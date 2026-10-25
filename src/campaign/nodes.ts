@@ -466,6 +466,12 @@ export const NODES: CampaignNode[] = [
 
   // ---- Act 6 --------------------------------------------------------------------------------
   {
+    id: 'o_mc', act: 6, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
+    why: 'A multicycle core runs each instruction as 3 or 4 short steps under a state machine. In the 1960s–80s that let one ALU and one memory serve every step, saving hardware a single-cycle core duplicates. Here the memories stay separate, so it saves nothing: two registers cut the long path (period 98 → 76), and each instruction takes 3 or 4 cycles. Measure period × cycles against Core III. It is why pipelines replaced this design: cut the path the same way, but keep every step busy.',
+    tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
+    codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
+  },
+  {
     id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
     why: 'Core IV runs at 76 delays a cycle, and the adders are no longer the whole problem: the cycle must fit a whole load, instruction ROM → decode → ALU → data RAM → result mux → register file, one after the other. Put registers between those steps and each cycle only has to fit one of them, with five instructions in flight. The price is hazards: an instruction needs a value its predecessor has not written yet, and a branch is decided after two more instructions were fetched. This act builds the pipeline, then forwarding, the load-use stall and the flush. Expect it to lose at first: the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone (forwarding, then the ALU) is 78 delays. Kogge–Stone adders in E win it back: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
     tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }],
@@ -649,18 +655,6 @@ export const NODES: CampaignNode[] = [
     tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.'],
     codex: ['normalize'],
   },
-  {
-    id: 'o_cache', act: 8, title: 'A cache', kind: 'build', optional: true, requires: ['m_mem', 'g_eq16'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
-    why: 'Main memory is far slower than the core. A small memory that keeps the words used recently answers most accesses at once: programs use the same words again and again (locality). It must know which word each line holds: a tag, and a valid bit.',
-    tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
-    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', label: 'Caches' }],
-  },
-  {
-    id: 'o_mc', act: 8, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3', 's_fsm'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
-    why: 'Before pipelines, processors ran each instruction as a sequence of short steps under a state machine (or microcode). The clock gets faster, the instruction slower: measure whether it pays here.',
-    tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
-    codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
-  },
   // ---- Act 9 --------------------------------------------------------------------------------
   {
     id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', optional: true, requires: ['c_core3'], body: 'gpu',
@@ -788,6 +782,12 @@ export const NODES: CampaignNode[] = [
     why: 'A real DRAM chip refreshes its own rows when told to (REF), keeps a row buffer per bank and sets every interval in nanoseconds: tRCD from ACT to a read, tCAS from the read to the data, tRAS before the row may close, tRP before the next opens. The controller turns requests into commands at the earliest legal cycle.',
     tips: ['Per bank: an open flag and the open row. Counters of the cycles since the last ACT and since the last PRE, saturating at 15, cover tRCD, tRAS and tRP when one request is in flight at a time.', 'A read\'s data comes tCAS = 4 cycles after its RD: a 4-stage shift register of "RD issued" says when to raise ready, and that no command is needed meanwhile.', 'Refresh: count cycles since the last REF and make it pending well before 256 (128 is a bit test). Pending goes first: PREA once tRAS allows, then REF once tRP allows.', 'After REF nothing may happen for tRFC = 12 cycles: remember that the last close was a REF, and wait 12 instead of 4.'],
     codex: ['dramtiming', 'pagepolicy'], unlocks: ['rv16_dramctrl'], chapters: [{ chapter: 'memctrl', step: 0, label: 'Commands' }, { chapter: 'memctrl', step: 1, label: 'Open page or closed page' }],
+  },
+  {
+    id: 'o_cache', act: 10, title: 'A cache', kind: 'build', optional: true, requires: ['m_ctrl'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
+    why: 'Your controller hands over a word of the open row tCAS = 4 cycles after its read command, and a word of another row only after tRP + tRCD + tCAS = 12, where every core assumed one. Programs use the same words again and again (locality): a small memory that keeps the recent ones answers most accesses at once. It must know which word each line holds: a tag, and a valid bit. Its bench still answers a miss in the same cycle, so the level proves the cache right and grades its own NANDs and period, not the cycles it would save.',
+    tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
+    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', label: 'Caches' }],
   },
   {
     id: 'm_bus', act: 10, title: 'Two masters, one bus', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_bus, par: { nand: 282, period: 26 },

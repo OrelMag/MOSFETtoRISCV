@@ -39,8 +39,8 @@ function span(core: ComponentDef, label: string): number {
   return on[on.length - 1].p.arrival - (first ? r.path[first - 1].arrival : 0);
 }
 
-const time = (def: ComponentDef, tests: CoreTest[] = coreTests(3), system = false) => {
-  const r = runCore(def, 'gate', { rv16i: true, tests: () => tests, budget: { cpi: 2.5, extra: 10 }, system });
+const time = (def: ComponentDef, tests: CoreTest[] = coreTests(3), system = false, cpi = 2.5) => {
+  const r = runCore(def, 'gate', { rv16i: true, tests: () => tests, budget: { cpi, extra: 10 }, system });
   expect(r.failures).toEqual([]);
   const period = corePeriod(def)!;
   const cycles = r.cycles!;
@@ -103,5 +103,21 @@ describe('the finale in two levels', () => {
   it('a predicting pipeline may keep its prediction in the finale', () => {
     const r = runCore(pipe({ sys: true, predict: true }), 'gate', { rv16i: true, tests: () => all, budget: { cpi: 2.5, extra: 10 }, system: true });
     expect(r.failures).toEqual([]);
+  });
+});
+
+describe('the moved side quests', () => {
+  it('multicycle sits at the act 5 → 6 seam, the cache after the DRAM controller', async () => {
+    const { RV16_MULTI } = await import('../src/lib/rv16/multi');
+    const { DRAM16 } = await import('../src/campaign/memcheck');
+    const mc = nodeById('o_mc')!, cache = nodeById('o_cache')!;
+    expect([mc.act, mc.optional, mc.requires]).toEqual([6, true, ['c_core3']]);
+    expect([cache.act, cache.optional, cache.requires]).toEqual([10, true, ['m_ctrl']]);
+    const m = time(RV16_MULTI, coreTests(3), false, 5), c3 = time(rv16Core(true));
+    expect(mc.why).toContain(`period ${c3.period} → ${m.period}`);
+    expect(m.nand).toBe(mc.par!.nand);
+    expect(Math.round((10 * m.time) / c3.time) / 10).toBe(2.4);
+    expect(cache.why).toContain(`tCAS = ${DRAM16.tCAS} cycles`);
+    expect(cache.why).toContain(`tRP + tRCD + tCAS = ${DRAM16.tRP + DRAM16.tRCD + DRAM16.tCAS}`);
   });
 });
