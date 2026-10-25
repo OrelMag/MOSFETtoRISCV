@@ -14,7 +14,7 @@ import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
-import type { Compiled } from './compile';
+import { type Compiled, diagText } from './compile';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
 import { importChips } from './store';
@@ -203,6 +203,15 @@ export function challengeOf(chipId: string, all: readonly BuildChallenge[]): Bui
 const stripHtml = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
 /**
+ * How far right a new challenge chip's outputs start: 40 units, or 20 on a phone, where 40 units fit the screen only
+ * at ~9 px each (pins too small for a finger); at 20 the first fit reaches camera.ts TOUCH_PX with both sides in view.
+ */
+function pinSpan(): number {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  return mm?.('(pointer: coarse) and (max-width: 760px)').matches ? 20 : 40;
+}
+
+/**
  * The challenge's chip, created with its pins in place (inputs on the left, outputs on the
  * right) and the brief in its notes, and opened. An existing one is only opened: the learner's
  * work is never replaced.
@@ -211,7 +220,7 @@ export function startChallenge(ws: Workspace, ch: BuildChallenge): { ws: Workspa
   const id = challengeChipId(ch);
   if (ws.chips[id]) return { ws: openChip(ws, id), chipId: id, created: false };
   const ins = ch.ports.filter((p) => p.dir === 'in'), outs = ch.ports.filter((p) => p.dir === 'out');
-  const right = Math.max(40, ...(ch.given ?? []).map((p) => p.at[0] + 24));
+  const right = Math.max(pinSpan(), ...(ch.given ?? []).map((p) => p.at[0] + 24));
   const pins: PinDoc[] = [
     ...ins.map((p, i): PinDoc => ({ id: p.name, name: p.name, dir: 'in', width: p.width, at: [0, 2 + 4 * i], ...(p.clock ? { kind: 'clock' } : {}) })),
     ...outs.map((p, i): PinDoc => ({ id: p.name, name: p.name, dir: 'out', width: p.width, at: [right, 2 + 4 * i] })),
@@ -250,7 +259,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     res.score = scoreOf(def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
-    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${d.msg}`);
+    const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${diagText(d)}`);
     res.failures.push(...pinProblems, ...errors.slice(0, 3));
     if (errors.length > 3) res.failures.push(`… and ${errors.length - 3} more errors`);
     if (!res.failures.length && ch.rules) res.failures.push(...ch.rules(def));

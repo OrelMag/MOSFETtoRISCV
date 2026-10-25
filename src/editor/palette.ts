@@ -126,11 +126,56 @@ export function paletteGroups(): readonly PaletteGroup[] {
 /** The items a group shows in a context, purist filter applied. */
 export function visibleItems(g: PaletteGroup, ctx: PaletteCtx, purist: boolean, filter = ''): PaletteItem[] {
   if (purist && !g.purist) return [];
-  const f = filter.trim().toLowerCase();
+  const f = filter.trim();
   return g.items(ctx).filter((it) =>
     (!purist || g.purist === true || (typeof g.purist === 'function' && g.purist(it)))
-    && (!f || it.name.toLowerCase().includes(f) || it.id.toLowerCase().includes(f) || (it.section ?? '').toLowerCase().includes(f)));
+    && (!f || partMatches(itemText(it), f)));
 }
+
+// ---- search ---------------------------------------------------------------------------------
+
+/**
+ * Other names a part goes by (other simulators', textbooks'): a query that starts one of these keys (3 letters at
+ * least) also searches for its targets.
+ */
+export const PART_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  label: ['pointer'], tunnel: ['pointer'], net: ['pointer'], wire: ['pointer', 'split', 'merge'],
+  splitter: ['split', 'merge'], bundle: ['split', 'merge'], bus: ['split', 'merge', 'bus'],
+  '7seg': ['7-segment'], 'seven segment': ['7-segment'], sevenseg: ['7-segment'],
+  cpu: ['core', 'processor', 'computer'], core: ['core', 'processor', 'computer'], processor: ['core', 'processor', 'computer'],
+  ff: ['flip-flop'], dff: ['flip-flop'], 'flipflop': ['flip-flop'], register: ['register', 'flip-flop'],
+  lamp: ['led'], light: ['led'], gnd: ['ground', 'gnd', 'constant 0'], ground: ['gnd', 'constant 0'], vcc: ['vdd', 'constant 1'],
+  mux: ['multiplexer', 'mux'], memory: ['ram', 'rom', 'memory'], text: ['comment'], note: ['comment'], tie: ['constant'],
+};
+
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/** Every word of `query` starts a word of `text` ("led" finds LED, not "bundled"). */
+export function wordStarts(text: string, query: string): boolean {
+  const ws = words(text);
+  const qs = words(query);
+  return qs.length > 0 && qs.every((q) => ws.some((w) => w.startsWith(q)));
+}
+
+/** The queries a query stands for: itself and the targets of every alias it starts. */
+export function aliasQueries(query: string): string[] {
+  const q = query.trim().toLowerCase();
+  const out = [q];
+  if (q.length >= 2) for (const [k, ts] of Object.entries(PART_ALIASES)) if (k === q || (q.length >= 3 && k.startsWith(q))) out.push(...ts);
+  return out;
+}
+
+/** A part's text (name, id, section) against a query and its aliases. */
+export function partMatches(text: string, query: string): boolean {
+  return aliasQueries(query).some((q) => wordStarts(text, q));
+}
+
+/** The alias keys that lead to a text (the search box's `alt`: "label tunnel net wire" on Pointer). */
+export function aliasesOf(text: string): string[] {
+  return Object.entries(PART_ALIASES).filter(([, ts]) => ts.some((t) => wordStarts(text, t))).map(([k]) => k);
+}
+
+export const itemText = (it: PaletteItem) => `${it.name} ${it.id} ${it.section ?? ''}`;
 
 // ---- favorites ------------------------------------------------------------------------------
 
@@ -161,7 +206,33 @@ export function toggleFavorite(favs: readonly string[] | undefined, key: string)
 
 // ---- built-in groups ------------------------------------------------------------------------
 
+const POINTER_TIP = 'A named wire: every pointer with the same name is the same wire, no line drawn (L places one)';
+const SPLIT_TIP = 'Fan an 8-bit bus out into 8 single wires (free: wiring only)';
+const MERGE_TIP = 'Gather 8 single wires into an 8-bit bus (free: wiring only)';
+const SPECIAL = 'Special I/O';
+
 const lib = (id: string, name: string, title?: string): PaletteItem => ({ id, name, title, place: { part: { lib: id } } });
+
+// The parts a first circuit needs, repeated from their groups so nobody scrolls for NAND. Its first nine are what the
+// number keys arm while no favorite is pinned.
+export const BASICS_ID = 'basics';
+registerPaletteGroup({
+  id: BASICS_ID, title: 'Basics', order: 2, purist: true,
+  items: () => [
+    { id: 'in1', name: 'Input', title: 'A 1-bit input pin: click it to toggle', place: { pin: { dir: 'in', width: 1 } } },
+    { id: 'out1', name: 'Output', title: 'A 1-bit output pin', place: { pin: { dir: 'out', width: 1 } } },
+    { id: 'clock', name: 'Clock', title: 'A 1-bit input driven by the run loop (Run / Step)', place: { pin: { dir: 'in', width: 1, kind: 'clock' } } },
+    { id: 'in8', name: 'Input bus', tag: '8-bit', title: 'An N-bit input pin: click it to edit the value. Pick the width on its tag', place: { pin: { dir: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'in', width: w } }) } },
+    { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin. Pick the width on its tag', place: { pin: { dir: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'out', width: w } }) } },
+    { id: 'nand', name: 'NAND', title: 'y = NOT (a AND b): the brick everything on this site is built from (4 transistors)', place: { part: { lib: 'nand' } } },
+    { id: 'k0', name: 'Constant 0', place: { part: { const: { width: 1, value: 0 } } } },
+    { id: 'k1', name: 'Constant 1', place: { part: { const: { width: 1, value: 1 } } } },
+    { id: 'led', name: 'LED', title: 'Lights when its input is 1', place: { part: { display: 'led' } } },
+    { id: 'pointer', name: 'Pointer', tag: 'L', title: POINTER_TIP, place: { pointer: true } },
+    { id: 's8', name: 'Split 8 → 1×8', title: SPLIT_TIP, place: { part: { split: [1, 1, 1, 1, 1, 1, 1, 1] } } },
+    { id: 'm8', name: 'Merge 1×8 → 8', title: MERGE_TIP, place: { part: { merge: [1, 1, 1, 1, 1, 1, 1, 1] } } },
+  ],
+});
 
 registerPaletteGroup({
   id: 'io', title: 'Inputs & outputs', order: 10, purist: true,
@@ -172,18 +243,18 @@ registerPaletteGroup({
     { id: 'in8', name: 'Input bus', tag: '8-bit', title: 'An N-bit input pin: click it to edit the value. Pick the width on its tag (any of 1–1024 later in the properties)', place: { pin: { dir: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'in', width: w } }) } },
     { id: 'out1', name: 'Output', title: 'A 1-bit output pin', place: { pin: { dir: 'out', width: 1 } } },
     { id: 'out8', name: 'Output bus', tag: '8-bit', title: 'An N-bit output pin. Pick the width on its tag', place: { pin: { dir: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.pin, def: 8, at: (w) => ({ pin: { dir: 'out', width: w } }) } },
-    { id: 'key', name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
-    { id: 'keyboard', name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
-    { id: 'pzin', name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'in', width: w } }) } },
-    { id: 'pzout', name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'out', width: w } }) } },
-    { id: 'cards', name: 'Card reader', tag: 'deck', title: 'A deck of punched cards: data = the word punched in row 9 of the card at the read station (or one column at a time), ready = 1 while one waits, next = 1 at a rising clk edge takes it. Punch, load and save decks in the properties; costs nothing', place: { part: { reader: sampleReaderRef() } } },
     { id: 'switches', name: 'Switches', tag: '8-bit', title: 'A bank of toggle switches (1–32 in the properties): click one to flip it, also while running. q = their positions; they stay put through Reset. Costs nothing', place: { part: { switches: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.switches, def: 8, at: (w) => ({ part: { switches: w } }) } },
+    { id: 'key', section: SPECIAL, name: 'Key', tag: 'A', title: 'A keyboard key: 1 while it is held (pick the key in the properties). Listens from inside a placed chip too; costs nothing', place: { part: { key: 'a' } } },
+    { id: 'keyboard', section: SPECIAL, name: 'Keyboard', tag: '8-bit', title: 'Typed keys wait in order: code = the oldest (ASCII), ready = 1 while one waits, ack removes it. Keys reach it while the circuit runs or with Type on; costs nothing', place: { part: { keyboard: true } } },
+    { id: 'pzin', section: SPECIAL, name: 'Puzzle in', tag: '8-bit', title: 'The input of a program puzzle: data = the next word of the test, ready = 1 while one waits, read = 1 at a rising clk edge takes it. Costs nothing', place: { part: { puzzle: 'in', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'in', width: w } }) } },
+    { id: 'pzout', section: SPECIAL, name: 'Puzzle out', tag: '8-bit', title: 'The output of a program puzzle: records data at a rising clk edge with we = 1; Check compares the words with the test. Costs nothing', place: { part: { puzzle: 'out', width: 8 } }, sized: { min: 1, max: WIDTH_LIMITS.puzzle, def: 8, at: (w) => ({ part: { puzzle: 'out', width: w } }) } },
+    { id: 'cards', section: SPECIAL, name: 'Card reader', tag: 'deck', title: 'A deck of punched cards: data = the word punched in row 9 of the card at the read station (or one column at a time), ready = 1 while one waits, next = 1 at a rising clk edge takes it. Punch, load and save decks in the properties; costs nothing', place: { part: { reader: sampleReaderRef() } } },
   ],
 });
 
 // Clocked sources built from gates (not purist: they open to a register and feedback logic).
 registerPaletteGroup({
-  id: 'sources', title: 'Sources', order: 15,
+  id: 'sources', title: 'Sources', order: 15, collapsed: true,
   items: () => [
     lib('cycles16', 'Cycle counter', 'Clock edges since power-on (16 bits; 8 or 32 in the properties)'),
     lib('random8', 'Random', 'A new pseudo-random number every clock edge: an XNOR LFSR that needs no seed (4, 8 or 16 bits in the properties)'),
@@ -192,7 +263,7 @@ registerPaletteGroup({
 });
 
 registerPaletteGroup({
-  id: 'fets', title: 'Transistors', order: 20, purist: true,
+  id: 'fets', title: 'Transistors', order: 20, purist: true, collapsed: true,
   items: () => [
     lib('nmos', 'NMOS', 'Conducts while its gate is 1'), lib('pmos', 'PMOS', 'Conducts while its gate is 0'),
     lib('vdd', 'VDD', 'Supply rail: a constant 1'), lib('gnd', 'GND', 'Ground rail: a constant 0'),
@@ -205,7 +276,7 @@ registerPaletteGroup({
 // (purist); the transmission gate and the tri-states are cells built from transistors.
 const PASSIVE = new Set(['res', 'pullup', 'pulldown', 'cap']);
 registerPaletteGroup({
-  id: 'switch', title: 'Switch level', order: 25, purist: (it) => PASSIVE.has(it.id),
+  id: 'switch', title: 'Switch level', order: 25, collapsed: true, purist: (it) => PASSIVE.has(it.id),
   items: () => [
     lib('res', 'Resistor', 'Always conducts, weaker than any transistor: a node it alone reaches follows it, any transistor overrides it'),
     lib('pullup', 'Pull-up', 'A resistor to VDD: the node reads 1 unless a transistor pulls it down (pseudo-NMOS, open-drain buses). Costs static current while pulled down'),
@@ -261,16 +332,16 @@ const many = (n: number, w: number) => Array.from({ length: n }, () => w);
 registerPaletteGroup({
   id: 'wiring', title: 'Wiring', order: 50, purist: true,
   items: () => [
-    { id: 'pointer', name: 'Pointer', tag: 'L', title: 'A named net label: every pointer with the same name is the same net, no wire needed', place: { pointer: true } },
+    { id: 'pointer', name: 'Pointer', tag: 'L', title: POINTER_TIP, place: { pointer: true } },
     { id: 'comment', name: 'Comment', tag: 'T', title: 'Free text on the canvas: saved and shared with the chip, never part of the circuit', place: { comment: true } },
-    { id: 's4', name: 'Split 4 → 1×4', place: { part: { split: many(4, 1) } } },
-    { id: 's8', name: 'Split 8 → 1×8', place: { part: { split: many(8, 1) } } },
-    { id: 's16', name: 'Split 16 → 8+8', place: { part: { split: [8, 8] } } },
-    { id: 's32', name: 'Split 32 → 8×4', place: { part: { split: many(4, 8) } } },
-    { id: 'm4', name: 'Merge 1×4 → 4', place: { part: { merge: many(4, 1) } } },
-    { id: 'm8', name: 'Merge 1×8 → 8', place: { part: { merge: many(8, 1) } } },
-    { id: 'm16', name: 'Merge 8+8 → 16', place: { part: { merge: [8, 8] } } },
-    { id: 'm32', name: 'Merge 8×4 → 32', place: { part: { merge: many(4, 8) } } },
+    { id: 's4', name: 'Split 4 → 1×4', title: 'Fan a 4-bit bus out into 4 single wires (free: wiring only)', place: { part: { split: many(4, 1) } } },
+    { id: 's8', name: 'Split 8 → 1×8', title: SPLIT_TIP, place: { part: { split: many(8, 1) } } },
+    { id: 's16', name: 'Split 16 → 8+8', title: 'Cut a 16-bit bus into two bytes (free: wiring only)', place: { part: { split: [8, 8] } } },
+    { id: 's32', name: 'Split 32 → 8×4', title: 'Cut a 32-bit bus into four bytes (free: wiring only)', place: { part: { split: many(4, 8) } } },
+    { id: 'm4', name: 'Merge 1×4 → 4', title: 'Gather 4 single wires into a 4-bit bus (free: wiring only)', place: { part: { merge: many(4, 1) } } },
+    { id: 'm8', name: 'Merge 1×8 → 8', title: MERGE_TIP, place: { part: { merge: many(8, 1) } } },
+    { id: 'm16', name: 'Merge 8+8 → 16', title: 'Join two bytes into a 16-bit bus (free: wiring only)', place: { part: { merge: [8, 8] } } },
+    { id: 'm32', name: 'Merge 8×4 → 32', title: 'Join four bytes into a 32-bit bus (free: wiring only)', place: { part: { merge: many(4, 8) } } },
   ],
 });
 
@@ -320,8 +391,6 @@ export interface PaletteHooks {
   renameFolder?(from: string, to: string): string | null;
 }
 
-const OPEN_LIB = new Set(['Gates', 'Transistors']);
-
 export class PalettePanel {
   readonly el: HTMLElement;
   /** Above the search box: the project switcher (projectui.ts). */
@@ -367,15 +436,23 @@ export class PalettePanel {
       for (const f of favs) det.append(this.itemButton(f.key, f.item, true, nums.get(f.key)));
       this.list.append(det);
     }
+    // No favorite pinned: the number keys arm Basics' first nine instead.
+    const basicNums = new Map(this.numbered().map((f, i) => [f.key, i + 1]));
     const first = this.hooks.first ?? [];
     const rank = (id: string) => (first.includes(id) ? first.indexOf(id) : first.length);
-    for (const g of [...groups].sort((a, b) => rank(a.id) - rank(b.id))) {
+    const order = [...groups].sort((a, b) => rank(a.id) - rank(b.id));
+    // The sandbox: the learner's own chips right after Basics once there are any (a level orders its own groups).
+    const mine = order.findIndex((g) => g.id === 'mine');
+    if (!this.hooks.first && mine >= 0 && order[mine].items(ctx).length) order.splice(order.findIndex((g) => g.id === BASICS_ID) + 1, 0, ...order.splice(mine, 1));
+    for (const g of order) {
       if (this.hooks.hidden?.(g.id)) continue;
+      // a search lists each part once, in its own group
+      if (filter && g.id === BASICS_ID) continue;
       const items = visibleItems(g, ctx, purist, filter);
       const folders = g.folders && (!purist || g.purist) ? g.folders(ctx) : null;
       if (!items.length && (filter || !folders?.length)) continue;
       const det = h('details', { class: 'sb-group', 'data-group': g.id }) as HTMLDetailsElement;
-      det.open = filter ? true : this.open.get(g.id) ?? (!g.collapsed && !this.hooks.closed?.includes(g.id));
+      det.open = filter ? true : this.open.get(g.id) ?? (!(g.collapsed && !first.includes(g.id)) && !this.hooks.closed?.includes(g.id));
       det.addEventListener('toggle', () => { if (!filter) this.open.set(g.id, det.open); });
       const add = folders && this.hooks.newFolder ? h('button', { class: 'sb-addfolder', title: 'New folder', 'aria-label': 'New folder', onclick: (e: Event) => { e.preventDefault(); e.stopPropagation(); this.hooks.newFolder!(); } }, icon('folderPlus', 14)) : null;
       det.append(h('summary', null, g.title, h('small', null, items.length), add));
@@ -416,7 +493,8 @@ export class PalettePanel {
           if (cur) {
             const key = `${g.id}/${cur}`;
             const sd = h('details', { class: 'sb-sec' }) as HTMLDetailsElement;
-            sd.open = filter ? true : this.open.get(key) ?? OPEN_LIB.has(cur);
+            // folded in the sandbox; open on a level screen, whose palette lists only what the level allows
+            sd.open = filter ? true : this.open.get(key) ?? !!this.hooks.first;
             sd.addEventListener('toggle', () => { if (!filter) this.open.set(key, sd.open); });
             sd.append(h('summary', null, cur));
             det.append(sd);
@@ -424,7 +502,7 @@ export class PalettePanel {
           } else sec = det;
         }
         const key = itemKey(g.id, it.id);
-        sec.append(this.itemButton(key, it, pinned.has(key)));
+        sec.append(this.itemButton(key, it, pinned.has(key), basicNums.get(key)));
       }
       this.list.append(det);
     }
@@ -469,7 +547,7 @@ export class PalettePanel {
 
   /** The n-th favorite (0-based) as number keys see it: purist applied, no search filter; a sized part at its width. */
   favorite(n: number): { key: string; item: PaletteItem } | null {
-    const f = this.favorites()[n];
+    const f = this.numbered()[n];
     return f ? { key: f.key, item: f.item.sized ? sizedItem(f.item, itemWidth(f.key, f.item)) : f.item } : null;
   }
 
@@ -503,6 +581,15 @@ export class PalettePanel {
     this.list.addEventListener('scroll', close, { once: true });
     input.focus();
     input.select();
+  }
+
+  /** What the number keys arm: the first nine favorites, else (none pinned) Basics' first nine. */
+  private numbered(): { key: string; item: PaletteItem }[] {
+    const favs = this.favorites();
+    if (favs.length) return favs.slice(0, 9);
+    const g = groups.find((q) => q.id === BASICS_ID);
+    if (!g || this.hooks.hidden?.(BASICS_ID)) return [];
+    return visibleItems(g, this.ctx(), this.hooks.purist()).slice(0, 9).map((item) => ({ key: itemKey(BASICS_ID, item.id), item }));
   }
 
   /** The favorites shown here: those of hidden groups (a level screen) left out. */
@@ -569,6 +656,28 @@ export class PalettePanel {
     this.search.value = '';
     this.searchX.hidden = true;
     this.render();
+  }
+
+  /** Open the groups and sections around an item, scroll it into view and flash it. */
+  reveal(key: string): void {
+    this.clearSearch();
+    const b = this.list.querySelector<HTMLElement>(`.sb-item[data-item="${CSS.escape(key)}"]`);
+    if (!b) return;
+    for (let d = b.parentElement?.closest('details'); d; d = d.parentElement?.closest('details')) {
+      (d as HTMLDetailsElement).open = true;
+    }
+    b.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    b.classList.remove('sb-flash');
+    void b.offsetWidth; // restart the animation
+    b.classList.add('sb-flash');
+    setTimeout(() => b.classList.remove('sb-flash'), 1600);
+  }
+
+  /** Every part this palette offers here (each once: Basics' copies left out), for the search box. */
+  placeable(): { key: string; item: PaletteItem; group: PaletteGroup }[] {
+    const ctx = this.ctx(), purist = this.hooks.purist();
+    return groups.filter((g) => g.id !== BASICS_ID && !this.hooks.hidden?.(g.id)).flatMap((g) =>
+      visibleItems(g, ctx, purist).filter((it) => !it.disabled).map((item) => ({ key: itemKey(g.id, item.id), item: item.sized ? sizedItem(item, itemWidth(itemKey(g.id, item.id), item)) : item, group: g })));
   }
 
   setArmed(key: string | null): void {

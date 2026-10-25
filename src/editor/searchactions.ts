@@ -4,8 +4,10 @@
 
 import { keyDef } from '../ui/keys';
 import type { NavItem } from '../ui/chapternav';
-import { here, registerActions } from '../ui/searchsources';
+import { here, registerActions, registerSearchSource, type SearchCtx } from '../ui/searchsources';
 import { type Editor, registerEditorPlugin } from './editor';
+import { addExample, EXAMPLES } from './examples';
+import { aliasesOf, itemText } from './palette';
 
 /** A toolbar title's own shortcut, "Undo (Ctrl+Z)" → title "Undo", keys ["Ctrl Z"]. */
 function split(title: string): { name: string; keys?: string[] } {
@@ -34,3 +36,32 @@ function actionsOf(ed: Editor): NavItem[] {
 }
 
 registerEditorPlugin((ed) => registerActions(() => (ed.el.isConnected ? actionsOf(ed) : [])));
+
+// ---- "Place a part": every palette item, armed for a click on the canvas; and the examples ----------------
+
+/** The palette's parts (and, in the sandbox, its examples) as search rows; aliases ride in `alt` ("tunnel" finds Pointer). */
+function partsOf(ed: Editor): NavItem[] {
+  const parts = ed.palette.placeable().map(({ key, item, group }): NavItem => ({
+    kind: 'component', id: `part:${key}`, title: item.name, sub: `Place a part · ${group.title}${item.section ? ` · ${item.section}` : ''}`,
+    alt: [item.id, item.tag ?? '', ...aliasesOf(itemText(item))].join(' '), run: () => ed.armPart(item, key),
+  }));
+  if (ed.level) return parts;
+  return [...parts, ...EXAMPLES.map((ex): NavItem => ({
+    kind: 'component', id: `example:${ex.id}`, title: `Example: ${ex.name}`, sub: `Load as a new chip · ${ex.blurb}`,
+    alt: ['example', ...aliasesOf(`${ex.name} ${ex.blurb}`)].join(' '),
+    run: () => {
+      let id = '';
+      ed.editWs((ws) => { const a = addExample(ws, ex); id = a.id; return a.ws; });
+      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (Ctrl+Z removes it)`);
+    },
+  }))];
+}
+
+const onEditor = (ctx: SearchCtx) => /^#\/(sandbox|campaign\/play)\b/.test(ctx.hash);
+
+registerEditorPlugin((ed) => registerSearchSource({
+  id: 'parts', title: 'Place a part', scope: 'Parts',
+  // ranked first on the sandbox and a level screen
+  order: (ctx) => (onEditor(ctx) ? -2 : 9),
+  items: (ctx) => (ed.el.isConnected && onEditor(ctx) ? partsOf(ed) : []),
+}));

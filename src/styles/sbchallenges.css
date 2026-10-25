@@ -157,3 +157,13 @@ a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
 
 span.sb-tp-prog { cursor: default; }
 span.sb-tp-prog:hover { background: none; }
+
+/* The level screen's strip (challengeui.ts renderScreen): the goal while idle, a failing result folded to a line. */
+.sb-chal-sum.sb-chal-goal { display: inline; font: 13px var(--font-ui); color: var(--text-2); }
+.sb-chal-goal b { color: var(--text); }
+.sb-chal-fold-line { font: 12.5px var(--font-ui); color: var(--text-2); white-space: nowrap; }
+.sb-chal-fold-line button { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.sb-chal-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+@media (pointer: coarse) {
+  .sb-chal-fold-line button { min-height: 40px; min-width: 40px; }
+}

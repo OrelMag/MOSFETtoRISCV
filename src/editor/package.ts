@@ -17,6 +17,8 @@ import {
   type ResolvedFace, resolveFace, SCALE_MAX, SCALE_MIN, setFaceOf, shownBox, SIDES, toggleDisplay,
 } from './face';
 import type { ChipDoc, FaceDoc, FaceSide, PinDoc } from './model';
+import { itemKey } from './palette';
+import { isDefaultName } from './session';
 
 /** Hues offered as swatches (any other is a slider away). */
 const HUES = [250, 210, 180, 150, 100, 45, 20, 330];
@@ -74,7 +76,8 @@ export function packageDialog(ed: Editor): void {
   }), (id) => compiled.netOfEnd.get(`p:${id}.a`) ?? -1);
   const itemByKey = new Map(items.map((it) => [pathKey(it.path), it]));
 
-  const name = h('input', { type: 'text', value: doc.name, spellcheck: 'false', 'aria-label': 'Chip name', maxlength: '40' }) as HTMLInputElement;
+  // a name nobody chose (Main, Chip 2) is not offered as the box's name: the field starts empty
+  const name = h('input', { type: 'text', value: isDefaultName(doc.name) ? '' : doc.name, placeholder: 'Name this chip (e.g. XOR)', spellcheck: 'false', 'aria-label': 'Chip name', maxlength: '40' }) as HTMLInputElement;
   const notes = h('textarea', { rows: '3', placeholder: 'What it does, how to use it…', 'aria-label': 'Notes' }, doc.notes ?? '') as HTMLTextAreaElement;
   const range = h('input', { type: 'range', min: '0', max: '359', value: String(hue), 'aria-label': 'Colour (hue)' }) as HTMLInputElement;
   const swatches = h('div', { class: 'sb-swatches', role: 'radiogroup', 'aria-label': 'Colour' });
@@ -345,9 +348,13 @@ export function packageDialog(ed: Editor): void {
     const nm = ed.doc.name;
     close();
     if (fresh) {
+      const id = ed.chipId;
       ed.newChip();
-      ed.toast(`“${nm}” is under My chips: drag it in`);
-    } else ed.toast(`Packaged “${nm}”${usedBy.length ? `: ${usedBy.length} chip${usedBy.length > 1 ? 's' : ''} using it follow` : ': find it under My chips'}`);
+      ed.toast(`Packaged “${nm}”: it is in the palette under My chips. Drag it onto a chip to use it.`, 'info', { label: 'Show', run: () => ed.revealPart(itemKey('mine', id)) });
+    } else ed.toast(usedBy.length
+      ? `Packaged “${nm}”: ${usedBy.length} chip${usedBy.length > 1 ? 's' : ''} using it follow`
+      // the chip being edited is never offered in its own palette
+      : `Packaged “${nm}”: in any other chip (New chip) it is in the palette under My chips.`);
   };
 
   const ov = h('div', { class: 'sb-help sb-pack', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Package as chip', onclick: (e: Event) => { if (e.target === ov) close(); } },

@@ -95,7 +95,7 @@ describe('pointers join nets', () => {
     const cb = compileLib(bad);
     expect(cb.diags).toHaveLength(1);
     expect(cb.diags[0].level).toBe('error');
-    expect(cb.diags[0].msg).toMatch(/width mismatch/);
+    expect(cb.diags[0].fix).toMatch(/A wire joins equal widths/);
     expect(cb.diags[0].labels).toEqual(['l1', 'l2']);
     expect(cb.diags[0].pins).toEqual(['a', 'y']);
     expect(cb.netOfLabel.get('l1')).toBe(-1);
