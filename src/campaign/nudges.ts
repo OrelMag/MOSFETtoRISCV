@@ -50,6 +50,15 @@ export const NUDGES: Record<string, string> = {
   s_fsm: 'Name every situation the machine can be in, and what moves it from one to the next.',
   m_ram: 'Writing must pick one word and reading must pick one word: two different selections.',
   m_rf: 'It is the small memory again, with more words, a second way to read, and one entry that must never change.',
+  // act 4: the instruction set and programs
+  i_enc: 'Cut the word at the field boundaries first; the opcode then tells you which fields are registers and which are pieces of an immediate.',
+  p_add: 'Every value has to be in a register before the ALU can touch it, and the answer leaves through a store.',
+  p_loop: 'Put the test where n = 0 does no work, then count what each iteration pays.',
+  p_mem: 'The array is further away than any offset reaches: let a register walk it.',
+  p_call: 'Caller and function only have to agree on where the numbers are and where to come back to.',
+  p_mul: 'Long multiplication in base 2: each row is nothing or a shifted copy of a.',
+  p_sort: 'Fixing neighbours that are out of order is enough; work out how many passes guarantee it.',
+  p_print: 'Without a divider, a digit is how many times its power of ten fits.',
   // act 5: the core
   c_imm: 'Look where the immediate bits sit in each format before reaching for any gate.',
   c_ctl: 'Every control signal is a list of the opcodes that need it.',
