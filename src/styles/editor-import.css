@@ -1,0 +1,20 @@
+/* The import dialog for Digital / Logisim circuits (import/importui.ts). Theme tokens only. */
+.sb-dlg.sb-imp-dlg .panel { width: min(820px, 94vw); }
+.sb-imp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; }
+.sb-imp-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; }
+.sb-imp-chips li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); }
+.sb-imp-chips li.top { background: var(--accent-soft); }
+.sb-imp-dlg .muted { color: var(--muted); }
+.sb-imp-dlg .mono { font-family: var(--font-mono); font-size: 12.5px; }
+.sb-imp-folder-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.sb-imp-folder { font: inherit; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); width: 180px; }
+.sb-imp-map { border-collapse: collapse; width: 100%; font-size: 13px; }
+.sb-imp-map th { text-align: left; color: var(--muted); font-weight: 500; padding: 2px 8px 4px 0; }
+.sb-imp-map td { padding: 3px 8px 3px 0; vertical-align: top; }
+.sb-imp-map td.mark { width: 20px; text-align: center; font-weight: 700; color: var(--good); }
+.sb-imp-map tr.stub td.mark { color: var(--bad); }
+.sb-imp-map tr.dropped td.mark, .sb-imp-map tr.dropped td { color: var(--muted); }
+.sb-imp-problems { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--text); }
+.sb-imp-problems p { margin: 0 0 4px; }
+.sb-imp-problems ul { margin: 0; padding-left: 18px; }
+@media (max-width: 640px) { .sb-imp-cols { grid-template-columns: minmax(0, 1fr); } }
