@@ -191,7 +191,7 @@ describe('the campaign rule in a check', () => {
 
   // A gate-level level is scored in NANDs, where a transistor counts as none: act 0's cells (unlocked by t_inv,
   // t_nor) and raw MOSFETs would make g_not free and g_mux cheaper than par.
-  it('keeps transistor-level parts out of every gate-level level', () => {
+  it('keeps transistor-level parts out of every gate-level level', async () => {
     const lv = NODES.filter((n) => levelChallenge(n));
     const gateLevel = lv.filter((n) => {
       const a = levelChallenge(n)!.allowed;
@@ -213,6 +213,8 @@ describe('the campaign rule in a check', () => {
       wires: [wire('w1', 'pin:a', 'p.g'), wire('w2', 'pin:a', 'm.g'), wire('w3', 'v.p', 'p.s'), wire('w4', 'p.d', 'pin:y'), wire('w5', 'm.d', 'pin:y'), wire('w6', 'm.s', 'z.p')],
     });
     // What the level lists is that rule: g_not is NAND only, and the brief states no rule of its own.
+    const { criteria } = await import('../src/campaign/ui/levelinfo');
+    expect(criteria(levelChallenge(nodeById('g_not')!)!).at(-1)).toBe('Built from NAND gates, wiring, constants and your own chips made of them (no transistors: the level is scored in NANDs).');
     expect(ruleFor('g_not')).toMatchObject({ lib: ['nand'], label: 'NAND only' });
     for (const n of lv) expect(levelChallenge(n)!.brief, n.id).not.toMatch(/only gate allowed|NAND only/i);
     // Families are listed by name, not as globs.
