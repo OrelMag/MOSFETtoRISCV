@@ -31,6 +31,7 @@ import { pathKey } from './face';
 import { type DisplayEls, drawDisplay, drawFace, type FaceEls, paintDisplay, paintFace } from './dispface';
 import { ioInfo } from './ioparts';
 import type { Sim } from '../sim/sim';
+import { weakLevel } from '../sim/switchsim';
 import { userHues } from './wirehue';
 
 /** Live values, read through the compile the simulator was built from (runtime.ts). */
@@ -43,6 +44,11 @@ export interface ViewValues {
   /** Switch level: the wire's / pointer's net carries a short. */
   wireShorted(id: string): boolean;
   labelShorted(id: string): boolean;
+  /** Switch level: the wire's / pointer's 1-bit net at a weak level (WEAK_H / WEAK_L, else 0). */
+  wireWeak(id: string): number;
+  labelWeak(id: string): number;
+  /** Switch level: a transistor part partly on. */
+  leaky(part: string): boolean;
   /** The keys waiting in a keyboard part of this chip (null: not one). */
   keyboardQueue(part: string): number[] | null;
   /** The simulation itself (I/O part faces read their parts' state through it). */
@@ -640,7 +646,10 @@ export class EditorView {
         e.ants?.forEach((a) => setNetHue(a, hue));
       }
       const bits = v?.wireBits(e.doc.id);
-      const vcls = bits ? `wire ${valueClass(bits)}${v!.wireShorted(e.doc.id) ? ' short' : ''}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
+      // a weak level: between the net's colours (its --lv), as on the stage
+      const wk = bits ? v!.wireWeak(e.doc.id) : 0;
+      if (wk) e.path.style.setProperty('--lv', weakLevel(wk).toFixed(3));
+      const vcls = bits ? `wire ${wk ? 'vl weak' : valueClass(bits)}${v!.wireShorted(e.doc.id) ? ' short' : ''}` : `wire${e.width > 1 ? ' bus' : ''} ed-dead`;
       this.paintWire(e, vcls);
       this.paintFlow(e, bits ?? null);
     }
@@ -695,6 +704,7 @@ export class EditorView {
       const c = v?.conducting(id);
       e.g.classList.toggle('conducting', c === 1);
       e.g.classList.toggle('maybe', c === 2);
+      e.g.classList.toggle('leaky', v?.leaky(id) ?? false);
     }
     this.paintBusLabels(v, built);
     this.paintTones(v !== null);

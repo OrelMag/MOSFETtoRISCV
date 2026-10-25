@@ -3,7 +3,7 @@
 
 import { orientGeom, type Vec } from '../sim/geometry';
 import { NmosSim } from '../sim/nmossim';
-import { SwitchSim, VDD_VOLTS } from '../sim/switchsim';
+import { SwitchSim, VDD_VOLTS, weakLevel, weakTag } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s } from '../ui/dom';
@@ -391,9 +391,12 @@ export class SchematicView {
     const lvSim = ctx.sim instanceof SwitchSim && ctx.sim.hasLevels ? ctx.sim : null;
     // a crowbar: current from a 1 source to a 0 source through this net (its own look, not just X)
     const shorts = ctx.sim instanceof SwitchSim && ctx.sim.hasShort ? ctx.sim.shorted : null;
+    // weak levels (an NMOS passing a 1, a PMOS a 0): between the net's colours, tagged 'H · 0.80 V'
+    const wkSim = ctx.sim instanceof SwitchSim && ctx.sim.hasWeak ? ctx.sim : null;
     for (const w of this.wires) {
       const bits = ctx.netBits(w.net.index);
       let vcls = w.net.width > 1 ? busClass(bits) : bitClass(bits[0]);
+      let tag = NaN, tagText = '';
       if (lvSim && w.net.width === 1) {
         // A charge level between the rails (a bit line at VDD/2, after sharing): its own colour and a voltage tag.
         const net = ctx.node.nets?.[w.net.index]?.[0];
@@ -403,8 +406,16 @@ export class SchematicView {
           vcls = 'vl';
           for (const p of w.paths) p.style.setProperty('--lv', l.toFixed(3));
         }
-        this.paintLevel(w, mid || (net !== undefined && lvSim.design.caps.has(net)) ? l : NaN);
+        tag = mid || (net !== undefined && lvSim.design.caps.has(net)) ? l : NaN;
       }
+      const wk = wkSim && w.net.width === 1 ? wkSim.weakOf(ctx.node.nets?.[w.net.index]?.[0] ?? -1) : 0;
+      if (wk) {
+        vcls = 'vl weak';
+        tag = weakLevel(wk);
+        tagText = weakTag(wk);
+        for (const p of w.paths) p.style.setProperty('--lv', tag.toFixed(3));
+      }
+      if (lvSim || w.level) this.paintLevel(w, tag, tagText);
       if (shorts && ctx.node.nets?.[w.net.index]?.some((n) => shorts[n])) vcls += ' short';
       if (vcls !== w.shown) {
         if (flow && w.shown !== undefined && w.paths.length) this.flowWire(w, vcls);
@@ -437,6 +448,8 @@ export class SchematicView {
         const c = ctx.sim.conducting[li];
         g.classList.toggle('conducting', c === 1);
         g.classList.toggle('maybe', c === 2);
+        // partly on (its gate at a weak level): static current through it
+        g.classList.toggle('leaky', ctx.sim instanceof SwitchSim && ctx.sim.leaky(li));
         if (k === 'relay' && ctx.sim instanceof SwitchSim) g.classList.toggle('energized', ctx.sim.relayEnergized(li) === 1);
       }
     }
@@ -508,7 +521,7 @@ export class SchematicView {
 
   /** Give every element of a wire the value class vcls (finishing any front in flight). */
   /** A net's voltage tag (NaN hides it), at the middle of its longest segment. */
-  private paintLevel(w: WireEls, l: number): void {
+  private paintLevel(w: WireEls, l: number, text = ''): void {
     if (!Number.isFinite(l)) {
       w.level?.g.setAttribute('display', 'none');
       return;
@@ -526,7 +539,7 @@ export class SchematicView {
       this.labelG?.append(g);
       w.level = { g, t, bg, at: best };
     }
-    const txt = `${(l * VDD_VOLTS).toFixed(2)} V`;
+    const txt = text || `${(l * VDD_VOLTS).toFixed(2)} V`;
     w.level.t.textContent = txt;
     const tw = textWidth(txt, 0.8);
     w.level.bg.setAttribute('x', String(w.level.at[0] - tw / 2));

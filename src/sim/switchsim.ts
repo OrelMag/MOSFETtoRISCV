@@ -909,6 +909,9 @@ export function shortText(sim: SwitchSim, s: Short): string {
 /** Weak levels (see the header): a 1 an NMOS passed, a 0 a PMOS passed; their voltages for display (VDD − Vt, Vt). */
 export const WEAK_H = 1, WEAK_L = 2;
 export const VT_VOLTS = 0.3;
+/** A weak level as a fraction of VDD (where its colour sits between the net's 0 and 1), and its tag: 'H · 0.80 V'. */
+export const weakLevel = (k: number): number => (k === WEAK_H ? (VDD_VOLTS - VT_VOLTS) / VDD_VOLTS : VT_VOLTS / VDD_VOLTS);
+export const weakTag = (k: number): string => `${k === WEAK_H ? 'H' : 'L'} · ${(weakLevel(k) * VDD_VOLTS).toFixed(2)} V`;
 
 /** Solver levels (see the header): sources, the weakest transistor, stored charge. */
 const LV_SOURCE = 7, LV_FET = 4, LV_CHARGE = 1;
