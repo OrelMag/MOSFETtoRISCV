@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>A</string>
+        </entry>
+      </elementAttributes>
+      <pos x="100" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>B</string>
+        </entry>
+      </elementAttributes>
+      <pos x="100" y="240"/>
+    </visualElement>
+    <visualElement>
+      <elementName>XOr</elementName>
+      <elementAttributes/>
+      <pos x="200" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>And</elementName>
+      <elementAttributes/>
+      <pos x="200" y="200"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Out</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>S</string>
+        </entry>
+      </elementAttributes>
+      <pos x="320" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Out</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>C</string>
+        </entry>
+      </elementAttributes>
+      <pos x="320" y="220"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Text</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Description</string>
+          <string>Half adder: S = A xor B, C = A and B</string>
+        </entry>
+      </elementAttributes>
+      <pos x="100" y="20"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Testcase</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>truth table</string>
+        </entry>
+        <entry>
+          <string>Testdata</string>
+          <testData>
+            <dataString>A B S C
+0 0 0 0
+0 1 1 0
+1 0 1 0
+1 1 0 1
+</dataString>
+          </testData>
+        </entry>
+      </elementAttributes>
+      <pos x="400" y="40"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="100" y="100"/>
+      <p2 x="160" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="160" y="100"/>
+      <p2 x="200" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="160" y="100"/>
+      <p2 x="160" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="160" y="200"/>
+      <p2 x="200" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="100" y="240"/>
+      <p2 x="140" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="140" y="240"/>
+      <p2 x="200" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="140" y="240"/>
+      <p2 x="140" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="140" y="140"/>
+      <p2 x="200" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="260" y="120"/>
+      <p2 x="320" y="120"/>
+    </wire>
+    <wire>
+      <p1 x="260" y="220"/>
+      <p2 x="320" y="220"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>
