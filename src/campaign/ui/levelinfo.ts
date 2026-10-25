@@ -5,6 +5,7 @@ import { h } from '../../ui/dom';
 import type { BuildChallenge } from '../../editor/challenges';
 import { METRIC } from '../grade';
 import { progress } from '../progress';
+import { PUZZLES, puzzleUnit } from '../puzzles';
 import type { CampaignNode, Metric } from '../types';
 
 /** What a challenge's test set is, in words (the level's success criteria). */
@@ -40,10 +41,15 @@ export function gradeTable(n: CampaignNode): HTMLElement {
   const keys = Object.keys(par) as Metric[];
   // A percentage (idle lanes) carries its unit; counts read fine bare, the label names them.
   const fmt = (k: Metric, v: number) => (METRIC[k].unit === '%' ? `${v} %` : String(v));
+  // a program's 'cycles' count what its machine steps: instructions, mostly
+  const pz = n.kind === 'program' ? PUZZLES[n.id] : undefined;
+  const unit = pz ? puzzleUnit(pz) : undefined;
+  const label = (k: Metric) => (k === 'cycles' && unit ? unit[0].toUpperCase() + unit.slice(1) : METRIC[k].label);
+  const hint = (k: Metric) => (k === 'cycles' && unit ? `${unit[0].toUpperCase() + unit.slice(1)} to run each test, mean over the tests` : METRIC[k].hint);
   return h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
     keys.length
       ? h('table', null, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Par'), h('th', null, 'Your best')),
-        keys.map((k) => h('tr', { title: METRIC[k].hint }, h('td', null, METRIC[k].label), h('td', null, fmt(k, par[k]!)),
+        keys.map((k) => h('tr', { title: hint(k) }, h('td', null, label(k)), h('td', null, fmt(k, par[k]!)),
           h('td', { class: np?.best?.[k] !== undefined ? (np.best[k]! <= par[k]! ? 'par' : 'over') : '' }, np?.best?.[k] !== undefined ? fmt(k, np.best[k]!) : '—'))))
       : h('p', { class: 'sub' }, 'Passing earns all three stars: nothing to optimise here.'),
     keys.length ? h('p', { class: 'sub' }, '★ passes · ★★ every metric within 1.5 × par · ★★★ every metric at or under par.') : null);

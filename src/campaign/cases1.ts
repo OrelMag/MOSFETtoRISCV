@@ -8,7 +8,16 @@
 import type { LevelCase } from './cases';
 
 export const CASES1: Record<string, LevelCase> = {
-  // ---- Act 4: programs ------------------------------------------------------------------------
+  // ---- Act 4: the instruction set and programs ------------------------------------------------
+  i_isa: {
+    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>mv</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
+    without: 'Act 5\'s blocks would have nothing to be checked against: the golden model every core bench compares with, register write by register write, is this specification run in software.',
+    cost: '23 instructions in 16-bit words. The width sets the costs downstream: three-bit register fields mean eight registers, so the register file is 2 172 NANDs; immediates that never move make the immediate generator 0 NANDs; a 4-bit opcode makes the control unit\'s first stage a 4→16 decoder, 100 of its 200 NANDs. The price is paid in instructions: 6-bit offsets, no <code>andi</code>, no <code>bltu</code>, no bytes.',
+  },
+  i_enc: {
+    problem: 'Decoding is reading a word\'s fields. op[3:0] names the format, and the format says which of the other fields are registers and which are pieces of an immediate. The register file and the immediate generator take their fields without asking, since they never move; only the control unit has to look at the opcode. Encoding is the assembler\'s half of the same table.',
+    cost: 'Six right answers pass; ★★★ allows two mistakes. In hardware this decode is the Control unit level: 200 NANDs and 13 delays at par, of which the 4→16 opcode decoder is 100 NANDs and 5 delays.',
+  },
   p_add: {
     problem: 'The smallest complete program: <code>lw a0, -4(x0)</code> twice reads two words from the input device, <code>add</code> sums them, <code>sw a0, -3(x0)</code> hands the sum to the output device, <code>halt</code> (<code>jal x0, 0</code>, a jump to itself) stops. The devices sit at the top of the address space (IN = 0xFFFC, OUT = 0xFFFD), so a device address is computed like any other: x0 plus the sign-extended offset, in the ALU. Loads, ALU operations, stores and a jump: every class the core must implement except conditional branches.',
     cost: 'Five words, five cycles on the single-cycle core, one per instruction. Nothing shorter exists: two inputs need two loads, then one add, one store and the halt.',
@@ -42,6 +51,11 @@ export const CASES1: Record<string, LevelCase> = {
   },
 
   // ---- Act 5: the single-cycle core -----------------------------------------------------------
+  c_lesson: {
+    problem: 'Acts 1–3 built blocks that compute and remember; Act 4\'s programs say what to compute. The datapath is the wiring between them: one loop through the PC, the instruction memory, the register file, the ALU and the data memory, the same for every instruction, with muxes whose settings differ by instruction class. Only three things change at the clock edge: the PC, x[rd] and the memory word a store writes.',
+    without: 'A path per instruction class: separate adders for addresses and branch targets beside the ALU, separate write paths into the register file. Sharing one path and switching it is what keeps the core small.',
+    cost: 'Core III, the whole of RV16I: 4 720 NANDs, of which the register file is 2 172, the ALU 1 055, next PC 421, the branch comparator 287 and control 200; the other 585 are bus muxes and the PC\'s flip-flops. Its period, 98 NAND delays, is set by a load\'s path, and 50 of those delays are the ripple ALU: the act ends with Core IV, which shortens exactly that.',
+  },
   c_imm: {
     problem: 'Constants travel inside instructions, in four formats: <b>I</b> = instr[15:10] (<code>addi</code>, <code>lw</code>, <code>jalr</code>), <b>S/B</b> = {instr[15:13], instr[6:4]}, in the f3 and rd positions (<code>sw</code> and the branch offsets), <b>J</b> = instr[15:7] (<code>jal</code>), <b>U</b> = {instr[15:7], instr[3]} &lt;&lt; 6 (<code>lui</code>). The generator delivers all four, sign-extended to 16 bits, and the core\'s 4:1 bus mux, steered by the control unit\'s <code>isel</code>, picks one. The sign bit is instr[15] in every format, so sign extension is a fan-out.',
     without: 'No instruction can carry a constant: no <code>addi</code>, no load or store offset, no branch or jump target.',
@@ -75,7 +89,7 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '+98 NANDs over Core I (3 990): the address is the ALU\'s add, but stores bring the S/B immediate format and loads the memory\'s word, so the immediate and the result each choose among three and gain a second 2:1 mux (49 NANDs; 4:1 bus muxes come with jumps). The price is mostly time: the data memory read sits behind the ALU in the same cycle (period 98 against 84), and fetch and load both read memory in that cycle, which is why a single-cycle core has separate instruction and data memories (Harvard).',
   },
   c_core3: {
-    problem: 'Branches and jumps complete RV16I. The branch comparator reads rs1 and rs2, the next-PC logic loads the PC with pc + imm (a taken branch, <code>jal</code>) or rs1 + imm (<code>jalr</code>), and <code>jal</code> / <code>jalr</code> write pc + 1 to rd through the result mux\'s third input. Loops, calls and the stack of Act 4 now run on hardware built from NANDs, one instruction per cycle.',
+    problem: 'Branches and jumps complete RV16I. The branch comparator reads rs1 and rs2, the next-PC logic loads the PC with pc + imm (a taken branch, <code>jal</code>) or rs1 + imm (<code>jalr</code>), and <code>jal</code> / <code>jalr</code> write pc + 1 to rd through the result mux\'s third input. The loops and calls of Act 4 now run on hardware built from NANDs, one instruction per cycle.',
     without: 'Straight-line code: each instruction runs once, and a loop of n iterations has to be written out n times.',
     cost: '+730 NANDs over Core II: the branch comparator (287) and next PC (421), less the PC\'s own incrementer (76), since next PC\'s pc + 1 now feeds the PC, and the J format and pc + 1 make the immediate and result muxes 4:1 (+98). 4 720 in all, period unchanged at 98 (the load path stays the longest). The 28 test programs take 1 236 cycles, 121 128 NAND delays. The five-stage pipeline of Act 6 runs them in 1 495 cycles at period 78 (116 610), the multicycle core in 3 865 at period 76 (293 740).',
     alts: [{ name: 'Single-cycle, Kogge–Stone adders', lib: 'rv16_cpu_ks' }, { name: 'Multicycle core', lib: 'rv16_mc' }, { name: 'Five-stage pipeline', lib: 'rv16_pipe_111' }],
@@ -93,6 +107,12 @@ export const CASES1: Record<string, LevelCase> = {
   },
 
   // ---- Act 6: the pipeline --------------------------------------------------------------------
+  pi_lesson: {
+    problem: 'A single-cycle core does one instruction at a time, and each one must cross the whole datapath before the next may start: most of the hardware sits idle most of the cycle. A pipeline keeps every stage busy with a different instruction, so the period only has to fit the slowest stage, and pays for it in pipeline registers and in the hazard logic that keeps the overlap correct.',
+    without: 'Core IV: 93 936 NAND delays on the 28 programs, one instruction per 76-delay cycle.',
+    cost: 'Pipeline IV is 9 218 NANDs against Core IV\'s 4 938, the 15 pipeline registers 3 900 of it, and with ripple adders in E it is slower than Core IV: 1 495 cycles at period 78, 116 610 NAND delays. Kogge–Stone adders in E (10 102 NANDs) bring the period to 56 and the time to 83 720.',
+    alts: [{ name: 'Core IV (single-cycle)', lib: 'rv16_cpu_ks' }, { name: 'Pipeline IV', lib: 'rv16_pipe_111' }],
+  },
   pi_reg: {
     problem: 'The four pipeline registers (F/D, D/E, E/M, M/W) carry what later stages need of the instruction they hold: the word, pc, operands, immediate, control bits, rd. Two hazards need more than a plain register. A load-use stall holds the PC and F/D (en = 0) so the waiting instruction is decoded again; a stall or a taken branch clears D/E (and a branch also F/D) to an all-zero bubble, whose control bits write no register and store nothing.',
     without: 'A plain register can neither hold nor bubble: the hazard unit and the branch redirect would have nothing to act on, and only code padded with nops by hand would run.',
@@ -112,7 +132,7 @@ export const CASES1: Record<string, LevelCase> = {
   pi_core1: {
     problem: 'Now an instruction may use the result of the one just before it. Two 3:1 bus muxes in front of E pick each operand from the register file, from M (the result before memory: the ALU\'s, or the immediate for lui) or from W (the value being written back), steered by the forwarding unit. rs2 is forwarded too: stores write it, and from Pipeline IV on branches compare it (with pc + 1 joining M\'s result for the jumps).',
     without: 'Two nops after every instruction: 2 508 cycles on these programs instead of 970.',
-    cost: '+355 NANDs (7 417) and the period rises from 65 to 78, but the 19 programs fall from 2 508 cycles to 970: 75 660 NAND delays, against 163 020 for Pipeline I and 80 752 for Core II. The pipeline now beats the single-cycle core, by 6%.',
+    cost: '+355 NANDs (7 417) and the period rises from 65 to 78, but the 19 programs fall from 2 508 cycles to 970: 75 660 NAND delays, against 163 020 for Pipeline I and 80 752 for Core II. The pipeline now beats Core II, by 6%, but not Core IV: with fast adders the single-cycle core runs these programs in 62 624 (824 cycles at period 76).',
   },
   pi_haz: {
     problem: 'A load\'s word comes out of memory at the end of M. If the very next instruction reads it, that instruction is already in E when the word appears, one cycle too early for forwarding. The hazard unit, in D, compares rs1 and rs2 with the rd of a load in E (rwe and wb = memory, rd ≠ x0) and raises <code>stall</code>: the PC and F/D hold, D/E takes a bubble, and a cycle later W forwards the loaded word.',
@@ -122,21 +142,28 @@ export const CASES1: Record<string, LevelCase> = {
   pi_core2: {
     problem: 'Loads used at once. On a stall the PC and F/D keep their values, D/E clears to a bubble and the load moves on to M; the next cycle it is in W and the forwarding unit hands its word to the instruction waiting in E. One lost cycle per load-use pair, none for any other dependence.',
     without: 'A nop after every load instead: 970 cycles on these programs, against 917 with the stall.',
-    cost: '+114 NANDs (7 531), period unchanged at 78. The stall is paid only when the next instruction reads the loaded register, where a nop is paid after every load. The 19 programs take 71 526 NAND delays, 11% less than on Core II.',
+    cost: '+114 NANDs (7 531), period unchanged at 78. The stall is paid only when the next instruction reads the loaded register, where a nop is paid after every load. The 19 programs take 71 526 NAND delays, 11% less than on Core II and still 14% more than on Core IV (62 624).',
   },
   pi_core3: {
     problem: 'A branch or jump resolves in E, where the comparator and the next-PC logic run on forwarded operands. By then F and D hold the next two words, fetched on the guess that the branch falls through. On a taken branch or any jump, E loads the PC with the target and clears F/D and D/E, so the two wrong-path instructions never write anything.',
     without: 'The two instructions after a taken branch execute anyway: wrong-path code changes registers and memory.',
-    cost: '+1 687 NANDs (9 218): the branch comparator (287), next PC (421), a redirect mux on the PC, three pipeline registers carrying pc and pc + 1 (780), and the J format and pc + 1 widening the immediate, value and result muxes (+147). Period unchanged at 78: forwarding → comparator → next PC → flush reaches F/D at 77, one delay inside the ALU path. Every taken branch and jump costs two cycles: the 28 Core III programs take 1 495 cycles against 1 236, and at period 78 against 98 the pipeline ends 4% faster than Core III (116 610 against 121 128 NAND delays). The flushes eat most of the 20% the shorter period gained; branch prediction and earlier resolution win it back.',
+    cost: '+1 687 NANDs (9 218): the branch comparator (287), next PC (421), a redirect mux on the PC, three pipeline registers carrying pc and pc + 1 (780), and the J format and pc + 1 widening the immediate, value and result muxes (+147). Period unchanged at 78: forwarding → comparator → next PC → flush reaches F/D at 77, one delay inside the ALU path. Every taken branch and jump costs two cycles: the 28 Core III programs take 1 495 cycles against 1 236, and at period 78 against 98 the pipeline ends 4% faster than Core III (116 610 against 121 128 NAND delays). The flushes eat most of the 20% the shorter period gained, and Core IV (93 936) beats it outright. Branch prediction wins back cycles (1 431 here) but adds period (80): 114 480. Kogge–Stone adders in E win back the period instead: 56, 83 720 NAND delays, 11% faster than Core IV.',
+    alts: [{ name: 'Core IV (single-cycle, Kogge–Stone ALU)', lib: 'rv16_cpu_ks' }, { name: 'Pipeline IV, Kogge–Stone adders in E', nand: 10102, note: 'period 56, the same 1 495 cycles: 83 720 NAND delays' }],
   },
   o_bpred: {
     problem: 'Loops take their closing branch almost every time, and Pipeline IV flushes two instructions for each one. Guessing in F avoids most of that: decode the fetched word (the immediate generator is wiring), and if it is <code>jal</code> or a branch with a negative offset (instr[15] = 1), fetch from pc + imm at once. E compares the guess with the outcome and redirects only on a miss: to the target, or back to pc + 1 when a predicted branch falls through.',
     without: 'Two flushed cycles per taken branch or jump: 2 653 cycles on the prediction programs.',
-    cost: '+571 NANDs (9 789) for an adder and a decoder in F and the guess carried to E, period 80 (+2). Cycles fall 13% over the 31 programs (2 653 → 2 303) and 25% on the three loop programs (1 158 → 872). A dynamic predictor also learns forward branches, from per-branch history; its logic is small (a 2-bit counter\'s next state is 28 NANDs), its storage is not: RV32\'s 16-entry branch target buffer is 22 849 NANDs, more than twice this whole pipeline.',
-    alts: [{ name: '2-bit saturating counter, next-state logic', lib: 'satctr' }, { name: '16-entry branch target buffer (RV32)', lib: 'btb16' }],
+    cost: '+571 NANDs (9 789) for an adder and a decoder in F and the guess carried to E, period 80 (+2). Cycles fall 13% over the 31 programs (2 653 → 2 303) and 25% on the three loop programs (1 158 → 872). A dynamic predictor also learns forward branches, from per-branch history; its logic is small (a 2-bit counter\'s next state is 28 NANDs), its storage is not: RV32\'s 16-entry branch target buffer is 22 849 NANDs, more than twice this whole pipeline. Against the single-cycle core the guess alone is not enough: Core IV runs these programs in 149 112 NAND delays (1 962 cycles at period 76), this pipeline in 184 240. With Kogge–Stone adders in E and in F\'s target adder as well it is 10 895 NANDs at period 58: 133 574, 10% faster than Core IV.',
+    alts: [{ name: '2-bit saturating counter, next-state logic', lib: 'satctr' }, { name: '16-entry branch target buffer (RV32)', lib: 'btb16' }, { name: 'Pipeline IV, no prediction', lib: 'rv16_pipe_111' }, { name: 'Core IV (single-cycle)', lib: 'rv16_cpu_ks' }],
   },
 
   // ---- Act 7: the system ----------------------------------------------------------------------
+  y_lesson: {
+    problem: 'Three events cannot be handled inline: a word that is no instruction, a request to the system (<code>ecall</code>), and a device that needs service now. Each one stops the program between two instructions, saves where it was and why, runs a handler at mtvec and comes back with <code>mret</code>. The state lives in CSRs, apart from the program\'s registers, so the handler can run without destroying what it must restore.',
+    without: 'An undefined word runs as whatever its bits select, and a device is polled in a loop that spends cycles and still misses what happens between two polls.',
+    cost: 'On the single-cycle core: the CSR file 1 765 NANDs, exceptions 2 537 over Core III in all, interrupts nothing more. In the pipeline: 2 813 over Pipeline IV for precise exceptions, then 7 for the interrupt. The finale is 12 038 NANDs.',
+    alts: [{ name: 'Single-cycle core with traps and interrupts', lib: 'rv16_cpu_irq' }, { name: 'The finale: pipeline with traps and interrupts', lib: 'rv16_pipe_111s' }],
+  },
   y_csr: {
     problem: 'The trap machinery keeps its state in control and status registers, read and written by <code>csrrw</code> / <code>csrrs</code> / <code>csrrc</code> with the CSR number in the rs2 field: mstatus (MIE bit 3, MPIE bit 7), mie (MEIE bit 11), mtvec (the handler\'s address), mepc (where the trap happened), mcause, mscratch; mip shows the interrupt line, and CSR 7 has no register: it reads 0 and ignores writes. A trap writes three of them on one edge (mepc ← pc, mcause ← cause, MPIE ← MIE, MIE ← 0), and <code>mret</code> moves MPIE back into MIE.',
     without: 'Nowhere to keep the return address and the cause: a trap would destroy the state needed to resume, so neither exceptions nor interrupts can exist.',
@@ -161,14 +188,27 @@ export const CASES1: Record<string, LevelCase> = {
     problem: 'The pipeline with precise exceptions: when an instruction traps, every older instruction completes and no younger one has changed anything. Traps are taken in E, where the instruction has written nothing yet: M and W finish, F/D and D/E are flushed, the PC loads mtvec. A valid bit travels with every instruction, because a bubble\'s all-zero word is an illegal SYSTEM encoding; a CSR instruction reads and writes in E, and its old value travels down as the result.',
     without: 'An imprecise trap: mepc points near the culprit, a younger instruction may already have written a register, and the handler cannot resume the program.',
     cost: '12 031 NANDs, +2 813 over Pipeline IV: the CSR file, system decode, illegal detector, one more pipeline register (D/E instr) and the F/D valid bit, one flip-flop that clears (15 NANDs). Period 81 (+3): trap and <code>mret</code> join the redirect path to the PC. The 44 programs take 2 361 cycles, 191 241 NAND delays, against 194 800 on the single-cycle core with traps (1 948 cycles at period 100): with ripple adders in E, a period of 81 against 100 only just covers the extra cycles (2% faster).',
+    alts: [{ name: 'Single-cycle core with traps', lib: 'rv16_cpu_trap' }, { name: 'Pipeline IV (no traps)', lib: 'rv16_pipe_111' }],
   },
   y_final: {
     problem: 'Pipeline V plus the external interrupt. When intr = MIE · MEIE · irq is 1, the instruction in E does not run: it is taken like an exception, with mcause 0x800B and mepc its pc, older instructions completing and younger ones flushed; <code>mret</code> runs it again. The valid bit gates the interrupt too: a bubble carries no real pc (its D/E slot was cleared), so an interrupt taken on it would save a wrong mepc, and mret would resume somewhere the program never was.',
     without: 'A device must be polled, as on Pipeline V. Without the valid gate, an interrupt that lands on a bubble saves mepc = 0, and its mret restarts the program.',
-    cost: '12 038 NANDs, 7 over Pipeline V: the interrupt\'s AND with valid (2), the trap OR (3) and the cause\'s interrupt terms (2). Period 81, unchanged. The 45 programs, the interrupt-driven one included, take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with interrupts (1 976 cycles at period 100).',
+    cost: '12 038 NANDs, 7 over Pipeline V: the interrupt\'s AND with valid (2), the trap OR (3) and the cause\'s interrupt terms (2). Period 81, unchanged. The 45 programs, the interrupt-driven one included, take 2 399 cycles, 194 319 NAND delays, against 197 600 on the single-cycle core with interrupts (1 976 cycles at period 100). A predicting Pipeline IV may keep its prediction here: 12 609 NANDs, period 84, 2 299 cycles, 193 116 NAND delays, about the same. What would make it pay is Kogge–Stone adders in E: 12 922 NANDs, period 59, 141 541, 28% faster than the single-cycle core.',
+    alts: [{ name: 'Single-cycle core with traps and interrupts', lib: 'rv16_cpu_irq' }, { name: 'The finale with branch prediction', nand: 12609, note: 'period 84, 2 299 cycles: 193 116 NAND delays' }, { name: 'The finale with Kogge–Stone adders in E', nand: 12922, note: 'period 59, 2 399 cycles: 141 541 NAND delays' }],
   },
 
   // ---- Act 8: side quests ---------------------------------------------------------------------
+  o_lesson: {
+    problem: 'RV16I adds, subtracts, shifts and compares; it has no multiply, no divide and no floating point. Each can be done in software, in a unit that loops one step per clock, or in one combinational pass, and the choice moves a core\'s three graded numbers in different directions: NANDs, period and cycles.',
+    without: 'Software: 28 to 134 instructions per 16-bit product in the Act 4 puzzle, 74 on average.',
+    cost: 'Shift-and-add: 1 169 NANDs, 18 cycles a product. The 16 × 16 array: 2 672 NANDs, 150 deep, and in the core a period of 191 against 98 for every instruction. The FP adder is 3 732 NANDs, the FP multiplier 4 912; no RV16 core runs them.',
+    alts: [{ name: 'Shift-and-add multiplier', lib: 'smul16' }, { name: '16 × 16 array multiplier', lib: 'amul16' }, { name: 'Pipelined Booth multiplier', lib: 'pmul16' }],
+  },
+  n_float: {
+    problem: 'An integer\'s 16 bits are 65 536 evenly spaced values. Binary16 spends them on a sign, a 5-bit exponent (bias 15) and a 10-bit fraction behind a hidden 1: values from 2<sup>−24</sup> up to 65 504, always with 11 significant bits, the steps growing with the value. Every FP unit of this act reads those three fields, so the encoding comes first.',
+    without: 'Fractions and large ranges only as fixed point: the programmer tracks the binary point by hand and loses either range or precision.',
+    cost: 'Free in hardware: the format is a convention. Its price shows in the units: unpack (63 NANDs) recovers the hidden bit and the special values, and every result needs normalize &amp; round (2 058).',
+  },
   o_mulseq: {
     problem: 'The Act 4 multiply loop in hardware. A 32-bit product register starts as {0, b}; each clock, if its lowest bit is 1, a is added to its upper half, then the whole register shifts right one place. Sixteen steps on one 16-bit adder, plus a load cycle and a done cycle: 18 cycles per product, run by an iteration counter.',
     without: 'Multiplication in software: 28 to 134 instructions per product in the Act 4 puzzle, 74 on average.',
@@ -229,26 +269,29 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpadd: {
     problem: 'a + b in binary16: unpack both, swap so that |a| ≥ |b|, shift b right by the exponent difference keeping a sticky bit, add or subtract the significands (<code>sub</code> flips b\'s sign), then normalize &amp; round. The special cases wrap around it: a NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00, and x − x is +0, except −0 when rounding down.',
     without: 'Floating-point addition in software: field extraction, shifts, compares and adds, dozens of integer instructions per operation.',
-    cost: '3 732 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18.',
-    alts: [{ name: 'binary32 adder', lib: 'fpadd8_23' }],
+    cost: '3 732 NANDs, depth 163, normalize &amp; round 2 058 of them. The same design in binary32 (8-bit exponent, 23-bit fraction) is 8 218 NANDs, depth 181: area roughly doubles, depth grows by 18. RV16 has no F registers or FP instructions, so no core here runs it; the RV32 chapters\' FPU32 is that adder, the multiplier and the rest inside a CPU, with a register file of their own.',
+    alts: [{ name: 'binary32 adder', lib: 'fpadd8_23' }, { name: 'RV32F floating-point unit', lib: 'fpu32' }],
   },
   o_fpmul: {
     problem: 'Multiplying floats needs no alignment: XOR the signs, add the exponents (less one bias), multiply the 11-bit significands into a 22-bit product, then normalize &amp; round. Two significands in [1, 2) give a product in [1, 4), so its top bit decides a shift by one place.',
-    cost: '4 912 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width.',
+    without: 'Float products in software: an integer multiply of the significands (28 to 134 instructions by shift and add on RV16I), then exponent, normalization and rounding code around it.',
+    cost: '4 912 NANDs, depth 150: the 11 × 11 Wallace multiplier is 1 696 and the 22-bit normalize &amp; round 2 666. Shallower than the adder (163), which must align before it adds. An 11 × 11 array multiplier is smaller (1 232) but 100 deep against 48; binary32 takes 14 913 NANDs, the significand multiplier growing with the square of the width. As with the adder, no RV16 core runs it: the RV32 chapters\' FPU32 is where a multiplier like it meets a register file.',
     alts: [{ name: 'binary32 multiplier', lib: 'fpmul8_23' }],
   },
   o_fpcmp: {
     problem: '<code>feq</code>, <code>flt</code> and <code>fle</code>. The exponent sits above the fraction, so two non-negative floats order like 15-bit unsigned integers: compare |a| and |b| once. The signs then decide: two negatives reverse the order, different signs make the negative one smaller unless both are zeros (−0 = +0), and any NaN makes every comparison false (<code>unord</code>), a signaling one also raising <code>snan</code>.',
+    without: 'Comparing the patterns as signed integers orders every pair of negatives backwards, calls −0 smaller than +0, and calls a NaN equal to itself.',
     cost: '682 NANDs, depth 25: two unpacks, a 15-bit Kogge–Stone subtractor and a 15-bit equality test for the magnitudes, and the sign and NaN logic. A 16-bit integer magnitude comparator alone (listed below) is 237 NANDs, depth 23: the format keeps its special cases off the critical path.',
     alts: [{ name: '16-bit magnitude comparator (integers)', lib: 'cmp16' }],
   },
   o_fpcvt: {
     problem: '<code>fcvt</code> from a 16-bit integer: an integer is already a significand, its top bit worth 2<sup>15</sup>. Take the magnitude (a conditional negate when signed and negative), hand it to normalize &amp; round with exponent 15 + bias, and the leading-zero shift and the rounding do the rest. Integers above 2048 lose low bits (inexact); unsigned 65 535 lies past 65 504, the largest finite, and rounds to ∞ in some modes (overflow).',
+    without: 'int → float in software: find the leading 1 a bit at a time, shift, and round by hand, a loop for every conversion.',
     cost: '2 690 NANDs, depth 109: the 16-bit normalize &amp; round and a 16-bit conditional negate. No new arithmetic: the level is wiring around blocks already built.',
   },
   o_cache: {
     problem: 'Main memory is far slower than the core, and programs reuse the same words (locality). A cache keeps recent ones close: here eight one-word lines, index = addr[2:0], each holding its word, a 5-bit tag (addr[7:3]) and a valid bit. hit = valid and tag match; a read hit answers from the line, a miss from main memory, filling the line at the clock edge; a write fills the line and goes through to memory.',
-    without: 'Every load waits for main memory, tens to hundreds of core cycles for DRAM. The RV16 bench answers in the same cycle, so here the cache is graded on its own cost.',
+    without: 'Every load pays the controller\'s latency: tCAS = 4 cycles on the open row, tRP + tRCD + tCAS = 12 on another, with the last level\'s timings, and a real DRAM is tens to hundreds of core cycles. The RV16 bench answers a miss in the same cycle, so here the cache is graded on its own cost. On the RV32I single-cycle core with chapter 22\'s 2-way cache, matmul misses 73 times: 676 stall cycles behind a fixed line fill (8 cycles, 12 with a dirty victim), 1 022 behind chapter 36\'s open-page controller.',
     cost: '3 497 NANDs, period 36, for 128 data bits: the data RAM (8 × 16) is 2 419 NANDs, the tag RAM (8 × 6) 939, the tag comparator 33. Tag and valid add 6 bits to every 16-bit line; longer lines share one tag among more words but fetch more on a miss. Direct mapping makes addresses with the same low three bits evict each other; two ways, two tags compared at once, avoid that.',
   },
   o_mc: {
@@ -259,6 +302,11 @@ export const CASES1: Record<string, LevelCase> = {
   },
 
   // ---- Act 9: throughput ----------------------------------------------------------------------
+  k_lesson: {
+    problem: 'Your core finishes one instruction a cycle for one program. A kernel runs the same instructions over many independent elements, so a second datapath needs no second fetch, decode or PC: share the front end, replicate the datapath and the registers. The act does it in three parts. <b>Lanes</b>: four lanes, their registers and mask, the SIMD core; then the stack and the SIMT core for lanes that disagree. <b>Warps</b>: a memory that answers late, and a second warp that issues meanwhile. <b>Pixels</b>: a rasterizer beside the lanes, and a frame drawn by both.',
+    without: 'Four of your cores: four fetches, four control units, four PCs and four instruction memories for four instruction streams that are identical.',
+    cost: 'The SIMD core is 15 669 NANDs, four single-cycle cores 18 880: the saving is small because RV16\'s front end is small, and 8 688 of the lane core\'s NANDs are its four register files. A second warp adds 12 242; the rasterizer and its device registers another 10 301 (A frame: 40 275).',
+  },
   k_lanes: {
     problem: 'One instruction, four results. A lane is the single-cycle core\'s execute step for one thread: the operand-b mux (its own rs2 or the shared immediate) and an ALU. All four lanes take the same <code>alu</code> operation, <code>bimm</code> and immediate from the one control unit; only their operands differ. <b>nz</b> has a bit per lane, rs1 ≠ 0: the predicate <code>split</code> will test, computed by every lane on its own register.',
     without: 'One result per instruction: a loop over n elements runs n iterations, where four lanes run n / 4.',
@@ -296,21 +344,35 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '17 732 NANDs, +2 063 over the SIMD core: the stack 1 995, the PC mux 49, a 4-bit mask mux 16, an OR. Period unchanged at 100: the stack sits beside the load path, not on it. The 25 programs take 919 cycles. Divergence now costs time instead of correctness: the if / else test runs 14 instructions at 71% lane utilization, two lanes on each side; the nested ifs 19 at 59%.',
     alts: [{ name: 'SIMD core (no split / join)', lib: 'rv16_simd' }],
   },
+  p_saxpy: {
+    problem: 'y ← a·x + y is the shape of most throughput work: every element independent. Thread t takes elements t, t + 4, …, so the lanes walk the arrays side by side and each pass touches four neighbouring words. There is no multiply, but a is the same in every lane, so the shift-and-add loop over its bits branches identically everywhere and the leader is never wrong.',
+    without: 'One lane doing everything (<code>tmc</code> to lane 0, stride 1): 281 cycles on average against 90, 3.1× slower, with the other three lanes masked 72% of the time.',
+    cost: '23 words, 90 cycles, 360 lane-ops, no lane idle: 7 instructions per element per set bit of a. The one-lane version does fewer lane-ops (287): four lanes run the loop\'s control (the bit test, the counters, the jumps) four times, 25% more work for 3.1× the speed. The stride-4 layout is also what a coalescer rewards: the four lanes\' words share one line, where contiguous quarters put them n / 4 words apart.',
+  },
+  p_reduce: {
+    problem: 'A sum turns n values into one, so the lanes cannot stay busy to the end: strided partial sums with every lane working, then the four partials meet in memory and fewer lanes combine them. The SIMT core\'s mask (<code>tmc</code>, or <code>split</code> / <code>join</code>) is what lets the spare lanes sit out.',
+    cost: '21 words, 35 cycles, 114 lane-ops; 29% of the lane-steps idle on 4 words, 12% on 32: the combine is a fixed cost. A tree (lanes 0 and 1 add lanes 2 and 3\'s sums, then lane 0 adds lane 1\'s) is 36 cycles and 120 lane-ops: each round is a store, a load and an add through memory, so on four lanes it does not pay. Every lane repeating the whole combine is a cycle faster and never masked, but three lanes compute a sum nobody needs: 134 lane-ops, and lane-ops are graded.',
+  },
   k_coal: {
     problem: 'The lane cores give every lane a memory port: four memories, or one memory with four ports, which real SRAM does not have. One port as wide as a line (four RV16 words) serves several lanes at once when their words share the line. The coalescer decides each access: the leader (lowest active lane) picks the line, every active lane whose address has the same bits 15 … 2 rides along, and the lanes left over wait for the next access.',
     without: 'One port serves one lane per cycle: a load with four active lanes takes four cycles, which is what chapter 29\'s RV32 lane core does. With neighbouring threads on neighbouring words (thread i on element i, the usual layout), the coalescer makes it one.',
-    cost: '467 NANDs, depth 27: a 4:1 bus mux for the leader\'s line (147), three 14-bit equality comparators (96 each: lane 0, when active, is the leader and needs none), the leader logic, an AND per lane and a 4-bit XOR for the lanes left. Its outputs drive a sequencer that loops over lines (one access, then mask := left) instead of over lanes. Chapter 32\'s RV32 access unit does the same over 16-byte lines, plus the bank picking of shared memory and the byte lanes of every word.',
+    cost: '467 NANDs, depth 27: a 4:1 bus mux for the leader\'s line (147), three 14-bit equality comparators (96 each: lane 0, when active, is the leader and needs none), the leader logic, an AND per lane and a 4-bit XOR for the lanes left. In a core its outputs would drive a sequencer that loops over lines (one access, then mask := left) instead of over lanes; act 9\'s two-warp core keeps a port per lane and places neither, so this level is the block on its own. Chapter 32\'s RV32 access unit does the same over 16-byte lines, plus the bank picking of shared memory and the byte lanes of every word.',
     alts: [{ name: 'Chapter 32\'s access unit (RV32)', nand: 5870, depth: 58, note: 'accessUnit(4) in lib/warpmem.ts, measured: 30-bit byte addresses, the bank picker of shared memory, a word select per lane.' }],
   },
   k_warps: {
-    problem: 'Real memory answers late: here one cycle (a synchronous RAM reads at the clock edge), in a GPU hundreds. Two warps that take turns hide it: warp 0\'s load goes out in its turn, the word comes back during warp 1\'s turn and is written then, through a second write port, and by warp 0\'s next turn it is in the register. Each warp needs its own state, PC, mask, stack and lane registers; fetch, decode, control and the lanes are shared, and a bit that toggles every cycle says whose turn it is. <code>bar</code> holds a warp until the other arrives, so warps can share data through memory.',
+    problem: 'A synchronous RAM reads at the clock edge, so a load\'s word comes a cycle after its address. Two warps that take turns hide that: warp 0\'s load goes out in its turn, the word comes back during warp 1\'s turn and is written then, through a second write port, and by warp 0\'s next turn it is in the register. Each warp needs its own state, PC, mask, stack and lane registers; fetch, decode, control and the lanes are shared, and a bit that toggles every cycle says whose turn it is. <code>bar</code> holds a warp until the other arrives, so warps can share data through memory.',
     without: 'One warp on the same memory waits a cycle after every load whose word its next instruction uses (no forwarding can deliver a word the memory has not read yet). The 31 test programs are mostly arithmetic, so the turns win little here: 2 160 turns for both warps against 2 229 cycles for one warp after the other with a stall per load. With memory 8 cycles late, as in chapter 31, a lone warp waits at such loads for 8 cycles, and more warps fill them: saxpy over 64 elements takes 266 cycles on one warp, 172 on four.',
     cost: '29 974 NANDs, period 95: +12 242 over the SIMT core, 8 688 of them the second set of lane registers and 1 995 the second stack; 16-bit 2:1 muxes pick the issuing warp\'s operands and feed each register file its warp\'s results or the returning word. The two lane register files are 58% of the core: a warp costs its registers, which is why a GPU\'s register file is its largest structure and why the registers a thread uses limit how many warps fit. The period falls from 100 to 95: the memory\'s read now ends at the clock edge (8 delays off the longest path), and the warp-select muxes put 3 back.',
     alts: [{ name: 'SIMT core (one warp, memory at once)', lib: 'rv16_simt' }],
   },
+  p_hist: {
+    problem: 'Counting is a read-modify-write, so two threads that meet one value at once would load the same counter, add 1 and store: one count lost. RV16 has no atomic add. So privatize: 16 bins × 8 threads = 128 counters, then <code>bar</code> between counting and summing. The bin-major layout (bin b, thread t at 8·b + t) puts bin b\'s eight counters in a row, so thread t sums bins 2t and 2t + 1 with plain loads.',
+    without: 'Without <code>bar</code> the kernel is right while the warps take turns (174 cycles) and wrong when warp 1 runs ahead, which the grader also tries: warp 1 sums bins warp 0 has not finished counting.',
+    cost: '41 words, 176 cycles, 702 lane-ops, no lane idle. Privatizing costs 8× the counters and a combine pass. Real GPUs add an atomic instead: chapter 32\'s <code>amoadd.w</code> counts in one instruction, serving the leader alone, one lane per access.',
+  },
   k_edge: {
-    problem: 'Deciding whether a pixel is inside a triangle takes three edge functions, E = A·(x − xᵢ) + B·(y − yᵢ), each a sum of two products. The rasterizer evaluates them for every pixel it visits, one a cycle. Because E is linear, the next pixel to the right is E + 4A and the one below E + 4B (quarter-pixel units): after the first pixel, every value is one addition away. The stepper keeps E and the start of the band, R, so that a new row of tiles can begin from R + 4B.',
-    without: 'Evaluating E from scratch costs two 8 × 8 multiplications per edge per pixel: six multipliers of the side quest\'s kind (about 500 NANDs each) to keep one pixel a cycle, against three adders.',
+    problem: 'Deciding whether a pixel is inside a triangle takes three edge functions, E = A·(x − xᵢ) + B·(y − yᵢ), each a sum of two products. The rasterizer evaluates them for every pixel it visits, one a cycle. Because E is linear, the next pixel to the right is E + 4A and the one below E + 4B (quarter-pixel units): after the first pixel, every value is one addition away. The stepper keeps E and the start of the band, R, so that a new row of tiles can begin from R + 4B. Why in hardware at all: the test is the same few adds at every pixel, which is what fixed-function hardware is for; a kernel on the lanes spends instructions on the walk, the tests and the stores around them.',
+    without: 'Evaluating E from scratch costs two 8 × 8 multiplications per edge per pixel: six 8 × 8 array multipliers (632 NANDs each, 3 792 in all) to keep one pixel a cycle, against three adders.',
     cost: '963 NANDs, period 58: the two 16-bit registers are 416, the five 16-bit muxes that choose the base (E, R or 2E) and the operand (a, 4a, b or 4b) 294, the adder / subtractor 212, the command decoder 30. Chapter 33\'s stepper is the same idea at 18 bits with the tile test built in; here the test is the rasterizer\'s.',
     alts: [{ name: 'Chapter 33\'s edge stepper (18 bits, with the tile test)', lib: 'edge_step' }],
   },
@@ -332,7 +394,16 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '40 275 NANDs, period 147: the two-warp core\'s 29 974, the rasterizer\'s 9 188, and 1 113 for the device: six 7-bit vertex registers and a 16-bit colour register, the address decoders on lane 0\'s port and every lane\'s, and the hold. The period is the rasterizer\'s set-up path. On the bench\'s 36 programs, 7 635 cycles.',
     alts: [{ name: 'Two warps, no device', lib: 'rv16_warps' }],
   },
+  p_spin: {
+    problem: 'A frame is three jobs in order: turn the corners (warp 0\'s four lanes, a corner each), clear the screen\'s 1 024 words (all eight threads), draw two triangles (lane 0 hands their vertices to the rasterizer). Two bars keep them apart: lane 0 must not draw before the corners are turned and the screen is clear, and nobody may clear a frame still being drawn.',
+    without: 'Without the second bar the kernel is right while the warps take turns and wrong when warp 1 runs ahead, which the grader also tries: warp 1 clears for the next frame before lane 0 has drawn this one, and the old square stays on the screen.',
+    cost: '73 words, 1 432 cycles over the four tests (2.5 frames on average), 5 282 lane-ops, 8% of the lane-steps idle. Of the reference\'s 577 cycles for one frame, the clear is 462: the screen, not the geometry, is the work. Chapter 34 adds a clear unit for the same reason: a word a cycle, 1 026 cycles where its pipeline\'s clear took 4 438.',
+  },
   // ---- Act 10: memory ---------------------------------------------------------------------------
+  m_lesson: {
+    problem: 'The computer\'s RAM is 20 166 of its 27 083 NANDs and answers in the cycle it is asked; every RV16 bench assumes that. A real main memory is DRAM: a 25 fF cell read through a 100 fF bit line and a sense amplifier, a row at a time, refreshed before it leaks away, behind a controller that keeps the chip\'s timing rules. Other masters want it too, so it sits on a bus; and it forgets at power-off, so the program starts in flash. The act builds that path in order: the column, a bank, the controller and a cache in front of it; the bus and a DMA engine; a flash page store; then a boot from flash.',
+    cost: 'What it costs a processor, measured on the RV32I single-cycle core with chapter 22\'s 2-way write-back cache: matmul misses 73 times whatever is behind the cache. Over a fixed line fill those misses stall 676 cycles (3 029 in all), over chapter 36\'s DRAM controller with open pages 1 022 (3 375), with closed pages 1 341 (3 694). The cache decides how often the core goes to DRAM; the controller, how long each trip takes.',
+  },
   m_sense: {
     problem: 'A DRAM cell is a 25 fF capacitor behind one transistor: it cannot drive a wire, it can only share its charge with one. Shared with a 100 fF bit line at VDD/2, a stored 1 lifts the line to 0.6 VDD and a 0 drops it to 0.4, and the cell is left at the same level. The column turns that into a bit (the sense amplifier against a twin reference line) and puts the charge back (the amplifier drives the line to a rail while the word line is still up).',
     without: 'Read the bit line with a logic gate and 0.4 to 0.6 VDD is neither 0 nor 1; and the cell, read once, holds 0.6: a second read would find almost nothing to tell.',
@@ -341,22 +412,26 @@ export const CASES1: Record<string, LevelCase> = {
   m_bank: {
     problem: 'Once a row is open its words are a cycle away, and every other row is draining: a bank needs someone who remembers which row is open, decides when to close it, and opens every row again before its charge is gone. Here the array leaves all of that to you, as the DRAMs of the 1970s did: RAS-only refresh, a row pointer and a timer in the controller.',
     without: 'Without refresh the first row nobody touched for 288 cycles is gone; the long-pause trace loses one before its first request. Without the open row, every access pays an ACT and a PRE.',
-    cost: '319 NANDs, period 30: the state is 165 (a flip-flop and three 4-bit registers: open row, refresh pointer, timer), two incrementers and a row comparator 66, the decisions the rest. 5 917 cycles over the eight traces.',
+    cost: '319 NANDs, period 30: the state is 165 (a flip-flop and three 4-bit registers: open row, refresh pointer, timer), two incrementers and a row comparator 66, the decisions the rest. 5 917 cycles over the eight traces. In a computer it would sit between a cache\'s miss port and the cell array, as 1970s controllers did; no later level places it: the next one hands refresh and the row buffers to the chip and keeps only the timing rules.',
+    alts: [{ name: 'The DDR-style controller (next level)', lib: 'rv16_dramctrl' }],
   },
   m_ctrl: {
     problem: 'A DDR chip does the refreshing itself when asked and keeps a row buffer per bank, but it has rules: a column command only tRCD after its row opened, data tCAS after a read, a row open at least tRAS, tRP before the next. The controller turns each request into the shortest legal sequence of commands, and fits a refresh in before the chip forgets.',
     without: 'Commands one cycle early read garbage or corrupt a row: the chip does not check, so the controller is the only thing standing between a timing table and silent data loss.',
-    cost: '779 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 36\'s FR-FCFS. 10 690 cycles over the eight traces.',
+    cost: '779 NANDs, period 36. One request at a time keeps it small: two since-counters (cycles since the last ACT and the last PRE) cover every timing for both banks, a 4-stage shift register follows a read to its data, an 8-bit counter schedules refresh. A controller that overlaps requests needs counters per bank and a queue: chapter 36\'s FR-FCFS. 10 690 cycles over the eight traces. The bench\'s intervals are DDR4-3200\'s at the chapters\' clock (4, 4, 4 and 9 cycles) except refresh, scaled to short traces: tREFI is 256 cycles here, 1 974 for the real 7.8 µs. This is the block the RV32 computers put behind their caches (chapter 36\'s, in the benchmarks\' DRAM rows); the next level puts a cache in front of it.',
+    alts: [{ name: 'The bank with refresh (last level)', lib: 'rv16_bank' }, { name: 'Chapter 36\'s controller (RV32: 2 banks, 16-word rows, open page)', nand: 1095, note: 'dramCtrl({ k: 6, banks: 2, rowWords: 16, policy: open }) in lib/dramctrl.ts, measured: 4-word line bursts, state per bank.' }],
   },
   m_bus: {
     problem: 'Two masters, three slaves, one set of wires: the bus has to pick who goes, route the request to the right slave, and bring the answer back to the right master, with a handshake that lets either side take its time. The arbiter must be fair (round robin) and must not take the bus from a transfer still waiting on a slow slave.',
     without: 'Each master needs its own path to every slave: two masters and three slaves are six sets of address and data wires, and a slave with two ports.',
-    cost: '282 NANDs, period 26: four 16-bit muxes (196) carry the address and data out and the read data back; three flip-flops and a few gates are the arbiter, and a few more decode the address.',
+    cost: '282 NANDs, period 26. The four 16-bit muxes are 196 of them, the arbiter\'s three flip-flops 27: moving words, not deciding, is what a bus costs. A crossbar built from the same 49-NAND muxes needs ten (an address and a data 2:1 mux in front of each slave, a 3:1 read mux of two behind each master), 490 NANDs before its three arbiters, and lets the slaves work at once. The shared bus is cheaper and serializes: while the DMA engine copies, the processor\'s loads wait. Chapter 38\'s AXI-shaped bus keeps the handshake and the round robin, with separate read and write channels.',
+    alts: [{ name: 'Chapter 38\'s bus (2 masters, 3 slaves, 32-bit, AXI-shaped)', nand: 1346, note: 'axiBus(2, [0, 1]) in lib/axi.ts, measured: 32-bit addresses and data, byte strobes, five channels.' }],
   },
   m_dma: {
     problem: 'Copying a buffer costs a processor a load, a store and the loop around them for every word. A DMA engine is a master on the bus that does it alone: three register writes start it, an interrupt says it is done, and the processor is free in between.',
     without: 'The processor copies every word itself, at least four instructions a word, each load waiting on memory.',
-    cost: '1 366 NANDs, period 48: four 16-bit registers (src, dst, count, the word in flight) are 832, three incrementers and the load muxes most of the rest. The count holds NOT(words left) and counts up, so the incrementer\'s carry says done with no comparator. 2 079 cycles for the bench\'s 30 copies, wait states included.',
+    cost: '1 366 NANDs, period 48: four 16-bit registers (src, dst, count, the word in flight) are 832, three incrementers and the load muxes most of the rest. The count holds NOT(words left) and counts up, so the incrementer\'s carry says done with no comparator. 2 079 cycles for the bench\'s 30 copies, wait states included. Boot from flash prices it: a 64-word table summed straight from flash is 845 cycles, copied by DMA and then summed 595, summed behind the copy 470.',
+    alts: [{ name: 'Chapter 38\'s DMA engine (32-bit, its registers a bus slave)', lib: 'dma' }],
   },
   m_flash: {
     problem: 'Flash keeps its data without power but cannot overwrite: a page is programmed once, then its whole block must be erased, and erasing is slow and wears the block out. The page store makes it look like a memory you can rewrite: every write goes somewhere erased, a table remembers where each page lives, and a collector reclaims blocks full of stale copies.',
@@ -366,6 +441,6 @@ export const CASES1: Record<string, LevelCase> = {
   p_boot: {
     problem: 'A program\'s table sits in flash, where every load stalls the processor for 8 cycles. The DMA engine copies a word every 4 cycles and leaves the processor free: the question is what to do while it runs.',
     without: 'Loading every word from flash: 845 cycles for 64 words.',
-    cost: 'Waiting for the interrupt and then summing the copy: 595 cycles for 64 words. Summing each word as soon as it has landed (0xFFF2 says how many are left): 470. Then the loop is the limit, about 7 cycles a word against the copy\'s 4: a shorter loop is worth more than a faster engine.',
+    cost: 'Waiting for the interrupt and then summing the copy: 595 cycles for 64 words. Summing each word as soon as it has landed (0xFFF2 says how many are left): 470. Then the loop is the limit, about 7 cycles a word against the copy\'s 4: a shorter loop is worth more than a faster engine. The bench\'s engine is m_dma\'s plus a readable count at 0xFFF2; yours has no such output, so on it only the 595-cycle version would run.',
   },
 };

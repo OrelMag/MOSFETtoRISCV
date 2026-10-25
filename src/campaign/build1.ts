@@ -242,7 +242,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
   }),
   a_slt: () => ({
     id: 'a_slt', title: 'Set if less than', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>lt</b> = (a &lt; b) as signed numbers, <b>ltu</b> = (a &lt; b) as unsigned, for slt / sltu and blt / bge. Both from one subtraction.',
+    brief: '<b>lt</b> = (a &lt; b) as signed numbers, <b>ltu</b> = (a &lt; b) as unsigned, both from one subtraction. The branch comparator reads lt for blt / bge; ltu is the step lt is made from.',
     ports: pins([['a', 16], ['b', 16]], [['lt'], ['ltu']]),
     check: { kind: 'table', spec: ([a, b]) => [s16(a) < s16(b) ? 1 : 0, a < b ? 1 : 0], vectors: () => pairs16() },
     answer: refOf('a_slt', () => CMP16, 'Less than'),
@@ -266,7 +266,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
   }),
   o_fastadd: () => ({
     id: 'o_fastadd', title: 'Fast adder', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>{cout, s} = a + b + cin</b> again, now graded on <b>depth</b>: compute the carries with a parallel-prefix tree. The generate / propagate cells are given.',
+    brief: '<b>{cout, s} = a + b + cin</b> again, now graded on <b>depth</b>: compute the carries with a parallel-prefix tree. The generate / propagate cells are given. Core IV puts this adder in the ALU.',
     ports: pins([['a', 16], ['b', 16], ['cin']], [['s', 16], ['cout']]),
     check: { kind: 'table', spec: ([a, b, c]) => [(a + b + c) & 0xffff, (a + b + c) >> 16], vectors: () => withBit(pairs16()) },
     answer: refOf('o_fastadd', () => keepPorts(koggeStone(16), ['a', 'b', 'cin', 's', 'cout']), 'Fast adder'),

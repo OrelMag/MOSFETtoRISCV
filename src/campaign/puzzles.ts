@@ -98,12 +98,15 @@ function mismatch(t: PuzzleTest, mc: Iss16 | Simt16 | Warps16): string | null {
   return null;
 }
 
+/** What a puzzle's graded count (Measured.cycles) counts: instructions on the golden model, warp instructions on a warp, cycles where warps take turns or flash stalls. */
+export const puzzleUnit = (p: ProgramPuzzle): 'instructions' | 'warp instructions' | 'cycles' => (p.warps || p.dma ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions');
+
 /** Run every test of a puzzle on a source. Never throws. */
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
   const a = assemble16(src);
   const size = a.words.length;
   if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0, laneOps: 0 } : {}) };
-  const what = p.warps ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions';
+  const what = puzzleUnit(p);
   const results = p.tests().map((t) => {
     const mc = puzzleMachine(p, a.words, a.data, t);
     const irqs = new Set(t.irqAt ?? []);

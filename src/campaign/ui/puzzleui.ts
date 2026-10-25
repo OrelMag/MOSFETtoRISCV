@@ -15,7 +15,7 @@ import type { Simt16 } from '../../riscv/rv16/simt16';
 import { Warps16 } from '../../riscv/rv16/warps16';
 import { progress } from '../progress';
 import { FB16, rgb565, SCREEN16 } from '../../gfx/raster16';
-import { PUZZLES, puzzleMachine, runPuzzle } from '../puzzles';
+import { PUZZLES, puzzleMachine, puzzleUnit, runPuzzle } from '../puzzles';
 import type { CampaignNode } from '../types';
 
 const hex = (v: number) => `0x${v.toString(16).padStart(4, '0')}`;
@@ -61,10 +61,10 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
     const head = r.ok ? (() => {
       const g = pr.solve(n.id, { size: r.size, cycles: r.cycles, ...(lanes ? { laneops: r.laneOps } : {}) });
       return h('p', null, h('b', null, icon('check', 14), ' All tests pass '),
-        `${'★'.repeat(g.stars)}${'☆'.repeat(3 - g.stars)} · ${r.size} words · ${r.cycles} cycles on average${lanes ? ` · ${r.laneOps} lane-ops · ${r.idle} % idle lanes` : ''}${g.best && !g.first ? ' (new best)' : ''}`);
+        `${'★'.repeat(g.stars)}${'☆'.repeat(3 - g.stars)} · ${r.size} words · ${r.cycles} ${puzzleUnit(p)} on average${lanes ? ` · ${r.laneOps} lane-ops · ${r.idle} % idle lanes` : ''}${g.best && !g.first ? ' (new best)' : ''}`);
     })() : h('p', null, h('b', null, `${r.results.filter((t) => !t.ok).length} of ${r.results.length} tests fail`), ` · ${r.size} words`);
     result.replaceChildren(head, h('table', { class: 'cp-pz-tests' },
-      h('tr', null, h('th'), h('th', null, 'Test'), h('th', null, lanes ? 'Cycles' : 'Steps'),
+      h('tr', null, h('th'), h('th', null, 'Test'), h('th', null, puzzleUnit(p)[0].toUpperCase() + puzzleUnit(p).slice(1)),
         lanes ? h('th', { title: 'Lane-steps with the lane masked off' }, 'Idle') : null, h('th')), rows));
   };
 

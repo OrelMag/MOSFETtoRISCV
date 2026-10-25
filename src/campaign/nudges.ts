@@ -17,6 +17,12 @@ export const NUDGES: Record<string, string> = {
   v_inv: 'Get one stage working first, then ask what levels the second one needs at its input and how to get there from the first one\'s output.',
   v_ff: 'Two stages that each keep the other off hold a bit; the level problem of the last level has not gone away.',
   h_loader: 'Every card needs a place to go and a moment to be written, and at the end the memory has to change hands.',
+  r_pull: 'Moving the armature takes more force than holding it once the gap is closed: expect two thresholds, not one.',
+  h_card: 'A letter is two holes, a zone at the top and a digit below; a digit is one.',
+  // act 1: drills
+  l_bool: 'Look for a term that already covers another, or a pair that differs in one variable only.',
+  n_bin: 'Split the bits into fours from the right end; each four is one hex digit.',
+  d_kmap: 'Draw the largest rectangles you can, of 1, 2, 4 or 8 cells, and let them wrap around the edges.',
   // act 1: gates
   g_not: 'Only one input to use, but the brick has two.',
   g_and: 'You already have the opposite of what you want.',
@@ -29,6 +35,7 @@ export const NUDGES: Record<string, string> = {
   g_mux8: 'The wide version is the narrow one many times over; see what the copies can share.',
   g_eq16: 'Equality is a question every bit position must answer the same way.',
   // act 2: arithmetic
+  n_twos: 'The top bit counts against you: in 8 bits it weighs −128, in 16 bits −32 768.',
   a_ha: 'Write out the four rows and look at each output column on its own; one of them hides inside a gate you already built.',
   a_fa: 'Count the 1s among the three inputs: the sum is the low bit of that count, the carry its high bit.',
   a_add4: 'Do what you do in decimal on paper: one column at a time, right to left.',
@@ -50,6 +57,15 @@ export const NUDGES: Record<string, string> = {
   s_fsm: 'Name every situation the machine can be in, and what moves it from one to the next.',
   m_ram: 'Writing must pick one word and reading must pick one word: two different selections.',
   m_rf: 'It is the small memory again, with more words, a second way to read, and one entry that must never change.',
+  // act 4: the instruction set and programs
+  i_enc: 'Cut the word at the field boundaries first; the opcode then tells you which fields are registers and which are pieces of an immediate.',
+  p_add: 'Every value has to be in a register before the ALU can touch it, and the answer leaves through a store.',
+  p_loop: 'Put the test where n = 0 does no work, then count what each iteration pays.',
+  p_mem: 'The array is further away than any offset reaches: let a register walk it.',
+  p_call: 'Caller and function only have to agree on where the numbers are and where to come back to.',
+  p_mul: 'Long multiplication in base 2: each row is nothing or a shifted copy of a.',
+  p_sort: 'Fixing neighbours that are out of order is enough; work out how many passes guarantee it.',
+  p_print: 'Without a divider, a digit is how many times its power of ten fits.',
   // act 5: the core
   c_imm: 'Look where the immediate bits sit in each format before reaching for any gate.',
   c_ctl: 'Every control signal is a list of the opcodes that need it.',
@@ -73,9 +89,11 @@ export const NUDGES: Record<string, string> = {
   y_csr: 'Some of these registers change when software writes them, some when a trap happens, and one every cycle.',
   y_trap: 'A trap replaces the instruction: decide what must be remembered, and where execution goes instead.',
   y_irq: 'An interrupt is a trap no instruction caused, and it may only come when it is allowed.',
+  p_handler: 'Whatever the handler changes, main must not notice; and the device must hear that it was served before the handler leaves.',
   y_ptrap: 'Pick one stage where traps take effect, and decide what happens to the older and the younger instructions around it.',
   y_final: 'An interrupt belongs to no instruction: ask which instruction it should look as if it came before, and whether the stage holds one at all.',
   // act 8: side quests
+  n_float: 'Write the value as a power of two times a number between 1 and 2, then find where each part goes.',
   o_mulseq: 'Multiply as by hand, one digit of b per cycle, with the same hardware every time.',
   o_mularr: 'Lay out the long multiplication you would write on paper, and build all of it at once.',
   o_mcore: 'The new opcode only needs a path from the operands to the register write.',
@@ -105,6 +123,10 @@ export const NUDGES: Record<string, string> = {
   k_tile: 'Visit tiles rather than pixels, and only enter a tile that passes its test.',
   k_raster: 'Everything the walk needs can be worked out once per triangle, on hardware the walk already has.',
   k_frame: 'The new unit is just another device at a few addresses, and the core must not race it.',
+  p_saxpy: 'Every lane runs the same program: what makes lane 2 work on different elements from lane 0?',
+  p_reduce: 'The many-to-one step at the end is the only part that cannot use every lane: keep it short, and let only the lanes it needs take part.',
+  p_hist: 'Two threads must never write the same word before the end: give each its own, and decide when everyone may read the others\' words.',
+  p_spin: 'Count what a frame costs before writing it: one part of it touches every word of the screen.',
   // act 10: memory in depth
   m_sense: 'A small change on a large line must be compared against something that started exactly where it did.',
   m_bank: 'Requests and refresh compete for the same rows: decide who goes first, and when an open row is worth keeping.',
@@ -112,6 +134,7 @@ export const NUDGES: Record<string, string> = {
   m_bus: 'Decide who owns the wires, and make sure nobody loses them in the middle of a transfer.',
   m_dma: 'It is a loop of a read and a write, run by hardware, that has to know when it is done without being told twice.',
   m_flash: 'You can never write in place: write somewhere new each time, remember where, and win the space back before it runs out.',
+  p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
 };
 
 /** A level's tips in the order they are revealed: its nudge first, then its own tips. */

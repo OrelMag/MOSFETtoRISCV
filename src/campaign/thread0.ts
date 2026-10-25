@@ -6,6 +6,27 @@ import type { NodeThread } from './thread';
 
 export const THREAD0: Record<string, NodeThread> = {
   // ---- Act 0 ----------------------------------------------------------------------------------
+  intro: { // a lesson about the whole machine: every block
+    uses: ['all'],
+    usedFor: {
+      t_inv: 'the switch every block on the diagram is made of, built first',
+      l_bool: 'the control unit, the decoders and the next-PC logic are logic: algebra makes them cheap',
+      n_bin: 'the PC, the registers and every memory word are 16-bit numbers',
+      r_pull: 'the same logic in relays, what the Z3 was built from',
+      v_inv: 'the same logic in vacuum tubes, what ENIAC was built from',
+      h_card: 'how the program got into a machine before there was a ROM',
+    },
+    pitfalls: [
+      'RV16 counts in words: the next instruction is at pc + 1, where RISC-V\'s is pc + 4.',
+      'x0 is not a register: it always reads 0 and a write to it is dropped.',
+    ],
+  },
+  t_nor: { // optional and in no block: RV16 has no NOR cell
+    pitfalls: [
+      'NMOS in series is the NAND again: the 01 and 10 rows give 1 instead of 0.',
+      'Each PMOS passes a good 1 only from VDD\'s side: one placed between y and GND pulls y to a weak L.',
+    ],
+  },
   t_inv: {
     uses: ['all'],
     usedFor: {
@@ -23,6 +44,79 @@ export const THREAD0: Record<string, NodeThread> = {
     pitfalls: [
       'NMOS in series, PMOS in parallel: the other way round is a NOR.',
       'With the PMOS in series too, a = 1, b = 0 leaves y floating (Z): no network conducts.',
+    ],
+  },
+
+  // ---- Act P: optional, beside act 0; no block of RV16 is built from relays, tubes or cards, so no `uses` ---------
+  r_pull: {
+    usedFor: { r_nand: 'every relay level counts time in its 8.2 ms steps' },
+    pitfalls: [
+      'Pull-in and drop-out differ: the relay pulled in at 15.2 V stays in down to 3.6 V.',
+      'First touch is not rest: the contact bounces 3 times before it settles.',
+    ],
+  },
+  r_nand: {
+    usedFor: {
+      r_xor: 'the same relays, both contacts of the changeover used: a multiplexer',
+      r_latch: 'a make contact feeding its own coil instead of an output',
+    },
+    pitfalls: [
+      'Break contacts in parallel from the supply: in series they make a NOR, y lost when either coil pulls.',
+      'y that nothing drives reads Z: end it on a load, the next coil drawn as its resistance.',
+    ],
+  },
+  r_xor: {
+    usedFor: { r_adder: 'its two lines chosen by b, then one by a: the sum bit; the carry runs the same way' },
+    pitfalls: [
+      'b\'s contacts go to a\'s lines crossed over: wired straight they give XNOR.',
+      'VDD on relay a\'s common, not on b\'s: then exactly one of a\'s lines carries the supply.',
+    ],
+  },
+  r_adder: {
+    pitfalls: [
+      'A contact cannot invert: the carry needs its own ¬c line, and carry in 0 means c open and ¬c on VDD.',
+      'Every sum line and the carry out end on a load, or they read Z wherever no contact drives them.',
+    ],
+  },
+  r_latch: {
+    usedFor: { r_clock: 'a relay switching its own coil again, through a break contact: it cannot rest' },
+    pitfalls: [
+      'The holding line comes through the reset relay\'s break contact: through a make contact k never holds.',
+      'k\'s make contact connects q to the holding line, not to VDD: wired to VDD, reset can never let go.',
+    ],
+  },
+  r_clock: {
+    usedFor: { h_loader: 'a counter bit on a beat: the loader\'s address counter does the same at eight bits' },
+    pitfalls: [
+      'One line from t to its own coil makes t follow k: halving needs two, chosen by a pole of k.',
+      'en goes on the common of k\'s break contact: wired straight to k\'s coil, k pulls in and stays in.',
+    ],
+  },
+  v_inv: {
+    usedFor: { v_ff: 'two of these, each grid reading the other\'s plate through the same divider' },
+    pitfalls: [
+      'A plate wired straight to the next grid holds it at 81 V or more: the second tube conducts whatever the first says.',
+      'The bias resistor goes to −150 V, not to GND: only then does the divider take the grid below −12.5 V.',
+    ],
+  },
+  v_ff: {
+    pitfalls: [
+      'set turns on the tube whose plate is nq, so q rises.',
+      'A wire from set to its grid also holds that grid at 0 V while set is 0: steer it through a diode.',
+    ],
+  },
+  h_card: {
+    usedFor: { h_loader: 'its deck: one object card per 16-bit instruction' },
+    pitfalls: [
+      'Rows run 12, 11, 0, 1–9 from the top: 0 is a zone for S–Z and a digit on its own.',
+      'On an object card column 1 holds the word\'s most significant bit, not bit 0.',
+    ],
+  },
+  h_loader: {
+    pitfalls: [
+      'run must not rise while clk is high: the CPU would see half a pulse. Take empty into a flip-flop clocked on the falling edge.',
+      'The RAM\'s address is the counter while loading and pc after: without the mux the CPU fetches from the counter.',
+      'ready is the write enable and the counter\'s enable: the word and the next address move at the same edge.',
     ],
   },
 

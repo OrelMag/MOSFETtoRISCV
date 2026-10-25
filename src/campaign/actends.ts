@@ -22,12 +22,12 @@ export const ACT_ENDS: Record<number, ActEnd> = {
     next: 's_sr',
   },
   3: {
-    can: 'Hold state: the PC, eight registers (2 172 NANDs, nearly half the core to come), memories as parts.',
+    can: 'Hold state: the PC, a register file of seven registers and x0 (2 172 NANDs, nearly half the core to come), memories as parts.',
     cannot: 'Decide what to do with them: every mux and enable you built waits for someone to set it. The instruction word does that, so first learn what the words say, by programming. Act 4.',
     next: 'i_isa', sides: [{ node: 'm_ram' }],
   },
   4: {
-    can: 'On the golden model: loops, arrays, calls, a stack. Multiplying took 28 to 134 instructions per product, 74 on average.',
+    can: 'On the golden model: loops, arrays, function calls. Multiplying took 28 to 134 instructions per product, 74 on average.',
     cannot: 'Run any of it on hardware you built. Each instruction you used is a path through blocks you have; Act 5 wires them.',
     next: 'c_lesson', sides: [{ node: 'p_sort' }],
   },
@@ -37,12 +37,12 @@ export const ACT_ENDS: Record<number, ActEnd> = {
     next: 'pi_lesson', nextLabel: 'Act 6: cut the path into stages',
   },
   6: {
-    can: 'Five instructions in flight at period 78 (9 218 NANDs), with forwarding, the load-use stall and branch flushes. On these programs the plain pipeline is only 4% faster than Core III, and slower than Core IV: branch prediction is how it earns its keep.',
+    can: 'Five instructions in flight at period 78 (9 218 NANDs), with forwarding, the load-use stall and branch flushes. On these programs it is only 4% faster than Core III, and slower than Core IV: Kogge–Stone adders in E make it pay (11% faster than Core IV), branch prediction alone does not.',
     cannot: 'Survive its own mistakes or listen to the world: an illegal word, an <code>ecall</code> or a device that needs attention has no handler. Act 7.',
     next: 'y_lesson', sides: [{ node: 'o_bpred' }],
   },
   7: {
-    can: 'The complete RV16: 12 038 NANDs, precise traps and interrupts.',
+    can: 'The complete RV16: 12 038 NANDs at period 81, five instructions in flight, precise traps and interrupts, every block from the NAND up.',
     cannot: 'Still idealised: memory answers in the cycle it is asked (Act 10), there is one instruction stream (Act 9), and no multiply, divide or floats in hardware (Act 8).',
     sides: [
       { node: 'm_lesson', label: 'Optional: Act 10, memory' },

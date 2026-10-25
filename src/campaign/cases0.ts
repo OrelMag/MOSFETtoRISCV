@@ -22,11 +22,27 @@ export const CASES0: Record<string, LevelCase> = {
   },
   t_nor: {
     problem: 'NOR is the dual of NAND (PMOS in series, NMOS in parallel) and also complete. It shows why cell libraries and this campaign build on NAND: NOR puts its series pair in the pull-up, and holes are about 2–3× less mobile than electrons, so its rising edge is the slow one unless the PMOS are made wider, which costs area and input capacitance.',
+    without: 'Nothing in RV16 needs it: every NOR the campaign draws is four NANDs. A NOR-only design is just as possible (the Apollo Guidance Computer was built from 3-input NOR gates alone), at the slow rising edge above.',
     cost: 'Four transistors, like the NAND. At gate level the campaign builds a NOR from four NANDs (16 transistors, depth 3).',
     alts: [{ name: 'NOR from four NANDs', lib: 'nor' }],
   },
 
   // ---- Act 1 ----------------------------------------------------------------------------------
+  l_bool: {
+    problem: 'Every par of acts 1 and 2 is the obvious circuit rewritten. OR is De Morgan, ¬(¬a · ¬b). XOR shares ¬(a·b) between its halves. The 2:1 multiplexer is a sum of products, and a sum of products is two levels of NANDs once the inversions cancel. The full adder\'s carry reuses its XORs\' first NANDs. The laws on this page are the tools for all of them.',
+    without: 'The textbook forms, as read off the truth tables: the multiplexer 8 NANDs instead of 4, XOR 5 instead of 4, the full adder 13 instead of 9. The single-cycle core has 705 bits of multiplexer and 64 full adders.',
+    cost: 'Nothing to build. The rewrites are free too: they change which NANDs exist, never add a part, and checking one is a truth table (2^n rows for n inputs).',
+  },
+  n_bin: {
+    problem: 'Inside the machine a number is only a pattern of bits. RV16\'s registers, its PC and every memory word are 16 bits: unsigned, bit k weighs 2^k, so a word holds 0 to 65 535. Hex writes it as four digits, one per nibble, which is how the instruction fields line up: op is bits 3–0, the low digit. The decoder reads its 3-bit address as a number, the prime detector its 4-bit input.',
+    without: 'Decimal hides the bit positions: 0x8000 (bit 15 alone) is 32 768, and 0xFFFF is 65 535.',
+    cost: 'A convention, so no gates. What it fixes is the range: n bits hold 2^n values, so a 16-bit PC names 65 536 instruction words.',
+  },
+  d_kmap: {
+    problem: 'Algebra transforms a sum of products but does not say when it is minimal. A Karnaugh map draws the truth table in Gray order, so cells that touch differ in one bit: a group of 2^k cells is one product with k literals fewer. Don\'t-cares (inputs that never occur, like unused opcodes) may join any group. The control unit\'s 14 output bits are functions of the opcode and f3 found this way.',
+    without: 'One product per row of the table: the prime detector read straight off its table is six minterms of four literals each; mapped, four products of three.',
+    cost: 'Nothing to build. Up to 4 variables the map is read by eye; beyond 5 a tabular method (Quine–McCluskey) finds the same minimum, as this drill\'s checker does.',
+  },
   g_not: {
     problem: 'Control signals are needed in both polarities. A mux needs ¬s next to s, the decoder ANDs the complements of the register number, a flip-flop\'s master latch runs on ¬clk, the ALU\'s sltu is ¬carry, and the pipeline writes its register file on ¬clk. NOT is a NAND with its inputs tied: ¬(a·a) = ¬a.',
     without: 'No AND (a NAND, then NOT) and no OR (NOT on both inputs, then a NAND): only the inverting function itself.',
@@ -118,7 +134,7 @@ export const CASES0: Record<string, LevelCase> = {
   a_add16: {
     problem: 'RV16 words are 16 bits. Four 4-bit adders, the carry out of each into the next, add them. The next-PC logic has two: pc + imm for taken branches and jal, rs1 + imm for jalr. The ALU\'s adder / subtractor and the branch comparator\'s less-than carry the same chain.',
     without: 'No branch or jump targets and no 16-bit arithmetic: the ALU, the comparator and the next-PC logic all start from this adder.',
-    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (Fast adders, later in this act) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
+    cost: '144 NANDs, depth 36: the carry crosses every bit, and the single-cycle core\'s critical path runs through such chains. A 16-bit Kogge–Stone adder (Fast adders, later in this act, which Core IV puts in the ALU) is 362 NANDs, depth 14 as its level builds it (the library\'s, listed below, 366 and 16); a carry-select adder 312 NANDs, depth 20.',
     alts: [{ name: 'Kogge–Stone (parallel prefix)', lib: 'ks16' }, { name: 'Carry-select, 4-bit blocks', lib: 'csel16_4' }],
   },
   a_inc16: {
@@ -137,7 +153,7 @@ export const CASES0: Record<string, LevelCase> = {
     ],
   },
   a_slt: {
-    problem: 'slt / sltu write 1 when rs1 < rs2, and blt / bge branch on it. Both orders come from one subtraction a + ¬b + 1: unsigned, a < b exactly when there is no carry out. Signed, when the signs differ a < b exactly when a is negative; when they agree the difference cannot overflow and the unsigned answer holds. The ALU derives both from its own adder / subtractor (signed as N ⊕ V); the branch comparator holds this block for blt / bge.',
+    problem: 'The branch comparator holds this block for blt and bge, and its carry chain is the comparator\'s critical path. Both orders come from one subtraction a + ¬b + 1: unsigned, a < b exactly when there is no carry out. Signed, when the signs differ a < b exactly when a is negative; when they agree the difference cannot overflow and the unsigned answer holds. RV16 has no bltu, so the core reads only lt; ltu is the step lt is made from (RISC-V\'s bltu / bgeu read it). The ALU does not use this block: slt and sltu come off its own adder / subtractor as N ⊕ V and ¬cout, 5 NANDs more.',
     without: 'The sign bit alone fails on overflow: 0x7FFF < 0x8000 is false as signed numbers, yet 0x7FFF − 0x8000 = 0xFFFF reads negative.',
     cost: 'Only the carry out is read, so 16 NOTs invert b in place of the subtractor\'s XORs; ltu = ¬cout, an XOR compares the signs and three NANDs and a NOT pick a15 or ltu: 169 NANDs, depth 39. The adder\'s sum gates are still there, unused; only a carry-only chain would drop them. On the adder / subtractor, N ⊕ V costs 217 NANDs, depth 44. A tree magnitude comparator computes one of the two orders in 237 NANDs, depth 23: faster, larger, and with no adder to share.',
     alts: [{ name: 'Adder / subtractor, then N ⊕ V and ¬cout', nand: 217, depth: 44, note: 'addsub16 (212, depth 41) with sub = 1, an XOR (4) for N ⊕ V and a NOT (1) on the carry.' }, { name: 'Tree magnitude comparator (signed only)', lib: 'cmp16s' }],
@@ -231,6 +247,8 @@ export const CASES0: Record<string, LevelCase> = {
   // ---- Lessons and drills whose case adds to the why --------------------------------------------
   n_twos: {
     problem: 'RV16 is two\'s complement throughout. The 6-bit immediates of addi, lw, sw and the branches are sign-extended by wiring alone: instr[15] fans out to every upper bit, so the immediate generator has no gates. The same adder adds signed and unsigned words; only the comparisons differ (signed less-than looks at the signs or N ⊕ V, unsigned at the carry out), and sra fills with the sign bit.',
+    without: 'Sign and magnitude has a +0 and a −0, and adding numbers of different signs means comparing magnitudes and subtracting the smaller from the larger: a comparator and a second subtractor beside the adder. One\'s complement also has two zeros, and its carry out must be added back in (end-around carry).',
+    cost: 'A convention, so no gates of its own: the immediate generator is wiring (0 NANDs), and negation is the adder / subtractor\'s XORs and carry in. A 16-bit word holds −32 768 to 32 767; 0x8000 has no positive twin.',
   },
   m_mem: {
     problem: 'Programs live in ROM, data in RAM. Built like the register file, a 64-word RAM is 20166 NANDs (80664 transistors, about 79 per bit), over four times the single-cycle core. Real memories are dense arrays: an SRAM bit is 6 transistors, a DRAM bit one transistor and a capacitor. From here on memories are given; the core levels\' bench serves the instruction and data words in the same cycle.',
