@@ -235,11 +235,7 @@ export class Editor {
     this.palette = new PalettePanel(() => ({ ws: this.ws, chipId: this.chipId, canPlace: (c) => this.lib.canPlace(this.chipId, c),
       level: this.level ? [this.level.chipId, this.levelHome!] : undefined }), {
       pick: (item, e) => this.pickPart(item, e),
-      arm: (item, key) => {
-        this.tools.arm(item, key);
-        if (this.partsDrawer) this.showParts(false);
-        this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
-      },
+      arm: (item, key) => this.armPart(item, key),
       purist: () => !!this.level || !!this.ws.purist,
       setPurist: (v) => this.volatile({ ...this.ws, ...(v ? { purist: true } : { purist: undefined }) }),
       toggleFavorite: (key) => {
@@ -1130,6 +1126,13 @@ export class Editor {
     this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 7000 : 2800);
+  }
+
+  /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
+  armPart(item: PaletteItem, key: string): void {
+    this.tools.arm(item, key);
+    if (this.partsDrawer) this.showParts(false);
+    this.toast(`${item.name}: ${coarsePointer() ? 'tap' : 'click'} the canvas to place it (Esc cancels)`);
   }
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */

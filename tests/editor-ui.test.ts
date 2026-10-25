@@ -11,7 +11,7 @@ import {
 } from '../src/editor/geom';
 import { emptyWorkspace, type ChipDoc, type DefOf, type PartRef } from '../src/editor/model';
 import { addPart, addPin, addWire, moveSel } from '../src/editor/ops';
-import { favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, type PaletteCtx } from '../src/editor/palette';
+import { aliasesOf, favoriteItems, paletteGroups, registerPaletteGroup, toggleFavorite, visibleItems, wordStarts, type PaletteCtx } from '../src/editor/palette';
 import { partDef } from '../src/editor/parts';
 import { EditorSim, FrameBudget, simKey } from '../src/editor/runtime';
 import { activeChip, closeChip, keepVolatile, newChip, openChip, setPinValue, isDefaultName } from '../src/editor/session';
@@ -290,6 +290,19 @@ describe('palette', () => {
     // a section is one run of items: the special ones come last
     expect(io.findIndex((i) => i.section)).toBe(io.length - 5);
     for (const id of ['sources', 'fets', 'switch', 'devices']) expect(paletteGroups().find((g) => g.id === id)?.collapsed, id).toBe(true);
+  });
+
+  it('search matches at word starts, and through aliases', () => {
+    const names = (q: string) => paletteGroups().filter((g) => g.id !== 'basics').flatMap((g) => visibleItems(g, ctx, false, q).map((i) => i.name));
+    expect(wordStarts('Bundled request bus', 'led')).toBe(false);
+    expect(names('led')).toContain('LED');
+    expect(names('led').every((n) => /(^|[^a-z])led/i.test(n))).toBe(true);
+    for (const q of ['label', 'tunnel', 'tun', 'net']) expect(names(q), q).toContain('Pointer');
+    expect(names('splitter')).toEqual(expect.arrayContaining(['Split 8 → 1×8', 'Merge 1×8 → 8']));
+    expect(names('7seg')).toContain('7-segment');
+    expect(names('seven segment')).toContain('7-segment');
+    expect(names('dff').some((n) => /flip-flop/i.test(n))).toBe(true);
+    expect(aliasesOf('Pointer pointer')).toEqual(expect.arrayContaining(['label', 'tunnel', 'net', 'wire']));
   });
 
   it('later phases register groups', () => {

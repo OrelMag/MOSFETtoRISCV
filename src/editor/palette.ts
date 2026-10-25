@@ -126,11 +126,56 @@ export function paletteGroups(): readonly PaletteGroup[] {
 /** The items a group shows in a context, purist filter applied. */
 export function visibleItems(g: PaletteGroup, ctx: PaletteCtx, purist: boolean, filter = ''): PaletteItem[] {
   if (purist && !g.purist) return [];
-  const f = filter.trim().toLowerCase();
+  const f = filter.trim();
   return g.items(ctx).filter((it) =>
     (!purist || g.purist === true || (typeof g.purist === 'function' && g.purist(it)))
-    && (!f || it.name.toLowerCase().includes(f) || it.id.toLowerCase().includes(f) || (it.section ?? '').toLowerCase().includes(f)));
+    && (!f || partMatches(itemText(it), f)));
 }
+
+// ---- search ---------------------------------------------------------------------------------
+
+/**
+ * Other names a part goes by (other simulators', textbooks'): a query that starts one of these keys (3 letters at
+ * least) also searches for its targets.
+ */
+export const PART_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  label: ['pointer'], tunnel: ['pointer'], net: ['pointer'], wire: ['pointer', 'split', 'merge'],
+  splitter: ['split', 'merge'], bundle: ['split', 'merge'], bus: ['split', 'merge', 'bus'],
+  '7seg': ['7-segment'], 'seven segment': ['7-segment'], sevenseg: ['7-segment'],
+  cpu: ['core', 'processor', 'computer'], core: ['core', 'processor', 'computer'], processor: ['core', 'processor', 'computer'],
+  ff: ['flip-flop'], dff: ['flip-flop'], 'flipflop': ['flip-flop'], register: ['register', 'flip-flop'],
+  lamp: ['led'], light: ['led'], gnd: ['ground', 'gnd', 'constant 0'], ground: ['gnd', 'constant 0'], vcc: ['vdd', 'constant 1'],
+  mux: ['multiplexer', 'mux'], memory: ['ram', 'rom', 'memory'], text: ['comment'], note: ['comment'], tie: ['constant'],
+};
+
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/** Every word of `query` starts a word of `text` ("led" finds LED, not "bundled"). */
+export function wordStarts(text: string, query: string): boolean {
+  const ws = words(text);
+  const qs = words(query);
+  return qs.length > 0 && qs.every((q) => ws.some((w) => w.startsWith(q)));
+}
+
+/** The queries a query stands for: itself and the targets of every alias it starts. */
+export function aliasQueries(query: string): string[] {
+  const q = query.trim().toLowerCase();
+  const out = [q];
+  if (q.length >= 2) for (const [k, ts] of Object.entries(PART_ALIASES)) if (k === q || (q.length >= 3 && k.startsWith(q))) out.push(...ts);
+  return out;
+}
+
+/** A part's text (name, id, section) against a query and its aliases. */
+export function partMatches(text: string, query: string): boolean {
+  return aliasQueries(query).some((q) => wordStarts(text, q));
+}
+
+/** The alias keys that lead to a text (the search box's `alt`: "label tunnel net wire" on Pointer). */
+export function aliasesOf(text: string): string[] {
+  return Object.entries(PART_ALIASES).filter(([, ts]) => ts.some((t) => wordStarts(text, t))).map(([k]) => k);
+}
+
+export const itemText = (it: PaletteItem) => `${it.name} ${it.id} ${it.section ?? ''}`;
 
 // ---- favorites ------------------------------------------------------------------------------
 
@@ -626,6 +671,13 @@ export class PalettePanel {
     void b.offsetWidth; // restart the animation
     b.classList.add('sb-flash');
     setTimeout(() => b.classList.remove('sb-flash'), 1600);
+  }
+
+  /** Every part this palette offers here (each once: Basics' copies left out), for the search box. */
+  placeable(): { key: string; item: PaletteItem; group: PaletteGroup }[] {
+    const ctx = this.ctx(), purist = this.hooks.purist();
+    return groups.filter((g) => g.id !== BASICS_ID && !this.hooks.hidden?.(g.id)).flatMap((g) =>
+      visibleItems(g, ctx, purist).filter((it) => !it.disabled).map((item) => ({ key: itemKey(g.id, item.id), item: item.sized ? sizedItem(item, itemWidth(itemKey(g.id, item.id), item)) : item, group: g })));
   }
 
   setArmed(key: string | null): void {
