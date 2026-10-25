@@ -84,6 +84,6 @@ export function widthCostWidget(): Widget {
       h('h3', null, 'The same generators at 32 and 64 bits'),
       h('p', { class: 'sub' }, 'NANDs and depth (NAND delays) as the library measures them. Each pair of bars is scaled to its own 64-bit block. Pick a block to see why it grows as it does.'),
       h('div', { class: 'w64-legend' }, h('span', null, h('i', { class: 'rvc-bar b32' }), '32 bits'), h('span', null, h('i', { class: 'rvc-bar b16' }), '64 bits')),
-      rows, note)),
+      note, rows)),
   };
 }
