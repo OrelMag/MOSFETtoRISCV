@@ -173,6 +173,8 @@ export class RefGateSim implements Sim {
     }
     this.dirty.length = 0;
     this.dirtyMark.fill(0);
+    // sources first (leaves with no inputs), as GateSim.reset
+    for (let i = 0; i < this.design.leaves.length; i++) if (!this.design.leaves[i].inputs.length) this.markDirty(i);
     for (let i = 0; i < this.design.leaves.length; i++) this.markDirty(i);
     this.relax();
 

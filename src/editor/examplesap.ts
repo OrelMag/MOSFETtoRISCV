@@ -179,9 +179,6 @@ export function sapChip(id: string, name: string, sub: Record<string, string>, d
     return false;
   });
   digitsInARow(parts, wires);
-  // The switches and the key first: their leaves then settle to 0 before the RAM's at power-on. Relaxation walks the
-  // leaves in order, and a 189 latch whose enable is still X there loses the word its hints gave it.
-  const io = parts.filter((p) => p.id.startsWith('io_'));
   const chips = Object.fromEntries(Object.entries(sub).flatMap(([k, cid]) => (docs[k] ? [[cid, docs[k]]] : [])));
-  return untangled({ ...doc, pins, parts: [...io, ...parts.filter((p) => !p.id.startsWith('io_'))], wires, notes: SAP_NOTES }, chips);
+  return untangled({ ...doc, pins, parts, wires, notes: SAP_NOTES }, chips);
 }

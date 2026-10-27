@@ -187,3 +187,6 @@ control lines in capitals (`ΣO`).
   held through an edge with `cycle(true)`, and one pressed between edges by taking `reset()` when the hardware holds what
   a reset leaves (PC, step, IR, A, B, flags all 0) and the model does not. The clock board has a RESET switch; the
   sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs.
+- **Power-on order**: GateSim.reset relaxes leaves with no inputs (constants, the sandbox's switches and keys) first, as
+  the root inputs are set first, so a hinted 189 latch never meets an enable still waiting on a switch: the example's
+  program survives whatever the part order in the document.

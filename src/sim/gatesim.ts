@@ -241,6 +241,12 @@ export class GateSim implements Sim {
     }
     this.clearDirty();
     const L = this.design.leaves.length;
+    // Sources first: a leaf with no inputs (a constant, or an external source such as the sandbox's switches and keys)
+    // is set before relaxation walks the rest, as the root inputs are. Otherwise a hinted latch reached while its enable
+    // still waits on a switch reads X and keeps it once the enable settles: the order of the leaves would decide (a
+    // sandbox document's part order), not the circuit.
+    const { leaves } = this.design;
+    for (let i = 0; i < L; i++) if (!leaves[i].inputs.length) this.markDirty(i);
     for (let i = 0; i < L; i++) this.markDirty(i);
     this.relax();
 

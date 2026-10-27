@@ -26,9 +26,17 @@ import { pack } from '../src/sim/values';
 const atLoad = new Set(registry.keys());
 const EX = EXAMPLES.find((e) => e.id === 'sap1')!;
 
-/** The example (with another program in its RAM, if given) on an EditorSim, the CPU drawer's monitor on it. */
-function open(bytes?: number[]) {
+/**
+ * The example (with another program in its RAM, if given) on an EditorSim, the CPU drawer's monitor on it. `io`: the
+ * switch, key and display parts moved before or after every module in the document (a learner who deletes and re-adds
+ * one leaves it last).
+ */
+function open(bytes?: number[], io?: 'first' | 'last') {
   let { ws, id } = addExample(emptyWorkspace(), EX);
+  if (io) {
+    const top = ws.chips[id], mine = top.parts.filter((p) => p.id.startsWith('io_')), rest = top.parts.filter((p) => !p.id.startsWith('io_'));
+    ws = { ...ws, chips: { ...ws.chips, [id]: { ...top, parts: io === 'first' ? [...mine, ...rest] : [...rest, ...mine] } } };
+  }
   if (bytes) ws = { ...ws, chips: { ...ws.chips, [`${id}_ram`]: withSapProgram(ws.chips[`${id}_ram`], bytes) } };
   const lib = new UserLibrary(ws);
   const es = new EditorSim({ debounceMs: 0 });
@@ -191,4 +199,16 @@ describe('the SAP-1 example', () => {
     expect(mon.read()!.ram).toEqual(Array.from(mon.iss!.ram));
   });
 
+  it.each(['first', 'last'] as const)('powers on with its program whatever the order of the parts (the switches %s)', (io) => {
+    const bytes = sapBytes(SAP_EXAMPLE_PROGRAM.src);
+    const { es, mon, ws, id } = open(undefined, io);
+    expect(ws.chips[id].parts.at(io === 'first' ? 0 : -1)!.id.startsWith('io_')).toBe(true);
+    expect(mon.read()!.ram).toEqual([...bytes, ...Array(16 - bytes.length).fill(0)]);
+    es.reset();
+    expect(mon.read()!.ram).toEqual([...bytes, ...Array(16 - bytes.length).fill(0)]);
+    const outs = outsOf(es);
+    es.runCycles(2000, () => mon.done, 1e9);
+    expect(mon.mismatch).toBeNull();
+    expect(outs).toEqual(SAP_EXAMPLE_PROGRAM.outs);
+  });
 });
