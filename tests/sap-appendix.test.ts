@@ -108,6 +108,31 @@ describe('SAP panel: the golden model in lock step', () => {
     expect(mon.mismatch).toBeNull();
   });
 
+  it('the RAM try: the low 189 is the board\'s ' + 'U10, its outputs inverted, flipped back by the 04', async () => {
+    const { SAP_RAM_LO_REF } = await import('../src/chapters/ch-sap');
+    const ref = sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.chips).find((c) => c.path?.join('.') === 'ram.lo')!.ref;
+    expect(ref).toBe(SAP_RAM_LO_REF);
+    const { findNode } = await import('../src/sim/flatten');
+    const { pack } = await import('../src/sim/values');
+    const sim = boot([]);
+    const q = (p: string, port: string) => pack(sim.getBits(findNode(sim.design.root, p.split('.'))!.ports[port]));
+    expect(q('ram.lo', 'q_n')).toBe(15);
+    expect(sapRam(sim)[0]).toBe(0);
+  });
+
+  it('the Flags try: run until ZF lights, then JZ\'s T2 has J', async () => {
+    const { CTRL } = await import('../src/sap/isa');
+    const bytes = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'countdown')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    let c = 0;
+    for (; c < 2000 && sapHw(sim).zf !== 1; c++) edge(sim, mon);
+    let h = sapHw(sim);
+    for (; c < 2000 && !(h.ir >> 4 === 8 && h.step === 2); c++) { edge(sim, mon); h = sapHw(sim); }
+    expect(h.zf).toBe(1);
+    expect(h.cw & CTRL.j).toBe(CTRL.j);
+    expect(mon.mismatch).toBeNull();
+  });
+
   it('a difference is caught at the next edge, Back restores', () => {
     const bytes = sapBytes(SAP_PROGRAMS[0].src);
     const sim = boot(bytes), mon = new SapFollower(bytes);

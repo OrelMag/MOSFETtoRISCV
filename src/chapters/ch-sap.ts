@@ -10,6 +10,7 @@ import { SAP_PROGRAMS } from '../sap/programs';
 import { SwitchSim } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
 import { sapAluScene, sapAregScene, sapClockScene, sapPcScene, sapScene, tristateScene } from '../widgets/sap';
+import { CTRL } from '../sap/isa';
 import { microTable, sapHw, sapRam } from '../widgets/sapmon';
 import { chAppendixDoom } from './ch-doom';
 import type { Chapter } from './types';
@@ -54,6 +55,10 @@ const hw = (st: Stage) => {
     return null;
   }
 };
+/** The board reference of the RAM's low 189, as saplayout.ts numbers the chips (tests/sap-appendix.test.ts holds it to
+ *  the layout: computing it here would build the computer's netlist whenever the chapters load). */
+export const SAP_RAM_LO_REF = 'U10';
+
 const halted = (st: Stage) => (hw(st)?.cw ?? 0) >> 15 === 1;
 
 /** Fibonacci's size and clock cycles to HLT (the golden model). */
@@ -263,8 +268,11 @@ export const chAppendixSap: Chapter = {
         PC, the step counter, A, B, the IR and the flags (the chips' CLR pins), but not the RAM, so the program starts from
         address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after. The bar's
         <em>Power cycle</em> is not RESET: it switches the computer off and on, and the 189s forget what you keyed in, as
-        real SRAM would.</p>`,
+        real SRAM would.</p>
+        <div class="try">Double-click ${SAP_RAM_LO_REF}, the low 189: its Q1–Q4 read the stored nibble inverted (an empty RAM reads
+        1111), and the 74LS04 beside it flips them back.</div>`,
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
+      tries: [(st) => st.path.join('.') === 'ram.lo'],
       challenge: {
         kind: 'reach',
         goal: 'By the switches, put LDI 7 (0x57) at address 0, OUT (0xE0) at 1, HLT (0xF0) at 2; PROG off, RESET, run until it shows 7.',
@@ -370,8 +378,11 @@ export const chAppendixSap: Chapter = {
         <p>and with ZF = 0 its T2 is empty: the instruction passes without jumping. No comparator, no branch unit: the
         condition is evaluated by looking up a different word. That is why the address grew from 7 bits to 9, and why the
         flags are loaded only by FI (ADD and SUB): a jump tests the result of the last arithmetic.</p>
-        <p>The program counts down from 10 with SUB and leaves the loop with JZ.</p>`,
+        <p>The program counts down from 10 with SUB and leaves the loop with JZ.</p>
+        <div class="try">Run (10 Hz) until ZF lights, stop, then Pulse through the JZ: its T2 now has J, and the PC
+        loads the operand.</div>`,
       scene: () => sapScene({ program: 'countdown', highlight: ['flags', 'ctl'] }),
+      tries: [(st) => { const h = hw(st); return !!h && h.ir >> 4 === 8 && h.zf === 1 && h.step === 2 && (h.cw & CTRL.j) !== 0; }],
       challenge: {
         kind: 'quiz',
         question: 'A = 15 and <code>SUB</code> subtracts 15. What are CF and ZF after its T4?',
