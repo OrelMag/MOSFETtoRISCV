@@ -64,6 +64,8 @@ export interface Scene {
    * scene opens on the boards (unless it opens deeper, or the learner last chose the schematic).
    */
   breadboard?: BreadboardLayout;
+  /** The bottom bar's Reset (a power cycle) under another name: 'Power cycle' where the circuit has a RESET of its own. */
+  resetLabel?: string;
 }
 
 export interface Widget {
@@ -1306,7 +1308,7 @@ export class Stage {
     if (this.sim?.kind === 'gate' || this.relayTime) {
       acts.append(labelled('ghost', this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', 'step', 'Step', () => this.stepOnce()));
     }
-    acts.append(labelled('ghost', 'Power-cycle the circuit', 'reset', 'Reset', () => this.powerCycle()));
+    acts.append(labelled('ghost', 'Power-cycle the circuit', 'reset', this.scene!.resetLabel ?? 'Reset', () => this.powerCycle()));
     c.append(h('span', { class: 'ctl-run' }, acts, this.status));
     this.fitControls();
   }

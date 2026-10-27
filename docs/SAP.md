@@ -87,8 +87,8 @@ ZF = sum = 0; both loaded by FI.
 | `bus` | `SAP_BUS` | OR per bit | `bus` (8), `clash` |
 
 `sapComputer(bytes)` (memoized by content): the RAM's power-on contents from `bytes` (dotted `powerOn` hints, as
-`editor/memory.ts ramWithInit`). Ports: in `clk` (clock), `prog` (programming mode), `addrSw` (4), `dataSw` (8),
-`write`, `rst` (RESET); out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
+`editor/memory.ts ramWithInit`). Ports: in `clk` (clock), `RESET` (first, so a phone's bottom bar shows it), `prog` (programming mode), `addrSw` (4),
+`dataSw` (8), `write`; out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
 with the bus between them, as the breadboards), net labels for the 16 control lines.
 
 - `src/view/breadboard.ts` (+ `src/styles/breadboard.css`): the breadboard view, `Scene.breadboard`: a layout (boards
@@ -179,14 +179,15 @@ control lines in capitals (`ΣO`).
 - `SapISS.halted` is a getter: the current control word has HLT (the hardware's `halt` output at the same moment);
   `drive()` gives the bus and how many drive it, `control()` the current control word, `run()` OUT's values.
 - Cost: five EEPROMs as ROM trees are 65 524 NANDs each; `sapCost(...).logicNands` (3 314) is the rest.
-- **RESET** (`rst`, active high, Ben's reset button): the CLRs of the PC's 161 (through `pc.inv`), the step counter's 161
+- **RESET** (the computer's `RESET` pin, the modules' `rst`, active high, Ben's reset button): the CLRs of the PC's 161 (through `pc.inv`), the step counter's 161
   (`ctl.clr`, a 74LS08: Y5 AND NOT RST, NOT RST from `ctl.inv`'s sixth gate), and the 173s of A, B, the IR and the flags.
   The MAR, OUT and the RAM keep their contents (their CLRs stay inactive), so a program keyed in by the switches survives
   it: PROG on, key in, PROG off, RESET, run, at any time. `SapISS.reset()` clears the same; `cycle(true)` is a period with
   RESET held (only the MAR moves: T0 of NOP is CO MI). The monitors (widgets/sapmon.ts, editor/sapmon.ts) follow RESET
   held through an edge with `cycle(true)`, and one pressed between edges by taking `reset()` when the hardware holds what
   a reset leaves (PC, step, IR, A, B, flags all 0) and the model does not. The clock board has a RESET switch; the
-  sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs.
+  sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs. The stage's Reset is a power cycle (the 189s
+  forget a keyed-in program, as SRAM would): SAP scenes label it `Power cycle` (`Scene.resetLabel`).
 - **Power-on order**: GateSim.reset relaxes leaves with no inputs (constants, the sandbox's switches and keys) first, as
   the root inputs are set first, so a hinted 189 latch never meets an enable still waiting on a switch: the example's
   program survives whatever the part order in the document.

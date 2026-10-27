@@ -42,8 +42,8 @@ function program(st: Stage, bytes: readonly number[]): void {
   poke(st, { prog: 1 });
   bytes.forEach((v, i) => { poke(st, { addrSw: i, dataSw: v }); poke(st, { write: 1 }); poke(st, { write: 0 }); });
   poke(st, { prog: 0, addrSw: 0, dataSw: 0 });
-  poke(st, { rst: 1 }); // PC 0, step T0, IR NOP: the program starts from the top
-  poke(st, { rst: 0 });
+  poke(st, { RESET: 1 }); // PC 0, step T0, IR NOP: the program starts from the top
+  poke(st, { RESET: 0 });
 }
 
 /** The computer's state, or null on any other scene. */
@@ -257,7 +257,9 @@ export const chAppendixSap: Chapter = {
         <p>This RAM starts empty. Program it as Ben does, whenever you like (running or not): PROG on, an address on the
         four switches, a byte on the eight, press WR; next address. PROG off, then RESET on the clock board: it clears the
         PC, the step counter, A, B, the IR and the flags (the chips' CLR pins), but not the RAM, so the program starts from
-        address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after.</p>`,
+        address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after. The bar's
+        <em>Power cycle</em> is not RESET: it switches the computer off and on, and the 189s forget what you keyed in, as
+        real SRAM would.</p>`,
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
       challenge: {
         kind: 'reach',

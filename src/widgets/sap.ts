@@ -52,12 +52,14 @@ export function sapScene(o: SapSceneOptions = {}): Scene {
   return {
     root,
     clock: 'clk',
-    inputs: { prog: 0, addrSw: 0, dataSw: 0, write: 0, rst: 0 },
+    inputs: { RESET: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0 },
     path: o.path,
     highlight: o.highlight,
     autoClock: o.autoClock ?? false,
     breadboard: sapLayout(root),
     panels: [sapPanel(o)],
+    // the bar's Reset powers the computer off and on (the 189s forget); RESET is the computer's own switch
+    resetLabel: 'Power cycle',
   };
 }
 

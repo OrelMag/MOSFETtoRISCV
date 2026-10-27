@@ -109,7 +109,7 @@ const PIN_PARTS: [string, PartRef, string, string][] = [
   ['addrSw', { switches: 4 }, 'q', 'address'],
   ['dataSw', { switches: 8 }, 'q', 'data'],
   ['write', { key: 'w' }, 'q', 'WRITE (W)'],
-  ['rst', { key: 'e' }, 'q', 'RESET (E)'],
+  ['RESET', { key: 'e' }, 'q', 'RESET (E)'],
   ['bus', { display: 'led', width: 8 }, 'a', 'bus'],
   ['out', { display: 'value', width: 8 }, 'a', 'OUT'],
   ['d0', { display: 'seg7', width: 8 }, 'a', 'ones'],

@@ -507,7 +507,8 @@ export const SAP_BUS: ComponentDef = (() => {
 // ---- the computer --------------------------------------------------------------------------------------------------
 
 export const SAP_PORTS: PortDef[] = [
-  bit('clk', 'in', true), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'), bit('rst', 'in'),
+  // RESET first: the bottom bar lists the pins in this order, and a phone shows only its start
+  bit('clk', 'in', true), bit('RESET', 'in'), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'),
   bus('bus', 8, 'out'), bus('out', 8, 'out'), bus('d0', 8, 'out'), bus('d1', 8, 'out'), bus('d2', 8, 'out'), bit('halt', 'out'), bit('clash', 'out'),
 ];
 
@@ -557,7 +558,7 @@ export const SAP_COMPUTER: ComponentDef = (() => {
   const ctl = b.op(SAP_CONTROL, [b.name(`${clock}.nclk`, 'NCLK', true), b.name(`${ir}.op`, 'opcode', true), '', ''], 'control', 'ctl');
   const line = (n: string) => b.name(`${ctl}.${n}`, n.toUpperCase().replace('EO', 'ΣO'), true);
   // RESET: the CLRs of the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
-  const rst = b.name('rst', 'RST', true);
+  const rst = b.name('RESET', 'RESET', true);
   b.wire(rst, `${ctl}.rst`);
   b.wire(rst, `${ir}.rst`);
   b.wire(line('hlt'), `${clock}.hlt`);

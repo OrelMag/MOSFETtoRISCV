@@ -122,7 +122,7 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
         c('clock.inv'), c('clock.and'),
       ],
       // Ben's reset button: clears the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
-      switches: [{ port: 'rst', label: 'RESET' }],
+      switches: [{ port: 'RESET', label: 'RESET' }],
       leds: [
         { net: { path: ['clock'], port: 'clk' }, color: 'blue', label: 'CLK' },
         { net: { path: ['ctl'], port: 'hlt' }, color: 'red', label: 'HLT' },

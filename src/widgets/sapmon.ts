@@ -3,7 +3,7 @@
 // rising edge (the falling edge before it has advanced the step counter: everything, the step included, must equal the
 // model), and `after` it (the registers and RAM have loaded; the step has not moved yet: the model's cycle() runs here
 // and everything but the step is compared). Programming mode (PROG = 1: the switches write the RAM, the model cannot
-// know what) pauses the comparison; the model is set from the hardware when PROG goes back to 0. RESET (the rst input)
+// know what) pauses the comparison; the model is set from the hardware when PROG goes back to 0. RESET (the RESET input)
 // is asynchronous: held through an edge the model's cycle(true) follows it; pressed and let go between two edges it
 // leaves nothing but its effect, so the model takes reset() when the hardware shows exactly what a reset leaves (PC,
 // step, IR, A, B and the flags all 0) and the model does not.
@@ -125,7 +125,7 @@ export class SapFollower {
     if (this.stale || sim.getInput('prog') === 1) return;
     const cw = this.iss.control(), oi = cw & CTRL.oi;
     if (cw & CTRL.ii) this.cur = this.iss.mar;
-    const ran = this.iss.cycle(sim.getInput('rst') === 1);
+    const ran = this.iss.cycle(sim.getInput('RESET') === 1);
     if (ran && oi) this.outs.push(this.iss.out);
     if (this.mismatch) return;
     this.compare(sapHw(sim), false);

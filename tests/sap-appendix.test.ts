@@ -12,7 +12,7 @@ import { GateSim } from '../src/sim/gatesim';
 import { shortText, SwitchSim } from '../src/sim/switchsim';
 import { B0, B1 } from '../src/sim/types';
 import { validateLayout } from '../src/view/bblayout';
-import { TRISTATE_BUS } from '../src/widgets/sap';
+import { sapScene, TRISTATE_BUS } from '../src/widgets/sap';
 import { moduleLayout, SAP_ROLES, sapLayout } from '../src/widgets/saplayout';
 import { microTable, SapFollower, sapGloss, sapHw, sapRam } from '../src/widgets/sapmon';
 import { tick } from './yieldtick';
@@ -54,7 +54,7 @@ function edge(sim: GateSim, mon: SapFollower): void {
 
 function boot(bytes: number[]): GateSim {
   const sim = new GateSim(flatten(sapComputer(bytes)));
-  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0, rst: 0 })) sim.setInput(k, v);
+  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0, RESET: 0 })) sim.setInput(k, v);
   sim.reset('zero');
   sim.settle();
   return sim;
@@ -132,10 +132,10 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(mon.outs.length).toBeGreaterThan(1);
     key(sim, mon, bytes);
     expect(sapRam(sim)).toEqual([...bytes, ...Array(16 - bytes.length).fill(0)]);
-    set(sim, { rst: 1 });
+    set(sim, { RESET: 1 });
     expect(sapHw(sim)).toMatchObject({ pc: 0, step: 0, ir: 0, a: 0, b: 0, cf: 0, zf: 0 });
     if (held) { edge(sim, mon); edge(sim, mon); }
-    set(sim, { rst: 0 });
+    set(sim, { RESET: 0 });
     const before = mon.outs.length;
     for (let c = 0; c < 4000 && sapHw(sim).cw >> 15 !== 1; c++) {
       edge(sim, mon);
@@ -147,14 +147,22 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(Array.from(mon.iss.ram)).toEqual(sapRam(sim));
   }, 120_000);
 
+  it('the pin is RESET, first on the bar; the stage Reset is labelled a power cycle', () => {
+    const ins = SAP_COMPUTER.ports.filter((p) => p.dir === 'in' && !p.clock).map((p) => p.name);
+    expect(ins[0]).toBe('RESET');
+    expect(ins).not.toContain('rst');
+    expect(sapScene({ empty: true }).resetLabel).toBe('Power cycle');
+    expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.switches ?? []).find((s) => s.port === 'RESET')?.label).toBe('RESET');
+  });
+
   it('RESET un-halts a halted computer, and it runs its program again', async () => {
     const p = SAP_PROGRAMS.find((q) => q.id === 'add')!;
     const bytes = sapBytes(p.src);
     const sim = boot(bytes), mon = new SapFollower(bytes);
     for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) edge(sim, mon);
     expect(mon.iss.halted).toBe(true);
-    set(sim, { rst: 1 });
-    set(sim, { rst: 0 });
+    set(sim, { RESET: 1 });
+    set(sim, { RESET: 0 });
     const before = mon.outs.length;
     for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); expect(mon.mismatch).toBeNull(); }
     expect(mon.outs.slice(before)).toEqual(p.outs);

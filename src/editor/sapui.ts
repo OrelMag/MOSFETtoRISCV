@@ -19,7 +19,7 @@ const IS_189 = /^ls189(_i([0-9a-f]{16}))?$/;
 export function sapRamChip(ed: Editor, prefix: string): { doc: ChipDoc; bytes: number[] } | { error: string } {
   const at = partAt(ed.doc, `${prefix}ram`, ed.ws.chips);
   const ref = at?.part.ref;
-  if (!ref || !('chip' in ref)) return { error: prefix ? 'a placed SAP-1 part keeps its RAM inside: program it through its prog, addrSw, dataSw and write pins, then rst' : 'no RAM chip (a user chip placed as ram)' };
+  if (!ref || !('chip' in ref)) return { error: prefix ? 'a placed SAP-1 part keeps its RAM inside: program it through its prog, addrSw, dataSw and write pins, then RESET' : 'no RAM chip (a user chip placed as ram)' };
   const doc = ed.ws.chips[ref.chip];
   const nib = (id: string) => {
     const p = doc?.parts.find((q) => q.id === id);
