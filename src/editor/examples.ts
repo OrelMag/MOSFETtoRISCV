@@ -9,6 +9,7 @@ import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 import { computer6502Chip, memory6502Chip } from './example6502';
+import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
 import { cardsBootChip } from './examplecards';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
@@ -400,6 +401,13 @@ export const EXAMPLES: Example[] = [
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
     hz: 10000,
+  },
+  {
+    id: 'sap1', name: 'SAP-1 breadboard computer',
+    blurb: 'Ben Eater’s 8-bit breadboard computer: 13 modules of 74xx chips on one bus, 16 bytes of RAM, a microcoded control unit with five steps an instruction. Run: Fibonacci on the digits; PROG, the DIP switches and W program it by hand.',
+    build: (id, n, sub, docs) => sapChip(id, n, sub, docs),
+    subchips: SAP_SUBCHIPS,
+    hz: 100,
   },
   {
     id: 'bussystem', name: 'System on a bus',

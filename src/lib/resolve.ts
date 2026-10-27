@@ -29,6 +29,7 @@ import { sramArray, sramColumn } from './arrays';
 import { wbCache } from './cache2';
 import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegister, timer, TIMER_PERIODS, upDownCounter } from './seqparts';
 import { srt4Divider, srt4Step } from './srt4';
+import { ls189With } from './ttl';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 // Single parts the sandbox palette and examples place by id (registered on import).
@@ -76,6 +77,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^fpun(\d+)_(\d+)$/, (m) => fpUnpack({ E: +m[1], M: +m[2] })],
   [/^fpnr(\d+)_(\d+)_(\d+)$/, (m) => normRound({ E: +m[1], M: +m[2] }, +m[3])],
   [/^fpcvt(\d+)_(\d+)_(\d+)$/, (m) => fpFromInt({ E: +m[1], M: +m[2] }, +m[3])],
+  // a 74LS189 holding its 16 nibbles at power-on (the sandbox's SAP-1 RAM)
+  [/^ls189_i([0-9a-f]{16})$/, (m) => ls189With(Array.from(m[1], (c) => parseInt(c, 16)))],
 ];
 
 type Resolver = (id: string) => ComponentDef | undefined;
