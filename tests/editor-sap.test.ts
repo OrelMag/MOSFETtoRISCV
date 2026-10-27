@@ -66,6 +66,10 @@ describe('the SAP-1 example', () => {
     }
     // Every pin but the clock became a part; the RAM's 189s hold the sample.
     expect(ws.chips[id].pins.map((p) => p.id)).toEqual(['clk']);
+    // the digits side by side, hundreds on the left: they read as a number
+    const dig = (k: number) => ws.chips[id].parts.find((p) => p.id === `io_d${k}`)!.at;
+    expect([dig(2)[1], dig(1)[1]]).toEqual([dig(0)[1], dig(0)[1]]);
+    expect(dig(2)[0] < dig(1)[0] && dig(1)[0] < dig(0)[0]).toBe(true);
     const bytes = sapBytes(SAP_EXAMPLE_PROGRAM.src);
     const ram = ws.chips[`${id}_ram`].parts;
     expect(ram.find((p) => p.id === 'lo')!.ref).toEqual({ lib: ls189With(bytes.map((b) => b & 15)).id });
@@ -186,4 +190,5 @@ describe('the SAP-1 example', () => {
     expect(outs).toEqual(p.outs);
     expect(mon.read()!.ram).toEqual(Array.from(mon.iss!.ram));
   });
+
 });

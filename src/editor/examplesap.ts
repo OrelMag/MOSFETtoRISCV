@@ -125,6 +125,29 @@ export const SAP_NOTES = 'Ben Eater\'s 8-bit breadboard computer (SAP-1, after M
   + 'Load program… in the CPU drawer puts another sample (or your own SAP-1 assembly) into the RAM. Or program it by hand, as on the breadboard, at any time: PROG on, set an address and a byte on the DIP switches, press W, and so on for each byte; PROG off, press RESET (E: it clears the PC, the step counter, A, B, the IR and the flags, not the RAM), then Run. '
   + 'The bus is a wired OR of the modules\' 74LS245s; the clash LED lights if two drive it at once.';
 
+/** Columns between two digits' left edges: a seg7 part is 8 wide, its wire comes up in the gap to its input on the left. */
+const DIGIT_PITCH = 10;
+
+/**
+ * The three digits side by side, hundreds on the left, so the display reads as a number (the pins they replace are
+ * stacked, ones on top). Each digit's wire runs from the display decoder's row straight up to its input: hundreds on
+ * the vertical docFromDef drew, tens and ones in the gap left of their digit.
+ */
+function digitsInARow(parts: PartDoc[], wires: ChipDoc['wires']): void {
+  const at = (k: number) => parts.find((p) => p.id === `io_d${k}`)!;
+  const [x0, y0] = at(0).at;
+  [2, 1, 0].forEach((k, i) => {
+    const p = at(k);
+    const dy = p.at[1] - y0;
+    p.at = [x0 + DIGIT_PITCH * i, y0];
+    const w = wires.find((q) => ('part' in q.b && q.b.part === p.id) || ('part' in q.a && q.a.part === p.id));
+    if (!w || w.pts.length !== 2) throw new Error(`SAP-1 example: no two-corner wire to ${p.id}`);
+    const [[x, ySrc], [, yDst]] = w.pts;
+    const vx = i ? p.at[0] - 1 : x;
+    w.pts = [[vx, ySrc], [vx, yDst - dy]];
+  });
+}
+
 /** The example's top level; `sub` maps SAP_BLOCKS keys to the sub-chips' ids. */
 export function sapChip(id: string, name: string, sub: Record<string, string>, docs: Record<string, ChipDoc> = {}): ChipDoc {
   const blockKey = new Map(Object.entries(SAP_BLOCKS).map(([k, d]) => [d, k]));
@@ -155,6 +178,7 @@ export function sapChip(id: string, name: string, sub: Record<string, string>, d
     }
     return false;
   });
+  digitsInARow(parts, wires);
   // The switches and the key first: their leaves then settle to 0 before the RAM's at power-on. Relaxation walks the
   // leaves in order, and a 189 latch whose enable is still X there loses the word its hints gave it.
   const io = parts.filter((p) => p.id.startsWith('io_'));
