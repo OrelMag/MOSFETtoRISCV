@@ -422,6 +422,13 @@ export class Stage {
       this.fitBar();
       this.fitControls();
     }).observe(this.canvas);
+    // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
+    // caption and top follow it (boardCover)
+    const notesSize = new ResizeObserver(() => this.syncCover());
+    const watchNotes = () => { for (const n of this.canvas.querySelectorAll(':scope > .stage-notes')) notesSize.observe(n); };
+    new MutationObserver(watchNotes).observe(this.canvas, { childList: true });
+    watchNotes();
+    this.life.signal.addEventListener('abort', () => notesSize.disconnect());
     // web fonts change every label's width without resizing the canvas (a weight first used later loads later)
     document.fonts?.addEventListener('loadingdone', () => {
       this.fitBar();
