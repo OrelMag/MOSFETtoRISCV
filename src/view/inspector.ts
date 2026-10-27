@@ -31,7 +31,7 @@ type Tab = 'info' | 'truth' | 'hdl';
 export const CATEGORY_LABEL: Record<Category, string> = {
   transistor: 'Transistor level', cell: 'CMOS cell', gate: 'Logic gate', plumbing: 'Wiring',
   arithmetic: 'Arithmetic', routing: 'Selection & routing', sequential: 'Sequential logic',
-  memory: 'Memory', cpu: 'Processor', custom: 'User chip',
+  memory: 'Memory', cpu: 'Processor', ttl: '74xx chip', custom: 'User chip',
 };
 
 export class Inspector {

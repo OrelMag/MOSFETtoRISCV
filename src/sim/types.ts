@@ -242,6 +242,8 @@ export interface ComponentDef {
 export type Category =
   | 'transistor' | 'cell' | 'gate' | 'plumbing' | 'arithmetic'
   | 'routing' | 'sequential' | 'memory' | 'cpu'
+  /** 74xx chips (Appendix C's breadboard computer). */
+  | 'ttl'
   /** User chips made in the sandbox. */
   | 'custom';
 
