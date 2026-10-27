@@ -95,8 +95,18 @@ with the bus between them, as the breadboards), net labels for the 16 control li
   at grid positions, each naming its module instance and listing its chips by instance path, LEDs by net path + bit
   and colour, DIP switches by input pin, 7-segment digits by output, the bus strip) drawn over the same simulation as
   the schematic; the stage toolbar gets a Schematic | Breadboard toggle. A chip's hover card (part, role, inside,
-  cost); double-click opens the chip's own drill (the schematic of that instance, with its DIP pin card live).
-  Both themes; phone width.
+  its outputs pin by pin). The boards pan and zoom (wheel, pinch, drag, Fit, the bar's zoom buttons); a layout may
+  carry a one-column `narrow` arrangement (the SAP-1's), shown as wide as the canvas wherever the whole layout would
+  print below `BB_READ_PX` (a phone, a stage beside an open panel). A right-docked panel stays open only beside
+  boards that read whole, so the SAP panel starts folded below about 1600 px; on a phone, opened, it goes under the
+  boards. A step that lights up to four boards opens zoomed on them. LEDs and bus jumpers: hover / focus names the
+  net, its value and its port's (site radix) and what drives it (`driverOf`, `busDrivers`), which lights; a click
+  keeps it lit. Keyboard: one roving Tab stop per board and for the bus strip, arrows by row and column
+  (`rovingMove`). Double-click a chip (or a board's title): the drill (`drillOf`, `drillCrumbs`, `drillPane`):
+  its board zoomed (others dimmed) with a breadcrumb, the live DIP pin card (overbars from `TTL_ACTIVE_LOW`, values
+  in words) and notes on the left (on top below `DRILL_STACK_PX`), the instance's schematic on the right; the
+  right-docked panels fold for it where two columns need the room, and come back after. Esc goes up; at the top, or
+  from Boards, the boards again. Both themes; phone width.
 - `src/widgets/sap.ts`: the SAP panel (control word LEDs by name, the microcode row of this step, the program listing
   with the PC, RAM contents, the golden model in lock step at every rising edge), `sapScene(program, opts)`.
 - `src/editor/examplesap.ts`: Examples ▸ SAP-1 breadboard computer (the modules as user chips, DIP switches, the
