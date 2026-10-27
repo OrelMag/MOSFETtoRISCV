@@ -26,7 +26,7 @@ import { closePopover, editNumber } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
-import type { BbChip, BreadboardLayout } from './bblayout';
+import { type BbChip, type BreadboardLayout, layoutBounds } from './bblayout';
 import { BreadboardView, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 
@@ -1452,6 +1452,7 @@ export class Stage {
     // only the view on screen is painted (the other catches up when it is shown)
     if (this.boardOn) {
       this.board.sim = this.sim;
+      this.boardCover();
       this.board.update(this.sim);
     } else this.view.update();
     if (this.pins && this.sim) this.pins.update(this.sim);
@@ -1710,8 +1711,10 @@ export class Stage {
       this.inset = this.rightInset();
       this.dockOut();
     };
-    const box = this.view.contentBox();
-    const bw = Math.max(box.w, 34), bh = Math.max(box.h, 1);
+    // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
+    const lay = this.boardOn ? this.scene?.breadboard : undefined;
+    const box = lay ? layoutBounds(lay) : this.view.contentBox();
+    const bw = Math.max(box.w, lay ? 1 : 34), bh = Math.max(box.h, 1);
     const scaleOf = (mask: number): number | null => {
       apply(mask);
       if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
@@ -1731,9 +1734,29 @@ export class Stage {
     // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
+    this.boardCover();
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);
+  }
+
+  /** The boards keep clear of the right-docked panels that are open; a folded one is only its title, so the boards
+   *  run under it, starting below it (--bb-inset, --bb-top: breadboard.css). */
+  private boardCover(): void {
+    const c = this.canvas.getBoundingClientRect();
+    const right = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.offsetWidth > 0);
+    const open = right.filter((p) => !p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth);
+    const folded = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.getBoundingClientRect().bottom - c.top);
+    this.canvas.style.setProperty('--bb-inset', `${open.length ? Math.max(...open) + 24 : 0}px`);
+    const capr = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth + 12);
+    this.canvas.style.setProperty('--bb-capr', `${capr.length && !open.length ? Math.max(...capr) : 0}px`);
+    const tops = open.length ? [] : folded;
+    // a chapter's challenge note over the canvas's top-left corner (ui/stagenotes.ts) too
+    for (const n of this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')) {
+      const r = n.getBoundingClientRect();
+      if (r.height > 0) tops.push(r.bottom - c.top);
+    }
+    this.canvas.style.setProperty('--bb-top', `${tops.length ? Math.max(...tops) + 6 : 0}px`);
   }
 
   /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit

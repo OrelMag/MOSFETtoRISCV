@@ -34,6 +34,8 @@ export interface BbSwitch {
   port: string;
   bit?: number;
   label?: string;
+  /** Leave a space before this switch (between two groups). */
+  gap?: boolean;
 }
 
 /** A 7-segment digit: 8 bits of a port from `bit` up (a…g, dp), or with `hex` 4 bits shown as a hex digit. */
@@ -183,6 +185,7 @@ export function planBoard(b: BbBoard): BoardPlan {
   // a switch bank's labels (if any) under it, like the LEDs'
   const swH = 1.8 + ((b.switches ?? []).some((s) => s.label) ? BB.ledLabel : 0);
   for (const sw of b.switches ?? []) {
+    if (sw.gap && switches.length) ix += 0.8;
     const w = Math.max(BB.sw, (sw.label?.length ?? 0) * 0.5);
     switches.push({ x: ix, y: iy, w, h: swH });
     ix += w;

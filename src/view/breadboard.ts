@@ -232,7 +232,7 @@ export class BreadboardView {
     }
     g.append(s('rect', { class: 'bb-body', width: r.w, height: r.h, rx: 0.18 }),
       s('path', { class: 'bb-notch', d: `M0 ${r.h / 2 - 0.5} A0.5 0.5 0 0 1 0 ${r.h / 2 + 0.5} Z` }));
-    const fs = Math.min(1.25, (r.w - 0.6) / (c.part.length * 0.62));
+    const fs = Math.min(1.5, (r.w - 0.6) / (c.part.length * 0.62));
     g.append(s('text', { class: 'bb-part', x: r.w / 2, y: r.h / 2 + (c.ref ? 0 : 0.4), 'font-size': fs }, c.part));
     if (c.ref) g.append(s('text', { class: 'bb-ref', x: r.w / 2, y: r.h / 2 + 1.15, 'font-size': Math.min(0.95, fs) }, c.ref));
     g.addEventListener('pointerenter', () => this.showCard(c, g));

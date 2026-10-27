@@ -68,13 +68,13 @@
 
 /* ---- the host over the canvas (the schematic stays under it) ---- */
 .canvas > .bb-host {
-  position: absolute; inset: 0; right: var(--panel-inset, 0px); z-index: 2; background: var(--bb-bg);
+  position: absolute; inset: 0; right: var(--bb-inset, 0px); z-index: 2; background: var(--bb-bg);
   display: flex; flex-direction: column; min-width: 0; overflow: hidden;
 }
 .canvas > .bb-host[hidden] { display: none; }
 .stage.bb-mode .canvas { background: var(--bb-bg); }
-.bb-caption { flex: none; padding: 8px 14px 0; font-size: 12.5px; color: var(--bb-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-svg.breadboard { flex: 1; min-height: 0; width: 100%; display: block; font-family: var(--font-mono); user-select: none; -webkit-user-select: none; }
+.bb-caption { flex: none; padding: 8px calc(14px + var(--bb-capr, 0px)) 0 14px; font-size: 12.5px; color: var(--bb-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+svg.breadboard { flex: 1; min-height: 0; width: 100%; display: block; margin-top: max(0px, calc(var(--bb-top, 0px) - 30px)); font-family: var(--font-mono); user-select: none; -webkit-user-select: none; }
 /* the stage's schematic tools, hint and level badge sit out while the boards are shown */
 .stage.bb-mode .sch-only, .stage.bb-mode .canvas > .level-badge, .stage.bb-mode .canvas > .hint-badge { display: none !important; }
 .stage:not(.bb-mode) .bb-only { display: none !important; }
@@ -126,7 +126,7 @@ svg.breadboard { flex: 1; min-height: 0; width: 100%; display: block; font-famil
 .bb-led[data-v='1'] .lens { fill: var(--on); }
 .bb-led[data-v='1'] .halo { opacity: 0.75; }
 .bb-led[data-v='x'] .lens { fill: var(--bb-led-x); }
-.bb-ll { font-size: 0.82px; font-weight: 500; fill: var(--bb-label); text-anchor: middle; }
+.bb-ll { font-size: 0.95px; font-weight: 500; fill: var(--bb-label); text-anchor: middle; }
 .bb-val { font-size: 1.05px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
 
 /* ---- DIP switches ---- */
