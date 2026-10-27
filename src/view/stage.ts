@@ -344,6 +344,11 @@ export class Stage {
       input: (port) => this.getInput(port),
       open: (path) => this.openFromBoard(path),
       select: () => this.showInspector(),
+      // the right-docked panels (a folded one's strip too) and a challenge note float over the boards
+      covers: () => [
+        ...this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.getBoundingClientRect()),
+        ...[...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()),
+      ],
     });
     for (const b of [imgWrap, layoutBtn, this.probeBtn]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)

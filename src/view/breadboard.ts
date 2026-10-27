@@ -13,7 +13,8 @@ import { romSize, stats } from '../sim/stats';
 import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
-import { Camera, fitBox, installPanZoom } from './camera';
+import { Camera, fitBox, installPanZoom, type Rect } from './camera';
+import { overlaps } from './route';
 import {
   BB, BB_TEXT, partText, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, outputPins, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
@@ -28,6 +29,9 @@ export interface BreadboardHooks {
   open(path: string[]): void;
   /** A chip was selected (null: none): the inspector follows. */
   select(chip: BbChip | null): void;
+  /** What floats over the boards (screen rectangles: a folded panel's strip, a challenge note): a step's zoom and the
+   *  hover cards keep clear of it. */
+  covers?(): DOMRect[];
 }
 
 /** 'built': jumpers in their wire colours (the bus's yellow brighter where a bit is 1); 'value': the site's wire colours by value. */
@@ -742,17 +746,40 @@ export class BreadboardView {
     this.lastSim = sim;
   }
 
+  /** The hooks' covers that reach over `el`, in its own px (from its top-left corner). */
+  private covers(el: Element): Rect[] {
+    const o = el.getBoundingClientRect();
+    return (this.hooks.covers?.() ?? []).map((c) => ({ x: c.left - o.left, y: c.top - o.top, w: c.width, h: c.height }))
+      .filter((c) => c.w > 0 && c.h > 0 && c.x < o.width && c.y < o.height && c.x + c.w > 0 && c.y + c.h > 0);
+  }
+
+  /** The hover card above `el` (below it at the top), clear of the covers: below it, or beside the cover, when the
+   *  first place is under one. */
   private placeCard(el: Element): void {
     const host = this.el.getBoundingClientRect(), r = el.getBoundingClientRect(), card = this.card;
     const cw = card.offsetWidth, ch = card.offsetHeight;
-    let x = r.left + r.width / 2 - host.left - cw / 2;
-    x = Math.max(8, Math.min(x, host.width - cw - 8));
-    let y = r.top - host.top - ch - 10;
-    const below = y < 8;
-    if (below) y = r.bottom - host.top + 10;
+    const cov = this.covers(this.el);
+    const clampX = (x: number) => Math.max(8, Math.min(x, host.width - cw - 8));
+    const clampY = (y: number) => Math.max(8, Math.min(y, host.height - ch - 8));
+    const at = (x: number, y: number) => cov.find((c) => overlaps({ x, y, w: cw, h: ch }, c));
+    const cx = clampX(r.left + r.width / 2 - host.left - cw / 2);
+    const up = r.top - host.top - ch - 10, down = r.bottom - host.top + 10;
+    let x = cx, y = clampY(up), below = up < 8;
+    if (below) y = clampY(down);
+    const hit = at(x, y);
+    if (hit) {
+      // the other side of the part, else beside the cover (left of it, or right)
+      const y2 = clampY(below ? up : down);
+      if (!at(x, y2) && (below ? up >= 8 : down + ch <= host.height - 8)) { y = y2; below = !below; }
+      else {
+        const left = hit.x - cw - 8, right = hit.x + hit.w + 8;
+        if (left >= 8 && !at(left, y)) x = left;
+        else if (right + cw <= host.width - 8 && !at(right, y)) x = right;
+      }
+    }
     card.classList.toggle('below', below);
     card.style.left = `${x}px`;
-    card.style.top = `${Math.max(8, Math.min(y, host.height - ch - 8))}px`;
+    card.style.top = `${y}px`;
     card.style.setProperty('--tip', `${Math.max(12, Math.min(cw - 12, r.left + r.width / 2 - host.left - x))}px`);
   }
 

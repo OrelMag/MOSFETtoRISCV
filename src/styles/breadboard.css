@@ -237,7 +237,9 @@ svg.breadboard.drilled .bb-board:not(.focus), svg.breadboard.drilled .bb-bus, sv
 .stage.bb-drill:not(.bb-stacked) .canvas > .level-badge,
 .stage.bb-drill:not(.bb-stacked) .canvas > .hint-badge,
 .stage.bb-drill:not(.bb-stacked) .canvas > .panel-dock { left: calc(var(--bb-drill-w, 46%) + 12px); }
-.stage.bb-drill.bb-stacked .canvas > .level-badge { top: calc(var(--bb-drill-h, 50%) + 10px); }
+/* below a folded panel's strip or a challenge note over the canvas's top (--bb-top: Stage.boardCover) */
+.stage.bb-drill:not(.bb-stacked) .canvas > .level-badge { top: max(10px, var(--bb-top, 0px)); }
+.stage.bb-drill.bb-stacked .canvas > .level-badge { top: calc(var(--bb-top, 0px) + var(--bb-drill-h, 50%) + 10px); }
 
 /* a phone: the stage grows for a stacked drill, so the schematic keeps a part of its own below the board */
 @media (max-width: 760px) { .stage.bb-drill.bb-stacked { height: 88vh; } }
