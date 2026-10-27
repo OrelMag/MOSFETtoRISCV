@@ -241,6 +241,14 @@ svg.breadboard.drilled .bb-board:not(.focus), svg.breadboard.drilled .bb-bus, sv
 .stage.bb-drill:not(.bb-stacked) .canvas > .level-badge { top: max(10px, var(--bb-top, 0px)); }
 .stage.bb-drill.bb-stacked .canvas > .level-badge { top: calc(var(--bb-top, 0px) + var(--bb-drill-h, 50%) + 10px); }
 
+/* beside a panel docked at the top right (the SAP panel, folded) the challenge note takes the caption's line, on one
+   line (a click shows it whole): under the caption it cost the boards the height that kept the computer whole at 1440 px */
+@media (min-width: 761px) {
+  .stage.bb-mode .canvas:has(> [data-dock='right']) > .stage-notes { top: 8px; }
+  .stage.bb-mode .canvas:has(> [data-dock='right']) > .stage-notes .stage-goal .txt { -webkit-line-clamp: 1; }
+  .stage.bb-mode .canvas:has(> [data-dock='right']):has(> .stage-notes > .stage-goal) > .bb-host > .bb-caption { visibility: hidden; }
+}
+
 /* a phone: the stage grows for a stacked drill, so the schematic keeps a part of its own below the board */
 @media (max-width: 760px) { .stage.bb-drill.bb-stacked { height: 88vh; } }
 
