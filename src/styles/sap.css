@@ -12,7 +12,7 @@
 .sap-mc { border-collapse: collapse; font-size: 12px; width: 100%; margin: 4px 0; }
 .sap-mc caption { text-align: left; font-size: 12px; color: var(--muted); padding-bottom: 2px; }
 .sap-mc th { text-align: left; font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; }
-.sap-mc td { padding: 3px 6px; border-top: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
+.sap-mc td { text-align: left; padding: 3px 6px; border-top: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
 .sap-mc td:first-child { font-family: var(--font-mono); color: var(--muted); width: 2.6em; }
 .sap-mc td code { white-space: nowrap; }
 .sap-mc tr.cur td { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); }
@@ -26,3 +26,7 @@
 .sap-tri-panel { max-width: 340px; }
 .sap-tri p { margin: 4px 0; font-size: 12.5px; }
 .sap-tri .muted { color: var(--muted); }
+.sap-verdict { font: 600 11.5px var(--font-mono); margin-left: 4px; }
+.sap-verdict.good { color: var(--good); }
+.sap-verdict.warn { color: var(--warn); }
+.sap-verdict.bad { color: var(--bad); }

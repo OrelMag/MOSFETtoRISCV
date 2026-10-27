@@ -83,7 +83,7 @@ function chip(all: Map<string, SapChip>, path: string, roleKey = path): BbChip {
 const drawn = (part: string, dip: number, role: string): BbChip => ({ part, dip, role });
 
 /** Board widths and gaps, in holes. */
-const COL_W = 60, GAP = 1.6, BUS_W = 12;
+const COL_W = 52, GAP = 1.6, BUS_W = 12;
 
 /** Number the chips U1, U2 … in board order. */
 function numberChips(boards: BbBoard[]): void {
@@ -129,14 +129,14 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
     {
       title: 'Memory address', module: ['mar'], bus: 'bus',
       chips: [c('mar.inv'), c('mar.reg'), c('mar.sel')],
-      switches: [{ port: 'prog', label: 'PROG' }, ...bitSwitches('addrSw', 4)],
+      switches: [{ port: 'prog', label: 'PROG' }, ...bitSwitches('addrSw', 4).map((s, i) => (i ? s : { ...s, gap: true }))],
       leds: ledsOf(['mar'], 'addr', 4, 'yellow'),
       loads: act('mi', 'loads at the next edge'),
     },
     {
       title: 'RAM 16 × 8', module: ['ram'], bus: 'bus',
       chips: ['ram.lo', 'ram.hi', 'ram.ilo', 'ram.ihi', 'ram.dlo', 'ram.dhi', 'ram.w', 'ram.wsel', 'ram.drv'].map(c),
-      switches: [...bitSwitches('dataSw', 8), { port: 'write', label: 'WR' }],
+      switches: [...bitSwitches('dataSw', 8), { port: 'write', label: 'WR', gap: true }],
       leds: ledsOf(['ram'], 'q', 8, 'red'),
       drives: act('ro', 'drives the bus'),
       loads: act('ri', 'writes at the edge'),
@@ -215,7 +215,7 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
   const hr = stack(right, COL_W + BUS_W + 2 * GAP);
   numberChips(boards);
   return {
-    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs, 74LS series and 28C16 EEPROMs (the 555s, 76 and 139 drawn only)`,
+    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs: 74LS series and 28C16 EEPROMs (pale: drawn only)`,
     buses: [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, Math.max(hl, hr)], path: ['bus'], port: 'bus' }],
     boards,
   };
@@ -243,11 +243,15 @@ export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): Breadboard
   const all = chipsOf(def);
   const chips = [...all.keys()].map((p) => chip(all, p, inst ? `${inst}.${p}` : p));
   const ins = def.ports.filter((p) => p.dir === 'in' && !p.clock && !(o.skip ?? []).includes(p.name));
-  const switches: BbSwitch[] = ins.flatMap((p) => (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? p.name.toUpperCase() }] : bitSwitches(p.name, p.width, p.name)));
+  const switches: BbSwitch[] = ins.flatMap((p, i) => {
+    const g = (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? p.name.toUpperCase() }] : bitSwitches(p.name, p.width, p.name)) as BbSwitch[];
+    return i ? g.map((s, j) => (j ? s : { ...s, gap: true })) : g;
+  });
   const outs: NonNullable<ModuleLayoutOpts['leds']> = o.leds ?? def.ports.filter((p) => p.dir === 'out').map((p) => ({ port: p.name }));
   const leds: BbLed[] = outs.flatMap((l, i) => {
     const p = def.ports.find((q) => q.name === l.port)!;
-    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? p.name.toUpperCase() } as BbLed] : ledsOf([], p.name, p.width, l.color ?? 'red');
+    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? p.name.toUpperCase() } as BbLed]
+      : ledsOf([], p.name, p.width, l.color ?? 'red', (b) => (b === p.width - 1 ? p.name : ''));
     return i ? withGap(ls) : ls;
   });
   const W = 64;

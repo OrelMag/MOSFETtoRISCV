@@ -164,8 +164,10 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       h('div', { class: 'cpu-sec' }, 'RAM', h('span', { class: 'cpu-sec-hint' }, '▸ PC · ● the instruction in the IR')), listing,
       h('div', { class: 'cpu-sec' }, 'OUT so far'), outs);
+    // the title carries the verdict, so a folded panel still says it
+    const verdict = h('span', { class: 'sap-verdict' });
     const el = h('div', { class: 'mem-panel cpu-panel sap-panel', 'data-dock': 'right', 'data-fold': 'narrow' },
-      h('h4', null, 'SAP-1', h('span', { class: 'fold-hint' })), body);
+      h('h4', null, 'SAP-1 ', verdict, h('span', { class: 'fold-hint' })), body);
 
     let lastKey = '';
     const update = () => {
@@ -176,6 +178,8 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
       const key = `${sim.time}|${mon.iss.cycles}|${mon.mismatch}|${mon.stale}|${ram.join(',')}|${hw.cw}|${stage.getInput('prog')}`;
       if (key === lastKey) return;
       lastKey = key;
+      verdict.textContent = mon.mismatch ? '✗ mismatch' : mon.stale ? 'programming' : '✓ in step';
+      verdict.className = `sap-verdict ${mon.mismatch ? 'bad' : mon.stale ? 'warn' : 'good'}`;
       alarm.hidden = !mon.mismatch;
       alarm.textContent = mon.mismatch ? `✗ Not in step with the golden model: ${mon.mismatch}` : '';
       const op = hw.ir < 0 ? -1 : hw.ir >> 4;

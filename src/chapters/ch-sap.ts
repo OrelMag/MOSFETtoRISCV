@@ -37,6 +37,14 @@ function poke(st: Stage, v: Record<string, number>): void {
   st.refresh();
 }
 
+/** Key bytes into the RAM from address 0 by the switches (PROG, address, data, WR), as Ben programs his. */
+function program(st: Stage, bytes: readonly number[]): void {
+  st.powerCycle(); // PC 0, step T0 (the RAM back to the scene's own program, then keyed over)
+  poke(st, { prog: 1 });
+  bytes.forEach((v, i) => { poke(st, { addrSw: i, dataSw: v }); poke(st, { write: 1 }); poke(st, { write: 0 }); });
+  poke(st, { prog: 0, addrSw: 0, dataSw: 0 });
+}
+
 /** The computer's state, or null on any other scene. */
 const hw = (st: Stage) => {
   try {
@@ -55,7 +63,7 @@ const FIB = (() => {
 })();
 
 const HAND = [0x57, 0xe0, 0xf0]; // LDI 7, OUT, HLT
-const HUNDRED = `; 100 does not fit LDI's four bits: keep it in RAM
+const HUNDRED = `; LDI holds 0–15: 100 is in RAM
         LDA x
         ADD y
         OUT
@@ -77,7 +85,7 @@ export const chAppendixSap: Chapter = {
   recap: {
     keep: [
       'SAP-1 is one 8-bit bus and boards that either drive it (…O) or load from it (…I). The microcode keeps it to one driver at a time; nothing in the wiring does.',
-      'Every instruction takes five steps: T0 <code>CO MI</code> and T1 <code>RO II CE</code> fetch, T2–T4 execute. The control word changes on the falling edge, registers load on the rising one.',
+      'Every instruction takes five steps: T0 <code>MI CO</code> and T1 <code>RO II CE</code> fetch, T2–T4 execute. The control word changes on the falling edge, registers load on the rising one.',
       'The control unit is a 74LS161 step counter and two 28C16 EEPROMs addressed by [ZF CF][opcode][step]: changing the ISA is reprogramming two chips, not rewiring.',
       `Without the EEPROMs it is ${k(SAP_COST.logic)} NANDs (${SAP_COST.chips} chips); our single-cycle RV32I is ${k(RV32I.nands)}. SAP-1 buys that with 16 bytes, an 8-bit adder, no registers beyond A and B, and five clocks an instruction.`,
       'A ROM is counted here as the mux tree it simulates as (65 524 NANDs per 28C16); on silicon it is a transistor per bit and two decoders.',
@@ -89,11 +97,11 @@ export const chAppendixSap: Chapter = {
         options: ['The IR takes RAM[MAR] and the PC counts', 'The MAR takes the PC', 'RAM[MAR] takes the bus', 'The PC loads the bus'],
         answer: 0,
         explain: 'RO puts RAM[MAR] on the bus, II loads it into the instruction register, CE lets the 161 count. MAR still holds the address T0 put there.',
-        why: ['', 'That is T0: CO MI. In T1 the PC does not drive the bus.', 'That would need RI; RO reads the RAM onto the bus.', 'Loading the PC from the bus is J (a jump). CE counts without touching the bus.'],
+        why: ['', 'That is T0: MI CO. In T1 the PC does not drive the bus.', 'That would need RI; RO reads the RAM onto the bus.', 'Loading the PC from the bus is J (a jump). CE counts without touching the bus.'],
       },
       {
         question: 'A programmer adds an instruction <code>LDB a</code> (B ← RAM[a]). What must change in the hardware?',
-        options: ['Only the two microcode EEPROMs: T2 IO MI, T3 RO BI', 'A new decoder for the opcode', 'A wire from the RAM to B', 'A sixth step in the counter'],
+        options: ['Only the two microcode EEPROMs: T2 MI IO, T3 RO BI', 'A new decoder for the opcode', 'A wire from the RAM to B', 'A sixth step in the counter'],
         answer: 0,
         explain: 'Every data path it needs exists: the operand onto the bus (IO) into the MAR (MI), then RAM onto the bus (RO) into B (BI). A free opcode (9–D) gets those words at its addresses in the EEPROMs.',
         why: ['', 'The EEPROMs are the decoder: the opcode is part of their address.', 'B already loads from the bus, and the RAM already drives it.', 'Two execute steps are enough; the counter already runs to T4.'],
@@ -197,7 +205,7 @@ export const chAppendixSap: Chapter = {
         <p>Three <span data-show="u0 u1 u2">tri-state buffers</span> (8 transistors each) on one wire, with a
         <span data-show="pd">pull-down</span> resistor, at switch level: the bus as the 245s make it. A disabled buffer
         has both its output transistors off, so it neither pulls up nor down. One enabled buffer sets the line; none leaves
-        it to the pull-down, a weak 0 (Ben puts a resistor on every bus bit for this).</p>
+        it to the pull-down, a weak 0 (the computer's bus has a pull-down on every bit for this).</p>
         <p>Enable two that disagree and one pulls the line to VDD while the other pulls it to GND: a short, current
         straight through both output stages, the line at neither value. On the board it costs heat and a sagging supply;
         in a chip, burnt metal. Nothing in SAP-1's wiring prevents it: the microcode does, by never turning on two O
@@ -250,7 +258,7 @@ export const chAppendixSap: Chapter = {
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
       challenge: {
         kind: 'reach',
-        goal: 'By the switches, put <code>LDI 7</code> (0x57) at address 0, <code>OUT</code> (0xE0) at 1 and <code>HLT</code> (0xF0) at 2; then PROG off, and run until the display shows 7.',
+        goal: 'By the switches, put LDI 7 (0x57) at address 0, OUT (0xE0) at 1 and HLT (0xF0) at 2; then PROG off, and run until the display shows 7.',
         check: (st) => {
           const sim = st.sim, h = hw(st);
           if (!sim || !h) return false;
@@ -263,12 +271,7 @@ export const chAppendixSap: Chapter = {
           'PROG off, then Run (or Run to HLT in the panel): the PC starts at 0.',
         ],
         answer: 'PROG = 1; address 0000, data 0101 0111, WR on/off; address 0001, data 1110 0000, WR; address 0010, data 1111 0000, WR; PROG = 0; Run to HLT. OUT shows 7.',
-        solve: (st) => {
-          poke(st, { prog: 1 });
-          HAND.forEach((v, i) => { poke(st, { addrSw: i, dataSw: v }); poke(st, { write: 1 }); poke(st, { write: 0 }); });
-          poke(st, { prog: 0, addrSw: 0, dataSw: 0 });
-          st.runCycles(40, () => halted(st));
-        },
+        solve: (st) => { program(st, HAND); st.runCycles(40, () => halted(st)); },
       },
     },
     {
@@ -325,7 +328,7 @@ export const chAppendixSap: Chapter = {
         edge, so the control word changes while the clock is low and is steady by the next rising edge; a 74LS138 decodes
         the count, and its fifth output clears the 161 at once (five steps, T0–T4). Two 28C16 EEPROMs, addressed by
         [ZF CF][opcode][step], hold the control word: high byte HLT … AO, low byte ΣO … FI. Every instruction starts with
-        the same fetch, T0 <code>CO MI</code> and T1 <code>RO II CE</code>. ADD:</p>
+        the same fetch, T0 <code>MI CO</code> and T1 <code>RO II CE</code>. ADD:</p>
         ${microTable(2)}
         <p>Our microcode is active high throughout, with inverters on the boards where a chip wants a low; Ben stores some
         lines inverted in his EEPROMs instead. Same machine, different bit patterns in the ROM.</p>
@@ -338,9 +341,9 @@ export const chAppendixSap: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'Which control word does the EEPROM pair hold at address [ZF 0][CF 0][opcode 0011][step 011]?',
-        options: ['<code>RO BI</code>: SUB\'s T3', '<code>IO MI</code>', '<code>ΣO AI SU FI</code>', '<code>RO II CE</code>'],
+        options: ['<code>RO BI</code>: SUB\'s T3', '<code>MI IO</code>', '<code>AI ΣO SU FI</code>', '<code>RO II CE</code>'],
         answer: 0,
-        explain: 'Opcode 3 is SUB; step 3 is its second execute step: B ← RAM[MAR]. The subtraction itself (ΣO AI SU FI) is T4.',
+        explain: 'Opcode 3 is SUB; step 3 is its second execute step: B ← RAM[MAR]. The subtraction itself (AI ΣO SU FI) is T4.',
         why: ['', 'That is T2, the operand into the MAR.', 'That is step 4, 100.', 'That is T1, the same for every opcode.'],
       },
     },
@@ -370,7 +373,7 @@ export const chAppendixSap: Chapter = {
         <p>Fibonacci until a sum passes 255, and Ben's multiply (a loop of additions, with JC as its counter) are in the
         panel's list; Edit takes your own, 16 bytes at most. Fibonacci's 13 values take
         ${FIB.bytes} bytes and ${FIB.cycles}
-        clock cycles, five a instruction.</p>
+        clock cycles, five an instruction.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the
         bus's OR stand-in) and five EEPROMs. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,
@@ -383,8 +386,9 @@ export const chAppendixSap: Chapter = {
         goal: 'Write a program that leaves 100 on the display and halts.',
         check: (st) => halted(st) && hw(st)?.out === 100,
         hints: ['LDI takes only 0–15: put the numbers in RAM with <code>.byte</code>.', 'LDA x, ADD y, OUT, HLT, with x + y = 100.'],
-        answer: `<pre>${HUNDRED}</pre>Edit, paste, Assemble &amp; load, Run to HLT.`,
-        solve: (st) => { st.load(sapScene({ source: HUNDRED })); st.runCycles(60, () => halted(st)); },
+        answer: `<pre>${HUNDRED}</pre>Edit, paste, Assemble &amp; load, Run to HLT. (Do it for me keys the bytes in by the switches over the program in RAM.)`,
+        // keyed in by the switches, as on the boards (the panel's model takes the RAM when PROG goes off)
+        solve: (st) => { program(st, sapBytes(HUNDRED)); st.runCycles(60, () => halted(st)); },
       },
     },
   ],

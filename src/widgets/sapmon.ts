@@ -19,9 +19,14 @@ export interface SapHw {
   cw: number; bus: number; clash: number;
 }
 
+/** Nets of a port by path, found once per flattened design (the hooks read them at every edge). */
+const netCache = new WeakMap<HierNode, Map<string, readonly number[] | null>>();
 const read = (sim: Sim, root: HierNode, path: string, port: string): number => {
-  const n = findNode(root, path.split('.'));
-  const nets = n?.ports[port];
+  let m = netCache.get(root);
+  if (!m) netCache.set(root, (m = new Map()));
+  const key = `${path}:${port}`;
+  let nets = m.get(key);
+  if (nets === undefined) m.set(key, (nets = findNode(root, path.split('.'))?.ports[port] ?? null));
   return nets ? pack(sim.getBits(nets)) : -1;
 };
 
