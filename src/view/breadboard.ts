@@ -234,7 +234,7 @@ export class BreadboardView {
     if (zb.length) {
       const x0 = Math.min(...zb.map((b) => b.at[0])), y0 = Math.min(...zb.map((b) => b.at[1]));
       const x1 = Math.max(...zb.map((b) => b.at[0] + b.size[0])), y1 = Math.max(...zb.map((b) => b.at[1] + b.size[1]));
-      return this.cam.show(fitBox({ x: x0 - 1.5, y: y0 - 1.5, w: x1 - x0 + 3, h: y1 - y0 + 3 }, r.width, r.height, 0, 0));
+      return this.cam.show(fitBox({ x: x0 - 1.5, y: y0 - 1.5, w: x1 - x0 + 3, h: y1 - y0 + 3 }, r.width, r.height, this.covers(this.svg), 0));
     }
     this.cam.show(fitBoards(layoutBounds(lay), r.width, r.height, this.arrangement === 'narrow'));
   }
