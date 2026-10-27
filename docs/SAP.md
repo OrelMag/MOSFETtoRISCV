@@ -15,7 +15,8 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
   `sap_bus` also outputs `clash` (two or more drivers enabled). One chapter step shows the real thing at switch level:
   three TRIBUFs on one line, contention drawn as a named short (`switchsim` shorts).
 - **Control lines are active high in the microcode.** Where a chip pin is active low (173 G1 / G2, 245 OE, 161 LOAD,
-  189 WE) the module has the inverter. Ben's own EEPROM stores some lines inverted; the chapter says so once.
+  189 WE) the module has the inverter (a 74LS04 on its board); the chapter says so once and makes no claim about
+  Ben's bit patterns.
 - **Timing, as Ben's**: registers, the PC and RAM writes take effect at the rising edge of the gated clock; the step
   counter (a 74LS161) is clocked by the inverted clock, so the control word changes on the falling edge. HLT gates
   the clock (`clk AND NOT hlt`). So the computer runs on GateSim, not the cycle engine (a gated clock): fine at this
@@ -49,8 +50,9 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
 
 Fetch, every instruction: T0 `CO MI`, T1 `RO II CE`. Every instruction takes five steps (T0–T4); the step counter
 wraps after T4. Control word bits, high to low (Ben's order): `HLT MI RI RO IO II AI AO ΣO SU BI OI CE CO J FI`
-(`SAP_CTRL` in `src/sap/isa.ts`). EEPROM address: `[flags ZF CF][opcode 4][step 3]` (9 bits used of the 28C16's 11);
-two EEPROMs, high byte and low byte of the control word. CF = carry out of the 8-bit adder (for SUB: no borrow),
+(`SAP_CTRL` in `src/sap/isa.ts`). EEPROM address: `[flags ZF CF][opcode 4][step 3]` (9 of the 28C16's 11 address bits);
+two EEPROMs, high byte and low byte of the control word, each with its own image. Ben programs both chips with one
+image and ties A7 differently on each to select its byte, so his use 10 address bits; the chapter says so once. CF = carry out of the 8-bit adder (for SUB: no borrow),
 ZF = sum = 0; both loaded by FI.
 
 ## Files

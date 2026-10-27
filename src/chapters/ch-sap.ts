@@ -122,8 +122,9 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>In 2016–17 Ben Eater built an 8-bit computer on breadboards, on video, one module at a time, from
         the design Albert Malvino and Jerald Brown call SAP-1 (<em>Simple As Possible</em>) in <em>Digital Computer
-        Electronics</em>. Many have built it since from his kits. Here it is again, chip for chip, each chip built
-        from our gates: open any of them and keep going down to MOSFETs.</p>
+        Electronics</em>. Many have built it since from his kits. Here it is again, module for module, each chip built
+        from our gates: open any of them and keep going down to MOSFETs. Our boards add a 74LS04 wherever an active-high
+        control line meets an active-low pin, and the RAM board a 74LS08 and a third 74LS157 for its write.</p>
         <p>Everything meets on one 8-bit <span data-show="bus">bus</span>. A board either <em>drives</em> it (a line
         ending in O: the <span data-show="pc">program counter</span>, the <span data-show="ram">RAM</span>, the
         <span data-show="ir">instruction register</span>'s operand, <span data-show="a">A</span>, the
@@ -311,7 +312,9 @@ export const chAppendixSap: Chapter = {
         <p>The <span data-show="disp">display</span> turns the byte into decimal with a 28C16 EEPROM holding, for every
         value and digit, that digit's segments. Ben uses one EEPROM for all four digits: a 555 clocks a 74LS76 counter, a
         74LS139 lights one digit at a time, faster than the eye follows. We draw those chips but simulate three static
-        copies of the EEPROM instead (no second clock to step), which is why the board shows three 28C16s.</p>
+        copies of the EEPROM instead (no second clock to step), which is why the board shows three 28C16s. Ben's fourth
+        digit is the sign, for his two's-complement mode; we show OUT unsigned (0–255), where it is always blank, so it is
+        left out.</p>
         <p>The program counts up by 15 until the adder carries out of bit 7.</p>`,
       scene: () => sapScene({ program: 'countup', highlight: ['out', 'disp'], autoClock: true }),
       challenge: {
@@ -333,12 +336,14 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>The <span data-show="ctl">control unit</span>: a 74LS161 counts the steps on <code>nclk</code>, the falling
         edge, so the control word changes while the clock is low and is steady by the next rising edge; a 74LS138 decodes
-        the count, and its fifth output clears the 161 at once (five steps, T0–T4). Two 28C16 EEPROMs, addressed by
-        [ZF CF][opcode][step], hold the control word: high byte HLT … AO, low byte ΣO … FI. Every instruction starts with
+        the count, and its Y5 clears the 161 at once (five steps, T0–T4). Two 28C16 EEPROMs, addressed by
+        [ZF CF][opcode][step], hold the control word: high byte HLT … AO, low byte ΣO … FI (Ben programs both with one
+        image and ties A7 differently on each chip to pick its byte, 10 address bits; ours hold one byte each, 9 bits).
+        Every instruction starts with
         the same fetch, T0 <code>MI CO</code> and T1 <code>RO II CE</code>. ADD:</p>
         ${microTable(2)}
-        <p>Our microcode is active high throughout, with inverters on the boards where a chip wants a low; Ben stores some
-        lines inverted in his EEPROMs instead. Same machine, different bit patterns in the ROM.</p>
+        <p>Our microcode is active high throughout: a line is 1 when it acts. Where a chip's pin wants a low (the 173's G1
+        and G2, the 245's G, the 161's LOAD, the 189's WE), the module's own board has a 74LS04 to invert it.</p>
         <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as ROM, 2 KB each; the
         simulation runs each as a mux tree of ${k(SAP_COST.perEeprom)} NANDs, which says more about a mux than about a ROM: on silicon a
         2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2 048 addresses are used.</p>
