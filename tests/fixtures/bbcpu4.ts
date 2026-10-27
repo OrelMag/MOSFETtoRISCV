@@ -19,7 +19,7 @@ const L = 0, R = 80, W = 64;
 
 export const CPU4_BB: BreadboardLayout = {
   note: 'The 4-bit CPU as boards: a test fixture',
-  buses: [{ id: 'a', title: 'A', at: [W + 3, 0], size: [10, 104], path: ['acc'], port: 'a' }],
+  buses: [{ id: 'a', title: 'A', at: [W + 3, 0], size: [10, 76], path: ['acc'], port: 'a' }],
   boards: [
     {
       title: 'Clock', at: [L, 0], size: [W, 16],

@@ -118,7 +118,7 @@ export interface Box { x: number; y: number; w: number; h: number }
 /** Board margins and pitches, in holes. */
 export const BB = {
   /** Rails, then the title above the chips. */
-  top: 3.6,
+  top: 4.3,
   side: 1.6,
   bottom: 1.6,
   chipGap: 1.2,
@@ -180,10 +180,13 @@ export function planBoard(b: BbBoard): BoardPlan {
   let ix = BB.side;
   const switches: Box[] = [], leds: Box[] = [], digits: Box[] = [];
   let ih = 0;
-  for (const _ of b.switches ?? []) {
-    switches.push({ x: ix, y: iy, w: BB.sw, h: 1.8 });
-    ix += BB.sw;
-    ih = Math.max(ih, 1.8);
+  // a switch bank's labels (if any) under it, like the LEDs'
+  const swH = 1.8 + ((b.switches ?? []).some((s) => s.label) ? BB.ledLabel : 0);
+  for (const sw of b.switches ?? []) {
+    const w = Math.max(BB.sw, (sw.label?.length ?? 0) * 0.5);
+    switches.push({ x: ix, y: iy, w, h: swH });
+    ix += w;
+    ih = Math.max(ih, swH);
   }
   if (switches.length) ix += 0.8;
   for (const l of b.leds ?? []) {

@@ -4,6 +4,8 @@ import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
 import { BbNets, type BreadboardLayout, defAt, layoutBounds, packBits, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { insideOf } from '../src/view/breadboard';
+import { register } from '../src/lib/sequential';
 import { CPU4_BB } from './fixtures/bbcpu4';
 
 const clone = (l: BreadboardLayout): BreadboardLayout => structuredClone(l);
@@ -104,5 +106,9 @@ describe('breadboard layout', () => {
       expect(bits[missing]).toBe(2);
     }
     expect(nets.size).toBe(17);
+  });
+
+  it('a chip card says what is inside and what it costs', () => {
+    expect(insideOf(register(4))).toBe('Inside: 4 × D flip-flop with enable · 60 NANDs');
   });
 });
