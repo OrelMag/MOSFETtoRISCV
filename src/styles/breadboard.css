@@ -26,6 +26,8 @@
   --bb-wire-on: #ffd84a;
   --bb-sw: #c8352c;
   --bb-sw-knob: #ffffff;
+  --bb-sw-slot: #5a120d;
+  --bb-sw-edge: #1b1b1b;
   --bb-seg-bg: #170a09;
   --bb-seg-on: #ff3b2f;
   --bb-seg-off: #3a1512;
@@ -86,7 +88,7 @@ svg.breadboard:active { cursor: grabbing; }
 .bb-rail { stroke-width: 0.2; stroke-linecap: round; }
 .bb-rail.pos { stroke: var(--bb-rail-pos); }
 .bb-rail.neg { stroke: var(--bb-rail-neg); }
-.bb-title { font-size: 1.25px; font-weight: 600; letter-spacing: 0.08px; fill: var(--bb-label); }
+.bb-title { font-size: 1.5px; font-weight: 600; letter-spacing: 0.08px; fill: var(--bb-label); }
 .bb-open { cursor: pointer; }
 .bb-open:hover .bb-title, .bb-open:focus-visible .bb-title { text-decoration: underline; }
 .bb-ring { fill: none; stroke: transparent; stroke-width: 0.35; }
@@ -110,7 +112,7 @@ svg.breadboard:active { cursor: grabbing; }
 .bb-chip .bb-leg { fill: var(--bb-leg); }
 .bb-chip .bb-notch { fill: var(--bb-board); }
 .bb-chip .bb-part { fill: var(--bb-chip-text); font-weight: 600; text-anchor: middle; }
-.bb-chip .bb-ref { fill: var(--bb-chip-ref); text-anchor: middle; }
+.bb-chip .bb-ref { fill: var(--bb-chip-ref); font-weight: 500; text-anchor: middle; }
 .bb-chip .bb-sel { fill: none; stroke: transparent; stroke-width: 0.22; }
 .bb-chip:hover .bb-sel { stroke: color-mix(in srgb, var(--bb-sel) 55%, transparent); }
 .bb-chip.sel .bb-sel, .bb-chip:focus-visible .bb-sel { stroke: var(--bb-sel); }
@@ -134,13 +136,15 @@ svg.breadboard:active { cursor: grabbing; }
 /* what an LED's card names as its driver: lit while it is shown, kept lit while the LED is pinned */
 .bb-chip.lit .bb-sel { stroke: var(--bb-sel); stroke-width: 0.3; filter: drop-shadow(0 0 0.5px var(--bb-sel)); }
 .bb-wire-hit { stroke: transparent; fill: none; cursor: pointer; }
-.bb-ll { font-size: 0.95px; font-weight: 500; fill: var(--bb-label); text-anchor: middle; }
-.bb-val { font-size: 1.05px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
+.bb-ll { font-size: 1.12px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
+.bb-val { font-size: 1.25px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
 
 /* ---- DIP switches ---- */
 .bb-sw { cursor: pointer; outline: none; }
 .bb-sw .body { fill: var(--bb-sw); }
-.bb-sw .knob { fill: var(--bb-sw-knob); }
+.bb-sw .slot { fill: var(--bb-sw-slot); }
+.bb-sw .knob { fill: var(--bb-sw-knob); stroke: var(--bb-sw-edge); stroke-width: 0.07; }
+.bb-sw.on .slot { fill: color-mix(in srgb, var(--bb-sw-slot) 70%, #000); }
 .bb-sw .hit { fill: transparent; }
 .bb-sw:focus-visible .body { stroke: var(--bb-sel); stroke-width: 0.2; }
 

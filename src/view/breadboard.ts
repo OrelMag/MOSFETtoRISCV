@@ -15,7 +15,7 @@ import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
 import { Camera, fitBox, installPanZoom } from './camera';
 import {
-  BB, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
+  BB, BB_TEXT, partText, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
 } from './bblayout';
 
@@ -150,6 +150,7 @@ export class BreadboardView {
   clear(): void {
     this.svg.replaceChildren();
     this.drilled = null;
+    this.zoomTo = null;
     this.el.classList.remove('drill');
     this.svg.classList.remove('drilled');
     this.drillHead.hidden = this.drillFoot.hidden = true;
@@ -225,6 +226,12 @@ export class BreadboardView {
     const lay = this.shown();
     if (!lay) return;
     const r = this.svg.getBoundingClientRect();
+    const zb = (this.zoomTo ?? []).map((t) => this.boardEls.get(t)?.board).filter((b): b is BbBoard => !!b);
+    if (zb.length) {
+      const x0 = Math.min(...zb.map((b) => b.at[0])), y0 = Math.min(...zb.map((b) => b.at[1]));
+      const x1 = Math.max(...zb.map((b) => b.at[0] + b.size[0])), y1 = Math.max(...zb.map((b) => b.at[1] + b.size[1]));
+      return this.cam.show(fitBox({ x: x0 - 1.5, y: y0 - 1.5, w: x1 - x0 + 3, h: y1 - y0 + 3 }, r.width, r.height, 0, 0));
+    }
     this.cam.show(fitBoards(layoutBounds(lay), r.width, r.height, this.arrangement === 'narrow'));
   }
 
@@ -242,8 +249,9 @@ export class BreadboardView {
     if (a !== this.arrangement) {
       const sel = this.selected?.path?.join('.');
       this.arrangement = a;
-      const d = this.drilled;
+      const d = this.drilled, z = this.zoomTo;
       this.draw(a === 'narrow' ? this.layout.narrow! : this.layout, this.root);
+      this.zoomTo = z;
       if (this.lastSim) this.update(this.lastSim);
       if (d) this.drill(d, this.drillArgs.crumbs, this.drillArgs.go);
       for (const [c] of this.chipEls) if (sel && c.path?.join('.') === sel) this.pick(c);
@@ -303,11 +311,27 @@ export class BreadboardView {
     this.last = [];
   }
 
-  /** Light the boards, bus strips and chips named by instance paths from the root ('a', 'ctl.romhi'); [] clears. */
-  highlight(names: readonly string[]): void {
+  /**
+   * Light the boards, bus strips and chips named by instance paths from the root ('a', 'ctl.romhi'); [] clears. With
+   * `zoom` (a step's own highlight, not a hover in the text) the view closes in on the boards lit, when they are a few.
+   */
+  highlight(names: readonly string[], zoom = false): void {
     const on = new Set(names);
     for (const { key, el, chip } of this.lightable) if (!chip) el.classList.toggle('hl', on.has(key));
     for (const { el, chip } of this.lightable) if (chip) el.classList.toggle('hl', !chip.board.classList.contains('hl') && chip.prefixes.some((p) => on.has(p)));
+    if (!zoom) return;
+    const lit = [...this.boardEls].filter(([, { g }]) => g.classList.contains('hl') || g.querySelector('.bb-chip.hl')).map(([title]) => title);
+    this.zoomTo = lit.length && lit.length <= 4 && lit.length < this.boardEls.size ? lit : null;
+    this.fit();
+  }
+
+  /** The boards a step lit (highlight with zoom): fit() shows them, Fit (fitAll) the whole layout. */
+  private zoomTo: string[] | null = null;
+
+  /** The bar's Fit: everything (in the drill: the board). */
+  fitAll(): void {
+    this.zoomTo = null;
+    this.fit();
   }
 
   /** Repaint from the simulation: only the elements whose bits changed. */
@@ -409,9 +433,11 @@ export class BreadboardView {
     }
     g.append(s('rect', { class: 'bb-body', width: r.w, height: r.h, rx: 0.18 }),
       s('path', { class: 'bb-notch', d: `M0 ${r.h / 2 - 0.5} A0.5 0.5 0 0 1 0 ${r.h / 2 + 0.5} Z` }));
-    const fs = Math.min(1.5, (r.w - 0.6) / (c.part.length * 0.62));
-    g.append(s('text', { class: 'bb-part', x: r.w / 2, y: r.h / 2 + (c.ref ? 0 : 0.4), 'font-size': fs }, c.part));
-    if (c.ref) g.append(s('text', { class: 'bb-ref', x: r.w / 2, y: r.h / 2 + 1.15, 'font-size': Math.min(0.95, fs) }, c.ref));
+    // the part number clear of the notch (centred in the room right of it), the reference under it
+    const pt = partText(c.part, r.w), mid = 0.65 + pt.room / 2, ref = c.ref ? Math.min(BB_TEXT.ref, pt.size * 0.85) : 0;
+    const top = r.h / 2 - (pt.size * 0.72 + (c.ref ? ref * 0.9 : 0)) / 2 + pt.size * 0.72;
+    g.append(s('text', { class: 'bb-part', x: mid, y: top, 'font-size': pt.size, ...(pt.squeeze ? { textLength: pt.squeeze, lengthAdjust: 'spacingAndGlyphs' } : {}) }, c.part));
+    if (c.ref) g.append(s('text', { class: 'bb-ref', x: mid, y: top + ref * 1.05, 'font-size': ref }, c.ref));
     g.addEventListener('pointerenter', () => this.showCard(c, g));
     g.addEventListener('pointerleave', () => this.hideCard());
     g.addEventListener('focus', () => this.showCard(c, g));
@@ -464,8 +490,10 @@ export class BreadboardView {
       s('title', null, `Switch ${what}: click to flip`),
       // a finger's target: the bank's switches are a hole wide
       s('rect', { class: 'hit', x: 0, y: -0.6, width: r.w, height: r.h + 1.2 }),
-      s('rect', { class: 'body', x, width: BB.sw, height: 1.8 }),
-      s('rect', { class: 'knob', x: x + 0.3, y: 0.95, width: BB.sw - 0.6, height: 0.6 }));
+      // the body, its slot and the slider: up is on, as printed on the real ones
+      s('rect', { class: 'body', x, width: BB.sw, height: 1.8, rx: 0.12 }),
+      s('rect', { class: 'slot', x: x + 0.2, y: 0.18, width: BB.sw - 0.4, height: 1.44, rx: 0.08 }),
+      s('rect', { class: 'knob', x: x + 0.24, y: 0.88, width: BB.sw - 0.48, height: 0.7, rx: 0.08 }));
     if (label) g.append(s('text', { class: 'bb-ll', x: r.w / 2, y: r.h - 0.12 }, label));
     const flip = () => this.hooks.toggle(port, bit);
     g.addEventListener('click', flip);
@@ -487,7 +515,7 @@ export class BreadboardView {
       sw.on = on;
       sw.g.classList.toggle('on', on);
       sw.g.setAttribute('aria-pressed', String(on));
-      sw.g.querySelector('.knob')!.setAttribute('y', on ? '0.25' : '0.95');
+      sw.g.querySelector('.knob')!.setAttribute('y', on ? '0.22' : '0.88');
     }
   }
 

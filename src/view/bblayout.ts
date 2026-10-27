@@ -133,11 +133,28 @@ export const BB = {
   digitW: 2.9,
   digitH: 4.4,
   /** Label room under an LED. */
-  ledLabel: 1.1,
+  ledLabel: 1.35,
   /** The bus strip's header board. */
   busHead: 6.5,
   busPitch: 1.2,
 } as const;
+
+/** The width of one character of an LED's or a switch's label (BB_TEXT.label, monospace), in holes. */
+export const BB_LABEL_CH = 0.68;
+
+/** Text sizes on the boards, in holes: chosen to read at BB_READ_PX (a part number about 10 px, a label 6 to 7). */
+export const BB_TEXT = { part: 1.75, ref: 1.15, title: 1.5, label: 1.12, value: 1.25 } as const;
+
+/**
+ * A chip's part number on its body `w` holes wide: the font size and, when even that is wider than the room beside the
+ * notch, the length to squeeze it to (a 555's 8-pin body). Monospace, 0.6 em a character, squeezed at most to 80 %.
+ */
+export function partText(part: string, w: number): { size: number; room: number; squeeze: number | null } {
+  const room = Math.max(1, w - 1.3);
+  const size = Math.min(BB_TEXT.part, room / (part.length * 0.6 * 0.8));
+  const natural = part.length * 0.6 * size;
+  return { size, room, squeeze: natural > room ? room : null };
+}
 
 /** A DIP package's body (the legs stick out half a hole above and below): a 0.3-inch one, or 0.6 from 24 pins up. */
 export function chipSize(dip: number): { w: number; h: number } {
@@ -188,7 +205,7 @@ export function planBoard(b: BbBoard): BoardPlan {
   const swH = 1.8 + ((b.switches ?? []).some((s) => s.label) ? BB.ledLabel : 0);
   for (const sw of b.switches ?? []) {
     if (sw.gap && switches.length) ix += 0.8;
-    const w = Math.max(BB.sw, (sw.label?.length ?? 0) * 0.5);
+    const w = Math.max(BB.sw, (sw.label?.length ?? 0) * BB_LABEL_CH);
     switches.push({ x: ix, y: iy, w, h: swH });
     ix += w;
     ih = Math.max(ih, swH);

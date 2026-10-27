@@ -26,7 +26,7 @@ import { closePopover, editNumber } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
-import { type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
+import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 
@@ -345,7 +345,7 @@ export class Stage {
     });
     for (const b of [imgWrap, layoutBtn, this.probeBtn]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)
-    const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fit() : this.view.fit()));
+    const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
@@ -578,7 +578,7 @@ export class Stage {
     this.buildControls();
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
-    this.board.highlight(scene.highlight ?? []);
+    this.board.highlight(scene.highlight ?? [], true);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -1807,12 +1807,15 @@ export class Stage {
     // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
     const lay = this.boardOn ? this.scene?.breadboard : undefined;
     const box = lay ? layoutBounds(lay) : this.view.contentBox();
-    const bw = Math.max(box.w, lay ? 1 : 34), bh = Math.max(box.h, 1);
+    const bw = lay ? box.w + 2 * BB_MARGIN : Math.max(box.w, 34), bh = Math.max(box.h + (lay ? 2 * BB_MARGIN : 0), 1);
+    const all = (1 << fold.length) - 1;
     const scaleOf = (mask: number): number | null => {
       apply(mask);
       if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
       const r = freeArea(W, H, this.covers(false), bw, bh);
-      return r ? Math.min(r.w / bw, r.h / bh) : 0;
+      const s = r ? Math.min(r.w / bw, r.h / bh) : 0;
+      // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
+      return lay && mask !== all && s < BB_READ_PX ? null : s;
     };
     apply(chooseFolds(fold.length, scaleOf, fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? null)));
   }
