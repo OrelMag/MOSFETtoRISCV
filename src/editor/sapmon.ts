@@ -11,7 +11,9 @@
 
 import { SAP_STATE } from '../lib/sap';
 import { CTRL, ctrlText, disasm, microcode, SAP_STEPS } from '../sap/isa';
+import { assembleSap, type SapAsmLine } from '../sap/asm';
 import { SapISS } from '../sap/iss';
+import { SAP_PROGRAMS } from '../sap/programs';
 import type { HierNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import type { Chips, Mismatch, MonitorSim, Retired } from './cpu';
@@ -66,6 +68,18 @@ export const sapSteps = (byte: number, cf: number, zf: number): number[] => Arra
 
 const hx = (v: number, d: number) => (v < 0 ? '?'.repeat(d) : v.toString(16).toUpperCase().padStart(d, '0'));
 
+/** The sample program whose bytes these are (padded to 16), as its lines and labels by address; null: none. */
+function sourceOf(ram: readonly number[]): { at: Map<number, SapAsmLine>; label: Map<number, string> } | null {
+  for (const p of SAP_PROGRAMS) {
+    const a = assembleSap(p.src);
+    if (a.errors.length || !ram.every((b, i) => b === (a.bytes[i] ?? 0))) continue;
+    const label = new Map<number, string>();
+    for (const [n, at] of a.labels) if (!label.has(at)) label.set(at, n);
+    return { at: new Map(a.lines.map((l) => [l.addr, l])), label };
+  }
+  return null;
+}
+
 /** The golden model in lock step with a SAP-1, compared at every clock edge. */
 export class SapMonitor {
   iss: SapISS | null = null;
@@ -82,6 +96,11 @@ export class SapMonitor {
   programming = false;
   /** Where the instruction in IR was fetched from (-1: not known yet). */
   fetched = -1;
+  /** Addresses fetched as instructions, and read or written as data by an execute step, since the model started. */
+  private code = new Set<number>();
+  private data = new Set<number>();
+  /** The sample whose bytes the RAM held when the model started (its lines say which bytes are data), else null. */
+  private source: { at: Map<number, SapAsmLine>; label: Map<number, string> } | null = null;
   private progKey = '';
   private lastDoc: ChipDoc | null = null;
   private lastChips: Chips | undefined;
@@ -132,6 +151,9 @@ export class SapMonitor {
     this.iss = null;
     this.programming = false;
     this.fetched = -1;
+    this.code.clear();
+    this.data.clear();
+    this.source = null;
     this.synced = this.es.cycles === 0;
     this.problem = this.desc ? null : 'no SAP-1 on this chip';
   }
@@ -230,10 +252,28 @@ export class SapMonitor {
     return this.fetched >= 0 ? this.fetched : (r.pc + 15) & 15;
   }
 
+  /**
+   * A RAM byte as the listing shows it: the sample's own line when the RAM started as one (`y: .byte 1`), else data
+   * (`.byte n`) when an execute step read or wrote it and it was never fetched, else the instruction it decodes as.
+   */
+  rowText(addr: number, byte: number): string {
+    if (byte < 0) return '?';
+    const line = this.source?.at.get(addr), lab = this.source?.label.get(addr);
+    const text = line ? (line.byte === byte ? line.text.replace(/s+/g, ' ') : line.text.startsWith('.byte') ? `.byte ${byte}` : disasm(byte))
+      : this.data.has(addr) && !this.code.has(addr) ? `.byte ${byte}` : disasm(byte);
+    return lab ? `${lab}: ${text}` : text;
+  }
+
+  /** Changes when rowText may: a new fetch or data access, a new source. */
+  get rowKey(): string {
+    return `${this.code.size}|${this.data.size}|${!!this.source}`;
+  }
+
   /** The model from the hardware's state (null: some of it is unknown). */
   private fromHardware(): SapISS | null {
     const r = this.read();
     if (!r || [r.pc, r.mar, r.ir, r.a, r.b, r.out, r.cf, r.zf, r.step, ...r.ram].some((v) => v < 0)) return null;
+    this.source = sourceOf(r.ram);
     const m = new SapISS(r.ram);
     Object.assign(m, { pc: r.pc, mar: r.mar, ir: r.ir, a: r.a, b: r.b, out: r.out, cf: r.cf, zf: r.zf, step: r.step });
     return m;
@@ -288,16 +328,18 @@ export class SapMonitor {
     iss.cycle(held);
     this.stepped = true;
     if (cw & CTRL.ii) this.fetched = mar;
+    if (cw & CTRL.ii) this.code.add(mar);
+    else if (step >= 2 && cw & (CTRL.ro | CTRL.ri)) this.data.add(mar);
     const text = held ? 'RESET held' : `${step < 2 ? 'fetch' : disasm(ir)}  T${step}`;
     const eff: string[] = [];
-    if (iss.mar !== was.mar) eff.push(`MAR ← ${hx(iss.mar, 1)}`);
-    if (iss.ir !== was.ir) eff.push(`IR ← ${hx(iss.ir, 2)}`);
+    if (iss.mar !== was.mar) eff.push(`MAR ← 0x${hx(iss.mar, 1)}`);
+    if (iss.ir !== was.ir) eff.push(`IR ← 0x${hx(iss.ir, 2)}`);
     if (iss.a !== was.a) eff.push(`A ← ${iss.a}`);
     if (iss.b !== was.b) eff.push(`B ← ${iss.b}`);
     if (iss.out !== was.out || cw & CTRL.oi) eff.push(`OUT ← ${iss.out}`);
-    if (cw & CTRL.ri) eff.push(`RAM [${hx(mar, 1)}] ← ${hx(iss.ram[mar], 2)}`);
+    if (cw & CTRL.ri) eff.push(`RAM [0x${hx(mar, 1)}] ← 0x${hx(iss.ram[mar], 2)}`);
     if (cw & CTRL.fi) eff.push(`CF ${iss.cf} ZF ${iss.zf}`);
-    if (iss.pc !== was.pc) eff.push(`PC → ${hx(iss.pc, 1)}`);
+    if (iss.pc !== was.pc) eff.push(`PC ← 0x${hx(iss.pc, 1)}`);
     if (iss.step === 0 && !held) this.retired++;
     this.seq++;
     this.log.push({ cycle: this.es.cycles, pc: this.fetched >= 0 ? this.fetched : was.pc, text, effect: `${cw ? ctrlText(cw) : '—'}${eff.length ? `: ${eff.join(', ')}` : ''}` });

@@ -15,7 +15,8 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
   `sap_bus` also outputs `clash` (two or more drivers enabled). One chapter step shows the real thing at switch level:
   three TRIBUFs on one line, contention drawn as a named short (`switchsim` shorts).
 - **Control lines are active high in the microcode.** Where a chip pin is active low (173 G1 / G2, 245 OE, 161 LOAD,
-  189 WE) the module has the inverter. Ben's own EEPROM stores some lines inverted; the chapter says so once.
+  189 WE) the module has the inverter (a 74LS04 on its board); the chapter says so once and makes no claim about
+  Ben's bit patterns.
 - **Timing, as Ben's**: registers, the PC and RAM writes take effect at the rising edge of the gated clock; the step
   counter (a 74LS161) is clocked by the inverted clock, so the control word changes on the falling edge. HLT gates
   the clock (`clk AND NOT hlt`). So the computer runs on GateSim, not the cycle engine (a gated clock): fine at this
@@ -23,7 +24,8 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
   said once.
 - **Display**: OUT is a 74LS273 clocked by `clk AND OI` (as Ben's). Ben multiplexes one 28C16 over four digits with a
   555 and a 74LS76; we draw that, but simulate three static copies of the decoder table (no second clock). Said once.
-- **The 555s are drawn, not simulated**: the stage's clock stands in for the clock module's astable. Said once.
+- **The 555s are drawn, not simulated**: the stage's clock stands in for the clock module's astable. Said once. So is the
+  clock board's 74LS32 (Ben's run / step select before the HLT AND): seven chips drawn only in all (`SAP_COST.drawn`).
 - The TTL-vs-CMOS note (the real chips are bipolar TTL; we build their logic from our CMOS NANDs) is said once, the
   first time a 74xx chip is opened.
 
@@ -48,8 +50,9 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
 
 Fetch, every instruction: T0 `CO MI`, T1 `RO II CE`. Every instruction takes five steps (T0–T4); the step counter
 wraps after T4. Control word bits, high to low (Ben's order): `HLT MI RI RO IO II AI AO ΣO SU BI OI CE CO J FI`
-(`SAP_CTRL` in `src/sap/isa.ts`). EEPROM address: `[flags ZF CF][opcode 4][step 3]` (9 bits used of the 28C16's 11);
-two EEPROMs, high byte and low byte of the control word. CF = carry out of the 8-bit adder (for SUB: no borrow),
+(`SAP_CTRL` in `src/sap/isa.ts`). EEPROM address: `[flags ZF CF][opcode 4][step 3]` (9 of the 28C16's 11 address bits);
+two EEPROMs, high byte and low byte of the control word, each with its own image. Ben programs both chips with one
+image and ties A7 differently on each to select its byte, so his use 10 address bits; the chapter says so once. CF = carry out of the 8-bit adder (for SUB: no borrow),
 ZF = sum = 0; both loaded by FI.
 
 ## Files
@@ -87,8 +90,8 @@ ZF = sum = 0; both loaded by FI.
 | `bus` | `SAP_BUS` | OR per bit | `bus` (8), `clash` |
 
 `sapComputer(bytes)` (memoized by content): the RAM's power-on contents from `bytes` (dotted `powerOn` hints, as
-`editor/memory.ts ramWithInit`). Ports: in `clk` (clock), `prog` (programming mode), `addrSw` (4), `dataSw` (8),
-`write`, `rst` (RESET); out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
+`editor/memory.ts ramWithInit`). Ports: in `clk` (clock), `RESET` (first, so a phone's bottom bar shows it), `prog` (programming mode), `addrSw` (4),
+`dataSw` (8), `write`; out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
 with the bus between them, as the breadboards), net labels for the 16 control lines.
 
 - `src/view/breadboard.ts` (+ `src/styles/breadboard.css`): the breadboard view, `Scene.breadboard`: a layout (boards
@@ -189,14 +192,15 @@ control lines in capitals (`ΣO`).
 - `SapISS.halted` is a getter: the current control word has HLT (the hardware's `halt` output at the same moment);
   `drive()` gives the bus and how many drive it, `control()` the current control word, `run()` OUT's values.
 - Cost: five EEPROMs as ROM trees are 65 524 NANDs each; `sapCost(...).logicNands` (3 314) is the rest.
-- **RESET** (`rst`, active high, Ben's reset button): the CLRs of the PC's 161 (through `pc.inv`), the step counter's 161
+- **RESET** (the computer's `RESET` pin, the modules' `rst`, active high, Ben's reset button): the CLRs of the PC's 161 (through `pc.inv`), the step counter's 161
   (`ctl.clr`, a 74LS08: Y5 AND NOT RST, NOT RST from `ctl.inv`'s sixth gate), and the 173s of A, B, the IR and the flags.
   The MAR, OUT and the RAM keep their contents (their CLRs stay inactive), so a program keyed in by the switches survives
   it: PROG on, key in, PROG off, RESET, run, at any time. `SapISS.reset()` clears the same; `cycle(true)` is a period with
   RESET held (only the MAR moves: T0 of NOP is CO MI). The monitors (widgets/sapmon.ts, editor/sapmon.ts) follow RESET
   held through an edge with `cycle(true)`, and one pressed between edges by taking `reset()` when the hardware holds what
   a reset leaves (PC, step, IR, A, B, flags all 0) and the model does not. The clock board has a RESET switch; the
-  sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs.
+  sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs. The stage's Reset is a power cycle (the 189s
+  forget a keyed-in program, as SRAM would): SAP scenes label it `Power cycle` (`Scene.resetLabel`).
 - **Power-on order**: GateSim.reset relaxes leaves with no inputs (constants, the sandbox's switches and keys) first, as
   the root inputs are set first, so a hinted 189 latch never meets an enable still waiting on a switch: the example's
   program survives whatever the part order in the document.

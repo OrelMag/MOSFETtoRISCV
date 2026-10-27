@@ -443,6 +443,9 @@ export class PropsPanel {
     this.depthTimer = setTimeout(() => {
       if (this.ed.compiled?.def !== def || this.ed.compiled.mode !== 'gate') return;
       const d = logicDepth(def);
+      // no input reaches an output without a flip-flop (a computer behind its switches): no depth to show
+      el.hidden = d === 0;
+      if (d === 0) return;
       const load = d === null ? null : logicDepth(def, 'load');
       el.textContent = d === null ? 'sequential' : load === null ? `depth ${d}` : `depth ${d} · ${fmtDelay(load, 'load')} under load`;
       el.title = load === null ? '' : DELAY_NOTE;

@@ -10,17 +10,18 @@ import { SAP_PROGRAMS } from '../sap/programs';
 import { SwitchSim } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
 import { sapAluScene, sapAregScene, sapClockScene, sapPcScene, sapScene, tristateScene } from '../widgets/sap';
+import { CTRL } from '../sap/isa';
 import { microTable, sapHw, sapRam } from '../widgets/sapmon';
 import { chAppendixDoom } from './ch-doom';
 import type { Chapter } from './types';
 
 /**
  * What the SAP-1 costs (lib/sap.ts sapCost; tests/sap-appendix.test.ts holds these to it): chips simulated (the boards
- * add six drawn only: four 555s, the 76 and the 139), NANDs of logic, NANDs of one 28C16 as the ROM tree it simulates
+ * add seven drawn only: four 555s, the clock's 74LS32, the 76 and the 139), NANDs of logic, NANDs of one 28C16 as the ROM tree it simulates
  * as, and the five EEPROMs' bits.
  */
 export const SAP_COST = {
-  chips: 49, drawn: 6, logic: 3314, perEeprom: 65524, eeproms: 5, bus: 122, control: 204,
+  chips: 49, drawn: 7, logic: 3314, perEeprom: 65524, eeproms: 5, bus: 122, control: 204,
   /** NANDs of single modules (stats), as the steps quote them. */
   clock: 14, areg: 243, alu: 129, pc: 150, ram: 1546, ls173: 109, ls161: 125, ls189: 716,
 } as const;
@@ -42,8 +43,8 @@ function program(st: Stage, bytes: readonly number[]): void {
   poke(st, { prog: 1 });
   bytes.forEach((v, i) => { poke(st, { addrSw: i, dataSw: v }); poke(st, { write: 1 }); poke(st, { write: 0 }); });
   poke(st, { prog: 0, addrSw: 0, dataSw: 0 });
-  poke(st, { rst: 1 }); // PC 0, step T0, IR NOP: the program starts from the top
-  poke(st, { rst: 0 });
+  poke(st, { RESET: 1 }); // PC 0, step T0, IR NOP: the program starts from the top
+  poke(st, { RESET: 0 });
 }
 
 /** The computer's state, or null on any other scene. */
@@ -54,6 +55,10 @@ const hw = (st: Stage) => {
     return null;
   }
 };
+/** The board reference of the RAM's low 189, as saplayout.ts numbers the chips (tests/sap-appendix.test.ts holds it to
+ *  the layout: computing it here would build the computer's netlist whenever the chapters load). */
+export const SAP_RAM_LO_REF = 'U10';
+
 const halted = (st: Stage) => (hw(st)?.cw ?? 0) >> 15 === 1;
 
 /** Fibonacci's size and clock cycles to HLT (the golden model). */
@@ -122,8 +127,9 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>In 2016–17 Ben Eater built an 8-bit computer on breadboards, on video, one module at a time, from
         the design Albert Malvino and Jerald Brown call SAP-1 (<em>Simple As Possible</em>) in <em>Digital Computer
-        Electronics</em>. Many have built it since from his kits. Here it is again, chip for chip, each chip built
-        from our gates: open any of them and keep going down to MOSFETs.</p>
+        Electronics</em>. Many have built it since from his kits. Here it is again, module for module, each chip built
+        from our gates: open any of them and keep going down to MOSFETs. Our boards add a 74LS04 wherever an active-high
+        control line meets an active-low pin, and the RAM board a 74LS08 and a third 74LS157 for its write.</p>
         <p>Everything meets on one 8-bit <span data-show="bus">bus</span>. A board either <em>drives</em> it (a line
         ending in O: the <span data-show="pc">program counter</span>, the <span data-show="ram">RAM</span>, the
         <span data-show="ir">instruction register</span>'s operand, <span data-show="a">A</span>, the
@@ -133,8 +139,9 @@ export const chAppendixSap: Chapter = {
         of them, a new set at every step.</p>
         <p>Cost: ${SAP_COST.chips} chips simulated (and ${SAP_COST.drawn} drawn only), ${k(SAP_COST.logic)} NANDs of logic
         and five EEPROMs, 5 × 2 KB of ROM (the inspector's count). The program is "add two numbers" from RAM.</p>
-        <div class="try">Pulse once: the program counter's board drives the bus (amber), the memory address register
-        loads from it (blue). That is T0 of every instruction.</div>`,
+        <div class="try">Look first: before any Pulse the computer is in T0, the program counter's board drives the bus
+        (amber) and the memory address register will load from it (blue) at the rising edge. Pulse once: now it is T1, the
+        RAM drives and the instruction register loads.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['bus'] }),
       tries: [(st) => (hw(st)?.step ?? 0) >= 1 || st.cycles >= 1],
       challenge: {
@@ -151,8 +158,9 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>Ben's clock board has three 555 timers: an astable (the free-running clock, its rate on a potentiometer), a
         monostable (one clean pulse per press of the step button) and a bistable (debouncing the run / step switch), and a
-        few gates to choose between them. The 555s are analog parts: here they are <strong>drawn, not simulated</strong>;
-        the stage's clock, <code>osc</code>, stands in for them.</p>
+        74LS32 that chooses between them: (astable AND run) OR (monostable AND step), its ANDs and inverter in spare gates of
+        the 08 and 04. The 555s and the select are <strong>drawn, not simulated</strong> (the 555s are analog parts); the
+        stage's clock, <code>osc</code>, stands in for whichever is chosen.</p>
         <p>What is simulated is the gating: <code>clk</code> = osc AND NOT HLT, a <span data-show="inv">74LS04</span>
         and a <span data-show="and">74LS08</span>, ${SAP_COST.clock} NANDs. A halted computer stops its own clock. The second
         inverter makes <code>nclk</code>, which steps the control unit on the falling edge (see Microcode).</p>
@@ -229,7 +237,7 @@ export const chAppendixSap: Chapter = {
         <p>Two <span data-show="add0 add1">74LS283</span> 4-bit adders, the first one's carry into the second (a ripple
         between the chips; inside each the 283 looks ahead), add A and B. For SUB, <span data-show="x0 x1">74LS86</span>
         XORs invert B and SU is the carry in: A − B = A + NOT B + 1. A <span data-show="drv">74LS245</span> puts the sum
-        on the bus while ΣO = 1. ${SAP_COST.alu} NANDs; it has no clock, the sum is always there.</p>
+        on the bus while ΣO = 1 (a <span data-show="inv">74LS04</span> turns ΣO into its active-low G). ${SAP_COST.alu} NANDs; it has no clock, the sum is always there.</p>
         <p>On the computer the sum also feeds the flags register (a 74LS173 loaded by FI): CF is the carry out of bit 7,
         ZF is the sum being 0 (74LS02 NORs and 74LS08 ANDs). For a subtraction CF = 1 means <em>no</em> borrow: A ≥ B.</p>
         <div class="try">Turn SU on: the sum becomes 28 − 14 = 14 and <code>cout</code> lights (no borrow).</div>`,
@@ -250,15 +258,21 @@ export const chAppendixSap: Chapter = {
         <p>The <span data-show="mar">memory address register</span> is one 74LS173: the RAM's address. A 74LS157 hands
         the RAM the four address switches instead while PROG is on. The <span data-show="ram">RAM</span> is two 74LS189s,
         16 × 4 bits each; their outputs are inverted, so two 74LS04s turn them back, two 157s choose what to write (the
-        bus, or the eight data switches), and a 245 drives the bus. Nine chips and ${k(SAP_COST.ram)} NANDs for 128 bits: the 189's
-        cells are latches, ${SAP_COST.ls189} NANDs a chip.</p>
+        bus, or the eight data switches), a 74LS08 makes the write pulse RI · CLK, a third 157 picks it or the WR button,
+        and a 245 drives the bus. Nine chips and ${k(SAP_COST.ram)} NANDs for 128 bits: the 189's cells are latches,
+        ${SAP_COST.ls189} NANDs a chip.</p>
         <p>Ben's 189 writes while WE is low, from an RC pulse on the clock edge. Here the write is RI AND CLK, so it happens
         while the clock is high: at the rising edge, in effect, which is when the golden model writes.</p>
         <p>This RAM starts empty. Program it as Ben does, whenever you like (running or not): PROG on, an address on the
         four switches, a byte on the eight, press WR; next address. PROG off, then RESET on the clock board: it clears the
         PC, the step counter, A, B, the IR and the flags (the chips' CLR pins), but not the RAM, so the program starts from
-        address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after.</p>`,
+        address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after. The bar's
+        <em>Power cycle</em> is not RESET: it switches the computer off and on, and the 189s forget what you keyed in, as
+        real SRAM would.</p>
+        <div class="try">Double-click ${SAP_RAM_LO_REF}, the low 189: its Q1–Q4 read the stored nibble inverted (an empty RAM reads
+        1111), and the 74LS04 beside it flips them back.</div>`,
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
+      tries: [(st) => st.path.join('.') === 'ram.lo'],
       challenge: {
         kind: 'reach',
         goal: 'By the switches, put LDI 7 (0x57) at address 0, OUT (0xE0) at 1, HLT (0xF0) at 2; PROG off, RESET, run until it shows 7.',
@@ -307,7 +321,9 @@ export const chAppendixSap: Chapter = {
         <p>The <span data-show="disp">display</span> turns the byte into decimal with a 28C16 EEPROM holding, for every
         value and digit, that digit's segments. Ben uses one EEPROM for all four digits: a 555 clocks a 74LS76 counter, a
         74LS139 lights one digit at a time, faster than the eye follows. We draw those chips but simulate three static
-        copies of the EEPROM instead (no second clock to step), which is why the board shows three 28C16s.</p>
+        copies of the EEPROM instead (no second clock to step), which is why the board shows three 28C16s. Ben's fourth
+        digit is the sign, for his two's-complement mode; we show OUT unsigned (0–255), where it is always blank, so it is
+        left out.</p>
         <p>The program counts up by 15 until the adder carries out of bit 7.</p>`,
       scene: () => sapScene({ program: 'countup', highlight: ['out', 'disp'], autoClock: true }),
       challenge: {
@@ -329,16 +345,19 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>The <span data-show="ctl">control unit</span>: a 74LS161 counts the steps on <code>nclk</code>, the falling
         edge, so the control word changes while the clock is low and is steady by the next rising edge; a 74LS138 decodes
-        the count, and its fifth output clears the 161 at once (five steps, T0–T4). Two 28C16 EEPROMs, addressed by
-        [ZF CF][opcode][step], hold the control word: high byte HLT … AO, low byte ΣO … FI. Every instruction starts with
+        the count, and its Y5 clears the 161 at once (five steps, T0–T4). Two 28C16 EEPROMs, addressed by
+        [ZF CF][opcode][step], hold the control word: high byte HLT … AO, low byte ΣO … FI (Ben programs both with one
+        image and ties A7 differently on each chip to pick its byte, 10 address bits; ours hold one byte each, 9 bits).
+        Every instruction starts with
         the same fetch, T0 <code>MI CO</code> and T1 <code>RO II CE</code>. ADD:</p>
         ${microTable(2)}
-        <p>Our microcode is active high throughout, with inverters on the boards where a chip wants a low; Ben stores some
-        lines inverted in his EEPROMs instead. Same machine, different bit patterns in the ROM.</p>
+        <p>Our microcode is active high throughout: a line is 1 when it acts. Where a chip's pin wants a low (the 173's G1
+        and G2, the 245's G, the 161's LOAD, the 189's WE), the module's own board has a 74LS04 to invert it.</p>
         <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as ROM, 2 KB each; the
         simulation runs each as a mux tree of ${k(SAP_COST.perEeprom)} NANDs, which says more about a mux than about a ROM: on silicon a
         2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2 048 addresses are used.</p>
-        <div class="try">Pulse to T4 of the ADD (the panel's step table follows): ΣO, AI and FI are lit, and the ALU drives the bus.</div>`,
+        <div class="try">Press the panel's Instruction once (LDA runs to the next T0), then Pulse four times: T4 of the ADD
+        (the step table follows) has ΣO, AI and FI lit, and the ALU drives the bus.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['ctl'] }),
       tries: [(st) => { const h = hw(st); return !!h && h.ir >> 4 === 2 && h.step === 4; }],
       challenge: {
@@ -359,8 +378,11 @@ export const chAppendixSap: Chapter = {
         <p>and with ZF = 0 its T2 is empty: the instruction passes without jumping. No comparator, no branch unit: the
         condition is evaluated by looking up a different word. That is why the address grew from 7 bits to 9, and why the
         flags are loaded only by FI (ADD and SUB): a jump tests the result of the last arithmetic.</p>
-        <p>The program counts down from 10 with SUB and leaves the loop with JZ.</p>`,
+        <p>The program counts down from 10 with SUB and leaves the loop with JZ.</p>
+        <div class="try">Run (10 Hz) until ZF lights, stop, then Pulse through the JZ: its T2 now has J, and the PC
+        loads the operand.</div>`,
       scene: () => sapScene({ program: 'countdown', highlight: ['flags', 'ctl'] }),
+      tries: [(st) => { const h = hw(st); return !!h && h.ir >> 4 === 8 && h.zf === 1 && h.step === 2 && (h.cw & CTRL.j) !== 0; }],
       challenge: {
         kind: 'quiz',
         question: 'A = 15 and <code>SUB</code> subtracts 15. What are CF and ZF after its T4?',
@@ -374,9 +396,13 @@ export const chAppendixSap: Chapter = {
       title: 'Programs',
       body: `
         <p>Fibonacci until a sum passes 255, and Ben's multiply (a loop of additions, with JC as its counter) are in the
-        panel's list; Edit takes your own, 16 bytes at most. Fibonacci's 13 values take
+        panel's list; Edit takes your own, 16 bytes at most. Run to HLT takes the rate beside it, Ben's potentiometer:
+        2 Hz to follow every step, 500 Hz, or as fast as the page runs; the golden model is checked at every edge at any
+        rate. Fibonacci's 13 values take
         ${FIB.bytes} bytes and ${FIB.cycles}
-        clock cycles, five an instruction.</p>
+        clock cycles, five an instruction. It keeps x and y in the RAM and overwrites them, so after a RESET it starts
+        from the top on what it left (144 and 233): it shows 144, the sum carries at once, and it halts. Power cycle puts
+        0 and 1 back.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the
         bus's OR stand-in) and five EEPROMs. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,

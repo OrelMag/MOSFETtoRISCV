@@ -507,7 +507,8 @@ export const SAP_BUS: ComponentDef = (() => {
 // ---- the computer --------------------------------------------------------------------------------------------------
 
 export const SAP_PORTS: PortDef[] = [
-  bit('clk', 'in', true), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'), bit('rst', 'in'),
+  // RESET first: the bottom bar lists the pins in this order, and a phone shows only its start
+  bit('clk', 'in', true), bit('RESET', 'in'), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'),
   bus('bus', 8, 'out'), bus('out', 8, 'out'), bus('d0', 8, 'out'), bus('d1', 8, 'out'), bus('d2', 8, 'out'), bit('halt', 'out'), bit('clash', 'out'),
 ];
 
@@ -521,6 +522,9 @@ export const SAP_STATE = {
 } as const;
 
 const computers = new Map<string, ComponentDef>();
+
+/** The computer in a sentence; each def adds what its RAM starts with (the inspector follows the scene). */
+const SAP_SUMMARY = 'Ben Eater\'s 8-bit breadboard computer (SAP-1 after Malvino and Brown): 16 bytes of RAM, an 8-bit bus, A and B registers, an adder–subtractor with carry and zero flags, a 4-bit program counter, and a microcoded control unit stepping five control words an instruction. Every module is 74xx chips.';
 
 /**
  * The SAP-1 with `bytes` in its RAM at power-on. Two columns of modules as Ben's breadboards (clock, MAR, RAM,
@@ -537,7 +541,7 @@ export function sapComputer(bytes: ArrayLike<number>): ComponentDef {
   // document (one chip's own wires) cannot hold. The registered SAP_COMPUTER is the same circuit with an empty RAM.
   d = {
     ...SAP_COMPUTER, id: `sap1_${key}`,
-    summary: `${SAP_COMPUTER.summary} Its RAM starts with a program.`,
+    summary: `${SAP_SUMMARY} Its RAM starts with a program (power-on contents); RESET reruns it, a power cycle reloads it.`,
     powerOn: ls189Init('ram.hi', ram.map((x) => x >> 4), ls189Init('ram.lo', ram.map((x) => x & 15))),
   };
   computers.set(key, d);
@@ -557,7 +561,7 @@ export const SAP_COMPUTER: ComponentDef = (() => {
   const ctl = b.op(SAP_CONTROL, [b.name(`${clock}.nclk`, 'NCLK', true), b.name(`${ir}.op`, 'opcode', true), '', ''], 'control', 'ctl');
   const line = (n: string) => b.name(`${ctl}.${n}`, n.toUpperCase().replace('EO', 'ΣO'), true);
   // RESET: the CLRs of the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
-  const rst = b.name('rst', 'RST', true);
+  const rst = b.name('RESET', 'RESET', true);
   b.wire(rst, `${ctl}.rst`);
   b.wire(rst, `${ir}.rst`);
   b.wire(line('hlt'), `${clock}.hlt`);
@@ -594,7 +598,7 @@ export const SAP_COMPUTER: ComponentDef = (() => {
   const R = b.right;
   return define({
     id: 'sap1', name: 'SAP-1 breadboard computer', category: 'cpu',
-    summary: 'Ben Eater\'s 8-bit breadboard computer (SAP-1 after Malvino and Brown): 16 bytes of RAM, an 8-bit bus, A and B registers, an adder–subtractor with carry and zero flags, a 4-bit program counter, and a microcoded control unit stepping five control words an instruction. Every module is 74xx chips.',
+    summary: `${SAP_SUMMARY} Its RAM starts empty: program it by its switches (PROG, an address, a byte, write; PROG off, RESET).`,
     ports: SAP_PORTS,
     symbol: { kind: 'box', label: 'SAP-1' },
     netlist: () => ({ pins: { ...pinsAt(ins(SAP_PORTS), 0, 6), ...pinsAt(outs(SAP_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
