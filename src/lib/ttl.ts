@@ -703,6 +703,7 @@ export function eeprom2k(image: ArrayLike<number>): ComponentDef {
       delay: 12,
     },
     preferBehavior: true,
+    romBytes: 2048,
     spec: ([a, ce, oe]) => [ce || oe ? 0 : content[a & 2047]],
     netlist: nl,
   });

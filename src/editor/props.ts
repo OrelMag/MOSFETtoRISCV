@@ -11,7 +11,7 @@ import { PORT_MAX_K } from '../lib/portmem';
 import { familyOf } from '../lib/resolve';
 import type { Vec } from '../sim/geometry';
 import { DELAY_NOTE, fmtDelay } from '../sim/delay';
-import { logicDepth, stats } from '../sim/stats';
+import { logicDepth, romSize, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { parseBig } from '../sim/values';
 import { h, icon } from '../ui/dom';
@@ -543,8 +543,10 @@ function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLEle
   }
   const slot = depth ? h('span') : null;
   const el = h('p', { class: 'sb-cost' },
-    h('span', null, h('b', null, st.nands.toLocaleString()), ' NAND'),
-    h('span', null, h('b', null, st.transistors.toLocaleString()), ' transistors'),
+    // ROM chips (a 28C16) count as the mux trees they simulate as: shown apart from the logic
+    h('span', st.rom ? { title: `and ${st.rom.nands.toLocaleString()} NANDs of ROM mux trees in the simulation` } : null, h('b', null, (st.nands - (st.rom?.nands ?? 0)).toLocaleString()), st.rom ? ' NAND of logic' : ' NAND'),
+    h('span', null, h('b', null, (st.transistors - (st.rom?.transistors ?? 0)).toLocaleString()), ' transistors'),
+    st.rom ? h('span', null, '+ ', h('b', null, romSize(st.rom)), ' of ROM') : null,
     st.resistors ? h('span', null, h('b', null, st.resistors.toLocaleString()), st.resistors > 1 ? ' resistors' : ' resistor') : null,
     st.capacitors ? h('span', null, h('b', null, st.capacitors.toLocaleString()), st.capacitors > 1 ? ' capacitors' : ' capacitor') : null, slot);
   if (depth && slot) depth(slot);

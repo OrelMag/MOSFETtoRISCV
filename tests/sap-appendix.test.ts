@@ -200,4 +200,20 @@ describe('Appendix C quotes measured numbers', () => {
       .toEqual([SAP_COST.clock, SAP_COST.areg, SAP_COST.alu, SAP_COST.pc, SAP_COST.ram]);
     expect([stats(T.LS173).nands, stats(T.LS161).nands, stats(T.LS189).nands]).toEqual([SAP_COST.ls173, SAP_COST.ls161, SAP_COST.ls189]);
   });
+
+  it('the cost lines count the EEPROMs as ROM, apart from the logic (the chapter numbers), and leave other ROMs alone', async () => {
+    const { SAP_COST } = await import('../src/chapters/ch-sap');
+    const { romSize, stats } = await import('../src/sim/stats');
+    const { insideOf } = await import('../src/view/breadboard');
+    const { SAP_CONTROL } = await import('../src/lib/sap');
+    const st = stats(SAP_COMPUTER);
+    expect(st.rom).toEqual({ chips: 5, bytes: 5 * 2048, size: 2048, nands: SAP_COST.perEeprom * 5, transistors: 4 * SAP_COST.perEeprom * 5 });
+    expect(st.nands - st.rom!.nands).toBe(SAP_COST.logic);
+    expect(romSize(st.rom!)).toBe('5 × 2 KB');
+    expect(insideOf(SAP_COMPUTER)).toContain(`· ${SAP_COST.logic.toLocaleString('en-US')} NANDs + 5 × 2 KB of ROM`);
+    expect(stats(SAP_CONTROL).nands - stats(SAP_CONTROL).rom!.nands).toBe(SAP_COST.control);
+    // a CPU's program ROM is not a ROM chip: counted as before
+    const { singleCycleCpu } = await import('../src/lib/cpu');
+    expect(stats(singleCycleCpu([0x13])).rom).toBeUndefined();
+  });
 });

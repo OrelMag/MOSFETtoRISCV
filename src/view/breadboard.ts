@@ -8,7 +8,7 @@
 import '../styles/breadboard.css';
 import { findNode, type HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
-import { stats } from '../sim/stats';
+import { romSize, stats } from '../sim/stats';
 import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
@@ -459,7 +459,10 @@ export class BreadboardView {
 export function insideOf(def: ComponentDef): string {
   const nl = netlistOf(def);
   const st = stats(def);
-  const cost = st.nands ? `${st.nands.toLocaleString('en-US')} NAND${st.nands === 1 ? '' : 's'}` : st.transistors ? `${st.transistors} transistors` : '';
+  // a ROM chip's mux tree (stats' rom) is not logic: its bytes instead
+  const n = st.nands - (st.rom?.nands ?? 0), rom = st.rom ? `${romSize(st.rom)} of ROM` : '';
+  const logic = n ? `${n.toLocaleString('en-US')} NAND${n === 1 ? '' : 's'}` : st.transistors && !st.rom ? `${st.transistors} transistors` : '';
+  const cost = [logic, rom].filter(Boolean).join(' + ');
   if (!nl) return cost ? `A leaf of the simulation · ${cost}` : 'A leaf of the simulation';
   const kinds = new Map<string, number>();
   for (const i of nl.instances) if (i.def.prim !== 'alias') kinds.set(i.def.name, (kinds.get(i.def.name) ?? 0) + 1);

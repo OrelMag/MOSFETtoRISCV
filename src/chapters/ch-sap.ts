@@ -89,7 +89,7 @@ export const chAppendixSap: Chapter = {
       'Every instruction takes five steps: T0 <code>MI CO</code> and T1 <code>RO II CE</code> fetch, T2–T4 execute. The control word changes on the falling edge, registers load on the rising one.',
       'The control unit is a 74LS161 step counter and two 28C16 EEPROMs addressed by [ZF CF][opcode][step]: changing the ISA is reprogramming two chips, not rewiring.',
       `Without the EEPROMs it is ${k(SAP_COST.logic)} NANDs (${SAP_COST.chips} chips); our single-cycle RV32I is ${k(RV32I.nands)}. SAP-1 buys that with 16 bytes, an 8-bit adder, no registers beyond A and B, and five clocks an instruction.`,
-      'A ROM is counted here as the mux tree it simulates as (65 524 NANDs per 28C16); on silicon it is a transistor per bit and two decoders.',
+      'The inspector counts the EEPROMs apart, as 5 × 2 KB of ROM: simulated, each is a mux tree of 65 524 NANDs; on silicon it is a transistor per bit and two decoders.',
     ],
     practise: ['s_reg4', 's_cnt4', 'a_addsub16', 'c_ctl', 'o_mc'],
     check: [
@@ -132,7 +132,7 @@ export const chAppendixSap: Chapter = {
         <span data-show="out">OUT</span>). The <span data-show="ctl">control unit</span> turns those lines on, sixteen
         of them, a new set at every step.</p>
         <p>Cost: ${SAP_COST.chips} chips simulated (and ${SAP_COST.drawn} drawn only), ${k(SAP_COST.logic)} NANDs of logic
-        without the five EEPROMs. The program is "add two numbers" from RAM.</p>
+        and five EEPROMs, 5 × 2 KB of ROM (the inspector's count). The program is "add two numbers" from RAM.</p>
         <div class="try">Pulse once: the program counter's board drives the bus (amber), the memory address register
         loads from it (blue). That is T0 of every instruction.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['bus'] }),
@@ -335,8 +335,8 @@ export const chAppendixSap: Chapter = {
         ${microTable(2)}
         <p>Our microcode is active high throughout, with inverters on the boards where a chip wants a low; Ben stores some
         lines inverted in his EEPROMs instead. Same machine, different bit patterns in the ROM.</p>
-        <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as the mux tree
-        they simulate as, ${k(SAP_COST.perEeprom)} NANDs each, which says more about a mux than about a ROM: on silicon a
+        <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as ROM, 2 KB each; the
+        simulation runs each as a mux tree of ${k(SAP_COST.perEeprom)} NANDs, which says more about a mux than about a ROM: on silicon a
         2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2 048 addresses are used.</p>
         <div class="try">Pulse to T4 of the ADD (the panel's step table follows): ΣO, AI and FI are lit, and the ALU drives the bus.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['ctl'] }),

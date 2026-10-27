@@ -190,3 +190,7 @@ control lines in capitals (`ΣO`).
 - **Power-on order**: GateSim.reset relaxes leaves with no inputs (constants, the sandbox's switches and keys) first, as
   the root inputs are set first, so a hinted 189 latch never meets an enable still waiting on a switch: the example's
   program survives whatever the part order in the document.
+- **Counts**: the 28C16 has `romBytes: 2048` (ComponentDef), so `stats()` also reports its NANDs under `Stats.rom`
+  (chips, bytes, size, NANDs, transistors). The inspector, the breadboard hover card (`insideOf`) and the sandbox's cost
+  line show logic and ROM apart: the computer is 3 314 NANDs of logic + 5 × 2 KB of ROM (the simulated mux trees,
+  327 620 NANDs, named in the tooltip). The totals are unchanged; other ROMs (a CPU's program ROM) carry no `romBytes`.

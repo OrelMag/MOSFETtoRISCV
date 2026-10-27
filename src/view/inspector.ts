@@ -4,7 +4,7 @@
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { DELAY_NOTE, type DelayModel, fmtDelay } from '../sim/delay';
 import { settings } from '../ui/settings';
-import { hasFeedback, logicDepth, stats } from '../sim/stats';
+import { hasFeedback, logicDepth, romSize, stats } from '../sim/stats';
 import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
@@ -130,10 +130,14 @@ export class Inspector {
       if (st.relays) cells.push([st.relays.toLocaleString(), `relay${st.relays > 1 ? 's' : ''}`]);
       if (st.triodes) cells.push([st.triodes.toLocaleString(), `triode section${st.triodes > 1 ? 's' : ''}`]);
       if (st.diodes) cells.push([st.diodes.toLocaleString(), `diode section${st.diodes > 1 ? 's' : ''}`]);
-      if (!old || st.transistors) cells.push([st.transistors.toLocaleString(), 'transistors']);
+      // ROM chips (a 28C16) are counted as the mux trees they simulate as: shown apart, so the logic's count stands alone
+      const rom = st.rom;
+      const romTip = rom ? `${romSize(rom)} of ROM, simulated as mux trees of ${rom.nands.toLocaleString()} NANDs (${rom.transistors.toLocaleString()} transistors) that are not counted here: on silicon a ROM is a transistor per bit and two decoders` : undefined;
+      if (!old || st.transistors) cells.push([(st.transistors - (rom?.transistors ?? 0)).toLocaleString(), rom ? 'transistors of logic' : 'transistors', romTip]);
       if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
       if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
-      if (!old || st.nands) cells.push([st.nands.toLocaleString(), 'NAND gates']);
+      if (!old || st.nands) cells.push([(st.nands - (rom?.nands ?? 0)).toLocaleString(), rom ? 'NAND gates of logic' : 'NAND gates', romTip]);
+      if (rom) cells.push([`+ ${romSize(rom)}`, `of ROM (${rom.chips} chip${rom.chips > 1 ? 's' : ''}: mux trees of ${rom.nands.toLocaleString()} NANDs in the simulation)`, romTip]);
       if (depth !== null && depth > 0) {
         const unit: [string, string] = [String(depth), 'gate delays (worst path)'];
         const loaded = logicDepthSafe(d, 'load');
