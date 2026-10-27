@@ -52,6 +52,9 @@ export class BreadboardView {
   private carded: { chip: BbChip; el: SVGGElement; live: HTMLElement | null } | null = null;
   private pinned = false;
   private chipEls = new Map<BbChip, SVGGElement>();
+  /** What highlight() can light: a board by its module, a bus strip by its path, a chip by its path or a prefix of it
+   *  (unless its board is lit already: 'flags' lights the flag chips on the ALU's board). */
+  private lightable: { key: string; el: SVGGElement; chip?: { prefixes: string[]; board: SVGGElement } }[] = [];
   selected: BbChip | null = null;
   radix: Radix = 'hex';
   private last: Bit[] = [];
@@ -83,6 +86,7 @@ export class BreadboardView {
     this.nets = null;
     this.root = null;
     this.chipEls.clear();
+    this.lightable = [];
     this.switches = [];
     this.selected = null;
     this.hideCard(true);
@@ -109,11 +113,32 @@ export class BreadboardView {
       const st = bus && stubOf(b, bus);
       if (st) this.svg.append(s('rect', { class: 'bb-stub', x: st.x, y: st.y, width: st.w, height: st.h, fill: `url(#${id}-ribbon)` }));
     }
-    for (const b of layout.buses ?? []) this.svg.append(this.drawBus(b, ctx));
-    for (const b of layout.boards) this.svg.append(this.drawBoard(b, ctx));
+    for (const b of layout.buses ?? []) {
+      const g = this.drawBus(b, ctx);
+      this.lightable.push({ key: b.path.join('.'), el: g });
+      this.svg.append(g);
+    }
+    for (const b of layout.boards) {
+      const g = this.drawBoard(b, ctx);
+      if (b.module) this.lightable.push({ key: b.module.join('.'), el: g });
+      this.svg.append(g);
+      for (const c of b.chips) {
+        const el = this.chipEls.get(c);
+        if (!c.path || !el) continue;
+        const prefixes = c.path.map((_, i) => c.path!.slice(0, i + 1).join('.'));
+        this.lightable.push({ key: c.path.join('.'), el, chip: { prefixes, board: g } });
+      }
+    }
     const ics = layout.boards.reduce((n, b) => n + b.chips.length, 0);
     this.caption.textContent = `${layout.note ?? `${ics} chips`} · every LED is a net of the same simulation`;
     this.last = [];
+  }
+
+  /** Light the boards, bus strips and chips named by instance paths from the root ('a', 'ctl.romhi'); [] clears. */
+  highlight(names: readonly string[]): void {
+    const on = new Set(names);
+    for (const { key, el, chip } of this.lightable) if (!chip) el.classList.toggle('hl', on.has(key));
+    for (const { el, chip } of this.lightable) if (chip) el.classList.toggle('hl', !chip.board.classList.contains('hl') && chip.prefixes.some((p) => on.has(p)));
   }
 
   /** Repaint from the simulation: only the elements whose bits changed. */

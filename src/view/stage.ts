@@ -572,6 +572,7 @@ export class Stage {
     this.buildControls();
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
+    this.board.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -633,7 +634,10 @@ export class Stage {
       this.view.cover = this.covers();
       this.view.fit();
     }
-    if (ctx === this.rootCtx && this.scene) this.view.highlight(this.scene.highlight ?? []);
+    if (ctx === this.rootCtx && this.scene) {
+      this.view.highlight(this.scene.highlight ?? []);
+      this.board.highlight(this.scene.highlight ?? []);
+    }
     if (leafName) this.openLeaf(leafName);
     this.renderCrumbs();
     this.showInspector();
@@ -1661,6 +1665,8 @@ export class Stage {
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+    // the boards light what the schematic would (names of the root's instances: a module's board, a chip)
+    if (this.ctx === this.rootCtx) this.board.highlight(names);
   }
 
   /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
