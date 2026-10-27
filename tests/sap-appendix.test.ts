@@ -217,6 +217,18 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(sapScene({ program: 'fib' }).root.summary).toMatch(/RAM starts with a program/);
   });
 
+  it('Fibonacci after RESET reruns on the x and y it overwrote: 144, then halts', async () => {
+    const bytes = sapBytes(SAP_PROGRAMS.find((q) => q.id === 'fib')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    for (let c = 0; c < 4000 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); if (c % 200 === 199) await tick(); }
+    expect(sapRam(sim).slice(12, 14)).toEqual([144, 233]);
+    set(sim, { RESET: 1 });
+    set(sim, { RESET: 0 });
+    const before = mon.outs.length;
+    for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); expect(mon.mismatch).toBeNull(); }
+    expect(mon.outs.slice(before)).toEqual([144]);
+  }, 60_000);
+
   it('RESET un-halts a halted computer, and it runs its program again', async () => {
     const p = SAP_PROGRAMS.find((q) => q.id === 'add')!;
     const bytes = sapBytes(p.src);

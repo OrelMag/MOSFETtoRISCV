@@ -400,7 +400,9 @@ export const chAppendixSap: Chapter = {
         2 Hz to follow every step, 500 Hz, or as fast as the page runs; the golden model is checked at every edge at any
         rate. Fibonacci's 13 values take
         ${FIB.bytes} bytes and ${FIB.cycles}
-        clock cycles, five an instruction.</p>
+        clock cycles, five an instruction. It keeps x and y in the RAM and overwrites them, so after a RESET it starts
+        from the top on what it left (144 and 233): it shows 144, the sum carries at once, and it halts. Power cycle puts
+        0 and 1 back.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the
         bus's OR stand-in) and five EEPROMs. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,
