@@ -133,8 +133,9 @@ export const chAppendixSap: Chapter = {
         of them, a new set at every step.</p>
         <p>Cost: ${SAP_COST.chips} chips simulated (and ${SAP_COST.drawn} drawn only), ${k(SAP_COST.logic)} NANDs of logic
         and five EEPROMs, 5 × 2 KB of ROM (the inspector's count). The program is "add two numbers" from RAM.</p>
-        <div class="try">Pulse once: the program counter's board drives the bus (amber), the memory address register
-        loads from it (blue). That is T0 of every instruction.</div>`,
+        <div class="try">Look first: before any Pulse the computer is in T0, the program counter's board drives the bus
+        (amber) and the memory address register will load from it (blue) at the rising edge. Pulse once: now it is T1, the
+        RAM drives and the instruction register loads.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['bus'] }),
       tries: [(st) => (hw(st)?.step ?? 0) >= 1 || st.cycles >= 1],
       challenge: {

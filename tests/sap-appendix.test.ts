@@ -77,6 +77,15 @@ describe('SAP panel: the golden model in lock step', () => {
     expect(mon.mismatch).toBeNull();
   }, 120_000);
 
+  it('step 0\'s try: T0 (CO MI) before any Pulse, T1 (RO II CE) after one', async () => {
+    const { CTRL } = await import('../src/sap/isa');
+    const bytes = sapBytes(SAP_PROGRAMS[0].src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    expect(sapHw(sim)).toMatchObject({ step: 0, cw: CTRL.co | CTRL.mi });
+    edge(sim, mon);
+    expect(sapHw(sim)).toMatchObject({ step: 1, cw: CTRL.ro | CTRL.ii | CTRL.ce });
+  });
+
   it('a difference is caught at the next edge, Back restores', () => {
     const bytes = sapBytes(SAP_PROGRAMS[0].src);
     const sim = boot(bytes), mon = new SapFollower(bytes);
