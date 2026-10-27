@@ -25,7 +25,14 @@ export interface Stats {
   descendants: number;
   /** Hierarchy levels below this component (0 for primitives). */
   levels: number;
+  /**
+   * Of the counts above, what ROM chips (ComponentDef.romBytes) hold as their simulated mux trees: how many chips,
+   * their bytes (`size`: each one's, 0 when they differ), NANDs and transistors. Absent when there is none.
+   */
+  rom?: RomStats;
 }
+
+export interface RomStats { chips: number; bytes: number; size: number; nands: number; transistors: number }
 
 const cache = new WeakMap<ComponentDef, Stats>();
 
@@ -58,6 +65,14 @@ export function stats(def: ComponentDef): Stats {
         s.triodes += c.triodes;
         s.diodes += c.diodes;
         s.depletion += c.depletion;
+        if (c.rom) {
+          const r = (s.rom ??= { chips: 0, bytes: 0, size: c.rom.size, nands: 0, transistors: 0 });
+          if (r.size !== c.rom.size) r.size = 0;
+          r.chips += c.rom.chips;
+          r.bytes += c.rom.bytes;
+          r.nands += c.rom.nands;
+          r.transistors += c.rom.transistors;
+        }
         if (inst.def.prim !== 'alias') {
           s.parts++;
           s.descendants += 1 + c.descendants;
@@ -66,8 +81,15 @@ export function stats(def: ComponentDef): Stats {
       }
     }
   }
+  if (def.romBytes) s = { ...s, rom: { chips: 1, bytes: def.romBytes, size: def.romBytes, nands: s.nands, transistors: s.transistors } };
   cache.set(def, s);
   return s;
+}
+
+/** The ROM chips' size: "2 KB", "5 × 2 KB" (one size), else the total ("10 KB"). */
+export function romSize(r: RomStats): string {
+  const kb = (n: number) => (n % 1024 ? `${n.toLocaleString('en-US')} bytes` : `${n / 1024} KB`);
+  return r.chips > 1 && r.size ? `${r.chips} × ${kb(r.size)}` : kb(r.bytes);
 }
 
 const depthCache = { unit: new WeakMap<ComponentDef, number | null>(), load: new WeakMap<ComponentDef, number | null>(), drawn: new WeakMap<ComponentDef, number | null>() };

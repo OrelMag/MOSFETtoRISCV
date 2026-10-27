@@ -8,13 +8,13 @@ import { families, familyOf, initialParams } from './resolve';
 export const CATS: [Category, string][] = [
   ['transistor', 'Transistors'], ['cell', 'CMOS cells'], ['gate', 'Gates'], ['arithmetic', 'Arithmetic'],
   ['routing', 'Selection & routing'], ['sequential', 'Sequential'], ['memory', 'Memory'], ['cpu', 'Processor parts'],
-  ['plumbing', 'Wiring & constants'], ['custom', 'My chips'],
+  ['ttl', '74xx chips'], ['plumbing', 'Wiring & constants'], ['custom', 'My chips'],
 ];
 
 // Single (non-family) components whose id contains a digit. Other ids with digits are generated
 // widths (families, or internal parts such as the 33-bit rows of MUL32) and stay out of the list.
 const FIXED = new Set(['m6502_core', 'nmos', 'pmos', 'nand3', 'cla4', 'mul32', 'sram6t', 'sramcol2', 'dram1t1c', 'arb2', 'btb16', 'fpu32', 'freectr32', 'plus4', 'plus4ks']);
-export const listed = (id: string) => FIXED.has(id) || (!/\d/.test(id.replace(/^(full_adder|half_adder)/, '')) && !id.startsWith('bench_') && !id.startsWith('pipe_'));
+export const listed = (id: string) => FIXED.has(id) || /^(ls\d+|ne555)$/.test(id) || (!/\d/.test(id.replace(/^(full_adder|half_adder)/, '')) && !id.startsWith('bench_') && !id.startsWith('pipe_'));
 
 export interface LibraryItem {
   id: string;

@@ -1,0 +1,198 @@
+/* The breadboard view (view/breadboard.ts): cream boards with holes and rails, black DIP chips, LEDs that glow by
+   value, DIP switches, 7-segment digits and the bus strip. The boards and parts keep their real colours in both
+   themes; the canvas around them, the edges and the active rings are tokens for each. Sizes are in breadboard
+   holes (the SVG's user unit). */
+
+:root {
+  --bb-bg: #e7e4dc;
+  --bb-caption: #5d6371;
+  --bb-board: #ece7dc;
+  --bb-board-edge: #c9bfaa;
+  --bb-hole: #bdb5a4;
+  --bb-rail-pos: #d8453b;
+  --bb-rail-neg: #3b67c9;
+  --bb-label: #5b5446;
+  --bb-chip: #1c1c1f;
+  --bb-chip-text: #ececee;
+  --bb-chip-ref: #a4a6ad;
+  --bb-leg: #b9bcc2;
+  --bb-sel: #d97706;
+  --bb-drive: #d97706;
+  --bb-load: #2563eb;
+  --bb-pill-text: #111111;
+  --bb-pill-load-text: #ffffff;
+  --bb-ribbon: #c9a53a;
+  --bb-wire: #9c7f2a;
+  --bb-wire-on: #ffd84a;
+  --bb-sw: #c8352c;
+  --bb-sw-knob: #ffffff;
+  --bb-seg-bg: #170a09;
+  --bb-seg-on: #ff3b2f;
+  --bb-seg-off: #3a1512;
+  --bb-led-red: #ff4d3d;
+  --bb-led-red-off: #5c2a24;
+  --bb-led-yellow: #ffd23d;
+  --bb-led-yellow-off: #5e4f22;
+  --bb-led-green: #47d16a;
+  --bb-led-green-off: #21492c;
+  --bb-led-blue: #4da3ff;
+  --bb-led-blue-off: #1f3858;
+  --bb-led-white: #f4f4f0;
+  --bb-led-white-off: #55554f;
+  --bb-led-x: #8a8577;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bb-bg: #16181d;
+    --bb-caption: #9aa1ab;
+    --bb-board-edge: #8f8672;
+    --bb-sel: #f59e0b;
+    --bb-drive: #f59e0b;
+    --bb-load: #4d9cff;
+    --bb-pill-load-text: #0b1220;
+  }
+}
+
+:root[data-theme='dark'],
+/* The vivid look's dark board (vivid.css): the boards' canvas takes the dark tokens in either theme. */
+:root[data-look='vivid'][data-board='dark'] .bb-host {
+  --bb-bg: #16181d;
+  --bb-caption: #9aa1ab;
+  --bb-board-edge: #8f8672;
+  --bb-sel: #f59e0b;
+  --bb-drive: #f59e0b;
+  --bb-load: #4d9cff;
+  --bb-pill-load-text: #0b1220;
+}
+
+/* ---- the host over the canvas (the schematic stays under it) ---- */
+.canvas > .bb-host {
+  position: absolute; inset: 0; right: var(--bb-inset, 0px); z-index: 2; background: var(--bb-bg);
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+}
+.canvas > .bb-host[hidden] { display: none; }
+.stage.bb-mode .canvas { background: var(--bb-bg); }
+.bb-caption { flex: none; padding: 8px calc(14px + var(--bb-capr, 0px)) 0 14px; font-size: 12.5px; color: var(--bb-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+svg.breadboard { flex: 1; min-height: 0; width: 100%; display: block; margin-top: max(0px, calc(var(--bb-top, 0px) - 30px)); font-family: var(--font-mono); user-select: none; -webkit-user-select: none; }
+/* the stage's schematic tools, hint and level badge sit out while the boards are shown */
+.stage.bb-mode .sch-only, .stage.bb-mode .canvas > .level-badge, .stage.bb-mode .canvas > .hint-badge { display: none !important; }
+.stage:not(.bb-mode) .bb-only { display: none !important; }
+
+/* ---- boards ---- */
+.bb-base { fill: var(--bb-board); stroke: var(--bb-board-edge); stroke-width: 0.08; }
+.bb-hole { fill: var(--bb-hole); }
+.bb-rail { stroke-width: 0.2; stroke-linecap: round; }
+.bb-rail.pos { stroke: var(--bb-rail-pos); }
+.bb-rail.neg { stroke: var(--bb-rail-neg); }
+.bb-title { font-size: 1.25px; font-weight: 600; letter-spacing: 0.08px; fill: var(--bb-label); }
+.bb-open { cursor: pointer; }
+.bb-open:hover .bb-title, .bb-open:focus-visible .bb-title { text-decoration: underline; }
+.bb-ring { fill: none; stroke: transparent; stroke-width: 0.35; }
+.bb-board[data-act='drive'] .bb-ring { stroke: var(--bb-drive); filter: drop-shadow(0 0 0.8px var(--bb-drive)); }
+.bb-board[data-act='load'] .bb-ring { stroke: var(--bb-load); filter: drop-shadow(0 0 0.8px var(--bb-load)); }
+.bb-pill { display: none; }
+.bb-board[data-act='drive'] .bb-pill, .bb-board[data-act='load'] .bb-pill { display: inline; }
+.bb-pill rect { fill: var(--bb-drive); }
+.bb-board[data-act='load'] .bb-pill rect { fill: var(--bb-load); }
+.bb-pill text { font-family: var(--font-ui); font-size: 1.15px; font-weight: 600; fill: var(--bb-pill-text); text-anchor: middle; }
+.bb-board[data-act='load'] .bb-pill text { fill: var(--bb-pill-load-text); }
+.bb-stub { stroke: none; }
+/* lit from the text (data-show) or the step's highlight */
+.bb-board.hl > .bb-base, .bb-bus.hl > .bb-base { stroke: var(--bb-sel); stroke-width: 0.32; }
+.bb-chip.hl .bb-sel { stroke: var(--bb-sel); stroke-dasharray: 0.5 0.3; }
+.bb-ribbon { fill: var(--bb-ribbon); }
+
+/* ---- chips ---- */
+.bb-chip { cursor: pointer; outline: none; }
+.bb-chip .bb-body { fill: var(--bb-chip); }
+.bb-chip .bb-leg { fill: var(--bb-leg); }
+.bb-chip .bb-notch { fill: var(--bb-board); }
+.bb-chip .bb-part { fill: var(--bb-chip-text); font-weight: 600; text-anchor: middle; }
+.bb-chip .bb-ref { fill: var(--bb-chip-ref); text-anchor: middle; }
+.bb-chip .bb-sel { fill: none; stroke: transparent; stroke-width: 0.22; }
+.bb-chip:hover .bb-sel { stroke: color-mix(in srgb, var(--bb-sel) 55%, transparent); }
+.bb-chip.sel .bb-sel, .bb-chip:focus-visible .bb-sel { stroke: var(--bb-sel); }
+.bb-chip.drawn .bb-body { fill: color-mix(in srgb, var(--bb-chip) 82%, var(--bb-board)); }
+
+/* ---- LEDs ---- */
+.bb-led { --on: var(--bb-led-red); --off: var(--bb-led-red-off); }
+.bb-led.c-yellow { --on: var(--bb-led-yellow); --off: var(--bb-led-yellow-off); }
+.bb-led.c-green { --on: var(--bb-led-green); --off: var(--bb-led-green-off); }
+.bb-led.c-blue { --on: var(--bb-led-blue); --off: var(--bb-led-blue-off); }
+.bb-led.c-white { --on: var(--bb-led-white); --off: var(--bb-led-white-off); }
+.bb-led .lens { fill: var(--off); }
+.bb-led .halo { fill: var(--on); opacity: 0; }
+.bb-led[data-v='1'] .lens { fill: var(--on); }
+.bb-led[data-v='1'] .halo { opacity: 0.75; }
+.bb-led[data-v='x'] .lens { fill: var(--bb-led-x); }
+.bb-ll { font-size: 0.95px; font-weight: 500; fill: var(--bb-label); text-anchor: middle; }
+.bb-val { font-size: 1.05px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
+
+/* ---- DIP switches ---- */
+.bb-sw { cursor: pointer; outline: none; }
+.bb-sw .body { fill: var(--bb-sw); }
+.bb-sw .knob { fill: var(--bb-sw-knob); }
+.bb-sw .hit { fill: transparent; }
+.bb-sw:focus-visible .body { stroke: var(--bb-sel); stroke-width: 0.2; }
+
+/* ---- 7-segment digits ---- */
+.bb-segwin { fill: var(--bb-seg-bg); }
+.bb-digit .seg { fill: var(--bb-seg-off); }
+.bb-digit .seg.on { fill: var(--bb-seg-on); filter: drop-shadow(0 0 0.35px var(--bb-seg-on)); }
+.bb-digit.vx .seg { fill: color-mix(in srgb, var(--bb-seg-off) 60%, var(--bb-led-x)); }
+
+/* ---- the bus strip ---- */
+.bb-wire { stroke: var(--bb-wire); stroke-width: 0.36; stroke-linecap: round; }
+.bb-wire[data-v='1'] { stroke: var(--bb-wire-on); filter: drop-shadow(0 0 0.4px var(--bb-wire-on)); }
+.bb-wire[data-v='x'] { stroke-dasharray: 0.6 0.4; }
+svg.breadboard[data-wires='value'] .bb-wire { stroke: var(--w0); filter: none; }
+svg.breadboard[data-wires='value'] .bb-wire[data-v='1'] { stroke: var(--w1); }
+svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); }
+
+/* ---- the chip's card ---- */
+.bb-card {
+  position: absolute; z-index: 6; width: min(330px, calc(100% - 16px)); box-sizing: border-box; padding: 10px 13px;
+  background: var(--surface); color: var(--text-2); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--shadow-lg); font-size: 12.5px; line-height: 1.45; pointer-events: none;
+}
+.bb-card[hidden] { display: none; }
+.bb-card::after {
+  content: ''; position: absolute; left: calc(var(--tip, 50%) - 6px); bottom: -7px; width: 12px; height: 12px;
+  background: var(--surface); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transform: rotate(45deg);
+}
+.bb-card.below::after { bottom: auto; top: -7px; transform: rotate(225deg); }
+.bb-card-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.bb-card-h b { font: 600 13px var(--font-mono); color: var(--text); }
+.bb-card-h span { color: var(--muted); }
+.bb-card p { margin: 5px 0 0; }
+.bb-card .live { font: 12px var(--font-mono); color: var(--text); }
+.bb-card .foot { color: var(--muted); font-size: 12px; }
+
+/* ---- the pin card (a chip open on the schematic) ---- */
+.bb-pincard { pointer-events: auto; padding: 10px 12px; max-width: 300px; }
+.bb-pincard h4 { margin: 0 0 6px; font-size: 13px; }
+.bb-dip { display: grid; grid-template-columns: auto 34px auto; gap: 0 6px; }
+.bb-dip .side { display: flex; flex-direction: column; }
+.bb-dip .pin { display: flex; align-items: center; gap: 6px; height: 20px; font: 12px var(--font-mono); color: var(--text-2); }
+.bb-dip .side.r .pin { justify-content: flex-end; }
+.bb-dip .pin .n { width: 18px; color: var(--muted); text-align: right; }
+.bb-dip .side.r .pin .n { text-align: left; }
+.bb-dip .pin .nm { min-width: 30px; }
+.bb-dip .side.r .pin .nm { text-align: right; }
+.bb-dip .pkg { position: relative; background: var(--bb-chip); border-radius: 4px; margin: 2px 0; }
+.bb-dip .pkg .notch { position: absolute; left: 50%; top: -1px; width: 14px; height: 7px; margin-left: -7px; border-radius: 0 0 7px 7px; background: var(--surface); }
+.bb-dip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--w0); flex: none; }
+.bb-dip .dot[data-v='1'] { background: var(--w1); box-shadow: 0 0 5px var(--w1); }
+.bb-dip .dot[data-v='x'] { background: var(--wx); }
+.bb-dip .dot.supply { background: transparent; border: 1px solid var(--muted); box-sizing: border-box; box-shadow: none; }
+.bb-pincard > .btn { margin-top: 8px; }
+
+/* the stage bar's view toggle */
+.stage-bar .seg.bb-view button, .stage-bar .seg.bb-wires button { font-family: var(--font-ui); font-size: 12.5px; }
+
+@media (pointer: coarse) {
+  .stage-bar .seg.bb-view button, .stage-bar .seg.bb-wires button { min-height: 40px; padding: 0 12px; }
+  .bb-pincard > .btn { min-height: 40px; }
+  .bb-dip .pin { height: 26px; }
+}

@@ -214,6 +214,12 @@ export interface ComponentDef {
    * large to walk (the 2^23-word WAD ROM: millions of instances). Must equal the walk (tested).
    */
   statsOf?: () => Stats;
+  /**
+   * A read-only memory chip of this many bytes (the 28C16 EEPROM): stats() still counts its structure, the mux tree it
+   * simulates as, but also under Stats.rom, so a cost line can say logic and ROM apart (a ROM on silicon is a
+   * transistor per bit, not a tree of NANDs).
+   */
+  romBytes?: number;
   /** Reference function for tests and truth tables: packed inputs → packed outputs. */
   spec?: (inputs: number[]) => number[];
   /** Power-on hints for 'zero' mode: internal net name → value. */
@@ -242,6 +248,8 @@ export interface ComponentDef {
 export type Category =
   | 'transistor' | 'cell' | 'gate' | 'plumbing' | 'arithmetic'
   | 'routing' | 'sequential' | 'memory' | 'cpu'
+  /** 74xx chips (Appendix C's breadboard computer). */
+  | 'ttl'
   /** User chips made in the sandbox. */
   | 'custom';
 

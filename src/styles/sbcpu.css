@@ -74,3 +74,12 @@
 .sb-cpu .cpu-now:has(.sb-cpu-bus) { flex-wrap: wrap; row-gap: 2px; }
 .sb-cpu .cpu-now .sb-cpu-bus { flex-basis: 100%; font: 11px var(--font-mono); color: var(--text-2); }
 .sb-cpu-secbtns { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+/* a SAP-1: the 16 control lines under this step, lit while on; a byte's five steps; the Load program text */
+.sb-cpu .cpu-now:has(.sb-sap-cw) { flex-wrap: wrap; row-gap: 4px; }
+.sb-sap-cw { flex-basis: 100%; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.sb-sap-cw span { font: 600 10px var(--font-mono); text-align: center; padding: 1px 0; border-radius: 3px; color: var(--muted); background: var(--surface-2); }
+.sb-sap-cw span.on { color: var(--accent-text); background: var(--hl); }
+.sb-sap-steps { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 4px 0; font: 12px var(--font-mono); }
+.sb-sap-steps div { display: contents; }
+.sb-sap-steps b { color: var(--accent); }
+.sb-sap-src { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12.5px/1.4 var(--font-mono); resize: vertical; }

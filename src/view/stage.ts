@@ -3,7 +3,7 @@
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
 import { DualSim } from '../sim/dualsim';
-import { flatten, type HierNode } from '../sim/flatten';
+import { findNode, flatten, type HierNode } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
@@ -26,6 +26,8 @@ import { closePopover, editNumber } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
+import { type BbChip, type BreadboardLayout, layoutBounds } from './bblayout';
+import { BreadboardView, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 
 export interface Scene {
@@ -57,6 +59,11 @@ export interface Scene {
   engine?: 'cycle' | 'nmos';
   /** No Open in Sandbox: the circuit is larger than a sandbox chip can hold (Appendix B's Doom computer). */
   noRemix?: boolean;
+  /**
+   * The circuit as built on breadboards (view/bblayout.ts): the stage bar gets a Schematic | Breadboard toggle and the
+   * scene opens on the boards (unless it opens deeper, or the learner last chose the schematic).
+   */
+  breadboard?: BreadboardLayout;
 }
 
 export interface Widget {
@@ -112,6 +119,10 @@ const DIR = () => h('span', { class: 'dir', 'aria-hidden': 'true' }, '▸');
 
 /** The learner's last fold or unfold of a foldable panel on each side (see Stage.foldable): later scenes follow it. */
 const foldChoice = new Map<string, boolean>();
+
+/** The learner's last choice between a scene's breadboards and its schematic, and of the jumpers' look (the page's life). */
+let boardChoice = true;
+let wireChoice: WireLook = 'built';
 
 /** Scenes at least this big (NAND gates plus a quarter of the transistors) are built behind a "Building…" cue
  *  painted first: flattening, simulating and drawing chapter 14's CPU (56 000 NANDs) holds the page half a second. */
@@ -211,6 +222,13 @@ export class Stage {
   readonly resetHooks = new Set<() => void>();
   private history: Checkpoint[] = [];
   private backBtn: HTMLButtonElement | null = null;
+  /** The breadboard view (Scene.breadboard), its toggles in the bar, and whether it is the one shown. */
+  private board: BreadboardView;
+  private boardOn = false;
+  private viewSeg: HTMLElement;
+  private wireSeg: HTMLElement;
+  /** A chip opened from the boards: its DIP pins, live, in the bottom-left dock. */
+  private pins: { path: string; el: HTMLElement; update(sim: Sim): void } | null = null;
   private beforeEdge(): void { this.edgeHooks.forEach((h) => h.before?.()); }
   private afterEdge(): void { this.edgeHooks.forEach((h) => h.after?.()); }
 
@@ -301,11 +319,32 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
     ];
+    // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
+    const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
+    this.viewSeg = h('div', { class: 'seg bb-view', role: 'group', 'aria-label': 'View', hidden: true },
+      segBtn('Schematic', 'The circuit as a schematic you can open level by level', () => this.showBoards(false)),
+      segBtn('Breadboard', 'The circuit as built: chips on breadboards, every LED a net of the same simulation', () => this.showBoards(true)));
+    this.wireSeg = h('div', { class: 'seg bb-wires bb-only', role: 'group', 'aria-label': 'Wire colours', hidden: true },
+      segBtn('Wires as built', 'Jumpers in their own colours', () => this.setWires('built')),
+      segBtn('By value', 'Jumpers coloured by value, as on the schematics', () => this.setWires('value')));
+    this.board = new BreadboardView({
+      toggle: (port, bit) => {
+        const p = this.scene?.root.ports.find((q) => q.name === port);
+        if (!p) return;
+        if (p.width === 1) this.toggleInput(port);
+        else this.setInput(port, this.getInput(port) ^ (1 << bit));
+      },
+      input: (port) => this.getInput(port),
+      open: (path) => this.openFromBoard(path),
+      select: () => this.showInspector(),
+    });
+    for (const b of [imgWrap, layoutBtn, this.probeBtn, zoomOut, zoomIn]) b.classList.add('sch-only');
+    const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => this.view.fit());
+    upBtn.classList.add('sch-only');
+    fitBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
-      this.crumbs, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
-      btn('up', 'Up one level (Esc)', () => this.up()),
-      zoomOut, zoomIn,
-      btn('fit', 'Fit to screen', () => this.view.fit()),
+      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
+      upBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
@@ -313,7 +352,7 @@ export class Stage {
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
       'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage');
-    this.canvas.append(this.levelBadge, this.hint, this.dock);
+    this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -355,6 +394,7 @@ export class Stage {
       this.analyzer.radix = settings.radix;
       this.view.radix = settings.radix;
       this.inspector.radix = settings.radix;
+      this.board.radix = settings.radix;
       this.refresh();
     });
     this.view.radix = settings.radix;
@@ -519,10 +559,20 @@ export class Stage {
     this.lateEvents = 0;
     this.setProbeMode(false);
     this.initAnalyzer();
-    this.goTo(at ?? scene.path ?? [], false);
+    const start = at ?? scene.path ?? [];
+    if (scene.breadboard) {
+      this.board.show(scene.breadboard, design.root);
+      this.board.radix = settings.radix;
+    }
+    this.viewSeg.hidden = !scene.breadboard;
+    this.wireSeg.hidden = !scene.breadboard;
+    this.setWires(wireChoice);
+    this.setBoardShown(!!scene.breadboard && boardChoice && !start.length);
+    this.goTo(start, false);
     this.buildControls();
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
+    this.board.highlight(scene.highlight ?? []);
     this.panels = (scene.panels ?? []).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -546,6 +596,8 @@ export class Stage {
     this.panels = [];
     this.closeLeaf();
     this.view.clear();
+    this.board.clear();
+    this.dropPins();
     this.inspector.clear();
     this.analyzer.detach();
     this.sim = null;
@@ -573,13 +625,19 @@ export class Stage {
     }
     this.ctx = ctx;
     this.selected = null;
+    // a drill path (a chip opened, Back / Forward to one) is a schematic's
+    if (this.boardOn && ctx !== this.rootCtx) this.setBoardShown(false);
+    this.syncPins();
     this.view.show(ctx, ctx === this.rootCtx);
     // Another level, another shape: the how-to line may fit beside it now, or no longer.
     if (this.placeHint()) {
       this.view.cover = this.covers();
       this.view.fit();
     }
-    if (ctx === this.rootCtx && this.scene) this.view.highlight(this.scene.highlight ?? []);
+    if (ctx === this.rootCtx && this.scene) {
+      this.view.highlight(this.scene.highlight ?? []);
+      this.board.highlight(this.scene.highlight ?? []);
+    }
     if (leafName) this.openLeaf(leafName);
     this.renderCrumbs();
     this.showInspector();
@@ -628,6 +686,84 @@ export class Stage {
       return;
     }
     if (this.ctx?.parent) this.goTo(this.ctx.parent.path);
+  }
+
+  // ---- the breadboard view ----------------------------------------------------------------
+
+  /** Schematic | Breadboard, by the learner: remembered for the next scene that has boards. */
+  showBoards(on: boolean): void {
+    if (!this.scene?.breadboard) return;
+    boardChoice = on;
+    if (on && this.ctx !== this.rootCtx) this.goTo([]);
+    this.setBoardShown(on);
+    this.refresh();
+  }
+
+  /** The boards are on screen (the schematic is not painted meanwhile). */
+  get boardsShown(): boolean {
+    return this.boardOn;
+  }
+
+  private setBoardShown(on: boolean): void {
+    this.boardOn = on;
+    this.el.classList.toggle('bb-mode', on);
+    this.board.el.hidden = !on;
+    const [sch, bb] = [...this.viewSeg.querySelectorAll('button')];
+    sch.classList.toggle('on', !on);
+    sch.setAttribute('aria-pressed', String(!on));
+    bb.classList.toggle('on', on);
+    bb.setAttribute('aria-pressed', String(on));
+    if (on) this.setProbeMode(false);
+    this.syncPins();
+    this.fitBar();
+  }
+
+  private setWires(w: WireLook): void {
+    wireChoice = w;
+    this.board.wires = w;
+    [...this.wireSeg.querySelectorAll('button')].forEach((b, i) => {
+      const on = (i === 0) === (w === 'built');
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  /** A chip or a board's module double-clicked: its schematic, through the drill path (one history entry per level). */
+  private openFromBoard(path: string[]): void {
+    this.setBoardShown(false);
+    this.goTo(path);
+    this.refresh();
+  }
+
+  /** The chip open on the schematic, if the boards list it with a pin map. */
+  private pinnedChip(): BbChip | null {
+    const lay = this.scene?.breadboard, ctx = this.ctx;
+    if (!lay || !ctx || this.boardOn || this.leaf) return null;
+    const key = ctx.path.join('.');
+    for (const b of lay.boards) for (const c of b.chips) if (c.pins && c.path && c.path.join('.') === key) return c;
+    return null;
+  }
+
+  /** Show (or drop) the pin card of the chip open on the schematic. */
+  private syncPins(): void {
+    const chip = this.pinnedChip();
+    const key = chip?.path?.join('.') ?? '';
+    if (this.pins?.path === key && chip) return;
+    this.dropPins();
+    const node = chip?.path && this.sim ? findNode(this.sim.design.root, chip.path) : null;
+    if (!chip || !node) return;
+    const card = pinCard(chip, node, () => this.showBoards(true));
+    this.pins = { path: key, ...card };
+    this.dock.append(card.el);
+    if (this.sim) card.update(this.sim);
+    this.layoutDock();
+  }
+
+  private dropPins(): void {
+    if (!this.pins) return;
+    this.pins.el.remove();
+    this.pins = null;
+    this.layoutDock();
   }
 
   /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
@@ -1313,7 +1449,13 @@ export class Stage {
 
   refresh(): void {
     if (!this.ctx) return;
-    this.view.update();
+    // only the view on screen is painted (the other catches up when it is shown)
+    if (this.boardOn) {
+      this.board.sim = this.sim;
+      this.boardCover();
+      this.board.update(this.sim);
+    } else this.view.update();
+    if (this.pins && this.sim) this.pins.update(this.sim);
     this.leaf?.widget.update?.();
     this.panels.forEach((p) => p.update?.());
     this.analyzer.update();
@@ -1339,6 +1481,19 @@ export class Stage {
   private showInspector(): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    // a chip selected on the boards
+    const chip = this.boardOn ? this.board.selected : null;
+    const node = chip?.path && this.sim ? findNode(this.sim.design.root, chip.path) : null;
+    if (chip?.path && node && this.sim) {
+      const sim = this.sim, path = chip.path;
+      this.inspector.show({
+        def: node.def, instance: chip.ref ? `${chip.ref} (${path.join('.')})` : path.join('.'),
+        portBits: (p) => sim.getBits(node.ports[p]),
+        canOpen: true, onOpen: () => this.openFromBoard(path),
+        power: () => this.livePower(this.rootCtx!, node),
+      });
+      return;
+    }
     const sel = this.leaf ? this.leaf.name : this.selected;
     const child = sel ? ctx.node.children?.get(sel) : undefined;
     if (child) {
@@ -1511,6 +1666,8 @@ export class Stage {
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+    // the boards light what the schematic would (names of the root's instances: a module's board, a chip)
+    if (this.ctx === this.rootCtx) this.board.highlight(names);
   }
 
   /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
@@ -1554,8 +1711,10 @@ export class Stage {
       this.inset = this.rightInset();
       this.dockOut();
     };
-    const box = this.view.contentBox();
-    const bw = Math.max(box.w, 34), bh = Math.max(box.h, 1);
+    // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
+    const lay = this.boardOn ? this.scene?.breadboard : undefined;
+    const box = lay ? layoutBounds(lay) : this.view.contentBox();
+    const bw = Math.max(box.w, lay ? 1 : 34), bh = Math.max(box.h, 1);
     const scaleOf = (mask: number): number | null => {
       apply(mask);
       if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
@@ -1575,9 +1734,29 @@ export class Stage {
     // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
+    this.boardCover();
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);
+  }
+
+  /** The boards keep clear of the right-docked panels that are open; a folded one is only its title, so the boards
+   *  run under it, starting below it (--bb-inset, --bb-top: breadboard.css). */
+  private boardCover(): void {
+    const c = this.canvas.getBoundingClientRect();
+    const right = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.offsetWidth > 0);
+    const open = right.filter((p) => !p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth);
+    const folded = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.getBoundingClientRect().bottom - c.top);
+    this.canvas.style.setProperty('--bb-inset', `${open.length ? Math.max(...open) + 24 : 0}px`);
+    const capr = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth + 12);
+    this.canvas.style.setProperty('--bb-capr', `${capr.length && !open.length ? Math.max(...capr) : 0}px`);
+    const tops = open.length ? [] : folded;
+    // a chapter's challenge note over the canvas's top-left corner (ui/stagenotes.ts) too
+    for (const n of this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')) {
+      const r = n.getBoundingClientRect();
+      if (r.height > 0) tops.push(r.bottom - c.top);
+    }
+    this.canvas.style.setProperty('--bb-top', `${tops.length ? Math.max(...tops) + 6 : 0}px`);
   }
 
   /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit

@@ -13,10 +13,11 @@ import { BY_NAME4, JCN_NAMES, pair4, reg4 } from '../isa4/isa4';
 import { type IsaDoc, tableOf } from '../isa/table';
 import { MNEMONICS as M65 } from '../m6502/isa';
 import { BUILTINS, KEYWORDS } from '../lang/ast';
+import { SAP_BY_NAME } from '../sap/isa';
 
-/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); hex: words;
- *  py: the Python subset of chapter 15. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'hex' | 'py' | { table: IsaDoc };
+/** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); sapasm: the
+ *  SAP-1's (Appendix C); hex: words; py: the Python subset of chapter 15. */
+export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -80,6 +81,12 @@ const CPU4: AsmWords = {
     if (CONDS_4.has(w.toLowerCase())) return 'kw';
     return 'sym';
   },
+};
+
+// The SAP-1 (sap/asm.ts): its eleven mnemonics in any case, .byte.
+const SAP: AsmWords = {
+  mnemonic: (w) => (w.startsWith('.') ? (w.toLowerCase() === '.byte' ? 'dir' : 'bad') : SAP_BY_NAME.has(w.toUpperCase()) ? 'op' : 'bad'),
+  operand: () => 'sym',
 };
 
 // A Custom ISA table: its mnemonics, register names and list names, in any case.
@@ -222,5 +229,5 @@ export function tokenize(line: string, lang: CodeLang): Tok[] {
   if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
   if (lang === 'm6502asm') return m6502asm(line);
   if (lang === 'py') return py(line);
-  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : RV32);
+  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'sapasm' ? SAP : RV32);
 }
