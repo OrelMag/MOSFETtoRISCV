@@ -1854,14 +1854,16 @@ export class Stage {
     const open = right.filter((p) => !p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth);
     const folded = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.getBoundingClientRect().bottom - c.top);
     this.canvas.style.setProperty('--bb-inset', `${open.length ? Math.max(...open) + 24 : 0}px`);
-    const capr = right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth + 12);
-    this.canvas.style.setProperty('--bb-capr', `${capr.length && !open.length ? Math.max(...capr) : 0}px`);
+    const capr = open.length ? [] : right.filter((p) => p.el.classList.contains('collapsed')).map((p) => p.el.offsetWidth + 12);
     const tops = open.length ? [] : folded;
-    // a chapter's challenge note over the canvas's top-left corner (ui/stagenotes.ts) too
+    // a chapter's challenge note over the canvas's top (ui/stagenotes.ts) too; the caption stops short of one on the right
+    const hr = this.board.el.getBoundingClientRect();
     for (const n of this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')) {
       const r = n.getBoundingClientRect();
       if (r.height > 0) tops.push(r.bottom - c.top);
+      if (r.height > 0 && hr.width > 0 && r.left - hr.left > hr.width / 3) capr.push(hr.right - r.left + 12);
     }
+    this.canvas.style.setProperty('--bb-capr', `${capr.length ? Math.max(...capr) : 0}px`);
     this.canvas.style.setProperty('--bb-top', `${tops.length ? Math.max(...tops) + 6 : 0}px`);
   }
 
