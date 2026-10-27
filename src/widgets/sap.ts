@@ -166,7 +166,7 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'OUT so far'), outs);
     // the title carries the verdict, so a folded panel still says it
     const verdict = h('span', { class: 'sap-verdict' });
-    const el = h('div', { class: 'mem-panel cpu-panel sap-panel', 'data-dock': 'right', 'data-fold': 'narrow' },
+    const el = h('div', { class: 'mem-panel cpu-panel sap-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
       h('h4', null, 'SAP-1 ', verdict, h('span', { class: 'fold-hint' })), body);
 
     let lastKey = '';

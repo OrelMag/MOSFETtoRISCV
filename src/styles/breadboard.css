@@ -247,3 +247,11 @@ svg.breadboard.drilled .bb-board:not(.focus), svg.breadboard.drilled .bb-bus, sv
   .bb-pincard > .btn, .bb-drill-head .bb-back, .bb-crumbs .crumb { min-height: 40px; }
   .bb-dip .pin { height: 26px; }
 }
+
+/* A phone with a panel unfolded into the canvas's flow (app.css data-phone="flow"): the boards keep a strip of their
+   own above it instead of lying under the panel. */
+@media (max-width: 760px) {
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed)) { --bb-phone-h: max(320px, 48vh); }
+  .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed)) > .bb-host { right: 0; bottom: auto; height: var(--bb-phone-h); }
+  .stage.bb-mode:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed)) { padding-top: calc(var(--bb-phone-h) + 8px); }
+}
