@@ -3,7 +3,7 @@ import { CPU4_BCD, CPU4_STATE } from '../src/lib/cpu4';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
-import { BB_MARGIN, BbNets, type BreadboardLayout, defAt, drillCrumbs, drillOf, drillPane, fitBoards, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { BB_MARGIN, BbNets, type BreadboardLayout, busDrivers, defAt, drillCrumbs, drillOf, drillPane, driverOf, fitBoards, netIdOf, rovingMove, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
 import { SAP_COMPUTER } from '../src/lib/sap';
 import { sapLayout } from '../src/widgets/saplayout';
 import { insideOf } from '../src/view/breadboard';
@@ -192,5 +192,42 @@ describe('breadboard view: the drill', () => {
     expect(p).toMatchObject({ stacked: true, w: 390 });
     expect(p.h).toBeGreaterThanOrEqual(160);
     expect(drillPane(2400, 900).w).toBe(620);
+  });
+});
+
+describe('breadboard view: LEDs and keys', () => {
+  const l = sapLayout(SAP_COMPUTER);
+  const root = flatten(SAP_COMPUTER).root;
+
+  it('names the chip that drives an LED, or the input', () => {
+    const a = l.boards.find((b) => b.title === 'A register')!;
+    const d = driverOf(l, root, netIdOf(root, a.leds![0].net)); // q[7]: the high 173
+    expect(d && 'chip' in d && d.chip.path).toEqual(['a', 'hi']);
+    const hlt = driverOf(l, root, netIdOf(root, { path: ['ctl'], port: 'hlt' }));
+    expect(hlt && 'chip' in hlt && hlt.chip.part).toBe('28C16');
+    expect(driverOf(l, root, netIdOf(root, { path: [], port: 'prog' }))).toEqual({ input: 'prog', bit: 0 });
+    expect(driverOf(l, root, -1)).toBeNull();
+  });
+
+  it('finds every board\'s bus drivers: its 245s', () => {
+    const m = busDrivers(l, root, l.buses![0]);
+    for (const t of ['Program counter', 'A register', 'Instruction', 'RAM 16 × 8', 'ALU + flags']) {
+      expect(m.get(t)?.map((c) => c.part), t).toEqual(['74LS245']);
+    }
+    expect(m.has('B register')).toBe(false);
+  });
+
+  it('moves the focus by rows and columns', () => {
+    // two rows: three chips, then four LEDs under them
+    const boxes = [0, 9, 18].map((x) => ({ x, y: 4, w: 8, h: 4 })).concat([0, 2, 4, 20].map((x) => ({ x, y: 10, w: 1.6, h: 2.7 })));
+    expect(rovingMove(boxes, 0, 'ArrowRight')).toBe(1);
+    expect(rovingMove(boxes, 0, 'ArrowLeft')).toBe(0);
+    expect(rovingMove(boxes, 1, 'ArrowDown')).toBe(6); // under the middle chip (x = 13): the nearest LED across, x = 20.8
+    expect(rovingMove(boxes, 0, 'ArrowDown')).toBe(5);
+    expect(rovingMove(boxes, 4, 'ArrowUp')).toBe(0);
+    expect(rovingMove(boxes, 6, 'ArrowUp')).toBe(2);
+    expect(rovingMove(boxes, 6, 'ArrowDown')).toBe(6);
+    expect(rovingMove(boxes, 2, 'End')).toBe(6);
+    expect(rovingMove(boxes, 5, 'Home')).toBe(0);
   });
 });

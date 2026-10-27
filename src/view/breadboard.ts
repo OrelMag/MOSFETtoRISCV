@@ -15,7 +15,7 @@ import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
 import { Camera, fitBox, installPanZoom } from './camera';
 import {
-  BB, type BbBoard, type BbCrumb, type BbDrill, fitBoards, pickArrangement, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
+  BB, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
 } from './bblayout';
 
@@ -42,6 +42,41 @@ const SEG: [number, number, number, number][] = [
 
 let uid = 0;
 
+/** An LED or a bus bit: what its card says and what a click lights. */
+interface NetInfo {
+  /** The LED (a bus bit: its LED on the strip's head). */
+  el: SVGGElement;
+  label: string;
+  /** Its net by path: 'a.q[3]'. */
+  name: string;
+  net: BbNet;
+  /** Its bit and its whole port's bits (low first), as indices into the bits update() reads. */
+  idx: number;
+  word: number[];
+  bus?: BbBus;
+  /** Computed on first use (undefined: not yet). */
+  driver?: BbDriver;
+}
+
+const NAV_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+
+/** A board's (or the bus strip's) controls, one Tab stop for them all: arrows move among them (rovingMove). */
+function roving(g: SVGGElement, items: { el: SVGGElement; box: Box }[]): void {
+  if (!items.length) return;
+  items.forEach((it, i) => it.el.setAttribute('tabindex', i ? '-1' : '0'));
+  g.addEventListener('focusin', (e) => {
+    const i = items.findIndex((it) => it.el === e.target);
+    if (i >= 0) items.forEach((it, k) => it.el.setAttribute('tabindex', k === i ? '0' : '-1'));
+  });
+  g.addEventListener('keydown', (e) => {
+    const i = items.findIndex((it) => it.el === e.target);
+    if (i < 0 || !NAV_KEYS.includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    items[rovingMove(items.map((it) => it.box), i, e.key)].el.focus();
+  });
+}
+
 export class BreadboardView {
   readonly el: HTMLElement;
   private svg: SVGSVGElement;
@@ -51,7 +86,14 @@ export class BreadboardView {
   private root: HierNode | null = null;
   private paints: ((bits: Bit[]) => void)[] = [];
   /** The chip whose card is shown (pinned: clicked, it stays until another click or Esc). */
-  private carded: { chip: BbChip; el: SVGGElement; live: HTMLElement | null } | null = null;
+  private carded: { chip?: BbChip; net?: NetInfo; el: Element; live: HTMLElement | null } | null = null;
+  /** LEDs and bus bits (and the bus's jumpers) by element. */
+  private netInfo = new Map<Element, NetInfo>();
+  /** The LED clicked: what drives it stays lit and its card shown, until another click or Esc. */
+  private pinNet: NetInfo | null = null;
+  private litEls: Element[] = [];
+  /** Per bus strip: each driving board's drive line (index into the bits) and its bus drivers (busDrivers). */
+  private busBoards = new Map<string, { title: string; line: string; idx: number; chips: BbChip[] }[]>();
   private pinned = false;
   private chipEls = new Map<BbChip, SVGGElement>();
   /** What highlight() can light: a board by its module, a bus strip by its path, a chip by its path or a prefix of it
@@ -82,12 +124,18 @@ export class BreadboardView {
     this.drillFoot = h('div', { class: 'bb-drill-foot', hidden: true });
     this.el = h('div', { class: 'bb-host', hidden: true }, this.caption, this.drillHead, this.svg, this.drillFoot, this.card);
     // a press on a chip, a switch or a board's title is theirs; anywhere else it pans, and a tap lets go of the chip
+    // (an LED or a bus jumper too: a tap on one lights what drives it)
     installPanZoom(this.svg, this.cam, {
       canStart: (e) => !(e.target as Element).closest('.bb-chip, .bb-sw, .bb-open'),
-      onTap: () => this.pick(null),
+      onTap: (target) => {
+        const hit = target.closest('.bb-led, .bb-wire-hit');
+        const info = hit ? this.netInfo.get(hit) : undefined;
+        if (info) this.pinLed(info);
+        else this.pick(null);
+      },
     });
     this.el.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && (this.pinned || this.selected)) {
+      if (e.key === 'Escape' && (this.pinned || this.selected || this.pinNet)) {
         e.stopPropagation();
         this.pick(null);
       }
@@ -111,6 +159,10 @@ export class BreadboardView {
     this.root = null;
     this.chipEls.clear();
     this.boardEls.clear();
+    this.netInfo.clear();
+    this.busBoards.clear();
+    this.pinNet = null;
+    this.litEls = [];
     this.lightable = [];
     this.switches = [];
     this.selected = null;
@@ -156,7 +208,7 @@ export class BreadboardView {
         : h('span', { class: `crumb${i === crumbs.length - 1 ? ' cur' : ''}`, ...(i === crumbs.length - 1 ? { 'aria-current': 'location' } : {}) }, c.label, kind));
     });
     this.drillHead.replaceChildren(nav, h('button', { class: 'btn sm bb-back', title: 'Back to all the boards (Esc goes up one level)', onclick: () => go('boards') }, '‹ Boards'));
-    if (!was || was.board.title !== d.board.title || !this.cam.fitted) this.fitDrill();
+    if (!was || was.board.title !== d.board.title || this.cam.fitted) this.fitDrill();
   }
 
   /** The drilled board, zoomed to the drill pane. */
@@ -240,6 +292,12 @@ export class BreadboardView {
         this.lightable.push({ key: c.path.join('.'), el, chip: { prefixes, board: g } });
       }
     }
+    for (const bus of layout.buses ?? []) {
+      const drv = busDrivers(layout, root, bus);
+      this.busBoards.set(bus.id, layout.boards.filter((b) => b.bus === bus.id && b.drives).map((b) => ({
+        title: b.title, line: (b.drives!.label ?? '').split(' · ')[0], idx: nets.net(b.drives!), chips: drv.get(b.title) ?? [],
+      })));
+    }
     const ics = layout.boards.reduce((n, b) => n + b.chips.length, 0);
     this.caption.textContent = `${layout.note ?? `${ics} chips`} · every LED is a net of the same simulation`;
     this.last = [];
@@ -263,7 +321,8 @@ export class BreadboardView {
       for (const p of this.paints) p(bits);
       this.last = bits;
     }
-    if (this.carded?.live) this.paintLive(this.carded.chip, this.carded.live, sim);
+    if (this.carded?.live && this.carded.chip) this.paintLive(this.carded.chip, this.carded.live, sim);
+    if (this.carded?.net && this.carded.live) this.paintNet(this.carded.net, this.carded.live);
     this.paintSwitches();
   }
 
@@ -282,9 +341,11 @@ export class BreadboardView {
       s('line', { class: 'bb-rail neg', x1: 1, x2: W - 1, y1: H - 1.3, y2: H - 1.3 }),
       s('line', { class: 'bb-rail pos', x1: 1, x2: W - 1, y1: H - 0.7, y2: H - 0.7 }));
     const title = s('text', { class: 'bb-title', x: 1.4, y: 3 }, b.title.toUpperCase());
+    const items: { el: SVGGElement; box: Box }[] = [];
     if (b.module) {
       const mod = b.module;
-      const t = s('g', { class: 'bb-open', role: 'button', tabindex: 0, 'aria-label': `${b.title}: open its schematic` }, title);
+      const t = s('g', { class: 'bb-open', role: 'button', 'aria-label': `${b.title} board: Enter opens it` }, title);
+      items.push({ el: t, box: { x: 1.4, y: 1.8, w: b.title.length * 0.8, h: 1.4 } });
       t.addEventListener('dblclick', () => this.hooks.open(mod));
       t.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -294,10 +355,15 @@ export class BreadboardView {
       });
       g.append(t);
     } else g.append(title);
-    b.chips.forEach((c, i) => g.append(this.drawChip(c, plan.chips[i], b)));
-    (b.beside ?? []).forEach((l, i) => g.append(this.drawLed(l.net, l.color ?? 'red', l.label, plan.beside[i], ctx)));
-    (b.switches ?? []).forEach((sw, i) => g.append(this.drawSwitch(sw.port, sw.bit ?? 0, sw.label, plan.switches[i])));
-    (b.leds ?? []).forEach((l, i) => g.append(this.drawLed(l.net, l.color ?? 'red', l.label, plan.leds[i], ctx)));
+    const add = (el: SVGGElement, box: Box) => {
+      items.push({ el, box });
+      g.append(el);
+    };
+    b.chips.forEach((c, i) => add(this.drawChip(c, plan.chips[i], b), plan.chips[i]));
+    (b.beside ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.beside[i], ctx), plan.beside[i]));
+    (b.switches ?? []).forEach((sw, i) => add(this.drawSwitch(sw.port, sw.bit ?? 0, sw.label, plan.switches[i]), plan.switches[i]));
+    (b.leds ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.leds[i], ctx), plan.leds[i]));
+    roving(g, items);
     if (plan.window) g.append(s('rect', { class: 'bb-segwin', x: plan.window.x, y: plan.window.y, width: plan.window.w, height: plan.window.h, rx: 0.3 }));
     (b.digits ?? []).forEach((d, i) => g.append(this.drawDigit(d, plan.digits[i], ctx)));
     // driving / loading: a ring and a pill
@@ -333,7 +399,7 @@ export class BreadboardView {
     const n = c.dip / 2;
     const name = `${c.ref ? `${c.ref}, ` : ''}${c.part}`;
     const g = s('g', {
-      class: `bb-chip${c.path ? '' : ' drawn'}`, transform: `translate(${r.x} ${r.y})`, role: 'button', tabindex: 0,
+      class: `bb-chip${c.path ? '' : ' drawn'}`, transform: `translate(${r.x} ${r.y})`, role: 'button',
       'aria-label': c.path ? `${name} on ${board.title}: Enter opens it, Space selects it` : `${name} on ${board.title} (drawn, not simulated)`,
     });
     g.append(s('rect', { class: 'bb-sel', x: -0.7, y: -1, width: r.w + 1.4, height: r.h + 2, rx: 0.4 }));
@@ -368,19 +434,23 @@ export class BreadboardView {
   private drawLed(net: BbNet, color: string, label: string | undefined, r: Box, ctx: { id: string; nets: BbNets }): SVGGElement {
     const i = ctx.nets.net(net);
     const cx = r.w / 2, cy = BB.led / 2;
-    const what = `${label ? `${label}: ` : ''}${[...net.path, net.port].join('.')}${net.bit !== undefined ? `[${net.bit}]` : ''}`;
-    const g = s('g', { class: `bb-led c-${color}`, transform: `translate(${r.x} ${r.y})`, 'data-v': 'x', role: 'img', 'aria-label': `${what} unknown` },
-      s('title', null, what),
+    const width = (this.root && findNode(this.root, net.path)?.ports[net.port]?.length) ?? 1;
+    const name = `${[...net.path, net.port].join('.')}${width > 1 ? `[${net.bit ?? 0}]` : ''}`;
+    const what = label && label !== net.port ? `${label}, ${name}` : name;
+    const g = s('g', { class: `bb-led c-${color}`, transform: `translate(${r.x} ${r.y})`, 'data-v': 'x', role: 'button', 'aria-pressed': 'false', 'aria-label': `LED ${what} unknown` },
+      s('rect', { class: 'hit', x: Math.min(0, cx - 0.8), y: -0.3, width: Math.max(r.w, 1.6), height: r.h + 0.3 }),
       s('circle', { class: 'halo', cx, cy, r: 0.95, filter: `url(#${ctx.id}-glow)` }),
       s('circle', { class: 'lens', cx, cy, r: 0.55 }));
     if (label) g.append(s('text', { class: 'bb-ll', x: cx, y: r.h - 0.12 }, label));
+    const info: NetInfo = { el: g, label: label && label !== net.port ? label : name, name, net, idx: i, word: width > 1 ? ctx.nets.bus({ ...net, bit: 0 }, width) : [i] };
+    this.netLed(g, info);
     let shown = '';
     this.paints.push((bits) => {
       const v = vOf(bits[i]);
       if (v === shown) return;
       shown = v;
       g.dataset.v = v;
-      g.setAttribute('aria-label', `${what} ${v === 'x' ? 'unknown' : v === '1' ? 'on' : 'off'}`);
+      g.setAttribute('aria-label', `LED ${what} ${v === 'x' ? 'unknown' : v === '1' ? 'on' : 'off'}`);
     });
     return g;
   }
@@ -390,7 +460,7 @@ export class BreadboardView {
   private drawSwitch(port: string, bit: number, label: string | undefined, r: Box): SVGGElement {
     const x = (r.w - BB.sw) / 2;
     const what = `${label ?? port}${label ? '' : `[${bit}]`}`;
-    const g = s('g', { class: 'bb-sw', transform: `translate(${r.x} ${r.y})`, role: 'button', tabindex: 0, 'aria-pressed': 'false', 'aria-label': `Switch ${what}` },
+    const g = s('g', { class: 'bb-sw', transform: `translate(${r.x} ${r.y})`, role: 'button', 'aria-pressed': 'false', 'aria-label': `Switch ${what}` },
       s('title', null, `Switch ${what}: click to flip`),
       // a finger's target: the bank's switches are a hole wide
       s('rect', { class: 'hit', x: 0, y: -0.6, width: r.w, height: r.h + 1.2 }),
@@ -449,12 +519,13 @@ export class BreadboardView {
     // the jumpers, MSB on the left
     const pitch = Math.min(BB.busPitch, (W - 1) / n);
     const x0 = W / 2 - (pitch * (n - 1)) / 2;
-    const wires: SVGLineElement[] = [];
+    const wires: SVGLineElement[] = [], hits: SVGLineElement[] = [];
     for (let k = 0; k < n; k++) {
       const x = x0 + (n - 1 - k) * pitch;
       wires.push(s('line', { class: 'bb-wire', x1: x, x2: x, y1: BB.busHead, y2: H, 'data-v': 'x' }));
+      hits.push(s('line', { class: 'bb-wire-hit', x1: x, x2: x, y1: BB.busHead, y2: H, 'stroke-width': pitch }));
     }
-    g.append(...wires);
+    g.append(...wires, ...hits);
     // the head: a small board with an LED per bit and the value
     const rows = n <= 4 ? 1 : 2, per = Math.ceil(n / rows);
     const lp = Math.min(1.6, (W - 1.6) / per);
@@ -465,11 +536,16 @@ export class BreadboardView {
     for (let k = 0; k < n; k++) {
       const row = Math.floor(k / per), col = k % per;
       const cx = W / 2 - (lp * (per - 1)) / 2 + col * lp, cy = 3.4 + row * 1.25;
-      const led = s('g', { class: 'bb-led c-yellow', 'data-v': 'x' },
+      const bit = n - 1 - k;
+      const led = s('g', { class: 'bb-led c-yellow', 'data-v': 'x', role: 'button', 'aria-pressed': 'false', 'aria-label': `${b.title ?? 'Bus'} bit ${bit}` },
         s('circle', { class: 'halo', cx, cy, r: 0.8, filter: `url(#${ctx.id}-glow)` }), s('circle', { class: 'lens', cx, cy, r: 0.45 }));
       leds.push(led);
+      const info: NetInfo = { el: led, label: `${b.title ?? 'Bus'} bit ${bit}`, name: `${[...b.path, b.port].join('.')}[${bit}]`, net: { path: b.path, port: b.port, bit }, idx: idx[bit], word: idx, bus: b };
+      this.netLed(led, info);
+      this.netLed(hits[bit], info, led);
     }
     g.append(...leds);
+    roving(g, leds.map((el, k) => ({ el, box: { x: k, y: 0, w: 1, h: 1 } })));
     const val = s('text', { class: 'bb-val', x: W / 2, y: BB.busHead - 0.55 });
     g.append(val);
     let shown = '';
@@ -490,10 +566,113 @@ export class BreadboardView {
     return g;
   }
 
+  // ---- LEDs and bus bits ----
+
+  /** Hover, focus and keys of an LED (or a bus jumper standing for its bit's LED `led`). */
+  private netLed(el: SVGElement, info: NetInfo, led: SVGGElement = info.el): void {
+    this.netInfo.set(el, info);
+    el.addEventListener('pointerenter', () => this.showNetCard(info, el));
+    el.addEventListener('pointerleave', () => this.hideCard());
+    if (el !== led) return;
+    el.addEventListener('focus', () => this.showNetCard(info, el));
+    el.addEventListener('blur', () => this.hideCard());
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.pinLed(info);
+      }
+    });
+  }
+
+  /** Who drives an LED's net (computed once). */
+  private driverOfNet(info: NetInfo): BbDriver {
+    if (info.driver === undefined) {
+      const lay = this.shown();
+      info.driver = lay && this.root ? driverOf(lay, this.root, netIdOf(this.root, info.net)) : null;
+    }
+    return info.driver;
+  }
+
+  /** The boards driving a bus strip now (their drive line is 1). */
+  private drivingNow(bus: BbBus): { title: string; line: string; chips: BbChip[] }[] {
+    return (this.busBoards.get(bus.id) ?? []).filter((b) => this.last[b.idx] === B1);
+  }
+
+  /** What an LED's card and a click on it light: the chip that drives it (a bus bit: the boards' bus drivers now). */
+  private driverEls(info: NetInfo): Element[] {
+    if (info.bus) return this.drivingNow(info.bus).flatMap((b) => b.chips.map((c) => this.chipEls.get(c)).filter((e): e is SVGGElement => !!e));
+    const d = this.driverOfNet(info);
+    const el = d && 'chip' in d ? this.chipEls.get(d.chip) : undefined;
+    return el ? [el] : [];
+  }
+
+  private light(info: NetInfo | null): void {
+    for (const el of this.litEls) el.classList.remove('lit');
+    this.litEls = info ? this.driverEls(info) : [];
+    for (const el of this.litEls) el.classList.add('lit');
+  }
+
+  /** Pin an LED (again: let it go): what drives it stays lit, its card shown. */
+  private pinLed(info: NetInfo): void {
+    if (this.pinNet === info) return this.pick(null);
+    this.pick(null, false);
+    this.pinNet = info;
+    info.el.setAttribute('aria-pressed', 'true');
+    info.el.classList.add('pinned');
+    this.showNetCard(info, info.el);
+  }
+
+  private showNetCard(info: NetInfo, el: Element): void {
+    const live = h('div', { class: 'net-live' });
+    this.card.replaceChildren(
+      h('div', { class: 'bb-card-h' }, h('b', null, info.label), info.label !== info.name ? h('span', null, info.name) : null),
+      live,
+      h('p', { class: 'foot' }, this.pinNet === info ? 'Lit: what drives it · click again or Esc to let go' : 'Click to keep what drives it lit'));
+    this.card.hidden = false;
+    this.carded = { net: info, el, live };
+    this.paintNet(info, live, true);
+    this.light(info);
+    this.placeCard(el);
+  }
+
+  /** An LED's card, live: its value and its port's (in the site's radix), and who drives it. */
+  private paintNet(info: NetInfo, el: HTMLElement, force = false): void {
+    const bits = this.last;
+    if (!bits.length) return;
+    const v = vOf(bits[info.idx]).toUpperCase(), word = info.word.map((i) => bits[i]);
+    const port = info.bus ? [...info.bus.path, info.bus.port].join('.') : [...info.net.path, info.net.port].join('.');
+    const value = word.length > 1 ? `${info.name} = ${v} · ${port} = ${formatBits(word, this.radix)}` : `${info.name} = ${v}`;
+    const chipName = (c: BbChip) => [c.ref, c.part].filter(Boolean).join(' · ');
+    let drive: string;
+    if (info.bus) {
+      const now = this.drivingNow(info.bus);
+      drive = !now.length ? 'No board drives the bus now: its pull-downs read 0.'
+        : `Driven now by ${now.map((b) => `${b.title}${b.line ? ` (${b.line})` : ''}${b.chips.length ? ` through ${b.chips.map(chipName).join(', ')}` : ''}`).join(' and ')}${now.length > 1 ? ': two drivers at once, a clash' : ''}.`;
+    } else {
+      const d = this.driverOfNet(info);
+      const wide = (n: number[] | undefined) => (n?.length ?? 1) > 1;
+      drive = !d ? 'Driven inside its module (by no chip of its own on the boards).'
+        : 'chip' in d ? `Driven by ${chipName(d.chip)}, its output ${d.port}${this.root && wide(findNode(this.root, d.chip.path!)?.ports[d.port]) ? `[${d.bit}]` : ''}.`
+          : `Set by the scene's input ${d.input}${wide(this.root?.ports[d.input]) ? `[${d.bit}]` : ''}.`;
+    }
+    const key = `${value}|${drive}`;
+    if (!force && el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.replaceChildren(h('p', { class: 'live' }, value), h('p', null, drive));
+    // a bus bit's drivers change from step to step: what is lit follows
+    if (!force && info.bus) this.light(info);
+  }
+
   // ---- the chip card ----
 
-  /** Select a chip (its card stays) or none. */
-  private pick(c: BbChip | null): void {
+  /** Select a chip (its card stays) or none; a pinned LED lets go. `notify`: tell the stage (the inspector). */
+  private pick(c: BbChip | null, notify = true): void {
+    if (this.pinNet) {
+      this.pinNet.el.setAttribute('aria-pressed', 'false');
+      this.pinNet.el.classList.remove('pinned');
+      this.pinNet = null;
+      this.light(null);
+    }
     if (this.selected) this.chipEls.get(this.selected)?.classList.remove('sel');
     this.selected = c;
     this.pinned = !!c;
@@ -502,11 +681,12 @@ export class BreadboardView {
       el.classList.add('sel');
       this.showCard(c, el, true);
     } else this.hideCard(true);
-    this.hooks.select(c);
+    if (notify) this.hooks.select(c);
   }
 
   private showCard(c: BbChip, el: SVGGElement, force = false): void {
     if (this.pinned && !force && this.carded?.chip !== c) return;
+    if (!this.pinNet) this.light(null);
     const node = c.path && this.root ? findNode(this.root, c.path) : null;
     const def = node?.def;
     const card = this.card;
@@ -533,7 +713,7 @@ export class BreadboardView {
     this.lastSim = sim;
   }
 
-  private placeCard(el: SVGGElement): void {
+  private placeCard(el: Element): void {
     const host = this.el.getBoundingClientRect(), r = el.getBoundingClientRect(), card = this.card;
     const cw = card.offsetWidth, ch = card.offsetHeight;
     let x = r.left + r.width / 2 - host.left - cw / 2;
@@ -548,6 +728,12 @@ export class BreadboardView {
   }
 
   private hideCard(force = false): void {
+    if (this.pinNet && !force) {
+      // back to the pinned LED's card
+      if (this.carded?.net !== this.pinNet) this.showNetCard(this.pinNet, this.pinNet.el);
+      return;
+    }
+    if (this.carded?.net) this.light(null);
     if (this.pinned && !force) {
       // back to the pinned chip's card
       if (this.selected && this.carded?.chip !== this.selected) this.showCard(this.selected, this.chipEls.get(this.selected)!, true);

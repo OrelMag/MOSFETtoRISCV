@@ -484,3 +484,87 @@ export function drillPane(w: number, h: number, inset = 0): { stacked: boolean; 
   if (free < DRILL_STACK_PX) return { stacked: true, w: free, h: Math.round(Math.max(Math.min(h * 0.5, 460), Math.min(h, 160))) };
   return { stacked: false, w: Math.round(Math.min(620, free * 0.46)), h };
 }
+
+// ---- what drives a net ------------------------------------------------------------------------------------
+
+/** What drives an LED's net: an output of a chip on the boards, an input pin of the scene (a switch), or neither (a
+ *  net driven inside a module by no chip the boards draw: a wired OR, a constant). */
+export type BbDriver = { chip: BbChip; port: string; bit: number } | { input: string; bit: number } | null;
+
+/** The flat net of a layout's bit (-1: the design has no such port). */
+export function netIdOf(root: HierNode, n: { path: string[]; port: string; bit?: number }): number {
+  return findNode(root, n.path)?.ports[n.port]?.[n.bit ?? 0] ?? -1;
+}
+
+/** Who drives flat net `id`: the chips' outputs first (in board order), then the root's inputs. */
+export function driverOf(l: BreadboardLayout, root: HierNode, id: number): BbDriver {
+  if (id < 0) return null;
+  for (const b of l.boards) {
+    for (const chip of b.chips) {
+      const node = chip.path && findNode(root, chip.path);
+      if (!node) continue;
+      for (const p of node.def.ports) {
+        if (p.dir !== 'out') continue;
+        const bit = node.ports[p.name]?.indexOf(id) ?? -1;
+        if (bit >= 0) return { chip, port: p.name, bit };
+      }
+    }
+  }
+  for (const p of root.def.ports) {
+    if (p.dir !== 'in') continue;
+    const bit = root.ports[p.name]?.indexOf(id) ?? -1;
+    if (bit >= 0) return { input: p.name, bit };
+  }
+  return null;
+}
+
+/** Per board, the chips whose outputs feed the bus strip's instance (its 3-state drivers: the 245s), by board title. */
+export function busDrivers(l: BreadboardLayout, root: HierNode, bus: BbBus): Map<string, BbChip[]> {
+  const node = findNode(root, bus.path);
+  const ins = new Set<number>();
+  for (const p of node?.def.ports ?? []) if (p.dir === 'in') for (const id of node!.ports[p.name] ?? []) ins.add(id);
+  const out = new Map<string, BbChip[]>();
+  for (const b of l.boards) {
+    if (b.bus !== bus.id) continue;
+    const chips = b.chips.filter((c) => {
+      const n = c.path && findNode(root, c.path);
+      return !!n && n.def.ports.some((p) => p.dir === 'out' && (n.ports[p.name] ?? []).some((id) => ins.has(id)));
+    });
+    if (chips.length) out.set(b.title, chips);
+  }
+  return out;
+}
+
+// ---- the keyboard: one roving stop per board -------------------------------------------------------------
+
+/**
+ * Where an arrow key moves the focus among a board's controls (boxes in board order): Left / Right the previous /
+ * next, Home / End the first / last, Up / Down the nearest one in the row above / below (the nearest row, then the
+ * nearest across). The same index when there is none that way.
+ */
+export function rovingMove(boxes: readonly Box[], i: number, key: string): number {
+  const n = boxes.length;
+  if (!n) return i;
+  if (key === 'ArrowLeft') return Math.max(0, i - 1);
+  if (key === 'ArrowRight') return Math.min(n - 1, i + 1);
+  if (key === 'Home') return 0;
+  if (key === 'End') return n - 1;
+  if (key !== 'ArrowUp' && key !== 'ArrowDown') return i;
+  const c = (b: Box) => [b.x + b.w / 2, b.y + b.h / 2];
+  const [cx, cy] = c(boxes[i]);
+  const dir = key === 'ArrowDown' ? 1 : -1;
+  const tol = boxes[i].h / 2;
+  let row = Infinity;
+  for (const b of boxes) {
+    const dy = (c(b)[1] - cy) * dir;
+    if (dy > tol) row = Math.min(row, dy);
+  }
+  if (row === Infinity) return i;
+  let best = i, bx = Infinity;
+  boxes.forEach((b, k) => {
+    const [x, y] = c(b);
+    const dy = (y - cy) * dir;
+    if (dy > tol && dy <= row + Math.max(tol, 1) && Math.abs(x - cx) < bx) [best, bx] = [k, Math.abs(x - cx)];
+  });
+  return best;
+}

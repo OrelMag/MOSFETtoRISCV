@@ -127,6 +127,13 @@ svg.breadboard:active { cursor: grabbing; }
 .bb-led[data-v='1'] .lens { fill: var(--on); }
 .bb-led[data-v='1'] .halo { opacity: 0.75; }
 .bb-led[data-v='x'] .lens { fill: var(--bb-led-x); }
+.bb-led { cursor: pointer; outline: none; }
+.bb-led .hit { fill: transparent; }
+.bb-led:focus-visible .lens, .bb-led.pinned .lens { stroke: var(--bb-sel); stroke-width: 0.22; }
+.bb-led:hover .lens { stroke: color-mix(in srgb, var(--bb-sel) 60%, transparent); stroke-width: 0.16; }
+/* what an LED's card names as its driver: lit while it is shown, kept lit while the LED is pinned */
+.bb-chip.lit .bb-sel { stroke: var(--bb-sel); stroke-width: 0.3; filter: drop-shadow(0 0 0.5px var(--bb-sel)); }
+.bb-wire-hit { stroke: transparent; fill: none; cursor: pointer; }
 .bb-ll { font-size: 0.95px; font-weight: 500; fill: var(--bb-label); text-anchor: middle; }
 .bb-val { font-size: 1.05px; font-weight: 600; fill: var(--bb-label); text-anchor: middle; }
 
@@ -169,6 +176,7 @@ svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); }
 .bb-card p { margin: 5px 0 0; }
 .bb-card .live { font: 12px var(--font-mono); color: var(--text); }
 .bb-card .foot { color: var(--muted); font-size: 12px; }
+.bb-card .net-live p { margin: 5px 0 0; }
 
 /* ---- the pin card (a chip open on the schematic) ---- */
 .bb-pincard { pointer-events: auto; padding: 10px 12px; max-width: 300px; }
