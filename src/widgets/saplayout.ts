@@ -4,7 +4,7 @@
 // switches on its inputs, for the chapter's steps that test a module alone (as Ben tests each board before the next).
 
 import { SAP_COMPUTER, type SapChip, sapChips } from '../lib/sap';
-import { TTL_PART, TTL_PINS } from '../lib/ttl';
+import { TTL_ACTIVE_LOW, TTL_PART, TTL_PINS } from '../lib/ttl';
 import { CTRL_LABEL, SAP_CTRL } from '../sap/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { type BbActive, type BbBoard, type BbBus, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
@@ -66,7 +66,8 @@ export const SAP_ROLES: Record<string, string> = {
 export function pinsOf(kind: string): Record<number, BbPin> {
   const out: Record<number, BbPin> = {};
   (TTL_PINS[kind] ?? []).forEach((p, i) => {
-    out[i + 1] = p.port ? { port: p.port, bit: p.bit, name: p.name } : p.name === 'VCC' || p.name === 'GND' ? p.name : 'NC';
+    const low = TTL_ACTIVE_LOW[kind]?.includes(p.name);
+    out[i + 1] = p.port ? { port: p.port, bit: p.bit, name: p.name, ...(low ? { low } : {}) } : p.name === 'VCC' || p.name === 'GND' ? p.name : 'NC';
   });
   return out;
 }

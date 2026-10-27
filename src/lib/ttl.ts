@@ -100,7 +100,7 @@ export const TTL_PINS: Record<string, TtlPin[]> = {
   ],
   ls76: [
     P('1CLK', 'clk1'), P('1PRE', 'pre1_n'), P('1CLR', 'clr1_n'), P('1J', 'j1'), VCC, P('2CLK', 'clk2'), P('2PRE', 'pre2_n'), P('2CLR', 'clr2_n'),
-    P('2J', 'j2'), P('2Q', 'q2_n'), P('2Q', 'q2'), P('2K', 'k2'), GND, P('1Q', 'q1_n'), P('1Q', 'q1'), P('1K', 'k1'),
+    P('2J', 'j2'), P('2Q̄', 'q2_n'), P('2Q', 'q2'), P('2K', 'k2'), GND, P('1Q̄', 'q1_n'), P('1Q', 'q1'), P('1K', 'k1'),
   ],
   at28c16: [
     P('A7', 'addr', 7), P('A6', 'addr', 6), P('A5', 'addr', 5), P('A4', 'addr', 4), P('A3', 'addr', 3), P('A2', 'addr', 2),

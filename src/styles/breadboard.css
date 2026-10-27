@@ -158,9 +158,10 @@ svg.breadboard:active { cursor: grabbing; }
 .bb-wire { stroke: var(--bb-wire); stroke-width: 0.36; stroke-linecap: round; }
 .bb-wire[data-v='1'] { stroke: var(--bb-wire-on); filter: drop-shadow(0 0 0.4px var(--bb-wire-on)); }
 .bb-wire[data-v='x'] { stroke-dasharray: 0.6 0.4; }
-svg.breadboard[data-wires='value'] .bb-wire { stroke: var(--w0); filter: none; }
-svg.breadboard[data-wires='value'] .bb-wire[data-v='1'] { stroke: var(--w1); }
-svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); }
+svg.breadboard[data-wires='value'] .bb-wire { stroke: var(--w0); stroke-width: 0.6; opacity: 0.55; filter: none; }
+svg.breadboard[data-wires='value'] .bb-wire[data-v='1'] { stroke: var(--w1); opacity: 1; filter: drop-shadow(0 0 0.45px var(--w1)); }
+svg.breadboard[data-wires='value'] .bb-stub { opacity: 0.45; }
+svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); opacity: 1; }
 
 /* ---- the chip's card ---- */
 .bb-card {
@@ -192,6 +193,8 @@ svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); }
 .bb-dip .pin .n { width: 18px; color: var(--muted); text-align: right; }
 .bb-dip .side.r .pin .n { text-align: left; }
 .bb-dip .pin .nm { min-width: 30px; }
+/* active low, as the datasheets draw it */
+.bb-dip .pin .nm.low { text-decoration: overline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .bb-dip .side.r .pin .nm { text-align: right; }
 .bb-dip .pkg { position: relative; background: var(--bb-chip); border-radius: 4px; margin: 2px 0; }
 .bb-dip .pkg .notch { position: absolute; left: 50%; top: -1px; width: 14px; height: 7px; margin-left: -7px; border-radius: 0 0 7px 7px; background: var(--surface); }

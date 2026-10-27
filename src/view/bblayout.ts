@@ -48,7 +48,7 @@ export interface BbDigit {
 }
 
 /** A DIP pin: a bit of the chip's port (named `name` on the pin card, else port[bit]), or a supply pin. */
-export type BbPin = { port: string; bit?: number; name?: string } | 'VCC' | 'GND' | 'NC';
+export type BbPin = { port: string; bit?: number; name?: string; low?: boolean } | 'VCC' | 'GND' | 'NC';
 
 export interface BbChip {
   /** The instance it stands for, from the scene root; absent: a chip that is drawn only (a 555 the stage's clock stands in for). */
@@ -435,6 +435,19 @@ export const HEX_SEGMENTS = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7
 export function pinSides(dip: number): { left: number[]; right: number[] } {
   const n = dip / 2;
   return { left: Array.from({ length: n }, (_, i) => i + 1), right: Array.from({ length: n }, (_, i) => dip - i) };
+}
+
+/** A chip's output pins in pin order, each with its name on the package and its flat net: what its card reads out (a
+ *  gate package's six outputs are six pins, not one word). */
+export function outputPins(chip: BbChip, node: HierNode): { n: number; name: string; net: number }[] {
+  const out: { n: number; name: string; net: number }[] = [];
+  for (const [k, pin] of Object.entries(chip.pins ?? {})) {
+    if (typeof pin === 'string') continue;
+    const p = node.def.ports.find((q) => q.name === pin.port);
+    const net = node.ports[pin.port]?.[pin.bit ?? 0];
+    if (p?.dir === 'out' && net !== undefined) out.push({ n: Number(k), name: pinName(pin, p.width), net });
+  }
+  return out.sort((a, b) => a.n - b.n);
 }
 
 /** A pin's name on the card. */

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CPU4_BCD, CPU4_STATE } from '../src/lib/cpu4';
-import { flatten } from '../src/sim/flatten';
+import { findNode, flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
-import { BB_MARGIN, BbNets, type BreadboardLayout, busDrivers, defAt, drillCrumbs, drillOf, drillPane, driverOf, fitBoards, netIdOf, rovingMove, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { BB_MARGIN, BbNets, outputPins, partText, type BreadboardLayout, busDrivers, defAt, drillCrumbs, drillOf, drillPane, driverOf, fitBoards, netIdOf, rovingMove, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
 import { SAP_COMPUTER } from '../src/lib/sap';
-import { sapLayout } from '../src/widgets/saplayout';
+import { pinsOf, sapLayout } from '../src/widgets/saplayout';
+import { TTL_ACTIVE_LOW, TTL_PINS } from '../src/lib/ttl';
 import { insideOf } from '../src/view/breadboard';
 import { register } from '../src/lib/sequential';
 import { CPU4_BB } from './fixtures/bbcpu4';
@@ -229,5 +230,38 @@ describe('breadboard view: LEDs and keys', () => {
     expect(rovingMove(boxes, 6, 'ArrowDown')).toBe(6);
     expect(rovingMove(boxes, 2, 'End')).toBe(6);
     expect(rovingMove(boxes, 5, 'Home')).toBe(0);
+  });
+});
+
+describe('breadboard view: print and pins', () => {
+  it('fits a part number beside the notch, squeezing only a narrow package', () => {
+    const wide = partText('74LS173', 8);
+    expect(wide.size).toBeCloseTo(1.75);
+    // a little narrower at most (91 %)
+    expect(wide.squeeze! / (7 * 0.6 * wide.size)).toBeGreaterThan(0.9);
+    expect(partText('28C16', 12).squeeze).toBeNull();
+    const n555 = partText('NE555', 4);
+    expect(n555.room).toBeCloseTo(2.7);
+    // its glyphs no narrower than 80 %
+    expect(n555.size * 0.6 * 5 * 0.8).toBeLessThanOrEqual(n555.room + 1e-9);
+  });
+
+  it('pin names are unique per package and every active-low name is a pin', () => {
+    for (const [k, pins] of Object.entries(TTL_PINS)) {
+      const names = pins.filter((p) => p.port).map((p) => p.name);
+      expect(new Set(names).size, k).toBe(names.length);
+      for (const n of TTL_ACTIVE_LOW[k] ?? []) expect(pins.some((p) => p.name === n), `${k} ${n}`).toBe(true);
+    }
+    expect(pinsOf('ls173')[9]).toMatchObject({ name: 'G1', low: true });
+    expect(pinsOf('ls173')[3]).not.toHaveProperty('low');
+  });
+
+  it('reads a gate package out pin by pin', () => {
+    const root = flatten(SAP_COMPUTER).root;
+    const l = sapLayout(SAP_COMPUTER);
+    const inv = l.boards.find((b) => b.title === 'A register')!.chips.find((c) => c.part === '74LS04')!;
+    const pins = outputPins(inv, findNode(root, inv.path!)!);
+    expect(pins.map((p) => p.n)).toEqual([2, 4, 6, 8, 10, 12]);
+    expect(pins[0].name).toMatch(/Y/);
   });
 });

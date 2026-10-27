@@ -15,7 +15,7 @@ import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
 import { Camera, fitBox, installPanZoom } from './camera';
 import {
-  BB, BB_TEXT, partText, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
+  BB, BB_TEXT, partText, type BbBoard, type BbCrumb, type BbDrill, type BbDriver, busDrivers, outputPins, driverOf, fitBoards, netIdOf, pickArrangement, rovingMove, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
 } from './bblayout';
 
@@ -122,7 +122,7 @@ export class BreadboardView {
     this.card = h('div', { class: 'bb-card', role: 'tooltip', hidden: true });
     this.drillHead = h('div', { class: 'bb-drill-head', hidden: true });
     this.drillFoot = h('div', { class: 'bb-drill-foot', hidden: true });
-    this.el = h('div', { class: 'bb-host', hidden: true }, this.caption, this.drillHead, this.svg, this.drillFoot, this.card);
+    this.el = h('div', { class: 'bb-host', role: 'region', 'aria-label': 'Breadboard view', hidden: true }, this.caption, this.drillHead, this.svg, this.drillFoot, this.card);
     // a press on a chip, a switch or a board's title is theirs; anywhere else it pans, and a tap lets go of the chip
     // (an LED or a bus jumper too: a tap on one lights what drives it)
     installPanZoom(this.svg, this.cam, {
@@ -485,7 +485,8 @@ export class BreadboardView {
 
   private drawSwitch(port: string, bit: number, label: string | undefined, r: Box): SVGGElement {
     const x = (r.w - BB.sw) / 2;
-    const what = `${label ?? port}${label ? '' : `[${bit}]`}`;
+    const wide = (this.root?.ports[port]?.length ?? 1) > 1;
+    const what = label && label !== port ? label : wide ? `${port}[${bit}]` : port;
     const g = s('g', { class: 'bb-sw', transform: `translate(${r.x} ${r.y})`, role: 'button', 'aria-pressed': 'false', 'aria-label': `Switch ${what}` },
       s('title', null, `Switch ${what}: click to flip`),
       // a finger's target: the bank's switches are a hole wide
@@ -774,8 +775,16 @@ export class BreadboardView {
   private paintLive(c: BbChip, el: HTMLElement, sim: Sim): void {
     const node = c.path && this.root ? findNode(this.root, c.path) : null;
     if (!node) return;
-    const outs = node.def.ports.filter((p) => p.dir === 'out').slice(0, 4);
-    const txt = outs.map((p) => `${p.name} = ${formatBits(sim.getBits(node.ports[p.name]), p.width === 1 ? 'bin' : this.radix)}`).join(' · ');
+    // by pin where the boards know the package (a 74LS04's six outputs are six gates, not a word), else by port
+    const pins = outputPins(c, node);
+    let txt: string;
+    if (pins.length) {
+      const bits = sim.getBits(pins.map((p) => p.net));
+      txt = `Outputs: ${pins.map((p, i) => `${p.name} ${vOf(bits[i])}`).join(' · ')}`;
+    } else {
+      const outs = node.def.ports.filter((p) => p.dir === 'out').slice(0, 4);
+      txt = outs.map((p) => `${p.name} = ${formatBits(sim.getBits(node.ports[p.name]), p.width === 1 ? 'bin' : this.radix)}`).join(' · ');
+    }
     if (el.textContent !== txt) el.textContent = txt;
   }
 }
@@ -813,24 +822,28 @@ export function drillNotes(d: BbDrill, def: ComponentDef | undefined): HTMLEleme
  */
 export function pinCard(chip: BbChip, node: HierNode, back: () => void): { el: HTMLElement; update(sim: Sim): void } {
   const sides = pinSides(chip.dip);
-  const dots: { el: HTMLElement; net: number | null }[] = [];
+  const dots: { el: HTMLElement; net: number | null; row: HTMLElement; what: string }[] = [];
   const pinRow = (n: number, right: boolean) => {
     const pin: BbPin | undefined = chip.pins?.[n];
     const port = typeof pin === 'object' ? node.def.ports.find((p) => p.name === pin.port) : undefined;
     const net = typeof pin === 'object' ? node.ports[pin.port]?.[pin.bit ?? 0] ?? null : null;
-    const dot = h('span', { class: `dot${net === null ? ' supply' : ''}`, 'data-v': 'x' });
-    dots.push({ el: dot, net });
-    const name = h('span', { class: 'nm' }, pinName(pin, port?.width ?? 1));
+    const dot = h('span', { class: `dot${net === null ? ' supply' : ''}`, 'data-v': 'x', 'aria-hidden': 'true' });
+    const nm = pinName(pin, port?.width ?? 1);
+    const low = typeof pin === 'object' && !!pin.low;
+    const name = h('span', { class: `nm${low ? ' low' : ''}` }, nm);
     const num = h('span', { class: 'n' }, String(n));
-    return h('div', { class: 'pin', title: typeof pin === 'object' ? `pin ${n}: ${pin.port}${port && port.width > 1 ? `[${pin.bit ?? 0}]` : ''}` : `pin ${n}` },
-      ...(right ? [dot, name, num] : [num, name, dot]));
+    // the value is in words too, not only the dot's colour
+    const what = `pin ${n} ${nm}${low ? ' (active low)' : ''}${typeof pin === 'object' ? `, ${pin.port}${port && port.width > 1 ? `[${pin.bit ?? 0}]` : ''}` : ''}`;
+    const row = h('div', { class: 'pin', role: 'listitem', title: what, 'aria-label': what }, ...(right ? [dot, name, num] : [num, name, dot]));
+    dots.push({ el: dot, net, row, what });
+    return row;
   };
   const el = h('div', { class: 'panel bb-pincard', role: 'group', 'aria-label': `${chip.ref ?? chip.part} pins` },
     h('h4', null, `${chip.ref ? `${chip.ref} · ` : ''}${chip.part} pins, live`),
     h('div', { class: 'bb-dip' },
-      h('div', { class: 'side' }, sides.left.map((n) => pinRow(n, false))),
+      h('div', { class: 'side', role: 'list', 'aria-label': 'left side, pin 1 at the notch' }, sides.left.map((n) => pinRow(n, false))),
       h('div', { class: 'pkg', 'aria-hidden': 'true' }, h('span', { class: 'notch' })),
-      h('div', { class: 'side r' }, sides.right.map((n) => pinRow(n, true)))),
+      h('div', { class: 'side r', role: 'list', 'aria-label': 'right side' }, sides.right.map((n) => pinRow(n, true)))),
     h('button', { class: 'btn sm', onclick: back }, 'Back to the board'));
   const nets = dots.filter((d) => d.net !== null);
   return {
@@ -839,7 +852,11 @@ export function pinCard(chip: BbChip, node: HierNode, back: () => void): { el: H
       const bits = sim.getBits(nets.map((d) => d.net!));
       nets.forEach((d, i) => {
         const v = vOf(bits[i]);
-        if (d.el.dataset.v !== v) d.el.dataset.v = v;
+        if (d.el.dataset.v === v) return;
+        d.el.dataset.v = v;
+        const t = `${d.what} = ${v === 'x' ? 'X (unknown)' : v}`;
+        d.row.title = t;
+        d.row.setAttribute('aria-label', t);
       });
     },
   };
