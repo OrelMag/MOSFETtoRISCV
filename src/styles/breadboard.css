@@ -189,11 +189,46 @@ svg.breadboard[data-wires='value'] .bb-wire[data-v='x'] { stroke: var(--wx); }
 .bb-dip .dot.supply { background: transparent; border: 1px solid var(--muted); box-sizing: border-box; box-shadow: none; }
 .bb-pincard > .btn { margin-top: 8px; }
 
+/* ---- the drill: a chip opened from its board, the board (left, or on top) beside its inside (Stage.syncDrill) ---- */
+.stage.bb-drill .canvas > .bb-host { right: auto; width: var(--bb-drill-w, 46%); z-index: 3; border-right: 1px solid var(--border); }
+.stage.bb-drill.bb-stacked .canvas > .bb-host { top: var(--bb-top, 0px); bottom: auto; height: var(--bb-drill-h, 50%); border-right: 0; border-bottom: 1px solid var(--border); overflow-y: auto; }
+.bb-host.drill svg.breadboard { margin-top: 0; min-height: 140px; }
+.stage.bb-stacked .bb-host.drill svg.breadboard { flex: 1 0 150px; }
+.bb-drill-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); min-width: 0; }
+.bb-drill-head[hidden], .bb-drill-foot[hidden] { display: none; }
+.bb-crumbs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 3px; overflow: hidden; font-size: 12.5px; white-space: nowrap; }
+.bb-crumbs .crumb { flex-shrink: 4; min-width: 2.6em; overflow: hidden; text-overflow: ellipsis; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font: 500 12.5px var(--font-ui); }
+.bb-crumbs button.crumb { cursor: pointer; }
+.bb-crumbs button.crumb:hover { color: var(--text); border-color: var(--muted); }
+.bb-crumbs .crumb.cur { flex-shrink: 0; color: var(--text); font-weight: 650; border-color: var(--bb-sel); box-shadow: inset 0 0 0 1px var(--bb-sel); }
+.bb-crumbs .kind { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.bb-crumbs .sep { color: var(--muted); flex: none; }
+.bb-drill-head .bb-back { flex: none; }
+.bb-drill-foot { flex: none; max-height: 58%; overflow: auto; padding: 8px 10px 10px; }
+.stage.bb-stacked .bb-drill-foot { max-height: none; overflow: visible; }
+.bb-drill-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.bb-drill-cards .bb-pincard { max-width: none; flex: none; }
+.bb-drill-cards .bb-pincard > .btn { display: none; }
+.bb-notes { flex: 1 1 200px; min-width: 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.bb-notes h4 { margin: 0 0 4px; font-size: 13px; color: var(--text); }
+.bb-notes h4 .kind { margin-left: 6px; color: var(--muted); font-weight: 400; }
+.bb-notes p { margin: 4px 0 0; }
+.bb-notes .in { font-family: var(--font-mono); font-size: 12px; }
+.bb-notes .foot { color: var(--muted); }
+/* the other boards step back; the open chip is ringed */
+svg.breadboard.drilled .bb-board:not(.focus), svg.breadboard.drilled .bb-bus, svg.breadboard.drilled .bb-stub { opacity: 0.32; }
+.bb-chip.open .bb-sel { stroke: var(--bb-sel); stroke-width: 0.3; }
+/* the stage's badges and bottom-left panels keep to the schematic's side */
+.stage.bb-drill:not(.bb-stacked) .canvas > .level-badge,
+.stage.bb-drill:not(.bb-stacked) .canvas > .hint-badge,
+.stage.bb-drill:not(.bb-stacked) .canvas > .panel-dock { left: calc(var(--bb-drill-w, 46%) + 12px); }
+.stage.bb-drill.bb-stacked .canvas > .level-badge { top: calc(var(--bb-drill-h, 50%) + 10px); }
+
 /* the stage bar's view toggle */
 .stage-bar .seg.bb-view button, .stage-bar .seg.bb-wires button { font-family: var(--font-ui); font-size: 12.5px; }
 
 @media (pointer: coarse) {
   .stage-bar .seg.bb-view button, .stage-bar .seg.bb-wires button { min-height: 40px; padding: 0 12px; }
-  .bb-pincard > .btn { min-height: 40px; }
+  .bb-pincard > .btn, .bb-drill-head .bb-back, .bb-crumbs .crumb { min-height: 40px; }
   .bb-dip .pin { height: 26px; }
 }

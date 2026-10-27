@@ -3,7 +3,7 @@ import { CPU4_BCD, CPU4_STATE } from '../src/lib/cpu4';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
-import { BB_MARGIN, BbNets, type BreadboardLayout, defAt, fitBoards, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { BB_MARGIN, BbNets, type BreadboardLayout, defAt, drillCrumbs, drillOf, drillPane, fitBoards, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
 import { SAP_COMPUTER } from '../src/lib/sap';
 import { sapLayout } from '../src/widgets/saplayout';
 import { insideOf } from '../src/view/breadboard';
@@ -152,5 +152,45 @@ describe('breadboard view: fit and arrangement', () => {
     const errs = validateLayout(l, SAP_COMPUTER);
     expect(errs.some((e) => /^narrow: board .* overlaps/.test(e))).toBe(true);
     expect(errs).toContain('narrow: not the same boards and chips');
+  });
+});
+
+describe('breadboard view: the drill', () => {
+  const l = sapLayout(SAP_COMPUTER);
+
+  it('finds the board and chip a path is at or inside', () => {
+    const d = drillOf(l, ['ir', 'hi'])!;
+    expect(d.board.title).toBe('Instruction');
+    expect(d.chip?.part).toBe('74LS173');
+    // deeper: still that chip
+    expect(drillOf(l, ['ir', 'hi', 'ff0', 'nand1'])!.chip).toBe(d.chip);
+    // a module: its board, no chip
+    expect(drillOf(l, ['a'])).toMatchObject({ board: { title: 'A register' }, chip: null });
+    // the top and the bus strip are not on a board
+    expect(drillOf(l, [])).toBeNull();
+    expect(drillOf(l, ['bus'])).toBeNull();
+    // the flags' chips sit on the ALU's board
+    expect(drillOf(l, ['flags', 'reg'])!.board.title).toBe('ALU + flags');
+  });
+
+  it('names the way there: boards, board, chip, the levels below', () => {
+    const d = drillOf(l, ['ir', 'hi', 'ff0'])!;
+    const c = drillCrumbs(d, ['ir', 'hi', 'ff0'], (p) => (p.length === 3 ? 'DFFE_R' : ''));
+    expect(c.map((x) => x.label)).toEqual(['Boards', 'Instruction', `${d.chip!.ref} · 74LS173`, 'ff0']);
+    expect(c.map((x) => x.to)).toEqual(['boards', ['ir'], ['ir', 'hi'], null]);
+    expect(c[3].kind).toBe('DFFE_R');
+    // on the chip itself, the chip is the level on screen
+    expect(drillCrumbs(d, ['ir', 'hi']).map((x) => x.to)).toEqual(['boards', ['ir'], null]);
+    // a module's board is the level on screen
+    expect(drillCrumbs(drillOf(l, ['a'])!, ['a']).map((x) => x.to)).toEqual(['boards', null]);
+  });
+
+  it('two columns where they fit beside the panels, else the board on top', () => {
+    expect(drillPane(1100, 600)).toMatchObject({ stacked: false, w: 506, h: 600 });
+    expect(drillPane(1100, 600, 360).stacked).toBe(true);
+    const p = drillPane(390, 330);
+    expect(p).toMatchObject({ stacked: true, w: 390 });
+    expect(p.h).toBeGreaterThanOrEqual(160);
+    expect(drillPane(2400, 900).w).toBe(620);
   });
 });

@@ -13,9 +13,9 @@ import { romSize, stats } from '../sim/stats';
 import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
-import { Camera, installPanZoom } from './camera';
+import { Camera, fitBox, installPanZoom } from './camera';
 import {
-  BB, type BbBoard, fitBoards, pickArrangement, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
+  BB, type BbBoard, type BbCrumb, type BbDrill, fitBoards, pickArrangement, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
 } from './bblayout';
 
@@ -64,6 +64,12 @@ export class BreadboardView {
   /** The layout given to show(), and the arrangement of it on screen. */
   private layout: BreadboardLayout | null = null;
   private arrangement: 'wide' | 'narrow' = 'wide';
+  /** The drill pane (Stage: a chip opened from its board): its breadcrumb, the board, and under it what the stage puts there. */
+  private drillHead: HTMLElement;
+  readonly drillFoot: HTMLElement;
+  private drilled: BbDrill | null = null;
+  private drillArgs: { crumbs: BbCrumb[]; go: (to: 'boards' | string[]) => void } = { crumbs: [], go: () => {} };
+  private boardEls = new Map<string, { g: SVGGElement; board: BbBoard }>();
 
   constructor(private readonly hooks: BreadboardHooks) {
     this.svg = s('svg', { class: 'breadboard', role: 'group', 'aria-label': 'Breadboards' });
@@ -72,7 +78,9 @@ export class BreadboardView {
     new ResizeObserver(() => this.resized()).observe(this.svg);
     this.caption = h('div', { class: 'bb-caption' });
     this.card = h('div', { class: 'bb-card', role: 'tooltip', hidden: true });
-    this.el = h('div', { class: 'bb-host', hidden: true }, this.caption, this.svg, this.card);
+    this.drillHead = h('div', { class: 'bb-drill-head', hidden: true });
+    this.drillFoot = h('div', { class: 'bb-drill-foot', hidden: true });
+    this.el = h('div', { class: 'bb-host', hidden: true }, this.caption, this.drillHead, this.svg, this.drillFoot, this.card);
     // a press on a chip, a switch or a board's title is theirs; anywhere else it pans, and a tap lets go of the chip
     installPanZoom(this.svg, this.cam, {
       canStart: (e) => !(e.target as Element).closest('.bb-chip, .bb-sw, .bb-open'),
@@ -93,10 +101,16 @@ export class BreadboardView {
 
   clear(): void {
     this.svg.replaceChildren();
+    this.drilled = null;
+    this.el.classList.remove('drill');
+    this.svg.classList.remove('drilled');
+    this.drillHead.hidden = this.drillFoot.hidden = true;
+    this.caption.hidden = false;
     this.paints = [];
     this.nets = null;
     this.root = null;
     this.chipEls.clear();
+    this.boardEls.clear();
     this.lightable = [];
     this.switches = [];
     this.selected = null;
@@ -111,8 +125,51 @@ export class BreadboardView {
     this.draw(this.arrangement === 'narrow' ? layout.narrow! : layout, root);
   }
 
-  /** Show the whole arrangement: centred, or a column as wide as the canvas from its top. */
+  /**
+   * The drill pane (null: the boards): `d`'s board zoomed with the others dimmed, its chip ringed, `crumbs` above it
+   * (a click: `go`), and drillFoot under it for the stage's pin card.
+   */
+  drill(d: BbDrill | null, crumbs: BbCrumb[] = [], go: (to: 'boards' | string[]) => void = () => {}): void {
+    const was = this.drilled;
+    this.drillArgs = { crumbs, go };
+    this.drilled = d;
+    this.el.classList.toggle('drill', !!d);
+    this.drillHead.hidden = this.drillFoot.hidden = !d;
+    this.caption.hidden = !!d;
+    this.svg.classList.toggle('drilled', !!d);
+    for (const [title, { g }] of this.boardEls) g.classList.toggle('focus', title === d?.board.title);
+    for (const [c, el] of this.chipEls) el.classList.toggle('open', !!d?.chip && c === d.chip);
+    if (!d) {
+      this.drillHead.replaceChildren();
+      this.drillFoot.replaceChildren();
+      if (was) this.fit();
+      return;
+    }
+    if (this.selected || this.pinned) this.pick(null);
+    else this.hideCard(true);
+    const nav = h('nav', { class: 'bb-crumbs', 'aria-label': 'Where this chip is' });
+    crumbs.forEach((c, i) => {
+      if (i) nav.append(h('span', { class: 'sep', 'aria-hidden': 'true' }, '›'));
+      const to = c.to;
+      const kind = c.kind ? h('span', { class: 'kind' }, c.kind) : null;
+      nav.append(to ? h('button', { class: 'crumb', onclick: () => go(to) }, c.label, kind)
+        : h('span', { class: `crumb${i === crumbs.length - 1 ? ' cur' : ''}`, ...(i === crumbs.length - 1 ? { 'aria-current': 'location' } : {}) }, c.label, kind));
+    });
+    this.drillHead.replaceChildren(nav, h('button', { class: 'btn sm bb-back', title: 'Back to all the boards (Esc goes up one level)', onclick: () => go('boards') }, '‹ Boards'));
+    if (!was || was.board.title !== d.board.title || !this.cam.fitted) this.fitDrill();
+  }
+
+  /** The drilled board, zoomed to the drill pane. */
+  private fitDrill(): void {
+    const b = this.drilled && this.boardEls.get(this.drilled.board.title)?.board;
+    if (!b) return;
+    const r = this.svg.getBoundingClientRect();
+    this.cam.show(fitBox({ x: b.at[0] - 1, y: b.at[1] - 1, w: b.size[0] + 2, h: b.size[1] + 2 }, r.width, r.height, 0, 0));
+  }
+
+  /** Show the whole arrangement: centred, or a column as wide as the canvas from its top (in the drill: its board). */
   fit(): void {
+    if (this.drilled) return this.fitDrill();
     const lay = this.shown();
     if (!lay) return;
     const r = this.svg.getBoundingClientRect();
@@ -133,8 +190,10 @@ export class BreadboardView {
     if (a !== this.arrangement) {
       const sel = this.selected?.path?.join('.');
       this.arrangement = a;
+      const d = this.drilled;
       this.draw(a === 'narrow' ? this.layout.narrow! : this.layout, this.root);
       if (this.lastSim) this.update(this.lastSim);
+      if (d) this.drill(d, this.drillArgs.crumbs, this.drillArgs.go);
       for (const [c] of this.chipEls) if (sel && c.path?.join('.') === sel) this.pick(c);
       this.fit();
       return;
@@ -171,6 +230,7 @@ export class BreadboardView {
     }
     for (const b of layout.boards) {
       const g = this.drawBoard(b, ctx);
+      this.boardEls.set(b.title, { g, board: b });
       if (b.module) this.lightable.push({ key: b.module.join('.'), el: g });
       this.svg.append(g);
       for (const c of b.chips) {
@@ -520,6 +580,17 @@ export function insideOf(def: ComponentDef): string {
   const list = [...kinds].sort((a, b) => b[1] - a[1]);
   const shown = list.slice(0, 4).map(([k, n]) => `${n} × ${k}`).join(', ') + (list.length > 4 ? `, ${list.length - 4} more kinds` : '');
   return `Inside: ${shown || 'wiring'}${cost ? ` · ${cost}` : ''}`;
+}
+
+/** Under the drilled board, beside the pins: what the chip (or the board's module) is, its role here, what is inside. */
+export function drillNotes(d: BbDrill, def: ComponentDef | undefined): HTMLElement {
+  const c = d.chip;
+  const head = c ? `${c.ref ? `${c.ref} · ` : ''}${c.part}` : d.board.title;
+  return h('div', { class: 'panel bb-notes' },
+    h('h4', null, head, def ? h('span', { class: 'kind' }, def.name) : null),
+    c?.role ? h('p', null, c.role) : null,
+    def ? h('p', { class: 'in' }, insideOf(def)) : null,
+    h('p', { class: 'foot' }, c ? 'Live on the right, the same nets as the board: double-click a part there to keep going down.' : 'Its chips on the left, its schematic on the right: double-click a chip on either to open it.'));
 }
 
 /**

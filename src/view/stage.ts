@@ -26,8 +26,8 @@ import { closePopover, editNumber } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { SchematicView } from './schematic';
-import { type BbChip, type BreadboardLayout, layoutBounds } from './bblayout';
-import { BreadboardView, pinCard, type WireLook } from './breadboard';
+import { type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
+import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 
 export interface Scene {
@@ -225,6 +225,11 @@ export class Stage {
   /** The breadboard view (Scene.breadboard), its toggles in the bar, and whether it is the one shown. */
   private board: BreadboardView;
   private boardOn = false;
+  /** A chip (or a board's module) opened from the boards: its board beside its inside (Stage.syncDrill). */
+  private drill: BbDrill | null = null;
+  private drillFold = false;
+  /** The panels the drill folded (unfolded again when it ends). */
+  private drillFolded: HTMLElement[] = [];
   private viewSeg: HTMLElement;
   private wireSeg: HTMLElement;
   /** A chip opened from the boards: its DIP pins, live, in the bottom-left dock. */
@@ -404,6 +409,7 @@ export class Stage {
     new ResizeObserver(() => {
       this.autoFold();
       this.inset = this.rightInset();
+      this.drillLayout();
       this.layoutDock(false);
       this.view.resized();
       this.fitBar();
@@ -598,6 +604,8 @@ export class Stage {
     this.view.clear();
     this.board.clear();
     this.dropPins();
+    this.drill = null;
+    this.el.classList.remove('bb-drill', 'bb-stacked');
     this.inspector.clear();
     this.analyzer.detach();
     this.sim = null;
@@ -625,10 +633,28 @@ export class Stage {
     }
     this.ctx = ctx;
     this.selected = null;
-    // a drill path (a chip opened, Back / Forward to one) is a schematic's
+    // a drill path (a chip opened, Back / Forward to one) is a schematic's, beside its board while the learner
+    // follows the boards; back at the top from there, the boards again
     if (this.boardOn && ctx !== this.rootCtx) this.setBoardShown(false);
+    if (ctx === this.rootCtx && this.drill && boardChoice) this.setBoardShown(true);
+    else this.syncDrill();
     this.syncPins();
+    this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
+    // a drill begun where the right-docked panels leave no room for two columns but folded would: they fold (unless
+    // the learner folded or unfolded one by hand), and unfold again when the drill ends
+    if (this.drillFold) {
+      this.drillFold = false;
+      const W = this.canvas.clientWidth;
+      const open = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.dataset.fold && !p.el.classList.contains('collapsed'));
+      if (open.length && !foldChoice.has('right') && W - this.inset < DRILL_STACK_PX && W >= DRILL_STACK_PX) {
+        for (const p of open) p.el.classList.add('collapsed');
+        this.drillFolded = open.map((p) => p.el);
+        this.inset = this.rightInset();
+      }
+      this.drillLayout();
+      this.view.setCover(this.covers(), true);
+    }
     // Another level, another shape: the how-to line may fit beside it now, or no longer.
     if (this.placeHint()) {
       this.view.cover = this.covers();
@@ -713,7 +739,7 @@ export class Stage {
   private setBoardShown(on: boolean): void {
     this.boardOn = on;
     this.el.classList.toggle('bb-mode', on);
-    this.board.el.hidden = !on;
+    if (this.syncDrill()) this.view.setCover(this.covers(), true);
     const [sch, bb] = [...this.viewSeg.querySelectorAll('button')];
     sch.classList.toggle('on', !on);
     sch.setAttribute('aria-pressed', String(!on));
@@ -734,6 +760,45 @@ export class Stage {
     });
   }
 
+  /**
+   * The drill pane: while the learner follows the boards (boardChoice) and the schematic shows a chip or a module the
+   * boards hold, its board zoomed beside it (a left column, or the top part of a narrow canvas: drillPane), with the
+   * breadcrumb and the chip's pins; the schematic fits the rest. True when it came or went.
+   */
+  private syncDrill(): boolean {
+    const lay = this.scene?.breadboard, ctx = this.ctx;
+    const d = lay && ctx && boardChoice && !this.boardOn ? drillOf(lay, ctx.path) : null;
+    const changed = !!d !== !!this.drill;
+    if (d && !this.drill) this.drillFold = true;
+    if (!d && this.drill && this.drillFolded.length) {
+      if (!foldChoice.has('right')) for (const el of this.drillFolded) el.classList.remove('collapsed');
+      this.drillFolded = [];
+    }
+    this.drill = d;
+    this.el.classList.toggle('bb-drill', !!d);
+    this.board.el.hidden = !(this.boardOn || d);
+    if (d && ctx) {
+      this.drillLayout();
+      const root = this.sim?.design.root;
+      this.board.drill(d, drillCrumbs(d, ctx.path, (p) => (root && findNode(root, p)?.def.name) ?? ''), (to) => (to === 'boards' ? this.showBoards(true) : this.goTo(to)));
+      if (this.sim) {
+        this.board.sim = this.sim;
+        this.board.update(this.sim);
+      }
+    } else this.board.drill(null);
+    return changed;
+  }
+
+  /** The drill pane's size on this canvas (--bb-drill-w / -h, breadboard.css), beside the right-docked panels. */
+  private drillLayout(): void {
+    if (!this.drill) return;
+    this.boardCover();
+    const p = drillPane(this.canvas.clientWidth, this.canvas.clientHeight, this.inset);
+    this.el.classList.toggle('bb-stacked', p.stacked);
+    this.canvas.style.setProperty('--bb-drill-w', `${p.w}px`);
+    this.canvas.style.setProperty('--bb-drill-h', `${p.h}px`);
+  }
+
   /** A chip or a board's module double-clicked: its schematic, through the drill path (one history entry per level). */
   private openFromBoard(path: string[]): void {
     this.setBoardShown(false);
@@ -743,6 +808,7 @@ export class Stage {
 
   /** The chip open on the schematic, if the boards list it with a pin map. */
   private pinnedChip(): BbChip | null {
+    if (this.drill) return this.drill.chip?.pins ? this.drill.chip : null;
     const lay = this.scene?.breadboard, ctx = this.ctx;
     if (!lay || !ctx || this.boardOn || this.leaf) return null;
     const key = ctx.path.join('.');
@@ -752,13 +818,25 @@ export class Stage {
 
   /** Show (or drop) the pin card of the chip open on the schematic. */
   private syncPins(): void {
+    const d = this.drill;
     const chip = this.pinnedChip();
-    const key = chip?.path?.join('.') ?? '';
-    if (this.pins?.path === key && chip) return;
+    const key = d ? `drill:${d.board.title}:${d.chip?.path?.join('.') ?? ''}` : chip?.path?.join('.') ?? '';
+    if (this.pins?.path === key && (chip || d)) return;
     this.dropPins();
-    const node = chip?.path && this.sim ? findNode(this.sim.design.root, chip.path) : null;
-    if (!chip || !node) return;
-    const card = pinCard(chip, node, () => this.showBoards(true));
+    const root = this.sim?.design.root;
+    const node = chip?.path && root ? findNode(root, chip.path) : null;
+    const card = chip && node ? pinCard(chip, node, () => this.showBoards(true)) : null;
+    if (d) {
+      // under the board: the pins, and what the chip (or the board) is
+      const at = d.chip?.path ?? d.board.module;
+      const def = at && root ? findNode(root, at)?.def : undefined;
+      const el = h('div', { class: 'bb-drill-cards' }, card?.el, drillNotes(d, def));
+      this.pins = { path: key, el, update: (sim) => card?.update(sim) };
+      this.board.drillFoot.replaceChildren(el);
+      if (this.sim) card?.update(this.sim);
+      return;
+    }
+    if (!card) return;
     this.pins = { path: key, ...card };
     this.dock.append(card.el);
     if (this.sim) card.update(this.sim);
@@ -767,9 +845,10 @@ export class Stage {
 
   private dropPins(): void {
     if (!this.pins) return;
+    const docked = this.pins.el.parentElement === this.dock;
     this.pins.el.remove();
     this.pins = null;
-    this.layoutDock();
+    if (docked) this.layoutDock();
   }
 
   /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
@@ -1460,7 +1539,14 @@ export class Stage {
       this.board.sim = this.sim;
       this.boardCover();
       this.board.update(this.sim);
-    } else this.view.update();
+    } else {
+      this.view.update();
+      // the drilled board beside the schematic stays live
+      if (this.drill) {
+        this.board.sim = this.sim;
+        this.board.update(this.sim);
+      }
+    }
     if (this.pins && this.sim) this.pins.update(this.sim);
     this.leaf?.widget.update?.();
     this.panels.forEach((p) => p.update?.());
@@ -1715,6 +1801,7 @@ export class Stage {
     const apply = (mask: number) => {
       fold.forEach((p, i) => p.el.classList.toggle('collapsed', ((mask >> i) & 1) === 1));
       this.inset = this.rightInset();
+      this.drillLayout();
       this.dockOut();
     };
     // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
@@ -1741,6 +1828,7 @@ export class Stage {
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.boardCover();
+    this.drillLayout();
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);
@@ -1770,7 +1858,7 @@ export class Stage {
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];
-    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : [])]) {
+    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : [])]) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }

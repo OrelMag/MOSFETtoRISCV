@@ -426,3 +426,61 @@ export function pinName(pin: BbPin | undefined, width = 1): string {
   if (typeof pin === 'string') return pin;
   return pin.name ?? (width > 1 ? `${pin.port}[${pin.bit ?? 0}]` : pin.port);
 }
+
+// ---- the drill: a chip opened from its board ---------------------------------------------------------------
+
+/** What an instance path opens into on the boards: the board it sits on and the chip (none: the board's own module). */
+export interface BbDrill {
+  board: BbBoard;
+  chip: BbChip | null;
+}
+
+/** The board and chip `path` is at or inside: the chip whose path is the longest prefix of it, else the board whose
+ *  module is a prefix of it; null for a path the boards do not hold (the root, the bus). */
+export function drillOf(l: BreadboardLayout, path: readonly string[]): BbDrill | null {
+  const pre = (p: readonly string[] | undefined) => !!p && p.length > 0 && p.length <= path.length && p.every((x, i) => x === path[i]);
+  let best: BbDrill | null = null, len = 0;
+  for (const board of l.boards) {
+    for (const chip of board.chips) if (pre(chip.path) && chip.path!.length > len) [best, len] = [{ board, chip }, chip.path!.length];
+    if (pre(board.module) && board.module!.length > len) [best, len] = [{ board, chip: null }, board.module!.length];
+  }
+  return best;
+}
+
+export interface BbCrumb {
+  label: string;
+  /** Its kind, after the label ('74LS173', 'DFFE_R'). */
+  kind?: string;
+  /** Where a click goes: 'boards' (all of them), an instance path, or nowhere (the level on screen, a board with no module). */
+  to: 'boards' | string[] | null;
+}
+
+/** The drill pane's breadcrumb for `path` (inside `d`): Boards › the board › the chip › the levels below it, by name. */
+export function drillCrumbs(d: BbDrill, path: readonly string[], kindAt: (path: string[]) => string = () => ''): BbCrumb[] {
+  const here = (p: readonly string[]) => p.length === path.length;
+  const out: BbCrumb[] = [{ label: 'Boards', to: 'boards' }];
+  const mod = d.board.module;
+  out.push({ label: d.board.title, to: mod && !here(mod) ? [...mod] : null });
+  let from = mod?.length ?? 0;
+  if (d.chip?.path) {
+    const c = d.chip;
+    out.push({ label: c.ref ? `${c.ref} · ${c.part}` : c.part, to: here(c.path!) ? null : [...c.path!] });
+    from = c.path!.length;
+  }
+  for (let i = from; i < path.length; i++) {
+    const p = path.slice(0, i + 1);
+    out.push({ label: path[i], kind: kindAt(p) || undefined, to: here(p) ? null : p });
+  }
+  return out;
+}
+
+/** Below this many px of canvas beside the right-docked panels, the drill stacks the board above the inside. */
+export const DRILL_STACK_PX = 760;
+
+/** Where the drill pane (the board, its pins) goes on a canvas `w` × `h` px with `inset` px of right-docked panels:
+ *  a left column, or the top part when the canvas is too narrow for two columns. */
+export function drillPane(w: number, h: number, inset = 0): { stacked: boolean; w: number; h: number } {
+  const free = Math.max(0, w - inset);
+  if (free < DRILL_STACK_PX) return { stacked: true, w: free, h: Math.round(Math.max(Math.min(h * 0.5, 460), Math.min(h, 160))) };
+  return { stacked: false, w: Math.round(Math.min(620, free * 0.46)), h };
+}
