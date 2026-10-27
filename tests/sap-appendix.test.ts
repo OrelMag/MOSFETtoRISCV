@@ -164,6 +164,12 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.switches ?? []).find((s) => s.port === 'RESET')?.label).toBe('RESET');
   });
 
+  it('the inspector\'s description follows the scene: an empty RAM or a program', () => {
+    expect(sapScene({ empty: true }).root.summary).toMatch(/RAM starts empty/);
+    expect(sapScene({ empty: true }).root.summary).not.toMatch(/with a program/);
+    expect(sapScene({ program: 'fib' }).root.summary).toMatch(/RAM starts with a program/);
+  });
+
   it('RESET un-halts a halted computer, and it runs its program again', async () => {
     const p = SAP_PROGRAMS.find((q) => q.id === 'add')!;
     const bytes = sapBytes(p.src);

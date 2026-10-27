@@ -232,7 +232,7 @@ export const chAppendixSap: Chapter = {
         <p>Two <span data-show="add0 add1">74LS283</span> 4-bit adders, the first one's carry into the second (a ripple
         between the chips; inside each the 283 looks ahead), add A and B. For SUB, <span data-show="x0 x1">74LS86</span>
         XORs invert B and SU is the carry in: A − B = A + NOT B + 1. A <span data-show="drv">74LS245</span> puts the sum
-        on the bus while ΣO = 1. ${SAP_COST.alu} NANDs; it has no clock, the sum is always there.</p>
+        on the bus while ΣO = 1 (a <span data-show="inv">74LS04</span> turns ΣO into its active-low G). ${SAP_COST.alu} NANDs; it has no clock, the sum is always there.</p>
         <p>On the computer the sum also feeds the flags register (a 74LS173 loaded by FI): CF is the carry out of bit 7,
         ZF is the sum being 0 (74LS02 NORs and 74LS08 ANDs). For a subtraction CF = 1 means <em>no</em> borrow: A ≥ B.</p>
         <div class="try">Turn SU on: the sum becomes 28 − 14 = 14 and <code>cout</code> lights (no borrow).</div>`,
@@ -253,8 +253,9 @@ export const chAppendixSap: Chapter = {
         <p>The <span data-show="mar">memory address register</span> is one 74LS173: the RAM's address. A 74LS157 hands
         the RAM the four address switches instead while PROG is on. The <span data-show="ram">RAM</span> is two 74LS189s,
         16 × 4 bits each; their outputs are inverted, so two 74LS04s turn them back, two 157s choose what to write (the
-        bus, or the eight data switches), and a 245 drives the bus. Nine chips and ${k(SAP_COST.ram)} NANDs for 128 bits: the 189's
-        cells are latches, ${SAP_COST.ls189} NANDs a chip.</p>
+        bus, or the eight data switches), a 74LS08 makes the write pulse RI · CLK, a third 157 picks it or the WR button,
+        and a 245 drives the bus. Nine chips and ${k(SAP_COST.ram)} NANDs for 128 bits: the 189's cells are latches,
+        ${SAP_COST.ls189} NANDs a chip.</p>
         <p>Ben's 189 writes while WE is low, from an RC pulse on the clock edge. Here the write is RI AND CLK, so it happens
         while the clock is high: at the rising edge, in effect, which is when the golden model writes.</p>
         <p>This RAM starts empty. Program it as Ben does, whenever you like (running or not): PROG on, an address on the
