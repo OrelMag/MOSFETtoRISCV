@@ -124,6 +124,9 @@ export class BreadboardView {
     this.cam = new Camera(this.svg);
     // shown, hidden, beside a panel that folds, on a phone turned: the svg's own size decides the arrangement and fit
     new ResizeObserver(() => this.resized()).observe(this.svg);
+    // Tab or an arrow onto a part out of view (a column a pan long, a zoomed step): bring it in first, so its card
+    // (placed by the part's own focus listener, after this capturing one) sits beside it
+    this.svg.addEventListener('focus', (e) => this.reveal(e.target as Element), true);
     this.caption = h('div', { class: 'bb-caption' });
     this.card = h('div', { class: 'bb-card', role: 'tooltip', hidden: true });
     this.drillHead = h('div', { class: 'bb-drill-head', hidden: true });
@@ -746,6 +749,20 @@ export class BreadboardView {
   /** The simulation the view reads (set by the stage before every update). */
   set sim(sim: Sim | null) {
     this.lastSim = sim;
+  }
+
+  /** Pan so `el` is in view (with a margin), when it is not and the keyboard focused it (a click is on screen). */
+  private reveal(el: Element): void {
+    if (el === this.svg || !el.matches(':focus-visible')) return;
+    const o = this.svg.getBoundingClientRect(), r = el.getBoundingClientRect(), m = 24;
+    if (!(o.width > 0 && this.cam.vb.w > 0)) return;
+    const dx = r.left < o.left + m ? r.left - o.left - m : r.right > o.right - m ? r.right - o.right + m : 0;
+    const dy = r.top < o.top + m ? r.top - o.top - m : r.bottom > o.bottom - m ? r.bottom - o.bottom + m : 0;
+    if (!dx && !dy) return;
+    const k = this.cam.vb.w / o.width;
+    this.cam.vb = { ...this.cam.vb, x: this.cam.vb.x + dx * k, y: this.cam.vb.y + dy * k };
+    this.cam.fitted = false;
+    this.cam.apply();
   }
 
   /** The hooks' covers that reach over `el`, in its own px (from its top-left corner). */
