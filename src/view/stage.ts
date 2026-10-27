@@ -795,7 +795,9 @@ export class Stage {
   private drillLayout(): void {
     if (!this.drill) return;
     this.boardCover();
-    const p = drillPane(this.canvas.clientWidth, this.canvas.clientHeight, this.inset);
+    // stacked, the pane starts below a folded panel's strip (--bb-top): it shares what is left with the schematic
+    const top = parseFloat(this.canvas.style.getPropertyValue('--bb-top')) || 0;
+    const p = drillPane(this.canvas.clientWidth, this.canvas.clientHeight - top, this.inset);
     this.el.classList.toggle('bb-stacked', p.stacked);
     this.canvas.style.setProperty('--bb-drill-w', `${p.w}px`);
     this.canvas.style.setProperty('--bb-drill-h', `${p.h}px`);
@@ -1890,8 +1892,12 @@ export class Stage {
       if (r.width > 0 && r.bottom - c.top > lineTop) right = Math.max(right, c.right - r.left + 12);
     }
     this.hint.style.bottom = `${bottom}px`;
-    this.hint.style.maxWidth = `${W - right - 12}px`;
-    this.hint.hidden = this.hint.dataset.off === '1' || W - right - 12 < 160 || (docked.length > 0 && lineTop < H / 2);
+    // beside the drill pane it starts right of it (breadboard.css)
+    const left = this.drill && !this.el.classList.contains('bb-stacked') ? parseFloat(this.canvas.style.getPropertyValue('--bb-drill-w')) + 12 || 12 : 12;
+    this.hint.style.maxWidth = `${W - right - left}px`;
+    // a drill stacked on a narrow canvas leaves the schematic a strip: the line would take a third of it
+    this.hint.hidden = this.hint.dataset.off === '1' || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)
+      || (!!this.drill && this.el.classList.contains('bb-stacked'));
     if (!this.hint.hidden && !roomBeside(this.view.contentBox(), W, H, this.covers())) this.hint.hidden = true;
     return this.hint.hidden !== was;
   }

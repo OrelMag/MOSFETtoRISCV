@@ -505,7 +505,7 @@ export function drillCrumbs(d: BbDrill, path: readonly string[], kindAt: (path: 
 }
 
 /** Below this many px of canvas beside the right-docked panels, the drill stacks the board above the inside. */
-export const DRILL_STACK_PX = 760;
+export const DRILL_STACK_PX = 700;
 
 /** Where the drill pane (the board, its pins) goes on a canvas `w` × `h` px with `inset` px of right-docked panels:
  *  a left column, or the top part when the canvas is too narrow for two columns. */

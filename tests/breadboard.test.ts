@@ -188,7 +188,8 @@ describe('breadboard view: the drill', () => {
 
   it('two columns where they fit beside the panels, else the board on top', () => {
     expect(drillPane(1100, 600)).toMatchObject({ stacked: false, w: 506, h: 600 });
-    expect(drillPane(1100, 600, 360).stacked).toBe(true);
+    expect(drillPane(1100, 600, 360).stacked).toBe(false);
+    expect(drillPane(1100, 600, 420).stacked).toBe(true);
     const p = drillPane(390, 330);
     expect(p).toMatchObject({ stacked: true, w: 390 });
     expect(p.h).toBeGreaterThanOrEqual(160);
