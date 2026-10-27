@@ -16,11 +16,11 @@ import type { Chapter } from './types';
 
 /**
  * What the SAP-1 costs (lib/sap.ts sapCost; tests/sap-appendix.test.ts holds these to it): chips simulated (the boards
- * add six drawn only: four 555s, the 76 and the 139), NANDs of logic, NANDs of one 28C16 as the ROM tree it simulates
+ * add seven drawn only: four 555s, the clock's 74LS32, the 76 and the 139), NANDs of logic, NANDs of one 28C16 as the ROM tree it simulates
  * as, and the five EEPROMs' bits.
  */
 export const SAP_COST = {
-  chips: 49, drawn: 6, logic: 3314, perEeprom: 65524, eeproms: 5, bus: 122, control: 204,
+  chips: 49, drawn: 7, logic: 3314, perEeprom: 65524, eeproms: 5, bus: 122, control: 204,
   /** NANDs of single modules (stats), as the steps quote them. */
   clock: 14, areg: 243, alu: 129, pc: 150, ram: 1546, ls173: 109, ls161: 125, ls189: 716,
 } as const;
@@ -152,8 +152,9 @@ export const chAppendixSap: Chapter = {
       body: `
         <p>Ben's clock board has three 555 timers: an astable (the free-running clock, its rate on a potentiometer), a
         monostable (one clean pulse per press of the step button) and a bistable (debouncing the run / step switch), and a
-        few gates to choose between them. The 555s are analog parts: here they are <strong>drawn, not simulated</strong>;
-        the stage's clock, <code>osc</code>, stands in for them.</p>
+        74LS32 that chooses between them: (astable AND run) OR (monostable AND step), its ANDs and inverter in spare gates of
+        the 08 and 04. The 555s and the select are <strong>drawn, not simulated</strong> (the 555s are analog parts); the
+        stage's clock, <code>osc</code>, stands in for whichever is chosen.</p>
         <p>What is simulated is the gating: <code>clk</code> = osc AND NOT HLT, a <span data-show="inv">74LS04</span>
         and a <span data-show="and">74LS08</span>, ${SAP_COST.clock} NANDs. A halted computer stops its own clock. The second
         inverter makes <code>nclk</code>, which steps the control unit on the falling edge (see Microcode).</p>

@@ -23,7 +23,8 @@ view mockup (https://claude.ai/artifact/S6UqobtefnYREYgfMBh87t: Main = the whole
   said once.
 - **Display**: OUT is a 74LS273 clocked by `clk AND OI` (as Ben's). Ben multiplexes one 28C16 over four digits with a
   555 and a 74LS76; we draw that, but simulate three static copies of the decoder table (no second clock). Said once.
-- **The 555s are drawn, not simulated**: the stage's clock stands in for the clock module's astable. Said once.
+- **The 555s are drawn, not simulated**: the stage's clock stands in for the clock module's astable. Said once. So is the
+  clock board's 74LS32 (Ben's run / step select before the HLT AND): seven chips drawn only in all (`SAP_COST.drawn`).
 - The TTL-vs-CMOS note (the real chips are bipolar TTL; we build their logic from our CMOS NANDs) is said once, the
   first time a 74xx chip is opened.
 

@@ -83,6 +83,9 @@ function chip(all: Map<string, SapChip>, path: string, roleKey = path): BbChip {
 
 const drawn = (part: string, dip: number, role: string): BbChip => ({ part, dip, role });
 
+/** Ben's run / step select before the HLT gate: drawn only, as the 555s it chooses between (a new object: boards number their chips). */
+export const sapSelect = (): BbChip => drawn('74LS32', 14, 'Run / step select: (astable AND run) OR (monostable AND step), the OR here, the ANDs and the inverter in spare gates of the 08 and 04. Drawn only: the stage\'s clock is already the chosen one.');
+
 /** Board widths and gaps, in holes. */
 const COL_W = 52, GAP = 1.6, BUS_W = 12;
 
@@ -119,6 +122,7 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
         drawn('NE555', 8, 'The astable: the free-running clock. Drawn, not simulated: the stage\'s clock stands in for it.'),
         drawn('NE555', 8, 'The monostable: one clean pulse per press of the step button. Drawn only.'),
         drawn('NE555', 8, 'The bistable: debounces the run / step switch. Drawn only.'),
+        sapSelect(),
         c('clock.inv'), c('clock.and'),
       ],
       // Ben's reset button: clears the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
@@ -218,7 +222,8 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
   const hr = stack(right, COL_W + BUS_W + 2 * GAP);
   numberChips(boards);
   return {
-    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs: 74LS series and 28C16 EEPROMs (pale: drawn only)`,
+    // short: the caption is one line over the boards at 1440 px
+    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs · pale: drawn only`,
     buses: [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, Math.max(hl, hr)], path: ['bus'], port: 'bus' }],
     boards,
   };

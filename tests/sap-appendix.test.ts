@@ -211,6 +211,9 @@ describe('Appendix C quotes measured numbers', () => {
     expect(cost.logicNands).toBe(SAP_COST.logic);
     expect(cost.eepromNands).toBe(SAP_COST.perEeprom * SAP_COST.eeproms);
     expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.chips).filter((c) => !c.path).length).toBe(SAP_COST.drawn);
+    // Ben's run / step select, drawn on the clock board; the caption counts every IC
+    expect(sapLayout(SAP_COMPUTER).boards.find((b) => b.title === 'Clock')!.chips.map((c) => c.part)).toContain('74LS32');
+    expect(sapLayout(SAP_COMPUTER).note).toBe(`${SAP_COST.chips + SAP_COST.drawn} ICs · pale: drawn only`);
     expect(stats(S.SAP_BUS).nands).toBe(SAP_COST.bus);
     expect(stats(S.SAP_CONTROL).nands - 2 * SAP_COST.perEeprom).toBe(SAP_COST.control);
     expect([stats(S.SAP_CLOCK).nands, stats(S.SAP_AREG).nands, stats(S.SAP_ALU).nands, stats(S.SAP_PC).nands, stats(S.SAP_RAM).nands])

@@ -15,7 +15,7 @@ import { B0, B1, type ComponentDef } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { codeEditor } from './codeedit';
-import { moduleLayout, sapLayout } from './saplayout';
+import { moduleLayout, sapLayout, sapSelect } from './saplayout';
 import { type FollowerState, SapFollower, sapGloss, sapHw, sapRam } from './sapmon';
 import { frameRun } from './slowctl';
 
@@ -65,7 +65,7 @@ export function sapScene(o: SapSceneOptions = {}): Scene {
 
 /** One module on a board of its own, its inputs on DIP switches (Ben tests every board before the next). */
 export function sapModuleScene(def: ComponentDef, title: string, o: { highlight?: string[]; inputs?: Record<string, number>; drives?: string; loads?: string; before?: boolean } = {}): Scene {
-  const before = o.before ? ['astable', 'monostable', 'bistable'].map((r) => ({ part: 'NE555', dip: 8, role: `The ${r} 555: drawn, not simulated (the stage's clock is osc).` })) : undefined;
+  const before = o.before ? [...['astable', 'monostable', 'bistable'].map((r) => ({ part: 'NE555', dip: 8, role: `The ${r} 555: drawn, not simulated (the stage's clock is osc).` })), sapSelect()] : undefined;
   return {
     root: def,
     inputs: o.inputs,
