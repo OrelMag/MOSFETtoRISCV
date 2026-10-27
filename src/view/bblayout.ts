@@ -27,6 +27,8 @@ export interface BbLed {
   label?: string;
   /** Leave a space before this LED (between two groups). */
   gap?: boolean;
+  /** What its card says drives it, where no chip on the boards does (the gate-level bus's clash detector). */
+  note?: string;
 }
 
 /** A DIP switch: one bit of an input pin of the scene root, toggled like the stage's bottom bar does. */

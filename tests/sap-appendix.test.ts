@@ -39,6 +39,10 @@ describe('SAP-1 breadboards', () => {
     const alu = moduleLayout(SAP_ALU, { title: 'ALU', drives: 'eo' });
     expect(alu.boards[0].drives?.label).toBe('ΣO · drives the bus');
     expect(alu.boards[1].switches!.map((s) => s.label)).toContain('ΣO');
+    // a bus is labelled under its top bit with its range, not with what reads as that bit's name
+    const areg = moduleLayout(SAP_AREG, { title: 'A register', drives: 'ao' });
+    expect(areg.boards[0].leds!.map((x) => x.label).filter(Boolean)).toEqual(['Q7–0', 'DRV7–0']);
+    expect(areg.boards[1].switches!.map((s) => s.label).filter(Boolean)).toEqual(['AI', 'AO', 'BUS7–0', 'RST']);
   });
 
   it('single-module boards are valid', () => {

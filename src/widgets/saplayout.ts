@@ -225,7 +225,8 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
   const column: BbBoard[] = [];
   const hn = stack(column, right, 0, stack(column, left, 0) + GAP);
   // at the foot of the bus column, the bus's own LED: two drivers at once (the strip ends above it, so the layout is no taller)
-  const clash = (h: number): BbBoard => sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' }, color: 'red', label: 'CLASH' }] }, [COL_W + GAP, h - foot + GAP], BUS_W);
+  const CLASH_NOTE = 'Lit while two or more boards drive the bus at once: the gate-level bus counts the drivers enabled. Ours, not Ben\'s (his has no such LED).';
+  const clash = (h: number): BbBoard => sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' }, color: 'red', label: 'CLASH', note: CLASH_NOTE }] }, [COL_W + GAP, h - foot + GAP], BUS_W);
   const foot = sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' } }] }, [0, 0], BUS_W).size[1] + GAP;
   const H = Math.max(hl, hr);
   boards.push(clash(H));
@@ -254,6 +255,9 @@ export interface ModuleLayoutOpts {
 
 /** A port as a board labels it: a control line by its name (ΣO for eo), else in capitals. */
 const portLabel = (p: string): string => (CTRL_LABEL as Record<string, string>)[p] ?? p.toUpperCase();
+/** A bus's LEDs or switches, under the most significant one: its name and bit range (Q7–0), so the label does not
+ *  read as that one bit's name. */
+const groupLabel = (p: string, w: number): string => `${portLabel(p)}${w - 1}–0`;
 
 export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): BreadboardLayout {
   // the roles are written for the computer: the module's instance name there
@@ -262,14 +266,14 @@ export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): Breadboard
   const chips = [...all.keys()].map((p) => chip(all, p, inst ? `${inst}.${p}` : p));
   const ins = def.ports.filter((p) => p.dir === 'in' && !p.clock && !(o.skip ?? []).includes(p.name));
   const switches: BbSwitch[] = ins.flatMap((p, i) => {
-    const g = (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? portLabel(p.name) }] : bitSwitches(p.name, p.width, p.name)) as BbSwitch[];
+    const g = (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? portLabel(p.name) }] : bitSwitches(p.name, p.width, groupLabel(p.name, p.width))) as BbSwitch[];
     return i ? g.map((s, j) => (j ? s : { ...s, gap: true })) : g;
   });
   const outs: NonNullable<ModuleLayoutOpts['leds']> = o.leds ?? def.ports.filter((p) => p.dir === 'out').map((p) => ({ port: p.name }));
   const leds: BbLed[] = outs.flatMap((l, i) => {
     const p = def.ports.find((q) => q.name === l.port)!;
-    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? p.name.toUpperCase() } as BbLed]
-      : ledsOf([], p.name, p.width, l.color ?? 'red', (b) => (b === p.width - 1 ? p.name : ''));
+    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? portLabel(p.name) } as BbLed]
+      : ledsOf([], p.name, p.width, l.color ?? 'red', (b) => (b === p.width - 1 ? groupLabel(p.name, p.width) : ''));
     return i ? withGap(ls) : ls;
   });
   const W = 64;

@@ -50,6 +50,8 @@ let uid = 0;
 interface NetInfo {
   /** The LED (a bus bit: its LED on the strip's head). */
   el: SVGGElement;
+  /** BbLed.note. */
+  note?: string;
   label: string;
   /** Its net by path: 'a.q[3]'. */
   name: string;
@@ -388,9 +390,9 @@ export class BreadboardView {
       g.append(el);
     };
     b.chips.forEach((c, i) => add(this.drawChip(c, plan.chips[i], b), plan.chips[i]));
-    (b.beside ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.beside[i], ctx), plan.beside[i]));
+    (b.beside ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.beside[i], ctx, l.note), plan.beside[i]));
     (b.switches ?? []).forEach((sw, i) => add(this.drawSwitch(sw.port, sw.bit ?? 0, sw.label, plan.switches[i]), plan.switches[i]));
-    (b.leds ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.leds[i], ctx), plan.leds[i]));
+    (b.leds ?? []).forEach((l, i) => add(this.drawLed(l.net, l.color ?? 'red', l.label, plan.leds[i], ctx, l.note), plan.leds[i]));
     roving(g, items);
     if (plan.window) g.append(s('rect', { class: 'bb-segwin', x: plan.window.x, y: plan.window.y, width: plan.window.w, height: plan.window.h, rx: 0.3 }));
     (b.digits ?? []).forEach((d, i) => g.append(this.drawDigit(d, plan.digits[i], ctx)));
@@ -461,7 +463,7 @@ export class BreadboardView {
     return g;
   }
 
-  private drawLed(net: BbNet, color: string, label: string | undefined, r: Box, ctx: { id: string; nets: BbNets }): SVGGElement {
+  private drawLed(net: BbNet, color: string, label: string | undefined, r: Box, ctx: { id: string; nets: BbNets }, note?: string): SVGGElement {
     const i = ctx.nets.net(net);
     const cx = r.w / 2, cy = BB.led / 2;
     const width = (this.root && findNode(this.root, net.path)?.ports[net.port]?.length) ?? 1;
@@ -472,7 +474,7 @@ export class BreadboardView {
       s('circle', { class: 'halo', cx, cy, r: 0.95, filter: `url(#${ctx.id}-glow)` }),
       s('circle', { class: 'lens', cx, cy, r: 0.55 }));
     if (label) g.append(s('text', { class: 'bb-ll', x: cx, y: r.h - 0.12 }, label));
-    const info: NetInfo = { el: g, label: label && label !== net.port ? label : name, name, net, idx: i, word: width > 1 ? ctx.nets.bus({ ...net, bit: 0 }, width) : [i] };
+    const info: NetInfo = { el: g, label: label && label !== net.port ? label : name, name, net, idx: i, word: width > 1 ? ctx.nets.bus({ ...net, bit: 0 }, width) : [i], note };
     this.netLed(g, info);
     let shown = '';
     this.paints.push((bits) => {
@@ -490,7 +492,7 @@ export class BreadboardView {
   private drawSwitch(port: string, bit: number, label: string | undefined, r: Box): SVGGElement {
     const x = (r.w - BB.sw) / 2;
     const wide = (this.root?.ports[port]?.length ?? 1) > 1;
-    const what = label && label !== port ? label : wide ? `${port}[${bit}]` : port;
+    const what = wide ? `${port}[${bit}]` : label && label !== port ? label : port;
     const g = s('g', { class: 'bb-sw', transform: `translate(${r.x} ${r.y})`, role: 'button', 'aria-pressed': 'false', 'aria-label': `Switch ${what}` },
       s('title', null, `Switch ${what}: click to flip`),
       // a finger's target: the bank's switches are a hole wide
@@ -684,7 +686,7 @@ export class BreadboardView {
     } else {
       const d = this.driverOfNet(info);
       const wide = (n: number[] | undefined) => (n?.length ?? 1) > 1;
-      drive = !d ? 'Driven inside its module (by no chip of its own on the boards).'
+      drive = !d ? info.note ?? 'Driven inside its module (by no chip of its own on the boards).'
         : 'chip' in d ? `Driven by ${chipName(d.chip)}, its output ${d.port}${this.root && wide(findNode(this.root, d.chip.path!)?.ports[d.port]) ? `[${d.bit}]` : ''}.`
           : `Set by the scene's input ${d.input}${wide(this.root?.ports[d.input]) ? `[${d.bit}]` : ''}.`;
     }
