@@ -128,6 +128,7 @@ export const TTL_PART: Record<string, string> = {
 /** A chip's TTL_PINS key (an EEPROM of any contents is 'at28c16'), or null for a part that is not one of these chips. */
 export function ttlKind(d: ComponentDef): string | null {
   if (d.id.startsWith('at28c16_')) return 'at28c16';
+  if (d.id.startsWith('ls189_i')) return 'ls189';
   return d.id in TTL_PINS ? d.id : null;
 }
 
@@ -518,14 +519,39 @@ export const LS189: ComponentDef = (() => {
 
 /** Power-on hints making a 74LS189 at `path` (an instance path in the top) hold `words` (low 4 bits each). */
 export function ls189Init(path: string, words: ArrayLike<number>, into: Record<string, 0 | 1> = {}): Record<string, 0 | 1> {
+  const pre = path ? `${path}.` : '';
   for (let i = 0; i < Math.min(16, words.length); i++) {
     for (let j = 0; j < 4; j++) {
       if (!bitOf(words[i], j)) continue;
-      into[`${path}.mem.w${i}.l${j}.sr.q`] = 1;
-      into[`${path}.mem.w${i}.l${j}.sr.q_n`] = 0;
+      into[`${pre}mem.w${i}.l${j}.sr.q`] = 1;
+      into[`${pre}mem.w${i}.l${j}.sr.q_n`] = 0;
     }
   }
   return into;
+}
+
+const loaded189 = new Map<string, ComponentDef>();
+
+/** The 16 nibbles of a loaded 74LS189's id (word 0 first), from its words. */
+export const ls189Key = (words: ArrayLike<number>) => Array.from({ length: 16 }, (_, i) => ((words[i] ?? 0) & 15).toString(16)).join('');
+
+/**
+ * A 74LS189 that holds `words` at power-on: id `ls189_i<16 hex nibbles>` (lib/resolve.ts rebuilds it from the id),
+ * the plain LS189 for an empty one. The sandbox's SAP-1 places it in its RAM chip: a chip's own wires cannot carry
+ * hints into a part's latches, a part's id can (as a RAM part's initial contents ride in its ref).
+ */
+export function ls189With(words: ArrayLike<number>): ComponentDef {
+  const key = ls189Key(words);
+  if (!/[^0]/.test(key)) return LS189;
+  let d = loaded189.get(key);
+  if (d) return d;
+  d = {
+    ...LS189, id: `ls189_i${key}`,
+    summary: `${LS189.summary} Holds its words at power-on.`,
+    powerOn: ls189Init('', Array.from(key, (c) => parseInt(c, 16))),
+  };
+  loaded189.set(key, d);
+  return d;
 }
 
 // ---- the dual JK flip-flop (Ben's display multiplexer: a 2-bit counter) --------------------------------------------
