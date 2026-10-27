@@ -1,0 +1,28 @@
+/* Appendix C's SAP panel (widgets/sap.ts) and the chapter's microcode tables: theme tokens only, so both themes follow. */
+.sap-panel { width: 340px; }
+.sap-alarm { font: 600 12.5px var(--font-mono); color: var(--bad); background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 6px; padding: 6px 8px; margin: 0 0 6px; }
+.sap-alarm[hidden] { display: none; }
+.sap-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); margin-bottom: 4px; font-size: 12px; }
+.sap-now code { background: none; padding: 0; font-weight: 700; color: var(--text); }
+.sap-now .cw { font: 600 12px var(--font-mono); color: var(--accent); }
+.sap-now .what { color: var(--text-2); flex-basis: 100%; }
+.sap-lines { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+.sap-lines .ln { font: 600 10.5px var(--font-mono); text-align: center; padding: 2px 0; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+.sap-lines .ln.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.sap-mc { border-collapse: collapse; font-size: 12px; width: 100%; margin: 4px 0; }
+.sap-mc caption { text-align: left; font-size: 12px; color: var(--muted); padding-bottom: 2px; }
+.sap-mc th { text-align: left; font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; }
+.sap-mc td { padding: 3px 6px; border-top: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
+.sap-mc td:first-child { font-family: var(--font-mono); color: var(--muted); width: 2.6em; }
+.sap-mc td code { white-space: nowrap; }
+.sap-mc tr.cur td { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); }
+.sap-regs { grid-template-columns: repeat(3, 1fr); }
+.sap-listing { max-height: 250px; }
+.sap-listing .ln { cursor: default; }
+.sap-listing .m { width: 1em; color: var(--accent); flex: none; }
+.sap-listing .d { margin-left: auto; color: var(--muted); flex: none; }
+.sap-listing .ln.ir:not(.cur) { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sap-outs { font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+.sap-tri-panel { max-width: 340px; }
+.sap-tri p { margin: 4px 0; font-size: 12.5px; }
+.sap-tri .muted { color: var(--muted); }
