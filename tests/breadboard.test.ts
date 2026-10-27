@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CPU4_BCD, CPU4_STATE } from '../src/lib/cpu4';
-import { flatten } from '../src/sim/flatten';
+import { findNode, flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
-import { BbNets, type BreadboardLayout, defAt, layoutBounds, packBits, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { BB_MARGIN, BbNets, outputPins, partText, type BreadboardLayout, busDrivers, defAt, drillCrumbs, drillOf, drillPane, driverOf, fitBoards, netIdOf, rovingMove, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { SAP_COMPUTER } from '../src/lib/sap';
+import { pinsOf, sapLayout } from '../src/widgets/saplayout';
+import { TTL_ACTIVE_LOW, TTL_PINS } from '../src/lib/ttl';
 import { insideOf } from '../src/view/breadboard';
 import { register } from '../src/lib/sequential';
 import { CPU4_BB } from './fixtures/bbcpu4';
@@ -110,5 +113,156 @@ describe('breadboard layout', () => {
 
   it('a chip card says what is inside and what it costs', () => {
     expect(insideOf(register(4))).toBe('Inside: 4 × D flip-flop with enable · 60 NANDs');
+  });
+});
+
+describe('breadboard view: fit and arrangement', () => {
+  it('fits the boards whole, centred, at the svg\'s aspect', () => {
+    const v = fitBoards({ w: 100, h: 50 }, 800, 800);
+    expect(v.w / v.h).toBeCloseTo(1);
+    expect(v.x).toBeCloseTo(-BB_MARGIN);
+    expect(v.y + v.h / 2).toBeCloseTo(25);
+  });
+
+  it('a column taller than the canvas fits its width, from the top', () => {
+    const v = fitBoards({ w: 60, h: 200 }, 390, 400, true);
+    expect(v).toMatchObject({ x: -BB_MARGIN, y: -BB_MARGIN, w: 64 });
+    expect(v.w / v.h).toBeCloseTo(390 / 400);
+    // one that fits anyway is centred whole
+    const s = fitBoards({ w: 60, h: 20 }, 390, 400, true);
+    expect(s.y + s.h / 2).toBeCloseTo(10);
+  });
+
+  it('the SAP-1 reads whole on a laptop and as one column on a phone', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    expect(l.narrow).toBeTruthy();
+    expect(pickArrangement(l, 780, 580)).toBe('wide');
+    expect(pickArrangement(l, 390, 420)).toBe('narrow');
+    // beside an open panel on a laptop: the column, larger
+    expect(pickArrangement(l, 436, 573)).toBe('narrow');
+    // a layout without one keeps its own
+    expect(pickArrangement(CPU4_BB, 300, 300)).toBe('wide');
+    const n = layoutBounds(l.narrow!), w = layoutBounds(l);
+    expect(n.w).toBeLessThan(w.w * 0.6);
+  });
+
+  it('checks the narrow arrangement too', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    l.narrow!.boards[1].at = [0, 0];
+    l.narrow!.boards.pop();
+    const errs = validateLayout(l, SAP_COMPUTER);
+    expect(errs.some((e) => /^narrow: board .* overlaps/.test(e))).toBe(true);
+    expect(errs).toContain('narrow: not the same boards and chips');
+  });
+});
+
+describe('breadboard view: the drill', () => {
+  const l = sapLayout(SAP_COMPUTER);
+
+  it('finds the board and chip a path is at or inside', () => {
+    const d = drillOf(l, ['ir', 'hi'])!;
+    expect(d.board.title).toBe('Instruction');
+    expect(d.chip?.part).toBe('74LS173');
+    // deeper: still that chip
+    expect(drillOf(l, ['ir', 'hi', 'ff0', 'nand1'])!.chip).toBe(d.chip);
+    // a module: its board, no chip
+    expect(drillOf(l, ['a'])).toMatchObject({ board: { title: 'A register' }, chip: null });
+    // the top and the bus strip are not on a board
+    expect(drillOf(l, [])).toBeNull();
+    expect(drillOf(l, ['bus'])).toBeNull();
+    // the flags' chips sit on the ALU's board
+    expect(drillOf(l, ['flags', 'reg'])!.board.title).toBe('ALU + flags');
+  });
+
+  it('names the way there: boards, board, chip, the levels below', () => {
+    const d = drillOf(l, ['ir', 'hi', 'ff0'])!;
+    const c = drillCrumbs(d, ['ir', 'hi', 'ff0'], (p) => (p.length === 3 ? 'DFFE_R' : ''));
+    expect(c.map((x) => x.label)).toEqual(['Boards', 'Instruction', `${d.chip!.ref} · 74LS173`, 'ff0']);
+    expect(c.map((x) => x.to)).toEqual(['boards', ['ir'], ['ir', 'hi'], null]);
+    expect(c[3].kind).toBe('DFFE_R');
+    // on the chip itself, the chip is the level on screen
+    expect(drillCrumbs(d, ['ir', 'hi']).map((x) => x.to)).toEqual(['boards', ['ir'], null]);
+    // a module's board is the level on screen
+    expect(drillCrumbs(drillOf(l, ['a'])!, ['a']).map((x) => x.to)).toEqual(['boards', null]);
+  });
+
+  it('two columns where they fit beside the panels, else the board on top', () => {
+    expect(drillPane(1100, 600)).toMatchObject({ stacked: false, w: 506, h: 600 });
+    expect(drillPane(1100, 600, 360).stacked).toBe(false);
+    expect(drillPane(1100, 600, 420).stacked).toBe(true);
+    const p = drillPane(390, 330);
+    expect(p).toMatchObject({ stacked: true, w: 390 });
+    expect(p.h).toBeGreaterThanOrEqual(160);
+    expect(drillPane(2400, 900).w).toBe(620);
+  });
+});
+
+describe('breadboard view: LEDs and keys', () => {
+  const l = sapLayout(SAP_COMPUTER);
+  const root = flatten(SAP_COMPUTER).root;
+
+  it('names the chip that drives an LED, or the input', () => {
+    const a = l.boards.find((b) => b.title === 'A register')!;
+    const d = driverOf(l, root, netIdOf(root, a.leds![0].net)); // q[7]: the high 173
+    expect(d && 'chip' in d && d.chip.path).toEqual(['a', 'hi']);
+    const hlt = driverOf(l, root, netIdOf(root, { path: ['ctl'], port: 'hlt' }));
+    expect(hlt && 'chip' in hlt && hlt.chip.part).toBe('28C16');
+    expect(driverOf(l, root, netIdOf(root, { path: [], port: 'prog' }))).toEqual({ input: 'prog', bit: 0 });
+    expect(driverOf(l, root, -1)).toBeNull();
+  });
+
+  it('finds every board\'s bus drivers: its 245s', () => {
+    const m = busDrivers(l, root, l.buses![0]);
+    for (const t of ['Program counter', 'A register', 'Instruction', 'RAM 16 × 8', 'ALU + flags']) {
+      expect(m.get(t)?.map((c) => c.part), t).toEqual(['74LS245']);
+    }
+    expect(m.has('B register')).toBe(false);
+  });
+
+  it('moves the focus by rows and columns', () => {
+    // two rows: three chips, then four LEDs under them
+    const boxes = [0, 9, 18].map((x) => ({ x, y: 4, w: 8, h: 4 })).concat([0, 2, 4, 20].map((x) => ({ x, y: 10, w: 1.6, h: 2.7 })));
+    expect(rovingMove(boxes, 0, 'ArrowRight')).toBe(1);
+    expect(rovingMove(boxes, 0, 'ArrowLeft')).toBe(0);
+    expect(rovingMove(boxes, 1, 'ArrowDown')).toBe(6); // under the middle chip (x = 13): the nearest LED across, x = 20.8
+    expect(rovingMove(boxes, 0, 'ArrowDown')).toBe(5);
+    expect(rovingMove(boxes, 4, 'ArrowUp')).toBe(0);
+    expect(rovingMove(boxes, 6, 'ArrowUp')).toBe(2);
+    expect(rovingMove(boxes, 6, 'ArrowDown')).toBe(6);
+    expect(rovingMove(boxes, 2, 'End')).toBe(6);
+    expect(rovingMove(boxes, 5, 'Home')).toBe(0);
+  });
+});
+
+describe('breadboard view: print and pins', () => {
+  it('fits a part number beside the notch, squeezing only a narrow package', () => {
+    const wide = partText('74LS173', 8);
+    expect(wide.size).toBeCloseTo(1.75);
+    // a little narrower at most (91 %)
+    expect(wide.squeeze! / (7 * 0.6 * wide.size)).toBeGreaterThan(0.9);
+    expect(partText('28C16', 12).squeeze).toBeNull();
+    const n555 = partText('NE555', 4);
+    expect(n555.room).toBeCloseTo(2.7);
+    // its glyphs no narrower than 80 %
+    expect(n555.size * 0.6 * 5 * 0.8).toBeLessThanOrEqual(n555.room + 1e-9);
+  });
+
+  it('pin names are unique per package and every active-low name is a pin', () => {
+    for (const [k, pins] of Object.entries(TTL_PINS)) {
+      const names = pins.filter((p) => p.port).map((p) => p.name);
+      expect(new Set(names).size, k).toBe(names.length);
+      for (const n of TTL_ACTIVE_LOW[k] ?? []) expect(pins.some((p) => p.name === n), `${k} ${n}`).toBe(true);
+    }
+    expect(pinsOf('ls173')[9]).toMatchObject({ name: 'G1', low: true });
+    expect(pinsOf('ls173')[3]).not.toHaveProperty('low');
+  });
+
+  it('reads a gate package out pin by pin', () => {
+    const root = flatten(SAP_COMPUTER).root;
+    const l = sapLayout(SAP_COMPUTER);
+    const inv = l.boards.find((b) => b.title === 'A register')!.chips.find((c) => c.part === '74LS04')!;
+    const pins = outputPins(inv, findNode(root, inv.path!)!);
+    expect(pins.map((p) => p.n)).toEqual([2, 4, 6, 8, 10, 12]);
+    expect(pins[0].name).toMatch(/Y/);
   });
 });

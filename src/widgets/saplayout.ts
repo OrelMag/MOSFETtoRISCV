@@ -4,10 +4,10 @@
 // switches on its inputs, for the chapter's steps that test a module alone (as Ben tests each board before the next).
 
 import { SAP_COMPUTER, type SapChip, sapChips } from '../lib/sap';
-import { TTL_PART, TTL_PINS } from '../lib/ttl';
+import { TTL_ACTIVE_LOW, TTL_PART, TTL_PINS } from '../lib/ttl';
 import { CTRL_LABEL, SAP_CTRL } from '../sap/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
-import { type BbActive, type BbBoard, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
+import { type BbActive, type BbBoard, type BbBus, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
 
 /** What each chip does on its board (the hover card), by its path in the computer (a module's: the part after the dot). */
 export const SAP_ROLES: Record<string, string> = {
@@ -66,7 +66,8 @@ export const SAP_ROLES: Record<string, string> = {
 export function pinsOf(kind: string): Record<number, BbPin> {
   const out: Record<number, BbPin> = {};
   (TTL_PINS[kind] ?? []).forEach((p, i) => {
-    out[i + 1] = p.port ? { port: p.port, bit: p.bit, name: p.name } : p.name === 'VCC' || p.name === 'GND' ? p.name : 'NC';
+    const low = TTL_ACTIVE_LOW[kind]?.includes(p.name);
+    out[i + 1] = p.port ? { port: p.port, bit: p.bit, name: p.name, ...(low ? { low } : {}) } : p.name === 'VCC' || p.name === 'GND' ? p.name : 'NC';
   });
   return out;
 }
@@ -82,6 +83,9 @@ function chip(all: Map<string, SapChip>, path: string, roleKey = path): BbChip {
 }
 
 const drawn = (part: string, dip: number, role: string): BbChip => ({ part, dip, role });
+
+/** Ben's run / step select before the HLT gate: drawn only, as the 555s it chooses between (a new object: boards number their chips). */
+export const sapSelect = (): BbChip => drawn('74LS32', 14, 'Run / step select: (astable AND run) OR (monostable AND step), the OR here, the ANDs and the inverter in spare gates of the 08 and 04. Drawn only: the stage\'s clock is already the chosen one.');
 
 /** Board widths and gaps, in holes. */
 const COL_W = 52, GAP = 1.6, BUS_W = 12;
@@ -119,14 +123,14 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
         drawn('NE555', 8, 'The astable: the free-running clock. Drawn, not simulated: the stage\'s clock stands in for it.'),
         drawn('NE555', 8, 'The monostable: one clean pulse per press of the step button. Drawn only.'),
         drawn('NE555', 8, 'The bistable: debounces the run / step switch. Drawn only.'),
+        sapSelect(),
         c('clock.inv'), c('clock.and'),
       ],
       // Ben's reset button: clears the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
-      switches: [{ port: 'rst', label: 'RESET' }],
+      switches: [{ port: 'RESET', label: 'RESET' }],
       leds: [
         { net: { path: ['clock'], port: 'clk' }, color: 'blue', label: 'CLK' },
         { net: { path: ['ctl'], port: 'hlt' }, color: 'red', label: 'HLT' },
-        { net: { path: ['bus'], port: 'clash' }, color: 'red', label: '2 ON', gap: true },
       ],
     },
     {
@@ -204,24 +208,33 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
       loads: act('oi', 'shows at the next edge'),
     },
   ];
-  const boards: BbBoard[] = [];
-  const stack = (list: Omit<BbBoard, 'at' | 'size'>[], x: number): number => {
-    let y = 0;
+  const stack = (into: BbBoard[], list: Omit<BbBoard, 'at' | 'size'>[], x: number, y = 0): number => {
     for (const b of list) {
       const s = sized(b, [x, y]);
-      boards.push(s);
+      into.push(s);
       y = Math.round((y + s.size[1] + GAP) * 10) / 10;
     }
     return y - GAP;
   };
-  const hl = stack(left, 0);
-  const hr = stack(right, COL_W + BUS_W + 2 * GAP);
+  const boards: BbBoard[] = [];
+  const hl = stack(boards, left, 0);
+  const hr = stack(boards, right, COL_W + BUS_W + 2 * GAP);
   numberChips(boards);
-  return {
-    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs: 74LS series and 28C16 EEPROMs (pale: drawn only)`,
-    buses: [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, Math.max(hl, hr)], path: ['bus'], port: 'bus' }],
-    boards,
-  };
+  // a narrow canvas (a phone): the right column under the left one, the bus strip beside them both (the chips are
+  // the same objects, numbered the same)
+  const column: BbBoard[] = [];
+  const hn = stack(column, right, 0, stack(column, left, 0) + GAP);
+  // at the foot of the bus column, the bus's own LED: two drivers at once (the strip ends above it, so the layout is no taller)
+  const CLASH_NOTE = 'Lit while two or more boards drive the bus at once: the gate-level bus counts the drivers enabled. Ours, not Ben\'s (his has no such LED).';
+  const clash = (h: number): BbBoard => sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' }, color: 'red', label: 'CLASH', note: CLASH_NOTE }] }, [COL_W + GAP, h - foot + GAP], BUS_W);
+  const foot = sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' } }] }, [0, 0], BUS_W).size[1] + GAP;
+  const H = Math.max(hl, hr);
+  boards.push(clash(H));
+  column.push(clash(hn));
+  // short: the caption is one line over the boards at 1440 px
+  const note = `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs · pale: drawn only`;
+  const bus = (h: number): BbBus[] => [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, h - foot], path: ['bus'], port: 'bus' }];
+  return { note, buses: bus(H), boards, narrow: { note, buses: bus(hn), boards: column } };
 }
 
 /** One module on its own board, its root inputs on DIP switches (the clock left to the stage), its outputs on LEDs. */
@@ -240,6 +253,12 @@ export interface ModuleLayoutOpts {
   labels?: Record<string, string>;
 }
 
+/** A port as a board labels it: a control line by its name (ΣO for eo), else in capitals. */
+const portLabel = (p: string): string => (CTRL_LABEL as Record<string, string>)[p] ?? p.toUpperCase();
+/** A bus's LEDs or switches, under the most significant one: its name and bit range (Q7–0), so the label does not
+ *  read as that one bit's name. */
+const groupLabel = (p: string, w: number): string => `${portLabel(p)}${w - 1}–0`;
+
 export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): BreadboardLayout {
   // the roles are written for the computer: the module's instance name there
   const inst = netlistOf(SAP_COMPUTER)?.instances.find((i) => i.def === def)?.name;
@@ -247,18 +266,18 @@ export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): Breadboard
   const chips = [...all.keys()].map((p) => chip(all, p, inst ? `${inst}.${p}` : p));
   const ins = def.ports.filter((p) => p.dir === 'in' && !p.clock && !(o.skip ?? []).includes(p.name));
   const switches: BbSwitch[] = ins.flatMap((p, i) => {
-    const g = (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? p.name.toUpperCase() }] : bitSwitches(p.name, p.width, p.name)) as BbSwitch[];
+    const g = (p.width === 1 ? [{ port: p.name, label: o.labels?.[p.name] ?? portLabel(p.name) }] : bitSwitches(p.name, p.width, groupLabel(p.name, p.width))) as BbSwitch[];
     return i ? g.map((s, j) => (j ? s : { ...s, gap: true })) : g;
   });
   const outs: NonNullable<ModuleLayoutOpts['leds']> = o.leds ?? def.ports.filter((p) => p.dir === 'out').map((p) => ({ port: p.name }));
   const leds: BbLed[] = outs.flatMap((l, i) => {
     const p = def.ports.find((q) => q.name === l.port)!;
-    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? p.name.toUpperCase() } as BbLed]
-      : ledsOf([], p.name, p.width, l.color ?? 'red', (b) => (b === p.width - 1 ? p.name : ''));
+    const ls = p.width === 1 ? [{ net: { path: [], port: p.name }, color: l.color ?? 'red', label: l.label ?? portLabel(p.name) } as BbLed]
+      : ledsOf([], p.name, p.width, l.color ?? 'red', (b) => (b === p.width - 1 ? groupLabel(p.name, p.width) : ''));
     return i ? withGap(ls) : ls;
   });
   const W = 64;
-  const top = sized({ title: o.title, chips: [...(o.before ?? []), ...chips], leds, ...(o.drives ? { drives: { path: [], port: o.drives, label: `${o.drives.toUpperCase()} · drives the bus` } } : {}), ...(o.loads ? { loads: { path: [], port: o.loads, label: `${o.loads.toUpperCase()} · loads at the next edge` } } : {}) }, [0, 0], W);
+  const top = sized({ title: o.title, chips: [...(o.before ?? []), ...chips], leds, ...(o.drives ? { drives: { path: [], port: o.drives, label: `${portLabel(o.drives)} · drives the bus` } } : {}), ...(o.loads ? { loads: { path: [], port: o.loads, label: `${portLabel(o.loads)} · loads at the next edge` } } : {}) }, [0, 0], W);
   const boards = [top];
   if (switches.length) boards.push(sized({ title: 'Test switches', chips: [], switches }, [0, top.size[1] + GAP], W));
   numberChips(boards);

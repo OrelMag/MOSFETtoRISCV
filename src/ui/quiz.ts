@@ -44,7 +44,9 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
   };
   reveal.addEventListener('click', () => { right(); intoView(explain); });
   q.options.forEach((o, i) => {
-    const btn = h('button', { class: 'btn' }, o);
+    // authored HTML, as the question and the explanations are (<code>RO II CE</code>), in one span: the button is a
+    // flex box, which would set a code and the text after it apart
+    const btn = h('button', { class: 'btn' }, h('span', { html: o }));
     btn.addEventListener('click', () => {
       if (i !== q.answer) {
         btn.classList.add('wrong');

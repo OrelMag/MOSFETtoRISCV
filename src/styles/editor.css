@@ -320,9 +320,11 @@
 
 /* toast, prompt, help */
 .sb-toast {
-  position: absolute; left: 50%; top: 12px; transform: translate(-50%, -8px); z-index: 6; pointer-events: none;
+  position: absolute; top: 12px; transform: translate(-50%, -8px); z-index: 6; pointer-events: none;
+  /* centred in the room a docked drawer leaves (--toast-dock, set by dock.ts), so it never covers the drawer's title */
+  left: calc(max(100% - var(--toast-dock, 0px), 60%) / 2); max-width: calc(max(100% - var(--toast-dock, 0px), 60%) * 0.9);
   background: var(--ed-toast); color: var(--ed-toast-text); font-size: 13px; padding: 6px 12px; border-radius: 8px;
-  box-shadow: var(--shadow); opacity: 0; transition: opacity 0.15s, transform 0.15s; max-width: 80%;
+  box-shadow: var(--shadow); opacity: 0; transition: opacity 0.15s, transform 0.15s;
 }
 .sb-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .sb-toast.err { background: var(--ed-err); color: #fff; }
@@ -450,6 +452,8 @@
   .sandbox { display: flex; flex-direction: column; height: auto; }
   /* the palette is a drawer under the top bar, closed by default: the canvas starts near the top */
   .sb-parts-btn { display: inline-flex; }
+  /* Open… sized by its longest chip name pushed the sticky group over the Parts button and the tabs */
+  .sb-open { max-width: 118px; }
   .sandbox:not(.pal-open) > .sb-palette { display: none; }
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */

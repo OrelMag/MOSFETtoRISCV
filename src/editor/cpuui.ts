@@ -1113,14 +1113,14 @@ class CpuPanel {
     // the listing: the RAM as it is now (a STA changes it), the instruction under way, where PC and MAR point
     const cur = mon.current;
     const ram = r?.ram ?? Array<number>(16).fill(-1);
-    const lk = `sap|${ram.join(',')}|${cur}|${r?.pc}|${r?.mar}|${this.sel}`;
+    const lk = `sap|${ram.join(',')}|${cur}|${r?.pc}|${r?.mar}|${this.sel}|${mon.rowKey}`;
     if (lk !== this.listKey) {
       this.listKey = lk;
       this.curKey = '';
       this.rowOf.clear();
       this.rows = ram.map((b, i) => {
         const row = h('div', { class: `ln${i === cur ? ' cur' : ''}${i === this.sel ? ' sel' : ''}`, 'data-pc': String(i), title: 'Its five steps, and the modules they use' },
-          h('span', { class: 'a' }, hx(i, 1)), h('span', { class: 'w' }, hx(b)), h('span', { class: 't' }, b < 0 ? '?' : sapDisasm(b)),
+          h('span', { class: 'a' }, hx(i, 1)), h('span', { class: 'w' }, hx(b)), h('span', { class: 't' }, mon.rowText(i, b)),
           ...(i === r?.pc ? [h('span', { class: 'stg', title: 'The program counter: the next fetch' }, 'PC')] : []),
           ...(i === r?.mar ? [h('span', { class: 'stg', title: 'The memory address register: the RAM reads and writes here' }, 'MAR')] : []));
         row.addEventListener('click', () => this.select(i));

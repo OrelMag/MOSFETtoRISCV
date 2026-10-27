@@ -12,7 +12,7 @@ import { GateSim } from '../src/sim/gatesim';
 import { shortText, SwitchSim } from '../src/sim/switchsim';
 import { B0, B1 } from '../src/sim/types';
 import { validateLayout } from '../src/view/bblayout';
-import { TRISTATE_BUS } from '../src/widgets/sap';
+import { sapScene, TRISTATE_BUS } from '../src/widgets/sap';
 import { moduleLayout, SAP_ROLES, sapLayout } from '../src/widgets/saplayout';
 import { microTable, SapFollower, sapGloss, sapHw, sapRam } from '../src/widgets/sapmon';
 import { tick } from './yieldtick';
@@ -29,6 +29,20 @@ describe('SAP-1 breadboards', () => {
       for (const b of l.boards) for (const c of b.chips) expect(c.role, `${c.ref} ${c.part}`).toBeTruthy();
     }
     for (const p of sapChips(SAP_COMPUTER).map((c) => c.path)) expect(SAP_ROLES[p], p).toBeTruthy();
+  });
+
+  it('labels: the clash LED is the bus\'s (CLASH), a module board names ΣO as ΣO', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    const leds = (t: string) => l.boards.find((b) => b.title === t)!.leds!.map((x) => x.label);
+    expect(leds('Clock')).not.toContain('2 ON');
+    expect(leds('Bus')).toEqual(['CLASH']);
+    const alu = moduleLayout(SAP_ALU, { title: 'ALU', drives: 'eo' });
+    expect(alu.boards[0].drives?.label).toBe('ΣO · drives the bus');
+    expect(alu.boards[1].switches!.map((s) => s.label)).toContain('ΣO');
+    // a bus is labelled under its top bit with its range, not with what reads as that bit's name
+    const areg = moduleLayout(SAP_AREG, { title: 'A register', drives: 'ao' });
+    expect(areg.boards[0].leds!.map((x) => x.label).filter(Boolean)).toEqual(['Q7–0', 'DRV7–0']);
+    expect(areg.boards[1].switches!.map((s) => s.label).filter(Boolean)).toEqual(['AI', 'AO', 'BUS7–0', 'RST']);
   });
 
   it('single-module boards are valid', () => {
@@ -54,7 +68,7 @@ function edge(sim: GateSim, mon: SapFollower): void {
 
 function boot(bytes: number[]): GateSim {
   const sim = new GateSim(flatten(sapComputer(bytes)));
-  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0, rst: 0 })) sim.setInput(k, v);
+  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0, RESET: 0 })) sim.setInput(k, v);
   sim.reset('zero');
   sim.settle();
   return sim;
@@ -76,6 +90,52 @@ describe('SAP panel: the golden model in lock step', () => {
     edge(sim, mon);
     expect(mon.mismatch).toBeNull();
   }, 120_000);
+
+  it('step 0\'s try: T0 (CO MI) before any Pulse, T1 (RO II CE) after one', async () => {
+    const { CTRL } = await import('../src/sap/isa');
+    const bytes = sapBytes(SAP_PROGRAMS[0].src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    expect(sapHw(sim)).toMatchObject({ step: 0, cw: CTRL.co | CTRL.mi });
+    edge(sim, mon);
+    expect(sapHw(sim)).toMatchObject({ step: 1, cw: CTRL.ro | CTRL.ii | CTRL.ce });
+  });
+
+  it('the Microcode try: Instruction (to the next T0), then four Pulses, is T4 of the ADD', () => {
+    const bytes = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'add')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    // the panel's Instruction: clock until the step is T0 again (at least one cycle)
+    let n = 0;
+    do { edge(sim, mon); n++; } while (sapHw(sim).step !== 0 && n < 5);
+    expect([n, sapHw(sim).ir >> 4, sapHw(sim).step]).toEqual([5, 1, 0]);
+    for (let i = 0; i < 4; i++) edge(sim, mon);
+    expect([sapHw(sim).ir >> 4, sapHw(sim).step]).toEqual([2, 4]);
+    expect(mon.mismatch).toBeNull();
+  });
+
+  it('the RAM try: the low 189 is the board\'s ' + 'U10, its outputs inverted, flipped back by the 04', async () => {
+    const { SAP_RAM_LO_REF } = await import('../src/chapters/ch-sap');
+    const ref = sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.chips).find((c) => c.path?.join('.') === 'ram.lo')!.ref;
+    expect(ref).toBe(SAP_RAM_LO_REF);
+    const { findNode } = await import('../src/sim/flatten');
+    const { pack } = await import('../src/sim/values');
+    const sim = boot([]);
+    const q = (p: string, port: string) => pack(sim.getBits(findNode(sim.design.root, p.split('.'))!.ports[port]));
+    expect(q('ram.lo', 'q_n')).toBe(15);
+    expect(sapRam(sim)[0]).toBe(0);
+  });
+
+  it('the Flags try: run until ZF lights, then JZ\'s T2 has J', async () => {
+    const { CTRL } = await import('../src/sap/isa');
+    const bytes = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'countdown')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    let c = 0;
+    for (; c < 2000 && sapHw(sim).zf !== 1; c++) edge(sim, mon);
+    let h = sapHw(sim);
+    for (; c < 2000 && !(h.ir >> 4 === 8 && h.step === 2); c++) { edge(sim, mon); h = sapHw(sim); }
+    expect(h.zf).toBe(1);
+    expect(h.cw & CTRL.j).toBe(CTRL.j);
+    expect(mon.mismatch).toBeNull();
+  });
 
   it('a difference is caught at the next edge, Back restores', () => {
     const bytes = sapBytes(SAP_PROGRAMS[0].src);
@@ -132,10 +192,10 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(mon.outs.length).toBeGreaterThan(1);
     key(sim, mon, bytes);
     expect(sapRam(sim)).toEqual([...bytes, ...Array(16 - bytes.length).fill(0)]);
-    set(sim, { rst: 1 });
+    set(sim, { RESET: 1 });
     expect(sapHw(sim)).toMatchObject({ pc: 0, step: 0, ir: 0, a: 0, b: 0, cf: 0, zf: 0 });
     if (held) { edge(sim, mon); edge(sim, mon); }
-    set(sim, { rst: 0 });
+    set(sim, { RESET: 0 });
     const before = mon.outs.length;
     for (let c = 0; c < 4000 && sapHw(sim).cw >> 15 !== 1; c++) {
       edge(sim, mon);
@@ -147,14 +207,40 @@ describe('RESET: reprogramming by the switches at any time', () => {
     expect(Array.from(mon.iss.ram)).toEqual(sapRam(sim));
   }, 120_000);
 
+  it('the pin is RESET, first on the bar; the stage Reset is labelled a power cycle', () => {
+    const ins = SAP_COMPUTER.ports.filter((p) => p.dir === 'in' && !p.clock).map((p) => p.name);
+    expect(ins[0]).toBe('RESET');
+    expect(ins).not.toContain('rst');
+    expect(sapScene({ empty: true }).resetLabel).toBe('Power cycle');
+    expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.switches ?? []).find((s) => s.port === 'RESET')?.label).toBe('RESET');
+  });
+
+  it('the inspector\'s description follows the scene: an empty RAM or a program', () => {
+    expect(sapScene({ empty: true }).root.summary).toMatch(/RAM starts empty/);
+    expect(sapScene({ empty: true }).root.summary).not.toMatch(/with a program/);
+    expect(sapScene({ program: 'fib' }).root.summary).toMatch(/RAM starts with a program/);
+  });
+
+  it('Fibonacci after RESET reruns on the x and y it overwrote: 144, then halts', async () => {
+    const bytes = sapBytes(SAP_PROGRAMS.find((q) => q.id === 'fib')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    for (let c = 0; c < 4000 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); if (c % 200 === 199) await tick(); }
+    expect(sapRam(sim).slice(12, 14)).toEqual([144, 233]);
+    set(sim, { RESET: 1 });
+    set(sim, { RESET: 0 });
+    const before = mon.outs.length;
+    for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); expect(mon.mismatch).toBeNull(); }
+    expect(mon.outs.slice(before)).toEqual([144]);
+  }, 60_000);
+
   it('RESET un-halts a halted computer, and it runs its program again', async () => {
     const p = SAP_PROGRAMS.find((q) => q.id === 'add')!;
     const bytes = sapBytes(p.src);
     const sim = boot(bytes), mon = new SapFollower(bytes);
     for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) edge(sim, mon);
     expect(mon.iss.halted).toBe(true);
-    set(sim, { rst: 1 });
-    set(sim, { rst: 0 });
+    set(sim, { RESET: 1 });
+    set(sim, { RESET: 0 });
     const before = mon.outs.length;
     for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); expect(mon.mismatch).toBeNull(); }
     expect(mon.outs.slice(before)).toEqual(p.outs);
@@ -194,6 +280,9 @@ describe('Appendix C quotes measured numbers', () => {
     expect(cost.logicNands).toBe(SAP_COST.logic);
     expect(cost.eepromNands).toBe(SAP_COST.perEeprom * SAP_COST.eeproms);
     expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.chips).filter((c) => !c.path).length).toBe(SAP_COST.drawn);
+    // Ben's run / step select, drawn on the clock board; the caption counts every IC
+    expect(sapLayout(SAP_COMPUTER).boards.find((b) => b.title === 'Clock')!.chips.map((c) => c.part)).toContain('74LS32');
+    expect(sapLayout(SAP_COMPUTER).note).toBe(`${SAP_COST.chips + SAP_COST.drawn} ICs · pale: drawn only`);
     expect(stats(S.SAP_BUS).nands).toBe(SAP_COST.bus);
     expect(stats(S.SAP_CONTROL).nands - 2 * SAP_COST.perEeprom).toBe(SAP_COST.control);
     expect([stats(S.SAP_CLOCK).nands, stats(S.SAP_AREG).nands, stats(S.SAP_ALU).nands, stats(S.SAP_PC).nands, stats(S.SAP_RAM).nands])
