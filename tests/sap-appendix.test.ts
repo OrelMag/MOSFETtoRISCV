@@ -133,3 +133,22 @@ describe('the real bus: tri-state drivers at switch level', () => {
     expect(agree.hasShort).toBe(false);
   });
 });
+
+describe('Appendix C quotes measured numbers', () => {
+  it('SAP_COST matches the library', async () => {
+    const { SAP_COST } = await import('../src/chapters/ch-sap');
+    const { stats } = await import('../src/sim/stats');
+    const S = await import('../src/lib/sap');
+    const T = await import('../src/lib/ttl');
+    const cost = S.sapCost(SAP_COMPUTER);
+    expect(cost.chips).toBe(SAP_COST.chips);
+    expect(cost.logicNands).toBe(SAP_COST.logic);
+    expect(cost.eepromNands).toBe(SAP_COST.perEeprom * SAP_COST.eeproms);
+    expect(sapLayout(SAP_COMPUTER).boards.flatMap((b) => b.chips).filter((c) => !c.path).length).toBe(SAP_COST.drawn);
+    expect(stats(S.SAP_BUS).nands).toBe(SAP_COST.bus);
+    expect(stats(S.SAP_CONTROL).nands - 2 * SAP_COST.perEeprom).toBe(SAP_COST.control);
+    expect([stats(S.SAP_CLOCK).nands, stats(S.SAP_AREG).nands, stats(S.SAP_ALU).nands, stats(S.SAP_PC).nands, stats(S.SAP_RAM).nands])
+      .toEqual([SAP_COST.clock, SAP_COST.areg, SAP_COST.alu, SAP_COST.pc, SAP_COST.ram]);
+    expect([stats(T.LS173).nands, stats(T.LS161).nands, stats(T.LS189).nands]).toEqual([SAP_COST.ls173, SAP_COST.ls161, SAP_COST.ls189]);
+  });
+});
