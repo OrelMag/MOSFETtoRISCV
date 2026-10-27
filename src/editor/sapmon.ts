@@ -154,7 +154,16 @@ export class SapMonitor {
   }
 
   get checking(): boolean {
-    return !!this.iss && this.synced && !this.problem && !this.programming && this.hasState;
+    return this.ensure() && this.synced && !this.problem && !this.programming && this.hasState;
+  }
+
+  /** The model, started from the hardware when there is none yet and the hardware is where it starts (false: none). */
+  private ensure(): boolean {
+    if (this.iss) return true;
+    if (!this.synced || this.programming || this.problem || !this.desc || !this.hasState || this.prog === 1) return false;
+    this.iss = this.fromHardware();
+    if (!this.iss) this.problem = 'the hardware holds unknown values (X): power on "to 0" and Reset';
+    return !!this.iss;
   }
 
   /** Why the model is not compared (null: it is, or it waits for a Reset). */
@@ -249,13 +258,13 @@ export class SapMonitor {
       this.iss = null;
       return;
     }
-    if (this.programming || (!this.iss && this.synced)) {
-      const was = this.programming;
+    if (this.programming) {
+      // PROG went off: take the machine as the switches left it
       this.programming = false;
-      this.iss = this.fromHardware();
-      if (was) this.synced = true;
-      if (!this.iss) { this.problem = 'the hardware holds unknown values (X): power on "to 0" and Reset'; return; }
+      this.synced = true;
+      this.iss = null;
     }
+    if (!this.ensure()) return;
     const iss = this.iss;
     if (!iss || !this.synced || iss.halted) return;
     this.compare(true, this.log.at(-1)?.text ?? 'power-on');

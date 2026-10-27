@@ -71,6 +71,8 @@ describe('the SAP-1 example', () => {
     expect(ram.find((p) => p.id === 'lo')!.ref).toEqual({ lib: ls189With(bytes.map((b) => b & 15)).id });
     expect(ram.find((p) => p.id === 'hi')!.ref).toEqual({ lib: ls189With(bytes.map((b) => b >> 4)).id });
     expect(detectSap(ws.chips[id])).toEqual({ prefix: '' });
+    // the library's computer placed whole is one too, its modules a level down
+    expect(detectSap({ ...ws.chips[id], parts: [{ id: 'sap', ref: { lib: 'sap1' }, at: [0, 0] }] })).toEqual({ prefix: 'sap.' });
   });
 
   it('a loaded 74LS189 is rebuilt from its id alone', () => {
