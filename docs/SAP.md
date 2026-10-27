@@ -118,3 +118,64 @@ with the bus between them, as the breadboards), net labels for the 16 control li
 9. Flags and conditional jumps (JC, JZ; the EEPROM address gains the flags).
 10. Programs (Fibonacci, multiply): run them; cost against our RV32I.
 Recap: keep, three checks, practise.
+
+## As built (src/sap, src/lib/ttl.ts, src/lib/sap.ts): ids, paths and changes to the contract
+
+**Chip ids** (`TTL_PINS` keys; `ttlKind(def)` maps a def to its key, `TTL_PART[key]` the printed part number,
+`TTL_ACTIVE_LOW[key]` the pins drawn with an overbar): `ls00 ls02 ls04 ls08 ls32 ls86 ls138 ls139 ls157 ls161 ls173
+ls189 ls245 ls273 ls283 ls76 ne555`, and `at28c16` for every `eeprom2k(image)` (id `at28c16_<hash>`). `TTL_PINS[key]`
+is an array: `pins[n - 1]` is DIP pin n, `{ name, port?, bit? }` (VCC / GND / the 555's pins have no port). Ports group
+pins into buses (`ls173`: `m n g1_n g2_n clr clk d[4] → q[4]`; `ls245`: `dir oe_n a[8] → b[8]`; `ls161`: `clr_n clk d[4]
+enp ent load_n → q[4] rco`; `ls189`: `a[4] cs_n we_n d[4] → q_n[4]`; `ls157`: `a[4] b[4] s g_n → y[4]`; `ls138`: `a[3] g1
+g2a_n g2b_n → y_n[8]`; `ls283`: `a[4] b[4] c0 → s[4] c4`; `ls273`: `clr_n clk d[8] → q[8]`; quad gates `a[4] b[4] →
+y[4]`, `ls04`: `a[6] → y[6]`; `at28c16`: `addr[11] ce_n oe_n we_n → data[8]`). Helper parts: `dffe_r` (DFF_R + a mux:
+the 173's flip-flop), `latch4` and `ram16x4l` (the 189's store: level-sensitive D latches), `d_latch_sr` and `jkff_n`
+(the 76's falling-edge JK).
+
+**Modules** (`sapChips(def)` lists every chip with its path and key; `sapCost(def)` chips, NANDs, and NANDs without the
+EEPROMs' ROM trees; `SAP_STATE` where a register is read: `[instance path, port]`, e.g. A = `a.hi.q`:`a.lo.q`, flags
+= `flags.reg.q` bit 0 CF, bit 1 ZF):
+
+| module | ports (in → out) |
+|---|---|
+| `SAP_CLOCK` | `osc` (clock), `hlt` → `clk`, `nclk` |
+| `SAP_PC` | `clk ce co j bus[8]` → `pc[4] drv[8]` |
+| `SAP_MAR` | `clk mi prog bus[8] addrSw[4]` → `addr[4]` |
+| `SAP_RAM` | `clk addr[4] bus[8] dataSw[8] prog write ri ro` → `q[8] drv[8]` |
+| `SAP_IR` | `clk ii io bus[8]` → `op[4] ir[8] drv[8]` |
+| `SAP_CONTROL` | `nclk op[4] cf zf` → the 16 lines (`hlt mi ri ro io ii ai ao eo su bi oi ce co j fi`; ΣO is `eo`), `t[3]`, `ts[5]` |
+| `SAP_AREG` | `clk ai ao bus[8]` → `q[8] drv[8]` |
+| `SAP_ALU` | `a[8] b[8] su eo` → `sum[8] drv[8] cout` |
+| `SAP_FLAGS` | `clk fi sum[8] cout` → `cf zf` |
+| `SAP_BREG` | `clk bi bus[8]` → `q[8]` |
+| `SAP_OUT` | `clk oi bus[8]` → `q[8]` |
+| `SAP_DISPLAY` | `v[8]` → `d0[8] d1[8] d2[8]` |
+| `SAP_BUS` | `pc ram ir a alu` (8 each), `co ro io ao eo` → `bus[8] clash` |
+
+`SAP_COMPUTER` (id `sap1`, empty RAM) is registered, so the registry-wide layout / route / sandbox round-trip tests cover
+it; `sapComputer(bytes)` returns it for an all-zero RAM, else an unregistered copy (id `sap1_<the 16 bytes in hex>`) whose
+`powerOn` hints (`ls189Init`) put the bytes into the 189s' latches (`ram.lo.mem.w<i>.l<j>.sr.q`): like
+`editor/memory.ts ramWithInit`, because a sandbox document cannot hold hints that reach into sub-chips. Top-level net labels: `CLK`, `NCLK`, `BUS`, `A`, `B`, `Σ`, `OUT`, `CF`, `ZF`, `opcode`, and the
+control lines in capitals (`ΣO`).
+
+**Changes to the contract, and why**
+
+- The clock module's input is `osc` (its output is `clk`, and a part cannot have two ports of one name).
+- Modules carry the inverters the active-high rule needs, as extra 74LS04s named `inv`: `pc` (J → LOAD, CO → G), `mar`
+  (MI), `ir` (II, IO), `a` (AI, AO), `b` (BI), `alu` (ΣO), `flags` (FI). The RAM's come from the spare gates of `ilo`.
+- RAM writes: `ram.w` (74LS08) makes RI · CLK and `ram.wsel` (74LS157) picks it or the write button (programming mode);
+  `ilo`'s spare inverters give the 189s' WE and the 245's G. The 189 writes while WE is low, so the write happens
+  while the clock is high: at the rising edge in effect (nothing on the bus changes during an `AO RI` step), which is
+  the golden model's rising-edge write.
+- The zero test lives in `flags` (`nor`, `and`, as the table says), so `alu` has no `zero` output. Flags register:
+  bit 0 CF, bit 1 ZF.
+- `ctl` has one more output, `ts[5]`: the step LEDs (T0–T4 one-hot) from `ctl.inv`. The step counter wraps by the 138's
+  Y5 on the 161's (asynchronous) CLR, as Ben wires it.
+- The 245 is modelled A → B only (DIR tied high on every board); the 28C16's WE is drawn, not simulated.
+- 7-segment bits follow the site's display part: bit 0 = segment a … bit 6 = g (not Ben's wiring order). The display
+  EEPROM is addressed `[signed A10][digit A9–A8][value A7–A0]`, Ben's layout; `disp.romK` has digit K tied.
+- `NE555` has no ports (drawn only).
+- "Count up" counts by 15 and stops when the adder carries (a program that never halts cannot be checked to its end).
+- `SapISS.halted` is a getter: the current control word has HLT (the hardware's `halt` output at the same moment);
+  `drive()` gives the bus and how many drive it, `control()` the current control word, `run()` OUT's values.
+- Cost: five EEPROMs as ROM trees are 65 524 NANDs each; `sapCost(...).logicNands` (3 306) is the rest.
