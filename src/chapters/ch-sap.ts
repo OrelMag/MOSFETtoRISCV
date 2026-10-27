@@ -348,7 +348,8 @@ export const chAppendixSap: Chapter = {
         <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as ROM, 2 KB each; the
         simulation runs each as a mux tree of ${k(SAP_COST.perEeprom)} NANDs, which says more about a mux than about a ROM: on silicon a
         2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2 048 addresses are used.</p>
-        <div class="try">Pulse to T4 of the ADD (the panel's step table follows): ΣO, AI and FI are lit, and the ALU drives the bus.</div>`,
+        <div class="try">Press the panel's Instruction once (LDA runs to the next T0), then Pulse four times: T4 of the ADD
+        (the step table follows) has ΣO, AI and FI lit, and the ALU drives the bus.</div>`,
       scene: () => sapScene({ program: 'add', highlight: ['ctl'] }),
       tries: [(st) => { const h = hw(st); return !!h && h.ir >> 4 === 2 && h.step === 4; }],
       challenge: {
@@ -384,7 +385,9 @@ export const chAppendixSap: Chapter = {
       title: 'Programs',
       body: `
         <p>Fibonacci until a sum passes 255, and Ben's multiply (a loop of additions, with JC as its counter) are in the
-        panel's list; Edit takes your own, 16 bytes at most. Fibonacci's 13 values take
+        panel's list; Edit takes your own, 16 bytes at most. Run to HLT takes the rate beside it, Ben's potentiometer:
+        2 Hz to follow every step, 500 Hz, or as fast as the page runs; the golden model is checked at every edge at any
+        rate. Fibonacci's 13 values take
         ${FIB.bytes} bytes and ${FIB.cycles}
         clock cycles, five an instruction.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the

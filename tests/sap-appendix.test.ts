@@ -96,6 +96,18 @@ describe('SAP panel: the golden model in lock step', () => {
     expect(sapHw(sim)).toMatchObject({ step: 1, cw: CTRL.ro | CTRL.ii | CTRL.ce });
   });
 
+  it('the Microcode try: Instruction (to the next T0), then four Pulses, is T4 of the ADD', () => {
+    const bytes = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'add')!.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    // the panel's Instruction: clock until the step is T0 again (at least one cycle)
+    let n = 0;
+    do { edge(sim, mon); n++; } while (sapHw(sim).step !== 0 && n < 5);
+    expect([n, sapHw(sim).ir >> 4, sapHw(sim).step]).toEqual([5, 1, 0]);
+    for (let i = 0; i < 4; i++) edge(sim, mon);
+    expect([sapHw(sim).ir >> 4, sapHw(sim).step]).toEqual([2, 4]);
+    expect(mon.mismatch).toBeNull();
+  });
+
   it('a difference is caught at the next edge, Back restores', () => {
     const bytes = sapBytes(SAP_PROGRAMS[0].src);
     const sim = boot(bytes), mon = new SapFollower(bytes);

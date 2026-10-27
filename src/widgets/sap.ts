@@ -85,6 +85,46 @@ export const sapClockScene = () => sapModuleScene(SAP_CLOCK, 'Clock', { before: 
 /** Clock periods a Run may take before it gives up (a program that never halts). */
 const RUN_LIMIT = 20000;
 
+/** Run's clock rates in Hz, Ben's potentiometer (0: as fast as the page runs). */
+export const SAP_RATES = [2, 10, 50, 500, 0] as const;
+
+/**
+ * Clock the stage at `hz` until `until`: whole cycles on animation frames, so every edge goes through the edge hooks
+ * (the golden model checked at each). Up to 10 Hz each cycle is a Pulse (Back undoes one); faster, Back gets a
+ * checkpoint a second. A late frame (a hidden tab) does not make up the backlog.
+ */
+export function pacedRun(stage: Stage, hz: number, until: () => boolean, onStop: () => void): () => void {
+  let raf: number | null = null, done = false, t0 = performance.now(), ran = 0, saved = t0;
+  const stop = () => {
+    if (raf !== null) cancelAnimationFrame(raf);
+    raf = null;
+    if (done) return;
+    done = true;
+    onStop();
+  };
+  const tick = (now: number) => {
+    let due = Math.floor(((now - t0) * hz) / 1000) - ran;
+    if (due > Math.max(2, hz / 4)) {
+      // late (a hidden tab, a slow frame): one cycle now, the rate from here
+      due = 1;
+      t0 = now - ((ran + 1) * 1000) / hz;
+    }
+    if (due > 0 && !until()) {
+      if (hz <= 10) for (let i = 0; i < due && !until(); i++) stage.pulse();
+      else {
+        if (now - saved > 1000) { stage.checkpoint(); saved = now; }
+        stage.runCycles(due, until);
+      }
+      ran += due;
+    }
+    if (until()) return stop();
+    raf = requestAnimationFrame(tick);
+  };
+  stage.checkpoint();
+  raf = requestAnimationFrame(tick);
+  return stop;
+}
+
 export function sapPanel(o: SapSceneOptions): ScenePanel {
   return (stage: Stage): Widget => {
     const { source, asm, id } = programOf(o);
@@ -95,22 +135,29 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
     let stopRun: (() => void) | null = null;
 
     stage.edgeHooks.add({ before: () => stage.sim && mon.before(stage.sim), after: () => stage.sim && mon.after(stage.sim) });
-    stage.historyHooks.add({ save: () => mon.save(), restore: (v) => mon.restore(v as FollowerState) });
+    // Back during a run stops it: the state it restores is the learner's to look at
+    stage.historyHooks.add({ save: () => mon.save(), restore: (v) => { stopRun?.(); mon.restore(v as FollowerState); } });
     stage.resetHooks.add(() => { stopRun?.(); mon.reset(); });
 
     const halted = () => !!stage.sim && stage.value('halt') === 1;
-    const runBtn = h('button', { class: 'btn sm primary', title: 'Run at full speed until HLT (or a mismatch, or Stop)' }, 'Run to HLT') as HTMLButtonElement;
+    const runBtn = h('button', { class: 'btn sm primary', title: 'Run at the rate beside it until HLT (or a mismatch, or Stop); the golden model is checked at every edge' }, 'Run to HLT') as HTMLButtonElement;
+    const rateSel = h('select', { 'aria-label': 'clock rate', title: 'Clock rate, as Ben\'s potentiometer sets it' },
+      ...SAP_RATES.map((r) => h('option', { value: String(r) }, r ? `${r} Hz` : 'full'))) as HTMLSelectElement;
+    rateSel.value = '0';
     const stop = () => { stopRun?.(); };
     runBtn.addEventListener('click', () => {
       if (stopRun) return stop();
       stage.checkpoint();
       runBtn.textContent = 'Stop';
       const start = mon.iss.cycles;
-      stopRun = frameRun(stage, () => halted() || !!mon.mismatch || mon.iss.cycles - start > RUN_LIMIT, () => {
+      const until = () => halted() || !!mon.mismatch || mon.iss.cycles - start > RUN_LIMIT;
+      const done = () => {
         stopRun = null;
         runBtn.textContent = 'Run to HLT';
         stage.refresh();
-      });
+      };
+      const hz = Number(rateSel.value);
+      stopRun = hz ? pacedRun(stage, hz, until, done) : frameRun(stage, until, done);
     });
     const instrBtn = h('button', {
       class: 'btn sm', title: 'Clock to the next T0: the rest of this instruction (all five steps from T0)',
@@ -159,7 +206,7 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
     const outs = h('div', { class: 'sap-outs' });
     const body = h('div', { class: 'cpu-body' },
       o.fixed ? null : h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn),
-      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, instrBtn, runBtn),
+      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, instrBtn, runBtn, rateSel),
       o.fixed ? null : editWrap, alarm, status, now,
       h('div', { class: 'cpu-sec' }, 'Control word', h('span', { class: 'cpu-sec-hint' }, 'the EEPROMs\' 16 outputs now')), lines,
       h('div', { class: 'cpu-sec' }, 'This instruction\'s steps'), steps,
