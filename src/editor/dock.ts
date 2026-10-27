@@ -91,6 +91,7 @@ class Dock {
     if (!cur) {
       this.host.remove();
       overlay.style.removeProperty('--dock-space');
+      overlay.parentElement?.style.removeProperty('--toast-dock');
       this.refit();
       this.ed.renderActions();
       return;
@@ -99,6 +100,8 @@ class Dock {
     const w = cur.width ?? 360;
     this.host.style.setProperty('--dock-w', `${w}px`);
     overlay.style.setProperty('--dock-space', `${w + 16}px`);
+    // the toast is the overlay's sibling: it centres in the room the drawer leaves (not over the drawer's title)
+    overlay.parentElement?.style.setProperty('--toast-dock', `${w + 16}px`);
     this.refit();
     for (const p of this.panes) p.el.hidden = p !== cur;
     this.tabs.hidden = this.panes.length < 2;

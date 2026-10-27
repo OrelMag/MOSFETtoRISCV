@@ -177,10 +177,13 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
       if (sel.value === '__mine') { editWrap.hidden = false; return; }
       stage.load(sapScene({ ...o, empty: false, program: sel.value, source: undefined }));
     });
-    const errBox = h('div', { class: 'asm-errors' });
+    // the errors in full under the editor as you type: the inline one is cut at the editor's edge (a line there cannot
+    // wrap without leaving the textarea's lines)
+    const errBox = h('div', { class: 'asm-errors', 'aria-live': 'polite' });
+    const showErrors = (r: SapAsmResult) => { errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'); };
     const editor = codeEditor({
       value: source || SAP_PROGRAMS[0].src, lang: 'sapasm', rows: 12,
-      onChange: () => { const r = assembleSap(editor.value); editor.setDiagnostics(r.errors); errBox.textContent = ''; },
+      onChange: () => { const r = assembleSap(editor.value); editor.setDiagnostics(r.errors); showErrors(r); },
     });
     const editWrap = h('div', { class: 'cpu-edit', hidden: true }, editor.el, errBox,
       h('div', { class: 'param-row', style: 'margin-top:6px' },
@@ -188,7 +191,8 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
           class: 'btn sm primary', onclick: () => {
             const r = assembleSap(editor.value);
             editor.setDiagnostics(r.errors);
-            if (r.errors.length) { errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'); return; }
+            showErrors(r);
+            if (r.errors.length) return;
             stage.load(sapScene({ ...o, empty: false, program: undefined, source: editor.value }));
           },
         }, 'Assemble & load'),
