@@ -126,13 +126,32 @@ describe('the SAP-1 example', () => {
     expect(mon.read()!.ram).toEqual(Array.from(mon.iss!.ram));
   });
 
+  it('the drawer lists data as .byte: from the sample\'s lines, else from what the program read and fetched', () => {
+    const fib = sapBytes(SAP_EXAMPLE_PROGRAM.src);
+    const { es, mon } = open();
+    es.runCycles(1);
+    expect(mon.rowText(0, fib[0])).toBe('loop: LDA x');
+    es.runCycles(4000, () => mon.done, 1e9);
+    const ram = mon.read()!.ram;
+    expect(mon.rowText(13, ram[13])).toBe(`y: .byte ${ram[13]}`);
+    // not a sample (x starts at 1): data by use, code by fetch
+    const mine = fib.slice();
+    mine[12] = 1;
+    const o = open(mine);
+    expect(o.mon.rowText(13, 1)).toBe('NOP 1'); // nothing known yet
+    o.es.runCycles(4000, () => o.mon.done, 1e9);
+    const r = o.mon.read()!.ram;
+    expect(o.mon.rowText(13, r[13])).toBe(`.byte ${r[13]}`);
+    expect(o.mon.rowText(0, r[0])).toBe('LDA 12');
+  });
+
   it('steps an instruction at a time, and names the modules a control word uses', () => {
     const { mon } = open();
     expect(mon.stepInstr()).toBe(5);
     expect(mon.read()!.step).toBe(0);
     expect(mon.retired).toBe(1);
     expect(mon.log.map((l) => l.text)).toEqual(['fetch  T0', 'fetch  T1', 'LDA 12  T2', 'LDA 12  T3', 'LDA 12  T4']);
-    expect(mon.log[1].effect).toBe('RO II CE: IR ← 1C, PC → 1');
+    expect(mon.log[1].effect).toBe('RO II CE: IR ← 0x1C, PC ← 0x1');
     expect(sapUse(CTRL.co | CTRL.mi).sort()).toEqual(['bus', 'ctl', 'mar', 'pc']);
   });
 

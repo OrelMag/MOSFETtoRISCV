@@ -31,6 +31,16 @@ describe('SAP-1 breadboards', () => {
     for (const p of sapChips(SAP_COMPUTER).map((c) => c.path)) expect(SAP_ROLES[p], p).toBeTruthy();
   });
 
+  it('labels: the clash LED is the bus\'s (CLASH), a module board names ΣO as ΣO', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    const leds = (t: string) => l.boards.find((b) => b.title === t)!.leds!.map((x) => x.label);
+    expect(leds('Clock')).not.toContain('2 ON');
+    expect(leds('Bus')).toEqual(['CLASH']);
+    const alu = moduleLayout(SAP_ALU, { title: 'ALU', drives: 'eo' });
+    expect(alu.boards[0].drives?.label).toBe('ΣO · drives the bus');
+    expect(alu.boards[1].switches!.map((s) => s.label)).toContain('ΣO');
+  });
+
   it('single-module boards are valid', () => {
     for (const d of [SAP_AREG, SAP_ALU, SAP_PC, SAP_CLOCK]) expect(validateLayout(moduleLayout(d, { title: d.name, drives: d === SAP_CLOCK ? undefined : d.ports.find((p) => /^(ao|eo|co)$/.test(p.name))?.name }), d)).toEqual([]);
   });
