@@ -277,8 +277,8 @@ export class Stage {
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
     const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
-    const zoomOut = btn('minus', 'Zoom out', () => this.view.zoom(1.25), ' zoom-btn');
-    const zoomIn = btn('plus', 'Zoom in', () => this.view.zoom(0.8), ' zoom-btn');
+    const zoomOut = btn('minus', 'Zoom out', () => this.zoomBy(1.25), ' zoom-btn');
+    const zoomIn = btn('plus', 'Zoom in', () => this.zoomBy(0.8), ' zoom-btn');
     // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
     const moreMenu = this.moreMenu = h('div', { class: 'pal-menu stage-more-menu', role: 'menu', 'aria-label': 'More tools' });
     const more = this.moreBtn = h('button', {
@@ -307,7 +307,7 @@ export class Stage {
     const pressed = (b: HTMLElement) => b.classList.contains('on');
     // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
     this.shedGroups = [
-      { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.view.zoom(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.view.zoom(0.8) }] },
+      { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
       { els: [imgWrap], items: [
         { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
         { label: 'Image as PNG', hint: 'The same at 2× resolution', icon: 'image', run: () => this.exportImage('png') }] },
@@ -338,10 +338,10 @@ export class Stage {
       open: (path) => this.openFromBoard(path),
       select: () => this.showInspector(),
     });
-    for (const b of [imgWrap, layoutBtn, this.probeBtn, zoomOut, zoomIn]) b.classList.add('sch-only');
-    const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => this.view.fit());
+    for (const b of [imgWrap, layoutBtn, this.probeBtn]) b.classList.add('sch-only');
+    // zoom and Fit work on the boards too (their own camera)
+    const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fit() : this.view.fit()));
     upBtn.classList.add('sch-only');
-    fitBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
       upBtn, zoomOut, zoomIn, fitBtn,
@@ -697,6 +697,12 @@ export class Stage {
     if (on && this.ctx !== this.rootCtx) this.goTo([]);
     this.setBoardShown(on);
     this.refresh();
+  }
+
+  /** The bar's zoom buttons: on the boards while they are shown, else on the schematic. */
+  private zoomBy(f: number): void {
+    if (this.boardOn) this.board.zoom(f);
+    else this.view.zoom(f);
   }
 
   /** The boards are on screen (the schematic is not painted meanwhile). */

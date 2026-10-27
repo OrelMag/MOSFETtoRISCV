@@ -7,7 +7,7 @@ import { SAP_COMPUTER, type SapChip, sapChips } from '../lib/sap';
 import { TTL_PART, TTL_PINS } from '../lib/ttl';
 import { CTRL_LABEL, SAP_CTRL } from '../sap/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
-import { type BbActive, type BbBoard, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
+import { type BbActive, type BbBoard, type BbBus, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
 
 /** What each chip does on its board (the hover card), by its path in the computer (a module's: the part after the dot). */
 export const SAP_ROLES: Record<string, string> = {
@@ -204,24 +204,25 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
       loads: act('oi', 'shows at the next edge'),
     },
   ];
-  const boards: BbBoard[] = [];
-  const stack = (list: Omit<BbBoard, 'at' | 'size'>[], x: number): number => {
-    let y = 0;
+  const stack = (into: BbBoard[], list: Omit<BbBoard, 'at' | 'size'>[], x: number, y = 0): number => {
     for (const b of list) {
       const s = sized(b, [x, y]);
-      boards.push(s);
+      into.push(s);
       y = Math.round((y + s.size[1] + GAP) * 10) / 10;
     }
     return y - GAP;
   };
-  const hl = stack(left, 0);
-  const hr = stack(right, COL_W + BUS_W + 2 * GAP);
+  const boards: BbBoard[] = [];
+  const hl = stack(boards, left, 0);
+  const hr = stack(boards, right, COL_W + BUS_W + 2 * GAP);
   numberChips(boards);
-  return {
-    note: `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs: 74LS series and 28C16 EEPROMs (pale: drawn only)`,
-    buses: [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, Math.max(hl, hr)], path: ['bus'], port: 'bus' }],
-    boards,
-  };
+  // a narrow canvas (a phone): the right column under the left one, the bus strip beside them both (the chips are
+  // the same objects, numbered the same)
+  const column: BbBoard[] = [];
+  const hn = stack(column, right, 0, stack(column, left, 0) + GAP);
+  const note = `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs: 74LS series and 28C16 EEPROMs (pale: drawn only)`;
+  const bus = (h: number): BbBus[] => [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, h], path: ['bus'], port: 'bus' }];
+  return { note, buses: bus(Math.max(hl, hr)), boards, narrow: { note, buses: bus(hn), boards: column } };
 }
 
 /** One module on its own board, its root inputs on DIP switches (the clock left to the stage), its outputs on LEDs. */

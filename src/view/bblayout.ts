@@ -103,6 +103,8 @@ export interface BreadboardLayout {
   buses?: BbBus[];
   /** The stage's caption over the boards: '18 ICs, 74LS series'. */
   note?: string;
+  /** The same boards in one column, for a canvas too narrow to read the layout whole (pickArrangement). */
+  narrow?: BreadboardLayout;
 }
 
 /** LEDs for a whole port, most significant bit first (as they sit on a board). */
@@ -228,6 +230,38 @@ export function layoutBounds(l: BreadboardLayout): { w: number; h: number } {
   return { w, h: hh };
 }
 
+/** Holes of margin around the boards in a fitted view. */
+export const BB_MARGIN = 2;
+
+/** Pixels per hole at which the boards read: a chip's part number (about 1.9 holes) is 10 px and more. */
+export const BB_READ_PX = 5.5;
+
+/** The boards' view box (in holes) for an svg `pw` × `ph` px: all of them centred, or with `top` (a column taller than
+ *  the canvas) as wide as the svg, from the top, the rest a pan away. Its aspect is the svg's, so nothing letterboxes. */
+export function fitBoards(b: { w: number; h: number }, pw: number, ph: number, top = false): Box {
+  const W = b.w + 2 * BB_MARGIN, H = b.h + 2 * BB_MARGIN;
+  if (!(pw > 0 && ph > 0)) return { x: -BB_MARGIN, y: -BB_MARGIN, w: W, h: H };
+  const all = Math.min(pw / W, ph / H), wide = pw / W;
+  if (!top || all >= wide - 1e-9) {
+    const w = pw / all, h = ph / all;
+    return { x: -BB_MARGIN - (w - W) / 2, y: -BB_MARGIN - (h - H) / 2, w, h };
+  }
+  return { x: -BB_MARGIN, y: -BB_MARGIN, w: W, h: ph / wide };
+}
+
+/**
+ * Which arrangement an svg `pw` × `ph` px shows: the layout whole while it reads there (BB_READ_PX), else its one-column
+ * `narrow` arrangement when that is clearly larger as wide as the svg (a phone, a stage beside a panel): readable
+ * boards a pan apart beat the whole computer in print too small to read.
+ */
+export function pickArrangement(l: BreadboardLayout, pw: number, ph: number): 'wide' | 'narrow' {
+  if (!l.narrow || !(pw > 0 && ph > 0)) return 'wide';
+  const b = layoutBounds(l), n = layoutBounds(l.narrow);
+  const s = Math.min(pw / (b.w + 2 * BB_MARGIN), ph / (b.h + 2 * BB_MARGIN));
+  if (s >= BB_READ_PX) return 'wide';
+  return pw / (n.w + 2 * BB_MARGIN) >= 1.25 * s ? 'narrow' : 'wide';
+}
+
 /** The ribbon from a board to its bus strip: across the gap on the side facing the strip, centred on the board. */
 export function stubOf(b: BbBoard, bus: BbBus): Box | null {
   const bx = boxOf(b.at, b.size), sx = boxOf(bus.at, bus.size);
@@ -320,6 +354,12 @@ export function validateLayout(l: BreadboardLayout, root: ComponentDef): string[
   }
   for (let i = 0; i < rects.length; i++) {
     for (let j = i + 1; j < rects.length; j++) if (overlap(rects[i].box, rects[j].box)) out.push(`${rects[i].name} overlaps ${rects[j].name}`);
+  }
+  if (l.narrow) {
+    for (const e of validateLayout(l.narrow, root)) out.push(`narrow: ${e}`);
+    const key = (x: BreadboardLayout) => x.boards.map((b) => `${b.title}:${b.chips.map((c) => c.path?.join('.') ?? c.part).join(',')}`).sort().join('|');
+    if (key(l.narrow) !== key(l)) out.push('narrow: not the same boards and chips');
+    if (l.narrow.narrow) out.push('narrow: has a narrow arrangement of its own');
   }
   return out;
 }

@@ -2,8 +2,9 @@
 // own simulation. Every LED, switch, digit, bus wire and active ring is a net of that simulation, read in one call per
 // repaint (BbNets) and painted only where it changed. A chip is a button: hover or focus shows its card (part, role,
 // what is inside, its cost), a click selects it (the inspector shows it), a double-click or Enter opens its schematic
-// (the stage's drill path), where pinCard lists its DIP pins live. The SVG's viewBox is the whole layout, so it
-// scales to any canvas (a phone too) without scrolling.
+// (the stage's drill path), where pinCard lists its DIP pins live. The boards pan and zoom like a schematic (wheel,
+// pinch, drag, Fit): they open fitted whole, or, where the layout whole would not read (a phone), on its one-column
+// arrangement (BreadboardLayout.narrow) as wide as the canvas, the rest a pan away.
 
 import '../styles/breadboard.css';
 import { findNode, type HierNode } from '../sim/flatten';
@@ -12,8 +13,9 @@ import { romSize, stats } from '../sim/stats';
 import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
 import { formatBits, type Radix } from '../sim/values';
 import { h, s } from '../ui/dom';
+import { Camera, installPanZoom } from './camera';
 import {
-  BB, type BbBoard, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
+  BB, type BbBoard, fitBoards, pickArrangement, type BbBus, type BbChip, type BbNet, BbNets, type BbPin, type Box, type BreadboardLayout, HEX_SEGMENTS, layoutBounds,
   packBits, pinName, pinSides, planBoard, stubOf,
 } from './bblayout';
 
@@ -58,14 +60,23 @@ export class BreadboardView {
   selected: BbChip | null = null;
   radix: Radix = 'hex';
   private last: Bit[] = [];
+  private cam: Camera;
+  /** The layout given to show(), and the arrangement of it on screen. */
+  private layout: BreadboardLayout | null = null;
+  private arrangement: 'wide' | 'narrow' = 'wide';
 
   constructor(private readonly hooks: BreadboardHooks) {
     this.svg = s('svg', { class: 'breadboard', role: 'group', 'aria-label': 'Breadboards' });
+    this.cam = new Camera(this.svg);
+    // shown, hidden, beside a panel that folds, on a phone turned: the svg's own size decides the arrangement and fit
+    new ResizeObserver(() => this.resized()).observe(this.svg);
     this.caption = h('div', { class: 'bb-caption' });
     this.card = h('div', { class: 'bb-card', role: 'tooltip', hidden: true });
     this.el = h('div', { class: 'bb-host', hidden: true }, this.caption, this.svg, this.card);
-    this.svg.addEventListener('pointerdown', (e) => {
-      if (!(e.target as Element).closest('.bb-chip')) this.pick(null);
+    // a press on a chip, a switch or a board's title is theirs; anywhere else it pans, and a tap lets go of the chip
+    installPanZoom(this.svg, this.cam, {
+      canStart: (e) => !(e.target as Element).closest('.bb-chip, .bb-sw, .bb-open'),
+      onTap: () => this.pick(null),
     });
     this.el.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && (this.pinned || this.selected)) {
@@ -94,13 +105,53 @@ export class BreadboardView {
 
   /** Draw `layout` over a flattened design's root (Stage.sim.design.root), whose simulation update() then reads. */
   show(layout: BreadboardLayout, root: HierNode): void {
+    const r = this.svg.getBoundingClientRect();
+    this.layout = layout;
+    this.arrangement = pickArrangement(layout, r.width, r.height);
+    this.draw(this.arrangement === 'narrow' ? layout.narrow! : layout, root);
+  }
+
+  /** Show the whole arrangement: centred, or a column as wide as the canvas from its top. */
+  fit(): void {
+    const lay = this.shown();
+    if (!lay) return;
+    const r = this.svg.getBoundingClientRect();
+    this.cam.show(fitBoards(layoutBounds(lay), r.width, r.height, this.arrangement === 'narrow'));
+  }
+
+  /** Scale the view by `factor` (< 1 zooms in) around its centre (the stage bar's zoom buttons). */
+  zoom(factor: number): void {
+    this.cam.zoom(factor);
+  }
+
+  /** The canvas changed size: another arrangement when the other one now reads better, a fitted view fitted again,
+   *  a zoomed one keeping its scale. */
+  resized(): void {
+    const r = this.svg.getBoundingClientRect();
+    if (!this.layout || !this.root || r.width <= 0 || r.height <= 0) return;
+    const a = pickArrangement(this.layout, r.width, r.height);
+    if (a !== this.arrangement) {
+      const sel = this.selected?.path?.join('.');
+      this.arrangement = a;
+      this.draw(a === 'narrow' ? this.layout.narrow! : this.layout, this.root);
+      if (this.lastSim) this.update(this.lastSim);
+      for (const [c] of this.chipEls) if (sel && c.path?.join('.') === sel) this.pick(c);
+      this.fit();
+      return;
+    }
+    if (!this.cam.resized()) this.fit();
+  }
+
+  private shown(): BreadboardLayout | null {
+    return this.layout && (this.arrangement === 'narrow' ? this.layout.narrow ?? this.layout : this.layout);
+  }
+
+  private draw(layout: BreadboardLayout, root: HierNode): void {
     this.clear();
     this.root = root;
     const nets = this.nets = new BbNets(root);
     const id = `bb${++uid}`;
-    const { w, h: H } = layoutBounds(layout);
-    const M = 2;
-    this.svg.setAttribute('viewBox', `${-M} ${-M} ${w + 2 * M} ${H + 2 * M}`);
+    this.fit();
     this.svg.append(s('defs', null,
       s('pattern', { id: `${id}-holes`, width: 1, height: 1, patternUnits: 'userSpaceOnUse' }, s('circle', { class: 'bb-hole', cx: 0.5, cy: 0.5, r: 0.15 })),
       s('pattern', { id: `${id}-ribbon`, width: 1, height: 0.55, patternUnits: 'userSpaceOnUse' }, s('rect', { class: 'bb-ribbon', x: 0, y: 0, width: 1, height: 0.27 })),

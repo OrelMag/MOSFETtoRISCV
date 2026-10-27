@@ -188,6 +188,15 @@ export class Camera {
     this.apply();
   }
 
+  /** Show `vb` as the fitted view (a caller's own fit: the boards'). */
+  show(vb: ViewBox): void {
+    const r = this.host.getBoundingClientRect();
+    this.vb = vb;
+    this.fitted = true;
+    this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
+    this.apply();
+  }
+
   /**
    * The host changed size. A view the learner has zoomed or panned keeps its scale and its
    * top-left corner (the edge that moved shows more or less); returns false when the view is

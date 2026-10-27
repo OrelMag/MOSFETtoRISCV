@@ -3,7 +3,9 @@ import { CPU4_BCD, CPU4_STATE } from '../src/lib/cpu4';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
-import { BbNets, type BreadboardLayout, defAt, layoutBounds, packBits, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { BB_MARGIN, BbNets, type BreadboardLayout, defAt, fitBoards, layoutBounds, packBits, pickArrangement, pinName, pinSides, planBoard, stubOf, validateLayout } from '../src/view/bblayout';
+import { SAP_COMPUTER } from '../src/lib/sap';
+import { sapLayout } from '../src/widgets/saplayout';
 import { insideOf } from '../src/view/breadboard';
 import { register } from '../src/lib/sequential';
 import { CPU4_BB } from './fixtures/bbcpu4';
@@ -110,5 +112,45 @@ describe('breadboard layout', () => {
 
   it('a chip card says what is inside and what it costs', () => {
     expect(insideOf(register(4))).toBe('Inside: 4 × D flip-flop with enable · 60 NANDs');
+  });
+});
+
+describe('breadboard view: fit and arrangement', () => {
+  it('fits the boards whole, centred, at the svg\'s aspect', () => {
+    const v = fitBoards({ w: 100, h: 50 }, 800, 800);
+    expect(v.w / v.h).toBeCloseTo(1);
+    expect(v.x).toBeCloseTo(-BB_MARGIN);
+    expect(v.y + v.h / 2).toBeCloseTo(25);
+  });
+
+  it('a column taller than the canvas fits its width, from the top', () => {
+    const v = fitBoards({ w: 60, h: 200 }, 390, 400, true);
+    expect(v).toMatchObject({ x: -BB_MARGIN, y: -BB_MARGIN, w: 64 });
+    expect(v.w / v.h).toBeCloseTo(390 / 400);
+    // one that fits anyway is centred whole
+    const s = fitBoards({ w: 60, h: 20 }, 390, 400, true);
+    expect(s.y + s.h / 2).toBeCloseTo(10);
+  });
+
+  it('the SAP-1 reads whole on a laptop and as one column on a phone', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    expect(l.narrow).toBeTruthy();
+    expect(pickArrangement(l, 780, 580)).toBe('wide');
+    expect(pickArrangement(l, 390, 420)).toBe('narrow');
+    // beside an open panel on a laptop: the column, larger
+    expect(pickArrangement(l, 436, 573)).toBe('narrow');
+    // a layout without one keeps its own
+    expect(pickArrangement(CPU4_BB, 300, 300)).toBe('wide');
+    const n = layoutBounds(l.narrow!), w = layoutBounds(l);
+    expect(n.w).toBeLessThan(w.w * 0.6);
+  });
+
+  it('checks the narrow arrangement too', () => {
+    const l = sapLayout(SAP_COMPUTER);
+    l.narrow!.boards[1].at = [0, 0];
+    l.narrow!.boards.pop();
+    const errs = validateLayout(l, SAP_COMPUTER);
+    expect(errs.some((e) => /^narrow: board .* overlaps/.test(e))).toBe(true);
+    expect(errs).toContain('narrow: not the same boards and chips');
   });
 });
