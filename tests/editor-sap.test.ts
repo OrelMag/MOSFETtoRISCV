@@ -155,4 +155,35 @@ describe('the SAP-1 example', () => {
     expect(mon.iss!.halted).toBe(true);
     expect(outs).toEqual(p.outs);
   });
+
+  it('RESET: a running program rekeyed by the switches mid-way, RESET, and the new one runs in step to its halt', () => {
+    const p = SAP_PROGRAMS.find((q) => q.id === 'mul')!;
+    const bytes = sapBytes(p.src);
+    const { es, mon } = open();
+    es.runCycles(61);
+    expect(mon.mismatch).toBeNull();
+    expect(mon.checking).toBe(true);
+    es.pokeLeaf(leaf(es, 'io_prog'), { v: 1 });
+    es.runCycles(3); // the clock keeps running while PROG is on
+    expect(mon.programming).toBe(true);
+    for (let i = 0; i < 16; i++) {
+      es.pokeLeaf(leaf(es, 'io_addrSw'), { v: i });
+      es.pokeLeaf(leaf(es, 'io_dataSw'), { v: bytes[i] ?? 0 });
+      es.setKey('w', true);
+      es.setKey('w', false);
+    }
+    es.pokeLeaf(leaf(es, 'io_prog'), { v: 0 });
+    es.runCycles(2); // PROG off: the model takes the machine as it is, mid-instruction
+    expect(mon.checking).toBe(true);
+    expect(mon.mismatch).toBeNull();
+    es.setKey('e', true);
+    expect([rd(es, 'pc.cnt', 'q'), rd(es, 'ctl.step', 'q'), rd(es, 'a.lo', 'q'), rd(es, 'ir.hi', 'q')]).toEqual([0, 0, 0, 0]);
+    es.setKey('e', false);
+    const outs = outsOf(es);
+    es.runCycles(4000, () => mon.done, 1e9);
+    expect(mon.mismatch).toBeNull();
+    expect(mon.iss!.halted).toBe(true);
+    expect(outs).toEqual(p.outs);
+    expect(mon.read()!.ram).toEqual(Array.from(mon.iss!.ram));
+  });
 });

@@ -77,7 +77,7 @@ ZF = sum = 0; both loaded by FI.
 | `mar` | `SAP_MAR` | `reg` 173, `sel` 157 | `addr` (4) |
 | `ram` | `SAP_RAM` | `lo` 189, `hi` 189, `ilo` 04, `ihi` 04, `dlo` 157, `dhi` 157, `drv` 245 | `q` (8), `drv` (8) |
 | `ir` | `SAP_IR` | `hi` 173, `lo` 173, `drv` 245 (low nibble) | `op` (4), `ir` (8), `drv` (8) |
-| `ctl` | `SAP_CONTROL` | `step` 161, `dec` 138, `inv` 04, `romhi` 28C16, `romlo` 28C16 | the 16 lines by name (`hlt`, `mi`, … `fi`), `t` (3) |
+| `ctl` | `SAP_CONTROL` | `step` 161, `dec` 138, `inv` 04, `clr` 08, `romhi` 28C16, `romlo` 28C16 | the 16 lines by name (`hlt`, `mi`, … `fi`), `t` (3) |
 | `a` | `SAP_AREG` | `hi` 173, `lo` 173, `drv` 245 | `q` (8), `drv` (8) |
 | `alu` | `SAP_ALU` | `add0` 283, `add1` 283, `x0` 86, `x1` 86, `drv` 245 | `sum` (8), `drv` (8), `cout`, `zero` |
 | `flags` | `SAP_FLAGS` | `reg` 173, zero detect (`nor` 02 / `and` 08) | `cf`, `zf` |
@@ -88,7 +88,7 @@ ZF = sum = 0; both loaded by FI.
 
 `sapComputer(bytes)` (memoized by content): the RAM's power-on contents from `bytes` (dotted `powerOn` hints, as
 `editor/memory.ts ramWithInit`). Ports: in `clk` (clock), `prog` (programming mode), `addrSw` (4), `dataSw` (8),
-`write`; out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
+`write`, `rst` (RESET); out `bus` (8), `out` (8), `d0` `d1` `d2`, `halt`, `clash`. Hand-placed top level (two columns of modules
 with the bus between them, as the breadboards), net labels for the 16 control lines.
 
 - `src/view/breadboard.ts` (+ `src/styles/breadboard.css`): the breadboard view, `Scene.breadboard`: a layout (boards
@@ -139,15 +139,15 @@ EEPROMs' ROM trees; `SAP_STATE` where a register is read: `[instance path, port]
 | module | ports (in → out) |
 |---|---|
 | `SAP_CLOCK` | `osc` (clock), `hlt` → `clk`, `nclk` |
-| `SAP_PC` | `clk ce co j bus[8]` → `pc[4] drv[8]` |
+| `SAP_PC` | `clk ce co j bus[8] rst` → `pc[4] drv[8]` |
 | `SAP_MAR` | `clk mi prog bus[8] addrSw[4]` → `addr[4]` |
 | `SAP_RAM` | `clk addr[4] bus[8] dataSw[8] prog write ri ro` → `q[8] drv[8]` |
-| `SAP_IR` | `clk ii io bus[8]` → `op[4] ir[8] drv[8]` |
-| `SAP_CONTROL` | `nclk op[4] cf zf` → the 16 lines (`hlt mi ri ro io ii ai ao eo su bi oi ce co j fi`; ΣO is `eo`), `t[3]`, `ts[5]` |
-| `SAP_AREG` | `clk ai ao bus[8]` → `q[8] drv[8]` |
+| `SAP_IR` | `clk ii io bus[8] rst` → `op[4] ir[8] drv[8]` |
+| `SAP_CONTROL` | `nclk op[4] cf zf rst` → the 16 lines (`hlt mi ri ro io ii ai ao eo su bi oi ce co j fi`; ΣO is `eo`), `t[3]`, `ts[5]` |
+| `SAP_AREG` | `clk ai ao bus[8] rst` → `q[8] drv[8]` |
 | `SAP_ALU` | `a[8] b[8] su eo` → `sum[8] drv[8] cout` |
-| `SAP_FLAGS` | `clk fi sum[8] cout` → `cf zf` |
-| `SAP_BREG` | `clk bi bus[8]` → `q[8]` |
+| `SAP_FLAGS` | `clk fi sum[8] cout rst` → `cf zf` |
+| `SAP_BREG` | `clk bi bus[8] rst` → `q[8]` |
 | `SAP_OUT` | `clk oi bus[8]` → `q[8]` |
 | `SAP_DISPLAY` | `v[8]` → `d0[8] d1[8] d2[8]` |
 | `SAP_BUS` | `pc ram ir a alu` (8 each), `co ro io ao eo` → `bus[8] clash` |
@@ -178,4 +178,12 @@ control lines in capitals (`ΣO`).
 - "Count up" counts by 15 and stops when the adder carries (a program that never halts cannot be checked to its end).
 - `SapISS.halted` is a getter: the current control word has HLT (the hardware's `halt` output at the same moment);
   `drive()` gives the bus and how many drive it, `control()` the current control word, `run()` OUT's values.
-- Cost: five EEPROMs as ROM trees are 65 524 NANDs each; `sapCost(...).logicNands` (3 306) is the rest.
+- Cost: five EEPROMs as ROM trees are 65 524 NANDs each; `sapCost(...).logicNands` (3 314) is the rest.
+- **RESET** (`rst`, active high, Ben's reset button): the CLRs of the PC's 161 (through `pc.inv`), the step counter's 161
+  (`ctl.clr`, a 74LS08: Y5 AND NOT RST, NOT RST from `ctl.inv`'s sixth gate), and the 173s of A, B, the IR and the flags.
+  The MAR, OUT and the RAM keep their contents (their CLRs stay inactive), so a program keyed in by the switches survives
+  it: PROG on, key in, PROG off, RESET, run, at any time. `SapISS.reset()` clears the same; `cycle(true)` is a period with
+  RESET held (only the MAR moves: T0 of NOP is CO MI). The monitors (widgets/sapmon.ts, editor/sapmon.ts) follow RESET
+  held through an edge with `cycle(true)`, and one pressed between edges by taking `reset()` when the hardware holds what
+  a reset leaves (PC, step, IR, A, B, flags all 0) and the model does not. The clock board has a RESET switch; the
+  sandbox example a RESET key (E). Cost: one more chip (49) and 8 NANDs.

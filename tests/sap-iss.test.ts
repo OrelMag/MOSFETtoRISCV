@@ -97,3 +97,33 @@ describe('SAP-1 golden model', () => {
     expect(m.run(20000)).toEqual(a);
   });
 });
+
+describe('SAP-1 reset', () => {
+  it('clears the PC, the step, A, B, the IR and the flags; the MAR, OUT and the RAM keep theirs', () => {
+    const bytes = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'fib')!.src);
+    const m = new SapISS(bytes);
+    for (let i = 0; i < 37; i++) m.cycle();
+    const { mar, out, ram } = m.save();
+    m.reset();
+    expect([m.pc, m.step, m.a, m.b, m.ir, m.cf, m.zf]).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(m.atReset).toBe(true);
+    expect([m.mar, m.out, Array.from(m.ram)]).toEqual([mar, out, ram]);
+    // a halted machine runs again after a reset
+    const h = new SapISS(bytes);
+    h.run();
+    expect(h.halted).toBe(true);
+    h.reset();
+    expect(h.halted).toBe(false);
+    // from the top, on the RAM as the first run left it (Fibonacci keeps its variables there)
+    expect(h.run()).toEqual(new SapISS(Array.from(h.ram)).run());
+  });
+
+  it('held through an edge only the MAR moves (T0 of NOP: CO MI, the PC is 0)', () => {
+    const m = new SapISS([0x1e]);
+    for (let i = 0; i < 3; i++) m.cycle();
+    expect(m.mar).toBe(0xe);
+    m.cycle(true);
+    expect(m.mar).toBe(0);
+    expect(m.atReset).toBe(true);
+  });
+});

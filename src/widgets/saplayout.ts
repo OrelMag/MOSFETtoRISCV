@@ -31,10 +31,11 @@ export const SAP_ROLES: Record<string, string> = {
   'ir.drv': 'Puts the IR\'s low 4 bits on the bus while IO = 1 (its high four inputs are tied to 0).',
   'ctl.step': 'The step counter: counts T0–T4 on the falling clock edge; the 138\'s Y5 clears it at once (five steps).',
   'ctl.dec': 'Decodes the step for the T0–T4 LEDs, and ends the count at T5.',
-  'ctl.inv': 'Turns the 138\'s active-low outputs into the step LEDs.',
+  'ctl.inv': 'Turns the 138\'s active-low outputs into the step LEDs; its sixth gate makes NOT RST.',
+  'ctl.clr': 'Clears the step counter at T5 (the end of an instruction) or while RESET is held: Y5 AND NOT RST into the 161\'s CLR.',
   'ctl.romhi': 'Microcode, high byte: HLT MI RI RO IO II AI AO for address [ZF CF][opcode][step].',
   'ctl.romlo': 'Microcode, low byte: ΣO SU BI OI CE CO J FI.',
-  'pc.inv': 'Turns J and CO into the 161\'s LOAD and the 245\'s enable (both active low).',
+  'pc.inv': 'Turns J, CO and RST into the 161\'s LOAD, the 245\'s enable and the 161\'s CLR (all active low).',
   'pc.cnt': 'The program counter: counts at the rising edge while CE = 1, loads the bus\'s low nibble while J = 1.',
   'pc.drv': 'Puts the PC on the bus while CO = 1.',
   'a.inv': 'Turns AI and AO into the active-low enables.',
@@ -120,6 +121,8 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
         drawn('NE555', 8, 'The bistable: debounces the run / step switch. Drawn only.'),
         c('clock.inv'), c('clock.and'),
       ],
+      // Ben's reset button: clears the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
+      switches: [{ port: 'rst', label: 'RESET' }],
       leds: [
         { net: { path: ['clock'], port: 'clk' }, color: 'blue', label: 'CLK' },
         { net: { path: ['ctl'], port: 'hlt' }, color: 'red', label: 'HLT' },
@@ -150,7 +153,7 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
     },
     {
       title: 'Control', module: ['ctl'],
-      chips: ['ctl.step', 'ctl.dec', 'ctl.inv', 'ctl.romhi', 'ctl.romlo'].map(c),
+      chips: ['ctl.step', 'ctl.dec', 'ctl.inv', 'ctl.clr', 'ctl.romhi', 'ctl.romlo'].map(c),
       leds: [
         ...SAP_CTRL.map((n): BbLed => ({ net: { path: ['ctl'], port: n }, color: 'blue', label: CTRL_LABEL[n] })),
         ...withGap([0, 1, 2, 3, 4].map((t): BbLed => ({ net: { path: ['ctl'], port: 'ts', bit: t }, color: 'green', label: `T${t}` }))),

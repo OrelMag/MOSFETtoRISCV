@@ -54,7 +54,7 @@ function edge(sim: GateSim, mon: SapFollower): void {
 
 function boot(bytes: number[]): GateSim {
   const sim = new GateSim(flatten(sapComputer(bytes)));
-  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0 })) sim.setInput(k, v);
+  for (const [k, v] of Object.entries({ clk: 0, prog: 0, addrSw: 0, dataSw: 0, write: 0, rst: 0 })) sim.setInput(k, v);
   sim.reset('zero');
   sim.settle();
   return sim;
@@ -110,6 +110,55 @@ describe('SAP panel: the golden model in lock step', () => {
     }
     expect(mon.outs).toEqual(p.outs);
   }, 60_000);
+});
+
+describe('RESET: reprogramming by the switches at any time', () => {
+  const set = (sim: GateSim, v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) { sim.setInput(k, x); sim.settle(); } };
+  /** PROG on, every byte keyed in by the switches and WR, PROG off. */
+  const key = (sim: GateSim, mon: SapFollower, bytes: number[]) => {
+    set(sim, { prog: 1 });
+    mon.look(sim); // the panel looks every frame
+    for (let i = 0; i < 16; i++) set(sim, { addrSw: i, dataSw: bytes[i] ?? 0, write: 1 }), set(sim, { write: 0 });
+    set(sim, { prog: 0, addrSw: 0, dataSw: 0 });
+  };
+
+  it.each([['pressed between two edges', false], ['held through an edge', true]] as const)('a program runs, is rekeyed mid-way, RESET (%s), and the new one runs in step', async (_, held) => {
+    const fib = sapBytes(SAP_PROGRAMS.find((q) => q.id === 'fib')!.src);
+    const next = SAP_PROGRAMS.find((q) => q.id === 'mul')!;
+    const bytes = sapBytes(next.src);
+    const sim = boot(fib), mon = new SapFollower(fib);
+    for (let c = 0; c < 53; c++) edge(sim, mon);
+    expect(mon.mismatch).toBeNull();
+    expect(mon.outs.length).toBeGreaterThan(1);
+    key(sim, mon, bytes);
+    expect(sapRam(sim)).toEqual([...bytes, ...Array(16 - bytes.length).fill(0)]);
+    set(sim, { rst: 1 });
+    expect(sapHw(sim)).toMatchObject({ pc: 0, step: 0, ir: 0, a: 0, b: 0, cf: 0, zf: 0 });
+    if (held) { edge(sim, mon); edge(sim, mon); }
+    set(sim, { rst: 0 });
+    const before = mon.outs.length;
+    for (let c = 0; c < 4000 && sapHw(sim).cw >> 15 !== 1; c++) {
+      edge(sim, mon);
+      expect(mon.mismatch, `cycle ${c}`).toBeNull();
+      if (c % 200 === 199) await tick();
+    }
+    expect(mon.iss.halted).toBe(true);
+    expect(mon.outs.slice(before)).toEqual(next.outs);
+    expect(Array.from(mon.iss.ram)).toEqual(sapRam(sim));
+  }, 120_000);
+
+  it('RESET un-halts a halted computer, and it runs its program again', async () => {
+    const p = SAP_PROGRAMS.find((q) => q.id === 'add')!;
+    const bytes = sapBytes(p.src);
+    const sim = boot(bytes), mon = new SapFollower(bytes);
+    for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) edge(sim, mon);
+    expect(mon.iss.halted).toBe(true);
+    set(sim, { rst: 1 });
+    set(sim, { rst: 0 });
+    const before = mon.outs.length;
+    for (let c = 0; c < 400 && sapHw(sim).cw >> 15 !== 1; c++) { edge(sim, mon); expect(mon.mismatch).toBeNull(); }
+    expect(mon.outs.slice(before)).toEqual(p.outs);
+  });
 });
 
 describe('the real bus: tri-state drivers at switch level', () => {

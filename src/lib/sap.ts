@@ -85,7 +85,7 @@ function inverters(b: Builder, lines: string[], z: string, name = 'inv'): string
   return bitsOf(b, `${inv}.y`, 6).slice(0, lines.length);
 }
 
-const AREG_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ai', 'in'), bit('ao', 'in'), bus('bus', 8, 'in'), bus('q', 8, 'out'), bus('drv', 8, 'out')];
+const AREG_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ai', 'in'), bit('ao', 'in'), bus('bus', 8, 'in'), bit('rst', 'in'), bus('q', 8, 'out'), bus('drv', 8, 'out')];
 
 /** An 8-bit register on the bus: two 173s loading from it (AI), a 245 driving it (AO). The A register. */
 export const SAP_AREG: ComponentDef = (() => {
@@ -95,8 +95,8 @@ export const SAP_AREG: ComponentDef = (() => {
   const [nai, nao] = inverters(b, ['ai', 'ao'], z);
   const d = b.op(splitter([4, 4], 2), ['bus'], 'nibbles');
   b.next();
-  const lo = b.op(LS173, [z, z, nai, nai, z, 'clk', `${d}.o0`], 'low nibble', 'lo');
-  const hi = b.op(LS173, [z, z, nai, nai, z, 'clk', `${d}.o1`], 'high nibble', 'hi');
+  const lo = b.op(LS173, [z, z, nai, nai, 'rst', 'clk', `${d}.o0`], 'low nibble', 'lo');
+  const hi = b.op(LS173, [z, z, nai, nai, 'rst', 'clk', `${d}.o1`], 'high nibble', 'hi');
   b.next();
   const q = b.name(word(b, [`${lo}.q`, `${hi}.q`], [4, 4], 'A'), 'q', true);
   b.next();
@@ -104,14 +104,14 @@ export const SAP_AREG: ComponentDef = (() => {
   b.wire(q, 'q');
   return define({
     id: 'sap_areg', name: 'A register (SAP-1)', category: 'cpu',
-    summary: 'The accumulator: two 74LS173s take the bus at the rising edge while AI = 1; a 74LS245 puts the value on the bus while AO = 1. q always feeds the ALU and the LEDs.',
+    summary: 'The accumulator: two 74LS173s take the bus at the rising edge while AI = 1; a 74LS245 puts the value on the bus while AO = 1. q always feeds the ALU and the LEDs. RST clears it (the 173s\' CLR).',
     ports: AREG_PORTS,
     symbol: { kind: 'box', label: 'A REG' },
     netlist: built(b, AREG_PORTS),
   });
 })();
 
-const BREG_PORTS: PortDef[] = [bit('clk', 'in', true), bit('bi', 'in'), bus('bus', 8, 'in'), bus('q', 8, 'out')];
+const BREG_PORTS: PortDef[] = [bit('clk', 'in', true), bit('bi', 'in'), bus('bus', 8, 'in'), bit('rst', 'in'), bus('q', 8, 'out')];
 
 /** The B register: two 173s loading from the bus (BI); it only feeds the ALU, so no 245. */
 export const SAP_BREG: ComponentDef = (() => {
@@ -121,20 +121,20 @@ export const SAP_BREG: ComponentDef = (() => {
   const [nbi] = inverters(b, ['bi'], z);
   const d = b.op(splitter([4, 4], 2), ['bus'], 'nibbles');
   b.next();
-  const lo = b.op(LS173, [z, z, nbi, nbi, z, 'clk', `${d}.o0`], 'low nibble', 'lo');
-  const hi = b.op(LS173, [z, z, nbi, nbi, z, 'clk', `${d}.o1`], 'high nibble', 'hi');
+  const lo = b.op(LS173, [z, z, nbi, nbi, 'rst', 'clk', `${d}.o0`], 'low nibble', 'lo');
+  const hi = b.op(LS173, [z, z, nbi, nbi, 'rst', 'clk', `${d}.o1`], 'high nibble', 'hi');
   b.next();
   b.wire(word(b, [`${lo}.q`, `${hi}.q`], [4, 4], 'B'), 'q');
   return define({
     id: 'sap_breg', name: 'B register (SAP-1)', category: 'cpu',
-    summary: 'The ALU\'s second operand: two 74LS173s take the bus at the rising edge while BI = 1. Ben\'s B never drives the bus, so it has no 245.',
+    summary: 'The ALU\'s second operand: two 74LS173s take the bus at the rising edge while BI = 1. Ben\'s B never drives the bus, so it has no 245. RST clears it.',
     ports: BREG_PORTS,
     symbol: { kind: 'box', label: 'B REG' },
     netlist: built(b, BREG_PORTS),
   });
 })();
 
-const IR_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ii', 'in'), bit('io', 'in'), bus('bus', 8, 'in'), bus('op', 4, 'out'), bus('ir', 8, 'out'), bus('drv', 8, 'out')];
+const IR_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ii', 'in'), bit('io', 'in'), bus('bus', 8, 'in'), bit('rst', 'in'), bus('op', 4, 'out'), bus('ir', 8, 'out'), bus('drv', 8, 'out')];
 
 /** The instruction register: two 173s (II); the high nibble (the opcode) goes to the control unit, the low one back to the bus (IO). */
 export const SAP_IR: ComponentDef = (() => {
@@ -144,8 +144,8 @@ export const SAP_IR: ComponentDef = (() => {
   const [nii, nio] = inverters(b, ['ii', 'io'], z);
   const d = b.op(splitter([4, 4], 2), ['bus'], 'nibbles');
   b.next();
-  const lo = b.op(LS173, [z, z, nii, nii, z, 'clk', `${d}.o0`], 'operand', 'lo');
-  const hi = b.op(LS173, [z, z, nii, nii, z, 'clk', `${d}.o1`], 'opcode', 'hi');
+  const lo = b.op(LS173, [z, z, nii, nii, 'rst', 'clk', `${d}.o0`], 'operand', 'lo');
+  const hi = b.op(LS173, [z, z, nii, nii, 'rst', 'clk', `${d}.o1`], 'opcode', 'hi');
   b.next();
   const ir = word(b, [`${lo}.q`, `${hi}.q`], [4, 4], 'IR');
   const low = word(b, [`${lo}.q`, b.op1(constWord(4, 0), [], '0000')], [4, 4], 'operand only');
@@ -155,7 +155,7 @@ export const SAP_IR: ComponentDef = (() => {
   b.wire(`${hi}.q`, 'op');
   return define({
     id: 'sap_ir', name: 'Instruction register (SAP-1)', category: 'cpu',
-    summary: 'Two 74LS173s take the instruction from the bus while II = 1. The high nibble, the opcode, goes to the control unit; a 74LS245 puts only the low nibble, the operand, back on the bus while IO = 1.',
+    summary: 'Two 74LS173s take the instruction from the bus while II = 1. The high nibble, the opcode, goes to the control unit; a 74LS245 puts only the low nibble, the operand, back on the bus while IO = 1. RST clears it (to NOP).',
     ports: IR_PORTS,
     symbol: { kind: 'box', label: 'IR' },
     netlist: built(b, IR_PORTS),
@@ -164,17 +164,17 @@ export const SAP_IR: ComponentDef = (() => {
 
 // ---- program counter, memory address register, RAM -----------------------------------------------------------------
 
-const PC_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ce', 'in'), bit('co', 'in'), bit('j', 'in'), bus('bus', 8, 'in'), bus('pc', 4, 'out'), bus('drv', 8, 'out')];
+const PC_PORTS: PortDef[] = [bit('clk', 'in', true), bit('ce', 'in'), bit('co', 'in'), bit('j', 'in'), bus('bus', 8, 'in'), bit('rst', 'in'), bus('pc', 4, 'out'), bus('drv', 8, 'out')];
 
 /** The program counter: a 161 counting (CE) or loading the bus (J), a 245 putting it on the bus (CO). */
 export const SAP_PC: ComponentDef = (() => {
   const b = new Builder(16, 10, 4);
   b.pins(...ins(PC_PORTS));
   const z = b.op1(TIE0, [], '0'), one = b.op1(TIE1, [], '1');
-  const [nj, nco] = inverters(b, ['j', 'co'], z);
+  const [nj, nco, nrst] = inverters(b, ['j', 'co', 'rst'], z);
   const d = b.op(splitter([4, 4], 2), ['bus'], 'nibbles');
   b.next();
-  const cnt = b.op(LS161, [one, 'clk', `${d}.o0`, 'ce', 'ce', nj], '74LS161', 'cnt');
+  const cnt = b.op(LS161, [nrst, 'clk', `${d}.o0`, 'ce', 'ce', nj], '74LS161', 'cnt');
   b.next();
   const pc = b.name(`${cnt}.q`, 'pc', true);
   const w = word(b, [pc, b.op1(constWord(4, 0), [], '0000')], [4, 4], 'PC on 8 bits');
@@ -183,7 +183,7 @@ export const SAP_PC: ComponentDef = (() => {
   b.wire(pc, 'pc');
   return define({
     id: 'sap_pc', name: 'Program counter (SAP-1)', category: 'cpu',
-    summary: 'A 74LS161 counts at the rising edge while CE = 1 and loads the bus\'s low nibble instead while J = 1 (a jump); a 74LS245 puts the count on the bus while CO = 1.',
+    summary: 'A 74LS161 counts at the rising edge while CE = 1 and loads the bus\'s low nibble instead while J = 1 (a jump); a 74LS245 puts the count on the bus while CO = 1. RST clears it to 0 (the 161\'s CLR).',
     ports: PC_PORTS,
     symbol: { kind: 'box', label: 'PC' },
     netlist: built(b, PC_PORTS),
@@ -310,7 +310,7 @@ export const SAP_ALU: ComponentDef = (() => {
   });
 })();
 
-const FLAGS_PORTS: PortDef[] = [bit('clk', 'in', true), bit('fi', 'in'), bus('sum', 8, 'in'), bit('cout', 'in'), bit('cf', 'out'), bit('zf', 'out')];
+const FLAGS_PORTS: PortDef[] = [bit('clk', 'in', true), bit('fi', 'in'), bus('sum', 8, 'in'), bit('cout', 'in'), bit('rst', 'in'), bit('cf', 'out'), bit('zf', 'out')];
 
 /** The flags register: the zero test (four NORs, three ANDs) and the carry into a 173 while FI = 1. */
 export const SAP_FLAGS: ComponentDef = (() => {
@@ -338,14 +338,14 @@ export const SAP_FLAGS: ComponentDef = (() => {
   b.next();
   const d = word(b, ['cout', zero, z, z], undefined, 'CF ZF');
   b.next();
-  const reg = b.op(LS173, [z, z, nfi, nfi, z, 'clk', d], 'flags', 'reg');
+  const reg = b.op(LS173, [z, z, nfi, nfi, 'rst', 'clk', d], 'flags', 'reg');
   b.next();
   const q = bitsOf(b, `${reg}.q`, 4);
   b.wire(q[0], 'cf');
   b.wire(q[1], 'zf');
   return define({
     id: 'sap_flags', name: 'Flags register (SAP-1)', category: 'cpu',
-    summary: 'The carry out of the adder and a zero test of the sum (74LS02 NORs on pairs of bits, then 74LS08 ANDs) go into a 74LS173 while FI = 1: CF and ZF, which the microcode\'s address takes for JC and JZ.',
+    summary: 'The carry out of the adder and a zero test of the sum (74LS02 NORs on pairs of bits, then 74LS08 ANDs) go into a 74LS173 while FI = 1: CF and ZF, which the microcode\'s address takes for JC and JZ. RST clears both.',
     ports: FLAGS_PORTS,
     symbol: { kind: 'box', label: 'FLAGS' },
     netlist: built(b, FLAGS_PORTS),
@@ -408,7 +408,7 @@ export const SAP_DISPLAY: ComponentDef = (() => {
 export const SAP_LINES = ['hlt', 'mi', 'ri', 'ro', 'io', 'ii', 'ai', 'ao', 'eo', 'su', 'bi', 'oi', 'ce', 'co', 'j', 'fi'] as const;
 
 const CTL_PORTS: PortDef[] = [
-  bit('nclk', 'in', true), bus('op', 4, 'in'), bit('cf', 'in'), bit('zf', 'in'),
+  bit('nclk', 'in', true), bus('op', 4, 'in'), bit('cf', 'in'), bit('zf', 'in'), bit('rst', 'in'),
   ...SAP_LINES.map((n) => bit(n, 'out')), bus('t', 3, 'out'), bus('ts', 5, 'out'),
 ];
 
@@ -431,13 +431,13 @@ export const SAP_CONTROL: ComponentDef = (() => {
   const dec = b.op(LS138, [t, one, z, z], 'step decoder', 'dec');
   b.next();
   const yn = bitsOf(b, `${dec}.y_n`, 8);
-  b.wire(b.name(yn[5], 'T5', true), `${step}.clr_n`);
   b.next();
-  const ia = word(b, [...yn.slice(0, 5), z], undefined, 'steps');
+  const ia = word(b, [...yn.slice(0, 5), 'rst'], undefined, 'steps, RST');
   b.next();
   const inv = b.op(LS04, [ia], 'step LEDs', 'inv');
   b.next();
-  b.wire(b.op1(splitter([5, 1], 2), [`${inv}.y`]), 'ts');
+  const iy = b.op(splitter([5, 1], 2), [`${inv}.y`]);
+  b.wire(`${iy}.o0`, 'ts');
   const addr = word(b, [t, 'op', 'cf', 'zf', z, z], [3, 4, 1, 1, 1, 1], '[ZF CF][op][step]');
   b.next();
   const hi = b.op(eeprom2k(SAP_ROM_HI), [addr, z, z, one], 'HLT … AO', 'romhi');
@@ -446,10 +446,18 @@ export const SAP_CONTROL: ComponentDef = (() => {
   const h = bitsOf(b, `${hi}.data`, 8, 'high byte'), l = bitsOf(b, `${lo}.data`, 8, 'low byte');
   const all = [...l, ...h]; // bit 0 = FI … bit 15 = HLT
   SAP_LINES.forEach((n, i) => b.wire(all[15 - i], n));
+  b.next();
+  // the step counter clears at T5 (the end of an instruction) or while RST is held: Y5 AND NOT RST into its CLR
+  const ca = word(b, [yn[5], z, z, z], undefined, 'T5');
+  const cb = word(b, [`${iy}.o1`, z, z, z], undefined, 'not RST');
+  b.next();
+  const clr = b.op(LS08, [ca, cb], 'clear: T5 or RST', 'clr');
+  b.next();
+  b.wire(b.name(bitsOf(b, `${clr}.y`, 4)[0], 'clr_n', true), `${step}.clr_n`);
   b.wire(t, 't');
   return define({
     id: 'sap_control', name: 'Control unit (SAP-1)', category: 'cpu',
-    summary: 'Microcode: a 74LS161 counts the steps on the falling clock edge, a 74LS138 decodes them (step 5 clears the counter: five steps a instruction), and two 28C16 EEPROMs turn [flags][opcode][step] into the 16 control lines.',
+    summary: 'Microcode: a 74LS161 counts the steps on the falling clock edge, a 74LS138 decodes them (step 5 clears the counter: five steps an instruction; so does RST, through a 74LS08), and two 28C16 EEPROMs turn [flags][opcode][step] into the 16 control lines.',
     ports: CTL_PORTS,
     symbol: { kind: 'box', label: 'CONTROL' },
     netlist: built(b, CTL_PORTS, 3),
@@ -499,7 +507,7 @@ export const SAP_BUS: ComponentDef = (() => {
 // ---- the computer --------------------------------------------------------------------------------------------------
 
 export const SAP_PORTS: PortDef[] = [
-  bit('clk', 'in', true), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'),
+  bit('clk', 'in', true), bit('prog', 'in'), bus('addrSw', 4, 'in'), bus('dataSw', 8, 'in'), bit('write', 'in'), bit('rst', 'in'),
   bus('bus', 8, 'out'), bus('out', 8, 'out'), bus('d0', 8, 'out'), bus('d1', 8, 'out'), bus('d2', 8, 'out'), bit('halt', 'out'), bit('clash', 'out'),
 ];
 
@@ -548,6 +556,10 @@ export const SAP_COMPUTER: ComponentDef = (() => {
   const ir = b.op(SAP_IR, [clk, '', '', ''], 'instruction', 'ir');
   const ctl = b.op(SAP_CONTROL, [b.name(`${clock}.nclk`, 'NCLK', true), b.name(`${ir}.op`, 'opcode', true), '', ''], 'control', 'ctl');
   const line = (n: string) => b.name(`${ctl}.${n}`, n.toUpperCase().replace('EO', 'ΣO'), true);
+  // RESET: the CLRs of the PC, the step counter, A, B, the IR and the flags (not the MAR, OUT or the RAM)
+  const rst = b.name('rst', 'RST', true);
+  b.wire(rst, `${ctl}.rst`);
+  b.wire(rst, `${ir}.rst`);
   b.wire(line('hlt'), `${clock}.hlt`);
   b.wire(line('hlt'), 'halt');
   b.wire(line('mi'), `${mar}.mi`);
@@ -575,6 +587,7 @@ export const SAP_COMPUTER: ComponentDef = (() => {
   const disp = b.op(SAP_DISPLAY, [shown], 'display', 'disp');
   b.wire(shown, 'out');
   for (const k of [0, 1, 2]) b.wire(`${disp}.d${k}`, `d${k}`);
+  for (const m of [pc, a, fl, breg]) b.wire(rst, `${m}.rst`);
   b.wire(b.name(`${fl}.cf`, 'CF', true), `${ctl}.cf`);
   b.wire(b.name(`${fl}.zf`, 'ZF', true), `${ctl}.zf`);
   for (const [m, from] of [['pc', `${pc}.drv`], ['ram', `${mem}.drv`], ['ir', `${ir}.drv`], ['a', `${a}.drv`], ['alu', `${alu}.drv`]]) b.wire(from, `${bs}.${m}`);

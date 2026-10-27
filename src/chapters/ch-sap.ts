@@ -20,7 +20,7 @@ import type { Chapter } from './types';
  * as, and the five EEPROMs' bits.
  */
 export const SAP_COST = {
-  chips: 48, drawn: 6, logic: 3306, perEeprom: 65524, eeproms: 5, bus: 122, control: 196,
+  chips: 49, drawn: 6, logic: 3314, perEeprom: 65524, eeproms: 5, bus: 122, control: 204,
   /** NANDs of single modules (stats), as the steps quote them. */
   clock: 14, areg: 243, alu: 129, pc: 150, ram: 1546, ls173: 109, ls161: 125, ls189: 716,
 } as const;
@@ -37,12 +37,13 @@ function poke(st: Stage, v: Record<string, number>): void {
   st.refresh();
 }
 
-/** Key bytes into the RAM from address 0 by the switches (PROG, address, data, WR), as Ben programs his. */
+/** Key bytes into the RAM from address 0 by the switches (PROG, address, data, WR), then RESET, as Ben programs his. */
 function program(st: Stage, bytes: readonly number[]): void {
-  st.powerCycle(); // PC 0, step T0 (the RAM back to the scene's own program, then keyed over)
   poke(st, { prog: 1 });
   bytes.forEach((v, i) => { poke(st, { addrSw: i, dataSw: v }); poke(st, { write: 1 }); poke(st, { write: 0 }); });
   poke(st, { prog: 0, addrSw: 0, dataSw: 0 });
+  poke(st, { rst: 1 }); // PC 0, step T0, IR NOP: the program starts from the top
+  poke(st, { rst: 0 });
 }
 
 /** The computer's state, or null on any other scene. */
@@ -169,7 +170,7 @@ export const chAppendixSap: Chapter = {
           'The EEPROMs stop driving their outputs',
         ],
         answer: 0,
-        explain: 'HLT\'s control word (T2 of opcode F) holds HLT = 1, which turns clk off; without clk and nclk the step counter cannot move off T2, so HLT stays on. The only way out is a reset.',
+        explain: 'HLT\'s control word (T2 of opcode F) holds HLT = 1, which turns clk off; without clk and nclk the step counter cannot move off T2, so HLT stays on. The only way out is RESET: it clears the IR, so the control word is a fetch again.',
         why: ['', 'Nothing clears: the registers keep their values, which is how OUT stays on the display.', 'The PC needs an edge to load anything, and there is none.', 'They keep driving the HLT word; that is what holds the clock off.'],
       },
     },
@@ -253,12 +254,14 @@ export const chAppendixSap: Chapter = {
         cells are latches, ${SAP_COST.ls189} NANDs a chip.</p>
         <p>Ben's 189 writes while WE is low, from an RC pulse on the clock edge. Here the write is RI AND CLK, so it happens
         while the clock is high: at the rising edge, in effect, which is when the golden model writes.</p>
-        <p>This RAM starts empty. Program it as Ben does: PROG on, an address on the four switches, a byte on the eight,
-        press WR; next address. The panel's model pauses while PROG is on and takes the RAM from the hardware after.</p>`,
+        <p>This RAM starts empty. Program it as Ben does, whenever you like (running or not): PROG on, an address on the
+        four switches, a byte on the eight, press WR; next address. PROG off, then RESET on the clock board: it clears the
+        PC, the step counter, A, B, the IR and the flags (the chips' CLR pins), but not the RAM, so the program starts from
+        address 0. The panel's model pauses while PROG is on and takes the RAM from the hardware after.</p>`,
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
       challenge: {
         kind: 'reach',
-        goal: 'By the switches, put LDI 7 (0x57) at address 0, OUT (0xE0) at 1 and HLT (0xF0) at 2; then PROG off, and run until the display shows 7.',
+        goal: 'By the switches, put LDI 7 (0x57) at address 0, OUT (0xE0) at 1, HLT (0xF0) at 2; PROG off, RESET, run until it shows 7.',
         check: (st) => {
           const sim = st.sim, h = hw(st);
           if (!sim || !h) return false;
@@ -268,9 +271,9 @@ export const chAppendixSap: Chapter = {
         hints: [
           'PROG on first: the RAM then takes its address from the four switches and its data from the eight.',
           'Each byte: address switches, data switches, then WR on and off. 0x57 is 0101 0111.',
-          'PROG off, then Run (or Run to HLT in the panel): the PC starts at 0.',
+          'PROG off, RESET on and off (the PC back to 0, the step to T0), then Run (or Run to HLT in the panel).',
         ],
-        answer: 'PROG = 1; address 0000, data 0101 0111, WR on/off; address 0001, data 1110 0000, WR; address 0010, data 1111 0000, WR; PROG = 0; Run to HLT. OUT shows 7.',
+        answer: 'PROG = 1; address 0000, data 0101 0111, WR on/off; address 0001, data 1110 0000, WR; address 0010, data 1111 0000, WR; PROG = 0; RESET on and off; Run to HLT. OUT shows 7.',
         solve: (st) => { program(st, HAND); st.runCycles(40, () => halted(st)); },
       },
     },

@@ -216,7 +216,7 @@ class Bench {
 }
 
 /** NANDs of the computer without its five EEPROMs' ROM trees (each 65 524): a change to a module shows here. */
-const SAP_LOGIC_NANDS = 3306;
+const SAP_LOGIC_NANDS = 3314; // 3306 before RESET's 74LS08 (ctl.clr)
 
 const issState = (m: SapISS) => ({ pc: m.pc, mar: m.mar, ir: m.ir, a: m.a, b: m.b, out: m.out, cf: m.cf, zf: m.zf, step: m.step });
 

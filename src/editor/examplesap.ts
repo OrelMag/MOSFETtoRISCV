@@ -2,8 +2,8 @@
 // the 4-bit CPU. The top level is docFromDef's drawing of SAP_COMPUTER with each module (Ben Eater's breadboards: clock,
 // PC, MAR, RAM, IR, control, A, ALU, flags, B, output, display, bus) a user chip of its own, so it opens and edits like
 // one the learner drew, and keeps opening down to the 74xx chips and their NANDs. The computer's pins become the parts
-// they stand for: a PROG switch, DIP switches for the address and the data, a WRITE key, the display's three digits and
-// OUT's value, LEDs on the bus, a clash LED and a halt part.
+// they stand for: a PROG switch, DIP switches for the address and the data, a WRITE key, a RESET key, the display's
+// three digits and OUT's value, LEDs on the bus, a clash LED and a halt part.
 //
 // The program: the RAM chip's two 74LS189s are placed as ls189_i<nibbles> (lib/ttl.ts ls189With), a 189 that holds
 // its 16 nibbles at power-on. A chip document can only give power-on values to its own wires, and the 189's latches
@@ -109,6 +109,7 @@ const PIN_PARTS: [string, PartRef, string, string][] = [
   ['addrSw', { switches: 4 }, 'q', 'address'],
   ['dataSw', { switches: 8 }, 'q', 'data'],
   ['write', { key: 'w' }, 'q', 'WRITE (W)'],
+  ['rst', { key: 'e' }, 'q', 'RESET (E)'],
   ['bus', { display: 'led', width: 8 }, 'a', 'bus'],
   ['out', { display: 'value', width: 8 }, 'a', 'OUT'],
   ['d0', { display: 'seg7', width: 8 }, 'a', 'ones'],
@@ -121,7 +122,7 @@ const PIN_PARTS: [string, PartRef, string, string][] = [
 export const SAP_NOTES = 'Ben Eater\'s 8-bit breadboard computer (SAP-1, after Malvino and Brown), one user chip per breadboard, each built from 74xx chips you can open down to NANDs. '
   + '16 bytes of RAM hold the program (Fibonacci to start with); every instruction takes five clock steps T0–T4, each a 16-bit control word read from the control logic\'s two EEPROMs. '
   + 'Run (or Run to halt in the CPU drawer, which checks every register, the bus and the RAM against the golden model at every clock): the numbers show on the digits and OUT; HLT stops the clock. '
-  + 'Load program… in the CPU drawer puts another sample (or your own SAP-1 assembly) into the RAM. Or program it by hand, as on the breadboard: PROG on, set an address and a byte on the DIP switches, press W, and so on for each byte; PROG off, then Run. '
+  + 'Load program… in the CPU drawer puts another sample (or your own SAP-1 assembly) into the RAM. Or program it by hand, as on the breadboard, at any time: PROG on, set an address and a byte on the DIP switches, press W, and so on for each byte; PROG off, press RESET (E: it clears the PC, the step counter, A, B, the IR and the flags, not the RAM), then Run. '
   + 'The bus is a wired OR of the modules\' 74LS245s; the clash LED lights if two drive it at once.';
 
 /** The example's top level; `sub` maps SAP_BLOCKS keys to the sub-chips' ids. */

@@ -19,7 +19,7 @@ const IS_189 = /^ls189(_i([0-9a-f]{16}))?$/;
 export function sapRamChip(ed: Editor, prefix: string): { doc: ChipDoc; bytes: number[] } | { error: string } {
   const at = partAt(ed.doc, `${prefix}ram`, ed.ws.chips);
   const ref = at?.part.ref;
-  if (!ref || !('chip' in ref)) return { error: prefix ? 'a placed SAP-1 part keeps its RAM inside: program it through its prog, addrSw, dataSw and write pins' : 'no RAM chip (a user chip placed as ram)' };
+  if (!ref || !('chip' in ref)) return { error: prefix ? 'a placed SAP-1 part keeps its RAM inside: program it through its prog, addrSw, dataSw and write pins, then rst' : 'no RAM chip (a user chip placed as ram)' };
   const doc = ed.ws.chips[ref.chip];
   const nib = (id: string) => {
     const p = doc?.parts.find((q) => q.id === id);
@@ -67,7 +67,7 @@ export function openSapProgram(ed: Editor, mon: SapMonitor): void {
   };
   const dlg = dialog(ed, 'Load a program into the RAM', [
     h('p', { class: 'sb-dlg-lead' }, 'SAP-1 assembly, a byte a line from address 0: LDA, ADD, SUB, STA, LDI, JMP, JC, JZ, OUT, HLT, labels and .byte. ',
-      'The bytes become the two 74LS189s’ power-on contents (they stay through Reset; Undo takes them back). By hand instead: PROG on, an address and a byte on the DIP switches, W, … PROG off.'),
+      'The bytes become the two 74LS189s’ power-on contents (they stay through Reset; Undo takes them back). By hand instead, at any time: PROG on, an address and a byte on the DIP switches, W, … PROG off, RESET (E), Run.'),
     h('label', { class: 'sb-row' }, h('span', null, 'Sample'), pick),
     text, msg,
   ], [h('button', { class: 'btn sm ghost', onclick: () => dlg.close() }, 'Cancel'), h('button', { class: 'btn sm primary', onclick: load }, 'Load')]);

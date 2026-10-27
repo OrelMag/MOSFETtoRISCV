@@ -52,7 +52,7 @@ export function sapScene(o: SapSceneOptions = {}): Scene {
   return {
     root,
     clock: 'clk',
-    inputs: { prog: 0, addrSw: 0, dataSw: 0, write: 0 },
+    inputs: { prog: 0, addrSw: 0, dataSw: 0, write: 0, rst: 0 },
     path: o.path,
     highlight: o.highlight,
     autoClock: o.autoClock ?? false,

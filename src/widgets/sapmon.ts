@@ -3,7 +3,10 @@
 // rising edge (the falling edge before it has advanced the step counter: everything, the step included, must equal the
 // model), and `after` it (the registers and RAM have loaded; the step has not moved yet: the model's cycle() runs here
 // and everything but the step is compared). Programming mode (PROG = 1: the switches write the RAM, the model cannot
-// know what) pauses the comparison; the model is set from the hardware when PROG goes back to 0.
+// know what) pauses the comparison; the model is set from the hardware when PROG goes back to 0. RESET (the rst input)
+// is asynchronous: held through an edge the model's cycle(true) follows it; pressed and let go between two edges it
+// leaves nothing but its effect, so the model takes reset() when the hardware shows exactly what a reset leaves (PC,
+// step, IR, A, B and the flags all 0) and the model does not.
 
 import { SAP_STATE } from '../lib/sap';
 import { CTRL, ctrlText, microcode, SAP_CTRL, SAP_STEPS } from '../sap/isa';
@@ -64,6 +67,9 @@ export function sapRam(sim: Sim): number[] {
   });
 }
 
+/** The hardware holds what RESET leaves: PC, step, IR, A, B and the flags all 0. */
+export const atReset = (hw: SapHw): boolean => !hw.pc && !hw.step && !hw.ir && !hw.a && !hw.b && !hw.cf && !hw.zf;
+
 const NAMES: [keyof SapHw & keyof SapState, string][] = [['pc', 'PC'], ['mar', 'MAR'], ['ir', 'IR'], ['a', 'A'], ['b', 'B'], ['out', 'OUT'], ['cf', 'CF'], ['zf', 'ZF']];
 const hx = (v: number) => (v < 0 ? 'X' : `0x${v.toString(16).toUpperCase().padStart(2, '0')}`);
 
@@ -106,6 +112,10 @@ export class SapFollower {
     }
     if (this.mismatch) return;
     const hw = sapHw(sim);
+    if (atReset(hw) && !this.iss.atReset) {
+      this.iss.reset();
+      this.cur = -1;
+    }
     this.compare(hw, true);
     if (!this.mismatch && hw.cw !== this.iss.control()) this.mismatch = `control word: hardware ${hw.cw < 0 ? 'X' : hw.cw.toString(16)}, model ${this.iss.control().toString(16)} (step T${this.iss.step}, opcode ${this.iss.ir >> 4})`;
   }
@@ -115,7 +125,7 @@ export class SapFollower {
     if (this.stale || sim.getInput('prog') === 1) return;
     const cw = this.iss.control(), oi = cw & CTRL.oi;
     if (cw & CTRL.ii) this.cur = this.iss.mar;
-    const ran = this.iss.cycle();
+    const ran = this.iss.cycle(sim.getInput('rst') === 1);
     if (ran && oi) this.outs.push(this.iss.out);
     if (this.mismatch) return;
     this.compare(sapHw(sim), false);

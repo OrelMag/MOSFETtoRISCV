@@ -2,7 +2,9 @@
 // step drives the bus; at the rising edge every register whose load line is on takes the bus (the PC counts with CE,
 // the flags take the ALU's carry and zero with FI, RAM[MAR] takes the bus with RI); at the falling edge the step
 // counter advances (and wraps after T4). HLT gates the clock: while the control word has HLT no edge happens, so the
-// machine stays as it is (halted).
+// machine stays as it is (halted). RESET (reset(), or cycle(true) while the line is held) clears what Ben's reset
+// button clears: the PC, the step counter, A, B, the IR and the flags (their chips' CLR); the MAR, OUT and the RAM keep
+// their contents, so a program keyed in by the switches survives it.
 
 import { CTRL, microcode, SAP_STEPS } from './isa';
 
@@ -56,8 +58,28 @@ export class SapISS {
     return { bus, drivers };
   }
 
-  /** One clock period; false (nothing happens) while halted. */
-  cycle(): boolean {
+  /** The reset button: PC, step, A, B, IR and the flags to 0 (asynchronous clears); MAR, OUT and the RAM keep theirs. */
+  reset(): void {
+    this.pc = 0; this.step = 0; this.a = 0; this.b = 0; this.ir = 0; this.cf = 0; this.zf = 0;
+  }
+
+  /** The cleared registers are as reset() leaves them. */
+  get atReset(): boolean {
+    return !this.pc && !this.step && !this.a && !this.b && !this.ir && !this.cf && !this.zf;
+  }
+
+  /**
+   * One clock period; false (nothing happens) while halted. `rst`: RESET held through it: the clears win over every
+   * load and count, so only the MAR moves (T0 of the cleared IR is CO MI: it takes the PC, 0).
+   */
+  cycle(rst = false): boolean {
+    if (rst) this.reset();
+    const ran = this.edge();
+    if (rst) this.reset();
+    return ran;
+  }
+
+  private edge(): boolean {
     const cw = this.control();
     const { bus } = this.drive(cw);
     this.cw = cw;

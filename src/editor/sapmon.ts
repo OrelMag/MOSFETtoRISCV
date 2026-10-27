@@ -5,7 +5,9 @@
 // step included), the model takes its cycle, and after the edge the registers it loaded are compared again.
 // The model starts from the hardware at power-on (the RAM's contents are the program). While PROG is on the clock and
 // the switches drive the RAM, which the model does not cover: it is followed, and taken up again from the hardware
-// at the first edge after PROG goes off.
+// at the first edge after PROG goes off. RESET clears the PC, the step, A, B, the IR and the flags at once: held through an
+// edge the model's cycle(true) follows it; pressed between two edges, the model takes reset() at the next edge when the
+// hardware holds exactly what a reset leaves and the model does not (so PROG, a program, RESET, Run stays checked).
 
 import { SAP_STATE } from '../lib/sap';
 import { CTRL, ctrlText, disasm, microcode, SAP_STEPS } from '../sap/isa';
@@ -205,6 +207,11 @@ export class SapMonitor {
     return w;
   }
 
+  /** RESET as the PC sees it. */
+  private get rst(): number {
+    return this.value('pc', 'rst');
+  }
+
   /** PROG as the MAR sees it. */
   private get prog(): number {
     return this.value('mar', 'prog');
@@ -266,15 +273,22 @@ export class SapMonitor {
     }
     if (!this.ensure()) return;
     const iss = this.iss;
-    if (!iss || !this.synced || iss.halted) return;
+    if (!iss || !this.synced) return;
+    const r = this.read();
+    if (r && !r.pc && !r.step && !r.ir && !r.a && !r.b && !r.cf && !r.zf && !iss.atReset) {
+      iss.reset();
+      this.fetched = -1;
+      this.seq++;
+    }
+    if (iss.halted) return;
     this.compare(true, this.log.at(-1)?.text ?? 'power-on');
     if (this.mismatch) return;
     const cw = iss.control(), step = iss.step, ir = iss.ir, mar = iss.mar;
-    const was = iss.save();
-    iss.cycle();
+    const was = iss.save(), held = this.rst === 1;
+    iss.cycle(held);
     this.stepped = true;
     if (cw & CTRL.ii) this.fetched = mar;
-    const text = `${step < 2 ? 'fetch' : disasm(ir)}  T${step}`;
+    const text = held ? 'RESET held' : `${step < 2 ? 'fetch' : disasm(ir)}  T${step}`;
     const eff: string[] = [];
     if (iss.mar !== was.mar) eff.push(`MAR ← ${hx(iss.mar, 1)}`);
     if (iss.ir !== was.ir) eff.push(`IR ← ${hx(iss.ir, 2)}`);
@@ -284,7 +298,7 @@ export class SapMonitor {
     if (cw & CTRL.ri) eff.push(`RAM [${hx(mar, 1)}] ← ${hx(iss.ram[mar], 2)}`);
     if (cw & CTRL.fi) eff.push(`CF ${iss.cf} ZF ${iss.zf}`);
     if (iss.pc !== was.pc) eff.push(`PC → ${hx(iss.pc, 1)}`);
-    if (iss.step === 0) this.retired++;
+    if (iss.step === 0 && !held) this.retired++;
     this.seq++;
     this.log.push({ cycle: this.es.cycles, pc: this.fetched >= 0 ? this.fetched : was.pc, text, effect: `${cw ? ctrlText(cw) : '—'}${eff.length ? `: ${eff.join(', ')}` : ''}` });
     if (this.log.length > SapMonitor.LOG) this.log.shift();
