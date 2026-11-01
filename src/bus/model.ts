@@ -24,7 +24,11 @@ export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, dma: 0x4, screen: 0x5, key
 export interface CardDeck { items: readonly number[]; feed: number }
 
 /** The optional slaves: a DRAM of 2^dramK words, an n × n screen (a byte a pixel), a keyboard, a card reader. */
-export interface BusDevices { dramK?: number; screen?: number; keys?: boolean; cards?: CardDeck }
+export interface BusDevices {
+  dramK?: number; screen?: number; keys?: boolean; cards?: CardDeck;
+  /** Where each region sits (its top address nibble), when not at MAP: the memory-map designer's applied map (editor/memmap.ts busMapOf). */
+  map?: Partial<Record<keyof typeof MAP, number>>;
+}
 
 /**
  * Edges between the reader's state a load sees and the edge the load retires at: the slave latches STATUS or DATA
@@ -86,6 +90,8 @@ export class BusModel implements BusMemory {
   readonly keys: number[] | null;
   /** The card reader (STATUS at 0x7000_0000, DATA at +4). */
   readonly cards: CardModel | null;
+  /** The top nibble of each region. */
+  readonly map: Record<keyof typeof MAP, number>;
   /** Rising clock edges so far (set by whoever steps the golden model; only the card reader needs it). */
   now = 0;
   dma = { src: 0, dst: 0, len: 0, done: false };
@@ -96,6 +102,7 @@ export class BusModel implements BusMemory {
     this.ram = new Uint32Array(2 ** ramK);
     this.flash = new Uint32Array(flashWords).fill(0xffffffff);
     for (let i = 0; i < Math.min(flashImage.length, flashWords); i++) this.flash[i] = flashImage[i] >>> 0;
+    this.map = { ...MAP, ...dev.map };
     this.dram = dev.dramK ? new Uint32Array(2 ** dev.dramK) : null;
     this.screen = dev.screen ? new Uint32Array((dev.screen * dev.screen) / 4) : null;
     this.keys = dev.keys ? [] : null;
@@ -106,7 +113,7 @@ export class BusModel implements BusMemory {
   get irq(): boolean { return this.dma.done; }
 
   read(addr: number): number {
-    const a = addr >>> 0, nib = a >>> 28, w = (a >>> 2);
+    const a = addr >>> 0, nib = a >>> 28, w = (a >>> 2), MAP = this.map;
     if (nib === MAP.ram) return this.ram[w & (this.ram.length - 1)];
     if (nib === MAP.flash) return this.flash[w & (this.flash.length - 1)];
     if (nib === MAP.dram && this.dram) return this.dram[w & (this.dram.length - 1)];
@@ -125,7 +132,7 @@ export class BusModel implements BusMemory {
   }
 
   write(addr: number, value: number, strb: number): void {
-    const a = addr >>> 0, nib = a >>> 28, w = a >>> 2;
+    const a = addr >>> 0, nib = a >>> 28, w = a >>> 2, MAP = this.map;
     const store = (m: Uint32Array) => { const i = w & (m.length - 1); m[i] = merge(m[i], value, strb); };
     if (nib === MAP.ram) store(this.ram);
     else if (nib === MAP.dram && this.dram) store(this.dram);
