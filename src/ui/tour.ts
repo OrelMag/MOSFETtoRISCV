@@ -6,6 +6,7 @@
 import type { Beat, Tour } from '../chapters/types';
 import type { Stage } from '../view/stage';
 import { h, icon } from './dom';
+import { reveal } from './stagenotes';
 
 /** How long Play holds each beat. */
 const PLAY_MS = 4200;
@@ -60,6 +61,8 @@ export class TourPlayer {
     this.marks = [];
     this.next();
     this.el.focus({ preventScroll: true });
+    // on a narrow screen the stage sits below the text: bring the caption into view
+    requestAnimationFrame(() => reveal(this.el));
   }
 
   get beat(): Beat | null {
