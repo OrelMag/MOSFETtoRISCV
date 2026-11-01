@@ -76,6 +76,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+/* Text size row: label, A−, value, A+ (view options menu) */
+.pal-menu .pal-size { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+.pal-menu .pal-size > span:first-child { flex: 1; min-width: 0; }
+.pal-menu .pal-size .btn { padding: 4px 10px; }
+.pal-size-v { min-width: 3.2em; text-align: center; font: 600 12px var(--font-mono); color: var(--text-2); }
+.pal-menu .pal-backup svg { flex: none; color: var(--accent); }
 .img-menu { min-width: 240px; left: 0; right: auto; }
 .pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
@@ -274,15 +280,15 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* ---------- chapter layout ---------- */
 .layout {
   display: grid; height: 100%;
-  grid-template-columns: minmax(300px, 400px) 1fr minmax(260px, 340px);
+  grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr minmax(260px, 340px);
 }
-.layout.no-inspector { grid-template-columns: minmax(300px, 400px) 1fr 0; }
+.layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 0; }
 .layout.no-inspector .inspector { display: none; }
 /* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
    own panels took most of that). */
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout { grid-template-columns: minmax(300px, 340px) 1fr minmax(260px, 300px); }
-  .layout.no-inspector { grid-template-columns: minmax(300px, 340px) 1fr 0; }
+  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr minmax(260px, 300px); }
+  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 0; }
 }
 
 .narrative {
@@ -299,7 +305,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .steps-dots button.done { background: color-mix(in srgb, var(--accent) 45%, var(--surface-3)); }
 .steps-dots button.cur { background: var(--accent); }
-.narrative-body { flex: 1; overflow-y: auto; padding: 18px 22px 24px; }
+.narrative-body { flex: 1; overflow-y: auto; padding: 18px 22px 24px; zoom: var(--prose-scale, 1); }
+/* Reading width (Settings ▸ Narrow reading column): a line of about 62 characters, centred in a pane wider than that (a phone or tablet stacks it full width). */
+:root[data-narrow-text] .narrative-body > * { max-width: 62ch; margin-inline: auto; }
 .step-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
 .prose p { margin: 0 0 0.85em; color: var(--text-2); }
 .prose strong { color: var(--text); }
@@ -2160,6 +2168,22 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .why-tabs button, .why-card > header .btn { min-height: 40px; min-width: 40px; }
 }
 
+/* Backup dialogs (ui/backupui.ts) and the Safari storage note (ui/persist.ts) */
+.bk-dlg { max-width: min(480px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); padding: 18px 20px; box-shadow: var(--shadow-lg); }
+.bk-dlg::backdrop { background: rgb(0 0 0 / 0.45); }
+.bk-dlg h3 { margin: 0 0 6px; font-size: 17px; }
+.bk-dlg h4 { margin: 12px 0 4px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bk-dlg p { margin: 6px 0; color: var(--text-2); }
+.bk-sub { font-size: 12.5px; color: var(--muted); }
+.bk-list { margin: 0; padding-left: 1.2em; color: var(--text-2); }
+.bk-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.persist-note {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+  max-width: min(640px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-lg); font-size: 13px;
+}
+.persist-note span { flex: 1 1 260px; }
+@media (pointer: coarse) { .bk-dlg .btn, .persist-note .btn { min-height: 40px; } }
 /* ---------- tours (ui/tour.ts), ledgers (ui/ledger.ts), layers under a step (ui/pages/chapter.ts) ---------- */
 .tour-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 10px; font-size: 12.5px; }
 .tour-go.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
