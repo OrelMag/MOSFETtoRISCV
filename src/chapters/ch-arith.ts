@@ -2,6 +2,7 @@ import type { ComponentDef } from '../sim/types';
 import { addSub, bcdAdder, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
+import { AND, MUX2 } from '../lib/gates';
 import type { Chapter } from './types';
 
 /** NAND delays to one output port (logicDepth reports the deepest output; the subtractor's is v, not the carry). */
@@ -508,7 +509,32 @@ export const chRouting: Chapter = {
         <p>A <strong>decoder</strong> takes an n-bit number and raises exactly one of its 2ⁿ outputs. For input 2,
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>
         <p>Each address bit runs down two vertical rails: itself and <span data-show="inv0 inv1">its inverse</span>.
-        <span data-show="g0 g1 g2 g3">Each output's AND gate</span> taps the combination of rails that spells its own number.</p>`,
+        <span data-show="g0 g1 g2 g3">Each output's AND gate</span> taps the combination of rails that spells its own number: for output 2 = 0b10, the true rail of a₁ and the inverted rail of a₀.
+        A gate that spells a number can fire for no other, so exactly one output is high.</p>
+        <p>Cost: 2ⁿ AND gates of n inputs, plus n inverters. For n = 2 that is ${stats(decoder(2)).nands} NANDs (two inverters and four 2-input ANDs) and ${logicDepth(decoder(2))} gate delays; the
+        table below shows how the cost grows. A decoder is where an address becomes a physical choice: which row of a memory, which register to write, which device on a bus.</p>`,
+      tour: {
+        beats: [
+          { title: 'Address 0', set: { a: 0 }, show: ['inv0', 'inv1', 'g0'], expect: { y0: 1, y1: 0, y2: 0, y3: 0 },
+            say: '<p>a = 0b{b:a}: both inverted rails are 1, and only g0 taps two inverted rails. y0 = {v:y0}, the rest 0.</p>' },
+          { title: 'Address 1', set: { a: 1 }, show: ['inv1', 'g1'], expect: { y0: 0, y1: 1, y2: 0, y3: 0 },
+            say: '<p>a = 0b{b:a}: g1 taps the true rail of a₀ and the inverted rail of a₁. y1 = {v:y1}; g0 lost its inverted a₀.</p>' },
+          { title: 'Address 2', set: { a: 2 }, show: ['inv0', 'g2'], expect: { y0: 0, y1: 0, y2: 1, y3: 0 },
+            say: '<p>a = 0b{b:a}: g2 now spells the number. y2 = {v:y2}.</p>' },
+          { title: 'Address 3', set: { a: 3 }, show: ['g3'], expect: { y0: 0, y1: 0, y2: 0, y3: 1 },
+            say: '<p>a = 0b{b:a}: both true rails, only g3. y3 = {v:y3}. Each address lit exactly one wire, which is the definition of one-hot.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Output k is the minterm yₖ = ∏ᵢ (aᵢ if bit i of k is 1, else ¬aᵢ). Different k differ in at least one bit, so a minterm of one is 0 whenever another is 1: the outputs are mutually exclusive, and since
+          every address matches exactly one k, exactly one output is 1. Cost: n inverters plus 2ⁿ ANDs of n inputs.</p>`,
+        real: `<p>A memory with 2¹⁶ words does not have 65 536 AND gates of 16 inputs: wide ANDs are slow and the rails are long. Row decoders split the address in two or three groups, decode each (predecoding), and AND
+          the group outputs, so each final gate has 2 or 3 inputs. The result is the same one-hot, in far less delay.</p>`,
+        pitfall: `<p>Reading y as a number. The decoder's output is one-hot: y = 0b0100 is "2", not 4, and the outputs are only meaningful as a set of wires. If two outputs are ever high together, an address bit is
+          stuck or an AND input is missing; on the circuit, every gate must read all n rails.</p>`,
+        numbers: `<table class="mini"><tr><th>address bits</th><th>outputs</th><th>NANDs</th><th>delays</th></tr>
+          ${[2, 3, 4, 5].map((n) => `<tr><td>${n}</td><td>${2 ** n}</td><td>${stats(decoder(n)).nands}</td><td>${logicDepth(decoder(n))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: decoder(2), inputs: { a: 2 } }),
     },
     {
@@ -516,7 +542,30 @@ export const chRouting: Chapter = {
       body: `
         <p>Add one more input to every AND gate, <span data-show="pin:en"><code>en</code></span>, and the decoder only speaks when it is enabled.
         This exact circuit will select which word of a memory gets written: the address picks the row, and the
-        write-enable says "now".</p>`,
+        write-enable says "now".</p>
+        <p>With en = 0 every AND has a 0 input, so all outputs are 0, whatever the address: a decoder with enable is a decoder that can say "none". It costs ${stats(decoder(3, true)).nands} NANDs for 3 address bits,
+        against ${stats(decoder(3)).nands} without: each of the 8 gates grows from 3 to 4 inputs. The enable is the data of the 1-bit demultiplexer of the end of this chapter.</p>`,
+      tour: {
+        beats: [
+          { title: 'Enabled', set: { a: 5, en: 1 }, show: ['g5'], expect: { y5: 1, y6: 0 },
+            say: '<p>a = {v:a}, en = 1: g5 sees the true rails of a₂ and a₀, the inverted rail of a₁, and en. y5 = {v:y5}.</p>' },
+          { title: 'Disabled', set: { en: 0 }, show: ['g5'], expect: { y5: 0, y6: 0 },
+            say: '<p>en = 0, same address: g5 has a 0 input, so y5 = {v:y5}. Every other output is 0 too: none of the eight wires is raised.</p>' },
+          { title: 'Another address', set: { a: 6, en: 1 }, show: ['g6'], expect: { y5: 0, y6: 1 },
+            say: '<p>a = {v:a}, en = 1: y6 = {v:y6}, and y5 has dropped.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>With enable, yₖ = en · ∏ᵢ (aᵢ or ¬aᵢ). Equivalently the n-bit decoder with enable is an (n + 1)-input AND per output, and the (n + 1)-bit decoder is two n-bit decoders sharing the low bits, one enabled by the top bit and one by
+          its inverse: a way to build large decoders from small ones.</p>`,
+        real: `<p>A memory's word-line decoder is a decoder with enable in the write path: write-enable gates the row lines so that nothing is written when we = 0. The same structure serves chip-select decoding, where the enable
+          is the bus's valid signal and the outputs choose a peripheral.</p>`,
+        pitfall: `<p>Enabling with a signal that changes while the address does. If en and a settle at different times, a brief extra output can rise (a glitch on an unrelated row). Writes are safe because the flip-flops only sample at the clock edge,
+          but a decoder driving something asynchronous needs its enable and address to change in a defined order.</p>`,
+        numbers: `<table class="mini"><tr><th>3 → 8 decoder</th><th>NANDs</th><th>delays</th></tr>
+          <tr><td>without enable</td><td>${stats(decoder(3)).nands}</td><td>${logicDepth(decoder(3))}</td></tr>
+          <tr><td>with enable</td><td>${stats(decoder(3, true)).nands}</td><td>${logicDepth(decoder(3, true))}</td></tr></table>`,
+      },
       scene: () => ({ root: decoder(3, true), inputs: { a: 5, en: 1 } }),
       challenge: {
         kind: 'reach', goal: 'Light up output y6, and only y6.',
@@ -534,7 +583,33 @@ export const chRouting: Chapter = {
       body: `
         <p>A 4:1 multiplexer is three 2:1 muxes in a tree. Select bit <code>s0</code> chooses <span data-show="m0_0 m0_1">within each pair</span>;
         <code>s1</code> chooses <span data-show="m1_0">between the winners</span>.</p>
-        <p>A 2ᵏ:1 mux needs 2ᵏ − 1 two-input muxes and k levels. The levels set the delay.</p>`,
+        <p>A 2ᵏ:1 mux needs 2ᵏ − 1 two-input muxes and k levels. The levels set the delay.</p>
+        <p>The tree shape is the same halving as binary search: each level discards half the candidates, using one more select bit. For 4 inputs that is ${stats(muxTree(2, 1)).nands} NANDs (three 2:1 muxes at ${stats(MUX2).nands} each) and
+        ${logicDepth(muxTree(2, 1))} gate delays from the data inputs to y; a flat alternative, a decoder gating each input into one big OR, has the same function and a different cost and delay, which the layers below compare.</p>`,
+      tour: {
+        beats: [
+          { title: 's = 0: the first of the first pair', set: { s: 0 }, show: ['m0_0', 'm1_0'], expect: { y: 0 },
+            say: '<p>s = 0b{b:s}: m0_0 passes d0 (s0 = 0) and m1_0 passes m0_0 (s1 = 0). y = {v:y} = d0.</p>' },
+          { title: 's = 1: the second', set: { s: 1 }, show: ['m0_0', 'm1_0'], expect: { y: 1 },
+            say: '<p>s0 = 1: m0_0 now passes d1. y = {v:y} = d1. Only the first level moved; the second level still reads the first pair.</p>' },
+          { title: 's = 2: the other pair', set: { s: 2 }, show: ['m0_1', 'm1_0'], expect: { y: 0 },
+            say: '<p>s1 = 1 makes m1_0 pass m0_1, the second pair\'s winner, and s0 = 0 makes m0_1 pass d2. y = {v:y} = d2.</p>' },
+          { title: 's = 3', set: { s: 3 }, show: ['m0_1', 'm1_0'], expect: { y: 1 },
+            say: '<p>s = 0b{b:s}: m0_1 passes d3. y = {v:y}. Two select bits reached four inputs through three muxes, two on any path.</p>' },
+          { title: 'The data matters only when selected', set: { d3: 0 }, show: ['m0_1'], expect: { y: 0 },
+            say: '<p>Change d3 to 0 with s = 3: y = {v:y}, it follows. Change any other data input and y would not move: the unselected paths are cut at some mux.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>A 2ᵏ:1 tree has 2ᵏ⁻¹ + … + 2 + 1 = 2ᵏ − 1 muxes, level j (from the leaves) having 2ᵏ⁻ʲ of them and selected by bit j − 1. Each mux is ${stats(MUX2).nands} NANDs, so a bit costs ${stats(MUX2).nands}·(2ᵏ − 1); the depth is the
+          mux depth per level times k, less what the shared select inversion saves.</p>`,
+        real: `<p>Large muxes in silicon are rarely trees of 2:1 cells. A one-hot AND-OR form (a decoder gating each input, then an OR tree) has a shorter select path, and a transmission-gate tree is the densest. Synthesis picks by timing: the
+          register file read in a CPU is exactly this choice.</p>`,
+        pitfall: `<p>Wiring the select bits in the wrong order. The least significant bit selects at the first level (nearest the data), the most significant at the last; swapping them reads input 1 as input 2. On the circuit: s0 should feed the
+          muxes closest to the d inputs.</p>`,
+        numbers: `<table class="mini"><tr><th>inputs</th><th>2:1 muxes</th><th>NANDs (1 bit)</th><th>delays</th></tr>
+          ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 1)).nands}</td><td>${logicDepth(muxTree(k, 1))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: muxTree(2, 1), inputs: { d0: 0, d1: 1, d2: 0, d3: 1, s: 1 } }),
     },
     {
@@ -542,15 +617,35 @@ export const chRouting: Chapter = {
       body: `
         <p>To choose between two 4-bit numbers, use <span data-show="m0 m1 m2 m3">four 2:1 muxes side by side</span>, all listening to
         <span data-show="pin:s">the same select line</span>. This is a <strong>bus multiplexer</strong>: one MUX2 per bit.</p>
-        <details class="deeper"><summary>Deeper: tri-state buses</summary>
-        <p>Boards and early computers chose differently: every source drives the same wires through a <strong>tri-state buffer</strong>,
-        which either drives its value or lets go (output Z, high impedance), and one-hot enables from a decoder let exactly one source
-        speak. No mux tree, and one wire per bit however many sources.</p>
-        <p>Inside chips the mux won. Two enables overlapping for a moment let two drivers fight (contention: a short from supply to ground
-        through both); none enabled leaves the bus floating at an undefined level that needs a keeper; a long wire with many drivers is
-        slow and hard to time; and static timing, scan test and FPGA fabrics all want every net to have exactly one driver. Tri-states
-        survive at the pins (a memory chip's data bus, open-drain lines such as I²C) and in dense arrays, where SRAM cells share a bit
-        line. The sandbox has the part (TRIBUF), simulated at switch level.</p></details>`,
+        <p>Cost and delay scale differently. The NANDs grow linearly with the width (${stats(busMux2(4)).nands} for 4 bits, ${stats(busMux2(32)).nands} for 32), but the delay does not: all bits are muxed in parallel, ${logicDepth(busMux2(4))} gate delays at any width. What does grow is the load on
+        s, which drives every bit's multiplexer: with unit delays this is invisible, but a real select line for a 64-bit bus needs a buffer tree.</p>`,
+      tour: {
+        beats: [
+          { title: 's = 0: a', set: { s: 0, a: 3, b: 12 }, show: ['m0', 'm1', 'm2', 'm3'], expect: { y: 3 },
+            say: '<p>s = 0: all four muxes pass their a bit. y = {b:y} = a, the word 0b{b:a}.</p>' },
+          { title: 's = 1: b', set: { s: 1 }, show: ['m0', 'm1', 'm2', 'm3'], expect: { y: 12 },
+            say: '<p>One wire changes and the whole word switches to b = 0b{b:b}: y = {b:y}. The width does not matter to s.</p>' },
+          { title: 'The other word is ignored', set: { a: 9 }, show: ['m0', 'm1'], expect: { y: 12 },
+            say: '<p>a changes to {v:a} while s = 1: y = {v:y} does not move.</p>' },
+          { title: 'Back to a', set: { s: 0 }, show: ['m0', 'm1', 'm2', 'm3'], expect: { y: 9 },
+            say: '<p>s = 0: y = {b:y}, the new a. Choosing between words is as cheap as choosing between bits, times the width.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>y[i] = s ? b[i] : a[i] for every i, with one s. Cost ${stats(MUX2).nands}·w NANDs; depth that of one MUX2, ${logicDepth(MUX2)}, independent of w; select fan-out w multiplexers (3 gate inputs each: the select and its inverter).</p>`,
+        real: `<p>Boards and early computers chose differently: every source drives the same wires through a <strong>tri-state buffer</strong>,
+          which either drives its value or lets go (output Z, high impedance), and one-hot enables from a decoder let exactly one source
+          speak. No mux tree, and one wire per bit however many sources.</p>
+          <p>Inside chips the mux won. Two enables overlapping for a moment let two drivers fight (contention: a short from supply to ground
+          through both); none enabled leaves the bus floating at an undefined level that needs a keeper; a long wire with many drivers is
+          slow and hard to time; and static timing, scan test and FPGA fabrics all want every net to have exactly one driver. Tri-states
+          survive at the pins (a memory chip's data bus, open-drain lines such as I²C) and in dense arrays, where SRAM cells share a bit
+          line. The sandbox has the part (TRIBUF), simulated at switch level.</p>`,
+        pitfall: `<p>Giving the bits different selects by accident. A bus multiplexer whose bit 3 has a stale select produces a word that is half a and half b, a pattern that matches neither input. On the stage all four muxes should share the
+          one select net; a bus that mixes words is the symptom of a missing connection.</p>`,
+        numbers: `<table class="mini"><tr><th>width</th><th>NANDs</th><th>delays</th></tr>
+          ${[4, 8, 16, 32, 64].map((w) => `<tr><td>${w}</td><td>${stats(busMux2(w)).nands}</td><td>${logicDepth(busMux2(w))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: busMux2(4), inputs: { a: 0x3, b: 0xc, s: 0 } }),
     },
     {
@@ -558,7 +653,30 @@ export const chRouting: Chapter = {
       body: `
         <p>Combine both ideas: <span data-show="m0_0 m0_1 m0_2 m0_3 m1_0 m1_1 m2_0">a tree of bus multiplexers</span> selects one of eight 4-bit words. This is exactly the
         <strong>read port</strong> of a memory, which is where we are heading: store eight words, then use the address
-        to pick the one you want.</p>`,
+        to pick the one you want.</p>
+        <p>The cost follows from the tree: 7 bus multiplexers of 4 bits, ${stats(muxTree(3, 4)).nands} NANDs, ${logicDepth(muxTree(3, 4))} gate delays from data to y. The three select bits fan out to different numbers of muxes: s0 to the four
+        first-level ones, s2 to the single last one. Doubling the words adds a level (and so the delay), and doubles the number of muxes at the first level.</p>`,
+      tour: {
+        beats: [
+          { title: 'Select 3', set: { s: 3 }, show: ['m0_1', 'm1_0', 'm2_0'], expect: { y: 3 },
+            say: '<p>s = 0b{b:s}. s0 = 1 makes m0_1 pass d3 (the second of its pair), s1 = 1 makes m1_0 pass m0_1, s2 = 0 makes m2_0 pass m1_0. y = {v:y}.</p>' },
+          { title: 'Select 6', set: { s: 6 }, show: ['m0_3', 'm1_1', 'm2_0'], expect: { y: 6 },
+            say: '<p>s = 0b{b:s}: m0_3 passes d6, m1_1 passes m0_3, and m2_0 passes m1_1 because s2 = 1. A different path, the same three levels. y = {v:y}.</p>' },
+          { title: 'Select 7', set: { s: 7 }, show: ['m0_3', 'm1_1', 'm2_0'], expect: { y: 7 },
+            say: '<p>All select bits 1: the rightmost leaf. y = {v:y}.</p>' },
+          { title: 'Change the data', set: { s: 5, d5: 10 }, show: ['m0_2', 'm1_1', 'm2_0'], expect: { y: 10 },
+            say: '<p>d5 is now 0xA and s = 5: y = {v:y}. Writing a memory word and reading it back is this circuit with the data coming from flip-flops.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>A 2ᵏ-word, w-bit read port costs w·${stats(MUX2).nands}·(2ᵏ − 1) NANDs: here 4·${stats(MUX2).nands}·7 = ${4 * stats(MUX2).nands * 7}. The delay is k multiplexer levels. The same tree shape appears in every read port, from a register file to a cache to a lookup table.</p>`,
+        real: `<p>In a CPU's register file the read mux is on the critical path of every instruction: operands must arrive within the first half of the cycle. 32:1 muxes are split into 4:1 or 8:1 stages with one-hot selects
+          (a decoder drives AND-OR gates) because that makes the select-to-data delay shorter than a tree of 2:1 cells.</p>`,
+        pitfall: `<p>Forgetting that the select path is the slow one. The data inputs pass through one multiplexer per level, but s0 fans out to the whole first level and each select goes through an inverter first. In a deep tree the select
+          arrives late; the data should not be assumed to be the critical input.</p>`,
+        numbers: `<table class="mini"><tr><th>words (4 bits)</th><th>bus muxes</th><th>NANDs</th><th>delays</th></tr>
+          ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 4)).nands}</td><td>${logicDepth(muxTree(k, 4))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: muxTree(3, 4), inputs: { d0: 0x0, d1: 0x1, d2: 0x2, d3: 0x3, d4: 0x4, d5: 0x5, d6: 0x6, d7: 0x7, s: 3 } }),
       challenge: {
         kind: 'reach', goal: 'Make the output 0xA by changing only the inputs (not s = 3).',
@@ -575,9 +693,34 @@ export const chRouting: Chapter = {
       title: 'Encoders: back to a number',
       body: `
         <p>An <strong>encoder</strong> undoes a decoder: one of 2ⁿ inputs is 1, and the output says which. Output bit j is simply the
-        OR of every input whose index has bit j set. Eight inputs, <span data-show="u1 u2 u3">three 4-input ORs</span>, 27 NANDs.</p>
+        OR of every input whose index has bit j set. Eight inputs, <span data-show="u1 u2 u3">three 4-input ORs</span>, ${stats(encoder(8)).nands} NANDs.</p>
         <p>Input 0 is not connected to anything: "input 0 is set" and "nothing is set" both give 0. With two inputs set the output is
-        the OR of their indices, which is meaningless. Both problems need the next circuit.</p>`,
+        the OR of their indices, which is meaningless. Both problems need the next circuit.</p>
+        <p>It is cheap, as the arithmetic suggests: no multiplexers, no inverters on the data path, ${stats(encoder(8)).nands / 3} NANDs per output bit, ${logicDepth(encoder(8))} gate delays deep. Its weakness is the assumption: it works only when exactly one input is high,
+        and nothing in the circuit checks that.</p>`,
+      tour: {
+        beats: [
+          { title: 'One input: bit 5', set: { x: 0b00100000 }, show: ['u1', 'u3'], expect: { y: 5 },
+            say: '<p>x₅ = 1. Index 5 = 0b101 has bits 2 and 0 set, so the ORs of those two output bits fire. y = {b:y} = {v:y}.</p>' },
+          { title: 'One input: bit 2', set: { x: 0b00000100 }, show: ['u2'], expect: { y: 2 },
+            say: '<p>x₂ = 1: only output bit 1 collects it. y = {b:y}.</p>' },
+          { title: 'Input 0', set: { x: 0b00000001 }, expect: { y: 0 },
+            say: '<p>x₀ = 1: index 0 has no bits set, so no OR sees it. y = {v:y}.</p>' },
+          { title: 'Nothing at all', set: { x: 0 }, expect: { y: 0 },
+            say: '<p>x = 0: y = {v:y} again. The encoder cannot tell input 0 from no input.</p>' },
+          { title: 'Two inputs: nonsense', set: { x: 0b00011000 }, show: ['u1', 'u2', 'u3'], expect: { y: 7 },
+            say: '<p>x₃ and x₄ together: the ORs of both indices (0b011 and 0b100) fire. y = {b:y} = {v:y}, neither of the two. The output is the OR of the indices.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>y₀ = x₁ + x₃ + x₅ + x₇, y₁ = x₂ + x₃ + x₆ + x₇, y₂ = x₄ + x₅ + x₆ + x₇: each output bit ORs the four inputs whose index has that bit set. x₀ appears in none. Each 4-input OR is ${stats(encoder(8)).nands / 3} NANDs here.</p>`,
+        real: `<p>A pure encoder appears where the hardware guarantees one request at a time: a keypad scanned row by row, a one-hot FSM turned into a state number, the output of a decoder in a test circuit. Anything that
+          can see two requests needs the priority version.</p>`,
+        pitfall: `<p>Treating the output as safe for any input. Two inputs set at once produce the OR of their indices (the tour: 3 and 4 give 7), and no output signals the problem. The first symptom of a non-one-hot input is an answer that
+          belongs to neither request.</p>`,
+        numbers: `<table class="mini"><tr><th>inputs</th><th>NANDs</th><th>delays</th></tr>
+          ${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(encoder(n)).nands}</td><td>${logicDepth(encoder(n))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: encoder(8), inputs: { x: 0b00100000 } }),
     },
     {
@@ -587,7 +730,33 @@ export const chRouting: Chapter = {
         to tell "request 0" from "no request". It is built recursively: <span data-show="lo hi">two half-size encoders</span>, and if the upper half has any
         request it wins, so its <code>v</code> becomes the top index bit and steers <span data-show="mx">a multiplexer</span> for the low bits.</p>
         <p>log₂ n − 1 levels of multiplexers: ${logicDepth(priorityEncoder(8))} gate delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32. Interrupt controllers, arbiters, floating-point
-        normalization (find the leading 1) and content-addressable memories all rely on one.</p>`,
+        normalization (find the leading 1) and content-addressable memories all rely on one.</p>
+        <p>The recursion is the design: an n-input encoder is two (n/2)-input encoders and a 2:1 choice. The cost is ${stats(priorityEncoder(8)).nands} NANDs for 8 inputs and ${stats(priorityEncoder(32)).nands} for 32, a bit more than linear, and the delay grows by a multiplexer for every doubling.
+        Unlike the plain encoder, any request pattern is legal; an unrealistic one just has the same answer as its highest bit.</p>`,
+      tour: {
+        beats: [
+          { title: 'No request', set: { r: 0 }, show: ['any'], expect: { y: 0, v: 0 },
+            say: '<p>r = 0: y = {v:y}, and v = {v:v} says that this 0 means nothing.</p>' },
+          { title: 'Request 0 only', set: { r: 1 }, show: ['lo'], expect: { y: 0, v: 1 },
+            say: '<p>r = 0b{b:r}: y = {v:y} again, but v = {v:v}: now the 0 is the number of a real request.</p>' },
+          { title: 'Several requests', set: { r: 0b00010110 }, show: ['lo', 'hi', 'mx'], expect: { y: 4, v: 1 },
+            say: '<p>r = 0b{b:r}: requests 1, 2 and 4. The upper half (4 to 7) has one, so it wins and steers the multiplexer: y = {v:y}.</p>' },
+          { title: 'A higher one arrives', set: { r: 0b11010110 }, show: ['hi', 'mx'], expect: { y: 7, v: 1 },
+            say: '<p>r = 0b{b:r}: requests 6 and 7 arrive. Within the upper half the recursion picks again: y = {v:y}. The lower requests are still there, but they are ignored.</p>' },
+          { title: 'Only low requests', set: { r: 0b00000110 }, show: ['lo', 'hi', 'mx'], expect: { y: 2, v: 1 },
+            say: '<p>r = 0b{b:r}: the upper half is empty, so its v is 0 and the multiplexer passes the lower half\'s answer: y = {v:y}.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>For n = 2m inputs: let (yₕ, vₕ) and (yₗ, vₗ) be the answers of the two halves. Then v = vₕ + vₗ, y = (vₕ, vₕ ? yₕ : yₗ): the top index bit is vₕ and the rest are chosen by it. The delay obeys D(n) = D(n/2) + one multiplexer,
+          so D(n) grows with log₂ n, not with n.</p>`,
+        real: `<p>Interrupt controllers use priority encoders to pick the most urgent request; bus arbiters use them (or the round-robin version of a later chapter); floating-point units find the leading one to normalize a result; and every
+          CPU has an instruction for it in software (count leading zeros, <code>clz</code>).</p>`,
+        pitfall: `<p>Assuming the highest <em>index</em> is the highest <em>priority</em>. The convention here (the highest index wins) is one of two; many controllers give priority to the lowest. Swapping them reverses the request numbering,
+          and a wrong convention reaches the wrong handler. On the circuit it is the multiplexer that decides, and it favours the upper half.</p>`,
+        numbers: `<table class="mini"><tr><th>inputs</th><th>NANDs</th><th>delays</th></tr>
+          ${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(priorityEncoder(n)).nands}</td><td>${logicDepth(priorityEncoder(n))}</td></tr>`).join('')}</table>`,
+      },
       scene: () => ({ root: priorityEncoder(8), inputs: { r: 0b00010110 } }),
       challenge: {
         kind: 'reach', goal: 'Raise at least three requests so that the output is y = 5.',
@@ -611,7 +780,28 @@ export const chRouting: Chapter = {
         <p>The mirror image of a multiplexer: one input word, 2ᵏ outputs, and the select chooses which output gets it. The others
         are 0. Inside it is <span data-show="dec">a decoder</span> whose one-hot output gates <span data-show="g0 g1 g2 g3">a row of AND gates per output</span>. A decoder with an enable is the
         same thing for a single bit, with the enable as the data.</p>
-        <p>A memory's write path is a demultiplexer: the address picks the row, and the write enable is the data.</p>`,
+        <p>A memory's write path is a demultiplexer: the address picks the row, and the write enable is the data.</p>
+        <p>This 4-bit, four-output demultiplexer costs ${stats(demux(2, 4)).nands} NANDs: the decoder's ${stats(decoder(2)).nands} plus ${4 * 4} two-input ANDs (${4 * 4 * stats(AND).nands} NANDs) gating each bit of the word into each output. The word fans out to all four rows,
+        and the decoder's lines each drive a whole row of ANDs.</p>`,
+      tour: {
+        beats: [
+          { title: 'Select 2', set: { x: 0xa, s: 2 }, show: ['dec', 'g2'], expect: { y0: 0, y1: 0, y2: 10, y3: 0 },
+            say: '<p>x = {v:x}, s = {v:s}: the decoder raises line 2, and the row of ANDs g2 passes the word. y2 = {v:y2}; the other outputs are 0.</p>' },
+          { title: 'Select 0', set: { s: 0 }, show: ['dec', 'g0'], expect: { y0: 10, y1: 0, y2: 0, y3: 0 },
+            say: '<p>s = 0: the same word now goes to y0 = {v:y0}, and y2 has dropped to {v:y2}. A demultiplexer routes, it does not copy.</p>' },
+          { title: 'New data, select 3', set: { x: 5, s: 3 }, show: ['dec', 'g3'], expect: { y0: 0, y3: 5 },
+            say: '<p>x = {v:x}, s = {v:s}: y3 = {v:y3}.</p>' },
+          { title: 'The word is zero', set: { x: 0 }, show: ['g3'], expect: { y3: 0 },
+            say: '<p>x = 0: every output is 0, selected or not. A 0 on a selected output and a 0 on a deselected one look the same: the demultiplexer cannot say which row it is serving, only the select can.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>y_k[i] = (s = k) · x[i]. With one-bit data this is the decoder with enable (the enable is x). For w bits, w ANDs per output, so the AND array has 2ᵏ·w gates; the decoder is shared. Cost ${stats(decoder(2)).nands} + 2ᵏ·w·${stats(AND).nands}
+          = ${stats(demux(2, 4)).nands} at k = 2, w = 4.</p>`,
+        real: `<p>Demultiplexers distribute a result to one of several destinations: a write-back bus into a register file, a network switch's port selector, a DMA engine addressing a peripheral. Parallel-to-serial and serial-to-parallel
+          conversions (the shift register) are time-domain versions of the same idea.</p>`,
+        pitfall: `<p>Assuming deselected outputs are "disconnected". They are driven to 0, so two demultiplexers feeding one wire fight if both are ever selected: combine them with an OR, not a shared wire, or use tri-state outputs where the sharing is a bus.</p>`,
+      },
       scene: () => ({ root: demux(2, 4), inputs: { x: 0xa, s: 2 } }),
     },
   ],
