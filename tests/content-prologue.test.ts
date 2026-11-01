@@ -36,10 +36,10 @@ describe('prologue content', () => {
 
   it('the 4-bit CPU is the size both prologue chapters say, and the relay quiz prices it right', () => {
     const n = stats(withoutParts(cpu4(new Array(256).fill(0)), ['rom'])).nands;
-    const tubes = num(quiz(chTubes, 'What it costs').question, /about ([\d ]+) NANDs without its ROM/);
+    const tubes = num(quiz(chTubes, 'What it costs').question, /about ([\d ]+) NANDs without its (?:ROM|program memory)/);
     expect(tubes).toBe(n);
     const relays = quiz(chRelays, 'What it costs');
-    const relaysN = num(relays.question, /about ([\d ]+) NANDs without its ROM/);
+    const relaysN = num(relays.question, /about ([\d ]+) NANDs without its (?:ROM|program memory)/);
     expect(Math.abs(relaysN - n) / n).toBeLessThan(0.05);
     const kw = num(relays.options[relays.answer], /([\d.]+) kW/);
     expect(kw).toBeCloseTo((relaysN * RELAY_POWER) / 1e3, 1);
@@ -55,7 +55,7 @@ describe('chapter 2 content', () => {
   });
 
   it("the three-input NOR question marks the textbook count (a grounded-gate PMOS load) right", () => {
-    const q = chInverter.recap!.check!.find((x) => x.question.includes('three-input NOR'))!;
+    const q = chInverter.recap!.check!.find((x) => x.question.includes('three-input') && x.question.includes('pseudo-NMOS'))!;
     expect(q.options[q.answer]).toMatch(/grounded-gate PMOS, so 4 transistors\), against 6/);
     q.options.forEach((o, i) => { if (i !== q.answer) expect(o).not.toMatch(/^4 transistors/); });
   });
