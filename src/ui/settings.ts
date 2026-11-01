@@ -51,6 +51,10 @@ interface State {
   singleKeys: boolean;
   /** Timing panels and the inspector open on load-dependent delay (sim/delay.ts) instead of unit delay. */
   loadDelay: boolean;
+  /** Sandbox: the minimap at the canvas corner (M); it hides itself while the whole chip is in view. */
+  minimap: boolean;
+  /** Coach-mark tours finished or skipped (ui/coachmarks.ts): "stage", "sandbox". */
+  coachDone: Record<string, boolean>;
   /** Prose size in the chapter pane, percent of the designed size (TEXT_SIZES); schematics never scale. */
   textSize: number;
   /** The chapter pane's text held to a comfortable line length (about 62 characters), centred where the pane is wider. */
@@ -73,7 +77,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -127,13 +131,14 @@ export const settings = {
   get autoClock() { return state.autoClock; },
   get singleKeys() { return state.singleKeys; },
   get loadDelay() { return state.loadDelay; },
+  get minimap() { return state.minimap; },
   get textSize() { return state.textSize; },
   get narrowText() { return state.narrowText; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -177,6 +182,15 @@ export const settings = {
   },
   isSolved(key: string): boolean {
     return !!state.solved[key];
+  },
+  /** Has the learner finished or skipped the coach-mark tour `id`? */
+  coachDone(id: string): boolean {
+    return !!state.coachDone[id];
+  },
+  setCoachDone(id: string, done = true): void {
+    if (done) state.coachDone[id] = true;
+    else delete state.coachDone[id];
+    save();
   },
   /** An optional campaign act as the learner left it: open, folded, or never set (undefined). */
   actOpen(act: number): boolean | undefined {

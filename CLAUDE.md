@@ -99,7 +99,12 @@ src/sim/       simulation core (no DOM)
                  level's ports/wires to flat nets (this is what makes every box transparent);
                  powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
                  on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 34's
-                 413 501 leaves)
+                 413 501 leaves); flattenSteps / flattenAsync(def, opts, onProgress, pause): the same walk as generators down to
+                 depth 7 that hand control back every ~24 ms (flatten() drains it: identical results, tests/loadflatten.test.ts),
+                 estimateInstances(def): the instance count from the distinct definitions, for a progress bar
+  loadplan.ts    LoadPlan: the phases of building a big scene (LOAD_PHASES: hierarchy, flatten, engine, draw), their times, the
+                 running one's count, the bar's fraction (by weight) and the time left; tasks.ts nextTask(): a message-channel
+                 yield so the page can paint between slices
   gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
@@ -859,6 +864,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   unravel.ts     unravelPointer(s) (a pointer name → wires from the driver: square shapes, else A* on the half grid;
                  never on another net), collapseWire(s) (a wire tree → one pointer per end), pointersOf(sel), suggestName
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  minimap.ts     plugin: the minimap at the canvas's bottom-right (parts in their category / chip hue, wires faint, the visible
+                 area a frame: drag to pan, click to jump, arrows when focused; M, settings.minimap; hidden while the whole chip
+                 is in view; clear of --dock-space), repainting on a document change (paintHooks, by identity) or Camera.listeners,
+                 one frame at a time; minimapmath.ts its coordinates (DOM-free, tests/minimap.test.ts)
   toolbarfit.ts  shedActions: which toolbar actions move into the More menu on a narrow top bar (SHED_ORDER, least
                  used first; editor.ts fitActions measures beside the open tab / Open… / New chip, or on a row of its own
                  below 1000 px); below 760 px the palette is a drawer behind a Parts button (a tap arms a part)
@@ -1155,6 +1164,14 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
                pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
                click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion; coachplan.ts (DOM-free: the
+               first-run coach marks' beats for the stage and the sandbox, pickBeats skips a beat whose control is not on the
+               page, move, mayAutoStart) and coachmarks.ts (the dim, the ring around one control and the card: showCoach(kind),
+               maybeCoach(kind) on a stage's first scene (Stage.onReady) or the sandbox; settings.coachDone; "Show me the controls"
+               in the ? sheet (SheetOptions.coach) and the > actions; never while a content tour (.tour-card) plays; smoke seeds
+               coachDone and has first-run routes); view/loadcard.ts: the card over a stage while Stage.load builds a big scene
+               (BUSY_GATES): a bar, the phases with their times and the flatten count, shown after LOAD_CARD_MS (300 ms)
+
                feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion;
                backup.ts (DOM-free): one file for every `mosfet2riscv:` key (BackupFile {format, schema, keys}); mergeBackup(file, kv) stages a copy of the
                storage and merges by the existing rules (settings: visited / solved union, local prefs kept; mergeCampaign; puzzles betterRecord; chips

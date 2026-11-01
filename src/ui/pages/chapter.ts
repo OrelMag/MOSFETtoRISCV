@@ -6,6 +6,7 @@ import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { notes, type Place } from '../notes';
 import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
+import { maybeCoach } from '../coachmarks';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
@@ -60,6 +61,7 @@ export class ChapterPage implements Page {
     this.inspector = new Inspector();
     this.stage = new Stage(this.inspector);
     this.stage.leafFactory = transistorLeaf;
+    this.stage.onReady(() => maybeCoach('stage'));
     this.head = h('div', { class: 'narrative-head' });
     this.body = h('div', { class: 'narrative-body' });
     this.foot = h('div', { class: 'narrative-foot' });
@@ -181,7 +183,11 @@ export class ChapterPage implements Page {
       if (k < 0) return;
     }
     const st = steps[k];
-    if (st.scene) this.stage.load(st.scene(), path);
+    if (st.scene) {
+      const t0 = performance.now();
+      const sc = st.scene();
+      this.stage.load(sc, path, performance.now() - t0);
+    }
     else this.stage.showWidget(st.widget!());
     this.shown = true;
     this.sceneShown = !!st.scene;
@@ -267,6 +273,7 @@ export class ChapterPage implements Page {
     this.wireTries(prose, st);
     if (st.tour) {
       const go = h('button', { class: 'btn sm tour-go', onclick: () => {
+        if (this.stage.loading) return;
         if (this.tour) return this.tour.el.focus();
         this.tour = new TourPlayer(this.stage, st.tour!, () => { this.tour = null; go.classList.remove('on'); });
         go.classList.add('on');

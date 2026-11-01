@@ -9,6 +9,7 @@ import type { ComponentDef } from '../../sim/types';
 import { netlistOf } from '../../sim/types';
 import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
+import { maybeCoach } from '../coachmarks';
 import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { benchOpened, benchTabs } from '../benchtabs';
@@ -37,6 +38,7 @@ export class WorkbenchPage implements Page {
     const inspector = this.inspector = new Inspector();
     this.stage = new Stage(inspector);
     this.stage.leafFactory = transistorLeaf;
+    this.stage.onReady(() => maybeCoach('stage'));
     const search = h('input', { type: 'search', placeholder: 'Search components…', 'aria-label': 'Search components' }) as HTMLInputElement;
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
     this.list = h('div', { class: 'lib-list' });

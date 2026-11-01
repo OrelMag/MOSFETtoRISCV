@@ -170,9 +170,13 @@ export class Camera {
   /** `host` gives the visible size (the svg itself unless it sits in a larger container). */
   constructor(readonly svg: SVGSVGElement, private host: Element = svg) {}
 
+  /** Told after every apply (the sandbox minimap follows the view). */
+  readonly listeners = new Set<() => void>();
+
   apply(): void {
     const { x, y, w, h } = this.vb;
     this.svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+    this.listeners.forEach((f) => f());
   }
 
   /**

@@ -129,7 +129,40 @@ export function hintBits(node: HierNode, name: string): number[] | null | undefi
   return n.ports[net] ?? (n.expanded || n === node ? undefined : null);
 }
 
-export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatDesign {
+/** Progress of a flatten: instances visited so far against an estimate of all of them. */
+export interface FlattenProgress {
+  done: number;
+  total: number;
+  /** The walk is done; the nets are being numbered and every reference rewritten. */
+  linking?: boolean;
+}
+
+/** Hierarchy depth down to which flattenSteps is made of generators (it can pause there); deeper subtrees run in one go. */
+const PAUSE_DEPTH = 7;
+
+/**
+ * An estimate of how many instances a flatten of `rootDef` visits (every instance, leaves included), memoized per
+ * definition so it costs a walk of the distinct definitions, not of the instances. It follows the default expansion
+ * rule (a behaviour marked preferBehavior stays a leaf); a custom `expand` can make the real count differ a little.
+ */
+export function estimateInstances(rootDef: ComponentDef, mode: FlattenMode = 'gate'): number {
+  const memo = new Map<ComponentDef, number>();
+  const count = (def: ComponentDef, isRoot: boolean): number => {
+    const known = memo.get(def);
+    if (known !== undefined && !isRoot) return known;
+    let n = 1;
+    if (def.prim !== 'alias' && def.prim !== 'nand' && !(def.behavior && def.preferBehavior && !isRoot) && !isSwitchPrim(def)) {
+      const nl = netlistOf(def);
+      if (nl && (mode === 'switch' || nl.level !== 'switch')) for (const i of nl.instances) n += count(i.def, false);
+    }
+    if (!isRoot) memo.set(def, n);
+    return n;
+  };
+  return count(rootDef, true);
+}
+
+/** Flatten as a generator: it yields its progress about every `sliceMs` milliseconds, so a caller can let the page paint. */
+export function* flattenSteps(rootDef: ComponentDef, opts: FlattenOptions = {}, sliceMs = Infinity): Generator<FlattenProgress, FlatDesign> {
   const mode = opts.mode ?? 'gate';
   const uf = new UnionFind();
   const leaves: FlatLeaf[] = [];
@@ -137,18 +170,34 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const capsRaw: number[] = [];
   const capW: [number, number][] = [];
   const leakRaw: [number, number][] = [];
+  const paced = sliceMs !== Infinity;
+  const total = paced ? estimateInstances(rootDef, mode) : 1;
+  let visited = 0;
+  let last = paced ? performance.now() : 0;
+  const due = (): boolean => {
+    if (!paced) return false;
+    const t = performance.now();
+    if (t - last < sliceMs) return false;
+    last = t;
+    return true;
+  };
 
   const alloc = (w: number): number[] => Array.from({ length: w }, () => uf.make());
 
   const root: HierNode = new Node('', rootDef, null, {});
   for (const p of rootDef.ports) root.ports[p.name] = alloc(p.width);
 
-  const visit = (node: HierNode): void => {
+  type Netlist = NonNullable<ReturnType<typeof netlistOf>>;
+  interface Open { netlist: Netlist; childPorts: Map<string, Record<string, number[]>> }
+
+  /** A node's own work: a leaf or an alias is finished here (null); else its nets are made and its children are still to visit. */
+  const open = (node: HierNode): Open | null => {
+    visited++;
     const def = node.def;
 
     if (def.prim === 'alias') {
       for (const [pa, ba, pb, bb] of def.alias ?? []) uf.union(node.ports[pa][ba], node.ports[pb][bb]);
-      return;
+      return null;
     }
 
     // A sense amplifier is a primitive inside a circuit, but opened (the root) it is the transistors it is drawn with.
@@ -170,7 +219,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
         outputs: outPorts(def).map((p) => node.ports[p.name]),
         terminals: kind && kind !== 'nand' ? def.ports.map((p) => node.ports[p.name][0]) : undefined,
       });
-      return;
+      return null;
     }
 
     const netlist = nl!;
@@ -220,16 +269,20 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
         }
       }
     });
+    return { netlist, childPorts };
+  };
 
-    for (const inst of netlist.instances) {
-      const cp = childPorts.get(inst.name) ?? {};
-      const ports: Record<string, number[]> = {};
-      for (const p of inst.def.ports) ports[p.name] = cp[p.name] ?? alloc(p.width);
-      const child: HierNode = new Node(inst.name, inst.def, node, ports);
-      node.children.set(inst.name, child);
-      visit(child);
-    }
+  const child = (node: HierNode, o: Open, inst: Netlist['instances'][number]): HierNode => {
+    const cp = o.childPorts.get(inst.name) ?? {};
+    const ports: Record<string, number[]> = {};
+    for (const p of inst.def.ports) ports[p.name] = cp[p.name] ?? alloc(p.width);
+    const c: HierNode = new Node(inst.name, inst.def, node, ports);
+    node.children!.set(inst.name, c);
+    return c;
+  };
 
+  const close = (node: HierNode): void => {
+    const def = node.def;
     if (def.powerOn) {
       for (const [name, v] of Object.entries(def.powerOn)) {
         const bits = hintBits(node, name);
@@ -239,7 +292,27 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     }
   };
 
-  visit(root);
+  const visit = (node: HierNode): void => {
+    const o = open(node);
+    if (!o) return;
+    for (const inst of o.netlist.instances) visit(child(node, o, inst));
+    close(node);
+  };
+
+  // The same walk as generators down to PAUSE_DEPTH: after each child it may hand control back.
+  function* visitG(node: HierNode, depth: number): Generator<FlattenProgress, void> {
+    const o = open(node);
+    if (!o) return;
+    for (const inst of o.netlist.instances) {
+      const c = child(node, o, inst);
+      if (depth + 1 < PAUSE_DEPTH) yield* visitG(c, depth + 1);
+      else visit(c);
+      if (due()) yield { done: visited, total };
+    }
+    close(node);
+  }
+
+  yield* visitG(root, 0);
 
   // Compress union-find roots into dense ids and rewrite every reference.
   const dense = new Map<number, number>();
@@ -262,11 +335,23 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
     n.nets?.forEach(remap);
     n.children?.forEach(walk);
   };
-  walk(root);
-  for (const l of leaves) {
+  function* walkG(n: HierNode, depth: number): Generator<FlattenProgress, void> {
+    for (const k in n.ports) remap(n.ports[k]);
+    n.nets?.forEach(remap);
+    if (!n.children) return;
+    for (const c of n.children.values()) {
+      if (depth + 1 < PAUSE_DEPTH) yield* walkG(c, depth + 1);
+      else walk(c);
+      if (due()) yield { done: visited, total: Math.max(total, visited), linking: true };
+    }
+  }
+  yield* walkG(root, 0);
+  for (let i = 0; i < leaves.length; i++) {
+    const l = leaves[i];
     l.inputs.forEach(remap);
     l.outputs.forEach(remap);
     if (l.terminals) remap(l.terminals);
+    if ((i & 2047) === 2047 && due()) yield { done: visited, total: Math.max(total, visited), linking: true };
   }
   const powerOn = new Map<number, 0 | 1>();
   for (const [raw, v] of hints) powerOn.set(id(raw), v);
@@ -279,6 +364,31 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
   const leaks = new Map<number, number>();
   for (const [raw, h] of leakRaw) leaks.set(id(raw), Math.min(h, leaks.get(id(raw)) ?? Infinity));
   return { root, netCount: dense.size, leaves, powerOn, caps, capWeight, leaks };
+}
+
+/** Flatten a hierarchical design in one go (the callers that need the answer now, and the tests). */
+export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatDesign {
+  const g = flattenSteps(rootDef, opts);
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * Flatten without holding the page: about every `sliceMs` it reports its progress and awaits `pause` (a paint), so a
+ * progress card can move. The result is the design flatten gives.
+ */
+export async function flattenAsync(
+  rootDef: ComponentDef, opts: FlattenOptions, onProgress: (p: FlattenProgress) => void, pause: () => Promise<void>, sliceMs = 24,
+): Promise<FlatDesign> {
+  const g = flattenSteps(rootDef, opts, sliceMs);
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+    onProgress(r.value);
+    await pause();
+  }
 }
 
 export function findNode(root: HierNode, path: readonly string[]): HierNode | null {
