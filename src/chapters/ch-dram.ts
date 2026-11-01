@@ -126,7 +126,7 @@ export const chDram: Chapter = {
           { title: 'Precharge', say: 'Sense off, precharge on: the bit lines return to VDD/2. The array is idle, and the only copy of the 1 is the charge in one 25 fF capacitor.', set: { sae: 0, pre: 1 }, show: ['col3'] },
           { title: 'Open the row again', say: 'The same row is activated once more, so the cell shares its charge with the bit line (the next step puts numbers on that swing).', set: { pre: 0, act: 1 }, show: ['rdec', 'col3'] },
           { title: 'Sense again', say: 'The amplifier resolves the small swing to a rail, and the row buffer holds the row again.', set: { sae: 1 }, show: ['col3'] },
-          { title: 'Read', say: 'Column 3 is selected with the data input at 0 and no write: the output is {v:dout}, the 1 written four beats ago, now read from a charge.', set: { cs: 1, din: 0 }, show: ['cdec', 'col3', 'out'], expect: { dout: 1 } },
+          { title: 'Read', say: 'Column 3 is selected with the data input at 0 and no write: the output is {v:dout}, the 1 written five beats ago, now read from a charge.', set: { cs: 1, din: 0 }, show: ['cdec', 'col3', 'out'], expect: { dout: 1 } },
         ],
       },
       more: {
@@ -169,7 +169,7 @@ export const chDram: Chapter = {
         read must write the value back.</p>
         <p>Two consequences follow from one formula. The swing scales with Cs / (Cs + Cb), so it shrinks as more cells hang on a bit line,
         and the amplifier's offset sets a floor under it. And because the cell ends at the shared level, a cell left unrestored after an
-        activate holds ${(share(1) * VDD_VOLTS).toFixed(2)} V instead of ${VDD_VOLTS} V: each uncorrected read halves the next one's signal, as the next step's quiz works out.</p>
+        activate holds ${(share(1) * VDD_VOLTS).toFixed(2)} V instead of ${VDD_VOLTS} V: each uncorrected read cuts the next one's signal to a fifth, as the next step's quiz works out.</p>
         <div class="try">The panel shows the array's contents and the view is inside column 1. Activate <span data-show="c1">row 1</span> and stop: read each bit
         line's distance from <span data-show="vh0 vh1">VDD/2</span> in the panel's <code>bl − bl̄</code> row (bit line minus reference line), and the bit line's voltage on the drawing.</div>`,
       more: {

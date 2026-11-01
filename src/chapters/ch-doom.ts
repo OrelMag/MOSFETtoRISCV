@@ -108,7 +108,7 @@ export const chAppendixDoom: Chapter = {
         innermost loop of the renderer is <code>R_DrawColumn</code>: one texel fetched, looked up in the light table and
         stored per pixel, down the column.</p>
         <p>Why this matters for hardware: the instruction mix is the specification of the CPU the program wants. A third of the words touching memory says the load and store path is the one to make fast;
-        branches and calls at one in eight say the front end matters; multiplies and divides below one in a hundred say a slow multiplier (34 cycles for a divide here) costs little.
+        jumps and calls at one in eight (branches one in eleven) say the front end matters; multiplies and divides below one in a hundred say a slow multiplier (34 cycles for a divide here) costs little.
         A chip designer reads a census like this one before choosing what to spend transistors on.</p>`,
       more: {
         derive: `<p>The image is 57,889 words, ${(57889 * 4).toLocaleString('en-US')} bytes, or ${Math.round(57889 * 4 / 1024)} KiB of code. It does not fit in anything we have drawn: the program ROM of the earlier CPUs held tens of words. The ROM tree here is built from the

@@ -236,7 +236,7 @@ export const chPixels: Chapter = {
         <div class="try">Draw these in both orders and compare the overlap.</div>`,
       scene: () => depthScene('blend'),
       more: {
-        derive: `<p>The blend is (s·(a + 1) + d·(7 − a)) / 8 per channel with α = a / 8 in eighths. Worked example: s = 200, d = 40, a = 2: (200 · 3 + 40 · 5) / 8 = ${(200 * 3 + 40 * 5) / 8}. Order matters because the result is not
+        derive: `<p>The blend is (s·(a + 1) + d·(7 − a)) / 8 per channel with α = (a + 1) / 8 (a = 7 is opaque). Worked example: s = 200, d = 40, a = 2: (200 · 3 + 40 · 5) / 8 = ${(200 * 3 + 40 * 5) / 8}. Order matters because the result is not
           symmetric: blending s over d gives ${(200 * 3 + 40 * 5) / 8}, d over s with the same α gives (40 · 3 + 200 · 5) / 8 = ${(40 * 3 + 200 * 5) / 8}. The factors (a + 1) and (7 − a) always sum to 8, so a blend of two equal values returns that
           value, and the division is a shift by three.</p>`,
         pitfall: `<p>Depth-testing a translucent surface hides what is behind it: its pixels write their depth, and anything drawn later that is farther fails the test even though it should show through. Draw opaque first with depth on,
