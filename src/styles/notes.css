@@ -79,3 +79,6 @@
 .bench-mark { padding: 0 12px 8px; }
 .bench-mark:empty { display: none; }
 .bench-mark .btn { width: 100%; justify-content: center; }
+
+/* the top bar's link is tight at 1280 px: the count alone with the icon until there is room for the words */
+@media (max-width: 1500px) { .nav a[data-key='notes'] .nl { display: none; } }

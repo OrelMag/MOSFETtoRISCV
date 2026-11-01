@@ -48,7 +48,8 @@ export function startApp(root: HTMLElement): void {
   const syncNotes = () => {
     const n = notes().count;
     notesLink.hidden = !n;
-    notesLink.querySelector('span')!.textContent = `My notes · ${n}`;
+    notesLink.querySelector('span')!.replaceChildren(h('span', { class: 'nl' }, 'My notes · '), String(n));
+    notesLink.setAttribute('aria-label', `My notes, ${n}`);
     notesLink.title = `${n} note${n === 1 ? '' : 's'} and bookmarks, and the review queue`;
   };
   notes().onChange(syncNotes);
