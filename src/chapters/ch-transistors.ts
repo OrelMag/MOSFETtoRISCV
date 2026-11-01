@@ -50,7 +50,7 @@ export const chMap: Chapter = {
         <p>Here is a 4-bit adder. It adds two numbers <code>a</code> and <code>b</code>. Change them in the
         bar at the bottom (or click the pins) and watch the sum <code>s</code>.</p>
         <p>Now the important part: <strong>double-click any block to look inside it</strong>.
-        An adder is made of <span data-ahead="fulladder">full adders (circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter 6 builds one)</span> (<code>FA</code>).
+        An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter 6 builds one)</span>.
         A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter 3 builds one)</span>.
         A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
         <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
