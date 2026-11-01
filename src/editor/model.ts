@@ -11,6 +11,7 @@
 
 import type { IsaDoc } from '../isa/table';
 import type { CustomRow } from '../riscv/custom';
+import type { Microprogram } from '../lib/multicycle';
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import type { CpuDoc } from './cpu';
@@ -309,6 +310,8 @@ export type PartRef =
       custom?: CustomRow[] } }
   /** The memory-port RV32I core (rv32i_core) with custom instructions: its control unit gains a class per row. */
   | { core: { custom: CustomRow[] } }
+  /** The multicycle CPU's microprogrammed controller (mc_micro) with edited microcode: its ROMs hold this program (lib/ucode.ts). */
+  | { ucode: Microprogram }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
   /** ports: a read and a write port per lane (2 … 8; lib/portmem.ts: addr<i>, wd<i>, we, clk → rd<i>), up to 1K words. */
   | { ram: { k: number; w: number; init?: number[]; ports?: number } };

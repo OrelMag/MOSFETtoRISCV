@@ -54,11 +54,23 @@ export const MC_STATES: McState[] = [
   { name: 'LUI', does: 'rd ← imm', sig: { resultSrc: 3, regWrite: 1, retire: 1 }, next: 0 },
 ];
 
+/** The state table as data: what a microcode ROM and its two dispatch ROMs hold (the microcode painter edits this). */
+export interface Microprogram {
+  states: McState[];
+  /** Decode dispatch: opcode class → word. */
+  dispatch: [string, number][];
+  /** Memory dispatch: LOAD, STORE → word. */
+  dispatch2: [string, number][];
+}
+
 /** Decode dispatch: opcode class → state. AUIPC needs no execute cycle: Decode already computed OldPC + imm. */
 export const MC_DISPATCH: [string, number][] = [['LOAD', 2], ['STORE', 2], ['R', 6], ['I', 8], ['JAL', 9], ['BRANCH', 10], ['JALR', 11], ['LUI', 12], ['AUIPC', 7]];
 const OPCODES5: Record<string, number> = { R: 0b01100, I: 0b00100, LOAD: 0b00000, STORE: 0b01000, BRANCH: 0b11000, JAL: 0b11011, JALR: 0b11001, LUI: 0b01101, AUIPC: 0b00101 };
 /** Memory dispatch: load → MemRead, store → MemWrite. */
 export const MC_DISPATCH2: [string, number][] = [['LOAD', 3], ['STORE', 5]];
+
+/** The book's microprogram. */
+export const MC_PROGRAM: Microprogram = { states: MC_STATES, dispatch: MC_DISPATCH, dispatch2: MC_DISPATCH2 };
 
 /** The opcode class of a 7-bit opcode (the dispatch tables' names), or null. */
 export function mcOpClass(op: number): string | null {
@@ -271,10 +283,10 @@ export const MC_FSM: ComponentDef = (() => {
  * microwords; each word holds the control signals for this cycle plus how to find the next word:
  * a next-address field, or a dispatch through a table indexed by the opcode.
  */
-export const MC_MICRO: ComponentDef = (() => {
-  const UROM = rom(MC_STATES.map(microword), 4, 'Microcode ROM');
-  const D1 = rom(Array.from({ length: 32 }, (_, op) => MC_DISPATCH.find(([c]) => OPCODES5[c] === op)?.[1] ?? 0), 5, 'Dispatch ROM 1');
-  const D2 = rom([MC_DISPATCH2[0][1], MC_DISPATCH2[1][1]], 1, 'Dispatch ROM 2');
+function buildMicro(P: Microprogram, id: string, shared: boolean): ComponentDef {
+  const UROM = rom(P.states.map(microword), 4, 'Microcode ROM');
+  const D1 = rom(Array.from({ length: 32 }, (_, op) => P.dispatch.find(([c]) => OPCODES5[c] === op)?.[1] ?? 0), 5, 'Dispatch ROM 1');
+  const D2 = rom([P.dispatch2.find(([c]) => c === 'LOAD')![1], P.dispatch2.find(([c]) => c === 'STORE')![1]], 1, 'Dispatch ROM 2');
   const REG = register(4), MX = muxTree(2, 4);
   const ug = symbolGeom(UROM), rg = symbolGeom(REG), mg = symbolGeom(MX);
   const widths = [...MC_FIELDS.map(([, n]) => n), 4, 2, 32 - CTRL_BITS - 6];
@@ -322,14 +334,43 @@ export const MC_MICRO: ComponentDef = (() => {
   const pins: Record<string, [number, number]> = { clk: [0, 40], op: [0, 60] };
   MC_FIELDS.forEach(([f], i) => (pins[f] = [xS + 24, 2 + 4 * i]));
   pins.state = [xS + 24, 2 + 4 * nf];
-  return define({
-    id: 'mc_micro', name: 'Microprogrammed multicycle controller', category: 'cpu',
-    summary: `The same ${MC_STATES.length}-state machine stored as data: a micro-PC, a ROM of ${CTRL_BITS + 6}-bit microwords (control signals, next address, sequencing mode) and two dispatch ROMs indexed by the opcode. Changing the instruction set means changing the ROM contents, not the wiring.`,
+  const def: ComponentDef = {
+    id, name: P === MC_PROGRAM ? 'Microprogrammed multicycle controller' : 'Microprogrammed multicycle controller (edited)', category: 'cpu',
+    summary: `The same ${P.states.length}-state machine stored as data: a micro-PC, a ROM of ${CTRL_BITS + 6}-bit microwords (control signals, next address, sequencing mode) and two dispatch ROMs indexed by the opcode. Changing the instruction set means changing the ROM contents, not the wiring.`,
     ports: ctrlPorts(),
     symbol: { kind: 'box', label: 'µCODE CONTROL' },
     netlist: () => ({ pins, instances, nets }),
-  });
-})();
+  };
+  return shared ? define(def) : def;
+}
+
+export const MC_MICRO: ComponentDef = buildMicro(MC_PROGRAM, 'mc_micro', true);
+
+/** What the three ROMs hold, as text: two microprograms with the same key build the same circuit. */
+export function microKey(P: Microprogram): string {
+  return `${P.states.map(microword).join(',')}|${[...P.dispatch].sort().join(';')}|${[...P.dispatch2].sort().join(';')}`;
+}
+const DEFAULT_KEY = microKey(MC_PROGRAM);
+const microCache = new Map<string, ComponentDef>();
+/** Edited controllers by definition: the sandbox turns one back into its microprogram (a part {ucode}). */
+const programOf = new WeakMap<ComponentDef, Microprogram>();
+
+/** The microprogrammed controller for a microprogram (the book's: MC_MICRO itself); memoized by content. */
+export function microController(P: Microprogram): ComponentDef {
+  const key = microKey(P);
+  if (key === DEFAULT_KEY) return MC_MICRO;
+  let d = microCache.get(key);
+  if (!d) {
+    let h = 5381;
+    for (let i = 0; i < key.length; i++) h = (h * 33 + key.charCodeAt(i)) >>> 0;
+    microCache.set(key, (d = buildMicro(P, `mc_micro_${h.toString(16)}`, false)));
+    programOf.set(d, structuredClone(P));
+  }
+  return d;
+}
+
+/** The microprogram an edited controller was built from (undefined for the book's and for other parts). */
+export const microprogramOf = (d: ComponentDef): Microprogram | undefined => programOf.get(d);
 
 function fsmVerilog(): string {
   const lines = MC_STATES.map((s, i) => {
@@ -361,17 +402,20 @@ export interface MulticycleOptions {
   /** Instruction ROM of 2^imemK words (default 6), data memory of 2^dmemK (default 5). */
   imemK?: number;
   dmemK?: number;
+  /** With control 'micro': an edited microprogram (default: the book's, the same circuit as without). */
+  microcode?: Microprogram;
 }
 
 export function multicycleCpu(program: number[], opts: MulticycleOptions = {}): ComponentDef {
   const IM = rom(program, opts.imemK ?? 6);
   const control = opts.control ?? 'fsm', adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
-  return memo(`mc_${IM.id}_${control}_${adder}_${dmemK}`, () => buildMulticycle(IM, control, adder, dmemK));
+  const CT = control === 'micro' && opts.microcode ? microController(opts.microcode) : control === 'micro' ? MC_MICRO : MC_FSM;
+  return memo(`mc_${IM.id}_${control}_${adder}_${dmemK}${CT.id === 'mc_micro' ? '' : `_${CT.id}`}`, () => buildMulticycle(IM, control, adder, dmemK, CT));
 }
 
-function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks', dmemK: number): ComponentDef {
+function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca' | 'ks', dmemK: number, CT: ComponentDef): ComponentDef {
   const R32 = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dataMemory(dmemK);
-  const M2 = busMux2(32), M4 = muxTree(2, 32), CTRL = control === 'fsm' ? MC_FSM : MC_MICRO;
+  const M2 = busMux2(32), M4 = muxTree(2, 32), CTRL = CT;
   const SI = splitter([7, 5, 3, 5, 5, 7]);
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
@@ -483,7 +527,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   ];
   const resY = P('res', 'y');
   return {
-    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${adder === 'ks' ? '' : '_rca'}${dmemK === 5 ? '' : `_d${dmemK}`}`,
+    id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${CT.id === 'mc_micro' || CT.id === 'mc_fsm' ? '' : CT.id.replace(/^mc_micro/, '')}${adder === 'ks' ? '' : '_rca'}${dmemK === 5 ? '' : `_d${dmemK}`}`,
     name: `Multicycle RV32I CPU (${control === 'fsm' ? 'hardwired' : 'microprogrammed'} control)`, category: 'cpu',
     summary: 'One ALU and one memory port, reused over 3 to 5 short cycles per instruction. IR, OldPC, A, B, Data and ALUOut hold values from one cycle to the next; the controller steps through the state table.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bit('fetch', 'out'), bus('state', 4, 'out')],

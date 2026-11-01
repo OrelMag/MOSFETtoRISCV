@@ -25,6 +25,7 @@ import { instrBreakdown } from '../widgets/instrfields';
 import { instrMarks, instrUse, oooUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import { OooFollower, oooView } from '../widgets/ooopanel';
+import { microcodePart } from './ucodepart';
 import { isOooCore, oooSnap } from '../riscv/ooosnap';
 import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
@@ -137,6 +138,7 @@ class CpuPanel {
   private use = h('div', { class: 'cpu-use' });
   private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
   /** Custom instructions on an RV32I core (editor/owninstr.ts): shown when the CPU has one. */
+  private ucodeBtn = h('button', { class: 'btn ghost sm', hidden: true, title: 'Paint the microcode of the controller: the words of the ROM, checked against the golden model', onclick: () => void import('./ucodeui').then((m) => m.openMicrocodeEditor(this.ed)) }, 'Microcode…') as HTMLButtonElement;
   private customBtn = h('button', { class: 'btn ghost sm', hidden: true, title: 'Your own instructions: a free opcode, its behaviour as a row of control signals; the core and the golden model learn it', onclick: () => void import('./owninstr').then((m) => m.openCustomInstructions(this.ed)) }, 'Custom…') as HTMLButtonElement;
   private fieldsSec = h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires'));
   private fields = h('div', { class: 'cpu-fields' });
@@ -201,7 +203,7 @@ class CpuPanel {
       h('div', { class: 'sb-btns sb-cpu-btns' }, this.runBtn, this.stepBtn, this.slowBtn, this.rateSel, reset),
       this.status, this.gaps, this.now,
       h('div', { class: 'cpu-sec sb-cpu-sechead' }, h('span', null, 'Program', this.progHint),
-        h('span', { class: 'sb-cpu-secbtns' }, this.customBtn,
+        h('span', { class: 'sb-cpu-secbtns' }, this.customBtn, this.ucodeBtn,
           h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…'))),
       this.listing, this.use,
       this.fieldsSec, this.fields,
@@ -301,6 +303,9 @@ class CpuPanel {
         this.multi = this.sap ? null : detectMulti(ed.doc, chips);
         this.desc = this.multi || this.sap ? null : resolveCpu(ed.doc, chips);
         this.customBtn.hidden = !this.desc?.core;
+        const uc = this.desc ? microcodePart(ed.doc) : undefined;
+        this.ucodeBtn.hidden = !uc;
+        this.ucodeBtn.textContent = uc && 'ucode' in uc.ref ? 'Microcode (edited)…' : 'Microcode…';
         this.customBtn.textContent = this.desc?.iss.custom?.length ? `Custom: ${this.desc.iss.custom.map((r) => r.name).join(', ')}` : 'Custom…';
         this.rv16 = this.multi || this.desc ? null : detectRv16(ed.doc, chips);
         this.lanes = this.multi || this.desc || this.rv16 ? null : detectLanes16(ed.doc, chips);

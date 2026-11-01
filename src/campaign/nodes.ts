@@ -371,18 +371,18 @@ export const NODES: CampaignNode[] = [
   {
     id: 'i_isa', act: 4, title: 'The RV16 instruction set', kind: 'lesson', requires: ['n_twos'],
     why: 'You can compute (Act 2) and remember (Act 3), but nothing yet says what to compute. The instruction set is that contract: what state exists, what each of RV16I\'s 23 instructions does to it, how each is spelled in 16 bits. Program it first, on the golden model: every instruction you use becomes a path you wire in Act 5.',
-    body: 'isa', tips: [], codex: ['isa', 'formats', 'rv16', 'mmio', 'rv32i'], chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }],
+    body: 'isa', tips: [], codex: ['isa', 'formats', 'rv16', 'mmio', 'rv32i'], chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }],
   },
   {
     id: 'i_enc', act: 4, title: 'Encode and decode', kind: 'drill', requires: ['i_isa'], drill: 'isa16', par: { mistakes: 2 },
     why: 'The control unit of Act 5 does one thing: read the fields of a word. Do it by hand first, both ways: the opcode in bits 3:0 says which fields are registers and which are pieces of an immediate. Six right answers pass; the Control unit level builds the same decode in 200 NANDs.',
-    tips: ['op is the low nibble; rd, rs1, rs2 start at bits 4, 7 and 10, f3 at 13.', 'Registers by name: zero ra sp a0 a1 a2 t0 t1 are x0 … x7, so a0 is x3.', 'S and B split their immediate: imm[5:3] in bits 15:13, imm[2:0] in bits 6:4, where an R-type keeps f3 and rd.'], chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }], codex: ['immediates'],
+    tips: ['op is the low nibble; rd, rs1, rs2 start at bits 4, 7 and 10, f3 at 13.', 'Registers by name: zero ra sp a0 a1 a2 t0 t1 are x0 … x7, so a0 is x3.', 'S and B split their immediate: imm[5:3] in bits 15:13, imm[2:0] in bits 6:4, where an R-type keeps f3 and rd.'], chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }], codex: ['immediates'],
   },
   {
     id: 'p_add', act: 4, title: 'First program', kind: 'program', requires: ['i_isa'], par: { size: 5, cycles: 5 },
     why: 'Act 5\'s core needs a path for every kind of instruction a program uses; the first program uses four. Two loads from the input device, an add, a store to the output device and a halt: 5 words, 5 instructions at par, and nothing shorter exists. Every program, however large, is made of these steps.',
     tips: ['IN is address 0xFFFC: from x0, that is offset −4. OUT is −3.', 'Two loads, one ALU operation, one store, halt: five words.'],
-    chapters: [{ chapter: 'isa', step: 1, label: 'The assembler' }], codex: ['assembly', 'mmio'],
+    chapters: [{ chapter: 'isa', step: 2, label: 'The assembler' }], codex: ['assembly', 'mmio'],
   },
   {
     id: 'p_loop', act: 4, title: 'Loops', kind: 'program', requires: ['p_add'], par: { size: 8, cycles: 330 },
@@ -431,7 +431,7 @@ export const NODES: CampaignNode[] = [
     id: 'c_imm', act: 5, title: 'Immediate generator', kind: 'build', requires: ['i_isa', 'g_mux8'], base: BUILD5.c_imm, par: { nand: 0, depth: 0 },
     why: 'Constants travel inside instructions, in four formats, and the datapath needs each as a 16-bit word. RV16 keeps every immediate bit where its format put it and the sign always in instr[15], so the generator is wiring: par 0 NANDs. Core I feeds it to the ALU\'s b input and to lui\'s write-back.',
     tips: ['Sign extension is wiring: fan the sign bit (instr[15]) out to every upper bit.', 'Splitters and mergers cost nothing; a 6-bit constant 0 makes the low bits of U.', 'U\'s odd bit: instr[3] is imm[0] (op 7 and 15 are both lui), so u = {instr[15:7], instr[3]} &lt;&lt; 6.'],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }], codex: ['immediates', 'signext'], unlocks: ['rv16_imm'], anatomy: ['imm'],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }], codex: ['immediates', 'signext'], unlocks: ['rv16_imm'], anatomy: ['imm'],
   },
   {
     id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap', 'g_sop'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },

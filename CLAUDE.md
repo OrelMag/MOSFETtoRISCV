@@ -387,7 +387,18 @@ src/lib/       the component library (registered in `registry` via define())
                  singleCycleCpu(…, { dcache: 'wb' | 'wb2', icache }); riscv/cosim.ts cacheLines() + coherent cpuState().dmem
   multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
                  multicycleCpu(program, { control: 'fsm' | 'micro' }) with `retire`, `fetch`, `state` outputs;
-                 mcTransitions (MC_FSM's AND gates t<k>), MC_FSM_SPEC (the controller as a state machine)
+                 mcTransitions (MC_FSM's AND gates t<k>), MC_FSM_SPEC (the controller as a state machine);
+                 Microprogram { states, dispatch, dispatch2 } (MC_PROGRAM: the book's), microController(p) (memoized by microKey, the
+                 book's program is MC_MICRO itself; an edited one is id mc_micro_<hash>, unregistered, microprogramOf(def) turns it back),
+                 multicycleCpu(…, { control: 'micro', microcode }) (the default stays the same object / id)
+  ucode.ts       the microcode painter's model (DOM-free): U_COLUMNS, edits (setField / cycleField / setSeq / setNext / setDispatch /
+                 addWord / removeLast: pure), changedCell vs the book's, doesOf, unitsLit(word) (the datapath's instance names it
+                 drives: lit on the chapter's stage), pathOf / cyclesByClass, validate (bad: no way back to Fetch, a path with no
+                 retire or two, no IR write; warn: unreachable, undispatched class), sanitizeProgram, iTypeInThree (the chapter's answer)
+  ucodecheck.ts  checkProgram(p): rv32ui riscv-tests images (lazy JSON chunk from tests/verify; riscv/rvimage.ts is the browser-safe
+                 loader / verdict shared with tests/verify/images.ts) on BitSim lanes, the benchmarks one by one on the cycle engine (DualSim,
+                 ~65× faster per cycle than a BitSim lane), each against the golden model: UcodeReport { tests, benches, cpi, cycles by class,
+                 nands, firstMismatch (a lock-step replay of the smallest failing program) }; bookReport() the cached "before"; yields every ~12 ms
   fsm.ts         FsmSpec: states (code, at, Moore out), arcs (when, Mealy out, parts lit on hover, drawing hints),
                  fsmNext / fsmOut / fsmArc; fsms.ts: library id → spec (mc_fsm, mc_micro, rv16_det101: DET101_FSM);
                  tests/fsm.test.ts reads every one back from its circuit (the picture cannot drift)
@@ -1011,6 +1022,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
                  the critical path drawn on the chip, lint as a diag source, open-input marks; records only while
                  the panel is open (its trace listener puts DualSim on GateSim)
+  ucodeui.ts     Microcode…: the painter (widgets/ucodepainter.ts: grid with arrow keys / Space / Enter / digits and a drag down a column, dispatch
+                 selects, the selected word's datapath sketch, Undo / Reset, the check box, Apply; mode 'dialog' in the sandbox, 'sheet' under the
+                 chapter's stage with onHighlight lighting the real units) on a placed multicycle CPU: its controller part is lib mc_micro or
+                 PartRef { ucode: Microprogram } (ucodepart.ts finds it; remix turns an edited controller into one); the CPU drawer's button and
+                 the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
                  measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy

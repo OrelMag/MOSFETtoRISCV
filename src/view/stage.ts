@@ -2175,7 +2175,17 @@ export class Stage {
     const was = this.hint.hidden;
     const H = this.canvas.clientHeight, W = this.canvas.clientWidth;
     const c = this.canvas.getBoundingClientRect();
-    const docked = [...this.dock.children].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
+    // beside the drill pane it starts right of it (breadboard.css)
+    const left = this.drill && !this.el.classList.contains('bb-stacked') ? parseFloat(this.canvas.style.getPropertyValue('--bb-drill-w')) + 12 || 12 : 12;
+    // Its one-line width, measured shown (a hidden element is 0 px wide).
+    this.hint.hidden = false;
+    this.hint.style.maxWidth = `${W - left - 12}px`;
+    const natural = this.hint.offsetWidth;
+    // Only the bottom panels under the line lift it. Panels well to its right (side by side in a row) leave it at
+    // the bottom, wrapped short of them: it floated mid-canvas above a pipeline diagram far to its right.
+    const all = [...this.dock.children].map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
+    const beside = all.filter((r) => r.left - c.left >= left + Math.min(natural, 360) + 12);
+    const docked = all.filter((r) => !beside.includes(r));
     const bottom = docked.length ? H - Math.min(...docked.map((r) => r.top - c.top)) + 6 : 10;
     // A line or two above `bottom`: the right panels reaching that low push its right edge in.
     const lineTop = H - bottom - 40;
@@ -2185,9 +2195,8 @@ export class Stage {
       const r = p.el.getBoundingClientRect();
       if (r.width > 0 && r.bottom - c.top > lineTop) right = Math.max(right, c.right - r.left + 12);
     }
+    for (const r of beside) if (r.top - c.top < H - bottom) right = Math.max(right, c.right - r.left + 12);
     this.hint.style.bottom = `${bottom}px`;
-    // beside the drill pane it starts right of it (breadboard.css)
-    const left = this.drill && !this.el.classList.contains('bb-stacked') ? parseFloat(this.canvas.style.getPropertyValue('--bb-drill-w')) + 12 || 12 : 12;
     this.hint.style.maxWidth = `${W - right - left}px`;
     // a drill stacked on a narrow canvas leaves the schematic a strip: the line would take a third of it
     this.hint.hidden = this.hint.dataset.off === '1' || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)

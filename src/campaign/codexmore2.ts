@@ -293,7 +293,7 @@ li a0, 0x12345     →  lui a0, 0x12 ; addi a0, a0, 0x345</pre>`,
     ],
     lib: 'loadextract',
     chapters: [
-      { chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' },
+      { chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' },
       { chapter: 'cpu', step: 0, label: 'The datapath' },
       { chapter: 'io', step: 0, label: 'Storing a byte' },
       { chapter: 'io', step: 2, label: 'Loading a byte' },

@@ -254,7 +254,7 @@ zero-extended instead: 0x003A = 58         an ordinary RAM word</pre>`,
     ],
     lib: 'rv16_imm',
     anatomy: ['imm'],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }, { chapter: 'io', step: 2, label: 'Loading a byte' }],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }, { chapter: 'io', step: 2, label: 'Loading a byte' }],
   },
 
   majority: {
@@ -371,7 +371,7 @@ multicycle                 150      76      11,400</pre>51 instructions; cycles 
       'Confusing pseudo-instructions with the ISA: <code>li</code>, <code>mv</code>, <code>call</code> and <code>push</code> are assembler expansions; the hardware sees lui, addi, jal and sw.',
       'Adding an instruction because one program wants it: each costs decode logic, tests and room in a fixed encoding space (RV16 has 16 opcodes).',
     ],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }, { chapter: 'isa', step: 1, label: 'The assembler' }],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }, { chapter: 'isa', step: 2, label: 'The assembler' }],
   },
 
   rv16: {
@@ -394,7 +394,7 @@ x0 zero · x1 ra · x2 sp · x3–x5 a0–a2 · x6–x7 t0–t1</pre>`,
       'Expecting 12-bit immediates: addi, lw, sw and branches take −32 … 31, so <code>li</code> of anything else is usually two words, and a branch reaches ±32 words (jal: −256 … 255).',
       'Writing <code>bltu</code> or <code>bgeu</code>: RV16\'s branches are equality and signed only; unsigned needs sltu then bnez / beqz.',
     ],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }],
   },
 
   formats: {
@@ -413,7 +413,7 @@ sw a0, 5(sp)         imm  rs2  rs1  imm  op
       'Counting rs2 as a source for I-type instructions: bits 12:10 are immediate bits there; reading that register is harmless, but a hazard unit that counts it stalls more than needed (RV16\'s does, to stay simple).',
     ],
     anatomy: ['rf', 'imm', 'ctl'],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }],
   },
 
   immediates: {
@@ -432,7 +432,7 @@ addi a0, a0, -24     a0 = 1024 − 24 = 1000    0xA1B4</pre>`,
     ],
     lib: 'rv16_imm',
     anatomy: ['imm'],
-    chapters: [{ chapter: 'isa', step: 0, label: 'Six formats, fixed register fields' }, { chapter: 'isa', step: 1, label: 'The assembler' }],
+    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }, { chapter: 'isa', step: 2, label: 'The assembler' }],
   },
 
   branches: {

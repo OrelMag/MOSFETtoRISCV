@@ -11,6 +11,7 @@
 
 import { listed } from '../lib/catalog';
 import { registry } from '../lib/define';
+import { microprogramOf } from '../lib/multicycle';
 import { regenerable } from '../lib/resolve';
 import { disasm } from '../riscv/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -74,6 +75,8 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
   const chipFor = new Map<ComponentDef, string | null>();
   const refOf = (d: ComponentDef): PartRef | undefined => {
     if (userChip(ws, d)) return { chip: d.id };
+    const prog = microprogramOf(d);
+    if (prog) return { ucode: prog };
     if (stableRef(d)) return undefined;
     const reader = readerRefOf(d);
     const special = romRef(d) ?? constRef(d) ?? (reader ? { reader } : undefined);

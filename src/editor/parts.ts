@@ -5,6 +5,8 @@
 
 import { muxTree } from '../lib/combinational';
 import { sanitizeRows } from '../riscv/custom';
+import { microController } from '../lib/multicycle';
+import { sanitizeProgram } from '../lib/ucode';
 import { singleCycleCpu } from '../lib/cpu';
 import { merger, ones, splitter } from '../lib/define';
 import { symbolGeom } from '../sim/geometry';
@@ -92,6 +94,10 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return ramWithInit(k, w, init);
   }
   if ('rom' in ref) return romPart(ref.rom);
+  if ('ucode' in ref) {
+    const p = sanitizeProgram(ref.ucode);
+    return p ? microController(p) : { error: 'microcode: not a microprogram' };
+  }
   if ('core' in ref) {
     const custom = sanitizeRows(ref.core.custom);
     return singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
