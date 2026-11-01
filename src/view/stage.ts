@@ -399,6 +399,10 @@ export class Stage {
       probeOf: (i) => this.probeOf(i),
     });
     this.view.arrange = true;
+    this.view.badge = () => {
+      const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
+      return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
+    };
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
     this.el.setAttribute('aria-label', 'Circuit');

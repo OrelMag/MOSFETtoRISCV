@@ -139,6 +139,9 @@
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
   .sb-levelmode .sb-mid { min-height: 170px; }
+  /* the strip and the run row take no more than they must: the goal line is in the Task tab and the level badge is the
+     bottom bar's (the canvas gains ~50 px of a 844 px phone) */
+  .sb-levelmode .sb-chal-sum.sb-chal-goal, .sb-levelmode .sb-controls .sb-level { display: none; }
   .sb-levelmode .sb-iobar { max-height: 20dvh; overflow-y: auto; }
   .sb-levelmode .sb-chal-sum.muted { display: none; }
   .sb-levelmode .sb-controls { row-gap: 4px; padding-top: 4px; padding-bottom: 4px; }

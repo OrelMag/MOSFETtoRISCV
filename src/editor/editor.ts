@@ -930,11 +930,18 @@ export class Editor {
     let room = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
     if (!matchMedia('(max-width: 1000px)').matches) {
       const gap = px(cs.columnGap);
+      // at their natural width: the tabs shrink to share what they get (editor.css), so what they are now says nothing
+      this.tabs.classList.add('measure');
       const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
+      this.tabs.classList.remove('measure');
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
-      room -= Math.min(tabsNeed, room / 2) + others.reduce((s, el) => s + el.offsetWidth + gap, 0) + gap;
+      // the tabs may take up to 60 % of the bar: as many as fit beside Open… / New chip (the others scroll), the least
+      // used actions going into More for them; 4 px of slack
+      // every flex item in the row has a gap beside it, an empty one (the top slot, before the autosave indicator) too
+      const items = [...top.children].filter((el) => getComputedStyle(el).display !== 'none').length;
+      room -= Math.min(tabsNeed + 4, room * 0.6) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
     }
     this.shed = shedActions(btns.map((b) => ({ id: b.dataset.action!, w: b.offsetWidth })), room, moreW, px(getComputedStyle(bar).columnGap));
     for (const b of btns) b.hidden = this.shed.has(b.dataset.action!);
