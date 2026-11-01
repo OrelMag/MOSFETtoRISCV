@@ -53,6 +53,13 @@ export interface PuzzleRecord {
   shown?: boolean;
 }
 
+/** Whether `neu` should replace `old`: nothing before, a reference that was only loaded (Do it for me), more stars, or equal stars and a lower cycles × NANDs. */
+export function betterRecord(neu: PuzzleRecord, old: PuzzleRecord | undefined): boolean {
+  if (!old) return true;
+  if (neu.shown) return false;
+  return old.shown === true || neu.stars > old.stars || (neu.stars === old.stars && neu.best.cycles * neu.best.nands < old.best.cycles * old.best.nands);
+}
+
 export class PuzzleProgress {
   private data: Record<string, PuzzleRecord> = {};
 
@@ -75,7 +82,7 @@ export class PuzzleProgress {
   /** Record a pass. Returns whether it is the best yet (and whether it is the first). */
   record(id: string, score: PuzzleScore, stars: Stars): { best: boolean; first: boolean } {
     const old = this.data[id];
-    const better = !old || old.shown || stars > old.stars || (stars === old.stars && score.cycles * score.nands < old.best.cycles * old.best.nands);
+    const better = betterRecord({ stars, best: score }, old);
     if (better) this.data[id] = { stars, best: score };
     this.save();
     return { best: better, first: !old };

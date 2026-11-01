@@ -1,0 +1,58 @@
+// Service worker (vite.config.ts fills in VERSION and PRECACHE and writes it to dist/sw.js): the site works offline once visited.
+//  - index.html and other same-origin files: network first, the cached copy when offline (a deploy shows at once).
+//  - assets/ (hashed names, immutable): cache first. Everything under assets/ is precached at install.
+//  - never touched (no respondWith: the browser fetches them as it always did): other origins, non-GET, ranges, and the large
+//    optional downloads doom/ (the WAD), layout/ (sky130 layouts), yosys/ (WebAssembly synthesis).
+// Caches are per version; the previous version's stays one more generation, because a tab opened before a deploy still loads its own lazy chunks.
+const VERSION = '__VERSION__';
+const PRECACHE = __PRECACHE__;
+const CACHE = `mosfet-assets-${VERSION}`;
+const META = 'mosfet-meta';
+const SKIP = /\/(doom|layout|yosys)\//;
+
+self.addEventListener('install', (e) => {
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    // one by one: a failed asset must not abort the install (it is fetched and cached when first used)
+    await Promise.all(['./', ...PRECACHE].map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {})));
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    const meta = await caches.open(META);
+    const old = await meta.match('current').then((r) => (r ? r.text() : ''));
+    const keep = new Set([CACHE, `mosfet-assets-${old}`, META]);
+    if (old !== VERSION) await meta.put('current', new Response(VERSION));
+    for (const k of await caches.keys()) if (k.startsWith('mosfet-assets-') && !keep.has(k)) await caches.delete(k);
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET' || req.headers.has('range')) return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || SKIP.test(url.pathname)) return;
+  const inAssets = url.pathname.includes('/assets/');
+  e.respondWith((async () => {
+    if (inAssets) {
+      const hit = await caches.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
+      return res;
+    }
+    try {
+      const res = await fetch(req);
+      if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
+      return res;
+    } catch (err) {
+      // offline: a page navigation gets the cached page (the app routes by hash, so one page serves every route)
+      const hit = await caches.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await caches.match('./') || await caches.match('index.html') : undefined);
+      if (hit) return hit;
+      throw err;
+    }
+  })());
+});

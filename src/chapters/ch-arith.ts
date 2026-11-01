@@ -21,6 +21,29 @@ function portDepth(def: ComponentDef, port: string): number {
   return max;
 }
 
+/** NAND delays on the longest path from one input port to one output port (the carry's own path: cin → cout). */
+function pathDepth(def: ComponentDef, from: string, to: string): number {
+  const d = flatten(def, { mode: 'gate' });
+  const driverOf = new Int32Array(d.netCount).fill(-1);
+  d.leaves.forEach((l, i) => l.outputs.forEach((p) => p.forEach((n) => (driverOf[n] = i))));
+  const src = new Set(d.root.ports[from]);
+  const memo = new Map<number, number>();
+  const depth = (net: number): number => {
+    if (src.has(net)) return 0;
+    const li = driverOf[net];
+    if (li < 0) return -Infinity;
+    let m = memo.get(li);
+    if (m === undefined) {
+      m = -Infinity;
+      for (const p of d.leaves[li].inputs) for (const n of p) m = Math.max(m, depth(n));
+      m += d.leaves[li].kind === 'nand' ? 1 : 0;
+      memo.set(li, m);
+    }
+    return m;
+  };
+  return Math.max(...d.root.ports[to].map(depth));
+}
+
 const CMP32 = logicDepth(magComparator(32, false));
 /** The 32-bit subtractor's carry out: a < b (unsigned) exactly when it is 0, a borrow. */
 const BORROW32 = portDepth(addSub(32), 'cout');
@@ -73,35 +96,122 @@ export const chAdders: Chapter = {
       title: 'Adding two bits',
       body: `
         <p>Add two bits and the answer needs two bits: 1 + 1 = <code>10</code> in binary. The low bit is the
-        <strong>sum</strong> <code>s</code>; the high bit is the <strong>carry</strong> <code>c</code>.</p>
-        <ul><li><span data-show="g1 g2 g3 g4"><code>s = a XOR b</code></span></li><li><span data-show="g1 g5"><code>c = a AND b</code></span></li></ul>
-        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter 4</a> plus one extra NAND:
-        the carry reuses the XOR's first gate. That makes 5 NANDs.</p>`,
+        <strong>sum</strong> <code>s</code>; the high bit is the <strong>carry</strong> <code>c</code>. Write out the four rows and
+        the two outputs are gates you already have:</p>
+        <ul><li><span data-show="g1 g2 g3 g4"><code>s = a XOR b</code></span>: the sum bit is 1 when exactly one input is 1;</li>
+        <li><span data-show="g1 g5"><code>c = a AND b</code></span>: there is a carry only when both are 1.</li></ul>
+        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter 4</a> plus one extra NAND.
+        The XOR's first gate, <span data-show="g1"><code>g1</code></span>, already computes NAND(a, b); the carry is its inverse, so a single
+        NAND wired as an inverter, <span data-show="g5"><code>g5</code></span>, gives a AND b. Sharing that gate is the whole design:
+        ${stats(HALF_ADDER).nands} NANDs, ${stats(HALF_ADDER).transistors} transistors, ${logicDepth(HALF_ADDER)} gate delays deep.</p>
+        <p>Why "half"? It has no input for a carry coming from the column to its right, so it can only add the lowest column of a
+        number. The next step adds that missing input.</p>`,
       scene: () => ({ root: HALF_ADDER, inputs: { a: 1, b: 1 } }),
+      tour: {
+        beats: [
+          { title: 'Nothing to add', set: { a: 0, b: 0 }, show: ['g1', 'g2', 'g3', 'g4', 'g5'], expect: { s: 0, c: 0 },
+            say: '<p>a = b = 0: s = {v:s}, c = {v:c}. g1 sees two 0s and gives 1, and every gate after it settles to 0 on the outputs.</p>' },
+          { title: 'One input', set: { a: 1, b: 0 }, show: ['g1', 'g2', 'g3', 'g4'], expect: { s: 1, c: 0 },
+            say: '<p>a = 1, b = 0: exactly one input is 1, so the XOR (g1 to g4) gives s = {v:s}. g1 still sees a 0, so it stays 1 and the carry stays {v:c}.</p>' },
+          { title: 'Both: the carry', set: { a: 1, b: 1 }, show: ['g1', 'g5'], expect: { s: 0, c: 1 },
+            say: '<p>a = b = 1: 1 + 1 = 10. g1 = NAND(1, 1) = 0, which the XOR turns into s = {v:s}, and g5 inverts it into c = {v:c}.</p><p>g1 serves both outputs: that shared gate is why the half adder costs 5 NANDs and not 4 + 2.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>From the truth table: s is 1 on rows 01 and 10, so s = a·¬b + ¬a·b = a ⊕ b; c is 1 only on row 11, so c = a·b.</p>
+          <p>The NAND XOR: m = ¬(a·b); p = ¬(a·m); q = ¬(b·m); s = ¬(p·q). Since c = a·b = ¬m, the carry needs only an inverter on m,
+          one NAND with its inputs tied together. Total: 4 + 1 = ${stats(HALF_ADDER).nands} NANDs.</p>`,
+        real: `<p>Standard-cell libraries do not build XOR from four NANDs. They have an XOR cell (often 8 to 12 transistors,
+          sometimes a transmission-gate design with 6), and a half-adder cell in about 14. Our ${stats(HALF_ADDER).transistors}-transistor
+          version is the price of building everything from one brick.</p>`,
+        pitfall: `<p>Chaining half adders does not make a multi-bit adder: column 1 has three bits to add (a₁, b₁ and the carry
+          from column 0), and a half adder has only two inputs. Dropping the carry gives the right answer only when no column carries.</p>`,
+      },
     },
     {
       title: 'Adding three bits',
       body: `
         <p>To add longer numbers, every column after the first must also add the carry coming in from the
-        right. A <strong>full adder</strong> adds three bits: <code>a + b + cin</code>.</p>
-        <p>The textbook recipe: add <code>a + b</code> with <span data-show="ha1">one half adder</span>, add <code>cin</code> to that
+        right. A <strong>full adder</strong> adds three bits: <code>a + b + cin</code>, a value from 0 to 3, so its result still fits in
+        two bits: <code>s</code> and <code>cout</code>.</p>
+        <p>The textbook recipe: add <code>a + b</code> with <span data-show="ha1">one half adder</span>, add <code>cin</code> to that partial sum
         with <span data-show="ha2">a second</span>, and if either produced a carry, carry out (<span data-show="or1">an OR gate</span>).
-        That makes 13 NANDs.</p>
+        The two half adders can never both carry: if the first carries, its sum bit is 0, and 0 + cin cannot carry again. So the OR
+        could just as well be an XOR; OR is cheaper.</p>
+        <p>Cost: two half adders and an OR, ${stats(FULL_ADDER_HA).nands} NANDs, ${logicDepth(FULL_ADDER_HA)} gate delays from a or b to the
+        sum, and ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')} from cin to cout. That last number matters most: in a long adder the carry
+        crosses one full adder per bit.</p>
         <div class="try">Set all three inputs to 1: the answer is 3 = <code>11</code>, so both s and cout are 1.</div>`,
       scene: () => ({ root: FULL_ADDER_HA, inputs: { a: 1, b: 1, cin: 0 } }),
       tries: [(st) => st.value('s') === 1 && st.value('cout') === 1],
+      tour: {
+        label: 'Walk me through it (and spot the waste)',
+        beats: [
+          { title: 'First half adder', set: { a: 1, b: 1, cin: 1 }, show: ['ha1'], expect: { s: 1, cout: 1 },
+            say: '<p>a + b + cin = 1 + 1 + 1 = 3. ha1 adds a + b = 2: its sum bit x is 0 and it carries.</p>' },
+          { title: 'Second half adder', show: ['ha2'],
+            say: '<p>ha2 adds x + cin = 0 + 1: s = {v:s}, and no second carry. The two half adders never both carry: after a carry, x is 0.</p>' },
+          { title: 'Either carry', show: ['or1'],
+            say: '<p>or1 passes on whichever carry came: cout = {v:cout}. Result: cout s = 11, which is 3.</p>' },
+          { title: 'Spot the waste: the carry', at: ['ha1'], show: ['g1', 'g5'], ghost: ['g5'],
+            say: '<p>Inside ha1, g1 computes NAND(a, b) and g5 inverts it to make the carry a AND b.</p>' },
+          { title: '… and the OR', at: ['or1'], show: ['g1', 'g2', 'g3'], ghost: ['g1', 'g2'],
+            say: '<p>Inside the OR, the first thing g1 and g2 do is invert both carries again (De Morgan: a + b = NAND(¬a, ¬b)). An inverter followed by an inverter does nothing.</p>' },
+          { title: 'Four gates for nothing', at: [], show: ['ha1', 'ha2', 'or1'],
+            say: `<p>Each half adder's carry inverter cancels one of the OR's input inverters: 4 of the ${stats(FULL_ADDER_HA).nands} NANDs can go, and the carry path loses 2 of its ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')} delays. The next step builds that adder.</p>` },
+        ],
+      },
+      more: {
+        derive: `<p>s = a ⊕ b ⊕ cin (odd parity of the three bits). cout is the majority: at least two of the three are 1,
+          cout = a·b + cin·(a ⊕ b). The two terms are exactly the two half adders' carries: <em>generate</em> (a·b: this column carries
+          whatever comes in) and <em>propagate</em> (a ⊕ b: this column passes the incoming carry on). The fast adders of a later chapter are built
+          from these two words.</p>`,
+        real: `<p>A CMOS full-adder cell is usually the 28-transistor "mirror adder", which computes ¬cout directly from a, b, cin in one complex
+          gate and then the sum from ¬cout, against ${stats(FULL_ADDER).transistors} transistors in our 9-NAND version. Fast adders skip full
+          adders altogether and work with generate and propagate signals.</p>`,
+        pitfall: `<p>Taking cout = a·b (the first half adder's carry) misses the rows where the carry comes from cin: 0 + 1 + 1 and
+          1 + 0 + 1 also carry. Every full adder needs both terms.</p>`,
+      },
     },
     {
       title: 'Optimizing: 13 NANDs → 9',
       body: `
-        <p>Engineers do not stop at "it works". Look closely at the half-adder version and some gates turn out to be
-        redundant. The OR gate's input inverters cancel the half adders' carry inverters, and the carry can
-        <span data-show="g1 g5 g9">reuse the first NAND of each XOR</span>.</p>
-        <p>The result is a <strong>9-NAND full adder</strong> with the same truth table (check the tab) for 30% fewer gates.
-        This is the one we will use from now on.</p>
+        <p>Engineers do not stop at "it works". The last walkthrough found four inverters that undo each other: each half adder ends its
+        carry with a NOT, and the OR gate begins by inverting both inputs. Delete both pairs and the OR collapses into a single NAND,
+        <span data-show="g9"><code>g9</code></span>, fed straight from the first NAND of each XOR: <span data-show="g1"><code>g1</code></span> = NAND(a, b) and
+        <span data-show="g5"><code>g5</code></span> = NAND(x, cin).</p>
+        <p>The result is a <strong>9-NAND full adder</strong> with the same truth table (check the tab): ${stats(FULL_ADDER).nands} NANDs instead of
+        ${stats(FULL_ADDER_HA).nands}, and the carry from cin crosses ${pathDepth(FULL_ADDER, 'cin', 'cout')} gates instead of
+        ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')}. Cheaper <em>and</em> faster, which is rare. This is the full adder every later circuit uses.</p>
+        <p>Read the carry as the derivation says: cout = ¬(¬(a·b) · ¬(x·cin)) = a·b + x·cin, generate or propagate.</p>
         <div class="note">Compare the two in the Info tab: transistor count and worst-case gate delays. Cheaper and
         faster circuits for the same function are a recurring theme of this journey.</div>`,
       scene: () => ({ root: FULL_ADDER, inputs: { a: 1, b: 0, cin: 1 } }),
+      tour: {
+        beats: [
+          { title: 'The first XOR', set: { a: 1, b: 0, cin: 1 }, show: ['g1', 'g2', 'g3', 'g4'], expect: { s: 0, cout: 1 },
+            say: '<p>g1 to g4 are the XOR of a and b: x = 1 ⊕ 0 = 1. Its first gate g1 = NAND(a, b) = 1 is also half of the carry.</p>' },
+          { title: 'The second XOR', show: ['g5', 'g6', 'g7', 'g8'],
+            say: '<p>g5 to g8 XOR x with cin: s = 1 ⊕ 1 = {v:s}. Its first gate g5 = NAND(x, cin) = 0: x and cin are both 1.</p>' },
+          { title: 'One NAND for the carry', show: ['g9'],
+            say: '<p>g9 = NAND(g1, g5) = NAND(1, 0) = {v:cout}. The carry came through the propagate path: a ⊕ b = 1 let cin through.</p>' },
+          { title: 'Generate', set: { a: 1, b: 1, cin: 0 }, show: ['g1', 'g9'], expect: { s: 0, cout: 1 },
+            say: '<p>a = b = 1: g1 = 0 forces cout = {v:cout} whatever cin is. This column generates a carry.</p>' },
+          { title: 'Neither', set: { a: 0, b: 0, cin: 1 }, show: ['g1', 'g5', 'g9'], expect: { s: 1, cout: 0 },
+            say: '<p>a = b = 0: x = 0 blocks cin at g5 and g1 = 1, so g9 sees two 1s: cout = {v:cout}, s = {v:s}. This column kills the carry.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Starting from the 13-NAND version: cout = OR(c₁, c₂) with c₁ = ¬m₁ and c₂ = ¬m₂ (each half adder's carry is its first NAND, inverted).
+          OR(c₁, c₂) = NAND(¬c₁, ¬c₂) = NAND(¬¬m₁, ¬¬m₂) = NAND(m₁, m₂). Two inverters per input cancel, 4 NANDs go, and what is left is g9.</p>`,
+        real: `<p>Logic synthesis does this rewrite automatically ("double inversion removal" and gate merging, the same pass as
+          <code>sim/techmap.ts</code> here). Hand-optimized cells go further: the mirror adder shares transistors between sum and carry.</p>`,
+        pitfall: `<p>Fewer gates does not always mean faster: a shared gate drives more inputs, and with load-dependent delay (the Load setting in the
+          Timing panel) a gate with fan-out 4, like g1 and g5 here, is slower than one with fan-out 1. Unit delay hides this; check both.</p>`,
+        numbers: `<table class="mini"><tr><th></th><th>NANDs</th><th>transistors</th><th>deepest path</th><th>cin → cout</th></tr>
+          <tr><td>half adders + OR</td><td>${stats(FULL_ADDER_HA).nands}</td><td>${stats(FULL_ADDER_HA).transistors}</td><td>${logicDepth(FULL_ADDER_HA)}</td><td>${pathDepth(FULL_ADDER_HA, 'cin', 'cout')}</td></tr>
+          <tr><td>9-NAND</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(FULL_ADDER).transistors}</td><td>${logicDepth(FULL_ADDER)}</td><td>${pathDepth(FULL_ADDER, 'cin', 'cout')}</td></tr></table>`,
+      },
       challenge: {
         kind: 'quiz', question: 'The 9-NAND full adder has a carry-out path through how many gates (from cin)?',
         options: ['1', '2', '4', '9'], answer: 1,
@@ -113,11 +223,41 @@ export const chAdders: Chapter = {
       title: 'Chaining: the ripple-carry adder',
       body: `
         <p>Line up <span data-show="fa0 fa1 fa2 fa3">four full adders</span> and connect each carry-out to the next carry-in. That gives a <strong>4-bit
-        ripple-carry adder</strong>, the circuit from <a href="#/c/map/1">the map chapter</a>.</p>
+        ripple-carry adder</strong>, the circuit from <a href="#/c/map/1">the map chapter</a>. It is exactly the column addition you learned
+        at school, in base 2: each column adds its two digits and the carry from the right, writes one digit and carries one to the left.
+        The ledger below writes the same sum by hand, from the live inputs.</p>
         <p>The <span data-show="sa sb">splitter on the left</span> (the thin bar) breaks the bus <code>a</code> into single wires, one per full adder;
-        the <span data-show="ms">merger on the right</span> bundles the sum bits back into a bus.</p>
+        the <span data-show="ms">merger on the right</span> bundles the sum bits back into a bus. Splitters and mergers are only wiring: they cost
+        nothing and add no delay.</p>
+        <p>Cost: n full adders, ${stats(rca(4)).nands} NANDs for 4 bits, and the carry crosses every one of them. That is fine at 4 bits and
+        the central problem at 64 (see Numbers below).</p>
         <div class="try">Compute 9 + 7. Watch the carries: which full adders produce one?</div>`,
       scene: () => ({ root: rca(4), inputs: { a: 9, b: 7, cin: 0 } }),
+      ledger: { kind: 'add', a: 'a', b: 'b', cin: 'cin', sum: 's', cout: 'cout', width: 4, col: (i) => [`fa${i}`] },
+      tour: {
+        beats: [
+          { title: 'Column 0', set: { a: 9, b: 7, cin: 0 }, show: ['fa0'], expect: { s: 0, cout: 1 },
+            say: '<p>9 = 1001, 7 = 0111. fa0 adds the low bits: 1 + 1 + 0 = 10, so s₀ = 0 and it carries into fa1.</p>' },
+          { title: 'Column 1', show: ['fa1'],
+            say: '<p>fa1: 0 + 1 + the carry 1 = 10. Another 0, another carry. Neither input bit was 1 on its own: the carry is doing the work.</p>' },
+          { title: 'Column 2', show: ['fa2'],
+            say: '<p>fa2: 0 + 1 + 1 = 10, the same again.</p>' },
+          { title: 'Column 3', show: ['fa3'],
+            say: '<p>fa3: 1 + 0 + 1 = 10. s = {b:s} with cout = {v:cout}: the answer is 1 0000 = 16. Every column carried, one after the other: the carry rippled through all four.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Column i computes sᵢ = aᵢ ⊕ bᵢ ⊕ cᵢ and cᵢ₊₁ = aᵢbᵢ + cᵢ(aᵢ ⊕ bᵢ), with c₀ = cin. Unrolled, c₄ depends on every input bit:
+          c₄ = g₃ + p₃g₂ + p₃p₂g₁ + p₃p₂p₁g₀ + p₃p₂p₁p₀c₀. The ripple adder evaluates this one parenthesis at a time; carry-lookahead adders
+          evaluate it as a tree.</p>`,
+        real: `<p>Real CPUs use ripple carry only for small or slow adders (a loop counter, a low-power microcontroller). The 32- and 64-bit adders in
+          an ALU are parallel-prefix adders (Kogge–Stone, Brent–Kung, Han–Carlson), built in <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
+        pitfall: `<p>The columns sit side by side, but they do not work in parallel: column 3's answer is only right once column 2's carry has arrived.
+          Reading the sum early gives a wrong number, the reason a clocked circuit waits for its slowest path.</p>`,
+        numbers: `<table class="mini"><tr><th>width</th><th>NANDs</th><th>gate delays</th></tr>
+          ${[4, 8, 16, 32, 64].map((n) => `<tr><td>${n}</td><td>${stats(rca(n)).nands}</td><td>${logicDepth(rca(n))}</td></tr>`).join('')}</table>
+          <p>Both columns grow linearly: double the width, double the cost and the delay.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Find inputs where every full adder produces a carry (cout = 1 and s = 0xF).',
         check: (st) => st.value('s') === 15 && st.value('cout') === 1,
@@ -134,26 +274,76 @@ export const chAdders: Chapter = {
       body: `
         <p>Gates are not instant: each NAND takes one <strong>gate delay</strong> to respond. In this scene the
         simulation runs slowly so you can see it.</p>
-        <p>Here <code>a = 0xFF</code> and <code>b = 0</code>. Now toggle <span data-show="pin:cin"><code>cin</code></span> to 1. The carry has to pass through
-        every full adder in turn, top to bottom, like a row of falling dominoes. Watch the status line: it reports how
-        many gate delays the adder took to settle.</p>
-        <p>An 8-bit ripple adder is slow; a 64-bit one has a carry chain eight times longer. Faster adders (carry-lookahead,
-        Kogge–Stone) compute the carries in parallel. That is coming in <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
+        <p>Here <code>a = 0xFF</code> and <code>b = 0</code>: every column propagates (aᵢ ⊕ bᵢ = 1) and none generates. Now toggle
+        <span data-show="pin:cin"><code>cin</code></span> to 1. The carry has to pass through every full adder in turn, like a row of falling
+        dominoes, and each sum bit flips from 1 to 0 as the carry passes it. Watch the status line: it reports how many gate delays the
+        adder took to settle.</p>
+        <p>This is the worst case for a ripple adder: ${logicDepth(rca(8))} gate delays for 8 bits. Most inputs settle sooner, because a carry chain
+        stops at the first column that generates or kills. But a clock must be slow enough for the worst case, so the worst case sets the speed.
+        A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders (carry-lookahead, Kogge–Stone) compute the carries in parallel: that is
+        <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
       scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
       actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
+      ledger: { kind: 'add', a: 'a', b: 'b', cin: 'cin', sum: 's', cout: 'cout', width: 8, col: (i) => [`fa${i}`] },
+      tour: {
+        beats: [
+          { title: 'Every column propagates', set: { a: 0xff, b: 0, cin: 0 }, show: ['fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5', 'fa6', 'fa7'], expect: { s: 255, cout: 0 },
+            say: '<p>a = 1111 1111, b = 0: every column has exactly one 1, so each sum bit is 1 and each column would pass a carry straight on. Nothing generates one yet.</p>' },
+          { title: 'Add one', set: { cin: 1 }, show: ['fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5', 'fa6', 'fa7'], expect: { s: 0, cout: 1 },
+            say: `<p>cin = 1: 255 + 1 = 256. The carry enters fa0 and walks up through every full adder, 2 gate delays each; each sum bit drops to 0 as it passes. s = {v:s}, cout = {v:cout}. Worst case: ${logicDepth(rca(8))} delays.</p>` },
+          { title: 'And back', set: { cin: 0 }, show: ['fa0', 'fa7'], expect: { s: 255, cout: 0 },
+            say: '<p>cin back to 0: the carries unwind the same way, column by column. The status line counts the delays again.</p>' },
+        ],
+      },
+      more: {
+        real: `<p>The 4004 and the 6502 used ripple-style carries in their 4- and 8-bit ALUs. Manchester carry chains (a pass-transistor chain, precharged)
+          made ripple carry fast enough for 16 to 32 bits in the 1970s and 80s. Above that, carry-lookahead took over.</p>`,
+        pitfall: `<p>Average-case delay is not the clock period. Random inputs give short carry chains (about log₂ n on average), but a single
+          worst-case pair of inputs that ripples through every column would be read wrong, so the clock must allow for it.</p>`,
+        numbers: `<p>Worst-case delay = 2 gate delays per bit plus the first sum's XOR: ${[8, 16, 32, 64].map((n) => `${n} bits: ${logicDepth(rca(n))}`).join(', ')}.</p>`,
+      },
     },
     {
       title: 'Subtraction for free',
       body: `
-        <p>Two's complement makes subtraction easy: <code>a − b = a + (NOT b) + 1</code>.</p>
-        <p>Put <span data-show="x0 x1 x2 x3 x4 x5 x6 x7">an XOR on every <code>b</code> input</span>: with <code>sub = 1</code> each XOR inverts its bit. Feed
-        <code>sub</code> into the carry-in as well to add the 1. One circuit now adds <em>and</em> subtracts.</p>
+        <p>Two's complement makes subtraction easy: <code>a − b = a + (NOT b) + 1</code>. NOT b is −b − 1 (b + NOT b is all ones, which is −1),
+        so adding it and then one more gives a − b.</p>
+        <p>Put <span data-show="x0 x1 x2 x3 x4 x5 x6 x7">an XOR on every <code>b</code> input</span>: with <code>sub = 1</code> each XOR inverts its bit, with
+        <code>sub = 0</code> it passes the bit unchanged (x ⊕ 0 = x, x ⊕ 1 = ¬x). Feed <code>sub</code> into the carry-in as well to add the 1.
+        One circuit now adds <em>and</em> subtracts, for ${stats(addSub(8)).nands - stats(rca(8)).nands} NANDs more than the plain adder
+        (${stats(addSub(8)).nands} in all at 8 bits).</p>
         <p>It also reports overflow. <code>cout</code> is the unsigned flag: a carry out of an add, or no carry out of a subtract (a
         borrow). The signed result is wrong exactly when the carry into the top bit differs from the carry out of it:
         <span data-show="vx"><code>v = c7 XOR c8</code></span> here, and <code>n</code> is the top bit of s.</p>
         <div class="try">Compute 5 − 7 (a = 5, b = 7, sub = 1). Switch the radix to DEC in the top bar, then click the
         <code>s</code> label on the wire to cycle through readings: is it 254 or −2? Both.</div>`,
       scene: () => ({ root: addSub(8), inputs: { a: 5, b: 7, sub: 0 } }),
+      ledger: { kind: 'add', a: 'a', b: 'b', sub: 'sub', sum: 's', cout: 'cout', width: 8, col: (i) => [`x${i}`, `fa${i}`] },
+      tour: {
+        beats: [
+          { title: 'Adding', set: { a: 5, b: 7, sub: 0 }, show: ['x0', 'x1', 'x2'], expect: { s: 12 },
+            say: '<p>sub = 0: every XOR passes its b bit unchanged and the carry-in is 0. 5 + 7 = {v:s}.</p>' },
+          { title: 'Invert b', set: { sub: 1 }, show: ['x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7'], expect: { s: 254 },
+            say: '<p>sub = 1: every XOR inverts its bit. The adders now see ¬7 = 1111 1000 = 248, which is −8 in two\'s complement.</p>' },
+          { title: '… plus one', show: ['fa0'],
+            say: '<p>The same sub wire is fa0\'s carry-in: 5 + 248 + 1 = {v:s} = 1111 1110. Read as signed, that is −2: 5 − 7.</p>' },
+          { title: 'Borrow, not overflow', show: ['vx', 'fa7'], expect: { cout: 0, v: 0 },
+            say: '<p>cout = {v:cout}: no carry out of a subtraction means a borrow, so 5 &lt; 7 unsigned. v = {v:v}: −2 fits in 8 signed bits, no overflow.</p>' },
+          { title: 'Signed overflow', set: { a: 100, b: 156 }, show: ['vx', 'fa7'], expect: { s: 200, v: 1 },
+            say: '<p>b = 156 is −100 signed. 100 − (−100) = 200, which does not fit in −128…127: s = {v:s} reads as −56, and v = {v:v} says so. The carry into bit 7 was 1, the carry out 0: they differ.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Signed overflow happens when two operands of the same sign give a result of the other sign. In the top column, with operand bits aₙ₋₁ and
+          b'ₙ₋₁: if both are 0, the sum bit is the carry in cₙ₋₁ and there is no carry out, so the sign went wrong exactly when cₙ₋₁ = 1 ≠ cₙ = 0;
+          if both are 1, cₙ = 1 and the sign is wrong when cₙ₋₁ = 0; if they differ, cₙ₋₁ = cₙ and overflow is impossible. In every case
+          v = cₙ₋₁ ⊕ cₙ.</p>`,
+        real: `<p>Flags differ between ISAs. x86 sets CF on a borrow (CF = 1 when a &lt; b); ARM sets C to the adder's carry out, so after SUBS C = 1 means
+          no borrow, the same as this circuit's cout. RISC-V has no flags at all: <code>sltu</code> and <code>bltu</code> compute the comparison when it
+          is needed.</p>`,
+        pitfall: `<p>cout and v answer different questions. cout = 1 after an add means the unsigned result wrapped; v = 1 means the signed one did.
+          127 + 1 sets v but not cout; 255 + 1 sets cout but not v.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Use the circuit to compute 5 − 7 (the result is −2 = 0xFE).',
         check: (st) => st.getInput('sub') === 1 && st.value('s') === 0xfe,
@@ -171,22 +361,58 @@ export const chAdders: Chapter = {
         <p>The subtractor already compares: a &lt; b (unsigned) exactly when a − b borrows. But the borrow (no carry out) comes at the end
         of the full carry chain. A dedicated <strong>magnitude comparator</strong> skips the arithmetic. <span data-show="c0 c1 c2 c3">Each bit</span> says
         <em>greater here</em> (a·¬b) and <em>equal here</em> (a XNOR b). A <span data-show="m0 m1 m2">tree of combine cells</span> then merges neighbouring fields:
-        the high field decides, unless it is equal. <span data-show="lt">lt</span> is neither greater nor equal.</p>
+        the high field decides, unless it is equal, in which case the low field decides. <span data-show="lt">lt</span> is neither greater nor equal.</p>
+        <p>That is how you compare two numbers by eye: start at the most significant digit and stop at the first one that differs. The tree does
+        all those "first difference" questions at once, in pairs, then pairs of pairs.</p>
         <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry-lookahead cells in
         <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
+      tour: {
+        beats: [
+          { title: 'Bit by bit', set: { a: 9, b: 6 }, show: ['c0', 'c1', 'c2', 'c3'], expect: { gt: 1, lt: 0, eq: 0 },
+            say: '<p>9 = 1001, 6 = 0110. Every bit differs: c0 and c3 say "greater here" (a has the 1), c1 and c2 say "less here". Which one counts?</p>' },
+          { title: 'The high half decides', show: ['m1', 'm2'],
+            say: '<p>m1 merges bits 3 and 2: bit 3 differs, so it decides, greater. m2 merges the halves: the high half is not equal, so the low half (whatever it says) is ignored. gt = {v:gt}.</p>' },
+          { title: 'Equal all the way', set: { a: 6, b: 6 }, show: ['m0', 'm1', 'm2', 'lt'], expect: { eq: 1, gt: 0, lt: 0 },
+            say: '<p>a = b: every field is equal, so every merge passes "equal" up: eq = {v:eq}, and lt, the NOR of gt and eq, is {v:lt}.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Each combine cell takes a high field (g_h, e_h) and a low field (g_l, e_l): g = g_h + e_h·g_l, e = e_h·e_l. The rule is
+          associative, so any tree shape gives the same answer and a balanced one has ⌈log₂ n⌉ levels: ${Math.ceil(Math.log2(32))} for 32 bits, on top of the
+          per-bit cells.</p>`,
+        real: `<p>Branch units often have their own comparator for <code>blt</code> / <code>bge</code> rather than waiting for the ALU's subtractor, for
+          exactly this reason. An equality test alone is even cheaper: XOR every bit pair and OR the results, which is how <code>beq</code> is usually done.</p>`,
+        pitfall: `<p>The low field must not be ignored when the high field is equal: comparing 0x12 with 0x15 is decided entirely by the low digit.</p>`,
+      },
     },
     {
       title: 'Signed comparison',
       body: `
         <p>In two's complement the sign bit has weight −2ⁿ⁻¹, so the order flips <em>in that bit only</em>. A 1 there means negative,
         the smaller number. The signed comparator differs in <span data-show="c3">one cell</span>: the sign bit's "greater" is ¬a·b. Everything below the sign
-        bit compares as unsigned.</p>
+        bit compares as unsigned, because below the sign bit the weights are the same positive powers of two in both readings.</p>
         <p>This is why RISC-V needs both <code>slt</code> and <code>sltu</code>, and <code>blt</code> and <code>bltu</code>: the same bits
-        order differently.</p>`,
+        order differently. 1000 is 8 unsigned and −8 signed; 0001 is 1 either way.</p>`,
       scene: () => ({ root: magComparator(4, true), inputs: { a: 3, b: 5 } }),
+      tour: {
+        beats: [
+          { title: 'Same sign', set: { a: 3, b: 5 }, show: ['c3'], expect: { lt: 1 },
+            say: '<p>3 and 5 are both positive: the sign bits are equal and the lower bits decide, as unsigned. lt = {v:lt}.</p>' },
+          { title: 'Different signs', set: { a: 8, b: 1 }, show: ['c3'], expect: { lt: 1 },
+            say: '<p>a = 1000, b = 0001. Unsigned, a is 8 and larger; signed, a is −8. The sign cell says "greater here" for the one with the 0, so lt = {v:lt}: −8 &lt; 1.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Flip the sign bit of both numbers (XOR with 100…0) and signed order becomes unsigned order: −8…7 maps onto 0…15 keeping the order
+          (this is "offset binary"). Inverting the sign bits is exactly the same as swapping a and b in the sign cell, which is what ¬a·b does.</p>`,
+        real: `<p>Hardware that has only an unsigned comparator does the same trick: flip both sign bits on the way in. Floating-point numbers can be
+          compared with an integer comparator the same way, after a sign-dependent flip of the whole word.</p>`,
+        pitfall: `<p>A loop like <code>for (unsigned i = n; i &gt;= 0; i--)</code> never ends: unsigned i is never below 0, and 0 − 1 wraps to the largest
+          value. Choosing <code>bltu</code> where <code>blt</code> was meant gives the same bug in assembly.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Find a and b where a is the larger unsigned number but the signed comparator says lt = 1.',
         check: (st) => st.value('lt') === 1 && st.getInput('a') > st.getInput('b'),
@@ -202,12 +428,22 @@ export const chAdders: Chapter = {
       title: 'Decimal: the BCD adder',
       body: `
         <p>Calculators, clocks and money keep numbers in decimal: four bits per digit, values 0–9, the codes 1010–1111 unused. This is
-        <strong>binary-coded decimal</strong>. Read a BCD number in hex and it looks decimal: 0x38 is thirty-eight.</p>
+        <strong>binary-coded decimal</strong>. Read a BCD number in hex and it looks decimal: 0x38 is thirty-eight. Decimal storage avoids a
+        conversion every time a number is printed, and a cent stays exactly a cent (0.1 has no exact binary fraction).</p>
         <p>Adding two digits in binary is right up to 9. Above that the sum must skip the six unused codes, so whenever the binary sum is
         more than 9 (a carry out, or 1010–1111) the <span data-show="u2 u3">digit adder</span> adds 6 and sends a decimal carry to the next digit. ${stats(bcdAdder(1)).nands} NANDs per digit,
         against ${stats(rca(4)).nands} for a 4-bit binary adder: the price of decimal. x86 had <code>daa</code> (decimal adjust) for exactly this until 64-bit mode dropped it; RISC-V has none.</p>
         <div class="try">In HEX mode, set a = 0x38 and b = 0x45: s = 0x83, thirty-eight plus forty-five.</div>`,
       scene: () => ({ root: bcdAdder(2), inputs: { a: 0x38, b: 0x45, cin: 0 } }),
+      more: {
+        derive: `<p>The correction is needed when the 4-bit sum z is 10–15 or the adder carried (16–19). 10–15 are the codes with z₃ = 1 and z₂ or z₁ set,
+          so fix = cout + z₃·(z₂ + z₁): the OR, AND and OR in the digit. Adding 6 = 0110 skips the six unused codes: 8 + 5 = 13 = 1101, + 0110 = 1 0011,
+          digit 3 with a decimal carry.</p>`,
+        real: `<p>IBM mainframes still add packed decimal in hardware (the <code>AP</code> instruction), and POWER and z/Architecture processors have
+          decimal floating point, because banking rules require decimal rounding.</p>`,
+        pitfall: `<p>Checking only "sum &gt; 9" on the 4-bit result misses 9 + 9 = 18: the binary sum is 1 0010, whose low 4 bits (2) look fine.
+          The binary carry out must also trigger the correction.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Make the adder overflow into the next hundred: s = 0x00 with cout = 1.',
         check: (st) => st.value('s') === 0 && st.value('cout') === 1,
