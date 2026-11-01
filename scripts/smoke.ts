@@ -324,7 +324,10 @@ const CLIPPED = `(() => {
 /**
  * A chapter or workbench stage whose bars lost something: the open level's name cut on a one-row top bar (its
  * buttons belong in More: Stage.fitBar), a button past either bar's edge, the run row's buttons cut
- * (Stage.fitControls drops their labels instead). Checked on every route.
+ * (Stage.fitControls drops their labels instead), a top bar that wraps to two rows without being `stacked`, the level badge
+ * over the drawing (the fit keeps it clear: SchematicView.badge), the sandbox's tab strip showing only the open tab beside
+ * others (tabs shrink and More takes actions first: editor.ts fitActions), a phone's level canvas under 40 % of the
+ * screen (level.css). Checked on every route.
  */
 const STAGE_BARS = `(() => {
   const out = [];
@@ -341,7 +344,28 @@ const STAGE_BARS = `(() => {
     }
     const run = bar.querySelector('.ctl-run');
     if (run && run.scrollWidth > run.clientWidth + 1) out.push('stage run bar cut (' + run.scrollWidth + ' px in ' + run.clientWidth + ')');
+    if (bar.matches('.stage-bar') && !bar.classList.contains('stacked') && bar.getBoundingClientRect().height > 64) out.push('stage bar wraps to ' + Math.round(bar.getBoundingClientRect().height) + ' px (not stacked)');
   }
+  const badge = document.querySelector('.stage .canvas > .level-badge');
+  const svg = document.querySelector('.stage .canvas > svg.schematic');
+  if (badge && svg && badge.offsetWidth) {
+    const b = badge.getBoundingClientRect();
+    const under = [...svg.querySelectorAll('rect, path, polygon, circle, text')].filter((e) => {
+      if (e.closest('defs')) return false;
+      const q = e.getBoundingClientRect();
+      return (q.width >= 1 || q.height >= 1) && q.width < 300 && q.height < 300 && q.right > b.left && q.left < b.right && q.bottom > b.top && q.top < b.bottom;
+    }).length;
+    if (under) out.push('level badge over the drawing (' + under + ' shapes)');
+  }
+  const strip = document.querySelector('.sb-top .sb-tabs');
+  if (strip) {
+    const tabs = [...strip.querySelectorAll('.sb-tab')], sr = strip.getBoundingClientRect(), g = strip.querySelector('.sb-new-grp');
+    const end = g ? g.getBoundingClientRect().left : sr.right;
+    const seen = tabs.filter((t) => { const r = t.getBoundingClientRect(); return r.left >= sr.left - 1 && r.right <= end + 1; }).length;
+    if (tabs.length > 1 && seen < 2 && sr.width > 300) out.push('sandbox tab strip shows ' + seen + ' of ' + tabs.length + ' tabs');
+  }
+  const lvc = document.querySelector('.sb-levelmode .sb-canvas');
+  if (lvc && document.documentElement.clientWidth <= 760 && lvc.getBoundingClientRect().height < 0.4 * innerHeight) out.push('phone level canvas only ' + Math.round(lvc.getBoundingClientRect().height) + ' px of ' + innerHeight);
   return out;
 })()`;
 
