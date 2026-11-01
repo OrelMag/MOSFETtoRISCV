@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import { execSync } from 'node:child_process';
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -39,8 +39,26 @@ function yosysFiles(): Plugin {
   };
 }
 
+// The service worker (scripts/sw-template.js): written into dist/ after the build with a version and the list of
+// everything under assets/ (source maps left out) to precache. Not written by vitest or the dev server.
+function serviceWorker(): Plugin {
+  let outDir = 'dist', building = false;
+  const walk = (dir: string, rel = ''): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? walk(join(dir, d.name), `${rel}${d.name}/`) : d.name.endsWith('.map') ? [] : [`${rel}${d.name}`]);
+  return {
+    name: 'service-worker',
+    configResolved(c) { outDir = resolve(c.root, c.build.outDir); building = c.command === 'build' && !process.env.VITEST; },
+    closeBundle() {
+      if (!building || !existsSync(join(outDir, 'assets'))) return;
+      const list = walk(join(outDir, 'assets')).map((f) => `assets/${f}`).sort();
+      const src = readFileSync(fileURLToPath(new URL('./scripts/sw-template.js', import.meta.url)), 'utf8');
+      writeFileSync(join(outDir, 'sw.js'), src.replace('__VERSION__', `${version}-${git('rev-parse --short HEAD', 'dev')}`).replace('__PRECACHE__', JSON.stringify(list)));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [yosysFiles()],
+  plugins: [yosysFiles(), serviceWorker()],
   // Relative base so the built site works from any sub-path (GitHub Pages, a folder on a server, ...)
   base: './',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
