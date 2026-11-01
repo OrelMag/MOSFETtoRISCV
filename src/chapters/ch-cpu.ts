@@ -1,7 +1,7 @@
 import { alu, addSub, bitwise, regfile, shifter } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
-import { stats } from '../sim/stats';
+import { logicDepth, stats } from '../sim/stats';
 import { netlistOf } from '../sim/types';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
@@ -25,6 +25,11 @@ const RF_COST = (() => {
   }
   return { regs, port: ports / 2, dec: rest, total: stats(rf).nands, perBit: regs / (31 * 32) };
 })();
+
+/** Bitwise operations at 32 bits: NANDs a bit and depth, read from the circuit. */
+const BW = Object.fromEntries((['and', 'or', 'xor'] as const).map((op) => [op, { per: stats(bitwise(op, 32)).nands / 32, depth: logicDepth(bitwise(op, 32)) ?? 0 }]));
+/** The 32-bit ALU and its two big parts. */
+const A32 = { nands: stats(alu(32)).nands, depth: logicDepth(alu(32)) ?? 0, add: stats(addSub(32)).nands, addDepth: logicDepth(addSub(32)) ?? 0, sh: stats(shifter(32)).nands, shDepth: logicDepth(shifter(32)) ?? 0 };
 
 function reg(st: Stage, i: number): number {
   const n = st.rootCtx?.node.children?.get(`w${i}`);
@@ -82,8 +87,31 @@ export const chAlu: Chapter = {
         <p>AND, OR and XOR on words are just <span data-show="g0 g1 g2 g3 g4 g5 g6 g7">n independent gates</span>: no carries, no interaction between bit positions,
         depth 2–3 NANDs regardless of width. They cost O(n) area and O(1) delay.</p>
         <p>In RV32I they implement masking (<code>andi</code>), setting bits (<code>ori</code>), toggling and comparing
-        (<code>xor</code>), and <code>not</code> as <code>xori rd, rs, -1</code>.</p>`,
+        (<code>xor</code>), and <code>not</code> as <code>xori rd, rs, -1</code>.</p>
+        <p>The reason is structural: output bit <em>i</em> is a function of a<sub>i</sub> and b<sub>i</sub> alone, so no signal
+        crosses from one bit position to another. Widening the word adds copies of the same cell and no delay. At 32 bits an
+        AND costs ${BW.and.per} NANDs a bit (a NAND and an inverter), an OR ${BW.or.per} (an inverter on each input, then a NAND) and an XOR
+        ${BW.xor.per}, at depths ${BW.and.depth}, ${BW.or.depth} and ${BW.xor.depth}. It is the cheapest block in the ALU, and the one
+        whose 32-bit cost is exactly 32 times the 1-bit cost.</p>`,
       scene: () => ({ root: bitwise('xor', 8), inputs: { a: 0b1100_1010, b: 0b1010_0110 } }),
+      tour: {
+        beats: [
+          { title: 'Where they differ', show: ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'], expect: { y: 0x6c },
+            say: '<p>0xCA ⊕ 0xA6 = <code>{b:y}</code>: a 1 in every position where the inputs differ. Each of the eight gates saw only its own two input bits.</p>' },
+          { title: 'Flip everything', set: { b: 0xff }, expect: { y: 0x35 },
+            say: '<p>With b all ones every gate inverts its a bit: y = ¬a = <code>{b:y}</code>. That is RISC-V\'s <code>not</code>: <code>xori rd, rs, -1</code>, with -1 sign-extended to 32 ones.</p>' },
+          { title: 'Leave alone', set: { b: 0 }, expect: { y: 0xca },
+            say: '<p>With b = 0 each bit passes through unchanged: y = a. In general b is a mask of the bits to toggle.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Cost at 32 bits, from the circuit: AND ${BW.and.per * 32} NANDs, OR ${BW.or.per * 32}, XOR ${BW.xor.per * 32}; a 32-bit ALU's bitwise unit is the three together, ${(BW.and.per + BW.or.per + BW.xor.per) * 32}
+          NANDs, against ${fmt(A32.nands)} for the whole ALU. Depth does not depend on the width: a 64-bit unit is the same ${BW.xor.depth} delays deep and twice the area.</p>`,
+        pitfall: `<p>The logical immediates are sign-extended like every I-type immediate. <code>andi a0, a0, 0x7F0</code> masks with 0x000007F0, but 0x800 does not
+          fit in 12 signed bits (it would read as -2048), and writing <code>andi a0, a0, -16</code> masks with 0xFFFFFFF0. A mask wider than 11 bits needs <code>lui</code> first.</p>`,
+        real: `<p>In a datapath the logic unit is laid out as a bit-slice: 32 or 64 identical cells in a column of wires, so the regularity that makes it cheap
+          here also makes it easy to lay out. SIMD units reuse the same idea: a 256-bit AND is just more slices.</p>`,
+      },
     },
     {
       title: 'The barrel shifter',
@@ -95,8 +123,36 @@ export const chAlu: Chapter = {
         <p>Two tricks keep it to one right-shifter: a left shift is a right shift of the
         <span data-show="rin mr rout mo">bit-reversed word, reversed back</span>, and an arithmetic right shift fills the
         vacated bits with the sign bit instead of 0 (<span data-show="f1 f2"><code>fill = arith ∧ a[n−1]</code></span>).</p>
+        <p>Why log₂ n stages and not n: a shift by <em>s</em> is the composition of shifts by 2<sup>j</sup> for each set bit
+        <em>j</em> of <em>s</em>, and shifts commute, so the stages can be chained in any order and each is either the identity or
+        one fixed permutation of the wires. A shifter that moved one bit per stage would be 31 stages deep. The whole 32-bit unit,
+        both reversal rows and the fill logic included, is ${fmt(A32.sh)} NANDs and ${A32.shDepth} delays: about a third of the ALU's area and a sixth of its
+        depth.</p>
         <div class="try">Set a = 0x96, sh = 3 and toggle <code>left</code> and <code>arith</code>. Open a stage to see the wiring box and the muxes.</div>`,
       scene: () => ({ root: shifter(8), inputs: { a: 0x96, sh: 3, left: 0, arith: 1 } }),
+      tour: {
+        beats: [
+          { title: 'Arithmetic right', show: ['m0', 'm1', 'm2'], expect: { y: 0xf2 },
+            say: '<p>sh = 3 = 2 + 1: the by-1 and by-2 stages are on, the by-4 stage passes through. 0x96 shifted right by 3 with the sign copied in is <code>{b:y}</code>.</p>' },
+          { title: 'Logical right', set: { arith: 0 }, show: ['f1', 'f2'], expect: { y: 0x12 },
+            say: '<p>With arith = 0 the fill bit is 0 instead of a[7]: y = <code>{b:y}</code>. Only the fill logic changed; the muxes did the same work.</p>' },
+          { title: 'Left, by reversal', set: { left: 1 }, show: ['rin', 'mr', 'rout', 'mo'], expect: { y: 0xb0 },
+            say: '<p>left = 1 reverses the input, shifts right, and reverses back: y = <code>{b:y}</code>, which is 0x96 &lt;&lt; 3 kept to 8 bits. The reversals are wires and a row of muxes, not a second shifter.</p>' },
+          { title: 'Shift by zero', set: { sh: 0 }, show: ['m0', 'm1', 'm2'], expect: { y: 0x96 },
+            say: '<p>sh = 0 turns every stage off: y = a = <code>{b:y}</code> in either direction.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Stage <em>j</em> is a row of n 2:1 muxes whose second input is the word moved by 2<sup>j</sup> with the fill bit shifted in. For sh = 3 the data takes the shifted input at
+          stages 0 and 1 and the straight one at stage 2: 0x96 → by 1 → by 2 → 0x12 (logical). The fill for an arithmetic shift is arith ∧ a[n−1], computed once and used by every stage,
+          so a negative number gets ones, not zeros, in all the vacated places. Mux count: n·log₂ n, plus two rows of n for the reversal.</p>`,
+        numbers: `<table class="mini"><tr><th>width</th><th>stages</th><th>NANDs</th><th>depth</th></tr>${[8, 16, 32, 64].map((n) => `<tr><td>${n}</td><td>${Math.log2(n)}</td><td>${fmt(stats(shifter(n)).nands)}</td><td>${logicDepth(shifter(n))}</td></tr>`).join('')}</table>
+          <p>Depth grows by two with each doubling of the width (one more mux stage); area a little more than doubles each time.</p>`,
+        pitfall: `<p>The shift amount is only the low log₂ n bits of rs2: in RV32I <code>sll</code> by 32 is a shift by 0, not zero. A compiler that wants "shift out everything" must test
+          the amount first. The ALU shifter does not saturate, which is also why <code>sra</code> by a large amount never needs a special case.</p>`,
+        real: `<p>Cores use this structure, often with a funnel shifter (a 2n-bit input, n bits out) that serves rotates and both directions in the same
+          log-depth rows. In a fast core the shifter is its own unit beside the adder and its result is picked by the output mux, exactly as the next steps show.</p>`,
+      },
       tries: [(st) => st.getInput('left') === 1 || st.getInput('arith') === 0],
     },
     {
@@ -108,8 +164,34 @@ export const chAlu: Chapter = {
         <ul><li><strong>Z</strong>: result is zero ⇒ a = b (beq/bne)</li>
         <li><strong><span data-show="pin:n">N</span> ⊕ <span data-show="vx">V</span></strong>: the true sign of a − b ⇒ a &lt; b signed (slt, blt). N alone is wrong when the subtraction overflows.</li>
         <li><strong>¬<span data-show="pin:cout">C</span></strong>: no carry out of a + ¬b + 1 ⇒ a &lt; b unsigned (sltu, bltu)</li></ul>
+        <p>Why this is nearly free: the flags are by-products of the subtraction the ALU does anyway. N is the top sum bit (a wire), C
+        the adder's carry out (a wire), V one XOR of the carries into and out of the top bit, and Z a 32-input NOR over the result.
+        Signed and unsigned order differ only in how they read the same 32 bits, so the same subtraction answers both and the
+        instruction picks the flag combination: <code>blt</code> N ⊕ V, <code>bltu</code> ¬C. The cost of a comparison is
+        the adder's, ${A32.add} NANDs and ${A32.addDepth} delays for a 32-bit ripple adder-subtractor, and nothing more.</p>
         <div class="try">Try a = 0x80 (−128), b = 0x01, sub = 1: the result 0x7F looks positive (N = 0) but V = 1, so N ⊕ V = 1: −128 &lt; 1. Correct.</div>`,
       scene: () => ({ root: addSub(8), inputs: { a: 0x80, b: 0x01, sub: 1 } }),
+      tour: {
+        beats: [
+          { title: 'Overflow', show: ['x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7'], expect: { s: 0x7f, cout: 1, v: 1, n: 0 },
+            say: '<p>0x80 − 1: b is inverted and the carry-in is 1. The result is {v:s} (<code>{b:s}</code>), which reads as positive: N = {v:n}. But −128 − 1 does not fit in 8 bits: V = {v:v}, and N ⊕ V = 1 says a &lt; b, correctly.</p>' },
+          { title: 'Plain negative', set: { a: 5, b: 9 }, expect: { s: 0xfc, cout: 0, v: 0, n: 1 },
+            say: '<p>5 − 9 = −4 = 0xFC. No overflow, so N = {v:n} is honest: signed a &lt; b. No carry out ({v:cout}): 5 + ¬9 + 1 fell short of 2⁸, so unsigned a &lt; b too.</p>' },
+          { title: 'Signed and unsigned disagree', set: { a: 0xff, b: 1 }, expect: { s: 0xfe, cout: 1, v: 0, n: 1 },
+            say: '<p>0xFF is −1 signed and 255 unsigned. The difference is {v:s}; N ⊕ V = 1 (−1 &lt; 1) but the carry out is {v:cout} (255 ≥ 1). One subtraction, two answers: <code>slt</code> reads N ⊕ V, <code>sltu</code> reads ¬C.</p>' },
+          { title: 'The same adder adds', set: { sub: 0 }, expect: { s: 0, cout: 1, v: 0, n: 0 },
+            say: '<p>With sub = 0, b is not inverted and the carry-in is 0: 0xFF + 1 = 0 with a carry out. The carry out that meant "no borrow" in a subtraction means "wrapped" here.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>With b inverted and carry-in 1 the adder computes a + (2ⁿ − 1 − b) + 1 = a − b + 2ⁿ. That reaches 2ⁿ, a carry out, exactly when a ≥ b: so C = 1 means a ≥ b unsigned and ¬C means
+          a &lt; b. For the signed case the true difference lies in −2ⁿ … 2ⁿ − 2, and the n-bit result wraps when the operands have different signs and the result's sign differs from a's. That is V. When V = 0 the sign
+          bit N is the sign of a − b; when V = 1 it is inverted; so the sign of the true difference is N ⊕ V.</p>`,
+        pitfall: `<p>Reading N alone for a signed compare works until the operands are far apart: 0x7F − 0x80 and 0x80 − 0x01 both overflow. A comparison that "works on small numbers" and fails on
+          values near ±2<sup>31</sup> is this bug. On the circuit: set a = 0x80, b = 1 and watch n and v disagree.</p>`,
+        real: `<p>Cores with a flags register (x86, ARM) keep N, Z, C, V from every arithmetic instruction and branch on them later. RISC-V has no flags register: the branch itself performs the
+          comparison, which avoids a hidden state that every instruction must update and every pipeline must track.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'For unsigned a < b, the ALU computes a + NOT b + 1 and looks at…',
         options: ['the sign bit of the result', 'carry out = 0', 'overflow = 1', 'zero = 0'], answer: 1,
@@ -132,8 +214,34 @@ export const chAlu: Chapter = {
         and read the flags. With op = R ∨ OP-IMM: ctl[2:0] = op ∧ funct3, ctl[3] = op ∧ funct7[5] ∧ (R ∨ funct3 = 101) ∨ branch.</p>
         <p>Note the cost structure in the Info tab: the shifter and mux trees dominate area; the ripple adder dominates delay.
         That is why <a href="#/c/fastadd/0">a later chapter</a> replaces it with a parallel-prefix adder.</p>
+        <p>At 32 bits the ALU is ${fmt(A32.nands)} NANDs and ${A32.depth} delays deep. The adder-subtractor alone is ${A32.add} NANDs but ${A32.addDepth} of those delays, the shifter
+        ${fmt(A32.sh)} NANDs but only ${A32.shDepth}: the units run in parallel, so the slowest sets the depth, and the multiplexer that picks among them is paid on every
+        operation. Computing everything and selecting wastes energy but not time, and a mux is cheaper than steering the operands.</p>
         <div class="note">ctl: 0000 ADD · 1000 SUB · 0001 SLL · 0010 SLT · 0011 SLTU · 0100 XOR · 0101 SRL · 1101 SRA · 0110 OR · 0111 AND</div>`,
       scene: () => ({ root: alu(8), inputs: { a: 0x80, b: 3, ctl: 0b0101 } }),
+      tour: {
+        beats: [
+          { title: 'Logical right', show: ['shift', 'mux'], expect: { y: 0x10 },
+            say: '<p>ctl = 0101 is SRL: 0x80 &gt;&gt; 3 = {v:y}. Every unit computed something; the multiplexer passed the shifter\'s result.</p>' },
+          { title: 'Arithmetic right', set: { ctl: 0b1101 }, show: ['shift', 'mux'], expect: { y: 0xf0 },
+            say: '<p>ctl[3] = 1 selects SRA: the sign bit is copied into the vacated positions, so y = <code>{b:y}</code>. Same shifter, one more bit of control.</p>' },
+          { title: 'Subtract', set: { ctl: 0b1000 }, show: ['add', 'mux'], expect: { y: 0x7d, neg: 0 },
+            say: '<p>ctl = 1000 is SUB: 0x80 − 3 = {v:y}. The adder-subtractor is the unit now selected; neg = {v:neg}, because the wrapped result is positive.</p>' },
+          { title: 'Set less than', set: { ctl: 0b0010 }, show: ['slt', 'sltu', 'mux'], expect: { y: 1 },
+            say: '<p>SLT: −128 &lt; 3 signed, so y = {v:y}. The result is one bit wide; the mux pads it with zeros.</p>' },
+          { title: '...and unsigned', set: { ctl: 0b0011 }, show: ['slt', 'sltu', 'mux'], expect: { y: 0 },
+            say: '<p>SLTU on the same operands: 128 &lt; 3 is false, so y = {v:y}. The two differ only in which flag is read.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The path through the ALU is the longest unit plus what follows it: the adder-subtractor's ${A32.addDepth} delays, then the flag logic that SLT and SLTU need and the 8:1 select,
+          ${A32.depth} in all. The remaining ${A32.depth - A32.addDepth} delays are that tail, the shifter's ${A32.shDepth} and the logic unit's ${BW.xor.depth} are far behind. That is why replacing the ripple adder
+          is the next chapter's first move.</p>`,
+        pitfall: `<p>Decoding ctl from funct3 alone is the classic bug: <code>add</code> and <code>sub</code> share funct3 = 000 and differ only in funct7[5]; <code>srl</code> and
+          <code>sra</code> likewise. In the OP-IMM form the same bit is part of the immediate, so passing it blindly turns <code>addi a0, a0, -1</code> into a subtraction. Try ctl = 1000 and 0000 above.</p>`,
+        real: `<p>Wide cores replicate this: several ALUs, a separate shifter and a multiplier with its own pipeline, selected per issue slot. The flags are still the adder's; real designs
+          also speed up the "zero" result for branches by computing equality directly instead of waiting for the subtraction.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Make the ALU compute 0x80 shifted right arithmetically by 3 (result 0xF0).',
         check: (st) => st.getInput('ctl') === 0b1101 && st.getInput('a') === 0x80 && st.getInput('b') === 3 && st.value('y') === 0xf0,
@@ -201,8 +309,35 @@ export const chRegfile: Chapter = {
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
         That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
+        <p>Why two read ports and one write port: the commonest instruction, <code>add rd, rs1, rs2</code>, reads two registers and writes one, and a single-cycle
+        machine does all three in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
+        A write must change state, so it happens only at the rising edge and only where the decoder and <code>we</code> enable one register. Reading a register while writing it gives the old
+        value until the edge, which is what a single-cycle machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
         <div class="try">Write a value: set wa, wd, we = 1, Pulse. Then point ra1 / ra2 at it.</div>`,
       scene: () => ({ root: regfile(3, 8), inputs: { wa: 5, wd: 0x42, we: 1, clk: 0, ra1: 5, ra2: 0 }, panels: [memGridPanel] }),
+      tour: {
+        beats: [
+          { title: 'Before the write', reset: true, show: ['dec', 'rp1'], expect: { rd1: 0, rd2: 0 },
+            say: '<p>Register 5 holds nothing yet, and port 1 is already pointed at it (ra1 = 5): rd1 = {v:rd1}. wa = 5, wd = 0x42 and we = 1 are set up, but nothing is stored until a clock edge.</p>' },
+          { title: 'The edge', cycles: 1, show: ['dec', 'rp1'], expect: { rd1: 0x42 },
+            say: '<p>One rising edge: the decoder enabled register 5 only, and it captured wd. Read port 1 shows {v:rd1} straight away: the read path has no clock.</p>' },
+          { title: 'Second port', set: { ra2: 5 }, show: ['rp2'], expect: { rd1: 0x42, rd2: 0x42 },
+            say: '<p>Point port 2 at the same register: rd2 = {v:rd2}. The two ports are independent mux trees over the same storage, so any two registers, or the same one twice, can be read in one cycle.</p>' },
+          { title: 'Write disabled', set: { we: 0, wd: 0x99 }, cycles: 1, expect: { rd1: 0x42 },
+            say: '<p>With we = 0 the edge changes nothing: the decoder enables no register, so wd = 0x99 is ignored and rd1 stays {v:rd1}.</p>' },
+          { title: 'Register zero', set: { we: 1, wa: 0, wd: 0x77, ra2: 0 }, cycles: 1, show: ['x0'], expect: { rd2: 0 },
+            say: '<p>Writing x0 goes nowhere: it has no flip-flops, and its slot on the read bus is a constant. Port 2, pointed at register 0, still reads {v:rd2}.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>One register of 8 bits is 8 enable flip-flops. The write decoder turns a 3-bit address into one of 8 enables, the bundle puts all 8 words side by side on one bus, and each read port is an 8:1 mux
+          per bit, three stages of 2:1 muxes. Scaled to 32 registers of 32 bits the structure is the same and the next step prices it: the storage grows with the number of registers, the ports with
+          registers × width × ports.</p>`,
+        pitfall: `<p>An instruction that reads a register another instruction is writing in the same cycle sees the old value. That is correct here and a bug in a pipeline, where the writer is three stages
+          past the reader: the pipelined chapter adds a bypass for exactly this case. If a value "does not arrive" in the register file, check whether the write has happened at an edge yet.</p>`,
+        real: `<p>Real register files are SRAM-like arrays with the read ports built in, usually written in the first half of the cycle and read in the second so that a write and a read of the same register
+          in one cycle can see each other. The mux-tree form here is correct but about as expensive as storage gets.</p>`,
+      },
       tries: [(st) => st.getInput('ra2') !== 0 && st.value('rd2') > 0],
       challenge: {
         kind: 'reach', goal: 'Store 0x42 in register 5 and read it on read port 2 (rd2 = 0x42).',
@@ -222,8 +357,27 @@ export const chRegfile: Chapter = {
         <span data-show="dec">5→32 write decoder</span> and two <span data-show="rp1 rp2">32:1 multiplexer trees</span> of
         32-bit words. At this site's construction that is ${fmt(RF_COST.regs)} NANDs of registers (${RF_COST.perBit} per bit: a flip-flop with enable), ${fmt(RF_COST.port)} per read port and ${fmt(RF_COST.dec)} for the decoder: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU.</p>
         <p>Real designs use custom multi-ported SRAM cells: an extra read port costs two transistors per bit, not a whole
-        mux tree. Register-file port count is a first-order cost in superscalar cores for exactly this reason.</p>`,
+        mux tree. Register-file port count is a first-order cost in superscalar cores for exactly this reason.</p>
+        <p>The split is worth reading: ${Math.round((100 * RF_COST.regs) / RF_COST.total)} % of the NANDs are the storage itself, ${Math.round((200 * RF_COST.port) / RF_COST.total)} % the two read ports and the decoder under
+        ${Math.round((100 * RF_COST.dec) / RF_COST.total)} %. The registers are the part you cannot avoid; the ports are the part that grows with ambition. Doubling the issue width of a core roughly
+        doubles the ports and, because each port also fans out to more storage, grows the file much faster than the instruction count it serves.</p>
+        <div class="try">Set wa = 10, wd = 0xCAFE, we = 1 and Pulse, then open <code>rp1</code>: each output bit comes from a tree of 31 2:1 muxes, five levels deep.</div>`,
       scene: () => ({ root: regfile(5, 32), inputs: { wa: 10, wd: 0xcafe, we: 1, clk: 0, ra1: 10, ra2: 0 } }),
+      more: {
+        derive: `<p>Storage: 31 registers × 32 bits × ${RF_COST.perBit} NANDs (a flip-flop with enable) = ${fmt(RF_COST.regs)}. One read port: 31 MUX2 per bit × 32 bits at ${RF_COST.port / (31 * 32)} NANDs = ${fmt(RF_COST.port)}.
+          Two ports: ${fmt(2 * RF_COST.port)}. The decoder and the bundling add ${fmt(RF_COST.dec)}. Total ${fmt(RF_COST.total)}.</p>
+          <p>A third read port adds ${fmt(RF_COST.port)} more, about ${Math.round((100 * RF_COST.port) / RF_COST.total)} % on top, and no storage. In the single-cycle CPU a third port would serve nothing; in a core that issues
+          several instructions per cycle every one of them wants two.</p>`,
+        numbers: `<table class="mini"><tr><th>part</th><th>NANDs</th><th>share</th></tr>
+          <tr><td>31 registers</td><td>${fmt(RF_COST.regs)}</td><td>${Math.round((100 * RF_COST.regs) / RF_COST.total)} %</td></tr>
+          <tr><td>2 read ports</td><td>${fmt(2 * RF_COST.port)}</td><td>${Math.round((200 * RF_COST.port) / RF_COST.total)} %</td></tr>
+          <tr><td>decoder, bundle</td><td>${fmt(RF_COST.dec)}</td><td>${Math.round((100 * RF_COST.dec) / RF_COST.total)} %</td></tr></table>`,
+        real: `<p>A 6-transistor SRAM cell stores a bit in six transistors against this design's ${RF_COST.perBit * 4} a bit (${RF_COST.perBit} NANDs of four transistors each). A register-file cell with two read ports and one write port is
+          about ten, because each read port adds two transistors (a pass gate and its enable) instead of a whole tree. That is the saving the paragraph above describes: ports in custom cells are cheap, and ports
+          in gates are not.</p>`,
+        pitfall: `<p>Do not read the register file's NAND count as the cost of "32 registers" in general: it is the cost of this construction. Changing from 2 to 3 read ports or from 32 to 16 registers moves the
+          total by tens of percent, and a custom array changes the whole shape of the answer.</p>`,
+      },
     },
   ],
 };
@@ -284,9 +438,24 @@ export const chIsa: Chapter = {
         fewer multiplexer inputs per bit.</p>
         <p>Under the word, the immediate is rebuilt bit by bit the way the hardware does it: each result bit is a wire
         from one instruction bit, a copy of bit 31 (dashed), or ground. No gates.</p>
+        <p>The six formats: <strong>R</strong> (three registers: <code>add</code>), <strong>I</strong> (a register and a 12-bit immediate: <code>addi</code>, loads,
+        <code>jalr</code>), <strong>S</strong> (two registers and a split immediate: stores), <strong>B</strong> (the same for branches, offset in halfwords),
+        <strong>U</strong> (a 20-bit upper immediate: <code>lui</code>, <code>auipc</code>) and <strong>J</strong> (<code>jal</code>, a 20-bit offset). Four are the
+        same few fields in different proportions. What the encoding does not spend is bits on decoding: with the sign always at bit 31, sign extension is one fan-out wire
+        and does not wait for the format to be known, and funct3 and funct7 stay put so the ALU control can start from them before the opcode has been decoded.</p>
+        <p>The cost shows up here and nowhere else. A B-type immediate takes bits from four places of the word, and the immediate generator is, per output bit, a selection among the formats driven by
+        the opcode, plus wiring. A simpler layout would have made the assembler easier to write and the hardware slower.</p>
         <div class="try">Pick <code>beq</code> and drag its offset: bit 12 of the offset lands in instruction bit 31, bit 11 in bit 7.
         Then flip bit 30 of an <code>add</code>, or any bit of the opcode, and see what the decoder makes of it.</div>`,
       widget: () => instructionExplorer(),
+      more: {
+        derive: `<p>Encode <code>beq x1, x2, +16</code>: the offset 16 = 0b1_0000 has only imm[4] set. In a B-type word imm[4:1] sits in instruction bits 11:8, imm[4] on top, so bit 11 of the word is 1 beside the
+          fixed fields. Decoding reverses it: imm[12] = inst[31], imm[11] = inst[7], imm[10:5] = inst[30:25], imm[4:1] = inst[11:8], imm[0] = 0. Four slices of the word, one constant, and the sign taken from bit 31.</p>`,
+        pitfall: `<p>Forgetting that the offset counts from the branch itself and is stored without bit 0: a hand-encoded <code>beq</code> with the offset in bytes shifted left one place lands twice as far as intended.
+          The explorer shows the same bits two ways; check that the decoded offset and the one you meant agree.</p>`,
+        real: `<p>RISC-V chose this layout after the MIPS and Alpha experience: the immediate generator is a small part of the decode path. The compressed (C) extension reuses the fields for 16-bit forms, so
+          the same decoder sees both. ARM's A32 spends its bits differently, on conditional execution of every instruction, and its decode is correspondingly heavier.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',
         options: ['To reach farther', 'To support the 16-bit compressed (C) extension without a new encoding', 'Because bit 0 is used for the condition'], answer: 1,
@@ -299,22 +468,26 @@ export const chIsa: Chapter = {
       body: `
         <p>The assembler turns text into those words in two passes: pass 1 assigns addresses to labels (pseudo-instructions
         like <code>li</code> may expand to two words, <code>lui</code> + <code>addi</code>), pass 2 encodes.</p>
-        <details class="deeper"><summary>Deeper: addresses and constants, the details that bite</summary>
-        <p><strong>PC-relative to the instruction itself.</strong> A branch or <code>jal</code> at address A jumps to
-        A + offset, not A + 4 + offset (MIPS and ARM count from the next instruction): <code>beq</code> at 0x100 with offset 16
-        lands on 0x110.</p>
-        <p><strong>Every I-type immediate is sign-extended</strong>, logical ones too: <code>andi a0, a0, -16</code> masks
-        with 0xFFFF_FFF0, <code>xori rd, rs, -1</code> is <code>not</code>, <code>sltiu rd, rs, -1</code> compares (unsigned) with 0xFFFF_FFFF,
-        and a mask such as 0x800 does not fit at all (−2048 … 2047).</p>
-        <p><strong>lui + addi rounds.</strong> addi adds a signed 12-bit value, so the upper part is (v + 0x800) &gt;&gt; 12:
-        <code>li a0, 0x12845</code> becomes <code>lui a0, 0x13</code>; <code>addi a0, a0, -1979</code>.</p>
-        <p><strong>auipc for addresses.</strong> <code>la a0, sym</code> is <code>auipc a0, hi</code>; <code>addi a0, a0, lo</code>
-        and <code>call f</code> is <code>auipc ra, hi</code>; <code>jalr ra, lo(ra)</code>, both from the distance to the
-        symbol, rounded the same way: position-independent code with ±2 GiB reach, where <code>jal</code> reaches ±1 MiB.</p></details>
+        <p>Why two passes: a branch to a label further down cannot be encoded until the label's address is known, and an address depends on how many words
+        every earlier line expands to. Pass 1 only counts and records labels; pass 2, with every address fixed, encodes. A pseudo-instruction whose size depends on its operand
+        (<code>li</code> with a constant that does not fit 12 bits) is why pass 1 must know the size before it knows the encoding.</p>
         <p>The result runs immediately on an <strong>instruction-set simulator</strong>, written directly from the
-        specification. The gate-level CPU in the next chapter is checked against it after every clock cycle.</p>
+        specification. The gate-level CPU in the next chapter is checked against it after every clock cycle: the simulator is
+        the definition of what the hardware must do, and a disagreement on any register after any instruction is a hardware bug.</p>
         <div class="try">Edit the program: errors show up with their line numbers, and the machine code updates as you type.</div>`,
       widget: () => assemblerWorkspace(src('sum')),
+      more: {
+        derive: `<p><strong>lui + addi rounds.</strong> addi adds a signed 12-bit value, so the upper part is (v + 0x800) &gt;&gt; 12: <code>li a0, 0x12845</code> becomes <code>lui a0, 0x13</code>;
+          <code>addi a0, a0, -1979</code> (0x13000 − 0x7BB = 0x12845). <strong>auipc for addresses.</strong> <code>la a0, sym</code> is <code>auipc a0, hi</code>; <code>addi a0, a0, lo</code> and
+          <code>call f</code> is <code>auipc ra, hi</code>; <code>jalr ra, lo(ra)</code>, both from the distance to the symbol, rounded the same way: position-independent code with ±2 GiB reach,
+          where <code>jal</code> reaches ±1 MiB.</p>`,
+        pitfall: `<p><strong>PC-relative to the instruction itself.</strong> A branch or <code>jal</code> at address A jumps to A + offset, not A + 4 + offset (MIPS and ARM count from the next instruction):
+          <code>beq</code> at 0x100 with offset 16 lands on 0x110. <strong>Every I-type immediate is sign-extended</strong>, logical ones too: <code>andi a0, a0, -16</code> masks with 0xFFFF_FFF0,
+          <code>xori rd, rs, -1</code> is <code>not</code>, <code>sltiu rd, rs, -1</code> compares (unsigned) with 0xFFFF_FFFF, and a mask such as 0x800 does not fit at all (−2048 … 2047).
+          Assemble these in the editor above and read the words back.</p>`,
+        real: `<p>Production assemblers also relax branches (a short form when the target is near, a long form otherwise), emit relocations for the linker to patch, and handle sections and
+          alignment. This one resolves everything in two passes because a program here is one file; the principle, count then encode, is the same.</p>`,
+      },
     },
   ],
 };
@@ -397,12 +570,36 @@ export const chSingleCycle: Chapter = {
         <p>Click a program line: its <strong>fields</strong> appear in the panel and the wires that carry them take the
         same colours (opcode to the control unit, rd to the write address, and so on). Point at a field to follow only
         its wires; open <code>imm</code> or <code>ctl</code> and the colours follow you inside.</p>
-        <details class="deeper"><summary>Deeper: Slow, and a clock edge one gate at a time</summary>
-        <p><strong>Slow</strong> runs the program at the speed you set, keeping the current instruction's hardware lit
-        and logging each retired instruction in the trace. At the <em>gate</em> level each rising edge plays out one
-        NAND delay at a time: the new PC leaves its register, fetches the next instruction, which is decoded and
-        executed until the result waits at the register file's inputs. That longest ripple sets the clock period.</p></details>`,
+        <p>Two registers carry state across a cycle: the PC and the register file (and the data memory on a store). Everything else is combinational, a function of those,
+        so one instruction is one pass of signals through a few thousand gates, and the clock only has to wait until they settle. That is the whole design:
+        the next chapters change how long the wait is and how many instructions share it, not what the instruction does.</p>
+        <p>Program order is the PC's job: it normally steps by 4, and a branch or jump replaces the +4 with a target. Instruction memory is a ROM read by the PC with no clock,
+        so the instruction is already on the wires when the cycle begins, and the edge at its end commits the PC, the register write and any store together.</p>`,
       scene: () => cpuScene({ source: src('sum') }),
+      tour: {
+        beats: [
+          { title: 'Fetch', reset: true, show: ['pc', 'imem'], expect: { pcOut: 0, aluOut: 0 },
+            say: '<p>Power on: the PC is {v:pcOut}, and the ROM, which has no clock, is already showing the word at that address on <code>instrOut</code> ({b:instrOut}). The first instruction is <code>li a0, 0</code>.</p>' },
+          { title: 'Execute', cycles: 1, show: ['rf', 'imm', 'alu'], expect: { pcOut: 4, aluOut: 1 },
+            say: '<p>One rising edge: the PC took PC + 4 = {v:pcOut} and a0 was written. The new instruction is <code>li t0, 1</code>, really <code>addi t0, zero, 1</code>: the register file reads x0, the immediate generator builds 1, and the ALU adds them: {v:aluOut}.</p>' },
+          { title: 'A register operation', cycles: 2, show: ['rf', 'alu', 'res'], expect: { pcOut: 12, aluOut: 1 },
+            say: '<p>At {v:pcOut} is the first instruction of the loop, <code>add a0, a0, t0</code>: both operands now come from the register file, a0 = 0 and t0 = 1, and the ALU gives {v:aluOut}. The result mux sends it back to the register file, to be written at the next edge.</p>' },
+          { title: 'A branch decides', cycles: 2, show: ['alu', 'npc'], expect: { pcOut: 20 },
+            say: '<p>At {v:pcOut}, <code>bne t0, t1, loop</code>: the ALU subtracts t0 − t1 = 2 − 11 = −9 (0xFFFFFFF7), which is not zero, so the next-PC logic will not use PC + 4.</p>' },
+          { title: 'The PC jumps back', cycles: 1, show: ['target', 'pcmux'], expect: { pcOut: 12 },
+            say: '<p>The PC is {v:pcOut} again, not 24: the select chose the branch-target adder (PC + imm<sub>B</sub>) over PC + 4. The loop runs nine more times, one cycle per instruction.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>A cycle's length is the longest path from a state element to a state element. For this machine that is PC → instruction memory → decode and immediate → ALU → next-PC select → PC,
+          or the same through the data memory for a load: about 155 NAND delays with ripple adders. Cycles for a program = instructions executed, since each takes exactly one, so the program's time
+          is instructions × 155 delays whatever mix it has. The pipeline of chapter 17 attacks both factors.</p>`,
+        pitfall: `<p>Judging the machine by the program text: a loop is one block of code and many cycles. The Pulse counter and the PC tell the truth. Count cycles as instructions executed, and a
+          taken branch as one cycle, not two: the single-cycle machine pays nothing extra for a taken branch; a pipeline does.</p>`,
+        real: `<p>Almost no shipping core is single-cycle: even small microcontroller cores split the datapath over two or three stages, and this design is where they start. The panel's Slow button
+          plays an edge one gate delay at a time at the gate level: the new PC leaves its register, the instruction is fetched and decoded, and the result
+          waits at the register file's inputs. That longest ripple sets the clock period.</p>`,
+      },
     },
     {
       title: 'ALU instructions',
@@ -415,8 +612,34 @@ export const chSingleCycle: Chapter = {
         become a subtraction. Only <code>srai</code> (funct3 = 101) passes it on. Loads, stores, <code>jalr</code> and
         <code>auipc</code> get ADD, branches SUB, whatever their funct3: a few gates in the
         <span data-show="ctl">control unit</span>.</p>
+        <p>The point of the control unit is how little it does for these instructions: it reads the opcode and funct bits and asserts a handful of one-bit signals, each of which
+        steers one multiplexer or enables one write. The same datapath serves <code>add</code> and <code>addi</code>, differing only in whether the second operand mux takes rs2 or the
+        immediate. Nothing is decoded twice, and nothing is chosen by a sequence of steps: the signals are a lookup on the instruction bits.</p>
         <div class="try">Pulse through the program and watch the highlighted path: <span data-show="rf">register file</span> → ALU → result mux → back into the register file.</div>`,
       scene: () => cpuScene({ source: RTYPE, highlight: ['rf', 'srcA', 'srcB', 'alu', 'res', 'imm'] }),
+      tour: {
+        beats: [
+          { title: 'Constants into registers', reset: true, show: ['imm', 'srcB', 'alu'], expect: { pcOut: 0, aluOut: 7 },
+            say: '<p><code>li a0, 7</code> is <code>addi a0, zero, 7</code>: ALUSrcB selects the immediate, the ALU adds it to x0\'s 0 and gets {v:aluOut}. The same happens for <code>li a1, 5</code> next.</p>' },
+          { title: 'add: two registers', cycles: 2, show: ['rf', 'srcA', 'srcB', 'alu'], expect: { pcOut: 8, aluOut: 12 },
+            say: '<p><code>add a2, a0, a1</code>: ALUSrcB now selects rs2. 7 + 5 = {v:aluOut}. ALUControl is {funct7[5], funct3} = 0000.</p>' },
+          { title: 'sub: one bit different', cycles: 1, show: ['alu', 'ctl'], expect: { pcOut: 12, aluOut: 2 },
+            say: '<p><code>sub a3, a0, a1</code> differs from <code>add</code> in instruction bit 30 alone, which is ALUControl[3]: the ALU subtracts and gets {v:aluOut}.</p>' },
+          { title: 'A shift by immediate', cycles: 2, show: ['imm', 'alu'], expect: { pcOut: 20, aluOut: 56 },
+            say: '<p><code>slli a5, a0, 3</code> at {v:pcOut}: the shift amount rides in the immediate field, the ALU\'s shifter moves 7 left three places and gets {v:aluOut}.</p>' },
+          { title: 'Compare', cycles: 1, show: ['alu'], expect: { pcOut: 24, aluOut: 1 },
+            say: '<p><code>slt a6, a1, a0</code>: 5 &lt; 7, so the ALU result is {v:aluOut}. The comparison is the subtraction\'s flag, not a comparator.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Signals for the instructions here, from the opcode: add / sub / and / slt (R-type): RegWrite 1, ALUSrcB 0, ResultSrc ALU, MemWrite 0, ALUControl {funct7[5], funct3}.
+          addi / slli (OP-IMM): ALUSrcB 1, ImmSrc I, ALUControl {0, funct3} except <code>srai</code>. The two rows differ in two signals, which is why the control unit is mostly an OR of a few opcode
+          decodes. Each signal is a function of the opcode's seven bits (and, for the ALU, funct3 and bit 30), so each is a small block of gates one level deep after the decoder.</p>`,
+        pitfall: `<p>Reading bit 30 as "subtract" everywhere: in an I-type word it is immediate bit 10, so <code>addi a0, a0, -1</code> has bit 30 set and must still add. The control passes bit 30 on
+          only for R-type and for <code>srai</code>, and for loads, stores, <code>jalr</code> and <code>auipc</code> it forces ADD whatever the instruction bits are.</p>`,
+        real: `<p>Hardwired decode like this is how every RISC core works. Microcoded machines (the 6502, early x86) look instructions up in a ROM and take several cycles; the multicycle chapter compares
+          the two on this instruction set.</p>`,
+      },
       tries: [(st) => { try { return st.sim ? cpuState(st.sim).x[16] === 1 : false; } catch { return false; } }],
     },
     {
@@ -427,8 +650,33 @@ export const chSingleCycle: Chapter = {
         <code>lw</code>: same address computation, ResultSrc = memory (the <span data-show="res">result mux</span> passes the loaded word). On paper that is the longest path:
         clock → PC → instruction memory → register file → ALU (32-bit ripple add) → data-memory read mux → result mux → register
         file input. <a href="#/c/fastadd/0">Chapter 16</a> measures this machine and finds a surprise.</p>
+        <p>Both use the ALU as an address adder, and that reuse is why the immediate formats differ: I-type for the load (rs1 + imm<sub>I</sub>), S-type for the store
+        (rs1 + imm<sub>S</sub>), with the same rs1 and the same ALU operation. A store has no destination register, so the 5 bits that would hold rd carry the low immediate bits
+        and RegWrite stays 0. The data memory reads asynchronously like the instruction memory, so a load's data is on the result mux within the cycle; a store changes memory only at the edge.</p>
         <div class="try">Pulse to the <code>lw</code> and compare the status bar's "settled in N gate delays" with an <code>addi</code>.</div>`,
       scene: () => cpuScene({ source: MEMOPS, highlight: ['alu', 'dm', 'res'] }),
+      tour: {
+        beats: [
+          { title: 'A value to store', reset: true, show: ['alu', 'imm'], expect: { pcOut: 0, aluOut: 42 },
+            say: '<p><code>li t0, 42</code>: the ALU puts {v:aluOut} on its output and the result mux sends it to t0.</p>' },
+          { title: 'sw: the address', cycles: 1, show: ['alu', 'dm'], expect: { pcOut: 4, aluOut: 8 },
+            say: '<p><code>sw t0, 8(zero)</code>: the ALU adds rs1 (x0 = 0) and imm<sub>S</sub> (8) and gets the address {v:aluOut}. rs2 = t0 goes to the data memory as the data, MemWrite = 1, and the write happens at the edge.</p>' },
+          { title: 'lw: the same address', cycles: 1, show: ['alu', 'dm', 'res'], expect: { pcOut: 8, aluOut: 8 },
+            say: '<p><code>lw t1, 8(zero)</code> computes the same address, {v:aluOut}. ResultSrc selects the memory\'s output, not the ALU\'s: t1 gets 42 at the next edge.</p>' },
+          { title: 'Used immediately', cycles: 1, show: ['rf', 'alu'], expect: { pcOut: 12, aluOut: 43 },
+            say: '<p><code>addi t1, t1, 1</code> reads t1 = 42 and the ALU gives {v:aluOut}. There is no load-use delay in this machine: the loaded value was written at the previous edge.</p>' },
+          { title: 'Another word', cycles: 1, show: ['alu', 'dm'], expect: { pcOut: 16, aluOut: 12 },
+            say: '<p><code>sw t1, 12(zero)</code> stores 43 at address {v:aluOut}. The memory holds 42 at 8 and 43 at 12.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The load's path is the longest of the simple instructions: clock → PC → instruction memory → decode and immediate → ALU add → data-memory address decode and read mux → result mux → register file input.
+          Every stage is a series term, so lw costs the sum, and add costs the sum without the memory term. The clock must fit lw, so add idles for the length of the data-memory read.</p>`,
+        pitfall: `<p>An offset is signed and in bytes. <code>lw t1, 8(zero)</code> addresses byte 8, which is word 2 of the memory; the panel shows words, and the first time the address looks "off by four" it
+          is this. A store\'s immediate is split in the word (imm[11:5] at the top, imm[4:0] where rd would be), so reading it off the hex by eye mis-reads it.</p>`,
+        real: `<p>On a real machine this step is where most of the time goes: a load goes to a cache whose hit takes several cycles and a miss takes hundreds. The "memory in one cycle" abstraction is only true
+          because this design\'s memories are logic; the memory chapters replace it with a hierarchy.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
@@ -444,8 +692,32 @@ export const chSingleCycle: Chapter = {
         PC + imm<sub>B</sub> from a <span data-show="target">dedicated adder</span>.</p>
         <p><code>jal</code> writes PC+4 to rd and jumps to PC + imm<sub>J</sub>; <code>jalr</code> jumps to (rs1 + imm) with bit 0 cleared:
         a <span data-show="clr0">wiring box</span> that ties bit 0 to ground. This program calls a function with <code>jal</code> and returns with <code>ret</code>
-        (= <code>jalr zero, 0(ra)</code>).</p>`,
+        (= <code>jalr zero, 0(ra)</code>).</p>
+        <p>The branch decision is the longest chain in the machine: the flags depend on the whole subtraction, and only then can the next-PC logic pick between PC + 4 and the target. That is why the
+        target has its own adder, computed in parallel with the ALU\'s subtraction instead of after it: when the flags arrive, both candidate PCs are ready and only a multiplexer is left.</p>`,
       scene: () => cpuScene({ source: src('gcd'), highlight: ['npc', 'target', 'pcmux', 'clr0'] }),
+      tour: {
+        beats: [
+          { title: 'Arguments', reset: true, show: ['alu'], expect: { pcOut: 0, aluOut: 1071 },
+            say: '<p>Two <code>li</code> set up a0 = 1071 and a1 = 462, the numbers whose gcd we want.</p>' },
+          { title: 'jal: call', cycles: 2, show: ['target', 'pcmux'], expect: { pcOut: 8 },
+            say: '<p><code>jal ra, gcd</code> at {v:pcOut}: the result mux sends PC + 4 = 12 to ra, and the next PC is PC + imm<sub>J</sub>, the address of <code>gcd</code>.</p>' },
+          { title: 'Inside the function', cycles: 1, show: ['pc'], expect: { pcOut: 20 },
+            say: '<p>The PC is {v:pcOut}: execution continues at <code>gcd</code>, and ra remembers where to come back to.</p>' },
+          { title: 'Not equal, not less', cycles: 1, show: ['alu', 'npc'], expect: { pcOut: 24, aluOut: 609 },
+            say: '<p><code>beq a0, a1, done</code> subtracted 1071 − 462 = 609 and found it non-zero, so it fell through to PC + 4. At {v:pcOut}, <code>bltu</code> subtracts again: {v:aluOut}, and the unsigned compare says a0 is not smaller.</p>' },
+          { title: 'Loop by jumping back', cycles: 3, show: ['target', 'pcmux'], expect: { pcOut: 20, aluOut: 147 },
+            say: '<p><code>sub a0, a0, a1</code> made a0 = 609 and <code>j gcd</code> jumped back to {v:pcOut}. The comparison now gives 609 − 462 = {v:aluOut}. The loop continues until a0 = a1 = 21.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Taken or not: PCSrc = Branch ∧ cond ∨ Jump, where cond is selected by funct3 from Z, N⊕V, ¬C and their complements. With cond ready, the next PC is a 2:1 mux between PC + 4 and PC + imm<sub>B</sub>
+          (jal uses imm<sub>J</sub>, jalr the ALU\'s rs1 + imm). Path length: the subtraction, then the flag, then the select; the target adder runs beside the ALU, so it adds nothing to the path.</p>`,
+        pitfall: `<p>Reading <code>ret</code> as a special instruction. It is <code>jalr zero, 0(ra)</code>: rd = x0 (the link is discarded), target = ra + 0 with bit 0 cleared. If a function never
+          saves ra and calls another, its own <code>ret</code> returns to the wrong place: look at ra after the second <code>jal</code>.</p>`,
+        real: `<p>This is the part pipelines spend the most hardware on. A taken branch redirects the PC late in the cycle, and in a pipeline that is several instructions already fetched: predictors, target buffers and
+          return stacks (chapters 17 and 18) all exist to avoid waiting for this decision.</p>`,
+      },
     },
     {
       title: 'Run real programs',
@@ -453,8 +725,32 @@ export const chSingleCycle: Chapter = {
         <p>Pick a program in the panel, or write your own with <strong>Edit</strong>. <strong>Run to halt</strong> clocks the
         gate-level machine as fast as your browser allows, about 200 cycles per second for ~200 000 transistors.</p>
         <p>Supported: all of RV32I except byte/halfword loads and stores, <code>fence</code>, <code>ecall</code>, <code>ebreak</code>.
-        A jump to itself is treated as halt.</p>`,
+        A jump to itself is treated as halt.</p>
+        <p>What this checks is the point of the exercise. After every clock cycle the panel compares all 32 registers, the PC and the memory with the instruction-set simulator, which was written
+        from the specification and shares no code with the gates. A program that halts with the right answer has had every one of its instructions compared, not only its result.
+        Anything the hardware gets wrong in a way the program exercises shows up at the first cycle where they differ.</p>`,
       scene: () => cpuScene({ source: src('fib'), editable: true }),
+      tour: {
+        beats: [
+          { title: 'Setup', reset: true, show: ['pc', 'rf'], expect: { pcOut: 0 },
+            say: '<p>Fibonacci starts by loading four registers: fib(n−2) = 0, fib(n−1) = 1, an address, and the limit 48 (12 words of 4 bytes).</p>' },
+          { title: 'First store', cycles: 4, show: ['dm', 'alu'], expect: { pcOut: 16, aluOut: 0 },
+            say: '<p>After four <code>li</code> the loop starts at {v:pcOut}: <code>sw t0, 0(t2)</code> will store fib(0) at address {v:aluOut}.</p>' },
+          { title: 'One iteration', cycles: 5, show: ['alu', 'npc'], expect: { pcOut: 36, aluOut: 0xffffffd4 },
+            say: '<p>Five instructions later the loop ends in <code>blt t2, t3</code> at {v:pcOut}: t2 is 4, t3 is 48, and the ALU\'s 4 − 48 = −44 is negative, so the branch is taken.</p>' },
+          { title: 'Again', cycles: 1, show: ['pc'], expect: { pcOut: 16 },
+            say: '<p>The PC is {v:pcOut} again and the second word is about to be stored. Eleven more passes fill the memory view with the first twelve Fibonacci numbers.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Cycle count of the program: four setup instructions, 6 per iteration × 12 iterations, one final jump to itself: 4 + 72 + 1 = 77 instructions, and 77 cycles, since each takes one. The
+          challenge says "about 75" for that reason. At roughly 200 cycles per second in the browser, the run takes under half a second; at the 155-delay period and the illustrative 25 ps a delay of chapter 16, a cycle is about
+          4 ns and the whole run about 0.3 µs.</p>`,
+        pitfall: `<p>A program that "works" on the simulator and not on the gates, or the reverse, almost always uses an instruction the hardware leaves out: byte and halfword accesses, <code>fence</code>,
+          <code>ecall</code>. The panel stops at the first mismatch and names the register: start there, not at the end of the run.</p>`,
+        real: `<p>Hardware designers verify this way: a golden model, random and directed programs, and a comparison after every retirement. The same method scales to full cores: this site\'s CPUs are also run through the official riscv-tests suite, and the golden model itself is
+          checked against Spike, the RISC-V reference simulator.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Run the Fibonacci program until it halts (fib[11] = 89 in memory).',
         check: (st) => { try { return st.sim ? cpuState(st.sim).dmem[11] === 89 : false; } catch { return false; } },
