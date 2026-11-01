@@ -9,7 +9,7 @@ import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
-import { Camera, installPanZoom, underCover, type ViewBox } from './camera';
+import { Camera, fitBox, installPanZoom, underCover, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -109,6 +109,9 @@ export class SchematicView {
   flowMs = 0;
   /** Screen rectangles (from the canvas's corner) the stage's panels cover; fit() keeps the circuit clear of them. */
   cover: Rect[] = [];
+  /** A small badge over the canvas's corner (the stage's level label), as a rectangle in the same px: the fit leaves it
+   *  clear only when the circuit, fitted without it, would reach under it (a corner nothing draws in costs no room). */
+  badge: (() => Rect | null) | null = null;
   /**
    * The learner's layout (view/layout.ts): true, parts and wires can be dragged and pointers unravelled (the stage);
    * 'wires', only wires and pointers, the parts stay put (the sandbox's look inside, the codex); false, as authored.
@@ -1203,7 +1206,17 @@ export class SchematicView {
   }
 
   fit(): void {
-    this.cam.fit(this.bbox, this.cover);
+    this.cam.fit(this.bbox, this.coverFor());
+  }
+
+  /** The panels' covers, and the badge's too when the circuit fitted beside the panels alone reaches under it. */
+  private coverFor(): Rect[] {
+    const b = this.badge?.();
+    if (!b) return this.cover;
+    const r = this.host.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return this.cover;
+    const vb = fitBox(this.bbox, r.width, r.height, this.cover);
+    return underCover(vb, this.bbox, r.width, r.height, [b]) ? [...this.cover, b] : this.cover;
   }
 
   /** Still showing what the last fit() chose (the learner has not zoomed or panned since). */
@@ -1222,7 +1235,7 @@ export class SchematicView {
     this.cover = cover;
     if (!this.cam.fitted) return;
     const r = this.host.getBoundingClientRect();
-    if (refit || underCover(this.cam.vb, this.bbox, r.width, r.height, cover)) this.fit();
+    if (refit || underCover(this.cam.vb, this.bbox, r.width, r.height, [...cover, ...(this.badge?.() ? [this.badge()!] : [])])) this.fit();
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {
