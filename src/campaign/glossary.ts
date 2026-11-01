@@ -115,3 +115,33 @@ export class Glossary {
     return out;
   }
 }
+
+/** What markTerms leaves alone (links, code, headings, part names lit on the stage …): one list for the DOM and proseRuns. */
+export const GLOSS_SKIP = 'a, code, pre, h1, h2, h3, h4, button, .gl, svg, kbd, .no-gloss, [data-show]';
+const SKIP_TAG = /^(a|code|pre|h[1-4]|button|svg|kbd)$/i;
+const SKIP_ATTR = /\bdata-show=|\bclass="[^"]*\b(gl|no-gloss)\b/;
+
+/**
+ * Prose as a reader meets it, without a DOM: the text outside GLOSS_SKIP, in runs, each with the terms an enclosing
+ * `data-ahead="id id"` element explains in place (a term used before the chapter that teaches it: chapters/firstuse.ts).
+ * Template holes (${…}) read as a space.
+ */
+export function proseRuns(html: string): { text: string; ahead: string[] }[] {
+  const runs: { text: string; ahead: string[] }[] = [];
+  const stack: { skip: boolean; ahead: string[] }[] = [];
+  const top = () => stack[stack.length - 1];
+  for (const m of html.replace(/\$\{[^}]*\}/g, ' ').matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>|<!--[\s\S]*?-->|([^<]+)/g)) {
+    const [, close, tag, attrs = '', self, text] = m;
+    if (text !== undefined) {
+      if (!top()?.skip) runs.push({ text: text.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&[lg]t;/g, ' '), ahead: top()?.ahead ?? [] });
+      continue;
+    }
+    if (!tag) continue;
+    if (self || /^(br|img|hr|input|wbr)$/i.test(tag)) { runs.push({ text: ' ', ahead: [] }); continue; }
+    if (close) { stack.pop(); runs.push({ text: ' ', ahead: [] }); continue; }
+    const ahead = /\bdata-ahead="([^"]*)"/.exec(attrs)?.[1].split(/\s+/).filter(Boolean) ?? [];
+    stack.push({ skip: !!top()?.skip || SKIP_TAG.test(tag) || SKIP_ATTR.test(attrs), ahead: [...(top()?.ahead ?? []), ...ahead] });
+    runs.push({ text: ' ', ahead: [] });
+  }
+  return runs;
+}

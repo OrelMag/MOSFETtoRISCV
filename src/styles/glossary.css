@@ -14,3 +14,7 @@
 .gl-close { margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 .gl-close:hover { background: var(--surface-2); color: var(--text); }
 @media (pointer: coarse) { .gl-close { width: 40px; height: 40px; margin: -8px -8px -8px auto; } }
+/* A term the reader has not been taught yet (chapters/taught.ts): a warmer underline, and where it is built on its card. */
+.gl.later { border-bottom-color: color-mix(in srgb, var(--warn) 75%, transparent); }
+.gl-later { font: 500 11.5px/1.4 var(--font-mono); color: var(--warn); }
+/* A term explained in place before its chapter (data-ahead: chapters/firstuse.ts) reads as plain prose. */
