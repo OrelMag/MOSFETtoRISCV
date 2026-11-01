@@ -22,6 +22,7 @@ import { installProjects } from '../../editor/projectui';
 import { MAIN_PROJECT, readProjects, setCurrentProject } from '../../editor/projects';
 // Every feature module (palette groups, property sections, toolbar actions, plugins).
 import '../../editor/features';
+import '../../editor/minimap';
 import type { Page } from './chapter';
 
 /** Chips of campaign levels (campaign/levels.ts levelChipId): kept in the first project. */
