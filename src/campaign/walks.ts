@@ -168,7 +168,7 @@ const WALKS0: Record<string, WalkScript> = {
     },
     {
       title: 'The carry',
-      text: 'g5 = ¬((a⊕b)·cin) is the first NAND of the second XOR. g9 = NAND(g1, g5) = a·b + (a⊕b)·cin = maj(a, b, cin), NAND–NAND with no inverters. cout is done, depth 5. Two half adders and an OR would spend 4 more NANDs on the same carry.',
+      text: 'g5 = ¬((a⊕b)·cin) is the first NAND of the second XOR. g9 = NAND(g1, g5) = a·b + (a⊕b)·cin = maj(a, b, cin), NAND–NAND with no inverters. cout is done, depth 5.',
       parts: ['g5', 'g9'], codex: ['nandnand'],
       why: 'cout = a·b + (a ⊕ b)·cin. g1 holds ¬(a·b) and g5 holds ¬((a ⊕ b)·cin); a NAND of two inverted terms is their OR (De Morgan), so one gate finishes the carry with no inverters.',
       whyNot: { text: 'Two half adders and an OR compute the same carry with inverters that cancel in pairs: 4 NANDs more, and 2 more delays from cin to cout.', alt: 'full_adder_ha' },

@@ -195,7 +195,7 @@
 .lv-rows b { font-family: var(--font-mono); font-weight: 600; }
 .lv-rows b.ok { color: var(--good); }
 .lv-gen { font-size: 12px; }
-.lv-walknav { display: flex; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
+.lv-walknav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
 
 /* the hint ladder (Tips tab) and the walkthrough's predict-first and Learn it */
 .lv-ladder { display: grid; gap: 0; }
