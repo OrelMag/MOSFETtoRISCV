@@ -222,3 +222,12 @@ export function validate(p: Microprogram): UProblem[] {
   p.states.forEach((s, i) => { if (!seen.has(i)) out.push({ level: 'warn', text: `${s.name} (word ${i}) is never reached.`, word: i }); });
   return out;
 }
+
+/**
+ * The chapter's challenge answer: ExecuteI writes rd from the ALU result itself and retires, back to Fetch. An I-type
+ * instruction takes Fetch, Decode, ExecuteI (3 cycles, not 4); ALUWB serves R-type, auipc and jal as before.
+ * tests/ucode.test.ts holds it to the golden model.
+ */
+export function iTypeInThree(): Microprogram {
+  return setNext(setField(setField(setField(bookProgram(), 8, 'resultSrc', 2), 8, 'regWrite', 1), 8, 'retire', 1), 8, 0);
+}

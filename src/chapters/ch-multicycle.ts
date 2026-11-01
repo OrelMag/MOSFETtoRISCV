@@ -1,7 +1,9 @@
+import facts from '../bench/ucodefacts.json';
 import { MC_FSM, MC_MICRO, MC_STATES } from '../lib';
+import { bookProgram, cyclesByClass, iTypeInThree, type Microprogram } from '../lib/ucode';
 import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
-import type { Widget } from '../view/stage';
+import type { Scene, Stage, Widget } from '../view/stage';
 import { controllerPanel, cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
 
@@ -24,6 +26,32 @@ function stateTable(): Widget {
   };
 }
 
+// ---- "Paint the microcode": the painter on the chapter's CPU --------------------------------------------------
+
+/** What the step's CPU runs; a fresh visit starts from the book's. */
+let painted: Microprogram = bookProgram();
+/** Scenes (by the CPU's id) whose microprogram passed the check and is faster for I-type: what the challenge asks. */
+const verified = new Set<string>();
+const bookCycles = cyclesByClass(bookProgram());
+const pct = (v: number) => Math.round(v * 100);
+
+function ucodeScene(): Scene {
+  return cpuScene({ source: src('sum'), multicycle: 'micro', microcode: painted, highlight: ['ctrl'], onMicrocode: openPainter });
+}
+
+function openPainter(stage: Stage): void {
+  void import('../widgets/ucodepainter').then((m) => m.openMicrocode({
+    program: painted, host: document.body, mode: 'sheet', applyLabel: 'Apply to the CPU',
+    onHighlight: (units) => stage.highlight(units ?? ['ctrl'], !!units),
+    onApply: (p, report) => {
+      painted = p;
+      const sc = ucodeScene();
+      if (report?.allPass && (report.cycles.I ?? 99) < (bookCycles.I ?? 0)) verified.add(sc.root.id);
+      stage.load(sc);
+    },
+  }));
+}
+
 export const chMulticycle: Chapter = {
   id: 'multicycle', num: 23, title: 'Multicycle & microcode', level: 'Processor',
   blurb: 'One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.',
@@ -40,6 +68,7 @@ export const chMulticycle: Chapter = {
       '13 states. Branch, lui and auipc take 3 cycles; ALU operations, stores and jal 4; loads and jalr 5.',
       'Hardwired control: a 4-bit state register, a 4→16 decoder, an AND gate per opcode-dependent transition and OR gates per signal: 412 NANDs.',
       'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6 124 NANDs here, because these ROMs are mux trees of constants.',
+      'The microcode is a grid of cells you can paint: an I-type instruction written back in ExecuteI takes 3 cycles instead of 4, and the painter checks any edit against the golden model.',
       'Period 85 NAND delays against the single-cycle CPU\'s 103 (both with Kogge–Stone adders), but CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.',
     ],
     practise: ['s_fsm', 'o_mc'],
@@ -165,6 +194,42 @@ export const chMulticycle: Chapter = {
         answer: 1,
         why: ['The longest step is the ALU operation and the branch decision, and CPI stays near 4 with any controller.', '', 'Microcode changes how the table is stored, not how long a step takes or how many steps there are.', 'A bigger register file sets neither the longest step nor the number of steps.'],
         explain: 'Time per instruction = CPI × period. With CPI near 4, only a much shorter period helps, which needs balanced steps. Overlapping the steps of consecutive instructions brings CPI back toward 1: that is pipelining.',
+      },
+    },
+    {
+      title: 'Paint the microcode',
+      body: `
+        <p>Microcode is data, so changing the machine means changing cells. The controller panel's <strong>Microcode…</strong> opens the ROM as a grid:
+        a row per microword, a column per control signal, a cell painted or cycled with a click, Space or Enter. The words are what
+        <span data-show="ctrl">the controller</span> sends to the datapath; the sequencing columns say what comes next.</p>
+        <p>An I-type instruction (<code>addi</code>, <code>slli</code>, <code>andi</code> …, ${pct(facts.iShare)} % of everything the benchmarks execute) takes
+        ${facts.bookCycles.I} cycles: Fetch, Decode, ExecuteI, ALUWB. ExecuteI computes into ALUOut; ALUWB only copies it into <code>rd</code>. A cycle spent copying.</p>
+        <p>The painter refuses edits that cannot work (a word that never reaches Fetch, an instruction that never retires or retires twice) and
+        checks the rest on the edited CPU: the ${facts.tests} riscv-tests rv32ui images it can run and the ${facts.benches} benchmark programs, every result compared
+        with the golden model; a wrong word is named by the first instruction after which the CPU and the model differ. The ROM's contents are constants, so
+        the controller costs the same NANDs whatever you paint.</p>
+        <div class="try">Open the microcode, select word 8 (ExecuteI) and look at what lights in the datapath sketch and on the circuit.</div>`,
+      more: {
+        numbers: `Book: CPI ${facts.bookCpi.toFixed(2)} on the four benchmarks (${facts.instructions.toLocaleString('en').replace(/,/g, ' ')} instructions). I-type instructions are ${pct(facts.iShare)} % of them, so one cycle fewer each
+          lowers the CPI by ${pct(facts.iShare)} / 100 = ${(facts.bookCpi - facts.solvedCpi).toFixed(2)}, to ${facts.solvedCpi.toFixed(2)}.`,
+      },
+      scene: () => { painted = bookProgram(); return ucodeScene(); },
+      challenge: {
+        kind: 'reach', goal: 'Make I-type instructions take 3 cycles, and pass the check.',
+        check: (st) => !!st.scene && verified.has(st.scene.root.id),
+        hints: [
+          'Look at the two words an I-type instruction visits after Decode: ExecuteI computes, ALUWB only copies ALUOut into rd. Could ExecuteI write rd itself?',
+          'The register file takes whatever Result carries when RegWrite is 1. During ExecuteI the ALU output is already on the Result multiplexer, at its ALUResult input.',
+          'Paint word 8 (ExecuteI): rg wr, ret, result = ALUResult, and point its next at word 0 (Fetch). Run the check, then Apply.',
+        ],
+        answer: `In ExecuteI (word 8) set <code>rg wr</code> and <code>ret</code>, set <code>result</code> to ALUResult (the ALU output before the ALUOut register) and point <code>next</code> at word 0, Fetch.
+          An I-type instruction is now Fetch, Decode, ExecuteI: ${facts.solvedCycles.I} cycles. All ${facts.tests} riscv-tests pass, the CPI goes from ${facts.bookCpi.toFixed(2)} to ${facts.solvedCpi.toFixed(2)}, and the controller is the same size.`,
+        solve: (st) => {
+          painted = iTypeInThree();
+          const sc = ucodeScene();
+          verified.add(sc.root.id); // tests/ucode.test.ts holds this program to the golden model
+          st.load(sc);
+        },
       },
     },
   ],

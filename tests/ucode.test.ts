@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MC_MICRO, MC_PROGRAM, MC_STATES, microController, microprogramOf, multicycleCpu } from '../src/lib';
-import { addWord, bookProgram, cyclesByClass, isBook, setField, setNext, validate, type Microprogram } from '../src/lib/ucode';
+import { addWord, bookProgram, cyclesByClass, iTypeInThree, isBook, setField, setNext, validate } from '../src/lib/ucode';
 import { bookReport, checkProgram } from '../src/lib/ucodecheck';
+import facts from '../src/bench/ucodefacts.json';
 import { breathe } from './setup';
-
-/** I-type in 3 cycles: ExecuteI writes rd from the ALU result itself and retires, back to Fetch. */
-export function threeCycleI(): Microprogram {
-  let p = bookProgram();
-  p = setField(p, 8, 'resultSrc', 2);
-  p = setField(p, 8, 'regWrite', 1);
-  p = setField(p, 8, 'retire', 1);
-  return setNext(p, 8, 0);
-}
+import { measureUcodeFacts } from './ucodefacts';
 
 describe('the microprogram as data', () => {
   it('the book\'s program builds the book\'s objects', () => {
@@ -23,10 +16,10 @@ describe('the microprogram as data', () => {
   });
 
   it('an edit builds another controller, memoized by content', () => {
-    const p = threeCycleI();
+    const p = iTypeInThree();
     const c = microController(p);
     expect(c).not.toBe(MC_MICRO);
-    expect(microController(threeCycleI())).toBe(c);
+    expect(microController(iTypeInThree())).toBe(c);
     expect(microprogramOf(c)).toEqual(p);
     expect(multicycleCpu([0x13], { control: 'micro', microcode: p }).id).not.toBe(multicycleCpu([0x13], { control: 'micro' }).id);
     expect(cyclesByClass(p).I).toBe(3);
@@ -60,7 +53,7 @@ describe('the check against the golden model', () => {
 
   it('I-type in three cycles passes everything and lowers the CPI', async () => {
     const book = await bookReport();
-    const r = await checkProgram(threeCycleI());
+    const r = await checkProgram(iTypeInThree());
     await breathe();
     expect(r.tests.filter((t) => !t.pass).map((t) => `${t.name}: ${t.text}`)).toEqual([]);
     expect(r.allPass).toBe(true);
@@ -78,5 +71,10 @@ describe('the check against the golden model', () => {
     expect(r.tests.some((t) => !t.pass)).toBe(true);
     expect(r.firstMismatch).toMatch(/after .* at pc 0x[0-9a-f]+: .*(x\d+|[a-z]\d+|PC|mem)/);
     console.log('first mismatch:', r.firstMismatch);
+  }, 300_000);
+
+  it('the multicycle chapter quotes the measured numbers (scripts/ucode-facts.ts --write after a change)', async () => {
+    expect(await measureUcodeFacts()).toEqual(facts);
+    await breathe();
   }, 300_000);
 });

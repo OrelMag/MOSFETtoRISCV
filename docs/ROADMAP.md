@@ -460,9 +460,16 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
 - ⏳ 5b. Then: chapter 14's challenge "add indexed load"; the pipelined CPU (a load-like row stalls like a load); RV16
 
 **More builders, after the instruction builder** (proposed 2026-10-19, kept for later)
-- ⏳ Microcode painter: the multicycle CPU's microprogram (MC_MICRO) as a grid of control signals × microinstructions,
-  painted like the encoding designer; each microword lights its datapath, the result is checked against MC_STATES;
-  microcode for a new instruction, or a shorter sequence and fewer cycles
+- ✅ Microcode painter (mockup approved 2026-11-01): the multicycle CPU's microprogram (lib/ucode.ts, multicycleCpu's `microcode`
+  option) as a grid of control signals × microwords in a sandbox dialog (CPU drawer's "Microcode…", the search's `>`; Apply swaps
+  the controller part for { ucode } in one undo step) and a sheet under chapter 23's last step ("Paint the microcode": reach
+  challenge "I-type in 3 cycles", Show answer, Do it for me). Changed cells marked against the book's, each word's datapath lit
+  (the sketch; on the chapter's stage the real units), validation (unreachable words, no retire / two retires on a path back to
+  Fetch, loops), and a check on the edited CPU: the 32 rv32ui riscv-tests images on BitSim lanes plus the four benchmarks on the
+  cycle engine, each against the golden model (~12 s), cycles per class and CPI before / after, the first mismatch named by a
+  lock-step replay. Numbers in the chapter are src/bench/ucodefacts.json (scripts/ucode-facts.ts --write), pinned by tests/ucode.test.ts.
+  Not done: a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (needs the
+  decoder: use Custom instructions on the single-cycle core)
 State machine and truth table builders (requested 2026-10-25; mockup approved: sandbox chips whose body is generated,
 like a Verilog chip, Detach to draw on it; in the campaign everywhere except the levels they would solve). A truth
 table covers any combinational block and a state machine any synchronous one in principle, but only small ones in
