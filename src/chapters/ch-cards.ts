@@ -12,6 +12,17 @@ const SUM_DECK = programDeck('sum.s', SUM.lines.map((l) => ({ word: l.word, sour
 const FEED = 2;
 const READER = bench(deckReader(SUM_DECK, 'word', { feed: FEED }));
 const SORT_CARDS = sampleDeck().cards.length;
+/** Binomial coefficient: the hole patterns of a column with exactly k of its 12 positions punched. */
+const choose = (n: number, k: number): number => (k === 0 ? 1 : (choose(n - 1, k - 1) * n) / k);
+const ROWS = 12;
+/** Cards a minute of the IBM 082 sorter (the step's text), and of the IBM 1402 reader. */
+const SORTER_CPM = 650;
+const READER_CPM = 800;
+const N = SUM_DECK.cards.length;
+/** Rising edges until the reader is empty with next held at 1: card k is taken at edge (FEED + 1)(k − 1) + 1. */
+const EDGES_ALL = (FEED + 1) * (N - 1) + 1;
+const hex = (w: number) => `0x${(w >>> 0).toString(16).padStart(8, '0')}`;
+const wordOf = (k: number) => SUM.lines[k].word >>> 0;
 
 export const chCards: Chapter = {
   id: 'cards', num: 0, prologue: 'P3', title: 'Punch cards', level: 'Input',
@@ -69,8 +80,20 @@ export const chCards: Chapter = {
         holes, and a new pattern is a new deck, not a new machine. A portrait of Jacquard woven in silk around 1839 took
         some 24 000 cards. Babbage meant his Analytical Engine to take its program the same way; Ada Lovelace wrote that it
         "weaves algebraical patterns just as the Jacquard loom weaves flowers and leaves".</p>
+        <p>What makes it a program and not just a pattern: the information is in the cards and the machine reads it one pick at a time, in order, and loops. A
+        stored program that selects among actions by position in a sequence is the same architecture as a ROM read by a counter (a chain is a ROM, the
+        reader is the program counter). It has no branch: the chain runs on, and a conditional is a cut or a different chain.</p>
         <div class="try">Weave the diamond, then punch or clear a hole in one card and weave again: the change repeats
         everywhere that card and that hook meet.</div>`,
+      more: {
+        derive: `<p>A chain of n cards on a loom with h hooks stores n × h bits, one per position: hole or no hole. The weave is the function (pick k, thread j) → whether hook (j mod h) is lifted on card k mod n.
+          That is periodic in two directions with periods n down the length and h across, so one deck and one harness tie decide the pattern's repeat, with no other memory. Changing one hole changes
+          every thread that card and hook meet, which is what the loom does when a card is punched.</p>`,
+        pitfall: `<p>Mixing the two repeats. The number of cards sets the repeat down the cloth; the number of hooks sets it across. A bigger design needs more cards and more hooks (and a
+          harness that ties every thread to its own hook), so the cost grows with the picture's area, not with its detail alone.</p>`,
+        real: `<p>Babbage planned the Analytical Engine with two decks in the Jacquard style: operation cards to say what to do, and variable cards to say where the numbers were.
+          That is a program and an address field on cards, a century before either word had its meaning. Jacquard looms stayed in use well into the twentieth century.</p>`,
+      },
       widget: () => loomWidget(),
       challenge: {
         kind: 'quiz', question: 'A loom has 8 hooks and a chain of 6 cards. After how many picks does the cloth repeat down its length?',
@@ -89,7 +112,19 @@ export const chCards: Chapter = {
         <p>Counting a <em>combination</em> (married women) needs AND: the circuits of both holes energize relays, and the dial
         is driven through their contacts in series, as in <a href="#/c/relays/0">prologue P1</a>. The data had become electrical. Hollerith's company
         merged into what was named IBM in 1924, and the card stayed the computer's input for half a century.</p>
+        <p>What was new was not the card but the <em>reading</em>: a hole becomes an electrical event, and from then on counting is wiring. A dial counts any signal that
+        steps its magnet, and which holes step it is a matter of how the relays between the pins and the dial are connected. Changing the question changes the wiring, not the
+        deck, so one deck answers many questions, and the same card can be fed through again for each.</p>
         <div class="try">Press a few cards one by one and watch which dials move, then run the stack.</div>`,
+      more: {
+        derive: `<p>With each hole closing a circuit, a relay per hole turns the circuits into Boolean variables, and the contacts of
+          <a href="#/c/relays/0">prologue P1</a> compute on them: two contacts in series are AND, in parallel OR, and a break contact is NOT. "Married and born abroad" is two make contacts in series
+          in front of one dial; "married or born abroad" is two in parallel; "married and not born abroad" is a make contact and a break contact in series. Every count is a sum of products of the holes.</p>`,
+        pitfall: `<p>Counting an OR by adding two dials. A person who is both married and born abroad steps both dials, so their sum counts them twice; the parallel contacts step one dial once.
+          The same mistake appears in a database query that adds two group counts instead of counting the union.</p>`,
+        real: `<p>Later tabulators moved the wiring to a removable plugboard, so a machine was reprogrammed by plugging wires: a program held in wires, between the fixed
+          machine and the deck of data. Hollerith's company became IBM in 1924, and the card stayed the computer's input for half a century.</p>`,
+      },
       widget: () => censusWidget(),
       challenge: {
         kind: 'quiz', question: 'How would the tabulator count people who are married OR born abroad, with one dial?',
@@ -109,8 +144,23 @@ export const chCards: Chapter = {
         of its 4 096 patterns are characters (the blank included): at most three holes, so the card stays stiff enough to feed.</p>
         <p>There is no lower case and no curly brace. The keypunch printed each character along the top edge so that
         people could read the card; machines read the holes. Readers took cards face down, the 9 edge first.</p>
+        <p>The code is built around what a counting machine needs: a digit is one hole in the digit rows, one pin per digit. The alphabet was added
+        with zone rows above them, so a letter is a zone and a digit, and the odd corners of the code (the 0-zone letters starting at 2, the signs that add an 8) come
+        from fitting 26 letters, signs and digits into 12 rows without ever punching more than three holes.</p>
         <div class="try">Type a line and watch it punch. Then click positions on the card: a pattern that is not in the
         code reads as no character at all.</div>`,
+      more: {
+        derive: `<p>A column has ${ROWS} positions, so ${2 ** ROWS} patterns, and a card ${COLUMNS} × ${ROWS} = ${COLUMNS * ROWS} positions. The code uses ${CHARSET.length} of the ${2 ** ROWS} patterns for a column,
+          with at most three holes: ${[0, 1, 2, 3].map((k) => choose(ROWS, k)).join(' + ')} = ${[0, 1, 2, 3].reduce((n, k) => n + choose(ROWS, k), 0)} patterns have three holes or fewer,
+          of which ${CHARSET.length} are characters. Information-wise the card holds ${COLUMNS} characters, about ${Math.floor(COLUMNS * Math.log2(CHARSET.length) / 8)} bytes, in ${COLUMNS * ROWS} positions: the code spends bits for
+          stiffness and for rows that fit the digit-counting machines.</p>`,
+        numbers: `<table class="mini"><tr><th>holes in a column</th>${[0, 1, 2, 3, 4].map((k) => `<td>${k}</td>`).join('')}</tr>
+          <tr><th>patterns</th>${[0, 1, 2, 3, 4].map((k) => `<td>${choose(ROWS, k)}</td>`).join('')}</tr></table>`,
+        pitfall: `<p>Treating a column as a byte. A column is 12 bits of which only ${CHARSET.length} patterns mean anything, and an unnamed pattern is a punch error that the machine rejects or reads as no character.
+          Two columns do not make a 16-bit value either: binary cards (like this chapter's object cards) use all 12 rows of a column as bits, outside the Hollerith code.</p>`,
+        real: `<p>IBM's EBCDIC, the character code of the System/360, grew out of the card code: its letters sit in the same zone-and-digit groups with gaps (A to I, J to R, S to Z), which is why
+          the alphabet is not contiguous there. The 80-column card shaped terminals too: 80 characters a line.</p>`,
+      },
       widget: () => cardEditorWidget(),
       challenge: {
         kind: 'quiz', question: 'Which holes does the 029 punch for the letter K?',
@@ -132,7 +182,20 @@ export const chCards: Chapter = {
         each card into the pocket of the digit in one column, 650 cards a minute. Stack the pockets 0 to 9 and sort on the
         next column to the left: after the last pass the deck is in order. That is the radix sort, least significant digit
         first, a pass per digit, each pass stable.</p>
+        <p>Why the sorter needs no comparison: it never asks which of two cards is larger. It looks at one column of one card and drops the card in a pocket, and
+        <em>stability</em> does the rest. Because each pass keeps the order of cards that fall in the same pocket, a later pass on a more significant digit cannot disturb the order
+        the earlier passes made among equal digits. The deck is sorted after the pass on the most significant column and in no state before that, which also tells the operator when to stop.</p>
         <div class="try">The deck is the bubble-sort sample, ${SORT_CARDS} cards. Drop it, then sort it on the sorter and count the passes.</div>`,
+      more: {
+        derive: `<p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k
+          drops each card in the pocket of that digit. Two cards in different pockets are in the order of digit k, whatever the lower digits. Two cards in the same pocket keep the order they had, which is the order on the lower k − 1
+          digits. So the deck is sorted on k digits. A key of d digits takes d passes, independent of the number of cards: the deck of N cards takes d × N / ${SORTER_CPM} minutes at the 082's ${SORTER_CPM} cards a minute.</p>`,
+        numbers: `<table class="mini"><tr><th>key digits</th><th>passes</th><th>1 000 cards</th><th>10 000 cards</th></tr>${[1, 2, 3, 4, 6].map((d) => `<tr><td>${d}</td><td>${d}</td><td>${(d * 1000 / SORTER_CPM).toFixed(1)} min</td><td>${(d * 10000 / SORTER_CPM / 60).toFixed(1)} h</td></tr>`).join('')}</table>`,
+        pitfall: `<p>Sorting from the most significant column "to save passes". The first pass gives ten pockets; each pocket would then need sorting alone on the next column, ten sub-piles of ten sub-piles, and the operator
+          has to keep track of all of them by hand. Least significant first needs only the one stack and one rule.</p>`,
+        real: `<p>This is the least-significant-digit radix sort, the same algorithm as in a modern library, with the card sorter's pockets as the buckets. Knuth's sorting-by-distribution section describes this card method.
+          Merging two sorted decks was the job of another machine, the collator.</p>`,
+      },
       widget: () => deckWidget(),
       challenge: {
         kind: 'quiz', question: 'Why does the operator sort on the rightmost column first?',
@@ -156,10 +219,37 @@ export const chCards: Chapter = {
         of its own: the IBM 1401's <strong>Load</strong> key read the first card into memory and ran it, and that card read the
         rest. <a href="#/c/bus/5">Chapter 38</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
         decks made from any ROM program.</p>
+        <p>The interface is a handshake of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
+        clock edge where both are 1. Neither side can force the other: a slow program leaves the card waiting at the station, a slow reader leaves the program polling <code>ready</code>, and a program that
+        never raises <code>next</code> reads nothing. The same ready and take protocol returns on the bus in chapter 38 and in every streaming interface since.</p>
         <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty
         cycles between cards while the reader feeds.</div>`,
       scene: () => ({ root: READER, inputs: { next: 0 }, clock: 'clk', autoClock: false, panels: [readerPanel] }),
       tries: [(st) => st.getInput('next') === 1 && st.cycles > 0],
+      tour: {
+        label: 'Walk me through the handshake',
+        beats: [
+          { title: 'A card waits', reset: true, set: { next: 0 }, cycles: 2, show: ['u'], expect: { ready: 1, empty: 0, data: wordOf(0) },
+            say: `<p>Two edges with next = 0: nothing is taken. ready = {v:ready}, empty = {v:empty}, and data holds card 1's word, ${hex(wordOf(0))}. The reader waits for the computer.</p>` },
+          { title: 'Take a card', set: { next: 1 }, cycles: 1, show: ['u'], expect: { ready: 0, empty: 0, data: 0 },
+            say: `<p>next = 1 and one rising edge: card 1 is taken. The reader starts feeding the next one: ready = {v:ready}, and data reads {v:data} (no card at the station).</p>` },
+          { title: 'Feeding', set: {}, cycles: FEED, show: ['u'], expect: { ready: 1, data: wordOf(1) },
+            say: `<p>${FEED} more edges: the next card has arrived. ready = {v:ready} and data is card 2's word, ${hex(wordOf(1))}. A card costs ${FEED + 1} edges with next held at 1: one to take it, ${FEED} to feed the next.</p>` },
+          { title: 'Another', set: {}, cycles: FEED + 1, show: ['u'], expect: { ready: 1, data: wordOf(2) },
+            say: `<p>The same again: card 3's word, ${hex(wordOf(2))}, is at the station after ${FEED + 1} edges. Nothing is lost in between because the reader holds each card until it is taken.</p>` },
+          { title: 'The last card', set: {}, cycles: EDGES_ALL - (FEED + 1) * 2, show: ['u'], expect: { ready: 0, empty: 1 },
+            say: `<p>Edge ${EDGES_ALL}: card ${N} is taken and the hopper is empty. empty = {v:empty}, ready = {v:ready}. ${N} cards took ${EDGES_ALL} edges, ${N} + ${N - 1} × ${FEED}.</p>` },
+        ],
+      },
+      more: {
+        derive: `<p>With next held at 1, a card is taken at every edge where ready is 1, and then ready stays 0 for ${FEED} edges. Card k is taken at edge ${FEED + 1}·(k − 1) + 1, so the n-card deck is empty after ${FEED + 1}·(n − 1) + 1 = n + (n − 1) × ${FEED} edges:
+          ${N} cards take ${EDGES_ALL}. Throughput is 1 / ${FEED + 1} cards per edge. A real reader's 75 ms a card (${READER_CPM} cards a minute) would be ${FEED + 1} edges of a clock of ${Math.round((FEED + 1) / 0.075)} Hz.</p>`,
+        numbers: `<table class="mini"><tr><th>cards</th><th>edges, next held at 1</th></tr>${[1, 2, 10, N, 100].filter((k, i, a) => a.indexOf(k) === i).map((k) => `<tr><td>${k}</td><td>${(FEED + 1) * (k - 1) + 1}</td></tr>`).join('')}</table>`,
+        pitfall: `<p>Reading data when ready is 0. Between cards data is 0, which is a valid word: a program that takes it as a card gets a stream of zeros and loses the card it should have waited for. Take a card only at an edge where
+          ready was 1, and use empty, not a zero word, to know the deck has ended.</p>`,
+        real: `<p>The IBM 1402 read ${READER_CPM} cards a minute, a card every 75 ms. A machine this fast needed a buffer: the reader fed a memory area by itself and the CPU was told when a card was in, the beginning of channels
+          and direct memory access (chapter 38 has the DMA engine).</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Read the whole deck, until the reader says empty.',
         check: (st) => st.value('empty') === 1,
