@@ -95,6 +95,15 @@ function load(): State {
 const state = load();
 const listeners = new Set<() => void>();
 
+/** Progress exists: ask the browser to keep the data (ui/persist.ts; once per load, after the page has settled). */
+let kept = false;
+function progressMade(): void {
+  if (kept) return;
+  kept = true;
+  setTimeout(() => { void import('./persist').then((m) => m.keepProgress()); }, 3000);
+}
+if (Object.keys(state.visited).length) progressMade();
+
 function save(): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
@@ -152,6 +161,7 @@ export const settings = {
     if (!v.includes(step)) v.push(step);
     else if (!moved) return;
     save();
+    progressMade();
   },
   /** The chapter step viewed last, if any. */
   lastStep(): { chapter: string; step: number } | undefined {
@@ -163,6 +173,7 @@ export const settings = {
   solve(key: string): void {
     state.solved[key] = true;
     save();
+    progressMade();
   },
   isSolved(key: string): boolean {
     return !!state.solved[key];

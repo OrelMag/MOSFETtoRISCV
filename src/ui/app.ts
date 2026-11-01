@@ -141,7 +141,7 @@ export function startApp(root: HTMLElement): void {
   const sizeMinus = h('button', { class: 'btn sm', title: 'Smaller text', 'aria-label': 'Smaller text', onclick: () => sizeStep(-1) }, 'A−');
   const sizePlus = h('button', { class: 'btn sm', title: 'Larger text', 'aria-label': 'Larger text', onclick: () => sizeStep(1) }, 'A+');
   const sizeRow = h('div', { class: 'pal-size', role: 'group', 'aria-label': 'Text size' },
-    h('span', null, h('b', null, 'Text size'), h('small', null, 'The chapters' prose; circuits keep their size')), sizeMinus, sizeVal, sizePlus);
+    h('span', null, h('b', null, 'Text size'), h('small', null, 'Chapter prose only; circuits keep their size')), sizeMinus, sizeVal, sizePlus);
   const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
