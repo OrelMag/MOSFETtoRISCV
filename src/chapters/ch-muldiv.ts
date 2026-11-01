@@ -395,7 +395,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>For multiplier b = Σ b<sub>i</sub>2<sup>i</sup> (two's complement), b = Σ<sub>j</sub> d<sub>j</sub>4<sup>j</sup> with d<sub>j</sub> = −2b<sub>2j+1</sub> + b<sub>2j</sub> + b<sub>2j−1</sub> (b<sub>−1</sub> = 0). Each d<sub>j</sub> is in {−2, …, +2}.
           Check: bit b<sub>2j</sub> appears once, at weight 4<sup>j</sup> = 2<sup>2j</sup>. Bit b<sub>2j+1</sub> appears in group j as −2·4<sup>j</sup> and again, as the overlap bit, in group j + 1 as +4<sup>j+1</sup>: together (−1 + 2)·2<sup>2j+1</sup> = 2<sup>2j+1</sup>. So every bit has its binary weight, except the top bit, which has no group above it and keeps −2<sup>n−1</sup>: the two's complement sign.</p>`,
-        pitfall: `<p>Forgetting the overlap bit. Each group reads the top bit of the group below it (b<sub>−1</sub> = 0 for the lowest). Without it, 011 and 111 would be indistinguishable, and a multiplier whose low bit is 1 would come out wrong.</p>`,
+        pitfall: `<p>Forgetting the overlap bit. Each group reads the top bit of the group below it (b<sub>−1</sub> = 0 for the lowest). Without it, 010 and 011 would be indistinguishable (both read as the pair 01), although they are +1 and +2.</p>`,
       },
     },
     {
@@ -639,7 +639,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>Restoring: if 2r − d &lt; 0, restore to 2r and next step form 2(2r) − d = 4r − d. Non-restoring: keep r' = 2r − d &lt; 0 and next step form 2r' + d = 4r − 2d + d = 4r − d. Same value, no restore multiplexer.
           The quotient bit stays "is the new remainder ≥ 0", read off the sign, so nothing needs converting afterwards.</p>`,
-        pitfall: `<p>Forgetting the last correction. If the final remainder is negative, the quotient and the remainder are both off: add d once to the remainder. This is the <code>fix</code> block, easy to miss on a schematic because it is only exercised by the inputs with a negative last remainder.</p>`,
+        pitfall: `<p>Forgetting the last correction. If the final remainder is negative, the remainder is off by d (the quotient is already right): add d once. This is the <code>fix</code> block, easy to miss on a schematic because it is only exercised by the inputs with a negative last remainder.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'Is a non-restoring step faster than a restoring one?',

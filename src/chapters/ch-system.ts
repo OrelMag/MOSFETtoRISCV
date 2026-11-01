@@ -105,7 +105,7 @@ export const chIO: Chapter = {
           { title: 'sh to address 2', set: { size: 1, addr: 2 }, show: ['r16', 'dec'], expect: { be: 12, wdata: 0x00ab00ab },
             say: '<p>A halfword is copied into both halves (wdata = {b:wdata}), and two enables are raised, for bytes 2 and 3: be = {b:be}.</p>' },
           { title: 'A misaligned half', set: { addr: 1 }, show: ['mis'], expect: { misaligned: 1 },
-            say: '<p>A halfword at an odd address would straddle two words. misaligned = {v:misaligned}: the complete CPU turns that into a trap rather than store anything.</p>' },
+            say: '<p>A halfword at an odd address is misaligned (at offset 3 it would even straddle two words). misaligned = {v:misaligned}: the complete CPU turns that into a trap rather than store anything.</p>' },
           { title: 'sw', set: { size: 2, addr: 0 }, show: ['dec'], expect: { be: 15, wdata: 0xab, misaligned: 0 },
             say: '<p>A word writes all four lanes from the 32-bit data: be = {b:be}, and no replication is needed (wd is 0xAB here, so the word is 0x000000AB).</p>' },
         ],
@@ -210,7 +210,7 @@ export const chIO: Chapter = {
         ],
       },
       more: {
-        derive: `<p>The I/O unit decodes the address: <em>io</em> = addr[31]. A store with io set and addr[3:2] = 0 raises the console strobe with the low byte as data; addr[3:2] = 1 latches the LEDs; a load with addr[3:2] = 2 returns the switches. The data memory sees the access only when io is clear. The program has ${(sys('hello').match(/\bsb\b/g) ?? []).length} stores and ${(sys('hello').match(/\bli\b/g) ?? []).length} <code>li</code> (one is the console address); a letter that repeats needs no new <code>li</code>.</p>`,
+        derive: `<p>The CPU decodes <em>io</em> = addr[31] and gates the memory write with it; the I/O unit then selects a register by addr[4:2]: 0 the console strobe (the low byte as data), 1 the LEDs, 2 the switches (a load), 4 mtime, 5 mtimecmp. The data memory sees the access only when io is clear. The program has ${(sys('hello').match(/\bsb\b/g) ?? []).length} stores and ${(sys('hello').match(/\bli\b/g) ?? []).length} <code>li</code> (one is the console address); a letter that repeats needs no new <code>li</code>.</p>`,
         pitfall: `<p>Treating the console like memory. A load from the console address does not return what was stored: the store went to a device, not to a cell. The same applies to any register of a real device, which is why C marks such pointers <code>volatile</code>: the compiler must not assume a second read returns the first value, or that two stores can be merged.</p>`,
         real: `<p>The 16550 UART on PCs and the PL011 on Arm boards are mapped this way, each with a status register for "transmitter ready" that this console omits. Memory-mapped I/O needs no extra instructions, but accesses to a device must not be cached or reordered, which is why real cores mark address ranges as device memory.</p>`,
       },
@@ -406,7 +406,7 @@ export const chTraps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>With several causes at once the trap unit takes the highest in a fixed order, a chain of 2:1 multiplexers from the lowest priority (store misaligned) to the highest: external interrupt, timer interrupt, illegal instruction, ebreak, ecall, fetch, load, store. Each stage picks its own cause and tval if its condition holds, else passes the previous
+        derive: `<p>With several causes at once the trap unit takes the highest in a fixed order, a chain of 2:1 multiplexers from the lowest priority (store misaligned, then load, fetch, ecall, ebreak, illegal) to the interrupt stage, which the CSR unit has already chosen between external and timer. Each stage picks its own cause and tval if its condition holds, else passes the previous
           result on. The chain is ${nd(TRAP_UNIT)} NANDs.</p>`,
         pitfall: `<p>Assuming the faulting instruction partly ran. It did not: its register write, memory write and CSR write are all cancelled, so after <code>mret</code> past it the machine state is exactly as if it had been a NOP. A handler that wants to emulate the instruction must do the work in software.</p>`,
         real: `<p>Real cores add a precise-exception rule: the fault is reported for the oldest faulting instruction, with every older one completed and no younger one visible. In a pipeline that needs flushing; here, with one instruction in flight, it is automatic.</p>`,

@@ -771,7 +771,7 @@ export const chFloat: Chapter = {
           ${([['fmadd.s', 0x43, 'a·b + c'], ['fmsub.s', 0x47, 'a·b − c'], ['fnmsub.s', 0x4b, '−(a·b) + c'], ['fnmadd.s', 0x4f, '−(a·b) − c']] as [string, number, string][]).map(([n, op, f]) => `<tr><td>${n}</td><td>0x${op.toString(16).toUpperCase()}</td><td>${(op >> 3) & 1}</td><td>${(op >> 2) & 1}</td><td>${f}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Reading fnmsub and fnmadd as "negated fmsub and fmadd" in the other order. Their names come from the signs applied to the product and to c, not from the result: fnmsub is −(a·b) + c, whose result is the negative of fmsub's.
           The quiz below, with a·b = 2 and c = −2, turns on exactly this.</p>`,
-        real: `<p>The R4 format uses a whole major-opcode quarter, four of them, for these four instructions; it is why RISC-V needs the third operand in the instruction word and a third read port, and why the base integer ISA never has one.
+        real: `<p>The R4 format uses four of the 32 major opcodes for these four instructions; it is why RISC-V needs the third operand in the instruction word and a third read port, and why the base integer ISA never has one.
           Cores that issue fma twice a cycle need six read ports in the f register file.</p>`,
       },
       challenge: {

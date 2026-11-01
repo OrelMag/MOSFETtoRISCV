@@ -199,7 +199,7 @@ export const chSilicon: Chapter = {
       more: {
         derive: `<p>Mapping is covering: tile the netlist's gates with library cells so that every gate is inside a cell and the total cost (area, or delay under a constraint) is least. A concrete case: the
           2:1 multiplexer here is four NANDs, ${stats(MUX2).transistors} transistors. A library with an AND-OR-INVERT cell (AOI22, eight transistors) covers the select-and-merge in one stage, and with
-          the inverter on the select that is ten.</p>`,
+          the inverter on the select that is ten for an inverting mux, twelve with an output inverter.</p>`,
         real: `<p>A foundry library has hundreds of cells and each is characterized for delay and power over input slew and output load, tables the tools interpolate. Mapping happens with timing
           in mind: the same function maps to a bigger, faster cell on a critical path and the smallest one elsewhere.</p>`,
         pitfall: `<p>Choosing cells by gate count. A NAND-only netlist counts every function in the same unit, which is the point of this course, but a mapped design is judged in area and picoseconds, and the
@@ -331,8 +331,8 @@ export const chSilicon: Chapter = {
           less the edge). Cost per good die ∝ A / Y: the 400 mm² die costs ${costRatio(400, 100).toFixed(1)} times the 100 mm² one by the yield alone, more with the edge loss.</p>`,
         real: `<p>Mature processes run at defect densities well below 0.1 per cm², and fabs quote Murphy or negative-binomial models, which clump defects and yield better than Poisson for large dies. The
           shape of the argument is unchanged: cost rises faster than area, and big dies are expensive.</p>`,
-        pitfall: `<p>A unit slip. 100 mm² is 1 cm², not 0.1: with the defect density per cm² the expected defects are A / 100 · D<sub>0</sub>. Using mm² directly gives yields near 100 % and a cost ratio of 4,
-          the answer people give before they apply the exponential.</p>`,
+        pitfall: `<p>A unit slip. 100 mm² is 1 cm², not 0.1: with the defect density per cm² the expected defects are A / 100 · D<sub>0</sub>. Using 0.1 cm² for 100 mm² gives a yield near 100 % and a cost ratio of 4, the answer people give before they apply the
+          exponential; using the mm² number directly gives e<sup>−10</sup>, near 0 %.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'With D₀ = 0.1 defects/cm², how does the yield of a 100 mm² die compare with a 400 mm² die?',

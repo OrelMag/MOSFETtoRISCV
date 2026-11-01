@@ -387,7 +387,7 @@ export const chCache: Chapter = {
         real: `<p>Typical numbers for a desktop core: L1 32 to 48 KB at 4 to 5 cycles, L2 256 KB to 2 MB at about 12 to 15, a shared L3 of tens of MB at 40 or more, DRAM at 200 or more
           cycles. Registers are the level above L1, and a hit in them costs nothing visible, which is why compilers work so hard to keep values there.</p>`,
         pitfall: `<p>Reading a cache's size as its speed-up. A hierarchy helps by the fraction of accesses it catches, not by its capacity: a 1 MB cache in front of a program that streams
-          once through 1 GB catches nothing it was not told to prefetch.</p>`,
+          once through 1 GB catches no reuse: every line is fetched once, and only the hits within a line help.</p>`,
       },
     },
     {
@@ -610,7 +610,7 @@ export const chCache: Chapter = {
           loading a[i] then b[i], every load evicts the line the other will need next: 32 loads, 32 misses. With two ways each set keeps one line of a and one of b. Only the first touch of
           each line misses: 4 lines of a and 4 of b, and the final store's allocation: 9. Cycles drop with the misses: every miss is 8 cycles (12 if the victim is dirty), so 33 − 9 = ${33 - 9} fewer
           misses save at least ${(33 - 9) * 8} cycles.</p>`,
-        pitfall: `<p>Reading "9 misses" as the cache working perfectly. Four of them are compulsory and cannot be removed by any associativity; what the second way removed are the conflicts. Give the program a third
+        pitfall: `<p>Reading "9 misses" as the cache working perfectly. All nine are compulsory (first touches of 4 lines of a, 4 of b and the result's line) and no associativity removes them; what the second way removed are the conflict misses. Give the program a third
           array in the same set and two ways thrash again, as the 2-way line of the explorer does for vector add.</p>`,
         real: `<p>LRU for two ways is one bit a set; for 8 ways exact LRU needs many bits and a reordering network on every hit, so real designs use tree pseudo-LRU (w − 1 bits) or random replacement,
           which loses little against LRU on most programs.</p>`,
@@ -706,7 +706,7 @@ export const chCache: Chapter = {
         lines before they are asked for: a next-line or stride prefetcher spots a sequential sweep (the row-major sum, "Vector add") and turns
         its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>
         <p>Weigh the terms of the example: of its ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, the L1 hit accounts for 4, the L2 for ${(0.05 * 12).toFixed(1)}
-        and DRAM for ${(0.05 * 0.2 * 250).toFixed(1)}. The slowest level adds the least per access, because two caches stand between it and the processor; it is still the term that
+        and DRAM for ${(0.05 * 0.2 * 250).toFixed(1)}. The slowest level adds only that much although it costs 250 cycles per access, because two caches stand between it and the processor; it is still the term that
         grows fastest when a miss rate worsens.</p>`,
       more: {
         derive: `<p>Local miss rates multiply on the way down. The fraction of all accesses that reach DRAM is 0.05 × 0.2 = ${pct(0.05 * 0.2)}, and each costs 250 cycles: 2.5 cycles an access

@@ -352,7 +352,7 @@ export const chOoo: Chapter = {
         and the second reads <code>t0</code>: its lookup (<code>a1v</code>, <code>a1t</code>) says entry 3 already.
         Pulse the clock: rows t0 and t1 now hold their tags.</div>
         <p>Cost: 12 443 NANDs, of which the 31 rows take 275 each.</p>
-        <p>The table is small in bits (${31 * 5} flip-flops) and large in ports. Six lookups and two updates a cycle, each across all 31 rows, are what make it
+        <p>The table is small in bits (${31 * 5} flip-flops) and large in ports. Four reads, two commit compares and two writes a cycle, each across all 31 rows, are what make it
         12 443 NANDs; the number of ports, not the number of entries, sets its cost and its delay, so it limits how wide a machine can dispatch.</p>`,
       scene: () => ({ root: RAT, autoClock: false, inputs: { rs1_0: 10, rs2_0: 11, rs1_1: 5, rs2_1: 0, rd0: 5, we0: 1, tag0: 3, rd1: 6, we1: 1, tag1: 4, clk: 0 }, highlight: ['rows', 'by2'] }),
       tries: [(st) => st.value('a1v') === 1 && st.value('a1t') === 3],
@@ -645,7 +645,7 @@ export const chOoo: Chapter = {
           out-of-order core's CPI on fib is ${cpi('ooo', 'fib')} at ${period('ooo')} delays, the dual-issue pipeline's ${cpi('pipe-2w', 'fib')} at ${period('pipe-2w')}.</p>`,
         real: `<p>The gap between CPI and speed is why wide cores spent the 2000s fighting the clock: wakeup and select, the bypass network and the register file's ports all
           scale badly with width. Cores in production are 4 to 8 wide, and the extra transistors went to caches, prediction and more cores.</p>`,
-        pitfall: `<p>Comparing CPI alone. The out-of-order core has the lowest CPI on every row of the table and still the longest clock; only the product, delays per instruction, ranks the machines.
+        pitfall: `<p>Comparing CPI alone. The out-of-order core has the lowest average CPI of the machines in the table and a longer clock than either pipeline; only the product, delays per instruction, ranks the machines.
           A machine measured on a memory that answers in one cycle also shows less of what the window is for than a real one would.</p>`,
       },
     },
