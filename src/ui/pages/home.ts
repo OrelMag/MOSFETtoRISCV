@@ -5,6 +5,7 @@ import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon } from '../dom';
 import { reportLink } from '../errors';
+import { notes } from '../notes';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
@@ -74,7 +75,8 @@ export function homePage(): Page {
             resume ? `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}` : 'Start the journey', icon('chevR', 16)),
           campaign,
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
-          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'))),
+          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'),
+          notes().count ? h('a', { class: 'btn', href: '#/notes', title: 'Your notes and bookmarks, and the review queue' }, icon('note', 16), `My notes · ${notes().count}`) : null)),
       ladder()),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
     h('p', { class: 'section-sub' }, 'Each chapter uses only what the previous ones built.'),
@@ -89,6 +91,8 @@ export function homePage(): Page {
       'Inspired by Turing Complete, Sebastian Lague\'s Digital Logic Sim, nand2tetris, and Harris & Harris. ',
       h('a', { href: 'https://github.com/OrelMag/MOSFETtoRISCV' }, 'Source on GitHub'), ' · ',
       reportLink(undefined, 'Report a problem'), ' · ',
+      h('a', { href: '#/', title: 'One backup file: chapters, campaign, puzzles and every sandbox project', onclick: (e: Event) => { e.preventDefault(); void import('../backupui').then((m) => m.exportBackup()); } }, 'Export all progress'), ' · ',
+      h('a', { href: '#/', title: 'Merge a backup file into what you have; nothing is lost', onclick: (e: Event) => { e.preventDefault(); void import('../backupui').then((m) => m.importBackup()); } }, 'Import progress…'), ' · ',
       h('a', { href: '#/', onclick: (e: Event) => { e.preventDefault(); if (confirm('Reset your progress?')) settings.resetProgress(); } }, 'Reset progress'),
       h('div', { class: 'footer-meta' },
         h('span', { title: `build ${__APP_COMMIT__}, ${__APP_DATE__}` }, `Version ${__APP_VERSION__}`), ' · ',

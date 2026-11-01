@@ -22,6 +22,8 @@ export const STAGE_BEATS: readonly CoachBeat[] = [
     text: 'Click a wire and Why? traces its value back through the gates to the inputs that decide it. Click a part instead to see what it is for.' },
   { id: 'run', target: '.stage .controls .ctl-acts', title: 'Back, Step, Slow',
     text: 'Back undoes a step, a clock cycle or an input change. Step advances one gate delay. Slow motion in the top bar draws each change as a front over one gate.' },
+  { id: 'share', target: '.stage .share-btn', title: 'Share this view',
+    text: 'Export this level as an SVG or PNG, or Copy link to this view: the step, the opened part, the inputs, probes and clock cycles, so whoever opens it sees what you see.' },
   { id: 'remix', target: '.stage .remix-btn', title: 'Open in Sandbox',
     text: 'Copies the circuit on screen into the sandbox as a chip of your own: rewire it, change it, run it with your own inputs.' },
 ];

@@ -3,6 +3,7 @@
 import { chapters } from '../../chapters';
 import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
+import { notes, type Place } from '../notes';
 import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { maybeCoach } from '../coachmarks';
@@ -11,6 +12,7 @@ import { h, icon } from '../dom';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { bindKeys } from '../keys';
 import { toggleChapterMenu } from '../quicknav';
+import { bookmarkButton, StepNotes } from '../notesui';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
@@ -34,6 +36,7 @@ export class ChapterPage implements Page {
   private stage: Stage;
   private inspector: Inspector;
   private head: HTMLElement;
+  private tools = h('div', { class: 'step-tools' });
   private body: HTMLElement;
   /** The walkthrough playing on the stage, if any. */
   private tour: TourPlayer | null = null;
@@ -49,6 +52,9 @@ export class ChapterPage implements Page {
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
   private unbindKeys: () => void;
+  /** This step's notes (cards, and markers on the stage); none on the recap. */
+  private stepNotes: StepNotes | null = null;
+  private offNotes: () => void;
 
   constructor(chapter: Chapter, step: number, path?: string[]) {
     this.chapter = chapter;
@@ -79,7 +85,18 @@ export class ChapterPage implements Page {
       'chapter.next': () => jump(1),
       'chapter.prev': () => jump(-1),
     });
+    // the head's Save / note count follow the store
+    this.offNotes = notes().onChange(() => this.renderTools());
     this.goStep(step, path);
+  }
+
+  /** The step's place for notes and bookmarks (null on the recap). */
+  private place(): Place | null {
+    return this.step >= 0 && this.step < this.chapter.steps.length ? { kind: 'step', chapter: this.chapter.id, step: this.step } : null;
+  }
+
+  private placeTitle(): string {
+    return `${chapterNo(this.chapter)} · ${this.chapter.title} · ${this.chapter.steps[this.step]?.title ?? ''}`;
   }
 
   /** This step's address, with the part open on the stage unless it is the scene's opening view. */
@@ -125,6 +142,9 @@ export class ChapterPage implements Page {
     this.unlisten = [];
     this.tour?.close();
     this.notes.clear();
+    this.stepNotes?.destroy();
+    this.stepNotes = null;
+    this.stage.noteMarks = null;
     if (i === this.recap) {
       this.show(steps.length - 1, path);
       this.renderHead();
@@ -202,7 +222,20 @@ export class ChapterPage implements Page {
       h('div', { class: 'steps-row' },
         h('div', { class: 'steps-dots', role: 'tablist' }, dots),
         total ? h('span', { class: 'checks-count', title: 'Questions and challenges solved in this chapter' }, `${done} / ${total} checks`) : null),
+      this.tools,
     );
+    this.renderTools();
+  }
+
+  /** Save (bookmark) and Add note, for the step shown; nothing on the recap. */
+  private renderTools(): void {
+    const place = this.place();
+    if (!place) return void this.tools.replaceChildren();
+    const n = notes().notesAt(place).length;
+    this.tools.replaceChildren(
+      bookmarkButton(place, () => this.placeTitle()),
+      h('button', { class: 'btn sm note-add', type: 'button', title: 'A note on this step, pinned to the part selected on the stage', onclick: () => this.stepNotes?.add() },
+        icon('note', 15), h('span', { class: 'lbl' }, 'Add note'), n ? h('small', null, ` · ${n}`) : null));
   }
 
   /** Hover definitions: a chunk of its own, marked once it arrives (if still shown), skipping terms met in earlier steps seen. */
@@ -228,6 +261,13 @@ export class ChapterPage implements Page {
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
     if (lit) b.append(lit);
+    const place = this.place();
+    if (place) {
+      this.stepNotes = new StepNotes(st.scene || this.sceneShown ? this.stage : null, place, () => this.placeTitle());
+      this.stage.noteMarks = this.stepNotes.marks;
+      b.append(this.stepNotes.el);
+      this.stage.updateNoteMarks();
+    }
     this.unlisten.push(wireLooks(b, this.stage));
     this.gloss(prose);
     this.wireTries(prose, st);
@@ -252,6 +292,7 @@ export class ChapterPage implements Page {
         st.actions.map((a) => h('button', { class: 'btn sm', onclick: () => a.run(this.stage) }, a.label))));
     }
     if (st.challenge) b.append(this.renderChallenge(st));
+    this.stepNotes?.openPending();
   }
 
   /** Tabs over the step's layers; one open at a time (the last chosen kind opens first on the next step that has it). */
@@ -420,6 +461,8 @@ export class ChapterPage implements Page {
   }
 
   destroy(): void {
+    this.offNotes();
+    this.stepNotes?.destroy();
     this.notes.clear();
     this.unbindKeys();
     this.unlisten.forEach((f) => f());

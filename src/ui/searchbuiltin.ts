@@ -11,6 +11,8 @@ import { showPageKeys } from './keyhelp';
 import { showCoach } from './coachmarks';
 import { keyDef } from './keys';
 import { allActions, here, registerActions, registerSearchSource, type SearchCtx } from './searchsources';
+import { notes, placeHref, snippet } from './notes';
+import { placeLabel } from './notelabel';
 import { applyTheme, settings, type Theme } from './settings';
 
 const route = (ctx: SearchCtx) => ctx.hash.replace(/^#\/?/, '').split('/');
@@ -47,6 +49,20 @@ registerSearchSource({
   order: (ctx) => (route(ctx)[0] === 'workbench' ? 2 : route(ctx)[0] === 'sandbox' ? 3 : 0),
   items: chapterItems,
   browse: () => chapterItems().filter((it) => it.kind === 'chapter'),
+});
+
+// ---- the learner's notes and bookmarks ---------------------------------------------------------------
+
+registerSearchSource({
+  id: 'notes', title: 'My notes', scope: 'Notes',
+  order: () => 6,
+  items: () => notes().list().map((it): NavItem => {
+    const where = placeLabel(it);
+    return {
+      kind: 'note', id: it.id, title: it.type === 'note' ? snippet(it.text, 90) : `Bookmark: ${where.sub || where.head}`,
+      sub: `${where.head}${where.sub ? ` · ${where.sub}` : ''}`, text: it.text, href: placeHref(it.place, it.pin),
+    };
+  }),
 });
 
 // ---- workbench components ----------------------------------------------------------------------------
@@ -163,6 +179,7 @@ registerActions((ctx) => {
       () => settings.set('radix', RADIXES[(RADIXES.indexOf(settings.radix as typeof RADIXES[number]) + 1) % 3]))));
   }
   if (stage) {
+    out.push(here(act('copylink', 'Copy link to this view', 'chapter step, opened part, inputs, probes and clock cycles', () => { void import('./viewlink').then(async (m) => { const l = m.currentViewLink(); if (l) await m.copyText(l); }); })));
     out.push(here(act('slow', 'Slow motion', `one gate delay at a time (${onOff(settings.animate)})`, toggle('animate'))));
     out.push(act('wide', 'Hide the side panes', `the circuit full width (${onOff(settings.wide)})`, toggle('wide')));
   }
@@ -178,6 +195,11 @@ registerActions((ctx) => {
     act('clock', 'Automatic clock', `a circuit with a clock starts running (${onOff(settings.autoClock)})`, toggle('autoClock')),
     act('delay', 'Load-dependent delay', `timing panels and the inspector time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
     act('simple', 'Simple connections', `sandbox: straight wires at any angle (${onOff(settings.simpleWires)})`, toggle('simpleWires')),
+    act('text.bigger', 'Larger text', `chapter prose ${Math.min(130, settings.textSize + 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.min(130, settings.textSize + 10)); applyTheme(); }),
+    act('text.smaller', 'Smaller text', `chapter prose ${Math.max(90, settings.textSize - 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.max(90, settings.textSize - 10)); applyTheme(); }),
+    act('text.narrow', 'Narrow reading column', `chapter text held to about 62 characters (${onOff(settings.narrowText)})`, () => { settings.set('narrowText', !settings.narrowText); applyTheme(); }),
+    act('backup.export', 'Export all progress', 'one backup file: chapters, campaign, puzzles, sandbox projects', () => { void import('./backupui').then((m) => m.exportBackup()); }),
+    act('backup.import', 'Import progress…', 'merge a backup file into what you have', () => { void import('./backupui').then((m) => m.importBackup()); }),
     act('go.journey', 'Go to the journey map', 'home', go('#/')),
     act('go.campaign', 'Go to the campaign map', 'campaign', go('#/campaign')),
     act('go.codex', 'Open the codex', 'campaign · every entry', go('#/campaign/codex')),

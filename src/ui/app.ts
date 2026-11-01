@@ -6,9 +6,11 @@ import { installErrorReporting, loadFailed } from './errors';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
+import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, PALETTES, settings, type Theme } from './settings';
+import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
 import { parseDrill } from './drillpath';
+import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
 
 /**
@@ -42,6 +44,19 @@ export function startApp(root: HTMLElement): void {
   });
   nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
     navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
+  // "My notes · n" shows once there is a note or a bookmark (ui/notes.ts)
+  const notesLink = navLink('#/notes', 'note', 'My notes', 'notes');
+  const syncNotes = () => {
+    const n = notes().count;
+    notesLink.hidden = !n;
+    notesLink.querySelector('span')!.replaceChildren(h('span', { class: 'nl' }, 'My notes · '), String(n));
+    notesLink.setAttribute('aria-label', `My notes, ${n}`);
+    notesLink.title = `${n} note${n === 1 ? '' : 's'} and bookmarks, and the review queue`;
+  };
+  notes().onChange(syncNotes);
+  window.addEventListener('storage', (e) => { if (e.key === NOTES_KEY) { notes().reload(); } });
+  syncNotes();
+  nav.append(notesLink);
   installQuickNav();
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
   // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
@@ -131,7 +146,26 @@ export function startApp(root: HTMLElement): void {
   const delayItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('loadDelay', !settings.loadDelay) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Load-dependent delay'), h('small', null, 'Timing panels and the inspector open on each NAND timed by what it drives; the chapters quote unit delay')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
+  // Reading: prose size in the chapter pane (never the circuits) and a held line length.
+  const sizeStep = (d: number) => {
+    const i = Math.max(0, Math.min(TEXT_SIZES.length - 1, TEXT_SIZES.indexOf(settings.textSize as 100) + d));
+    settings.set('textSize', TEXT_SIZES[i]);
+    applyTheme();
+  };
+  const sizeVal = h('span', { class: 'pal-size-v', 'aria-live': 'polite' });
+  const sizeMinus = h('button', { class: 'btn sm', title: 'Smaller text', 'aria-label': 'Smaller text', onclick: () => sizeStep(-1) }, 'A−');
+  const sizePlus = h('button', { class: 'btn sm', title: 'Larger text', 'aria-label': 'Larger text', onclick: () => sizeStep(1) }, 'A+');
+  const sizeRow = h('div', { class: 'pal-size', role: 'group', 'aria-label': 'Text size' },
+    h('span', null, h('b', null, 'Text size'), h('small', null, 'Chapter prose only; circuits keep their size')), sizeMinus, sizeVal, sizePlus);
+  const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
+  // One file for everything the site keeps in this browser (ui/backup.ts, backupui.ts).
+  const backupSave = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.exportBackup()); } },
+    icon('download', 16), h('span', null, h('b', null, 'Export all progress'), h('small', null, 'One backup file: chapters, campaign, puzzles, sandbox projects')));
+  const backupLoad = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.importBackup()); } },
+    icon('upload', 16), h('span', null, h('b', null, 'Import progress…'), h('small', null, 'Merges a backup file into what you have; nothing is lost')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), sizeRow, narrowItem, h('div', { class: 'pal-sep', role: 'separator' }), backupSave, backupLoad, h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -160,6 +194,10 @@ export function startApp(root: HTMLElement): void {
     glossItem.setAttribute('aria-checked', String(settings.glossary));
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     delayItem.setAttribute('aria-checked', String(settings.loadDelay));
+    narrowItem.setAttribute('aria-checked', String(settings.narrowText));
+    sizeVal.textContent = `${settings.textSize}%`;
+    sizeMinus.disabled = settings.textSize <= TEXT_SIZES[0];
+    sizePlus.disabled = settings.textSize >= TEXT_SIZES[TEXT_SIZES.length - 1];
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));
@@ -180,7 +218,12 @@ export function startApp(root: HTMLElement): void {
   let routeSeq = 0;
   const route = () => {
     const seq = ++routeSeq;
-    const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    // A chapter's or the workbench's address may end in a view suffix (?i=…&p=…&n=…, viewlink.ts): taken off here and handed to the
+    // stage that builds the scene, so the rest of the routing sees the plain address it always did.
+    const { route: base, query } = splitView(location.hash);
+    const onStage = /^#\/?(c|workbench)\//.test(base);
+    setPendingView(onStage ? decodeView(query) : null);
+    const parts = (onStage ? base : location.hash).replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
     const shows = stageTools(parts);
@@ -193,6 +236,7 @@ export function startApp(root: HTMLElement): void {
       const path = parseDrill(parts.slice(3));
       if (page instanceof ChapterPage && page.chapter === ch) {
         page.route(step, path);
+        applyPendingView();
         return;
       }
       mount(new ChapterPage(ch, step, path));
@@ -224,9 +268,17 @@ export function startApp(root: HTMLElement): void {
       const path = parseDrill(parts.slice(2));
       if (page instanceof WorkbenchPage) {
         page.route(parts[1] ?? 'rca4', path);
+        applyPendingView();
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
+    } else if (key === 'notes') {
+      if ((page as { kind?: string } | null)?.kind === 'notes') return;
+      import('./pages/notes').then((m) => {
+        if (seq === routeSeq) mount(new m.NotesPage());
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed('My notes', e));
+      });
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;

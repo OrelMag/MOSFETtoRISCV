@@ -14,6 +14,7 @@ import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { benchOpened, benchTabs } from '../benchtabs';
 import { h, icon } from '../dom';
+import { bookmarkButton } from '../notesui';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import type { Page } from './chapter';
 
@@ -28,6 +29,8 @@ export class WorkbenchPage implements Page {
   /** On a phone the library is a drawer above the stage, closed until this button opens it (app.css). */
   private libBtn: HTMLButtonElement;
   private libName: HTMLElement;
+  /** Save this component in My notes (ui/notes.ts). */
+  private mark = h('div', { class: 'bench-mark' });
   /** Following the address bar (a route): the stage's moves are not new history entries. */
   private routing = false;
 
@@ -40,7 +43,7 @@ export class WorkbenchPage implements Page {
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
     this.list = h('div', { class: 'lib-list' });
     this.params = h('div', { class: 'param-row', style: 'padding:0 12px 10px' });
-    const lib = h('aside', { class: 'library', id: 'bench-library' }, benchTabs('components'), search, this.params, this.list);
+    const lib = h('aside', { class: 'library', id: 'bench-library' }, benchTabs('components'), this.mark, search, this.params, this.list);
     this.libName = h('span', { class: 'bench-libname' });
     this.libBtn = h('button', { class: 'btn sm bench-libbtn', 'aria-controls': 'bench-library', 'aria-expanded': 'false', title: 'Show or hide the component library',
       onclick: () => this.showLibrary(!this.el.classList.contains('lib-open')) }, icon('menu', 15), h('b', null, 'Components'), this.libName, icon('chevD', 14)) as HTMLButtonElement;
@@ -93,6 +96,7 @@ export class WorkbenchPage implements Page {
       const near = suggestItems(id);
       this.current = '';
       this.libName.textContent = '';
+      this.mark.replaceChildren();
       this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
         h('h3', null, 'Unknown component'),
         h('p', { class: 'sub' }, `No component called "${id}". ${near.length ? 'Did you mean:' : 'Pick one from the library list, or search it.'}`),
@@ -106,6 +110,7 @@ export class WorkbenchPage implements Page {
     }
     this.current = def.id;
     this.libName.textContent = def.name;
+    this.mark.replaceChildren(bookmarkButton({ kind: 'bench', id: def.id }, () => `Workbench · ${def.name}`));
     benchOpened(def.id, this.el);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))

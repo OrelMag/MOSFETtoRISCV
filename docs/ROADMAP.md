@@ -1164,6 +1164,12 @@ links, bus taps, duplicate and pin reordering. The gaps:
   the synchronous API drains, so results are identical and the sync path costs the same
 - ✅ Sandbox minimap (M): the whole chip, a draggable frame, hidden while everything fits
 
+### Quality of life (2026-11-01) ✅
+- One backup file for all progress (ui/backup.ts: export / merge import, settings menu + home page + search), `navigator.storage.persist()` and a one-time Safari eviction note
+- Install as an app / offline: manifest, icons, generated service worker (vite.config.ts, scripts/sw-template.js)
+- Copy link to this view: inputs, probes and clock cycles in an optional hash suffix (ui/viewlink.ts, Stage share menu)
+- Text size (90–130 %) and a narrow reading column, prose only
+
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
 our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 34, the "vintage" accent).
@@ -1183,6 +1189,14 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
 - ✅ The 6502 as a sandbox part (Library ▸ Processor parts, opening onto the transistor chip), ROMs in 6502
   assembly, Examples ▸ 6502 computer, the CPU panel following it
 - ⏳ Undocumented opcodes in the ISS
+
+### Notes, bookmarks and a review queue (2026-11-01) ✅
+
+- ✅ Save (bookmark) and Add note in every chapter step's header; a note may be pinned to the selected part (path, part, inputs, cycle) and
+  shows as a numbered marker on it; bookmarks also on workbench components and sandbox chips (ui/notes.ts, notesui.ts)
+- ✅ `#/notes` (My notes): filters, search, each item back to its place; the review queue beside it: wrong answers first, then
+  "Ask again soon", then the longest unseen, from chapters visited; right answers return after 2 / 7 / 21 days (ui/review.ts)
+- ✅ Notes and review history are in the "Export all progress" backup (ui/backup.ts: `mergeNotes`, `mergeReview`)
 
 ---
 

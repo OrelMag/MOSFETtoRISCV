@@ -5,6 +5,8 @@ import type { Radix } from '../sim/values';
 export type Theme = 'auto' | 'light' | 'dark';
 /** What one slow-mode tick advances: a gate delay, a clock cycle, or a retired instruction. */
 export type TraceLevel = 'gate' | 'cycle' | 'instr';
+/** The prose size choices, percent. */
+export const TEXT_SIZES = [90, 100, 110, 120, 130] as const;
 export type Palette = 'default' | 'cb' | 'lsim' | 'contrast' | 'print';
 
 /** Wire palettes (colours live in styles/palettes.css). */
@@ -53,6 +55,10 @@ interface State {
   minimap: boolean;
   /** Coach-mark tours finished or skipped (ui/coachmarks.ts): "stage", "sandbox". */
   coachDone: Record<string, boolean>;
+  /** Prose size in the chapter pane, percent of the designed size (TEXT_SIZES); schematics never scale. */
+  textSize: number;
+  /** The chapter pane's text held to a comfortable line length (about 62 characters), centred where the pane is wider. */
+  narrowText: boolean;
   /** Timing panel open (stays open across scenes). */
   analyzer: boolean;
   /** Gate delays per second when animating propagation. */
@@ -71,7 +77,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, coachDone: {}, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -92,6 +98,15 @@ function load(): State {
 
 const state = load();
 const listeners = new Set<() => void>();
+
+/** Progress exists: ask the browser to keep the data (ui/persist.ts; once per load, after the page has settled). */
+let kept = false;
+function progressMade(): void {
+  if (kept) return;
+  kept = true;
+  setTimeout(() => { void import('./persist').then((m) => m.keepProgress()); }, 3000);
+}
+if (Object.keys(state.visited).length) progressMade();
 
 function save(): void {
   try {
@@ -117,11 +132,13 @@ export const settings = {
   get singleKeys() { return state.singleKeys; },
   get loadDelay() { return state.loadDelay; },
   get minimap() { return state.minimap; },
+  get textSize() { return state.textSize; },
+  get narrowText() { return state.narrowText; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -149,6 +166,7 @@ export const settings = {
     if (!v.includes(step)) v.push(step);
     else if (!moved) return;
     save();
+    progressMade();
   },
   /** The chapter step viewed last, if any. */
   lastStep(): { chapter: string; step: number } | undefined {
@@ -160,6 +178,7 @@ export const settings = {
   solve(key: string): void {
     state.solved[key] = true;
     save();
+    progressMade();
   },
   isSolved(key: string): boolean {
     return !!state.solved[key];
@@ -208,6 +227,11 @@ export function applyTheme(): void {
   else root.setAttribute('data-wireflow', 'off');
   if (state.netColors) root.setAttribute('data-netcolors', 'on');
   else root.removeAttribute('data-netcolors');
+  // Prose only: app.css applies these to the chapter pane's text (zoom), never to a drawn circuit.
+  const size = TEXT_SIZES.includes(state.textSize as 100) ? state.textSize : 100;
+  if (size === 100) root.style.removeProperty('--prose-scale');
+  else root.style.setProperty('--prose-scale', String(size / 100));
+  root.toggleAttribute('data-narrow-text', state.narrowText);
   if (state.vivid) root.setAttribute('data-look', 'vivid');
   else root.removeAttribute('data-look');
   if (state.vivid && state.board) root.setAttribute('data-board', 'dark');

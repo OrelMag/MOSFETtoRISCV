@@ -1171,6 +1171,32 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                in the ? sheet (SheetOptions.coach) and the > actions; never while a content tour (.tour-card) plays; smoke seeds
                coachDone and has first-run routes); view/loadcard.ts: the card over a stage while Stage.load builds a big scene
                (BUSY_GATES): a bar, the phases with their times and the flatten count, shown after LOAD_CARD_MS (300 ms)
+
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion;
+               backup.ts (DOM-free): one file for every `mosfet2riscv:` key (BackupFile {format, schema, keys}); mergeBackup(file, kv) stages a copy of the
+               storage and merges by the existing rules (settings: visited / solved union, local prefs kept; mergeCampaign; puzzles betterRecord; chips
+               importChips + mergeFolders; other projects adopted under their own id; other keys filled if absent) and returns only the changed keys,
+               idempotent, with `notes` for anything left out; backupui.ts the dialogs (settings menu, home footer, `>` actions), leaves the editor,
+               writes, reloads (settings / progress / editors hold state in memory); persist.ts navigator.storage.persist() once progress exists and the
+               one-time Safari 7-day note; viewlink.ts (DOM-free): an optional `?i=<port~hex>&p=<path~net>&n=<cycles>` suffix on a chapter / workbench
+               hash (app.ts route() strips it, hands it to the Stage that builds the scene: Stage.viewState / restoreView / copyViewLink in the Share
+               menu; cycles replayed under a time budget, REPLAY_MS); settings.textSize / narrowText set --prose-scale (zoom on .narrative-body, the
+               pane widens with it) and data-narrow-text (62ch); never schematics.
+public/ + scripts/sw-template.js: manifest.webmanifest, icon.svg / icon-{180,192,512}.png; vite.config.ts serviceWorker() writes dist/sw.js
+               (assets/ precached, hashed assets cache-first, everything else network-first, doom/ layout/ yosys/ and other origins untouched; two
+               cache generations); main.ts registers it only in production on http(s) (never app:// or file:)
+               notes.ts (DOM-free, tested: the learner's notes and bookmarks in their own key `mosfet2riscv:notes:v1`, injected KV, sanitized;
+               a note = free text on a step, optionally pinned (NotePin: the level's path, the part, the scene's inputs and cycle), a
+               bookmark = a Place (step / workbench component / sandbox chip); deletions kept as tombstones; mergeNotes: union by id, newest
+               edit wins, for the backup file; never in share links; openNoteNext / takeOpenNote: the notes page asks the stage to restore a
+               pin), notesui.ts (bookmarkButton, StepNotes: the yellow cards in a step and their numbered markers: Stage.noteMarks →
+               SchematicView.setNotePins), notelabel.ts (a place's words), editor/bookmark.ts (the sandbox's toolbar toggle), pages/notes.ts
+               (#/notes, its own chunk: filters, search, the review queue; top bar "My notes · n" and the home button only with items; the
+               search's `notes` source); review.ts (DOM-free: ReviewLog in `mosfet2riscv:review:v1`, one Memo per question key as quizBox
+               logs it (first pick of a showing); wrong → due now, right → due in 2 / 7 / 21 / 60 days, "Ask again soon" flag; buildQueue:
+               missed, then asked-soon, then the longest unseen, only chapters visited (a codex question once answered), summarize;
+               mergeReview for the backup), reviewqs.ts (every question: step quizzes, recap checks, codex Check yourself, with origin
+               and link); tests/notes.test.ts
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,

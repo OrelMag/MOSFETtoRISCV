@@ -153,7 +153,7 @@ export function chapterMark(seen: number, checks: { done: number; total: number 
 
 // ---- search items of every kind (the search box's sources: ui/searchsources.ts) ----------------
 
-export type NavKind = 'chapter' | 'step' | 'component' | 'level' | 'codex' | 'action';
+export type NavKind = 'chapter' | 'step' | 'component' | 'level' | 'codex' | 'action' | 'note';
 
 /** One row the search can show: a place (href) or something to do (run). */
 export interface NavItem {

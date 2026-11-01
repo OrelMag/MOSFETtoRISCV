@@ -9,7 +9,7 @@ import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
-import { Camera, installPanZoom, underCover, type ViewBox } from './camera';
+import { Camera, fitBox, installPanZoom, underCover, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -17,6 +17,14 @@ import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, 
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
+
+/** A note's marker on a part of the level shown. */
+export interface NotePin {
+  inst: string;
+  n: number;
+  title: string;
+  open(): void;
+}
 
 export interface SchematicEvents {
   open(child: string): void;
@@ -87,6 +95,8 @@ export class SchematicView {
   private wires: WireEls[] = [];
   private pins: PinEls[] = [];
   private insts = new Map<string, SVGGElement>();
+  /** The learner's notes pinned to parts of this level (ui/notes.ts): a numbered marker on each part, a click opens the note. */
+  private notePins: NotePin[] = [];
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
   private cam: Camera;
   private radixOverride = new Map<number, Radix>();
@@ -109,6 +119,9 @@ export class SchematicView {
   flowMs = 0;
   /** Screen rectangles (from the canvas's corner) the stage's panels cover; fit() keeps the circuit clear of them. */
   cover: Rect[] = [];
+  /** A small badge over the canvas's corner (the stage's level label), as a rectangle in the same px: the fit leaves it
+   *  clear only when the circuit, fitted without it, would reach under it (a corner nothing draws in costs no room). */
+  badge: (() => Rect | null) | null = null;
   /**
    * The learner's layout (view/layout.ts): true, parts and wires can be dragged and pointers unravelled (the stage);
    * 'wires', only wires and pointers, the parts stay put (the sandbox's look inside, the codex); false, as authored.
@@ -177,6 +190,27 @@ export class SchematicView {
     this.wires = [];
     this.pins = [];
     this.insts.clear();
+  }
+
+  /** Markers for the notes pinned to this level's parts (replaces the previous ones; a name not on this level is skipped). */
+  setNotePins(pins: NotePin[]): void {
+    this.notePins = pins;
+    for (const [name, g] of this.insts) this.paintNotePins(name, g);
+  }
+
+  private paintNotePins(name: string, g: SVGGElement): void {
+    g.querySelectorAll(':scope > .note-pin').forEach((e) => e.remove());
+    const mine = this.notePins.filter((p) => p.inst === name);
+    mine.forEach((p, k) => {
+      const m = s('g', { class: 'note-pin', transform: `translate(${-0.9 + k * 1.5},${-1.1})` });
+      m.append(s('title', {}, p.title), s('circle', { cx: 0.7, cy: 0.7, r: 0.75 }), s('text', { x: 0.7, y: 0.72 }, String(p.n)));
+      m.addEventListener('pointerdown', (e) => e.stopPropagation());
+      m.addEventListener('click', (e) => {
+        e.stopPropagation();
+        p.open();
+      });
+      g.append(m);
+    });
   }
 
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
@@ -359,6 +393,7 @@ export class SchematicView {
       this.insts.set(inst.name, g);
       instG.append(g);
       this.paintHeat(inst.name, g);
+      this.paintNotePins(inst.name, g);
     }
 
     // The component's own pins
@@ -1203,7 +1238,17 @@ export class SchematicView {
   }
 
   fit(): void {
-    this.cam.fit(this.bbox, this.cover);
+    this.cam.fit(this.bbox, this.coverFor());
+  }
+
+  /** The panels' covers, and the badge's too when the circuit fitted beside the panels alone reaches under it. */
+  private coverFor(): Rect[] {
+    const b = this.badge?.();
+    if (!b) return this.cover;
+    const r = this.host.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return this.cover;
+    const vb = fitBox(this.bbox, r.width, r.height, this.cover);
+    return underCover(vb, this.bbox, r.width, r.height, [b]) ? [...this.cover, b] : this.cover;
   }
 
   /** Still showing what the last fit() chose (the learner has not zoomed or panned since). */
@@ -1222,7 +1267,7 @@ export class SchematicView {
     this.cover = cover;
     if (!this.cam.fitted) return;
     const r = this.host.getBoundingClientRect();
-    if (refit || underCover(this.cam.vb, this.bbox, r.width, r.height, cover)) this.fit();
+    if (refit || underCover(this.cam.vb, this.bbox, r.width, r.height, [...cover, ...(this.badge?.() ? [this.badge()!] : [])])) this.fit();
   }
 
   zoom(factor: number, cx?: number, cy?: number): void {

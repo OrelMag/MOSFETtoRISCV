@@ -175,7 +175,9 @@ class Coach {
 /** Is a content tour (ui/tour.ts), a dialog or this tour already on screen? */
 const busy = () => ({
   otherTour: !!document.querySelector('.tour-card') || active !== null,
-  dialogOpen: !!document.querySelector('.kh-back, [role="dialog"][aria-modal="true"]:not(.coach-card)'),
+  // a modal (keys, search, the backup dialogs), the Safari data note, or a note being typed
+  dialogOpen: !!document.querySelector('.kh-back, dialog[open], .persist-note, [role="dialog"][aria-modal="true"]:not(.coach-card)')
+    || !!(document.activeElement as HTMLElement | null)?.closest?.('.note-card'),
 });
 
 /** Play the tour of `kind` now (the ? sheet, the search's actions). False when no control of it is on the page. */
