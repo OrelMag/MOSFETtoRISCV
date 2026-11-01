@@ -2159,3 +2159,47 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .why-chain li, .why-table tr td { min-height: 40px; }
   .why-tabs button, .why-card > header .btn { min-height: 40px; min-width: 40px; }
 }
+
+/* ---------- tours (ui/tour.ts), ledgers (ui/ledger.ts), layers under a step (ui/pages/chapter.ts) ---------- */
+.tour-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 10px; font-size: 12.5px; }
+.tour-go.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tour-card {
+  position: absolute; z-index: 7; width: min(330px, calc(100% - 16px)); display: grid; gap: 8px; padding: 10px 12px 12px;
+  background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
+  font-size: 13.5px; line-height: 1.5;
+}
+.tour-card:focus { outline: none; }
+.tour-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tour-card > header { display: flex; align-items: center; gap: 8px; }
+.tour-title { font-size: 13.5px; }
+.tour-count { margin-left: auto; font: 600 11px var(--font-mono); color: var(--muted); }
+.tour-say p { margin: 0 0 6px; }
+.tour-say p:last-child { margin: 0; }
+.tour-ctl { display: flex; gap: 6px; flex-wrap: wrap; }
+.tour-ctl .btn.primary { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
+.tour-ctl .btn:disabled { opacity: 0.45; }
+svg.schematic .inst.ghost { opacity: 0.35; }
+svg.schematic .inst.ghost .hit, svg.schematic .inst.ghost path, svg.schematic .inst.ghost rect { stroke-dasharray: 3 2; }
+svg.schematic.focus .inst.ghost { opacity: 0.5; }
+.ledger { margin: 8px 0 12px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow-x: auto; }
+.ledger table { border-collapse: collapse; font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+.ledger th { text-align: right; padding: 1px 8px 1px 0; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.ledger td { text-align: center; min-width: 1.4em; padding: 1px 2px; border-radius: 4px; }
+.ledger td[data-col]:hover { background: var(--accent-soft); color: var(--accent); }
+.ledger td.ledger-v { text-align: left; padding-left: 12px; color: var(--muted); white-space: nowrap; }
+.ledger .ledger-carry td { color: var(--accent); font-size: 11.5px; }
+.ledger .ledger-sum td { border-top: 1px solid var(--border-strong); font-weight: 700; }
+.ledger-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.ledger-warn { color: var(--wx); }
+.layers { margin: 10px 0 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.layer-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.layer-tabs button { font: 600 12px var(--font-ui, inherit); padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
+.layer-tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.layer-body { margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+@media (pointer: coarse) {
+  .tour-ctl .btn, .tour-card > header .btn, .layer-tabs button { min-height: 40px; min-width: 40px; }
+  .ledger td[data-col] { min-width: 28px; }
+}
+.layer-body table.mini { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.layer-body table.mini th, .layer-body table.mini td { padding: 2px 10px 2px 0; text-align: left; border-bottom: 1px solid var(--border); }
+.layer-body table.mini th { color: var(--muted); font-weight: 600; }

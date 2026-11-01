@@ -1364,7 +1364,9 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 
 A chapter is a list of steps. Each step has narrative HTML and either a `scene` (a root
 component, initial inputs, optional drill path, highlights, probes) or a `widget`, plus an
-optional `challenge`. Keep the prose short, concrete and honest. Introduce a component
+optional `challenge`. Write the explanation in full (what it is, why it works, what it costs), concrete and honest;
+derivations, real chips, the usual mistake and tables of numbers go in `more` (Layers), the mechanism played out on the
+circuit in a `tour` (Beats, checked by tests/tours.test.ts), a worked sum in a `ledger`. Every number is computed. Introduce a component
 as a black box only after its inside has been shown. A clocked scene starts running on load (settings.autoClock,
 2 Hz; Pulse / Step / Back / a hand-clocked edge pause it): give it `autoClock: false` when its exercise counts Pulses
 from the first state. Say what each thing *costs*.

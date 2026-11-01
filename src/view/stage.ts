@@ -1812,6 +1812,32 @@ export class Stage {
     this.view.heat(map);
   }
 
+  /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
+  ghost(names: string[]): void {
+    this.view.ghost(names);
+  }
+
+  /** The screen rectangle around instances of the current view (null: none drawn). */
+  instRect(names: string[]): DOMRect | null {
+    return this.view.instRect(names);
+  }
+
+  /** Put an element over the canvas (a tour's caption), or take it away. */
+  overlay(el: HTMLElement, on = true): void {
+    if (on) this.canvas.append(el);
+    else el.remove();
+  }
+
+  /** The canvas's screen rectangle. */
+  get canvasRect(): DOMRect {
+    return this.canvas.getBoundingClientRect();
+  }
+
+  /** How many steps Back can undo now: a tour notes it before each beat and backs up to it. */
+  get historyDepth(): number {
+    return this.history.length;
+  }
+
   /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */
   markNets(marks: Map<number, string>): void {
     this.view.markNets(marks);
