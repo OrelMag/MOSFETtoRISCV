@@ -7,6 +7,7 @@
 
 import { sanitizeIsa } from '../isa/table';
 import { sanitizeRows } from '../riscv/custom';
+import { isBook, sanitizeProgram } from '../lib/ucode';
 import { sanitizeCpu } from './cpu';
 import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
@@ -87,6 +88,10 @@ function sanitizeRef(r: unknown): PartRef | null {
     }
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
     return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}) } };
+  }
+  if (isObj(r.ucode)) {
+    const p = sanitizeProgram(r.ucode);
+    return p ? (isBook(p) ? { lib: 'mc_micro' } : { ucode: p }) : null;
   }
   if (isObj(r.core)) {
     const custom = sanitizeRows(r.core.custom);

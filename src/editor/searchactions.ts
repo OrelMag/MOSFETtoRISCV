@@ -8,6 +8,7 @@ import { here, registerActions, registerSearchSource, type SearchCtx } from '../
 import { type Editor, registerEditorPlugin } from './editor';
 import { addExample, EXAMPLES } from './examples';
 import { aliasesOf, itemText } from './palette';
+import { microcodePart } from './ucodepart';
 
 /** A toolbar title's own shortcut, "Undo (Ctrl+Z)" → title "Undo", keys ["Ctrl Z"]. */
 function split(title: string): { name: string; keys?: string[] } {
@@ -31,6 +32,7 @@ function actionsOf(ed: Editor): NavItem[] {
       keys: keys ?? (a.id === 'help' ? ['?'] : undefined), run: () => a.run(ed),
     });
   }
+  if (microcodePart(ed.doc)) out.push(here({ kind: 'action', id: 'sb.microcode', title: 'Microcode…', sub: `${where} · paint the multicycle CPU's microcode`, alt: 'ucode microprogram control store', run: () => void import('./ucodeui').then((m) => m.openMicrocodeEditor(ed)) }));
   if (!ed.level) out.push({ kind: 'action', id: 'sb.new', title: 'New chip', sub: 'Sandbox · an empty chip in a new tab', run: () => ed.newChip() });
   return out;
 }
