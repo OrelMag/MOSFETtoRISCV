@@ -287,8 +287,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
    own panels took most of that). */
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout { grid-template-columns: minmax(300px, 340px) 1fr minmax(260px, 300px); }
-  .layout.no-inspector { grid-template-columns: minmax(300px, 340px) 1fr 0; }
+  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr minmax(260px, 300px); }
+  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 0; }
 }
 
 .narrative {

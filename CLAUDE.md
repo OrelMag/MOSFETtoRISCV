@@ -1155,7 +1155,19 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
                pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
                click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:
-               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion;
+               backup.ts (DOM-free): one file for every `mosfet2riscv:` key (BackupFile {format, schema, keys}); mergeBackup(file, kv) stages a copy of the
+               storage and merges by the existing rules (settings: visited / solved union, local prefs kept; mergeCampaign; puzzles betterRecord; chips
+               importChips + mergeFolders; other projects adopted under their own id; other keys filled if absent) and returns only the changed keys,
+               idempotent, with `notes` for anything left out; backupui.ts the dialogs (settings menu, home footer, `>` actions), leaves the editor,
+               writes, reloads (settings / progress / editors hold state in memory); persist.ts navigator.storage.persist() once progress exists and the
+               one-time Safari 7-day note; viewlink.ts (DOM-free): an optional `?i=<port~hex>&p=<path~net>&n=<cycles>` suffix on a chapter / workbench
+               hash (app.ts route() strips it, hands it to the Stage that builds the scene: Stage.viewState / restoreView / copyViewLink in the Share
+               menu; cycles replayed under a time budget, REPLAY_MS); settings.textSize / narrowText set --prose-scale (zoom on .narrative-body, the
+               pane widens with it) and data-narrow-text (62ch); never schematics.
+public/ + scripts/sw-template.js: manifest.webmanifest, icon.svg / icon-{180,192,512}.png; vite.config.ts serviceWorker() writes dist/sw.js
+               (assets/ precached, hashed assets cache-first, everything else network-first, doom/ layout/ yosys/ and other origins untouched; two
+               cache generations); main.ts registers it only in production on http(s) (never app:// or file:)
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,
