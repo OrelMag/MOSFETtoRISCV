@@ -35,3 +35,5 @@ import './tableui';
 import './fsmchipui';
 // The editor's actions in the search box (`>`).
 import './searchactions';
+// Bookmark the open chip.
+import './bookmark';
