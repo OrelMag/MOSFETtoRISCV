@@ -151,7 +151,11 @@ export class ChapterPage implements Page {
       if (k < 0) return;
     }
     const st = steps[k];
-    if (st.scene) this.stage.load(st.scene(), path);
+    if (st.scene) {
+      const t0 = performance.now();
+      const sc = st.scene();
+      this.stage.load(sc, path, performance.now() - t0);
+    }
     else this.stage.showWidget(st.widget!());
     this.shown = true;
     this.sceneShown = !!st.scene;
