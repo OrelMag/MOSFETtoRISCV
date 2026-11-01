@@ -89,7 +89,7 @@ export const chRelays: Chapter = {
           ${RELAY_COIL_POWER.toFixed(2)} W (V² / R). With N = ${RELAY.N} turns the magnetomotive force is N·I, and the flux is that
           divided by the reluctance of the magnetic circuit, dominated by the air gap: ${(RELAY.gOpen * 1e3).toFixed(2)} mm
           open, ${(RELAY.gRes * 1e3).toFixed(2)} mm of residual shim once closed. The pull goes as the flux squared, so as (N·I)² / gap²:
-          closing the gap multiplies the force from one current by roughly ${(((RELAY.gOpen + RELAY.gIron) / (RELAY.gRes + RELAY.gIron)) ** 2).toFixed(0)}
+          closing the gap multiplies the force from one current by roughly ${(((RELAY.gOpen + RELAY.gRes + RELAY.gIron) / (RELAY.gOpen - RELAY.travel + RELAY.gRes + RELAY.gIron)) ** 2).toFixed(0)}
           before the iron saturates. The spring asks ${RELAY.F0.toFixed(1)} N at rest and ${(RELAY.F0 + RELAY.k * RELAY.travel).toFixed(1)} N at the
           end of the travel (${RELAY.k} N/m over ${(RELAY.travel * 1e3).toFixed(2)} mm). The thresholds the model finds from this force balance,
           ${ms(PULL.pull ?? 0)} V and ${ms(PULL.drop ?? 0)} V, are in the ratio ${((PULL.drop ?? 0) / (PULL.pull ?? 1)).toFixed(2)}.</p>`,
@@ -311,7 +311,7 @@ export const chRelays: Chapter = {
       },
       more: {
         derive: `<p>The next state is q⁺ = set + q·¬reset: set feeds the coil, or q does, unless reset cuts the holding line. That is the SR latch of
-          <a href="#/c/latches/0">chapter 8</a> (set dominant here), in one relay and a few contacts where the NAND version takes ${stats(SR_LATCH).nands} gates.
+          <a href="#/c/latches/0">chapter 8</a> (set dominant here), in three relays (set, reset and the holding relay k) where the NAND version takes ${stats(SR_LATCH).nands} gates, though those relays also supply the set and reset inputs.
           Holding works because of hysteresis: once in, k holds down to the drop-out voltage (${ms(PULL.drop ?? 0)} V), well below the pull-in (${ms(PULL.pull ?? 0)} V).</p>`,
         pitfall: `<p>Looking for a clock. There is none: the latch is level-sensitive, a set pulse shorter than a relay step does nothing (the armature never arrives)
           and a longer one is enough. Note too that "both inputs at 0" does not say what q is: the state lives in k, not in the inputs.</p>`,

@@ -1,4 +1,5 @@
 import { cam, decoder, equal, fifo, LFSR_TAPS, MUX2, muxTree, pla, PLA_PRESETS, plaTerms, regfileMP, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
+import { CLK_TO_Q, SETUP } from '../sim/timing';
 import { DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
 import { logicDepth, stats } from '../sim/stats';
 import { pack } from '../sim/values';
@@ -102,7 +103,7 @@ export const chLatches: Chapter = {
           <p>A set moves q one gate delay after s_n falls, and q̄ follows one delay later: the pair is settled after two.</p>`,
         real: `<p>This loop is the heart of SRAM too: a 6-transistor cell is two cross-coupled inverters (4 transistors) plus two access transistors. The latch here spends
           ${stats(SR_LATCH).transistors} transistors on the loop alone because each NAND is a full gate with its own pull-up and pull-down.</p>`,
-        pitfall: `<p>Forgetting that the inputs are active low. s_n = 0 means <em>set</em>; an input left at its resting value 0 holds the latch permanently set. On the circuit, a latch whose
+        pitfall: `<p>Forgetting that the inputs are active low. s_n = 0 means <em>set</em>; an input stuck at 0 holds the latch permanently set. On the circuit, a latch whose
           q never changes is usually one with an input stuck at 0. And at power-on, silicon comes up in either state: this simulator starts at q = 0, a hint of its own, which
           real hardware does not give.</p>`,
       },
@@ -197,7 +198,7 @@ export const chLatches: Chapter = {
           ${nands(RV16_DLATCH)} and ${nands(RV16_DFF)}, and the state machine in chapter 9 is made of them. The chapters keep the
           ${nands(D_LATCH)}-NAND latch on stage because its set and reset sides read more plainly.</p>`,
         real: `<p>Latches are real building blocks, not only a stepping stone: a level-sensitive latch is half the area of a flip-flop, and high-speed designs use latch pairs on
-          the two phases of the clock on purpose, so that a slow stage can borrow time from the next (time borrowing). Standard-cell latches are about 8 to 12 transistors, close
+          the two phases of the clock on purpose, so that a slow stage can borrow time from the next (time borrowing). Standard-cell latches are about 8 to 12 transistors, against
           to the ${stats(D_LATCH).transistors} here.</p>`,
         pitfall: `<p>Putting a transparent latch in a feedback loop. With e = 1, a loop of logic from q back to d has no register in it: the signal chases itself around at gate speed and may
           oscillate (an inverter from q̄ to d does exactly that). A latch is safe when its enable is closed before the loop can come around, and that is what the flip-flop of the next step
@@ -248,7 +249,7 @@ export const chLatches: Chapter = {
       },
       more: {
         derive: `<p>With t_cq the clock-to-q delay, t_logic the slowest path between two flip-flops, t_su the setup time and t_h the hold time, the constraints between a launching and a capturing flip-flop are
-          T ≥ t_cq + t_logic + t_su and t_cq + t_logic,min ≥ t_h. With this flip-flop's numbers (clk-to-q 3 for a falling q, setup 2) a stage of 20 NAND delays needs T ≥ 3 + 20 + 2 = 25 delays. The first
+          T ≥ t_cq + t_logic + t_su and t_cq + t_logic,min ≥ t_h. With the timing model's numbers for this flip-flop (clk-to-q ${CLK_TO_Q}, setup ${SETUP}) a stage of 20 NAND delays needs T ≥ ${CLK_TO_Q} + 20 + ${SETUP} = ${CLK_TO_Q + 20 + SETUP} delays. The first
           inequality is about the slow path, so a slower clock fixes it; the second is about the fast path and does not contain T at all.</p>`,
         real: `<p>A library flip-flop is a master–slave pair like this one, in 20 to 30 transistors with tuned sizes, against ${stats(DFF).transistors} here. Its datasheet lists setup, hold and clk-to-q as tables
           over the input slew and the output load, which is why real timing analysis is a calculation over a graph of such tables.</p>`,
@@ -541,7 +542,7 @@ export const chRegisters: Chapter = {
         <p>Replace the incrementer with <span data-show="u3 u1">an adder/subtractor adding the constant 1</span>, its <code>sub</code> input driven
         by <span data-show="u0">NOT up</span>, and add <span data-show="u4">a multiplexer for a parallel load</span>. Now the counter counts up or down, and can be preset: the shape of a timer that counts down to zero
         from a loaded value.</p>
-        <p>Subtracting 1 is adding the two's complement of 1, which the adder/subtractor does by inverting its b input and setting the carry-in: a − 1 = a + ¬1 + 1 = a + 0b1111 + 1 (mod 16). So one adder serves both
+        <p>Subtracting 1 is adding the two's complement of 1, which the adder/subtractor does by inverting its b input and setting the carry-in: a − 1 = a + ¬1 + 1 = a + 0b1110 + 1 = a + 0b1111 (mod 16). So one adder serves both
         directions, with the direction input as its subtract control. The counter costs ${nands(upDownCounter(4))} NANDs against ${nands(counter(4))} for the plain 4-bit one: the adder/subtractor is bigger than the
         incrementer, and the load multiplexer adds a gate level per bit.</p>`,
       tour: {

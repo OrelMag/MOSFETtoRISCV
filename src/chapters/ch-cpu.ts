@@ -185,7 +185,7 @@ export const chAlu: Chapter = {
       },
       more: {
         derive: `<p>With b inverted and carry-in 1 the adder computes a + (2ⁿ − 1 − b) + 1 = a − b + 2ⁿ. That reaches 2ⁿ, a carry out, exactly when a ≥ b: so C = 1 means a ≥ b unsigned and ¬C means
-          a &lt; b. For the signed case the true difference lies in −2ⁿ … 2ⁿ − 2, and the n-bit result wraps when the operands have different signs and the result's sign differs from a's. That is V. When V = 0 the sign
+          a &lt; b. For the signed case the true difference lies in −2ⁿ + 1 … 2ⁿ − 1, and the n-bit result wraps when the operands have different signs and the result's sign differs from a's. That is V. When V = 0 the sign
           bit N is the sign of a − b; when V = 1 it is inverted; so the sign of the true difference is N ⊕ V.</p>`,
         pitfall: `<p>Reading N alone for a signed compare works until the operands are far apart: 0x7F − 0x80 and 0x80 − 0x01 both overflow. A comparison that "works on small numbers" and fails on
           values near ±2<sup>31</sup> is this bug. On the circuit: set a = 0x80, b = 1 and watch n and v disagree.</p>`,
@@ -481,7 +481,7 @@ export const chIsa: Chapter = {
           <code>addi a0, a0, -1979</code> (0x13000 − 0x7BB = 0x12845). <strong>auipc for addresses.</strong> <code>la a0, sym</code> is <code>auipc a0, hi</code>; <code>addi a0, a0, lo</code> and
           <code>call f</code> is <code>auipc ra, hi</code>; <code>jalr ra, lo(ra)</code>, both from the distance to the symbol, rounded the same way: position-independent code with ±2 GiB reach,
           where <code>jal</code> reaches ±1 MiB.</p>`,
-        pitfall: `<p><strong>PC-relative to the instruction itself.</strong> A branch or <code>jal</code> at address A jumps to A + offset, not A + 4 + offset (MIPS and ARM count from the next instruction):
+        pitfall: `<p><strong>PC-relative to the instruction itself.</strong> A branch or <code>jal</code> at address A jumps to A + offset, not A + 4 + offset (MIPS counts from the next instruction, ARM32 from the one after that):
           <code>beq</code> at 0x100 with offset 16 lands on 0x110. <strong>Every I-type immediate is sign-extended</strong>, logical ones too: <code>andi a0, a0, -16</code> masks with 0xFFFF_FFF0,
           <code>xori rd, rs, -1</code> is <code>not</code>, <code>sltiu rd, rs, -1</code> compares (unsigned) with 0xFFFF_FFFF, and a mask such as 0x800 does not fit at all (−2048 … 2047).
           Assemble these in the editor above and read the words back.</p>`,

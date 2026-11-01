@@ -141,7 +141,7 @@ export const chPipePay: Chapter = {
       },
       more: {
         derive: `<p>Two paths compete for the clock. In the basic pipeline a branch goes forwarding mux → ALU subtract → flags → result mux → zero detect → next-PC → flush, all in E. With a comparator it is forwarding mux → comparator (${CMP_DEPTH}) → flush,
-          the ALU\'s ${ALU_KS_DEPTH} delays gone from the path. Both adders are Kogge–Stone, so the rest of the ALU path (result mux, zero detector) is what the comparator removes. The cost is the comparator (${fmt(CMP)} NANDs) and, for <code>jalr</code>, an adder
+          the ALU\'s ${ALU_KS_DEPTH} delays replaced by the comparator\'s ${CMP_DEPTH}. Both adders are Kogge–Stone, so the rest of the ALU path (result mux, zero detector) is what the comparator removes. The cost is the comparator (${fmt(CMP)} NANDs) and, for <code>jalr</code>, an adder
           for rs1 + imm (${fmt(JADD)}) that no longer shares the ALU.</p>`,
         pitfall: `<p>Calling the old critical path "the ALU" and speeding up the ALU. After the adder swap of chapter 16 the ALU is not the only part of the branch path, and with the comparator the next critical path (see the question below) is forwarded operand →
           comparator → flush. Speed up the path the timing panel names, not the block you suspect.</p>`,
@@ -165,8 +165,8 @@ export const chPipePay: Chapter = {
         <span data-show="mis">verifies the prediction</span>; only a <em>misprediction</em> flushes, and redirects to the
         <span data-show="corr">correct PC</span>. Open the BTB: it is the register file's construction
         (decoder, registers, bundled bus, two read ports) holding 62-bit entries: ${fmt(nands(BTB))} NANDs, about as many as the ${fmt(nands(regfile(5, 32)))} of the register file.</p>
-        <p>The key property is that a wrong prediction is never worse than no prediction. The machine already pays two bubbles for every taken branch, so guessing "not taken" for an entry it has never seen costs nothing extra:
-        only a wrong guess flushes, and it flushes what the unpredicted pipeline would have flushed anyway. Prediction can only remove bubbles, at the price of the table and the logic that checks the guess.</p>
+        <p>A misprediction costs the same two bubbles as an unpredicted taken branch. The machine already pays two bubbles for every taken branch, so guessing "not taken" for an entry it has never seen costs nothing extra:
+        only a wrong guess flushes. Prediction loses only when it says taken for a branch that falls through, which the unpredicted pipeline would not have flushed; it mostly removes bubbles, at the price of the table and the logic that checks the guess.</p>
         <div class="try">Run the program and watch the diagram: after the first iteration the loop branch is predicted, and the flushes disappear.</div>`,
       scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, balanced: true, predictor: true, adder: 'ks', highlight: ['btb', 'mis', 'corr'] }), autoClock: false }),
       tries: [predicted],

@@ -133,7 +133,7 @@ export const chPython: Chapter = {
       widget: () => pyCost(['gcd']),
       more: {
         derive: `<p><code>x * 5</code> = <code>x * 4 + x</code>: <code>slli</code> then <code>add</code>, two cycles. <code>x * 7</code> = <code>x * 8 − x</code>: <code>slli</code> then <code>sub</code>.
-          A constant with three or more bits set, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one shifted add per bit of the multiplier, 32 passes. <code>rt.divmod</code> does the
+          A constant that is not 2^k, 2^a + 2^b or 2^a − 1, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one shifted add per bit of the multiplier, 32 passes. <code>rt.divmod</code> does the
           long division you learned in school in binary: shift the next dividend bit into the remainder, subtract the divisor if it fits, record a quotient bit. 32 passes, a few instructions each, about 240 cycles in all.</p>`,
         numbers: `<table class="mini"><tr><th>program</th><th>instructions</th><th>cycles</th></tr>${COST.map((r) => `<tr><td>${r.name}</td><td>${r.words}</td><td>${fmt(r.steps)}</td></tr>`).join('')}</table>
           <p>Measured on the golden model, which takes one cycle per instruction on the single-cycle CPU. The gap between instructions in the listing and cycles run is the loop count.</p>`,

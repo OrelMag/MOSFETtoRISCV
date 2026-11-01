@@ -73,7 +73,7 @@ export const chMap: Chapter = {
           { title: 'One full adder', at: ['fa0'], show: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'],
             say: `<p>Inside fa0: ${stats(rca(4)).nands / 4} gates, all NANDs. This is the level you get by opening a box one step.</p>` },
           { title: 'One NAND', at: ['fa0', 'g1'], show: ['p1', 'p2', 'n1', 'n2'],
-            say: '<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next chapter and the one after explain why these four make a NAND.</p>' },
+            say: '<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next three chapters build up to why these four make a NAND (chapter 3).</p>' },
         ],
       },
       more: {
@@ -323,7 +323,7 @@ export const chMosfet: Chapter = {
       },
       more: {
         derive: `<p>A node with no DC path to a rail keeps its charge: it sits where it was and drifts with leakage. With a load C and a leak current I<sub>leak</sub>, the voltage falls at I<sub>leak</sub> / C, which
-          for the ${loadOf(2)} fF load of the last step and a nanoamp of leakage is ${(1e-9 / (loadOf(2) * 1e-15) * 1e-6).toFixed(0)} V/µs: it loses a level in microseconds. (Chapter 35's DRAM stores a bit on exactly this node, and refreshes it before the charge is gone.)
+          for the ${loadOf(2)} fF load of the last step and a nanoamp of leakage is ${(1e-9 / (loadOf(2) * 1e-15) * 1e-6).toFixed(1)} V/µs: it loses a level in microseconds. (Chapter 35's DRAM stores a bit on exactly this node, and refreshes it before the charge is gone.)
           For logic the rule is simpler: every output must be driven for every valid input.</p>`,
         pitfall: `<p>Reading Z as "probably 0". A floating input to a following gate can sit at any voltage, including the middle, where both its transistors conduct a little and it draws current; the Z
           is drawn in its own colour for that reason. In the sandbox a floating output that feeds logic is flagged.</p>`,
@@ -433,7 +433,7 @@ export const chInverter: Chapter = {
       },
       more: {
         derive: `<p>The output is y = ¬a because the pull-up conducts exactly when a = 0 (a PMOS on a low gate) and the pull-down exactly when a = 1 (an NMOS on a high gate). The energy of one output transition, from the
-          previous chapter, is C·V²/2 drawn from the supply on a rising edge and C·V²/2 dissipated in the NMOS on a falling one: a full cycle costs C·V² = ${(loadOf(2) * VDD * VDD).toFixed(0)} fJ for a ${loadOf(2)} fF load, and nothing while the input holds.</p>`,
+          previous chapter, is C·V² drawn from the supply on a rising edge (half stored on C, half dissipated in the PMOS), and the stored C·V²/2 dissipated in the NMOS on the falling edge: a full cycle costs C·V² = ${(loadOf(2) * VDD * VDD).toFixed(0)} fJ for a ${loadOf(2)} fF load, and nothing while the input holds.</p>`,
         pitfall: `<p>Counting the inverter's "off" transistor as a resistor to ground. In the logic model a transistor is an open switch when it is off; in silicon it still leaks a little (previous chapter), which is the whole
           standby power of a CMOS chip. The drawing shows only the intended state.</p>`,
       },

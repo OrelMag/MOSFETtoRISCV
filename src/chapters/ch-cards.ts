@@ -123,7 +123,7 @@ export const chCards: Chapter = {
         pitfall: `<p>Counting an OR by adding two dials. A person who is both married and born abroad steps both dials, so their sum counts them twice; the parallel contacts step one dial once.
           The same mistake appears in a database query that adds two group counts instead of counting the union.</p>`,
         real: `<p>Later tabulators moved the wiring to a removable plugboard, so a machine was reprogrammed by plugging wires: a program held in wires, between the fixed
-          machine and the deck of data. Hollerith's company became IBM in 1924, and the card stayed the computer's input for half a century.</p>`,
+          machine and the deck of data. Hollerith's firm, merged into C-T-R in 1911, was renamed IBM in 1924, and the card stayed the computer's input for half a century.</p>`,
       },
       widget: () => censusWidget(),
       challenge: {
@@ -184,7 +184,7 @@ export const chCards: Chapter = {
         first, a pass per digit, each pass stable.</p>
         <p>Why the sorter needs no comparison: it never asks which of two cards is larger. It looks at one column of one card and drops the card in a pocket, and
         <em>stability</em> does the rest. Because each pass keeps the order of cards that fall in the same pocket, a later pass on a more significant digit cannot disturb the order
-        the earlier passes made among equal digits. The deck is sorted after the pass on the most significant column and in no state before that, which also tells the operator when to stop.</p>
+        the earlier passes made among equal digits. The deck is guaranteed sorted only after the pass on the most significant column, which also tells the operator when to stop.</p>
         <div class="try">The deck is the bubble-sort sample, ${SORT_CARDS} cards. Drop it, then sort it on the sorter and count the passes.</div>`,
       more: {
         derive: `<p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k

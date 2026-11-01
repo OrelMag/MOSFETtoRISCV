@@ -154,7 +154,7 @@ export const chGates: Chapter = {
         real: `<p>In CMOS an OR is a NOR followed by an inverter (6 transistors, against ${tr(OR)} here). The NOR is the slower of the two inverting gates: its
           PMOS transistors sit in series, and a PMOS conducts less current than an NMOS of the same size. That is one more reason libraries are
           NAND-heavy.</p>`,
-        pitfall: `<p>Forgetting the inverters: a plain NAND of a and b looks like an OR on three of four rows. It is wrong only at a = b = 0, where
+        pitfall: `<p>Forgetting the inverters: a plain NAND of a and b agrees with OR only on the two mixed rows. It gives 1 at a = b = 0 and 0 at a = b = 1, the opposite of OR, where
           NAND gives 1 and OR gives 0. Truth tables are checked on every row for exactly this reason.</p>`,
       },
       challenge: {
@@ -192,7 +192,7 @@ export const chGates: Chapter = {
         <p>The classic circuit uses ${nd(XOR)} NANDs and shares the first one cleverly:
         <span data-show="g1"><code>m = NAND(a, b)</code></span> feeds <span data-show="g2 g3">both middle gates</span>, which each mix m with one input;
         <span data-show="g4">the last NAND</span> combines them. The longest path (through m) is ${logicDepth(XOR)} delays; a direct
-        path from an input to the output is ${pathDepth(XOR, 'a', 'y') - 1} gates shorter... the tour checks all four rows.</p>`,
+        path from an input to the output (through g2 or g3 only) is ${pathDepth(XOR, 'a', 'y') - 1} delays deep, one fewer. The tour checks all four rows.</p>`,
       scene: () => ({ root: XOR, inputs: { a: 1, b: 0 } }),
       tour: {
         beats: [

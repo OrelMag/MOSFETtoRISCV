@@ -750,8 +750,8 @@ export const chRouting: Chapter = {
       more: {
         derive: `<p>For n = 2m inputs: let (yₕ, vₕ) and (yₗ, vₗ) be the answers of the two halves. Then v = vₕ + vₗ, y = (vₕ, vₕ ? yₕ : yₗ): the top index bit is vₕ and the rest are chosen by it. The delay obeys D(n) = D(n/2) + one multiplexer,
           so D(n) grows with log₂ n, not with n.</p>`,
-        real: `<p>Interrupt controllers use priority encoders to pick the most urgent request; bus arbiters use them (or the round-robin version of a later chapter); floating-point units find the leading one to normalize a result; and every
-          CPU has an instruction for it in software (count leading zeros, <code>clz</code>).</p>`,
+        real: `<p>Interrupt controllers use priority encoders to pick the most urgent request; bus arbiters use them (or the round-robin version of a later chapter); floating-point units find the leading one to normalize a result; and many ISAs have
+          an instruction for it (count leading zeros, <code>clz</code>; in RISC-V the Zbb extension).</p>`,
         pitfall: `<p>Assuming the highest <em>index</em> is the highest <em>priority</em>. The convention here (the highest index wins) is one of two; many controllers give priority to the lowest. Swapping them reverses the request numbering,
           and a wrong convention reaches the wrong handler. On the circuit it is the multiplexer that decides, and it favours the upper half.</p>`,
         numbers: `<table class="mini"><tr><th>inputs</th><th>NANDs</th><th>delays</th></tr>
