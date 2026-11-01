@@ -226,7 +226,7 @@ export const chPython: Chapter = {
           until the first nested call. In the stack panel the saved words are labelled by the instruction that stored them, so an unsaved register is a missing label.</p>`,
         real: `<p>The RISC-V calling convention splits registers into caller-saved (t0–t6, a0–a7) and callee-saved (s0–s11, sp, gp): the callee preserves the s-registers, the caller preserves anything in a t-register it
           needs after a call. This compiler follows it, which is why <code>s0</code> is saved in the prologue and <code>t0</code> around the second call. Real stacks also guard against overflow with a page the OS leaves unmapped; here a stack that
-          meets the output simply overwrites it.</p>`,
+          meets the output overwrites it without a fault.</p>`,
       },
       challenge: {
         kind: 'quiz',
