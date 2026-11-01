@@ -6,7 +6,7 @@ import { netlistOf } from '../sim/types';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import { memGridPanel } from '../widgets/memgrid';
-import { assemblerWorkspace, instructionExplorer } from '../widgets/riscv';
+import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
@@ -386,14 +386,15 @@ export const chIsa: Chapter = {
   id: 'isa', num: 13, title: 'Instructions & assembly', level: 'ISA',
   blurb: 'RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.',
   goals: [
+    'follow a program through fetch, decode and execute, one instruction at a time, and say where PC goes next',
     'name the six RV32I formats and say why rs1, rs2 and rd never move',
-    'rebuild an immediate from instruction bits the way the hardware does: wires, sign copies and ground',
-    'explain why branch and jump offsets count halfwords',
+    'rebuild an immediate from instruction bits (wires, sign copies and ground) and explain why branch offsets count halfwords',
     'assemble a program in two passes and run it on an instruction-set simulator',
   ],
-  builds: ['binary', 'regfile'],
+  builds: ['binary', 'alu', 'regfile'],
   recap: {
     keep: [
+      'A program is words in memory. The processor repeats one loop: fetch the word at PC, decode its fields, execute (registers in, a register or memory out), then PC ← PC + 4 unless a branch or jump wrote PC. The ISA is the contract saying what each word means.',
       'Every instruction is 32 bits; the opcode (bits 6:0) picks one of six formats: R, I, S, B, U, J.',
       'rs1 (19:15), rs2 (24:20) and rd (11:7) never move, so register reads start in parallel with decoding.',
       'Immediates pay for it: S splits its immediate around rs2, B and J scramble theirs so the sign is always bit 31. Each immediate bit is a wire, a copy of bit 31, or 0: no gates.',
@@ -427,6 +428,50 @@ export const chIsa: Chapter = {
     ],
   },
   steps: [
+    {
+      title: 'A program is words in memory',
+      body: `
+        <p>Every circuit so far computes one fixed thing. A processor computes whatever its <strong>program</strong> says, and a program
+        is only numbers: 32-bit words in a memory, one per <strong>instruction</strong>. Each word is a small order: add two registers,
+        load a word, jump if equal.</p>
+        <p>The state a program can see is three things: the <strong>program counter</strong> (PC, the byte address of the next
+        instruction), 32 <strong>registers</strong> x0–x31 of 32 bits (chapter 12's register file; x0 always reads 0), and memory.
+        The processor runs one loop forever:</p>
+        <ol>
+          <li><strong>Fetch</strong>: read the word at PC.</li>
+          <li><strong>Decode</strong>: split it into fields: the operation, the registers it names, a constant.</li>
+          <li><strong>Execute</strong>: read the source registers, compute (chapter 11's ALU), write the result to a register or to memory.</li>
+          <li><strong>Next</strong>: PC ← PC + 4, unless the instruction is a branch or a jump, which writes PC itself.</li>
+        </ol>
+        <p>The last rule is where loops and decisions come from: a branch compares two registers and, if the condition holds, sends PC
+        back (or forward) to another instruction. RV32I's 40-odd instructions fall into three kinds: <strong>compute</strong>
+        (<code>add</code>, <code>addi</code>, <code>slt</code>: registers in, a register out), <strong>memory</strong> (<code>lw</code>,
+        <code>sw</code>: the only ones that touch memory, which makes RISC-V a <em>load–store</em> architecture) and <strong>control</strong>
+        (<code>beq</code>, <code>jal</code>: they change PC).</p>
+        <p>The <strong>instruction set</strong> (ISA) is the contract between the two sides: which word means what. Software is written
+        against it, and any hardware that honours it runs that software. Chapter 14 builds one in gates that does the whole loop in a
+        single clock cycle. The rest of this chapter is the contract itself: how an instruction is packed into 32 bits, and how text
+        becomes those words.</p>
+        <p>Reading the listing: <code>add a1, a1, a0</code> is a1 ← a1 + a0. Registers go by their ABI names, which say how compiled code
+        uses them: <code>zero</code> = x0, <code>a0</code> = x10, <code>a1</code> = x11. <code>bnez a0, loop</code> is <code>bne a0, zero, loop</code>:
+        branch while a0 ≠ 0.</p>
+        <div class="try">Step through the program: it adds 3 + 2 + 1 into a1 and stores the sum at address 0. Watch PC jump back from
+        0x10 to 0x08 twice, then fall through.</div>`,
+      widget: () => fetchLoop(FETCH_LOOP, [10, 11]),
+      more: {
+        numbers: `<p>32 registers take 5 bits to name, so an instruction naming three of them spends 15 of its 32 bits on that. 16
+          registers would free 3 bits for constants; 64 would cost 3 more and a bigger, slower register file. A register read is one
+          multiplexer tree inside the processor; a memory access in a real machine is anywhere from a few cycles (a cache) to a hundred or
+          more (DRAM, chapter 35), which is why compute instructions only ever see registers.</p>`,
+        pitfall: `<p>PC counts bytes, not instructions: the next instruction is at PC + 4, and the instruction at index n is at 4n. And
+          x0 is not a register you can use: writing it is allowed and discarded, which is what makes <code>addi zero, zero, 0</code> a
+          no-op and <code>add a0, a1, zero</code> a move.</p>`,
+        real: `<p>Here instructions and data sit in separate memories (chapter 14's CPU has an instruction ROM and a data memory), as in a
+          Harvard machine. A PC or a phone keeps both in one memory, as von Neumann's design did, with separate caches in front (chapter 22).
+          One memory is what lets a program be loaded as data and then run: chapter 38's computer boots by copying a program from flash into
+          RAM and jumping to it.</p>`,
+      },
+    },
     {
       title: 'Six formats, fixed register fields',
       body: `
@@ -491,6 +536,15 @@ export const chIsa: Chapter = {
     },
   ],
 };
+
+export const FETCH_LOOP = `# sum = 3 + 2 + 1, stored at address 0
+        li   a0, 3          # n = 3
+        li   a1, 0          # sum = 0
+loop:   add  a1, a1, a0     # sum += n
+        addi a0, a0, -1     # n -= 1
+        bnez a0, loop       # again while n != 0
+        sw   a1, 0(zero)    # mem[0] = sum
+halt:   j    halt`;
 
 const RTYPE = `# R-type and I-type: rd = rs1 op rs2 / imm
         li   a0, 7

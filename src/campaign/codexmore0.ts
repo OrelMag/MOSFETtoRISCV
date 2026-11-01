@@ -508,7 +508,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming li is one instruction: a value outside −32…31 without zero low bits takes lui + addi, and every label after it moves.',
       'Splitting a constant as hi = v &gt;&gt; 6, lo = v &amp; 63: addi sign-extends, so when bit 5 of v is 1 the high part must be rounded up (1000 = 1024 − 24, not 960 + 40).',
     ],
-    chapters: [{ chapter: 'isa', step: 1, label: 'The assembler' }],
+    chapters: [{ chapter: 'isa', step: 2, label: 'The assembler' }],
   },
   shiftadd: {
     idea: 'Binary multiplication needs no table: for each 1 bit of the multiplier b, add the multiplicand a shifted left by that bit\'s position. In software it is a loop of n iterations: test the low bit of b, add if set, shift a left, shift b right. In hardware it is the sequential multiplier: one adder and a 2n-bit product register that starts as {0, b}. Each cycle, if the register\'s low bit is 1, a is added to the upper half; then the whole register shifts right one place, the adder\'s carry entering at the top. After n steps it holds a·b.<br>Against the array multiplier: the 16-bit sequential unit is 1 169 NANDs and 16 add-and-shift steps, the 16 × 16 array 2 672 NANDs and one long cycle. At 8 bits the two are the same size (633 and 632 NANDs), so the sequential form saves area only at larger widths.',
