@@ -14,6 +14,8 @@ const FRAME_CYCLES = 1.9e6;
 const SYS_M = RESULTS.cpus.find((c) => c.id === 'sys-m');
 const SYS_NS = ((SYS_M?.period ?? NaN) * RESULTS.psPerNand) / 1000;
 const FRAME_MS = Math.round((FRAME_CYCLES * SYS_NS) / 1e6);
+/** The gate-level system CPU's speed in this page (cycles a second, as the Play panel quotes it), and the nominal clock. */
+const GATE_CPS = 2400, NOMINAL_HZ = 40e6;
 
 export const chAppendixDoom: Chapter = {
   // numbered after Appendix A, whatever the journey's length (chapters before it get renumbered)
@@ -71,7 +73,22 @@ export const chAppendixDoom: Chapter = {
         megabytes of memory where we have kilobytes, a 256-colour screen, a keyboard that reports releases, and a file
         to read the levels from. The table measures what is needed against what we had.</p>
         <p>The rest of this appendix builds that computer twice: as a fast interpreter of our ISA, to play it, and in
-        gates, to check it.</p>`,
+        gates, to check it.</p>
+        <p>Separating the two questions is the useful move. "Can the CPU execute this program?" is a question about the ISA: which instructions the compiler emits and which
+        semantics they need. "Can the computer run it?" is a question about everything outside the CPU: how much memory, how pixels leave, where the data comes from. A CPU
+        that answers the first can be wrapped to answer the second without changing a gate of its own.</p>`,
+      more: {
+        derive: `<p>Why fixed point needs only M. A 16.16 multiply is (a × b) >> 16: the product of two 32-bit values is 64 bits, of which the middle 32 are wanted. RV32M gives the low half with <code>mul</code> and the high half with <code>mulh</code>
+          (signed), and a shift and an OR join them, so a fixed-point multiply is a handful of instructions. Divide works the same way through <code>div</code> on a pre-shifted value. No floating-point unit is involved anywhere, because the 386 the game was written for had none either.</p>`,
+        real: `<p>Doom has run on nearly everything with a CPU and a frame buffer: calculators, printers, cameras, oscilloscopes. What it needs is not performance (it ran on a 386 at 33 MHz) but a few megabytes,
+          a way to draw 320 × 200 pixels and some input. The porting layer, six functions in doomgeneric, is the real interface between a game and a machine.</p>`,
+        pitfall: `<p>Reading "runs Doom" as a statement about the CPU's speed or features. The ISA decides whether the code can execute at all; the memory map decides whether it can start; the clock decides how fast it plays.
+          The mistakes this chapter avoids are all of the second kind: forgetting that the WAD must be mapped somewhere, or that a key read must remove the key.</p>`,
+        numbers: `<table class="mini"><tr><th>what Doom needs</th><th>size</th></tr>
+          <tr><td>screen (palette indices)</td><td>${(320 * 200).toLocaleString('en-US')} bytes (320 × 200)</td></tr>
+          <tr><td>RAM</td><td>${2 ** 23 / 2 ** 20} MiB</td></tr>
+          <tr><td>WAD region</td><td>${(2 ** 23 * 4) / 2 ** 20} MiB (2<sup>23</sup> words)</td></tr></table>`,
+      },
       widget: () => doomNeeds(),
     },
     {
@@ -89,7 +106,21 @@ export const chAppendixDoom: Chapter = {
         <p>The census is of the image itself: a third of the words load or store, one in eleven branches, one in eight
         jumps or calls; multiplies and divides are under one in a hundred. The
         innermost loop of the renderer is <code>R_DrawColumn</code>: one texel fetched, looked up in the light table and
-        stored per pixel, down the column.</p>`,
+        stored per pixel, down the column.</p>
+        <p>Why this matters for hardware: the instruction mix is the specification of the CPU the program wants. A third of the words touching memory says the load and store path is the one to make fast;
+        branches and calls at one in eight say the front end matters; multiplies and divides below one in a hundred say a slow multiplier (34 cycles for a divide here) costs little.
+        A chip designer reads a census like this one before choosing what to spend transistors on.</p>`,
+      more: {
+        derive: `<p>The image is 57,889 words, ${(57889 * 4).toLocaleString('en-US')} bytes, or ${Math.round(57889 * 4 / 1024)} KiB of code. It does not fit in anything we have drawn: the program ROM of the earlier CPUs held tens of words. The ROM tree here is built from the
+          same banks, 2<sup>16</sup> words of them.</p>`,
+        real: `<p>Embedded builds put code in flash and run it in place (execute in place, as NOR flash allows), constants in the same flash, and only variables in RAM. Doom's tables are initialized data, so a Harvard design like ours
+          copies them from the image into RAM at start; a von Neumann machine need not. The linker script is what decides which section lands where, and it is the file a port spends most of its effort on.</p>`,
+        pitfall: `<p>Assuming <code>-O2</code> code looks like what you wrote. Loops are unrolled, inlined and strength-reduced (a multiply by a constant becomes shifts and adds), so an instruction census is a census of what the compiler
+          emitted, not of the source. Compare the source of <code>R_DrawColumn</code> with its disassembly before drawing conclusions about the renderer.</p>`,
+        numbers: `<table class="mini"><tr><th>instruction class</th><th>share of the image</th></tr>
+          <tr><td>load or store</td><td>about a third</td></tr><tr><td>branch</td><td>one in eleven (${(100 / 11).toFixed(0)} %)</td></tr>
+          <tr><td>jump or call</td><td>one in eight (${(100 / 8).toFixed(0)} %)</td></tr><tr><td>multiply or divide</td><td>under 1 %</td></tr></table>`,
+      },
       widget: () => doomProgram(),
     },
     {
@@ -103,7 +134,19 @@ export const chAppendixDoom: Chapter = {
         it, so the CPU's data port gains a read strobe. <code>FLIP</code> marks a finished frame (the screen shows the
         frame buffer as it was then). <code>WADLEN</code> tells the program how much of the WAD region is file.</p>
         <p>The timer stays inside the core: mtime counts every clock cycle (34 for a divide), and the program reads it
-        for its 35 game tics a second at a nominal 40 MHz. A slower machine plays slower, never differently.</p>`,
+        for its 35 game tics a second at a nominal 40 MHz. A slower machine plays slower, never differently.</p>
+        <p>The design rule behind all of it is memory-mapped I/O: a device is an address, and the CPU needs no instruction beyond load and store to use it. That is also what makes the machine
+        testable. Every register can be read from a program, every effect of a store is a change in one named memory, and the same map describes the interpreter and the gates.</p>`,
+      more: {
+        derive: `<p>Decoding: the top nibble addr[31:28] gives 16 regions, of which four are used here. A store's write enable is the AND of the CPU's write strobe and one decoded region line, so exactly one memory sees it;
+          a load goes through a 4:1 multiplexer selected by the same nibble. The 8 MiB of RAM is 2<sup>23</sup> bytes of the 2<sup>28</sup> bytes its region could address: 1/32 of it, so the region's upper address bits do not matter to a program that stays inside the RAM.</p>`,
+        real: `<p>Every SoC has a memory map like this one: boot ROM, SRAM, DRAM, peripheral blocks, each at a base address, documented in a table that the firmware author knows by heart. Real maps add a distinction we do not need:
+          device regions are mapped uncacheable and strongly ordered, so that the hardware cannot reorder or merge accesses to them (the RISC-V physical memory attributes).</p>`,
+        pitfall: `<p>A read that removes something. A load from <code>KEY</code> returns the oldest event and pops it, so it must happen exactly once per instruction. A CPU that retries a load, a debugger that
+          dumps memory, or a cache that reads a whole line would eat key events. That is the reason for the read strobe, and for keeping <code>KEY</code> out of any cache.</p>`,
+        numbers: `<table class="mini"><tr><th>addr[31:28]</th><th>region</th></tr>
+          <tr><td>0x0</td><td>RAM, 8 MiB</td></tr><tr><td>0x1</td><td>WAD (read only)</td></tr><tr><td>0x8</td><td>devices: console, KEY, FLIP, WADLEN</td></tr><tr><td>0xC</td><td>frame buffer and palette</td></tr></table>`,
+      },
       widget: () => doomMemoryMap(),
     },
     {
@@ -117,20 +160,30 @@ export const chAppendixDoom: Chapter = {
         registers next to the system CPU's: <code>KEY</code> (a read takes one key event), <code>FLIP</code> (a frame is
         done) and <code>WADLEN</code>. Doom's renderer stores its columns and spans straight into the frame buffer.</p>
         <p>It runs on a fast interpreter of our ISA, not on the gates.</p>
-        <details class="deeper"><summary>Deeper: the interpreter</summary>
-        <p>Each instruction word is decoded once into a table, then executed by one switch. It has the exact semantics
-        (memories, traps, cycle counts) of the instruction-set simulator our CPUs are checked against, and is checked
-        against it in lock step on the official riscv-tests, random programs, and Doom's first 1.5 million
-        instructions. Game time is <code>mtime</code> at a nominal 40 MHz, so a slower computer plays slower, never
-        differently.</p></details>
         <p><strong>Cost.</strong> A frame of the demo takes 1.0–3.0 M cycles (median 1.9 M): 48 ms at 40 MHz. The
         interpreter manages about 90 M instructions a second. The gate-level system CPU in this page manages about
         2,400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing
         period of ${SYS_M?.period} NAND delays (${SYS_NS.toFixed(1)} ns at ${RESULTS.psPerNand} ps a NAND), would draw it in about ${FRAME_MS} ms.</p>
+        <p>The three numbers are three different questions. The interpreter answers "what does the program do?", fast enough to play. The gates answer "what do these circuits do?", slowly enough to watch.
+        Silicon answers "how fast could this design go?", and that last figure comes from the same static timing that priced every CPU in the workbench, not from running anything.</p>
         <div class="try">Start the game, then <b>Pause</b> on a wall and press <b>To next pixel</b> a few times:
         each press stops just after an <code>sb</code> into the frame buffer (the listing's line above the PC), and the
         zoom shows the column growing downward.
         <b>Back</b> undoes any step.</div>`,
+      more: {
+        derive: `<p>A frame is ${(FRAME_CYCLES / 1e6).toFixed(1)} M cycles. At the nominal ${NOMINAL_HZ / 1e6} MHz that is ${((FRAME_CYCLES / NOMINAL_HZ) * 1000).toFixed(0)} ms, ${(NOMINAL_HZ / FRAME_CYCLES).toFixed(0)} frames a second, against the game's 35 tics a second: the
+          renderer, not the game logic, is the limit, and Doom skips drawing when it is behind. On the gates, at ${GATE_CPS.toLocaleString('en-US')} cycles a second, a frame takes ${(FRAME_CYCLES / GATE_CPS / 60).toFixed(0)} minutes: ${Math.round(NOMINAL_HZ / GATE_CPS).toLocaleString('en-US')} times slower than
+          real time at 40 MHz. The interpreter reaches about 90 M instructions a second by decoding each instruction word once into a table and executing it with one switch. It has the exact semantics
+          (memories, traps, cycle counts) of the instruction-set simulator our CPUs are checked against, and is checked against it in lock step on the official riscv-tests, random programs, and Doom's first 1.5 million instructions.</p>`,
+        real: `<p>This is also how real chips are brought up. Before silicon exists the design runs in an instruction-set simulator (fast, to write software) and in a Verilog simulator or an FPGA (slow or expensive, to check the gates);
+          the two are kept in lock step the way this page keeps them. Booting a full operating system on the RTL is the test that finds the bugs the unit tests missed.</p>`,
+        pitfall: `<p>Trusting the frame rate of the panel as the machine's speed. The interpreter's speed is the browser's; what the program sees is <code>mtime</code>, which counts the machine's cycles. If the page runs slowly the game
+          lags in wall time but not in game time, and a demo recorded on a fast machine replays identically on a slow one. Only a change to the program or to the model's cycle counts changes the game.</p>`,
+        numbers: `<table class="mini"><tr><th>platform</th><th>speed</th><th>one frame (${(FRAME_CYCLES / 1e6).toFixed(1)} M cycles)</th></tr>
+          <tr><td>nominal 40 MHz</td><td>${NOMINAL_HZ / 1e6} M cycles/s</td><td>${((FRAME_CYCLES / NOMINAL_HZ) * 1000).toFixed(0)} ms</td></tr>
+          <tr><td>our gates on silicon</td><td>${(1e3 / SYS_NS).toFixed(0)} M cycles/s</td><td>about ${FRAME_MS} ms</td></tr>
+          <tr><td>gates in this page</td><td>${GATE_CPS.toLocaleString('en-US')} cycles/s</td><td>${(FRAME_CYCLES / GATE_CPS / 60).toFixed(0)} min</td></tr></table>`,
+      },
       widget: () => doomPlay(),
     },
     {
@@ -151,7 +204,19 @@ export const chAppendixDoom: Chapter = {
         the window all 8 MiB of RAM and the frame buffer too.</p>
         <p><strong>Cost.</strong> The gates run a few thousand cycles a second in this page (the panel measures it): one
         frame of about 1.9 million cycles takes minutes to hours. The pixels they draw glow yellow: a few columns of a wall
-        per thousand cycles.</p>`,
+        per thousand cycles.</p>
+        <p>The comparison is exhaustive in one sense and sampled in another: every instruction in the window is checked against the golden model, in every register, but only a window of the game is
+        run, not the whole thing. That is how verification of a large design usually goes: random and directed programs for coverage, and a real workload as the integration test. Doom is a good workload because it
+        exercises the multiplier and divider, byte and halfword stores, branches in every direction, and the memory map all at once.</p>`,
+      more: {
+        derive: `<p>Handing over the state is the delicate part: the interpreter's registers, PC, CSRs and timer must be written into the circuit's flip-flops <em>bit by bit, into both latches of each</em> (master and slave), or the first edge would
+          shift an inconsistent state into the slave. The memories are poked directly; the key queue likewise. After that the circuit is clocked, and the compare after each retired instruction is
+          a PC and 31 registers, 32 values, with memory differences looked for at the end of the window.</p>`,
+        real: `<p>The same flow is used on real designs, at larger scale: run a workload on a fast model, snapshot at an interesting point, load the snapshot into a slow detailed model (RTL simulation, or an FPGA emulator) and
+          compare from there. It lets a billion-cycle boot be skipped and only the interesting million be simulated at gate detail.</p>`,
+        pitfall: `<p>Reading a matching window as a proof about the whole game. Equality over thousands of instructions says the gates agree with the model on those instructions, and on the paths they exercised. A rarely used
+          instruction, a cache-line or page boundary or an interrupt in a particular cycle can sit outside any window. That is why the CPU is also checked on the riscv-tests, fuzzed against random programs and run against Spike.</p>`,
+      },
       scene: () => doomGatesScene(),
     },
   ],

@@ -110,8 +110,40 @@ export const chDram: Chapter = {
         <p>Cost of this 4 × 4: the cells are 16 transistors and 16 capacitors. Each column then adds 3 precharge transistors,
         2 for the column select and an 8-transistor <span data-show="col0.sa">sense amplifier</span>: 13 per column, more than its cells. Real arrays hang 512 to
         1 024 cells on a bit line to amortize them.</p>
+        <p>Why one transistor is enough: a bit is a charge, and a charge needs only a switch to reach it and a capacitor to keep it. The
+        feedback that makes an SRAM cell static costs five more transistors per bit, and DRAM pays for its absence in time instead:
+        every access is a small analog event (<a href="#/c/dram/1">next step</a>), and the stored value must be restored after a read
+        and renewed while idle. What the capacitor buys is density: the cell is the smallest storage element there is, and the cost per
+        bit of the whole array is set by how many cells share each column's periphery.</p>
         <div class="try">The cells power on unknown (X). In the panel pick a row, then Activate, Sense, choose a column and data,
         Write; Close; Precharge. Each cell shows its voltage, and the wires show theirs.</div>`,
+      tour: {
+        beats: [
+          { title: 'Open a row', say: 'Precharge off, row 2 selected, <code>act</code> up: the row decoder raises row 2\'s word line and its four cells join their bit lines. They power on unknown, so the output is {v:dout} (X).', set: { row: 2, pre: 0, act: 1 }, at: [], show: ['rdec'], expect: { dout: -1 } },
+          { title: 'Sense', say: 'The amplifiers fire (<code>sae</code>). Every column of the row now sits at a rail, but the row held nothing known, so the output is still X: sensing restores what was there, it cannot invent it.', set: { sae: 1 }, show: ['col0', 'col1', 'col2', 'col3'], expect: { dout: -1 } },
+          { title: 'Write a 1', say: 'Column 3 selected, data 1, write: the driver forces column 3\'s amplifier and the open cell follows its bit line. The output reads {v:dout}.', set: { col: 3, din: 1, cs: 1, we: 1 }, show: ['wd', 'cdec', 'col3'], expect: { dout: 1 } },
+          { title: 'Close the row', say: 'Writing stops and the word line falls first: the cell is disconnected while its bit line is still at the rail, so the 1 stays in the capacitor.', set: { we: 0, cs: 0, act: 0 }, show: ['rdec'], expect: { dout: 1 } },
+          { title: 'Precharge', say: 'Sense off, precharge on: the bit lines return to VDD/2. The array is idle, and the only copy of the 1 is the charge in one 25 fF capacitor.', set: { sae: 0, pre: 1 }, show: ['col3'] },
+          { title: 'Open the row again', say: 'The same row is activated once more, so the cell shares its charge with the bit line (the next step puts numbers on that swing).', set: { pre: 0, act: 1 }, show: ['rdec', 'col3'] },
+          { title: 'Sense again', say: 'The amplifier resolves the small swing to a rail, and the row buffer holds the row again.', set: { sae: 1 }, show: ['col3'] },
+          { title: 'Read', say: 'Column 3 is selected with the data input at 0 and no write: the output is {v:dout}, the 1 written four beats ago, now read from a charge.', set: { cs: 1, din: 0 }, show: ['cdec', 'col3', 'out'], expect: { dout: 1 } },
+        ],
+      },
+      more: {
+        derive: `<p>Cost per bit, counting transistors: a cell is 1 and each column adds ${3 + 2 + 8} for precharge (3), column select (2) and the sense
+          amplifier (8). With R cells on a bit line the column costs 1 + ${3 + 2 + 8}/R per bit, against 6 for SRAM. The periphery
+          falls away as R grows, but a longer bit line has more capacitance, which shrinks the read signal (the next step); that
+          trade-off sets how many cells a real bit line carries.</p>`,
+        real: `<p>A shipping DRAM cell does not use a planar capacitor: it is a deep trench or a tall stacked cylinder, tens of fF in a footprint of a few
+          F², where F is the minimum feature size. An SRAM cell is of the order of a hundred F². The access transistor is built with a
+          buried or recessed gate so that its leakage stays low. That is why DRAM and logic need different processes, and why a CPU's last
+          cache is SRAM, or embedded DRAM on a DRAM-like flow, not ordinary DRAM.</p>`,
+        pitfall: `<p>Reading a cell is not "looking at a wire". The cell's capacitor (${CELL_C} fF) is a quarter of the bit line it must move (${BITLINE_C} fF) and has
+          no gain, so there is no digital value on the bit line until an amplifier makes one. In the panel, the line shows a voltage
+          before Sense and a logic level only after; reading the output before the row is sensed gives X.</p>`,
+        numbers: `<table class="mini"><tr><th>cells per bit line</th><th>transistors per bit</th><th>SRAM (6T)</th></tr>
+          ${[4, 64, 512, 1024].map((r) => `<tr><td>${r}</td><td>${(1 + 13 / r).toFixed(2)}</td><td>6</td></tr>`).join('')}</table>`,
+      },
       scene: () => dramScene(),
       challenge: {
         kind: 'reach', goal: 'Store a 1 in row 2, column 3, and leave the array closed and precharged.',
@@ -135,8 +167,25 @@ export const chDram: Chapter = {
         their charge, Σ C·V / Σ C, and the wires show their voltage. Everywhere else the circuit is still 0, 1, X and Z.</p>
         <p><span data-show="c1">The cell</span> lost its charge in the process: it now sits at the bit line's level too. Sharing destroys the bit, so a DRAM
         read must write the value back.</p>
+        <p>Two consequences follow from one formula. The swing scales with Cs / (Cs + Cb), so it shrinks as more cells hang on a bit line,
+        and the amplifier's offset sets a floor under it. And because the cell ends at the shared level, a cell left unrestored after an
+        activate holds ${(share(1) * VDD_VOLTS).toFixed(2)} V instead of ${VDD_VOLTS} V: each uncorrected read halves the next one's signal, as the next step's quiz works out.</p>
         <div class="try">The panel shows the array's contents and the view is inside column 1. Activate <span data-show="c1">row 1</span> and stop: read each bit
         line's distance from <span data-show="vh0 vh1">VDD/2</span> in the panel's <code>bl − bl̄</code> row (bit line minus reference line), and the bit line's voltage on the drawing.</div>`,
+      more: {
+        derive: `<p>Charge conservation on the joined nodes: Cs·V<sub>cell</sub> + Cb·VDD/2 = (Cs + Cb)·V. Subtract (Cs + Cb)·VDD/2 from both sides:
+          V − VDD/2 = (V<sub>cell</sub> − VDD/2) · Cs / (Cs + Cb). With Cs = ${CELL_C} fF, Cb = ${BITLINE_C} fF the fraction is ${CELL_C}/${CELL_C + BITLINE_C} = ${(CELL_C / (CELL_C + BITLINE_C)).toFixed(2)},
+          a cell at ±VDD/2 = ±${mV(0.5)} mV moves the line by ±${mV(DV)} mV. The cell ends at the same level, so after the read it holds
+          VDD/2 ± ${mV(DV)} mV: one fifth of its original margin.</p>`,
+        real: `<p>Sense amplifiers resolve tens of millivolts, which is why real arrays keep bit lines short (512 to 1 024 cells, as above), twist or shield them against coupling between neighbours, and keep a dummy or twin line precisely matched to the one being
+          read. Everything on the line is a noise source: the amplifier's offset, the neighbour's switching, the supply.</p>`,
+        pitfall: `<p>Reading the bit line's level on the drawing as "the bit". At ${mV(DV)} mV from VDD/2 the line is neither a 0 nor a 1 for any logic
+          gate: the panel shows <code>bl − bl̄</code> (the bit line against its reference) because only the difference carries information.
+          If the reference is not at the same level, a stored 0 can look like a 1.</p>`,
+        numbers: `<table class="mini"><tr><th>Cb / Cs</th><th>bit-line swing</th><th>margin over the ${OFFSET_MV} mV offset</th></tr>
+          ${[2, 4, 8, 16, 32].map((m) => { const d = 0.5 / (1 + m); return `<tr><td>${m}</td><td>${mV(d)} mV</td><td>${(mV(d) / OFFSET_MV).toFixed(1)}×</td></tr>`; }).join('')}</table>
+          <p>Here Cb / Cs = ${BITLINE_C / CELL_C}. The margin falls roughly as 1 / (1 + Cb / Cs) and runs out where the line carries ${Math.floor(0.5 * VDD_VOLTS * 1000 / OFFSET_MV - 1)} times the cell's capacitance.</p>`,
+      },
       scene: () => dramScene({ pattern: PATTERN, path: ['col1'] }),
       challenge: {
         kind: 'reach', goal: `Activate row 1 and stop before sensing: every bit line sits ${mV(DV)} mV above or below VDD/2.`,
@@ -163,8 +212,25 @@ export const chDram: Chapter = {
         <p>A switch model cannot amplify 110 mV, so the amplifier is a primitive here: drawn with its 8 transistors, it compares the two
         levels and latches. Real amplifiers have an offset of some millivolts (mismatched transistors); below ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV
         this one latches X.</p>
+        <p>Why this is the right circuit: the signal is a difference of ${mV(DV)} mV on two lines that are otherwise identical, and a
+        cross-coupled pair amplifies exactly a difference while rejecting what is common to both lines (supply noise, coupling). Its gain is
+        positive feedback, so it is also its own memory: when it has finished, the pair <em>is</em> a latch holding the bit, which is
+        what the row buffer is. The cost is that it must be enabled only after the charge has been shared, and disabled only after the
+        cell has been restored.</p>
         <div class="try">The view is inside column 0. Activate a row and Sense, and watch the lines and the cell go to the rails. Open
         the SENSE box to see its transistors.</div>`,
+      more: {
+        derive: `<p>Near the metastable point the pair is a linear amplifier with a positive pole: the difference grows as δ(t) = δ₀·e<sup>t/τ</sup>, where τ = C/g<sub>m</sub>
+          (the line's capacitance over the transistors' transconductance). Resolving to a rail from δ₀ takes t = τ·ln(V<sub>swing</sub>/δ₀). A large
+          signal resolves fast; a signal at the offset takes a few times longer, and a signal of exactly zero never does, which is the
+          analog form of the metastability met with latches. Here the primitive latches when |δ₀| clears the ${OFFSET_MV} mV offset and gives X below it.</p>`,
+        real: `<p>Real sense amplifiers are shared: in a folded array one amplifier sits between a bit line and its twin; in an open array it sits between
+          two mats and each mat borrows its twin's line. Either way the amplifier must fit in the pitch of two bit lines, which is why it is
+          the most carefully drawn circuit on a DRAM die, and why its offset is a matter of layout symmetry as much as of design.</p>`,
+        pitfall: `<p>Closing in the wrong order. Precharge pulls the bit lines to VDD/2; if the word line is still up, the cell is pulled to VDD/2 with them and
+          the row is lost. Close first (<code>act</code> down), then precharge. The same trap in the other direction: enabling the amplifier
+          before the word line has joined the cell to the line senses nothing and latches a coin toss.</p>`,
+      },
       scene: () => dramScene({ pattern: PATTERN, path: ['col0'], highlight: ['sa'] }),
       tries: [(st) => st.getInput('act') === 1 && st.getInput('sae') === 1],
       challenge: {
@@ -187,21 +253,30 @@ export const chDram: Chapter = {
         <p>The charge leaks away through the access transistor's channel and its junction. Here a stored 1 halves every
         ${CELL_HALFLIFE} clock cycles, and the amplifier reads it correctly while its bit line moves by more than its offset: for
         <strong>${SAFE_CYCLES} cycles</strong> after the last restore. After that it reads X, and after a few more it reads 0 and writes
-        that 0 back. The bit is gone.</p>
+        that 0 back. The bit is gone. Retention is a distribution, not a number: the leakiest cell among billions sets the refresh interval, so the
+        interval is chosen to keep that cell alive with margin, and it is the same for every row.</p>
         <p><strong>Refresh</strong> is a read with nothing out: <span data-show="rdec">activate a row</span>, sense it (which restores it), close it. Every row must be
         refreshed within the retention time. In silicon that is 64 ms, and a DDR4 device refreshes in 8 192 REF commands, one every
         ${DDR4_3200.tREFI / 1000} µs, each keeping it busy for ${DDR4_3200.tRFC} ns: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time
         lost. Here cells leak only towards 0, so a stored 0 never fades; in silicon many arrays store half their bits inverted
         (true and anti-cells), so lost charge reads as 1 in some cells and 0 in others, and refresh must cover every bit. A cell in
         an open row does not decay: its <span data-show="col0.sa">amplifier</span> holds it.</p>
-        <details class="deeper"><summary>Deeper: row hammer</summary>
-        <p>Refresh assumes a cell loses charge only by leaking. Activating one row over and over (the <em>aggressor</em>) disturbs
-        the cells of its neighbours and drains them faster: Kim et al. (2014) flipped bits in 110 of 129 DDR3 modules with as few as
-        139 000 activations inside one 64 ms window, and denser parts since have flipped with under 5 000. A program that hammers the
-        rows around a victim flips bits it may not write; Project Zero turned that into a privilege escalation in 2015. Defences count
-        activations and refresh the neighbours (DDR4's target row refresh, DDR5's refresh management), refresh more often, or add ECC.
-        Here cells do not couple: each leaks alone.</p></details>
         <div class="try">Wait 200 cycles and watch row ages turn orange, then red. Refresh a row and its age returns to 0.</div>`,
+      more: {
+        derive: `<p>A stored 1 decays as L(t) = 2<sup>−t/${CELL_HALFLIFE}</sup> of VDD. It stays readable while the bit-line swing clears the amplifier's offset,
+          that is while L ≥ ${READABLE.toFixed(3)} (½ plus the offset's share of the cell: ${OFFSET_MV} mV · (Cs + Cb) / Cs). Solving: t = ${CELL_HALFLIFE} · log₂(1 / ${READABLE.toFixed(3)})
+          = ${SAFE_CYCLES} cycles. Refresh cost, DDR4: ${DDR4_3200.retentionMs} ms retention over 8 192 REF commands is one every ${DDR4_3200.tREFI / 1000} µs; a bank has 65 536 rows,
+          so each REF restores 8 rows per bank. During it the device is busy for tRFC = ${DDR4_3200.tRFC} ns, so the lost fraction is ${DDR4_3200.tRFC}/${DDR4_3200.tREFI} = ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} %.</p>`,
+        real: `<p>Refresh assumes a cell loses charge only by leaking. Activating one row over and over (the <em>aggressor</em>) disturbs
+          the cells of its neighbours and drains them faster: Kim et al. (2014) flipped bits in 110 of 129 DDR3 modules with as few as
+          139 000 activations inside one 64 ms window, and denser parts since have flipped with under 5 000. A program that hammers the
+          rows around a victim flips bits it may not write; Project Zero turned that into a privilege escalation in 2015. Defences count
+          activations and refresh the neighbours (DDR4's target row refresh, DDR5's refresh management), refresh more often, or add ECC.
+          Here cells do not couple: each leaks alone.</p>`,
+        pitfall: `<p>Thinking an idle row is safe because nothing touches it: it is the idle rows that leak. And the opposite error: assuming a refresh costs an
+          activate and a read. It does cost a row cycle (tRAS + tRP), but it moves no data over the pins; the controller only has to leave the bank
+          alone for tRFC. In the panel, a row's age resets on Refresh and keeps climbing under Wait, whatever else you do to the other rows.</p>`,
+      },
       scene: () => dramScene({ pattern: PATTERN }),
       challenge: {
         kind: 'reach', goal: 'Let at least 600 cycles pass (Wait) and keep every bit: all four rows still readable.',
@@ -227,7 +302,21 @@ export const chDram: Chapter = {
         <p>Rows are interleaved over the banks, so consecutive lines fill a row and then move on to the next bank. Banks are
         independent: while one waits for its precharge or activate, another can be read, and a controller with several requests
         overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter 36</a>). Two streams that land in the same bank keep closing each
-        other's rows. A memory copy whose destination sits a multiple of the bank stride away does exactly that.</p>`,
+        other's rows. A memory copy whose destination sits a multiple of the bank stride away does exactly that.</p>
+        <p>The row buffer is why access order matters more than access count. Sequential addresses cost one activate per row and a stream of
+        cheap column commands; a stride that hops rows costs an activate and a precharge for every word. The same program can therefore run
+        at a few cycles a line or at a conflict's ${accessCycles('conflict', TIMING)} cycles a line, with nothing changed but the addresses.</p>`,
+      more: {
+        derive: `<p>Average cost per line with hit rate h and conflict share k of the misses: ${accessCycles('hit', TIMING)}·h + ${accessCycles('miss', TIMING)}·(1 − h)(1 − k) + ${accessCycles('conflict', TIMING)}·(1 − h)k.
+          A streaming read with 16-word rows and 4-word lines hits 3 times in 4 (h = 0.75, k = 0): ${(0.75 * accessCycles('hit', TIMING) + 0.25 * accessCycles('miss', TIMING)).toFixed(1)} cycles a line. The same lines
+          visited so that each one finds another row open (h = 0, k = 1) cost ${accessCycles('conflict', TIMING)}: ${(accessCycles('conflict', TIMING) / (0.75 * accessCycles('hit', TIMING) + 0.25 * accessCycles('miss', TIMING))).toFixed(1)} times as much.</p>`,
+        real: `<p>The address mapping is the controller's main lever. Real controllers put the column bits lowest (consecutive lines share a row), then bank-group and
+          bank bits (so streams spread over independent banks), then the row bits, and some XOR bank bits with row bits to break the power-of-two strides
+          that make arrays of structures collide. Servers interleave channels the same way.</p>`,
+        pitfall: `<p>Reading "16 banks" as 16 times the bandwidth. Banks overlap latency (one activates while another bursts) but they share the data pins and
+          the command bus; a program whose accesses all fall in one bank gets none of the overlap. The widget's copy example is that case: the
+          mapping, not the device, is what changes.</p>`,
+      },
       widget: rowBufferWidget,
       challenge: {
         kind: 'quiz',
@@ -253,14 +342,22 @@ export const chDram: Chapter = {
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
         <a href="#/c/cache/0">Chapter 22</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
         ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 36</a> builds the controller that issues these
-        commands, and lets the caches pay what the row buffer says.</p>
-        <details class="deeper"><summary>Deeper: what DDR4-3200 22-22-22 means</summary>
-        <p>${MTS} MT/s (million transfers a second per data pin): data moves on both edges of a ${MTS / 2} MHz clock, so tCK = ${TCK} ns.
-        The three numbers are CL (tCAS), tRCD and tRP in clocks: ${CL_TCK} × ${TCK} = ${DDR4_3200.tCAS} ns each. The array cannot keep up
-        with the pins, so each column access fetches 8 bits per data pin at once (<strong>8n prefetch</strong>) and shifts them out as a
-        <strong>burst of 8</strong> (BL8) over 4 clocks, ${BL8_NS} ns: on a 64-bit channel, a 64-byte cache line. From DDR to DDR5 the
-        transfer rate rose from 200–400 to 4 800 MT/s and more, the prefetch from 2n to 16n; CL in nanoseconds stayed at about 13–17. The latency is the array's, and the
-        array has not got faster.</p></details>`,
+        commands, and lets the caches pay what the row buffer says.</p>`,
+      more: {
+        derive: `<p>${MTS} MT/s (million transfers a second per data pin): data moves on both edges of a ${MTS / 2} MHz clock, so tCK = ${TCK} ns.
+          The three numbers are CL (tCAS), tRCD and tRP in clocks: ${CL_TCK} × ${TCK} = ${DDR4_3200.tCAS} ns each. The array cannot keep up
+          with the pins, so each column access fetches 8 bits per data pin at once (<strong>8n prefetch</strong>) and shifts them out as a
+          <strong>burst of 8</strong> (BL8) over 4 clocks, ${BL8_NS} ns: on a 64-bit channel, a 64-byte cache line. From DDR to DDR5 the
+          transfer rate rose from 200–400 to 4 800 MT/s and more, the prefetch from 2n to 16n; CL in nanoseconds stayed at about 13–17. The latency is the array's, and the
+          array has not got faster.</p>`,
+        real: `<p>The pins run at ${MTS} MT/s, the array at a small fraction of that; the prefetch and the burst hide the difference. DDR5 splits the
+          module into two independent 32-bit channels and adds bank groups so that more commands overlap; HBM goes the other way, thousands of slower pins on an interposer
+          beside the CPU. All of them still pay tRCD, tCAS and tRP in nanoseconds, because the array's physics did not change.</p>`,
+        pitfall: `<p>Comparing latencies in clocks across generations. DDR4-3200 CL22 and DDR5-6400 CL46 have the same CAS latency in time, ${DDR4_3200.tCAS} ns against about 14 ns:
+          the bigger count is a faster clock, not a slower memory. Convert to nanoseconds first, then to your CPU's cycles.</p>`,
+        numbers: `<table class="mini"><tr><th>CPU clock</th><th>ns / cycle</th><th>hit</th><th>miss</th><th>conflict</th></tr>
+          ${[0.1, 1, 2, 3, 5].map((g) => { const c = (k: number) => cyclesOf(k, 1 / g), b = cyclesOf(BL8_NS, 1 / g); return `<tr><td>${g} GHz</td><td>${(1 / g).toFixed(2)}</td><td>${c(DDR4_3200.tCAS) + b}</td><td>${c(DDR4_3200.tRCD) + c(DDR4_3200.tCAS) + b}</td><td>${c(DDR4_3200.tRP) + c(DDR4_3200.tRCD) + c(DDR4_3200.tCAS) + b}</td></tr>`; }).join('')}</table>`,
+      },
       widget: timingWidget,
       challenge: {
         kind: 'quiz',

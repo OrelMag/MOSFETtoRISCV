@@ -96,7 +96,31 @@ export const chFlash: Chapter = {
         whole block at once, "in a flash".</p>
         <p>The simulator gives each floating gate a charge. A program pulse adds ${FG_STEP} (${(5 * FG_STEP).toFixed(1)} V of threshold), an erase pulse removes
         it all. The panel's curve is the selected cell's drain current against its gate voltage, the dashed one an erased cell's.</p>
+        <p>Why it works: the floating gate is insulated on every side, so charge put there has nowhere to go. The control gate sees the cell through the
+        series of two capacitors, and the electrons on the floating gate screen it: a higher control-gate voltage is needed before the channel inverts,
+        which is the shifted threshold. The read does not touch the charge; it applies one voltage between the two thresholds and asks whether the cell conducts.
+        The cost is the insulation itself: forcing charge through it wears it, and that, not any speed limit, is what makes flash programmable only a limited number of times.</p>
         <div class="try">Pick a cell of <span data-show="c0_0 c0_1 c0_2 c0_3">row 0</span>, program the row with data 1110, and watch its threshold climb pulse by pulse.</div>`,
+      tour: {
+        beats: [
+          { title: 'Erased cells read 1', say: 'Row 0, read voltage on. Every cell is erased, Vt = 0 V, below the read voltage: all four conduct and pull their bit lines low, and the output inverters give 1. <code>dout0</code> = {v:dout0}.', set: { row: 0, rd: 1 }, at: [], show: ['c0_0', 'c0_1', 'c0_2', 'c0_3'], expect: { dout0: 1, dout1: 1 } },
+          { title: 'First pulse', say: `Read off, bit line 0 pulled low (<code>din0</code> = 0), <code>pgm</code> rises: electrons tunnel onto cell 0's floating gate. One pulse adds ${FG_STEP} of charge. Cells 1 to 3 have <code>din</code> = 1 and are inhibited.`, set: { rd: 0, din0: 0, pgm: 1 }, show: ['c0_0'] },
+          { title: 'Verify: not yet', say: `The program line falls and the data lines go back high; a read gives <code>dout0</code> = {v:dout0}. Charge ${FG_STEP} gives Vt = ${vtOf(FG_STEP).toFixed(1)} V, still below the ${V_READ} V read voltage: the cell conducts and reads as erased.`, set: { pgm: 0, din0: 1, rd: 1 }, show: ['c0_0'], expect: { dout0: 1 } },
+          { title: 'Second pulse', say: 'The same pulse again: the verify said the bit was not yet 0.', set: { rd: 0, din0: 0, pgm: 1 }, show: ['c0_0'] },
+          { title: 'Verify: programmed', say: `Vt = ${vtOf(2 * FG_STEP).toFixed(1)} V is above ${V_READ} V: cell 0 stays off and <code>dout0</code> reads {v:dout0}. The other three cells, inhibited, still read {v:dout1}.`, set: { pgm: 0, din0: 1, rd: 1 }, show: ['c0_0', 'c0_1'], expect: { dout0: 0, dout1: 1 } },
+        ],
+      },
+      more: {
+        derive: `<p>The threshold shifts by the stored charge over the coupling capacitance to the control gate, ΔVt = −Q / C<sub>cg</sub>. In this model a pulse adds ${FG_STEP} units of charge and the read passes
+          below ${FG_READ}, so a cell is programmed after ⌈${FG_READ} / ${FG_STEP}⌉ = ${pulses} pulses. Erased, Vt = ${vtOf(0)} V; after each pulse:
+          ${[0, 1, 2, 3].map((n) => `${n}: ${vtOf(n * FG_STEP).toFixed(1)} V`).join(', ')}. Stopping at the first pulse that passes the read voltage keeps the oxide stress and the
+          threshold spread small, which is what the verify after each pulse is for.</p>`,
+        real: `<p>NAND programs by Fowler–Nordheim tunnelling through an oxide of the order of 8 nm, at about 20 V on the control gate, in incremental steps (ISPP: each pulse a little higher)
+          with a verify after each. Erase puts the high voltage on the substrate instead. Each cycle traps a few electrons in the oxide, so the window between erased and programmed narrows with
+          use; data retention is specified as years at a given wear, not as forever.</p>`,
+        pitfall: `<p>Reading a half-programmed cell as programmed, or the reverse. A cell with Vt just under the read voltage reads 1 today and 0 after a little drift, so programming overshoots on purpose and
+          each pulse is followed by a verify at a stricter voltage than the normal read. In the panel, one pulse changes the threshold curve but not the bit.</p>`,
+      },
       scene: () => flashScene({ kind: 'nor' }),
       tries: [(st) => rowsOf(st, 1)[0] === 0b1110],
       challenge: {
@@ -127,7 +151,24 @@ export const chFlash: Chapter = {
         ${FLASH_REAL_US.read} µs, a page program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. At our
         ${CLOCK_NS.toFixed(2)} ns clock a read alone would be ${fmtN(READ_REAL)} cycles, so the model scales all three down about ${SCALE}×,
         keeping their ratios: ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
+        <p>Why a block and not a row: the erase is done through the substrate, which all the cells of the block share; separating it per row would cost a
+        well and its isolation for every row. So the erase unit is as large as the process makes cheap, and the controller's problem becomes what to do with
+        the rest of a block when one row of it changes. The answer, two steps on, is not to change it in place.</p>
         <div class="try"><span data-show="c1_0 c1_1 c1_2 c1_3">Row 1</span> holds 1010. Make it 0110 and keep rows 0, 2 and 3 as they are.</div>`,
+      more: {
+        derive: `<p>A program can only clear bits, so it ANDs the data into the stored word: new = old AND data. Row 1 holds 1010 and 0110 is wanted: 1010 AND 0110 = 0010, not 0110,
+          because bit 2 would have to rise. Rewriting costs, in the model's cycles, a read of each of the 3 other rows (${3 * FLASH_TIMES.read}), the erase (${FLASH_TIMES.erase}) and a program of each row
+          that needs a 0 (3 × ${FLASH_TIMES.program} = ${3 * FLASH_TIMES.program}): ${3 * FLASH_TIMES.read + FLASH_TIMES.erase + 3 * FLASH_TIMES.program} cycles to change four bits, against ${FLASH_TIMES.program} for a program alone.</p>`,
+        real: `<p>NAND erases blocks of a few hundred kilobytes to several megabytes, and programs pages of 4 to 16 KB in order inside a block. NOR erases sectors of 64 to 256 KB and programs bytes or words,
+          which is why code can be updated in place there with a sector buffer. The asymmetry (read, then program, then erase, each about ten times slower than the last) is a property of the physics,
+          not the interface.</p>`,
+        pitfall: `<p>Erasing to change one bit. The erase takes the whole block, so the other rows' data must be held somewhere else first; if power fails between the erase and the
+          reprogramming they are gone. This is the real hazard of in-place updates on raw flash, and the reason the next steps never do it.</p>`,
+        numbers: `<table class="mini"><tr><th>operation</th><th>real SLC</th><th>model cycles</th></tr>
+          <tr><td>page read</td><td>${FLASH_REAL_US.read} µs</td><td>${FLASH_TIMES.read}</td></tr>
+          <tr><td>page program</td><td>${FLASH_REAL_US.program} µs</td><td>${FLASH_TIMES.program}</td></tr>
+          <tr><td>block erase</td><td>${FLASH_REAL_US.erase / 1000} ms</td><td>${FLASH_TIMES.erase}</td></tr></table>`,
+      },
       scene: () => flashScene({ kind: 'nor', pattern: PATTERN }),
       challenge: {
         kind: 'reach', goal: 'Rewrite row 1 from 1010 to 0110, and keep the other rows (0011, 1111, 0101).',
@@ -151,17 +192,28 @@ export const chFlash: Chapter = {
         A read puts the selected row at the read voltage and every other row at the <span data-show="p0 p1 p2 p3 p4 p5 p6 p7"><strong>pass voltage</strong></span>, high enough to turn on
         any cell whatever it holds; the string conducts only if the selected cell is erased. About 4 F² a cell and no random access:
         a page is sensed in tens of microseconds and then streamed out. NAND holds files and SSDs, NOR holds boot code.</p>
-        <details class="deeper"><summary>Deeper: several bits a cell, and the third dimension</summary>
-        <p>The threshold is analog, so a cell can hold more than one bit: <strong>MLC</strong> places it at one of 4 levels (2 bits),
-        <strong>TLC</strong> 8 (3 bits), <strong>QLC</strong> 16 (4 bits). A read then compares against 3, 7 or 15 read voltages, a
-        program steps in finer pulses with more verifies, and the margins between levels shrink: QLC programs several times slower
-        than SLC and survives on the order of a thousand erases against SLC's 100 000. The same cell, the same array; only the
-        sensing and the controller change.</p>
-        <p>Planar cells stopped shrinking near 15 nm: a few dozen electrons per level, and neighbours coupling through the gap.
-        <strong>3D NAND</strong> (Samsung's V-NAND, 2013, 24 layers) stands each string up as a vertical channel through a stack of
-        word-line layers, most with a charge-trap layer in place of the floating gate; current parts stack over 200 layers. Density
-        now comes from layers, not from a smaller F.</p></details>
+        <p>The two arrays are one cell wired two ways, and the wiring decides everything else. Parallel cells give random access and cost a contact each;
+        series cells give density and force every access to go through the whole string. The cost of the series path shows in two places: reads are slow
+        (a small current through many transistors), and every read applies the pass voltage to the other rows, a mild stress that the last step comes back to.</p>
         <div class="try">Read a row: every other row's cells sit at the pass voltage. Program a row, then erase the block.</div>`,
+      more: {
+        derive: `<p>Transistors and contacts per bit. NOR: 1 cell and 1 bit-line contact. A NAND string of N cells has N + 2 transistors (the string and ground selects) and a single
+          bit-line contact shared by all N bits, so (N + 2) / N transistors and 1 / N contacts per bit. The contact, not the transistor, sets the pitch, which is why the string length is the lever.</p>`,
+        real: `<p>The threshold is analog, so a cell can hold more than one bit: <strong>MLC</strong> places it at one of 4 levels (2 bits),
+          <strong>TLC</strong> 8 (3 bits), <strong>QLC</strong> 16 (4 bits). A read then compares against 3, 7 or 15 read voltages, a
+          program steps in finer pulses with more verifies, and the margins between levels shrink: QLC programs several times slower
+          than SLC and survives on the order of a thousand erases against SLC's 100 000. The same cell, the same array; only the
+          sensing and the controller change.</p>
+          <p>Planar cells stopped shrinking near 15 nm: a few dozen electrons per level, and neighbours coupling through the gap.
+          <strong>3D NAND</strong> (Samsung's V-NAND, 2013, 24 layers) stands each string up as a vertical channel through a stack of
+          word-line layers, most with a charge-trap layer in place of the floating gate; current parts stack over 200 layers. Density
+          now comes from layers, not from a smaller F.</p>`,
+        pitfall: `<p>Reading a NAND row as if the other cells were not there. In the scene, a string conducts only when every cell above and below the selected one is on, so a programmed cell
+          that is not at the pass voltage would block the read. The pass voltage must exceed the highest threshold of any level, which is also what limits how many levels fit.</p>`,
+        numbers: `<table class="mini"><tr><th>string length N</th><th>transistors per bit</th><th>bit-line contacts per bit</th></tr>
+          <tr><td>NOR (no string)</td><td>1.00</td><td>1.00</td></tr>
+          ${[8, 32, 64, 128].map((n) => `<tr><td>${n}</td><td>${((n + 2) / n).toFixed(2)}</td><td>${(1 / n).toFixed(3)}</td></tr>`).join('')}</table>`,
+      },
       scene: () => flashScene({ kind: 'nand', pattern: [0b1010, 0b1111, 0b0110, 0b1111, 0b0001, 0b1111, 0b1111, 0b1100] }),
       challenge: {
         kind: 'quiz',
@@ -187,7 +239,19 @@ export const chFlash: Chapter = {
         <p>When free blocks run low, <strong>garbage collection</strong> picks the block with the fewest valid pages, copies those to the
         active block and erases it. Every copy is a program the host did not ask for: <strong>write amplification</strong> is page programs
         divided by host writes. The table itself lives in the controller's RAM and is rebuilt from the pages at power-up (each page
-        records its logical number).</p>`,
+        records its logical number).</p>
+        <p>The layer is what makes flash look like a disk: the host sees a flat array of overwritable sectors, and the controller turns every overwrite into a program of a
+        free page, a table update and, later, an erase. The host's speed then depends on how much work is waiting in the background, which is why an SSD slows down as it fills.</p>`,
+      more: {
+        derive: `<p>A block of n pages with v valid ones frees n − v pages at the price of v copies. To fill the freed pages the host writes n − v pages, so the device programs v + (n − v) = n pages for n − v host writes:
+          write amplification = n / (n − v). For n = 8: ${[0, 2, 4, 6, 7].map((v) => `v = ${v} gives ${(8 / (8 - v)).toFixed(2)}`).join('; ')}. The cheaper the victim (fewer valid pages), the nearer WA is to 1,
+          which is what picking the block with the fewest valid pages does.</p>`,
+        real: `<p>The table is the controller's largest data structure: a 4-byte entry per 4 KiB page is 1 MiB of RAM per GiB of flash, ${2 ** 40 / 2 ** 12 * 4 / 2 ** 30} GiB for a 1 TiB drive, which is why
+          the cheapest SSDs map in larger units or keep part of the table on the flash. TRIM (or discard) lets the host say which logical pages are dead, so they need not be copied. Sequential
+          writes invalidate whole blocks together and cost almost nothing to collect; random small writes are the worst case.</p>`,
+        pitfall: `<p>Thinking a delete frees a page. Until the block holding it is collected the stale copy still sits there, readable with the right tools, and a drive that has not been told
+          (TRIM) treats it as live data and copies it during garbage collection. In the widget, watch the stale count rise on a rewrite and fall only when a block is erased.</p>`,
+      },
       widget: ftlWidget,
       challenge: {
         kind: 'quiz',
@@ -213,15 +277,25 @@ export const chFlash: Chapter = {
         <p><strong>Spare space</strong> (over-provisioning) is the controller's room to work. With little spare, the blocks it collects are
         still mostly valid, so every free page costs many copies. With more, write amplification drops toward 1. SSDs keep 7 to 28 %
         of their flash out of sight for this.</p>
-        <details class="deeper"><summary>Deeper: errors, ECC and read disturb</summary>
-        <p>Here every cell reads exactly what was programmed. Real cells do not: charge leaks over months (faster in worn
-        blocks), neighbours couple, and each level is a spread of thresholds that grows with wear. Every page carries spare bytes of
-        <strong>ECC</strong>: BCH codes correcting tens of bits per kilobyte in SLC and early MLC, then LDPC codes in TLC and QLC,
-        which use soft reads (the same page sensed at several read voltages) to decide the doubtful bits. When the corrected-bit count
-        climbs, the controller moves the data and retires the block.</p>
-        <p><strong>Read disturb</strong>: a NAND read puts the pass voltage on every other row of the block, a weak program pulse for
-        their cells. After many thousands of reads a block's unselected pages drift toward 0, so the controller counts reads per
-        block and rewrites a block before it reaches the limit: a read can cost a write.</p></details>`,
+        <p>Three limits meet here and each has its own remedy: the oxide wears (spread the erases), blocks fail (skip them) and the drive fills (keep room to move data).
+        The controller's firmware is largely an accountant of these budgets, and the drive's rated lifetime is the point where the first one runs out.</p>`,
+      more: {
+        derive: `<p>Total host data a drive can take before wear-out = capacity × erase endurance / write amplification, assuming perfect levelling. For 1 TB of TLC (${fmtN(3000)} erases) and WA 1, 2, 4:
+          ${[1, 2, 4].map((wa) => `${(1e12 * 3000 / wa / 1e15).toFixed(2)} PB`).join(', ')}. Halving WA doubles the life, which is why over-provisioning, TRIM and sequential-friendly layouts are worth real money.</p>`,
+        real: `<p>Here every cell reads exactly what was programmed. Real cells do not: charge leaks over months (faster in worn
+          blocks), neighbours couple, and each level is a spread of thresholds that grows with wear. Every page carries spare bytes of
+          <strong>ECC</strong>: BCH codes correcting tens of bits per kilobyte in SLC and early MLC, then LDPC codes in TLC and QLC,
+          which use soft reads (the same page sensed at several read voltages) to decide the doubtful bits. When the corrected-bit count
+          climbs, the controller moves the data and retires the block.</p>
+          <p><strong>Read disturb</strong>: a NAND read puts the pass voltage on every other row of the block, a weak program pulse for
+          their cells. After many thousands of reads a block's unselected pages drift toward 0, so the controller counts reads per
+          block and rewrites a block before it reaches the limit: a read can cost a write.</p>`,
+        pitfall: `<p>Reading the endurance figure as a promise per block. It is a statistical rating: some blocks die early, and a drive's life ends when the spare pool for replacing them runs out, not when the average
+          block reaches the limit. Static data is the other trap: blocks holding it are barely worn while the free pool is worn out, unless the controller moves cold data to spread the wear.</p>`,
+        numbers: `<table class="mini"><tr><th>cell</th><th>bits</th><th>levels</th><th>erases (typical)</th></tr>
+          <tr><td>SLC</td><td>1</td><td>2</td><td>${fmtN(100000)}</td></tr><tr><td>MLC</td><td>2</td><td>4</td><td>${fmtN(10000)}</td></tr>
+          <tr><td>TLC</td><td>3</td><td>8</td><td>${fmtN(3000)}</td></tr><tr><td>QLC</td><td>4</td><td>16</td><td>${fmtN(1000)}</td></tr></table>`,
+      },
       widget: wearWidget,
       challenge: {
         kind: 'quiz',
