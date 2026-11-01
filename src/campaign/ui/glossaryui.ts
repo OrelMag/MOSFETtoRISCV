@@ -92,7 +92,7 @@ function show(el: HTMLElement): void {
   sum.innerHTML = e.body;
   card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, CODEX_KINDS.find((k) => k.id === e.kind)?.title.replace(/s$/, '') ?? e.kind),
     coarse() ? h('button', { class: 'gl-close', 'aria-label': 'Close', onclick: hideGlossary }, icon('close', 14)) : null), sum,
-    el.dataset.later ? h('div', { class: 'gl-later' }, `Built in ${el.dataset.later}. Read on: this step does not need it yet.`) : null,
+    ...(el.dataset.later ? [h('div', { class: 'gl-later' }, `Built in ${el.dataset.later}. Read on: this step does not need it yet.`)] : []),
     h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}`, onclick: (ev: Event) => {
       if (!opener) return;
       ev.preventDefault();
