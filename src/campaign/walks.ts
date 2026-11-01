@@ -156,16 +156,22 @@ const WALKS0: Record<string, WalkScript> = {
       title: 'The shared NAND of a and b',
       text: 'g1 = ¬(a·b). It is the first NAND of the XOR a ⊕ b, and also half of the carry: cout = a·b + cin·(a ⊕ b).',
       parts: ['g1'], codex: ['majority'],
+      why: 'Both outputs need it. The sum starts with the XOR a ⊕ b, whose first NAND is ¬(a·b); the carry needs a·b, which is the same gate seen from the other side. Placing it first lets both grow from it.',
+      whyNot: { text: 'Building the carry from its own AND gate (NAND + NOT) would compute ¬(a·b) twice: one NAND and one level of delay spent for nothing.' },
     },
     {
       title: 'First XOR',
       text: 'g2, g3 and g4 complete the four-NAND XOR on g1: g4 = a ⊕ b. This is a half adder without its carry gate.',
       parts: ['g2', 'g3', 'g4'], codex: ['xor'],
+      why: 'a ⊕ b is the propagate signal: 1 when exactly one of a, b is 1, so an incoming carry would pass through this column. Both the sum and the carry need it.',
+      whyNot: { text: 'An XOR built from AND, OR and NOT gates costs more than four NANDs; the four-NAND form reuses g1, which the carry needs anyway.' },
     },
     {
       title: 'The carry',
       text: 'g5 = ¬((a⊕b)·cin) is the first NAND of the second XOR. g9 = NAND(g1, g5) = a·b + (a⊕b)·cin = maj(a, b, cin), NAND–NAND with no inverters. cout is done, depth 5. Two half adders and an OR would spend 4 more NANDs on the same carry.',
       parts: ['g5', 'g9'], codex: ['nandnand'],
+      why: 'cout = a·b + (a ⊕ b)·cin. g1 holds ¬(a·b) and g5 holds ¬((a ⊕ b)·cin); a NAND of two inverted terms is their OR (De Morgan), so one gate finishes the carry with no inverters.',
+      whyNot: { text: 'Two half adders and an OR compute the same carry with inverters that cancel in pairs: 4 NANDs more, and 2 more delays from cin to cout.', alt: 'full_adder_ha' },
       ask: {
         question: 'cout = a·b + (a⊕b)·cin. g1 = ¬(a·b) is there, and the second XOR will start with g5 = ¬((a⊕b)·cin). What gives cout?',
         options: ['NAND(g1, g5): 1 NAND', 'Two ANDs and an OR: 7 NANDs', 'NAND(g4, cin)', 'AND(g1, g5)'],
@@ -178,6 +184,8 @@ const WALKS0: Record<string, WalkScript> = {
       title: 'Second XOR',
       text: 'The second XOR has the same four-NAND shape as the first. Its first NAND, ¬((a⊕b)·cin), was placed in step 3 because the carry needs it too. Add the other three: g6 = ¬(g4·g5), g7 = ¬(cin·g5), g8 = NAND(g6, g7). The sum is now complete: 1 when an odd number of inputs are 1. Nine NANDs, depth 6.',
       parts: ['g6', 'g7', 'g8'], codex: ['fulladder'],
+      why: 's = (a ⊕ b) ⊕ cin: an XOR of the first XOR with the carry in. Its first NAND, g5, is already there because the carry needed it, so only three gates remain.',
+      whyNot: { text: 'A parity tree over a, b and cin as two separate XORs that did not share g5 with the carry would cost one more NAND for the same sum.' },
     },
   ],
   s_sr: [
