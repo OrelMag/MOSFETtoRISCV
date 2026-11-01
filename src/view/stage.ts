@@ -18,6 +18,7 @@ import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } 
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
 import { applyTheme, settings } from '../ui/settings';
+import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector } from './inspector';
@@ -88,6 +89,8 @@ const LEVEL_NAME: Record<string, string> = {
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
 const HISTORY_MAX = 100;
+/** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
+const REPLAY_MS = 1500;
 /** The stage's Run: one clock cycle every RUN_MS (2 Hz, slow enough to follow every edge), high for the first half. */
 const RUN_MS = 500;
 /** The open part's pins shown in the bar's read-only row (the rest are in the inspector's Info). */
@@ -188,6 +191,8 @@ export class Stage {
   private navListeners = new Set<(path: string[]) => void>();
   readonly analyzer = new LogicAnalyzer();
   private probeMode = false;
+  /** Where each probe lane was clicked (instance path + net index), for a link to this view; cleared with the lanes. */
+  private probeRefs = new Map<number, { path: string[]; net: number }>();
   private probeBtn: HTMLButtonElement;
   private whyBtn: HTMLButtonElement;
   /** Why? mode: a click on a wire explains its value (view/whypanel.ts). */
@@ -275,11 +280,15 @@ export class Stage {
       imgMenu.classList.remove('open');
       this.exportImage(kind);
     } }, h('span', null, h('b', null, label), h('small', null, hint)));
-    imgMenu.append(imgItem('svg', 'SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'PNG', 'The same at 2× resolution'));
-    const imgBtn = h('button', { class: 'btn ghost sm', title: 'Export this level as an image (SVG or PNG)', 'aria-haspopup': 'menu', onclick: (e: Event) => {
+    const linkItem = h('button', { role: 'menuitem', onclick: () => {
+      imgMenu.classList.remove('open');
+      void this.copyViewLink();
+    } }, h('span', null, h('b', null, 'Copy link to this view'), h('small', null, 'Chapter step, opened part, inputs, probes and clock cycles')));
+    imgMenu.append(imgItem('svg', 'Image as SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'Image as PNG', 'The same at 2× resolution'), linkItem);
+    const imgBtn = h('button', { class: 'btn ghost sm', title: 'Share this view: an image of this level (SVG or PNG), or a link that reopens it as it is now', 'aria-haspopup': 'menu', onclick: (e: Event) => {
       e.stopPropagation();
       imgMenu.classList.toggle('open');
-    } }, icon('image', 15), h('span', { class: 'lbl' }, 'Image'));
+    } }, icon('image', 15), h('span', { class: 'lbl' }, 'Share'));
     document.addEventListener('pointerdown', (e) => {
       if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
     }, { signal: this.life.signal });
@@ -336,7 +345,8 @@ export class Stage {
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
       { els: [imgWrap], items: [
         { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
-        { label: 'Image as PNG', hint: 'The same at 2× resolution', icon: 'image', run: () => this.exportImage('png') }] },
+        { label: 'Image as PNG', hint: 'The same at 2× resolution', icon: 'image', run: () => this.exportImage('png') },
+        { label: 'Copy link to this view', hint: 'Step, part, inputs, probes, clock cycles', icon: 'link', run: () => void this.copyViewLink() }] },
       { els: [layoutBtn], items: [{ label: 'Layout…', hint: 'Unravel pointers into wires, or reset this level', icon: 'move', run: () => {
         const r = more.getBoundingClientRect();
         this.view.layoutMenu(r.left, r.bottom + 6);
@@ -594,6 +604,7 @@ export class Stage {
     this.sim = sim;
     this.edge = null;
     this.cycles = 0;
+    this.probeRefs.clear();
     // toggles counted from the start (an increment per change), so the inspector's Power section has the whole run
     this.meter = sim instanceof GateSim ? new PowerMeter(sim) : null;
     this.meterFrom = 0;
@@ -628,7 +639,11 @@ export class Stage {
     this.layoutDock(false);
     this.view.fit();
     this.refresh();
-    if (settings.autoClock && scene.autoClock !== false) { this.startClock(); this.autoRun = this.clockRunning; }
+    // A link's view (ui/viewlink.ts): inputs, probes and cycles replayed; a replayed run is left paused where it ends.
+    const link = takePendingView();
+    setViewTarget(this);
+    if (link) this.restoreView(link);
+    if (settings.autoClock && scene.autoClock !== false && !link?.cycles) { this.startClock(); this.autoRun = this.clockRunning; }
   }
 
   /**
@@ -1262,15 +1277,107 @@ export class Stage {
       this.analyzer.remove(hit.id);
       return true;
     }
-    const nl = netlistOf(this.ctx.def)!;
-    const net = nl.nets[idx];
+    this.addProbe(this.ctx, idx, nets);
+    return true;
+  }
+
+  private addProbe(ctx: ViewCtx, idx: number, nets: number[]): void {
+    const net = netlistOf(ctx.def)!.nets[idx];
     const name = net.name ?? net.ends.find((e) => !e.includes('.')) ?? net.ends[0];
-    const where = this.ctx.path;
-    this.analyzer.add({
+    const where = ctx.path;
+    const lane = this.analyzer.add({
       label: [...where.slice(-1), name].join('.'), title: [...where, name].join('.'),
       nets, width: nets.length, color: this.analyzer.nextColor(), probe: true, clock: false,
     });
-    return true;
+    this.probeRefs.set(lane.id, { path: [...where], net: idx });
+  }
+
+  // ---- a link to this view -----------------------------------------------------------------
+
+  /** What differs from the scene as loaded: input values, probed nets, clock cycles run. */
+  viewState(): ViewState {
+    const v = emptyView();
+    const sim = this.sim, scene = this.scene;
+    if (!sim || !scene) return v;
+    const clk = this.clockPort();
+    for (const p of inPorts(scene.root)) {
+      if (p.name === clk || scene.hiddenInputs?.includes(p.name)) continue;
+      const bits = sim.getInputBits(p.name);
+      if (!bits || bits.some((b) => b !== B0 && b !== B1)) continue;
+      const now = packBig(bits);
+      if (now === null) continue;
+      const start = scene.inputs?.[p.name];
+      if (now !== BigInt(start ?? 0)) v.inputs[p.name] = now;
+    }
+    if (sim.kind === 'gate' && !(sim instanceof DualSim)) {
+      for (const lane of this.analyzer.lanes) {
+        const ref = lane.probe ? this.probeRefs.get(lane.id) : undefined;
+        if (ref) v.probes.push(ref);
+      }
+    }
+    v.cycles = clk ? this.cycles : 0;
+    return v;
+  }
+
+  /** The hash that reopens this view: the route (kept current by the page) plus the suffix. */
+  viewHash(): string {
+    return splitView(location.hash).route + encodeView(this.viewState());
+  }
+
+  isLive(): boolean {
+    return !!this.sim && this.el.isConnected;
+  }
+
+  /** Copy the link to this view; the status line says what it holds. */
+  async copyViewLink(): Promise<void> {
+    const url = linkTo(this.viewHash());
+    const v = this.viewState();
+    const what = isEmptyView(v) ? 'this view' : [Object.keys(v.inputs).length ? 'inputs' : '', v.probes.length ? 'probes' : '', v.cycles ? `${v.cycles} cycle${v.cycles === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+    if (await copyText(url)) this.flashNow(`Link copied (${what})`);
+    else window.prompt('Copy this link (Ctrl+C):', url);
+  }
+
+  private flashNow(msg: string): void {
+    this.flash = msg;
+    this.updateControls();
+  }
+
+  /**
+   * Apply a link's view to the scene just built: inputs, probes, then the clock cycles replayed as fast pulses (the input
+   * changes made between them are not replayed, only their end state). Capped by a time budget; a note says what was cut.
+   */
+  restoreView(v: ViewState): void {
+    const sim = this.sim, scene = this.scene;
+    if (!sim || !scene) return;
+    const clk = this.clockPort();
+    const ports = new Map(inPorts(scene.root).map((p) => [p.name, p] as const));
+    let skipped = 0;
+    for (const [name, val] of Object.entries(v.inputs)) {
+      const p = ports.get(name);
+      if (!p || name === clk || scene.hiddenInputs?.includes(name)) { skipped++; continue; }
+      sim.setInputBits(name, unpackBig(val, p.width));
+    }
+    if (Object.keys(v.inputs).length) sim.settle();
+    if (v.probes.length && sim.kind === 'gate' && !(sim instanceof DualSim) && this.rootCtx) {
+      for (const ref of v.probes) {
+        let ctx: ViewCtx | null = this.rootCtx;
+        for (const n of ref.path) ctx = ctx?.child(n) ?? null;
+        const nets = ctx?.node.nets?.[ref.net];
+        if (!ctx || !nets || !netlistOf(ctx.def)?.nets[ref.net]) { skipped++; continue; }
+        this.addProbe(ctx, ref.net, [...nets]);
+      }
+      if (this.analyzer.lanes.some((l) => l.probe)) this.showAnalyzer(true, false);
+    } else if (v.probes.length) skipped += v.probes.length;
+    let note = '';
+    if (v.cycles > 0 && clk) {
+      const deadline = performance.now() + REPLAY_MS;
+      const done = this.runCycles(v.cycles, () => performance.now() > deadline);
+      if (done < v.cycles) note = `Link opened: replayed ${done} of ${v.cycles} clock cycles (the rest would take too long here)`;
+    }
+    if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
+    this.history = [];
+    this.refresh();
+    if (note) this.flashNow(note);
   }
 
   /** A switch-level design with relays: its time is relay steps, played like gate delays. */
@@ -1844,6 +1951,32 @@ export class Stage {
   /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
   heat(map: Map<string, { band: number; tip: string }> | null): void {
     this.view.heat(map);
+  }
+
+  /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
+  ghost(names: string[]): void {
+    this.view.ghost(names);
+  }
+
+  /** The screen rectangle around instances of the current view (null: none drawn). */
+  instRect(names: string[]): DOMRect | null {
+    return this.view.instRect(names);
+  }
+
+  /** Put an element over the canvas (a tour's caption), or take it away. */
+  overlay(el: HTMLElement, on = true): void {
+    if (on) this.canvas.append(el);
+    else el.remove();
+  }
+
+  /** The canvas's screen rectangle. */
+  get canvasRect(): DOMRect {
+    return this.canvas.getBoundingClientRect();
+  }
+
+  /** How many steps Back can undo now: a tour notes it before each beat and backs up to it. */
+  get historyDepth(): number {
+    return this.history.length;
   }
 
   /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */

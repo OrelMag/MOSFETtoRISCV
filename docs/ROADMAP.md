@@ -1156,6 +1156,12 @@ links, bus taps, duplicate and pin reordering. The gaps:
   (its memories read asynchronously, so they become LUT RAM): more than a GW1NR-9 has; no place-and-route in CI
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
+### Quality of life (2026-11-01) ✅
+- One backup file for all progress (ui/backup.ts: export / merge import, settings menu + home page + search), `navigator.storage.persist()` and a one-time Safari eviction note
+- Install as an app / offline: manifest, icons, generated service worker (vite.config.ts, scripts/sw-template.js)
+- Copy link to this view: inputs, probes and clock cycles in an optional hash suffix (ui/viewlink.ts, Stage share menu)
+- Text size (90–130 %) and a narrow reading column, prose only
+
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
 our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 34, the "vintage" accent).

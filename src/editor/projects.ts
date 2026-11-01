@@ -156,6 +156,14 @@ export function createProject(name: string, ws: Workspace = emptyWorkspace(), kv
   return { ok: true, id, name: n };
 }
 
+/** List a project under the id it has elsewhere (a backup being merged: a second import finds it again), its workspace saved here; false when that fails. */
+export function adoptProject(meta: ProjectMeta, ws: Workspace, kv: KV | null = storage()): boolean {
+  const idx = readProjects(kv);
+  if (idx.list.some((p) => p.id === meta.id) || !ID.test(meta.id)) return false;
+  if (!saveWorkspace(ws, kv, projectKey(meta.id)).ok) return false;
+  return write(kv, { ...idx, list: [...idx.list, { id: meta.id, name: uniqueProjectName(idx, meta.name), ...meta.modified ? { modified: meta.modified } : {}, chips: Object.keys(ws.chips).length }] });
+}
+
 /** A copy of a project's saved workspace under a new name ("CPU build copy"). */
 export function duplicateProject(id: string, kv: KV | null = storage(), now = Date.now()): ProjectResult {
   const idx = readProjects(kv);

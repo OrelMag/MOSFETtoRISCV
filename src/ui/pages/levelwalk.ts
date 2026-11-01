@@ -11,7 +11,12 @@
 
 import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
-import { stepMetrics, partialDoc, type StepMetrics, type Walk, walkOf } from '../../campaign/walk';
+import { stepMetrics, partialDoc, type StepMetrics, type Walk, type WalkStep, walkOf, withoutStep } from '../../campaign/walk';
+import { registry } from '../../lib/define';
+import { logicDepth, stats } from '../../sim/stats';
+
+/** How long Play all holds each step. */
+const PLAY_MS = 3500;
 import type { CampaignNode } from '../../campaign/types';
 import type { BuildChallenge } from '../../editor/challenges';
 import type { Editor } from '../../editor/editor';
@@ -128,6 +133,7 @@ export class WalkMode {
   }
 
   go(k: number): void {
+    if (k < this.k && this.playing) { this.playing = false; clearTimeout(this.playTimer); }
     this.k = Math.max(0, Math.min(k, this.walk.steps.length - 1));
     this.show(this.ed.ws);
   }
@@ -197,6 +203,8 @@ export class WalkMode {
 
   /** Leave: the scratch chip and the chips it brought go, the level's chip comes back. */
   leave(): void {
+    this.playing = false;
+    clearTimeout(this.playTimer);
     const ed = this.ed;
     this.restoreLevel();
     const chips = { ...ed.ws.chips };
@@ -214,6 +222,46 @@ export class WalkMode {
   }
 
   // ---- the side panel ----------------------------------------------------------------------------
+
+  /** Play all: the steps one after another, a few seconds each (paused by Back, a mode change or the last step). */
+  playing = false;
+  private playTimer = 0;
+  togglePlay(): void {
+    this.playing = !this.playing;
+    clearTimeout(this.playTimer);
+    if (this.playing) this.playTimer = window.setTimeout(() => this.playNext(), PLAY_MS);
+    this.changed();
+  }
+  private playNext(): void {
+    if (!this.playing) return;
+    if (this.last || this.pending() || this.mode !== 'watch') { this.playing = false; this.changed(); return; }
+    this.go(this.k + 1);
+    this.playTimer = window.setTimeout(() => this.playNext(), PLAY_MS);
+  }
+
+  /** What the step places, why, and the alternative not taken (with its measured cost). */
+  private stepText(s: WalkStep): HTMLElement {
+    if (!s.why && !s.whyNot) return h('p', null, s.text);
+    const alt = s.whyNot?.alt ? registry.get(s.whyNot.alt) : undefined;
+    const altCost = alt ? (() => { const st = stats(alt); return ` (${alt.name}: ${st.nands} NANDs, ${logicDepth(alt) ?? '?'} deep)`; })() : '';
+    const row = (k: string, v: string | null) => (v ? [h('dt', null, k), h('dd', null, v)] : []);
+    return h('dl', { class: 'lv-why' }, ...row('Place', s.text), ...row('Why', s.why ?? null), ...row('Why not', s.whyNot ? s.whyNot.text + altCost : null));
+  }
+
+  /** Each output's rows as small cells: right ones filled, the ones this step made right outlined. */
+  private rowGrid(rows: NonNullable<StepMetrics['rows']>): HTMLElement | null {
+    if (!rows[0]?.ok || rows[0].total > 64) return null;
+    let prev: StepMetrics | undefined;
+    if (this.k > 0) { try { prev = stepMetrics(this.walk, this.k - 1, this.ch); } catch { prev = undefined; } }
+    let fresh = 0;
+    const grid = h('div', { class: 'lv-grid' }, rows.map((r, o) => h('div', { class: 'lv-grid-row' }, h('span', { class: 'lv-grid-k' }, r.out),
+      h('span', { class: 'lv-cells' }, r.ok!.map((ok, i) => {
+        const was = prev?.rows?.[o]?.ok?.[i] ?? false;
+        if (ok && !was) fresh++;
+        return h('i', { class: ok ? (was ? 'r' : 'r n') : '', title: `row ${i}: ${ok ? 'right' : 'not yet'}` });
+      })))));
+    return h('div', { class: 'lv-rowgrid' }, grid, h('p', { class: 'sub' }, fresh ? `Outlined: the ${fresh} row${fresh > 1 ? 's' : ''} this step made right.` : 'This step made no new row right: it prepares the next.'));
+  }
 
   /** Build along's part of the step card: what to do, Check step, and the verdict. */
   private buildBox(): HTMLElement {
@@ -243,7 +291,7 @@ export class WalkMode {
     const card = h('section', { class: 'lv-step' },
       h('h3', null, `Step ${this.k + 1} of ${w.steps.length} · ${s.title}`),
       ask ? h('div', { class: 'lv-predict' }, quizBox(ask, this.askKey(this.k), 'Predict first', () => this.reveal()),
-        h('button', { class: 'btn ghost sm', onclick: () => this.reveal() }, 'Show the step')) : h('p', null, s.text),
+        h('button', { class: 'btn ghost sm', onclick: () => this.reveal() }, 'Show the step')) : this.stepText(s),
       !ask && this.mode === 'build' ? this.buildBox() : null,
       s.codex.length ? h('div', { class: 'lv-chips' }, s.codex.map((id) => codexById(id)).filter((e) => !!e).map((e) => h('a', { class: 'lv-chip acc', href: `#/campaign/codex/${e!.id}` }, `Codex: ${e!.title}`))) : null,
       ask || this.mode === 'build' ? null : meters,
@@ -259,6 +307,11 @@ export class WalkMode {
       // Depth 0 with parts placed: no output is driven yet, nothing to measure.
       if (m.depth !== null && (m.depth > 0 || !m.nand)) out.push(bar('Depth so far:', m.depth, par.depth));
       if (m.rows) out.push(h('p', { class: 'lv-rows' }, 'Rows right: ', m.rows.map((r, i) => [i ? ' · ' : '', h('b', { class: r.right === r.total ? 'ok' : '' }, `${r.out} ${r.right}/${r.total}`)])));
+      const grid = m.rows ? this.rowGrid(m.rows) : null;
+      if (grid) out.push(grid);
+      const wo = this.mode === 'watch' ? withoutStep(this.walk, this.k, this.ch) : null;
+      if (wo && wo.some((r) => r.wrong > 0)) out.push(h('p', { class: 'lv-without' }, h('span', { class: 'lv-k' }, 'Without this step'), ' the finished circuit gets ',
+        wo.filter((r) => r.wrong > 0).map((r, i) => [i ? ', ' : '', h('b', null, `${r.out} wrong on ${r.wrong} of ${r.total} rows`)]), wo.some((r) => !r.wrong) ? `; ${wo.filter((r) => !r.wrong).map((r) => r.out).join(' and ')} still right` : '', '.'));
       meters.replaceChildren(...out);
     }, 0);
     // The last step ends with a choice that says what happens to the circuit (a plain "Done" used to drop it).
@@ -275,6 +328,11 @@ export class WalkMode {
           h('button', { class: 'btn sm primary', title: 'Copy the reference answer into your chip (one undo step), as Do it for me does', onclick: take }, 'Use this answer'),
           h('span', { class: 'lv-spacer' }),
           h('button', { class: 'btn sm', title: 'Leave the walkthrough: your own circuit comes back as you left it', onclick: close }, 'Build it myself'));
+    const play = this.mode === 'watch' && !this.last
+      ? h('button', { class: `btn sm lv-play${this.playing ? ' on' : ''}`, title: 'Step through the whole build, one step every few seconds', onclick: () => this.togglePlay() },
+        icon(this.playing ? 'pause' : 'play', 13), this.playing ? 'Pause' : 'Play all')
+      : null;
+    if (play) nav.prepend(play);
     const modes = h('div', { class: 'lv-modes', role: 'tablist' },
       h('button', { class: this.mode === 'watch' ? 'on' : '', role: 'tab', onclick: () => this.setMode('watch') }, 'Watch'),
       h('button', { class: this.mode === 'build' ? 'on' : '', role: 'tab', title: 'Place each step\'s parts on their outlines and wire them yourself', onclick: () => this.setMode('build') }, 'Build along'));

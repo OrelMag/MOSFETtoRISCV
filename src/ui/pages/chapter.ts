@@ -16,6 +16,13 @@ import { quizBox } from '../quiz';
 import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
 import { litLine, wireLooks } from './looks';
+import { ledgerView } from '../ledger';
+import { TourPlayer } from '../tour';
+import type { Layers } from '../../chapters/types';
+
+/** The layers under a step's body, in order, with their tab names. */
+const LAYERS: [keyof Layers, string][] = [['derive', 'Derivation'], ['real', 'In real silicon'], ['pitfall', 'Common mistake'], ['numbers', 'Numbers']];
+const LAYER_KEY = 'mosfet2riscv:layer';
 
 export interface Page {
   el: HTMLElement;
@@ -30,6 +37,8 @@ export class ChapterPage implements Page {
   private head: HTMLElement;
   private tools = h('div', { class: 'step-tools' });
   private body: HTMLElement;
+  /** The walkthrough playing on the stage, if any. */
+  private tour: TourPlayer | null = null;
   private foot: HTMLElement;
   private step = -1;
   /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
@@ -129,6 +138,7 @@ export class ChapterPage implements Page {
     this.step = i;
     this.unlisten.forEach((f) => f());
     this.unlisten = [];
+    this.tour?.close();
     this.notes.clear();
     this.stepNotes?.destroy();
     this.stepNotes = null;
@@ -255,12 +265,49 @@ export class ChapterPage implements Page {
     this.unlisten.push(wireLooks(b, this.stage));
     this.gloss(prose);
     this.wireTries(prose, st);
+    if (st.tour) {
+      const go = h('button', { class: 'btn sm tour-go', onclick: () => {
+        if (this.tour) return this.tour.el.focus();
+        this.tour = new TourPlayer(this.stage, st.tour!, () => { this.tour = null; go.classList.remove('on'); });
+        go.classList.add('on');
+        this.tour.start();
+      } }, icon('play', 14), h('span', null, st.tour.label ?? 'Walk me through it'));
+      b.append(h('div', { class: 'tour-row' }, go, h('span', { class: 'muted' }, `${st.tour.beats.length} steps`)));
+    }
+    if (st.ledger && st.scene) {
+      const lv = ledgerView(this.stage, st.ledger);
+      b.append(lv.el);
+      this.unlisten.push(this.stage.onChange(() => lv.update()));
+    }
+    if (st.more) b.append(this.layers(st.more));
     if (st.actions?.length) {
       b.append(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px' },
         st.actions.map((a) => h('button', { class: 'btn sm', onclick: () => a.run(this.stage) }, a.label))));
     }
     if (st.challenge) b.append(this.renderChallenge(st));
     this.stepNotes?.openPending();
+  }
+
+  /** Tabs over the step's layers; one open at a time (the last chosen kind opens first on the next step that has it). */
+  private layers(more: Layers): HTMLElement {
+    const have = LAYERS.filter(([k]) => more[k]);
+    const panel = h('div', { class: 'layer-body prose', role: 'tabpanel' });
+    const tabs = have.map(([k, label]) => h('button', { role: 'tab', 'aria-selected': 'false', onclick: () => pick(k) }, label));
+    let open: keyof Layers | null = null;
+    const pick = (k: keyof Layers | null) => {
+      open = open === k ? null : k;
+      have.forEach(([kk], i) => tabs[i].setAttribute('aria-selected', String(kk === open)));
+      panel.hidden = !open;
+      panel.innerHTML = open ? more[open]! : '';
+      if (open) this.gloss(panel);
+      try { if (open) localStorage.setItem(LAYER_KEY, open); } catch { /* storage off: no memory */ }
+    };
+    let last: string | null = null;
+    try { last = localStorage.getItem(LAYER_KEY); } catch { /* storage off */ }
+    panel.hidden = true;
+    const box = h('div', { class: 'layers' }, h('div', { class: 'layer-tabs', role: 'tablist', 'aria-label': 'Go deeper' }, ...tabs), panel);
+    if (last && have.some(([k]) => k === last)) pick(last as keyof Layers);
+    return box;
   }
 
   private goalsCard(): HTMLElement {

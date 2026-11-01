@@ -1155,7 +1155,19 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                walkthrough), options in a fixed shuffle per question (shuffleOrder: authors write the answer first), a
                pick scrolls its explanation into view; stagenotes.ts: over a chapter's canvas the step's challenge goal (a
                click shows its card), green and announced (aria-live) once solved, toasts when a Try box ticks (words:
-               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion
+               feedback.ts, DOM-free); reveal() scrolls into view, smooth unless reduced motion;
+               backup.ts (DOM-free): one file for every `mosfet2riscv:` key (BackupFile {format, schema, keys}); mergeBackup(file, kv) stages a copy of the
+               storage and merges by the existing rules (settings: visited / solved union, local prefs kept; mergeCampaign; puzzles betterRecord; chips
+               importChips + mergeFolders; other projects adopted under their own id; other keys filled if absent) and returns only the changed keys,
+               idempotent, with `notes` for anything left out; backupui.ts the dialogs (settings menu, home footer, `>` actions), leaves the editor,
+               writes, reloads (settings / progress / editors hold state in memory); persist.ts navigator.storage.persist() once progress exists and the
+               one-time Safari 7-day note; viewlink.ts (DOM-free): an optional `?i=<port~hex>&p=<path~net>&n=<cycles>` suffix on a chapter / workbench
+               hash (app.ts route() strips it, hands it to the Stage that builds the scene: Stage.viewState / restoreView / copyViewLink in the Share
+               menu; cycles replayed under a time budget, REPLAY_MS); settings.textSize / narrowText set --prose-scale (zoom on .narrative-body, the
+               pane widens with it) and data-narrow-text (62ch); never schematics.
+public/ + scripts/sw-template.js: manifest.webmanifest, icon.svg / icon-{180,192,512}.png; vite.config.ts serviceWorker() writes dist/sw.js
+               (assets/ precached, hashed assets cache-first, everything else network-first, doom/ layout/ yosys/ and other origins untouched; two
+               cache generations); main.ts registers it only in production on http(s) (never app:// or file:)
                notes.ts (DOM-free, tested: the learner's notes and bookmarks in their own key `mosfet2riscv:notes:v1`, injected KV, sanitized;
                a note = free text on a step, optionally pinned (NotePin: the level's path, the part, the scene's inputs and cycle), a
                bookmark = a Place (step / workbench component / sandbox chip); deletions kept as tombstones; mergeNotes: union by id, newest
@@ -1376,7 +1388,9 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 
 A chapter is a list of steps. Each step has narrative HTML and either a `scene` (a root
 component, initial inputs, optional drill path, highlights, probes) or a `widget`, plus an
-optional `challenge`. Keep the prose short, concrete and honest. Introduce a component
+optional `challenge`. Write the explanation in full (what it is, why it works, what it costs), concrete and honest;
+derivations, real chips, the usual mistake and tables of numbers go in `more` (Layers), the mechanism played out on the
+circuit in a `tour` (Beats, checked by tests/tours.test.ts), a worked sum in a `ledger`. Every number is computed. Introduce a component
 as a black box only after its inside has been shown. A clocked scene starts running on load (settings.autoClock,
 2 Hz; Pulse / Step / Back / a hand-clocked edge pause it): give it `autoClock: false` when its exercise counts Pulses
 from the first state. Say what each thing *costs*.
