@@ -100,6 +100,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.undo', group: 'edit', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: `undo · redo (also ${MOD} Shift Z)` },
   { id: 'sb.run', group: 'view', caps: [`${MOD} ↵`], does: 'run / pause the simulation' },
   { id: 'sb.probe', group: 'view', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')], taken: ['p'] },
+  { id: 'sb.minimap', group: 'view', caps: ['M'], does: 'show or hide the minimap (it hides itself while the whole chip is in view)', match: [letter('m')], taken: ['m'] },
   { id: 'sb.space', group: 'view', caps: ['Space'], does: 'held: pan with a drag' },
   { id: 'sb.search', group: 'panels', caps: [`${MOD} K`, '·', '/'], does: 'search; > lists every toolbar action (Type, Package, Export…)', taken: ['/'] },
   { id: 'sb.help', group: 'panels', caps: ['?'], does: 'this sheet', match: [{ key: '?' }], taken: ['?'] },

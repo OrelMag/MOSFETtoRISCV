@@ -3,7 +3,10 @@
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
 import { DualSim } from '../sim/dualsim';
-import { findNode, flatten, type HierNode } from '../sim/flatten';
+import { type FlatDesign, findNode, flatten, flattenAsync, type HierNode } from '../sim/flatten';
+import { LoadPlan } from '../sim/loadplan';
+import { nextTask } from '../sim/tasks';
+import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
@@ -134,11 +137,8 @@ let wireChoice: WireLook = 'built';
  *  painted first: flattening, simulating and drawing chapter 14's CPU (56 000 NANDs) holds the page half a second. */
 export const BUSY_GATES = 10_000;
 
-/** Run `f` once the browser has painted what is on screen now: a frame, then a task. (A hidden tab paints no
- *  frames: there it runs after the frame the tab next shows.) */
-function afterPaint(f: () => void): void {
-  requestAnimationFrame(() => setTimeout(f, 0));
-}
+/** A build still going after this long shows its progress card (a quicker one never flashes it). */
+const LOAD_CARD_MS = 300;
 
 export class Stage {
   readonly el: HTMLElement;
@@ -149,7 +149,7 @@ export class Stage {
   /** Where the pending scene opens (load's `at`), if not its own Scene.path. */
   private pendingAt: string[] | undefined;
   private loadSeq = 0;
-  private busyEl: HTMLElement | null = null;
+  private card: LoadCard | null = null;
   private remixBtn!: HTMLButtonElement;
   sim: Sim | null = null;
   rootCtx: ViewCtx | null = null;
@@ -285,7 +285,7 @@ export class Stage {
       void this.copyViewLink();
     } }, h('span', null, h('b', null, 'Copy link to this view'), h('small', null, 'Chapter step, opened part, inputs, probes and clock cycles')));
     imgMenu.append(imgItem('svg', 'Image as SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'Image as PNG', 'The same at 2× resolution'), linkItem);
-    const imgBtn = h('button', { class: 'btn ghost sm', title: 'Share this view: an image of this level (SVG or PNG), or a link that reopens it as it is now', 'aria-haspopup': 'menu', onclick: (e: Event) => {
+    const imgBtn = h('button', { class: 'btn ghost sm share-btn', title: 'Share this view: an image of this level (SVG or PNG), or a link that reopens it as it is now', 'aria-haspopup': 'menu', onclick: (e: Event) => {
       e.stopPropagation();
       imgMenu.classList.toggle('open');
     } }, icon('image', 15), h('span', { class: 'lbl' }, 'Share'));
@@ -417,6 +417,7 @@ export class Stage {
     this.el.tabIndex = 0;
     this.el.setAttribute('aria-label', 'Circuit');
     this.el.addEventListener('keydown', (e) => {
+      if (this.pending) return;
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
@@ -539,23 +540,32 @@ export class Stage {
     this.widget = { w, host };
   }
 
+  /** A big scene is still being built (load): there is no simulation to act on yet. */
+  get loading(): boolean {
+    return this.pending !== null;
+  }
+
   /** The scene on the stage, or the big one being built for it (load). */
   get target(): Scene | null {
     return this.pending ?? this.scene;
   }
 
   /**
-   * Show a scene. A big one (BUSY_GATES) first puts a "Building…" cue over the canvas and is built once that has
-   * painted, a frame later: building is one synchronous stretch of up to a second, which would otherwise freeze the
-   * page with no sign of why. Until then the old scene stays (under the cue) and `scene` is still the old one.
-   * `at`: open this path instead of Scene.path (a drill path from the address bar), which stays the scene's opening view.
+   * Show a scene. A big one (BUSY_GATES) is built in slices that let the page paint between them, under a card that
+   * names the phases and counts through the longest (view/loadcard.ts); the card only appears when the build is
+   * still going after LOAD_CARD_MS. Until it is done the old scene's place is empty and `scene` is still the old one
+   * (`target` is the new one). `at`: open this path instead of Scene.path (a drill path from the address bar), which
+   * stays the scene's opening view. `builtMs`: how long the caller took to make the scene's definitions, shown as the
+   * first phase.
    */
-  load(scene: Scene, at?: string[]): void {
+  load(scene: Scene, at?: string[], builtMs = 0): void {
     const seq = ++this.loadSeq;
+    const t0 = performance.now();
     const st = stats(scene.root);
     const size = st.nands + st.transistors / 4;
     if (size < BUSY_GATES) {
       this.pending = null;
+      this.setBuilding(false);
       this.busy(null);
       this.build(scene, at);
       return;
@@ -564,27 +574,83 @@ export class Stage {
     this.pendingAt = at;
     this.stopAnim();
     this.stopClock();
-    this.busy(st.nands ? `Building the circuit: ${st.nands.toLocaleString()} NAND gates…` : 'Building the circuit…');
-    afterPaint(() => {
-      if (seq !== this.loadSeq) return;
+    this.busy(null);
+    const plan = new LoadPlan();
+    plan.completed('hierarchy', builtMs + (performance.now() - t0));
+    const what = st.nands ? `${st.nands.toLocaleString('en').replace(/,/g, ' ')} NAND gates` : `${Math.round(st.transistors).toLocaleString('en').replace(/,/g, ' ')} transistors`;
+    const card = new LoadCard(plan, 'Building the circuit from gates',
+      `${what}: everything you will see is built from these parts, nothing on screen is drawn by hand.`);
+    this.card = card;
+    // only a build that takes a while shows the card; a quick one never flashes it
+    const showTimer = window.setTimeout(() => {
+      if (this.card === card) this.canvas.append(card.el);
+    }, LOAD_CARD_MS);
+    // The bar and the run controls still belong to the scene being replaced (or to none): nothing to press until it is up.
+    this.setBuilding(true);
+    this.buildSliced(scene, at, seq, plan, card).catch((err) => {
+      // as the synchronous build's: an uncaught error (the page's handlers report it), not a silently empty stage
       this.pending = null;
-      try {
-        this.build(scene, at);
-      } finally {
-        this.busy(null);
-      }
+      setTimeout(() => { throw err; });
+    }).finally(() => {
+      clearTimeout(showTimer);
+      if (this.card === card) this.busy(null);
+      if (seq === this.loadSeq) this.setBuilding(false);
     });
   }
 
-  /** The "Building…" cue over the canvas (null removes it). */
-  private busy(text: string | null): void {
-    this.busyEl?.remove();
-    this.busyEl = text === null ? null
-      : h('div', { class: 'stage-busy', role: 'status', 'aria-live': 'polite' }, h('span', { class: 'stage-busy-box' }, h('span', { class: 'stage-busy-spin', 'aria-hidden': 'true' }), text));
-    if (this.busyEl) this.canvas.append(this.busyEl);
+  private setBuilding(on: boolean): void {
+    this.bar.inert = on;
+    this.controls.inert = on;
+    this.el.toggleAttribute('aria-busy', on);
+  }
+
+  /** The load card over the canvas (null removes it). */
+  private busy(card: LoadCard | null): void {
+    this.card?.remove();
+    this.card = card;
+  }
+
+  /** build(), in slices: the same steps, with the page free to paint between them (and a newer load able to overtake). */
+  private async buildSliced(scene: Scene, at: string[] | undefined, seq: number, plan: LoadPlan, card: LoadCard): Promise<void> {
+    const alive = () => seq === this.loadSeq;
+    // the card is repainted on each slice, so a count that moves is seen to move
+    const slice = async () => {
+      card.paint();
+      await nextTask();
+    };
+    plan.enter('flatten');
+    await slice();
+    if (!alive()) return;
+    const level = this.beginBuild(scene);
+    const design = await flattenAsync(scene.root, { mode: level, ...this.flattenOptions() }, (p) => plan.report(p.done, p.total, p.linking), slice);
+    if (!alive()) return;
+    plan.enter('engine');
+    await slice();
+    if (!alive()) return;
+    this.pending = null;
+    this.makeEngine(scene, design, level);
+    plan.enter('draw');
+    await slice();
+    if (!alive()) return;
+    this.drawScene(scene, at, design);
+    plan.finish();
+  }
+
+  private flattenOptions() {
+    return { expand: (d: ComponentDef, n: HierNode) => n.parent === null || !d.preferBehavior };
   }
 
   private build(scene: Scene, at?: string[]): void {
+    const level = this.beginBuild(scene);
+    // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
+    // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
+    const design = flatten(scene.root, { mode: level, ...this.flattenOptions() });
+    this.makeEngine(scene, design, level);
+    this.drawScene(scene, at, design);
+  }
+
+  /** Let go of the last scene; returns the level (gate or switch) the new one is simulated at. */
+  private beginBuild(scene: Scene): 'gate' | 'switch' {
     this.edgeHooks.clear();
     this.historyHooks.clear();
     this.resetHooks.clear();
@@ -594,11 +660,13 @@ export class Stage {
     this.stopClock();
     closePopover();
     this.release();
+    this.scene = null;
+    return needsSwitchLevel(scene.root) ? 'switch' : 'gate';
+  }
+
+  /** The simulation of a flattened design, powered on and settled. */
+  private makeEngine(scene: Scene, design: FlatDesign, level: 'gate' | 'switch'): void {
     this.scene = scene;
-    const level = needsSwitchLevel(scene.root) ? 'switch' : 'gate';
-    // The root is always its structure, even one simulated as a lookup elsewhere (a large RAM opened
-    // in the workbench); such parts below it stay leaves and open onto their own sub-simulation.
-    const design = flatten(scene.root, { mode: level, expand: (d, n) => n.parent === null || !d.preferBehavior });
     const sim: Sim = level === 'switch' ? switchSim(design, scene.engine === 'nmos')
       : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
     if (sim instanceof DualSim) sim.preferFast = true;
@@ -617,6 +685,10 @@ export class Stage {
     this.lastSettle = null;
     this.period = null;
     this.lateEvents = 0;
+  }
+
+  /** The drawing, controls and panels of a scene whose simulation is up. */
+  private drawScene(scene: Scene, at: string[] | undefined, design: FlatDesign): void {
     this.setProbeMode(false);
     this.initAnalyzer();
     const start = at ?? scene.path ?? [];
@@ -648,6 +720,14 @@ export class Stage {
     setViewTarget(this);
     if (link) this.restoreView(link);
     if (settings.autoClock && scene.autoClock !== false && !link?.cycles) { this.startClock(); this.autoRun = this.clockRunning; }
+    this.readyHooks.forEach((f) => f());
+  }
+
+  private readyHooks = new Set<() => void>();
+  /** Called each time a scene has been built and drawn (the first-run coach marks wait for it). */
+  onReady(f: () => void): () => void {
+    this.readyHooks.add(f);
+    return () => this.readyHooks.delete(f);
   }
 
   /**

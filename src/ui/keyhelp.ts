@@ -2,6 +2,8 @@
 // drawn from the key table (keys.ts KEYS), so a key listed is a key that works; the switch for single-key
 // shortcuts sits at the bottom of each.
 
+import { type CoachKind } from './coachplan';
+import { showCoach } from './coachmarks';
 import { h, icon } from './dom';
 import { GROUP_TITLES, KEYS, type KeyDef, type KeyGroup } from './keys';
 import { settings } from './settings';
@@ -14,6 +16,8 @@ export interface SheetOptions {
   taken?: ReadonlySet<string>;
   /** Mouse gestures, folded under the keys. */
   mouse?: readonly [string, string][];
+  /** A 'Show me the controls' button in the footer: closes the sheet, then plays this tour. */
+  coach?: CoachKind;
   /** Class on the overlay (the sandbox marks its sheet so its own keys stay out of it). */
   cls?: string;
 }
@@ -57,6 +61,7 @@ export function showKeySheet(o: SheetOptions): () => void {
     o.mouse?.length ? h('details', { class: 'kh-mouse' }, h('summary', null, 'Mouse and touch gestures'),
       h('dl', null, o.mouse.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]))) : null,
     h('div', { class: 'kh-foot' },
+      o.coach ? h('button', { class: 'btn sm kh-coach', onclick: () => { close(); showCoach(o.coach!); } }, 'Show me the controls') : null,
       takenKeys.length ? h('span', { class: 'kh-taken' }, 'A Key part on this chip takes ', takenKeys.map((k) => h('kbd', null, k.toUpperCase())), ' (struck through)') : null,
       h('span', { class: 'sp' }), sw, note));
   const ov = h('div', { class: `kh-back key-help${o.cls ? ` ${o.cls}` : ''}` }, box);
@@ -95,5 +100,5 @@ export function showPageKeys(): void {
   const groups: KeyGroup[] = ['anywhere'];
   if (chapter) groups.push('chapter');
   if (stage) groups.push('stage');
-  showKeySheet({ title: 'Keys on this page', groups });
+  showKeySheet({ title: 'Keys on this page', groups, ...(stage ? { coach: 'stage' as const } : {}) });
 }

@@ -1156,6 +1156,14 @@ links, bus taps, duplicate and pin reordering. The gaps:
   (its memories read asynchronously, so they become LUT RAM): more than a GW1NR-9 has; no place-and-route in CI
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
+### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
+- ✅ Coach marks: the first scene a learner opens dims the page and walks the stage bar (drill, Probe + Timing, Why?, Back / Step / Slow,
+  Open in Sandbox; a beat whose control is absent is skipped); a shorter tour of the sandbox; remembered in settings, replayed from
+  the `?` sheet and the `>` actions
+- ✅ Big scenes load in slices under a progress card (phases with times, a live count through the flatten): flatten.ts is a generator
+  the synchronous API drains, so results are identical and the sync path costs the same
+- ✅ Sandbox minimap (M): the whole chip, a draggable frame, hidden while everything fits
+
 ### Quality of life (2026-11-01) ✅
 - One backup file for all progress (ui/backup.ts: export / merge import, settings menu + home page + search), `navigator.storage.persist()` and a one-time Safari eviction note
 - Install as an app / offline: manifest, icons, generated service worker (vite.config.ts, scripts/sw-template.js)

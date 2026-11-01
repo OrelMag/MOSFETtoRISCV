@@ -63,7 +63,9 @@ const VIEWPORTS: Viewport[] = [
 ];
 
 const SETTINGS_KEY = 'mosfet2riscv:v1';
-const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
+// the coach-mark tours (ui/coachmarks.ts) count as seen, so they do not dim every page; two routes below play them
+const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme, coachDone: { stage: true, sandbox: true } }) });
+const firstRun = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
 const light = themed('light');
 const unlocked = { ...light, [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) };
 
@@ -82,7 +84,7 @@ function notesStorage(theme: 'light' | 'dark'): Record<string, string> {
   const quiz = c1.steps.findIndex((st) => st.challenge?.kind === 'quiz');
   if (quiz >= 0) review[`${c1.id}:${quiz}`] = { n: 1, last: at, miss: true, missed: at, streak: 0, due: at };
   return {
-    [SETTINGS_KEY]: JSON.stringify({ theme, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
+    [SETTINGS_KEY]: JSON.stringify({ theme, coachDone: { stage: true, sandbox: true }, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
     [NOTES_KEY]: JSON.stringify({ schema: 1, items }),
     [REVIEW_KEY]: JSON.stringify({ schema: 1, memos: review }),
   };
@@ -128,6 +130,11 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
+  for (const theme of ['light', 'dark'] as const) {
+    for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
+  }
+  add(`#/c/${chapters[1].id}/0`, firstRun('light'), ' (first run, phone)', VIEWPORTS[VIEWPORTS.length - 1]);
   // My notes: empty, then with notes, bookmarks and a review history, in both themes and on a phone
   add('#/notes', light, ' (empty)');
   add('#/notes', notesStorage('light'));
@@ -482,6 +489,12 @@ class Tab {
       if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}`);
       await sleep(50);
     }
+    // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
+    const built = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.stage[aria-busy]')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
+    ]);
     const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
     await Promise.race([
       this.send('Runtime.evaluate', { expression: idle, awaitPromise: true }),

@@ -475,24 +475,31 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .hint-badge.touch > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hint-badge.touch .x { flex: none; font-size: 14px; line-height: 1; padding: 0 4px; }
-/* A big scene being built (Stage.load): painted before the page holds still for up to a second. The spinner turns
-   on the compositor, so it keeps turning while the main thread builds. */
+/* A big scene being built (Stage.load): the card (view/loadcard.ts) over the empty stage, shown once the build has taken
+   LOAD_CARD_MS. */
 .stage-busy {
   position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--bg) 45%, transparent); cursor: progress;
 }
-.stage-busy-box {
-  display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 99px;
+.load-card {
+  width: min(460px, calc(100% - 32px)); box-sizing: border-box; padding: 24px 28px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
-  font-size: 13.5px; font-weight: 550; color: var(--text-2);
+  display: flex; flex-direction: column; gap: 14px; cursor: default;
 }
-.stage-busy-spin {
-  width: 14px; height: 14px; border-radius: 50%; flex: none;
-  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent);
-  animation: stage-busy-spin 0.8s linear infinite;
-}
-@keyframes stage-busy-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .stage-busy-spin { animation: none; } }
+.load-card h2 { margin: 0; font-size: 18px; }
+.load-bar { height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
+.load-fill { height: 100%; width: 0; background: var(--accent); border-radius: 5px; transition: width 0.12s linear; }
+.load-phases { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.load-phases li { display: flex; gap: 10px; align-items: baseline; }
+.load-phases .what { flex: 1; min-width: 0; }
+.load-phases .ms { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.load-phases .mark { width: 1em; text-align: center; }
+.load-phases li.done .mark { color: var(--good); font-weight: 700; }
+.load-phases li.active .mark { color: var(--accent); font-weight: 700; }
+.load-phases li.active .what { font-weight: 600; }
+.load-phases li.todo { color: var(--muted); }
+.load-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .load-fill { transition: none; } }
 
 /* Feedback over a chapter's canvas (ui/stagenotes.ts): the step's challenge goal, green once solved (a click shows its
    card in the text), and brief "done" toasts. Top right, clear of the level badge (top left), the hint (bottom) and
@@ -2172,6 +2179,31 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .why-tabs button, .why-card > header .btn { min-height: 40px; min-width: 40px; }
 }
 
+/* First-run coach marks (ui/coachmarks.ts): the page dimmed with a ring cut out around one control, and a card beside it.
+   The ring's huge shadow is the dimming, so the control itself stays lit. */
+.coach { position: fixed; inset: 0; z-index: 2000; }
+.coach-ring {
+  position: fixed; border-radius: 8px; pointer-events: none;
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgb(10 12 18 / 58%); transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s;
+}
+.coach-arrow { position: fixed; width: 16px; height: 16px; background: var(--surface); transform: rotate(45deg); pointer-events: none; }
+.coach-card {
+  position: fixed; box-sizing: border-box; padding: 18px 20px; border-radius: 14px; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgb(10 12 18 / 35%); display: flex; flex-direction: column; gap: 10px; outline: none; transition: left 0.18s, top 0.18s;
+}
+.coach-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+.coach .sp { flex: 1; }
+.coach-dots { display: inline-flex; gap: 6px; }
+.coach-dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--border-strong); }
+.coach-dots i.on { background: var(--accent); }
+.coach-title { margin: 0; font-size: 17px; }
+.coach-text { margin: 0; line-height: 1.55; color: var(--text-2); font-size: 14px; }
+.coach-ctl { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.coach-ctl .btn { min-height: 36px; }
+.coach-skip { color: var(--muted); }
+@media (pointer: coarse) { .coach-ctl .btn { min-height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .coach-ring, .coach-card { transition: none; } }
+
 /* Backup dialogs (ui/backupui.ts) and the Safari storage note (ui/persist.ts) */
 .bk-dlg { max-width: min(480px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); padding: 18px 20px; box-shadow: var(--shadow-lg); }
 .bk-dlg::backdrop { background: rgb(0 0 0 / 0.45); }
@@ -2231,3 +2263,6 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .layer-body table.mini { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 4px 0; }
 .layer-body table.mini th, .layer-body table.mini td { padding: 2px 10px 2px 0; text-align: left; border-bottom: 1px solid var(--border); }
 .layer-body table.mini th { color: var(--muted); font-weight: 600; }
+
+/* A stage still building its scene (Stage.load): its bar and run row have nothing to act on yet. */
+.stage[aria-busy] .stage-bar > :not(.crumbs), .stage[aria-busy] .controls { visibility: hidden; }
