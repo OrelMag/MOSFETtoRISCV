@@ -484,7 +484,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 26: classify(word) → class /
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its
+               values; narrateCycle(PipeSnap, wordAt): each pipeline stage this cycle, with why it forwards, stalls or flushes; the
+               CPU panel's and the sandbox CPU drawer's Narrate section; tests/narrate.test.ts: next pc and written value equal the
+               golden model's over the sample programs), ilp.ts (chapter 26: classify(word) → class /
                sources / rd / call / ret, traceOf (the golden model's run), dataflow (the limit: each instruction when its operands
                are ready; criticalPath)), ooomodel.ts (OooModel / OOO_CORE: the out-of-order core's rules cycle by cycle, the
                header is the spec the gate-level core follows; CycleInfo per cycle: committed / issued (Uop.port) / dispatched /
@@ -540,7 +543,7 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
                schedule.ts: FCFS against FR-FCFS over a queue (chapter 36's last step)
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
-               copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
+               copy is instant, and with BusDevices a DRAM, a screen, a key queue, and `map`: each region's top nibble when not MAP (the memory-map designer's); ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
                37's boot ROM and payload
                Card reader: BusDevices.cards { items, feed } → CardModel, the one time-dependent device: whoever steps the ISS sets
                BusModel.now (rising edges so far, at the retiring edge); a read sees the reader CARD_LAG (2) edges earlier and a DATA
@@ -915,6 +918,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…);
                  isadesign.ts its Design tab (patterns painted on a bit grid, a drag = one undo step; the analysis is
                  isa/design.ts: clashes, shadows, the opcode map's window and cells, coverage, a plain decoder's NANDs / depth)
+  memmap.ts      the memory-map designer's model (DOM-free): the sandbox bus (lib/axi.ts sandboxBus, id axibus2_<codes>_b; resolve.ts
+                 rebuilds it by id) decodes a[31:28], so a MemMap is regions {kind, base = nibble << 28, used} + the default slave:
+                 readMap(doc) (the bus part's codes, each slave found through its s<k>_req wire or pointer name, kind from its lib id),
+                 analyze (overlap / misaligned / range / count problems, free windows), moveTo / newRegion / withoutRegion, applyMap
+                 (pure: a new ChipDoc; bus swapped, links re-tapped with their pointer names, new regions' parts and devices placed
+                 below the slaves, removed ones' slave parts dropped, devices left), busMapOf (BusModel's `map`), decoderDef (lib/
+                 memmapdec.ts: the bus's nibbleSelects without its address mux and hold register), cHeader / linkerScript;
+                 memmapui.ts the dialog (File ▸ Memory map…, fileui.ts, enabled with a bus; `>` Memory map): Map | Decoder | Export,
+                 drag + ↑ ↓ keys, Apply = one Editor.edit; tests/memmap.test.ts, memmap-run.test.ts (the example with the screen moved,
+                 chip against BusModel)
   m6502mon.ts    detect6502 (a placed m6502_core, a ROM in 6502 assembly, a RAM of bytes, here or one chip down),
                  M6502Monitor: follows the part (it is the cycle-exact model: nothing compared): the bus read before each
                  edge, an instruction from one SYNC to the next (its bytes, stores, cycles; IRQ / NMI sequences), halted on

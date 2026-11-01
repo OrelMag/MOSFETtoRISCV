@@ -510,9 +510,16 @@ a datapath (register transfers on real adders and registers), the textbook way a
   arcs curve by default, parallel ones fan out; right-click menus on a state, an arc and the diagram; an arc drawn by
   dragging from a state's rim; double-click renames in place or adds a state; N, A, F2, Delete, Esc, arrows (a 10-unit
   grid); arrange in a circle
-- ⏳ Memory-map designer: address regions (RAM, ROM, screen, console, keys) dragged onto the address space, overlaps and
-  gaps shown, the address decoder opened as a chip (the ISA decoder's match lines over address bits); chapter 37's bus
-  and the sandbox computer's map
+- ✅ Memory-map designer (File ▸ Memory map…, `>` in the search, on a chip with the sandbox's bundled bus: Examples ▸ System on a
+  bus): the bus's 16 windows of 256 MiB (it decodes a[31:28] only: a finer split on a[27:24] would need a second decoder level,
+  left out), regions dragged (or ↑ ↓ Home / End on a focused one), kinds from a palette (RAM, flash, DRAM, screen, keys +
+  timer place their parts on Apply; the DMA registers are moved only), overlaps / off-grid bases named, gaps going to the
+  default slave, one Apply = one undo step (editor/memmap.ts: readMap from the bus part's codes and its slaves' pointers,
+  applyMap swaps the bus for `axibus2_<codes>_b`, resolve.ts rebuilds it on reload); the decoder as a chip (lib/memmapdec.ts,
+  the bus's own nibbleSelects: NANDs and depth shown) opened in the sandbox; a C header and a linker MEMORY block;
+  BusModel takes the applied map (`map`: tests/memmap-run.test.ts boots the example with the screen moved, against the
+  chip). Left out: ROM, console and card-reader kinds (no bus slave of that shape in the sandbox: the console is inside
+  the core), the CPU drawer following a bus core
 - ✅ Examples ▸ 4-bit CPU (4004-inspired; src/isa4, lib/cpu4.ts): the 4004's opcode map and mnemonics, one instruction
   per 16-bit ROM word and per clock (the 4004 byte high, its second byte low), 29 instructions (the 4004's set minus the
   4002 RAM-chip ones, FIN, KBP and DCL): 4-bit accumulator and carry, 16 × 4-bit index registers in 8 pairs, an 8-bit

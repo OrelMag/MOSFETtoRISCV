@@ -10,7 +10,7 @@ import { type Deck, deckWords, programDeck } from '../cards/card';
 import { deckReader } from '../cards/reader';
 import { assemble } from '../riscv/asm';
 import type { ComponentDef, PortDef } from '../sim/types';
-import { AXI_CARDS, AXI_DEFAULT, AXI_KEYS, AXI_IO_PORT, AXI_PIXEL, axiBus, axiDram, axiFlash, axiFlashWindow, axiRam, axiScreen, BUS_DRAM, bundled, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
+import { sandboxBus, AXI_CARDS, AXI_DEFAULT, AXI_KEYS, AXI_IO_PORT, AXI_PIXEL, axiBus, axiDram, axiFlash, axiFlashWindow, axiRam, axiScreen, BUS_DRAM, bundled, DMA_ENGINE, KEY_QUEUE, M_IN, M_OUT } from './axi';
 import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
@@ -184,10 +184,9 @@ export const SANDBOX_MAP = [MAP.ram, MAP.flash, MAP.dram, MAP.dma, MAP.screen, M
 /** The sandbox system's parts, by role (library ids the example places). */
 export const SANDBOX_PARTS = (() => {
   const slave = (d: ComponentDef) => bundled(d, [['', 'slave']], `${d.id}_b`);
-  const BUS = axiBus(2, SANDBOX_MAP);
   return {
     cpu: bundled(busCore(7), [['', 'master']], 'sysbuscore7_b'),
-    bus: bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...SANDBOX_MAP.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`),
+    bus: sandboxBus(SANDBOX_MAP),
     ram: slave(axiRam(12)), flash: slave(axiFlashWindow(8)), dram: slave(axiDram()),
     dma: bundled(DMA_ENGINE, [['', 'slave'], ['m_', 'master']], 'dma_b'),
     pixel: slave(AXI_PIXEL), io: slave(AXI_IO_PORT), def: slave(AXI_DEFAULT),

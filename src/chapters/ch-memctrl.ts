@@ -1,5 +1,6 @@
 import { RESULTS } from '../bench/summary';
 import type { DramConfig } from '../dram/controller';
+import { WB_MISS_CLEAN, WB_MISS_DIRTY } from '../lib/cache2';
 import { accessCycles, DDR4_3200, TIMING } from '../dram/timing';
 import { BENCHMARKS } from '../riscv/benchprograms';
 import { dramCtrl } from '../lib/dramctrl';
@@ -90,18 +91,37 @@ export const chMemCtrl: Chapter = {
         flip-flops</span> (idle when none is set), <span data-show="ctrl.cnt">one wait counter</span> that every command loads with its delay, an open-row table (a valid bit and
         a row register per bank) and a refresh counter. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
         as the cache asks: the cache holds <span data-show="pin:req"><code>req</code></span> until <code>done</code>.</p>
-        <details class="deeper"><summary>Deeper: the rules a real controller also obeys</summary>
-        <p>One request at a time needs only the four rules above. A controller that overlaps requests across banks (bank-level
-        parallelism: activate bank 1 while bank 0 bursts) meets the rules between banks too. DDR4-3200, an 8 Gb ×8 device, roughly:
-        <strong>tRRD</strong> between two ACTs to different banks (2.5 ns, 4.9 ns within one bank group); <strong>tFAW</strong>, at most
-        four ACTs in any 21 ns window (the activate current the supply can deliver); <strong>tCCD_S / tCCD_L</strong> between column
-        commands, 4 clocks to another bank group, 5 ns within one: DDR4's 16 banks sit in 4 <strong>bank groups</strong> that share
-        their data path, so a controller alternates groups to keep the bus full; <strong>tWR</strong>, 15 ns of write recovery before a
-        written row may precharge; <strong>tWTR</strong>, 2.5–7.5 ns from a write's data to the next read, as the bus turns around; tRTP
-        from a read to the precharge. A scheduler tracks each rule per bank, group and rank; this one has no second request to overlap,
-        so none of them binds.</p></details>
+        <p>The controller's whole job is to know, for every bank, what is open and how long until the next command is legal. Hence the shape:
+        the open-row table answers "hit, miss or conflict?", the wait counter answers "may I issue yet?", and the state flip-flops pick the next command.
+        A request's cost is not a property of its address: line 0 is a miss on a closed bank and a hit one request later. The same
+        address costs ${accessCycles('miss', TIMING)} or ${accessCycles('hit', TIMING)} cycles depending on what came before.</p>
         <div class="try">Read line 0, then line 1, then line 8, and compare the three timelines. Lines 0–3 share row 0 of bank 0;
         lines 4–7 are row 0 of bank 1; line 8 is row 1 of bank 0.</div>`,
+      tour: {
+        beats: [
+          { title: 'A miss', reset: true, say: `Every bank starts closed. Line 0 is raised on <code>req</code>: the controller issues ACT, waits tRCD, reads, waits tCAS and bursts four words. <code>done</code> ({v:done}) rises after ${accessCycles('miss', TIMING) - 1} clocks; counting the cycle the request is taken, that is ${accessCycles('miss', TIMING)}.`, set: { req: 1, la: 0 }, cycles: accessCycles('miss', TIMING) - 1, at: [], show: ['ctrl', 'dev'], expect: { done: 1, err: 0 } },
+          { title: 'Release', say: 'The cache drops <code>req</code>: <code>done</code> falls ({v:done}) and the controller returns to idle. Row 0 of bank 0 stays open in the table: open page bets on the next request.', set: { req: 0 }, cycles: 1, show: ['ctrl'], expect: { done: 0 } },
+          { title: 'A hit', say: `Line 1 is in the same row. No ACT: RD at once, so <code>done</code> ({v:done}) rises after ${accessCycles('hit', TIMING) - 1} clocks, ${accessCycles('miss', TIMING) - accessCycles('hit', TIMING)} fewer than the miss.`, set: { req: 1, la: 1 }, cycles: accessCycles('hit', TIMING) - 1, show: ['ctrl', 'dev'], expect: { done: 1, err: 0 } },
+          { title: 'Release again', say: 'Idle once more, row 0 still open.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'A conflict', say: `Line 8 is row 1 of bank 0, but row 0 is open. The controller must PRE (tRP), ACT (tRCD), RD (tCAS) and burst: <code>done</code> ({v:done}) rises after ${accessCycles('conflict', TIMING) - 1} clocks. The device checked every spacing; its error flag is {v:err}.`, set: { req: 1, la: 8 }, cycles: accessCycles('conflict', TIMING) - 1, show: ['ctrl', 'dev'], expect: { done: 1, err: 0 } },
+        ],
+      },
+      more: {
+        derive: `<p>Cycle accounting at our clock: a hit is tCAS + burst = ${TIMING.tCAS} + ${TIMING.burst} = ${accessCycles('hit', TIMING)}. A miss adds the activate, tRCD: ${accessCycles('miss', TIMING)}.
+          A conflict adds the precharge first, tRP: ${accessCycles('conflict', TIMING)}. The wait counter is loaded with the next rule's delay after each command and the state machine moves on
+          when it reaches zero, so one counter serves every rule.</p>`,
+        real: `<p>One request at a time needs only the four rules above. A controller that overlaps requests across banks (bank-level
+          parallelism: activate bank 1 while bank 0 bursts) meets the rules between banks too. DDR4-3200, an 8 Gb ×8 device, roughly:
+          <strong>tRRD</strong> between two ACTs to different banks (2.5 ns, 4.9 ns within one bank group); <strong>tFAW</strong>, at most
+          four ACTs in any 21 ns window (the activate current the supply can deliver); <strong>tCCD_S / tCCD_L</strong> between column
+          commands, 4 clocks to another bank group, 5 ns within one: DDR4's 16 banks sit in 4 <strong>bank groups</strong> that share
+          their data path, so a controller alternates groups to keep the bus full; <strong>tWR</strong>, 15 ns of write recovery before a
+          written row may precharge; <strong>tWTR</strong>, 2.5–7.5 ns from a write's data to the next read, as the bus turns around; tRTP
+          from a read to the precharge. A scheduler tracks each rule per bank, group and rank; this one has no second request to overlap,
+          so none of them binds.</p>`,
+        pitfall: `<p>Treating hit, miss and conflict as a property of the address. They are a property of the address <em>and</em> the open-row table. Reading the same line twice is a
+          miss then a hit; reading two lines of one bank alternately is a conflict every time. In the scene, watch the open-row table change after each request.</p>`,
+      },
       scene: () => memCtrlScene({ cfg: CFG }),
       challenge: {
         kind: 'reach', goal: 'Make the controller meet all three cases: a row hit, a row miss and a row conflict.',
@@ -124,7 +144,24 @@ export const chMemCtrl: Chapter = {
         when two requests come close together. A dirty victim's write-back followed at once by its fill is such a pair.</p>
         <p>Measured on the gate-level CPUs: fib takes ${fmt(run('sc-wb2', 'fib'))} cycles with the old fixed miss cost,
         ${fmt(run('sc-wb2-dram', 'fib'))} over DRAM with open page and ${fmt(run('sc-wb2-dramc', 'fib'))} with closed page. The benchmarks'
-        data is 256 bytes, four rows, so open page hits most of the time. The copy, on 4 K words, is the other kind of program.</p>`,
+        data is 256 bytes, four rows, so open page hits most of the time. The copy, on 4 K words, is the other kind of program.</p>
+        <p>The policy is a prediction, and the controller can only make it from the past: will the next request to this bank want the row that is open?
+        Programs with spatial locality say yes, programs that scatter say no, and a controller serving many cores sees a mixture. Neither policy is
+        free of cost: open page pays tRP on the misses it did not predict, closed page pays tRCD on the hits it threw away.</p>`,
+      more: {
+        derive: `<p>Take a stream of requests to one bank, a fraction h of which hit the open row; the rest find another row open. Open page costs
+          h·${accessCycles('hit', TIMING)} + (1 − h)·${accessCycles('conflict', TIMING)} cycles a request, closed page ${accessCycles('miss', TIMING)} flat. They break even at
+          h = (${accessCycles('conflict', TIMING)} − ${accessCycles('miss', TIMING)}) / (${accessCycles('conflict', TIMING)} − ${accessCycles('hit', TIMING)}) = ${((accessCycles('conflict', TIMING) - accessCycles('miss', TIMING)) / (accessCycles('conflict', TIMING) - accessCycles('hit', TIMING))).toFixed(2)}:
+          above it open page wins. The threshold is tRP / (tRP + tRCD), since the hit saves tRCD and the miss-turned-conflict pays tRP.</p>`,
+        real: `<p>Production controllers do not choose once. They keep a row open for a timeout and close it after a few idle cycles, or predict per bank (a small counter of recent
+          hits and conflicts), or use auto-precharge on the last column command of a known burst, which closes the row without a command-bus slot. Closed page is also
+          the safe choice for security-sensitive systems: a row buffer's state is a timing side channel between programs.</p>`,
+        pitfall: `<p>Choosing a policy from the best case. Open page's ${accessCycles('hit', TIMING)}-cycle hit is a real gain only if more than half of the requests hit. Two interleaved
+          streams that each hit their own row will, in one bank, hit nothing: each request finds the other stream's row open.</p>`,
+        numbers: `<table class="mini"><tr><th>row-hit share h</th><th>open page</th><th>closed page</th></tr>
+          ${[0, 0.25, 0.5, 0.75, 1].map((h) => `<tr><td>${Math.round(h * 100)} %</td><td>${(h * accessCycles('hit', TIMING) + (1 - h) * accessCycles('conflict', TIMING)).toFixed(1)}</td><td>${accessCycles('miss', TIMING)}</td></tr>`).join('')}</table>
+          <p>Cycles per request when every request that misses the open row finds another row there.</p>`,
+      },
       widget: ctrlExplorer,
       challenge: {
         kind: 'quiz',
@@ -151,7 +188,24 @@ export const chMemCtrl: Chapter = {
         <p>DDR4 lets a controller postpone up to 8 refreshes while it is busy and catch up later; the device here loses its data if it
         goes 9 intervals without one. This controller never postpones: with one request at a time there is always an idle cycle soon.
         The scene refreshes every 120 cycles instead of ${TIMING.tREFI}, so you meet one within a few requests.</p>
+        <p>Refresh is the one thing in this chapter that the program cannot predict or avoid. It raises the average cost slightly and the worst case a lot:
+        the typical request is unaffected, while the one behind a REF waits several times its normal latency. That tail, not the average,
+        is what shows up in real-time systems.</p>
         <div class="try">Read a few lines and watch "refresh in" count down. Idle 50 past zero: PA (precharge all), REF, then nothing.</div>`,
+      more: {
+        derive: `<p>The sequence is PREA (tRP = ${TIMING.tRP}), REF, then tRFC = ${TIMING.tRFC} silent cycles, after which the request still needs its own miss, ${accessCycles('miss', TIMING)}.
+          The worst case is a request arriving the cycle the refresh starts: ${TIMING.tRP} + ${TIMING.tRFC} + ${accessCycles('miss', TIMING)} = ${TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)} cycles, against a conflict's
+          ${accessCycles('conflict', TIMING)}: ${((TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)) / accessCycles('conflict', TIMING)).toFixed(1)} times. The average cost is far smaller: the device is unavailable
+          ${((100 * (TIMING.tRP + TIMING.tRFC)) / TIMING.tREFI).toFixed(1)} % of the time (${TIMING.tRP + TIMING.tRFC} of every ${TIMING.tREFI} cycles).</p>`,
+        real: `<p>Newer parts hide more of it. DDR4 has a fine-granularity mode (refresh 2× or 4× as often with a shorter tRFC); DDR5 and LPDDR refresh a single bank
+          while the others serve requests (same-bank refresh), so the device is never wholly busy. Above 85 °C a DDR4 device must refresh twice as often, because
+          leakage roughly doubles every ten degrees or so. Server controllers schedule refreshes around bursts of traffic, using the 8-refresh postponement slack.</p>`,
+        pitfall: `<p>Assuming a request's latency is a constant for a given row state. Latency measured over millions of requests has a long tail at the refresh interval,
+          and a tight loop timed over a few thousand cycles can miss it entirely. In the scene, a REF closes every bank: the request that follows is always a miss, even
+          if its row was open before.</p>`,
+        numbers: `<table class="mini"><tr><th>DDR4 density</th><th>tRFC</th><th>busy</th></tr>
+          ${[['2 Gb', 160], ['4 Gb', 260], ['8 Gb', DDR4_3200.tRFC], ['16 Gb', 550]].map(([d, t]) => `<tr><td>${d}</td><td>${t} ns</td><td>${((100 * (t as number)) / DDR4_3200.tREFI).toFixed(1)} %</td></tr>`).join('')}</table>`,
+      },
       scene: () => memCtrlScene({ cfg: FAST_REF }),
       tries: [(st) => (memCtrlState(st)?.refreshes ?? 0) > 0],
       challenge: {
@@ -181,7 +235,21 @@ export const chMemCtrl: Chapter = {
         (${slower('sc-wb2-dram', 'sc-wb2', 'sort')} slower). The pipelined CPU loses ${slower('pipe-wb2-dram', 'pipe-wb2', 'matmul')} on matmul.
         Every run is checked against the instruction-set simulator, the official riscv-tests pass on all three DRAM CPUs, and the device saw
         no broken rule.</p>
+        <p>What changed for the CPU is that a miss now has a price the programmer can influence. Two programs with the same miss count can stall for different times, because their misses fall in different rows. The stall is a sum over misses of what the row buffer said, not a constant times the miss count.</p>
         <div class="try">Run to halt and compare the cycles with the instructions: every stall is a miss priced by the row buffer.</div>`,
+      more: {
+        derive: `<p>The stall for one miss is the controller's cycles for the request or requests behind it. A clean victim: one fill, ${accessCycles('hit', TIMING)} to ${accessCycles('conflict', TIMING)} cycles
+          by the row state. A dirty victim: a write-back first, then the fill, so up to ${2 * accessCycles('miss', TIMING)} cycles with both banks closed and ${accessCycles('miss', TIMING) + accessCycles('conflict', TIMING)} when they share a bank.
+          The fixed-cost caches of chapter 22 charged ${WB_MISS_CLEAN} and ${WB_MISS_DIRTY}; the controller replaces those constants with the open-row table's answer.</p>`,
+        real: `<p>A real CPU does not freeze on a miss. Out-of-order cores keep issuing past it, non-blocking caches track several outstanding misses (miss-status registers),
+          the critical word comes first and the rest of the line fills behind it, and a hardware prefetcher opens rows before the load asks. All of them aim at the same
+          thing: more requests in flight, so that a controller has something to reorder.</p>`,
+        pitfall: `<p>Comparing the DRAM CPU's cycle count with the fixed-cost one and calling the difference "DRAM latency". It also contains the write-backs, the refreshes and the
+          bank conflicts, each of which the scene shows separately in the controller's trace. Run to halt, then step a miss to see which it was.</p>`,
+        numbers: `<table class="mini"><tr><th>program</th><th>fixed miss cost</th><th>DRAM, open page</th><th>DRAM, closed page</th></tr>
+          ${['fib', 'sort', 'matmul', 'crc'].map((b) => `<tr><td>${b}</td><td>${fmt(run('sc-wb2', b))}</td><td>${fmt(run('sc-wb2-dram', b))}</td><td>${fmt(run('sc-wb2-dramc', b))}</td></tr>`).join('')}</table>
+          <p>Cycles on the single-cycle CPU with a 2-way write-back cache.</p>`,
+      },
       scene: () => cpuScene({ source: BENCHMARKS.find((b) => b.id === 'sort')!.source, dcache: 'wb2', dram: CFG, adder: 'ks', highlight: ['dm'] }),
       challenge: {
         kind: 'quiz',
@@ -207,7 +275,19 @@ export const chMemCtrl: Chapter = {
         <p>A controller can fold row bits into the bank number. With an XOR of the row's parity, rows 32 apart land in different banks:
         on the copy, row hits go from ${COPY.plain} % to ${COPY.hash} % of the requests and the program takes ${COPY.faster} % fewer cycles.
         The cost is a parity tree and an XOR gate in the controller; the program and the cache do not change. Real controllers hash
-        more bits and choose the mapping to suit the workload.</p>`,
+        more bits and choose the mapping to suit the workload.</p>
+        <p>The mapping is free to change because the address is only a name. The CPU never learns which bank a line lives in, and the controller is the one place
+        that can choose: it decides which low bits (consecutive lines, spread over banks for parallelism) and which high bits (rows, for locality) matter.
+        Any fixed mapping has a stride that defeats it; hashing makes the bad stride a rarer one.</p>`,
+      more: {
+        derive: `<p>With 2 banks and 16-word rows, the bank is bit 4 of the word address and the row the bits above it. The copy's source word i and destination i + 1 024 differ only in
+          bit 10, so bit 4 is equal: the same bank, a row 1 024 / (16 × 2) = 32 apart. Folding in the parity (XOR of the row bits) gives bank = bit 4 ⊕ parity(row); the two rows differ in one row bit
+          (bit 5 of the row number, for rows below 32), their parities differ, and the streams separate. Cost: a parity tree over the row bits and one XOR.</p>`,
+        real: `<p>Intel and AMD controllers hash many address bits (channel, rank, bank group and bank each take an XOR of several higher bits), partly to spread power-of-two strides, partly to spread
+          row hammer's aggressors. The same hashes are why reverse-engineering a machine's mapping is a standard first step for a DRAM side-channel or row-hammer attack.</p>`,
+        pitfall: `<p>Adding banks and expecting the conflicts to go. Two addresses that agree in the bank bits stay together at any bank count; only a mapping that makes those bits
+          differ separates them. The quiz's copy on four banks still fights: 1 024 is a multiple of 4 × 16.</p>`,
+      },
       widget: ctrlExplorer,
       challenge: {
         kind: 'quiz',
@@ -233,7 +313,19 @@ export const chMemCtrl: Chapter = {
         <p>It needs requests to choose from. This chapter's controller has one: the cache asks for a line and waits. A queue comes with a
         write buffer, several cores (<a href="#/c/multicore/0">chapter 27</a>) or a DMA engine (<a href="#/c/bus/0">chapter 38</a>). Its cost is the queue itself, address and data
         registers per entry, and a row-hit comparator per entry feeding a priority encoder. FR-FCFS is also unfair: a stream of hits can
-        hold an old request back, so real controllers cap how long a request may wait.</p>`,
+        hold an old request back, so real controllers cap how long a request may wait.</p>
+        <p>The idea generalizes: the DRAM is a device whose cost depends on state, so the controller's schedule is an optimization over that state, the way a compiler
+        schedules instructions over a pipeline's hazards. What it cannot do is invent parallelism that the program, the caches and the cores did not create.</p>`,
+      more: {
+        derive: `<p>Four requests to one bank, in arrival order A, B, A, B (rows A and B). FCFS: a miss, then three conflicts: ${accessCycles('miss', TIMING)} + 3 × ${accessCycles('conflict', TIMING)} = ${accessCycles('miss', TIMING) + 3 * accessCycles('conflict', TIMING)} cycles.
+          FR-FCFS serves A, A, B, B: a miss, a hit, a conflict, a hit = ${accessCycles('miss', TIMING)} + ${accessCycles('hit', TIMING)} + ${accessCycles('conflict', TIMING)} + ${accessCycles('hit', TIMING)} = ${2 * accessCycles('hit', TIMING) + accessCycles('miss', TIMING) + accessCycles('conflict', TIMING)} cycles,
+          ${(100 * (1 - (2 * accessCycles('hit', TIMING) + accessCycles('miss', TIMING) + accessCycles('conflict', TIMING)) / (accessCycles('miss', TIMING) + 3 * accessCycles('conflict', TIMING)))).toFixed(0)} % fewer, with the same four requests. The saving is two conflicts turned into hits.</p>`,
+        real: `<p>Real schedulers add policy on top: reads before writes (a load stalls a core, a store does not), writes drained in batches at a high-water mark so that the bus
+          turns around rarely, ages that force an old request to the front, and priorities for latency-sensitive agents such as a display. The comparators that find the row hits
+          are a content-addressable search over the queue, one of the larger structures in the controller.</p>`,
+        pitfall: `<p>Reading FR-FCFS as a speed-up for any workload. It cannot create hits that no request offers, and it trades fairness for throughput: a stream hitting an open row can keep a
+          request for another row waiting for as long as the hits keep coming. Without an age cap that is starvation.</p>`,
+      },
       widget: reorderWidget,
       challenge: {
         kind: 'quiz',

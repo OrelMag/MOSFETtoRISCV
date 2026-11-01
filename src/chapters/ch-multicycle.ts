@@ -1,6 +1,7 @@
 import facts from '../bench/ucodefacts.json';
-import { MC_FSM, MC_MICRO, MC_STATES } from '../lib';
+import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib';
 import { bookProgram, cyclesByClass, iTypeInThree, type Microprogram } from '../lib/ucode';
+import { stats } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -8,6 +9,26 @@ import { controllerPanel, cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+
+/** Cycles an instruction takes: Fetch and Decode, then the states from its dispatch target until the table returns to Fetch
+ *  (`mem`: the state a load or store goes to after MemAdr). */
+function cyclesOf(target: number, mem = 0): number {
+  let n = 2;
+  for (let i = target; ; n++) {
+    const nx = MC_STATES[i].next;
+    if (nx === 0) return n + 1;
+    i = typeof nx === 'number' ? nx : mem;
+  }
+}
+const target = (cls: string) => MC_DISPATCH.find(([c]) => c === cls)![1];
+/** Cycle counts by class, from the state table. */
+const CYC = {
+  branch: cyclesOf(target('BRANCH')), lui: cyclesOf(target('LUI')), auipc: cyclesOf(target('AUIPC')),
+  alu: cyclesOf(target('R')), store: cyclesOf(target('STORE'), 5), jal: cyclesOf(target('JAL')),
+  load: cyclesOf(target('LOAD'), 3), jalr: cyclesOf(target('JALR')),
+};
+const sp = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const FSM_NANDS = stats(MC_FSM).nands, MICRO_NANDS = stats(MC_MICRO).nands;
 
 /** The state table as a page widget. */
 function stateTable(): Widget {
@@ -108,8 +129,35 @@ export const chMulticycle: Chapter = {
         <strong>B</strong> (the source registers), <strong>Data</strong> (a loaded word) and <strong>ALUOut</strong>. The datapath now does whatever the
         <span data-show="ctrl">controller</span> says, one step at a time.</p>
         <p>(The memory port selects the program ROM or the data RAM by phase, so the sample programs keep their data at address 0.)</p>
+        <p>The point of sharing is area: one ALU instead of three adders, one memory port instead of two. Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
+        instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one, and the clock period only shrinks to the longest single step.</p>
         <div class="try">Pulse the clock and follow the controller panel: an add takes Fetch, Decode, ExecuteR, ALUWB.</div>`,
       scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'] }),
+      tour: {
+        beats: [
+          { title: 'Fetch', reset: true, show: ['ctrl'], expect: { state: 0, fetch: 1, pcOut: 0 },
+            say: '<p>State {v:state}, Fetch. The ALU computes PC + 4 while the instruction at 0 (<code>li a0, 0</code>) is read into IR.</p>' },
+          { title: 'Decode', cycles: 1, show: ['ir', 'ra', 'rb'], expect: { state: 1, fetch: 0, pcOut: 4 },
+            say: '<p>The PC is now {v:pcOut}. Decode reads the two source registers into A and B, and the same ALU computes OldPC + imm, a branch target nobody may need.</p>' },
+          { title: 'Execute', cycles: 1, show: ['aluout'], expect: { state: 8 },
+            say: '<p>State {v:state}, ExecuteI: the ALU computes A + imm into ALUOut. The register file is not written yet.</p>' },
+          { title: 'Write back', cycles: 1, show: ['aluout'], expect: { state: 7, retire: 1 },
+            say: '<p>ALUWB (state {v:state}) writes ALUOut into rd, and retire = {v:retire}: the instruction is done after four cycles.</p>' },
+          { title: 'The next instruction', cycles: 1, show: ['ctrl'], expect: { state: 0, fetch: 1, pcOut: 4 },
+            say: '<p>Back to Fetch, with the PC at {v:pcOut}. Every instruction starts the same way.</p>' },
+          { title: 'A branch takes three', cycles: 18, show: ['ctrl'], expect: { state: 10, retire: 1, pcOut: 24 },
+            say: '<p>Eighteen cycles later, the loop\'s <code>bne</code> is in the Branch state (state {v:state}): Fetch, Decode, Branch is all it needs, and retire = {v:retire} in the third.</p>' },
+          { title: 'Taken', cycles: 1, show: ['ctrl'], expect: { state: 0, pcOut: 12 },
+            say: '<p>The branch was taken: the PC is back at {v:pcOut}, the top of the loop, after only three cycles for the branch.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Cycles per class come straight from the state table: branch, lui and auipc ${CYC.branch}; ALU operations, stores and jal ${CYC.alu}; loads and jalr ${CYC.load}. Time per instruction is CPI × period. A program whose mix is half ALU operations (4 cycles), a
+          fifth loads (5), a fifth branches (3) and the rest stores (4) averages ${(0.5 * CYC.alu + 0.2 * CYC.load + 0.2 * CYC.branch + 0.1 * CYC.store).toFixed(1)} cycles per instruction.</p>`,
+        pitfall: `<p>Leaving out IR. It is tempting to read the instruction from memory in every step, but the memory port is shared: after Fetch the same port serves a load or store, and the address changes. IR is the copy that survives. The same goes for A, B and ALUOut: any value
+          needed after the next edge must sit in a register, or the shared unit overwrites it.</p>`,
+        real: `<p>Multicycle designs were the norm while logic was dear: the 6502 spends 2 to 7 cycles per instruction on one ALU and one bus. Their control was often microcode, the subject of the last three steps.</p>`,
+      },
     },
     {
       title: 'The state table',
@@ -117,8 +165,14 @@ export const chMulticycle: Chapter = {
         <p>Everything about sequencing is in one table: per state, which control signals are on and which state comes next. Decode branches on the
         opcode class; MemAdr on load versus store. Instructions take 3 (branch, lui, auipc), 4 (ALU ops, stores, jal) or 5 cycles (loads, jalr).</p>
         <p>Two tricks keep it short. Decode computes OldPC + imm "just in case": that is the branch target, the jal target and the auipc result, so
-        auipc goes straight to write-back. And jalr reuses the JAL state once it has put its target in ALUOut.</p>`,
+        auipc goes straight to write-back. And jalr reuses the JAL state once it has put its target in ALUOut.</p>
+        <p>To read the table, follow an instruction by its class: the Decode row's dispatch names the first execute state, and each row's <em>next</em> column gives the one after, until Fetch comes back. A load is Fetch, Decode, MemAdr, MemRead, MemWB: ${CYC.load} cycles. The control
+        signals in a row are exactly what that cycle does on the datapath, so the table is both the specification and, in the next two steps, the circuit.</p>`,
       widget: stateTable,
+      more: {
+        derive: `<p>Counting cycles by walking the table: Fetch and Decode are common (2). Then ${MC_DISPATCH.map(([c, t]) => `${c} → ${MC_STATES[t].name}`).join(', ')}. Following the next column from each: branch, lui and auipc end after one more state (${CYC.branch}); R, I, store and jal after two (${CYC.alu}); load and jalr after three (${CYC.load}).</p>`,
+        pitfall: `<p>Reading Decode as idle. It computes the branch target before it knows the instruction is a branch. If the instruction turns out to be a load, that value goes unused; spending the ALU in a cycle that would otherwise wait is what saves a cycle on branches.</p>`,
+      },
     },
     {
       title: 'Hardwired control',
@@ -127,9 +181,30 @@ export const chMulticycle: Chapter = {
         giving one wire per state, <span data-show="t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11">an AND gate per opcode-dependent transition</span>
         and OR gates. Each control signal is the OR of the states that assert it. Each next-state bit is
         <span data-show="n0 n1 n2 n3">the OR of the transitions</span> whose target has that bit set.
-        ${MC_STATES.length} states cost about 400 NANDs.</p>
+        ${MC_STATES.length} states cost ${sp(FSM_NANDS)} NANDs.</p>
+        <p>The structure is a direct transcription of the table: a state is a wire, a transition is an AND of a state wire and, for the two dispatch points, an opcode test, and each signal is the OR of the states that assert it. Nothing is stored except the 4-bit state, which is why
+        it is so small. Its price is that every change of the table is a change of the logic.</p>
         <div class="try">op = 0x03 is a load. Pulse through Fetch → Decode → MemAdr → MemRead → MemWB and back to Fetch.</div>`,
       scene: () => ({ root: MC_FSM, inputs: { op: 0x03, clk: 0 }, panels: [controllerPanel('fsm')] }),
+      tour: {
+        beats: [
+          { title: 'Fetch', reset: true, show: ['st', 'dec'], expect: { state: 0, irWrite: 1, pcUpdate: 1 },
+            say: '<p>State {v:state}: the decoder raises its Fetch wire, and the OR gates assert irWrite = {v:irWrite} and pcUpdate = {v:pcUpdate}. The opcode (a load, 0x03) is ignored for now.</p>' },
+          { title: 'Decode', cycles: 1, expect: { state: 1, irWrite: 0 },
+            say: '<p>One edge: state {v:state}, Decode. The signals for Fetch are off.</p>' },
+          { title: 'MemAdr: the opcode matters', cycles: 1, show: ['t1', 't2'], expect: { state: 2, aluSrcB: 1 },
+            say: '<p>Decode\'s next state depends on the opcode. The AND gate for "Decode and a load or a store" fires: state {v:state}, MemAdr, computing the address with the immediate (aluSrcB = {v:aluSrcB}).</p>' },
+          { title: 'MemRead, then MemWB', cycles: 2, show: ['dec'], expect: { state: 4, regWrite: 1, retire: 1 },
+            say: '<p>For a load the next state is MemRead and then MemWB (state {v:state}): regWrite and retire are {v:regWrite}.</p>' },
+          { title: 'A store takes another path', set: { op: 0x23 }, cycles: 4, expect: { state: 5, memWrite: 1, retire: 1 },
+            say: '<p>With op = 0x23 (a store) the same Decode and MemAdr states lead to MemWrite instead (state {v:state}): memWrite = {v:memWrite}. The dispatch is the only place where the opcode changes the path.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Signal s = OR over the states i with s asserted, of the decoded state wire. Next-state bit k = OR over the transitions t with bit k set in the target. The ${MC_STATES.length} states need ${Math.ceil(Math.log2(MC_STATES.length))} state bits. Both are sums of products over at most ${MC_STATES.length} wires, so the whole controller is ${sp(FSM_NANDS)} NANDs, and
+          its delay is a decoder plus two levels of OR: short next to the datapath.</p>`,
+        pitfall: `<p>Adding a state without the transition into it. An unreachable state asserts nothing and nothing complains: the decoder has a wire for it and the logic is complete, but no AND gate leads there. The tests read the controller back and compare every state and arc against the table for that reason.</p>`,
+      },
       tries: [(st) => st.value('state') === 4],
       challenge: {
         kind: 'reach', goal: 'Drive the controller into the MemWrite state.',
@@ -155,8 +230,26 @@ export const chMulticycle: Chapter = {
         <span data-show="mx">sequencer</span> picks which.</p>
         <p>IBM's System/360 (1964) used microcode to run one instruction set on machines of very different cost. x86 processors still execute
         their rarest, most complex instructions from a microcode ROM, and patch hardware bugs with microcode updates loaded at boot.</p>
+        <p>The consequence is flexibility. Changing the instruction set's sequencing means changing the ROM contents, not the logic; adding an instruction is a few more words. The ROM here costs ${sp(MICRO_NANDS)} NANDs against ${sp(FSM_NANDS)} for the hardwired controller, because our ROMs are
+        trees of multiplexers over constants.</p>
         <div class="try">Same inputs as before. The panel shows the microwords: sequencing | next | control.</div>`,
       scene: () => ({ root: MC_MICRO, inputs: { op: 0x03, clk: 0 }, panels: [controllerPanel('micro')] }),
+      tour: {
+        beats: [
+          { title: 'The same sequence', reset: true, show: ['upc', 'urom'], expect: { state: 0, irWrite: 1 },
+            say: '<p>The micro-PC is {v:state}: the ROM word at address 0 asserts irWrite = {v:irWrite}, as the hardwired Fetch did.</p>' },
+          { title: 'Dispatch through the opcode', cycles: 2, show: ['d1', 'd2', 'mx'], expect: { state: 2, aluSrcA: 2 },
+            say: '<p>After Decode the sequencer takes the dispatch ROM, indexed by the opcode (a load): the next micro-address is {v:state}, MemAdr, with aluSrcA = {v:aluSrcA}.</p>' },
+          { title: 'Write back', cycles: 2, show: ['urom'], expect: { state: 4, regWrite: 1, retire: 1 },
+            say: '<p>Two words later, MemWB: regWrite = {v:regWrite}, retire = {v:retire}. Every control signal is the same, cycle for cycle, as in the hardwired controller.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>A microword is a row of the state table plus its sequencing: ${MC_STATES.length} words of 14 control bits, a 4-bit next address and a 2-bit mode (next, dispatch through the opcode, or the second dispatch for load versus store), and two small dispatch ROMs. The same table feeds both controllers (the tests check them cycle by cycle), so
+          there is no second source of truth to drift.</p>`,
+        real: `<p>Wilkes' point was exactly this: the control table becomes data. A shipped CPU can then fix a bug by patching a microword, which x86 cores still do, and a family of machines can share a datapath style with different microprograms.</p>`,
+        pitfall: `<p>Treating microcode as free. The ROM is state that must be read every cycle: its address register and the ROM's own delay are on the controller's critical path, and a ROM written as logic costs far more than a state machine for a table this small.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'The microcode and FSM controllers are generated from the same table. How do we know they behave identically?',
         options: [
@@ -173,10 +266,24 @@ export const chMulticycle: Chapter = {
     {
       title: 'Same CPU, microprogrammed',
       body: `
-        <p>Swap the <span data-show="ctrl">controller</span> and nothing else changes: same cycles, same results. The cost does change. The FSM takes about 400 NANDs. The microcode
-        controller takes about 6 100, because our ROMs are multiplexer trees of constants (a real ROM is a dense transistor array). Microcode pays off when the
-        table is large and irregular, as with complex instruction sets, or when it has to be changeable.</p>`,
+        <p>Swap the <span data-show="ctrl">controller</span> and nothing else changes: same cycles, same results. The cost does change. The FSM takes ${sp(FSM_NANDS)} NANDs. The microcode
+        controller takes ${sp(MICRO_NANDS)}, because our ROMs are multiplexer trees of constants (a real ROM is a dense transistor array). Microcode pays off when the
+        table is large and irregular, as with complex instruction sets, or when it has to be changeable.</p>
+        <p>The comparison to keep in mind is the ratio: ${(MICRO_NANDS / FSM_NANDS).toFixed(0)} to 1 for a table this small and regular. RV32I has few instructions and each is a handful of states, which is the case hardwired logic handles best; a CISC instruction set with hundreds of
+        multi-step instructions is the case microcode was invented for.</p>`,
       scene: () => cpuScene({ source: src('sum'), multicycle: 'micro', highlight: ['ctrl'] }),
+      tour: {
+        beats: [
+          { title: 'Same program, same states', reset: true, cycles: 3, show: ['ctrl'], expect: { state: 7, retire: 1, pcOut: 4 },
+            say: '<p>After three edges the first <code>li</code> is in ALUWB (state {v:state}) with retire = {v:retire}: the identical trace as the hardwired version.</p>' },
+          { title: 'And the branch', cycles: 19, show: ['ctrl'], expect: { state: 10, retire: 1, pcOut: 24 },
+            say: '<p>Nineteen cycles on, the loop\'s branch is in state {v:state}, three cycles after its fetch, exactly as before. The controller\'s construction is invisible from outside.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Both controllers implement the same function from (state, opcode) to (control signals, next state), so for equal tables they are equivalent; the difference is only cost: ${sp(FSM_NANDS)} NANDs wired, ${sp(MICRO_NANDS)} as a ROM, a factor of ${(MICRO_NANDS / FSM_NANDS).toFixed(0)}.</p>`,
+        pitfall: `<p>Concluding that microcode is inherently wasteful from this number. The ROM here is a tree of multiplexers on constants, about the worst way to store a table; a ROM array of transistors stores a bit in one device. The ratio says more about this site's ROM than about microcode.</p>`,
+      },
     },
     {
       title: 'Was it worth it?',
@@ -186,8 +293,16 @@ export const chMulticycle: Chapter = {
         so each instruction takes 300 to 340 delays instead of 103.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2 900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
-        and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 17</a>.</p>`,
+        and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 17</a>.</p>
+        <p>The accounting is time per instruction = CPI × period. A step is shorter than the whole single-cycle path, but an instruction needs several of them; the product is what matters, and here it is far above the single-cycle machine's one period of 103. The cheap controller
+        (${sp(FSM_NANDS)} NANDs) is not the problem; the serial use of one ALU is.</p>`,
       scene: () => cpuScene({ source: src('gcd'), multicycle: 'fsm', timing: true }),
+      more: {
+        derive: `<p>Single-cycle: CPI 1 at a period of 103, so 103 delays per instruction. Multicycle: this gcd takes 182 cycles for 51 instructions, CPI ${(182 / 51).toFixed(2)}, at a period of 85: ${Math.round((182 / 51) * 85)} delays per instruction, ${((182 / 51) * 85 / 103).toFixed(1)} times slower. The period fell by ${Math.round((1 - 85 / 103) * 100)} %
+          while the cycle count per instruction rose by a factor of ${(182 / 51).toFixed(1)}.</p>`,
+        pitfall: `<p>Expecting a shorter clock to pay. The longest step is still an ALU operation followed by the branch decision, so the period cannot fall far below the single-cycle machine's; to make multicycle competitive the steps must be balanced and overlapped, which is a pipeline.</p>`,
+        real: `<p>Multicycle sequencing survives where logic is scarce or memory is slow relative to logic: small microcontrollers, and the microcoded parts of larger cores. Performance cores overlap instead.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'The steps are unbalanced: the ALU step needs 85 delays, the others much less. What would make the multicycle CPU competitive?',
         options: ['A faster controller', 'Balancing the steps (e.g. splitting the ALU step) and overlapping consecutive instructions', 'More microcode', 'A bigger register file'],

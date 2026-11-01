@@ -11,7 +11,8 @@ import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, type Microprogram, dualPipeCpu, micr
 import { fsmView } from './fsmpanel';
 import { isBook } from '../lib/ucode';
 import { assemble, type AsmResult } from '../riscv/asm';
-import { cacheLines, cpuState, retireCount, retiring } from '../riscv/cosim';
+import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/cosim';
+import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
 import { ISS, type ModelState } from '../riscv/iss';
 import { disasmC, expand16, parcelAt } from '../riscv/rvc';
@@ -125,6 +126,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const log: { cycle: number; pc: number; text: string; effect: string }[] = [];
     let logSeq = 0, logShown = 0;
     const trace = h('div', { class: 'cpu-trace' });
+    /** Narration (riscv/narrate.ts): the single-cycle CPU's last instruction unit by unit, or the pipeline's cycle stage by stage. */
+    const narrKind = opts.ooo || opts.wide || opts.multicycle || opts.fpu ? null : opts.pipeline ? 'cycle' : 'instr';
+    const narrBox = h('div', { class: 'cpu-narr', 'aria-live': 'polite' });
+    let narr: NarrLine[] = [];
+    let narrShown = '';
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
     /** The out-of-order core: the port the selected instruction was bound to (-1: not known). */
@@ -258,6 +264,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       editWrap, status, haltLine, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
+      ...(narrKind ? [h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, narrKind === 'cycle' ? 'this cycle, stage by stage' : 'the last instruction, unit by unit')), narrBox] : []),
       h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
       h('div', { class: 'cpu-sec' }, 'Registers'), regs,
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
@@ -292,7 +299,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         if (willRetire) slowCtl.retired();
         if (!willRetire || iss.halted || !stage.sim) return;
         for (let k = 0; k < willRetire && !iss.halted; k++) {
+          const before = narrKind === 'instr' ? [...iss.x] : null;
           const info = iss.step();
+          if (before) narr = narrateInstr(before, info);
           log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
           if (log.length > LOG_MAX) log.shift();
           logSeq++;
@@ -320,6 +329,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         lastX = st.lastX.slice();
         mismatch = st.mismatch;
         log.splice(0, log.length, ...st.log);
+        narr = [];
         logSeq = st.logSeq;
         ({ loads, misses, prevStall, stallRun } = st);
         // rebuilt in full by the next showTrace
@@ -372,6 +382,16 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         haltLine.replaceChildren(`Halted after ${iss.steps.toLocaleString()} instruction${iss.steps === 1 ? '' : 's'}`,
           multiCycle ? ` (${stage.cycles.toLocaleString()} cycles)` : '',
           res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${st.x[r] | 0}`), ` (${hex(st.x[r])})`) : '');
+      }
+      if (narrKind === 'cycle' && !stage.inEdge) {
+        const p = pipeSnap(sim, sim.design.root, stage.cycles);
+        narr = p ? narrateCycle(p, wordAt) : [];
+      }
+      const nk = narr.map((l) => l.unit + l.text).join('|');
+      if (nk !== narrShown) {
+        narrShown = nk;
+        narrBox.replaceChildren(...(narr.length ? narr.map((l) => h('div', { class: 'narr-row' }, h('span', { class: 'narr-unit' }, l.unit), h('span', null, l.text)))
+          : [h('div', { class: 'narr-empty' }, narrKind === 'cycle' ? 'Pulse: each stage says what it does with its instruction.' : 'Step or Pulse: the instruction just executed is told unit by unit, with its values.')]));
       }
       const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
       const w = wordAt(shownPc);

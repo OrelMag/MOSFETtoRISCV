@@ -6,7 +6,8 @@
 import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
 import { h, icon, placeMenu, s } from '../ui/dom';
-import { registerToolbarAction, type Editor } from './editor';
+import { here, registerActions } from '../ui/searchsources';
+import { registerEditorPlugin, registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
 import { dropDeckFile } from './cardui';
 import { isDeckFile } from '../cards/card';
@@ -90,7 +91,11 @@ function closeMenu(): void {
   document.removeEventListener('keydown', onMenuKey, true);
 }
 
-interface MenuItem { icon: string; label: string; hint: string; run(ed: Editor): void }
+interface MenuItem { icon: string; label: string; hint: string; run(ed: Editor): void; enabled?(ed: Editor): boolean; off?: string }
+
+/** Does the open chip hold the sandbox's bus interconnect (editor/memmap.ts hasBus; light here so the designer loads on demand)? */
+const hasBusPart = (ed: Editor) => ed.doc.parts.some((p) => 'lib' in p.ref && /^axibus2_[0-9]/.test(p.ref.lib));
+const openMemoryMap = (ed: Editor) => void import('./memmapui').then((m) => m.openMemoryMap(ed));
 const MENU: (MenuItem | null)[] = [
   { icon: 'download', label: 'Export this chip…', hint: 'the chip and every chip inside it, as a .json file', run: (ed) => exportChip(ed) },
   { icon: 'download', label: 'Export all chips…', hint: 'this project, its folders and favorites, as a .json file', run: (ed) => exportAll(ed) },
@@ -104,6 +109,7 @@ const MENU: (MenuItem | null)[] = [
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
   { icon: 'code', label: 'Instruction sets…', hint: 'custom ISAs: an assembler and a listing for your CPU from a table', run: (ed) => openIsaEditor(ed) },
+  { icon: 'layers', label: 'Memory map…', hint: 'the bus address windows: move RAM, flash, screen …, see overlaps, the decoder, a C header', run: openMemoryMap, enabled: hasBusPart, off: 'Open a chip with a bus (Examples ▸ System on a bus)' },
   { icon: 'stack', label: 'Manage chips…', hint: 'sizes, who uses what; open, duplicate, delete', run: (ed) => manageDialog(ed) },
   { icon: 'trash', label: 'Delete local data…', hint: 'erase what this site keeps in this browser', run: (ed) => deleteDataDialog(ed) },
 ];
@@ -117,7 +123,8 @@ function openMenu(ed: Editor): void {
   ed.claimMenu(closeMenu);
   for (const it of MENU) {
     if (!it) { menu.append(h('hr')); continue; }
-    menu.append(h('button', { role: 'menuitem', onclick: () => { closeMenu(); it.run(ed); } },
+    const off = it.enabled && !it.enabled(ed);
+    menu.append(h('button', { role: 'menuitem', disabled: off, title: off ? it.off : undefined, onclick: () => { closeMenu(); it.run(ed); } },
       glyph(it.icon), h('span', null, h('b', null, it.label), h('small', null, it.hint))));
   }
   ed.el.append(menu);
@@ -674,3 +681,8 @@ export function installFiles(ed: Editor): FilesUi {
     },
   };
 }
+
+// `>` in the search: the memory map, while the open chip has a bus
+registerEditorPlugin((ed) => registerActions(() => (ed.el.isConnected && hasBusPart(ed) ? [here({
+  kind: 'action', id: 'sb.memmap', title: 'Memory map', sub: 'Sandbox · File ▸ Memory map… the bus address windows', run: () => openMemoryMap(ed),
+})] : [])));
