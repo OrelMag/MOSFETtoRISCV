@@ -54,6 +54,8 @@ interface Route {
   label: string;
   /** An emulated screen, and the page must not be wider than it (no horizontal scroll). */
   viewport?: Viewport;
+  /** A page script run once the page is idle (awaited; returns the problems it found, as strings), then the page settles again. */
+  drive?: string;
 }
 
 interface Viewport { width: number; height: number; mobile: boolean; name: string }
@@ -101,9 +103,40 @@ function examplesWorkspace(): { json: string; ids: string[] } {
   return { json: JSON.stringify(ws), ids };
 }
 
+/** Opens File ▸ Memory map…, checks the windows, the three views and that the dialog fits, closes it with Esc. */
+const MEMMAP_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const file = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'File');
+  if (!file) return ['no File button'];
+  file.click(); await wait(200);
+  const item = [...document.querySelectorAll('.sb-menu button')].find((b) => /Memory map/.test(b.textContent));
+  if (!item) return ['no Memory map item in the File menu'];
+  if (item.disabled) return ['Memory map is disabled on a chip with a bus'];
+  item.click(); await wait(1500);
+  const dlg = document.querySelector('.mp-dlg');
+  if (!dlg) return ['the dialog did not open'];
+  if (dlg.querySelectorAll('.mp-row[data-n]').length !== 16) bad.push('expected 16 windows');
+  if (dlg.querySelectorAll('.mp-bar[data-i]').length !== 6) bad.push('expected 6 regions on System on a bus');
+  if (!dlg.querySelector('.mp-apply[disabled]')) bad.push('Apply should be disabled with nothing changed');
+  const panel = dlg.querySelector('.panel').getBoundingClientRect();
+  if (panel.right > innerWidth + 1 || panel.left < -1) bad.push('the dialog is wider than the screen');
+  dlg.querySelector('.mp-bar').click(); await wait(100);
+  if (!dlg.querySelector('#mp-base')) bad.push('selecting a region shows no base field');
+  for (const name of ['Decoder', 'Export', 'Map']) {
+    [...dlg.querySelectorAll('.mp-tab')].find((b) => b.textContent === name).click(); await wait(300);
+    if (name === 'Decoder' && !dlg.querySelector('.mp-table')) bad.push('no decoder table');
+    if (name === 'Export' && dlg.querySelectorAll('.mp-export pre').length !== 2) bad.push('export previews missing');
+  }
+  dlg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await wait(100);
+  if (document.querySelector('.mp-dlg')) bad.push('Esc did not close the dialog');
+  return bad;
+})()`;
+
 function routes(): Route[] {
   const out: Route[] = [];
-  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport) => out.push({ hash, storage, label: hash + note, viewport });
+  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => out.push({ hash, storage, label: hash + note, viewport, drive });
   add('#/', light);
   add('#/', themed('dark'), ' (dark)');
   for (const theme of ['light', 'dark'] as const) {
@@ -154,6 +187,10 @@ function routes(): Route[] {
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
+  // The memory-map designer on System on a bus, opened from File, in both themes and on a phone.
+  for (const [theme, viewport] of [['light', undefined], ['dark', undefined], ['light', phone]] as const) {
+    add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'bussystem')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (memory map, ${theme}${viewport ? ', phone' : ''})`, viewport, MEMMAP_DRIVE);
+  }
   return only ? out.filter((r) => r.label.includes(only)) : out;
 }
 
@@ -467,6 +504,11 @@ class Tab {
       const nav = await this.send('Page.navigate', { url });
       if (nav.errorText) throw new Error(`navigation failed: ${nav.errorText}`);
       await this.settle(t0);
+      if (route.drive) {
+        const found = (await this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true })).result.value as string[] | undefined;
+        for (const p of found ?? []) this.errors.push(`drive: ${p}`);
+        await this.settle(t0);
+      }
       const seen = (await this.send('Runtime.evaluate', { expression: INSPECT, returnByValue: true })).result.value as string[];
       for (const p of seen) this.errors.push(`page: ${p}`);
       const bars = (await this.send('Runtime.evaluate', { expression: STAGE_BARS, returnByValue: true })).result.value as string[];

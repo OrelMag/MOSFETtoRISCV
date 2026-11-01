@@ -904,6 +904,16 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  putIsa (an edit reaches every ROM that holds it), deleteIsa; isaui.ts the ISA editor dialog (File ▸ Instruction sets…);
                  isadesign.ts its Design tab (patterns painted on a bit grid, a drag = one undo step; the analysis is
                  isa/design.ts: clashes, shadows, the opcode map's window and cells, coverage, a plain decoder's NANDs / depth)
+  memmap.ts      the memory-map designer's model (DOM-free): the sandbox bus (lib/axi.ts sandboxBus, id axibus2_<codes>_b; resolve.ts
+                 rebuilds it by id) decodes a[31:28], so a MemMap is regions {kind, base = nibble << 28, used} + the default slave:
+                 readMap(doc) (the bus part's codes, each slave found through its s<k>_req wire or pointer name, kind from its lib id),
+                 analyze (overlap / misaligned / range / count problems, free windows), moveTo / newRegion / withoutRegion, applyMap
+                 (pure: a new ChipDoc; bus swapped, links re-tapped with their pointer names, new regions' parts and devices placed
+                 below the slaves, removed ones' slave parts dropped, devices left), busMapOf (BusModel's `map`), decoderDef (lib/
+                 memmapdec.ts: the bus's nibbleSelects without its address mux and hold register), cHeader / linkerScript;
+                 memmapui.ts the dialog (File ▸ Memory map…, fileui.ts, enabled with a bus; `>` Memory map): Map | Decoder | Export,
+                 drag + ↑ ↓ keys, Apply = one Editor.edit; tests/memmap.test.ts, memmap-run.test.ts (the example with the screen moved,
+                 chip against BusModel)
   m6502mon.ts    detect6502 (a placed m6502_core, a ROM in 6502 assembly, a RAM of bytes, here or one chip down),
                  M6502Monitor: follows the part (it is the cycle-exact model: nothing compared): the bus read before each
                  edge, an instruction from one SYNC to the next (its bytes, stores, cycles; IRQ / NMI sequences), halted on
