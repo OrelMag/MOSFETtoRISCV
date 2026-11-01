@@ -286,7 +286,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Load write-back',
       text: 'wb = 1 selects drdata, which the memory returns in the same cycle: the result gets a second 2:1 mux too (wb is 0, 1 or 3: no pc + 1 without jumps). 3 990 NANDs, 98 over Core I for the two extra muxes; the bigger cost is time: the data memory sits behind the ALU, and that path sets the period at 98 instead of 84.',
       why: 'A load\'s word arrives in the same cycle, so it only needs one more source on the result mux: the data memory\'s output.',
-      whyNot: { text: 'Writing the load result one cycle later through a register would lift the period but make the core multi-cycle: the pipeline chapters take that route.' },
+      whyNot: { text: 'Writing the load result one cycle later through a register would shorten the period but make the core multi-cycle: the pipeline chapters take that route.' },
       parts: ['pick11', 'u9'], codex: ['criticalpath'],
     },
   ],
@@ -369,7 +369,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Data RAM',
       text: 'A 64-word RAM on daddr[5:0], written with dwdata at the clock edge and read combinationally into drdata. 20 166 NANDs, 74% of the computer: about 79 transistors per stored bit with the decoder and read mux, against 6 in an SRAM cell.',
       why: 'The RAM serves lw and sw. It reads combinationally into drdata and writes at the clock edge, matching the core\'s timing.',
-      whyNot: { text: 'Switch-level SRAM cells (6 transistors a bit, against about 79 here) would shrink it, but they need analog periphery this level does not have.' },
+      whyNot: { text: 'Switch-level SRAM cells (6 transistors a bit, against about 79 here) would shrink it, but they are switch-level parts, which this gate-level computer cannot simulate or count in NANDs.' },
       parts: ['u2', 'u6'], codex: ['ram'],
     },
     {
@@ -512,7 +512,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Compare rs1',
       text: 'rs1 = rdM and rs1 = rdW: two 3-bit equality comparators (19 NANDs, depth 8 each), each ANDed with its stage\'s write flag.',
       why: 'E reads rs1 from D/E. If M or W is about to write that register, E must take the newer value from them instead.',
-      whyNot: { text: 'Waiting for the write (a stall) is always correct but costs a cycle per dependency; forwarding costs only the comparators.' },
+      whyNot: { text: 'Waiting for the write (a stall) is always correct but costs one or two cycles per dependency by distance; forwarding costs comparators and operand muxes, and lengthens the period.' },
       parts: ['u6', 'u7', 'u8', 'u9'], codex: ['comparator'],
     },
     {
@@ -786,7 +786,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'MIE and MPIE',
       text: 'MIE\' = trap ? 0 : mret ? MPIE : written; MPIE\' = trap ? MIE : mret ? 1 : written. A trap turns interrupts off and remembers the old enable in MPIE; mret puts it back.',
       why: 'A trap saves MIE in MPIE and turns interrupts off; mret restores. That pair makes a handler non-reentrant yet returns the state.',
-      whyNot: { text: 'A single enable bit would lose the previous state: after a handler returned, interrupts would be on whatever they were before.' },
+      whyNot: { text: 'A single enable bit has nowhere to save the old value: a trap clears it and mret can only set it to 1 (or leave it 0), so a trap taken with interrupts off would return with them on.' },
       parts: ['u28', 'u29', 'u30', 'u31', 'u32'], codex: ['interrupts'],
       ask: {
         question: 'A trap must turn interrupts off, and mret must later restore whatever the enable was. What does a trap do to MIE and MPIE?',
@@ -902,7 +902,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'intr joins the trap',
       text: 'trap = ill + ecall + ebreak + intr. The interrupt is taken before the instruction at pc runs, as the golden model does.',
       why: 'The interrupt joins the trap OR. It is taken before the instruction at pc runs.',
-      whyNot: { text: 'Taking it after the instruction would need mepc to be pc + 1 and the instruction\'s effects to be undone for exceptions.' },
+      whyNot: { text: 'Taking it after the instruction would need mepc to hold the next PC (the target after a taken branch or jump, not simply pc + 1), and every instruction\'s effects would already be committed.' },
       parts: ['u8', 'u9'],
     },
     {

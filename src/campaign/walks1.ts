@@ -141,7 +141,7 @@ export const WALKS1: Record<string, WalkScript> = {
       text: 'u16 = ¬any drives zero: one more NAND and one more level. 46 NANDs, depth 9: par.',
       parts: ['u16'], codex: ['not'],
       why: '"Zero" is the complement of "any bit is 1". One more NAND inverts the tree\'s output instead of rebuilding the reduction in the other polarity.',
-      whyNot: { text: 'An AND tree over inverted bits needs an inverter on every input first: many more gates for the same output.' },
+      whyNot: { text: 'An AND tree over the inverted bits gives zero directly but costs the same 46 NANDs (16 inverters, 15 ANDs) at depth 9: no gain.' },
     },
   ],
   g_dec: [

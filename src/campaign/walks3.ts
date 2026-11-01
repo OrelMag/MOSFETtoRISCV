@@ -77,7 +77,7 @@ export const WALKS3: Record<string, WalkScript> = {
       text: 'a operates ra, with VDD on its common. Its make contact (no) carries the supply while a = 1, its break contact (nc) while a = 0: exactly one of the two lines is on VDD. A changeover contact is a 2:1 multiplexer that passes either way.',
       parts: ['ra'], codex: ['relay'],
       why: 'XOR needs both a and ¬a. One changeover contact provides the pair in one relay step, each line carrying the supply for one value of a.',
-      whyNot: { text: 'An inverter for ¬a needs a relay of its own, whose coil would wait for a: a second relay step.' },
+      whyNot: { text: 'A separate inverter for ¬a costs a third relay and coil for a line ra\'s changeover contact already provides.' },
     },
     {
       title: 'Relay b picks the other line',

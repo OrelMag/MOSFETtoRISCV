@@ -41,7 +41,7 @@ const WALKS0: Record<string, WalkScript> = {
       text: 'g2 is a NOT (a NAND with both inputs on g1): y = ¬¬(a·b) = a·b. Two NANDs, depth 2. Where an AND feeds another NAND, skip g2 and let the next gate absorb the bubble.',
       parts: ['g2'], codex: ['and', 'bubble'],
       why: 'Inverting g1 restores the polarity. It comes second because it has something to invert only once g1 exists.',
-      whyNot: { text: 'Skipping it leaves y = ¬(a·b): three of four rows wrong. Inverting a and b in front of the NAND instead computes ¬(¬a·¬b) = a + b, an OR.' },
+      whyNot: { text: 'Skipping it leaves y = ¬(a·b): all four rows wrong. Inverting a and b in front of the NAND instead computes ¬(¬a·¬b) = a + b, an OR.' },
       ask: {
         question: 'g1 = ¬(a·b). Which single NAND turns it into a·b?',
         options: ['NAND(g1, g1)', 'NAND(g1, a)', 'NAND(a, b) again', 'None: g1 is already a·b'],
@@ -87,7 +87,7 @@ const WALKS0: Record<string, WalkScript> = {
       text: 'g1 = ¬(a·b). The textbook form a·¬b + ¬a·b needs two inverters and costs 5 NANDs. g1 replaces both: a·¬(a·b) = a·(¬a + ¬b) = a·¬b, because a·¬a = 0.',
       parts: ['g1'], codex: ['identities', 'demorgan'],
       why: 'The XOR is 1 when exactly one input is 1. ¬(a·b) removes the a = b = 1 case at once, and the two later gates reuse it instead of inverting a and b.',
-      whyNot: { text: 'The textbook sum of products a·¬b + ¬a·b needs an inverter on each input first: 5 NANDs against 4, and a deeper path.' },
+      whyNot: { text: 'The textbook sum of products a·¬b + ¬a·b needs an inverter on each input first: 5 NANDs against 4, at the same depth 3.' },
     },
     {
       title: 'a and not b',
@@ -138,7 +138,7 @@ const WALKS0: Record<string, WalkScript> = {
       text: 'g2 = ¬(b·s): the product term s·b, inverted. It takes s directly and needs no inverter.',
       parts: ['g2'],
       why: 'The second product, s·b. s is already in the right polarity, so this gate takes it directly.',
-      whyNot: { text: 'Feeding this gate ¬s too would select b when s = 0 and make the mux a pass-through of a.' },
+      whyNot: { text: 'Feeding this gate ¬s too would give y = ¬s·(a + b): a OR b when s = 0, and 0 when s = 1.' },
     },
     {
       title: 'Combine',

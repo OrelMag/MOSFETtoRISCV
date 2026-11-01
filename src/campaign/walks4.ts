@@ -39,14 +39,14 @@ export const WALKS4: Record<string, WalkScript> = {
       text: 'Position i takes the group at i − 2. L1_2 and L1_3 now reach bit 0 (gray), twelve are black: 66 NANDs.',
       parts: ['L1_2', 'L1_3', 'L1_4', 'L1_5', 'L1_6', 'L1_7', 'L1_8', 'L1_9', 'L1_10', 'L1_11', 'L1_12', 'L1_13', 'L1_14', 'L1_15'],
       why: 'Groups of 2 now merge with the groups of 2 below them, at distance 2: spans double.',
-      whyNot: { text: 'Combining at distance 1 again adds nothing: the group at i − 1 is already inside i\'s span.' },
+      whyNot: { text: 'Combining at distance 1 again would grow spans by one (to 3) with overlapping groups, instead of doubling them to 4.' },
     },
     {
       title: 'Level 2: spans of 8',
       text: 'Distance 4: four gray cells (positions 4 to 7) and eight black ones, 52 NANDs.',
       parts: ['L2_4', 'L2_5', 'L2_6', 'L2_7', 'L2_8', 'L2_9', 'L2_10', 'L2_11', 'L2_12', 'L2_13', 'L2_14', 'L2_15'],
       why: 'The same step at distance 4. Each level needs the contiguous groups the level before it built.',
-      whyNot: { text: 'Jumping to distance 8 first would join groups of 2 and leave holes in the span.' },
+      whyNot: { text: 'Jumping to distance 8 would join spans of 4 and leave bits i − 4 … i − 7 uncovered.' },
     },
     {
       title: 'Level 3: every carry',

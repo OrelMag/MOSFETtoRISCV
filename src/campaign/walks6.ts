@@ -170,7 +170,7 @@ export const WALKS6: Record<string, WalkScript> = {
       title: 'Results per lane',
       text: 'pc + 1 and the immediate are the same for every lane: one shared mux. Per lane, ALU or memory, then that or the shared value: eight more muxes, the wb bits steering all of them. 9 × 49 = 441 NANDs.',
       parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u20', 'u21', 'u22', 'u23'], codex: ['datapath'],
-      why: 'Results are written back per lane, but pc + 1 and the immediate are common to all four. Sharing their mux saves eight copies.',
+      why: 'Results are written back per lane, but pc + 1 and the immediate are common to all four. Sharing their mux saves three copies (147 NANDs).',
       whyNot: { text: 'A full result mux tree per lane: three more 49-NAND muxes, because the pc + 1 / immediate choice would be repeated four times.' },
     },
     {
