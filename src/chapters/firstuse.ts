@@ -3,7 +3,7 @@
 // inside an element marked data-ahead="<codex id>", with a few words of its own. The `more` layers are opened on
 // request and left out. tests/first-use.test.ts holds the count at zero; the chapter page's hover cards use later().
 
-import { Glossary, proseRuns } from '../campaign/glossary';
+import { chapterSkip, Glossary, proseRuns } from '../campaign/glossary';
 import { TAUGHT, TAUGHT_OPTIONAL } from './taught';
 import { chapterNo, type Chapter } from './types';
 
@@ -58,7 +58,8 @@ export function earlyUses(chs: readonly Chapter[]): { early: EarlyUse[]; thin: E
   const early: EarlyUse[] = [], thin: EarlyUse[] = [];
   chs.forEach((c, at) => {
     for (const [where, html] of shownTexts(c)) {
-      const seen = new Set<string>();
+      // words the chapter uses in another sense (a loom's warp) are not the term
+      const seen = chapterSkip(c);
       for (const run of proseRuns(html)) {
         for (const m of gloss!.find(run.text)) {
           if (seen.has(m.id) || knows(chs, at, m.id)) continue;
