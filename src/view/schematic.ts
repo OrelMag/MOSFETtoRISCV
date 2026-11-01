@@ -18,6 +18,14 @@ import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, 
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 
+/** A note's marker on a part of the level shown. */
+export interface NotePin {
+  inst: string;
+  n: number;
+  title: string;
+  open(): void;
+}
+
 export interface SchematicEvents {
   open(child: string): void;
   select(child: string | null): void;
@@ -87,6 +95,8 @@ export class SchematicView {
   private wires: WireEls[] = [];
   private pins: PinEls[] = [];
   private insts = new Map<string, SVGGElement>();
+  /** The learner's notes pinned to parts of this level (ui/notes.ts): a numbered marker on each part, a click opens the note. */
+  private notePins: NotePin[] = [];
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
   private cam: Camera;
   private radixOverride = new Map<number, Radix>();
@@ -177,6 +187,27 @@ export class SchematicView {
     this.wires = [];
     this.pins = [];
     this.insts.clear();
+  }
+
+  /** Markers for the notes pinned to this level's parts (replaces the previous ones; a name not on this level is skipped). */
+  setNotePins(pins: NotePin[]): void {
+    this.notePins = pins;
+    for (const [name, g] of this.insts) this.paintNotePins(name, g);
+  }
+
+  private paintNotePins(name: string, g: SVGGElement): void {
+    g.querySelectorAll(':scope > .note-pin').forEach((e) => e.remove());
+    const mine = this.notePins.filter((p) => p.inst === name);
+    mine.forEach((p, k) => {
+      const m = s('g', { class: 'note-pin', transform: `translate(${-0.9 + k * 1.5},${-1.1})` });
+      m.append(s('title', {}, p.title), s('circle', { cx: 0.7, cy: 0.7, r: 0.75 }), s('text', { x: 0.7, y: 0.72 }, String(p.n)));
+      m.addEventListener('pointerdown', (e) => e.stopPropagation());
+      m.addEventListener('click', (e) => {
+        e.stopPropagation();
+        p.open();
+      });
+      g.append(m);
+    });
   }
 
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
@@ -359,6 +390,7 @@ export class SchematicView {
       this.insts.set(inst.name, g);
       instG.append(g);
       this.paintHeat(inst.name, g);
+      this.paintNotePins(inst.name, g);
     }
 
     // The component's own pins

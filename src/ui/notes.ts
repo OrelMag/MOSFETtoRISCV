@@ -175,9 +175,13 @@ export class NotesStore {
     return () => this.listeners.delete(f);
   }
 
-  /** Every living item, the most recently changed first. */
+  private live(): NoteItem[] {
+    return Object.values(this.st.items).filter((i) => !i.gone);
+  }
+
+  /** Every item worth listing (a note not typed yet is not), the most recently changed first. */
   list(): NoteItem[] {
-    return Object.values(this.st.items).filter((i) => !i.gone).sort((a, b) => b.edited - a.edited || (a.id < b.id ? -1 : 1));
+    return this.live().filter((i) => i.type === 'bookmark' || i.text.trim()).sort((a, b) => b.edited - a.edited || (a.id < b.id ? -1 : 1));
   }
 
   /** The count shown on the top bar: notes with text plus bookmarks. */
@@ -192,7 +196,7 @@ export class NotesStore {
 
   notesAt(p: Place): NoteItem[] {
     const k = placeKey(p);
-    return this.list().filter((i) => i.type === 'note' && placeKey(i.place) === k).sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+    return this.live().filter((i) => i.type === 'note' && placeKey(i.place) === k).sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
   }
 
   bookmarkOf(p: Place): NoteItem | undefined {

@@ -7,7 +7,7 @@
 
 /** The order actions leave the bar in, least used first; ids not listed (later plugins) go before these. */
 export const SHED_ORDER: readonly string[] = [
-  'help', 'type', 'screens', 'inspect', 'cpu', 'puzzles', 'challenges', 'play', 'tests', 'timing', 'probe', 'timingmenu', 'examples', 'package',
+  'bookmark', 'help', 'type', 'screens', 'inspect', 'cpu', 'puzzles', 'challenges', 'play', 'tests', 'timing', 'probe', 'timingmenu', 'examples', 'package',
   'zout', 'zin', 'iobar', 'fit', 'redo', 'undo', 'props', 'file',
 ];
 

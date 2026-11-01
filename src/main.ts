@@ -8,6 +8,7 @@ import './styles/m6502.css';
 import './styles/prologue.css';
 import './styles/cards.css';
 import './styles/doom.css';
+import './styles/notes.css';
 import { startApp } from './ui/app';
 
 startApp(document.getElementById('app')!);

@@ -28,6 +28,8 @@ import { CODEX } from '../src/campaign/codex';
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { emptyWorkspace } from '../src/editor/model';
 import { KEY as SANDBOX_KEY } from '../src/editor/store';
+import { NOTES_KEY } from '../src/ui/notes';
+import { REVIEW_KEY } from '../src/ui/review';
 
 // ---- options ---------------------------------------------------------------------------------
 
@@ -64,6 +66,27 @@ const SETTINGS_KEY = 'mosfet2riscv:v1';
 const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
 const light = themed('light');
 const unlocked = { ...light, [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) };
+
+/** A few notes and bookmarks, and a review history over chapters marked visited: the My notes page with something to show. */
+function notesStorage(theme: 'light' | 'dark'): Record<string, string> {
+  const c0 = chapters[0], c1 = chapters[1];
+  const at = 1_700_000_000_000;
+  const item = (id: string, o: object) => [id, { id, at, edited: at, title: '', text: '', ...o }];
+  const items = Object.fromEntries([
+    item('n:a', { type: 'note', place: { kind: 'step', chapter: c1.id, step: 0 }, text: 'The first note, on a step.', pin: { path: [], inst: 'nothere', inputs: { a: 1 }, cycle: 2 } }),
+    item('n:b', { type: 'note', place: { kind: 'step', chapter: c0.id, step: 1 }, text: 'A second note with a longer text. '.repeat(8) }),
+    item('bm:c', { type: 'bookmark', place: { kind: 'bench', id: 'rca4' }, title: 'Workbench · rca4' }),
+    item('bm:d', { type: 'bookmark', place: { kind: 'chip', id: 'gone' }, title: 'Sandbox · my_alu' }),
+  ]);
+  const review: Record<string, object> = {};
+  const quiz = c1.steps.findIndex((st) => st.challenge?.kind === 'quiz');
+  if (quiz >= 0) review[`${c1.id}:${quiz}`] = { n: 1, last: at, miss: true, missed: at, streak: 0, due: at };
+  return {
+    [SETTINGS_KEY]: JSON.stringify({ theme, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
+    [NOTES_KEY]: JSON.stringify({ schema: 1, items }),
+    [REVIEW_KEY]: JSON.stringify({ schema: 1, memos: review }),
+  };
+}
 
 function examplesWorkspace(): { json: string; ids: string[] } {
   let ws = emptyWorkspace();
@@ -105,9 +128,16 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // My notes: empty, then with notes, bookmarks and a review history, in both themes and on a phone
+  add('#/notes', light, ' (empty)');
+  add('#/notes', notesStorage('light'));
+  add('#/notes', notesStorage('dark'), ' (dark)');
+  add('#/', notesStorage('light'), ' (with notes)');
+  add(`#/c/${chapters[1].id}/0`, notesStorage('light'), ' (with a note)');
   // No horizontal overflow on one page of each kind, on a desktop and on a phone.
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
+    add('#/notes', notesStorage('light'), ` (${v.name})`, v);
   }
   // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
   const phone = VIEWPORTS.find((v) => v.mobile)!;

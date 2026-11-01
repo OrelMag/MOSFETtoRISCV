@@ -25,7 +25,7 @@ import type { LivePower } from './powerpanel';
 import { closePopover, editNumber } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
-import { SchematicView } from './schematic';
+import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
@@ -707,7 +707,41 @@ export class Stage {
     if (leafName) this.openLeaf(leafName);
     this.renderCrumbs();
     this.showInspector();
+    this.updateNoteMarks();
     if (notify) this.navListeners.forEach((f) => f(this.path));
+  }
+
+  /** The learner's notes pinned to parts of the level shown (ui/notes.ts); the page that owns the notes sets it. */
+  noteMarks: ((path: string[]) => NotePin[]) | null = null;
+
+  /** Draw the markers again (a note was added, moved or deleted, or the level changed). */
+  updateNoteMarks(): void {
+    this.view.setNotePins(this.noteMarks && !this.leaf ? this.noteMarks(this.path) : []);
+  }
+
+  /** The part selected on the level shown, if any. */
+  get selectedInst(): string | null {
+    return this.leaf ? null : this.selected;
+  }
+
+  /** The scene's input values and clock cycles so far: what a note pinned here remembers. */
+  get sceneState(): { inputs: Record<string, number>; cycle: number } {
+    const inputs: Record<string, number> = {};
+    for (const p of this.scene?.root.ports ?? []) if (p.dir === 'in' && this.sim) inputs[p.name] = this.getInput(p.name);
+    return { inputs, cycle: this.cycles };
+  }
+
+  /** Show a pinned note's place: open its level, put the inputs back, select its part. */
+  showPin(pin: { path: string[]; inst?: string; inputs?: Record<string, number> }): void {
+    this.openPath(pin.path);
+    const known = new Set((this.scene?.root.ports ?? []).filter((p) => p.dir === 'in').map((p) => p.name));
+    const inputs = Object.fromEntries(Object.entries(pin.inputs ?? {}).filter(([k]) => known.has(k)));
+    if (Object.keys(inputs).length) this.setInputs(inputs);
+    if (pin.inst && this.ctx?.node.children?.has(pin.inst)) {
+      this.view.select(pin.inst);
+      this.select(pin.inst);
+      this.view.focusInst(pin.inst);
+    }
   }
 
   get path(): string[] {

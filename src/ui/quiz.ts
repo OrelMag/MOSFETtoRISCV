@@ -24,22 +24,22 @@ export function shuffleOrder(n: number, seed: string): number[] {
 /**
  * A multiple-choice question: a wrong pick says why it is wrong (Quiz.why) and stays marked; the right one shows the
  * explanation and records `key` as solved. `onSolved` runs after a new solve (the head's counters).
- * The first pick of a showing (or Show answer before any) is logged for the review queue (ui/review.ts). `opts.fresh`:
+ * The first pick of a showing (or Show answer before any) is logged for the review queue (ui/review.ts). `qopts.fresh`:
  * a question asked again in the review: whatever was solved before is ignored and nothing is marked solved;
- * `opts.onAnswer` gets the verdict instead of the log.
+ * `qopts.onAnswer` gets the verdict instead of the log.
  */
 export interface QuizOpts {
   fresh?: boolean;
   onAnswer?(right: boolean): void;
 }
 
-export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void, opts: QuizOpts = {}): HTMLElement {
-  const wasSolved = !opts.fresh && settings.isSolved(key);
+export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void, qopts: QuizOpts = {}): HTMLElement {
+  const wasSolved = !qopts.fresh && settings.isSolved(key);
   let logged = wasSolved;
   const log = (right: boolean) => {
     if (logged) return;
     logged = true;
-    if (opts.onAnswer) opts.onAnswer(right);
+    if (qopts.onAnswer) qopts.onAnswer(right);
     else reviewLog().record(key, right);
   };
   const box = h('div', { class: 'challenge' });
@@ -76,7 +76,7 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
       log(true);
       right();
       intoView(explain);
-      if (opts.fresh || settings.isSolved(key)) return;
+      if (qopts.fresh || settings.isSolved(key)) return;
       settings.solve(key);
       markSolved();
       onSolved();

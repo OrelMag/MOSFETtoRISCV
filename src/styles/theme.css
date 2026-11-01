@@ -42,6 +42,12 @@
   --pcard-hole: #141824;
   --pcard-edge: #cdb98a;
   --warn-soft: #fff4e0;
+  /* a learner's note (ui/notes.ts): the yellow of a sticky note, and its marker on a part */
+  --note-bg: #fff7e0;
+  --note-line: #e6cf86;
+  --note-ink: #6b5310;
+  --note-mark: #f5c542;
+  --note-mark-ink: #3d2d00;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #d92d20;
   --bad-soft: #fdecea;
@@ -124,6 +130,11 @@
     --pcard-hole: #0a0c12;
     --pcard-edge: #a8976b;
     --warn-soft: #2d2210;
+  --note-bg: #2b2410;
+  --note-line: #6b5a1f;
+  --note-ink: #e8d38a;
+  --note-mark: #f5c542;
+  --note-mark-ink: #2b2000;
     /* an uncaught error (ui/errors.ts banner) */
     --bad: #f87171;
     --bad-soft: #2e1416;
@@ -186,6 +197,11 @@
   --pcard-hole: #0a0c12;
   --pcard-edge: #a8976b;
   --warn-soft: #2d2210;
+  --note-bg: #2b2410;
+  --note-line: #6b5a1f;
+  --note-ink: #e8d38a;
+  --note-mark: #f5c542;
+  --note-mark-ink: #2b2000;
   /* an uncaught error (ui/errors.ts banner) */
   --bad: #f87171;
   --bad-soft: #2e1416;

@@ -6,6 +6,7 @@ import { installErrorReporting, loadFailed } from './errors';
 import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
+import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, type Theme } from './settings';
 import { parseDrill } from './drillpath';
@@ -42,6 +43,18 @@ export function startApp(root: HTMLElement): void {
   });
   nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
     navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
+  // "My notes · n" shows once there is a note or a bookmark (ui/notes.ts)
+  const notesLink = navLink('#/notes', 'note', 'My notes', 'notes');
+  const syncNotes = () => {
+    const n = notes().count;
+    notesLink.hidden = !n;
+    notesLink.querySelector('span')!.textContent = `My notes · ${n}`;
+    notesLink.title = `${n} note${n === 1 ? '' : 's'} and bookmarks, and the review queue`;
+  };
+  notes().onChange(syncNotes);
+  window.addEventListener('storage', (e) => { if (e.key === NOTES_KEY) { notes().reload(); } });
+  syncNotes();
+  nav.append(notesLink);
   installQuickNav();
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
   // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
@@ -227,6 +240,13 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
+    } else if (key === 'notes') {
+      if ((page as { kind?: string } | null)?.kind === 'notes') return;
+      import('./pages/notes').then((m) => {
+        if (seq === routeSeq) mount(new m.NotesPage());
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed('My notes', e));
+      });
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
