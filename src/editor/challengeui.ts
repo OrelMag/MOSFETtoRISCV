@@ -433,8 +433,10 @@ class ChallengeUi {
         ? h('button', { class: 'sb-tp-prog pong', 'data-chal': 'pong', title: 'A new chip: Pong in a ROM, your core, a RAM, LEDs, eight switches and a 32 × 32 screen; the CPU panel checks every write against the golden model while you play', onclick: () => this.pong() },
           icon('play', 11), 'Play Pong on your core')
         : null,
-      tests.map(({ t, bad: b }) => h('button', { class: `sb-tp-prog${b ? ' bad' : ''}`, 'data-chal': 'program', title: `${b ? 'Fails' : 'Passes'}: open “${t.name}” on a bench around your core`, onclick: () => this.debug(t) },
-        icon(b ? 'close' : 'check', 11), t.name)));
+      tests.map(({ t, bad: b }) => h('button', { class: `sb-tp-prog${b ? ' bad' : ''}`, 'data-chal': 'program', title: `${b ? 'Fails' : 'Passes'}: ${t.what ? `${t.what}. ` : ''}Open “${t.name}” on a bench around your core`, onclick: () => this.debug(t) },
+        icon(b ? 'close' : 'check', 11), t.name)),
+      // what a failing program exercises, in words (CoreTest.what: its source's first comment)
+      tests.some(({ t, bad: b }) => b && t.what) ? h('ul', { class: 'sb-tp-what' }, tests.filter(({ t, bad: b }) => b && t.what).slice(0, 4).map(({ t }) => h('li', null, h('b', null, t.name), `: ${t.what}`))) : null);
   }
 
   private problems(r: CheckResult, ch: BuildChallenge): HTMLElement {

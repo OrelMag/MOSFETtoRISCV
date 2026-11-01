@@ -541,3 +541,7 @@
 .sb-wchooser-row > button.on { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
 .sb-wchooser input { width: 64px; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 12px var(--font-mono); }
 .sb-wchooser small { color: var(--muted); }
+
+/* a core level: what each failing program exercises (CoreTest.what) */
+.sb-tp-what { margin: 4px 0 0; padding-left: 1.1em; font-size: 12px; color: var(--muted); flex-basis: 100%; }
+.sb-tp-what b { color: var(--text, inherit); font-weight: 600; }
