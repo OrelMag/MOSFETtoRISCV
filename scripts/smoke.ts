@@ -435,6 +435,12 @@ class Tab {
       if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}`);
       await sleep(50);
     }
+    // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
+    const built = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.stage[aria-busy]')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
+    ]);
     const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
     await Promise.race([
       this.send('Runtime.evaluate', { expression: idle, awaitPromise: true }),

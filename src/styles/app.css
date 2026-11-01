@@ -2235,3 +2235,6 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .layer-body table.mini { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 4px 0; }
 .layer-body table.mini th, .layer-body table.mini td { padding: 2px 10px 2px 0; text-align: left; border-bottom: 1px solid var(--border); }
 .layer-body table.mini th { color: var(--muted); font-weight: 600; }
+
+/* A stage still building its scene (Stage.load): its bar and run row have nothing to act on yet. */
+.stage[aria-busy] .stage-bar > :not(.crumbs), .stage[aria-busy] .controls { visibility: hidden; }
