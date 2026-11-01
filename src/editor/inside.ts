@@ -100,6 +100,7 @@ class InsideView {
       select: () => {},
       toggleInput: () => {},
       editInput: () => {},
+      layoutChanged: () => this.decorate(),
     });
     this.view.radix = ed.view.radix;
     ed.paintHooks.add(this.hook);
@@ -138,15 +139,23 @@ class InsideView {
     // A library part's wires move as on the stage (the same layout, by component id); a user chip's are drawn in its own tab.
     this.view.arrange = ctx.def.id.startsWith('u_') ? false : 'wires';
     this.view.show(ctx, false, keepView);
-    const io = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
-    const faces = this.decorateFaces(ctx);
-    this.ioPaint = io || faces ? () => { io?.(); faces?.(); } : null;
+    this.decorate();
     // The panel may still be settling into its size on the first frame.
     if (!keepView) requestAnimationFrame(() => this.view.fit());
     if (leaf) this.openLeaf(leaf);
     this.renderCrumbs();
     this.tick();
     if (!this.el.contains(document.activeElement)) this.el.focus({ preventScroll: true });
+  }
+
+  /** The live faces drawn into the schematic: again after every redraw (a wire moved). */
+  private decorate(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const io = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
+    const faces = this.decorateFaces(ctx);
+    this.ioPaint = io || faces ? () => { io?.(); faces?.(); } : null;
+    this.ioPaint?.();
   }
 
   /** The displays placed user chips show on their boxes (face.ts), live from below their nodes. */
