@@ -179,6 +179,37 @@ function compute(def: ComponentDef, path: readonly string[]): Ablation | string 
   return { rows, outputs: plan.outs.map((o) => o.name), parts };
 }
 
+/**
+ * Several children of the top level removed together (outputs left open): per output, the rows it gets wrong against
+ * the intact circuit. A string says why it cannot be done.
+ */
+export function ablateSet(def: ComponentDef, insts: readonly string[]): Record<string, number> | string {
+  const plan = planOf(def);
+  if (typeof plan === 'string') return plan;
+  const kids = plan.design.root.children;
+  const forced = new Set<number>();
+  for (const name of insts) {
+    const c = kids?.get(name);
+    if (c && c.def.prim !== 'alias') for (const p of outPorts(c.def)) for (const n of c.ports[p.name]) forced.add(n);
+  }
+  const rows = 2 ** plan.inNets.length, words = Math.ceil(rows / 32), live = rows >= 32 ? -1 : (1 << rows) - 1;
+  const good = run(plan, null, 'open'), bad = run(plan, forced, 'open');
+  const out: Record<string, number> = {};
+  plan.outs.forEach((o, k) => {
+    let count = 0;
+    for (let w = 0; w < words; w++) {
+      let diff = 0;
+      for (let b = 0; b < o.nets.length; b++) {
+        const i = b * words + w;
+        diff |= (good.one[k][i] & ~bad.one[k][i]) | (good.zero[k][i] & ~bad.zero[k][i]);
+      }
+      count += popcount(diff & (w === words - 1 ? live : -1));
+    }
+    out[o.name] = count;
+  });
+  return out;
+}
+
 function popcount(x: number): number {
   x -= (x >>> 1) & 0x55555555;
   x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);

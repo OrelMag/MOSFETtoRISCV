@@ -631,6 +631,23 @@ export class SchematicView {
    * Highlight instances. With `focus`, everything else fades, and so does every wire that does
    * not join two highlighted parts (or a highlighted part and a pin): the data path stands out.
    */
+  /** Draw these instances as removed (a tour's "before": dashed, faded); [] restores them. */
+  ghost(names: string[]): void {
+    const on = new Set(names);
+    for (const [name, g] of this.insts) g.classList.toggle('ghost', on.has(name));
+  }
+
+  /** The screen rectangle around these instances (null: none drawn). */
+  instRect(names: string[]): DOMRect | null {
+    let r: DOMRect | null = null;
+    for (const n of names) {
+      const b = this.insts.get(n)?.getBoundingClientRect();
+      if (!b || !b.width) continue;
+      r = r ? new DOMRect(Math.min(r.left, b.left), Math.min(r.top, b.top), Math.max(r.right, b.right) - Math.min(r.left, b.left), Math.max(r.bottom, b.bottom) - Math.min(r.top, b.top)) : b;
+    }
+    return r;
+  }
+
   highlight(names: string[], focus = false): void {
     this.lastHl = { names, focus };
     const on = new Set(names);

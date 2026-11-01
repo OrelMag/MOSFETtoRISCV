@@ -33,10 +33,71 @@ export interface StepAction {
   run: (stage: Stage) => void;
 }
 
+/**
+ * One beat of a tour: what the stage does, then what the caption says. Beats run in order from the scene's opening
+ * state; Back undoes a beat on the stage (its checkpoints). Names are the scene's (instances of the level at `at`).
+ */
+export interface Beat {
+  /** The caption (HTML): {v:port} is a root port's value in decimal, {b:port} in binary at its width. */
+  say: string;
+  /** A short heading for the beat (shown above the caption). */
+  title?: string;
+  /** First beat only: put the scene back to power-on (Reset), so cycle counts start from the first instruction. */
+  reset?: boolean;
+  /** Root inputs to set first (one change: Back undoes them together). */
+  set?: Record<string, number>;
+  /** After setting: clock cycles to run (the scene's clock). */
+  cycles?: number;
+  /** Open this drill path first (from the scene's root; [] the top). Omitted: stay where the last beat was. */
+  at?: string[];
+  /** Instances of the open level to light (the rest fade), and frame. */
+  show?: string[];
+  /** Instances drawn as if removed: dashed, faded (a derivation's "before"). */
+  ghost?: string[];
+  /** Root port values the beat must leave (checked by tests/tours.test.ts). */
+  expect?: Record<string, number>;
+}
+
+export interface Tour {
+  /** The button's label (default "Walk me through it"). */
+  label?: string;
+  beats: Beat[];
+}
+
+/** A live worked sum beside the prose (ui/ledger.ts): the step's arithmetic in its own notation, from the scene's ports. */
+export type Ledger =
+  | {
+      kind: 'add';
+      a: string;
+      b: string;
+      sum: string;
+      width: number;
+      cin?: string;
+      cout?: string;
+      /** a − b: b is inverted and the carry-in is 1 while this port is 1. */
+      sub?: string;
+      /** Instances computing column i (lit while the column is hovered). */
+      col?: (i: number) => string[];
+    };
+
+/** Layers under a step's body, each opened on request: the reasoning worked out, real chips, the usual mistake, numbers. */
+export interface Layers {
+  derive?: string;
+  real?: string;
+  pitfall?: string;
+  numbers?: string;
+}
+
 export interface Step {
   title: string;
-  /** HTML. Keep it short; the circuit does the explaining. */
+  /** HTML: the explanation itself, as long as the idea needs (what, why, what it costs); depth beyond that in `more`. */
   body: string;
+  /** "Walk me through it": the step's mechanism played on the live circuit, beat by beat. */
+  tour?: Tour;
+  /** A live worked sum next to the prose. */
+  ledger?: Ledger;
+  /** Derivation / In real silicon / Common mistake / Numbers, under the body. */
+  more?: Layers;
   scene?: () => Scene;
   widget?: () => Widget;
   challenge?: Challenge;
