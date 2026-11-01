@@ -1176,6 +1176,14 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
   assembly, Examples ▸ 6502 computer, the CPU panel following it
 - ⏳ Undocumented opcodes in the ISS
 
+### Notes, bookmarks and a review queue (2026-11-01) ✅
+
+- ✅ Save (bookmark) and Add note in every chapter step's header; a note may be pinned to the selected part (path, part, inputs, cycle) and
+  shows as a numbered marker on it; bookmarks also on workbench components and sandbox chips (ui/notes.ts, notesui.ts)
+- ✅ `#/notes` (My notes): filters, search, each item back to its place; the review queue beside it: wrong answers first, then
+  "Ask again soon", then the longest unseen, from chapters visited; right answers return after 2 / 7 / 21 days (ui/review.ts)
+- ⏳ Registered in the "Export all progress" backup (union by id, newest edit wins: `mergeNotes`, `mergeReview`) once that module is on main
+
 ---
 
 ## Open questions for the author
