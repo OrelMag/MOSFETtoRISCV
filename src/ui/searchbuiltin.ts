@@ -162,6 +162,7 @@ registerActions((ctx) => {
       () => settings.set('radix', RADIXES[(RADIXES.indexOf(settings.radix as typeof RADIXES[number]) + 1) % 3]))));
   }
   if (stage) {
+    out.push(here(act('copylink', 'Copy link to this view', 'chapter step, opened part, inputs, probes and clock cycles', () => { void import('./viewlink').then(async (m) => { const l = m.currentViewLink(); if (l) await m.copyText(l); }); })));
     out.push(here(act('slow', 'Slow motion', `one gate delay at a time (${onOff(settings.animate)})`, toggle('animate'))));
     out.push(act('wide', 'Hide the side panes', `the circuit full width (${onOff(settings.wide)})`, toggle('wide')));
   }

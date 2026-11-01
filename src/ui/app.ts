@@ -9,6 +9,7 @@ import { WorkbenchPage } from './pages/workbench';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
 import { parseDrill } from './drillpath';
+import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
 
 /**
@@ -203,7 +204,12 @@ export function startApp(root: HTMLElement): void {
   let routeSeq = 0;
   const route = () => {
     const seq = ++routeSeq;
-    const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    // A chapter's or the workbench's address may end in a view suffix (?i=…&p=…&n=…, viewlink.ts): taken off here and handed to the
+    // stage that builds the scene, so the rest of the routing sees the plain address it always did.
+    const { route: base, query } = splitView(location.hash);
+    const onStage = /^#\/?(c|workbench)\//.test(base);
+    setPendingView(onStage ? decodeView(query) : null);
+    const parts = (onStage ? base : location.hash).replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
     const shows = stageTools(parts);
@@ -216,6 +222,7 @@ export function startApp(root: HTMLElement): void {
       const path = parseDrill(parts.slice(3));
       if (page instanceof ChapterPage && page.chapter === ch) {
         page.route(step, path);
+        applyPendingView();
         return;
       }
       mount(new ChapterPage(ch, step, path));
@@ -247,6 +254,7 @@ export function startApp(root: HTMLElement): void {
       const path = parseDrill(parts.slice(2));
       if (page instanceof WorkbenchPage) {
         page.route(parts[1] ?? 'rca4', path);
+        applyPendingView();
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
