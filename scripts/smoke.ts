@@ -84,7 +84,7 @@ function notesStorage(theme: 'light' | 'dark'): Record<string, string> {
   const quiz = c1.steps.findIndex((st) => st.challenge?.kind === 'quiz');
   if (quiz >= 0) review[`${c1.id}:${quiz}`] = { n: 1, last: at, miss: true, missed: at, streak: 0, due: at };
   return {
-    [SETTINGS_KEY]: JSON.stringify({ theme, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
+    [SETTINGS_KEY]: JSON.stringify({ theme, coachDone: { stage: true, sandbox: true }, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
     [NOTES_KEY]: JSON.stringify({ schema: 1, items }),
     [REVIEW_KEY]: JSON.stringify({ schema: 1, memos: review }),
   };
