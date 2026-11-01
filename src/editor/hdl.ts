@@ -1,11 +1,12 @@
 // Verilog chips (DOM-free): a group of chips drawn from one Verilog source, one per module. The top module's chip
 // holds the text; synthesizing it (Yosys in the page, hdl/yosys.ts) rebuilds every chip of the group in place
 // (ids kept by module name, so parents keep their wires), adds chips for new modules and lets go of vanished ones.
-// The bodies are generated: Editor.edit refuses to change them (isGenerated), Detach turns them into drawn chips.
+// The bodies are generated: Editor.edit refuses to change them but for the wires' shapes (isGenerated, bodyKey),
+// Detach turns them into drawn chips.
 
 import { type GateSet, synthesize } from '../hdl/yosys';
 import { type HdlDiag, importYosysJson, type ImportedModule } from '../hdl/yosysjson';
-import { type ChipDoc, emptyChip, type HdlDoc, slug, uniqueName, type Workspace } from './model';
+import { type ChipDoc, emptyChip, type EndRef, type HdlDoc, slug, uniqueName, type Workspace } from './model';
 import { openChip } from './session';
 import { usedBy } from './library';
 
@@ -44,9 +45,14 @@ export function hdlGroup(ws: Workspace, homeId: string): ChipDoc[] {
 /** Is the chip's body generated, from Verilog or a truth table (ttable.ts), so the canvas must not edit it? */
 export const isGenerated = (ws: Workspace, id: string): boolean => !!hdlHome(ws, id) || !!ws.chips[id]?.table || !!ws.chips[id]?.fsm;
 
-/** The part of a chip a synthesis owns: changing it by hand is refused. */
+/**
+ * The part of a chip a synthesis owns: changing it by hand is refused. A wire's shape is left out (its corners, and
+ * where a branch meets another wire): moving wires connects nothing new, and the next synthesis draws them afresh.
+ */
 export function bodyKey(doc: ChipDoc): string {
-  return JSON.stringify([doc.pins.map(({ value: _v, ...p }) => p), doc.parts, doc.wires, doc.labels]);
+  const end = (e: EndRef) => ('wire' in e ? { wire: e.wire } : e);
+  const wires = doc.wires.map(({ pts: _p, straight: _s, a, b, ...w }) => ({ ...w, a: end(a), b: end(b) }));
+  return JSON.stringify([doc.pins.map(({ value: _v, ...p }) => p), doc.parts, wires, doc.labels]);
 }
 
 /** A new Verilog chip (not yet synthesized), opened. */

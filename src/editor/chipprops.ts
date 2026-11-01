@@ -132,7 +132,7 @@ registerPropsSection({
     const look = canLookInside(ed, id);
     return h('section', { class: 'sb-sec-props' }, h('h3', null, 'Look inside'),
       h('p', { class: 'sb-sum' }, look
-        ? `Opens its schematic read-only with live values from this circuit; keep opening parts down to transistors.${'chip' in part.ref ? '' : ' (Double-click does the same.)'}`
+        ? `Opens its schematic with live values from this circuit (a library part's wires can be moved, as on the stage); keep opening parts down to transistors.${'chip' in part.ref ? '' : ' (Double-click does the same.)'}`
         : 'A primitive of the simulator: it has no inside to show.'),
       h('div', { class: 'sb-btns' },
         look ? btn('Look inside', 'Its inside, live', () => lookInside(ed, [id]), 'layers') : null,

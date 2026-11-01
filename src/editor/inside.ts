@@ -1,4 +1,4 @@
-// Look inside: any placed part (a library part or a user chip) opens read-only over the canvas,
+// Look inside: any placed part (a library part or a user chip) opens over the canvas (read-only but for a library part's wires, view/layout.ts),
 // on the editor's own running simulation. The root ViewCtx wraps EditorSim's simulator and its
 // flattened root, so a part expanded by the flatten shows the very nets the editor simulates,
 // and a primitive (a NAND at gate level) opens onto a lock-step sub-simulation of its inside
@@ -83,6 +83,12 @@ class InsideView {
       this.canvas);
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      // the wires moved here (view/layout.ts), not the chip's own undo
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
+        if (this.view.undo(k === 'y' || e.shiftKey)) e.preventDefault();
+        return;
+      }
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         this.up();
@@ -129,6 +135,8 @@ class InsideView {
     }
     if (ctx === this.root && !leaf) return this.close();
     this.ctx = ctx;
+    // A library part's wires move as on the stage (the same layout, by component id); a user chip's are drawn in its own tab.
+    this.view.arrange = ctx.def.id.startsWith('u_') ? false : 'wires';
     this.view.show(ctx, false, keepView);
     const io = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
     const faces = this.decorateFaces(ctx);

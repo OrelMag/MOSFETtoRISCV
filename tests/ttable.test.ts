@@ -3,7 +3,7 @@ import '../src/lib';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace, type TableDoc, type Workspace } from '../src/editor/model';
 import { sanitizeChip } from '../src/editor/store';
-import { isGenerated } from '../src/editor/hdl';
+import { bodyKey, isGenerated } from '../src/editor/hdl';
 import {
   addInput, addOutput, detachTable, equation, newTableChip, pasteRows, removeInput, removeOutput, setTable, tableBuild, tableCost, tableDef, tableLogic, tableMatches,
 } from '../src/editor/ttable';
@@ -103,6 +103,18 @@ describe('truth-table chips (editor/ttable.ts)', () => {
     const d = detachTable(w2, id);
     expect(isGenerated(d, id)).toBe(false);
     expect(d.chips[id].parts).toEqual(w2.chips[id].parts);
+  });
+
+  it('its wires can be reshaped, not rewired (bodyKey)', () => {
+    const { ws, id } = newTableChip(emptyWorkspace());
+    const doc = ws.chips[id];
+    const w = doc.wires[0], key = bodyKey(doc);
+    const withWire = (x: typeof w) => ({ ...doc, wires: doc.wires.map((v) => (v.id === w.id ? x : v)) });
+    expect(bodyKey(withWire({ ...w, pts: [...w.pts, [w.pts[0]?.[0] ?? 0, -40]] }))).toBe(key);
+    expect(bodyKey(withWire({ ...w, straight: true }))).toBe(key);
+    const other = doc.wires.find((v) => v.id !== w.id)!;
+    expect(bodyKey(withWire({ ...w, b: { wire: other.id, at: [1, 2] } }))).not.toBe(key);
+    expect(bodyKey({ ...doc, wires: doc.wires.filter((v) => v.id !== w.id) })).not.toBe(key);
   });
 
   it('constant outputs and every input count from 1 to 8', () => {
