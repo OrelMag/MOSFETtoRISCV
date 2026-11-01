@@ -1,0 +1,30 @@
+{
+  "tests": 32,
+  "benches": 4,
+  "instructions": 12391,
+  "iShare": 0.37,
+  "bookCpi": 3.918,
+  "solvedCpi": 3.548,
+  "bookCycles": {
+    "LOAD": 5,
+    "STORE": 4,
+    "R": 4,
+    "I": 4,
+    "JAL": 4,
+    "BRANCH": 3,
+    "JALR": 5,
+    "LUI": 3,
+    "AUIPC": 3
+  },
+  "solvedCycles": {
+    "LOAD": 5,
+    "STORE": 4,
+    "R": 4,
+    "I": 3,
+    "JAL": 4,
+    "BRANCH": 3,
+    "JALR": 5,
+    "LUI": 3,
+    "AUIPC": 3
+  }
+}

@@ -7,8 +7,9 @@ import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
 import type { Sim } from '../sim/sim';
 import { analyzeTiming } from '../sim/timing';
-import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, dualPipeCpu, microword, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
+import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, type Microprogram, dualPipeCpu, microword, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu } from '../lib';
 import { fsmView } from './fsmpanel';
+import { isBook } from '../lib/ucode';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/cosim';
 import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
@@ -64,6 +65,9 @@ export interface CpuSceneOptions {
   icache?: boolean;
   /** The multicycle CPU with a hardwired or microprogrammed controller (adds the controller panel). */
   multicycle?: 'fsm' | 'micro';
+  /** With multicycle 'micro': an edited microprogram (lib/ucode.ts), and the controller panel's "Microcode…" button. */
+  microcode?: Microprogram;
+  onMicrocode?: (stage: Stage) => void;
   /** Single-cycle CPU with the FPU and f registers (chapter 24). */
   fpu?: boolean;
   /** Show the program editor. */
@@ -95,7 +99,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
     ...(opts.ooo ? { engine: 'cycle' as const } : {}),
     root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
       : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
-      : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder })
+      : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
@@ -103,7 +107,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
-      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true)] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
+      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true, { program: opts.microcode, onEdit: opts.onMicrocode })] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
   };
 }
 
@@ -669,30 +673,34 @@ const controllerView = { full: 'diagram', compact: 'table' };
  * The controller as a state diagram (lib/fsm.ts MC_FSM_SPEC, live) or as its state table, the current state
  * highlighted (and, for microcode, the microwords).
  */
-export function controllerPanel(control: 'fsm' | 'micro', compact = false): ScenePanel {
+export function controllerPanel(control: 'fsm' | 'micro', compact = false, edited?: { program?: Microprogram; onEdit?: (stage: Stage) => void }): ScenePanel {
   return (stage: Stage): Widget => {
+    // an edited microprogram has no state diagram (MC_FSM_SPEC is the book's): its words are listed
+    const prog = edited?.program && !isBook(edited.program) ? edited.program : undefined;
+    const states = prog?.states ?? MC_STATES;
     const body = h('div', { class: 'mc-table' });
     const key = compact ? 'compact' : 'full';
     // Inside a CPU the controller is instance ctrl; on its own it is the scene, whose AND gates an arc can light.
     const diagram = fsmView(stage, MC_FSM_SPEC, compact ? { inputs: { op: 'ctrl.op' } } : { parts: control === 'fsm' });
     const seg = h('span', { class: 'seg mc-seg', onclick: (e: Event) => e.stopPropagation() });
-    const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), seg, compact ? null : h('span', { class: 'fold-hint' }));
+    const editBtn = edited?.onEdit ? h('button', { class: 'btn sm', title: 'Paint the microcode: the words of the ROM, checked against the golden model', onclick: (e: Event) => { e.stopPropagation(); edited.onEdit!(stage); } }, prog ? 'Microcode (edited)…' : 'Microcode…') : null;
+    const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), prog ? null : seg, editBtn, compact ? null : h('span', { class: 'fold-hint' }));
     const legend = h('div', { class: 'fsm-legend' }, h('span', null, h('i', { class: 'cur' }), 'current'), h('span', null, h('i', { class: 'last' }), 'last edge'),
       h('span', null, h('i', { class: 'next' }), 'next edge (by op)'), h('span', null, h('b', { class: 'fsm-badge-k' }, '2'), 'cycle of this instruction'));
     const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body, diagram.el, legend);
     title.addEventListener('click', () => el.classList.toggle('collapsed'));
     const show = (v: string) => {
-      controllerView[key] = v;
+      if (!prog) controllerView[key] = v;
       el.classList.toggle('diagram', v === 'diagram');
       body.hidden = v === 'diagram';
       diagram.el.hidden = legend.hidden = v !== 'diagram';
       seg.replaceChildren(...['diagram', 'table'].map((x) => h('button', { class: x === v ? 'on' : '', onclick: () => show(x) }, x === 'diagram' ? 'Diagram' : 'Table')));
       stage.layoutDock();
     };
-    show(controllerView[key]);
+    show(prog ? 'table' : controllerView[key]);
     const ctrlBits = MC_FIELDS.reduce((a, [, n]) => a + n, 0);
-    const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? MC_STATES[n].name : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
-    const rows = MC_STATES.map((st, i) => {
+    const nextText = (n: (typeof MC_STATES)[number]['next']) => (typeof n === 'number' ? states[n]?.name ?? '?' : n === 'decode' ? (compact ? 'by opcode' : 'dispatch (opcode)') : (compact ? 'ld / st' : 'dispatch (load / store)'));
+    const rows = states.map((st, i) => {
       const w = microword(st);
       return h('div', { class: 'mc-row', 'data-i': String(i) },
         h('span', { class: 'mc-i' }, String(i)),
