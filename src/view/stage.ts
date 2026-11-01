@@ -403,6 +403,7 @@ export class Stage {
     this.el.tabIndex = 0;
     this.el.setAttribute('aria-label', 'Circuit');
     this.el.addEventListener('keydown', (e) => {
+      if (this.pending) return;
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
@@ -545,6 +546,7 @@ export class Stage {
     const size = st.nands + st.transistors / 4;
     if (size < BUSY_GATES) {
       this.pending = null;
+      this.setBuilding(false);
       this.busy(null);
       this.build(scene, at);
       return;
@@ -564,10 +566,23 @@ export class Stage {
     const showTimer = window.setTimeout(() => {
       if (this.card === card) this.canvas.append(card.el);
     }, LOAD_CARD_MS);
-    void this.buildSliced(scene, at, seq, plan, card).finally(() => {
+    // The bar and the run controls still belong to the scene being replaced (or to none): nothing to press until it is up.
+    this.setBuilding(true);
+    this.buildSliced(scene, at, seq, plan, card).catch((err) => {
+      // as the synchronous build's: an uncaught error (the page's handlers report it), not a silently empty stage
+      this.pending = null;
+      setTimeout(() => { throw err; });
+    }).finally(() => {
       clearTimeout(showTimer);
       if (this.card === card) this.busy(null);
+      if (seq === this.loadSeq) this.setBuilding(false);
     });
+  }
+
+  private setBuilding(on: boolean): void {
+    this.bar.inert = on;
+    this.controls.inert = on;
+    this.el.toggleAttribute('aria-busy', on);
   }
 
   /** The load card over the canvas (null removes it). */
@@ -588,7 +603,7 @@ export class Stage {
     await slice();
     if (!alive()) return;
     const level = this.beginBuild(scene);
-    const design = await flattenAsync(scene.root, { mode: level, ...this.flattenOptions() }, (p) => plan.report(p.done, p.total), slice);
+    const design = await flattenAsync(scene.root, { mode: level, ...this.flattenOptions() }, (p) => plan.report(p.done, p.total, p.linking), slice);
     if (!alive()) return;
     plan.enter('engine');
     await slice();

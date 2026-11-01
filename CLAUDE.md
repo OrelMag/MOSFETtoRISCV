@@ -100,7 +100,7 @@ src/sim/       simulation core (no DOM)
                  powerOn hints may be dotted paths into children ('w3.ff0.ff.slave.sr.q'); one array per net, shared by the ports
                  on it and the leaves reading it (never mutate one), HierNode.path computed from the parents (memory: ch 34's
                  413 501 leaves); flattenSteps / flattenAsync(def, opts, onProgress, pause): the same walk as generators down to
-                 depth 7 that hand control back every ~50 ms (flatten() drains it: identical results, tests/loadflatten.test.ts),
+                 depth 7 that hand control back every ~24 ms (flatten() drains it: identical results, tests/loadflatten.test.ts),
                  estimateInstances(def): the instance count from the distinct definitions, for a progress bar
   loadplan.ts    LoadPlan: the phases of building a big scene (LOAD_PHASES: hierarchy, flatten, engine, draw), their times, the
                  running one's count, the bar's fraction (by weight) and the time left; tasks.ts nextTask(): a message-channel

@@ -551,7 +551,7 @@
 }
 .sb-minimap[hidden] { display: none; }
 .sb-minimap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.sb-minimap svg { display: block; }
+.sb-minimap svg { display: block; width: 100%; height: 100%; }
 .mm-part { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 0.8; }
 .mm-part.hued { fill: hsl(var(--h) var(--mm-s, 60%) var(--mm-l, 80%)); stroke: hsl(var(--h) 40% 55%); }
 .mm-wires { fill: none; stroke: var(--muted); stroke-width: 0.8; opacity: 0.4; stroke-linejoin: round; }

@@ -133,6 +133,8 @@ export function hintBits(node: HierNode, name: string): number[] | null | undefi
 export interface FlattenProgress {
   done: number;
   total: number;
+  /** The walk is done; the nets are being numbered and every reference rewritten. */
+  linking?: boolean;
 }
 
 /** Hierarchy depth down to which flattenSteps is made of generators (it can pause there); deeper subtrees run in one go. */
@@ -340,7 +342,7 @@ export function* flattenSteps(rootDef: ComponentDef, opts: FlattenOptions = {}, 
     for (const c of n.children.values()) {
       if (depth + 1 < PAUSE_DEPTH) yield* walkG(c, depth + 1);
       else walk(c);
-      if (due()) yield { done: visited, total: Math.max(total, visited) };
+      if (due()) yield { done: visited, total: Math.max(total, visited), linking: true };
     }
   }
   yield* walkG(root, 0);
@@ -349,7 +351,7 @@ export function* flattenSteps(rootDef: ComponentDef, opts: FlattenOptions = {}, 
     l.inputs.forEach(remap);
     l.outputs.forEach(remap);
     if (l.terminals) remap(l.terminals);
-    if ((i & 2047) === 2047 && due()) yield { done: visited, total: Math.max(total, visited) };
+    if ((i & 2047) === 2047 && due()) yield { done: visited, total: Math.max(total, visited), linking: true };
   }
   const powerOn = new Map<number, 0 | 1>();
   for (const [raw, v] of hints) powerOn.set(id(raw), v);
@@ -378,7 +380,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
  * progress card can move. The result is the design flatten gives.
  */
 export async function flattenAsync(
-  rootDef: ComponentDef, opts: FlattenOptions, onProgress: (p: FlattenProgress) => void, pause: () => Promise<void>, sliceMs = 50,
+  rootDef: ComponentDef, opts: FlattenOptions, onProgress: (p: FlattenProgress) => void, pause: () => Promise<void>, sliceMs = 24,
 ): Promise<FlatDesign> {
   const g = flattenSteps(rootDef, opts, sliceMs);
   for (;;) {

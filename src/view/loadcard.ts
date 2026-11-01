@@ -10,13 +10,17 @@ export class LoadCard {
   private fill: HTMLElement;
   private list: HTMLElement;
   private eta: HTMLElement;
+  /** Announced to a screen reader: the running phase's name, once per phase (the bar carries the rest). */
+  private live: HTMLElement;
+  private liveFor = '';
 
   constructor(private plan: LoadPlan, title: string, private about: string) {
     this.fill = h('div', { class: 'load-fill' });
     this.bar = h('div', { class: 'load-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0', 'aria-label': 'Building the circuit' }, this.fill);
     this.list = h('ol', { class: 'load-phases' });
     this.eta = h('p', { class: 'load-note' });
-    this.el = h('div', { class: 'stage-busy', role: 'status', 'aria-live': 'polite' },
+    this.live = h('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
+    this.el = h('div', { class: 'stage-busy' }, this.live,
       h('section', { class: 'load-card', 'aria-label': 'Loading the circuit' }, h('h2', null, title), this.bar, this.list, this.eta));
     this.paint();
   }
@@ -35,12 +39,17 @@ export class LoadCard {
       const mark = li.children[0] as HTMLElement, what = li.children[1] as HTMLElement, ms = li.children[2] as HTMLElement;
       const m = r.state === 'done' ? '✓' : r.state === 'active' ? '●' : '○';
       if (mark.textContent !== m) mark.textContent = m;
-      const count = r.state === 'active' && r.done !== undefined && r.total && r.unit ? `: ${fmtCount(r.done)} of about ${fmtCount(r.total)} ${r.unit}` : '';
+      const count = r.state === 'active' && r.note ? `: ${r.note}` : r.state === 'active' && r.done !== undefined && r.total && r.unit ? `: ${fmtCount(r.done)} of about ${fmtCount(r.total)} ${r.unit}` : '';
       const text = `${r.label}${count}`;
       if (what.textContent !== text) what.textContent = text;
       const t = r.ms !== undefined ? fmtSeconds(r.ms) : '';
       if (ms.textContent !== t) ms.textContent = t;
     });
+    const now = rows.find((r) => r.state === 'active')?.label ?? '';
+    if (now !== this.liveFor) {
+      this.liveFor = now;
+      this.live.textContent = now ? `Building the circuit: ${now}` : '';
+    }
     const left = this.plan.etaMs();
     this.eta.textContent = `${left !== null && left > 1500 ? `About ${Math.round(left / 1000)} s left. ` : ''}${this.about}`;
   }

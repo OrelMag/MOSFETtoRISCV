@@ -30,6 +30,9 @@ class Minimap {
   private layout: MapLayout | null = null;
   private seen: unknown[] = [];
   private raf = 0;
+  /** What the last update drew for: the view box and canvas size, to skip an update a simulation frame asks for. */
+  private lastView = '';
+  private sized = true;
   private dragOff: [number, number] | null = null;
   private off: (() => void)[] = [];
 
@@ -37,7 +40,7 @@ class Minimap {
     this.gParts = s('g', { class: 'mm-parts' });
     this.wires = s('path', { class: 'mm-wires', d: '' });
     this.frame = s('rect', { class: 'mm-frame', rx: 3 });
-    this.svg = s('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true' }, this.wires, this.gParts, this.frame);
+    this.svg = s('svg', { class: 'mm-svg', preserveAspectRatio: 'none', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true' }, this.wires, this.gParts, this.frame);
     this.el = h('section', {
       class: 'sb-minimap', hidden: true, tabindex: '0', role: 'group', 'aria-keyshortcuts': 'M',
       'aria-label': 'Minimap of the whole chip. Arrow keys pan the view, M hides it',
@@ -62,7 +65,7 @@ class Minimap {
     };
     document.addEventListener('keydown', key);
     this.off.push(() => document.removeEventListener('keydown', key));
-    const ro = new ResizeObserver(paint);
+    const ro = new ResizeObserver(() => { this.sized = true; paint(); });
     ro.observe(ed.view.svg);
     this.off.push(() => ro.disconnect());
     this.schedule();
@@ -93,20 +96,27 @@ class Minimap {
   private update(): void {
     const ed = this.ed;
     const doc = ed.doc;
-    const key = [doc.parts, doc.pins, doc.labels, doc.comments, ed.view.polys.size, ed.chipId, ed.ws.chips];
-    if (!settings.minimap || !doc.parts.length) { this.el.hidden = true; return; }
+    const key = [doc.parts, doc.wires, doc.pins, doc.labels, doc.comments, ed.view.polys.size, ed.chipId, ed.ws.chips, settings.minimap];
+    const vb = ed.view.cam.vb;
+    const view = `${vb.x},${vb.y},${vb.w},${vb.h}`;
+    const same = !this.sized && view === this.lastView && key.every((k, i) => k === this.seen[i]);
+    // paintHooks fire on every simulation frame: nothing here changes with one
+    if (same) return;
+    this.lastView = view;
+    this.sized = false;
+    if (!settings.minimap || !doc.parts.length) { this.seen = key; this.el.hidden = true; return; }
     if (key.some((k, i) => k !== this.seen[i]) || !this.content) {
       this.seen = key;
       this.content = ed.view.contentBox(ed.defOf);
       this.drawContent();
     }
-    const view = this.visible();
+    const seeing = this.visible();
     const content = this.content;
     // The frame is the visible area; with the whole chip in it there is nothing to show
-    if (!content || !this.layout || contentFits(content, view)) { this.el.hidden = true; return; }
+    if (!content || !this.layout || contentFits(content, seeing)) { this.el.hidden = true; return; }
     this.el.hidden = false;
     // the map also holds the frame when the view reaches beyond the chip
-    const f = mapRect(this.layout, view);
+    const f = mapRect(this.layout, seeing);
     this.frame.setAttribute('x', f.x.toFixed(1));
     this.frame.setAttribute('y', f.y.toFixed(1));
     this.frame.setAttribute('width', Math.max(4, f.w).toFixed(1));

@@ -23,6 +23,8 @@ export interface PhaseRow {
   done?: number;
   total?: number;
   unit?: string;
+  /** A sub-step the running phase is in, shown after its label (the count is complete by then). */
+  note?: string;
 }
 
 /** The phases Stage.load goes through for a scene too big to build between two frames. */
@@ -69,22 +71,23 @@ export class LoadPlan {
     this.since = t;
     const r = this.rows[i];
     r.state = 'active';
-    r.done = r.total = undefined;
+    r.done = r.total = r.note = undefined;
   }
 
   private finishCurrent(t: number): void {
     const r = this.rows[this.cur];
     r.state = 'done';
     r.ms = t - this.since;
-    r.done = r.total = undefined;
+    r.done = r.total = r.note = undefined;
   }
 
   /** The running phase's count (`done` of `total`, the total an estimate: it never shows past 100 %). */
-  report(done: number, total: number): void {
+  report(done: number, total: number, linking = false): void {
     if (this.cur < 0) return;
     const r = this.rows[this.cur];
     r.done = done;
     r.total = Math.max(total, done);
+    r.note = linking ? 'numbering the nets' : undefined;
   }
 
   finish(): void {
