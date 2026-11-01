@@ -8,6 +8,7 @@ import { checksDone, recapIndex } from '../chapters/checks';
 import { libraryItems } from '../lib/catalog';
 import { navEntries, type NavItem } from './chapternav';
 import { showPageKeys } from './keyhelp';
+import { showCoach } from './coachmarks';
 import { keyDef } from './keys';
 import { allActions, here, registerActions, registerSearchSource, type SearchCtx } from './searchsources';
 import { applyTheme, settings, type Theme } from './settings';
@@ -165,6 +166,8 @@ registerActions((ctx) => {
     out.push(here(act('slow', 'Slow motion', `one gate delay at a time (${onOff(settings.animate)})`, toggle('animate'))));
     out.push(act('wide', 'Hide the side panes', `the circuit full width (${onOff(settings.wide)})`, toggle('wide')));
   }
+  if (stage) out.push(here(act('coach', 'Show me the controls', 'a short tour of the stage bar: drill, probe, Why?, Back / Step, Open in Sandbox', () => { setTimeout(() => showCoach('stage'), 60); })));
+  if (key === 'sandbox') out.push(here(act('coach.sb', 'Show me the controls', 'a short tour of the sandbox: parts, wiring, Run, File', () => { setTimeout(() => showCoach('sandbox'), 60); })));
   if (!editor) out.push(act('keys', 'Keys on this page', 'every shortcut that works here', () => showPageKeys(), ['?']));
   out.push(
     act('singleKeys', 'Single-key shortcuts', `letters, digits and / [ ] ? as shortcuts (${onOff(settings.singleKeys)})`, toggle('singleKeys')),

@@ -5,6 +5,7 @@ import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
+import { maybeCoach } from '../coachmarks';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
@@ -45,6 +46,7 @@ export class ChapterPage implements Page {
     this.inspector = new Inspector();
     this.stage = new Stage(this.inspector);
     this.stage.leafFactory = transistorLeaf;
+    this.stage.onReady(() => maybeCoach('stage'));
     this.head = h('div', { class: 'narrative-head' });
     this.body = h('div', { class: 'narrative-body' });
     this.foot = h('div', { class: 'narrative-foot' });

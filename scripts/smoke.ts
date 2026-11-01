@@ -61,7 +61,9 @@ const VIEWPORTS: Viewport[] = [
 ];
 
 const SETTINGS_KEY = 'mosfet2riscv:v1';
-const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
+// the coach-mark tours (ui/coachmarks.ts) count as seen, so they do not dim every page; two routes below play them
+const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme, coachDone: { stage: true, sandbox: true } }) });
+const firstRun = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
 const light = themed('light');
 const unlocked = { ...light, [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) };
 
@@ -105,6 +107,11 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
+  for (const theme of ['light', 'dark'] as const) {
+    for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
+  }
+  add(`#/c/${chapters[1].id}/0`, firstRun('light'), ' (first run, phone)', VIEWPORTS[VIEWPORTS.length - 1]);
   // No horizontal overflow on one page of each kind, on a desktop and on a phone.
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);

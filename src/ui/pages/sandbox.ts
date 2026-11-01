@@ -23,6 +23,7 @@ import { MAIN_PROJECT, readProjects, setCurrentProject } from '../../editor/proj
 // Every feature module (palette groups, property sections, toolbar actions, plugins).
 import '../../editor/features';
 import '../../editor/minimap';
+import { maybeCoach } from '../coachmarks';
 import type { Page } from './chapter';
 
 /** Chips of campaign levels (campaign/levels.ts levelChipId): kept in the first project. */
@@ -39,6 +40,8 @@ export class SandboxPage implements Page {
     const share = chipId === SHARE_SEG, made = chipId === NEW_SEG ? location.hash.split('/')[3] ?? '' : null;
     this.editor = this.build(share || made !== null ? undefined : chipId, this.projectFor(chipId));
     this.el = this.editor.el;
+    // the first visit: the sandbox's tour (not on a shared link, which opens a banner of its own)
+    if (!share) maybeCoach('sandbox');
     if (share) this.files.openShare(shareRoute(location.hash));
     if (made !== null) this.makeNew(made);
   }

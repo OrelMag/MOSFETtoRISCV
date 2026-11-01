@@ -2166,3 +2166,28 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .why-chain li, .why-table tr td { min-height: 40px; }
   .why-tabs button, .why-card > header .btn { min-height: 40px; min-width: 40px; }
 }
+
+/* First-run coach marks (ui/coachmarks.ts): the page dimmed with a ring cut out around one control, and a card beside it.
+   The ring's huge shadow is the dimming, so the control itself stays lit. */
+.coach { position: fixed; inset: 0; z-index: 2000; }
+.coach-ring {
+  position: fixed; border-radius: 8px; pointer-events: none;
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgb(10 12 18 / 58%); transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s;
+}
+.coach-arrow { position: fixed; width: 16px; height: 16px; background: var(--surface); transform: rotate(45deg); pointer-events: none; }
+.coach-card {
+  position: fixed; box-sizing: border-box; padding: 18px 20px; border-radius: 14px; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgb(10 12 18 / 35%); display: flex; flex-direction: column; gap: 10px; outline: none; transition: left 0.18s, top 0.18s;
+}
+.coach-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+.coach .sp { flex: 1; }
+.coach-dots { display: inline-flex; gap: 6px; }
+.coach-dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--border-strong); }
+.coach-dots i.on { background: var(--accent); }
+.coach-title { margin: 0; font-size: 17px; }
+.coach-text { margin: 0; line-height: 1.55; color: var(--text-2); font-size: 14px; }
+.coach-ctl { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.coach-ctl .btn { min-height: 36px; }
+.coach-skip { color: var(--muted); }
+@media (pointer: coarse) { .coach-ctl .btn { min-height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .coach-ring, .coach-card { transition: none; } }

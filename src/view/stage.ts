@@ -681,6 +681,14 @@ export class Stage {
     this.view.fit();
     this.refresh();
     if (settings.autoClock && scene.autoClock !== false) { this.startClock(); this.autoRun = this.clockRunning; }
+    this.readyHooks.forEach((f) => f());
+  }
+
+  private readyHooks = new Set<() => void>();
+  /** Called each time a scene has been built and drawn (the first-run coach marks wait for it). */
+  onReady(f: () => void): () => void {
+    this.readyHooks.add(f);
+    return () => this.readyHooks.delete(f);
   }
 
   /**
