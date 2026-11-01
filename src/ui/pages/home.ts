@@ -5,6 +5,7 @@ import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon } from '../dom';
 import { reportLink } from '../errors';
+import { notes } from '../notes';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
@@ -74,7 +75,8 @@ export function homePage(): Page {
             resume ? `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}` : 'Start the journey', icon('chevR', 16)),
           campaign,
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
-          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'))),
+          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'),
+          notes().count ? h('a', { class: 'btn', href: '#/notes', title: 'Your notes and bookmarks, and the review queue' }, icon('note', 16), `My notes · ${notes().count}`) : null)),
       ladder()),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
     h('p', { class: 'section-sub' }, 'Each chapter uses only what the previous ones built.'),

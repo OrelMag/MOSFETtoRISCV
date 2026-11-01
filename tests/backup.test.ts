@@ -7,6 +7,8 @@ import { emptyChip, emptyWorkspace, type ChipDoc, type Vec, type Workspace } fro
 import { MAIN_PROJECT, PROJECTS_KEY, createProject, projectKey, readProjects } from '../src/editor/projects';
 import { FORMAT, KEY, loadWorkspace, saveWorkspace } from '../src/editor/store';
 import { PUZZLES_KEY } from '../src/puzzles/grade';
+import { NOTES_KEY } from '../src/ui/notes';
+import { REVIEW_KEY } from '../src/ui/review';
 import { MapKV, SETTINGS_KEY, applyMerge, makeBackup, mergeBackup, readBackup, summarize } from '../src/ui/backup';
 
 function chip(id: string, uses: string[] = [], name = id): ChipDoc {
@@ -136,5 +138,46 @@ describe('backup', () => {
     expect(err(JSON.stringify({ format: FORMAT }))).toMatch(/sandbox/);
     expect(err(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 99, keys: {} }))).toMatch(/newer/);
     expect(err(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 1 }))).toMatch(/no data/);
+  });
+});
+
+describe('backup of notes and review', () => {
+  const at = 1_700_000_000_000;
+  const note = (id: string, text: string, edited: number) => ({ id, type: 'note', place: { kind: 'step', chapter: 'adders', step: 1 }, title: '', text, at, edited });
+  const memo = (last: number, miss = false) => ({ n: 1, last, streak: miss ? 0 : 1, due: last, ...(miss ? { miss: true, missed: last } : {}) });
+
+  it('keeps notes and review history from both sides, the newest edit winning', () => {
+    const mine = new MapKV([
+      [NOTES_KEY, JSON.stringify({ schema: 1, items: { a: note('a', 'mine old', at + 1), b: note('b', 'only mine', at + 5) } })],
+      [REVIEW_KEY, JSON.stringify({ schema: 1, memos: { 'c:1': memo(at + 10, true), 'c:2': memo(at + 20) } })],
+    ]);
+    const theirs = new MapKV([
+      [NOTES_KEY, JSON.stringify({ schema: 1, items: { a: note('a', 'theirs newer', at + 9), c: note('c', 'only theirs', at + 2) } })],
+      [REVIEW_KEY, JSON.stringify({ schema: 1, memos: { 'c:1': memo(at + 30), 'c:3': memo(at + 4, true) } })],
+    ]);
+    const r = readBackup(makeBackup(theirs));
+    if ('error' in r) throw new Error(r.error);
+    const res = mergeBackup(r.file, mine);
+    expect(applyMerge(res, mine)).toEqual({ ok: true });
+    const notes = JSON.parse(mine.getItem(NOTES_KEY)!).items;
+    expect(Object.keys(notes).sort()).toEqual(['a', 'b', 'c']);
+    expect(notes.a.text).toBe('theirs newer');
+    const memos = JSON.parse(mine.getItem(REVIEW_KEY)!).memos;
+    expect(Object.keys(memos).sort()).toEqual(['c:1', 'c:2', 'c:3']);
+    expect(memos['c:1'].last).toBe(at + 30);
+    expect(memos['c:1'].miss).toBeUndefined();
+    // the same file again changes nothing, and the keys are not counted as small preferences
+    expect(Object.keys(mergeBackup(r.file, mine).writes)).toEqual([]);
+    expect(summarize(mine).other).toBe(0);
+  });
+
+  it('takes the file as it is where nothing is stored, and lists an unreadable part', () => {
+    const theirs = new MapKV([[NOTES_KEY, JSON.stringify({ schema: 1, items: { a: note('a', 'x', at) } })], [REVIEW_KEY, '[1]']]);
+    const r = readBackup(makeBackup(theirs));
+    if ('error' in r) throw new Error(r.error);
+    const res = mergeBackup(r.file, new MapKV());
+    expect(JSON.parse(res.writes[NOTES_KEY]).items.a.text).toBe('x');
+    expect(res.notes.some((n) => n.includes('review history'))).toBe(true);
+    expect(res.writes[REVIEW_KEY]).toBeUndefined();
   });
 });

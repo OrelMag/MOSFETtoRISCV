@@ -80,8 +80,12 @@
 .sb-tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .sb-tab {
   display: inline-flex; align-items: center; border-radius: 8px; border: 1px solid transparent;
-  background: var(--surface-2); color: var(--text-2); flex: none; max-width: 220px;
+  background: var(--surface-2); color: var(--text-2); flex: 0 1 auto; min-width: 84px; max-width: 220px;
 }
+/* tabs give way to each other (names end in an ellipsis) before the strip scrolls, the open one last; editor.ts fitActions
+   measures them at their natural width (.measure) to decide how much of the bar they get */
+.sb-tab.on { flex-shrink: 0; }
+.sb-tabs.measure .sb-tab { flex: none; }
 .sb-tab.on { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .sb-tab button { border: 0; background: transparent; cursor: pointer; color: inherit; }
 .sb-tab-name { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -10,6 +10,8 @@ import { navEntries, type NavItem } from './chapternav';
 import { showPageKeys } from './keyhelp';
 import { keyDef } from './keys';
 import { allActions, here, registerActions, registerSearchSource, type SearchCtx } from './searchsources';
+import { notes, placeHref, snippet } from './notes';
+import { placeLabel } from './notelabel';
 import { applyTheme, settings, type Theme } from './settings';
 
 const route = (ctx: SearchCtx) => ctx.hash.replace(/^#\/?/, '').split('/');
@@ -46,6 +48,20 @@ registerSearchSource({
   order: (ctx) => (route(ctx)[0] === 'workbench' ? 2 : route(ctx)[0] === 'sandbox' ? 3 : 0),
   items: chapterItems,
   browse: () => chapterItems().filter((it) => it.kind === 'chapter'),
+});
+
+// ---- the learner's notes and bookmarks ---------------------------------------------------------------
+
+registerSearchSource({
+  id: 'notes', title: 'My notes', scope: 'Notes',
+  order: () => 6,
+  items: () => notes().list().map((it): NavItem => {
+    const where = placeLabel(it);
+    return {
+      kind: 'note', id: it.id, title: it.type === 'note' ? snippet(it.text, 90) : `Bookmark: ${where.sub || where.head}`,
+      sub: `${where.head}${where.sub ? ` · ${where.sub}` : ''}`, text: it.text, href: placeHref(it.place, it.pin),
+    };
+  }),
 });
 
 // ---- workbench components ----------------------------------------------------------------------------

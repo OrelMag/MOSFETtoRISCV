@@ -28,6 +28,8 @@ import { CODEX } from '../src/campaign/codex';
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { emptyWorkspace } from '../src/editor/model';
 import { KEY as SANDBOX_KEY } from '../src/editor/store';
+import { NOTES_KEY } from '../src/ui/notes';
+import { REVIEW_KEY } from '../src/ui/review';
 
 // ---- options ---------------------------------------------------------------------------------
 
@@ -64,6 +66,27 @@ const SETTINGS_KEY = 'mosfet2riscv:v1';
 const themed = (theme: 'light' | 'dark') => ({ [SETTINGS_KEY]: JSON.stringify({ theme }) });
 const light = themed('light');
 const unlocked = { ...light, [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) };
+
+/** A few notes and bookmarks, and a review history over chapters marked visited: the My notes page with something to show. */
+function notesStorage(theme: 'light' | 'dark'): Record<string, string> {
+  const c0 = chapters[0], c1 = chapters[1];
+  const at = 1_700_000_000_000;
+  const item = (id: string, o: object) => [id, { id, at, edited: at, title: '', text: '', ...o }];
+  const items = Object.fromEntries([
+    item('n:a', { type: 'note', place: { kind: 'step', chapter: c1.id, step: 0 }, text: 'The first note, on a step.', pin: { path: [], inst: 'nothere', inputs: { a: 1 }, cycle: 2 } }),
+    item('n:b', { type: 'note', place: { kind: 'step', chapter: c0.id, step: 1 }, text: 'A second note with a longer text. '.repeat(8) }),
+    item('bm:c', { type: 'bookmark', place: { kind: 'bench', id: 'rca4' }, title: 'Workbench · rca4' }),
+    item('bm:d', { type: 'bookmark', place: { kind: 'chip', id: 'gone' }, title: 'Sandbox · my_alu' }),
+  ]);
+  const review: Record<string, object> = {};
+  const quiz = c1.steps.findIndex((st) => st.challenge?.kind === 'quiz');
+  if (quiz >= 0) review[`${c1.id}:${quiz}`] = { n: 1, last: at, miss: true, missed: at, streak: 0, due: at };
+  return {
+    [SETTINGS_KEY]: JSON.stringify({ theme, visited: { [c0.id]: [0, 1], [c1.id]: [0] } }),
+    [NOTES_KEY]: JSON.stringify({ schema: 1, items }),
+    [REVIEW_KEY]: JSON.stringify({ schema: 1, memos: review }),
+  };
+}
 
 function examplesWorkspace(): { json: string; ids: string[] } {
   let ws = emptyWorkspace();
@@ -105,9 +128,16 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // My notes: empty, then with notes, bookmarks and a review history, in both themes and on a phone
+  add('#/notes', light, ' (empty)');
+  add('#/notes', notesStorage('light'));
+  add('#/notes', notesStorage('dark'), ' (dark)');
+  add('#/', notesStorage('light'), ' (with notes)');
+  add(`#/c/${chapters[1].id}/0`, notesStorage('light'), ' (with a note)');
   // No horizontal overflow on one page of each kind, on a desktop and on a phone.
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
+    add('#/notes', notesStorage('light'), ` (${v.name})`, v);
   }
   // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
   const phone = VIEWPORTS.find((v) => v.mobile)!;
@@ -294,7 +324,10 @@ const CLIPPED = `(() => {
 /**
  * A chapter or workbench stage whose bars lost something: the open level's name cut on a one-row top bar (its
  * buttons belong in More: Stage.fitBar), a button past either bar's edge, the run row's buttons cut
- * (Stage.fitControls drops their labels instead). Checked on every route.
+ * (Stage.fitControls drops their labels instead), a top bar that wraps to two rows without being `stacked`, the level badge
+ * over the drawing (the fit keeps it clear: SchematicView.badge), the sandbox's tab strip showing only the open tab beside
+ * others (tabs shrink and More takes actions first: editor.ts fitActions), a phone's level canvas under 40 % of the
+ * screen (level.css). Checked on every route.
  */
 const STAGE_BARS = `(() => {
   const out = [];
@@ -311,7 +344,28 @@ const STAGE_BARS = `(() => {
     }
     const run = bar.querySelector('.ctl-run');
     if (run && run.scrollWidth > run.clientWidth + 1) out.push('stage run bar cut (' + run.scrollWidth + ' px in ' + run.clientWidth + ')');
+    if (bar.matches('.stage-bar') && !bar.classList.contains('stacked') && bar.getBoundingClientRect().height > 64) out.push('stage bar wraps to ' + Math.round(bar.getBoundingClientRect().height) + ' px (not stacked)');
   }
+  const badge = document.querySelector('.stage .canvas > .level-badge');
+  const svg = document.querySelector('.stage .canvas > svg.schematic');
+  if (badge && svg && badge.offsetWidth) {
+    const b = badge.getBoundingClientRect();
+    const under = [...svg.querySelectorAll('rect, path, polygon, circle, text')].filter((e) => {
+      if (e.closest('defs')) return false;
+      const q = e.getBoundingClientRect();
+      return (q.width >= 1 || q.height >= 1) && q.width < 300 && q.height < 300 && q.right > b.left && q.left < b.right && q.bottom > b.top && q.top < b.bottom;
+    }).length;
+    if (under) out.push('level badge over the drawing (' + under + ' shapes)');
+  }
+  const strip = document.querySelector('.sb-top .sb-tabs');
+  if (strip) {
+    const tabs = [...strip.querySelectorAll('.sb-tab')], sr = strip.getBoundingClientRect(), g = strip.querySelector('.sb-new-grp');
+    const end = g ? g.getBoundingClientRect().left : sr.right;
+    const seen = tabs.filter((t) => { const r = t.getBoundingClientRect(); return r.left >= sr.left - 1 && r.right <= end + 1; }).length;
+    if (tabs.length > 1 && seen < 2 && sr.width > 300) out.push('sandbox tab strip shows ' + seen + ' of ' + tabs.length + ' tabs');
+  }
+  const lvc = document.querySelector('.sb-levelmode .sb-canvas');
+  if (lvc && document.documentElement.clientWidth <= 760 && lvc.getBoundingClientRect().height < 0.4 * innerHeight) out.push('phone level canvas only ' + Math.round(lvc.getBoundingClientRect().height) + ' px of ' + innerHeight);
   return out;
 })()`;
 

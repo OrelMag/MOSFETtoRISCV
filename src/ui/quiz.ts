@@ -5,6 +5,7 @@
 import type { Quiz } from '../chapters/types';
 import { h, icon } from './dom';
 import { settings } from './settings';
+import { reviewLog } from './review';
 import { reveal as intoView } from './stagenotes';
 
 /** A shuffle of 0 … n − 1 that depends only on `seed` (FNV-1a, then Fisher–Yates on its stream). */
@@ -23,8 +24,24 @@ export function shuffleOrder(n: number, seed: string): number[] {
 /**
  * A multiple-choice question: a wrong pick says why it is wrong (Quiz.why) and stays marked; the right one shows the
  * explanation and records `key` as solved. `onSolved` runs after a new solve (the head's counters).
+ * The first pick of a showing (or Show answer before any) is logged for the review queue (ui/review.ts). `qopts.fresh`:
+ * a question asked again in the review: whatever was solved before is ignored and nothing is marked solved;
+ * `qopts.onAnswer` gets the verdict instead of the log.
  */
-export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void): HTMLElement {
+export interface QuizOpts {
+  fresh?: boolean;
+  onAnswer?(right: boolean): void;
+}
+
+export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void, qopts: QuizOpts = {}): HTMLElement {
+  const wasSolved = !qopts.fresh && settings.isSolved(key);
+  let logged = wasSolved;
+  const log = (right: boolean) => {
+    if (logged) return;
+    logged = true;
+    if (qopts.onAnswer) qopts.onAnswer(right);
+    else reviewLog().record(key, right);
+  };
   const box = h('div', { class: 'challenge' });
   const tag = h('span', { class: 'tag' }, label);
   // polite: a screen reader reads the verdict out after a pick
@@ -42,22 +59,24 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
     box.classList.add('solved');
     tag.replaceChildren(icon('check', 12), ' Solved');
   };
-  reveal.addEventListener('click', () => { right(); intoView(explain); });
+  reveal.addEventListener('click', () => { log(false); right(); intoView(explain); });
   q.options.forEach((o, i) => {
     // authored HTML, as the question and the explanations are (<code>RO II CE</code>), in one span: the button is a
     // flex box, which would set a code and the text after it apart
     const btn = h('button', { class: 'btn' }, h('span', { html: o }));
     btn.addEventListener('click', () => {
       if (i !== q.answer) {
+        log(false);
         btn.classList.add('wrong');
         explain.innerHTML = q.why?.[i] ?? 'Not quite. Try another answer.';
         // below the fold of a long step, or of the page on a phone: bring the explanation up
         intoView(explain);
         return;
       }
+      log(true);
       right();
       intoView(explain);
-      if (settings.isSolved(key)) return;
+      if (qopts.fresh || settings.isSolved(key)) return;
       settings.solve(key);
       markSolved();
       onSolved();
@@ -66,7 +85,7 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
   });
   opts.append(...shuffleOrder(buttons.length, `${key}|${q.question}`).map((i) => buttons[i]));
   box.append(h('div', { class: 'challenge-head' }, tag, h('span', { html: q.question })), opts, reveal, explain);
-  if (settings.isSolved(key)) {
+  if (wasSolved) {
     markSolved();
     right();
   }

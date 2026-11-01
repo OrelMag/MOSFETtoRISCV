@@ -117,7 +117,7 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
 
 let palette: HTMLElement | null = null;
 
-const KIND_ICON: Partial<Record<NavKind, string>> = { component: 'bench', level: 'flag', codex: 'book', action: 'code' };
+const KIND_ICON: Partial<Record<NavKind, string>> = { component: 'bench', level: 'flag', codex: 'book', action: 'code', note: 'note' };
 
 /** What ↵ does for a row, and Shift ↵ (null: nothing). */
 export function verbs(it: NavItem): [string, string | null] {

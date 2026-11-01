@@ -1171,6 +1171,18 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
 public/ + scripts/sw-template.js: manifest.webmanifest, icon.svg / icon-{180,192,512}.png; vite.config.ts serviceWorker() writes dist/sw.js
                (assets/ precached, hashed assets cache-first, everything else network-first, doom/ layout/ yosys/ and other origins untouched; two
                cache generations); main.ts registers it only in production on http(s) (never app:// or file:)
+               notes.ts (DOM-free, tested: the learner's notes and bookmarks in their own key `mosfet2riscv:notes:v1`, injected KV, sanitized;
+               a note = free text on a step, optionally pinned (NotePin: the level's path, the part, the scene's inputs and cycle), a
+               bookmark = a Place (step / workbench component / sandbox chip); deletions kept as tombstones; mergeNotes: union by id, newest
+               edit wins, for the backup file; never in share links; openNoteNext / takeOpenNote: the notes page asks the stage to restore a
+               pin), notesui.ts (bookmarkButton, StepNotes: the yellow cards in a step and their numbered markers: Stage.noteMarks →
+               SchematicView.setNotePins), notelabel.ts (a place's words), editor/bookmark.ts (the sandbox's toolbar toggle), pages/notes.ts
+               (#/notes, its own chunk: filters, search, the review queue; top bar "My notes · n" and the home button only with items; the
+               search's `notes` source); review.ts (DOM-free: ReviewLog in `mosfet2riscv:review:v1`, one Memo per question key as quizBox
+               logs it (first pick of a showing); wrong → due now, right → due in 2 / 7 / 21 / 60 days, "Ask again soon" flag; buildQueue:
+               missed, then asked-soon, then the longest unseen, only chapters visited (a codex question once answered), summarize;
+               mergeReview for the backup), reviewqs.ts (every question: step quizzes, recap checks, codex Check yourself, with origin
+               and link); tests/notes.test.ts
 tests/         Vitest: every component with a `spec` is checked exhaustively (≤ 12 input
                bits) or randomly against its structure; sequential behaviour tests
 tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU variant: build, ISA, env,

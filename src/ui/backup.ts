@@ -12,6 +12,8 @@ import { mergeFolders } from '../editor/folders';
 import type { Workspace } from '../editor/model';
 import { adoptProject, projectKey, readProjects, MAIN_PROJECT, PROJECTS_KEY } from '../editor/projects';
 import { BACKUP_KEY, FORMAT as SANDBOX_FORMAT, KEY as SANDBOX_KEY, MAX_FAVORITES, SITE_PREFIX, importChips, loadWorkspace, localData, saveWorkspace, type ListKV } from '../editor/store';
+import { mergeNotes, NOTES_KEY, sanitizeNotes } from './notes';
+import { mergeReview, REVIEW_KEY, sanitizeReview } from './review';
 import { betterRecord, PUZZLES_KEY, type PuzzleRecord } from '../puzzles/grade';
 
 export const BACKUP_FORMAT = 'mosfet2riscv-backup';
@@ -127,7 +129,7 @@ export function summarize(kv: ListKV): Summary {
   return out;
 }
 
-const OWNED = new Set([SETTINGS_KEY, CAMPAIGN_KEY, PUZZLES_KEY, PROJECTS_KEY, SANDBOX_KEY]);
+const OWNED = new Set([SETTINGS_KEY, CAMPAIGN_KEY, PUZZLES_KEY, PROJECTS_KEY, SANDBOX_KEY, NOTES_KEY, REVIEW_KEY]);
 
 /** The summary as lines of prose (the import dialog, the export confirmation). */
 export function describe(s: Summary): string[] {
@@ -227,6 +229,15 @@ export function mergeBackup(file: BackupFile, kv: ListKV): MergeResult {
   if (theirs.getItem(PUZZLES_KEY) !== null) {
     if (!isObj(parse(theirs.getItem(PUZZLES_KEY)))) unreadable(PUZZLES_KEY, 'The puzzle progress');
     else put(PUZZLES_KEY, mergePuzzles(parse(stage.getItem(PUZZLES_KEY)), parse(theirs.getItem(PUZZLES_KEY))));
+  }
+  // notes and bookmarks: union by id, the newest edit wins; the review history: the later answer per question
+  if (theirs.getItem(NOTES_KEY) !== null) {
+    if (!isObj(parse(theirs.getItem(NOTES_KEY)))) unreadable(NOTES_KEY, 'The notes and bookmarks');
+    else put(NOTES_KEY, mergeNotes(sanitizeNotes(parse(stage.getItem(NOTES_KEY))), sanitizeNotes(parse(theirs.getItem(NOTES_KEY)))));
+  }
+  if (theirs.getItem(REVIEW_KEY) !== null) {
+    if (!isObj(parse(theirs.getItem(REVIEW_KEY)))) unreadable(REVIEW_KEY, 'The review history');
+    else put(REVIEW_KEY, mergeReview(sanitizeReview(parse(stage.getItem(REVIEW_KEY))), sanitizeReview(parse(theirs.getItem(REVIEW_KEY)))));
   }
   // sandbox projects: the first one (it holds the campaign's level chips) merges chip by chip; the others by id
   const workspaceOf = (store: MapKV, key: string): Workspace | null => {
