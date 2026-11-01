@@ -4,7 +4,8 @@ import { assemble } from '../riscv/asm';
 import { ABI, decode, disasm, type Fmt } from '../riscv/isa';
 import { formatStrip } from './instrfields';
 import { instrComposer } from './composer';
-import { ISS } from '../riscv/iss';
+import { ISS, type StepInfo } from '../riscv/iss';
+import { stepEffect } from '../riscv/trace';
 import { PROGRAMS } from '../riscv/programs';
 import { debounce, h } from '../ui/dom';
 import { codeEditor } from './codeedit';
@@ -62,6 +63,76 @@ export function instructionExplorer(): Widget {
         h('p', { class: 'sub' }, 'Switches: the same word on a front panel. Before assemblers, programs went in like this, a word at a time: set the switches, Deposit next.'),
         memBox, runOut),
       h('div', { class: 'panel', style: 'margin-top:16px' }, h('h3', null, 'The six formats'), h('p', { class: 'sub' }, 'rs1, rs2 and rd sit in the same bits in every format, so the register file can be read before the instruction is even decoded.'), formats)),
+  };
+}
+
+/** The fields an instruction's format carries, as the decoder reads them. */
+function fieldsOf(d: ReturnType<typeof decode>): string {
+  const r = (n: number) => ABI[n];
+  switch (d.fmt) {
+    case 'R': return `rd = ${r(d.rd)}, rs1 = ${r(d.rs1)}, rs2 = ${r(d.rs2)}`;
+    case 'I': return `rd = ${r(d.rd)}, rs1 = ${r(d.rs1)}, imm = ${d.imm}`;
+    case 'S': case 'B': return `rs1 = ${r(d.rs1)}, rs2 = ${r(d.rs2)}, imm = ${d.imm}`;
+    case 'U': case 'J': return `rd = ${r(d.rd)}, imm = ${d.imm}`;
+    default: return '';
+  }
+}
+
+/**
+ * Chapter 13's first step: the fetch–decode–execute loop on the golden model, one instruction per Step. The program
+ * sits in memory as words; each Step says what was fetched from PC, what its fields decode to, what changed, and
+ * where PC went. `watch`: the registers shown.
+ */
+export function fetchLoop(source: string, watch: number[]): Widget {
+  const r = assemble(source);
+  const iss = new ISS(r.words);
+  const start = iss.save();
+  const hist: ReturnType<ISS['save']>[] = [];
+  let last: StepInfo | null = null;
+  const listing = h('tbody');
+  const phases = h('div', { class: 'fl-phases', 'aria-live': 'polite' });
+  const regs = h('div', { class: 'cpu-regs' });
+  const mem = h('div', { class: 'cpu-mem' });
+  const count = h('span', { class: 'sub' });
+  const stepB = h('button', { class: 'btn primary', onclick: () => { hist.push(iss.save()); last = iss.step(); render(); } }, 'Step') as HTMLButtonElement;
+  const backB = h('button', { class: 'btn', onclick: () => { iss.restore(hist.pop()!); last = null; render(); } }, 'Back') as HTMLButtonElement;
+  const resetB = h('button', { class: 'btn', onclick: () => { iss.restore(start); hist.length = 0; last = null; render(); } }, 'Reset');
+  const render = () => {
+    listing.replaceChildren(...r.lines.map((l) => h('tr', { class: l.addr === iss.pc ? 'cur' : '' },
+      h('td', { class: 'a' }, (l.addr === iss.pc ? 'PC → ' : '') + hex(l.addr, 2)),
+      h('td', { class: 'w' }, l.word.toString(16).padStart(8, '0')),
+      h('td', null, disasm(l.word, l.addr)))));
+    if (!last) {
+      phases.replaceChildren(h('p', null, hist.length ? 'Stepped back. Step again to rerun it.' : `Next: fetch the word at address ${hex(iss.pc, 2)}, the one PC points to.`));
+    } else {
+      const d = decode(last.word);
+      const effect = stepEffect(last).replace(/ · halt$|^halt$/, '');
+      const pcNext = last.halted ? 'unchanged: a jump to itself, so the program has halted'
+        : iss.pc === (last.pc + 4) >>> 0 ? `${hex(iss.pc, 2)}: PC + 4, the next word`
+          : `${hex(iss.pc, 2)}: PC + imm, the instruction wrote PC`;
+      phases.replaceChildren(
+        h('p', null, h('b', null, 'Fetch. '), `Memory[${hex(last.pc, 2)}] = ${hex(last.word)}.`),
+        h('p', null, h('b', null, 'Decode. '), `Opcode ${d.opcode.toString(2).padStart(7, '0')}: ${d.fmt} format, ${d.name}; ${fieldsOf(d)}.`),
+        h('p', null, h('b', null, 'Execute. '), effect && effect !== '—' ? effect
+          : d.fmt === 'B' ? `Compare rs1 with rs2: ${iss.pc === (last.pc + 4) >>> 0 ? 'not taken' : 'taken'}. No register written.` : 'No register written.'),
+        h('p', null, h('b', null, 'PC ← '), pcNext));
+    }
+    regs.replaceChildren(...watch.map((i) => h('div', { class: 'r' + (last?.rd === i ? ' chg' : '') + (iss.x[i] ? '' : ' z') },
+      h('span', { class: 'n' }, ABI[i]), h('span', { class: 'v' }, String(iss.x[i] | 0)))));
+    mem.replaceChildren(h('div', { class: 'm' }, h('span', { class: 'n' }, '[0x00]'), h('span', { class: 'v' }, hex(iss.dmem[0])), h('span', { class: 'd' }, String(iss.dmem[0] | 0))));
+    count.textContent = `${hist.length} instruction${hist.length === 1 ? '' : 's'} executed${iss.halted ? ', halted' : ''}`;
+    stepB.disabled = iss.halted;
+    backB.disabled = !hist.length;
+  };
+  render();
+  return {
+    el: h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
+      h('div', { class: 'panel' }, h('h3', null, 'Instruction memory'),
+        h('div', { style: 'overflow-x:auto' }, h('table', { class: 'asm-table fl-list' }, listing)),
+        h('div', { class: 'fl-bar' }, stepB, backB, resetB, count)),
+      h('div', { class: 'panel' }, h('h3', null, 'What the last step did'), phases,
+        h('div', { class: 'cpu-sec' }, 'Registers'), regs,
+        h('div', { class: 'cpu-sec' }, 'Data memory'), mem))),
   };
 }
 
