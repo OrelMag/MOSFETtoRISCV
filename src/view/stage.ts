@@ -526,6 +526,11 @@ export class Stage {
     this.widget = { w, host };
   }
 
+  /** A big scene is still being built (load): there is no simulation to act on yet. */
+  get loading(): boolean {
+    return this.pending !== null;
+  }
+
   /** The scene on the stage, or the big one being built for it (load). */
   get target(): Scene | null {
     return this.pending ?? this.scene;
@@ -1885,6 +1890,32 @@ export class Stage {
   /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
   heat(map: Map<string, { band: number; tip: string }> | null): void {
     this.view.heat(map);
+  }
+
+  /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
+  ghost(names: string[]): void {
+    this.view.ghost(names);
+  }
+
+  /** The screen rectangle around instances of the current view (null: none drawn). */
+  instRect(names: string[]): DOMRect | null {
+    return this.view.instRect(names);
+  }
+
+  /** Put an element over the canvas (a tour's caption), or take it away. */
+  overlay(el: HTMLElement, on = true): void {
+    if (on) this.canvas.append(el);
+    else el.remove();
+  }
+
+  /** The canvas's screen rectangle. */
+  get canvasRect(): DOMRect {
+    return this.canvas.getBoundingClientRect();
+  }
+
+  /** How many steps Back can undo now: a tour notes it before each beat and backs up to it. */
+  get historyDepth(): number {
+    return this.history.length;
   }
 
   /** Colour nets of the current view (index in its netlist → classes); cleared on navigation. */

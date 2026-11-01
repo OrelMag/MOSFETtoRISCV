@@ -195,7 +195,7 @@
 .lv-rows b { font-family: var(--font-mono); font-weight: 600; }
 .lv-rows b.ok { color: var(--good); }
 .lv-gen { font-size: 12px; }
-.lv-walknav { display: flex; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
+.lv-walknav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0 14px; margin-top: auto; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
 
 /* the hint ladder (Tips tab) and the walkthrough's predict-first and Learn it */
 .lv-ladder { display: grid; gap: 0; }
@@ -253,3 +253,19 @@
 .lv-sidebody .th-why { margin-top: 0; }
 .lv-pits .th-pits { font-size: 13px; }
 .lv-result .th-end { margin-top: 0; }
+
+/* Walk 2.0: what / why / why not, the rows each step makes right, what breaks without it, Play all */
+.lv-why { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 4px 0 8px; font-size: 13px; line-height: 1.5; }
+.lv-why dt { font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding-top: 3px; }
+.lv-why dd { margin: 0; }
+.lv-rowgrid { display: grid; gap: 4px; margin-top: 4px; }
+.lv-grid { display: grid; gap: 3px; }
+.lv-grid-row { display: flex; align-items: center; gap: 8px; }
+.lv-grid-k { font: 600 11px var(--font-mono); min-width: 3.5em; color: var(--muted); }
+.lv-cells { display: flex; flex-wrap: wrap; gap: 2px; }
+.lv-cells i { width: 11px; height: 11px; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--border); }
+.lv-cells i.r { background: var(--good); border-color: var(--good); }
+.lv-cells i.n { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lv-without { font-size: 12.5px; margin: 6px 0 0; }
+.lv-k { font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.lv-play.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }

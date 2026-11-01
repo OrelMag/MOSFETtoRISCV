@@ -206,16 +206,22 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bit 0',
       text: 'fa0 adds a[0], b[0] and cin: s[0] and a carry into bit 1. From a[0] to its carry out is 5 NAND delays, from cin only 2 (g5, then g9).',
       parts: ['sa', 'sb', 'fa0'], codex: ['fulladder'],
+      why: 'A 4-bit sum is four column additions, lowest first, each passing its carry to the next. The splitters only cut the buses into wires: no gates, no delay.',
+      whyNot: { text: 'Starting from the top bit does not work: bit 3 cannot be finished until it knows bit 2\'s carry, so the chain must start at bit 0.' },
     },
     {
       title: 'Bit 1',
       text: 'fa1 adds a[1], b[1] and fa0\'s carry. Its own a and b arrive at once, so the carry from bit 0 is what it waits for: 2 more delays on the carry.',
       parts: ['fa1'], codex: ['ripple'],
+      why: 'fa1 needs three bits: a[1], b[1] and the carry out of bit 0. Its own inputs are ready at once, so the only wait is for fa0\'s carry, 2 NAND delays through g5 and g9.',
+      whyNot: { text: 'Feeding a half adder here would drop the carry from bit 0: 1 + 1 = 2 would read as 0 in the next column.' },
     },
     {
       title: 'Bit 2',
       text: 'fa2 continues the chain: the carry into bit 3 settles at depth 5 + 2 + 2 = 9.',
       parts: ['fa2'],
+      why: 'The same full adder again. A ripple adder is n identical cells in a row: the regular structure is why it is cheap to build and easy to check.',
+      whyNot: { text: 'A 4-bit carry-lookahead adder computes all four carries at once from generate and propagate signals: shorter on the carry, at a higher price.', alt: 'cla4' },
       ask: {
         question: 'The carry out of bit 0 settles at depth 5, and each later full adder adds 2 on the carry. At what depth does the carry into bit 3 settle?',
         options: ['9', '15', '7', '11'],
@@ -228,6 +234,8 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bit 3 and cout',
       text: 'fa3 makes s[3] (3 delays after its carry in: depth 12) and cout (depth 11); the merger gathers s. 36 NANDs, depth 12: par. Each extra bit adds 2 to the depth, so 16 bits take 36.',
       parts: ['fa3', 'ms'], codex: ['criticalpath'],
+      why: 'fa3\'s carry out is the adder\'s cout, the bit that says the sum did not fit in 4 bits; the merger bundles s[3:0] back into a bus for free.',
+      whyNot: { text: 'Leaving cout unconnected would pass most rows and fail every one whose sum is 16 or more: the carry out is part of the answer.' },
     },
   ],
   a_add16: [

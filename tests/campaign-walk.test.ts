@@ -181,9 +181,9 @@ describe('step metrics', () => {
   it('count an output nothing drives yet as wrong on every row', () => {
     const n = nodeById('a_ha')!, w = walkOf(n)!, ch = levelChallenge(n)!;
     const m = stepMetrics(w, 0, ch);
-    expect(m.rows).toEqual([{ out: 's', right: 0, total: 4 }, { out: 'c', right: 0, total: 4 }]);
+    expect(m.rows).toMatchObject([{ out: 's', right: 0, total: 4 }, { out: 'c', right: 0, total: 4 }]);
     // After the XOR (step 2) s is right and c still undriven.
-    expect(stepMetrics(w, 1, ch).rows).toEqual([{ out: 's', right: 4, total: 4 }, { out: 'c', right: 0, total: 4 }]);
+    expect(stepMetrics(w, 1, ch).rows).toMatchObject([{ out: 's', right: 4, total: 4 }, { out: 'c', right: 0, total: 4 }]);
     expect(stepMetrics(w, 1, ch)).toMatchObject({ nand: 4, depth: 3 });
   });
 });

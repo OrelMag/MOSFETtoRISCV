@@ -11,11 +11,12 @@ import {
   type ChipDoc, type DefOf, type EndRef, endKey, type LabelDoc, onSegment, orthogonal, type PartDoc, polyline, roundPt, SCHEMA,
   straightLine, type Vec, type WireDoc, type Workspace,
 } from '../editor/model';
+import { ablateSet } from '../sim/ablate';
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
-import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
+import { B0, B1, type Bit, type ComponentDef, inPorts, netlistOf } from '../sim/types';
 import type { Quiz } from '../chapters/types';
 import { levelChallenge } from './levels';
 import type { CampaignNode } from './types';
@@ -29,7 +30,12 @@ export interface WalkScriptStep {
   codex?: string[];
   /** Predict first: a question answered before the step's parts appear (the step that holds the level's trick). */
   ask?: Quiz;
+  /** Why this part and this wiring (one or a few sentences; `text` says what is placed). */
+  why?: string;
+  /** The alternative a learner would try, and why not; `alt`: a library id whose cost is measured beside it. */
+  whyNot?: WhyNot;
 }
+export interface WhyNot { text: string; alt?: string }
 export type WalkScript = WalkScriptStep[];
 
 export interface WalkStep {
@@ -45,6 +51,8 @@ export interface WalkStep {
   codex: string[];
   authored: boolean;
   ask?: Quiz;
+  why?: string;
+  whyNot?: WhyNot;
 }
 
 export interface Walk {
@@ -80,8 +88,8 @@ export function makeWalk(node: CampaignNode, script: WalkScript | null = WALKS[n
   const docs = ch.answer();
   const main = docs[docs.length - 1];
   const g = analyze(docs, main, ch);
-  const groups: { parts: string[]; title: string; text: string; codex: string[]; authored: boolean; ask?: Quiz }[] = script
-    ? script.map((s) => ({ parts: [...s.parts], title: s.title, text: s.text, codex: [...(s.codex ?? [])], authored: true, ask: s.ask }))
+  const groups: { parts: string[]; title: string; text: string; codex: string[]; authored: boolean; ask?: Quiz; why?: string; whyNot?: WhyNot }[] = script
+    ? script.map((s) => ({ parts: [...s.parts], title: s.title, text: s.text, codex: [...(s.codex ?? [])], authored: true, ask: s.ask, why: s.why, whyNot: s.whyNot }))
     : generate(g);
   // Wiring parts named by no step go with the step of the part they feed.
   const stepOf = new Map<string, number>();
@@ -109,7 +117,7 @@ export function makeWalk(node: CampaignNode, script: WalkScript | null = WALKS[n
     const before = partials[i], after = partials[i + 1];
     const old = new Map(before.wires.map((x) => [x.id, x])), oldL = new Map(before.labels.map((x) => [x.id, x]));
     return {
-      title: s.title, text: s.text, parts: order(main, s.parts), codex: s.codex, authored: s.authored, ...(s.ask ? { ask: s.ask } : {}),
+      title: s.title, text: s.text, parts: order(main, s.parts), codex: s.codex, authored: s.authored, ...(s.ask ? { ask: s.ask } : {}), ...(s.why ? { why: s.why } : {}), ...(s.whyNot ? { whyNot: s.whyNot } : {}),
       wires: after.wires.filter((x) => !sameWire(old.get(x.id), x)).map((x) => x.id),
       labels: after.labels.filter((l) => !oldL.has(l.id)).map((l) => l.id),
     };
@@ -680,8 +688,8 @@ export interface StepMetrics {
   transistors: number;
   /** null: sequential (feedback), switch level, or nothing to measure. */
   depth: number | null;
-  /** Table levels: per output pin, the rows of Check's table it already gets right (X or Z is wrong). */
-  rows?: { out: string; right: number; total: number }[];
+  /** Table levels: per output pin, the rows of Check's table it already gets right (X or Z is wrong), and which. */
+  rows?: { out: string; right: number; total: number; ok?: boolean[] }[];
 }
 
 const libs = new WeakMap<Walk, UserLibrary>();
@@ -721,11 +729,14 @@ const bit = (x: number, i: number) => (i < 31 ? (x >>> i) & 1 : Math.floor(x / 2
  * three-valued dual rail (a net is "is 1", "is 0", or neither: X), so an output a missing part
  * leaves undriven counts as wrong; anything else (transistors, behaviours) runs row by row.
  */
-function rowsRight(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: TableCheck): { out: string; right: number; total: number }[] {
+function rowsRight(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: TableCheck): { out: string; right: number; total: number; ok: boolean[] }[] {
   const rows = tableRows(check, ports);
   const I = ports.filter((p) => p.dir === 'in'), O = ports.filter((p) => p.dir === 'out');
   const right = O.map(() => 0);
+  const ok = O.map(() => rows.map(() => false));
+  let row = 0;
   const score = (v: number[], got: (i: number, b: number) => Bit | null) => {
+    const r = row++;
     const want = check.spec(v), care = check.care?.(v);
     O.forEach((p, k) => {
       for (let i = 0; i < p.width; i++) {
@@ -733,6 +744,7 @@ function rowsRight(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[],
         if (got(k, i) !== (bit(want[k], i) ? B1 : B0)) return;
       }
       right[k]++;
+      ok[k][r] = true;
     });
   };
   const design = flatten(def, { mode });
@@ -779,11 +791,41 @@ function rowsRight(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[],
     for (const v of rows) {
       I.forEach((p, i) => sim.setInput(p.name, v[i]));
       sim.settle();
-      if (sim.unstable) continue;
+      if (sim.unstable) { row++; continue; }
       score(v, (k, i) => sim.getBits([outNets[k][i]])[0]);
     }
   }
-  return O.map((p, k) => ({ out: p.name, right: right[k], total: rows.length }));
+  return O.map((p, k) => ({ out: p.name, right: right[k], total: rows.length, ok: ok[k] }));
+}
+
+const withoutCache = new WeakMap<Walk, Map<string, { out: string; wrong: number; total: number }[] | null>>();
+
+/**
+ * Without step k: the finished reference with that step's parts removed (their outputs left open: sim/ablate.ts on the
+ * compiled circuit, whose instances are the parts), over every input row. Per output, the rows it then gets wrong.
+ * Null off a table level or past ablate's input limit.
+ */
+export function withoutStep(w: Walk, k: number, ch: BuildChallenge): { out: string; wrong: number; total: number }[] | null {
+  if (ch.check.kind !== 'table') return null;
+  let cache = withoutCache.get(w);
+  if (!cache) withoutCache.set(w, (cache = new Map()));
+  const key = `${ch.id}|${k}`;
+  if (cache.has(key)) return cache.get(key)!;
+  let res: { out: string; wrong: number; total: number }[] | null = null;
+  try {
+    const full = partialDoc(w, w.steps.length - 1);
+    let lib = libs.get(w);
+    if (!lib) libs.set(w, (lib = new UserLibrary()));
+    lib.update(workspaceOf([...w.docs.slice(0, -1), full]));
+    const c = lib.compiled(full.id);
+    const r = c && c.mode === 'gate' ? ablateSet(c.def, w.steps[k].parts) : null;
+    if (r && typeof r !== 'string') {
+      const total = 2 ** inPorts(c!.def).reduce((n, p) => n + p.width, 0);
+      res = Object.entries(r).map(([out, wrong]) => ({ out, wrong, total }));
+    }
+  } catch { res = null; }
+  cache.set(key, res);
+  return res;
 }
 
 /** NAND triples in topological order (Kahn; what is left in loops goes last, swept until stable). */
