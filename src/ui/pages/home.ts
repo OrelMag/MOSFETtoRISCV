@@ -71,7 +71,7 @@ export function homePage(): Page {
         h('h1', null, 'From a single ', h('span', { class: 'grad' }, 'MOSFET'), ' to a ', h('span', { class: 'grad' }, 'RISC-V'), ' processor.'),
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         h('div', { class: 'cta' },
-          h('a', { class: 'btn primary', href: resume ? `#/c/${resume.chapter.id}/${resume.step}` : '#/c/map/0' },
+          h('a', { class: 'btn primary', href: resume ? `#/c/${resume.chapter.id}/${resume.step}` : '#/c/basics/0' },
             resume ? `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}` : 'Start the journey', icon('chevR', 16)),
           campaign,
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),

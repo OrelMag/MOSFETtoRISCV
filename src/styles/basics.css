@@ -1,0 +1,36 @@
+/* Chapter 0's explainers (widgets/basics.ts): a loop, noise bands, lamps, a switch table, a toy machine's listing. */
+
+.bx-svg { display: block; width: 100%; height: auto; margin: 4px 0 10px; background: var(--canvas); border: 1px solid var(--border); border-radius: 10px; }
+.bx-wire { fill: none; stroke: var(--w0); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.bx-wire.on { stroke: var(--w1); }
+.bx-sym { fill: none; stroke: var(--sym-stroke); stroke-width: 2.5; }
+.bx-sym.thick { stroke-width: 6; }
+.bx-pin { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 2; }
+.bx-lamp { fill: var(--surface-3); stroke: var(--sym-stroke); stroke-width: 2; }
+.bx-lamp.on { fill: var(--warn); }
+.bx-glow { fill: var(--w1-glow); }
+.bx-lbl { fill: var(--text-2); font: 12px var(--font-mono); }
+.bx-big { fill: var(--text); font: 700 16px var(--font-ui); }
+.bx-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.bx-plots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.bx-cap { font: 12px var(--font-mono); color: var(--text-2); }
+.bx-band { fill: var(--surface-2); }
+.bx-band.alt { fill: var(--surface-3); }
+.bx-dot { fill: var(--good); }
+.bx-dot.bad { fill: var(--bad); }
+.bx-lamps { display: flex; gap: 14px; justify-content: center; padding: 10px 0; }
+.bx-lampb { display: grid; justify-items: center; gap: 6px; border: 0; background: none; color: var(--muted); font: 600 13px var(--font-mono); cursor: pointer; }
+.bx-lampb i { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface-2); }
+.bx-lampb.on i { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 18px var(--w1-glow); }
+.bx-lampb:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.bx-sum { text-align: center; color: var(--text-2); font-size: 14px; margin: 4px 0 12px; }
+.bx-sum em { color: var(--warn); font-style: normal; }
+.bx-table { border-collapse: collapse; font: 14px var(--font-mono); margin: 0 auto; }
+.bx-table th, .bx-table td { padding: 6px 18px; border-bottom: 1px solid var(--border); text-align: center; }
+.bx-table th { color: var(--muted); font-weight: 500; }
+.bx-table tr.cur td { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.bx-listing { font: 13px var(--font-mono); display: grid; gap: 2px; }
+.bx-line { display: grid; grid-template-columns: 18px 26px 88px minmax(0, 1fr); gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--text-2); }
+.bx-line .n { color: var(--muted); text-align: right; }
+.bx-line.pc { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+@media (pointer: coarse) { .bx-lampb i { width: 52px; height: 52px; } }

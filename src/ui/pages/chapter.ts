@@ -214,7 +214,7 @@ export class ChapterPage implements Page {
     }
     const { done, total } = checksDone(c, (k) => settings.isSolved(k));
     this.head.replaceChildren(
-      h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : c.prologue ? `Prologue ${c.prologue}` : `Chapter ${c.num}`} · ${c.level}`),
+      h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : c.prologue ? `Prologue ${c.prologue}` : c.label ?? `Chapter ${c.num}`} · ${c.level}`),
       h('h1', { class: 'chapter-title' }, h('button', {
         class: 'chapter-switch', title: 'Switch chapter', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),

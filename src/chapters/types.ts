@@ -119,6 +119,8 @@ export interface Chapter {
   appendix?: string;
   /** The label of a prologue chapter (P1 …: before the transistor, between the map and chapter 1; num 0). */
   prologue?: string;
+  /** Shown in place of the number (Basics: "Start", before the map; still a journey chapter, num 0). */
+  label?: string;
   title: string;
   /** One line for cards. */
   blurb: string;
@@ -139,7 +141,7 @@ export interface Chapter {
 }
 
 /** How a chapter is numbered on screen: 07, P1 for a prologue chapter, A for an appendix. */
-export const chapterNo = (c: { num: number; appendix?: string; prologue?: string }): string => c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0');
+export const chapterNo = (c: { num: number; appendix?: string; prologue?: string; label?: string }): string => c.label ?? c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0');
 
 /** Planned chapters, shown greyed out on the map. */
 export interface FutureChapter {
