@@ -409,13 +409,18 @@ export function equation(nibble: number): string {
 }
 export const bits4 = (n: number) => n.toString(2).padStart(4, '0');
 
-const cName = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+const C_TOKEN: Record<Kind, string> = { ram: 'RAM', flash: 'FLASH', dram: 'DRAM', screen: 'SCREEN', io: 'IO', dma: 'DMA', other: 'DEV' };
+/** The C identifier of each region: RAM, FLASH, DRAM, SCREEN, IO, DMA; a second of a kind is RAM2. */
+export function cNames(map: MemMap): string[] {
+  const seen = new Map<Kind, number>();
+  return map.regions.map((r) => { const n = (seen.get(r.kind) ?? 0) + 1; seen.set(r.kind, n); return C_TOKEN[r.kind] + (n > 1 ? n : ''); });
+}
 const hexw = (n: number) => `0x${(n >>> 0).toString(16).toUpperCase().padStart(8, '0')}u`;
 
 /** A C header: BASE and SIZE (the bytes the device answers) of every region, WINDOW once. */
 export function cHeader(map: MemMap, chip: string): string {
-  const nm = names(map);
-  const rows = map.regions.map((r, i) => ({ r, n: cName(nm[i]), label: nm[i] })).sort((a, b) => a.r.base - b.r.base);
+  const nm = names(map), cn = cNames(map);
+  const rows = map.regions.map((r, i) => ({ r, n: cn[i], label: nm[i] })).sort((a, b) => a.r.base - b.r.base);
   const w = Math.max(...rows.map((x) => x.n.length), 6);
   return [
     `/* Memory map of "${chip}": the bus decodes a[31:28], so every region owns a 256 MiB window.`,
@@ -425,7 +430,7 @@ export function cHeader(map: MemMap, chip: string): string {
     '',
     `#define MMAP_WINDOW ${hexw(WINDOW)}`,
     '',
-    ...rows.flatMap(({ r, n, label }) => [`/* ${label}${r.detail ? ` (${r.detail})` : ''} */`, `#define ${n.padEnd(w)}_BASE ${hexw(r.base)}`, `#define ${n.padEnd(w)}_SIZE ${hexw(r.used)}`]),
+    ...rows.flatMap(({ r, n, label }) => [`/* ${label}${r.detail ? ` (${r.detail})` : ''} */`, `#define ${(n + '_BASE').padEnd(w + 5)} ${hexw(r.base)}`, `#define ${(n + '_SIZE').padEnd(w + 5)} ${hexw(r.used)}`]),
     '',
     '#endif',
     '',
@@ -434,8 +439,8 @@ export function cHeader(map: MemMap, chip: string): string {
 
 /** A linker script's MEMORY block for the regions that hold code and data, and PROVIDEd symbols for the devices. */
 export function linkerScript(map: MemMap, chip: string): string {
-  const nm = names(map);
-  const rows = map.regions.map((r, i) => ({ r, n: cName(nm[i]) })).sort((a, b) => a.r.base - b.r.base);
+  const cn = cNames(map);
+  const rows = map.regions.map((r, i) => ({ r, n: cn[i] })).sort((a, b) => a.r.base - b.r.base);
   const mem = rows.filter(({ r }) => r.kind === 'ram' || r.kind === 'flash' || r.kind === 'dram');
   const len = (n: number) => (n >= 1024 && n % 1024 === 0 ? `${n / 1024}K` : `${n}`);
   const dev = rows.filter(({ r }) => !mem.some((m) => m.r === r));

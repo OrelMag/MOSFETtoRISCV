@@ -183,7 +183,7 @@ export function nibbleSelects(b: Builder, g: ReturnType<typeof kit>, nib: string
 }
 
 /** The address decoder: the top nibble of the address presented (AW when writing, else AR); held with the grant. */
-function axiDecoder(codes: number[]): ComponentDef {
+export function axiDecoder(codes: number[]): ComponentDef {
   const S = codes.length;
   return memo(`axidec${codes.join('_')}`, () => {
     const b = new Builder(14, 14);

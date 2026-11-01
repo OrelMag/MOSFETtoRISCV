@@ -79,7 +79,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^fpnr(\d+)_(\d+)_(\d+)$/, (m) => normRound({ E: +m[1], M: +m[2] }, +m[3])],
   [/^fpcvt(\d+)_(\d+)_(\d+)$/, (m) => fpFromInt({ E: +m[1], M: +m[2] }, +m[3])],
   // the sandbox bus with other slave codes (the memory-map designer's Apply makes one: a saved chip places it by id)
-  [/^axibus2_(d+(?:_d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
+  [/^axibus2_(\d+(?:_\d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
   // a 74LS189 holding its 16 nibbles at power-on (the sandbox's SAP-1 RAM)
   [/^ls189_i([0-9a-f]{16})$/, (m) => ls189With(Array.from(m[1], (c) => parseInt(c, 16)))],
 ];
