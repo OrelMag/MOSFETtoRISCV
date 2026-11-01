@@ -38,6 +38,7 @@ export * from './axi';
 export * from './soc';
 export * from './cache';
 export * from './multicycle';
+export * from './ucode';
 export * from './fpu';
 export * from './mpdecode';
 export * from './multicore';

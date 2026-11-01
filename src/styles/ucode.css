@@ -1,0 +1,76 @@
+/* The microcode painter (widgets/ucodepainter.ts): a grid of microwords, the selected word's datapath and the check. */
+
+.uc-dlg.sb-help .uc-panel { width: min(1320px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 10px; padding: 0; overflow: hidden; }
+.uc-head-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.uc-head-bar h3 { display: flex; align-items: center; gap: 7px; font-size: 18px; }
+.uc-sub { color: var(--muted); font-size: 12.5px; }
+.uc-grow { flex: 1 1 auto; }
+.uc-body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; overflow: auto; flex: 1 1 auto; }
+.uc-main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.uc-side { padding: 14px 16px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.uc-gridwrap { overflow-x: auto; padding-bottom: 4px; }
+.uc-grid { display: flex; flex-direction: column; gap: 2px; font: 12px var(--font-mono); width: max-content; min-width: 100%; }
+.uc-row { display: grid; grid-template-columns: 24px 82px repeat(6, 36px) 70px 60px 50px 36px 36px 52px 76px; gap: 3px; align-items: center; min-height: 28px; padding: 0 4px; border-radius: 6px; }
+.uc-row.sel { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -1px; }
+.uc-row.edited:not(.sel) { background: var(--warn-soft); }
+.uc-head { color: var(--muted); font-weight: 600; align-items: end; min-height: 34px; }
+.uc-i { color: var(--muted); }
+.uc-n { font: 600 12.5px var(--font-ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uc-cell { height: 22px; border-radius: 4px; box-sizing: border-box; display: grid; place-items: center; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.uc-cell.bit { border: 1px solid var(--border-strong); background: var(--surface); }
+.uc-cell.bit.on { background: var(--accent); border-color: var(--accent); }
+.uc-cell.named, .uc-cell.txt { background: var(--surface-2); color: var(--text); padding: 0 4px; font-size: 11.5px; border: 1px solid transparent; white-space: nowrap; }
+.uc-cell.named:not(.on) { color: var(--muted); }
+.uc-cell.txt { color: var(--text-2); }
+.uc-cell.chg { box-shadow: 0 0 0 2px var(--warn); }
+.uc-cell:hover { filter: brightness(0.96); }
+.uc-cell:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; z-index: 1; }
+.uc-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12.5px; color: var(--text-2); }
+.uc-legend span { display: inline-flex; gap: 6px; align-items: center; }
+.uc-legend .k { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border-strong); display: inline-block; box-sizing: border-box; }
+.uc-legend .k.on { background: var(--accent); border-color: var(--accent); }
+.uc-legend .k.chg { background: var(--warn-soft); border-color: var(--warn); }
+.uc-dispatch { display: grid; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.uc-dispatch > div { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.uc-d { display: inline-flex; align-items: center; gap: 4px; font: 12px var(--font-mono); }
+.uc-d select { font: 12px var(--font-mono); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; padding: 2px 4px; max-width: 120px; }
+.uc-d select.chg { box-shadow: 0 0 0 2px var(--warn); }
+.uc-probs { display: grid; gap: 4px; font-size: 12.5px; }
+.uc-probs div { padding: 4px 9px; border-radius: 6px; }
+.uc-probs .bad { background: var(--bad-soft); color: var(--bad); }
+.uc-probs .warn { background: var(--warn-soft); color: var(--warn); }
+.uc-k { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+.uc-does { font: 13px/1.6 var(--font-mono); color: var(--text); }
+.uc-does .was { color: var(--muted); }
+.uc-fig { margin: 0; padding: 10px; border-radius: 12px; background: #11141c; color: #a7adbd; }
+.uc-fig figcaption { font-size: 12px; margin-top: 6px; }
+.uc-dp { width: 100%; height: auto; display: block; }
+.uc-dp rect { fill: #1f2430; stroke: #4d5568; stroke-width: 1.2; }
+.uc-dp text { fill: #aeb4c4; font: 600 9.5px var(--font-ui); text-anchor: middle; dominant-baseline: central; }
+.uc-dp .lit rect { fill: #3a2c0c; stroke: #f5a524; stroke-width: 2; }
+.uc-dp .lit text { fill: #ffd27a; }
+.uc-dp path { fill: none; stroke: #4d5568; stroke-width: 1.2; stroke-dasharray: 3 3; }
+.uc-dp path.lit { stroke: #f5a524; stroke-width: 2.6; stroke-dasharray: none; }
+.uc-check { padding: 11px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.uc-check.good { background: var(--good-soft); border-color: var(--good); }
+.uc-check.good > strong { color: var(--good); }
+.uc-check.bad { background: var(--bad-soft); border-color: var(--bad); }
+.uc-check.bad > strong { color: var(--bad); }
+.uc-check .uc-muted { color: var(--text-2); }
+.uc-check .uc-first { font-family: var(--font-mono); font-size: 12.5px; }
+.uc-check .uc-fails, .uc-check .uc-prog { font-size: 12.5px; color: var(--text-2); }
+.uc-foot { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+
+/* The chapter's sheet: under the stage, no backdrop (the stage shows what the word drives) */
+.uc-dlg.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 58vh; display: flex; }
+.uc-dlg.sheet .uc-panel { width: 100%; display: flex; flex-direction: column; max-height: 58vh; overflow: hidden; border-radius: 14px 14px 0 0; box-shadow: var(--shadow-lg); border: 1px solid var(--border-strong); background: var(--surface); }
+
+@media (max-width: 1000px) {
+  .uc-body { grid-template-columns: minmax(0, 1fr); }
+  .uc-side { border-left: 0; border-top: 1px solid var(--border); }
+}
+@media (pointer: coarse) {
+  .uc-row { min-height: 40px; grid-template-columns: 24px 82px repeat(6, 40px) 74px 64px 54px 40px 40px 56px 80px; }
+  .uc-cell { height: 36px; }
+  .uc-d select { padding: 8px 4px; }
+}
