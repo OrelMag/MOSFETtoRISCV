@@ -1188,7 +1188,7 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
   shows as a numbered marker on it; bookmarks also on workbench components and sandbox chips (ui/notes.ts, notesui.ts)
 - ✅ `#/notes` (My notes): filters, search, each item back to its place; the review queue beside it: wrong answers first, then
   "Ask again soon", then the longest unseen, from chapters visited; right answers return after 2 / 7 / 21 days (ui/review.ts)
-- ⏳ Registered in the "Export all progress" backup (union by id, newest edit wins: `mergeNotes`, `mergeReview`) once that module is on main
+- ✅ Notes and review history are in the "Export all progress" backup (ui/backup.ts: `mergeNotes`, `mergeReview`)
 
 ---
 

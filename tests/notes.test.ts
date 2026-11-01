@@ -146,3 +146,19 @@ describe('review schedule', () => {
     expect(all.some((q) => q.key.startsWith('codex:'))).toBe(true);
   });
 });
+
+describe('mergeReview', () => {
+  it('keeps the later answer per question, the union of questions, and is idempotent', () => {
+    const a = emptyReview(), b = emptyReview();
+    a.memos.q1 = answered(undefined, false, 1000);
+    a.memos.q2 = answered(undefined, true, 5000);
+    b.memos.q1 = answered(a.memos.q1, true, 9000);
+    b.memos.q3 = answered(undefined, false, 2000);
+    const m = mergeReview(a, b);
+    expect(Object.keys(m.memos).sort()).toEqual(['q1', 'q2', 'q3']);
+    expect(m.memos.q1.last).toBe(9000);
+    expect(m.memos.q1.streak).toBe(1);
+    expect(mergeReview(b, a)).toEqual(m);
+    expect(mergeReview(m, m)).toEqual(m);
+  });
+});
