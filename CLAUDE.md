@@ -177,6 +177,13 @@ src/sim/       simulation core (no DOM)
                  flat: only port counts and joined port bits travel up; equal to the flattened count, tests/tech.test.ts)
   dead.ts        deadInstances(netlist, ports): parts no path leads from to an output (tested over every netlist
                  and reference answer; the sandbox lint warns about them)
+  explain.ts     Why?: whyNet(sim, net) traces a value back through the deciding inputs (a NAND at 1: its 0 input nearest a
+                 source; at 0: every input) to pins, constants and storage (a loop of ≤ LATCH gates, a stateful behaviour);
+                 foldAt / whyAt fold the trace into one drill level's steps (a child's gates into the child, the bits each cause
+                 uses), sayStep words them, explainNets does both (tests/explain.test.ts: the cited pins alone decide the value)
+  ablate.ts      Break a part: ablate(def, path) removes each child of a level (outputs open), then holds it at 0 and 1, over
+                 the whole truth table (≤ MAX_BITS inputs, bit-parallel three-valued), against the intact one; roleText
+                 (tests/ablate.test.ts: equal to simulating the netlist without the part)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
   power.ts       dynamic power estimate: netCaps (C per net from fan-out: FF_INPUT / FF_DRIVER / FF_WIRE, illustrative
                  28 nm-class), ½ C V² per toggle, PowerMeter over a GateSim (reset / mark after settles: settled vs glitch
@@ -497,6 +504,8 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                a note); undo / redo per component for the visit (Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y); applyLayout keeps the
                nets and their order, so the simulation, probes and marks are untouched; a moved part's nets drop its
                trunk / via; the right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
+               whypanel.ts (the Why? card, W: a click on a wire traces it with sim/explain.ts, the chain's parts lit;
+               Each part: sim/ablate.ts's table; on the stage and in the sandbox's look inside),
                crumbvals.ts (the breadcrumb's live values, stage and look inside: each level the output carrying the one
                below, `bit [7] = 1` where the level above's bus was sliced),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or

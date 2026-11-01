@@ -14,6 +14,7 @@ import { h, hintBadge, icon, s } from '../ui/dom';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
+import { WhyPanel } from '../view/whypanel';
 import type { Widget } from '../view/stage';
 import { transistorLeaf } from '../widgets/mosfet';
 import type { Editor } from './editor';
@@ -60,6 +61,9 @@ class InsideView {
   private crumbVals: { el: HTMLElement; v: CrumbValue }[] = [];
   private readonly chip: string;
   private readonly hook = () => this.tick();
+  /** Why? (view/whypanel.ts): a click on a wire traces its value; what each part of the level is for. */
+  private why: WhyPanel;
+  private whyBtn: HTMLButtonElement;
 
   constructor(private ed: Editor) {
     this.chip = ed.chipId;
@@ -68,9 +72,27 @@ class InsideView {
     this.badge = h('div', { class: 'level-badge' });
     this.canvas = h('div', { class: 'canvas sb-inside-canvas' }, this.badge,
       hintBadge('double-click a part to open it · Esc: up · live: toggle inputs on the left, or Run', 'double-tap a part: open · tap an input to toggle it', 'inside'));
+    this.why = new WhyPanel({
+      ctx: () => this.ctx,
+      light: (names) => this.view.highlight(names, names.length > 0),
+      selectNet: (i) => this.view.selectNet(i),
+      toggled: (on) => {
+        this.whyBtn.classList.toggle('on', on);
+        this.canvas.classList.toggle('probing', on);
+        if (!on) this.view.setCover([], true);
+      },
+    });
+    this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
+      icon('why', 15), h('span', { class: 'lbl' }, 'Why?')) as HTMLButtonElement;
+    this.canvas.append(this.why.el);
+    new ResizeObserver(() => {
+      if (!this.why.on) return;
+      const c = this.canvas.getBoundingClientRect(), r = this.why.el.getBoundingClientRect();
+      this.view.setCover([{ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height }]);
+    }).observe(this.why.el);
     this.el = h('section', { class: 'sb-inside', role: 'dialog', 'aria-label': 'Look inside', tabindex: '-1' },
       h('div', { class: 'stage-bar sb-inside-bar' },
-        h('span', { class: 'sb-inside-tag' }, icon('layers', 14), 'Inside'), this.crumbs,
+        h('span', { class: 'sb-inside-tag' }, icon('layers', 14), 'Inside'), this.crumbs, this.whyBtn,
         btn('up', 'Up one level (Esc)', () => this.up()),
         btn('minus', 'Zoom out', () => this.view.zoom(1.25)),
         btn('plus', 'Zoom in', () => this.view.zoom(0.8)),
@@ -89,6 +111,12 @@ class InsideView {
         if (this.view.undo(k === 'y' || e.shiftKey)) e.preventDefault();
         return;
       }
+      if (e.key === 'Escape' && this.why.on) {
+        e.preventDefault();
+        this.why.setOn(false);
+        return;
+      }
+      if (k === 'w' && !e.ctrlKey && !e.metaKey && !e.altKey) this.why.setOn(!this.why.on);
       if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault();
         this.up();
@@ -101,6 +129,7 @@ class InsideView {
       toggleInput: () => {},
       editInput: () => {},
       layoutChanged: () => this.decorate(),
+      netClick: (i) => this.why.netClick(i),
     });
     this.view.radix = ed.view.radix;
     ed.paintHooks.add(this.hook);
@@ -136,6 +165,7 @@ class InsideView {
     }
     if (ctx === this.root && !leaf) return this.close();
     this.ctx = ctx;
+    this.why.levelChanged();
     // A library part's wires move as on the stage (the same layout, by component id); a user chip's are drawn in its own tab.
     this.view.arrange = ctx.def.id.startsWith('u_') ? false : 'wires';
     this.view.show(ctx, false, keepView);
@@ -263,6 +293,7 @@ class InsideView {
     if (ctx.isSubSim) ctx.sync();
     this.view.radix = ed.view.radix;
     this.view.update();
+    this.why.update();
     this.ioPaint?.();
     this.leaf?.w.update?.();
     this.syncCrumbVals();

@@ -2126,3 +2126,33 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .nav a { min-width: 36px; padding-inline: 8px; }
 }
 @media (pointer: coarse) { .lab-chip, .lab-unit, .lab-x, .lab-add { min-height: 40px; min-width: 40px; } .lab-num input, .lab-num select { min-height: 40px; } }
+
+/* ---------- Why? (view/whypanel.ts): a wire's value traced to its causes, what each part is for ---------- */
+.why-card {
+  position: absolute; left: 12px; top: 12px; z-index: 6; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px);
+  display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg); font-size: 13px;
+}
+.why-card > header { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border); }
+.why-card > header b { font-size: 13.5px; }
+.why-tabs { margin-left: auto; }
+.why-tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+.why-body { overflow: auto; padding: 10px 12px 12px; display: grid; gap: 8px; }
+.why-q { margin: 0; font-weight: 600; }
+.why-hint { margin: 0; color: var(--muted); font-size: 12px; }
+.why-chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.why-chain li { display: grid; grid-template-columns: 20px 1fr; gap: 6px; padding: 4px 6px; border-radius: 6px; line-height: 1.45; cursor: default; }
+.why-chain li:hover, .why-chain li:focus-visible { background: var(--surface-2); }
+.why-n { font: 600 11px var(--font-mono); color: var(--accent); padding-top: 2px; }
+.why-chain li[data-kind="pin"] .why-n, .why-chain li[data-kind="port"] .why-n { color: var(--muted); }
+.why-table { overflow-x: auto; }
+.why-table table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.why-table th, .why-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.why-table th { font-size: 11px; color: var(--muted); font-weight: 600; }
+.why-table td.bad { color: var(--bad, var(--wx)); font-weight: 600; }
+.why-table td.muted { color: var(--muted); }
+.why-table tr:hover td, .why-table tr:focus-visible td { background: var(--surface-2); }
+@media (pointer: coarse) {
+  .why-chain li, .why-table tr td { min-height: 40px; }
+  .why-tabs button, .why-card > header .btn { min-height: 40px; min-width: 40px; }
+}

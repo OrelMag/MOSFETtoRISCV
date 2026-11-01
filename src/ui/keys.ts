@@ -78,7 +78,8 @@ export const KEYS: readonly KeyDef[] = [
   // ---- the stage (chapters and the workbench)
   { id: 'stage.focus', group: 'stage', caps: ['S'], does: 'focus the circuit (Tab from it goes on to its controls)', match: [letter('s')] },
   { id: 'stage.probe', group: 'stage', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')] },
-  { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe mode, else up one level' },
+  { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
+  { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },
   { id: 'stage.undo', group: 'stage', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: 'undo · redo moving parts' },
   // ---- the sandbox (and campaign levels)
   { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n; a click places it (Shift-click: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },

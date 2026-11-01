@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FULL_ADDER, rca, SR_LATCH, DFF } from '../src/lib';
 import { registry } from '../src/lib/define';
-import { explainNet, stepList, whyAt, whyNet, type Why } from '../src/sim/explain';
+import { explainNet, explainNets, stepList, whyAt, whyNet, type Why } from '../src/sim/explain';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { inputBits, needsSwitchLevel, reachesTransistors } from '../src/sim/harness';
@@ -95,5 +95,11 @@ describe('whyNet', () => {
       }
     }
     expect(checked).toBeGreaterThan(500);
+  });
+  it('names a bus whole and its bits where a box uses them', () => {
+    const s = sim(rca(4), { a: 9, b: 7, cin: 0 });
+    const { lines } = explainNets(s, s.design.root.ports.s);
+    expect(lines.filter((l) => l.startsWith('a = 9 is an input pin'))).toHaveLength(1);
+    expect(lines).toContain('fa1.s = 0 from a[1] = 0, b[1] = 1, fa0.cout = 1.');
   });
 });
