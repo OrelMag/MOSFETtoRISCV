@@ -504,7 +504,7 @@ cycle 19  add issues        (26 if each load were waited out in turn)</pre>The w
       'Clearing the bit at issue instead of at write-back: the next instruction then reads the old value.',
       'Expecting a scoreboard to remove the latency: it only lets independent work fill it; with nothing independent, the thread still waits (and another warp has to fill the slots).',
     ],
-    chapters: [
+    chapters: [{ chapter: 'ooo', step: 3, label: 'The scoreboard (CDC 6600, 1964)' }, 
       { chapter: 'warps', step: 1, label: 'A scoreboard' },
       { chapter: 'cache', step: 13, label: 'A cache in the pipeline' },
     ],

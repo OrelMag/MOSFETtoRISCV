@@ -61,7 +61,7 @@ export const chFastAdders: Chapter = {
         options: ['Faster decode, immediate mux, ALU result mux and zero detector', 'An even faster adder', 'A faster register-file write', 'Nothing: 103 is the limit for this instruction set'],
         answer: 0,
         explain: 'Fix the worst path and the next one appears: the new critical path runs through decode, the immediate mux, the ALU\'s result mux and its zero detector.',
-        why: ['', 'The 32-bit Kogge–Stone is now under 20 NAND delays, a minority of the path: shaving it further moves little.', 'The critical path is a branch: it ends at the PC and never writes the register file.', 'Pipelining cuts the path into pieces; the next chapter\'s pipeline runs at 93 with these adders.'],
+        why: ['', 'The 32-bit Kogge–Stone is now under 20 NAND delays, a minority of the path: shaving it further moves little.', 'The critical path is a branch: it ends at the PC and never writes the register file.', 'Cutting the path into pieces is the next chapter\'s method: that CPU runs at 93 with these adders.'],
       },
     ],
   },
@@ -174,7 +174,7 @@ export const chFastAdders: Chapter = {
         <p>At 32 bits with 4-bit blocks: 32 NAND delays instead of 68, for 680 NANDs instead of 288. Uneven blocks (small first, growing
         later, so every block's answers are ready just as its carry arrives) do better; so does selecting at two levels.</p>
         <p>The trade is speculation: spend hardware on work that will mostly be thrown away (half of every block's sums are discarded) to take the carry off the critical path.
-        It is the same bargain as branch prediction in a pipeline, but cheaper, because here both outcomes can be computed and nothing has to be undone.
+        It is the same bargain as guessing a branch outcome early, but cheaper, because here both outcomes can be computed and nothing has to be undone.
         The price is ${(N(carrySelect(32)) / N(rca(32))).toFixed(1)} times the NANDs of a ripple adder for ${(D(rca(32)) / D(carrySelect(32))).toFixed(1)} times the speed.</p>
         <div class="try">Toggle <code>cin</code> (slow motion is on): only the first block and the chain of multiplexers react.</div>`,
       scene: () => ({ root: carrySelect(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
@@ -293,7 +293,7 @@ export const chFastAdders: Chapter = {
         program: start at every flip-flop output (clk→q), propagate arrival times through every gate, and take the
         latest arrival at any flip-flop input (+ setup). The panel shows the result and highlights the path. Its clock rate
         converts NAND delays at an illustrative 25 ps each, a loaded NAND2 at 28 nm; real sign-off timing comes from a
-        characterized cell library, with slew, load and wire RC per arc (<a href="#/c/silicon/0">chapter 28</a> runs our dual-core through one).</p>
+        characterized library of gate cells, with slew, load and wire RC per arc (<a href="#/c/silicon/0">chapter 28</a> runs our dual-core through one).</p>
         <p>Surprise: it is not <code>lw</code>. It is a <strong>branch</strong>: <span data-show="pc">PC</span> →
         <span data-show="imem">instruction memory</span> → <span data-show="ctl">decode</span> →
         <span data-show="imm">immediate mux</span> → <span data-show="srcB">SrcB</span> → 32-bit subtract in the
@@ -357,7 +357,7 @@ export const chFastAdders: Chapter = {
         still opens down to transistors, the check against the instruction-set simulator still passes, and the clock period drops by about a third.</p>
         <p>Look at the new critical path: <span data-show="ctl">decode</span> (opcode AND gates, OR trees), the
         <span data-show="imm">immediate multiplexer</span> and the ALU's result mux and 32-input zero detector now dominate. That is the usual story of optimization: fix the worst
-        path and the next one appears. Pipelining, next, attacks the problem differently: it cuts the path into pieces.</p>
+        path and the next one appears. Overlapping instructions, next, attacks the problem differently: it cuts the path into pieces.</p>
         <p>The accounting is simple because the adder is on the critical path once: the period falls by exactly the ALU's saving, ${ALU_RIPPLE} to ${ALU_KS} delays, from ${CPU_PERIOD} to ${CPU_PERIOD - ALU_RIPPLE + ALU_KS}. The cost is in area, not time: the ALU grows
         from ${N(alu(32))} to ${N(alu(32, 'ks'))} NANDs, and the two other adders grow with it. The remaining path is decode, the immediate mux, the result mux and the zero detector, none of which has an obvious faster form.</p>`,
       scene: () => cpuScene({ source: src('sum'), timing: true, adder: 'ks' }),

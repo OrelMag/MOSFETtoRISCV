@@ -8,9 +8,6 @@ import { chapters } from '../src/chapters';
 import { earlyUses } from '../src/chapters/firstuse';
 import { TAUGHT, TAUGHT_OPTIONAL } from '../src/chapters/taught';
 
-// Uses still to fix (chapter|where|id). It only shrinks: a new early use fails, and so does a fixed one left listed.
-const PENDING: string[] = (await import('./first-use.pending.json')).default;
-
 describe('first use', () => {
   it('every taught chapter is one of the entry\'s own links, on the right side of the journey', () => {
     const ids = new Set(CODEX.map((e) => e.id));
@@ -38,8 +35,6 @@ describe('first use', () => {
   it('no codex term is used before the chapter that teaches it, unless explained in place', () => {
     const { early, thin } = earlyUses(chapters);
     expect(thin, 'a data-ahead explanation needs a few words of its own').toEqual([]);
-    const now = early.map((u) => `${u.chapter}|${u.where}|${u.id}`);
-    expect(now.filter((k) => !PENDING.includes(k)), 'new early uses').toEqual([]);
-    expect(PENDING.filter((k) => !now.includes(k)), 'fixed: take them off first-use.pending.json').toEqual([]);
+    expect(early.map((u) => `${u.chapter} / ${u.where}: ${u.word} (${u.id})`), 'reword it, or explain it in place with data-ahead').toEqual([]);
   });
 });

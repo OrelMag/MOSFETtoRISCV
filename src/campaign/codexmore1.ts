@@ -108,7 +108,7 @@ RV16 pipeline            9,218 NANDs</pre>`,
       'Choosing NOR for wide functions: its series PMOS make it worse than NAND at every fan-in.',
     ],
     anatomy: ['imm', 'ctl'],
-    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'silicon', step: 2, label: 'A real cell library' }],
+    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'silicon', step: 2, label: 'A real cell library' }, { chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
   },
 
   depth: {
@@ -175,7 +175,7 @@ read upwards: 11 1110 1000 = 0x3E8 = 512 + 256 + 128 + 64 + 32 + 8</pre>`,
       'Reading the remainders top-down: the first remainder is bit 0.',
       'Assuming a left shift always doubles: the top bit falls off (0x8000 shifted left is 0 at 16 bits).',
     ],
-    chapters: [{ chapter: 'binary', step: 0, label: 'Counting with two digits' }],
+    chapters: [{ chapter: 'basics', step: 2, label: 'Counting with lamps' }, { chapter: 'binary', step: 0, label: 'Counting with two digits' }],
   },
 
   hex: {
@@ -235,7 +235,7 @@ bne  t1, a2, ovf</pre>`,
       'Expecting a trap: RV16 wraps silently, as RISC-V does.',
     ],
     anatomy: ['alu'],
-    chapters: [{ chapter: 'adders', step: 7, label: 'Signed comparison' }],
+    chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }, { chapter: 'adders', step: 7, label: 'Signed comparison' }],
   },
 
   signext: {
@@ -329,6 +329,7 @@ a shift register (q straight into the next d) relies on
       'Leaving the memories out of the path: <code>rv16_cpu</code>\'s 98 delays include two 8-delay memory reads.',
     ],
     chapters: [
+      { chapter: 'latches', step: 3, label: 'The flip-flop: act only on the edge' },
       { chapter: 'fastadd', step: 7, label: 'Static timing on our CPU' },
       { chapter: 'fastadd', step: 8, label: 'Overclock it' },
       { chapter: 'silicon', step: 4, label: 'Wires and the clock' },

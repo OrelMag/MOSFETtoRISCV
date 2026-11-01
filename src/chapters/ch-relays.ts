@@ -32,7 +32,7 @@ export const chRelays: Chapter = {
     keep: [
       `A telephone relay on 24 V closes at ${ms(PULL.pull ?? 0)} V, opens only below ${ms(PULL.drop ?? 0)} V, and is settled ${ms(RELAY_STEP_MS)} ms after switch-on, bounce included: one relay step.`,
       'Contacts pass a line both ways at full strength, isolated from the coil. Every line ends on a coil, a resistor to ground: <strong>voltage means 1, no connection means 0</strong>.',
-      `Changeover contacts make selection nearly free: XOR is 2 relays and 1 step (in CMOS 4 NANDs, 3 delays). The adder's carry runs through closed contacts on two lines, c and its complement: 1 step at any width, against ${logicDepth(rca(32))} gate delays for a 32-bit CMOS ripple-carry adder.`,
+      `Changeover contacts make selection nearly free: XOR is 2 relays and 1 step (in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> 4 NANDs, 3 delays). The adder's carry runs through closed contacts on two lines, c and its complement: 1 step at any width, against ${logicDepth(rca(32))} gate delays for a 32-bit <span data-ahead="ripple">ripple-carry adder (each carry waits for the one before)</span> in transistors.`,
       `A relay fed through its own make contact holds itself: one relay per bit (the Z3: ${thin(Z3.memory)} of its ${thin(Z3.relays)} relays). Fed through its own break contact it buzzes: in the step model a period of two relay steps, about ${BUZZ_HZ} Hz.`,
       `One relay draws ${RELAY_COIL_POWER.toFixed(2)} W while its coil is on, and its contacts wear: every break of a coil's current draws an arc. The Z3: ${thin(Z3.relays)} relays, about ${Z3.power / 1e3} kW, about a tonne, ${Z3_SPEED}.`,
     ],
@@ -50,7 +50,7 @@ export const chRelays: Chapter = {
         options: [`1 relay step (${ms(RELAY_STEP_MS)} ms)`, '32 relay steps, one per bit', `${logicDepth(rca(32))} relay steps`],
         answer: 0,
         explain: 'Only the operand relays move, all together. The carry is never a coil: it passes through contacts that are already closed.',
-        why: ['', 'A carry would ripple bit by bit if each bit had to operate a relay. Here it only passes through contacts.', 'That is the 32-bit ripple-carry adder built from NAND bricks, a relay per NAND: then the carry waits for a coil in every gate.'],
+        why: ['', 'A carry would ripple bit by bit if each bit had to operate a relay. Here it only passes through contacts.', 'That is the 32-bit <span data-ahead="ripple">ripple-carry adder (carry passed from column to column)</span> built from NAND bricks, a relay per NAND: then the carry waits for a coil in every gate.'],
       },
       {
         question: 'In the self-holding relay, how does reset clear the bit?',
@@ -116,9 +116,9 @@ export const chRelays: Chapter = {
         <p>In a schematic <span data-show="r">a relay</span> is its coil (left) and its contacts (right), joined by a dashed line for the
         armature. The blade rests on NC; drive <span data-show="pin:a"><code>a</code></span> to 1 and it moves to NO. Not at once: the coil lights up
         first, and the blade follows one relay step later.</p>
-        <p>Here the relay's break contact connects <span data-show="vdd">VDD</span> to <span data-show="pin:y"><code>y</code></span>: an inverter. Every relay circuit in this
+        <p>Here the relay's break contact connects <span data-show="vdd">VDD</span> to <span data-show="pin:y"><code>y</code></span>: y always takes the opposite of a. Every relay circuit in this
         chapter moves in relay steps, all relays together, and the status line counts them.</p>
-        <p>The inverter costs ${stats(RELAY_NOT).relays} relay and uses one of its poles; the others could serve other gates reading the same signal.
+        <p>This gate costs ${stats(RELAY_NOT).relays} relay and uses one of its poles; the others could serve other gates reading the same signal.
         The output is a <em>connection to a rail</em>: whichever rail the contact touches, the line gets the supply's full voltage,
         so there is no level to degrade from gate to gate.</p>
         <div class="try">Toggle <code>a</code>, then use Step: the coil carries current a whole step before the contact moves.</div>`,
@@ -201,11 +201,11 @@ export const chRelays: Chapter = {
         <p>A changeover contact chooses between two lines. <span data-show="ra">Relay <code>a</code></span> puts VDD on one of two lines (L0 when
         released, L1 when operated), and <span data-show="rb">relay <code>b</code></span> connects the output to the other one. The output is 1 when
         exactly one of them pulled: an <strong>XOR</strong>, from two relays and one relay step.</p>
-        <p>In CMOS an XOR is 4 NANDs, 16 transistors, 3 gate delays deep. Changeover contacts make selection nearly
+        <p>In <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> an XOR is 4 NANDs, 16 transistors, 3 gate delays deep. Changeover contacts make selection nearly
         free, and that is the honest comparison: each technology built in its own style, not one copying the other's
         gates.</p>
         <p>The XOR is ${stats(RELAY_XOR).relays} relays against ${stats(XOR).nands} NANDs (${stats(XOR).transistors} transistors, ${logicDepth(XOR)} gate delays) in the
-        brick. The same contacts make a multiplexer or a comparator just as cheaply: here the unit of price is the pole, not the gate.</p>`,
+        brick. The same contacts make a two-way selector or a comparator just as cheaply: here the unit of price is the pole, not the gate.</p>`,
       scene: () => ({ root: RELAY_XOR, inputs: { a: 1, b: 0 }, animate: true }),
       tour: {
         beats: [
@@ -230,7 +230,7 @@ export const chRelays: Chapter = {
         kind: 'quiz', question: 'Why does the relay XOR need two lines between the relays, not one?',
         options: ['A contact can pass a line or not, but cannot invert it: the "not" has to be a second line', 'To halve the current in each contact', 'Two lines settle faster'],
         answer: 0,
-        explain: 'Contacts only connect. A NOT exists where a coil drives a break contact; between two relays, the only way to carry "a is 0" is a separate line that has voltage exactly when a is 0.',
+        explain: 'Contacts only connect. An inversion exists where a coil drives a break contact; between two relays, the only way to carry "a is 0" is a separate line that has voltage exactly when a is 0.',
         why: ['', 'Only one line carries current at a time. The second line is there for the logic, not for the current.', 'Both lines are switched in the same relay step: the second adds no speed.'],
       },
     },
@@ -242,8 +242,8 @@ export const chRelays: Chapter = {
         the carry out and the sum. <span data-show="fa0.ra">Relay A</span> has 5 poles, <span data-show="fa0.rb">relay B</span> 4; telephone relays carried a dozen.</p>
         <p><span data-show="fa0 fa1 fa2 fa3">Four of them</span> make this ${stats(ADD4).relays}-relay adder. When <code>a</code> and <code>b</code> change, the
         relays move once, together, and the carry crosses all four bits through closed contacts at the speed of the
-        current. The status line says it: <strong>settled in 1 relay step</strong>, for any width. The CMOS ripple-carry
-        adder of <a href="#/c/adders/0">chapter 6</a> is ${logicDepth(rca(4))} gate delays deep at 4 bits and ${logicDepth(rca(32))} at 32.</p>
+        current. The status line says it: <strong>settled in 1 relay step</strong>, for any width. The <span data-ahead="ripple cmos">ripple-carry adder (each column waits for the carry of the one before; CMOS transistor gates)</span>
+        of <a href="#/c/adders/0">chapter 6</a> is ${logicDepth(rca(4))} gate delays deep at 4 bits and ${logicDepth(rca(32))} at 32.</p>
         <p>Why it works: in a conventional adder a carry is a <em>value</em> that each column computes and passes on, and computing takes a
         gate delay. Here a carry is a <em>connection</em>. Each column's contacts decide, from its own two bits, whether the carry lines pass
         through (propagate), start fresh (generate) or are cut (kill); once those relays have moved, the lines through all columns are one
@@ -289,7 +289,7 @@ export const chRelays: Chapter = {
         flowing. <span data-show="rs"><code>set</code></span> starts it, <span data-show="rr"><code>reset</code></span> breaks the holding path. Set and reset are relays too: a
         push button is just a contact.</p>
         <p>Konrad Zuse's <strong>Z3</strong> (1941) stored 64 words of 22 bits this way, one relay per bit: 1 408 of its
-        2 600 relays were memory. A CMOS flip-flop is ${stats(DFF).nands} NANDs; a relay bit is one relay. Memory was still the
+        2 600 relays were memory. A <span data-ahead="cmos dff">CMOS flip-flop (a clocked one-bit memory made of transistor gates)</span> is ${stats(DFF).nands} NANDs; a relay bit is one relay. Memory was still the
         expensive part, which is why the Z3 had 64 words.</p>
         <p>The mechanism is feedback through hysteresis. While <code>set</code> is held, k operates. Its make contact now joins the holding line to its own coil, so the coil
         stays fed after <code>set</code> returns to 0. Reset cuts the holding line; with no current k falls, and its own contact opens behind it.
@@ -358,7 +358,7 @@ export const chRelays: Chapter = {
       challenge: {
         kind: 'quiz', question: `In the step model a relay step takes ${ms(RELAY_STEP_MS)} ms. At what frequency does the buzzer run?`,
         options: ['About 60 Hz', 'About 120 Hz', 'About 8 Hz'], answer: 0,
-        explain: `Two steps per period: ${ms(2 * RELAY_STEP_MS)} ms, about ${BUZZ_HZ} Hz, a hum. The real relay drops out faster than it pulls in (${ms(RELEASE_MS)} ms against ${ms(RELAY_STEP_MS)}), so a real buzzer runs a little faster, its wave lopsided. A CMOS ring oscillator of three inverters runs at gigahertz.`,
+        explain: `Two steps per period: ${ms(2 * RELAY_STEP_MS)} ms, about ${BUZZ_HZ} Hz, a hum. The real relay drops out faster than it pulls in (${ms(RELEASE_MS)} ms against ${ms(RELAY_STEP_MS)}), so a real buzzer runs a little faster, its wave lopsided. A <span data-ahead="cmos inverter">CMOS ring oscillator (a loop of three inverting transistor gates)</span> runs at gigahertz.`,
         why: ['', 'That is one relay step per period. The relay has to pull in and then drop out again: two steps.', `That reads the ${ms(RELAY_STEP_MS)} ms step as a frequency. A period is two steps, ${ms(2 * RELAY_STEP_MS)} ms.`],
       },
     },
@@ -368,16 +368,16 @@ export const chRelays: Chapter = {
         <p>One relay here (a telephone relay on 24 V) draws <strong>${RELAY_COIL_POWER.toFixed(2)} W</strong> while its
         coil is on and takes <strong>${ms(RELAY_STEP_MS)} ms</strong> to move and stop bouncing. Its share of a rack is about
         ${fmtVolume(RELAY_VOLUME)}, and the Z3's tonne over its relays is ${fmtMass(RELAY_MASS)} a relay, frame and wiring
-        included. A CMOS NAND switches in about ${PS_PER_NAND} ps on femtojoules and takes about ${NAND2_UM2} µm² of
+        included. A NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> switches in about ${PS_PER_NAND} ps on femtojoules and takes about ${NAND2_UM2} µm² of
         silicon.</p>
         <p>Contacts wear out. Every contact feeds a coil, and breaking a coil's current is breaking an inductor: its
         stored energy has to go somewhere, and what a quench path (the first step's resistor) does not take arcs across
         the opening gap. Each arc pits one contact and plates metal onto the other. Contacts are rated for some ${thin(CONTACT_LIFE / 1e6)} million operations under load; a relay switching on
         every cycle of a ${Z3.hz} Hz clock spends that in about ${Math.round(CONTACT_LIFE / Z3.hz / 86400)} days. Dust and
-        oxide films open contacts too: the "bug" taped into the Harvard Mark II's log in 1947 was a moth caught in a relay.</p>
+        oxide films open contacts too: the "bug" taped into the log of a Mark II relay computer in 1947 was a moth caught in a relay.</p>
         <p>The Z3: ${thin(Z3.relays)} relays, about ${Z3.power / 1e3} kW, about a tonne, ${Z3_SPEED} (its clock about
         ${Z3.hz} Hz), its program read from punched film.
-        <span data-show="fa0 fa1 fa2 fa3">The relay adder above</span> beats the CMOS ripple adder in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
+        <span data-show="fa0 fa1 fa2 fa3">The relay adder above</span> beats the <span data-ahead="ripple cmos">CMOS ripple adder (transistor gates, the carry passed from column to column)</span> in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
         and loses by eight orders of magnitude in time per step. That trade, and the tube's answer to it, is <a href="#/c/tubes/0">the next
         chapter</a>. <a href="#/c/silicon/0">Chapter 28</a> prices the whole CPU you build in relays and tubes.</p>`,
       scene: () => ({ root: ADD4, inputs: { a: 15, b: 1 }, animate: true }),
@@ -392,9 +392,9 @@ export const chRelays: Chapter = {
           <tr><td>Relay</td><td>${ms(RELAY_STEP_MS)} ms</td><td>1 coil and its contacts</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
       },
       challenge: {
-        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3 400 NANDs without its ROM. With 1.44 W per coil and about half the coils on, it draws about:',
+        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3 400 NANDs without its program memory. With 1.44 W per coil and about half the coils on, it draws about:',
         options: ['2.4 kW', '240 W', '24 kW'], answer: 0,
-        explain: 'About 3 400 relays (fan-out adds a little) × 0.72 W ≈ 2.4 kW: a Z3. In CMOS the same CPU draws milliwatts.',
+        explain: 'About 3 400 relays (shared signals add a little) × 0.72 W ≈ 2.4 kW: a Z3. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> the same CPU draws milliwatts.',
         why: ['', 'That would be 0.07 W per relay. A telephone coil draws 1.44 W while on, 0.72 W on average.', 'That would be 7 W per relay, five times a coil\'s full 1.44 W.'],
       },
     },

@@ -27,11 +27,11 @@ export const chMap: Chapter = {
         a few gates make an adder, adders and registers make a processor.</p>
         <p>This journey climbs those levels one at a time. Every level is built <em>only</em> from the
         level below it, and nothing is hidden: every box you see is a <strong>transparent box</strong>.</p>
-        <p>The rule is what makes the climb possible. A level may use the <em>behaviour</em> of the level below (a NAND gives 0 only when both inputs
+        <p>The rule is what makes the climb possible. A level may use the <em>behaviour</em> of the level below (an adder can rely on a gate giving 0 only when both its inputs
         are 1) but never its insides, so a designer working on an adder thinks in gates and needs no transistor in mind. The price of the rule is
         that every level adds overhead the one above cannot see; the benefit is that the descriptions stay small enough to hold in a head. Each chapter
         here ends by pricing what it built in the level below, so you can see both sides.</p>
-        <div class="note">The ladder of abstraction is the whole journey, from the MOSFET on its bottom rung upward. Each rung
+        <div class="note">The ladder of abstraction is the whole journey, from the transistor on its bottom rung upward. Each rung
         lists what it is made of; a click opens the chapter that builds it.</div>`,
       more: {
         derive: `<p>One number shows why levels are needed. This site's 4-bit adder is ${stats(rca(4)).transistors} transistors; a 32-bit one is ${stats(rca(32)).transistors}, and each
@@ -50,16 +50,14 @@ export const chMap: Chapter = {
         <p>Here is a 4-bit adder. It adds two numbers <code>a</code> and <code>b</code>. Change them in the
         bar at the bottom (or click the pins) and watch the sum <code>s</code>.</p>
         <p>Now the important part: <strong>double-click any block to look inside it</strong>.
-        An adder is made of full adders (<code>FA</code>). A full adder is made of NAND gates.
-        A NAND gate is made of four transistors. Open one of those and you reach a single MOSFET.</p>
-        <div class="try">Open <code>fa0</code>, then a NAND, then a transistor. Use the breadcrumbs above
+        An adder is made of <span data-ahead="fulladder">full adders (circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter 6 builds one)</span> (<code>FA</code>).
+        A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter 3 builds one)</span>.
+        A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
+        <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
         the circuit, or press <kbd>Esc</kbd>, to climb back up.</div>
-        <p>Wires show their values: a glowing wire carries a <strong>1</strong>, a dim one a <strong>0</strong>.
-        Thicker wires are <em>buses</em> (several bits travelling together); their value is printed on them. Each net
-        has a hue of its own, to follow it by eye (Colour per net, in the wire-colour menu).
-        Use the HEX / BIN / DEC switch in the top bar to change how buses are written.</p>
-        <p>The adder is a ripple-carry adder: four identical full adders in a row, each passing its carry to the next. Opening <code>fa0</code> shows
-        the same nine gates that every later full adder repeats; opening one gate shows four transistors. The shape of every level is a handful of
+        <p>How wires, buses and the HEX / BIN / DEC switch read on this site is in <a href="#/c/basics/5">Basics, step 6</a>.</p>
+        <p>The adder is four identical one-bit stages in a row, each passing its carry to the next. Opening <code>fa0</code> shows
+        the same nine gates that every later stage repeats; opening one gate shows four transistors. The shape of every level is a handful of
         parts, wired by names, and that is the whole trick.</p>`,
       scene: () => ({ root: rca(4), inputs: { a: 5, b: 3 } }),
       ledger: { kind: 'add', a: 'a', b: 'b', sum: 's', width: 4, cin: 'cin', cout: 'cout', col: (i) => [`fa${i}`] },
@@ -67,13 +65,13 @@ export const chMap: Chapter = {
         label: 'Walk me down to a transistor',
         beats: [
           { title: 'A sum', set: { a: 5, b: 3 }, show: ['fa0', 'fa1', 'fa2', 'fa3'], expect: { s: 8, cout: 0 },
-            say: '<p>5 + 3: the adder gives s = {v:s}, carry out {v:cout}. Four full adders, one per bit.</p>' },
+            say: '<p>5 + 3: the adder gives s = {v:s}, carry out {v:cout}. Four one-bit stages, one per bit.</p>' },
           { title: 'A carry out', set: { a: 15, b: 1 }, show: ['fa0', 'fa1', 'fa2', 'fa3'], expect: { s: 0, cout: 1 },
-            say: '<p>15 + 1 = 16, which needs five bits: s = {v:s} and cout = {v:cout}. The carry has run through all four full adders, each waiting for the one before.</p>' },
-          { title: 'One full adder', at: ['fa0'], show: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'],
-            say: `<p>Inside fa0: ${stats(rca(4)).nands / 4} gates, all NANDs. This is the level you get by opening a box one step.</p>` },
-          { title: 'One NAND', at: ['fa0', 'g1'], show: ['p1', 'p2', 'n1', 'n2'],
-            say: '<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next three chapters build up to why these four make a NAND (chapter 3).</p>' },
+            say: '<p>15 + 1 = 16, which needs five bits: s = {v:s} and cout = {v:cout}. The carry has run through all four stages, each waiting for the one before.</p>' },
+          { title: 'One bit stage', at: ['fa0'], show: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'],
+            say: `<p>Inside fa0: ${stats(rca(4)).nands / 4} gates, all <span data-ahead="nand">NANDs (gates whose output is 0 only when both inputs are 1)</span>. This is the level you get by opening a box one step.</p>` },
+          { title: 'One gate', at: ['fa0', 'g1'], show: ['p1', 'p2', 'n1', 'n2'],
+            say: '<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next three chapters build up to why these four make a gate (chapter 3).</p>' },
         ],
       },
       more: {
@@ -93,8 +91,8 @@ export const chMap: Chapter = {
       title: 'How the levels stack up',
       body: `
         <p>Look at the inspector's <strong>Info</strong> tab: it counts what the adder costs. A 4-bit adder
-        is ${stats(rca(4)).nands} NAND gates, or ${stats(rca(4)).transistors} transistors. Select any part (single click)
-        to see its own cost: a full adder is ${stats(rca(4)).nands / 4} NANDs.</p>
+        is ${stats(rca(4)).nands} <span data-ahead="nand">NAND gates (two-input gates whose output is 0 only when both inputs are 1)</span>, or ${stats(rca(4)).transistors} transistors. Select any part (single click)
+        to see its own cost: a one-bit stage is ${stats(rca(4)).nands / 4} <span data-ahead="nand">NANDs (two-input gates whose output is 0 only when both inputs are 1)</span>.</p>
         <p>Every number on this site is <em>measured</em> from the circuit itself, not quoted from a book.
         That includes the "gate delays": how many gates a signal must pass through, which sets how fast the
         circuit can go.</p>
@@ -244,7 +242,7 @@ export const chMosfet: Chapter = {
         <table><tr><th></th><th>gate = 0</th><th>gate = 1</th></tr>
         <tr><th>NMOS</th><td>off</td><td>on</td></tr><tr><th>PMOS</th><td>on</td><td>off</td></tr></table>
         <p>NMOS is good at pulling a wire down to 0 (ground). PMOS is good at pulling it up to 1 (VDD).
-        That complementary pair is the C in <strong>CMOS</strong>.</p>
+        That complementary pair is the C in <span data-ahead="cmos"><strong>CMOS</strong> (complementary MOS: NMOS and PMOS used together, each pulling to its own rail; chapter 2 builds the simplest CMOS gate)</span>.</p>
         <p>The reason for the asymmetry is the sign of the carriers and of the source. An NMOS source is its lower terminal, so the gate must rise above it by Vt; if
         the output it drives rises towards VDD, its V<sub>gs</sub> shrinks and it stops short (the weak-levels step of <a href="#/c/inverter/2">chapter 2</a> shows the weak 1). A PMOS source is its upper
         terminal, and its V<sub>sg</sub> grows as the output rises, so it carries a 1 whole. Each type is strong on the rail it is tied to and weak on the other one.</p>`,
@@ -280,7 +278,7 @@ export const chMosfet: Chapter = {
         and converts them at an illustrative 25 ps each: this is where that order of magnitude comes from.
         Multiply the energy by how often a node switches and by the clock frequency and you have dynamic power,
         P ≈ α·C·V²·f, which the power estimates later in the journey count from the simulation.</p>
-        <div class="try">Change the width and the fan-out. Delay follows C / I; energy follows C alone.</div>`,
+        <div class="try">Change the width and the number of inputs the output drives. Delay follows C / I; energy follows C alone.</div>`,
       more: {
         derive: `<p>The load of an output driving f CMOS inputs is C = f · 2 · ${C_GATE} fF (an NMOS gate and a PMOS gate each) + ${C_WIRE} fF of wire. For f = 2 that is ${loadOf(2)} fF. The transistor discharges it from ${VDD} V
           with the saturation current I = ${current(VDD - VT, VDD).id.toFixed(0)} µA at first, so the first part of the fall is ΔV / Δt = I / C = ${(current(VDD - VT, VDD).id / loadOf(2)).toFixed(0)} V/ns, and the output
@@ -376,15 +374,15 @@ export const chInverter: Chapter = {
   builds: ['mosfet'],
   recap: {
     keep: [
-      'CMOS inverter: a PMOS from VDD to y, an NMOS from y to GND, both gates on a. For a valid input exactly one conducts, so y = NOT a.',
+      'CMOS inverter: a PMOS from VDD to y, an NMOS from y to GND, both gates on a. For a valid input exactly one conducts, so y is the inverse of a.',
       'With the input still there is no path from VDD to ground: static power is almost zero. Energy goes into charging the capacitance downstream, at each transition.',
       'The output connects straight to a rail, so a slightly weak input still gives a full output: noise does not accumulate from gate to gate.',
-      'Pseudo-NMOS: an always-on pull-up (a resistor here, a PMOS with its gate grounded in silicon) against a stronger NMOS (ratioed logic). An n-input NOR is n NMOS and one pull-up, n + 1 devices against 2n, paid for with current while y = 0, a low level only as good as the ratio and a slow rising edge.',
+      'Pseudo-NMOS: an always-on pull-up (a resistor here, a PMOS with its gate grounded in silicon) against a stronger NMOS (ratioed logic). An n-input <span data-ahead="nor">NOR (a gate whose output is 1 only when every input is 0)</span> is n NMOS and one pull-up, n + 1 devices against 2n, paid for with current while y = 0, a low level only as good as the ratio and a slow rising edge.',
     ],
     practise: ['t_inv'],
     check: [
       {
-        question: 'How many devices does a three-input NOR take in pseudo-NMOS, and in CMOS?',
+        question: 'How many devices does a three-input <span data-ahead="nor">NOR (a gate whose output is 1 only when every input is 0)</span> take in pseudo-NMOS, and in CMOS?',
         options: ['3 NMOS and one always-on pull-up (a resistor here; in silicon a grounded-gate PMOS, so 4 transistors), against 6 transistors', '3 NMOS and three pull-ups, against 6 transistors', '3 NMOS and one pull-up, against 4 transistors'],
         answer: 0,
         explain: 'Pseudo-NMOS keeps the n parallel NMOS and replaces the whole PMOS network with one always-on pull-up: n + 1 devices against 2n.',
@@ -413,7 +411,7 @@ export const chInverter: Chapter = {
         <p>Stack <span data-show="p1">a PMOS</span> on top of <span data-show="n1">an NMOS</span> and tie their gates together. That is a <strong>CMOS inverter</strong>.</p>
         <ul><li><code>a = 0</code>: the PMOS conducts, the NMOS is off → <code>y</code> is pulled up to <strong>1</strong>.</li>
         <li><code>a = 1</code>: the NMOS conducts, the PMOS is off → <code>y</code> is pulled down to <strong>0</strong>.</li></ul>
-        <p>The output is always the opposite of the input: <strong>y = NOT a</strong>. Conducting transistors
+        <p>The output is always the opposite of the input: <strong>y = <span data-ahead="not">NOT a (the logical inverse: 1 becomes 0, 0 becomes 1)</span></strong>. Conducting transistors
         are drawn with a solid glowing channel.</p>
         <p>It costs ${stats(INV_CMOS).transistors} transistors, and the arrangement is the pattern for every CMOS gate: a <strong>pull-up network</strong> of PMOS from VDD to the output and a <strong>pull-down network</strong>
         of NMOS from the output to ground, each the logical complement of the other. For an inverter each network is one transistor. Between a change of the input and the output settling, the load capacitance moves: that is
@@ -455,11 +453,11 @@ export const chInverter: Chapter = {
         <li><strong>Power only when switching.</strong> Energy is spent charging and discharging the tiny
         capacitance of the wires and gates downstream. Fewer transitions means less power.</li>
         </ul>
-        <p>Switch to the <strong>Truth table</strong> tab: it was computed by actually solving the transistor
+        <p>Switch to the <strong><span data-ahead="truthtable">Truth table (the output listed for every input combination)</span></strong> tab: it was computed by actually solving the transistor
         network for every input.</p>
         <p>Restoring is what lets a design be deep. Every output is rebuilt from a rail, so after each gate the error budget is reset: a signal that crosses a thousand gates is as clean as one that crosses
         one. Without it (a chain of resistors, or of pass switches) every stage subtracts a little swing, and past a few stages 0 and 1 meet. The price is that each stage inverts,
-        which is why a CMOS stage is always an inverting gate and why AND costs more than NAND (<a href="#/c/nand/0">chapter 3</a>).</p>`,
+        which is why a CMOS stage is always an inverting gate and why a non-inverting gate costs more than an inverting one (<a href="#/c/nand/0">chapter 3</a>).</p>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
       more: {
         derive: `<p>Here a wire is 0, 1, X or Z; in silicon it is a voltage, and an inverter maps input voltage to output voltage
@@ -500,7 +498,7 @@ export const chInverter: Chapter = {
         <p><span data-show="tg">A transmission gate</span> puts a PMOS beside the NMOS, gated by the complement
         (<span data-show="inv">an inverter</span> makes <code>en_n</code>): the NMOS carries a 0 whole, the PMOS the
         last 0.3 V of a 1, so <code>q</code> follows <code>d</code> at full swing. Two transistors and an inverted
-        enable instead of one transistor; muxes and latches built from them still come out smaller than in NANDs.</p>
+        enable instead of one transistor; muxes and latches built from them still come out smaller than the same circuits built from plain gates.</p>
         <div class="try">Toggle <code>a</code> and read y's tag; set <code>en = 1</code> and toggle <code>d</code>:
         <code>q</code> has no tag.</div>`,
       scene: () => ({ root: WEAK_DEMO, inputs: { a: 1, d: 1, en: 1 } }),
@@ -543,10 +541,10 @@ export const chInverter: Chapter = {
         (<em>ratioed</em> logic; here a resistor is weaker than any transistor).</p>
         <p>What it costs: while <code>y = 0</code> a current flows from VDD through the resistor and the NMOS
         to ground, all the time, not just while switching. The low level is only as good as the ratio, and the
-        rising edge is as slow as the pull-up. What it saves: the pull-up network. An n-input NOR is n NMOS and one
-        pull-up, n + 1 devices instead of 2n, which is why wide NORs (PLA and ROM rows) and open-drain buses still
+        rising edge is as slow as the pull-up. What it saves: the pull-up network. An n-input <span data-ahead="nor">NOR (a gate whose output is 1 only when every input is 0)</span> is n NMOS and one
+        pull-up, n + 1 devices instead of 2n, which is why wide NORs (the row lines of a stored table) and open-drain buses still
         pull up.</p>
-        <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The truth table is the
+        <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The <span data-ahead="truthtable">truth table (the output listed for every input combination)</span> is the
         CMOS inverter's: same function, no device saved at one input, none of the standby savings.</div>`,
       scene: () => ({ root: INV_PSEUDO, inputs: { a: 1 } }),
       tour: {
@@ -589,15 +587,15 @@ export const chNand: Chapter = {
     'build a two-input gate from a pull-up network of PMOS and its dual pull-down of NMOS',
     'say why designers prefer NAND to NOR (the slow PMOS in parallel, not in series)',
     'explain why one gate type is enough for every circuit on this site',
-    'price a NAND in transistors, and in relays and tubes',
+    'price a NAND in transistors, and in <span data-ahead="relay">relays (switches closed by the magnetic pull of a coil)</span> and tubes',
   ],
   builds: ['inverter'],
   recap: {
     keep: [
       'A CMOS gate is a pull-up network of PMOS and a pull-down network of NMOS that are each other\'s dual: parallel in one, series in the other. For every input exactly one of them conducts.',
-      'NAND: PMOS in parallel, NMOS in series. NOR is the dual. A single CMOS stage always inverts, so NAND (4 transistors) is cheaper than AND (6).',
+      'NAND: PMOS in parallel, NMOS in series. NOR is the dual. A single CMOS stage always inverts, so NAND (4 transistors) is cheaper than <span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span> (6).',
       'NAND is <strong>functionally complete</strong>. Every circuit on this site bottoms out in NANDs, and the gate counts count them.',
-      'A NAND is a function: CMOS, relays or tubes change its price (time, power, size), never the netlist.',
+      'A NAND is a function: CMOS, <span data-ahead="relay">relays (switches closed by the magnetic pull of a coil)</span> or tubes change its price (time, power, size), never the netlist.',
     ],
     practise: ['t_nand', 't_nor', 'r_nand'],
     check: [
@@ -631,11 +629,11 @@ export const chNand: Chapter = {
         <p>Give the inverter a second input. Put two PMOS transistors <span data-show="p1 p2">p1, p2</span>
         <em>in parallel</em> (either one can pull up) and two NMOS <span data-show="n1 n2">n1, n2</span> <em>in series</em>
         (both must conduct to pull down).</p>
-        <p>The output is 0 only when <code>a</code> AND <code>b</code> are both 1. That is NOT-AND:
+        <p>The output is 0 only when <code>a</code> and <code>b</code> are both 1. That is NOT-AND:
         <strong>NAND</strong>.</p>
         <table><tr><th>a</th><th>b</th><th>y</th></tr><tr><td>0</td><td>0</td><td>1</td></tr><tr><td>0</td><td>1</td><td>1</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>1</td><td>1</td><td>0</td></tr></table>
         <p>Why this arrangement and not another: the output must be driven for every input, so the two networks have to be exact complements. The pull-down conducts when
-        <code>a·b</code> = 1 (series: both on). The pull-up must conduct in every other case, <code>¬a + ¬b</code> = 1 (parallel: either PMOS on). De Morgan turns series into parallel and
+        <code>a·b</code> = 1 (series: both on). The pull-up must conduct in every other case, <code>¬a + ¬b</code> = 1 (parallel: either PMOS on). <span data-ahead="demorgan">De Morgan's law (inverting a product gives a sum of inverted terms, and the reverse)</span> turns series into parallel and
         back, so the complement of a network is its <em>dual</em>, with every series replaced by a parallel and the reverse. Count: ${stats(NAND).transistors} transistors, one NMOS and one PMOS per input.</p>
         <div class="try">Find the input where the series NMOS pair forms a complete path to ground.</div>`,
       scene: () => ({ root: NAND, inputs: { a: 1, b: 0 } }),
@@ -707,7 +705,7 @@ export const chNand: Chapter = {
         bottoms out in NANDs.</p>
         <p>Here is our NAND, now drawn with its standard symbol, the "D" shape with a bubble. This is our first
         <strong>abstraction</strong>: we stop drawing four transistors and draw one symbol.</p>
-        <p>Completeness rests on a short argument. NOT is a NAND with its inputs tied together, AND is a NAND followed by a NOT, and OR is a NAND of two inverted inputs: with NOT, AND and OR any
+        <p>Completeness rests on a short argument. Inverting is a NAND with its inputs tied together, "both inputs 1" is a NAND followed by that inversion, and "either input 1" is a NAND of two inverted inputs: with those three operations any
         Boolean function can be written, so any can be built. The rest of the journey is repeated application of this: everything is NANDs, and each chapter prices what it builds
         in NANDs, then in transistors (four each).</p>
         <div class="note">Abstraction is a promise, not a disguise. Double-click the symbol whenever you want
@@ -733,16 +731,16 @@ export const chNand: Chapter = {
 
       },
       challenge: {
-        kind: 'quiz', question: 'How many transistors does a CMOS AND gate need, built the natural way?',
+        kind: 'quiz', question: 'How many transistors does a CMOS <span data-ahead="and">AND gate (output 1 only when both inputs are 1)</span> need, built the natural way?',
         options: ['4: same as NAND', '6: a NAND followed by an inverter', '2'], answer: 1,
-        why: ['A NAND is 4, but its output is inverted, and undoing that inversion costs an inverter.', '', 'Two transistors make an inverter: one input, no AND.'],
-        explain: 'A single CMOS stage always inverts, so AND = NAND + NOT = 4 + 2 = 6 transistors. Inverting gates are the cheap ones.',
+        why: ['A NAND is 4, but its output is inverted, and undoing that inversion costs an inverter.', '', 'Two transistors make an inverter: one input, nothing to combine.'],
+        explain: 'A single CMOS stage always inverts, so an AND gate is a NAND plus an inverter: 4 + 2 = 6 transistors. Inverting gates are the cheap ones.',
       },
     },
     {
       title: 'One NAND, three technologies',
       body: `
-        <p>A NAND is a function, not a device. The prologue built it twice before the transistor, from relays (P1) and
+        <p>A NAND is a function, not a device. The prologue built it twice before the transistor, from <span data-ahead="relay">relays (switches closed by the magnetic pull of a coil)</span> (P1) and
         from tubes (P2). Every circuit on this site bottoms out in NANDs, so each can be built in any of the three. The
         netlist stays the same, and only the price of one NAND changes:</p>
         <ul>
@@ -750,7 +748,7 @@ export const chNand: Chapter = {
           silicon, femtojoules per switch.</li>
           <li><strong>Relays</strong>: one coil per NAND output. Its contacts are the inputs of the gates that read it,
           ${RELAY_CONTACTS} per relay, so a net read more than ${RELAY_CONTACTS} times needs another coil for every
-          ${RELAY_CONTACTS} more. ${RELAY_STEP_MS} ms per step (P1's model: pull-in plus bounce), ${RELAY_POWER.toFixed(2)} W
+          ${RELAY_CONTACTS} more. ${RELAY_STEP_MS} ms per step (P1's model: the armature closing, plus bounce), ${RELAY_POWER.toFixed(2)} W
           on average, about ${fmtVolume(RELAY_VOLUME)} and ${fmtMass(RELAY_MASS)}.</li>
           <li><strong>Tubes</strong>: half a 6SN7 with a 6AL5 diode pair in front and a divider into the grid.
           ${TUBE_STEP_US.toFixed(1)} µs per step (an R·C estimate) and ${TUBE_BRICK_POWER.toFixed(2)} W, most of it heater,
@@ -776,10 +774,10 @@ export const chNand: Chapter = {
       },
       widget: () => techCompareWidget(),
       challenge: {
-        kind: 'quiz', question: `Through the brick, the 32-bit ripple-carry adder is ${RCA32_DEPTH} NAND delays deep. Built from relays, one add takes about:`,
+        kind: 'quiz', question: `Through the brick, the 32-bit <span data-ahead="ripple">ripple-carry adder (each stage waits for the carry of the one before)</span> is ${RCA32_DEPTH} NAND delays deep. Built from <span data-ahead="relay">relays (switches closed by the magnetic pull of a coil)</span>, one add takes about:`,
         options: [fmtTime(RCA32_DEPTH * TECH.relay.step), fmtTime(TECH.relay.step), fmtTime(RCA32_DEPTH * TECH.tube.step)], answer: 0,
         why: ['', 'That is P1\'s native relay adder, whose carry runs through changeover contacts in one step. Through the NAND brick the carry ripples gate by gate.', 'That is the tube time: tubes switch in microseconds, relays in milliseconds.'],
-        explain: `${RCA32_DEPTH} relay steps × ${RELAY_STEP_MS} ms ≈ ${fmtTime(RCA32_DEPTH * TECH.relay.step)}. P1's relay adder carries through contacts and adds in one step (${fmtTime(TECH.relay.step)}); tubes take ${fmtTime(RCA32_DEPTH * TECH.tube.step)}, CMOS ${fmtTime(RCA32_DEPTH * TECH.cmos.step)}.`,
+        explain: `${RCA32_DEPTH} <span data-ahead="relaystep">relay steps (the time for every relay to follow its coil once)</span> × ${RELAY_STEP_MS} ms ≈ ${fmtTime(RCA32_DEPTH * TECH.relay.step)}. P1's relay adder carries through contacts and adds in one step (${fmtTime(TECH.relay.step)}); tubes take ${fmtTime(RCA32_DEPTH * TECH.tube.step)}, CMOS ${fmtTime(RCA32_DEPTH * TECH.cmos.step)}.`,
       },
     },
   ],

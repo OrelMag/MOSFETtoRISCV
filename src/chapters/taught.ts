@@ -1,6 +1,6 @@
 // Where each codex term is taught (DOM-free): the journey chapter that explains it, so a step before it must not lean on
 // it (chapters/firstuse.ts, tests/first-use.test.ts). Each row is one of the entry's own chapter links (CodexMore.chapters):
-// the earliest on the journey, unless that chapter only cites the term (cpi, coherence, scoreboard, horner name a later
+// the earliest on the journey, unless that chapter only cites the term (cpi, coherence, horner name a later
 // one). OPTIONAL: the prologue and appendix chapters that also explain an entry, for readers who took that path.
 
 /** Codex id → the journey chapter that teaches it. */
@@ -15,7 +15,7 @@ export const TAUGHT: Record<string, string> = {
   nor: 'nand',
   universality: 'nand',
   duality: 'inverter',
-  truthtable: 'adders',
+  truthtable: 'basics',
   identities: 'gates',
   demorgan: 'gates',
   bubble: 'gates',
@@ -33,10 +33,10 @@ export const TAUGHT: Record<string, string> = {
   decoder: 'routing',
   bus: 'routing',
   comparator: 'adders',
-  positional: 'binary',
+  positional: 'basics',
   hex: 'binary',
   twos: 'binary',
-  overflow: 'adders',
+  overflow: 'binary',
   signext: 'isa',
   halfadder: 'adders',
   fulladder: 'adders',
@@ -54,7 +54,7 @@ export const TAUGHT: Record<string, string> = {
   dlatch: 'latches',
   dff: 'latches',
   edge: 'latches',
-  setuphold: 'fastadd',
+  setuphold: 'latches',
   register: 'latches',
   clockgating: 'latches',
   counter: 'registers',
@@ -160,7 +160,7 @@ export const TAUGHT: Record<string, string> = {
   carrysave: 'muldiv',
   booth: 'muldiv',
   fma: 'float',
-  scoreboard: 'warps',
+  scoreboard: 'ooo',
   occupancy: 'warps',
   zbuffer: 'pixels',
   doublebuffer: 'pixels',
@@ -185,4 +185,11 @@ export const TAUGHT_OPTIONAL: Record<string, string[]> = {
   ecclesjordan: ['tubes'],
   hollerith: ['cards'],
   loader: ['cards'],
+  nand: ['relays', 'tubes'],
+  xor: ['relays'],
+  fulladder: ['relays'],
+  nor: ['tubes'],
+  and: ['tubes', 'cards'],
+  or: ['cards'],
+  fanin: ['tubes'],
 };

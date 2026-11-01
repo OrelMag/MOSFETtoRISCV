@@ -330,7 +330,7 @@ export const chBus: Chapter = {
     {
       title: 'Booting from cards',
       body: `
-        <p>Before flash, the program came on <strong>punched cards</strong>. The IBM 1401's <strong>Load</strong> key was a loader in
+        <p>Before flash, the program came on <strong>punched cards</strong>. The IBM 1401's <strong>Load</strong> key was <span data-ahead="loader">a loader (a first program whose only job is to read the real program into memory)</span> in
         hardware: it read one card into memory locations 1–80 and branched to location 1. That first card held a few instructions that
         read the next cards, which read the rest: the program pulled itself up by its bootstraps, hence <em>booting</em>.</p>
         <p>Here a <span data-show="cards">card reader</span> stands in for the flash, at 0x7000_0000, the deck in its hopper (one word a card, punched in binary along

@@ -571,7 +571,7 @@ export const chCache: Chapter = {
         miss whose victim is dirty must write it back first: 12 cycles instead of 8. <span data-show="dm.fsm">The miss controller</span> is a 4-bit counter: 0–3 write the
         victim back, 4–7 wait, 8–11 fill, and a clean victim jumps from 0 to 5.</p>
         <p>The panel's memory view now shows the memory <em>as the program sees it</em>: main memory overlaid with the dirty lines, which are
-        the only up-to-date copy. That is the coherence problem of <a href="#/c/multicore/0">chapter 27</a> in its simplest form.</p>
+        the only up-to-date copy. That is <span data-ahead="coherence">the coherence problem (several copies of one address disagreeing)</span> of <a href="#/c/multicore/0">chapter 27</a> in its simplest form.</p>
         <div class="try">Run "Update an array in place": 48 stores, every one a hit, because each follows a load of the same word; the first pass's loads miss 4 times and bring the lines in. Open <span data-show="dm.ram"><code>dm</code> → <code>ram</code></span>: main memory is still all zero.</div>`,
       scene: () => cpuScene({ source: csrc('inplace'), dcache: 'wb', adder: 'ks', highlight: ['dm'] }),
       more: {
@@ -582,7 +582,7 @@ export const chCache: Chapter = {
         pitfall: `<p>Forgetting that memory is stale. With write-back the cache holds the only current copy of a dirty line, so anything else that reads memory (a second core, a DMA engine, a
           debugger's memory view) sees old data unless it asks the cache. The panel's memory view overlays the dirty lines for this reason; open <code>dm.ram</code> and compare.</p>`,
         real: `<p>Almost every cache from L2 outward is write-back, and most L1s. A write-through L1 is used where simplicity or error handling matters (its lines are never the only copy, so parity
-          is enough), with a write buffer in front of the next level. Multicore parts add a coherence protocol so that the dirty copy in one core's cache is found when another asks.</p>`,
+          is enough), with a write buffer in front of the next level. Multicore parts add a protocol that keeps the copies consistent, so that the dirty copy in one core's cache is found when another asks.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'In "Update an array in place" (48 stores to 16 words), how many words reach main memory with each cache?',
@@ -662,7 +662,7 @@ export const chCache: Chapter = {
         the freeze is over, so the instruction-set simulator still steps once per instruction.</p>
         <p>Freezing everything is a deliberate simplification: it is easy to get right and to check. Real pipelines keep going past a miss (a non-blocking
         cache: later instructions that hit, or do not touch memory, carry on while miss-status registers track the outstanding misses), at the cost of
-        a scoreboard to stop an instruction that needs the missing data.</p>
+        a table of pending results to stop an instruction that needs the missing data.</p>
         <p>A bug worth knowing: our first version let flushed bubbles reach the cache. A bubble's fields are not all zero, and one of them looked
         like a load, so it caused real misses that cost time but not correctness. The co-simulation passed; the miss count did not match the
         single-cycle CPU's. The fix is <span data-show="ldV">one AND gate</span>: only a <em>valid</em> instruction in M may access the cache.</p>

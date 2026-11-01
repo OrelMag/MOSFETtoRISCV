@@ -104,7 +104,7 @@ export const chMulticore: Chapter = {
         1 / (1 − p) = 10×. The serial tenth, plus the time the cores spend waiting for each other (the lock below), sets the ceiling. What saves
         many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson).</p>
         <p>The rest of the chapter is about the price of sharing. Two cores that never touch the same data need nothing but a second copy of the core. The moment they share a
-        memory they need a rule for who goes first (an arbiter), a way to make a read-modify-write indivisible (atomic instructions), a way to keep private copies
+        memory they need a rule for who goes first (an arbiter), a way to make a read-modify-write indivisible (atomic instructions), a way to keep each core's copies of shared data
         agreeing (coherence), and a statement of the order in which one core's writes are seen by another (the memory model).</p>`,
       more: {
         derive: `<p>Dynamic power P = α · C · V² · f per core, so n cores at (V, f) draw n · V² · f in relative terms. One core at 1.0 V and 4 GHz: ${power(1, 1, 4)}. Two at 0.8 V and 2.8 GHz:

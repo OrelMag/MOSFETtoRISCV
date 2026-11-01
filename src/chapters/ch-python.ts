@@ -37,10 +37,10 @@ export const chPython: Chapter = {
     ],
     check: [
       {
-        question: '<code>n // 2</code> compiles to one <code>srai</code>. Why is that exactly Python\'s floor division, for negative n too?',
+        question: '<code>n // 2</code> compiles to one <code>srai</code>. Why is that exactly the floor of n / 2 (what Python\'s <code>//</code> gives) for negative n too?',
         options: ['An arithmetic shift right rounds toward minus infinity, as // does', 'Python rounds toward zero, and so does srai', 'It is not exact: the compiler accepts an error for negative n', 'srai calls the divide routine for negative n'],
         answer: 0,
-        explain: 'Shifting a two\'s-complement number right by one, copying the sign bit in, is ⌊n / 2⌋: −7 becomes −4. Python\'s // is also the floor. Division by a power of two that is not a floor (C\'s, toward zero) needs a correction; Python\'s needs none.',
+        explain: 'Shifting a two\'s-complement number right by one, copying the sign bit in, is ⌊n / 2⌋: −7 becomes −4. Python\'s // is also the floor. Dividing by a power of two without flooring (C\'s, toward zero) needs a correction; Python\'s needs none.',
         why: ['', 'Python\'s // is the floor: −7 // 2 is −4, not −3.', 'Both are the floor: the test suite checks every edge case against the interpreter.', 'srai is one instruction; there is no call.'],
       },
       {
@@ -116,10 +116,10 @@ export const chPython: Chapter = {
     {
       title: 'What * // % cost',
       body: `
-        <p>RV32I has no multiply or divide instructions (the M extension of chapter 21 adds them). The compiler
+        <p>RV32I has no multiply or divide instructions (chapter 21 adds them in hardware). The compiler
         spends instructions instead.</p>
         <p>A power of two is a shift or a mask: <code>n % 2</code> is one <code>andi</code>, <code>n // 2</code> one
-        <code>srai</code> (an arithmetic shift is exactly Python's floor division by 2), <code>x * 8</code> one
+        <code>srai</code> (an arithmetic shift is exactly what Python's <code>//</code> does for 2), <code>x * 8</code> one
         <code>slli</code>. A constant with two bits set, or one less than a power of two, is two shifts and an add or a
         subtract. Anything else calls a routine: <code>rt.mul</code> adds one shifted copy per bit of the multiplier,
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
@@ -127,7 +127,7 @@ export const chPython: Chapter = {
         <p>Measured: Collatz from 27 runs 938 cycles, every line a few instructions. In gcd, <code>t = a % b</code>
         costs about 240 cycles a call, 1 472 of the program's 1 545. Chapter 21's divider does the same 32 steps in
         hardware, with no instruction fetched between them.</p>
-        <p>The lesson generalizes: the cost of an operator is the number of instructions behind it, and an operator that looks atomic in the source can hide a loop. A programmer who
+        <p>The lesson generalizes: the cost of an operator is the number of instructions behind it, and an operator that looks like one indivisible step in the source can hide a loop. A programmer who
         knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider (chapter 21) moves that loop out of
         the instruction stream, trading area for cycles, as every earlier chapter did.</p>`,
       widget: () => pyCost(['gcd']),
@@ -243,7 +243,7 @@ export const chPython: Chapter = {
         <p>The editor compiles as you type and points at the first error in Python's terms. <em>Compile &amp; load</em>
         puts the program in the ROM and resets the CPU. The program list holds forty examples in six sections (first steps,
         numbers, lists, functions, bits, multiply and divide): a sieve, three sorts, binary search, a matrix multiply,
-        the towers of Hanoi, Ackermann, a random-number generator, division by hand.</p>
+        the towers of Hanoi, Ackermann, a random-number generator, divide by hand.</p>
         <p>The limits are the machine's: 256 instructions of ROM, 64 words of data memory shared by the variables, the
         lists, the output and the stack (output that runs into the stack overwrites it), seven temporaries, twelve
         variables a function (twenty in one that calls nothing).</p>
