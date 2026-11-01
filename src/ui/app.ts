@@ -7,7 +7,7 @@ import { ChapterPage, type Page } from './pages/chapter';
 import { homePage } from './pages/home';
 import { WorkbenchPage } from './pages/workbench';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, PALETTES, settings, type Theme } from './settings';
+import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
 import { parseDrill } from './drillpath';
 import type { Radix } from '../sim/values';
 
@@ -131,7 +131,26 @@ export function startApp(root: HTMLElement): void {
   const delayItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('loadDelay', !settings.loadDelay) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Load-dependent delay'), h('small', null, 'Timing panels and the inspector open on each NAND timed by what it drives; the chapters quote unit delay')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
+  // Reading: prose size in the chapter pane (never the circuits) and a held line length.
+  const sizeStep = (d: number) => {
+    const i = Math.max(0, Math.min(TEXT_SIZES.length - 1, TEXT_SIZES.indexOf(settings.textSize as 100) + d));
+    settings.set('textSize', TEXT_SIZES[i]);
+    applyTheme();
+  };
+  const sizeVal = h('span', { class: 'pal-size-v', 'aria-live': 'polite' });
+  const sizeMinus = h('button', { class: 'btn sm', title: 'Smaller text', 'aria-label': 'Smaller text', onclick: () => sizeStep(-1) }, 'A−');
+  const sizePlus = h('button', { class: 'btn sm', title: 'Larger text', 'aria-label': 'Larger text', onclick: () => sizeStep(1) }, 'A+');
+  const sizeRow = h('div', { class: 'pal-size', role: 'group', 'aria-label': 'Text size' },
+    h('span', null, h('b', null, 'Text size'), h('small', null, 'The chapters' prose; circuits keep their size')), sizeMinus, sizeVal, sizePlus);
+  const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
+  // One file for everything the site keeps in this browser (ui/backup.ts, backupui.ts).
+  const backupSave = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.exportBackup()); } },
+    icon('download', 16), h('span', null, h('b', null, 'Export all progress'), h('small', null, 'One backup file: chapters, campaign, puzzles, sandbox projects')));
+  const backupLoad = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.importBackup()); } },
+    icon('upload', 16), h('span', null, h('b', null, 'Import progress…'), h('small', null, 'Merges a backup file into what you have; nothing is lost')));
+  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), sizeRow, narrowItem, h('div', { class: 'pal-sep', role: 'separator' }), backupSave, backupLoad, h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -160,6 +179,10 @@ export function startApp(root: HTMLElement): void {
     glossItem.setAttribute('aria-checked', String(settings.glossary));
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     delayItem.setAttribute('aria-checked', String(settings.loadDelay));
+    narrowItem.setAttribute('aria-checked', String(settings.narrowText));
+    sizeVal.textContent = `${settings.textSize}%`;
+    sizeMinus.disabled = settings.textSize <= TEXT_SIZES[0];
+    sizePlus.disabled = settings.textSize >= TEXT_SIZES[TEXT_SIZES.length - 1];
     for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));
