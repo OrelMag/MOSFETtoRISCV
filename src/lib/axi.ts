@@ -69,7 +69,7 @@ export function andBus(w: number): ComponentDef {
 }
 
 /** Small helpers over a Builder: gates of any arity, buses of any width (1 included). */
-function kit(b: Builder) {
+export function kit(b: Builder) {
   const and = (...xs: string[]) => (xs.length === 1 ? xs[0] : xs.length === 2 ? b.op1(AND, xs) : b.op1(andN(xs.length), xs));
   const or = (...xs: string[]) => (xs.length === 1 ? xs[0] : xs.length === 2 ? b.op1(OR, xs) : b.op1(orN(xs.length), xs));
   const not = (x: string) => b.op1(NOT, [x]);
@@ -172,6 +172,16 @@ function axiMasterMux(M: number): ComponentDef {
   });
 }
 
+/**
+ * The decoder's combinational core: one match line per slave but the last (the nibble equals its code), and the
+ * last, the default slave, when none does. Shared with lib/memmapdec.ts (the memory-map designer's decoder chip), so
+ * the chip is the very logic the bus contains.
+ */
+export function nibbleSelects(b: Builder, g: ReturnType<typeof kit>, nib: string, codes: number[]): string[] {
+  const match = codes.slice(0, codes.length - 1).map((c) => b.op1(equal(4), [nib, g.konst(4, c)], `= ${c.toString(16)}`));
+  return [...match, g.not(g.or(...match))];
+}
+
 /** The address decoder: the top nibble of the address presented (AW when writing, else AR); held with the grant. */
 function axiDecoder(codes: number[]): ComponentDef {
   const S = codes.length;
@@ -181,8 +191,7 @@ function axiDecoder(codes: number[]): ComponentDef {
     const addr = g.mux(32, 'araddr', 'awaddr', 'awvalid', 'address');
     const nib = g.split(addr, [28, 4])[1];
     b.next();
-    const match = codes.slice(0, S - 1).map((c) => b.op1(equal(4), [nib, g.konst(4, c)], `= ${c.toString(16)}`));
-    const dec = [...match, g.not(g.or(...match))];
+    const dec = nibbleSelects(b, g, nib, codes);
     b.next();
     const selHeld = b.op(register(S), [g.merge(dec), g.not('busy'), 'clk'], 'addressed slave', 'selh');
     const sh = g.split(`${selHeld}.q`, ones(S));
@@ -827,6 +836,12 @@ export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });
   });
+}
+
+/** The sandbox's interconnect for the given slave codes: two masters, every link packed (lib/soc.ts SANDBOX_PARTS.bus; the memory-map designer's). */
+export function sandboxBus(codes: number[]): ComponentDef {
+  const BUS = axiBus(2, codes);
+  return bundled(BUS, [['m0_', 'slave'], ['m1_', 'slave'], ...codes.map((_, k): [string, 'master'] => [`s${k}_`, 'master'])], `${BUS.id}_b`);
 }
 
 /** The channel signals a master drives, packed bit 0 first (M_OUT order): 105 bits. */
