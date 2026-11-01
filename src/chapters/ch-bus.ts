@@ -1,6 +1,7 @@
 import { cardBootTime } from '../bus/cardboot';
 import { BOOT_SOURCE, CARD_BOOT_SOURCE, CARD_FEED, LOAD_AT, LOAD_WORDS, SYSTEM_WORDS } from '../bus/programs';
 import { deckWords } from '../cards/card';
+import { accessCycles, CLOCK_NS, TIMING } from '../dram/timing';
 import { FLASH_TIMES } from '../flash/model';
 import { AXI_CARDS, AXI_KEYS, AXI_PORT, axiBus, axiDram, DMA_ENGINE, busMemUnit } from '../lib/axi';
 import { CARD_DECK, SOC_SCREEN } from '../lib/soc';
@@ -14,6 +15,8 @@ import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputer
 import type { Chapter } from './types';
 
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en-US').replace(/,/g, ' ');
+
+const fmtCycles = (ns: number) => Math.round(ns / CLOCK_NS).toLocaleString('en-US').replace(/,/g, ' ');
 
 /** The card boot, from the golden model (bus/cardboot.ts, pinned against the gates): with the reader's feed, and without. */
 const CARD_BOOT = cardBootTime(deckWords(CARD_DECK), CARD_FEED), CARD_BOOT_0 = cardBootTime(deckWords(CARD_DECK), 0);
@@ -105,8 +108,34 @@ export const chBus: Chapter = {
         <p>A load is an address (one handshake), then data coming back (another). A slave answers the cycle after the address at
         the earliest, so even the fastest memory now costs <strong>two cycles</strong> an access. The CPU's side is a small state
         machine, <span data-show="cpu">the master port</span>: ${nands(AXI_PORT)} NANDs.</p>
+        <p>Why two wires and not one. With only valid, a sender could not tell whether the receiver had taken the data; with only ready, a receiver could not tell
+        whether the data on the wires was meant for it. Each side states its own condition and nothing else, so neither needs to know the other's speed, and a slave
+        can take one cycle or a thousand without the master changing. The price is a state machine at each end and a cycle of latency the old combinational memory did not have.</p>
         <div class="try">Here a request port stands in for the CPU. Read <span data-show="ram">RAM</span>, then <span data-show="flash">the flash</span>. The panel shows every cycle: R for a read
         address raised, W for a write, ✓ for the answer, and who holds the bus.</div>`,
+      tour: {
+        beats: [
+          { title: 'RAM: the short way', reset: true, say: 'The port raises a read of 0x40. The decoder sees a top nibble of 0, the RAM is idle and takes the address at once, and the word comes back on the next edge: <code>done</code> = {v:done}, <code>rdata</code> = {v:rdata}. (The panel counts the request\'s own cycle too: 2.)', set: { req: 1, we: 0, addr: 0x40 }, cycles: 1, at: [], show: ['ram'], expect: { done: 1, rdata: 0 } },
+          { title: 'Let go', say: 'The port drops <code>req</code>; <code>done</code> falls ({v:done}) and the bus is free.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'Flash: it has to look', say: `Address 0x1000_0000 goes to the flash. Its page buffer is empty, so the slave starts a page read and holds ready back. Ten clocks later <code>done</code> is still {v:done}.`, set: { req: 1, addr: 0x10000000 }, cycles: 10, show: ['flash'], expect: { done: 0 } },
+          { title: 'The page arrives', say: `After ${FLASH_TIMES.read + 1} clocks in all the word comes back: <code>rdata</code> = {v:rdata}, the first word of the image. The page read is the whole cost; the handshake itself added the same two cycles as for RAM.`, cycles: FLASH_TIMES.read + 1 - 10, show: ['flash'], expect: { done: 1, rdata: BENCH_IMAGE[0] >>> 0 } },
+          { title: 'Let go', say: 'Released again; the page now sits in the flash\'s buffer.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'The next word is cheap', say: 'The next word, 0x1000_0004, is in the buffer already: <code>rdata</code> = {v:rdata} after only 2 clocks (3 on the panel\'s count).', set: { req: 1, addr: 0x10000004 }, cycles: 2, show: ['flash'], expect: { done: 1, rdata: BENCH_IMAGE[1] >>> 0 } },
+        ],
+      },
+      more: {
+        derive: `<p>The rule fixes the timing: a transfer occurs at every rising edge where valid and ready are both 1, and a sender that has raised valid must hold it, with its data steady, until that edge.
+          A read is two such transfers (address, then data), and a slave cannot answer in the cycle of the address because it has only just seen it, so the floor is two cycles.
+          RAM: 2. The flash's first word: ${FLASH_TIMES.read} cycles of page read plus the 2 of the handshake = ${FLASH_TIMES.read + 2}. A later word of the same page: 3.</p>`,
+        real: `<p>AXI's rules are the same in spirit: valid must not wait for ready, ready may wait for valid, and once valid is up it stays up with stable payload. APB, AHB, Wishbone, TileLink and AXI differ
+          in channels, bursts and pipelining, not in this idea. Most CPUs reach their memory over such a bus; the flash here stands for anything that answers slowly, from a page of NAND to a peripheral over a bridge.</p>`,
+        pitfall: `<p>Making valid depend on ready. If the sender waits to see ready before raising valid, and the receiver waits to see valid before raising ready, both wait for ever. The
+          bench's port raises <code>req</code> and holds it until <code>done</code>, however long the flash takes.</p>`,
+        numbers: `<table class="mini"><tr><th>access</th><th>cycles</th></tr>
+          <tr><td>RAM, any word</td><td>2</td></tr>
+          <tr><td>flash, first word of a page</td><td>${FLASH_TIMES.read + 2}</td></tr>
+          <tr><td>flash, next word of the page</td><td>3</td></tr></table>`,
+      },
       scene: () => busBenchScene(),
       challenge: {
         kind: 'reach', goal: 'Read a word from RAM, then one from the flash, and compare what each cost.',
@@ -127,17 +156,38 @@ export const chBus: Chapter = {
         uses two: the address (AR) and the data (R). Our masters raise AW and W together and our slaves take them together, which AXI
         allows. The main data paths of ARM SoCs use full AXI, and many RISC-V SoCs TileLink or AXI: both add bursts and several
         transactions in flight; ours keeps one.</p>
-        <details class="deeper"><summary>Deeper: bursts and IDs</summary>
-        <p>Full AXI sends one address for a <strong>burst</strong> of up to 256 data beats (AxLEN): INCR steps the address, WRAP wraps
-        it inside a line so a cache fill can start at the word the CPU is waiting for, FIXED repeats it for a FIFO. One handshake on AR
-        then buys a whole line on R. Each transaction also carries an <strong>ID</strong> (AxID): responses with the same ID come back in
-        order, responses with different IDs in any order, so a master can keep many reads in flight and a fast slave need not wait for
-        a slow one. The interconnect extends the IDs with the master's number to route the answers back. W has kept no ID since AXI4:
-        write data follows the order of its addresses. Each extra field is wires on the channels and state in every slave: AXI-lite
-        drops them for registers that move one word at a time.</p></details>
         <p>The <span data-show="bus.dec"><strong>address decoder</strong></span> looks at the top four address bits: 0x0… is RAM, 0x1… the flash, 0x4… the DMA engine's
         registers. Any other address goes to a <span data-show="def">default slave</span> that answers 0, so a stray pointer never hangs the bus (AXI would
-        answer with an error and the CPU would trap). A slow slave just holds back valid: <span data-show="ram">this RAM</span> has 3 <strong>wait states</strong>.</p>`,
+        answer with an error and the CPU would trap). A slow slave just holds back valid: <span data-show="ram">this RAM</span> has 3 <strong>wait states</strong>.</p>
+        <p>Splitting the channels is what lets a bus be both simple and general. The address can be accepted while the data is still being found, a write's response is
+        its own message (so the master learns that the store has landed, not just left), and each channel can be pipelined separately in a larger design. The cost is five
+        handshakes' worth of wires and state per port; AXI-lite keeps them but drops bursts and IDs, which is why a register file hangs off it for a few gates.</p>`,
+      tour: {
+        beats: [
+          { title: 'A store with wait states', reset: true, say: 'A store of 0xABCD to 0x100. AW and W go out together and the slave takes both in the first cycle. <code>done</code> (B) is {v:done}: the RAM now spends its 3 wait states.', set: { req: 1, we: 1, addr: 0x100, wdata: 0xabcd }, cycles: 1, at: [], show: ['ram'], expect: { done: 0 } },
+          { title: 'The response', say: 'Three more clocks and B arrives: <code>done</code> = {v:done}. The panel counts 5 cycles for the store: the request\'s own cycle, the one that takes the address, the wait states, and the answer.', cycles: 3, expect: { done: 1 } },
+          { title: 'Let go', say: 'The port drops <code>req</code> and <code>we</code>.', set: { req: 0, we: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'A read pays too', say: 'The same word read back: wait states are the slave\'s, not the write\'s. After 4 clocks <code>rdata</code> = {v:rdata}.', set: { req: 1, addr: 0x100 }, cycles: 4, show: ['ram'], expect: { done: 1, rdata: 0xabcd } },
+          { title: 'A stray pointer', say: 'Release, then a read of 0x7000_0000. The decoder sends it to the default slave, which answers at once with {v:rdata}: no hang, no error.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'Default slave answers', say: 'It answers after one clock, with zeros: <code>done</code> = {v:done}, <code>rdata</code> = {v:rdata}.', set: { req: 1, addr: 0x70000000 }, cycles: 1, show: ['bus', 'def'], expect: { done: 1, rdata: 0 } },
+        ],
+      },
+      more: {
+        derive: `<p>With w wait states a store costs 2 + w cycles on the panel's count: one for the address and data, w of waiting, one for the response. For w = 3 that is 5, which a quiz asks. Over a
+          sequence of n independent accesses the bus does n·(2 + w) cycles because only one transaction is in flight. A burst of n words amortizes the address and the wait over the data beats; idealized,
+          a slave with w wait states returns n words in about 1 + w + n cycles instead of n·(2 + w).</p>`,
+        real: `<p>Full AXI sends one address for a <strong>burst</strong> of up to 256 data beats (AxLEN): INCR steps the address, WRAP wraps
+          it inside a line so a cache fill can start at the word the CPU is waiting for, FIXED repeats it for a FIFO. One handshake on AR
+          then buys a whole line on R. Each transaction also carries an <strong>ID</strong> (AxID): responses with the same ID come back in
+          order, responses with different IDs in any order, so a master can keep many reads in flight and a fast slave need not wait for
+          a slow one. The interconnect extends the IDs with the master's number to route the answers back. W has kept no ID since AXI4:
+          write data follows the order of its addresses. Each extra field is wires on the channels and state in every slave: AXI-lite
+          drops them for registers that move one word at a time.</p>`,
+        pitfall: `<p>Treating the decoder's default as free error handling. An address that decodes to nothing returns 0 here and the CPU carries on with the wrong value. Real systems return a bus error and
+          take a trap (the access-fault exceptions of the privileged ISA), because a silent zero turns a wild pointer into a quiet wrong answer.</p>`,
+        numbers: `<table class="mini"><tr><th>wait states</th><th>store (cycles)</th><th>8 stores in a row</th></tr>
+          ${[0, 1, 3, 7].map((w) => `<tr><td>${w}</td><td>${2 + w}</td><td>${8 * (2 + w)}</td></tr>`).join('')}</table>`,
+      },
       scene: () => busBenchScene(3),
       challenge: {
         kind: 'quiz',
@@ -165,7 +215,20 @@ export const chBus: Chapter = {
         <p>One transaction at a time has a price: while the DMA waits for the flash's page read, it holds the bus, and the CPU waits
         too, for a RAM that is idle. Real interconnects split a transaction (the address phase frees the bus) or let several be in
         flight, so that a slow slave delays only those who use it.</p>
+        <p>The arbiter decides who goes next, not how long they take. Round robin is fair between requesters that are ready at the same time, and it guarantees that
+        neither master is starved; what it cannot do is shorten a transaction already granted. The longest wait one master can suffer is therefore the other's longest transaction, here
+        a flash page read, and a real-time deadline has to be met against that number, not against the average.</p>
         <div class="try">Start the DMA copy, Clock 10, then Read: the CPU's R waits while the bus belongs to the DMA.</div>`,
+      more: {
+        derive: `<p>The worst-case wait for a CPU access is one complete DMA transaction: ${FLASH_TIMES.read + 2} cycles for a flash word whose page is not yet buffered, 3 for a later word, 2 for a RAM write. After it the
+          grant passes to the CPU if it is requesting, because round robin moves the pointer past the master just served. So a CPU and a DMA both busy alternate, one transaction each, and the CPU
+          gets at least every second slot.</p>`,
+        real: `<p>Interconnects cut this wait in three ways. A <strong>crossbar</strong> gives each slave its own arbiter, so a CPU talking to RAM does not wait for a DMA talking to flash. <strong>Split transactions</strong>
+          release the bus after the address and give it back for the data. <strong>Several transactions in flight</strong> (AXI IDs) let the master issue the next before the last returns.
+          Quality-of-service bits let a display controller or a core outrank a bulk copy.</p>`,
+        pitfall: `<p>Reading "round robin" as "the arbiter takes the bus back". It chooses between transactions only. In the scene the DMA's flash read is granted, and the CPU's valid stays up for the
+          full page read behind it; only the next grant can go the other way.</p>`,
+      },
       scene: () => busBenchScene(),
       challenge: {
         kind: 'reach', goal: 'Start the DMA copy, then make a read that has to wait for the bus.',
@@ -189,16 +252,27 @@ export const chBus: Chapter = {
         multiplexes the registers.</p>
         <p>It costs bus time: two transactions a word, and every one the CPU wants meanwhile waits for the bus. Its gain is that the CPU
         keeps running, and that a slow source (the flash's ${FLASH_TIMES.read}-cycle page reads) delays the DMA, not the program.</p>
-        <details class="deeper"><summary>Deeper: DMA and the caches</summary>
-        <p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter 22</a>) in front of it
-        and the DMA, which talks to RAM directly, sees two problems. Copying <em>out</em> of a buffer the CPU just wrote, it reads RAM
-        while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
-        Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them, or the
-        CPU reads the stale copy. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
-        <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 27</a>).
-        Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
-        reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p></details>
+        <p>The engine is a bus master with almost no logic of its own: it has no program, no decoder and no ALU beyond an address incrementer and a down counter. That is why it is cheap, and why
+        it is the first thing a system adds after a CPU. The software side of the bargain is a protocol: write the registers, start it, then either poll the status or take the interrupt, and never touch the
+        buffer in between.</p>
         <div class="try">Copy, run until the interrupt, and watch RAM from 0x100 fill with the flash's words (0xF1A5_00nn).</div>`,
+      more: {
+        derive: `<p>A copy of n words is 4 setup stores plus a read and a write per word: 4 + 2n transactions, all but the four on the DMA's own account. By the CPU, a copy costs a load and a store per word,
+          each at least 2 bus cycles, plus the loop's instructions, and nothing else runs. The DMA's wall-clock time is longer than the sum of its transactions, because the first flash word adds the
+          page read and the engine does one transaction at a time; the point is that the CPU is free during it.</p>`,
+        real: `<p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter 22</a>) in front of it
+          and the DMA, which talks to RAM directly, sees two problems. Copying <em>out</em> of a buffer the CPU just wrote, it reads RAM
+          while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
+          Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them, or the
+          CPU reads the stale copy. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
+          <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 27</a>).
+          Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
+          reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p>`,
+        pitfall: `<p>Starting the engine before the data is in memory, or reading the destination before the interrupt. Both look right in a quick test, because the copy is fast, and fail only under load. In the
+          scene, RAM fills word by word while the copy runs; <code>irq</code> is the only signal that says the last one has landed.</p>`,
+        numbers: `<table class="mini"><tr><th>words</th><th>bus transactions</th></tr>
+          ${[4, 16, 64, 256].map((n) => `<tr><td>${n}</td><td>${4 + 2 * n}</td></tr>`).join('')}</table>`,
+      },
       scene: () => busBenchScene(),
       challenge: {
         kind: 'reach', goal: 'Have the DMA copy 16 words from the flash to RAM 0x100, and wait for its interrupt.',
@@ -221,7 +295,22 @@ export const chBus: Chapter = {
         <p>At power-up the boot ROM programs <span data-show="dma">the DMA</span> to copy ${LOAD_WORDS} words from <span data-show="flash">the flash</span> to <span data-show="ram">RAM</span> at 0x${LOAD_AT.toString(16)}, waits for it, and
         jumps there. Every computer boots like this: a small ROM that knows how to fetch the real program from storage.</p>
         <pre class="code">${BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
+        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter 19's; only the place the words come from moved, and the
+        memory unit absorbs the difference by stalling the pipeline's bookkeeping (<code>retire</code> low) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
+        what is behind its port, and put every piece of timing in the port.</p>
         <div class="try">Run, and watch the PC move from the boot ROM into RAM, the console print, and the LEDs count.</div>`,
+      more: {
+        derive: `<p>Cycles per instruction from RAM, no wait states: an instruction costs 2 for its fetch (address, word), and a load or store adds 2 for its own access, so 2 for an ALU instruction or a branch and 4 for a load or store.
+          The boot ROM, inside the CPU, delivers its word in the same cycle: 1 and 3. A program of mixed instructions therefore runs at roughly half the speed it had from the ROM,
+          which is the factor a cache exists to win back.</p>`,
+        real: `<p>Every machine has this ladder. A mask ROM in the SoC (the "boot ROM") is the only code that is there at power-up; it initializes just enough (clocks, a memory controller, a storage controller),
+          loads the next stage from flash or a card, and often checks its signature before jumping. The chain continues (a first-stage loader, a second stage that trains the DRAM, then an operating-system loader), and each
+          stage is larger and slower to fetch than the one that loaded it.</p>`,
+        pitfall: `<p>Reading <code>retire</code> = 0 as a hang. The CPU is waiting for the bus, and in the scene it waits every instruction that runs from RAM. A real hang is a PC that stops
+          changing with retire stuck low: a slave that never raises ready, which is why bus fabrics include time-outs.</p>`,
+        numbers: `<table class="mini"><tr><th>instruction</th><th>boot ROM</th><th>from RAM</th></tr>
+          <tr><td>ALU, branch</td><td>1</td><td>2</td></tr><tr><td>load, store</td><td>3</td><td>4</td></tr></table>`,
+      },
       scene: () => busComputerScene(),
       tries: [(st) => (busComputerState(st)?.booted ?? -1) >= 0],
       challenge: {
@@ -257,12 +346,25 @@ export const chBus: Chapter = {
         ${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)} a card. With no feed delay the loop alone would take
         ${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)} (three of its nine instructions go over the bus); the rest is
         ${CARD_BOOT.idlePolls} polls that found the station empty.</p>
-        <details class="deeper"><summary>Deeper: sequence numbers</summary>
-        <p>Each card also carries a <strong>sequence number</strong> in columns 73–80 (10, 20, 30, …, so that a card can be slipped in
-        between). A dropped deck is not lost: a card sorter, one column a pass, puts it back in order. The loader cannot tell: an unsorted
-        deck loads, and runs as nonsense.</p></details>
+        <p>The point of the exercise is the dependency chain: the loader must be in a memory that needs no loading, so the first thing a machine runs is always something
+        built into it. Here that is the boot ROM; on the 1401 it was the Load key's hard-wired sequence. What changes between the two machines is only how much the first stage can do before it hands over.</p>
         <div class="try">Run, and watch the reader work through the deck while the PC stays in the boot ROM; then the PC jumps into RAM
         and the program from the cards prints and counts.</div>`,
+      more: {
+        derive: `<p>The loop reads STATUS (a bus load), tests the hopper bit, reads DATA (a second load, which takes the card), stores the word (a bus store) and loops: of its nine instructions three go over the bus, so with no feed delay
+          it takes ${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)} cycles a card. The reader needs ${CARD_FEED} edges to present the next card, so the loop polls until it does; ${CARD_DECK.cards.length} cards in
+          ${CARD_BOOT.cycles} cycles is ${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)} a card, and the difference is the ${CARD_BOOT.idlePolls} idle polls. A real reader at about 75 ms a card is ${fmtCycles(75e6)} of
+          these cycles a card, so the same program would spend almost all of its time polling.</p>`,
+        real: `<p>The 1401 and its relatives booted from cards, tape or disk the same way: a button that loads the first record into fixed locations and starts there. Modern machines add layers: a mask ROM, then a
+          flash-resident first stage, then the operating system's loader. Whatever is first is read-only or hard-wired, because nothing else can be trusted to exist yet. Bootstrapping is also the origin of the word "reboot".</p>`,
+        pitfall: `<p>Each card also carries a <strong>sequence number</strong> in columns 73–80 (10, 20, 30, …, so that a card can be slipped in
+          between). A dropped deck is not lost: a card sorter, one column a pass, puts it back in order. The loader cannot tell: an unsorted
+          deck loads, and runs as nonsense. A deck out of order is the usual way a boot fails: the loader reads cards in the order they sit in the hopper, and a deck dropped and restacked by hand is wrong in exactly that way.</p>`,
+        numbers: `<table class="mini"><tr><th></th><th>cycles / card</th></tr>
+          <tr><td>loop alone, no feed delay</td><td>${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)}</td></tr>
+          <tr><td>with the reader's ${CARD_FEED}-edge feed</td><td>${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)}</td></tr>
+          <tr><td>a real reader, 75 ms</td><td>${fmtCycles(75e6)}</td></tr></table>`,
+      },
       scene: () => cardComputerScene(),
       challenge: {
         kind: 'reach', goal: 'Boot the computer from the deck: run until the program on the cards prints.',
@@ -282,11 +384,6 @@ export const chBus: Chapter = {
         <a href="#/c/memctrl/0">chapter 36</a> behind its controller and a bus adapter (adapter and controller:
         ${nands(axiDram())} NANDs). A load costs 10 cycles on an open row, 14 on a closed bank, 18 when another row is open, more
         behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of <a href="#/c/cache/0">chapter 22</a> close.</p>
-        <details class="deeper"><summary>Deeper: the adapter and the data mask</summary>
-        <p>The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
-        joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
-        (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
-        store needs no read first.</p></details>
         <p>At 0x5000_0000, a <span data-show="screen"><strong>screen</strong></span>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
         byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter 33</a>'s scan-out reads its frame. At 0x6000_0000, a
         <span data-show="keys kbd"><strong>keyboard</strong></span>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack, the acknowledge that drops the key, in the cycle after the read's
@@ -296,6 +393,21 @@ export const chBus: Chapter = {
         DRAM and paints an 8 × 8 block of its colour on the screen; Enter prints the line back from DRAM, last key first.</p>
         <div class="try">Run, then type into the keyboard field (or Type hello⏎). Watch the blocks appear, Enter read the line back,
         and the DRAM counters: the line's words sit in one row, so after the first access nearly all are row hits.</div>`,
+      more: {
+        derive: `<p>The DRAM figures are the controller's cycles plus the bus's two: a hit ${accessCycles('hit', TIMING)} + 2 = ${accessCycles('hit', TIMING) + 2}, a miss ${accessCycles('miss', TIMING)} + 2 = ${accessCycles('miss', TIMING) + 2}, a conflict
+          ${accessCycles('conflict', TIMING)} + 2 = ${accessCycles('conflict', TIMING) + 2}. On-chip RAM costs 2. The screen and keyboard are the RAM's own structure (four byte lanes) with a different meaning for the addresses: a store to the frame
+          buffer is an ordinary store whose side effect is a pixel.</p>`,
+        real: `<p>The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
+          joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
+          (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
+          store needs no read first. Real SoCs add the same kinds of slave and more (interrupt controllers, UARTs, SPI, a display engine), each behind a register block like these.</p>`,
+        pitfall: `<p>Side effects behind caches and speculation. Reading the keyboard's +0 takes the key. A cache that fetches the line, a prefetcher that reads ahead, or a debugger that dumps
+          memory all lose keys. Device registers are mapped uncached and non-speculative for this reason, and a driver reads each one exactly as often as it means to.</p>`,
+        numbers: `<table class="mini"><tr><th>slave</th><th>address</th><th>load (cycles)</th></tr>
+          <tr><td>on-chip RAM</td><td>0x0…</td><td>2</td></tr><tr><td>flash, buffered word</td><td>0x1…</td><td>3</td></tr>
+          <tr><td>DRAM, open row</td><td>0x2…</td><td>${accessCycles('hit', TIMING) + 2}</td></tr><tr><td>DRAM, closed bank</td><td>0x2…</td><td>${accessCycles('miss', TIMING) + 2}</td></tr>
+          <tr><td>DRAM, other row open</td><td>0x2…</td><td>${accessCycles('conflict', TIMING) + 2}</td></tr></table>`,
+      },
       scene: () => systemComputerScene(),
       challenge: {
         kind: 'reach', goal: 'Type a line, and have the computer print it back from DRAM.',

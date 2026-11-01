@@ -1,4 +1,4 @@
-import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, TRAP_UNIT, bankedMemory, systemCpu } from '../lib';
+import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, SYS_DECODE, TRAP_UNIT, bankedMemory, systemCpu } from '../lib';
 import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
@@ -9,6 +9,12 @@ import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
+const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+/** The byte enables of a store: size 0 byte, 1 half, 2 word, at a byte offset 0..3. */
+const enables = (size: number, off: number) => (size === 0 ? 1 << off : size === 1 ? 3 << (off & 2) : 15);
+const bin4 = (n: number) => n.toString(2).padStart(4, '0');
+/** NANDs of the privileged-architecture hardware: the CSR unit, the trap unit and the system decoder. */
+const TRAP_NANDS = nd(CSR_UNIT) + nd(TRAP_UNIT) + nd(SYS_DECODE);
 
 /** NANDs of the complete system CPU (RV32I, or RV32IM with `m`), with and without its program ROM. The ROM is a
  *  fixed 128-word mux tree whatever the program, so an empty program measures it. */
@@ -85,17 +91,58 @@ export const chIO: Chapter = {
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
         <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
         trap and leave it to software; the complete CPU traps.</p>
+        <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, with no multiplexer. All the logic is in the enables, a small
+        decoder of the low two address bits and the size: ${nd(STORE_ALIGN)} NANDs for the whole unit. It also produces <em>misaligned</em>, which the CPU turns into a trap.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
       scene: () => ({ root: STORE_ALIGN, inputs: { wd: 0xab, addr: 2, size: 0 } }),
       tries: [(st) => st.getInput('size') === 0 && st.getInput('addr') !== 2],
+      tour: {
+        beats: [
+          { title: 'sb to address 2', show: ['r8', 'dec'], expect: { be: 4, wdata: 0xabababab, misaligned: 0 },
+            say: '<p>The byte 0xAB is copied into all four lanes (wdata = {b:wdata}), and only the enable for byte 2 is raised: be = {b:be}.</p>' },
+          { title: 'Another byte', set: { addr: 3 }, show: ['dec'], expect: { be: 8 },
+            say: '<p>Address 3: the same data, a different enable. be = {b:be}. The data never moved.</p>' },
+          { title: 'sh to address 2', set: { size: 1, addr: 2 }, show: ['r16', 'dec'], expect: { be: 12, wdata: 0x00ab00ab },
+            say: '<p>A halfword is copied into both halves (wdata = {b:wdata}), and two enables are raised, for bytes 2 and 3: be = {b:be}.</p>' },
+          { title: 'A misaligned half', set: { addr: 1 }, show: ['mis'], expect: { misaligned: 1 },
+            say: '<p>A halfword at an odd address is misaligned (at offset 3 it would even straddle two words). misaligned = {v:misaligned}: the complete CPU turns that into a trap rather than store anything.</p>' },
+          { title: 'sw', set: { size: 2, addr: 0 }, show: ['dec'], expect: { be: 15, wdata: 0xab, misaligned: 0 },
+            say: '<p>A word writes all four lanes from the 32-bit data: be = {b:be}, and no replication is needed (wd is 0xAB here, so the word is 0x000000AB).</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>With o the low two address bits: a byte store enables lane o; a halfword store enables lanes 2·o[1] and 2·o[1] + 1 (misaligned if o[0] = 1); a word store enables all four (misaligned if o ≠ 0). The table of enables, most significant lane first:
+          byte ${[0, 1, 2, 3].map((o) => `${o}: ${bin4(enables(0, o))}`).join(', ')}; half ${[0, 2].map((o) => `${o}: ${bin4(enables(1, o))}`).join(', ')}; word ${bin4(enables(2, 0))}.</p>`,
+        pitfall: `<p>Writing the data into lane 0 only. With be = 0100 and the byte in lane 0, lane 2 stores whatever was on the bus, zero in the first case. If a byte store puts the wrong value in memory, look at wdata first: all four lanes must show the byte.</p>`,
+        real: `<p>SRAM macros expose exactly these byte write masks, and DRAM modules a data mask line per byte. A cache that did not have them would have to read a line, modify it and write it back for every <code>sb</code>.</p>`,
+      },
     },
     {
       title: 'Four byte-wide banks',
       body: `
         <p>The data memory becomes <span data-show="b0 b1 b2 b3">four 8-bit memories</span> side by side, one per byte lane, each with its own write enable
         (<span data-show="w0 w1 w2 w3">we AND be<sub>i</sub></span>). Real SRAM macros do exactly this: per-byte write masks.</p>
-        <p>Reads always return the whole word.</p>`,
+        <p>Reads always return the whole word.</p>
+        <p>Splitting the memory by lane is what makes a partial write possible at all. A single 32-bit memory would have to read the word, replace one byte and write it back (two accesses), or take a mask. Four 8-bit memories take the mask for free: each bank is
+        written when we ∧ be<sub>i</sub> and otherwise keeps its byte. This memory is ${nd(bankedMemory(2))} NANDs for 4 words; the write enables cost an AND per bank, nothing against the storage.</p>`,
       scene: () => ({ root: bankedMemory(2), inputs: { addr: 4, wdata: 0x11223344, be: 0b0100, we: 1, clk: 0 } }),
+      tour: {
+        beats: [
+          { title: 'Four banks', reset: true, show: ['b0', 'b1', 'b2', 'b3'], expect: { rdata: 0 },
+            say: '<p>Four 8-bit memories, one per byte lane, all empty: rdata = {v:rdata}. The word 0x11223344 is on wdata and we is high.</p>' },
+          { title: 'Only byte 2', cycles: 1, show: ['b2', 'w2'], expect: { rdata: 0x00220000 },
+            say: '<p>be = 0100: only bank 2 sees its write enable. After the edge the word reads {v:rdata} (0x00220000): byte 2 of wdata, 0x22, in lane 2; the others still empty.</p>' },
+          { title: 'Bytes 0 and 1', set: { be: 3 }, cycles: 1, show: ['b0', 'b1', 'w0', 'w1'], expect: { rdata: 0x00223344 },
+            say: '<p>be = 0011: banks 0 and 1 write. The word is now {v:rdata} (0x00223344), and byte 2 survived: a partial write leaves the other lanes alone.</p>' },
+          { title: 'Byte 3 completes it', set: { be: 8 }, cycles: 1, show: ['b3', 'w3'], expect: { rdata: 0x11223344 },
+            say: '<p>be = 1000: the last lane. rdata = {v:rdata}, the whole word, assembled byte by byte.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Bank i stores bits 8i + 7 … 8i of each word and is written when we ∧ be<sub>i</sub>, so a store with enables e leaves the word w' = (w ∧ ¬m(e)) ∨ (wdata ∧ m(e)), where m(e) expands each enable bit to a byte mask. That is the whole semantics of <code>sb</code> and <code>sh</code> at the memory.</p>`,
+        pitfall: `<p>Raising we without the byte enables. A bank writes only when both are 1, so a store with we = 1 and be = 0000 changes nothing, and a word store must drive be = 1111. A store that seems to vanish is usually an enable that stayed 0.</p>`,
+        real: `<p>Byte-writable SRAM macros and DDR's data mask pins work like this; ECC memories complicate it, because a partial write must update check bits over the whole word.</p>`,
+      },
     },
     {
       title: 'Loading a byte',
@@ -104,8 +151,28 @@ export const chIO: Chapter = {
         or half (<span data-show="hsel">2:1</span>), then <span data-show="fsel">funct3 chooses</span>
         sign extension (<span data-show="sb sh"><code>lb</code>, <code>lh</code>: copy the top bit</span>) or zero extension
         (<span data-show="zb zh"><code>lbu</code>, <code>lhu</code></span>).
-        Both extensions are pure wiring, so the cost is all in the multiplexers.</p>`,
+        Both extensions are pure wiring, so the cost is all in the multiplexers.</p>
+        <p>Little-endian puts byte 0 in the low bits of the word, so the byte at offset o is bits 8o + 7 … 8o, and a halfword at offset 2 is the top half. The unit is ${nd(LOAD_EXTRACT)} NANDs. Compare the store side: stores replicate and steer by enables, loads select and extend. The asymmetry is
+        why a store needs no multiplexer and a load needs two levels of them.</p>`,
       scene: () => ({ root: LOAD_EXTRACT, inputs: { rdata: 0x12ab5678, addr: 2, funct3: 0 } }),
+      tour: {
+        beats: [
+          { title: 'lb: byte 2, sign-extended', show: ['bsel', 'sb'], expect: { value: 0xffffffab },
+            say: '<p>The word is 0x12AB5678. Byte 2 is 0xAB. <code>lb</code> copies its top bit through bits 31:8: value = {v:value} (0xFFFFFFAB, −85).</p>' },
+          { title: 'lbu: zero-extended', set: { funct3: 4 }, show: ['zb'], expect: { value: 0xab },
+            say: '<p>funct3 = 4 (<code>lbu</code>): the same byte with zeros above it, value = {v:value}.</p>' },
+          { title: 'lh: half at offset 2', set: { funct3: 1 }, show: ['hsel', 'sh'], expect: { value: 0x12ab },
+            say: '<p>funct3 = 1 (<code>lh</code>): the top half, 0x12AB. Its top bit is 0, so sign extension gives value = {v:value}, the same as zero extension would.</p>' },
+          { title: 'A negative half', set: { rdata: 0x92ab5678 }, show: ['sh'], expect: { value: 0xffff92ab },
+            say: '<p>With 0x92AB in the top half, <code>lh</code> now extends a 1: value = {v:value} (0xFFFF92AB).</p>' },
+          { title: 'lhu', set: { funct3: 5 }, show: ['zh'], expect: { value: 0x92ab },
+            say: '<p>funct3 = 5 (<code>lhu</code>): zero-extended, value = {v:value}. The same load, two meanings: which one the programmer wants is part of the instruction.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>funct3[1:0] gives the size (00 byte, 01 half, 10 word) and funct3[2] the unsigned flag. For a byte at offset o: value = {24 copies of (¬u ∧ the byte\'s top bit), the byte}; for a half at offset 0 or 2: {16 copies of (¬u ∧ the half\'s top bit), the half}. The replicated bit is one wire fanned out, which costs only its fan-out load.</p>`,
+        pitfall: `<p>Getting the byte order backwards. In a little-endian machine the byte at address 2 of 0x12AB5678 is 0xAB, not 0x56: the least significant byte, 0x78, is at address 0. A quick check on the circuit: with addr = 0 the unit must return 0x78.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'Memory holds 0x12AB5678 at address 0. What does lb x5, 2(x0) load?',
         options: ['0x000000AB', '0xFFFFFFAB', '0x00000056', '0xFFFFFF56'], answer: 1,
@@ -124,16 +191,37 @@ export const chIO: Chapter = {
         0x8000_0000 is not a store at all: the I/O unit sends the byte to the <span data-show="pin:consoleData">console</span>. That is how most processors talk to
         the outside world, from UARTs to GPUs; x86 also keeps a separate 64 K I/O port space with its own <code>in</code> / <code>out</code> instructions,
         now used mostly by legacy devices.</p>
+        <p>The machine does not know it is printing. The I/O unit watches the address of every access: with bit 31 set, a store goes to a device register instead of the memory, and a load comes from one. The console register is write-only and always ready; a real UART adds a status register that the
+        program polls before each store.</p>
         <div class="try">Run the program. The console fills one <code>sb</code> at a time.</div>`,
       scene: () => cpuScene({ source: sys('hello'), system: true }),
+      tour: {
+        beats: [
+          { title: 'Set up the console address', reset: true, cycles: 1, show: ['io'], expect: { pcOut: 4, consoleValid: 0 },
+            say: '<p>The first instruction, <code>li a0, 0x80000000</code>, is a single <code>lui</code>: a0 now holds the console\'s address. Nothing has been printed (consoleValid = {v:consoleValid}).</p>' },
+          { title: 'The first store', cycles: 1, show: ['io', 'st'], expect: { pcOut: 8, consoleValid: 1, consoleData: 72 },
+            say: '<p>After <code>li t0, \'H\'</code>, <code>sb t0, 0(a0)</code> is at pc = {v:pcOut}. Its address has bit 31 set, so the I/O unit takes it: consoleValid = {v:consoleValid}, consoleData = {v:consoleData}, the code for H. The byte is printed at the coming edge.</p>' },
+          { title: 'Nothing while loading', cycles: 1, expect: { pcOut: 12, consoleValid: 0 },
+            say: '<p>The next instruction loads the next letter into t0. It is not a store, so consoleValid drops to {v:consoleValid}: the console only sees stores.</p>' },
+          { title: 'Next letter', cycles: 1, expect: { pcOut: 16, consoleValid: 1, consoleData: 101 },
+            say: '<p>Another <code>sb</code>, now with {v:consoleData}, the code for e. Two instructions per character.</p>' },
+          { title: 'A repeated letter', cycles: 3, expect: { pcOut: 28, consoleValid: 1, consoleData: 108 },
+            say: '<p>The two l\'s are stored by two <code>sb</code> in a row, with no <code>li</code> between them: t0 already holds 108. The second store is at pc = {v:pcOut}, with consoleData = {v:consoleData} again.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The CPU decodes <em>io</em> = addr[31] and gates the memory write with it; the I/O unit then selects a register by addr[4:2]: 0 the console strobe (the low byte as data), 1 the LEDs, 2 the switches (a load), 4 mtime, 5 mtimecmp. The data memory sees the access only when io is clear. The program has ${(sys('hello').match(/\bsb\b/g) ?? []).length} stores and ${(sys('hello').match(/\bli\b/g) ?? []).length} <code>li</code> (one is the console address); a letter that repeats needs no new <code>li</code>.</p>`,
+        pitfall: `<p>Treating the console like memory. A load from the console address does not return what was stored: the store went to a device, not to a cell. The same applies to any register of a real device, which is why C marks such pointers <code>volatile</code>: the compiler must not assume a second read returns the first value, or that two stores can be merged.</p>`,
+        real: `<p>The 16550 UART on PCs and the PL011 on Arm boards are mapped this way, each with a status register for "transmitter ready" that this console omits. Memory-mapped I/O needs no extra instructions, but accesses to a device must not be cached or reordered, which is why real cores mark address ranges as device memory.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Run the program until the console shows the whole greeting.',
         check: (st) => { try { return st.sim ? cpuState(st.sim).x.length > 0 && st.cycles >= 31 : false; } catch { return false; } },
         hints: [
           'Nothing prints until a store reaches 0x8000_0000, so the clock has to run.',
-          'Each character costs two instructions (load it into a register, store it): count the characters in the greeting.',
+          'Each character costs a store, and a new letter also a load-immediate: count the characters in the greeting.',
         ],
-        answer: 'Press "Run to halt" (or Pulse ~31 times): 15 characters, one li + sb pair each.',
+        answer: 'Press "Run to halt" (or Pulse ~31 times): 15 characters, 15 stores and 15 load-immediates in all (the second l reuses its register), with the halt loop.',
         solve: (st) => { st.runCycles(40); },
       },
     },
@@ -143,8 +231,24 @@ export const chIO: Chapter = {
         <p>Inputs work the same way: a load from 0x8000_0008 returns the <span data-show="pin:switches">switches</span>, a
         store to 0x8000_0004 latches the <span data-show="pin:leds">LEDs</span>. The <span data-show="io">I/O unit</span>
         decodes both. This program copies one to the other in a loop.</p>
+        <p>Input and output differ only in direction: a store drives the LED register, a load samples the switch pins. The switches are not stored anywhere; a load reads their level at that moment. A program that wants to react to a change has to read repeatedly, which is polling, and the loop here
+        does that continuously.</p>
         <div class="try">Let the clock run (or press Run), then flip switches in the I/O panel.</div>`,
       scene: () => cpuScene({ source: sys('leds'), system: true }),
+      tour: {
+        beats: [
+          { title: 'Switches at 0x5A', reset: true, set: { switches: 0x5a }, cycles: 5, show: ['io'], expect: { leds: 0x5a, pcOut: 20 },
+            say: '<p>With the switches at 0x5A, one pass of the loop (<code>lw</code>, two instructions on a copy that is never used, <code>sw</code>) has copied them to the LEDs: leds = {v:leds} ({b:leds}).</p>' },
+          { title: 'Flip them', set: { switches: 0xa5 }, cycles: 1, show: ['io'], expect: { leds: 0x5a },
+            say: '<p>The switches are now 0xA5, but the LEDs still show {v:leds}: the program has not read the switches again yet. Nothing links the two except the loop.</p>' },
+          { title: 'The loop catches up', cycles: 4, show: ['io'], expect: { leds: 0xa5, pcOut: 20 },
+            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is up to one pass, five cycles here.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The loop is five instructions (<code>lw</code>, <code>not</code>, <code>andi</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches within five cycles: a flip just after the <code>lw</code> samples waits for the next pass. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
+        pitfall: `<p>Expecting an input to be latched. If the switches change and change back between two loads, the program never sees it. Real devices that must not miss events latch them in a status register, or raise an interrupt (the next chapter).</p>`,
+      },
       tries: [(st) => st.value('leds') > 0],
     },
   ],
@@ -212,8 +316,31 @@ export const chTraps: Chapter = {
         the counters' upper halves (mcycleh …) and 64 bits of time; here mcycle reads the 32-bit timer mtime.</p>
         <p>Open the CSR unit: sixteen <span data-show="is_mstatus is_mtvec is_mepc is_mcause">address comparators</span>, a
         <span data-show="rsel">read multiplexer</span>, the <span data-show="orOld andOld opSel">read-modify-write logic</span>,
-        and the <span data-show="rTvec rEpc rCause rTval">registers</span>, some of them written by hardware on a trap.</p>`,
+        and the <span data-show="rTvec rEpc rCause rTval">registers</span>, some of them written by hardware on a trap.</p>
+        <p>A CSR instruction is an atomic read-modify-write: the old value goes to rd, and the new one, formed from the old value and rs1 (or a 5-bit immediate), goes back. The three operations differ only in how the new value is formed: swap, OR, AND-NOT. The unit costs ${nd(CSR_UNIT)} NANDs.</p>`,
       scene: () => ({ root: CSR_UNIT, inputs: { addr: 0x305, funct3: 1, rs1v: 0x40, csrWrite: 1, clk: 0 } }),
+      tour: {
+        beats: [
+          { title: 'Select mtvec', reset: true, show: ['is_mtvec', 'rsel'], expect: { rdata: 0, mtvecOut: 0 },
+            say: '<p>addr = 0x305 is mtvec, the trap vector. Its comparator fires and the read multiplexer selects it: rdata = {v:rdata}, the power-on value.</p>' },
+          { title: 'csrrw: swap', cycles: 1, show: ['rTvec', 'opSel'], expect: { rdata: 0x40, mtvecOut: 0x40 },
+            say: '<p>funct3 = 1 (<code>csrrw</code>) with rs1 = 0x40: the register takes rs1 at the edge. mtvec = {v:mtvecOut}, and the read now shows the new value, {v:rdata}.</p>' },
+          { title: 'csrrs: set bits', set: { funct3: 2, rs1v: 0x80 }, cycles: 1, show: ['orOld'], expect: { mtvecOut: 0xc0 },
+            say: '<p>funct3 = 2 (<code>csrrs</code>) with rs1 = 0x80: the new value is old OR rs1 = 0x40 | 0x80 = {v:mtvecOut}. Bits set in rs1 are set; the others keep their value.</p>' },
+          { title: 'csrrc: clear bits', set: { funct3: 3, rs1v: 0x40 }, cycles: 1, show: ['andOld'], expect: { mtvecOut: 0x80 },
+            say: '<p>funct3 = 3 (<code>csrrc</code>) with rs1 = 0x40: old AND NOT rs1 clears that bit: mtvec = {v:mtvecOut}.</p>' },
+          { title: 'Read mstatus', set: { addr: 0x300, csrWrite: 0 }, show: ['rsel'], expect: { rdata: 0x1800, mtvecOut: 0x80 },
+            say: '<p>With csrWrite = 0 nothing is written. Address 0x300 is mstatus: rdata = {v:rdata} (0x1800), the MPP field set to machine mode. mtvec is unchanged, {v:mtvecOut}.</p>' },
+          { title: 'A trap writes mepc', set: { addr: 0x341, trap: 1, trapPC: 0x100, trapCause: 11 }, cycles: 1, show: ['rEpc', 'rCause'], expect: { mepcOut: 0x100, rdata: 0x100 },
+            say: '<p>With trap = 1 the hardware writes mepc and mcause in the same edge, without any CSR instruction: mepc = {v:mepcOut}, and reading 0x341 returns it, {v:rdata}.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Let old be the CSR and s the source (rs1, or zimm). csrrw: new = s. csrrs: new = old ∨ s. csrrc: new = old ∧ ¬s. rd always receives old. The specification says csrrs and csrrc do not write when s is zero (rs1 = x0 or zimm = 0), so reading a read-only CSR never traps:
+          <code>csrr rd, csr</code> is <code>csrrs rd, csr, x0</code>. The unit computes all three and selects by funct3[1:0], with the immediate forms choosing zimm over rs1 by funct3[2].</p>`,
+        pitfall: `<p>Writing mtvec's low two bits. They are its MODE field; here they are wired to 0, so a base address written with them set reads back with them clear (above: 0x40 | 0x80 | 0x03 would still read 0xC0). A handler address must be 4-byte aligned for that reason.</p>`,
+        real: `<p>CSR numbers carry meaning in their bits: the top two give read/write or read-only, the next two the lowest privilege that may access the register (0x300 is machine-mode read/write). Real cores have hundreds of CSRs and decode them in the same way, one comparator or a ROM-like table per register.</p>`,
+      },
     },
     {
       title: 'ecall: asking the operating system',
@@ -227,14 +354,32 @@ export const chTraps: Chapter = {
         to BASE + 4<em>n</em> (exceptions still to BASE), saving the handler the dispatch on mcause. Here the two bits are wired to 0: direct only.</p>
         <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a three-line "OS" prints the
         character in a0. Note the handler adds 4 to mepc so that <code>mret</code> returns <em>after</em> the ecall.</p>
-        <details class="deeper"><summary>Deeper: privilege modes</summary>
-        <p>This CPU has only machine mode (M), the one mode every RISC-V core must have, so the "OS" and the program share it. A real system runs
-        programs in user mode (U), and an OS with virtual memory in supervisor mode (S). A trap goes to M (or, if delegated, S) and records the mode
-        it came from in mstatus.MPP (2 bits: 0 U, 1 S, 3 M); <code>mret</code> returns to that mode. Hence three ecall causes: 8 from U, 9 from S,
-        11 from M. In U, an access to a machine CSR or an <code>mret</code> is an illegal instruction, and PMP registers fence off memory: that is
-        what stops a program from taking over the machine. Here MPP is wired to 3 and ecall's cause is always 11.</p></details>
+        <p>Everything the hardware does on the trap happens at one clock edge: the PC is replaced, mepc and mcause are written, MIE is cleared, and the instruction that trapped is suppressed. No general register is touched, which is why the handler can start with a free hand only after it has saved
+        what it will use.</p>
         <div class="try">Pulse to the ecall and watch mepc and mcause (11 = ecall) change in the I/O panel, and the PC jump to the handler.</div>`,
       scene: () => cpuScene({ source: sys('syscall'), system: true, highlight: ['trap', 'csr', 'trapmux'] }),
+      tour: {
+        beats: [
+          { title: 'Before the ecall', reset: true, cycles: 4, show: ['trap', 'csr'], expect: { pcOut: 16 },
+            say: '<p>The program has pointed mtvec at the handler (<code>la</code>, <code>csrw</code>) and loaded the character \'O\' into a0. pc = {v:pcOut}: the <code>ecall</code> is next.</p>' },
+          { title: 'The trap', cycles: 1, show: ['trap', 'trapmux'], expect: { pcOut: 40 },
+            say: '<p>One edge: pc = {v:pcOut}, the handler. The PC mux took mtvec; mepc now holds 16, the address of the ecall itself, and mcause holds 11.</p>' },
+          { title: 'The handler prints', cycles: 1, show: ['io'], expect: { pcOut: 44, consoleValid: 1, consoleData: 79 },
+            say: '<p>The handler\'s first instruction has loaded the console address into t1; now the <code>sb</code> at pc = {v:pcOut} stores a0 to the console: consoleData = {v:consoleData}, the code for O.</p>' },
+          { title: 'mret', cycles: 5, show: ['trapmux', 'csr'], expect: { pcOut: 20 },
+            say: '<p>The handler reads mepc, adds 4, writes it back and executes <code>mret</code>. The trap mux takes mepc: pc = {v:pcOut}, the instruction after the ecall. Without the <code>addi</code> it would return to the ecall and trap forever.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The trap edge, in order of the registers written: mepc ← pc of the trapping instruction; mcause ← the cause; mtval ← the faulting value; mstatus.MPIE ← MIE and MIE ← 0; pc ← mtvec (BASE). <code>mret</code> reverses it: pc ← mepc, MIE ← MPIE, MPIE ← 1. That is six writes at one edge,
+          which is why the hardware needs dedicated paths to those registers and cannot use the normal CSR write port alone.</p>`,
+        real: `<p>This CPU has only machine mode (M), the one mode every RISC-V core must have, so the "OS" and the program share it. A real system runs
+          programs in user mode (U), and an OS with virtual memory in supervisor mode (S). A trap goes to M (or, if delegated, S) and records the mode
+          it came from in mstatus.MPP (2 bits: 0 U, 1 S, 3 M); <code>mret</code> returns to that mode. Hence three ecall causes: 8 from U, 9 from S,
+          11 from M. In U, an access to a machine CSR or an <code>mret</code> is an illegal instruction, and PMP registers fence off memory: that is
+          what stops a program from taking over the machine. Here MPP is wired to 3 and ecall's cause is always 11.</p>`,
+        pitfall: `<p>Returning without moving mepc. For a fault that has been fixed, returning to the trapping instruction retries it, which is the point; for an ecall it traps again at once. The handler adds 4 because every instruction here is four bytes; with the C extension the handler must look at the instruction's length.</p>`,
+      },
       tries: [(st) => { try { return csrq(st, 'rCause') === 11; } catch { return false; } }],
     },
     {
@@ -245,8 +390,27 @@ export const chTraps: Chapter = {
         <strong>misaligned load</strong> and an <code>ebreak</code>. Each traps to the handler, which logs mcause and mtval
         (the faulting address, for the misaligned load) into memory and skips the instruction.</p>
         <p>The <span data-show="trap">trap unit</span> is a priority chain of multiplexers: interrupts first, then illegal instruction, ebreak, ecall, misaligned
-        fetch, load and store. A trapping instruction writes nothing: its register write, memory write and CSR write are all suppressed.</p>`,
+        fetch, load and store. A trapping instruction writes nothing: its register write, memory write and CSR write are all suppressed.</p>
+        <p>What the handler learns is the pair (mcause, mtval): what happened and what it happened to. For an illegal instruction the value is the instruction word, for a misaligned access the address; the handler here only logs them. The same code serves all three faults, since only mcause differs.</p>`,
       scene: () => cpuScene({ source: sys('faults'), system: true, highlight: ['sys', 'trap'] }),
+      tour: {
+        beats: [
+          { title: 'An illegal word', reset: true, cycles: 4, show: ['sys'], expect: { pcOut: 16 },
+            say: '<p>After the set-up, pc = {v:pcOut}: the word 0xFFFFFFFF, which no instruction uses. The system decoder will flag it illegal.</p>' },
+          { title: 'Trap', cycles: 1, show: ['sys', 'trap'], expect: { pcOut: 36 },
+            say: '<p>Cause 2, illegal instruction: pc = {v:pcOut}, the handler. mepc holds 16, the instruction that did not run.</p>' },
+          { title: 'Handler and return', cycles: 9, show: ['trap'], expect: { pcOut: 20 },
+            say: '<p>Nine instructions log mcause and mtval, add 4 to mepc and return. pc = {v:pcOut}: the instruction after the illegal word.</p>' },
+          { title: 'A misaligned load', cycles: 2, show: ['trap'], expect: { pcOut: 36 },
+            say: '<p><code>lw t2, 1(t1)</code> reads address 3, not a multiple of 4. The load is suppressed and the CPU traps with cause 4: pc = {v:pcOut}, the same handler. mtval will hold the address, 3.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>With several causes at once the trap unit takes the highest in a fixed order, a chain of 2:1 multiplexers from the lowest priority (store misaligned, then load, fetch, ecall, ebreak, illegal) to the interrupt stage, which the CSR unit has already chosen between external and timer. Each stage picks its own cause and tval if its condition holds, else passes the previous
+          result on. The chain is ${nd(TRAP_UNIT)} NANDs.</p>`,
+        pitfall: `<p>Assuming the faulting instruction partly ran. It did not: its register write, memory write and CSR write are all cancelled, so after <code>mret</code> past it the machine state is exactly as if it had been a NOP. A handler that wants to emulate the instruction must do the work in software.</p>`,
+        real: `<p>Real cores add a precise-exception rule: the fault is reported for the oldest faulting instruction, with every older one completed and no younger one visible. In a pipeline that needs flushing; here, with one instruction in flight, it is automatic.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Run until all three exceptions have been logged (mcause values 2, 4 and 3 in memory).',
         check: (st) => { try { const m = st.sim ? cpuState(st.sim).dmem : []; return m[0] === 2 && m[2] === 4 && m[4] === 3; } catch { return false; } },
@@ -274,8 +438,27 @@ export const chTraps: Chapter = {
         <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that should itself be interruptible
         (a slow one, under a more urgent device) saves mepc, mcause and mstatus on its stack, then sets MIE again; before returning it clears MIE
         and restores them. Cores with many interrupt levels (RISC-V's CLIC, Arm's NVIC) do that stacking in hardware.</p></details>
+        <p>The compare-and-interrupt arrangement is the same in every timer: a counter that always runs, a register the software sets to "wake me at this time", and a comparator. Because the handler sets the next compare value relative to the previous one, the ticks do not drift even if some handlers
+        run late.</p>
         <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
       scene: () => cpuScene({ source: sys('timer'), system: true, highlight: ['io', 'csr'] }),
+      tour: {
+        beats: [
+          { title: 'Set up and count', reset: true, cycles: 10, show: ['io', 'csr'], expect: { pcOut: 40, consoleValid: 0 },
+            say: '<p>The set-up reads mtime, adds 40 and writes mtimecmp, enables the timer interrupt in mie and the global MIE. Then the loop at pc {v:pcOut} counts in s0.</p>' },
+          { title: 'The interrupt is taken', cycles: 35, show: ['csr', 'trap'], expect: { pcOut: 48 },
+            say: '<p>The counter mtime has reached mtimecmp: the timer interrupt is pending, enabled and globally enabled, so at the next instruction boundary the CPU traps. pc = {v:pcOut}, the handler; mepc holds the loop instruction that was interrupted.</p>' },
+          { title: 'A dot', cycles: 1, show: ['io'], expect: { pcOut: 52, consoleValid: 1, consoleData: 46 },
+            say: '<p>The handler stores \'.\' (consoleData = {v:consoleData}) to the console, moves mtimecmp 40 cycles ahead, counts the tick in s1 and returns.</p>' },
+          { title: 'Back to the loop', cycles: 6, show: ['csr'], expect: { pcOut: 40 },
+            say: '<p><code>mret</code> brings the loop back at pc {v:pcOut}, exactly where it was interrupted. The loop never knew; s0 is still counting.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The timer line is mtip = (mtime ≥ mtimecmp). It is taken when mtip ∧ mie.MTIE ∧ mstatus.MIE, at an instruction boundary. After the handler writes mtimecmp ← mtimecmp + 40, mtip falls until 40 more cycles have passed, so a tick comes every 40 cycles. Each period includes the handler\'s 7 instructions, which the main loop loses: the overhead here is 7/40 = ${Math.round((7 / 40) * 100)} %.</p>`,
+        pitfall: `<p>Forgetting to move mtimecmp. While mtime ≥ mtimecmp the interrupt stays pending, so <code>mret</code> would take it again immediately and the main program would never run. A level-triggered interrupt must be cleared at its source; this one is cleared by moving the compare value.</p>`,
+        real: `<p>RISC-V\'s machine timer is exactly mtime and mtimecmp. Operating systems program it for the scheduler tick (typically 100 to 1000 per second) and, in tickless kernels, for the next event only.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Let the timer interrupt fire five times (s1 = 5).',
         check: (st) => { try { return st.sim ? cpuState(st.sim).x[9] >= 5 : false; } catch { return false; } },
@@ -296,8 +479,26 @@ export const chTraps: Chapter = {
         the reason real-time systems love simple, short pipelines.</p>
         <p>The loop here spins. A real idle loop waits in <code>wfi</code> (wait for interrupt): the core may stop its clock until an interrupt is
         pending and enabled in mie, even with mstatus.MIE = 0. The spec lets <code>wfi</code> be a no-op, and here it is one.</p>
+        <p>The difference from the timer is who decides the moment: the timer is internal and predictable, an external line can rise at any cycle. The CPU does not care; it samples the line at each instruction boundary and either takes the interrupt there or does not. That is why the main
+        loop can be any code at all.</p>
         <div class="try">Pulse a few cycles to finish the setup, then press "IRQ (one cycle)" in the I/O panel.</div>`,
       scene: () => cpuScene({ source: sys('irq'), system: true, highlight: ['csr', 'trap'] }),
+      tour: {
+        beats: [
+          { title: 'Waiting in the loop', reset: true, cycles: 12, show: ['csr', 'trap'], expect: { pcOut: 32, leds: 0 },
+            say: '<p>The set-up enabled the external interrupt in mie and the global MIE. The loop at pc {v:pcOut} counts in s0; the LEDs are {v:leds}.</p>' },
+          { title: 'The line rises', set: { irq: 1 }, cycles: 1, show: ['csr', 'trap'], expect: { pcOut: 40, leds: 0 },
+            say: '<p>irq = {v:irq}: mip.MEIP is set, the interrupt is enabled, and at the very next instruction boundary the CPU traps. The instruction at pc 32 does not run; pc = {v:pcOut}, the handler, and mepc holds 32.</p>' },
+          { title: 'The handler toggles the LEDs', set: { irq: 0 }, cycles: 3, show: ['io'], expect: { pcOut: 52, leds: 255 },
+            say: '<p>The button is released. The handler reads the LEDs, flips them and writes them back: leds = {v:leds}.</p>' },
+          { title: 'Return', cycles: 2, show: ['csr'], expect: { pcOut: 32 },
+            say: '<p><code>mret</code> returns to mepc: pc = {v:pcOut}, the instruction that was held back runs now. The LEDs stay on until the next press.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter 21, it waits for the divide.</p>`,
+        pitfall: `<p>Holding the IRQ button across the handler. The line is checked at every boundary and the handler clears nothing at the source, so if irq stayed high the CPU would take the interrupt again at the first boundary after <code>mret</code>. The scene\'s button is a one-cycle pulse for that reason; a real device holds its line until software acknowledges it.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'A device raises its interrupt line, and holds it until the handler services it, while MIE = 0 (we are inside a handler). What happens?',
         options: ['It is lost', 'It stays pending in mip and is taken after mret sets MIE again', 'It interrupts the handler anyway', 'The CPU halts'],
@@ -312,8 +513,30 @@ export const chTraps: Chapter = {
         <p>Seven 2:1 multiplexer pairs in a chain build the <span data-show="c0 c1 c2 c3 c4 c5 c6">cause</span> and
         <span data-show="v0 v1 v2 v3 v4 v5 v6">mtval</span>; the trap signal is <span data-show="any">the OR of all sources</span>.
         Together with the CSR unit and the system decoder this is about 10 000 NANDs: privilege and interrupts are not free, but
-        they are what turns a calculator into a computer that can run an operating system.</p>`,
+        they are what turns a calculator into a computer that can run an operating system.</p>
+        <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>`,
       scene: () => ({ root: TRAP_UNIT, inputs: { illegal: 1 } }),
+      tour: {
+        beats: [
+          { title: 'Illegal instruction', show: ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6'], expect: { trap: 1, cause: 2 },
+            say: '<p>illegal = 1: trap = {v:trap}, cause = {v:cause}.</p>' },
+          { title: 'Two at once', set: { ecall: 1 }, show: ['any'], expect: { trap: 1, cause: 2 },
+            say: '<p>ecall as well. One real instruction cannot be both, but the unit must still be defined for any inputs: the cause is still {v:cause}, because illegal instruction has the higher priority.</p>' },
+          { title: 'ebreak beats ecall', set: { illegal: 0, ebreak: 1 }, expect: { cause: 3 },
+            say: '<p>Without the illegal word, ebreak (cause {v:cause}) outranks ecall.</p>' },
+          { title: 'ecall alone', set: { ebreak: 0 }, expect: { cause: 11 },
+            say: '<p>Only ecall left: cause = {v:cause}.</p>' },
+          { title: 'An interrupt outranks everything', set: { irq: 1, irqCause: 0x80000007, illegal: 1 }, show: ['c6', 'v6'], expect: { cause: 0x80000007 },
+            say: '<p>A pending timer interrupt, with an illegal instruction and an ecall still asserted: cause = {v:cause} (bit 31 set marks an interrupt, 7 the timer). The faulting instruction has not run and will trap after the handler returns.</p>' },
+          { title: 'A misaligned load', set: { irq: 0, illegal: 0, ecall: 0, loadMis: 1, addr: 3 }, show: ['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6'], expect: { cause: 4, tval: 3 },
+            say: '<p>Only loadMis: cause = {v:cause}, and mtval = {v:tval} is the address, 3.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The chain is a priority encoder written as multiplexers: cause<sub>k</sub> = (source k asserted) ? code<sub>k</sub> : cause<sub>k−1</sub>, starting from the lowest priority. The same select picks tval. trap = OR of all sources, so a cycle with no source leaves cause 0 and no trap. Seven stages of a 32-bit 2:1 mux for each of cause and tval account for most of the unit\'s ${nd(TRAP_UNIT)} NANDs.</p>`,
+        pitfall: `<p>Reading cause when trap is 0. The chain's output is only meaningful with trap = 1; with no source the multiplexers all pass 0. In software, mcause is read in the handler, never otherwise.</p>`,
+        numbers: `<table class="mini"><tr><th>unit</th><th>NANDs</th></tr><tr><td>CSR unit</td><td>${nd(CSR_UNIT)}</td></tr><tr><td>trap unit</td><td>${nd(TRAP_UNIT)}</td></tr><tr><td>system decoder</td><td>${nd(SYS_DECODE)}</td></tr><tr><td>together</td><td>${TRAP_NANDS}</td></tr></table>`,
+      },
     },
   ],
 };

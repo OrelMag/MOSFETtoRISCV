@@ -16,6 +16,24 @@ function counter(st: Stage): number {
 }
 const runToHalt = () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); };
 const halted = () => !!document.querySelector('.cpu-panel .cpu-status .warn');
+/** Relative dynamic power of n cores at v volts and f GHz (C absorbed): n · V² · f. */
+const power = (n: number, v: number, f: number) => n * v * v * f;
+/** Amdahl's speed-up with parallel fraction p on n cores. */
+const amdahl = (p: number, n: number) => 1 / ((1 - p) + p / n);
+/** Store buffering under sequential consistency: every interleaving of (x=1; r0=y) and (y=1; r1=x) that keeps each thread's order. */
+function sbSc(): { runs: number; outcomes: string[] } {
+  const a = ['x=1', 'r0=y'], b = ['y=1', 'r1=x'], seen = new Set<string>();
+  let runs = 0;
+  const go = (i: number, j: number, m: Record<string, number>) => {
+    if (i === 2 && j === 2) { runs++; seen.add('r0=' + m.r0 + ' r1=' + m.r1); return; }
+    const step = (op: string) => { const [d, s2] = op.split('='); const n = { ...m }; n[d] = s2 === '1' ? 1 : (m[s2] ?? 0); return n; };
+    if (i < 2) go(i + 1, j, step(a[i]));
+    if (j < 2) go(i, j + 1, step(b[j]));
+  };
+  go(0, 0, { x: 0, y: 0, r0: -1, r1: -1 });
+  return { runs, outcomes: [...seen].sort() };
+}
+const SB = sbSc();
 
 export const chMulticore: Chapter = {
   id: 'multicore', num: 27, title: 'Many cores', level: 'Systems',
@@ -84,7 +102,20 @@ export const chMulticore: Chapter = {
         <p>Cores speed up only the part of the work that runs in parallel. With a fraction p of it parallel, n cores give a speed-up of
         1 / ((1 − p) + p / n) (<strong>Amdahl's law</strong>): at p = 90 %, 8 cores give 1 / (0.1 + 0.1125) = 4.7×, and no number of cores beats
         1 / (1 − p) = 10×. The serial tenth, plus the time the cores spend waiting for each other (the lock below), sets the ceiling. What saves
-        many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson).</p>`,
+        many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson).</p>
+        <p>The rest of the chapter is about the price of sharing. Two cores that never touch the same data need nothing but a second copy of the core. The moment they share a
+        memory they need a rule for who goes first (an arbiter), a way to make a read-modify-write indivisible (atomic instructions), a way to keep private copies
+        agreeing (coherence), and a statement of the order in which one core's writes are seen by another (the memory model).</p>`,
+      more: {
+        derive: `<p>Dynamic power P = α · C · V² · f per core, so n cores at (V, f) draw n · V² · f in relative terms. One core at 1.0 V and 4 GHz: ${power(1, 1, 4)}. Two at 0.8 V and 2.8 GHz:
+          ${power(2, 0.8, 2.8).toFixed(2)}, with ${(2 * 2.8 / 4).toFixed(1)}× the peak throughput. The saving is the V²: slowing a core lets its voltage fall, and power falls with the square. Amdahl bounds the gain:
+          1 / ((1 − p) + p / n) is ${amdahl(0.9, 2).toFixed(2)} for n = 2 and ${amdahl(0.9, 8).toFixed(2)} for n = 8 at p = 0.9, and tends to ${(1 / (1 - 0.9)).toFixed(0)}.</p>`,
+        real: `<p>Dennard scaling stopped around 2005: voltage could no longer fall with feature size because leakage grew as the threshold fell, and Intel cancelled its
+          next single-core Pentium 4 line in 2004 for power. Mainstream clocks have stayed at 3 to 5 GHz since, and the extra transistors became cores, wider vectors and bigger caches.</p>`,
+        pitfall: `<p>Reading the speed-up as the core count. With 10 % serial, 64 cores give ${amdahl(0.9, 64).toFixed(1)}×, not 64: the serial tenth and the synchronization between cores (the lock step below)
+          set the ceiling, not the number of cores.</p>`,
+        numbers: `<table class="mini"><thead><tr><th>Cores</th>${[1, 2, 4, 8, 16, 64].map((n) => `<th>${n}</th>`).join('')}</tr></thead><tbody>${[0.5, 0.9, 0.99].map((p) => `<tr><td>p = ${p}</td>${[1, 2, 4, 8, 16, 64].map((n) => `<td>${amdahl(p, n).toFixed(1)}×</td>`).join('')}</tr>`).join('')}</tbody></table>`,
+      },
       challenge: {
         kind: 'quiz', question: 'A core runs at 4 GHz and 1.0 V. Two cores at 2.8 GHz and 0.8 V split the same work between them. Relative dynamic power?',
         options: ['Twice as much', 'About the same', 'About 0.9×', 'About half'], answer: 2,
@@ -99,16 +130,60 @@ export const chMulticore: Chapter = {
         <span data-show="core0.mpd">a decoder for atomics</span>, and <span data-show="h0 h1">an input carrying its hart id</span>, which <code>csrr a0, mhartid</code> reads. Both run the same program and use the id to divide the work.</p>
         <p><span data-show="dm">The shared memory</span> has one port, so an <span data-show="arb"><strong>arbiter</strong></span> grants it to one core per cycle. A core that loses holds its PC and register write for a cycle and
         tries again. A multi-hart instruction-set simulator (the reference model of the ISA) applies the same arbitration and checks both cores after every cycle.</p>
+        <p>Each core keeps its own program ROM, so instruction fetch never competes: only loads and stores reach the shared port. That is why two cores running the same code stay
+        in step until the first memory access, and why the arbiter decides the order of everything that follows.</p>
         <div class="try">Run "Who am I?": each core fills and sums its own half of an array; both store 36.</div>`,
       scene: () => dualCoreScene(mc('harts')),
+      tour: {
+        beats: [
+          { title: 'In step', reset: true, cycles: 4, show: ['core0', 'core1'], expect: { pc0: 16, pc1: 16, retire0: 1, retire1: 1 },
+            say: '<p>Both cores run the same program from address 0 and have retired the same instructions: pc0 = {v:pc0}, pc1 = {v:pc1}. The instructions so far touched no memory, so nothing divided them.</p>' },
+          { title: 'First contention', cycles: 1, show: ['arb', 'dm'], expect: { pc0: 20, pc1: 20, grant0: 1, retire1: 0 },
+            say: '<p>Both are now at {v:pc0} with a memory access. The arbiter grants the port to core 0 (grant0 = {v:grant0}); core 1 does not retire this cycle (retire1 = {v:retire1}) and keeps its PC and register write for a retry.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The port serves one access a cycle. If a fraction m of instructions access data, two cores at one instruction a cycle demand 2m accesses a cycle: below m = 1/2 conflicts only delay a
+          core by a cycle now and then, above it the port saturates and the cores run at the port's pace. The time one core loses is its wait for the other's access: at most one cycle per
+          access with two cores.</p>`,
+        real: `<p>Real shared memory is many ports: banks, several channels, and between the cores and DRAM a hierarchy of caches that serves most accesses privately. The single arbitrated
+          port is the minimum that shows every problem: ordering, atomicity and a bus others can see.</p>`,
+        pitfall: `<p>Assuming the cores keep step. They did for four cycles; a contended access holds one core for a cycle and offsets them from then on, and every later
+          interleaving follows from that. The race step shows it.</p>`,
+      },
     },
     {
       title: 'The arbiter',
       body: `
         <p>A two-way round-robin arbiter: one request is simply <span data-show="g0 g1">granted</span>. If both cores ask, the one holding
         <span data-show="ff">the priority bit</span> wins and the bit flips, so the loser wins next time. Fixed priority would let one busy core starve the other forever.</p>
+        <p>The state is one flip-flop. It flips only in a cycle where both request, because the priority bit has meaning only when there is a conflict: a lone request is granted
+        whatever the bit says, and leaves the bit alone. That makes the policy fair and cheap: a loser waits one cycle, and a core that does not ask never loses its turn.</p>
         <div class="try">Raise both requests and pulse the clock: the grants alternate.</div>`,
       scene: () => ({ root: ARBITER2, inputs: { r0: 1, r1: 1, clk: 0 } }),
+      tour: {
+        beats: [
+          { title: 'Both ask', show: ['g0', 'g1', 'ff'], expect: { g0: 1, g1: 0, p: 0 },
+            say: '<p>Both requests are high. The priority bit is {v:p}, so core 0 is granted: g0 = {v:g0}, g1 = {v:g1}.</p>' },
+          { title: 'Turns alternate', cycles: 1, show: ['ff', 'x'], expect: { g0: 0, g1: 1, p: 1 },
+            say: '<p>The conflict flipped the bit at the edge: p = {v:p}, and now core 1 wins: g0 = {v:g0}, g1 = {v:g1}.</p>' },
+          { title: 'A lone request', set: { r1: 0 }, show: ['b1', 'g0'], expect: { g0: 1, g1: 0, p: 1 },
+            say: '<p>Core 1 stops asking. Core 0 is granted even though the bit favours core 1: nobody else wants the port.</p>' },
+          { title: 'The bit holds', cycles: 1, expect: { g0: 1, g1: 0, p: 1 },
+            say: '<p>With no conflict the bit does not flip: p stays {v:p}.</p>' },
+          { title: 'Core 1 asks again', set: { r1: 1 }, show: ['g1', 'ff'], expect: { g0: 0, g1: 1, p: 1 },
+            say: '<p>Now both ask, p = {v:p}, and core 1 is granted: the turn it was owed is still its own.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>With p the priority bit: g0 = r0 · ¬(r1 · p), g1 = r1 · ¬(r0 · ¬p), and p′ = p XOR (r0 · r1). If only one request is high, its grant is 1 whatever p is. If both are high, exactly
+          one grant is: g0 when p = 0, g1 when p = 1, and p flips. So over any run of conflicts the grants alternate, and a core waits at most one cycle for any grant it asks while the other is served.
+          For n requesters the same idea needs a pointer and a mask: a loser waits at most n − 1 grants.</p>`,
+        real: `<p>Round robin is the default in bus interconnects (chapter 38's bus uses it for its masters); fixed priority is used where one requester must never wait, such as an
+          interrupt controller, with a limit on how much of the bandwidth the high-priority side may take.</p>`,
+        pitfall: `<p>Fixed priority "because it is simpler". A busy core 0 would then win every conflict and core 1 would starve for as long as it lasted: the system is correct and one of its cores never runs.
+          The single flip-flop is the cost of avoiding that.</p>`,
+      },
     },
     {
       title: 'A race',
@@ -116,8 +191,31 @@ export const chMulticore: Chapter = {
         <p>Both cores add 1 to <span data-show="dm">a shared counter</span> twenty times with <code>lw</code>, <code>addi</code>, <code>sw</code>. Expect 40. Both reach the first <code>lw</code> in the same
         cycle; core 1 loses <span data-show="arb">arbitration</span> and runs one cycle behind from then on. So core 1 always loads the counter <em>before</em> core 0 has stored its increment.
         Each pair of increments produces +1, and half the updates are lost.</p>
-        <p>Nothing is broken in the hardware: every access is atomic on its own. The <em>sequence</em> load–add–store is not.</p>`,
+        <p>Nothing is broken in the hardware: every access is atomic on its own. The <em>sequence</em> load–add–store is not.</p>
+        <p>The result also depends on timing nobody wrote down. Add an instruction before the loop on one core and the offset between them changes, and so does the final count: a bug
+        that depends on the interleaving is the hard kind to find, because the program is deterministic on this machine and wrong on the next.</p>`,
       scene: () => dualCoreScene(mc('race')),
+      tour: {
+        beats: [
+          { title: 'Same cycle, one loses', reset: true, cycles: 2, show: ['arb', 'dm'], expect: { pc0: 8, pc1: 8, grant0: 1, retire1: 0 },
+            say: '<p>Both cores reach the first <code>lw</code>, at {v:pc0}, in the same cycle. The arbiter grants core 0; core 1 does not retire (retire1 = {v:retire1}) and tries again next cycle.</p>' },
+          { title: 'Core 1 loads the old value', cycles: 1, show: ['core0', 'core1', 'dm'], expect: { pc0: 12, pc1: 8, grant1: 1, retire1: 1 },
+            say: '<p>Core 0 has its value and is at the <code>addi</code> (pc0 = {v:pc0}); core 1\'s <code>lw</code> is granted now (grant1 = {v:grant1}) and reads the <em>same</em> counter, before core 0 has stored.</p>' },
+          { title: 'Core 0 stores first', cycles: 1, show: ['core0', 'dm'], expect: { pc0: 16, pc1: 12, grant0: 1 },
+            say: '<p>Core 0\'s <code>sw</code> at {v:pc0} writes old + 1. Core 1 is one instruction behind (pc1 = {v:pc1}) and holds the same old value.</p>' },
+          { title: 'Core 1 stores the same', cycles: 1, show: ['core1', 'dm'], expect: { pc0: 20, pc1: 16, grant1: 1 },
+            say: '<p>Core 1\'s <code>sw</code> at {v:pc1} writes old + 1 over core 0\'s identical value. Two increments, one new value: an update was lost.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Let c be the counter and the two cores load at t and t + 1 (the one-cycle offset the arbiter imposes). Both read c, both store c + 1; the second store overwrites the
+          first with the same value. Per pair of loop passes the counter gains 1 instead of 2, so after 20 passes each the count is 20 and not 40, as the challenge shows. A read-modify-write
+          is atomic only if no other store to c can fall between its load and its store.</p>`,
+        real: `<p>On real hardware the same bug appears with caches and store buffers instead of a single port, and on a language's memory model it is a data race: in C and C++ undefined behaviour,
+          and the reason thread sanitizers exist. The fix is the same: an atomic instruction or a lock.</p>`,
+        pitfall: `<p>Believing that "every access is atomic" makes a program safe. Each <code>lw</code> and <code>sw</code> is indivisible, and the program is still wrong, because correctness needs the whole
+          read-modify-write to be indivisible. Check by counting: the result is 20, which is exactly the number of passes of one core.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Run both cores to the end and read the counter.',
         check: (st) => counter(st) === 20 && halted(),
@@ -136,9 +234,23 @@ export const chMulticore: Chapter = {
         Nothing can come in between, because <span data-show="arb">the arbiter</span> grants the port for that one access. In the core, the atomic looks like a load to the control unit (it writes rd),
         <span data-show="core0.amux">its address is rs1 itself</span>, and <span data-show="core0.amoadd">a dedicated adder</span> computes old + rs2 for the write.</p>
         <p>Doing the read, the add and the write in one cycle, serialized by the one port's arbiter, is a deliberate simplification. In a real system with caches,
-        the core gets the cache line exclusively and holds it for the duration of the operation: the same idea, with coherence doing the arbitration.</p>
-        <details class="deeper"><summary>Deeper: LR/SC, the other half of the A extension</summary>
-        <p><code>lr.w rd, (rs1)</code> loads a word and places a <em>reservation</em> on it (in practice on its cache line). <code>sc.w rd, rs2, (rs1)</code>
+        the core gets the cache line exclusively and holds it for the duration of the operation: the same idea, with coherence doing the arbitration.</p>`,
+      scene: () => dualCoreScene(mc('atomic')),
+      tour: {
+        beats: [
+          { title: 'Both reach the atomic', reset: true, cycles: 3, show: ['arb', 'core0', 'core1'], expect: { pc0: 12, pc1: 12, grant0: 1, retire1: 0 },
+            say: '<p>Both cores are at the <code>amoadd.w</code> (pc = {v:pc0}). Core 0 is granted the port; core 1 waits (retire1 = {v:retire1}).</p>' },
+          { title: 'One access each', cycles: 1, show: ['arb', 'dm'], expect: { pc0: 16, pc1: 12, grant1: 1, retire1: 1 },
+            say: '<p>The read, add and write of core 0 took that one grant. Now the <code>amoadd.w</code> of core 1 is granted: it reads the value core 0 left, not the old one. There is no cycle between a core read and its write for the other to slip into.</p>' },
+          { title: 'Another round', cycles: 2, show: ['arb'], expect: { pc0: 12, pc1: 20, grant0: 1 },
+            say: '<p>Core 0 is back at the <code>amoadd.w</code> (pc0 = {v:pc0}) for its next increment while core 1 finishes its loop body (pc1 = {v:pc1}). Each increment is one grant.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The race needed two accesses, a read and a write, with a gap another core could use. The atomic is one access that the arbiter grants whole: its read, the add
+          (a dedicated adder fed from the loaded word and rs2) and its write happen in that one grant. In a pair of cores that makes the increments totally ordered by the
+          grants: 40 increments are 40 grants, and the counter is 40 whatever the interleaving.</p>`,
+        real: `<p>Shipping cores offer LR/SC besides the AMOs, the other half of the A extension. <code>lr.w rd, (rs1)</code> loads a word and places a <em>reservation</em> on it (in practice on its cache line). <code>sc.w rd, rs2, (rs1)</code>
         stores rs2 only if the reservation still holds, and writes rd = 0 on success, non-zero on failure. Another hart's store to the reserved bytes breaks
         the reservation, and an implementation may fail an sc for other reasons too, so software always loops. Any read-modify-write that no AMO
         provides becomes atomic, compare-and-swap for instance:</p>
@@ -151,8 +263,10 @@ export const chMulticore: Chapter = {
         jumps or taken backward branches, fences or system instructions. An AMO needs no loop: the memory (or the cache that owns the line) does the
         whole operation as one request, so it always completes and stays cheap under contention, where LR/SC retries pile up. LR/SC covers the
         rest. The cores on this site implement two AMOs, <code>amoadd.w</code> and <code>amoswap.w</code>, and no LR/SC: one arbitrated access is
-        easy to make atomic; a reservation needs a monitor watching every other core's stores.</p></details>`,
-      scene: () => dualCoreScene(mc('atomic')),
+        easy to make atomic; a reservation needs a monitor watching every other core's stores.</p>`,
+        pitfall: `<p>Using an atomic for part of a sequence. <code>amoadd.w</code> makes the add indivisible; a program that loads the counter with <code>lw</code>, tests it and then
+          does an <code>amoadd.w</code> has a gap between the test and the add. A decision that depends on the old value must be made inside the atomic, or under a lock.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Run to the end: the counter must be 40.',
         check: (st) => counter(st) === 40 && halted(),
@@ -170,8 +284,31 @@ export const chMulticore: Chapter = {
         <p>Most critical sections are longer than one add. <code>amoswap.w</code> builds a lock: swap 1 into the lock word, and if the old value was 0 you own it.
         Otherwise spin and try again. Release by storing 0. Between acquire and release, the ordinary <code>lw</code>/<code>addi</code>/<code>sw</code> is safe.</p>
         <p>Correct, but count the cost: the run takes over four times longer than the atomic add, and the stall counters show the cores fighting for <span data-show="arb dm">the memory port</span> while they spin.
-        Real locks back off, or spin on a cached copy (test-and-test-and-set) to keep the bus quiet.</p>`,
+        Real locks back off, or spin on a cached copy (test-and-test-and-set) to keep the bus quiet.</p>
+        <p>The lock serializes the critical section by design, so Amdahl applies to it: the time spent holding the lock is serial time. Keep it short, and keep the work that
+        needs no lock outside it. The waiting core is not idle either: every spin is a memory access that takes a turn from the core doing the work.</p>`,
       scene: () => dualCoreScene(mc('lock')),
+      tour: {
+        beats: [
+          { title: 'Both try the lock', reset: true, cycles: 4, show: ['arb', 'dm'], expect: { pc0: 16, pc1: 16, grant0: 1, retire1: 0 },
+            say: '<p>Both cores reach the <code>amoswap.w</code> at {v:pc0}. Core 0 is granted and swaps 1 into the lock word: its old value is 0, the lock was free.</p>' },
+          { title: 'Core 1 finds it held', cycles: 1, show: ['arb', 'core1'], expect: { pc0: 20, pc1: 16, grant1: 1, retire1: 1 },
+            say: '<p>Core 1\'s swap is granted next, and returns 1: core 0 already holds the lock. Core 1 owns nothing.</p>' },
+          { title: 'It spins', cycles: 2, show: ['core1'], expect: { pc0: 28, pc1: 16 },
+            say: '<p>Core 1 branches back and swaps again: pc1 went 16 → 20 → 16. Meanwhile core 0 works in its critical section (pc0 = {v:pc0}).</p>' },
+          { title: 'The spinner takes a turn', cycles: 2, show: ['arb', 'dm'], expect: { pc0: 36, pc1: 16, retire0: 0, grant1: 1 },
+            say: '<p>Core 0 is at {v:pc0}, a memory access it needs, but the port is granted to core 1\'s swap (grant1 = {v:grant1}): core 0 does not retire (retire0 = {v:retire0}). The waiting core slows the working one.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The swap in the loop: <code>amoswap.w t0, t1, (lock)</code> with t1 = 1 returns the old lock value in t0 and leaves 1 behind. Old value 0: the caller now owns the
+          lock. Old value 1: someone else does, and the 1 written changes nothing. One atomic access decides who owns it, so there is never more than one owner. Release is a plain store of 0.
+          With one waiting core, spinning adds one port access per iteration of its loop, and each is a grant the working core does not get.</p>`,
+        real: `<p>Operating systems and runtimes layer on top: spin a short while, then sleep and be woken (futexes); queue the waiters so the lock passes in order (ticket and MCS locks);
+          spin on a cached copy and swap only when it reads 0 (test-and-test-and-set), so waiting costs no bus traffic until the release.</p>`,
+        pitfall: `<p>A lock with no ordering on a weakly ordered core. The swap that takes the lock needs acquire semantics and the store that frees it needs release (the last step), or the
+          critical section's accesses can be seen outside it. This sequentially consistent machine never shows that bug, which is exactly why it hides in testing.</p>`,
+      },
     },
     {
       title: 'Caches and coherence',
@@ -182,8 +319,19 @@ export const chMulticore: Chapter = {
         <p>MESI adds an <em>Exclusive</em> state: a block read by only one core can later be written without any bus traffic. That covers the common case of private data.</p>
         <p>Snooping needs every cache to see every request, a broadcast that stops scaling past a few dozen cores. Large machines keep a
         <strong>directory</strong> instead: per memory block, a record of which caches hold it, so invalidations go point to point to the sharers alone.</p>
+        <p>The unit of coherence is the line, not the variable. That is what makes the protocol affordable (one state per line, not per byte) and what makes false sharing possible. Every write to a
+        line another cache holds costs a round trip on the interconnect; a program that scales is one whose cores mostly write lines nobody else reads.</p>
         <div class="try">Compare "Private read-then-write" under MSI and MESI. Then compare "False sharing" with "Padded".</div>`,
       widget: coherenceWidget,
+      more: {
+        derive: `<p>Count the transactions for a core that reads a block nobody else holds and then writes it. MSI: the read miss fetches the block into Shared (1 transaction), the write must
+          broadcast an upgrade to invalidate possible sharers (2). MESI: the read fetches into Exclusive, since no one else has it, and the write moves E to M with no bus traffic (1). Private data is
+          most data, so the saving is on most writes. A 64-byte line holds ${64 / 4} words: two threads' variables within the same ${64 / 4} words share a line.</p>`,
+        real: `<p>Snooping works while every cache can hear every request, roughly up to a few dozen cores. Beyond that a directory records, per block, which caches hold it, and invalidations go to those
+          alone. Intel and AMD cores use MESIF and MOESI variants (an Owned or Forwarding state to answer from a cache instead of memory).</p>`,
+        pitfall: `<p>Two counters in adjacent words, one per thread, on the assumption that "no sharing" means no cost. Each write invalidates the other thread's copy of the line and the line travels
+          back and forth on every update. The fix is layout: pad each counter to its own line, as the Padded scenario does.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'Two threads update two different variables, x and y, which happen to sit in the same 64-byte cache line. What happens?',
         options: ['Nothing: they are different variables', 'The line ping-pongs between the caches: every write invalidates the other copy (false sharing)', 'The hardware detects it and splits the line', 'The writes are lost'],
@@ -206,7 +354,17 @@ export const chMulticore: Chapter = {
         <p>A lock needs order at both ends. Taking it is an <em>acquire</em>: the critical section's loads and stores must not be performed before the
         lock is held, or they could read the counter while another core still owns it: <code>amoswap.w.aq</code> (or the swap, then <code>fence r,rw</code>).
         Freeing it is a <em>release</em>: everything before must be visible before the lock reads free: <code>amoswap.w.rl x0, x0, (lock)</code>
-        (or <code>fence rw,w</code>, then the store). Accesses may move into the critical section, never out of it.</p>`,
+        (or <code>fence rw,w</code>, then the store). Accesses may move into the critical section, never out of it.</p>
+      <p>The model matters because the instructions that enforce order cost cycles: a fence waits until earlier accesses are visible. Software pays for ordering only where it asks for it, and the hardware is free to reorder everywhere else.</p>`,
+      more: {
+        derive: `<p>Store buffering enumerated. Two threads: T0 runs <code>x = 1; r0 = y</code>, T1 runs <code>y = 1; r1 = x</code>, x = y = 0 at the start. Under sequential consistency every execution is one of the
+          ${SB.runs} interleavings that keep each thread's order, and the outcomes they produce are ${SB.outcomes.map((o) => `(${o})`).join(', ')}: never r0 = 0 and r1 = 0, because whichever store comes first is seen by the other
+          thread's load. With a store buffer each store waits in its own core while the load behind it reads memory, and (0, 0) appears.</p>`,
+        real: `<p>x86's model (TSO) allows exactly this reordering and no more: loads pass earlier stores to other addresses. RISC-V's RVWMO and ARM allow more, so more fences. C11 and C++11 atomics map
+          onto these instructions: a release store and an acquire load compile to the fences or the <code>.aq</code> / <code>.rl</code> bits the target needs.</p>`,
+        pitfall: `<p>Testing a lock on a sequentially consistent machine and calling it correct. This dual-core cannot reorder, so a missing acquire or release never shows here; the same code on a
+          core with a store buffer can read a stale counter inside its critical section. A concurrency bug that does not reproduce is not absent.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'In the spin lock, why should the release (sw zero, lock) have release semantics on a real RISC-V core?',
         options: ['To make it faster', 'So that the stores of the critical section become visible to other cores before the lock appears free', 'Because sw cannot write zero', 'It does not matter'],

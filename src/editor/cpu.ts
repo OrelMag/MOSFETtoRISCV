@@ -24,6 +24,7 @@ import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
 import { ISS, type IssOptions } from '../riscv/iss';
 import { stepEffect } from '../riscv/trace';
+import { narrateInstr, type NarrLine } from '../riscv/narrate';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
@@ -503,6 +504,8 @@ export class CpuMonitor {
   /** Instructions retired since the reset. */
   retired = 0;
   readonly log: Retired[] = [];
+  /** The last retired instruction told unit by unit (riscv/narrate.ts); empty on a pipeline, whose stages each hold another. */
+  narr: NarrLine[] = [];
   /** Bumped on every retirement (views redraw on change). */
   seq = 0;
   /** Why there is no golden model (no ROM, a ROM program that does not build). */
@@ -569,6 +572,7 @@ export class CpuMonitor {
     this.mismatch = null;
     this.retired = 0;
     this.log.length = 0;
+    this.narr = [];
     this.console = '';
     this.conN = -1;
     this.issCon = consoleInit();
@@ -683,13 +687,19 @@ export class CpuMonitor {
       return;
     }
     // the retiring instructions, oldest first; the state is compared after the last
-    let info = iss.step(), stored = !!info.store && !(iss.io && info.store.addr >= 0x80000000);
+    const step = () => {
+      const before = d.pipeline ? null : [...iss.x];
+      const i = iss.step();
+      if (before) this.narr = narrateInstr(before, i);
+      return i;
+    };
+    let info = step(), stored = !!info.store && !(iss.io && info.store.addr >= 0x80000000);
     for (let k = 0; ; ) {
       this.retired++;
       this.log.push({ cycle: this.es.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
       if (this.log.length > CpuMonitor.LOG) this.log.shift();
       if (++k >= n || iss.halted) break;
-      info = iss.step();
+      info = step();
       stored ||= !!info.store && !(iss.io && info.store.addr >= 0x80000000);
     }
     this.seq++;

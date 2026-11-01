@@ -95,7 +95,9 @@ describe('k_frame: 7-bit vertex registers', () => {
   });
 
   it('the walk quotes the registers, their saving over 16 bits and the total', () => {
-    const t = step(WALKS6.k_frame, 'The device registers').text;
+    // the saving moved from the step's text into its why-not (Walk 2.0)
+    const st = step(WALKS6.k_frame, 'The device registers');
+    const t = `${st.text} ${st.whyNot?.text ?? ''}`;
     expect(has(t, vertex)).toBe(true);
     expect(has(t, regs)).toBe(true);
     expect(has(t, 6 * (nands(RV16_REG16) - vertex))).toBe(true);

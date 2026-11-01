@@ -1,10 +1,10 @@
-import { DFF, ECCLES_JORDAN, SR_LATCH, TRIODE_SWITCH, TUBE_FA, TUBE_NAND, TUBE_NOR } from '../lib';
+import { DFF, ECCLES_JORDAN, FULL_ADDER, SR_LATCH, TRIODE_SWITCH, TUBE_FA, TUBE_NAND, TUBE_NOR, rca } from '../lib';
 import { RELAY_STEP_MS } from '../phys/relay';
 import {
-  B_PLUS, DIVIDER_RATIO, ENIAC, HEATER_W, R_DIV_BOTTOM, R_DIV_TOP, TUBE_STEP_US, V_BIAS, V_CUTOFF, V_LOW, gateLevels, nandBrickPower,
-  sectionPower, warmup,
+  B_PLUS, DIVIDER_RATIO, ENIAC, HEATER_W, R_DIV_BOTTOM, R_DIV_TOP, R_PLATE, TUBE_STEP_US, V_BIAS, V_CUTOFF, V_LOW, dividerOut, gateLevels,
+  nandBrickPower, plateVoltage, sectionPower, warmup,
 } from '../phys/triode';
-import { stats } from '../sim/stats';
+import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { triodeCloseup } from '../widgets/triode3d';
 import { tubeDividerWidget } from '../widgets/tubedivider';
@@ -84,8 +84,24 @@ export const chTubes: Chapter = {
         9 mA), and works into a 22 kΩ plate resistor. The cathode warms with a 6 s time constant, and emission
         (Richardson's law) grows exponentially with temperature. So after switch-on nothing flows for
         ${WARM.t10.toFixed(1)} s, and the full current arrives by ${WARM.t90.toFixed(1)} s.</p>
+        <p>The grid is the point. It is a field, not a current: held negative it collects no electrons, so it takes no power to
+        hold a level. That is the same idea as the MOSFET's gate
+        (<a href="#/c/mosfet/0">chapter 1</a>), reached fifty years earlier, with a vacuum in place of an oxide. What the tube pays for it is
+        the heater: ${w2(HEATER_W)} W per section just to keep the cathode emitting, switching or not.</p>
         <div class="try">Switch it on from cold. Then sweep the grid and watch the plate: ${v(V_LOW)} V conducting,
         ${B_PLUS} V cut off.</div>`,
+      more: {
+        derive: `<p>Current follows I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> while the bracket is positive and is zero otherwise. Cutoff is where it reaches zero:
+          V<sub>g</sub> = −V<sub>p</sub>/µ = −${B_PLUS}/20 = ${V_CUTOFF.toFixed(1)} V at the full plate supply. With the ${R_PLATE / 1e3} kΩ plate resistor the plate sits on the load line
+          V<sub>p</sub> = ${B_PLUS} − R·I. At V<sub>g</sub> = 0 that settles at ${v(V_LOW)} V, a current of ${(1e3 * (B_PLUS - V_LOW) / R_PLATE).toFixed(1)} mA, and ${w2(SEC.resistor)} W is dissipated
+          in the resistor and ${w2(SEC.plate)} W in the tube while it conducts.</p>`,
+        pitfall: `<p>Reading a cold machine as "all off". Until the cathodes warm (${WARM.t10.toFixed(1)} s to a tenth of the current, ${WARM.t90.toFixed(1)} s to nine tenths) nothing conducts, so every plate
+          sits at ${B_PLUS} V, which the logic reads as a 1: the machine wakes up in a state nobody designed, and resets must wait for the heaters.</p>`,
+        real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it almost everywhere. An oxide-coated cathode emits at around 1 000 K, which is also why
+          tubes dim and fail: the coating evaporates and the heater ages. Computers of the 1950s left their tubes on day and night for this reason.</p>`,
+        numbers: `<table class="mini"><tr><th>grid V</th>${[0, -4, -8, -12.5].map((g) => `<td>${g}</td>`).join('')}</tr>
+          <tr><th>plate V</th>${[0, -4, -8, -12.5].map((g) => `<td>${v(plateVoltage(g))}</td>`).join('')}</tr></table>`,
+      },
       widget: () => triodeCloseup(),
       challenge: {
         kind: 'quiz', question: `The heater draws ${w2(HEATER_W)} W per section whether the tube switches or not. What does that do to a tube machine?`,
@@ -110,9 +126,29 @@ export const chTubes: Chapter = {
         plate down or push its cathode up, but it never passes a signal back the way a contact does (or, from
         chapter 1 on, a MOSFET channel). There is no transmission gate in tubes, and no carry that runs through switches as in the relay adder.
         The orange line is the beam: it shows while the tube conducts.</p>
+        <p>The plate resistor is the price of the output: while the tube conducts, ${w2(SEC.resistor)} W goes into it and ${w2(SEC.plate)} W into the tube, from the supply
+        to ground, on top of the heater. A MOSFET inverter in CMOS has no such standing path; the tube inverter is the pseudo-NMOS inverter of
+        <a href="#/c/inverter/3">chapter 2</a>, with a resistor and a switch that is never fully off.</p>
         <div class="try">Toggle <code>g</code> and watch the beam and the plate.</div>`,
       scene: () => ({ root: TRIODE_SWITCH, inputs: { g: 0 } }),
       tries: [(st) => st.value('y') === 0],
+      tour: {
+        beats: [
+          { title: 'Grid low: cut off', set: { g: 0 }, show: ['v1', 'rl'], expect: { y: 1 },
+            say: `<p>g = 0 here means the grid is held below cutoff (${V_CUTOFF.toFixed(1)} V or lower). No electrons reach the plate, no current flows in the resistor, and the plate sits at ${B_PLUS} V: y = {v:y}.</p>` },
+          { title: 'Grid high: conducting', set: { g: 1 }, show: ['v1', 'rl'], expect: { y: 0 },
+            say: `<p>g = 1: the grid is near 0 V, electrons stream to the plate and the resistor drops the voltage: the plate falls to ${v(V_LOW)} V, a 0. y = {v:y}. The beam is drawn while this lasts.</p>` },
+          { title: 'Grid low again', set: { g: 0 }, show: ['v1'], expect: { y: 1 },
+            say: `<p>g = 0: the tube cuts off, the resistor pulls the plate back to ${B_PLUS} V, y = {v:y}. The inversion needs no moving part, but the plate recharges through ${R_PLATE / 1e3} kΩ: that RC is the tube step, about ${TUBE_STEP_US.toFixed(1)} µs.</p>` },
+        ],
+      },
+      more: {
+        derive: `<p>The tube is a switch from the plate to ground with an on-resistance of V<sub>low</sub> / I = ${v(V_LOW)} V over ${(1e3 * (B_PLUS - V_LOW) / R_PLATE).toFixed(1)} mA, about
+          ${v(V_LOW / ((B_PLUS - V_LOW) / R_PLATE) / 1e3)} kΩ, against ${R_PLATE / 1e3} kΩ for the plate resistor. The ratio decides the low level: a fraction ${(V_LOW / B_PLUS).toFixed(2)} of the supply, nowhere near 0.
+          Ratioed logic means the low level is a fraction of the supply set by the ratio, not zero.</p>`,
+        pitfall: `<p>Taking the plate's low (${v(V_LOW)} V) as a 0 V logic level. It is a 0 only relative to the ${B_PLUS} V high, and the next grid needs a divider to bring it
+          below cutoff (next step). Looking at the plate on a scope next to the grid shows two different voltage scales for the same bit.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'Why could the relay adder pass its carry through four bits in one step, but a tube adder cannot?',
         options: [
@@ -139,8 +175,25 @@ export const chTubes: Chapter = {
         ${(L2.marginHigh).toFixed(0)} V, and at four the chain stops working. Machines put a
         <strong>cathode follower</strong> (a tube with its plate on B+ and its output on the cathode, which follows
         the grid) in front of every wide fan-out.</p>
+        <p>The cost is plain. The divider conducts from the plate to the bias rail all the time: ${w2(BRICK.divider)} W per divider on average. Every logic level passes through
+        a resistor network that wastes power and loads the node. CMOS has none of this, because a gate input is an insulator at the same voltage range as the output.</p>
         <div class="try">Move the bias rail to 0 V, then try a fan-out of 4. Then find the ratio range that still
         works.</div>`,
+      more: {
+        derive: `<p>The divider output is V<sub>g</sub> = (V<sub>p</sub>·R<sub>b</sub> + V<sub>bias</sub>·R<sub>t</sub>) / (R<sub>t</sub> + R<sub>b</sub>). For a ${B_PLUS} V plate to give
+          0 V: ${B_PLUS}·${R_DIV_BOTTOM / 1e3} = ${-V_BIAS}·${R_DIV_TOP / 1e3} in the ratio R<sub>t</sub> / R<sub>b</sub> = ${(R_DIV_TOP / R_DIV_BOTTOM).toFixed(2)}, which is ${B_PLUS} / ${-V_BIAS} = ${DIVIDER_RATIO.toFixed(2)} on the whole divider.
+          The low plate (${v(V_LOW)} V) then gives ${v(dividerOut(V_LOW))} V on the next grid, ${(V_CUTOFF - dividerOut(V_LOW)).toFixed(0)} V below cutoff for an unloaded plate. Each added divider on the plate is a ${(R_DIV_TOP + R_DIV_BOTTOM) / 1e3} kΩ
+          path to ${V_BIAS} V in parallel with the plate resistor; the numbers below are what that does to both levels.</p>`,
+        numbers: `<table class="mini"><tr><th>dividers on a plate</th><th>cut-off plate</th><th>next grid, high</th><th>margin above cutoff</th><th>next grid, low</th><th>margin below cutoff</th></tr>${[1, 2, 3, 4].map((k) => {
+          const l = gateLevels(k);
+          return `<tr><td>${k}</td><td>${v(l.high)} V</td><td>${l.gridHigh.toFixed(1)} V</td><td>${l.marginHigh.toFixed(1)} V</td><td>${l.gridLow.toFixed(1)} V</td><td>${l.marginLow.toFixed(1)} V</td></tr>`;
+        }).join('')}</table>`,
+        pitfall: `<p>Choosing the ratio for the high level only. The divider has to put both levels on the right sides of cutoff, and a negative margin at four dividers means the chain
+          stops working: a high plate gives a grid at or below cutoff, so the next tube never turns on. Check both margins, as the table does.</p>`,
+        real: `<p>Direct-coupled amplifiers use the same trick: a resistor network from a plate to a negative rail. A small speed-up capacitor across the top resistor passes
+          fast edges around the divider's own time constant; the model's node capacitance (${(45).toFixed(0)} pF, the next grid with its Miller multiplication, wiring and those capacitors)
+          is what sets the ${TUBE_STEP_US.toFixed(1)} µs step with the ${R_PLATE / 1e3} kΩ plate resistor.</p>`,
+      },
       widget: () => tubeDividerWidget(),
       challenge: {
         kind: 'quiz', question: 'What goes wrong if the divider\'s bottom leg goes to ground instead of −150 V?',
@@ -167,8 +220,31 @@ export const chTubes: Chapter = {
         divider</span> to ${V_BIAS} V, and the plate resistor burns ${w2(SEC.resistor)} W whenever a tube conducts. In the
         simulation <span data-show="ra1 rb1">the divider's top resistor</span> decides the grid and <span data-show="ra2 rb2">its bottom leg</span> (a bias resistor, the weakest
         element) only holds a grid nothing else reaches.</p>
+        <p>Cost: ${stats(TUBE_NOR).triodes} triode sections and ${stats(TUBE_NOR).resistors} resistors for two inputs, and one more section and two resistors for each further input. The plate
+        resistor is shared, so a wide NOR is cheaper per input than a narrow one, until the plate's load limits the margins.</p>
         <div class="try">Set both inputs to 0, then either to 1. Double-click a resistor or a tube to see what it is.</div>`,
       scene: () => ({ root: TUBE_NOR, inputs: { a: 1, b: 0 } }),
+      tour: {
+        beats: [
+          { title: 'Both cut off', set: { a: 0, b: 0 }, show: ['va', 'vb', 'rl'], expect: { y: 1 },
+            say: '<p>a = b = 0: both grids are below cutoff, neither triode conducts and the plate resistor pulls y up: y = {v:y}.</p>' },
+          { title: 'One conducts', set: { a: 1 }, show: ['va', 'vb'], expect: { y: 0 },
+            say: `<p>a = 1: the first triode conducts and pulls the shared plate down to about ${v(V_LOW)} V. y = {v:y}. The other tube stays cut off and does not matter.</p>` },
+          { title: 'Both conduct', set: { b: 1 }, show: ['va', 'vb'], expect: { y: 0 },
+            say: '<p>b = 1 too: two parallel paths share the current, the plate is no lower than a logic 0 needs. y = {v:y}: the output is 1 only when both are 0.</p>' },
+          { title: 'Only b', set: { a: 0 }, show: ['vb', 'rb1', 'rb2'], expect: { y: 0 },
+            say: '<p>a = 0, b = 1: the second tube alone holds the plate down, y = {v:y}. Each input has its own divider (rb1 over rb2 here) and drives its own grid.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>y = ¬(a + b): the plate is high only if no triode conducts. Two tubes in series would need the upper cathode above ground: with its grid held to the same levels
+          the grid-to-cathode voltage falls by the cathode's rise, so the upper tube conducts less, and the logic levels depend on which input is on. In parallel every cathode is at ground, so each
+          input sees the same levels and the same ${(R_DIV_TOP / 1e3).toFixed(0)} / ${(R_DIV_BOTTOM / 1e3).toFixed(0)} kΩ divider.</p>`,
+        pitfall: `<p>Calling it a NAND from the wiring. Triodes in parallel under one resistor look like an AND gate drawn sideways, but the plate falls on <em>either</em>
+          input: with the 1-conducts, 0-cut-off convention it is a NOR. The tour above checks all four rows.</p>`,
+        real: `<p>ENIAC gated with pentodes and pentagrids: a second control grid in the same tube gives an AND without a series stack, so a gate and its amplifier are one bulb.
+          SEAC and UNIVAC did the gating in crystal diodes and used tubes only to restore levels, the arrangement the next step builds.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Make the output 1.',
         check: (st) => st.value('y') === 1,
@@ -190,9 +266,36 @@ export const chTubes: Chapter = {
         <p>One NAND: half a 6SN7 and a whole 6AL5 (a twin diode), ${w2(BRICK.total)} W on average:
         ${w2(BRICK.heaters)} W of heaters, ${w2(BRICK.plate)} W through the plate resistor, ${w2(BRICK.divider)} W in the
         divider. ENIAC itself used 7 200 germanium crystal diodes for gates like this one, which saved the heaters.</p>
+        <p>The diodes do the logic and the triode restores the level: a diode AND alone has no gain, and every stage through it would lose a diode drop of swing. The
+        triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in CMOS between the gate and its restoring stage, paid in
+        two tube envelopes (${stats(TUBE_NAND).triodes} triode section and ${stats(TUBE_NAND).diodes} diode sections per NAND).</p>
         <div class="try">Set both inputs to 1: both diodes let go, the junction rises, the triode conducts.</div>`,
       scene: () => ({ root: TUBE_NAND, inputs: { a: 1, b: 0 } }),
       tries: [(st) => st.value('y') === 0],
+      tour: {
+        beats: [
+          { title: 'Both high', set: { a: 1, b: 1 }, show: ['da', 'db', 'rj'], expect: { y: 0 },
+            say: '<p>a = b = 1: both diodes would need to pass current backwards, so neither conducts and the pull-up lifts the junction. The divider and triode invert it: y = {v:y}.</p>' },
+          { title: 'One input low', set: { a: 0 }, show: ['da', 'rj'], expect: { y: 1 },
+            say: '<p>a = 0: a\'s diode conducts and the low input pulls the junction down, beating the pull-up resistor. The grid goes below cutoff, the triode stops, y = {v:y}.</p>' },
+          { title: 'The other input low', set: { a: 1, b: 0 }, show: ['db', 'rj'], expect: { y: 1 },
+            say: '<p>a = 1, b = 0: now b\'s diode does the work and the junction is low again: y = {v:y}. Either low input is enough, which is the AND.</p>' },
+          { title: 'The triode inverts', set: { a: 1, b: 1 }, show: ['r1', 'r2', 'v1'], expect: { y: 0 },
+            say: '<p>Back to both high: the junction rises through the divider (r1, r2) to the grid, the tube conducts, and the plate falls to the low level. y = {v:y}.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The junction J = a·b (a diode AND), the divider carries it to the grid, and the triode inverts: y = ¬J = ¬(a·b), a NAND. Power per brick, on average:
+          ${w2(BRICK.heaters)} W of heaters (the triode's ${w2(HEATER_W)} W plus both diode sections), ${w2(BRICK.plate)} W through the plate resistor and tube, ${w2(BRICK.divider)} W in the divider:
+          ${w2(BRICK.total)} W in all, of which ${(100 * BRICK.heaters / BRICK.total).toFixed(0)} % is heater.</p>`,
+        numbers: `<table class="mini"><tr><th>part of a NAND brick</th><th>average power</th></tr>
+          <tr><td>heaters (½ 6SN7 + 6AL5)</td><td>${w2(BRICK.heaters)} W</td></tr><tr><td>plate resistor and tube</td><td>${w2(BRICK.plate)} W</td></tr>
+          <tr><td>divider</td><td>${w2(BRICK.divider)} W</td></tr><tr><th>total</th><th>${w2(BRICK.total)} W</th></tr></table>`,
+        pitfall: `<p>Chaining diode ANDs without a restoring stage. Each diode drops a fraction of a volt, and a pull-up that fights several parallel diodes lets the junction creep up on a
+          nominally low input. After two or three stages the levels are gone. The triode is there to bring them back, which also costs the step.</p>`,
+        real: `<p>ENIAC used crystal diodes (${thin(ENIAC.diodes)} of them) for gates like this and kept the tubes for amplification and storage, which saved a heater for every gate.
+          Germanium diodes also gave less drop than vacuum ones, which made the restoring stage easier.</p>`,
+      },
       challenge: {
         kind: 'quiz', question: 'With a = 0 and b = 1, why does the junction read 0 rather than X, with the pull-up and a diode fighting over it?',
         options: [
@@ -220,19 +323,42 @@ export const chTubes: Chapter = {
         <p>In NAND bricks the same set–reset latch is ${stats(SR_LATCH).nands} NANDs: ${stats(SR_LATCH).nands} triode
         sections and ${2 * stats(SR_LATCH).nands} diodes; a clocked D flip-flop is ${stats(DFF).nands}. ENIAC kept each
         decimal digit of its accumulators in a ring of ten of these pairs.</p>
-        <details class="deeper"><summary>Deeper: memory in the tube era</summary>
-        <p>At two triodes a bit, flip-flops were for registers only: ENIAC's twenty accumulators held twenty ten-digit
-        numbers. Larger stores kept bits in something cheaper and used tubes only to read and rewrite them. A
-        <strong>mercury delay line</strong> (EDSAC, 1949; UNIVAC I, 1951) sent bits as sound pulses down a tube of mercury
-        and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
-        circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
-        charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
-        <a href="#/c/dram/0">chapter 35</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
-        <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
-        random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
-        memory until semiconductor DRAM displaced it in the 1970s.</p></details>
+        <p>Why it holds: each stage is an inverter, and two inverters in a loop have two stable states and one unstable in between. A small
+        disturbance at the middle grows round the loop (the loop gain is above 1) until one tube is fully on and the other fully off. That is the same
+        regenerative loop as the cross-coupled NANDs of <a href="#/c/latches/0">chapter 8</a>, with a plate resistor and a divider in place of the gate.
+        It costs ${stats(ECCLES_JORDAN).triodes} triode sections and ${stats(ECCLES_JORDAN).diodes} steering diodes, and it burns heater and plate power for as long as it holds.</p>
         <div class="try">Set, let go, and the bit stays. Then reset.</div>`,
       scene: () => ({ root: ECCLES_JORDAN, inputs: { set: 0, reset: 1 } }),
+      tour: {
+        beats: [
+          { title: 'Reset held', set: { set: 0, reset: 1 }, show: ['va', 'vb', 'dr'], expect: { q: 0, nq: 1 },
+            say: '<p>reset = 1: the left tube is forced on, so the left plate q is low: q = {v:q}. The right grid is below cutoff, its plate nq is high: nq = {v:nq}.</p>' },
+          { title: 'Set', set: { set: 1, reset: 0 }, show: ['va', 'vb', 'ds'], expect: { q: 1, nq: 0 },
+            say: '<p>set = 1: the steering diode ds drives the right grid up, the right tube conducts and nq falls to {v:nq}. The left grid, fed from nq, goes below cutoff and q rises: q = {v:q}.</p>' },
+          { title: 'Let go: it holds', set: { set: 0 }, show: ['va', 'vb'], expect: { q: 1, nq: 0 },
+            say: '<p>set = 0: the diode conducts nothing now, but each plate still holds the other grid where it was. q = {v:q}, nq = {v:nq} with both inputs at 0: one stored bit.</p>' },
+          { title: 'Reset', set: { reset: 1 }, show: ['va', 'vb', 'dr'], expect: { q: 0, nq: 1 },
+            say: '<p>reset = 1: the mirror image through dr. The left tube takes over, q = {v:q}, nq = {v:nq}. Let go of reset and the pair would stay.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Two stable states: (left on, right off) and (left off, right on); the state with both half on is a balance point that any noise leaves. Each stage inverts, so the loop through the
+          two dividers inverts twice and feeds back positively. A stage's gain must stay above 1 even after the divider cuts the plate's swing to ${(R_DIV_BOTTOM / (R_DIV_TOP + R_DIV_BOTTOM)).toFixed(3)} of its size
+          (the bias rail only shifts it), which is why the dividers are the part to tune. In NAND bricks the same latch is ${stats(SR_LATCH).nands} NANDs, ${stats(SR_LATCH).nands} triode sections
+          and ${2 * stats(SR_LATCH).nands} diode sections, against ${stats(ECCLES_JORDAN).triodes} and ${stats(ECCLES_JORDAN).diodes} here.</p>`,
+        pitfall: `<p>Powering up with neither set nor reset. The scene starts with reset held for a reason: both tubes warm together, and which one wins is decided by tiny
+          differences in emission and noise. A real machine reset its flip-flops in a power-on sequence before using them, and a simulator that shows X is saying the same.</p>`,
+        real: `<p>At two triodes a bit, flip-flops were for registers only: ENIAC's twenty accumulators held twenty ten-digit
+          numbers. Larger stores kept bits in something cheaper and used tubes only to read and rewrite them. A
+          <strong>mercury delay line</strong> (EDSAC, 1949; UNIVAC I, 1951) sent bits as sound pulses down a tube of mercury
+          and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
+          circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
+          charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
+          <a href="#/c/dram/0">chapter 35</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
+          <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
+          random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
+          memory until semiconductor DRAM displaced it in the 1970s.</p>`,
+      },
       challenge: {
         kind: 'reach', goal: 'Store a 1 in q, with set and reset both back at 0.',
         check: (st) => st.value('q') === 1 && st.getInput('set') === 0 && st.getInput('reset') === 0,
@@ -263,6 +389,27 @@ export const chTubes: Chapter = {
         then the MOSFET in 1959, which is where <a href="#/c/mosfet/0">chapter 1</a> begins.
         <a href="#/c/silicon/0">Chapter 28</a> prices the CPU you build in relays and in tubes.</p>`,
       scene: () => ({ root: TUBE_FA, inputs: { a: 1, b: 1, cin: 0 } }),
+      ledger: { kind: 'add', a: 'a', b: 'b', sum: 's', width: 1, cin: 'cin', cout: 'cout', col: () => ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'] },
+      tour: {
+        beats: [
+          { title: 'A carry is generated', set: { a: 1, b: 1, cin: 0 }, show: ['g1', 'g9'], expect: { s: 0, cout: 1 },
+            say: `<p>1 + 1 + 0: g1 = NAND(a, b) = 0 forces g9 high, so cout = {v:cout} and s = {v:s}. The carry takes two bricks (g1, then g9): about ${(2 * TUBE_STEP_US).toFixed(0)} µs.</p>` },
+          { title: 'The carry passes through', set: { a: 1, b: 0, cin: 1 }, show: ['g1', 'g2', 'g3', 'g4', 'g5', 'g9'], expect: { s: 0, cout: 1 },
+            say: `<p>1 + 0 + 1: a ⊕ b = 1 lets cin through the second half. s = {v:s}, cout = {v:cout}. The longest path in the adder is ${logicDepth(FULL_ADDER)} tube steps, about ${(logicDepth(FULL_ADDER)! * TUBE_STEP_US).toFixed(0)} µs, every one a tube regenerating its level.</p>` },
+          { title: 'All three set', set: { a: 1, b: 1, cin: 1 }, show: ['g5', 'g6', 'g7', 'g8', 'g9'], expect: { s: 1, cout: 1 },
+            say: '<p>1 + 1 + 1 = 3: the second XOR sees x = 0 and cin = 1, so s = {v:s}, and cout = {v:cout}. Every brick in the adder is heated whether or not its output moved.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>The adder is the nine-NAND full adder of <a href="#/c/adders/0">chapter 6</a> with each NAND a brick: ${stats(TUBE_FA).triodes} triode sections, ${stats(TUBE_FA).diodes} diode sections and
+          ${stats(TUBE_FA).resistors} resistors. Power: 9 × ${w2(BRICK.total)} W = ${w2(9 * BRICK.total)} W. A 32-bit ripple adder is ${logicDepth(rca(32))} steps deep, about ${(logicDepth(rca(32))! * TUBE_STEP_US).toFixed(0)} µs per
+          sum in tubes, against ${(logicDepth(rca(32))! * RELAY_STEP_MS).toFixed(0)} ms through relay-per-NAND bricks.</p>`,
+        pitfall: `<p>Quoting a tube machine's power as its switching power. The heaters burn ${(100 * BRICK.heaters / BRICK.total).toFixed(0)} % of a brick's ${w2(BRICK.total)} W whether the gate switches or not, so a
+          mostly idle tube machine costs nearly the same as a busy one. The only saving is to switch it off, and then it takes seconds to warm up.</p>`,
+        numbers: `<table class="mini"><tr><th>full adder</th><th>NANDs</th><th>devices</th><th>average power</th><th>longest path</th></tr>
+          <tr><td>CMOS</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(FULL_ADDER).transistors} transistors</td><td>femtojoules per switch</td><td>${logicDepth(FULL_ADDER)} × ${PS_PER_NAND} ps</td></tr>
+          <tr><td>Tubes</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(TUBE_FA).triodes} triodes + ${stats(TUBE_FA).diodes} diodes</td><td>${w2(9 * BRICK.total)} W</td><td>${logicDepth(FULL_ADDER)} × ${TUBE_STEP_US.toFixed(1)} µs</td></tr></table>`,
+      },
       challenge: {
         kind: 'quiz', question: `The 4-bit CPU of the examples is about ${thin(CPU4_NANDS)} NANDs without its ROM. Built from tube NAND bricks at ${w2(BRICK.total)} W each, it draws about:`,
         options: [`${v(CPU4_NANDS * BRICK.total / 1e3)} kW`, `${(CPU4_NANDS * BRICK.total / 1e4).toFixed(1)} kW`, `${v(CPU4_NANDS * BRICK.total / 1e2)} kW`],
