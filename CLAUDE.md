@@ -529,7 +529,7 @@ src/dram/      timing.ts: DDR4-3200 in our cycles (CLOCK_NS = the single-cycle C
                the CPUs' 2-way write-back cache model, price() on the models (equal to the gate-level CPUs to the cycle);
                schedule.ts: FCFS against FR-FCFS over a queue (chapter 36's last step)
 src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden model: RAM, flash, DMA registers whose
-               copy is instant, and with BusDevices a DRAM, a screen, a key queue; ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
+               copy is instant, and with BusDevices a DRAM, a screen, a key queue, and `map`: each region's top nibble when not MAP (the memory-map designer's); ISS({ bus }) fetches beyond its ROM and loads / stores through it); programs.ts: chapter
                37's boot ROM and payload
                Card reader: BusDevices.cards { items, feed } → CardModel, the one time-dependent device: whoever steps the ISS sets
                BusModel.now (rising edges so far, at the retiring edge); a read sees the reader CARD_LAG (2) edges earlier and a DATA

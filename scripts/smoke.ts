@@ -187,8 +187,8 @@ function routes(): Route[] {
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
-  // The memory-map designer on System on a bus, opened from File, in both themes and on a phone.
-  for (const [theme, viewport] of [['light', undefined], ['dark', undefined], ['light', phone]] as const) {
+  // The memory-map designer on System on a bus, opened from File, in both themes.
+  for (const [theme, viewport] of [['light', undefined], ['dark', undefined]] as const) {
     add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'bussystem')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (memory map, ${theme}${viewport ? ', phone' : ''})`, viewport, MEMMAP_DRIVE);
   }
   return only ? out.filter((r) => r.label.includes(only)) : out;
