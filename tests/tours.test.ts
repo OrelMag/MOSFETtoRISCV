@@ -45,6 +45,7 @@ describe('tours', () => {
       let at = scene!.path ?? [];
       st.tour.beats.forEach((b, k) => {
         const tag = `${where} beat ${k + 1}`;
+        if (b.reset) expect(k, `${tag}: reset only on the first beat`).toBe(0);
         if (b.at) at = b.at;
         const level = defAt(root, at);
         expect(level, `${tag}: level ${at.join('.')}`).toBeTruthy();

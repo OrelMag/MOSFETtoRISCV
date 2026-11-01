@@ -71,6 +71,7 @@ export class TourPlayer {
     this.k++;
     this.marks[this.k] = this.stage.historyDepth;
     const b = this.tour.beats[this.k];
+    if (b.reset) { this.stage.powerCycle(); this.marks[this.k] = this.stage.historyDepth; }
     if (b.at) this.go(b.at);
     if (b.set) this.stage.setInputs(b.set);
     for (let i = 0; i < (b.cycles ?? 0); i++) this.stage.pulse();

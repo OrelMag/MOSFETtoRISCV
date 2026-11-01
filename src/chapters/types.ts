@@ -42,6 +42,8 @@ export interface Beat {
   say: string;
   /** A short heading for the beat (shown above the caption). */
   title?: string;
+  /** First beat only: put the scene back to power-on (Reset), so cycle counts start from the first instruction. */
+  reset?: boolean;
   /** Root inputs to set first (one change: Back undoes them together). */
   set?: Record<string, number>;
   /** After setting: clock cycles to run (the scene's clock). */
