@@ -41,7 +41,8 @@ function text(id: string): string {
 const nands = (d: ComponentDef) => stats(d).nands;
 const quotes = (id: string, ...ns: number[]) => { for (const n of ns) expect(text(id), `${id}: ${f(n)}`).toContain(f(n)); };
 /** The chapter step's prose contains the string (a chapter number the codex repeats). */
-const stepSays = (ch: string, step: number, s: string) => expect(String(chapterById(ch)!.steps[step].body), `${ch} ${step}: ${s}`).toContain(s);
+// a step's layers count as its prose (the explanations pass moved asides into them)
+const stepSays = (ch: string, step: number, s: string) => { const st = chapterById(ch)!.steps[step]; expect([st.body, ...Object.values(st.more ?? {})].map(String).join(' '), `${ch} ${step}: ${s}`).toContain(s); };
 
 describe('the journey\'s codex entries', () => {
   it('are complete and taught by a level', () => {

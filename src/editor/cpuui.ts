@@ -161,6 +161,9 @@ class CpuPanel {
   private memSec = h('div', { class: 'cpu-sec' });
   private mem = h('div', { class: 'cpu-mem' });
   private trace = h('div', { class: 'cpu-trace sb-cpu-trace' });
+  /** The last instruction told unit by unit, as the chapters' CPU panel does (riscv/narrate.ts). */
+  private narrSec = h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, 'the last instruction, unit by unit'));
+  private narr = h('div', { class: 'cpu-narr', 'aria-live': 'polite' });
   private traceSec = h('div', { class: 'cpu-sec' }, 'Retired', h('span', { class: 'cpu-sec-hint' }, 'by the golden model, newest last'));
   private runBtn: HTMLButtonElement;
   private stepBtn: HTMLButtonElement;
@@ -208,6 +211,7 @@ class CpuPanel {
       this.regsSec, this.regs,
       this.fregsSec, this.fregs,
       this.memSec, this.mem,
+      this.narrSec, this.narr,
       this.traceSec, this.trace);
     this.el = h('aside', { class: 'sb-drawer sb-cpu', 'aria-label': 'CPU' },
       h('div', { class: 'sb-drawer-head' }, icon('code', 15), this.title,
@@ -834,8 +838,12 @@ class CpuPanel {
     // An RV16 listing's rows are keyed like the others' (4 × the word index).
     const row = (pc: number) => (mon instanceof M6502Monitor ? 4 * (mon.romIndex(pc) ?? 0) : wordListed(mon) ? 4 * pc : pc);
     this.traceSec.hidden = this.trace.hidden = !show;
+    const narr = mon instanceof CpuMonitor && show ? mon.narr : [];
+    this.narrSec.hidden = this.narr.hidden = !(mon instanceof CpuMonitor && show && !mon.desc?.pipeline);
     if (mon.seq === this.seqSeen) return;
     this.seqSeen = mon.seq;
+    this.narr.replaceChildren(...(narr.length ? narr.map((l) => h('div', { class: 'narr-row' }, h('span', { class: 'narr-unit' }, l.unit), h('span', null, l.text)))
+      : [h('div', { class: 'narr-empty' }, 'Step: the instruction just executed is told unit by unit, with its values.')]));
     this.trace.replaceChildren(...mon.log.slice(-40).map((e) => h('div', { class: 'tr', title: 'Select this instruction in the listing', onclick: () => this.select(row(e.pc)) },
       h('span', { class: 'c' }, String(e.cycle)), h('span', { class: 't' }, e.hart !== undefined ? h('b', { class: 'sb-cpu-hart' }, `C${e.hart}`) : null, e.text), h('span', { class: 'eff' }, e.effect))));
     this.trace.lastElementChild?.classList.add('new');

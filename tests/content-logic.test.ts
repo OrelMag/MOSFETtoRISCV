@@ -16,7 +16,8 @@ import { pack } from '../src/sim/values';
 const body = (c: Chapter, title: string): string => {
   const s = c.steps.find((x) => x.title === title);
   expect(s, `${c.id}: step '${title}'`).toBeTruthy();
-  return s!.body;
+  // the step's prose: its body and the layers under it (asides moved there)
+  return [s!.body, ...Object.values(s!.more ?? {})].join(' ');
 };
 const num = (html: string, re: RegExp): number => {
   const m = html.match(re);

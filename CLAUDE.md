@@ -473,7 +473,10 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), ilp.ts (chapter 26: classify(word) → class /
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its
+               values; narrateCycle(PipeSnap, wordAt): each pipeline stage this cycle, with why it forwards, stalls or flushes; the
+               CPU panel's and the sandbox CPU drawer's Narrate section; tests/narrate.test.ts: next pc and written value equal the
+               golden model's over the sample programs), ilp.ts (chapter 26: classify(word) → class /
                sources / rd / call / ret, traceOf (the golden model's run), dataflow (the limit: each instruction when its operands
                are ready; criticalPath)), ooomodel.ts (OooModel / OOO_CORE: the out-of-order core's rules cycle by cycle, the
                header is the spec the gate-level core follows; CycleInfo per cycle: committed / issued (Uop.port) / dispatched /
