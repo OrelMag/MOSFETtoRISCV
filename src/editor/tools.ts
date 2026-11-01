@@ -37,7 +37,8 @@ type State =
   /** Pressed on an object; a click or a drag, not decided yet. */
   /** `name`: the press was on the object's drawn name (a click then renames a selected object). */
   /** `wire`: on a pin knob's port side, where a drag draws a wire from the pin (a tap still toggles it). */
-  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean; wire?: { end: EndRef; pos: Vec } }
+  /** `tap`: a mode's click (Tools.onPress), run instead of the usual one if the press does not move. */
+  | { k: 'press'; hit: Hit; at: Vec; sx: number; sy: number; was: boolean; shift: boolean; name: boolean; wire?: { end: EndRef; pos: Vec }; tap?: () => void }
   | { k: 'move'; at: Vec; base: ChipDoc; sel: Sel; d: Vec }
   /**
    * Reshaping one wire: what the press grabbed on it (geom.ts grabOn), from the document before the drag.
@@ -78,8 +79,11 @@ export class Tools {
   private touch = false;
   private buttonHeld: PinDoc | null = null;
   private off: (() => void)[] = [];
-  /** A mode that takes clicks first (probing): true when it consumed the press. */
-  onPress: ((h: Hit, e: PointerEvent) => boolean) | null = null;
+  /**
+   * A mode that takes clicks first (probing): true when it consumed the press; a function to run if the press stays a
+   * click (a drag goes on as usual: probing, a wire still moves).
+   */
+  onPress: ((h: Hit, e: PointerEvent) => boolean | (() => void)) | null = null;
   /** The right-click menu (ctxmenu.ts plugs it in), at a screen point, for the selection or the canvas point `at`. */
   onContext: ((x: number, y: number, at: Vec) => void) | null = null;
 
@@ -202,7 +206,13 @@ export class Tools {
 
     const named = nameHit(e.target);
     let h = named ?? this.hit(p);
-    if (this.onPress?.(h, e)) return;
+    const took = this.onPress?.(h, e);
+    if (took === true) return;
+    if (took) {
+      // nothing selected yet: a click is the mode's, a drag selects as it starts
+      this.state = { k: 'press', hit: h, at: p, sx: e.clientX, sy: e.clientY, was: this.isSelected(h), shift: false, name: !!named, tap: took };
+      return;
+    }
     let wire: { end: EndRef; pos: Vec } | undefined;
     // A finger on a pin's connection point presses the pin: a tap toggles it, a drag draws the wire. At a
     // phone's zoom the knob and the stub's end are a few px apart, too close for a finger to choose between.
@@ -309,6 +319,7 @@ export class Tools {
     switch (st.k) {
       case 'press': {
         this.state = { k: 'idle' };
+        if (st.tap) return st.tap();
         this.click(st, e);
         // what was tapped, the same thing twice (a wire anywhere along it)
         const h = st.hit, key = h.k === 'wire' ? `wire ${h.id}` : `${st.name} ${JSON.stringify(h)}`;

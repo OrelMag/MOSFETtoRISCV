@@ -109,8 +109,11 @@ export class SchematicView {
   flowMs = 0;
   /** Screen rectangles (from the canvas's corner) the stage's panels cover; fit() keeps the circuit clear of them. */
   cover: Rect[] = [];
-  /** Parts and wires can be dragged and pointers unravelled (view/layout.ts): the stage's views, not a read-only look inside. */
-  arrange = false;
+  /**
+   * The learner's layout (view/layout.ts): true, parts and wires can be dragged and pointers unravelled (the stage);
+   * 'wires', only wires and pointers, the parts stay put (the sandbox's look inside, the codex); false, as authored.
+   */
+  arrange: boolean | 'wires' = false;
   /** The level's netlist as authored (before the learner's layout). */
   private base: Netlist | null = null;
   /** A part drag just ended: the click it ends with does not select. */
@@ -138,7 +141,7 @@ export class SchematicView {
     this.cam = new Camera(this.el, host);
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
-      canStart: (e) => !(this.arrange && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
+      canStart: (e) => !(this.arrange === true && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
       onTap: (target) => {
         const n = target.closest('[data-net]');
         if (n) this.clickNet(Number(n.getAttribute('data-net')), target);
@@ -154,7 +157,7 @@ export class SchematicView {
     });
     this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
     this.el.addEventListener('pointerdown', (e) => {
-      if (this.arrange && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
+      if (this.arrange === true && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
       const net = this.grabbedNet(e);
       if (net >= 0) this.dragWire(e, net);
     });
@@ -202,7 +205,7 @@ export class SchematicView {
       dropCorners(p, base, Object.keys(this.preview));
     }
     const nl = !this.arrange ? base : applyLayout(base, lay);
-    this.el.classList.toggle('arrange', this.arrange);
+    this.el.classList.toggle('arrange', this.arrange === true);
     const t0 = performance.now();
     const { nets, pins } = routeNetlist(ctx.def, nl);
     this.routeMs = performance.now() - t0;
@@ -337,7 +340,7 @@ export class SchematicView {
       g.addEventListener('click', (e) => {
         e.stopPropagation();
         if (this.dragged) return;
-        if (this.arrange && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+        if (this.arrange === true && (e.shiftKey || e.ctrlKey || e.metaKey)) {
           this.toggleGroup(inst.name);
           return;
         }
@@ -345,7 +348,7 @@ export class SchematicView {
         this.select(inst.name);
         this.events.select(inst.name);
       });
-      if (this.arrange) g.addEventListener('pointerdown', (e) => this.dragInst(e, inst.name));
+      if (this.arrange === true) g.addEventListener('pointerdown', (e) => this.dragInst(e, inst.name));
       g.addEventListener('pointerup', (e) => {
         if (this.taps.upEvent(e, inst.name) && openable && !this.dragged) this.events.open(inst.name);
       });
@@ -904,11 +907,12 @@ export class SchematicView {
   }
 
   /**
-   * The net whose wire a press would drag (-1: none): the stage, not probing, a plain press on a wire. A finger
-   * pans the canvas over wires, so it moves only the wire already selected (tap it first).
+   * The net whose wire a press would drag (-1: none): a plain press on a wire, probing too (a press that does not
+   * move is still a click: the probe). A finger pans the canvas over wires, so it moves only the wire already
+   * selected (tap it first).
    */
   private grabbedNet(e: PointerEvent): number {
-    if (!this.arrange || e.button !== 0 || e.shiftKey || this.host.classList.contains('probing')) return -1;
+    if (!this.arrange || e.button !== 0 || e.shiftKey) return -1;
     const t = (e.target as Element).closest('.wire-hit, .wires [data-net]');
     const idx = t ? Number(t.getAttribute('data-net')) : -1;
     return idx >= 0 && (e.pointerType !== 'touch' || idx === this.selectedNet) ? idx : -1;
@@ -916,7 +920,7 @@ export class SchematicView {
 
   /** On the stage a wire's hit stroke shows which way the segment under the pointer moves. */
   private wireCursor(t: SVGPathElement, e: PointerEvent): void {
-    const w = this.arrange && !this.host.classList.contains('probing') ? this.wires.find((x) => x.net.index === Number(t.dataset.net)) : undefined;
+    const w = this.arrange ? this.wires.find((x) => x.net.index === Number(t.dataset.net)) : undefined;
     const seg = w && nearestSegment(w.net.paths, this.cam.toWorld(e.clientX, e.clientY), 0.7, (i) => !w.net.ends?.[i]);
     t.style.cursor = seg ? (seg.axis === 'h' ? 'ns-resize' : 'ew-resize') : '';
   }
@@ -1112,7 +1116,7 @@ export class SchematicView {
       }
     }
     const inst = target?.closest('[data-inst]')?.getAttribute('data-inst');
-    const back = inst && this.group.has(inst) ? [...this.group].filter((n) => lay?.at[n]) : inst && lay?.at[inst] ? [inst] : [];
+    const back = this.arrange !== true ? [] : inst && this.group.has(inst) ? [...this.group].filter((n) => lay?.at[n]) : inst && lay?.at[inst] ? [inst] : [];
     if (back.length) {
       items.push({ label: back.length > 1 ? `Put the ${back.length} picked parts back` : `Put ${back[0]} back`, hint: 'Where the chapter drew it',
         run: () => this.edit((l) => {
