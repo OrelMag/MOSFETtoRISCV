@@ -127,14 +127,30 @@ class Coach {
     const ch = this.card.offsetHeight;
     const below = vh - y1 - 16 >= ch + 8;
     const above = y0 - 16 >= ch + 8;
-    let top = below ? y1 + 14 : above ? y0 - 14 - ch : Math.max(12, Math.min(vh - ch - 12, y1 + 14 > vh - ch ? vh - ch - 12 : y1 + 14));
-    // neither side has room (a target as tall as the window): the card sits inside the ring's lower corner
-    if (!below && !above) top = Math.max(12, vh - ch - 12);
-    const left = Math.max(12, Math.min(vw - cw - 12, (x0 + x1) / 2 - cw / 2));
-    Object.assign(this.card.style, { left: `${left}px`, top: `${top}px` });
-    const ax = Math.max(left + 18, Math.min(left + cw - 18, (x0 + x1) / 2));
-    this.arrow.hidden = !(below || above);
-    Object.assign(this.arrow.style, { left: `${ax - 8}px`, top: `${below ? top - 8 : top + ch - 8}px` });
+    const right = vw - x1 - 16 >= cw + 8, left = x0 - 16 >= cw + 8;
+    const clampL = (v: number) => Math.max(12, Math.min(vw - cw - 12, v));
+    const clampT = (v: number) => Math.max(12, Math.min(vh - ch - 12, v));
+    let cl: number, ct: number, ax = 0, ay = 0, arrow = true;
+    if (below || above) {
+      cl = clampL((x0 + x1) / 2 - cw / 2);
+      ct = below ? y1 + 14 : y0 - 14 - ch;
+      ax = Math.max(cl + 18, Math.min(cl + cw - 18, (x0 + x1) / 2)) - 8;
+      ay = below ? ct - 8 : ct + ch - 8;
+    } else if (right || left) {
+      // a target as tall as the window (the parts list): the card beside it
+      cl = right ? x1 + 14 : x0 - 14 - cw;
+      ct = clampT((y0 + y1) / 2 - ch / 2);
+      ax = right ? cl - 8 : cl + cw - 8;
+      ay = Math.max(ct + 18, Math.min(ct + ch - 18, (y0 + y1) / 2)) - 8;
+    } else {
+      // no side has room (a target as large as the window): the card sits over its lower corner
+      cl = clampL((x0 + x1) / 2 - cw / 2);
+      ct = clampT(vh - ch - 12);
+      arrow = false;
+    }
+    Object.assign(this.card.style, { left: `${cl}px`, top: `${ct}px` });
+    this.arrow.hidden = !arrow;
+    Object.assign(this.arrow.style, { left: `${ax}px`, top: `${ay}px` });
   }
 
   private refreshCount(): void {
@@ -151,7 +167,7 @@ class Coach {
     this.el.remove();
     settings.setCoachDone(this.kind);
     if (active === this) active = null;
-    const back = this.opener?.isConnected ? this.opener : document.querySelector<HTMLElement>(this.kind === 'stage' ? '.stage' : '.sandbox .canvas');
+    const back = this.opener?.isConnected ? this.opener : document.querySelector<HTMLElement>(this.kind === 'stage' ? '.stage' : '.sandbox .sb-canvas');
     back?.focus({ preventScroll: true });
   }
 }

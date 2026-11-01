@@ -29,9 +29,9 @@ export const STAGE_BEATS: readonly CoachBeat[] = [
 export const SANDBOX_BEATS: readonly CoachBeat[] = [
   { id: 'palette', target: '.sandbox .sb-palette', title: 'Parts',
     text: 'Pick a part and click the canvas to place it; 1 to 9 arm your favourites. The search box finds any library part or chip of yours.' },
-  { id: 'wire', target: '.sandbox .canvas', title: 'Wiring',
+  { id: 'wire', target: '.sandbox .sb-canvas', title: 'Wiring',
     text: 'Drag from a pin to another pin to wire them. L adds a named pointer: the same name is the same net. Space and drag pans, the wheel zooms, M shows a minimap of a big chip.' },
-  { id: 'inside', target: '.sandbox .canvas', title: 'Look inside',
+  { id: 'inside', target: '.sandbox .sb-canvas', title: 'Look inside',
     text: 'Double-click a library part to look inside it, down to the transistors. Double-click a chip of your own to edit it; the tab breadcrumb brings you back.' },
   { id: 'run', target: '.sandbox .sb-run', title: 'Run',
     text: 'Run starts the clock (Ctrl+Enter), Step advances it. Click an input pin to flip it; probe mode (P) records wires in the Timing panel.' },

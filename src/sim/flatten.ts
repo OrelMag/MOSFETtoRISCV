@@ -378,7 +378,7 @@ export function flatten(rootDef: ComponentDef, opts: FlattenOptions = {}): FlatD
  * progress card can move. The result is the design flatten gives.
  */
 export async function flattenAsync(
-  rootDef: ComponentDef, opts: FlattenOptions, onProgress: (p: FlattenProgress) => void, pause: () => Promise<void>, sliceMs = 24,
+  rootDef: ComponentDef, opts: FlattenOptions, onProgress: (p: FlattenProgress) => void, pause: () => Promise<void>, sliceMs = 50,
 ): Promise<FlatDesign> {
   const g = flattenSteps(rootDef, opts, sliceMs);
   for (;;) {
