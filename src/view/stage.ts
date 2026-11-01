@@ -29,6 +29,7 @@ import { SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
+import { WhyPanel } from './whypanel';
 
 export interface Scene {
   root: ComponentDef;
@@ -188,6 +189,9 @@ export class Stage {
   readonly analyzer = new LogicAnalyzer();
   private probeMode = false;
   private probeBtn: HTMLButtonElement;
+  private whyBtn: HTMLButtonElement;
+  /** Why? mode: a click on a wire explains its value (view/whypanel.ts). */
+  private why: WhyPanel;
   private timingBtn: HTMLButtonElement;
   private panesBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
@@ -246,6 +250,21 @@ export class Stage {
       h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
     this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
+    this.why = new WhyPanel({
+      ctx: () => this.ctx,
+      light: (names) => (names.length ? this.view.highlight(names, true) : this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : [])),
+      selectNet: (i) => this.view.selectNet(i),
+      toggled: (on) => {
+        this.whyBtn.classList.toggle('on', on);
+        this.canvas.classList.toggle('probing', on || this.probeMode);
+        if (on && this.probeMode) this.setProbeMode(false);
+        // the card covers the canvas's top-left corner: a fitted circuit moves clear of it, and back when it closes
+        if (!on) this.view.setCover(this.covers(), true);
+      },
+    });
+    new ResizeObserver(() => this.why.on && this.view.setCover(this.covers())).observe(this.why.el);
+    this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
+      icon('why', 15), h('span', { class: 'lbl' }, 'Why?')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
     const remix = this.remixBtn = h('button', { class: 'btn ghost sm remix-btn', title: 'Open in Sandbox: an editable copy of the circuit on screen, as one of your own chips', onclick: () => this.remix() },
@@ -325,6 +344,7 @@ export class Stage {
       { els: [remix], items: [{ label: 'Open in Sandbox', hint: 'An editable copy of the circuit on screen', icon: 'chip', run: () => this.remix() }] },
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
+      { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -350,12 +370,12 @@ export class Stage {
         ...[...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()),
       ],
     });
-    for (const b of [imgWrap, layoutBtn, this.probeBtn]) b.classList.add('sch-only');
+    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)
     const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
-      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.timingBtn, moreWrap,
+      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
       upBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
@@ -364,7 +384,7 @@ export class Stage {
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
       'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage');
-    this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el);
+    this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -392,6 +412,11 @@ export class Stage {
       }
       if (e.key === 'Escape' && this.view.dropGroup()) return;
       if (matches(e, 'stage.probe') && shortcutAllowed(e)) this.setProbeMode(!this.probeMode);
+      if (matches(e, 'stage.why') && shortcutAllowed(e) && !this.boardOn) this.why.setOn(!this.why.on);
+      if (e.key === 'Escape' && this.why.on) {
+        this.why.setOn(false);
+        return;
+      }
       if (e.key === 'Escape' && this.probeMode) {
         this.setProbeMode(false);
         return;
@@ -646,6 +671,7 @@ export class Stage {
       ctx = c;
     }
     this.ctx = ctx;
+    this.why.levelChanged();
     this.selected = null;
     // a drill path (a chip opened, Back / Forward to one) is a schematic's, beside its board while the learner
     // follows the boards; back at the top from there, the boards again
@@ -1167,9 +1193,10 @@ export class Stage {
 
   private setProbeMode(on: boolean): void {
     if (on && (this.sim?.kind !== 'gate' || this.sim instanceof DualSim)) return;
+    if (on) this.why.setOn(false);
     this.probeMode = on;
     this.probeBtn.classList.toggle('on', on);
-    this.canvas.classList.toggle('probing', on);
+    this.canvas.classList.toggle('probing', on || this.why.on);
     if (on && !this.el.classList.contains('with-analyzer')) this.showAnalyzer(true);
   }
 
@@ -1188,6 +1215,7 @@ export class Stage {
 
   /** In probe mode a click on a wire adds (or removes) a probe instead of selecting. */
   private netClick(idx: number): boolean {
+    if (this.why.netClick(idx)) return true;
     if (!this.probeMode || !this.ctx) return false;
     const nets = this.flatNets(idx);
     if (!nets) {
@@ -1567,6 +1595,7 @@ export class Stage {
     this.leaf?.widget.update?.();
     this.panels.forEach((p) => p.update?.());
     this.analyzer.update();
+    this.why.update();
     this.showInspector();
     this.updateControls();
     if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
@@ -1879,7 +1908,7 @@ export class Stage {
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];
-    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : [])]) {
+    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el]) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }
