@@ -59,6 +59,8 @@ export function liveSchematic(id: string): HTMLElement | null {
       view.update();
     },
   });
+  // wires move as on the stage (the same layout, by component id); the parts stay put
+  view.arrange = 'wires';
   view.show(new ViewCtx(sim, design.root), true);
   // Fit once the host has a size.
   const ro = new ResizeObserver(() => {

@@ -488,7 +488,9 @@ src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over 
                layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
                units, several at once (shift-click, shift-drag a box; Esc lets go), wires following live on a level that
                routes under LIVE_ROUTE_MS, else on drop; a wire's segment dragged sideways in half units (dragSegment: the
-               net's whole run on that line moves, a stub stays on a pin; a finger moves only the selected wire), kept as
+               net's whole run on that line moves, a stub stays on a pin; a finger moves only the selected wire; in probe
+               mode too: a press that does not move probes; SchematicView.arrange 'wires': the same wire edits with the
+               parts fixed, look inside a library part and the codex's live schematics), kept as
                the learner's corners (LayoutEdit.via → NetDef.via, over the author's; RoutedNet.ends names each path's
                sink; dropped when a part they touch moves; "Reroute" lets go); pointers (NetDef.tags) unravelled into wires one by one or all,
                and wires drawn as pointers (tags: true, named for the driver; a net too short for them is taken back with
@@ -753,7 +755,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   hdl.ts         Verilog chips (ChipDoc.hdl: module, src on the group's top chip or `of` its id, stale): newVerilogChip,
                  setSource, resynthesize / applyNetlist (ids kept by module, the top module on the home chip; a vanished
                  module deleted, or detached when another chip places it), detachGroup, importNetlist (Yosys JSON → drawn
-                 chips), isGenerated + bodyKey (Editor.edit refuses changes to a generated body), verilogModules
+                 chips), isGenerated + bodyKey (Editor.edit refuses changes to a generated body, a wire's shape aside), verilogModules
   hdlui.ts       plugin: the Verilog pane in slots.left (textarea over a highlighted pre, synthesized 1 s after typing or Ctrl/⌘
                  Enter: text + drawing one undo step; a stale chip shown or placed below is synthesized once per text, as a
                  volatile change), the canvas banner (Detach, Hide text), the 'hdl' props section (top, gates, modules),
@@ -935,7 +937,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  resize, displays ticked, moved and scaled, live; Save & new circuit)
   dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /
                  paintFace: from below its node), for the canvas, the face editor and look inside
-  inside.ts      lookInside(ed, path): read-only live schematic over the canvas on EditorSim's simulator (ViewCtx);
+  inside.ts      lookInside(ed, path): live schematic over the canvas on EditorSim's simulator (ViewCtx), read-only but for
+                 a library part's wires (arrange 'wires': the stage's layout, Ctrl+Z there);
                  consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
   ioface.ts      the I/O parts' SVG faces (canvas and look inside; the wheel over a console with scrollback scrolls it,
                  "↑ n lines" while up, Ctrl + wheel zooms); ScreenCanvas: the picture as a canvas bitmap in a
@@ -1310,7 +1313,7 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 - Later phases plug in through `registerPaletteGroup`, `registerPropsSection`,
   `registerToolbarAction` (`active` for toggles, `menu`: its name in More), `registerEditorPlugin` (per-editor state, with a
   cleanup), `registerDiagSource` (extra diagnostics, e.g. lint), `Editor.onSimChange`,
-  `Tools.onPress` (a mode that takes clicks first) and `editor.slots` (`overlay` over the canvas,
+  `Tools.onPress` (a mode that takes clicks first; a function: only if the press stays a click) and `editor.slots` (`overlay` over the canvas,
   `bottom` above the run bar, `top` in the tab bar, `left` beside the canvas: the Verilog pane), `registerFileImporter`
   (fileui.ts: more file kinds for Import and drag-and-drop), `registerNewChipKind` (New chip ▾). `editor.saveState` / `onSave()` report autosave
   (saved / saving / error). `editor.paintHooks` run after every repaint (live views over the

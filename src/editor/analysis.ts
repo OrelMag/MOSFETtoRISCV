@@ -298,8 +298,8 @@ class Analysis {
     this.drawFlags();
   }
 
-  /** In probe mode, a click on a wire, pointer or pin adds its lane (or removes it). */
-  private press(hit: Hit, e: PointerEvent): boolean {
+  /** In probe mode, a click on a wire, pointer or pin adds its lane (or removes it); a drag still moves it. */
+  private press(hit: Hit, e: PointerEvent): boolean | (() => void) {
     if (!this.probing) return false;
     const flag = (e.target as Element | null)?.closest?.('.probe-flag');
     if (flag) {
@@ -312,21 +312,26 @@ class Analysis {
     else if (hit.k === 'label') target = { pointer: doc.labels.find((l) => l.id === hit.id)?.name ?? '' };
     // Pins keep toggling in probe mode: they have lanes of their own from the start.
     else return false;
+    return () => this.probe(target);
+  }
+
+  private probe(target: ProbeTarget): void {
+    const doc = this.ed.doc;
     const sim = this.sim, built = this.ed.sim.built;
     if (!sim || !built) {
       this.ed.toast(this.gate ? 'Not simulated yet: finish the wiring (see the diagnostics)' : 'Switch level: nothing to record', 'err');
-      return true;
+      return;
     }
     for (const [id, t] of this.targets) {
       if (sameTarget(t, target, doc, built)) {
         this.la.remove(id);
-        return true;
+        return;
       }
     }
     const r = resolveProbe(target, doc, built, sim.design);
     if (!r) {
       this.ed.toast('This wire is not on a working net (see the diagnostics)', 'err');
-      return true;
+      return;
     }
     this.internal = true;
     const lane = this.la.add({
@@ -335,7 +340,6 @@ class Analysis {
     this.internal = false;
     this.targets.set(lane.id, r.target);
     this.drawFlags();
-    return true;
   }
 
   // ---- drawing on the canvas -----------------------------------------------------------------
