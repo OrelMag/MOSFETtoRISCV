@@ -209,7 +209,8 @@ describe('the glossary in the chapters', () => {
     const hit = new Set<string>();
     for (const c of chapters) {
       const skip = chapterSkip(c);
-      for (const s of c.steps) for (const id of ids(plain(s.body))) if (!skip.has(id)) hit.add(id);
+      // a step's layers get the glossary's marks too (ui/pages/chapter.ts layers)
+      for (const s of c.steps) for (const text of [s.body, ...Object.values(s.more ?? {})]) for (const id of ids(plain(text))) if (!skip.has(id)) hit.add(id);
     }
     const never = CODEX.filter((e) => !hit.has(e.id)).map((e) => e.id);
     expect(never.length / CODEX.length, never.join(' ')).toBeLessThanOrEqual(0.25); // 57 of 146 before the aliases
