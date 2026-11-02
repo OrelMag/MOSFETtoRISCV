@@ -43,7 +43,7 @@ export default function mount(host: HTMLElement): void {
         s('path', { d: `M${x + BW / 2},${BT + BH} v6`, class: 'af-drip' }),
         s('text', { x: x + BW / 2, y: BT - 8, 'text-anchor': 'middle', class: 'af-t af-m' }, `stored ${bits[k]}`),
         s('text', { x: x + BW / 2, y: BT + BH + 24, 'text-anchor': 'middle', class: 'af-t' }, `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(0)} mV`),
-        s('text', { x: x + BW / 2, y: BT + BH + 44, 'text-anchor': 'middle', class: `af-big sm${r === 'X' ? ' bad' : ''}` }, `reads ${r}`));
+        s('text', { x: x + BW / 2, y: BT + BH + 44, 'text-anchor': 'middle', class: `af-big sm${r === 'X' ? ' bad' : ''}` }, `→ ${r}`));
     });
     kids.push(s('text', { x: W / 2, y: 182, 'text-anchor': 'middle', class: 'af-t af-m' }, `${age.toFixed(0)} cycles · half-life ${CELL_HALFLIFE}`));
     svg.replaceChildren(...kids);

@@ -4,12 +4,12 @@ import { h, s } from '../../ui/dom';
 import { BUCKET_T_MAX, bucketRun } from './model';
 import { button, frames, reducedMotion } from './common';
 
-const W = 360, PX = 168, PY = 8, PW = 184, PH = 96; // the V–t plot
-const BT = 124, BH = 52; // buckets' top and height
+const W = 360, PX = 10, PY = 6, PW = 340, PH = 100; // the V–t plot
+const BT = 204, BH = 50; // buckets' top and height
 
 export default function mount(host: HTMLElement): void {
   let n = 2, t = BUCKET_T_MAX, playing = false;
-  const svg = s('svg', { viewBox: `0 0 ${W} 190`, class: 'af-svg', role: 'img', 'aria-label': 'A hose filling buckets through a manifold, and their level over time' });
+  const svg = s('svg', { viewBox: `0 0 ${W} 262`, class: 'af-svg', role: 'img', 'aria-label': 'A hose filling buckets through a manifold, and their level over time' });
   const hose = s('g');
   const buckets = s('g');
   const curve = s('path', { class: 'af-curve' });
@@ -19,10 +19,10 @@ export default function mount(host: HTMLElement): void {
   const now = s('line', { class: 'af-now', y1: PY, y2: PY + PH });
   svg.append(
     s('rect', { x: PX, y: PY, width: PW, height: PH, class: 'af-plot' }), half, mark, now, curve, dot,
-    s('text', { x: PX + PW - 3, y: PY + PH / 2 - 4, 'text-anchor': 'end', class: 'af-t af-m' }, 'half full'),
-    s('text', { x: PX + PW / 2, y: PY + PH + 12, 'text-anchor': 'middle', class: 'af-t af-m' }, `time, 0 to ${BUCKET_T_MAX} ps`),
-    s('text', { x: PX - 4, y: PY + 9, 'text-anchor': 'end', class: 'af-t af-m' }, 'full'),
-    s('text', { x: 8, y: 20, class: 'af-t' }, 'output channel'), hose, buckets);
+    s('text', { x: PX + PW - 3, y: PY + PH / 2 - 5, 'text-anchor': 'end', class: 'af-t af-m' }, 'half full'),
+    s('text', { x: PX + PW / 2, y: PY + PH + 17, 'text-anchor': 'middle', class: 'af-t af-m' }, `time, 0 to ${BUCKET_T_MAX} ps`),
+    s('text', { x: PX + 4, y: PY + 16, class: 'af-t af-m' }, 'full'),
+    s('text', { x: 8, y: 150, class: 'af-t' }, 'output channel, resistance R'), hose, buckets);
   const read = h('p', { class: 'af-read', 'aria-live': 'polite' });
   const X = (ps: number) => PX + (ps / BUCKET_T_MAX) * PW, Y = (f: number) => PY + PH - f * PH;
 
@@ -37,10 +37,9 @@ export default function mount(host: HTMLElement): void {
     // a hose into a manifold, then one branch per bucket
     const bw = Math.min(40, (W - 16) / n - 8), gap = (W - 16 - n * bw) / n, cx = (k: number) => 8 + gap / 2 + k * (bw + gap) + bw / 2;
     hose.replaceChildren(
-      s('path', { d: `M8,30 H${W / 2 - 20} V80`, class: 'af-pipe' }),
-      s('text', { x: 16, y: 44, class: 'af-t af-m' }, 'R'),
-      s('path', { d: `M${Math.min(cx(0), W / 2 - 20)},80 H${Math.max(cx(n - 1), W / 2 - 20)}`, class: 'af-pipe' }),
-      ...Array.from({ length: n }, (_, k) => s('path', { d: `M${cx(k)},80 V${BT - 4}`, class: 'af-pipe' })));
+      s('path', { d: `M8,160 H${W / 2 - 20} V186`, class: 'af-pipe' }),
+      s('path', { d: `M${Math.min(cx(0), W / 2 - 20)},186 H${Math.max(cx(n - 1), W / 2 - 20)}`, class: 'af-pipe' }),
+      ...Array.from({ length: n }, (_, k) => s('path', { d: `M${cx(k)},186 V${BT - 4}`, class: 'af-pipe' })));
     buckets.replaceChildren(...Array.from({ length: n }, (_, k) => s('g', null,
       s('rect', { x: cx(k) - bw / 2, y: BT, width: bw, height: BH, rx: 3, class: 'af-bucket' }),
       s('rect', { x: cx(k) - bw / 2 + 1, y: BT + BH * (1 - lvl), width: bw - 2, height: BH * lvl, class: 'af-water' }),

@@ -14,7 +14,7 @@ export default function mount(host: HTMLElement): void {
   const door = (x: number, open: boolean, name: string) => s('g', null,
     s('rect', { x: x - 3, y: 22, width: 6, height: 70, class: 'af-wall' }),
     s('rect', { x: x - 3, y: open ? 22 : 40, width: 6, height: open ? 14 : 34, class: open ? 'af-door open' : 'af-door' }),
-    s('text', { x, y: 108, 'text-anchor': 'middle', class: 'af-t af-m' }, `${name}: ${open ? 'open' : 'shut'}`));
+    s('text', { x, y: 112, 'text-anchor': 'middle', class: 'af-t af-m' }, `${name} ${open ? 'open' : 'shut'}`));
 
   const dBtn = button('D = 0', () => { st = airlockSetD(st, !st.d); paint(); }, false);
   const clkBtn = button('Clock: rise', () => {
@@ -27,14 +27,14 @@ export default function mount(host: HTMLElement): void {
   const paint = () => {
     svg.replaceChildren(
       s('rect', { x: 110, y: 22, width: 140, height: 70, class: 'af-room' }),
-      s('text', { x: 180, y: 16, 'text-anchor': 'middle', class: 'af-t af-m' }, 'chamber = master'),
+      s('text', { x: 180, y: 15, 'text-anchor': 'middle', class: 'af-t af-m' }, 'master chamber'),
       s('text', { x: 180, y: 66, 'text-anchor': 'middle', class: 'af-big' }, bit(st.master)),
-      door(110, st.outer, 'outer door'), door(250, st.inner, 'inner door'),
+      door(110, st.outer, 'outer'), door(250, st.inner, 'inner'),
       s('text', { x: 40, y: 66, 'text-anchor': 'middle', class: 'af-big' }, bit(st.d)),
       s('text', { x: 40, y: 40, 'text-anchor': 'middle', class: 'af-t af-m' }, 'D'),
       s('text', { x: 316, y: 66, 'text-anchor': 'middle', class: 'af-big' }, bit(st.q)),
       s('text', { x: 316, y: 40, 'text-anchor': 'middle', class: 'af-t af-m' }, 'Q (slave)'),
-      s('text', { x: 180, y: 136, 'text-anchor': 'middle', class: 'af-t' }, `clock ${st.clk ? 'high' : 'low'}`));
+      s('text', { x: 180, y: 140, 'text-anchor': 'middle', class: 'af-t' }, `clock ${st.clk ? 'high' : 'low'}`));
     setPressed(dBtn, st.d);
     dBtn.textContent = `D = ${bit(st.d)}`;
     clkBtn.textContent = st.clk ? 'Clock: fall' : 'Clock: rise';

@@ -2041,7 +2041,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .tm-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .tm-table td { font: 600 12.5px var(--font-mono); white-space: nowrap; }
 .tm-table th:first-child, .tm-table td:first-child { text-align: left; }
-.tm-table .t { text-align: left; white-space: normal; font: 13px var(--font-ui); color: var(--text-2); min-width: 260px; }
+.tm-table .t { text-align: left; white-space: normal; font: 17px var(--font-ui); color: var(--text-2); min-width: 260px; }
 @media (max-width: 640px) { .rb-line { grid-template-columns: 54px minmax(0, 1fr) 30px; } .rb-line .rb-br, .rb-line .rb-kind { display: none; } }
 /* chapter 36: the controller panel (widgets/dramctrl.ts) and the reordering bar (widgets/dramwork.ts) */
 .mc-panel { width: 360px; }
@@ -2319,11 +2319,11 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 /* The analogy aside's 2D figures (widgets/analogy/*): water in --series-1, everything else on the site's tokens. */
 .analogy-fig { padding: 8px; }
 .af-svg { display: block; width: 100%; max-width: 440px; height: auto; margin: 0 auto; }
-.af-svg .af-t { font: 13px var(--font-ui); fill: var(--text-2); }
+.af-svg .af-t { font: 17px var(--font-ui); fill: var(--text-2); }
 .af-svg .af-t.af-m { fill: var(--muted); }
 .af-svg .af-t.af-on { fill: var(--accent-text); font-weight: 700; }
 .af-svg .af-big { font: 700 26px var(--font-mono); fill: var(--text); }
-.af-svg .af-big.sm { font-size: 14px; }
+.af-svg .af-big.sm { font-size: 17px; }
 .af-svg .af-big.bad { fill: var(--bad); }
 .af-svg .af-bucket, .af-svg .af-plot, .af-svg .af-room { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
 .af-svg .af-water { fill: var(--series-1); opacity: 0.85; }

@@ -4,7 +4,7 @@ import { h, s } from '../../ui/dom';
 import { LOADS, STAGES, STAGE_NAMES, laundry } from './model';
 import { button, setPressed } from './common';
 
-const W = 360, L = 48, TOP = 24, ROW = 34, SLOT_MAX = 12;
+const W = 360, L = 64, TOP = 24, ROW = 34, SLOT_MAX = 12;
 
 export default function mount(host: HTMLElement): void {
   let pipelined = true, stall = false;
