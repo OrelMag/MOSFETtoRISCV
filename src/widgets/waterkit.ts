@@ -181,6 +181,11 @@ function partShape(p: WPart): SVGElement | null {
   });
 }
 
+/** Labels are written V_DS: the site's subscript style (as HTML or as SVG tspans), not a raw underscore. */
+const SUB_RE = /_([A-Za-z0-9]+)/g;
+export const htmlSub = (t: string): (string | Node)[] => t.split(SUB_RE).map((p, i) => (i % 2 ? h('sub', null, p) : p));
+const svgSub = (t: string): (string | Node)[] => t.split(SUB_RE).map((p, i) => (i % 2 ? s('tspan', { 'baseline-shift': 'sub', 'font-size': '75%' }, p) : p));
+
 function drawFlat(svg: SVGSVGElement, parts: WPart[], marks: WLabel[], px: number): void {
   const order = parts.map((p, i) => ({ p, i, l: LAYERS.indexOf(p.layer), z: p.pos[2] + (p.scale?.[2] ?? 1) / 2 })).sort((a, b) => a.l - b.l || a.z - b.z || a.i - b.i);
   const g = s('g');
@@ -188,7 +193,7 @@ function drawFlat(svg: SVGSVGElement, parts: WPart[], marks: WLabel[], px: numbe
   for (const m of marks) {
     if (m.minor || m.hidden) continue;
     const dx = m.side === 'l' ? -0.12 : m.side === 'r' ? 0.12 : 0, dy = m.side === 't' ? -0.12 : m.side === 'b' ? 0.3 : 0.08;
-    g.append(s('text', { x: m.p[0] + dx, y: -m.p[1] + dy, class: 'wt-flat-lbl', style: `font-size:${(11.5 / px).toFixed(3)}px`, 'text-anchor': m.side === 'l' ? 'end' : m.side === 'r' ? 'start' : 'middle' }, m.text));
+    g.append(s('text', { x: m.p[0] + dx, y: -m.p[1] + dy, class: 'wt-flat-lbl', style: `font-size:${(11.5 / px).toFixed(3)}px`, 'text-anchor': m.side === 'l' ? 'end' : m.side === 'r' ? 'start' : 'middle' }, ...svgSub(m.text)));
   }
   svg.replaceChildren(g);
 }
@@ -216,7 +221,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
 
   let renderer: Renderer | null = null, mode: 'gl' | 'flat' = 'gl', dead = false, seen = false, visible = true, raf = 0, last = 0;
   const lbls = scene.labels();
-  const lblEls = lbls.map((a) => { const b = h('b', null, a.text); return { el: labels.appendChild(h('span', { class: `wt-lbl ${a.side}${a.minor ? ' minor' : ''}` }, h('i'), b)), b }; });
+  const lblEls = lbls.map((a) => { const b = h('b', null, ...htmlSub(a.text)); b.dataset.t = a.text; return { el: labels.appendChild(h('span', { class: `wt-lbl ${a.side}${a.minor ? ' minor' : ''}` }, h('i'), b)), b }; });
   const widths = new Map<string, number>();
   let lastW = 0;
   const placeLabels = () => {
@@ -227,7 +232,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
       const l = lblEls[k];
       if (!l) return;
       const e = l.el;
-      if (l.b.textContent !== a.text) l.b.textContent = a.text;
+      if (l.b.dataset.t !== a.text) { l.b.dataset.t = a.text; l.b.replaceChildren(...htmlSub(a.text)); }
       const p = renderer!.project(a.p);
       if (!p || a.hidden) { e.style.display = 'none'; return; }
       e.style.display = '';

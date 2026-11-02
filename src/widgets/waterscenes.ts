@@ -8,7 +8,7 @@ import {
   columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, FET_PIPE_R, fetWater, loopWater, pinchRadius, wasted,
   type ColumnIn, type ColumnStep, type FetWater, type LoopState, type P3,
 } from './water';
-import { mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
+import { htmlSub, mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
 
 const approach = (cur: number, tgt: number, dt: number, settle: boolean): number =>
   settle ? tgt : Math.abs(tgt - cur) < 0.004 ? tgt : cur + (tgt - cur) * Math.min(1, dt * 12);
@@ -205,7 +205,7 @@ export function cmosFigure(weak: boolean): FigureMount {
       cells[1].b.textContent = `${Math.round(s.p * 100)} %`;
       cells[2].b.textContent = `${Math.round(s.n * 100)} %`;
       cells[3].b.textContent = `${Math.round(wasted(s) * 100)} %`;
-      pill.textContent = w.text;
+      pill.replaceChildren(...htmlSub(w.text));
       pill.className = `wt-pill ${w.tone === 'mid' ? '' : w.tone}`;
       rangeOut.textContent = `${(inp.vin * COLUMN_VOLTS).toFixed(2)} V`;
       shortBtn.setAttribute('aria-pressed', String(inp.short));
