@@ -470,7 +470,7 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
   .sb-item { touch-action: pan-y; }
-  .sb-center { height: 70vh; }
+  .sb-center { height: 62vh; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
   .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
