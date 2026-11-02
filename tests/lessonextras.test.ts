@@ -24,3 +24,15 @@ describe('lesson extras', () => {
     for (const [body, x] of Object.entries(LESSON_EXTRAS)) x.check.forEach((_, k) => expect(keys.has(`lesson:${body}:${k}`)).toBe(true));
   });
 });
+
+describe('codex figures drawn from library parts', () => {
+  it('the entries given a figure by M5 resolve their part', async () => {
+    const { hasCodexFigure } = await import('../src/campaign/ui/codexfigs');
+    const parts: Record<string, string> = { cpu: 'rv16_cpu', rv16: 'rv16_imm', dontcare: 'rv16_ctl', setuphold: 'dff', interrupts: 'rv16_csr', mext: 'rv16_mul', metastability: 'sr_latch', fpadder: 'fpadd5_10' };
+    for (const [id, lib] of Object.entries(parts)) {
+      expect(hasCodexFigure(id), id).toBe(true);
+      expect(resolveComponent(lib), lib).toBeTruthy();
+    }
+    expect(hasCodexFigure('loader')).toBe(true);
+  });
+});
