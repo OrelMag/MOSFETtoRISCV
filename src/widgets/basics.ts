@@ -3,11 +3,13 @@
 // SAP-1's golden model (Appendix C's computer). Every number on them is computed here, and the prose reads it from here.
 
 import '../styles/basics.css';
+import '../styles/watertoggle.css';
 import { assembleSap } from '../sap/asm';
 import { SapISS } from '../sap/iss';
 import { SAP_PROGRAMS } from '../sap/programs';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import type { WaterMount } from './waterkit';
 
 /** The loop: a 1.5 V cell and a lamp of 15 Ω (hot), so 0.1 A and 0.15 W. */
 export const LOOP = { volts: 1.5, ohms: 15 };
@@ -23,8 +25,35 @@ export function loopWidget(): Widget {
   const svg = s('svg', { viewBox: '0 0 560 270', class: 'bx-svg', role: 'img' });
   const ctl = h('div', { class: 'bx-row' });
   const out = h('div');
+  // Wire | Water: the same loop drawn as pipes (the analogy, in 3D on the site's WebGL renderer, loaded on first use). Both views
+  // read this widget's own state, so a switch thrown in either is thrown in both.
+  let view: 'wire' | 'water' = 'wire', water: WaterMount | null = null, dead = false;
+  const wireBtn = h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setView('wire') }, 'Wire');
+  const waterBtn = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setView('water') }, 'Water');
+  const seg = h('div', { class: 'wt-seg', role: 'group', 'aria-label': 'How to draw the loop' }, wireBtn, waterBtn);
+  const host = h('div', { class: 'wt-host' });
   const el = h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'A battery, a switch and a lamp'),
-    h('p', { class: 'sub' }, 'Current flows only around a closed loop. Close the switch, then break the loop somewhere else.'), svg, ctl, out));
+    h('p', { class: 'sub' }, 'Current flows only around a closed loop. Close the switch, then break the loop somewhere else.'), seg, svg, host, ctl, out));
+
+  function setView(v: 'wire' | 'water'): void {
+    view = v;
+    wireBtn.setAttribute('aria-pressed', String(v === 'wire'));
+    waterBtn.setAttribute('aria-pressed', String(v === 'water'));
+    svg.style.display = v === 'wire' ? '' : 'none';
+    host.style.display = v === 'water' ? '' : 'none';
+    if (v === 'water' && !water && !host.firstChild) {
+      host.style.minHeight = '260px';
+      host.textContent = 'Loading the water view…';
+      import('./waterscenes')
+        .then((m) => {
+          if (dead) return;
+          host.textContent = ''; host.style.minHeight = '';
+          water = m.mountLoop(host, () => ({ closed, cut, lamps }));
+        })
+        .catch((e: unknown) => { if (!dead) host.textContent = `The water view did not load (${String(e)}).`; });
+    } else water?.kick();
+  }
+  host.style.display = 'none';
 
   function lampAt(cx: number, cy: number, p: number): SVGElement {
     const lit = p / (loopAmps(1) * LOOP.volts);
@@ -65,9 +94,10 @@ export function loopWidget(): Widget {
       btn(lamps === 1 ? 'Two lamps in a row' : 'One lamp', () => { lamps = 3 - lamps; render(); }));
     out.replaceChildren(readout([`${fmt(vLamp)} V`, lamps === 1 ? 'across the lamp' : 'across each lamp'], [`${fmt(amps)} A`, 'current, the same all round'],
       [`${fmt(p)} W`, lamps === 1 ? 'power in the lamp, V × I' : 'power in each lamp'], [amps > 0 ? (lamps === 1 ? 'bright' : 'dim') : 'off', 'the lamp']));
+    if (view === 'water') water?.kick();
   }
   render();
-  return { el };
+  return { el, destroy() { dead = true; water?.destroy(); water = null; } };
 }
 
 /** A small seeded generator, so the noise is the same on every visit. */

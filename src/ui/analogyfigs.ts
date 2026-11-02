@@ -4,9 +4,11 @@
 
 export type FigureMount = (host: HTMLElement) => void;
 
-export const FIGURES: Record<string, () => Promise<FigureMount>> = {};
-
-FIGURES.buckets = () => import('../widgets/analogy/buckets').then((m) => m.default);
-FIGURES.airlock = () => import('../widgets/analogy/airlock').then((m) => m.default);
-FIGURES.laundry = () => import('../widgets/analogy/laundry').then((m) => m.default);
-FIGURES.leaky = () => import('../widgets/analogy/leaky').then((m) => m.default);
+export const FIGURES: Record<string, () => Promise<FigureMount>> = {
+  'water-cmos': async () => (await import('../widgets/waterscenes')).cmosFigure(false),
+  'water-cmos-weak': async () => (await import('../widgets/waterscenes')).cmosFigure(true),
+  buckets: () => import('../widgets/analogy/buckets').then((m) => m.default),
+  airlock: () => import('../widgets/analogy/airlock').then((m) => m.default),
+  laundry: () => import('../widgets/analogy/laundry').then((m) => m.default),
+  leaky: () => import('../widgets/analogy/leaky').then((m) => m.default),
+};

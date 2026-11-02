@@ -59,6 +59,9 @@
 
   /* schematic */
   --canvas: #fbfbfd;
+  /* Water analogy scenes (widgets/waterkit.ts) */
+  --wt-water: #2f86e0; --wt-drop: #1c5fb8; --wt-pipe: #8b94a6; --wt-dark: #3a4152; --wt-pmos: #d94a3a; --wt-nmos: #3a6fd9;
+  --wt-lamp: #f2b01e; --wt-wood: #b98a52; --wt-glass: #8fb4dd; --wt-sky: #a9adb6; --wt-ground: #5a5652; --wt-key: #e2ded6;
   --grid: #d6dae4;
   --sym-stroke: #2b3142;
   --sym-fill: #ffffff;
@@ -147,6 +150,8 @@
     --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
 
     --canvas: #0c0f16;
+    --wt-water: #4aa3f5; --wt-drop: #8cc8ff; --wt-pipe: #8e98ac; --wt-dark: #4a5266; --wt-pmos: #ef6a5a; --wt-nmos: #5b8ff0;
+    --wt-lamp: #ffc63d; --wt-wood: #c99a62; --wt-glass: #a9c6e8; --wt-sky: #8d93a3; --wt-ground: #3d3b3a; --wt-key: #d8d4cc;
     --grid: #232a38;
     --sym-stroke: #c9cfdc;
     --sym-fill: #141824;
@@ -216,6 +221,8 @@
   --shadow-lg: 0 8px 40px rgb(0 0 0 / 50%);
 
   --canvas: #0c0f16;
+  --wt-water: #4aa3f5; --wt-drop: #8cc8ff; --wt-pipe: #8e98ac; --wt-dark: #4a5266; --wt-pmos: #ef6a5a; --wt-nmos: #5b8ff0;
+  --wt-lamp: #ffc63d; --wt-wood: #c99a62; --wt-glass: #a9c6e8; --wt-sky: #8d93a3; --wt-ground: #3d3b3a; --wt-key: #d8d4cc;
   --grid: #232a38;
   --sym-stroke: #c9cfdc;
   --sym-fill: #141824;
