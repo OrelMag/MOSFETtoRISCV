@@ -2359,6 +2359,20 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-svg .af-w.af-badw { stroke: var(--bad); }
 .af-svg .af-t.af-litt { fill: var(--text); font-weight: 700; }
 /* end analogy figures E */
+/* analogy figures F: pipeline grid (handoff, emptyplate, fork) */
+.af-svg .af-grid { stroke: var(--border); stroke-width: 1; }
+.af-svg .af-cell { fill: var(--series-1); }
+.af-svg .af-cell.af-i1 { fill: var(--series-2); }
+.af-svg .af-cell.af-i2 { fill: var(--series-3); }
+.af-svg .af-cell.af-i3 { fill: var(--series-5); }
+.af-svg .af-cell.af-i4 { fill: var(--series-4); }
+.af-svg .af-cell.af-held { opacity: 0.35; }
+.af-svg .af-t.af-hold { fill: var(--text); font-weight: 700; }
+.af-svg .af-ghost { fill: none; stroke: var(--bad); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.af-svg .af-hand { fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.af-svg .af-road { fill: none; stroke: var(--border-strong); stroke-width: 3; stroke-linejoin: round; }
+.af-svg .af-guess { fill: none; stroke: var(--series-2); stroke-width: 3; stroke-linejoin: round; }
+.af-svg .af-real { fill: none; stroke: var(--good); stroke-width: 2.5; }
 @media (pointer: coarse) { .af-btn { min-height: 40px; padding: 8px 12px; } .af-ctl input[type='range'] { height: 40px; width: 110px; } }
 /* analogy figures E */
 @media (pointer: coarse) { .af-ctl input[type='range'] { min-width: 120px; } }

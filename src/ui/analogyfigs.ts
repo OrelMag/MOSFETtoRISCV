@@ -14,4 +14,7 @@ export const FIGURES: Record<string, () => Promise<FigureMount>> = {
   points: () => import('../widgets/analogy/points').then((m) => m.default),
   switchboard: () => import('../widgets/analogy/switchboard').then((m) => m.default),
   microphone: () => import('../widgets/analogy/microphone').then((m) => m.default),
+  handoff: () => import('../widgets/analogy/handoff').then((m) => m.default),
+  emptyplate: () => import('../widgets/analogy/emptyplate').then((m) => m.default),
+  fork: () => import('../widgets/analogy/fork').then((m) => m.default),
 };

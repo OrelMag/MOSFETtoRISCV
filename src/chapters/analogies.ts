@@ -149,7 +149,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['pipeline', 'throughput'],
   },
   {
-    chapter: 'pipeline', step: 'Data hazards and forwarding', title: 'Handing the dish across',
+    chapter: 'pipeline', step: 'Data hazards and forwarding', title: 'Handing the dish across', figure: 'handoff',
     body: `<p>One cook finishes a sauce that the next cook needs. Putting it on the shelf (writing the register file) and letting
       the next cook fetch it from there takes too long; handing the pan straight across (forwarding) costs nothing extra in
       time.</p>`,
@@ -158,7 +158,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['forwarding', 'hazards'],
   },
   {
-    chapter: 'pipeline', step: 'The load-use stall', title: 'An empty plate down the line',
+    chapter: 'pipeline', step: 'The load-use stall', title: 'An empty plate down the line', figure: 'emptyplate',
     body: `<p>The sauce is still in the oven when the next cook needs it: a load's data arrives a stage later than an ALU
       result. The next cook waits one beat, and an empty plate (a bubble) travels down the line in that slot.</p>`,
     breaks: `A real cook would start another dish meanwhile. An in-order pipeline cannot reorder its work, so it sends the empty
@@ -166,7 +166,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['loaduse', 'stall'],
   },
   {
-    chapter: 'pipeline', step: 'Control hazards', title: 'Guessing at a fork in the road',
+    chapter: 'pipeline', step: 'Control hazards', title: 'Guessing at a fork in the road', figure: 'fork',
     body: `<p>The pipeline reaches a branch before it knows which way it goes, so it guesses and keeps driving. A right guess
       costs nothing; a wrong one means turning back to the fork.</p>`,
     breaks: `A driver who turns back has lost only time. The pipeline also has to cancel every instruction it started on the
