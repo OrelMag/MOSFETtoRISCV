@@ -67,6 +67,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],
   // the multi-core's core with an instruction port (the sandbox's computer example places it)
   [/^rv32i_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true })],
+  [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
   [/^zero(\d+)$/, (m) => isZero(+m[1])],

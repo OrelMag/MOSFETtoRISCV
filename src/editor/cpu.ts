@@ -47,6 +47,8 @@ export interface CpuIss {
   dmemWords?: number;
   /** The core's custom instructions (a { core } part's rows): found, never a setting. */
   custom?: CustomRow[];
+  /** The C extension (rv32ic_core, or a ROM with its C box ticked): the model fetches 16-bit parcels. */
+  c?: boolean;
 }
 
 /** ChipDoc.cpu: the user's settings; every field left out is detected. */
@@ -181,8 +183,9 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
+  const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
   return {
-    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
+    rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
     ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
@@ -208,7 +211,7 @@ export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
   // The core's custom rows follow the hardware, whatever the settings say about the rest.
-  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}) };
+  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}) };
   return out;
 }
 
@@ -240,7 +243,7 @@ export function sanitizeCpu(c: unknown): CpuDoc | undefined {
   if (isObj(c.iss)) {
     const i = c.iss;
     const iss: CpuIss = {};
-    for (const k of ['system', 'mmio', 'm', 'f'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
+    for (const k of ['system', 'mmio', 'm', 'f', 'c'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
     if (Number.isInteger(i.dmemWords) && (i.dmemWords as number) >= 1 && (i.dmemWords as number) <= 1 << 16) iss.dmemWords = i.dmemWords as number;
     out.iss = iss;
   }
