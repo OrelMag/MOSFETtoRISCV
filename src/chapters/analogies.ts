@@ -46,7 +46,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['mosfet'],
   },
   {
-    chapter: 'mosfet', step: 'What one switch costs', title: 'Buckets filled through one hose',
+    chapter: 'mosfet', step: 'What one switch costs', title: 'Buckets filled through one hose', figure: 'buckets',
     body: `<p>An output is a hose: the transistor's channel is its resistance. Every input it feeds is a bucket at the far end
       (a gate's capacitance), and the wire adds a small one of its own. The next gate switches when the buckets are half full,
       so twice the buckets take about twice as long.</p>
@@ -96,7 +96,7 @@ export const ANALOGIES: Analogy[] = [
       no upper bound, only odds that fall by a fixed factor every gate delay.`,
   },
   {
-    chapter: 'latches', step: 'The flip-flop: act only on the edge', title: 'An airlock',
+    chapter: 'latches', step: 'The flip-flop: act only on the edge', title: 'An airlock', figure: 'airlock',
     body: `<p>The master and slave latches are the two doors of an airlock. While the clock is low the outer door is open and
       D walks into the chamber; the inner door is shut, so Q keeps its old value. When the clock rises the outer door shuts
       first, then the inner one opens and Q takes what is in the chamber. The two doors are never open together, so D can never
@@ -139,7 +139,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['bus'],
   },
   {
-    chapter: 'pipeline', step: 'Overlap the work', title: 'Laundry: wash, dry, fold',
+    chapter: 'pipeline', step: 'Overlap the work', title: 'Laundry: wash, dry, fold', figure: 'laundry',
     body: `<p>Doing one load at a time, a load takes three slots and the next waits for it to be folded. Overlapped, the washer
       starts the second load while the first is in the dryer: each load still takes three slots, but once the line is full one
       load comes out every slot.</p>`,
@@ -191,7 +191,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['senseamp'],
   },
   {
-    chapter: 'dram', step: 'Leaks and refresh', title: 'A row of leaky buckets',
+    chapter: 'dram', step: 'Leaks and refresh', title: 'A row of leaky buckets', figure: 'leaky',
     body: `<p>Each cell is a bucket with a pinhole. Reading tips it into the bit line, which is precharged to half and holds four
       times as much, so the line moves by a fifth of the bucket's distance from half. Refresh reads every row and fills its
       buckets back up before a 1 sinks too close to half to tell apart.</p>`,
