@@ -384,6 +384,10 @@ export class LogicAnalyzer {
       parts.push(s('text', { x: x(c) + 3, y: 10, class: `la-cursor-l ${cls}` }, cls.toUpperCase()));
     }
     if (this.hoverT !== null) parts.push(s('line', { x1: x(this.hoverT), x2: x(this.hoverT), y1: RULER_H, y2: H, class: 'la-hover' }));
+    // nothing has changed yet: say how to record something
+    if (this.lanes.length && [...this.traces.values()].every((tr) => tr.t.length <= 1)) {
+      parts.push(s('text', { x: W / 2, y: RULER_H + (H - RULER_H) / 2 + 4, class: 'la-empty', 'text-anchor': 'middle' }, 'Nothing recorded yet: toggle an input or step the clock'));
+    }
     this.svg.replaceChildren(...parts);
 
     // Names column: value at the hover position, else cursor A, else now.
