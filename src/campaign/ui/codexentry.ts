@@ -30,7 +30,10 @@ import type { CodexMore } from '../codexmore';
 import { DRILLS, rng, type Drill } from '../drills';
 import { libCost } from '../measure';
 import type { ProgressView } from '../graph';
-import type { Quiz } from '../../chapters/types';
+import { chapterNo, type Quiz } from '../../chapters/types';
+import { chapters } from '../../chapters';
+import { analogiesForCodex, type Analogy } from '../../chapters/analogies';
+import { analogyEl } from '../../ui/analogy';
 import { codexFigure } from './codexfigs';
 import { anatomySvg } from './svgs';
 
@@ -162,6 +165,19 @@ function anatomyEl(view: ProgressView, blocks: string[]): HTMLElement {
   return h('div', null, chips.childElementCount ? chips : null, holder);
 }
 
+/** Where an analogy is told in the journey: chapter N, step title. */
+function analogyFrom(a: Analogy): { href: string; label: string } | undefined {
+  const c = chapters.find((x) => x.id === a.chapter);
+  const k = c?.steps.findIndex((s) => s.title === a.step) ?? -1;
+  return c && k >= 0 ? { href: `#/c/${c.id}/${k}`, label: `In ${chapterNo(c)} · ${c.title}: ${a.step}` } : undefined;
+}
+
+function analogySection(id: string): HTMLElement | null {
+  const list = analogiesForCodex(id);
+  return list.length ? h('section', null, h('h4', null, list.length > 1 ? 'Analogies' : 'Analogy'),
+    ...list.map((a, i) => analogyEl(a, { open: i === 0, from: analogyFrom(a) }))) : null;
+}
+
 export interface EntryOptions {
   /** One column (the level screen's pane). */
   narrow?: boolean;
@@ -177,6 +193,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
   const drill = DRILLS[DRILL_OF[e.id] ?? ''];
   const left = h('div', { class: 'cx-col' },
     more ? h('section', null, h('h4', null, 'The idea'), ideaEl(more.idea)) : null,
+    analogySection(e.id),
     more?.example ? h('section', null, h('h4', null, `Worked example: ${more.example.title}`), rich('div', more.example.body, 'cx-prose cx-example')) : null,
     more?.mistakes?.length ? h('section', null, h('h4', null, 'Common mistakes'), h('ul', { class: 'cx-mist' }, more.mistakes.map((m) => rich('li', m)))) : null,
     more?.anatomy?.length ? h('section', null, h('h4', null, 'Where it sits'), anatomyEl(view, more.anatomy)) : null,

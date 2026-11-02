@@ -34,6 +34,9 @@
   /* the prologue (relays, tubes, cards) accent */
   --brass: #8a6a12;
   --brass-soft: #f8f1dc;
+  /* the folded Analogy aside (ui/analogy.ts) */
+  --analogy: #0b6f78;
+  --analogy-soft: #e3f3f4;
   /* a tube's heater and beam (prologue P2) */
   --tube-glow: #e8730c;
   /* a punched card (prologue P3, the card reader): manila, its ink, the holes */
@@ -124,6 +127,8 @@
     --vintage-soft: #2c1c10;
     --brass: #d9b44a;
     --brass-soft: #262010;
+    --analogy: #4fc7cf;
+    --analogy-soft: #0d2628;
     --tube-glow: #ff9a3a;
     --pcard: #cdbd94;
     --pcard-ink: #4d3f22;
@@ -191,6 +196,8 @@
   --vintage-soft: #2c1c10;
   --brass: #d9b44a;
   --brass-soft: #262010;
+  --analogy: #4fc7cf;
+  --analogy-soft: #0d2628;
   --tube-glow: #ff9a3a;
   --pcard: #cdbd94;
   --pcard-ink: #4d3f22;

@@ -19,6 +19,8 @@ import { reveal, StageNotes } from '../stagenotes';
 import { litLine, wireLooks } from './looks';
 import { ledgerView } from '../ledger';
 import { TourPlayer } from '../tour';
+import { analogiesOf } from '../../chapters/analogies';
+import { analogyEl } from '../analogy';
 import type { Layers, Reading } from '../../chapters/types';
 
 /** The layers under a step's body, in order, with their tab names. */
@@ -262,6 +264,11 @@ export class ChapterPage implements Page {
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
     if (lit) b.append(lit);
+    for (const a of analogiesOf(c.id, st.title)) {
+      const el = analogyEl(a);
+      b.append(el);
+      this.gloss(el.querySelector<HTMLElement>('.analogy-in')!);
+    }
     const place = this.place();
     if (place) {
       this.stepNotes = new StepNotes(st.scene || this.sceneShown ? this.stage : null, place, () => this.placeTitle());
