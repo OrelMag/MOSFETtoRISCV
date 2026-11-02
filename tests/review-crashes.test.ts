@@ -35,3 +35,16 @@ describe('chapter 36 explorer', () => {
     }
   });
 });
+
+import { DeviceModel, deviceIn } from '../src/dram/controller';
+import { cloneState } from '../src/sim/gatesim';
+
+describe('saved simulation state', () => {
+  it('keeps a DRAM device inside a plain state object a DeviceModel', () => {
+    const dev = new DeviceModel({ k: 7, banks: 2, rowWords: 16, policy: 'open' });
+    const c = cloneState({ dev, clk: 0 }) as { dev: DeviceModel };
+    expect(deviceIn(c)).not.toBeNull();
+    expect(c.dev).not.toBe(dev);
+    expect(c.dev.mem).not.toBe(dev.mem);
+  });
+});
