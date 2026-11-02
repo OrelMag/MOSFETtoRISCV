@@ -9,6 +9,7 @@ import { FORMAT, KEY, loadWorkspace, saveWorkspace } from '../src/editor/store';
 import { PUZZLES_KEY } from '../src/puzzles/grade';
 import { NOTES_KEY } from '../src/ui/notes';
 import { REVIEW_KEY } from '../src/ui/review';
+import { LEARN_KEY } from '../src/learn/store';
 import { MapKV, SETTINGS_KEY, applyMerge, makeBackup, mergeBackup, readBackup, summarize } from '../src/ui/backup';
 
 function chip(id: string, uses: string[] = [], name = id): ChipDoc {
@@ -138,6 +139,20 @@ describe('backup', () => {
     expect(err(JSON.stringify({ format: FORMAT }))).toMatch(/sandbox/);
     expect(err(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 99, keys: {} }))).toMatch(/newer/);
     expect(err(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 1 }))).toMatch(/no data/);
+  });
+});
+
+describe('backup of My path', () => {
+  it('keeps every test-out and the later start', () => {
+    const mine = new MapKV([[LEARN_KEY, JSON.stringify({ schema: 1, start: { persona: 'new', tier: 0, at: 5 }, tested: { basics: 6 } })]]);
+    const theirs = new MapKV([[LEARN_KEY, JSON.stringify({ schema: 1, start: { persona: 'logic', tier: 2, at: 9 }, tested: { adders: 7 } })]]);
+    const r = readBackup(makeBackup(theirs));
+    if ('error' in r) throw new Error(r.error);
+    expect(applyMerge(mergeBackup(r.file, mine), mine)).toEqual({ ok: true });
+    const st = JSON.parse(mine.getItem(LEARN_KEY)!);
+    expect(st.tested).toEqual({ basics: 6, adders: 7 });
+    expect(st.start.persona).toBe('logic');
+    expect(summarize(mine).other).toBe(0);
   });
 });
 
