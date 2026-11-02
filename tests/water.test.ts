@@ -3,7 +3,7 @@ import { VDD_VOLTS, VT_VOLTS, WEAK_H, weakLevel } from '../src/sim/switchsim';
 import { LOOP, loopAmps } from '../src/widgets/basics';
 import { current, VDD, VT } from '../src/widgets/mosphys';
 import {
-  columnSettle, columnStep, columnWords, COLUMN_VT, faucetOpen, fetWater, fetWords, loopWater, openings, pointAlong, polyLength, wasted, weakCapVolts,
+  columnSettle, columnStep, columnWords, COLUMN_VT, faucetOpen, fetWater, fetWords, FET_PIPE_R, FET_PINCH_MIN_R, loopWater, LOOP_RANGE, openings, pinchRadius, pointAlong, polyLength, wasted, weakCapVolts,
   type ColumnIn,
 } from '../src/widgets/water';
 import { alongQuat } from '../src/widgets/waterkit';
@@ -34,6 +34,51 @@ describe('water: the loop', () => {
     const a = loopWater({ closed: true, cut: false, lamps: 1 }), b = loopWater({ closed: true, cut: false, lamps: 2 });
     expect(b.dropSpeed / a.dropSpeed).toBeCloseTo(b.amps / a.amps, 12);
     expect(b.wheelRate / a.wheelRate).toBeCloseTo(b.power / a.power, 12);
+  });
+});
+
+describe('water: the loop with other values', () => {
+  const st = { closed: true, cut: false, lamps: 1 };
+  it('defaults are the widget’s numbers, and the range holds them', () => {
+    expect(loopWater({ ...st, volts: LOOP.volts, ohms: LOOP.ohms })).toEqual(loopWater(st));
+    expect(LOOP_RANGE.volts[0]).toBeLessThan(LOOP.volts); expect(LOOP_RANGE.volts[1]).toBeGreaterThan(LOOP.volts);
+    expect(LOOP_RANGE.ohms[0]).toBeLessThan(LOOP.ohms); expect(LOOP_RANGE.ohms[1]).toBeGreaterThan(LOOP.ohms);
+  });
+  it('Ohm’s law and P = V I at other values', () => {
+    const m = loopWater({ ...st, volts: 3, ohms: 30 });
+    expect(m.amps).toBeCloseTo(0.1, 12);
+    expect(m.vLamp).toBeCloseTo(3, 12);
+    expect(m.power).toBeCloseTo(0.3, 12);
+    expect(m.tank).toBeCloseTo(1, 12);
+    expect(loopAmps(2, 3, 30)).toBeCloseTo(0.05, 12);
+  });
+  it('a higher resistance narrows the pipe, a higher voltage raises the tank', () => {
+    expect(loopWater({ ...st, ohms: 30 }).bore).toBeLessThan(loopWater(st).bore);
+    expect(loopWater({ ...st, volts: 3 }).tank).toBeGreaterThan(loopWater(st).tank);
+    expect(loopWater(st).bore).toBeCloseTo(1, 12);
+  });
+});
+
+describe('water: the choke', () => {
+  it('the outlet’s bore follows V_GS - V_T, from the threshold to VDD', () => {
+    expect(fetWater(VT, 1).bore).toBe(0);
+    expect(fetWater(0.2, 1).bore).toBe(0);
+    expect(fetWater(VDD, 1).bore).toBeCloseTo(1, 12);
+    for (const vg of [0.6, 0.9, 1.2, 1.5]) expect(fetWater(vg, 1).bore).toBeCloseTo((vg - VT) / (VDD - VT), 12);
+    expect(pinchRadius(0)).toBe(FET_PINCH_MIN_R);
+    expect(pinchRadius(1)).toBeCloseTo(FET_PIPE_R, 12);
+    expect(pinchRadius(0.5)).toBeGreaterThan(pinchRadius(0.25));
+  });
+  it('in saturation the flow goes as the outlet’s area (bore squared), per mosphys.ts current()', () => {
+    const ref = current(VDD - VT, 1.8).id / (1 + 0.05 * 1.8);
+    for (const vg of [0.7, 1.0, 1.3, 1.8]) {
+      const f = fetWater(vg, 1.7);
+      expect(f.kind).toBe('sat');
+      expect(f.id / (1 + 0.05 * 1.7) / ref).toBeCloseTo(f.bore * f.bore, 9);
+    }
+  });
+  it('choked exactly when mosphys.ts says saturation', () => {
+    for (const vg of [0.3, 0.9, 1.5]) for (const vd of [0.1, 0.5, 1.2]) expect(fetWater(vg, vd).choked).toBe(current(vg - VT, vd).kind === 'sat');
   });
 });
 

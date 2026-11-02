@@ -10,7 +10,11 @@ export const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
 // ------------------------------------------------------------------ chapter 0: the loop
 
-export interface LoopState { closed: boolean; cut: boolean; lamps: number }
+export interface LoopState {
+  closed: boolean; cut: boolean; lamps: number;
+  /** Try other values (the Water view's sliders): the cell's volts and one lamp's ohms; absent: the widget's LOOP. */
+  volts?: number; ohms?: number;
+}
 export interface LoopWater {
   amps: number;
   /** Volts across one lamp, and the power in it (V × I). */
@@ -25,10 +29,15 @@ export interface LoopWater {
 export const TANK_VOLTS = 3;
 const DROP_PER_AMP = 22, WHEEL_PER_WATT = 30;
 
+/** Slider ranges for 'try other values': the cell's volts and a lamp's ohms (the defaults, LOOP, sit inside both). */
+export const LOOP_RANGE = { volts: [0.5, 3] as const, ohms: [5, 45] as const };
+
 export function loopWater(st: LoopState): LoopWater {
-  const amps = st.closed && !st.cut ? loopAmps(st.lamps) : 0;
-  const vLamp = amps * LOOP.ohms, power = amps * vLamp;
-  return { amps, vLamp, power, tank: LOOP.volts / TANK_VOLTS, dropSpeed: amps * DROP_PER_AMP, wheelRate: power * WHEEL_PER_WATT, bore: 1 / Math.sqrt(st.lamps) };
+  const volts = st.volts ?? LOOP.volts, ohms = st.ohms ?? LOOP.ohms;
+  const amps = st.closed && !st.cut ? loopAmps(st.lamps, volts, ohms) : 0;
+  const vLamp = amps * ohms, power = amps * vLamp;
+  // The narrow pipe's bore follows the loop's resistance (lamps in a row add): 1 at one default lamp, 1/√2 at two.
+  return { amps, vLamp, power, tank: volts / TANK_VOLTS, dropSpeed: amps * DROP_PER_AMP, wheelRate: power * WHEEL_PER_WATT, bore: Math.min(1.6, 1 / Math.sqrt((st.lamps * ohms) / LOOP.ohms)) };
 }
 
 // ------------------------------------------------------------------ chapter 1: the faucet
@@ -44,12 +53,19 @@ export interface FetWater {
   flow: number;
   /** Is the outlet choked (saturation): a lower basin adds nothing? */
   choked: boolean;
+  /** The outlet's bore against the pipe's (the pinch drawn in the faucet scene): the overdrive over its largest, so its
+   *  area, and the flow it limits in saturation, go as the overdrive squared like mosphys.ts current(). 0 when cut off. */
+  bore: number;
 }
+/** The pipe's radius in the faucet scene, and the narrowest the outlet is drawn (a shut faucet still shows a pinhole). */
+export const FET_PIPE_R = 0.11, FET_PINCH_MIN_R = 0.03;
+/** The outlet's drawn radius: the pipe's at the widest (V_GS = VDD), the pinhole's when cut off. */
+export const pinchRadius = (bore: number): number => FET_PINCH_MIN_R + (FET_PIPE_R - FET_PINCH_MIN_R) * bore;
 const ID_MAX = current(VDD - VT, VDD).id;
 
 export function fetWater(vg: number, vd: number): FetWater {
   const ov = vg - VT, c = current(ov, vd);
-  return { id: c.id, kind: c.kind, region: c.region, opening: clamp01(ov / (VDD - VT)), level: clamp01(vd / VDD), flow: c.id / ID_MAX, choked: c.kind === 'sat' };
+  return { id: c.id, kind: c.kind, region: c.region, opening: clamp01(ov / (VDD - VT)), level: clamp01(vd / VDD), flow: c.id / ID_MAX, choked: c.kind === 'sat', bore: clamp01(ov / (VDD - VT)) };
 }
 
 // ------------------------------------------------------------------ chapter 2: two faucets on one column

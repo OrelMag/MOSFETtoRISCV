@@ -5,7 +5,7 @@
 import type { FigureMount } from '../ui/analogyfigs';
 import { h } from '../ui/dom';
 import {
-  columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, fetWater, loopWater, wasted,
+  columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, fetWater, loopWater, pinchRadius, wasted,
   type ColumnIn, type ColumnStep, type FetWater, type LoopState, type P3,
 } from './water';
 import { mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
@@ -83,6 +83,7 @@ const FET_SPEED = 6.5; // scene units a second at the device's largest current
 export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
   let open = 0, level = 0, phase = 0, moving = false;
   const now = (): FetWater => fetWater(get().vg, get().vd);
+  const choked = (): boolean => now().choked;
   return {
     alt: 'A faucet between a drain tank and a source basin: the handle is the gate, the tank level the drain voltage.',
     view: { target: [0, 0.6, 0], yaw: -0.25, pitch: 0.28, dist: 9.2 },
@@ -92,6 +93,7 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       { text: 'drain tank: V_DS above the source', p: [-2.4, 2.35, 0.5], side: 't' },
       { text: 'source basin: 0 V', p: [2.4, 2.35, 0.5], side: 't' },
       { text: 'handle = gate (V_GS)', p: [0.0, 0.55, 0.4], side: 't' },
+      { text: choked() ? 'outlet choked: sets the flow' : 'outlet: opens with V_GS − V_T', p: [1.45, -0.55, 0.4], side: 'b', minor: true },
     ],
     advance(dt, settle) {
       const f = now();
@@ -105,7 +107,10 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       const f = now();
       p.tank(-2.4, -0.4, 0, 1.3, 2.4, 1.0, 0.05 + level * 0.9);
       p.tank(2.4, -0.4, 0, 1.3, 2.4, 1.0, 0.02);
-      p.tube([-1.75, -0.2, 0], [1.75, -0.2, 0], 0.11);
+      // The outlet: a nozzle whose bore is the overdrive (water.ts pinchRadius), flanged.
+      p.tube([-1.75, -0.2, 0], [1.0, -0.2, 0], 0.11);
+      p.tube([1.0, -0.2, 0], [1.75, -0.2, 0], pinchRadius(f.bore));
+      p.flange([1.0, -0.2, 0], 0.16, [1, 0, 0]); p.flange([1.75, -0.2, 0], 0.16, [1, 0, 0]);
       p.valve([0, -0.2, 0], open, p.P.nmos);
       if (f.flow > 0) p.drops(FET_PATH, FET_DROPS, phase);
     },
