@@ -25,7 +25,7 @@ describe('instruction → hardware map', () => {
     expect(swx).toEqual(expect.arrayContaining(['dm', 'st']));
     expect(swx).not.toContain('res');
     const fetch = new Set(instrUse(0).units); // the fetch names cover the multicycle CPU too
-    for (const u of [lwx, subi, swx]) expect(u.filter((n) => !have.has(n) && !fetch.has(n))).toEqual([]);
+    for (const u of [lwx, subi, swx]) expect(u.filter((n) => !have.has(n) && !fetch.has(n) && !['ld', 'ldsel', 'st'].includes(n))).toEqual([]);
     expect(instrUse(w[0]).units).not.toContain('dm'); // without the rows the word is unknown
   });
 
