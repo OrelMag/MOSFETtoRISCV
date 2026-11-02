@@ -150,14 +150,23 @@ function dramPanel(opts: DramSceneOptions): ScenePanel {
     actions.set(stage, { wait: (n) => wait(n)(), refreshAll: op(refreshAll) });
 
     // Load: the pattern, written row by row, then precharged.
-    if (opts.pattern) {
+    const loadPattern = () => {
+      if (!opts.pattern) return;
       opts.pattern.forEach((bits, r) => {
         precharge(); drive({ pre: 0 }); drive({ row: r, act: 1 }); drive({ sae: 1 });
         for (let c = 0; c < p.cols; c++) { drive({ col: c, din: (bits >> c) & 1, cs: 1, we: 1 }); drive({ we: 0, cs: 0 }); }
         close();
       });
       precharge();
-    }
+    };
+    loadPattern();
+    // Reset: the circuit is back at power-on, so the panel starts again too (the pattern is written anew)
+    stage.resetHooks.add(() => {
+      st.waited = 0; st.age.fill(0); st.lastRead = null;
+      sel = { row: 0, col: 0, din: 1 };
+      note = '';
+      loadPattern();
+    });
 
     const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => {
       const b = h('button', { class: cls, title }, label);

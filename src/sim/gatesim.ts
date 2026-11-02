@@ -642,10 +642,50 @@ export function cloneState(s: unknown): unknown {
   const plain = proto === Object.prototype || proto === null || Array.isArray(s) || ArrayBuffer.isView(s) || s instanceof Map || s instanceof Set;
   if (!plain) return s;
   try {
-    return structuredClone(s);
+    return deepCopy(s, new Map());
   } catch {
     return s;
   }
+}
+
+/**
+ * A copy that keeps the prototype of nested class instances (structuredClone would turn a
+ * DRAM device held in a plain state object into a bare record). An instance holding a function
+ * is shared; anything else unusual goes through structuredClone.
+ */
+function deepCopy(v: unknown, seen: Map<object, unknown>): unknown {
+  if (v === null || typeof v !== 'object') return v;
+  const o = v as object;
+  const hit = seen.get(o);
+  if (hit !== undefined) return hit;
+  if (ArrayBuffer.isView(o)) return typeof (o as { slice?: unknown }).slice === 'function' ? (o as unknown as { slice(): unknown }).slice() : structuredClone(o);
+  if (Array.isArray(o)) {
+    const out: unknown[] = [];
+    seen.set(o, out);
+    for (let i = 0; i < o.length; i++) out[i] = deepCopy(o[i], seen);
+    return out;
+  }
+  if (o instanceof Map) {
+    const out = new Map();
+    seen.set(o, out);
+    for (const [k, x] of o) out.set(deepCopy(k, seen), deepCopy(x, seen));
+    return out;
+  }
+  if (o instanceof Set) {
+    const out = new Set();
+    seen.set(o, out);
+    for (const x of o) out.add(deepCopy(x, seen));
+    return out;
+  }
+  const proto = Object.getPrototypeOf(o);
+  if (proto !== Object.prototype && proto !== null) {
+    const keys = Object.keys(o) as (keyof typeof o)[];
+    if (keys.some((k) => typeof o[k] === 'function') || o instanceof Date || o instanceof RegExp || o instanceof Error) return o;
+  }
+  const out = Object.create(proto) as Record<string, unknown>;
+  seen.set(o, out);
+  for (const k of Object.keys(o)) out[k] = deepCopy((o as Record<string, unknown>)[k], seen);
+  return out;
 }
 
 interface GateState {

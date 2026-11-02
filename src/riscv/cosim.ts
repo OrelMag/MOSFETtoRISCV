@@ -35,7 +35,8 @@ export function dmemWords(sim: Pick<Sim, 'getBits'> & Partial<Pick<Sim, 'leafSta
   } else {
     // byte-banked memory: word i = {b3[i], b2[i], b1[i], b0[i]}
     for (let lane = 0; lane < 4; lane++) {
-      const bank = dm.children!.get(`b${lane}`)!;
+      const bank = dm.children!.get(`b${lane}`);
+      if (!bank?.children) break; // no byte banks (a memory whose state is not readable now): nothing to list
       for (const [name, n] of bank.children!) {
         if (!/^w\d+$/.test(name)) continue;
         const i = Number(name.slice(1));

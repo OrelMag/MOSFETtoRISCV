@@ -1,5 +1,5 @@
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, NetDef } from '../sim/types';
+import { isSwitchPrim, type ComponentDef, type NetDef } from '../sim/types';
 import type { Scene, Stage, Widget } from '../view/stage';
 
 /** A multiple-choice question (a step's quiz, a chapter recap's Check yourself). HTML in every text. */
@@ -193,7 +193,7 @@ export function bench(def: ComponentDef): ComponentDef {
   const b: ComponentDef = {
     id: `bench_${def.id}`, name: def.name, category: def.category, summary: def.summary,
     ports: def.ports, symbol: { kind: 'box', label: def.name },
-    netlist: () => ({ pins, pinDirs, instances: [{ name: 'u', def, at, label: def.name }], nets }),
+    netlist: () => ({ ...(isSwitchPrim(def) ? { level: 'switch' as const } : {}), pins, pinDirs, instances: [{ name: 'u', def, at, label: def.name }], nets }),
   };
   benchCache.set(def, b);
   return b;

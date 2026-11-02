@@ -5,10 +5,21 @@ import { parseBig } from '../sim/values';
 import { h } from '../ui/dom';
 
 let open: HTMLElement | null = null;
+/** Removes the listeners of the open popover (outside press, Esc, navigation). */
+let cleanup: (() => void) | null = null;
+let resync: (() => void) | null = null;
 
 export function closePopover(): void {
+  cleanup?.();
+  cleanup = null;
+  resync = null;
   open?.remove();
   open = null;
+}
+
+/** The value edited elsewhere (the bar's + / −, a click on the input): the open popover shows it. */
+export function syncPopover(): void {
+  resync?.();
 }
 
 /** Bit buttons per row for a wide input (rows from the top bits down, LSB at the right). */
@@ -20,7 +31,7 @@ const MAX_BUTTONS = 128;
  * Edit a `width`-bit value (exact at any width: BigInt). `onChange` gets the new value, always
  * in 0 … 2^width − 1.
  */
-export function editNumber(anchor: DOMRect, name: string, width: number, value: number | bigint, onChange: (v: bigint) => void): void {
+export function editNumber(anchor: DOMRect, name: string, width: number, value: number | bigint, onChange: (v: bigint) => void, current?: () => bigint): void {
   closePopover();
   const W = BigInt(width), M = 1n << W;
   const wrap = (x: bigint) => ((x % M) + M) % M;
@@ -81,13 +92,21 @@ export function editNumber(anchor: DOMRect, name: string, width: number, value: 
   pop.style.left = `${Math.max(8, Math.min(window.innerWidth - r.width - 8, anchor.left))}px`;
   pop.style.top = `${Math.max(8, Math.min(window.innerHeight - r.height - 8, anchor.bottom + 6))}px`;
   open = pop;
-  setTimeout(() => {
-    const away = (e: PointerEvent) => {
-      if (open && !open.contains(e.target as Node)) {
-        closePopover();
-        document.removeEventListener('pointerdown', away);
-      }
-    };
-    document.addEventListener('pointerdown', away);
-  });
+  if (current) resync = () => {
+    const n = current();
+    if (n !== v && document.activeElement !== input) { v = wrap(n); render(); }
+  };
+  const away = (e: PointerEvent) => { if (open && !open.contains(e.target as Node)) closePopover(); };
+  const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { closePopover(); e.stopPropagation(); } };
+  // leaving the page (a step, a chapter, a part) takes the popover with it
+  const nav = () => closePopover();
+  const timer = setTimeout(() => document.addEventListener('pointerdown', away));
+  document.addEventListener('keydown', esc, true);
+  window.addEventListener('hashchange', nav);
+  cleanup = () => {
+    clearTimeout(timer);
+    document.removeEventListener('pointerdown', away);
+    document.removeEventListener('keydown', esc, true);
+    window.removeEventListener('hashchange', nav);
+  };
 }
