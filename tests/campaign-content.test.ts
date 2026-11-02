@@ -2,6 +2,7 @@
 // parts, the fuller codex to codex entries, library parts, anatomy blocks and chapters. Every
 // required build or core level has a case, and every codex entry has its fuller text.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { BLOCKS } from '../src/campaign/anatomy';
 import { caseIds, caseOf } from '../src/campaign/cases';
@@ -79,7 +80,7 @@ describe('numbers in the level text', () => {
     const { stats, logicDepth } = await import('../src/sim/stats');
     const n = nodeById('o_mulseq')!, arr = resolveComponent('amul16')!;
     const cycles = 18, depth = logicDepth(arr)!, nand = stats(arr).nands;
-    const fmt = (v: number) => v.toLocaleString('en').replace(/,/g, ' ');
+    const fmt = groupDigits;
     expect(n.why).toContain(`${cycles} cycles of a ${n.par!.period}-delay clock against one ${depth}-deep pass: about ${(cycles * n.par!.period! / depth).toFixed(1)} times the time`);
     expect(n.why).toContain(`(${fmt(n.par!.nand!)} against ${fmt(nand)})`);
     expect(caseOf('o_mulseq')!.problem).toContain(`${cycles} cycles per product`);
@@ -88,7 +89,7 @@ describe('numbers in the level text', () => {
   it('m_ctrl says its refresh interval is scaled from the real one', async () => {
     const { TIMING } = await import('../src/dram/timing');
     const { BUILDM } = await import('../src/campaign/buildm');
-    expect(BUILDM.m_ctrl().brief).toContain(`a real chip's 7.8 µs is about ${TIMING.tREFI.toLocaleString('en').replace(/,/g, ' ')} cycles`);
+    expect(BUILDM.m_ctrl().brief).toContain(`a real chip's 7.8 µs is about ${groupDigits(TIMING.tREFI)} cycles`);
   });
 });
 

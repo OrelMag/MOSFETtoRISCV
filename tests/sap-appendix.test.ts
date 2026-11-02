@@ -2,6 +2,7 @@
 // (widgets/sapmon.ts) follows every sample program to its HLT as the stage's edge hooks drive it, notices a
 // difference, survives programming by the switches, and the tri-state scene shorts when two drivers disagree.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { SAP_ALU, SAP_AREG, SAP_CLOCK, SAP_COMPUTER, SAP_PC, sapChips, sapComputer } from '../src/lib/sap';
@@ -299,7 +300,7 @@ describe('Appendix C quotes measured numbers', () => {
     expect(st.rom).toEqual({ chips: 5, bytes: 5 * 2048, size: 2048, nands: SAP_COST.perEeprom * 5, transistors: 4 * SAP_COST.perEeprom * 5 });
     expect(st.nands - st.rom!.nands).toBe(SAP_COST.logic);
     expect(romSize(st.rom!)).toBe('5 × 2 KB');
-    expect(insideOf(SAP_COMPUTER)).toContain(`· ${SAP_COST.logic.toLocaleString('en-US')} NANDs + 5 × 2 KB of ROM`);
+    expect(insideOf(SAP_COMPUTER)).toContain(`· ${groupDigits(SAP_COST.logic)} NANDs + 5 × 2 KB of ROM`);
     expect(stats(SAP_CONTROL).nands - stats(SAP_CONTROL).rom!.nands).toBe(SAP_COST.control);
     // a CPU's program ROM is not a ROM chip: counted as before
     const { singleCycleCpu } = await import('../src/lib/cpu');

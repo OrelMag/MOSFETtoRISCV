@@ -1,5 +1,6 @@
 // Chapters 24, 27 and 28's numbers that the text quotes as typed figures: each measured here and looked up in the text,
 // so a change to either the library or the prose fails the test.
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { chFloat } from '../src/chapters/ch-float';
 import { chMulticore } from '../src/chapters/ch-multicore';
@@ -18,7 +19,7 @@ const text = (c: Chapter) => [
   ...c.steps.flatMap((s) => [s.body, JSON.stringify(s.challenge ?? '')]),
 ].join('\n').replace(/\s+/g, ' ');
 /** n rounded to a multiple of q, with the chapters' thousands separator (a space). */
-const fmt = (n: number, q = 1) => (Math.round(n / q) * q).toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = (n: number, q = 1) => groupDigits(Math.round(n / q) * q);
 const nands = (d: ComponentDef) => stats(d).nands;
 const depth = (d: ComponentDef) => logicDepth(d)!;
 

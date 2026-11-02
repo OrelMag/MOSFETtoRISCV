@@ -1,5 +1,6 @@
 // Chapters 29–34 (ch-gpu.ts, ch-gfx.ts): the numbers and claims their prose quotes that the text cannot compute in place,
 // measured here and read back from the text, so a change to either side fails.
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { laneCore, multiCore, regfile, rom, warpCore } from '../src/lib';
@@ -17,7 +18,7 @@ import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { DEPTH_SCRIPTS } from '../src/widgets/screen';
 import type { Chapter } from '../src/chapters/types';
 
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 const nands = (d: ComponentDef) => stats(d).nands;
 const inst = (d: ComponentDef, name: string) => netlistOf(d)!.instances.find((i) => i.name === name)!.def;
 const flat = (s: string) => s.replace(/\s+/g, ' ');

@@ -1,6 +1,7 @@
 // Chapter 26's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
 // cannot drift from them.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { chOoo } from '../src/chapters/ch-ooo';
 import { assemble } from '../src/riscv/asm';
@@ -85,7 +86,7 @@ describe('chapter 26: the numbers it quotes', () => {
   });
 });
 
-const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en').replace(/,/g, ' ');
+const nands = (d: Parameters<typeof stats>[0]) => groupDigits(stats(d).nands);
 const sceneOf = (title: string) => {
   const sc = chOoo.steps.find((s) => s.title === title)!.scene!;
   return typeof sc === 'function' ? sc() : sc;
@@ -120,7 +121,7 @@ describe('chapter 26: the gate-level steps', () => {
 
   it('the benchmark figures', () => {
     const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
-    const n = (id: string) => cpu(id).nands.toLocaleString('en').replace(/,/g, ' ');
+    const n = (id: string) => groupDigits(cpu(id).nands);
     expect([n('ooo'), n('pipe-2w'), n('pipe-m-bal-bp')]).toEqual(['359 262', '193 768', '141 655']);
     expect([cpu('ooo').period, cpu('pipe-2w').period]).toEqual([93, 80]);
     const cpis = (id: string) => ['fib', 'sort', 'matmul', 'matmul-m', 'crc'].map((b) => { const r = cpu(id).runs.find((x) => x.bench === b)!; return (r.cycles / r.instructions).toFixed(2); });

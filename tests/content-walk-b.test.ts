@@ -1,6 +1,7 @@
 // The walkthroughs of acts P and 3–10 (walks3–7) quote numbers and behaviours their reference circuits must keep:
 // each is measured or simulated here and compared with the text that quotes it, so an edit to either fails.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { WALKS3 } from '../src/campaign/walks3';
 import { WALKS4 } from '../src/campaign/walks4';
@@ -35,7 +36,7 @@ const step = (walk: WalkScript | undefined, title: string) => {
   return s;
 };
 /** A number as the walks write it: grouped by thin spaces or not. */
-const has = (text: string, n: number) => text.includes(String(n)) || text.includes(n.toLocaleString('en-US').replace(/,/g, ' '));
+const has = (text: string, n: number) => text.includes(String(n)) || text.includes(groupDigits(n));
 
 describe('r_clock: the toggle relay and its wrong wirings', () => {
   // k's make contact (k.no2) fed from t's break line (the reference), from VDD, or from y.
@@ -115,7 +116,7 @@ describe('numbers in other act 8–10 walks', () => {
 
   it('k_edge: |E| fits 16 bits', () => {
     expect(2 * 127 * 127).toBeLessThan(2 ** 15);
-    expect(step(WALKS6.k_edge, 'E and R').text).toContain(`${(2 * 127 * 127).toLocaleString('en-US').replace(',', ' ')}`);
+    expect(step(WALKS6.k_edge, 'E and R').text).toContain(`${groupDigits(2 * 127 * 127).replace(',', ' ')}`);
   });
 
   it('m_bank: the state is three 4-bit registers and a flip-flop', () => {

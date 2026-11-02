@@ -1,5 +1,6 @@
 // Chapters 11–14 and 16–18 quote measured numbers: each is measured here and found in the chapter's text, so an edit to
 // either the hardware or the prose that breaks the match fails (content review 2026-10-18, slice j-cpu).
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { chAlu, chIsa, chRegfile, chSingleCycle } from '../src/chapters/ch-cpu';
 import { chFastAdders } from '../src/chapters/ch-perf';
@@ -194,7 +195,7 @@ describe('pipelines (findings 2–7)', () => {
     // the BTB: core +38 %
     expect(Math.round(((cp - cb) / cb) * 100)).toBe(38);
     expect(t).toContain('the core grows by 38 %');
-    const sp = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+    const sp = groupDigits;
     expect(t).toContain(`from ${sp(cb)} to ${sp(cp)} NANDs`);
   }, 120000);
 

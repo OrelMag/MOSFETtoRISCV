@@ -1,6 +1,7 @@
 // Numbers the codex's Check yourself questions and the campaign lessons quote, measured: an edit to either the
 // text or the part fails here.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
@@ -25,7 +26,7 @@ const text = (entry: string, i: number) => {
   const q = CHECKS[entry][i];
   return [q.question, ...q.options, q.explain ?? '', ...(q.why ?? [])].join(' ');
 };
-const thin = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+const thin = groupDigits;
 
 describe('codex checks: quoted costs', () => {
   it('register: 13 NANDs a bit unshared, 1 + 12 a bit with ¬en shared', () => {

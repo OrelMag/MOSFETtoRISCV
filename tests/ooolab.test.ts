@@ -1,6 +1,7 @@
 // The out-of-order lab (widgets/ooolab.ts, bench/ooprice.ts): chapter 26's "Your own core" quotes its numbers from
 // the model, a shape survives its round trip through the knobs, own programs run, and only gate shapes are priced.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { chOoo } from '../src/chapters/ch-ooo';
 import { compilePy } from '../src/lang/compile';
@@ -40,8 +41,8 @@ describe('the out-of-order lab', () => {
     const slow = onSet({ lat: { alu: 1, load: 20, mul: 2, div: 19 } });
     quoted(`CPI is ${slow.cpi} with ${slow.share('memory')} %`);
     const lo = priceOf({ rob: 8, iq: 4, sq: 2 })!, hi = priceOf({ rob: 32, iq: 16, sq: 8 })!;
-    quoted(`(${lo.nands.toLocaleString('en').replace(/,/g, ' ')} NANDs)`);
-    quoted(`(${hi.nands.toLocaleString('en').replace(/,/g, ' ')})`);
+    quoted(`(${groupDigits(lo.nands)} NANDs)`);
+    quoted(`(${groupDigits(hi.nands)})`);
     quoted(`from ${lo.period} to ${hi.period} NAND delays`);
     quoted(`only brings it to ${onSet({ lat: { alu: 1, load: 20, mul: 2, div: 19 }, rob: 64, iq: 32, sq: 16 }).cpi}`);
   });
