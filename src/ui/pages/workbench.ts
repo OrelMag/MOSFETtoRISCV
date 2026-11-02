@@ -154,6 +154,12 @@ export class WorkbenchPage implements Page {
     }
   }
 
+  /** The top bar's way back (ui/returnto.ts): the part on the bench. */
+  returnLabel(): { label: string; short: string } {
+    const name = resolveComponent(this.current)?.name ?? this.current;
+    return { label: `Workbench: ${name}`, short: name };
+  }
+
   destroy(): void {
     this.stage.destroy();
   }

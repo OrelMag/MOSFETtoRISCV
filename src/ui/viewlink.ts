@@ -132,6 +132,11 @@ export function currentViewLink(): string | null {
   return linkTo(active.viewHash());
 }
 
+/** The address of what is on the stage now, view suffix included (null: no stage). */
+export function currentViewHash(): string | null {
+  return active?.isLive() ? active.viewHash() : null;
+}
+
 /** Put text on the clipboard; false when the browser will not (insecure page, no permission). */
 export async function copyText(text: string): Promise<boolean> {
   try {

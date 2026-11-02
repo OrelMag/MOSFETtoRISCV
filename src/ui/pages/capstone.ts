@@ -22,6 +22,7 @@ import '../../editor/features';
 import type { Capstone } from '../../learn/capstones';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { markJump } from '../returnto';
 import { briefResults, GRADE_WORD, starText } from './briefview';
 import type { Page } from './chapter';
 
@@ -349,6 +350,7 @@ export class CapstonePage implements Page {
     const ed = this.editor!, ch = this.ch!;
     let main = '';
     ed.editWs((ws) => { const r = importAnswer(ws, ch); main = r.main; return r.ws; });
+    markJump();
     location.hash = `#/sandbox/${main}`;
   }
 }

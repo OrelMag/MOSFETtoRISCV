@@ -1242,6 +1242,12 @@ src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-
                hash (app.ts route() strips it, hands it to the Stage that builds the scene: Stage.viewState / restoreView / copyViewLink in the Share
                menu; cycles replayed under a time budget, REPLAY_MS); settings.textSize / narrowText set --prose-scale (zoom on .narrative-body, the
                pane widens with it) and data-narrow-text (62ch); never schematics.
+               returntrail.ts (DOM-free) / returnto.ts: quick return. A click (or markJump(): a search pick, Open in Sandbox) that leaves one
+               section for another (sectionOf: chapter, workbench, sandbox, campaign map, level, codex, notes; Home and My path are hubs) keeps
+               the place left (the address + the stage's view suffix, the page's scrolled boxes) in a trail of RETURN_MAX (3) for the tab
+               (sessionStorage); the pill beside the top bar's nav goes to the saved address (not history.back(): a drill leaves one entry per
+               level), one place at a time, Alt+Backspace too; arriving at a saved place by any route ends the trail there, the top nav / Home
+               / × forget it. app.ts route() calls it first, while the page left is mounted: a page names itself with returnLabel().
 public/ + scripts/sw-template.js: manifest.webmanifest, icon.svg / icon-{180,192,512}.png; vite.config.ts serviceWorker() writes dist/sw.js
                (assets/ precached, hashed assets cache-first, everything else network-first, doom/ layout/ yosys/ and other origins untouched; two
                cache generations); main.ts registers it only in production on http(s) (never app:// or file:)
