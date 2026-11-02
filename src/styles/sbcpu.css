@@ -34,7 +34,10 @@
 .sb-cpu-iss { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0; }
 .sb-cpu-iss > span { width: 82px; color: var(--text-2); font-size: 12.5px; }
 .sb-cpu-iss .sb-check { margin: 0; }
-.sb-cpu-sechead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sb-cpu-sechead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 6px; }
+/* the hint sits under the name, so the buttons never crowd it on a narrow drawer */
+.sb-cpu-sechead > span:first-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sb-cpu-sechead .cpu-sec-hint { margin-left: 0; }
 .sb-cpu-sechead .btn { text-transform: none; letter-spacing: 0; padding: 1px 6px; gap: 4px; font: 500 11.5px var(--font-ui); }
 
 /* run controls: Run, Step, Slow + its rate, Reset on one row when they fit */
