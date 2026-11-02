@@ -533,7 +533,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         const order = Object.keys(STAGE_UNITS);
         const rows = [...inFlight].flatMap(([pc, stgs]) => stgs.map((s) => [s as keyof typeof STAGE_UNITS, pc] as const))
           .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc)))));
+        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc), opts.custom))));
         usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))),
           note ? h('div', { class: 'ibd-note' }, note) : '');
         return;
@@ -545,7 +545,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         return;
       }
       const w = wordAt(pc);
-      const use = opts.ooo ? oooUse(w, pc === selPc ? selPort : -1) : instrUse(w);
+      const use = opts.ooo ? oooUse(w, pc === selPc ? selPort : -1) : instrUse(w, opts.custom);
       const stages = inFlight.get(pc) ?? [];
       // the out-of-order core decodes in two slots: no single set of field wires to colour
       const carried = !opts.ooo && (!opts.pipeline || !stages.length || stages.includes('D'));
