@@ -586,7 +586,7 @@ registerPropsSection({
     const k = m[2] ? +m[2] : DMEM64_DEFAULT;
     const opts = Array.from({ length: DMEM64_MAX - DMEM64_MIN + 1 }, (_, i): [number, string] => {
       const n = DMEM64_MIN + i;
-      return [n, `${2 ** n} doublewords · ${kWords(2 ** (n + 3))} bytes`];
+      return [n, `${2 ** n} dwords (${kWords(2 ** (n + 3))} B)`];
     });
     return h('section', { class: 'sb-sec-props' }, h('h3', null, `${m[1] === 'im' ? 'RV64IM' : 'RV64I'} core`),
       row('Data memory', select(k, opts, (n) => {
