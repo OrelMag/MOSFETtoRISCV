@@ -129,3 +129,22 @@ describe('speed slider', () => {
     expect(fmtRate(123.4)).toBe('123');
   });
 });
+
+describe('a clock left high by hand', () => {
+  it('a following edge is a real edge: lowerClock / riseEdge bring it low first', () => {
+    const hand = cpu(), ref = cpu();
+    // the learner clicks the clock pin high (one edge) and leaves it there
+    hand.setInput('clk', 1);
+    hand.settle();
+    clockCycle(ref);
+    expect(cpuState(hand)).toEqual(cpuState(ref));
+    // a Pulse must be one more edge, not a raise of an input that is already 1
+    const e = riseEdge(hand, 'clk');
+    completeEdge(hand, e);
+    hand.setInput('clk', 0);
+    hand.settle();
+    clockCycle(ref);
+    expect(cpuState(hand).pc).toBe(cpuState(ref).pc);
+    expect(cpuState(hand)).toEqual(cpuState(ref));
+  });
+});
