@@ -91,7 +91,23 @@ function amdahlCurve(): HTMLElement {
   return el;
 }
 
+/** A library part's live schematic (codexentry.ts liveSchematic, imported on demand: that module imports this one). */
+function schem(id: string, caption: string): CodexFigure {
+  const host = h('div', null, h('p', { class: 'sub' }, 'Loading the circuit…'));
+  void import('./codexentry').then((m) => { const f = m.liveSchematic(id); host.replaceChildren(f ?? h('p', { class: 'sub' }, 'The figure could not load.')); }, () => host.replaceChildren(h('p', { class: 'sub' }, 'The figure could not load.')));
+  return { el: host, caption };
+}
+
 const FIGS: Record<string, () => CodexFigure> = {
+  cpu: () => schem('rv16_cpu', 'A complete single-cycle processor, simulated: program counter, instruction memory port, register file, ALU, data memory port and the control that steers them. Click an input; open the boxes on the workbench to drill down to transistors.'),
+  rv16: () => schem('rv16_imm', "RV16's immediate generator, simulated: the fixed-field encoding means every immediate bit is a wire from one instruction bit, a copy of the sign, or ground."),
+  dontcare: () => schem('rv16_ctl', "RV16's control unit, built from a table in which most cells are don't-cares: each unused op code lets the minimizer pick whichever value makes a signal cheaper."),
+  setuphold: () => schem('dff', 'A master-slave flip-flop, simulated: the master follows D while the clock is low and the slave copies it when the clock rises. A D that changes too near the edge is caught half-way, which is what setup and hold forbid.'),
+  interrupts: () => schem('rv16_csr', 'The CSR file where interrupts live: mstatus (MIE, MPIE), mie, mip, mtvec and mepc behind one read multiplexer. A pending and enabled interrupt makes the core save mepc and jump to mtvec.'),
+  mext: () => schem('rv16_mul', "RV16's multiplier, the M extension in gates: an unsigned array with sign corrections, simulated."),
+  loader: () => lazy(() => import('../../widgets/cards').then((m) => m.cardEditorWidget()), "A program as punched cards, the loader's input: type a line and see its holes."),
+  metastability: () => schem('sr_latch', 'An SR latch, simulated: release S and R together and the two NANDs race; whichever is a hair faster wins. A flip-flop sampling a changing input is this race, and its decision can take arbitrarily long.'),
+  fpadder: () => schem('fpadd5_10', 'The half-precision adder, simulated: align the smaller exponent (shift right with a sticky bit), add, normalise (leading-zero count), round.'),
   positional: () => live(numberWidget(8, false), 'The number explorer: click a bit to flip it and read the same pattern in binary, hex and decimal.'),
   hex: () => live(numberWidget(8, false), 'Click bits: each hex digit is one group of four.'),
   twos: () => live(numberWidget(8, false), 'Set the top bit: the unsigned and the two\'s-complement readings part ways by 256.'),

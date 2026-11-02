@@ -155,8 +155,15 @@ done:   sw   a0, -3(x0)
 /** A directed test: its `what` is the program's first comment line. */
 export const directed = (name: string, src: string): CoreTest => ({ name, src, what: src.match(/^#\s*(.+)/)?.[1].trim() });
 
+/** What a seeded random program of each level exercises (the generator's instruction mix, randprog.ts). */
+const RANDOM_WHAT: Record<number, string> = {
+  1: 'seeded random register and immediate arithmetic: every ALU operation on arbitrary values',
+  2: 'seeded random arithmetic mixed with loads and stores on the data memory',
+  3: 'seeded random arithmetic, memory and forward branches and jumps',
+};
+
 const rand = (level: 1 | 2 | 3, count: number, from = 1): CoreTest[] =>
-  Array.from({ length: count }, (_, i) => ({ name: `random ${level}.${from + i}`, src: randomProgram(from + i, level, 30 + 5 * (i % 4)) }));
+  Array.from({ length: count }, (_, i) => ({ name: `random ${level}.${from + i}`, src: randomProgram(from + i, level, 30 + 5 * (i % 4)), what: RANDOM_WHAT[level] }));
 
 /** The tests of a core stage (1: arithmetic, 2: + memory, 3: + branches and jumps). */
 export function coreTests(stage: 1 | 2 | 3): CoreTest[] {
@@ -183,7 +190,7 @@ function padded(t: CoreTest, after: number, loadsOnly: boolean): CoreTest {
     const isLoad = decode16(w).spec?.name === 'lw';
     for (let k = 0; k < (loadsOnly ? (isLoad ? after : 0) : after); k++) words.push(NOP);
   }
-  return { name: t.name, words, data: a.data };
+  return { name: t.name, words, data: a.data, what: t.what };
 }
 
 /**
@@ -282,7 +289,7 @@ handler:
 
 /** Act 7's programs: traps (and with irq, the interrupt) plus the core's own tests. */
 export function sysTests(irq: boolean): CoreTest[] {
-  return [{ name: 'traps', src: TRAPS }, { name: 'csrs', src: CSRS }, ...(irq ? [{ name: 'interrupt', src: IRQ }] : []), ...coreTests(3).filter((_, i) => i % 2 === 0)];
+  return [directed('traps', TRAPS), directed('csrs', CSRS), ...(irq ? [directed('interrupt', IRQ)] : []), ...coreTests(3).filter((_, i) => i % 2 === 0)];
 }
 
 const MULS = `# every multiply on edge values
@@ -354,8 +361,8 @@ dig:    remu a2, a1, t1
 /** The MD levels' programs: multiplies (and divides), then the core's own tests. */
 export function mdTests(md: 'mul' | 'all'): CoreTest[] {
   const own = coreTests(3).filter((_, i) => i % 3 === 0);
-  const rnd = Array.from({ length: 10 }, (_, i): CoreTest => ({ name: `random md.${i + 1}`, src: randomProgram(100 + i, 3, 30 + 5 * (i % 4), md) }));
-  return [{ name: 'multiplies', src: MULS }, ...(md === 'all' ? [{ name: 'divides', src: DIVS }, { name: 'digits', src: MULLOOP }] : []), ...rnd, ...own];
+  const rnd = Array.from({ length: 10 }, (_, i): CoreTest => ({ name: `random md.${i + 1}`, src: randomProgram(100 + i, 3, 30 + 5 * (i % 4), md), what: 'seeded random program including multiplies' + (md === 'all' ? ' and divides' : '') }));
+  return [directed('multiplies', MULS), ...(md === 'all' ? [directed('divides', DIVS), directed('digits', MULLOOP)] : []), ...rnd, ...own];
 }
 
 const NESTED = `# nested loops: a multiplication table summed, inner loop taken 9 times out of 10
@@ -423,5 +430,5 @@ keep:   addi a0, a0, 1
 
 /** Branch prediction's programs: loops first (where a guess pays), then the pipeline's tests. */
 export function predictTests(): CoreTest[] {
-  return [{ name: 'nested loops', src: NESTED }, { name: 'copy and calls', src: COPY }, { name: 'sort', src: SORT }, ...pipeTests(3)];
+  return [directed('nested loops', NESTED), directed('copy and calls', COPY), directed('sort', SORT), ...pipeTests(3)];
 }

@@ -19,7 +19,7 @@ import { reveal, StageNotes } from '../stagenotes';
 import { litLine, wireLooks } from './looks';
 import { ledgerView } from '../ledger';
 import { TourPlayer } from '../tour';
-import type { Layers } from '../../chapters/types';
+import type { Layers, Reading } from '../../chapters/types';
 
 /** The layers under a step's body, in order, with their tab names. */
 const LAYERS: [keyof Layers, string][] = [['derive', 'Derivation'], ['real', 'In real silicon'], ['pitfall', 'Common mistake'], ['numbers', 'Numbers']];
@@ -288,12 +288,26 @@ export class ChapterPage implements Page {
       this.unlisten.push(this.stage.onChange(() => lv.update()));
     }
     if (st.more) b.append(this.layers(st.more));
+    if (st.reading) b.append(this.reading(st.reading));
     if (st.actions?.length) {
       b.append(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px' },
         st.actions.map((a) => h('button', { class: 'btn sm', onclick: () => a.run(this.stage) }, a.label))));
     }
     if (st.challenge) b.append(this.renderChallenge(st));
     this.stepNotes?.openPending();
+  }
+
+  /** "Read the spec": the manual's passage under the body, folded, with its questions (kept in the review queue). */
+  private reading(r: Reading): HTMLElement {
+    const key = (k: number) => `${this.chapter.id}:${this.step}:read:${k}`;
+    const quotes = r.quote.map((p) => h('blockquote', null, p));
+    const note = h('p', { class: 'reading-note' }); note.innerHTML = r.note;
+    return h('details', { class: 'reading' },
+      h('summary', null, icon('book', 14), h('span', null, 'Read the spec')),
+      h('div', { class: 'reading-body' },
+        h('p', { class: 'reading-src' }, r.source, ', ', h('b', null, r.section)),
+        ...quotes, note,
+        ...r.quizzes.map((q, k) => quizBox(q, key(k), `${k + 1} of ${r.quizzes.length}`, () => this.renderHead()))));
   }
 
   /** Tabs over the step's layers; one open at a time (the last chosen kind opens first on the next step that has it). */

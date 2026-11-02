@@ -54,6 +54,11 @@ describe('chapter guide', () => {
       c.steps.forEach((s, i) => {
         const where = `${c.id}/${i}`;
         if (s.challenge?.kind === 'quiz') quizOk(where, s.challenge);
+        if (s.reading) {
+          expect(s.reading.quizzes.length, `${where}: a reading has three questions`).toBe(3);
+          s.reading.quizzes.forEach((q, k) => quizOk(`${where} reading ${k}`, q));
+          expect(s.reading.quote.join(' ').length, `${where}: quote the manual briefly`).toBeLessThan(700);
+        }
         if (s.challenge?.kind === 'reach') for (const h of s.challenge.hints ?? []) expect(h.trim(), where).not.toBe('');
         if (s.tries) expect(s.tries.length, `${where}: a .try box per condition`).toBeLessThanOrEqual(tryBoxes(s.body));
       });
@@ -61,6 +66,11 @@ describe('chapter guide', () => {
       if (c.recap) expect(c.recap.keep.length, `${c.id}: recap`).toBeGreaterThan(0);
       for (const id of c.recap?.practise ?? []) expect(nodeById(id), `${c.id} practises ${id}`).toBeTruthy();
     }
+  });
+
+  it('the spec readings: six, each on a step of its own chapter', () => {
+    const n = chapters.flatMap((c) => c.steps.filter((s) => s.reading)).length;
+    expect(n).toBeGreaterThanOrEqual(5);
   });
 
   it('Builds on names chapters that come earlier', () => {
