@@ -22,3 +22,16 @@ describe('workbench opens every part', () => {
     }
   });
 });
+
+import { ctrlConfig } from '../src/widgets/dramwork';
+import { price, workloads } from '../src/dram/workload';
+
+describe('chapter 36 explorer', () => {
+  it('every toggle combination prices every workload', () => {
+    for (const policy of ['open', 'closed'] as const) for (const banks of [2, 4]) for (const hash of [false, true]) {
+      for (const w of workloads()) {
+        expect(() => price(w, ctrlConfig(w.dmemWords, banks, policy, hash))).not.toThrow();
+      }
+    }
+  });
+});

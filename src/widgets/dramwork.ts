@@ -22,13 +22,18 @@ function seg<T extends string | number>(opts: [T, string][], get: () => T, set: 
 
 const pct = (a: number, b: number) => `${Math.round((100 * a) / Math.max(1, b))} %`;
 
+/** The explorer's device: the program's memory, grown when the banks would leave no row bits (rows of 16 words, 4 banks: at least 2^7). */
+export function ctrlConfig(dmemWords: number, banks: number, policy: PagePolicy, hash: boolean): DramConfig {
+  return { k: Math.max(Math.log2(dmemWords), 2 + 2 + Math.log2(banks) + 1), banks, rowWords: 16, policy, hash };
+}
+
 export function ctrlExplorer(): Widget {
   let policy: PagePolicy = 'open', banks = 2, hash = false;
   const out = h('div', null);
   const update = () => {
     for (const s of segs) s.sync();
     const rows = workloads().map((w) => {
-      const c: DramConfig = { k: Math.log2(w.dmemWords), banks, rowWords: 16, policy, hash };
+      const c = ctrlConfig(w.dmemWords, banks, policy, hash);
       return { w, p: price(w, c) };
     });
     out.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 'tm-table ce-table' },
