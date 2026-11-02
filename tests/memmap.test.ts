@@ -119,6 +119,20 @@ describe('applying a map', () => {
     compiles(ws, out2);
   });
 
+  it('removing a region takes its devices and pointers too: nothing is left dangling', () => {
+    const { ws, doc } = chip();
+    for (const idx of [1, 4, 5]) {
+      const m = ok(readMap(doc));
+      const out = applyMap(doc, withoutRegion(m, idx));
+      const names = out.labels.map((l) => l.name);
+      for (const n of new Set(names)) expect(names.filter((x) => x === n).length, `${m.regions[idx].kind}: pointer ${n}`).toBeGreaterThanOrEqual(2);
+      expect(out.parts.length).toBeLessThan(doc.parts.length - 1);
+      const warns = (d: ChipDoc) => new UserLibrary({ ...ws, chips: { ...ws.chips, [d.id]: d } }).compiled(d.id)!.diags.filter((x) => x.level === 'warn').map((x) => x.msg);
+      expect(warns(out), m.regions[idx].kind).toEqual(warns(doc));
+      compiles(ws, out);
+    }
+  });
+
   it('removes a region: its slave part goes, the bus shrinks', () => {
     const { ws, doc } = chip();
     const out = applyMap(doc, withoutRegion(ok(readMap(doc)), 2));
