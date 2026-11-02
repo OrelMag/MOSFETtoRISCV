@@ -32,10 +32,10 @@ export function startApp(root: HTMLElement): void {
   applyTheme();
   const view = h('main', { id: 'view' });
   const nav = h('nav', { class: 'nav' });
-  const navLink = (href: string, ic: string, label: string, key: string) =>
-    h('a', { href, 'data-key': key, title: label, 'aria-label': label }, icon(ic, 16), h('span', null, label));
+  const navLink = (href: string, ic: string, label: string, key: string, short?: string) =>
+    h('a', { href, 'data-key': key, title: label, 'aria-label': label }, icon(ic, 16), h('span', null, label), ...(short ? [h('span', { class: 'cap', 'aria-hidden': 'true' }, short)] : []));
   // "Chapters" opens the chapter menu rather than the first chapter (still a link: new tab works).
-  const chLink = navLink('#/c/map/0', 'book', 'Chapters', 'c');
+  const chLink = navLink('#/c/map/0', 'book', 'Chapters', 'c', 'Chapters');
   chLink.append(icon('chevD', 14));
   chLink.setAttribute('aria-haspopup', 'menu');
   chLink.setAttribute('aria-expanded', 'false');
@@ -46,8 +46,8 @@ export function startApp(root: HTMLElement): void {
     toggleChapterMenu(chLink);
   });
   // "My path" (the tiers, what next) in place of "Journey": the logo still goes home.
-  nav.append(navLink('#/path', 'layers', 'My path', 'path'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
-    navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
+  nav.append(navLink('#/path', 'layers', 'My path', 'path', 'Path'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign', 'Campaign'),
+    navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench', 'Bench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox', 'Sandbox'));
   // "My notes · n" shows once there is a note or a bookmark (ui/notes.ts)
   const notesLink = navLink('#/notes', 'note', 'My notes', 'notes');
   const syncNotes = () => {
