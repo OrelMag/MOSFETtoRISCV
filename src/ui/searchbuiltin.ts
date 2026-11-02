@@ -14,6 +14,7 @@ import { allActions, here, registerActions, registerSearchSource, type SearchCtx
 import { notes, placeHref, snippet } from './notes';
 import { placeLabel } from './notelabel';
 import { applyTheme, settings, type Theme } from './settings';
+import { markJump } from './returnto';
 
 const route = (ctx: SearchCtx) => ctx.hash.replace(/^#\/?/, '').split('/');
 /** The stage of a chapter or the workbench (none outside a browser: the tests). */
@@ -116,7 +117,10 @@ const toggle = (k: 'animate' | 'wireFlow' | 'netColors' | 'glossary' | 'autoCloc
 const onOff = (b: boolean) => (b ? 'on' : 'off');
 const THEMES: Theme[] = ['auto', 'light', 'dark'];
 const RADIXES = ['hex', 'bin', 'dec'] as const;
-const go = (href: string) => () => { location.hash = href; };
+const go = (href: string) => () => {
+  markJump();
+  location.hash = href;
+};
 
 /** The stage's own buttons (Run, Pulse, Step, Back, Reset, the inputs, Probe, Up, zoom): what they say is what they do. */
 function stageActions(): NavItem[] {

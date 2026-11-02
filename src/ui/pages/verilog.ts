@@ -21,6 +21,7 @@ import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { YOSYS_BYTES, YOSYS_VERSION, yosysReady } from '../../hdl/yosys';
 import type { HdlDiag } from '../../hdl/yosysjson';
 import { h, icon } from '../dom';
+import { markJump } from '../returnto';
 import type { Page } from './chapter';
 
 type Tab = 'spec' | 'tests' | 'drawn';
@@ -276,6 +277,7 @@ export class VerilogPage implements Page {
       : newVerilogChip(ws0, this.ta.value, file, 'nand', t.module);
     const saved = saveWorkspace(made.ws);
     if (!saved.ok) { this.checkEl.prepend(h('p', { class: 'note' }, saved.reason)); return; }
+    markJump();
     location.hash = `#/sandbox/${made.id}`;
   }
 
@@ -283,6 +285,7 @@ export class VerilogPage implements Page {
     const r = importAnswer(loadWorkspace(), twinChallenge(this.t!));
     const saved = saveWorkspace(r.ws);
     if (!saved.ok) return;
+    markJump();
     location.hash = `#/sandbox/${r.main}`;
   }
 

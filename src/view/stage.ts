@@ -37,6 +37,7 @@ import { matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { findMemories } from './memfind';
+import { markJump } from '../ui/returnto';
 
 export interface Scene {
   root: ComponentDef;
@@ -450,7 +451,8 @@ export class Stage {
         this.setProbeMode(false);
         return;
       }
-      if (e.key === 'Escape' || e.key === 'Backspace') {
+      // Alt+Backspace is the top bar's way back (ui/returnto.ts)
+      if (e.key === 'Escape' || (e.key === 'Backspace' && !e.altKey)) {
         e.preventDefault();
         this.up();
       }
@@ -1059,7 +1061,10 @@ export class Stage {
     import('../editor/remix').then((m) => {
       const r = m.remixIntoStorage(def);
       if ('error' in r) this.setStatus(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
-      else location.hash = `#/sandbox/${r.id}`;
+      else {
+        markJump();
+        location.hash = `#/sandbox/${r.id}`;
+      }
     }, (e) => this.setStatus(h('span', { class: 'pulse warn' }), `The sandbox could not load: ${String(e)}`));
   }
 

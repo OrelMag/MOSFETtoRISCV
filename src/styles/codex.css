@@ -4,7 +4,6 @@
 .cx-entry.narrow { padding: 0; border: 0; background: none; max-width: none; }
 .cx-entry.narrow .cx-cols { grid-template-columns: minmax(0, 1fr); }
 .cx-entry.narrow h2 { font-size: 18px; margin-top: 0; }
-.cx-from { margin-bottom: 8px; }
 
 /* the level screen's Codex tab: an entry read in the pane, which widens while it is open */
 @media (min-width: 901px) { .lv-body.reading { grid-template-columns: min(560px, 46vw) minmax(0, 1fr); } }
