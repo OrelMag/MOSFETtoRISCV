@@ -1210,8 +1210,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 :root[data-wide] .bench:not(:has(> .stage.widget-mode)) > :is(.library, .inspector) { display: none; }
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
-.bench-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 8px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bench-tabs { display: flex; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+.bench-tab { padding: 6px 6px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.hw-inner > .bench-tabs { gap: 2px; }
+.hw-inner .bench-tab { padding: 6px 8px; font-size: 13.5px; }
 .bench-tab:hover { color: var(--text); }
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
 .widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
