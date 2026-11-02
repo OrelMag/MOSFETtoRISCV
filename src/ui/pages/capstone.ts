@@ -164,7 +164,8 @@ export class CapstonePage implements Page {
       h('section', null, h('h4', null, 'Graded'), h('p', null, graded),
         h('p', { class: 'cap-ref' }, h('b', null, 'Reference: '), h('span', { 'data-ref': 'nand' }, '… NANDs'), ' (period and cycles are shown after a pass)')),
       h('section', null, h('h4', null, 'Allowed'),
-        h('p', null, `NAND and ${names.length} unlocked parts: `, names.join(', '), '. Your own chips count by their NANDs.')),
+        h('p', null, `NAND and ${names.length} unlocked parts (the palette's Unlocked parts lists them). Your own chips count by their NANDs.`),
+        h('details', { class: 'cap-parts' }, h('summary', null, 'The parts'), h('p', null, names.join(', ')))),
       h('p', { class: 'cap-note' }, h('b', null, 'Capstones only: '), 'no exam and no certificate. There is no walkthrough, no tip and no “Do it for me”; the reference answer opens after a pass, and a pass marks the tier done on My path.'),
     );
     if (this.ref) this.showRefNands(el);
