@@ -11,4 +11,7 @@ export const FIGURES: Record<string, () => Promise<FigureMount>> = {
   airlock: () => import('../widgets/analogy/airlock').then((m) => m.default),
   laundry: () => import('../widgets/analogy/laundry').then((m) => m.default),
   leaky: () => import('../widgets/analogy/leaky').then((m) => m.default),
+  handoff: () => import('../widgets/analogy/handoff').then((m) => m.default),
+  emptyplate: () => import('../widgets/analogy/emptyplate').then((m) => m.default),
+  fork: () => import('../widgets/analogy/fork').then((m) => m.default),
 };
