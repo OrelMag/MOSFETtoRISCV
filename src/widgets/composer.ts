@@ -137,6 +137,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
 
   const set = (w: number, from: 'text' | 'slider' | null = null) => {
     word = (w & mask) >>> 0;
+    el.classList.remove('stale');
     const c = cur();
     if (c) mem = rememberParts(mem, isa.instr(c.id), c.parts);
     render(from);
@@ -480,10 +481,12 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     const r = isa.parse(input.value, pc ?? 0, labels);
     if ('error' in r) {
       input.classList.add('err');
+      el.classList.add('stale'); // the bits below are the last good line, not this one
       msg.className = 'cmp-msg err';
       msg.textContent = r.error;
       return;
     }
+    el.classList.remove('stale');
     if ('words' in r) {
       input.classList.remove('err');
       msg.className = 'cmp-msg';
