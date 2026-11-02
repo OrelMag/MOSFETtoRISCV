@@ -2234,13 +2234,14 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* ---------- Why? (view/whypanel.ts): a wire's value traced to its causes, what each part is for ---------- */
 .why-card {
-  position: absolute; left: 12px; top: 12px; z-index: 6; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px);
+  position: absolute; left: var(--why-left, 12px); top: var(--why-top, 12px); z-index: 6;
+  width: min(380px, max(240px, calc(100% - var(--why-left, 12px) - max(12px, var(--panel-inset, 0px))))); max-height: calc(100% - var(--why-top, 12px) - 12px);
   display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg); font-size: 13px;
 }
 /* a narrow canvas (look inside beside the circuit, a phone): the card sits along the bottom, the circuit above it */
-.sb-inside:not(.wide) .why-card { top: auto; bottom: 40px; width: calc(100% - 24px); max-height: 42%; }
-@media (max-width: 760px) { .why-card { top: auto; bottom: 12px; width: calc(100% - 24px); max-height: 45%; } }
+.sb-inside:not(.wide) .why-card { top: auto; left: 12px; bottom: 40px; width: calc(100% - 24px); max-height: 42%; }
+@media (max-width: 760px) { .why-card { top: auto; left: 12px; bottom: 12px; width: calc(100% - 24px); max-height: 45%; } }
 .why-card > header { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border); }
 .why-card > header b { font-size: 13.5px; }
 .why-tabs { margin-left: auto; }
