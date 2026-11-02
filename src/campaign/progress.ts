@@ -8,6 +8,7 @@ import type { ChipDoc, Workspace } from '../editor/model';
 import { better, type Measured, stars as starsOf } from './grade';
 import { isDone, type ProgressView } from './graph';
 import { levelChipId } from './levels';
+import { CAPSTONES } from '../learn/capstones';
 import { NODES, nodeById } from './nodes';
 
 export const CAMPAIGN_KEY = 'mosfet2riscv:campaign:v1';
@@ -37,6 +38,8 @@ export interface CampaignState {
 export const emptyCampaign = (): CampaignState => ({ schema: SCHEMA, nodes: {} });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** A tier capstone (learn/capstones.ts): recorded here beside the nodes, not on the campaign map. */
+const isCapstone = (id: string) => CAPSTONES.some((c) => c.id === id);
 const STATUSES = new Set(['started', 'solved', 'skipped']);
 
 /** Untrusted JSON → a state with only known nodes and well-formed fields. */
@@ -46,7 +49,7 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
   if (raw.unlockAll === true) st.unlockAll = true;
   const nodes = isObj(raw.nodes) ? raw.nodes : {};
   for (const [id, v] of Object.entries(nodes)) {
-    if (!nodeById(id) || !isObj(v)) continue;
+    if ((!nodeById(id) && !isCapstone(id)) || !isObj(v)) continue;
     const p: NodeProgress = {};
     if (typeof v.status === 'string' && STATUSES.has(v.status)) p.status = v.status as NodeProgress['status'];
     if (v.stars === 1 || v.stars === 2 || v.stars === 3) p.stars = v.stars;
@@ -157,6 +160,24 @@ export class Progress {
     }
     this.save();
     return { stars: s, best, first };
+  }
+
+  /**
+   * A capstone passed: solved, with the best result kept (fewer NANDs, then a shorter period, then fewer cycles). No stars:
+   * a capstone is a pass or not yet.
+   */
+  solveCapstone(id: string, m: Measured = {}): { first: boolean; best: boolean } {
+    const p = this.node(id);
+    const first = p.status !== 'solved';
+    const key = (x?: Measured) => [x?.nand ?? Infinity, x?.period ?? Infinity, x?.cycles ?? Infinity];
+    const a = key(m), b = key(p.best);
+    const i = a.findIndex((v, k) => v !== b[k]);
+    const best = first || !p.best || (i >= 0 && a[i] < b[i]);
+    p.status = 'solved';
+    p.at = Date.now();
+    if (best) p.best = m;
+    this.save();
+    return { first, best };
   }
 
   /** Skip: the level counts as done (its parts unlock), with no stars. A solved level stays solved. */

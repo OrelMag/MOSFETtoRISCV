@@ -15,9 +15,9 @@ export interface Capstone {
 }
 
 export const CAPSTONES: Capstone[] = [
-  { tier: 1, id: 'cap_t1', title: 'An adding machine', brief: 'An accumulator that adds what you key in, from NANDs only: checked by its test table, scored on NANDs and depth.', route: null },
-  { tier: 2, id: 'cap_t2', title: 'An RV16 core from its spec', brief: 'A single-cycle core that passes the core bench and plays Pong on itself, scored on NANDs, period and cycles.', route: null },
-  { tier: 3, id: 'cap_t3', title: 'A pipelined core', brief: 'Forwarding and stalls on the core bench, scored on period × cycles against the reference.', route: null },
+  { tier: 1, id: 'cap_t1', title: 'An adding machine', brief: 'A 4-bit accumulator that adds what you key in, from the gates, adders and flip-flops of acts 1–3: checked by a test sequence, scored on NANDs and clock period.', route: '#/campaign/play/cap_t1' },
+  { tier: 2, id: 'cap_t2', title: 'An RV16 core from its spec', brief: 'A single-cycle core that passes the core bench and plays Pong on itself, scored on NANDs, period and cycles.', route: '#/campaign/play/cap_t2' },
+  { tier: 3, id: 'cap_t3', title: 'A pipelined core', brief: 'Forwarding and stalls on the core bench, scored on period × cycles against the reference.', route: '#/campaign/play/cap_t3' },
   { tier: 4, id: 'cap_t4', title: 'Your own machine', brief: 'Your own instruction set, its decoder and core, and a program that runs on it.', route: null },
 ];
 

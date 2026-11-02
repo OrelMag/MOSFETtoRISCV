@@ -24,6 +24,8 @@ export interface CoreTest {
   src?: string;
   words?: number[];
   data?: Map<number, number>;
+  /** A program that never halts (a game): only its first this-many instructions are expected; what the core does after is not judged. */
+  bounded?: number;
 }
 
 export interface CoreSpec {
@@ -53,6 +55,7 @@ interface Golden {
   regs: Event[];
   stores: Event[];
   steps: number;
+  bounded: boolean;
 }
 
 const hex = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
@@ -64,17 +67,17 @@ export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system'>, maxSte
   if (a.errors.length) throw new Error(`core test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
   const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: true }, a.data);
   const regs: Event[] = [], stores: Event[] = [];
-  while (!iss.halted && iss.steps < maxSteps) {
+  while (!iss.halted && iss.steps < (t.bounded ?? maxSteps)) {
     const s = iss.step();
     if (s.reg) regs.push({ pc: s.pc, instr: s.instr, rd: s.reg.rd, value: s.reg.value });
     if (s.store) stores.push({ pc: s.pc, instr: s.instr, addr: s.store.addr, value: s.store.value });
   }
-  if (iss.error || !iss.halted) throw new Error(`core test ${t.name}: ${iss.error ?? 'does not halt'}`);
+  if (iss.error || (!iss.halted && !t.bounded)) throw new Error(`core test ${t.name}: ${iss.error ?? 'does not halt'}`);
   const imem = new Uint16Array(65536);
   imem.set(a.words);
   const dmem = new Uint16Array(65536);
   for (const [k, v] of a.data) dmem[k] = v;
-  return { name: t.name, imem, dmem, regs, stores, steps: iss.steps };
+  return { name: t.name, imem, dmem, regs, stores, steps: iss.steps, bounded: !!t.bounded };
 }
 
 /** The two engines behind one face: per-lane inputs and outputs. */
@@ -205,7 +208,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         }
         if (rwe[k] && rwa[k] !== 0) {
           const e = l.g.regs[l.ri];
-          if (!e) l.fail = `${l.g.name}: an extra register write ${rname(rwa[k])} ← ${hex(rwd[k])} at ${at}: the program has ended`;
+          if (!e) { if (!l.g.bounded) l.fail = `${l.g.name}: an extra register write ${rname(rwa[k])} ← ${hex(rwd[k])} at ${at}: the program has ended`; }
           else if (rwa[k] !== e.rd || rwd[k] !== e.value) {
             l.fail = `${l.g.name}: register write #${l.ri + 1} is ${Number.isNaN(rwa[k]) ? 'X' : rname(rwa[k])} ← ${Number.isNaN(rwd[k]) ? 'X' : hex(rwd[k])} at ${at}; expected ${rname(e.rd!)} ← ${hex(e.value)} from ${where(e)}`;
           } else l.ri++;
@@ -213,7 +216,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         if (!l.fail && dwe[k]) {
           const e = l.g.stores[l.si];
           const a = daddr[k], v = dwd[k];
-          if (!e) l.fail = `${l.g.name}: an extra store [${hex(a)}] ← ${hex(v)} at ${at}: the program has ended`;
+          if (!e) { if (!l.g.bounded) l.fail = `${l.g.name}: an extra store [${hex(a)}] ← ${hex(v)} at ${at}: the program has ended`; }
           else if (a !== e.addr || v !== e.value) {
             l.fail = `${l.g.name}: store #${l.si + 1} is [${Number.isNaN(a) ? 'X' : hex(a)}] ← ${Number.isNaN(v) ? 'X' : hex(v)} at ${at}; expected [${hex(e.addr!)}] ← ${hex(e.value)} from ${where(e)}`;
           } else {

@@ -28,9 +28,9 @@ const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc
 const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 const EDGE = [0, 1, 0x7fff, 0x8000, 0xffff, 0x1234, 0xfffe, 2];
 
-const CORE_PINS: PinSpec[] = CORE_PORTS.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.name === 'clk' ? { clock: true } : {}) }));
+export const CORE_PINS: PinSpec[] = CORE_PORTS.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.name === 'clk' ? { clock: true } : {}) }));
 
-const CORE_BRIEF = (what: string) => `${what} Pins: <code>clk</code>, <code>rst</code> (hold the PC at 0), <code>instr</code> (the bench answers with imem[pc] in the same cycle), <code>drdata</code> (dmem[daddr], also at once) → <code>pc</code>, <code>daddr</code>, <code>dwdata</code>, <code>dwe</code> (a store at the clock edge), and the register-write port <code>rwe</code>, <code>rwa</code>, <code>rwd</code> (what is written to x[rwa] at the edge) through which the bench watches your core.`;
+export const CORE_BRIEF = (what: string) => `${what} Pins: <code>clk</code>, <code>rst</code> (hold the PC at 0), <code>instr</code> (the bench answers with imem[pc] in the same cycle), <code>drdata</code> (dmem[daddr], also at once) → <code>pc</code>, <code>daddr</code>, <code>dwdata</code>, <code>dwe</code> (a store at the clock edge), and the register-write port <code>rwe</code>, <code>rwa</code>, <code>rwd</code> (what is written to x[rwa] at the edge) through which the bench watches your core.`;
 
 /** The control table, a row per instruction class, read off controlSpec (X: not checked). */
 export const CTL_ROWS: { label: string; ops: string; word: number; alu?: string }[] = [
