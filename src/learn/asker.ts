@@ -4,6 +4,7 @@
 
 import { h } from '../ui/dom';
 import { quizBox } from '../ui/quiz';
+import type { Question } from '../campaign/drills';
 import type { Item } from './placement';
 
 export interface Answer { tier: Item['tier']; right: boolean }
@@ -38,23 +39,30 @@ export function asker(items: Item[], onDone: (answers: Answer[]) => void, label 
     if (it.kind === 'quiz') {
       body.replaceChildren(quizBox(it.quiz, `learn:${at}`, it.from, () => {}, { fresh: true, onAnswer: answer }));
     } else {
-      const input = h('input', { class: 'lp-input', type: 'text', placeholder: it.q.placeholder ?? 'Your answer', 'aria-label': 'Your answer', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
-      const verdict = h('div', { class: 'lp-verdict', 'aria-live': 'polite' });
-      const check = () => {
-        if (answers.length > at || !input.value.trim()) return;
-        const r = it.q.check(input.value);
-        verdict.className = `lp-verdict ${r.ok ? 'ok' : 'bad'}`;
-        verdict.innerHTML = r.ok ? 'Right.' : `Not quite${r.why ? `: ${r.why}` : '.'} The answer: <code>${it.q.answer}</code>.${it.q.explain ? ` ${it.q.explain}` : ''}`;
-        input.disabled = true;
-        answer(r.ok);
-      };
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') check(); });
-      const form = h('div', { class: 'lp-form' }, input, h('button', { class: 'btn primary', type: 'button', onclick: check }, 'Answer'));
-      body.replaceChildren(h('div', { class: 'challenge' }, h('div', { class: 'lp-how', html: it.how }), h('p', { class: 'lp-prompt', html: it.q.prompt }), form, verdict));
-      queueMicrotask(() => input.focus());
+      body.replaceChildren(drillBox(it.q, it.how, answer));
     }
     nav.replaceChildren(skip);
   }
   show();
   return el;
+}
+
+/** A drill question with a typed answer and its exact checker; `onAnswer` gets the first verdict (placement, test-out, review). */
+export function drillBox(q: Question, how: string, onAnswer: (right: boolean) => void): HTMLElement {
+  let done = false;
+  const input = h('input', { class: 'lp-input', type: 'text', placeholder: q.placeholder ?? 'Your answer', 'aria-label': 'Your answer', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
+  const verdict = h('div', { class: 'lp-verdict', 'aria-live': 'polite' });
+  const check = () => {
+    if (done || !input.value.trim()) return;
+    done = true;
+    const r = q.check(input.value);
+    verdict.className = `lp-verdict ${r.ok ? 'ok' : 'bad'}`;
+    verdict.innerHTML = r.ok ? 'Right.' : `Not quite${r.why ? `: ${r.why}` : '.'} The answer: <code>${q.answer}</code>.${q.explain ? ` ${q.explain}` : ''}`;
+    input.disabled = true;
+    onAnswer(r.ok);
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') check(); });
+  queueMicrotask(() => { if (input.isConnected) input.focus(); });
+  return h('div', { class: 'challenge' }, h('div', { class: 'lp-how', html: how }), h('p', { class: 'lp-prompt', html: q.prompt }),
+    h('div', { class: 'lp-form' }, input, h('button', { class: 'btn primary', type: 'button', onclick: check }, 'Answer')), verdict);
 }

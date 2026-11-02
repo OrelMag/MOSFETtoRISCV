@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { checkOf } from '../src/campaign/codexmore';
+import { DRILL_REVIEW, REVIEW_BANK } from '../src/learn/bank';
 import { nodeById } from '../src/campaign/nodes';
 import { chapters } from '../src/chapters';
 import { skillState, type Evidence } from '../src/learn/mastery';
@@ -25,7 +26,7 @@ describe('skill map', () => {
       if (!s.checks.length) bad.push(`${s.id}: no question, so it can never be remembered`);
       for (const k of s.checks) {
         const [a, b, d] = k.split(':');
-        const ok = a === 'codex' ? !!checkOf(b)?.[+d] : b === 'recap' ? !!byId.get(a)?.recap?.check?.[+d] : byId.get(a)?.steps[+b]?.challenge?.kind === 'quiz';
+        const ok = a === 'drill' ? !!DRILL_REVIEW.find((x) => x.drill === b) : a === 'predict' || a === 'ablate' ? REVIEW_BANK.some((q) => q.key === k) : a === 'codex' ? !!checkOf(b)?.[+d] : b === 'recap' ? !!byId.get(a)?.recap?.check?.[+d] : byId.get(a)?.steps[+b]?.challenge?.kind === 'quiz';
         if (!ok) bad.push(`${s.id}: ${k}`);
       }
       for (const id of s.levels) if (!nodeById(id)) bad.push(`${s.id}: level ${id}`);

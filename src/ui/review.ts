@@ -90,7 +90,12 @@ export interface Question {
   href: string;
   /** The chapter id when from one (visited gate). */
   chapter?: string;
+  /** Generated (learn/bank.ts): never seen, at most NEW_GENERATED of them in a queue, so they season the authored ones. */
+  generated?: boolean;
 }
+
+/** New generated questions a queue may hold. */
+export const NEW_GENERATED = 3;
 
 export interface QueueOptions {
   now: number;
@@ -125,7 +130,11 @@ export function buildQueue<Q extends Question>(all: readonly Q[], st: ReviewStat
     // misses: the oldest wrong first; the rest: unseen, then the longest unseen; ties keep the catalogue's order
     || (a.m?.last ?? 0) - (b.m?.last ?? 0) || a.i - b.i);
   const why = ['missed', 'soon', 'due'] as const;
-  return rows.slice(0, o.limit ?? 12).map((r) => ({ q: r.q, why: r.m ? why[r.t] : 'new' }));
+  // new generated questions: at most NEW_GENERATED, every third place from the third, so a short session still meets one
+  const fresh = rows.filter((r) => !r.m && r.q.generated).slice(0, NEW_GENERATED);
+  const kept = rows.filter((r) => r.m || !r.q.generated);
+  fresh.forEach((r, k) => kept.splice(Math.min(kept.length, 2 + 3 * k), 0, r));
+  return kept.slice(0, o.limit ?? 12).map((r) => ({ q: r.q, why: r.m ? why[r.t] : 'new' }));
 }
 
 export interface Summary {
