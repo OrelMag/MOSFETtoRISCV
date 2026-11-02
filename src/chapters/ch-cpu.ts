@@ -475,11 +475,11 @@ export const chIsa: Chapter = {
     {
       title: 'Six formats, fixed register fields',
       reading: {
-        source: 'RISC-V Unprivileged ISA', section: '2.2 Base Instruction Formats',
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Base Instruction Formats',
         quote: [
-          'In the base RV32I ISA, there are four core instruction formats (R/I/S/U), as shown in Figure 2.2. All are a fixed 32 bits in length. The base ISA has IALIGN=32, and instructions must be aligned on a four-byte boundary in memory.',
+          'All are a fixed 32 bits in length. The base ISA has IALIGN=32, meaning that instructions must be aligned on a four-byte boundary in memory.',
           'The RISC-V ISA keeps the source (rs1 and rs2) and destination (rd) registers at the same position in all formats to simplify decoding.'],
-        note: 'The step counts six formats; the manual counts four core ones (R, I, S, U) and treats B and J as the S and U formats with their immediate bits rearranged (section 2.3). The count differs, the bits are the same.',
+        note: 'The step counts six formats; the manual counts four core ones (R, I, S, U) and treats B and J as the S and U formats with their immediate bits rearranged (Immediate Encoding Variants). The count differs, the bits are the same.',
         quizzes: [
           { question: 'The manual calls R, I, S and U the core formats and B and J variants of S and U. What makes a variant?', options: ['A different opcode width', 'Only how the immediate bits are arranged in the word', 'A different position of rs1 and rs2', 'A different instruction length'], answer: 1,
           why: ['Every format has the opcode in bits 6:0.', '', 'rs1 and rs2 never move: that is the rule quoted above.', 'All are 32 bits in RV32I.'],
@@ -717,10 +717,10 @@ export const chSingleCycle: Chapter = {
     {
       title: 'Loads and stores',
       reading: {
-        source: 'RISC-V Unprivileged ISA', section: '2.3 Immediate Encoding Variants',
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Immediate Encoding Variants',
         quote: [
           'The only difference between the S and B formats is that the 12-bit immediate field is used to encode branch offsets in multiples of 2 in the B format. Instead of shifting all bits in the instruction-encoded immediate left by one in hardware as is conventionally done, the middle bits (imm[10:1]) and sign bit stay in fixed positions, while the lowest bit in S format (inst[7]) encodes a high-order bit in B format.',
-          'Sign-extension is one of the most critical operations on immediates (particularly in RV64I), and in RISC-V the sign bit for all immediates is always held in bit 31 of the instruction to allow sign-extension to proceed in parallel with instruction decoding.'],
+          'Sign extension is one of the most critical operations on immediates (particularly for XLEN>32), and in RISC-V the sign bit for all immediates is always held in bit 31 of the instruction to allow sign extension to proceed in parallel with instruction decoding.'],
         note: 'This is the immediate generator you can open in the datapath: each output bit is a wire from one instruction bit, a copy of bit 31, or ground, and a multiplexer on the format picks among them.',
         quizzes: [
           { question: 'The I-type immediate field of a load holds 0xFFC. What 32-bit value does the immediate generator produce?', options: ['0x00000FFC', '0xFFFFFFFC', '0xFFFFF000', '0x7FFFFFFC'], answer: 1,
@@ -777,10 +777,10 @@ export const chSingleCycle: Chapter = {
     {
       title: 'Branches and jumps',
       reading: {
-        source: 'RISC-V Unprivileged ISA', section: '2.5 Control Transfer Instructions',
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Control Transfer Instructions (Unconditional Jumps; Conditional Branches)',
         quote: [
-          'The jump and link (JAL) instruction uses the J-type format, where the J-immediate encodes a signed offset in multiples of 2 bytes. The offset is sign-extended and added to the address of the jump instruction to form the jump target address. Jumps can therefore target a ±1 MiB range.',
-          'All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed offsets in multiples of 2 bytes. The offset is sign-extended and added to the address of the branch instruction to give the target address. The conditional branch range is ±4 KiB.'],
+          'The JAL (jump and link) instruction uses the J-type format, where the J-immediate encodes a signed offset in multiples of 2 bytes. The offset is sign-extended and added to the address of the jump instruction to form the jump target address. Jumps can therefore target a ±1 MiB range.',
+          'All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed offsets in multiples-of-two bytes. The offset is sign-extended and added to the address of the branch instruction to give the target address. The conditional branch range is ±4 KiB.'],
         note: 'The dedicated target adder in the datapath is exactly this sentence: PC plus the sign-extended immediate, computed beside the ALU, so that when the flags arrive only a multiplexer is left.',
         quizzes: [
           { question: 'A beq at address 0x20 has the offset −8. Where does it go when taken?', options: ['0x18', '0x1C', '0x14', '0x24'], answer: 0,

@@ -309,7 +309,7 @@ export const chTraps: Chapter = {
     {
       title: 'Control and status registers',
       reading: {
-        source: 'RISC-V Privileged ISA', section: 'Machine-Level ISA: mtvec, mepc, mstatus',
+        source: 'RISC-V Privileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'Machine-Level ISA: Machine Trap-Vector Base-Address (mtvec) Register; Machine Exception Program Counter (mepc) Register; Privilege and Global Interrupt-Enable Stack in mstatus',
         quote: [
           'The mtvec register is an MXLEN-bit WARL read/write register that holds trap vector configuration, consisting of a vector base address (BASE) and a vector mode (MODE).',
           'When a trap is taken into M-mode, mepc is written with the virtual address of the instruction that was interrupted or that encountered the exception.',

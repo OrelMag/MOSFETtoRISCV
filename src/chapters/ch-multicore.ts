@@ -343,9 +343,9 @@ export const chMulticore: Chapter = {
     {
       title: 'Memory ordering',
       reading: {
-        source: 'RISC-V Unprivileged ISA', section: '2.7 Memory Ordering Instructions',
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Memory Ordering Instructions',
         quote: [
-          'The FENCE instruction is used to order device I/O and memory accesses as viewed by other RISC-V harts and external devices or coprocessors. Any combination of device input (I), device output (O), memory reads (R), and memory writes (W) may be ordered with respect to any combination of the same.'],
+          'FENCE instructions are used to order device I/O and memory accesses as viewed by other RISC-V harts and external devices or coprocessors. Any combination of device input (I), device output (O), memory reads (R), and memory writes (W) may be ordered with respect to any combination of the same.'],
         note: 'fence w,r reads as: earlier writes (the predecessor set) are ordered before later reads (the successor set). That is the pair store buffering needs.',
         quizzes: [
           { question: 'Which fence between each core\'s store and its load forbids both cores reading 0 in store buffering?', options: ['fence r,w', 'fence w,r', 'fence r,r', 'fence w,w'], answer: 1,

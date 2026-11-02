@@ -154,10 +154,10 @@ export const chWidths: Chapter = {
     {
       title: 'The expander',
       reading: {
-        source: 'RISC-V Unprivileged ISA', section: 'C Extension: Overview',
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'Extension for Integer Compressed Instructions (Zca)',
         quote: [
-          'RVC uses a simple compression scheme that offers shorter 16-bit versions of common 32-bit RISC-V instructions when: the immediate or address offset is small, or one of the registers is the zero register (x0), the ABI link register (x1), or the ABI stack pointer (x2), or the destination register and the first source register are identical, or the registers used are the 8 most popular ones.',
-          'The C extension allows 16-bit instructions to be freely intermixed with 32-bit instructions, with the latter now able to start on any 16-bit boundary.'],
+          'The compressed extensions use a simple compression scheme that offers shorter 16-bit versions of common 32-bit RISC-V instructions when: the immediate or address offset is small, or one of the registers is the zero register (x0), the ABI link register (x1), or the ABI stack pointer (x2), or the destination register and the first source register are identical, or the registers used are the 8 most popular ones.',
+          'The Zca extension allows 16-bit instructions to be freely intermixed with 32-bit instructions, with the latter now able to start on any 16-bit boundary, i.e., IALIGN=16.'],
         note: 'Each clause of the first sentence is a reason a field can be shortened, and each one is a condition the expander\'s FORM decode ANDs in: rd ≠ 0, a 3-bit register, a small immediate.',
         quizzes: [
           { question: 'Which of these has a 16-bit form?', options: ['addi a0, a0, 1', 'addi a0, a1, 1', 'addi a0, a0, 100', 'add a0, a1, a2'], answer: 0,
