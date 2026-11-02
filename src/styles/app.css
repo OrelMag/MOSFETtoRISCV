@@ -2350,4 +2350,15 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-btn:disabled { opacity: 0.55; cursor: default; }
 .af-read, .af-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .af-note { color: var(--muted); }
+/* analogy figures E */
+.af-svg .af-pipe.off { stroke: var(--muted); stroke-dasharray: 5 4; opacity: 0.5; }
+.af-svg .af-lever { stroke: var(--warn); stroke-width: 4; stroke-linecap: round; }
+.af-svg .af-bucket.af-lit { fill: var(--analogy-soft); stroke: var(--analogy); stroke-width: 2; }
+.af-svg .af-w { stroke: var(--border-strong); stroke-width: 5; stroke-linecap: round; fill: none; }
+.af-svg .af-w.live { stroke: var(--series-1); }
+.af-svg .af-w.af-badw { stroke: var(--bad); }
+.af-svg .af-t.af-litt { fill: var(--text); font-weight: 700; }
+/* end analogy figures E */
 @media (pointer: coarse) { .af-btn { min-height: 40px; padding: 8px 12px; } .af-ctl input[type='range'] { height: 40px; width: 110px; } }
+/* analogy figures E */
+@media (pointer: coarse) { .af-ctl input[type='range'] { min-width: 120px; } }

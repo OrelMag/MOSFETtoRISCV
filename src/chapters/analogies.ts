@@ -115,23 +115,24 @@ export const ANALOGIES: Analogy[] = [
     codex: ['register'],
   },
   {
-    chapter: 'gates', step: 'The multiplexer: a digital switch', title: 'Railway points',
+    chapter: 'gates', step: 'The multiplexer: a digital switch', title: 'Railway points', figure: 'points',
     body: `<p>The select input sets the points; of the tracks coming in, one continues to the output. Change the points and a
       different track goes through.</p>`,
     breaks: `Points move a train; nothing moves through a multiplexer. Every input is computed all the time and the gates pass
-      one: an unselected input can change and nothing happens at the output, but its gates still switch and still cost power.`,
+      one: an unselected input can change and nothing happens at the output (here its first NAND is blocked by the select,
+      so nothing inside the mux moves), but whatever computes that input still switches and still costs power.`,
     codex: ['mux'],
   },
   {
-    chapter: 'memory', step: 'Four words, one address', title: 'A hotel switchboard',
+    chapter: 'memory', step: 'Four words, one address', title: 'A hotel switchboard', figure: 'switchboard',
     body: `<p>The address is a room number; the decoder rings exactly one room, and only that room's word can be read or
       written. Every other line stays quiet.</p>`,
-    breaks: `A switchboard connects calls when they come; a decoder answers every address on every cycle, and it doubles in size
-      with each address bit.`,
+    breaks: `A switchboard connects calls when they come; a decoder answers every address on every cycle, and each address
+      bit doubles the rooms and more than doubles the decoder.`,
     codex: ['decoder'],
   },
   {
-    chapter: 'appendix-sap', step: 'What a bus really is', title: 'One microphone, many speakers',
+    chapter: 'appendix-sap', step: 'What a bus really is', title: 'One microphone, many speakers', figure: 'microphone',
     body: `<p>Everyone on the bus shares one microphone. The control lines hand it to one speaker at a time; everybody may
       listen, and whoever is told to takes down what is said.</p>`,
     breaks: `Two people at one microphone make noise you can still pick apart. Two outputs driving one wire to different values
