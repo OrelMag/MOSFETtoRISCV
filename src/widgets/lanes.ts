@@ -2,6 +2,7 @@
 // step, the split / join stack, each lane's registers, golden-model lock-step), and the lanes
 // against cores comparison (NANDs by block and cycles, both measured).
 
+import { groupDigits } from '../sim/numfmt';
 import { alu, laneCore, multiCore, regfile } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { ABI, disasm } from '../riscv/isa';
@@ -297,16 +298,16 @@ export function lanesVsCoresWidget(): Widget {
       const w = ((W - x0) * v) / max;
       const rect = add('rect', { x, y, width: Math.max(0, w - 2), height: bh, rx: i === d.parts.length - 1 ? 4 : 0, fill: `var(--series-${i + 1})` });
       const t = document.createElementNS(S, 'title');
-      t.textContent = `${d.name}: ${CATS[i]}, ${v.toLocaleString('en')} NANDs`;
+      t.textContent = `${d.name}: ${CATS[i]}, ${groupDigits(v)} NANDs`;
       rect.appendChild(t);
       x += w;
     });
-    add('text', { x: x + 8, y: y + 17, class: 'tot' }, tot(d).toLocaleString('en'));
+    add('text', { x: x + 8, y: y + 17, class: 'tot' }, groupDigits(tot(d)));
   });
   const legend = h('div', { class: 'lvc-legend' }, ...CATS.map((c, i) => h('span', null, h('i', { style: `background:var(--series-${i + 1})` }), c)));
   const table = h('table', { class: 'lvc-table' },
     h('tr', null, h('th', null, 'NANDs'), ...CATS.map((c) => h('th', null, c)), h('th', null, 'Total'), h('th', null, 'saxpy cycles')),
-    ...rows.map((d) => h('tr', null, h('td', null, d.name), ...d.parts.map((v) => h('td', null, v.toLocaleString('en'))), h('td', null, tot(d).toLocaleString('en')), h('td', null, String(d.cycles)))));
+    ...rows.map((d) => h('tr', null, h('td', null, d.name), ...d.parts.map((v) => h('td', null, groupDigits(v))), h('td', null, groupDigits(tot(d))), h('td', null, String(d.cycles)))));
   const saving = 1 - tot(lanes) / tot(cores);
   el.append(h('div', { class: 'lvc-title' }, 'NAND gates by block, and cycles for saxpy on 16 elements'), legend, svg, table,
     h('p', { class: 'sub' }, `The lanes cost ${(100 * saving).toFixed(0)} % less, and take ${lanes.cycles} cycles against ${cores.cycles}: `

@@ -58,7 +58,7 @@ export const CPU4_NOTES = 'A 4-bit accumulator machine with the Intel 4004\'s in
   + 'The program ROM holds 4-bit assembly: Edit program… for the samples (BCD addition, a counter, the switches, a subroutine, the TEST key). '
   + 'SRC Pn picks the port (the pair\'s high nibble: 0–3 the digits, 4 the LEDs), WRR writes A to it; RDR reads the switches; JCN TZ / TN test the TEST key (Space). '
   + 'Run (or Run to halt in the CPU drawer, which checks every register against the golden model): the BCD sample shows 1234 + 5876 = 7110 and halts on JUN to itself. '
-  + 'Cost: about 3 400 NANDs without the ROM, against 48 000 for the single-cycle RV32I.';
+  + 'Cost: about 3400 NANDs without the ROM, against 48 000 for the single-cycle RV32I.';
 
 /** The example's top level; `sub` maps CPU4_BLOCKS keys to the sub-chips' ids. */
 export function cpu4Chip(id: string, name: string, sub: Record<string, string>, src = BCD4): ChipDoc {

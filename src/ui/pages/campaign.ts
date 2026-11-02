@@ -4,6 +4,7 @@
 // level screen (pages/level.ts): Play writes the level's chip into the saved workspace and opens
 // #/campaign/play/<node>.
 
+import { groupDigits } from '../../sim/numfmt';
 import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
 import '../../styles/level.css';
@@ -343,10 +344,10 @@ export class CampaignPage implements Page {
       el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', pz.brief)),
         h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
           h('ul', null, h('li', null, pz.lanes && pz.warps
-            ? `${pz.tests().length} tests on the two-warp golden model (${pz.warps} warps of ${pz.lanes} lanes taking turns, one shared memory); each must end within ${pz.maxSteps.toLocaleString()} cycles with the expected memory, and again with warp ${pz.warps - 1} running ahead.`
+            ? `${pz.tests().length} tests on the two-warp golden model (${pz.warps} warps of ${pz.lanes} lanes taking turns, one shared memory); each must end within ${groupDigits(pz.maxSteps)} cycles with the expected memory, and again with warp ${pz.warps - 1} running ahead.`
             : pz.lanes
-            ? `${pz.tests().length} tests on the lane golden model (${pz.lanes} lanes, one shared memory); each must halt within ${pz.maxSteps.toLocaleString()} warp instructions with the expected memory.`
-            : `${pz.tests().length} tests on the golden model; each must halt within ${pz.maxSteps.toLocaleString()} ${pz.dma ? 'cycles (flash stalls included)' : 'instructions'} with the expected output.`),
+            ? `${pz.tests().length} tests on the lane golden model (${pz.lanes} lanes, one shared memory); each must halt within ${groupDigits(pz.maxSteps)} warp instructions with the expected memory.`
+            : `${pz.tests().length} tests on the golden model; each must halt within ${groupDigits(pz.maxSteps)} ${pz.dma ? 'cycles (flash stalls included)' : 'instructions'} with the expected output.`),
             pz.tests().map((t) => h('li', null, t.name)))));
       if (st !== 'locked') {
         let card = this.cards.get(n.id);
@@ -406,7 +407,7 @@ export class CampaignPage implements Page {
     if (hasTwin(n.id) && !n.soon && st !== 'locked') {
       const vp = p.get(twinKey(n.id));
       el.append(h('div', { class: 'cp-twin' }, h('b', null, 'Also in Verilog'),
-        h('p', { class: 'sub' }, vp?.stars ? `Passed with ${'★'.repeat(vp.stars)}${vp.best?.nand !== undefined ? ` at ${vp.best.nand.toLocaleString()} NANDs` : ''}. Optional.` : 'The same block written as Verilog: Yosys in your browser turns it into NANDs and the level’s own check grades it. Optional.'),
+        h('p', { class: 'sub' }, vp?.stars ? `Passed with ${'★'.repeat(vp.stars)}${vp.best?.nand !== undefined ? ` at ${groupDigits(vp.best.nand)} NANDs` : ''}. Optional.` : 'The same block written as Verilog: Yosys in your browser turns it into NANDs and the level’s own check grades it. Optional.'),
         h('a', { class: 'btn sm', href: `#/campaign/play/${twinKey(n.id)}` }, icon('play', 13), vp?.status ? 'Continue' : 'Try it in Verilog')));
     }
     el.append(this.actions(n, st, ch));

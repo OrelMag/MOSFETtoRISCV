@@ -34,9 +34,9 @@ export const CASES0: Record<string, LevelCase> = {
     cost: 'Nothing to build. The rewrites are free too: they change which NANDs exist, never add a part, and checking one is a truth table (2^n rows for n inputs).',
   },
   n_bin: {
-    problem: 'Inside the machine a number is only a pattern of bits. RV16\'s registers, its PC and every memory word are 16 bits: unsigned, bit k weighs 2^k, so a word holds 0 to 65 535. Hex writes it as four digits, one per nibble, which is how the instruction fields line up: op is bits 3–0, the low digit. The decoder reads its 3-bit address as a number, the prime detector its 4-bit input.',
-    without: 'Decimal hides the bit positions: 0x8000 (bit 15 alone) is 32 768, and 0xFFFF is 65 535.',
-    cost: 'A convention, so no gates. What it fixes is the range: n bits hold 2^n values, so a 16-bit PC names 65 536 instruction words.',
+    problem: 'Inside the machine a number is only a pattern of bits. RV16\'s registers, its PC and every memory word are 16 bits: unsigned, bit k weighs 2^k, so a word holds 0 to 65 535. Hex writes it as four digits, one per nibble, which is how the instruction fields line up: op is bits 3–0, the low digit. The decoder reads its 3-bit address as a number, the prime detector its 4-bit input.',
+    without: 'Decimal hides the bit positions: 0x8000 (bit 15 alone) is 32 768, and 0xFFFF is 65 535.',
+    cost: 'A convention, so no gates. What it fixes is the range: n bits hold 2^n values, so a 16-bit PC names 65 536 instruction words.',
   },
   d_kmap: {
     problem: 'Algebra transforms a sum of products but does not say when it is minimal. A Karnaugh map draws the truth table in Gray order, so cells that touch differ in one bit: a group of 2^k cells is one product with k literals fewer. Don\'t-cares (inputs that never occur, like unused opcodes) may join any group. The control unit\'s 14 output bits are functions of the opcode and f3 found this way.',
@@ -248,7 +248,7 @@ export const CASES0: Record<string, LevelCase> = {
   n_twos: {
     problem: 'RV16 is two\'s complement throughout. The 6-bit immediates of addi, lw, sw and the branches are sign-extended by wiring alone: instr[15] fans out to every upper bit, so the immediate generator has no gates. The same adder adds signed and unsigned words; only the comparisons differ (signed less-than looks at the signs or N ⊕ V, unsigned at the carry out), and sra fills with the sign bit.',
     without: 'Sign and magnitude has a +0 and a −0, and adding numbers of different signs means comparing magnitudes and subtracting the smaller from the larger: a comparator and a second subtractor beside the adder. One\'s complement also has two zeros, and its carry out must be added back in (end-around carry).',
-    cost: 'A convention, so no gates of its own: the immediate generator is wiring (0 NANDs), and negation is the adder / subtractor\'s XORs and carry in. A 16-bit word holds −32 768 to 32 767; 0x8000 has no positive twin.',
+    cost: 'A convention, so no gates of its own: the immediate generator is wiring (0 NANDs), and negation is the adder / subtractor\'s XORs and carry in. A 16-bit word holds −32 768 to 32 767; 0x8000 has no positive twin.',
   },
   m_mem: {
     problem: 'Programs live in ROM, data in RAM. Built like the register file, a 64-word RAM is 20166 NANDs (80664 transistors, about 79 per bit), over four times the single-cycle core. Real memories are dense arrays: an SRAM bit is 6 transistors, a DRAM bit one transistor and a capacitor. From here on memories are given; the core levels\' bench serves the instruction and data words in the same cycle.',

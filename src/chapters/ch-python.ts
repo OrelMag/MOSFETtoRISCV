@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { cpuState } from '../riscv/cosim';
 import { pyCompile, pyCost, pyLinked, pyProfile, pyScene } from '../widgets/python';
 import { PY_PROGRAMS } from '../lang/pyprograms';
@@ -7,7 +8,7 @@ import type { Chapter } from './types';
 // model and the gate-level CPU the scenes build (singleCycleCpu with PY_IMEM_K / PY_DMEM_K).
 
 const src = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 
 /** Cycles the golden model needs for a sample program, and per Python line (own + runtime routines called from it). */
 const PROF = (id: string) => { const c = pyCompile(src(id)); return { c, p: pyProfile(c) }; };
@@ -125,7 +126,7 @@ export const chPython: Chapter = {
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
         toward minus infinity.</p>
         <p>Measured: Collatz from 27 runs 938 cycles, every line a few instructions. In gcd, <code>t = a % b</code>
-        costs about 240 cycles a call, 1 472 of the program's 1 545. Chapter 21's divider does the same 32 steps in
+        costs about 240 cycles a call, 1472 of the program's 1545. Chapter 21's divider does the same 32 steps in
         hardware, with no instruction fetched between them.</p>
         <p>The lesson generalizes: the cost of an operator is the number of instructions behind it, and an operator that looks like one indivisible step in the source can hide a loop. A programmer who
         knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider (chapter 21) moves that loop out of
@@ -146,17 +147,17 @@ export const chPython: Chapter = {
     {
       title: 'Run it on the gates',
       body: `
-        <p>The CPU is chapter 14's, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
-        403 916 transistors. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
+        <p>The CPU is chapter 14's, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
+        403 916 transistors. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
         gives the line running, the registers and data memory give the variables, the words from the output's start to
         gp give what was printed.</p>
         <p><em>Step line</em> clocks <span data-show="pc imem rf alu">the CPU</span> until the next Python line starts
         (Back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
-        <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
+        <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
         through <span data-show="rf alu">the register file and the ALU</span>. Click a line to light the hardware its
         instructions use. The CPU panel still checks every register against the golden model after every cycle.</p>
-        <p>Two things this view makes concrete. First, how little of the machine a line uses: one <code>add</code> reads two registers and writes one, and the rest of the ~400 000 transistors
-        sit idle in that cycle, though about 25 000 nets still change value, because a new instruction word has just been fetched and decoded. Second, that the abstraction
+        <p>Two things this view makes concrete. First, how little of the machine a line uses: one <code>add</code> reads two registers and writes one, and the rest of the ~400 000 transistors
+        sit idle in that cycle, though about 25 000 nets still change value, because a new instruction word has just been fetched and decoded. Second, that the abstraction
         holds: the Python never mentions a register or a wire, yet its variable <code>total</code> is a set of flip-flops you can read and watch change.</p>`,
       scene: () => pyScene(src('sum'), { highlight: ['rf', 'alu'] }),
       tour: {

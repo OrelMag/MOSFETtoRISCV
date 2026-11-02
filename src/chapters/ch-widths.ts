@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { C_EXPAND, cFetch, W_ALU } from '../lib';
@@ -23,7 +24,7 @@ const K = RVC_COSTS;
 const C64 = (id: string) => WIDTH_COSTS.find((r) => r.id === id);
 const pct = (a: number, b: number) => Math.round((100 * (a - b)) / b);
 const X = XLEN_COSTS;
-const fmt = (n: number) => n.toLocaleString('en-US');
+const fmt = groupDigits;
 /** Share of a program's size left when a fraction f of its instructions shrink from 4 bytes to 2. */
 const sizeLeft = (f: number) => 1 - f / 2;
 const pctLeft = (f: number) => (100 * sizeLeft(f)).toFixed(0);
@@ -46,7 +47,7 @@ export const chWidths: Chapter = {
       'Most instructions are short in what they say: copy a register, load a small constant, add a small number, touch the stack. The C extension gives those a 16-bit form. On our programs: 68 % of the compiled Python samples\' instructions, 34 % fewer bytes; the hand-written benchmarks 15–31 % fewer.',
       'A parcel is compressed when bits 1:0 ≠ 11, which leaves a quarter of the 16-bit space to the 32-bit instructions. The price of 16 bits: 3-bit register fields (x8–x15: s0, s1, a0–a5), the destination doubling as a source, 6-bit immediates, offsets scaled by the access size.',
       'Every 16-bit instruction is exactly one 32-bit instruction, so the hardware rewrites it before the decoder. The rewrite only moves bits and adds constants: the gates recognize which of the 30 forms it is and pick each field.',
-      `The C single-cycle core: ${K.c.nands.toLocaleString()} NANDs against ${K.plain.nands.toLocaleString()} (+${((100 * (K.c.nands - K.plain.nands)) / K.plain.nands).toFixed(1)} %), period ${K.c.period} against ${K.plain.period} NAND delays (+${pct(K.c.period, K.plain.period)} %): the expander (${K.expander.depth} deep) and the second bank's index sit in series with decode. With a ROM per program, C saves storage and costs speed; it pays where instruction bytes are the bottleneck, a cache or a narrow memory.`,
+      `The C single-cycle core: ${groupDigits(K.c.nands)} NANDs against ${groupDigits(K.plain.nands)} (+${((100 * (K.c.nands - K.plain.nands)) / K.plain.nands).toFixed(1)} %), period ${K.c.period} against ${K.plain.period} NAND delays (+${pct(K.c.period, K.plain.period)} %): the expander (${K.expander.depth} deep) and the second bank's index sit in series with decode. With a ROM per program, C saves storage and costs speed; it pays where instruction bytes are the bottleneck, a cache or a narrow memory.`,
       'RV64 widens the registers, the PC and every ALU result to 64 bits and keeps every RV32 encoding. Per block: once per bit doubles (registers, the register file, multiplexers), a tree over the bits doubles and adds a level (adders, shifter), the multiplier quadruples, the iterative divider doubles in area and in time.',
       `The W instructions (addw, subw, sllw, srlw, sraw, addiw, the shift immediates, mulw, divw, remw …) keep RV32's 32-bit arithmetic: operands cut to 32 bits and extended, the result's low half sign-extended. In gates, ${fmt(X.wUnit.nands)} NANDs and ${X.wUnit.depth} levels around the 64-bit ALU. lw sign-extends, lwu does not; ld / sd move a doubleword.`,
       `The same single-cycle core at 64 bits: ${fmt(X.rv64im.nands)} NANDs against ${fmt(X.rv32im.nands)} (×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)}), period ${X.rv64im.period} against ${X.rv32im.period}. On 32-bit programs it does the same instructions, slower; it pays when the values are 64 bits wide.`,
@@ -181,8 +182,8 @@ export const chWidths: Chapter = {
         (<span data-show="opcode">opcode</span>, <span data-show="rd">rd</span>, <span data-show="funct3">funct3</span>, <span data-show="rs1">rs1</span>,
         <span data-show="rs2">rs2</span>, <span data-show="funct7">funct7</span>) is a one-hot multiplexer: forms that fill it the same way share an input,
         their wires ORed, and each bit is a NAND per input, then a NAND across them. A 32-bit instruction is one more input that passes straight through.</p>
-        <p>${K.expander.nands.toLocaleString()} NANDs, ${K.expander.depth} deep. The recipes come from the specification: the generator reads, for every one of the
-        65 536 parcels, where each bit of the expansion comes from, and a test checks the gates on all of them.</p>
+        <p>${groupDigits(K.expander.nands)} NANDs, ${K.expander.depth} deep. The recipes come from the specification: the generator reads, for every one of the
+        65 536 parcels, where each bit of the expansion comes from, and a test checks the gates on all of them.</p>
         <p>Spread over the 32 output bits that is about ${Math.round(K.expander.nands / 32)} NANDs a bit: not much logic, but a long path: ${K.expander.depth} levels, against ${X.alu[32].depth} for the whole 32-bit ALU.
         The form decode, the one-hot select and the OR across forms are in series, and the result still has to go through the ordinary decoder.</p>`,
       scene: () => ({ root: C_EXPAND, inputs: { w: 0x4408 } }),
@@ -203,7 +204,7 @@ export const chWidths: Chapter = {
       more: {
         derive: `<p>A field of the output is a one-hot multiplexer: with F forms asserted one at a time and recipes r(f) for the field, bit i is the OR over forms of
           (form f AND the source bit r(f, i)). Forms that fill the field the same way share a recipe, so the OR is over recipes, not forms. In NANDs: one NAND per
-          (recipe, bit) input, then one NAND across them. ${K.expander.nands.toLocaleString()} NANDs for 32 bits, ${K.expander.depth} deep.</p>`,
+          (recipe, bit) input, then one NAND across them. ${groupDigits(K.expander.nands)} NANDs for 32 bits, ${K.expander.depth} deep.</p>`,
         real: `<p>Shipping cores with C do the same thing in a module in front of decode (Rocket's RVCExpander, Ibex's compressed decoder). The expander is on the
           critical path of the fetch stage in a pipelined core, and some cores cut the path by predecoding the instruction lengths when the cache line is filled.</p>`,
         pitfall: `<p>Running the expander on the wrong window. The expander sees 32 bits starting at the PC; it must first decide, from bits 1:0 alone, whether the
@@ -276,9 +277,9 @@ export const chWidths: Chapter = {
         <table class="rvc-table">
           <thead><tr><th>Single-cycle core</th><th class="num">NANDs (no ROM)</th><th class="num">Period</th></tr></thead>
           <tbody>
-            <tr><td>RV32I (chapter 14)</td><td class="num">${K.plain.nands.toLocaleString()}</td><td class="num">${K.plain.period}</td></tr>
-            <tr><td>RV32IC</td><td class="num">${K.c.nands.toLocaleString()}</td><td class="num">${K.c.period}</td></tr>
-            <tr><td>… expander</td><td class="num">${K.expander.nands.toLocaleString()}</td><td class="num">${K.expander.depth} deep</td></tr>
+            <tr><td>RV32I (chapter 14)</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
+            <tr><td>RV32IC</td><td class="num">${groupDigits(K.c.nands)}</td><td class="num">${K.c.period}</td></tr>
+            <tr><td>… expander</td><td class="num">${groupDigits(K.expander.nands)}</td><td class="num">${K.expander.depth} deep</td></tr>
             <tr><td>… bank index and swaps</td><td class="num">${K.fetch}</td><td class="num"></td></tr>
           </tbody>
         </table>
@@ -333,7 +334,7 @@ export const chWidths: Chapter = {
         So the question "what does a 64-bit core cost?" has an exact answer, block by block, and the blocks fall into four kinds:</p>
         <ul>
           <li><strong>Once per bit</strong>: registers, the register file, multiplexers. Twice the bits, twice the gates, the same delay. The register
-          file alone is ${(C64('rf')!.nands[1] - C64('rf')!.nands[0]).toLocaleString()} more NANDs.</li>
+          file alone is ${groupDigits(C64('rf')!.nands[1] - C64('rf')!.nands[0])} more NANDs.</li>
           <li><strong>A tree over the bits</strong>: the Kogge–Stone adder, the shifter, the zero test. A little over twice the gates, one more level:
           the 64-bit ALU is ${C64('alu')!.depth![1] - C64('alu')!.depth![0]} NAND delays slower than the 32-bit one. A ripple adder would have doubled its delay.</li>
           <li><strong>Every bit with every bit</strong>: the multiplier's partial products. Four times the gates.</li>

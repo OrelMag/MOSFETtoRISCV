@@ -2,6 +2,7 @@
 // lessons, thread clauses and the control unit's brief quote is measured here, and the content is complete (a why
 // that names a cost, tips, nudges, a case, the thread's uses / clauses / pitfalls for every dependent).
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { caseOf } from '../src/campaign/cases';
 import { BUILD5, CTL_ROWS, ctlTable } from '../src/campaign/build5';
@@ -32,8 +33,8 @@ const mine = NODES.filter((n) => ACTS.includes(n.act));
 const node = (id: string) => nodeById(id)!;
 const par = (id: string) => node(id).par!;
 const nand = (id: string) => libCost(id)!.nand;
-const fmt = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const fmt = (v: number) => groupDigits(v);
+const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/[ \t\r\n]+/g, ' ');
 const why = (id: string) => plain(node(id).why);
 const lesson = (k: string) => plain(LESSONS[k]);
 

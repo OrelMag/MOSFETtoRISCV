@@ -6,6 +6,7 @@
 // illustrative 28 nm-class values (like PS_PER_NAND), not extracted from a layout; leakage is not modelled.
 // Behavioural leaves (the program ROM, large memories) switch nothing inside: only their outputs are counted.
 
+import { groupDigits } from './numfmt';
 import { flatten, type FlatDesign, type HierNode } from './flatten';
 import { GateSim } from './gatesim';
 import { needsSwitchLevel } from './harness';
@@ -175,7 +176,7 @@ export function powerRefusal(def: ComponentDef, maxNands = 40_000): string {
   if (needsSwitchLevel(def)) return 'Transistor-level circuit: the switch-level solver has no time, so it cannot count glitches.';
   const n = stats(def).nands;
   if (!n) return 'No gates inside.';
-  if (n > maxNands) return `${n.toLocaleString()} NANDs: too large to measure on random inputs here.`;
+  if (n > maxNands) return `${groupDigits(n)} NANDs: too large to measure on random inputs here.`;
   if (!inPorts(def).length) return 'No inputs to drive.';
   return '';
 }

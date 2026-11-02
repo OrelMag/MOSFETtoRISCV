@@ -9,6 +9,7 @@
 // gets the multi-hart view: each core's instruction, registers side by side, which core retired,
 // the shared memory. A properties section sets or overrides what detection found (cpu.ts).
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/sbcpu.css';
 import { wordsHash } from '../lib/bigmem';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
@@ -385,7 +386,7 @@ class CpuPanel {
       m.runToHalt(this.runBudget.ms, this.runCap);
       work = performance.now() - t;
       if (m.done || this.ed.sim.cycles >= this.runCap) {
-        if (!m.done) this.ed.toast(`Stopped after ${RUN_CAP.toLocaleString('en')} cycles without halting`);
+        if (!m.done) this.ed.toast(`Stopped after ${groupDigits(RUN_CAP)} cycles without halting`);
         return this.stopRun();
       }
       this.running = requestAnimationFrame(tick);
@@ -541,7 +542,7 @@ class CpuPanel {
     const multi = mon instanceof MultiMonitor;
     keyed(this.runBtn, `${!!this.running}`, () => [icon(this.running ? 'pause' : 'play', 14), this.running ? 'Stop' : 'Run to halt']);
     this.runBtn.disabled = !mon.checking;
-    this.runBtn.title = mon instanceof M6502Monitor ? `Clock until the program jumps to itself, or ${RUN_CAP.toLocaleString('en')} cycles` : mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${RUN_CAP.toLocaleString('en')} cycles`
+    this.runBtn.title = mon instanceof M6502Monitor ? `Clock until the program jumps to itself, or ${groupDigits(RUN_CAP)} cycles` : mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${groupDigits(RUN_CAP)} cycles`
       : 'Needs the golden model (a register file to check, a program that builds, a Reset) to know when the program halts';
     this.stepBtn.title = multi ? 'One clock cycle: every core that is not stalled retires an instruction'
       : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : mon instanceof SapMonitor ? 'Clock to the next T0: one instruction (five steps)' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';

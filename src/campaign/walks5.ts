@@ -36,7 +36,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Load, or shift right',
-      text: 'mh and ml (64 NANDs each) choose between loading {0, b} and the next value: the 17-bit {carry, sum} and L shifted right one place as a whole, so H = {carry, sum[15:1]} and L = {sum[0], L[15:1]}. The shift costs nothing: it is the wiring into the muxes. 1 169 NANDs in all, against 2 672 for a 16 × 16 array, for 17 edges instead of one.',
+      text: 'mh and ml (64 NANDs each) choose between loading {0, b} and the next value: the 17-bit {carry, sum} and L shifted right one place as a whole, so H = {carry, sum[15:1]} and L = {sum[0], L[15:1]}. The shift costs nothing: it is the wiring into the muxes. 1169 NANDs in all, against 2672 for a 16 × 16 array, for 17 edges instead of one.',
       parts: ['mh', 'ml'], codex: ['mux'],
       why: 'Shifting the sum right instead of shifting a left keeps the adder 16 bits wide: H always sits under the addend. The shift is wiring only; the same mux provides the load.',
       whyNot: { text: 'Shifting a left each step needs a 32-bit adder and a 32-bit copy of a, twice the width on the critical path.' },
@@ -74,7 +74,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'The last row',
-      text: 'add7 gives p[7] and, with its carry, the top eight bits p[15:8]. 8 × 16 + 7 × 72 = 632 NANDs, no clock and no control. Cells grow as n², depth as n: 16 × 16 is 2 672 NANDs, 150 deep.',
+      text: 'add7 gives p[7] and, with its carry, the top eight bits p[15:8]. 8 × 16 + 7 × 72 = 632 NANDs, no clock and no control. Cells grow as n², depth as n: 16 × 16 is 2672 NANDs, 150 deep.',
       parts: ['add7'],
       why: 'Nothing follows the last adder, so its whole sum and carry are the product\'s top eight bits.',
       whyNot: { text: 'A Wallace tree sums the rows in logarithmic depth at the price of irregular wiring and more cells. The array keeps one regular cell and a depth that grows with n.' },
@@ -91,7 +91,7 @@ export const WALKS5: Record<string, WalkScript> = {
   o_mcore: [
     {
       title: 'Core III, as before',
-      text: 'Control, immediates, register file, ALU, branch comparator, next PC, result mux and PC: Core III unchanged, 4 720 NANDs at period 98. Its control unit writes nothing for opcode 0011, so MD needs a decode, a datapath and a write of its own.',
+      text: 'Control, immediates, register file, ALU, branch comparator, next PC, result mux and PC: Core III unchanged, 4720 NANDs at period 98. Its control unit writes nothing for opcode 0011, so MD needs a decode, a datapath and a write of its own.',
       parts: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u20', 'u22', 'u23'], codex: ['singlecycle'],
       why: 'Everything except the multiply stays as built, so the change is the smallest that adds the instruction: a decode, a unit and a write path.',
       whyNot: { text: 'Reusing the ALU for the multiply is not possible in one cycle: a multiply is a different function with the array\'s depth, so it is a unit of its own.' },
@@ -105,10 +105,10 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'The multiplier',
-      text: 'The MD multiplier (3 257 NANDs, depth 166) reads rs1 and rs2 straight from the register file. Inside, one unsigned 16 × 16 array (2 672) serves all four: the signed high half (mulh) is the unsigned one minus b when a < 0 and minus a when b < 0; mulhsu (a signed, b unsigned) takes only the first correction, mulhu neither.',
+      text: 'The MD multiplier (3257 NANDs, depth 166) reads rs1 and rs2 straight from the register file. Inside, one unsigned 16 × 16 array (2672) serves all four: the signed high half (mulh) is the unsigned one minus b when a < 0 and minus a when b < 0; mulhsu (a signed, b unsigned) takes only the first correction, mulhu neither.',
       parts: ['u15'], codex: ['arraymul', 'signedmul'],
       why: 'rs1 and rs2 are already at the register file\'s read ports, so the unit only has to produce the product by the end of the cycle. One unsigned array with two corrections serves all four variants.',
-      whyNot: { text: 'A separate array for each of mul, mulh, mulhsu and mulhu would repeat the 2 672-NAND array four times for what two conditional subtractions fix.' },
+      whyNot: { text: 'A separate array for each of mul, mulh, mulhsu and mulhu would repeat the 2672-NAND array four times for what two conditional subtractions fix.' },
       ask: {
         question: 'The multiplier is 166 deep and sits between the register file\'s read and write ports. Core III ran at period 98. What happens?',
         options: ['Every instruction now takes a period of about 191', 'Multiplies take longer; other instructions keep period 98', 'Nothing: the multiplier runs beside the ALU'],
@@ -119,7 +119,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Write the product',
-      text: 'rwe = rwe + MD, and one more 16-bit mux puts the product on the write-back path when MD: 52 NANDs. 8 037 NANDs in all, +3 317 over Core III.',
+      text: 'rwe = rwe + MD, and one more 16-bit mux puts the product on the write-back path when MD: 52 NANDs. 8037 NANDs in all, +3317 over Core III.',
       parts: ['u18', 'u19'], codex: ['datapath'],
       why: 'The product must reach rd by the same write-back path as every other result, and the control asserts no write for this opcode, so both the write enable and the result mux need MD.',
       whyNot: { text: 'Overriding the result inside the control unit again edits a given block. One extra mux after it (52 NANDs with the enable) leaves the ALU path alone.' },
@@ -164,7 +164,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'One step',
-      text: 'The given division step (482 NANDs, depth 21) shifts the remainder left with rq\'s top bit and subtracts b: if the difference is not negative it is the new remainder and the quotient bit is 1, else the remainder is just shifted and the bit is 0. Its path is most of the period, 31; 1 445 NANDs in all.',
+      text: 'The given division step (482 NANDs, depth 21) shifts the remainder left with rq\'s top bit and subtracts b: if the difference is not negative it is the new remainder and the quotient bit is 1, else the remainder is just shifted and the bit is 0. Its path is most of the period, 31; 1445 NANDs in all.',
       parts: ['step'],
       why: 'The step is the only arithmetic: shift in a bit, subtract, keep the result if it is not negative. Reusing one block for 16 cycles trades time for gates.',
       whyNot: { text: 'An array of 16 such steps divides in one cycle, but its path is about 613 deep against this unit\'s period of 31, with 16 copies of the 482-NAND step.' },
@@ -188,13 +188,13 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Multiply, as in the last level',
-      text: 'MD = opcode 0011, decoded from the opcode bits (8 NANDs), and the MD multiplier (3 257 NANDs) on f3[1:0].',
+      text: 'MD = opcode 0011, decoded from the opcode bits (8 NANDs), and the MD multiplier (3257 NANDs) on f3[1:0].',
       parts: ['u13', 'u14', 'u16', 'u17', 'u15'], codex: ['mext'],
       why: 'The multiply is carried over so MD can choose between product and quotient later by f3[2].',
     },
     {
       title: 'Start the divider',
-      text: 'divide = MD · f3[2]: div, divu, rem and remu are f3 4 to 7. It drives the MD divider\'s start (2 400 NANDs: the 1 445-NAND unsigned divider with the signs taken off and put back around it). The divider loads on the first cycle and ignores start while busy.',
+      text: 'divide = MD · f3[2]: div, divu, rem and remu are f3 4 to 7. It drives the MD divider\'s start (2400 NANDs: the 1445-NAND unsigned divider with the signs taken off and put back around it). The divider loads on the first cycle and ignores start while busy.',
       parts: ['u18', 'u19'], codex: ['division'],
       why: 'f3[2] already separates the four divide forms (f3 4 to 7) from the multiplies under the same opcode, so one AND on existing signals starts the divider.',
       whyNot: { text: 'A second opcode would use up an encoding that RISC-V already assigns to the M extension.' },
@@ -215,7 +215,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Write once, at the end',
-      text: 'A 16-bit mux picks the multiplier or the divider by f3[2], and the MD mux puts it on write-back. rwe = rwe + MD · ¬hold: nothing is written until the last cycle. 10 546 NANDs, period 193; every divide holds the core 18 cycles.',
+      text: 'A 16-bit mux picks the multiplier or the divider by f3[2], and the MD mux puts it on write-back. rwe = rwe + MD · ¬hold: nothing is written until the last cycle. 10 546 NANDs, period 193; every divide holds the core 18 cycles.',
       parts: ['u22', 'u23', 'u24', 'u25', 'u26'], codex: ['datapath'],
       why: 'While held, the instruction re-executes every cycle. Only the last cycle holds the finished result, so the write must wait for it.',
       whyNot: { text: 'Writing rd in every held cycle would put partial quotients in the register file, and with rd = rs1 the re-executed instruction would read its own half-written result.' },
@@ -454,7 +454,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Assemble the encoding',
-      text: 'normal = hidden bit + carry; the field is the exponent if normal, else 0. OF = normal · overflow; then the field is 31 and the fraction 0 (∞), or 30 and all 1s (the largest finite) when toInf is 0. NX = inexact + OF. 2 058 NANDs, depth 86.',
+      text: 'normal = hidden bit + carry; the field is the exponent if normal, else 0. OF = normal · overflow; then the field is 31 and the fraction 0 (∞), or 30 and all 1s (the largest finite) when toInf is 0. NX = inexact + OF. 2058 NANDs, depth 86.',
       parts: ['u56', 'u63', 'u64', 'u65', 'u68', 'u70', 'u72', 'u73', 'u74', 'u76', 'u78', 'u81'],
       why: 'The last step turns the flags into bits: the field and fraction by case, OF for an overflow, NX for either cause.',
       whyNot: { text: 'NX from the inexact term alone misses an overflow whose kept bits were exact: the result is replaced by ∞ or the largest finite, and IEEE requires inexact too.' },
@@ -527,14 +527,14 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Normalize and round',
-      text: 'The 15-bit word has a carry place above the significand, so normalize & round gets the larger exponent + 1 (an incrementer, 63 NANDs) and does the rest: 2 058 NANDs, more than half the unit.',
+      text: 'The 15-bit word has a carry place above the significand, so normalize & round gets the larger exponent + 1 (an incrementer, 63 NANDs) and does the rest: 2058 NANDs, more than half the unit.',
       parts: ['u38', 'u40'], codex: ['normalize'],
       why: 'The sum may have lost leading bits (cancellation) or gained a carry. The shared normalize & round handles both and rounds.',
       whyNot: { text: 'A separate one-bit normalizer for the carry and a leading-zero counter for cancellation would repeat what normalize & round already holds.' },
     },
     {
       title: 'Special cases',
-      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output. 3 732 NANDs, depth 163 (the library\'s unit also gathers the exception flags, 23 NANDs more).',
+      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output. 3732 NANDs, depth 163 (the library\'s unit also gathers the exception flags, 23 NANDs more).',
       parts: ['u41', 'u42', 'u43', 'u44', 'u45', 'u49', 'u51'],
       why: 'NaN and ∞ results come from the class flags, not from arithmetic, so they override the datapath at the output.',
       whyNot: { text: 'Handling special cases before the datapath saves nothing: the datapath runs anyway. A late override is two 16-bit muxes.' },
@@ -557,7 +557,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'The significands',
-      text: 'The given 11 × 11 Wallace-tree multiplier (1 696 NANDs, depth 48) gives a 22-bit product. Two significands in [1, 2) multiply to [1, 4): the product\'s top bit weighs 2, not 1.',
+      text: 'The given 11 × 11 Wallace-tree multiplier (1696 NANDs, depth 48) gives a 22-bit product. Two significands in [1, 2) multiply to [1, 4): the product\'s top bit weighs 2, not 1.',
       parts: ['u3'], codex: ['arraymul'],
       why: 'The 11 × 11 product is the deepest part of the unit, so a Wallace tree is used. It is already given.',
       whyNot: { text: 'An array multiplier does the same function in regular cells, but its depth grows linearly with the rows.' },
@@ -578,14 +578,14 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Normalize and round',
-      text: 'The 22-bit normalize & round (2 666 NANDs, depth 90) shifts out the product\'s leading zeros (one when its top bit is 0, more when an input was subnormal) and rounds the bits that do not fit in 11 on guard and sticky.',
+      text: 'The 22-bit normalize & round (2666 NANDs, depth 90) shifts out the product\'s leading zeros (one when its top bit is 0, more when an input was subnormal) and rounds the bits that do not fit in 11 on guard and sticky.',
       parts: ['u14'], codex: ['normalize'],
       why: 'The product has 22 bits where 11 are kept: shift out the leading zeros, round on guard and sticky.',
       whyNot: { text: 'Truncating to the top 11 bits skips rounding: the result is off by up to an ulp and the flags are wrong.' },
     },
     {
       title: 'Special cases',
-      text: 'invalid = a signaling NaN, or ∞ × 0 either way round; any NaN or invalid gives 0x7E00; else an infinite operand gives ∞ with the XORed sign. A zero needs no case: a zero significand rounds to a signed zero. 4 912 NANDs, depth 150, shallower than the adder\'s 163.',
+      text: 'invalid = a signaling NaN, or ∞ × 0 either way round; any NaN or invalid gives 0x7E00; else an infinite operand gives ∞ with the XORed sign. A zero needs no case: a zero significand rounds to a signed zero. 4912 NANDs, depth 150, shallower than the adder\'s 163.',
       parts: ['u15', 'u16', 'u17', 'u18', 'u19', 'u23', 'u25'],
       why: 'Class flags decide NaN and ∞ results. Zero needs no case.',
       whyNot: { text: 'A zero case would only add a mux: a zero significand already normalizes and rounds to a zero of the right sign.' },
@@ -650,21 +650,21 @@ export const WALKS5: Record<string, WalkScript> = {
       text: 'negative = x[15] · signed: an unsigned integer is never negative, whatever its top bit.',
       parts: ['u1'],
       why: 'One circuit serves signed and unsigned converts, so the top bit counts as a sign only when signed.',
-      whyNot: { text: 'Treating x[15] as the sign always converts an unsigned 0x8000 (32 768) as − 32 768.' },
+      whyNot: { text: 'Treating x[15] as the sign always converts an unsigned 0x8000 (32 768) as − 32 768.' },
     },
     {
       title: 'The magnitude',
-      text: 'A 16-bit conditional negate (430 NANDs, depth 17): |x| when negative, else x. −32 768 becomes 32 768, which fits in 16 unsigned bits.',
+      text: 'A 16-bit conditional negate (430 NANDs, depth 17): |x| when negative, else x. −32 768 becomes 32 768, which fits in 16 unsigned bits.',
       parts: ['u2'], codex: ['subtract'],
       why: 'Normalize & round works on a magnitude and the sign travels beside it, as in every float format here.',
       whyNot: { text: 'Feeding two\'s complement bits to the normalizer counts leading ones for negatives and rounds the wrong value.' },
     },
     {
       title: 'Normalize and round',
-      text: 'The 16-bit normalize & round (2 258 NANDs, depth 90) finds the leading 1, shifts it to the top and rounds what does not fit in 11 bits: integers above 2 048 can be inexact. One case overflows: an unsigned x ≥ 65 520 rounds to nearest to 2^16, past the largest finite 65 504, and gives ∞ with OF and NX (toward zero or down it stops at 65 504; up, anything above 65 504 overflows). The exponent is the constant 30 and stin is 0. 2 690 NANDs, depth 109.',
+      text: 'The 16-bit normalize & round (2258 NANDs, depth 90) finds the leading 1, shifts it to the top and rounds what does not fit in 11 bits: integers above 2048 can be inexact. One case overflows: an unsigned x ≥ 65 520 rounds to nearest to 2^16, past the largest finite 65 504, and gives ∞ with OF and NX (toward zero or down it stops at 65 504; up, anything above 65 504 overflows). The exponent is the constant 30 and stin is 0. 2690 NANDs, depth 109.',
       parts: ['u5'], codex: ['normalize', 'rounding'],
       why: 'An integer is a float with a fixed exponent: the top bit weighs 2^15, so the biased exponent is the constant 30. The existing block finds the 1 and rounds.',
-      whyNot: { text: 'Counting zeros and shifting again by hand repeats that block, and the overflow just below 65 520 would be easy to miss.' },
+      whyNot: { text: 'Counting zeros and shifting again by hand repeats that block, and the overflow just below 65 520 would be easy to miss.' },
       ask: {
         question: 'The integer\'s top bit weighs 2^15. Which exponent does normalize & round get?',
         options: ['30', '15', '0', '16'],

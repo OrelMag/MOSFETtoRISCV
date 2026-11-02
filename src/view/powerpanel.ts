@@ -2,6 +2,7 @@
 // running scene it reads the scene's own simulation (toggles counted from the moment the section opens);
 // elsewhere it measures the part on seeded random inputs. V is the learner's; f comes from static timing.
 
+import { groupDigits } from '../sim/numfmt';
 import type { HierNode } from '../sim/flatten';
 import { alphaOf, energyFj, fmtEnergy, fmtPower, hzOf, measurePower, POWER_NOTE, powerRefusal, powerW, VDD, type PowerMeter, type PowerReport, type PowerShare } from '../sim/power';
 import type { ComponentDef } from '../sim/types';
@@ -46,7 +47,7 @@ export function powerBody(def: ComponentDef, live: LivePower | null, rerender: (
     shares = inside.map((s) => ({ ...s, switched: s.switched / units }));
     head.append(h('button', { class: 'btn ghost sm', title: 'Count from now', onclick: () => { live.restart(); rerender(); } }, 'Restart'));
     box.append(h('p', { class: 'insp-power-src' }, live.cycles
-      ? `Measured on this scene’s simulation over its last ${live.cycles.toLocaleString()} clock cycle${live.cycles > 1 ? 's' : ''} (since it loaded, a Reset, a step back or Restart), glitches included.`
+      ? `Measured on this scene’s simulation over its last ${groupDigits(live.cycles)} clock cycle${live.cycles > 1 ? 's' : ''} (since it loaded, a Reset, a step back or Restart), glitches included.`
       : sw ? 'Measured on this scene’s simulation: every input change since it loaded (or Restart), glitches included. Run the clock for energy per cycle.'
         : 'Nothing has switched yet: change an input or run the clock.'));
   } else {

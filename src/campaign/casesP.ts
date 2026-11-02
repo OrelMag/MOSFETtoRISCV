@@ -8,7 +8,7 @@ export const CASESP: Record<string, LevelCase> = {
   r_pull: {
     problem: 'A relay is a coil, an iron armature and a spring. The coil\'s pull grows as the gap closes, so the chapter\'s relay needs 15.2 V of its 24 to start moving but holds until the supply falls below 3.6 V: a switch with hysteresis. Its contact first touches 6.6 ms after switch-on, bounces 3 times and rests at 8.2 ms; it opens 3.4 ms after switch-off, while the collapsing field kicks the coil to −117 V. Every relay level after this one counts time in steps of that 8.2 ms.',
     without: 'Without the step, a simulation of relay logic would have to follow every bounce, and a circuit read before its contacts rest reads noise. Relay machines paced themselves to it: the Z3 ran at 5 Hz.',
-    cost: 'The coil burns 1.44 W while it is on. The Z3\'s 2 600 relays drew about 4 kW.',
+    cost: 'The coil burns 1.44 W while it is on. The Z3\'s 2600 relays drew about 4 kW.',
   },
   r_nand: {
     problem: 'Every machine of the 1940s that was not built from tubes was built from relays: Zuse\'s Z3, Aiken\'s Harvard Mark I, the Bell Labs Model V. A relay NAND is the brick in that technology: two break contacts in parallel from the supply, so the output is on the supply unless both coils pull.',

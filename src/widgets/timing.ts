@@ -1,5 +1,6 @@
 // Static-timing panel for CPU scenes, and the adder cost/speed comparison.
 
+import { groupDigits } from '../sim/numfmt';
 import { brentKung, busMux2, CLA4, koggeStone, ram, rca, register, sklansky } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
@@ -174,7 +175,7 @@ export function prefixDelays(): Widget {
         h('th', { class: 'num', title: DELAY_NOTE }, 'load'), h('th', { class: 'num', title: 'By load, minimum-size gates, no buffers' }, 'as drawn'), h('th', null, ''))),
       h('tbody', null, rows.map((r, i) => h('tr', null,
         h('td', null, h('a', { href: `#/workbench/${r.def.id}` }, r.name), r.fanout !== undefined ? h('span', { class: 'sub' }, ` · drives ${r.fanout}`) : null),
-        h('td', { class: 'num', title: i === 5 ? "The decoder's own NANDs" : undefined }, r.nands ? r.nands.toLocaleString() : '—'),
+        h('td', { class: 'num', title: i === 5 ? "The decoder's own NANDs" : undefined }, r.nands ? groupDigits(r.nands) : '—'),
         h('td', { class: 'num' }, String(r.unit)),
         h('td', { class: 'num' }, r.load.toFixed(1)),
         h('td', { class: 'num' }, r.drawn.toFixed(1)),

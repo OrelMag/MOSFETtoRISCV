@@ -2,12 +2,13 @@
 // info, a sandbox chip's properties and chapter 3. Each column follows from the design's counts and its worst path;
 // the simulation is the same in all three. In a side panel the technologies stack, one small table each.
 
+import { groupDigits } from '../sim/numfmt';
 import { type Priced, RELAY_CONTACTS, TECH, TECHS, TECH_NOTE, type TechId, cabinets, fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtVolume, fmtWatts, price } from '../lib/tech';
 import { type DesignSteps, designSteps } from '../lib/techsteps';
 import type { ComponentDef } from '../sim/types';
 import { h } from '../ui/dom';
 
-const thin = (n: number) => n.toLocaleString('en-US');
+const thin = groupDigits;
 const plural = (n: number, w: string) => `${thin(n)} ${w}${n === 1 ? '' : 's'}`;
 
 export interface TechTableOptions {

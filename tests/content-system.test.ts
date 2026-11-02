@@ -1,6 +1,7 @@
 // Numbers quoted in chapters 19–23 (ch-system, ch-muldiv, ch-cache, ch-multicycle) that the text cannot compute in
 // place: each is measured here and compared with the number the text quotes, so an edit to either fails.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { kNands, sysNands, chIO, chTraps } from '../src/chapters/ch-system';
 import { chMulDiv } from '../src/chapters/ch-muldiv';
@@ -26,7 +27,7 @@ const text = (c: Chapter, title: string) => {
   const q = s.challenge?.kind === 'quiz' ? s.challenge : undefined;
   return [s.body, q?.question, ...(q?.options ?? []), q?.explain].join(' ');
 };
-const flat = (s: string) => s.replace(/\s+/g, ' ');
+const flat = (s: string) => s.replace(/[ \t\r\n]+/g, ' ');
 
 describe('chapters 19–20: the system CPU', () => {
   it('measures the program ROM the same for any program, so sysNands may use an empty one', () => {
@@ -79,7 +80,7 @@ describe('chapter 21: multiply and divide', () => {
   it('compares the dividers with the cycle × delay products it quotes', () => {
     const t = text(chMulDiv, 'Dividers compared');
     expect(t).toContain(`7 cycles of 44 delays against 10 of 29: ${7 * 44} against ${10 * 29}`);
-    expect(t).toContain(`19 of 44 against 34 of 31: ${19 * 44} against ${(34 * 31).toLocaleString('en-US').replace(/,/g, ' ')}`);
+    expect(t).toContain(`19 of 44 against 34 of 31: ${19 * 44} against ${groupDigits(34 * 31)}`);
   });
 });
 

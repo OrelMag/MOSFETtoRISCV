@@ -448,7 +448,7 @@ export const WALKS6: Record<string, WalkScript> = {
     },
     {
       title: 'E and R',
-      text: 'Two 16-bit registers with enable, 208 NANDs each: E, the edge function at the current pixel, and R, its value where the current band started. 16 bits are enough: vertices are 7-bit quarter pixels, so A, B and every Δ lie within ±127 and |E| = |A·Δx + B·Δy| ≤ 2·127² = 32 258, below 2^15.',
+      text: 'Two 16-bit registers with enable, 208 NANDs each: E, the edge function at the current pixel, and R, its value where the current band started. 16 bits are enough: vertices are 7-bit quarter pixels, so A, B and every Δ lie within ±127 and |E| = |A·Δx + B·Δy| ≤ 2·127² = 32 258, below 2^15.',
       parts: ['E', 'R'], codex: ['register', 'edgefn'],
       why: 'E is the value at the pixel; R remembers where the band began so that one adder can return to it. The width follows from the arithmetic bound, not from habit.',
       whyNot: { text: 'Wider registers for safety: every extra bit is another enabled flip-flop in both registers, for bits that are always copies of the sign.' },

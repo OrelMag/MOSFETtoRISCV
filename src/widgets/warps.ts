@@ -3,6 +3,7 @@
 // accesses each memory instruction takes, the barrier and the shared memory), and the occupancy
 // widget (cycles against warps and load latency from the timing model, NANDs from the circuits).
 
+import { groupDigits } from '../sim/numfmt';
 import { regfile, warpCore } from '../lib';
 import { assemble } from '../riscv/asm';
 import { ABI, decode, disasm, OPCODES } from '../riscv/isa';
@@ -375,7 +376,7 @@ export function occupancyWidget(): Widget {
       h('tr', null, h('th', null, 'Warps'), h('th', null, 'NANDs'), h('th', null, 'of which registers'), h('th', null, 'cycles'), h('th', null, 'instructions'), h('th', null, 'NAND · cycles (M)')),
       ...WS.map((W, i) => {
         const rf = W * LANES * stats(regfile(5, 32)).nands;
-        return h('tr', null, h('td', null, String(W)), h('td', null, costs[i].toLocaleString('en')), h('td', null, rf.toLocaleString('en')),
+        return h('tr', null, h('td', null, String(W)), h('td', null, groupDigits(costs[i])), h('td', null, groupDigits(rf)),
           h('td', null, String(runs[i].cycles)), h('td', null, String(runs[i].issued)), h('td', null, ((costs[i] * runs[i].cycles) / 1e6).toFixed(1)));
       })));
   };
@@ -383,6 +384,6 @@ export function occupancyWidget(): Widget {
   draw();
   el.append(h('div', { class: 'lvc-title' }, 'saxpy on 64 elements: cycles against warps'), h('div', { class: 'param-row' }, lat), chart, table,
     h('p', { class: 'sub' }, 'Cycles from the timing model, which the tests check against the gate-level core cycle for cycle; NANDs counted in the circuits (8-cycle loads). '
-      + `Registers are ${LANES} lanes × 31 × 32 bits per warp, ${stats(regfile(5, 32)).nands.toLocaleString('en')} NANDs per lane. More warps pay only while some issue slot is still empty.`));
+      + `Registers are ${LANES} lanes × 31 × 32 bits per warp, ${groupDigits(stats(regfile(5, 32)).nands)} NANDs per lane. More warps pay only while some issue slot is still empty.`));
   return { el };
 }

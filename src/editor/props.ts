@@ -6,6 +6,7 @@
 // Fields commit on 'change' (Enter or leaving the field), each one undo step. The panel is
 // rebuilt only when the selection or the selected objects change, never while typing.
 
+import { groupDigits } from '../sim/numfmt';
 import { kWords } from '../lib/bigmem';
 import { PORT_MAX_K } from '../lib/portmem';
 import { familyOf } from '../lib/resolve';
@@ -547,11 +548,11 @@ function costLine(def: ComponentDef, depth?: (el: HTMLElement) => void): HTMLEle
   const slot = depth ? h('span') : null;
   const el = h('p', { class: 'sb-cost' },
     // ROM chips (a 28C16) count as the mux trees they simulate as: shown apart from the logic
-    h('span', st.rom ? { title: `and ${st.rom.nands.toLocaleString()} NANDs of ROM mux trees in the simulation` } : null, h('b', null, (st.nands - (st.rom?.nands ?? 0)).toLocaleString()), st.rom ? ' NAND of logic' : ' NAND'),
-    h('span', null, h('b', null, (st.transistors - (st.rom?.transistors ?? 0)).toLocaleString()), ' transistors'),
+    h('span', st.rom ? { title: `and ${groupDigits(st.rom.nands)} NANDs of ROM mux trees in the simulation` } : null, h('b', null, groupDigits(st.nands - (st.rom?.nands ?? 0))), st.rom ? ' NAND of logic' : ' NAND'),
+    h('span', null, h('b', null, groupDigits(st.transistors - (st.rom?.transistors ?? 0))), ' transistors'),
     st.rom ? h('span', null, '+ ', h('b', null, romSize(st.rom)), ' of ROM') : null,
-    st.resistors ? h('span', null, h('b', null, st.resistors.toLocaleString()), st.resistors > 1 ? ' resistors' : ' resistor') : null,
-    st.capacitors ? h('span', null, h('b', null, st.capacitors.toLocaleString()), st.capacitors > 1 ? ' capacitors' : ' capacitor') : null, slot);
+    st.resistors ? h('span', null, h('b', null, groupDigits(st.resistors)), st.resistors > 1 ? ' resistors' : ' resistor') : null,
+    st.capacitors ? h('span', null, h('b', null, groupDigits(st.capacitors)), st.capacitors > 1 ? ' capacitors' : ' capacitor') : null, slot);
   if (depth && slot) depth(slot);
   return el;
 }

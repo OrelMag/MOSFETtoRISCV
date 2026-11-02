@@ -1,5 +1,6 @@
 // Chapters 29–34 (ch-gpu.ts, ch-gfx.ts): the numbers and claims their prose quotes that the text cannot compute in place,
 // measured here and read back from the text, so a change to either side fails.
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { laneCore, multiCore, regfile, rom, warpCore } from '../src/lib';
@@ -17,10 +18,10 @@ import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { DEPTH_SCRIPTS } from '../src/widgets/screen';
 import type { Chapter } from '../src/chapters/types';
 
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 const nands = (d: ComponentDef) => stats(d).nands;
 const inst = (d: ComponentDef, name: string) => netlistOf(d)!.instances.find((i) => i.name === name)!.def;
-const flat = (s: string) => s.replace(/\s+/g, ' ');
+const flat = (s: string) => s.replace(/[ \t\r\n]+/g, ' ');
 const step = (c: Chapter, title: string) => flat(c.steps.find((s) => s.title === title)!.body);
 const keep = (c: Chapter) => flat(c.recap!.keep.join(' '));
 const quizText = (c: Chapter, title: string) => {
@@ -60,7 +61,7 @@ describe('chapter 29: lanes against cores', () => {
 });
 
 describe('chapter 31: a warp\'s program port', () => {
-  it('every warp slot reads the program through a ROM of its own: 8 064 NANDs, the copy the text describes', () => {
+  it('every warp slot reads the program through a ROM of its own: 8064 NANDs, the copy the text describes', () => {
     const p = WARP_PROGRAMS.find((x) => x.id === 'saxpy64')!;
     const words = assemble(p.source(4)).words;
     const core = warpCore(words, { warps: 4, lanes: 4, latency: 8, dmemK: WARP_DMEM_K, data: p.data() });
@@ -98,7 +99,7 @@ describe('chapter 33: the clear and the depth test', () => {
     expect(84 + 256 * 17).toBe(CLEAR_CYCLES);
     // chapter 34's clear phase is the launch cycle and the same clear
     expect(PIPE_COSTS.frames.find((f) => f.id === 'triangle')!.clear).toBe(CLEAR_CYCLES + 2);
-    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4 438 (the launch cycle, then chapter 33's ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
+    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4438 (the launch cycle, then chapter 33's ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
   });
 
   it('the two crossing triangles never tie at a pixel centre, so both orders give the same picture', () => {
@@ -125,7 +126,7 @@ describe('chapter 34: the vertex kernel and the cube', () => {
     expect(body).toContain('X = 128 + ((x cos θ − y sin θ) &gt;&gt; 16)');
   });
 
-  it('the cube: half or more of its triangles culled, 2 300 to 3 200 cycles of drawing, frames of whole scan-outs', () => {
+  it('the cube: half or more of its triangles culled, 2300 to 3200 cycles of drawing, frames of whole scan-outs', () => {
     const cube = meshById('cube');
     const frames = Array.from({ length: 64 }, (_, f) => {
       const runs = frameOps(cube, f).slice(1).map((op) => rasterize(op.v, cube.zt));
@@ -146,7 +147,7 @@ describe('chapter 34: the vertex kernel and the cube', () => {
     expect(snap(cw.clear)).toEqual([4096, 5120]);
     const text = step(chGfxPipeline, 'A spinning triangle');
     expect(text).toContain('Half of them or more face away (six or eight, with the angle)');
-    expect(text).toContain('Its frames take 7 168 to 8 192 cycles: two or three faces, 2 300 to 3 200 cycles of drawing');
-    expect(step(chGfxPipeline, 'A faster clear')).toContain('4 096 or 5 120');
+    expect(text).toContain('Its frames take 7168 to 8192 cycles: two or three faces, 2300 to 3200 cycles of drawing');
+    expect(step(chGfxPipeline, 'A faster clear')).toContain('4096 or 5120');
   });
 });

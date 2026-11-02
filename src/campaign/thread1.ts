@@ -209,7 +209,7 @@ export const THREAD1: Record<string, NodeThread> = {
     uses: ['alu', 'mmio'],
     usedFor: {},
     pitfalls: [
-      'Unsigned compare: the value can exceed 32 767, so <code>sltu</code>, not <code>slt</code>.',
+      'Unsigned compare: the value can exceed 32 767, so <code>sltu</code>, not <code>slt</code>.',
       'Skip leading zeros but always print the last digit: 0 prints "0".',
       'A character is \'0\' + digit (48 + d), stored to the console at −2.',
     ],

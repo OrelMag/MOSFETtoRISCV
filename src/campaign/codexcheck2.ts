@@ -123,18 +123,18 @@ export const CHECK2: Record<string, Quiz[]> = {
   // ---- numbers
   positional: [
     {
-      question: 'Shift 0xC000 (49,152) left by one at 16 bits. The result?',
-      options: ['0x8000 (32,768)', '0x18000 (98,304)', '0x6000 (24,576)'],
+      question: 'Shift 0xC000 (49 152) left by one at 16 bits. The result?',
+      options: ['0x8000 (32 768)', '0x18000 (98 304)', '0x6000 (24 576)'],
       answer: 0,
       explain: 'Every bit moves up one place and the top bit falls off: 1100… becomes 1000…, which is not double.',
       why: ['', 'Doubling needs a 17th bit; a 16-bit register drops it.', 'That is a right shift, which halves.'],
     },
     {
-      question: 'How many bits does the unsigned number 1,024 need?',
+      question: 'How many bits does the unsigned number 1024 need?',
       options: ['10', '11', '9'],
       answer: 1,
-      explain: 'n bits reach 2<sup>n</sup> − 1; 10 bits stop at 1,023, so 1,024 = 2<sup>10</sup> is a 1 followed by ten 0s: 11 bits.',
-      why: ['Off by one: 10 bits hold 0 … 1,023.', '', '9 bits reach only 511.'],
+      explain: 'n bits reach 2<sup>n</sup> − 1; 10 bits stop at 1023, so 1024 = 2<sup>10</sup> is a 1 followed by ten 0s: 11 bits.',
+      why: ['Off by one: 10 bits hold 0 … 1023.', '', '9 bits reach only 511.'],
     },
   ],
   hex: [
@@ -158,15 +158,15 @@ export const CHECK2: Record<string, Quiz[]> = {
       question: '−12 as a 16-bit two\'s-complement word?',
       options: ['0xFFF4', '0xFFF3', '0x800C'],
       answer: 0,
-      explain: '12 = 0x000C, ¬12 = 0xFFF3, + 1 = 0xFFF4 (= 65,536 − 12).',
+      explain: '12 = 0x000C, ¬12 = 0xFFF3, + 1 = 0xFFF4 (= 65 536 − 12).',
       why: ['', 'That is ¬12 alone, ones\' complement: off by one.', 'That is sign-magnitude (a sign bit on top of 12), which an ordinary adder does not add correctly.'],
     },
     {
       question: 'abs(x) at 16 bits is computed as <code>x &lt; 0 ? ¬x + 1 : x</code>. What does it return for x = 0x8000?',
-      options: ['0x8000, still −32,768', '0x7FFF, saturated to 32,767', '0x0000', 'It traps'],
+      options: ['0x8000, still −32 768', '0x7FFF, saturated to 32 767', '0x0000', 'It traps'],
       answer: 0,
-      explain: '¬0x8000 + 1 = 0x7FFF + 1 = 0x8000. +32,768 is not representable: the range is −32,768 … 32,767.',
-      why: ['', 'Nothing saturates: the adder wraps modulo 2<sup>16</sup>.', '+32,768 does not wrap to 0: ¬0x8000 = 0x7FFF, and adding 1 gives 0x8000.', 'RV16 arithmetic never traps; it wraps.'],
+      explain: '¬0x8000 + 1 = 0x7FFF + 1 = 0x8000. +32 768 is not representable: the range is −32 768 … 32 767.',
+      why: ['', 'Nothing saturates: the adder wraps modulo 2<sup>16</sup>.', '+32 768 does not wrap to 0: ¬0x8000 = 0x7FFF, and adding 1 gives 0x8000.', 'RV16 arithmetic never traps; it wraps.'],
     },
   ],
   overflow: [
@@ -174,15 +174,15 @@ export const CHECK2: Record<string, Quiz[]> = {
       question: '0x6000 + 0x3000 at 16 bits. Signed overflow V and carry out C?',
       options: ['V = 1, C = 0', 'V = 0, C = 1', 'V = 1, C = 1', 'V = 0, C = 0'],
       answer: 0,
-      explain: '24,576 + 12,288 = 36,864 fits 16 bits unsigned (no carry), but two positives gave 0x9000, which reads negative: signed overflow.',
-      why: ['', 'Carry out needs a sum ≥ 65,536; this one is 36,864. And the signed result is wrong.', 'Unsigned it fits, so there is no carry out.', '0x9000 has its top bit set: two positive operands produced a negative signed result.'],
+      explain: '24 576 + 12 288 = 36 864 fits 16 bits unsigned (no carry), but two positives gave 0x9000, which reads negative: signed overflow.',
+      why: ['', 'Carry out needs a sum ≥ 65 536; this one is 36 864. And the signed result is wrong.', 'Unsigned it fits, so there is no carry out.', '0x9000 has its top bit set: two positive operands produced a negative signed result.'],
     },
     {
       question: '0x8000 − 0x0001 = 0x7FFF at 16 bits. Which is true?',
       options: ['Signed overflow; unsigned it is correct', 'No overflow: the operands have different signs', 'Unsigned borrow: the result is smaller than both', 'The ALU traps'],
       answer: 0,
-      explain: 'Signed: −32,768 − 1 does not fit and wraps to +32,767. Unsigned: 32,768 − 1 = 32,767 is correct, and a + ¬b + 1 carries out 1 (no borrow).',
-      why: ['', 'That is the addition rule applied to a − b without inverting b: a subtraction overflows when the signs differ and the result has b\'s sign.', 'A borrow means b &gt; a unsigned; 1 &lt; 32,768.', 'RV16, like RISC-V, never traps on overflow: it wraps.'],
+      explain: 'Signed: −32 768 − 1 does not fit and wraps to +32 767. Unsigned: 32 768 − 1 = 32 767 is correct, and a + ¬b + 1 carries out 1 (no borrow).',
+      why: ['', 'That is the addition rule applied to a − b without inverting b: a subtraction overflows when the signs differ and the result has b\'s sign.', 'A borrow means b &gt; a unsigned; 1 &lt; 32 768.', 'RV16, like RISC-V, never traps on overflow: it wraps.'],
     },
   ],
   signext: [

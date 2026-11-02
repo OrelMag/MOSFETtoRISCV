@@ -2,6 +2,7 @@
 // rasterizer's position), the scenes it sits in (the display alone, the rasterizer drawing into it) and the
 // edge-function explorer.
 
+import { groupDigits } from '../sim/numfmt';
 import { type DrawOp, FB_W, rasterize, rgb332, type Vtx } from '../gfx/raster';
 import { displayTop, FB_WORDS, GPU30, GPU30Z, VERTEX_PINS } from '../lib/raster';
 import { FrameMemory, frameOf } from './framemem';
@@ -205,7 +206,7 @@ export function backFrame(sim: Sim): Uint8Array | null {
 /** The panel's controls explained, for the variant shown (display alone, one triangle, scripts, or the drawing pad). */
 function controlsHelp(opts: PanelOpts): HTMLElement {
   const item = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)];
-  const words = String(FB_WORDS).replace(/\B(?=(\d{3})+$)/g, ' ');
+  const words = groupDigits(FB_WORDS);
   const rows = [
     ...item('Run / Pause', 'Clocks the circuit without stopping, at the speed chosen above. Run itself draws nothing: the scan-out keeps sending '
       + `the front frame, a word (four pixels) a cycle, ${words} cycles a frame${opts.gpu ? ', and the rasterizer works only when told to' : ''}.`),
@@ -438,7 +439,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
         h('span', null, `front: frame ${fr}`),
         ...(opts.gpu ? [h('span', { class: busy ? 'warn' : '' }, busy ? 'rasterizer busy' : 'rasterizer idle')] : []),
         ...(queue.length ? [h('span', null, `${queue.length} draw${queue.length > 1 ? 's' : ''} to go`)] : []),
-        ...(running && rate ? [h('span', { title: 'gate-level simulation in this page' }, `${rate.toLocaleString('en')} cycles/s`)] : []));
+        ...(running && rate ? [h('span', { title: 'gate-level simulation in this page' }, `${groupDigits(rate)} cycles/s`)] : []));
       mem.update();
     };
 

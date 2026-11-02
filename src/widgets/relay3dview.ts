@@ -3,6 +3,7 @@
 // model's current, travel, contact and coil voltage over 25 ms, and its summary. Without WebGL2 (or after a lost
 // context) the same parts are drawn as a flat side view in SVG.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/relay3d.css';
 import { CssColors, mixRgb, scaleRgb, watchTheme } from '../gl/color';
 import { packInstances, type Instance, type RGB } from '../gl/instances';
@@ -267,7 +268,7 @@ export function relayView(): Widget {
   const summary = () => {
     const r = relaySummary(run), V = run.V, ms = (t: number | null, d = 2) => (t === null ? '—' : `${fmt(t * 1e3, d)} ms`);
     const rows: [string, string, string?][] = [
-      ['Coil', `${V} V, ${RELAY.Rc} Ω, ${RELAY.N.toLocaleString('en-US').replace(/,/g, ' ')} turns`],
+      ['Coil', `${V} V, ${RELAY.Rc} Ω, ${groupDigits(RELAY.N)} turns`],
       ['Coil power', `${fmt(r.power, 2)} W`],
       ['Pull-in voltage', STATIC.pull === null ? '—' : `${fmt(STATIC.pull)} V`],
       ['Drop-out voltage', STATIC.drop === null ? '—' : `${fmt(STATIC.drop)} V`],

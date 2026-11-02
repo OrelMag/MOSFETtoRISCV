@@ -6,6 +6,7 @@
 // conducts (output 0). A click on a rack names its block and links to its schematic. Without WebGL2 (or after a
 // lost context) the same layout is drawn as a flat isometric picture.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/relay3d.css';
 import '../styles/hall.css';
 import { CssColors, mixRgb, scaleRgb, watchTheme } from '../gl/color';
@@ -22,7 +23,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 
-const num = (n: number) => Math.round(n).toLocaleString('en-US');
+const num = (n: number) => groupDigits(Math.round(n));
 /** A clock rate, as Hz below 1 Hz too (not mHz). */
 const hz = (period: number) => (period > 1 ? `${(1 / period).toFixed(2)} Hz` : fmtRate(period));
 

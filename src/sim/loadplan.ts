@@ -1,3 +1,4 @@
+import { groupDigits } from './numfmt';
 // The phases of building a big scene (Stage.load) as data: which one is running, how long each took, how far the
 // running one is, the bar's fraction and what is left. DOM-free; view/loadcard.ts draws it, tests/loadplan.test.ts
 // pins the arithmetic.
@@ -124,7 +125,7 @@ export class LoadPlan {
 }
 
 /** "256 000": groups of three, spaced: the chapters' prose style, so a widget's number reads like the text around it. */
-export const fmtCount = (n: number): string => Math.round(n).toLocaleString('en').replace(/,/g, ' ');
+export const fmtCount = (n: number): string => groupDigits(Math.round(n)).replace(/,/g, ' ');
 
 /** "0.3 s" / "12 s". */
 export const fmtSeconds = (ms: number): string => `${ms < 9950 ? (ms / 1000).toFixed(1) : Math.round(ms / 1000)} s`;

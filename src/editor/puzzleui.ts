@@ -5,6 +5,7 @@
 // chart, Show answer and Do it for me. The puzzle chip's PUZZLE IN holds the selected test's words whenever
 // the circuit powers on, so Run and the CPU drawer show it too.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import '../styles/sbpuzzles.css';
 import { h, icon } from '../ui/dom';
@@ -27,7 +28,7 @@ let store: PuzzleProgress | null = null;
 const progress = () => (store ??= new PuzzleProgress(typeof localStorage === 'undefined' ? null : localStorage));
 
 const CPU_LABEL: Record<RefCpu, string> = { cpu4: '4-bit CPU', rv16: 'RV16', rv32: 'RV32I' };
-const fmtN = (n: number) => n.toLocaleString('en');
+const fmtN = groupDigits;
 const starText = (s: Stars) => '★'.repeat(s) + '☆'.repeat(3 - s);
 const words = (ws: number[]) => (ws.length ? ws.map((v) => (v < 0 ? 'X' : String(v))).join(' ') : '—');
 

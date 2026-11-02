@@ -2,6 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
+import { groupDigits } from '../sim/numfmt';
 import type { DramConfig } from '../dram/controller';
 import { GateSim } from '../sim/gatesim';
 import { energyFj, fmtEnergy, fmtPower, POWER_NOTE, PowerMeter, powerW } from '../sim/power';
@@ -397,8 +398,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       haltLine.hidden = !halted || !!mismatch;
       if (halted && !mismatch) {
         const res = match?.result, r = res ? regNumber(res.reg) : null;
-        haltLine.replaceChildren(`Halted after ${iss.steps.toLocaleString()} instruction${iss.steps === 1 ? '' : 's'}`,
-          multiCycle ? ` (${stage.cycles.toLocaleString()} cycles)` : '',
+        haltLine.replaceChildren(`Halted after ${groupDigits(iss.steps)} instruction${iss.steps === 1 ? '' : 's'}`,
+          multiCycle ? ` (${groupDigits(stage.cycles)} cycles)` : '',
           res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${st.x[r] | 0}`), ` (${hex(st.x[r])})`) : '');
       }
       if (narrKind === 'cycle' && !stage.inEdge) {

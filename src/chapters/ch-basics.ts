@@ -63,7 +63,7 @@ export const chBasics: Chapter = {
         1011 are 8 + 0 + 2 + 1 = 11. This is <strong>positional notation</strong>, and every number in a computer is written
         this way.</p>
         <p>Count past 15 and four lamps run out: 15 + 1 needs a fifth lamp. With four, the count wraps round to 0, as a car's
-        odometer does at 99 999. Chapter 5 turns this into arithmetic, negative numbers included.</p>
+        odometer does at 99 999. Chapter 5 turns this into arithmetic, negative numbers included.</p>
         <div class="try">Set the lamps to 6. Then count up and watch the place worth 1 flip on every step.</div>`,
       widget: () => lampCountWidget(),
     },

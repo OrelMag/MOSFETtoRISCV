@@ -3,6 +3,7 @@
 // campaign/verilog.ts (synthesize, then the level's own check). Optional: a pass is recorded under the twin's id and
 // changes nothing on the map but a star beside the level. Loaded on demand with the editor's styles.
 
+import { groupDigits } from '../../sim/numfmt';
 import '../../styles/editor.css';
 import '../../styles/campaign.css';
 import '../../styles/level.css';
@@ -233,9 +234,9 @@ export class VerilogPage implements Page {
         : h('div', { class: 'vl-verdict bad' }, `✕ fails the level's check (${c.tested} ${kind} run)`));
       if (!c.ok) kids.push(h('ul', { class: 'vl-fail' }, c.failures.slice(0, 4).map((f) => h('li', null, f))));
       kids.push(h('div', { class: 'vl-scores' }, ...[
-        h('div', { class: 'vl-score' }, h('b', null, (r.nand ?? 0).toLocaleString()), 'NANDs · yours'),
-        h('div', { class: 'vl-score' }, h('b', null, r.drawn.toLocaleString()), 'NANDs · drawn reference'),
-        r.verilog !== undefined && r.verilog !== r.drawn ? h('div', { class: 'vl-score' }, h('b', null, r.verilog.toLocaleString()), 'NANDs · our Verilog answer') : null,
+        h('div', { class: 'vl-score' }, h('b', null, groupDigits(r.nand ?? 0)), 'NANDs · yours'),
+        h('div', { class: 'vl-score' }, h('b', null, groupDigits(r.drawn)), 'NANDs · drawn reference'),
+        r.verilog !== undefined && r.verilog !== r.drawn ? h('div', { class: 'vl-score' }, h('b', null, groupDigits(r.verilog)), 'NANDs · our Verilog answer') : null,
         h('div', { class: 'vl-score' }, h('b', { class: 'lv-stars' }, r.stars ? starText(r.stars) : '☆☆☆'),
           r.stars === 3 ? 'at or under the reference' : r.stars === 2 ? `within 1.5 × (≤ ${Math.floor(ref * 1.5)})` : r.stars === 1 ? `a pass; ★★ at ≤ ${Math.floor(ref * 1.5)}` : 'no stars yet')].filter((x): x is HTMLDivElement => !!x)));
     }
@@ -263,7 +264,7 @@ export class VerilogPage implements Page {
     const t = this.t!;
     const d = drawnScore(t), me = r.check!.score;
     const row = (label: string, a: number | null | undefined, b: number | null | undefined) => h('tr', null, h('td', null, label),
-      h('td', null, a == null ? '—' : a.toLocaleString()), h('td', null, b == null ? '—' : b.toLocaleString()));
+      h('td', null, a == null ? '—' : groupDigits(a)), h('td', null, b == null ? '—' : groupDigits(b)));
     return h('table', { class: 'lv-res-table vl-cmp' }, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours (Verilog)'), h('th', null, 'Drawn')),
       row('NANDs', me.nand, d.nand), row('Logic depth', me.depth, d.depth), row('Clock period', me.period, d.period));
   }
@@ -336,7 +337,7 @@ export class VerilogPage implements Page {
         h('p', { class: 'sub' }, 'Other modules may follow in the file; the top one must have exactly these ports.')),
       h('section', null, h('h4', null, 'Graded'), h('ul', null,
         h('li', null, `★ the level's ${ch.check.kind === 'sequence' ? 'test sequence' : 'truth-table check'} passes`),
-        h('li', null, `★★ within 1.5 × that (the drawn reference is ${ref.toLocaleString()} NANDs)`),
+        h('li', null, `★★ within 1.5 × that (the drawn reference is ${groupDigits(ref)} NANDs)`),
         h('li', null, '★★★ at or under the drawn reference, or our own Verilog answer where synthesis cannot reach it'))),
       h('section', null, h('h4', null, 'Watch for'), rich('p', t.note)),
       h('p', { class: 'cap-note' }, h('b', null, 'Optional: '), 'a Verilog twin sits beside its level and changes nothing else on the map. A latch is refused with its line.'));
@@ -347,7 +348,7 @@ export class VerilogPage implements Page {
     const c = ch.check;
     el.append(h('section', null, h('h4', null, 'The level\'s own tests'),
       h('p', null, c.kind === 'table'
-        ? `${tableRows(c, ch.ports).length.toLocaleString()} input vectors, every output compared with the level's truth function (directed edge cases first, then the rest of the input space or a spread of it).`
+        ? `${groupDigits(tableRows(c, ch.ports).length)} input vectors, every output compared with the level's truth function (directed edge cases first, then the rest of the input space or a spread of it).`
         : c.kind === 'sequence' ? `${c.steps.length} clocked steps, every output compared after each step (including steps that change an input between edges and must change nothing).` : 'A bench of the level\'s own programs.'),
       h('p', { class: 'sub' }, 'Your netlist is run on the same gate-level simulator as a drawn chip. A failing case is named in the Check card with the inputs and the expected outputs.')));
   }
@@ -357,7 +358,7 @@ export class VerilogPage implements Page {
     const ref = this.ref();
     const done = progress().get(t.twin);
     el.append(h('section', null, h('h4', null, node.title),
-      h('p', null, h('b', null, `${ref.toLocaleString()} NANDs`), ' drawn', node.par?.nand !== undefined ? ` (the level's par is ${node.par.nand.toLocaleString()})` : '', '.'),
+      h('p', null, h('b', null, `${groupDigits(ref)} NANDs`), ' drawn', node.par?.nand !== undefined ? ` (the level's par is ${groupDigits(node.par.nand)})` : '', '.'),
       h('p', null, done?.stars ? `You solved the drawn level with ${starText(done.stars)}.` : 'You have not solved the drawn level yet; its answer opens after you pass this one or it.'),
       h('p', null, h('a', { class: 'btn sm', href: `#/campaign/n/${t.twin}` }, 'Open the drawn level', icon('chevR', 12)))),
       h('section', null, h('h4', null, 'Why the counts differ'),

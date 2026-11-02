@@ -1,6 +1,7 @@
 // Chapter 25's explorers for the C extension: code size measured on our own programs, a 16-bit parcel taken apart
 // bit by bit next to the instruction it stands for, and what the C core costs.
 
+import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { BENCHMARKS } from '../riscv/benchprograms';
 import { PROGRAMS } from '../riscv/programs';
@@ -48,7 +49,7 @@ export function codeSizeWidget(): Widget {
   // every program at once: the share of instructions with a 16-bit form and the bytes saved
   let tot32 = 0, tot16 = 0, totN = 0, totS = 0;
   for (const p of progs) { const s = codeSize(p.source); tot32 += s.bytes32; tot16 += s.bytes16; totN += s.n; totS += s.short; }
-  all.replaceChildren(h('b', null, `${Math.round((100 * totS) / totN)} %`), ` of the ${totN.toLocaleString()} instructions in these ${progs.length} programs have a 16-bit form; together they shrink from ${tot32.toLocaleString()} to ${tot16.toLocaleString()} bytes (−${Math.round(100 * (1 - tot16 / tot32))} %).`);
+  all.replaceChildren(h('b', null, `${Math.round((100 * totS) / totN)} %`), ` of the ${groupDigits(totN)} instructions in these ${progs.length} programs have a 16-bit form; together they shrink from ${groupDigits(tot32)} to ${groupDigits(tot16)} bytes (−${Math.round(100 * (1 - tot16 / tot32))} %).`);
   const render = () => {
     const p = progs.find((q) => q.id === sel.value)!;
     const s = codeSize(p.source);

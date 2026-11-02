@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { ageBit, iqEntry, RAT, SELECT8 } from '../lib/ooo';
 import RESULTS from '../bench/results.json';
 import { logicDepth, stats } from '../sim/stats';
@@ -200,7 +201,7 @@ export const chOoo: Chapter = {
         Returns are predicted by a <span data-show="ras">4-entry return-address stack</span>. Up to two instructions
         retire a cycle: the golden model steps once for each, and the diagram shows each stage's second lane under
         it.</p>
-        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
+        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
         delays against 79, and CPI fib 1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 against 1.35, 1.18,
         1.30, 1.25, 1.23. Only 29 to 53 % of the instructions go in pairs; the others wait for a result, the one memory
         lane or a branch. About a sixth less time for a third more gates.</p>
@@ -351,9 +352,9 @@ export const chOoo: Chapter = {
         <div class="try">The scene dispatches a pair writing <code>t0</code> (entry 3) and <code>t1</code> (entry 4),
         and the second reads <code>t0</code>: its lookup (<code>a1v</code>, <code>a1t</code>) says entry 3 already.
         Pulse the clock: rows t0 and t1 now hold their tags.</div>
-        <p>Cost: 12 443 NANDs, of which the 31 rows take 275 each.</p>
+        <p>Cost: 12 443 NANDs, of which the 31 rows take 275 each.</p>
         <p>The table is small in bits (${31 * 5} flip-flops) and large in ports. Four reads, two commit compares and two writes a cycle, each across all 31 rows, are what make it
-        12 443 NANDs; the number of ports, not the number of entries, sets its cost and its delay, so it limits how wide a machine can dispatch.</p>`,
+        12 443 NANDs; the number of ports, not the number of entries, sets its cost and its delay, so it limits how wide a machine can dispatch.</p>`,
       scene: () => ({ root: RAT, autoClock: false, inputs: { rs1_0: 10, rs2_0: 11, rs1_1: 5, rs2_1: 0, rd0: 5, we0: 1, tag0: 3, rd1: 6, we1: 1, tag1: 4, clk: 0 }, highlight: ['rows', 'by2'] }),
       tries: [(st) => st.value('a1v') === 1 && st.value('a1t') === 3],
       tour: {
@@ -371,7 +372,7 @@ export const chOoo: Chapter = {
       more: {
         derive: `<p>Storage: 31 rows × (1 valid + 4 tag bits) = ${31 * 5} flip-flops; a 16-entry ROB needs 4 bits to name an entry. Ports: each of the two dispatched instructions reads two
           sources (4 reads) and writes one destination (2 writes), and commit adds 2 compare-and-clear ports. A row recognizes its register from the 5-bit numbers on 4 ports, which is why a
-          row costs 275 NANDs against a row of plain flip-flops: ${stats(RAT).nands.toLocaleString('en-US').replace(/,/g, ' ')} NANDs for the table.</p>`,
+          row costs 275 NANDs against a row of plain flip-flops: ${groupDigits(stats(RAT).nands)} NANDs for the table.</p>`,
         real: `<p>Big cores keep the rename table as a RAM, not rows of comparators, and checkpoint it at each branch so a misprediction restores it at once. That copy per branch
           in flight is what recovery at execute needs, and it is the table's main cost there.</p>`,
         pitfall: `<p>Forgetting the same-cycle case. Without the bypass, the second instruction of a pair that reads the first's destination reads the old mapping and takes
@@ -396,7 +397,7 @@ export const chOoo: Chapter = {
         <div class="try">Set <code>alloc</code> to 0 and <code>bv0</code> to 1: bus 0 now carries tag 5 with the value 42.
         <code>ready</code> rises before any clock edge, and <code>opA</code> (the bus value, passed on while the operand
         waits) is what the port would take.</div>
-        <p>4 247 NANDs an entry, eight entries. The four comparators are a small part of that: storage and 32-bit
+        <p>4247 NANDs an entry, eight entries. The four comparators are a small part of that: storage and 32-bit
         multiplexers are most of it. Big cores keep scores of entries and read the operands after issue, so an entry holds
         no values; there the comparators, tags × buses × entries, are what grows.</p>`,
       scene: () => ({
@@ -433,7 +434,7 @@ export const chOoo: Chapter = {
         and commit waits on nothing else. The entries are not kept in order, though (a freed slot takes whatever comes
         next), and keeping them sorted would mean shifting ~200-bit entries every cycle. Instead an <strong>age
         matrix</strong> records, for every ordered pair of entries, which holds the older instruction: 56 bits for eight
-        entries, 1 536 NANDs. A new entry is younger than every entry present: its row clears and its column sets.</p>
+        entries, 1536 NANDs. A new entry is younger than every entry present: its row clears and its column sets.</p>
         <p>Select is then two levels of logic. Entry e wins when it is a candidate and no other candidate is older:
         <span data-show="blk6">an OR over seven ANDs</span>, <span data-show="g6">then an AND with its own
         request</span>. The whole grant word is 280 NANDs and 11 levels deep, with no chain from entry 0 to 7 as in a
@@ -479,7 +480,7 @@ export const chOoo: Chapter = {
         buffer</span> and <span data-show="cm rf">commit into the register file</span>.</p>
         <p><span data-show="rob">The reorder buffer</span> is the largest block: 16 entries of 109 bits (done; the
         destination, PC and kind of control transfer, written at dispatch; the value, the real next PC and a mispredict
-        bit, written by a result bus), 70 541 NANDs. Up to two entries leave the head a cycle, at most one of them a
+        bit, written by a result bus), 70 541 NANDs. Up to two entries leave the head a cycle, at most one of them a
         store, and write the register file. The core's <code>retire</code> output counts them and the golden model steps
         once per commit, so the CPU panel compares the registers after every commit even though instructions finish out of
         order.</p>
@@ -559,7 +560,7 @@ export const chOoo: Chapter = {
         big cores guess that a load does not alias a store and replay it when a store proves them wrong.</p>
         <p>The program sums 8 + 7 + … + 1 through memory. Each element starts with a divide that holds commit back for 19
         cycles; the store and the load behind it execute meanwhile, and every load takes its value from the queue, long
-        before its store reaches memory. The queue costs 8 544 NANDs.</p>
+        before its store reaches memory. The queue costs 8544 NANDs.</p>
         <p>Two ordering rules do the work. Stores reach memory in program order and only at commit, so memory always holds the state of a prefix of the program. Loads
         read memory plus the queue, so they see every older store even though none of them has been written yet. The simple rule that a load waits for all older store addresses
         gives up some parallelism and all risk of reading a stale word.</p>`,
@@ -589,10 +590,10 @@ export const chOoo: Chapter = {
     {
       title: 'The whole core',
       body: `
-        <p>All together: 359 262 NANDs without the program ROM, against 193 768 for the dual-issue pipeline and 141 655
-        for one pipeline. The reorder buffer takes 70 541, the issue queue 56 888, the BTB 35 662, the register file
-        (four reads, two writes) 35 463, the divider 16 742, the rename table 12 443, the return stack 10 824 and the
-        store queue 8 544.</p>
+        <p>All together: 359 262 NANDs without the program ROM, against 193 768 for the dual-issue pipeline and 141 655
+        for one pipeline. The reorder buffer takes 70 541, the issue queue 56 888, the BTB 35 662, the register file
+        (four reads, two writes) 35 463, the divider 16 742, the rename table 12 443, the return stack 10 824 and the
+        store queue 8544.</p>
         <p>Measured on the benchmark set at a period of 93 NAND delays: CPI fib 0.99, sort 0.77, matmul 1.28, matmul-m
         0.84, crc 0.99, against 1.13, 1.01, 1.05, 1.09, 0.97 for the dual-issue pipeline. sort gains most. matmul loses:
         its software multiply branches on data bits, and every misprediction costs the trip to the head of the reorder
@@ -670,8 +671,8 @@ export const chOoo: Chapter = {
         <p>The price comes from the gates. Where the gate-level core can be built in your shape (it stays 2-wide with its
         own ports, predictor and latencies; its window sizes vary), the lab gives its NANDs and its clock period, and the
         period times the CPI is the time of an instruction. Other shapes are timed, not priced. The window costs area,
-        hardly any clock: from a reorder buffer of 8, an issue queue of 4 and a store queue of 2 (286 574 NANDs) to 32,
-        16 and 8 (509 252) the period only goes from 93 to 95 NAND delays, since the critical path runs from the divider's
+        hardly any clock: from a reorder buffer of 8, an issue queue of 4 and a store queue of 2 (286 574 NANDs) to 32,
+        16 and 8 (509 252) the period only goes from 93 to 95 NAND delays, since the critical path runs from the divider's
         result through the operand bypass, not through wakeup and select. Keep a shape to set it beside the next.</p>`,
       widget: oooLabWidget,
       more: {
@@ -688,12 +689,12 @@ export const chOoo: Chapter = {
       title: 'Code that helps the hardware',
       body: `
         <p>crc spends its time on one branch: is the low bit 1? It goes either way at random, so no predictor learns it:
-        290 mispredictions in 3 049 instructions on our core, each paid when the branch reaches the head of the reorder
+        290 mispredictions in 3049 instructions on our core, each paid when the branch reaches the head of the reorder
         buffer. The cure is in the code. Make the decision data: <code>neg</code> turns the bit into 0 or all ones,
         <code>and</code> with the polynomial picks it or 0, and the <code>xor</code> always runs. Two more instructions a
         bit, and no branch.</p>
-        <p>On the benchmark that is 3 819 instructions instead of 3 049, but 2 330 cycles instead of 3 021: 21
-        mispredictions. The in-order dual-issue machine of step 3 gains as much (3 045 → 2 370 cycles): the win is in
+        <p>On the benchmark that is 3819 instructions instead of 3049, but 2330 cycles instead of 3021: 21
+        mispredictions. The in-order dual-issue machine of step 3 gains as much (3045 → 2370 cycles): the win is in
         prediction, not in reordering. Compilers do this where they can (if-conversion into a select, cmov on x86,
         czero in RISC-V's Zicond).</p>
         <p>The core runs the CRC of four words, a branch on every bit: 807 cycles. Edit the program in the CPU panel and

@@ -5,6 +5,7 @@
 // screen (unless the user closed it for that chip), and follows tab switches (editor.sim is per
 // chip). Clear and Save PNG act on the part's state in the simulation, never on the document.
 
+import { groupDigits } from '../sim/numfmt';
 import { formatBits } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { h, icon } from '../ui/dom';
@@ -87,7 +88,7 @@ async function savePng(ed: Editor, sc: ScreenCanvas, name: string): Promise<void
   saveFile(`${fileBase(ed.doc.name)}-${fileBase(name, 'screen')}.png`, blob, 'image/png');
 }
 
-const n0 = (v: number) => v.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = groupDigits;
 
 // ---- properties ------------------------------------------------------------------------------
 

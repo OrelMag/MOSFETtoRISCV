@@ -594,7 +594,7 @@ registerPropsSection({
         const r = setCore64Memory(ed.doc, p.id, n, ed.defOf);
         if (r.reason) return void ed.toast(r.reason, 'err');
         ed.edit(() => r.doc);
-      }, 'Data memory'), 'The core keeps its data memory inside: 2^k doublewords as eight byte banks. A larger memory is more gates to build and simulate (2^8 is about 400 000 leaves).'),
+      }, 'Data memory'), 'The core keeps its data memory inside: 2^k doublewords as eight byte banks. A larger memory is more gates to build and simulate (2^8 is about 400 000 leaves).'),
       h('p', { class: 'sb-sum' }, 'The memory is inside the core part, so the drawer’s memory view and the golden model follow the size; addresses past it wrap.'));
   },
 });

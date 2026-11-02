@@ -2,6 +2,7 @@
 // main path has an end card; the numbers its texts quote are measured; and the derived pieces (the "Goes into"
 // chain, the anatomy a level lights, "Now within reach", act seams) behave.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { ACT_ENDS } from '../src/campaign/actends';
 import { BLOCKS } from '../src/campaign/anatomy';
@@ -26,7 +27,7 @@ import { netlistOf } from '../src/sim/types';
 const par = (id: string) => nodeById(id)!.par!;
 const nand = (id: string) => libCost(id)!.nand;
 /** As the texts write numbers: a space between thousands. */
-const fmt = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const fmt = (v: number) => groupDigits(v);
 const plain = (html: string) => html.replace(/<[^>]+>/g, '');
 const blocks = new Set(BLOCKS.map((b) => b.id));
 const view = (done: string[]) => (id: string): NodeState | undefined => (done.includes(id) ? { status: 'solved' } : undefined);

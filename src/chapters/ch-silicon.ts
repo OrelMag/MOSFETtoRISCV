@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { MUX2 } from '../lib';
 import { stats } from '../sim/stats';
 import { chipLayoutWidget } from '../widgets/chiplayout';
@@ -10,7 +11,7 @@ import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
 import type { Chapter, Step } from './types';
 
-const num = (n: number) => Math.round(n).toLocaleString('en-US');
+const num = (n: number) => groupDigits(Math.round(n));
 const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
 /** Poisson yield of a die of a mm² at d0 defects per cm². */
 const yieldOf = (a: number, d0 = 0.1) => Math.exp(-(a / 100) * d0);

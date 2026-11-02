@@ -126,7 +126,7 @@ const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 
 const twos: Drill = {
   id: 'twos', title: "Two's complement", goal: 8,
-  how: 'Answer in decimal (signed), as a pattern, or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
+  how: 'Answer in decimal (signed), as a pattern, or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
   make(r) {
     const k = int(r, 0, 7);
     const v = int(r, 0, 255);
@@ -136,7 +136,7 @@ const twos: Drill = {
         const x = r() < 0.7 ? w | 0x8000 : w;
         return {
           prompt: `The 16-bit pattern <code>0x${hex(x, 16)}</code> as a signed (two's-complement) number?`, check: numAnswer(s16(x), 10), answer: String(s16(x)),
-          explain: `The top bit weighs −32 768: ${x & 0x8000 ? `−32 768 + ${x & 0x7fff}` : String(x)} = ${s16(x)}. As unsigned the same bits are ${x}.`,
+          explain: `The top bit weighs −32 768: ${x & 0x8000 ? `−32 768 + ${x & 0x7fff}` : String(x)} = ${s16(x)}. As unsigned the same bits are ${x}.`,
         };
       }
       // a and b with different signs half the time: then the signed and unsigned orders disagree
@@ -157,7 +157,7 @@ const twos: Drill = {
       return {
         prompt: `In 16 bits, a = <code>0x${hex(w, 16)}</code>, b = <code>0x${hex(b, 16)}</code>: does a + ¬b + 1 (that is a − b) carry out of bit 15? (yes / no)`, placeholder: 'yes / no',
         check: yesNo(cout), answer: cout ? 'yes' : 'no',
-        explain: `a + ¬b + 1 = a + (65 536 − b): it carries out exactly when a ≥ b as unsigned numbers. ${order} So a &lt; b unsigned ⇔ no carry out: sltu is ¬cout.`,
+        explain: `a + ¬b + 1 = a + (65 536 − b): it carries out exactly when a ≥ b as unsigned numbers. ${order} So a &lt; b unsigned ⇔ no carry out: sltu is ¬cout.`,
       };
     }
     if (k === 0) return { prompt: `The 8-bit pattern <code>${grp(bin(v, 8))}</code> as a signed (two's-complement) number?`, check: numAnswer(s8(v), 10), answer: String(s8(v)), explain: `The top bit weighs −128: ${v & 0x80 ? `−128 + ${v & 0x7f}` : String(v)} = ${s8(v)}.` };

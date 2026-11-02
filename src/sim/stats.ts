@@ -1,6 +1,7 @@
 // Cost of a component, measured from its structure: NAND count, transistor count, and the
 // logic depth (longest input → output path in NAND delays) for combinational parts.
 
+import { groupDigits } from './numfmt';
 import { type DelayModel, inputArrivals, leafDelays } from './delay';
 import { flatten } from './flatten';
 import { needsSwitchLevel } from './harness';
@@ -88,7 +89,7 @@ export function stats(def: ComponentDef): Stats {
 
 /** The ROM chips' size: "2 KB", "5 × 2 KB" (one size), else the total ("10 KB"). */
 export function romSize(r: RomStats): string {
-  const kb = (n: number) => (n % 1024 ? `${n.toLocaleString('en-US')} bytes` : `${n / 1024} KB`);
+  const kb = (n: number) => (n % 1024 ? `${groupDigits(n)} bytes` : `${n / 1024} KB`);
   return r.chips > 1 && r.size ? `${r.chips} × ${kb(r.size)}` : kb(r.bytes);
 }
 

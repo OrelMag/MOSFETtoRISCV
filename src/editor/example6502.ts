@@ -12,7 +12,7 @@ import { isError, partDef } from './parts';
 
 const NOTES_MAP = 'RAM $0000–$3FFF (2K, repeating: zero page, the stack in page 1), console $4000 (a store prints), LEDs $4001 (a store lights them), switches $4002 (a load reads them; the devices repeat every 4 bytes), ROM $8000–$FFFF (4K, repeating: the program at $F000, the vectors at $FFFA).';
 
-export const NOTES_6502 = 'A computer of 1975: the MOS 6502 (one bus cycle per clock, every cycle as the chip makes it; double-click it for its 4 513 transistors, replaying what it did), '
+export const NOTES_6502 = 'A computer of 1975: the MOS 6502 (one bus cycle per clock, every cycle as the chip makes it; double-click it for its 4513 transistors, replaying what it did), '
   + 'a 4K program ROM in 6502 assembly (Edit program…; samples: hello, Fibonacci in decimal, a BCD count, the switches), the memory map (double-click: the decoder, 2K of RAM, the read multiplexers) and the devices. '
   + `${NOTES_MAP} The halt detector latches each opcode fetch's address (SYNC) and stops Run when the next one is the same: a JMP to itself. Run, or Run to halt in the CPU drawer.`;
 

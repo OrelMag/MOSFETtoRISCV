@@ -4,6 +4,7 @@
 // "Fill outputs from the circuit" writes what the circuit shows into the table. Edits of the text are one undo step
 // per pause in typing (TYPE_MS), as the Verilog pane's.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-tests.css';
 import { h, icon } from '../ui/dom';
 import type { CheckResult } from './challenges';
@@ -248,7 +249,7 @@ class TestsPane {
       ...tabs,
       h('button', { class: 'btn sm ghost', title: 'A new table for this chip, its pins as the header', onclick: () => this.addTable() }, icon('plus', 12), 'Table'),
       h('span', { class: 'spacer' }),
-      h('label', { class: 'sb-tests-auto', title: `Run the tables after every edit (up to ${AUTO_STEPS.toLocaleString('en')} steps each)` },
+      h('label', { class: 'sb-tests-auto', title: `Run the tables after every edit (up to ${groupDigits(AUTO_STEPS)} steps each)` },
         h('input', { type: 'checkbox', checked: this.auto, onchange: (e: Event) => { this.auto = (e.target as HTMLInputElement).checked; } }), 'Run on every edit'),
       tests.length ? h('button', { class: 'btn sm', title: 'Write what the circuit shows into the outputs of the plain rows', onclick: () => this.fill() }, 'Fill outputs from the circuit') : null,
       tests.length ? h('button', { class: 'btn sm primary', title: 'Run every table now', onclick: () => { this.flush(); this.runAll(true); } }, icon('play', 12), 'Run all') : null,
@@ -283,14 +284,14 @@ class TestsPane {
     }
     const steps = o.plan!.ch.check.kind === 'sequence' ? o.plan!.ch.check.steps.length : 0;
     if (o.waiting || !o.run) {
-      box.append(h('p', { class: 'sb-tests-sum' }, `${steps.toLocaleString('en')} rows: too many to run after every edit. `, h('button', { class: 'btn sm primary', onclick: () => this.runAll(true) }, 'Run')));
+      box.append(h('p', { class: 'sb-tests-sum' }, `${groupDigits(steps)} rows: too many to run after every edit. `, h('button', { class: 'btn sm primary', onclick: () => this.runAll(true) }, 'Run')));
       return box;
     }
     const run = o.run, plan = o.plan!, names = o.names!;
     const bad = run.failed.length;
     box.append(h('p', { class: 'sb-tests-sum' },
-      h('b', null, `${steps.toLocaleString('en')} rows`), ' ',
-      h('span', { class: 'ok' }, `${(run.steps.length - bad + (run.error ? 1 : 0)).toLocaleString('en')} pass`), ' ',
+      h('b', null, `${groupDigits(steps)} rows`), ' ',
+      h('span', { class: 'ok' }, `${groupDigits(run.steps.length - bad + (run.error ? 1 : 0))} pass`), ' ',
       bad ? h('span', { class: 'bad' }, `${bad} fail${bad > 1 ? '' : 's'}`) : null, ' ',
       h('span', { class: 'muted' }, `${o.ms! < 10 ? o.ms!.toFixed(1) : Math.round(o.ms!)} ms`),
       ...plan.notes.map((n) => h('span', { class: 'muted note' }, n))));
@@ -320,7 +321,7 @@ class TestsPane {
     }
     grid.append(body);
     box.append(h('div', { class: 'sb-tests-scroll' }, grid));
-    if (to < steps || from > 0) box.append(h('p', { class: 'muted sb-tests-more' }, `Rows ${from + 1}–${to} of ${steps.toLocaleString('en')}`));
+    if (to < steps || from > 0) box.append(h('p', { class: 'muted sb-tests-more' }, `Rows ${from + 1}–${to} of ${groupDigits(steps)}`));
     if (first !== undefined) {
       const row = plan.rows[plan.rowOf[first]];
       const res = run.steps[first];

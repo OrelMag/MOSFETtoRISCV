@@ -5,6 +5,7 @@
 // (the table's problems, how many words decode, and a line tried live). Every committed change is
 // one undo step and reaches every ROM that holds the table (isaops.putIsa).
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/isa.css';
 import { ISA_PRESETS } from '../isa/presets';
 import { type InstrDef, type IsaDoc, type OperandDef, sanitizeIsa, tableOf } from '../isa/table';
@@ -259,7 +260,7 @@ export function openIsaEditor(ed: Editor, id?: string): void {
     if (W <= 16) {
       let n = 0;
       for (let w = 0; w < 2 ** W; w++) if (t.match(w)) n++;
-      coverage = `${n.toLocaleString('en')} of ${(2 ** W).toLocaleString('en')} words are instructions; the rest disassemble as .word.`;
+      coverage = `${groupDigits(n)} of ${groupDigits(2 ** W)} words are instructions; the rest disassemble as .word.`;
     } else coverage = `${W}-bit words: too many to count here.`;
     const out = h('div', { class: 'isa-try-out' });
     const input = h('input', { class: 'isa-try', value: tryText, placeholder: doc.instrs[0] ? `${doc.instrs[0].mnemonic} …` : 'an instruction', spellcheck: false, 'aria-label': 'Try a line' }) as HTMLInputElement;

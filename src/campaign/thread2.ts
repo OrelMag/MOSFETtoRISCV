@@ -266,7 +266,7 @@ export const THREAD2: Record<string, NodeThread> = {
   },
   o_fpnorm: {
     usedFor: {
-      o_fpadd: 'its last stage, 2 058 of the adder\'s 3 732 NANDs',
+      o_fpadd: 'its last stage, 2058 of the adder\'s 3732 NANDs',
       o_fpcvt: 'the 16-bit version: the integer is the significand',
     },
     pitfalls: [

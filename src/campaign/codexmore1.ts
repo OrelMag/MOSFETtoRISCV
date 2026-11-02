@@ -7,7 +7,7 @@ import type { CodexMore } from './codexmore';
 export const MORE1: Record<string, CodexMore> = {
   // ---- the big picture
   cpu: {
-    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 4,720 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
+    idea: `A processor is a state machine whose next-state function is chosen by data: the word at <code>imem[pc]</code> selects which transformation of (PC, registers, memory) happens this step. The program is an input, so one fixed circuit runs any program. In RV16 the architectural state is the 16-bit PC, seven 16-bit registers (x0 is a constant) and 64 K words of data memory; the program sits in a separate ROM the CPU never writes.<br>Everything else (control unit, immediate generator, ALU, multiplexers) is combinational logic computing the next state. The single-cycle core <code>rv16_cpu</code> is 4720 NANDs; the only state it holds itself is 128 flip-flops (16 for the PC, 112 for x1–x7). The memories are outside it.`,
     example: {
       title: 'Five instructions, thirteen steps',
       body: `<pre>pc  instruction            state change
@@ -59,9 +59,9 @@ write back    result mux             4       93
 XOR                          4 NANDs
 full adder                   9 NANDs
 16-bit adder               144 NANDs   (16 full adders)
-16-bit ALU               1,055 NANDs
-rv16_cpu                 4,720 NANDs   (18,880 transistors)
-RV16 pipeline            9,218 NANDs</pre>`,
+16-bit ALU                1055 NANDs
+rv16_cpu                  4720 NANDs   (18 880 transistors)
+RV16 pipeline             9218 NANDs</pre>`,
     },
     mistakes: [
       'Treating a black box as free: a 16:1 multiplexer is one symbol and 15 two-input muxes per bit inside.',
@@ -155,7 +155,7 @@ field    f3     rs2   rs1   rd    op
 
   // ---- numbers
   positional: {
-    idea: `A string of digits is a polynomial in the base: b<sub>n−1</sub>…b<sub>0</sub> means Σ b<sub>k</sub>·2^k. Each position weighs twice the one to its right, so a left shift doubles a number and drops the top bit, a right shift halves it and drops the bottom bit. n bits hold 0 … 2^n − 1 unsigned: 0 … 65,535 at 16 bits.<br>An adder is positional notation in hardware: column k adds the two bits of weight 2^k and a carry of the same weight, and passes a carry of weight 2^(k+1) to the left.`,
+    idea: `A string of digits is a polynomial in the base: b<sub>n−1</sub>…b<sub>0</sub> means Σ b<sub>k</sub>·2^k. Each position weighs twice the one to its right, so a left shift doubles a number and drops the top bit, a right shift halves it and drops the bottom bit. n bits hold 0 … 2^n − 1 unsigned: 0 … 65 535 at 16 bits.<br>An adder is positional notation in hardware: column k adds the two bits of weight 2^k and a carry of the same weight, and passes a carry of weight 2^(k+1) to the left.`,
     example: {
       title: '1000 in binary',
       body: `<pre>1000 ÷ 2 = 500 r 0      bit 0
@@ -171,7 +171,7 @@ field    f3     rs2   rs1   rd    op
 read upwards: 11 1110 1000 = 0x3E8 = 512 + 256 + 128 + 64 + 32 + 8</pre>`,
     },
     mistakes: [
-      'Getting the range off by one: n bits reach 2^n − 1, so 65,536 needs a 17th bit.',
+      'Getting the range off by one: n bits reach 2^n − 1, so 65 536 needs a 17th bit.',
       'Reading the remainders top-down: the first remainder is bit 0.',
       'Assuming a left shift always doubles: the top bit falls off (0x8000 shifted left is 0 at 16 bits).',
     ],
@@ -197,19 +197,19 @@ fields   111111 011 011 0100
   },
 
   twos: {
-    idea: `In two's complement the top bit weighs −2^(n−1) and the others keep their positive weights, so a pattern with the top bit set reads as u unsigned and u − 2^n signed. Addition modulo 2^n is the same operation under both readings, which is why one adder serves signed and unsigned arithmetic and subtraction is a + ¬b + 1. Only what interprets the bits differs: comparison (slt / sltu, blt), right shifts (sra / srl), widening (sign or zero extension), the high half of a product, division.<br>The range is asymmetric, −32,768 … 32,767 at 16 bits, so −(−32,768) wraps to −32,768: negation, absolute value and division by −1 each have one input without a representable answer.`,
+    idea: `In two's complement the top bit weighs −2^(n−1) and the others keep their positive weights, so a pattern with the top bit set reads as u unsigned and u − 2^n signed. Addition modulo 2^n is the same operation under both readings, which is why one adder serves signed and unsigned arithmetic and subtraction is a + ¬b + 1. Only what interprets the bits differs: comparison (slt / sltu, blt), right shifts (sra / srl), widening (sign or zero extension), the high half of a product, division.<br>The range is asymmetric, −32 768 … 32 767 at 16 bits, so −(−32 768) wraps to −32 768: negation, absolute value and division by −1 each have one input without a representable answer.`,
     example: {
       title: '−5 at 16 bits',
       body: `<pre> 5       = 0000 0000 0000 0101 = 0x0005
 ¬5       = 1111 1111 1111 1010 = 0xFFFA
 ¬5 + 1   = 1111 1111 1111 1011 = 0xFFFB = −5
-unsigned:  65,531 = 65,536 − 5
+unsigned:  65 531 = 65 536 − 5
 check:     0xFFFB + 0x0005 = 0x1_0000 → 0x0000 (carry out dropped)</pre>`,
     },
     mistakes: [
       'Negating with ¬x alone (ones\' complement): off by one, and it has two zeros.',
       'Comparing signed values with <code>sltu</code>: −1 (0xFFFF) becomes the largest number.',
-      'Forgetting the asymmetry: <code>neg</code> of 0x8000 is 0x8000, and RV16\'s <code>div</code> of −32,768 by −1 returns −32,768 by definition.',
+      'Forgetting the asymmetry: <code>neg</code> of 0x8000 is 0x8000, and RV16\'s <code>div</code> of −32 768 by −1 returns −32 768 by definition.',
     ],
     anatomy: ['alu'],
     chapters: [{ chapter: 'binary', step: 1, label: 'Negative numbers: two\'s complement' }, { chapter: 'adders', step: 5, label: 'Subtraction for free' }],
@@ -220,9 +220,9 @@ check:     0xFFFB + 0x0005 = 0x1_0000 → 0x0000 (carry out dropped)</pre>`,
     example: {
       title: 'Two additions at 16 bits',
       body: `<pre>0x7FFF + 0x0001 = 0x8000     c15 = 1, c16 = 0 → V = 1, C = 0
-  signed 32,767 + 1 → −32,768 (overflow); unsigned 32,768 (correct)
+  signed 32 767 + 1 → −32 768 (overflow); unsigned 32 768 (correct)
 0xFFFF + 0x0001 = 0x0000     c15 = 1, c16 = 1 → V = 0, C = 1
-  signed −1 + 1 = 0 (correct); unsigned 65,535 + 1 → 0 (overflow)
+  signed −1 + 1 = 0 (correct); unsigned 65 535 + 1 → 0 (overflow)
 
 add  t0, a0, a1     # signed overflow iff (a1 &lt; 0) ≠ (t0 &lt; a0)
 slt  t1, a1, zero
@@ -361,10 +361,10 @@ RV16: separate imem and dmem, so neither happens</pre>`,
     example: {
       title: 'gcd(1071, 462): one program, four machines',
       body: `<pre>core                    cycles  period   time (NAND delays)
-single-cycle                50      98       4,900
-pipeline                    83      78       6,474
-pipeline + prediction       61      80       4,880
-multicycle                 150      76      11,400</pre>51 instructions; cycles counted to the last result, periods from static timing with 8-delay memories. Same register writes and stores on all four. The plain pipeline loses on this program: 15 taken branches and jumps cost 2 cycles each. With prediction it only draws level.`,
+single-cycle                50      98        4900
+pipeline                    83      78        6474
+pipeline + prediction       61      80        4880
+multicycle                 150      76      11 400</pre>51 instructions; cycles counted to the last result, periods from static timing with 8-delay memories. Same register writes and stores on all four. The plain pipeline loses on this program: 15 taken branches and jumps cost 2 cycles each. With prediction it only draws level.`,
     },
     mistakes: [
       'Relying on implementation timing: a program that expects a loaded value one cycle late works on one core and fails on another.',
@@ -554,7 +554,7 @@ echo:   lw   a0, -6(x0)    # 0xE836
 
   // ---- the CPU
   datapath: {
-    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are the largest single cost. In <code>rv16_cpu</code> 705 bits of two-input mux make 2,265 of its 4,720 NANDs, nearly half: 336 in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
+    idea: `The datapath is the part of the CPU that holds and moves data: PC, instruction memory, register file, immediate generator, ALU, branch comparator, data memory, and the multiplexers that choose each block's inputs. Every instruction uses the same blocks; only the mux selects and the write enables differ, and those come from the control unit. Designing a datapath means walking the instruction set one instruction at a time and adding a path, and a mux input, for whatever the existing paths cannot do.<br>Multiplexers are the largest single cost. In <code>rv16_cpu</code> 705 bits of two-input mux make 2265 of its 4720 NANDs, nearly half: 336 in the register file's read ports and write enables, 208 in the ALU's operation select, and the rest in the result, immediate, operand and PC selects.`,
     example: {
       title: 'Settings per instruction (– = don\'t care)',
       body: `<pre>instr  rwe  ALU b  imm  result   mwe  next PC
@@ -578,12 +578,12 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
   },
 
   singlecycle: {
-    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (4,720 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
+    idea: `A single-cycle CPU executes each instruction completely between two clock edges: fetch, decode, execute, memory and write back form one combinational path from the PC back to the PC and the register file. CPI is exactly 1, and control is a pure function of the instruction with no state machine, which makes it the simplest correct implementation and the reference the others are compared with. The price is the period: every instruction gets the time of the slowest one, a load, whose path passes through both memories and the ALU.<br><code>rv16_cpu</code> (4720 NANDs) has a period of 98 NAND delays with 8-delay memories, and a jal, which needs neither the ALU nor the data memory, gets the same 98. Any long unit on the path stretches every cycle.`,
     example: {
       title: 'One unit sets everyone\'s period',
-      body: `<pre>rv16_cpu                      4,720 NANDs   period  98
-  with a Kogge–Stone ALU      4,938 NANDs   period  76   (−22% time, +5% NANDs)
-  with the array multiplier   8,037 NANDs   period 191   (paid by every instruction)</pre>`,
+      body: `<pre>rv16_cpu                       4720 NANDs   period  98
+  with a Kogge–Stone ALU       4938 NANDs   period  76   (−22% time, +5% NANDs)
+  with the array multiplier    8037 NANDs   period 191   (paid by every instruction)</pre>`,
     },
     mistakes: [
       'Timing the add path and calling it the clock: the period is set by the worst instruction, here a load.',
@@ -627,7 +627,7 @@ and the branch path is now two delays behind (74):
   },
 
   pipeline: {
-    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays, then 4 through the E/M register's clear and enable muxes, plus 6 of clk-to-q and setup), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116,610 against 121,128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
+    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays, then 4 through the E/M register's clear and enable muxes, plus 6 of clk-to-q and setup), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116 610 against 121 128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
     example: {
       title: 'Five in flight, and the measured cost',
       body: `<pre>cycle    1  2  3  4  5  6  7  8  9
@@ -638,9 +638,9 @@ or                F  D  E  M  W
 sw                   F  D  E  M  W
 
 nested loops (334 instructions)   cycles  period    time
-single-cycle                        333      98    32,634
-pipeline                            534      78    41,652
-pipeline + static prediction        358      80    28,640</pre>534 = 333 + 3 (fill) + 2 × 99 taken branches.`,
+single-cycle                        333      98    32 634
+pipeline                            534      78    41 652
+pipeline + static prediction        358      80    28 640</pre>534 = 333 + 3 (fill) + 2 × 99 taken branches.`,
     },
     mistakes: [
       'Expecting 5× from 5 stages: unbalanced stages and register overhead (6 delays of clk-to-q and setup per stage here, 10 with a stage register\'s clear and enable muxes) eat most of it, and hazards add cycles.',
@@ -763,7 +763,7 @@ predict backward taken: wrong at the 10 inner exits and the outer
 
   // ---- system
   traps: {
-    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 4,720 to 7,257 NANDs.`,
+    idea: `A trap transfers control to a handler without a branch in the program. On an exception (ecall, ebreak, an illegal instruction) or an interrupt the CPU saves the PC in mepc and the reason in mcause, copies mstatus.MIE into MPIE and clears MIE (so the handler is not interrupted), and jumps to mtvec. mret reverses it: pc ← mepc, MIE ← MPIE. The handler runs with the program's registers, so it saves what it uses; mscratch can hold a pointer to a save area.<br>For an exception mepc is the trapping instruction itself, so a handler that continues after an ecall adds 1 to mepc before mret. RV16's mcause values: 2 illegal instruction, 3 breakpoint, 11 ecall, 0x800B external (bit 15 marks an interrupt). Adding traps to the single-cycle core (CSR file, illegal-instruction detector, system decode) takes it from 4720 to 7257 NANDs.`,
     example: {
       title: 'An ecall at 0x0010, handled and resumed',
       body: `<pre>before: pc = 0x0010 (ecall), mstatus.MIE = 1, mtvec = h
@@ -835,7 +835,7 @@ next:   pc ← mtvec, mepc ← pc of the illegal word, mcause ← 2</pre>`,
 
   // ---- side quests
   mext: {
-    idea: `M adds multiply and divide on the MD opcode (op 3), with f3 selecting the operation: 0 mul (low 16 bits), 1 mulh (high 16, signed × signed), 2 mulhsu (signed × unsigned), 3 mulhu (unsigned × unsigned), 4 div, 5 divu, 6 rem, 7 remu. Division truncates toward zero and the remainder takes the dividend's sign. Nothing traps: x ÷ 0 gives a quotient of all ones and a remainder of x; the one signed overflow, −32,768 ÷ −1, gives −32,768 with remainder 0.<br>A full 32-bit product takes two instructions, mulh (or mulhu) and mul on the same operands. In hardware the multiplier is combinational and the divider iterative: the 16 × 16 array multiplier with signed corrections is 3,257 NANDs, depth 166, which raises a single-cycle core's period from 98 to 191 for every instruction; the divider takes 18 cycles and holds the PC meanwhile.`,
+    idea: `M adds multiply and divide on the MD opcode (op 3), with f3 selecting the operation: 0 mul (low 16 bits), 1 mulh (high 16, signed × signed), 2 mulhsu (signed × unsigned), 3 mulhu (unsigned × unsigned), 4 div, 5 divu, 6 rem, 7 remu. Division truncates toward zero and the remainder takes the dividend's sign. Nothing traps: x ÷ 0 gives a quotient of all ones and a remainder of x; the one signed overflow, −32 768 ÷ −1, gives −32 768 with remainder 0.<br>A full 32-bit product takes two instructions, mulh (or mulhu) and mul on the same operands. In hardware the multiplier is combinational and the divider iterative: the 16 × 16 array multiplier with signed corrections is 3257 NANDs, depth 166, which raises a single-cycle core's period from 98 to 191 for every instruction; the divider takes 18 cycles and holds the PC meanwhile.`,
     example: {
       title: 'Results from the golden model',
       body: `<pre>a = −1 (0xFFFF), b = 3:
@@ -860,23 +860,23 @@ a = b = 0x8000:
   },
 
   ieee754: {
-    idea: `A float is sign × significand × 2^exponent with the significand normalised to 1.f, so the leading 1 is implicit and every stored fraction bit is precision. binary16 packs a sign bit, a 5-bit exponent with bias 15 and a 10-bit fraction: value = (−1)^s × 1.f × 2^(e − 15) for e = 1 … 30. e = 0 encodes zero and the subnormals, e = 31 infinity (f = 0) and NaN (f ≠ 0). Magnitudes run from 2^−24 to 65,504 with 11 significant bits, so integers are exact up to 2,048.<br>The encoding is ordered: for non-negative values a larger bit pattern is a larger number, so comparison is nearly integer comparison. Spacing is constant within a binade (2^−10 of its lower end), so the absolute error grows with magnitude while the relative error stays bounded.`,
+    idea: `A float is sign × significand × 2^exponent with the significand normalised to 1.f, so the leading 1 is implicit and every stored fraction bit is precision. binary16 packs a sign bit, a 5-bit exponent with bias 15 and a 10-bit fraction: value = (−1)^s × 1.f × 2^(e − 15) for e = 1 … 30. e = 0 encodes zero and the subnormals, e = 31 infinity (f = 0) and NaN (f ≠ 0). Magnitudes run from 2^−24 to 65 504 with 11 significant bits, so integers are exact up to 2048.<br>The encoding is ordered: for non-negative values a larger bit pattern is a larger number, so comparison is nearly integer comparison. Spacing is constant within a binade (2^−10 of its lower end), so the absolute error grows with magnitude while the relative error stays bounded.`,
     example: {
       title: 'binary16 encodings',
       body: `<pre>1.0        0 01111 0000000000   0x3C00
 1.5        0 01111 1000000000   0x3E00
 −2.0       1 10000 0000000000   0xC000
-65,504     0 11110 1111111111   0x7BFF   largest finite
+65 504     0 11110 1111111111   0x7BFF   largest finite
 2^−14      0 00001 0000000000   0x0400   smallest normal
 2^−24      0 00000 0000000001   0x0001   smallest subnormal
 +∞         0 11111 0000000000   0x7C00
-2,049 → 2,048 (0x6800): above 2,048 the spacing is 2
+2049 →  2048 (0x6800): above  2048 the spacing is 2
 0.1 + 0.2 = 0x34CC, while 0.3 = 0x34CD</pre>`,
     },
     mistakes: [
       'Comparing floats for equality after arithmetic: 0.1 + 0.2 and 0.3 differ in the last bit, in binary16 as in binary64.',
       'Forgetting the bias: the exponent field 01111 means 2^0.',
-      'Storing integers above 2,048 in binary16 and expecting them back: 2,049 becomes 2,048.',
+      'Storing integers above 2048 in binary16 and expecting them back: 2049 becomes 2048.',
     ],
     lib: 'fpun5_10',
     chapters: [
@@ -937,15 +937,15 @@ largest subnormal 0x03FF = 1023 × 2^−24</pre>`,
     example: {
       title: 'rv16_mc against rv16_cpu',
       body: `<pre>program                    cycles   CPI   period     time
-nested loops   multicycle     999   3.00     76    75,924
-               single-cycle   333   1.00     98    32,634
-bubble sort    multicycle     777   3.38     76    59,052
-               single-cycle   230   1.00     98    22,540</pre>`,
+nested loops   multicycle     999   3.00     76    75 924
+               single-cycle   333   1.00     98    32 634
+bubble sort    multicycle     777   3.38     76    59 052
+               single-cycle   230   1.00     98    22 540</pre>`,
     },
     mistakes: [
       'Cutting the path where it is convenient: here E holds 70 of the 76 delays while F and M hold one memory read each; unbalanced steps waste the short ones.',
       'Expecting the period to shrink by the number of steps: register overhead (clk-to-q + setup = 6) is paid in every step.',
-      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (5,203 against 4,720 NANDs) and slower.',
+      'Keeping separate memories and adders: without sharing, the multicycle core is bigger than the single-cycle one (5203 against 4720 NANDs) and slower.',
     ],
     lib: 'rv16_mc',
     chapters: [
@@ -1040,9 +1040,9 @@ carry out  0                      a &lt; b unsigned (a borrow)</pre>`,
     example: {
       title: 'a = 0x8000, b = 0x0001',
       body: `<pre>a + ¬b + 1 = 0x8000 + 0xFFFE + 1 = 0x7FFF, carry out 1
-unsigned:  carry 1, no borrow → 32,768 ≥ 1          correct
+unsigned:  carry 1, no borrow → 32 768 ≥ 1          correct
 signed:    N = 0, V = 1 (negative − positive gave positive)
-           lt = N ⊕ V = 1 → −32,768 &lt; 1             correct
+           lt = N ⊕ V = 1 → −32 768 &lt; 1             correct
 N alone would answer "not less"</pre>`,
     },
     mistakes: [
@@ -1101,7 +1101,7 @@ or  a2, a0, a1     F       D             E: a0 ← W, a1 ← M</pre>Measured: li
       body: `<pre> 1.5 = 0x3E00     2.0 = 0x4000     0x3E00 &lt; 0x4000 → 1.5 &lt; 2.0
 −1.5 = 0xBE00    −2.0 = 0xC000     magnitudes 0x3E00 &lt; 0x4000,
                                    both negative: flip → −2.0 &lt; −1.5
-as signed 16-bit integers 0xBE00 = −16,896 &lt; 0xC000 = −16,384,
+as signed 16-bit integers 0xBE00 = −16 896 &lt; 0xC000 = −16 384,
 which would claim −1.5 &lt; −2.0</pre>`,
     },
     mistakes: [
@@ -1115,10 +1115,10 @@ which would claim −1.5 &lt; −2.0</pre>`,
   },
 
   signedmul: {
-    idea: `An unsigned multiplier reads a negative 16-bit a as a + 2^16, so the product it forms is (a + 2^16)·b = a·b + b·2^16: the error lies entirely in the high half. The low 16 bits are the same for every signedness, so mul needs no correction, and the signed high half is the unsigned one minus b when a is negative and minus a when b is negative (both when both are; the 2^32 term falls outside the 32-bit product). One unsigned array multiplier and two conditional subtractors give mul, mulh, mulhsu and mulhu.<br>Cost in RV16: the unsigned 16 × 16 array is 2,672 NANDs, depth 150; with the corrections the MD multiplier is 3,257 NANDs, depth 166. Baugh–Wooley and Booth recoding fold the signs into the partial products instead of correcting afterwards.`,
+    idea: `An unsigned multiplier reads a negative 16-bit a as a + 2^16, so the product it forms is (a + 2^16)·b = a·b + b·2^16: the error lies entirely in the high half. The low 16 bits are the same for every signedness, so mul needs no correction, and the signed high half is the unsigned one minus b when a is negative and minus a when b is negative (both when both are; the 2^32 term falls outside the 32-bit product). One unsigned array multiplier and two conditional subtractors give mul, mulh, mulhsu and mulhu.<br>Cost in RV16: the unsigned 16 × 16 array is 2672 NANDs, depth 150; with the corrections the MD multiplier is 3257 NANDs, depth 166. Baugh–Wooley and Booth recoding fold the signs into the partial products instead of correcting afterwards.`,
     example: {
       title: '−1 × 3, and 0x8000 × 0x8000',
-      body: `<pre>unsigned 0xFFFF × 3 = 196,605 = 0x0002_FFFD
+      body: `<pre>unsigned 0xFFFF × 3 = 196 605 = 0x0002_FFFD
 low half   0xFFFD = mul (−3), the same for every signedness
 mulhu      0x0002
 mulh, mulhsu: a &lt; 0 → 0x0002 − b = 0x0002 − 3 = 0xFFFF
@@ -1139,17 +1139,17 @@ check:     −3 = 0xFFFF_FFFD
 
   // ---- act 9: throughput (lane figures from the RV16 lane golden model, riscv/rv16/simt16.ts)
   throughput: {
-    idea: `Latency is how long one result takes; throughput is how many results arrive per unit of time. For one chain of dependent instructions only latency matters, and Acts 5–7 spent gates on it: forwarding, prediction, a shorter period. For n independent copies of one small computation (pixels, array elements) the latency of any one copy hardly matters; what counts is results per second, and per gate. Throughput is bought by overlap (a pipeline) or by replication (cores, lanes), and the two compose.<br>Replication keeps each result's latency: on the 4-lane SIMD core an element of 3·x + y still takes one 9-instruction loop iteration, at a period of 100 against the scalar core's 98, but four elements finish per iteration. Over 16 words that is 43 instructions against 151: 4,300 NAND delays against 14,798, 3.4× the throughput for 3.3× the NANDs.`,
+    idea: `Latency is how long one result takes; throughput is how many results arrive per unit of time. For one chain of dependent instructions only latency matters, and Acts 5–7 spent gates on it: forwarding, prediction, a shorter period. For n independent copies of one small computation (pixels, array elements) the latency of any one copy hardly matters; what counts is results per second, and per gate. Throughput is bought by overlap (a pipeline) or by replication (cores, lanes), and the two compose.<br>Replication keeps each result's latency: on the 4-lane SIMD core an element of 3·x + y still takes one 9-instruction loop iteration, at a period of 100 against the scalar core's 98, but four elements finish per iteration. Over 16 words that is 43 instructions against 151: 4300 NAND delays against 14 798, 3.4× the throughput for 3.3× the NANDs.`,
     example: {
       title: 'Four results per cycle, two ways',
       body: `<pre>                       NANDs   period   results / cycle
-single-cycle core      4,720     98       1
-four cores            18,880     98       4
-SIMD core, 4 lanes    15,669    100       4
+single-cycle core       4720     98       1
+four cores            18 880     98       4
+SIMD core, 4 lanes    15 669    100       4
 
 3·x + y, 16 words      instructions   NAND delays
-one lane                   151          14,798
-four lanes                  43           4,300</pre>Four cores also need four instruction memories; the lanes share one.`,
+one lane                   151          14 798
+four lanes                  43            4300</pre>Four cores also need four instruction memories; the lanes share one.`,
     },
     mistakes: [
       'Judging a throughput machine by its latency: the SIMD core\'s period is 2 delays longer than the scalar core\'s, and it finishes the array 3.4× sooner.',
@@ -1160,17 +1160,17 @@ four lanes                  43           4,300</pre>Four cores also need four in
   },
 
   simd: {
-    idea: `Single instruction, multiple data: one instruction stream drives several datapaths. What depends only on the instruction is built once: PC, instruction memory and fetch, decode and control, the immediate, the next-PC logic. What depends on the data is built per lane: registers, ALU, memory port, result path. The cost model follows: shared logic is paid once, lane logic n times, so SIMD saves as much as the shared part weighs in a core.<br>In RV16 it weighs little: of the SIMD core's 15,669 NANDs, 1,797 are shared and 3,468 belong to each lane, and four single-cycle cores would be 18,880. The larger saving is outside the NAND count: one instruction memory and one fetch per four results instead of four. SIMD appears as vector extensions (one instruction over a vector register: SSE, AVX, RISC-V V) and as GPUs, whose SIMT model hides the lanes from the programmer.`,
+    idea: `Single instruction, multiple data: one instruction stream drives several datapaths. What depends only on the instruction is built once: PC, instruction memory and fetch, decode and control, the immediate, the next-PC logic. What depends on the data is built per lane: registers, ALU, memory port, result path. The cost model follows: shared logic is paid once, lane logic n times, so SIMD saves as much as the shared part weighs in a core.<br>In RV16 it weighs little: of the SIMD core's 15 669 NANDs, 1797 are shared and 3468 belong to each lane, and four single-cycle cores would be 18 880. The larger saving is outside the NAND count: one instruction memory and one fetch per four results instead of four. SIMD appears as vector extensions (one instruction over a vector register: SSE, AVX, RISC-V V) and as GPUs, whose SIMT model hides the lanes from the programmer.`,
     example: {
       title: 'The SIMD core\'s bill',
-      body: `<pre>shared, once                                  1,797
+      body: `<pre>shared, once                                   1797
   next PC 421, branch 287, control 200, PC 144
   4:1 muxes (leader rs1, rs2; immediate) 441
   mask 102, lane decoder 52, PC muxes 147, OR 3
-per lane, × 4                                 3,468
-  registers 2,172, ALU + mux + nz 1,149
+per lane, × 4                                  3468
+  registers  2172, ALU + mux + nz  1149
   result muxes 147
-total                                        15,669</pre>The register files alone are 8,688: 55% of the core.`,
+total                                        15 669</pre>The register files alone are 8688: 55% of the core.`,
     },
     mistakes: [
       'Assuming every instruction does n times the work: setup code, masked lanes and the tail of a reduction do less.',
@@ -1251,7 +1251,7 @@ split      14 instructions   stored 0, 3, 1, 9
   },
 
   simt: {
-    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17,732 NANDs against 15,669 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
+    idea: `Single instruction, multiple threads: SIMD hardware with the programming model of independent threads. Each thread is an ordinary scalar program over its own registers, with its own ifs and loops; the hardware runs a warp of them on one PC and keeps the illusion with the active mask (which lanes write) and the reconvergence stack (which lanes are still owed the other side of an if). A correct program needs no knowledge of the lanes; a fast one does, because divergence and the tail of a reduction leave lanes idle.<br>The cost over SIMD is small: RV16's SIMT core is the SIMD core plus the stack, a PC mux and a mask mux, 17 732 NANDs against 15 669 (+13%), at the same period of 100. Its 25 test programs, the split ones among them, take 919 cycles. Nvidia named the model; Vortex, the open-source RISC-V GPU, adds split, join and tmc to RV32 as the campaign adds them to RV16.`,
     example: {
       title: 'Nested ifs, four threads',
       body: `<pre>a0 = 0
@@ -1321,7 +1321,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
 
   barrel: {
-    idea: `Barrel scheduling (fine-grained multithreading) gives the issue slots to the warps in a fixed rotation, one instruction each. A warp's consecutive instructions are then W cycles apart, so any latency up to W − 1 cycles between them is invisible: no forwarding, no stall, no scoreboard. The CDC 6600's peripheral processors (1964) shared one datapath this way among ten threads; Sun's Niagara and today's GPUs keep the idea and add a scheduler that picks a ready warp instead of the next one.<br>The campaign's two-warp core rotates two warps over a memory one cycle late: a load's word comes back during the other warp's turn and is written then, through a second register write port. The cost is the state: a PC, mask, stack and lane register file per warp, +12 242 NANDs over the SIMT core (29 974 against 17 732), more than half of it registers. A fixed rotation also wastes the turns of a warp that cannot use them (waiting at a barrier, or finished): 59 of the 2 160 turns in the level's 31 programs.`,
+    idea: `Barrel scheduling (fine-grained multithreading) gives the issue slots to the warps in a fixed rotation, one instruction each. A warp's consecutive instructions are then W cycles apart, so any latency up to W − 1 cycles between them is invisible: no forwarding, no stall, no scoreboard. The CDC 6600's peripheral processors (1964) shared one datapath this way among ten threads; Sun's Niagara and today's GPUs keep the idea and add a scheduler that picks a ready warp instead of the next one.<br>The campaign's two-warp core rotates two warps over a memory one cycle late: a load's word comes back during the other warp's turn and is written then, through a second register write port. The cost is the state: a PC, mask, stack and lane register file per warp, +12 242 NANDs over the SIMT core (29 974 against 17 732), more than half of it registers. A fixed rotation also wastes the turns of a warp that cannot use them (waiting at a barrier, or finished): 59 of the 2160 turns in the level's 31 programs.`,
     example: {
       title: 'A load, in turns',
       body: `<pre>cycle  issues               the memory, at the edge   register writes
@@ -1371,7 +1371,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   tilewalk: {
     idea: 'A rasterizer that visits every pixel of a triangle\'s bounding box spends most of its cycles outside a thin or diagonal triangle. Group the pixels into tiles (4 × 4 here) and test each tile once: if some edge is negative even at the tile\'s best corner, the corner where that edge is largest, no pixel of the tile can be inside, and the walk moves on. The best corner of edge i is at its top-left pixel plus 12·A⁺ in x and 12·B⁺ in y (A⁺ = A when positive, else 0): one more adder per edge.<br>The walk goes in bands, rows of tiles left to right. Inside an accepted tile it runs down the first column, up the second, down, up: every step is one pixel, so E changes by one constant, and the last pixel, the top-right one, is one step left of the next tile\'s top-left. A band starts again from R, the stepper\'s copy of E at the band\'s first tile: R + 4·(4B) is the next band.',
-    example: { title: 'A sliver across the screen', body: '<pre>triangle (4, 8) (124, 112) (116, 124), quarter pixels\nbox: tiles 0 … 7 × 0 … 7, 64 tiles, 1 024 pixels\ntiles accepted: 19, rejected: 45; pixels drawn: 70\ncycles: 64 TEST + 19 × 16 = 368 (+ 19 set-up)\na scan of the box: 1 024 (+ set-up)</pre>The thinner the triangle, the more the TEST cycles save.' },
+    example: { title: 'A sliver across the screen', body: '<pre>triangle (4, 8) (124, 112) (116, 124), quarter pixels\nbox: tiles 0 … 7 × 0 … 7, 64 tiles,  1024 pixels\ntiles accepted: 19, rejected: 45; pixels drawn: 70\ncycles: 64 TEST + 19 × 16 = 368 (+ 19 set-up)\na scan of the box:  1024 (+ set-up)</pre>The thinner the triangle, the more the TEST cycles save.' },
     mistakes: [
       'Testing a tile at its top-left pixel only: a tile whose top-left is outside can still hold pixels inside.',
       'A row-by-row path inside the tile: the jump back to the left edge is −3·4A, a step the stepper does not have.',
@@ -1382,7 +1382,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
   },
   horner: {
     idea: 'Multiplying a by an n-bit b needs no multiplier if time is cheaper than gates: Horner\'s rule, b = (…((b₇)·2 + b₆)·2 + …)·2 + b₀, turns a·b into n steps of acc ← 2·acc + (bₖ ? a : 0), most significant bit first. The doubling is wiring; the addition is the adder that is already there. A two\'s complement b weighs its top bit −2ⁿ⁻¹: that one step subtracts.<br>The campaign\'s RV16 rasterizer (k_raster) uses it to stay multiplier-free. Its set-up needs E = A·Δx + B·Δy − bias for each edge at the first tile, and each edge stepper already has an adder and a register. Interleaving the two products bit by bit, double-and-add A for bit k of Δx, then add B for bit k of Δy, computes both in one pass: E ← 0, two subtracting steps for the sign bits, fourteen steps for bits 6 … 0, one for the bias. The three edges run at once, 17 cycles a triangle, with nothing added but the muxes that feed the steppers. Chapter 33\'s GPU spends gates instead: its edge set-up runs eight products on a Booth multiplier, and only its depth set-up evaluates z at the first tile by ten Horner steps.',
-    example: { title: '−20 · 40 + 110 · 40, MSB first', body: '<pre>Δx = Δy = 40 = 0010 1000 (bits 7 … 0)\nE = 0\nbit 7: E − 0·A − 0·B          = 0\nbit 6: 2E + 0, + 0             = 0\nbit 5: 2E + A (−20), + B (110) = 90\nbit 4: 2E, + 0                 = 180\nbit 3: 2E + A, + B             = 450\nbit 2 … 0: doublings           = 3 600\nminus the bias 1               = 3 599</pre>' },
+    example: { title: '−20 · 40 + 110 · 40, MSB first', body: '<pre>Δx = Δy = 40 = 0010 1000 (bits 7 … 0)\nE = 0\nbit 7: E − 0·A − 0·B          = 0\nbit 6: 2E + 0, + 0             = 0\nbit 5: 2E + A (−20), + B (110) = 90\nbit 4: 2E, + 0                 = 180\nbit 3: 2E + A, + B             = 450\nbit 2 … 0: doublings           =  3600\nminus the bias 1               =  3599</pre>' },
     mistakes: [
       'Least significant bit first with a fixed accumulator: then the operand must shift left each step, a second register.',
       'Treating Δ as unsigned: the sign bit weighs −128, so it subtracts.',
@@ -1402,8 +1402,8 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
   minsky: {
-    idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2 000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).<br>It is p_spin\'s rule, for RV16 warps with no multiplier. Chapter 34\'s GPU turns its triangle exactly instead: a 64-entry sine table and <code>mul</code> on lanes that have multipliers.',
-    example: { title: 'One step of a corner, ε = 1/8', body: '<pre>x = −28·256 = −7 168, y = −7 168   (8.8: −28 quarter pixels)\nx ← x − (y &gt;&gt; 3) = −7 168 + 896 = −6 272\ny ← y + (x &gt;&gt; 3) = −7 168 − 784 = −7 952\nscreen: 64 + (x &gt;&gt; 8) = 64 − 25 = 39, 64 + (y &gt;&gt; 8) = 64 − 32 = 32</pre>' },
+    idea: 'Rotating a point by a small angle ε exactly takes cos ε and sin ε: four multiplications. Approximating, x ← x − ε·y; y ← y + ε·x, is cheap but wrong in a way that grows: the matrix [[1, −ε], [ε, 1]] has determinant 1 + ε², so every step pushes the point outward, and after a few hundred steps the circle is a spiral. Minsky\'s version uses the new x in the second line. Its matrix, [[1, −ε], [ε, 1 − ε²]], has determinant exactly 1: the point moves on a closed ellipse, very close to a circle for small ε.<br>With ε = 1/8 both multiplications are arithmetic shifts by 3. In 8.8 fixed point (8 fraction bits) a square\'s corners stay within about 6 % of their radius over 2000 frames; in whole quarter pixels the rounding errors build up to about 20 %. Marvin Minsky found it drawing circles on the PDP-1 display (HAKMEM, item 149).<br>It is p_spin\'s rule, for RV16 warps with no multiplier. Chapter 34\'s GPU turns its triangle exactly instead: a 64-entry sine table and <code>mul</code> on lanes that have multipliers.',
+    example: { title: 'One step of a corner, ε = 1/8', body: '<pre>x = −28·256 = −7168, y = −7168   (8.8: −28 quarter pixels)\nx ← x − (y &gt;&gt; 3) = −7168 + 896 = −6272\ny ← y + (x &gt;&gt; 3) = −7168 − 784 = −7952\nscreen: 64 + (x &gt;&gt; 8) = 64 − 25 = 39, 64 + (y &gt;&gt; 8) = 64 − 32 = 32</pre>' },
     mistakes: [
       'Updating y from the old x: the two lines then form the spiral, not the ellipse.',
       'Logical shifts: a negative coordinate turns into a large positive one.',
@@ -1429,7 +1429,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     chapters: [{ chapter: 'dram', step: 4, label: 'Rows, columns, banks' }, { chapter: 'memctrl', step: 4, label: 'Banks and address mapping' }],
   },
   refresh: {
-    idea: 'The capacitor of a DRAM cell leaks through its access transistor and the junctions around it; a stored 1 decays towards the point where the amplifier can no longer tell it from VDD/2. Opening the row restores every cell of it to a full level, so a refresh is nothing but an activate (and a precharge). JEDEC chips guarantee 64 ms: 8 192 rows in 64 ms is a row every 7.8 µs.<br>Early DRAMs (the 4116) left the bookkeeping to the system: <b>RAS-only refresh</b>, the controller keeping a row counter and activating each row in turn, as m_bank does in cycles the requests leave free. From the mid-1980s chips kept the counter inside (CAS-before-RAS refresh), and DDR chips do too: the controller only sends <b>REF</b> every tREFI with every bank closed, and the chip is busy for tRFC (350 ns for an 8 Gb DDR4). The cost is the same either way: a few percent of the cycles, more as chips grow.',
+    idea: 'The capacitor of a DRAM cell leaks through its access transistor and the junctions around it; a stored 1 decays towards the point where the amplifier can no longer tell it from VDD/2. Opening the row restores every cell of it to a full level, so a refresh is nothing but an activate (and a precharge). JEDEC chips guarantee 64 ms: 8192 rows in 64 ms is a row every 7.8 µs.<br>Early DRAMs (the 4116) left the bookkeeping to the system: <b>RAS-only refresh</b>, the controller keeping a row counter and activating each row in turn, as m_bank does in cycles the requests leave free. From the mid-1980s chips kept the counter inside (CAS-before-RAS refresh), and DDR chips do too: the controller only sends <b>REF</b> every tREFI with every bank closed, and the chip is busy for tRFC (350 ns for an 8 Gb DDR4). The cost is the same either way: a few percent of the cycles, more as chips grow.',
     example: { title: 'm_bank\'s budget', body: '16 rows, each opened at least every 288 cycles: one refresh every 18 cycles on average. The reference refreshes when the port is idle and the timer has passed 8, and forces one at 15: at most 16 cycles apart, so every row comes round within 256.' },
     mistakes: [
       'Refreshing only when idle: a busy enough request stream then starves refresh until data is lost.',

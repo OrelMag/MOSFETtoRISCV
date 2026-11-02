@@ -526,7 +526,7 @@ export const chCache: Chapter = {
         <p>The single-cycle CPU with <span data-show="dm">this cache as its data memory</span>: <span data-show="isLoad">a load</span>, decoded from ResultSrc
         (the control field that selects the value written back), raises <code>re</code>, and a miss holds <span data-show="pc">the PC</span> and the
         <span data-show="rwg">register write</span> (<code>retire</code> = 0) until the line arrives. The instruction-set simulator steps only when an instruction retires, so it still checks every one.
-        The cache costs about 10 000 NANDs of tag and data arrays, and the clock period does not change (103).</p>
+        The cache costs about 10 000 NANDs of tag and data arrays, and the clock period does not change (103).</p>
         <p>An honest caveat: the "slow" main memory here is flip-flops too; its latency is modelled by the 4 wait cycles on a load miss only.
         A store writes it in its own cycle, so here write-through never stalls. A real memory cannot take a word every cycle: a write-through
         cache puts a <strong>write buffer</strong> in front of it (a few queued address / data pairs, drained when the bus is free, checked by

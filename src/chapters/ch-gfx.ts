@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { drawScene } from '../widgets/drawpad';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
@@ -6,7 +7,7 @@ import { CLEAR_CYCLES, Z_WALK_START } from '../gfx/raster';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 /** The rasterizer's clear, from go: the cycles before the walk's first test, then every 4 × 4 tile of the screen (a test and 16 pixels). */
 const CLEAR = CLEAR_CYCLES + 1;
 /** The screen of chapters 33-34: 64 x 64 pixels, one byte each, four to a word. */
@@ -37,11 +38,11 @@ export const chPixels: Chapter = {
   builds: ['memory', 'muldiv'],
   recap: {
     keep: [
-      'A 64 × 64 RGB332 frame is 4 KB; the scan-out reads a word, four pixels, a cycle: 1 024 cycles a frame. Two frames and a flip at vsync stop tearing; a swap moves two address multiplexers and copies nothing.',
+      'A 64 × 64 RGB332 frame is 4 KB; the scan-out reads a word, four pixels, a cycle: 1024 cycles a frame. Two frames and a flip at vsync stop tearing; a swap moves two address multiplexers and copies nothing.',
       'E<sub>i</sub>(p) = A<sub>i</sub>·(p.x − x<sub>i</sub>) + B<sub>i</sub>·(p.y − y<sub>i</sub>): inside when all three are ≥ 0. Their sum is twice the area (negative: a back face, culled). The top-left rule biases the other edges by −1, so a shared edge is drawn once.',
-      'One pixel right adds 4A, one down 4B: products only at set-up, eight on one Booth multiplier. Tiles of 4 × 4 pixels are tested at their best corner: the large triangle takes 1 914 cycles against 3 368 pixel by pixel.',
-      'Depth is a fourth plane, stepped with the edges. Its set-up needs two divisions: 76 more cycles per triangle and 12 032 NANDs. A pixel passes only if strictly nearer, and draw order stops mattering, except where two surfaces tie exactly in depth: there the first drawn keeps the pixel.',
-      'Blending (α in eighths, 1 074 NANDs) mixes with what is already in the frame, so order matters: opaque surfaces first with the depth test, translucent ones back to front.',
+      'One pixel right adds 4A, one down 4B: products only at set-up, eight on one Booth multiplier. Tiles of 4 × 4 pixels are tested at their best corner: the large triangle takes 1914 cycles against 3368 pixel by pixel.',
+      'Depth is a fourth plane, stepped with the edges. Its set-up needs two divisions: 76 more cycles per triangle and 12 032 NANDs. A pixel passes only if strictly nearer, and draw order stops mattering, except where two surfaces tie exactly in depth: there the first drawn keeps the pixel.',
+      'Blending (α in eighths, 1074 NANDs) mixes with what is already in the frame, so order matters: opaque surfaces first with the depth test, translucent ones back to front.',
     ],
     practise: ['k_edge', 'k_tile', 'k_raster'],
     check: [
@@ -56,7 +57,7 @@ export const chPixels: Chapter = {
         question: 'Why does depth set-up cost more than the rest of the rasterizer?',
         options: ['Its slopes divide by twice the area: two runs of a 30-bit divider, 32 cycles each', 'Depth values are 32 bits wide', 'The depth buffer is cleared for every triangle', 'Every pixel needs a multiplication for z'],
         answer: 0,
-        explain: 'Z<sub>x</sub> and Z<sub>y</sub> are quotients by 2·area: four products, two divisions and ten shift-and-add steps, 76 cycles and 12 032 NANDs. Per pixel z is one add.',
+        explain: 'Z<sub>x</sub> and Z<sub>y</sub> are quotients by 2·area: four products, two divisions and ten shift-and-add steps, 76 cycles and 12 032 NANDs. Per pixel z is one add.',
         why: ['', 'Width costs adders, not cycles; the time goes into the two divisions.', 'The depth buffer is cleared once a frame, not per triangle.', 'z is linear like the edges: one add per pixel step, no multiplication.'],
       },
       {
@@ -76,7 +77,7 @@ export const chPixels: Chapter = {
         the eye resolves least). Pixel (x, y) is byte y·64 + x, 4 KB a frame. The bytes sit in four banks, bank x mod 4, so one word address names four
         neighbouring pixels.</p>
         <p>The <span data-show="scan"><strong>scan-out</strong></span> sends the frame to the screen: a 10-bit counter steps through the words, one a cycle,
-        1 024 cycles a frame, and raises <span data-show="pin:vsync"><strong>vsync</strong></span> on the last word. It is the one client of memory that can never wait: a 1920 × 1080 display at 60 Hz needs 124 million
+        1024 cycles a frame, and raises <span data-show="pin:vsync"><strong>vsync</strong></span> on the last word. It is the one client of memory that can never wait: a 1920 × 1080 display at 60 Hz needs 124 million
         pixels a second whatever else is happening.</p>
         <p>Drawing into the frame the screen is reading shows half-drawn pictures. So there are <span data-show="fb">two frames</span>, the
         <strong>front</strong> one read by the scan-out and the <strong>back</strong> one drawn into, and <span data-show="pin:swap"><strong>swap</strong></span>
@@ -84,7 +85,7 @@ export const chPixels: Chapter = {
         <strong>tearing</strong>.</p>
         <p>Cost: the scan-out and flip logic are 256 NANDs. The two frames are 64 Kbit of flip-flops, 1.35 million NANDs as drawn, simulated as two
         lookups (open a bank to see its flip-flops); real framebuffers are DRAM.</p>
-        <p>Why the flip is not a copy: a copy of 4 KB would take at least one cycle per word, 1 024 of them, during which the scan-out would read a half-copied frame. Exchanging which
+        <p>Why the flip is not a copy: a copy of 4 KB would take at least one cycle per word, 1024 of them, during which the scan-out would read a half-copied frame. Exchanging which
         buffer each address multiplexer selects is one cycle and cannot be seen, provided it lands between two frames. That timing constraint, not the memory, is why a display
         controller owns vsync.</p>
         <div class="try">Run, then Swap: the rings arrive with the next frame. Untick "wait for vsync" and Swap again mid-frame to see a tear.</div>`,
@@ -123,7 +124,7 @@ export const chPixels: Chapter = {
         <p>A centre exactly on an edge shared by two triangles must be drawn once, not twice (blending would add it twice) and not zero times (a crack). The
         <strong>top-left rule</strong> keeps it for the triangle whose left edge (A &gt; 0) or top edge (A = 0, B &gt; 0) it lies on: every other edge
         is biased by −1.</p>
-        <p>Widths: coordinates are 8 bits, so |E| ≤ 2·255² = 130 050 fits in 18 bits signed. And no multiplier per pixel: one pixel to the right adds 4A to E,
+        <p>Widths: coordinates are 8 bits, so |E| ≤ 2·255² = 130 050 fits in 18 bits signed. And no multiplier per pixel: one pixel to the right adds 4A to E,
         one down adds 4B. The products are needed once per triangle, at the start.</p>
         <p>Why this form and not, say, slope comparisons: a cross product needs only subtractions and two multiplications, no division and no special case for vertical edges, and it is
         linear in p, which is what lets the walk step by addition. The price is that the sign convention matters (the winding decides which side is inside), and the arithmetic must be
@@ -152,17 +153,17 @@ export const chPixels: Chapter = {
       body: `
         <p>The <span data-show="rast"><strong>rasterizer</strong></span> turns a triangle into pixel writes, one a cycle. Open it:</p>
         <ul>
-          <li><strong>Set-up</strong> (6 389 NANDs): A and B by subtraction, the top-left bias, the bounding box by comparators, and eight products on one
-          10 × 10 Booth multiplier (<a href="#/c/muldiv/0">chapter 21</a>, 1 601 NANDs) in eight cycles: twice the area (its sign culls), then each edge's value at the first tile.</li>
-          <li>Three <strong>edge steppers</strong> (1 330 NANDs each): E, a register R for the start of the current band, one adder / subtractor whose operand
+          <li><strong>Set-up</strong> (6389 NANDs): A and B by subtraction, the top-left bias, the bounding box by comparators, and eight products on one
+          10 × 10 Booth multiplier (<a href="#/c/muldiv/0">chapter 21</a>, 1601 NANDs) in eight cycles: twice the area (its sign culls), then each edge's value at the first tile.</li>
+          <li>Three <strong>edge steppers</strong> (1330 NANDs each): E, a register R for the start of the current band, one adder / subtractor whose operand
           is dx = 4A, dy = 4B or four times either (a wired shift), and a second adder for the tile test.</li>
           <li>The <strong>tile walk</strong> (753 NANDs): a state machine over the box in 4 × 4-pixel tiles.</li>
         </ul>
         <p>Each tile starts with one TEST cycle: if any edge is negative at the tile's best corner, no pixel of the tile can be inside and the walk jumps on
         (E += 4dx). Otherwise its 16 pixels follow, one a cycle. A row of tiles is a <strong>band</strong>; the next band starts from R.</p>
 
-        <p>The large triangle: 1 369 pixels, 210 tiles tested, 106 walked, 1 914 cycles. Visiting its box pixel by pixel would take 3 368. A thin sliver gains
-        more: 888 cycles against 3 848. A real GPU tests whole tiles of pixels in parallel and writes dozens a cycle; this one writes at most one, 11 989 NANDs
+        <p>The large triangle: 1369 pixels, 210 tiles tested, 106 walked, 1914 cycles. Visiting its box pixel by pixel would take 3368. A thin sliver gains
+        more: 888 cycles against 3848. A real GPU tests whole tiles of pixels in parallel and writes dozens a cycle; this one writes at most one, 11 989 NANDs
         in all.</p>
         <div class="try">Draw, and watch the <span data-show="fb">back frame</span> fill (click the BACK frame under the screen: what it held before stays dimmed until something writes it). Swap to put it on the screen. Then try the sliver, and the
         back face: it stops after three set-up cycles.</div>`,
@@ -170,7 +171,7 @@ export const chPixels: Chapter = {
       more: {
         derive: `<p>The best corner for edge i is E + 12·(A⁺ + B⁺), where A⁺ is A when positive, else 0. The 16 pixels go column by column, down, up, down, up, so the
           tile ends at its top-right pixel and the next tile is one step right.</p>
-          <p>The large triangle's cycles: 8 set-up (the products), 210 tile tests, 106 tiles walked at 16 pixels: ${8 + 210 + 106 * 16} cycles (1 914 measured), against 3 368 for every pixel of the box. The walk skips ${210 - 106} of 210 tiles
+          <p>The large triangle's cycles: 8 set-up (the products), 210 tile tests, 106 tiles walked at 16 pixels: ${8 + 210 + 106 * 16} cycles (1914 measured), against 3368 for every pixel of the box. The walk skips ${210 - 106} of 210 tiles
           (${pct(210 - 106, 210)}) for the price of one test cycle each. A tile test costs 1 cycle and saves up to 16, so it pays whenever more than 1 in 16 tested tiles is empty.</p>`,
         pitfall: `<p>The test is conservative: a tile passes if <em>any</em> pixel could be inside, judged by each edge's best corner separately. A tile near a vertex can pass all three edge tests and still contain no pixel
           centre. It then costs 17 cycles for nothing, and that is why the cost of a thin sliver is dominated by the tests, not by the pixels written.</p>`,
@@ -195,7 +196,7 @@ export const chPixels: Chapter = {
         Z<sub>x</sub> = (A<sub>0</sub>·(z<sub>2</sub> − z<sub>0</sub>) + A<sub>2</sub>·(z<sub>1</sub> − z<sub>0</sub>)) / (2·area) (the barycentric weights,
         differentiated), Z<sub>y</sub> the same with B. So a fourth stepper walks it with the edges. Its <span data-show="rast"><strong>depth set-up</strong></span>
         needs a division: four products on its own Booth multiplier, two divisions on <a href="#/c/muldiv/0">chapter 21</a>'s non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
-        z at the first tile. That is 76 more cycles per triangle and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
+        z at the first tile. That is 76 more cycles per triangle and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
         among many pixel pipelines.</p>
         <p>The buffer keeps 16 bits a pixel. The <span data-show="rop">ROP</span> (raster operations: the depth test and the blend) reads it at the pixel's
         address, compares and writes in the same cycle. Clearing it walks every tile of the screen: ${fmt(CLEAR)} cycles from go (${Z_WALK_START - 1} before the walk starts,
@@ -226,7 +227,7 @@ export const chPixels: Chapter = {
       body: `
         <p>Glass, smoke, a fading sprite: the new colour is mixed with the one already in the frame, out = src·α + dst·(1 − α), channel by channel. Here
         <span data-show="pin:a">α</span> comes in eighths: (s·(a + 1) + d·(7 − a)) / 8, <span data-show="rop">six 4 × 4 array multipliers and three
-        adders</span> (1 074 NANDs); the division by 8 is wiring. The destination is the <span data-show="fb">back frame</span>'s pixel at the same address,
+        adders</span> (1074 NANDs); the division by 8 is wiring. The destination is the <span data-show="fb">back frame</span>'s pixel at the same address,
         read and rewritten in one cycle.</p>
         <p>Unlike the depth test, blending is not commutative: red under a blue at 3/8 is a dark purple, the same blue under red is red. Renderers therefore
         draw the opaque surfaces first, with the depth test, then the translucent ones sorted back to front. And here the top-left rule pays: a pixel on
@@ -261,8 +262,8 @@ export const chPixels: Chapter = {
         <p>Each shape gets a depth of its own, nearer than every shape before it, and the <span data-show="rop">depth test</span> is on. Shapes cover each other in the order they were
         drawn. Where two triangles of one shape overlap (a stroke crossing itself, a fanned outline), the second fails "nearer", so the pixel is blended
         once: a translucent stroke has no darker knots where it crosses itself.</p>
-        <p>Cost: the house is 7 shapes, 25 triangles and 2 136 pixel writes, 6 453 cycles after the ${fmt(CLEAR)}-cycle clear. Every triangle spends ${Z_WALK_START} cycles before
-        its first tile, mostly on depth's division: 2 125 of the 6 453 here. A scribble of short segments is almost all set-up. That is why a GPU has
+        <p>Cost: the house is 7 shapes, 25 triangles and 2136 pixel writes, 6453 cycles after the ${fmt(CLEAR)}-cycle clear. Every triangle spends ${Z_WALK_START} cycles before
+        its first tile, mostly on depth's division: 2125 of the 6453 here. A scribble of short segments is almost all set-up. That is why a GPU has
         several set-up units, and why meshes are not cut finer than the pixels need. The scene runs on the cycle engine, and the screen is compared
         pixel for pixel with the reference rasterizer's picture of the same triangles.</p>
         <div class="try">Draw something, then Send to the GPU; click the BACK frame under the screen to watch the clear sweep it and the triangles land. Tick "show triangles"
@@ -305,10 +306,10 @@ export const chGfxPipeline: Chapter = {
   recap: {
     keep: [
       'The vertex kernel: sin θ from a 64-entry table, <code>mul</code> and <code>srai 16</code> in 16.16 fixed point, one packed word per vertex in a double-buffered vertex buffer. The triangle is 44 instructions, 60 cycles a frame.',
-      'The command unit (1 997 NANDs, one flip-flop a state) launches the next frame\'s kernel and the clear, feeds each triangle\'s word and vertices to the rasterizer through a spare read port, swaps, and waits for the flip and the kernel.',
-      'Flips happen only at vsync, every 1 024 cycles, so a frame snaps to whole scan-outs: the triangle\'s frame was 6 144 cycles, 4 438 of them the clear.',
-      'The warp core is 182 121 NANDs and busy 1 % of the frame; the rasterizer, a seventh of its size, is busy most of it. Software matches the rasterizer only with five or six four-warp cores, but clears the frame in 804 cycles.',
-      'A clear unit (a 10-bit word counter, 278 NANDs) with a banked depth buffer clears four pixels a cycle: the triangle\'s frame falls to 3 072 cycles, and the rasterizer\'s pixel a cycle now bounds it.',
+      'The command unit (1997 NANDs, one flip-flop a state) launches the next frame\'s kernel and the clear, feeds each triangle\'s word and vertices to the rasterizer through a spare read port, swaps, and waits for the flip and the kernel.',
+      'Flips happen only at vsync, every 1024 cycles, so a frame snaps to whole scan-outs: the triangle\'s frame was 6144 cycles, 4438 of them the clear.',
+      'The warp core is 182 121 NANDs and busy 1 % of the frame; the rasterizer, a seventh of its size, is busy most of it. Software matches the rasterizer only with five or six four-warp cores, but clears the frame in 804 cycles.',
+      'A clear unit (a 10-bit word counter, 278 NANDs) with a banked depth buffer clears four pixels a cycle: the triangle\'s frame falls to 3072 cycles, and the rasterizer\'s pixel a cycle now bounds it.',
     ],
     practise: ['k_frame', 'p_spin'],
     check: [
@@ -320,11 +321,11 @@ export const chGfxPipeline: Chapter = {
         why: ['', 'A vertex is one packed word: X | Y << 8 | Z << 16.', 'The fourth vertex pads the vertex count to a multiple of the lane count; it sits in the same buffer.', 'The scan-out reads the framebuffer; vertices reach the rasterizer through the command unit.'],
       },
       {
-        question: 'With the pixel-a-cycle clear, the cube\'s frames took 7 168 to 8 192 cycles. Why always a multiple of 1 024?',
-        options: ['A frame ends at a flip, and flips happen only at vsync, once per 1 024-cycle scan-out', 'The rasterizer works in blocks of 1 024 pixels', 'The clear takes 1 024 cycles', 'The vertex kernel runs once every 1 024 cycles'],
+        question: 'With the pixel-a-cycle clear, the cube\'s frames took 7168 to 8192 cycles. Why always a multiple of 1024?',
+        options: ['A frame ends at a flip, and flips happen only at vsync, once per 1024-cycle scan-out', 'The rasterizer works in blocks of 1024 pixels', 'The clear takes 1024 cycles', 'The vertex kernel runs once every 1024 cycles'],
         answer: 0,
-        explain: 'Whatever the drawing takes, the frame waits for the next vsync to flip: 7 168 = 7 × 1 024, 8 192 = 8 × 1 024.',
-        why: ['', 'The rasterizer walks 4 × 4 tiles, one pixel a cycle, for as long as the triangle needs.', 'That clear took 4 438 cycles, not a multiple of 1 024.', 'The kernel runs once a frame (109 cycles for the cube), hidden in the clear.'],
+        explain: 'Whatever the drawing takes, the frame waits for the next vsync to flip: 7168 = 7 × 1024, 8192 = 8 × 1024.',
+        why: ['', 'The rasterizer walks 4 × 4 tiles, one pixel a cycle, for as long as the triangle needs.', 'That clear took 4438 cycles, not a multiple of 1024.', 'The kernel runs once a frame (109 cycles for the cube), hidden in the clear.'],
       },
       {
         question: 'How long does the rasterizer spend on a cube face that points away?',
@@ -352,7 +353,7 @@ export const chGfxPipeline: Chapter = {
         round twice and lanes 2 and 3 once: a divergent branch, needing split and join). The triangle's three vertices get a fourth, unused one, which lane 3
         would have transformed anyway: padded, it reads a defined vertex rather than whatever follows the model. One frame is 44 instructions,
         60 cycles. The cube (eight vertices, a spin then a fixed tilt toward the viewer: eight multiplies a vertex) is 86 instructions, 109 cycles.</p>
-        <p>Cost: each lane is 35 255 NANDs, multiplier included; the core is 182 121 without its memories.</p>
+        <p>Cost: each lane is 35 255 NANDs, multiplier included; the core is 182 121 without its memories.</p>
 
         <div class="try">Run to halt, then switch to the cube's kernel. The vertex buffer is at word 96 of the <span data-show="mem">data memory</span>: one packed word a vertex.</div>`,
       scene: () => warpCoreScene('vertexTri', { warps: 1, highlight: ['lane0', 'lane1', 'lane2', 'lane3'], programs: ['vertexTri', 'vertexCube'] }),
@@ -373,7 +374,7 @@ export const chGfxPipeline: Chapter = {
         derive: `<p>16.16 fixed point means a value v is stored as v · 2<sup>16</sup> = v · ${fmt(65536)}. With |x|, |y| ≤ 100 and cos θ, sin θ scaled to ±${fmt(65536)}, each product is at most 100 · ${fmt(65536)} = ${fmt(100 * 65536)} and the
           sum of two at most ${fmt(200 * 65536)} &lt; 2<sup>24</sup> = ${fmt(2 ** 24)}, so the low 32 bits of <code>mul</code> hold the whole result and <code>srai 16</code> divides by 2<sup>16</sup>. The angle resolution is 360° / 64 = ${360 / 64}° a table step, the
           reason a turn takes 64 frames. Vertex count n over 4 lanes needs ⌈n / 4⌉ · 4 threads: ${Math.ceil(3 / 4) * 4} for the triangle, ${Math.ceil(8 / 4) * 4} for the cube.</p>`,
-        pitfall: `<p>Overflow in the multiplication is silent and wraps at 32 bits. The 2<sup>24</sup> bound holds with room here, but a mesh with coordinates around 40 000 would make a product reach ${fmt(40000 * 65536)} and the vertex would land at a wrong place,
+        pitfall: `<p>Overflow in the multiplication is silent and wraps at 32 bits. The 2<sup>24</sup> bound holds with room here, but a mesh with coordinates around 40 000 would make a product reach ${fmt(40000 * 65536)} and the vertex would land at a wrong place,
           not stop the program. Change the mesh and check the bound.</p>`,
         real: `<p>This scene is <strong>orthographic</strong>: a rotation, then x and y straight onto the screen, z kept for the depth test, and the meshes small
           enough that every vertex stays on screen (the triangle's within 100 quarter pixels of the centre, the cube's corners within 97). A real pipeline
@@ -403,7 +404,7 @@ export const chGfxPipeline: Chapter = {
         <p>Six blocks, the first one programmable: the <span data-show="core">warp core</span> running the vertex kernel, the
         <span data-show="cmd"><strong>command unit</strong></span>, <a href="#/c/pixels/0">chapter 33</a>'s <span data-show="rast">rasterizer</span> with its
         depth set-up, the <span data-show="rop">depth test and blend</span>, the <span data-show="fb">two frames</span> and the
-        <span data-show="scan">scan-out</span>. The command unit (1 997 NANDs, one flip-flop a state) runs every frame:</p>
+        <span data-show="scan">scan-out</span>. The command unit (1997 NANDs, one flip-flop a state) runs every frame:</p>
         <ul>
           <li><strong>launch</strong>: start the kernel on the <em>next</em> frame (warp 0 back to PC 0, every lane on) and, in the same cycle, start the
           clear of the back frame;</li>
@@ -413,29 +414,29 @@ export const chGfxPipeline: Chapter = {
         </ul>
         <p>The vertex buffer is double-buffered like the framebuffer, so the kernel computes frame f + 1 while frame f is drawn.</p>
 
-        <p>The triangle's frame is 6 144 cycles: the clear 4 438 (the launch cycle, then <a href="#/c/pixels/0">chapter 33</a>'s ${fmt(CLEAR)}-cycle clear
-        from go), the triangle 1 268, waiting for vsync 438; the kernel's 60 cycles hide inside the clear.
-        A frame ends at a flip, and flips happen only at vsync, every 1 024 cycles: the frame time snaps to six scan-outs.</p>
+        <p>The triangle's frame is 6144 cycles: the clear 4438 (the launch cycle, then <a href="#/c/pixels/0">chapter 33</a>'s ${fmt(CLEAR)}-cycle clear
+        from go), the triangle 1268, waiting for vsync 438; the kernel's 60 cycles hide inside the clear.
+        A frame ends at a flip, and flips happen only at vsync, every 1024 cycles: the frame time snaps to six scan-outs.</p>
         <div class="try">One frame, then read the timeline: who works when. Click the BACK frame under the screen and step through a frame: the clear sweeps away the picture from two frames ago, then each triangle lands, and the two vertex buffers trade roles. Open the command unit and watch its state register.</div>`,
       scene: () => pipelineScene('triangle', { highlight: ['cmd'] }),
       more: {
-        derive: `<p>The triangle's frame adds up: clear 4 438 + triangle 1 268 + vsync wait 438 = ${4438 + 1268 + 438} cycles, which is ${(4438 + 1268 + 438) / FRAME_WORDS} scan-outs of ${FRAME_WORDS}. The drawing itself ends at 4 438 + 1 268 = ${4438 + 1268} cycles; the flip rounds that up to
-          ${snap(4438 + 1268)}, ${snap(4438 + 1268) - (4438 + 1268)} cycles of waiting. Any drawing time inside the same 1 024-cycle window gives the same frame time, and one cycle over the boundary costs a whole extra scan-out.</p>`,
-        pitfall: `<p>Do not read a frame time as the drawing time. Making the rasterizer 10 % faster does nothing if the end of the drawing stays in the same 1 024-cycle window; the frame snaps back to the same flip.
+        derive: `<p>The triangle's frame adds up: clear 4438 + triangle 1268 + vsync wait 438 = ${4438 + 1268 + 438} cycles, which is ${(4438 + 1268 + 438) / FRAME_WORDS} scan-outs of ${FRAME_WORDS}. The drawing itself ends at 4438 + 1268 = ${4438 + 1268} cycles; the flip rounds that up to
+          ${snap(4438 + 1268)}, ${snap(4438 + 1268) - (4438 + 1268)} cycles of waiting. Any drawing time inside the same 1024-cycle window gives the same frame time, and one cycle over the boundary costs a whole extra scan-out.</p>`,
+        pitfall: `<p>Do not read a frame time as the drawing time. Making the rasterizer 10 % faster does nothing if the end of the drawing stays in the same 1024-cycle window; the frame snaps back to the same flip.
           Measure the timeline's busy spans (clear, triangle, kernel), not the frame count.</p>`,
         real: `<p>A real command processor does the same over the memory system: it reads command buffers, launches kernels and waits on fences.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'The vertex kernel is busy 60 cycles of a 6 144-cycle frame. What would a second warp core gain?',
+        kind: 'quiz', question: 'The vertex kernel is busy 60 cycles of a 6144-cycle frame. What would a second warp core gain?',
         options: ['Twice the frame rate', 'Nothing: the frame is spent clearing and rasterizing', 'Half the vsync wait', 'Room for the depth test'], answer: 1,
-        explain: 'The kernel already finishes during the clear, a frame ahead of its use. The frame is bound by the clear (4 438 cycles) and the rasterizer (one pixel a cycle); more vertex throughput changes nothing until the mesh is far larger.',
-        why: ['The kernel is 60 of 6 144 cycles and already hidden in the clear: doubling its throughput saves nothing.', '', 'The vsync wait depends on where drawing ends within a scan-out, not on the kernel.', 'The depth test is fixed-function in its own block; it does not run on the warp core.'],
+        explain: 'The kernel already finishes during the clear, a frame ahead of its use. The frame is bound by the clear (4438 cycles) and the rasterizer (one pixel a cycle); more vertex throughput changes nothing until the mesh is far larger.',
+        why: ['The kernel is 60 of 6144 cycles and already hidden in the clear: doubling its throughput saves nothing.', '', 'The vsync wait depends on where drawing ends within a scan-out, not on the kernel.', 'The depth test is fixed-function in its own block; it does not run on the warp core.'],
       },
     },
     {
       title: 'A spinning triangle',
       body: `
-        <p>Run: every gate of the pipeline is simulated, 413 501 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
+        <p>Run: every gate of the pipeline is simulated, 413 501 leaves (gates and memory blocks). This scene runs on the <strong>cycle engine</strong>: the
         same settled values after every clock edge as the event-driven simulator, flip-flops as tables, several times faster; it has no gate delays, so
         probes and the timing diagram are off here. The panel measures frames per second in this page: a few (about three for the triangle on the machine
         this was written on), for a frame that a 1 GHz chip would draw in 6 µs.</p>
@@ -445,14 +446,14 @@ export const chGfxPipeline: Chapter = {
         <p>Then the cube: twelve triangles, a colour a face. Half of them or more face away (six or eight, with the angle), so the <span data-show="rast">rasterizer's set-up</span> culls them after
         three cycles (twice their area is negative).
         For a single convex solid that alone hides everything behind; depth is on all the same, and earns its 76 set-up cycles per triangle only where
-        solids overlap. Its frames take 7 168 to 8 192 cycles: two or three faces, 2 300 to 3 200 cycles of drawing.</p>
+        solids overlap. Its frames take 7168 to 8192 cycles: two or three faces, 2300 to 3200 cycles of drawing.</p>
         <p>What the scene proves is agreement, not speed. Three independent models run beside the gates: the instruction-set simulator for the kernel, a check of the vertex buffer when the command unit reads it,
-        and the reference rasterizer for every pixel. A gate-level bug anywhere in 413 501 leaves would show up as a pixel that differs from the reference in some frame, which is why the pipeline can be trusted at this size.</p>
+        and the reference rasterizer for every pixel. A gate-level bug anywhere in 413 501 leaves would show up as a pixel that differs from the reference in some frame, which is why the pipeline can be trusted at this size.</p>
         <div class="try">Run for a few frames, then pick the cube. Pause and open the rasterizer: its tile walk is wherever the timeline says.</div>`,
       scene: () => pipelineScene('triangle', { highlight: ['core', 'rast'] }),
       more: {
         derive: `<p>A back-facing triangle costs 3 set-up cycles, a front-facing one ${Z_WALK_START} plus its walk. A cube has 12 triangles, 2 per face; with the angle, 6 to 8 of them face away: those cost ${6 * 3} to ${8 * 3} cycles, the visible ones
-          ${12 - 8} to ${12 - 6} triangles at ${Z_WALK_START} each plus their tiles. The measured frame is 7 168 to 8 192 cycles: ${7168 / FRAME_WORDS} to ${8192 / FRAME_WORDS} scan-outs, two or three faces drawn, with the clear (4 438) taking most of it.</p>`,
+          ${12 - 8} to ${12 - 6} triangles at ${Z_WALK_START} each plus their tiles. The measured frame is 7168 to 8192 cycles: ${7168 / FRAME_WORDS} to ${8192 / FRAME_WORDS} scan-outs, two or three faces drawn, with the clear (4438) taking most of it.</p>`,
         pitfall: `<p>The cycle engine shows settled values only, so the timing diagram and probes are off; slowing the clock down will not show gate delays here. To watch one gate switch, use the earlier chapters' scenes, which run on the event-driven simulator.</p>`,
       },
       challenge: {
@@ -465,22 +466,22 @@ export const chGfxPipeline: Chapter = {
     {
       title: 'Where the gates go',
       body: `
-        <p>The programmable part is the largest and the idlest: 182 121 NANDs of warp core, busy 1 % of the frame. The rasterizer, a seventh of its
+        <p>The programmable part is the largest and the idlest: 182 121 NANDs of warp core, busy 1 % of the frame. The rasterizer, a seventh of its
         size, is busy most of it. Real GPUs answer with <strong>unified shaders</strong>: vertex and pixel work run on the same lanes, so the lanes never
         wait for a kind of work that is not there; edge stepping, the depth test and blending stay fixed-function, because per pixel they are a handful
         of adders.</p>
 
         <p>The surprise is the clear: 72 % of the triangle's frame, one pixel a cycle. The same 16 threads clear the frame in software in 804 cycles,
         four pixels per store. Real GPUs never clear pixel by pixel: they mark tiles as cleared (fast clear) and supply the colour when a tile is first
-        read. Drawing goes the other way: the software kernel takes 6 825 cycles for the triangle the rasterizer draws in 1 268, on <a href="#/c/warps/0">chapter 31</a>'s four-warp core, whose logic alone is 488 609 NANDs: matching the rasterizer in software would take five or six of them,
-        against 26 708.</p>
+        read. Drawing goes the other way: the software kernel takes 6825 cycles for the triangle the rasterizer draws in 1268, on <a href="#/c/warps/0">chapter 31</a>'s four-warp core, whose logic alone is 488 609 NANDs: matching the rasterizer in software would take five or six of them,
+        against 26 708.</p>
         <p>Scaled to 1920 × 1080, this design would spend two million cycles a frame on the clear alone.</p>
         <p>Read the widget as a budget: gates on one axis, cycles on the other, per block. A block that is large and idle (the warp core) is a candidate for sharing with other work; a block that is small and busy (the rasterizer)
         is a candidate for copying. Unified shaders and several rasterizers are those two moves.</p>`,
       widget: costWidget,
       more: {
-        derive: `<p>Utilization of each block over a ${fmt(6144)}-cycle frame: the warp core runs its kernel 60 cycles, ${pct(60, 6144)} busy; the clear takes 4 438, ${pct(4438, 6144)}; the rasterizer spends its triangle's 1 268 plus the clear it performs, almost the whole frame.
-          Area against use: the core is 182 121 NANDs and the rasterizer a seventh of that (about ${fmt(Math.round(182121 / 7))}), so the biggest block is the idlest. At 1920 × 1080 the clear alone, one pixel a cycle, is ${fmt(1920 * 1080)} cycles, ${(1920 * 1080 / FRAME_WORDS).toFixed(0)} of this screen's scan-outs.</p>`,
+        derive: `<p>Utilization of each block over a ${fmt(6144)}-cycle frame: the warp core runs its kernel 60 cycles, ${pct(60, 6144)} busy; the clear takes 4438, ${pct(4438, 6144)}; the rasterizer spends its triangle's 1268 plus the clear it performs, almost the whole frame.
+          Area against use: the core is 182 121 NANDs and the rasterizer a seventh of that (about ${fmt(Math.round(182121 / 7))}), so the biggest block is the idlest. At 1920 × 1080 the clear alone, one pixel a cycle, is ${fmt(1920 * 1080)} cycles, ${(1920 * 1080 / FRAME_WORDS).toFixed(0)} of this screen's scan-outs.</p>`,
         pitfall: `<p>Gate counts and cycle counts answer different questions. The warp core is large because it is general, not because it is slow; a review that only looks at area would shrink it and make vertex work the bottleneck at a larger mesh.
           Compare gates <em>and</em> busy time, per block.</p>`,
         real: `<p>Here a triangle has one flat colour and the ROP does the only per-pixel work. On a real GPU the rasterizer hands each covered pixel to a
@@ -494,30 +495,30 @@ export const chGfxPipeline: Chapter = {
       challenge: {
         kind: 'quiz', question: 'Which change halves the triangle\'s frame time?',
         options: ['A second warp core', 'Clearing four pixels a cycle', 'A faster vertex kernel', 'Flipping without waiting for vsync'], answer: 1,
-        explain: 'The clear falls from 4 438 cycles to 1 026 (the next step builds it), so the frame snaps to three scan-outs: 3 072 cycles instead of 6 144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
-        why: ['The warp core is busy 1 % of the frame: a second one would have nothing to do.', '', 'The kernel already hides inside the clear.', 'That saves at most one scan-out of 1 024 cycles, and the picture tears.'],
+        explain: 'The clear falls from 4438 cycles to 1026 (the next step builds it), so the frame snaps to three scan-outs: 3072 cycles instead of 6144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
+        why: ['The warp core is busy 1 % of the frame: a second one would have nothing to do.', '', 'The kernel already hides inside the clear.', 'That saves at most one scan-out of 1024 cycles, and the picture tears.'],
       },
     },
     {
       title: 'A faster clear',
       body: `
         <p>The clear writes the same colour into every pixel and the same far depth into every depth entry: it needs no edge functions, no tile walk,
-        no depth test. <a href="#/c/pixels/0">Chapter 33</a> let the rasterizer do it because the rasterizer was there, a pixel a cycle: 4 438 of the triangle's 6 144 cycles.</p>
+        no depth test. <a href="#/c/pixels/0">Chapter 33</a> let the rasterizer do it because the rasterizer was there, a pixel a cycle: 4438 of the triangle's 6144 cycles.</p>
         <p>The <span data-show="clear"><strong>clear unit</strong></span> is a 10-bit word counter, 278 NANDs. The <span data-show="cmd">command unit</span>
         starts it at launch, instead of the rasterizer, and it drives one word address a cycle with a write enable that reaches all four byte banks of the
-        <span data-show="fb">back frame</span>: four RGB332 pixels a cycle, 1 024 cycles a frame. The
-        depth buffer takes the frame's shape, four banks of 1 024 × 16 (pixel x mod 4), so four depths clear in the same cycle. Drawing still writes one
-        pixel and one bank, picked by x mod 4. The banks cost the <span data-show="rop">depth test</span> 307 NANDs of multiplexers (1 728 against 1 421), and the command unit no longer
-        steers the background colour into the rasterizer (1 963 against 1 997): about 580 NANDs in all.</p>
-        <p>The triangle's frame: the clear 1 026 cycles, the triangle 1 268, waiting for vsync 778, so 3 072 cycles, three scan-outs instead of six. The cube's is
-        4 096 or 5 120, four or five scan-outs (it was 7 168 to 8 192). The triangle's frame rate doubles, and the rasterizer's pixel a cycle now bounds the frame.</p>
+        <span data-show="fb">back frame</span>: four RGB332 pixels a cycle, 1024 cycles a frame. The
+        depth buffer takes the frame's shape, four banks of 1024 × 16 (pixel x mod 4), so four depths clear in the same cycle. Drawing still writes one
+        pixel and one bank, picked by x mod 4. The banks cost the <span data-show="rop">depth test</span> 307 NANDs of multiplexers (1728 against 1421), and the command unit no longer
+        steers the background colour into the rasterizer (1963 against 1997): about 580 NANDs in all.</p>
+        <p>The triangle's frame: the clear 1026 cycles, the triangle 1268, waiting for vsync 778, so 3072 cycles, three scan-outs instead of six. The cube's is
+        4096 or 5120, four or five scan-outs (it was 7168 to 8192). The triangle's frame rate doubles, and the rasterizer's pixel a cycle now bounds the frame.</p>
 
         <div class="try">Switch the clear and run a few frames each way: the timeline gains a clear unit lane, and the triangle's frames per second double. Click the BACK
         frame under the screen: the clear now sweeps it four pixels at a time. Open the clear unit and watch its word count.</div>`,
       scene: () => pipelineScene('triangle', { clear: 'word', clearSwitch: true, highlight: ['clear', 'rop'] }),
       more: {
-        derive: `<p>Clearing words instead of pixels: ${fmt(FRAME_BYTES)} pixels / ${SCREEN.perWord} per cycle = ${FRAME_WORDS} cycles, plus 2 to start, 1 026. The frame is then clear + triangle = 1 026 + 1 268 = ${1026 + 1268} cycles of work, rounded up to ${snap(1026 + 1268)} (${snap(1026 + 1268) / FRAME_WORDS} scan-outs),
-          against ${snap(4438 + 1268)} before: ${pct(snap(1026 + 1268), snap(4438 + 1268))} of the old time. The cube's two or three faces (2 300 to 3 200 cycles) plus the clear land in ${snap(1026 + 2300) / FRAME_WORDS} to ${snap(1026 + 3200) / FRAME_WORDS} scan-outs.</p>`,
+        derive: `<p>Clearing words instead of pixels: ${fmt(FRAME_BYTES)} pixels / ${SCREEN.perWord} per cycle = ${FRAME_WORDS} cycles, plus 2 to start, 1026. The frame is then clear + triangle = 1026 + 1268 = ${1026 + 1268} cycles of work, rounded up to ${snap(1026 + 1268)} (${snap(1026 + 1268) / FRAME_WORDS} scan-outs),
+          against ${snap(4438 + 1268)} before: ${pct(snap(1026 + 1268), snap(4438 + 1268))} of the old time. The cube's two or three faces (2300 to 3200 cycles) plus the clear land in ${snap(1026 + 2300) / FRAME_WORDS} to ${snap(1026 + 3200) / FRAME_WORDS} scan-outs.</p>`,
         pitfall: `<p>A faster clear moves the bottleneck, it does not remove it: with the clear at ${FRAME_WORDS} cycles the rasterizer's one pixel a cycle bounds the frame, and doubling the clear again would change nothing. Find the next limit before spending gates on this one.</p>`,
         real: `<p>Real GPUs go further: a clear only marks tiles as cleared, a bit each, and the colour is supplied when a tile is first read or written, so a clear
           costs a few cycles whatever the screen size. The price is that flag, checked by the depth test and the scan-out on every access.</p>`,
@@ -525,8 +526,8 @@ export const chGfxPipeline: Chapter = {
       challenge: {
         kind: 'quiz', question: 'With the clear a word a cycle, what bounds the cube\'s frame?',
         options: ['The clear', 'The rasterizer: one pixel a cycle', 'The vertex kernel', 'The scan-out\'s word a cycle'], answer: 1,
-        why: ['The clear is down to 1 026 cycles, a quarter of the frame at most.', '', 'The cube\'s kernel is 109 cycles, hidden in the clear.', 'The scan-out reads while the frame is drawn; it only sets where a flip can fall.'],
-        explain: 'The clear is 1 026 cycles; drawing the cube\'s two or three faces takes the rest, and the frame snaps to the next scan-out: 4 096 cycles, or 5 120 when the faces cover more of the screen. Drawing faster takes more pixels a cycle: several rasterizers, each on its own tiles, as real GPUs have.',
+        why: ['The clear is down to 1026 cycles, a quarter of the frame at most.', '', 'The cube\'s kernel is 109 cycles, hidden in the clear.', 'The scan-out reads while the frame is drawn; it only sets where a flip can fall.'],
+        explain: 'The clear is 1026 cycles; drawing the cube\'s two or three faces takes the rest, and the frame snaps to the next scan-out: 4096 cycles, or 5120 when the faces cover more of the screen. Drawing faster takes more pixels a cycle: several rasterizers, each on its own tiles, as real GPUs have.',
       },
     },
   ],

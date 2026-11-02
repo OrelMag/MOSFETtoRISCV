@@ -1,6 +1,7 @@
 // Numbers the codex's Check yourself questions and the campaign lessons quote, measured: an edit to either the
 // text or the part fails here.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
@@ -25,7 +26,7 @@ const text = (entry: string, i: number) => {
   const q = CHECKS[entry][i];
   return [q.question, ...q.options, q.explain ?? '', ...(q.why ?? [])].join(' ');
 };
-const thin = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+const thin = groupDigits;
 
 describe('codex checks: quoted costs', () => {
   it('register: 13 NANDs a bit unshared, 1 + 12 a bit with ¬en shared', () => {
@@ -101,10 +102,10 @@ describe('campaign lessons', () => {
     expect(LESSONS.isa).toContain('<tr><th>U</th><td colspan="3">imm[9:1]</td><td>rd</td><td>imm[0] · 111</td></tr>');
   });
 
-  it('intro: exhaustive up to 16 input bits, 4 096 random vectors above', () => {
+  it('intro: exhaustive up to 16 input bits, 4096 random vectors above', () => {
     const src = readFileSync(new URL('../src/editor/challenges.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/const MAX_EXHAUSTIVE = 16;/);
     expect(src).toMatch(/const RANDOM_VECTORS = 4096;/);
-    expect(LESSONS.intro).toContain('combination up to 16 input bits, 4 096 random ones');
+    expect(LESSONS.intro).toContain('combination up to 16 input bits, 4096 random ones');
   });
 });

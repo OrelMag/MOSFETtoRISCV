@@ -1,6 +1,7 @@
 // The memory chapters (32–35) and the appendices: numbers the text quotes that are typed, or computed in a way a later
 // edit could break, held to the parts and files they describe.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { chBus } from '../src/chapters/ch-bus';
@@ -41,7 +42,7 @@ describe('memory chapters: quoted numbers', () => {
 
   it('ch 37: the flash times are a real page read scaled down, ratios about kept', () => {
     const real = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
-    expect(text(chFlash)).toContain(real.toLocaleString('en-US').replace(/,/g, ' '));
+    expect(text(chFlash)).toContain(groupDigits(real));
     const scale = real / FLASH_TIMES.read;
     for (const op of ['read', 'program', 'erase'] as const) {
       const ideal = (FLASH_REAL_US[op] * 1000) / CLOCK_NS / scale;

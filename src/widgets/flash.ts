@@ -2,6 +2,7 @@
 // program a row pulse by pulse with a verify read after each, erase the block), every cell's threshold
 // shown; the translation layer on a small device; and garbage collection and wear over a long workload.
 
+import { groupDigits } from '../sim/numfmt';
 import { FlashDevice, FLASH_TIMES, Ftl, type FtlEvent, randomWrites } from '../flash/model';
 import { nandBlock, norArray, V_READ, vtOf } from '../lib/flash';
 import { findNode } from '../sim/flatten';
@@ -243,7 +244,7 @@ export function wearWidget(): Widget {
     seg([[true, 'Wear levelling'], [false, 'None']] as [boolean, string][], () => wl, (v) => (wl = v), 'Wear levelling'),
   ];
   const el = h('div', { class: 'widget rb-widget' }, h('div', { class: 'rb-ctl' }, ...segs.map((x) => x.el)),
-    h('p', { class: 'sub' }, `${G.blocks} blocks of ${G.pagesPerBlock} pages, block 11 bad from the factory, each block good for ${ENDURANCE} erases (real SLC: about 100 000; TLC: 3 000). ${WRITES.toLocaleString('en-US')} host writes; hot data: 90 % of them to a tenth of the pages.`),
+    h('p', { class: 'sub' }, `${G.blocks} blocks of ${G.pagesPerBlock} pages, block 11 bad from the factory, each block good for ${ENDURANCE} erases (real SLC: about 100 000; TLC: 3000). ${groupDigits(WRITES)} host writes; hot data: 90 % of them to a tenth of the pages.`),
     out);
   update();
   return { el };

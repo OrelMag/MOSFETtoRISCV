@@ -3,6 +3,7 @@
 // mode, the Check strip under the canvas) around campaign/capstone.ts's challenge; a pass is recorded under the
 // capstone's id in the campaign progress (which My path reads: learn/capstones.ts). Loaded on demand with the editor.
 
+import { groupDigits } from '../../sim/numfmt';
 import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import '../../styles/campaign.css';
@@ -222,7 +223,7 @@ export class CapstonePage implements Page {
         h('li', null, h('span', { class: 'bf-st' }, starText(1)), ' ', GRADE_WORD[1]),
         h('li', null, h('span', { class: 'bf-st' }, starText(2)), ' no reference is both at least as cheap and at least as fast as yours'),
         h('li', null, h('span', { class: 'bf-st' }, starText(3)), ' yours is cheaper and faster than one of them'))),
-      h('section', null, h('h4', null, 'The references'), h('ul', null, refs.map((r) => rich('li', `<b>${r.name}</b>: ${r.nand.toLocaleString()} NANDs, ${r.time.toLocaleString()} gate delays (${r.period} × ${r.cycles.toLocaleString()})`)))),
+      h('section', null, h('h4', null, 'The references'), h('ul', null, refs.map((r) => rich('li', `<b>${r.name}</b>: ${groupDigits(r.nand)} NANDs, ${groupDigits(r.time)} gate delays (${r.period} × ${groupDigits(r.cycles)})`)))),
       h('p', { class: 'cap-note' }, h('b', null, 'Why a brief: '), 'tier 4 has no fixed checker. A brief fixes the programs and the measure and leaves the design open. A pass (★) marks the tier done on My path; the stars are for exploring.'),
     );
   }
@@ -280,7 +281,7 @@ export class CapstonePage implements Page {
   }
   private refNands?: number;
   private showRefNands(el: HTMLElement): void {
-    if (this.refNands !== undefined) el.querySelector('[data-ref="nand"]')?.replaceChildren(`${this.refNands.toLocaleString()} NANDs`);
+    if (this.refNands !== undefined) el.querySelector('[data-ref="nand"]')?.replaceChildren(`${groupDigits(this.refNands)} NANDs`);
   }
 
   // ---- a pass ----------------------------------------------------------------------------------------
@@ -308,7 +309,7 @@ export class CapstonePage implements Page {
     const cap = this.cap!;
     this.result?.remove();
     const m = measured(r.score);
-    const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : v.toLocaleString());
+    const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : groupDigits(v));
     type Key = 'nand' | 'period' | 'cycles' | 'speed';
     // tier 3 is ranked by period × cycles (capstoneRank)
     const val = (s: { nand?: number; period?: number | null; cycles?: number }, k: Key): number | undefined =>

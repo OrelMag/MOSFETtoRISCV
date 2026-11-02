@@ -194,7 +194,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'A Kogge–Stone ALU',
-      text: 'The same ten operations, its adder a prefix tree: 1 273 NANDs, +218 over the ripple ALU, and 28 delays on the load path instead of 50. The memories, control and muxes on that path stay as they were.',
+      text: 'The same ten operations, its adder a prefix tree: 1273 NANDs, +218 over the ripple ALU, and 28 delays on the load path instead of 50. The memories, control and muxes on that path stay as they were.',
       parts: ['u6'], codex: ['cla', 'criticalpath'],
       ask: {
         question: 'Core III\'s period is 98, set by the load path, of which the ripple ALU takes 50. The Kogge–Stone ALU crosses that path in 28. What is the new period?',
@@ -222,7 +222,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Write back',
-      text: 'The 4:1 result mux into the register file. 4 938 NANDs (+218, +5%) for period 76 (−22%): the same 1 236 cycles take 93 936 NAND delays instead of 121 128.',
+      text: 'The 4:1 result mux into the register file. 4938 NANDs (+218, +5%) for period 76 (−22%): the same 1236 cycles take 93 936 NAND delays instead of 121 128.',
       parts: ['u9'], codex: ['cpi'],
       why: 'The result mux is the same, so the totals can be compared with Core III: NANDs against period against cycles.',
     },
@@ -279,7 +279,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Check in E',
-      text: 'redirect = ld ⊕ predicted: taken but not guessed goes to the target, guessed but not taken back to pc + 1 (a mux on predicted). +571 NANDs (9 789); the XOR lengthens the comparator → next PC → flush path, period 80 (+2). The 31 programs fall from 2 653 cycles to 2 303 (−13%), 184 240 NAND delays against 206 934.',
+      text: 'redirect = ld ⊕ predicted: taken but not guessed goes to the target, guessed but not taken back to pc + 1 (a mux on predicted). +571 NANDs (9789); the XOR lengthens the comparator → next PC → flush path, period 80 (+2). The 31 programs fall from 2653 cycles to 2303 (−13%), 184 240 NAND delays against 206 934.',
       parts: ['u54', 'u55'], codex: ['controlhazard', 'flush'],
       why: 'A guess that was right needs no flush. redirect is 1 only when the outcome differs from the guess, an XOR.',
       whyNot: { text: 'Flushing on every taken branch, as before, throws away the instructions a correct guess fetched.' },
@@ -296,7 +296,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'The data',
-      text: 'An 8 × 16 RAM on the same index holds one word per line: 2 419 NANDs, 69% of the cache. Tag and valid add 6 bits to every 16-bit line.',
+      text: 'An 8 × 16 RAM on the same index holds one word per line: 2419 NANDs, 69% of the cache. Tag and valid add 6 bits to every 16-bit line.',
       parts: ['u4'], codex: ['ram'],
       why: 'The data sits beside the tags on the same index, so one index reads both.',
     },
@@ -323,7 +323,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'Fill or write',
-      text: 'Both RAMs write when wr + rd·¬hit; the line takes wdata on a write, mdata on a fill. Write-through with allocate: the bench writes main memory too. 3 497 NANDs, period 36, for 128 data bits.',
+      text: 'Both RAMs write when wr + rd·¬hit; the line takes wdata on a write, mdata on a fill. Write-through with allocate: the bench writes main memory too. 3497 NANDs, period 36, for 128 data bits.',
       parts: ['u8', 'u9', 'u11', 'u12'], codex: ['cache'],
       why: 'Write-through keeps main memory current, so evicting a line needs no write back.',
       whyNot: { text: 'Write-back needs a dirty bit per line and a write-back path on eviction: more state and a stall.' },
@@ -388,7 +388,7 @@ export const WALKS4: Record<string, WalkScript> = {
     },
     {
       title: 'The PC loads in W',
-      text: 'next = ld ? target : pc + 1, the reset mux, and a PC register with enable W + rst. 5 203 NANDs (+483 over Core III) and period 76 instead of 98, but 3 865 cycles instead of 1 236: 293 740 NAND delays against 121 128, 2.4 times slower.',
+      text: 'next = ld ? target : pc + 1, the reset mux, and a PC register with enable W + rst. 5203 NANDs (+483 over Core III) and period 76 instead of 98, but 3865 cycles instead of 1236: 293 740 NAND delays against 121 128, 2.4 times slower.',
       parts: ['u16', 'u21', 'u23', 'u24'], codex: ['pc', 'cpi'],
       ask: {
         question: 'An instruction spends 3 or 4 cycles in the core. When must the PC load its next value?',

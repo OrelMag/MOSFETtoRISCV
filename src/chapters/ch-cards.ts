@@ -38,7 +38,7 @@ export const chCards: Chapter = {
     keep: [
       'Jacquard (1804): a card per pick, a hole lets its hook lift its warp threads. The loom is fixed and the pattern lives in the deck: a program.',
       'Hollerith (1890): a pin through a hole closes a circuit through mercury and steps a dial. Combinations go through relay contacts, in series for AND, in parallel for OR.',
-      `IBM's card: ${COLUMNS} columns of 12 rows. A digit is one hole, a letter a zone (12, 11 or 0) and a digit, most signs add an 8; only ${CHARSET.length} of a column's 4 096 patterns are characters.`,
+      `IBM's card: ${COLUMNS} columns of 12 rows. A digit is one hole, a letter a zone (12, 11 or 0) and a digit, most signs add an 8; only ${CHARSET.length} of a column's 4096 patterns are characters.`,
       'A card sorter drops each card into the pocket of its digit in one column. Rightmost column first, each pass stable, a pass per digit: the radix sort.',
       `To a circuit a card reader is <code>ready</code>, <code>data</code>, <code>empty</code>, and <code>next</code> taken at a rising edge. Here the next card arrives ${FEED} edges after each one; the IBM 1402 read 800 cards a minute.`,
     ],
@@ -78,7 +78,7 @@ export const chCards: Chapter = {
         and the chain is laced into a loop, so it repeats down its length.</p>
         <p>The cards are a <strong>program</strong> in every sense that matters: the loom is fixed, the pattern lives in the
         holes, and a new pattern is a new deck, not a new machine. A portrait of Jacquard woven in silk around 1839 took
-        some 24 000 cards. Babbage meant his Analytical Engine to take its program the same way; Ada Lovelace wrote that it
+        some 24 000 cards. Babbage meant his Analytical Engine to take its program the same way; Ada Lovelace wrote that it
         "weaves algebraical patterns just as the Jacquard loom weaves flowers and leaves".</p>
         <p>What makes it a program and not just a pattern: the information is in the cards and the machine reads it one pick at a time, in order, and loops. A
         stored program that selects among actions by position in a sequence is the same architecture as a <span data-ahead="rom">ROM (a fixed table of words, read-only memory)</span> read by a counter (a chain is a ROM, the
@@ -141,7 +141,7 @@ export const chCards: Chapter = {
         character in the <strong>Hollerith code</strong> as punched by the IBM 029 keypunch (1964): the digit rows 0–9, and above
         them two unprinted <em>zone</em> rows, 12 and 11 (0 doubles as the third zone). A digit is one hole; a letter is a zone
         and a digit (A = 12-1, J = 11-1, S = 0-2); most signs add an 8 to a digit. A column is 12 bits, but only ${CHARSET.length}
-        of its 4 096 patterns are characters (the blank included): at most three holes, so the card stays stiff enough to feed.</p>
+        of its 4096 patterns are characters (the blank included): at most three holes, so the card stays stiff enough to feed.</p>
         <p>There is no lower case and no curly brace. The keypunch printed each character along the top edge so that
         people could read the card; machines read the holes. Readers took cards face down, the 9 edge first.</p>
         <p>The code is built around what a counting machine needs: a digit is one hole in the digit rows, one pin per digit. The alphabet was added
@@ -190,7 +190,7 @@ export const chCards: Chapter = {
         derive: `<p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k
           drops each card in the pocket of that digit. Two cards in different pockets are in the order of digit k, whatever the lower digits. Two cards in the same pocket keep the order they had, which is the order on the lower k − 1
           digits. So the deck is sorted on k digits. A key of d digits takes d passes, independent of the number of cards: the deck of N cards takes d × N / ${SORTER_CPM} minutes at the 082's ${SORTER_CPM} cards a minute.</p>`,
-        numbers: `<table class="mini"><tr><th>key digits</th><th>passes</th><th>1 000 cards</th><th>10 000 cards</th></tr>${[1, 2, 3, 4, 6].map((d) => `<tr><td>${d}</td><td>${d}</td><td>${(d * 1000 / SORTER_CPM).toFixed(1)} min</td><td>${(d * 10000 / SORTER_CPM / 60).toFixed(1)} h</td></tr>`).join('')}</table>`,
+        numbers: `<table class="mini"><tr><th>key digits</th><th>passes</th><th>1000 cards</th><th>10 000 cards</th></tr>${[1, 2, 3, 4, 6].map((d) => `<tr><td>${d}</td><td>${d}</td><td>${(d * 1000 / SORTER_CPM).toFixed(1)} min</td><td>${(d * 10000 / SORTER_CPM / 60).toFixed(1)} h</td></tr>`).join('')}</table>`,
         pitfall: `<p>Sorting from the most significant column "to save passes". The first pass gives ten pockets; each pocket would then need sorting alone on the next column, ten sub-piles of ten sub-piles, and the operator
           has to keep track of all of them by hand. Least significant first needs only the one stack and one rule.</p>`,
         real: `<p>This is the least-significant-digit radix sort, the same algorithm as in a modern library, with the card sorter's pockets as the buckets. Knuth's sorting-by-distribution section describes this card method.

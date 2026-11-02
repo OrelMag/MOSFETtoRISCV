@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, rca, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { flatten } from '../sim/flatten';
@@ -29,7 +30,7 @@ const period = (d: ComponentDef) => analyzeTiming(flatten(d))?.period ?? 0;
 const between = (d: ComponentDef) => CLK_TO_Q + dp(d) + SETUP;
 /** NANDs of the M unit's part called `name` (mul, div). */
 const mduPart = (name: string) => nd(netlistOf(MDU)!.instances.find((i) => i.name === name)!.def);
-const sp = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const sp = groupDigits;
 
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 21, title: 'Multiply & divide', level: 'Arithmetic',
@@ -45,7 +46,7 @@ export const chMulDiv: Chapter = {
     keep: [
       'A partial product is <code>a AND b<sub>i</sub></code>. The array adds the rows with ripple adders: n² cells, and a depth that grows with n (70 NAND delays at 8×8, about 310 at 32×32).',
       'A row of unconnected full adders turns three words into two (x + y + z = s + 2c) in one full-adder delay. A Wallace tree of them leaves a single carry-propagate adder: a 32×32 tree multiplier is about as deep as one 32-bit ripple adder.',
-      'Signed operands: Baugh–Wooley inverts the partial products that pair a sign bit with a normal bit and adds one constant. Radix-4 Booth halves the rows, but at 8 bits it is larger and deeper (1 062 NANDs and 47 delays, against 972 and 40); it wins from 32 bits (12 658 against 13 293).',
+      'Signed operands: Baugh–Wooley inverts the partial products that pair a sign bit with a normal bit and adds one constant. Radix-4 Booth halves the rows, but at 8 bits it is larger and deeper (1062 NANDs and 47 delays, against 972 and 40); it wins from 32 bits (12 658 against 13 293).',
       'Division is serial: each quotient bit needs the previous remainder. Non-restoring makes every step "add ±d"; SRT keeps the remainder in carry-save form and picks each digit from its top bits (14 NAND delays at any width). Radix 4 makes two bits a step: 19 cycles of 44 delays for 32 bits, against 34 of 31.',
       'On the single-cycle CPU a divide takes 34 cycles: one in twenty instructions gives CPI 2.65. In the pipeline the multiply ends in M, so a dependent instruction stalls once, exactly as after a load.',
     ],
@@ -502,10 +503,10 @@ export const chMulDiv: Chapter = {
         real: `<p>Production cores pipeline the multiplier three or four stages deep so that it issues one multiply per cycle, and place registers inside the Booth tree where a cut costs fewest flip-flops. Small cores that rarely multiply use an iterative unit or none at all.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'A loop computes 1 000 independent products. Which multiplier finishes first?',
+        kind: 'quiz', question: 'A loop computes 1000 independent products. Which multiplier finishes first?',
         options: ['The pipelined one', 'The combinational Booth tree', 'The iterative one', 'They all take the same time'],
         answer: 0,
-        explain: 'Independent products stream through the pipeline at one per (short) cycle: about 1 000 × 41 delays. The combinational Booth tree needs 1 000 × 67. When each product feeds the next (a dependency chain), the pipeline\'s latency of 4 × 41 = 164 per product makes it the slowest of the three trees.',
+        explain: 'Independent products stream through the pipeline at one per (short) cycle: about 1000 × 41 delays. The combinational Booth tree needs 1000 × 67. When each product feeds the next (a dependency chain), the pipeline\'s latency of 4 × 41 = 164 per product makes it the slowest of the three trees.',
         why: ['', 'Its period of 67 delays covers the whole tree for every product. The pipeline starts a new product every 41.', 'The iterative unit spends many cycles on each product: it is the smallest of the four, not the fastest.', 'Latency is not throughput: independent products overlap in the pipeline, one finishing every cycle.'],
       },
     },
@@ -754,7 +755,7 @@ export const chMulDiv: Chapter = {
         up to 2⁄16 low. The tests check them against every reachable remainder exactly, and the divider against every 4-bit pair. A table
         built the same way, with five entries missing, was the Pentium's FDIV bug (1994).</p></details>
         <p>Each comparison stays in carry-save form: one 3:2 row computes s + c − m and an 8-bit adder gives its sign. A 32-bit division takes
-        19 cycles of 44 NAND delays (836) against radix 2's 34 of 31 (1 054).</p>
+        19 cycles of 44 NAND delays (836) against radix 2's 34 of 31 (1054).</p>
         <p>At 8 bits the radix-4 divider is ${sp(nd(srt4Divider(8)))} NANDs against ${sp(nd(srtDivider(8)))} for radix 2: the selection tables and the extra multiples cost about ${(nd(srt4Divider(8)) / nd(srtDivider(8))).toFixed(1)} times as much hardware for half the steps.</p>
         <div class="try">start = 1 is set. Pulse the clock: the quotient fills two bits at a time.</div>`,
       scene: () => ({ root: srt4Divider(8), inputs: { a: 200, b: 7, start: 1, clk: 0 }, autoClock: false }),
@@ -806,7 +807,7 @@ export const chMulDiv: Chapter = {
         ],
         answer: 0,
         why: ['', 'It needs fewer: 7 against 10. Each of them is longer.', 'Both dividers normalize once, in the load cycle, whatever the operands.', 'The final addition runs once per division. The crossover comes from the step delay times the number of steps.'],
-        explain: 'Both pay a load cycle and a done cycle; radix 4 also one extra digit (the dividend is shifted down two places). At 8 bits radix 4 takes 7 cycles of 44 delays against 10 of 29: 308 against 290. At 32 bits, 19 of 44 against 34 of 31: 836 against 1 054. Real dividers go further: radix 8 or 16 by overlapping two or three radix-2 or radix-4 stages per cycle.',
+        explain: 'Both pay a load cycle and a done cycle; radix 4 also one extra digit (the dividend is shifted down two places). At 8 bits radix 4 takes 7 cycles of 44 delays against 10 of 29: 308 against 290. At 32 bits, 19 of 44 against 34 of 31: 836 against 1054. Real dividers go further: radix 8 or 16 by overlapping two or three radix-2 or radix-4 stages per cycle.',
       },
     },
     {
@@ -814,7 +815,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>Here is everything together, as the CPU uses it. funct3 (the instruction's 3-bit function field) picks the operation.
         <strong>Multiplies</strong> go through <span data-show="mul">the 33×33 tree</span>
-        (about 13 900 NANDs) and finish in the same cycle. <strong>Divides</strong> strip the signs (<span data-show="nga ngb">conditional negators</span>), run
+        (about 13 900 NANDs) and finish in the same cycle. <strong>Divides</strong> strip the signs (<span data-show="nga ngb">conditional negators</span>), run
         <span data-show="div">the 32-bit iterative divider</span>, and <span data-show="ngo">put the sign back</span>: the quotient is negative if the signs differ (unless b = 0), and the remainder takes the dividend's sign.
         While a divide runs, <span data-show="stall"><code>stall</code></span> holds the CPU for 33 extra cycles.</p>
         <p>The costs are very unequal: the multiplier is ${sp(mduPart('mul'))} NANDs, the divider ${sp(mduPart('div'))}, and the whole unit ${sp(nd(MDU))}; the logic around them (sign handling, the result select) is ${sp(nd(MDU) - mduPart('mul') - mduPart('div'))}. The multiplier finishes in the cycle, the divider takes 34.</p>
@@ -827,7 +828,7 @@ export const chMulDiv: Chapter = {
           { title: 'mulh: high word', set: { funct3: 1 }, show: ['mul'], expect: { y: 4294967295 },
             say: '<p>funct3 = 1 (<code>mulh</code>) reads the high word of the same 64-bit product: all ones, the sign extension of −21. y = {v:y}.</p>' },
           { title: 'mulhu: both unsigned', set: { funct3: 3 }, show: ['mul'], expect: { y: 2 },
-            say: '<p>funct3 = 3 (<code>mulhu</code>) treats a as 4 294 967 289: times 3 the high word is {v:y}. The same tree, a different extension of the operands.</p>' },
+            say: '<p>funct3 = 3 (<code>mulhu</code>) treats a as 4 294 967 289: times 3 the high word is {v:y}. The same tree, a different extension of the operands.</p>' },
           { title: 'div starts', set: { funct3: 4 }, cycles: 1, show: ['div', 'nga', 'ngb'], expect: { stall: 1 },
             say: '<p>funct3 = 4 (<code>div</code>): the signs are stripped (7 / 3) and the iterative divider starts. stall = {v:stall}: the CPU holds while it works.</p>' },
           { title: 'Thirty-one more edges', cycles: 31, show: ['div'], expect: { stall: 1 },
@@ -849,7 +850,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>The complete system CPU with <span data-show="md">the M unit</span> beside <span data-show="mres">the result multiplexer</span>: about ${kNands(sysNands(true).core)} NANDs
         without its program ROM, ${pct(sysNands(true).core, sysNands(false).core)} % more than the RV32I machine of <a href="#/c/io/0">chapter 19</a>
-        (${kNands(sysNands(false).core)}); the M unit alone is ${stats(MDU).nands.toLocaleString('en-US').replace(/,/g, ' ')}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
+        (${kNands(sysNands(false).core)}); the M unit alone is ${groupDigits(stats(MDU).nands)}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
         ${kNands(sysNands(true).all)} against ${kNands(sysNands(false).all)}. It is still checked
         against the instruction-set simulator (the reference model that runs the program one instruction at a time) on every instruction. The timing panel shows the cost in speed: <strong>one NAND delay</strong> (126 → 127).
         The critical path does not even pass through the multiplier. The tree is shallow enough to hide behind the existing
@@ -885,7 +886,7 @@ export const chMulDiv: Chapter = {
           'This is a long run, well over a thousand cycles: pulsing by hand would take a while.',
           'The CPU panel has a button that runs the program until it halts.',
         ],
-        answer: 'Press "Run to halt": about 1 600 cycles for 293 instructions, CPI 5.5. The 20 digits cost 40 divides × 34 cycles, 1 360 cycles of division alone. This is why compilers turn division by a constant into a multiply by its reciprocal.',
+        answer: 'Press "Run to halt": about 1600 cycles for 293 instructions, CPI 5.5. The 20 digits cost 40 divides × 34 cycles, 1360 cycles of division alone. This is why compilers turn division by a constant into a multiply by its reciprocal.',
         // the panel's Run button animates without freezing the page
         solve: () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); },
       },
@@ -924,7 +925,7 @@ export const chMulDiv: Chapter = {
         <p>A <strong>divide</strong> runs on <span data-show="dive">the radix-4 SRT divider in E</span>. While it works, <code>divStall</code> (the divider's
         busy signal) holds PC, IF/ID and ID/EX, and
         sends bubbles into M; the result leaves through the ALU's place in E/M on the 19th cycle and is forwarded like any ALU result.</p>
-        <p>Cost: 70 900 → 102 900 NANDs (+45 %, the 64-bit tree and adder dominate). Speed, with fast adders: 93 → 93 gate delays, because the
+        <p>Cost: 70 900 → 102 900 NANDs (+45 %, the 64-bit tree and adder dominate). Speed, with fast adders: 93 → 93 gate delays, because the
         branch-resolution path in E is longer than both units.</p>
         <p>The design choice to note is where the multiplier is cut. A product is ready at the end of M, like a load, so the hazard unit needs no new case. The alternative, a one-stage multiplier, would put the 64-bit tree and adder in E on top of the forwarding mux and set the clock; a deeper split would add bubbles for dependent uses.</p>
         <details class="deeper"><summary>Deeper: the balanced pipeline's clock, 59 → 79</summary>

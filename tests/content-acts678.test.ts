@@ -2,6 +2,7 @@
 // measured here, from the levels' pars, the library and runs of the reference cores on the benches' programs,
 // and the thread is filled for every level of the three acts.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { ACT_ENDS } from '../src/campaign/actends';
@@ -25,8 +26,8 @@ import { analyzeTiming } from '../src/sim/timing';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 
 /** As the texts write numbers: a space between thousands. */
-const sp = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const plain = (h: string) => h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const sp = (n: number) => groupDigits(n);
+const plain = (h: string) => h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/[ \t\r\n]+/g, ' ');
 const par = (id: string) => nodeById(id)!.par!;
 const why = (id: string) => plain(nodeById(id)!.why);
 const cs = (id: string) => { const c = caseOf(id)!; return plain(`${c.problem} ${c.without ?? ''} ${c.cost ?? ''} ${(c.alts ?? []).map((a) => `${a.name} ${a.note ?? ''}`).join(' ')}`); };

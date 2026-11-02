@@ -4,6 +4,7 @@
 // fetched until the learner starts: the program image (400 KB) on open, the WAD (Freedoom, 29 MB,
 // or their own file) on Play.
 
+import { groupDigits } from '../sim/numfmt';
 import { ABI } from '../riscv/isa';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
@@ -16,7 +17,7 @@ const GATE_HZ = 2400;
 const PANEL_MS = 250;
 export const FREEDOOM = 'doom/freedoom1.wad';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('en');
+const fmt = (n: number) => groupDigits(Math.round(n));
 const hex = (n: number, d = 8) => (n >>> 0).toString(16).padStart(d, '0');
 const dur = (s: number) => (s < 60 ? `${s.toFixed(0)} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s` : `${(s / 3600).toFixed(1)} h`);
 

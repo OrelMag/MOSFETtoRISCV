@@ -1,6 +1,7 @@
 // The right-hand panel: what is this thing, what does it cost, how does it behave, and
 // what does it look like in Verilog.
 
+import { groupDigits } from '../sim/numfmt';
 import { evalOnce, forEachInput, inputBits, simulate } from '../sim/harness';
 import { DELAY_NOTE, type DelayModel, fmtDelay } from '../sim/delay';
 import { settings } from '../ui/settings';
@@ -127,17 +128,17 @@ export class Inspector {
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
       // a relay or tube circuit counts relays or tube sections, not the transistors it has none of
       const old = st.relays + st.triodes + st.diodes;
-      if (st.relays) cells.push([st.relays.toLocaleString(), `relay${st.relays > 1 ? 's' : ''}`]);
-      if (st.triodes) cells.push([st.triodes.toLocaleString(), `triode section${st.triodes > 1 ? 's' : ''}`]);
-      if (st.diodes) cells.push([st.diodes.toLocaleString(), `diode section${st.diodes > 1 ? 's' : ''}`]);
+      if (st.relays) cells.push([groupDigits(st.relays), `relay${st.relays > 1 ? 's' : ''}`]);
+      if (st.triodes) cells.push([groupDigits(st.triodes), `triode section${st.triodes > 1 ? 's' : ''}`]);
+      if (st.diodes) cells.push([groupDigits(st.diodes), `diode section${st.diodes > 1 ? 's' : ''}`]);
       // ROM chips (a 28C16) are counted as the mux trees they simulate as: shown apart, so the logic's count stands alone
       const rom = st.rom;
-      const romTip = rom ? `${romSize(rom)} of ROM, simulated as mux trees of ${rom.nands.toLocaleString()} NANDs (${rom.transistors.toLocaleString()} transistors) that are not counted here: on silicon a ROM is a transistor per bit and two decoders` : undefined;
-      if (!old || st.transistors) cells.push([(st.transistors - (rom?.transistors ?? 0)).toLocaleString(), rom ? 'transistors of logic' : 'transistors', romTip]);
-      if (st.resistors) cells.push([st.resistors.toLocaleString(), `resistor${st.resistors > 1 ? 's' : ''}`]);
-      if (st.capacitors) cells.push([st.capacitors.toLocaleString(), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
-      if (!old || st.nands) cells.push([(st.nands - (rom?.nands ?? 0)).toLocaleString(), rom ? 'NAND gates of logic' : 'NAND gates', romTip]);
-      if (rom) cells.push([`+ ${romSize(rom)}`, `of ROM (${rom.chips} chip${rom.chips > 1 ? 's' : ''}: mux trees of ${rom.nands.toLocaleString()} NANDs in the simulation)`, romTip]);
+      const romTip = rom ? `${romSize(rom)} of ROM, simulated as mux trees of ${groupDigits(rom.nands)} NANDs (${groupDigits(rom.transistors)} transistors) that are not counted here: on silicon a ROM is a transistor per bit and two decoders` : undefined;
+      if (!old || st.transistors) cells.push([groupDigits(st.transistors - (rom?.transistors ?? 0)), rom ? 'transistors of logic' : 'transistors', romTip]);
+      if (st.resistors) cells.push([groupDigits(st.resistors), `resistor${st.resistors > 1 ? 's' : ''}`]);
+      if (st.capacitors) cells.push([groupDigits(st.capacitors), `capacitor${st.capacitors > 1 ? 's' : ''}`]);
+      if (!old || st.nands) cells.push([groupDigits(st.nands - (rom?.nands ?? 0)), rom ? 'NAND gates of logic' : 'NAND gates', romTip]);
+      if (rom) cells.push([`+ ${romSize(rom)}`, `of ROM (${rom.chips} chip${rom.chips > 1 ? 's' : ''}: mux trees of ${groupDigits(rom.nands)} NANDs in the simulation)`, romTip]);
       if (depth !== null && depth > 0) {
         const unit: [string, string] = [String(depth), 'gate delays (worst path)'];
         const loaded = logicDepthSafe(d, 'load');
@@ -217,7 +218,7 @@ export class Inspector {
       if (rows.length) det.append(h('table', { class: 'ports used' }, h('tbody', null, rows)));
       if (!all) det.append(h('button', { class: 'btn ghost sm', onclick: () => { this.usedAll.add(d); this.render(); } }, `Show all ${list.length}`));
       det.append(h('div', { class: 'insp-used-h' }, 'Copies in the chapters’ CPUs, flattened'),
-        h('table', { class: 'ports used' }, h('tbody', null, u.cpus.map((c) => h('tr', null, h('td', null, c.label), h('td', { class: 'val' }, c.n ? c.n.toLocaleString() : '—'))))));
+        h('table', { class: 'ports used' }, h('tbody', null, u.cpus.map((c) => h('tr', null, h('td', null, c.label), h('td', { class: 'val' }, c.n ? groupDigits(c.n) : '—'))))));
     };
     if (this.usedOpen) {
       det.open = true;
@@ -260,7 +261,7 @@ export class Inspector {
       return;
     }
     if (n > 8) {
-      this.body.append(h('p', { class: 'empty' }, `${n} input bits → ${(2 ** n).toLocaleString()} rows. Too many to list. That is why we describe big circuits with arithmetic, not tables.`));
+      this.body.append(h('p', { class: 'empty' }, `${n} input bits → ${groupDigits(2 ** n)} rows. Too many to list. That is why we describe big circuits with arithmetic, not tables.`));
       return;
     }
     const table = truthTable(d);

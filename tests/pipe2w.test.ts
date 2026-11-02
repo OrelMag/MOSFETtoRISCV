@@ -1,6 +1,7 @@
 // The dual-issue in-order pipeline (Phase 17b, lib/pipe2w.ts) and its parts: the 4-read 2-write register file,
 // and the CPU in lock-step with the golden model (two instructions may retire a cycle, oldest first).
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import RESULTS from '../src/bench/results.json';
 import { chOoo, DUAL_SOURCE } from '../src/chapters/ch-ooo';
@@ -94,7 +95,7 @@ describe('dual-issue pipeline vs golden model', () => {
   }, 900000);
   it('step 2 quotes the share of instructions that go in pairs', () => {
     const pct = (x: number) => Math.round(100 * x);
-    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/\s+/g, ' ');
+    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/[ \t\r\n]+/g, ' ');
     expect(paired.length).toBe(5);
     expect(text).toContain(`Only ${pct(Math.min(...paired))} to ${pct(Math.max(...paired))} %`);
   });
@@ -112,8 +113,8 @@ describe('chapter 26, step 2', () => {
   it('quotes the measured cost and CPI', () => {
     const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
     const two = cpu('pipe-2w'), one = cpu('pipe-m-bal-bp');
-    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/\s+/g, ' ');
-    const n = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
+    const text = chOoo.steps.find((s) => s.title === 'Two at a time, in order')!.body.replace(/[ \t\r\n]+/g, ' ');
+    const n = groupDigits;
     const cpis = (c: typeof two) => c.runs.map((r) => `${r.bench} ${(r.cycles / r.instructions).toFixed(2)}`);
     expect(text).toContain(`${n(two.nands)} NANDs against ${n(one.nands)}`);
     expect(text).toContain(`+${Math.round(100 * (two.nands / one.nands - 1))} %`);

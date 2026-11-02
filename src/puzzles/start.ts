@@ -3,6 +3,7 @@
 // one of the learner's chips with the two ports placed beside it, or the RV16 computer around one of the
 // learner's single-cycle campaign cores. No DOM.
 
+import { groupDigits } from '../sim/numfmt';
 import { nodeOfChip } from '../campaign/levels';
 import type { ChipDoc, Workspace } from '../editor/model';
 import { uniqueName } from '../editor/model';
@@ -62,7 +63,7 @@ export function startCandidates(ws: Workspace, defOf: (chip: string) => Componen
     const node = nodeOfChip(id);
     if (node && SINGLE_CYCLE_CORES.has(node.id) && isCore16(defOf(id))) {
       const def = defOf(id)!;
-      out.push({ choice: { kind: 'core', chip: id }, name: doc.name, tag: 'campaign core', lang: 'rv16', langLabel: langName('rv16'), detail: `your ${node.title} in the RV16 puzzle computer · core ${hardwareNands(def).toLocaleString('en')} NANDs`, nands: hardwareNands(def) });
+      out.push({ choice: { kind: 'core', chip: id }, name: doc.name, tag: 'campaign core', lang: 'rv16', langLabel: langName('rv16'), detail: `your ${node.title} in the RV16 puzzle computer · core ${groupDigits(hardwareNands(def))} NANDs`, nands: hardwareNands(def) });
       continue;
     }
     const roms = programRoms(doc, ws.chips);
@@ -72,7 +73,7 @@ export function startCandidates(ws: Workspace, defOf: (chip: string) => Componen
     const n = def ? hardwareNands(def) : undefined;
     out.push({
       choice: { kind: 'chip', chip: id }, name: doc.name, tag: 'your chip', lang: r.lang, langLabel: romLangName(r),
-      detail: `ROM ${(2 ** r.k).toLocaleString('en')} × ${r.w} at ${roms[0].path}${n !== undefined ? ` · ${n.toLocaleString('en')} NANDs` : ''} · you wire the ports`, nands: n,
+      detail: `ROM ${groupDigits(2 ** r.k)} × ${r.w} at ${roms[0].path}${n !== undefined ? ` · ${groupDigits(n)} NANDs` : ''} · you wire the ports`, nands: n,
     });
   }
   return out;

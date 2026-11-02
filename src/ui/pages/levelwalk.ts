@@ -9,6 +9,7 @@
 // step never ends on a bare Done (which dropped the circuit): Build along's Finish makes the learner's circuit the
 // level's chip and checks it; Watch offers Use this answer (as Do it for me) or Build it myself (back to their own).
 
+import { groupDigits } from '../../sim/numfmt';
 import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
 import { stepMetrics, partialDoc, type StepMetrics, type Walk, type WalkStep, walkOf, withoutStep } from '../../campaign/walk';
@@ -301,7 +302,7 @@ export class WalkMode {
       const m = this.metricsNow();
       if (!m) return void meters.replaceChildren(h('p', { class: 'sub' }, 'The partial circuit cannot be measured yet.'));
       const bar = (label: string, v: number, p?: number) => h('div', { class: 'lv-meter' },
-        h('span', null, label, ' ', h('b', null, v.toLocaleString()), p !== undefined ? ` of par ${p.toLocaleString()}` : ''),
+        h('span', null, label, ' ', h('b', null, groupDigits(v)), p !== undefined ? ` of par ${groupDigits(p)}` : ''),
         p ? h('span', { class: 'track' }, h('i', { class: v > p ? 'over' : '', style: `width:${Math.min(100, (100 * v) / p).toFixed(1)}%` })) : null);
       const out: HTMLElement[] = [bar('Cost so far:', m.nand, par.nand)];
       // Depth 0 with parts placed: no output is driven yet, nothing to measure.

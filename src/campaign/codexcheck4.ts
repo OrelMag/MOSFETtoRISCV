@@ -185,7 +185,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'Why does refreshing every row within 64 ms not protect against row hammer?',
       options: ['Activating a neighbouring row drains a victim faster than leakage, and a row can be activated about 1.4 million times in 64 ms', 'Refresh skips rows that are being read', 'Row hammer writes the victim row directly', 'Refresh only covers rows that hold 1s'],
       answer: 0,
-      explain: 'Refresh is sized for leakage. Each activation of an aggressor disturbs its neighbours; at tRC = 45.75 ns (DDR4-3200) one row can be activated about 1.4 million times per window, ten times the 139 000 that flipped DDR3 bits in 2014.',
+      explain: 'Refresh is sized for leakage. Each activation of an aggressor disturbs its neighbours; at tRC = 45.75 ns (DDR4-3200) one row can be activated about 1.4 million times per window, ten times the 139 000 that flipped DDR3 bits in 2014.',
       why: ['', 'Refresh covers every row on schedule; the problem is what happens between refreshes.', 'The attacker never writes the victim: the flips come from activating its neighbours.', 'Refresh restores every cell, 0s and 1s alike (and real arrays mix true and anti-cells).'],
     },
     {
@@ -317,10 +317,10 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'Digits stay within −2 … +2; the top bit of the group has weight −2.', 'The top bit carries negative weight in the recoding.', '−1 is (1, 0, 1) or (1, 1, 0).'],
     },
     {
-      question: 'At 8 × 8 the Booth multiplier is 1 062 NANDs against 972 for the Baugh–Wooley tree. Why does halving the rows not pay at that width?',
+      question: 'At 8 × 8 the Booth multiplier is 1062 NANDs against 972 for the Baugh–Wooley tree. Why does halving the rows not pay at that width?',
       options: ['Each row bit becomes a select and an XOR instead of one AND, and the encoders sit in front: that costs more than four rows save', 'Booth needs more rows at 8 bits', 'The final adder doubles in width', 'Booth only works for unsigned operands'],
       answer: 0,
-      explain: 'The saving grows with the number of rows. At 32 bits Booth wins: 12 658 NANDs against 13 293, and fewer rows also mean less wiring and power.',
+      explain: 'The saving grows with the number of rows. At 32 bits Booth wins: 12 658 NANDs against 13 293, and fewer rows also mean less wiring and power.',
       why: ['', 'It has 4 rows (plus correction bits) against 8.', 'The product width is 16 bits either way.', 'Booth handles two\'s complement naturally; that is one of its attractions.'],
     },
   ],
@@ -358,17 +358,17 @@ export const CHECK4: Record<string, Quiz[]> = {
   ],
   occupancy: [
     {
-      question: 'A multiprocessor has 65 536 registers. A kernel needs 64 registers per thread. How many threads fit, by registers alone?',
-      options: ['1 024', '2 048', '512', '65 536'],
+      question: 'A multiprocessor has 65 536 registers. A kernel needs 64 registers per thread. How many threads fit, by registers alone?',
+      options: ['1024', '2048', '512', '65 536'],
       answer: 0,
-      explain: '65 536 / 64 = 1 024 threads, 32 warps of 32: half what fits at 32 registers a thread.',
+      explain: '65 536 / 64 = 1024 threads, 32 warps of 32: half what fits at 32 registers a thread.',
       why: ['', 'That is at 32 registers a thread.', 'That would be 128 registers a thread.', 'That counts registers, not threads.'],
     },
     {
       question: 'Chapter 31\'s saxpy takes 266 cycles on one warp, 192 on two and 172 on four. Why would an eighth warp gain almost nothing?',
       options: ['Four warps already fill every issue slot; more warps only add registers and gates', 'The memory cannot take more requests', 'The scheduler supports four warps at most', 'Each warp runs the whole array'],
       answer: 0,
-      explain: 'At four warps 172 instructions issue in 172 cycles: no slot is left empty for another warp to fill. Each resident warp costs a slot and a register bank per lane (the second one 110 715 NANDs).',
+      explain: 'At four warps 172 instructions issue in 172 cycles: no slot is left empty for another warp to fill. Each resident warp costs a slot and a register bank per lane (the second one 110 715 NANDs).',
       why: ['', 'One request enters the memory pipeline every cycle; it is slow, not busy.', 'The limit here is the empty issue slots, not the scheduler.', 'The warps divide the elements by thread id.'],
     },
   ],
@@ -397,11 +397,11 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'The scan-out never stops sending pixels.', 'Nothing is copied: the swap takes effect at once.', 'A swap shows the frame just drawn.'],
     },
     {
-      question: 'Frames flip only at vsync, every 1 024 cycles. Drawing a frame takes 1 100 cycles. How often does a new picture appear?',
-      options: ['Every 2 048 cycles', 'Every 1 100 cycles', 'Every 1 024 cycles', 'Every 2 124 cycles'],
+      question: 'Frames flip only at vsync, every 1024 cycles. Drawing a frame takes 1100 cycles. How often does a new picture appear?',
+      options: ['Every 2048 cycles', 'Every 1100 cycles', 'Every 1024 cycles', 'Every 2124 cycles'],
       answer: 0,
       explain: 'The frame misses the first vsync by 76 cycles and flips at the second: frame times snap to whole scan-outs. Triple buffering lets drawing start the next frame instead of waiting.',
-      why: ['', 'The flip waits for a vsync; it cannot happen when drawing ends.', 'Drawing is slower than one scan-out, so it misses the first vsync.', 'Flips come only at vsync boundaries, multiples of 1 024.'],
+      why: ['', 'The flip waits for a vsync; it cannot happen when drawing ends.', 'Drawing is slower than one scan-out, so it misses the first vsync.', 'Flips come only at vsync boundaries, multiples of 1024.'],
     },
   ],
 };

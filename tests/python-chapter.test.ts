@@ -14,7 +14,7 @@ import { PY_DMEM_K, PY_IMEM_K, pyCompile, pyProfile } from '../src/widgets/pytho
 
 const prose = chPython.steps.map((s) => s.body).join('\n') + chPython.recap!.keep.join('\n');
 const src = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
-const quoted = (n: number | string) => expect(prose.replace(/\s+/g, ' ')).toContain(String(n));
+const quoted = (n: number | string) => expect(prose.replace(/[ \t\r\n]+/g, ' ')).toContain(String(n));
 
 describe('chapter 15: the numbers in the text', () => {
   it('sum: 4 lines, 12 instructions, total in s0 and i in s1', () => {
@@ -32,7 +32,7 @@ describe('chapter 15: the numbers in the text', () => {
     const line = src('gcd').split('\n').findIndex((l) => l.includes('t = a % b')) + 1;
     const total = (p.own.get(line) ?? 0) + (p.rt.get(line) ?? 0);
     expect(total).toBe(1472);
-    quoted('1 472 of the program\'s 1 545');
+    quoted('1472 of the program\'s 1545');
     const calls = p.own.get(line)! / c.pcsOfPy(line).length; // every instruction of the line runs once a call
     expect(Math.abs(total / calls - 240)).toBeLessThan(10);
   });
@@ -57,8 +57,8 @@ describe('chapter 15: the numbers in the text', () => {
     const def = singleCycleCpu(c.words, { imemK: PY_IMEM_K, dmemK: PY_DMEM_K });
     const st = stats(def);
     expect([st.nands, st.transistors]).toEqual([100979, 403916]);
-    quoted('100 979 NANDs');
-    quoted('403 916 transistors');
+    quoted('100 979 NANDs');
+    quoted('403 916 transistors');
     const sim = new GateSim(flatten(def));
     sim.setInput('clk', 0);
     sim.settle();
@@ -75,7 +75,7 @@ describe('chapter 15: the numbers in the text', () => {
     }
     expect(runs).toBe(10);
     expect(Math.abs(toggles / runs - 25000)).toBeLessThan(1000);
-    quoted('about 25 000 nets');
+    quoted('about 25 000 nets');
   }, 60000);
 
   it('every sample fits the chapter\'s ROM and data memory', () => {

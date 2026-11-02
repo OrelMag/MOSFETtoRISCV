@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { CLOCK_NS } from '../dram/timing';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { V_READ, vtOf } from '../lib/flash';
@@ -27,7 +28,7 @@ function rowsOf(st: Stage, rows: number): number[] {
 }
 
 const pulses = Math.ceil(FG_READ / FG_STEP);
-const fmtN = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmtN = groupDigits;
 /** A real page read at our clock, and how far the model scales the busy times down. */
 const READ_REAL = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
 const SCALE = 10 * Math.round(READ_REAL / FLASH_TIMES.read / 10);
@@ -202,7 +203,7 @@ export const chFlash: Chapter = {
         real: `<p>The threshold is analog, so a cell can hold more than one bit: <strong>MLC</strong> places it at one of 4 levels (2 bits),
           <strong>TLC</strong> 8 (3 bits), <strong>QLC</strong> 16 (4 bits). A read then compares against 3, 7 or 15 read voltages, a
           program steps in finer pulses with more verifies, and the margins between levels shrink: QLC programs several times slower
-          than SLC and survives on the order of a thousand erases against SLC's 100 000. The same cell, the same array; only the
+          than SLC and survives on the order of a thousand erases against SLC's 100 000. The same cell, the same array; only the
           sensing and the controller change.</p>
           <p>Planar cells stopped shrinking near 15 nm: a few dozen electrons per level, and neighbours coupling through the gap.
           <strong>3D NAND</strong> (Samsung's V-NAND, 2013, 24 layers) stands each string up as a vertical channel through a stack of
@@ -270,7 +271,7 @@ export const chFlash: Chapter = {
     {
       title: 'Garbage, wear and bad blocks',
       body: `
-        <p>The oxide wears with every erase: an SLC block lasts about 100 000 erase cycles, TLC some 3 000. Garbage collection on its
+        <p>The oxide wears with every erase: an SLC block lasts about 100 000 erase cycles, TLC some 3000. Garbage collection on its
         own erases the same few blocks over and over (those holding hot data), and they wear out first. <strong>Wear levelling</strong>
         opens the least-erased free block next, so the erases spread. That is dynamic wear levelling: a block full of cold data never comes free, so controllers also move cold data now and then (static wear levelling), which this model leaves out. Some blocks are bad from the factory, and others fail in
         service: the controller keeps a list and never uses them again.</p>

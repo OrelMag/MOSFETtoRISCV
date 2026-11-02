@@ -1,6 +1,7 @@
 // Chapter 26's quoted numbers, recomputed from the models (riscv/ilp.ts, ooomodel.ts, scoreboard.ts), so the prose
 // cannot drift from them.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { chOoo } from '../src/chapters/ch-ooo';
 import { assemble } from '../src/riscv/asm';
@@ -31,7 +32,7 @@ const PW = PAY.reduce((a, [, w]) => a + w, 0);
 const OPTS = { dmemWords: 64, imemWords: 128 };
 const words = (id: string) => assemble(OOO_PROGRAMS.find((p) => p.id === id)?.source ?? BENCHMARKS.find((b) => b.id === id)!.source).words;
 const cpi = (id: string, cfg: Partial<OooConfig> = {}) => { const s = oooRun(words(id), cfg, OPTS); return s.cycles / s.instructions; };
-const text = [...chOoo.steps.map((s) => s.body), ...chOoo.recap!.keep].join(' ').replace(/\s+/g, ' ');
+const text = [...chOoo.steps.map((s) => s.body), ...chOoo.recap!.keep].join(' ').replace(/[ \t\r\n]+/g, ' ');
 const quoted = (v: string) => expect(text, v).toContain(v);
 const LONG = { lat: { alu: 1, load: 4, mul: 4, div: 19 } };
 
@@ -85,7 +86,7 @@ describe('chapter 26: the numbers it quotes', () => {
   });
 });
 
-const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en').replace(/,/g, ' ');
+const nands = (d: Parameters<typeof stats>[0]) => groupDigits(stats(d).nands);
 const sceneOf = (title: string) => {
   const sc = chOoo.steps.find((s) => s.title === title)!.scene!;
   return typeof sc === 'function' ? sc() : sc;
@@ -106,8 +107,8 @@ describe('chapter 26: the gate-level steps', () => {
     const want: [string, string][] = [['rename table', nands(RAT)], ['row', nands(RAT_ROW)], ['entry', nands(iqEntry(PW))], ['queue', nands(issueQueue(PW))],
       ['select', nands(SELECT8)], ['age', nands(AGE8)], ['rob', nands(reorderBuffer(43, 65))], ['sq', nands(STORE_QUEUE)],
       ['btb', part('btb')], ['rf', part('rf')], ['div', part('div')], ['ras', part('ras')]];
-    expect(Object.fromEntries(want)).toEqual({ 'rename table': '12 443', row: '275', entry: '4 247', queue: '56 888', select: '280', age: '1 536', rob: '70 541', sq: '8 544',
-      btb: '35 662', rf: '35 463', div: '16 742', ras: '10 824' });
+    expect(Object.fromEntries(want)).toEqual({ 'rename table': '12 443', row: '275', entry: '4247', queue: '56 888', select: '280', age: '1536', rob: '70 541', sq: '8544',
+      btb: '35 662', rf: '35 463', div: '16 742', ras: '10 824' });
     for (const [, v] of want) quoted(v);
     expect(part('rob')).toBe(nands(reorderBuffer(43, 65)));
     expect(part('iq')).toBe(nands(issueQueue(PW)));
@@ -120,13 +121,13 @@ describe('chapter 26: the gate-level steps', () => {
 
   it('the benchmark figures', () => {
     const cpu = (id: string) => RESULTS.cpus.find((c) => c.id === id)!;
-    const n = (id: string) => cpu(id).nands.toLocaleString('en').replace(/,/g, ' ');
-    expect([n('ooo'), n('pipe-2w'), n('pipe-m-bal-bp')]).toEqual(['359 262', '193 768', '141 655']);
+    const n = (id: string) => groupDigits(cpu(id).nands);
+    expect([n('ooo'), n('pipe-2w'), n('pipe-m-bal-bp')]).toEqual(['359 262', '193 768', '141 655']);
     expect([cpu('ooo').period, cpu('pipe-2w').period]).toEqual([93, 80]);
     const cpis = (id: string) => ['fib', 'sort', 'matmul', 'matmul-m', 'crc'].map((b) => { const r = cpu(id).runs.find((x) => x.bench === b)!; return (r.cycles / r.instructions).toFixed(2); });
     expect(cpis('ooo')).toEqual(['0.99', '0.77', '1.28', '0.84', '0.99']);
     expect(cpis('pipe-2w')).toEqual(['1.13', '1.01', '1.05', '1.09', '0.97']);
-    for (const v of ['359 262', '193 768', '141 655', '93 NAND delays', 'fib 0.99, sort 0.77, matmul 1.28, matmul-m 0.84, crc 0.99', '1.13, 1.01, 1.05, 1.09, 0.97', "pipeline's 80"]) quoted(v);
+    for (const v of ['359 262', '193 768', '141 655', '93 NAND delays', 'fib 0.99, sort 0.77, matmul 1.28, matmul-m 0.84, crc 0.99', '1.13, 1.01, 1.05, 1.09, 0.97', "pipeline's 80"]) quoted(v);
   });
 
   it("the rename table scene: slot 1 sees slot 0's tag, then a pulse maps both", () => {
@@ -199,7 +200,7 @@ describe('chapter 26: measured, and code that helps the hardware', () => {
     const [a, b] = [run(crc), run(free)];
     expect([a.instructions, a.cycles, a.mispredicts, b.instructions, b.cycles, b.mispredicts]).toEqual([3049, 3021, 290, 3819, 2330, 21]);
     expect([run(crc, { inorder: true }).cycles, run(free, { inorder: true }).cycles]).toEqual([3045, 2370]);
-    for (const v of ['290 mispredictions in 3 049', '3 819 instructions instead of 3 049', '2 330 cycles instead of 3 021', '3 045 → 2 370']) quoted(v);
+    for (const v of ['290 mispredictions in 3049', '3819 instructions instead of 3049', '2330 cycles instead of 3021', '3045 → 2370']) quoted(v);
   });
 
   it('the challenge\'s CRC on the gates: 807 cycles with the branch, under the budget without', async () => {

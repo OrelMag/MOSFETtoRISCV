@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { cam, decoder, equal, fifo, LFSR_TAPS, MUX2, muxTree, pla, PLA_PRESETS, plaTerms, regfileMP, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
 import { CLK_TO_Q, SETUP } from '../sim/timing';
 import { DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
@@ -657,7 +658,7 @@ export const chRegisters: Chapter = {
         pitfall: `<p>Starting from zero. An XOR-feedback LFSR locks up in the all-zero state, and a sequence that never leaves 0 is the symptom: seed it non-zero, or use the XNOR form, which locks up at all ones
           instead. Also, using the register's n bits as an n-bit random number gives successive values that are shifts of one another: take one output bit per step, or use a wider register.</p>`,
         numbers: `<table class="mini"><tr><th>width</th><th>taps</th><th>states</th><th>NANDs</th></tr>
-          ${[4, 8, 16].map((n) => `<tr><td>${n}</td><td>${LFSR_TAPS[n].join(', ')}</td><td>${(2 ** n - 1).toLocaleString('en-US')}</td><td>${nands(lfsr(n))}</td></tr>`).join('')}</table>`,
+          ${[4, 8, 16].map((n) => `<tr><td>${n}</td><td>${LFSR_TAPS[n].join(', ')}</td><td>${groupDigits(2 ** n - 1)}</td><td>${nands(lfsr(n))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: lfsr(4), inputs: { load: 1, seed: 1, clk: 0 } }),
     },
@@ -695,7 +696,7 @@ export const chRegisters: Chapter = {
         pitfall: `<p>Illegal states. Any n-bit register with fewer than 2ⁿ legal states can power up in an illegal one: in a ring counter, 0000 or two 1s, which then circulate forever. A self-correcting ring
           detects and fixes it, or the init input loads a legal state first, which is exactly what this scene's init does.</p>`,
         numbers: `<table class="mini"><tr><th>flip-flops</th><th>ring states</th><th>Johnson states</th><th>binary states</th></tr>
-          ${[4, 8, 16].map((n) => `<tr><td>${n}</td><td>${n}</td><td>${2 * n}</td><td>${(2 ** n).toLocaleString('en-US')}</td></tr>`).join('')}</table>`,
+          ${[4, 8, 16].map((n) => `<tr><td>${n}</td><td>${n}</td><td>${2 * n}</td><td>${groupDigits(2 ** n)}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: ringCounter(4, true), inputs: { init: 1, clk: 0 } }),
       tries: [(st) => st.getInput('init') === 0 && st.value('q') === 0b1100],
@@ -724,12 +725,12 @@ export const chRegisters: Chapter = {
       more: {
         derive: `<p>Each toggle flip-flop outputs half the frequency of its clock: f_i = f / 2ⁱ⁺¹. Delays add: stage i changes after i·t_cq, so the bits of a ripple count change in sequence, not together, and for
           a moment the word shows a value that was never the count. The settling time is n·t_cq, against one t_cq for a synchronous counter.</p>`,
-        real: `<p>A 32 768 Hz watch crystal divided by 2¹⁵ (${2 ** 15}) gives exactly 1 Hz: fifteen ripple stages, in every quartz watch. At those rates the delay does not matter, and a ripple divider is
+        real: `<p>A 32 768 Hz watch crystal divided by 2¹⁵ (${2 ** 15}) gives exactly 1 Hz: fifteen ripple stages, in every quartz watch. At those rates the delay does not matter, and a ripple divider is
           the cheapest and lowest-power way to count.</p>`,
         pitfall: `<p>Using a stage output as the clock for other logic. Its edge arrives i·t_cq after the master clock's, a skew that moves the setup and hold windows, and the static timing tools then see
           a generated clock to treat as such. A synchronous counter with an enable (a clock-enable pulse every 2ⁱ cycles) keeps one clock domain instead.</p>`,
-        numbers: `<table class="mini"><tr><th>stage</th><th>output frequency from 32 768 Hz</th></tr>
-          ${[0, 1, 2, 7, 14].map((i) => `<tr><td>${i}</td><td>${(32768 / 2 ** (i + 1)).toLocaleString('en-US')} Hz</td></tr>`).join('')}</table>`,
+        numbers: `<table class="mini"><tr><th>stage</th><th>output frequency from 32 768 Hz</th></tr>
+          ${[0, 1, 2, 7, 14].map((i) => `<tr><td>${i}</td><td>${groupDigits(32768 / 2 ** (i + 1))} Hz</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: clockDivider(3), inputs: { clk: 0, rst_n: 0 }, analyzer: true }),
     },
@@ -825,7 +826,7 @@ export const chMemory: Chapter = {
   recap: {
     keep: [
       'A RAM is registers plus a decoder with enable (write: one word\'s load enable, at the clock edge) and a multiplexer tree (read: asynchronous, no clock). 4 words × 4 bits: 306 NANDs.',
-      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use cells of six transistors, or of one transistor and a capacitor.',
+      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use cells of six transistors, or of one transistor and a capacitor.',
       'A ROM keeps the decoder and puts the data in the wiring: output bit j is the OR of the word lines whose bit j is 1. A PLA builds only the product terms the outputs need: the 7-segment font in 164 NANDs against 313 as a ROM.',
       'FIFO: a circular buffer with read and write pointers, one extra pointer bit telling full from empty. Stack: one pointer, the top at slot sp − 1.',
       'A CAM compares the key with every entry at once and priority-encodes the matches; a comparator per entry keeps CAMs small. Each extra port costs another mux tree (read) or decoder (write).',
@@ -960,7 +961,7 @@ export const chMemory: Chapter = {
       body: `
         <p>The same three parts scale to any size. Pick a size in the panel. The address grows one bit each time
         the number of words doubles, and so does <span data-show="dec">the decoder</span> and the depth of <span data-show="rmux">the mux tree</span>.</p>
-        <p>Watch the transistor count in the Info tab: a 64 × 16 memory built this way already needs about ${(Math.round(stats(ram(6, 16)).transistors / 1000) * 1000).toLocaleString('en-US').replace(',', ' ')} transistors. That is why real memories use dense custom cells: a phone's 16 GB of DRAM is ${(16 * 2 ** 30 * 8 / 1e11).toFixed(1)} × 10¹¹ bits, each one transistor and a
+        <p>Watch the transistor count in the Info tab: a 64 × 16 memory built this way already needs about ${groupDigits(Math.round(stats(ram(6, 16)).transistors / 1000) * 1000).replace(',', ' ')} transistors. That is why real memories use dense custom cells: a phone's 16 GB of DRAM is ${(16 * 2 ** 30 * 8 / 1e11).toFixed(1)} × 10¹¹ bits, each one transistor and a
         capacitor. Stored at ${stats(DFFE).transistors} transistors a bit, as here, it would take ${Math.floor(16 * 2 ** 30 * 8 * stats(DFFE).transistors / 1e12)} × 10¹² transistors.</p>
         <p>The cost splits between storage and plumbing, and the split hardly moves: the table in <em>Numbers</em> shows the stored bits taking close to four fifths at every size, because the read tree adds nearly one
         multiplexer per stored bit. The delay, on the other hand, grows with every added address bit.</p>`,
@@ -972,7 +973,7 @@ export const chMemory: Chapter = {
         pitfall: `<p>Counting only gates. In a real memory the wires matter more than the logic: the delay of a word line or bit line grows with its length, and a naive 2ᵏ-to-1 tree puts a wire the length of the array
           on the critical path. Banking trades extra decoders for shorter wires.</p>`,
         numbers: `<table class="mini"><tr><th>words × bits</th><th>NANDs</th><th>transistors</th><th>of it storage</th><th>read tree depth</th></tr>
-          ${([[2, 4], [3, 8], [4, 8], [5, 16], [6, 16]] as const).map(([k, w]) => `<tr><td>${2 ** k} × ${w}</td><td>${nands(ram(k, w)).toLocaleString('en-US')}</td><td>${stats(ram(k, w)).transistors.toLocaleString('en-US')}</td><td>${Math.round(100 * 2 ** k * w * nands(DFFE) / nands(ram(k, w)))} %</td><td>${logicDepth(muxTree(k, w))}</td></tr>`).join('')}</table>`,
+          ${([[2, 4], [3, 8], [4, 8], [5, 16], [6, 16]] as const).map(([k, w]) => `<tr><td>${2 ** k} × ${w}</td><td>${groupDigits(nands(ram(k, w)))}</td><td>${groupDigits(stats(ram(k, w)).transistors)}</td><td>${Math.round(100 * 2 ** k * w * nands(DFFE) / nands(ram(k, w)))} %</td><td>${logicDepth(muxTree(k, w))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: ram(4, 8), inputs: { addr: 0, din: 0x42, we: 1, clk: 0 }, panels: [memSizePanel, memGridPanel] }),
       challenge: {
@@ -1087,7 +1088,7 @@ export const chMemory: Chapter = {
         pitfall: `<p>dout shows the word at the read pointer even when the FIFO is empty: it is stale data, not a valid word. The consumer must look at empty, not at dout. Likewise a push while full is refused by the logic, but the
           producer has to notice, or the word is lost.</p>`,
         numbers: `<table class="mini"><tr><th>slots × bits</th><th>NANDs</th><th>of which storage</th></tr>
-          ${([[2, 8], [3, 8], [4, 8], [4, 32]] as const).map(([k, w]) => `<tr><td>${2 ** k} × ${w}</td><td>${nands(fifo(k, w)).toLocaleString('en-US')}</td><td>${(2 ** k * w * nands(DFFE)).toLocaleString('en-US')}</td></tr>`).join('')}</table>`,
+          ${([[2, 8], [3, 8], [4, 8], [4, 32]] as const).map(([k, w]) => `<tr><td>${2 ** k} × ${w}</td><td>${groupDigits(nands(fifo(k, w)))}</td><td>${groupDigits(2 ** k * w * nands(DFFE))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: fifo(2, 8), inputs: { push: 1, pop: 0, din: 0x11, clk: 0 }, autoClock: false }),
       challenge: {
@@ -1192,7 +1193,7 @@ export const chMemory: Chapter = {
         <p>The register bank of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
-        <p>The cost is not linear: ${nands(regfileMP(5, 32, 4, 2)).toLocaleString('en-US')} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${nands(regfileMP(5, 32, 2, 1)).toLocaleString('en-US')} for 2 reads and 1 write
+        <p>The cost is not linear: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write
         (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times). Adding ports multiplies the plumbing over the same storage, and in silicon each port also lengthens every bit's wires,
         so the real cost is higher still.</p>`,
       more: {
@@ -1202,7 +1203,7 @@ export const chMemory: Chapter = {
           register file into banks, or use a clustered design, instead of adding ports.</p>`,
         pitfall: `<p>Two write ports can write the same register in one cycle. Someone has to decide which wins (the younger instruction, by convention) and the hardware that decides is the multiplexer in front of every register.</p>`,
         numbers: `<table class="mini"><tr><th>ports (read / write)</th><th>NANDs (32 × 32)</th></tr>
-          ${([[2, 1], [4, 1], [4, 2]] as const).map(([r, w]) => `<tr><td>${r} / ${w}</td><td>${nands(regfileMP(5, 32, r, w)).toLocaleString('en-US')}</td></tr>`).join('')}</table>`,
+          ${([[2, 1], [4, 1], [4, 2]] as const).map(([r, w]) => `<tr><td>${r} / ${w}</td><td>${groupDigits(nands(regfileMP(5, 32, r, w)))}</td></tr>`).join('')}</table>`,
       },
       widget: portCost,
     },

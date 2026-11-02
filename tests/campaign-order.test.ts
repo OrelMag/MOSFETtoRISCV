@@ -2,6 +2,7 @@
 // first fixed (the ripple ALU is 50 of Core III's 98 delays), and the pipeline that follows only
 // beats it once E's adders are fast too. The texts quoting them are checked against the measurement.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { corePeriod, type CoreTest, memLeaf, runCore } from '../src/campaign/corecheck';
 import { coreTests, pipeTests, sysTests } from '../src/campaign/coretests';
@@ -18,8 +19,8 @@ import { stats } from '../src/sim/stats';
 import { analyzeTiming } from '../src/sim/timing';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 
-/** Thousands with a thin space, as the texts write them (1 236, 93 936). */
-const sp = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+/** Thousands with a thin space, as the texts write them (1236, 93 936). */
+const sp = (n: number) => groupDigits(n);
 
 /** The delays the core's instance labelled `label` adds to its critical path, with the bench's memories. */
 function span(core: ComponentDef, label: string): number {

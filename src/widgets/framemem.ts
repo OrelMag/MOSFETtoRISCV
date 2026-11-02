@@ -9,6 +9,7 @@
 // instance names: displayTop, GPU30, GPU30Z, gpu31. gpu31's faster clear (step 5) clears with its clear unit (clear.busy,
 // clear.ca), a word a write (fb.wall: four pixels), into a depth buffer in four banks (rop.zbuf0 … zbuf3).
 
+import { groupDigits } from '../sim/numfmt';
 import { FB_W, rgb332 } from '../gfx/raster';
 import { FB_WORDS } from '../lib/raster';
 import { ramLeafState } from '../lib/bigmem';
@@ -321,8 +322,8 @@ export class FrameMemory {
       rows.push({
         unit: this.opts.depth ? 'Depth · blend' : 'Framebuffer',
         hue: 'draw',
-        text: `${t.written.toLocaleString('en')} pixel${t.written === 1 ? '' : 's'} drawn since the flip`
-          + (t.failed ? `, ${t.failed.toLocaleString('en')} failed the depth test` : ''),
+        text: `${groupDigits(t.written)} pixel${t.written === 1 ? '' : 's'} drawn since the flip`
+          + (t.failed ? `, ${groupDigits(t.failed)} failed the depth test` : ''),
       });
     }
     rows.push(...(this.opts.rows?.(sim) ?? []));

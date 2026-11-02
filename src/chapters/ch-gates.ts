@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import type { ComponentDef } from '../sim/types';
 import { AND, MUX2, NAND, NOR, NOT, OR, XNOR, XOR, equal } from '../lib';
 import { flatten } from '../sim/flatten';
@@ -352,7 +353,7 @@ export const chBinary: Chapter = {
         digit is worth ten times the one to its right; in <strong>binary</strong>, twice: 1, 2, 4, 8, 16… A digit string is read the
         same way in every base: multiply each digit by its place value and add. Base 2 is the one hardware speaks, because a wire has two states.</p>
         <p>The width of the bus sets the range: n wires carry 2ⁿ different patterns, 0 to 2ⁿ − 1 read as an unsigned number. Eight wires give
-        ${2 ** 8}, sixteen ${(2 ** 16).toLocaleString('en-US')}, thirty-two ${(2 ** 32).toLocaleString('en-US')}. Every width in a processor (a register, an
+        ${2 ** 8}, sixteen ${groupDigits(2 ** 16)}, thirty-two ${groupDigits(2 ** 32)}. Every width in a processor (a register, an
         address, an arithmetic unit) is a decision about where that range ends, and what happens past it: the number wraps around.</p>
         <p>Long binary numbers are hard to read, so we write them in <strong>hexadecimal</strong>, one digit (0–9,
         A–F) for every four bits. <code>0b1010_1111</code> is <code>0xAF</code> is ${parseInt('10101111', 2)}. The grouping costs nothing in hardware:

@@ -1,6 +1,7 @@
 // The numbers codexnew.ts / codexmore2.ts / codexcheck4.ts quote, against the library, the models and the chapters
 // that teach them. Each check reads the entry's text, so a change to either side fails here.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { codexById } from '../src/campaign/codex';
@@ -29,8 +30,8 @@ import { FF_DRIVER, FF_INPUT, FF_WIRE, VDD } from '../src/sim/power';
 import { logicDepth, stats } from '../src/sim/stats';
 import type { ComponentDef } from '../src/sim/types';
 
-/** 26348 → "26 348", as the entries write numbers. */
-const f = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+/** 26348 → "26 348", as the entries write numbers. */
+const f = (n: number) => groupDigits(n);
 /** Everything an entry says: summary, fuller text, questions. */
 function text(id: string): string {
   const m = moreOf(id)!;
@@ -96,12 +97,12 @@ describe('the journey\'s codex entries', () => {
   it('quote the warp core and the screen as measured', () => {
     quotes('scoreboard', nands(SCOREBOARD), nands(SB_CHECK));
     quotes('doublebuffer', nands(SCAN_OUT));
-    stepSays('warps', 4, '110 715'); stepSays('warps', 4, '92 564'); stepSays('warps', 4, '65 536');
+    stepSays('warps', 4, '110 715'); stepSays('warps', 4, '92 564'); stepSays('warps', 4, '65 536');
     quotes('occupancy', 110715, 92564, 65536);
     stepSays('warps', 0, '266 cycles'); stepSays('warps', 3, '192 cycles'); stepSays('warps', 3, '172 cycles');
-    stepSays('pixels', 3, '12 032'); stepSays('pixels', 3, '76 more cycles');
+    stepSays('pixels', 3, '12 032'); stepSays('pixels', 3, '76 more cycles');
     quotes('zbuffer', 12032);
-    stepSays('graphics', 1, '6 144');
+    stepSays('graphics', 1, '6144');
   });
 
   it('agree with the coherence model', () => {
@@ -132,7 +133,7 @@ describe('the journey\'s codex entries', () => {
     const tRC = DDR4_3200.tRAS + DDR4_3200.tRP;
     expect(tRC).toBe(45.75);
     expect((64e6 / tRC / 1e6).toFixed(1)).toBe('1.4');
-    stepSays('dram', 3, '139 000');
+    stepSays('dram', 3, '139 000');
     // metastability: the illustrative MTBFs
     expect(Math.exp(5) / 2e5 * 1e3).toBeCloseTo(0.74, 2);
     expect(Math.round(Math.exp(47.5) / 2e5 / 3.156e7 / 1e6)).toBe(67);

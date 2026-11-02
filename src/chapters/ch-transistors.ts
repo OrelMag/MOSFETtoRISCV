@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { AND, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR, NOR_CMOS, NOT, OR, PMOS_SWITCH, rca, WEAK_DEMO, XOR } from '../lib';
 import {
   NAND2_UM2, PLATE_FANOUT, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, fmtMass, fmtTime, fmtVolume,
@@ -768,8 +769,8 @@ export const chNand: Chapter = {
           fan-out coils; a tube NAND is half a 6SN7 and a 6AL5 with the divider into the grid; a CMOS NAND is four transistors.</p>`,
         numbers: `<table class="mini"><tr><th></th><th>one NAND</th><th>step</th><th>steps vs CMOS</th><th>average power</th></tr>
           <tr><td>CMOS</td><td>4 transistors</td><td>${fmtTime(TECH.cmos.step)}</td><td>1</td><td>on switching only</td></tr>
-          <tr><td>Tubes</td><td>½ 6SN7 + 6AL5</td><td>${fmtTime(TECH.tube.step)}</td><td>${Math.round(TECH.tube.step / TECH.cmos.step).toLocaleString('en-US').replace(/,/g, ' ')}</td><td>${TUBE_BRICK_POWER.toFixed(2)} W</td></tr>
-          <tr><td>Relays</td><td>1 coil, ${RELAY_CONTACTS} poles</td><td>${fmtTime(TECH.relay.step)}</td><td>${Math.round(TECH.relay.step / TECH.cmos.step).toLocaleString('en-US').replace(/,/g, ' ')}</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
+          <tr><td>Tubes</td><td>½ 6SN7 + 6AL5</td><td>${fmtTime(TECH.tube.step)}</td><td>${groupDigits(Math.round(TECH.tube.step / TECH.cmos.step))}</td><td>${TUBE_BRICK_POWER.toFixed(2)} W</td></tr>
+          <tr><td>Relays</td><td>1 coil, ${RELAY_CONTACTS} poles</td><td>${fmtTime(TECH.relay.step)}</td><td>${groupDigits(Math.round(TECH.relay.step / TECH.cmos.step))}</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
         pitfall: `<p>Comparing step counts across technologies. A relay adder wins on steps because its carry is a contact (P1), and loses on time by the ratio of the steps; the NAND price, which assumes none of those tricks,
           shows what each technology costs for the same logic. A native part and a NAND-mapped part are different questions, and the widget's Native view is the first.</p>`,
         real: `<p>Switching from relays to tubes to transistors cut the step by more than ${Math.floor(Math.log10(TECH.relay.step / TECH.cmos.step))} orders of magnitude, from the relay (${fmtTime(TECH.relay.step)}) to CMOS (${fmtTime(TECH.cmos.step)}), and area per gate by far more.

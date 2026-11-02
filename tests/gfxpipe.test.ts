@@ -2,6 +2,7 @@
 // the whole pipeline at gate level (the cycle engine): every frame's picture, the vertex buffers, what each unit did
 // in a frame, and the numbers the chapter and its cost widget quote.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { chGfxPipeline } from '../src/chapters/ch-gfx';
@@ -30,7 +31,7 @@ const kid = (n: HierNode, ...p: string[]) => p.reduce<HierNode>((x, k) => x.chil
 const u = (s: Sim, n: HierNode, port: string) => pack(s.getBits(n.ports[port])) >>> 0;
 const inst = (d: ComponentDef, n: string) => netlistOf(d)!.instances.find((i) => i.name === n)!.def;
 const nands = (d: ComponentDef) => stats(d).nands;
-const fmt = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+const fmt = groupDigits;
 
 describe('vertex kernels', () => {
   it('the model: front faces the right way round, every vertex on the screen at every angle', () => {
@@ -216,7 +217,7 @@ describe('chapter 34 quotes these numbers', () => {
     expect(text).toContain(`${cube.kernel} cycles`);
     expect(Math.round((100 * tri.clear) / (tri.clear + tri.draw + tri.wait))).toBe(72);
     expect(flatten(gpu31(meshById('triangle'))).leaves.length).toBe(413501);
-    expect(text).toContain('413 501');
+    expect(text).toContain('413 501');
   });
 
   it("step 5's prose", () => {

@@ -2,6 +2,7 @@
 // thread quote is measured here (pars, library parts, the puzzle runner on the references and on the variants
 // the texts compare them with, the benchmark results, PIPE_COSTS) and read back from the text.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import results from '../src/bench/results.json';
@@ -32,8 +33,8 @@ import { assemble16 } from '../src/riscv/rv16/asm16';
 import type { Warps16 } from '../src/riscv/rv16/warps16';
 import { stats } from '../src/sim/stats';
 
-const fmt = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+const fmt = (v: number) => groupDigits(v);
+const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/[ \t\r\n]+/g, ' ');
 const par = (id: string) => nodeById(id)!.par!;
 const nand = (id: string) => libCost(id)!.nand;
 const why = (id: string) => plain(nodeById(id)!.why);

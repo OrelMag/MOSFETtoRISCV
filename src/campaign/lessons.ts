@@ -35,24 +35,24 @@ thoroughly, real enough to run loops, functions, a stack and interrupt handlers.
   route operands, a decoder picks the register to write (30 NANDs), an equality test decides
   <code>beq</code> (110).</li>
   <li><b>Act 2, arithmetic</b>: bits get a meaning, so one adder does add, sub, comparisons and every
-  address. The ALU is 1 055 NANDs, depth 64; the fast adder (362 NANDs, depth 14 against the ripple
+  address. The ALU is 1055 NANDs, depth 64; the fast adder (362 NANDs, depth 14 against the ripple
   adder's 36) waits for Core IV.</li>
   <li><b>Act 3, state</b>: feedback is the only way to remember. Latches, flip-flops, the PC, the register
-  file: 2 172 NANDs, nearly half the core to come.</li>
+  file: 2172 NANDs, nearly half the core to come.</li>
   <li><b>Act 4, the instruction set</b>: what the hardware must do, learnt by programming it on the
   golden model before any of it is wired.</li>
-  <li><b>Act 5, the single-cycle CPU</b>: your blocks wired into Cores I, II and III (4 720 NANDs, one
+  <li><b>Act 5, the single-cycle CPU</b>: your blocks wired into Cores I, II and III (4720 NANDs, one
   instruction per 98-delay cycle) and a computer around them. It ends with <b>Core IV</b>, the fast adder
   on the critical path: period 76.</li>
-  <li><b>Act 6</b> overlaps five instructions in a pipeline (9 218 NANDs, period 78); <b>act 7</b> lets it
-  survive its own errors and listen to devices: traps and interrupts, 12 038 NANDs, the finale.</li>
+  <li><b>Act 6</b> overlaps five instructions in a pipeline (9218 NANDs, period 78); <b>act 7</b> lets it
+  survive its own errors and listen to devices: traps and interrupts, 12 038 NANDs, the finale.</li>
   <li>Acts 8, 9 and 10 are optional: arithmetic units, a GPU, the memory behind the data port.</li>
 </ol>
 <h4>How the campaign works</h4>
 <ul>
   <li>Every level builds one block from blocks you already have. It starts as a chip in the
   sandbox with its pins in place; <b>Check</b> runs the level's test set: every input
-  combination up to 16 input bits, 4 096 random ones (after the level's edge cases) above that; a
+  combination up to 16 input bits, 4096 random ones (after the level's edge cases) above that; a
   clocked sequence; or whole programs against a golden model.</li>
   <li>What you may use: NAND, wiring, your own chips, and the <b>parts unlocked</b> by the
   levels below. Solve a level and its block becomes a library part for the levels above.</li>
@@ -108,8 +108,8 @@ detector read their inputs as numbers.</p>`,
 
   mem: `
 <p>You built memory from flip-flops: 13 NANDs per bit (a 9-NAND flip-flop and its 4-NAND enable
-mux), a decoder on the write port and an 8:1 bus mux per read port. Your register file is about 2 200 NANDs
-for 112 bits of state: some 20 NANDs, 80 transistors, a bit. A 64-word RAM built the same way is 20 166
+mux), a decoder on the write port and an 8:1 bus mux per read port. Your register file is about 2200 NANDs
+for 112 bits of state: some 20 NANDs, 80 transistors, a bit. A 64-word RAM built the same way is 20 166
 NANDs, over four times the whole single-cycle core of Act 5.</p>
 <p>Real memories are <b>arrays</b>: an SRAM bit is 6 transistors (caches, register files), a DRAM bit one
 transistor and a capacitor (main memory), read through shared bit lines and sense amplifiers. Act 10
@@ -223,8 +223,8 @@ we = 1; the PC becomes PC + 1 at the clock edge.</p>
   <tr><th>jalr</th><td>–</td><td>I</td><td>–</td><td>pc + 1</td><td>–</td><td>rs1 + imm</td></tr>
 </table></div>
 <p>A dash is a don't-care. The table is the control unit; the rest is wiring between blocks you own:
-the register file 2 172 NANDs, the ALU 1 055, the branch comparator 287, next PC 421, control 200.
-Core III is 4 720 NANDs, nearly half of it the register file.</p>
+the register file 2172 NANDs, the ALU 1055, the branch comparator 287, next PC 421, control 200.
+Core III is 4720 NANDs, nearly half of it the register file.</p>
 <h4>Where the clock period goes</h4>
 <p>The slowest instruction sets the period for all of them, and that is a load: PC → instruction memory →
 control (13 delays) → ALU → data memory → result mux → register file, 98 NAND delays with the bench's
@@ -250,14 +250,14 @@ with five instructions in flight.</p>
 <p>"Up to five times faster" needs five equal stages, and RV16's are not. E holds the whole ALU: in
 Pipeline I it is the slowest stage by far, 65 delays, most of them the ripple ALU, so the period falls
 from 98 to 65, not to a fifth of it. The registers are not free either: 260 NANDs each, twelve in
-Pipeline I (3 120 NANDs), sixteen in the finished chip (4 160, a third of it).</p>
+Pipeline I (3120 NANDs), sixteen in the finished chip (4160, a third of it).</p>
 <h4>The hazards, one level each</h4>
 <p>Five instructions in flight see each other's unfinished work. This act pays for that one hazard at
 a time, and every level runs real programs against the golden model:</p>
 <ul>
   <li><b>Pipeline I</b> handles none: its programs keep every producer two instructions from its user and
   never branch. The register file writes at the falling edge, so an instruction three behind its producer
-  already reads the new value. Two nops after every instruction: 2 508 cycles on 19 programs.</li>
+  already reads the new value. Two nops after every instruction: 2508 cycles on 19 programs.</li>
   <li><b>Data hazards</b>: a result exists at the end of E but reaches the register file from W, two
   cycles later. <b>Forwarding</b> (Pipeline II) takes it from M or W: the unit is 110 NANDs, but its
   13 delays land on E (period 65 → 78), and the nops go: 970 cycles.</li>
@@ -266,13 +266,13 @@ a time, and every level runs real programs against the golden model:</p>
   reads the loaded register; a nop after every load was paid always.</li>
   <li><b>Control hazards</b>: a branch resolves in E, after two younger words were fetched on the guess
   "not taken". They are <b>flushed</b> when it is taken (Pipeline IV), so every taken branch or jump
-  costs two cycles: 1 495 cycles on Core III's 28 programs against its 1 236.</li>
+  costs two cycles: 1495 cycles on Core III's 28 programs against its 1236.</li>
 </ul>
 <h4>The bill</h4>
 <p>CPI rises above 1, and the shorter period has to pay for it. In RV16 it pays only once E is short too. E holds the forwarding muxes and then the ALU, the branch
 comparator and next PC side by side: with ripple adders that is 78 delays, and the pipeline is 4% faster
 than Core III but slower than Core IV. With Kogge–Stone adders in E (the ALU, the comparator's less-than,
-next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4 938.
+next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4938.
 Branch prediction, the act's optional level, attacks the cycles instead: 13% fewer on its loop
 programs, at period 80, still slower than Core IV on its own. Real pipelines do both, and resolve
 branches earlier.</p>
@@ -308,11 +308,11 @@ interrupted in turn), pc ← mtvec. <code>mret</code> undoes it: pc ← mepc, MI
   never knew it was there.</li>
 </ul>
 <h4>This act</h4>
-<p>It builds the machinery twice. First on the single-cycle core: the CSR file (1 765 NANDs), exceptions
-(2 537 over Core III) and the interrupt (0 more NANDs: what that level adds is the protocol above). Then in
+<p>It builds the machinery twice. First on the single-cycle core: the CSR file (1765 NANDs), exceptions
+(2537 over Core III) and the interrupt (0 more NANDs: what that level adds is the protocol above). Then in
 the pipeline, where a trap must be <b>precise</b>: every older instruction completes and no younger one
-leaves a trace. Pipeline V takes exceptions precisely (2 813 over Pipeline IV); the finale adds the
-interrupt for 7 more, 12 038 NANDs in all. The interrupt handler, a program, is written in between.</p>`,
+leaves a trace. Pipeline V takes exceptions precisely (2813 over Pipeline IV); the finale adds the
+interrupt for 7 more, 12 038 NANDs in all. The interrupt handler, a program, is written in between.</p>`,
 
   arith: `
 <p>Act 4 multiplied in software: a shift-and-add loop of 28 to 134 instructions per product. This act
@@ -320,16 +320,16 @@ builds that arithmetic in hardware, more than one way, and every level measures 
 NANDs and its depth or period, and on the core levels the cycles your programs take.</p>
 <h4>Multiply and divide</h4>
 <p>The <b>shift-and-add multiplier</b> is the Act 4 loop as a circuit: one adder used once a clock,
-18 cycles a product on 1 169 NANDs. The <b>array multiplier</b> forms every partial product at once:
-16 × 16 is 2 672 NANDs and 150 delays deep, a product in one pass. Put the array in your single-cycle
+18 cycles a product on 1169 NANDs. The <b>array multiplier</b> forms every partial product at once:
+16 × 16 is 2672 NANDs and 150 delays deep, a product in one pass. Put the array in your single-cycle
 core and every instruction pays for it: the period goes from 98 to 191, so a program without a single
-multiply runs 1.95 times slower. A <b>divider</b> in one pass is 4 464 NANDs on a 613-deep path, so it
-iterates (1 445 NANDs, 18 cycles), and the core must hold its PC until the quotient is ready: its first
+multiply runs 1.95 times slower. A <b>divider</b> in one pass is 4464 NANDs on a 613-deep path, so it
+iterates (1445 NANDs, 18 cycles), and the core must hold its PC until the quotient is ready: its first
 instruction that takes more than one cycle.</p>
 <h4>Floating point</h4>
 <p>Binary16 by hand first, then its units one rung each: unpack, the rounding decision, the sticky
-shifter, the leading-zero counter, and normalize &amp; round (2 058 NANDs), which every operation ends
-in. On those the adder is 3 732 NANDs and the multiplier 4 912. They stay units of their own: RV16 has
+shifter, the leading-zero counter, and normalize &amp; round (2058 NANDs), which every operation ends
+in. On those the adder is 3732 NANDs and the multiplier 4912. They stay units of their own: RV16 has
 no F registers and no FP instructions, so no core here runs them. The chapters' RV32 FPU is where such
 units meet a register file.</p>
 <h4>Two tracks</h4>
@@ -355,9 +355,9 @@ instruction on its own operands: four results per cycle for one fetch and one de
 <code>csrr rd, tid</code> gives each lane its <b>thread number</b>, the only thing that tells them
 apart at the start.</p>
 <h4>What it costs</h4>
-<p>The control is cheap: the SIMD core you will build is 15 669 NANDs, 10 949 more than your
-single-cycle core for three extra lanes, and four single-cycle cores would be 18 880. Most of the
-difference is <b>registers</b>: four register files are 8 688 NANDs. A real GPU is the same, with its
+<p>The control is cheap: the SIMD core you will build is 15 669 NANDs, 10 949 more than your
+single-cycle core for three extra lanes, and four single-cycle cores would be 18 880. Most of the
+difference is <b>registers</b>: four register files are 8688 NANDs. A real GPU is the same, with its
 register file the largest structure on the chip.</p>
 <h4>Five new instructions</h4>
 <p>Everything else is RV16 unchanged. <code>csrr rd, tid</code> reads CSR 7, the thread's number
@@ -380,8 +380,8 @@ the lanes waiting for the other side of an if. Each side then runs with some lan
   <li><b>Lanes</b>: the four lanes, their register file and the mask, then the SIMD core; the
   reconvergence stack, then the SIMT core, on which every lane runs like a thread of its own.</li>
   <li><b>Warps</b>: a memory that answers a cycle late, and a second warp that issues while the
-  first waits: +12 242 NANDs, 8 688 of them its lane registers. A warp costs its state.</li>
-  <li><b>Pixels</b>: an edge stepper, a tile walk and a rasterizer (9 188 NANDs), fixed-function
+  first waits: +12 242 NANDs, 8688 of them its lane registers. A warp costs its state.</li>
+  <li><b>Pixels</b>: an edge stepper, a tile walk and a rasterizer (9188 NANDs), fixed-function
   hardware beside the lanes, with the screen as memory both write.</li>
 </ul>
 <p>Four kernels run on the golden model of the core each part ends with: saxpy (SIMD), a
@@ -408,8 +408,8 @@ a <b>REF</b> command every 7.8 µs (tREFI), with every bank closed.</p>
 <h4>What it costs a processor</h4>
 <p>Behind a cache, DRAM's latency is paid on misses only. The RV32I single-cycle core with chapter
 22's 2-way write-back cache misses 73 times on matmul whatever is behind it. With a fixed line fill
-(8 cycles, 12 when a dirty line goes back first) those misses stall it 676 cycles, 3 029 in all; over
-chapter 36's DRAM controller with open pages 1 022 (3 375); with closed pages 1 341 (3 694). The cache
+(8 cycles, 12 when a dirty line goes back first) those misses stall it 676 cycles, 3029 in all; over
+chapter 36's DRAM controller with open pages 1022 (3375); with closed pages 1341 (3694). The cache
 decides how often the core goes to DRAM; the controller, how long each trip takes.</p>
 <h4>Other masters, other memories</h4>
 <p>A display, a DMA engine or a second core want memory too, so the data port becomes a <b>bus</b>:

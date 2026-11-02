@@ -3,6 +3,7 @@
 // is the gate-level machine; the computer's scenes open on its breadboards (widgets/saplayout.ts) with the SAP panel
 // following the golden model at every clock edge (widgets/sap.ts).
 
+import { groupDigits } from '../sim/numfmt';
 import { RESULTS } from '../bench/summary';
 import { sapBytes } from '../sap/asm';
 import { SapISS } from '../sap/iss';
@@ -26,7 +27,7 @@ export const SAP_COST = {
   clock: 14, areg: 243, alu: 129, pc: 150, ram: 1546, ls173: 109, ls161: 125, ls189: 716,
 } as const;
 const RV32I = RESULTS.cpus.find((c) => c.id === 'sc')!;
-const k = (n: number) => n.toLocaleString('en-US');
+const k = groupDigits;
 
 /** Set inputs without the stage's propagation animation (a solve must not race its own animation). */
 function poke(st: Stage, v: Record<string, number>): void {
@@ -101,7 +102,7 @@ export const chAppendixSap: Chapter = {
       'Every instruction takes five steps: T0 <code>MI CO</code> and T1 <code>RO II CE</code> fetch, T2–T4 execute. The control word changes on the falling edge, registers load on the rising one.',
       'The control unit is a 74LS161 step counter and two 28C16 EEPROMs addressed by [ZF CF][opcode][step]: changing the ISA is reprogramming two chips, not rewiring.',
       `Without the EEPROMs it is ${k(SAP_COST.logic)} NANDs (${SAP_COST.chips} chips); our single-cycle RV32I is ${k(RV32I.nands)}. SAP-1 buys that with 16 bytes, an 8-bit adder, no registers beyond A and B, and five clocks an instruction.`,
-      'The inspector counts the EEPROMs apart, as 5 × 2 KB of ROM: simulated, each is a mux tree of 65 524 NANDs; on silicon it is a transistor per bit and two decoders.',
+      'The inspector counts the EEPROMs apart, as 5 × 2 KB of ROM: simulated, each is a mux tree of 65 524 NANDs; on silicon it is a transistor per bit and two decoders.',
     ],
     practise: ['s_reg4', 's_cnt4', 'a_addsub16', 'c_ctl', 'o_mc'],
     check: [
@@ -404,7 +405,7 @@ export const chAppendixSap: Chapter = {
           program, as SRAM does when its supply goes. And PROG takes the RAM's address away from the memory address register: keying bytes while the program runs makes the two disagree about where the RAM is looking.</p>`,
         numbers: `<table class="mini"><tr><th>part</th><th>NANDs</th><th>stores</th></tr>
           <tr><td>74LS189 (16 × 4)</td><td>${k(SAP_COST.ls189)}</td><td>64 bits</td></tr><tr><td>RAM board (2 × 189, glue)</td><td>${k(SAP_COST.ram)}</td><td>128 bits</td></tr>
-          <tr><td>one 28C16 as simulated</td><td>${k(SAP_COST.perEeprom)}</td><td>16 384 bits</td></tr></table>`,
+          <tr><td>one 28C16 as simulated</td><td>${k(SAP_COST.perEeprom)}</td><td>16 384 bits</td></tr></table>`,
       },
       scene: () => sapScene({ empty: true, highlight: ['mar', 'ram'], fixed: true }),
       tries: [(st) => st.path.join('.') === 'ram.lo'],
@@ -527,7 +528,7 @@ export const chAppendixSap: Chapter = {
         and G2, the 245's G, the 161's LOAD, the 189's WE), the module's own board has a 74LS04 to invert it.</p>
         <p>Cost: without the EEPROMs the control unit is ${SAP_COST.control} NANDs. The EEPROMs are counted as ROM, 2 KB each; the
         simulation runs each as a mux tree of ${k(SAP_COST.perEeprom)} NANDs, which says more about a mux than about a ROM: on silicon a
-        2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2 048 addresses are used.</p>
+        2K × 8 ROM is an array of 16 384 cells (a transistor or two each) plus its decoders. Only 512 of its 2048 addresses are used.</p>
         <p>Microcode is a table: for every (flags, opcode, step), the control word that step needs. That the table is in an EEPROM and not in gates is the whole idea. The instruction set becomes data, so adding an instruction, or
         fixing one, is rewriting the table, with no change to the wiring; and the hardware that executes it is the same five boards for every instruction. The cost is a ROM and a step counter that run every instruction in the same five steps, even those that need two.</p>
         <div class="try">Press the panel's Instruction once (LDA runs to the next T0), then Pulse four times: T4 of the ADD
@@ -545,7 +546,7 @@ export const chAppendixSap: Chapter = {
       },
       more: {
         derive: `<p>The EEPROM address is [ZF CF][opcode: 4 bits][step: 3 bits] = 9 bits, 512 words; the control word is 16 bits wide, so the two chips hold a byte each (high byte HLT … AO, low byte ΣO … FI). Of the 512 words only the steps an instruction uses are nonzero:
-          5 steps × 16 opcodes × 4 flag combinations is 320, and most of those are the same fetch repeated. Changing the ISA means rewriting those 1 024 bytes: for instance <code>LDB</code> (B ← RAM[a]) is two words, <code>MI IO</code> and <code>RO BI</code>, at an unused opcode's T2 and T3.</p>`,
+          5 steps × 16 opcodes × 4 flag combinations is 320, and most of those are the same fetch repeated. Changing the ISA means rewriting those 1024 bytes: for instance <code>LDB</code> (B ← RAM[a]) is two words, <code>MI IO</code> and <code>RO BI</code>, at an unused opcode's T2 and T3.</p>`,
         real: `<p>Microprogrammed control was the standard way to build complex CPUs from the 1960s (IBM System/360, the VAX, the 8086's microcode ROM) until RISC made hardwired control small enough to win. Today's x86 chips still run most of their
           instructions as sequences of micro-operations, and their microcode can be patched at boot by a vendor update, in the same way as rewriting this table. A 5-step instruction on the SAP-1 and a 2-micro-operation instruction on a modern CPU are the same idea at different scales.</p>`,
         pitfall: `<p>Forgetting that every step of every opcode needs an entry. An unused step is not "nothing": it is a word that must be all zeros, or an address left unprogrammed that reads whatever the EEPROM holds (erased cells read 1s), which turns on
