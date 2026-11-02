@@ -334,7 +334,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; flex: none; }
 /* a neighbouring chapter's title gives way (ellipsis) before the step count wraps */
 .narrative-foot .btn { min-width: 0; }
-.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; }
+/* wrap at word boundaries onto a second line before an ellipsis; the full title is also the tooltip */
+.narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
+.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; white-space: normal; text-align: left; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .narrative-foot .btn:not(:has(.lbl)) { flex: none; } /* a plain Back / Next keeps its key hint whole */
 
 /* challenge */
