@@ -78,7 +78,7 @@ export const ANALOGIES: Analogy[] = [
       passed 1 sits lower still.`,
   },
   {
-    chapter: 'latches', step: 'Two NANDs holding hands', title: 'Two people who always disagree',
+    chapter: 'latches', step: 'Two NANDs holding hands', title: 'Two people who always disagree', figure: 'disagree',
     body: `<p>Each of two people says the opposite of what the other is saying. If A says "yes", B says "no", which keeps A on
       "yes": the pair holds that answer for as long as you leave them alone. Set and reset are a shout in one ear that makes
       that person change their answer; the other follows, and the new answer then holds by itself.</p>`,
@@ -87,7 +87,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['latch', 'feedback'],
   },
   {
-    chapter: 'latches', step: 'The forbidden input, and races', title: 'A ball balanced on a hilltop',
+    chapter: 'latches', step: 'The forbidden input, and races', title: 'A ball balanced on a hilltop', figure: 'hilltop',
     body: `<p>The two settled states are the two valleys either side of a hill. Release both inputs at the same instant and the
       latch is a ball pushed up exactly to the top: it stays there for a while and then rolls into one valley or the other,
       and nothing about the push says which.</p>`,
@@ -106,7 +106,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['dff', 'edge'],
   },
   {
-    chapter: 'registers', step: 'A register is a row of flip-flops', title: 'An orchestra on one beat',
+    chapter: 'registers', step: 'A register is a row of flip-flops', title: 'An orchestra on one beat', figure: 'orchestra',
     body: `<p>The clock is the conductor's beat. Every flip-flop in the machine takes its new value on the same beat; between
       beats the logic works out the next values, and they must all be ready before the next beat falls. The tempo is therefore
       set by the slowest player: the longest path from one flip-flop to the next.</p>`,
