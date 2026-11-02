@@ -166,10 +166,10 @@ export class Progress {
    * A capstone passed: solved, with the best result kept (fewer NANDs, then a shorter period, then fewer cycles). No stars:
    * a capstone is a pass or not yet.
    */
-  solveCapstone(id: string, m: Measured = {}): { first: boolean; best: boolean } {
+  solveCapstone(id: string, m: Measured = {}, rank?: (m: Measured) => number[]): { first: boolean; best: boolean } {
     const p = this.node(id);
     const first = p.status !== 'solved';
-    const key = (x?: Measured) => [x?.nand ?? Infinity, x?.period ?? Infinity, x?.cycles ?? Infinity];
+    const key = (x?: Measured) => (x && rank ? rank(x) : [x?.nand ?? Infinity, x?.period ?? Infinity, x?.cycles ?? Infinity]);
     const a = key(m), b = key(p.best);
     const i = a.findIndex((v, k) => v !== b[k]);
     const best = first || !p.best || (i >= 0 && a[i] < b[i]);
@@ -254,7 +254,7 @@ export class Progress {
 
 /** The campaign as a file: progress plus the level chips and every chip they use. */
 export function exportCampaign(st: CampaignState, ws: Workspace): string {
-  const ids = NODES.map(levelChipId).filter((id) => ws.chips[id]);
+  const ids = [...NODES.map(levelChipId), ...CAPSTONES.map((c) => `u_ch_${c.id}`)].filter((id) => ws.chips[id]);
   return JSON.stringify({ format: CAMPAIGN_FORMAT, schema: SCHEMA, progress: st, chips: closure(ws, ids) }, null, 2);
 }
 

@@ -2,7 +2,7 @@
 // capstone keeps its answer shut until it is passed.
 
 import { describe, expect, it } from 'vitest';
-import { accNext, accumulatorDef, builtCapstones, capstoneChallenge, capstoneRule, referenceScore, solutionsOpen } from '../src/campaign/capstone';
+import { accNext, accumulatorDef, builtCapstones, capstoneChallenge, capstoneRank, capstoneRule, PIPE_FIRST_WRITE, referenceScore, solutionsOpen } from '../src/campaign/capstone';
 import { coreSpecOf, runCore } from '../src/campaign/corecheck';
 import { progress as getProgress } from '../src/campaign/progress';
 import { type BuildChallenge, checkChallenge } from '../src/editor/challenges';
@@ -113,7 +113,7 @@ describe('tier 2: an RV16 core from its spec', { timeout: 300000 }, () => {
 });
 
 describe('tier 3: a pipelined core', { timeout: 300000 }, () => {
-  it('the pipeline passes, and the single-cycle core is turned away for its period', () => {
+  it('the pipeline passes, and the single-cycle core is turned away (it writes in cycle 1)', () => {
     const ch = capstoneChallenge('cap_t3')!;
     const r = checkReference(ch);
     expect(r.failures).toEqual([]);
@@ -123,6 +123,22 @@ describe('tier 3: a pipelined core', { timeout: 300000 }, () => {
     if ('error' in doc) throw new Error(doc.error);
     const bad = checkChallenge(ch, new UserLibrary(workspace(doc)).compiled(doc.id));
     expect(bad.ok).toBe(false);
-    expect(bad.failures.join('\n')).toMatch(/pipeline registers/);
+    expect(bad.failures.join('\n')).toMatch(/first register write came at cycle 1/);
+  });
+
+  it('Core IV (single cycle, fast adders, period 76) is turned away too: its first write is at cycle 1, a pipelined core writes at 5', () => {
+    const ch = capstoneChallenge('cap_t3')!;
+    const doc = docFromDef(rv16Core(true, true), { id: 'u_ch_cap_t3', name: 'core IV' });
+    if ('error' in doc) throw new Error(doc.error);
+    const bad = checkChallenge(ch, new UserLibrary(workspace(doc)).compiled(doc.id));
+    expect(bad.ok).toBe(false);
+    expect(bad.failures.join('\n')).toMatch(/first register write came at cycle 1/);
+    expect(PIPE_FIRST_WRITE).toBe(4);
+  });
+
+  it('is ranked by period × cycles, the other tiers by NANDs first', () => {
+    const a = capstoneRank('cap_t3')({ nand: 9000, period: 80, cycles: 8000 }), b = capstoneRank('cap_t3')({ nand: 20000, period: 78, cycles: 8000 });
+    expect(b[0]).toBeLessThan(a[0]);
+    expect(capstoneRank('cap_t2')({ nand: 4720, period: 98, cycles: 5235 })).toEqual([4720, 98, 5235]);
   });
 });

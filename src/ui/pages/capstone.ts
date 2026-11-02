@@ -9,7 +9,7 @@ import '../../styles/campaign.css';
 import '../../styles/level.css';
 import '../../styles/capstone.css';
 import { partNames } from '../../campaign/cardlabel';
-import { builtCapstones, capstoneById, capstoneChallenge, capstoneChipId, capstoneRule, referenceNands, referenceScore, type ReferenceScore, solutionsOpen } from '../../campaign/capstone';
+import { builtCapstones, capstoneById, capstoneChallenge, capstoneChipId, capstoneRank, capstoneRule, referenceNands, referenceScore, type ReferenceScore, solutionsOpen } from '../../campaign/capstone';
 import { coreSpecOf } from '../../campaign/corecheck';
 import { measured } from '../../campaign/grade';
 import { progress } from '../../campaign/progress';
@@ -200,7 +200,7 @@ export class CapstonePage implements Page {
   // ---- a pass ----------------------------------------------------------------------------------------
 
   private record(r: CheckResult): void {
-    const g = progress().solveCapstone(this.nodeId, measured(r.score));
+    const g = progress().solveCapstone(this.nodeId, measured(r.score), capstoneRank(this.nodeId));
     this.renderSide();
     this.showResult(r, g);
   }
@@ -210,11 +210,15 @@ export class CapstonePage implements Page {
     this.result?.remove();
     const m = measured(r.score);
     const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : v.toLocaleString());
-    const rows: [string, 'nand' | 'period' | 'cycles'][] = [['NANDs', 'nand'], ['Clock period', 'period'], ['Cycles', 'cycles']];
-    const shown = rows.filter(([, k]) => m[k] !== undefined);
+    type Key = 'nand' | 'period' | 'cycles' | 'speed';
+    // tier 3 is ranked by period × cycles (capstoneRank)
+    const val = (s: { nand?: number; period?: number | null; cycles?: number }, k: Key): number | undefined =>
+      k === 'speed' ? (s.period != null && s.cycles !== undefined ? s.period * s.cycles : undefined) : (s[k] ?? undefined);
+    const rows: [string, Key][] = [['NANDs', 'nand'], ['Clock period', 'period'], ['Cycles', 'cycles'], ...(cap.tier === 3 ? [['Period × cycles', 'speed'] as [string, Key]] : [])];
+    const shown = rows.filter(([, k]) => val(m, k) !== undefined);
     const refCells = shown.map(([, k]) => h('td', { 'data-ref': k }, '…'));
     const table = h('table', { class: 'lv-res-table' }, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours'), h('th', null, 'Reference')),
-      shown.map(([label, k], i) => h('tr', null, h('td', null, label), h('td', null, cell(m[k])), refCells[i])));
+      shown.map(([label, k], i) => h('tr', null, h('td', null, label), h('td', null, cell(val(m, k))), refCells[i])));
     const close = () => { this.result?.remove(); this.result = null; };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Capstone passed' },
       h('h3', null, icon('check', 20), g.first ? `Tier ${cap.tier} capstone passed` : g.best ? 'New best' : 'Passes'),
@@ -233,9 +237,9 @@ export class CapstonePage implements Page {
       this.ref ??= referenceScore(this.nodeId);
       const ref = this.ref;
       shown.forEach(([, k], i) => {
-        const v = ref?.[k];
+        const v = ref ? val(ref, k) : undefined;
         refCells[i].textContent = cell(v);
-        const mine = m[k];
+        const mine = val(m, k);
         if (typeof v === 'number' && typeof mine === 'number') refCells[i].previousElementSibling?.classList.add(mine <= v ? 'par' : 'over');
       });
     }, 0);

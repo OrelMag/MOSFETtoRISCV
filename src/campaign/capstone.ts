@@ -167,6 +167,9 @@ const PONG_TEST: CoreTest = {
 const t2Tests = (): CoreTest[] => [...coreTests(3), PONG_TEST];
 const t3Tests = (): CoreTest[] => [...pipeTests(3), PONG_TEST];
 
+/** A five-stage core's first register write after reset: F, D, E, M, W (cycle 5; a single-cycle core writes in cycle 1). */
+export const PIPE_FIRST_WRITE = 4;
+
 /** The period of the reference single-cycle core: a pipeline must beat it. */
 let singleCycle: number | null | undefined;
 export const singleCyclePeriod = (): number | null => (singleCycle === undefined ? (singleCycle = corePeriod(rv16Core(true))) : singleCycle);
@@ -221,7 +224,7 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
       brief: CORE_BRIEF('The same RV16I as a five-stage pipeline: forwarding, the load-use stall and the branch flush. Report register writes from W (<code>rwe</code>, <code>rwa</code>, <code>rwd</code>) and stores from M. No walkthrough and no hints.')
         + ` Within 2.2 cycles per instruction on ${pipeTests(3).length} programs and Pong; a pass also needs a clock period below the single-cycle core's. Scored on period × cycles.`,
       ports: CORE_PINS,
-      check: pipelined(coreCheck({ rv16i: true, tests: t3Tests, budget: { cpi: 2.2, extra: 8 } },
+      check: pipelined(coreCheck({ rv16i: true, tests: t3Tests, budget: { cpi: 2.2, extra: 8 }, minFirstWrite: PIPE_FIRST_WRITE },
         `${pipeTests(3).length} programs and Pong on a pipeline: every write in order within 2.2 cycles per instruction, and a shorter period than the single-cycle core.`)),
       answer: refOf('cap_t3', () => rv16Pipe({ fwd: true, stall: true, flush: true }), 'Pipelined RV16 core'),
     };
@@ -232,6 +235,10 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
 
 /** The capstones that have a challenge (the ones whose tier is built). */
 export const builtCapstones = (): Capstone[] => CAPSTONES.filter((c) => !!capstoneChallenge(c.id));
+
+/** How a capstone's passes are ranked (lower is better, compared in order): its own grading, tier 3's period × cycles. */
+export const capstoneRank = (id: string) => (m: { nand?: number; period?: number; cycles?: number }): number[] =>
+  id === 'cap_t3' && m.period !== undefined && m.cycles !== undefined ? [m.period * m.cycles, m.nand ?? Infinity] : [m.nand ?? Infinity, m.period ?? Infinity, m.cycles ?? Infinity];
 
 // ---- what the reference scores -------------------------------------------------------------------------
 
