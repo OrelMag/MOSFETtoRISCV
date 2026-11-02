@@ -63,3 +63,10 @@ export function move(s: CoachState, m: CoachMove): number | null {
 export function mayAutoStart(o: { done: boolean; otherTour: boolean; dialogOpen: boolean }): boolean {
   return !o.done && !o.otherTour && !o.dialogOpen;
 }
+
+/** Does a tour of this kind belong on the page at `hash`? The sandbox's tour on a chapter (a route change while it
+ *  waited or played) is a card about controls that are not there. */
+export function coachFits(kind: CoachKind, hash: string): boolean {
+  if (kind === 'sandbox') return /^#\/sandbox(\/|$)/.test(hash);
+  return /^#\/(c|workbench)(\/|$)/.test(hash);
+}
