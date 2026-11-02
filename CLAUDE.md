@@ -277,9 +277,13 @@ src/lib/       the component library (registered in `registry` via define())
                  the workbench's Statistics tab (ui/pages/hwstats.ts, its own chunk; benchtabs.ts: the tabs)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
-                 pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
+                 pipelinedCpu(program, { adder, balanced, predictor, dcache, m, custom }) (a cache miss in M freezes every stage;
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
-                 one or two fetch read ports (BTB = btbOf(1), unchanged)
+                 one or two fetch read ports (BTB = btbOf(1), unchanged). custom: riscv/custom.ts rows, control(custom) in place of CONTROL and
+                 nothing else: the hazard unit reads signals, never opcodes (result = mem is resultSrc 01, the load-use stall; rs1 / rs2 forwarding goes by
+                 register numbers; branch / jump / jalr redirect from E; memWrite a store); without rows the same component, gate for gate
+                 (tests/custom-pipe.test.ts: lock step with ISS({ custom }) through retiring() on directed programs per hazard and 32 random programs
+                 per CPU variant and row set)
   pipe2w.ts      chapter 26's dual-issue in-order RV32IM pipeline: dualPipeCpu(program, { imemK, dmemK }) (pipe-2w): rom2 (two
                  ROM reads, pc and pc + 4; not registered, like rom), PREDECODE (calls / returns from the word), FETCH_PRED (the
                  pair's next PC: return stack, BTB, pc + 8; slot 1 only when slot 0 is not predicted taken), ISSUE_CLASS,
@@ -508,7 +512,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                `retirePc()` (pcW0, else pcW: the oldest retiring); dmemWords), ooosnap.ts (the out-of-order core's state read
                from its registers: fetch register, ROB head first, issue queue oldest first with the tags each operand waits for,
                rename table, store queue; oooIssued: each port's pick; isOooCore, sandbox copies (u_rob16…) included;
-               tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
+               tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA; { custom }: about a fifth of the units are the rows, addresses kept in the window through BASE and a masked offset, jumps one instruction on or to a label), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
 src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
@@ -604,6 +608,10 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 34 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
+               owninstr.ts: chapter 14's last step "Your own instruction" (ownInstrScene(rows): cpuScene({ custom }) with a left panel, the dialog's signal lines over a draft
+               lwx row, the control unit's NANDs, Build the CPU = stage.load; the challenge reads mem[0] = 80 from the gates, solveOwnInstr = the answer row built and run;
+               OWN_COST quotes the prose's NANDs; tests/own-instr-chapter.test.ts); cpuScene({ custom }) assembles, runs the golden model and decodes with the rows on the single-cycle
+               and pipelined CPU (the pipeline chapter's "Your own instruction, pipelined" step); ownrow.ts: the row controls shared with the sandbox dialog;
                composer.ts: the instruction builder over any ComposeIsa (instrComposer({ isa }): palette, asm / hex input,
                clickable bits for any word width, the immediate's wiring as bands per run + one sign bracket, operand cards,
                decode chain, one bit away (isa.loose), and for RV32 the major-opcode map and a data path; Fields | Switches: the
@@ -1039,7 +1047,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy
+                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy. Only the single-cycle rv32i_core
+                 exists as a sandbox part (no pipelined core with a memory port), so Apply stays there; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
