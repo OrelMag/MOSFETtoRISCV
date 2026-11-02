@@ -1179,6 +1179,19 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                shows the after-pass card); ui/pages/levelwalk.ts the walkthrough on a scratch chip u_walk_<node>. The
                sandbox still opens a level's chip u_ch_cp_<node> with the full strip (breadcrumb, tips, stars, Next,
                Level screen); both record passes in the campaign's progress
+src/learn/     the zero-to-master path (DOM-free unless noted): skills.ts (a skill = a codex entry at the chapter that teaches it,
+               chapters/taught.ts; its steps from the entry's links there, its levels from CampaignNode.codex, its questions the
+               codex's Check yourself + the steps' quizzes; Basics' two ideas without an entry; TIERS: 0 Basics + map, 1 ch 1–10,
+               2 11–15, 3 16–25, 4 the rest, prologue / appendices in none), mastery.ts (skillState: understand = a question right,
+               build = its level or reach challenge (waived when it has none), retain = streak 2; practised, mastered, rusty =
+               mastered with a question due; a test-out is practised, never mastered), store.ts (LEARN_KEY: start persona / tier,
+               chapters tested out, placement; never settings.solved or the review memos; in ui/backup.ts), path.ts (tierViews,
+               currentTier, nextUp: questions due, the tier's next unseen step, a level to practise, the capstone at 80 %; time
+               estimates at READ_WPM), placement.ts (twelve questions from drills and recaps, suggestTier; test-out items),
+               capstones.ts (the interface My path reads: one per tier), evidence.ts (browser: pathCtx from settings, review
+               memos, campaign progress, the store), asker.ts (browser: a run of questions, quizBox fresh with onAnswer).
+               Pages: ui/pages/path.ts (#/path, My path: the top bar's link), ui/pages/start.ts (#/start, Where are you
+               starting?: the home page's first button on a first visit); styles/path.css; tests/learn.test.ts
 src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12). DOM-free:
   puzzles.ts     PUZZLES: tasks as word streams (tests, cycle limit, pseudocode), ISA-agnostic; inputOn / outputFrom: a
                  word through a narrower port in pieces, most significant first
