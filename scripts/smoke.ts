@@ -24,6 +24,7 @@ import { families, initialParams } from '../src/lib/resolve';
 import { NODES } from '../src/campaign/nodes';
 import { levelChallenge } from '../src/campaign/levels';
 import { builtCapstones } from '../src/campaign/capstone';
+import { TWIN_LEVELS, twinKey } from '../src/campaign/twinids';
 import { CAMPAIGN_KEY } from '../src/campaign/progress';
 import { CODEX } from '../src/campaign/codex';
 import { addExample, EXAMPLES } from '../src/editor/examples';
@@ -164,6 +165,8 @@ function routes(): Route[] {
   }
   // The tier capstones (campaign/capstone.ts), on the level screen's layout
   for (const c of builtCapstones()) add(`#/campaign/play/${c.id}`, light);
+  // The Verilog twins (campaign/twinids.ts): the source beside the check, never synthesized here (Yosys is 78 MB)
+  for (const l of TWIN_LEVELS) add(`#/campaign/play/${twinKey(l)}`, unlocked);
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
