@@ -262,6 +262,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .kh-head h3 { margin: 0; font-size: 18px; color: var(--text); }
 .kh-sub { font-size: 12.5px; }
 .kh-close { margin-left: auto; color: var(--muted); }
+.kh-coach { margin-left: auto; color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.kh-coach + .kh-close { margin-left: 0; }
 .kh-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .kh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px 14px; }
 .kh-grp { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px 6px; background: var(--surface-2); }
@@ -598,6 +600,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 760px) {
   .show-circuit { display: inline-flex; position: fixed; z-index: 25; right: 14px; bottom: 14px; box-shadow: var(--shadow-lg); border-radius: 99px; }
   .show-circuit[hidden] { display: none; }
+}
+.recap-on > .stage::after {
+  content: "Last step's circuit"; position: absolute; z-index: 5; left: 12px; top: 46px; padding: 2px 8px; border-radius: 99px; pointer-events: none;
+  font: 600 11px var(--font-mono); color: var(--muted); background: var(--surface); border: 1px solid var(--border);
 }
 html[data-widget-step] .slow-btn { display: none; }
 .stage-notes-live { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
