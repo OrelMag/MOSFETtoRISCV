@@ -19,6 +19,9 @@ export interface DockPane {
   width?: number;
 }
 
+/** A phone-width sandbox: a drawer opening by itself would cover most of the circuit (the toolbar's buttons open them). */
+export const phoneWidth = (): boolean => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+
 class Dock {
   readonly host: HTMLElement;
   private tabs: HTMLElement;
