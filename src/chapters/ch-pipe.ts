@@ -10,8 +10,10 @@ import { netlistOf, outPorts } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Stage, Widget } from '../view/stage';
 import { cpuScene } from '../widgets/cpupanel';
+import { OWN_ANSWER, OWN_COST, OWN_SOURCE } from '../widgets/owninstr';
 import type { Chapter } from './types';
 
+const { control: CONTROL_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 /** The single-cycle CPU's logic between registers (period 155), cut into n even stages with a register each. */
 const LOGIC = 155 - CLK_TO_Q - SETUP;
@@ -345,6 +347,24 @@ export const chPipeline: Chapter = {
         explain: 'Each taken branch flushes two instructions: 9 × 2 = 18 cycles. The last, not-taken branch matches the prediction and costs nothing.',
         why: ['Each taken branch flushes two instructions, not one.', '', 'The last branch falls through, which is what the pipeline predicted: no flush.', 'The prediction is always "not taken", so every taken branch is mispredicted.'],
       },
+    },
+    {
+      title: 'Your own instruction, pipelined',
+      body: `
+        <p>A custom instruction (chapter 14's <em>Your own instruction</em>) is one row of the <span data-show="ctl">control unit</span>, and the pipeline reads that row the same way: the signals are decoded in D and carried down the
+        stages in the pipeline registers. The <span data-show="hz">hazard unit</span> needs no case for it, because it never looks at an opcode. Each hazard comes from a signal the row asserts:</p>
+        <ul class="prose">
+          <li><strong>result = memory</strong> (<code>resultSrc</code> = 01) is a load: a dependent instruction right behind it stalls one cycle, as for <code>lw</code>. The loop here has that bubble after every <code>lwx</code>.</li>
+          <li><strong>rs1, rs2 reads</strong>: forwarding compares register numbers (<code>rs1E = rdM</code> …), not what the instruction does with them. A custom R-type is forwarded to like <code>add</code>; one without an rs2 field is
+            compared on whatever bits sit there, harmlessly, as in the single-cycle CPU.</li>
+          <li><strong>next PC ≠ PC + 4</strong> (<code>branch</code>, <code>jump</code>, <code>jalr</code>) is decided in E with the others: taken means two bubbles, as for any branch or jump.</li>
+          <li><strong>memWrite</strong> is a store: it writes in M, and its data (rs2) is forwarded like a store's.</li>
+        </ul>
+        <p>Cost: the control unit grows by the same ${LWX_NANDS - CONTROL_NANDS} NANDs as on the single-cycle CPU for <code>lwx</code>; the hazard unit and the pipeline registers are untouched. What the instruction saves is one issue slot in
+        the loop (<code>add</code> + <code>lw</code> → <code>lwx</code>), not the load-use bubble: that costs a cycle whatever the encoding.</p>
+        <p>The pipelined CPU is checked as the single-cycle one is: the golden model with the same rows steps at each retirement, on directed programs for each hazard and on random programs containing the instructions.</p>`,
+      scene: () => ({ ...cpuScene({ source: OWN_SOURCE, custom: [OWN_ANSWER], pipeline: true, highlight: ['ctl', 'hz'] }), autoClock: false }),
+      lit: 'The control unit with the lwx class (ctl) and the hazard unit (hz): the stall comes from resultSrc.',
     },
     {
       title: 'Does it pay? Measured',
