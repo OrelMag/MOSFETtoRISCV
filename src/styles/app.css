@@ -2351,3 +2351,5 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-read, .af-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .af-note { color: var(--muted); }
 @media (pointer: coarse) { .af-btn { min-height: 40px; padding: 8px 12px; } .af-ctl input[type='range'] { height: 40px; width: 110px; } }
+/* analogy figures H */
+@media (pointer: coarse) { .af-btn.af-step { min-width: 40px; } .af-slide input[type='range'] { height: 40px; } }

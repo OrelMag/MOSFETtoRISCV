@@ -208,7 +208,7 @@ export const ANALOGIES: Analogy[] = [
       cell is programmed and erased. Each crossing damages the oxide a little, which is why a flash block wears out.`,
   },
   {
-    chapter: 'ooo', step: 'Rename, wait, commit in order', title: 'A kitchen with a pass',
+    chapter: 'ooo', step: 'Rename, wait, commit in order', title: 'A kitchen with a pass', figure: 'kitchen',
     body: `<p>Tickets come in order, but the cooks start any dish whose ingredients are ready, so a quick salad does not wait for
       a slow roast. The dishes then queue at the pass and go out strictly in ticket order: the diner (the program) never sees
       anything out of turn.</p>`,
@@ -217,7 +217,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['precise'],
   },
   {
-    chapter: 'simt', step: 'When lanes disagree', title: 'A drill squad',
+    chapter: 'simt', step: 'When lanes disagree', title: 'A drill squad', figure: 'squad',
     body: `<p>The lanes are a squad that moves on one sergeant's orders. When the order depends on each soldier ("those whose
       number is even, step forward"), the sergeant calls one group while the other stands still, then the other group, then
       the squad marches together again.</p>`,
@@ -226,7 +226,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['divergence', 'activemask'],
   },
   {
-    chapter: 'bus', step: 'DMA', title: 'A moving company',
+    chapter: 'bus', step: 'DMA', title: 'A moving company', figure: 'movers',
     body: `<p>The CPU writes the order (from, to, how much) and gets back to its own work; the movers copy the data and ring the
       doorbell (an interrupt) when they are done.</p>`,
     breaks: `The movers use the same road as everyone else: while the DMA engine holds the bus, the CPU's own loads and stores
@@ -234,7 +234,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['dma'],
   },
   {
-    chapter: 'traps', step: 'The timer interrupt', title: 'A doorbell, not checking the door',
+    chapter: 'traps', step: 'The timer interrupt', title: 'A doorbell, not checking the door', figure: 'doorbell',
     body: `<p>Polling is walking to the door every minute to see whether anyone is there. An interrupt is a doorbell: work
       carries on, and the bell takes you to the door only when someone is there.</p>`,
     breaks: `Answering the bell is not free: the trap saves the PC and the cause, jumps to the handler, and the handler saves any
@@ -242,7 +242,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['interrupts'],
   },
   {
-    chapter: 'multicore', step: 'The arbiter', title: 'A four-way stop',
+    chapter: 'multicore', step: 'The arbiter', title: 'A four-way stop', figure: 'fourway',
     body: `<p>Several cores reach the one memory port in the same cycle, like cars at a junction: one goes, the others wait, and
       nobody may wait forever.</p>`,
     breaks: `At a four-way stop the first to arrive goes. A round-robin arbiter ignores who came first and serves the next core in
