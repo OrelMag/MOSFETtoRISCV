@@ -106,6 +106,10 @@ export interface DrawLink {
   /** Set by the screen panel: draw these one after the other into the back frame, swap, and run until a whole frame
    * of the picture has been sent; then `done` gets what the screen showed and the cycles from the first go to the swap. */
   play?: (ops: DrawOp[], done?: (shown: Uint8Array, cycles: number) => void) => void;
+  /** Set by the screen panel: is the circuit running now (else paused: a play waits for Run). */
+  running?: () => boolean;
+  /** Set by the other panel: the screen panel started or paused its run. */
+  runChanged?: () => void;
 }
 
 export interface PanelOpts { gpu: boolean; scripts?: DrawScript[]; link?: DrawLink }
@@ -249,7 +253,13 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     const sync = h('input', { type: 'checkbox', checked: true }) as HTMLInputElement;
     const node = (sim: Sim, ...p: string[]) => kid(sim.design.root, ...p);
 
-    const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run'; };
+    const stop = () => {
+      if (running) cancelAnimationFrame(running);
+      running = null;
+      runBtn.textContent = 'Run';
+      lowerPulses(); // a go / swap raised for the cycle just run must not stay up while paused (a Step would repeat it)
+      opts.link?.runChanged?.();
+    };
     const cap0 = new ScanCapture(stage, stop);
     // the scenes with a depth buffer are the ones that clear: the scripts and the drawing pad
     const mem = new FrameMemory(stage, cap0, { gpu: opts.gpu, depth: !!(opts.scripts || opts.link) }, () => paint());
@@ -259,6 +269,13 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     const busyNow = () => { const sim = stage.sim; return !!sim && sim.design.root.ports.busy !== undefined && val(sim, sim.design.root.ports.busy) === 1; };
     /** Ports raised for one cycle by feed, lowered before the next. */
     let pulsed: string[] = [];
+    const lowerPulses = () => {
+      const sim = stage.sim;
+      if (!pulsed.length || !sim) return;
+      for (const p of pulsed) sim.setInput(p, 0);
+      pulsed = [];
+      sim.settle();
+    };
     /** A play from the link: when it started, its draw cycles once swapped, the flip and the frame sent after it. */
     let job: { start: number; drawn?: number; f0: number; sent: number; done?: (shown: Uint8Array, cycles: number) => void } | null = null;
     /**
@@ -268,7 +285,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
     const feed = () => {
       const sim = stage.sim;
       if (!sim) return;
-      if (pulsed.length) { for (const p of pulsed) sim.setInput(p, 0); pulsed = []; sim.settle(); }
+      lowerPulses();
       if (busyNow()) return;
       const op = queue.shift();
       if (op) {
@@ -294,6 +311,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       if (running) return stop();
       stage.checkpoint();
       runBtn.textContent = 'Pause';
+      opts.link?.runChanged?.();
       let last = performance.now(), owed = 0;
       // as fast as it goes: cycles for ~12 ms of each frame, then one redraw (a redraw costs as much as many cycles)
       const tick = () => {
@@ -305,7 +323,13 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
           owed -= want;
         }
         last = t0;
-        const n = want > 0 ? stage.runCycles(want, () => { feed(); checkJob(); return until() || performance.now() > deadline; }) : 0;
+        const n = want > 0 ? stage.runCycles(want, () => {
+          checkJob();
+          // stop before feed(): a go / swap it raised must be clocked, or the next feed() lowers it unseen and the draw is lost
+          if (until() || performance.now() > deadline) return true;
+          feed();
+          return false;
+        }) : 0;
         const dt = performance.now() - t0;
         if (cap) rate = cap;
         else if (n > 0 && dt > 0) rate = Math.round((n * 1000) / Math.max(dt, 16.7));
@@ -351,6 +375,7 @@ export function screenPanel(opts: PanelOpts): ScenePanel {
       else if (k === 'clear') { queue = [CLEAR]; swapAfter = false; job = null; if (!running) runFor(() => !drawing()); }
     });
     if (opts.link) {
+      opts.link.running = () => running !== null;
       opts.link.play = (ops, done) => {
         stop();
         queue = [...ops];

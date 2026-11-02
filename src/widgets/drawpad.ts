@@ -150,6 +150,7 @@ function drawPanel(link: DrawLink): ScenePanel {
       });
     });
     stage.resetHooks.add(() => { sending = false; draw(); });
+    link.runChanged = () => { if (sending) draw(); };
 
     // ---- the pad ----
     const at = (ev: PointerEvent | MouseEvent): Vtx => {
@@ -281,7 +282,7 @@ function drawPanel(link: DrawLink): ScenePanel {
         h('span', { title: 'pixel writes (a pixel two triangles cover counts twice)' }, `${fmt(cost.pixels)} pixels`),
         h('span', { title: `clear ${fmt(cost.clear)} + triangles ${fmt(cost.draw)} (of which set-up ${fmt(cost.setup)})` }, `${fmt(cost.clear + cost.draw)} cycles`),
         ...(over ? [h('span', { class: 'warn' }, `only the first ${MAX_TRIANGLES} triangles are sent`)] : []),
-        ...(sending ? [h('span', { class: 'warn' }, 'the GPU is drawing…')] : []),
+        ...(sending ? [h('span', { class: 'warn' }, link.running?.() === false ? 'paused: Run carries on drawing' : 'the GPU is drawing…')] : []),
         ...(result ? [h('span', { class: result.diff ? 'bad' : 'good', title: 'the frame the scan-out sent, against the reference rasterizer\'s picture of the same triangles' },
           `${result.version === version ? 'Sent' : 'Last sent (before your edits)'}: ${fmt(result.cycles)} cycles${result.cycles === result.predicted ? ', as predicted' : ` (predicted ${fmt(result.predicted)})`}; `
           + (result.diff ? `${result.diff} pixels differ from the reference` : 'the screen matches the reference, pixel for pixel'))] : []));
