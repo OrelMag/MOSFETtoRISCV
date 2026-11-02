@@ -876,7 +876,7 @@ export const chSingleCycle: Chapter = {
       title: 'Your own instruction',
       body: `
         <p>The control unit is a lookup table from opcode to nine signals, so a new instruction is a new row of it. RISC-V reserves four major opcodes for this
-        (<code>custom-0…3</code>; custom-0 is taken by the SIMT instructions of the GPU chapters). The row is the whole definition: <code>regWrite</code>, ALU A (rs1 or PC) and B (rs2 or imm), the
+        (<code>custom-0…3</code>; the first is used later by the GPU chapters, so a free choice here is one of the other three). The row is the whole definition: <code>regWrite</code>, ALU A (rs1 or PC) and B (rs2 or imm), the
         ALU operation, <code>memWrite</code>, the result mux (ALU, memory, PC + 4, imm) and the next-PC choice. The data path does not change: fetch, register read, ALU, memory and
         write-back are already there, and the row only picks which of them the instruction uses.</p>
         <p>Cost, from the circuit: the control unit is ${CONTROL_NANDS} NANDs. A new instruction class adds one 5-input AND on the opcode rails (${AND5_NANDS} NANDs) and one more OR input on every signal
@@ -885,9 +885,7 @@ export const chSingleCycle: Chapter = {
         a few ANDs more per instruction.</p>
         <p>What it buys: the loop on the left sums eight words. Without the instruction each element takes <code>add t4, a0, t0</code> and <code>lw t2, 0(t4)</code>; with <code>lwx</code> it is one instruction,
         4 cycles an iteration instead of 5. The draft row below only adds and writes nothing. The panel is the row editor of the sandbox's <em>Custom instructions…</em> dialog: set the signals, build the CPU and run.
-        The golden model executes the same row, so lock step with it will agree with a wrong definition as well; the program's answer is what says it is the one you meant.</p>
-        <p>This instruction is a load for hazards as well: it reads memory in the same cycle as the ALU adds. On the pipelined CPU, in a later chapter, the same row, built into its control unit, makes <code>result = memory</code>
-        a load-use stall and <code>rs1, rs2</code> reads ordinary forwarding sources, with no change to the hazard unit.</p>`,
+        The golden model executes the same row, so lock step with it will agree with a wrong definition as well; the program's answer is what says it is the one you meant.</p>`,
       scene: () => ownInstrScene(),
       lit: 'The control unit (ctl) grows by the new class; the data path stays as it was.',
       more: {

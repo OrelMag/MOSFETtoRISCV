@@ -1,4 +1,4 @@
-// Chapter 14's challenge "Your own instruction": the draft row leaves the sum wrong, the answer row gives 80 on the
+// The single-cycle chapter's challenge "Your own instruction": the draft row leaves the sum wrong, the answer row gives 80 on the
 // single-cycle CPU and on the pipelined one, and the cost the prose quotes is the control unit's growth.
 
 import { describe, expect, it } from 'vitest';

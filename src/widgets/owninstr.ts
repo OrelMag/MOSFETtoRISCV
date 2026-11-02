@@ -1,4 +1,4 @@
-// Chapter 14's last step: design a custom instruction. The single-cycle CPU runs a program that uses `lwx` (an
+// The single-cycle chapter's last step: design a custom instruction. The single-cycle CPU runs a program that uses `lwx` (an
 // indexed load, rd ← mem[rs1 + rs2]) with a draft row that does not load anything yet; the panel beside it is the
 // sandbox dialog's row editor (widgets/ownrow.ts), reduced to what the program fixes: the learner sets the
 // control signals, sees the NANDs the control unit grows by, and rebuilds the CPU. The golden model runs the same
