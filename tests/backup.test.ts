@@ -196,3 +196,21 @@ describe('backup of notes and review', () => {
     expect(res.writes[REVIEW_KEY]).toBeUndefined();
   });
 });
+
+describe('the summary lists everything a backup merges', () => {
+  it('notes, bookmarks, the review queue and My path appear in describe()', async () => {
+    const { describe: lines } = await import('../src/ui/backup');
+    const kv = device({});
+    kv.setItem(NOTES_KEY, JSON.stringify({ schema: 1, items: {
+      n1: { id: 'n1', type: 'note', text: 'hi', at: 1, edited: 1, place: { kind: 'step', chapter: 'basics', step: 0 } },
+      b1: { id: 'b1', type: 'bookmark', text: '', at: 2, edited: 2, place: { kind: 'step', chapter: 'basics', step: 1 } } } }));
+    kv.setItem(REVIEW_KEY, JSON.stringify({ schema: 1, memos: { q1: { n: 1, last: 1, due: 2, streak: 1 } } }));
+    kv.setItem(LEARN_KEY, JSON.stringify({ schema: 1, tested: { basics: 5 } }));
+    const s = summarize(kv);
+    expect([s.notes, s.bookmarks, s.reviewed, s.testedOut]).toEqual([1, 1, 1, 1]);
+    const text = lines(s).join('\n');
+    expect(text).toMatch(/Notes: 1 note, 1 bookmark/);
+    expect(text).toMatch(/Review queue/);
+    expect(text).toMatch(/My path: 1 chapter tested out/);
+  });
+});
