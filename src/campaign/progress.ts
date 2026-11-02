@@ -28,6 +28,26 @@ export interface NodeProgress {
   src?: string;
   /** When last solved (ms since epoch). */
   at?: number;
+  /** The design brief's submissions (cap_t4), newest first: what was measured, not the chip. */
+  subs?: Submission[];
+}
+
+/** One measured design of the tier 4 brief. */
+export interface Submission { nand: number; period: number; cycles: number; stars: 1 | 2 | 3; at: number }
+
+/** Submissions kept per brief. */
+export const MAX_SUBMISSIONS = 10;
+
+function cleanSubs(v: unknown): Submission[] {
+  if (!Array.isArray(v)) return [];
+  const out: Submission[] = [];
+  for (const x of v) {
+    if (!isObj(x)) continue;
+    const { nand, period, cycles, stars, at } = x;
+    const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    if (ok(nand) && ok(period) && ok(cycles) && (stars === 1 || stars === 2 || stars === 3) && ok(at)) out.push({ nand, period, cycles, stars, at });
+  }
+  return out.slice(0, MAX_SUBMISSIONS);
 }
 
 export interface CampaignState {
@@ -63,6 +83,8 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
     if (v.seen === true) p.seen = true;
     if (typeof v.src === 'string' && v.src.length < 100_000) p.src = v.src;
     if (typeof v.at === 'number' && Number.isFinite(v.at)) p.at = v.at;
+    const subs = cleanSubs(v.subs);
+    if (subs.length && isCapstone(id)) p.subs = subs;
     st.nodes[id] = p;
   }
   return st;
@@ -196,6 +218,14 @@ export class Progress {
     return { first, best };
   }
 
+  /** A measured design of the brief: kept newest first (at most MAX_SUBMISSIONS); the best grade is the node's stars. */
+  addSubmission(id: string, sub: Omit<Submission, 'at'>): void {
+    const p = this.node(id);
+    p.subs = [{ ...sub, at: Date.now() }, ...(p.subs ?? [])].slice(0, MAX_SUBMISSIONS);
+    p.stars = Math.max(p.stars ?? 1, sub.stars) as 1 | 2 | 3;
+    this.save();
+  }
+
   /** Skip: the level counts as done (its parts unlock), with no stars. A solved level stays solved. */
   skip(id: string): void {
     const p = this.node(id);
@@ -293,6 +323,8 @@ export function mergeCampaign(a: CampaignState, b: CampaignState): CampaignState
     const tips = Math.max(x.tips ?? 0, y.tips ?? 0);
     if (tips) p.tips = tips;
     if (x.seen || y.seen) p.seen = true;
+    const subs = [...(y.subs ?? []), ...(x.subs ?? [])].filter((q, i, a) => a.findIndex((r) => r.at === q.at) === i).sort((a, b) => b.at - a.at).slice(0, MAX_SUBMISSIONS);
+    if (subs.length) p.subs = subs;
     p.src = y.src ?? x.src;
     if (p.src === undefined) delete p.src;
     out.nodes[id] = p;

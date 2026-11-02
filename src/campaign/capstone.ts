@@ -20,6 +20,7 @@ import { PONG16 } from '../riscv/rv16/pong16';
 import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { CORE_BRIEF, CORE_PINS } from './build5';
+import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
 import { coreTests, pipeTests } from './coretests';
 import { rng } from './drills';
@@ -58,6 +59,8 @@ export function capstoneRule(id: string): LibRule | undefined {
     // tiers 2 and 3: everything the core levels unlocked, not the finished core
     else if (id === 'cap_t2') r = tierRule(['c_fast'], ['rv16_cpu']);
     else if (id === 'cap_t3') r = tierRule(['pi_core3'], ['rv16_cpu']);
+    // tier 4: everything the core levels of acts 5–6 unlocked (the multicycle and predicting cores too), not the finished cores
+    else if (id === 'cap_t4') r = tierRule(['pi_core3', 'o_mc', 'o_bpred'], ['rv16_cpu', 'rv16_mc']);
     if (r) rules.set(id, r);
   }
   return r;
@@ -228,6 +231,15 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
         `${pipeTests(3).length} programs and Pong on a pipeline: every write in order within 2.2 cycles per instruction, and a shorter period than the single-cycle core.`)),
       answer: refOf('cap_t3', () => rv16Pipe({ fwd: true, stall: true, flush: true }), 'Pipelined RV16 core'),
     };
+  } else if (id === 'cap_t4') {
+    c = {
+      ...base,
+      brief: CORE_BRIEF('Any core you like: single-cycle, multicycle, pipelined, with fast adders or shared ones. The task is not one target but a trade-off: every design that passes is a point on the cost / speed chart, graded on where it lands against three reference cores.')
+        + ` The workload is ${briefTests().length} programs; cost is the NANDs of your core (the program memory is the bench's), speed is the total time: cycles × clock period over all of them.`,
+      ports: CORE_PINS,
+      check: coreCheck(briefSpec(), `${briefTests().length} programs against the golden model, every register write and store in order, within ${BRIEF_BUDGET.cpi} cycles per instruction; measured for NANDs, clock period and cycles.`),
+      answer: refOf('cap_t4', () => rv16Core(true), 'Single-cycle RV16 core'),
+    };
   }
   if (c) cache.set(id, c);
   return c;
@@ -238,7 +250,7 @@ export const builtCapstones = (): Capstone[] => CAPSTONES.filter((c) => !!capsto
 
 /** How a capstone's passes are ranked (lower is better, compared in order): its own grading, tier 3's period × cycles. */
 export const capstoneRank = (id: string) => (m: { nand?: number; period?: number; cycles?: number }): number[] =>
-  id === 'cap_t3' && m.period !== undefined && m.cycles !== undefined ? [m.period * m.cycles, m.nand ?? Infinity] : [m.nand ?? Infinity, m.period ?? Infinity, m.cycles ?? Infinity];
+  (id === 'cap_t3' || id === 'cap_t4') && m.period !== undefined && m.cycles !== undefined ? [m.period * m.cycles, m.nand ?? Infinity] : [m.nand ?? Infinity, m.period ?? Infinity, m.cycles ?? Infinity];
 
 // ---- what the reference scores -------------------------------------------------------------------------
 
