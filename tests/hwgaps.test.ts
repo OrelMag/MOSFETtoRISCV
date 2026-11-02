@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
-import { hardwareGaps } from '../src/riscv/hwgaps';
+import { hardwareGaps, hwFeaturesOf } from '../src/riscv/hwgaps';
+import { M_PROGRAMS } from '../src/riscv/mprograms';
+import { PIPE_M_PROGRAMS } from '../src/riscv/pmprograms';
+import { CACHE_CPU_PROGRAMS } from '../src/riscv/cprograms';
+import { F_PROGRAMS } from '../src/riscv/fprograms';
+import { SYSTEM_PROGRAMS } from '../src/riscv/sysprograms';
 import { PROGRAMS } from '../src/riscv/programs';
 
 describe('hardware gaps', () => {
@@ -16,7 +21,14 @@ describe('hardware gaps', () => {
     expect(g[0].message).toContain('M extension');
     expect(hardwareGaps(r, { m: true, subword: true })).toEqual([]);
   });
-  it('the chapter programs use nothing the single-cycle CPU lacks', () => {
-    for (const p of PROGRAMS) expect(hardwareGaps(assemble(p.source), {}), p.name).toEqual([]);
+  it('data lines are not instructions', () => {
+    expect(hardwareGaps(assemble('.word 0x02b50533\nlw a0, 0(zero)'), {})).toEqual([]);
+  });
+  it('every sample program uses only what the scene it is shown on implements (the note is for the learner own edits)', () => {
+    const sets: [string, typeof PROGRAMS, Parameters<typeof hwFeaturesOf>[0]][] = [
+      ['PROGRAMS', PROGRAMS, {}], ['M_PROGRAMS', M_PROGRAMS, { system: true, m: true }], ['PIPE_M_PROGRAMS', PIPE_M_PROGRAMS, { m: true }],
+      ['CACHE_CPU_PROGRAMS', CACHE_CPU_PROGRAMS, {}], ['F_PROGRAMS', F_PROGRAMS, { fpu: true }], ['SYSTEM_PROGRAMS', SYSTEM_PROGRAMS, { system: true }],
+    ];
+    for (const [name, list, o] of sets) for (const p of list) expect(hardwareGaps(assemble(p.source), hwFeaturesOf(o)), `${name}/${p.id}`).toEqual([]);
   });
 });

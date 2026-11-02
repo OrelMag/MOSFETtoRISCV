@@ -11,7 +11,7 @@ import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, type Microprogram, dualPipeCpu, micr
 import { fsmView } from './fsmpanel';
 import { isBook } from '../lib/ucode';
 import { assemble, type AsmResult } from '../riscv/asm';
-import { hardwareGaps } from '../riscv/hwgaps';
+import { hardwareGaps, hwFeaturesOf } from '../riscv/hwgaps';
 import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/cosim';
 import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
@@ -211,7 +211,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     // Errors go to the gutter as you type (debounced) and below the box on Assemble & load.
     const errBox = h('div', { class: 'asm-errors' });
     // Instructions the assembler takes but this CPU's gates lack (mul on RV32I, lb on a word-only memory): noted, not refused.
-    const gaps = (r: AsmResult) => hardwareGaps(r, { m: !!(opts.m || opts.wide || opts.ooo), fpu: !!opts.fpu, system: !!(opts.system || opts.wide || opts.ooo), subword: !!(opts.system || opts.wide || opts.ooo) });
+    const gaps = (r: AsmResult) => hardwareGaps(r, hwFeaturesOf(opts));
     const check = debounce(() => { const r = assemble(editor.value); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
     const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
     editor.el.classList.add('asm-editor');

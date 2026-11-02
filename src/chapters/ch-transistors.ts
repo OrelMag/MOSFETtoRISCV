@@ -490,7 +490,7 @@ export const chInverter: Chapter = {
         <code>a = 1</code> the NMOS conducts, but only while its gate is a threshold above its source: <code>y</code>
         rises to VDD − V<sub>t</sub> = ${VDD_VOLTS} − ${VT_VOLTS} = <strong>${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V</strong> and the channel pinches off. That is a
         <strong>weak 1</strong>, drawn between the 0 and 1 colours and tagged <strong>H</strong>. With <code>a = 0</code>
-        the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at ${VT_VOLTS} V. The bits are right; the levels are not. (The switch-level model uses an illustrative 1.1 V supply and V<sub>t</sub> = 0.3 V, not chapter 1's 1.8 V / 0.45 V device, so its levels are 0.80 V and 0.30 V; the ratios are what carry over.)</p>
+        the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at ${VT_VOLTS} V. The bits are right; the levels are not. (The switch-level model uses an illustrative ${VDD_VOLTS} V supply and V<sub>t</sub> = ${VT_VOLTS} V, not chapter 1's 1.8 V / 0.45 V device, so its levels are ${(VDD_VOLTS - VT_VOLTS).toFixed(2)} V and ${VT_VOLTS.toFixed(2)} V; the ratios are what carry over.)</p>
         <p>A CMOS gate reading H still reads 1 and drives a full 0 from its rails, so the level is restored one gate
         later. The price is in that gate: its PMOS sees ${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V against ${VDD_VOLTS} V, right at threshold, partly on, and a
         current flows from VDD to ground all the time. A 1 passed by an NMOS whose own gate is H is worse: ${(VDD_VOLTS - VT_VOLTS).toFixed(1)} − ${VT_VOLTS} =

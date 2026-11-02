@@ -2131,7 +2131,11 @@ export class Stage {
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < BB_READ_PX ? null : s;
     };
-    apply(chooseFolds(fold.length, scaleOf, fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (p.el.dataset.keep === 'open' ? false : null))));
+    const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : null));
+    let pick = chooseFolds(fold.length, scaleOf, mine(true));
+    // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
+    if (scaleOf(pick) === null) pick = chooseFolds(fold.length, scaleOf, mine(false));
+    apply(pick);
   }
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
