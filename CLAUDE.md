@@ -511,7 +511,13 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
-src/view/      SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
+src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
+               a large RAM's leaf state, byte lanes b0–b3, or same-kind registers under pins naming a write port (wa|addr + we +
+               wd|din|d + clk: rv16_rf, a learner's RAM / register file) placed by probeWrites (each address written on a private
+               copy; a decoder on the wrong register becomes a problem); memMarks: read / next-write rows from the memory's own
+               ports; ROMs never), memview.ts (memGrid / memRow: the live grid shared by the scene panel, the sandbox drawer and
+               the RAM part's properties);
+               SVG schematic renderer (route.ts: orthogonal routing + hops over crossings; untangle's A* reroutes stop after
                UNTANGLE_POPS states per schematic, leaving overlaps rather than freezing the page: scripts/route-perf.ts times one),
                layout.ts (the learner's layout on the stage, per component id in localStorage: parts dragged to whole grid
                units, several at once (shift-click, shift-drag a box; Esc lets go), wires following live on a level that
@@ -557,7 +563,8 @@ src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block eras
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
                randomWrites (seeded, optional hot set)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid, ...); python.ts: chapter 15's (pyLinked:
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid: memgrid.ts memGridPanel, Memory contents of
+               the scene's memories with a picker, data-mem, ...); python.ts: chapter 15's (pyLinked:
                Python / assembly / ROM words linked by line, the fields; pyCost: cycles per line on the golden model; pyScene:
                the gate-level CPU (PY_IMEM_K / PY_DMEM_K via cpuScene's imemK / dmemK) with the Python panel bottom-left
                through cpuScene's extraPanels: the line from the PC, its cycles and toggles from edgeHooks, variables from
@@ -991,6 +998,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
                  for a nested console or screen (unless closed for that chip), behind a drawer already shown
                  (dockPane's `front` false); its console scrolls natively and follows only at the bottom
+  memdrawer.ts   plugin: the Memory drawer (Memory contents): view/memfind.ts's memories of the chip and the chips it places,
+                 the chosen one in view/memview.ts's grid (Go to past 64 words), a learner's memory with its probe's problems;
+                 opens by itself like the Screens drawer, redraws at most every 100 ms while running; the level screen lists it
   cardui.ts      plugin: the card reader's property section (mode, bits, feed; the deck listed, the selected card drawn by
                  widgets/carddraw.ts and punched by hand, the read station followed live; load / save / punch from a ROM /
                  type a source card / drop / sort / delete / clear, each one undo step); deck files (pickDeck, saveDeck,
@@ -1371,6 +1381,8 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   distance from the driver (`laneTails` for a schematic net's paths, editor/flowdir.ts for the
   sandbox's wires), so a value reaching a junction carries on along every branch; tags fade only at
   the driver and at a sink. Both SchematicView and EditorView draw it; wire classes are untouched.
+- Memory contents: a scene that declares no panels gets memGridPanel by itself when view/memfind.ts finds a memory in its
+  circuit (Stage.panelsOf; not on NmosSim; `Scene.memory: false` opts out). A scene with panels of its own adds it itself.
 - Slow motion draws each change as a front over one gate
   delay (`SchematicView.flowMs`); the simulation's timing is unchanged.
 - The Timing panel only records nets of the scene's own simulation (`ctx.sim === stage.sim`);

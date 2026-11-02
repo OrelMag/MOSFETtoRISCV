@@ -34,6 +34,8 @@ import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
+import { memGridPanel } from '../widgets/memgrid';
+import { findMemories } from './memfind';
 
 export interface Scene {
   root: ComponentDef;
@@ -62,6 +64,11 @@ export interface Scene {
    * event-driven switch-level engine.
    */
   engine?: 'cycle' | 'nmos';
+  /**
+   * false: no Memory contents panel. A scene that declares no panels gets one by itself when its circuit holds a memory
+   * (view/memfind.ts: a RAM, a register file, a cache's arrays …); a scene with panels of its own decides for itself.
+   */
+  memory?: false;
   /** No Open in Sandbox: the circuit is larger than a sandbox chip can hold (Appendix B's Doom computer). */
   noRemix?: boolean;
   /**
@@ -705,7 +712,7 @@ export class Stage {
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
     this.board.highlight(scene.highlight ?? [], true);
-    this.panels = (scene.panels ?? []).map((f) => f(this));
+    this.panels = this.panelsOf(scene).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
     for (const p of this.panels) this.panelSize.observe(p.el);
@@ -728,6 +735,13 @@ export class Stage {
   onReady(f: () => void): () => void {
     this.readyHooks.add(f);
     return () => this.readyHooks.delete(f);
+  }
+
+  /** The scene's panels, and Memory contents when it declares none and its circuit holds a memory (not on NmosSim). */
+  private panelsOf(scene: Scene): ScenePanel[] {
+    if (scene.panels?.length) return scene.panels;
+    if (scene.memory === false || scene.engine === 'nmos' || !this.rootCtx) return [];
+    return findMemories(this.rootCtx.sim, this.rootCtx.node).length ? [memGridPanel] : [];
   }
 
   /**

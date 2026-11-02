@@ -6,7 +6,8 @@
 
 import '../styles/memui.css';
 import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
-import { B0, B1, BX } from '../sim/types';
+import { BX, type Bit } from '../sim/types';
+import { memRow } from '../view/memview';
 import { h, icon, placeMenu } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import type { CodeLang } from '../widgets/codetok';
@@ -406,7 +407,6 @@ registerPropsSection({
     const { k, w, init } = p.ref.ram;
     const multi = (p.ref.ram.ports ?? 1) > 1;
     const N = 2 ** k;
-    const digits = Math.max(1, Math.ceil(w / 4));
     const showBits = w <= 16;
     // Past 64 words the RAM is a lookup: its words come from the leaf's state (lib/bigmem.ts).
     const big = k > BANK_K;
@@ -417,11 +417,8 @@ registerPropsSection({
     const grid = h('div', { class: `memgrid sb-ram-grid${big ? ' big' : ''}` });
     const makeRow = (i: number) => {
       const v = snap ? snap.word(i) : -1;
-      const bits = showBits ? snap?.bits(i) ?? null : null;
-      const cells = showBits ? Array.from({ length: w }, (_, j) => h('span', { class: `cell${bits?.[j] === B1 ? ' one' : bits && bits[j] !== B0 ? ' x' : ''}` })).reverse() : [];
-      return h('div', { class: `row${i === cur ? (writing ? ' write' : ' read') : ''}` }, h('span', { class: 'addr' }, at(i)),
-        showBits ? h('span', { class: 'cells' }, cells) : null,
-        h('span', { class: 'hex' }, v < 0 ? 'x'.repeat(digits) : v.toString(16).toUpperCase().padStart(digits, '0')));
+      const bits = (showBits ? snap?.bits(i) : null) ?? Array.from({ length: w }, (_, j) => (v < 0 ? BX : (Math.floor(v / 2 ** j) % 2) as Bit));
+      return memRow(at(i), bits, w, { cls: i === cur ? (writing ? 'write' : 'read') : '', prefix: '', cells: showBits });
     };
     // Only the rows in view are built: a 64K-word RAM is one screenful of rows.
     const rows = virtualRows({ count: N, el: grid, body: grid, row: makeRow, rowH: 17 });

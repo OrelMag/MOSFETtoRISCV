@@ -10,7 +10,6 @@ import { netlistOf } from '../../sim/types';
 import { Inspector } from '../../view/inspector';
 import { Stage } from '../../view/stage';
 import { maybeCoach } from '../coachmarks';
-import { memGridPanel } from '../../widgets/memgrid';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { benchOpened, benchTabs } from '../benchtabs';
 import { h, icon } from '../dom';
@@ -115,10 +114,9 @@ export class WorkbenchPage implements Page {
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
       ? bench(def) : def;
-    const panels = /^ram\d/.test(def.id) ? [memGridPanel] : [];
     // the 6502's active-low lines start inactive (else the chip sits in reset)
     const inputs = def.id === 'm6502_core' ? { resb: 1, irqb: 1, nmib: 1 } : undefined;
-    this.stage.load({ root, panels, ...(inputs ? { inputs } : {}) }, path);
+    this.stage.load({ root, ...(inputs ? { inputs } : {}) }, path);
     // a different part replaces the entry, as it always did (its drill entries behind are another part's)
     const want = this.hash();
     if (location.hash !== want) history.replaceState(null, '', want);
