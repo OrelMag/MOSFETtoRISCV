@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centredOn, contentFits, mapLayout, mapRect, panCentre, toMap, toWorld } from '../src/editor/minimapmath';
+import { centredOn, clampBox, CONTENT_PAD, contentFits, mapLayout, mapRect, panCentre, toMap, toWorld } from '../src/editor/minimapmath';
 
 describe('minimap coordinates', () => {
   const content = { x: -10, y: 0, w: 100, h: 50 };
@@ -22,6 +22,15 @@ describe('minimap coordinates', () => {
   it('is hidden when the view holds the whole content', () => {
     expect(contentFits(content, { x: -20, y: -10, w: 150, h: 100 })).toBe(true);
     expect(contentFits(content, { x: -20, y: -10, w: 60, h: 100 })).toBe(false);
+  });
+  it('counts the margin around the pins as in view', () => {
+    // content starts 0.9 left of the view: only the pin's empty pad is out of sight
+    expect(contentFits(content, { x: -9.1, y: -9, w: 120, h: 80 })).toBe(false);
+    expect(contentFits(content, { x: -9.1, y: -9, w: 120, h: 80 }, CONTENT_PAD)).toBe(true);
+  });
+  it('clips the frame to the map', () => {
+    expect(clampBox({ x: -13, y: 19, w: 300, h: 60 }, 208, 148)).toEqual({ x: 0, y: 19, w: 208, h: 60 });
+    expect(clampBox({ x: 50, y: 100, w: 20, h: 200 }, 208, 148)).toEqual({ x: 50, y: 100, w: 20, h: 48 });
   });
   it('centres the view on a point and keeps the chip in reach', () => {
     const view = { x: 0, y: 0, w: 40, h: 30 };

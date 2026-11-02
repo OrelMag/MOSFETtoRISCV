@@ -308,7 +308,10 @@ class Analysis {
     }
     const doc = this.ed.doc;
     let target: ProbeTarget;
+    // the value pill floats above its bus: a click on it probes that bus
+    const pill = (e.target as Element | null)?.closest?.('.bus-label')?.getAttribute('data-wire');
     if (hit.k === 'wire') target = { wires: [hit.id] };
+    else if (pill) target = { wires: [pill] };
     else if (hit.k === 'label') target = { pointer: doc.labels.find((l) => l.id === hit.id)?.name ?? '' };
     // Pins keep toggling in probe mode: they have lanes of their own from the start.
     else return false;

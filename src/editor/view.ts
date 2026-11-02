@@ -796,7 +796,7 @@ export class EditorView {
           }
         }
         for (const [net, { at, len, wire }] of best) {
-          const g = s('g', { class: 'bus-label' });
+          const g = s('g', { class: 'bus-label', 'data-wire': wire });
           setNetHue(g, this.huesOf(built)[net]);
           const bg = s('rect', { rx: 0.45, height: 1.3, y: at[1] - 0.65 - 0.9 });
           const text = s('text', { x: at[0], y: at[1] - 0.9 + 0.38, 'text-anchor': 'middle' });
