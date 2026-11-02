@@ -174,7 +174,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['bpred', 'controlhazard', 'flush'],
   },
   {
-    chapter: 'cache', step: 'The memory hierarchy', title: 'Desk, shelf, library, warehouse',
+    chapter: 'cache', step: 'The memory hierarchy', title: 'Desk, shelf, library, warehouse', figure: 'desk',
     body: `<p>What you use now is on your desk, the rest of this week's work on a shelf, the department's in the library, and
       everything else in a warehouse across town. Each place holds far more than the one before and takes far longer to reach,
       and you keep the desk stocked with what you are about to need.</p>`,
@@ -183,7 +183,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['cache', 'memwall'],
   },
   {
-    chapter: 'dram', step: 'The sense amplifier', title: 'A seesaw tipped by a feather',
+    chapter: 'dram', step: 'The sense amplifier', title: 'A seesaw tipped by a feather', figure: 'seesaw',
     body: `<p>Both bit lines start balanced at half the supply, like a level seesaw. The cell's charge is a feather on one end;
       the sense amplifier then slams that end all the way down and the other all the way up, which turns about a
       hundred millivolts into a full 0 and 1, and writes the cell back as it does.</p>`,
@@ -202,7 +202,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['refresh'],
   },
   {
-    chapter: 'flash', step: 'A gate that remembers', title: 'Charge stranded on an island',
+    chapter: 'flash', step: 'A gate that remembers', title: 'Charge stranded on an island', figure: 'island',
     body: `<p>The floating gate is an island with no bridge: charge put on it has no way back, so it stays for years without
       power, and its charge decides whether the transistor above conducts at the read voltage.</p>`,
     breaks: `There is no bridge, but a strong enough field pushes charge across the water anyway (tunnelling): that is how the
