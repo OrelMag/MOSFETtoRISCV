@@ -41,6 +41,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a.active { background: var(--accent-soft); color: var(--accent); }
+.nav a .cap { display: none; }
 .spacer { flex: 1; }
 .brand, .tools { flex: none; }
 .tools { display: flex; align-items: center; gap: 8px; }
@@ -79,8 +80,19 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 480px) {
   .nav { margin-left: 0; }
   .nav a { padding: 6px 7px; }
-  .nav a .icon:last-child:not(:first-child) { display: none; }
+  .nav a .icon:not(:first-child) { display: none; }
   .topbar .tools { gap: 4px; }
+}
+
+/* A phone (the stacked layout, 760 px): the section icons get a tiny caption under them (ui/app.ts navLink's short word) and the
+   bar grows by 14 px; --topbar-h is the one place that height lives (menus, drawers and the level page size from it). */
+@media (max-width: 760px) {
+  :root:root { --topbar-h: 70px; }
+  .nav a { flex-direction: column; justify-content: center; gap: 2px; padding: 4px 5px; }
+  .nav a span.cap { display: block; font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }
+  .nav a .icon:not(:first-child) { display: none; }
+  /* five captioned sections do not fit beside four tools in 360 px: Slow motion goes (the search's > actions keep it) */
+  .topbar .slow-btn { display: none; }
 }
 
 /* palette menu */
@@ -2228,7 +2240,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .stage-bar { gap: 2px; }
 }
 @media (pointer: coarse) and (max-width: 420px) {
-  .nav a { min-width: 36px; padding-inline: 8px; }
+  .nav a { min-width: 36px; padding-inline: 4px; }
 }
 @media (pointer: coarse) { .lab-chip, .lab-unit, .lab-x, .lab-add { min-height: 40px; min-width: 40px; } .lab-num input, .lab-num select { min-height: 40px; } }
 
