@@ -1068,7 +1068,11 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.lead { font-size: 18px; color: var(--text-2); margin: 0 0 24px; max-width: 34em; }
 .hero .cta { display: flex; gap: 10px; flex-wrap: wrap; }
-.hero .cta-campaign { display: contents; } /* its button swapped once the campaign is known to be started (home.ts) */
+.hero .cta-more { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 12px 0 0 -10px; }
+.hero .cta-more .btn { max-width: 100%; padding-inline: 8px; }
+.hero .cta-campaign { display: contents; }
+.hero-ladder { min-width: 0; }
+.ladder-cap { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {

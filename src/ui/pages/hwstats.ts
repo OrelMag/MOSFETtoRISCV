@@ -228,7 +228,11 @@ export class HwStatsPage implements Page {
         items.push({ family: ms[0].family!, cat: ms[0].cat, members: ms, values });
       }
     }
-    const val = (x: Item, k: Key) => (isGroup(x) ? x.values[k] ?? null : this.get(x, k));
+    // A part with no NAND (a wire, a relay or transistor circuit) has no gate count to order by: it sorts last, not first.
+    const val = (x: Item, k: Key) => {
+      const v = isGroup(x) ? x.values[k] ?? null : this.get(x, k);
+      return k === 'nands' && v === 0 ? null : v;
+    };
     items.sort((a, b) => {
       const x = val(a, this.sort), y = val(b, this.sort);
       // Missing values (a dash) sort last either way.
