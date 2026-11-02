@@ -139,6 +139,12 @@ export interface LevelScreenHooks {
   actions?(): HTMLElement[];
   /** Replaces "Show answer" (which would import the answer as chips the screen does not show). */
   showAnswer?(): void;
+  /** A tier capstone (campaign/capstone.ts): the challenge played, which is not a campaign node's. */
+  challenge?: BuildChallenge;
+  /** A capstone passed: record it (before checked()). */
+  record?(r: CheckResult): void;
+  /** False: Show answer and Do it for me are not offered (a capstone before its pass). */
+  solutions?(): boolean;
 }
 
 /** Install the challenge panel on an editor (once per page); returns its teardown. */
@@ -195,6 +201,7 @@ class ChallengeUi {
   }
 
   private get challenge(): BuildChallenge | undefined {
+    if (this.screen?.challenge) return this.screen.challenge;
     const n = this.level;
     return n ? levelChallenge(n) : challengeOf(this.ed.chipId, CHALLENGES);
   }
@@ -244,7 +251,7 @@ class ChallengeUi {
     const stale = !!res && res.conn !== ed.compiled?.connKey;
     const lv = this.level;
     const lp = lv ? progress().get(lv.id) : undefined;
-    const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch)), lp]);
+    const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch)), lp, this.screen?.solutions?.()]);
     if (key === this.key) return;
     this.key = key;
     this.panel.hidden = !ch;
@@ -304,9 +311,9 @@ class ChallengeUi {
       ? [h('span', { class: 'sb-chal-ask' }, 'Replace your circuit with the answer?'),
         h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
         h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
-      : [...(sc.actions?.() ?? []),
+      : [...(sc.actions?.() ?? []), ...(sc.solutions && !sc.solutions() ? [] : [
         h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The reference answer', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
-        h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')];
+        h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')])];
     this.panel.append(h('header', { class: 'sb-chal-head' },
       h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
       res ? this.summaryEl(ch, res.r, stale) : goalEl(ch),
@@ -499,6 +506,9 @@ class ChallengeUi {
       const st = '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
       if (this.screen) this.screen.checked(r, g);
       else ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
+    } else if (r.ok && this.screen?.record) {
+      this.screen.record(r);
+      this.screen.checked(r);
     } else if (r.ok) {
       const first = !settings.isSolved(solvedKey(ch));
       settings.solve(solvedKey(ch));

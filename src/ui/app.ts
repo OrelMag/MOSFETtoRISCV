@@ -291,7 +291,16 @@ export function startApp(root: HTMLElement): void {
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
-      if (lv?.kind === 'level' && lv.nodeId === parts[2]) return;
+      if ((lv?.kind === 'level' || lv?.kind === 'capstone') && lv.nodeId === parts[2]) return;
+      // A tier capstone (learn/capstones.ts) has the level screen's layout and a page of its own
+      if (parts[2]?.startsWith('cap_')) {
+        import('./pages/capstone').then((m) => {
+          if (seq === routeSeq) mount(new m.CapstonePage(parts[2]));
+        }, (e) => {
+          if (seq === routeSeq) view.replaceChildren(loadFailed('capstone', e));
+        });
+        return;
+      }
       import('./pages/level').then((m) => {
         if (seq === routeSeq) mount(new m.LevelPage(parts[2] ?? ''));
       }, (e) => {

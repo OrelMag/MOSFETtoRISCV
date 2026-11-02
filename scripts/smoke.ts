@@ -23,6 +23,7 @@ import { chapters } from '../src/chapters';
 import { families, initialParams } from '../src/lib/resolve';
 import { NODES } from '../src/campaign/nodes';
 import { levelChallenge } from '../src/campaign/levels';
+import { builtCapstones } from '../src/campaign/capstone';
 import { CAMPAIGN_KEY } from '../src/campaign/progress';
 import { CODEX } from '../src/campaign/codex';
 import { addExample, EXAMPLES } from '../src/editor/examples';
@@ -161,6 +162,8 @@ function routes(): Route[] {
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).
     if (!levelChallenge(n) || n.soon) add(`#/campaign/n/${n.id}`, unlocked);
   }
+  // The tier capstones (campaign/capstone.ts), on the level screen's layout
+  for (const c of builtCapstones()) add(`#/campaign/play/${c.id}`, light);
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
