@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Cpu6502, FLAG, Ram64, type BusCycle } from '../src/m6502/iss';
-import { OPCODES } from '../src/m6502/isa';
+import { OPCODES, UNDOC, UNDOC_MNEMONICS, opInfoOf, disasm } from '../src/m6502/isa';
 import { assemble, toImage } from '../src/m6502/asm';
 import { PROGRAMS } from '../src/m6502/programs';
 import { breathe } from './setup';
@@ -22,9 +22,9 @@ type Case = [initial: State, final: State, cycles: number[]];
 const DOCUMENTED = OPCODES.flatMap((o) => (o ? [o.op.toString(16).padStart(2, '0')] : []));
 
 /** Runs one SingleStepTests case; returns a description of the first difference, or null. */
-function runCase(ram: Ram64, [init, fin, cycles]: Case): string | null {
+function runCase(ram: Ram64, [init, fin, cycles]: Case, undocumented = false): string | null {
   for (let i = 0; i < init[6].length; i += 2) ram.mem[init[6][i]] = init[6][i + 1];
-  const cpu = new Cpu6502(ram);
+  const cpu = new Cpu6502(ram, { undocumented });
   [cpu.pc, cpu.s, cpu.a, cpu.x, cpu.y, cpu.p] = init;
   let err: string | null = null;
   const n = cycles.length / 3;
@@ -80,6 +80,67 @@ describe.skipIf(!fullCached)('SingleStepTests full sets (cached)', () => {
       const fails: string[] = [];
       for (const t of tests) {
         const err = runCase(ram, [state(t.initial), state(t.final), t.cycles.flatMap(([a, d, k]) => [a, d, k === 'write' ? 1 : 0])]);
+        if (err && fails.length < 5) fails.push(`${t.name}: ${err}`);
+      }
+      expect(fails).toEqual([]);
+    });
+  }
+});
+
+const UNDOCUMENTED = UNDOC.flatMap((o) => (o ? [o.op.toString(16).padStart(2, '0')] : []));
+
+describe('stable undocumented opcodes (sample, checked in)', () => {
+  const sample = JSON.parse(readFileSync(here('./m6502/singlestep-undoc-sample.json'), 'utf8')) as Record<string, Case[]>;
+  it('covers every opcode of the table, and the table is the documented set apart', () => {
+    expect(UNDOCUMENTED.length).toBe(85);
+    expect(Object.keys(sample).sort()).toEqual([...UNDOCUMENTED].sort());
+    for (const op of UNDOCUMENTED) expect(OPCODES[parseInt(op, 16)]).toBeUndefined();
+    expect(UNDOC_MNEMONICS).toEqual(['LAX', 'SAX', 'DCP', 'ISC', 'SLO', 'RLA', 'SRE', 'RRA', 'ANC', 'ALR', 'ARR', 'SBX', 'SBC', 'NOP']);
+  });
+  it('matches every bus cycle, register and byte', () => {
+    const ram = new Ram64();
+    const fails: string[] = [];
+    for (const op of UNDOCUMENTED) sample[op].forEach((c, i) => {
+      const err = runCase(ram, c, true);
+      if (err) fails.push(`${op} ${opInfoOf(parseInt(op, 16))!.mnemonic} #${i}: ${err}`);
+    });
+    expect(fails.slice(0, 20)).toEqual([]);
+  });
+  it('stops on them by default, as the documented-only chip would', () => {
+    const ram = new Ram64();
+    ram.mem[0x200] = 0xa7;
+    const cpu = new Cpu6502(ram);
+    cpu.pc = 0x200;
+    cpu.step();
+    expect(cpu.illegal).toBe(0xa7);
+    expect(cpu.pc).toBe(0x200);
+  });
+  it('the unstable ones and the KIL opcodes still stop it', () => {
+    for (const op of [0x8b, 0xab, 0x93, 0x9b, 0x9c, 0x9e, 0x9f, 0xbb, 0x02, 0x12, 0x92, 0xf2]) {
+      const ram = new Ram64();
+      ram.mem[0x200] = op;
+      const cpu = new Cpu6502(ram, { undocumented: true });
+      cpu.pc = 0x200;
+      cpu.step();
+      expect(cpu.illegal, op.toString(16)).toBe(op);
+    }
+  });
+  it('disassembles them', () => {
+    expect(disasm([0xa7, 0x10], 0)).toBe('LAX $10');
+    expect(disasm([0xdf, 0x00, 0x20], 0)).toBe('DCP $2000,X');
+    expect(disasm([0x02], 0)).toBe('.byte $02');
+  });
+});
+
+const undocCached = UNDOCUMENTED.every((op) => existsSync(CACHE + op + '.json'));
+describe.skipIf(!undocCached)('undocumented opcodes, full sets (cached: fetch-tests.mjs --undocumented)', () => {
+  for (const op of UNDOCUMENTED) {
+    it(`opcode ${op} ${opInfoOf(parseInt(op, 16))!.mnemonic}: 10 000 tests`, () => {
+      const tests = JSON.parse(readFileSync(CACHE + op + '.json', 'utf8')) as RawCase[];
+      const ram = new Ram64();
+      const fails: string[] = [];
+      for (const t of tests) {
+        const err = runCase(ram, [state(t.initial), state(t.final), t.cycles.flatMap(([a, d, k]) => [a, d, k === 'write' ? 1 : 0])], true);
         if (err && fails.length < 5) fails.push(`${t.name}: ${err}`);
       }
       expect(fails).toEqual([]);
