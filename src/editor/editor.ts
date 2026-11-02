@@ -116,7 +116,7 @@ registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 5
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
 // Menus that gather actions used together, so the bar stays short.
 registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
-registerToolbarAction({ id: 'play', title: 'Play: build challenges and program puzzles', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
+registerToolbarAction({ id: 'play', title: 'Play: challenges (build a chip, checked and scored) and puzzles (write programs for a CPU)', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
 registerToolbarAction({ id: 'help', title: 'Keyboard shortcuts (?)', menu: 'Keyboard shortcuts', levelLabel: 'Keys', icon: 'keyboard', order: 90, run: (ed) => ed.showHelp() });
 
 const withChip = (ws: Workspace, doc: ChipDoc): Workspace => ({ ...ws, chips: { ...ws.chips, [doc.id]: doc } });
@@ -275,6 +275,10 @@ export class Editor {
     this.resize = new ResizeObserver(() => {
       if (!this.fitted && this.canvas.clientWidth > 0) {
         this.fitted = true;
+        this.fitView();
+      } else if (this.canvas.clientWidth > 0 && this.view.cam.fitted) {
+        // a pane beside the canvas (state machine, truth table, tests) opened, hid or was dragged: a view still as
+        // fitted follows the room it has (a zoomed or panned one keeps what the learner chose)
         this.fitView();
       }
     });
@@ -937,11 +941,11 @@ export class Editor {
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       this.tabs.classList.remove('measure');
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
-      // the tabs may take up to 60 % of the bar: as many as fit beside Open… / New chip (the others scroll), the least
+      // the tabs may take up to 70 % of the bar: as many as fit beside Open… / New chip (the others scroll), the least
       // used actions going into More for them; 4 px of slack
       // every flex item in the row has a gap beside it, an empty one (the top slot, before the autosave indicator) too
       const items = [...top.children].filter((el) => getComputedStyle(el).display !== 'none').length;
-      room -= Math.min(tabsNeed + 4, room * 0.6) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
+      room -= Math.min(tabsNeed + 4, room * 0.7) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
     }
     this.shed = shedActions(btns.map((b) => ({ id: b.dataset.action!, w: b.offsetWidth })), room, moreW, px(getComputedStyle(bar).columnGap));
     for (const b of btns) b.hidden = this.shed.has(b.dataset.action!);

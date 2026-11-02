@@ -401,3 +401,41 @@ export function cFetch(program: number[], k = 6): ComponentDef {
   fetchCache.set(key, d);
   return d;
 }
+
+/**
+ * A program ROM that answers at any even address: the 32 bits starting there, un-expanded (the sandbox's ROM part with
+ * its C box ticked; rv32ic_core expands them). cFetch without the expander and without the c / illegal outputs.
+ */
+export function cWindowRom(words: number[], k = 6): ComponentDef {
+  const N = 2 ** k;
+  const w = Array.from({ length: N }, (_, i) => (words[i] ?? 0x00000013) >>> 0);
+  const key = `cwin${k}_${hash(w)}`;
+  let d = fetchCache.get(key);
+  if (d) return d;
+  const b = new Builder(14, 12, 4);
+  b.pins('addr');
+  const sa = b.op(splitter([1, 1, k, 30 - k]), ['addr'], undefined, 'sa');
+  b.next();
+  const ix0 = b.op1(incCin(k), [`${sa}.o2`, `${sa}.o1`], 'next word if pc[1]', 'ix');
+  b.next();
+  const lo = b.op1(halfRom(w.map((x) => x & 0xffff), k, 'low halves'), [ix0], undefined, 'lo');
+  const hi = b.op1(halfRom(w.map((x) => x >>> 16), k, 'high halves'), [`${sa}.o2`], undefined, 'hi');
+  b.next();
+  const p0 = b.op1(busMux2(16), [lo, hi, `${sa}.o1`], 'parcel at pc', 'p0');
+  const p1 = b.op1(busMux2(16), [hi, lo, `${sa}.o1`], 'parcel at pc + 2', 'p1');
+  b.next();
+  b.wire(b.op1(merger([16, 16]), [p0, p1], undefined, 'win'), 'data');
+  d = define({
+    id: key, name: `ROM ${N}×32 (halfword reads)`, category: 'memory',
+    summary: `${N} words of program read at any even address: the 32 bits starting there (two halfword banks and a swap on addr[1]). The C core expands them.`,
+    ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')],
+    symbol: { kind: 'box', label: 'ROM + C' },
+    spec: ([a]) => {
+      const at = (x: number) => (w[(x >>> 2) % N] >>> ((x & 2) * 8)) & 0xffff;
+      return [(at(a & ~1) | (at((a & ~1) + 2) << 16)) >>> 0];
+    },
+    netlist: () => ({ pins: edgePins(b, ['addr'], ['data'], 4), instances: b.instances, nets: b.nets() }),
+  });
+  fetchCache.set(key, d);
+  return d;
+}

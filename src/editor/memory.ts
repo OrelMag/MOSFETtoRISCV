@@ -32,14 +32,19 @@ export interface RomImage extends BuiltProgram {
 }
 
 /** Build a ROM's program and check it against the ROM's size and word width. */
-export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa' | 'custom'>): RomImage {
-  const p = buildProgram(r.lang, r.src, r.isa, r.k, r.custom);
+export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa' | 'custom'> & Partial<Pick<RomRef, 'c' | 'xlen'>>): RomImage {
+  const p = buildProgram(r.lang, r.src, r.isa, r.k, r.custom, r.xlen === 64 ? 64 : 32);
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;
   // source line of word i (a map, built on the first problem: a 64K-word program has 64K lines)
   let lines: Map<number, number> | null = null;
   const lineOf = (i: number) => (lines ??= new Map(p.lines.map((l) => [l.addr, l.srcLine]))).get(4 * i) ?? 0;
+  if (r.lang === 'asm' && !r.c && /^\s*\.option\s+rvc\b/m.test(r.src)) {
+    const msg = '.option rvc packs 16-bit instructions: tick “C extension” on this ROM (and use the C core)';
+    problems.push({ line: 0, message: msg });
+    error ??= `ROM program: ${msg}`;
+  }
   if (p.words.length > capacity) {
     const msg = `${p.words.length} words do not fit in 2^${r.k} = ${capacity} words`;
     problems.push({ line: lineOf(capacity), message: msg });
@@ -83,7 +88,7 @@ export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang 
     index: i,
     // a 6502 ROM: the CPU address the byte answers at, as the program placed it
     addr: r.addr === 'rv32' ? `0x${l.addr.toString(16).padStart(4, '0')}` : l.at !== undefined ? `$${l.at.toString(16).toUpperCase().padStart(4, '0')}` : `[${i}]`,
-    word: (l.word >>> 0).toString(16).padStart(digits, '0'),
+    word: (l.word >>> 0).toString(16).padStart(l.size === 2 ? 4 : digits, '0'),
     text: dis ? l.text : '',
     srcLine: l.srcLine,
   }));

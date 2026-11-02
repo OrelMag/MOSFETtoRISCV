@@ -4,6 +4,7 @@
 import { assemble } from '../riscv/asm';
 import type { CustomRow } from '../riscv/custom';
 import { disasm } from '../riscv/isa';
+import { disasmC } from '../riscv/rvc';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import { assemble4 } from '../isa4/asm4';
@@ -24,6 +25,8 @@ export interface ProgramLine {
   text: string;
   /** 1-based source line the word came from (for a hex gap: the `@` line that skipped it). */
   srcLine: number;
+  /** C: a 16-bit instruction (word is the parcel). */
+  size?: 2;
   /** 6502: the CPU address the byte answers at (the ROM repeats every 2^k bytes; absent: unknown). */
   at?: number;
   /** 6502: the first byte of an instruction (its text is the instruction, its operand bytes have none). */
@@ -158,7 +161,7 @@ function build6502(src: string, k: number): BuiltProgram {
 
 /** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token; 6502: bytes for a ROM of 2^k. */
 /** custom: an RV32 program's custom instructions (riscv/custom.ts). */
-export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = []): BuiltProgram {
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = [], xlen: 32 | 64 = 32): BuiltProgram {
   if (lang === 'hex') return buildHex(src);
   if (lang === '6502') return build6502(src, k);
   if (lang === 'isa') {
@@ -176,10 +179,10 @@ export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 1
     const r = assemble4(src);
     return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm4(l.word), srcLine: l.srcLine })) };
   }
-  const r = assemble(src, custom);
+  const r = assemble(src, custom, xlen === 64 ? { xlen } : {});
   return {
     words: r.words,
     errors: r.errors,
-    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: disasm(l.word, l.addr, custom), srcLine: l.srcLine })),
+    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: l.size === 2 ? disasmC(l.word, l.addr) : disasm(l.word, l.addr, custom, xlen), srcLine: l.srcLine, ...(l.size === 2 ? { size: 2 as const } : {}) })),
   };
 }

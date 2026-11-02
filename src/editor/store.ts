@@ -87,7 +87,9 @@ function sanitizeRef(r: unknown): PartRef | null {
       return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
     }
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
-    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}) } };
+    const c = r.rom.c === true && addr === 'rv32' && w === 32 && (lang === 'asm' || lang === 'hex');
+    const xlen = r.rom.xlen === 64 && lang === 'asm' && !c;
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
   }
   if (isObj(r.ucode)) {
     const p = sanitizeProgram(r.ucode);

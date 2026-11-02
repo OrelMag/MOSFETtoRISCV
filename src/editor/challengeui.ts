@@ -591,7 +591,7 @@ class ChallengeUi {
     // Behind another drawer of the dock: bring it to the front rather than closing it.
     if (this.drawer && !paneShown(this.ed, 'challenges')) return showPane(this.ed, 'challenges');
     if (this.drawer) return this.closeList();
-    this.drawer = h('aside', { class: 'sb-drawer sb-chal-list', 'aria-label': 'Build challenges' });
+    this.drawer = h('aside', { class: 'sb-drawer sb-chal-list', 'aria-label': 'Challenges' });
     this.drawer.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Escape') this.closeList();
@@ -648,7 +648,7 @@ class ChallengeUi {
       }
     }
     d.replaceChildren(
-      h('div', { class: 'sb-drawer-head' }, icon('flag', 15), h('h3', null, 'Build challenges'), h('span', { class: 'sb-chal-count' }, `${done}/${CHALLENGES.length} solved`),
+      h('div', { class: 'sb-drawer-head' }, icon('flag', 15), h('h3', null, 'Challenges'), h('span', { class: 'sb-chal-count' }, `${done}/${CHALLENGES.length} solved`),
         h('button', { class: 'btn ghost icon-only', title: 'Close', 'aria-label': 'Close the challenges', onclick: () => this.closeList() }, icon('close', 15))),
       body);
   }
@@ -666,6 +666,6 @@ class ChallengeUi {
 }
 
 registerToolbarAction({
-  id: 'challenges', title: 'Build challenges: recreate every level, checked and scored', icon: 'flag', label: 'Challenges', menu: 'Build challenges', order: 64, under: 'play',
+  id: 'challenges', title: 'Build challenges: recreate every level, checked and scored', icon: 'flag', label: 'Challenges', menu: 'Challenges', order: 64, under: 'play',
   run: (ed) => (uis.get(ed) ?? (installChallenges(ed), uis.get(ed)!)).toggleList(),
 });

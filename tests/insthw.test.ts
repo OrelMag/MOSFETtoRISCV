@@ -7,12 +7,28 @@ import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K } from '../src/riscv/warpprogra
 import { netlistOf } from '../src/sim/types';
 import { instrUse, laneUse, oooUse, STAGE_UNITS } from '../src/widgets/insthw';
 import { oooCpu } from '../src/lib/ooocore';
+import { CUSTOM_PRESETS } from '../src/riscv/custom';
 
 // The program-listing highlight names top-level instances: keep the tables in step with the CPUs.
 const names = (d: ReturnType<typeof singleCycleCpu>) => new Set(netlistOf(d)!.instances.map((i) => i.name));
 const prog = assemble('addi t0, zero, 1\nadd t1, t0, t0\nlw t2, 0(zero)\nsw t2, 4(zero)\nbeq t0, t1, 0\njal ra, 4\njalr zero, 0(ra)\nlui a0, 1\nauipc a1, 0').words;
 
 describe('instruction → hardware map', () => {
+  it('a custom row lights what its signals use, and every unit exists on both CPUs', () => {
+    const rows = [CUSTOM_PRESETS[0], CUSTOM_PRESETS[2], CUSTOM_PRESETS[3]];
+    const w = assemble('lwx a0, a1, a2\nsubi a0, a1, 3\nswx a0, a1, a2', rows).words;
+    const have = new Set([...names(singleCycleCpu(w, { custom: rows })), ...names(pipelinedCpu(w, { custom: rows }))]);
+    const [lwx, subi, swx] = w.map((x) => instrUse(x, rows).units);
+    expect(lwx).toEqual(expect.arrayContaining(['rf', 'alu', 'dm', 'res']));
+    expect(subi).not.toContain('dm');
+    expect(subi).toEqual(expect.arrayContaining(['imm', 'alu', 'res']));
+    expect(swx).toEqual(expect.arrayContaining(['dm', 'st']));
+    expect(swx).not.toContain('res');
+    const fetch = new Set(instrUse(0).units); // the fetch names cover the multicycle CPU too
+    for (const u of [lwx, subi, swx]) expect(u.filter((n) => !have.has(n) && !fetch.has(n) && !['ld', 'ldsel', 'st'].includes(n))).toEqual([]);
+    expect(instrUse(w[0]).units).not.toContain('dm'); // without the rows the word is unknown
+  });
+
   it('the out-of-order core: every unit named exists, on either port', () => {
     const have = names(oooCpu(prog));
     const ops = [...prog, ...assemble('mul t0, t1, t2\ndiv t0, t1, t2').words];

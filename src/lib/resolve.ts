@@ -9,6 +9,7 @@ import { ram } from './memory';
 import { BANK_K, bigRam, ramBank } from './bigmem';
 import { alu, bitwise, constWord, isZero, orN, shifter, zext } from './alu';
 import { singleCycleCpu } from './cpu';
+import { xlenCpu } from './cpu64';
 import { addSubFast, brentKung, fanout, koggeStone, sklansky } from './fastadd';
 import { csrUnit, sysDecode } from './system';
 import { regfile } from './regfile';
@@ -67,6 +68,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^regfile(\d+)x(\d+)$/, (m) => regfile(log2(+m[1]), +m[2])],
   // the multi-core's core with an instruction port (the sandbox's computer example places it)
   [/^rv32i_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true })],
+  [/^rv64(i|im)(?:_d(\d))?_core$/, (m) => xlenCpu([], { xlen: 64, m: m[1] === 'im', dmemK: m[2] ? +m[2] : 6, imemPort: true })],
+  [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
   [/^zero(\d+)$/, (m) => isZero(+m[1])],

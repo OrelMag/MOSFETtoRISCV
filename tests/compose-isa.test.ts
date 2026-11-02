@@ -7,7 +7,8 @@ import { assemble16 } from '../src/riscv/rv16/asm16';
 import { assemble4 } from '../src/isa4/asm4';
 import { composeIsaOf, CPU4_COMPOSE, tableCompose } from '../src/isa/compose';
 import { clampSlot, type ComposeIsa, type Parts } from '../src/isa/composekit';
-import { RV32_COMPOSE } from '../src/riscv/compose';
+import { RV32_COMPOSE, RV64_COMPOSE } from '../src/riscv/compose';
+import { RVC_COMPOSE } from '../src/riscv/composec';
 import { RV16_COMPOSE } from '../src/riscv/rv16/compose16';
 import { tableOf, type IsaDoc } from '../src/isa/table';
 
@@ -47,6 +48,10 @@ function randomParts(isa: ComposeIsa, id: string): Parts {
 
 const CASES: [string, ComposeIsa, (src: string) => { words: number[]; errors: unknown[] }, number][] = [
   ['RV32', RV32_COMPOSE, assemble, 0x40],
+  // RV64: the W / doubleword instructions and 6-bit shifts through the assembler at xlen 64
+  ['RV64', RV64_COMPOSE, (src) => assemble(src, [], { xlen: 64 }), 0x40],
+  // C: a parcel a line (the assembler's lines, not its packed words)
+  ['RV32C', RVC_COMPOSE, (src) => { const a = assemble(src); return { words: a.lines.map((l) => l.word), errors: a.errors }; }, 0x40],
   ['RV16', RV16_COMPOSE, assemble16, 0x10],
   ['4-bit CPU', CPU4_COMPOSE, assemble4, 0x10],
   // pc 0x200: the table's relative targets are absolute addresses in the text, so one below 0 is unwritable
@@ -67,7 +72,7 @@ describe('instruction builder adapters', () => {
           expect(isa.encode(d!.id, d!.parts)).toBe(w);
           // the text at pc, assembled at pc (a target is relative), is the same word
           const text = isa.text(w, pc, new Map());
-          const src = isa.step === 4 ? `${'nop\n'.repeat(pc / 4)}${text}` : `${isa === RV16_COMPOSE ? 'nop\n'.repeat(pc) : `.org ${pc}\n`}${text}`;
+          const src = isa === RVC_COMPOSE ? `${'c.nop\n'.repeat(pc / 2)}${text}` : isa.step === 4 ? `${'nop\n'.repeat(pc / 4)}${text}` : `${isa === RV16_COMPOSE ? 'nop\n'.repeat(pc) : `.org ${pc}\n`}${text}`;
           const r = asm(src);
           expect(r.errors, `${name}: ${text}`).toEqual([]);
           expect(r.words[r.words.length - 1] >>> 0, `${name}: ${text}`).toBe(w);
@@ -116,6 +121,8 @@ describe('instruction builder adapters', () => {
 
   it('each ROM language has its builder', () => {
     expect(composeIsaOf('asm')).toBe(RV32_COMPOSE);
+    expect(composeIsaOf('asm', undefined, undefined, { xlen: 64 })).toBe(RV64_COMPOSE);
+    expect(composeIsaOf('asm', undefined, undefined, { c: true })).toBe(RVC_COMPOSE);
     expect(composeIsaOf('rv16')).toBe(RV16_COMPOSE);
     expect(composeIsaOf('cpu4')).toBe(CPU4_COMPOSE);
     expect(composeIsaOf('isa', SAMPLE)).toBe(composeIsaOf('isa', SAMPLE));

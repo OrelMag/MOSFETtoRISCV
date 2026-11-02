@@ -328,6 +328,11 @@ export const chTraps: Chapter = {
         ],
       },
       body: `
+        <p>So far the CPU runs one program that never stops to ask anything. A real computer needs three ways out of it. An instruction that cannot run (an
+        undefined word, a misaligned load) must stop somewhere sensible instead of doing something undefined. A program must be able to ask a more privileged
+        one, the operating system, to do work for it. And a device must be able to say "now", so the program does not have to keep reading
+        <a href="#/c/io/0">chapter 19</a>'s switches in a loop to notice that one flipped. All three are one mechanism, a <strong>trap</strong>: the hardware
+        saves where it was and why, and jumps to a handler written in software. That takes a few registers of its own, which is where this chapter starts.</p>
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements a
         working subset of machine mode: mstatus, misa, mie, mtvec, mscratch, mepc, mcause, mtval, mip, mcycle/cycle and mhartid, plus the identity

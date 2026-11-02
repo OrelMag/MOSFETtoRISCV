@@ -5,6 +5,7 @@
 
 import { CLASSES } from '../lib/cpu';
 import { fieldAt, fieldRole, fieldsOf, SLICES, type FieldKey, type FieldRole } from '../riscv/fields';
+import { slotOpcode, uses, type CustomRow } from '../riscv/custom';
 import { decode, OPCODES } from '../riscv/isa';
 import { netlistOf, type ComponentDef } from '../sim/types';
 
@@ -18,7 +19,21 @@ export interface InstrUse {
 const FETCH = ['pc', 'pcmux', 'npc', 'imem', 'plus4', 'si', 'ctl', 'ir', 'adr', 'memsel', 'ctrl'];
 const ADDR = ['rf', 'imm', 'srcA', 'srcB', 'alu'];
 
-export function instrUse(word: number): InstrUse {
+/** A custom instruction's units, from what its row uses (riscv/custom.ts uses: the signals it asserts). */
+function customUse(r: CustomRow): InstrUse {
+  const k = uses(r), units = [...FETCH], path: string[] = [];
+  if (k.rs1 || k.rs2) { units.push('rf'); path.push([k.rs1 ? 'rs1' : '', k.rs2 ? 'rs2' : ''].filter(Boolean).join(', ')); }
+  if (k.imm) units.push('imm');
+  if (k.alu) { units.push('srcA', 'srcB', 'alu'); path.push('ALU'); }
+  if (k.mem) { units.push('dm', 'ld', 'ldsel'); if (r.memWrite) units.push('st'); path.push('data memory'); }
+  if (r.regWrite) { units.push('res', 'rf'); path.push('result mux → rd'); }
+  if (r.next !== 'pc4') { units.push('npc', 'target', 'bcmp'); if (r.next === 'jalr') units.push('clr0', 'clr0E', 'jtgt'); path.push('next PC'); }
+  return { units, path: `${r.name}: ${path.join(' → ') || 'no data path work'}` };
+}
+
+export function instrUse(word: number, custom?: readonly CustomRow[]): InstrUse {
+  const row = custom?.find((r) => slotOpcode(r.slot) === (word & 0x7f));
+  if (row) return customUse(row);
   const op = word & 0x7f, funct7 = word >>> 25;
   const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path });
   switch (op) {

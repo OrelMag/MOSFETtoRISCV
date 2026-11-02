@@ -15,6 +15,7 @@
 // the console part's text, a switch bank's positions and an LED bank named leds stand in for the
 // system CPU's consoleData / switches / leds pins.
 
+import { expandWindow } from '../lib/rvc';
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
 import type { CustomRow } from '../riscv/custom';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
@@ -47,6 +48,8 @@ export interface CpuIss {
   dmemWords?: number;
   /** The core's custom instructions (a { core } part's rows): found, never a setting. */
   custom?: CustomRow[];
+  /** The C extension (rv32ic_core, or a ROM with its C box ticked): the model fetches 16-bit parcels. */
+  c?: boolean;
 }
 
 /** ChipDoc.cpu: the user's settings; every field left out is detected. */
@@ -181,8 +184,9 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
+  const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
   return {
-    rom, pc, auto, iss: { ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
+    rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
     ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
@@ -208,7 +212,7 @@ export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
   // The core's custom rows follow the hardware, whatever the settings say about the rest.
-  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}) };
+  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}) };
   return out;
 }
 
@@ -240,7 +244,7 @@ export function sanitizeCpu(c: unknown): CpuDoc | undefined {
   if (isObj(c.iss)) {
     const i = c.iss;
     const iss: CpuIss = {};
-    for (const k of ['system', 'mmio', 'm', 'f'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
+    for (const k of ['system', 'mmio', 'm', 'f', 'c'] as const) if (typeof i[k] === 'boolean') iss[k] = i[k] as boolean;
     if (Number.isInteger(i.dmemWords) && (i.dmemWords as number) >= 1 && (i.dmemWords as number) <= 1 << 16) iss.dmemWords = i.dmemWords as number;
     out.iss = iss;
   }
@@ -767,7 +771,20 @@ export class CpuMonitor {
   wordAt(pc: number): number | null {
     const prog = this.prog;
     if (!prog || pc < 0) return null;
+    if (this.desc?.iss.c) return expandWindow(this.windowAt(pc)).instr;
     return prog.words[(pc >>> 2) % 2 ** prog.k] ?? 0x13;
+  }
+
+  /** C: the 32 bits starting at an even byte address (what the window ROM answers). */
+  private windowAt(pc: number): number {
+    const p = this.prog!, N = 2 ** p.k;
+    const half = (a: number) => ((p.words[(a >>> 2) % N] ?? 0x13) >>> ((a & 2) * 8)) & 0xffff;
+    return (half(pc & ~1) | (half((pc & ~1) + 2) << 16)) >>> 0;
+  }
+
+  /** C: the instruction at pc is 16 bits long. */
+  compressedAt(pc: number): boolean {
+    return !!this.prog && !!this.desc?.iss.c && pc >= 0 && (this.windowAt(pc) & 3) !== 3;
   }
 }
 

@@ -307,7 +307,11 @@ export type PartRef =
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */
       isa?: IsaDoc;
       /** lang 'asm': the CPU's custom instructions (riscv/custom.ts), a copy of its core's rows, so the program assembles. */
-      custom?: CustomRow[] } }
+      custom?: CustomRow[];
+      /** lang 'asm' (or hex), byte addressed: the C extension. The ROM answers at any even address with the 32 bits starting there (lib/rvc.ts cWindowRom); `.option rvc` needs it. */
+      c?: boolean;
+      /** lang 'asm': assembled for RV64 (ld, sd, the W instructions, li of any 64-bit constant); the words stay 32-bit instructions. */
+      xlen?: 64 } }
   /** The memory-port RV32I core (rv32i_core) with custom instructions: its control unit gains a class per row. */
   | { core: { custom: CustomRow[] } }
   /** The multicycle CPU's microprogrammed controller (mc_micro) with edited microcode: its ROMs hold this program (lib/ucode.ts). */

@@ -259,7 +259,7 @@ src/lib/       the component library (registered in `registry` via define())
                  cField(i) per field of C_FIELDS (one-hot AND-OR over cRecipes(): forms that fill a field alike share a
                  recipe, read off riscv/rvc.ts decodeC over all 65 536 parcels), C_EXPAND (window → instr, c, illegal;
                  expandWindow its spec), incCin(n), PLUS2OR4, halfRom (a halfword bank: preferBehavior, id hrom…; verify
-                 lanes give each bank its program), cFetch(program, k) (two banks, the low one a word on when pc[1] = 1, swaps)
+                 lanes give each bank its program), cFetch(program, k) (two banks, the low one a word on when pc[1] = 1, swaps), cWindowRom(words, k) (cFetch without the expander: the 32 bits at any even address, the sandbox's ROM part with its C box ticked; rv32ic_core = singleCycleCpu({ shared, imemPort, c }) puts C_EXPAND + PLUS2OR4 inside and takes the window on `instr`, extra pin `illegal`; other paths gate for gate as before)
   cpu64.ts       chapter 25 part 2: xlenCpu(program, { xlen: 32 | 64, m, imemK, dmemK }) (one drawing at both widths, user level;
                  instances pc, imem (fed pc[31:0]), rf, dm, alu, ctl, npc, st, ld, wu, md, xd; retire with m), wordUnit(64) (the
                  W unit: operands cut to 32 bits and extended in front, a W shift's b5 cleared, the result sign-extended behind; also
@@ -267,7 +267,7 @@ src/lib/       the component library (registered in `registry` via define())
                  lsu.ts storeAlign / loadExtract / laneMemory(k, xlen) and muldiv.ts mUnit / mulWide (32: the old objects);
                  xlencosts.ts XLEN_COSTS (pinned by tests/cpu64.test.ts: lock step against ISS64 / ISS, BigInt readers cosim.ts wideState);
                  W_ALU (step 7's scene: the W unit around alu(64)); tests/verify-xlen.test.ts: riscv-tests at both widths, the benchmarks at 64;
-                 widgets/cpu64panel.ts cpu64Scene (step 8: its own CPU panel, ISS64 in lock step), widgets/rv64.ts WIDTH_COSTS (step 6)
+                 widgets/cpu64panel.ts cpu64Scene (step 8: its own CPU panel, ISS64 in lock step), widgets/rv64.ts WIDTH_COSTS (step 6); xlenCpu({ xlen: 64, imemPort: true }) = the sandbox's rv64i_core / rv64im_core (+ `_d<k>` for a data memory of 2^k doublewords, default 6; lib/resolve.ts): no ROM inside, `instr` in, `pcLow` (the ROM's address) and `pcOut` out, the data memory stays inside as dm (sandbox RAM holds <= 32-bit words and has no byte enables)
   fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
                  brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
@@ -277,9 +277,13 @@ src/lib/       the component library (registered in `registry` via define())
                  the workbench's Statistics tab (ui/pages/hwstats.ts, its own chunk; benchtabs.ts: the tabs)
   pipeline.ts    equal, nonZero, clearableRegister, pipeline registers (fields on fixed rows),
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
-                 pipelinedCpu(program, { adder, balanced, predictor, dcache, m }) (a cache miss in M freezes every stage;
+                 pipelinedCpu(program, { adder, balanced, predictor, dcache, m, custom }) (a cache miss in M freezes every stage;
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
-                 one or two fetch read ports (BTB = btbOf(1), unchanged)
+                 one or two fetch read ports (BTB = btbOf(1), unchanged). custom: riscv/custom.ts rows, control(custom) in place of CONTROL and
+                 nothing else: the hazard unit reads signals, never opcodes (result = mem is resultSrc 01, the load-use stall; rs1 / rs2 forwarding goes by
+                 register numbers; branch / jump / jalr redirect from E; memWrite a store); without rows the same component, gate for gate
+                 (tests/custom-pipe.test.ts: lock step with ISS({ custom }) through retiring() on directed programs per hazard and 32 random programs
+                 per CPU variant and row set)
   pipe2w.ts      chapter 26's dual-issue in-order RV32IM pipeline: dualPipeCpu(program, { imemK, dmemK }) (pipe-2w): rom2 (two
                  ROM reads, pc and pc + 4; not registered, like rom), PREDECODE (calls / returns from the word), FETCH_PRED (the
                  pair's next PC: return stack, BTB, pc + 8; slot 1 only when slot 0 is not predicted taken), ISSUE_CLASS,
@@ -482,7 +486,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                decode / disasm / ISS({ custom }) take the rows; sanitizeRows, rowsKey), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
                order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
                parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts; RV32_COMPOSE: its
-               builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
+               builder adapter, isa/composekit.ts); rv32Compose(custom, 64) / RV64_COMPOSE: the 64-bit builder (slotsOf / encodeParts / partsOf / fieldsOf / immBits take xlen: 6-bit shift amounts, ld / sd / lwu / the W instructions, PALETTE64); composec.ts RVC_COMPOSE: a 16-bit builder (step 2, one form per c.* mnemonic, encoded through the assembler, decoded by decodeC, the strip by form; tests/compose-isa.test.ts runs each through the assembler), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
@@ -508,7 +512,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                `retirePc()` (pcW0, else pcW: the oldest retiring); dmemWords), ooosnap.ts (the out-of-order core's state read
                from its registers: fetch register, ROB head first, issue queue oldest first with the tags each operand waits for,
                rename table, store queue; oooIssued: each port's pick; isOooCore, sandbox copies (u_rob16…) included;
-               tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
+               tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA; { custom }: about a fifth of the units are the rows, addresses kept in the window through BASE and a masked offset, jumps one instruction on or to a label), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
 src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
@@ -604,6 +608,10 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory
                panels slim to 240 px on a narrow stage); gfxpipe.ts: chapter 34 (pipelineScene:
                gpu31 on the cycle engine; the panel: screen, frames per second, the last frame's timeline from FrameRecorder, the
                vertex kernel in lock-step with WarpISS (launch()), every frame against framePicture; costWidget: PIPE_COSTS);
+               owninstr.ts: chapter 14's last step "Your own instruction" (ownInstrScene(rows): cpuScene({ custom }) with a left panel, the dialog's signal lines over a draft
+               lwx row, the control unit's NANDs, Build the CPU = stage.load; the challenge reads mem[0] = 80 from the gates, solveOwnInstr = the answer row built and run;
+               OWN_COST quotes the prose's NANDs; tests/own-instr-chapter.test.ts); cpuScene({ custom }) assembles, runs the golden model and decodes with the rows on the single-cycle
+               and pipelined CPU (the pipeline chapter's "Your own instruction, pipelined" step); ownrow.ts: the row controls shared with the sandbox dialog;
                composer.ts: the instruction builder over any ComposeIsa (instrComposer({ isa }): palette, asm / hex input,
                clickable bits for any word width, the immediate's wiring as bands per run + one sign bracket, operand cards,
                decode chain, one bit away (isa.loose), and for RV32 the major-opcode map and a data path; Fields | Switches: the
@@ -949,6 +957,14 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly, or on a custom table: followed, not checked), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
                  values the hardware sampled, every register compared (CPU4_STATE paths; elsewhere: followed, not checked);
                  cpu4Use: the blocks an instruction uses (the drawer's marks)
+  exampleisa.ts  Examples ▸ RV32C and RV64 (Sheet): rvcChip = rv32ic_core + a ROM with its C box ticked (rom.c) + RAM + console + a halt part on the
+                 expanded `j .` (cpu.instrOut); rv64Chip = rv64im_core + a ROM assembled for RV64 (rom.xlen = 64), no memory port. The ROM ref's `c`
+                 (byte addressed, 32-bit words: cWindowRom, k <= C_ROM_MAX_K = 8; `.option rvc` without it is a ROM error) and `xlen` (assemble at 64)
+                 are the ROM property section's Extensions row; palette group "Processor cores" (rv32i / rv32ic / rv64i / rv64im cores, C and RV64 ROMs)
+  rv64mon.ts     detectRv64 (a placed rv64i/im_core + a ROM), Rv64Monitor: ISS64 stepped at every retiring edge (the core's `retire` with m), x0..x31, the PC
+                 and the doublewords after a store compared as BigInts (bitsBig on <core>.rf / .dm banks); the CPU drawer's RV64 view (renderRv64: 64-bit
+                 registers in a grid of their own, memory in doublewords). A C core is a plain CpuMonitor with iss.c (ISS({ c }); wordAt = the expanded
+                 instruction, compressedAt(pc), the listing a row per instruction with 16-bit ones shown as 4 hex digits)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
                  lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
@@ -1045,7 +1061,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy
+                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy. Only the single-cycle rv32i_core
+                 exists as a sandbox part (no pipelined core with a memory port), so Apply stays there; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram

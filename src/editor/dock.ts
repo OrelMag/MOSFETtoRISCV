@@ -108,8 +108,10 @@ class Dock {
     this.refit();
     for (const p of this.panes) p.el.hidden = p !== cur;
     this.tabs.hidden = this.panes.length < 2;
+    // three or more drawers: only the open one's tab keeps its word (the others are icons with a title), so no name is cut
+    this.tabs.classList.toggle('many', this.panes.length > 2);
     this.tabs.replaceChildren(...this.panes.map((p) => h('button', {
-      class: `sb-dock-tab${p === cur ? ' on' : ''}`, role: 'tab', 'aria-selected': String(p === cur), title: p.label,
+      class: `sb-dock-tab${p === cur ? ' on' : ''}`, role: 'tab', 'aria-selected': String(p === cur), title: p.label, 'aria-label': p.label,
       onclick: () => this.show(p.id),
     }, icon(p.icon, 13), h('span', null, p.label))));
     this.ed.renderActions();

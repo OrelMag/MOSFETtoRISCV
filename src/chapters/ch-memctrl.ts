@@ -81,6 +81,11 @@ export const chMemCtrl: Chapter = {
     {
       title: 'Commands',
       body: `
+        <p><a href="#/c/dram/0">Chapter 35</a> drove a DRAM by hand: activate a row, sense, read or write, close, precharge, each at the right moment, and refresh
+        before the charge leaks away. The cache of <a href="#/c/cache/0">chapter 22</a> knows none of that: it asks for a line and waits. Between them sits a
+        <strong>memory controller</strong>, a state machine that knows the device's commands and timing rules, turns each request into commands at legal
+        cycles, and refreshes on time whether anyone asks or not. Its choices (keep a row open or close it, which address bits pick the bank, which request
+        to serve first) decide what each miss costs, so the chapter measures them on the benchmarks.</p>
         <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
         refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),

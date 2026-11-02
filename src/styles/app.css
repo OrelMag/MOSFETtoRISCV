@@ -243,6 +243,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .btn.primary .kbd-hint { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent); }
 [data-nosinglekeys] .kbd-hint { display: none; }
 @media (pointer: coarse), (max-width: 700px) { .kbd-hint { display: none; } }
+@media (pointer: coarse) { .qn-search kbd { display: none; } } /* no keyboard: no shortcut to advertise */
 .kh-back { position: fixed; inset: 0; z-index: 72; display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; background: rgb(10 12 20 / 38%); overflow: auto; }
 .kh { width: min(1060px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 16px 20px 12px; }
 .kh-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); }
@@ -363,7 +364,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .narrative-foot .btn { min-width: 0; }
 /* wrap at word boundaries onto a second line before an ellipsis; the full title is also the tooltip */
 .narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
-.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; white-space: normal; text-align: left; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.narrative-foot .btn .lbl { overflow: hidden; text-align: left; line-height: 1.2; display: flex; flex-direction: column; min-width: 0; }
+.narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
+.narrative-foot .btn .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a neighbour's title needs the room more than the key hint does (the shortcut stays: aria-keyshortcuts, the help sheet) */
 .narrative-foot .btn:has(.lbl) .kbd-hint { display: none; }
 .narrative-foot .btn:not(:has(.lbl)) { flex: none; } /* a plain Back / Next keeps its key hint whole */
@@ -557,7 +560,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn);
 }
 .stage-goal .txt { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.stage-goal .more { flex: none; align-self: center; font-size: 16px; line-height: 1; color: var(--muted); }
 .stage-goal:hover { border-color: var(--accent); }
+.stage-goal:hover .more { color: var(--accent); }
 .stage-goal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage-goal.solved { border-color: var(--good); background: color-mix(in srgb, var(--good-soft) 94%, transparent); }
 .stage-goal.solved .tag { color: var(--good); }
@@ -574,6 +579,15 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage-toast.out { opacity: 0; }
 @keyframes stage-toast-in { from { opacity: 0; transform: translateY(-4px); } }
+.challenge.solved:not(.how-open) :is(.hints, .challenge-actions, .explain) { display: none; }
+.challenge-how { margin-top: 6px; }
+/* phone: a pill that takes the learner down to the circuit under the text (ui/pages/chapter.ts showCircuitButton) */
+.show-circuit { display: none; }
+@media (max-width: 760px) {
+  .show-circuit { display: inline-flex; position: fixed; z-index: 25; right: 14px; bottom: 14px; box-shadow: var(--shadow-lg); border-radius: 99px; }
+  .show-circuit[hidden] { display: none; }
+}
+html[data-widget-step] .slow-btn { display: none; }
 .stage-notes-live { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 760px) {
   .stage-notes { top: 40px; left: 12px; right: 12px; max-width: none; align-items: flex-start; }
@@ -736,6 +750,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .la-plot { flex: 1; min-width: 0; position: relative; cursor: crosshair; touch-action: none; }
 .la-svg { display: block; }
 .la-tick { stroke: var(--border); stroke-width: 1; }
+.la-empty { font: 12px var(--font-ui); fill: var(--muted); }
 .la-time { font: 10px var(--font-mono); fill: var(--muted); }
 .la-edge { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.6; }
 .la-late { fill: var(--wx); }
@@ -835,6 +850,13 @@ details.tech-note summary { cursor: pointer; }
 pre.code {
   margin: 0 0 14px; padding: 12px; background: var(--surface-2); border: 1px solid var(--border);
   border-radius: 10px; overflow: auto; font-size: 12px; line-height: 1.55; white-space: pre;
+  /* a shadow on the side that has more to scroll to (the cover scrolls with the text, the shadow stays) */
+  background:
+    linear-gradient(to right, var(--surface-2) 12px, transparent) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--surface-2) 12px, transparent) right / 24px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, var(--text) 16%, transparent), transparent) left / 10px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, var(--text) 16%, transparent), transparent) right / 10px 100% no-repeat scroll,
+    var(--surface-2);
 }
 pre.code .kw { color: var(--accent); font-weight: 600; }
 pre.code .cm { color: var(--muted); font-style: italic; }
@@ -1403,6 +1425,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .narrative-body { overflow: visible; }
   .stage { height: 72vh; }
   .hero { grid-template-columns: 1fr; }
+  /* the buttons in a tidy grid: the primary one across, the rest two to a row (not ragged by label length) */
+  .hero .cta { display: grid; grid-template-columns: 1fr 1fr; }
+  .hero .cta > .btn { justify-content: center; text-align: center; white-space: normal; min-width: 0; height: auto; min-height: 40px; }
+  .hero .cta > .btn.primary { grid-column: 1 / -1; }
   .bench { display: flex; flex-direction: column; height: auto; }
   .library { max-height: 60vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* closed by default: the circuit starts under the top bar */

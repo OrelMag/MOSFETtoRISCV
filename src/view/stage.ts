@@ -4,7 +4,7 @@
 
 import { DualSim } from '../sim/dualsim';
 import { type FlatDesign, findNode, flatten, flattenAsync, type HierNode } from '../sim/flatten';
-import { LoadPlan } from '../sim/loadplan';
+import { fmtCount, LoadPlan } from '../sim/loadplan';
 import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
@@ -179,6 +179,8 @@ export class Stage {
   private levelBadge: HTMLElement;
   /** The how-to line at the canvas's bottom left, kept clear of the panels (placeHint). */
   private hint: HTMLElement;
+  /** The challenge note's size when the cover was last synced (a note that comes or grows refits a fitted view). */
+  private notesKey = '';
   /** rightInset() when the cover was last synced: a fold, unfold or width change refits a fitted view. */
   private inset = 0;
   /** The automatic clock started this scene and the learner has done nothing since (autoRunning). */
@@ -591,7 +593,7 @@ export class Stage {
     this.busy(null);
     const plan = new LoadPlan();
     plan.completed('hierarchy', builtMs + (performance.now() - t0));
-    const what = st.nands ? `${st.nands.toLocaleString('en').replace(/,/g, ' ')} NAND gates` : `${Math.round(st.transistors).toLocaleString('en').replace(/,/g, ' ')} transistors`;
+    const what = st.nands ? `${fmtCount(st.nands)} NAND gates` : `${fmtCount(st.transistors)} transistors`;
     const card = new LoadCard(plan, 'Building the circuit from gates',
       `${what}: everything you will see is built from these parts, nothing on screen is drawn by hand.`);
     this.card = card;
@@ -703,6 +705,8 @@ export class Stage {
 
   /** The drawing, controls and panels of a scene whose simulation is up. */
   private drawScene(scene: Scene, at: string[] | undefined, design: FlatDesign): void {
+    // a Why? card is about the nets it was opened on: a new scene closes it (the Timing panel is a setting and stays)
+    this.why.setOn(false);
     this.setProbeMode(false);
     this.initAnalyzer();
     const start = at ?? scene.path ?? [];
@@ -1812,8 +1816,8 @@ export class Stage {
     else if (busy && this.relayTime) msg = `switching… relay step ${sim.time - this.changeStart}`;
     else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
     else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'} (${(this.lastSettle * RELAY_STEP_MS).toFixed(1)} ms)`;
-    else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'clock edge ' : ''}settled in ${this.lastSettle} gate delay${this.lastSettle === 1 ? '' : 's'}`;
-    else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'switch level: solved instantly' : 'settled';
+    else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'edge ' : ''}settled in ${this.lastSettle} delay${this.lastSettle === 1 ? '' : 's'}`;
+    else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);
     this.setStatus(h('span', { class: `pulse${busy ? ' busy' : ''}${warn ? ' warn' : ''}` }), msg);
   }
@@ -2154,8 +2158,10 @@ export class Stage {
   private syncCover(): void {
     this.autoFold();
     const inset = this.rightInset();
-    const refit = inset !== this.inset;
+    const notes = [...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()).filter((r) => r.height > 0).map((r) => Math.round(r.width) + 'x' + Math.round(r.bottom)).join();
+    const refit = inset !== this.inset || notes !== this.notesKey;
     this.inset = inset;
+    this.notesKey = notes;
     // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
@@ -2215,6 +2221,11 @@ export class Stage {
     const out: Rect[] = [];
     for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el]) {
       const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
+    }
+    // a chapter's challenge note (ui/stagenotes.ts) hides what it sits on: the fit keeps clear of it too
+    for (const n of this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')) {
+      const r = n.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }
     return out;

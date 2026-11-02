@@ -5,6 +5,7 @@ import {
   dualCore, dualPipeCpu, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCpu,
 } from '../../src/lib';
 import type { DramConfig } from '../../src/dram/controller';
+import type { CustomRow } from '../../src/riscv/custom';
 import type { IssOptions } from '../../src/riscv/iss';
 import type { ComponentDef } from '../../src/sim/types';
 import type { Env } from './images';
@@ -20,6 +21,8 @@ export interface Isa {
   mp?: boolean;
   /** The C extension: programs are assembled with .option rvc. */
   c?: boolean;
+  /** Custom instructions (riscv/custom.ts): the CPU's control unit decodes them, the programs use them. */
+  custom?: readonly CustomRow[];
 }
 
 export interface CpuConfig {
@@ -101,5 +104,5 @@ export function notApplicable(cfg: Pick<CpuConfig, 'isa' | 'fixedDmemK'>, name: 
 
 /** The golden model configured like a CPU's ISA. */
 export function issOptions(isa: Isa): IssOptions {
-  return { system: !!isa.system, m: !!isa.m, f: !!isa.f, c: !!isa.c };
+  return { system: !!isa.system, m: !!isa.m, f: !!isa.f, c: !!isa.c, ...(isa.custom ? { custom: isa.custom } : {}) };
 }

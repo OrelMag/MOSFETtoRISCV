@@ -346,7 +346,7 @@ class PuzzleUi {
   toggleList(): void {
     if (this.drawer && !paneShown(this.ed, 'puzzles')) return showPane(this.ed, 'puzzles');
     if (this.drawer) return this.closeList();
-    this.drawer = h('aside', { class: 'sb-drawer sb-chal-list', 'aria-label': 'Program puzzles' });
+    this.drawer = h('aside', { class: 'sb-drawer sb-chal-list', 'aria-label': 'Puzzles' });
     this.drawer.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Escape') this.closeList();
@@ -388,7 +388,7 @@ class PuzzleUi {
       }
     }
     d.replaceChildren(
-      h('div', { class: 'sb-drawer-head' }, icon('puzzle', 15), h('h3', null, 'Program puzzles'), h('span', { class: 'sb-chal-count' }, `${done}/${PUZZLES.length} solved`),
+      h('div', { class: 'sb-drawer-head' }, icon('puzzle', 15), h('h3', null, 'Puzzles'), h('span', { class: 'sb-chal-count' }, `${done}/${PUZZLES.length} solved`),
         h('button', { class: 'btn ghost icon-only', title: 'Close', 'aria-label': 'Close the puzzles', onclick: () => this.closeList() }, icon('close', 15))),
       body);
   }
@@ -521,6 +521,6 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'puzzles', title: 'Program puzzles: write programs for a CPU, run on its gates and scored', icon: 'puzzle', label: 'Puzzles', menu: 'Program puzzles', order: 65, under: 'play',
+  id: 'puzzles', title: 'Program puzzles: write programs for a CPU, run on its gates and scored', icon: 'puzzle', label: 'Puzzles', menu: 'Puzzles', order: 65, under: 'play',
   run: (ed) => uis.get(ed)?.toggleList(),
 });

@@ -281,6 +281,10 @@ export const chSimt: Chapter = {
     {
       title: 'The active mask',
       body: `
+        <p>In <a href="#/c/lanes/0">chapter 29</a> every lane ran every instruction, and a branch went wherever the leader said. That is right as long as the four
+        threads agree. Real kernels disagree: an <code>if</code> on each thread's own data, a loop whose count depends on the element. This chapter gives a lane a
+        way to sit out instructions that are not its own, then builds the bookkeeping that brings the lanes back together after a divergent branch, and counts
+        what the idle lanes cost.</p>
         <p>Each lane has one bit in the <span data-show="simt"><strong>active mask</strong></span>. A lane whose bit is 0 still sees every instruction, but its
         <span data-show="weg">register write enable</span> is off and the <span data-show="mseq">memory sequencer</span> skips it. The mask register stores the
         mask inverted, so at power-on, with every flip-flop at 0, all lanes are active.</p>

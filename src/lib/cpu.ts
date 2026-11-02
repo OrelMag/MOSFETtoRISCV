@@ -23,7 +23,7 @@ import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
-import { cFetch, PLUS2OR4 } from './rvc';
+import { C_EXPAND, cFetch, PLUS2OR4 } from './rvc';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -548,7 +548,7 @@ export function singleCycleCpu(program: number[], opts: CpuOptions = {}): Compon
 }
 
 function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false): ComponentDef {
-  if (c && (dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
+  if (c && (dcache || icache || fpu || (shared && !imemPort))) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
@@ -881,12 +881,23 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
       pins.instr = [0, bottom + 15];
       extraPorts.push(bus('instr', 32, 'in'));
+      if (c) {
+        // C: the port carries the 32-bit window at pc (a window ROM, editor/parts.ts); the expander is inside the core
+        instances.push({ name: 'cx', def: C_EXPAND, at: at.get('imem')!, label: 'C expander' });
+        ins.ends = ins.ends.map((e) => (e === 'instr' ? 'cx.instr' : e));
+        nets.push({ name: 'window', ends: ['instr', 'cx.w'], tags: true });
+        const cn = nets.find((n) => n.name === 'C')!;
+        cn.ends = cn.ends.map((e) => (e === 'imem.c' ? 'cx.c' : e));
+        nets.push({ name: 'cIllegal', ends: ['cx.illegal', 'illegal'], tags: true });
+        extraPorts.push(bit('illegal', 'out'));
+        pins.illegal = [ox, bottom + 16];
+      }
     }
     extraPorts.push(bus('hartid', 32, 'in'), bus('memRData', 32, 'in'), bit('grant', 'in'),
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache
