@@ -14,7 +14,7 @@ import { PY_DMEM_K, PY_IMEM_K, pyCompile, pyProfile } from '../src/widgets/pytho
 
 const prose = chPython.steps.map((s) => s.body).join('\n') + chPython.recap!.keep.join('\n');
 const src = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
-const quoted = (n: number | string) => expect(prose.replace(/\s+/g, ' ')).toContain(String(n));
+const quoted = (n: number | string) => expect(prose.replace(/[ \t\r\n]+/g, ' ')).toContain(String(n));
 
 describe('chapter 15: the numbers in the text', () => {
   it('sum: 4 lines, 12 instructions, total in s0 and i in s1', () => {

@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { FPU32, fpAdd, fpDiv, fpFma, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { F_PROGRAMS } from '../riscv/fprograms';
@@ -52,7 +53,7 @@ function sci(x: number): string {
   if (Math.abs(Number(e)) <= 3) return String(Number(x.toPrecision(3)));
   return Number(e) === 0 ? String(Number(m)) : `${Number(m)} × 10<sup>${e.replace('-', '−').replace('+', '')}</sup>`;
 }
-const grp = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const grp = (n: number) => groupDigits(Math.round(n));
 const nands = (d: ComponentDef) => stats(d).nands;
 const deep = (d: ComponentDef) => logicDepth(d) ?? 0;
 /** Layers built on first use: the cost tables flatten float32 units, which would slow the chapter's load. */

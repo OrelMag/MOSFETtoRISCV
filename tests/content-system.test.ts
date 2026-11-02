@@ -27,7 +27,7 @@ const text = (c: Chapter, title: string) => {
   const q = s.challenge?.kind === 'quiz' ? s.challenge : undefined;
   return [s.body, q?.question, ...(q?.options ?? []), q?.explain].join(' ');
 };
-const flat = (s: string) => s.replace(/\s+/g, ' ');
+const flat = (s: string) => s.replace(/[ \t\r\n]+/g, ' ');
 
 describe('chapters 19–20: the system CPU', () => {
   it('measures the program ROM the same for any program, so sysNands may use an empty one', () => {

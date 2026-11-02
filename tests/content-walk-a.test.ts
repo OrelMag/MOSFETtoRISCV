@@ -3,6 +3,7 @@
 // Also: the prime detector and the 3→8 decoder references are the cheapest known, and the prime detector's are
 // proved minimal by exhaustive search.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { caseOf } from '../src/campaign/cases';
 import { NUDGES } from '../src/campaign/nudges';
@@ -22,9 +23,9 @@ import type { ComponentDef } from '../src/sim/types';
 
 const nands = (d: ComponentDef) => stats(d).nands;
 const lib = (id: string) => resolveComponent(id)!;
-/** A number as the texts write it: 12 038, or 12038 in code-like spots. */
-const spelled = (n: number) => [String(n), n >= 1000 ? `${Math.floor(n / 1000)} ${String(n % 1000).padStart(3, '0')}` : String(n)];
-const quotes = (text: string, n: number) => spelled(n).some((s) => new RegExp(`(?<!\\d)(?<!\\d )${s}(?!\\d)(?! \\d{3})`).test(text));
+/** A number as the texts write it: 12 038, or 12038 in code-like spots. */
+const spelled = (n: number) => [String(n), groupDigits(n)];
+const quotes = (text: string, n: number) => spelled(n).some((s) => new RegExp(`(?<!\\d)(?<!\\d )${s}(?!\\d)(?! \\d{3})`).test(text));
 const node = (id: string) => nodeById(id)!;
 const walk = (id: string) => walkOf(node(id))!;
 const step = (id: string, title: string) => {
@@ -195,7 +196,7 @@ describe('numbers the walks quote', () => {
     const share = (16 * finalNand('pi_reg')) / finalNand('y_final');
     expect(share).toBeGreaterThan(0.3);
     expect(share).toBeLessThan(0.37);
-    expect(walkText('pi_reg')).toContain('4 160 NANDs, a third of the chip');
+    expect(walkText('pi_reg')).toContain('4160 NANDs, a third of the chip');
     expect(16 * finalNand('pi_reg')).toBe(4160);
   });
 });

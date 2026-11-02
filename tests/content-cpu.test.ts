@@ -21,7 +21,7 @@ import { logicDepth, stats } from '../src/sim/stats';
 import { analyzeTiming } from '../src/sim/timing';
 
 /** Everything a chapter says (bodies, recap, quizzes), whitespace collapsed. */
-const text = (c: Chapter) => JSON.stringify(c).replace(/\\n/g, ' ').replace(/\s+/g, ' ');
+const text = (c: Chapter) => JSON.stringify(c).replace(/\\n/g, ' ').replace(/[ \t\r\n]+/g, ' ');
 const words = (id: string) => assemble(PROGRAMS.find((p) => p.id === id)!.source).words;
 const W0 = words(PROGRAMS[0].id);
 const core = (d: Parameters<typeof withoutParts>[0]) => stats(withoutParts(d, ['imem'])).nands;
@@ -55,16 +55,16 @@ describe('ALU control (finding 1)', () => {
 });
 
 describe('register file and single-cycle CPU (findings 9, 10, 11)', () => {
-  it('the register file is nearly half of the 48 000-NAND CPU', () => {
+  it('the register file is nearly half of the 48 000-NAND CPU', () => {
     const rf = stats(singleCycleCpu(W0).netlist!().instances.find((i) => i.name === 'rf')!.def).nands;
     const c = core(singleCycleCpu(W0));
     expect(Math.round(c / 1000)).toBe(48);
     expect(rf / c).toBeGreaterThan(0.45);
     expect(rf / c).toBeLessThan(0.5);
-    expect(text(chRegfile)).toContain('about 48 000');
+    expect(text(chRegfile)).toContain('about 48 000');
     // chapter 14 quotes the same count, and says the Info tab's (with the program ROM) is larger
-    expect(text(chSingleCycle)).toContain('about 48 000 NANDs without its program ROM');
-    expect(text(chSingleCycle)).not.toMatch(/all 48 000/);
+    expect(text(chSingleCycle)).toContain('about 48 000 NANDs without its program ROM');
+    expect(text(chSingleCycle)).not.toMatch(/all 48 000/);
     expect(stats(singleCycleCpu(W0)).nands).toBeGreaterThan(c);
   });
   it('the pseudo-instructions credited to x0 use x0; mv does not', () => {
@@ -191,7 +191,7 @@ describe('pipelines (findings 2–7)', () => {
     const basic = core(pipelinedCpu(W0, { adder: 'ks' })), cb = core(bal), cp = core(pred);
     const added = cb - basic;
     expect(Math.abs(added - 2100)).toBeLessThan(100);
-    expect(t).toContain('about 2 100 more NANDs');
+    expect(t).toContain('about 2100 more NANDs');
     // the BTB: core +38 %
     expect(Math.round(((cp - cb) / cb) * 100)).toBe(38);
     expect(t).toContain('the core grows by 38 %');

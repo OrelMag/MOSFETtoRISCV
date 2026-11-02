@@ -17,7 +17,7 @@ import { GRID_PROGRAMS, oooProgram } from '../src/widgets/ooo';
 
 const OPTS = { dmemWords: 64, imemWords: 128 };
 const SET = GRID_PROGRAMS.map((id) => ({ id, name: id, words: oooProgram(id).words, opts: OPTS }));
-const body = chOoo.steps.find((s) => s.title === 'Your own core')!.body.replace(/\s+/g, ' ');
+const body = chOoo.steps.find((s) => s.title === 'Your own core')!.body.replace(/[ \t\r\n]+/g, ' ');
 const quoted = (v: string) => expect(body, v).toContain(v);
 
 function onSet(cfg: Partial<OooConfig>) {

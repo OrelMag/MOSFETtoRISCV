@@ -102,10 +102,10 @@ describe('campaign lessons', () => {
     expect(LESSONS.isa).toContain('<tr><th>U</th><td colspan="3">imm[9:1]</td><td>rd</td><td>imm[0] · 111</td></tr>');
   });
 
-  it('intro: exhaustive up to 16 input bits, 4 096 random vectors above', () => {
+  it('intro: exhaustive up to 16 input bits, 4096 random vectors above', () => {
     const src = readFileSync(new URL('../src/editor/challenges.ts', import.meta.url), 'utf8');
     expect(src).toMatch(/const MAX_EXHAUSTIVE = 16;/);
     expect(src).toMatch(/const RANDOM_VECTORS = 4096;/);
-    expect(LESSONS.intro).toContain('combination up to 16 input bits, 4 096 random ones');
+    expect(LESSONS.intro).toContain('combination up to 16 input bits, 4096 random ones');
   });
 });

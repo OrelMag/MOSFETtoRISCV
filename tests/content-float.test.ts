@@ -17,7 +17,7 @@ import { isExhaustive, operandPairs } from './fptest';
 const text = (c: Chapter) => [
   c.blurb, ...(c.recap?.keep ?? []), ...(c.recap?.check ?? []).map((q) => JSON.stringify(q)),
   ...c.steps.flatMap((s) => [s.body, JSON.stringify(s.challenge ?? '')]),
-].join('\n').replace(/\s+/g, ' ');
+].join('\n').replace(/[ \t\r\n]+/g, ' ');
 /** n rounded to a multiple of q, with the chapters' thousands separator (a space). */
 const fmt = (n: number, q = 1) => groupDigits(Math.round(n / q) * q);
 const nands = (d: ComponentDef) => stats(d).nands;

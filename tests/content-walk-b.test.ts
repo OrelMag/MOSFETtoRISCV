@@ -125,13 +125,13 @@ describe('numbers in other act 8–10 walks', () => {
     expect(has(t, nands(BANK16))).toBe(true);
   });
 
-  it('o_fpcvt: unsigned 65 520 and up overflows to ∞ when rounding to nearest', () => {
+  it('o_fpcvt: unsigned 65 520 and up overflows to ∞ when rounding to nearest', () => {
     const d = FP_REF.cvt(), sim = simulate(d);
     const at = (x: number, rm: number) => evalOnce(sim, [x, 0, rm]);
     expect(at(65519, 0)).toEqual([0x7bff, 1]); // NX
     expect(at(65520, 0)).toEqual([0x7c00, 5]); // OF + NX
     expect(at(65535, 1)).toEqual([0x7bff, 1]); // toward zero: the largest finite
-    expect(step(WALKS5.o_fpcvt, 'Normalize and round').text).toMatch(/65 520.*65 504/);
+    expect(step(WALKS5.o_fpcvt, 'Normalize and round').text).toMatch(/65 520.*65 504/);
   });
 });
 

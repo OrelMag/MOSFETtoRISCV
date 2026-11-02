@@ -2,6 +2,7 @@
 // arbitration, wearlevel and loader, the longer summaries), each against the model, the gates or the library it
 // describes: a change to either side fails here. Hand-worked timelines are replayed on the bench's own models.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { codexById } from '../src/campaign/codex';
@@ -40,7 +41,7 @@ function text(id: string): string {
   return [codexById(id)!.body, m.idea, m.example?.title, m.example?.body, ...(m.mistakes ?? []),
     ...(CHECKS[id] ?? []).flatMap((q) => [q.question, q.explain, ...q.options, ...(q.why ?? [])])].join(' ');
 }
-const sp = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const sp = (n: number) => groupDigits(n);
 
 // ---- DRAM: commands replayed on m_ctrl's chip model ---------------------------------------------------------
 
@@ -223,7 +224,7 @@ describe('summaries and new entries, measured', () => {
     expect(lib('rv16_pc').summary).toContain('pc ← rst ? 0');
   });
 
-  it('FP adder: 3 755 NANDs, depth 163, normalize & round 2 058; the two sums on the reference', () => {
+  it('FP adder: 3755 NANDs, depth 163, normalize & round 2058; the two sums on the reference', () => {
     const fa = fpAdd(F16, RV16_MUX2);
     const parts = netlistOf(fa)!.instances.map((i) => (typeof i.def === 'string' ? lib(i.def) : i.def));
     const nr = parts.find((p) => p.id.startsWith('fpnr'))!;
@@ -233,7 +234,7 @@ describe('summaries and new entries, measured', () => {
     expect(fpAddX(0x3c00, 0x3bff, true, F16)).toEqual({ y: 0x1000, fl: 0 });
     expect(2 ** -11).toBe(1 - 0.99951171875);
     const t = text('fpadder');
-    for (const s of [`${sp(3755)} NANDs, depth 163`, `${sp(2058)} of them`, '3 755 NANDs and 163 delays deep', '1.875 (0x3F80)', '(0x3BFF)', 'a left shift of 11, exact: 0x1000']) expect(t).toContain(s);
+    for (const s of [`${sp(3755)} NANDs, depth 163`, `${sp(2058)} of them`, '3755 NANDs and 163 delays deep', '1.875 (0x3F80)', '(0x3BFF)', 'a left shift of 11, exact: 0x1000']) expect(t).toContain(s);
   });
 
   it('tri-state: TRIBUF 8 transistors; a 4:1 mux 3 × 4 NANDs, 48 transistors', () => {
@@ -243,7 +244,7 @@ describe('summaries and new entries, measured', () => {
     for (const s of ['TRIBUF: 8 transistors', '4 TRIBUFs = 32 transistors', '3 two-input muxes = 12 NANDs = 48 transistors']) expect(t).toContain(s);
   });
 
-  it('binary to decimal: at most 32 subtractions (59 999), x · 52 429 >> 19 exact through 262 148', () => {
+  it('binary to decimal: at most 32 subtractions (59 999), x · 52 429 >> 19 exact through 262 148', () => {
     const subs = (x: number) => [10000, 1000, 100, 10].reduce((s, p) => { const d = Math.floor(x / p); x -= d * p; return s + d; }, 0);
     let max = 0, at = 0;
     for (let x = 0; x < 65536; x++) if (subs(x) > max) { max = subs(x); at = x; }
@@ -253,6 +254,6 @@ describe('summaries and new entries, measured', () => {
     expect(first).toBe(262149);
     expect(40000 - 65536).toBe(-25536);
     const t = text('bin2dec');
-    for (const s of ['at most 32 subtractions', '(x · 52 429) >> 19', '6 subtractions', '→ 32, the most for 16 bits', 'first wrong at 262 149', '−25 536']) expect(t).toContain(s);
+    for (const s of ['at most 32 subtractions', '(x · 52 429) >> 19', '6 subtractions', '→ 32, the most for 16 bits', 'first wrong at 262 149', '−25 536']) expect(t).toContain(s);
   });
 });

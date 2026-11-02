@@ -2,6 +2,7 @@
 // clauses, tips, lessons and drills is measured here, the thread covers acts 0 and P too, and the Simplify drill's
 // derivations are proved step by step.
 
+import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import { caseOf } from '../src/campaign/cases';
 import { DRILLS, evalBool, minimumCover, parseBool, rng, SIMPLIFY, sopLiterals } from '../src/campaign/drills';
@@ -22,8 +23,8 @@ import { stats } from '../src/sim/stats';
 
 const par = (id: string) => nodeById(id)!.par!;
 const cost = (id: string) => libCost(id)!;
-const fmt = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+const fmt = (v: number) => groupDigits(v);
+const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/[ \t\r\n]+/g, ' ');
 /** A negative number as the texts write it, with a minus sign. */
 const neg = (v: number) => String(v).replace('-', '−');
 const why = (id: string) => nodeById(id)!.why;

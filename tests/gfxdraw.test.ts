@@ -104,8 +104,8 @@ describe('tessellation', () => {
     const d = SAMPLE_DRAWINGS[0].d, c = drawingCost(d);
     expect([d.shapes.length, c.triangles, c.culled, c.pixels, c.clear, c.draw, c.setup]).toEqual([7, 25, 0, 2136, CLEAR_CYCLES + 1, 6453, 2125]);
     expect(Z_WALK_START).toBe(85);
-    const body = chPixels.steps.find((s) => s.title === 'Your own picture')!.body.replace(/\s+/g, ' ');
-    for (const q of ['7 shapes, 25 triangles and 2 136 pixel writes', '6 453 cycles after the 4 437-cycle clear', 'spends 85 cycles', '2 125 of the 6 453'])
+    const body = chPixels.steps.find((s) => s.title === 'Your own picture')!.body.replace(/[ \t\r\n]+/g, ' ');
+    for (const q of ['7 shapes, 25 triangles and 2136 pixel writes', '6453 cycles after the 4437-cycle clear', 'spends 85 cycles', '2125 of the 6453'])
       expect(body).toContain(q);
     expect(CLEAR_CYCLES + 1).toBe(4437);
   });

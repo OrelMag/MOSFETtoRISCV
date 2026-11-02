@@ -206,7 +206,7 @@ export function backFrame(sim: Sim): Uint8Array | null {
 /** The panel's controls explained, for the variant shown (display alone, one triangle, scripts, or the drawing pad). */
 function controlsHelp(opts: PanelOpts): HTMLElement {
   const item = (k: string, v: string) => [h('dt', null, k), h('dd', null, v)];
-  const words = String(FB_WORDS).replace(/\B(?=(\d{3})+$)/g, ' ');
+  const words = groupDigits(FB_WORDS);
   const rows = [
     ...item('Run / Pause', 'Clocks the circuit without stopping, at the speed chosen above. Run itself draws nothing: the scan-out keeps sending '
       + `the front frame, a word (four pixels) a cycle, ${words} cycles a frame${opts.gpu ? ', and the rasterizer works only when told to' : ''}.`),

@@ -21,9 +21,9 @@ import { stats } from '../src/sim/stats';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 
 const nands = (d: ComponentDef) => stats(d).nands;
-/** A number as the codex writes it: 4,741 or 4 741 (thin or plain space). */
+/** A number as the codex writes it: 4,741 or 4741 (thin or plain space). */
 const num = (s: string) => Number(s.replace(/[,\s\u2009\u202f\u00a0]/g, ''));
-const N = '(\\d{1,3}(?:[,\\s\\u2009\\u202f\\u00a0]\\d{3})*|\\d+)';
+const N = '(\\d{1,3}(?:[,\\s\\u2009\\u202f\\u00a0]\\d{3})+|\\d+)';
 /** The numbers a pattern captures in a text (each `#` in the pattern is a number). */
 function grab(text: string, pattern: string): number[] {
   const re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/#/g, N).replace(/ /g, '\\s+'));
