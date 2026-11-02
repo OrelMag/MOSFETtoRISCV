@@ -80,7 +80,7 @@ export function idVdsChart(W = 320, H = 190, big = false): IvChart {
     svg.append(s('path', { d: `${bound} L${X(VDD - VT)},${top} L${X(0)},${top} Z`, class: 'rg-lin' }),
       s('path', { d: `${bound} L${X(VDD - VT)},${top} L${X(VDD)},${top} L${X(VDD)},${Y(0)} Z`, class: 'rg-sat' }),
       s('text', { x: X(0.1), y: Y(I_MAX * 0.9), class: 'rl lin' }, 'linear: a resistor'),
-      s('text', { x: X(1.12), y: Y(100), class: 'rl sat' }, 'saturation: a current source'),
+      s('text', { x: X(VDD) - 4, y: Y(100), 'text-anchor': 'end', class: 'rl sat' }, 'saturation: a current source'), // right-aligned: it stays whole when the chart is scaled down
       // In the clear band between the 1.5 V and 1.8 V curves, just right of the boundary.
       s('text', { x: X(1.3), y: Y(178), class: 'rl sat' }, '← pinch-off'));
   }
