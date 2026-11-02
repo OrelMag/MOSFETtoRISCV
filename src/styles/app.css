@@ -2246,7 +2246,14 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .stage-bar { gap: 2px; }
 }
 @media (pointer: coarse) and (max-width: 420px) {
-  .nav a { min-width: 36px; padding-inline: 4px; }
+  .nav a { min-width: 36px; padding-inline: 3px; }
+}
+/* 360 px: five captioned sections and four tools need 36 px targets (still over WCAG 2.5.8's 24) */
+@media (pointer: coarse) and (max-width: 380px) {
+  .topbar { padding: 0 2px; }
+  .topbar .brand, .topbar .tools .btn.icon-only { min-width: 36px; }
+  .nav a { padding-inline: 1px; }
+  .nav a span.cap { font-weight: 500; letter-spacing: -0.02em; }
 }
 @media (pointer: coarse) { .lab-chip, .lab-unit, .lab-x, .lab-add { min-height: 40px; min-width: 40px; } .lab-num input, .lab-num select { min-height: 40px; } }
 
