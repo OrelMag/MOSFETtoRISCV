@@ -5,3 +5,8 @@
 export type FigureMount = (host: HTMLElement) => void;
 
 export const FIGURES: Record<string, () => Promise<FigureMount>> = {};
+
+FIGURES.buckets = () => import('../widgets/analogy/buckets').then((m) => m.default);
+FIGURES.airlock = () => import('../widgets/analogy/airlock').then((m) => m.default);
+FIGURES.laundry = () => import('../widgets/analogy/laundry').then((m) => m.default);
+FIGURES.leaky = () => import('../widgets/analogy/leaky').then((m) => m.default);
