@@ -2414,3 +2414,21 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-svg .af-wear.dead { fill: var(--bad); }
 /* analogy figures H */
 @media (pointer: coarse) { .af-btn.af-step { min-width: 40px; } .af-slide input[type='range'] { height: 40px; } }
+
+/* Touch targets the sweep missed (a 390 px phone). The step dots are the chapter's main navigation there: each keeps
+   its 22 × 6 look, with a 30 × 40 hit area from a transparent ::after (the spacing moves from the gap into the margins, so
+   the hit areas touch without overlapping; the recap ring, 12 wide, gets wider margins). The stats filter chips grow to
+   40 px, the notes' "Open the step" link and the chapter switch get a larger hit area. */
+@media (pointer: coarse) {
+  .steps-dots { gap: 0; margin-inline: -4px; }
+  .steps-dots button { position: relative; margin-inline: 4px; }
+  .steps-dots button.recap { margin-inline: 9px; }
+  .steps-dots button::after { content: ''; position: absolute; inset: -17px -4px; }
+  .steps-dots button.recap::after { inset: -17px -9px; }
+  .steps-dots .soon { margin-inline: 4px; }
+  .hw-chip { min-height: 40px; padding-inline: 12px; }
+  .np-open { position: relative; }
+  .np-open::after { content: ''; position: absolute; inset: -9px -6px; }
+  .chapter-switch { position: relative; }
+  .chapter-switch::after { content: ""; position: absolute; inset: -7px 0; }
+}
