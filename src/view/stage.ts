@@ -26,7 +26,7 @@ import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector } from './inspector';
 import type { LivePower } from './powerpanel';
-import { closePopover, editNumber } from './popover';
+import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { type NotePin, SchematicView } from './schematic';
@@ -1149,7 +1149,7 @@ export class Stage {
       this.checkpoint();
       this.sim.setInputBits(port, unpackBig(v, p.width));
       this.propagate();
-    });
+    }, () => { const b = this.sim?.getInputBits(port); return (b && packBig(b)) ?? 0n; });
   }
 
   /**
@@ -1816,6 +1816,7 @@ export class Stage {
   // ---- rendering --------------------------------------------------------------------------
 
   refresh(): void {
+    syncPopover();
     if (!this.ctx) return;
     // only the view on screen is painted (the other catches up when it is shown)
     if (this.boardOn) {
