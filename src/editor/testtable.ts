@@ -603,3 +603,8 @@ export function fillOutputs(src: string, plan: TestPlan, names: string[], run: T
   }
   return { src: lines.join('\n'), filled, kept };
 }
+
+/** A table with nothing but blank lines (a starter on a chip with no pins yet): not an error, just nothing to run. */
+export function isBlankTable(src: string): boolean {
+  return !src.split('\n').some((l) => l.trim() && !l.trim().startsWith('#'));
+}
