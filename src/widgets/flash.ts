@@ -94,6 +94,9 @@ function flashPanel(o: FlashSceneOptions): ScenePanel {
     loadPattern();
     // Reset: the cells are back at power-on, so the panel starts again (the pattern programmed anew)
     stage.resetHooks.add(() => {
+      // the floating gates keep their charge through a power-cycle of the nets: empty them, then program the pattern
+      drive({ rd: 0, pgm: 0, ers: 1 });
+      drive({ ers: 0 });
       st.reads = []; st.erases = 0;
       sel = { row: 0, col: 0, data: 0b1010 };
       loadPattern();
