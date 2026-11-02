@@ -5,7 +5,7 @@
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { C_GATE, current, discharge, loadOf, VDD, VT } from './mosphys';
-import { slider } from './mosparts';
+import { fitText, slider } from './mosparts';
 
 const W = 640, H = 260, T_MAX = 120, M = { l: 54, r: 16, t: 14, b: 34 };
 
@@ -14,6 +14,7 @@ export function mosCostWidget(): Widget {
   const X = (t: number) => M.l + (t / T_MAX) * (W - M.l - M.r);
   const Y = (v: number) => H - M.b - (v / VDD) * (H - M.t - M.b);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot', role: 'img', 'aria-label': 'Output voltage falling after the gate switches on' });
+  fitText(svg, W);
   for (let t = 0; t <= T_MAX; t += 20) {
     svg.append(s('line', { x1: X(t), x2: X(t), y1: M.t, y2: H - M.b, class: 'grid' }), s('text', { x: X(t), y: H - M.b + 14, 'text-anchor': 'middle', class: 'tick' }, String(t)));
   }

@@ -9,6 +9,16 @@ export const I_MAX = current(VDD - VT, VDD).id * 1.06;
 
 interface Axes { X: (v: number) => number; Y: (i: number) => number; svg: SVGSVGElement; xl: SVGTextElement }
 
+/** Keep a scaled SVG chart's text readable: `--tk` is how many user units one screen pixel covers once the chart is
+ *  narrower than its viewBox (a phone), so the CSS font sizes (calc(10.5px * var(--tk, 1))) stay ~10 px on screen. */
+export function fitText(svg: SVGSVGElement, W: number): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  new ResizeObserver(() => {
+    const w = svg.clientWidth;
+    svg.style.setProperty('--tk', w > 0 && w < W ? (W / w).toFixed(2) : '1');
+  }).observe(svg);
+}
+
 function axes(W: number, H: number, xLabel: string, label: string): Axes {
   const m = { l: 54, r: 12, t: 12, b: 34 };
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot', role: 'img', 'aria-label': label }) as SVGSVGElement;
@@ -22,6 +32,7 @@ function axes(W: number, H: number, xLabel: string, label: string): Axes {
     svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(i), y2: Y(i), class: 'grid' }),
       s('text', { x: m.l - 6, y: Y(i) + 3.5, 'text-anchor': 'end', class: 'tick' }, String(i)));
   }
+  fitText(svg, W);
   const xl = s('text', { x: W - m.r, y: H - 4, 'text-anchor': 'end', class: 'axl' }, xLabel);
   svg.append(s('line', { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: 'ax' }), s('line', { x1: m.l, x2: m.l, y1: m.t, y2: H - m.b, class: 'ax' }),
     xl, s('text', { x: 6, y: m.t, 'text-anchor': 'end', 'dominant-baseline': 'hanging', transform: `rotate(-90 6 ${m.t})`, class: 'axl' }, 'Id (µA)'));
