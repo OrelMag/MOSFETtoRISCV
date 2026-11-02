@@ -214,10 +214,10 @@ export function cmosFigure(weak: boolean): FigureMount {
     const mount = mountWater(stageHost, scene, readout);
     const change = () => { scene.state.step = columnStep(scene.state.out, inp, 0); readout(); mount.kick(); };
     range.addEventListener('input', () => { inp.vin = Number(range.value); change(); });
-    shortBtn.addEventListener('click', () => { inp.short = !inp.short; change(); });
+    shortBtn.addEventListener('click', () => { inp.short = !inp.short; if (inp.short) inp.weak = false; change(); });
     weakBtn.addEventListener('click', () => {
       inp.weak = !inp.weak;
-      if (inp.weak) { inp.vin = 0; range.value = '0'; }
+      if (inp.weak) { inp.vin = 0; range.value = '0'; inp.short = false; } // the two states exclude each other
       change();
     });
     readout();
