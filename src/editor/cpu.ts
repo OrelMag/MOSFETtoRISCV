@@ -28,6 +28,7 @@ import { narrateInstr, type NarrLine } from '../riscv/narrate';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
+import { wordRegs } from '../view/memfind';
 import type { Compiled } from './compile';
 import { romImage, type RomRef } from './memory';
 import type { ChipDoc, PartDoc } from './model';
@@ -282,17 +283,6 @@ export function pinValue(v: CpuSimView, doc: ChipDoc, name: string, dir: 'in' | 
   return p ? refValue(v, doc, { pin: p.id }) : null;
 }
 
-const WORD = /^w(\d+)$/;
-
-/** Registers named w<i> (each with a q port) directly under a node. */
-function wordRegs(n: HierNode): Map<number, HierNode> {
-  const out = new Map<number, HierNode>();
-  for (const [name, c] of n.children ?? []) {
-    const m = WORD.exec(name);
-    if (m && c.ports.q) out.set(Number(m[1]), c);
-  }
-  return out;
-}
 
 /**
  * Where a part keeps its words: the node itself (regfile, RAM: w0, w1, ... registers), its `ram`
