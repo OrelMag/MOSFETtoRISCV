@@ -1172,7 +1172,9 @@ export class Stage {
   private rise(clk: string): void {
     const sim = this.sim!;
     let end: number | null = null;
-    lowerClock(sim, clk, !(this.period && sim.runUntil)); // a clock left high by hand: no edge, but the panels' models would step
+    // a clock left high by hand: no edge, but the panels' models would step. Settled even with a period: lowered and
+    // raised at one instant (the next edge due now), transport delay would cancel the pulse
+    lowerClock(sim, clk);
     if (this.period && sim.runUntil) {
       const P = this.period;
       const E = Math.max(sim.time, this.nextEdge);
