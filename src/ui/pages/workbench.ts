@@ -94,6 +94,8 @@ export class WorkbenchPage implements Page {
       // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
       const near = suggestItems(id);
       this.current = '';
+      // nothing to describe: the Info / Table / Verilog pane would be three empty tabs
+      this.el.classList.add('no-part');
       this.libName.textContent = '';
       this.mark.replaceChildren();
       this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
@@ -107,6 +109,7 @@ export class WorkbenchPage implements Page {
       this.showLibrary(true); // a phone: the list to pick from, opened
       return;
     }
+    this.el.classList.remove('no-part');
     this.current = def.id;
     this.libName.textContent = def.name;
     this.mark.replaceChildren(bookmarkButton({ kind: 'bench', id: def.id }, () => `Workbench · ${def.name}`));

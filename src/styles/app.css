@@ -1124,6 +1124,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* ---------- workbench ---------- */
 .bench { display: grid; height: 100%; grid-template-columns: 270px 1fr minmax(260px, 340px); }
+.bench.no-part { grid-template-columns: 270px 1fr; }
+.bench.no-part > .inspector { display: none; }
 .library { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .library input[type=search] {
   margin: 12px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border);
