@@ -54,7 +54,7 @@
 .m65-op td b { display: block; font-size: 11px; }
 .m65-op td span { font-size: 9px; color: var(--text-2); }
 .m65-op td.x { background: transparent; border: 1px dashed var(--border); cursor: default; }
-.m65-op td.u { border-left-style: dashed; background: color-mix(in srgb, var(--c) 12%, var(--surface)); }
+.m65-op td.u { border: 1px dashed var(--c); border-left: 3px dashed var(--c); background: color-mix(in srgb, var(--c) 7%, var(--surface)); }
 .m65-isa .m65-legend i.u { background: transparent; border: 1.5px dashed var(--text-2); width: 9px; height: 9px; }
 .m65-undoc { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .m65-op td.sel { outline: 2.5px solid var(--text); outline-offset: -1px; }
