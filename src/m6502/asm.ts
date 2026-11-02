@@ -19,7 +19,7 @@
 // (no forward reference) and below $100, and the instruction has that form; otherwise absolute. Pass 2
 // keeps pass 1's choice, so the two passes always agree on sizes.
 
-import { MODES, opcodeOf, modesOf, type Mode } from './isa';
+import { MODES, OPCODES, opcodeOf, modesOf, UNDOC, type Mode } from './isa';
 
 export interface AsmError { line: number; message: string }
 
@@ -31,6 +31,8 @@ export interface AsmLine {
   addr: number;
   bytes: number[];
   source: string;
+  /** The statement is one of the stable undocumented opcodes (isa.ts UNDOC): the model knows it, the transistor chip and the part do not. */
+  undocumented?: true;
 }
 
 export interface AsmSegment { addr: number; bytes: Uint8Array }
@@ -387,7 +389,8 @@ export function assemble(src: string): AsmResult {
   parsed.forEach(({ stmt }, i) => {
     const at = addrs[i];
     const bytes: number[] = [];
-    lines.push({ line: i + 1, addr: at, bytes, source: rawLines[i] });
+    const line: AsmLine = { line: i + 1, addr: at, bytes, source: rawLines[i] };
+    lines.push(line);
     if (!stmt || failed.has(i)) return;
     const value = (e: Expr): number => {
       const v = evaluate(e, symbols, at);
@@ -445,6 +448,7 @@ export function assemble(src: string): AsmResult {
       fail(i, e.message);
       return;
     }
+    if (stmt?.k === 'ins' && bytes.length && UNDOC[bytes[0]] && !OPCODES[bytes[0]]) line.undocumented = true;
     if (at + bytes.length > 0x10000) { fail(i, 'past the end of memory ($FFFF)'); bytes.length = 0; return; }
     if (bytes.length && origin === undefined) origin = at;
     bytes.forEach((b, k) => { mem[at + k] = b; written[at + k] = 1; });
