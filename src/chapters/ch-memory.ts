@@ -83,7 +83,7 @@ export const chLatches: Chapter = {
         <p>Why does the loop remember? With both inputs at 1, each NAND is an inverter of the other's output. Two inversions in a ring
         regenerate themselves: q = 1 forces q̄ = 0, which forces q = 1 again, and the opposite pair is just as stable. The circuit has two
         stable states and the inputs push it from one to the other. The cost is ${nands(SR_LATCH)} NANDs (${stats(SR_LATCH).transistors} transistors): the cheapest
-        memory there is, and the seed of every register and RAM bit in this book.</p>
+        memory there is, and the seed of every register and memory bit in this book.</p>
         <div class="try">Set the latch (pulse s_n to 0 and back to 1), then notice q stays 1 with both inputs at 1.</div>`,
       tour: {
         beats: [
@@ -348,7 +348,7 @@ export const chRegisters: Chapter = {
         of them).</p>
         <p>Nothing new is inside: n copies of the previous chapter's enable flip-flop, so the cost is n times ${nands(DFFE)} NANDs (here ${nands(register(4))} for 4 bits, ${stats(register(4)).transistors} transistors),
         and a delay of one flip-flop's clock-to-q from the edge to the word. The shared en does a second job: it fans out to every bit, so a wide register loads all its bits on the same edge or none, and
-        a word is never half-written. RISC-V's 32 registers of 32 bits are ${32 * 32} bits, ${32 * 32 * nands(DFFE)} NANDs of flip-flops before any read logic: the register file is one of the biggest blocks on a small core.</p>
+        a word is never half-written. RISC-V's 32 registers of 32 bits are ${32 * 32} bits, ${32 * 32 * nands(DFFE)} NANDs of flip-flops before any read logic: this bank of registers is one of the biggest blocks on a small core.</p>
         <div class="try">Type a value into d, set en = 1, then Pulse. Change d again with en = 0 and Pulse: q keeps the old word.</div>`,
       tour: {
         beats: [
@@ -388,10 +388,10 @@ export const chRegisters: Chapter = {
       title: 'Wider words',
       body: `
         <p>An 8-bit register is the same picture with eight rows. Look at the cost in the Info tab: every bit of storage
-        is ${nands(DFFE)} NANDs (${stats(DFFE).transistors} transistors) here. Real memories use cleverer cells, a 6-transistor SRAM cell or even a single
+        is ${nands(DFFE)} NANDs (${stats(DFFE).transistors} transistors) here. Real memories use cleverer cells, six transistors or even a single
         transistor and a capacitor (DRAM), which we will meet later.</p>
-        <p>The 8-bit register is ${nands(register(8))} NANDs and ${stats(register(8)).transistors} transistors, against ${8 * 6} for eight 6-transistor SRAM cells: ten times as many. What
-        the flip-flop buys is simplicity, a clean edge-triggered interface and an output that is always valid. What a RAM cell buys is density, at the price of sense amplifiers and a more careful
+        <p>The 8-bit register is ${nands(register(8))} NANDs and ${stats(register(8)).transistors} transistors, against ${8 * 6} for eight 6-transistor cells: ten times as many. What
+        the flip-flop buys is simplicity, a clean edge-triggered interface and an output that is always valid. What those cells buy is density, at the price of extra circuits to read them and a more careful
         timing. Both are used, and both appear in this book.</p>`,
       more: {
         derive: `<p>Cost per stored bit: ${nands(DFFE)} NANDs = a ${nands(DFF)}-NAND flip-flop + a ${nands(MUX2)}-NAND enable multiplexer. The flip-flop is two latches (${nands(D_LATCH)} NANDs each) and the clock inverter.
@@ -738,7 +738,7 @@ export const chRegisters: Chapter = {
       body: `
         <p>A counter is a register whose next value is a fixed function of its value. Let that function read inputs too and you have a
         <strong>finite-state machine</strong>: a state register, next-state logic, output logic. It is how hardware runs a sequence (a divider's
-        iterations, a cache refill, the steps of a multicycle CPU in <a href="#/c/multicycle/0">chapter 23</a>).</p>
+        iterations, a memory refill, the steps of a CPU that spends several cycles per instruction in <a href="#/c/multicycle/0">chapter 23</a>).</p>
         <p>The design is mechanical. Recognise 1, 0, 1 on a serial input x, overlaps included: S0 has seen nothing useful, S1 a 1, S2 a 1 then
         a 0. Draw the transitions, encode the states in two flip-flops (s1 s0 = 00, 01, 10), write the table:</p>
         <table class="cmp fsm-tt"><thead><tr><th>s1 s0</th><th>x</th><th>n1 n0</th><th>y</th></tr></thead><tbody>
@@ -825,7 +825,7 @@ export const chMemory: Chapter = {
   recap: {
     keep: [
       'A RAM is registers plus a decoder with enable (write: one word\'s load enable, at the clock edge) and a multiplexer tree (read: asynchronous, no clock). 4 words × 4 bits: 306 NANDs.',
-      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use 6T SRAM or 1T1C DRAM cells.',
+      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use cells of six transistors, or of one transistor and a capacitor.',
       'A ROM keeps the decoder and puts the data in the wiring: output bit j is the OR of the word lines whose bit j is 1. A PLA builds only the product terms the outputs need: the 7-segment font in 164 NANDs against 313 as a ROM.',
       'FIFO: a circular buffer with read and write pointers, one extra pointer bit telling full from empty. Stack: one pointer, the top at slot sp − 1.',
       'A CAM compares the key with every entry at once and priority-encodes the matches; a comparator per entry keeps CAMs small. Each extra port costs another mux tree (read) or decoder (write).',
@@ -1056,7 +1056,7 @@ export const chMemory: Chapter = {
       title: 'FIFO',
       body: `
         <p>A <strong>first-in first-out</strong> queue decouples a producer from a consumer: a UART receiving bytes faster than software reads
-        them, a pipeline stage that sometimes stalls. Here, four words in registers, written through <span data-show="u6">a decoder</span> at
+        them, a processing stage that sometimes has to wait. Here, four words in registers, written through <span data-show="u6">a decoder</span> at
         the <span data-show="wp">write pointer</span> and read
         through <span data-show="u14">a multiplexer</span> at the <span data-show="rp">read pointer</span>. Both pointers only ever count up,
         wrapping around: a <em>circular buffer</em>.</p>
@@ -1148,7 +1148,7 @@ export const chMemory: Chapter = {
         <span data-show="u10 u11 u12 u13">its own comparator</span>, all comparing with the key at the same time, and
         <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/6">chapter 7</a>) turns the matches into hit and index.
         A valid bit per entry keeps never-written entries from matching.</p>
-        <p>One comparator per entry is why CAMs stay small: a TLB (address translation) has tens of entries, a fully associative cache a few
+        <p>One comparator per entry is why CAMs stay small: an address-translation table has tens of entries, a fast buffer that may keep any line in any slot, a few
         hundred lines at most, a network router's lookup table is the big exception, and burns power accordingly.</p>
         <p>The search takes no clock and no sequencing: all entries compare in parallel, so the lookup time is one comparator plus one priority encoder, independent of the number of entries. What grows is the area: this CAM has four 4-bit entries and costs ${nands(cam(2, 4))} NANDs,
         of which a comparator alone is ${nands(equal(4))}.</p>`,
@@ -1189,7 +1189,7 @@ export const chMemory: Chapter = {
     {
       title: 'Ports cost area',
       body: `
-        <p>The register file of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
+        <p>The register bank of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
         <p>The cost is not linear: ${nands(regfileMP(5, 32, 4, 2)).toLocaleString('en-US')} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${nands(regfileMP(5, 32, 2, 1)).toLocaleString('en-US')} for 2 reads and 1 write

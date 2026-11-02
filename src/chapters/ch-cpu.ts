@@ -43,7 +43,7 @@ export const chAlu: Chapter = {
     'say why bitwise operations cost n gates and constant depth at any width',
     'build a barrel shifter from log₂ n mux stages, with one right-shifter serving all three shifts',
     'read signed and unsigned less-than from one subtraction (N ⊕ V, ¬C)',
-    'say where the ALU control comes from: {funct7[5], funct3} for an R-type, a few gates for immediates, addresses and branches',
+    'say where the ALU control comes from: {funct7[5], funct3} for an R-type, a few gates for <span data-ahead="immediates">immediates (constants stored inside the instruction word)</span>, addresses and branches',
   ],
   builds: ['adders', 'routing'],
   recap: {
@@ -52,7 +52,7 @@ export const chAlu: Chapter = {
       'Barrel shifter: log₂ n stages of 2:1 muxes, stage j shifting by 2<sup>j</sup> (the shift itself is wiring). Left = reverse, shift right, reverse back; an arithmetic shift fills with <code>arith ∧ a[n−1]</code>. 32 bits: 901 NANDs, 16 delays deep.',
       'No comparator: a − b gives Z (equal), N ⊕ V (signed less-than: N alone lies on overflow) and ¬C (unsigned less-than: no carry out of a + ¬b + 1).',
       'Every unit computes every cycle and an 8:1 mux on ctl[2:0] picks the result; ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
-      'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere the control unit decides: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
+      'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere a few gates decide: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
       'At 32 bits: 2 610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
     ],
     practise: ['a_addsub16', 'a_slt', 'a_shift16', 'a_alu16'],
@@ -75,8 +75,8 @@ export const chAlu: Chapter = {
         question: '<code>srl</code> and <code>sra</code> share funct3 = 101. What tells the ALU which one to do?',
         options: ['funct7[5] (instruction bit 30), passed on as ctl[3]', 'The opcode', 'A decoder reading all seven funct7 bits', 'The sign of rs2'],
         answer: 0,
-        explain: 'For an R-type ctl = {funct7[5], funct3}: 0101 is SRL, 1101 SRA, and the same bit picks SUB (1000) over ADD (0000). For OP-IMM the control unit passes bit 30 only when funct3 = 101 (srli / srai): in addi or andi that bit is imm[10], and <code>addi a0, a0, -1</code> would otherwise subtract.',
-        why: ['', 'Both are R-type (or both OP-IMM for the immediate forms): the opcode says where the operand comes from, not which shift.', 'Only bit 5 of funct7 differs between them: one gate passes it on, no wider decoder.', 'rs2 gives the shift amount. The fill bit comes from a, and only when ctl says arithmetic.'],
+        explain: 'For an R-type ctl = {funct7[5], funct3}: 0101 is SRL, 1101 SRA, and the same bit picks SUB (1000) over ADD (0000). For OP-IMM a few gates pass bit 30 only when funct3 = 101 (srli / srai): in addi or andi that bit is imm[10], and <code>addi a0, a0, -1</code> would otherwise subtract.',
+        why: ['', 'Both are R-type (or both OP-IMM, the forms that carry a constant): the opcode says where the operand comes from, not which shift.', 'Only bit 5 of funct7 differs between them: one gate passes it on, no wider decoder.', 'rs2 gives the shift amount. The fill bit comes from a, and only when ctl says arithmetic.'],
       },
     ],
   },
@@ -86,7 +86,7 @@ export const chAlu: Chapter = {
       body: `
         <p>AND, OR and XOR on words are just <span data-show="g0 g1 g2 g3 g4 g5 g6 g7">n independent gates</span>: no carries, no interaction between bit positions,
         depth 2–3 NANDs regardless of width. They cost O(n) area and O(1) delay.</p>
-        <p>In RV32I they implement masking (<code>andi</code>), setting bits (<code>ori</code>), toggling and comparing
+        <p>In RISC-V they implement masking (<code>andi</code>), setting bits (<code>ori</code>), toggling and comparing
         (<code>xor</code>), and <code>not</code> as <code>xori rd, rs, -1</code>.</p>
         <p>The reason is structural: output bit <em>i</em> is a function of a<sub>i</sub> and b<sub>i</sub> alone, so no signal
         crosses from one bit position to another. Widening the word adds copies of the same cell and no delay. At 32 bits an
@@ -99,7 +99,7 @@ export const chAlu: Chapter = {
           { title: 'Where they differ', show: ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'], expect: { y: 0x6c },
             say: '<p>0xCA ⊕ 0xA6 = <code>{b:y}</code>: a 1 in every position where the inputs differ. Each of the eight gates saw only its own two input bits.</p>' },
           { title: 'Flip everything', set: { b: 0xff }, expect: { y: 0x35 },
-            say: '<p>With b all ones every gate inverts its a bit: y = ¬a = <code>{b:y}</code>. That is RISC-V\'s <code>not</code>: <code>xori rd, rs, -1</code>, with -1 sign-extended to 32 ones.</p>' },
+            say: '<p>With b all ones every gate inverts its a bit: y = ¬a = <code>{b:y}</code>. That is RISC-V\'s <code>not</code>: <code>xori rd, rs, -1</code>, with -1 written as 32 ones.</p>' },
           { title: 'Leave alone', set: { b: 0 }, expect: { y: 0xca },
             say: '<p>With b = 0 each bit passes through unchanged: y = a. In general b is a mask of the bits to toggle.</p>' },
         ],
@@ -208,7 +208,7 @@ export const chAlu: Chapter = {
         ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU also force subtraction.</p>
         <p>The codes are chosen to match R-type encodings: for <code>add</code> … <code>and</code>,
         <code>ctl = {funct7[5], funct3}</code>, plain wiring. Other instructions need a few gates in
-        <a href="#/c/cpu/0">chapter 14</a>'s control unit. OP-IMM has no funct7: bit 30 is imm[10], so it passes as ctl[3]
+        <a href="#/c/cpu/0">chapter 14</a>'s control logic. OP-IMM has no funct7: bit 30 is imm[10], so it passes as ctl[3]
         only for the shifts (funct3 = 101: <code>srai</code>); else <code>addi a0, a0, -1</code> would subtract. Loads, stores,
         <code>jalr</code> and <code>auipc</code> force ADD (an address; their funct3 is a width or nothing), branches force SUB
         and read the flags. With op = R ∨ OP-IMM: ctl[2:0] = op ∧ funct3, ctl[3] = op ∧ funct7[5] ∧ (R ∨ funct3 = 101) ∨ branch.</p>
@@ -270,8 +270,8 @@ export const chRegfile: Chapter = {
       'Two asynchronous read ports and one synchronous write port: two operands in, one result out, every cycle.',
       'Structure: a write decoder, one register with enable per word, every word bundled onto one bus, and a mux tree per read port.',
       'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>li</code> (addi rd, x0, imm), <code>nop</code>, <code>j</code> (jal x0), <code>beqz</code>, <code>neg</code> (sub rd, x0, rs) and <code>ret</code> (jalr x0, 0(ra)) are pseudo-instructions built on it; <code>mv</code> is addi rd, rs, 0 and needs none.',
-      `RV32I: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the single-cycle CPU (about 48 000 without its program ROM).`,
-      `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom SRAM cell adds a port for about two transistors per bit.`,
+      `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter 14 (about 48 000 without its program ROM).`,
+      `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom memory cell adds a port for about two transistors per bit.`,
     ],
     practise: ['m_rf'],
     check: [
@@ -279,12 +279,12 @@ export const chRegfile: Chapter = {
         question: 'Why does the register file have two read ports?',
         options: ['An R-type instruction reads rs1 and rs2 in the same cycle', 'One port reads while the other writes', 'One of them serves x0', 'To read 64-bit values'],
         answer: 0,
-        explain: '<code>add rd, rs1, rs2</code> needs both operands at once in a single-cycle machine. One port would take two cycles; one result per instruction needs only one write port.',
-        why: ['', 'Writes have their own synchronous port; both read ports only read.', 'x0 needs no port: it is a constant on the bundled bus, selected like any other word.', 'RV32I registers are 32 bits, and each port returns one register.'],
+        explain: '<code>add rd, rs1, rs2</code> needs both operands at once in a machine that finishes one instruction per cycle. One port would take two cycles; one result per instruction needs only one write port.',
+        why: ['', 'Writes have their own synchronous port; both read ports only read.', 'x0 needs no port: it is a constant on the bundled bus, selected like any other word.', 'RISC-V registers are 32 bits, and each port returns one register.'],
       },
       {
         question: '<code>addi x0, x5, 1</code> executes. What happens?',
-        options: ['Nothing visible: the write to x0 goes nowhere', 'x0 holds x5 + 1 until the next write', 'An illegal-instruction trap', 'x5 is incremented'],
+        options: ['Nothing visible: the write to x0 goes nowhere', 'x0 holds x5 + 1 until the next write', 'The processor stops with an error', 'x5 is incremented'],
         answer: 0,
         explain: 'x0 has no storage, so the result is lost and x0 still reads 0. <code>addi x0, x0, 0</code> is the canonical <code>nop</code>.',
         why: ['', 'There is nothing to hold the value: x0\'s slot on the read bus is wired to 0.', 'Writing x0 is legal; RISC-V relies on it for nop and for discarding results (j is jal x0).', 'rd is x0; rs1 = x5 is only read.'],
@@ -294,7 +294,7 @@ export const chRegfile: Chapter = {
         options: ['4 000 NANDs: one more 32:1 tree of 32-bit words', 'two transistors per bit', 'nothing: the bundled bus already reaches every register', 'a second set of 31 registers'],
         answer: 0,
         explain: '31 MUX2 per bit × 32 bits × 4 NANDs = 3 968 NANDs. Port count is a first-order cost, which is why wide superscalar cores fight over register-file ports.',
-        why: ['', 'That is the price with custom multi-ported SRAM cells, not with a mux tree built from NANDs.', 'The bus brings every word to the port, but each port still needs its own selector to pick one.', 'Ports share the storage; only the selection logic is duplicated.'],
+        why: ['', 'That is the price with custom multi-ported memory cells, not with a mux tree built from NANDs.', 'The bus brings every word to the port, but each port still needs its own selector to pick one.', 'Ports share the storage; only the selection logic is duplicated.'],
       },
     ],
   },
@@ -309,10 +309,10 @@ export const chRegfile: Chapter = {
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
         That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
-        <p>Why two read ports and one write port: the commonest instruction, <code>add rd, rs1, rs2</code>, reads two registers and writes one, and a single-cycle
-        machine does all three in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
+        <p>Why two read ports and one write port: the commonest instruction, <code>add rd, rs1, rs2</code>, reads two registers and writes one, and a machine that finishes one instruction per cycle
+        does all three in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
         A write must change state, so it happens only at the rising edge and only where the decoder and <code>we</code> enable one register. Reading a register while writing it gives the old
-        value until the edge, which is what a single-cycle machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
+        value until the edge, which is what such a machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
         <div class="try">Write a value: set wa, wd, we = 1, Pulse. Then point ra1 / ra2 at it.</div>`,
       scene: () => ({ root: regfile(3, 8), inputs: { wa: 5, wd: 0x42, we: 1, clk: 0, ra1: 5, ra2: 0 }, panels: [memGridPanel] }),
       tour: {
@@ -353,10 +353,10 @@ export const chRegfile: Chapter = {
     {
       title: 'The real thing: 32 × 32',
       body: `
-        <p>RV32I's register file: <span data-show="w1 w2 w3 w31">31 × 32 flip-flops</span> with enable, a
+        <p>RISC-V's register file: <span data-show="w1 w2 w3 w31">31 × 32 flip-flops</span> with enable, a
         <span data-show="dec">5→32 write decoder</span> and two <span data-show="rp1 rp2">32:1 multiplexer trees</span> of
         32-bit words. At this site's construction that is ${fmt(RF_COST.regs)} NANDs of registers (${RF_COST.perBit} per bit: a flip-flop with enable), ${fmt(RF_COST.port)} per read port and ${fmt(RF_COST.dec)} for the decoder: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU.</p>
-        <p>Real designs use custom multi-ported SRAM cells: an extra read port costs two transistors per bit, not a whole
+        <p>Real designs use custom multi-ported memory cells: an extra read port costs two transistors per bit, not a whole
         mux tree. Register-file port count is a first-order cost in superscalar cores for exactly this reason.</p>
         <p>The split is worth reading: ${Math.round((100 * RF_COST.regs) / RF_COST.total)} % of the NANDs are the storage itself, ${Math.round((200 * RF_COST.port) / RF_COST.total)} % the two read ports and the decoder under
         ${Math.round((100 * RF_COST.dec) / RF_COST.total)} %. The registers are the part you cannot avoid; the ports are the part that grows with ambition. Doubling the issue width of a core roughly
@@ -372,7 +372,7 @@ export const chRegfile: Chapter = {
           <tr><td>31 registers</td><td>${fmt(RF_COST.regs)}</td><td>${Math.round((100 * RF_COST.regs) / RF_COST.total)} %</td></tr>
           <tr><td>2 read ports</td><td>${fmt(2 * RF_COST.port)}</td><td>${Math.round((200 * RF_COST.port) / RF_COST.total)} %</td></tr>
           <tr><td>decoder, bundle</td><td>${fmt(RF_COST.dec)}</td><td>${Math.round((100 * RF_COST.dec) / RF_COST.total)} %</td></tr></table>`,
-        real: `<p>A 6-transistor SRAM cell stores a bit in six transistors against this design's ${RF_COST.perBit * 4} a bit (${RF_COST.perBit} NANDs of four transistors each). A register-file cell with two read ports and one write port is
+        real: `<p>A 6-transistor memory cell stores a bit in six transistors against this design's ${RF_COST.perBit * 4} a bit (${RF_COST.perBit} NANDs of four transistors each). A register-file cell with two read ports and one write port is
           about ten, because each read port adds two transistors (a pass gate and its enable) instead of a whole tree. That is the saving the paragraph above describes: ports in custom cells are cheap, and ports
           in gates are not.</p>`,
         pitfall: `<p>Do not read the register file's NAND count as the cost of "32 registers" in general: it is the cost of this construction. Changing from 2 to 3 read ports or from 32 to 16 registers moves the
@@ -602,7 +602,7 @@ export const chSingleCycle: Chapter = {
         question: 'A program of mostly <code>addi</code> runs on the single-cycle CPU. Why is each instruction no faster than a load?',
         options: ['The clock period is fixed by the longest path any instruction can take', 'addi uses the data memory too', 'The register-file write takes the whole cycle', 'It is faster: each instruction takes its own time'],
         answer: 0,
-        explain: 'One instruction per cycle at one period: the cycle must fit the slowest instruction, and addi wastes the slack. Multicycle and pipelined designs exist to recover it.',
+        explain: 'One instruction per cycle at one period: the cycle must fit the slowest instruction, and addi wastes the slack. Designs that split an instruction over several cycles, or overlap instructions, exist to recover it.',
         why: ['', 'addi never touches the data memory; its path ends at the result mux.', 'The write happens at the clock edge; it is not what makes the cycle long.', 'A synchronous design has one clock period for every instruction.'],
       },
     ],
@@ -718,7 +718,7 @@ export const chSingleCycle: Chapter = {
           { title: 'lw: the same address', cycles: 1, show: ['alu', 'dm', 'res'], expect: { pcOut: 8, aluOut: 8 },
             say: '<p><code>lw t1, 8(zero)</code> computes the same address, {v:aluOut}. ResultSrc selects the memory\'s output, not the ALU\'s: t1 gets 42 at the next edge.</p>' },
           { title: 'Used immediately', cycles: 1, show: ['rf', 'alu'], expect: { pcOut: 12, aluOut: 43 },
-            say: '<p><code>addi t1, t1, 1</code> reads t1 = 42 and the ALU gives {v:aluOut}. There is no load-use delay in this machine: the loaded value was written at the previous edge.</p>' },
+            say: '<p><code>addi t1, t1, 1</code> reads t1 = 42 and the ALU gives {v:aluOut}. There is no wait after a load in this machine: the loaded value was written at the previous edge.</p>' },
           { title: 'Another word', cycles: 1, show: ['alu', 'dm'], expect: { pcOut: 16, aluOut: 12 },
             say: '<p><code>sw t1, 12(zero)</code> stores 43 at address {v:aluOut}. The memory holds 42 at 8 and 43 at 12.</p>' },
         ],
@@ -735,7 +735,7 @@ export const chSingleCycle: Chapter = {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
         why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 16\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
-        explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for multicycle and pipelined designs.',
+        explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for splitting an instruction over several cycles and for overlapping instructions.',
       },
     },
     {

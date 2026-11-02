@@ -55,7 +55,7 @@ export const chLanes: Chapter = {
         question: '<code>blt t3, t2, loop</code> runs with all four lanes active. Whose comparison steers the PC?',
         options: ['Lane 0\'s, the leader: the lowest active lane', 'Lane 3\'s, the highest', 'A majority vote of the four', 'All four must agree, or the core stops'],
         answer: 0,
-        explain: 'A lowest-set-bit circuit turns the active mask into a one-hot word, and one-hot multiplexers bring that lane\'s ALU flags to the next-PC logic.',
+        explain: 'A lowest-set-bit circuit turns the lane enable bits into a one-hot word, and one-hot multiplexers bring that lane\'s ALU flags to the next-PC logic.',
         why: ['', 'The leader is the lowest active lane, not the highest.', 'There is no voting logic: one-hot multiplexers pass exactly one lane\'s flags.', 'This core does not check that the lanes agree: when they disagree it follows the leader, which is wrong for the others.'],
       },
     ],
@@ -102,7 +102,7 @@ export const chLanes: Chapter = {
         <span data-show="lane0 lane1 lane2 lane3"><strong>LANE</strong> boxes</span>. Open one: a 31 × 32-bit register file, the SrcA / SrcB multiplexers, an ALU and the result multiplexer, exactly the single-cycle datapath. Every lane
         receives the same rs1, rs2 and rd fields, the same control signals and the same immediate; only its registers differ.</p>
         <p>A lane learns which thread it is with <code>csrr t0, tid</code>: a constant wired into each lane (0, 1, 2, 3) answers. Here every lane takes the elements
-        i = tid, tid + 4, tid + 8, tid + 12 of y = 3·x + y. <code>nlanes</code> reads 4, <code>lane</code> the lane number, <code>tmask</code> the active mask.</p>
+        i = tid, tid + 4, tid + 8, tid + 12 of y = 3·x + y. <code>nlanes</code> reads 4, <code>lane</code> the lane number, <code>tmask</code> one enable bit per lane.</p>
         <p>The Warp panel runs an instruction-set simulator of the SIMT machine (a reference model in software) in lock-step and compares the PC, the mask and every lane's registers after each instruction. Click a line of its listing to light the hardware that instruction
         uses; <strong>Slow</strong> runs the kernel at a pace you set (a gate delay, a cycle or an instruction at a time), the highlight following each
         instruction onto the lanes it runs on.</p>
@@ -114,7 +114,7 @@ export const chLanes: Chapter = {
       tour: {
         beats: [
           { title: 'One instruction', reset: true, show: ['pc', 'imem', 'ctl'], expect: { pcOut: 0, maskOut: 15 },
-            say: '<p>Power on: the PC is {v:pcOut}, the active mask {b:maskOut} (all four lanes). The first word, <code>csrr t0, tid</code>, goes to the control unit once.</p>' },
+            say: '<p>Power on: the PC is {v:pcOut}, the lane enables {b:maskOut} (all four lanes on). The first word, <code>csrr t0, tid</code>, goes to the control unit once.</p>' },
           { title: 'Four times the work', cycles: 1, show: ['lane0', 'lane1', 'lane2', 'lane3'], expect: { pcOut: 4 },
             say: '<p>One edge: <code>csrr t0, tid</code> has run in all four lanes at once, each reading its own constant (0, 1, 2, 3) into t0. The PC moved to {v:pcOut}, a single PC for the four threads.</p>' },
           { title: 'Same fields, own values', cycles: 3, show: ['lane0', 'lane1', 'lane2', 'lane3'], expect: { pcOut: 16, maskOut: 15 },
@@ -125,7 +125,7 @@ export const chLanes: Chapter = {
       },
       more: {
         derive: `<p>Per lane the datapath is the single-cycle CPU's: two register reads, SrcA / SrcB multiplexers, an ALU, a result multiplexer, a register write. The only
-          new inputs are three: the active mask (a write enable per lane), the lane's constant for <code>csrr tid</code>, and a way to hand its operands to the memory
+          new inputs are three: the lane enables (a write enable per lane), the lane's constant for <code>csrr tid</code>, and a way to hand its operands to the memory
           sequencer. Everything else arrives over wires that fan out to all ${SAXPY.lanes} lanes, so the front end is saved ${SAXPY.lanes - 1} times
           over and the register files, the bulk of a lane, are not saved at all.</p>`,
         pitfall: `<p>The register file is not shared: x5 in lane 0 and x5 in lane 1 are different flip-flops that the same instruction names. Reading "register t3" off a
@@ -136,7 +136,7 @@ export const chLanes: Chapter = {
       title: 'The leader',
       body: `
         <p>Here one PC means one branch decision per instruction. The lanes all compute the comparison, but only one is listened to: the <strong>leader</strong>, the
-        lowest active lane. A <span data-show="lead">lowest-set-bit circuit</span> turns the active mask into a one-hot word, and one-hot multiplexers (an AND per bit and an OR tree: no decoder,
+        lowest active lane. A <span data-show="lead">lowest-set-bit circuit</span> turns the lane enables into a one-hot word, and one-hot multiplexers (an AND per bit and an OR tree: no decoder,
         the select is already one-hot) bring the <span data-show="lF">leader's ALU flags</span> to the <span data-show="npc">next-PC logic</span> and its
         <span data-show="lAlu">ALU result</span> to the <span data-show="clr0">jalr target</span>.</p>
         <p>In saxpy the branch agrees in every lane: each lane does exactly four elements, so <code>blt t3, t2, loop</code> is taken or not taken by all of them at
@@ -250,7 +250,7 @@ export const chSimt: Chapter = {
       '<code>split</code> runs the lanes with rs1 ≠ 0 first and pushes one entry: the mask before, the waiting lanes, the resume PC, a pending bit. The first <code>join</code> switches to the waiting lanes and jumps back; the second restores the mask and pops.',
       'The stack is a shift register of four entries: four levels of nesting. <code>pred</code> turns lanes off without an entry, for loops whose length differs per lane.',
       'Divergence runs both sides, each with part of the lanes: 58 % of the lane-steps did work with the nested ifs. Lanes switched off on purpose cost the same: 45 % in the tmc kernel, where lane 0 adds alone.',
-      'Here the programmer writes split and join. On real GPUs the compiler places the reconvergence point (the branch\'s immediate post-dominator): a per-warp stack before Volta, convergence barriers with a PC per thread since, and on AMD an EXEC mask kept by scalar instructions.',
+      'Here the programmer writes split and join. On real GPUs the compiler places the reconvergence point (the branch\'s immediate post-dominator): a per-warp stack before Volta, per-thread convergence tracking with a PC per thread since, and on AMD an EXEC mask kept by scalar instructions.',
     ],
     practise: ['k_mask', 'k_stack', 'k_simt', 'p_reduce'],
     check: [

@@ -52,7 +52,7 @@ export const chIO: Chapter = {
       'A store replicates the byte (or half) into every lane and raises byte enables only for the addressed bytes: <code>sb</code> to address 2 → be = 0100, <code>sh</code> to address 2 → 1100.',
       'The data memory is four 8-bit banks, each written when we ∧ be<sub>i</sub>; a read returns the whole word.',
       'A load picks the lane with a 4:1 (byte) or 2:1 (half) mux, then sign- or zero-extends by wiring alone: the cost is all in the multiplexers.',
-      'A halfword at an odd address or a word off a 4-byte boundary is misaligned. RISC-V lets an implementation handle it in hardware or trap; the complete CPU traps.',
+      'A halfword at an odd address or a word off a 4-byte boundary is misaligned. RISC-V lets an implementation handle it in hardware or <span data-ahead="traps">trap (jump to a software handler, chapter 20)</span>; the complete CPU traps.',
       `Addresses with bit 31 set go to the I/O unit: a store to 0x8000_0000 prints a byte, 0x8000_0004 sets the LEDs, a load from 0x8000_0008 reads the switches. The whole machine is about ${kNands(sysNands(false).core)} NANDs without its program ROM.`,
     ],
     practise: ['c_computer'],
@@ -68,7 +68,7 @@ export const chIO: Chapter = {
         question: 'Which of these accesses is misaligned?',
         options: ['<code>lw</code> from address 6', '<code>lh</code> from address 6', '<code>lb</code> from address 7', '<code>sw</code> to address 8'],
         answer: 0,
-        explain: 'An aligned word sits on a 4-byte boundary; address 6 spans two words. RISC-V lets a core either split such an access in hardware or trap; the complete CPU raises a misaligned-load exception (next chapter).',
+        explain: 'An aligned word sits on a 4-byte boundary; address 6 spans two words. RISC-V lets a core either split such an access in hardware or <span data-ahead="traps">trap (jump to a software handler)</span>; the complete CPU raises a misaligned-load exception (chapter 20).',
         why: ['', 'A halfword needs only an even address.', 'A byte can sit at any address.', '8 is a multiple of 4.'],
       },
       {
@@ -76,7 +76,7 @@ export const chIO: Chapter = {
         options: ['A store to an address with bit 31 set goes to the I/O unit, which sends the byte to the console', 'funct3 of <code>sb</code> selects a console mode', 'The console reads the data memory every cycle', 'Only an <code>ecall</code> can print'],
         answer: 0,
         explain: 'Memory-mapped I/O: the address decides where a store goes. Devices get addresses, and ordinary loads and stores talk to them.',
-        why: ['', 'funct3 only gives the access size and sign; the address decides where the store goes.', 'Nothing watches the data memory: the store never reaches it, the I/O unit takes it instead.', 'An ecall traps to software, and that software still prints with a store to the console address.'],
+        why: ['', 'funct3 only gives the access size and sign; the address decides where the store goes.', 'Nothing watches the data memory: the store never reaches it, the I/O unit takes it instead.', 'An ecall hands control to a software handler (chapter 20), and that handler still prints with a store to the console address.'],
       },
     ],
   },
@@ -90,7 +90,7 @@ export const chIO: Chapter = {
         and raises <strong><span data-show="dec bsel">byte enables</span></strong> only for the addressed bytes: <code>sb</code> to address 2 enables byte 2, <code>sh</code>
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
         <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
-        trap and leave it to software; the complete CPU traps.</p>
+        <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter 20)</span> and leave it to software; the complete CPU traps.</p>
         <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, with no multiplexer. All the logic is in the enables, a small
         decoder of the low two address bits and the size: ${nd(STORE_ALIGN)} NANDs for the whole unit. It also produces <em>misaligned</em>, which the CPU turns into a trap.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
@@ -105,7 +105,7 @@ export const chIO: Chapter = {
           { title: 'sh to address 2', set: { size: 1, addr: 2 }, show: ['r16', 'dec'], expect: { be: 12, wdata: 0x00ab00ab },
             say: '<p>A halfword is copied into both halves (wdata = {b:wdata}), and two enables are raised, for bytes 2 and 3: be = {b:be}.</p>' },
           { title: 'A misaligned half', set: { addr: 1 }, show: ['mis'], expect: { misaligned: 1 },
-            say: '<p>A halfword at an odd address is misaligned (at offset 3 it would even straddle two words). misaligned = {v:misaligned}: the complete CPU turns that into a trap rather than store anything.</p>' },
+            say: '<p>A halfword at an odd address is misaligned (at offset 3 it would even straddle two words). misaligned = {v:misaligned}: the complete CPU turns that into an <span data-ahead="traps">exception (a jump to a handler routine, chapter 20)</span> rather than store anything.</p>' },
           { title: 'sw', set: { size: 2, addr: 0 }, show: ['dec'], expect: { be: 15, wdata: 0xab, misaligned: 0 },
             say: '<p>A word writes all four lanes from the 32-bit data: be = {b:be}, and no replication is needed (wd is 0xAB here, so the word is 0x000000AB).</p>' },
         ],
@@ -185,7 +185,7 @@ export const chIO: Chapter = {
       body: `
         <p>This is the full processor: the single-cycle datapath plus the <span data-show="st ld">load/store unit</span> and
         <span data-show="dm">byte-banked memory</span>, an <strong><span data-show="io">I/O unit</span></strong>, and (next chapter)
-        <span data-show="csr trap">CSRs, a trap unit</span> and interrupts. Every RV32I instruction plus Zicsr, about
+        <span data-show="csr trap">CSRs, a trap unit</span> and <span data-ahead="interrupts">interrupts (a device or timer asking the CPU to stop what it is doing and run a handler)</span>. Every RV32I instruction plus Zicsr, about
         ${kNands(sysNands(false).core)} NAND gates without the program ROM (${kNands(sysNands(false).all)} with it), and still checked against the instruction-set simulator every cycle.</p>
         <p>Addresses with bit 31 set go to <strong>memory-mapped I/O</strong> instead of the data memory. A store to
         0x8000_0000 is not a store at all: the I/O unit sends the byte to the <span data-show="pin:consoleData">console</span>. That is how most processors talk to
@@ -317,7 +317,7 @@ export const chTraps: Chapter = {
         <p>Open the CSR unit: sixteen <span data-show="is_mstatus is_mtvec is_mepc is_mcause">address comparators</span>, a
         <span data-show="rsel">read multiplexer</span>, the <span data-show="orOld andOld opSel">read-modify-write logic</span>,
         and the <span data-show="rTvec rEpc rCause rTval">registers</span>, some of them written by hardware on a trap.</p>
-        <p>A CSR instruction is an atomic read-modify-write: the old value goes to rd, and the new one, formed from the old value and rs1 (or a 5-bit immediate), goes back. The three operations differ only in how the new value is formed: swap, OR, AND-NOT. The unit costs ${nd(CSR_UNIT)} NANDs.</p>`,
+        <p>A CSR instruction reads and writes in one indivisible step: the old value goes to rd, and the new one, formed from the old value and rs1 (or a 5-bit immediate), goes back. The three operations differ only in how the new value is formed: swap, OR, AND-NOT. The unit costs ${nd(CSR_UNIT)} NANDs.</p>`,
       scene: () => ({ root: CSR_UNIT, inputs: { addr: 0x305, funct3: 1, rs1v: 0x40, csrWrite: 1, clk: 0 } }),
       tour: {
         beats: [

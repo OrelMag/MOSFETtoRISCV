@@ -40,7 +40,7 @@ function tenth(): number[] {
 const SC_PERIOD = 313, PIPE_PERIOD = 121;
 const FP_RUNS: [string, number, number][] = [['0.1 ten times', 41, 67], ['dot product', 80, 137], ['fused multiply-add', 26, 42], ['Horner with fmadd', 23, 45], ['division and square root', 215, 257], ["Newton's √2", 170, 199], ['exception flags', 28, 76]];
 const kt = (n: number) => `${(n / 1000).toFixed(1)} k`;
-const perfTable = () => `<table><tr><th>program</th><th>cycles</th><th>time (NAND delays)</th><th>gain</th></tr>${FP_RUNS.map(([n, c1, c2]) => `<tr><td>${n}</td><td>${c1} → ${c2}</td><td>${kt(c1 * SC_PERIOD)} → ${kt(c2 * PIPE_PERIOD)}</td><td>${((c1 * SC_PERIOD) / (c2 * PIPE_PERIOD)).toFixed(2)}×</td></tr>`).join('')}</table>`;
+const perfTable = () => `<table><tr><th>program</th><th>cycles</th><th>time (NAND delays)</th><th>gain</th></tr>${FP_RUNS.map(([n, c1, c2]) => `<tr><td>${n === 'Horner with fmadd' ? `<span data-ahead="horner">${n} (a polynomial as nested multiply-adds)</span>` : n}</td><td>${c1} → ${c2}</td><td>${kt(c1 * SC_PERIOD)} → ${kt(c2 * PIPE_PERIOD)}</td><td>${((c1 * SC_PERIOD) / (c2 * PIPE_PERIOD)).toFixed(2)}×</td></tr>`).join('')}</table>`;
 /** A count rounded to hundreds, as the prose says "about". */
 const about = (n: number) => grp(Math.round(n / 100) * 100);
 const bias = (f: FpFormat) => 2 ** (f.E - 1) - 1;
@@ -577,7 +577,7 @@ export const chFloat: Chapter = {
         take the operand with the larger exponent as the base, shift the other right with guard and sticky bits, <span data-show="u1">add or subtract</span> (a difference can come
         out negative when the exponents are within 3 of each other; it is then exact and is negated), and send the 52-bit result to
         <span data-show="u3">the same normalize &amp; round</span>. fmsub, fnmsub and fnmadd only flip the signs of c and the product. ∞ × 0 is invalid even when c is a quiet NaN, as RISC-V requires.</p>
-        <p>One rounding makes x·x − p exact where fmul then fsub gives 0, and makes dot products, polynomial evaluation (Horner) and Newton steps
+        <p>One rounding makes x·x − p exact where fmul then fsub gives 0, and makes dot products, polynomial evaluation and Newton steps
         both faster and more accurate. float32 fma: ${about(u32('fma').n)} NANDs, ${u32('fma').d} deep: deeper than either multiplier (${u32('mul').d}) or adder (${u32('add').d}), but shallower than
         the two in a row (${u32('mul').d + u32('add').d}). It is built as three boxes, multiply (92 deep), align and add (91), round (106: the 52-bit normalize &amp; round, ${deep(normRound(F32, 52))}, then the NaN and ∞
         cases): the stages of the pipelined FPU. The price of fusing is area, ${(u32('fma').n / (u32('mul').n + u32('add').n)).toFixed(2)} times a separate multiplier and adder, since the adder must be as wide as the exact product.
@@ -603,7 +603,7 @@ export const chFloat: Chapter = {
           Cost in float32: ${grp(nands(fpFma(F32)))} NANDs against ${grp(nands(fpMul(F32)) + nands(fpAdd(F32)))} for a separate multiplier and adder, and ${deep(fpFma(F32))} NAND delays against ${deep(fpMul(F32)) + deep(fpAdd(F32))} for the two in a row.</p>`,
         pitfall: `<p>Expecting an fma to give the same bits as a * b + c compiled to two instructions. It will not: results differ in the last place, and a compiler that contracts them (fp-contract) changes
           what a program prints. Reproducible numerics means choosing either, everywhere.</p>`,
-        real: `<p>Every modern core has an fma unit and uses it for multiply and add alike (a multiply is a × b + 0, an add a × 1 + c). It is what makes dot products, polynomial evaluation by Horner's rule and Newton iterations
+        real: `<p>Every modern core has an fma unit and uses it for multiply and add alike (a multiply is a × b + 0, an add a × 1 + c). It is what makes dot products, polynomial evaluation and Newton iterations
           both faster and more accurate, and the basis of the linear-algebra libraries' peak-FLOPS figures: two floating-point operations in one instruction.</p>`,
       })),
       challenge: {
@@ -762,7 +762,7 @@ export const chFloat: Chapter = {
         <p>In a single-cycle CPU the deepest instruction sets the clock: adding the fma took the period from 274 to 368 NAND delays (+34 %), paid by
         every add and branch (313 once normalize &amp; round is shortened, below). A pipelined FPU gives fma several cycles of latency instead.</p>
         <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), then 17, 7, −7, −17 from the four variants.
-        "Horner with fmadd" evaluates a cubic in 3 instructions instead of 6.</div>`,
+        <span data-ahead="horner">"Horner with fmadd" (a polynomial written as nested multiply-adds)</span> evaluates a cubic in 3 instructions instead of 6.</div>`,
       scene: () => cpuScene({ source: fsrc('fma'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
       more: {
         derive: `<p>R4 format, 32 bits: rs3 [31:27], fmt [26:25] (00 = single), rs2 [24:20], rs1 [19:15], rm [14:12], rd [11:7], opcode [6:0]. The four opcodes differ in bits 3:2, and those two bits are the signs applied by the FPU:
@@ -850,7 +850,7 @@ export const chFloat: Chapter = {
           'To forward loads',
         ], answer: 0,
         why: ['', 'The ALU still has its one cycle in E; X adds latency to the pipe, not time to any stage.', 'The register file writes in one cycle, in W. The extra stage is there for ordering.', 'Loads are forwarded from X because they pass through it: a consequence of the extra stage, not its reason.'],
-        explain: 'With different path lengths a younger integer instruction would finish before an older FP instruction: write-after-write and precise state would need extra logic (a scoreboard or a reorder buffer). Equal lengths keep it simple; the cost is one more forwarding source (X) and one stage of latency for nothing.',
+        explain: 'With different path lengths a younger integer instruction would finish before an older FP instruction: write-after-write and precise state would need extra logic (extra tracking of pending results, as in chapter 26, or a reorder buffer). Equal lengths keep it simple; the cost is one more forwarding source (X) and one stage of latency for nothing.',
       },
     },
     {

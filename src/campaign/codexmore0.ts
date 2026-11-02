@@ -35,7 +35,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Expecting one delay per gate in silicon: here every NAND costs 1 whatever it drives; a real gate slows with fan-out and wire load.',
     ],
     lib: 'nand',
-    chapters: [{ chapter: 'nand', step: 0, label: 'Two inputs' }, { chapter: 'nand', step: 2, label: 'One brick to build everything' }],
+    chapters: [{ chapter: 'nand', step: 0, label: 'Two inputs' }, { chapter: 'nand', step: 2, label: 'One brick to build everything' }, { chapter: 'relays', step: 2, label: 'Contacts conduct both ways' }, { chapter: 'tubes', step: 4, label: 'A NAND from diodes' }],
   },
   nor: {
     idea: 'NOR is the dual of NAND: NMOS in parallel (any input at 1 pulls the output down), PMOS in series (the output rises only when every input is 0). It is functionally complete too. Its cost is the series PMOS: holes are 2–3× less mobile than electrons, so a PMOS needs that much more width to conduct like an NMOS, and two in series need twice that again. A NOR is therefore slower than a NAND of the same area, or bigger at the same speed, which is why CMOS logic is mostly NANDs and inverters.<br>From NANDs, NOR is an OR followed by a NOT: 4 NANDs, 3 delays.',
@@ -45,7 +45,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming NAND and NOR cost the same because both have 4 transistors: the series PMOS make the NOR larger or slower.',
     ],
     lib: 'nor_cmos', compare: ['nor'],
-    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }],
+    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }, { chapter: 'tubes', step: 3, label: "NOR is the tube's gate" }],
   },
   universality: {
     idea: 'A set of gates is functionally complete when every Boolean function can be built from it. The proof has two steps: every function is a sum of products of literals (read it off the truth table\'s 1 rows), so AND, OR and NOT suffice; and each of those is a few NANDs: NOT a = NAND(a, a), AND = NOT(NAND), OR = NAND(¬a, ¬b). NOR works the same way by duality. AND and OR alone do not: they are monotone (raising an input never lowers the output), so no circuit of them computes ¬a.<br>This is why one cell type is enough for a CPU and why everything here is counted in NANDs. Completeness says nothing about cost: a NAND realization is only as good as the minimization and sharing behind it.',
@@ -80,7 +80,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Using a table for a circuit with state: the same inputs can give different outputs, so it needs a sequence.',
     ],
     lib: 'full_adder',
-    chapters: [{ chapter: 'adders', step: 1, label: 'Adding three bits' }],
+    chapters: [{ chapter: 'basics', step: 3, label: 'A rule as a table' }, { chapter: 'adders', step: 1, label: 'Adding three bits' }],
   },
   identities: {
     idea: 'The identities are the rewrite rules that turn an expression into a cheaper one with the same truth table. Four do most of the work. <b>Complement</b> merges two terms that differ in one variable (a·b + a·¬b = a), which is all a K-map rectangle does. <b>Absorption</b> drops a term covered by a smaller one (a + a·b = a). <b>Distributivity</b> factors a shared literal out (a·b + a·c = a·(b + c): fewer gates, one level deeper). <b>Consensus</b> drops the redundant b·c from a·b + ¬a·c + b·c. Each has a dual.<br>Rewriting trades area against depth: factoring saves gates and adds levels, flattening to a sum of products does the reverse. A redundant term is not always waste: the consensus term is what keeps a mux from glitching.',
@@ -121,7 +121,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Building an 8-input AND as a chain: 14 delays instead of a 3-level tree\'s 6, for the same 14 NANDs.',
     ],
     lib: 'and', anatomy: ['npc', 'rf'],
-    chapters: [{ chapter: 'gates', step: 1, label: 'AND: undo the NOT' }],
+    chapters: [{ chapter: 'gates', step: 1, label: 'AND: undo the NOT' }, { chapter: 'tubes', step: 4, label: 'A NAND from diodes' }, { chapter: 'cards', step: 1, label: 'Counting a nation' }],
   },
   or: {
     idea: 'OR from NANDs is De Morgan: a + b = ¬(¬a·¬b) = NAND(¬a, ¬b), 3 NANDs and 2 delays, the two input inverters working in parallel. In a CPU it merges conditions (the PC redirects on jal + jalr + taken; a trap is the OR of its sources) and finds any 1 in a word: a 16-input OR tree is 45 NANDs, 8 delays.<br>Its inverters are often already there: if the inputs come from NANDs, their outputs are the complements the OR needs, and the OR collapses into one NAND. That is NAND–NAND logic.',
@@ -131,7 +131,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Counting the input inverters of every OR when the inputs already exist complemented.',
     ],
     lib: 'or', anatomy: ['npc', 'alu'],
-    chapters: [{ chapter: 'gates', step: 2, label: "OR: De Morgan's trick" }],
+    chapters: [{ chapter: 'gates', step: 2, label: "OR: De Morgan's trick" }, { chapter: 'cards', step: 1, label: 'Counting a nation' }],
   },
   xor: {
     idea: 'XOR is 1 when its inputs differ. It is the sum bit of an adder (a ⊕ b ⊕ cin), a controlled inverter (x ⊕ 1 = ¬x, x ⊕ 0 = x, so b ⊕ sub flips b for subtraction), a one-bit inequality (an equality comparator is an XOR per bit and a zero detector) and the parity of a word. From NANDs the minimum is 4: the first NAND n = ¬(a·b) is shared by both halves, y = NAND(NAND(a, n), NAND(b, n)), depth 3. XNOR is XOR plus a NOT: 5 NANDs, 4 delays.<br>XOR is associative and commutative, so a parity tree or a three-input sum can be grouped in any order. In CMOS it takes more transistors than a NAND in any common style, which is why adders and comparators are designed around as few XORs as possible.',
@@ -141,7 +141,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Taking a full adder\'s carry from a ⊕ b: that is the propagate signal; the carry is a·b + cin·(a ⊕ b).',
     ],
     lib: 'xor', anatomy: ['alu', 'br', 'fwd'],
-    chapters: [{ chapter: 'gates', step: 4, label: 'XOR: are they different?' }, { chapter: 'gates', step: 5, label: 'XNOR: are they equal?' }, { chapter: 'adders', step: 5, label: 'Subtraction for free' }],
+    chapters: [{ chapter: 'gates', step: 4, label: 'XOR: are they different?' }, { chapter: 'gates', step: 5, label: 'XNOR: are they equal?' }, { chapter: 'adders', step: 5, label: 'Subtraction for free' }, { chapter: 'relays', step: 3, label: 'What contacts are good at' }],
   },
   mux: {
     idea: 'A 2:1 multiplexer passes a when s = 0 and b when s = 1: y = s·b + ¬s·a, which is NAND–NAND logic plus an inverter for ¬s: 4 NANDs, depth 3 from s and 2 from the data inputs. It is the datapath\'s switch: wherever the control unit chooses (ALU operand: register or immediate; result: ALU, load or pc + 1; next PC: pc + 1 or target; a forwarded operand) there is a bus of muxes driven by one control bit.<br>An N:1 mux is a tree of log2 N levels of 2:1 muxes, level k steered by select bit k; a w-bit bus mux is w of them on a common select. Cost grows as (N − 1)·w muxes, so wide many-input muxes are expensive: the 8:1 result mux of the 16-bit ALU is 343 NANDs, a third of the ALU, even with one ¬s shared by each bus mux\'s sixteen bits (49 NANDs instead of 64).',
@@ -195,7 +195,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Building the carry from fresh gates (13 NANDs) when <code>¬(a·b)</code> and <code>¬((a⊕b)·cin)</code> already exist inside the two XORs.',
     ],
     lib: 'full_adder', compare: ['full_adder_ha'], anatomy: ['alu', 'npc', 'br'],
-    chapters: [{ chapter: 'adders', step: 1, label: 'Adding three bits' }, { chapter: 'adders', step: 2, label: 'Optimizing: 13 NANDs → 9' }],
+    chapters: [{ chapter: 'adders', step: 1, label: 'Adding three bits' }, { chapter: 'adders', step: 2, label: 'Optimizing: 13 NANDs → 9' }, { chapter: 'relays', step: 4, label: 'A carry that needs no time' }],
   },
   ripple: {
     idea: 'Chain n full adders, each carry out into the next carry in, and you add n-bit words: 9n NANDs, the cheapest adder there is. Its delay is the carry chain: bit 0 produces its carry 5 delays after the inputs settle, each later bit passes it on in 2 (cin → cout through two NANDs), and the top sum bit adds its XOR: 2n + 4 delays, 36 at 16 bits, 68 at 32. The worst case is a carry generated at the bottom and propagated through every bit, as in 0xFFFF + 1.<br>The carry chain is the longest path through the ALU, the branch comparator and the next-PC adders of a simple CPU, so it sets the clock: the RV16 single-cycle core needs 98 NAND delays per cycle with ripple adders and 76 with Kogge–Stone. Faster adders spend NANDs to shorten the chain: the 16-bit Kogge–Stone is 366 NANDs and 16 delays against 144 and 36.',

@@ -214,7 +214,7 @@ export class ChapterPage implements Page {
     }
     const { done, total } = checksDone(c, (k) => settings.isSolved(k));
     this.head.replaceChildren(
-      h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : c.prologue ? `Prologue ${c.prologue}` : `Chapter ${c.num}`} · ${c.level}`),
+      h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : c.prologue ? `Prologue ${c.prologue}` : c.label ?? `Chapter ${c.num}`} · ${c.level}`),
       h('h1', { class: 'chapter-title' }, h('button', {
         class: 'chapter-switch', title: 'Switch chapter', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
@@ -243,11 +243,12 @@ export class ChapterPage implements Page {
     if (!settings.glossary) return;
     const c = this.chapter;
     const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => c.steps[k].body);
-    import('../../campaign/ui/glossaryui').then((m) => {
+    Promise.all([import('../../campaign/ui/glossaryui'), import('../../chapters/firstuse')]).then(([m, f]) => {
       if (!el.isConnected) return;
       const skip = m.chapterSkip(c);
       for (const b of met) for (const id of m.termsIn(b)) skip.add(id);
-      m.markTerms(el, 10, skip);
+      const at = chapters.indexOf(c);
+      m.markTerms(el, 10, skip, (id) => f.later(chapters, at, id));
     }, () => {});
   }
 

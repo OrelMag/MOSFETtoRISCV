@@ -9,8 +9,10 @@ transistor to a multi-core RISC-V processor laid out on silicon. Each level is b
 from the levels below it, and every component on screen is a **transparent box**: the
 learner can open any instance and keep drilling down to MOSFETs.
 
-**Audience: engineers.** Prose is dense and precise (encodings, timing, cost, trade-offs); no
-hand-holding. **Challenges are optional** and every one has a "Show answer" (reach challenges
+**Audience: from a technical newcomer to an engineer.** The floor is someone who can program or did school maths
+but knows no hardware: chapter 0 (Basics, `ch-basics.ts`) starts there. Prose is dense and precise (encodings, timing,
+cost, trade-offs); no padding, but no term before the chapter that teaches it: reword, or explain it in place in a
+`data-ahead="<codex id>"` element (chapters/taught.ts, firstuse.ts; tests/first-use.test.ts). **Challenges are optional** and every one has a "Show answer" (reach challenges
 also "Do it for me" via `solve`).
 
 It is *not* primarily a logic simulator. The simulator exists so that every value, gate

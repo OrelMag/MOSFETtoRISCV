@@ -18,6 +18,7 @@ import { chGfxPipeline, chPixels } from './ch-gfx';
 import { chBinary, chGates } from './ch-gates';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
+import { chBasics } from './ch-basics';
 import { chAppendix6502 } from './ch-6502';
 import { chAppendixDoom } from './ch-doom';
 import { chAppendixSap } from './ch-sap';
@@ -31,7 +32,7 @@ import { chCards } from './ch-cards';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
-  chMap,
+  chBasics, chMap,
   // the prologue: before the transistor, labelled P1 …
   chRelays, chTubes, chCards,
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,

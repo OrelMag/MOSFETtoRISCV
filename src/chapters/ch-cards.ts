@@ -81,8 +81,8 @@ export const chCards: Chapter = {
         some 24 000 cards. Babbage meant his Analytical Engine to take its program the same way; Ada Lovelace wrote that it
         "weaves algebraical patterns just as the Jacquard loom weaves flowers and leaves".</p>
         <p>What makes it a program and not just a pattern: the information is in the cards and the machine reads it one pick at a time, in order, and loops. A
-        stored program that selects among actions by position in a sequence is the same architecture as a ROM read by a counter (a chain is a ROM, the
-        reader is the program counter). It has no branch: the chain runs on, and a conditional is a cut or a different chain.</p>
+        stored program that selects among actions by position in a sequence is the same architecture as a <span data-ahead="rom">ROM (a fixed table of words, read-only memory)</span> read by a counter (a chain is a ROM, the
+        reader is the <span data-ahead="pc">program counter, the register that names the next instruction</span>). It has no branch: the chain runs on, and a conditional is a cut or a different chain.</p>
         <div class="try">Weave the diamond, then punch or clear a hole in one card and weave again: the change repeats
         everywhere that card and that hook meet.</div>`,
       more: {
@@ -172,7 +172,7 @@ export const chCards: Chapter = {
     {
       title: 'A program on cards',
       body: `
-        <p>A program was punched one statement a card (a <em>source deck</em>), and an assembler or compiler punched out the
+        <p>A program was punched one statement a card (a <em>source deck</em>), and an <span data-ahead="assembly">assembler (a program that turns mnemonics into machine words)</span> or compiler punched out the
         result as an <strong>object deck</strong> of machine words in binary. Here each object card holds one RISC-V
         instruction: the 32-bit word along row 9 from column 1, most significant bit first, its source line and the word in
         hex printed along the top. Real machines packed more: the IBM 704 read each of a card's 12 rows as two 36-bit words.
@@ -218,8 +218,8 @@ export const chCards: Chapter = {
         <p>This deck is the sum program, ${SUM_DECK.cards.length} cards. Feeding it into a computer's memory is a job for a little program
         of its own: the IBM 1401's <strong>Load</strong> key read the first card into memory and ran it, and that card read the
         rest. <a href="#/c/bus/5">Chapter 38</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
-        decks made from any ROM program.</p>
-        <p>The interface is a handshake of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
+        decks made from any stored program.</p>
+        <p>The interface is a <span data-ahead="handshake">handshake (a ready signal answered by a take signal)</span> of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
         clock edge where both are 1. Neither side can force the other: a slow program leaves the card waiting at the station, a slow reader leaves the program polling <code>ready</code>, and a program that
         never raises <code>next</code> reads nothing. The same ready and take protocol returns on the bus in chapter 38 and in every streaming interface since.</p>
         <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty

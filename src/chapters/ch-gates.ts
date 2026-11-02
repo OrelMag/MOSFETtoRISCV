@@ -83,7 +83,7 @@ export const chGates: Chapter = {
         inverter.</p>
         <p>Every gate in this chapter is drawn with its usual symbol, but inside it is only NANDs. Double-click it to check.
         NOT costs ${nd(NOT)} NAND, ${tr(NOT)} transistors and ${logicDepth(NOT)} gate delay.</p>
-        <p>Why build everything from NAND? It is <em>universal</em>: any truth table can be made from NANDs alone, as the rest of
+        <p>Why build everything from NAND? It is <em>universal</em>: any <span data-ahead="truthtable">truth table (a function's output listed for every input combination)</span> can be made from NANDs alone, as the rest of
         the chapter shows gate by gate. And in CMOS it is among the cheapest gates there is (4 transistors for two inputs), so a library with
         one brick loses little and gains a lot: one cell to design, test and count.</p>`,
       scene: () => ({ root: NOT, inputs: { a: 0 } }),
@@ -230,7 +230,7 @@ export const chGates: Chapter = {
       body: `
         <p><span data-show="x1">XOR</span> followed by <span data-show="not1">NOT</span> gives 1 when the inputs are equal: ${nd(XNOR)} NANDs, ${logicDepth(XNOR)} delays deep.
         Put an XNOR on every bit pair of two numbers and AND
-        the results together, and you have an equality comparator (the processor's <code>beq</code>
+        the results together, and you have an <span data-ahead="comparator">equality comparator (a circuit whose output is 1 when two words are equal)</span> (the processor's <code>beq</code>
         instruction will need one).</p>
         <p>The price of that comparator grows with the width: for 32 bits, 32 XNORs and a tree that ANDs 32 results, ${nd(equal(32))} NANDs in all and
         ${logicDepth(equal(32))} delays deep. The tree is why equality is cheap compared with <em>magnitude</em> comparison, which needs to know which bit decides.</p>`,
@@ -353,7 +353,7 @@ export const chBinary: Chapter = {
         same way in every base: multiply each digit by its place value and add. Base 2 is the one hardware speaks, because a wire has two states.</p>
         <p>The width of the bus sets the range: n wires carry 2ⁿ different patterns, 0 to 2ⁿ − 1 read as an unsigned number. Eight wires give
         ${2 ** 8}, sixteen ${(2 ** 16).toLocaleString('en-US')}, thirty-two ${(2 ** 32).toLocaleString('en-US')}. Every width in a processor (a register, an
-        address, an ALU) is a decision about where that range ends, and what happens past it: the number wraps around.</p>
+        address, an arithmetic unit) is a decision about where that range ends, and what happens past it: the number wraps around.</p>
         <p>Long binary numbers are hard to read, so we write them in <strong>hexadecimal</strong>, one digit (0–9,
         A–F) for every four bits. <code>0b1010_1111</code> is <code>0xAF</code> is ${parseInt('10101111', 2)}. The grouping costs nothing in hardware:
         a hex digit is four wires read together.</p>

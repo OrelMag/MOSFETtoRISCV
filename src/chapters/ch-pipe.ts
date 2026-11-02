@@ -313,7 +313,7 @@ export const chPipeline: Chapter = {
         the panel. Real cores predict branches (dynamic predictors are often more than 95% accurate) and resolve them earlier.</p>
         <p>The flush is safe because nothing the two wrong-path instructions did is visible yet: they have not reached M (no store) or W (no
         register write). A design that resolved branches later than the first stage that changes state would need much more care.
-        The same flush is how a pipeline gets precise exceptions (In real silicon, below).</p>
+        The same flush is how a pipeline keeps a faulting instruction from leaving younger ones half done (In real silicon, below).</p>
         <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
       scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.flush],

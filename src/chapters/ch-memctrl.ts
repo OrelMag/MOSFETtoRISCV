@@ -311,7 +311,7 @@ export const chMemCtrl: Chapter = {
         oldest of all only when nothing hits. With a CPU and a write buffer working on two rows of one bank, FCFS turns every request
         into a conflict; FR-FCFS batches each row's requests, as deep as the queue lets it.</p>
         <p>It needs requests to choose from. This chapter's controller has one: the cache asks for a line and waits. A queue comes with a
-        write buffer, several cores (<a href="#/c/multicore/0">chapter 27</a>) or a DMA engine (<a href="#/c/bus/0">chapter 38</a>). Its cost is the queue itself, address and data
+        write buffer, several cores (<a href="#/c/multicore/0">chapter 27</a>) or <span data-ahead="dma">a DMA engine (hardware that copies memory blocks without the CPU)</span> (<a href="#/c/bus/0">chapter 38</a>). Its cost is the queue itself, address and data
         registers per entry, and a row-hit comparator per entry feeding a priority encoder. FR-FCFS is also unfair: a stream of hits can
         hold an old request back, so real controllers cap how long a request may wait.</p>
         <p>The idea generalizes: the DRAM is a device whose cost depends on state, so the controller's schedule is an optimization over that state, the way a compiler

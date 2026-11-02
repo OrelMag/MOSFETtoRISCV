@@ -74,7 +74,7 @@ export const chAdders: Chapter = {
         options: ['It roughly doubles', 'It grows by a constant', 'It stays the same', 'It roughly quadruples'],
         answer: 0,
         explain: 'The carry crosses each full adder in turn, two NAND delays per bit: delay grows linearly with the width.',
-        why: ['', 'That is a tree, like the magnitude comparator or a carry-lookahead adder. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
+        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter 16. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
       },
       {
         question: 'In the adder/subtractor, why is <code>sub</code> wired to the carry-in as well as to the XORs?',
@@ -281,7 +281,7 @@ export const chAdders: Chapter = {
         adder took to settle.</p>
         <p>This is the worst case for a ripple adder: ${logicDepth(rca(8))} gate delays for 8 bits. Most inputs settle sooner, because a carry chain
         stops at the first column that generates or kills. But a clock must be slow enough for the worst case, so the worst case sets the speed.
-        A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders (carry-lookahead, Kogge–Stone) compute the carries in parallel: that is
+        A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the carries in parallel: that is
         <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
       scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
       actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
@@ -367,7 +367,7 @@ export const chAdders: Chapter = {
         all those "first difference" questions at once, in pairs, then pairs of pairs.</p>
         <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
-        <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry-lookahead cells in
+        <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry cells of the fast adders in
         <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
       tour: {
@@ -665,7 +665,7 @@ export const chRouting: Chapter = {
           { title: 'Select 7', set: { s: 7 }, show: ['m0_3', 'm1_1', 'm2_0'], expect: { y: 7 },
             say: '<p>All select bits 1: the rightmost leaf. y = {v:y}.</p>' },
           { title: 'Change the data', set: { s: 5, d5: 10 }, show: ['m0_2', 'm1_1', 'm2_0'], expect: { y: 10 },
-            say: '<p>d5 is now 0xA and s = 5: y = {v:y}. Writing a memory word and reading it back is this circuit with the data coming from flip-flops.</p>' },
+            say: '<p>d5 is now 0xA and s = 5: y = {v:y}. Writing a memory word and reading it back is this circuit with the data coming from stored bits.</p>' },
         ],
       },
       more: {
@@ -729,7 +729,7 @@ export const chRouting: Chapter = {
         <p>A <strong>priority encoder</strong> accepts any pattern of requests and reports the highest one, plus <span data-show="pin:v"><code>v</code></span> (valid)
         to tell "request 0" from "no request". It is built recursively: <span data-show="lo hi">two half-size encoders</span>, and if the upper half has any
         request it wins, so its <code>v</code> becomes the top index bit and steers <span data-show="mx">a multiplexer</span> for the low bits.</p>
-        <p>log₂ n − 1 levels of multiplexers: ${logicDepth(priorityEncoder(8))} gate delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32. Interrupt controllers, arbiters, floating-point
+        <p>log₂ n − 1 levels of multiplexers: ${logicDepth(priorityEncoder(8))} gate delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32. Arbiters (who is served first), floating-point
         normalization (find the leading 1) and content-addressable memories all rely on one.</p>
         <p>The recursion is the design: an n-input encoder is two (n/2)-input encoders and a 2:1 choice. The cost is ${stats(priorityEncoder(8)).nands} NANDs for 8 inputs and ${stats(priorityEncoder(32)).nands} for 32, a bit more than linear, and the delay grows by a multiplexer for every doubling.
         Unlike the plain encoder, any request pattern is legal; an unrealistic one just has the same answer as its highest bit.</p>`,

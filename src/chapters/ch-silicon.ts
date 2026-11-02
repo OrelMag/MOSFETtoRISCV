@@ -30,8 +30,8 @@ function hallStep(): Step {
     const dm = r.blocks.find((b) => b.name === 'dm')!, rf = r.blocks.find((b) => b.name === 'rf')!;
     const perBit = dm.nands / (32 * 32);
     text = `
-      <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be a relay (P1) or a triode with two
-      diodes (P2). Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter 14</a> priced that way, block by block, and stood on a floor at
+      <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be <span data-ahead="relay">a relay (an electromagnetic switch; prologue P1)</span> or <span data-ahead="triode">a triode (a vacuum tube whose grid voltage switches its current) with two
+      diodes (prologue P2)</span>. Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter 14</a> priced that way, block by block, and stood on a floor at
       physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
@@ -40,7 +40,7 @@ function hallStep(): Step {
       tubes</strong> in ${tc.used} ENIAC-sized panels of ${ENIAC_PANEL.tubes}, ${fmtMass(t.total.mass!)} and ${fmtWatts(t.total.power!)}:
       ${times(t.total.devices / ENIAC.tubes)} ENIACs. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
       (${cabinetCounts(c4.relay).used} racks).</p>
-      <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a ${TECH.relay.stepName} of ${fmtTime(TECH.relay.step)}
+      <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a <span data-ahead="relay relaystep">${TECH.relay.stepName} (the time for every relay to settle after an input changes)</span> of ${fmtTime(TECH.relay.step)}
       or a ${TECH.tube.stepName} of ${fmtTime(TECH.tube.step)}: one instruction takes <strong>${fmtTime(pr)}</strong> in relays
       (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
       ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
@@ -76,7 +76,7 @@ function hallStep(): Step {
     },
     challenge: {
       kind: 'quiz',
-      question: `The RV32I's 32-word data memory alone fills dozens of relay racks, yet the Z3 kept 64 words in ${num(Z3.memory)} relays. Why?`,
+      question: `The RV32I's 32-word data memory alone fills dozens of racks of <span data-ahead="relay">relays (switches closed by an electromagnet)</span>, yet the Z3 kept 64 words in ${num(Z3.memory)} relays. Why?`,
       options: [
         'The Z3\'s words were shorter',
         'Here every bit is a flip-flop of NANDs, each NAND a relay; a relay holding itself through its own contact is a one-relay latch',
@@ -350,7 +350,7 @@ export const chSilicon: Chapter = {
         the four transistors of a NAND.</p>
         <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 29–34</a> build a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 35–38</a> go below the caches: a DRAM
-        cell by cell, its controller, flash, and a bus with DMA that boots a computer from flash. The appendices rebuild a real chip, the
+        cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
         on the gates.</p>
         <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
