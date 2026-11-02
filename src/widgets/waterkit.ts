@@ -142,6 +142,8 @@ export interface WaterScene {
   /** What the picture is, for assistive technology. */
   alt: string;
   view: OrbitView;
+  /** Width over height of the stage (the scene's own shape: a tall column wants a squarer one). */
+  aspect: number;
   limits?: Partial<OrbitLimits>;
   /** The flat fallback's window on the xy plane (y up). */
   flat: { x0: number; y0: number; w: number; h: number };
@@ -179,14 +181,14 @@ function partShape(p: WPart): SVGElement | null {
   });
 }
 
-function drawFlat(svg: SVGSVGElement, parts: WPart[], marks: WLabel[]): void {
+function drawFlat(svg: SVGSVGElement, parts: WPart[], marks: WLabel[], px: number): void {
   const order = parts.map((p, i) => ({ p, i, l: LAYERS.indexOf(p.layer), z: p.pos[2] + (p.scale?.[2] ?? 1) / 2 })).sort((a, b) => a.l - b.l || a.z - b.z || a.i - b.i);
   const g = s('g');
   for (const { p } of order) { const e = partShape(p); if (e) g.append(e); }
   for (const m of marks) {
     if (m.minor || m.hidden) continue;
     const dx = m.side === 'l' ? -0.12 : m.side === 'r' ? 0.12 : 0, dy = m.side === 't' ? -0.12 : m.side === 'b' ? 0.3 : 0.08;
-    g.append(s('text', { x: m.p[0] + dx, y: -m.p[1] + dy, class: 'wt-flat-lbl', 'text-anchor': m.side === 'l' ? 'end' : m.side === 'r' ? 'start' : 'middle' }, m.text));
+    g.append(s('text', { x: m.p[0] + dx, y: -m.p[1] + dy, class: 'wt-flat-lbl', style: `font-size:${(11.5 / px).toFixed(3)}px`, 'text-anchor': m.side === 'l' ? 'end' : m.side === 'r' ? 'start' : 'middle' }, m.text));
   }
   svg.replaceChildren(g);
 }
@@ -200,6 +202,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
   const labels = h('div', { class: 'wt-labels', 'aria-hidden': 'true' });
   const hint = h('div', { class: 'wt-hint' }, HINT_GL);
   const stage = h('div', { class: 'wt-stage' }, canvas, flatSvg, labels);
+  stage.style.aspectRatio = String(scene.aspect);
   host.append(stage, hint);
 
   const colors = new CssColors(stage);
@@ -214,10 +217,13 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
   let renderer: Renderer | null = null, mode: 'gl' | 'flat' = 'gl', dead = false, seen = false, visible = true, raf = 0, last = 0;
   const lbls = scene.labels();
   const lblEls = lbls.map((a) => { const b = h('b', null, a.text); return { el: labels.appendChild(h('span', { class: `wt-lbl ${a.side}${a.minor ? ' minor' : ''}` }, h('i'), b)), b }; });
+  const widths = new Map<string, number>();
+  let lastW = 0;
   const placeLabels = () => {
     if (mode !== 'gl' || !renderer) return;
-    const now = scene.labels();
-    now.forEach((a, k) => {
+    const W = canvas.clientWidth;
+    if (W !== lastW) { widths.clear(); lastW = W; }
+    scene.labels().forEach((a, k) => {
       const l = lblEls[k];
       if (!l) return;
       const e = l.el;
@@ -226,6 +232,17 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
       if (!p || a.hidden) { e.style.display = 'none'; return; }
       e.style.display = '';
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
+      // Keep the text inside the stage: a side label flips to the roomier side, a centred one slides along.
+      let w = widths.get(a.text);
+      if (w === undefined) { w = l.b.offsetWidth; if (w) widths.set(a.text, w); }
+      let side = a.side, shift = 0;
+      if (w) {
+        if (side === 'r' && p[0] + 9 + w > W - 2 && p[0] - 9 - w >= 2) side = 'l';
+        else if (side === 'l' && p[0] - 9 - w < 2 && p[0] + 9 + w <= W - 2) side = 'r';
+        if (side === 't' || side === 'b') shift = Math.max(0, 3 - (p[0] - w / 2)) - Math.max(0, p[0] + w / 2 - (W - 3));
+      }
+      l.b.style.marginLeft = shift ? `${shift.toFixed(1)}px` : '';
+      e.className = `wt-lbl ${side}${a.minor ? ' minor' : ''}`;
     });
   };
 
@@ -235,7 +252,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
     const parts = new Parts(pal());
     scene.build(parts);
     if (mode === 'gl' && renderer) for (let i = 0; i < KINDS.length * LAYERS.length; i++) renderer.updateBatch(i, parts.pack(i));
-    else if (mode === 'flat') drawFlat(flatSvg, parts.list, scene.labels());
+    else if (mode === 'flat') drawFlat(flatSvg, parts.list, scene.labels(), Math.max(20, Math.min(stage.clientWidth / f.w, stage.clientHeight / f.h)) || 50);
     onFrame?.();
   };
 

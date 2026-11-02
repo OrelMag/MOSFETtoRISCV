@@ -24,7 +24,8 @@ export function loopScene(get: () => LoopState): WaterScene {
   const lenLoop = LOOP_PATH.reduce((l, p, i) => (i ? l + Math.hypot(p[0] - LOOP_PATH[i - 1][0], p[1] - LOOP_PATH[i - 1][1]) : 0), 0);
   return {
     alt: 'A loop of water: a tank, two valves, a water wheel with a lamp, a narrow pipe and a pump.',
-    view: { target: [-0.6, 0.5, 0], yaw: -0.35, pitch: 0.3, dist: 11.5 },
+    view: { target: [-0.6, 0.5, 0], yaw: -0.35, pitch: 0.3, dist: 9.4 },
+    aspect: 4 / 3,
     flat: { x0: -4.6, y0: -2.6, w: 8.6, h: 6.4 },
     labels: () => [
       { text: 'tank height = voltage', p: [-2.6, 2.95, 0.6], side: 't' },
@@ -84,7 +85,8 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
   const now = (): FetWater => fetWater(get().vg, get().vd);
   return {
     alt: 'A faucet between a drain tank and a source basin: the handle is the gate, the tank level the drain voltage.',
-    view: { target: [0, 0.6, 0], yaw: -0.25, pitch: 0.28, dist: 9 },
+    view: { target: [0, 0.6, 0], yaw: -0.25, pitch: 0.28, dist: 9.2 },
+    aspect: 16 / 10,
     flat: { x0: -3.4, y0: -0.9, w: 6.8, h: 3.6 },
     labels: () => [
       { text: 'drain tank: V_DS above the source', p: [-2.4, 2.35, 0.5], side: 't' },
@@ -128,15 +130,16 @@ export function columnScene(inp: ColumnIn, out0: number): ColumnScene {
   return {
     state,
     alt: 'Two faucets on one glass column: a full tank above, a drain below. The output is the water level in the column.',
-    view: { target: [0, 0.6, 0], yaw: -0.55, pitch: 0.22, dist: 10 },
+    view: { target: [0.1, 0.85, 0], yaw: -0.55, pitch: 0.22, dist: 11.4 },
+    aspect: 0.8,
     flat: { x0: -2.6, y0: -2.5, w: 5.4, h: 6.6 },
     labels: () => [
-      { text: 'V_DD tank (always full)', p: [1.9, 3.5, 0.4], side: 'r' },
-      { text: inp.weak ? 'top faucet: NMOS, shuts itself' : 'top faucet: PMOS, opens at input 0', p: [0.6, 2.75, 0.5], side: 't' },
-      { text: 'output = level in the column', p: [1.6, 0.55, 0.3], side: 'r' },
-      { text: 'bottom faucet: NMOS, opens at input 1', p: [0.6, -0.55, 0.5], side: 'b' },
+      { text: 'V_DD tank, always full', p: [1.9, 3.5, 0.4], side: 'r' },
+      { text: inp.weak ? 'top: NMOS, shuts itself' : 'top: PMOS, open at input 0', p: [0.6, 2.75, 0.5], side: 't' },
+      { text: 'output = column level', p: [1.6, 0.55, 0.3], side: 'r' },
+      { text: 'bottom: NMOS, open at input 1', p: [0.6, -0.55, 0.5], side: 'b' },
       { text: 'drain = ground', p: [0, -2.3, 0.6], side: 'b', minor: true },
-      { text: 'wasted-flow meter', p: [-1.6, -0.6, 0.3], side: 't', minor: true },
+      { text: 'wasted flow', p: [-1.6, -0.6, 0.3], side: 't', minor: true },
       { text: `V_DD − V_t = ${(COLUMN_VOLTS * (1 - COLUMN_VT)).toFixed(2)} V`, p: [1.5, COL.y0 + COL.h * (1 - COLUMN_VT), 0.2], side: 'r', hidden: !inp.weak },
     ],
     advance(dt, settle) {

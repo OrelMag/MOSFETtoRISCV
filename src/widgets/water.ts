@@ -81,7 +81,7 @@ export function openings(c: ColumnIn, out: number): { p: number; n: number } {
 }
 
 export interface ColumnStep { out: number; iTop: number; iBot: number; p: number; n: number }
-const COLUMN_RATE = 3; // column fills per second at full flow
+const COLUMN_RATE = 5; // column fills per second at full flow
 
 /** One step of the column: it fills through the top faucet from a full tank (1) and empties through the bottom into the drain. */
 export function columnStep(out: number, c: ColumnIn, dt: number): ColumnStep {

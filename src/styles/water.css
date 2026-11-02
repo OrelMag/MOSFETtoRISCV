@@ -1,7 +1,7 @@
 /* The water analogies (widgets/waterkit.ts, waterscenes.ts): the 3D / flat stage, labels over it, the figure's controls. */
 
 .wt-stage {
-  position: relative; aspect-ratio: 4 / 3; min-height: 230px; max-height: 440px; width: 100%; overflow: hidden; container-type: inline-size;
+  position: relative; aspect-ratio: 4 / 3; min-height: 230px; max-height: 460px; width: 100%; overflow: hidden; container-type: inline-size;
   border: 1px solid var(--border); border-radius: var(--radius-sm, 8px);
   background: var(--canvas); background-image: radial-gradient(var(--grid) 1px, transparent 1px); background-size: 20px 20px;
 }
@@ -12,7 +12,7 @@
 .wt-flat .wt-p { stroke: color-mix(in srgb, var(--text) 30%, transparent); stroke-width: 0.012; }
 .wt-flat .wt-p.water { stroke: none; }
 .wt-flat .wt-p.ring { stroke: color-mix(in srgb, var(--text) 40%, transparent); }
-.wt-flat-lbl { font: 500 0.26px var(--font-ui); fill: var(--text-2); }
+.wt-flat-lbl { font-family: var(--font-ui); font-weight: 500; fill: var(--text-2); }
 .wt-labels { position: absolute; inset: 0; pointer-events: none; }
 .wt-lbl { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .wt-lbl i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 1.5px var(--surface); }
