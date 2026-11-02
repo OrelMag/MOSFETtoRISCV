@@ -1,7 +1,11 @@
 // My notes (#/notes, its own chunk): the learner's notes and bookmarks on the left, filtered and searched, each linking back
 // to its place; the review queue on the right (ui/review.ts: the questions answered wrong first, then the ones asked
-// again, then the longest unseen, from chapters visited), asked with the same quizBox as everywhere.
+// again, then the longest unseen, from chapters visited), asked with the same quizBox as everywhere; a drill with its
+// typed answer (learn/asker.ts drillBox).
 
+import '../../styles/path.css';
+import { DRILLS, rng } from '../../campaign/drills';
+import { drillBox } from '../../learn/asker';
 import { h, icon } from '../dom';
 import { noteHaystack, placeLabel } from '../notelabel';
 import { type NoteItem, notes, openNoteNext, placeHref, snippet } from '../notes';
@@ -115,10 +119,11 @@ export class NotesPage implements Page {
     }
     const why = q.why === 'missed' ? this.missedNote(q.q.key) : q.why === 'soon' ? 'you asked to see this again' : q.why === 'new' ? 'not asked yet' : 'due again';
     const pct = Math.round((this.done / total) * 100);
-    const box = quizBox(q.q.quiz, q.q.key, `${this.at + 1} of ${total}`, () => {}, {
-      fresh: true,
-      onAnswer: (right) => { reviewLog().record(q.q.key, right); this.done++; this.progress(); },
-    });
+    const onAnswer = (right: boolean) => { reviewLog().record(q.q.key, right); this.done++; this.progress(); };
+    // a drill: a fresh question of it each time, under the drill's one key
+    const drill = q.q.drill ? DRILLS[q.q.drill] : undefined;
+    const box = drill ? drillBox(drill.make(rng(Date.now())), drill.how, onAnswer)
+      : quizBox(q.q.quiz!, q.q.key, `${this.at + 1} of ${total}`, () => {}, { fresh: true, onAnswer });
     box.classList.add('np-quiz');
     const bar = h('div', { class: 'np-bar-track', role: 'progressbar', 'aria-valuenow': String(pct), 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Review progress' },
       h('div', { class: 'np-bar-fill', style: `width:${pct}%` }));

@@ -1,6 +1,6 @@
 // The skill map (DOM-free): a skill is a codex entry, placed at the journey chapter that teaches it (chapters/taught.ts),
 // learned on the steps its entry links there, practised by the campaign levels built around it (CampaignNode.codex), and
-// checked by its codex questions plus the linked steps' quizzes (their review memos: ui/review.ts). Basics adds the two
+// checked by its codex questions, the linked steps' quizzes and the generated ones (bank.ts) (their review memos: ui/review.ts). Basics adds the two
 // ideas that have no codex entry. Tiers group the journey: 0 Basics and the map, 1 chapters 1–10, 2 11–15, 3 16–25,
 // 4 the rest (prologue and appendices are optional and in no tier). Nothing here is authored per skill: it cannot drift.
 
@@ -10,6 +10,7 @@ import { NODES } from '../campaign/nodes';
 import { chapters } from '../chapters';
 import { TAUGHT } from '../chapters/taught';
 import type { Chapter } from '../chapters/types';
+import { DRILL_REVIEW, REVIEW_BANK } from './bank';
 import type { Tier } from './capstones';
 
 export interface Skill {
@@ -76,6 +77,9 @@ export function skills(): Skill[] {
       levels: [...lv.filter((n) => !n.optional), ...lv.filter((n) => n.optional)].map((n) => n.id),
     });
   }
+  // generated questions (learn/bank.ts): a beat to predict counts for the skills its step teaches, a part to remove for the entries drawing it
+  for (const b of REVIEW_BANK) for (const s of out) if (b.kind === 'predict' ? s.chapter === b.chapter && s.steps.includes(b.step) : b.codex.includes(s.id)) s.checks.push(b.key);
+  for (const d of DRILL_REVIEW) for (const s of out) if (d.codex.includes(s.id)) s.checks.push(`drill:${d.drill}`);
   const at = (s: Skill) => (order.get(s.chapter) ?? 0) * 1000 + s.steps[0];
   memo = out.sort((a, b) => at(a) - at(b));
   return memo;
