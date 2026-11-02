@@ -117,7 +117,7 @@ function warpsPanel(p: WarpProgram, words: number[], W: number, L: number, opts:
       h('span', { class: 'fold-hint' }));
     const hint = lsu ? 'a letter: the warp issued (L load, S store, A amoadd.w, B bar) · faded: a further access · striped: a load in flight · barred: at the barrier'
       : 'a letter: the warp issued · striped: a load of it in flight';
-    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-keep': 'open' }, title,
       h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.programs ? [progSel] : []), sel, runBtn), slow.el, status,
         h('div', { class: 'cpu-sec' }, 'Issue timeline', h('span', { class: 'cpu-sec-hint' }, hint)), timeline,
         h('div', { class: 'cpu-sec' }, 'Warps', h('span', { class: 'cpu-sec-hint' }, 'scoreboard: registers waiting for a load')), slots,

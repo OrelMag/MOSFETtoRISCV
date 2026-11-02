@@ -514,7 +514,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* a panel docked at the top right (the CPU, bus, DRAM, screen panels…, folded or not) holds that corner: the note goes
    under the level badge, as wide as the canvas left of the panel allows (--panel-inset: stage.ts syncCover) */
 @media (min-width: 761px) { .canvas:has(> [data-dock='right']) > .stage-notes {
-  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - var(--panel-inset, 0px) - 12px));
+  top: 44px; right: auto; left: var(--note-left, 12px); align-items: flex-start; max-width: min(380px, calc(100% - var(--note-left, 12px) - var(--panel-inset, 0px)));
 } }
 @media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .stage-notes { top: 56px; } }
 .stage-goal {

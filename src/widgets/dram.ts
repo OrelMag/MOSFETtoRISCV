@@ -196,7 +196,7 @@ function dramPanel(opts: DramSceneOptions): ScenePanel {
         btn('Wait 50 cycles', 'Let 50 clock cycles of leakage pass', wait(50)),
         btn('Wait 200', 'Let 200 clock cycles of leakage pass', wait(200))),
       status, grid, msg);
-    const el = h('div', { class: 'mem-panel cpu-panel dram-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title, body);
+    const el = h('div', { class: 'mem-panel cpu-panel dram-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-keep': 'open' }, title, body);
 
     const update = () => {
       const s = sim();

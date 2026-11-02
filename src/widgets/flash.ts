@@ -115,7 +115,7 @@ function flashPanel(o: FlashSceneOptions): ScenePanel {
     const plot = s('svg', { viewBox: '0 0 300 120', class: 'fl-plot', role: 'img', 'aria-label': 'Drain current against gate voltage for the selected cell' });
     const msg = h('div', { class: 'dram-note' });
     const title = h('h4', null, o.kind === 'nor' ? 'NOR flash 4 × 4' : 'NAND flash: 4 strings × 8', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel dram-panel fl-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel dram-panel fl-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-keep': 'open' }, title,
       h('div', { class: 'dram-sel' }, h('span', null, 'row'), rowSeg.el, h('span', null, 'data'), dataBtns),
       h('div', { class: 'dram-ops' },
         btn('Read row', 'The row at the read voltage: an erased cell conducts (1), a programmed one does not (0)', op(() => { const v = read(sel.row); st.reads.push({ row: sel.row, v }); log = [`row ${sel.row} reads ${v < 0 ? 'X' : bits(v)}`]; }), 'btn sm primary'),
