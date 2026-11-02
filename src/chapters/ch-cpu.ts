@@ -321,8 +321,7 @@ export const chRegfile: Chapter = {
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
         That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
-        <p>Why two read ports and one write port: the commonest instruction, <code>add rd, rs1, rs2</code>, reads two registers and writes one, and a machine that finishes one instruction per cycle
-        does all three in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
+        <p>A machine that finishes one instruction per cycle does both reads and the write in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
         A write must change state, so it happens only at the rising edge and only where the decoder and <code>we</code> enable one register. Reading a register while writing it gives the old
         value until the edge, which is what such a machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
         <div class="try">Write a value: set wa, wd, we = 1, Pulse. Then point ra1 / ra2 at it.</div>`,

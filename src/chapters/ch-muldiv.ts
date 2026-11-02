@@ -91,7 +91,7 @@ export const chMulDiv: Chapter = {
       title: 'Long multiplication is AND and add',
       body: `
         <p>RV32I, the instruction set every CPU so far runs, has no multiply or divide. <a href="#/c/python/0">Chapter 15</a>'s compiler turns <code>a * b</code>
-        into <code>rt.mul</code>, a loop of shift and add over the multiplier's bits: five or six instructions a pass, up to 32 passes, close to 200 cycles for one
+        into <code>rt.mul</code>, a loop of shift and add over the multiplier's bits: five or six instructions a pass, up to 32 passes, up to about 200 cycles for one
         product, and a divide takes a loop of its own. The M extension adds eight instructions (<code>mul</code>, <code>mulh</code>, <code>mulhsu</code>,
         <code>mulhu</code>, <code>div</code>, <code>divu</code>, <code>rem</code>, <code>remu</code>) and leaves the work to the hardware. This chapter builds that
         hardware, first the obvious way, then faster ways, each priced in NANDs and delays, and ends by putting it in the CPUs.</p>
