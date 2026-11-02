@@ -271,6 +271,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   let cur: number | null | undefined;
   const ce = codeEditor({ value: applied.src, lang: codeOf(applied), rows: 24, onChange: () => schedule() });
 
+  const applyBtn = h('button', { class: 'btn sm primary', title: 'Apply (Ctrl+Enter): one undo step', onclick: () => apply() }, 'Apply') as HTMLButtonElement;
   const rebuild = () => {
     img = romImage({ ...applied, src: ce.value });
     ce.setDiagnostics(img.problems.filter((e) => e.line > 0));
@@ -279,6 +280,8 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     if (tilesOn) tiles?.refresh();
     cur = undefined;
     const errs = img.problems;
+    applyBtn.disabled = errs.length > 0;
+    applyBtn.title = errs.length ? 'Fix the problems first: a program with errors would leave the ROM unresolved' : 'Apply (Ctrl+Enter): one undo step';
     status.className = `sb-rom-dlg-status${errs.length ? ' err' : ''}`;
     status.replaceChildren(errs.length
       ? `${errs.length} problem${errs.length > 1 ? 's' : ''}: ${errs[0].line ? `line ${errs[0].line}: ` : ''}${errs[0].message}${errs.length > 1 ? ' …' : ''}`
@@ -303,6 +306,8 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       return close();
     }
     if (p.ref.rom.src !== ce.value) {
+      // typed just now: the debounced check may not have run
+      if (romImage({ ...p.ref.rom, src: ce.value }).problems.length) return void ed.toast('Fix the program problems first: nothing was applied', 'err');
       const doc = ed.ws.chips[chipId];
       const r = setRef(doc, partId, { rom: { ...p.ref.rom, src: ce.value } }, ed.defOf);
       if (r.reason) return void ed.toast(r.reason, 'err');
@@ -369,7 +374,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
           openProgramEditor(ed, partId);
         }) }, 'Load deck…') : null,
         h('button', { class: 'btn sm', onclick: cancel }, 'Cancel'),
-        h('button', { class: 'btn sm primary', title: 'Apply (Ctrl+Enter): one undo step', onclick: apply }, 'Apply'))));
+        applyBtn)));
   // Keys stay in the dialog: the canvas's shortcuts (Delete, arrows, Ctrl+Z) must not act behind it.
   ov.addEventListener('keydown', (e) => {
     e.stopPropagation();

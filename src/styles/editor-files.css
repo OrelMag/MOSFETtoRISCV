@@ -8,6 +8,7 @@
   /* max-height set where it is placed (ui/dom.ts placeMenu): a long menu scrolls inside the window */
   max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain; align-content: start;
 }
+.sb-file-menu { max-width: min(520px, calc(100vw - 16px)); }
 .sb-menu button {
   display: flex; align-items: flex-start; gap: 10px; text-align: left; border: 0; background: transparent; color: var(--text);
   padding: 6px 10px; border-radius: 8px; cursor: pointer; font: inherit;

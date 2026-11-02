@@ -337,8 +337,36 @@ export function applyMap(doc: ChipDoc, map: MemMap): ChipDoc {
   if ('error' in old) throw new Error(old.error);
   const leaving = old.regions.filter((r) => !keep.has(r.id)).map((r) => r.id);
   dropWires((w) => touches(w, (e) => e.part === bus.id && /^s\d+_(req|rsp)$/.test(e.port)));
-  for (const id of leaving) dropWires((w) => touches(w, (e) => e.part === id));
-  let outParts = parts.filter((p) => !leaving.includes(p.id));
+  // the devices a leaving slave drove or read (screen, keyboard, timer, flash contents) go with it: the drivers of the
+  // nets it reads and the readers of the nets it drives (not other readers of a net a device drives: the interrupt
+  // OR), then parts only those use (the timer's count splitter); never the clock / reset, the bus or a staying slave
+  const quiet = /^(clk|rst|reset|req|rsp)$/;
+  const gone = new Set(leaving);
+  const stays = new Set([bus.id, ...keep]);
+  const dirOf = (id: string, port: string): string | undefined => {
+    const p = doc.parts.find((q) => q.id === id);
+    if (!p) return undefined;
+    try { return defOf(p.ref).ports.find((x) => x.name === port)?.dir; } catch { return undefined; }
+  };
+  const ends = (id: string) => {
+    const ports = new Set<string>();
+    for (const w of doc.wires) for (const e of [w.a, w.b]) if (isPart(e) && e.part === id && !quiet.test(e.port)) ports.add(e.port);
+    return [...ports].map((port) => ({ port, dir: dirOf(id, port), peers: peers(doc, { part: id, port }).ends.filter(isPart).filter((o) => o.part !== id && !quiet.test(o.port)) }));
+  };
+  for (const id of leaving) for (const e of ends(id)) for (const o of e.peers) {
+    const od = dirOf(o.part, o.port);
+    // an input of the slave: its driver; an output of the slave: whatever reads it (never another driver)
+    if (!stays.has(o.part) && od !== undefined && e.dir !== undefined && od !== e.dir && (od === 'out' || e.dir === 'out')) gone.add(o.part);
+  }
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const d of [...gone]) for (const e of ends(d)) for (const o of e.peers) {
+      if (gone.has(o.part) || stays.has(o.part)) continue;
+      if (ends(o.part).every((x) => x.peers.every((y) => gone.has(y.part) || y.part === o.part))) { gone.add(o.part); grew = true; }
+    }
+  }
+  for (const id of gone) dropWires((w) => touches(w, (e) => e.part === id));
+  let outParts = parts.filter((p) => !gone.has(p.id));
 
   // new slaves: a column below the others
   const slaveIds = [...old.regions.map((r) => r.id), old.fallback.id].filter((id) => !leaving.includes(id));
@@ -391,6 +419,24 @@ export function applyMap(doc: ChipDoc, map: MemMap): ChipDoc {
     tap(bus.id, newBus.ref, bus.at, bus.flip, bus.rot, `s${k}_req`, lk.req);
     tap(bus.id, newBus.ref, bus.at, bus.flip, bus.rot, `s${k}_rsp`, lk.rsp);
   });
+  // a pointer a removed device drove, left reading nothing (the interrupt OR's timer input): a 0 takes the device's place
+  for (const l of [...labels]) {
+    if (labels.filter((x) => x.name === l.name).length !== 1) continue;
+    const w = wires.find((x) => [x.a, x.b].some((e) => 'label' in e && e.label === l.id));
+    const e = w && [w.a, w.b].find(isPart);
+    const p = e && outParts.find((q) => q.id === e.part);
+    if (!p || !e) continue;
+    let port;
+    try { port = defOf(p.ref).ports.find((x) => x.name === e.port); } catch { continue; }
+    if (!port || port.dir !== 'in' || port.width > 53) continue;
+    const ref: PartRef = { const: { width: port.width, value: 0 } };
+    const out = defOf(ref).ports.find((x) => x.dir === 'out');
+    if (!out) continue;
+    const id = uniqueName(`${p.id}_${e.port}_0`, outParts.map((q) => q.id));
+    const g = instPort(defOf(p.ref), p.at, p.flip, e.port, p.rot);
+    outParts = [...outParts, { id, ref, at: [g.pos[0] + 2 * exitStep[g.exit][0] - 6, g.pos[1] + 2 * exitStep[g.exit][1] - 1], label: '0' }];
+    tap(id, ref, outParts[outParts.length - 1].at, undefined, undefined, out.name, l.name);
+  }
   return { ...doc, parts: outParts, wires, labels };
 }
 
