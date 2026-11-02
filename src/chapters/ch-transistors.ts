@@ -408,6 +408,9 @@ export const chInverter: Chapter = {
     {
       title: 'Pull up, pull down',
       body: `
+        <p>A logic gate must drive its output to a clean 1 or 0 for every input. One NMOS cannot: it can connect the output to ground, but when it is off
+        it leaves the output connected to nothing. Its complement, the PMOS, connects to VDD instead and turns on at the opposite gate level. Use one of each,
+        one to pull up and one to pull down, and for either input exactly one of them is on.</p>
         <p>Stack <span data-show="p1">a PMOS</span> on top of <span data-show="n1">an NMOS</span> and tie their gates together. That is a <strong>CMOS inverter</strong>.</p>
         <ul><li><code>a = 0</code>: the PMOS conducts, the NMOS is off → <code>y</code> is pulled up to <strong>1</strong>.</li>
         <li><code>a = 1</code>: the NMOS conducts, the PMOS is off → <code>y</code> is pulled down to <strong>0</strong>.</li></ul>

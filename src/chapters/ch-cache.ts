@@ -109,6 +109,13 @@ export const chCache: Chapter = {
     {
       title: 'Six transistors per bit',
       body: `
+        <p>The CPUs so far get their data in the same cycle they ask for it, because their data memory is tiny: a few dozen words of flip-flops next to the
+        core. Real programs want megabytes or gigabytes, and a memory that large is far away and slow: an access takes on the order of 100 ns, a hundred cycles
+        or more of a GHz core. With a load or store every few instructions, a CPU that waited for each one would spend nearly all its time waiting.</p>
+        <p>What saves it is that programs are predictable in where they look. What was used is used again soon (a loop counter, the stack): <em>temporal
+        locality</em>. What lies next to it is used next (an array walked in order, the next instruction): <em>spatial locality</em>. A <strong>cache</strong> is a
+        small, fast memory beside the core holding copies of recently used blocks; a hit takes a cycle, and only a miss goes out to the big memory. This
+        chapter builds one from the cell up, then measures what its misses cost.</p>
         <p>Our register file stores each bit in an enable flip-flop: 15 NANDs, <strong>60 transistors</strong>. A cache needs
         hundreds of thousands of bits, so real memories use the <span data-show="c0 c1"><strong>6T SRAM cell</strong></span>: two cross-coupled inverters (a loop
         that remembers, like the SR latch) and two access transistors controlled by the <em>word line</em>. Every cell in a column

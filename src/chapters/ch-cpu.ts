@@ -84,6 +84,14 @@ export const chAlu: Chapter = {
     {
       title: 'Bitwise operations are free parallelism',
       body: `
+        <p>Most RISC-V instructions do one thing to two 32-bit words: add or subtract them, AND, OR or XOR them, shift one by the other, or compare them.
+        That is ten operations (add, sub, sll, slt, sltu, xor, srl, sra, or, and), and the <strong>ALU</strong> (arithmetic logic unit) is one block that does all ten,
+        picking the one an instruction asks for with a 4-bit control code. An instruction is a 32-bit word (<a href="#/c/isa/0">chapter 13</a> lays out its formats);
+        in the register-to-register ones, called R-type, two small fields of that word, funct3 (3 bits) and one bit of funct7, name the operation, and the ALU's
+        code is chosen to be exactly those four bits. Most operations also come in an <span data-ahead="immediates">immediate form, whose second operand is a constant written into the instruction word</span>
+        (<code>addi</code>, <code>andi</code>, <code>slli</code> …).</p>
+        <p>The units are built from parts you have: chapter 6's adder for add, sub and the comparisons, chapter 7's multiplexers for the shifter and for picking
+        the result. First the cheapest of them.</p>
         <p>AND, OR and XOR on words are just <span data-show="g0 g1 g2 g3 g4 g5 g6 g7">n independent gates</span>: no carries, no interaction between bit positions,
         depth 2–3 NANDs regardless of width. They cost O(n) area and O(1) delay.</p>
         <p>In RISC-V they implement masking (<code>andi</code>), setting bits (<code>ori</code>), toggling and comparing
@@ -302,15 +310,18 @@ export const chRegfile: Chapter = {
     {
       title: 'A memory with two read ports',
       body: `
-        <p>An R-type instruction needs two operands and produces one result per cycle, so the register file has
+        <p><a href="#/c/registers/0">Chapter 9</a> kept one word in a register; <a href="#/c/memory/0">chapter 10</a> kept many behind an address. A processor needs
+        something in between: a few dozen words that every instruction can name directly, two of them read and one written in the same cycle. RISC-V has 32,
+        x0 to x31, and an instruction names them by number: <code>add x5, x6, x7</code> reads x6 and x7 and writes their sum to x5 (<a href="#/c/isa/0">chapter 13</a>
+        shows the three 5-bit register numbers in the instruction word). The block that holds them is the <strong>register file</strong>: a small memory with more than one port.</p>
+        <p>Such an instruction needs two operands and produces one result per cycle, so the register file has
         <strong>two asynchronous <span data-show="rp1 rp2">read ports</span></strong> and <strong>one synchronous write
         port</strong> (<span data-show="dec">a decoder</span> enabling one register). Structurally it is the
         memory array from <a href="#/c/memory/0">chapter 10</a> with a second mux tree.</p>
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
         That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
-        <p>Why two read ports and one write port: the commonest instruction, <code>add rd, rs1, rs2</code>, reads two registers and writes one, and a machine that finishes one instruction per cycle
-        does all three in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
+        <p>A machine that finishes one instruction per cycle does both reads and the write in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
         A write must change state, so it happens only at the rising edge and only where the decoder and <code>we</code> enable one register. Reading a register while writing it gives the old
         value until the edge, which is what such a machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
         <div class="try">Write a value: set wa, wd, we = 1, Pulse. Then point ra1 / ra2 at it.</div>`,

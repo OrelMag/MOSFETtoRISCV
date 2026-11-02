@@ -506,13 +506,17 @@ export const chRouting: Chapter = {
     {
       title: 'The decoder: a number becomes one wire',
       body: `
+        <p>A computer is full of choices made by a number: which of 32 registers to write, which word of memory to read, which of several results to keep.
+        Two blocks make every one of them. A <em>decoder</em> turns a number into one raised wire among 2ⁿ, a choice to act on (write this row); a
+        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/0">Chapter 4</a> built the 2:1
+        multiplexer; this chapter widens both and prices them, and every memory after it is built on the pair.</p>
         <p>A <strong>decoder</strong> takes an n-bit number and raises exactly one of its 2ⁿ outputs. For input 2,
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>
         <p>Each address bit runs down two vertical rails: itself and <span data-show="inv0 inv1">its inverse</span>.
         <span data-show="g0 g1 g2 g3">Each output's AND gate</span> taps the combination of rails that spells its own number: for output 2 = 0b10, the true rail of a₁ and the inverted rail of a₀.
         A gate that spells a number can fire for no other, so exactly one output is high.</p>
         <p>Cost: 2ⁿ AND gates of n inputs, plus n inverters. For n = 2 that is ${stats(decoder(2)).nands} NANDs (two inverters and four 2-input ANDs) and ${logicDepth(decoder(2))} gate delays; the
-        table below shows how the cost grows. A decoder is where an address becomes a physical choice: which row of a memory, which register to write, which device on a bus.</p>`,
+        table below shows how the cost grows.</p>`,
       tour: {
         beats: [
           { title: 'Address 0', set: { a: 0 }, show: ['inv0', 'inv1', 'g0'], expect: { y0: 1, y1: 0, y2: 0, y3: 0 },
