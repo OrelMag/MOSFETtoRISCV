@@ -197,8 +197,8 @@
 .sb-hint { left: 12px; bottom: 8px; }
 /* An empty chip: where to start, centred; the canvas under it still takes drops and clicks. */
 .sb-empty-chip {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
-  width: min(380px, calc(100% - 32px)); text-align: center; color: var(--text-2);
+  position: absolute; left: calc((100% - var(--toast-dock, 0px)) / 2); top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
+  width: min(380px, calc(100% - var(--toast-dock, 0px) - 32px)); text-align: center; color: var(--text-2);
   padding: 20px 22px; border-radius: 14px; border: 1px dashed var(--border-strong, var(--border));
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }

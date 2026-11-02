@@ -55,6 +55,8 @@
 .sb-chal-list { width: min(380px, calc(100% - 16px)); }
 .sb-chal-count { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .sb-chal-list-body { overflow: auto; min-height: 0; padding: 4px 10px 12px; }
+/* the list runs on past the drawer's edge: fade the last rows instead of cutting them */
+.sb-chal-list-body { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); padding-bottom: 22px; }
 .sb-chal-intro { margin: 6px 2px 4px; color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
 .sb-chal-list-body h4 {
   display: flex; align-items: baseline; justify-content: space-between; margin: 12px 2px 4px; font-size: 11.5px;
