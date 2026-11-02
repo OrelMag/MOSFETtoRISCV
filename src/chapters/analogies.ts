@@ -58,7 +58,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['fanin'],
   },
   {
-    chapter: 'inverter', step: 'Pull up, pull down', title: 'Two faucets on one column',
+    chapter: 'inverter', step: 'Pull up, pull down', title: 'Two faucets on one column', figure: 'water-cmos',
     body: `<p>The output is the water level in a glass column. A faucet above it fills it from a full tank (the PMOS, open when
       the input is 0); a faucet below empties it into a drain (the NMOS, open when the input is 1). One handle works both, in
       opposite directions, so once the input settles water only moves while the column changes level. Hold the handle halfway
@@ -69,7 +69,7 @@ export const ANALOGIES: Analogy[] = [
     codex: ['cmos', 'inverter'],
   },
   {
-    chapter: 'inverter', step: 'The wrong way round: weak levels', title: 'A faucet that shuts itself',
+    chapter: 'inverter', step: 'The wrong way round: weak levels', title: 'A faucet that shuts itself', figure: 'water-cmos-weak',
     body: `<p>Put the NMOS above the column and let it fill it. Its handle is held by the difference between its gate and the
       water level in the column, so as the column rises the faucet closes itself, and it is shut before the column is full: it
       stops a threshold short of its gate, 0.80 V of 1.1 V here. A PMOS draining the column stops the same distance above

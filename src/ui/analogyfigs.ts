@@ -4,4 +4,7 @@
 
 export type FigureMount = (host: HTMLElement) => void;
 
-export const FIGURES: Record<string, () => Promise<FigureMount>> = {};
+export const FIGURES: Record<string, () => Promise<FigureMount>> = {
+  'water-cmos': async () => (await import('../widgets/waterscenes')).cmosFigure(false),
+  'water-cmos-weak': async () => (await import('../widgets/waterscenes')).cmosFigure(true),
+};

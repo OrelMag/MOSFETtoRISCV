@@ -2,12 +2,15 @@
 // the pinch-off boundary, a drain sweep, and a close-up of the channel under the same two voltages.
 
 import { h } from '../ui/dom';
+import '../styles/watertoggle.css';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop, volts } from './mosfet';
 import { VDD } from './mosphys';
 import { chips, idVdsChart, slider } from './mosparts';
 import { crossSection } from './mosxsec';
+import { fetWater, fetWords } from './water';
+import type { WaterMount } from './waterkit';
 
 const SWEEP_MS = 4000;
 
@@ -24,10 +27,40 @@ export function mosRegionsWidget(): Widget {
   const startSweep = () => { vd = 0; sweepT0 = performance.now(); syncSweep(); loop.kick(); };
   const stopSweep = () => { sweepT0 = null; syncSweep(); };
 
+  // Cross-section | Water: the channel as silicon, or as a faucet (3D, loaded on first use) on the same two voltages.
+  let view: 'xs' | 'water' = 'xs', water: WaterMount | null = null, dead = false;
+  const xsBtn = h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setView('xs') }, 'Cross-section');
+  const waterBtn = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setView('water') }, 'Water');
+  const seg = h('div', { class: 'wt-seg', role: 'group', 'aria-label': 'How to draw the channel' }, xsBtn, waterBtn);
+  const host = h('div', { class: 'wt-host' });
+  const words = h('p', { class: 'wt-cap', 'aria-live': 'polite' });
+  const waterBox = h('div', null, host, words);
+  waterBox.style.display = 'none';
+  function setView(v: 'xs' | 'water'): void {
+    view = v;
+    xsBtn.setAttribute('aria-pressed', String(v === 'xs'));
+    waterBtn.setAttribute('aria-pressed', String(v === 'water'));
+    xs.el.style.display = v === 'xs' ? '' : 'none';
+    waterBox.style.display = v === 'water' ? '' : 'none';
+    if (v === 'water' && !water && !host.firstChild) {
+      host.style.minHeight = '260px';
+      host.textContent = 'Loading the water view…';
+      import('./waterscenes')
+        .then((m) => {
+          if (dead) return;
+          host.textContent = ''; host.style.minHeight = '';
+          water = m.mountFet(host, () => ({ vg, vd }));
+        })
+        .catch((e: unknown) => { if (!dead) host.textContent = `The water view did not load (${String(e)}).`; });
+    }
+    repaint();
+  }
+
   function paint(dt: number): void {
     chart.paint(vg, vd, false);
     readout.paint(vg, vd, false);
-    flowing = xs.paint('n', vg, vd, dt);
+    if (view === 'xs') flowing = xs.paint('n', vg, vd, dt);
+    else { flowing = false; words.textContent = fetWords(fetWater(vg, vd)); water?.kick(); }
     dSl.set(vd);
   }
   const loop = frameLoop((now, dt) => {
@@ -44,9 +77,9 @@ export function mosRegionsWidget(): Widget {
     h('div', { class: 'panel' }, h('h3', null, 'Output characteristics: Id against Vds for five gate voltages'), chart.el),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, gSl.el, dSl.el, reducedMotion() ? null : sweepBtn)),
     readout.el,
-    h('div', { class: 'panel mos-xpanel' }, h('h3', null, 'The channel, close up'), xs.el));
+    h('div', { class: 'panel mos-xpanel' }, h('h3', null, 'The channel, close up'), seg, xs.el, waterBox));
 
   syncSweep();
   repaint();
-  return { el, destroy() { loop.stop(); } };
+  return { el, destroy() { dead = true; loop.stop(); water?.destroy(); water = null; } };
 }

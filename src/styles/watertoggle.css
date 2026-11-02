@@ -1,0 +1,10 @@
+/* The Wire | Water and Cross-section | Water view switches (widgets/basics.ts, mosregions.ts): a two-button segmented control
+   that stays in the main bundle; the 3D view's own styles (water.css) come with its chunk. */
+.wt-seg { display: inline-flex; border: 1px solid var(--border-strong, var(--border)); border-radius: 8px; overflow: hidden; margin: 2px 0 8px; }
+.wt-seg button { border: 0; background: var(--surface); color: var(--text-2); font: 600 13px var(--font-ui); padding: 5px 14px; cursor: pointer; }
+.wt-seg button + button { border-left: 1px solid var(--border-strong, var(--border)); }
+.wt-seg button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
+.wt-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.wt-host { min-width: 0; }
+.wt-host:empty { display: none; }
+@media (pointer: coarse) { .wt-seg button { min-height: 40px; padding: 0 18px; } }
