@@ -8,3 +8,11 @@
 .wt-host { min-width: 0; }
 .wt-host:empty { display: none; }
 @media (pointer: coarse) { .wt-seg button { min-height: 40px; padding: 0 18px; } }
+/* "Try other values" under the loop's Water view: the cell's volts and the lamp's ohms (the text quotes the defaults). */
+.wt-try { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 6px 0 8px; }
+.wt-try-k { font: 600 12px var(--font-ui); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; flex: 1 0 100%; }
+.wt-try-sl { display: flex; align-items: center; gap: 8px; flex: 1 1 180px; min-width: 0; font-size: 13px; }
+.wt-try-sl span { flex: none; color: var(--text-2); }
+.wt-try-sl input { flex: 1; min-width: 70px; accent-color: var(--accent); }
+.wt-try-sl output { width: 52px; flex: none; text-align: right; font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) { .wt-try-sl input { min-height: 40px; } .wt-try .btn { min-height: 40px; } }

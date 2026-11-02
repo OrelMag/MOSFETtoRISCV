@@ -183,6 +183,15 @@ export const ANALOGIES: Analogy[] = [
     codex: ['cache', 'memwall'],
   },
   {
+    chapter: 'cache', step: 'Leaks, refresh and sense amplifiers', title: 'Buckets that sink while nobody looks', figure: 'leaky',
+    body: `<p>Each stored bit is a bucket with a pinhole: a 1 is a full bucket, and it drains on its own. Nothing is wrong with it;
+      that is what the part is. Reading tips the bucket into a bigger pipe and leaves it empty, so the read must fill it back.
+      Refresh is the rounds: visit every bucket in turn and top it up before a full one has sunk so low that nobody can say
+      whether it was full. Chapter 35 builds the bit lines and the sense amplifiers, with the numbers.</p>`,
+    breaks: `A real cell leaks at a rate that differs from cell to cell and doubles for about every 10 °C, so the rounds are timed by
+      the worst bucket on the hottest day. And the rounds are not free: a request for a row that is being refreshed waits.`,
+  },
+  {
     chapter: 'dram', step: 'The sense amplifier', title: 'A seesaw tipped by a feather', figure: 'seesaw',
     body: `<p>Both bit lines start balanced at half the supply, like a level seesaw. The cell's charge is a feather on one end;
       the sense amplifier then slams that end all the way down and the other all the way up, which turns about a

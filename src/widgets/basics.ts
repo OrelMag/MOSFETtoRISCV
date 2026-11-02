@@ -9,11 +9,12 @@ import { SapISS } from '../sap/iss';
 import { SAP_PROGRAMS } from '../sap/programs';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { LOOP_RANGE } from './water';
 import type { WaterMount } from './waterkit';
 
 /** The loop: a 1.5 V cell and a lamp of 15 Ω (hot), so 0.1 A and 0.15 W. */
 export const LOOP = { volts: 1.5, ohms: 15 };
-export const loopAmps = (lamps: number) => LOOP.volts / (LOOP.ohms * lamps);
+export const loopAmps = (lamps: number, volts = LOOP.volts, ohms = LOOP.ohms) => volts / (ohms * lamps);
 const fmt = (x: number, d = 2) => x.toFixed(d);
 
 const btn = (label: string, onclick: () => void, extra = '') => h('button', { class: `btn sm${extra}`, type: 'button', onclick }, label);
@@ -21,7 +22,7 @@ const readout = (...cells: [string, string][]) => h('div', { class: 'readout' },
 
 /** Step 1: a closed loop lights the lamp; open it anywhere and the current is 0 all round. */
 export function loopWidget(): Widget {
-  let closed = false, cut = false, lamps = 1;
+  let closed = false, cut = false, lamps = 1, volts = LOOP.volts, ohms = LOOP.ohms;
   const svg = s('svg', { viewBox: '0 0 560 270', class: 'bx-svg', role: 'img' });
   const ctl = h('div', { class: 'bx-row' });
   const out = h('div');
@@ -32,8 +33,23 @@ export function loopWidget(): Widget {
   const waterBtn = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setView('water') }, 'Water');
   const seg = h('div', { class: 'wt-seg', role: 'group', 'aria-label': 'How to draw the loop' }, wireBtn, waterBtn);
   const host = h('div', { class: 'wt-host' });
+  // Try other values (Water view only; the text above quotes the defaults): they feed this widget's own readout too.
+  const slider = (label: string, [min, max]: readonly [number, number], step: number, value: number, unit: string, set: (v: number) => void) => {
+    const out = h('output', null, `${value} ${unit}`);
+    const input = h('input', { type: 'range', min, max, step, value, 'aria-label': label }) as HTMLInputElement;
+    input.addEventListener('input', () => { set(Number(input.value)); out.textContent = `${input.value} ${unit}`; render(); });
+    return { input, out, el: h('label', { class: 'wt-try-sl' }, h('span', null, label), input, out) };
+  };
+  const vSl = slider('Cell', LOOP_RANGE.volts, 0.1, volts, 'V', (v) => { volts = v; });
+  const oSl = slider('Lamp', LOOP_RANGE.ohms, 1, ohms, 'Ω', (v) => { ohms = v; });
+  const reset = h('button', { type: 'button', class: 'btn sm', onclick: () => {
+    volts = LOOP.volts; ohms = LOOP.ohms;
+    vSl.input.value = String(volts); oSl.input.value = String(ohms); vSl.out.textContent = `${volts} V`; oSl.out.textContent = `${ohms} Ω`; render();
+  } }, `Back to ${LOOP.volts} V, ${LOOP.ohms} Ω`);
+  const tryRow = h('div', { class: 'wt-try' }, h('span', { class: 'wt-try-k' }, 'Try other values'), vSl.el, oSl.el, reset);
+  tryRow.style.display = 'none';
   const el = h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'A battery, a switch and a lamp'),
-    h('p', { class: 'sub' }, 'Current flows only around a closed loop. Close the switch, then break the loop somewhere else.'), seg, svg, host, ctl, out));
+    h('p', { class: 'sub' }, 'Current flows only around a closed loop. Close the switch, then break the loop somewhere else.'), seg, svg, host, tryRow, ctl, out));
 
   function setView(v: 'wire' | 'water'): void {
     view = v;
@@ -41,6 +57,7 @@ export function loopWidget(): Widget {
     waterBtn.setAttribute('aria-pressed', String(v === 'water'));
     svg.style.display = v === 'wire' ? '' : 'none';
     host.style.display = v === 'water' ? '' : 'none';
+    tryRow.style.display = v === 'water' ? '' : 'none';
     if (v === 'water' && !water && !host.firstChild) {
       host.style.minHeight = '260px';
       host.textContent = 'Loading the water view…';
@@ -48,7 +65,7 @@ export function loopWidget(): Widget {
         .then((m) => {
           if (dead) return;
           host.textContent = ''; host.style.minHeight = '';
-          water = m.mountLoop(host, () => ({ closed, cut, lamps }));
+          water = m.mountLoop(host, () => ({ closed, cut, lamps, volts, ohms }));
         })
         .catch((e: unknown) => { if (!dead) host.textContent = `The water view did not load (${String(e)}).`; });
     } else water?.kick();
@@ -56,7 +73,7 @@ export function loopWidget(): Widget {
   host.style.display = 'none';
 
   function lampAt(cx: number, cy: number, p: number): SVGElement {
-    const lit = p / (loopAmps(1) * LOOP.volts);
+    const lit = Math.min(1, p / (loopAmps(1) * LOOP.volts));
     return s('g', null,
       s('circle', { cx, cy, r: 40, class: 'bx-glow', style: `opacity:${lit}` }),
       s('circle', { cx, cy, r: 24, class: `bx-lamp${lit > 0 ? ' on' : ''}`, style: lit > 0 ? `opacity:${0.35 + 0.65 * lit}` : '' }),
@@ -64,8 +81,8 @@ export function loopWidget(): Widget {
   }
 
   function render(): void {
-    const amps = closed && !cut ? loopAmps(lamps) : 0;
-    const vLamp = amps * LOOP.ohms, p = amps * vLamp;
+    const amps = closed && !cut ? loopAmps(lamps, volts, ohms) : 0;
+    const vLamp = amps * ohms, p = amps * vLamp;
     const w = amps > 0 ? 'bx-wire on' : 'bx-wire';
     const lampY = lamps === 1 ? [135] : [95, 175];
     svg.replaceChildren(
@@ -79,7 +96,7 @@ export function loopWidget(): Widget {
       s('line', { x1: 62, y1: 108, x2: 118, y2: 108, class: 'bx-sym' }), s('line', { x1: 76, y1: 122, x2: 104, y2: 122, class: 'bx-sym thick' }),
       s('line', { x1: 62, y1: 138, x2: 118, y2: 138, class: 'bx-sym' }), s('line', { x1: 76, y1: 152, x2: 104, y2: 152, class: 'bx-sym thick' }),
       s('text', { x: 126, y: 112, class: 'bx-lbl' }, '+'), s('text', { x: 126, y: 158, class: 'bx-lbl' }, '−'),
-      s('text', { x: 14, y: 135, class: 'bx-big' }, `${LOOP.volts} V`),
+      s('text', { x: 14, y: 135, class: 'bx-big' }, `${volts} V`),
       // the switch
       s('circle', { cx: 230, cy: 50, r: 5, class: 'bx-pin' }), s('circle', { cx: 300, cy: 50, r: 5, class: 'bx-pin' }),
       s('line', closed ? { x1: 233, y1: 48, x2: 297, y2: 48, class: w } : { x1: 233, y1: 47, x2: 290, y2: 18, class: 'bx-wire' }),

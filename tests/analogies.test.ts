@@ -49,3 +49,30 @@ describe('analogy figures', () => {
     for (const a of ANALOGIES) if (a.figure) expect(FIGURES[a.figure], `${a.title}: figure ${a.figure}`).toBeDefined();
   });
 });
+
+describe('analogy acceptance', () => {
+  // The two that open a widget with a Wire | Water or Cross-section | Water view (basics.ts loopWidget, mosregions.ts) instead.
+  const WATER_WIDGETS = ['basics/A loop of wire', 'mosfet/Three regions'];
+
+  it('every analogy has a figure, or sits on a step whose widget has a water view', () => {
+    const bare = ANALOGIES.filter((a) => !a.figure).map((a) => `${a.chapter}/${a.step}`);
+    expect(bare.sort()).toEqual([...WATER_WIDGETS].sort());
+    for (const key of WATER_WIDGETS) {
+      const [id, title] = key.split('/');
+      const step = chapters.find((c) => c.id === id)!.steps.find((s) => s.title === title)!;
+      expect(step.widget, key).toBeDefined();
+    }
+  });
+
+  it('the hover card finds an analogy for the entries that name one', () => {
+    for (const a of ANALOGIES) for (const id of a.codex ?? []) expect(analogiesForCodex(id).map((x) => x.title), id).toContain(a.title);
+    expect(analogiesForCodex('refresh')[0].title).toBe('A row of leaky buckets');
+  });
+
+  it('the cache chapter tells leaks before the DRAM chapter, under its own title', () => {
+    const cache = ANALOGIES.find((a) => a.chapter === 'cache' && a.step === 'Leaks, refresh and sense amplifiers')!;
+    const dram = ANALOGIES.find((a) => a.chapter === 'dram' && a.figure === 'leaky')!;
+    expect(cache.figure).toBe('leaky');
+    expect(cache.title).not.toBe(dram.title);
+  });
+});
