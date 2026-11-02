@@ -11,7 +11,7 @@ import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
 import { searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
-import { CODEX_ACTS, CODEX_BY_KIND, CODEX_FROM, CODEX_ORDER } from '../../campaign/codexlinks';
+import { CODEX_ACTS, CODEX_BY_KIND, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
 import { ANALOGIES, ANALOGY_INDEX_ID } from '../../chapters/analogies';
 import { analogyIndexEl } from '../analogyindex';
@@ -36,6 +36,7 @@ import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { markJump } from '../returnto';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
@@ -117,6 +118,14 @@ export class CampaignPage implements Page {
   open(parts: string[]): void {
     this.parts = parts;
     this.render();
+  }
+
+  /** The top bar's way back names the open entry or level (ui/returnto.ts). */
+  returnLabel(): { label: string; short: string } | null {
+    const [a, b] = this.parts;
+    const t = a === 'codex' ? codexById(b ?? '')?.title : a === 'n' ? nodeById(b ?? '')?.title : undefined;
+    if (!t) return { label: 'the campaign map', short: 'Map' };
+    return a === 'codex' ? { label: `Codex: ${t}`, short: `Codex: ${t}` } : { label: `${t} (map)`, short: t };
   }
 
   destroy(): void {
@@ -476,6 +485,7 @@ export class CampaignPage implements Page {
     const r = importAnswer(loadWorkspace(), ch);
     const saved = saveWorkspace(r.ws);
     if (!saved.ok) return this.say(saved.reason);
+    markJump();
     location.hash = `#/sandbox/${r.main}`;
   }
 
@@ -643,11 +653,6 @@ export class CampaignPage implements Page {
       detail = codexEntryEl(e, more, p.view, entrySheets(e, more), this.checkOf(e.id));
       if (!unlocked.has(e.id)) detail.querySelector('.cx-head h2')?.append(h('span', { class: 'cp-badge cx-lockbadge' }, icon('lock', 11), 'not discovered: shown anyway'));
     }
-    // Come from a level's Codex tab: the way back to it (its chip and undo history were saved, the level reopens as left).
-    let from: string | null = null;
-    try { from = sessionStorage.getItem(CODEX_FROM); } catch { /* none */ }
-    const fromNode = from ? nodeById(from) : undefined;
-    if (fromNode) detail.prepend(h('a', { class: 'lv-chip acc cx-from', href: levelChallenge(fromNode) && !fromNode.soon ? `#/campaign/play/${fromNode.id}` : `#/campaign/n/${fromNode.id}` }, icon('chevL', 12), `Back to ${fromNode.title}`));
     return h('div', { class: `cp-codex${sel ? ' has-sel' : ''}` }, list, detail);
   }
 

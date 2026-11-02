@@ -14,6 +14,7 @@ import { applyPendingView, decodeView, setPendingView, splitView } from './viewl
 import type { Radix } from '../sim/values';
 import { isTwinKey } from '../campaign/twinids';
 import { menuKeys } from './menukeys';
+import { installReturn, type ReturnLabelled } from './returnto';
 
 /**
  * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
@@ -209,9 +210,11 @@ export function startApp(root: HTMLElement): void {
   settings.onChange(syncTools);
   syncTools();
 
+  // The way back after a jump into another section (returnto.ts): installed before the router's hashchange listener.
+  const ret = installReturn(view);
   const topbar = h('header', { class: 'topbar' },
     h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
-    nav, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
+    nav, ret.el, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   view.tabIndex = -1;
   root.append(skip, topbar, view);
 
@@ -220,6 +223,7 @@ export function startApp(root: HTMLElement): void {
   let routeSeq = 0;
   const route = () => {
     const seq = ++routeSeq;
+    ret.route(page as ReturnLabelled | null);
     // A chapter's or the workbench's address may end in a view suffix (?i=…&p=…&n=…, viewlink.ts): taken off here and handed to the
     // stage that builds the scene, so the rest of the routing sees the plain address it always did.
     const { route: base, query } = splitView(location.hash);
