@@ -925,8 +925,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
                  consoleData / consoleValid / leds; a placed port core (rv32i_core, rv32i_pipe_core, *_core) → regs '<part>.rf'; the pipelined one → pipeline, retire = the part's
-                 retire port (refNets asks the part's node for a port nothing is wired to), pipelineSlots / the diagram read its stages (pipeRoot); a pipeline's console and LEDs are
-                 compared at the halt like its memory (its stores run ahead of retirement); its
+                 retire port (refNets asks the part's node for a port nothing is wired to), pipelineSlots / the diagram read its stages (pipeRoot); on a pipelined port core the model is compared with the console and LEDs as of the previous
+                 edge and given the switches of the previous edge (the memory port acts in M, one edge before W retires); its
                  RAM may sit one chip down ('mem.ram'); a console or switch-bank part → iss.mmio), resolveCpu (settings over detection), readers
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
                  large RAM's leaf state), pipelineSlots,

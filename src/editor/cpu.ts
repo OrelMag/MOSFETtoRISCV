@@ -584,6 +584,8 @@ export class CpuMonitor {
     this.issCon = consoleInit();
     this.issConLen = 0;
     this.compared = '';
+    this.hwPrev = null;
+    this.swPrev = null;
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
@@ -659,6 +661,15 @@ export class CpuMonitor {
     return true;
   }
 
+  /**
+   * A pipelined port core retires a store (and a load) one edge after it reached M, where the memory port acts: its devices (the console,
+   * the LED latch) have taken the store by the time the golden model steps it, and a switch is read one edge before the model reads it.
+   * So the model is compared with the devices as they were after the previous edge, and given the switches as of the previous edge.
+   */
+  private get lagged(): boolean { return !!this.desc?.pipeline && !!this.desc.core; }
+  private hwPrev: { console: string; leds: number | null } | null = null;
+  private swPrev: number | null = null;
+
   private before(): void {
     const d = this.desc, iss = this.iss;
     this.willRetire = 0;
@@ -675,13 +686,18 @@ export class CpuMonitor {
       if (irq !== null) iss.irq = irq === 1;
       const bank = this.switchBank, sim = this.es.sim;
       const sw = bank && sim ? (ioState(sim, bank) as SwitchState | undefined)?.v ?? null : pinValue(this.es, doc, 'switches', 'in', 8);
-      if (sw !== null) iss.switches = Math.max(0, sw);
+      if (sw !== null) {
+        iss.switches = Math.max(0, this.lagged && this.swPrev !== null ? this.swPrev : sw);
+        this.swPrev = sw;
+      }
     }
   }
 
   private after(): void {
     const iss = this.iss, d = this.desc;
     const conPart = !!d && this.readConsolePart();
+    const lag = this.lagged, prev = lag ? this.hwPrev : null;
+    if (lag) this.hwPrev = { console: this.console, leds: this.leds };
     if (!this.willRetire || !iss || !d || iss.halted) return;
     const n = this.willRetire;
     this.willRetire = 0;
@@ -737,9 +753,7 @@ export class CpuMonitor {
       const m = mem && memDiff(mem, iss.dmem);
       if (m) return void at('mem', memName(m.i), m.model, m.hw);
     }
-    // a pipeline's stores run ahead of retirement (a console character or the LED latch is written from M, one edge before the
-    // store retires from W): its devices are compared at the halt, like its memory
-    if (iss.io && (!d.pipeline || iss.halted)) {
+    if (iss.io) {
       let model = iss.console;
       if (conPart) {
         // compare what the console part shows with the model's text put through the same terminal
@@ -749,14 +763,15 @@ export class CpuMonitor {
         }
         model = consoleText(this.issCon);
       }
-      const key = `${this.conN}|${this.console.length}|${iss.console.length}`;
-      if (key !== this.compared && this.console !== model) {
-        const i = [...this.console].findIndex((c, k) => c !== model[k]);
-        const k = i < 0 ? this.console.length : i;
-        return void at('console', 'console', model.charCodeAt(k) || 0, this.console.charCodeAt(k) || 0, `console: expected ${quote(model)}, got ${quote(this.console)}`);
+      const hwCon = prev ? prev.console : this.console, hwLeds = prev ? prev.leds : this.leds;
+      const key = `${this.conN}|${hwCon.length}|${iss.console.length}`;
+      if (key !== this.compared && hwCon !== model) {
+        const i = [...hwCon].findIndex((c, k) => c !== model[k]);
+        const k = i < 0 ? hwCon.length : i;
+        return void at('console', 'console', model.charCodeAt(k) || 0, hwCon.charCodeAt(k) || 0, `console: expected ${quote(model)}, got ${quote(hwCon)}`);
       }
       this.compared = key;
-      const leds = this.leds;
+      const leds = hwLeds;
       if (leds !== null && leds !== iss.leds) return void at('leds', 'LEDs', iss.leds, leds);
     }
   }

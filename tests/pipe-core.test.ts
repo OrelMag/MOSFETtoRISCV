@@ -29,7 +29,7 @@ import type { ComponentDef } from '../src/sim/types';
 import type { PortDef } from '../src/sim/types';
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 import { tick } from './yieldtick';
-import { DONE_TEXT, GREETING, PICTURE } from '../src/riscv/ioprograms';
+import { COMPUTER_PROGRAMS, DONE_TEXT, GREETING, PICTURE } from '../src/riscv/ioprograms';
 import { ISS } from '../src/riscv/iss';
 import { PipeHistory } from '../src/widgets/pipegrid';
 import { coreUnitNames, instrUse } from '../src/widgets/insthw';
@@ -163,6 +163,26 @@ describe('Examples ▸ the pipelined computer', () => {
     // a pipeline finishes in more cycles than instructions (CPI above 1), the single-cycle core in exactly one each
     expect(es.cycles).toBeGreaterThan(mon.retired);
   });
+
+  it('live switches: a flipped switch repaints the square, the console and LEDs compared a store behind the core, the switches read an edge early', async () => {
+    const src = COMPUTER_PROGRAMS.find((p) => p.id === 'liveswitches')!.source;
+    const { es, mon } = open((ws, id) => {
+      const doc = ws.chips[id];
+      return { ...ws, chips: { ...ws.chips, [id]: { ...doc, parts: doc.parts.map((p) => (p.id === 'imem' && 'rom' in p.ref ? { ...p, ref: { rom: { ...p.ref.rom, src } } } as typeof p : p)) } } };
+    });
+    const sw = es.sim!.design.leaves.findIndex((l) => l.node.path.join('.') === 'dev.sw');
+    await run(es, mon, 2500);
+    for (const v of [0x1c, 0xe0, 0x03]) {
+      es.pokeLeaf(sw, { v });
+      await run(es, mon, es.cycles + 2500);
+      expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
+      expect(mon.leds).toBe(v);
+    }
+    expect(mon.iss!.halted).toBe(false);
+    expect(mon.retired).toBeGreaterThan(1000);
+    const px = (ioState(es.sim!, ioNodes(es.sim!.design.root).find((x) => x.info.kind === 'screen')!.node) as ScreenState).px;
+    expect(px[30 * 64 + 30]).toBe(0x03);
+  }, 120_000);
 
   it('custom rows: Apply\'s ref on the core and the ROM, the drawer running them in lock step against ISS({ custom })', async () => {
     const lwx = P.lwx!, subi = P.subi!;
