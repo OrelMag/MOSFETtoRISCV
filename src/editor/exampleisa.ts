@@ -70,3 +70,46 @@ export function rvcChip(id: string, name: string, src = RVC_SOURCE): ChipDoc {
   s.tap('con.data', 'byte'); s.tap('con.we', 'conWe'); s.tap('con.clk', 'clk');
   return s.doc(id, name, { notes: NOTES_RVC });
 }
+
+/** The RV64 program: constants past 53 bits, a doubleword store and load, the W instructions, a multiply, and fib(90) in 64 bits. */
+export const RV64_SOURCE = `# RV64IM: 64-bit registers, ld / sd, the W instructions
+        li   t0, 0x123456789abcdef0   # li of any 64-bit constant (lui, addi, slli chains)
+        li   t1, 1
+        slli t1, t1, 40               # 6-bit shift amounts
+        add  t2, t0, t1
+        sd   t2, 0(x0)                # a doubleword store
+        ld   t3, 0(x0)                # and load
+        lw   t4, 0(x0)                # lw sign-extends 32 bits (the low half, 0x9abcdef0)
+        lwu  t5, 0(x0)                # lwu does not
+        addiw a0, t3, 1               # W: 32-bit add, sign-extended
+        mul  a1, t0, t0               # the low 64 bits of the square
+        li   a2, 0
+        li   a3, 1
+        li   a4, 90
+fib:    add  a5, a2, a3               # fib(90) = 2880067194370816120: past 2^53
+        mv   a2, a3
+        mv   a3, a5
+        addi a4, a4, -1
+        bnez a4, fib
+        sd   a2, 8(x0)
+done:   j    done`;
+
+export const NOTES_RV64 = 'The 64-bit core in the sandbox. rv64im_core is the chapter-25 core with its program on a port: 64-bit PC, 32 registers of 64 bits, a 64-bit ALU and M unit, the W unit, '
+  + 'and a data memory of 64 doublewords inside the part (byte lanes: ld / sd beside lb … sw, lwu); it has no memory port, because the sandbox\'s RAM part holds 32-bit words with no byte enables. '
+  + 'The program ROM is assembled for RV64 (select it: RV64 is ticked). The CPU drawer shows all 64 bits of every register and memory word and checks them against ISS64 after each instruction; the halt part stops Run at `j .`.';
+
+/** The sandbox's RV64 computer: the 64-bit core and its program ROM. */
+export function rv64Chip(id: string, name: string, src = RV64_SOURCE): ChipDoc {
+  const s = new Sheet();
+  s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
+  s.tap('pin:clk', 'clk');
+  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src, xlen: 64 } }, [6, 5], { label: 'program (RV64)' });
+  s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
+  s.part('cpu', { lib: 'rv64im_core' }, [30, 6], { label: 'RV64IM core' });
+  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcLow', 'pc'); s.tap('cpu.instrOut', 'run');
+  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
+  s.part('eq', { lib: 'eq32' }, [10, 19]);
+  s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
+  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  return s.doc(id, name, { notes: NOTES_RV64 });
+}

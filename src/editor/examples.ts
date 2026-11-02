@@ -11,7 +11,7 @@ import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
 import { computer6502Chip, memory6502Chip } from './example6502';
 import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
-import { rvcChip } from './exampleisa';
+import { rv64Chip, rvcChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
 import { PONG_HZ, pongChip } from '../campaign/bench';
@@ -430,6 +430,11 @@ export const EXAMPLES: Example[] = [
     id: 'rvc', name: 'RV32C: compressed instructions',
     blurb: 'The RV32I core with the C extension: a ROM that reads at any even address, 16-bit instructions expanded in the core, PC + 2. Run: it prints 0–9 from compressed code.',
     build: (id, n) => rvcChip(id, n),
+  },
+  {
+    id: 'rv64', name: 'RV64: 64-bit registers',
+    blurb: 'The 64-bit core with its program ROM assembled for RV64: ld / sd, the W instructions, a multiply and fib(90), all 64 bits in the CPU drawer, checked against the golden model.',
+    build: (id, n) => rv64Chip(id, n),
   },
   {
     id: 'rv16pong', name: 'RV16: Pong on the campaign core',

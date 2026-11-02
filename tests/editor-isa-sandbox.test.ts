@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { CpuMonitor, resolveCpu } from '../src/editor/cpu';
-import { RVC_SOURCE, RVC_TEXT, rvcChip } from '../src/editor/exampleisa';
+import { RV64_SOURCE, RVC_SOURCE, RVC_TEXT, rvcChip } from '../src/editor/exampleisa';
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { consoleText, type ConsoleState, ioNodes, ioState } from '../src/editor/ioparts';
 import { UserLibrary } from '../src/editor/library';
@@ -16,6 +16,9 @@ import { EditorSim } from '../src/editor/runtime';
 import { regenerable } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
 import { ISS } from '../src/riscv/iss';
+import { ISS64 } from '../src/riscv/iss64';
+import { detectRv64, Rv64Monitor } from '../src/editor/rv64mon';
+import { detectCpu } from '../src/editor/cpu';
 import { breathe } from './setup';
 
 const atLoad = new Set(registry.keys());
@@ -85,5 +88,51 @@ describe('Examples ▸ RV32C', () => {
     const doc = rvcChip('u', 'n');
     const imem = doc.parts.find((p) => p.id === 'imem')!;
     expect('rom' in imem.ref && imem.ref.rom.c).toBe(true);
+  });
+});
+
+describe('Examples ▸ RV64', () => {
+  it('the program assembles at xlen 64 and the golden model ends with 64-bit values', () => {
+    const a = assemble(RV64_SOURCE, [], { xlen: 64 });
+    expect(a.errors).toEqual([]);
+    const iss = new ISS64(a.words, { m: true });
+    iss.run(3000);
+    expect(iss.halted).toBe(true);
+    expect(iss.readDword(8n)).toBe(2880067194370816120n);
+    expect(iss.x[7]).toBe(0x123456789abcdef0n + (1n << 40n)); // t2
+  });
+
+  it('places only parts a page load resolves and draws without lint warnings', () => {
+    const { ws, id } = addExample(emptyWorkspace(), EXAMPLES.find((e) => e.id === 'rv64')!);
+    const lib = new UserLibrary(ws);
+    const doc = ws.chips[id];
+    const lost = doc.parts.flatMap((p) => ('lib' in p.ref && !atLoad.has(p.ref.lib) && !regenerable(p.ref.lib) ? [p.ref.lib] : []));
+    expect(lost).toEqual([]);
+    const c = lib.compiled(id)!;
+    expect(c.diags).toEqual([]);
+    const defOf = (p: { ref: PartRef }) => {
+      const d = partDef(p.ref, (x) => lib.defOf(x));
+      return !d || 'error' in d ? undefined : d;
+    };
+    const polys = new Map(doc.wires.flatMap((w) => { const p = polyline(doc, w, defOf); return p ? [[w.id, p] as const] : []; }));
+    expect(lintChip(doc, c, polys).diags).toEqual([]);
+    expect(deadParts(doc, c)).toEqual([]);
+    expect(openInputs(c)).toEqual([]);
+  });
+
+  it('runs on the hardware in lock step with ISS64: 64-bit registers and memory equal after every instruction', async () => {
+    const { ws, id, es } = open('rv64');
+    expect(detectRv64(ws.chips[id])).toMatchObject({ core: 'cpu', rom: 'imem', m: true, dmemK: 6 });
+    expect(detectCpu(ws.chips[id])?.iss.c).toBeUndefined();
+    const mon = new Rv64Monitor(es, () => ws.chips[id]);
+    expect(mon.problem).toBe(null);
+    await run(es, 4000);
+    expect(es.halted).toBe(true);
+    expect(mon.mismatch).toBeNull();
+    expect(mon.retired).toBeGreaterThan(400);
+    const r = mon.read()!;
+    expect(r.x[12]).toBe(2880067194370816120n); // a2
+    expect(r.dmem[1]).toBe(2880067194370816120n);
+    expect(r.x[28]).toBe(0x123456789abcdef0n + (1n << 40n)); // t3
   });
 });
