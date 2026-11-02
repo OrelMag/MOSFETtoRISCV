@@ -1600,6 +1600,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-big th.vert { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; padding: 6px 2px; }
 .mc-big td { font-size: 12px; padding: 3px 5px; }
 .mc-panel.compact { width: 230px; }
+/* the tab strip and the Microcode… button wrap onto a row of their own rather than clip in 230 px */
+.mc-panel.compact h4 { flex-wrap: wrap; row-gap: 4px; }
+.mc-panel.compact h4 .mc-seg { margin-left: 0; }
 .mc-panel.compact .mc-row { grid-template-columns: 18px 70px 0 auto; }
 .mc-panel.diagram { width: 640px; }
 .mc-panel.compact.diagram { width: 520px; }
