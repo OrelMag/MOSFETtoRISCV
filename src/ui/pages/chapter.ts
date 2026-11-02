@@ -152,6 +152,8 @@ export class ChapterPage implements Page {
     this.stepNotes?.destroy();
     this.stepNotes = null;
     this.stage.noteMarks = null;
+    // the recap leaves the last step's circuit on the stage: say so (app.css .recap-on)
+    this.el.classList.toggle('recap-on', i === this.recap);
     if (i === this.recap) {
       this.show(steps.length - 1, path);
       this.renderHead();
