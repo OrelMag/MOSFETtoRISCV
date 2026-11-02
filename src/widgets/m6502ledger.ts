@@ -69,7 +69,7 @@ export function ledger(): Widget {
         h('div', null,
           h('h5', null, `Our RV32I: ${fmt(rvTotal)} transistors`), ...rvB.slice(0, 7).map((b) => bar(b.name, b.n, 'rv')),
           h('h5', null, `Our 6502: ${fmt(st.transistors)} transistors, ${fmt(st.depletion)} of them loads`), ...cpuB.slice(0, 10).map((b) => bar(b.name, b.n, 'us')),
-          h('p', { class: 'm65-note' }, `The real 6502: 3,510 transistors plus about 1,018 depletion loads (4,528). The bars share one scale: the RV32I's register file alone is ${fmt(rvB[0].n / st.transistors)} of our 6502s.`)),
+          h('p', { class: 'm65-note' }, `The real 6502: 3510 transistors plus about 1018 depletion loads (4528). The bars share one scale: the RV32I's register file alone is ${fmt(rvB[0].n / st.transistors)} of our 6502s.`)),
         h('div', null,
           h('h5', null, 'One function, two technologies (transistors)'),
           h('table', { class: 'm65-cmp' },

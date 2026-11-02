@@ -79,8 +79,8 @@ export const CHECK3: Record<string, Quiz[]> = {
       question: 'a0 = −2 (0xFFFE), a1 = 5. What does <code>mulhu a2, a0, a1</code> give?',
       options: ['0xFFFF', '0x0004', '0xFFF6', '0x0000'],
       answer: 1,
-      explain: 'mulhu treats both as unsigned: 65,534 × 5 = 0x4FFF6, high half 0x0004. The signed answer, −10, has high half 0xFFFF (mulh).',
-      why: ['That is mulh, the signed product −10 = 0xFFFFFFF6; mulhu reads 0xFFFE as 65,534.', '', 'That is mul, the low half.', 'Small signed operands do not make a small unsigned product: 0xFFFE is 65,534.'],
+      explain: 'mulhu treats both as unsigned: 65 534 × 5 = 0x4FFF6, high half 0x0004. The signed answer, −10, has high half 0xFFFF (mulh).',
+      why: ['That is mulh, the signed product −10 = 0xFFFFFFF6; mulhu reads 0xFFFE as 65 534.', '', 'That is mul, the low half.', 'Small signed operands do not make a small unsigned product: 0xFFFE is 65 534.'],
     },
   ],
   ieee754: [
@@ -96,7 +96,7 @@ export const CHECK3: Record<string, Quiz[]> = {
       options: ['0x7E00', '0x7C00', '0x8000', '0x7BFF'],
       answer: 0,
       explain: 'Exponent field 31 is reserved: fraction 0 is ±∞, any other fraction NaN. 0x7E00 = 0 11111 1000000000, the canonical quiet NaN a RISC-V FPU returns. Field 0 with fraction 0 is ±0.',
-      why: ['', '0 11111 0000000000: fraction 0 with field 31 is +∞, the result of an overflow or of 1 / +0.', '1 00000 0000000000 is −0: sign set, everything else 0. It compares equal to +0, yet 1 / −0 = −∞.', '0 11110 1111111111 is 65,504, the largest finite value: field 30 is the top normal binade.'],
+      why: ['', '0 11111 0000000000: fraction 0 with field 31 is +∞, the result of an overflow or of 1 / +0.', '1 00000 0000000000 is −0: sign set, everything else 0. It compares equal to +0, yet 1 / −0 = −∞.', '0 11110 1111111111 is 65 504, the largest finite value: field 30 is the top normal binade.'],
     },
   ],
   rounding: [
@@ -150,7 +150,7 @@ export const CHECK3: Record<string, Quiz[]> = {
   throughput: [
     {
       question: 'Which workload gains least from four lanes behind one control unit?',
-      options: ['Brightening 4,096 pixels', 'Iterating x ← f(x) 1,000 times, each step on the last result', '3·x + y over 64 words', 'Adding two arrays of 256 words'],
+      options: ['Brightening 4096 pixels', 'Iterating x ← f(x) 1000 times, each step on the last result', '3·x + y over 64 words', 'Adding two arrays of 256 words'],
       answer: 1,
       explain: 'A dependent chain has one thing to do at a time; the other lanes have nothing to work on.',
       why: ['Every pixel is independent: four lanes take four at a time.', '', 'Every element is independent; the strided loop splits it over the lanes.', 'Each sum is independent of the others: an ideal case for lanes.'],
@@ -159,7 +159,7 @@ export const CHECK3: Record<string, Quiz[]> = {
       question: 'A kernel takes 200 instructions on the scalar core (period 98) and 56 warp instructions on the 4-lane SIMD core (period 100). What throughput gain is that?',
       options: ['3.5×', '3.6×: 200 / 56', '4×: four lanes'],
       answer: 0,
-      explain: 'Compare times: 200 × 98 = 19,600 NAND delays against 56 × 100 = 5,600, a factor of 3.5.',
+      explain: 'Compare times: 200 × 98 = 19 600 NAND delays against 56 × 100 = 5600, a factor of 3.5.',
       why: ['', 'The instruction ratio ignores that the SIMD core\'s period is 2 delays longer.', 'Setup code runs at full length on every lane, so instructions fall by less than the lane count.'],
     },
   ],
@@ -172,11 +172,11 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['Each lane works on its own operands, so each needs its own registers.', 'Each lane computes its own result: an ALU per lane.', '', 'The result path carries each lane\'s own value: one per lane.'],
     },
     {
-      question: 'RV16\'s 4-lane SIMD core is 15,669 NANDs against 18,880 for four single-cycle cores, about 17% smaller. Why so little?',
+      question: 'RV16\'s 4-lane SIMD core is 15 669 NANDs against 18 880 for four single-cycle cores, about 17% smaller. Why so little?',
       options: ['The per-lane part (registers, ALU) dominates a core; the shared control is a small share', 'The lane decoder and mask cost as much as three cores\' control', 'SIMD lanes need wider registers than scalar cores'],
       answer: 0,
-      explain: 'Of 15,669 NANDs, 1,797 are shared and 3,468 per lane; the register files alone are 55%. The bigger saving is one instruction memory and fetch for four results.',
-      why: ['', 'Mask and lane decoder together are 154 NANDs; the shared part is 1,797 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
+      explain: 'Of 15 669 NANDs, 1797 are shared and 3468 per lane; the register files alone are 55%. The bigger saving is one instruction memory and fetch for four results.',
+      why: ['', 'Mask and lane decoder together are 154 NANDs; the shared part is 1797 in all.', 'Each lane has the same 16-bit registers as the scalar core.'],
     },
   ],
   leader: [
@@ -437,8 +437,8 @@ export const CHECK3: Record<string, Quiz[]> = {
   ],
   wearlevel: [
     {
-      question: 'A log-structured FTL manages 1,000 blocks; 900 of them hold a photo library written once and never changed. Where does the wear from hot writes go?',
-      options: ['To the other ~100 blocks, until static wear levelling moves the cold data', 'Evenly over all 1,000 blocks: the log levels wear by itself', 'Mostly to the 900 cold blocks'],
+      question: 'A log-structured FTL manages 1000 blocks; 900 of them hold a photo library written once and never changed. Where does the wear from hot writes go?',
+      options: ['To the other ~100 blocks, until static wear levelling moves the cold data', 'Evenly over all 1000 blocks: the log levels wear by itself', 'Mostly to the 900 cold blocks'],
       answer: 0,
       explain: 'Blocks full of live cold data are never worth collecting, so they are never erased; static wear levelling moves that data to put them back in rotation.',
       why: ['', 'The log spreads hot data\'s erases over the blocks it cycles through, which excludes blocks holding cold data.', 'Cold blocks are never erased: they wear least.'],

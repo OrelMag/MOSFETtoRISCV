@@ -32,7 +32,7 @@ export const chAppendixDoom: Chapter = {
   recap: {
     keep: [
       'Doom does its geometry in 16.16 fixed point, so integer multiply and divide are enough: RV32IM, the ISA of the system CPU, runs it unchanged. What was missing was a computer: 8 MiB of RAM, a 320 × 200 frame buffer, a key queue and the WAD.',
-      'GCC (<code>-march=rv32im -mabi=ilp32 -O2</code>) and newlib give 57,889 instruction words. Our CPUs are Harvard machines, so only code goes in the ROM; constants, tables and jump tables go in RAM.',
+      'GCC (<code>-march=rv32im -mabi=ilp32 -O2</code>) and newlib give 57 889 instruction words. Our CPUs are Harvard machines, so only code goes in the ROM; constants, tables and jump tables go in RAM.',
       'The top four address bits choose the memory: RAM at 0, the WAD (read only) at <code>0x1000_0000</code>, devices from <code>0x8000_0000</code>, the frame buffer from <code>0xC000_0000</code>. A load of <code>KEY</code> removes the event it returns, so the data port gains a read strobe.',
       'Game time is <code>mtime</code>, which counts clock cycles, at a nominal 40 MHz: a slower machine plays slower, never differently.',
       `A frame is about 1.9 M cycles: 48 ms at 40 MHz, about 13 minutes on the gate-level CPU in this page, about ${FRAME_MS} ms for the same gates on silicon at their ${SYS_NS.toFixed(1)} ns period.`,
@@ -112,7 +112,7 @@ export const chAppendixDoom: Chapter = {
         jumps and calls at one in eight (branches one in eleven) say the front end matters; multiplies and divides below one in a hundred say a slow multiplier (34 cycles for a divide here) costs little.
         A chip designer reads a census like this one before choosing what to spend transistors on.</p>`,
       more: {
-        derive: `<p>The image is 57,889 words, ${groupDigits(57889 * 4)} bytes, or ${Math.round(57889 * 4 / 1024)} KiB of code. It does not fit in anything we have drawn: the program ROM of the earlier CPUs held tens of words. The ROM tree here is built from the
+        derive: `<p>The image is 57 889 words, ${groupDigits(57889 * 4)} bytes, or ${Math.round(57889 * 4 / 1024)} KiB of code. It does not fit in anything we have drawn: the program ROM of the earlier CPUs held tens of words. The ROM tree here is built from the
           same banks, 2<sup>16</sup> words of them.</p>`,
         real: `<p>Embedded builds put code in flash and run it in place (execute in place, as NOR flash allows), constants in the same flash, and only variables in RAM. Doom's tables are initialized data, so a Harvard design like ours
           copies them from the image into RAM at start; a von Neumann machine need not. The linker script is what decides which section lands where, and it is the file a port spends most of its effort on.</p>`,
@@ -154,7 +154,7 @@ export const chAppendixDoom: Chapter = {
       title: 'Play',
       body: `
         <p>This is Doom (1993): the C source of <a href="https://github.com/ozkl/doomgeneric" target="_blank" rel="noopener">doomgeneric</a>
-        compiled by GCC with <code>-march=rv32im</code> into 57,889 instruction words, the ISA of the system CPU of <a href="#/c/io/0">chapters 19–21</a>.
+        compiled by GCC with <code>-march=rv32im</code> into 57 889 instruction words, the ISA of the system CPU of <a href="#/c/io/0">chapters 19–21</a>.
         No floats (Doom is fixed point), no compressed instructions, machine mode only.</p>
         <p>The program sees a small computer: 8 MiB of RAM, the game data (a WAD file) mapped read-only at
         <code>0x1000_0000</code>, a 320 × 200 frame buffer of palette indices at <code>0xC000_0000</code>, and three I/O
@@ -163,7 +163,7 @@ export const chAppendixDoom: Chapter = {
         <p>It runs on a fast interpreter of our ISA, not on the gates.</p>
         <p><strong>Cost.</strong> A frame of the demo takes 1.0–3.0 M cycles (median 1.9 M): 48 ms at 40 MHz. The
         interpreter manages about 90 M instructions a second. The gate-level system CPU in this page manages about
-        2,400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing
+        2400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing
         period of ${SYS_M?.period} NAND delays (${SYS_NS.toFixed(1)} ns at ${RESULTS.psPerNand} ps a NAND), would draw it in about ${FRAME_MS} ms.</p>
         <p>The three numbers are three different questions. The interpreter answers "what does the program do?", fast enough to play. The gates answer "what do these circuits do?", slowly enough to watch.
         Silicon answers "how fast could this design go?", and that last figure comes from the same static timing that priced every CPU in the workbench, not from running anything.</p>

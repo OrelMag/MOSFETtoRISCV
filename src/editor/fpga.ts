@@ -364,7 +364,7 @@ export function fpgaExport(def: ComponentDef, base: string): FpgaExport {
   unplaced('out', 'left unconnected (synthesis removes what only they used)');
   unplaced('inout', 'bidirectional pins are not wired by the board top');
   for (const d of memories(def)) {
-    issues.push({ level: 'info', text: `${d.name} is read in the same cycle it is addressed (asynchronous read), which FPGA block RAM cannot do: synthesis builds it from LUT RAM, so a large one may not fit a small FPGA (a Tang Nano 9K has 8,640 LUTs)` });
+    issues.push({ level: 'info', text: `${d.name} is read in the same cycle it is addressed (asynchronous read), which FPGA block RAM cannot do: synthesis builds it from LUT RAM, so a large one may not fit a small FPGA (a Tang Nano 9K has 8640 LUTs)` });
   }
   const top = res.top, board = `${top}_board`;
   return {

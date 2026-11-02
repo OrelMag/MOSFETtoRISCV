@@ -9,6 +9,7 @@
 // and masses from the Z3 and ENIAC; tests/tech.test.ts keeps them tied together. All are illustrative, like the
 // 25 ps per CMOS NAND.
 
+import { groupDigits } from '../sim/numfmt';
 import {
   DIODE_HEATER_W, ENIAC, ENIAC_PANEL, HEATER_W, TUBE_STEP_US, dividerPower, nandBrickPower, plateFanout, sectionPower,
 } from '../phys/triode';
@@ -188,11 +189,11 @@ const scaled = (x: number, units: [number, string][], digits = 3): string => {
   const [k, u] = units[units.length - 1];
   return `${sig(x / k, digits)} ${u}`;
 };
-/** At most `digits` significant digits, thousands separated, no exponent. */
+/** At most `digits` significant digits, thin-space grouped, no exponent. */
 function sig(x: number, digits: number): string {
   if (x === 0) return '0';
   const d = Math.max(0, digits - 1 - Math.floor(Math.log10(Math.abs(x))));
-  return Number(x.toFixed(Math.min(d, 6))).toLocaleString('en-US', { maximumFractionDigits: Math.min(d, 6) });
+  return groupDigits(Number(x.toFixed(Math.min(d, 6))));
 }
 
 export const fmtTime = (s: number) => scaled(s, [[3600, 'h'], [60, 'min'], [1, 's'], [1e-3, 'ms'], [1e-6, 'µs'], [1e-9, 'ns'], [1e-12, 'ps']]);
