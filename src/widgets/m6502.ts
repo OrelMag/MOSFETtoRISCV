@@ -177,8 +177,10 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
         h('button', {
           class: 'btn sm primary', onclick: () => {
             const r = assemble(editor.value);
-            editor.setDiagnostics(r.errors);
-            if (r.errors.length) { errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'); return; }
+            // the assembler and the model know the stable undocumented opcodes; the chip drawn here is built from the documented ones only
+            const errors = [...r.errors, ...r.lines.filter((l) => l.undocumented).map((l) => ({ line: l.line, message: `${l.source.trim().split(/\s+/).find((w) => !w.endsWith(':'))} is an undocumented opcode: the assembler and the model know it, this transistor-level chip is not built for it` }))];
+            editor.setDiagnostics(errors);
+            if (errors.length) { errBox.textContent = errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'); return; }
             stage.load(m6502Scene({ ...opts, source: editor.value }));
           },
         }, 'Assemble & load'),

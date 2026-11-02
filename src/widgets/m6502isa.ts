@@ -1,9 +1,9 @@
 // Appendix A's instruction-set reference: the 6502's opcode matrix (16 × 16, the 151 documented
-// opcodes), coloured by class or addressing mode. A click opens an opcode: its aaa bbb cc fields,
+// opcodes, and the stable undocumented ones drawn dashed: the model and the assembler know them, the chip does not), coloured by class or addressing mode. A click opens an opcode: its aaa bbb cc fields,
 // size, cycles, flags, the bus cycles it makes (run on the ISS, not typed in) and the decode PLA
 // rows it lights in each cycle of our chip.
 
-import { CLASS_TITLES, fields, MODES, type Mode, type OpClass, OPCODES, type OpInfo } from '../m6502/isa';
+import { CLASS_TITLES, fields, MODES, type Mode, type OpClass, OPCODES, opInfoOf, type OpInfo, UNDOC } from '../m6502/isa';
 import { Cpu6502, Ram64 } from '../m6502/iss';
 import { plaRows, type PlaRow } from '../m6502/pla';
 import { UCODE } from '../m6502/ucode';
@@ -17,6 +17,7 @@ const FLAGS: Record<string, string> = {
   ADC: 'N V Z C', SBC: 'N V Z C', AND: 'N Z', ORA: 'N Z', EOR: 'N Z', CMP: 'N Z C', CPX: 'N Z C', CPY: 'N Z C', BIT: 'N V Z',
   LDA: 'N Z', LDX: 'N Z', LDY: 'N Z', ASL: 'N Z C', LSR: 'N Z C', ROL: 'N Z C', ROR: 'N Z C', INC: 'N Z', DEC: 'N Z',
   INX: 'N Z', INY: 'N Z', DEX: 'N Z', DEY: 'N Z', TAX: 'N Z', TXA: 'N Z', TAY: 'N Z', TYA: 'N Z', TSX: 'N Z', PLA: 'N Z',
+  LAX: 'N Z', DCP: 'N Z C', ISC: 'N V Z C', SLO: 'N Z C', RLA: 'N Z C', SRE: 'N Z C', RRA: 'N V Z C', ANC: 'N Z C', ALR: 'N Z C', ARR: 'N V Z C', SBX: 'N Z C',
   PLP: 'all', RTI: 'all', CLC: 'C', SEC: 'C', CLI: 'I', SEI: 'I', CLV: 'V', CLD: 'D', SED: 'D', BRK: 'I (and B on the stack)',
 };
 const CLASS_HUE: Record<OpClass, string> = { ldst: 's1', alu: 's2', rmw: 's3', branch: 's4', jump: 's5', stack: 's6', transfer: 's7', flag: 's8' };
@@ -29,7 +30,7 @@ export function busCycles(o: OpInfo, cross: boolean): { addr: number; data: numb
   const ram = new Ram64();
   // a branch sits near the end of a page so that a short offset can leave it
   const pc = o.mode === 'rel' ? 0x02f0 : 0x0230;
-  const cpu = new Cpu6502(ram);
+  const cpu = new Cpu6502(ram, { undocumented: !!o.undocumented });
   // operands chosen so that an index lands on the same page, or crosses it
   // a branch is taken: its flag (bits 7:6 of the opcode pick N V C Z) set to bit 5 of the opcode
   const taken = ((o.op >> 5) & 1) === 1 ? 0xc3 : 0;
@@ -72,25 +73,25 @@ export function opcodeMatrix(): Widget {
   const render = () => {
     const head = h('tr', null, h('th', null, ''), ...Array.from({ length: 16 }, (_, c) => h('th', null, `-${hex(c, 1)}`)));
     const rows = Array.from({ length: 16 }, (_, r) => h('tr', null, h('th', null, `${hex(r, 1)}-`), ...Array.from({ length: 16 }, (_, c) => {
-      const op = r * 16 + c, o = OPCODES[op];
-      if (!o) return h('td', { class: 'x', title: `$${hex(op)}: undocumented` });
+      const op = r * 16 + c, o = opInfoOf(op);
+      if (!o) return h('td', { class: 'x', title: `${hex(op)}: undocumented and unstable (XAA, AHX, TAS, SHY, SHX, LAS, LAX #) or KIL: the model stops on it` });
       const hue = colourBy === 'class' ? CLASS_HUE[o.cls] : MODE_HUE[o.mode];
       const cyc = `${o.cycles}${o.pageCross || o.branch ? '+' : ''}`;
-      const td = h('td', { class: `${hue}${op === sel ? ' sel' : ''}`, title: `$${hex(op)} ${o.mnemonic} ${MODES[o.mode].title}` },
+      const td = h('td', { class: `${hue}${op === sel ? ' sel' : ''}${o.undocumented ? ' u' : ''}`, title: `${hex(op)} ${o.mnemonic} ${MODES[o.mode].title}${o.undocumented ? ' (undocumented: the model and the assembler know it, the chip is not built for it)' : ''}` },
         h('b', null, o.mnemonic), h('span', null, `${MODES[o.mode].syntax.replace('$nnnn', 'nnnn').replace('$nn', 'nn').replace('#$', '#')}${MODES[o.mode].syntax ? ' · ' : ''}${cyc}`));
       td.addEventListener('click', () => { sel = op; cross = false; render(); });
       return td;
     })));
     grid.replaceChildren(head, ...rows);
-    const n = OPCODES.filter(Boolean).length;
-    legend.replaceChildren(h('b', null, `${n} opcodes`), ...(colourBy === 'class'
+    const n = OPCODES.filter(Boolean).length, u = UNDOC.filter(Boolean).length;
+    legend.replaceChildren(h('b', null, `${n} opcodes`), h('span', { title: 'The stable undocumented NMOS opcodes: LAX SAX DCP ISC SLO RLA SRE RRA ANC ALR ARR SBX, SBC $EB, the NOP variants' }, h('i', { class: 'u' }), `${u} undocumented (dashed)`), ...(colourBy === 'class'
       ? (Object.keys(CLASS_HUE) as OpClass[]).map((k) => h('span', null, h('i', { class: CLASS_HUE[k] }), CLASS_TITLES[k]))
       : (['impl', 'imm', 'zp', 'zpx', 'abs', 'abx', 'izx', 'rel'] as Mode[]).map((k) => h('span', null, h('i', { class: MODE_HUE[k] }),
         { impl: 'implied / accumulator', imm: 'immediate', zp: 'zero page', zpx: 'zero page,X / Y', abs: 'absolute', abx: 'absolute,X / Y', izx: 'indirect', rel: 'relative' }[k as string]))));
     showDetail();
   };
   const showDetail = () => {
-    const o = OPCODES[sel]!;
+    const o = opInfoOf(sel)!;
     const f = fields(sel);
     const bits = sel.toString(2).padStart(8, '0');
     const m = MODES[o.mode];
@@ -98,12 +99,12 @@ export function opcodeMatrix(): Widget {
     const canCross = o.pageCross || o.branch || ((o.mode === 'abx' || o.mode === 'aby' || o.mode === 'izy') && o.access !== 'r');
     const cycles = busCycles(o, cross);
     rowsCache ??= plaRows();
-    const lit = (UCODE[sel] ?? []).map((_, t) => rowsCache!.filter((r) => r.t === t + 1 && (sel & ~r.cube.mask) === r.cube.val).length);
+    const lit = o.undocumented ? [] : (UCODE[sel] ?? []).map((_, t) => rowsCache!.filter((r) => r.t === t + 1 && (sel & ~r.cube.mask) === r.cube.val).length);
     const crossBtn = canCross ? h('label', { class: 'm65-cross' }, h('input', { type: 'checkbox', checked: cross || null, onchange: (e: Event) => { cross = (e.target as HTMLInputElement).checked; showDetail(); } }),
       o.branch ? ' taken, to another page' : ' index crosses a page') : '';
     detail.replaceChildren(
       h('div', { class: 'm65-k' }, `Opcode $${hex(sel)}`),
-      h('div', { class: 'm65-big' }, o.mnemonic, ' ', h('span', null, m.syntax)),
+      h('div', { class: 'm65-big' }, o.mnemonic, ' ', h('span', null, m.syntax), o.undocumented ? h('span', { class: 'm65-undoc' }, ' undocumented') : null),
       h('div', { class: 'm65-enc' }, ...[...bits].map((b, i) => h('span', { class: i < 3 ? 'aaa' : i < 6 ? 'bbb' : 'cc' }, b))),
       h('div', { class: 'm65-enc l' }, h('span', { style: 'flex:3' }, `aaa = ${f.aaa}`), h('span', { style: 'flex:3' }, `bbb = ${f.bbb}`), h('span', { style: 'flex:2' }, `cc = ${f.cc}`)),
       h('div', { class: 'm65-kv' },
@@ -111,7 +112,9 @@ export function opcodeMatrix(): Widget {
         h('span', null, 'Bytes'), h('span', null, String(m.bytes)),
         h('span', null, 'Cycles'), h('span', null, cyc),
         h('span', null, 'Flags'), h('span', null, FLAGS[o.mnemonic] ?? '—'),
-        h('span', null, 'Decode PLA'), h('span', { title: 'Rows of our chip\'s decode PLA that match this opcode, per cycle (T1 finishes the previous instruction)' }, lit.map((n, t) => `T${t + 1}: ${n}`).join(' · '))),
+        h('span', null, 'Decode PLA'), o.undocumented
+          ? h('span', { title: 'The PLA is minimized from the documented opcodes with the others free: on silicon such an opcode fires whichever rows match it, a mix of documented behaviours' }, 'not built for it (don’t-care cells)')
+          : h('span', { title:'Rows of our chip\'s decode PLA that match this opcode, per cycle (T1 finishes the previous instruction)' }, lit.map((n, t) => `T${t + 1}: ${n}`).join(' · '))),
       h('div', { class: 'm65-k' }, 'Bus cycles ', crossBtn),
       h('table', { class: 'm65-trace' },
         h('tr', null, ...['', 'address', 'data', 'R/W', ''].map((x) => h('th', null, x))),

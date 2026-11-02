@@ -40,14 +40,18 @@
 // whatever they were: a new Cpu6502 starts with A = X = Y = S = PC = 0 and P = $20, so its reset reads
 // $0000 twice and the stack at $0100, $01FF, $01FE, and leaves S = $FD, P = $24.
 //
-// Undocumented opcodes are not implemented: fetching one sets `illegal` to the opcode, leaves PC on it,
+// Undocumented opcodes: by default not implemented. Fetching one sets `illegal` to the opcode, leaves PC on it,
 // and every later cycle reads that same address (sync 0, cycles still counted) until reset() / restore().
+// With `{ undocumented: true }` the stable NMOS ones run (isa.ts UNDOC: LAX SAX DCP ISC SLO RLA SRE RRA ANC ALR ARR
+// SBX, SBC $EB and the NOP variants), bus cycle for bus cycle like the real chip; the unstable ones (XAA, LAX #imm,
+// AHX, TAS, SHY, SHX, LAS) and the KIL opcodes still stop it. The transistor-level chip and the sandbox part are
+// built from the documented table only, so they keep the default.
 //
 // Decimal mode is the NMOS one: ADC / SBC correct the accumulator; ADC's N and V come from the
 // intermediate (half-corrected) sum, Z from the binary sum; SBC's flags all come from the binary
 // difference (Bruce Clark, "Decimal Mode", 6502.org).
 
-import { OPCODES } from './isa';
+import { OPCODES, UNDOC } from './isa';
 
 /** The memory and devices: every bus access goes through it, in order. read() must return a byte. */
 export interface Bus6502 {
@@ -75,6 +79,11 @@ export class Ram64 implements Bus6502 {
 
 /** Status flags. B (bit 4) exists only on the stack; bit 5 always reads 1. */
 export const FLAG = { C: 0x01, Z: 0x02, I: 0x04, D: 0x08, B: 0x10, U: 0x20, V: 0x40, N: 0x80 } as const;
+
+export interface Cpu6502Options {
+  /** Run the stable undocumented opcodes (default false: they stop the CPU, as the documented-only chip would). */
+  undocumented?: boolean;
+}
 
 /** Everything a Cpu6502 is: registers, the position inside an instruction, interrupt latches, last bus cycle. */
 export interface Cpu6502State {
@@ -111,6 +120,20 @@ for (const info of OPCODES) {
     : mnemonic === 'PLA' || mnemonic === 'PLP' ? F_PULL : MODE_FLOW[mode];
   ACCESS[op] = info.access === 'w' ? 1 : info.access === 'm' ? 2 : 0;
 }
+// The undocumented opcodes: their sequences are the documented modes'; UK says what each does with its operand.
+const UK_LAX = 1, UK_SAX = 2, UK_DCP = 3, UK_ISC = 4, UK_SLO = 5, UK_RLA = 6, UK_SRE = 7, UK_RRA = 8, UK_ANC = 9, UK_ALR = 10,
+  UK_ARR = 11, UK_SBX = 12, UK_SBC = 13, UK_NOP = 14;
+const UK_OF: Record<string, number> = { LAX: UK_LAX, SAX: UK_SAX, DCP: UK_DCP, ISC: UK_ISC, SLO: UK_SLO, RLA: UK_RLA, SRE: UK_SRE,
+  RRA: UK_RRA, ANC: UK_ANC, ALR: UK_ALR, ARR: UK_ARR, SBX: UK_SBX, SBC: UK_SBC, NOP: UK_NOP };
+const UK = new Uint8Array(256);
+const FLOW_U = FLOW.slice();
+for (const info of UNDOC) {
+  if (!info) continue;
+  const { op, mnemonic, mode } = info;
+  UK[op] = UK_OF[mnemonic];
+  FLOW_U[op] = MODE_FLOW[mode];
+  ACCESS[op] = info.access === 'w' ? 1 : info.access === 'm' ? 2 : 0;
+}
 // Flag tested by a branch, from the opcode's top two bits: N, V, C, Z.
 const BRANCH_BIT = [7, 6, 0, 1];
 
@@ -145,7 +168,12 @@ export class Cpu6502 {
   private nmiPrev = false;
   private intPending = false;
 
-  constructor(readonly bus: Bus6502) {}
+  /** The sequences by opcode: the documented ones, plus the stable undocumented ones when asked for. */
+  private readonly flows: Int8Array;
+
+  constructor(readonly bus: Bus6502, opts: Cpu6502Options = {}) {
+    this.flows = opts.undocumented ? FLOW_U : FLOW;
+  }
 
   /** The cycle within the current instruction the next cycle() runs (0: an opcode fetch). */
   get instrCycle(): number { return this.t === T_RESET ? 0 : this.t; }
@@ -228,7 +256,7 @@ export class Cpu6502 {
       return;
     }
     const op = this.rd(this.pc);
-    const f = FLOW[op];
+    const f = this.flows[op];
     if (f === F_ILLEGAL) { this.illegal = op; return; }
     this.pc = (this.pc + 1) & 0xffff;
     this.ir = op; this.flow = f; this.seq = SEQ_BRK; this.t = 1;
@@ -333,8 +361,8 @@ export class Cpu6502 {
       case F_WRITE: {
         this.poll();
         const op = this.ir;
-        // STA / STX / STY: bits 1-0 = 01 / 10 / 00.
-        this.wr(this.ea, (op & 3) === 1 ? this.a : (op & 3) === 2 ? this.x : this.y);
+        // STA / STX / STY: bits 1-0 = 01 / 10 / 00; SAX (11) stores A & X.
+        this.wr(this.ea, (op & 3) === 1 ? this.a : (op & 3) === 2 ? this.x : (op & 3) === 3 ? this.a & this.x : this.y);
         this.t = 0;
         return;
       }
@@ -487,6 +515,8 @@ export class Cpu6502 {
 
   // Shift / rotate / increment / decrement: the operation from aaa (bits 7-5).
   private modify(op: number, v: number): number {
+    const k = UK[op];
+    if (k) return this.undocRmw(k, v);
     let r: number;
     switch (op >> 5) {
       case 0: r = (v << 1) & 0xff; this.p = (this.p & ~C) | (v >> 7); break; // ASL
@@ -501,6 +531,8 @@ export class Cpu6502 {
   }
 
   private readOp(op: number, v: number): void {
+    const k = UK[op];
+    if (k) { this.undocRead(k, v); return; }
     switch (op & 3) {
       case 1: // the ALU group: ORA AND EOR ADC (STA) LDA CMP SBC
         switch (op >> 5) {
@@ -523,6 +555,56 @@ export class Cpu6502 {
           default: this.compare(this.x, v); return; // CPX
         }
     }
+  }
+
+  /** A read-modify-write undocumented opcode: the shift / step on memory, then the ALU operation with the result. */
+  private undocRmw(k: number, v: number): number {
+    let r: number;
+    switch (k) {
+      case UK_DCP: r = (v - 1) & 0xff; this.compare(this.a, r); return r;
+      case UK_ISC: r = (v + 1) & 0xff; this.sbc(r); return r;
+      case UK_SLO: r = this.modify(0x06, v); this.a |= r; this.setNZ(this.a); return r;
+      case UK_RLA: r = this.modify(0x26, v); this.a &= r; this.setNZ(this.a); return r;
+      case UK_SRE: r = this.modify(0x46, v); this.a ^= r; this.setNZ(this.a); return r;
+      default: r = this.modify(0x66, v); this.adc(r); return r; // RRA: ROR, then ADC with the carry it made
+    }
+  }
+
+  /** A read undocumented opcode (the operand byte v; SAX only writes, NOP only reads). */
+  private undocRead(k: number, v: number): void {
+    switch (k) {
+      case UK_LAX: this.a = this.x = v; this.setNZ(v); return;
+      case UK_SBC: this.sbc(v); return;
+      case UK_ANC: this.a &= v; this.setNZ(this.a); this.p = (this.p & ~C) | (this.a >> 7); return;
+      case UK_ALR: this.a &= v; this.p = (this.p & ~C) | (this.a & 1); this.a >>= 1; this.setNZ(this.a); return;
+      case UK_ARR: this.arr(v); return;
+      case UK_SBX: {
+        const t = this.a & this.x, d = t - v;
+        this.p = (this.p & ~C) | (d >= 0 ? C : 0);
+        this.x = d & 0xff;
+        this.setNZ(this.x);
+        return;
+      }
+      default: return; // NOP: the read happens, nothing else
+    }
+  }
+
+  // AND with the operand, then ROR A. Binary: C = bit 6, V = bit 6 ^ bit 5. Decimal mode adjusts the nibbles as ADC does.
+  private arr(v: number): void {
+    const t = this.a & v, c = this.p & C;
+    let r = (t >> 1) | (c << 7);
+    let p = this.p & ~(N | Z | C | V);
+    if (r & 0x80) p |= N;
+    if (r === 0) p |= Z;
+    if ((t ^ r) & 0x40) p |= V;
+    if (!(this.p & D)) {
+      if (r & 0x40) p |= C;
+    } else {
+      if ((t & 0x0f) + (t & 1) > 5) r = (r & 0xf0) | ((r + 6) & 0x0f);
+      if ((t >> 4) + ((t >> 4) & 1) > 5) { r = (r + 0x60) & 0xff; p |= C; }
+    }
+    this.p = p;
+    this.a = r;
   }
 
   private compare(r: number, v: number): void {

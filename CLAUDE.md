@@ -671,9 +671,14 @@ src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand 
                immediate's wiring, text by label, a line parsed in context, program), compose.ts (tableCompose(doc): a table's
                rows as instructions, split operands wired; CPU4_COMPOSE; composeIsaOf(lang, table)); riscv/rv16/compose16.ts
                RV16's (each format's fields written out); tests/compose-isa.test.ts: every adapter against its own assembler
-src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, modes, disasm), asm.ts (two-pass
-               assembler, ';' comments, $hex %bin, *= .org .byte .word .text .fill), iss.ts (Cpu6502: cycle-exact, every
-               bus cycle incl. dummy accesses, IRQ / NMI / RESET as the NMOS chip; save / restore), programs.ts (samples;
+src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, modes, disasm; UNDOC: the 85 stable undocumented NMOS
+               opcodes (LAX SAX DCP ISC SLO RLA SRE RRA ANC ALR ARR SBX, SBC $EB, the NOP variants) apart, so the PLA / ucode /
+               chip stay documented-only; opInfoOf(op) is either; left out: XAA, LAX #, AHX, TAS, SHY, SHX, LAS (unstable) and
+               the KIL opcodes), asm.ts (two-pass
+               assembler (takes UNDOC too; AsmLine.undocumented), ';' comments, $hex %bin, *= .org .byte .word .text .fill), iss.ts (Cpu6502: cycle-exact, every
+               bus cycle incl. dummy accesses; `new Cpu6502(bus, { undocumented: true })` runs UNDOC (default off: they stop it as before,
+               which is what the chip and the sandbox part are built for; tests/m6502-iss.test.ts: sample checked in as
+               singlestep-undoc-sample.json, full sets with fetch-tests.mjs --undocumented), IRQ / NMI / RESET as the NMOS chip; save / restore), programs.ts (samples;
                IO6502: output port $F001, IRQ acknowledge $F002), ucode.ts (our microarchitecture: per opcode and cycle the
                control signals; t = 1 is the next fetch, finishing the previous instruction), rtl.ts (Rtl6502: the
                register-transfer model of our design, phase by phase), pla.ts (the decode PLA minimized from the table,
@@ -1034,7 +1039,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  against par, the cycles / NANDs chart, Show answer, Do it for me; PUZZLE IN gets the selected test's
                  words whenever the circuit powers on (autoload)
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
-  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several;
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several; phoneWidth(): on a phone
+                 the CPU and Memory drawers do not open by themselves (they would cover the circuit; the toolbar opens them);
                  sets --dock-space on the overlay so look inside stops at its edge and Fit (Editor.fitView) leaves room
                  for it (a still-fitted view refits when a drawer opens or closes)
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
@@ -1355,7 +1361,7 @@ Clicking a listing line highlights the instruction's hardware (insthw.ts) in foc
 (`stage.highlight(names, true)` fades the rest); "in ROM" calls `stage.reveal(['imem'], 'c<i>')`.
 **Slow mode** (CPU panel) ticks at a learner-set rate (`settings.traceRate`, or `speed` for gates) at one of
 three levels: `gate` (`stage.startEdge()` / `edgeStep()`: a rising edge one gate delay at a time, via
-`src/sim/edge.ts`, which `Stage.cycle` also uses), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
+`src/sim/edge.ts`, which `Stage.cycle` also uses; lowerClock: a clock the learner left high by hand is brought low before a new edge, or the Pulse would be none while the panels' golden models step), `cycle` (`pulse(flowMs)`) or `instr` (run to the next
 retirement). The highlight then follows execution, and the trace logs `stepEffect(iss.step())` (riscv/trace.ts).
 While `stage.inEdge`, panels must not compare the hardware with the golden model (it steps after the edge).
 The Warp panels (widgets/lanes.ts, warps.ts) have the same listing marks (laneUse) and Slow mode; on the warp core the
