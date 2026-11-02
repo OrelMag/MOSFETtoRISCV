@@ -47,7 +47,7 @@ export interface MemInfo {
   prefix: string;
   src: MemSource;
   /** Found by probing (a learner's memory): the instance at each address (its label, else its name), and what looked wrong. */
-  built?: { names: Map<number, string>; problems: string[] };
+  built?: { names: Map<number, string>; problems: string[]; guessed?: true };
 }
 
 /** A row's address as shown: x5 for a register file, [5] (or [0F5] past 64 words, in hex) for a memory. */
@@ -101,7 +101,13 @@ export interface ProbeResult {
   /** Output port of the word instances. */
   out: string;
   problems: string[];
+  /** The addresses could not be read off the circuit: `at` is the words in drawing order. */
+  guessed?: true;
 }
+
+/** Gate delays one probe step may take before the circuit counts as not settling. */
+const SETTLE_DELAYS = 20_000;
+class Unsettled extends Error {}
 
 const probes = new WeakMap<ComponentDef, ProbeResult | null>();
 
@@ -137,42 +143,85 @@ function probe(def: ComponentDef): ProbeResult | null {
   const names = [...groups.values()].sort((a, b) => b.length - a.length)[0];
   if (!names || names.length < 2) return null;
   const out = outPort(def.netlist().instances.find((i) => i.name === names[0])!.def)!.name;
+  const nameOf = new Map(names.map((n) => [label.get(n)!, n]));
+  // The circuit could not be read (it does not settle, it is half wired): the words in drawing order, marked as a guess.
+  const guess = (why: string[]): ProbeResult => {
+    const at = new Map<number, string>(), labels = new Map<number, string>();
+    names.slice(0, 2 ** k).forEach((n, i) => { at.set(i, n); labels.set(i, label.get(n)!); });
+    return { at, labels, out, problems: why, guessed: true };
+  };
   const level = needsSwitchLevel(def) ? 'switch' : 'gate';
-  const sim: Sim = level === 'switch' ? new SwitchSim(flatten(def, { mode: level })) : new GateSim(flatten(def, { mode: level }));
+  const sim: Sim = level === 'switch' ? new SwitchSim(flatten(def, { mode: level })) : new GateSim(flatten(def, { mode: level }), { powerOn: 'x' });
+  // Bounded: an oscillating circuit would hold a gate-level settle for its whole event limit (a minute on rv16_rf).
+  const settle = () => {
+    if (sim.runUntil) sim.runUntil(sim.time + SETTLE_DELAYS);
+    else sim.settle();
+    if (sim.busy() || sim.unstable) throw new Unsettled();
+  };
   const kids = sim.design.root.children!;
   const read = () => names.map((n) => pack(sim.getBits(kids.get(n)!.ports[out])));
   const ones = width >= 53 ? -1 : 2 ** width - 1;
   const writes = new Map<number, string[]>();
-  for (let a = 0; a < 2 ** k; a++) {
-    sim.reset('zero');
+  try {
+    // Storage starts unknown ('x': no loop is forced, so a ring left in the circuit stays X instead of oscillating
+    // through the relaxation); a write shows as X → ones, the words it did not write stay X.
+    sim.reset('x');
     for (const p of ins(def)) sim.setInput(p.name, 0);
-    sim.settle();
+    settle();
+    const start = sim.saveState();
     const before = read();
-    sim.setInput(roles.addr, a);
-    sim.setInput(roles.we, 1);
-    if (ones < 0) sim.setInputBits(roles.data, new Array(width).fill(1)); else sim.setInput(roles.data, ones);
-    sim.settle();
-    sim.setInput(roles.clk, 1);
-    sim.settle();
-    sim.setInput(roles.clk, 0);
-    sim.settle();
-    const after = read();
-    writes.set(a, names.filter((_, j) => after[j] !== before[j]).map((n) => label.get(n)!));
+    for (let a = 0; a < 2 ** k; a++) {
+      sim.restoreState(start);
+      sim.setInput(roles.addr, a);
+      sim.setInput(roles.we, 1);
+      if (ones < 0) sim.setInputBits(roles.data, new Array(width).fill(1)); else sim.setInput(roles.data, ones);
+      settle();
+      sim.setInput(roles.clk, 1);
+      settle();
+      sim.setInput(roles.clk, 0);
+      settle();
+      const after = read();
+      writes.set(a, names.filter((_, j) => after[j] !== before[j]).map((n) => label.get(n)!));
+    }
+  } catch (e) {
+    if (e instanceof Unsettled) return guess(['it does not settle, so the addresses could not be read off it']);
+    throw e;
   }
   const at = new Map<number, string>(), labels = new Map<number, string>();
-  const nameOf = new Map(names.map((n) => [label.get(n)!, n]));
+  // Problems, grouped so a decoder left unwired reads as one line: addresses writing the same several words together,
+  // then a word two addresses write (unless it was already named), then words no address writes.
   const problems: string[] = [];
-  const by = new Map<string, number[]>();
+  const by = new Map<string, number[]>(), multi = new Map<string, number[]>();
   for (const [a, w] of writes) {
     if (w.length === 1) { at.set(a, nameOf.get(w[0])!); labels.set(a, w[0]); }
-    if (w.length > 1) problems.push(`${roles.addr} = ${a} writes ${w.length} words (${w.join(', ')})`);
+    if (w.length > 1) multi.set(w.join(', '), [...(multi.get(w.join(', ')) ?? []), a]);
     for (const n of w) by.set(n, [...(by.get(n) ?? []), a]);
   }
-  for (const [n, as] of by) if (as.length > 1) problems.push(`${n} is written at ${roles.addr} = ${as.join(' and ')}`);
+  for (const [ws, as] of multi) {
+    const n = ws.split(', ').length;
+    problems.push(`${roles.addr} = ${spans(as)} ${as.length > 1 ? 'each write' : 'writes'} ${n} words (${few(ws.split(', '))})`);
+  }
+  const named = new Set([...multi.keys()].flatMap((ws) => ws.split(', ')));
+  for (const [n, as] of by) if (as.length > 1 && !named.has(n)) problems.push(`${n} is written at ${roles.addr} = ${spans(as)}`);
   const never = names.map((n) => label.get(n)!).filter((n) => !by.has(n));
-  if (never.length) problems.push(`never written: ${never.join(', ')}`);
-  return at.size >= 2 ? { at, labels, out, problems } : null;
+  if (never.length) problems.push(`never written: ${few(never)}`);
+  return at.size >= 2 ? { at, labels, out, problems } : guess(problems);
 }
+
+/** Addresses as runs: 0–3, 6. */
+function spans(as: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < as.length;) {
+    let j = i;
+    while (j + 1 < as.length && as[j + 1] === as[j] + 1) j++;
+    out.push(j > i ? `${as[i]}–${as[j]}` : String(as[i]));
+    i = j + 1;
+  }
+  return out.join(', ');
+}
+
+/** At most four names, then how many more. */
+const few = (ns: string[]): string => ns.length > 4 ? `${ns.slice(0, 3).join(', ')} and ${ns.length - 3} more` : ns.join(', ');
 
 // ---- finding them --------------------------------------------------------------------------------
 
@@ -208,7 +257,7 @@ function memAt(sim: Sim, n: HierNode, path: string): MemInfo | null {
     const width = sameWidth(regs);
     if (regs.size < 2 || width === null) return null;
     const k = n.ports[writeRoles(n.def)!.addr].length;
-    return { path, node: n, words: 2 ** k, width, prefix: prefixOf(n), src: { kind: 'regs', regs }, built: { names: pr.labels, problems: pr.problems } };
+    return { path, node: n, words: 2 ** k, width, prefix: prefixOf(n), src: { kind: 'regs', regs }, built: { names: pr.labels, problems: pr.problems, ...(pr.guessed ? { guessed: true as const } : {}) } };
   }
   return null;
 }
@@ -272,7 +321,7 @@ function portValue(sim: Sim, n: HierNode, name: string): number | null {
 
 /** Write ports: (address, enable) pairs by the library's names. */
 const WRITES: [string, string][] = [['wa', 'we'], ['wa0', 'we0'], ['wa1', 'we1'], ['addr', 'we']];
-const READ = /^(ra\d*|raddr\d*|addr)$/;
+const READ = /^(ra\d*|raddr\d*|addr\d*)$/;
 
 export interface MemMarks {
   /** Addresses being read (a read port's address). */
@@ -298,9 +347,10 @@ export function memMarks(sim: Sim, m: MemInfo): MemMarks {
     if (a !== null && a >= 0 && a < m.words && !read.includes(a)) read.push(a);
   }
   const roles = m.built ? writeRoles(n.def) : null;
-  for (const [wa, we] of roles ? [[roles.addr, roles.we] as [string, string]] : WRITES) {
-    const a = portValue(sim, n, wa), e = portValue(sim, n, we);
-    if (a !== null && e === 1 && a >= 0 && a < m.words && !noStorage(m, a) && !write.includes(a)) write.push(a);
-  }
+  const add = (a: number | null) => { if (a !== null && a >= 0 && a < m.words && !noStorage(m, a) && !write.includes(a)) write.push(a); };
+  for (const [wa, we] of roles ? [[roles.addr, roles.we] as [string, string]] : WRITES) if (portValue(sim, n, we) === 1) add(portValue(sim, n, wa));
+  // a memory with ports (portmem.ts): addr<i>, and one bit of we per port
+  const wes = n.ports.we;
+  if (!roles && wes && wes.length > 1) sim.getBits(wes).forEach((b, i) => { if (b === B1) add(portValue(sim, n, `addr${i}`)); });
   return { read, write };
 }

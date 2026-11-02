@@ -42,7 +42,7 @@ export const memGridPanel: ScenePanel = (stage: Stage): Widget => {
     const m = chosen();
     size.textContent = m ? memSize(m) : '';
     grid.show(sim, m);
-    const problems = m?.built?.problems ?? [];
+    const problems = [...(m?.built?.guessed ? ['Order guessed: the words as drawn, their addresses could not be read off the circuit'] : []), ...m?.built?.problems ?? []];
     note.textContent = problems.join('; ');
     note.hidden = !problems.length;
   };

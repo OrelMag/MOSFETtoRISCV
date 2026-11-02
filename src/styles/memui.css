@@ -108,4 +108,4 @@
 .sb-mem .memgrid .cells { gap: 1px; }
 .sb-mem .memgrid .cell { width: 8px; height: 11px; border-radius: 2px; }
 .sb-mem .mem-note { max-width: none; margin: 0; }
-@media (pointer: coarse) { .sb-mem-item { min-height: 40px; } }
+@media (pointer: coarse) { .sb-mem-item { min-height: 40px; } .sb-mem input.sb-ram-goto { min-height: 40px; } }

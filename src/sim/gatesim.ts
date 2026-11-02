@@ -25,6 +25,9 @@ for (let a = 0; a < 4; a++) {
 export interface GateSimOptions {
   /** Maximum simulated time per settle() before the circuit is declared unstable. */
   settleLimit?: number;
+  /** The power-on the constructor applies (default 'zero'). 'x' forces no storage loop: a caller that resets the way it
+   *  wants anyway (view/memfind.ts's probe) skips the relaxation, which an oscillating loop drags out for seconds. */
+  powerOn?: PowerOnMode;
 }
 
 export class GateSim implements Sim {
@@ -136,7 +139,7 @@ export class GateSim implements Sim {
         this.inputs.set(p.name, 0);
       }
     }
-    this.reset('zero');
+    this.reset(opts.powerOn ?? 'zero');
   }
 
   get(net: number): Bit {

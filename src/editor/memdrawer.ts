@@ -20,6 +20,8 @@ class MemoryDrawer {
   readonly el: HTMLElement;
   open = false;
   private auto = false;
+  /** The chip it opened by itself on: it stays open while that chip is edited (a half-wired memory may vanish for a moment). */
+  private autoChip = '';
   /** Chips whose drawer the user closed (not reopened automatically this session). */
   private closed = new Set<string>();
   private list = h('div', { class: 'sb-mem-list', role: 'listbox', 'aria-label': 'Memories' });
@@ -74,7 +76,8 @@ class MemoryDrawer {
     if (!this.open && this.mems.length && !this.closed.has(this.ed.chipId)) {
       this.setOpen(true);
       this.auto = true;
-    } else if (this.open && this.auto && !this.mems.length) this.setOpen(false);
+      this.autoChip = this.ed.chipId;
+    } else if (this.open && this.auto && !this.mems.length && this.ed.chipId !== this.autoChip) this.setOpen(false);
     if (this.open) this.build();
   }
 
@@ -105,7 +108,9 @@ class MemoryDrawer {
       onclick: () => { this.chosen = m.path; this.build(); },
     }, h('code', null, m.path ? m.path.split('.').join(' › ') : 'this chip'), h('small', null, `${m.words} × ${m.width} · ${kindOf(m)}`)))
       : [h('p', { class: 'sb-scr-none' }, this.sim ? 'No RAM or register file in this chip or the chips it places.' : 'Not simulated yet.')]));
-    this.src.textContent = !cur ? '' : cur.built
+    this.src.textContent = !cur ? '' : cur.built?.guessed
+      ? `${memSize(cur)}, order guessed: the words as drawn, their addresses could not be read off the circuit.`
+      : cur.built
       ? `${memSize(cur)}: each word's address found by writing every ${cur.prefix ? 'register number' : 'address'} on a copy of this circuit.`
       : `${memSize(cur)}${cur.src.kind === 'big' ? ', simulated as a lookup: words from its state' : ''}.`;
     this.src.hidden = !cur;

@@ -13,8 +13,11 @@ import { bankedMemory } from '../src/lib/lsu';
 import { ram } from '../src/lib/memory';
 import { portMemory } from '../src/lib/portmem';
 import { regfile, regfile2w } from '../src/lib/regfile';
+import { NOT } from '../src/lib/gates';
 import { DEC3, RF8, RV16_MUX8, RV16_REG16 } from '../src/lib/rv16/logic';
 import { romArray } from '../src/lib/storage';
+import { flatten } from '../src/sim/flatten';
+import { GateSim } from '../src/sim/gatesim';
 import { simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
 import { findMemories, memMarks, noStorage, rowLabel, wordValue } from '../src/view/memfind';
@@ -54,6 +57,10 @@ const MISWIRED: ComponentDef = (() => {
     netlist: () => ({ pins: Object.fromEntries(['wa', 'we', 'wd', 'ra1', 'ra2', 'clk', 'rd1', 'rd2'].map((n, i) => [n, [0, 4 * i]])), instances: b.instances, nets: b.nets() }),
   } as ComponentDef;
 })();
+
+/** rv16_rf with an edit to its netlist (a fresh definition each time, so the probe's memo does not answer). */
+const rfVariant = (edit: (n: ReturnType<NonNullable<ComponentDef['netlist']>>) => typeof n): ComponentDef =>
+  ({ ...RF8, id: 'test_rf_variant', netlist: () => edit(RF8.netlist!()) });
 
 const compiledAnswer = (chips: ReturnType<NonNullable<ReturnType<typeof levelChallenge>>['answer']>) => {
   const main = chips[chips.length - 1];
@@ -134,5 +141,27 @@ describe('findMemories', () => {
     expect(mems.map((m) => [m.path, m.words, m.width])).toEqual([['', 4, 4]]);
     pulse(sim, { addr: 2, d: 0x9, we: 1 });
     expect(Array.from({ length: 4 }, (_, i) => wordValue(sim, mems[0], i))).toEqual([0, 0, 9, 0]);
+  });
+
+  it('lists a half-wired register file in drawing order, marked as a guess, and says why', () => {
+    const [m] = found(rfVariant((n) => ({ ...n, nets: n.nets.filter((x) => !x.ends.some((e) => /.en$/.test(e))) }))).mems;
+    expect(m.built!.guessed).toBe(true);
+    expect([...m.built!.names.values()]).toEqual(['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7']);
+    expect(m.built!.problems).toEqual(['never written: x1, x2, x3 and 4 more']);
+  });
+
+  it('probes a circuit with a ring of inverters in it quickly', () => {
+    // (the scene's own power-on relaxes the ring for seconds; the probe must not do it again)
+    const sim = new GateSim(flatten(rfVariant((n) => ({ ...n, instances: [...n.instances, { name: 'osc', def: NOT, at: [0, 0] }], nets: [...n.nets, { ends: ['osc.a', 'osc.y'] }] }))), { powerOn: 'x' });
+    const t = performance.now();
+    const [m] = findMemories(sim);
+    expect(m.words).toBe(8);
+    expect(performance.now() - t).toBeLessThan(5000);
+  });
+
+  it('marks each port of a multi-port memory: addr<i> read, written where its bit of we is set', () => {
+    const { sim, mems: [m] } = found(portMemory(4, 8, 2));
+    sim.setInput('addr0', 2); sim.setInput('addr1', 9); sim.setInput('we', 0b10); sim.settle();
+    expect(memMarks(sim, m)).toEqual({ read: [2, 9], write: [9] });
   });
 });

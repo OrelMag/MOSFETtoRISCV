@@ -2280,3 +2280,6 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 
 /* A stage still building its scene (Stage.load): its bar and run row have nothing to act on yet. */
 .stage[aria-busy] .stage-bar > :not(.crumbs), .stage[aria-busy] .controls { visibility: hidden; }
+
+/* The Memory contents picker (widgets/memgrid.ts) at finger size. */
+@media (pointer: coarse) { .mem-pick { min-height: 40px; } }
