@@ -13,7 +13,9 @@ import { searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
 import { CODEX_ACTS, CODEX_BY_KIND, CODEX_FROM, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
-import { codexEntryEl, entrySheets, lockedEntryEl } from '../../campaign/ui/codexentry';
+import { codexEntryEl, entrySheets, liveSchematic, lockedEntryEl } from '../../campaign/ui/codexentry';
+import { LESSON_EXTRAS } from '../../campaign/lessonextras';
+import { quizBox } from '../quiz';
 import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
@@ -308,6 +310,15 @@ export class CampaignPage implements Page {
       el.append(h('a', { class: 'cp-mini-anatomy', href: '#/campaign/intro', title: 'Open the full diagram', 'aria-label': 'The CPU: open the full block diagram' }, anatomySvg(p.view, undefined)));
     }
     if (n.body && LESSONS[n.body]) el.append(html('div', 'cp-lesson', LESSONS[n.body]));
+    const extra = n.body ? LESSON_EXTRAS[n.body] : undefined;
+    if (extra) {
+      for (const f of extra.figures) {
+        const fig = liveSchematic(f.lib);
+        if (fig) el.append(h('figure', { class: 'cx-fig cp-lesson-fig' }, fig, h('figcaption', null, f.caption, ' ', h('a', { href: `#/workbench/${f.lib}` }, 'Open it on the workbench'), '.')));
+      }
+      el.append(h('section', { class: 'cx-check cp-lesson-check' }, h('h4', null, 'Check yourself'),
+        ...extra.check.map((q, k) => quizBox(q, `lesson:${n.body}:${k}`, `${k + 1} of ${extra.check.length}`, () => {}))));
+    }
     if (ch) el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', ch.brief)));
     if (n.kind === 'drill' && n.drill && !n.soon && st !== 'locked') {
       let card = this.cards.get(n.id);

@@ -8,6 +8,8 @@ import { chapters } from '../chapters';
 import { chapterNo, type Quiz } from '../chapters/types';
 import { DRILLS } from '../campaign/drills';
 import { bankQuiz, DRILL_REVIEW, REVIEW_BANK } from '../learn/bank';
+import { LESSON_EXTRAS } from '../campaign/lessonextras';
+import { NODES } from '../campaign/nodes';
 import { TAUGHT } from '../chapters/taught';
 import type { Question } from './review';
 
@@ -26,6 +28,7 @@ export function allQuestions(): ReviewQ[] {
     const name = `${chapterNo(c)} · ${c.title}`;
     c.steps.forEach((s, i) => {
       if (s.challenge?.kind === 'quiz') out.push({ key: `${c.id}:${i}`, origin: `${name} · step ${i + 1}, ${s.title}`, href: `#/c/${c.id}/${i}`, chapter: c.id, quiz: s.challenge });
+      s.reading?.quizzes.forEach((q, k) => out.push({ key: `${c.id}:${i}:read:${k}`, origin: `${name} · step ${i + 1}, ${s.title}, the spec`, href: `#/c/${c.id}/${i}`, chapter: c.id, quiz: q }));
     });
     c.recap?.check?.forEach((q, k) => out.push({ key: `${c.id}:recap:${k}`, origin: `${name} · recap`, href: `#/c/${c.id}/${c.steps.length}`, chapter: c.id, quiz: q }));
   }
@@ -33,6 +36,10 @@ export function allQuestions(): ReviewQ[] {
     const e = codexById(id);
     if (!e) continue;
     qs.forEach((q, k) => out.push({ key: `codex:${id}:${k}`, origin: `Codex · ${e.title}`, href: `#/campaign/codex/${id}`, quiz: q }));
+  }
+  for (const n of NODES) {
+    const x = n.kind === 'lesson' && n.body ? LESSON_EXTRAS[n.body] : undefined;
+    x?.check.forEach((q, k) => out.push({ key: `lesson:${n.body}:${k}`, origin: `Campaign · ${n.title}`, href: `#/campaign/n/${n.id}`, quiz: q }));
   }
   // generated: predict a tour's beat (from its chapter, once visited), what breaks when a part goes (from the chapter teaching it)
   const byId = new Map(chapters.map((c) => [c.id, c]));

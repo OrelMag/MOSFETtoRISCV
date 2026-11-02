@@ -474,6 +474,24 @@ export const chIsa: Chapter = {
     },
     {
       title: 'Six formats, fixed register fields',
+      reading: {
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Base Instruction Formats',
+        quote: [
+          'All are a fixed 32 bits in length. The base ISA has IALIGN=32, meaning that instructions must be aligned on a four-byte boundary in memory.',
+          'The RISC-V ISA keeps the source (rs1 and rs2) and destination (rd) registers at the same position in all formats to simplify decoding.'],
+        note: 'The step counts six formats; the manual counts four core ones (R, I, S, U) and treats B and J as the S and U formats with their immediate bits rearranged (Immediate Encoding Variants). The count differs, the bits are the same.',
+        quizzes: [
+          { question: 'The manual calls R, I, S and U the core formats and B and J variants of S and U. What makes a variant?', options: ['A different opcode width', 'Only how the immediate bits are arranged in the word', 'A different position of rs1 and rs2', 'A different instruction length'], answer: 1,
+          why: ['Every format has the opcode in bits 6:0.', '', 'rs1 and rs2 never move: that is the rule quoted above.', 'All are 32 bits in RV32I.'],
+          explain: 'B has S\'s fields with the immediate scrambled so its bits sit where S puts them; J does the same for U. The decoder and the register file see the same fields either way.' },
+          { question: 'Why does the manual keep rs1, rs2 and rd in the same bit positions in every format?', options: ['So the assembler is simpler', 'So register reads can start before the format is known', 'To save opcode space', 'So immediates can be longer'], answer: 1,
+          why: ['The assembler is not the cost the design avoids; the decode path is.', '', 'The opcode is a separate field; register fields do not use it.', 'Fixed register fields take bits away from the immediate, not give them.'],
+          explain: 'The register file\'s read addresses are wires straight from the word, so the read runs in parallel with decoding.' },
+          { question: 'Which instruction bits hold rd in an R-type, I-type, U-type and J-type word?', options: ['Bits 11:7 in all four', 'Bits 24:20 in R and I, 11:7 in U and J', 'Bits 19:15 in all four', 'It depends on funct3'], answer: 0,
+          why: ['', 'Bits 24:20 are rs2 (R) or the immediate (I).', 'Bits 19:15 are rs1.', 'funct3 selects an operation, never where a register field sits.'],
+          explain: 'rd is bits 11:7 wherever it exists. S and B have no rd, and use those five bits for immediate bits instead.' },
+        ],
+      },
       body: `
         <p>Every RV32I instruction is 32 bits. The opcode (bits 6:0) selects one of six formats. The design rule that shapes
         everything: <strong>rs1, rs2 and rd are always in the same bit positions</strong>, so register-file reads start in
@@ -698,6 +716,24 @@ export const chSingleCycle: Chapter = {
     },
     {
       title: 'Loads and stores',
+      reading: {
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Immediate Encoding Variants',
+        quote: [
+          'The only difference between the S and B formats is that the 12-bit immediate field is used to encode branch offsets in multiples of 2 in the B format. Instead of shifting all bits in the instruction-encoded immediate left by one in hardware as is conventionally done, the middle bits (imm[10:1]) and sign bit stay in fixed positions, while the lowest bit in S format (inst[7]) encodes a high-order bit in B format.',
+          'Sign extension is one of the most critical operations on immediates (particularly for XLEN>32), and in RISC-V the sign bit for all immediates is always held in bit 31 of the instruction to allow sign extension to proceed in parallel with instruction decoding.'],
+        note: 'This is the immediate generator you can open in the datapath: each output bit is a wire from one instruction bit, a copy of bit 31, or ground, and a multiplexer on the format picks among them.',
+        quizzes: [
+          { question: 'The I-type immediate field of a load holds 0xFFC. What 32-bit value does the immediate generator produce?', options: ['0x00000FFC', '0xFFFFFFFC', '0xFFFFF000', '0x7FFFFFFC'], answer: 1,
+          why: ['That is zero extension; the field\'s top bit is 1, so the value is negative.', '', 'That would shift the field up instead of extending it.', 'Bit 31 of the result is a copy of the sign, so it is 1.'],
+          explain: '0xFFC is 12 bits with the sign set: −4. Bits 31:11 of the result are copies of instruction bit 31, so the load reads from rs1 − 4.' },
+          { question: 'Why can the generator copy bit 31 into the upper result bits before the format is decoded?', options: ['Because bit 31 is always zero', 'Because every format with an immediate holds its sign in bit 31', 'Because the ALU fixes the sign afterwards', 'It cannot; it waits for the opcode'], answer: 1,
+          why: ['Bit 31 is the sign, and negative offsets exist.', '', 'The ALU adds the immediate it is given.', 'The fan-out wire needs no decoder, which is the point of the layout.'],
+          explain: 'The sign is in the same place in I, S, B, U and J, so sign extension is one fan-out of one wire, in parallel with decode. Only the lower bits need the format.' },
+          { question: 'Instruction bit 7 holds imm[0] of a store. What does the same bit hold in a branch?', options: ['imm[0] again', 'imm[11]', 'rd[0]', 'Nothing'], answer: 1,
+          why: ['A branch offset is a multiple of 2, so its bit 0 is not stored at all.', '', 'Branches have no rd.', 'The bit is used: it takes the place the missing bit 0 frees.'],
+          explain: 'Because B offsets are multiples of 2, the bit that held imm[0] in S is reused for imm[11]; the middle bits and the sign stay put, so most wires are shared between the two formats.' },
+        ],
+      },
       body: `
         <p><code>sw</code>: the <span data-show="alu">ALU</span> computes rs1 + imm<sub>S</sub>, MemWrite = 1 (the
         <span data-show="dm">data memory</span> writes), data = rs2. Nothing is written back.
@@ -740,6 +776,24 @@ export const chSingleCycle: Chapter = {
     },
     {
       title: 'Branches and jumps',
+      reading: {
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Control Transfer Instructions (Unconditional Jumps; Conditional Branches)',
+        quote: [
+          'The JAL (jump and link) instruction uses the J-type format, where the J-immediate encodes a signed offset in multiples of 2 bytes. The offset is sign-extended and added to the address of the jump instruction to form the jump target address. Jumps can therefore target a ±1 MiB range.',
+          'All branch instructions use the B-type instruction format. The 12-bit B-immediate encodes signed offsets in multiples-of-two bytes. The offset is sign-extended and added to the address of the branch instruction to give the target address. The conditional branch range is ±4 KiB.'],
+        note: 'The dedicated target adder in the datapath is exactly this sentence: PC plus the sign-extended immediate, computed beside the ALU, so that when the flags arrive only a multiplexer is left.',
+        quizzes: [
+          { question: 'A beq at address 0x20 has the offset −8. Where does it go when taken?', options: ['0x18', '0x1C', '0x14', '0x24'], answer: 0,
+          why: ['', 'That adds the offset to PC + 4. The manual says the address of the branch itself.', 'That subtracts the offset twice.', 'That is the fall-through, PC + 4.'],
+          explain: 'Target = PC of the branch + offset = 0x20 − 8 = 0x18. The target adder takes the branch\'s own PC, not the incremented one.' },
+          { question: 'How far can a conditional branch reach, and why?', options: ['±2 KiB: 12 bits of byte offset', '±4 KiB: 12 bits in units of 2 bytes', '±1 MiB: 20 bits', '±8 KiB: 13 bits in units of 2'], answer: 1,
+          why: ['That would be a 12-bit offset in bytes; the stored bits are halfword units.', '', 'That is jal, which has a 20-bit immediate.', 'The immediate has 12 stored bits plus the implicit zero: 13 bits of byte offset in total.'],
+          explain: '12 stored bits × 2 bytes = a 13-bit signed byte offset: −4096 … +4094.' },
+          { question: 'What would jal reach if its 20 stored bits were a byte offset instead of units of 2?', options: ['±512 KiB', '±1 MiB', '±2 MiB', '±64 KiB'], answer: 0,
+          why: ['', 'That is the real range, with units of 2 bytes.', 'That needs 22 bits of byte offset.', 'That is far too small for 20 bits.'],
+          explain: '20 signed bits of bytes are ±512 KiB; the unstored bit 0 doubles it to ±1 MiB. The same trick gives a branch 4 KiB.' },
+        ],
+      },
       body: `
         <p>Branches use the ALU to subtract (ALUControl = SUB) and the <span data-show="npc">next-PC logic</span> reads the flags: beq Z, bne ¬Z,
         blt N⊕V, bge ¬(N⊕V), bltu ¬C, bgeu C. If taken, PCSrc (the <span data-show="pcmux">next-PC select</span>) picks

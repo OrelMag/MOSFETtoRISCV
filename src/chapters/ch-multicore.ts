@@ -342,6 +342,23 @@ export const chMulticore: Chapter = {
     },
     {
       title: 'Memory ordering',
+      reading: {
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'RV32I, Memory Ordering Instructions',
+        quote: [
+          'FENCE instructions are used to order device I/O and memory accesses as viewed by other RISC-V harts and external devices or coprocessors. Any combination of device input (I), device output (O), memory reads (R), and memory writes (W) may be ordered with respect to any combination of the same.'],
+        note: 'fence w,r reads as: earlier writes (the predecessor set) are ordered before later reads (the successor set). That is the pair store buffering needs.',
+        quizzes: [
+          { question: 'Which fence between each core\'s store and its load forbids both cores reading 0 in store buffering?', options: ['fence r,w', 'fence w,r', 'fence r,r', 'fence w,w'], answer: 1,
+          why: ['That orders a read before a later write; the stores here are before the loads.', '', 'It orders reads among themselves; the store is not covered.', 'It orders stores among themselves; the load is not covered.'],
+          explain: 'The earlier store must be visible before the later load is performed: predecessor w, successor r.' },
+          { question: 'Which fence goes before the store that releases a lock, so the critical section\'s accesses are visible first?', options: ['fence rw,w', 'fence w,r', 'fence r,rw', 'None is needed'], answer: 0,
+          why: ['', 'That orders stores before loads, not before a store.', 'That is the acquire side, after taking the lock.', 'It is on this sequentially consistent machine, which is why the bug hides.'],
+          explain: 'Everything before (r and w) must be performed before the releasing write: predecessor rw, successor w.' },
+          { question: 'The dual-core of this chapter has one memory port. What does a fence change on it?', options: ['Nothing observable: order already holds', 'It flushes the cache', 'It stalls both cores', 'It makes AMOs atomic'], answer: 0,
+          why: ['', 'There is nothing to flush; the ordering is a property of the one port.', 'No stall is needed when no access can pass another.', 'Atomicity comes from the AMO\'s read-modify-write on the port.'],
+          explain: 'With one port every access happens in a single global order, so every fence is already satisfied. Cores with store buffers are where it costs cycles.' },
+        ],
+      },
       body: `
         <p>Our dual-core is <strong>sequentially consistent</strong>: there is one memory port, so all accesses happen in one global order consistent with each program.
         Real cores reorder: a store waits in a store buffer while later loads go ahead, and that is invisible to one thread but not to another. RISC-V specifies a

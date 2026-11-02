@@ -88,6 +88,20 @@ export interface Layers {
   numbers?: string;
 }
 
+/** A short passage of the RISC-V manual beside what the step builds, with three questions tied to the build (Step.reading). */
+export interface Reading {
+  /** Which volume: "RISC-V Unprivileged ISA" or "RISC-V Privileged ISA". */
+  source: string;
+  /** The section cited. */
+  section: string;
+  /** The quoted sentences, verbatim (kept short), one paragraph each. */
+  quote: string[];
+  /** How the passage maps onto the circuit the step shows (HTML). */
+  note: string;
+  /** Questions with a why per option; asked in the review queue like a step's quiz. */
+  quizzes: Quiz[];
+}
+
 export interface Step {
   title: string;
   /** HTML: the explanation itself, as long as the idea needs (what, why, what it costs); depth beyond that in `more`. */
@@ -96,6 +110,8 @@ export interface Step {
   tour?: Tour;
   /** A live worked sum next to the prose. */
   ledger?: Ledger;
+  /** "Read the spec": a folded block under the body quoting the manual, with questions. */
+  reading?: Reading;
   /** Derivation / In real silicon / Common mistake / Numbers, under the body. */
   more?: Layers;
   scene?: () => Scene;

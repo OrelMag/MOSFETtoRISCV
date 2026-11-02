@@ -14,6 +14,8 @@ export function shownTexts(c: Chapter): [string, string][] {
   c.steps.forEach((s, i) => {
     t.push([`${i} body`, s.body]);
     s.tour?.beats.forEach((b, k) => t.push([`${i} beat ${k}`, `${b.title ?? ''} ${b.say}`]));
+    s.reading?.quizzes.forEach((q, k) => t.push([`${i} reading ${k}`, [q.question, ...q.options, q.explain, ...(q.why ?? [])].join(' ')]));
+    if (s.reading) t.push([`${i} reading`, s.reading.note]);
     const ch = s.challenge;
     if (ch?.kind === 'reach') t.push([`${i} challenge`, [ch.goal, ...(ch.hints ?? []), ch.answer].join(' ')]);
     if (ch?.kind === 'quiz') t.push([`${i} quiz`, [ch.question, ...ch.options, ch.explain, ...(ch.why ?? [])].join(' ')]);

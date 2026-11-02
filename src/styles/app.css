@@ -2278,6 +2278,18 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .layer-body table.mini th, .layer-body table.mini td { padding: 2px 10px 2px 0; text-align: left; border-bottom: 1px solid var(--border); }
 .layer-body table.mini th { color: var(--muted); font-weight: 600; }
 
+/* Read the spec (ui/pages/chapter.ts reading): a folded block of the manual under the step, with its questions. */
+.reading { margin: 10px 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.reading > summary { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font: 600 13px var(--font-ui, inherit); color: var(--accent); list-style: none; }
+.reading > summary::-webkit-details-marker { display: none; }
+
+.reading[open] > summary { border-bottom: 1px solid var(--border); }
+.reading-body { padding: 8px 12px 12px; }
+.reading-src { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+.reading blockquote { margin: 6px 0; padding: 6px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-style: italic; font-size: 13px; line-height: 1.5; }
+.reading-note { font-size: 13px; }
+@media (pointer: coarse) { .reading > summary { min-height: 40px; } }
+
 /* A stage still building its scene (Stage.load): its bar and run row have nothing to act on yet. */
 .stage[aria-busy] .stage-bar > :not(.crumbs), .stage[aria-busy] .controls { visibility: hidden; }
 

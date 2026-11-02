@@ -153,6 +153,24 @@ export const chWidths: Chapter = {
     },
     {
       title: 'The expander',
+      reading: {
+        source: 'RISC-V Unprivileged ISA (current AsciiDoc, riscv-isa-manual)', section: 'Extension for Integer Compressed Instructions (Zca)',
+        quote: [
+          'The compressed extensions use a simple compression scheme that offers shorter 16-bit versions of common 32-bit RISC-V instructions when: the immediate or address offset is small, or one of the registers is the zero register (x0), the ABI link register (x1), or the ABI stack pointer (x2), or the destination register and the first source register are identical, or the registers used are the 8 most popular ones.',
+          'The Zca extension allows 16-bit instructions to be freely intermixed with 32-bit instructions, with the latter now able to start on any 16-bit boundary, i.e., IALIGN=16.'],
+        note: 'Each clause of the first sentence is a reason a field can be shortened, and each one is a condition the expander\'s FORM decode ANDs in: rd ≠ 0, a 3-bit register, a small immediate.',
+        quizzes: [
+          { question: 'Which of these has a 16-bit form?', options: ['addi a0, a0, 1', 'addi a0, a1, 1', 'addi a0, a0, 100', 'add a0, a1, a2'], answer: 0,
+          why: ['', 'The destination and the first source differ, and neither is sp.', 'The immediate does not fit the 6-bit signed field.', 'Three different registers fit none of the clauses.'],
+          explain: 'c.addi needs rd = rs1 and an immediate in −32 … 31: two clauses of the quote at once.' },
+          { question: 'The 3-bit register fields of the compressed forms name which registers?', options: ['x0–x7', 'x8–x15', 'x16–x23', 'The 8 least recently used'], answer: 1,
+          why: ['x0–x7 include zero, ra and sp, which have forms of their own.', '', 'Nothing singles out x16–x23.', 'The set is fixed in the encoding, not adaptive.'],
+          explain: 'x8–x15 (s0, s1, a0–a5) are the "8 most popular" registers; a value kept in t0–t6 gives the 32-bit form.' },
+          { question: 'A 32-bit instruction can now start at an address that is a multiple of 2 but not of 4. What does the fetch have to cope with?', options: ['Nothing: it fetches a word at the PC', 'An instruction straddling two words', 'An alignment trap on every such jump', 'A second program counter'], answer: 1,
+          why: ['A word fetch at a 2-byte address would be misaligned.', '', 'With C the 2-byte alignment is legal.', 'One PC is enough; it counts in units of 2.'],
+          explain: 'The instruction\'s halves can sit in two consecutive words, which is why the fetch unit reads two banks and swaps them.' },
+        ],
+      },
       body: `
         <p>Each 16-bit instruction is exactly one 32-bit instruction, so the C core rewrites it in front of the decoder from
         <a href="#/c/cpu">chapter 14</a>, which never learns that compressed code exists. On the input, 32 bits: the parcel at the PC in bits 15:0
