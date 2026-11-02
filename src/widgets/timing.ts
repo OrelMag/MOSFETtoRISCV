@@ -17,9 +17,9 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
   const body = h('div');
   let model = defaultDelay();
   const sw = h('span');
-  const title = h('h4', null, h('span', null, 'Critical path ', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing')), sw);
-  const el = h('div', { class: 'mem-panel', 'data-dock': 'left', style: 'width:300px' }, title, body);
-  title.addEventListener('click', () => el.classList.toggle('collapsed'));
+  // folded by the stage (data-fold): beside a CPU panel on a small stage it starts folded rather than squeeze the circuit to a thumbnail
+  const title = h('h4', null, h('span', null, 'Critical path ', h('span', { style: 'font-weight:500;color:var(--muted)' }, 'static timing')), sw, h('span', { class: 'fold-hint' }));
+  const el = h('div', { class: 'mem-panel', 'data-dock': 'left', 'data-fold': 'narrow', style: 'width:300px' }, title, body);
   const design = stage.sim!.design;
   const reportOf = (m: DelayModel) => {
     let r = reports[m].get(design);

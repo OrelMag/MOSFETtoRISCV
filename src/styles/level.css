@@ -73,7 +73,7 @@
    the result (its failures are the player's rows) takes a few lines. */
 .sb-levelmode .sb-mid { min-height: 50%; }
 .sb-levelmode .sb-bottom { min-height: 0; overflow-y: auto; }
-.sb-chal-screen:has(.sb-chal-tests) .sb-chal-body { max-height: 92px; }
+.sb-chal-screen:has(.sb-chal-tests) .sb-chal-body { max-height: 150px; } /* the verdict and its failures (a core level lists more rows: they scroll) */
 .sb-chal-sum { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 12.5px var(--font-mono); color: var(--text-2); min-width: 0; }
 .sb-chal-sum.muted { font-family: var(--font-ui); color: var(--muted); }
 .sb-chal-sum .v { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-ui); }
@@ -138,7 +138,7 @@
   .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
-  .sb-levelmode .sb-mid { min-height: 170px; }
+  .sb-levelmode .sb-mid { min-height: 230px; }
   /* the strip and the run row take no more than they must: the goal line is in the Task tab and the level badge is the
      bottom bar's (the canvas gains ~50 px of a 844 px phone) */
   .sb-levelmode .sb-chal-sum.sb-chal-goal, .sb-levelmode .sb-controls .sb-level { display: none; }

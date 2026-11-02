@@ -67,8 +67,8 @@
 /* the charts */
 .mos-plot .grid { stroke: var(--border); stroke-width: 1; }
 .mos-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
-.mos-plot .tick { font: 10.5px var(--font-mono); fill: var(--muted); }
-.mos-plot .axl { font: 600 11px var(--font-ui); fill: var(--text-2); }
+.mos-plot .tick { font: calc(10.5px * var(--tk, 1)) var(--font-mono); fill: var(--muted); }
+.mos-plot .axl { font: 600 calc(11px * (1 + (var(--tk, 1) - 1) * 0.7)) var(--font-ui); fill: var(--text-2); }
 .mos-plot .vt { stroke: var(--muted); stroke-dasharray: 3 3; }
 .mos-plot .fam { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
 .mos-plot .cur { fill: none; stroke: var(--accent); stroke-width: 2.4; }
@@ -76,7 +76,7 @@
 .mos-plot .op { fill: var(--w1); stroke: var(--surface); stroke-width: 2; }
 .mos-plot .rg-lin { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
 .mos-plot .rg-sat { fill: color-mix(in srgb, var(--good) 8%, transparent); }
-.mos-plot .rl { font: 600 11px var(--font-ui); }
+.mos-plot .rl { font: 600 calc(11px * (1 + (var(--tk, 1) - 1) * 0.7)) var(--font-ui); }
 .mos-plot .rl.lin { fill: var(--accent); } .mos-plot .rl.sat { fill: var(--good); }
 .mos-plot .t50 { stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 3 3; }
 .mos-plot .rl.t50l { fill: var(--warn); }

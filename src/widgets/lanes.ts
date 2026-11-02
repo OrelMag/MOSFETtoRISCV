@@ -115,7 +115,7 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
       return el;
     });
     const title = h('h4', null, `Warp: ${n} lanes, one PC`, h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
+    const el = h('div', { class: 'mem-panel cpu-panel warp-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-keep': 'open' }, title,
       h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), slow.el, status,
         h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
         h('div', { class: 'cpu-sec' }, 'Active mask, instruction by instruction', h('span', { class: 'cpu-sec-hint' }, 'filled: the lane ran it')), grid,

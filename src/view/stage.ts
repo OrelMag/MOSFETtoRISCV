@@ -2091,7 +2091,8 @@ export class Stage {
    * folding: a click on its title folds it to that title or unfolds it, and the fit leaves room for it
    * while it is unfolded (syncInset). A bottom-left panel (`data-dock="left"`) is the stage's to fold only with
    * `data-fold` (the others fold themselves: one listener each, or a click would fold and unfold at once).
-   * With `data-fold="narrow"` a panel may start folded (autoFold), unless the learner already folded or unfolded
+   * With `data-fold="narrow"` a panel may start folded (autoFold; `data-keep="open"`: the step's text is about it, so it
+   * starts open unless the stage has no room beside it at all), unless the learner already folded or unfolded
    * one on that side by hand (foldChoice, kept for the page's life).
    */
   private foldable(el: HTMLElement): void {
@@ -2131,7 +2132,11 @@ export class Stage {
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < BB_READ_PX ? null : s;
     };
-    apply(chooseFolds(fold.length, scaleOf, fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? null)));
+    const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : null));
+    let pick = chooseFolds(fold.length, scaleOf, mine(true));
+    // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
+    if (scaleOf(pick) === null) pick = chooseFolds(fold.length, scaleOf, mine(false));
+    apply(pick);
   }
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
@@ -2144,11 +2149,32 @@ export class Stage {
     // the challenge note keeps clear of the right-docked panels, folded ones too (app.css .stage-notes)
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
+    this.clearNotesOfPanels();
     this.boardCover();
     this.drillLayout();
     this.dockOut();
     this.placeHint();
     this.view.setCover(this.covers(), refit);
+  }
+
+  /** A challenge note drawn at the canvas's top left (app.css .stage-notes with a right-docked panel) must not sit on a
+   *  left-docked panel that starts at the top (a size picker): it moves right of the panel (--note-left). */
+  private clearNotesOfPanels(): void {
+    const notes = this.canvas.querySelector<HTMLElement>(':scope > .stage-notes');
+    if (!notes) return;
+    notes.style.removeProperty('--note-left');
+    if (getComputedStyle(notes).left === 'auto') return; // top right: clear of the left panels already
+    let left = 0;
+    for (const n of notes.children) {
+      const r = n.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      for (const p of this.panels) {
+        if (p.el.dataset.dock === 'right') continue;
+        const q = p.el.getBoundingClientRect();
+        if (q.width > 0 && q.height > 0 && r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom) left = Math.max(left, q.right - this.canvas.getBoundingClientRect().left + 12);
+      }
+    }
+    if (left) notes.style.setProperty('--note-left', `${left}px`);
   }
 
   /** The boards keep clear of the right-docked panels that are open; a folded one is only its title, so the boards

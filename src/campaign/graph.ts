@@ -1,7 +1,8 @@
 // The campaign as a graph: closures, the parts a level may use, and each level's status from
 // the learner's progress. No DOM.
 
-import { type LibRule, transistorLevel } from '../editor/challenges';
+import { type LibRule, libAllowed, transistorLevel } from '../editor/challenges';
+import { libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
 import { NODES, nodeById } from './nodes';
 import type { CampaignNode, Status } from './types';
@@ -55,8 +56,18 @@ export function ruleFor(id: string): LibRule {
   const lib = new Set<string>(['nand', ...(n0?.gives ?? []), ...(n0?.givesOf?.() ?? [])]);
   for (const a of ancestors(id)) for (const u of nodeById(a)?.unlocks ?? []) lib.add(u);
   if (gates) for (const u of lib) { const d = u.endsWith('*') ? undefined : resolveComponent(u); if (d && transistorLevel(d)) lib.delete(u); }
-  const n = lib.size - 1;
-  return { lib: [...lib].sort(), label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only', ...(gates ? { gates } : {}) };
+  const rule: LibRule = { lib: [...lib].sort() };
+  const n = unlockedPartCount(rule);
+  return { ...rule, label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only', ...(gates ? { gates } : {}) };
+}
+
+/** How many parts the palette's "Unlocked parts" lists for a rule (editor/challengeui.ts unlockedItems): a `prefix*` stands
+ *  for the library parts it matches, not for one entry, so the badge counts what is on the shelf. */
+export function unlockedPartCount(rule: Pick<LibRule, 'lib'>): number {
+  const ids = new Set<string>();
+  for (const c of libraryItems()) for (const it of c.items) if (it.id !== 'nand' && libAllowed(rule as LibRule, it.id)) ids.add(it.id);
+  for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && resolveComponent(id)) ids.add(id);
+  return ids.size;
 }
 
 /** A node's progress as the graph needs it. */

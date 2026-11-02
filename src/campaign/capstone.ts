@@ -24,7 +24,7 @@ import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
 import { coreTests, pipeTests } from './coretests';
 import { rng } from './drills';
-import { ruleFor } from './graph';
+import { ruleFor, unlockedPartCount } from './graph';
 
 export const capstoneById = (id: string): Capstone | undefined => CAPSTONES.find((c) => c.id === id);
 
@@ -45,7 +45,7 @@ function tierRule(ids: readonly string[], drop: readonly string[]): LibRule {
   const lib = new Set<string>(['nand']);
   for (const id of ids) for (const u of ruleFor(id).lib) lib.add(u);
   for (const d of drop) lib.delete(d);
-  const n = lib.size - 1;
+  const n = unlockedPartCount({ lib: [...lib] });
   return { lib: [...lib].sort(), label: `NAND + ${n} unlocked part${n === 1 ? '' : 's'}`, gates: true };
 }
 

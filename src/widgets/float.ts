@@ -24,7 +24,7 @@ export function encodeNumber(x: number, f: FpFormat): number {
   return roundTo(sign, mant, (e || 1) - 1075, f);
 }
 
-const fmtVal = (v: number) => (Number.isNaN(v) ? 'NaN' : !Number.isFinite(v) ? (v > 0 ? '+∞' : '−∞') : Object.is(v, -0) ? '−0' : Math.abs(v) >= 1e-4 && Math.abs(v) < 1e7 ? String(+v.toPrecision(9)) : v.toExponential(7));
+const fmtVal = (v: number) => (Number.isNaN(v) ? 'NaN' : !Number.isFinite(v) ? (v > 0 ? '+∞' : '−∞') : v === 0 ? (Object.is(v, -0) ? '−0' : '+0') : Math.abs(v) >= 1e-4 && Math.abs(v) < 1e7 ? String(+v.toPrecision(9)) : v.toExponential(7));
 
 /** Click bits, type a number, step by one ulp: what a float really is. */
 export function floatExplorer(): Widget {
@@ -33,6 +33,7 @@ export function floatExplorer(): Widget {
   const info = h('div', { class: 'fx-info' });
   const input = h('input', { type: 'text', value: '0.1', class: 'fx-in', 'aria-label': 'decimal value' }) as HTMLInputElement;
   const N = () => 1 + f.E + f.M;
+  const note = h('div', { class: 'sub fx-note', role: 'status' });
   const render = () => {
     const n = N(), p = parts(bits, f), v = fpValue(bits, f);
     grid.replaceChildren(...Array.from({ length: n }, (_, k) => {
@@ -51,11 +52,23 @@ export function floatExplorer(): Widget {
       h('div', null, h('span', { class: 'fx-k' }, 'value'), h('strong', null, fmtVal(v)), h('span', { class: 'sub' }, `  ${p.kind}`)),
       h('div', null, h('span', { class: 'fx-k' }, 'bits'), h('code', null, `0x${bits.toString(16).toUpperCase().padStart(Math.ceil(n / 4), '0')}`)),
       h('div', null, h('span', { class: 'fx-k' }, 'meaning'), h('code', null, formula)),
-      h('div', null, h('span', { class: 'fx-k' }, 'spacing'), h('span', null, Number.isFinite(ulp) ? `the next float is ${fmtVal(next)}, ${fmtVal(ulp)} away (1 ulp)` : '–')),
+      h('div', null, h('span', { class: 'fx-k' }, 'spacing'), h('span', null, Number.isFinite(ulp) ? `the next float is ${fmtVal(next)}, ${fmtVal(ulp)} away (1 ulp)`
+        : Number.isFinite(v) && v !== 0 && !Number.isFinite(next) && !Number.isNaN(next) ? `the next encoding is ${fmtVal(next)}: the largest finite ${v < 0 ? 'magnitude' : 'value'} of the format` : '–')),
       h('div', { class: 'sub' }, `sign 1 bit · exponent ${f.E} bits (bias ${b}) · fraction ${f.M} bits · ${n} bits in all · largest ${fmtVal(fpValue((2 ** f.E - 2) * 2 ** f.M + 2 ** f.M - 1, f))}, smallest normal ${fmtVal(2 ** (1 - b))}, smallest subnormal ${fmtVal(2 ** (1 - b - f.M))}`));
   };
   input.addEventListener('change', () => {
-    const x = Number(input.value.trim().replace(/^inf(inity)?$/i, 'Infinity').replace(/^-inf(inity)?$/i, '-Infinity'));
+    const t = input.value.trim();
+    note.textContent = '';
+    if (!t) { note.textContent = 'Type a decimal number, such as 0.1, -2.5e3, inf or nan, or 0x… for a bit pattern.'; return; }
+    // 0x… is a bit pattern of the format, not the decimal number it would spell
+    if (/^0x[0-9a-f]+$/i.test(t)) {
+      const b = parseInt(t.slice(2), 16);
+      if (b >= 2 ** N()) note.textContent = `${t} has more than ${N()} bits: this format's patterns run 0x0 to 0x${(2 ** N() - 1).toString(16).toUpperCase()}.`;
+      else { bits = b; render(); }
+      return;
+    }
+    const x = /^[+-]?nan$/i.test(t) ? NaN : Number(t.replace(/^\+?inf(inity)?$/i,'Infinity').replace(/^-inf(inity)?$/i, '-Infinity'));
+    if (Number.isNaN(x) && !/^[+-]?nan$/i.test(t)) { note.textContent = `"${t}" is not a number: type a decimal such as 0.1, -2.5e3, inf or nan, or 0x… for a bit pattern.`; return; }
     bits = encodeNumber(x, f);
     render();
   });
@@ -67,10 +80,10 @@ export function floatExplorer(): Widget {
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
       h('h3', null, 'IEEE 754, bit by bit'),
-      h('p', { class: 'sub' }, 'Click any bit, or type a number (it is rounded to the nearest float). Red: sign. Blue: exponent. Green: fraction.'),
+      h('p', { class: 'sub' }, 'Click any bit, or type a decimal number (it is rounded to the nearest float) or 0x… for a bit pattern. Red: sign. Blue: exponent. Green: fraction.'),
       h('div', { class: 'param-row' }, sel, input,
         h('button', { class: 'btn sm', onclick: () => step(-1) }, '− 1 ulp'), h('button', { class: 'btn sm', onclick: () => step(1) }, '+ 1 ulp')),
-      grid, info)),
+      grid, info, note)),
   };
 }
 

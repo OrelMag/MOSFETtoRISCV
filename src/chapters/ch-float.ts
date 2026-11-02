@@ -813,13 +813,13 @@ export const chFloat: Chapter = {
       challenge: {
         kind: 'quiz', question: 'fadd.s fa0, fa0, ft0 repeated: how many cycles does each one take on this pipeline, and why?',
         options: [
-          'Three: it waits in D while the previous one is in E and in M, then takes its result forwarded from W',
+          'Three',
           'One: forwarding removes every stall',
           'Two: one stall for the load-use hazard',
           'Six: one per stage',
         ], answer: 0,
         why: ['', 'Forwarding moves a value that exists. The sum exists only at the end of X, two cycles after the next fadd wants it in E.', 'There is no load here, and the wait is two stall cycles, so each fadd takes three cycles.', 'That is one instruction\'s latency with no overlap. The next fadd only waits until its producer reaches W, while the stages keep overlapping.'],
-        explain: 'The sum exists only at the end of X. The next fadd can enter E when its producer reaches W, three cycles after the producer entered E: two stall cycles each. Twelve dependent adds take 45 cycles with the fill; spread over three accumulators the same adds have no stalls at all (23 instructions in 35 cycles).',
+        explain: 'Three: each waits in D while the previous one is in E and in M, then takes its result forwarded from W. The sum exists only at the end of X. The next fadd can enter E when its producer reaches W, three cycles after the producer entered E: two stall cycles each. Twelve dependent adds take 45 cycles with the fill; spread over three accumulators the same adds have no stalls at all (23 instructions in 35 cycles).',
       },
     },
     {

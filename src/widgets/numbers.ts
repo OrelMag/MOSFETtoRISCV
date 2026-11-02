@@ -102,7 +102,8 @@ export function numberWidget(initialWidth: 4 | 8 = 8, showWheel = true): Widget 
         h('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px' }, h('h3', null, 'Bits → numbers'), widthSel),
         h('p', { class: 'sub' }, 'Click bits to flip them. Each bit is worth twice the one to its right. In two\'s complement the top bit is worth a negative amount (marked *).'),
         bitsRow, readout, ops, msg),
-      h('div', { class: 'panel' }, h('h3', null, 'The number wheel'), h('p', { class: 'sub' }, 'Fixed-width numbers wrap around. The same bits mean different numbers depending on how we read them.'), wheelHost)));
+      // no empty card when the wheel is off
+      showWheel ? h('div', { class: 'panel' }, h('h3', null, 'The number wheel'), h('p', { class: 'sub' }, 'Fixed-width numbers wrap around. The same bits mean different numbers depending on how we read them.'), wheelHost) : null));
   render();
   return { el };
 }

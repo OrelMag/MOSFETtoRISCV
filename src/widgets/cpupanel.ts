@@ -11,6 +11,7 @@ import { MC_FIELDS, MC_FSM_SPEC, MC_STATES, type Microprogram, dualPipeCpu, micr
 import { fsmView } from './fsmpanel';
 import { isBook } from '../lib/ucode';
 import { assemble, type AsmResult } from '../riscv/asm';
+import { hardwareGaps, hwFeaturesOf } from '../riscv/hwgaps';
 import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/cosim';
 import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
@@ -209,9 +210,14 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
 
     // Errors go to the gutter as you type (debounced) and below the box on Assemble & load.
     const errBox = h('div', { class: 'asm-errors' });
-    const check = debounce(() => editor.setDiagnostics(assemble(editor.value).errors), 300);
+    // Instructions the assembler takes but this CPU's gates lack (mul on RV32I, lb on a word-only memory): noted, not refused.
+    const gaps = (r: AsmResult) => hardwareGaps(r, hwFeaturesOf(opts));
+    const check = debounce(() => { const r = assemble(editor.value); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
     const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
     editor.el.classList.add('asm-editor');
+    // Still shown after Assemble & load rebuilds the panel: the program uses what the gates lack, so a mismatch is expected.
+    const gapNotes = gaps(opts.asm);
+    const hwNote = h('div', { class: 'asm-errors', role: 'status' }, gapNotes.length ? `Not in this CPU’s hardware: ${gapNotes.map((e) => `line ${e.line}: ${e.message}`).join('; ')}. The golden model runs them; the gates will not, so expect a mismatch.` : '');
     const editWrap = h('div', { class: 'cpu-edit', style: 'display:none' }, editor.el, errBox,
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px' },
         h('button', {
@@ -222,6 +228,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
               errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
               return;
             }
+            editor.setDiagnostics(gaps(r));
             // the ROM has a fixed size (an out-of-order scene sizes it to the program): a longer program wraps the PC
             const cap = opts.ooo ? Infinity : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
             if (r.words.length > cap) {
@@ -267,7 +274,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.extraPanels?.length ? [] : [sel, editBtn]), runBtn),
       slowCtl.el,
-      editWrap, status, haltLine, now,
+      editWrap, hwNote, status, haltLine, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       ...(narrKind ? [h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, narrKind === 'cycle' ? 'this cycle, stage by stage' : 'the last instruction, unit by unit')), narrBox] : []),

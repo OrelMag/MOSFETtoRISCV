@@ -8,7 +8,7 @@ import {
   columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, FET_PIPE_R, fetWater, loopWater, pinchRadius, wasted,
   type ColumnIn, type ColumnStep, type FetWater, type LoopState, type P3,
 } from './water';
-import { mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
+import { htmlSub, mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
 
 const approach = (cur: number, tgt: number, dt: number, settle: boolean): number =>
   settle ? tgt : Math.abs(tgt - cur) < 0.004 ? tgt : cur + (tgt - cur) * Math.min(1, dt * 12);
@@ -31,7 +31,7 @@ export function loopScene(get: () => LoopState): WaterScene {
       { text: 'tank height = voltage', p: [-2.6, 2.95, 0.6], side: 't' },
       { text: 'valve = switch', p: [-1.0, 1.05, 0.4], side: 't' },
       { text: 'wheel = lamp', p: [1.0, 1.55, 0.3], side: 't' },
-      { text: 'narrow pipe = resistance', p: [1.95, 0.05, 0.3], side: 'b' },
+      { text: 'narrow pipe = resistance', p: [2.45, 0.5, 0.3], side: 'r' }, // right of the corner: below it sat on the second lamp's wheel
       { text: 'pump = battery', p: [-1.4, -2.25, 0.3], side: 'b' },
       { text: 'return pipe = ground, 0 V', p: [0.6, -1.95, 0.5], side: 'b', minor: true },
     ],
@@ -205,7 +205,7 @@ export function cmosFigure(weak: boolean): FigureMount {
       cells[1].b.textContent = `${Math.round(s.p * 100)} %`;
       cells[2].b.textContent = `${Math.round(s.n * 100)} %`;
       cells[3].b.textContent = `${Math.round(wasted(s) * 100)} %`;
-      pill.textContent = w.text;
+      pill.replaceChildren(...htmlSub(w.text));
       pill.className = `wt-pill ${w.tone === 'mid' ? '' : w.tone}`;
       rangeOut.textContent = `${(inp.vin * COLUMN_VOLTS).toFixed(2)} V`;
       shortBtn.setAttribute('aria-pressed', String(inp.short));
@@ -214,10 +214,10 @@ export function cmosFigure(weak: boolean): FigureMount {
     const mount = mountWater(stageHost, scene, readout);
     const change = () => { scene.state.step = columnStep(scene.state.out, inp, 0); readout(); mount.kick(); };
     range.addEventListener('input', () => { inp.vin = Number(range.value); change(); });
-    shortBtn.addEventListener('click', () => { inp.short = !inp.short; change(); });
+    shortBtn.addEventListener('click', () => { inp.short = !inp.short; if (inp.short) inp.weak = false; change(); });
     weakBtn.addEventListener('click', () => {
       inp.weak = !inp.weak;
-      if (inp.weak) { inp.vin = 0; range.value = '0'; }
+      if (inp.weak) { inp.vin = 0; range.value = '0'; inp.short = false; } // the two states exclude each other
       change();
     });
     readout();

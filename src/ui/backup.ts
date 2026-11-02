@@ -92,6 +92,11 @@ export interface Summary {
   campaignSolved: number;
   campaignStarted: number;
   puzzles: number;
+  /** Notes and bookmarks (ui/notes.ts), questions in the review queue (ui/review.ts), chapters tested out in My path (learn/store.ts). */
+  notes: number;
+  bookmarks: number;
+  reviewed: number;
+  testedOut: number;
   projects: number;
   chips: number;
   /** Other keys: layouts, panel widths, hints seen, and the like. */
@@ -104,7 +109,7 @@ const parse = (s: string | null | undefined): unknown => {
 
 /** What `kv` holds, counted. */
 export function summarize(kv: ListKV): Summary {
-  const out: Summary = { steps: 0, chapters: 0, checks: 0, campaignSolved: 0, campaignStarted: 0, puzzles: 0, projects: 0, chips: 0, other: 0 };
+  const out: Summary = { steps: 0, chapters: 0, checks: 0, campaignSolved: 0, campaignStarted: 0, puzzles: 0, notes: 0, bookmarks: 0, reviewed: 0, testedOut: 0, projects: 0, chips: 0, other: 0 };
   const st = parse(kv.getItem(SETTINGS_KEY));
   if (isObj(st)) {
     if (isObj(st.visited)) for (const v of Object.values(st.visited)) if (Array.isArray(v) && v.length) { out.chapters++; out.steps += v.length; }
@@ -117,6 +122,9 @@ export function summarize(kv: ListKV): Summary {
   }
   const pz = parse(kv.getItem(PUZZLES_KEY));
   if (isObj(pz)) out.puzzles = Object.keys(pz).length;
+  for (const it of Object.values(sanitizeNotes(parse(kv.getItem(NOTES_KEY))).items)) if (!it.gone) out[it.type === 'bookmark' ? 'bookmarks' : 'notes']++;
+  out.reviewed = Object.keys(sanitizeReview(parse(kv.getItem(REVIEW_KEY))).memos).length;
+  out.testedOut = Object.keys(sanitizeLearn(parse(kv.getItem(LEARN_KEY))).tested).length;
   const idx = readProjects(kv);
   out.projects = idx.list.filter((p) => p.id === MAIN_PROJECT ? !!kv.getItem(SANDBOX_KEY) : !!kv.getItem(projectKey(p.id))).length;
   for (const p of idx.list) {
@@ -140,6 +148,9 @@ export function describe(s: Summary): string[] {
   out.push(s.campaignSolved || s.campaignStarted ? `Campaign: ${n(s.campaignSolved, 'level')} solved, ${s.campaignStarted} started` : 'Campaign: no progress');
   out.push(s.puzzles ? `Puzzles: ${n(s.puzzles, 'puzzle')} solved` : 'Puzzles: none solved');
   out.push(`Sandbox: ${n(s.projects, 'project')}, ${n(s.chips, 'chip')}`);
+  if (s.notes || s.bookmarks) out.push(`Notes: ${n(s.notes, 'note')}, ${n(s.bookmarks, 'bookmark')}`);
+  if (s.reviewed) out.push(`Review queue: ${n(s.reviewed, 'question')} scheduled`);
+  if (s.testedOut) out.push(`My path: ${n(s.testedOut, 'chapter')} tested out`);
   if (s.other) out.push(`${n(s.other, 'small preference')} (layouts, panel sizes, hints seen)`);
   return out;
 }

@@ -334,7 +334,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .narrative-foot .count { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; flex: none; }
 /* a neighbouring chapter's title gives way (ellipsis) before the step count wraps */
 .narrative-foot .btn { min-width: 0; }
-.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; }
+/* wrap at word boundaries onto a second line before an ellipsis; the full title is also the tooltip */
+.narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
+.narrative-foot .btn .lbl { overflow: hidden; text-overflow: ellipsis; white-space: normal; text-align: left; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+/* a neighbour's title needs the room more than the key hint does (the shortcut stays: aria-keyshortcuts, the help sheet) */
+.narrative-foot .btn:has(.lbl) .kbd-hint { display: none; }
 .narrative-foot .btn:not(:has(.lbl)) { flex: none; } /* a plain Back / Next keeps its key hint whole */
 
 /* challenge */
@@ -512,7 +516,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* a panel docked at the top right (the CPU, bus, DRAM, screen panels…, folded or not) holds that corner: the note goes
    under the level badge, as wide as the canvas left of the panel allows (--panel-inset: stage.ts syncCover) */
 @media (min-width: 761px) { .canvas:has(> [data-dock='right']) > .stage-notes {
-  top: 44px; right: auto; left: 12px; align-items: flex-start; max-width: min(380px, calc(100% - var(--panel-inset, 0px) - 12px));
+  top: 44px; right: auto; left: var(--note-left, 12px); align-items: flex-start; max-width: min(380px, calc(100% - var(--note-left, 12px) - var(--panel-inset, 0px)));
 } }
 @media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .stage-notes { top: 56px; } }
 .stage-goal {
@@ -1210,8 +1214,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 :root[data-wide] .bench:not(:has(> .stage.widget-mode)) > :is(.library, .inspector) { display: none; }
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
-.bench-tabs { display: flex; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 8px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bench-tabs { display: flex; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+.bench-tab { padding: 6px 6px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.hw-inner > .bench-tabs { gap: 2px; }
+.hw-inner .bench-tab { padding: 6px 8px; font-size: 13.5px; }
 .bench-tab:hover { color: var(--text); }
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
 .widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -1600,6 +1606,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-big th.vert { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; padding: 6px 2px; }
 .mc-big td { font-size: 12px; padding: 3px 5px; }
 .mc-panel.compact { width: 230px; }
+/* the tab strip and the Microcode… button wrap onto a row of their own rather than clip in 230 px */
+.mc-panel.compact h4 { flex-wrap: wrap; row-gap: 4px; }
+.mc-panel.compact h4 .mc-seg { margin-left: 0; }
 .mc-panel.compact .mc-row { grid-template-columns: 18px 70px 0 auto; }
 .mc-panel.diagram { width: 640px; }
 .mc-panel.compact.diagram { width: 520px; }

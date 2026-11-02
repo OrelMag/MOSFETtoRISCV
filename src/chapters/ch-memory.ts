@@ -48,9 +48,9 @@ export const chLatches: Chapter = {
       },
       {
         question: 'In the master–slave flip-flop, clk is low. Which latch is transparent?',
-        options: ['The master: d flows into it while the slave holds q', 'The slave', 'Both', 'Neither'],
+        options: ['The master', 'The slave', 'Both', 'Neither'],
         answer: 0,
-        explain: 'The master follows d while the clock is low. At the rising edge it closes on d, and the slave opens to show it.',
+        explain: 'The master follows d while the clock is low (d flows into it while the slave holds q). At the rising edge it closes on d, and the slave opens to show it.',
         why: ['', 'The slave is open while clk is high: it shows what the master caught at the rising edge.', 'Then d would race straight through to q. The opposite enables exist to prevent exactly that.', 'One of the two is always open; the edge is the instant they swap.'],
       },
       {
