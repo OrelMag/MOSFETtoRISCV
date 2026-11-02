@@ -58,7 +58,7 @@ export interface FetWater {
   bore: number;
 }
 /** The pipe's radius in the faucet scene, and the narrowest the outlet is drawn (a shut faucet still shows a pinhole). */
-export const FET_PIPE_R = 0.11, FET_PINCH_MIN_R = 0.03;
+export const FET_PIPE_R = 0.17, FET_PINCH_MIN_R = 0.02;
 /** The outlet's drawn radius: the pipe's at the widest (V_GS = VDD), the pinhole's when cut off. */
 export const pinchRadius = (bore: number): number => FET_PINCH_MIN_R + (FET_PIPE_R - FET_PINCH_MIN_R) * bore;
 const ID_MAX = current(VDD - VT, VDD).id;

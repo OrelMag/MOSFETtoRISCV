@@ -5,7 +5,7 @@
 import type { FigureMount } from '../ui/analogyfigs';
 import { h } from '../ui/dom';
 import {
-  columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, fetWater, loopWater, pinchRadius, wasted,
+  columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, FET_PIPE_R, fetWater, loopWater, pinchRadius, wasted,
   type ColumnIn, type ColumnStep, type FetWater, type LoopState, type P3,
 } from './water';
 import { mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
@@ -108,9 +108,10 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       p.tank(-2.4, -0.4, 0, 1.3, 2.4, 1.0, 0.05 + level * 0.9);
       p.tank(2.4, -0.4, 0, 1.3, 2.4, 1.0, 0.02);
       // The outlet: a nozzle whose bore is the overdrive (water.ts pinchRadius), flanged.
-      p.tube([-1.75, -0.2, 0], [1.0, -0.2, 0], 0.11);
+      p.tube([-1.75, -0.2, 0], [1.0, -0.2, 0], FET_PIPE_R);
       p.tube([1.0, -0.2, 0], [1.75, -0.2, 0], pinchRadius(f.bore));
-      p.flange([1.0, -0.2, 0], 0.16, [1, 0, 0]); p.flange([1.75, -0.2, 0], 0.16, [1, 0, 0]);
+      p.flange([1.0, -0.2, 0], 0.23, [1, 0, 0]); p.flange([1.75, -0.2, 0], 0.23, [1, 0, 0]);
+      p.flange([1.375, -0.2, 0], pinchRadius(f.bore) + 0.04, [1, 0, 0]); // a collar hugging the neck, so the narrowing reads
       p.valve([0, -0.2, 0], open, p.P.nmos);
       if (f.flow > 0) p.drops(FET_PATH, FET_DROPS, phase);
     },
