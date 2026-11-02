@@ -18,6 +18,7 @@ import { cpuScene } from './cpupanel';
 import { instrUse } from './insthw';
 import { instrBreakdown } from './instrfields';
 import { clearInstr, markInstr } from './slowctl';
+import { fmtCount } from '../sim/loadplan';
 import '../styles/python.css';
 
 /** The chapter's CPU: the single-cycle RV32I of chapter 14 with a 256-word ROM and 64 words of data memory. */
@@ -159,10 +160,10 @@ export function pyCost(ids: string[]): Widget {
         ...lines.flatMap((r) => [
           h('code', { class: 'k', title: c.pcsOfPy(r.n).map((pc) => disasm(c.words[pc >>> 2], pc)).join('\n') }, r.t.trim()),
           h('span', { class: 'i' }, String(r.ins)),
-          h('span', { class: 'bw' }, h('span', { class: 'b', style: `width:${(100 * r.own / max).toFixed(1)}%` }), r.rt ? h('span', { class: 'b rt', style: `width:${(100 * r.rt / max).toFixed(1)}%`, title: `${r.rt.toLocaleString('en')} cycles in the runtime routine` }) : ''),
-          h('span', { class: 'v' }, (r.own + r.rt).toLocaleString('en')),
+          h('span', { class: 'bw' }, h('span', { class: 'b', style: `width:${(100 * r.own / max).toFixed(1)}%` }), r.rt ? h('span', { class: 'b rt', style: `width:${(100 * r.rt / max).toFixed(1)}%`, title: `${fmtCount(r.rt)} cycles in the runtime routine` }) : ''),
+          h('span', { class: 'v' }, fmtCount((r.own + r.rt))),
         ])),
-      h('p', { class: 'py-hint' }, `${p.steps.toLocaleString('en')} cycles in all; ${c.words.length} instructions in the ROM`,
+      h('p', { class: 'py-hint' }, `${fmtCount(p.steps)} cycles in all; ${c.words.length} instructions in the ROM`,
         c.layout!.runtime.length ? h('span', null, '; ', h('span', { class: 'py-sw rt' }), ` inside ${c.layout!.runtime.map((r) => `rt.${r}`).join(' and ')}`) : '', '.'));
   };
   sel.value = ids[0];
@@ -358,14 +359,14 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       const st = cpuState(sim);
       const cur = c.pyOfPc(st.pc), scope = scopeAt(c, st.pc);
       const shown = cur ?? (scope === null ? lastLine : null);
-      status.textContent = st.pc === haltPc ? `Halted after ${stage.cycles.toLocaleString('en')} cycles.`
+      status.textContent = st.pc === haltPc ? `Halted after ${fmtCount(stage.cycles)} cycles.`
         : cur !== null ? `Running line ${cur}${scope ? ` in ${scope}()` : ''}.` : scope === null ? `Inside a runtime routine, for line ${lastLine}.` : 'Setting up: the stack and the output pointer.';
       const keep = listing.scrollTop;
       listing.replaceChildren(...lines.map((t, i) => {
         const n = i + 1, k = cycles.get(n) ?? 0, r = rtCycles.get(n) ?? 0;
         const e = h('div', { class: `ln${n === shown ? ' cur' : ''}${n === selLine ? ' sel' : ''}`, title: c.pcsOfPy(n).length ? 'Show its instructions and their hardware' : '' },
           h('span', { class: 'a' }, String(n)), h('span', { class: 't' }, t || ' '),
-          k + r ? h('span', { class: 'py-cyc', title: `${k} cycles on this line${r ? `, ${r} in a runtime routine` : ''}` }, (k + r).toLocaleString('en')) : '');
+          k + r ? h('span', { class: 'py-cyc', title: `${k} cycles on this line${r ? `, ${r} in a runtime routine` : ''}` }, fmtCount((k + r))) : '');
         if (c.pcsOfPy(n).length) e.addEventListener('click', () => { selLine = selLine === n ? null : n; update(); });
         return e;
       }));
@@ -379,8 +380,8 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       thisLine.replaceChildren(...(focus ? [
         h('span', null, 'line'), h('span', null, h('code', null, (lines[focus - 1] ?? '').trim())),
         h('span', null, 'instructions'), h('span', { class: 'py-ins' }, ...pcs.map((p) => h('code', { class: p === st.pc ? 'now' : '' }, `${p.toString(16).padStart(3, '0')} ${asmText.get(p) ?? disasm(c.words[p >>> 2], p)}`))),
-        h('span', null, 'clock cycles so far'), h('span', null, `${(cycles.get(focus) ?? 0).toLocaleString('en')}${rtCycles.get(focus) ? ` + ${rtCycles.get(focus)!.toLocaleString('en')} in rt` : ''}`),
-        ...(sim instanceof GateSim ? [h('span', { title: 'Nets that changed value during its last clock cycle on the gates (glitches included)' }, 'wire toggles, its last cycle'), h('span', null, (lineToggles.get(focus) ?? 0).toLocaleString('en'))] : []),
+        h('span', null, 'clock cycles so far'), h('span', null, `${fmtCount((cycles.get(focus) ?? 0))}${rtCycles.get(focus) ? ` + ${fmtCount(rtCycles.get(focus)!)} in rt` : ''}`),
+        ...(sim instanceof GateSim ? [h('span', { title: 'Nets that changed value during its last clock cycle on the gates (glitches included)' }, 'wire toggles, its last cycle'), h('span', null, fmtCount((lineToggles.get(focus) ?? 0)))] : []),
       ] : [h('span', { class: 'py-hint' }, st.pc === haltPc ? 'The program has halted: click a line to see its instructions.' : 'No Python line yet.'), h('span')]));
       if (selLine !== null) {
         const units = [...new Set(pcs.flatMap((p) => instrUse(c.words[p >>> 2]).units))];

@@ -123,7 +123,7 @@ export class LoadPlan {
   }
 }
 
-/** "256 000": groups of three, thin enough for a card. */
+/** "256 000": groups of three, spaced: the chapters' prose style, so a widget's number reads like the text around it. */
 export const fmtCount = (n: number): string => Math.round(n).toLocaleString('en').replace(/,/g, ' ');
 
 /** "0.3 s" / "12 s". */

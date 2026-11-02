@@ -754,7 +754,7 @@ export const chSingleCycle: Chapter = {
         <p>Both use the ALU as an address adder, and that reuse is why the immediate formats differ: I-type for the load (rs1 + imm<sub>I</sub>), S-type for the store
         (rs1 + imm<sub>S</sub>), with the same rs1 and the same ALU operation. A store has no destination register, so the 5 bits that would hold rd carry the low immediate bits
         and RegWrite stays 0. The data memory reads asynchronously like the instruction memory, so a load's data is on the result mux within the cycle; a store changes memory only at the edge.</p>
-        <div class="try">Pulse to the <code>lw</code> and compare the status bar's "settled in N gate delays" with an <code>addi</code>.</div>`,
+        <div class="try">Pulse to the <code>lw</code> and compare the status bar's "settled in N delays" with an <code>addi</code>.</div>`,
       scene: () => cpuScene({ source: MEMOPS, highlight: ['alu', 'dm', 'res'] }),
       tour: {
         beats: [

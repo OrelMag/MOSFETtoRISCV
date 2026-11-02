@@ -75,7 +75,8 @@ export class StageNotes {
     c.setAttribute('aria-label', `${solved ? 'Challenge solved' : 'Challenge'}: ${this.goalText}. Show the challenge in the text`);
     c.replaceChildren(
       h('span', { class: 'tag' }, solved ? [icon('check', 12), ' Solved'] : 'Challenge'),
-      h('span', { class: 'txt' }, goal));
+      h('span', { class: 'txt' }, goal),
+      h('span', { class: 'more', 'aria-hidden': 'true' }, '›'));
   }
 
   private say(msg: string): void {
