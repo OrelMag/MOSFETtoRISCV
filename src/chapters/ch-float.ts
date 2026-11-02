@@ -118,6 +118,11 @@ export const chFloat: Chapter = {
     {
       title: 'Scientific notation in binary',
       body: `
+        <p>An integer has a fixed step: a 32-bit one counts by 1 from −2³¹ to 2³¹ − 1, about ±2.1 × 10⁹. It cannot hold 0.5, and a quantity of 10⁻¹⁵ (a gate's
+        capacitance in farads) or 10¹⁵ is either lost or out of range. Science, engineering and graphics want the opposite trade: a fixed number of
+        significant digits at any scale. A floating-point number keeps a fixed number of significant bits and moves the binary point: float32 holds 24
+        significant bits (about 7 decimal digits) from about 1.2 × 10⁻³⁸ to 3.4 × 10³⁸, in the same 32 bits as an integer. The price is paid in hardware:
+        before adding two floats it must line up their points, and after every operation it must renormalize and round. That is what this chapter builds.</p>
         <p>A float is a sign, an exponent and a fraction: (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>. The leading 1 is not stored
         (the <em>hidden bit</em>). The exponent is biased, so that comparing two positive floats as integers orders them correctly.
         Exponent 0 marks zero and the <strong>subnormals</strong> (no hidden bit, gradual underflow). Exponent all ones marks

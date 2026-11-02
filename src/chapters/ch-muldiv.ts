@@ -90,6 +90,11 @@ export const chMulDiv: Chapter = {
     {
       title: 'Long multiplication is AND and add',
       body: `
+        <p>RV32I, the instruction set every CPU so far runs, has no multiply or divide. <a href="#/c/python/0">Chapter 15</a>'s compiler turns <code>a * b</code>
+        into <code>rt.mul</code>, a loop of shift and add over the multiplier's bits: five or six instructions a pass, up to 32 passes, close to 200 cycles for one
+        product, and a divide takes a loop of its own. The M extension adds eight instructions (<code>mul</code>, <code>mulh</code>, <code>mulhsu</code>,
+        <code>mulhu</code>, <code>div</code>, <code>divu</code>, <code>rem</code>, <code>remu</code>) and leaves the work to the hardware. This chapter builds that
+        hardware, first the obvious way, then faster ways, each priced in NANDs and delays, and ends by putting it in the CPUs.</p>
         <p>Binary long multiplication is simpler than the decimal kind you learned at school, because every digit of the multiplier is 0 or 1.
         Row i is either a (shifted i places) or zero, so it is <strong>a AND b<sub>i</sub></strong>: one AND gate per bit, called a <span data-show="pp0 pp1 pp2 pp3"><em>partial product</em></span>.</p>
         <p>Then add the rows. This 4×4 <strong>array multiplier</strong> <span data-show="add1 add2 add3">adds row i</span> to the running sum shifted right one place. The bit that

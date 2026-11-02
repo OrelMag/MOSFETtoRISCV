@@ -75,6 +75,11 @@ export const chPipePay: Chapter = {
     {
       title: 'Look-ahead forwarding',
       body: `
+        <p><a href="#/c/pipeline/0">Chapter 17</a>'s pipeline did not pay. Its Execute stage keeps almost the whole single-cycle path: 145 NAND delays with ripple
+        adders against at most 21 for the other stages, so at CPI 1.34 on fib an instruction takes about 194 delays, against the single-cycle CPU's 155. Kogge–Stone
+        adders bring the period to 93, and E is still four times longer than its neighbours. Time per instruction is CPI × period, and this chapter works on
+        both factors: first take the forwarding decision and the branch decision off E's path (a shorter period), then predict branches (fewer cycles lost to
+        taken ones). Each change is measured, since a gain in one factor can cost the other.</p>
         <p>The basic <span data-show="hz">hazard unit</span> compares rs1E/rs2E (the source registers of the instruction
         in E) with rdM/rdW (the destinations of the two ahead of it) <em>during</em> the execute stage, so the comparators
         (XNOR + 5-input AND, then the priority logic) sit in front of the <span data-show="fwdA fwdB">forwarding muxes</span> on the critical path.</p>
