@@ -39,16 +39,16 @@ const OPNAME: Record<number, string> = {
   [OPCODES.LUI]: 'LUI', [OPCODES.AUIPC]: 'AUIPC', [OPCODES.JAL]: 'JAL', [OPCODES.JALR]: 'JALR',
   [OPCODES.BRANCH]: 'BRANCH', [OPCODES.LOAD]: 'LOAD', [OPCODES.STORE]: 'STORE', [OPCODES.OPIMM]: 'OP-IMM',
   [OPCODES.OP]: 'OP', [OPCODES.SYSTEM]: 'SYSTEM', [OPCODES.FENCE]: 'MISC-MEM', [OPCODES.LOADFP]: 'LOAD-FP',
-  [OPCODES.STOREFP]: 'STORE-FP', [OPCODES.OPFP]: 'OP-FP', [OPCODES.AMO]: 'AMO',
+  [OPCODES.STOREFP]: 'STORE-FP', [OPCODES.OPFP]: 'OP-FP', [OPCODES.AMO]: 'AMO', [OPCODES.OPIMM32]: 'OP-IMM-32 (W)', [OPCODES.OP32]: 'OP-32 (W)',
   [OPCODES.FMADD]: 'MADD', [OPCODES.FMSUB]: 'MSUB', [OPCODES.FNMSUB]: 'NMSUB', [OPCODES.FNMADD]: 'NMADD',
 };
 
 const ALU3 = ['add/sub', 'sll', 'slt', 'sltu', 'xor', 'srl/sra', 'or', 'and'];
 const F3: Record<number, string[]> = {
-  [OPCODES.OP]: ALU3, [OPCODES.OPIMM]: ALU3,
+  [OPCODES.OP]: ALU3, [OPCODES.OPIMM]: ALU3, [OPCODES.OP32]: ALU3, [OPCODES.OPIMM32]: ALU3,
   [OPCODES.BRANCH]: ['taken if rs1 = rs2', 'taken if rs1 ≠ rs2', '', '', 'taken if rs1 < rs2 (signed)', 'taken if rs1 ≥ rs2 (signed)', 'taken if rs1 < rs2 (unsigned)', 'taken if rs1 ≥ rs2 (unsigned)'],
-  [OPCODES.LOAD]: ['byte', 'half', 'word', '', 'byte, zero-ext.', 'half, zero-ext.'],
-  [OPCODES.STORE]: ['byte', 'half', 'word'],
+  [OPCODES.LOAD]: ['byte', 'half', 'word', 'doubleword (RV64)', 'byte, zero-ext.', 'half, zero-ext.', 'word, zero-ext. (RV64)'],
+  [OPCODES.STORE]: ['byte', 'half', 'word', 'doubleword (RV64)'],
   [OPCODES.SYSTEM]: ['', 'CSR write', 'CSR set', 'CSR clear', '', 'CSR write imm.', 'CSR set imm.', 'CSR clear imm.'],
   [OPCODES.LOADFP]: ['', '', 'word'], [OPCODES.STOREFP]: ['', '', 'word'],
 };
@@ -57,9 +57,9 @@ const bitsOf = (w: number, hi: number, lo: number) => Math.floor((w >>> 0) / 2 *
 const sgn = (v: number) => (v < 0 ? `${v}` : `+${v}`);
 
 /** The fields of one instruction word, high bits first, tiling bits 31..0 exactly. */
-export function fieldsOf(word: number, custom?: readonly CustomRow[]): Field[] {
+export function fieldsOf(word: number, custom?: readonly CustomRow[], xlen: 32 | 64 = 32): Field[] {
   const w = word >>> 0;
-  const d = decode(w, custom);
+  const d = decode(w, custom, xlen);
   const s = d.spec;
   const fp = s?.fp;
   const reg = (bank: 'f' | 'x' | undefined, r: number) => (bank === 'f' ? `f${r} (${FABI[r]})` : `x${r} (${ABI[r]})`);
@@ -93,7 +93,9 @@ export function fieldsOf(word: number, custom?: readonly CustomRow[]): Field[] {
       return [F('funct7', 31, 25, f7m), rs2, rs1, funct3, rd, opcode];
     }
     case 'I':
-      if (d.opcode === OPCODES.OPIMM && (d.funct3 === 1 || d.funct3 === 5)) {
+      if ((d.opcode === OPCODES.OPIMM || d.opcode === OPCODES.OPIMM32) && (d.funct3 === 1 || d.funct3 === 5)) {
+        // RV64's OP-IMM shifts have a 6-bit amount (instr[25] is shamt[5]) under a 6-bit funct6
+        if (xlen === 64 && d.opcode === OPCODES.OPIMM) return [F('funct7', 31, 26, d.funct7 & 0x20 ? 'bit 5 set: arithmetic' : 'logical', 'funct6'), F('shamt', 25, 20, `shift by ${d.imm}`), rs1, funct3, rd, opcode];
         return [F('funct7', 31, 25, d.funct7 & 0x20 ? 'bit 5 set: arithmetic' : 'logical'),
           F('shamt', 24, 20, `shift by ${d.rs2}`), rs1, funct3, rd, opcode];
       }
@@ -132,8 +134,8 @@ export interface ImmBit {
 }
 
 /** How the immediate generator assembles this instruction's 32-bit immediate (empty for R-type). */
-export function immBits(word: number, custom?: readonly CustomRow[]): ImmBit[] {
-  const fmt = decode(word, custom).fmt;
+export function immBits(word: number, custom?: readonly CustomRow[], xlen: 32 | 64 = 32): ImmBit[] {
+  const fmt = decode(word, custom, xlen).fmt;
   if (fmt === 'R' || fmt === 'R4') return [];
   const map = IMM_SRC[fmt];
   return Array.from({ length: 32 }, (_, i) => {

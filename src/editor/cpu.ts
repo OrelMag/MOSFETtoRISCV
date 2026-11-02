@@ -15,6 +15,7 @@
 // the console part's text, a switch bank's positions and an LED bank named leds stand in for the
 // system CPU's consoleData / switches / leds pins.
 
+import { expandWindow } from '../lib/rvc';
 import { type RamState, ramLeafState, ramWords } from '../lib/bigmem';
 import type { CustomRow } from '../riscv/custom';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
@@ -770,7 +771,20 @@ export class CpuMonitor {
   wordAt(pc: number): number | null {
     const prog = this.prog;
     if (!prog || pc < 0) return null;
+    if (this.desc?.iss.c) return expandWindow(this.windowAt(pc)).instr;
     return prog.words[(pc >>> 2) % 2 ** prog.k] ?? 0x13;
+  }
+
+  /** C: the 32 bits starting at an even byte address (what the window ROM answers). */
+  private windowAt(pc: number): number {
+    const p = this.prog!, N = 2 ** p.k;
+    const half = (a: number) => ((p.words[(a >>> 2) % N] ?? 0x13) >>> ((a & 2) * 8)) & 0xffff;
+    return (half(pc & ~1) | (half((pc & ~1) + 2) << 16)) >>> 0;
+  }
+
+  /** C: the instruction at pc is 16 bits long. */
+  compressedAt(pc: number): boolean {
+    return !!this.prog && !!this.desc?.iss.c && pc >= 0 && (this.windowAt(pc) & 3) !== 3;
   }
 }
 

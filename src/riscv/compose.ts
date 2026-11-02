@@ -7,7 +7,7 @@
 import { assemble } from './asm';
 import { meaning, rowsKey, specOf, type CustomRow } from './custom';
 import { fieldRole, fieldsOf, immBits } from './fields';
-import { ABI, BY_NAME, CSR_NAMES, CSRS, decode, disasm, encB, encI, encJ, encR, encR4, encS, encU, FABI, IMM_TOP, INSTRS, OPCODES, type ImmFmt, type InstrSpec } from './isa';
+import { ABI, BY_NAME, BY_NAME64, CSR_NAMES, CSRS, decode, disasm, encB, encI, encJ, encR, encR4, encS, encU, FABI, IMM_TOP, INSTRS, INSTRS64, OPCODES, type ImmFmt, type InstrSpec, type Xlen } from './isa';
 import { parseWithOffsets, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts as CParts, type ParseResult } from '../isa/composekit';
 
 export type SlotKey = 'rd' | 'rs1' | 'rs2' | 'rs3' | 'imm' | 'csr' | 'zimm' | 'rm';
@@ -35,13 +35,13 @@ export const NO_PARTS: Parts = { rd: 0, rs1: 0, rs2: 0, rs3: 0, imm: 0, csr: 0, 
 /** Instructions whose word is fixed (no operands; fence's ordering bits are not ours to set). */
 export const FIXED: Record<string, number> = { ecall: 0x00000073, ebreak: 0x00100073, mret: 0x30200073, wfi: 0x10500073, fence: 0x0ff0000f };
 
-const isShift = (s: InstrSpec) => s.opcode === OPCODES.OPIMM && (s.funct3 === 1 || s.funct3 === 5);
+const isShift = (s: InstrSpec) => (s.opcode === OPCODES.OPIMM || s.opcode === OPCODES.OPIMM32) && (s.funct3 === 1 || s.funct3 === 5);
 const isCsr = (s: InstrSpec) => s.opcode === OPCODES.SYSTEM && (s.funct3 ?? 0) !== 0;
 
 const IMM12 = { min: -2048, max: 2047, step: 1 };
 
 /** The operands of `spec` in the order they are written. */
-export function slotsOf(spec: InstrSpec): Slot[] {
+export function slotsOf(spec: InstrSpec, xlen: Xlen = 32): Slot[] {
   if (spec.name in FIXED) return [];
   const fp = spec.fp;
   const x = (key: SlotKey): Slot => ({ key, bank: 'x' });
@@ -65,7 +65,7 @@ export function slotsOf(spec: InstrSpec): Slot[] {
     case 'R': case 'R4': return [x('rd'), x('rs1'), x('rs2')];
     case 'I':
       if (spec.opcode === OPCODES.LOAD || spec.name === 'jalr') return [x('rd'), { key: 'imm', ...IMM12, role: 'offset' }, x('rs1')];
-      if (isShift(spec)) return [x('rd'), x('rs1'), { key: 'imm', min: 0, max: 31, step: 1, role: 'shamt' }];
+      if (isShift(spec)) return [x('rd'), x('rs1'), { key: 'imm', min: 0, max: xlen === 64 && spec.opcode === OPCODES.OPIMM ? 63 : 31, step: 1, role: 'shamt' }];
       return [x('rd'), x('rs1'), { key: 'imm', ...IMM12, role: 'imm' }];
     case 'S': return [x('rs2'), { key: 'imm', ...IMM12, role: 'offset' }, x('rs1')];
     case 'B': return [x('rs1'), x('rs2'), { key: 'imm', min: -4096, max: 4094, step: 2, role: 'target' }];
@@ -83,9 +83,9 @@ export function clampTo(slot: Slot, v: number): number {
 }
 
 /** The word of a composed instruction (operands outside their range are clamped). */
-export function encodeParts(spec: InstrSpec, p: Parts): number {
+export function encodeParts(spec: InstrSpec, p: Parts, xlen: Xlen = 32): number {
   if (spec.name in FIXED) return FIXED[spec.name];
-  const slots = slotsOf(spec);
+  const slots = slotsOf(spec, xlen);
   const v = (k: SlotKey) => {
     const s = slots.find((x) => x.key === k);
     return s ? clampTo(s, k === 'zimm' ? p.rs1 : p[k]) : 0;
@@ -107,9 +107,9 @@ export function encodeParts(spec: InstrSpec, p: Parts): number {
 }
 
 /** A word as spec + operands, or null when no instruction decodes it (or its fixed bits differ). */
-export function partsOf(word: number, custom?: readonly CustomRow[]): Composed | null {
+export function partsOf(word: number, custom?: readonly CustomRow[], xlen: Xlen = 32): Composed | null {
   const w = word >>> 0;
-  const d = decode(w, custom);
+  const d = decode(w, custom, xlen);
   const spec = d.spec;
   if (!spec) return null;
   if (spec.name in FIXED) return FIXED[spec.name] === w ? { spec, parts: { ...NO_PARTS } } : null;
@@ -120,7 +120,7 @@ export function partsOf(word: number, custom?: readonly CustomRow[]): Composed |
   const c = { spec, parts };
   // Bits the composer cannot set (an AMO's aq / rl, an R4's fmt above S, a SIMT's rd) make the
   // word one it would not build: keep those out rather than lose them silently.
-  return encodeParts(spec, parts) === w ? c : null;
+  return encodeParts(spec, parts, xlen) === w ? c : null;
 }
 
 /** Re-target a composed instruction at another spec, keeping what carries over. */
@@ -132,9 +132,9 @@ export function retarget(from: Parts, spec: InstrSpec): Parts {
 }
 
 /** The assembly text of a word for a program: disasm, with a branch / jump target by label. */
-export function textOf(word: number, pc?: number, labels?: Map<string, number>, custom?: readonly CustomRow[]): string {
-  const d = decode(word, custom);
-  const base = disasm(word, undefined, custom);
+export function textOf(word: number, pc?: number, labels?: Map<string, number>, custom?: readonly CustomRow[], xlen: Xlen = 32): string {
+  const d = decode(word, custom, xlen);
+  const base = disasm(word, undefined, custom, xlen);
   if (pc === undefined || !labels || !d.spec || (d.fmt !== 'B' && d.fmt !== 'J')) return base;
   const at = pc + d.imm;
   for (const [name, addr] of labels) if (addr === at) return base.replace(/-?\d+$/, name);
@@ -171,6 +171,17 @@ export const PALETTE: PaletteGroup[] = [
   { id: 'simt', name: 'SIMT (lanes)', names: INSTRS.filter((s) => s.simt).map((s) => s.name), more: true },
 ];
 
+/** RV64's picker: the loads, stores and multiplies with the doubleword and W instructions added, and a group for the W ones. */
+export const PALETTE64: PaletteGroup[] = [
+  ...PALETTE.slice(0, 2),
+  { id: 'w', name: 'Word (W)', names: ['addiw', 'slliw', 'srliw', 'sraiw', 'addw', 'subw', 'sllw', 'srlw', 'sraw'] },
+  { id: 'ld', name: 'Load', names: ['ld', 'lw', 'lwu', 'lh', 'lb', 'lhu', 'lbu'] },
+  { id: 'st', name: 'Store', names: ['sd', 'sw', 'sh', 'sb'] },
+  ...PALETTE.slice(4, 6),
+  { id: 'm', name: 'Multiply', names: ['mul', 'mulh', 'mulhsu', 'mulhu', 'div', 'divu', 'rem', 'remu', 'mulw', 'divw', 'divuw', 'remw', 'remuw'] },
+  PALETTE[7],
+];
+
 /** A CSR operand's name (or its number in hex). */
 export const csrName = (n: number) => CSR_NAMES[n] ?? `0x${n.toString(16)}`;
 
@@ -187,54 +198,57 @@ function cslot(s: Slot): CSlot {
 }
 
 const CINSTRS = new Map(INSTRS.map((spec): [string, CInstr] => [spec.name, { id: spec.name, name: spec.name, slots: slotsOf(spec).map(cslot) }]));
+const CINSTRS64 = new Map([...INSTRS, ...INSTRS64].map((spec): [string, CInstr] => [spec.name, { id: spec.name, name: spec.name, slots: slotsOf(spec, 64).map(cslot) }]));
 
 const toParts = (rec: CParts): Parts => ({ ...NO_PARTS, ...rec, rs1: rec.zimm ?? rec.rs1 ?? 0 });
 
 /** RV32 for the instruction builder; `custom`: the CPU's custom instructions (riscv/custom.ts), a palette group of
  *  their own, encoded, decoded and written like the rest. */
-export function rv32Compose(custom: readonly CustomRow[] = []): ComposeIsa {
-  const key = custom.length ? rowsKey(custom) : '';
+export function rv32Compose(custom: readonly CustomRow[] = [], xlen: Xlen = 32): ComposeIsa {
+  const key = (xlen === 64 ? '64:' : '') + (custom.length ? rowsKey(custom) : '');
   const hit = composeCache.get(key);
   if (hit) return hit;
   const own = new Map(custom.map((r) => [r.name, specOf(r)]));
-  const specOfId = (id: string) => BY_NAME.get(id) ?? own.get(id)!;
-  const ownInstrs = new Map([...own].map(([n, s]): [string, CInstr] => [n, { id: n, name: n, summary: meaning(s.custom).join('; '), slots: slotsOf(s).map(cslot) }]));
-  const asm = (src: string) => assemble(src, custom);
+  const specOfId = (id: string) => BY_NAME.get(id) ?? (xlen === 64 ? BY_NAME64.get(id) : undefined) ?? own.get(id)!;
+  const ownInstrs = new Map([...own].map(([n, s]): [string, CInstr] => [n, { id: n, name: n, summary: meaning(s.custom).join('; '), slots: slotsOf(s, xlen).map(cslot) }]));
+  const asm = (src: string) => assemble(src, custom, xlen === 64 ? { xlen } : {});
+  const palette = xlen === 64 ? PALETTE64 : PALETTE;
+  const CI = xlen === 64 ? CINSTRS64 : CINSTRS;
   const isa: ComposeIsa = {
-    id: 'asm', name: custom.length ? `RV32 + ${custom.map((r) => r.name).join(', ')}` : 'RV32', wordBits: 32, step: 4, rv32: true, start: 0xfff50513,
+    id: xlen === 64 ? 'asm64' : 'asm', name: custom.length ? `RV32 + ${custom.map((r) => r.name).join(', ')}` : xlen === 64 ? 'RV64' : 'RV32', wordBits: 32, step: 4, rv32: true, start: 0xfff50513,
     groups: [
       ...(custom.length ? [{ name: 'Yours', ids: custom.map((r) => r.name) }] : []),
-      ...PALETTE.map((g) => ({ name: g.name, ids: g.names, more: g.more })),
+      ...palette.map((g) => ({ name: g.name, ids: g.names, more: g.more })),
     ],
-    instr: (id) => CINSTRS.get(id) ?? ownInstrs.get(id),
-    encode: (id, parts) => encodeParts(specOfId(id), toParts(parts)),
+    instr: (id) => CI.get(id) ?? ownInstrs.get(id),
+    encode: (id, parts) => encodeParts(specOfId(id), toParts(parts), xlen),
     decode(word) {
-      const c = partsOf(word, custom);
+      const c = partsOf(word, custom, xlen);
       if (!c) return null;
       const rec: CParts = {};
-      for (const s of slotsOf(c.spec)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
+      for (const s of slotsOf(c.spec, xlen)) rec[s.key] = s.key === 'zimm' ? c.parts.rs1 : c.parts[s.key];
       return { id: c.spec.name, parts: rec };
     },
     loose(word) {
-      const d = decode(word, custom);
+      const d = decode(word, custom, xlen);
       if (!d.spec) return null;
       const all: CParts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, rs3: d.rs3, csr: word >>> 20, rm: d.funct3, zimm: d.rs1, imm: d.spec.fmt === 'U' ? d.imm >>> 12 : d.imm };
       const parts: CParts = {};
-      for (const s of slotsOf(d.spec)) parts[s.key] = all[s.key];
+      for (const s of slotsOf(d.spec, xlen)) parts[s.key] = all[s.key];
       return { id: d.spec.name, parts };
     },
-    fields: (word) => fieldsOf(word, custom).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
+    fields: (word) => fieldsOf(word, custom, xlen).map((f): CField => ({ key: f.key, label: f.label, hi: f.hi, lo: f.lo, role: fieldRole(f.key), used: f.used, meaning: f.meaning, value: f.value })),
     imm(word) {
-      const c = partsOf(word, custom);
-      const slot = c && slotsOf(c.spec).find((s) => s.key === 'imm');
+      const c = partsOf(word, custom, xlen);
+      const slot = c && slotsOf(c.spec, xlen).find((s) => s.key === 'imm');
       if (!c || !slot || slot.role === 'shamt') return null;
-      const d = decode(word, custom);
-      const ib = immBits(word, custom);
+      const d = decode(word, custom, xlen);
+      const ib = immBits(word, custom, xlen);
       const note = d.fmt === 'U' ? 'the upper 20 bits as they are, the low 12 tied to ground'
         : `bit 31 copied into every bit above bit ${IMM_TOP[d.fmt as ImmFmt]} (sign extension)${d.fmt === 'B' || d.fmt === 'J' ? ', bit 0 tied to ground' : ''}`;
       return { wires: ib.map((b) => ({ bit: b.bit, src: b.src, sign: b.sign, value: b.value })), value: d.imm, text: d.fmt === 'U' ? `0x${(d.imm >>> 0).toString(16)}` : String(d.imm), note };
     },
-    text: (word, pc, labels) => textOf(word, pc, labels, custom),
+    text: (word, pc, labels) => textOf(word, pc, labels, custom, xlen),
     parse: (line, pc, labels) => parseLine(line, asm, pc, labels, custom),
     program(src) {
       const r = asm(src);
@@ -249,3 +263,6 @@ const composeCache = new Map<string, ComposeIsa>();
 
 /** RV32 for the instruction builder. */
 export const RV32_COMPOSE: ComposeIsa = rv32Compose();
+
+/** RV64I / M for the instruction builder: the doubleword and W instructions, 6-bit shift amounts. */
+export const RV64_COMPOSE: ComposeIsa = rv32Compose([], 64);

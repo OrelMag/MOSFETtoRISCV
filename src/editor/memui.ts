@@ -19,6 +19,7 @@ import {
 import type { PartDoc } from './model';
 import { setRef } from './ops';
 import { registerPaletteGroup } from './palette';
+import { RV64_SOURCE, RVC_SOURCE } from './exampleisa';
 import { MAX_ROM_K } from './parts';
 import { registerPropsSection } from './props';
 import type { ProgramLang } from './program';
@@ -59,6 +60,19 @@ registerPaletteGroup({
       place: { part: { rom: { k: 4, w: 8, addr: 'word', lang: 'hex', src: WALK } } } },
     { id: 'ram', name: 'RAM', tag: '16×8', title: 'Read-write memory: a decoder, one register per word and a multiplexer tree (contents live in the properties)',
       place: { part: { ram: { k: 4, w: 8 } } } },
+  ],
+});
+
+// The cores that take their program from a ROM part (memory port or inside): a computer is a core, a ROM and a RAM.
+registerPaletteGroup({
+  id: 'cores', title: 'Processor cores', order: 56, collapsed: true,
+  items: () => [
+    { id: 'core_rv32', name: 'RV32I core', title: 'The single-cycle RV32I core with a memory port: instr in (from a Program ROM), pcOut and memAddr / memWData / memWE out, memRData in. The CPU drawer follows it.', place: { part: { lib: 'rv32i_core' } } },
+    { id: 'core_rv32c', name: 'RV32IC core', title: 'RV32I with the C extension: 16-bit instructions expanded inside, PC + 2. Its Program ROM needs the C extension ticked: it answers at any even address.', place: { part: { lib: 'rv32ic_core' } } },
+    { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside. Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
+    { id: 'core_rv64m', name: 'RV64IM core', title: 'The 64-bit core with the M extension (multiply, divide: retire = 0 while a divide runs). Program ROM: tick RV64.', place: { part: { lib: 'rv64im_core' } } },
+    { id: 'prog_rom_c', name: 'Program ROM (RV32C)', title: 'A Program ROM with the C extension ticked: reads at any even address, assembles .option rvc and c.* mnemonics', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RVC_SOURCE, c: true } } } },
+    { id: 'prog_rom_64', name: 'Program ROM (RV64)', title: 'A Program ROM assembled for RV64: ld, sd, the W instructions, li of any 64-bit constant', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RV64_SOURCE, xlen: 64 } } } },
   ],
 });
 
@@ -184,6 +198,12 @@ registerPropsSection({
       row('Address', select(r.addr, [['word', 'word index'], ['rv32', 'byte (RV32 PC)']], (addr) => set(addr === 'rv32' ? { addr, w: 32 } : { addr }), 'Addressing'),
         'word: addr is the word number (k bits). byte: a 32-bit address like a PC, word = addr / 4'),
       row('Language', languageSelect(ed, id, r, set), 'Switching converts the program when it builds (RV16, 4-bit CPU: 16-bit words, word addressed; a custom instruction set: its word width)'),
+      ...(r.lang === 'asm' && r.addr === 'rv32' && r.w === 32 ? [row('Extensions', h('span', { class: 'sb-exts' },
+        h('label', { class: 'sb-check', title: 'C: the ROM answers at any even address with the 32 bits starting there; .option rvc and c.* mnemonics assemble to 16-bit instructions. Needs the RV32C core (rv32ic_core).' },
+          h('input', { type: 'checkbox', checked: !!r.c, 'aria-label': 'C extension', onchange: (e: Event) => set((e.target as HTMLInputElement).checked ? { c: true, xlen: undefined } : { c: undefined }) }), 'C extension'),
+        h('label', { class: 'sb-check', title: 'RV64: assemble for the 64-bit core (ld, sd, the W instructions, li of any 64-bit constant, 6-bit shifts). Needs rv64i_core or rv64im_core.' },
+          h('input', { type: 'checkbox', checked: r.xlen === 64, 'aria-label': 'RV64', onchange: (e: Event) => set((e.target as HTMLInputElement).checked ? { xlen: 64, c: undefined } : { xlen: undefined }) }), 'RV64'))
+        , 'C: 16-bit instructions at any even address (rv32ic_core). RV64: assemble for the 64-bit cores')] : []),
       row('Sample', sample),
       status,
       h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…'),
@@ -193,15 +213,21 @@ registerPropsSection({
 
     let key = '';
     live(out, () => {
-      const i = romNow(ed, id, r);
+      let i = romNow(ed, id, r);
+      if (r.c && i !== null) {
+        // with C the listing has a row an instruction: find the one at this byte address
+        const a = addrValue(ed.sim.endBits(`p:${id}.addr`));
+        const at = a === null ? undefined : (a & ~1) % (4 * 2 ** r.k);
+        i = at === undefined ? null : img.lines.findIndex((x) => x.addr === at);
+      }
       const k = String(i);
       if (k === key) return;
       key = k;
-      list.setCurrent(i);
-      const l = i === null ? undefined : img.lines[i];
+      list.setCurrent(i !== null && i >= 0 ? i : null);
+      const l = i === null || i < 0 ? undefined : img.lines[i];
       now.replaceChildren(i === null
         ? h('span', null, 'Address unknown (not connected or X)')
-        : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(4 * i).toString(16).padStart(4, '0')}` : rows[i]?.addr ?? `[${i}]`), ' → ',
+        : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(r.c && l ? l.addr : 4 * i).toString(16).padStart(4, '0')}` : rows[i]?.addr ?? `[${i}]`), ' → ',
           h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' || (r.lang === '6502' && l.text) ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
     });
     return out;
@@ -332,7 +358,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
   // program as tiles (a view of the text: a click builds a line, a drag moves it).
   const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502';
-  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom));
+  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom, { c: applied.c, xlen: applied.xlen }));
   // RV32: the CPU's own instructions (editor/owninstr.ts), from the footer or a free custom slot in the builder;
   // the program editor closes for it and reopens after
   const customInstrs = () => {

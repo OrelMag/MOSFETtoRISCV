@@ -88,7 +88,7 @@ export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang 
     index: i,
     // a 6502 ROM: the CPU address the byte answers at, as the program placed it
     addr: r.addr === 'rv32' ? `0x${l.addr.toString(16).padStart(4, '0')}` : l.at !== undefined ? `$${l.at.toString(16).toUpperCase().padStart(4, '0')}` : `[${i}]`,
-    word: (l.word >>> 0).toString(16).padStart(digits, '0'),
+    word: (l.word >>> 0).toString(16).padStart(l.size === 2 ? 4 : digits, '0'),
     text: dis ? l.text : '',
     srcLine: l.srcLine,
   }));
