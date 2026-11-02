@@ -130,7 +130,7 @@ export class CapstonePage implements Page {
     const others = builtCapstones().filter((c) => c.id !== cap.id);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: '#/campaign', title: 'The campaign' }, icon('chevL', 14), 'Campaign'),
-      h('span', { class: 'lv-badge cap-tier' }, this.isBrief() ? `TIER ${cap.tier} CAPSTONE · DESIGN BRIEF` : `TIER ${cap.tier} CAPSTONE`),
+      h('span', { class: 'lv-badge cap-tier' }, `TIER ${cap.tier} CAPSTONE`),
       h('span', { class: 'lv-crumb' }, h('b', null, cap.title)),
       this.isBrief() ? this.briefBadge() : this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
       h('span', { class: 'lv-spacer' }),

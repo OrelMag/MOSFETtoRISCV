@@ -53,8 +53,8 @@ export function briefChart(subs: Submission[]): SVGSVGElement {
     el.append(s('circle', { class: i === 0 ? 'mine' : 'mine-old', cx: x, cy: y, r: i === 0 ? 8 : 6 },
       s('title', null, `yours${i === 0 ? ', latest' : ` #${subs.length - i}`}: ${q.nand.toLocaleString()} NANDs, ${timeOf(q).toLocaleString()} gate delays, ${starText(q.stars)}`)));
     if (i === 0) {
-      const left = x > X1 - 110;
-      el.append(s('text', { class: 'lb mine-lb', x: left ? x - 13 : x + 13, y: y + 16, 'text-anchor': left ? 'end' : 'start' }, 'yours, latest'));
+      // left of the dot and above it: the references' labels run to the right of their rings
+      el.append(s('text', { class: 'lb mine-lb', x: x - 13, y: y - 9, 'text-anchor': 'end' }, 'yours, latest'));
     }
   });
   return el;
