@@ -29,6 +29,7 @@ import { addExample, EXAMPLES } from '../src/editor/examples';
 import { emptyWorkspace } from '../src/editor/model';
 import { KEY as SANDBOX_KEY } from '../src/editor/store';
 import { NOTES_KEY } from '../src/ui/notes';
+import { LEARN_KEY } from '../src/learn/store';
 import { REVIEW_KEY } from '../src/ui/review';
 
 // ---- options ---------------------------------------------------------------------------------
@@ -168,6 +169,11 @@ function routes(): Route[] {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
   }
   add(`#/c/${chapters[1].id}/0`, firstRun('light'), ' (first run, phone)', VIEWPORTS[VIEWPORTS.length - 1]);
+  // Where are you starting? and My path: fresh, and with a start, a test-out and some progress, in both themes and on a phone
+  add('#/start', light);
+  add('#/path', light, ' (fresh)');
+  for (const theme of ['light', 'dark'] as const) add('#/path', { ...notesStorage(theme), [LEARN_KEY]: JSON.stringify({ schema: 1, start: { persona: 'software', tier: 1, at: 1_700_000_000_000 }, tested: { [chapters[0].id]: 1_700_000_000_000 } }) }, ` (started, ${theme})`);
+  add('#/', { ...light, [LEARN_KEY]: JSON.stringify({ schema: 1, start: { persona: 'new', tier: 0, at: 1_700_000_000_000 }, tested: {} }) }, ' (with a path)');
   // My notes: empty, then with notes, bookmarks and a review history, in both themes and on a phone
   add('#/notes', light, ' (empty)');
   add('#/notes', notesStorage('light'));
@@ -178,6 +184,8 @@ function routes(): Route[] {
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
     add('#/notes', notesStorage('light'), ` (${v.name})`, v);
+    add('#/path', notesStorage('light'), ` (${v.name})`, v);
+    add('#/start', light, ` (${v.name})`, v);
   }
   // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
   const phone = VIEWPORTS.find((v) => v.mobile)!;
