@@ -14,6 +14,7 @@ import type { HdlDiag } from '../hdl/yosysjson';
 import { stats } from '../sim/stats';
 import { levelChallenge } from './levels';
 import { nodeById } from './nodes';
+import { twinKey } from './twinids';
 
 export interface VerilogTwin {
   /** The drawn level this is the twin of (campaign node id). */
@@ -111,8 +112,7 @@ export const TWINS: VerilogTwin[] = [
 
 export const twinById = (id: string): VerilogTwin | undefined => TWINS.find((t) => twinId(t) === id);
 export const twinOf = (node: string): VerilogTwin | undefined => TWINS.find((t) => t.twin === node);
-export const twinId = (t: VerilogTwin): string => `vl_${t.twin}`;
-export const isTwinId = (id: string): boolean => id.startsWith('vl_') && TWINS.some((t) => twinId(t) === id);
+export const twinId = (t: VerilogTwin): string => twinKey(t.twin);
 export const twinChipId = (t: VerilogTwin): string => `u_vl_${t.twin}`;
 
 /** The level's challenge (its pins, its check), with every library part allowed: the synthesizer picks the gates. */
@@ -150,6 +150,14 @@ export function drawnNands(t: VerilogTwin): number {
   const def = new UserLibrary(ws).compiled(chips[chips.length - 1].id)?.def;
   if (!def) throw new Error(`reference of ${t.twin} does not compile`);
   return stats(def).nands;
+}
+
+/** The drawn reference run through the level's own check (the numbers the Drawn version tab and the comparison show). */
+export function drawnScore(t: VerilogTwin): CheckResult['score'] {
+  const ch = twinChallenge(t);
+  const chips = ch.answer();
+  const ws = { ...emptyWorkspace(), chips: Object.fromEntries(chips.map((d) => [d.id, d])) };
+  return checkChallenge(ch, new UserLibrary(ws).compiled(chips[chips.length - 1].id)).score;
 }
 
 /** Stars for a passing design: 1 passes, 2 within 1.5 × the reference's NANDs, 3 at or under it. */

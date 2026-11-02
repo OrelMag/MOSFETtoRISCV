@@ -12,6 +12,7 @@ import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settin
 import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
+import { isTwinKey } from '../campaign/twinids';
 
 /**
  * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
@@ -291,13 +292,22 @@ export function startApp(root: HTMLElement): void {
     } else if (key === 'campaign' && parts[1] === 'play') {
       // A level on its own screen: the editor's chunk, like the sandbox.
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
-      if ((lv?.kind === 'level' || lv?.kind === 'capstone') && lv.nodeId === parts[2]) return;
+      if ((lv?.kind === 'level' || lv?.kind === 'capstone' || lv?.kind === 'verilog') && lv.nodeId === parts[2]) return;
       // A tier capstone (learn/capstones.ts) has the level screen's layout and a page of its own
       if (parts[2]?.startsWith('cap_')) {
         import('./pages/capstone').then((m) => {
           if (seq === routeSeq) mount(new m.CapstonePage(parts[2]));
         }, (e) => {
           if (seq === routeSeq) view.replaceChildren(loadFailed('capstone', e));
+        });
+        return;
+      }
+      // A Verilog twin of a build level (campaign/twinids.ts): the same layout, the source beside the check
+      if (isTwinKey(parts[2] ?? '')) {
+        import('./pages/verilog').then((m) => {
+          if (seq === routeSeq) mount(new m.VerilogPage(parts[2]));
+        }, (e) => {
+          if (seq === routeSeq) view.replaceChildren(loadFailed('Verilog challenge', e));
         });
         return;
       }

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { checkTwin, drawnNands, starsOf, TWINS, twinById, twinId, twinOf, twinReference, twinStart } from '../src/campaign/verilog';
 import { nodeById } from '../src/campaign/nodes';
+import { TWIN_LEVELS } from '../src/campaign/twinids';
 import './hdlkit';
 
 /** The stars each reference earns today (pinned: a change in the synthesizer or a level's par shows here). */
@@ -25,6 +26,10 @@ describe('Verilog twins', () => {
     expect(ids.size).toBe(TWINS.length);
     // a few in each of the acts that have build levels among 2, 3, 5
     for (const act of [2, 3, 5]) expect(TWINS.filter((t) => nodeById(t.twin)!.act === act).length, `act ${act}`).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the twinned levels of the map are the twins', () => {
+    expect(TWIN_LEVELS).toEqual(TWINS.map((x) => x.twin));
   });
 
   it('grades by NANDs against the drawn reference', () => {

@@ -336,6 +336,11 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
 .cp-node:hover .cp-blk rect, .cp-node:focus-visible .cp-blk rect, .cp-node.sel .cp-blk rect { stroke: var(--accent); fill: var(--accent-soft); }
 .cp-node:hover .cp-blk circle, .cp-node:focus-visible .cp-blk circle, .cp-node.sel .cp-blk circle { fill: var(--accent); }
 .cp-node:hover .cp-blk text, .cp-node:focus-visible .cp-blk text, .cp-node.sel .cp-blk text { fill: var(--accent); }
+.cp-vl rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.cp-vl text { font: 600 9px var(--font-mono); fill: var(--muted); }
+.cp-vl.done text { fill: var(--warn); }
+.cp-node:hover .cp-vl rect, .cp-node:focus-visible .cp-vl rect, .cp-node.sel .cp-vl rect { stroke: var(--accent); fill: var(--accent-soft); }
+.cp-node:hover .cp-vl text, .cp-node:focus-visible .cp-vl text, .cp-node.sel .cp-vl text { fill: var(--accent); }
 .cp-blk.all circle { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .cp-foot-link { cursor: pointer; outline: none; }
 .cp-foot-link rect { fill: var(--accent); stroke: var(--accent); stroke-width: 1.2; }
@@ -343,3 +348,9 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
 .cp-foot-link.side rect { fill: var(--surface); stroke: var(--border-strong); }
 .cp-foot-link.side text { fill: var(--accent); }
 .cp-foot-link:hover rect, .cp-foot-link:focus-visible rect { stroke: var(--text); stroke-width: 2; }
+
+/* the node panel's "also in Verilog" row */
+.cp-twin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px; }
+.cp-twin b { color: var(--text); }
+.cp-twin .sub { flex: 1 1 220px; margin: 0; }
+@media (pointer: coarse) { .cp-twin .btn { min-height: 40px; } }
