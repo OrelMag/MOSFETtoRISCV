@@ -46,6 +46,20 @@ const rich = (tag: 'p' | 'div' | 'li' | 'span', html: string, cls?: string) => {
 /** The phone layout: the spec folds away above the editor. */
 const narrow = () => matchMedia('(max-width: 900px)').matches;
 
+/** The Tests tab's rows: each directed program with what it exercises; seeded random ones of a kind in one row. */
+function testRows(tests: readonly { name: string; what?: string }[]): [string, string | undefined][] {
+  const rows: [string, string | undefined][] = [];
+  const groups = new Map<string, { n: number; first: string; last: string; row: number }>();
+  for (const t of tests) {
+    if (!t.name.startsWith('random')) { rows.push([t.name, t.what]); continue; }
+    const kind = t.name.replace(/[.][0-9]+$/, '');
+    const g = groups.get(kind);
+    if (g) { g.n++; g.last = t.name; } else { groups.set(kind, { n: 1, first: t.name, last: t.name, row: rows.push([t.name, t.what]) - 1 }); }
+  }
+  for (const g of groups.values()) if (g.n > 1) rows[g.row][0] = `${g.first} … ${g.last} (${g.n})`;
+  return rows;
+}
+
 export class CapstonePage implements Page {
   readonly kind = 'capstone';
   readonly el: HTMLElement;
@@ -178,7 +192,7 @@ export class CapstonePage implements Page {
       const tests = core.tests();
       el.append(h('section', null, h('h4', null, `${tests.length} programs`),
         h('p', { class: 'sub' }, 'Each runs on the golden model first; your core must make the same register writes and stores in the same order. The Check strip lists every one, failing ones first, and opens a failing one on a bench around your core.'),
-        h('ul', { class: 'cap-tests' }, tests.map((t) => h('li', null, h('b', null, t.name), t.what ? `: ${t.what}` : '')))));
+        h('ul', { class: 'cap-tests' }, testRows(tests).map(([name, what]) => h('li', null, h('b', null, name), what ? `: ${what}` : '')))));
     } else if (ch.check.kind === 'sequence') {
       el.append(h('section', null, h('h4', null, `${ch.check.steps.length} steps`),
         h('p', { class: 'sub' }, 'A reset, directed steps (a plain sum, hold, the carry and its holding, reset beating add, d wiggling between edges) and seeded random ones. Check plays them on your circuit; a failing step is shown with its inputs and the expected outputs.')));

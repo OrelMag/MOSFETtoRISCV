@@ -308,6 +308,25 @@ export const chTraps: Chapter = {
   steps: [
     {
       title: 'Control and status registers',
+      reading: {
+        source: 'RISC-V Privileged ISA', section: 'Machine-Level ISA: mtvec, mepc, mstatus',
+        quote: [
+          'The mtvec register is an MXLEN-bit WARL read/write register that holds trap vector configuration, consisting of a vector base address (BASE) and a vector mode (MODE).',
+          'When a trap is taken into M-mode, mepc is written with the virtual address of the instruction that was interrupted or that encountered the exception.',
+          'When a trap is taken from privilege mode y into privilege mode x, xPIE is set to the value of xIE; xIE is set to 0; and xPP is set to y.'],
+        note: 'The CSR unit you opened holds mtvec and mepc as registers; the trap unit writes mepc and mcause itself at the edge, and the mstatus bits are the interrupt-enable stack.',
+        quizzes: [
+          { question: 'An illegal instruction sits at address 0x10 and traps. What does mepc hold?', options: ['0x10', '0x14', 'The instruction word', 'The handler\'s address'], answer: 0,
+          why: ['', 'That would skip the instruction. The hardware saves the faulting one, so a handler can fix and retry it.', 'The word goes to mtval for an illegal instruction.', 'That is mtvec\'s BASE.'],
+          explain: 'mepc is the address of the instruction that encountered the exception. For ecall, software adds 4 before mret; the hardware never does.' },
+          { question: 'A trap is taken with MIE = 1 and MPIE = 0. After it, MIE and MPIE are:', options: ['MIE = 0, MPIE = 1', 'MIE = 1, MPIE = 0', 'MIE = 0, MPIE = 0', 'MIE = 1, MPIE = 1'], answer: 0,
+          why: ['', 'Nothing changed, but the rule says interrupts are disabled on entry.', 'MPIE takes the old MIE, which was 1.', 'MIE is cleared on entry.'],
+          explain: 'MPIE ← MIE, MIE ← 0: the handler runs with interrupts off and mret restores MIE from MPIE. That is the one-level stack in the quote.' },
+          { question: 'This core wires mtvec\'s MODE bits to 0. A handler address of 0x83 is written. What does a read give?', options: ['0x83', '0x80', '0x84', '0x00'], answer: 1,
+          why: ['The low two bits are MODE and read as 0 here.', '', 'Nothing rounds up.', 'Only the low two bits are lost.'],
+          explain: 'BASE is a multiple of 4: the two MODE bits are not part of the address, so 0x83 reads back as 0x80. Align handlers to 4 bytes.' },
+        ],
+      },
       body: `
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements a

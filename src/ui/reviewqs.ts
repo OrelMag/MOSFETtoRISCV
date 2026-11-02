@@ -26,6 +26,7 @@ export function allQuestions(): ReviewQ[] {
     const name = `${chapterNo(c)} · ${c.title}`;
     c.steps.forEach((s, i) => {
       if (s.challenge?.kind === 'quiz') out.push({ key: `${c.id}:${i}`, origin: `${name} · step ${i + 1}, ${s.title}`, href: `#/c/${c.id}/${i}`, chapter: c.id, quiz: s.challenge });
+      s.reading?.quizzes.forEach((q, k) => out.push({ key: `${c.id}:${i}:read:${k}`, origin: `${name} · step ${i + 1}, ${s.title}, the spec`, href: `#/c/${c.id}/${i}`, chapter: c.id, quiz: q }));
     });
     c.recap?.check?.forEach((q, k) => out.push({ key: `${c.id}:recap:${k}`, origin: `${name} · recap`, href: `#/c/${c.id}/${c.steps.length}`, chapter: c.id, quiz: q }));
   }
