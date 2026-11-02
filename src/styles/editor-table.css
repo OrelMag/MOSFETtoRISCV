@@ -14,7 +14,7 @@
 }
 
 .tt-pane {
-  width: 460px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
+  width: 400px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
   background: var(--surface); border-right: 1px solid var(--border);
 }
 .tt-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }

@@ -572,4 +572,4 @@ function examplesMenu(ed: Editor): void {
   (menu.querySelector('.sb-menu-item') as HTMLElement | null)?.focus();
 }
 
-registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples ▸', order: 60, run: examplesMenu });
+registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples ▾', order: 60, run: examplesMenu });

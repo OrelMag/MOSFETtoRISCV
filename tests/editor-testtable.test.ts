@@ -138,3 +138,12 @@ describe('widths', () => {
     expect('error' in lit && lit.error).toContain('does not fit');
   });
 });
+
+describe('blank tables', () => {
+  it('a starter on a chip with no pins is blank, not an error', async () => {
+    const { isBlankTable } = await import('../src/editor/testtable');
+    expect(isBlankTable('\n\n')).toBe(true);
+    expect(isBlankTable('')).toBe(true);
+    expect(isBlankTable('a b\n0 X\n')).toBe(false);
+  });
+});

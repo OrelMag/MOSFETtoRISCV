@@ -111,7 +111,7 @@ function examplesWorkspace(): { json: string; ids: string[] } {
 const MEMMAP_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
-  const file = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'File');
+  const file = [...document.querySelectorAll('button')].find((b) => b.textContent.trim().replace(/ ▾$/, '') === 'File');
   if (!file) return ['no File button'];
   file.click(); await wait(200);
   const item = [...document.querySelectorAll('.sb-menu button')].find((b) => /Memory map/.test(b.textContent));

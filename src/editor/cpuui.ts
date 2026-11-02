@@ -194,7 +194,7 @@ class CpuPanel {
     this.slowBtn = h('button', { class: 'btn sm toggle', onclick: () => this.toggleSlow() }) as HTMLButtonElement;
     this.rateSel = h('select', { class: 'sb-cpu-rate', 'aria-label': 'Slow-mode speed' }, SLOW_RATES.map((r) => h('option', { value: String(r), selected: r === this.slowRate }, `${r}/s`))) as HTMLSelectElement;
     this.rateSel.addEventListener('change', () => { this.slowRate = Number(this.rateSel.value); });
-    const reset = h('button', { class: 'btn sm ghost icon-only sb-cpu-reset', title: 'Reset: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => this.reset() }, icon('reset', 15));
+    const reset = h('button', { class: 'btn sm ghost sb-cpu-reset', title: 'Reset: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => this.reset() }, icon('reset', 14), 'Reset');
     const irq = h('button', { class: 'btn sm', title: 'Raise the external interrupt (the irq pin) for one clock cycle', onclick: () => this.pulseIrq() }, 'IRQ (one cycle)');
     this.io = h('div', { class: 'sb-cpu-io' }, this.con,
       h('div', { class: 'io-row' }, h('div', null, h('div', { class: 'cpu-sec' }, 'LEDs'), this.leds), h('div', null, h('div', { class: 'cpu-sec' }, 'Switches'), this.sw)),

@@ -80,7 +80,7 @@
 .sb-tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .sb-tab {
   display: inline-flex; align-items: center; border-radius: 8px; border: 1px solid transparent;
-  background: var(--surface-2); color: var(--text-2); flex: 0 1 auto; min-width: 84px; max-width: 220px;
+  background: var(--surface-2); color: var(--text-2); flex: 0 1 auto; min-width: 104px; max-width: 220px;
 }
 /* tabs give way to each other (names end in an ellipsis) before the strip scrolls, the open one last; editor.ts fitActions
    measures them at their natural width (.measure) to decide how much of the bar they get */
@@ -100,6 +100,14 @@
   background: var(--surface); color: var(--text);
 }
 .sb-new { flex: none; }
+/* Open… looks like its neighbours (a ghost button with a caret), not a native select box */
+select.sb-open {
+  appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 500; color: var(--text-2);
+  border-color: transparent; background-color: transparent; padding: 5px 24px 5px 10px; border-radius: var(--radius-sm, 8px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a8f98' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 /* Open… and New chip ▾ stay in view at the end of the tabs when they scroll (New chip was cut under the autosave
    indicator; alone sticky, it covered Open…); the tabs slide under the group (editor.ts showActiveTab keeps the
    open one clear of it) */
@@ -197,8 +205,8 @@
 .sb-hint { left: 12px; bottom: 8px; }
 /* An empty chip: where to start, centred; the canvas under it still takes drops and clicks. */
 .sb-empty-chip {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
-  width: min(380px, calc(100% - 32px)); text-align: center; color: var(--text-2);
+  position: absolute; left: calc((100% - var(--toast-dock, 0px)) / 2); top: 50%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
+  width: min(380px, calc(100% - var(--toast-dock, 0px) - 32px)); text-align: center; color: var(--text-2);
   padding: 20px 22px; border-radius: 14px; border: 1px dashed var(--border-strong, var(--border));
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
@@ -462,7 +470,7 @@
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
   .sb-item { touch-action: pan-y; }
-  .sb-center { height: 70vh; }
+  .sb-center { height: 62vh; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
   .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }

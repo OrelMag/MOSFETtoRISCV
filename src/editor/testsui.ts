@@ -10,7 +10,7 @@ import type { CheckResult } from './challenges';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import type { ChipDoc, TestDoc } from './model';
 import { registerPropsSection } from './props';
-import { fillOutputs, parseTest, planTest, runTest, starterTest, type TestPlan, type TestRun, testsOf } from './testtable';
+import { fillOutputs, isBlankTable, parseTest, planTest, runTest, starterTest, type TestPlan, type TestRun, testsOf } from './testtable';
 import { TestPlayer } from './testplayer';
 import { testSet } from './testrun';
 
@@ -26,6 +26,8 @@ interface Outcome {
   names?: string[];
   run?: TestRun;
   error?: { msg: string; line: number };
+  /** A blank table (a chip with no pins yet): neutral, nothing to run. */
+  idle?: boolean;
   /** Too long to run by itself: waiting for Run. */
   waiting?: boolean;
   ms?: number;
@@ -106,6 +108,7 @@ class TestsPane {
   }
 
   private runOne(doc: ChipDoc, t: TestDoc, force: boolean): Outcome {
+    if (isBlankTable(t.src)) return { idle: true };
     const c = this.ed.compiled;
     if (!c || c.diags.some((d) => d.level === 'error')) return { error: { msg: 'the circuit has errors: fix them to run its tests', line: 0 } };
     const plan = planTest(c.def, t);
@@ -128,7 +131,7 @@ class TestsPane {
   /** ✓ / ✗ / … for a table, from its last run. */
   status(i: number): 'pass' | 'fail' | 'none' {
     const o = this.outcome(i);
-    if (!o || o.waiting) return 'none';
+    if (!o || o.waiting || o.idle) return 'none';
     if (o.error || !o.run) return 'fail';
     return o.run.failed.length || o.run.error ? 'fail' : 'pass';
   }
@@ -270,6 +273,10 @@ class TestsPane {
     const o = this.outcome(i);
     const box = h('div', { class: 'sb-tests-res', role: 'status' });
     if (!o) return box.appendChild(h('p', { class: 'sb-tests-sum muted' }, 'Running…')), box;
+    if (o.idle) {
+      box.append(h('p', { class: 'sb-tests-sum muted' }, 'Nothing to run yet: add pins to the chip, then + Table starts a table with them.'));
+      return box;
+    }
     if (o.error) {
       box.append(h('p', { class: 'sb-tests-err' }, o.error.line ? `Line ${o.error.line}: ` : '', o.error.msg));
       return box;
