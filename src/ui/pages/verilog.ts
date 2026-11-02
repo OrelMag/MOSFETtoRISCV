@@ -7,6 +7,7 @@ import '../../styles/editor.css';
 import '../../styles/campaign.css';
 import '../../styles/level.css';
 import '../../styles/editor-hdl.css';
+import '../../styles/capstone.css';
 import '../../styles/verilog.css';
 import { progress } from '../../campaign/progress';
 import { nodeById } from '../../campaign/nodes';
@@ -200,8 +201,8 @@ export class VerilogPage implements Page {
     if (!r?.cells || r.diags.some((d) => d.level === 'error' && !d.line && !r.ws)) { this.logEl.replaceChildren(); return; }
     const parts = Object.entries(r.cells).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`);
     this.logEl.replaceChildren(h('span', { class: r.diags.some((d) => d.level === 'error') ? 'bad' : 'ok' }, r.diags.some((d) => d.level === 'error') ? '✕ refused' : '✓ synthesized'),
-      ` · Yosys ${YOSYS_VERSION.replace(/\.\d+$/, '')} onto NAND gates · `, parts.length ? parts.join(', ') : 'wires only', ' · ',
-      h('span', { class: 'sub' }, 'the netlist is the chip below, drawn from NANDs and flip-flops'));
+      ` · Yosys ${YOSYS_VERSION.replace(/\.\d+$/, '')} onto NAND gates · `, parts.length ? parts.join(', ') : r.diags.some((d) => d.level === 'error') ? 'no gates' : 'wires only', ' · ',
+      h('span', { class: 'sub' }, 'Open the netlist to see it drawn, down to the NANDs'));
   }
 
   // ---- the Check card ---------------------------------------------------------------------------------

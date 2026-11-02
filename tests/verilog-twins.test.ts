@@ -56,6 +56,7 @@ describe('Verilog twins', () => {
       const r = await checkTwin(t, twinStart(t));
       expect(r.ok, t.twin).toBe(false);
       expect(r.stars ?? 0).toBe(0);
+      expect(r.diags.some((d) => /never driven/.test(d.msg)), t.twin).toBe(true);
     }
   }, 120_000);
 
@@ -97,4 +98,24 @@ describe('Verilog twins', () => {
     expect(r3.ok).toBe(false);
     expect(r3.check?.failures.join(' ')).toMatch(/en/);
   }, 120_000);
+});
+
+describe('twin progress', () => {
+  it('records the best result under the twin id and keeps it through sanitizing; unknown ids are dropped', async () => {
+    const { Progress, sanitizeCampaign, CAMPAIGN_KEY } = await import('../src/campaign/progress');
+    const mem = new Map<string, string>();
+    const kv = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    const p = new Progress(kv);
+    expect(p.solveTwin('vl_s_reg4', 1, 70)).toEqual({ first: true, best: true });
+    expect(p.solveTwin('vl_s_reg4', 2, 60)).toEqual({ first: false, best: true });
+    expect(p.solveTwin('vl_s_reg4', 1, 50)).toEqual({ first: false, best: false });
+    p.setSource('vl_s_reg4', 'module reg4; endmodule');
+    const again = new Progress(kv).get('vl_s_reg4');
+    expect(again).toMatchObject({ status: 'solved', stars: 2, best: { nand: 60 }, src: 'module reg4; endmodule' });
+    expect(mem.has(CAMPAIGN_KEY)).toBe(true);
+    const st = sanitizeCampaign({ nodes: { vl_g_dec: { status: 'solved' }, vl_nonsense: { status: 'solved' } } });
+    expect(Object.keys(st.nodes)).toEqual(['vl_g_dec']);
+    // twins are outside the map's tallies
+    expect(p.summary().done).toBe(0);
+  });
 });

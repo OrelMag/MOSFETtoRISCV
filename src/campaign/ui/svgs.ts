@@ -189,8 +189,8 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         s('text', { x: 12, y: 9 }, blk.label)));
     }
     if (vl) {
-      // "also in Verilog": a tab on the card's bottom-left edge (the block tab sits at the right), ★ once the twin is passed
-      const text = vlStars ? `Verilog ${'★'.repeat(vlStars)}` : 'also in Verilog';
+      // "also in Verilog" (the card label says so in full): a short tab on the card's bottom-left edge (the block tab sits at the right), ★ once the twin is passed
+      const text = vlStars ? `Verilog ${'★'.repeat(vlStars)}` : 'Verilog';
       const w = 12 + text.length * 5.4;
       g.append(s('g', { class: `cp-vl${vlStars ? ' done' : ''}`, transform: `translate(10,${NODE_H - 6})`, 'aria-hidden': 'true' },
         s('rect', { width: w, height: 12, rx: 6 }), s('text', { x: 6, y: 9 }, text)));

@@ -194,6 +194,19 @@ function latchDiag(d: HdlDiag): HdlDiag {
   };
 }
 
+/** "Wire m.\q [3] is used but has no driver", once per signal, as the error it is for an output nothing drives. */
+function tidyDiags(diags: HdlDiag[]): HdlDiag[] {
+  const out: HdlDiag[] = [];
+  for (const d of diags) {
+    const m = /^Wire (?:[\w$]+\.)?\\?([\w$]+)\s*(?:\[\d+\])? is used but has no driver/.exec(d.msg);
+    const w = /^wire '\\?([\w$]+)' is assigned in a block at ([^:\s]+):(\d+)/.exec(d.msg);
+    const x: HdlDiag = m ? { level: 'error', msg: `\`${m[1]}\` is never driven: assign it in every bit (an output left open reads X)` }
+      : w ? { level: 'warn', file: w[2], line: +w[3], msg: `\`${w[1]}\` is assigned in a block: declare it \`output reg\`, or use \`assign\`` } : d;
+    if (!out.some((y) => y.msg === x.msg && y.line === x.line)) out.push(x);
+  }
+  return out;
+}
+
 /** Number of library parts by id in the hierarchy under a chip (a summary of what Yosys made). */
 function cellCounts(ws: Workspace, id: string): Record<string, number> {
   const out: Record<string, number> = {};
@@ -223,7 +236,7 @@ export async function checkTwin(t: VerilogTwin, text: string, progress?: (done: 
   let out;
   try { out = await resynthesize(made.ws, made.id, progress); } catch (e) { return fail([{ level: 'error', msg: e instanceof Error ? e.message : String(e) }]); }
   if (!out.ok) return fail(out.diags);
-  const diags = out.diags.filter((d) => !/x \/ z bits read as 0/.test(d.msg)).map(latchDiag);
+  const diags = tidyDiags(out.diags.filter((d) => !/x \/ z bits read as 0/.test(d.msg)).map(latchDiag));
   const lib = new UserLibrary(out.ws);
   const compiled = lib.compiled(made.id);
   const cells = cellCounts(out.ws, made.id);
