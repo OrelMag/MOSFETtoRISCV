@@ -13,6 +13,7 @@ import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
 import { isTwinKey } from '../campaign/twinids';
+import { menuKeys } from './menukeys';
 
 /**
  * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
@@ -181,6 +182,7 @@ export function startApp(root: HTMLElement): void {
     if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palOpen(false);
   });
   const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
+  menuKeys(palWrap, palMenu, palBtn, () => palOpen(false));
 
   const syncTools = () => {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
