@@ -3,7 +3,9 @@
 // stores stay in a window of the data memory, and the program ends in a jump to itself. Sources are often
 // registers written just before, so forwarding, load-use stalls and branches right after loads come up all
 // the time. Options switch on what a CPU implements: byte / halfword access, M, F, the system CPU's CSRs,
-// traps and timer interrupt, the multi-core's atomics and hart id. One seed, one program.
+// traps and timer interrupt, the multi-core's atomics and hart id, a CPU's custom instructions. One seed, one program.
+
+import { FMT_FIELDS, uses, type CustomRow } from './custom';
 
 export interface Rand32Options {
   /** Body length in units (an instruction, or a short sequence: a loop, a jalr, an address computation). */
@@ -28,6 +30,9 @@ export interface Rand32Options {
   /** The C extension: assembled with .option rvc, and about a third of the units are C forms (registers x8–x15,
    * rd = rs1, short immediates, loads and stores off a prime register or sp, short jumps). Unchanged without it. */
   c?: boolean;
+  /** Custom instructions (riscv/custom.ts): about a fifth of the units are one of the rows, set up so that every
+   *  address they compute stays in the data window and every jump lands on an instruction (draws nothing without rows). */
+  custom?: readonly CustomRow[];
 }
 
 /** mulberry32: small, fast, good enough. */
@@ -179,6 +184,47 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     else if (v < 0.91) emit(`${pick(['c.j', 'c.jal'])} ${ahead()}`);
     else { emit(`la ${JR}, ${ahead()}`); emit(`${pick(['c.jr', 'c.jalr'])} ${JR}`); }
   };
+  /** A custom instruction (riscv/custom.ts) with operands that keep the program well-formed: an address it computes
+   *  is BASE (word-aligned) plus a small word-aligned offset; a jump lands one instruction on (jalr: from an auipc, as
+   *  the jalr unit does) or on a forward label; a row the data path could not run safely this way becomes an addi. */
+  const customUnit = (row: CustomRow, i: number) => {
+    const u = uses(row), f = FMT_FIELDS[row.fmt], n = row.name;
+    const ahead = (): string => { const l = `L${label++}`; pending.push({ label: l, at: i + int(1, 4) }); return l; };
+    const form = (rd: string, rs1: string, rs2: string, imm: number | string) => {
+      switch (row.fmt) {
+        case 'R': return `${n} ${rd}, ${rs1}, ${rs2}`;
+        case 'I': return `${n} ${rd}, ${rs1}, ${imm}`;
+        case 'S': return `${n} ${rs2}, ${imm}(${rs1})`;
+        case 'B': return `${n} ${rs1}, ${rs2}, ${imm}`;
+        default: return `${n} ${rd}, ${imm}`;
+      }
+    };
+    const rd = () => (f.rd && row.regWrite ? dst() : pick(POOL));
+    const plain = () => emit(`addi ${dst()}, ${src()}, 1`);
+    const mem = u.mem, addOnly = row.alu !== 'funct3' || row.funct3 === 0;
+    if (row.next === 'jalr') {
+      // target = (A op B) & ~1 = pc of the unit's second instruction + 8: A = the auipc (rs1) or the row's own pc
+      const bval = (row.srcA === 'pc' ? 8 : 12) * (row.alu === 'sub' ? -1 : 1);
+      if (mem || !addOnly || row.fmt === 'B' || row.fmt === 'U' || (row.srcA === 'rs1' && !f.rs1) || (row.srcB === 'rs2' ? !f.rs2 : !f.imm)) return plain();
+      emit(`auipc ${JR}, 0`);
+      if (row.srcB === 'rs2') emit(`li ${T1}, ${bval}`);
+      emit(form(rd(), JR, T1, bval));
+      emit(`addi ${dst()}, ${src()}, 1`);
+    } else if (row.next === 'jump') {
+      if (mem || row.fmt === 'R' || row.fmt === 'U') return plain();
+      emit(form(rd(), src(), src(), row.fmt === 'B' ? ahead() : 8));
+      if (row.fmt !== 'B') emit(`addi ${dst()}, ${src()}, 1`);
+    } else if (row.next === 'branch') {
+      emit(form('zero', src(), src(), ahead()));
+    } else {
+      if (row.fmt === 'B' || (mem && !addOnly)) return plain();
+      const a = row.srcA === 'rs1' && mem ? T0 : src(), b = row.srcB === 'rs2' && mem ? T1 : src();
+      if (a === T0) emit(`mv ${T0}, ${BASE}`);
+      if (b === T1) emit(`andi ${T1}, ${src()}, 60`);
+      const imm = row.fmt === 'U' ? (mem ? int(0, 0x7ffff) : int(0, 0xfffff)) : mem ? 4 * int(-16, 15) : r() < 0.3 ? pick([0, -1, 2047, -2048, 1]) : int(-2048, 2047);
+      emit(form(rd(), a, b, imm));
+    }
+  };
   for (let i = 0; i < n; i++) {
     for (const p of pending.filter((q) => q.at === i)) out.push(`${p.label}:`);
     if (o.c && r() < 0.35) { cUnit(i); continue; }
@@ -238,6 +284,8 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
         if (D !== undefined) emit(`xor ${ADDR}, ${ADDR}, ${BASE}`); // no offset in an AMO: D | (ADDR ^ B / 2)
         emit(`${pick(['amoadd.w', 'amoswap.w'])} ${dst()}, ${src()}, (${ADDR})`);
       } else emit(`csrr ${dst()}, mhartid`);
+    } else if (o.custom?.length && u < 0.5) {
+      customUnit(pick(o.custom), i);
     } else {
       const v = r();
       if (v < 0.45) emit(`${pick(R_OPS)} ${dst()}, ${src()}, ${src()}`);

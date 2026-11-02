@@ -15,7 +15,8 @@ import { cachedMemory } from './cache';
 import { wbCache } from './cache2';
 import type { DramConfig } from '../dram/controller';
 import { cfgKey } from './dramctrl';
-import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
+import { rowsKey, type CustomRow } from '../riscv/custom';
+import { CLEAR_BIT0, CONTROL, control, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, dataMemory, rom } from './cpu';
 import { DIV_E, MUL_E, MUL_M } from './pipem';
 import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
@@ -605,6 +606,10 @@ export interface PipeOptions {
    * the radix-4 SRT divider in E, which stalls the front of the pipeline for 18 cycles.
    */
   m?: boolean;
+  /** Custom instructions (riscv/custom.ts): the control unit gains an opcode class per row. The hazard logic needs
+   *  nothing more: it reads the control signals (result = mem is a load for the load-use stall, a branch / jump /
+   *  jalr redirect resolves in E, forwarding goes by register numbers). */
+  custom?: readonly CustomRow[];
 }
 
 /** Replace one end of a net (and its tag, if it had one). */
@@ -615,11 +620,11 @@ function retargetEnd(n: NetDef, from: string, to: string): void {
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program, opts.imemK ?? 6);
-  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`, () => buildPipe(IM, o));
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram, custom: opts.custom ?? [] } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig }): ComponentDef {
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[] }): ComponentDef {
   const { adder, balanced: bal, predictor: pred, dcache, m } = o;
   if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
   if (o.dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('pipelinedCpu: dram needs a write-back data cache');
@@ -663,7 +668,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   alignY('rf', RF, xFD + 22, 'ra1', row('rd1') + 6);
   alignY('byA', M2, xFD + 46, 'a', P('rf', 'rd1')[1]);
   alignY('byB', M2, xFD + 46, 'a', P('rf', 'rd2')[1] + 8);
-  alignY('ctl', CONTROL, xFD + 46, 'regWrite', row('regWrite'));
+  alignY('ctl', o.custom.length ? control(o.custom) : CONTROL, xFD + 46, 'regWrite', row('regWrite'));
   alignY('imm', IMM_GEN, xFD + 22, 'instr', row('imm') + 26);
   // E
   alignY('fwdA', M4, xDE + 12, 'd0', row('rd1'));
@@ -984,7 +989,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
+    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
     name: `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],

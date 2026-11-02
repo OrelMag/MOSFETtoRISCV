@@ -15,6 +15,7 @@ import { hardwareGaps, hwFeaturesOf } from '../riscv/hwgaps';
 import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/cosim';
 import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
+import type { CustomRow } from '../riscv/custom';
 import { ISS, type ModelState } from '../riscv/iss';
 import { disasmC, expand16, parcelAt } from '../riscv/rvc';
 import { PROGRAMS } from '../riscv/programs';
@@ -84,6 +85,8 @@ export interface CpuSceneOptions {
   extraPanels?: ScenePanel[];
   /** The single-cycle RV32IC CPU (chapter 25): 16-bit instructions in the listing at 2-byte addresses. */
   c?: boolean;
+  /** The CPU's custom instructions (riscv/custom.ts): single-cycle or pipelined; assembled, run on the golden model and decoded by the control unit. */
+  custom?: readonly CustomRow[];
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -93,7 +96,7 @@ const oooImemK = (words: number[]) => Math.max(6, Math.ceil(Math.log2(Math.max(1
 export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts.ooo ? { ...sceneOpts, m: true } : sceneOpts;
   // the C core runs any program compressed, unless the program says otherwise (.option norvc / rvc)
-  const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source);
+  const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom);
   // the CPU panel and the Out of order panel share the selected instruction
   const link: OooLink = {};
   return {
@@ -103,8 +106,8 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c }),
+      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
@@ -117,7 +120,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const asm = opts.asm;
     const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
       : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}) };
-    let iss = new ISS(asm.words, issOpts);
+    let iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let changed = new Set<number>();
     let mismatch: string | null = null;
@@ -212,7 +215,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const errBox = h('div', { class: 'asm-errors' });
     // Instructions the assembler takes but this CPU's gates lack (mul on RV32I, lb on a word-only memory): noted, not refused.
     const gaps = (r: AsmResult) => hardwareGaps(r, hwFeaturesOf(opts));
-    const check = debounce(() => { const r = assemble(editor.value); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
+    const check = debounce(() => { const r = assemble(editor.value, opts.custom); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
     const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
     editor.el.classList.add('asm-editor');
     // Still shown after Assemble & load rebuilds the panel: the program uses what the gates lack, so a mismatch is expected.
@@ -222,7 +225,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px' },
         h('button', {
           class: 'btn sm primary', onclick: () => {
-            const r = assemble(editor.value);
+            const r = assemble(editor.value, opts.custom);
             editor.setDiagnostics(r.errors);
             if (r.errors.length) {
               errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
@@ -243,7 +246,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = 'none'; } }, 'Close')));
     // Decks of punched cards (cards/program.ts, shared with the sandbox's ROMs): one object card a word.
     function saveAsDeck(): void {
-      const r = assemble(editor.value);
+      const r = assemble(editor.value, opts.custom);
       editor.setDiagnostics(r.errors);
       if (r.errors.length) return void (errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'));
       if (!r.words.length) return void (errBox.textContent = 'The program is empty: nothing to punch.');
@@ -359,7 +362,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       if (!sim) return;
       slowCtl.update();
       if (stage.cycles === 0 && iss.steps > 0) {
-        iss = new ISS(asm.words, issOpts);
+        iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
         mismatch = null;
         slowCtl.tracing = false;
         log.length = 0;
@@ -410,7 +413,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       }
       const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
       const w = wordAt(shownPc);
-      const d = decode(w);
+      const d = decode(w, opts.custom);
       const short = opts.c ? parcelAt(asm.words, shownPc) : null;
       now.replaceChildren(
         h('span', { class: 'fmt' }, short?.size === 2 ? `16-bit → ${d.fmt}-type` : `${d.fmt}-type`),
@@ -492,7 +495,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     };
     const dis = (pc: number) => {
       const p = opts.c ? parcelAt(asm.words, pc) : null;
-      return p?.size === 2 ? disasmC(p.bits, pc) : disasm(wordAt(pc), pc);
+      return p?.size === 2 ? disasmC(p.bits, pc) : disasm(wordAt(pc), pc, opts.custom);
     };
     const fieldFocus = () => fieldHover ?? fieldPin;
     /** Colour the fields of `word` and light `units` (slowctl.ts markInstr). Returns a note for the use line. */

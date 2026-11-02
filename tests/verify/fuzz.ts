@@ -41,14 +41,14 @@ const hex = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 export const fuzzDmemK = (cfg: CpuConfig) => cfg.fixedDmemK ?? 5;
 
 export function fuzzOptions(cfg: CpuConfig, n: number): Rand32Options {
-  const { sub, m, f, system, mp, c } = cfg.isa;
-  return { n, sub, m, f, system, mp, c, dmemWords: 2 ** fuzzDmemK(cfg) };
+  const { sub, m, f, system, mp, c, custom } = cfg.isa;
+  return { n, sub, m, f, system, mp, c, ...(custom ? { custom } : {}), dmemWords: 2 ** fuzzDmemK(cfg) };
 }
 
 /** A program for `cfg` from `seed`, run on the golden model to its halt. */
 export function fuzzCase(cfg: CpuConfig, seed: number, n = 60, cov?: IsaCoverage): FuzzCase {
   const source = randomProgram32(seed, fuzzOptions(cfg, n));
-  const asm = assemble(source);
+  const asm = assemble(source, cfg.isa.custom);
   if (asm.errors.length) throw new Error(`seed ${seed}: line ${asm.errors[0].line}: ${asm.errors[0].message}\n${source}`);
   const words = asm.words, halt = asm.labels.get('halt')!, dmemWords = 2 ** fuzzDmemK(cfg), imemWords = 2 ** log2up(words.length);
   if (cfg.isa.mp) {
