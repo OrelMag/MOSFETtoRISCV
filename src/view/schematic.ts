@@ -17,6 +17,7 @@ import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, 
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
+import { menuKeys } from '../ui/menukeys';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -1220,6 +1221,11 @@ export class SchematicView {
       } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
         : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.'));
     document.body.append(m);
+    // keys: Esc closes it and gives the focus back to what opened it; arrows move between the items
+    const opener = document.activeElement as HTMLElement | null;
+    menuKeys(m, m, opener ?? document.body, () => this.closeMenu());
+    m.tabIndex = -1;
+    (m.querySelector<HTMLElement>('button') ?? m).focus({ preventScroll: true });
     const r = m.getBoundingClientRect();
     m.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
     m.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 4))}px`;
