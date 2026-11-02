@@ -2351,3 +2351,32 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-read, .af-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .af-note { color: var(--muted); }
 @media (pointer: coarse) { .af-btn { min-height: 40px; padding: 8px 12px; } .af-ctl input[type='range'] { height: 40px; width: 110px; } }
+
+/* analogy figures G (desk, seesaw, island) */
+.af-svg .af-strong { fill: var(--text); font-weight: 700; }
+.af-svg .af-tier { fill: var(--series-3); }
+.af-svg .af-tier.t1 { fill: var(--series-1); }
+.af-svg .af-tier.t2 { fill: var(--series-4); }
+.af-svg .af-tier.t3 { fill: var(--series-2); }
+.af-svg .af-tier.on { stroke: var(--text); stroke-width: 2; }
+.af-svg .af-cell { fill: none; stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 2; }
+.af-svg .af-cell.full { fill: var(--surface-2); stroke-dasharray: none; }
+.af-svg .af-cell.new { fill: var(--analogy-soft); stroke: var(--analogy); stroke-width: 1.5; }
+.af-svg .af-cell.cur { fill: var(--series-3); stroke: var(--text); stroke-width: 2; }
+.af-svg .af-plank { fill: var(--series-4); stroke: var(--border-strong); stroke-width: 1.5; }
+.af-svg .af-plank.slam { fill: var(--series-3); }
+.af-svg .af-plank.maybe { fill: var(--muted); }
+.af-svg .af-feather { fill: var(--series-1); opacity: 0.9; }
+.af-svg .af-feather.off { opacity: 0.35; }
+.af-svg .af-quill { stroke: var(--text); stroke-width: 1.2; fill: none; }
+.af-svg .af-island { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.af-svg .af-island.worn { stroke: var(--bad); }
+.af-svg .af-charge { fill: var(--series-4); stroke: var(--text-2); stroke-width: 1; }
+.af-svg .af-slot { fill: none; stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 2; }
+.af-svg .af-channel { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.af-svg .af-channel.on { fill: var(--good-soft); stroke: var(--good); }
+.af-svg .af-channel.off { fill: var(--bad-soft, var(--surface-2)); stroke: var(--bad); }
+.af-svg .af-tunnel { stroke: var(--series-4); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.af-svg .af-charge-bar { fill: var(--series-4); }
+.af-svg .af-wear { fill: var(--series-1); }
+.af-svg .af-wear.dead { fill: var(--bad); }

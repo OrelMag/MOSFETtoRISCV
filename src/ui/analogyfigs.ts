@@ -10,5 +10,8 @@ export const FIGURES: Record<string, () => Promise<FigureMount>> = {
   buckets: () => import('../widgets/analogy/buckets').then((m) => m.default),
   airlock: () => import('../widgets/analogy/airlock').then((m) => m.default),
   laundry: () => import('../widgets/analogy/laundry').then((m) => m.default),
+  desk: () => import('../widgets/analogy/desk').then((m) => m.default),
+  seesaw: () => import('../widgets/analogy/seesaw').then((m) => m.default),
+  island: () => import('../widgets/analogy/island').then((m) => m.default),
   leaky: () => import('../widgets/analogy/leaky').then((m) => m.default),
 };
