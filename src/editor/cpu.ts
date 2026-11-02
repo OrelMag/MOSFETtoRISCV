@@ -77,7 +77,7 @@ export interface CpuDesc extends CpuDoc {
   iss: CpuIss;
   /** The part with an `fcsr` output (RV32F: frm and the accrued flags); detected only. */
   fcsr?: string;
-  /** The memory-port core (rv32i_core, or a { core } part with custom instructions) at the top level; detected only. */
+  /** The memory-port core (rv32i_core, rv32i_pipe_core, or a { core } part with custom instructions) at the top level; detected only. */
   core?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
@@ -180,7 +180,9 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   // a 2-bit retire counts the instructions retiring together (a wide CPU: a pipeline as far as checking goes)
   const wide = pinNamed(doc, 'out', 2, 'retire');
   const retire = validW ?? pinNamed(doc, 'out', 1, 'retire') ?? wide;
-  const pipeline = !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
+  // the pipelined port core (rv32i_pipe_core, or a { core: { pipe } } part): its retire port is validW, its stages sit inside the part
+  const pipeCore = !!core && (('lib' in core.ref && core.ref.lib === 'rv32i_pipe_core') || ('core' in core.ref && !!core.ref.core.pipe));
+  const pipeline = pipeCore || !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
@@ -188,8 +190,8 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   return {
     rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
-    ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
-    ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
+    ...(retire ? { retire: { pin: retire.id } } : pipeCore ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
+    ...(core && (('lib' in core.ref && (core.ref.lib === 'rv32i_core' || core.ref.lib === 'rv32i_pipe_core')) || 'core' in core.ref) ? { core: core.id } : {}),
   };
 }
 
@@ -271,6 +273,8 @@ export function refNets(v: CpuSimView, doc: ChipDoc, r: NetRef): number[] | null
   else if ('pointer' in r) {
     for (const l of doc.labels) if (l.name === r.pointer && (i = b.netOfLabel.get(l.id)) !== undefined && i >= 0) break;
   }
+  // a port nothing is wired to has no net of the chip: ask the part's own node (a core's retire output)
+  if ((i === undefined || i < 0) && 'part' in r) return partNode(sim, r.part)?.ports[r.port] ?? null;
   if (i === undefined || i < 0) return null;
   return sim.design.root.nets?.[i] ?? null;
 }
@@ -321,6 +325,12 @@ export function memStoreOf(sim: Sim, n: HierNode | undefined, depth = 3): MemSto
 }
 
 /** The simulation's node of a part path ('rf', 'imem.rom'). */
+/** The node the pipeline diagram reads: a pipelined port core's own, else the chip's root. */
+export function pipeRoot(sim: Sim, d: CpuDesc | null | undefined): HierNode {
+  const n = d?.core ? sim.design.root.children?.get(d.core) : undefined;
+  return n?.children?.has('FD') ? n : sim.design.root;
+}
+
 export function partNode(sim: Sim, path: string | undefined): HierNode | undefined {
   if (!path) return undefined;
   let n: HierNode | undefined = sim.design.root;
@@ -421,7 +431,9 @@ export function romProgram(doc: ChipDoc, rom: string, chips?: Chips): { words: n
  */
 export function pipelineSlots(v: CpuSimView, doc: ChipDoc, d: CpuDesc): { stage: string; pc: number }[] | null {
   const sim = v.sim;
-  const kids = sim?.design.root.children;
+  const top = sim?.design.root.children;
+  // a pipelined port core: the stages sit inside the placed part
+  const kids = d.core && top?.get(d.core)?.children?.has('FD') ? top.get(d.core)!.children : top;
   if (!sim || !kids || !d.pipeline || !kids.has('FD') || !kids.has('DE') || !kids.has('EM')) return null;
   const val = (inst: string, port: string) => {
     const n = kids.get(inst)?.ports[port];
@@ -572,6 +584,8 @@ export class CpuMonitor {
     this.issCon = consoleInit();
     this.issConLen = 0;
     this.compared = '';
+    this.hwPrev = null;
+    this.swPrev = null;
     this.seq++;
     this.synced = this.es.cycles === 0;
     const d = this.desc;
@@ -647,6 +661,15 @@ export class CpuMonitor {
     return true;
   }
 
+  /**
+   * A pipelined port core retires a store (and a load) one edge after it reached M, where the memory port acts: its devices (the console,
+   * the LED latch) have taken the store by the time the golden model steps it, and a switch is read one edge before the model reads it.
+   * So the model is compared with the devices as they were after the previous edge, and given the switches as of the previous edge.
+   */
+  private get lagged(): boolean { return !!this.desc?.pipeline && !!this.desc.core; }
+  private hwPrev: { console: string; leds: number | null } | null = null;
+  private swPrev: number | null = null;
+
   private before(): void {
     const d = this.desc, iss = this.iss;
     this.willRetire = 0;
@@ -663,13 +686,18 @@ export class CpuMonitor {
       if (irq !== null) iss.irq = irq === 1;
       const bank = this.switchBank, sim = this.es.sim;
       const sw = bank && sim ? (ioState(sim, bank) as SwitchState | undefined)?.v ?? null : pinValue(this.es, doc, 'switches', 'in', 8);
-      if (sw !== null) iss.switches = Math.max(0, sw);
+      if (sw !== null) {
+        iss.switches = Math.max(0, this.lagged && this.swPrev !== null ? this.swPrev : sw);
+        this.swPrev = sw;
+      }
     }
   }
 
   private after(): void {
     const iss = this.iss, d = this.desc;
     const conPart = !!d && this.readConsolePart();
+    const lag = this.lagged, prev = lag ? this.hwPrev : null;
+    if (lag) this.hwPrev = { console: this.console, leds: this.leds };
     if (!this.willRetire || !iss || !d || iss.halted) return;
     const n = this.willRetire;
     this.willRetire = 0;
@@ -735,14 +763,15 @@ export class CpuMonitor {
         }
         model = consoleText(this.issCon);
       }
-      const key = `${this.conN}|${this.console.length}|${iss.console.length}`;
-      if (key !== this.compared && this.console !== model) {
-        const i = [...this.console].findIndex((c, k) => c !== model[k]);
-        const k = i < 0 ? this.console.length : i;
-        return void at('console', 'console', model.charCodeAt(k) || 0, this.console.charCodeAt(k) || 0, `console: expected ${quote(model)}, got ${quote(this.console)}`);
+      const hwCon = prev ? prev.console : this.console, hwLeds = prev ? prev.leds : this.leds;
+      const key = `${this.conN}|${hwCon.length}|${iss.console.length}`;
+      if (key !== this.compared && hwCon !== model) {
+        const i = [...hwCon].findIndex((c, k) => c !== model[k]);
+        const k = i < 0 ? hwCon.length : i;
+        return void at('console', 'console', model.charCodeAt(k) || 0, hwCon.charCodeAt(k) || 0, `console: expected ${quote(model)}, got ${quote(hwCon)}`);
       }
       this.compared = key;
-      const leds = this.leds;
+      const leds = hwLeds;
       if (leds !== null && leds !== iss.leds) return void at('leds', 'LEDs', iss.leds, leds);
     }
   }

@@ -22,13 +22,14 @@ import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
 import type { FieldKey } from '../riscv/fields';
 import { instrBreakdown } from '../widgets/instrfields';
-import { instrMarks, instrUse, oooUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
+import { coreUnitNames, instrMarks, instrUse, oooUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
 import { PipeHistory, pipeGridRows } from '../widgets/pipegrid';
 import { OooFollower, oooView } from '../widgets/ooopanel';
+import { lightInside, lookInside } from './inside';
 import { microcodePart } from './ucodepart';
 import { isOooCore, oooSnap } from '../riscv/ooosnap';
 import {
-  type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode,
+  type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode, pipeRoot,
   memStoreOf, pinNamed, pipelineSlots, readMem, refValue, resolveCpu, romParts,
 } from './cpu';
 import { dockPane, paneShown, phoneWidth, showPane, undockPane } from './dock';
@@ -332,7 +333,7 @@ class CpuPanel {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
         const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
-        const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, es.sim.design.root, es.cycles); } };
+        const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, pipeRoot(es.sim, mon instanceof CpuMonitor ? mon.desc : null), es.cycles); } };
         es.edgeHooks.add(hook);
         entry = { chip, mon, pipe, hook };
         this.monitors.set(es, entry);
@@ -703,7 +704,7 @@ class CpuPanel {
     const sim = this.ed.sim.sim;
     if (e && sim && this.ed.sim.cycles === 0) {
       e.pipe.clear();
-      e.pipe.record(sim, sim.design.root, 0);
+      e.pipe.record(sim, pipeRoot(sim, mon.desc), 0);
     }
     const snaps = e?.pipe.snaps ?? [];
     this.pipeSec.hidden = this.pipe.hidden = !snaps.length;
@@ -1273,6 +1274,8 @@ class CpuPanel {
   private marked: string[] = [];
   private wireMarks = new Map<string, string>();
   private useKey = '';
+  /** A placed port core's units the selected instruction uses (lit in the look-inside view of the core). */
+  private coreUnits: { core: string; names: string[] } | null = null;
   private markKey = '';
   private markBuilt: unknown = null;
   private wiresOfNet: { built: unknown; map: Map<number, string[]> } = { built: null, map: new Map() };
@@ -1294,6 +1297,7 @@ class CpuPanel {
     let units: string[] = [];
     let word: number | null = null;
     let path = '';
+    const custom = mon instanceof CpuMonitor ? mon.desc?.iss.custom : undefined;
     const f = this.sel !== null ? { pc: this.sel, role: 'selected' } : this.slow ? this.focusPc() : null;
     const focus = this.fieldHover ?? this.fieldPin;
     const slots = mon instanceof CpuMonitor && mon.desc?.pipeline ? pipelineSlots(ed.sim, ed.doc, mon.desc) ?? [] : null;
@@ -1305,14 +1309,14 @@ class CpuPanel {
     this.markBuilt = built;
     if (mon && f && slots && this.sel === null) {
       // slow mode in a pipeline: every stage's part of the work
-      units = slots.flatMap((s) => (s.stage in STAGE_UNITS ? stageUse(s.stage as keyof typeof STAGE_UNITS, instrUse(mon.wordAt(s.pc) ?? 0x13)) : []));
+      units = slots.flatMap((s) => (s.stage in STAGE_UNITS ? stageUse(s.stage as keyof typeof STAGE_UNITS, instrUse(mon.wordAt(s.pc) ?? 0x13, custom)) : []));
       word = mon.wordAt(f.pc);
     } else if (mon && f) {
       word = mon.wordAt(f.pc);
       if (word !== null) {
         // the out-of-order core's parts, by the port the instruction went to when it was picked from its view
         const ooo = !!ed.sim.sim && isOooCore(ed.sim.sim.design.root);
-        const u = ooo ? oooUse(word, f.pc === this.sel ? this.selPort : -1) : instrUse(word);
+        const u = ooo ? oooUse(word, f.pc === this.sel ? this.selPort : -1) : instrUse(word, custom);
         units = u.units;
         path = u.path;
       }
@@ -1323,7 +1327,12 @@ class CpuPanel {
     const m = def && word !== null && inD ? instrMarks(def, word, focus) : null;
     if (m && focus) units = m.units;
     const have = new Set(ed.doc.parts.map((p) => p.id));
+    // a placed port core is one box: its units are lit inside it (look inside), the box itself haloed
+    const coreId = mon instanceof CpuMonitor ? mon.desc?.core : undefined;
+    const inner = coreId ? [...(partNode(ed.sim.sim!, coreId)?.children?.keys() ?? [])] : [];
+    this.coreUnits = coreId && inner.length ? { core: coreId, names: coreUnitNames([...new Set(units)], inner) } : null;
     this.marked = [...new Set(units)].filter((n) => have.has(n));
+    if (this.coreUnits?.names.length && !this.marked.includes(coreId!)) this.marked.push(coreId!);
     this.wireMarks = new Map();
     if (m) {
       const byNet = this.netWires();
@@ -1332,8 +1341,10 @@ class CpuPanel {
     this.useKey = '';
     this.applyMarks();
     if (this.sel !== null && word !== null && this.open) {
-      keyed(this.use, `${this.sel}|${word}|${this.marked.length}`, () => [h('code', null, disasm(word!, this.sel!, this.desc?.iss.custom)),
-        h('div', null, this.marked.length ? path : 'No parts named like the chapters’ CPU (rf, alu, imm, …) to mark here.')]);
+      const cu = this.coreUnits;
+      keyed(this.use, `${this.sel}|${word}|${this.marked.length}|${cu?.names.length ?? ''}`, () => [h('code', null, disasm(word!, this.sel!, this.desc?.iss.custom)),
+        h('div', null, this.marked.length ? path : 'No parts named like the chapters’ CPU (rf, alu, imm, …) to mark here.'),
+        ...(cu?.names.length ? [h('button', { class: 'btn sm ghost', title: `Open ${cu.core} to see ${cu.names.length} of its units lit`, onclick: () => lookInside(this.ed, [cu.core]) }, icon('layers', 13), `Show the ${cu.names.length} units inside ${cu.core}`)] : [])]);
     } else keyed(this.use, '', () => []);
   }
 
@@ -1350,6 +1361,7 @@ class CpuPanel {
 
   private clearMarks(): void {
     this.markKey = '';
+    this.coreUnits = null;
     this.marked = [];
     this.wireMarks = new Map();
     this.useKey = '';
@@ -1358,6 +1370,7 @@ class CpuPanel {
 
   /** Halo the marked parts and colour the field wires (again after a repaint rewrote their classes). */
   applyMarks(): void {
+    lightInside(this.ed, this.coreUnits?.core ?? '', this.coreUnits?.names ?? []);
     const svg = this.ed.view.svg;
     const count = () => `${svg.querySelectorAll('.ed-cpu-use').length}|${svg.querySelectorAll('.wire.fld').length}`;
     const key = `${this.ed.chipId}|${this.marked.join(',')}|${[...this.wireMarks].join(',')}`;

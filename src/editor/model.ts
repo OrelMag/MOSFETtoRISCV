@@ -313,7 +313,7 @@ export type PartRef =
       /** lang 'asm': assembled for RV64 (ld, sd, the W instructions, li of any 64-bit constant); the words stay 32-bit instructions. */
       xlen?: 64 } }
   /** The memory-port RV32I core (rv32i_core) with custom instructions: its control unit gains a class per row. */
-  | { core: { custom: CustomRow[] } }
+  | { core: { custom: CustomRow[]; /** The pipelined core (rv32i_pipe_core) instead of the single-cycle one. */ pipe?: true } }
   /** The multicycle CPU's microprogrammed controller (mc_micro) with edited microcode: its ROMs hold this program (lib/ucode.ts). */
   | { ucode: Microprogram }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */

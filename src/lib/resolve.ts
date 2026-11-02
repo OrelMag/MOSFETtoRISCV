@@ -22,7 +22,7 @@ import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } fro
 import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
-import { clearableRegister, hazardUnit } from './pipeline';
+import { clearableRegister, hazardUnit, pipelinedCpu } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
@@ -69,6 +69,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   // the multi-core's core with an instruction port (the sandbox's computer example places it)
   [/^rv32i_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true })],
   [/^rv64(i|im)(?:_d(\d))?_core$/, (m) => xlenCpu([], { xlen: 64, m: m[1] === 'im', dmemK: m[2] ? +m[2] : 6, imemPort: true })],
+  // the pipelined core with the same two ports (the sandbox's: Custom instructions… applies to it too)
+  [/^rv32i_pipe_core$/, () => pipelinedCpu([], { adder: 'ks', ports: true })],
   [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],

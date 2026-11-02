@@ -610,6 +610,13 @@ export interface PipeOptions {
    *  nothing more: it reads the control signals (result = mem is a load for the load-use stall, a branch / jump /
    *  jalr redirect resolves in E, forwarding goes by register numbers). */
   custom?: readonly CustomRow[];
+  /**
+   * The sandbox's core (rv32i_pipe_core): the program and the data memory sit outside. Pins: instr in (the ROM's word at pcOut), pcOut
+   * (the PC being fetched) and memAddr / memWData / memWE out of the M stage, memRData in, retire (= validW) and pcW out. The M stage's
+   * port keeps the data memory's timing (read combinational from memAddr, write at the rising edge), so any RAM that serves the
+   * single-cycle rv32i_core's memory port serves this one. Not with dcache or m.
+   */
+  ports?: boolean;
 }
 
 /** Replace one end of a net (and its tag, if it had one). */
@@ -620,11 +627,11 @@ function retargetEnd(n: NetDef, from: string, to: string): void {
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
   const IM = rom(program, opts.imemK ?? 6);
-  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram, custom: opts.custom ?? [] } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}`, () => buildPipe(IM, o));
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram, custom: opts.custom ?? [], ports: !!opts.ports } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${o.ports ? '_pp' : ''}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[] }): ComponentDef {
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[]; ports: boolean }): ComponentDef {
   const { adder, balanced: bal, predictor: pred, dcache, m } = o;
   if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
   if (o.dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('pipelinedCpu: dram needs a write-back data cache');
@@ -987,14 +994,36 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     retargetEnd(net('ALUResultE'), 'EM.aluResultE', 'mdE.a');
     retargetEnd(net('ReadDataM'), 'MW.readDataM', 'rdm.a');
   }
+  const portPins: Record<string, [number, number]> = {};
+  if (o.ports) {
+    if (dcache || m) throw new Error('pipelinedCpu: ports with a data cache or M is not supported');
+    // the program and the data memory outside: the M stage's memory port keeps dataMemory's timing (read from the address in the
+    // same cycle, write at the rising edge), so the sandbox's RAM serves it as it serves the single-cycle port core
+    for (const n of ['imem', 'dm']) instances.splice(instances.findIndex((i) => i.name === n), 1);
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const swap = (name: string, from: string, to: string) => { retargetEnd(net(name), from, to); };
+    swap('PCF', 'pcF', 'pcOut');
+    net('PCF').ends = net('PCF').ends.filter((e) => e !== 'imem.addr');
+    swap('InstrF', 'imem.data', 'instr');
+    swap('ALUResultM', 'dm.addr', 'memAddr'); (net('ALUResultM').tags as string[]).push('memAddr');
+    swap('WriteDataM', 'dm.wd', 'memWData'); net('WriteDataM').tags = ['memWData'];
+    swap('MemWriteM', 'dm.we', 'memWE');
+    swap('ReadDataM', 'dm.rd', 'memRData'); net('ReadDataM').tags = ['memRData'];
+    swap('validW', 'validW', 'retire');
+    const clk = net('clk');
+    clk.ends = clk.ends.filter((e) => e !== 'dm.clk');
+    clk.tags = (clk.tags as string[]).filter((e) => e !== 'dm.clk');
+    extraPorts.push(bus('instr', 32, 'in'), bus('memRData', 32, 'in'), bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'));
+    Object.assign(portPins, { instr: [0, yb + 4], memRData: [0, yb + 8], memAddr: [xMW + 30, yb + 13], memWData: [xMW + 30, yb + 16], memWE: [xMW + 30, yb + 19] });
+  }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
-    name: `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
+    id: o.ports ? `rv32i_pipe${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}_core` : `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
+    name: o.ports ? 'Pipelined RV32I core (program and memory on ports)' : `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bit('validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
+    ports: [bit('clk', 'in', 'left', true), bus(o.ports ? 'pcOut' : 'pcF', 32, 'out'), bit(o.ports ? 'retire' : 'validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
     symbol: { kind: 'box', label: dcache ? 'RV32I PIPE + D$' : 'RV32I PIPE' },
-    netlist: () => ({ pins: { clk: [0, yb], pcF: [xMW + 30, yb + 4], validW: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10], ...(dcache ? { dstall: [xMW + 30, yb + 13] } : {}) }, instances, nets }),
+    netlist: () => ({ pins: { clk: [0, yb], [o.ports ? 'pcOut' : 'pcF']: [xMW + 30, yb + 4], [o.ports ? 'retire' : 'validW']: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10], ...(dcache ? { dstall: [xMW + 30, yb + 13] } : {}), ...portPins }, instances, nets }),
     hdl: { verilog: '// Structure follows the primer\'s hdl/rv_pipe.sv (and rv_pipe_bp.sv for branch prediction), extended to all of RV32I.' },
   };
 }
