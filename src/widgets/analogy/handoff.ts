@@ -21,7 +21,7 @@ export default function mount(host: HTMLElement): void {
     btn.textContent = fwd ? 'Forwarding on' : 'Forwarding off';
     read.textContent = fwd
       ? `${sc.cycles} cycles, no wait: dish 1's sauce is ready at the end of its cook E, and the arrow hands it from M straight to dish 2's cook in E. That arrow is a multiplexer input in front of the ALU, the extra hand.`
-      : `${sc.cycles} cycles, ${sc.stalls} lost: dish 2 waits at D (dashed: bubbles) until dish 1's sauce is on the shelf, the register file, which it reaches when dish 1 is in W. Rows are the stages F, D, E, M, W; columns the clock cycles.`;
+      : `${sc.cycles} cycles, ${sc.stalls} lost: dish 2 waits in D (pale cells; the dashed cells behind are bubbles) until dish 1's sauce is on the shelf, the register file, which it reaches when dish 1 is in W. Rows are the stages F, D, E, M, W; columns the clock cycles.`;
   };
   host.replaceChildren(svg, h('div', { class: 'af-ctl' }, btn), read);
   paint();

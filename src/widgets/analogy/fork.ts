@@ -28,8 +28,7 @@ export default function mount(host: HTMLElement): void {
       s('text', { x: GRID_W - 88, y: yT + 5, class: 'af-t' }, 'taken'));
     const gy = guess ? yT : yN;
     k.push(s('path', { d: `M${xf} ${y0} L${xf + 30} ${gy} L${xf + 70} ${gy}`, class: 'af-guess' }),
-      s('text', { x: xf + 36, y: gy + (guess ? -4 : 15), class: 'af-t af-m' }, 'guess'),
-      s('circle', { cx: GRID_W - 102, cy: actual ? yT : yN, r: 5, class: 'af-real' }));
+      s('circle', { cx: GRID_W - 100, cy: actual ? yT : yN, r: 5, class: 'af-real' }));
     return k;
   };
 
@@ -45,8 +44,8 @@ export default function mount(host: HTMLElement): void {
     stepBtn.textContent = t >= f.cycles ? 'Replay' : `Step (${t}/${f.cycles})`;
     read.textContent = t < f.cycles ? `Cycle ${t} of ${f.cycles}.`
       : f.wrong
-        ? `Wrong guess: the branch is resolved in E, and the ${FLUSH_PENALTY} instructions fetched on the guessed road (dashed) are flushed. The right road starts ${FLUSH_PENALTY} cycles late: ${f.lost} cycles lost, ${f.cycles} in all.`
-        : `Right guess: the road really taken was already being fetched, so nothing is lost (${f.cycles} cycles).${guess ? ' Guessing taken needs a predictor that knows the target in F; the chapter\'s own pipeline always guesses not taken.' : ''}`;
+        ? `Orange road: the guess; ring: the road really taken. Wrong guess: the branch is resolved in E, and the ${FLUSH_PENALTY} instructions fetched on the guessed road (dashed) are flushed. The right road starts ${FLUSH_PENALTY} cycles late: ${f.lost} cycles lost, ${f.cycles} in all.`
+        : `Orange road: the guess; ring: the road really taken. Right guess: the road really taken was already being fetched, so nothing is lost (${f.cycles} cycles).${guess ? ' Guessing taken needs a predictor that knows the target in F; the chapter\'s own pipeline always guesses not taken.' : ''}`;
   };
   host.replaceChildren(svg, h('div', { class: 'af-ctl' }, guessBtn, actualBtn, stepBtn), read);
   paint();

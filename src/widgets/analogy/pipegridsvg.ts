@@ -36,7 +36,7 @@ export function gridKids(g: GridSpec): SVGElement[] {
     const cls = c.ghost ? 'af-cell af-ghost' : `af-cell af-i${HUES[c.instr % HUES.length]}${c.held ? ' af-held' : ''}`;
     kids.push(s('g', null,
       s('rect', { x: x(c.cycle) + 1.5, y: y(c.stage) + 3, width: cw - 3, height: GRID_ROW - 7, rx: 3, class: cls }),
-      c.held ? null : s('text', { x: x(c.cycle) + cw / 2, y: y(c.stage) + GRID_ROW / 2 + 3, 'text-anchor': 'middle', class: `af-t ${c.ghost ? 'af-m' : 'af-on'}` }, g.label(c.instr))));
+      s('text', { x: x(c.cycle) + cw / 2, y: y(c.stage) + GRID_ROW / 2 + 3, 'text-anchor': 'middle', class: `af-t ${c.ghost ? 'af-m' : c.held ? 'af-hold' : 'af-on'}` }, g.label(c.instr))));
   }
   // the extra hand: an arrow in a column from the stage that holds the result to the stage that needs it
   for (const h of g.hands ?? []) {
