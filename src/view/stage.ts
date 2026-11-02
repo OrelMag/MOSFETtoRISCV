@@ -10,7 +10,7 @@ import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
-import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
+import { completeEdge, type Edge, lowerClock, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
 import { RELAY_STEP_MS } from '../phys/relay';
 import { stats } from '../sim/stats';
@@ -1170,6 +1170,7 @@ export class Stage {
   private rise(clk: string): void {
     const sim = this.sim!;
     let end: number | null = null;
+    lowerClock(sim, clk, !(this.period && sim.runUntil)); // a clock left high by hand: no edge, but the panels' models would step
     if (this.period && sim.runUntil) {
       const P = this.period;
       const E = Math.max(sim.time, this.nextEdge);
