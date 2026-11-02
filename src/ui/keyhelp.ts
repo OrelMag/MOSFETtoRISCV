@@ -56,12 +56,13 @@ export function showKeySheet(o: SheetOptions): () => void {
   const takenKeys = o.taken ? [...o.taken].filter((k) => KEYS.some((d) => d.taken?.includes(k))) : [];
   const closeBtn = h('button', { class: 'btn ghost sm kh-close', 'aria-label': 'Close' }, h('kbd', null, 'Esc'), 'close');
   const box = h('div', { class: 'kh', role: 'dialog', 'aria-modal': 'true', 'aria-label': o.title },
-    h('div', { class: 'kh-head' }, icon('keyboard', 18), h('h3', null, o.title), o.sub ? h('span', { class: 'kh-sub' }, o.sub) : null, closeBtn),
+    h('div', { class: 'kh-head' }, icon('keyboard', 18), h('h3', null, o.title), o.sub ? h('span', { class: 'kh-sub' }, o.sub) : null,
+      // beside Esc / close, where a learner looking for a way out finds it (not lost at the sheet's bottom)
+      o.coach ? h('button', { class: 'btn sm kh-coach', onclick: () => { close(); showCoach(o.coach!); } }, 'Show me the controls') : null, closeBtn),
     grid,
     o.mouse?.length ? h('details', { class: 'kh-mouse' }, h('summary', null, 'Mouse and touch gestures'),
       h('dl', null, o.mouse.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]))) : null,
     h('div', { class: 'kh-foot' },
-      o.coach ? h('button', { class: 'btn sm kh-coach', onclick: () => { close(); showCoach(o.coach!); } }, 'Show me the controls') : null,
       takenKeys.length ? h('span', { class: 'kh-taken' }, 'A Key part on this chip takes ', takenKeys.map((k) => h('kbd', null, k.toUpperCase())), ' (struck through)') : null,
       h('span', { class: 'sp' }), sw, note));
   const ov = h('div', { class: `kh-back key-help${o.cls ? ` ${o.cls}` : ''}` }, box);

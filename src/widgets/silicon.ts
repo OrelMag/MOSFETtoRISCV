@@ -271,7 +271,8 @@ export function fabWidget(): Widget {
 // ---- technology mapping --------------------------------------------------------------------------------
 
 export function mappingWidget(): Widget {
-  const body = h('tbody');
+  // an empty table is a header and nothing: say what fills it
+  const body = h('tbody', null, h('tr', null, h('td', { colspan: '7', class: 'sub' }, 'Press Map the designs: each row is measured on the real netlist as it appears.')));
   const designs: [string, () => ComponentDef][] = [
     ['full adder', () => FULL_ADDER],
     ['32-bit ALU (fast)', () => alu(32, 'ks')],

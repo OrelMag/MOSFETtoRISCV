@@ -74,7 +74,7 @@ export class PathPage implements Page {
       const row = h('div', { class: 'lp-row' },
         h('a', { class: 'lp-ch', href: `#/c/${c.id}/${Math.min(seen, c.steps.length - 1)}` }, c.title, h('small', null, `${c.label ?? `ch ${c.num}`} · ${seen} / ${c.steps.length} steps${tested ? ' · tested out' : ''}`)),
         h('div', { class: 'lp-chips' }, ...mine.map(({ skill, state }) => h('a', { class: `lp-chip ${state}`, href: `#/campaign/codex/${skill.id}`, title: `${skill.title}: ${STATE_LABEL[state]}` }, skill.title))),
-        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.check?.length ? h('button', { class: 'btn sm', type: 'button', onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
+        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.check?.length ? h('button', { class: 'btn sm', type: 'button', title: this.testing === c.id ? 'Close the questions' : `Skip ${c.title}: answer its recap questions, all right to count it as known`, onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
           tested ? h('button', { class: 'btn sm', type: 'button', title: 'Count this chapter as not tested out', onclick: () => learn().untest(c.id) }, 'Undo test-out') : null));
       card.append(row);
       if (this.testing === c.id) card.append(this.testOut(c.id));

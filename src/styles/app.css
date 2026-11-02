@@ -41,6 +41,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a.active { background: var(--accent-soft); color: var(--accent); }
+.nav a .cap { display: none; }
 .spacer { flex: 1; }
 .brand, .tools { flex: none; }
 .tools { display: flex; align-items: center; gap: 8px; }
@@ -79,8 +80,19 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 480px) {
   .nav { margin-left: 0; }
   .nav a { padding: 6px 7px; }
-  .nav a .icon:last-child:not(:first-child) { display: none; }
+  .nav a .icon:not(:first-child) { display: none; }
   .topbar .tools { gap: 4px; }
+}
+
+/* A phone (the stacked layout, 760 px): the section icons get a tiny caption under them (ui/app.ts navLink's short word) and the
+   bar grows by 14 px; --topbar-h is the one place that height lives (menus, drawers and the level page size from it). */
+@media (max-width: 760px) {
+  :root:root { --topbar-h: 70px; }
+  .nav a { flex-direction: column; justify-content: center; gap: 2px; padding: 4px 5px; }
+  .nav a span.cap { display: block; font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }
+  .nav a .icon:not(:first-child) { display: none; }
+  /* five captioned sections do not fit beside four tools in 360 px: Slow motion goes (the search's > actions keep it) */
+  .topbar .slow-btn { display: none; }
 }
 
 /* palette menu */
@@ -250,6 +262,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .kh-head h3 { margin: 0; font-size: 18px; color: var(--text); }
 .kh-sub { font-size: 12.5px; }
 .kh-close { margin-left: auto; color: var(--muted); }
+.kh-coach { margin-left: auto; color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.kh-coach + .kh-close { margin-left: 0; }
 .kh-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .kh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px 14px; }
 .kh-grp { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px 6px; background: var(--surface-2); }
@@ -586,6 +600,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 760px) {
   .show-circuit { display: inline-flex; position: fixed; z-index: 25; right: 14px; bottom: 14px; box-shadow: var(--shadow-lg); border-radius: 99px; }
   .show-circuit[hidden] { display: none; }
+}
+/* under the level badge (whatever its width or the stage bar's height) */
+.recap-on > .stage .canvas::after {
+  content: "Last step's circuit"; position: absolute; z-index: 5; left: 12px; top: 38px; padding: 2px 8px; border-radius: 99px; pointer-events: none;
+  font: 600 11px var(--font-mono); color: var(--muted); background: var(--surface); border: 1px solid var(--border);
 }
 html[data-widget-step] .slow-btn { display: none; }
 .stage-notes-live { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -2228,19 +2247,27 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .stage-bar { gap: 2px; }
 }
 @media (pointer: coarse) and (max-width: 420px) {
-  .nav a { min-width: 36px; padding-inline: 8px; }
+  .nav a { min-width: 36px; padding-inline: 3px; }
+}
+/* 360 px: five captioned sections and four tools need 36 px targets (still over WCAG 2.5.8's 24) */
+@media (pointer: coarse) and (max-width: 380px) {
+  .topbar { padding: 0 2px; }
+  .topbar .brand, .topbar .tools .btn.icon-only { min-width: 36px; }
+  .nav a { padding-inline: 1px; }
+  .nav a span.cap { font-weight: 500; letter-spacing: -0.02em; }
 }
 @media (pointer: coarse) { .lab-chip, .lab-unit, .lab-x, .lab-add { min-height: 40px; min-width: 40px; } .lab-num input, .lab-num select { min-height: 40px; } }
 
 /* ---------- Why? (view/whypanel.ts): a wire's value traced to its causes, what each part is for ---------- */
 .why-card {
-  position: absolute; left: 12px; top: 12px; z-index: 6; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px);
+  position: absolute; left: var(--why-left, 12px); top: var(--why-top, 12px); z-index: 6;
+  width: min(380px, max(240px, calc(100% - var(--why-left, 12px) - max(12px, var(--panel-inset, 0px))))); max-height: calc(100% - var(--why-top, 12px) - 12px);
   display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg); font-size: 13px;
 }
 /* a narrow canvas (look inside beside the circuit, a phone): the card sits along the bottom, the circuit above it */
-.sb-inside:not(.wide) .why-card { top: auto; bottom: 40px; width: calc(100% - 24px); max-height: 42%; }
-@media (max-width: 760px) { .why-card { top: auto; bottom: 12px; width: calc(100% - 24px); max-height: 45%; } }
+.sb-inside:not(.wide) .why-card { top: auto; left: 12px; bottom: 40px; width: calc(100% - 24px); max-height: 42%; }
+@media (max-width: 760px) { .why-card { top: auto; left: 12px; bottom: 12px; width: calc(100% - 24px); max-height: 45%; } }
 .why-card > header { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--border); }
 .why-card > header b { font-size: 13.5px; }
 .why-tabs { margin-left: auto; }

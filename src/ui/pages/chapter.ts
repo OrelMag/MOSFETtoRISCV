@@ -55,6 +55,7 @@ export class ChapterPage implements Page {
   /** Following the address bar (a route): the stage's moves are not new history entries. */
   private routing = false;
   private unlisten: (() => void)[] = [];
+  private pillOff: (() => void) | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
   private unbindKeys: () => void;
@@ -152,6 +153,8 @@ export class ChapterPage implements Page {
     this.stepNotes?.destroy();
     this.stepNotes = null;
     this.stage.noteMarks = null;
+    // the recap leaves the last step's circuit on the stage: say so (app.css .recap-on)
+    this.el.classList.toggle('recap-on', i === this.recap);
     if (i === this.recap) {
       this.show(steps.length - 1, path);
       this.renderHead();
@@ -361,9 +364,15 @@ export class ChapterPage implements Page {
       this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     } }, icon('chevD', 16), 'Show circuit');
     if (typeof IntersectionObserver !== 'undefined') {
-      const io = new IntersectionObserver((es) => { b.hidden = es.some((e) => e.intersectionRatio > 0.35); }, { threshold: [0, 0.35, 0.6] });
+      // Gone once the stage is mostly in view, and as soon as its bar is: the pill sits where the bar's right-hand icons do.
+      let mostly = false, bar = false;
+      const sync = () => { b.hidden = mostly || bar; };
+      const io = new IntersectionObserver((es) => { for (const e of es) { if (e.target === this.stage.el) mostly = e.intersectionRatio > 0.35; else bar = e.isIntersecting; } sync(); }, { threshold: [0, 0.35, 0.6] });
       io.observe(this.stage.el);
-      this.unlisten.push(() => io.disconnect());
+      const barEl = this.stage.el.querySelector('.stage-bar');
+      if (barEl) io.observe(barEl);
+      // not in `unlisten`: that is emptied at every step change, and the pill lives as long as the page
+      this.pillOff = () => io.disconnect();
     }
     return b;
   }
@@ -535,6 +544,7 @@ export class ChapterPage implements Page {
     this.notes.clear();
     this.unbindKeys();
     this.unlisten.forEach((f) => f());
+    this.pillOff?.();
     this.stage.destroy();
   }
 }
