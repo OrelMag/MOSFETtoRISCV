@@ -36,6 +36,7 @@ import { type BuildChallenge, importAnswer, startChallenge } from '../../editor/
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { markJump } from '../returnto';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 import { tipsOf } from '../../campaign/nudges';
@@ -122,7 +123,7 @@ export class CampaignPage implements Page {
     const [a, b] = this.parts;
     const t = a === 'codex' ? codexById(b ?? '')?.title : a === 'n' ? nodeById(b ?? '')?.title : undefined;
     if (!t) return { label: 'the campaign map', short: 'Map' };
-    return a === 'codex' ? { label: `Codex: ${t}`, short: t } : { label: `${t} (map)`, short: t };
+    return a === 'codex' ? { label: `Codex: ${t}`, short: `Codex: ${t}` } : { label: `${t} (map)`, short: t };
   }
 
   destroy(): void {
@@ -482,6 +483,7 @@ export class CampaignPage implements Page {
     const r = importAnswer(loadWorkspace(), ch);
     const saved = saveWorkspace(r.ws);
     if (!saved.ok) return this.say(saved.reason);
+    markJump();
     location.hash = `#/sandbox/${r.main}`;
   }
 

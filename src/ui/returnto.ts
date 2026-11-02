@@ -3,7 +3,7 @@
 // rules). It goes to the saved address rather than history.back(): a drill leaves one history entry per level.
 
 import { h, icon } from './dom';
-import { typing } from './keys';
+import { ownsKeys } from './keys';
 import { currentViewHash, splitView } from './viewlink';
 import { fallbackLabel, nextTrail, parseTrail, placeKey, RETURN_KEY, sectionOf, type Intent, type ReturnPlace } from './returntrail';
 
@@ -88,14 +88,27 @@ export function installReturn(view: HTMLElement): { el: HTMLElement; route(page:
     const before = trail.slice(0, -1).reverse().map((p) => p.label);
     go.title = `Back to ${top.label} (Alt+Backspace)${before.length ? `, then ${before.join(', then ')}` : ''}`;
     go.setAttribute('aria-label', `Back to ${top.label}`);
+    fit();
   };
+  // The longest label that leaves the nav unscrolled (on a phone it scrolls anyway: the short label, at least the arrow beside it).
+  const fit = () => {
+    if (el.hidden) return;
+    const nav = el.parentElement?.querySelector<HTMLElement>('.nav');
+    const phone = innerWidth <= 480;
+    for (const f of phone ? ['short'] : ['long', 'short', 'icon']) {
+      el.dataset.fit = f;
+      if (!nav || nav.scrollWidth <= nav.clientWidth + 1) break;
+    }
+  };
+  // the width changes the room (fit never changes the root's size, so this cannot loop)
+  new ResizeObserver(() => fit()).observe(document.documentElement);
   forget.addEventListener('click', () => {
     trail = [];
     save(trail);
     render();
   });
   window.addEventListener('keydown', (e) => {
-    if (!e.altKey || e.ctrlKey || e.metaKey || e.key !== 'Backspace' || typing(e.target) || !trail.length) return;
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.key !== 'Backspace' || e.defaultPrevented || ownsKeys(e.target) || !trail.length) return;
     e.preventDefault();
     markJump();
     location.hash = trail[trail.length - 1].hash;
@@ -127,6 +140,8 @@ export function installReturn(view: HTMLElement): { el: HTMLElement; route(page:
         save(trail);
         render();
       }
+      // the route shows or hides the stage tools in the bar after this
+      requestAnimationFrame(fit);
     },
   };
 }

@@ -50,10 +50,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 1220px) { .tools .lbl { display: none; } }
 @media (max-width: 1140px) { .nav a span { display: none; } }
 @media (max-width: 580px) { .brand-name { display: none; } }
-/* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. The full label only where
-   the bar has room for it; below that the short one ("Ch 07 · 3"), the full one in the tooltip. */
+/* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. data-fit (returnto.ts fit):
+   the full label while the nav still fits beside it, else the short one ("Ch 07 · 3"), else the arrow alone; the full one in
+   the tooltip. */
 .return-pill {
-  flex: 0 1 auto; display: flex; align-items: center; height: 30px; min-width: 0; margin-left: 6px; border-radius: 15px;
+  flex: none; display: flex; align-items: center; height: 30px; margin-left: 6px; border-radius: 15px;
   background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   --rt-ink: color-mix(in srgb, var(--accent) 70%, var(--text));
 }
@@ -65,15 +66,16 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .rt-go .icon { flex: none; }
 .rt-long, .rt-short { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rt-long { max-width: 30ch; }
-.rt-short { display: none; max-width: 14ch; }
+.rt-short { max-width: 14ch; }
+.return-pill:not([data-fit='short']) .rt-short, .return-pill:not([data-fit='long']) .rt-long { display: none; }
+.return-pill[data-fit='icon'] .rt-go { gap: 0; }
 .rt-x {
   flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-right: 2px; padding: 0; border: 0; border-radius: 13px;
   background: none; color: var(--rt-ink); cursor: pointer;
 }
 .rt-go:hover, .rt-x:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-@media (max-width: 1300px) { .rt-long { display: none; } .rt-short { display: inline; } }
-/* a phone: the pill keeps its label and the nav scrolls under it; the top nav forgets the way back, so the × goes */
-@media (max-width: 480px) { .return-pill { flex: none; margin-left: 2px; } .rt-short { max-width: 10ch; } .rt-go { padding-right: 10px; border-radius: 15px; } .rt-x { display: none; } }
+/* a phone: the top nav forgets the way back, so the × goes */
+@media (max-width: 480px) { .return-pill { margin-left: 2px; } .rt-short { max-width: 10ch; } .rt-go { padding-right: 10px; border-radius: 15px; } .rt-x { display: none; } }
 @media (max-width: 480px) {
   .nav { margin-left: 0; }
   .nav a { padding: 6px 7px; }

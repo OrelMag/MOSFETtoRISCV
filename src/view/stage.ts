@@ -447,7 +447,8 @@ export class Stage {
         this.setProbeMode(false);
         return;
       }
-      if (e.key === 'Escape' || e.key === 'Backspace') {
+      // Alt+Backspace is the top bar's way back (ui/returnto.ts)
+      if (e.key === 'Escape' || (e.key === 'Backspace' && !e.altKey)) {
         e.preventDefault();
         this.up();
       }

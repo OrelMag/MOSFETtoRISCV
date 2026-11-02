@@ -32,6 +32,7 @@ import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { markJump } from '../returnto';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 import { WalkMode } from './levelwalk';
@@ -459,6 +460,7 @@ export class LevelPage implements Page {
     const ed = this.editor!, ch = this.ch!;
     let main = '';
     ed.editWs((ws) => { const r = importAnswer(ws, ch); main = r.main; return r.ws; });
+    markJump();
     location.hash = `#/sandbox/${main}`;
   }
 
