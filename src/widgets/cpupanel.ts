@@ -222,6 +222,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
               errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
               return;
             }
+            // the ROM has a fixed size (an out-of-order scene sizes it to the program): a longer program wraps the PC
+            const cap = opts.ooo ? Infinity : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
+            if (r.words.length > cap) {
+              errBox.textContent = `program is ${r.words.length} words, the ROM holds ${cap}`;
+              return;
+            }
             stage.load(cpuScene({ ...opts, source: editor.value }));
           },
         }, 'Assemble & load'),
