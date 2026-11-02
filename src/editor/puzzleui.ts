@@ -9,7 +9,7 @@ import '../styles/sbchallenges.css';
 import '../styles/sbpuzzles.css';
 import { h, icon } from '../ui/dom';
 import { REF_BY_ID, type RefCpu } from '../puzzles/computers';
-import { dominatedBy, parFor, PuzzleProgress, type PuzzleScore, puzzleStars, refFront, type Stars } from '../puzzles/grade';
+import { dominatedBy, isReferenceProgram, parFor, PuzzleProgress, type PuzzleScore, puzzleStars, refFront, type Stars } from '../puzzles/grade';
 import { type Puzzle, PUZZLE_GROUPS, puzzleChipId, puzzleOfChip, PUZZLES, type PuzzleTest } from '../puzzles/puzzles';
 import { refPoints, refProgram, type RefPoint } from '../puzzles/refs';
 import { PuzzleReplay } from '../puzzles/replay';
@@ -35,7 +35,7 @@ class PuzzleUi {
   private panel = h('section', { class: 'sb-chal sb-pz', 'aria-label': 'Puzzle' });
   private drawer: HTMLElement | null = null;
   private dlg: HTMLElement | null = null;
-  private results = new Map<string, { r: PuzzleRun; key: string; score: PuzzleScore | null; stars: Stars | null }>();
+  private results = new Map<string, { r: PuzzleRun; key: string; score: PuzzleScore | null; stars: Stars | null; reference?: boolean }>();
   private collapsed = false;
   private confirming = false;
   private checking = false;
@@ -202,7 +202,7 @@ class PuzzleUi {
       stale ? h('p', { class: 'sb-tp-note' }, 'Edited since the last Check: check again.') : null);
   }
 
-  private scoreEl(p: Puzzle, res: { r: PuzzleRun; score: PuzzleScore | null; stars: Stars | null } | undefined, stale: boolean, lang: string | null): HTMLElement {
+  private scoreEl(p: Puzzle, res: { r: PuzzleRun; score: PuzzleScore | null; stars: Stars | null; reference?: boolean } | undefined, stale: boolean, lang: string | null): HTMLElement {
     const refs = refPoints(p.id);
     const par = parFor(lang, refs);
     const s = res?.score ?? null;
@@ -222,6 +222,8 @@ class PuzzleUi {
       out.append(h('p', { class: 'sb-pz-grade' }, h('span', { class: 'sb-chal-stars' }, starText(res.stars)), ' ',
         res.stars === 3 ? 'cycles × NANDs below every reference' : res.stars === 2 ? 'on the front: no reference is both cheaper and faster'
           : `${beaten.map((b) => CPU_LABEL[b.cpu]).join(', ')} ${beaten.length > 1 ? 'match' : 'matches'} or ${beaten.length > 1 ? 'beat' : 'beats'} you on both NANDs and cycles`));
+    } else if (res?.reference) {
+      out.append(h('p', { class: 'sb-pz-hint' }, 'The reference program as loaded: it earns no stars. Change it, then Check again.'));
     } else if (refs.length) {
       out.append(h('p', { class: 'sb-pz-hint' }, '★ pass · ★★ no reference both cheaper and faster · ★★★ cycles × NANDs below every reference'));
     }
@@ -243,9 +245,16 @@ class PuzzleUi {
         const c = ed.compiled;
         const r = runPuzzle(p, c, ed.doc.pins);
         const score: PuzzleScore | null = r.ok ? { cycles: r.cycles, nands: hardwareNands(c.def), words: programWords(ed.doc, ed.ws.chips) } : null;
-        const stars = score ? puzzleStars(score, refPoints(p.id)) : null;
-        this.results.set(ed.chipId, { r, key: this.stateKey(), score, stars });
-        if (score && stars) {
+        // the reference program as loaded earns nothing: it matches itself
+        const roms = programRoms(ed.doc, ed.ws.chips);
+        const cpu = roms.length === 1 ? ({ cpu4: 'cpu4', rv16: 'rv16', asm: 'rv32' } as Record<string, RefCpu>)[(roms[0].part.ref as { rom: { lang: string } }).rom.lang] : undefined;
+        const isRef = !!score && !!cpu && isReferenceProgram((roms[0].part.ref as { rom: { src: string } }).rom.src, refProgram(cpu, p.id));
+        const stars = score && !isRef ? puzzleStars(score, refPoints(p.id)) : null;
+        this.results.set(ed.chipId, { r, key: this.stateKey(), score, stars, reference: isRef });
+        if (isRef) {
+          progress().shown(p.id);
+          ed.toast('This is the reference program: it passes, but earns no stars. Change it to beat it');
+        } else if (score && stars) {
           const { best, first } = progress().record(p.id, score, stars);
           ed.toast(first ? `Solved: ${starText(stars)}` : best ? `New best: ${starText(stars)}` : 'Passes (not better than your best)');
         } else {
