@@ -3,6 +3,7 @@
 // codex. Loaded on demand by the chapter page and the level screen.
 
 import '../../styles/glossary.css';
+import { analogiesForCodex } from '../../chapters/analogies';
 import { h, icon } from '../../ui/dom';
 import { CODEX_KINDS, codexById } from '../codex';
 import { Glossary, GLOSS_SKIP } from '../glossary';
@@ -88,17 +89,21 @@ function show(el: HTMLElement): void {
     // A touch screen has no mouseleave: the card closes on its ×, and when the page scrolls under it.
     addEventListener('scroll', () => { if (card && !card.hidden && coarse()) hideGlossary(); }, { capture: true, passive: true });
   }
+  const go = (ev: Event) => {
+    if (!opener) return;
+    ev.preventDefault();
+    hideGlossary();
+    opener(e.id);
+  };
+  // A one-line pointer to the picture the entry has in the codex (chapters/analogies.ts), under the summary.
+  const pic = analogiesForCodex(e.id)[0];
   const sum = h('div', { class: 'gl-sum' });
   sum.innerHTML = e.body;
   card.replaceChildren(h('div', { class: 'gl-title' }, h('b', null, e.title), h('span', { class: 'gl-kind' }, CODEX_KINDS.find((k) => k.id === e.kind)?.title.replace(/s$/, '') ?? e.kind),
     coarse() ? h('button', { class: 'gl-close', 'aria-label': 'Close', onclick: hideGlossary }, icon('close', 14)) : null), sum,
+    ...(pic ? [h('a', { class: 'gl-analogy', href: `#/campaign/codex/${e.id}`, onclick: go }, h('span', null, 'Analogy: '), pic.title)] : []),
     ...(el.dataset.later ? [h('div', { class: 'gl-later' }, `Built in ${el.dataset.later}. Read on: this step does not need it yet.`)] : []),
-    h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}`, onclick: (ev: Event) => {
-      if (!opener) return;
-      ev.preventDefault();
-      hideGlossary();
-      opener(e.id);
-    } }, opener ? 'Read the entry' : 'Open in the codex', icon('chevR', 12)));
+    h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}`, onclick: go }, opener ? 'Read the entry' : 'Open in the codex', icon('chevR', 12)));
   card.hidden = false;
   const r = el.getBoundingClientRect();
   const w = Math.min(380, window.innerWidth - 24);
