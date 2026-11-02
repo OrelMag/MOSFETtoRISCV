@@ -109,7 +109,7 @@ const MENU: (MenuItem | null)[] = [
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
   { icon: 'code', label: 'Instruction sets…', hint: 'custom ISAs: an assembler and a listing for your CPU from a table', run: (ed) => openIsaEditor(ed) },
-  { icon: 'layers', label: 'Memory map…', hint: 'the bus address windows: move RAM, flash, screen …, see overlaps, the decoder, a C header', run: openMemoryMap, enabled: hasBusPart, off: 'Open a chip with a bus (Examples ▸ System on a bus)' },
+  { icon: 'layers', label: 'Memory map…', hint: 'the bus address windows: move RAM, flash, screen …, see overlaps, the decoder, a C header', run: openMemoryMap, enabled: hasBusPart, off: 'open Examples ▸ System on a bus' },
   { icon: 'stack', label: 'Manage chips…', hint: 'sizes, who uses what; open, duplicate, delete', run: (ed) => manageDialog(ed) },
   { icon: 'trash', label: 'Delete local data…', hint: 'erase what this site keeps in this browser', run: (ed) => deleteDataDialog(ed) },
 ];
@@ -125,7 +125,7 @@ function openMenu(ed: Editor): void {
     if (!it) { menu.append(h('hr')); continue; }
     const off = it.enabled && !it.enabled(ed);
     menu.append(h('button', { role: 'menuitem', disabled: off, title: off ? it.off : undefined, onclick: () => { closeMenu(); it.run(ed); } },
-      glyph(it.icon), h('span', null, h('b', null, it.label), h('small', null, it.hint))));
+      glyph(it.icon), h('span', null, h('b', null, it.label), h('small', null, off && it.off ? `Needs a bus on the chip: ${it.off}` : it.hint))));
   }
   ed.el.append(menu);
   const w = menu.offsetWidth;
