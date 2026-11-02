@@ -1,0 +1,17 @@
+{
+  "single": {
+    "nand": 4720,
+    "period": 98,
+    "cycles": 1236
+  },
+  "multi": {
+    "nand": 5203,
+    "period": 76,
+    "cycles": 3865
+  },
+  "pipe": {
+    "nand": 9218,
+    "period": 78,
+    "cycles": 1495
+  }
+}
