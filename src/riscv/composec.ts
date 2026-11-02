@@ -4,8 +4,8 @@
 
 import { assemble } from './asm';
 import { ABI } from './isa';
-import { type CDecoded, type CFmt, decodeC, disasmC } from './rvc';
-import { parseWithOffsets, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts, type ParseResult, type Role } from '../isa/composekit';
+import { type CDecoded, type CFmt, decodeC, disasmC, IMM_MAPS, type ImmMap } from './rvc';
+import { parseWithOffsets, type CField, type CImm, type ImmWire, type CInstr, type ComposeIsa, type CSlot, type Parts, type ParseResult, type Role } from '../isa/composekit';
 
 type Kind = 'reg' | 'rego' | 'imm' | 'offset' | 'target' | 'upper';
 interface Op {
@@ -152,6 +152,69 @@ function fieldsC(word: number): CField[] {
   });
 }
 
+// ---- the immediate's wiring: IMM_MAPS drawn for the panel ---------------------------------------------------
+
+interface ImmLayout {
+  map: ImmMap;
+  /** Signed: the bits above the top one copy it; bits the map lacks below the top are ground (the scaling). */
+  signed: boolean;
+  /** The immediate's bit 0 is this bit of the value (c.lui: nzimm[17:12] is the upper field imm[5:0]). */
+  base: number;
+  /** The panel's width: the bits the field has; 16 for a signed one (the rest are sign copies). */
+  width: number;
+  note: string;
+}
+const topOf = (m: ImmMap) => Math.max(...(Object.values(IMM_MAPS[m]) as number[]));
+const SIGNED_W = 16;
+const IMM_LAYOUT: Record<string, ImmLayout> = {
+  'c.addi': { map: 'ci', signed: true, base: 0, width: SIGNED_W, note: 'imm[5] from inst[12], imm[4:0] from inst[6:2], sign-extended from bit 5' },
+  'c.li': { map: 'ci', signed: true, base: 0, width: SIGNED_W, note: 'imm[5] from inst[12], imm[4:0] from inst[6:2], sign-extended from bit 5' },
+  'c.andi': { map: 'ci', signed: true, base: 0, width: SIGNED_W, note: 'imm[5] from inst[12], imm[4:0] from inst[6:2], sign-extended from bit 5' },
+  'c.slli': { map: 'ci', signed: false, base: 0, width: 6, note: 'shamt[5] from inst[12] (must be 0 on RV32), shamt[4:0] from inst[6:2]' },
+  'c.srli': { map: 'ci', signed: false, base: 0, width: 6, note: 'shamt[5] from inst[12] (must be 0 on RV32), shamt[4:0] from inst[6:2]' },
+  'c.srai': { map: 'ci', signed: false, base: 0, width: 6, note: 'shamt[5] from inst[12] (must be 0 on RV32), shamt[4:0] from inst[6:2]' },
+  'c.lui': { map: 'lui', signed: true, base: 12, width: SIGNED_W, note: 'nzimm[17:12] (the lui field imm[5:0], sign-extended from nzimm[17]) from inst[12] and inst[6:2]; the 12 low bits of the value are ground' },
+  'c.addi16sp': { map: 'addi16sp', signed: true, base: 0, width: SIGNED_W, note: 'nzimm[9|4|6|8:7|5] scattered over inst[12], inst[6:2]; imm[3:0] tied to ground (a multiple of 16), sign-extended from bit 9' },
+  'c.addi4spn': { map: 'addi4spn', signed: false, base: 0, width: 10, note: 'nzuimm[5:4|9:6|2|3] scattered over inst[12:5]; imm[1:0] tied to ground (a multiple of 4)' },
+  'c.lw': { map: 'lw', signed: false, base: 0, width: 7, note: 'uimm[5:3] from inst[12:10], uimm[2] and uimm[6] from inst[6:5]; imm[1:0] tied to ground (a multiple of 4)' },
+  'c.sw': { map: 'lw', signed: false, base: 0, width: 7, note: 'uimm[5:3] from inst[12:10], uimm[2] and uimm[6] from inst[6:5]; imm[1:0] tied to ground (a multiple of 4)' },
+  'c.lwsp': { map: 'lwsp', signed: false, base: 0, width: 8, note: 'uimm[5] from inst[12], uimm[4:2|7:6] from inst[6:2]; imm[1:0] tied to ground (a multiple of 4)' },
+  'c.swsp': { map: 'swsp', signed: false, base: 0, width: 8, note: 'uimm[5:2|7:6] from inst[12:7]; imm[1:0] tied to ground (a multiple of 4)' },
+  'c.j': { map: 'cj', signed: true, base: 0, width: SIGNED_W, note: 'offset[11|4|9:8|10|6|7|3:1|5] scattered over inst[12:2]; imm[0] tied to ground (a multiple of 2), sign-extended from bit 11' },
+  'c.jal': { map: 'cj', signed: true, base: 0, width: SIGNED_W, note: 'offset[11|4|9:8|10|6|7|3:1|5] scattered over inst[12:2]; imm[0] tied to ground (a multiple of 2), sign-extended from bit 11' },
+  'c.beqz': { map: 'cb', signed: true, base: 0, width: SIGNED_W, note: 'offset[8|4:3] from inst[12:10], offset[7:6|2:1|5] from inst[6:2]; imm[0] tied to ground, sign-extended from bit 8' },
+  'c.bnez': { map: 'cb', signed: true, base: 0, width: SIGNED_W, note: 'offset[8|4:3] from inst[12:10], offset[7:6|2:1|5] from inst[6:2]; imm[0] tied to ground, sign-extended from bit 8' },
+};
+
+/** The wiring of a parcel's immediate (null: the form has none, or the parcel is no builder form), bit i of the panel = bit i + base of the value. */
+export function cImm(word: number): CImm | null {
+  const h = word & 0xffff;
+  const d = decodeC(h);
+  const lay = d && IMM_LAYOUT[d.name];
+  if (!d || !lay) return null;
+  const map = IMM_MAPS[lay.map] as Record<number, number>;
+  const bySrc = new Map<number, number>(); // value bit → parcel bit
+  for (const [ib, vb] of Object.entries(map)) bySrc.set(vb, Number(ib));
+  const top = topOf(lay.map);
+  const signSrc = bySrc.get(top)!;
+  const wires: ImmWire[] = [];
+  for (let i = 0; i < lay.width; i++) {
+    const vb = i + lay.base;
+    const src = bySrc.get(vb);
+    const sign = src === undefined && lay.signed && vb > top;
+    const from: number | 'zero' = src !== undefined ? src : sign ? signSrc : 'zero';
+    wires.push({ bit: i, src: from, sign, value: from === 'zero' ? 0 : (h >>> from) & 1 });
+  }
+  const value = lay.base ? d.imm >> lay.base : d.imm;
+  return { wires, value, text: lay.base ? `0x${(value & 0xfffff).toString(16)}` : String(value), note: lay.note };
+}
+
+/** Why a parcel is not a form of the builder, when that is a reason worth a sentence. */
+export function whyNotC(word: number): string | null {
+  const d = decodeC(word & 0xffff);
+  return d?.f ? `${d.name} is a floating-point form (RV32FC): the C cores have no F extension, so the builder leaves it out.` : null;
+}
+
 /** C for the instruction builder: 16-bit parcels, one instruction at a time (step 2). */
 export const RVC_COMPOSE: ComposeIsa = (() => {
   const groups: { name: string; ids: string[] }[] = [];
@@ -183,7 +246,8 @@ export const RVC_COMPOSE: ComposeIsa = (() => {
     decode: (word) => decodeC16(word),
     loose: (word) => decodeC16(word),
     fields: fieldsC,
-    imm: () => null,
+    imm: cImm,
+    whyNot: whyNotC,
     text(word, pc, labels) {
       const h = word & 0xffff, base = disasmC(h);
       const d = decodeC(h);

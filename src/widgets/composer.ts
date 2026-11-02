@@ -170,7 +170,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     if (!c) {
       msg.className = 'cmp-msg err';
       const name = isa.rv32 ? decode(word).spec?.name : undefined;
-      msg.textContent = name
+      msg.textContent = isa.whyNot?.(word) ? isa.whyNot(word)! : name
         ? `A ${name} with bits set that the builder leaves alone (an atomic's aq / rl, a fence's ordering): shown, not built.`
         : isa.rv32 ? `${hex(word)} is not an RV32 instruction here: the CPU traps with mcause 2 (illegal instruction).`
           : `${hex(word)} is not an instruction of ${isa.name}${fields[0]?.label === '.word' ? '' : ', or has bits set the builder leaves alone'}.`;
