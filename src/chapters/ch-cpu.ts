@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { alu, addSub, bitwise, regfile, shifter } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
@@ -13,7 +14,7 @@ import type { Chapter } from './types';
 
 const { control: CONTROL_NANDS, and5: AND5_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 
 /** The 32 × 32 register file's NANDs by part: registers w1…w31, read ports rp1 / rp2, the rest (decoder). */
 const RF_COST = (() => {

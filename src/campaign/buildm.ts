@@ -2,6 +2,7 @@
 // a row-buffer controller, a two-master bus, a DMA engine and a flash page store, each against a device on its bench
 // (memcheck.ts) or, for the bus, a sequence from a model. No DOM.
 
+import { groupDigits } from '../sim/numfmt';
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
@@ -128,7 +129,7 @@ export const BUILDM: Record<string, () => BuildChallenge> = {
     id: 'm_ctrl', title: 'Row-buffer controller', level: 'memory', allowed: 'nand',
     brief: `A DRAM chip on the bench: ${DRAM16.banks} banks of ${DRAM16.rows} rows of ${DRAM16.cols} words, each bank with its own row buffer. A request (<code>req</code>, <code>addr</code> = row (6 bits) · bank · column (4 bits), <code>we</code>, <code>wd</code>) is held until <b>ready</b>: a write is ready in the cycle of its WR, a read in the cycle its word is on <code>dq</code> (<b>rd</b>). `
       + `Commands on <b>cmd</b> with <b>ba</b>, <b>ra</b>, <b>ca</b>, <b>dd</b>: 1 ACT (open row ra of bank ba), 2 RD (word ca of its open row: on dq <b>tCAS = ${DRAM16.tCAS}</b> cycles later), 3 WR (dd into word ca now), 4 PRE (close bank ba), 5 PREA (close both), 6 REF (needs both closed). `
-      + `The chip's rules, in cycles: ACT → RD / WR ≥ <b>tRCD = ${DRAM16.tRCD}</b>; ACT → PRE ≥ <b>tRAS = ${DRAM16.tRAS}</b>; PRE → ACT or REF ≥ <b>tRP = ${DRAM16.tRP}</b>; REF → anything ≥ <b>tRFC = ${DRAM16.tRFC}</b>; a REF at least every <b>${DRAM16.tREFI}</b> cycles (scaled down for the bench: a real chip\'s 7.8 µs is about ${TIMING.tREFI.toLocaleString('en').replace(/,/g, ' ')} cycles at our clock). Graded on cycles over the traces.`,
+      + `The chip's rules, in cycles: ACT → RD / WR ≥ <b>tRCD = ${DRAM16.tRCD}</b>; ACT → PRE ≥ <b>tRAS = ${DRAM16.tRAS}</b>; PRE → ACT or REF ≥ <b>tRP = ${DRAM16.tRP}</b>; REF → anything ≥ <b>tRFC = ${DRAM16.tRFC}</b>; a REF at least every <b>${DRAM16.tREFI}</b> cycles (scaled down for the bench: a real chip\'s 7.8 µs is about ${groupDigits(TIMING.tREFI)} cycles at our clock). Graded on cycles over the traces.`,
     ports: pinsOf(CTRL16),
     check: { kind: 'custom', describe: `${ctrlTraces().length} request traces against the DRAM chip (runs along a row, a stream per bank, row conflicts, random, long pauses, no pause at all): every word, every timing rule, refresh.`, run: runCtrl },
     answer: refOf('m_ctrl', () => CTRL16, 'Row-buffer controller'),

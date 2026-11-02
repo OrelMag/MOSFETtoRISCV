@@ -3,6 +3,7 @@
 // the commit slots went (stats.slots), a timeline of the run, and a price from the gates where the gate-level core can
 // be built that way (bench/ooprice.ts: its window sizes; any other shape is timed, not priced).
 
+import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { compilePy } from '../lang/compile';
 import { PY_PROGRAMS } from '../lang/pyprograms';
@@ -51,7 +52,7 @@ interface RunOut { prog: LabProg; stats: OooStats; halted: boolean; model?: OooM
 
 const pow2 = (n: number) => 2 ** Math.ceil(Math.log2(Math.max(2, n)));
 const fix = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '–');
-const nands = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+const nands = groupDigits;
 
 /** One run of the model to its halt (a jump to itself) or RUN_MAX cycles; `keep`: the history and every cycle's cause. */
 export function labRun(prog: LabProg, cfg: Partial<OooConfig>, keep = false): RunOut {

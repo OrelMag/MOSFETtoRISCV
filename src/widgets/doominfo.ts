@@ -1,12 +1,13 @@
 // Appendix B's first steps: what Doom asks of a computer, the program GCC made of it (measured from
 // public/doom/doom.img and its symbols), and the machine's memory map.
 
+import { groupDigits } from '../sim/numfmt';
 import { decode, disasm } from '../riscv/isa';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import type { DoomSymbol } from '../doom/image';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('en');
+const fmt = (n: number) => groupDigits(Math.round(n));
 const hex = (n: number, d = 8) => (n >>> 0).toString(16).padStart(d, '0');
 
 /** B.1: Doom's needs against the system CPU of chapters 19–21, and what Appendix B adds. */

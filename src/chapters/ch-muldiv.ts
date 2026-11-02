@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, rca, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { flatten } from '../sim/flatten';
@@ -29,7 +30,7 @@ const period = (d: ComponentDef) => analyzeTiming(flatten(d))?.period ?? 0;
 const between = (d: ComponentDef) => CLK_TO_Q + dp(d) + SETUP;
 /** NANDs of the M unit's part called `name` (mul, div). */
 const mduPart = (name: string) => nd(netlistOf(MDU)!.instances.find((i) => i.name === name)!.def);
-const sp = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const sp = groupDigits;
 
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 21, title: 'Multiply & divide', level: 'Arithmetic',
@@ -849,7 +850,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>The complete system CPU with <span data-show="md">the M unit</span> beside <span data-show="mres">the result multiplexer</span>: about ${kNands(sysNands(true).core)} NANDs
         without its program ROM, ${pct(sysNands(true).core, sysNands(false).core)} % more than the RV32I machine of <a href="#/c/io/0">chapter 19</a>
-        (${kNands(sysNands(false).core)}); the M unit alone is ${stats(MDU).nands.toLocaleString('en-US').replace(/,/g, ' ')}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
+        (${kNands(sysNands(false).core)}); the M unit alone is ${groupDigits(stats(MDU).nands)}. With its ${kNands(sysNands(true).rom)}-NAND program ROM:
         ${kNands(sysNands(true).all)} against ${kNands(sysNands(false).all)}. It is still checked
         against the instruction-set simulator (the reference model that runs the program one instruction at a time) on every instruction. The timing panel shows the cost in speed: <strong>one NAND delay</strong> (126 → 127).
         The critical path does not even pass through the multiplier. The tree is shallow enough to hide behind the existing

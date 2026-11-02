@@ -2,6 +2,7 @@
 // timelines, the reorder-buffer explorer and the speculation table (riscv/ooomodel.ts, the gate-level core's
 // reference), and the CDC 6600 scoreboard (riscv/scoreboard.ts).
 
+import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { BENCHMARKS } from '../riscv/benchprograms';
 import { criticalPath, dataflow, LAT, latencyOf, traceOf, type Latencies, type TraceEntry } from '../riscv/ilp';
@@ -348,7 +349,7 @@ export function measuredWidget(): Widget {
   const row = (c: BenchCpu) => {
     const cpi = meanOf(c, 'cpi'), d = cpi * c.period, mm = runOf(c, 'matmul-m');
     return h('tr', { class: c.id === 'ooo' ? 'ours' : '' }, h('td', null, c.name), ...[
-      c.nands.toLocaleString('en').replace(/,/g, ' '), `${(c.nands / base.nands).toFixed(2)}×`, String(c.period), fix(cpi), d.toFixed(1),
+      groupDigits(c.nands), `${(c.nands / base.nands).toFixed(2)}×`, String(c.period), fix(cpi), d.toFixed(1),
       mm ? ((mm.cycles / mm.instructions) * c.period).toFixed(0) : '–', meanOf(c, 'epi').toFixed(1),
     ].map((v) => h('td', null, v)));
   };

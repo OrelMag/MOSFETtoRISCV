@@ -11,6 +11,7 @@
 // progress. Their rule (NAND + the parts unlocked by the levels below) fills the palette's
 // "Unlocked parts" group.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import { addBench, addLaneBench, addPongBench, failingTest } from '../campaign/bench';
 import { coreSpecOf } from '../campaign/corecheck';
@@ -54,7 +55,7 @@ function rule(a: Allowed): [string, string] {
 /** The level screen's idle line: what to build, from what, and par ("Goal: NOT from NAND · NAND only · par 1 NAND, depth 1"). */
 export function goalText(ch: BuildChallenge): { goal: string; rule: string; par: string } {
   const l = ch.limits ?? {};
-  const n = (v: number) => v.toLocaleString();
+  const n = groupDigits;
   const par = [
     l.maxTransistors !== undefined ? `${n(l.maxTransistors)} transistor${l.maxTransistors === 1 ? '' : 's'}` : '',
     l.maxNand !== undefined ? `${n(l.maxNand)} NAND` : '',
@@ -343,7 +344,7 @@ class ChallengeUi {
       if (v === null || v === undefined) return null;
       const cls = par === undefined ? '' : v <= par ? 'par' : 'over';
       return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par' : '' },
-        before ? `${unit} ` : null, h('b', null, v.toLocaleString()), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
+        before ? `${unit} ` : null, h('b', null, groupDigits(v)), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
     const lv = this.level;
     const lp = lv ? progress().get(lv.id) : undefined;
@@ -469,7 +470,7 @@ class ChallengeUi {
     const item = (v: number, unit: string, par?: number, before = false) => {
       const cls = par === undefined ? '' : v <= par ? 'par' : 'over';
       return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par (allowed: par is a target)' : '' },
-        before ? `${unit} ` : null, h('b', null, v.toLocaleString()), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
+        before ? `${unit} ` : null, h('b', null, groupDigits(v)), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
     const period = r.score.period;
     const unit = scoreUnit(ch);
@@ -479,7 +480,7 @@ class ChallengeUi {
       : [item(r.score.nand, 'NAND', lim.maxNand), r.score.depth !== null ? item(r.score.depth, 'depth', lim.maxDepth, true) : null,
         period !== undefined && period !== null ? item(period, 'period', lim.maxPeriod, true) : null,
         r.score.cycles !== undefined ? item(r.score.cycles, 'cycles', lim.maxCycles) : null,
-        h('span', null, h('b', null, r.score.transistors.toLocaleString()), ' transistors')];
+        h('span', null, h('b', null, groupDigits(r.score.transistors)), ' transistors')];
     // a metric par grades that this circuit could not be measured on
     const unmeasured = lim.maxDepth !== undefined && r.score.depth === null && unit !== 'transistors' && unit !== 'devices';
     return h('div', null, h('p', { class: 'sb-chal-score' }, ...parts, unmeasured ? h('span', { class: 'over' }, 'depth —', h('small', null, ` par ${lim.maxDepth}`)) : null),

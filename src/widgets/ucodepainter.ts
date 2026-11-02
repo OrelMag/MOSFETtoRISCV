@@ -4,6 +4,7 @@
 // (lib/ucodecheck.ts) before Apply. The grid is a real grid: arrow keys move, Space / Enter paint (a multi-bit cell
 // cycles its named values, Shift reverses), digits set a value, Delete clears; a mouse drag down a column paints it.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/ucode.css';
 import { MC_PROGRAM, type McState } from '../lib/multicycle';
 import {
@@ -261,7 +262,7 @@ export function openMicrocode(o: PainterOptions): { close(): void } {
       const diffs = CLASS_NAMES.filter((c) => r.cycles[c] !== b.cycles[c]).map((c) => `${CLASS_LABEL[c]}: ${b.cycles[c]} → ${r.cycles[c] ?? 'never returns'} cycles`);
       lines.push(h('span', null, diffs.length ? diffs.join(' · ') : 'Every instruction class takes the book\'s cycles.'));
       if (r.cpi !== null && b.cpi !== null) lines.push(h('span', null, `CPI on the benchmarks: ${b.cpi.toFixed(2)} → ${r.cpi.toFixed(2)}${r.cpi < b.cpi - 1e-9 ? ` (${Math.round((1 - r.cpi / b.cpi) * 100)} % fewer cycles)` : ''}.`));
-      lines.push(h('span', { class: 'uc-muted' }, `Control: ${r.nands.toLocaleString('en').replace(/,/g, ' ')} NANDs in the microcode controller${r.nands === b.nands ? ', unchanged size: the ROMs are constants, the contents cost nothing' : ` (the book's: ${b.nands.toLocaleString('en').replace(/,/g, ' ')})`}.`));
+      lines.push(h('span', { class: 'uc-muted' }, `Control: ${groupDigits(r.nands)} NANDs in the microcode controller${r.nands === b.nands ? ', unchanged size: the ROMs are constants, the contents cost nothing' : ` (the book's: ${groupDigits(b.nands)})`}.`));
     }
     checkEl.replaceChildren(...lines);
   }

@@ -2,6 +2,7 @@
 // The references are rings on a dashed front, the learner's measured designs dots (the latest solid). Axes are to scale
 // from 0; every number comes from campaign/brief.ts (references: briefrefs.json) or the learner's own measurements.
 
+import { groupDigits } from '../../sim/numfmt';
 import { briefFront, briefRefs, type BriefRefPoint, type BriefStars, timeOf } from '../../campaign/brief';
 import type { Submission } from '../../campaign/progress';
 import { h, s } from '../dom';
@@ -45,13 +46,13 @@ export function briefChart(subs: Submission[]): SVGSVGElement {
   );
   for (const r of refs) {
     const x = px(r.time), y = py(r.nand), left = x > X1 - 120;
-    el.append(s('circle', { class: 'ref', cx: x, cy: y, r: 7 }, s('title', null, `${r.name} (reference): ${r.nand.toLocaleString()} NANDs, ${r.time.toLocaleString()} gate delays`)),
+    el.append(s('circle', { class: 'ref', cx: x, cy: y, r: 7 }, s('title', null, `${r.name} (reference): ${groupDigits(r.nand)} NANDs, ${groupDigits(r.time)} gate delays`)),
       s('text', { class: 'lb', x: left ? x - 12 : x + 12, y: y - 8, 'text-anchor': left ? 'end' : 'start' }, `${r.name} (ref)`));
   }
   subs.forEach((q, i) => {
     const x = px(timeOf(q)), y = py(q.nand);
     el.append(s('circle', { class: i === 0 ? 'mine' : 'mine-old', cx: x, cy: y, r: i === 0 ? 8 : 6 },
-      s('title', null, `yours${i === 0 ? ', latest' : ` #${subs.length - i}`}: ${q.nand.toLocaleString()} NANDs, ${timeOf(q).toLocaleString()} gate delays, ${starText(q.stars)}`)));
+      s('title', null, `yours${i === 0 ? ', latest' : ` #${subs.length - i}`}: ${groupDigits(q.nand)} NANDs, ${groupDigits(timeOf(q))} gate delays, ${starText(q.stars)}`)));
     if (i === 0) {
       // left of the dot and above it: the references' labels run to the right of their rings
       el.append(s('text', { class: 'lb mine-lb', x: x - 13, y: y - 9, 'text-anchor': 'end' }, 'yours, latest'));
@@ -65,7 +66,7 @@ export function briefResults(subs: Submission[]): HTMLElement {
   const refs = briefRefs();
   const latest = subs[0];
   const n = subs.length;
-  const num = (v: number) => v.toLocaleString();
+  const num = groupDigits;
   const rows = [
     ...subs.map((q, i) => h('tr', { class: i === 0 ? 'me' : '' }, h('td', null, i === 0 ? `yours, latest (#${n})` : `yours, #${n - i}`), h('td', { class: 'n' }, num(q.nand)), h('td', { class: 'n' }, num(q.period)),
       h('td', { class: 'n' }, num(q.cycles)), h('td', { class: 'n' }, num(timeOf(q))), h('td', { class: 'stars', 'aria-label': `${q.stars} of 3 stars` }, starText(q.stars)))),

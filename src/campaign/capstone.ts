@@ -4,6 +4,7 @@
 // under its own id in the campaign state (progress.ts), its chip is u_ch_<id>, and it is played on
 // ui/pages/capstone.ts (#/campaign/play/<id>). No DOM.
 
+import { groupDigits } from '../sim/numfmt';
 import { CAPSTONES, type Capstone, type CapstoneStatus, capstoneStatus } from '../learn/capstones';
 import { type BuildChallenge, type ChallengeCheck, type CheckResult, checkChallenge, type LibRule, type PinSpec, type SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
@@ -163,7 +164,7 @@ export const PONG_STEPS = 4000;
 
 const PONG_TEST: CoreTest = {
   name: 'Pong', bounded: PONG_STEPS,
-  what: `the game of Pong (${PONG_STEPS.toLocaleString()} instructions: the serve, the ball crossing the screen, a paddle and the score)`,
+  what: `the game of Pong (${groupDigits(PONG_STEPS)} instructions: the serve, the ball crossing the screen, a paddle and the score)`,
   src: PONG16,
 };
 
@@ -215,7 +216,7 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
     c = {
       ...base,
       brief: CORE_BRIEF('The whole of RV16I in one cycle per instruction: arithmetic, loads and stores, branches and jumps. No walkthrough and no hints: the spec is all you get.')
-        + ` Graded on ${coreTests(3).length} programs and then on <b>Pong</b>: the golden model's first ${PONG_STEPS.toLocaleString()} instructions of the game, every register write and store compared. Scored on NANDs, clock period and cycles.`,
+        + ` Graded on ${coreTests(3).length} programs and then on <b>Pong</b>: the golden model's first ${groupDigits(PONG_STEPS)} instructions of the game, every register write and store compared. Scored on NANDs, clock period and cycles.`,
       ports: CORE_PINS,
       check: coreCheck({ rv16i: true, tests: t2Tests, budget: { cpi: 1, extra: 2 } },
         `${coreTests(3).length} programs (loops, calls, every branch condition, random code) and Pong: every register write and store, in order, one instruction per cycle.`),

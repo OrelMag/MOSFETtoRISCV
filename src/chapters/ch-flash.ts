@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { CLOCK_NS } from '../dram/timing';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { V_READ, vtOf } from '../lib/flash';
@@ -27,7 +28,7 @@ function rowsOf(st: Stage, rows: number): number[] {
 }
 
 const pulses = Math.ceil(FG_READ / FG_STEP);
-const fmtN = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmtN = groupDigits;
 /** A real page read at our clock, and how far the model scales the busy times down. */
 const READ_REAL = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
 const SCALE = 10 * Math.round(READ_REAL / FLASH_TIMES.read / 10);

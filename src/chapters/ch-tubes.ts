@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { DFF, ECCLES_JORDAN, FULL_ADDER, SR_LATCH, TRIODE_SWITCH, TUBE_FA, TUBE_NAND, TUBE_NOR, rca } from '../lib';
 import { RELAY_STEP_MS } from '../phys/relay';
 import {
@@ -17,7 +18,7 @@ const WARM = (() => {
 })();
 const v = (x: number) => Math.round(x).toString();
 const w2 = (x: number) => x.toFixed(2);
-const thin = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+const thin = (n: number) => groupDigits(Math.round(n));
 /** The 4-bit CPU of the examples, without its ROM (Phase 14 mockup, measured). */
 const CPU4_NANDS = 3357;
 /** Tube steps per CMOS NAND delay, to the nearest 10 000. */

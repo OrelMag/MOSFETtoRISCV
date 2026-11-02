@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import facts from '../bench/ucodefacts.json';
 import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib';
 import { bookProgram, cyclesByClass, iTypeInThree, type Microprogram } from '../lib/ucode';
@@ -27,7 +28,7 @@ const CYC = {
   alu: cyclesOf(target('R')), store: cyclesOf(target('STORE'), 5), jal: cyclesOf(target('JAL')),
   load: cyclesOf(target('LOAD'), 3), jalr: cyclesOf(target('JALR')),
 };
-const sp = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const sp = groupDigits;
 const FSM_NANDS = stats(MC_FSM).nands, MICRO_NANDS = stats(MC_MICRO).nands;
 
 /** The state table as a page widget. */
@@ -325,7 +326,7 @@ export const chMulticycle: Chapter = {
         the controller costs the same NANDs whatever you paint.</p>
         <div class="try">Open the microcode, select word 8 (ExecuteI) and look at what lights in the datapath sketch and on the circuit.</div>`,
       more: {
-        numbers: `Book: CPI ${facts.bookCpi.toFixed(2)} on the four benchmarks (${facts.instructions.toLocaleString('en').replace(/,/g, ' ')} instructions). I-type instructions are ${pct(facts.iShare)} % of them, so one cycle fewer each
+        numbers: `Book: CPI ${facts.bookCpi.toFixed(2)} on the four benchmarks (${groupDigits(facts.instructions)} instructions). I-type instructions are ${pct(facts.iShare)} % of them, so one cycle fewer each
           lowers the CPI by ${pct(facts.iShare)} / 100 = ${(facts.bookCpi - facts.solvedCpi).toFixed(2)}, to ${facts.solvedCpi.toFixed(2)}.`,
       },
       scene: () => { painted = bookProgram(); return ucodeScene(); },

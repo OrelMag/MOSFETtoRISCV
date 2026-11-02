@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { ageBit, iqEntry, RAT, SELECT8 } from '../lib/ooo';
 import RESULTS from '../bench/results.json';
 import { logicDepth, stats } from '../sim/stats';
@@ -371,7 +372,7 @@ export const chOoo: Chapter = {
       more: {
         derive: `<p>Storage: 31 rows × (1 valid + 4 tag bits) = ${31 * 5} flip-flops; a 16-entry ROB needs 4 bits to name an entry. Ports: each of the two dispatched instructions reads two
           sources (4 reads) and writes one destination (2 writes), and commit adds 2 compare-and-clear ports. A row recognizes its register from the 5-bit numbers on 4 ports, which is why a
-          row costs 275 NANDs against a row of plain flip-flops: ${stats(RAT).nands.toLocaleString('en-US').replace(/,/g, ' ')} NANDs for the table.</p>`,
+          row costs 275 NANDs against a row of plain flip-flops: ${groupDigits(stats(RAT).nands)} NANDs for the table.</p>`,
         real: `<p>Big cores keep the rename table as a RAM, not rows of comparators, and checkpoint it at each branch so a misprediction restores it at once. That copy per branch
           in flight is what recovery at execute needs, and it is the table's main cost there.</p>`,
         pitfall: `<p>Forgetting the same-cycle case. Without the bypass, the second instruction of a pair that reads the first's destination reads the old mapping and takes

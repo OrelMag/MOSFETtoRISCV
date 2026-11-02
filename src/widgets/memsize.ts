@@ -1,5 +1,6 @@
 // Panel that rebuilds the RAM scene at a size of the learner's choosing.
 
+import { groupDigits } from '../sim/numfmt';
 import { ram } from '../lib';
 import { stats } from '../sim/stats';
 import { h } from '../ui/dom';
@@ -16,7 +17,7 @@ export const memSizePanel: ScenePanel = (stage: Stage): Widget => {
   for (const b of [4, 8, 16]) bSel.append(h('option', { value: b, selected: b === width }, `${b} bits`));
   const st = stats(root);
   const info = h('span', { style: 'color:var(--muted);font:12px var(--font-mono)' },
-    `${(2 ** words * width).toLocaleString()} bits · ${st.transistors.toLocaleString()} transistors`);
+    `${groupDigits(2 ** words * width)} bits · ${groupDigits(st.transistors)} transistors`);
   const rebuild = () => {
     const k = Number(wSel.value), w = Number(bSel.value);
     stage.load({ root: ram(k, w), inputs: { addr: 0, din: 0, we: 1, clk: 0 }, panels: [memSizePanel, memGridPanel] });

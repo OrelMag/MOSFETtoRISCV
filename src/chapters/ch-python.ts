@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { cpuState } from '../riscv/cosim';
 import { pyCompile, pyCost, pyLinked, pyProfile, pyScene } from '../widgets/python';
 import { PY_PROGRAMS } from '../lang/pyprograms';
@@ -7,7 +8,7 @@ import type { Chapter } from './types';
 // model and the gate-level CPU the scenes build (singleCycleCpu with PY_IMEM_K / PY_DMEM_K).
 
 const src = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 
 /** Cycles the golden model needs for a sample program, and per Python line (own + runtime routines called from it). */
 const PROF = (id: string) => { const c = pyCompile(src(id)); return { c, p: pyProfile(c) }; };

@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, SYS_DECODE, TRAP_UNIT, bankedMemory, systemCpu } from '../lib';
 import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
@@ -29,7 +30,7 @@ export function sysNands(m: boolean): { all: number; core: number; rom: number }
   return r;
 }
 /** A count rounded to thousands, spaced as the site writes numbers: 67 131 → "67 000". */
-export const kNands = (n: number) => (Math.round(n / 1000) * 1000).toLocaleString('en-US').replace(/,/g, ' ');
+export const kNands = (n: number) => groupDigits(Math.round(n / 1000) * 1000);
 
 function csrq(st: Stage, inst: string): number {
   const csr = st.rootCtx?.node.children?.get('csr');

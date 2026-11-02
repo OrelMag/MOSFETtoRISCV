@@ -1,5 +1,6 @@
 // Appendix A: the MOS 6502 of 1975, at transistor level, built the way it was built then.
 
+import { groupDigits } from '../sim/numfmt';
 import { BUS_LINE, MS_BIT } from '../lib/m6502/demo';
 import { NNOR2 } from '../lib/nmos';
 import { SwitchSim } from '../sim/switchsim';
@@ -54,7 +55,7 @@ export const LEDGER = {
   /** Transistors per bit: a 6502 register bit, a bit of the RV32I's register file (with its read multiplexers' share). */
   bit6502: 10, bitRf: 90,
 } as const;
-const k = (n: number) => n.toLocaleString('en-US');
+const k = groupDigits;
 
 export const chAppendix6502: Chapter = {
   id: 'appendix-6502', num: 39, appendix: 'A', title: '1975: the 6502', level: 'NMOS',

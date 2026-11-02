@@ -4,6 +4,7 @@
 // cannot drift: a widget for an entry without a part (codexfigs.ts), the part's schematic, live (click an input to flip
 // it), its truth table and pins, and its cost against the alternatives.
 
+import { groupDigits } from '../../sim/numfmt';
 import { flatten } from '../../sim/flatten';
 import { GateSim } from '../../sim/gatesim';
 import { needsSwitchLevel } from '../../sim/harness';
@@ -188,7 +189,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
   const cost = more?.lib ? libCost(more.lib) : undefined;
   const head = h('header', { class: 'cx-head' },
     h('h2', null, e.title, h('span', { class: 'cp-badge kind' }, kind),
-      cost ? h('span', { class: 'cp-badge cost', title: 'Measured from the library part' }, `${cost.nand.toLocaleString()} NAND · ${cost.transistors.toLocaleString()} T${cost.depth !== null ? ` · depth ${cost.depth}` : ''}`) : null),
+      cost ? h('span', { class: 'cp-badge cost', title: 'Measured from the library part' }, `${groupDigits(cost.nand)} NAND · ${groupDigits(cost.transistors)} T${cost.depth !== null ? ` · depth ${cost.depth}` : ''}`) : null),
     rich('div', e.body, 'cx-sum'), linksEl(e, more));
   const drill = DRILLS[DRILL_OF[e.id] ?? ''];
   const left = h('div', { class: 'cx-col' },
@@ -216,7 +217,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
       h('div', { class: 'lv-bars' }, compare.flatMap((x, i) => [
         h('a', { href: `#/workbench/${x.id}` }, x.name),
         h('span', { class: 'track' }, h('i', { class: i === 0 ? 'you' : '', style: `width:${(100 * (x.c?.nand ?? 0) / max).toFixed(1)}%` })),
-        h('span', { class: 'v' }, `${x.c?.nand.toLocaleString() ?? '—'}${x.c?.depth !== null && x.c?.depth !== undefined ? ` · d ${x.c.depth}` : ''}`)])),
+        h('span', { class: 'v' }, `${x.c?.nand !== undefined ? groupDigits(x.c.nand) : '—'}${x.c?.depth !== null && x.c?.depth !== undefined ? ` · d ${x.c.depth}` : ''}`)])),
       h('p', { class: 'sub' }, 'NANDs (bar) and depth in NAND delays, measured.')) : null);
   const article = h('article', { class: `cp-codex-entry cx-entry${opts.narrow ? ' narrow' : ''}` }, head,
     h('div', { class: `cx-cols${right.childElementCount ? '' : ' solo'}` }, left, right.childElementCount ? right : null),
@@ -237,7 +238,7 @@ export function sheetEl(d: Datasheet): HTMLElement {
   const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
   return h('div', { class: 'cp-sheet' },
     h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
-    h('p', { class: 'sub' }, `${d.nand.toLocaleString('en')} NAND · ${d.transistors.toLocaleString('en')} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
+    h('p', { class: 'sub' }, `${groupDigits(d.nand)} NAND · ${groupDigits(d.transistors)} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
     h('div', { class: 'cp-sheet-cols' },
       h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
         d.pins.map((p) => h('tr', null, h('td', null, p.name), h('td', null, p.dir), h('td', null, String(p.width))))),

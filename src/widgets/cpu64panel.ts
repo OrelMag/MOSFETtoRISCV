@@ -2,6 +2,7 @@
 // own, the golden model (riscv/iss64.ts) in lock step after every retirement. Registers are 64 bits, so every value
 // is read as a BigInt (sim/values.ts packBig), never through a JS number.
 
+import { groupDigits } from '../sim/numfmt';
 import { xlenCpu } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { retiring, wideState } from '../riscv/cosim';
@@ -172,7 +173,7 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
         ...(iss.halted ? [h('span', { class: 'warn' }, 'halted')] : []));
       const res = match?.result ? regNumber(match.result) : null;
       haltLine.hidden = !iss.halted || !!mismatch;
-      if (iss.halted && !mismatch) haltLine.replaceChildren(`Halted after ${iss.steps.toLocaleString()} instructions (${stage.cycles.toLocaleString()} cycles)`,
+      if (iss.halted && !mismatch) haltLine.replaceChildren(`Halted after ${groupDigits(iss.steps)} instructions (${groupDigits(stage.cycles)} cycles)`,
         res !== null && match ? h('span', null, ' · result ', h('b', null, `${match.result} = ${signed(iss.x[res])}`)) : '');
       const pc = st.pc;
       const w = asm.words[Number(pc >> 2n)] ?? 0x13;

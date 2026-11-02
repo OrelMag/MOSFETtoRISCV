@@ -3,6 +3,7 @@
 // is the gate-level machine; the computer's scenes open on its breadboards (widgets/saplayout.ts) with the SAP panel
 // following the golden model at every clock edge (widgets/sap.ts).
 
+import { groupDigits } from '../sim/numfmt';
 import { RESULTS } from '../bench/summary';
 import { sapBytes } from '../sap/asm';
 import { SapISS } from '../sap/iss';
@@ -26,7 +27,7 @@ export const SAP_COST = {
   clock: 14, areg: 243, alu: 129, pc: 150, ram: 1546, ls173: 109, ls161: 125, ls189: 716,
 } as const;
 const RV32I = RESULTS.cpus.find((c) => c.id === 'sc')!;
-const k = (n: number) => n.toLocaleString('en-US');
+const k = groupDigits;
 
 /** Set inputs without the stage's propagation animation (a solve must not race its own animation). */
 function poke(st: Stage, v: Record<string, number>): void {

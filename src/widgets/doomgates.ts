@@ -6,6 +6,7 @@
 // The scene is built from the game's data, so it starts as the bare core on a bench; starting the
 // game reloads the stage with the whole computer (the session lives across that reload).
 
+import { groupDigits } from '../sim/numfmt';
 import { bench } from '../chapters/types';
 import { doomComputer } from '../lib/doompc';
 import { systemCore } from '../lib/system';
@@ -17,7 +18,7 @@ import { FREEDOOM, fetchBytes, loadProgram, wadProblem, type Loaded } from './do
 
 const W = 320, H = 200;
 const WINDOWS = [1000, 5000, 20000];
-const fmt = (n: number) => Math.round(n).toLocaleString('en');
+const fmt = (n: number) => groupDigits(Math.round(n));
 const dur = (s: number) => (s < 60 ? `${s.toFixed(0)} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')} s` : `${(s / 3600).toFixed(1)} h`);
 
 interface Session {

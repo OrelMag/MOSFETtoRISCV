@@ -4,6 +4,7 @@
 // cells.json and a tile pyramid rendered from the GDS by KLayout; the deploy copies them to layout/
 // (the dual-core) and layout/sys/ next to the site.
 
+import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { installPinch } from '../view/pinch';
@@ -194,8 +195,8 @@ export function chipLayoutWidget(): Widget {
     const ws = num(/finish__timing__setup__ws$/), power = num(/finish__power__total$/), util = num(/finish__design__instance__utilization$/), wl = num(/^detailedroute__route__wirelength$/);
     const rows: [string, string][] = [
       ['die', `${dieW.toFixed(0)} × ${dieH.toFixed(0)} µm (${((dieW * dieH) / 1e6).toFixed(3)} mm²)`],
-      ['standard cells', `${insts.toLocaleString()} (${kinds.map(([k, v]) => `${v.toLocaleString()} ${k}`).join(', ')})`],
-      ['from our netlist', sum.source ? `${sum.source.nands.toLocaleString()} NAND equivalents → ${insts.toLocaleString()} library cells` : '–'],
+      ['standard cells', `${groupDigits(insts)} (${kinds.map(([k, v]) => `${groupDigits(v)} ${k}`).join(', ')})`],
+      ['from our netlist', sum.source ? `${groupDigits(sum.source.nands)} NAND equivalents → ${groupDigits(insts)} library cells` : '–'],
     ];
     if (!sum.source?.blocks) rows.push(['area by block', Object.entries(sum.blockArea).map(([b, a]) => `${label(b)} ${(a / 1e3).toFixed(1)}k µm²`).join(' · ')]);
     if (Number.isFinite(util)) rows.push(['utilization', `${(util * 100).toFixed(0)} %`]);
@@ -251,7 +252,7 @@ function estimateVsFlow(sum: LayoutSummary, blocks: string[], label: (b: string)
     const keptNands = kept.reduce((a, b) => a + b.nands, 0), keptArea = kept.reduce((a, b) => a + SA[b.module!], 0);
     const row = (name: string, nands: number, area: number, bold = false) => {
       const td = (t: string, cls?: string) => h('td', cls ? { class: cls } : null, bold ? h('strong', null, t) : t);
-      return h('tr', null, td(name), td(nands.toLocaleString(), 'num'), td(um(nands * SKY130_NAND2_UM2), 'num'), td(um(area), 'num'), td(ratio(area / (nands * SKY130_NAND2_UM2)), 'num'));
+      return h('tr', null, td(name), td(groupDigits(nands), 'num'), td(um(nands * SKY130_NAND2_UM2), 'num'), td(um(area), 'num'), td(ratio(area / (nands * SKY130_NAND2_UM2)), 'num'));
     };
     out.push(h('div', { class: 'lay-scroll' }, h('table', { class: 'cmp' },
       h('thead', null, h('tr', null, h('th', null, 'block'), h('th', null, 'our NANDs'), h('th', null, `× ${SKY130_NAND2_UM2} µm²`), h('th', null, 'sky130 µm²'), h('th', null, 'sky130 / ours'))),
@@ -263,7 +264,7 @@ function estimateVsFlow(sum: LayoutSummary, blocks: string[], label: (b: string)
     const ha = sum.masters.find(([m]) => m === 'sky130_fd_sc_hd__ha_1')?.[1] ?? 0;
     const placed = Number(sum.metrics.finish__design__instance__area__stdcell);
     out.push(h('p', { class: 'sub' }, `Each of our NAND equivalents is priced as one ${SKY130_NAND2_UM2} µm² NAND2 cell, against the cells Yosys chose for the same logic. The library does better wherever it has one cell for what we build from several NANDs (a flip-flop with an enable, edfxtp, instead of a DFF and a multiplexer; a 2:1 multiplexer, mux2i; an and-or-invert), and Yosys removes logic whose result nothing reads and merges what is computed twice, which our count keeps. `
-      + (over.length ? `Where the ratio is above 1 (${over.map((b) => label(b.name)).join(', ')}) it spent more than our count${ha ? `: it built the adders from ${ha.toLocaleString()} half-adder cells (ha_1, 12.5 µm² each) and buffered the heavily loaded nets` : ''}. ` : '')
+      + (over.length ? `Where the ratio is above 1 (${over.map((b) => label(b.name)).join(', ')}) it spent more than our count${ha ? `: it built the adders from ${groupDigits(ha)} half-adder cells (ha_1, 12.5 µm² each) and buffered the heavily loaded nets` : ''}. ` : '')
       + (Number.isFinite(placed) ? `Placement then adds the clock tree, timing repair buffers and well taps: ${um(placed)} µm² of cells on the finished die.` : '')));
   }
 

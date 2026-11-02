@@ -1,5 +1,6 @@
 // Chapter 25's explorers for RV64: what each building block costs at 32 and at 64 bits.
 
+import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import '../styles/rvc.css';
@@ -52,7 +53,7 @@ const GROWTH: Record<Growth, { label: string; note: string }> = {
   time: { label: '×2, twice the cycles', note: 'one bit per cycle' },
 };
 
-const fmt = (n: number) => n.toLocaleString('en-US');
+const fmt = groupDigits;
 
 export function widthCostWidget(): Widget {
   let sel = 'rf';

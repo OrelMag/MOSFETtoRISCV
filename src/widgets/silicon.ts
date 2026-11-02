@@ -1,6 +1,7 @@
 // Chapter 28 widgets: cell layout, fabrication, technology mapping, place & route, clock tree,
 // floorplan and wafer economics. The numbers are computed from this site's own netlists.
 
+import { groupDigits } from '../sim/numfmt';
 import { FULL_ADDER, alu, counter, dataMemory, dualCore, rca, singleCycleCpu } from '../lib';
 import { assemble } from '../riscv/asm';
 import { MC_PROGRAMS } from '../riscv/mcprograms';
@@ -288,8 +289,8 @@ export function mappingWidget(): Widget {
       if (i >= designs.length) { btn.textContent = 'Done'; return; }
       const [name, mk] = designs[i++];
       const r = techMap(mk());
-      body.append(h('tr', null, h('td', null, name), h('td', { class: 'num' }, r.nands.toLocaleString()), h('td', { class: 'num' }, r.inverters.toLocaleString()),
-        h('td', { class: 'num' }, r.pairsRemoved.toLocaleString()), h('td', { class: 'num' }, r.nandTransistors.toLocaleString()), h('td', { class: 'num' }, r.mappedTransistors.toLocaleString()),
+      body.append(h('tr', null, h('td', null, name), h('td', { class: 'num' }, groupDigits(r.nands)), h('td', { class: 'num' }, groupDigits(r.inverters)),
+        h('td', { class: 'num' }, groupDigits(r.pairsRemoved)), h('td', { class: 'num' }, groupDigits(r.nandTransistors)), h('td', { class: 'num' }, groupDigits(r.mappedTransistors)),
         h('td', { class: 'num' }, `${(100 * (1 - r.mappedTransistors / r.nandTransistors)).toFixed(1)} %`)));
       setTimeout(nextOne, 30);
     };
@@ -452,7 +453,7 @@ export function floorplanWidget(): Widget {
     svg.innerHTML = s;
     box.replaceChildren(svg);
     const mm = (u: number) => (u / 1000).toFixed(u > 3000 ? 1 : 2);
-    info.textContent = `${total.toLocaleString()} NAND equivalents (each core ${core.toLocaleString()} including its program ROM as a multiplexer tree, memory ${mem.toLocaleString()} as flip-flops). Logic area at ${(util * 100).toFixed(0)} % utilization: ${mm(side)} mm × ${mm(side)} mm. With ${pads} bond pads of ${pad} µm the die is ${mm(die)} mm on a side${padSide > side ? ': pad-limited, the I/O ring is bigger than the logic it serves' : ''}. For scale: Caravel's user area on the open-source SkyWater shuttles is 2.92 × 3.52 mm; a modern laptop SoC is over 100 mm² with ~10¹⁰ transistors.`;
+    info.textContent = `${groupDigits(total)} NAND equivalents (each core ${groupDigits(core)} including its program ROM as a multiplexer tree, memory ${groupDigits(mem)} as flip-flops). Logic area at ${(util * 100).toFixed(0)} % utilization: ${mm(side)} mm × ${mm(side)} mm. With ${pads} bond pads of ${pad} µm the die is ${mm(die)} mm on a side${padSide > side ? ': pad-limited, the I/O ring is bigger than the logic it serves' : ''}. For scale: Caravel's user area on the open-source SkyWater shuttles is 2.92 × 3.52 mm; a modern laptop SoC is over 100 mm² with ~10¹⁰ transistors.`;
   };
   const nsel = h('select', { 'aria-label': 'process' }) as HTMLSelectElement;
   nodes.forEach(([n], i) => nsel.append(h('option', { value: String(i) }, n)));
@@ -489,7 +490,7 @@ export function waferWidget(): Widget {
     }
     svg.innerHTML = s;
     box.replaceChildren(svg);
-    info.textContent = `${gross} whole dies of ${A} mm² on a 300 mm wafer. Expected yield e^(−A·D₀) = ${(yieldP * 100).toFixed(1)} % (Poisson model, ${d0} defects/cm²), so about ${Math.round(gross * yieldP)} good dies (this wafer: ${good}). At $${cost.toLocaleString()} per processed wafer: $${(cost / Math.max(1, gross * yieldP)).toFixed(2)} per good die, before testing and packaging. Yield falls exponentially with area: big dies are disproportionately expensive, which is why large designs are split into chiplets.`;
+    info.textContent = `${gross} whole dies of ${A} mm² on a 300 mm wafer. Expected yield e^(−A·D₀) = ${(yieldP * 100).toFixed(1)} % (Poisson model, ${d0} defects/cm²), so about ${Math.round(gross * yieldP)} good dies (this wafer: ${good}). At $${groupDigits(cost)} per processed wafer: $${(cost / Math.max(1, gross * yieldP)).toFixed(2)} per good die, before testing and packaging. Yield falls exponentially with area: big dies are disproportionately expensive, which is why large designs are split into chiplets.`;
   };
   const slider = (label: string, min: number, max: number, step: number, val: number, on: (v: number) => void, unit: string) => {
     const i = h('input', { type: 'range', min: String(min), max: String(max), step: String(step), value: String(val) }) as HTMLInputElement;

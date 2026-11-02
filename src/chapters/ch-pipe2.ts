@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { BRANCH_CMP, BTB, SAT_COUNTER, alu, koggeStone, regfile } from '../lib';
 import { logicDepth, stats } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';
@@ -7,7 +8,7 @@ import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 /** What balancing adds beside the ALU: the branch comparator and jalr's own rs1 + imm adder. */
 const CMP = nands(BRANCH_CMP), JADD = nands(koggeStone(32));

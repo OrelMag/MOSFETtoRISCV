@@ -2,6 +2,7 @@
 // pad shows the shapes as drawn (smooth, each at its opacity); gfx/tessellate.ts cuts them into triangles; the screen
 // panel feeds them to the rasterizer and the result is compared, pixel for pixel, with the reference picture.
 
+import { groupDigits } from '../sim/numfmt';
 import { FB_W, type Vtx } from '../gfx/raster';
 import {
   cross, type Drawing, drawingCost, drawingOps, drawingPicture, MAX_SHAPES, MAX_TRIANGLES, SAMPLE_DRAWINGS, type Shape, shapeTriangles, type Tool,
@@ -276,7 +277,7 @@ function drawPanel(link: DrawLink): ScenePanel {
       }
       if (costOf.version !== version) costOf = { version, cost: drawingCost(d), over: d.shapes.reduce((n, s) => n + shapeTriangles(s, d.keepWinding).length, 0) > MAX_TRIANGLES };
       const { cost, over } = costOf;
-      const fmt = (n: number) => n.toLocaleString('en');
+      const fmt = groupDigits;
       status.replaceChildren(
         h('span', null, `${d.shapes.length} shape${d.shapes.length === 1 ? '' : 's'}`),
         h('span', { title: 'triangles sent to the rasterizer' }, `${fmt(cost.triangles)} triangle${cost.triangles === 1 ? '' : 's'}`),

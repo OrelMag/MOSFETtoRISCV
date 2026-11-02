@@ -6,6 +6,7 @@
 // finished CPU. The chip is the same one the sandbox opens ("Open in sandbox"), nothing is copied.
 // Loaded on demand with the editor (app.ts imports it dynamically).
 
+import { groupDigits } from '../../sim/numfmt';
 import '../../styles/editor.css';
 import '../../styles/sbchips.css';
 import '../../styles/campaign.css';
@@ -188,7 +189,7 @@ export class LevelPage implements Page {
         h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', 'aria-label': 'Leave the walkthrough', onclick: () => this.leaveWalk() }, h('span', null, 'Leave', h('span', { class: 'lbl' }, ' the walkthrough'))));
       return;
     }
-    const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${par[k]!.toLocaleString()}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
+    const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${groupDigits(par[k]!)}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
       h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
@@ -257,7 +258,7 @@ export class LevelPage implements Page {
         el.append(cap);
         setTimeout(() => {
           const k = copiesInFinal(n);
-          if (k > 0) cap.textContent = `Everywhere: ${k.toLocaleString()} copies in the finished CPU.`;
+          if (k > 0) cap.textContent = `Everywhere: ${groupDigits(k)} copies in the finished CPU.`;
         }, 0);
       }
     }
@@ -272,7 +273,7 @@ export class LevelPage implements Page {
       const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined;
       // A transistor level compares in transistors (its parts have no NANDs: "0 NAND" said nothing).
       const fets = !devices && par.transistors !== undefined && par.nand === undefined;
-      const fetText = (v: number | undefined) => (v === undefined ? '—' : `${v.toLocaleString()} transistor${v === 1 ? '' : 's'}`);
+      const fetText = (v: number | undefined) => (v === undefined ? '—' : `${groupDigits(v)} transistor${v === 1 ? '' : 's'}`);
       if (devices) rows.push(['Par', deviceText(par, par)]);
       else if (fets) rows.push(['Par', fetText(par.transistors)]);
       else if (par.nand !== undefined || par.depth !== undefined) rows.push(['Par', costText(par.nand, par.depth)]);
@@ -283,7 +284,7 @@ export class LevelPage implements Page {
       // Compiling the finished CPU takes a moment: after the panel is on screen.
       setTimeout(() => {
         const k = copiesInFinal(n), part = countedPart(n);
-        if (k > 0 && part) copies.replaceChildren(h('b', null, k.toLocaleString()), ` × ${part.name} in the finished CPU (${finalCpu(n)?.node.title ?? ''}).`);
+        if (k > 0 && part) copies.replaceChildren(h('b', null, groupDigits(k)), ` × ${part.name} in the finished CPU (${finalCpu(n)?.node.title ?? ''}).`);
       }, 0);
       costSec = sec;
     }
@@ -476,7 +477,7 @@ export class LevelPage implements Page {
     const c = caseOf(n.id);
     const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a) }));
     const metrics = (['nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
-    const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : v.toLocaleString());
+    const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : groupDigits(v));
     const table = metrics.length ? h('table', { class: 'lv-res-table' },
       h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours'), h('th', null, 'Par'), alts.map((a) => h('th', null, a.name))),
       metrics.map((k) => h('tr', null, h('td', null, METRIC[k].label),
@@ -489,7 +490,7 @@ export class LevelPage implements Page {
     const barEl = area ? h('div', { class: 'lv-bars-box' },
       h('div', { class: 'lv-bars-k' }, `Area, in ${area.unit === 'nand' ? 'NANDs' : METRIC[area.unit].label.toLowerCase()}`),
       h('div', { class: 'lv-bars', title: METRIC[area.unit].hint }, area.bars.flatMap(([k, v, you]) =>
-        [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, v.toLocaleString())]))) : null;
+        [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, groupDigits(v))]))) : null;
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);
@@ -524,13 +525,13 @@ export class LevelPage implements Page {
     const n = this.node!;
     const k = copiesInFinal(n), part = countedPart(n);
     if (k <= 0 || !part || yours === undefined) return el.remove();
-    const parts: (string | Node)[] = [`The finished CPU holds `, h('b', null, k.toLocaleString()), ` × ${part.name}.`];
+    const parts: (string | Node)[] = [`The finished CPU holds `, h('b', null, groupDigits(k)), ` × ${part.name}.`];
     // Against the first alternative the case lists (the textbook way), not the costliest: a later one may do more (a reset).
     const base = alts[0];
     if (base?.cost.nand !== undefined && base.cost.nand > yours) {
-      parts.push(` Compared with “${base.name}”, your design saves `, h('b', null, ((base.cost.nand - yours) * k).toLocaleString()), ' NANDs there.');
+      parts.push(` Compared with “${base.name}”, your design saves `, h('b', null, groupDigits((base.cost.nand - yours) * k)), ' NANDs there.');
     }
-    if (par !== undefined && yours > par) parts.push(' At par it would be ', h('b', null, ((yours - par) * k).toLocaleString()), ' fewer.');
+    if (par !== undefined && yours > par) parts.push(' At par it would be ', h('b', null, groupDigits((yours - par) * k)), ' fewer.');
     el.replaceChildren(...parts);
   }
 }
@@ -540,7 +541,7 @@ const narrow = () => matchMedia('(max-width: 900px)').matches;
 
 /** Relays, tube sections and relay steps of `c`, those the level grades (`par`) only. */
 function deviceText(c: { relays?: number; tubes?: number; steps?: number }, par: Par): string {
-  const n = (v: number, one: string, many: string) => `${v.toLocaleString()} ${v === 1 ? one : many}`;
+  const n = (v: number, one: string, many: string) => `${groupDigits(v)} ${v === 1 ? one : many}`;
   const out: string[] = [];
   if (c.relays !== undefined && par.relays !== undefined) out.push(n(c.relays, 'relay', 'relays'));
   if (c.tubes !== undefined && par.tubes !== undefined) out.push(n(c.tubes, 'tube section', 'tube sections'));
@@ -550,7 +551,7 @@ function deviceText(c: { relays?: number; tubes?: number; steps?: number }, par:
 
 function costText(nand: number | undefined, depth: number | null | undefined): string {
   const out: string[] = [];
-  if (nand !== undefined) out.push(`${nand.toLocaleString()} NAND`);
+  if (nand !== undefined) out.push(`${groupDigits(nand)} NAND`);
   if (depth !== undefined && depth !== null) out.push(`depth ${depth}`);
   return out.join(' · ') || '—';
 }

@@ -2,6 +2,7 @@
 // (the why as the lead, where the part goes, the case, how later levels use it, what it builds on, then the rest),
 // the act-end card and "Now within reach". Both pages pass how a level opens (the map's panel or the level screen).
 
+import { groupDigits } from '../../sim/numfmt';
 import { actName, actTitle, nodeById } from '../nodes';
 import { isDone, type ProgressView } from '../graph';
 import { altCost } from '../measure';
@@ -74,7 +75,7 @@ export function whyStackEl(n: CampaignNode, ctx: ThreadCtx, mode: 'map' | 'level
         if (w.alts.length) {
           body.append(sec('Alternatives', h('div', { class: 'lv-cost' }, w.alts.flatMap((a) => {
             const c = altCost(a);
-            const v = [c.nand !== undefined ? `${c.nand.toLocaleString()} NAND` : '', c.depth !== undefined && c.depth !== null ? `depth ${c.depth}` : ''].filter(Boolean).join(' · ') || '—';
+            const v = [c.nand !== undefined ? `${groupDigits(c.nand)} NAND` : '', c.depth !== undefined && c.depth !== null ? `depth ${c.depth}` : ''].filter(Boolean).join(' · ') || '—';
             return [h('span', null, a.name), h('span', { class: 'v' }, v)];
           }))));
         }

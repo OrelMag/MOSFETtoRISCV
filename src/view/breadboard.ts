@@ -6,6 +6,7 @@
 // pinch, drag, Fit): they open fitted whole, or, where the layout whole would not read (a phone), on its one-column
 // arrangement (BreadboardLayout.narrow) as wide as the canvas, the rest a pan away.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/breadboard.css';
 import { findNode, type HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
@@ -841,7 +842,7 @@ export function insideOf(def: ComponentDef): string {
   const st = stats(def);
   // a ROM chip's mux tree (stats' rom) is not logic: its bytes instead
   const n = st.nands - (st.rom?.nands ?? 0), rom = st.rom ? `${romSize(st.rom)} of ROM` : '';
-  const logic = n ? `${n.toLocaleString('en-US')} NAND${n === 1 ? '' : 's'}` : st.transistors && !st.rom ? `${st.transistors} transistors` : '';
+  const logic = n ? `${groupDigits(n)} NAND${n === 1 ? '' : 's'}` : st.transistors && !st.rom ? `${st.transistors} transistors` : '';
   const cost = [logic, rom].filter(Boolean).join(' + ');
   if (!nl) return cost ? `A leaf of the simulation · ${cost}` : 'A leaf of the simulation';
   const kinds = new Map<string, number>();

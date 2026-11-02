@@ -3,6 +3,7 @@
 // drop of exported files onto the canvas, and the autosave indicator. Everything that changes
 // the workspace is one undo step; nothing is ever imported without the user's click.
 
+import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
 import { h, icon, placeMenu, s } from '../ui/dom';
@@ -270,7 +271,7 @@ async function shareDialog(ed: Editor): Promise<void> {
     h('p', { class: 'sb-dlg-lead' }, 'Whoever opens this link gets a copy of ', h('b', null, name),
       chips.length > 1 ? ` and the ${plural(chips.length - 1, 'chip')} inside it` : '', '. The circuit travels inside the link: nothing is uploaded, and they choose whether to import it.'),
     h('div', { class: 'sb-share-row' }, field, h('button', { class: 'btn sm', onclick: () => void copy() }, glyph('link', 14), 'Copy')),
-    h('p', { class: 'sb-sum' }, `${plural(chips.length, 'chip')} · ${url.length.toLocaleString('en')} characters (${kb(url.length)})`),
+    h('p', { class: 'sb-sum' }, `${plural(chips.length, 'chip')} · ${groupDigits(url.length)} characters (${kb(url.length)})`),
     long ? h('p', { class: 'sb-warn' }, `Long links may break in some apps (mail, chat, URL shorteners) — export a file instead.`) : null,
     note,
   ];

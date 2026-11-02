@@ -3,6 +3,7 @@
 // pattern text the table stores; while the drag lasts the problems, clashes, opcode map, coverage and
 // decoder cost follow the draft, and letting go commits it (one undo step). Analysis: isa/design.ts.
 
+import { groupDigits } from '../sim/numfmt';
 import { analyze, bitsOf, groupPattern } from '../isa/design';
 import { tableOf, type IsaDoc } from '../isa/table';
 import { h, icon } from '../ui/dom';
@@ -109,10 +110,10 @@ export function designPane(doc: IsaDoc, preset: boolean, st: DesignState, commit
       h('div', { class: 'isd-probs' }, msgs),
       h('div', null, h('h4', null, `Opcode map · bits [${win.hi}:${win.lo}]`), omap),
       h('div', { class: 'isd-fill' },
-        h('div', { class: 'sb-sum' }, `${a.exact ? '' : 'at most '}${a.decoded.toLocaleString('en')} of ${a.total.toLocaleString('en')} words decode (${pct < 0.1 && pct > 0 ? '< 0.1' : pct.toFixed(1)}%): room for ${a.exact ? '' : 'at least '}${(a.total - a.decoded).toLocaleString('en')} more.`),
+        h('div', { class: 'sb-sum' }, `${a.exact ? '' : 'at most '}${groupDigits(a.decoded)} of ${groupDigits(a.total)} words decode (${pct < 0.1 && pct > 0 ? '< 0.1' : pct.toFixed(1)}%): room for ${a.exact ? '' : 'at least '}${groupDigits(a.total - a.decoded)} more.`),
         h('div', { class: 'isd-bar' }, h('i', { style: `width:${Math.min(100, pct)}%` }))),
       h('div', { class: 'isd-dec' }, h('h4', null, 'Decoder'),
-        h('p', null, h('b', null, `${dec.nands.toLocaleString('en')} NANDs`), `, ${dec.depth} gate delays: one AND per instruction over its fixed bits (${dec.ands} NANDs), and ${dec.nots} shared inverters${a.shadows.length ? ' (a special case\'s match, inverted, keeps the general one off)' : ''}. Fewer fixed bits per instruction, a cheaper decoder.`),
+        h('p', null, h('b', null, `${groupDigits(dec.nands)} NANDs`), `, ${dec.depth} gate delays: one AND per instruction over its fixed bits (${dec.ands} NANDs), and ${dec.nots} shared inverters${a.shadows.length ? ' (a special case\'s match, inverted, keeps the general one off)' : ''}. Fewer fixed bits per instruction, a cheaper decoder.`),
         // Built from the saved table (not a drag in progress): a match line per instruction and valid
         openDecoder && !a.clashes.length ? h('button', { type: 'button', class: 'btn sm', title: 'The decoder as a chip of your own: open it, drill into it, simulate it', onclick: openDecoder }, 'Open the decoder in the sandbox') : '',
         openDecoder && a.clashes.length ? h('p', { class: 'sb-sum' }, 'Fix the clashes first: a word two instructions both claim has no single match line.') : ''));

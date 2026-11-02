@@ -2,6 +2,7 @@
 // the chapters' CPUs in one sortable table, measured from their netlists (lib/hwstats.ts). The
 // build ships the rows as hwstats.json; without it (the dev server) they are computed here.
 
+import { groupDigits } from '../../sim/numfmt';
 import { type HwRow, hwStatsLive } from '../../lib/hwstats';
 import { RELAY_MASS, RELAY_VOLUME, TECH, TECH_NOTE, TUBE_MASS, TUBE_VOLUME, type TechId, fmtMass, fmtRate, fmtTime, fmtVolume, fmtWatts } from '../../lib/tech';
 import { PS_NOTE, PS_PER_NAND } from '../../sim/timing';
@@ -51,7 +52,7 @@ const isGroup = (x: Item): x is Group => 'members' in x;
 // One rows load per visit to the site: the file (or the live computation) is shared by later visits.
 let loaded: Promise<HwRow[]> | null = null;
 
-const num = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
+const num = (n: number | null) => (n === null ? '—' : groupDigits(n));
 /** Counts from 100 000 up as 3.44 M / 765 k (the exact figure on hover): a 3 438 100-NAND SoC is read at a glance, not by counting digits. */
 const compact = (n: number): string => (n >= 1e6 ? `${+(n / 1e6).toPrecision(3)} M` : n >= 1e5 ? `${Math.round(n / 1e3)} k` : num(n));
 const count = (n: number): Node | string => (n >= 1e5 ? h('span', { title: num(n) }, compact(n)) : num(n));
@@ -163,7 +164,7 @@ export class HwStatsPage implements Page {
     const tile = (big: string, ...small: (Node | string)[]) => h('div', { class: 'hw-tile' }, h('b', null, big), h('span', null, ...small));
     const [b, d, p] = [top('nands'), top('depth'), top('period')];
     this.tiles.replaceChildren(
-      tile(lib.length.toLocaleString('en-US'), `components (${fams} families of sizes), ${this.rows.length - lib.length} wiring parts`),
+      tile(groupDigits(lib.length), `components (${fams} families of sizes), ${this.rows.length - lib.length} wiring parts`),
       tile(`${num(b.nands)} NANDs`, 'largest: ', link(b)),
       tile(`${d.depth} delays`, 'deepest combinational: ', link(d)),
       tile(`${p.period} delays`, 'slowest clock: ', link(p), ` (${mhz(p.period!)} MHz)`));
@@ -269,7 +270,7 @@ export class HwStatsPage implements Page {
       if (open) for (const m of it.members) out.push(this.row(m, max, true));
     }
     this.body.replaceChildren(...out);
-    this.count.textContent = `${rows.length.toLocaleString('en-US')} components shown${this.group ? `, ${items.length.toLocaleString('en-US')} rows` : ''}`;
+    this.count.textContent = `${groupDigits(rows.length)} components shown${this.group ? `, ${groupDigits(items.length)} rows` : ''}`;
   }
 
   /** A family row's range end, formatted for its column. */
@@ -290,7 +291,7 @@ export class HwStatsPage implements Page {
     const tail = t === 'cmos'
       ? [h('td', null, count(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), count(r.nands)),
         h('td', null, r.switchLevel ? h('span', { class: 'hw-na' }, 'switch level') : num(r.depth)),
-        h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${mhz(r.period).toLocaleString('en-US')}`)),
+        h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${groupDigits(mhz(r.period))}`)),
         h('td', null, num(r.levels)), h('td', null, count(r.parts))]
       : [h('td', null, cell ? count(cell.n) : h('span', { class: 'hw-na' }, r.switchLevel ? 'transistors' : '—'),
           cell?.native ? h('span', { class: 'hw-tag' }, 'native') : null),

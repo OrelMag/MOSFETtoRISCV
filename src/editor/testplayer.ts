@@ -6,6 +6,7 @@
 // gives the simulation back as it was. Anything else driving the simulation (Run, Step, a clock
 // click, Reset) ends the replay.
 
+import { groupDigits } from '../sim/numfmt';
 import { h, icon } from '../ui/dom';
 import { type BuildChallenge, type CheckResult, fmtBits, fmtNum, MAX_FAILED } from './challenges';
 import type { Editor } from './editor';
@@ -208,13 +209,13 @@ export class TestPlayer {
         ? btn('pause', 'Pause', () => { this.pause(); this.render(); }, false, 'pause')
         : btn('play', 'Play the tests on the circuit (stops at a failing one)', () => this.play(), false, 'play'),
       btn('chevR', 'Next test', () => this.jump(v.k + 1), v.k >= set.n - 1, 'next'),
-      h('span', { class: 'sb-tp-pos' }, `${set.kind === 'sequence' ? 'Step' : 'Test'} `, h('b', null, (v.k + 1).toLocaleString()), ` / ${set.n.toLocaleString()}`),
+      h('span', { class: 'sb-tp-pos' }, `${set.kind === 'sequence' ? 'Step' : 'Test'} `, h('b', null, groupDigits(v.k + 1)), ` / ${groupDigits(set.n)}`),
       status,
       this.failed.length
         ? h('span', { class: 'sb-tp-fails' },
           h('button', { class: 'btn ghost sm', title: 'The previous failing test', disabled: prevF === undefined, onclick: () => prevF !== undefined && this.jump(prevF) }, icon('chevL', 12), 'previous failure'),
           h('button', { class: 'btn ghost sm', 'data-tp': 'nextfail', title: 'The next failing test', disabled: nextF === undefined, onclick: () => nextF !== undefined && this.jump(nextF) }, 'next failure', icon('chevR', 12)),
-          h('small', null, `${this.failed.length.toLocaleString()}${this.failed.length >= MAX_FAILED ? '+' : ''} failing`))
+          h('small', null, `${groupDigits(this.failed.length)}${this.failed.length >= MAX_FAILED ? '+' : ''} failing`))
         : '');
     this.range.value = String(v.k);
     this.marks.classList.toggle('stale', this.stale);

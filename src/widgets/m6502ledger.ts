@@ -2,6 +2,7 @@
 // side by side in each technology, and the count over the years. Every count of ours is measured
 // from the circuits (sim/stats.ts); the real chips' counts are published figures.
 
+import { groupDigits } from '../sim/numfmt';
 import { FULL_ADDER } from '../lib/combinational';
 import { singleCycleCpu } from '../lib/cpu';
 import { controlUnit, datapath, m6502 } from '../lib/m6502/chip';
@@ -17,7 +18,7 @@ import { type ComponentDef, netlistOf } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('en');
+const fmt = (n: number) => groupDigits(Math.round(n));
 const T = (d: ComponentDef) => stats(d).transistors;
 
 /** Transistors per top-level block, largest first. */

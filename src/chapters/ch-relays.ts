@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { DFF, RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, SR_LATCH, XOR, relayAdder, rca } from '../lib';
 import { NAND2_UM2, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, fmtMass, fmtTime, fmtVolume, relayExtra } from '../lib/tech';
 import { RELAY, RELAY_COIL_POWER, RELAY_STEP_MS, RELAY_SUPPLY, Z3, relayStatic } from '../phys/relay';
@@ -9,7 +10,7 @@ import type { Chapter } from './types';
 const ADD4 = relayAdder(4);
 const PULL = relayStatic();
 const ms = (x: number) => x.toFixed(1);
-const thin = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+const thin = (n: number) => groupDigits(Math.round(n));
 /** The Z3's speed (Rojas): an addition in about 0.8 s, a multiplication in about 3 s, on a clock of about 5 Hz. */
 const Z3_SPEED = 'an addition in about 0.8 s and a multiplication in about 3 s';
 /** The buzzer in the step model: a period of two relay steps. */

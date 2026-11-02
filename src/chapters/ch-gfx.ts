@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { drawScene } from '../widgets/drawpad';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
@@ -6,7 +7,7 @@ import { CLEAR_CYCLES, Z_WALK_START } from '../gfx/raster';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 /** The rasterizer's clear, from go: the cycles before the walk's first test, then every 4 × 4 tile of the screen (a test and 16 pixels). */
 const CLEAR = CLEAR_CYCLES + 1;
 /** The screen of chapters 33-34: 64 x 64 pixels, one byte each, four to a word. */

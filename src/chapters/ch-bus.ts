@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { cardBootTime } from '../bus/cardboot';
 import { BOOT_SOURCE, CARD_BOOT_SOURCE, CARD_FEED, LOAD_AT, LOAD_WORDS, SYSTEM_WORDS } from '../bus/programs';
 import { deckWords } from '../cards/card';
@@ -14,9 +15,9 @@ import type { Stage } from '../view/stage';
 import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, cardComputerScene, systemComputerScene } from '../widgets/bus';
 import type { Chapter } from './types';
 
-const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands.toLocaleString('en-US').replace(/,/g, ' ');
+const nands = (d: Parameters<typeof stats>[0]) => groupDigits(stats(d).nands);
 
-const fmtCycles = (ns: number) => Math.round(ns / CLOCK_NS).toLocaleString('en-US').replace(/,/g, ' ');
+const fmtCycles = (ns: number) => groupDigits(Math.round(ns / CLOCK_NS));
 
 /** The card boot, from the golden model (bus/cardboot.ts, pinned against the gates): with the reader's feed, and without. */
 const CARD_BOOT = cardBootTime(deckWords(CARD_DECK), CARD_FEED), CARD_BOOT_0 = cardBootTime(deckWords(CARD_DECK), 0);

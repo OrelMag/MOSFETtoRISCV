@@ -3,6 +3,7 @@
 // kernel in lock-step with its golden model and every frame checked against the reference picture), and the cost
 // widget (NANDs per stage, cycles per frame by phase, the same frame drawn in software on the lanes).
 
+import { groupDigits } from '../sim/numfmt';
 import { FB_W } from '../gfx/raster';
 import { type FrameCost, FrameRecorder, type FrameRecord, framePicture, PIPE_COSTS, type SpanKind } from '../gfx/pipeline';
 import { type CuState, cuState, gpu31 } from '../lib/gfxpipe';
@@ -19,7 +20,7 @@ import { backFrame, ScanCapture } from './screen';
 
 const kid = (n: HierNode, ...p: string[]) => p.reduce((x, k) => x.children!.get(k)!, n);
 const u = (sim: Sim, node: HierNode, port: string) => pack(sim.getBits(node.ports[port])) >>> 0;
-const fmt = (n: number) => n.toLocaleString('en').replace(/,/g, ' ');
+const fmt = groupDigits;
 
 export interface PipeSceneOptions {
   highlight?: string[];

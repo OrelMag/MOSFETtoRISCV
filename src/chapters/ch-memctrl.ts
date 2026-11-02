@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { RESULTS } from '../bench/summary';
 import type { DramConfig } from '../dram/controller';
 import { WB_MISS_CLEAN, WB_MISS_DIRTY } from '../lib/cache2';
@@ -20,7 +21,7 @@ export const COPY = { plain: 33, hash: 54, faster: 8 };
 
 const run = (id: string, bench: string) => RESULTS.cpus.find((c) => c.id === id)?.runs.find((r) => r.bench === bench)?.cycles ?? NaN;
 const nands = (id: string) => RESULTS.cpus.find((c) => c.id === id)?.nands ?? NaN;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 const slower = (a: string, b: string, bench: string) => `${(((run(a, bench) / run(b, bench)) - 1) * 100).toFixed(1)} %`;
 
 export const chMemCtrl: Chapter = {

@@ -1,3 +1,4 @@
+import { groupDigits } from '../sim/numfmt';
 import { divergenceWidget, laneCoreScene, lanesVsCoresWidget } from '../widgets/lanes';
 import { accessWidget, tilingWidget } from '../widgets/feed';
 import { occupancyWidget, warpCoreScene } from '../widgets/warps';
@@ -10,7 +11,7 @@ function halted(st: Stage): boolean {
 }
 
 const pct = (a: number, b: number) => `${Math.round((100 * a) / b)} %`;
-const fmt = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmt = groupDigits;
 /** saxpy on the lane core (chapter 29): instructions run, loads and stores among them, lanes; one cycle per active lane for a memory instruction. */
 const SAXPY = { instrs: 74, mem: 20, lanes: 4 };
 const SAXPY_CYCLES = SAXPY.instrs - SAXPY.mem + SAXPY.mem * SAXPY.lanes;
