@@ -3,6 +3,7 @@
 //  - Klaus Dormann's 6502_functional_test.bin (GPL: cached only, never checked in)
 // Usage: node scripts/m6502/fetch-tests.mjs [--sample] [op ...]
 //   --sample   also rewrite tests/m6502/singlestep-sample.json (the first SAMPLE tests of each opcode)
+//   --undocumented  the stable undocumented opcodes (src/m6502/isa.ts UNDOC) instead: tests/m6502/singlestep-undoc-sample.json
 //   op ...     only these opcodes (hex), e.g. a9 6d
 import { mkdir, writeFile, readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -21,6 +22,12 @@ const DOCUMENTED = (
   '81 84 85 86 88 8a 8c 8d 8e 90 91 94 95 96 98 99 9a 9d a0 a1 a2 a4 a5 a6 a8 a9 aa ac ad ae b0 b1 b4 b5 b6 b8 ' +
   'b9 ba bc bd be c0 c1 c4 c5 c6 c8 c9 ca cc cd ce d0 d1 d5 d6 d8 d9 dd de e0 e1 e4 e5 e6 e8 e9 ea ec ed ee f0 ' +
   'f1 f5 f6 f8 f9 fd fe').split(' ');
+
+// The stable undocumented opcodes (kept in step with isa.ts UNDOC_TABLE; tests check it).
+const UNDOCUMENTED = (
+  '03 04 07 0b 0c 0f 13 14 17 1a 1b 1c 1f 23 27 2b 2f 33 34 37 3a 3b 3c 3f 43 44 47 4b 4f 53 54 57 5a 5b 5c 5f ' +
+  '63 64 67 6b 6f 73 74 77 7a 7b 7c 7f 80 82 83 87 89 8f 97 a3 a7 af b3 b7 bf c2 c3 c7 cb cf d3 d4 d7 da db dc df ' +
+  'e2 e3 e7 eb ef f3 f4 f7 fa fb fc ff').split(' ');
 
 const exists = (p) => stat(p).then(() => true, () => false);
 
@@ -44,8 +51,9 @@ const compact = (t) => [state(t.initial), state(t.final), t.cycles.flatMap(([a, 
 
 const args = process.argv.slice(2);
 const sample = args.includes('--sample');
+const undoc = args.includes('--undocumented');
 const ops = args.filter((a) => !a.startsWith('--'));
-const list = ops.length ? ops : DOCUMENTED;
+const list = ops.length ? ops : undoc ? UNDOCUMENTED : DOCUMENTED;
 await mkdir(CACHE, { recursive: true });
 
 let fetched = 0;
@@ -53,16 +61,16 @@ const queue = [...list];
 await Promise.all(Array.from({ length: 8 }, async () => {
   for (let op; (op = queue.shift()); ) if (await get(SST + op + '.json', join(CACHE, op + '.json'))) fetched++;
 }));
-if (await get(KLAUS, join(CACHE, '6502_functional_test.bin'))) fetched++;
+if (!undoc && await get(KLAUS, join(CACHE, '6502_functional_test.bin'))) fetched++;
 console.log(`${fetched} file(s) downloaded into ${CACHE}`);
 
 if (sample) {
   const out = {};
-  for (const op of DOCUMENTED) {
+  for (const op of undoc ? UNDOCUMENTED : DOCUMENTED) {
     const tests = JSON.parse(await readFile(join(CACHE, op + '.json'), 'utf8'));
     out[op] = tests.slice(0, SAMPLE).map(compact);
   }
-  const dest = join(ROOT, 'tests', 'm6502', 'singlestep-sample.json');
+  const dest = join(ROOT, 'tests', 'm6502', undoc ? 'singlestep-undoc-sample.json' : 'singlestep-sample.json');
   // One opcode per line keeps diffs readable.
   const text = '{\n' + Object.entries(out).map(([k, v]) => `"${k}":${JSON.stringify(v)}`).join(',\n') + '\n}\n';
   await writeFile(dest, text);
