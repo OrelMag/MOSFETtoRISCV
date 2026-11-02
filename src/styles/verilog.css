@@ -1,0 +1,39 @@
+/* A Verilog twin (ui/pages/verilog.ts): the level screen's layout (level.css) with the source and the Check card in the main
+   area. The source pane reuses editor-hdl.css (.hdl-code, .hdl-hl, .hdl-ta, .hdl-diag). Theme tokens only. */
+
+.lv-badge.vl-tier { background: var(--accent-soft); color: var(--accent); }
+.vl-main { min-width: 0; min-height: 0; overflow: auto; padding: 14px; }
+.vl-split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.vl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; overflow: hidden; }
+.vl-card > h3 { margin: 0; padding: 12px 14px 0; font-size: 15px; }
+.vl-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.vl-head .grow { flex: 1; }
+.vl-editor .hdl-code { height: 380px; min-height: 240px; background: var(--hdl-code-bg); }
+.vl-editor .hdl-diags { max-height: 160px; }
+.vl-log { padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface-2); font: 12.5px/1.5 var(--font-mono); color: var(--text-2); }
+.vl-log:empty { display: none; }
+.vl-log .ok { color: var(--good); }
+.vl-log .bad { color: var(--bad); }
+.vl-log .sub { color: var(--muted); font-family: var(--font-ui); }
+.vl-check { padding: 12px 14px 14px; display: grid; gap: 12px; font-size: 13.5px; color: var(--text-2); }
+.vl-check p { margin: 0; }
+.vl-check .note { font-size: 12.5px; color: var(--muted); }
+.vl-wait { color: var(--text); }
+.vl-verdict { font: 600 13px var(--font-mono); padding: 8px 10px; border-radius: 8px; }
+.vl-verdict.ok { background: var(--good-soft); color: var(--good); }
+.vl-verdict.bad { background: var(--bad-soft); color: var(--bad); }
+.vl-fail { margin: 0; padding-left: 18px; font: 12.5px/1.5 var(--font-mono); color: var(--text-2); display: grid; gap: 4px; }
+.vl-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.vl-score { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.vl-score b { font: 600 17px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.vl-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.vl-cmp td:not(:first-child) { text-align: right; }
+.vl-ref { display: grid; gap: 6px; }
+.vl-code { margin: 0; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; font: 12.5px/1.55 var(--font-mono); color: var(--text); }
+
+@media (max-width: 1100px) { .vl-split { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .vl-main { padding: 10px; } .vl-editor .hdl-code { height: 300px; } }
+@media (pointer: coarse) {
+  .vl-head .btn, .vl-links .btn { min-height: 40px; }
+  .hdl-diag { min-height: 40px; }
+}

@@ -8,6 +8,7 @@ import { BAND_GAP, COL_GAP, FOOT_LABEL_W, mapLayout, NODE_H, NODE_W, OPTIONAL_AC
 import { actDone, actEnd, cardBlock, endLinks } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
 import { levelCardLabel } from '../cardlabel';
+import { hasTwin, twinKey } from '../twinids';
 import type { CampaignNode } from '../types';
 
 const KIND_MARK: Record<CampaignNode['kind'], string> = { lesson: 'read', drill: 'drill', build: 'build', program: 'code', core: 'CPU' };
@@ -164,7 +165,9 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const stars = view(n.id)?.stars ?? 0;
     // A locked level opens too (its panel says what it needs), so it is a working button that says "locked", not a disabled one.
     const blk = cardBlock(n);
-    const label = `${levelCardLabel(n, st, stars)}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
+    const vl = hasTwin(n.id) && !n.soon;
+    const vlStars = vl ? view(twinKey(n.id))?.stars ?? 0 : 0;
+    const label = `${levelCardLabel(n, st, stars)}${vl ? `, also in Verilog${vlStars ? ` (${vlStars} of 3 stars)` : ''}` : ''}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
     const g = s('g', {
       class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
       transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'data-node': n.id,
@@ -184,6 +187,13 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         s('rect', { width: w, height: 12, rx: 6 }),
         s('circle', { cx: 7, cy: 6, r: 2.5 }),
         s('text', { x: 12, y: 9 }, blk.label)));
+    }
+    if (vl) {
+      // "also in Verilog" (the card label says so in full): a short tab on the card's bottom-left edge (the block tab sits at the right), ★ once the twin is passed
+      const text = vlStars ? `Verilog ${'★'.repeat(vlStars)}` : 'Verilog';
+      const w = 12 + text.length * 5.4;
+      g.append(s('g', { class: `cp-vl${vlStars ? ' done' : ''}`, transform: `translate(10,${NODE_H - 6})`, 'aria-hidden': 'true' },
+        s('rect', { width: w, height: 12, rx: 6 }), s('text', { x: 6, y: 9 }, text)));
     }
     const from = crossIn.get(n.id);
     if (from) {

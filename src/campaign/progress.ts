@@ -10,6 +10,7 @@ import { isDone, type ProgressView } from './graph';
 import { levelChipId } from './levels';
 import { CAPSTONES } from '../learn/capstones';
 import { NODES, nodeById } from './nodes';
+import { isTwinKey } from './twinids';
 
 export const CAMPAIGN_KEY = 'mosfet2riscv:campaign:v1';
 export const CAMPAIGN_FORMAT = 'mosfet2riscv-campaign';
@@ -69,7 +70,7 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
   if (raw.unlockAll === true) st.unlockAll = true;
   const nodes = isObj(raw.nodes) ? raw.nodes : {};
   for (const [id, v] of Object.entries(nodes)) {
-    if ((!nodeById(id) && !isCapstone(id)) || !isObj(v)) continue;
+    if ((!nodeById(id) && !isCapstone(id) && !isTwinKey(id)) || !isObj(v)) continue;
     const p: NodeProgress = {};
     if (typeof v.status === 'string' && STATUSES.has(v.status)) p.status = v.status as NodeProgress['status'];
     if (v.stars === 1 || v.stars === 2 || v.stars === 3) p.stars = v.stars;
@@ -198,6 +199,21 @@ export class Progress {
     p.status = 'solved';
     p.at = Date.now();
     if (best) p.best = m;
+    this.save();
+    return { first, best };
+  }
+
+  /**
+   * A Verilog twin passed (campaign/verilog.ts): solved with its stars and NAND count, the best kept (more stars, then fewer
+   * NANDs). Twins are optional and sit outside the map's summary, so nothing else reads them.
+   */
+  solveTwin(id: string, stars: 1 | 2 | 3, nand: number): { first: boolean; best: boolean } {
+    const p = this.node(id);
+    const first = p.status !== 'solved';
+    const best = first || !p.stars || stars > p.stars || (stars === p.stars && nand < (p.best?.nand ?? Infinity));
+    p.status = 'solved';
+    p.at = Date.now();
+    if (best) { p.stars = stars; p.best = { nand }; }
     this.save();
     return { first, best };
   }
