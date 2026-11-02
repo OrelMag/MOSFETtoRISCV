@@ -29,7 +29,7 @@ function campaignLink(into: HTMLElement): void {
     if (!Object.keys(p.state.nodes).length) return;
     const next = nextAvailable(p.view, p.unlockAll);
     if (!next || !into.isConnected) return;
-    into.replaceChildren(h('a', { class: 'btn', href: `#/campaign/n/${next.id}`, title: 'The next level open on the campaign map' }, icon('flag', 16), `Continue campaign: ${next.title}`));
+    into.replaceChildren(h('a', { class: 'btn ghost', href: `#/campaign/n/${next.id}`, title: 'The next level open on the campaign map' }, icon('flag', 16), `Continue campaign: ${next.title}`));
   }, () => {});
 }
 
@@ -38,7 +38,7 @@ export function homePage(): Page {
   const resume = resumeTarget(chapters, (id) => settings.visited(id), settings.lastStep());
   const path = !!learn().state.start;
   // "Play the campaign", replaced by "Continue campaign: <level>" once the campaign has been started
-  const campaign = h('span', { class: 'cta-campaign' }, h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'));
+  const campaign = h('span', { class: 'cta-campaign' }, h('a', { class: 'btn ghost', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'));
   campaignLink(campaign);
 
   const cards = chapters.flatMap((c, i) => {
@@ -72,19 +72,21 @@ export function homePage(): Page {
         h('div', { class: 'eyebrow' }, 'An interactive journey'),
         h('h1', null, 'From a single ', h('span', { class: 'grad' }, 'MOSFET'), ' to a ', h('span', { class: 'grad' }, 'RISC-V'), ' processor.'),
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
+        // One way forward, then the rest as quiet links: five equal buttons wrapped unevenly and moved when the campaign link grew.
         h('div', { class: 'cta' },
           // A path chosen: continue it. A first visit: where to start. Otherwise the resume button, with My path beside it.
           path ? h('a', { class: 'btn primary', href: '#/path' }, 'Continue your path', icon('chevR', 16))
             : !resume ? h('a', { class: 'btn primary', href: '#/start' }, 'Where are you starting?', icon('chevR', 16)) : null,
           resume ? h('a', { class: `btn${path ? '' : ' primary'}`, href: `#/c/${resume.chapter.id}/${resume.step}` },
-            `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}`, path ? null : icon('chevR', 16))
-            : h('a', { class: 'btn', href: '#/c/basics/0' }, icon('layers', 16), 'Start the journey'),
-          !path && resume ? h('a', { class: 'btn', href: '#/path' }, icon('layers', 16), 'My path') : null,
+            `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}`, path ? null : icon('chevR', 16)) : null),
+        h('div', { class: 'cta-more' },
+          !resume ? h('a', { class: 'btn ghost', href: '#/c/basics/0' }, icon('layers', 16), 'Start the journey') : null,
+          !path && resume ? h('a', { class: 'btn ghost', href: '#/path' }, icon('layers', 16), 'My path') : null,
           campaign,
-          h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
-          h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'),
-          notes().count ? h('a', { class: 'btn', href: '#/notes', title: 'Your notes and bookmarks, and the review queue' }, icon('note', 16), `My notes · ${notes().count}`) : null)),
-      ladder()),
+          h('a', { class: 'btn ghost', href: '#/workbench/rca4' }, icon('bench', 16), 'Workbench'),
+          h('a', { class: 'btn ghost', href: '#/sandbox' }, icon('chip', 16), 'Sandbox'),
+          notes().count ? h('a', { class: 'btn ghost', href: '#/notes', title: 'Your notes and bookmarks, and the review queue' }, icon('note', 16), `My notes · ${notes().count}`) : null)),
+      h('div', { class: 'hero-ladder' }, h('p', { class: 'ladder-cap' }, 'The key levels, each built from the one below. Numbers are chapters; the chapters between fill in the steps.'), ladder())),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
     h('p', { class: 'section-sub' }, 'Each chapter uses only what the previous ones built.'),
     h('div', { class: 'cards' }, cards, soon),

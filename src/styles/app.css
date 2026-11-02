@@ -107,8 +107,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .pal-menu .pal-size > span:first-child { flex: 1; min-width: 0; }
 .pal-menu .pal-size .btn { padding: 4px 10px; }
 .pal-size-v { min-width: 3.2em; text-align: center; font: 600 12px var(--font-mono); color: var(--text-2); }
-.pal-menu .pal-backup svg { flex: none; color: var(--accent); }
 .img-menu { min-width: 240px; left: 0; right: auto; }
+.pal-head { padding: 8px 10px 2px; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-top: 1px solid var(--border); margin-top: 4px; }
+.pal-menu > .pal-head:first-child { border-top: 0; margin-top: 0; }
 .pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .pal-mods .m0 { --chip-h: 145; } .pal-mods .m1 { --chip-h: 45; } .pal-mods .m2 { --chip-h: 215; } .pal-mods .m3 { --chip-h: 330; }
@@ -1115,7 +1116,11 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.lead { font-size: 18px; color: var(--text-2); margin: 0 0 24px; max-width: 34em; }
 .hero .cta { display: flex; gap: 10px; flex-wrap: wrap; }
-.hero .cta-campaign { display: contents; } /* its button swapped once the campaign is known to be started (home.ts) */
+.hero .cta-more { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 12px 0 0 -10px; }
+.hero .cta-more .btn { max-width: 100%; padding-inline: 8px; }
+.hero .cta-campaign { display: contents; }
+.hero-ladder { min-width: 0; }
+.ladder-cap { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
@@ -1167,6 +1172,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 
 /* ---------- workbench ---------- */
 .bench { display: grid; height: 100%; grid-template-columns: 270px 1fr minmax(260px, 340px); }
+.bench.no-part { grid-template-columns: 270px 1fr; }
+.bench.no-part > .inspector { display: none; }
 .library { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .library input[type=search] {
   margin: 12px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border);
@@ -1348,7 +1355,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-dot.pipe { fill: var(--series-3); }
 .bm-dot.wide { fill: var(--series-4); }
 .bm-dot.off { fill-opacity: 0.18; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 2 2; }
-.bm-hit { fill: transparent; cursor: default; }
+.bm-hit { fill: transparent; cursor: pointer; }
+.bm-dot.hl { stroke: var(--text); stroke-width: 3; }
+.bm-table tr.hl > td { background: var(--accent-soft); }
 .bm-tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; }
 .bm-tip b { display: block; font-size: 12.5px; }
 .bm-tip span { color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -2498,3 +2507,7 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .hw-chev { width: 28px; height: 40px; text-align: center; line-height: 40px; vertical-align: middle; }
   .hw-chev-space { width: 28px; }
 }
+
+/* Codex "Check yourself": short answers ("8", "6") sit side by side as chips, long ones still take a line each. */
+.cx-check .challenge .options { display: flex; flex-wrap: wrap; gap: 6px; }
+.cx-check .challenge .options button { flex: 0 1 auto; max-width: 100%; }

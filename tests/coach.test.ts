@@ -26,3 +26,15 @@ describe('coach marks', () => {
     expect(mayAutoStart({ done: false, otherTour: false, dialogOpen: true })).toBe(false);
   });
 });
+
+describe('coach marks and routes', () => {
+  it('a tour belongs to its page only', async () => {
+    const { coachFits } = await import('../src/ui/coachplan');
+    expect(coachFits('sandbox', '#/sandbox/u_x')).toBe(true);
+    expect(coachFits('sandbox', '#/c/basics/0')).toBe(false);
+    expect(coachFits('stage', '#/c/cpu/3')).toBe(true);
+    expect(coachFits('stage', '#/workbench/rca4')).toBe(true);
+    expect(coachFits('stage', '#/sandbox')).toBe(false);
+    expect(coachFits('stage', '#/campaign')).toBe(false);
+  });
+});

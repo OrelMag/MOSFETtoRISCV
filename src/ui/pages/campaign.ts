@@ -83,6 +83,8 @@ export class CampaignPage implements Page {
   private cxQuery = '';
   private cxKind = '';
   /** The codex list by act (the reading order) or by kind, as the reader last chose. */
+  /** The acts left open in the codex list (the selected entry's act always opens): 177 entries are not read from the top. */
+  private cxOpen = new Set<string>();
   private cxView: 'act' | 'kind' = (() => { try { return localStorage.getItem(CX_VIEW_KEY) === 'kind' ? 'kind' : 'act'; } catch { return 'act'; } })();
   /** Locked entries the reader asked to see anyway (this visit). */
   private cxPeek = new Set<string>();
@@ -555,9 +557,26 @@ export class CampaignPage implements Page {
         parts: [{ sub: '', ul: h('ul', null, g.main.map(item)) }, ...(g.further.length ? [{ sub: 'Further', ul: h('ul', null, g.further.map(item)) }] : [])],
       }))
       : CODEX_KINDS.map((k) => ({ head: k.title, parts: [{ sub: '', ul: h('ul', null, CODEX_BY_KIND.filter((e) => e.kind === k.id).map(item)) }] }));
+    const fold = this.cxView === 'act';
+    const folds: (() => void)[] = [];
     const sections = groups.map((g) => {
       const parts = g.parts.map((x) => ({ ...x, h: x.sub ? h('h5', { title: x.sub === 'Further' ? 'Unlocked by this act\'s levels, which do not need them: read beyond the task' : '' }, x.sub) : null }));
-      return { el: h('section', { class: 'cx-grp' }, h('h4', null, g.head), parts.flatMap((x) => [x.h, x.ul])), parts };
+      const holdsSel = !!sel && g.parts.some((x) => [...x.ul.children].some((li) => (li as HTMLElement).dataset.id === sel));
+      if (holdsSel) this.cxOpen.add(g.head);
+      const el = h('section', { class: 'cx-grp' }, h('h4', null, g.head), parts.flatMap((x) => [x.h, x.ul]));
+      if (fold) {
+        const btn = h('button', { class: 'cx-grp-t', type: 'button' }, g.head) as HTMLButtonElement;
+        el.querySelector('h4')!.replaceChildren(btn);
+        const sync = () => {
+          const open = this.cxOpen.has(g.head) || !!this.cxKind;
+          el.classList.toggle('folded', !open);
+          btn.setAttribute('aria-expanded', String(open));
+        };
+        btn.addEventListener('click', () => { if (this.cxOpen.has(g.head)) this.cxOpen.delete(g.head); else this.cxOpen.add(g.head); sync(); });
+        sync();
+        folds.push(sync);
+      }
+      return { el, parts };
     });
     const ranked = h('ul', { class: 'cx-ranked', hidden: true });
     const filter = () => {
@@ -586,6 +605,7 @@ export class CampaignPage implements Page {
           shown += any;
         }
       }
+      for (const f of folds) f();
       empty.hidden = shown > 0;
       for (const b of kinds.children) {
         b.classList.toggle('on', (b as HTMLElement).dataset.k === this.cxKind);

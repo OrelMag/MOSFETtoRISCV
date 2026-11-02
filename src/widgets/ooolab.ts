@@ -109,7 +109,7 @@ export function oooLabWidget(): Widget {
     num('Issue queue', () => cfg.iq, (v) => { cfg.iq = v; }, 1, 128),
     num('Store queue', () => cfg.sq, (v) => { cfg.sq = v; }, 1, 64),
     sel('Issue', [['ooo', 'out of order, oldest first'], ['in', 'in order']], () => (cfg.inorder ? 'in' : 'ooo'), (v) => { cfg.inorder = v === 'in'; }),
-    sel('Binding', [['balance', 'to the port with fewer waiting'], ['alternate', 'alternating']], () => cfg.bind, (v) => { cfg.bind = v; }),
+    sel('Binding', [['balance', 'port with fewer waiting'], ['alternate', 'alternating']], () => cfg.bind, (v) => { cfg.bind = v; }),
     sel('Predictor', [['ras', 'BTB + return stack'], ['btb', 'BTB only'], ['perfect', 'perfect']], () => cfg.predict, (v) => { cfg.predict = v; }),
     num('BTB entries', () => cfg.btb, (v) => { cfg.btb = v; }, 1, 1024),
     num('Return stack', () => cfg.ras, (v) => { cfg.ras = v; }, 1, 64),

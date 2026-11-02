@@ -5,6 +5,8 @@
 .lv-page { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
 .lv-notice { display: grid; place-items: start center; padding: 40px 16px; }
 .lv-notice .panel { max-width: 520px; }
+.lv-notice .panel h3 { margin-top: 0; }
+.lv-notice-go { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .lv-bar {
   display: flex; align-items: center; gap: 10px; padding: 6px 12px; min-height: 46px; flex-wrap: wrap; row-gap: 4px;

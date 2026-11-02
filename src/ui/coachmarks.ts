@@ -5,7 +5,7 @@
 // the ? sheet and the search's > actions plays it again. Never starts while a content tour (ui/tour.ts) plays.
 
 import { h } from './dom';
-import { beatsOf, type CoachBeat, type CoachKind, mayAutoStart, move, pickBeats } from './coachplan';
+import { beatsOf, type CoachBeat, type CoachKind, coachFits, mayAutoStart, move, pickBeats } from './coachplan';
 import { settings } from './settings';
 
 let active: Coach | null = null;
@@ -50,6 +50,7 @@ class Coach {
     // clicks outside the card go nowhere: the page below is dimmed, not live
     this.el.addEventListener('pointerdown', (e) => { if (!this.card.contains(e.target as Node)) e.preventDefault(); });
     document.addEventListener('keydown', this.key, true);
+    window.addEventListener('hashchange', this.route);
     window.addEventListener('resize', this.schedule);
     window.addEventListener('scroll', this.schedule, true);
     this.ro = new ResizeObserver(this.schedule);
@@ -58,6 +59,11 @@ class Coach {
     this.show();
     this.card.focus({ preventScroll: true });
   }
+
+  /** A route change to a page the tour is not about ends it, without counting it as seen. */
+  private route = (): void => {
+    if (!coachFits(this.kind, location.hash)) this.end(false);
+  };
 
   private key = (e: KeyboardEvent): void => {
     // a dialog opened over the tour (the search, the keys sheet) owns its keys: Esc closes it, Tab moves in it
@@ -170,15 +176,17 @@ class Coach {
     this.dots.replaceChildren(...this.beats.map((_, k) => h('i', { class: k === this.i ? 'on' : '' })));
   }
 
-  end(): void {
+  end(seen = true): void {
+    window.removeEventListener('hashchange', this.route);
     cancelAnimationFrame(this.raf);
     document.removeEventListener('keydown', this.key, true);
     window.removeEventListener('resize', this.schedule);
     window.removeEventListener('scroll', this.schedule, true);
     this.ro.disconnect();
     this.el.remove();
-    settings.setCoachDone(this.kind);
+    if (seen) settings.setCoachDone(this.kind);
     if (active === this) active = null;
+    if (!seen) return;
     // the opener may be <body> (a first visit) or gone (the ? sheet's button): then the stage / canvas
     const o = this.opener;
     const usable = !!o && o !== document.body && o !== document.documentElement && o.isConnected && o.getClientRects().length > 0;
@@ -197,7 +205,7 @@ const busy = () => ({
 
 /** Play the tour of `kind` now (the ? sheet, the search's actions). False when no control of it is on the page. */
 export function showCoach(kind: CoachKind): boolean {
-  active?.end();
+  active?.end(false);
   const beats = pickBeats(beatsOf(kind), (sel) => !!shown(sel));
   if (!beats.length) return false;
   active = new Coach(kind, beats);
@@ -209,7 +217,7 @@ export function maybeCoach(kind: CoachKind): void {
   if (!mayAutoStart({ done: settings.coachDone(kind), ...busy() })) return;
   // a beat later: the page has settled and the stage bar has fitted itself
   window.setTimeout(() => {
-    if (mayAutoStart({ done: settings.coachDone(kind), ...busy() })) showCoach(kind);
+    if (coachFits(kind, location.hash) && mayAutoStart({ done: settings.coachDone(kind), ...busy() })) showCoach(kind);
   }, 700);
 }
 

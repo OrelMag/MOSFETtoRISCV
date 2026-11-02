@@ -52,6 +52,9 @@ const isGroup = (x: Item): x is Group => 'members' in x;
 let loaded: Promise<HwRow[]> | null = null;
 
 const num = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
+/** Counts from 100 000 up as 3.44 M / 765 k (the exact figure on hover): a 3 438 100-NAND SoC is read at a glance, not by counting digits. */
+const compact = (n: number): string => (n >= 1e6 ? `${+(n / 1e6).toPrecision(3)} M` : n >= 1e5 ? `${Math.round(n / 1e3)} k` : num(n));
+const count = (n: number): Node | string => (n >= 1e5 ? h('span', { title: num(n) }, compact(n)) : num(n));
 const mhz = (p: number) => Math.round(1e6 / (p * PS_PER_NAND));
 
 export class HwStatsPage implements Page {
@@ -63,7 +66,8 @@ export class HwStatsPage implements Page {
   private wiring = false;
   private group = true;
   private sort: Key = 'nands';
-  private dir = -1;
+  /** Smallest first: the table opens on the gates and adders, not on the 3.4 M-NAND computers (a click on a header reverses). */
+  private dir = 1;
   private tech: TechId = 'cmos';
   private techBtns = h('div', { class: 'hw-tech', role: 'group', 'aria-label': 'Technology' });
   private techNote = h('p', { class: 'hw-note hw-tech-note' });
@@ -224,7 +228,11 @@ export class HwStatsPage implements Page {
         items.push({ family: ms[0].family!, cat: ms[0].cat, members: ms, values });
       }
     }
-    const val = (x: Item, k: Key) => (isGroup(x) ? x.values[k] ?? null : this.get(x, k));
+    // A part with no NAND (a wire, a relay or transistor circuit) has no gate count to order by: it sorts last, not first.
+    const val = (x: Item, k: Key) => {
+      const v = isGroup(x) ? x.values[k] ?? null : this.get(x, k);
+      return k === 'nands' && v === 0 ? null : v;
+    };
     items.sort((a, b) => {
       const x = val(a, this.sort), y = val(b, this.sort);
       // Missing values (a dash) sort last either way.
@@ -266,7 +274,7 @@ export class HwStatsPage implements Page {
 
   /** A family row's range end, formatted for its column. */
   private fmt(k: Key, x: number): string {
-    if (this.tech === 'cmos' || (k !== 'watts' && k !== 'mass')) return num(x);
+    if (this.tech === 'cmos' || (k !== 'watts' && k !== 'mass')) return compact(x);
     return k === 'watts' ? fmtWatts(x) : fmtMass(x);
   }
 
@@ -280,13 +288,13 @@ export class HwStatsPage implements Page {
       return [num(n), h('span', { class: 'hw-mhz hw-tval' }, `${fmtTime(s)}${rate ? ` · ${fmtRate(s)}` : ''}`)];
     };
     const tail = t === 'cmos'
-      ? [h('td', null, num(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
+      ? [h('td', null, count(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), count(r.nands)),
         h('td', null, r.switchLevel ? h('span', { class: 'hw-na' }, 'switch level') : num(r.depth)),
         h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${mhz(r.period).toLocaleString('en-US')}`)),
-        h('td', null, num(r.levels)), h('td', null, num(r.parts))]
-      : [h('td', null, cell ? num(cell.n) : h('span', { class: 'hw-na' }, r.switchLevel ? 'transistors' : '—'),
+        h('td', null, num(r.levels)), h('td', null, count(r.parts))]
+      : [h('td', null, cell ? count(cell.n) : h('span', { class: 'hw-na' }, r.switchLevel ? 'transistors' : '—'),
           cell?.native ? h('span', { class: 'hw-tag' }, 'native') : null),
-        h('td', { class: 'hw-nands' }, bar(r.nands, max), num(r.nands)),
+        h('td', { class: 'hw-nands' }, bar(r.nands, max), count(r.nands)),
         h('td', null, ...steps(r.depth, false)),
         h('td', null, ...steps(r.period, true)),
         h('td', null, cell ? fmtWatts(cell.watts) : '—'),

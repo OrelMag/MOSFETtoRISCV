@@ -519,7 +519,9 @@ class ChallengeUi {
     // The level screen: after the first failing result, later ones fold to a line (Show opens them), the player stays shut.
     const fold = !!this.screen && this.openResult !== null;
     if (fold) this.openResult = false;
-    // A failure opens the player on the first failing test: the circuit shows it.
+    // A failure opens the player on the first failing test: the circuit shows it. On the level screen the player's
+    // rows are the failures, so the details start folded to the one line (Show opens them): the player keeps its height.
+    if (!fold && this.screen && this.openResult === null && !r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openResult = false;
     if (!fold && !r.ok && r.failed?.length && ch.check.kind !== 'custom') this.openPlayer(ch, r, r.failed[0]);
     else this.render();
     if (this.drawer) this.renderList();

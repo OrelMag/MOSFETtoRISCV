@@ -55,6 +55,12 @@ describe('sources and groups', () => {
     expect(scoped.counts.get('b')).toBe(1);
   });
 
+  it('puts a group that opens on an exact title match before the page order', () => {
+    const srcs = [fake('a', 1, [item('chapter', 'NAND gates'), item('chapter', 'Nand in CMOS')]), fake('b', 2, [item('component', 'NAND')])];
+    expect(searchGroups(srcs, 'nand', ALL, ctx).groups.map((g) => g.id)).toEqual(['b', 'a']);
+    expect(searchGroups(srcs, 'nan', ALL, ctx).groups.map((g) => g.id)).toEqual(['a', 'b']);
+  });
+
   it('reports a lazy source as loading until its items arrive', () => {
     let items: NavItem[] | null = null;
     const lazy = fake('lazy', 1, null, { items: () => items, load: async () => { items = [item('level', 'Adder level')]; } });
