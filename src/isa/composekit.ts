@@ -65,6 +65,8 @@ export interface ComposeIsa {
   /** The instruction a word names even with bits set the builder would not set ("one bit away"). */
   loose(word: number): { id: string; parts: Parts } | null;
   fields(word: number): CField[];
+  /** A sentence on why a word that is no instruction here is left out, when it is a known thing the builder skips. */
+  whyNot?(word: number): string | null;
   imm(word: number): CImm | null;
   /** The word as a line of the program: pc in the ISA's address unit, a target by label when one fits. */
   text(word: number, pc?: number, labels?: Map<string, number>): string;
