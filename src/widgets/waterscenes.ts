@@ -31,7 +31,7 @@ export function loopScene(get: () => LoopState): WaterScene {
       { text: 'tank height = voltage', p: [-2.6, 2.95, 0.6], side: 't' },
       { text: 'valve = switch', p: [-1.0, 1.05, 0.4], side: 't' },
       { text: 'wheel = lamp', p: [1.0, 1.55, 0.3], side: 't' },
-      { text: 'narrow pipe = resistance', p: [1.95, 0.05, 0.3], side: 'b' },
+      { text: 'narrow pipe = resistance', p: [2.45, 0.5, 0.3], side: 'r' }, // right of the corner: below it sat on the second lamp's wheel
       { text: 'pump = battery', p: [-1.4, -2.25, 0.3], side: 'b' },
       { text: 'return pipe = ground, 0 V', p: [0.6, -1.95, 0.5], side: 'b', minor: true },
     ],
