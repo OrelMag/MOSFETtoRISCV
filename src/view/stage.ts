@@ -20,6 +20,7 @@ import { B0, B1, BZ, type Bit, type ComponentDef, inPorts, netlistOf, outPorts, 
 import { formatBits, formatNumber, mask, pack, packBig, type Radix, unpackBig } from '../sim/values';
 import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
+import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
 import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
@@ -283,21 +284,22 @@ export class Stage {
       icon('chip', 15), h('span', { class: 'lbl' }, 'Open in Sandbox'));
     // The level on screen as an image file (view/image.ts, loaded on first use).
     const imgMenu = h('div', { class: 'pal-menu img-menu', role: 'menu' });
+    const showImg = (on: boolean) => { imgMenu.classList.toggle('open', on); imgBtn.setAttribute('aria-expanded', String(on)); };
     const imgItem = (kind: 'svg' | 'png', label: string, hint: string) => h('button', { role: 'menuitem', onclick: () => {
-      imgMenu.classList.remove('open');
+      showImg(false);
       this.exportImage(kind);
     } }, h('span', null, h('b', null, label), h('small', null, hint)));
     const linkItem = h('button', { role: 'menuitem', onclick: () => {
-      imgMenu.classList.remove('open');
+      showImg(false);
       void this.copyViewLink();
     } }, h('span', null, h('b', null, 'Copy link to this view'), h('small', null, 'Chapter step, opened part, inputs, probes and clock cycles')));
     imgMenu.append(imgItem('svg', 'Image as SVG', 'This level, whole, as drawn in the current theme'), imgItem('png', 'Image as PNG', 'The same at 2× resolution'), linkItem);
-    const imgBtn = h('button', { class: 'btn ghost sm share-btn', title: 'Share this view: an image of this level (SVG or PNG), or a link that reopens it as it is now', 'aria-haspopup': 'menu', onclick: (e: Event) => {
+    const imgBtn: HTMLElement = h('button', { class: 'btn ghost sm share-btn', title: 'Share this view: an image of this level (SVG or PNG), or a link that reopens it as it is now', 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: (e: Event) => {
       e.stopPropagation();
-      imgMenu.classList.toggle('open');
+      showImg(!imgMenu.classList.contains('open'));
     } }, icon('image', 15), h('span', { class: 'lbl' }, 'Share'));
     document.addEventListener('pointerdown', (e) => {
-      if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) imgMenu.classList.remove('open');
+      if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) showImg(false);
     }, { signal: this.life.signal });
     // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it. The menu closes on any
     // press outside it, this button's too: a press that found it open only closes it.
@@ -319,6 +321,7 @@ export class Stage {
     } }, icon('sidebar', 16)) as HTMLButtonElement;
     this.syncPanesBtn();
     const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
+    menuKeys(imgWrap, imgMenu, imgBtn, () => showImg(false));
     const zoomOut = btn('minus', 'Zoom out', () => this.zoomBy(1.25), ' zoom-btn');
     const zoomIn = btn('plus', 'Zoom in', () => this.zoomBy(0.8), ' zoom-btn');
     // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
