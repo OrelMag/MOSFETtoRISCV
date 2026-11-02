@@ -9,6 +9,7 @@ import { bindKeys, installKeys, MAC } from './keys';
 import { resetSearchCaches } from './searchbuiltin';
 import { ALL, parseQuery, pushRecent, recentItems, searchGroups, searchSources } from './searchsources';
 import { settings } from './settings';
+import { markJump } from './returnto';
 
 export const QUICK_KEY = MAC ? '⌘K' : 'Ctrl K';
 
@@ -171,7 +172,10 @@ export function openQuickNav(initial = ''): void {
       pushRecent(it);
       close();
       if (newTab) window.open(new URL(it.href, location.href).href, '_blank', 'noopener');
-      else location.hash = it.href;
+      else {
+        markJump();
+        location.hash = it.href;
+      }
     } else if (it.run) {
       close();
       it.run();
