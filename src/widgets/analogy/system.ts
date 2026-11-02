@@ -170,6 +170,7 @@ export function moveRun(len: number, src: MoveSource, gap = MOVE_GAP, cpuFirst =
     cpu.push(instr);
     words.push(written);
   }
+  if (len) { cpu[t] = instr; words[t] = written; } // the cycle the last word lands
   return { owner, cpu, words, irqAt: t, loads };
 }
 

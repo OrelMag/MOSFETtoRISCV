@@ -6,11 +6,11 @@ import { SQUAD_CONDS, SQUAD_LANES, laneOn, popcount, squadRun } from './system';
 import { button, frames, reducedMotion } from './common';
 import { choice } from './sysui';
 
-const W = 360, GX = 52, GY = 128, GR = 20, STEP_MS = 420;
+const W = 360, GX = 64, GY = 128, GR = 20, STEP_MS = 420;
 
 export default function mount(host: HTMLElement): void {
   let cond = 1, idx = 0, playing = false;
-  const svg = s('svg', { viewBox: `0 0 ${W} 232`, class: 'af-svg', role: 'img', 'aria-label': 'Four soldiers, and a grid of which of them were moving at each step' });
+  const svg = s('svg', { viewBox: `0 0 ${W} 252`, class: 'af-svg', role: 'img', 'aria-label': 'Four soldiers, and a grid of which of them were moving at each step' });
   const read = h('p', { class: 'af-read', 'aria-live': 'polite' });
   const conds = choice(SQUAD_CONDS.map((c) => c.label), (i) => { cond = i; reset(); });
   const run = () => squadRun(SQUAD_CONDS[cond].id);
@@ -47,8 +47,8 @@ export default function mount(host: HTMLElement): void {
       }
     }
     kids.push(s('rect', { x: GX + idx * cw, y: GY - 1, width: cw, height: SQUAD_LANES * GR + 2, class: 'af-cursor' }),
-      s('text', { x: GX, y: GY + SQUAD_LANES * GR + 18, class: 'af-t af-m' }, 'one column = one slot'),
-      s('text', { x: 4, y: 224, class: 'af-t' }, `slot ${idx + 1} of ${n}: ${cur.text}`));
+      s('text', { x: GX, y: GY + SQUAD_LANES * GR + 20, class: 'af-t af-m' }, 'one column = one slot'),
+      s('text', { x: 4, y: 246, class: 'af-t' }, `slot ${idx + 1} of ${n}: ${cur.text}`));
     svg.replaceChildren(...kids);
     conds.mark(cond);
     stepBtn.disabled = last;

@@ -6,7 +6,7 @@ import { KITCHEN_PROGRAMS, KITCHEN_WINDOWS, kitchenCycles, kitchenRun } from './
 import { button, frames, reducedMotion } from './common';
 import { choice } from './sysui';
 
-const W = 360, ROW = 24, TOP = 34, CYCLE_MS = 260;
+const W = 360, ROW = 27, TOP = 34, CYCLE_MS = 260;
 
 export default function mount(host: HTMLElement): void {
   let prog = 0, win = 1, idx = 0, playing = false;
@@ -38,13 +38,13 @@ export default function mount(host: HTMLElement): void {
     ];
     for (let i = 0; i < n; i++) {
       const t = f.rob[i], y = TOP + i * ROW;
-      if (!t) { kids.push(s('rect', { x: 2, y: y + 2, width: W - 4, height: ROW - 4, rx: 4, class: 'af-row empty' })); continue; }
+      if (!t) { kids.push(s('rect', { x: 2, y: y + 1, width: W - 4, height: ROW - 2, rx: 4, class: 'af-row empty' })); continue; }
       const label = t.state === 'queued' ? 'waiting' : t.state === 'issued' ? `cook ${t.port}` : 'ready';
-      kids.push(s('rect', { x: 2, y: y + 2, width: W - 4, height: ROW - 4, rx: 4, class: i === 0 ? 'af-row head' : 'af-row' }),
-        s('text', { x: 8, y: y + 18, class: 'af-t af-m' }, `#${t.seq}`),
-        s('text', { x: 52, y: y + 18, class: 'af-t' }, t.text),
-        s('rect', { x: W - 96, y: y + 4, width: 90, height: ROW - 8, rx: 9, class: `af-pill ${t.state}` }),
-        s('text', { x: W - 51, y: y + 18, 'text-anchor': 'middle', class: 'af-t' }, label));
+      kids.push(s('rect', { x: 2, y: y + 1, width: W - 4, height: ROW - 2, rx: 4, class: i === 0 ? 'af-row head' : 'af-row' }),
+        s('text', { x: 8, y: y + 20, class: 'af-t af-m' }, `#${t.seq}`),
+        s('text', { x: 52, y: y + 20, class: 'af-t' }, t.text),
+        s('rect', { x: W - 96, y: y + 4, width: 90, height: ROW - 8, rx: 10, class: `af-pill ${t.state}` }),
+        s('text', { x: W - 51, y: y + 19, 'text-anchor': 'middle', class: 'af-t' }, label));
     }
     svg.replaceChildren(...kids);
     progs.mark(prog); wins.mark(win);

@@ -140,6 +140,9 @@ describe('movers (bus / DMA)', () => {
   it("the figure's CPU (3 ALU instructions, then a load) waits while the DMA holds the bus", () => {
     const busy = moveRun(16, 'ram', MOVE_GAP), none = moveRun(16, 'ram', -1);
     expect(busy.irqAt).toBeGreaterThan(none.irqAt); // the CPU's loads take bus turns
+    const done = moveRun(16, 'ram', MOVE_GAP);
+    expect(done.words.at(-1)).toBe(16); // every word has landed when the bell rings
+    expect(done.words.length).toBe(done.irqAt + 1);
     const flash = moveRun(16, 'flash', MOVE_GAP);
     expect(Math.max(...flash.loads)).toBeGreaterThan(FLASH_TIMES.read); // a load behind the page read waits for the rest of it
     expect(Math.max(...flash.loads)).toBeLessThanOrEqual(FLASH_TIMES.read + 2 + 2);

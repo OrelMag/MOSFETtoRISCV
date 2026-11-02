@@ -1,5 +1,7 @@
 /* Figures in the Analogy asides, merge H: kitchen, squad, movers, doorbell, fourway. Tokens only; both themes follow. */
 .af-svg .af-row { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.af-svg .af-frame { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.af-svg .af-hist { fill: var(--surface); stroke-width: 3; }
 .af-svg .af-row.empty { fill: none; stroke: var(--muted); stroke-dasharray: 3 3; }
 .af-svg .af-row.head { stroke: var(--analogy); stroke-width: 2; }
 .af-svg .af-pill { fill: var(--surface); stroke-width: 3; }

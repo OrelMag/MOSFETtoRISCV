@@ -36,7 +36,7 @@ export default function mount(host: HTMLElement): void {
     const kids: SVGElement[] = [
       s('rect', { x: CX - 20, y: 8, width: 40, height: 168, class: 'af-road' }),
       s('rect', { x: CX - 104, y: CY - 20, width: 208, height: 40, class: 'af-road' }),
-      s('rect', { x: CX - 20, y: CY - 20, width: 40, height: 40, fill: 'none', class: 'af-road' }),
+      s('rect', { x: CX - 20, y: CY - 20, width: 40, height: 40, class: 'af-frame' }),
     ];
     for (let i = 0; i < n; i++) {
       const [x, y] = POS[i], w = st.want[i];
@@ -44,11 +44,11 @@ export default function mount(host: HTMLElement): void {
         s('text', { x, y: y + 6, 'text-anchor': 'middle', class: 'af-big sm' }, String(i)),
         s('text', { x: i === 0 || i === 2 ? x + 24 : x, y: i === 0 || i === 2 ? y + 6 : y + 34, 'text-anchor': i === 0 || i === 2 ? 'start' : 'middle', class: 'af-t' }, `${w} to go`));
     }
-    if (last >= 0) kids.push(s('circle', { cx: CX, cy: CY, r: 13, class: `af-s${last}` }), s('text', { x: CX, y: CY + 6, 'text-anchor': 'middle', class: 'af-big sm' }, String(last)));
+    if (last >= 0) kids.push(s('circle', { cx: CX, cy: CY, r: 13, class: `af-car af-st${last}` }), s('text', { x: CX, y: CY + 6, 'text-anchor': 'middle', class: 'af-big sm' }, String(last)));
     kids.push(s('text', { x: 4, y: 206, class: 'af-t af-m' }, 'order they went through:'));
     st.grants.forEach((g, k) => {
       const x = 6 + (k % 12) * 28, y = 214 + Math.floor(k / 12) * 24;
-      kids.push(s('rect', { x, y, width: 24, height: 20, rx: 3, class: `af-s${g}` }), s('text', { x: x + 12, y: y + 15, 'text-anchor': 'middle', class: 'af-t' }, String(g)));
+      kids.push(s('rect', { x, y, width: 24, height: 20, rx: 3, class: `af-hist af-st${g}` }), s('text', { x: x + 12, y: y + 15, 'text-anchor': 'middle', class: 'af-t' }, String(g)));
     });
     svg.replaceChildren(...kids);
     pols.mark(pol); cores.mark(n - 2);

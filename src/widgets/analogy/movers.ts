@@ -42,7 +42,7 @@ export default function mount(host: HTMLElement): void {
       s('rect', { x: 8, y: 8, width: 70, height: 40, rx: 6, class: cur === 'cpu' ? 'af-row head' : 'af-row' }),
       s('text', { x: 43, y: 34, 'text-anchor': 'middle', class: 'af-t' }, 'CPU'),
       s('rect', { x: 282, y: 8, width: 70, height: 40, rx: 6, class: cur === 'dma' ? 'af-row head' : 'af-row' }),
-      s('text', { x: 317, y: 34, 'text-anchor': 'middle', class: 'af-t' }, 'DMA van'),
+      s('text', { x: 317, y: 34, 'text-anchor': 'middle', class: 'af-t' }, 'DMA'),
       s('rect', { x: 78, y: 24, width: 204, height: 8, class: cur === 'cpu' ? 'af-bus-cpu' : cur === 'dma' ? 'af-bus-dma' : 'af-bus-idle' }),
       s('text', { x: 180, y: 20, 'text-anchor': 'middle', class: 'af-t af-m' }, cur === 'idle' ? 'road free' : `road: ${cur === 'cpu' ? 'CPU' : 'DMA'}`),
       s('circle', { cx: 180, cy: 62, r: 11, class: done ? 'af-bell ring' : 'af-bell' }),
@@ -58,7 +58,7 @@ export default function mount(host: HTMLElement): void {
         from = c;
       }
     }
-    kids.push(s('rect', { x: BX, y: 108, width: BW, height: 18, fill: 'none', class: 'af-row' }), s('line', { x1: X(t), x2: X(t), y1: 104, y2: 130, class: 'af-now' }),
+    kids.push(s('rect', { x: BX, y: 108, width: BW, height: 18, class: 'af-frame' }), s('line', { x1: X(t), x2: X(t), y1: 104, y2: 130, class: 'af-now' }),
       s('rect', { x: BX, y: 146, width: 14, height: 14, class: 'af-bus-cpu' }), s('text', { x: BX + 20, y: 158, class: 'af-t' }, 'CPU load'),
       s('rect', { x: BX + 110, y: 146, width: 14, height: 14, class: 'af-bus-dma' }), s('text', { x: BX + 130, y: 158, class: 'af-t' }, 'DMA read / write'),
       s('text', { x: BX, y: 190, class: 'af-big sm' }, `CPU: ${instr} instructions`),

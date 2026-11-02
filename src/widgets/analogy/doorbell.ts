@@ -24,7 +24,7 @@ export default function mount(host: HTMLElement): void {
         from = c;
       }
     }
-    out.push(s('rect', { x: SX, y, width: SW, height: 22, class: 'af-row', fill: 'none' }));
+    out.push(s('rect', { x: SX, y, width: SW, height: 22, class: 'af-frame' }));
     for (const arr of r.arrivals) if (arr < WINDOW) out.push(s('path', { d: `M${SX + arr * cw - 5},${y - 12} h10 l-5,10 z`, class: 'af-visitor' }));
     return out;
   };
