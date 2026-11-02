@@ -742,7 +742,7 @@ export class Editor {
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       grp.append(sel);
     }
-    grp.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => this.newChip() }, icon('plus', 14), 'New chip'));
+    grp.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => { this.newChip(); this.toast(`New chip “${this.doc.name}” in a new tab`, 'info', { label: 'Undo', run: () => this.undo() }); } }, icon('plus', 14), 'New chip'));
     if (newChipKinds.length) {
       const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
         onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
