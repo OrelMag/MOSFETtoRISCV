@@ -5,7 +5,7 @@ import { CELL_HALFLIFE } from '../../lib/dram';
 import { DRAM_OFFSET_MV, decay, deltaMv, refreshLevel, senseRead } from './model';
 import { button, frames, reducedMotion, setPressed } from './common';
 
-const W = 360, BT = 28, BH = 72, BW = 56;
+const W = 360, BT = 30, BH = 72, BW = 56;
 const CYCLES_PER_S = 40;
 
 export default function mount(host: HTMLElement): void {
@@ -13,7 +13,7 @@ export default function mount(host: HTMLElement): void {
   const bits = [1, 0, 1, 1];
   let level = [1, 0, 0.8, 0.62];
   let age = 0, running = !reducedMotion(), looping = false;
-  const svg = s('svg', { viewBox: `0 0 ${W} 190`, class: 'af-svg', role: 'img', 'aria-label': 'Four leaking buckets, the half line, and what a read of each would give' });
+  const svg = s('svg', { viewBox: `0 0 ${W} 192`, class: 'af-svg', role: 'img', 'aria-label': 'Four leaking buckets, the half line, and what a read of each would give' });
   const read = h('p', { class: 'af-read', 'aria-live': 'polite' });
 
   const advance = (c: number) => { age += c; level = level.map((l) => decay(l, c)); paint(); };
@@ -45,7 +45,7 @@ export default function mount(host: HTMLElement): void {
         s('text', { x: x + BW / 2, y: BT + BH + 24, 'text-anchor': 'middle', class: 'af-t' }, `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(0)} mV`),
         s('text', { x: x + BW / 2, y: BT + BH + 44, 'text-anchor': 'middle', class: `af-big sm${r === 'X' ? ' bad' : ''}` }, `reads ${r}`));
     });
-    kids.push(s('text', { x: W - 4, y: 12, 'text-anchor': 'end', class: 'af-t af-m' }, `${age.toFixed(0)} cycles · half-life ${CELL_HALFLIFE}`));
+    kids.push(s('text', { x: W / 2, y: 182, 'text-anchor': 'middle', class: 'af-t af-m' }, `${age.toFixed(0)} cycles · half-life ${CELL_HALFLIFE}`));
     svg.replaceChildren(...kids);
     const xs = level.filter((l) => senseRead(l) === 'X').length;
     read.textContent = `A read shares the cell's charge with the bit line (precharged to ½, 4× the capacitance): ΔV = (level − ½)·VDD·C_cell / (C_cell + C_bit). The amplifier needs ${DRAM_OFFSET_MV.toFixed(0)} mV; ${xs ? `${xs} cell${xs > 1 ? 's' : ''} below that read${xs > 1 ? '' : 's'} X, and a refresh now would toss a coin for ${xs > 1 ? 'each' : 'it'}.` : 'every cell still reads clearly.'}`;
