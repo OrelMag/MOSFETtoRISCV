@@ -11,8 +11,26 @@ import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import type { Chips, MonitorSim, Retired } from './cpu';
 import { partAt, partNode, romProgram } from './cpu';
 import type { ChipDoc, PartDoc } from './model';
+import { setRef, type Edited } from './ops';
 
 export const CORE64 = /^rv64(i|im)(?:_d(\d))?_core$/;
+
+/** The data memory sizes the sandbox offers (log2 of the doublewords): 2^8 is already 409 000 leaves (3 s to build), 2^10 1.5 M (11 s). */
+export const DMEM64_MIN = 4, DMEM64_MAX = 8, DMEM64_DEFAULT = 6;
+
+/** The library id of a 64-bit core with 2^k doublewords of data memory (lib/cpu64.ts names it, resolve.ts reads it back). */
+export function core64Id(m: boolean, k: number): string {
+  return `rv64${m ? 'im' : 'i'}${k !== DMEM64_DEFAULT ? `_d${k}` : ''}_core`;
+}
+
+/** The core part with another data memory size: one edit of the part's ref, its wires kept (the ports are the same). */
+export function setCore64Memory(doc: ChipDoc, partId: string, k: number, defOf?: Parameters<typeof setRef>[3]): Edited {
+  const p = doc.parts.find((q) => q.id === partId);
+  const m = p && 'lib' in p.ref ? CORE64.exec(p.ref.lib) : null;
+  if (!p || !m) return { doc, reason: `'${partId}' is not a 64-bit core` };
+  if (!Number.isInteger(k) || k < DMEM64_MIN || k > DMEM64_MAX) return { doc, reason: `data memory: 2^${DMEM64_MIN} to 2^${DMEM64_MAX} doublewords` };
+  return setRef(doc, partId, { lib: core64Id(m[1] === 'im', k) }, defOf);
+}
 
 export interface Rv64Desc {
   /** The program ROM (a part path). */

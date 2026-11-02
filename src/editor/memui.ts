@@ -18,6 +18,7 @@ import {
 } from './memory';
 import type { PartDoc } from './model';
 import { setRef } from './ops';
+import { CORE64, DMEM64_DEFAULT, DMEM64_MAX, DMEM64_MIN, setCore64Memory } from './rv64mon';
 import { registerPaletteGroup } from './palette';
 import { RV64_SOURCE, RVC_SOURCE } from './exampleisa';
 import { MAX_ROM_K } from './parts';
@@ -69,7 +70,7 @@ registerPaletteGroup({
   items: () => [
     { id: 'core_rv32', name: 'RV32I core', title: 'The single-cycle RV32I core with a memory port: instr in (from a Program ROM), pcOut and memAddr / memWData / memWE out, memRData in. The CPU drawer follows it.', place: { part: { lib: 'rv32i_core' } } },
     { id: 'core_rv32c', name: 'RV32IC core', title: 'RV32I with the C extension: 16-bit instructions expanded inside, PC + 2. Its Program ROM needs the C extension ticked: it answers at any even address.', place: { part: { lib: 'rv32ic_core' } } },
-    { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside. Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
+    { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside (Properties: 16 to 256). Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
     { id: 'core_rv64m', name: 'RV64IM core', title: 'The 64-bit core with the M extension (multiply, divide: retire = 0 while a divide runs). Program ROM: tick RV64.', place: { part: { lib: 'rv64im_core' } } },
     { id: 'prog_rom_c', name: 'Program ROM (RV32C)', title: 'A Program ROM with the C extension ticked: reads at any even address, assembles .option rvc and c.* mnemonics', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RVC_SOURCE, c: true } } } },
     { id: 'prog_rom_64', name: 'Program ROM (RV64)', title: 'A Program ROM assembled for RV64: ld, sd, the W instructions, li of any 64-bit constant', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RV64_SOURCE, xlen: 64 } } } },
@@ -573,3 +574,26 @@ function examplesMenu(ed: Editor): void {
 }
 
 registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples ▾', order: 60, run: examplesMenu });
+
+// ---- the 64-bit core's data memory ---------------------------------------------------------
+
+registerPropsSection({
+  id: 'core64', order: 19,
+  render(ed) {
+    const p = selectedPart(ed);
+    const m = p && 'lib' in p.ref ? CORE64.exec(p.ref.lib) : null;
+    if (!p || !m) return null;
+    const k = m[2] ? +m[2] : DMEM64_DEFAULT;
+    const opts = Array.from({ length: DMEM64_MAX - DMEM64_MIN + 1 }, (_, i): [number, string] => {
+      const n = DMEM64_MIN + i;
+      return [n, `${2 ** n} doublewords · ${kWords(2 ** (n + 3))} bytes`];
+    });
+    return h('section', { class: 'sb-sec-props' }, h('h3', null, `${m[1] === 'im' ? 'RV64IM' : 'RV64I'} core`),
+      row('Data memory', select(k, opts, (n) => {
+        const r = setCore64Memory(ed.doc, p.id, n, ed.defOf);
+        if (r.reason) return void ed.toast(r.reason, 'err');
+        ed.edit(() => r.doc);
+      }, 'Data memory'), 'The core keeps its data memory inside: 2^k doublewords as eight byte banks. A larger memory is more gates to build and simulate (2^8 is about 400 000 leaves).'),
+      h('p', { class: 'sb-sum' }, 'The memory is inside the core part, so the drawer’s memory view and the golden model follow the size; addresses past it wrap.'));
+  },
+});
