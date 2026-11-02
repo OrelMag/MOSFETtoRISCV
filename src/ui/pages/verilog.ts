@@ -231,11 +231,12 @@ export class VerilogPage implements Page {
         ? h('div', { class: 'vl-verdict ok' }, `✓ ${c.tested} of ${c.tested} ${kind}`)
         : h('div', { class: 'vl-verdict bad' }, `✕ fails the level's check (${c.tested} ${kind} run)`));
       if (!c.ok) kids.push(h('ul', { class: 'vl-fail' }, c.failures.slice(0, 4).map((f) => h('li', null, f))));
-      kids.push(h('div', { class: 'vl-scores' },
+      kids.push(h('div', { class: 'vl-scores' }, ...[
         h('div', { class: 'vl-score' }, h('b', null, (r.nand ?? 0).toLocaleString()), 'NANDs · yours'),
-        h('div', { class: 'vl-score' }, h('b', null, ref.toLocaleString()), 'NANDs · drawn reference'),
+        h('div', { class: 'vl-score' }, h('b', null, r.drawn.toLocaleString()), 'NANDs · drawn reference'),
+        r.verilog !== undefined && r.verilog !== r.drawn ? h('div', { class: 'vl-score' }, h('b', null, r.verilog.toLocaleString()), 'NANDs · our Verilog answer') : null,
         h('div', { class: 'vl-score' }, h('b', { class: 'lv-stars' }, r.stars ? starText(r.stars) : '☆☆☆'),
-          r.stars === 3 ? 'at or under the reference' : r.stars === 2 ? `within 1.5 × (≤ ${Math.floor(ref * 1.5)})` : r.stars === 1 ? `a pass; ★★ at ≤ ${Math.floor(ref * 1.5)}` : 'no stars yet')));
+          r.stars === 3 ? 'at or under the reference' : r.stars === 2 ? `within 1.5 × (≤ ${Math.floor(ref * 1.5)})` : r.stars === 1 ? `a pass; ★★ at ≤ ${Math.floor(ref * 1.5)}` : 'no stars yet')].filter((x): x is HTMLDivElement => !!x)));
     }
     if (this.compare) kids.push(this.compareEl(r));
     kids.push(this.links(r));
@@ -332,8 +333,8 @@ export class VerilogPage implements Page {
         h('p', { class: 'sub' }, 'Other modules may follow in the file; the top one must have exactly these ports.')),
       h('section', null, h('h4', null, 'Graded'), h('ul', null,
         h('li', null, `★ the level's ${ch.check.kind === 'sequence' ? 'test sequence' : 'truth-table check'} passes`),
-        h('li', null, `★★ within 1.5 × the drawn reference's NANDs (${ref.toLocaleString()} → at most ${Math.floor(ref * 1.5).toLocaleString()})`),
-        h('li', null, `★★★ at or under it (${ref.toLocaleString()})`))),
+        h('li', null, `★★ within 1.5 × that (the drawn reference is ${ref.toLocaleString()} NANDs)`),
+        h('li', null, '★★★ at or under the drawn reference, or our own Verilog answer where synthesis cannot reach it'))),
       h('section', null, h('h4', null, 'Watch for'), rich('p', t.note)),
       h('p', { class: 'cap-note' }, h('b', null, 'Optional: '), 'a Verilog twin sits beside its level and changes nothing else on the map. A latch is refused with its line.'));
   }

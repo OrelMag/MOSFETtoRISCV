@@ -8,7 +8,6 @@ import { TWIN_LEVELS } from '../src/campaign/twinids';
 import './hdlkit';
 
 /** The stars each reference earns today (pinned: a change in the synthesizer or a level's par shows here). */
-const STARS: Record<string, number> = { g_dec: 2, a_addsub16: 2, a_slt: 3, s_reg4: 2, s_cnt4: 3, c_imm: 3, c_br: 3 };
 
 const withBody = (node: string, body: string) => { const t = twinOf(node)!; return twinStart(t).replace(t.start, body); };
 
@@ -46,8 +45,9 @@ describe('Verilog twins', () => {
       expect(r.diags.filter((d) => d.level === 'error'), t.twin).toEqual([]);
       expect(r.check?.failures, t.twin).toEqual([]);
       expect(r.ok).toBe(true);
-      expect(r.ref).toBe(drawnNands(t));
-      expect(r.stars, `${t.twin}: ${r.nand} NANDs against ${r.ref}`).toBe(STARS[t.twin]);
+      expect(r.drawn).toBe(drawnNands(t));
+      expect(r.ref).toBe(Math.max(r.drawn, r.verilog!));
+      expect(r.stars, `${t.twin}: ${r.nand} NANDs against ${r.ref}`).toBe(3);
     }, 120_000);
   }
 

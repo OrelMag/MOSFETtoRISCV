@@ -178,7 +178,11 @@ export interface TwinResult {
   cells?: Record<string, number>;
   nand?: number;
   stars?: 0 | 1 | 2 | 3;
+  /** The bar for the stars: the drawn reference's NANDs, or our Verilog answer's where synthesis cannot reach them. */
   ref: number;
+  /** The drawn reference's NANDs, and our Verilog answer's once synthesized. */
+  drawn: number;
+  verilog?: number;
   ok: boolean;
 }
 
@@ -226,10 +230,26 @@ function cellCounts(ws: Workspace, id: string): Record<string, number> {
 }
 
 /** Synthesize the text and grade it. Never throws: a failure is a diagnostic. */
-export async function checkTwin(t: VerilogTwin, text: string, progress?: (done: number, total: number) => void): Promise<TwinResult> {
+const verilogBars = new Map<string, number>();
+
+/** NANDs of our own Verilog answer, synthesized like a learner's (once per twin). */
+export async function verilogNands(t: VerilogTwin): Promise<number> {
+  let n = verilogBars.get(t.twin);
+  if (n === undefined) {
+    const r = await checkTwin(t, twinReference(t), undefined, true);
+    if (r.nand === undefined) throw new Error(`the Verilog answer of ${t.twin} does not synthesize`);
+    verilogBars.set(t.twin, (n = r.nand));
+  }
+  return n;
+}
+
+export async function checkTwin(t: VerilogTwin, text: string, progress?: (done: number, total: number) => void, isBar = false): Promise<TwinResult> {
   const ch = twinChallenge(t);
-  const ref = drawnNands(t);
-  const fail = (diags: HdlDiag[]): TwinResult => ({ diags, ref, ok: false });
+  const drawn = drawnNands(t);
+  let verilog: number | undefined;
+  if (!isBar) { try { verilog = await verilogNands(t); } catch { /* no bar from it */ } }
+  const ref = Math.max(drawn, verilog ?? 0);
+  const fail = (diags: HdlDiag[]): TwinResult => ({ diags, ref, drawn, verilog, ok: false });
   if (!new RegExp(`\\bmodule\\s+${t.module}\\b`).test(text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, ''))) {
     return fail([{ level: 'error', msg: `the top module must be called ${t.module} (its ports are the level's pins)` }]);
   }
@@ -244,9 +264,9 @@ export async function checkTwin(t: VerilogTwin, text: string, progress?: (done: 
   if (Object.keys(cells).some((k) => k.startsWith('d_latch')) && !diags.some((d) => LATCH.test(d.msg))) {
     diags.push({ level: 'error', msg: 'the netlist holds a latch: storage must be a flip-flop clocked by a posedge' });
   }
-  if (diags.some((d) => d.level === 'error')) return { diags, ws: out.ws, chipId: made.id, cells, ref, ok: false };
+  if (diags.some((d) => d.level === 'error')) return { diags, ws: out.ws, chipId: made.id, cells, ref, drawn, verilog, ok: false };
   const check = checkChallenge(ch, compiled);
   const nand = check.score.nand;
   const stars = check.ok ? starsOf(nand, ref) : 0;
-  return { diags, check, ws: out.ws, chipId: made.id, cells, nand, stars, ref, ok: check.ok };
+  return { diags, check, ws: out.ws, chipId: made.id, cells, nand, stars, ref, drawn, verilog, ok: check.ok };
 }
