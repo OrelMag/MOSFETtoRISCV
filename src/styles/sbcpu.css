@@ -83,3 +83,4 @@
 .sb-sap-steps div { display: contents; }
 .sb-sap-steps b { color: var(--accent); }
 .sb-sap-src { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12.5px/1.4 var(--font-mono); resize: vertical; }
+.sb-cpu .cpu-regs.sb-cpu-w64 .r .n { min-width: 2.8ch; margin-right: 4px; }

@@ -20,6 +20,10 @@ import { ioRefDef } from './ioparts';
 import { readerRefDef } from './cardparts';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
+import { cWindowRom } from '../lib/rvc';
+
+/** Largest ROM with the C extension's halfword reads (a mux tree of constants per bank). */
+export const C_ROM_MAX_K = 8;
 
 export type PartResult = ComponentDef | { error: string };
 
@@ -338,6 +342,11 @@ function romPart(r: RomRef): PartResult {
   if (typeof src !== 'string') return { error: 'ROM: no program' };
   const p = romImage(r);
   if (p.error) return { error: p.error };
+  if (r.c) {
+    if (addr !== 'rv32' || w !== 32 || (lang !== 'asm' && lang !== 'hex')) return { error: 'ROM: the C extension needs byte addresses, 32-bit words and assembly or hex' };
+    if (k > C_ROM_MAX_K) return { error: `ROM: with the C extension at most 2^${C_ROM_MAX_K} words` };
+    return cWindowRom(p.words, k);
+  }
   return wordRom(k, w, addr, p.words);
 }
 

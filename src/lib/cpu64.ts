@@ -320,6 +320,12 @@ export interface XlenCpuOptions {
   imemK?: number;
   /** Data memory of 2^dmemK words of xlen bits (default 5). */
   dmemK?: number;
+  /**
+   * 64 bits only: no program ROM inside. The instruction arrives on `instr` (32 bits) and the PC's low 32 bits leave on
+   * `pcLow` (the ROM's address): the sandbox's rv64i_core / rv64im_core, whose data memory stays inside (doublewords,
+   * byte banks: the sandbox's RAM part has no byte enables and holds at most 32-bit words).
+   */
+  imemPort?: boolean;
 }
 
 /**
@@ -331,10 +337,11 @@ export interface XlenCpuOptions {
 export function xlenCpu(program: number[], opts: XlenCpuOptions): ComponentDef {
   const xlen = opts.xlen, m = !!opts.m, imemK = opts.imemK ?? 6, dmemK = opts.dmemK ?? 5;
   const IM = rom(program, imemK);
-  return memo(`xcpu${xlen}${m ? 'm' : ''}_${IM.id}_${imemK}_${dmemK}`, () => buildXlen(IM, xlen, m, dmemK));
+  if (opts.imemPort && xlen !== 64) throw new Error('xlenCpu: imemPort is for the 64-bit core');
+  return memo(`xcpu${xlen}${m ? 'm' : ''}_${IM.id}_${imemK}_${dmemK}${opts.imemPort ? '_ip' : ''}`, () => buildXlen(IM, xlen, m, dmemK, !!opts.imemPort));
 }
 
-function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number): ComponentDef {
+function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPort = false): ComponentDef {
   const wide = X === 64;
   const PC = register(X), RF = regfile(5, X), ALU = alu(X, 'ks'), DM = laneMemory(dmemK, X), ST = storeAlign(X), LD = loadExtract(X);
   const M2 = busMux2(X), M4 = muxTree(2, X), ADD = koggeStone(X), SI = splitter([7, 5, 3, 5, 5, 7]);
@@ -479,14 +486,25 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number): Compon
   const resY = P('res', 'y');
   const ox = resY[0] + 22;
   const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [ox, bottom - 8], instrOut: [ox, bottom - 5], aluOut: [ox, bottom - 2], ...(m ? { retire: [ox, bottom + 1] } : {}) };
+  const extra: PortDef[] = [];
+  if (imemPort) {
+    // the program comes from outside (the sandbox's ROM part): its address leaves, the instruction arrives
+    instances.splice(instances.findIndex((i) => i.name === 'imem'), 1);
+    const sub = (n: string, f: (e: string) => string) => { const t = nets.find((x) => x.name === n)!; t.ends = t.ends.map(f); };
+    sub('PC[31:0]', (e) => (e === 'imem.addr' ? 'pcLow' : e));
+    sub('Instr', (e) => (e === 'imem.data' ? 'instr' : e));
+    pins.instr = [0, bottom + 6];
+    pins.pcLow = [ox, bottom + 4];
+    extra.push(bus('instr', 32, 'in'), bus('pcLow', 32, 'out'));
+  }
   const isa = `RV${X}I${m ? 'M' : ''}`;
   return {
-    id: `x${X}${m ? 'm' : ''}_${IM.id.replace(/^rom_/, '')}${dmemK !== 5 ? `_d${dmemK}` : ''}`, name: `Single-cycle ${isa} CPU`, category: 'cpu',
+    id: imemPort ? `rv64${m ? 'im' : 'i'}${dmemK !== 6 ? `_d${dmemK}` : ''}_core` : `x${X}${m ? 'm' : ''}_${IM.id.replace(/^rom_/, '')}${dmemK !== 5 ? `_d${dmemK}` : ''}`, name: `Single-cycle ${isa} CPU`, category: 'cpu',
     summary: wide
       ? `The single-cycle core at 64 bits: a 64-bit PC, 32 registers of 64 bits, a 64-bit ALU${m ? ' and M unit' : ''}, and a data memory of doublewords in eight byte banks (ld / sd beside lb … sw, and lwu). The immediate generator stays 32 bits wide; its result is sign-extended by wiring, at no cost. The W unit keeps RV32's 32-bit arithmetic (addw, sllw${m ? ', mulw, divw' : ''}, …).${m ? ' Divides take 66 cycles on the iterative divider (retire = 0 meanwhile).' : ''}`
       : `The single-cycle core at 32 bits, drawn as its 64-bit twin: RV32I${m ? 'M' : ''} with byte and halfword loads and stores on four byte banks.${m ? ' Divides take 34 cycles on the iterative divider (retire = 0 meanwhile).' : ''}`,
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', X, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', X, 'out'), ...(m ? [bit('retire', 'out')] : [])],
-    symbol: { kind: 'box', label: isa },
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', X, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', X, 'out'), ...(m ? [bit('retire', 'out')] : []), ...extra],
+    symbol: { kind: 'box', label: imemPort ? 'CORE' : isa },
     netlist: () => ({ pins, instances, nets }),
   };
 }
