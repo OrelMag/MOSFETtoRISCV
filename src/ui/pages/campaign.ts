@@ -382,7 +382,7 @@ export class CampaignPage implements Page {
     if (hasTwin(n.id) && !n.soon && st !== 'locked') {
       const vp = p.get(twinKey(n.id));
       el.append(h('div', { class: 'cp-twin' }, h('b', null, 'Also in Verilog'),
-        h('p', { class: 'sub' }, vp?.stars ? `Passed with ${'★'.repeat(vp.stars)}${vp.best?.nand !== undefined ? ` at ${vp.best.nand.toLocaleString()} NANDs` : ''}. Optional.` : 'The same block written as Verilog: Yosys in your browser turns it into NANDs and the level's own check grades it. Optional.'),
+        h('p', { class: 'sub' }, vp?.stars ? `Passed with ${'★'.repeat(vp.stars)}${vp.best?.nand !== undefined ? ` at ${vp.best.nand.toLocaleString()} NANDs` : ''}. Optional.` : 'The same block written as Verilog: Yosys in your browser turns it into NANDs and the level’s own check grades it. Optional.'),
         h('a', { class: 'btn sm', href: `#/campaign/play/${twinKey(n.id)}` }, icon('play', 13), vp?.status ? 'Continue' : 'Try it in Verilog')));
     }
     el.append(this.actions(n, st, ch));
