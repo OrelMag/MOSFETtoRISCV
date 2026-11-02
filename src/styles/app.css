@@ -601,8 +601,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   .show-circuit { display: inline-flex; position: fixed; z-index: 25; right: 14px; bottom: 14px; box-shadow: var(--shadow-lg); border-radius: 99px; }
   .show-circuit[hidden] { display: none; }
 }
-.recap-on > .stage::after {
-  content: "Last step's circuit"; position: absolute; z-index: 5; left: 150px; top: 52px; padding: 2px 8px; border-radius: 99px; pointer-events: none;
+/* under the level badge (whatever its width or the stage bar's height) */
+.recap-on > .stage .canvas::after {
+  content: "Last step's circuit"; position: absolute; z-index: 5; left: 12px; top: 38px; padding: 2px 8px; border-radius: 99px; pointer-events: none;
   font: 600 11px var(--font-mono); color: var(--muted); background: var(--surface); border: 1px solid var(--border);
 }
 html[data-widget-step] .slow-btn { display: none; }
