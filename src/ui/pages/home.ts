@@ -5,6 +5,7 @@ import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon } from '../dom';
 import { reportLink } from '../errors';
+import { learn } from '../../learn/store';
 import { notes } from '../notes';
 import { settings } from '../settings';
 import type { Page } from './chapter';
@@ -35,6 +36,7 @@ function campaignLink(into: HTMLElement): void {
 export function homePage(): Page {
   const progress = (id: string, n: number) => settings.visited(id).filter((k) => k < n).length / n;
   const resume = resumeTarget(chapters, (id) => settings.visited(id), settings.lastStep());
+  const path = !!learn().state.start;
   // "Play the campaign", replaced by "Continue campaign: <level>" once the campaign has been started
   const campaign = h('span', { class: 'cta-campaign' }, h('a', { class: 'btn', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'));
   campaignLink(campaign);
@@ -71,8 +73,13 @@ export function homePage(): Page {
         h('h1', null, 'From a single ', h('span', { class: 'grad' }, 'MOSFET'), ' to a ', h('span', { class: 'grad' }, 'RISC-V'), ' processor.'),
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a transistor, make a gate, then adders, memory, and a processor. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         h('div', { class: 'cta' },
-          h('a', { class: 'btn primary', href: resume ? `#/c/${resume.chapter.id}/${resume.step}` : '#/c/basics/0' },
-            resume ? `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}` : 'Start the journey', icon('chevR', 16)),
+          // A path chosen: continue it. A first visit: where to start. Otherwise the resume button, with My path beside it.
+          path ? h('a', { class: 'btn primary', href: '#/path' }, 'Continue your path', icon('chevR', 16))
+            : !resume ? h('a', { class: 'btn primary', href: '#/start' }, 'Where are you starting?', icon('chevR', 16)) : null,
+          resume ? h('a', { class: `btn${path ? '' : ' primary'}`, href: `#/c/${resume.chapter.id}/${resume.step}` },
+            `${resume.next ? 'Next chapter' : 'Continue'}: ${resume.chapter.title}`, path ? null : icon('chevR', 16))
+            : h('a', { class: 'btn', href: '#/c/basics/0' }, icon('layers', 16), 'Start the journey'),
+          !path && resume ? h('a', { class: 'btn', href: '#/path' }, icon('layers', 16), 'My path') : null,
           campaign,
           h('a', { class: 'btn', href: '#/workbench/rca4' }, icon('bench', 16), 'Open the workbench'),
           h('a', { class: 'btn', href: '#/sandbox' }, icon('chip', 16), 'Open the sandbox'),

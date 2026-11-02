@@ -14,6 +14,7 @@ import { adoptProject, projectKey, readProjects, MAIN_PROJECT, PROJECTS_KEY } fr
 import { BACKUP_KEY, FORMAT as SANDBOX_FORMAT, KEY as SANDBOX_KEY, MAX_FAVORITES, SITE_PREFIX, importChips, loadWorkspace, localData, saveWorkspace, type ListKV } from '../editor/store';
 import { mergeNotes, NOTES_KEY, sanitizeNotes } from './notes';
 import { mergeReview, REVIEW_KEY, sanitizeReview } from './review';
+import { LEARN_KEY, mergeLearn, sanitizeLearn } from '../learn/store';
 import { betterRecord, PUZZLES_KEY, type PuzzleRecord } from '../puzzles/grade';
 
 export const BACKUP_FORMAT = 'mosfet2riscv-backup';
@@ -129,7 +130,7 @@ export function summarize(kv: ListKV): Summary {
   return out;
 }
 
-const OWNED = new Set([SETTINGS_KEY, CAMPAIGN_KEY, PUZZLES_KEY, PROJECTS_KEY, SANDBOX_KEY, NOTES_KEY, REVIEW_KEY]);
+const OWNED = new Set([SETTINGS_KEY, CAMPAIGN_KEY, PUZZLES_KEY, PROJECTS_KEY, SANDBOX_KEY, NOTES_KEY, REVIEW_KEY, LEARN_KEY]);
 
 /** The summary as lines of prose (the import dialog, the export confirmation). */
 export function describe(s: Summary): string[] {
@@ -238,6 +239,11 @@ export function mergeBackup(file: BackupFile, kv: ListKV): MergeResult {
   if (theirs.getItem(REVIEW_KEY) !== null) {
     if (!isObj(parse(theirs.getItem(REVIEW_KEY)))) unreadable(REVIEW_KEY, 'The review history');
     else put(REVIEW_KEY, mergeReview(sanitizeReview(parse(stage.getItem(REVIEW_KEY))), sanitizeReview(parse(theirs.getItem(REVIEW_KEY)))));
+  }
+  // My path: every test-out, the later start and placement
+  if (theirs.getItem(LEARN_KEY) !== null) {
+    if (!isObj(parse(theirs.getItem(LEARN_KEY)))) unreadable(LEARN_KEY, 'My path');
+    else put(LEARN_KEY, mergeLearn(sanitizeLearn(parse(stage.getItem(LEARN_KEY))), sanitizeLearn(parse(theirs.getItem(LEARN_KEY)))));
   }
   // sandbox projects: the first one (it holds the campaign's level chips) merges chip by chip; the others by id
   const workspaceOf = (store: MapKV, key: string): Workspace | null => {

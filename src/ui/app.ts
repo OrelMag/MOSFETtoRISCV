@@ -42,7 +42,8 @@ export function startApp(root: HTMLElement): void {
     e.preventDefault();
     toggleChapterMenu(chLink);
   });
-  nav.append(navLink('#/', 'layers', 'Journey', 'home'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
+  // "My path" (the tiers, what next) in place of "Journey": the logo still goes home.
+  nav.append(navLink('#/path', 'layers', 'My path', 'path'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign'),
     navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox'));
   // "My notes · n" shows once there is a note or a bookmark (ui/notes.ts)
   const notesLink = navLink('#/notes', 'note', 'My notes', 'notes');
@@ -272,6 +273,14 @@ export function startApp(root: HTMLElement): void {
         return;
       }
       mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
+    } else if (key === 'path' || key === 'start') {
+      // My path and Where are you starting?: a chunk of their own (the skill map reads the codex and the campaign).
+      if ((page as { kind?: string } | null)?.kind === key) return;
+      (key === 'path' ? import('./pages/path').then((m) => new m.PathPage()) : import('./pages/start').then((m) => new m.StartPage())).then((p) => {
+        if (seq === routeSeq) mount(p);
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed(key === 'path' ? 'My path' : 'Where are you starting?', e));
+      });
     } else if (key === 'notes') {
       if ((page as { kind?: string } | null)?.kind === 'notes') return;
       import('./pages/notes').then((m) => {
