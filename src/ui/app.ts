@@ -87,7 +87,10 @@ export function startApp(root: HTMLElement): void {
 
   // Palette menu: a swatch button opening a small list (0, 1, X and bus colours per entry).
   const swatch = () => h('span', { class: 'pal-sw' }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' }));
-  const palMenu = h('div', { class: 'pal-menu', role: 'menu' });
+  const palMenu = h('div', { class: 'pal-menu', role: 'menu', 'aria-label': 'View options' });
+  // Sections, so the long list reads as four short ones (the backup lives on the home page, the search's actions and the storage note).
+  const palHead = (t: string) => h('div', { class: 'pal-head', role: 'presentation' }, t);
+  palMenu.append(palHead('Wire colours'));
   for (const p of PALETTES) {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
       settings.set('palette', p.id);
@@ -163,12 +166,7 @@ export function startApp(root: HTMLElement): void {
   const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
-  // One file for everything the site keeps in this browser (ui/backup.ts, backupui.ts).
-  const backupSave = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.exportBackup()); } },
-    icon('download', 16), h('span', null, h('b', null, 'Export all progress'), h('small', null, 'One backup file: chapters, campaign, puzzles, sandbox projects')));
-  const backupLoad = h('button', { role: 'menuitem', class: 'pal-backup', onclick: () => { palOpen(false); void import('./backupui').then((m) => m.importBackup()); } },
-    icon('upload', 16), h('span', null, h('b', null, 'Import progress…'), h('small', null, 'Merges a backup file into what you have; nothing is lost')));
-  palMenu.append(h('div', { class: 'pal-sep', role: 'separator' }), sizeRow, narrowItem, h('div', { class: 'pal-sep', role: 'separator' }), backupSave, backupLoad, h('div', { class: 'pal-sep', role: 'separator' }), vividItem, boardItem, cartoonItem, modItem, flowItem, netItem, simpleItem, glossItem, clockItem, delayItem);
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, palHead('Behaviour'), simpleItem, clockItem, delayItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
