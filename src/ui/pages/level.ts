@@ -13,7 +13,7 @@ import '../../styles/level.css';
 import { partNames } from '../../campaign/cardlabel';
 import { caseOf } from '../../campaign/cases';
 import { codexById } from '../../campaign/codex';
-import { CODEX_FROM, levelUses, teachingLevels } from '../../campaign/codexlinks';
+import { levelUses, teachingLevels } from '../../campaign/codexlinks';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
 import { isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
@@ -142,9 +142,13 @@ export class LevelPage implements Page {
       this.readCodex(a.getAttribute('href')!.slice('#/campaign/codex/'.length));
     });
     setCodexOpener((id) => this.readCodex(id));
-    try { sessionStorage.removeItem(CODEX_FROM); } catch { /* not kept */ }
     this.renderBar();
     this.renderSide();
+  }
+
+  /** The top bar's way back (ui/returnto.ts): the chip is autosaved, so the level reopens as left. */
+  returnLabel(): { label: string; short: string } | null {
+    return this.node ? { label: `Level: ${this.node.title}`, short: this.node.title } : null;
   }
 
   destroy(): void {
@@ -386,9 +390,7 @@ export class LevelPage implements Page {
       this.cxStack.pop();
       this.renderSide();
     } }, icon('chevL', 13), before ? `Back to ${before}` : 'Back to the level’s entries');
-    const page = h('a', { class: 'lv-more', href: `#/campaign/codex/${id}`, 'data-page': '', title: 'The codex page (leaves the level: your chip is saved)', onclick: () => {
-      try { sessionStorage.setItem(CODEX_FROM, this.node!.id); } catch { /* not kept */ }
-    } }, 'Codex page', icon('open', 12));
+    const page = h('a', { class: 'lv-more', href: `#/campaign/codex/${id}`, 'data-page': '', title: 'The codex page (leaves the level: your chip is saved, the top bar leads back)' }, 'Codex page', icon('open', 12));
     el.append(h('div', { class: 'lv-cx-nav' }, back, page));
     if (!open) {
       const where = teachingLevels(id);

@@ -487,6 +487,12 @@ export class ChapterPage implements Page {
     return (o === 'auto' || o === 'scroll') && this.body.scrollHeight > this.body.clientHeight;
   }
 
+  /** The top bar's way back (ui/returnto.ts): chapter and step. */
+  returnLabel(): { label: string; short: string } {
+    const no = chapterNo(this.chapter), st = this.chapter.steps[this.step];
+    return st ? { label: `Ch ${no} · ${st.title}`, short: `Ch ${no} · ${this.step + 1}` } : { label: `Ch ${no} · Recap`, short: `Ch ${no} · recap` };
+  }
+
   destroy(): void {
     this.offNotes();
     this.stepNotes?.destroy();

@@ -97,6 +97,12 @@ export class SandboxPage implements Page {
     this.editor.destroy();
   }
 
+  /** The top bar's way back (ui/returnto.ts): the open chip (autosaved). */
+  returnLabel(): { label: string; short: string } {
+    const name = this.editor.ws.chips[this.editor.chipId]?.name ?? 'chip';
+    return { label: `Sandbox: ${name}`, short: name };
+  }
+
   destroy(): void {
     this.teardown();
   }
