@@ -330,7 +330,8 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
   const target = (s: string, bits: number) => {
     const t = s.trim();
     let off: number;
-    if (labels.has(t)) off = labels.get(t)! - addr;
+    if (t === '.') off = 0; // the current address: `j .` is a jump to itself
+    else if (labels.has(t)) off = labels.get(t)! - addr;
     else off = parseImm(t);
     if (off % 2) throw new AsmError('branch / jump offset must be even');
     const lim = 2 ** (bits - 1);
