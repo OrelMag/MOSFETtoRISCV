@@ -92,3 +92,20 @@
 .sb-tile-note { font: 11.5px var(--font-mono); color: var(--muted); padding: 2px 8px 0 28px; }
 @media (max-width: 760px) { .sb-tile { grid-template-columns: 14px minmax(0, 1fr); } .sb-tile .lbl:empty { display: none; } .sb-tile .right { grid-column: 2; justify-items: start; } }
 .code-edit.ce-away { position: absolute !important; left: -10000px; top: 0; width: 600px; }
+
+/* The Memory drawer (editor/memdrawer.ts): the memories by path, then the chosen one's grid */
+.sb-mem-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px 14px; min-height: 0; overflow: auto; }
+.sb-mem-list { display: grid; gap: 2px; }
+.sb-mem-item { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.sb-mem-item code { font: 12px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-mem-item small { flex: none; font-size: 11px; color: var(--muted); }
+.sb-mem-item:hover, .sb-mem-item:focus-visible { background: var(--surface-2); outline: none; }
+.sb-mem-item.on { background: var(--accent-soft); }
+.sb-mem-src { margin: 0; font-size: 12px; color: var(--text-2); }
+.sb-mem input.sb-ram-goto { width: 100%; font: 12px var(--font-mono); }
+.sb-mem .memgrid { border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; background: var(--surface-2); font-size: 11.5px; }
+.sb-mem .memgrid .row { gap: 6px; border-radius: 0; white-space: nowrap; }
+.sb-mem .memgrid .cells { gap: 1px; }
+.sb-mem .memgrid .cell { width: 8px; height: 11px; border-radius: 2px; }
+.sb-mem .mem-note { max-width: none; margin: 0; }
+@media (pointer: coarse) { .sb-mem-item { min-height: 40px; } }

@@ -46,7 +46,7 @@ export interface MemInfo {
   /** Row label prefix: 'x' / 'f' for register files (x5), '' for a memory ([5]). */
   prefix: string;
   src: MemSource;
-  /** Found by probing (a learner's memory): the instance at each address, and what looked wrong. */
+  /** Found by probing (a learner's memory): the instance at each address (its label, else its name), and what looked wrong. */
   built?: { names: Map<number, string>; problems: string[] };
 }
 
@@ -96,6 +96,8 @@ const clocked = (d: ComponentDef) => d.ports.some((p) => p.dir === 'in' && (p.cl
 export interface ProbeResult {
   /** Address → the instance it writes (only addresses that write exactly one). */
   at: Map<number, string>;
+  /** Address → that instance's label, else its name (what the views and the problems call it). */
+  labels: Map<number, string>;
   /** Output port of the word instances. */
   out: string;
   problems: string[];
@@ -125,7 +127,9 @@ function probe(def: ComponentDef): ProbeResult | null {
   const k = def.ports.find((p) => p.name === roles.addr)!.width;
   // the word candidates: the largest group of same-definition clocked instances with a data-wide output
   const groups = new Map<ComponentDef, string[]>();
+  const label = new Map<string, string>();
   for (const inst of def.netlist().instances) {
+    label.set(inst.name, inst.label ?? inst.name);
     const o = outPort(inst.def);
     if (!o || o.width !== width || !clocked(inst.def)) continue;
     groups.set(inst.def, [...(groups.get(inst.def) ?? []), inst.name]);
@@ -153,20 +157,21 @@ function probe(def: ComponentDef): ProbeResult | null {
     sim.setInput(roles.clk, 0);
     sim.settle();
     const after = read();
-    writes.set(a, names.filter((_, j) => after[j] !== before[j]));
+    writes.set(a, names.filter((_, j) => after[j] !== before[j]).map((n) => label.get(n)!));
   }
-  const at = new Map<number, string>();
+  const at = new Map<number, string>(), labels = new Map<number, string>();
+  const nameOf = new Map(names.map((n) => [label.get(n)!, n]));
   const problems: string[] = [];
   const by = new Map<string, number[]>();
   for (const [a, w] of writes) {
-    if (w.length === 1) at.set(a, w[0]);
+    if (w.length === 1) { at.set(a, nameOf.get(w[0])!); labels.set(a, w[0]); }
     if (w.length > 1) problems.push(`${roles.addr} = ${a} writes ${w.length} words (${w.join(', ')})`);
     for (const n of w) by.set(n, [...(by.get(n) ?? []), a]);
   }
   for (const [n, as] of by) if (as.length > 1) problems.push(`${n} is written at ${roles.addr} = ${as.join(' and ')}`);
-  const never = names.filter((n) => !by.has(n));
+  const never = names.map((n) => label.get(n)!).filter((n) => !by.has(n));
   if (never.length) problems.push(`never written: ${never.join(', ')}`);
-  return at.size >= 2 ? { at, out, problems } : null;
+  return at.size >= 2 ? { at, labels, out, problems } : null;
 }
 
 // ---- finding them --------------------------------------------------------------------------------
@@ -203,7 +208,7 @@ function memAt(sim: Sim, n: HierNode, path: string): MemInfo | null {
     const width = sameWidth(regs);
     if (regs.size < 2 || width === null) return null;
     const k = n.ports[writeRoles(n.def)!.addr].length;
-    return { path, node: n, words: 2 ** k, width, prefix: prefixOf(n), src: { kind: 'regs', regs }, built: { names: pr.at, problems: pr.problems } };
+    return { path, node: n, words: 2 ** k, width, prefix: prefixOf(n), src: { kind: 'regs', regs }, built: { names: pr.labels, problems: pr.problems } };
   }
   return null;
 }

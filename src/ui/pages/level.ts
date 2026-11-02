@@ -46,7 +46,7 @@ type Tab = 'walk' | 'why' | 'task' | 'tips' | 'codex';
 
 const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'LESSON', drill: 'DRILL', build: 'BUILD', program: 'PROGRAM', core: 'CPU CORE' };
 /** The level screen keeps the toolbar to what building and checking a level needs. */
-const LEVEL_ACTIONS = ['undo', 'redo', 'zout', 'zin', 'fit', 'iobar', 'probe', 'timing', 'package', 'inspect', 'cpu', 'props', 'help'];
+const LEVEL_ACTIONS = ['undo', 'redo', 'zout', 'zin', 'fit', 'iobar', 'probe', 'timing', 'package', 'inspect', 'cpu', 'memory', 'props', 'help'];
 
 const rich = (tag: 'p' | 'div' | 'li' | 'span', html: string, cls?: string) => {
   const el = h(tag, cls ? { class: cls } : null);

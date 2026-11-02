@@ -63,6 +63,8 @@ export function memGrid(o: { scroll?: boolean } = {}): MemGrid {
   let sim: Sim | null = null, mem: MemInfo | null = null;
   let virt: VirtualRows | null = null;
   let read: number[] = [], write: number[] = [];
+  /** A learner's memory shows which part holds each word, unless the names say nothing more than the rows (x1 at x1, u7). */
+  let names = false;
   const row = (i: number) => {
     const m = mem!;
     const none = noStorage(m, i);
@@ -71,7 +73,7 @@ export function memGrid(o: { scroll?: boolean } = {}): MemGrid {
     const tip = w ? 'will be written on the next rising clock edge' : r ? 'being read'
       : none ? (m.prefix === 'x' && i === 0 ? 'x0: hard-wired to zero, no storage' : 'no word at this address') : '';
     return memRow(rowLabel(m, i), none ? null : wordBits(sim!, m, i), m.width, {
-      cls: w ? 'write' : r ? 'read' : '', tip, mark: m.built ? (name ?? '') : undefined,
+      cls: w ? 'write' : r ? 'read' : '', tip, mark: names ? (name ?? '') : undefined,
     });
   };
   const refresh = () => {
@@ -87,6 +89,7 @@ export function memGrid(o: { scroll?: boolean } = {}): MemGrid {
       if (m !== mem) {
         mem = m;
         virt = null;
+        names = !!m?.built && [...m.built.names].some(([i, n]) => n !== rowLabel(m, i) && !/^u\d+$/.test(n));
         el.replaceChildren();
         el.classList.toggle('scroll', !!o.scroll || (m?.words ?? 0) > ALL_ROWS);
         el.classList.toggle('wide', !!m && m.width > CELL_BITS);

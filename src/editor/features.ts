@@ -19,6 +19,8 @@ import './analysis';
 import './testsui';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
 import './cpuui';
+// Every RAM and register file inside, live: the Memory drawer.
+import './memdrawer';
 // Consoles, switch banks and screens: their property sections and the Screens drawer.
 import './ioui';
 // The card reader's properties and deck files (also dropped on the canvas).

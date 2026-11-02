@@ -117,7 +117,7 @@ describe('findMemories', () => {
 
   it('names a decoder wired to the wrong register', () => {
     const [m] = found(MISWIRED).mems;
-    expect(m.built!.problems).toEqual(['wa = 6 writes 2 words (r6, r7)']);
+    expect(m.built!.problems).toEqual(['wa = 6 writes 2 words (x6, x7)']);
     expect(noStorage(m, 6)).toBe(true);
     expect(noStorage(m, 5)).toBe(false);
   });
