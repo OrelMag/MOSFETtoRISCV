@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { chapters } from '../src/chapters';
-import { ANALOGIES, analogiesForCodex, analogiesOf } from '../src/chapters/analogies';
+import { ANALOGIES, ANALOGY_INDEX_ID, analogiesForCodex, analogiesOf, analogyIndex } from '../src/chapters/analogies';
 import { CODEX } from '../src/campaign/codex';
 
 const text = (html: string) => html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
@@ -74,5 +74,26 @@ describe('analogy acceptance', () => {
     const dram = ANALOGIES.find((a) => a.chapter === 'dram' && a.figure === 'leaky')!;
     expect(cache.figure).toBe('leaky');
     expect(cache.title).not.toBe(dram.title);
+  });
+});
+
+describe('the analogy index', () => {
+  const groups = analogyIndex(chapters);
+
+  it('lists every analogy once, on its own step, chapters in journey order', () => {
+    const listed = groups.flatMap((g) => g.items.map((x) => x.a));
+    expect(listed.length).toBe(ANALOGIES.length);
+    expect(new Set(listed).size).toBe(ANALOGIES.length);
+    const order = chapters.map((c) => c.id);
+    expect(groups.map((g) => order.indexOf(g.chapter))).toEqual(groups.map((g) => order.indexOf(g.chapter)).sort((a, b) => a - b));
+    for (const g of groups) {
+      const c = chapters.find((x) => x.id === g.chapter)!;
+      for (const { a, step } of g.items) expect(c.steps[step]?.title, a.title).toBe(a.step);
+      expect(g.items.map((x) => x.step)).toEqual(g.items.map((x) => x.step).sort((a, b) => a - b));
+    }
+  });
+
+  it('has a route no codex entry takes', () => {
+    expect(CODEX.some((e) => e.id === ANALOGY_INDEX_ID)).toBe(false);
   });
 });

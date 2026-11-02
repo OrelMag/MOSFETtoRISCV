@@ -264,5 +264,22 @@ export const ANALOGIES: Analogy[] = [
 /** The analogies shown under a step, in table order. */
 export const analogiesOf = (chapter: string, step: string): Analogy[] => ANALOGIES.filter((a) => a.chapter === chapter && a.step === step);
 
+/** The codex page that lists every analogy (#/campaign/codex/analogies): not a codex entry's id (a test checks). */
+export const ANALOGY_INDEX_ID = 'analogies';
+
+export interface AnalogyGroup {
+  chapter: string;
+  items: { a: Analogy; step: number }[];
+}
+
+/** Every analogy grouped by chapter in journey order, each with its step's index (the index page). */
+export function analogyIndex(chs: readonly { id: string; steps: readonly { title: string }[] }[]): AnalogyGroup[] {
+  return chs.map((c) => ({
+    chapter: c.id,
+    items: ANALOGIES.filter((a) => a.chapter === c.id).map((a) => ({ a, step: c.steps.findIndex((s) => s.title === a.step) }))
+      .sort((x, y) => x.step - y.step),
+  })).filter((g) => g.items.length);
+}
+
 /** The analogies a codex entry shows. */
 export const analogiesForCodex = (id: string): Analogy[] => ANALOGIES.filter((a) => a.codex?.includes(id));

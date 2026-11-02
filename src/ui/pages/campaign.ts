@@ -13,6 +13,8 @@ import { searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
 import { CODEX_ACTS, CODEX_BY_KIND, CODEX_FROM, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
+import { ANALOGIES, ANALOGY_INDEX_ID } from '../../chapters/analogies';
+import { analogyIndexEl } from '../analogyindex';
 import { codexEntryEl, entrySheets, liveSchematic, lockedEntryEl } from '../../campaign/ui/codexentry';
 import { LESSON_EXTRAS } from '../../campaign/lessonextras';
 import { quizBox } from '../quiz';
@@ -591,11 +593,15 @@ export class CampaignPage implements Page {
     const list = h('nav', { class: `cp-codex-list${this.cxListOpen ? ' open' : ''}`, 'aria-label': 'Codex entries' }, sel ? browse : null,
       h('div', { class: 'cx-listbody' },
         h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
+        h('a', { class: `cx-axlink${sel === ANALOGY_INDEX_ID ? ' on' : ''}`, href: `#/campaign/codex/${ANALOGY_INDEX_ID}`, ...(sel === ANALOGY_INDEX_ID ? { 'aria-current': 'page' } : {}) },
+          icon('like', 13), `All ${ANALOGIES.length} analogies`),
         search, h('div', { class: 'cx-filters' }, views, kinds), empty, ranked, sections.map((g) => g.el)));
     filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;
-    if (!e) {
+    if (sel === ANALOGY_INDEX_ID) {
+      detail = analogyIndexEl();
+    } else if (!e) {
       detail = this.codexLanding(unlocked);
     } else if (this.moreOf === undefined) {
       // The fuller texts (and the questions) are a chunk of their own: load them, then draw the entry.
@@ -649,6 +655,9 @@ export class CampaignPage implements Page {
       h('p', { class: 'cx-landing-go' },
         h('a', { class: 'btn primary', href: `#/campaign/codex/${CODEX_ORDER[0].id}` }, `Start reading: ${CODEX_ORDER[0].title}`, icon('chevR', 14)),
         firstNew && firstNew !== CODEX_ORDER[0] ? h('a', { class: 'btn ghost', href: `#/campaign/codex/${firstNew.id}`, title: 'The first entry in reading order you have not discovered' }, `First undiscovered: ${firstNew.title}`) : null),
+      h('section', null, h('h4', null, 'Analogies'),
+        h('p', null, `${ANALOGIES.length} familiar pictures for abstract ideas, each with where it stops being true: `,
+          h('a', { href: `#/campaign/codex/${ANALOGY_INDEX_ID}` }, 'the analogy index'), '.')),
       recent.length ? h('section', null, h('h4', null, 'Recently discovered'), h('div', null, recent.map(link))) : null,
       next ? h('section', null, h('h4', null, 'Next to discover'),
         h('p', { class: 'sub' }, 'With ', h('a', { href: levelChallenge(next) && !next.soon ? `#/campaign/play/${next.id}` : `#/campaign/n/${next.id}` }, next.title), coming.length ? ':' : ': nothing new for the codex.'),
