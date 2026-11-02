@@ -2445,3 +2445,7 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .hw-chev { width: 28px; height: 40px; text-align: center; line-height: 40px; vertical-align: middle; }
   .hw-chev-space { width: 28px; }
 }
+
+/* Codex "Check yourself": short answers ("8", "6") sit side by side as chips, long ones still take a line each. */
+.cx-check .challenge .options { display: flex; flex-wrap: wrap; gap: 6px; }
+.cx-check .challenge .options button { flex: 0 1 auto; max-width: 100%; }
