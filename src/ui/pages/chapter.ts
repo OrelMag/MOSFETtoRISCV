@@ -361,8 +361,13 @@ export class ChapterPage implements Page {
       this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     } }, icon('chevD', 16), 'Show circuit');
     if (typeof IntersectionObserver !== 'undefined') {
-      const io = new IntersectionObserver((es) => { b.hidden = es.some((e) => e.intersectionRatio > 0.35); }, { threshold: [0, 0.35, 0.6] });
+      // Gone once the stage is mostly in view, and as soon as its bar is: the pill sits where the bar's right-hand icons do.
+      let mostly = false, bar = false;
+      const sync = () => { b.hidden = mostly || bar; };
+      const io = new IntersectionObserver((es) => { for (const e of es) { if (e.target === this.stage.el) mostly = e.intersectionRatio > 0.35; else bar = e.isIntersecting; } sync(); }, { threshold: [0, 0.35, 0.6] });
       io.observe(this.stage.el);
+      const barEl = this.stage.el.querySelector('.stage-bar');
+      if (barEl) io.observe(barEl);
       this.unlisten.push(() => io.disconnect());
     }
     return b;
