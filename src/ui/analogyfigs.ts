@@ -20,4 +20,7 @@ export const FIGURES: Record<string, () => Promise<FigureMount>> = {
   handoff: () => import('../widgets/analogy/handoff').then((m) => m.default),
   emptyplate: () => import('../widgets/analogy/emptyplate').then((m) => m.default),
   fork: () => import('../widgets/analogy/fork').then((m) => m.default),
+  disagree: () => import('../widgets/analogy/disagree').then((m) => m.default),
+  hilltop: () => import('../widgets/analogy/hilltop').then((m) => m.default),
+  orchestra: () => import('../widgets/analogy/orchestra').then((m) => m.default),
 };

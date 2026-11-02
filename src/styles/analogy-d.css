@@ -1,0 +1,16 @@
+/* analogy figures D: storage and the clock (widgets/analogy/disagree.ts, hilltop.ts, orchestra.ts) */
+.af-svg .af-say { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.af-svg .af-say.yes { fill: var(--analogy-soft); stroke: var(--analogy); }
+.af-svg .af-shout { fill: none; stroke: var(--bad); stroke-width: 3; stroke-linecap: round; }
+.af-svg .af-ear { fill: none; stroke: var(--border-strong); stroke-width: 2; stroke-dasharray: 4 3; }
+.af-svg .af-link { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.af-svg .af-ground { fill: none; stroke: var(--muted); stroke-width: 2.5; stroke-linejoin: round; }
+.af-svg .af-ballc { fill: var(--warn); stroke: var(--text); stroke-width: 1; }
+.af-svg .af-bar { fill: var(--series-1); }
+.af-svg .af-bar.exp { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.af-svg .af-ready { fill: var(--good); opacity: 0.85; }
+.af-svg .af-ready.late { fill: var(--bad); }
+.af-svg .af-setup { fill: var(--muted); opacity: 0.5; }
+.af-svg .af-beatline { stroke: var(--analogy); stroke-width: 2.5; }
+.af-svg .af-t.af-shoutt { fill: var(--bad); font-weight: 700; }
+.af-svg .af-t.af-beat { fill: var(--analogy); font-weight: 700; }
