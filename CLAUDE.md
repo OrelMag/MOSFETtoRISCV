@@ -279,7 +279,10 @@ src/lib/       the component library (registered in `registry` via define())
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m, custom }) (a cache miss in M freezes every stage;
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
-                 one or two fetch read ports (BTB = btbOf(1), unchanged). custom: riscv/custom.ts rows, control(custom) in place of CONTROL and
+                 one or two fetch read ports (BTB = btbOf(1), unchanged). ports: the sandbox's rv32i_pipe_core (lib/resolve.ts, `rv32i_pipe_cx<key>_core` with rows): no imem / dm, pins
+                 instr in, pcOut, memAddr / memWData / memWE out of M, memRData in, retire (= validW), pcW; the memory port keeps dataMemory's timing (read from the
+                 address in the same cycle, write at the rising edge), so any RAM that serves the single-cycle rv32i_core serves it, hartid / grant / atomics absent;
+                 not with dcache or m; tests/pipe-core.test.ts. custom: riscv/custom.ts rows, control(custom) in place of CONTROL and
                  nothing else: the hazard unit reads signals, never opcodes (result = mem is resultSrc 01, the load-use stall; rs1 / rs2 forwarding goes by
                  register numbers; branch / jump / jalr redirect from E; memWrite a store); without rows the same component, gate for gate
                  (tests/custom-pipe.test.ts: lock step with ISS({ custom }) through retiring() on directed programs per hazard and 32 random programs
@@ -847,7 +850,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  pattern), a 1K ROM (riscv/ioprograms.ts), a Memory chip (memoryChip: decoder, 4K × 32 RAM, the
                  devices' buses x / y / byte), a 64 × 64 RGB332 screen at 0xC000_0000 + 256·y + 4·x on the top level,
                  a Devices chip (devicesChip: console / LEDs / switches at the ISS's IO addresses), a halt part on
-                 `j .`; word accesses only (no lb / sb). The 4-bit CPU (example4.ts): docFromDef's drawing of lib/cpu4's computer,
+                 `j .`; word accesses only (no lb / sb). Examples ▸ Computer: the pipelined RISC-V core (computerChip(…, pipe)): rv32i_pipe_core in the same chip
+                 (no hartid / grant pins), the halt part behind a Halt sub-chip (haltChip: `j .` seen in fetch twice, three clocks apart, then two clocks of delay: a
+                 flushed fetch past a taken branch shows it once, the older instructions finish). The 4-bit CPU (example4.ts): docFromDef's drawing of lib/cpu4's computer,
                  each block a user chip, the ROM a cpu4 ROM part, the pins swapped for a TEST key, switches, hex digits, LEDs, halt.
                  The 6502 computer (example6502.ts): the part, a 4K ROM in 6502 assembly, memory6502Chip (decoder, 2K RAM,
                  read muxes), the Devices chip, a halt detector (the last SYNC address = this one); drawn with Sheet (pointer
@@ -919,7 +924,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  dmem, pipeline, iss options); part fields are paths into user chips ('imem.rom', partAt,
                  nestedRoms: detection takes the workspace's chips); detectCpu (the chapters' instance and
                  pin names: imem, rf, dm, frf, fcsr, pcOut / pcF, retire, validW, switches / irq /
-                 consoleData / consoleValid / leds; a placed port core (rv32i_core, *_core) → regs '<part>.rf', its
+                 consoleData / consoleValid / leds; a placed port core (rv32i_core, rv32i_pipe_core, *_core) → regs '<part>.rf'; the pipelined one → pipeline, retire = the part's
+                 retire port (refNets asks the part's node for a port nothing is wired to), pipelineSlots / the diagram read its stages (pipeRoot); a pipeline's console and LEDs are
+                 compared at the halt like its memory (its stores run ahead of retirement); its
                  RAM may sit one chip down ('mem.ram'); a console or switch-bank part → iss.mmio), resolveCpu (settings over detection), readers
                  (readRegs / readMem find w<i> registers via storageOf, banks, cache lines; memStoreOf also finds a
                  large RAM's leaf state), pipelineSlots,
@@ -1010,7 +1017,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   dispface.ts    the displays' SVG faces (drawDisplay / paintDisplay) and a placed chip's face displays (drawFace /
                  paintFace: from below its node), for the canvas, the face editor and look inside
   inside.ts      lookInside(ed, path): live schematic over the canvas on EditorSim's simulator (ViewCtx), read-only but for
-                 a library part's wires (arrange 'wires': the stage's layout, Ctrl+Z there);
+                 a library part's wires (arrange 'wires': the stage's layout, Ctrl+Z there); lightInside(ed, path, names): the CPU drawer lights the units
+                 an instruction uses inside a placed port core (widgets/insthw.ts coreUnitNames: dm → amux / wmux), the core's box haloed on the canvas;
                  consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
   ioface.ts      the I/O parts' SVG faces (canvas and look inside; the wheel over a console with scrollback scrolls it,
                  "↑ n lines" while up, Ctrl + wheel zooms); ScreenCanvas: the picture as a canvas bitmap in a
@@ -1061,8 +1069,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } }, the ROM ref gets a copy. Only the single-cycle rv32i_core
-                 exists as a sandbox part (no pipelined core with a memory port), so Apply stays there; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
+                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram

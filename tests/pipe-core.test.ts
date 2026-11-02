@@ -20,7 +20,15 @@ import { registry } from '../src/lib/define';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { regenerable, resolveComponent } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
-import { CUSTOM_PRESETS } from '../src/riscv/custom';
+import { CUSTOM_PRESETS, type CustomRow } from '../src/riscv/custom';
+import { clockCycle, cpuState, dmemWords, retireCount, retirePc } from '../src/riscv/cosim';
+import { randomProgram32 } from '../src/riscv/randprog32';
+import { flatten } from '../src/sim/flatten';
+import { GateSim } from '../src/sim/gatesim';
+import type { ComponentDef } from '../src/sim/types';
+import type { PortDef } from '../src/sim/types';
+const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
+import { tick } from './yieldtick';
 import { DONE_TEXT, GREETING, PICTURE } from '../src/riscv/ioprograms';
 import { ISS } from '../src/riscv/iss';
 import { PipeHistory } from '../src/widgets/pipegrid';
@@ -196,4 +204,45 @@ h:    j h`;
     expect(lit).toEqual(expect.arrayContaining(['rf', 'alu', 'srcA', 'srcB', 'res', 'ctl', 'pc']));
     expect(lit.includes('dm')).toBe(false); // the data memory is outside the core
   });
+});
+
+// The port core's memory timing is the data memory's: wired to a ROM and a dataMemory it is the plain pipeline again, so random
+// programs (hazards, loads right after stores, branches over them) end where the golden model ends, register by register.
+describe('rv32i_pipe_core with a ROM and a data memory on its ports', () => {
+  const harness = (words: number[], custom: CustomRow[] = []): ComponentDef => ({
+    id: `t_pipe_port_${words.length}_${custom.length}`, name: 'harness', category: 'custom', symbol: { kind: 'box' },
+    ports: [bit('clk', 'in')],
+    netlist: () => ({
+      instances: [
+        { name: 'core', def: pipelinedCpu([], { adder: 'ks', ports: true, custom }) }, { name: 'imem', def: rom(words, 6) }, { name: 'dm', def: dataMemory(5) },
+      ],
+      nets: [
+        { ends: ['clk', 'core.clk', 'dm.clk'] }, { ends: ['core.pcOut', 'imem.addr'] }, { ends: ['imem.data', 'core.instr'] },
+        { ends: ['core.memAddr', 'dm.addr'] }, { ends: ['core.memWData', 'dm.wd'] }, { ends: ['core.memWE', 'dm.we'] }, { ends: ['dm.rd', 'core.memRData'] },
+      ],
+    }),
+  });
+
+  const cases = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ seed: i + 1, custom: i % 2 ? [P.lwx!, P.subi!] : [] as CustomRow[] }));
+  it.each(cases.map((c) => [c.seed, c] as const))('random program %i ends in the golden model\'s state', async (_s, c) => {
+    const asm = assemble(randomProgram32(c.seed, { n: 70, ...(c.custom.length ? { custom: c.custom } : {}) }), c.custom);
+    expect(asm.errors).toEqual([]);
+    const sim = new GateSim(flatten(harness(asm.words, c.custom)));
+    sim.setInput('clk', 0);
+    sim.settle();
+    const core = sim.design.root.children!.get('core')!;
+    const iss = new ISS(asm.words, { dmemWords: 32, imemWords: 64, ...(c.custom.length ? { custom: c.custom } : {}) });
+    for (let cyc = 1; cyc < 4000 && !iss.halted; cyc++) {
+      const ret = retireCount(sim, core);
+      if (ret) expect(retirePc(sim, core), `cycle ${cyc}: retiring pc`).toBe(iss.pc);
+      clockCycle(sim);
+      if (!ret) continue;
+      iss.step();
+      expect(cpuState(sim, core).x, `cycle ${cyc} after ${iss.steps} instructions`).toEqual([...iss.x].map((v) => v >>> 0));
+      if (cyc % 64 === 0) await tick();
+    }
+    expect(iss.halted).toBe(true);
+    for (let k = 0; k < 8; k++) clockCycle(sim);
+    expect(dmemWords(sim, sim.design.root.children!.get('dm')!)).toEqual([...iss.dmem].map((v) => v >>> 0));
+  }, 120_000);
 });
