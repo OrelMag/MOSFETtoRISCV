@@ -2,6 +2,7 @@
 // and in a codex entry with a link back to the step that tells it.
 
 import type { Analogy } from '../chapters/analogies';
+import { FIGURES } from './analogyfigs';
 import { h, icon } from './dom';
 
 export interface AnalogyOptions {
@@ -19,9 +20,21 @@ export function analogyEl(a: Analogy, opts: AnalogyOptions = {}): HTMLElement {
     : null;
   const breaks = h('p', { class: 'analogy-breaks' }, h('b', null, 'Where it breaks: '), h('span', { html: a.breaks }));
   const from = opts.from ? h('a', { class: 'analogy-from', href: opts.from.href }, opts.from.label, icon('chevR', 12)) : null;
+  const load = a.figure ? FIGURES[a.figure] : undefined;
+  const fig = load ? h('div', { class: 'analogy-fig' }) : null;
   const d = h('details', { class: 'analogy' },
     h('summary', null, icon('like', 14), h('span', { class: 'analogy-k' }, 'Analogy'), h('span', { class: 'analogy-t' }, a.title)),
-    h('div', { class: 'analogy-in' }, body, map, breaks, from));
+    h('div', { class: 'analogy-in' }, body, fig, map, breaks, from));
+  if (fig && load) {
+    let started = false;
+    const start = () => {
+      if (started || !d.open) return;
+      started = true;
+      load().then((mount) => mount(fig)).catch(() => { fig.textContent = 'The figure could not load.'; });
+    };
+    d.addEventListener('toggle', start);
+    queueMicrotask(start);
+  }
   if (opts.open) d.open = true;
   return d;
 }

@@ -2314,3 +2314,4 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .analogy-from { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12.5px; color: var(--analogy); }
 @media (max-width: 480px) { .analogy-map { grid-template-columns: 1fr; } .analogy-map dd { margin-bottom: 4px; } }
 @media (pointer: coarse) { .analogy > summary { min-height: 40px; align-items: center; } }
+.analogy-fig { margin: 8px 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; min-height: 40px; }

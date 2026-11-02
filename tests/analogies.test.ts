@@ -42,3 +42,10 @@ describe('analogies', () => {
     expect(analogiesForCodex('mosfet').map((x) => x.step)).toContain('Three regions');
   });
 });
+
+describe('analogy figures', () => {
+  it('every figure key is registered', async () => {
+    const { FIGURES } = await import('../src/ui/analogyfigs');
+    for (const a of ANALOGIES) if (a.figure) expect(FIGURES[a.figure], `${a.title}: figure ${a.figure}`).toBeDefined();
+  });
+});

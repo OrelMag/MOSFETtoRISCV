@@ -15,6 +15,8 @@ export interface Analogy {
   map?: [string, string][];
   /** HTML: where the picture stops being true (a sentence or two, no heading). */
   breaks: string;
+  /** A figure drawn in the aside (ui/analogyfigs.ts FIGURES key), loaded when the aside opens. */
+  figure?: string;
   /** Codex entries that show it too. */
   codex?: string[];
 }
