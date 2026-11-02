@@ -18,8 +18,8 @@ export default function mount(host: HTMLElement): void {
     s('text', { x: x + 55, y: 62, 'text-anchor': 'middle', class: 'af-t af-m' }, name),
     s('rect', { x, y: 70, width: 110, height: 52, rx: 14, class: v ? 'af-say yes' : 'af-say' }),
     s('text', { x: x + 55, y: 105, 'text-anchor': 'middle', class: 'af-big' }, word(v)),
-    s('path', { d: `M ${x + 55} 30 L ${x + 55} 66`, class: shouting ? 'af-shout' : 'af-ear' }),
-    s('text', { x: x + 55, y: 22, 'text-anchor': 'middle', class: shouting ? 'af-t af-on' : 'af-t af-m' }, shouting ? `${ear} shouts` : `${ear} quiet`));
+    s('path', { d: `M ${x + 55} 28 L ${x + 55} 48`, class: shouting ? 'af-shout' : 'af-ear' }),
+    s('text', { x: x + 55, y: 22, 'text-anchor': 'middle', class: shouting ? 'af-t af-shoutt' : 'af-t af-m' }, shouting ? `${ear} shouts` : `${ear} quiet`));
 
   const paint = (frame: Say, note?: string) => {
     svg.replaceChildren(

@@ -6,6 +6,7 @@ import { beat, counterPlayers, PS_PER_NAND, SETUP, slowestNeed } from './storage
 import { button } from './common';
 
 const W = 360, X0 = 62, X1 = 346, MAXT = 20, ROW = 30, Y0 = 24;
+const names = (bits: number[]) => bits.map((b) => `bit ${b}`).join(' and ');
 const bin = (v: number) => (v & 15).toString(2).padStart(4, '0');
 
 export default function mount(host: HTMLElement): void {
@@ -36,7 +37,7 @@ export default function mount(host: HTMLElement): void {
     kids.push(
       s('text', { x: (X0 + X1) / 2, y: bot + 38, 'text-anchor': 'middle', class: 'af-t af-m' }, 'NAND delays after the beat'),
       s('line', { x1: px(period), x2: px(period), y1: Y0 - 6, y2: bot + 2, class: 'af-beatline' }),
-      s('text', { x: px(period) + (px(period) > 250 ? -4 : 4), y: Y0 - 8, 'text-anchor': px(period) > 250 ? 'end' : 'start', class: 'af-t af-on' }, 'next beat'));
+      s('text', { x: px(period) + (px(period) > 250 ? -4 : 4), y: Y0 - 8, 'text-anchor': px(period) > 250 ? 'end' : 'start', class: 'af-t af-beat' }, 'next beat'));
     const ys = bot + 74;
     kids.push(s('text', { x: 4, y: ys, class: 'af-t af-m' }, 'count'));
     const digits = bin(q), want = bin(prev + 1);
@@ -50,8 +51,8 @@ export default function mount(host: HTMLElement): void {
     out.textContent = `${period} delays = ${period * PS_PER_NAND} ps`;
     read.textContent = (period >= need
       ? `Every player is ready before the beat. Coloured: the path from the beat to the new value; grey: the ${SETUP} delays of setup the flip-flop wants first.`
-      : `The beat falls before ${players.filter((p) => p.need > period).map((p) => `bit ${p.bit}`).join(', ')} is ready (red).`)
-      + (beats ? (late.length ? ` The count is ${bin(q)} instead of ${bin((prev + 1) & 15)}: the late player still plays the old note.` : ` The count went ${bin(prev)} to ${bin(q)}.`) : '')
+      : `The beat falls before ${names(players.filter((p) => p.need > period).map((p) => p.bit))} ${players.filter((p) => p.need > period).length > 1 ? 'are' : 'is'} ready (red).`)
+      + (beats ? (late.length ? ` The count is ${bin(q)} instead of ${bin((prev + 1) & 15)}: the late player still plays the old note.` : ` The count went ${bin(prev)} to ${bin(q)}${period < need ? ': no late bit had to change this time' : ''}.`) : '')
       + ` The slowest player needs ${need} delays.`;
   };
   host.replaceChildren(svg, h('div', { class: 'af-ctl' }, lab, out, beatBtn, resetBtn), read,

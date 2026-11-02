@@ -5,7 +5,7 @@ import '../../styles/analogy-d.css';
 import { expectedHistogram, histogram, mulberry32, rollBoth, rollOne, TIE_BREAK_P, type Roll } from './storage';
 import { button, reducedMotion } from './common';
 
-const W = 360, H = 170, TICK_MS = 420, MAX_TICKS = 10, BINS = 8, RUN = 100;
+const W = 360, H = 182, TICK_MS = 420, MAX_TICKS = 10, BINS = 8, RUN = 100;
 const ground = (x: number) => 128 - 74 * Math.exp(-(((x - 180) / 42) ** 2)) + 22 * (Math.exp(-(((x - 62) / 40) ** 2)) + Math.exp(-(((x - 298) / 40) ** 2)));
 const VALLEY_X = [62, 298], TOP_X = 180, R = 11;
 
@@ -23,8 +23,8 @@ export default function mount(host: HTMLElement): void {
     const ballY = ground(ballX) - R - 1;
     svg.replaceChildren(
       s('polyline', { points: pts, class: 'af-ground' }),
-      s('text', { x: VALLEY_X[0], y: 160, 'text-anchor': 'middle', class: 'af-t' }, 'valley 0'),
-      s('text', { x: VALLEY_X[1], y: 160, 'text-anchor': 'middle', class: 'af-t' }, 'valley 1'),
+      s('text', { x: VALLEY_X[0], y: 174, 'text-anchor': 'middle', class: 'af-t' }, 'valley 0'),
+      s('text', { x: VALLEY_X[1], y: 174, 'text-anchor': 'middle', class: 'af-t' }, 'valley 1'),
       s('text', { x: TOP_X, y: 26, 'text-anchor': 'middle', class: 'af-t af-m' }, 'the top'),
       s('circle', { cx: ballX + wobble, cy: ballY, r: R, class: 'af-ballc' }));
     read.textContent = label;
