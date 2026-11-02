@@ -276,6 +276,10 @@ export class Editor {
       if (!this.fitted && this.canvas.clientWidth > 0) {
         this.fitted = true;
         this.fitView();
+      } else if (this.canvas.clientWidth > 0 && this.view.cam.fitted) {
+        // a pane beside the canvas (state machine, truth table, tests) opened, hid or was dragged: a view still as
+        // fitted follows the room it has (a zoomed or panned one keeps what the learner chose)
+        this.fitView();
       }
     });
     this.resize.observe(this.canvas);
