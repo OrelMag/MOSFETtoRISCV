@@ -136,7 +136,7 @@ function openMenu(ed: Editor): void {
   menu.querySelector('button')?.focus();
 }
 
-registerToolbarAction({ id: 'file', title: 'Export, import, share', icon: 'menu', label: 'File', order: 5, run: openMenu });
+registerToolbarAction({ id: 'file', title: 'Export, import, share', icon: 'menu', label: 'File ▾', order: 5, run: openMenu });
 
 // ---------------------------------------------------------------------------------------------
 // Export / import
