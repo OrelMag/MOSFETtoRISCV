@@ -291,7 +291,7 @@ class FsmUi {
   private render(id: string, doc: FsmDoc): void {
     const head = h('div', { class: 'tt-head' }, h('span', { class: 'tt-title' }, 'State machine'), h('span', { class: 'grow' }),
       h('button', { class: `btn sm${this.wide ? ' on' : ''}`, 'aria-pressed': String(this.wide), title: this.wide ? 'Back to a narrow pane' : 'A wide pane: the diagram large, its properties beside it', onclick: () => this.toggleWide() }, this.wide ? 'Narrow' : 'Expand'),
-      h('button', { class: 'btn sm', title: 'Hide the machine (the banner shows it again)', 'aria-label': 'Hide the machine', onclick: () => this.toggleHidden(id) }, '◂'));
+      h('button', { class: 'btn sm', title: "Hide the machine: the circuit gets the whole stage (the banner's Show machine brings it back)", 'aria-label': 'Hide the machine', onclick: () => this.toggleHidden(id) }, '◂ Circuit'));
 
     const pins = h('div', { class: 'tt-pins' },
       h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Inputs'),

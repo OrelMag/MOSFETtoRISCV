@@ -148,7 +148,7 @@ class TableUi {
 
     const head = h('div', { class: 'tt-head' },
       h('span', { class: 'tt-title' }, 'Truth table'), h('span', { class: 'grow' }), form,
-      h('button', { class: 'btn sm', title: 'Hide the table (the banner shows it again)', onclick: () => this.toggleHidden(id), 'aria-label': 'Hide the table' }, '◂'));
+      h('button', { class: 'btn sm', title: "Hide the table: the circuit gets the whole stage (the banner's Show table brings it back)", onclick: () => this.toggleHidden(id), 'aria-label': 'Hide the table' }, '◂ Circuit'));
 
     const pins = h('div', { class: 'tt-pins' },
       h('div', { class: 'tt-pinrow' }, h('span', { class: 'tt-lbl' }, 'Inputs'),

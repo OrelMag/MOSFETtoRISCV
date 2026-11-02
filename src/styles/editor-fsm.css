@@ -1,7 +1,7 @@
 /* State-machine chips (editor/fsmchipui.ts): the machine pane left of the canvas. Shares editor-table.css's tt-*. */
 
 .fsm-pane {
-  width: 480px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
+  width: 400px; max-width: 60vw; display: flex; flex-direction: column; min-height: 0;
   background: var(--surface); border-right: 1px solid var(--border);
 }
 .fsm-body { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; }
