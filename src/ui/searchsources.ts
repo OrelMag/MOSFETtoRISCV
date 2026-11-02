@@ -167,6 +167,12 @@ export function searchGroups(srcs: readonly SearchSource[], raw: string, scope: 
     const n = scope === ALL ? per : 80;
     groups.push({ id: s.id, title: s.title, items: ranked.slice(0, n), more: Math.max(0, ranked.length - n), scope: s.id });
   }
+  // a group that opens on an exact id / title match comes first: "nand" finds the part before 196 chapter steps
+  if (text && scope === ALL) {
+    const q = text.toLowerCase();
+    const exact = (g: Group) => { const it = g.items[0]; return !!it && !it.locked && (it.title.toLowerCase() === q || it.id.toLowerCase() === q); };
+    groups.sort((a, b) => Number(exact(b)) - Number(exact(a)));
+  }
   // the other scopes' counts, for their chips
   if (text && scope !== ALL) {
     for (const s of srcs) {
