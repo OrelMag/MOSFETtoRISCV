@@ -66,6 +66,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'search', group: 'anywhere', caps: [`${MOD} K`, '/'], does: 'search chapters, components, levels, the codex and actions (> for actions)',
     match: [{ ...letter('k'), mod: true, shift: false }], capture: true },
   { id: 'search.slash', group: 'anywhere', caps: [], does: '', match: [{ key: '/', code: 'Slash' }] },
+  { id: 'return', group: 'anywhere', caps: ['Alt Backspace'], does: 'back to where a link or search took you from (the ↩ pill in the top bar)' },
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
   { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },

@@ -23,8 +23,6 @@ export interface ActGroup {
   further: CodexEntry[];
 }
 
-/** sessionStorage: the level the reader left for the codex page (the page's "Back to" chip). */
-export const CODEX_FROM = 'mosfet2riscv:codex-from';
 
 /** The levels that teach an entry. */
 export const teachingLevels = (id: string) => NODES.filter((n) => n.codex.includes(id));
