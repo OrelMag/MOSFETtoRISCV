@@ -303,7 +303,7 @@ export class ChapterPage implements Page {
     const quotes = r.quote.map((p) => h('blockquote', null, p));
     const note = h('p', { class: 'reading-note' }); note.innerHTML = r.note;
     return h('details', { class: 'reading' },
-      h('summary', null, icon('book', 14), h('span', null, 'Read the spec'), h('small', null, ` · ${r.section}`)),
+      h('summary', null, icon('book', 14), h('span', null, 'Read the spec')),
       h('div', { class: 'reading-body' },
         h('p', { class: 'reading-src' }, r.source, ', ', h('b', null, r.section)),
         ...quotes, note,
