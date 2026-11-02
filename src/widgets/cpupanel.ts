@@ -298,9 +298,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       after: () => {
         if (willRetire) slowCtl.retired();
         if (!willRetire || iss.halted || !stage.sim) return;
+        let stepped = ''; // the instruction the model ran last: the one a mismatch is "after"
         for (let k = 0; k < willRetire && !iss.halted; k++) {
           const before = narrKind === 'instr' ? [...iss.x] : null;
           const info = iss.step();
+          stepped = info.text;
           if (before) narr = narrateInstr(before, info);
           log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
           if (log.length > LOG_MAX) log.shift();
@@ -314,7 +316,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
           if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
           const fc = cpuState(stage.sim).fcsr;
           if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
-          if (diff >= 0) mismatch = `${ABI[diff]} differs after "${disasm(iss.imem[(iss.pc >>> 2) % (issOpts.imemWords ?? 64)] ?? 0x13)}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
+          if (diff >= 0) mismatch = `${ABI[diff]} differs after "${stepped || log.at(-1)?.text || 'reset'}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
     });
