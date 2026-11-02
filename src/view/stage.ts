@@ -10,7 +10,7 @@ import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
-import { completeEdge, type Edge, riseEdge, stepEdge } from '../sim/edge';
+import { completeEdge, type Edge, lowerClock, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
 import { RELAY_STEP_MS } from '../phys/relay';
 import { stats } from '../sim/stats';
@@ -31,7 +31,7 @@ import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { type NotePin, SchematicView } from './schematic';
-import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, DRILL_STACK_PX, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
+import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
@@ -251,6 +251,8 @@ export class Stage {
   private drillFold = false;
   /** The panels the drill folded (unfolded again when it ends). */
   private drillFolded: HTMLElement[] = [];
+  /** The learner's fold choice on the right when the drill folded the panels (a different one at the end: theirs stands). */
+  private drillChoice: boolean | undefined;
   private viewSeg: HTMLElement;
   private wireSeg: HTMLElement;
   /** A chip opened from the boards: its DIP pins, live, in the bottom-left dock. */
@@ -801,13 +803,13 @@ export class Stage {
     this.syncPins();
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
-    // a drill begun where the right-docked panels leave no room for two columns but folded would: they fold (unless
-    // the learner folded or unfolded one by hand), and unfold again when the drill ends
+    // a drill folds the right-docked panels (the board and the schematic want the room, at any width), and the top level
+    // gets them back as they were, unless the learner folded or unfolded one by hand meanwhile (foldChoice)
     if (this.drillFold) {
       this.drillFold = false;
-      const W = this.canvas.clientWidth;
       const open = this.panels.filter((p) => p.el.dataset.dock === 'right' && p.el.dataset.fold && !p.el.classList.contains('collapsed'));
-      if (open.length && !foldChoice.has('right') && W - this.inset < DRILL_STACK_PX && W >= DRILL_STACK_PX) {
+      if (open.length) {
+        this.drillChoice = foldChoice.get('right');
         for (const p of open) p.el.classList.add('collapsed');
         this.drillFolded = open.map((p) => p.el);
         this.inset = this.rightInset();
@@ -965,7 +967,7 @@ export class Stage {
     const changed = !!d !== !!this.drill;
     if (d && !this.drill) this.drillFold = true;
     if (!d && this.drill && this.drillFolded.length) {
-      if (!foldChoice.has('right')) for (const el of this.drillFolded) el.classList.remove('collapsed');
+      if (foldChoice.get('right') === this.drillChoice) for (const el of this.drillFolded) el.classList.remove('collapsed');
       this.drillFolded = [];
     }
     this.drill = d;
@@ -1174,6 +1176,9 @@ export class Stage {
   private rise(clk: string): void {
     const sim = this.sim!;
     let end: number | null = null;
+    // a clock left high by hand: no edge, but the panels' models would step. Settled even with a period: lowered and
+    // raised at one instant (the next edge due now), transport delay would cancel the pulse
+    lowerClock(sim, clk);
     if (this.period && sim.runUntil) {
       const P = this.period;
       const E = Math.max(sim.time, this.nextEdge);

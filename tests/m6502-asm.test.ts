@@ -1,7 +1,7 @@
 // The 6502 assembler and disassembler (src/m6502/asm.ts, isa.ts).
 import { describe, expect, it } from 'vitest';
 import { assemble, toImage } from '../src/m6502/asm';
-import { disasm, disasmAt, fields, MODES, OPCODES, opcodeOf } from '../src/m6502/isa';
+import { disasm, disasmAt, fields, MODES, OPCODES, opcodeOf, opInfoOf, UNDOC } from '../src/m6502/isa';
 import { PROGRAMS } from '../src/m6502/programs';
 
 const bytes = (src: string) => {
@@ -170,5 +170,34 @@ len = * - msg
       const img = toImage(r);
       expect(img[0xfffc] | (img[0xfffd] << 8), p.name).toBe(r.symbols.get('start'));
     }
+  });
+});
+
+describe('stable undocumented opcodes', () => {
+  it('assemble to their opcodes in every mode they have, and disassemble back', () => {
+    for (const o of UNDOC) {
+      if (!o) continue;
+      const op = MODES[o.mode].syntax.replace('nnnn', '1234').replace('nn', '12');
+      const src = `${o.mnemonic} ${o.mode === 'impl' ? '' : op}`;
+      const got = bytes(src);
+      // the first opcode of a mode is the one written ($0B for ANC, $80 for NOP #, $EB never: $E9 is SBC #)
+      expect(opInfoOf(got[0])!.mnemonic, src).toBe(o.mnemonic);
+      expect(opInfoOf(got[0])!.mode, src).toBe(o.mode);
+      expect(disasm(got, 0).split(' ')[0], src).toBe(o.mnemonic);
+    }
+    expect(bytes('lax $10\nsax ($20,x)\ndcp $1234,y\nanc #1\nnop $10,x\nnop\nsbc #1')).toEqual([0xa7, 0x10, 0x83, 0x20, 0xdb, 0x34, 0x12, 0x0b, 0x01, 0x14, 0x10, 0xea, 0xe9, 0x01]);
+  });
+  it('marks the lines that use one, and only those', () => {
+    const r = assemble('lda #1\nlax $10\nnop\nnop #3\nsbc #1');
+    expect(r.lines.map((l) => !!l.undocumented)).toEqual([false, true, false, true, false]);
+  });
+  it('knows the mode limits (SAX has no immediate, ANC only immediate)', () => {
+    expect(errs('sax #1')[0].message).toMatch(/no immediate/);
+    expect(errs('anc $10')[0].message).toMatch(/no absolute/);
+    expect(errs('xaa #1')[0].message).toMatch(/unknown instruction/);
+  });
+  it('the documented sets stay what they were', () => {
+    expect(OPCODES.filter((o) => o).length).toBe(151);
+    for (const o of UNDOC) if (o) expect(OPCODES[o.op]).toBeUndefined();
   });
 });

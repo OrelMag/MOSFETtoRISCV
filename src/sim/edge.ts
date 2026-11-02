@@ -15,8 +15,19 @@ export interface Edge {
 /** Edges longer than this are oscillating: hand them to settle(), which resolves races. */
 const LIMIT = 10000;
 
+/**
+ * A clock the learner left high by hand (a click on the clock pin) makes a raise no edge: the circuit would see nothing
+ * while the panels' golden models step. Bring it low first (settled, or at the period's own time via runUntil).
+ */
+export function lowerClock(sim: Sim, clk: string, settle = true): void {
+  if (sim.getInput(clk) !== 1) return;
+  sim.setInput(clk, 0);
+  if (settle) sim.settle();
+}
+
 /** Raise the clock; nothing propagates until stepEdge / completeEdge. */
 export function riseEdge(sim: Sim, clk: string, end: number | null = null): Edge {
+  lowerClock(sim, clk, end === null);
   sim.setInput(clk, 1);
   return { clk, start: sim.time, end };
 }
