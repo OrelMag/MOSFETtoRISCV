@@ -163,7 +163,7 @@ export function openMicrocode(o: PainterOptions): { close(): void } {
     }
     if (ci === U_COLUMNS.length) {
       const chg = changedNext(prog, i);
-      return h('span', { ...attrs, class: `uc-cell txt${chg ? ' chg' : ''}`, 'aria-label': `${st.name}, next address: ${typeof st.next === 'number' ? `${st.next}, ${prog.states[st.next]?.name}` : 'not used, the dispatch picks'}${chg ? ', changed from the book' : ''}` },
+      return h('span', { ...attrs, class: `uc-cell txt${chg ? ' chg' : ''}`, title: 'Click: next state; Shift+click or right-click: previous; or type a digit', 'aria-label': `${st.name}, next address: ${typeof st.next === 'number' ? `${st.next}, ${prog.states[st.next]?.name}` : 'not used, the dispatch picks'}${chg ? ', changed from the book' : ''}` },
         typeof st.next === 'number' ? String(st.next) : '—');
     }
     const chg = changedNext(prog, i);
@@ -366,8 +366,9 @@ export function openMicrocode(o: PainterOptions): { close(): void } {
       render();
       drag = { c, value, field, touched: new Set([r]) };
       grid.setPointerCapture?.(e.pointerId);
-    } else paint(r, c, e.shiftKey ? -1 : 1);
+    } else paint(r, c, e.shiftKey || e.button === 2 ? -1 : 1); // Shift+click or right-click steps back down
   });
+  grid.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('.uc-cell')) e.preventDefault(); });
   grid.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.uc-row') as HTMLElement | null;
