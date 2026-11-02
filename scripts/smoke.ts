@@ -4,7 +4,7 @@
 //
 //   npm run build && npm run smoke                       (starts `vite preview` of dist/ itself)
 //   vite-node scripts/smoke.ts --url http://host/sub/     (a site already served)
-//   options: --only <substring of the route>  --tabs <n>  --headful  --timeout <s per route>
+//   options: --only <substring of the route> ("analogy": the asides opened, figures drawn)  --tabs <n>  --headful  --timeout <s per route>
 //   CHROME=<path> picks the browser (else the usual Windows / Linux / macOS locations).
 //
 // Routes come from the code (chapters, workbench families, campaign nodes and codex, sandbox
@@ -20,6 +20,7 @@ import { createServer } from 'node:net';
 import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chapters } from '../src/chapters';
+import { ANALOGIES } from '../src/chapters/analogies';
 import { families, initialParams } from '../src/lib/resolve';
 import { NODES } from '../src/campaign/nodes';
 import { levelChallenge } from '../src/campaign/levels';
@@ -137,6 +138,30 @@ const MEMMAP_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/**
+ * Opens every Analogy aside on the step (a figure loads and mounts when its aside opens), turns on the Water | Cross-section
+ * views of the step's widget, and waits for the figures to draw; a figure that stays empty or says it could not load is a problem.
+ */
+const ANALOGY_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const asides = [...document.querySelectorAll('details.analogy')];
+  if (!asides.length) return ['no Analogy aside on the step'];
+  for (const d of asides) d.open = true;
+  for (const b of document.querySelectorAll('.wt-seg button')) if (b.textContent.trim() === 'Water') b.click();
+  for (let i = 0; i < 40; i++) {
+    await wait(250);
+    if ([...document.querySelectorAll('.analogy-fig')].every((f) => f.firstChild && !/Loading/.test(f.textContent)) && !document.querySelector('.wt-host')?.textContent.includes('Loading')) break;
+  }
+  for (const f of document.querySelectorAll('.analogy-fig')) {
+    if (!f.firstChild) bad.push('an analogy figure did not draw');
+    else if (/could not load/.test(f.textContent)) bad.push('an analogy figure could not load');
+  }
+  for (const h of document.querySelectorAll('.wt-host')) if (/did not load/.test(h.textContent)) bad.push('a water view did not load');
+  await wait(400);
+  return bad;
+})()`;
+
 function routes(): Route[] {
   const out: Route[] = [];
   const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => out.push({ hash, storage, label: hash + note, viewport, drive });
@@ -149,6 +174,15 @@ function routes(): Route[] {
       if (c.recap) add(`#/c/${c.id}/${c.steps.length}`, themed(theme), theme === 'dark' ? ' (dark)' : '');
     }
   }
+  // Every analogy that has a figure, or whose step has a Water view, with its aside open (ANALOGY_DRIVE), and the two Water-view
+  // steps and a figure on a phone.
+  const phoneVp = VIEWPORTS.find((v) => v.mobile)!;
+  const analogySteps = ANALOGIES.flatMap((a) => {
+    const ci = chapters.findIndex((c) => c.id === a.chapter), si = chapters[ci]?.steps.findIndex((st) => st.title === a.step) ?? -1;
+    return si < 0 ? [] : [{ hash: `#/c/${a.chapter}/${si}`, water: !a.figure, chapter: a.chapter }];
+  });
+  for (const a of analogySteps) add(a.hash, light, ' (analogy open)', undefined, ANALOGY_DRIVE);
+  for (const a of analogySteps.filter((x) => x.water || x.chapter === 'cache')) add(a.hash, light, ` (analogy open, ${phoneVp.name})`, phoneVp, ANALOGY_DRIVE);
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);

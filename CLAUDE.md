@@ -52,7 +52,7 @@ browser context; it fails on exceptions, console / browser errors, failed reques
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
 route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
-buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
+buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). Every analogy with a figure or a Water view (chapters/analogies.ts) is also a route "(analogy open)" (30 with the phone ones; `--only analogy`): its `.analogy` asides opened and the step's Water toggles clicked (ANALOGY_DRIVE), failing on a figure that stays empty or says it could not load. `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
 on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
