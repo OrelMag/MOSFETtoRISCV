@@ -259,7 +259,7 @@ src/lib/       the component library (registered in `registry` via define())
                  cField(i) per field of C_FIELDS (one-hot AND-OR over cRecipes(): forms that fill a field alike share a
                  recipe, read off riscv/rvc.ts decodeC over all 65 536 parcels), C_EXPAND (window → instr, c, illegal;
                  expandWindow its spec), incCin(n), PLUS2OR4, halfRom (a halfword bank: preferBehavior, id hrom…; verify
-                 lanes give each bank its program), cFetch(program, k) (two banks, the low one a word on when pc[1] = 1, swaps)
+                 lanes give each bank its program), cFetch(program, k) (two banks, the low one a word on when pc[1] = 1, swaps), cWindowRom(words, k) (cFetch without the expander: the 32 bits at any even address, the sandbox's ROM part with its C box ticked; rv32ic_core = singleCycleCpu({ shared, imemPort, c }) puts C_EXPAND + PLUS2OR4 inside and takes the window on `instr`, extra pin `illegal`; other paths gate for gate as before)
   cpu64.ts       chapter 25 part 2: xlenCpu(program, { xlen: 32 | 64, m, imemK, dmemK }) (one drawing at both widths, user level;
                  instances pc, imem (fed pc[31:0]), rf, dm, alu, ctl, npc, st, ld, wu, md, xd; retire with m), wordUnit(64) (the
                  W unit: operands cut to 32 bits and extended in front, a W shift's b5 cleared, the result sign-extended behind; also
@@ -267,7 +267,7 @@ src/lib/       the component library (registered in `registry` via define())
                  lsu.ts storeAlign / loadExtract / laneMemory(k, xlen) and muldiv.ts mUnit / mulWide (32: the old objects);
                  xlencosts.ts XLEN_COSTS (pinned by tests/cpu64.test.ts: lock step against ISS64 / ISS, BigInt readers cosim.ts wideState);
                  W_ALU (step 7's scene: the W unit around alu(64)); tests/verify-xlen.test.ts: riscv-tests at both widths, the benchmarks at 64;
-                 widgets/cpu64panel.ts cpu64Scene (step 8: its own CPU panel, ISS64 in lock step), widgets/rv64.ts WIDTH_COSTS (step 6)
+                 widgets/cpu64panel.ts cpu64Scene (step 8: its own CPU panel, ISS64 in lock step), widgets/rv64.ts WIDTH_COSTS (step 6); xlenCpu({ xlen: 64, imemPort: true }) = the sandbox's rv64i_core / rv64im_core (+ `_d<k>` for a data memory of 2^k doublewords, default 6; lib/resolve.ts): no ROM inside, `instr` in, `pcLow` (the ROM's address) and `pcOut` out, the data memory stays inside as dm (sandbox RAM holds <= 32-bit words and has no byte enables)
   fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
                  brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
@@ -482,7 +482,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                decode / disasm / ISS({ custom }) take the rows; sanitizeRows, rowsKey), compose.ts (the instruction builder's model: a spec + operands both ways, slotsOf in assembly
                order with bank / range, encodeParts / partsOf (null: bits it would not set), retarget, textOf (a target by label),
                parseLine, PALETTE; every instruction round-trips through asm.ts: tests/compose.test.ts; RV32_COMPOSE: its
-               builder adapter, isa/composekit.ts), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
+               builder adapter, isa/composekit.ts); rv32Compose(custom, 64) / RV64_COMPOSE: the 64-bit builder (slotsOf / encodeParts / partsOf / fieldsOf / immBits take xlen: 6-bit shift amounts, ld / sd / lwu / the W instructions, PALETTE64); composec.ts RVC_COMPOSE: a 16-bit builder (step 2, one form per c.* mnemonic, encoded through the assembler, decoded by decodeC, the strip by form; tests/compose-isa.test.ts runs each through the assembler), fastiss.ts (FastISS: the golden model's semantics, every ROM word predecoded by decode() into
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
@@ -944,6 +944,14 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly, or on a custom table: followed, not checked), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
                  values the hardware sampled, every register compared (CPU4_STATE paths; elsewhere: followed, not checked);
                  cpu4Use: the blocks an instruction uses (the drawer's marks)
+  exampleisa.ts  Examples ▸ RV32C and RV64 (Sheet): rvcChip = rv32ic_core + a ROM with its C box ticked (rom.c) + RAM + console + a halt part on the
+                 expanded `j .` (cpu.instrOut); rv64Chip = rv64im_core + a ROM assembled for RV64 (rom.xlen = 64), no memory port. The ROM ref's `c`
+                 (byte addressed, 32-bit words: cWindowRom, k <= C_ROM_MAX_K = 8; `.option rvc` without it is a ROM error) and `xlen` (assemble at 64)
+                 are the ROM property section's Extensions row; palette group "Processor cores" (rv32i / rv32ic / rv64i / rv64im cores, C and RV64 ROMs)
+  rv64mon.ts     detectRv64 (a placed rv64i/im_core + a ROM), Rv64Monitor: ISS64 stepped at every retiring edge (the core's `retire` with m), x0..x31, the PC
+                 and the doublewords after a store compared as BigInts (bitsBig on <core>.rf / .dm banks); the CPU drawer's RV64 view (renderRv64: 64-bit
+                 registers in a grid of their own, memory in doublewords). A C core is a plain CpuMonitor with iss.c (ISS({ c }); wordAt = the expanded
+                 instruction, compressedAt(pc), the listing a row per instruction with 16-bit ones shown as 4 hex digits)
   multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
                  lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
