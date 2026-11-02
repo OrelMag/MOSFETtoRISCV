@@ -13,7 +13,7 @@ const STARS: Record<string, number> = { g_dec: 2, a_addsub16: 2, a_slt: 3, s_reg
 const withBody = (node: string, body: string) => { const t = twinOf(node)!; return twinStart(t).replace(t.start, body); };
 
 describe('Verilog twins', () => {
-  it('every twin names an existing optional-free build level, in acts 1 to 5, with a unique id', () => {
+  it('every twin names an existing build level, in acts 1 to 5, with a unique id', () => {
     const ids = new Set<string>();
     for (const t of TWINS) {
       const n = nodeById(t.twin);
@@ -115,7 +115,15 @@ describe('twin progress', () => {
     expect(mem.has(CAMPAIGN_KEY)).toBe(true);
     const st = sanitizeCampaign({ nodes: { vl_g_dec: { status: 'solved' }, vl_nonsense: { status: 'solved' } } });
     expect(Object.keys(st.nodes)).toEqual(['vl_g_dec']);
-    // twins are outside the map's tallies
+    // twins are outside the map's tallies and survive a merge (an import of a backup)
     expect(p.summary().done).toBe(0);
+    const { mergeCampaign } = await import('../src/campaign/progress');
+    const merged = mergeCampaign(p.state, sanitizeCampaign({ nodes: { vl_s_reg4: { status: 'solved', stars: 3, best: { nand: 52 } } } }));
+    expect(merged.nodes.vl_s_reg4).toMatchObject({ status: 'solved', stars: 3 });
+    // the learner-facing readers of the progress (My path's evidence, the backup summary) take it in stride
+    const { summarize } = await import('../src/ui/backup');
+    const { MapKV } = await import('../src/ui/backup');
+    const s = summarize(new MapKV(mem));
+    expect(s.campaignSolved).toBe(1);
   });
 });

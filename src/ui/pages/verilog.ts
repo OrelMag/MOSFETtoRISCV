@@ -11,11 +11,12 @@ import '../../styles/capstone.css';
 import '../../styles/verilog.css';
 import { progress } from '../../campaign/progress';
 import { nodeById } from '../../campaign/nodes';
-import { drawnNands, drawnScore, type TwinResult, checkTwin, TWINS, twinById, twinChallenge, twinReference, twinStart, twinTitle, type VerilogTwin } from '../../campaign/verilog';
+import { drawnNands, drawnScore, type TwinResult, checkTwin, TWINS, twinById, twinChallenge, twinChipId, twinReference, twinStart, twinTitle, type VerilogTwin } from '../../campaign/verilog';
 import { twinKey } from '../../campaign/twinids';
 import { ins, importAnswer, outs, tableRows } from '../../editor/challenges';
 import { highlight } from '../../editor/hdlhighlight';
-import { newVerilogChip } from '../../editor/hdl';
+import { newVerilogChip, setSource } from '../../editor/hdl';
+import { openChip } from '../../editor/session';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import { YOSYS_BYTES, YOSYS_VERSION, yosysReady } from '../../hdl/yosys';
 import type { HdlDiag } from '../../hdl/yosysjson';
@@ -267,7 +268,11 @@ export class VerilogPage implements Page {
 
   private openNetlist(): void {
     const t = this.t!;
-    const made = newVerilogChip(loadWorkspace(), this.ta.value, `${t.module}.v`, 'nand', t.module);
+    // one chip per twin: opening the netlist again replaces its text (a chip of the same id that is not this twin's is left alone)
+    const ws0 = loadWorkspace(), id0 = twinChipId(t), file = `${t.module}.v`;
+    const made = ws0.chips[id0]?.hdl?.src?.file === file
+      ? { ws: openChip(setSource(ws0, id0, { text: this.ta.value, gates: 'nand', top: t.module }), id0), id: id0 }
+      : newVerilogChip(ws0, this.ta.value, file, 'nand', t.module);
     const saved = saveWorkspace(made.ws);
     if (!saved.ok) { this.checkEl.prepend(h('p', { class: 'note' }, saved.reason)); return; }
     location.hash = `#/sandbox/${made.id}`;
@@ -326,7 +331,7 @@ export class VerilogPage implements Page {
         h('thead', null, h('tr', null, ['port', 'w', 'dir'].map((x) => h('th', null, x)))), h('tbody', null, [...ins(ch.ports), ...outs(ch.ports)].map(pin)))),
         h('p', { class: 'sub' }, 'Other modules may follow in the file; the top one must have exactly these ports.')),
       h('section', null, h('h4', null, 'Graded'), h('ul', null,
-        h('li', null, '★ the level\'s test sequence passes'),
+        h('li', null, `★ the level's ${ch.check.kind === 'sequence' ? 'test sequence' : 'truth-table check'} passes`),
         h('li', null, `★★ within 1.5 × the drawn reference's NANDs (${ref.toLocaleString()} → at most ${Math.floor(ref * 1.5).toLocaleString()})`),
         h('li', null, `★★★ at or under it (${ref.toLocaleString()})`))),
       h('section', null, h('h4', null, 'Watch for'), rich('p', t.note)),

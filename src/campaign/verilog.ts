@@ -9,7 +9,7 @@
 import { type BuildChallenge, type CheckResult, checkChallenge, ins, outs, type PinSpec } from '../editor/challenges';
 import { newVerilogChip, resynthesize } from '../editor/hdl';
 import { UserLibrary } from '../editor/library';
-import { emptyWorkspace, type Workspace } from '../editor/model';
+import { emptyWorkspace, slug, type Workspace } from '../editor/model';
 import type { HdlDiag } from '../hdl/yosysjson';
 import { stats } from '../sim/stats';
 import { levelChallenge } from './levels';
@@ -113,7 +113,8 @@ export const TWINS: VerilogTwin[] = [
 export const twinById = (id: string): VerilogTwin | undefined => TWINS.find((t) => twinId(t) === id);
 export const twinOf = (node: string): VerilogTwin | undefined => TWINS.find((t) => t.twin === node);
 export const twinId = (t: VerilogTwin): string => twinKey(t.twin);
-export const twinChipId = (t: VerilogTwin): string => `u_vl_${t.twin}`;
+/** The id "Open the netlist" gives the chip in the sandbox (newVerilogChip's own choice for a first one). */
+export const twinChipId = (t: VerilogTwin): string => `u_${slug(t.module)}`;
 
 /** The level's challenge (its pins, its check), with every library part allowed: the synthesizer picks the gates. */
 export function twinChallenge(t: VerilogTwin): BuildChallenge {
