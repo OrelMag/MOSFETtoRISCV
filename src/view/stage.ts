@@ -148,6 +148,8 @@ export const BUSY_GATES = 10_000;
 
 /** A build still going after this long shows its progress card (a quicker one never flashes it). */
 const LOAD_CARD_MS = 300;
+/** Width a challenge note or the Why? card needs beside a left panel before the right dock, else it does not move there. */
+const NOTE_ROOM = 240;
 
 export class Stage {
   readonly el: HTMLElement;
@@ -277,10 +279,11 @@ export class Stage {
         this.canvas.classList.toggle('probing', on || this.probeMode);
         if (on && this.probeMode) this.setProbeMode(false);
         // the card covers the canvas's top-left corner: a fitted circuit moves clear of it, and back when it closes
-        if (!on) this.view.setCover(this.covers(), true);
+        if (on) this.placeWhy();
+        else this.view.setCover(this.covers(), true);
       },
     });
-    new ResizeObserver(() => this.why.on && this.view.setCover(this.covers())).observe(this.why.el);
+    new ResizeObserver(() => this.why.on && (this.placeWhy(), this.view.setCover(this.covers()))).observe(this.why.el);
     this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
       icon('why', 15), h('span', { class: 'lbl' }, 'Why?')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
@@ -2166,6 +2169,7 @@ export class Stage {
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.clearNotesOfPanels();
+    this.placeWhy();
     this.boardCover();
     this.drillLayout();
     this.dockOut();
@@ -2174,23 +2178,61 @@ export class Stage {
   }
 
   /** A challenge note drawn at the canvas's top left (app.css .stage-notes with a right-docked panel) must not sit on a
-   *  left-docked panel that starts at the top (a size picker): it moves right of the panel (--note-left). */
+   *  left-docked panel that starts at the top (a size picker): it moves right of the panel (--note-left). Where that
+   *  leaves it no room before the right dock (a tall left panel beside the CPU panel squashed it to two words), it stays
+   *  at the left and the left dock starts below it instead. */
   private clearNotesOfPanels(): void {
+    this.dock.style.removeProperty('top');
     const notes = this.canvas.querySelector<HTMLElement>(':scope > .stage-notes');
     if (!notes) return;
     notes.style.removeProperty('--note-left');
     if (getComputedStyle(notes).left === 'auto') return; // top right: clear of the left panels already
-    let left = 0;
+    const c = this.canvas.getBoundingClientRect();
+    let left = 0, bottom = 0;
     for (const n of notes.children) {
       const r = n.getBoundingClientRect();
       if (r.width <= 0 || r.height <= 0) continue;
+      bottom = Math.max(bottom, r.bottom - c.top);
       for (const p of this.panels) {
         if (p.el.dataset.dock === 'right') continue;
         const q = p.el.getBoundingClientRect();
-        if (q.width > 0 && q.height > 0 && r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom) left = Math.max(left, q.right - this.canvas.getBoundingClientRect().left + 12);
+        if (q.width > 0 && q.height > 0 && r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom) left = Math.max(left, q.right - c.left + 12);
       }
     }
-    if (left) notes.style.setProperty('--note-left', `${left}px`);
+    if (!left) return;
+    if (c.width - left - this.panelInset() >= NOTE_ROOM) notes.style.setProperty('--note-left', `${left}px`);
+    else this.dock.style.top = `${bottom + 8}px`;
+  }
+
+  /** --panel-inset: what the right-docked panels take from the canvas's right edge (syncCover). */
+  private panelInset(): number {
+    return parseFloat(this.canvas.style.getPropertyValue('--panel-inset')) || 0;
+  }
+
+  /** The Why? card (top left) must not sit on a challenge note drawn there (a right-docked panel sends the note left)
+   *  or on a left-docked panel that starts at the top: it moves right of such a panel (--why-left), then below the
+   *  notes it would still cover (--why-top). With no room right of the panel it stays over it (the learner opened it).
+   *  Along the bottom (a phone) it is clear of both. */
+  private placeWhy(): void {
+    const el = this.why.el;
+    el.style.removeProperty('--why-left');
+    el.style.removeProperty('--why-top');
+    if (!this.why.on) return;
+    const c = this.canvas.getBoundingClientRect();
+    const hits = (r: DOMRect, q: DOMRect) => q.width > 0 && q.height > 0 && r.left < q.right && q.left < r.right && r.top < q.bottom && q.top < r.bottom;
+    let r = el.getBoundingClientRect();
+    if (r.top - c.top > c.height / 2) return;
+    let left = 0;
+    for (const p of this.panels) if (p.el.dataset.dock !== 'right' && hits(r, p.el.getBoundingClientRect())) left = Math.max(left, p.el.getBoundingClientRect().right - c.left + 12);
+    if (left && c.width - left - this.panelInset() >= NOTE_ROOM) el.style.setProperty('--why-left', `${left}px`);
+    r = el.getBoundingClientRect();
+    let top = 0;
+    // horizontally only: the card is moved down, so a note it would cover once moved counts too
+    for (const n of this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')) {
+      const q = n.getBoundingClientRect();
+      if (q.width > 0 && q.height > 0 && r.left < q.right && q.left < r.right && q.top - c.top < c.height / 2) top = Math.max(top, q.bottom - c.top + 8);
+    }
+    if (top) el.style.setProperty('--why-top', `${top}px`);
   }
 
   /** The boards keep clear of the right-docked panels that are open; a folded one is only its title, so the boards
