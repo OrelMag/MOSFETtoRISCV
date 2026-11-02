@@ -108,7 +108,7 @@ with the bus between them, as the breadboards), net labels for the 16 control li
   (`rovingMove`). Double-click a chip (or a board's title): the drill (`drillOf`, `drillCrumbs`, `drillPane`):
   its board zoomed (others dimmed) with a breadcrumb, the live DIP pin card (overbars from `TTL_ACTIVE_LOW`, values
   in words) and notes on the left (on top below `DRILL_STACK_PX`), the instance's schematic on the right; the
-  right-docked panels fold for it where two columns need the room, and come back after. Esc goes up; at the top, or
+  right-docked panels fold for it (at any width) and come back as they were after, unless the learner folded or unfolded one meanwhile. Esc goes up; at the top, or
   from Boards, the boards again. Both themes; phone width.
 - `src/widgets/sap.ts`: the SAP panel (control word LEDs by name, the microcode row of this step, the program listing
   with the PC, RAM contents, the golden model in lock step at every rising edge), `sapScene(program, opts)`.

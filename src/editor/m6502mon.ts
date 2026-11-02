@@ -5,7 +5,7 @@
 // with its bytes and everything it wrote, and it ends where the next opcode fetch (SYNC) begins.
 
 import { core6502Regs } from '../lib/m6502/core';
-import { disasmAt, OPCODES } from '../m6502/isa';
+import { disasmAt, OPCODES, opInfoOf } from '../m6502/isa';
 import type { HierNode } from '../sim/flatten';
 import type { Chips, MonitorSim, Retired } from './cpu';
 import { partAt, partNode } from './cpu';
@@ -206,7 +206,11 @@ export class M6502Monitor {
     const c = this.cur;
     if (c && ++c.cycles === 1) c.int = s.ir === 0 && (c.bytes.get(c.pc) ?? 0) !== 0; // ir 0 for a non-zero opcode: not BRK
     this.tcycle++;
-    if (s.illegal !== null) this.problem ??= `undocumented opcode $${hx(s.illegal)}: the 6502 part stops on it (it reads one address forever)`;
+    if (s.illegal !== null) {
+      const u = opInfoOf(s.illegal);
+      // the model and the assembler know the stable ones (m6502/iss.ts `undocumented`); the part and the transistor chip are built from the documented table
+      this.problem ??= `${u ? `${u.mnemonic} (${hx(s.illegal)}) is an undocumented opcode the transistor chip is not built for` : `${hx(s.illegal)} is not a 6502 opcode the part knows`}: the part stops on it (it reads one address forever)`;
+    }
     if (!s.bus.sync) return;
     const at = s.bus.addr;
     if (this.cur) this.retire(this.cur, s, at);

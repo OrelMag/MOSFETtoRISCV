@@ -8,7 +8,7 @@ import { RV64_SOURCE, RVC_SOURCE, RVC_TEXT, rvcChip } from '../src/editor/exampl
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { consoleText, type ConsoleState, ioNodes, ioState } from '../src/editor/ioparts';
 import { UserLibrary } from '../src/editor/library';
-import { deadParts, lintChip, openInputs } from '../src/editor/lint';
+import { deadParts, isaMismatch, lintChip, openInputs } from '../src/editor/lint';
 import { partDef } from '../src/editor/parts';
 import { registry } from '../src/lib/define';
 import { emptyWorkspace, type PartRef, polyline, type Workspace } from '../src/editor/model';
@@ -134,5 +134,23 @@ describe('Examples ▸ RV64', () => {
     expect(r.x[12]).toBe(2880067194370816120n); // a2
     expect(r.dmem[1]).toBe(2880067194370816120n);
     expect(r.x[28]).toBe(0x123456789abcdef0n + (1n << 40n)); // t3
+  });
+});
+
+describe('core / ROM mismatch lint', () => {
+  const rom = (extra: object): PartRef => ({ rom: { k: 5, w: 32, addr: 'rv32', lang: 'asm', src: 'nop', ...extra } } as PartRef);
+  const doc = (core: string, r: PartRef) => ({
+    id: 'u', name: 'u', pins: [], labels: [], wires: [],
+    parts: [{ id: 'imem', ref: r, at: [0, 0] as [number, number] }, { id: 'cpu', ref: { lib: core } as PartRef, at: [10, 0] as [number, number] }],
+  });
+  it('names the mismatch between a ROM and the core beside it, and is quiet when they agree', () => {
+    expect(isaMismatch(doc('rv32ic_core', rom({ c: true })))).toEqual([]);
+    expect(isaMismatch(doc('rv32i_core', rom({})))).toEqual([]);
+    expect(isaMismatch(doc('rv64im_core', rom({ xlen: 64 })))).toEqual([]);
+    expect(isaMismatch(doc('rv32i_core', rom({ c: true })))[0].msg).toMatch(/C extension.*RV32.*no C expander/);
+    expect(isaMismatch(doc('rv32ic_core', rom({})))[0].msg).toMatch(/RV32IC but ROM imem is a plain ROM/);
+    expect(isaMismatch(doc('rv32i_core', rom({ xlen: 64 })))[0].msg).toMatch(/assembled for RV64 but core cpu is RV32/);
+    expect(isaMismatch(doc('rv64i_core', rom({})))[0].msg).toMatch(/assembled as RV32 but core cpu is RV64/);
+    expect(isaMismatch(doc('rv64i_core', rom({})))[0].parts).toEqual(['imem', 'cpu']);
   });
 });

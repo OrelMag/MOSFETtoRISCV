@@ -2434,3 +2434,13 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .chapter-switch { position: relative; }
   .chapter-switch::after { content: ""; position: absolute; inset: -7px 0; }
 }
+
+/* Workbench Statistics table on touch: sort headers, rows (their links) and the family chevron reach 40 px. */
+@media (pointer: coarse) {
+  .hw-table th button { min-height: 40px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; }
+  .hw-table th:nth-child(-n+2) button { align-items: flex-start; }
+  .hw-table td { height: 40px; padding-block: 4px; }
+  .hw-name a { display: inline-flex; align-items: center; min-height: 40px; }
+  .hw-chev { width: 28px; height: 40px; text-align: center; line-height: 40px; vertical-align: middle; }
+  .hw-chev-space { width: 28px; }
+}

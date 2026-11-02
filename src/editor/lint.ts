@@ -116,6 +116,7 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
       parts: dead,
     });
   }
+  diags.push(...isaMismatch(doc));
   return { diags, open };
 }
 
@@ -141,4 +142,36 @@ export function deadParts(doc: ChipDoc, built: Compiled): string[] {
   if (!sinks) return [];
   const ids = new Set(doc.parts.map((p) => p.id));
   return deadInstances(nl, built.def.ports).filter((n) => ids.has(n));
+}
+
+/** The width / extension a placed core implements (null: not one of the byte-addressed RISC-V cores). */
+function coreIsa(ref: ChipDoc['parts'][number]['ref']): { xlen: 32 | 64; c: boolean } | null {
+  if ('core' in ref) return { xlen: 32, c: false };
+  if (!('lib' in ref)) return null;
+  if (ref.lib === 'rv32i_core') return { xlen: 32, c: false };
+  if (ref.lib === 'rv32ic_core') return { xlen: 32, c: true };
+  return /^rv64(i|im)(_dd)?_core$/.test(ref.lib) ? { xlen: 64, c: false } : null;
+}
+
+/**
+ * A Program ROM whose extension does not match the core placed beside it: a C ROM (halfword reads, packed 16-bit
+ * instructions) for a core without the expander, a plain ROM for the C core, a ROM assembled for RV64 on a 32-bit core, or
+ * RV32 source for a 64-bit one. The drawer's golden model would only say so later, as a mismatch.
+ */
+export function isaMismatch(doc: ChipDoc): Diag[] {
+  const cores = doc.parts.flatMap((p) => { const i = coreIsa(p.ref); return i ? [{ id: p.id, ...i }] : []; });
+  if (cores.length !== 1) return [];
+  const core = cores[0];
+  const out: Diag[] = [];
+  const isa = `${core.xlen === 64 ? 'RV64' : 'RV32'}${core.c ? 'C' : ''}`;
+  for (const p of doc.parts) {
+    if (!('rom' in p.ref) || p.ref.rom.addr !== 'rv32' || p.ref.rom.w !== 32 || p.ref.rom.lang !== 'asm') continue;
+    const r = p.ref.rom, rom = `ROM ${p.id}`;
+    const warn = (msg: string, fix: string) => out.push({ level: 'warn', msg, fix, parts: [p.id, core.id] });
+    if (r.c && !core.c) warn(`${rom} has the C extension but core ${core.id} is ${isa}, with no C expander`, 'The ROM answers with packed 16-bit instructions the core cannot read. Use the RV32IC core, or untick C extension on the ROM.');
+    else if (!r.c && core.c) warn(`core ${core.id} is RV32IC but ${rom} is a plain ROM`, 'The core reads 32-bit words at word addresses only, so 16-bit instructions would be misread. Tick C extension on the ROM.');
+    if (r.xlen === 64 && core.xlen === 32) warn(`${rom} is assembled for RV64 but core ${core.id} is ${isa}`, 'ld, sd and the W instructions are illegal on a 32-bit core. Use an RV64 core, or untick RV64 on the ROM.');
+    else if (r.xlen !== 64 && core.xlen === 64) warn(`${rom} is assembled as RV32 but core ${core.id} is RV64`, 'ld, sd, the W instructions and 64-bit li will not assemble. Tick RV64 on the ROM.');
+  }
+  return out;
 }
