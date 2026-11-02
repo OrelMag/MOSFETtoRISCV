@@ -10,7 +10,7 @@ const hex = (a: number) => `0x${a.toString(16)}`;
 
 export default function mount(host: HTMLElement): void {
   let pattern: Pattern = 'sequential', desk = new Desk(), running = false, looping = false;
-  const svg = s('svg', { viewBox: `0 0 ${W} 290`, class: 'af-svg', role: 'img', 'aria-label': 'Four places to fetch from, their walking times, the last requests and the lines on the desk' });
+  const svg = s('svg', { viewBox: `0 0 ${W} 240`, class: 'af-svg', role: 'img', 'aria-label': 'Four places to fetch from, their walking times, the last requests and the lines on the desk' });
   const read = h('p', { class: 'af-read', 'aria-live': 'polite' });
   const seq = button('Sequential', () => pick('sequential'), true), rnd = button('Random', () => pick('random'), false);
   const step = (n: number) => { for (let i = 0; i < n; i++) desk.access(desk.nextAddr(pattern)); paint(); };
