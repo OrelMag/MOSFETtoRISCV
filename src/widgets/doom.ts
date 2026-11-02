@@ -220,14 +220,17 @@ export function doomPlay(): Widget {
   file.addEventListener('change', async () => {
     const f = file.files?.[0];
     if (f) start(new Uint8Array(await f.arrayBuffer()), f.name);
+    file.value = ''; // the same file can be picked again after a refusal
   });
   const playFree = h('button', { type: 'button', class: 'btn primary', onclick: async () => {
     playFree.setAttribute('disabled', '');
     try {
       const wad = await fetchBytes(FREEDOOM, (got, total) => { status.textContent = `Downloading Freedoom: ${(got / 1e6).toFixed(1)}${total ? ` of ${(total / 1e6).toFixed(1)}` : ''} MB…`; });
-      if (alive) start(wad, 'Freedoom: Phase 1');
+      if (!alive) return;
+      if (wadProblem(wad)) throw new Error('not a WAD'); // a host without the file answers with its fallback page
+      start(wad, 'Freedoom: Phase 1');
     } catch {
-      status.textContent = 'Freedoom is not part of this build (the deploy adds it; locally: node scripts/doom/fetch-wad.mjs). You can load your own WAD instead.';
+      status.textContent = 'The bundled Freedoom WAD is missing from this build (the deploy adds it; locally: node scripts/doom/fetch-wad.mjs). Use "Load your own WAD…" instead, or try again.';
       playFree.removeAttribute('disabled');
     }
   } }, 'Play Freedoom (29 MB)');
