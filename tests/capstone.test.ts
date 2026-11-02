@@ -10,7 +10,7 @@ import { checkSimulatable } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import { UserLibrary } from '../src/editor/library';
 import { deadParts, openInputs } from '../src/editor/lint';
-import { CAPSTONES, capstoneStatus } from '../src/learn/capstones';
+import { capstoneStatus } from '../src/learn/capstones';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import '../src/lib';
 import { workspace } from './editorkit';
@@ -29,10 +29,8 @@ function checkReference(ch: BuildChallenge) {
 }
 
 describe('the capstone set', () => {
-  it('tiers 1–3 are built, tier 4 has no checker', () => {
-    expect(builtCapstones().map((c) => c.id)).toEqual(['cap_t1', 'cap_t2', 'cap_t3']);
-    expect(capstoneChallenge('cap_t4')).toBeUndefined();
-    expect(CAPSTONES.find((c) => c.id === 'cap_t4')!.route).toBeNull();
+  it('all four tiers are built', () => {
+    expect(builtCapstones().map((c) => c.id)).toEqual(['cap_t1', 'cap_t2', 'cap_t3', 'cap_t4']);
     for (const c of builtCapstones()) expect(c.route, c.id).toBe(`#/campaign/play/${c.id}`);
   });
 

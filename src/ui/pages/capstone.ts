@@ -9,6 +9,7 @@ import '../../styles/campaign.css';
 import '../../styles/level.css';
 import '../../styles/capstone.css';
 import { partNames } from '../../campaign/cardlabel';
+import { briefRefs, briefStars } from '../../campaign/brief';
 import { builtCapstones, capstoneById, capstoneChallenge, capstoneChipId, capstoneRank, capstoneRule, referenceNands, referenceScore, type ReferenceScore, solutionsOpen } from '../../campaign/capstone';
 import { coreSpecOf } from '../../campaign/corecheck';
 import { measured } from '../../campaign/grade';
@@ -21,9 +22,12 @@ import '../../editor/features';
 import type { Capstone } from '../../learn/capstones';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
+import { briefResults, GRADE_WORD, starText } from './briefview';
 import type { Page } from './chapter';
 
-type Tab = 'spec' | 'tests';
+type Tab = 'spec' | 'tests' | 'rules' | 'others';
+/** The design brief (tier 4) has two views: the editor, and the chart of what has been measured. */
+type View = 'design' | 'results';
 
 /** The level screen keeps the toolbar to what building and checking needs. */
 const ACTIONS = ['undo', 'redo', 'zout', 'zin', 'fit', 'iobar', 'probe', 'timing', 'package', 'inspect', 'cpu', 'memory', 'props', 'help'];
@@ -72,6 +76,8 @@ export class CapstonePage implements Page {
   private side = h('aside', { class: 'lv-side', 'aria-label': 'The spec sheet' });
   private edWrap = h('div', { class: 'lv-ed' });
   private tab: Tab = 'spec';
+  private view: View = 'design';
+  private resultsEl: HTMLElement | null = null;
   private folded = narrow();
   private result: HTMLElement | null = null;
   /** The reference's own numbers, computed once on demand (a pass, or the NAND count shown on the sheet). */
@@ -116,8 +122,9 @@ export class CapstonePage implements Page {
     this.offs.push(p.onChange(() => { this.renderBar(); this.chal?.refresh(); }));
     this.renderBar();
     this.renderSide();
+    this.renderResults();
     // the reference's NAND count for the sheet: compiling it is cheap, running its check is not (that waits for a pass)
-    setTimeout(() => this.fillRefNands(), 0);
+    if (!this.isBrief()) setTimeout(() => this.fillRefNands(), 0);
   }
 
   destroy(): void {
@@ -139,8 +146,9 @@ export class CapstonePage implements Page {
       h('a', { class: 'lv-back', href: '#/campaign', title: 'The campaign' }, icon('chevL', 14), 'Campaign'),
       h('span', { class: 'lv-badge cap-tier' }, `TIER ${cap.tier} CAPSTONE`),
       h('span', { class: 'lv-crumb' }, h('b', null, cap.title)),
-      this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
+      this.isBrief() ? this.briefBadge() : this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
       h('span', { class: 'lv-spacer' }),
+      ...(this.isBrief() ? this.viewButtons() : []),
       ...others.map((c) => h('a', { class: 'btn sm ghost', href: c.route ?? '#/campaign', title: c.title }, h('span', { class: 'lbl' }, `Tier ${c.tier}`))),
     ].filter((x): x is HTMLElement => !!x));
   }
@@ -148,20 +156,83 @@ export class CapstonePage implements Page {
   // ---- the spec sheet --------------------------------------------------------------------------------
 
   private renderSide(): void {
-    const tabs: [Tab, string][] = [['spec', 'Spec'], ['tests', 'Tests']];
+    const tabs: [Tab, string][] = this.isBrief() ? [['spec', 'Brief'], ['rules', 'Rules'], ['tests', 'Tests'], ['others', 'Other briefs']] : [['spec', 'Spec'], ['tests', 'Tests']];
     const bar = h('div', { class: 'lv-tabs', role: 'tablist' }, tabs.map(([id, label]) => {
       const on = this.tab === id && !this.folded;
       return h('button', { class: on ? 'on' : '', role: 'tab', 'aria-selected': String(on), 'aria-expanded': narrow() ? String(on) : null,
         onclick: () => { this.folded = narrow() && on; this.tab = id; this.renderSide(); } }, label);
     }));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
-    if (this.tab === 'spec') this.specTab(body);
+    if (this.tab === 'spec') { if (this.isBrief()) this.briefTab(body); else this.specTab(body); }
+    else if (this.tab === 'rules') this.specTab(body, true);
+    else if (this.tab === 'others') this.othersTab(body);
     else this.testsTab(body);
     this.side.replaceChildren(bar, body);
     this.side.classList.toggle('folded', this.folded);
   }
 
-  private specTab(el: HTMLElement): void {
+  // ---- the design brief (tier 4) ---------------------------------------------------------------------
+
+  private isBrief(): boolean {
+    return this.nodeId === 'cap_t4';
+  }
+
+  private subs() {
+    return progress().get(this.nodeId)?.subs ?? [];
+  }
+
+  private briefBadge(): HTMLElement | null {
+    const best = this.subs().reduce((m, q) => Math.max(m, q.stars), 0);
+    return best ? h('span', { class: 'lv-badge good', title: 'Your best grade so far' }, starText(best as 1 | 2 | 3)) : null;
+  }
+
+  private viewButtons(): HTMLElement[] {
+    const btn = (v: View, label: string) => h('button', { class: `btn sm ${this.view === v ? '' : 'ghost'}`, 'aria-pressed': String(this.view === v), onclick: () => this.setView(v) }, label);
+    return [btn('design', 'Design'), btn('results', `Results (${this.subs().length})`),
+      h('button', { class: 'btn sm primary', title: 'Run the workload on your core and keep the result as a submission', onclick: () => { this.setView('design'); this.chal?.check(); } }, 'Measure')];
+  }
+
+  private setView(v: View): void {
+    this.view = v;
+    this.renderResults();
+    this.renderBar();
+  }
+
+  /** The results view fills the editor's place (the editor stays alive underneath). */
+  private renderResults(): void {
+    if (!this.isBrief()) return;
+    this.resultsEl?.remove();
+    this.resultsEl = null;
+    this.edWrap.classList.toggle('bf-hide', this.view === 'results');
+    if (this.view !== 'results') return;
+    this.resultsEl = briefResults(this.subs());
+    this.edWrap.append(this.resultsEl);
+  }
+
+  private briefTab(el: HTMLElement): void {
+    const refs = briefRefs();
+    el.append(
+      h('section', null, h('h4', null, 'The problem'), h('p', null, 'Any RV16 core you like (single-cycle, multicycle, pipelined, with fast adders or shared ones) that runs the workload to the golden model’s results. There is no single right answer: every design is a point on a cost / speed chart.')),
+      h('section', null, h('h4', null, 'Measured'), h('ul', null,
+        rich('li', '<b>Cost</b>: NANDs of the core (the program memory is the bench’s)'),
+        rich('li', '<b>Speed</b>: total time = cycles × clock period over the workload'),
+        rich('li', '<b>Correctness first</b>: every register write and store against the golden model'))),
+      h('section', null, h('h4', null, 'Graded on the front'), h('ul', null,
+        h('li', null, h('span', { class: 'bf-st' }, starText(1)), ' ', GRADE_WORD[1]),
+        h('li', null, h('span', { class: 'bf-st' }, starText(2)), ' no reference is both at least as cheap and at least as fast as yours'),
+        h('li', null, h('span', { class: 'bf-st' }, starText(3)), ' yours is cheaper and faster than one of them'))),
+      h('section', null, h('h4', null, 'The references'), h('ul', null, refs.map((r) => rich('li', `<b>${r.name}</b>: ${r.nand.toLocaleString()} NANDs, ${r.time.toLocaleString()} gate delays (${r.period} × ${r.cycles.toLocaleString()})`)))),
+      h('p', { class: 'cap-note' }, h('b', null, 'Why a brief: '), 'tier 4 has no fixed checker. A brief fixes the programs and the measure and leaves the design open. A pass (★) marks the tier done on My path; the stars are for exploring.'),
+    );
+  }
+
+  private othersTab(el: HTMLElement): void {
+    el.append(h('section', null, h('h4', null, 'Briefs'),
+      h('div', { class: 'bf-brief' }, h('b', null, 'The cheapest core that runs the benchmarks'), h('span', { class: 'lv-badge good' }, 'this one')),
+      h('p', { class: 'sub' }, 'This is the only brief for now.')));
+  }
+
+  private specTab(el: HTMLElement, rulesOnly = false): void {
     const ch = this.ch!;
     const pinRow = (p: BuildChallenge['ports'][number]) => h('tr', null,
       h('td', null, p.name), h('td', null, p.dir === 'in' ? 'in' : 'out'), h('td', null, String(p.width)), h('td', null, PIN_NOTES[p.name] ?? ''));
@@ -172,15 +243,15 @@ export class CapstonePage implements Page {
       ? `${core.tests().length} programs against the golden model, write by write (registers and stores, in order), within the cycle budget; Pong among them. Scored on NANDs, clock period and cycles.`
       : `A test sequence of ${ch.check.kind === 'sequence' ? ch.check.steps.length : 0} clocked steps, every output compared after every step. Scored on NANDs and clock period.`;
     el.append(
-      h('section', null, h('h4', null, 'The brief'), rich('p', ch.brief)),
+      ...(rulesOnly ? [] : [h('section', null, h('h4', null, 'The brief'), rich('p', ch.brief))]),
       h('section', null, h('h4', null, 'Pins'), h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins' },
         h('thead', null, h('tr', null, ['pin', 'dir', 'w', 'meaning'].map((t) => h('th', null, t)))), h('tbody', null, ch.ports.map(pinRow))))),
-      h('section', null, h('h4', null, 'Graded'), h('p', null, graded),
-        h('p', { class: 'cap-ref' }, h('b', null, 'Reference: '), h('span', { 'data-ref': 'nand' }, '… NANDs'), ' (period and cycles are shown after a pass)')),
+      ...(rulesOnly ? [h('section', null, h('h4', null, 'Check'), h('p', null, graded))] : [h('section', null, h('h4', null, 'Graded'), h('p', null, graded),
+        h('p', { class: 'cap-ref' }, h('b', null, 'Reference: '), h('span', { 'data-ref': 'nand' }, '… NANDs'), ' (period and cycles are shown after a pass)'))]),
       h('section', null, h('h4', null, 'Allowed'),
         h('p', null, `NAND and ${names.length} unlocked parts (the palette's Unlocked parts lists them). Your own chips count by their NANDs.`),
         h('details', { class: 'cap-parts' }, h('summary', null, 'The parts'), h('p', null, names.join(', ')))),
-      h('p', { class: 'cap-note' }, h('b', null, 'Capstones only: '), 'no exam and no certificate. There is no walkthrough, no tip and no “Do it for me”; the reference answer opens after a pass, and a pass marks the tier done on My path.'),
+      ...(rulesOnly ? [] : [h('p', { class: 'cap-note' }, h('b', null, 'Capstones only: '), 'no exam and no certificate. There is no walkthrough, no tip and no “Do it for me”; the reference answer opens after a pass, and a pass marks the tier done on My path.')]),
     );
     if (this.ref) this.showRefNands(el);
   }
@@ -214,9 +285,22 @@ export class CapstonePage implements Page {
   // ---- a pass ----------------------------------------------------------------------------------------
 
   private record(r: CheckResult): void {
+    if (this.isBrief()) { this.recordBrief(r); return; }
     const g = progress().solveCapstone(this.nodeId, measured(r.score), capstoneRank(this.nodeId));
     this.renderSide();
     this.showResult(r, g);
+  }
+
+  /** A pass of the brief: the measurement is kept as a submission, graded against the references, and shown on the chart. */
+  private recordBrief(r: CheckResult): void {
+    const m = measured(r.score);
+    if (m.nand === undefined || m.period === undefined || m.cycles === undefined) return;
+    const p = progress();
+    const stars = briefStars({ nand: m.nand, period: m.period, cycles: m.cycles });
+    p.addSubmission(this.nodeId, { nand: m.nand, period: m.period, cycles: m.cycles, stars });
+    p.solveCapstone(this.nodeId, m, capstoneRank(this.nodeId));
+    this.setView('results');
+    this.renderSide();
   }
 
   private showResult(r: CheckResult, g: { first: boolean; best: boolean }): void {

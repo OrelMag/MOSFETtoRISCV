@@ -17,3 +17,32 @@
 .cap-parts { margin-top: 6px; font-size: 12.5px; }
 .cap-parts summary { cursor: pointer; color: var(--accent); }
 @media (pointer: coarse) { .cap-parts summary { min-height: 40px; display: flex; align-items: center; } }
+
+/* The design brief (tier 4): results view with the cost / speed chart and the submissions table. */
+.bf-results { padding: 16px; display: grid; gap: 14px; align-content: start; min-width: 0; overflow-y: auto; height: 100%; }
+.bf-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.bf-card h4 { margin: 0; font-size: 15px; }
+.bf-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.bf-svgwrap { overflow-x: auto; }
+.bf-chart { display: block; width: 100%; min-width: 460px; height: auto; }
+.bf-chart .ax { stroke: var(--border-strong); }
+.bf-chart .gl { stroke: var(--border); }
+.bf-chart .tk { fill: var(--muted); font: 11px var(--font-mono); }
+.bf-chart .lb { fill: var(--text-2); font: 12px var(--font-ui); }
+.bf-chart .mine-lb { fill: var(--accent); font-weight: 600; }
+.bf-chart .ref { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.bf-chart .front { fill: none; stroke: var(--muted); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.bf-chart .mine { fill: var(--accent); }
+.bf-chart .mine-old { fill: var(--accent); opacity: 0.4; }
+.bf-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bf-tbl th, .bf-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.bf-tbl th { font: 600 10.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.bf-tbl td.n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.bf-tbl tr.me td { color: var(--accent); font-weight: 600; }
+.bf-tbl .stars { color: var(--warn); letter-spacing: 2px; white-space: nowrap; }
+.bf-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.lv-ed.bf-hide > .bf-results { display: grid; }
+.lv-ed:not(.bf-hide) > .bf-results { display: none; }
+.lv-ed.bf-hide > :not(.bf-results) { display: none; }
+.bf-st { color: var(--warn); letter-spacing: 2px; display: inline-block; min-width: 3.4em; }
+.bf-brief { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); }
