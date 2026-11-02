@@ -119,7 +119,7 @@ function openMenu(ed: Editor): void {
   const btn = ed.actionAnchor('file');
   opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : btn;
   const r = btn?.getBoundingClientRect() ?? new DOMRect(16, 60, 0, 0);
-  menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'File' });
+  menu = h('div', { class: 'sb-menu sb-file-menu', role: 'menu', 'aria-label': 'File' });
   ed.claimMenu(closeMenu);
   for (const it of MENU) {
     if (!it) { menu.append(h('hr')); continue; }
@@ -129,7 +129,8 @@ function openMenu(ed: Editor): void {
   }
   ed.el.append(menu);
   const w = menu.offsetWidth;
-  placeMenu(menu, r, Math.max(8, Math.min(r.right - w, innerWidth - w - 8)));
+  // under its button (left edges together), pulled back only as far as the window needs
+  placeMenu(menu, r, Math.max(8, Math.min(r.left, innerWidth - w - 8)));
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onMenuKey, true);
   menu.querySelector('button')?.focus();

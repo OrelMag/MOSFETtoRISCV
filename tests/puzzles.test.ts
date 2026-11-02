@@ -13,8 +13,9 @@ import { EditorSim } from '../src/editor/runtime';
 import { sanitizeChip } from '../src/editor/store';
 import { Rv16Monitor } from '../src/editor/cpu16';
 import { computerChip, REF_COMPUTERS } from '../src/puzzles/computers';
-import { puzzleStars, refFront } from '../src/puzzles/grade';
+import { isReferenceProgram, puzzleStars, refFront } from '../src/puzzles/grade';
 import { measureOn } from '../src/puzzles/measure';
+import { refProgram } from '../src/puzzles/refs';
 import { inputOn, outputFrom, PUZZLE_BY_ID, puzzleChipId, puzzleOfChip, PUZZLES } from '../src/puzzles/puzzles';
 import { REF_DATA, REFS, refPoints } from '../src/puzzles/refs';
 import { PuzzleReplay } from '../src/puzzles/replay';
@@ -244,5 +245,15 @@ describe('your own core', () => {
     const run = runPuzzle(p, c, doc.pins);
     expect(run.ok).toBe(true);
     expect(run.cycles).toBe(refPoints(p.id).find((r) => r.cpu === 'rv16')!.cycles);
+  });
+});
+
+describe('a loaded reference earns no stars', () => {
+  it('is recognised as the reference, line ends and trailing blanks aside, and an edit is not', () => {
+    const src = refProgram('rv16', PUZZLES[0].id)!;
+    expect(isReferenceProgram(src, src)).toBe(true);
+    expect(isReferenceProgram(src.replace(/\n/g, '  \r\n') + '\n\n', src)).toBe(true);
+    expect(isReferenceProgram(src + '\nnop', src)).toBe(false);
+    expect(isReferenceProgram(src, undefined)).toBe(false);
   });
 });

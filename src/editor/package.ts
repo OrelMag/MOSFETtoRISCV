@@ -154,7 +154,9 @@ export function packageDialog(ed: Editor): void {
       const pg = g.ports[p.name];
       if (!pg) continue;
       const on = sel?.k === 'pin' && sel.id === p.id;
-      root.append(s('circle', { class: `sb-face-pin${on ? ' on' : ''}`, cx: pg.pos[0], cy: pg.pos[1], r: 0.45, 'data-pin': p.id },
+      // the knob sits just outside the edge: the pin's name is drawn inside it and must stay readable
+      const out = ({ left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] } as const)[pg.exit] ?? [0, 0];
+      root.append(s('circle', { class: `sb-face-pin${on ? ' on' : ''}`, cx: pg.pos[0] + 0.3 * out[0], cy: pg.pos[1] + 0.3 * out[1], r: 0.35, 'data-pin': p.id },
         s('title', null, `${p.name}: drag along an edge or onto another side`)));
     }
     root.append(s('rect', { class: 'sb-face-handle sb-face-corner', x: w - 0.3, y: bh - 0.3, width: 0.6, height: 0.6, 'data-size': '1' },

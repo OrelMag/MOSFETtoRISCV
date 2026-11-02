@@ -76,6 +76,8 @@ export function keepVolatile(next: Workspace, cur: Workspace): Workspace {
     }
   }
   const open = cur.open.filter((o) => next.chips[o]);
+  // a chip this step brings back (redo of an example's load) comes with its tab, as it was open
+  for (const o of next.open) if (next.chips[o] && !cur.chips[o] && !open.includes(o)) open.push(o);
   const res: Workspace = { ...next, chips, open: open.length ? open : next.open.filter((o) => next.chips[o]) };
   if (cur.purist) res.purist = true;
   else delete res.purist;

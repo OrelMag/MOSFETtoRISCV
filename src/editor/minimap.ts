@@ -9,7 +9,7 @@ import { matches, shortcutAllowed } from '../ui/keys';
 import { h, s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { type Editor, registerEditorPlugin } from './editor';
-import { type Box, contentFits, mapLayout, type MapLayout, mapRect, panCentre, toMap, toWorld } from './minimapmath';
+import { type Box, clampBox, CONTENT_PAD, contentFits, mapLayout, type MapLayout, mapRect, panCentre, toMap, toWorld } from './minimapmath';
 import { partBox } from './geom';
 
 /** The map's size in px (editor.css gives the box the same size). */
@@ -113,10 +113,11 @@ class Minimap {
     const seeing = this.visible();
     const content = this.content;
     // The frame is the visible area; with the whole chip in it there is nothing to show
-    if (!content || !this.layout || contentFits(content, seeing)) { this.el.hidden = true; return; }
+    if (!content || !this.layout || contentFits(content, seeing, CONTENT_PAD)) { this.el.hidden = true; return; }
     this.el.hidden = false;
     // the map also holds the frame when the view reaches beyond the chip
-    const f = mapRect(this.layout, seeing);
+    // ... clipped to the box, so a view wider than the map's reach does not draw outside it
+    const f = clampBox(mapRect(this.layout, seeing), W, H);
     this.frame.setAttribute('x', f.x.toFixed(1));
     this.frame.setAttribute('y', f.y.toFixed(1));
     this.frame.setAttribute('width', Math.max(4, f.w).toFixed(1));
