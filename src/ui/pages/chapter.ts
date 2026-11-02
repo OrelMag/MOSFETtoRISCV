@@ -283,7 +283,12 @@ export class ChapterPage implements Page {
       const go = h('button', { class: 'btn sm tour-go', onclick: () => {
         if (this.stage.loading) return;
         if (this.tour) return this.tour.el.focus();
-        this.tour = new TourPlayer(this.stage, st.tour!, () => { this.tour = null; go.classList.remove('on'); });
+        this.tour = new TourPlayer(this.stage, st.tour!, () => {
+          this.tour = null;
+          go.classList.remove('on');
+          // Esc / Done / × leave the focus on the card that has just gone: back to the button that began the tour
+          if (go.isConnected) go.focus({ preventScroll: true });
+        });
         go.classList.add('on');
         this.tour.start();
       } }, icon('play', 14), h('span', null, st.tour.label ?? 'Walk me through it'));

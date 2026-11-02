@@ -10,6 +10,9 @@ import { settings } from './settings';
 
 let active: Coach | null = null;
 
+/** Dialogs that may sit above a tour and take its keys. */
+const OVER_TOUR = '[role="dialog"][aria-modal="true"]:not(.coach-card), .kh-back, dialog[open]';
+
 const shown = (sel: string): HTMLElement | null => {
   const el = document.querySelector<HTMLElement>(sel);
   if (!el || el.hidden || !el.getClientRects().length) return null;
@@ -57,6 +60,8 @@ class Coach {
   }
 
   private key = (e: KeyboardEvent): void => {
+    // a dialog opened over the tour (the search, the keys sheet) owns its keys: Esc closes it, Tab moves in it
+    if ((e.target as Element | null)?.closest?.(OVER_TOUR)) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
@@ -134,6 +139,13 @@ class Coach {
     if (below || above) {
       cl = clampL((x0 + x1) / 2 - cw / 2);
       ct = below ? y1 + 14 : y0 - 14 - ch;
+      // on a phone the chapter's Back / Next row is fixed above a bottom-sheet stage: keep the card off it
+      const foot = document.querySelector<HTMLElement>('.narrative-foot');
+      const f = foot && foot.getClientRects().length ? foot.getBoundingClientRect() : null;
+      if (f && !below && ct + ch > f.top - 8 && ct < f.bottom) {
+        ct = Math.max(12, f.top - 8 - ch);
+        arrow = ct + ch + 24 > y0;
+      }
       ax = Math.max(cl + 18, Math.min(cl + cw - 18, (x0 + x1) / 2)) - 8;
       ay = below ? ct - 8 : ct + ch - 8;
     } else if (right || left) {
@@ -167,7 +179,10 @@ class Coach {
     this.el.remove();
     settings.setCoachDone(this.kind);
     if (active === this) active = null;
-    const back = this.opener?.isConnected ? this.opener : document.querySelector<HTMLElement>(this.kind === 'stage' ? '.stage' : '.sandbox .sb-canvas');
+    // the opener may be <body> (a first visit) or gone (the ? sheet's button): then the stage / canvas
+    const o = this.opener;
+    const usable = !!o && o !== document.body && o !== document.documentElement && o.isConnected && o.getClientRects().length > 0;
+    const back = usable ? o : document.querySelector<HTMLElement>(this.kind === 'stage' ? '.stage' : '.sandbox .sb-canvas');
     back?.focus({ preventScroll: true });
   }
 }
