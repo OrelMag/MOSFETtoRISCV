@@ -55,6 +55,7 @@ export class ChapterPage implements Page {
   /** Following the address bar (a route): the stage's moves are not new history entries. */
   private routing = false;
   private unlisten: (() => void)[] = [];
+  private pillOff: (() => void) | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
   private unbindKeys: () => void;
@@ -370,7 +371,8 @@ export class ChapterPage implements Page {
       io.observe(this.stage.el);
       const barEl = this.stage.el.querySelector('.stage-bar');
       if (barEl) io.observe(barEl);
-      this.unlisten.push(() => io.disconnect());
+      // not in `unlisten`: that is emptied at every step change, and the pill lives as long as the page
+      this.pillOff = () => io.disconnect();
     }
     return b;
   }
@@ -542,6 +544,7 @@ export class ChapterPage implements Page {
     this.notes.clear();
     this.unbindKeys();
     this.unlisten.forEach((f) => f());
+    this.pillOff?.();
     this.stage.destroy();
   }
 }
