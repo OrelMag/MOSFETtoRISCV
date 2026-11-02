@@ -16,6 +16,7 @@ import { bookmarkButton, StepNotes } from '../notesui';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
+import { reducedMotion } from '../motion';
 import { litLine, wireLooks } from './looks';
 import { ledgerView } from '../ledger';
 import { TourPlayer } from '../tour';
@@ -31,6 +32,9 @@ export interface Page {
   el: HTMLElement;
   destroy(): void;
 }
+
+/** The page that last set the top bar's data-widget-step (a later page keeps it when an earlier one is destroyed). */
+let widgetStepOwner: object | null = null;
 
 export class ChapterPage implements Page {
   readonly el: HTMLElement;
@@ -70,6 +74,7 @@ export class ChapterPage implements Page {
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
+    this.el.append(this.showCircuitButton());
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.sceneShown) syncDrill(this.hash(), this.routing);
@@ -194,6 +199,9 @@ export class ChapterPage implements Page {
     this.shown = true;
     this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);
+    // a widget has no gate delays to slow down: the top bar's Slow motion button hides (app.css)
+    widgetStepOwner = this;
+    document.documentElement.toggleAttribute('data-widget-step', !st.scene);
   }
 
   private renderHead(): void {
@@ -344,6 +352,22 @@ export class ChapterPage implements Page {
     return box;
   }
 
+  /**
+   * On a phone the circuit sits under the text, below the fold, and nothing says so: a pill at the bottom of the screen
+   * takes the learner to it, and goes away once the stage is in view (app.css .show-circuit shows it on a phone only).
+   */
+  private showCircuitButton(): HTMLElement {
+    const b = h('button', { class: 'btn primary show-circuit', type: 'button', 'aria-label': 'Show the circuit', onclick: () => {
+      this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    } }, icon('chevD', 16), 'Show circuit');
+    if (typeof IntersectionObserver !== 'undefined') {
+      const io = new IntersectionObserver((es) => { b.hidden = es.some((e) => e.intersectionRatio > 0.35); }, { threshold: [0, 0.35, 0.6] });
+      io.observe(this.stage.el);
+      this.unlisten.push(() => io.disconnect());
+    }
+    return b;
+  }
+
   private goalsCard(): HTMLElement {
     const c = this.chapter;
     const builds = (c.builds ?? []).map((id) => chapters.find((x) => x.id === id)).filter((x): x is Chapter => !!x);
@@ -388,15 +412,25 @@ export class ChapterPage implements Page {
     if (ch.kind === 'quiz') return quizBox(ch, key, 'Question', () => this.renderHead());
     const box = h('div', { class: 'challenge' });
     const tag = h('span', { class: 'tag' }, 'Challenge');
-    const markSolved = () => {
-      box.classList.add('solved');
-      tag.replaceChildren(icon('check', 12), ' Solved');
-      settings.solve(key);
-    };
     box.append(h('div', { class: 'challenge-head' }, tag, ch.goal));
     const hints = h('div', { class: 'hints' });
     const ans = h('div', { class: 'explain' });
     const row = h('div', { class: 'challenge-actions' });
+    // Once solved the card is the tick and the goal; the hints, the answer and Do it for me wait behind "Show how".
+    const how = h('button', { class: 'btn ghost sm', 'aria-expanded': 'false' }, 'Show how') as HTMLButtonElement;
+    how.addEventListener('click', () => {
+      const open = how.getAttribute('aria-expanded') !== 'true';
+      how.setAttribute('aria-expanded', String(open));
+      how.textContent = open ? 'Hide how' : 'Show how';
+      box.classList.toggle('how-open', open);
+    });
+    const markSolved = () => {
+      box.classList.add('solved');
+      tag.replaceChildren(icon('check', 12), ' Solved');
+      settings.solve(key);
+      how.hidden = false;
+    };
+    how.hidden = true;
     const all = ch.hints ?? [];
     if (all.length) {
       let n = 0;
@@ -416,7 +450,7 @@ export class ChapterPage implements Page {
       if (ch.solve) row.append(h('button', { class: 'btn sm', onclick: () => ch.solve!(this.stage) }, 'Do it for me'));
     });
     row.append(show);
-    box.append(hints, row, ans);
+    box.append(hints, row, ans, h('div', { class: 'challenge-how' }, how));
     if (settings.isSolved(key)) markSolved();
     // The goal over the canvas too; a click on it shows this card (and lands keyboard focus there).
     box.tabIndex = -1;
@@ -466,10 +500,10 @@ export class ChapterPage implements Page {
     const last = this.recap >= 0 ? this.recap : n - 1;
     const prevBtn = this.step > 0
       ? h('button', { class: 'btn', onclick: () => this.goStep(this.step - 1) }, icon('chevL', 16), 'Back')
-      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, prev.title)) : h('span');
+      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, h('small', null, 'Previous chapter'), h('span', { class: 't' }, prev.title))) : h('span');
     const nextBtn = this.step < last
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
-      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, next.title), icon('chevR', 16))
+      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, h('small', null, 'Next chapter'), h('span', { class: 't' }, next.title)), icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
     // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
     if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {
@@ -494,6 +528,8 @@ export class ChapterPage implements Page {
   }
 
   destroy(): void {
+    // (the next page may already have set it: the old one is destroyed after the new one is built)
+    if (widgetStepOwner === this) document.documentElement.removeAttribute('data-widget-step');
     this.offNotes();
     this.stepNotes?.destroy();
     this.notes.clear();
