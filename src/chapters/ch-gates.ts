@@ -53,9 +53,9 @@ export const chGates: Chapter = {
     check: [
       {
         question: 'Built from this chapter\'s boxes, how many NANDs does NOT(a OR b) take?',
-        options: ['4: an OR (3) then a NOT (1)', '2', '3', '1'],
+        options: ['4', '2', '3', '1'],
         answer: 0,
-        explain: 'OR is two inverters and a NAND (3); inverting its output costs one more NAND used as NOT.',
+        explain: '4: an OR is two inverters and a NAND (3); inverting its output costs one more NAND used as NOT.',
         why: ['', 'That is AND: one NAND, then one NAND as an inverter.', 'That is OR alone: its output still has to be inverted.', 'One NAND gives NOT(a AND b), not NOT(a OR b).'],
       },
       {

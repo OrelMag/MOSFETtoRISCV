@@ -72,7 +72,7 @@ export const chMemCtrl: Chapter = {
           'Only for its writes',
         ],
         answer: 0,
-        explain: '1 024 / (4 × 16) = 16: the destination is the same bank, 16 rows down. More banks only help when the bank bits differ; the explorer shows the copy\'s row hits barely move. The XOR hash is what separates them.',
+        explain: '1 024 words is a whole number of 4 × 16-word stripes: 1 024 / (4 × 16) = 16: the destination is the same bank, 16 rows down. More banks only help when the bank bits differ; the explorer shows the copy\'s row hits barely move. The XOR hash is what separates them.',
         why: ['', 'Which bank a line uses depends on its address bits. Two addresses that agree in the bank bits share a bank however many banks there are.', 'The bank bits of i and i + 1 024 are the same: 1 024 changes only row bits.', 'Reads and writes are both line requests to the same banks: the fill of a source line and the write-back of a destination line conflict alike.'],
       },
     ],

@@ -328,8 +328,8 @@ export const chMosfet: Chapter = {
       },
       challenge: {
         kind: 'quiz', question: 'With g = 0, what value does "out" have?',
-        options: ['0', '1', 'Z: it is not connected to anything'], answer: 2,
-        explain: 'An off transistor is an open switch. Nothing drives the output, so it floats. To always have a valid output we need a second switch that pulls up.',
+        options: ['0', '1', 'Z'], answer: 2,
+        explain: 'Z: the output is not connected to anything. An off transistor is an open switch. Nothing drives the output, so it floats. To always have a valid output we need a second switch that pulls up.',
         why: ['0 is a driven level: it needs a conducting path to ground, and the only one is open.', 'Nothing in this circuit connects out to VDD, so nothing can make a 1.', ''],
       },
     },

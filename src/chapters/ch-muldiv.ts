@@ -644,14 +644,14 @@ export const chMulDiv: Chapter = {
       challenge: {
         kind: 'quiz', question: 'Is a non-restoring step faster than a restoring one?',
         options: [
-          'Not much: the restore multiplexer after the carry chain is gone, but the add/subtract choice puts an XOR on the divisor before it',
+          'Not much: the carry chain still sets the step',
           'Yes, about twice as fast, because it never restores',
           'No, it is slower because it needs an extra step',
           'Yes, because it does not need a carry chain',
         ],
         answer: 0,
         why: ['', 'The restore was only a multiplexer after the carry chain. The chain, which sets the step\'s delay, is still there.', 'There is no extra step per bit. The one correction (the fix block) comes once, after the last step.', 'Each row is still a full-width adder/subtractor with a carry chain. Removing the chain takes the carry-save remainder of SRT.'],
-        explain: 'Both steps are a full-width carry chain plus about two gates (a multiplexer after it, or an XOR before it): 27 NAND delays each at 8 bits, measured. What non-restoring buys is regularity: every step is "add ±d". That is the form that lets the next idea keep the remainder in carry-save form.',
+        explain: 'The restore multiplexer after the carry chain is gone, but the add/subtract choice puts an XOR on the divisor before it. Both steps are a full-width carry chain plus about two gates (a multiplexer after it, or an XOR before it): 27 NAND delays each at 8 bits, measured. What non-restoring buys is regularity: every step is "add ±d". That is the form that lets the next idea keep the remainder in carry-save form.',
       },
     },
     {
