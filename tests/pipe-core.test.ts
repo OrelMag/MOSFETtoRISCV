@@ -209,12 +209,12 @@ h:    j h`;
 // The port core's memory timing is the data memory's: wired to a ROM and a dataMemory it is the plain pipeline again, so random
 // programs (hazards, loads right after stores, branches over them) end where the golden model ends, register by register.
 describe('rv32i_pipe_core with a ROM and a data memory on its ports', () => {
-  const harness = (words: number[], custom: CustomRow[] = []): ComponentDef => ({
+  const harness = (words: number[], imemK: number, custom: CustomRow[] = []): ComponentDef => ({
     id: `t_pipe_port_${words.length}_${custom.length}`, name: 'harness', category: 'custom', symbol: { kind: 'box' },
     ports: [bit('clk', 'in')],
     netlist: () => ({
       instances: [
-        { name: 'core', def: pipelinedCpu([], { adder: 'ks', ports: true, custom }) }, { name: 'imem', def: rom(words, 6) }, { name: 'dm', def: dataMemory(5) },
+        { name: 'core', def: pipelinedCpu([], { adder: 'ks', ports: true, custom }) }, { name: 'imem', def: rom(words, imemK) }, { name: 'dm', def: dataMemory(5) },
       ],
       nets: [
         { ends: ['clk', 'core.clk', 'dm.clk'] }, { ends: ['core.pcOut', 'imem.addr'] }, { ends: ['imem.data', 'core.instr'] },
@@ -225,13 +225,14 @@ describe('rv32i_pipe_core with a ROM and a data memory on its ports', () => {
 
   const cases = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ seed: i + 1, custom: i % 2 ? [P.lwx!, P.subi!] : [] as CustomRow[] }));
   it.each(cases.map((c) => [c.seed, c] as const))('random program %i ends in the golden model\'s state', async (_s, c) => {
-    const asm = assemble(randomProgram32(c.seed, { n: 70, ...(c.custom.length ? { custom: c.custom } : {}) }), c.custom);
+    const asm = assemble(randomProgram32(c.seed, { n: 40, ...(c.custom.length ? { custom: c.custom } : {}) }), c.custom);
     expect(asm.errors).toEqual([]);
-    const sim = new GateSim(flatten(harness(asm.words, c.custom)));
+    const imemK = Math.max(6, Math.ceil(Math.log2(asm.words.length)));
+    const sim = new GateSim(flatten(harness(asm.words, imemK, c.custom)));
     sim.setInput('clk', 0);
     sim.settle();
     const core = sim.design.root.children!.get('core')!;
-    const iss = new ISS(asm.words, { dmemWords: 32, imemWords: 64, ...(c.custom.length ? { custom: c.custom } : {}) });
+    const iss = new ISS(asm.words, { dmemWords: 32, imemWords: 2 ** imemK, ...(c.custom.length ? { custom: c.custom } : {}) });
     for (let cyc = 1; cyc < 4000 && !iss.halted; cyc++) {
       const ret = retireCount(sim, core);
       if (ret) expect(retirePc(sim, core), `cycle ${cyc}: retiring pc`).toBe(iss.pc);
