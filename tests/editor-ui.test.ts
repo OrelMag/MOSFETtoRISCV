@@ -234,6 +234,10 @@ describe('session', () => {
     expect(r.purist).toBe(true);
     expect(r.favorites).toEqual(['lib/nand']);
     expect(keepVolatile({ ...ws1, favorites: ['lib/nand'] }, ws2).favorites).toBeUndefined();
+    // redo of a step that made a chip (an example): its tab comes back, active; an undo drops it
+    const made = openChip({ ...ws1, chips: { ...ws1.chips, u_ex: { ...ws1.chips.u_main, id: 'u_ex' } } }, 'u_ex');
+    expect(keepVolatile(made, { ...ws1, open: ['u_main'] }).open).toEqual(['u_main', 'u_ex']);
+    expect(keepVolatile(ws1, made).open).toEqual(['u_main']);
     // unchanged chips keep their identity
     expect(keepVolatile(ws2, ws2).chips.u_main).toBe(ws2.chips.u_main);
   });

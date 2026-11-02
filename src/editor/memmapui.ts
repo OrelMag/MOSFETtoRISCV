@@ -25,7 +25,8 @@ export function openMemoryMap(ed: Editor): void {
   const chipId = ed.doc.id;
   const first = readMap(ed.doc);
   if ('error' in first) return void ed.toast(first.error, 'err');
-  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // the menu item that opened this is gone by now (activeElement is the body): Esc goes back to the File button
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : ed.actionAnchor('file');
   let onChip: MemMap = first;
   let draft: MemMap = first;
   let sel: number | null = null;
@@ -38,7 +39,7 @@ export function openMemoryMap(ed: Editor): void {
   const close = () => {
     ov.remove();
     open = null;
-    (opener?.isConnected ? opener : ed.view.svg)?.focus?.();
+    (opener?.isConnected ? opener : ed.view.svg)?.focus?.({ preventScroll: true });
   };
   const chipName = () => ed.ws.chips[chipId]?.name ?? 'this chip';
   const tabBtn = (t: Tab, label: string) => h('button', {
@@ -237,7 +238,7 @@ export function openMemoryMap(ed: Editor): void {
       const base = h('input', { id: 'mp-base', class: 'mp-in', value: hex8(r.base), spellcheck: false, autocomplete: 'off' }) as HTMLInputElement;
       base.addEventListener('change', () => {
         const v = Number(base.value.replace(/_/g, '').trim());
-        if (!base.value.trim() || !Number.isFinite(v)) { ed.toast('Not an address: write it as 0x5000_0000', 'err'); base.value = hex8(r.base); return; }
+        if (!base.value.trim() || !Number.isInteger(v) || v < 0 || v > 0xffff_ffff) { ed.toast('Not an address: write it as 0x5000_0000 (0 … 0xffff_ffff)', 'err'); base.value = hex8(r.base); return; }
         draft = withRegion(draft, i, { base: v });
         announce(`${names(draft)[i]} base ${hex8(v)}`);
         render();

@@ -27,6 +27,12 @@ export function puzzleStars(s: PuzzleScore, refs: RefPoint[]): Stars {
   return refs.every((r) => s.cycles * s.nands < r.cycles * r.nands) ? 3 : 2;
 }
 
+/** Is `src` the reference program as loaded (Do it for me), give or take line ends and trailing blanks? Such a pass earns no stars. */
+export function isReferenceProgram(src: string, ref: string | undefined): boolean {
+  const norm = (t: string) => t.split(/\r?\n/).map((l) => l.trimEnd()).join('\n').trim();
+  return ref !== undefined && norm(src) === norm(ref);
+}
+
 /** The references on the front: no other reference both cheaper and faster (the dashed line of the chart). */
 export function refFront(refs: RefPoint[]): RefPoint[] {
   return refs.filter((r) => !refs.some((q) => q !== r && q.nands <= r.nands && q.cycles <= r.cycles && (q.nands < r.nands || q.cycles < r.cycles)))

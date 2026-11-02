@@ -192,6 +192,9 @@ function routes(): Route[] {
   add('#/campaign/intro', light);
   add('#/campaign/codex', unlocked);
   for (const e of CODEX) add(`#/campaign/codex/${e.id}`, unlocked);
+  // The analogy index, every aside opened (each figure loads), and on a phone.
+  add('#/campaign/codex/analogies', unlocked, ' (analogies open)', undefined, ANALOGY_DRIVE);
+  add('#/campaign/codex/analogies', unlocked, ` (${phoneVp.name})`, phoneVp);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).

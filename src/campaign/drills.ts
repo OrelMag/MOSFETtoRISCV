@@ -72,14 +72,16 @@ const bin = (v: number, w: number) => v.toString(2).padStart(w, '0');
 const hex = (v: number, w: number) => v.toString(16).toUpperCase().padStart(Math.ceil(w / 4), '0');
 const grp = (s: string) => s.replace(/(.{4})(?=.)/g, '$1 ');
 
-/** A text answer must be this number written in this base (the prefix is optional). */
-function numAnswer(want: number, base: 2 | 10 | 16, width = 0): Question['check'] {
+/** A text answer must be this number written in this base (the prefix is optional; a binary answer takes only 0 and 1, a hex one only hex digits). */
+function numAnswer(want: number, base: 2 | 10 | 16): Question['check'] {
+  const name = base === 2 ? 'binary' : base === 16 ? 'hexadecimal' : 'decimal';
   return (a) => {
     const t = a.trim().toLowerCase().replace(/[_\s]/g, '');
-    const s = base === 16 && /^[0-9a-f]+$/.test(t) && !/^\d+$/.test(t) ? `0x${t}` : base === 16 && /^\d+$/.test(t) ? `0x${t}` : base === 2 && /^[01]+$/.test(t) ? `0b${t}` : t;
-    const v = parseNum(s);
-    if (v === null) return { ok: false, why: `write a ${base === 2 ? 'binary' : base === 16 ? 'hexadecimal' : 'decimal'} number` };
-    if (base === 2 && width && t.replace(/^0b/, '').length !== width) return { ok: v === want, why: v === want ? undefined : 'not that value' };
+    let v: number | null = null;
+    if (base === 2) { const m = t.match(/^(?:0b)?([01]+)$/); v = m ? parseInt(m[1], 2) : null; }
+    else if (base === 16) { const m = t.match(/^(?:0x)?([0-9a-f]+)$/); v = m ? parseInt(m[1], 16) : null; }
+    else v = parseNum(t);
+    if (v === null) return { ok: false, why: `write a ${name} number` };
     return { ok: v === want, why: v === want ? undefined : 'not that value' };
   };
 }

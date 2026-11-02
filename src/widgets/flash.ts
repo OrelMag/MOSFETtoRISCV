@@ -86,9 +86,21 @@ function flashPanel(o: FlashSceneOptions): ScenePanel {
     const op = (f: () => void) => () => { stage.checkpoint(); f(); stage.refresh(); };
 
     // load: the pattern, programmed as the panel would
-    if (o.pattern) o.pattern.forEach((d, r) => { if ((d & 0b1111) !== 0b1111) program(r, d); });
-    log = [];
-    st.pulses = 0;
+    const loadPattern = () => {
+      if (o.pattern) o.pattern.forEach((d, r) => { if ((d & 0b1111) !== 0b1111) program(r, d); });
+      log = [];
+      st.pulses = 0;
+    };
+    loadPattern();
+    // Reset: the cells are back at power-on, so the panel starts again (the pattern programmed anew)
+    stage.resetHooks.add(() => {
+      // the floating gates keep their charge through a power-cycle of the nets: empty them, then program the pattern
+      drive({ rd: 0, pgm: 0, ers: 1 });
+      drive({ ers: 0 });
+      st.reads = []; st.erases = 0;
+      sel = { row: 0, col: 0, data: 0b1010 };
+      loadPattern();
+    });
 
     const seg = (n: number, get: () => number, set: (v: number) => void, label: string) => {
       const g = h('span', { class: 'seg dram-seg', role: 'group', 'aria-label': label });

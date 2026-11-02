@@ -25,6 +25,16 @@ export function mapRect(l: MapLayout, b: Box): Box {
   return { x: b.x * l.k + l.ox, y: b.y * l.k + l.oy, w: b.w * l.k, h: b.h * l.k };
 }
 
+/** The margin contentBox keeps around a pin (3 units) and above a part (1): empty canvas, so the chip counts as in view without it. */
+export const CONTENT_PAD = 3;
+
+/** `b` cut to the 0 … w × 0 … h box (empty past it: w and h 0 at the near edge). */
+export function clampBox(b: Box, w: number, h: number): Box {
+  const x0 = Math.min(Math.max(b.x, 0), w), y0 = Math.min(Math.max(b.y, 0), h);
+  const x1 = Math.min(Math.max(b.x + b.w, 0), w), y1 = Math.min(Math.max(b.y + b.h, 0), h);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 /** Is the whole content inside the view (the minimap has nothing to add)? A little slack for rounding. */
 export function contentFits(content: Box, view: Box, slack = 0.5): boolean {
   return content.x >= view.x - slack && content.y >= view.y - slack
