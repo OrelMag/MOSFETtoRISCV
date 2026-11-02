@@ -17,6 +17,7 @@ import { rv16Core } from '../lib/rv16/cpu';
 import { RV16_DFF } from '../lib/rv16/logic';
 import { rv16Pipe } from '../lib/rv16/pipe';
 import { PONG16 } from '../riscv/rv16/pong16';
+import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { CORE_BRIEF, CORE_PINS } from './build5';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
@@ -245,4 +246,14 @@ export function referenceScore(id: string): ReferenceScore | undefined {
   const ws = { ...emptyWorkspace(), chips: Object.fromEntries(chips.map((d) => [d.id, d])) };
   const r: CheckResult = checkChallenge(ch, new UserLibrary(ws).compiled(main.id));
   return { nand: r.score.nand, period: r.score.period, cycles: r.score.cycles, tested: r.tested, ok: r.ok };
+}
+
+/** The reference's NAND count alone (compile and count: no simulation, cheap enough for the spec sheet). */
+export function referenceNands(id: string): number | undefined {
+  const ch = capstoneChallenge(id);
+  if (!ch) return undefined;
+  const chips = ch.answer();
+  const ws = { ...emptyWorkspace(), chips: Object.fromEntries(chips.map((d) => [d.id, d])) };
+  const def = new UserLibrary(ws).compiled(chips[chips.length - 1].id)?.def;
+  return def ? stats(def).nands : undefined;
 }

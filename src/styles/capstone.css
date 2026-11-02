@@ -1,0 +1,16 @@
+/* A tier capstone (ui/pages/capstone.ts): the level screen's layout (level.css) with a spec sheet in the side pane.
+   Colours come from the theme tokens only. */
+
+.lv-badge.cap-tier { background: var(--accent-soft); color: var(--accent); }
+.cap-tw { overflow-x: auto; }
+.cap-pins { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cap-pins th { text-align: left; font: 600 10.5px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.cap-pins td { padding: 4px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.cap-pins td:first-child { font-family: var(--font-mono); color: var(--text); white-space: nowrap; }
+.cap-pins td:nth-child(2), .cap-pins td:nth-child(3) { font-family: var(--font-mono); white-space: nowrap; }
+.cap-ref { margin-top: 6px !important; font-size: 12.5px; }
+.cap-ref [data-ref] { font-family: var(--font-mono); color: var(--text); }
+.cap-note { border: 1px dashed var(--warn); background: var(--warn-soft); color: var(--text); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; }
+.cap-note b { color: var(--warn); }
+.cap-tests { font-size: 12.5px; }
+.cap-tests li { margin: 3px 0; }
