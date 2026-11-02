@@ -1158,7 +1158,15 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .memgrid .cell { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-3); }
 .memgrid .cell.one { background: var(--w1); }
 .memgrid .cell.x { background: var(--wx); opacity: 0.6; }
-.memgrid .hex { width: 54px; text-align: right; font-weight: 600; }
+.memgrid .hex { min-width: 54px; margin-left: auto; text-align: right; font-weight: 600; white-space: nowrap; }
+.memgrid .row.none .hex { color: var(--muted); font-weight: 500; }
+.memgrid .mark { min-width: 22px; color: var(--muted); font-size: 11px; }
+/* A grid that scrolls by itself (a memory past 64 words, the sandbox's drawer). */
+.memgrid.scroll { max-height: 300px; overflow: auto; }
+.mem-panel .memgrid.scroll { max-height: min(300px, calc(100vh - 260px)); }
+.mem-pick { display: block; width: 100%; margin: 0 0 6px; font: 12px var(--font); padding: 3px 6px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+/* --warn is too faint for small text: the warning colour marks the edge, the text stays --text */
+.mem-note { margin: 6px 0 0; max-width: 300px; font-size: 12px; color: var(--text); border-left: 3px solid var(--warn); padding-left: 6px; }
 .mem-panel {
   position: absolute; right: 12px; bottom: 12px; z-index: 3; max-height: calc(100% - 60px); overflow: auto;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
