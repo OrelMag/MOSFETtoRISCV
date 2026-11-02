@@ -317,6 +317,31 @@ export function devicesChip(id: string, name: string, at = 'at 0x8000_0000'): Ch
   });
 }
 
+const PIPE_NOTES = 'A whole computer around the five-stage pipelined RV32I core (open it: fetch, decode, execute, memory, writeback with forwarding, load-use stalls and branch flushes). It fetches from the program ROM and reaches RAM, the screen, the console, the LEDs and the switches through the memory side from its M stage, with the timing of the single-cycle core port: the address goes out and the word comes back in the same cycle, a store lands at the clock edge. RAM 0x0000_0000 (4K words), console 0x8000_0000, LEDs 0x8000_0004, switches 0x8000_0008, screen 0xC000_0000 + 256·y + 4·x (64 × 64, RGB332). Word loads and stores only. Run (or Run to halt in the CPU drawer, which shows the pipeline diagram and checks every retired instruction against the golden model); Custom… adds your own instructions to it. The halt part stops Run once "j ." (jal x0, 0) has gone round again: three clocks after its first fetch, because the pipeline fetches it, a wrong-path word, then it again, and two more clocks for the older instructions to finish.';
+
+/**
+ * The pipelined computer's halt: `j .` (jal x0, 0) is fetched, goes round the pipeline (fetch, a wrong-path word, then it again: three
+ * clocks later) and is told apart from a `j .` fetched on a flushed path by that repeat; two more clocks let the older instructions
+ * finish before the halt part reads 1.
+ */
+export function haltChip(id: string, name: string): ChipDoc {
+  const at = (n: number): Vec => [18 + 12 * n + (n > 2 ? 8 : 0), (n > 2 ? 4 : 5) + n];
+  const dffs = [0, 1, 2, 3, 4].map((n) => part(`h${n + 1}`, { lib: 'dff' }, at(n)));
+  return chip(id, name, {
+    notes: 'Raises halted two clocks after the instruction word jal x0, 0 (j .) has been seen in fetch twice, three clocks apart: the first fetch, the word behind it (flushed) and the loop coming round. Every older instruction has retired by then. A single-cycle core needs no such wait: its halt part watches the instruction word itself.',
+    hue: 200,
+    pins: [pin('instr', 'in', [0, 6], 32), pin('clk', 'in', [0, 17], 1, { kind: 'clock' }), pin('halted', 'out', [84, 11])],
+    parts: [part('hj', { const: { width: 32, value: 0x6f } }, [2, 9], { label: 'j .' }), part('eq', { lib: 'eq32' }, [8, 4]), ...dffs, part('hg', { lib: 'and' }, [54, 7], { label: 'again' })],
+    wires: [
+      wire('ins', 'pin:instr', 'eq.a'), wire('hb', 'hj.y', 'eq.b'),
+      wire('d1', 'eq.eq', 'h1.d', [], { name: 'isJ' }), wire('d2', 'h1.q', 'h2.d'), wire('d3', 'h2.q', 'h3.d'),
+      wire('ga', { wire: 'd1', at: [16, 7] }, 'hg.a', [[16, 1], [52, 1], [52, 8]]), wire('gb', 'h3.q', 'hg.b'),
+      wire('d4', 'hg.y', 'h4.d'), wire('d5', 'h4.q', 'h5.d'), wire('out', 'h5.q', 'pin:halted'),
+      ...[0, 1, 2, 3, 4].map((n) => wire(`k${n + 1}`, 'pin:clk', `h${n + 1}.clk`, [[at(n)[0] - 2, 17], [at(n)[0] - 2, at(n)[1] + 4]])),
+    ],
+  });
+}
+
 /** The computer's pointers: [id, name, at, face, the end they join]. */
 type Ptr = [string, string, Vec, LabelDoc['face'], string];
 const COMPUTER_PTRS: Ptr[] = [
@@ -339,28 +364,33 @@ const COMPUTER_PTRS: Ptr[] = [
  * `j .` (jal x0, 0: 0x0000006f), so Run stops when the program ends; the CPU drawer runs the
  * golden model in lock-step.
  */
-export function computerChip(id: string, name: string, sub: { mem: string; dev: string }, src = PICTURE): ChipDoc {
+export function computerChip(id: string, name: string, sub: { mem: string; dev: string; halt?: string }, src = PICTURE, pipe = false): ChipDoc {
+  // the pipelined core: its ports are the single-cycle core's without the hart id and the grant; a `j .` is seen in fetch, so the halt part
+  // waits for the loop to come round again (a flushed fetch past a taken branch shows it once) and for the older instructions to finish
+  const cpuAt: Vec = pipe ? [18, 10] : [20, 10];
+  const ptrs: Ptr[] = (pipe ? [...COMPUTER_PTRS, ['c3', 'clk', [12, 7], 'left', 'hlt.clk'] as Ptr] : COMPUTER_PTRS).map((p) => (!pipe ? p : p[0] === 'c0' ? ['c0', 'clk', [17, 12], 'left', 'cpu.clk'] : p[0] === 'c1' ? ['c1', 'rdata', [18, 19], 'left', 'cpu.memRData'] : p));
   return chip(id, name, {
-    notes: 'A whole computer: the RV32I core fetches from the program ROM (Edit program… to change it) and reaches RAM, the screen, the console, the LEDs and the switches through the memory side (double-click it: the address decoder and the RAM). RAM 0x0000_0000 (4K words), console 0x8000_0000, LEDs 0x8000_0004, switches 0x8000_0008, screen 0xC000_0000 + 256·y + 4·x (64 × 64, RGB332). Word loads and stores only: this core has no lb / sb. Run (or Run to halt in the CPU drawer); flip the switches (on the I/O bar), Reset and Run again.',
+    notes: pipe ? PIPE_NOTES : 'A whole computer: the RV32I core fetches from the program ROM (Edit program… to change it) and reaches RAM, the screen, the console, the LEDs and the switches through the memory side (double-click it: the address decoder and the RAM). RAM 0x0000_0000 (4K words), console 0x8000_0000, LEDs 0x8000_0004, switches 0x8000_0008, screen 0xC000_0000 + 256·y + 4·x (64 × 64, RGB332). Word loads and stores only: this core has no lb / sb. Run (or Run to halt in the CPU drawer); flip the switches (on the I/O bar), Reset and Run again.',
     pins: [pin('clk', 'in', [2, 26], 1, { kind: 'clock' })],
     parts: [
       part('imem', { rom: { k: 10, w: 32, addr: 'rv32', lang: 'asm', src } }, [2, 15], { label: 'program' }),
-      part('cpu', { lib: 'rv32i_core' }, [20, 10], { label: 'RV32I core' }),
-      part('hart', { const: { width: 32, value: 0 } }, [14, 18]), part('grant', { const: { width: 1, value: 1 } }, [18, 22]),
-      part('hj', { const: { width: 32, value: 0x6f } }, [6, 5], { label: 'j .' }), part('eq', { lib: 'eq32' }, [14, 4]), part('halt', { display: 'halt', width: 1 }, [22, 6]),
+      part('cpu', { lib: pipe ? 'rv32i_pipe_core' : 'rv32i_core' }, cpuAt, { label: pipe ? 'RV32I pipelined core' : 'RV32I core' }),
+      ...(pipe ? [] : [part('hart', { const: { width: 32, value: 0 } }, [14, 18]), part('grant', { const: { width: 1, value: 1 } }, [18, 22])]),
+      ...(pipe ? [part('hlt', { chip: sub.halt! }, [14, 3], { label: 'halt' })] : [part('hj', { const: { width: 32, value: 0x6f } }, [6, 5], { label: 'j .' }), part('eq', { lib: 'eq32' }, [14, 4])]),
+      part('halt', { display: 'halt', width: 1 }, pipe ? [30, 5] : [22, 6]),
       part('mem', { chip: sub.mem }, [42, 15]),
       part('scr', { screen: { mode: 'write', size: 64, color: 'rgb332' } }, [6, 36], { label: 'screen' }),
       part('dev', { chip: sub.dev }, [44, 37]),
     ],
-    labels: COMPUTER_PTRS.map(([lid, n, at, face]) => lbl(lid, n, at, face)),
+    labels: ptrs.map(([lid, n, at, face]) => lbl(lid, n, at, face)),
     wires: [
       wire('pc', 'cpu.pcOut', 'imem.addr', [[38, 12], [38, 2], [0, 2], [0, 17]], { name: 'pc' }),
       wire('instr', 'imem.data', 'cpu.instr', [], { name: 'instr' }),
-      wire('hx', { wire: 'instr', at: [13, 17] }, 'eq.b', [[13, 8]]), wire('hb', 'hj.y', 'eq.a'), wire('hh', 'eq.eq', 'halt.a'),
-      wire('hart', 'hart.y', 'cpu.hartid'), wire('gr', 'grant.y', 'cpu.grant'),
+      ...(pipe ? [wire('hx', { wire: 'instr', at: [13, 17] }, 'hlt.instr', [[13, 5]]), wire('hh', 'hlt.halted', 'halt.a')]
+        : [wire('hx', { wire: 'instr', at: [13, 17] }, 'eq.b', [[13, 8]]), wire('hb', 'hj.y', 'eq.a'), wire('hh', 'eq.eq', 'halt.a'), wire('hart', 'hart.y', 'cpu.hartid'), wire('gr', 'grant.y', 'cpu.grant')]),
       wire('addr', 'cpu.memAddr', 'mem.addr', [], { name: 'addr' }), wire('wdata', 'cpu.memWData', 'mem.wdata', [], { name: 'wdata' }),
       wire('we', 'cpu.memWE', 'mem.we', [], { name: 'we' }),
-      ...COMPUTER_PTRS.map(([lid, , at, , e]) => wire(`p_${lid}`, `lbl:${lid}`, e, lid === 'c0' ? [[at[0], 15]] : [])),
+      ...ptrs.map(([lid, , at, , e]) => wire(`p_${lid}`, `lbl:${lid}`, e, lid === 'c0' ? [[at[0], 15]] : [])),
     ],
   });
 }
@@ -387,6 +417,13 @@ export const EXAMPLES: Example[] = [
     blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',
     build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev }),
     subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip } },
+    hz: 10000,
+  },
+  {
+    id: 'computer-pipe', name: 'Computer: the pipelined RISC-V core',
+    blurb: 'The computer again with the five-stage pipelined RV32I core on the same memory map: the CPU drawer draws the pipeline diagram and checks every retired instruction; Custom… adds your own instruction to it.',
+    build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev, halt: sub.halt }, PICTURE, true),
+    subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip }, halt: { name: 'Halt', build: haltChip } },
     hz: 10000,
   },
   {

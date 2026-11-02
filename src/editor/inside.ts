@@ -23,6 +23,15 @@ import { faceOf } from './face';
 import { decorateInside, toggleSwitch } from './ioface';
 
 const views = new WeakMap<Editor, InsideView>();
+/** Instances to light at one path (the CPU drawer: the units an instruction uses inside a placed core). */
+const wanted = new WeakMap<Editor, { path: string; names: string[] }>();
+
+/** Light `names` in the look-inside view when it shows the part `path` (an empty list, or another path, lets go). */
+export function lightInside(ed: Editor, path: string, names: string[]): void {
+  if (names.length) wanted.set(ed, { path, names });
+  else wanted.delete(ed);
+  views.get(ed)?.applyLight();
+}
 
 /** Open the inside of a part of the chip being edited (`path`: instance names from the chip). */
 export function lookInside(ed: Editor, path: string[]): void {
@@ -61,6 +70,8 @@ class InsideView {
   private crumbVals: { el: HTMLElement; v: CrumbValue }[] = [];
   private readonly chip: string;
   private readonly hook = () => this.tick();
+  /** What the drawer's lighting last set here (so another highlight, the Why? panel's, is not undone). */
+  private litKey = '';
   /** Why? (view/whypanel.ts): a click on a wire traces its value; what each part of the level is for. */
   private why: WhyPanel;
   private whyBtn: HTMLButtonElement;
@@ -169,6 +180,8 @@ class InsideView {
     // A library part's wires move as on the stage (the same layout, by component id); a user chip's are drawn in its own tab.
     this.view.arrange = ctx.def.id.startsWith('u_') ? false : 'wires';
     this.view.show(ctx, false, keepView);
+    this.litKey = '';
+    this.applyLight();
     this.decorate();
     // The panel may still be settling into its size on the first frame.
     if (!keepView) requestAnimationFrame(() => this.view.fit());
@@ -176,6 +189,14 @@ class InsideView {
     this.renderCrumbs();
     this.tick();
     if (!this.el.contains(document.activeElement)) this.el.focus({ preventScroll: true });
+  }
+
+  applyLight(): void {
+    const w = wanted.get(this.ed), p = this.path;
+    const key = w && p.length === 1 && p[0] === w.path && !this.leaf ? w.names.join() : '';
+    if (key === this.litKey) return;
+    this.litKey = key;
+    this.view.highlight(key ? w!.names : [], !!key);
   }
 
   /** The live faces drawn into the schematic: again after every redraw (a wire moved). */
@@ -294,6 +315,7 @@ class InsideView {
     this.view.radix = ed.view.radix;
     this.view.update();
     this.why.update();
+    this.applyLight();
     this.ioPaint?.();
     this.leaf?.w.update?.();
     this.syncCrumbVals();

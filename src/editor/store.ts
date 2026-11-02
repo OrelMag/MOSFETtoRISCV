@@ -61,7 +61,7 @@ function compact<T extends object>(o: T): T {
   return o;
 }
 
-function sanitizeRef(r: unknown): PartRef | null {
+export function sanitizeRef(r: unknown): PartRef | null {
   if (!isObj(r)) return null;
   const bits = (x: unknown) => (Array.isArray(x) && x.length > 0 && x.every((n) => int(n, 1)) ? (x as number[]).slice() : null);
   const pitch = num(r.pitch) && r.pitch > 0 ? r.pitch : undefined;
@@ -97,7 +97,8 @@ function sanitizeRef(r: unknown): PartRef | null {
   }
   if (isObj(r.core)) {
     const custom = sanitizeRows(r.core.custom);
-    return custom.length ? { core: { custom } } : { lib: 'rv32i_core' };
+    const pipe = r.core.pipe === true;
+    return custom.length ? { core: { custom, ...(pipe ? { pipe } : {}) } } : { lib: pipe ? 'rv32i_pipe_core' : 'rv32i_core' };
   }
   if (isObj(r.ram)) {
     const { k, w, init, ports } = r.ram;

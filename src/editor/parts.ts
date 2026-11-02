@@ -8,6 +8,7 @@ import { sanitizeRows } from '../riscv/custom';
 import { microController } from '../lib/multicycle';
 import { sanitizeProgram } from '../lib/ucode';
 import { singleCycleCpu } from '../lib/cpu';
+import { pipelinedCpu } from '../lib/pipeline';
 import { merger, ones, splitter } from '../lib/define';
 import { symbolGeom } from '../sim/geometry';
 import { defIndex, resolveComponent } from '../lib/resolve';
@@ -104,7 +105,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   }
   if ('core' in ref) {
     const custom = sanitizeRows(ref.core.custom);
-    return singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
+    return ref.core.pipe ? pipelinedCpu([], { adder: 'ks', ports: true, custom }) : singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
   }
   return { error: 'unknown part kind' };
 }

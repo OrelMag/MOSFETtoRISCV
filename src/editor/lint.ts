@@ -148,7 +148,7 @@ export function deadParts(doc: ChipDoc, built: Compiled): string[] {
 function coreIsa(ref: ChipDoc['parts'][number]['ref']): { xlen: 32 | 64; c: boolean } | null {
   if ('core' in ref) return { xlen: 32, c: false };
   if (!('lib' in ref)) return null;
-  if (ref.lib === 'rv32i_core') return { xlen: 32, c: false };
+  if (ref.lib === 'rv32i_core' || ref.lib === 'rv32i_pipe_core') return { xlen: 32, c: false };
   if (ref.lib === 'rv32ic_core') return { xlen: 32, c: true };
   return /^rv64(i|im)(_dd)?_core$/.test(ref.lib) ? { xlen: 64, c: false } : null;
 }

@@ -77,7 +77,7 @@ export interface CpuDesc extends CpuDoc {
   iss: CpuIss;
   /** The part with an `fcsr` output (RV32F: frm and the accrued flags); detected only. */
   fcsr?: string;
-  /** The memory-port core (rv32i_core, or a { core } part with custom instructions) at the top level; detected only. */
+  /** The memory-port core (rv32i_core, rv32i_pipe_core, or a { core } part with custom instructions) at the top level; detected only. */
   core?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
@@ -180,7 +180,9 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   // a 2-bit retire counts the instructions retiring together (a wide CPU: a pipeline as far as checking goes)
   const wide = pinNamed(doc, 'out', 2, 'retire');
   const retire = validW ?? pinNamed(doc, 'out', 1, 'retire') ?? wide;
-  const pipeline = !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
+  // the pipelined port core (rv32i_pipe_core, or a { core: { pipe } } part): its retire port is validW, its stages sit inside the part
+  const pipeCore = !!core && (('lib' in core.ref && core.ref.lib === 'rv32i_pipe_core') || ('core' in core.ref && !!core.ref.core.pipe));
+  const pipeline = pipeCore || !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
@@ -188,8 +190,8 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   return {
     rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
-    ...(retire ? { retire: { pin: retire.id } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
-    ...(core && (('lib' in core.ref && core.ref.lib === 'rv32i_core') || 'core' in core.ref) ? { core: core.id } : {}),
+    ...(retire ? { retire: { pin: retire.id } } : pipeCore ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
+    ...(core && (('lib' in core.ref && (core.ref.lib === 'rv32i_core' || core.ref.lib === 'rv32i_pipe_core')) || 'core' in core.ref) ? { core: core.id } : {}),
   };
 }
 
@@ -271,6 +273,8 @@ export function refNets(v: CpuSimView, doc: ChipDoc, r: NetRef): number[] | null
   else if ('pointer' in r) {
     for (const l of doc.labels) if (l.name === r.pointer && (i = b.netOfLabel.get(l.id)) !== undefined && i >= 0) break;
   }
+  // a port nothing is wired to has no net of the chip: ask the part's own node (a core's retire output)
+  if ((i === undefined || i < 0) && 'part' in r) return partNode(sim, r.part)?.ports[r.port] ?? null;
   if (i === undefined || i < 0) return null;
   return sim.design.root.nets?.[i] ?? null;
 }
@@ -321,6 +325,12 @@ export function memStoreOf(sim: Sim, n: HierNode | undefined, depth = 3): MemSto
 }
 
 /** The simulation's node of a part path ('rf', 'imem.rom'). */
+/** The node the pipeline diagram reads: a pipelined port core's own, else the chip's root. */
+export function pipeRoot(sim: Sim, d: CpuDesc | null | undefined): HierNode {
+  const n = d?.core ? sim.design.root.children?.get(d.core) : undefined;
+  return n?.children?.has('FD') ? n : sim.design.root;
+}
+
 export function partNode(sim: Sim, path: string | undefined): HierNode | undefined {
   if (!path) return undefined;
   let n: HierNode | undefined = sim.design.root;
@@ -421,7 +431,9 @@ export function romProgram(doc: ChipDoc, rom: string, chips?: Chips): { words: n
  */
 export function pipelineSlots(v: CpuSimView, doc: ChipDoc, d: CpuDesc): { stage: string; pc: number }[] | null {
   const sim = v.sim;
-  const kids = sim?.design.root.children;
+  const top = sim?.design.root.children;
+  // a pipelined port core: the stages sit inside the placed part
+  const kids = d.core && top?.get(d.core)?.children?.has('FD') ? top.get(d.core)!.children : top;
   if (!sim || !kids || !d.pipeline || !kids.has('FD') || !kids.has('DE') || !kids.has('EM')) return null;
   const val = (inst: string, port: string) => {
     const n = kids.get(inst)?.ports[port];
@@ -725,7 +737,9 @@ export class CpuMonitor {
       const m = mem && memDiff(mem, iss.dmem);
       if (m) return void at('mem', memName(m.i), m.model, m.hw);
     }
-    if (iss.io) {
+    // a pipeline's stores run ahead of retirement (a console character or the LED latch is written from M, one edge before the
+    // store retires from W): its devices are compared at the halt, like its memory
+    if (iss.io && (!d.pipeline || iss.halted)) {
       let model = iss.console;
       if (conPart) {
         // compare what the console part shows with the model's text put through the same terminal

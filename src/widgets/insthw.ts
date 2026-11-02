@@ -273,3 +273,13 @@ export function oooUse(word: number, port = -1): InstrUse {
     default: return u([], 'no data path work');
   }
 }
+
+/**
+ * instrUse's unit names present in a placed port core (`inner`: the instances of the part, rv32i_core or rv32i_pipe_core): the data
+ * memory is outside such a core, so a load / store lights the address and store-data multiplexers that face its port instead.
+ */
+export function coreUnitNames(units: readonly string[], inner: readonly string[]): string[] {
+  const have = new Set(inner), out = new Set<string>();
+  for (const u of units) for (const n of u === 'dm' ? ['dm', 'amux', 'wmux'] : [u]) if (have.has(n)) out.add(n);
+  return [...out];
+}

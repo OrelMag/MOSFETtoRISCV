@@ -68,6 +68,7 @@ registerPaletteGroup({
   id: 'cores', title: 'Processor cores', order: 56, collapsed: true,
   items: () => [
     { id: 'core_rv32', name: 'RV32I core', title: 'The single-cycle RV32I core with a memory port: instr in (from a Program ROM), pcOut and memAddr / memWData / memWE out, memRData in. The CPU drawer follows it.', place: { part: { lib: 'rv32i_core' } } },
+    { id: 'core_rv32p', name: 'RV32I pipelined core', title: 'The five-stage pipelined RV32I core on the same two ports: instr in, pcOut and memAddr / memWData / memWE out of the M stage, memRData in; retire = an instruction reaches W. Forwarding, load-use stalls and branch flushes inside. The CPU drawer follows it with the pipeline diagram; Custom… applies to it.', place: { part: { lib: 'rv32i_pipe_core' } } },
     { id: 'core_rv32c', name: 'RV32IC core', title: 'RV32I with the C extension: 16-bit instructions expanded inside, PC + 2. Its Program ROM needs the C extension ticked: it answers at any even address.', place: { part: { lib: 'rv32ic_core' } } },
     { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside. Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
     { id: 'core_rv64m', name: 'RV64IM core', title: 'The 64-bit core with the M extension (multiply, divide: retire = 0 while a divide runs). Program ROM: tick RV64.', place: { part: { lib: 'rv64im_core' } } },
