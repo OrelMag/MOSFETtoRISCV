@@ -1,0 +1,30 @@
+// The tier capstones (DOM-free): one design per tier built from a spec sheet, with no walk, hints or "Do it for me",
+// graded by the benches the campaign already has. Passing one marks its tier done on My path (learn/path.ts). This file
+// is the interface My path reads; the capstone screens fill in `route` and the status as they are built.
+
+export type Tier = 0 | 1 | 2 | 3 | 4;
+
+export interface Capstone {
+  tier: Exclude<Tier, 0>;
+  id: string;
+  title: string;
+  /** One line: what is built and how it is graded. */
+  brief: string;
+  /** Where it is played; null while not built yet (My path shows it without a link). */
+  route: string | null;
+}
+
+export const CAPSTONES: Capstone[] = [
+  { tier: 1, id: 'cap_t1', title: 'An adding machine', brief: 'An accumulator that adds what you key in, from NANDs only: checked by its test table, scored on NANDs and depth.', route: null },
+  { tier: 2, id: 'cap_t2', title: 'An RV16 core from its spec', brief: 'A single-cycle core that passes the core bench and plays Pong on itself, scored on NANDs, period and cycles.', route: null },
+  { tier: 3, id: 'cap_t3', title: 'A pipelined core', brief: 'Forwarding and stalls on the core bench, scored on period × cycles against the reference.', route: null },
+  { tier: 4, id: 'cap_t4', title: 'Your own machine', brief: 'Your own instruction set, its decoder and core, and a program that runs on it.', route: null },
+];
+
+export type CapstoneStatus = 'none' | 'started' | 'passed';
+
+/** A capstone's status from the campaign progress's node records (the capstone screens record there under its id). */
+export function capstoneStatus(id: string, nodes: Record<string, { status?: string } | undefined>): CapstoneStatus {
+  const s = nodes[id]?.status;
+  return s === 'solved' ? 'passed' : s ? 'started' : 'none';
+}
