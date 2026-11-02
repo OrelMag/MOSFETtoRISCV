@@ -32,3 +32,4 @@
 .sb-overlay > .sb-inside:not(.wide) { left: max(0px, min((100% - var(--dock-space, 0px)) * 0.38, 100% - var(--dock-space, 0px) - var(--inside-min))); }
 @media (max-width: 900px) { .sb-overlay > .sb-inside, .sb-overlay > .sb-inside:not(.wide) { left: 0; right: 0; } }
 .sb-overlay > .sb-inside .sb-inside-bar { flex-wrap: wrap; row-gap: 4px; }
+.sb-dock-tabs.many .sb-dock-tab:not(.on) span { display: none; }

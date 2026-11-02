@@ -150,11 +150,6 @@
   .sb-save-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .sb-save[data-state='error'] .sb-save-label, .sb-save[data-state='saving'] .sb-save-label { position: static; width: auto; height: auto; clip-path: none; }
 }
-/* on a phone the dot is not enough to read: the word beside it, small */
-@media (max-width: 760px) {
-  .sb-save-label { position: static; width: auto; height: auto; clip-path: none; font-size: 11px; }
-  .sb-save { padding: 4px 4px; gap: 4px; }
-}
 
 .sb-menu button:disabled { opacity: 0.5; cursor: not-allowed; }
 .sb-menu button:disabled:hover { background: none; }
