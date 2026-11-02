@@ -702,7 +702,7 @@ export const chWarps: Chapter = {
         <p>A warp is cheap to switch to but not cheap to keep. The second warp adds 110 715 NANDs to the core: its registers, 31 × 32 bits in each of 4 lanes
         (92 564), its read port into the program, a copy of the ROM (8064), its slot of PC, mask, stack and scoreboard (6203), its scoreboard check (736),
         the wspawn compare that starts it, and wider multiplexers. Each resident warp buys issue slots only while some are still empty: past that, it only adds gates.</p>
-        <p>A real GPU turns the question around. Its register file is fixed (65 536 32-bit registers per streaming multiprocessor on recent NVIDIA parts), and a
+        <p>A real GPU turns the question around. Its register file is fixed (65 536 32-bit registers per streaming multiprocessor on recent NVIDIA parts), and a
         kernel's register count decides how many threads fit: at 32 registers a thread, 2048 threads (64 warps of 32, the most an A100 or H100 SM holds; an
         RTX 30 or 40 SM stops at 1536); at 64 registers, half as many. Shared memory per block and the block size limit it too: whichever runs out first
         decides. The resident warps as a fraction of the maximum are the <strong>occupancy</strong>. Fewer registers per thread, more warps, more latency hidden;
