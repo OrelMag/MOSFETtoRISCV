@@ -2405,3 +2405,5 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .af-svg .af-charge-bar { fill: var(--series-4); }
 .af-svg .af-wear { fill: var(--series-1); }
 .af-svg .af-wear.dead { fill: var(--bad); }
+/* analogy figures H */
+@media (pointer: coarse) { .af-btn.af-step { min-width: 40px; } .af-slide input[type='range'] { height: 40px; } }

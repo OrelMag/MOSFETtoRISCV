@@ -1,0 +1,38 @@
+/* Figures in the Analogy asides, merge H: kitchen, squad, movers, doorbell, fourway. Tokens only; both themes follow. */
+.af-svg .af-row { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.af-svg .af-frame { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.af-svg .af-hist { fill: var(--surface); stroke-width: 3; }
+.af-svg .af-row.empty { fill: none; stroke: var(--muted); stroke-dasharray: 3 3; }
+.af-svg .af-row.head { stroke: var(--analogy); stroke-width: 2; }
+.af-svg .af-pill { fill: var(--surface); stroke-width: 3; }
+.af-svg .af-pill.queued { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.af-svg .af-pill.issued { stroke: var(--series-4); }
+.af-svg .af-pill.done { stroke: var(--good); }
+.af-svg .af-mono { font: 15px var(--font-mono); fill: var(--text); }
+.af-svg .af-warnt { fill: var(--warn); font-weight: 700; }
+.af-svg .af-s0 { fill: var(--series-1); } .af-svg .af-s1 { fill: var(--series-2); } .af-svg .af-s2 { fill: var(--series-3); } .af-svg .af-s3 { fill: var(--series-4); }
+.af-svg .af-st0 { stroke: var(--series-1); } .af-svg .af-st1 { stroke: var(--series-2); } .af-svg .af-st2 { stroke: var(--series-3); } .af-svg .af-st3 { stroke: var(--series-4); }
+.af-svg .af-soldier { fill: var(--series-1); stroke: none; }
+.af-svg .af-soldier.rest { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 4 3; }
+.af-svg .af-cell { fill: var(--series-1); }
+.af-svg .af-cell.off { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.af-svg .af-cell.future { fill: none; stroke: var(--border); stroke-width: 1; }
+.af-svg .af-cursor { fill: none; stroke: var(--analogy); stroke-width: 2; }
+.af-svg .af-bus-cpu { fill: var(--series-1); } .af-svg .af-bus-dma { fill: var(--series-2); } .af-svg .af-bus-idle { fill: var(--surface-2); }
+.af-svg .af-sl-work { fill: var(--surface-2); stroke: var(--border); stroke-width: 0.5; }
+.af-svg .af-sl-check { fill: var(--series-4); } .af-svg .af-sl-service { fill: var(--series-1); } .af-svg .af-sl-trap { fill: var(--bad); }
+.af-svg .af-visitor { fill: var(--text); }
+.af-svg .af-road { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.af-svg .af-car { fill: var(--surface); stroke-width: 4; }
+.af-svg .af-car.idle { stroke-dasharray: 4 3; opacity: 0.55; }
+.af-svg .af-bell { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 2; }
+.af-svg .af-bell.ring { fill: var(--warn); stroke: var(--warn); }
+.af-choice { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.af-stepper { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+.af-stepper .af-stepname { min-width: 52px; }
+.af-btn.af-step { padding: 2px 9px; min-width: 28px; }
+.af-num { font: 600 12.5px var(--font-mono); color: var(--text); min-width: 2ch; text-align: center; }
+.af-slide { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.af-slide input[type='range'] { width: 100px; }
+.af-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); gap: 4px 14px; justify-content: start; }
+.af-row-lbl { font-size: 12px; color: var(--muted); margin: 8px 0 0; }

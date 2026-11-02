@@ -23,4 +23,9 @@ export const FIGURES: Record<string, () => Promise<FigureMount>> = {
   disagree: () => import('../widgets/analogy/disagree').then((m) => m.default),
   hilltop: () => import('../widgets/analogy/hilltop').then((m) => m.default),
   orchestra: () => import('../widgets/analogy/orchestra').then((m) => m.default),
+  kitchen: () => import('../widgets/analogy/kitchen').then((m) => m.default),
+  squad: () => import('../widgets/analogy/squad').then((m) => m.default),
+  movers: () => import('../widgets/analogy/movers').then((m) => m.default),
+  doorbell: () => import('../widgets/analogy/doorbell').then((m) => m.default),
+  fourway: () => import('../widgets/analogy/fourway').then((m) => m.default),
 };
