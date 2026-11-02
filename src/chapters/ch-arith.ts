@@ -532,7 +532,7 @@ export const chRouting: Chapter = {
       more: {
         derive: `<p>Output k is the minterm yₖ = ∏ᵢ (aᵢ if bit i of k is 1, else ¬aᵢ). Different k differ in at least one bit, so a minterm of one is 0 whenever another is 1: the outputs are mutually exclusive, and since
           every address matches exactly one k, exactly one output is 1. Cost: n inverters plus 2ⁿ ANDs of n inputs.</p>`,
-        real: `<p>A memory with 2¹⁶ words does not have 65 536 AND gates of 16 inputs: wide ANDs are slow and the rails are long. Row decoders split the address in two or three groups, decode each (predecoding), and AND
+        real: `<p>A memory with 2¹⁶ words does not have 65 536 AND gates of 16 inputs: wide ANDs are slow and the rails are long. Row decoders split the address in two or three groups, decode each (predecoding), and AND
           the group outputs, so each final gate has 2 or 3 inputs. The result is the same one-hot, in far less delay.</p>`,
         pitfall: `<p>Reading y as a number. The decoder's output is one-hot: y = 0b0100 is "2", not 4, and the outputs are only meaningful as a set of wires. If two outputs are ever high together, an address bit is
           stuck or an AND input is missing; on the circuit, every gate must read all n rails.</p>`,

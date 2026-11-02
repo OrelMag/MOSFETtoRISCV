@@ -86,17 +86,17 @@ export const CHECK5: Record<string, Quiz[]> = {
   ],
   bin2dec: [
     {
-      question: 'Printing 59 999 by subtracting powers of ten: how many subtractions?',
-      options: ['32: 5 + 9 + 9 + 9, the last digit is what is left', '5', '36', '59 999'],
+      question: 'Printing 59 999 by subtracting powers of ten: how many subtractions?',
+      options: ['32: 5 + 9 + 9 + 9, the last digit is what is left', '5', '36', '59 999'],
       answer: 0,
-      explain: 'Each count of subtractions is a digit; the units are what remains, with no subtraction. 59 999 has the most for a 16-bit number.',
+      explain: 'Each count of subtractions is a digit; the units are what remains, with no subtraction. 59 999 has the most for a 16-bit number.',
       why: ['', 'That is one per digit; each digit needs as many subtractions as its value.', 'The last digit is the remainder: it needs none.', 'That would be subtracting 1 at a time.'],
     },
     {
-      question: 'p_print compares x with 10 000 using a signed compare, and x = 40 000. What happens?',
-      options: ['40 000 reads as −25 536: "below 10 000", so the ten-thousands digit is skipped', 'Nothing: it prints 40000', 'An overflow trap', 'It prints 4 twice'],
+      question: 'p_print compares x with 10 000 using a signed compare, and x = 40 000. What happens?',
+      options: ['40 000 reads as −25 536: "below 10 000", so the ten-thousands digit is skipped', 'Nothing: it prints 40000', 'An overflow trap', 'It prints 4 twice'],
       answer: 0,
-      explain: 'Above 32 767 a 16-bit number is negative when read as signed. The unsigned compare (sltu) is the right one for a value that is never negative.',
+      explain: 'Above 32 767 a 16-bit number is negative when read as signed. The unsigned compare (sltu) is the right one for a value that is never negative.',
       why: ['', 'The signed compare sees a negative number.', 'RV16, like RISC-V, never traps on compares or overflow.', 'The digit loop never starts for the ten-thousands.'],
     },
   ],

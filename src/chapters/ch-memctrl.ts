@@ -65,16 +65,16 @@ export const chMemCtrl: Chapter = {
         why: ['', 'A REF needs every bank precharged first: no row survives it.', 'DDR4 allows postponing up to 8 refreshes, but this controller never does: once due, a refresh goes first at the next idle cycle.', 'The controller holds the request until the device may take commands again. X marks a broken timing rule, and the controller breaks none.'],
       },
       {
-        question: 'The copy (source word i, destination word i + 1 024, rows of 16 words) on 4 banks with the plain mapping. Do its streams still fight?',
+        question: 'The copy (source word i, destination word i + 1024, rows of 16 words) on 4 banks with the plain mapping. Do its streams still fight?',
         options: [
-          'Yes: 1 024 words is a whole number of 4 × 16-word stripes, so each destination line still lands in its source line\'s bank',
+          'Yes: 1024 words is a whole number of 4 × 16-word stripes, so each destination line still lands in its source line\'s bank',
           'No: with four banks two streams never share one',
           'No: the destination now lands in the next bank',
           'Only for its writes',
         ],
         answer: 0,
-        explain: '1 024 words is a whole number of 4 × 16-word stripes: 1 024 / (4 × 16) = 16: the destination is the same bank, 16 rows down. More banks only help when the bank bits differ; the explorer shows the copy\'s row hits barely move. The XOR hash is what separates them.',
-        why: ['', 'Which bank a line uses depends on its address bits. Two addresses that agree in the bank bits share a bank however many banks there are.', 'The bank bits of i and i + 1 024 are the same: 1 024 changes only row bits.', 'Reads and writes are both line requests to the same banks: the fill of a source line and the write-back of a destination line conflict alike.'],
+        explain: '1024 words is a whole number of 4 × 16-word stripes: 1024 / (4 × 16) = 16: the destination is the same bank, 16 rows down. More banks only help when the bank bits differ; the explorer shows the copy\'s row hits barely move. The XOR hash is what separates them.',
+        why: ['', 'Which bank a line uses depends on its address bits. Two addresses that agree in the bank bits share a bank however many banks there are.', 'The bank bits of i and i + 1024 are the same: 1024 changes only row bits.', 'Reads and writes are both line requests to the same banks: the fill of a source line and the write-back of a destination line conflict alike.'],
       },
     ],
   },
@@ -275,8 +275,8 @@ export const chMemCtrl: Chapter = {
       title: 'Banks and address mapping',
       body: `
         <p>Which address bits pick the bank decides which requests fight. Here a line's address is {row, bank, column}: four lines fill
-        a row, the next four go to the next bank. The copy reads word i and writes word i + 1 024, and with 2 banks of 16-word rows
-        1 024 words is 32 rows of both banks. Source and destination always land in the same bank, a different row, so each
+        a row, the next four go to the next bank. The copy reads word i and writes word i + 1024, and with 2 banks of 16-word rows
+        1024 words is 32 rows of both banks. Source and destination always land in the same bank, a different row, so each
         stream keeps closing the other's row.</p>
         <p>A controller can fold row bits into the bank number. With an XOR of the row's parity, rows 32 apart land in different banks:
         on the copy, row hits go from ${COPY.plain} % to ${COPY.hash} % of the requests and the program takes ${COPY.faster} % fewer cycles.
@@ -286,13 +286,13 @@ export const chMemCtrl: Chapter = {
         that can choose: it decides which low bits (consecutive lines, spread over banks for parallelism) and which high bits (rows, for locality) matter.
         Any fixed mapping has a stride that defeats it; hashing makes the bad stride a rarer one.</p>`,
       more: {
-        derive: `<p>With 2 banks and 16-word rows, the bank is bit 4 of the word address and the row the bits above it. The copy's source word i and destination i + 1 024 differ only in
-          bit 10, so bit 4 is equal: the same bank, a row 1 024 / (16 × 2) = 32 apart. Folding in the parity (XOR of the row bits) gives bank = bit 4 ⊕ parity(row); the two rows differ in one row bit
+        derive: `<p>With 2 banks and 16-word rows, the bank is bit 4 of the word address and the row the bits above it. The copy's source word i and destination i + 1024 differ only in
+          bit 10, so bit 4 is equal: the same bank, a row 1024 / (16 × 2) = 32 apart. Folding in the parity (XOR of the row bits) gives bank = bit 4 ⊕ parity(row); the two rows differ in one row bit
           (bit 5 of the row number, for rows below 32), their parities differ, and the streams separate. Cost: a parity tree over the row bits and one XOR.</p>`,
         real: `<p>Intel and AMD controllers hash many address bits (channel, rank, bank group and bank each take an XOR of several higher bits), partly to spread power-of-two strides, partly to spread
           row hammer's aggressors. The same hashes are why reverse-engineering a machine's mapping is a standard first step for a DRAM side-channel or row-hammer attack.</p>`,
         pitfall: `<p>Adding banks and expecting the conflicts to go. Two addresses that agree in the bank bits stay together at any bank count; only a mapping that makes those bits
-          differ separates them. The quiz's copy on four banks still fights: 1 024 is a multiple of 4 × 16.</p>`,
+          differ separates them. The quiz's copy on four banks still fights: 1024 is a multiple of 4 × 16.</p>`,
       },
       widget: ctrlExplorer,
       challenge: {

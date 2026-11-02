@@ -20,9 +20,9 @@ export const LESSON_EXTRAS: Record<string, LessonExtra> = {
       { lib: 'ram4x4', caption: 'A 4-word RAM of 4-bit words, simulated: a decoder on the write port, flip-flops with an enable, one read mux per bit. Click an input; the lesson\'s 64-word RAM is this drawing 16 times wider and deeper.' },
     ],
     check: [
-      { question: 'A 64-word RAM of 16-bit words costs 20 166 NANDs built from flip-flops. About how many NANDs per stored bit?', options: ['About 4', 'About 13', 'About 20', 'About 80'], answer: 2,
+      { question: 'A 64-word RAM of 16-bit words costs 20 166 NANDs built from flip-flops. About how many NANDs per stored bit?', options: ['About 4', 'About 13', 'About 20', 'About 80'], answer: 2,
         why: ['A NAND stores nothing alone; a bit needs a feedback pair and its gating.', 'That is the flip-flop and its enable mux alone; the decoder and the read muxes come on top.', '', 'That is the transistor count (4 per NAND), not the NAND count.'],
-        explain: '20 166 / (64 × 16) = 19.7. Thirteen go to the flip-flop and its enable mux, the rest to the write decoder and the read multiplexer tree. That is why real memories are arrays of 6- or 1-transistor cells.' },
+        explain: '20 166 / (64 × 16) = 19.7. Thirteen go to the flip-flop and its enable mux, the rest to the write decoder and the read multiplexer tree. That is why real memories are arrays of 6- or 1-transistor cells.' },
       { question: 'Why does a single-cycle core need two memories, instruction and data (Harvard)?', options: ['Instructions are wider than data', 'It fetches an instruction and accesses data in the same cycle', 'ROM cannot be written', 'To keep the program safe'], answer: 1,
         why: ['Width is not the reason; one array could hold both.', '', 'True, but a load or store needs the data port even if the program were in RAM.', 'Protection is a side effect, not the cost the design avoids.'],
         explain: 'One port cannot serve the fetch and a load or store in one cycle, so there are two: the PC addresses one, the ALU result the other.' },

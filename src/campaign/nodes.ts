@@ -54,7 +54,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 0 --------------------------------------------------------------------------------
   {
     id: 'intro', act: 0, title: 'Anatomy of a CPU', kind: 'lesson', requires: [],
-    why: 'What a processor is made of, and why each block. The diagram is the machine you finish with, RV16 pipelined with traps and interrupts, 12 038 NANDs. Each block lights up as you build it, in an order where every block needs only the ones before it.',
+    why: 'What a processor is made of, and why each block. The diagram is the machine you finish with, RV16 pipelined with traps and interrupts, 12 038 NANDs. Each block lights up as you build it, in an order where every block needs only the ones before it.',
     body: 'intro',
     tips: [], codex: ['cpu', 'fde', 'abstraction'],
     chapters: [{ chapter: 'map', label: 'The map' }, { chapter: 'cpu', label: 'A single-cycle CPU' }],
@@ -68,7 +68,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 't_nand', act: 0, title: 'CMOS NAND', kind: 'build', requires: ['t_inv'], base: sandbox('t_nand'),
-    why: 'An inverter computes one function; a CPU needs all of them. NAND is complete: 4 transistors, 1 delay, the unit every later cost is counted in. From NOT from NAND on it is your only brick: the finished RV16 is 12 038 of them.',
+    why: 'An inverter computes one function; a CPU needs all of them. NAND is complete: 4 transistors, 1 delay, the unit every later cost is counted in. From NOT from NAND on it is your only brick: the finished RV16 is 12 038 of them.',
     tips: ['The pull-down network must conduct only when a = b = 1: put the NMOS in series.', 'The pull-up must conduct when either input is 0: PMOS in parallel.', 'PMOS in series too would leave y floating (Z) for a = 1, b = 0: no network conducts.'],
     codex: ['nand', 'universality', 'duality', 'stdcell'], unlocks: ['nand'], par: { transistors: 4 },
     chapters: [{ chapter: 'nand', label: 'The NAND gate' }, { chapter: 'nand', step: 2, label: 'One brick to build everything' }],
@@ -161,7 +161,7 @@ export const NODES: CampaignNode[] = [
     chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean', par: { mistakes: 2 } },
   {
     id: 'n_bin', act: 1, title: 'Binary and hex', kind: 'drill', requires: ['intro'], drill: 'binary', par: { mistakes: 2 },
-    why: 'A wire carries a bit; a number is a convention about many. Unsigned: bit k weighs 2^k, a 16-bit word holds 0 to 65 535, and four bits make one hex digit. The decoder and the prime detector read their inputs as numbers; two\'s complement reuses the patterns.',
+    why: 'A wire carries a bit; a number is a convention about many. Unsigned: bit k weighs 2^k, a 16-bit word holds 0 to 65 535, and four bits make one hex digit. The decoder and the prime detector read their inputs as numbers; two\'s complement reuses the patterns.',
     tips: ['Each hex digit is exactly four bits.', 'Bit k weighs 2^k.', 'Group bits in fours from bit 0, the right end: 1 1111 is 0x1F, not 0xF1.'],
     codex: ['positional', 'hex'], chapters: [{ chapter: 'binary', label: 'Binary numbers' }],
   },
@@ -238,7 +238,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 2 --------------------------------------------------------------------------------
   {
     id: 'n_twos', act: 2, title: "Two's complement", kind: 'drill', requires: ['n_bin'], drill: 'twos', par: { mistakes: 2 },
-    why: 'The ALU must handle negative numbers without a second subtractor. In two\'s complement the top bit weighs −2^15, so −x = ¬x + 1 and one adder serves signed and unsigned alike: a 16-bit word holds −32 768 to 32 767. The adder / subtractor, sra and every immediate rely on it.',
+    why: 'The ALU must handle negative numbers without a second subtractor. In two\'s complement the top bit weighs −2^15, so −x = ¬x + 1 and one adder serves signed and unsigned alike: a 16-bit word holds −32 768 to 32 767. The adder / subtractor, sra and every immediate rely on it.',
     tips: ['−x = ¬x + 1.', 'Overflow: both operands have the same sign and the result has the other.', 'Overflow is about signs, not the carry out: −1 + 1 carries out of 0xFFFF + 1 and is right.'],
     codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }],
   },
@@ -294,7 +294,7 @@ export const NODES: CampaignNode[] = [
     chapters: [{ chapter: 'alu', step: 1, label: 'The barrel shifter' }] },
   {
     id: 'a_alu16', act: 2, title: 'The ALU', kind: 'build', requires: ['a_addsub16', 'a_shift16', 'g_wide'],
-    why: 'An instruction names one of ten operations, and every arithmetic instruction and lw / sw address needs the result within the cycle. All ten compute in parallel and a mux on f3 picks one: 1 055 NANDs, depth 64, the adder setting it. Core I puts it after the register file.',
+    why: 'An instruction names one of ten operations, and every arithmetic instruction and lw / sw address needs the result within the cycle. All ten compute in parallel and a mux on f3 picks one: 1055 NANDs, depth 64, the adder setting it. Core I puts it after the register file.',
     tips: ['Compute everything in parallel, select one result with a mux tree.', 'Share the one adder between add, sub and the comparisons: slt is N ⊕ V, sltu ¬cout.', 'Decode {OPX, f3}, not f3 alone: ctl 8 is sub, 13 is sra; and shift by b mod 16.'],
     codex: ['alu'], unlocks: ['rv16_alu16'], anatomy: ['alu'], chapters: [{ chapter: 'alu', label: 'The ALU' }], base: BUILD1.a_alu16, par: { nand: 1055, depth: 64 } },
   {
@@ -358,12 +358,12 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'm_rf', act: 3, title: 'Register file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8'],
-    why: 'An R-type instruction reads two registers and writes a third in one cycle, so the register file needs two read ports and a write port, and x0 must read 0 whatever is written to it. 2 172 NANDs at par: nearly half of Core III. Core I wires rs1, rs2 and rd straight from the instruction word to it.',
+    why: 'An R-type instruction reads two registers and writes a third in one cycle, so the register file needs two read ports and a write port, and x0 must read 0 whatever is written to it. 2172 NANDs at par: nearly half of Core III. Core I wires rs1, rs2 and rd straight from the instruction word to it.',
     tips: ['Write: the decoder on wa, enabled by we, picks the one register that loads.', 'Read: two 8:1 bus muxes. x0 needs no register at all.', 'x0 is input 0 of each read mux tied to the constant 0: a real register there costs 208 NANDs and is written unless its enable is cut.'],
     codex: ['regfile'], unlocks: ['rv16_rf'], anatomy: ['rf'], chapters: [{ chapter: 'regfile', step: 0, label: 'A memory with two read ports' }], base: BUILD1.m_rf, par: { nand: 2172, period: 11 } },
   {
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
-    why: 'Built like the register file, memory costs about 20 NANDs a bit: the 64-word RAM a small program needs would be 20 166 NANDs, over four times Core III. Real memories are arrays of 6-transistor or 1-transistor cells, so from here on ROM and RAM are given parts. Core II hangs the data RAM on the ALU\'s output.',
+    why: 'Built like the register file, memory costs about 20 NANDs a bit: the 64-word RAM a small program needs would be 20 166 NANDs, over four times Core III. Real memories are arrays of 6-transistor or 1-transistor cells, so from here on ROM and RAM are given parts. Core II hangs the data RAM on the ALU\'s output.',
     body: 'mem', tips: [], chapters: [{ chapter: 'memory', step: 4, label: 'Read-only memory' }], codex: ['rom', 'harvard'], anatomy: ['imem', 'dmem'], unlocks: ['sb_rom*', 'ram*'],
   },
 
@@ -398,7 +398,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'p_call', act: 4, title: 'Functions', kind: 'program', requires: ['p_mem'], par: { size: 15, cycles: 1388 },
-    why: 'Code needed in several places should exist once: <code>call</code> (<code>jal ra</code>) jumps and saves the return address, <code>ret</code> (<code>jalr</code> through ra) comes back. 15 words at par; gcd by subtraction averages 1 388 instructions a test. Act 7\'s interrupt handler is a function no instruction calls, so it must save every register it touches.',
+    why: 'Code needed in several places should exist once: <code>call</code> (<code>jal ra</code>) jumps and saves the return address, <code>ret</code> (<code>jalr</code> through ra) comes back. 15 words at par; gcd by subtraction averages 1388 instructions a test. Act 7\'s interrupt handler is a function no instruction calls, so it must save every register it touches.',
     tips: ['Euclid by subtraction: while a ≠ b, subtract the smaller from the larger.', 'gcd calls nothing, so it need not save ra.'],
     codex: ['callconv', 'stack'],
   },
@@ -424,7 +424,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 5 --------------------------------------------------------------------------------
   {
     id: 'c_lesson', act: 5, title: 'The datapath', kind: 'lesson', requires: ['i_isa', 'a_alu16', 'm_rf'],
-    why: 'You have every block: an ALU (1 055 NANDs), a register file (2 172), a PC, memories, Act 4\'s programs. Every instruction takes one path through them with different mux settings, and the control unit is the table of those settings. This act builds the table, then three cores, then Core IV: the ripple ALU is 50 of Core III\'s 98 delays.',
+    why: 'You have every block: an ALU (1055 NANDs), a register file (2172), a PC, memories, Act 4\'s programs. Every instruction takes one path through them with different mux settings, and the control unit is the table of those settings. This act builds the table, then three cores, then Core IV: the ripple ALU is 50 of Core III\'s 98 delays.',
     body: 'datapath', tips: [], codex: ['datapath', 'control'], chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }],
   },
   {
@@ -453,7 +453,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'c_core1', act: 5, title: 'Core I: arithmetic', kind: 'core', requires: ['c_lesson', 'c_imm', 'c_ctl', 's_pc', 'm_rf', 'a_alu16'], base: BUILD5.c_core1, par: { nand: 3892, period: 84, cycles: 701 },
-    why: 'The blocks of acts 1–5 become one loop that runs a program by itself. First the instructions that touch only registers: PC → instruction memory → control → register file → ALU → register file, the spine every later core adds to. 3 892 NANDs and period 84 at par.',
+    why: 'The blocks of acts 1–5 become one loop that runs a program by itself. First the instructions that touch only registers: PC → instruction memory → control → register file → ALU → register file, the spine every later core adds to. 3892 NANDs and period 84 at par.',
     tips: ['Wire the instruction\'s fields straight to the register file: rs1 = instr[9:7], rs2 = instr[12:10], rd = instr[6:4].', 'A mux picks the ALU\'s b (rs2 or the immediate); another picks what is written back (the ALU\'s result, or the immediate for lui).', 'Use pointers (net labels) for long wires: pc, imm, the result.'],
     chapters: [{ chapter: 'cpu', step: 1, label: 'ALU instructions' }], codex: ['singlecycle', 'datapath'],
   },
@@ -465,19 +465,19 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'c_core3', act: 5, title: 'Core III: control flow', kind: 'core', requires: ['c_core2', 'c_npc'], base: BUILD5.c_core3, par: { nand: 4720, period: 98, cycles: 1236 },
-    why: 'Core II runs straight-line code only. The branch comparator and next PC make loops and calls: the complete RV16I, 4 720 NANDs at par, and every Act 4 program runs on hardware you built. Its 98-delay period, 50 of them in the ripple ALU, is what Core IV attacks next.',
+    why: 'Core II runs straight-line code only. The branch comparator and next PC make loops and calls: the complete RV16I, 4720 NANDs at par, and every Act 4 program runs on hardware you built. Its 98-delay period, 50 of them in the ripple ALU, is what Core IV attacks next.',
     tips: ['The branch comparator takes rs1, rs2 and op[1:0]; the next-PC logic loads the PC when it must jump.', 'jal and jalr write pc + 1: the result mux\'s third input.', 'The branch target comes from next PC (pc + imm), never from the ALU, which a branch does not use.'],
     chapters: [{ chapter: 'cpu', step: 3, label: 'Branches and jumps' }], codex: ['cpi'], unlocks: ['rv16_cpu'],
   },
   {
     id: 'c_computer', act: 5, title: 'A computer', kind: 'build', requires: ['c_core3', 'p_loop'], base: BUILDH.c_computer, par: { nand: 27083, period: 110 },
-    why: 'A core alone needs a test bench to serve its memory. Wire it to a ROM, a 64-word RAM and LEDs, decode the addresses, and it runs with nothing outside: 27 083 NANDs at par, three quarters of them the RAM. Then write your own program for it. Act 7\'s interrupts come from devices like these.',
+    why: 'A core alone needs a test bench to serve its memory. Wire it to a ROM, a 64-word RAM and LEDs, decode the addresses, and it runs with nothing outside: 27 083 NANDs at par, three quarters of them the RAM. Then write your own program for it. Act 7\'s interrupts come from devices like these.',
     tips: ['pc is 16 bits, the ROM has 32 words: a splitter gives pc[4:0].', 'Partial decoding: daddr[15] alone tells I/O from RAM (the program only uses the top of the address space for I/O).', 'The LEDs are a 16-bit register written when dwe and daddr[15].', 'Your own program: select the ROM, Edit program…, RV16 assembly.'],
     chapters: [{ chapter: 'io', step: 4, label: 'Switches in, LEDs out' }], codex: ['mmio', 'harvard'], anatomy: ['mmio'],
   },
   {
     id: 'c_fast', act: 5, title: 'Core IV: the critical path', kind: 'core', requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
-    why: 'Core III\'s period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it: the same 1 236 cycles at period 76 (par). Act 6 then cuts what is left of the path into stages.',
+    why: 'Core III\'s period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it: the same 1236 cycles at period 76 (par). Act 6 then cuts what is left of the path into stages.',
     tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.', 'After the swap, look again: the path has moved. A fast adder that is now off it costs NANDs and buys no delay.'],
     chapters: [{ chapter: 'fastadd', step: 9, label: 'Swap in fast adders' }], codex: ['criticalpath', 'cla', 'skew'],
   },
@@ -485,24 +485,24 @@ export const NODES: CampaignNode[] = [
   // ---- Act 6 --------------------------------------------------------------------------------
   {
     id: 'o_mc', act: 6, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
-    why: 'Core III spends a whole cycle on every instruction, an add as long as a load. Cut the path with registers into 3 or 4 steps under a state machine: period 98 → 76, but Core III\'s programs take 3 865 cycles instead of 1 236, 2.4 times as long. Pipelining cuts the path the same way and keeps every step busy.',
+    why: 'Core III spends a whole cycle on every instruction, an add as long as a load. Cut the path with registers into 3 or 4 steps under a state machine: period 98 → 76, but Core III\'s programs take 3865 cycles instead of 1236, 2.4 times as long. Pipelining cuts the path the same way and keeps every step busy.',
     tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
     codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
   },
   {
     id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
-    why: 'Core IV runs at 76 delays a cycle: every instruction must fit a whole load. Registers between its steps let five run at once, but hazards make the 28 Core III programs take 1 495 cycles instead of 1 236, and with ripple adders E alone is 78 delays. With Kogge–Stone adders in E it wins: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
+    why: 'Core IV runs at 76 delays a cycle: every instruction must fit a whole load. Registers between its steps let five run at once, but hazards make the 28 Core III programs take 1495 cycles instead of 1236, and with ripple adders E alone is 78 delays. With Kogge–Stone adders in E it wins: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
     tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }, { chapter: 'pipeline', step: 5, label: 'Does it pay? Measured' }],
   },
   {
     id: 'pi_reg', act: 6, title: 'Pipeline register', kind: 'build', requires: ['s_reg16', 'g_mux8', 'g_or'], base: BUILD6.pi_reg, par: { nand: 260, period: 8 },
-    why: 'A plain register can only load; between two stages one must also hold (a stall) and clear to a bubble that writes nothing (a flush). A mux to 0 in front does both: 260 NANDs, and the finished RV16 places 16 of them, 4 160 NANDs, a third of the chip. Pipeline I places the first twelve.',
+    why: 'A plain register can only load; between two stages one must also hold (a stall) and clear to a bubble that writes nothing (a flush). A mux to 0 in front does both: 260 NANDs, and the finished RV16 places 16 of them, 4160 NANDs, a third of the chip. Pipeline I places the first twelve.',
     tips: ['Two controls, two questions: en decides whether to load at all, clr what is loaded.', 'A mux in front picks 0 when clr; the register loads when en or clr.', 'Clear wins over hold: a flush during a stall must still leave a bubble. Leaving clr out of the load enable is the classic miss.'],
     codex: ['preg', 'stall', 'flush'], unlocks: ['rv16_preg'], anatomy: ['p1', 'p2', 'p3', 'p4'], chapters: [{ chapter: 'pipeline', step: 1, label: 'Pipeline registers' }],
   },
   {
     id: 'pi_core0', act: 6, title: 'Pipeline I: five stages', kind: 'core', requires: ['pi_lesson', 'pi_reg'], base: BUILD6.pi_core0, par: { nand: 7062, period: 65, cycles: 2508 },
-    why: 'Cut the datapath into F, D, E, M and W, and five instructions run at once. No stage knows yet what the others hold, so these programs never branch and keep producers two apart: 7 062 NANDs at period 65, but the two nops after every instruction make it 2 508 cycles. Pipeline II removes the nops.',
+    why: 'Cut the datapath into F, D, E, M and W, and five instructions run at once. No stage knows yet what the others hold, so these programs never branch and keep producers two apart: 7062 NANDs at period 65, but the two nops after every instruction make it 2508 cycles. Pipeline II removes the nops.',
     tips: ['Write the register file at the falling edge (clock it with ¬clk): an instruction three behind its producer then reads the new value.', 'Carry everything a later stage needs in the pipeline registers: rd, control signals, the immediate. Without branches no stage after F needs the pc.', 'Report register writes from W and stores from M.'],
     codex: ['pipeline'], chapters: [{ chapter: 'pipeline', step: 0, label: 'Overlap the work' }],
   },
@@ -514,7 +514,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'pi_core1', act: 6, title: 'Pipeline II: forwarding', kind: 'core', requires: ['pi_core0', 'pi_fwd'], base: BUILD6.pi_core1, par: { nand: 7417, period: 78, cycles: 970 },
-    why: 'Pipeline I pads every instruction with two nops. With two 3:1 muxes in front of E, steered by the forwarding unit, an instruction may use the result of the one just before it: +355 NANDs and period 78, and the 19 programs fall from 2 508 cycles to 970. Pipeline III removes the last nop, the one after each load.',
+    why: 'Pipeline I pads every instruction with two nops. With two 3:1 muxes in front of E, steered by the forwarding unit, an instruction may use the result of the one just before it: +355 NANDs and period 78, and the 19 programs fall from 2508 cycles to 970. Pipeline III removes the last nop, the one after each load.',
     tips: ['Each operand comes from one of three places: the register file, M or W.', 'M\'s forwarded value is its result before memory: the ALU\'s, or the immediate for lui (this pipeline has no jumps, so no pc + 1 yet).', 'Forward rs2 too: stores use it (and from Pipeline IV on, branches). Forwarding rs1 only is the classic miss.'],
     codex: ['forwarding'], chapters: [{ chapter: 'pipeline', step: 2, label: 'Data hazards and forwarding' }],
   },
@@ -532,7 +532,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'pi_core3', act: 6, title: 'Pipeline IV: branches', kind: 'core', requires: ['pi_core2'], base: BUILD6.pi_core3, par: { nand: 9218, period: 78, cycles: 1495 },
-    why: 'Pipeline III cannot branch: a branch is decided in E, after the next two words were fetched as if not taken. Flush them and fetch the target: +1 687 NANDs, and every taken branch or jump costs two cycles, 1 495 on Core III\'s 28 programs against 1 236. Pipeline V adds traps to it.',
+    why: 'Pipeline III cannot branch: a branch is decided in E, after the next two words were fetched as if not taken. Flush them and fetch the target: +1687 NANDs, and every taken branch or jump costs two cycles, 1495 on Core III\'s 28 programs against 1236. Pipeline V adds traps to it.',
     tips: ['redirect = the next-PC logic\'s ld in E; it loads the PC and clears F/D and D/E.', 'jal and jalr write pc + 1: carry pc and pc + 1 down to E, and forward pc + 1 from M like any result.', 'Every taken branch costs two cycles: the price predictors (and earlier resolution) try to lower. Clearing only F/D is the classic miss: the word in D was fetched on the wrong path too.'],
     codex: ['flush', 'controlhazard'], chapters: [{ chapter: 'pipeline', step: 4, label: 'Control hazards' }],
   },
@@ -546,18 +546,18 @@ export const NODES: CampaignNode[] = [
   // ---- Act 7 --------------------------------------------------------------------------------
   {
     id: 'y_lesson', act: 7, title: 'Traps and interrupts', kind: 'lesson', requires: ['c_core3', 'c_computer'], body: 'traps',
-    why: 'Your computer cannot be told anything: it must poll a device in a loop, and an undefined word runs as whatever its bits select. A real processor stops between two instructions, saves where and why in CSRs, runs a handler and resumes. This act builds that on the single-cycle core, for 2 537 NANDs over Core III, then in the pipeline.',
+    why: 'Your computer cannot be told anything: it must poll a device in a loop, and an undefined word runs as whatever its bits select. A real processor stops between two instructions, saves where and why in CSRs, runs a handler and resumes. This act builds that on the single-cycle core, for 2537 NANDs over Core III, then in the pipeline.',
     tips: [], codex: ['traps', 'csr'], chapters: [{ chapter: 'traps', label: 'Traps and interrupts' }],
   },
   {
     id: 'y_csr', act: 7, title: 'CSR file', kind: 'build', requires: ['s_reg16', 'g_dec', 'g_mux8', 'y_lesson'], base: BUILD7.y_csr, par: { nand: 1765, period: 17 },
-    why: 'A trap needs somewhere to keep the return address, the cause and the interrupt enable without touching the program\'s eight registers. Six 16-bit registers and an 8:1 read port: 1 765 NANDs, more than a third of Core III. A trap writes three of them on one edge and mret undoes it; Exceptions places the file, and every core after it keeps it.',
+    why: 'A trap needs somewhere to keep the return address, the cause and the interrupt enable without touching the program\'s eight registers. Six 16-bit registers and an 8:1 read port: 1765 NANDs, more than a third of Core III. A trap writes three of them on one edge and mret undoes it; Exceptions places the file, and every core after it keeps it.',
     tips: ['Six 16-bit registers and an 8:1 read mux. mstatus computes its next value every cycle, so it needs no enable.', 'mstatus: bits 3 (MIE) and 7 (MPIE) have their own next-value logic; the other bits only change on a write.', 'A trap wins over a software write in the same cycle: the instruction that writes is the one being trapped, so its write must not happen.'],
     codex: ['csr'], unlocks: ['rv16_csr'], anatomy: ['csr'], chapters: [{ chapter: 'traps', step: 0, label: 'Control and status registers' }],
   },
   {
     id: 'y_trap', act: 7, title: 'Exceptions', kind: 'core', requires: ['c_core3', 'y_csr'], base: BUILD7.y_trap, par: { nand: 7257, period: 100, cycles: 712 },
-    why: 'Core III runs an undefined word as whatever its bits select, and a program cannot call the system or stop for a debugger. Exceptions replaces such an instruction by a jump to mtvec, with pc saved in mepc and the cause in mcause: +2 537 NANDs over Core III, period 100. Interrupts reuses all of it, and Pipeline V moves it into the pipeline.',
+    why: 'Core III runs an undefined word as whatever its bits select, and a program cannot call the system or stop for a debugger. Exceptions replaces such an instruction by a jump to mtvec, with pc saved in mepc and the cause in mcause: +2537 NANDs over Core III, period 100. Interrupts reuses all of it, and Pipeline V moves it into the pipeline.',
     tips: ['The illegal-instruction detector and the system decoder are given (open them: the detector is a function of the 16-bit word, the decoder computes the CSR write value).', 'On a trap: no register write, no store, pc ← mtvec, mepc ← pc.', 'csrr* write the old CSR value to rd.'],
     codex: ['traps', 'vm'], gives: ['rv16_ill', 'rv16_sysdec'], unlocks: ['rv16_ill', 'rv16_sysdec'], chapters: [{ chapter: 'traps', step: 2, label: 'Exceptions' }],
   },
@@ -575,13 +575,13 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'y_ptrap', act: 7, title: 'Pipeline V: exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
-    why: 'Pipeline IV holds five instructions, so a trap must be precise: older ones finish, younger ones are cancelled, and mepc names the culprit. Taking traps in E, where the instruction has written nothing yet, does it: +2 813 NANDs over Pipeline IV, period 81. The finale adds the interrupt to this core.',
+    why: 'Pipeline IV holds five instructions, so a trap must be precise: older ones finish, younger ones are cancelled, and mepc names the culprit. Taking traps in E, where the instruction has written nothing yet, does it: +2813 NANDs over Pipeline IV, period 81. The finale adds the interrupt to this core.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
     codex: ['precise', 'flush'], chapters: [{ chapter: 'traps', step: 5, label: 'Inside the trap unit' }],
   },
   {
     id: 'y_final', act: 7, title: 'Finale: interrupts', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
-    why: 'Pipeline V still polls. The finale takes the interrupt in E, on a valid instruction only: 7 NANDs, 12 038 in all. The 45 programs take 194 319 NAND delays against 197 600 on the single-cycle core with interrupts, and that 2% is all a ripple-adder pipeline wins; with Kogge–Stone adders in E it would be 28%.',
+    why: 'Pipeline V still polls. The finale takes the interrupt in E, on a valid instruction only: 7 NANDs, 12 038 in all. The 45 programs take 194 319 NAND delays against 197 600 on the single-cycle core with interrupts, and that 2% is all a ripple-adder pipeline wins; with Kogge–Stone adders in E it would be 28%.',
     tips: ['intr = MIE · MEIE · irq comes from the CSR file: wire the pin in and OR the interrupt into the trap.', 'Gate the interrupt with the valid bit too: a bubble in E has no pc of its own (its D/E slot was cleared), so mepc would name an address the program never was at.', 'mcause for the interrupt is 0x800B (bit 15, external cause 11): it wins over every exception.'],
     codex: ['interrupts'], chapters: [{ chapter: 'traps', step: 4, label: 'External interrupts' }, { chapter: 'pipepay', step: 5, label: 'Measured, all together' }],
   },
@@ -594,13 +594,13 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16', 'p_mul'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
-    why: 'Act 4\'s software multiply took 28 to 134 instructions a product; this is that loop in hardware, one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1 169 against 2 672). The Divider runs the same pattern, one datapath step per clock under a counter.',
+    why: 'Act 4\'s software multiply took 28 to 134 instructions a product; this is that loop in hardware, one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1169 against 2672). The Divider runs the same pattern, one datapath step per clock under a counter.',
     tips: ['The iteration counter is given: you build the datapath it steps.', 'The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.', 'The adder\'s carry out is the new top bit after the shift: dropping it is the classic miss, and only small products come out right.'],
     codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
   },
   {
     id: 'o_mularr', act: 8, title: 'Array multiplier', kind: 'build', optional: true, requires: ['a_add16'], base: BUILD8.o_mularr, givesOf: partsOf(() => arrayMul(8)), par: { nand: 632, depth: 70 },
-    why: 'A shift-and-add unit takes 18 cycles a product; the array does every addition at once, in rows of adders: 632 NANDs, 70 deep at 8 × 8, and 2 672 NANDs, 150 deep at 16 × 16. Multiply in the core places the 16 × 16 one and finds out what 150 delays do to every instruction\'s clock.',
+    why: 'A shift-and-add unit takes 18 cycles a product; the array does every addition at once, in rows of adders: 632 NANDs, 70 deep at 8 × 8, and 2672 NANDs, 150 deep at 16 × 16. Multiply in the core places the 16 × 16 one and finds out what 150 delays do to every instruction\'s clock.',
     tips: ['Row k is a AND b[k], shifted left by k.', 'Add the rows one after the other: each adder\'s carry out becomes the next row\'s top bit.', 'Row 0\'s lowest bit is already p[0], and each row after it fixes one more product bit: only the last row\'s adder gives the top half.'],
     codex: ['arraymul', 'carrysave'], chapters: [{ chapter: 'muldiv', step: 0, label: 'Long multiplication is AND and add' }],
   },
@@ -612,19 +612,19 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16, RV16_MUX2)), par: { nand: 1445, period: 31 }, unlocks: ['sdiv16_rv16'],
-    why: 'RV16I has no divide, and in one pass it is expensive: unrolled, the 16 subtract-and-compare steps are 4 464 NANDs on a 613-deep path. The iterative divider does one step per clock under a counter: 1 445 NANDs, period 31, 18 cycles a quotient. Divide in the core puts it in your core and makes the core wait for it.',
+    why: 'RV16I has no divide, and in one pass it is expensive: unrolled, the 16 subtract-and-compare steps are 4464 NANDs on a 613-deep path. The iterative divider does one step per clock under a counter: 1445 NANDs, period 31, 18 cycles a quotient. Divide in the core puts it in your core and makes the core wait for it.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.', 'b = 0 needs no special case: every subtraction succeeds, so q = 0xFFFF and r = a, as RISC-V wants.', 'Subtracting before the shift is the classic miss: the next dividend bit must be in the remainder before it is compared.'],
     codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }],
   },
   {
     id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10546, period: 193, cycles: 1859 },
-    why: 'Every instruction so far finished in one cycle; a divide takes 18. The core starts the divider, holds the PC and writes nothing until done, the single-cycle core\'s version of a stall: 10 546 NANDs at period 193, and the 23 programs take 1 859 cycles. It ends the multiply-and-divide track.',
+    why: 'Every instruction so far finished in one cycle; a divide takes 18. The core starts the divider, holds the PC and writes nothing until done, the single-cycle core\'s version of a stall: 10 546 NANDs at period 193, and the 23 programs take 1859 cycles. It ends the multiply-and-divide track.',
     tips: ['start = (a divide); hold = start and not done. Hold the PC by loading it with itself: ld = ld | hold, target = hold ? pc : target.', 'Write nothing while holding: rwe for MD = MD and not hold.', 'Signs: an adder / subtractor with a = 0 negates when sub = 1. Negate the quotient only when b ≠ 0.'],
     codex: ['mext', 'division', 'stall'], unlocks: ['rv16_div'], chapters: [{ chapter: 'muldiv', step: 21, label: 'The M unit' }],
   },
   {
     id: 'n_float', act: 8, title: 'Floating point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'float', par: { mistakes: 2 },
-    why: 'A 16-bit integer stops at 32 767 and has no fractions. Binary16 spends the same 16 bits on a sign, an exponent and a fraction, a binary scientific notation that reaches 65 504 and keeps 11 significant bits. Encode and decode it by hand: Float unpack, the first FP unit, reads these fields.',
+    why: 'A 16-bit integer stops at 32 767 and has no fractions. Binary16 spends the same 16 bits on a sign, an exponent and a fraction, a binary scientific notation that reaches 65 504 and keeps 11 significant bits. Encode and decode it by hand: Float unpack, the first FP unit, reads these fields.',
     tips: ['Write the value as 1.f × 2^e; the exponent field is e + 15.', 'Exponent field 0 has no hidden bit (zero and the subnormals, worth 0.f × 2^−14); field 31 is not a number at all, ∞ or NaN.'],
     codex: ['ieee754'], chapters: [{ chapter: 'float', label: 'Floating point' }, { chapter: 'float', step: 0, label: 'Scientific notation in binary' }],
   },
@@ -654,19 +654,19 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16_rv16', 'fpnr5_10_22'],
-    why: 'Add, multiply and int → float all end the same way: a raw significand and exponent must become a correctly rounded word, subnormals and overflow included. Built from the three blocks below it: 2 058 NANDs, depth 86, more than half the FP adder. The adder and Integer to float place it.',
+    why: 'Add, multiply and int → float all end the same way: a raw significand and exponent must become a correctly rounded word, subnormals and overflow included. Built from the three blocks below it: 2058 NANDs, depth 86, more than half the FP adder. The adder and Integer to float place it.',
     tips: ['Left shift by min(leading zeros, exp − 1): never below exponent 1. If exp < 1, shift right by 1 − exp instead (sticky shifter).', 'After the shift the kept bits are the top 11; then the guard bit; everything below it, and stin, is the sticky bit.', 'Rounding up 1.111…1 carries into a new top bit: the exponent goes up by one and the fraction is 0.', 'Overflow: a final field of 31 or more. Then toInf picks ∞ or 0x7BFF.'],
     codex: ['normalize', 'rounding', 'subnormal'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
   },
   {
     id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3732, depth: 163 },
-    why: 'Adding floats means aligning their binary points, adding, then normalizing and rounding, and every block for that is built: 3 732 NANDs, depth 163, normalize & round 2 058 of them. RV16 has no F registers, so this and the other FP units stand alone: no core in the campaign runs them. The FP multiplier reuses its normalizer, wider.',
+    why: 'Adding floats means aligning their binary points, adding, then normalizing and rounding, and every block for that is built: 3732 NANDs, depth 163, normalize & round 2058 of them. RV16 has no F registers, so this and the other FP units stand alone: no core in the campaign runs them. The FP multiplier reuses its normalizer, wider.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
     codex: ['fpadder', 'ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4912, depth: 150 },
-    why: 'Multiplying floats needs no alignment: XOR the signs, add the exponents less one bias, multiply the 11-bit significands, normalize & round. 4 912 NANDs at depth 150, against the adder\'s 163; the significand product grows with the square of the width, and the binary32 multiplier is 14 913 NANDs.',
+    why: 'Multiplying floats needs no alignment: XOR the signs, add the exponents less one bias, multiply the 11-bit significands, normalize & round. 4912 NANDs at depth 150, against the adder\'s 163; the significand product grows with the square of the width, and the binary32 multiplier is 14 913 NANDs.',
     tips: ['Signs, exponents and significands are three separate datapaths: s = sa XOR sb, e = ea + eb − 15, and the given 11 × 11 multiplier for the significands.', '11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one (and add one to the exponent).', 'Special cases before the arithmetic: 0 × ∞ is NaN, NaN in gives the canonical NaN, and a subnormal input has exponent 1 and no hidden bit, as unpack says.'],
     codex: ['ieee754', 'fma'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
   },
@@ -678,25 +678,25 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_fpcvt', act: 8, title: 'Integer to float', kind: 'build', optional: true, requires: ['o_fpnorm'], base: BUILDFP.o_fpcvt, givesOf: fpGives(FP_REF.cvt), par: { nand: 2690, depth: 109 },
-    why: 'fcvt.h.w: an integer is already a significand, with its binary point at the right. Take its magnitude, and normalize & round finds the leading 1 and rounds what does not fit in 11 bits: 2 690 NANDs, depth 109, with no new arithmetic. It closes the ladder\'s conversion branch.',
-    tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.', 'The sign comes from x, not from |x|: negate, convert, then put the sign back. −32 768 is its own negation, and still converts right as an unsigned magnitude.'],
+    why: 'fcvt.h.w: an integer is already a significand, with its binary point at the right. Take its magnitude, and normalize & round finds the leading 1 and rounds what does not fit in 11 bits: 2690 NANDs, depth 109, with no new arithmetic. It closes the ladder\'s conversion branch.',
+    tips: ['|x| = signed and x < 0 ? −x : x (a conditional negate).', 'The integer\'s top bit weighs 2^15: the exponent you hand normalize & round is 15 + bias.', 'The sign comes from x, not from |x|: negate, convert, then put the sign back. −32 768 is its own negation, and still converts right as an unsigned magnitude.'],
     codex: ['normalize'], chapters: [{ chapter: 'float', label: 'Floating point' }],
   },
   // ---- Act 9 --------------------------------------------------------------------------------
   {
     id: 'k_lesson', act: 9, title: 'Latency or throughput', kind: 'lesson', optional: true, requires: ['c_core3'], body: 'gpu',
-    why: 'Much of computing is one small program over thousands of data, where what counts is results per second. One control unit can feed four lanes: 15 669 NANDs against 18 880 for four of your cores. Lanes first, then warps, then a rasterizer.',
+    why: 'Much of computing is one small program over thousands of data, where what counts is results per second. One control unit can feed four lanes: 15 669 NANDs against 18 880 for four of your cores. Lanes first, then warps, then a rasterizer.',
     tips: [], codex: ['throughput', 'simd', 'amdahl'], chapters: [{ chapter: 'lanes', label: 'Latency or throughput' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
   },
   {
     id: 'k_lanes', act: 9, title: 'Four lanes', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_lanes, par: { nand: 4596, depth: 55 },
-    why: 'Your core computes one result per instruction. Here its execute step comes four times, four ALUs on one set of control signals: 4 596 NANDs, all of it replicated. The SIMD core puts what they share around them.',
+    why: 'Your core computes one result per instruction. Here its execute step comes four times, four ALUs on one set of control signals: 4596 NANDs, all of it replicated. The SIMD core puts what they share around them.',
     tips: ['Your ALU and the 49-NAND bus mux are unlocked: one mux and one ALU per lane.', 'nz: OR the 16 bits of each a<sub>i</sub>, then merge the four bits.', 'Every lane gets the same alu, bimm and imm: fan them out, never decode them per lane.'],
     codex: ['lane'], unlocks: ['rv16_lanes4'], chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }],
   },
   {
     id: 'k_vrf', act: 9, title: 'Lane register file', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_vrf, par: { nand: 8688, period: 11 },
-    why: 'Four ALUs on one register file compute the same results. Each lane needs its own registers, same numbers, different values: four files, 8 688 NANDs, 55% of the SIMD core. Storage, not control, is what a lane costs.',
+    why: 'Four ALUs on one register file compute the same results. Each lane needs its own registers, same numbers, different values: four files, 8688 NANDs, 55% of the SIMD core. Storage, not control, is what a lane costs.',
     tips: ['Your register file is unlocked: one per lane, sharing wa, ra1 and ra2.', 'Split we into four bits: one write enable per lane.', 'Each lane writes its own word wd<sub>i</sub>: a single data input fanned out to all four would give every lane lane 0\'s result.'],
     codex: ['vrf'], unlocks: ['rv16_vrf4'], chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }],
   },
@@ -708,19 +708,19 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'k_simd', act: 9, title: 'SIMD core', kind: 'core', optional: true, requires: ['k_lanes', 'k_vrf', 'k_mask'], base: BUILDK.k_simd, par: { nand: 15669, period: 100, cycles: 810 },
-    why: 'One fetch, one decode, one control unit; four lanes on their own registers and memory ports, told apart by tid: 15 669 NANDs against 18 880 for four single-cycle cores. A branch has one PC, so the leader decides it.',
+    why: 'One fetch, one decode, one control unit; four lanes on their own registers and memory ports, told apart by tid: 15 669 NANDs against 18 880 for four single-cycle cores. A branch has one PC, so the leader decides it.',
     tips: ['Start from your single-cycle core: the control unit, immediates, branch and next-PC logic stay as they are.', 'The lane decoder is given: tmc, tid, split and join (the last two can wait for the SIMT core).', 'Leader operands: two 4:1 bus muxes on the lanes’ rs1 and rs2, selected by lead. They feed the branch unit, jalr and tmc.', 'Results: per lane, ALU or memory; pc + 1 and the immediate are the same for every lane; tid replaces them all when the decoder says so.'],
     codex: ['warp'], gives: ['rv16_lanedec'], unlocks: ['rv16_lanedec'], chapters: [{ chapter: 'lanes', step: 2, label: 'The leader' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
   },
   {
     id: 'k_stack', act: 9, title: 'Reconvergence stack', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_stack, par: { nand: 1995, period: 19 },
-    why: 'When lanes disagree on an if, the SIMD core follows the leader and the rest compute the wrong side. Run one side, park the other with where to resume, then reconverge; ifs nest, so it is a stack: 1 995 NANDs.',
+    why: 'When lanes disagree on an if, the SIMD core follows the leader and the rest compute the wrong side. Run one side, park the other with where to resume, then reconverge; ifs nest, so it is a stack: 1995 NANDs.',
     tips: ['An entry is 26 bits: mask, else lanes, pc, pending, valid. Registers with enable, a 2:1 mux in front of each: a push shifts down, a pop shifts up.', 'The top entry decides join: pending → run the else lanes (jump); not pending → restore and pop.', 'Reset clears only the valid bits; the rest may hold anything.'],
     codex: ['reconvergence', 'divergence'], unlocks: ['rv16_stack4'], chapters: [{ chapter: 'simt', step: 2, label: 'split and join' }, { chapter: 'simt', step: 3, label: 'An if inside an if' }],
   },
   {
     id: 'k_simt', act: 9, title: 'SIMT core', kind: 'core', optional: true, requires: ['k_simd', 'k_stack'], base: BUILDK.k_simt, par: { nand: 17732, period: 100, cycles: 919 },
-    why: 'With the stack, split and join let each lane follow its own control flow under one control unit: +2 063 NANDs, period unchanged. Divergence now costs utilization instead of correctness; the two-warp core starts here.',
+    why: 'With the stack, split and join let each lane follow its own control flow under one control unit: +2063 NANDs, period unchanged. Divergence now costs utilization instead of correctness; the two-warp core starts here.',
     tips: ['The stack’s p is the lanes’ nz (rs1 ≠ 0); its pc1 is the next-PC logic’s pc + 1.', 'Mask: load when tmc runs or the stack says so; tmc’s value wins.', 'The PC: a 2:1 mux after the next-PC choice, to jpc when the stack jumps.'],
     codex: ['simt'], chapters: [{ chapter: 'simt', step: 2, label: 'split and join' }, { chapter: 'simt', step: 5, label: 'What divergence costs' }],
   },
@@ -739,13 +739,13 @@ export const NODES: CampaignNode[] = [
   // Phases 3 and 4 of the GPU track: warps and memory, then graphics.
   {
     id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_coal, par: { nand: 467, depth: 27 },
-    why: 'Four memory ports are four memories; one port a line wide serves every lane whose word is in the line: 467 NANDs. The two-warp core keeps a port per lane and does not place it; chapter 32\'s access unit (5 870 NANDs) does.',
+    why: 'Four memory ports are four memories; one port a line wide serves every lane whose word is in the line: 467 NANDs. The two-warp core keeps a port per lane and does not place it; chapter 32\'s access unit (5870 NANDs) does.',
     tips: ['Drop each address’s two low bits: what is left (14 bits) names its line.', 'The leader is the lowest active lane, exactly as in your mask; a 4:1 bus mux picks its line.', 'Lane 0, when active, is the leader: it needs no comparator. Lanes 1–3: an equality comparator each, ANDed with their mask bit.', 'left = mask XOR served: served never contains an inactive lane.'],
     codex: ['coalescing'], unlocks: ['rv16_coal4'], chapters: [{ chapter: 'feed', label: 'One port, a line wide' }, { chapter: 'feed', step: 1, label: 'Coalescing' }],
   },
   {
     id: 'k_warps', act: 9, title: 'Two warps', kind: 'core', optional: true, requires: ['k_simt', 'k_coal'], base: BUILDK.k_warps, par: { nand: 29974, period: 95, cycles: 2093 },
-    why: 'Memory answers late: here a cycle, in a GPU hundreds. A GPU switches warps instead of stalling. A warp is its state (PC, mask, stack, lane registers): +12 242 NANDs, 71% of them lane registers. The frame core starts here.',
+    why: 'Memory answers late: here a cycle, in a GPU hundreds. A GPU switches warps instead of stalling. A warp is its state (PC, mask, stack, lane registers): +12 242 NANDs, 71% of them lane registers. The frame core starts here.',
     tips: ['Start from your SIMT core: fetch, decode, control and the lanes stay shared. Duplicate what is state: PC, mask, stack, lane registers.', 'The warp bit is a flip-flop that toggles every cycle (0 after reset); 2:1 muxes pick the issuing warp’s PC, register reads and mask.', 'A load: hold its lanes (mask · rwe) and rd for one cycle, then write drdata into the other warp’s registers. In any cycle each register file has one writer: its warp’s results, or the returning load.', 'bar: a waiting bit per warp. Arriving first sets yours, arriving second clears the other’s. A warp goes only if it is not held at bar (or the other has no lanes) and has lanes of its own; a PC moves only when its warp goes.'],
     codex: ['barrel', 'barrier', 'occupancy'], chapters: [{ chapter: 'warps', label: 'A memory that makes you wait' }, { chapter: 'warps', step: 4, label: 'Occupancy' }],
   },
@@ -757,7 +757,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_edge, par: { nand: 963, period: 58 },
-    why: 'The lanes could rasterize: chapter 34 measured 6 825 cycles for one triangle on 16 threads, against 1 268 on a rasterizer of 26 708 NANDs. The edge function is linear, so each step is one add: 963 NANDs an edge.',
+    why: 'The lanes could rasterize: chapter 34 measured 6825 cycles for one triangle on 16 threads, against 1268 on a rasterizer of 26 708 NANDs. The edge function is linear, so each step is one add: 963 NANDs an edge.',
     tips: ['Two 16-bit registers: E, and R, where the current band started (a band is four rows of pixels).', 'One adder / subtractor: its first operand is E, R (band) or 2E (double, a wired shift); its second a, 4a, b or 4b (wired shifts too); subtract only for up.', 'Load and band write R as well as E; hold writes neither.', 'inside: NOT of E\'s bit 15.'],
     codex: ['edgefn'], unlocks: ['rv16_edge'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
   },
@@ -769,13 +769,13 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'k_raster', act: 9, title: 'Rasterizer', kind: 'build', optional: true, requires: ['k_tile'], base: BUILDK.k_raster, par: { nand: 9188, period: 145, cycles: 7439 },
-    why: 'The steppers need a start: A, B, the bias, the box in tiles, E at the first tile. E is a product and act 9 has no multiplier, so each stepper shift-adds its own: 9 188 NANDs, mostly adders, a device of the frame core.',
+    why: 'The steppers need a start: A, B, the bias, the box in tiles, E at the first tile. E is a product and act 9 has no multiplier, so each stepper shift-adds its own: 9188 NANDs, mostly adders, a device of the frame core.',
     tips: ['A, B, Δx = ox − xᵢ, Δy = oy − yᵢ: 8-bit subtractions (two 4-bit adders, the subtrahend inverted, carry in 1). ox = 16·tx0 + 2.', 'The first tile is the smallest (v + 1) >> 4 of the three vertices; the last the largest (v − 2) >> 4, 0 if negative. A comparison is an adder\'s carry.', 'E = A·Δx + B·Δy − bias, MSB first: E ← 0; E ← E − A·Δx₇ (the sign bit weighs −128); E ← E − B·Δy₇; then for bits 6 … 0: E ← 2E + (Δxₖ ? A : 0), E ← E + (Δyₖ ? B : 0); last E ← E − bias. Then load E into itself, so R starts there too.', 'The sum of the three E plus the three biases is twice the area: ≤ 0 is a back face, done.', 'The tile test: a second adder per edge, E + 12·(A⁺ + B⁺), its sign.'],
     codex: ['horner', 'shiftadd'], unlocks: ['rv16_raster'], chapters: [{ chapter: 'pixels', step: 1, label: 'Inside a triangle' }, { chapter: 'graphics', step: 3, label: 'Where the gates go' }],
   },
   {
     id: 'k_frame', act: 9, title: 'A frame', kind: 'core', optional: true, requires: ['k_raster', 'k_warps'], base: BUILDK.k_frame, par: { nand: 40275, period: 147, cycles: 7635 },
-    why: 'A GPU in miniature: lanes place the vertices, the rasterizer fills the pixels, the screen is memory both write. The core reaches the rasterizer through addresses and must not race it: 40 275 NANDs. Spin runs on it.',
+    why: 'A GPU in miniature: lanes place the vertices, the rasterizer fills the pixels, the screen is memory both write. The core reaches the rasterizer through addresses and must not race it: 40 275 NANDs. Spin runs on it.',
     tips: ['Start from your two-warp core; add the rasterizer, six 7-bit vertex registers and a 16-bit colour register, written from lane 0\'s port when its address is 0xFFF0 … 0xFFF6.', 'A store to 0xFFF6 sets a flip-flop that is the rasterizer\'s go in the next cycle; busy for the core is that flip-flop OR the rasterizer\'s busy.', 'Hold: busy AND (lane 0 is active, the instruction stores, address in 0xFFF0 … 0xFFF6, OR it loads and an active lane\'s address is in 0xF000 … 0xF3FF). AND its inverse into the warp\'s go: nothing of that instruction happens, and its next turn tries again.', 'Use the instruction\'s own signals for the hold, not the write enables it gates: those depend on go.'],
     codex: ['device', 'mmio'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }, { chapter: 'graphics', step: 1, label: 'The pipeline' }],
   },
@@ -788,7 +788,7 @@ export const NODES: CampaignNode[] = [
   // ---- Act 10 -------------------------------------------------------------------------------
   {
     id: 'm_lesson', act: 10, title: 'Where the cycles go', kind: 'lesson', optional: true, requires: ['c_computer'], body: 'memwall',
-    why: 'Your computer\'s 64-word RAM is 20 166 of its 27 083 NANDs (74%), about 79 transistors a bit. Real memory is one transistor a bit: dense, slow, forgetful. This act builds it and prices what every core assumed.',
+    why: 'Your computer\'s 64-word RAM is 20 166 of its 27 083 NANDs (74%), about 79 transistors a bit. Real memory is one transistor a bit: dense, slow, forgetful. This act builds it and prices what every core assumed.',
     tips: [], codex: ['memwall', 'rowbuffer', 'amat'], chapters: [{ chapter: 'dram', label: 'Inside a DRAM' }, { chapter: 'memctrl', label: 'A memory controller' }],
   },
   {
@@ -812,7 +812,7 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'o_cache', act: 10, title: 'A cache', kind: 'build', optional: true, requires: ['m_ctrl'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
-    why: 'Your controller answers tCAS = 4 cycles after a read on the open row, tRP + tRCD + tCAS = 12 on another; every core assumed one. A small memory of recent words, a tag and a valid bit each, answers most at once: 3 497 NANDs.',
+    why: 'Your controller answers tCAS = 4 cycles after a read on the open row, tRP + tRCD + tCAS = 12 on another; every core assumed one. A small memory of recent words, a tag and a valid bit each, answers most at once: 3497 NANDs.',
     tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
     codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', step: 6, label: 'A direct-mapped cache' }, { chapter: 'memctrl', step: 3, label: 'The CPU behind it' }],
   },
@@ -824,13 +824,13 @@ export const NODES: CampaignNode[] = [
   },
   {
     id: 'm_dma', act: 10, title: 'DMA engine', kind: 'build', optional: true, requires: ['m_bus'], base: BUILDM.m_dma, par: { nand: 1366, period: 48, cycles: 2079 },
-    why: 'Copying costs a processor two bus transfers a word. A DMA engine copies as a second master and interrupts when done: 1 366 NANDs. A 64-word table summed straight from flash takes 845 cycles, copied by DMA first 595.',
+    why: 'Copying costs a processor two bus transfers a word. A DMA engine copies as a second master and interrupts when done: 1366 NANDs. A 64-word table summed straight from flash takes 845 cycles, copied by DMA first 595.',
     tips: ['Registers: src, dst, a count, and the word in flight; flip-flops for running, read or write, and irq.', 'Count with an incrementer: load NOT len and add 1 per word; the incrementer\'s carry (all ones) means nothing is left, len = 0 included.', 'One request at a time: valid while running and not done, the address src in the read phase and dst in the write phase. When ready: a read latches mq and turns to writing; a write steps src, dst and the count and turns to reading.', 'Hold everything while ready is 0: the address and data come straight from registers that change only when ready.'],
     codex: ['dma', 'coherence'], unlocks: ['rv16_dma'], chapters: [{ chapter: 'bus', step: 3, label: 'DMA' }],
   },
   {
     id: 'm_flash', act: 10, title: 'Flash page store', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_flash, par: { nand: 1049, period: 38, cycles: 7844 },
-    why: 'Flash keeps data without power but cannot overwrite: a page is written once per erase of its whole block. A page store writes somewhere new each time and keeps a map, as every SSD does: 1 049 NANDs.',
+    why: 'Flash keeps data without power but cannot overwrite: a page is written once per erase of its whole block. A page store writes somewhere new each time and keeps a map, as every SSD does: 1049 NANDs.',
     tips: ['Write as a log: a head pointer to the next erased page, a table of 8 entries saying where each logical page lives. A write programs the head (with the logical page number as its tag), points the entry there, and moves the head.', 'Keep one block erased ahead of the head. When the head enters a new block, collect the block after it: read each page; if the table still points at it (its tag says whose it was), program it at the head and repoint the entry; then erase the block.', 'Update the table and the head when you issue the program, not when it finishes: fq shows the read page only until the next command.', 'A small state machine: idle, waiting on a read or a program, and the collector\'s read, copy and erase. While fbusy is 1 issue nothing.'],
     codex: ['ftl', 'wearlevel'], unlocks: ['rv16_flashstore'], chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
   },

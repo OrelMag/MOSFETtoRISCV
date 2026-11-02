@@ -228,7 +228,7 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
     stop = frameRun(stage, () => false, () => { stop = null; runBtn.textContent = 'Run'; stage.refresh(); });
   };
   runBtn.addEventListener('click', () => { if (stop) stop(); else run(); });
-  const step = h('button', { class: 'btn sm', title: 'Run to the next printed character, or 2 000 cycles' }, 'Run to output');
+  const step = h('button', { class: 'btn sm', title: 'Run to the next printed character, or 2000 cycles' }, 'Run to output');
   step.addEventListener('click', () => {
     stage.checkpoint();
     const n = st.console.length;

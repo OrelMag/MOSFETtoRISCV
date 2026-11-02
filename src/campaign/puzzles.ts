@@ -429,7 +429,7 @@ bin:    lw   a1, 0(a0)
         li   a0, 0xff
         lw   ra, 0(a0)        # frames
 frame:
-        # clear: every thread a share of the 1 024 words
+        # clear: every thread a share of the 1024 words
 
         # warp 0, lane i: turn corner i, and store its screen position
 

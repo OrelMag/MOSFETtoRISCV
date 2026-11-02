@@ -18,8 +18,8 @@ export function doomNeeds(): Widget {
     ['Game data', 'a WAD file: Freedoom is 28.8 MB', 'none', 'a read-only region at 0x1000_0000, the file\'s bytes'],
     ['Screen', '320 × 200, 256 colours from a palette', 'a console, 8 LEDs', 'a frame buffer of palette indices + 256 palette registers'],
     ['Keys', 'press and release events', '8 switches', 'KEY: a load takes the oldest event'],
-    ['Time', 'milliseconds since start', 'mtime, a 32-bit cycle counter', 'nothing: time = cycles / 40 000 (40 MHz), extended to 64 bits in software'],
-    ['Work', 'measured: 1.0–3.0 M cycles a frame (median 1.9 M)', 'about 2 400 cycles/s on the gates in a page', 'a fast interpreter of the same ISA (≈ 90 M instructions/s)'],
+    ['Time', 'milliseconds since start', 'mtime, a 32-bit cycle counter', 'nothing: time = cycles / 40 000 (40 MHz), extended to 64 bits in software'],
+    ['Work', 'measured: 1.0–3.0 M cycles a frame (median 1.9 M)', 'about 2400 cycles/s on the gates in a page', 'a fast interpreter of the same ISA (≈ 90 M instructions/s)'],
   ];
   const el = h('div', { class: 'doom-info' },
     h('table', { class: 'doom-table' },

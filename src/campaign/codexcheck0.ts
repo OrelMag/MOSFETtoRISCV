@@ -19,9 +19,9 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   inverter: [
     {
-      question: 'A pseudo-NMOS design has 200 000 gates whose NMOS is on, each drawing 25 µA through its pull-up. Its static current, and that of the same logic in CMOS:',
+      question: 'A pseudo-NMOS design has 200 000 gates whose NMOS is on, each drawing 25 µA through its pull-up. Its static current, and that of the same logic in CMOS:',
       options: ['5 A; essentially none in CMOS', '5 A; also 5 A, since both have one NMOS per gate', 'Essentially none for both: current flows only while switching'], answer: 0,
-      explain: '200 000 × 25 µA = 5 A, drawn for as long as the inputs stay at 1. In CMOS the PMOS that replaces the resistor is off whenever the NMOS is on.',
+      explain: '200 000 × 25 µA = 5 A, drawn for as long as the inputs stay at 1. In CMOS the PMOS that replaces the resistor is off whenever the NMOS is on.',
       why: ['', 'In CMOS the pull-up is a PMOS that turns off when the NMOS turns on: no rail-to-rail path in either steady state.', 'That is true of CMOS only. In pseudo-NMOS the resistor and the NMOS conduct together for as long as the input is 1.'],
     },
     {
@@ -231,11 +231,11 @@ export const CHECK0: Record<string, Quiz[]> = {
     {
       question: 'a = 0x0001, b = 0xFFFF. slt and sltu give:',
       options: ['slt = 1, sltu = 0', 'Both 1', 'slt = 0, sltu = 1'], answer: 2,
-      explain: 'Signed, 0xFFFF is −1 and 1 &lt; −1 is false. Unsigned it is 65 535, and a − b borrows (no carry out): 1.',
-      why: ['Swapped: signed 0xFFFF is −1, unsigned it is 65 535.', 'Signed, 1 is not less than −1.', ''],
+      explain: 'Signed, 0xFFFF is −1 and 1 &lt; −1 is false. Unsigned it is 65 535, and a − b borrows (no carry out): 1.',
+      why: ['Swapped: signed 0xFFFF is −1, unsigned it is 65 535.', 'Signed, 1 is not less than −1.', ''],
     },
     {
-      question: 'The 16-bit ALU is 1 055 NANDs, 64 delays deep with ripple carry. What should be made faster to shorten its critical path?',
+      question: 'The 16-bit ALU is 1055 NANDs, 64 delays deep with ripple carry. What should be made faster to shorten its critical path?',
       options: ['The subtractor\'s carry chain', 'The 8:1 result mux, its biggest part', 'The barrel shifter'], answer: 0,
       explain: 'The delay is in the carry chain: a Kogge–Stone adder takes the ALU from 64 to 42 delays for 218 more NANDs.',
       why: ['', 'The result mux is the largest part (343 NANDs, a third of the ALU) but only 7 levels deep.', 'The shifter is large (299 NANDs) but only 14 deep.'],
@@ -341,8 +341,8 @@ export const CHECK0: Record<string, Quiz[]> = {
   ],
   regfile: [
     {
-      question: 'Adding a third read port to the RV16 8 × 16 register file (2 172 NANDs) costs about:',
-      options: ['1 456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '30 NANDs: another decoder'], answer: 1,
+      question: 'Adding a third read port to the RV16 8 × 16 register file (2172 NANDs) costs about:',
+      options: ['1456 NANDs: another copy of the registers', '343 NANDs: one more 8:1 bus mux tree', '30 NANDs: another decoder'], answer: 1,
       explain: 'Read ports share the storage; each has its own mux tree. The two existing ones are 686 NANDs, 343 each.',
       why: ['Every port reads the same registers; only the selection is duplicated.', '', 'A decoder selects the register written; a read port selects with a mux tree.'],
     },

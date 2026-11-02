@@ -271,7 +271,7 @@ export const chTraps: Chapter = {
       'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE. mtvec\'s low two bits are its MODE: 0 direct (every trap to BASE), 1 vectored (interrupt <em>n</em> to BASE + 4<em>n</em>); here MODE is wired to 0.',
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
-      'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
+      'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
     ],
     practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],
@@ -537,7 +537,7 @@ export const chTraps: Chapter = {
       body: `
         <p>Seven 2:1 multiplexer pairs in a chain build the <span data-show="c0 c1 c2 c3 c4 c5 c6">cause</span> and
         <span data-show="v0 v1 v2 v3 v4 v5 v6">mtval</span>; the trap signal is <span data-show="any">the OR of all sources</span>.
-        Together with the CSR unit and the system decoder this is about 10 000 NANDs: privilege and interrupts are not free, but
+        Together with the CSR unit and the system decoder this is about 10 000 NANDs: privilege and interrupts are not free, but
         they are what turns a calculator into a computer that can run an operating system.</p>
         <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>`,
       scene: () => ({ root: TRAP_UNIT, inputs: { illegal: 1 } }),

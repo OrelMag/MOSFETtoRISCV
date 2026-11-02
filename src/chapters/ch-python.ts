@@ -156,8 +156,8 @@ export const chPython: Chapter = {
         <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
         through <span data-show="rf alu">the register file and the ALU</span>. Click a line to light the hardware its
         instructions use. The CPU panel still checks every register against the golden model after every cycle.</p>
-        <p>Two things this view makes concrete. First, how little of the machine a line uses: one <code>add</code> reads two registers and writes one, and the rest of the ~400 000 transistors
-        sit idle in that cycle, though about 25 000 nets still change value, because a new instruction word has just been fetched and decoded. Second, that the abstraction
+        <p>Two things this view makes concrete. First, how little of the machine a line uses: one <code>add</code> reads two registers and writes one, and the rest of the ~400 000 transistors
+        sit idle in that cycle, though about 25 000 nets still change value, because a new instruction word has just been fetched and decoded. Second, that the abstraction
         holds: the Python never mentions a register or a wire, yet its variable <code>total</code> is a set of flip-flops you can read and watch change.</p>`,
       scene: () => pyScene(src('sum'), { highlight: ['rf', 'alu'] }),
       tour: {

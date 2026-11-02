@@ -76,7 +76,7 @@ export const chTubes: Chapter = {
       title: 'A hot cathode',
       body: `
         <p>A relay waits milliseconds for iron to move. A <strong>vacuum tube</strong> moves only electrons. A heater
-        brings an oxide-coated <strong>cathode</strong> to about 1 000 K, hot enough to boil electrons off its surface;
+        brings an oxide-coated <strong>cathode</strong> to about 1000 K, hot enough to boil electrons off its surface;
         a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a wire mesh, the
         <strong>grid</strong>, decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
         none once the grid is below ${V_CUTOFF} V. Its field pushes them back.</p>
@@ -98,7 +98,7 @@ export const chTubes: Chapter = {
           in the resistor and ${w2(SEC.plate)} W in the tube while it conducts.</p>`,
         pitfall: `<p>Reading a cold machine as "all off". Until the cathodes warm (${WARM.t10.toFixed(1)} s to a tenth of the current, ${WARM.t90.toFixed(1)} s to nine tenths) nothing conducts, so every plate
           sits at ${B_PLUS} V, which the logic reads as a 1: the machine wakes up in a state nobody designed, and resets must wait for the heaters.</p>`,
-        real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it almost everywhere. An oxide-coated cathode emits at around 1 000 K, which is also why
+        real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it almost everywhere. An oxide-coated cathode emits at around 1000 K, which is also why
           tubes dim and fail: the coating evaporates and the heater ages. Computers of the 1950s left their tubes on day and night for this reason.</p>`,
         numbers: `<table class="mini"><tr><th>grid V</th>${[0, -4, -8, -12.5].map((g) => `<td>${g}</td>`).join('')}</tr>
           <tr><th>plate V</th>${[0, -4, -8, -12.5].map((g) => `<td>${v(plateVoltage(g))}</td>`).join('')}</tr></table>`,
@@ -113,7 +113,7 @@ export const chTubes: Chapter = {
         ],
         answer: 0,
         explain: `Of a section's ${w2(SEC.average)} W (average, conducting half the time), ${w2(HEATER_W)} W is the heater. <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> pays when it switches; a tube pays for being ready to.`,
-        why: ['', 'The heater keeps the cathode at about 1 000 K all the time. Switch it off and emission stops: the tube no longer conducts at all.', 'Once the cathode is hot the emission is steady: a warm tube switches no faster the longer it runs.'],
+        why: ['', 'The heater keeps the cathode at about 1000 K all the time. Switch it off and emission stops: the tube no longer conducts at all.', 'Once the cathode is hot the emission is steady: a warm tube switches no faster the longer it runs.'],
       },
     },
     {
@@ -266,7 +266,7 @@ export const chTubes: Chapter = {
         junction is the <strong>AND</strong> of the inputs; <span data-show="r1 r2">a divider</span> and <span data-show="v1">a triode</span> invert it.</p>
         <p>One NAND: half a 6SN7 and a whole 6AL5 (a twin diode), ${w2(BRICK.total)} W on average:
         ${w2(BRICK.heaters)} W of heaters, ${w2(BRICK.plate)} W through the plate resistor, ${w2(BRICK.divider)} W in the
-        divider. ENIAC itself used 7 200 germanium crystal diodes for gates like this one, which saved the heaters.</p>
+        divider. ENIAC itself used 7200 germanium crystal diodes for gates like this one, which saved the heaters.</p>
         <p>The diodes do the logic and the triode restores the level: a diode AND alone has no gain, and every stage through it would lose a diode drop of swing. The
         triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> between the gate and its restoring stage, paid in
         two tube envelopes (${stats(TUBE_NAND).triodes} triode section and ${stats(TUBE_NAND).diodes} diode sections per NAND).</p>
@@ -355,7 +355,7 @@ export const chTubes: Chapter = {
           and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
           circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
           charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
-          <a href="#/c/dram/0">chapter 35</a>'s DRAM: 1 024 bits a tube, random access, temperamental.
+          <a href="#/c/dram/0">chapter 35</a>'s DRAM: 1024 bits a tube, random access, temperamental.
           <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
           random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
           memory until semiconductor DRAM displaced it in the 1970s.</p>`,
@@ -383,7 +383,7 @@ export const chTubes: Chapter = {
         ${thin(ENIAC.relays)} relays, ${thin(ENIAC.resistors)} resistors, ${ENIAC.power / 1e3} kW, ${ENIAC.mass / 1e3} t,
         ${thin(ENIAC.adds)} additions a second. Heaters age fastest while warming up, so it was left on: then a tube
         failed about every two days, and finding which one took a while. Every tube is a filament with a lifetime, so
-        reliability, not wiring, bounded a tube machine. SAGE's AN/FSQ-7 (1958) reached some 50 000 tubes a site only by
+        reliability, not wiring, bounded a tube machine. SAGE's AN/FSQ-7 (1958) reached some 50 000 tubes a site only by
         building the computer twice, one on line and one on standby, and by running tubes at reduced voltage
         (marginal checking) to find the weak ones before they failed.</p>
         <p>The transistor switches with no heater, no vacuum and no warm-up: the bipolar point-contact transistor in 1947,

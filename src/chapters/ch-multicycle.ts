@@ -89,7 +89,7 @@ export const chMulticycle: Chapter = {
       'One ALU computes PC + 4 (fetch), the branch target (decode) and the operation (execute); one memory port serves fetches and loads. IR, OldPC, A, B, Data and ALUOut carry values across steps.',
       '13 states. Branch, lui and auipc take 3 cycles; ALU operations, stores and jal 4; loads and jalr 5.',
       'Hardwired control: a 4-bit state register, a 4→16 decoder, an AND gate per opcode-dependent transition and OR gates per signal: 412 NANDs.',
-      'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6 124 NANDs here, because these ROMs are mux trees of constants.',
+      'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6124 NANDs here, because these ROMs are mux trees of constants.',
       'The microcode is a grid of cells you can paint: an I-type instruction written back in ExecuteI takes 3 cycles instead of 4, and the painter checks any edit against the golden model.',
       'Period 85 NAND delays against the single-cycle CPU\'s 103 (both with Kogge–Stone adders), but CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.',
     ],
@@ -110,7 +110,7 @@ export const chMulticycle: Chapter = {
         why: ['', 'The microcode lives in the controller\'s ROM; these are datapath registers.', 'Only one instruction is in flight at a time: there is nothing to forward between.', 'The register file is still there; A and B hold the two values read from it for the next step.'],
       },
       {
-        question: 'Here microcode costs 6 124 NANDs against 412 for the hardwired FSM. When is microcode worth it?',
+        question: 'Here microcode costs 6124 NANDs against 412 for the hardwired FSM. When is microcode worth it?',
         options: ['When the control table is large and irregular, or must be changeable after manufacture', 'When the clock must be faster', 'Never: it only adds gates', 'When the instruction set is small and regular'],
         answer: 0,
         explain: 'A dense ROM stores a big table more cheaply than random logic, and can be rewritten. That is how System/360 spanned a family of machines and how x86 cores still patch bugs.',
@@ -255,12 +255,12 @@ export const chMulticycle: Chapter = {
         kind: 'quiz', question: 'The microcode and FSM controllers are generated from the same table. How do we know they behave identically?',
         options: [
           'We assume it',
-          'Both run in lock-step for 3 000 cycles of random instructions with every output compared, and both full CPUs are co-simulated against the instruction-set simulator',
+          'Both run in lock-step for 3000 cycles of random instructions with every output compared, and both full CPUs are co-simulated against the instruction-set simulator',
           'The microcode is faster',
           'They have the same gate count',
         ],
         answer: 1,
-        why: ['An assumption is not evidence: two implementations of one table can still differ by a wiring mistake.', '', 'Speed says nothing about behaviour, and both run at the same period here.', 'Equal cost would prove nothing, and they are far apart: about 400 NANDs against 6 100.'],
+        why: ['An assumption is not evidence: two implementations of one table can still differ by a wiring mistake.', '', 'Speed says nothing about behaviour, and both run at the same period here.', 'Equal cost would prove nothing, and they are far apart: about 400 NANDs against 6100.'],
         explain: 'The site\'s tests drive both controllers with the same opcode sequence, reaching all 13 states, and compare every control signal every cycle. Then each full CPU runs every sample program against the instruction-set simulator. Equivalence checking of two implementations is a daily job in industry, usually done formally.',
       },
     },
@@ -292,7 +292,7 @@ export const chMulticycle: Chapter = {
         <p>Measured with the timing panel: the clock period drops from 103 to <strong>85</strong> NAND delays. The longest step is still a full
         <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the CPI is now <strong>3.6 to 4.0</strong> on the sample programs (this gcd: 51 instructions in 182 cycles, 3.57),
         so each instruction takes 300 to 340 delays instead of 103.
-        The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2 900 NANDs) cost more than the two adders they replace.</p>
+        The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
         and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 17</a>.</p>
         <p>The accounting is time per instruction = CPI × period. A step is shorter than the whole single-cycle path, but an instruction needs several of them; the product is what matters, and here it is far above the single-cycle machine's one period of 103. The cheap controller

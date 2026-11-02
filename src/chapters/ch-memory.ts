@@ -725,11 +725,11 @@ export const chRegisters: Chapter = {
       more: {
         derive: `<p>Each toggle flip-flop outputs half the frequency of its clock: f_i = f / 2ⁱ⁺¹. Delays add: stage i changes after i·t_cq, so the bits of a ripple count change in sequence, not together, and for
           a moment the word shows a value that was never the count. The settling time is n·t_cq, against one t_cq for a synchronous counter.</p>`,
-        real: `<p>A 32 768 Hz watch crystal divided by 2¹⁵ (${2 ** 15}) gives exactly 1 Hz: fifteen ripple stages, in every quartz watch. At those rates the delay does not matter, and a ripple divider is
+        real: `<p>A 32 768 Hz watch crystal divided by 2¹⁵ (${2 ** 15}) gives exactly 1 Hz: fifteen ripple stages, in every quartz watch. At those rates the delay does not matter, and a ripple divider is
           the cheapest and lowest-power way to count.</p>`,
         pitfall: `<p>Using a stage output as the clock for other logic. Its edge arrives i·t_cq after the master clock's, a skew that moves the setup and hold windows, and the static timing tools then see
           a generated clock to treat as such. A synchronous counter with an enable (a clock-enable pulse every 2ⁱ cycles) keeps one clock domain instead.</p>`,
-        numbers: `<table class="mini"><tr><th>stage</th><th>output frequency from 32 768 Hz</th></tr>
+        numbers: `<table class="mini"><tr><th>stage</th><th>output frequency from 32 768 Hz</th></tr>
           ${[0, 1, 2, 7, 14].map((i) => `<tr><td>${i}</td><td>${groupDigits(32768 / 2 ** (i + 1))} Hz</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: clockDivider(3), inputs: { clk: 0, rst_n: 0 }, analyzer: true }),
@@ -826,7 +826,7 @@ export const chMemory: Chapter = {
   recap: {
     keep: [
       'A RAM is registers plus a decoder with enable (write: one word\'s load enable, at the clock edge) and a multiplexer tree (read: asynchronous, no clock). 4 words × 4 bits: 306 NANDs.',
-      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use cells of six transistors, or of one transistor and a capacitor.',
+      'Each doubling of the words adds an address bit, a decoder input and a mux level. 64 × 16 bits in flip-flops is about 80 000 transistors: why real memories use cells of six transistors, or of one transistor and a capacitor.',
       'A ROM keeps the decoder and puts the data in the wiring: output bit j is the OR of the word lines whose bit j is 1. A PLA builds only the product terms the outputs need: the 7-segment font in 164 NANDs against 313 as a ROM.',
       'FIFO: a circular buffer with read and write pointers, one extra pointer bit telling full from empty. Stack: one pointer, the top at slot sp − 1.',
       'A CAM compares the key with every entry at once and priority-encodes the matches; a comparator per entry keeps CAMs small. Each extra port costs another mux tree (read) or decoder (write).',

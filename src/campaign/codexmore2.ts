@@ -186,7 +186,7 @@ read miss        8 cycles               8, or 12 with a dirty victim:
     ],
   },
   vm: {
-    idea: `Virtual memory gives every program its own address space. Addresses split into a virtual page number and an offset; a page table, set up by the operating system, maps each page to a physical frame and says whether it may be read, written, executed or touched in user mode. A missing or forbidden page raises a <b>page fault</b>, a precise exception: the handler loads the page or kills the program, and the instruction runs again. Pages give isolation, memory larger than RAM (paging to disk), shared libraries and copy-on-write.<br>RISC-V's Sv32 (RV32): 4 KiB pages, a two-level table of 1 024 four-byte entries per level (10 + 10 + 12 address bits), the root's frame in <code>satp</code> along with an address-space id; an entry holds a 22-bit frame number and V, R, W, X, U, G, A, D bits, and the physical address grows to 34 bits. A walk costs two memory reads, so a <b>TLB</b>, a small (often fully associative) cache of translations, sits beside the L1; a TLB miss walks the table, in hardware on RISC-V. To look up the cache while translating, L1s index with page-offset bits only (virtually indexed, physically tagged), which limits an L1 to page size × ways: 4 KiB × 8 ways = 32 KiB.<br>None of the site's CPUs has an MMU: they run in machine mode on physical addresses, as small embedded cores do.`,
+    idea: `Virtual memory gives every program its own address space. Addresses split into a virtual page number and an offset; a page table, set up by the operating system, maps each page to a physical frame and says whether it may be read, written, executed or touched in user mode. A missing or forbidden page raises a <b>page fault</b>, a precise exception: the handler loads the page or kills the program, and the instruction runs again. Pages give isolation, memory larger than RAM (paging to disk), shared libraries and copy-on-write.<br>RISC-V's Sv32 (RV32): 4 KiB pages, a two-level table of 1024 four-byte entries per level (10 + 10 + 12 address bits), the root's frame in <code>satp</code> along with an address-space id; an entry holds a 22-bit frame number and V, R, W, X, U, G, A, D bits, and the physical address grows to 34 bits. A walk costs two memory reads, so a <b>TLB</b>, a small (often fully associative) cache of translations, sits beside the L1; a TLB miss walks the table, in hardware on RISC-V. To look up the cache while translating, L1s index with page-offset bits only (virtually indexed, physically tagged), which limits an L1 to page size × ways: 4 KiB × 8 ways = 32 KiB.<br>None of the site's CPUs has an MMU: they run in machine mode on physical addresses, as small embedded cores do.`,
     example: {
       title: 'Translating 0x0040_3A10 under Sv32',
       body: `<pre>VPN[1] = bits 31:22 = 0x001    VPN[0] = bits 21:12 = 0x003
@@ -253,12 +253,12 @@ flip 6 and 9:     syndrome 6⊕9 = 15, parity even → double</pre>Here: encoder
   },
 
   rowhammer: {
-    idea: `Refresh is sized for leakage alone: every row is rewritten within 64 ms because a cell keeps its charge at least that long on its own. Row hammer breaks the assumption. Each activation of a row (the <em>aggressor</em>) raises its word line and swings its bit lines; through capacitive coupling between neighbouring word lines and charge injected into the substrate, the cells of the adjacent rows (the <em>victims</em>) lose a little charge every time. Enough activations before the victims' next refresh and their weakest cells flip. Kim et al. (ISCA 2014) found it in 110 of 129 DDR3 modules, the first flips after 139 000 activations of one row within a 64 ms window; as cells shrank the threshold fell, to under 5 000 in some later DDR4 and LPDDR4 parts. Hammering both neighbours of a victim (double-sided) needs fewer per row.<br>It is a security hole, not just a reliability one: a program flips bits in memory it cannot write. Project Zero (2015) flipped page-table bits to gain kernel privileges; later attacks reached across virtual machines and through JavaScript. Defences: count activations per row and refresh a hammered row's neighbours early (DDR4's target row refresh, inside the device; DDR5's refresh management commands and per-row activation counters), refresh the whole device more often (halving the window halves the activations an attacker gets), and ECC, which corrects one flip per word but not the several a determined attack can place. Chapter 35's cells do not couple: each leaks alone.`,
+    idea: `Refresh is sized for leakage alone: every row is rewritten within 64 ms because a cell keeps its charge at least that long on its own. Row hammer breaks the assumption. Each activation of a row (the <em>aggressor</em>) raises its word line and swings its bit lines; through capacitive coupling between neighbouring word lines and charge injected into the substrate, the cells of the adjacent rows (the <em>victims</em>) lose a little charge every time. Enough activations before the victims' next refresh and their weakest cells flip. Kim et al. (ISCA 2014) found it in 110 of 129 DDR3 modules, the first flips after 139 000 activations of one row within a 64 ms window; as cells shrank the threshold fell, to under 5000 in some later DDR4 and LPDDR4 parts. Hammering both neighbours of a victim (double-sided) needs fewer per row.<br>It is a security hole, not just a reliability one: a program flips bits in memory it cannot write. Project Zero (2015) flipped page-table bits to gain kernel privileges; later attacks reached across virtual machines and through JavaScript. Defences: count activations per row and refresh a hammered row's neighbours early (DDR4's target row refresh, inside the device; DDR5's refresh management commands and per-row activation counters), refresh the whole device more often (halving the window halves the activations an attacker gets), and ECC, which corrects one flip per word but not the several a determined attack can place. Chapter 35's cells do not couple: each leaks alone.`,
     example: {
       title: 'How many activations fit in a refresh window (DDR4-3200)',
       body: `<pre>one row can be activated every tRC = tRAS + tRP = 32 + 13.75 = 45.75 ns
 64 ms / 45.75 ns ≈ 1.4 million activations of one row per window
-DDR3 threshold in 2014: 139 000, about a tenth of that
+DDR3 threshold in 2014: 139 000, about a tenth of that
 double-sided: two aggressors take turns, 0.7 million each</pre>An attacker has an order of magnitude to spare; refreshing twice as often only halves it.`,
     },
     mistakes: [
@@ -445,8 +445,8 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
 0 + 4 − 32 + 128 = 100: four rows 0, 4a, −32a, 128a instead of eight
 
              NANDs   depth
- 8 × 8 Booth  1 062    47      Baugh–Wooley tree  972    40
-32 × 32 Booth 12 658   75      Baugh–Wooley tree 13 293  68</pre>`,
+ 8 × 8 Booth   1062    47      Baugh–Wooley tree  972    40
+32 × 32 Booth 12 658   75      Baugh–Wooley tree 13 293  68</pre>`,
     },
     mistakes: [
       'Expecting Booth to win at every width: at 8 bits the encoders and wider row cells cost more than the four rows saved.',
@@ -472,7 +472,7 @@ fsub  1.25 − 1.25 → 0
 fma   x·x − 1.25  → 0.015625 = 2⁻⁶, exact, no flags
 
 float32 here     NANDs    depth
-fma              26 348    270   (multiply 92, align and add 91, round 106)
+fma              26 348    270   (multiply 92, align and add 91, round 106)
 fmul then fadd            357   (176 + 181)</pre>In the single-cycle RV32IF the fma took the period from 274 to 368 NAND delays: a pipelined FPU gives it several cycles instead.`,
     },
     mistakes: [
@@ -497,7 +497,7 @@ fmul then fadd            357   (176 + 181)</pre>In the single-cycle RV32IF the 
 cycle 11  lw a1, 256(t4)    reads t4, writes a1: neither pending, issues
                             sets pending[a1]; back at the end of 18
           add a0, t5, a1    t5 clears after 17, a1 after 18
-cycle 19  add issues        (26 if each load were waited out in turn)</pre>The warp core's scoreboard: a 32-bit pending register with set and clear decoders (1 418 NANDs per warp), and a check of 736 NANDs: three 32:1 multiplexers reading the pending bits of rs1, rs2 and rd, gated by whether the opcode uses each.`,
+cycle 19  add issues        (26 if each load were waited out in turn)</pre>The warp core's scoreboard: a 32-bit pending register with set and clear decoders (1418 NANDs per warp), and a check of 736 NANDs: three 32:1 multiplexers reading the pending bits of rs1, rs2 and rd, gated by whether the opcode uses each.`,
     },
     mistakes: [
       'Checking only the source registers: a second load to the same rd could then be overwritten by the first one returning late.',
@@ -510,13 +510,13 @@ cycle 19  add issues        (26 if each load were waited out in turn)</pre>The w
     ],
   },
   occupancy: {
-    idea: `A GPU hides latency with other work: while one warp waits for memory, another issues. How much latency it can hide depends on how many warps are resident, and that is limited by what each warp needs from fixed resources. <b>Occupancy</b> is the number of resident warps as a fraction of the hardware's maximum. The register file is the usual limit: on recent NVIDIA multiprocessors 65 536 32-bit registers are shared by all resident threads, so a kernel using 32 registers a thread fits 2 048 threads (64 warps), at 64 registers 1 024. Shared memory per block and the maximum blocks and threads per multiprocessor (2 048 on A100 / H100, 1 536 on recent consumer parts) limit it too.<br>More occupancy is not automatically better: past the point where every issue slot is filled, more warps buy nothing, and cutting registers to fit them forces spills to slow memory. Chapter 31 builds the trade-off in gates: each resident warp adds a slot and a register bank in every lane, so it costs area, and it pays only while issue slots are still empty.`,
+    idea: `A GPU hides latency with other work: while one warp waits for memory, another issues. How much latency it can hide depends on how many warps are resident, and that is limited by what each warp needs from fixed resources. <b>Occupancy</b> is the number of resident warps as a fraction of the hardware's maximum. The register file is the usual limit: on recent NVIDIA multiprocessors 65 536 32-bit registers are shared by all resident threads, so a kernel using 32 registers a thread fits 2048 threads (64 warps), at 64 registers 1024. Shared memory per block and the maximum blocks and threads per multiprocessor (2048 on A100 / H100, 1536 on recent consumer parts) limit it too.<br>More occupancy is not automatically better: past the point where every issue slot is filled, more warps buy nothing, and cutting registers to fit them forces spills to slow memory. Chapter 31 builds the trade-off in gates: each resident warp adds a slot and a register bank in every lane, so it costs area, and it pays only while issue slots are still empty.`,
     example: {
       title: 'saxpy over 64 elements, 8-cycle loads',
       body: `<pre>warps   cycles   issue slots used
   1      266       58 %   (154 instructions)
   2      192       83 %
-  4      172      100 %   (172 instructions: every warp runs a prologue)</pre>The second warp costs 110 715 NANDs, 92 564 of them its registers: a fourth warp only fills the last empty slots.`,
+  4      172      100 %   (172 instructions: every warp runs a prologue)</pre>The second warp costs 110 715 NANDs, 92 564 of them its registers: a fourth warp only fills the last empty slots.`,
     },
     mistakes: [
       'Maximizing occupancy for its own sake: once no issue slot is empty, more warps only add pressure on registers and caches.',
@@ -536,7 +536,7 @@ cycle 19  add issues        (26 if each load were waited out in turn)</pre>The w
 per pixel       16 bits in the buffer, test "strictly less", then write
 stepping        a fourth stepper beside the three edges, 12 fraction bits
 set-up          four products (Booth), two 30-bit divisions (32 cycles each),
-                ten shift-and-add steps: 76 cycles, 12 032 NANDs per triangle
+                ten shift-and-add steps: 76 cycles, 12 032 NANDs per triangle
 clear           every tile of the screen, longer than drawing both triangles</pre>A pixel at exactly the stored depth fails: the first triangle drawn at that depth keeps it. Real APIs let the program pick the comparison.`,
     },
     mistakes: [
@@ -554,10 +554,10 @@ clear           every tile of the screen, longer than drawing both triangles</pr
     example: {
       title: 'Chapter 33–34\'s frames',
       body: `<pre>frame           64 × 64 RGB332 = 4 KB, four byte banks
-scan-out        one word (4 pixels) a cycle: 1 024 cycles a frame, vsync on the last
+scan-out        one word (4 pixels) a cycle:  1024 cycles a frame, vsync on the last
 swap            two address multiplexers change sides; 256 NANDs with the scan-out
 chapter 34      the triangle's frame: clear, triangle, then wait for vsync,
-                6 144 cycles = six scan-outs exactly</pre>Untick "wait for vsync" in chapter 33 and swap mid-frame to see a tear.`,
+                 6144 cycles = six scan-outs exactly</pre>Untick "wait for vsync" in chapter 33 and swap mid-frame to see a tear.`,
     },
     mistakes: [
       'Copying the back frame into the front one: it costs a whole frame of memory traffic for what two multiplexers do.',

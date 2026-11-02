@@ -34,7 +34,7 @@ export const chLanes: Chapter = {
       'A thread finds out which it is with <code>csrr t0, tid</code>, a constant wired into each lane. The threads stepping together form a <em>warp</em> (SIMT: single instruction, multiple threads).',
       'On this core one PC means one branch decision: the <strong>leader</strong>, the lowest active lane, found by a lowest-set-bit circuit, sends its flags to the next-PC logic through one-hot multiplexers.',
       'With one memory port, a load or store takes one cycle per active lane, lowest first: saxpy runs 74 instructions in 134 cycles.',
-      'Against four cores the lanes save 18 % of the gates, and 24 192 of the 32 670 NANDs saved are the three program ROMs they do without; without ROMs the saving is 6 %, because a lane is mostly its register file (23 141 of its 27 584 NANDs). And they are slower on saxpy: a memory access stops all four lanes.',
+      'Against four cores the lanes save 18 % of the gates, and 24 192 of the 32 670 NANDs saved are the three program ROMs they do without; without ROMs the saving is 6 %, because a lane is mostly its register file (23 141 of its 27 584 NANDs). And they are slower on saxpy: a memory access stops all four lanes.',
     ],
     practise: ['k_lanes', 'k_vrf', 'k_simd', 'p_saxpy'],
     check: [
@@ -213,8 +213,8 @@ export const chLanes: Chapter = {
         <p>The same work on <a href="#/c/multicore/0">chapter 27</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core. Both bars are counted
         from the actual designs, and both cycle counts come from the instruction-set simulators, which the gate-level circuits match cycle for cycle.</p>
         <p>The lanes save the front end three times over, yet only 18 % of the gates, and most of that is program ROM: four cores read four copies of the
-        program, the lanes one, and 24 192 of the 32 670 NANDs saved are those three ROMs. Leave the ROMs out of both and the lanes save 6 %: a lane is mostly
-        its register file (23 141 of its 27 584 NANDs, flip-flops and multiplexers), and the PC, decoder and control they share are small beside it. And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
+        program, the lanes one, and 24 192 of the 32 670 NANDs saved are those three ROMs. Leave the ROMs out of both and the lanes save 6 %: a lane is mostly
+        its register file (23 141 of its 27 584 NANDs, flip-flops and multiplexers), and the PC, decoder and control they share are small beside it. And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
         the other three compute. Real GPUs answer both: memory as wide as a warp, with a <strong>coalescer</strong> merging neighbouring addresses into one access
         (<a href="#/c/feed/0">chapter 32</a>), and many warps so that one waiting does not idle the lanes (<a href="#/c/warps/0">chapter 31</a>). Their register files are SRAM, and the cores they compete with have
         large front ends (out-of-order logic, predictors, caches), so the sharing pays far more than it does here.</p>`,
@@ -510,7 +510,7 @@ export const chWarps: Chapter = {
       'A scoreboard, one pending bit per register, stops a warp only at the first instruction that reads a pending register or writes one.',
       'A warp slot holds a PC, a mask and stack, a running bit and a scoreboard; each lane holds a register bank per warp. The program, the decoder, the ALUs and the memory are shared; each warp reads the program through a port of its own, which in gates is a copy of the ROM.',
       'A round-robin scheduler issues one ready warp a cycle. Four warps: 172 instructions in 172 cycles, the latency hidden; two warps 192 cycles, one 266.',
-      'The second warp costs 110 715 NANDs, 92 564 of them registers. A real GPU fixes the register file, and the registers a thread needs decide how many warps fit: the occupancy.',
+      'The second warp costs 110 715 NANDs, 92 564 of them registers. A real GPU fixes the register file, and the registers a thread needs decide how many warps fit: the occupancy.',
     ],
     practise: ['k_warps'],
     check: [
@@ -525,14 +525,14 @@ export const chWarps: Chapter = {
         question: 'What does a second resident warp add to the core?',
         options: ['A slot (PC, mask, stack, running bit, scoreboard), a register bank in every lane and a read of the program ROM', 'A second decoder, ALUs and memory', 'Only a PC', 'Four more ALUs, so two warps issue at once'],
         answer: 0,
-        explain: 'Only state is copied, plus what reads it: 110 715 NANDs, of which 92 564 are the new register banks.',
+        explain: 'Only state is copied, plus what reads it: 110 715 NANDs, of which 92 564 are the new register banks.',
         why: ['', 'The decoder, the ALUs and the memory are shared; only one warp issues per cycle.', 'Each thread\'s registers must survive while the other warp runs: the register banks are most of the cost.', 'One warp issues per cycle, so the lanes\' ALUs are shared by all warps.'],
       },
       {
-        question: 'A GPU has 65 536 registers per streaming multiprocessor. A kernel needs 64 registers per thread. How many threads fit?',
-        options: ['1 024', '2 048', '512', '65 536'],
+        question: 'A GPU has 65 536 registers per streaming multiprocessor. A kernel needs 64 registers per thread. How many threads fit?',
+        options: ['1024', '2048', '512', '65 536'],
         answer: 0,
-        explain: '65 536 / 64 = 1 024 threads, 32 warps of 32: half the 2 048 that fit at 32 registers a thread.',
+        explain: '65 536 / 64 = 1024 threads, 32 warps of 32: half the 2048 that fit at 32 registers a thread.',
         why: ['', 'That is at 32 registers a thread.', 'That would be 128 registers a thread.', 'That counts registers, not threads.'],
       },
     ],
@@ -699,19 +699,19 @@ export const chWarps: Chapter = {
     {
       title: 'Occupancy',
       body: `
-        <p>A warp is cheap to switch to but not cheap to keep. The second warp adds 110 715 NANDs to the core: its registers, 31 × 32 bits in each of 4 lanes
-        (92 564), its read port into the program, a copy of the ROM (8 064), its slot of PC, mask, stack and scoreboard (6 203), its scoreboard check (736),
+        <p>A warp is cheap to switch to but not cheap to keep. The second warp adds 110 715 NANDs to the core: its registers, 31 × 32 bits in each of 4 lanes
+        (92 564), its read port into the program, a copy of the ROM (8064), its slot of PC, mask, stack and scoreboard (6203), its scoreboard check (736),
         the wspawn compare that starts it, and wider multiplexers. Each resident warp buys issue slots only while some are still empty: past that, it only adds gates.</p>
         <p>A real GPU turns the question around. Its register file is fixed (65 536 32-bit registers per streaming multiprocessor on recent NVIDIA parts), and a
-        kernel's register count decides how many threads fit: at 32 registers a thread, 2 048 threads (64 warps of 32, the most an A100 or H100 SM holds; an
-        RTX 30 or 40 SM stops at 1 536); at 64 registers, half as many. Shared memory per block and the block size limit it too: whichever runs out first
+        kernel's register count decides how many threads fit: at 32 registers a thread, 2048 threads (64 warps of 32, the most an A100 or H100 SM holds; an
+        RTX 30 or 40 SM stops at 1536); at 64 registers, half as many. Shared memory per block and the block size limit it too: whichever runs out first
         decides. The resident warps as a fraction of the maximum are the <strong>occupancy</strong>. Fewer registers per thread, more warps, more latency hidden;
         too few registers, and the compiler spills to slow memory instead.</p>
         <p>The widget sweeps the warps and the load latency with the timing model, which the tests check against the gate-level core cycle for cycle.</p>`,
       widget: occupancyWidget,
       more: {
         derive: `<p>Occupancy from the register file: threads per SM = R / r, with R registers and r per thread; warps = threads / 32, capped by the architectural limit (64 warps, or ${fmt(2048)} threads).
-          At R = 65 536: r = 32 gives ${fmt(65536 / 32)} threads (the cap), r = 64 gives ${fmt(65536 / 64)}, r = 128 gives ${fmt(65536 / 128)}, r = 255 (the most a thread may use) gives ${fmt(Math.floor(65536 / 255))}.
+          At R = 65 536: r = 32 gives ${fmt(65536 / 32)} threads (the cap), r = 64 gives ${fmt(65536 / 64)}, r = 128 gives ${fmt(65536 / 128)}, r = 255 (the most a thread may use) gives ${fmt(Math.floor(65536 / 255))}.
           Occupancy is that over ${fmt(2048)}: ${pct(65536 / 64, 2048)} at 64 registers, ${pct(65536 / 128, 2048)} at 128. Latency hiding needs enough warps, so the compiler's register allocation is a throughput decision.</p>`,
         pitfall: `<p>Higher occupancy is not always faster. Once the issue slots are full more warps add nothing (this chapter's table), and a kernel that spills registers to memory to raise occupancy
           trades slots for slow loads. The right measure is issue slots used, not warps resident.</p>`,
@@ -734,7 +734,7 @@ export const chFeed: Chapter = {
   builds: ['warps', 'cache'],
   recap: {
     keep: [
-      'One port a 16-byte line wide replaces a port per lane: 77 829 NANDs instead of 183 964 for 128 words. The access unit serves the leader\'s line and every lane on it; each other line costs another access.',
+      'One port a 16-byte line wide replaces a port per lane: 77 829 NANDs instead of 183 964 for 128 words. The access unit serves the leader\'s line and every lane on it; each other line costs another access.',
       'Coalescing is a data-layout question: the same 76-instruction kernel takes 124 cycles by rows (68 accesses) and 76 by columns (20).',
       'Shared memory: 64 words in four banks (word w in bank w mod 4), loads in 2 cycles instead of 8. Different words in one bank conflict, one word read by several lanes is broadcast, and padding a 4-word row to 5 spreads a column over the banks.',
       '<code>bar rs1, rs2</code> holds each warp until rs2 warps have arrived: a waiting bit per warp and a population count. <code>amoadd.w</code> reads, adds and writes in one access; this core serves it one lane per access (one adder at the memory), so lanes on one word all count. Real GPUs run atomics in units at the L2 slices and shared-memory banks: lanes on different words proceed together, only lanes on one word take turns.',
@@ -769,14 +769,14 @@ export const chFeed: Chapter = {
     {
       title: 'One port, a line wide',
       body: `
-        <p><a href="#/c/warps/0">Chapter 31</a>'s memory gave every lane a read and a write port of its own: four address decoders and four 128-way multiplexers of 32 bits, 183 964 NANDs for
+        <p><a href="#/c/warps/0">Chapter 31</a>'s memory gave every lane a read and a write port of its own: four address decoders and four 128-way multiplexers of 32 bits, 183 964 NANDs for
         128 words. No real memory is built that way. A DRAM moves a <em>burst</em> of neighbouring bytes per access, and a cache a whole line; here the memory reads
-        and writes a <strong>16-byte line</strong>, four words side by side, through one port: 77 829 NANDs for the same 128 words.</p>
+        and writes a <strong>16-byte line</strong>, four words side by side, through one port: 77 829 NANDs for the same 128 words.</p>
         <p>Four lanes now share that port. The <strong>access unit</strong> decides which of them one access serves: the lowest lane still to serve leads, and every
         lane whose address bits 31 … 4 match the leader's (the same line) goes along. The others wait for the next access. A memory instruction holds the issue
         port for one cycle per access, and its warp moves on only after the last: <a href="#/c/lanes/0">chapter 29</a>'s sequencer, looping over lines instead of lanes. Each access's words
         go back to the lanes it served; the scoreboard clears with the last.</p>
-        <p>The widget evaluates the gate-level access unit (5 870 NANDs) on four addresses, then again on the lanes it left, until none is left.</p>
+        <p>The widget evaluates the gate-level access unit (5870 NANDs) on four addresses, then again on the lanes it left, until none is left.</p>
         <p>Why a line and not a word: DRAM, caches and buses all move their data in blocks because the cost of an access is mostly the address, the decode and the wait, not the
         wires that carry the bytes. Making the port wide spends cheap wires to save expensive accesses, but only for lanes whose addresses fall in the same block. That condition, not
         the width, is what the rest of the chapter is about.</p>
@@ -845,7 +845,7 @@ export const chFeed: Chapter = {
         <p>Next to the lanes sits a <strong>shared memory</strong>: 64 words at address 0x1000 (bit 12 of an address picks it), a scratchpad the threads read and
         write explicitly. It is on the chip, close to the lanes: an access enters the memory pipeline one register before the end, so a load takes 2 cycles instead
         of 8. Only one access reaches the memories per cycle, so a shared access waits a cycle when a global one issued 6 cycles earlier would arrive with it.</p>
-        <p>It is built from four <strong>banks</strong>: word w lives in bank w mod 4, row w / 4, and each bank has its own row decoder (38 928 NANDs, 300 more than
+        <p>It is built from four <strong>banks</strong>: word w lives in bank w mod 4, row w / 4, and each bank has its own row decoder (38 928 NANDs, 300 more than
         a line memory of the same size). One access then serves any four words in different banks, not just one line. Lanes asking for the same word share it (a
         broadcast). Two different words in one bank are a <strong>bank conflict</strong>: per bank the lowest lane picks the row, and a lane wanting another row
         waits for the next access.</p>
@@ -960,7 +960,7 @@ export const chFeed: Chapter = {
       title: 'Tiles',
       body: `
         <p>A matrix multiply, C = A · B with A 8 × 4 and B 4 × 8, needs a multiplier in each lane: a Wallace tree keeping the low 32 bits of the product
-        (<code>mul</code>, 7 388 NANDs a lane). The plain kernel computes C[i][j] from row i of A and column j of B straight from global memory: 8 loads per
+        (<code>mul</code>, 7388 NANDs a lane). The plain kernel computes C[i][j] from row i of A and column j of B straight from global memory: 8 loads per
         element, each one access (a warp's four threads share a row of A, one word for all, and read neighbouring columns of B).</p>
         <p>The tiled kernel uses shared memory as a staging area. Each thread copies one element of a 4 × 4 tile of A and one of B into shared memory,
         <code>bar</code>, computes its element of C from the tiles (a row of the A tile is one word for the whole warp, a column of the B tile spans the four

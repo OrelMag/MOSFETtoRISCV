@@ -35,7 +35,7 @@ export const NUDGES: Record<string, string> = {
   g_mux8: 'The wide version is the narrow one many times over; see what the copies can share.',
   g_eq16: 'Equality is a question every bit position must answer the same way.',
   // act 2: arithmetic
-  n_twos: 'The top bit counts against you: in 8 bits it weighs −128, in 16 bits −32 768.',
+  n_twos: 'The top bit counts against you: in 8 bits it weighs −128, in 16 bits −32 768.',
   a_ha: 'Write out the four rows and look at each output column on its own; one of them hides inside a gate you already built.',
   a_fa: 'Count the 1s among the three inputs: the sum is the low bit of that count, the carry its high bit.',
   a_add4: 'Do what you do in decimal on paper: one column at a time, right to left.',

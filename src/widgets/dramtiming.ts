@@ -11,7 +11,7 @@ const ROW_WORDS = 16, LINE = 4, REQUESTS = 64, SHOWN = 12;
 type Pattern = 'seq' | 'copy' | 'stride' | 'random';
 const PATTERNS: [Pattern, string, string][] = [
   ['seq', 'Sequential', 'Lines 0, 1, 2 … in order: four lines fill a row.'],
-  ['copy', 'Copy', 'Read a line of the source, write it to the destination 1 024 words further: two streams, alternating.'],
+  ['copy', 'Copy', 'Read a line of the source, write it to the destination 1024 words further: two streams, alternating.'],
   ['stride', 'Stride', 'One line per row of bank 0: every access needs a different row of the same bank.'],
   ['random', 'Random', 'Lines anywhere in a 4 K-word memory.'],
 ];
@@ -118,7 +118,7 @@ export function timingWidget(): Widget {
       ['tCAS', `${DDR4_3200.tCAS} ns`, t.tCAS, 'column command → first word: column decoder, data lines, the output path.'],
       ['tRP', `${DDR4_3200.tRP} ns`, t.tRP, 'PRE → ACT: word line down, both bit lines equalized back to VDD/2.'],
       ['tRAS', `${DDR4_3200.tRAS} ns`, t.tRAS, 'ACT → PRE at the earliest: the amplifiers must finish writing the row back.'],
-      ['tREFI', `${DDR4_3200.tREFI / 1000} µs`, t.tREFI, `one REF command at least this often: 8 192 of them cover every row in ${DDR4_3200.retentionMs} ms.`],
+      ['tREFI', `${DDR4_3200.tREFI / 1000} µs`, t.tREFI, `one REF command at least this often: 8192 of them cover every row in ${DDR4_3200.retentionMs} ms.`],
       ['tRFC', `${DDR4_3200.tRFC} ns`, t.tRFC, `the device is busy refreshing: ${((100 * DDR4_3200.tRFC) / DDR4_3200.tREFI).toFixed(1)} % of the time.`],
     ];
     const max = accessCycles('conflict', t), scale = Math.min(14, 360 / max);

@@ -247,7 +247,7 @@ export const chPipePay: Chapter = {
         <p>The fix is a classic: compare the predicted target against <strong>both</strong> candidate targets in parallel (PC + imm,
         rs1 + imm) and pick the right comparison with the jalr bit. The decision and the check then overlap: 70 NAND delays.</p>
         <p>And area: this BTB is ${fmt(nands(BTB))} NANDs (16 entries × 62 bits of flip-flops, a decoder and two read ports),
-        as much as the register file. With its checking logic the core grows by 38 %, from 64 881 to 89 712 NANDs without the
+        as much as the register file. With its checking logic the core grows by 38 %, from 64 881 to 89 712 NANDs without the
         program ROM: a large price for a period 19 % longer and a CPI 14 % lower.</p>
         <p>The period is the more instructive cost. A predictor is not on the critical path by itself: the BTB read happens in Fetch beside the instruction memory. The path that grew is the check, in Execute, that the guess
         was right, because it needs the branch's own outcome and target. Doing the two comparisons in parallel instead of in sequence is the general method: when a decision gates a check, compute the check for each possible decision

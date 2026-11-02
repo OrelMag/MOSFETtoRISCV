@@ -101,7 +101,7 @@ export const CHECK3: Record<string, Quiz[]> = {
   ],
   rounding: [
     {
-      question: '0x3FFF is 1.1111111111₂. A binary16 sum comes out as 1.1111111111|1 000… (lsb 1, G 1, S 0). What does RNE give?',
+      question: '0x3FFF is 1.1111111111₂. A binary16 sum comes out as 1.1111111111|1000… (lsb 1, G 1, S 0). What does RNE give?',
       options: ['0x4000 (2.0)', '0x3FFF', '0x3C00 (1.0)'],
       answer: 0,
       explain: 'A tie with an odd lsb rounds up; adding one ulp to 1.111…1 carries out to 10.000…0, so the exponent goes up by one.',
@@ -341,11 +341,11 @@ export const CHECK3: Record<string, Quiz[]> = {
   ],
   refresh: [
     {
-      question: 'DDR4 at our clock: a REF at least every tREFI = 1 974 cycles (7.8 µs), each keeping an 8 Gb chip busy for tRFC = 89 cycles (350 ns). What share of the time does refresh take, and at 16 Gb (tRFC 550 ns)?',
+      question: 'DDR4 at our clock: a REF at least every tREFI = 1974 cycles (7.8 µs), each keeping an 8 Gb chip busy for tRFC = 89 cycles (350 ns). What share of the time does refresh take, and at 16 Gb (tRFC 550 ns)?',
       options: ['About 4.5%; about 7% at 16 Gb', 'About 4.5% at either size: tREFI does not change', 'Under 1%: a refresh is one activate and precharge, about 45 ns'],
       answer: 0,
-      explain: 'tRFC / tREFI: 89 / 1 974 = 4.5% (350 / 7 800 ns), and 550 / 7 800 = 7% at 16 Gb. tREFI stays fixed by retention (8 192 REFs in 64 ms), so each REF refreshes more rows as chips grow, and tRFC grows with them.',
-      why: ['', 'tREFI stays, but a bigger chip has more rows to cover in the same 8 192 REFs: tRFC grows, 350 ns to 550 ns, and so does the share.', 'One REF refreshes several rows in every bank at once; that is why tRFC is 350 ns, not one row cycle.'],
+      explain: 'tRFC / tREFI: 89 / 1974 = 4.5% (350 / 7800 ns), and 550 / 7800 = 7% at 16 Gb. tREFI stays fixed by retention (8192 REFs in 64 ms), so each REF refreshes more rows as chips grow, and tRFC grows with them.',
+      why: ['', 'tREFI stays, but a bigger chip has more rows to cover in the same 8192 REFs: tRFC grows, 350 ns to 550 ns, and so does the share.', 'One REF refreshes several rows in every bank at once; that is why tRFC is 350 ns, not one row cycle.'],
     },
     {
       question: 'A controller refreshes only when no request is waiting. What can go wrong?',

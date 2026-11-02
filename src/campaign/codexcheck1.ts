@@ -104,10 +104,10 @@ export const CHECK1: Record<string, Quiz[]> = {
   truthtable: [
     {
       question: 'A block takes an 8-bit a, an 8-bit b and a 3-bit operation select. How many rows has its truth table, and how does the campaign\'s Check test it?',
-      options: ['2^19 = 524 288, every one: Check is always exhaustive', '2^19 = 524 288: beyond 16 input bits, so directed cases plus 4 096 random vectors', '2^8 + 2^8 + 2^3 = 520: each input is tested separately'],
+      options: ['2^19 = 524 288, every one: Check is always exhaustive', '2^19 = 524 288: beyond 16 input bits, so directed cases plus 4096 random vectors', '2^8 + 2^8 + 2^3 = 520: each input is tested separately'],
       answer: 1,
       explain: '8 + 8 + 3 = 19 input bits give 2<sup>19</sup> rows. Check runs every row up to 16 input bits; beyond that, directed cases and random vectors.',
-      why: ['Exhaustive checking stops at 16 input bits (65 536 rows).', '', 'Rows are combinations of all inputs together: the counts multiply, they do not add.'],
+      why: ['Exhaustive checking stops at 16 input bits (65 536 rows).', '', 'Rows are combinations of all inputs together: the counts multiply, they do not add.'],
     },
     {
       question: 'Why can a truth table not specify a counter?',
@@ -239,7 +239,7 @@ export const CHECK1: Record<string, Quiz[]> = {
     },
     {
       question: 'Why does the sequential multiplier save area only at larger widths?',
-      options: ['At 8 bits it is no smaller than the array (633 against 632 NANDs) and takes 8 steps; at 16 it is 1 169 against 2 672', 'It is always smaller, just slower', 'Its adder grows with the square of the width'],
+      options: ['At 8 bits it is no smaller than the array (633 against 632 NANDs) and takes 8 steps; at 16 it is 1169 against 2672', 'It is always smaller, just slower', 'Its adder grows with the square of the width'],
       answer: 0,
       explain: 'The array grows with n<sup>2</sup>, the sequential unit with n (an adder, a 2n-bit register, control), so the register and control overhead pays off only once n is large.',
       why: ['', 'At 8 bits the two are the same size: the register and control cost as much as the array\'s extra rows.', 'The adder is n bits wide; it is the array multiplier that grows with n<sup>2</sup>.'],
@@ -363,7 +363,7 @@ export const CHECK1: Record<string, Quiz[]> = {
       question: 'a = 0x7FFF, b = 0xFFFF at 16 bits. From a + ¬b + 1, what are sltu and slt?',
       options: ['sltu = 1, slt = 1', 'sltu = 1, slt = 0', 'sltu = 0, slt = 0'],
       answer: 1,
-      explain: 'a + ¬b + 1 = 0x8000, carry out 0: unsigned 32 767 < 65 535. N = 1, V = 1 (positive − negative gave negative): N ⊕ V = 0, and 32 767 is not < −1.',
+      explain: 'a + ¬b + 1 = 0x8000, carry out 0: unsigned 32 767 < 65 535. N = 1, V = 1 (positive − negative gave negative): N ⊕ V = 0, and 32 767 is not < −1.',
       why: ['That reads the sign bit alone; the subtraction overflowed, which flipped N.', '', 'Carry out 0 means a borrow, so a < b unsigned: the unsigned test is inverted here.'],
     },
     {
@@ -412,7 +412,7 @@ export const CHECK1: Record<string, Quiz[]> = {
       options: ['Yes: as 16-bit signed integers 0xB800 < 0xBA00', 'Yes: as unsigned integers 0xB800 < 0xBA00', 'No: magnitudes order 0x3800 < 0x3A00, and with both negative the order flips'],
       answer: 2,
       explain: 'a = −0.5 and b = −0.75. |a| < |b|, both negative, so b < a. Integer comparison would claim the reverse.',
-      why: ['Floats are sign–magnitude: two\'s-complement comparison orders the negatives backwards (−18 432 < −17 920 says −0.5 < −0.75).', 'Unsigned comparison works for magnitudes only; with the sign bits set it must be reversed.', ''],
+      why: ['Floats are sign–magnitude: two\'s-complement comparison orders the negatives backwards (−18 432 < −17 920 says −0.5 < −0.75).', 'Unsigned comparison works for magnitudes only; with the sign bits set it must be reversed.', ''],
     },
     {
       question: 'a = 0x7E00 (a quiet NaN), b = 0x7C00 (+∞). What does <code>flt b, a</code> give?',
@@ -428,13 +428,13 @@ export const CHECK1: Record<string, Quiz[]> = {
       options: ['0x0004: the unsigned high half', '0xFFFF: 0x0004 − b', '0x0006: 0x0004 − a'],
       answer: 1,
       explain: 'a is negative, so the unsigned multiplier saw a + 2<sup>16</sup> and added b·2<sup>16</sup>: subtract b from the high half. −10 = 0xFFFF_FFF6.',
-      why: ['The unsigned high half includes the extra b·2<sup>16</sup> from reading −2 as 65 534.', '', 'A negative a makes you subtract b, not a (a is subtracted when b is negative).'],
+      why: ['The unsigned high half includes the extra b·2<sup>16</sup> from reading −2 as 65 534.', '', 'A negative a makes you subtract b, not a (a is subtracted when b is negative).'],
     },
     {
       question: 'mulhsu with rs1 = 3 and rs2 = 0xFFFF. The unsigned product is 0x0002_FFFD. The result?',
       options: ['0xFFFF: minus a, because rs2\'s top bit is set', '0x0003: minus b, as if rs1 were negative', '0x0002: rs1 is not negative and rs2 is unsigned, so nothing is subtracted'],
       answer: 2,
-      explain: 'mulhsu treats rs1 as signed and rs2 as unsigned. Only a negative rs1 subtracts b; 3 × 65 535 = 196 605, high half 2.',
+      explain: 'mulhsu treats rs1 as signed and rs2 as unsigned. Only a negative rs1 subtracts b; 3 × 65 535 = 196 605, high half 2.',
       why: ['rs2 is unsigned in mulhsu: its top bit is worth +2<sup>15</sup>, so no correction for it.', 'b is subtracted only when rs1 is negative, and 3 is not.', ''],
     },
   ],

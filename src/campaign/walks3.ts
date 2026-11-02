@@ -155,7 +155,7 @@ export const WALKS3: Record<string, WalkScript> = {
         options: ['k\'s own make contact, feeding q from a line on the supply', 'Nothing: q falls with set, so relays cannot store', 'rs, which stays operated by itself', 'The charge left on q'],
         answer: 0,
         explain: 'While k is in, its make contact connects its coil line to a holding line on VDD: k keeps itself in until that line is broken.',
-        why: ['', 'Relays store exactly this way: the Z3 kept 1 408 bits in self-holding relays.', 'rs follows set: its coil is on the set pin, and nothing else feeds it.', 'A coil line holds no charge here: the coil itself pulls an open line to 0.'],
+        why: ['', 'Relays store exactly this way: the Z3 kept 1408 bits in self-holding relays.', 'rs follows set: its coil is on the set pin, and nothing else feeds it.', 'A coil line holds no charge here: the coil itself pulls an open line to 0.'],
       },
       why: 'The latch is a loop. In relays it closes through k\'s own make contact, so k is both the stored bit and its own input.',
       whyNot: { text: 'Two cross-coupled relays, as two cross-coupled gates, spend a second coil and more contacts to store the one bit k holds alone.' },

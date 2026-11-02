@@ -183,7 +183,7 @@ export const chWidths: Chapter = {
         <span data-show="rs2">rs2</span>, <span data-show="funct7">funct7</span>) is a one-hot multiplexer: forms that fill it the same way share an input,
         their wires ORed, and each bit is a NAND per input, then a NAND across them. A 32-bit instruction is one more input that passes straight through.</p>
         <p>${groupDigits(K.expander.nands)} NANDs, ${K.expander.depth} deep. The recipes come from the specification: the generator reads, for every one of the
-        65 536 parcels, where each bit of the expansion comes from, and a test checks the gates on all of them.</p>
+        65 536 parcels, where each bit of the expansion comes from, and a test checks the gates on all of them.</p>
         <p>Spread over the 32 output bits that is about ${Math.round(K.expander.nands / 32)} NANDs a bit: not much logic, but a long path: ${K.expander.depth} levels, against ${X.alu[32].depth} for the whole 32-bit ALU.
         The form decode, the one-hot select and the OR across forms are in series, and the result still has to go through the ordinary decoder.</p>`,
       scene: () => ({ root: C_EXPAND, inputs: { w: 0x4408 } }),

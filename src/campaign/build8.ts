@@ -55,7 +55,7 @@ const FP_EDGE = [0x0000, 0x8000, 0x3c00, 0xbc00, 0x7bff, 0xfbff, 0x0001, 0x8001,
 export const BUILD8: Record<string, () => BuildChallenge> = {
   o_mularr: () => ({
     id: 'o_mularr', title: 'Array multiplier', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>p = a × b</b> for 8-bit unsigned a and b, in one pass: eight partial-product rows (a AND each bit of b), summed by a column of adders. Every product is checked (65 536 of them).',
+    brief: '<b>p = a × b</b> for 8-bit unsigned a and b, in one pass: eight partial-product rows (a AND each bit of b), summed by a column of adders. Every product is checked (65 536 of them).',
     ports: pins([['a', 8], ['b', 8]], [['p', 16]]), check: { kind: 'table', spec: ([a, b]) => [a * b] },
     answer: refOf('o_mularr', () => arrayMul(8), 'Array multiplier'),
   }),

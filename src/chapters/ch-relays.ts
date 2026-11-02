@@ -289,8 +289,8 @@ export const chRelays: Chapter = {
         <p>Feed <span data-show="k">a relay's coil</span> through its own make contact and it holds itself in: once pulled, it keeps its current
         flowing. <span data-show="rs"><code>set</code></span> starts it, <span data-show="rr"><code>reset</code></span> breaks the holding path. Set and reset are relays too: a
         push button is just a contact.</p>
-        <p>Konrad Zuse's <strong>Z3</strong> (1941) stored 64 words of 22 bits this way, one relay per bit: 1 408 of its
-        2 600 relays were memory. A <span data-ahead="cmos dff">CMOS flip-flop (a clocked one-bit memory made of transistor gates)</span> is ${stats(DFF).nands} NANDs; a relay bit is one relay. Memory was still the
+        <p>Konrad Zuse's <strong>Z3</strong> (1941) stored 64 words of 22 bits this way, one relay per bit: 1408 of its
+        2600 relays were memory. A <span data-ahead="cmos dff">CMOS flip-flop (a clocked one-bit memory made of transistor gates)</span> is ${stats(DFF).nands} NANDs; a relay bit is one relay. Memory was still the
         expensive part, which is why the Z3 had 64 words.</p>
         <p>The mechanism is feedback through hysteresis. While <code>set</code> is held, k operates. Its make contact now joins the holding line to its own coil, so the coil
         stays fed after <code>set</code> returns to 0. Reset cuts the holding line; with no current k falls, and its own contact opens behind it.
@@ -393,9 +393,9 @@ export const chRelays: Chapter = {
           <tr><td>Relay</td><td>${ms(RELAY_STEP_MS)} ms</td><td>1 coil and its contacts</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
       },
       challenge: {
-        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3 400 NANDs without its program memory. With 1.44 W per coil and about half the coils on, it draws about:',
+        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3400 NANDs without its program memory. With 1.44 W per coil and about half the coils on, it draws about:',
         options: ['2.4 kW', '240 W', '24 kW'], answer: 0,
-        explain: 'About 3 400 relays (shared signals add a little) × 0.72 W ≈ 2.4 kW: a Z3. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> the same CPU draws milliwatts.',
+        explain: 'About 3400 relays (shared signals add a little) × 0.72 W ≈ 2.4 kW: a Z3. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> the same CPU draws milliwatts.',
         why: ['', 'That would be 0.07 W per relay. A telephone coil draws 1.44 W while on, 0.72 W on average.', 'That would be 7 W per relay, five times a coil\'s full 1.44 W.'],
       },
     },

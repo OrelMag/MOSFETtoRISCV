@@ -272,7 +272,7 @@ export const THREAD0: Record<string, NodeThread> = {
     },
     pitfalls: [
       'Group bits in fours from bit 0, not from the left: 1 1111 is 0x1F, not 0xF1.',
-      'Bit k weighs 2^k counting from 0: the top bit of a 16-bit word is bit 15 (32 768).',
+      'Bit k weighs 2^k counting from 0: the top bit of a 16-bit word is bit 15 (32 768).',
     ],
   },
   // ---- Act 2 ----------------------------------------------------------------------------------
@@ -286,7 +286,7 @@ export const THREAD0: Record<string, NodeThread> = {
     },
     pitfalls: [
       '−x is ¬x + 1, not ¬x (that is one\'s complement).',
-      '0x8000 (−32 768) has no positive twin: negating it gives 0x8000 again.',
+      '0x8000 (−32 768) has no positive twin: negating it gives 0x8000 again.',
       'Overflow is about signs, not the carry out: 0xFFFF + 1 carries out and is right as −1 + 1 = 0.',
     ],
   },
@@ -364,7 +364,7 @@ export const THREAD0: Record<string, NodeThread> = {
   a_shift16: {
     uses: ['alu'],
     usedFor: {
-      a_alu16: 'sll, srl and sra: 299 of its 1 055 NANDs',
+      a_alu16: 'sll, srl and sra: 299 of its 1055 NANDs',
       o_fpsticky: 'a right shifter again, ORing the bits that fall off into a sticky bit',
     },
     pitfalls: [

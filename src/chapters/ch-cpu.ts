@@ -56,7 +56,7 @@ export const chAlu: Chapter = {
       'No comparator: a − b gives Z (equal), N ⊕ V (signed less-than: N alone lies on overflow) and ¬C (unsigned less-than: no carry out of a + ¬b + 1).',
       'Every unit computes every cycle and an 8:1 mux on ctl[2:0] picks the result; ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
       'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere a few gates decide: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
-      'At 32 bits: 2 610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
+      'At 32 bits: 2610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
     ],
     practise: ['a_addsub16', 'a_slt', 'a_shift16', 'a_alu16'],
     check: [
@@ -281,7 +281,7 @@ export const chRegfile: Chapter = {
       'Two asynchronous read ports and one synchronous write port: two operands in, one result out, every cycle.',
       'Structure: a write decoder, one register with enable per word, every word bundled onto one bus, and a mux tree per read port.',
       'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>li</code> (addi rd, x0, imm), <code>nop</code>, <code>j</code> (jal x0), <code>beqz</code>, <code>neg</code> (sub rd, x0, rs) and <code>ret</code> (jalr x0, 0(ra)) are pseudo-instructions built on it; <code>mv</code> is addi rd, rs, 0 and needs none.',
-      `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter 14 (about 48 000 without its program ROM).`,
+      `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter 14 (about 48 000 without its program ROM).`,
       `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom memory cell adds a port for about two transistors per bit.`,
     ],
     practise: ['m_rf'],
@@ -302,9 +302,9 @@ export const chRegfile: Chapter = {
       },
       {
         question: 'A third read port on this 32 × 32 register file adds about…',
-        options: ['4 000 NANDs: one more 32:1 tree of 32-bit words', 'two transistors per bit', 'nothing: the bundled bus already reaches every register', 'a second set of 31 registers'],
+        options: ['4000 NANDs: one more 32:1 tree of 32-bit words', 'two transistors per bit', 'nothing: the bundled bus already reaches every register', 'a second set of 31 registers'],
         answer: 0,
-        explain: '31 MUX2 per bit × 32 bits × 4 NANDs = 3 968 NANDs. Port count is a first-order cost, which is why wide superscalar cores fight over register-file ports.',
+        explain: '31 MUX2 per bit × 32 bits × 4 NANDs = 3968 NANDs. Port count is a first-order cost, which is why wide superscalar cores fight over register-file ports.',
         why: ['', 'That is the price with custom multi-ported memory cells, not with a mux tree built from NANDs.', 'The bus brings every word to the port, but each port still needs its own selector to pick one.', 'Ports share the storage; only the selection logic is duplicated.'],
       },
     ],
@@ -437,7 +437,7 @@ export const chIsa: Chapter = {
         options: ['Two: lui, then addi', 'One: li is an instruction', 'One addi, since the value is positive', 'Three'],
         answer: 0,
         explain: '<code>lui a0, 0x12</code> sets the upper 20 bits, <code>addi a0, a0, 0x345</code> adds the low 12. addi sign-extends, so when bit 11 of the constant is set lui takes one more: <code>li a0, 0x12845</code> is <code>lui a0, 0x13</code>; <code>addi a0, a0, -1979</code> (0x13000 − 0x7BB). Pass 1 must know the size to place every label after it.',
-        why: ['', 'li is a pseudo-instruction: RV32I has no li opcode.', 'addi\'s immediate is 12 bits signed (−2048 … 2047); 0x12345 = 74 565 does not fit.', 'lui supplies 20 bits and addi 12: two instructions cover any 32-bit constant.'],
+        why: ['', 'li is a pseudo-instruction: RV32I has no li opcode.', 'addi\'s immediate is 12 bits signed (−2048 … 2047); 0x12345 = 74 565 does not fit.', 'lui supplies 20 bits and addi 12: two instructions cover any 32-bit constant.'],
       },
     ],
   },
@@ -612,7 +612,7 @@ export const chSingleCycle: Chapter = {
       'Control comes from the opcode: RegWrite, ALUSrcB, ResultSrc, MemWrite, ImmSrc, and ALUControl: {funct7[5], funct3} for an R-type; funct3 for OP-IMM, with bit 30 only for <code>srai</code>; ADD for loads, stores, <code>jalr</code> and <code>auipc</code>; SUB for branches.',
       'Branches subtract in the ALU and read its flags (beq Z, bne ¬Z, blt N⊕V, bge ¬(N⊕V), bltu ¬C, bgeu C); a separate adder computes PC + imm<sub>B</sub>.',
       '<code>jal</code> writes PC + 4 and jumps to PC + imm<sub>J</sub>; <code>jalr</code> jumps to rs1 + imm with bit 0 cleared by wiring.',
-      'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders, and the clock must fit the slowest instruction.',
+      'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders, and the clock must fit the slowest instruction.',
     ],
     practise: ['c_imm', 'c_ctl', 'c_br', 'c_npc', 'c_core1', 'c_core2', 'c_core3'],
     check: [
@@ -643,7 +643,7 @@ export const chSingleCycle: Chapter = {
     {
       title: 'The datapath',
       body: `
-        <p>This is a complete RV32I processor, simulated at gate level: about 48 000 NANDs without its program ROM
+        <p>This is a complete RV32I processor, simulated at gate level: about 48 000 NANDs without its program ROM
         (the Info tab's total counts the ROM too, which grows with the program). Each <strong>Pulse</strong> executes one instruction:</p>
         <ul><li><strong>Fetch</strong>: <span data-show="pc">PC</span> addresses the <span data-show="imem">instruction memory</span>; +4 computes the next sequential address.</li>
         <li><strong>Decode</strong>: the splitter fans the instruction fields out; the <span data-show="rf">register file</span> reads rs1/rs2 while the
@@ -845,7 +845,7 @@ export const chSingleCycle: Chapter = {
       title: 'Run real programs',
       body: `
         <p>Pick a program in the panel, or write your own with <strong>Edit</strong>. <strong>Run to halt</strong> clocks the
-        gate-level machine as fast as your browser allows, about 200 cycles per second for ~200 000 transistors.</p>
+        gate-level machine as fast as your browser allows, about 200 cycles per second for ~200 000 transistors.</p>
         <p>Supported: all of RV32I except byte/halfword loads and stores, <code>fence</code>, <code>ecall</code>, <code>ebreak</code>.
         A jump to itself is treated as halt.</p>
         <p>What this checks is the point of the exercise. After every clock cycle the panel compares all 32 registers, the PC and the memory with the instruction-set simulator, which was written

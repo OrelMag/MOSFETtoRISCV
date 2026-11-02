@@ -333,7 +333,7 @@ ${PHASES}
         <p>Every cycle is a bus access, the dummy ones included: a read of the next byte after an implied
         instruction, the old value written back by a read-modify-write, a read at the wrong page while an index's
         carry is fixed. Our transistors make exactly these: on all 1.51 million cases of Tom Harte's SingleStepTests for the
-        151 documented opcodes (10 000 each) and all 96 million cycles of Klaus Dormann's functional test, every bus cycle matches a
+        151 documented opcodes (10 000 each) and all 96 million cycles of Klaus Dormann's functional test, every bus cycle matches a
         reference model.</p>
         <p>The ISA is shaped by the datapath: three registers because there are three places a byte can be held on SB, zero page because an address with a known-zero high byte saves a cycle, indexed modes because the single
         adder can add X or Y to an address byte on the way past. Each addressing mode is a recipe of bus transfers, and the opcode matrix is the table of recipes.</p>`,

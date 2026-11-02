@@ -67,7 +67,7 @@ export const chAppendixDoom: Chapter = {
       title: 'What a game asks of a computer',
       body: `
         <p>Every program so far was written for our CPUs: a few hundred instructions of assembly, a few dozen words of
-        memory. Doom (id Software, 1993; the source released in 1997) is the other kind: about 65 000 lines of C written for
+        memory. Doom (id Software, 1993; the source released in 1997) is the other kind: about 65 000 lines of C written for
         a 386 PC, with no idea what runs it. Can our ISA run it unchanged?</p>
         <p>The ISA is enough. Doom does its geometry in 16.16 fixed point, so integer multiply and divide are all it
         needs: RV32IM, which the system CPU of <a href="#/c/io/0">chapters 19–21</a> implements. What it lacks is a computer around it:

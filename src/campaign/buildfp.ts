@@ -167,7 +167,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
   }),
   o_fpcvt: () => ({
     id: 'o_fpcvt', title: 'Integer to float', level: 'arithmetic', allowed: 'nand',
-    brief: 'fcvt from a 16-bit integer <b>x</b> (two\'s complement when <b>signed</b>, else unsigned) to binary16, rounded in mode <b>rm</b>, with <b>flags</b> {NV, DZ, OF, UF, NX}. The magnitude is a significand whose top bit weighs 2^15: normalize & round does the rest. Integers above 2048 lose low bits (NX); unsigned 65 535 rounds up past the largest finite in some modes (OF).',
+    brief: 'fcvt from a 16-bit integer <b>x</b> (two\'s complement when <b>signed</b>, else unsigned) to binary16, rounded in mode <b>rm</b>, with <b>flags</b> {NV, DZ, OF, UF, NX}. The magnitude is a significand whose top bit weighs 2^15: normalize & round does the rest. Integers above 2048 lose low bits (NX); unsigned 65 535 rounds up past the largest finite in some modes (OF).',
     ports: pins([['x', 16], ['signed'], ['rm', 3]], [['y', 16], ['flags', 5]]),
     check: {
       kind: 'table', spec: ([x, s, rm]) => { const r = fpFromIntX(x, !!s, F16, rm, 16); return [r.y, r.fl]; },
