@@ -105,7 +105,7 @@
 .lab-nums { display: grid; gap: 5px; }
 .lab-num { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-2); }
 .lab-num input { width: 68px; font: 12.5px var(--font-mono); padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-align: right; }
-.lab-num select { max-width: 170px; font-size: 12px; padding: 3px 6px; }
+.lab-num select { max-width: 190px; font-size: 12px; padding: 3px 6px; }
 .lab-ports { display: grid; gap: 4px; margin-bottom: 6px; }
 .lab-port { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
 .lab-port b { font: 600 11px var(--font-mono); color: var(--muted); }
@@ -148,3 +148,6 @@
 .ooo-tl tr.lab-lost td.c span { height: 8px; margin-top: 5px; border-radius: 2px; }
 .lab-scroll { overflow-x: auto; }
 .lab-stale .lab-head, .lab-stale .lab-bar, .lab-stale .lab-legend, .lab-stale .lab-two, .lab-stale .ooo-tl { opacity: 0.35; }
+
+/* The knobs stay in view while the results (the timeline, the per-program table) scroll past: change, see, change. */
+@media (min-width: 861px) { .lab-knobs { position: sticky; top: 8px; align-self: start; max-height: calc(100dvh - 16px); overflow-y: auto; } }
