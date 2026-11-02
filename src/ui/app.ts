@@ -231,7 +231,14 @@ export function startApp(root: HTMLElement): void {
     const shows = stageTools(parts);
     radix.hidden = !shows.radix;
     animate.hidden = !shows.slow;
-    if (key === 'c') {
+    if (key === 'c' && parts[1] && !chapterById(parts[1])) {
+      // a stale or mistyped link: say so rather than quietly showing another chapter under the wrong address
+      const bad = parts[1];
+      mount({ el: h('div', { class: 'widget missing-chapter', role: 'status' }, h('div', { class: 'panel' },
+        h('h3', null, 'No such chapter'),
+        h('p', { class: 'sub' }, `There is no chapter called "${bad}". It may have been renamed or removed.`),
+        h('div', { class: 'suggest' }, h('a', { class: 'btn primary', href: '#/c/map/0' }, 'Open the chapter list'), h('a', { class: 'btn', href: `#/c/${chapters[0].id}/0` }, 'Start at the first chapter')))), destroy() {} });
+    } else if (key === 'c') {
       const ch = chapterById(parts[1] ?? '') ?? chapters[0];
       const step = Number(parts[2] ?? 0) || 0;
       // after the step, the part opened on its stage (ui/drillpath.ts)
