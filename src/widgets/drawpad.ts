@@ -147,6 +147,8 @@ function drawPanel(link: DrawLink): ScenePanel {
         result = { version: v, cycles, predicted: cost.clear + cost.draw, diff };
         sending = false;
         draw();
+        // the panel scrolls: bring the verdict (it can wrap to three lines) into view
+        requestAnimationFrame(() => status.scrollIntoView({ block: 'nearest' }));
       });
     });
     stage.resetHooks.add(() => { sending = false; draw(); });
