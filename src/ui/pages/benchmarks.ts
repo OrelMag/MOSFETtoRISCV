@@ -121,9 +121,17 @@ export class BenchmarksPage implements Page {
     for (const c of cpus) {
       const cx = X(xOf(c)), cy = Y(meanOf(c, 'time'));
       const hit = s('circle', { class: 'bm-hit', cx, cy, r: 14 });
-      hit.addEventListener('pointerenter', () => this.showTip(c, cx / W, cy / H));
-      hit.addEventListener('pointerleave', () => { this.tip.hidden = true; });
-      svg.append(s('circle', { class: `bm-dot ${familyOf(c.id)}${c.offChip ? ' off' : ''}`, cx, cy, r: 6 }), hit);
+      hit.addEventListener('pointerenter', () => { this.showTip(c, cx / W, cy / H); this.mark(c.id); });
+      hit.addEventListener('pointerleave', () => { this.tip.hidden = true; this.mark(null); });
+      hit.addEventListener('click', () => {
+        this.open.add(c.id);
+        this.render();
+        const row = this.body.querySelector<HTMLElement>(`tr[data-cpu="${CSS.escape(c.id)}"]`);
+        row?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        this.mark(c.id);
+      });
+      this.dotAt.set(c.id, [cx / W, cy / H]);
+      svg.append(s('circle', { class: `bm-dot ${familyOf(c.id)}${c.offChip ? ' off' : ''}`, 'data-cpu': c.id, cx, cy, r: 6 }), hit);
     }
     // Each front label takes the first corner around its dot that covers no other dot and no earlier label.
     const dots = cpus.map((c) => [X(xOf(c)), Y(meanOf(c, 'time'))] as const);
@@ -212,12 +220,15 @@ export class BenchmarksPage implements Page {
         else this.open.add(c.id);
         this.render();
       });
-      out.push(h('tr', null,
+      const row = h('tr', { 'data-cpu': c.id },
         h('td', { class: 'hw-name' }, chev, h('i', { class: `bm-fam ${familyOf(c.id)}` }), ch ? h('a', { href: `#/c/${ch}`, title: c.id }, c.name) : h('span', { title: c.id }, c.name)),
         h('td', c.offChip ? { title: 'main memory is a DRAM chip outside the CPU: not counted' } : null, fmt(c.nands), c.offChip ? h('span', { class: 'hw-mhz' }, ' + DRAM') : ''),
         h('td', null, String(c.period), h('span', { class: 'hw-mhz' }, ` ${fmt(mhz(c.period))}`)),
         ...BENCHMARKS.map((b) => cell(b.id, this.value(c, b.id))),
-        cell('mean', this.value(c, 'mean'))));
+        cell('mean', this.value(c, 'mean')));
+      row.addEventListener('pointerenter', () => { const p = this.dotAt.get(c.id); if (p) this.showTip(c, p[0], p[1]); this.mark(c.id); });
+      row.addEventListener('pointerleave', () => { this.tip.hidden = true; this.mark(null); });
+      out.push(row);
       if (open) out.push(this.detail(c, cols.length));
     }
     this.body.replaceChildren(...out);
@@ -243,6 +254,15 @@ export class BenchmarksPage implements Page {
         : extra < 0 ? `${fmt(-extra)} cycles fewer than one per instruction over the ${c.runs.length} programs: ${fmt(c.runs.reduce((a, r) => a + r.instructions, 0) / c.runs.reduce((a, r) => a + r.cycles, 0), 2)} instructions per cycle.`
         : 'One cycle per instruction: every instruction completes in the cycle it is fetched.')));
   }
+
+  /** Dots and rows are one thing: pointing at either lights both (and the tip), a click on a dot opens its row. */
+  private mark(id: string | null): void {
+    for (const el of this.el.querySelectorAll('.hl')) el.classList.remove('hl');
+    if (!id) return;
+    for (const el of this.el.querySelectorAll(`[data-cpu="${CSS.escape(id)}"]`)) el.classList.add('hl');
+  }
+
+  private dotAt = new Map<string, [number, number]>();
 
   private chip(label: string, on: boolean, act: () => void, lead?: Node): HTMLElement {
     const b = h('button', { class: `hw-chip${on ? ' on' : ''}`, 'aria-pressed': String(on) }, lead ?? null, label);

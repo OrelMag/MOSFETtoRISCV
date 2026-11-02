@@ -1305,7 +1305,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-dot.pipe { fill: var(--series-3); }
 .bm-dot.wide { fill: var(--series-4); }
 .bm-dot.off { fill-opacity: 0.18; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 2 2; }
-.bm-hit { fill: transparent; cursor: default; }
+.bm-hit { fill: transparent; cursor: pointer; }
+.bm-dot.hl { stroke: var(--text); stroke-width: 3; }
+.bm-table tr.hl > td { background: var(--accent-soft); }
 .bm-tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; }
 .bm-tip b { display: block; font-size: 12.5px; }
 .bm-tip span { color: var(--text-2); font-variant-numeric: tabular-nums; }
