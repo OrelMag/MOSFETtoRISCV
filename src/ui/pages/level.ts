@@ -95,8 +95,9 @@ export class LevelPage implements Page {
       return;
     }
     if (statusOf(n, p.view, p.unlockAll) === 'locked') {
-      const missing = n.requires.filter((r) => !isDone(p.view(r))).map((r) => nodeById(r)?.title ?? r);
-      this.el = this.notice(`${n.title} is locked`, `Finish or skip first: ${missing.join(', ')}. Or tick Unlock all on the map.`, n);
+      const missing = n.requires.filter((r) => !isDone(p.view(r)));
+      const blockers = missing.map((r) => nodeById(r)).filter((m): m is CampaignNode => !!m);
+      this.el = this.notice(`${n.title} is locked`, `Finish or skip first: ${missing.map((r) => nodeById(r)?.title ?? r).join(', ')}. Or tick Unlock all on the map.`, n, blockers);
       return;
     }
     this.node = n;
@@ -157,9 +158,11 @@ export class LevelPage implements Page {
     this.editor?.destroy();
   }
 
-  private notice(title: string, text: string, n?: CampaignNode): HTMLElement {
+  private notice(title: string, text: string, n?: CampaignNode, blockers: CampaignNode[] = []): HTMLElement {
+    // a locked level links to what blocks it (its page when it is a level of the editor, else its map card)
+    const go = (m: CampaignNode) => h('a', { class: 'btn primary', href: !m.soon && levelChallenge(m) && statusOf(m, progress().view, progress().unlockAll) !== 'locked' ? `#/campaign/play/${m.id}` : `#/campaign/n/${m.id}` }, m.title, icon('chevR', 14));
     return h('div', { class: 'lv-page lv-notice' }, h('div', { class: 'panel' }, h('h3', null, title), h('p', { class: 'sub' }, text),
-      h('p', null, h('a', { class: 'btn', href: n ? `#/campaign/n/${n.id}` : '#/campaign' }, icon('chevL', 14), 'Back to the map'))));
+      h('p', { class: 'lv-notice-go' }, ...blockers.map(go), h('a', { class: 'btn', href: n ? `#/campaign/n/${n.id}` : '#/campaign' }, icon('chevL', 14), 'Back to the map'))));
   }
 
   // ---- the level bar ---------------------------------------------------------------------------
