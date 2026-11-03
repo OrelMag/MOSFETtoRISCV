@@ -234,3 +234,13 @@ describe('the sandbox on a touch screen', () => {
     expect(touchZoom(cpu, W, [60, 45])).toBe(cpu);
   });
 });
+
+describe('a tall drawing beside a hint line', () => {
+  it('stays centred in the roomy rectangle instead of the narrow strip past the hint (32 × 32 register file)', () => {
+    // a 1486 × 886 canvas: a one-line hint along the bottom left, a panel at the right; the drawing is 1 : 5.7
+    const cover: Rect[] = [{ x: 12, y: 856, w: 800, h: 24 }, { x: 1270, y: 250, w: 216, h: 630 }];
+    const r = freeArea(1486, 886, cover, 60, 340)!;
+    expect(r.w).toBeGreaterThan(1000);
+    expect(r.x + r.w / 2).toBeLessThan(900);
+  });
+});
