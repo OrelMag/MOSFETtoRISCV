@@ -268,3 +268,25 @@ svg.breadboard.drilled .bb-board:not(.focus), svg.breadboard.drilled .bb-bus, sv
   .stage:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed)) > .bb-host { right: 0; bottom: auto; height: var(--bb-phone-h); }
   .stage.bb-mode:not(.widget-mode) > .canvas:has(> [data-phone='flow']:not(.collapsed)) { padding-top: calc(var(--bb-phone-h) + 8px); }
 }
+
+/* The jumpers between chip pins (bbwires.ts): colours as built, one per net; rails red and black. */
+svg.breadboard {
+  --bb-j0: #d9412f; --bb-j1: #2f7fd9; --bb-j2: #2e9e5b; --bb-j3: #e0a11b; --bb-j4: #8a55c8; --bb-j5: #d9682b;
+  --bb-j-pos: #c62828; --bb-j-neg: #26282c;
+}
+.bb-jumpers { pointer-events: none; }
+.bb-jumper { fill: none; stroke-width: 0.2; stroke-linecap: round; }
+.bb-jumper.rail { stroke-width: 0.16; opacity: 0.75; }
+.bb-jumpers.across .bb-jumper { opacity: 0.45; stroke-width: 0.14; }
+.bb-jumper[data-hue='0'] { stroke: var(--bb-j0); } .bb-jumper[data-hue='1'] { stroke: var(--bb-j1); }
+.bb-jumper[data-hue='2'] { stroke: var(--bb-j2); } .bb-jumper[data-hue='3'] { stroke: var(--bb-j3); }
+.bb-jumper[data-hue='4'] { stroke: var(--bb-j4); } .bb-jumper[data-hue='5'] { stroke: var(--bb-j5); }
+.bb-jumper[data-hue='pos'] { stroke: var(--bb-j-pos); } .bb-jumper[data-hue='neg'] { stroke: var(--bb-j-neg); }
+svg.breadboard[data-wires='value'] .bb-jumper { stroke: var(--w0); opacity: 0.55; }
+svg.breadboard[data-wires='value'] .bb-jumper[data-v='1'] { stroke: var(--w1); opacity: 1; }
+svg.breadboard[data-wires='value'] .bb-jumper[data-v='x'] { stroke: var(--wx); opacity: 1; }
+svg.breadboard[data-wires='value'] .bb-jumper.rail { opacity: 0.35; }
+svg.breadboard[data-wires='none'] .bb-jumpers { display: none; }
+
+/* The boards cover the schematic also where a short panel leaves the canvas bare. */
+.stage.bb-mode:not(.bb-drill) .canvas > svg.schematic { visibility: hidden; }

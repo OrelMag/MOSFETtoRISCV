@@ -9,6 +9,7 @@
 import { groupDigits } from '../sim/numfmt';
 import '../styles/breadboard.css';
 import { findNode, type HierNode } from '../sim/flatten';
+import { planWires, wireHue, wirePath } from './bbwires';
 import type { Sim } from '../sim/sim';
 import { romSize, stats } from '../sim/stats';
 import { B0, B1, type Bit, type ComponentDef, netlistOf } from '../sim/types';
@@ -35,8 +36,8 @@ export interface BreadboardHooks {
   covers?(): DOMRect[];
 }
 
-/** 'built': jumpers in their wire colours (the bus's yellow brighter where a bit is 1); 'value': the site's wire colours by value. */
-export type WireLook = 'built' | 'value';
+/** 'built': jumpers in their wire colours (the bus's yellow brighter where a bit is 1); 'value': the site's wire colours by value; 'none': the chips' jumpers hidden. */
+export type WireLook = 'built' | 'value' | 'none';
 
 const vOf = (b: Bit | undefined) => (b === B1 ? '1' : b === B0 ? '0' : 'x');
 
@@ -155,6 +156,8 @@ export class BreadboardView {
   /** The look of the jumpers (the stage's Wires as built | By value). */
   set wires(w: WireLook) {
     this.svg.dataset.wires = w;
+    // chip jumpers follow their values only while they show them: a running game repaints nothing for them otherwise
+    this.last = [];
   }
 
   clear(): void {
@@ -316,6 +319,7 @@ export class BreadboardView {
         title: b.title, line: (b.drives!.label ?? '').split(' · ')[0], idx: nets.net(b.drives!), chips: drv.get(b.title) ?? [],
       })));
     }
+    this.drawJumpers(layout, root, nets);
     const ics = layout.boards.reduce((n, b) => n + b.chips.length, 0);
     this.caption.textContent = `${layout.note ?? `${ics} chips`} · every LED is a net of the same simulation`;
     this.last = [];
@@ -361,6 +365,46 @@ export class BreadboardView {
   }
 
   // ---- drawing ----
+
+  /** Every jumper (bbwires.ts): those within a board under its chips, those between boards over everything. */
+  private drawJumpers(layout: BreadboardLayout, root: HierNode, nets: BbNets): void {
+    const across = s('g', { class: 'bb-jumpers across' });
+    const within = new Map<BbBoard, SVGGElement>();
+    const byNet = new Map<number, { idx: number; els: SVGPathElement[] }>();
+    for (const w of planWires(layout, root)) {
+      const hue = w.rail ? (w.rail === 'pos' ? 'pos' : 'neg') : String(wireHue(w.net));
+      const el = s('path', { class: `bb-jumper${w.rail ? ' rail' : ''}`, d: wirePath(w), 'data-hue': hue }) as SVGPathElement;
+      if (w.from.board === w.to.board) {
+        let g = within.get(w.from.board);
+        if (!g) { g = s('g', { class: 'bb-jumpers', transform: `translate(${w.from.board.at[0]} ${w.from.board.at[1]})` }); within.set(w.from.board, g); }
+        el.setAttribute('transform', `translate(${-w.from.board.at[0]} ${-w.from.board.at[1]})`);
+        g.append(el);
+      } else across.append(el);
+      if (w.net >= 0) {
+        let e = byNet.get(w.net);
+        if (!e) { e = { idx: nets.netById(w.net), els: [] }; byNet.set(w.net, e); }
+        e.els.push(el);
+      }
+    }
+    for (const [b, g] of within) {
+      const info = this.boardEls.get(b.title);
+      if (!info) continue;
+      g.removeAttribute('transform');
+      info.g.insertBefore(g, info.g.querySelector('.bb-chip'));
+    }
+    this.svg.append(across);
+    const list = [...byNet.values()], shown = new Int8Array(list.length).fill(-1);
+    this.paints.push((bits) => {
+      if (this.svg.dataset.wires !== 'value') { shown.fill(-1); return; }
+      list.forEach((e, i) => {
+        const v = bits[e.idx];
+        if (v === shown[i]) return;
+        shown[i] = v;
+        const c = vOf(v);
+        for (const el of e.els) el.dataset.v = c;
+      });
+    });
+  }
 
   private drawBoard(b: BbBoard, ctx: { id: string; nets: BbNets }): SVGGElement {
     const [W, H] = b.size;

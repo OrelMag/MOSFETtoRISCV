@@ -142,10 +142,10 @@ export const chAppendixRunner: Chapter = {
       scene: () => runnerScene({ highlight: ['video', 'player'] }),
       challenge: {
         kind: 'quiz',
-        question: 'How many gates would it cost to make your bit twice as wide (columns 12–19 rather than 12–15)?',
-        options: ['Fewer: drop h2 from the AND, so h3 alone with h6, h5, h4 at 0 means columns 8–15, then shift it by choosing the bits again', 'A second player counter', 'An adder on h', 'A bigger register'],
+        question: 'Your column window is columns 12–15. What would it cost to make it columns 8–15, twice as wide?',
+        options: ['One input fewer on its AND', 'A second player counter', 'An adder on h', 'A bigger register'],
         answer: 0,
-        explain: 'A power-of-two window aligned to its size is an AND of the top bits, and a wider one has fewer inputs. Columns 8–15 is that exact window; a window not aligned to its width, such as 12–19, needs an OR of two such terms.',
+        explain: 'Drop h2: h3 with h6, h5 and h4 at 0 means columns 8–15. A power-of-two window aligned to its size is an AND of the top bits, and a wider one has fewer inputs. A window not aligned to its width, such as 12–19, needs an OR of two such terms.',
         why: ['', 'Your column does not move: only your line needs a counter.', 'Nothing here adds to h; windows only compare.', 'A window is logic: no state at all.'],
       },
     },
@@ -163,7 +163,7 @@ export const chAppendixRunner: Chapter = {
         difficulty curve, one OR gate.</p>
         <p>Cost: ${k(RB_COST.walls)} NANDs for the board, which also keeps your place on the score. A CPU would hold a wall's x in a register and add to it. Here it takes
         a counter that was needed anyway to draw the wall.</p>
-        <div class="try">Press <strong>Frame</strong> a few times and read the COUNT LEDs: at the same beam position, the count differs once per slip.</div>`,
+        <div class="try">Press <strong>Frame</strong> a few times and read the WC LEDs: at the same beam position, the count differs once per slip.</div>`,
       scene: () => runnerScene({ highlight: ['walls'], paused: true }),
       challenge: {
         kind: 'quiz',
@@ -223,7 +223,7 @@ export const chAppendixRunner: Chapter = {
         The XNOR is the game's one rule. It is also why a gate of the wrong colour behaves as wall, down to the pixel.</p>
         <p>The first overlapping pixel sets <code>ghost</code>, which blocks further crashes and blinks you until that wall has passed (the same tick that scores). So one wall costs one life, however many pixels overlap. Three flip-flop bits, the rest gates: ${k(RB_COST.rules)} NANDs.</p>
         <p>The timing is why this is so cheap. A program would have to compute this per object per frame. Here the beam visits every pixel anyway, and asks one question at each.</p>
-        <div class="try">Crash once: watch the CRASH LED blink for one clock at slow rates, and the lives go down.</div>`,
+        <div class="try">Crash once: watch the HIT LED blink for one clock at slow rates, and the lives go down.</div>`,
       scene: () => runnerScene({ highlight: ['rules'] }),
       tries: [(st) => st.value('lives') >= 1],
       challenge: {

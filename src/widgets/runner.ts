@@ -46,7 +46,7 @@ export function runnerPanel(o: RunnerOptions): ScenePanel {
     let model = new BitRunnerModel();
     const crt = new Crt();
     let mismatch = '';
-    let raf: number | null = null, last = 0, rate = o.rate ?? GAME_HZ, fps = 0, fpsAt = 0, fpsFrames = 0;
+    let raf: number | null = null, last = 0, rate = o.rate ?? GAME_HZ, fps = 0, fpsAt = 0, fpsFrames = 0, shownAt = 0;
     const netOf = (p: string) => stage.sim!.design.root.ports[p][0];
     let pins: { v: Record<(typeof VIDEO_PINS)[number], number>; b: Record<Button, number> } | null = null;
     const look = () => {
@@ -140,7 +140,7 @@ export function runnerPanel(o: RunnerOptions): ScenePanel {
     rateSel.value = String(rate);
     rateSel.addEventListener('change', () => { rate = Number(rateSel.value); last = performance.now(); });
 
-    const paint = () => {
+    const paintScreen = () => {
       if (ctx && image) {
         const d = image.data, px = crt.px;
         for (let i = 0; i < px.length; i++) { const c = RGB[px[i]]; d[4 * i] = c[0]; d[4 * i + 1] = c[1]; d[4 * i + 2] = c[2]; d[4 * i + 3] = 255; }
@@ -148,6 +148,10 @@ export function runnerPanel(o: RunnerOptions): ScenePanel {
         if (rate > 0 && rate <= RB_CLOCKS && crt.x < RB_W && crt.y < RB_H) { const i = crt.y * RB_W + crt.x; d[4 * i] = 255; d[4 * i + 1] = 60; d[4 * i + 2] = 60; }
         ctx.putImageData(image, 0, 0);
       }
+      for (const b of pending) if (pressedAt[b] !== crt.frames) { pending.delete(b); setPin(b, 0); }
+    };
+    // text lays out the page: a few times a second while running
+    const paintText = () => {
       const st = stage.sim;
       if (!st) return;
       const run = stage.value('run') === 1, lost = stage.value('lives');
@@ -160,8 +164,8 @@ export function runnerPanel(o: RunnerOptions): ScenePanel {
       verdict.textContent = mismatch ? 'differs from the model' : 'matches the model';
       verdict.classList.toggle('good', !mismatch);
       verdict.classList.toggle('bad', !!mismatch);
-      for (const b of pending) if (pressedAt[b] !== crt.frames) { pending.delete(b); setPin(b, 0); }
     };
+    const paint = () => { paintScreen(); paintText(); };
 
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
@@ -176,10 +180,12 @@ export function runnerPanel(o: RunnerOptions): ScenePanel {
       if (stage.sim instanceof DualSim) stage.sim.preferFast = true;
       if (!pins) look();
       const f0 = crt.frames;
-      stage.runCycles(due, () => performance.now() > deadline);
+      stage.runCycles(due, () => performance.now() > deadline, 0, true);
+      // the screen every frame, the boards and the rest of the stage a few times a second: redrawing them costs fifty times the gates
+      if (now - shownAt > 200) { shownAt = now; stage.refresh(); paintText(); }
       fpsFrames += crt.frames - f0;
       if (now - fpsAt > 500) { fps = (fpsFrames * 1000) / (now - fpsAt); fpsAt = now; fpsFrames = 0; }
-      paint();
+      paintScreen();
     };
     const start = () => {
       if (raf !== null || !stage.sim) return;

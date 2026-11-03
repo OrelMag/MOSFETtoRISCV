@@ -403,6 +403,12 @@ export class BbNets {
     return this.nets.length - 1;
   }
 
+  /** Register a flat net by its id; its index into read(). */
+  netById(id: number): number {
+    this.nets.push(id);
+    return this.nets.length - 1;
+  }
+
   /** Register `width` bits from n.bit up; their indices, low bit first. */
   bus(n: { path: string[]; port: string; bit?: number }, width: number): number[] {
     return Array.from({ length: width }, (_, i) => this.net({ ...n, bit: (n.bit ?? 0) + i }));

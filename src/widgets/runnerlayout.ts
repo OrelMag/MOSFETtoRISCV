@@ -31,11 +31,11 @@ const LEFT: Spec[] = [
   },
   {
     title: 'Walls: a counter that slips', module: ['walls'], chips: chipsOn('walls'),
-    leds: [...ledsOf(['walls'], 'wc', 6, 'yellow', (b) => (b === 5 ? 'COUNT' : '')), { ...led('walls', 'wv', 'WALL', 'white'), gap: true }, led('walls', 'w', 'B', 'green'), led('walls', 'f', 'F', 'blue')],
+    leds: [...ledsOf(['walls'], 'wc', 6, 'yellow', (b) => (b === 5 ? 'WC5–0' : '')), { ...led('walls', 'wv', 'WALL', 'white'), gap: true }, led('walls', 'w', 'B', 'green'), led('walls', 'f', 'F', 'blue')],
   },
   {
     title: 'Gates: where and what colour', module: ['gaps'], chips: chipsOn('gaps'),
-    leds: [led('gaps', 'inGap', 'IN GATE', 'green'), led('gaps', 'colour', 'COLOUR', 'yellow')],
+    leds: [led('gaps', 'inGap', 'GATE', 'green'), led('gaps', 'colour', 'COL', 'yellow')],
   },
   {
     title: 'Player: you are a counter too', module: ['player'], chips: chipsOn('player'),
@@ -48,17 +48,17 @@ const RIGHT: Spec[] = [
   {
     title: 'Rules: collision is an AND', module: ['rules'], chips: chipsOn('rules'),
     switches: [{ port: 'start', label: 'START' }],
-    leds: [led('rules', 'run', 'RUN', 'green'), led('rules', 'crash', 'CRASH'), led('rules', 'ghost', 'GHOST', 'blue'), { ...led('rules', 'lives', 'LOST', 'red', 1), gap: true }, led('rules', 'lives', '', 'red', 0)],
+    leds: [led('rules', 'run', 'RUN', 'green'), led('rules', 'crash', 'HIT'), led('rules', 'ghost', 'GHO', 'blue'), { ...led('rules', 'lives', 'LOST', 'red', 1), gap: true }, led('rules', 'lives', '', 'red', 0)],
   },
   {
     title: 'Score', module: ['score'], chips: chipsOn('score'),
     digits: [{ path: ['score'], port: 'tens', hex: true }, { path: ['score'], port: 'ones', hex: true }],
     leds: [led('score', 'fast', '≥ 10', 'yellow'), led('score', 'narrow3', '≥ 20', 'yellow'), led('score', 'narrow2', '≥ 40', 'yellow')],
   },
-  { title: 'Digits to pixels', module: ['digits'], chips: chipsOn('digits'), leds: [led('digits', 'px', 'PIXEL', 'white')] },
+  { title: 'Digits to pixels', module: ['digits'], chips: chipsOn('digits'), leds: [led('digits', 'px', 'PX', 'white')] },
   {
     title: 'Video', module: ['video'], chips: chipsOn('video'),
-    leds: [led('video', 'white', 'WHITE', 'white'), led('video', 'amber', 'AMBER', 'yellow'), led('video', 'cyan', 'CYAN', 'blue'), { ...led('sync', 'hsync', 'HSYNC', 'green'), gap: true }, led('sync', 'vsync', 'VSYNC', 'green')],
+    leds: [led('video', 'white', 'WHT', 'white'), led('video', 'amber', 'AMB', 'yellow'), led('video', 'cyan', 'CYN', 'blue'), { ...led('sync', 'hsync', 'HS', 'green'), gap: true }, led('sync', 'vsync', 'VS', 'green')],
   },
 ];
 
