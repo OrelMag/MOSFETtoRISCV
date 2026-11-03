@@ -1,6 +1,6 @@
-import { chapters, future } from '../../chapters';
+import { outline as chapters, future } from '../../chapters/outline';
 import { checksDone } from '../../chapters/checks';
-import { chapterNo } from '../../chapters/types';
+import { chapterNo, type ChapterMeta } from '../../chapters/meta';
 import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon, tx } from '../dom';
@@ -11,7 +11,7 @@ import { settings } from '../settings';
 import type { Page } from './chapter';
 
 /** '40% seen · 2 / 5 checks' on a started chapter's card. */
-function seenNote(c: (typeof chapters)[number], p: number): string {
+function seenNote(c: ChapterMeta, p: number): string {
   const { done, total } = checksDone(c, (k) => settings.isSolved(k));
   return `${Math.round(p * 100)}% seen${total ? ` · ${done} / ${total} checks` : ''}`;
 }

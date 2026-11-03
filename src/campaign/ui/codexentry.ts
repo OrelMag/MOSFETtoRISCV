@@ -31,8 +31,9 @@ import type { CodexMore } from '../codexmore';
 import { DRILLS, rng, type Drill } from '../drills';
 import { libCost } from '../measure';
 import type { ProgressView } from '../graph';
-import { chapterNo, type Quiz } from '../../chapters/types';
-import { chapters } from '../../chapters';
+import type { Quiz } from '../../chapters/types';
+import { chapterNo } from '../../chapters/meta';
+import { outlineOf } from '../../chapters/outline';
 import { analogiesForCodex, type Analogy } from '../../chapters/analogies';
 import { analogyEl } from '../../ui/analogy';
 import { codexFigure } from './codexfigs';
@@ -168,7 +169,7 @@ function anatomyEl(view: ProgressView, blocks: string[]): HTMLElement {
 
 /** Where an analogy is told in the journey: chapter N, step title. */
 function analogyFrom(a: Analogy): { href: string; label: string } | undefined {
-  const c = chapters.find((x) => x.id === a.chapter);
+  const c = outlineOf(a.chapter);
   const k = c?.steps.findIndex((s) => s.title === a.step) ?? -1;
   return c && k >= 0 ? { href: `#/c/${c.id}/${k}`, label: `In ${chapterNo(c)} · ${c.title}: ${a.step}` } : undefined;
 }

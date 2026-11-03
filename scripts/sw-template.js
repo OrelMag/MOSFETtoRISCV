@@ -14,7 +14,8 @@ self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     // one by one: a failed asset must not abort the install (it is fetched and cached when first used)
-    await Promise.all(['./', ...PRECACHE].map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {})));
+    // (hashed assets may come from the HTTP cache, where the page just fetched them; only the page itself is fetched fresh)
+    await Promise.all(['./', ...PRECACHE].map((u) => cache.add(u === './' ? new Request(u, { cache: 'reload' }) : u).catch(() => {})));
     await self.skipWaiting();
   })());
 });

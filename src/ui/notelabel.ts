@@ -1,14 +1,14 @@
 // How a note or bookmark names its place (DOM-free): the chapter and step, or the saved title.
 
-import { chapters } from '../chapters';
-import { chapterNo } from '../chapters/types';
+import { outlineOf } from '../chapters/outline';
+import { chapterNo } from '../chapters/meta';
 import type { NoteItem } from './notes';
 
 /** "Chapter 5 · Adding three bits · step 2, Nine NANDs" for a place; chip and component titles are as saved. */
 export function placeLabel(it: NoteItem): { head: string; sub: string } {
   const p = it.place;
   if (p.kind === 'step') {
-    const c = chapters.find((x) => x.id === p.chapter);
+    const c = outlineOf(p.chapter);
     const st = c?.steps[p.step];
     if (c) return { head: `${chapterNo(c)} · ${c.title}`.toUpperCase(), sub: `step ${p.step + 1}${st ? `, ${st.title}` : ''}` };
   }

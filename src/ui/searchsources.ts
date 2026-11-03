@@ -20,6 +20,8 @@ export interface SearchSource {
   /** The items now, or null until load() has finished. */
   items(ctx: SearchCtx): readonly NavItem[] | null;
   load?(): Promise<unknown>;
+  /** Load as soon as the box opens, before a first keystroke (small sources; the campaign's waits for a query). */
+  prefetch?: boolean;
   /** Its own ranking of a query over its items (the codex: aliases and spellings, campaign/codexsearch.ts); else rankItems. */
   rank?(items: readonly NavItem[], text: string): NavItem[];
   /** With an empty query in All: listed after Recent and On this page (the chapters). */

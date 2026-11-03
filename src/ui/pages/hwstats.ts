@@ -3,7 +3,7 @@
 // build ships the rows as hwstats.json; without it (the dev server) they are computed here.
 
 import { groupDigits } from '../../sim/numfmt';
-import { type HwRow, hwStatsLive } from '../../lib/hwstats';
+import type { HwRow } from '../../lib/hwstats';
 import { RELAY_MASS, RELAY_VOLUME, TECH, TECH_NOTE, TUBE_MASS, TUBE_VOLUME, type TechId, fmtMass, fmtRate, fmtTime, fmtVolume, fmtWatts } from '../../lib/tech';
 import { PS_NOTE, PS_PER_NAND } from '../../sim/timing';
 import type { Category } from '../../sim/types';
@@ -107,9 +107,13 @@ export class HwStatsPage implements Page {
     this.renderHead();
     loaded ??= fetch('hwstats.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { rows: HwRow[] }) => j.rows)
-      .catch(() => hwStatsLive((done, total) => {
-        if (this.alive) this.status.textContent = `Measuring every component… ${done} of ${total}`;
-      }));
+      .catch(async () => {
+        // measured here: that reads every registered part, so the whole library loads first (the shipped file needs none of it)
+        const [{ hwStatsLive }] = await Promise.all([import('../../lib/hwstats'), import('../../lib')]);
+        return hwStatsLive((done, total) => {
+          if (this.alive) this.status.textContent = `Measuring every component… ${done} of ${total}`;
+        });
+      });
     loaded.then((rows) => {
       if (!this.alive) return;
       this.rows = rows;

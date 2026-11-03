@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite-node scripts/hwstats.ts && vite build",
+    "build": "tsc --noEmit && vite-node scripts/hwstats.ts && vite-node scripts/chapter-manifest.ts --index && vite build",
+    "manifest": "vite-node scripts/chapter-manifest.ts",
     "stats": "vite-node scripts/hwstats.ts",
     "preview": "vite preview",
     "smoke": "vite-node scripts/smoke.ts",

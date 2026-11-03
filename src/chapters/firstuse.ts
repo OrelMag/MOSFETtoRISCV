@@ -5,7 +5,8 @@
 
 import { chapterSkip, Glossary, proseRuns } from '../campaign/glossary';
 import { TAUGHT, TAUGHT_OPTIONAL } from './taught';
-import { chapterNo, type Chapter } from './types';
+import { chapterNo, type ChapterHead } from './meta';
+import type { Chapter } from './types';
 
 /** What a chapter shows a reader without opening anything: [where, html]. */
 export function shownTexts(c: Chapter): [string, string][] {
@@ -25,13 +26,13 @@ export function shownTexts(c: Chapter): [string, string][] {
   return t;
 }
 
-const optional = (c: Chapter) => !!(c.prologue || c.appendix);
+const optional = (c: ChapterHead) => !!(c.prologue || c.appendix);
 
 /**
  * Has a reader of `chs[at]` been taught `id`? A journey chapter knows what the journey taught up to it; a prologue or
  * appendix chapter also what it, or an earlier chapter of its own group, explains (TAUGHT_OPTIONAL). Untaught ids: yes.
  */
-export function knows(chs: readonly Chapter[], at: number, id: string): boolean {
+export function knows(chs: readonly ChapterHead[], at: number, id: string): boolean {
   const t = TAUGHT[id];
   const ti = t ? chs.findIndex((c) => c.id === t) : -1;
   if (ti >= 0 && ti <= at) return true;
@@ -44,7 +45,7 @@ export function knows(chs: readonly Chapter[], at: number, id: string): boolean 
 }
 
 /** "chapter 3, NAND gate": where a term the reader of `chs[at]` lacks is built; null when known. */
-export function later(chs: readonly Chapter[], at: number, id: string): string | null {
+export function later(chs: readonly ChapterHead[], at: number, id: string): string | null {
   if (knows(chs, at, id)) return null;
   const c = chs.find((x) => x.id === TAUGHT[id]) ?? chs.find((x) => x.id === TAUGHT_OPTIONAL[id]?.[0]);
   return c ? `${c.prologue ? 'prologue' : c.appendix ? 'appendix' : 'chapter'} ${chapterNo(c).replace(/^0(?=\d)/, '')}, ${c.title}` : null;

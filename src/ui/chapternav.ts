@@ -11,7 +11,8 @@ export interface NavChapter {
   title: string;
   blurb: string;
   level: string;
-  steps: { title: string; body: string }[];
+  /** `text`: the body already as plain text (the search index), else `body` HTML is stripped. */
+  steps: { title: string; body?: string; text?: string }[];
 }
 
 export interface NavEntry {
@@ -53,7 +54,7 @@ export function navEntries(chs: readonly NavChapter[]): NavEntry[] {
     ({ chapter: c.id, step, num: c.num, no: c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0'), level: c.level, chTitle: c.title, title, text, href: `#/c/${c.id}/${Math.max(0, step)}`, lt: title.toLowerCase(), lx: text.toLowerCase() });
   for (const c of chs) {
     out.push(entry(c, -1, c.title, c.blurb));
-    c.steps.forEach((s, i) => out!.push(entry(c, i, s.title, plainText(s.body))));
+    c.steps.forEach((s, i) => out!.push(entry(c, i, s.title, s.text ?? plainText(s.body ?? ''))));
   }
   memo.set(chs, out);
   return out;
