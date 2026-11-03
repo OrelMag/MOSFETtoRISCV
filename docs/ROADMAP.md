@@ -1041,8 +1041,11 @@ language and functions.
   on the gate-level CPU with the Python panel (the line running, its cycles and toggles, the variables read from the
   registers and data memory, the output, the stack), functions and the stack, an editor compiling as you type;
   forty example programs in six sections (pyprograms.ts: each with what it prints, under 20 000 cycles)
-- ⏳ The same programs on the pipeline (stalls and flushes per Python line); RV32IM (mul / div instead of the
-  routines); strings and a heap
+- ✅ The same programs on the pipeline (cycles per Python line: issue, stall, flush; the last step of chapter 17) and compiled for
+  RV32IM (mul / div / rem with Python's floor correction instead of the routines, on the pipeline with the M unit: the last step
+  of chapter 21, with the measured gate cost). Both live in the chapters that teach the hardware (each level uses only what
+  came before it), not in chapter 15
+- ⏳ Strings and a heap
 
 ### Phase 19 — Where other tools still win ⏳
 From a comparison with other tools (2026-10-19): Digital, DigitalJS, Circuit Artist, FREESS and Ripes each still do

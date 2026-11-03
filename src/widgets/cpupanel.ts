@@ -107,7 +107,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
+      : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
