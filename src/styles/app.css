@@ -2593,7 +2593,7 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 /* ---------- Readable schematics (view/legible.ts) ----------
    Text kinds hide once they would render under 7 px on screen (classes lg-h-<kind> on the svg, set when the scale crosses
    a size); a net's tag keeps its pill, a bus or tap label goes whole. A block name under 12 px is drawn again at 12 px
-   on screen (.lg-name inside the instance, so fading, dragging and heat apply to it); the block's own label gives way
+   on screen (.lg-name in a layer of its own, last in the svg, mirroring the block's focus fade and ghost); the block's own label gives way
    while that copy is in use (.lg-nm) and wherever it is shown, never in an exported image (view/image.ts). */
 /* the same in every theme and look: white on a dark outline reads on any block colour */
 :root { --lg-name-fill: #ffffff; --lg-name-edge: #10131b; }
@@ -2603,6 +2603,8 @@ svg.schematic.lg .lg-name {
   display: none; pointer-events: none; user-select: none;
   font-weight: 700; font-family: var(--font-ui); fill: var(--lg-name-fill); stroke: var(--lg-name-edge); stroke-linejoin: round; paint-order: stroke; letter-spacing: 0;
 }
+svg.schematic.focus .lg-name:not(.hl) { opacity: 0.28; }
+svg.schematic .lg-name.ghost { opacity: 0.35; }
 :root[data-parts='cartoon'] svg.schematic.lg .lg-name { font-family: 'Fredoka', var(--font-ui); }
 svg.schematic.lg.lg-nm .inst.lg-named .sym-label,
 svg.schematic.lg.lg-h-tiny .sym-tiny, svg.schematic.lg.lg-h-rail .sym-rail, svg.schematic.lg.lg-h-port .sym-port,

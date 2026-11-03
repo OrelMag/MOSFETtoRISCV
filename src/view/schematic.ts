@@ -103,6 +103,8 @@ export class SchematicView {
   private cam: Camera;
   /** Small text hidden and block names kept at a readable size (view/legible.ts): a view rule only. */
   private legible: Legibility;
+  /** Each block's fixed-size name, in the top layer: it mirrors the block's highlight and ghost state (the layer is not inside the block). */
+  private nameOf = new Map<string, SVGTextElement>();
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
@@ -268,7 +270,10 @@ export class SchematicView {
     const labelG = s('g', { class: 'labels' });
     this.labelG = labelG;
     this.probeG = s('g', { class: 'probes' });
-    this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG);
+    // the fixed-size block names (legible.ts) have a layer of their own, last: nothing is painted over them
+    const nameG = s('g', { class: 'lg-names', 'aria-hidden': 'true' });
+    this.nameOf.clear();
+    this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG, nameG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -370,9 +375,11 @@ export class SchematicView {
       const own = g.querySelector('.sym-label');
       if (nameEligible(own?.textContent, geo.w, geo.h)) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
-        const t = s('text', { class: 'lg-name', x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'aria-hidden': 'true', transform: rot ? `rotate(-90 ${cx} ${cy})` : null }, own!.textContent!.trim());
+        const ax = at[0] + cx, ay = at[1] + cy;
+        const t = s('text', { class: 'lg-name', x: ax, y: ay, 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: rot ? `rotate(-90 ${ax} ${ay})` : null }, own!.textContent!.trim());
         g.classList.add('lg-named');
-        g.append(t);
+        nameG.append(t);
+        this.nameOf.set(inst.name, t);
         names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: own!.textContent!.trim().length, rot } });
       }
       if (openable) {
@@ -688,6 +695,7 @@ export class SchematicView {
   ghost(names: string[]): void {
     const on = new Set(names);
     for (const [name, g] of this.insts) g.classList.toggle('ghost', on.has(name));
+    for (const [name, t] of this.nameOf) t.classList.toggle('ghost', on.has(name));
   }
 
   /** The screen rectangle around these instances (null: none drawn). */
@@ -710,6 +718,7 @@ export class SchematicView {
     this.lastHl = { names, focus };
     const on = new Set(names);
     for (const [name, g] of this.insts) g.classList.toggle('hl', on.has(name));
+    for (const [name, t] of this.nameOf) t.classList.toggle('hl', on.has(name));
     for (const p of this.pins) p.g.classList.toggle('hl', on.has(`pin:${p.pin.name}`));
     this.el.classList.toggle('focus', focus && names.length > 0);
     const nl = this.ctx ? netlistOf(this.ctx.def) : undefined;
