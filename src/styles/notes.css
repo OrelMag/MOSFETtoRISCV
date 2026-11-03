@@ -11,7 +11,8 @@
 .step-notes[hidden] { display: none; }
 .note-card { padding: 12px 14px; border-radius: 12px; background: var(--note-bg); border: 1px solid var(--note-line); display: flex; flex-direction: column; gap: 8px; }
 .note-k { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--note-ink); }
-.note-k small { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.85; }
+.note-k { flex-wrap: wrap; row-gap: 0; }
+.note-k small { flex-basis: 100%; font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.85; }
 .note-no { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 10px; background: var(--note-mark); color: var(--note-mark-ink); font-size: 12px; font-weight: 700; }
 .note-card textarea { font: inherit; resize: vertical; width: 100%; box-sizing: border-box; border: 1px solid var(--note-line); border-radius: 8px; padding: 8px; background: var(--surface); color: var(--text); min-height: 64px; }
 .note-card textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -28,7 +29,7 @@
 .note-pin:hover circle { stroke-width: 0.25; }
 
 /* the page */
-.np-page { height: 100%; overflow: auto; box-sizing: border-box; padding: 24px; display: flex; gap: 24px; align-items: flex-start; background: var(--bg); }
+.np-page { height: 100%; overflow: auto; box-sizing: border-box; padding: 24px var(--page-gutter); display: flex; gap: 24px; align-items: flex-start; background: var(--bg); }
 .np-left { flex: 0 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .np-left h1 { margin: 0; font-size: 22px; }
 .np-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

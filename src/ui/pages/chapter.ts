@@ -218,7 +218,7 @@ export class ChapterPage implements Page {
       const solved = !!s.challenge && settings.isSolved(`${c.id}:${i}`);
       return h('button', {
         class: [i === this.step ? 'cur' : visited.includes(i) ? 'done' : '', solved ? 'solved' : ''].filter(Boolean).join(' '),
-        title: `${i + 1}. ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
+        title: `Step ${i + 1}: ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
         'aria-label': `Step ${i + 1}: ${s.title}${solved ? ', check solved' : ''}`,
         onclick: () => this.goStep(i),
       });

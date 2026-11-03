@@ -76,11 +76,16 @@ export function ladder(opts: { badge?: boolean } = {}): HTMLElement {
   // while sizes settle (web fonts, a phone's wrapped rungs), until the visitor scrolls it.
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
-      if (!box.clientHeight) return;
-      const r = rungs[focus];
-      // snapped to a whole card: the first rung that starts at or below the wanted top
-      const want = r.offsetTop + r.offsetHeight + 24 - box.clientHeight;
-      box.scrollTop = focus === LADDER.length - 1 ? box.scrollHeight : (rungs.find((x) => x.offsetTop >= want)?.offsetTop ?? want);
+      // The box holds whole cards: from the focus rung up, as many as the CSS height allows, the box sized to them
+      // (a slice of the top card read as a bug); sizes settle, so this runs again until the visitor scrolls.
+      box.style.maxHeight = '';
+      const room = box.clientHeight;
+      if (!room) return;
+      const bottom = rungs[focus].offsetTop + rungs[focus].offsetHeight;
+      let first = focus;
+      while (first > 0 && bottom - rungs[first - 1].offsetTop + 1 <= room) first--;
+      box.style.maxHeight = `${bottom - rungs[first].offsetTop + 3}px`;
+      box.scrollTop = rungs[first].offsetTop - 1;
       edges();
     });
     ro.observe(box);

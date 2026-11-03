@@ -63,6 +63,7 @@ export class HwStatsPage implements Page {
   readonly el: HTMLElement;
   private rows: HwRow[] = [];
   private q = '';
+  private search!: HTMLInputElement;
   private cats = new Set<Category>(ORDER);
   private wiring = false;
   private group = true;
@@ -84,6 +85,7 @@ export class HwStatsPage implements Page {
   constructor() {
     const search = h('input', { type: 'search', class: 'hw-search', placeholder: 'Search name or id…', 'aria-label': 'Search components' }) as HTMLInputElement;
     search.addEventListener('input', () => { this.q = search.value.toLowerCase(); this.render(); });
+    this.search = search;
     const check = (label: string, on: boolean, set: (v: boolean) => void) => {
       const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
       box.checked = on;
@@ -273,8 +275,14 @@ export class HwStatsPage implements Page {
           ? h('td', { class: 'hw-nands' }, bar(it.values.nands as number, max), range('nands')) : h('td', null, range(c.k))))));
       if (open) for (const m of it.members) out.push(this.row(m, max, true));
     }
+    if (!out.length) {
+      // nothing matches: say what to do (the filters are chips, a search and a switch: easy to forget one)
+      const reset = h('button', { class: 'btn sm', onclick: () => { this.q = ''; this.search.value = ''; this.cats = new Set(ORDER); this.renderChips(); this.render(); } }, 'Clear the search and filters');
+      out.push(h('tr', null, h('td', { colspan: String(columns(this.tech).length), class: 'hw-empty' }, 'No part matches. ', reset)));
+    }
     this.body.replaceChildren(...out);
-    this.count.textContent = `${groupDigits(rows.length)} components shown${this.group ? `, ${groupDigits(items.length)} rows` : ''}`;
+    // the tile above counts every library part; this is how many of all the table's rows (wiring parts included) pass the filters
+    this.count.textContent = `${groupDigits(rows.length)} of ${groupDigits(this.rows.length)} parts shown${this.group ? `, in ${groupDigits(items.length)} rows (sizes grouped)` : ''}`;
   }
 
   /** A family row's range end, formatted for its column. */
@@ -295,7 +303,7 @@ export class HwStatsPage implements Page {
     const tail = t === 'cmos'
       ? [h('td', null, count(r.transistors)), h('td', { class: 'hw-nands' }, bar(r.nands, max), count(r.nands)),
         h('td', null, r.switchLevel ? h('span', { class: 'hw-na' }, 'switch level') : num(r.depth)),
-        h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` ${groupDigits(mhz(r.period))}`)),
+        h('td', null, r.period === null ? '—' : num(r.period), r.period === null ? null : h('span', { class: 'hw-mhz' }, ` · ${groupDigits(mhz(r.period))} MHz`)),
         h('td', null, num(r.levels)), h('td', null, count(r.parts))]
       : [h('td', null, cell ? count(cell.n) : h('span', { class: 'hw-na' }, r.switchLevel ? 'transistors' : '—'),
           cell?.native ? h('span', { class: 'hw-tag' }, 'native') : null),

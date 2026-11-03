@@ -17,7 +17,8 @@ export function bookmarkButton(place: Place, title: () => string, cls = 'btn sm 
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
     b.title = on ? 'Saved in My notes: click to remove' : 'Save this place in My notes';
-    b.setAttribute('aria-label', on ? 'Saved: remove bookmark' : 'Bookmark this place');
+    // the accessible name starts with the visible label (WCAG 2.5.3)
+    b.setAttribute('aria-label', on ? 'Saved in My notes: remove' : 'Save this place in My notes');
     b.replaceChildren(bookmarkIcon(on), h('span', { class: 'lbl' }, on ? 'Saved' : 'Save'));
   };
   b.addEventListener('click', () => { store.toggleBookmark(place, title()); });

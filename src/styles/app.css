@@ -105,7 +105,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 320px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px;
   /* A short window: the list scrolls rather than running off the bottom of the screen. */
-  max-height: calc(100dvh - var(--topbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain;
+  max-height: calc(100dvh - var(--topbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  /* shadows at the edges that have more past them (scroll-attached gradients), so a cut list says it scrolls */
+  background:
+    linear-gradient(var(--surface) 30%, transparent) 0 0 / 100% 28px local no-repeat,
+    linear-gradient(transparent, var(--surface) 70%) 0 100% / 100% 28px local no-repeat,
+    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--text) 28%, transparent), transparent) 0 0 / 100% 10px scroll no-repeat,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--text) 28%, transparent), transparent) 0 100% / 100% 10px scroll no-repeat,
+    var(--surface);
 }
 .pal-menu.open { display: grid; gap: 2px; }
 .pal-menu button {
@@ -391,7 +398,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   background: var(--surface-2); padding: 14px;
 }
 .challenge-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
-.challenge-head .tag { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn); background: var(--warn-soft); padding: 1px 7px; border-radius: 99px; }
+.challenge-head .tag { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-text); background: var(--warn-soft); padding: 1px 7px; border-radius: 99px; }
 .challenge.solved { border-color: var(--good); background: var(--good-soft); }
 .challenge.solved .tag { color: var(--good); background: transparent; }
 .challenge .options { display: grid; gap: 6px; margin-top: 8px; }
@@ -571,7 +578,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .stage-goal .tag {
   flex: none; display: inline-flex; align-items: center; gap: 3px;
-  font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn);
+  font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-text);
 }
 .stage-goal .txt { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .stage-goal .more { flex: none; align-self: center; font-size: 16px; line-height: 1; color: var(--muted); }
@@ -1129,7 +1136,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .bits-row { display: flex; gap: 3px; }
 
 /* ---------- home ---------- */
-.home { max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
+.home { max-width: 1120px; margin: 0 auto; padding: 48px var(--page-gutter) 80px; }
 .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; margin-bottom: 56px; }
 .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.04; letter-spacing: -0.035em; margin: 10px 0 16px; font-weight: 800; }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -1139,7 +1146,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero .cta-more .btn { max-width: 100%; padding-inline: 8px; }
 .hero .cta-campaign { display: contents; }
 .hero-ladder { min-width: 0; }
-.ladder-cap { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
+.ladder-cap { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
@@ -1150,13 +1157,13 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .ladder > .rung { scroll-snap-align: start; }
 .ladder-wrap { position: relative; }
 .ladder-up {
-  position: absolute; top: 6px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent-text);
+  position: absolute; top: -11px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent);
   background: var(--surface); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
 }
 .ladder-up[hidden] { display: none; }
-.ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 40px); }
-.ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 40px); }
-.ladder.more-up.more-down { mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 14px); }
+.ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 14px); }
+.ladder.more-up.more-down { mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
 .widget .ladder { max-height: max(320px, calc(100vh - 250px)); }
 .rung.start { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
 .rung .start-tag {
@@ -1304,7 +1311,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
 .widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hw-page { height: 100%; overflow: auto; background: var(--bg); }
-.hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px 20px 40px; }
+.hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px var(--page-gutter) 40px; }
 .hw-inner > .bench-tabs { padding: 8px 0 0; margin-bottom: 16px; }
 .hw-page h1 { font-size: 22px; margin: 0 0 4px; }
 .hw-sub { color: var(--text-2); margin: 0 0 16px; max-width: 900px; }
@@ -1344,7 +1351,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .hw-table td.hw-name { white-space: normal; min-width: 220px; }
 .hw-name a { color: var(--text); font-weight: 500; }
 /* a generated id (soc_sys_rom_70ec…_dram_scr_kbd) is cut, whole in its tooltip: it widened the table past its frame */
-.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: 6px; display: inline-block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: none; margin-left: 6px; display: inline-block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .hw-tag { color: var(--muted); font-size: 12px; margin-left: 6px; font-weight: 400; }
 .hw-cat { color: var(--text-2); }
 .hw-cat .hw-dot { margin-right: 6px; }
@@ -2717,3 +2724,47 @@ html[data-busy]::before {
 }
 @keyframes busy-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(260%); } }
 @media (prefers-reduced-motion: reduce) { html[data-busy]::before { width: 100%; animation: busy-pulse 1.4s ease-in-out 0.25s infinite; } @keyframes busy-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 0.8; } } }
+
+/* ---------- Phone nav: equal 38 px targets with 2 px between (Chapters and Campaign no longer touch) ---------- */
+@media (pointer: coarse) and (max-width: 420px) {
+  .nav { gap: 2px; }
+  .nav a { min-width: 38px; }
+}
+
+/* ---------- Forced colours (Windows high contrast): system colours only, so icons, the current page and the swatches must say what they are ---------- */
+@media (forced-colors: active) {
+  .nav a.active { outline: 2px solid Highlight; outline-offset: -2px; text-decoration: underline; }
+  .btn, .look, .pal-btn { border: 1px solid ButtonText; }
+  .btn.primary, .stage-bar .btn.on, .look.on { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .look svg, .btn svg, .nav a svg { stroke: currentColor; }
+  .pal-sw, .pal-sw i, .pal-board-sw i, .pal-nets-sw i { forced-color-adjust: none; }
+  .pal-menu button[aria-checked='true'] { outline: 2px solid Highlight; }
+  .steps-dots button { border: 1px solid ButtonText; }
+  .steps-dots button.cur { background: Highlight; }
+  a.rung, .card { border: 1px solid LinkText; }
+}
+
+/* ---------- Print: a chapter's prose and the statistics table on paper, without the app around them ---------- */
+@media print {
+  html, body, #app, #view, .scroll, .layout, .narrative, .narrative-body, .hw-inner, .hw-table-wrap, .home, .cp-page { height: auto !important; max-height: none !important; overflow: visible !important; position: static !important; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .layout { display: block !important; }
+  .topbar, .skip-link, .stage, .inspector, .show-circuit, .narrative-foot, .return-pill, .coach, .tour-card, .pal-menu, .gl-card, .hw-chips, .hw-tech, .stage-notes, .step-notes .note-btn, .layers .layer-tabs, .quiz .opts button { display: none !important; }
+  .narrative { width: auto !important; border: 0 !important; }
+  .narrative-body { padding: 0 !important; zoom: 1 !important; }
+  a { color: inherit; }
+  .hw-table { width: 100%; font-size: 9pt; }
+  .hw-table thead { display: table-header-group; }
+  .hw-table tr, pre, .challenge, figure { break-inside: avoid; }
+  h1, h2, h3, h4 { break-after: avoid; }
+}
+
+/* Workbench list: the open part carries a bar, not only a faint fill; a size row says what it is; an empty search says so */
+.lib-item[aria-current='true'] { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+.param-k { flex-basis: 100%; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.lib-empty { padding: 14px 12px; color: var(--text-2); font-size: 13px; display: grid; gap: 8px; justify-items: start; }
+/* View options: a chosen row carries a check as well as the fill (colour alone is not a state) */
+.pal-menu button[aria-checked='true'] { position: relative; }
+.pal-menu button[aria-checked='true']::after { content: '\2713'; position: absolute; right: 10px; top: 8px; color: var(--accent); font-weight: 700; }
+.hw-empty { text-align: center !important; padding: 18px; color: var(--text-2); }
+.bm-hit:focus-visible { stroke: var(--accent); stroke-width: 2; outline: none; }
