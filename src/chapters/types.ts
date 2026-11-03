@@ -123,6 +123,8 @@ export interface Step {
    * names; '' hides it. Names in the body marked data-show="inst other" light those instances (ui/pages/looks.ts).
    */
   lit?: string;
+  /** A deep dive: marked in the chapter's part list; it stays in order, is never hidden or locked, and nothing later relies on it (tests/chapter-guide.test.ts). */
+  deep?: boolean;
   /** Conditions for the body's .try boxes, in order: a box ticks itself once its condition holds. */
   tries?: ((stage: Stage) => boolean)[];
 }
@@ -151,6 +153,11 @@ export interface Chapter {
    * else found from the campaign's links). Codex entries are added from their links.
    */
   recap?: { keep: string[]; check?: Quiz[]; practise?: string[] };
+  /**
+   * Named parts of a chapter of 15 steps or more (PARTS_MIN), as [name, step count] in order: they only group the steps
+   * (no step moves, so addresses and saved progress keep their numbers). The counts add up to the steps.
+   */
+  parts?: [name: string, steps: number][];
   steps: Step[];
   /** Titles of steps not built yet: dashed dots after the steps, not clickable. */
   soon?: string[];

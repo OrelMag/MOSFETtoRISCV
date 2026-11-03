@@ -55,6 +55,7 @@ const lazyLayers = (make: () => Layers): Layers => {
 export const nearFarSteps: Step[] = [
   {
     title: 'A faster adder: near and far paths',
+    deep: true,
     get body() {
       const m = measured();
       return `
@@ -116,6 +117,7 @@ export const nearFarSteps: Step[] = [
   },
   {
     title: 'Anticipating the leading zeros',
+    deep: true,
     get body() {
       const m = measured();
       return `

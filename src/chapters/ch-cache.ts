@@ -105,6 +105,7 @@ export const chCache: Chapter = {
       },
     ],
   },
+  parts: [['Memory cells', 5], ['How a cache works', 4], ['A CPU with a cache', 3], ['Fetch and the pipeline', 2], ['Average access time', 1]],
   steps: [
     {
       title: 'Six transistors per bit',
@@ -308,6 +309,7 @@ export const chCache: Chapter = {
     },
     {
       title: 'Leaks, refresh and sense amplifiers',
+      deep: true,
       body: `<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. <a href="#/c/dram/0">Chapter 35</a> builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>
         <p>Refresh is a tax on every access. The controller must issue a refresh command every ${TIMING.tREFI} of our cycles, and each one keeps the bank busy for ${TIMING.tRFC}:
         a bank is unavailable ${pct(TIMING.tRFC / TIMING.tREFI)} of the time to a request that arrives at a random moment, and a request that collides with a refresh waits out
@@ -327,6 +329,7 @@ export const chCache: Chapter = {
     },
     {
       title: 'Errors and ECC',
+      deep: true,
       body: `
         <p>A cell can also flip: a weak DRAM cell leaks early, or a particle strike dumps charge into a node. One <strong>parity</strong> bit
         (an XOR tree) detects any single flip but cannot locate it. A <strong>Hamming code</strong> adds r check bits at positions 1, 2, 4, …:
@@ -635,6 +638,7 @@ export const chCache: Chapter = {
     },
     {
       title: 'Caching instructions too',
+      deep: true,
       body: `
         <p>Fetch needs a cache as much as loads do, and an <strong>instruction cache</strong> is simpler: nothing is ever written, so no dirty
         bits and no write-back. Here <span data-show="imem">8 lines of 4 instructions</span> sit in front of

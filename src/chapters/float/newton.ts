@@ -29,6 +29,7 @@ const SOFT_INSTRS = 233, SOFT_M_INSTRS = 32;
 export const newtonSteps: Step[] = [
   {
     title: 'Division without a divider',
+    deep: true,
     body: `
       <p><span data-show="fpu.u27">The iterative divider</span> costs ${grp(stats(fpDiv(F32)).nands)} NANDs and 29 cycles. The fused multiply-add of
       <span data-show="fpu">the unit</span> can divide too. Newton–Raphson finds 1/b as the root of f(x) = 1/x − b: from an estimate x, the residual
