@@ -156,6 +156,7 @@ export const chOoo: Chapter = {
       },
     ],
   },
+  parts: [['Why reorder', 3], ['Hazards and renaming', 2], ['The machinery in gates', 4], ['Branches and memory', 2], ['The whole core', 2], ['Your turn', 2]],
   steps: [
     {
       title: 'How much parallelism is there?',
@@ -337,6 +338,7 @@ export const chOoo: Chapter = {
     },
     {
       title: 'The rename table in gates',
+      deep: true,
       body: `
         <p>This is our core's rename table at gate level. <span data-show="rows">31 rows</span>, one per register (x0 is
         never renamed), each hold a valid bit and a 4-bit tag: the reorder-buffer entry of the youngest instruction in
@@ -381,6 +383,7 @@ export const chOoo: Chapter = {
     },
     {
       title: 'Wakeup (Tomasulo, IBM 360/91, 1967)',
+      deep: true,
       body: `
         <p>Tomasulo's reservation stations held an instruction with, for each operand, either its value or the tag of
         the unit that would produce it. Every result went out on the Common Data Bus with its tag, and every station
@@ -652,6 +655,7 @@ export const chOoo: Chapter = {
     },
     {
       title: 'Your own core',
+      deep: true,
       body: `
         <p>The model behind this chapter is the specification the gate-level core follows cycle for cycle. Here it takes
         any shape: fetch and commit widths, issue ports and the units on each, the window, the predictor, where a

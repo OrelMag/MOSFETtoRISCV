@@ -2589,3 +2589,45 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
 .coh-panel .coh-ln { cursor: pointer; }
 .coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }
+
+/* A long chapter's parts (ui/chapterparts.ts): a segment per part sized by its steps, a status line that folds the list
+   of parts, the current part open. The list takes at most a quarter of the screen's height and scrolls inside itself, so the
+   prose and the fixed Next bar stay reachable; the pane is only 340 px wide. */
+.parts-nav { display: flex; flex-direction: column; gap: 6px; }
+.parts-segs { display: flex; gap: 4px; }
+.parts-segs i { position: relative; height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; min-width: 6px; }
+.parts-segs i b { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent) 45%, var(--surface-3)); }
+.parts-segs i.cur { box-shadow: 0 0 0 1.5px var(--accent); }
+.parts-segs i.cur b { background: var(--accent); }
+.parts-segs i.recap { flex: 0 0 12px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--border-strong); }
+.parts-segs i.recap.cur { background: var(--accent); box-shadow: none; }
+.parts-wrap > summary, .part > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.parts-wrap > summary::-webkit-details-marker, .part > summary::-webkit-details-marker { display: none; }
+.parts-status { font: 12px var(--font-ui); letter-spacing: -0.01em; color: var(--muted); min-height: 24px; justify-content: space-between; }
+.parts-status svg, .part > summary svg { flex: none; transition: transform 0.15s; }
+details[open] > .parts-status svg, details.part[open] > summary svg { transform: rotate(180deg); }
+.parts-list { display: flex; flex-direction: column; max-height: min(26vh, 230px); overflow-y: auto; overscroll-behavior: contain; margin-top: 2px; border-top: 1px solid var(--border); }
+.part { border-bottom: 1px solid var(--border); }
+.part > summary { padding: 7px 2px; font-weight: 600; font-size: 13.5px; }
+.part > summary .pname { flex: 1; min-width: 0; }
+.part > summary .pcount { font: 400 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.part.cur > summary .pname { color: var(--accent); }
+.part-steps { list-style: none; margin: 0 0 6px; padding: 0; }
+.pstep { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font: 13px/1.3 var(--font-ui); text-align: left; cursor: pointer; }
+.pstep:hover { background: var(--surface-2); }
+.pstep .pn { flex: none; min-width: 1.7em; font: 11.5px var(--font-mono); color: var(--muted); text-align: right; }
+.pstep .pt { flex: 1; min-width: 0; }
+.pstep.done .pn { color: var(--accent); }
+.pstep.cur { background: var(--accent-soft); color: var(--text); font-weight: 650; }
+.pstep.cur .pn { color: var(--accent); }
+.pstep .pck { color: var(--good); font-size: 12px; }
+.pstep .deep { flex: none; align-self: center; font: normal 10px var(--font-mono); color: var(--muted); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.pstep.recap { margin: 2px 0 4px; }
+@media (max-width: 760px) {
+  /* the list sits in the header, folded until asked for; opened it may take half the screen */
+  .parts-list { max-height: min(50vh, 340px); }
+}
+@media (pointer: coarse) {
+  .parts-status, .part > summary, .pstep { min-height: 40px; }
+  .pstep { align-items: center; }
+}
