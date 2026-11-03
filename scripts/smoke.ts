@@ -452,6 +452,38 @@ const CLIPPED = `(() => {
 })()`;
 
 /**
+ * A schematic's fixed-size block name (view/legible.ts, .lg-name) with something painted over it: at both ends and the middle of
+ * each drawn name, the topmost element at that point (its pointer-events lifted for the test) must be the name itself. A point
+ * that lands on a panel above the svg is skipped, and so is one beside the circuit's own box (the name may overhang it).
+ */
+const NAME_COVER = `(() => {
+  const out = [];
+  // everything painted takes part in the hit test (decorations are pointer-events: none), and the names' layer must come last
+  const lift = document.createElement('style');
+  lift.textContent = 'svg.schematic * { pointer-events: auto !important }';
+  document.head.append(lift);
+  for (const svg of document.querySelectorAll('svg.schematic')) {
+    const sr = svg.getBoundingClientRect();
+    if (!sr.width) continue;
+    const names = [...svg.querySelectorAll('.lg-name')].filter((t) => getComputedStyle(t).display !== 'none');
+    if (names.length && svg.lastElementChild?.getAttribute('class') !== 'lg-names') out.push('names layer is not last in the svg');
+    for (const t of names) {
+      const r = t.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, tall = r.height > r.width;
+      const pts = tall ? [[cx, r.top + 3], [cx, cy], [cx, r.bottom - 3]] : [[r.left + 3, cy], [cx, cy], [r.right - 3, cy]];
+      for (const [x, y] of pts) {
+        if (x < sr.left || x > sr.right || y < sr.top || y > sr.bottom) continue;
+        const top = document.elementsFromPoint(x, y)[0];
+        if (!top || !svg.contains(top) || top === t) continue;
+        out.push('name covered: ' + t.textContent + ' by ' + (top.getAttribute('class') || top.tagName));
+        break;
+      }
+    }
+  }
+  lift.remove();
+  return out;
+})()`;
+
+/**
  * A chapter or workbench stage whose bars lost something: the open level's name cut on a one-row top bar (its
  * buttons belong in More: Stage.fitBar), a button past either bar's edge, the run row's buttons cut
  * (Stage.fitControls drops their labels instead), a top bar that wraps to two rows without being `stacked`, the level badge
@@ -602,6 +634,8 @@ class Tab {
       }
       const seen = (await this.send('Runtime.evaluate', { expression: INSPECT, returnByValue: true })).result.value as string[];
       for (const p of seen) this.errors.push(`page: ${p}`);
+      const covered = (await this.send('Runtime.evaluate', { expression: NAME_COVER, returnByValue: true })).result.value as string[];
+      for (const p of covered) this.errors.push(p);
       const bars = (await this.send('Runtime.evaluate', { expression: STAGE_BARS, returnByValue: true })).result.value as string[];
       for (const p of bars) this.errors.push(p);
       if (route.viewport) {

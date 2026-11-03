@@ -34,7 +34,9 @@ export interface NameBox { cx: number; cy: number; w: number; h: number; chars: 
 
 /** Is this block's label worth a fixed name? Not: no label, one character (a constant, a bit), a small box. */
 export function nameEligible(label: string | null | undefined, w: number, h: number): boolean {
-  return !!label && label.trim().length >= 2 && !/^[01]$/.test(label.trim()) && (w >= 6 || h >= 20);
+  const t = label?.trim() ?? '';
+  // not an assignment or a constant drawn as a box ("bit0 := 0", "0x0"): those sit on their own stubs
+  return t.length >= 2 && !/^[01]$/.test(t) && !/[=:]|^0x|^[\d.]+$/.test(t) && /[A-Za-z].*[A-Za-z]/.test(t) && (w >= 6 || h >= 20);
 }
 
 /** A tall narrow block (a pipeline register) gets its name turned. */
@@ -82,8 +84,9 @@ export class Legibility {
   private timer = 0;
   private fontScale = 0;
   private wasFixed = false;
+  private lastPlan = -1e9;
   /** Planning runs this long after the scale stopped changing (ms). */
-  settleMs = 90;
+  settleMs = 60;
 
   constructor(private svg: SVGSVGElement) { svg.classList.add('lg'); }
 
@@ -111,8 +114,13 @@ export class Legibility {
     if (!this.names.length) return;
     if (this.planScale === 0 || fixed !== this.wasFixed) { this.wasFixed = fixed; this.plan(); }
     else if (fixed && Math.abs(scale / this.planScale - 1) > 0.02) {
-      clearTimeout(this.timer);
-      this.timer = window.setTimeout(() => this.plan(), this.settleMs);
+      // at once when the last plan is not recent (a resize, a click on zoom), else after the burst (a wheel turning): a
+      // plan for a scale the view has left would let names overlap
+      if (performance.now() - this.lastPlan >= this.settleMs) this.plan();
+      else {
+        clearTimeout(this.timer);
+        this.timer = window.setTimeout(() => this.plan(), this.settleMs);
+      }
     }
     this.size();
   }
@@ -126,6 +134,8 @@ export class Legibility {
   }
 
   private plan(): void {
+    clearTimeout(this.timer);
+    this.lastPlan = performance.now();
     this.planScale = this.scale;
     const next = planNames(this.names.map((n) => n.box), this.scale);
     this.shown = [];
