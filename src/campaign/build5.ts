@@ -66,7 +66,7 @@ export function ctlTable(): string {
 export const BUILD5: Record<string, () => BuildChallenge> = {
   c_imm: () => ({
     id: 'c_imm', title: 'Immediate generator', level: 'cpu', allowed: 'nand',
-    brief: 'From the instruction word, the four immediates, each sign-extended to 16 bits: <b>i</b> = instr[15:10]; <b>sb</b> = {instr[15:13], instr[6:4]}; <b>j</b> = instr[15:7]; <b>u</b> = {instr[15:7], instr[3]} &lt;&lt; 6 (not sign-extended: lui). Par: zero NANDs.',
+    brief: 'From the instruction word, the four immediates, 16 bits each (i, sb and j sign-extended): <b>i</b> = instr[15:10]; <b>sb</b> = {instr[15:13], instr[6:4]}; <b>j</b> = instr[15:7]; <b>u</b> = {instr[15:7], instr[3]} &lt;&lt; 6 (not sign-extended: lui). Par: zero NANDs.',
     ports: pins([['instr', 16]], [['i', 16], ['sb', 16], ['j', 16], ['u', 16]]), check: { kind: 'table', spec: ([w]) => immediates(w) },
     answer: refOf('c_imm', () => IMM16, 'Immediate generator'),
   }),

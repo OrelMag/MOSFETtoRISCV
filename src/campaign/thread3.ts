@@ -123,7 +123,7 @@ export const THREAD3: Record<string, NodeThread> = {
     pitfalls: [
       'Shared counters: two threads that load, add 1 and store one word lose a count. Give every thread its own.',
       'No bar between counting and summing: right while the warps take turns, wrong when warp 1 runs ahead.',
-      'Thread-major counters (16·t + b): a bin\'s eight counters are then 16 words apart, beyond the reach of lw\'s 6-bit offset.',
+      'Thread-major counters (16·t + b): a bin\'s eight counters then span 112 words, beyond the reach of lw\'s 6-bit offset from one base.',
     ],
   },
 
