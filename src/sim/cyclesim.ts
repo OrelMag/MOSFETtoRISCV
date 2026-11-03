@@ -290,6 +290,15 @@ export class CycleSim implements Sim {
     for (const l of leaves) {
       if (l.kind === 'behavior' && l.inputs.length === 0 && !isExternal(l.def) && !l.def.behavior?.init) for (const p of l.outputs) for (const net of p) constNet[net] = 1;
     }
+    // … and what a NAND makes of constants alone (a pin tied off through an inverter: a 74LS173's CLR)
+    for (let again = true; again;) {
+      again = false;
+      for (const l of leaves) {
+        if (l.def.prim !== 'nand' || constNet[l.outputs[0][0]] || !l.inputs.every((p) => p.every((net) => constNet[net]))) continue;
+        constNet[l.outputs[0][0]] = 1;
+        again = true;
+      }
+    }
     const where = (node: HierNode) => node.path.join('.') || 'the chip';
     /** A net's name as seen from an instance: one of its ports, else a port or named net of an instance around it. */
     const nameIn = (node: HierNode, net: number): string => {
