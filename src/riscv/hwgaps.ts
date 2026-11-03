@@ -47,3 +47,14 @@ export function hardwareGaps(r: AsmResult, f: HwFeatures): { line: number; messa
   }
   return out;
 }
+
+/**
+ * The note for a program with lr.w / sc.w on a design that has none: the chapter's shared-memory dual-core decodes them as
+ * amoswap.w (its decoder predates them), the single-cycle CPUs not at all, while the golden model (ISS, MultiISS) applies the real
+ * reservation rule. Only the coherent dual-core (lib/coherent.ts, chapter 27's cache steps) implements them.
+ */
+export function lrScNote(words: readonly number[]): string | null {
+  const used = new Set(words.map((w) => decode(w).name).filter((n) => n === 'lr.w' || n === 'sc.w'));
+  if (!used.size) return null;
+  return `${[...used].join(' and ')} is not in this design's hardware (the shared-memory dual-core runs it as amoswap.w); only the coherent dual-core of chapter 27 implements it. The golden model applies the real rule, so a mismatch is expected.`;
+}

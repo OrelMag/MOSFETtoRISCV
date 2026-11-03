@@ -269,7 +269,9 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   pointer, masked and unmasked priority chains, n − 1 flip-flops; on the workbench) and up to 64K words of shared memory;
   co-simulated every cycle against MultiISS with n harts. The 4-core runs ~4 500 cycles/s on the cycle engine in Node
   (scripts/sim-perf.ts). Chapter 27 keeps the dual-core; chapter 29 measures the lane core against `multiCore(4)`
-- ⏳ Private caches in the gate-level cores with a coherent bus; lr.w / sc.w
+- ✅ Private write-back caches (4 sets × 4 words) in the gates, kept coherent by MSI snooping on a one-transaction-at-a-time bus with a duplicate snoop tag array and a Flush;
+  lr.w / sc.w with a reservation per cache; `coherentDualCore` beside `dualCore` (which, multiCore and the silicon flow are unchanged); chapter 27's four cache steps and the Coherence panel;
+  verified cycle for cycle against `riscv/cohmodel.ts` (SWMR every cycle, a sequentially consistent replay of the retirement order, seeded fuzz with shared lines and lr/sc loops)
 
 ### Phase 11 — From netlist to silicon ✅ (chapter 28)
 - ✅ INV / NAND2 / NOR2 standard cells in layout (layers, live conduction), λ dimensions, sky130 reference

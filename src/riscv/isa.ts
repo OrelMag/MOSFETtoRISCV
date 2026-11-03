@@ -104,6 +104,9 @@ export const INSTRS: InstrSpec[] = [
   // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
   { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
   { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
+  // load-reserved / store-conditional (chapter 27's coherent caches): a reservation on the 16-byte line of the address
+  { name: 'lr.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x08, hw: false },
+  { name: 'sc.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x0c, hw: false },
   // SIMT (the lane cores of the GPU chapters): warp control on custom-0, funct3 selects, as in Vortex
   ...([['tmc', ['rs1']], ['wspawn', ['rs1', 'rs2']], ['split', ['rs1']], ['join', []], ['bar', ['rs1', 'rs2']], ['pred', ['rs1', 'rs2']]] as const).map(
     ([name, simt], f3): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.SIMT, funct3: f3, funct7: 0, hw: false, simt: [...simt] })),
@@ -310,7 +313,7 @@ export function disasm(word: number, pc?: number, custom?: readonly CustomRow[],
     if (d.fmt === 'R4') return `${n} ${frn(d.rd)}, ${frn(d.rs1)}, ${frn(d.rs2)}, ${frn(d.rs3)}${rm}`;
     return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
-  if (d.opcode === OPCODES.AMO) return `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
+  if (d.opcode === OPCODES.AMO) return n === 'lr.w' ? `${n} ${rn(d.rd)}, (${rn(d.rs1)})` : `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
   if (d.spec.simt) return [n, d.spec.simt.map((f) => rn(d[f])).join(', ')].filter(Boolean).join(' ');
   switch (d.fmt) {
     case 'R': case 'R4': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;

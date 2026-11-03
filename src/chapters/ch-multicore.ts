@@ -3,6 +3,7 @@ import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { pack } from '../sim/values';
 import type { Stage } from '../view/stage';
 import { coherenceWidget, dualCoreScene } from '../widgets/multicore';
+import { COH_STEPS } from './ch-multicore-coh';
 import type { Chapter } from './types';
 
 const mc = (id: string) => MC_PROGRAMS.find((p) => p.id === id)!.source;
@@ -37,12 +38,12 @@ const SB = sbSc();
 
 export const chMulticore: Chapter = {
   id: 'multicore', num: 27, title: 'Many cores', level: 'Systems',
-  blurb: 'Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and cache coherence.',
+  blurb: 'Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and private caches kept coherent by snooping, in gates.',
   goals: [
     'say why the end of Dennard scaling turned extra transistors into extra cores, from dynamic power C·V²·f',
     'explain how a round-robin arbiter shares one memory port, and why fixed priority can starve a core',
-    'find the lost update in a load–add–store race and fix it with <code>amoadd.w</code> or an <code>amoswap.w</code> spin lock',
-    'follow a write-invalidate protocol (MSI, MESI) and spot false sharing',
+    'find the lost update in a load–add–store race and fix it with <code>amoadd.w</code>, an <code>amoswap.w</code> spin lock or an <code>lr.w</code> / <code>sc.w</code> retry loop',
+    'follow write-invalidate snooping (MSI) from a stale copy to a Flush in gates, and measure what a spinning lock and false sharing put on the bus',
   ],
   builds: ['cpu', 'cache'],
   recap: {
@@ -51,8 +52,10 @@ export const chMulticore: Chapter = {
       'Two copies of the single-cycle core share one single-port memory. A round-robin arbiter grants it to one core per cycle; the loser holds its PC and register write and tries again.',
       'Every access is atomic; a load–add–store sequence is not: two cores adding 1 twenty times each end at 20, not 40. <code>amoadd.w</code> reads, adds and writes in one arbitrated access: 40, every time.',
       'An <code>amoswap.w</code> spin lock makes any critical section safe, at a price: over four times the run time of the atomic add, the cores fighting for the port while they spin.',
-      'Private caches stay coherent by write-invalidate snooping, per line. MESI\'s Exclusive state makes private data free; two variables on one line ping-pong between caches (false sharing).',
-      'Real cores reorder (RVWMO): with store buffers both cores of the store-buffering test can read 0. A lock is taken with acquire (<code>amoswap.w.aq</code>) and freed with release (<code>.rl</code> or <code>fence rw,w</code>). LR/SC builds any other atomic as a retry loop; this site\'s cores have the two AMOs only.',
+      'Private write-back caches disagree until they snoop: with no snooping core 1 reads a stale 0 for the 7 core 0 stored. MSI in gates is two state bits per line (I 00, S 10, M 11), BusRd / BusRdX / BusUpgr on a bus that carries one transaction at a time, a second copy of the tags for the snoop, and a Flush from the Modified holder written back on the way. The control is a few percent of a cache; the data array is nine tenths.',
+      'Spinning on a Shared copy (test-and-test-and-set) puts a fraction of the bus traffic of spinning with <code>amoswap.w</code>, because a load that hits never reaches the bus. Two variables on one line ping-pong between caches (false sharing): the same loop, a line apart, is several times faster. MESI\'s Exclusive state would make private data free.',
+      '<code>lr.w</code> / <code>sc.w</code> keep a reservation (valid + line) per cache, cleared by any <code>sc.w</code>, by a snooped BusRdX / BusUpgr for the line or by an eviction. The atomic add as a retry loop is correct and costs failed <code>sc.w</code>s; without a hold-off after <code>lr.w</code> one core can starve the other until it stops.',
+      'Real cores reorder (RVWMO): with store buffers both cores of the store-buffering test can read 0. A lock is taken with acquire (<code>amoswap.w.aq</code>) and freed with release (<code>.rl</code> or <code>fence rw,w</code>). LR/SC builds any other atomic as a retry loop, as the coherent dual-core does.',
     ],
     practise: ['m_bus'],
     check: [
@@ -72,7 +75,7 @@ export const chMulticore: Chapter = {
         ],
         answer: 0,
         explain: 'Core 1 runs one cycle behind: its load comes between core 0\'s load and store. Both add 1 to the same old value, and two increments make +1.',
-        why: ['', 'Losing arbitration delays an access by a cycle; it never discards one.', 'This dual-core has no caches: both cores read the one shared memory, and the value is stale only because the other core\'s store comes later.'],
+        why: ['', 'Losing arbitration delays an access by a cycle; it never discards one.', 'The dual-core of this step has no caches: both cores read the one shared memory, and the value is stale only because the other core\'s store comes later.'],
       },
       {
         question: 'A core reads a block no other cache holds, then writes it. How many bus transactions under MSI, and under MESI?',
@@ -340,6 +343,7 @@ export const chMulticore: Chapter = {
         explain: 'Coherence works on whole lines. Each write needs exclusive ownership of the line, so the two cores take turns invalidating each other, although they never touch the same byte. Padding the variables onto separate lines removes the traffic entirely.',
       },
     },
+    ...COH_STEPS,
     {
       title: 'Memory ordering',
       reading: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brentKung, cachedMemory, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
+import { brentKung, cachedMemory, coherentDualCore, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
@@ -28,6 +28,9 @@ systemCpu(words, { m: true });
 multicycleCpu(words, { control: 'fsm' });
 multicycleCpu(words, { control: 'micro' });
 dualCore(words);
+coherentDualCore(words);
+coherentDualCore(words, { coherent: false });
+coherentDualCore(words, { dmemK: 6 });
 cachedMemory(6, 2);
 // The parallel-prefix adders beside Kogge–Stone, powers of two and not.
 for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }

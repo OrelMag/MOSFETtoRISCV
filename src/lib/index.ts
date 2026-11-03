@@ -44,6 +44,7 @@ export * from './fpu';
 export * from './fpnearfar';
 export * from './mpdecode';
 export * from './multicore';
+export * from './coherent';
 export * from './lanes';
 export * from './warps';
 export * from './warpmem';

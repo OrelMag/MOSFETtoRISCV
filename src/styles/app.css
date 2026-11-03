@@ -1812,6 +1812,27 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .btn.xs { padding: 0 5px; font-size: 10px; height: 18px; line-height: 16px; }
 .coh-log { font-size: 12px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; margin-top: 6px; }
 
+/* chapter 27: the Coherence panel (widgets/coherent.ts) */
+.coh-panel .coh-cores { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.coh-panel .coh-verdict { font-size: 12px; margin: 4px 0; display: flex; flex-direction: column; gap: 2px; }
+.coh-panel table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.coh-panel th { text-align: left; font-weight: 500; font-size: 10.5px; color: var(--muted); padding: 1px 4px; }
+.coh-panel td { padding: 2px 4px; border-top: 1px solid var(--border); vertical-align: middle; }
+.coh-panel td.mono, .coh-panel .mono { font-family: var(--font-mono); }
+.coh-panel td.words { white-space: nowrap; }
+.coh-panel td.acts { white-space: nowrap; text-align: right; }
+.coh-panel tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.coh-panel td.op { color: var(--accent); font-family: var(--font-mono); white-space: nowrap; }
+.coh-st { display: inline-block; min-width: 1.7em; text-align: center; font: 700 12px var(--font-mono); border-radius: 4px; padding: 0 3px; border: 1px solid var(--border); }
+.coh-st.st-M { background: color-mix(in srgb, #dc2626 24%, transparent); border-color: #dc2626; }
+.coh-st.st-S { background: color-mix(in srgb, #16a34a 24%, transparent); border-color: #16a34a; }
+.coh-st.st-I { color: var(--muted); }
+.coh-panel .bus-tag { font: 600 11px var(--font-mono); color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
+.coh-panel .coh-res { font-size: 12px; color: var(--text-2); margin: 3px 0; }
+.coh-panel .coh-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin: 6px 0; color: var(--text-2); }
+.coh-panel .coh-stat b { color: var(--text); font-family: var(--font-mono); }
+.coh-panel .coh-measured { margin-top: 8px; }
+
 /* chapter 28: layout, fab, P&R, clock tree, floorplan, wafer */
 .lay-svg { width: 100%; max-width: 360px; display: block; margin: 8px auto; }
 .lay-svg .L-nwell { fill: rgba(250, 204, 21, 0.14); stroke: rgba(250, 204, 21, 0.5); stroke-width: 0.15; stroke-dasharray: 0.6 0.4; }
@@ -2555,3 +2576,16 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 /* Codex "Check yourself": short answers ("8", "6") sit side by side as chips, long ones still take a line each. */
 .cx-check .challenge .options { display: flex; flex-wrap: wrap; gap: 6px; }
 .cx-check .challenge .options button { flex: 0 1 auto; max-width: 100%; }
+
+/* the Coherence panel's small buttons grow to 40 px on touch screens */
+@media (pointer: coarse) { .coh-panel .btn.xs { min-height: 40px; min-width: 40px; height: auto; } }
+.coh-panel .coh-regs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 10px; }
+.coh-panel .coh-regs .m .n { width: 26px; }
+
+.coh-panel .coh-listing { margin: 6px 0; font-size: 12px; }
+.coh-panel .coh-listing summary { cursor: pointer; color: var(--muted); }
+.coh-panel .coh-ln { display: grid; grid-template-columns: 46px 1fr 40px; gap: 4px; padding: 1px 4px; }
+.coh-panel .coh-ln.at { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
+.coh-panel .coh-ln { cursor: pointer; }
+.coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }

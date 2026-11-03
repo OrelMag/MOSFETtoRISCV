@@ -49,7 +49,7 @@ export function slotsOf(spec: InstrSpec, xlen: Xlen = 32): Slot[] {
   const reg = (key: 'rd' | 'rs1' | 'rs2' | 'rs3', role?: 'f' | 'x') => (role === 'f' ? f(key) : x(key));
   const rm: Slot[] = fp?.rm ? [{ key: 'rm', min: 0, max: 7, step: 1 }] : [];
   if (spec.simt) return spec.simt.map((k) => x(k));
-  if (spec.opcode === OPCODES.AMO) return [x('rd'), x('rs2'), x('rs1')];
+  if (spec.opcode === OPCODES.AMO) return spec.name === 'lr.w' ? [x('rd'), x('rs1')] : [x('rd'), x('rs2'), x('rs1')];
   if (isCsr(spec)) {
     const src: Slot = spec.funct3! & 4 ? { key: 'zimm', min: 0, max: 31, step: 1 } : x('rs1');
     return [x('rd'), { key: 'csr', min: 0, max: 0xfff, step: 1 }, src];
@@ -92,7 +92,7 @@ export function encodeParts(spec: InstrSpec, p: Parts, xlen: Xlen = 32): number 
   };
   const op = spec.opcode, f3 = spec.funct3 ?? 0;
   if (spec.simt) return encR(op, 0, f3, v('rs1'), v('rs2'), 0);
-  if (op === OPCODES.AMO) return encR(op, v('rd'), 2, v('rs1'), v('rs2'), spec.funct7!);
+  if (op === OPCODES.AMO) return encR(op, v('rd'), 2, v('rs1'), spec.name === 'lr.w' ? 0 : v('rs2'), spec.funct7!);
   if (isCsr(spec)) return encI(op, v('rd'), f3, spec.funct3! & 4 ? v('zimm') : v('rs1'), v('csr'));
   const fp = spec.fp;
   switch (spec.fmt) {
@@ -166,7 +166,7 @@ export const PALETTE: PaletteGroup[] = [
   { id: 'j', name: 'Jump · upper', names: ['jal', 'jalr', 'lui', 'auipc'] },
   { id: 'm', name: 'Multiply', names: ['mul', 'mulh', 'mulhsu', 'mulhu', 'div', 'divu', 'rem', 'remu'] },
   { id: 'sys', name: 'System', names: ['ecall', 'ebreak', 'mret', 'wfi', 'fence', 'csrrw', 'csrrs', 'csrrc', 'csrrwi', 'csrrsi', 'csrrci'] },
-  { id: 'a', name: 'Atomic', names: ['amoswap.w', 'amoadd.w'], more: true },
+  { id: 'a', name: 'Atomic', names: ['amoswap.w', 'amoadd.w', 'lr.w', 'sc.w'], more: true },
   { id: 'f', name: 'Float', names: INSTRS.filter((s) => s.fp).map((s) => s.name), more: true },
   { id: 'simt', name: 'SIMT (lanes)', names: INSTRS.filter((s) => s.simt).map((s) => s.name), more: true },
 ];

@@ -479,10 +479,11 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
   const spec = BY_NAME.get(op) ?? (xlen === 64 ? BY_NAME64.get(op) : undefined) ?? (own ? specOf(own) : undefined);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
   if (spec.opcode === OPCODES.AMO) {
-    need(3);
-    const m = mem(args[2]);
+    const lr = op === 'lr.w';
+    need(lr ? 2 : 3);
+    const m = mem(args[lr ? 1 : 2]);
     if (m.off !== 0) throw new AsmError('atomic memory operations take no offset: (rs1)');
-    return [encR(spec.opcode, reg(args[0]), 2, m.base, reg(args[1]), spec.funct7!)];
+    return [encR(spec.opcode, reg(args[0]), 2, m.base, lr ? 0 : reg(args[1]), spec.funct7!)];
   }
   if (spec.simt) {
     need(spec.simt.length);

@@ -435,6 +435,19 @@ src/lib/       the component library (registered in `registry` via define())
   multicore.ts   dualCore(program): two singleCycleCpu(…, { shared }) cores + arbiter + shared memory (the chapter's,
                  the Yosys / OpenROAD flow's); multiCore(program, n, { dmemK, imemK }): 2, 4 or 8 cores, arbiterN,
                  encoder + mux trees on the port; sharedMemory(k): dataMemory up to 2^6 words, else a bigRam
+  coherent.ts    chapter 27's cache steps: coherentDualCore(program, { dmemK 5 | 6, imemK, coherent }) = dualCore's cores (the same ComponentDef:
+                 pins instrOut / memReq / grant / memRData …) each behind coherentCache(K, coh) + cohBus(K) + sharedMemory; dualCore, multiCore
+                 and the Yosys / OpenROAD flow are untouched. coherentCache: 4 sets × 4-word lines, direct-mapped, write-back; per set {m, v, tag}
+                 (I 00, S 10, M 11) in two regfileMP arrays written together (the core's, the snoop port's: a snoop never takes the core's tag
+                 port; the snoop copy is left out when coh = false: the private-caches variant that never snoops), the data array a regfileMP
+                 with a second read port for the bus; cohAccess(t) (decodes lw / sw / amo* / lr.w / sc.w from instrOut: the core's own decoder
+                 takes lr.w and sc.w for amoswap, MP_DECODE is unchanged; hit, grant, need, BusUpgr, dirty victim), cohRes (the reservation:
+                 a snooped invalidation of its line, an eviction or any sc.w clears it, a clear beats a set at the same edge). cohBus: ARBITER2
+                 gated while busy, busy / owner / flush / 3-bit count, the address and data muxes in front of the memory. A transaction: the
+                 grant cycle (the other cache's copy changes at that edge: BusRd M→S, BusRdX / BusUpgr hit→I), counts 0-3 victim write-back, 4-7
+                 the line a word a cycle (from the Modified holder, written to memory the same cycle: the Flush, else from memory), a BusUpgr
+                 is count 4 alone; the owner's state is written on the last cycle. cohread.ts readCache / readMem (regfileMP registers are u1 … uN);
+                 cohcosts.ts cohCosts() (NANDs counted for the chapter's prose; tests/coherent-costs.test.ts pins them)
   cpu4.ts        the 4-bit CPU (Examples ▸ 4-bit CPU): CPU4_PC (PC + 3-level stack), CPU4_DECODE (control4: the control
                  table, its spec), CPU4_REGS (16 × 4 in pairs), CPU4_ALU (alu4), CPU4_ACC, CPU4_IO (SRC + five ports), rom4(words)
                  (256 × 16, the sandbox ROM part's geometry), cpu4(words) (the computer; CPU4_STATE: paths of its registers)
@@ -511,7 +524,7 @@ src/riscv/     cycletime.ts (chapter 14: the single-cycle CPU on GateSim over ra
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its pollirq.ts (chapter 20: pollIrqSource / runPollIrq / crossover: a polling and a timer-interrupt program run on the system-mode ISS, cycles, work and latency measured; sysprograms also has poll and nested),
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), cohmodel.ts (CohModel: the coherent dual-core's cycle-exact timing model, its header the spec the gates follow; harts' loads and stores go through its cache data, so the variant without snooping reproduces a stale read; invariants(): SWMR), cohprograms.ts (COH_PROGRAMS), cohfuzz.ts (seeded random programs with shared lines, conflict misses and lr / sc loops), cohrun.ts (runCoherent: a program to halt on the model, the numbers chapter 27 quotes; lineStates); lr.w / sc.w in isa / asm / ISS (a reservation on the 16-byte line: ISS.resValid / resLine; the caches' evictions and snooped invalidations are the model's to apply), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its pollirq.ts (chapter 20: pollIrqSource / runPollIrq / crossover: a polling and a timer-interrupt program run on the system-mode ISS, cycles, work and latency measured; sysprograms also has poll and nested),
                values; narrateCycle(PipeSnap, wordAt): each pipeline stage this cycle, with why it forwards, stalls or flushes; the
                CPU panel's and the sandbox CPU drawer's Narrate section; tests/narrate.test.ts: next pc and written value equal the
                golden model's over the sample programs), ilp.ts (chapter 26: classify(word) → class /
@@ -1004,7 +1017,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  and the doublewords after a store compared as BigInts (bitsBig on <core>.rf / .dm banks); the CPU drawer's RV64 view (renderRv64: 64-bit
                  registers in a grid of their own, memory in doublewords). A C core is a plain CpuMonitor with iss.c (ISS({ c }); wordAt = the expanded
                  instruction, compressedAt(pc), the listing a row per instruction with 16-bit ones shown as 4 hex digits)
-  multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory), MultiMonitor: MultiISS in
+  multicpu.ts    detectMulti (two or more placed CPU chips + a shared memory; not with u_coh* cache chips: the cores wait on caches), MultiMonitor: MultiISS in
                  lock-step (which cores retired, each core's registers and PC, shared memory)
                DOM:
   editor.ts      Editor: workspace + history + library + sim + panels; registerToolbarAction, slots
