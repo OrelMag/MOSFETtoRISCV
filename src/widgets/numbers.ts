@@ -18,7 +18,7 @@ export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts:
   let message = '';
   let C = 0, V = 0;
   const bitsRow = h('div', { class: 'bits rows ns-bits' });
-  const readout = h('div', { class: 'readout' });
+  const readout = h('div', { class: 'readout ns-read' });
   const flags = h('div', { class: 'ns-flags' });
   const wheelHost = h('div');
   const halveHost = h('div', { class: 'ns-scroll' });
@@ -131,10 +131,11 @@ export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts:
     const at = Math.floor(v / scale);
     const ang = (i: number) => (i / n) * Math.PI * 2 - Math.PI / 2;
     const xy = (i: number, r: number): [number, number] => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
-    const fmt = (z: number) => (Math.abs(z) >= 1e5 ? `${z < 0 ? '−' : ''}2^${Math.log2(Math.abs(z))}` : String(z).replace('-', '−'));
+    const fmt = (z: number) => String(z).replace('-', '−');
+    // wider than 8 bits: label a tick by its top 8 bits (the footer gives the unit), never i · 2^k in full
     const label = (i: number) => {
       const [x, y] = xy(i, R + 15), [x2, y2] = xy(i, R - (n === 16 ? 26 : 28));
-      const u = i * scale, sg = i >= n / 2 ? (i - n) * scale : u;
+      const u = i, sg = i >= n / 2 ? i - n : u;
       svg.append(s('text', { x, y: y + 4, 'text-anchor': 'middle', class: 'ns-wu' }, fmt(u)));
       svg.append(s('text', { x: x2, y: y2 + 4, 'text-anchor': 'middle', class: 'ns-ws' }, fmt(sg)));
     };
@@ -164,7 +165,7 @@ export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts:
     svg.append(s('circle', { cx: dx, cy: dy, r: 6, class: 'ns-cur' }));
     svg.append(s('text', { x: 6, y: 16, class: 'ns-wu' }, 'outer: unsigned'));
     svg.append(s('text', { x: 314, y: 16, 'text-anchor': 'end', class: 'ns-ws' }, 'inner: signed'));
-    if (scale > 1) svg.append(s('text', { x: cx, y: 308, 'text-anchor': 'middle', class: 'ns-wu' }, `each tick = 2^${width - 8} values (the top 8 bits)`));
+    if (scale > 1) svg.append(s('text', { x: cx, y: 308, 'text-anchor': 'middle', class: 'ns-wu' }, `labels: the top 8 bits; each tick = 2^${width - 8} values`));
     return svg;
   }
 

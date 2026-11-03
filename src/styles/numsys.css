@@ -67,3 +67,6 @@
   .ns-bits button { min-height: 40px; }
 }
 .readout.ns-wide { grid-template-columns: 1fr; }
+/* the binary reading takes the whole row (32 bits are 39 characters) and wraps between groups if it must */
+.ns-read > div:first-child { grid-column: 1 / -1; }
+.ns-read b { overflow-wrap: anywhere; }
