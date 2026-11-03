@@ -24,6 +24,17 @@ describe('lza', () => {
       }
     }
   });
+  it('the one-place miss is common: about three nonzero differences in ten at 8 bits', () => {
+    const n = 8, s = simulate(lza(n));
+    let miss = 0, tot = 0;
+    for (let a = 1; a < 2 ** n; a++) for (let b = 0; b < a; b++) {
+      const lz = n - 1 - Math.floor(Math.log2(a - b));
+      tot++;
+      if (evalOnce(s, [a, b, 0])[0] === lz - 1) miss++;
+    }
+    expect(miss / tot).toBeGreaterThan(0.28);
+    expect(miss / tot).toBeLessThan(0.33);
+  });
 });
 
 describe('near / far adder', () => {
@@ -75,19 +86,19 @@ describe('near / far adder: cost and depth against the single-path adder (pinned
   const measure = (d: ComponentDef) => ({ nands: stats(d).nands, unit: logicDepth(d)!, load: Math.round(logicDepth(d, 'load')!) });
   it('E4M3', () => {
     expect(measure(fpAdd(E4M3))).toEqual({ nands: 2553, unit: 151, load: 240 });
-    expect(measure(fpAddNearFar(E4M3))).toEqual({ nands: 3270, unit: 101, load: 162 });
+    expect(measure(fpAddNearFar(E4M3))).toEqual({ nands: 3120, unit: 97, load: 158 });
     expect(measure(fpAddNearFar(E4M3, false))).toEqual({ nands: 2506, unit: 111, load: 182 });
   });
   it('float32', () => {
     expect(measure(fpAdd(F32))).toEqual({ nands: 8218, unit: 181, load: 293 });
-    expect(measure(fpAddNearFar(F32))).toEqual({ nands: 12170, unit: 114, load: 190 });
+    expect(measure(fpAddNearFar(F32))).toEqual({ nands: 11420, unit: 114, load: 190 });
     // without anticipation (the count behind the subtractor): most of the depth saving stays, most of the area growth goes
     expect(measure(fpAddNearFar(F32, false))).toEqual({ nands: 8672, unit: 129, load: 221 });
   });
-  it('the paths: far and near are balanced, the shared rounder is the rest', () => {
+  it('the paths: the near path has slack, the far path and the shared rounder set the depth', () => {
     const inst = (n: string) => fpAddNearFar(F32).netlist!().instances.find((i) => i.name === n)!.def;
     expect([stats(inst('far')).nands, logicDepth(inst('far'))]).toEqual([2365, 57]);
-    expect([stats(inst('near')).nands, logicDepth(inst('near'))]).toEqual([6574, 53]);
+    expect([stats(inst('near')).nands, logicDepth(inst('near'))]).toEqual([5824, 49]);
     expect([stats(inst('rnd')).nands, logicDepth(inst('rnd'))]).toEqual([1497, 27]);
   });
 });

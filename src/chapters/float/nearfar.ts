@@ -39,7 +39,8 @@ function measured(): Measured {
     far: part('far'), near: part('near'), rnd: part('rnd'), unpackD: unit(parts.get('ua')!), expD: unit(parts.get('dab')!),
   });
 }
-const pct = (a: number, b: number) => Math.round((100 * (b - a)) / a);
+/** The change from a to b in percent, with a true minus sign. */
+const pct = (a: number, b: number) => { const v = Math.round((100 * (b - a)) / a); return v < 0 ? `−${-v}` : `${v}`; };
 const lazyLayers = (make: () => Layers): Layers => {
   let m: Layers | undefined;
   const get = () => (m ??= make());
@@ -60,16 +61,15 @@ export const nearFarSteps: Step[] = [
         <p>The adder above is one serial path: compare the magnitudes, swap, subtract the exponents, align right, add, count the leading zeros, shift left, round. Every addition is built to pay for a long right shift
         <em>and</em> a long left shift, one after the other, though no pair of operands needs both. Split on the exponent difference d = |e<sub>a</sub> − e<sub>b</sub>| and on whether the operation is an effective subtraction.</p>
         <p><strong>Far path</strong> (<span data-show="far">FAR</span>): an effective addition, or a subtraction with d ≥ 2. The smaller significand shifts right by up to M + 3 places, the sticky bit keeping what falls off. The result is in [1, 4)
-        for an addition and in (½, 2) for a subtraction with d ≥ 2, so it moves at most one place right (a carry) or two left: two rows of multiplexers and no counter. <strong>Near path</strong> (<span data-show="near">NEAR</span>): a
+        for an addition and in (½, 2) for a subtraction with d ≥ 2, so it moves at most one place right (a carry) or two left, counted from the carry column: two rows of multiplexers and no counter. <strong>Near path</strong> (<span data-show="near">NEAR</span>): a
         subtraction with d ≤ 1. The smaller significand moves at most one place, into one extra bit, so nothing is lost: no sticky, no aligner, an exact difference. What can happen instead is cancellation to any depth, so this path keeps the
         counting and the left shifter. Each path carries one of the two big shifters, not both in series.</p>
         <p>The swap goes by exponent alone: <span data-show="dab dba">both differences e<sub>a</sub> − e<sub>b</sub> and e<sub>b</sub> − e<sub>a</sub> are formed and the borrow picks</span>, which removes the magnitude comparator that stood in front of
         everything (31 bits wide in float32). When d = 0 either operand may be the larger, so the near path forms X − Y and Y − X and keeps the one without a borrow. A select between the two results, then <span data-show="rnd">one rounder</span>
         shared by both paths: the rounding decision, increment, overflow and tininess logic of normalize &amp; round, without its counter and shifters, which the paths have already done. Results and flags are bit for bit those of the single-path adder:
         every operand pair of the 6-bit format and of E4M3 in all five modes, float16 and float32 on biased random operands.</p>
-        <p>Measured in float32: <strong>${grp(m.nf.n)} NANDs</strong> against ${grp(m.one.n)} (${pct(m.one.n, m.nf.n) > 0 ? '+' : ''}${pct(m.one.n, m.nf.n)} %), <strong>${m.nf.d} NAND delays deep</strong> against ${m.one.d} (${pct(m.one.d, m.nf.d)} %), and ${m.nf.l} against
-        ${m.one.l} units under the load-dependent model (${pct(m.one.l, m.nf.l)} %). Where the rest of the depth sits: unpack ${m.unpackD}, exponent difference ${m.expD}, then the paths (far ${m.far.d}, near ${m.near.d}), then the rounder ${m.rnd.d}. The paths are nearly balanced, so
-        speeding one up alone gains little, and the front and the rounder are common to both: a serial floor that the split cannot touch.</p>
+        <p>Measured in float32: <strong>${grp(m.nf.n)} NANDs</strong> against ${grp(m.one.n)} (+${pct(m.one.n, m.nf.n)} %), <strong>${m.nf.d} NAND delays deep</strong> against ${m.one.d} (${pct(m.one.d, m.nf.d)} %), and ${m.nf.l} against
+        ${m.one.l} units under the load-dependent model (${pct(m.one.l, m.nf.l)} %). Where the rest of the depth sits: unpack ${m.unpackD}, exponent difference ${m.expD}, then the paths (far ${m.far.d}, near ${m.near.d}), then the rounder ${m.rnd.d}. The near path has slack (${m.far.d - m.near.d} delays), so the far path sets the depth, and the front and the rounder are common to both: a serial floor that the split cannot touch.</p>
         <div class="try">3.0 + 1.0 takes the far path. Then 1.125 − 1.0 (0x39 − 0x38): the near path, three leading zeros. Then 1.0 − 1.125: equal exponents, X &lt; Y, so the other difference is used and the sign flips.</div>`;
     },
     scene: () => ({ root: fpAddNearFar(E4M3), inputs: { a: 0x44, b: 0x38, sub: 0 } }),
@@ -102,16 +102,16 @@ export const nearFarSteps: Step[] = [
     }),
     challenge: {
       kind: 'quiz',
-      question: 'Which of these operand pairs takes the near path?',
+      question: 'Both operands are positive. Which of these takes the near path?',
       options: ['x − y where the exponents differ by 1', 'x + y with equal exponents', 'x − y where the exponents differ by 2', 'any x − y whose result turns out to be small'],
       answer: 0,
       why: [
         '',
-        'An effective addition never cancels: the sum is at least the larger operand and carries at most one place. Whatever its exponents, it takes the far path.',
+        'With both operands positive, x + y is an effective addition. It never cancels: the sum is at least the larger operand and carries at most one place. Whatever its exponents, it takes the far path. (x + y with opposite signs would be an effective subtraction, and could be near.)',
         'With d = 2 the smaller operand is below a quarter of the larger one; the difference is more than half of it and needs at most two places of left shift. That is the far path, which has no counter.',
         'The path is chosen from the exponents before the subtraction starts. The size of the result is only known after, which is exactly why the near path needs a counter or an anticipator.',
       ],
-      explain: 'Near = effective subtraction with an exponent difference of 0 or 1: the only case where the result can cancel to any depth. Everything else has a long alignment but a short normalization.',
+      explain: 'Near = effective subtraction (the operand signs differ after fsub flips the sign of b) with an exponent difference of 0 or 1: the only case where the result can cancel to any depth. Everything else has a long alignment but a short normalization.',
     },
   },
   {
@@ -119,7 +119,7 @@ export const nearFarSteps: Step[] = [
     get body() {
       const m = measured();
       return `
-        <p>Cancellation in the near path can leave anywhere from 0 to 24 leading zeros in <span data-show="dxy">X − Y</span>, and the shifter that removes them needs the count. Counting behind the subtractor puts three things in series before the shift: the
+        <p>Cancellation in the near path can leave anywhere from 0 to ${F32.M + 1} leading zeros in <span data-show="dxy">X − Y</span>, and the shifter that removes them needs the count. Counting behind the subtractor puts three things in series before the shift: the
         carry chain, the select between X − Y and Y − X, and a priority encoder. <strong>Anticipation</strong> predicts the count from the operands X and Y alone, by <span data-show="lzxy">an anticipator</span> running at the same time as the subtraction (and
         <span data-show="lzyx">a second one for Y − X</span>, since the borrow that says which difference is wanted arrives late).</p>
         <p>For each bit of X + ¬Y the anticipator forms propagate T = x ⊕ ȳ, generate G = x·ȳ and zero Z = x̄·y, then a pattern f<sub>i</sub> = T<sub>i+1</sub>·(G<sub>i</sub>·Z̄<sub>i−1</sub> + Z<sub>i</sub>·Ḡ<sub>i−1</sub>) + T̄<sub>i+1</sub>·(Z<sub>i</sub>·Z̄<sub>i−1</sub> + G<sub>i</sub>·Ḡ<sub>i−1</sub>)
@@ -131,7 +131,7 @@ export const nearFarSteps: Step[] = [
         <p>Does it pay? The anticipator is <strong>${m.lzaD}</strong> deep (${grp(m.lzaN)} NANDs, and the near path has two). The subtractor it runs beside is ${m.addD} deep and a 32-bit counter ${m.lzcD}: ${m.addD} + ${m.lzcD} = ${m.addD + m.lzcD}, about the same.
         What anticipation removes is not the counting but the chain behind the subtractor: the sign select and the comparison with the exponent. Measured on the same float32 adder with the count taken behind the subtractor instead: <strong>${grp(m.counted.n)} NANDs, ${m.counted.d} deep</strong>
         (${m.counted.l} units loaded), against <strong>${grp(m.nf.n)} NANDs, ${m.nf.d} deep</strong> (${m.nf.l}) anticipated. The split alone took the adder from ${m.one.d} to ${m.counted.d} delays for ${pct(m.one.n, m.counted.n)} % more NANDs; anticipation takes a further
-        ${m.counted.d - m.nf.d} (${-pct(m.counted.d, m.nf.d)} %) for ${pct(m.counted.n, m.nf.n)} % more. A trade, not a free win, and with a Kogge–Stone subtractor and an 11-deep counter it is a modest one: a slower adder, or a wider format, would favour it more.</p>
+        ${m.counted.d - m.nf.d} delays (${pct(m.counted.d, m.nf.d)} %) for ${pct(m.counted.n, m.nf.n)} % more NANDs. A trade, not a free win, and with a Kogge–Stone subtractor and an 11-deep counter it is a modest one: a slower adder, or a wider format, would favour it more.</p>
         <div class="try">1.125 − 1.0: watch both anticipators; the one for X − Y is the one that counts. Then 1.0 − 1.125 hands the shift to the other.</div>`;
     },
     scene: () => ({ root: fpAddNearFar(E4M3), path: ['near'], inputs: { a: 0x39, b: 0x38, sub: 1 } }),
@@ -148,7 +148,7 @@ export const nearFarSteps: Step[] = [
     more: lazyLayers(() => ({
       derive: `<p>A − B = A + ¬B + 1. For one bit position, T says the pair propagates a carry (the sum bit is 1 whatever comes from below), G that it generates one, Z that it kills one. f<sub>i</sub> reads bits i + 1, i and i − 1 only, so it cannot see whether a carry
         arrives from further below. When one does, the true leading one is one position lower than f says: that is the one-place uncertainty, and the reason for the correction shift. A 1 entering below the least significant bit stands for the +1 of the subtraction.</p>`,
-      pitfall: `<p>Letting the anticipated count stand for the true one. The count is only exact when the carry from below does not reach the leading position; assume it always is and the normalized result has a leading zero in about three cases in ten (over all 8-bit operand pairs), and the packer reads the 0 hidden bit as a subnormal: a number far too small
+      pitfall: `<p>Letting the anticipated count stand for the true one. The count is only exact when the carry from below does not reach the leading position; assume it always is and the normalized result has a leading zero in about three cases in ten (measured over every 8-bit operand pair), and the packer reads the 0 hidden bit as a subnormal: a number far too small
         in a plausible encoding, with no flag. The correction shift is part of the design, not an optional refinement.</p>`,
       real: `<p>The anticipator in real FPUs is the same idea (Schmookler and Nowka, 2001, compare the methods), usually folded with the sign decision so that one pattern serves both X − Y and Y − X. Here the two differences are kept apart: simpler to read,
         about twice the anticipator's gates.</p>`,

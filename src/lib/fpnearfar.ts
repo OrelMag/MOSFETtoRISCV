@@ -14,7 +14,7 @@
 // Bit-identical to fpAdd, flags included (tests/fpnearfar.test.ts); it costs more NANDs and
 // is shallower, by the amounts the same test pins.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { andN, busMux2, decoder, equal } from './combinational';
 import { define, merger, ones, splitter } from './define';
@@ -47,6 +47,33 @@ const flagWord = (b: Builder, fl: { nv?: string }) => {
   const z = () => b.op1(TIE0, []);
   return b.op1(merger([1, 1, 1, 1, 1]), [z(), z(), z(), z(), fl.nv ?? z()]);
 };
+
+/** n inverters side by side (the library has no inverter word: an XOR with ones would cost three NANDs a bit more). */
+const notCache = new Map<number, ComponentDef>();
+function notWord(n: number): ComponentDef {
+  let d = notCache.get(n);
+  if (d) return d;
+  const P = 6;
+  const instances: InstanceDef[] = [
+    { name: 'sa', def: splitter(ones(n), P), at: [4, 0] },
+    { name: 'my', def: merger(ones(n), P), at: [17, 1] },
+  ];
+  const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'y', ends: ['my.out', 'y'] }];
+  for (let i = 0; i < n; i++) {
+    instances.push({ name: `g${i}`, def: NOT, at: [10, 2 + P * i] });
+    nets.push({ ends: [`sa.o${i}`, `g${i}.a`] }, { ends: [`g${i}.y`, `my.i${i}`] });
+  }
+  d = define({
+    id: `fpnfnot${n}`, name: `${n}-bit NOT`, category: 'gate',
+    summary: `${n} inverters side by side: bit i of the result is the complement of bit i of the input.`,
+    ports: [bus('a', n, 'in'), bus('y', n, 'out')],
+    symbol: { kind: 'box', label: `NOT${n}` },
+    spec: ([a]) => [2 ** n - 1 - a],
+    netlist: () => ({ pins: { a: [1, (P * n) / 2], y: [21, 1 + (P * n) / 2] }, instances, nets }),
+  });
+  notCache.set(n, d);
+  return d;
+}
 
 // ---- leading-zero anticipation ---------------------------------------------------------------------
 
@@ -81,27 +108,26 @@ export function lza(n: number): ComponentDef {
   return memo(`fpnflza${n}`, () => {
     const P = pow2ceil(n), k = Math.log2(P);
     const b = new Builder();
-    const ones_ = b.op1(K(n, 2 ** n - 1), []);
-    const X = (x: number) => bitwise('xor', x);
-    const na = b.op1(X(n), ['a', ones_], 'NOT a'), nb = b.op1(X(n), ['b', ones_], 'NOT b');
-    const p = b.op1(X(n), ['a', 'b'], 'propagate: a xor b');
+    const A = bitwise('and', n), O = bitwise('or', n), N = notWord(n);
+    const na = b.op1(N, ['a'], 'NOT a'), nb = b.op1(N, ['b'], 'NOT b');
     b.next();
-    const g = b.op1(bitwise('and', n), ['a', nb], 'generate: a and not b');
-    const z = b.op1(bitwise('and', n), [na, 'b'], 'zero: not a, b');
+    // per bit of a + ¬b: T propagates a carry, G generates one, Z kills one
+    const t = b.op1(bitwise('xor', n), ['a', nb], 'T = a xor ¬b (propagate)');
+    const g = b.op1(A, ['a', nb], 'G = a and ¬b (generate)');
+    const z = b.op1(A, [na, 'b'], 'Z = ¬a and b (kill)');
     b.next();
-    // the neighbours: G and Z of the bit below (a 1 / 0 enters at the bottom: the +1 of the subtraction), P of the bit above (a 0 enters at the top)
-    const gs = b.op(splitter([n - 1, 1]), [g]), zs = b.op(splitter([n - 1, 1]), [z]), ps = b.op(splitter([1, n - 1]), [p]);
+    // the neighbours: G and Z of the bit below (a 1 / 0 enters at the bottom: the +1 of the subtraction), T of the bit above (a 1 enters at the top)
+    const gs = b.op(splitter([n - 1, 1]), [g]), zs = b.op(splitter([n - 1, 1]), [z]), ts = b.op(splitter([1, n - 1]), [t]);
     const gd = b.op1(merger([1, n - 1]), [b.op1(TIE1, []), `${gs}.o0`], 'G of the bit below');
     const zd = b.op1(merger([1, n - 1]), [b.op1(TIE0, []), `${zs}.o0`], 'Z of the bit below');
-    const pu = b.op1(merger([n - 1, 1]), [`${ps}.o1`, b.op1(TIE0, [])], 'P of the bit above');
+    const tu = b.op1(merger([n - 1, 1]), [`${ts}.o1`, b.op1(TIE1, [])], 'T of the bit above');
     b.next();
-    const ngd = b.op1(X(n), [gd, ones_]), nzd = b.op1(X(n), [zd, ones_]);
+    const ngd = b.op1(N, [gd]), nzd = b.op1(N, [zd]), ntu = b.op1(N, [tu]);
     b.next();
-    const A = bitwise('and', n), O = bitwise('or', n);
-    const x1 = b.op1(O, [b.op1(A, [g, nzd]), b.op1(A, [z, ngd])], 'f when the bit above does not propagate');
-    const x0 = b.op1(O, [b.op1(A, [z, nzd]), b.op1(A, [g, ngd])], 'f when it propagates');
+    const x1 = b.op1(O, [b.op1(A, [g, nzd]), b.op1(A, [z, ngd])], 'f if T above: G·¬Z below + Z·¬G below');
+    const x0 = b.op1(O, [b.op1(A, [z, nzd]), b.op1(A, [g, ngd])], 'f if ¬T above: Z·¬Z below + G·¬G below');
     b.next();
-    const f = b.op1(O, [b.op1(A, [pu, x0]), b.op1(A, [b.op1(X(n), [pu, ones_]), x1])], 'f: first 1 = leading one (± 1)');
+    const f = b.op1(O, [b.op1(A, [tu, x1]), b.op1(A, [ntu, x0])], 'f: first 1 = leading one (± 1)');
     b.next();
     const padded = P > n ? b.op1(merger([P - n, n]), [b.op1(K(P - n, 2 ** (P - n) - 1), []), f]) : f;
     const forced = b.op1(bitwise('or', P), [padded, 'lim'], 'force the clamp');
