@@ -50,7 +50,13 @@
 .cp-edge.opt { stroke-dasharray: 4 3; }
 .cp-edge.cross { display: none; }
 .cp-edge.cross.hot, .cp-edge.cross.hover { display: inline; }
-.cp-edge.hot, .cp-edge.hover { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.cp-edge.hover { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+/* tracing a card: what it needs and unlocks stays lit with its lines, the rest fades (map-wide, so the bundles between columns can be told apart) */
+.cp-map.tracing .cp-edge:not(.hover) { opacity: 0.15; }
+.cp-map.tracing .cp-node:not(.rel) { opacity: 0.4; }
+@media (prefers-reduced-motion: no-preference) {
+  .cp-edge, .cp-node { transition: opacity 0.12s; }
+}
 .cp-port { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
 .cp-legend .port::before { border-radius: 50%; border-color: var(--accent); width: 7px; height: 7px; }
 .cp-node { cursor: pointer; outline: none; }
