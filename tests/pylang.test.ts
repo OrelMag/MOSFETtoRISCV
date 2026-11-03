@@ -21,10 +21,10 @@ function runIss(c: Compiled, maxSteps = 2_000_000): { output: number[]; steps: n
   return { output: outputOf(L, iss.x[3], iss.dmem), steps: iss.steps, iss };
 }
 
-function both(src: string, dmemWords = 512): { py: number[]; rv: number[]; c: Compiled; steps: number } {
+function both(src: string, dmemWords = 512, m = false): { py: number[]; rv: number[]; c: Compiled; steps: number } {
   const ref = runPy(src);
   if (ref.error) throw ref.error;
-  const c = compilePy(src, { dmemWords });
+  const c = compilePy(src, { dmemWords, m });
   if (c.error) throw c.error;
   const { output, steps } = runIss(c);
   return { py: ref.output, rv: output, c, steps };
@@ -44,6 +44,37 @@ describe('Python subset: samples', () => {
       console.log(`${p.id}: ${p.source.trim().split('\n').length} Python lines, ${c.words.length} instructions, ${steps} executed`);
     });
   }
+});
+
+describe('Python subset: RV32IM target', () => {
+  it('samples equal the interpreter, with no runtime routines and fewer steps', () => {
+    for (const p of PY_PROGRAMS) {
+      const base = both(p.source, 64), m = both(p.source, 64, true);
+      expect(m.rv, p.id).toEqual(p.expect);
+      expect(m.c.layout!.runtime, p.id).toEqual([]);
+      if (base.c.layout!.runtime.length) expect(m.steps, p.id).toBeLessThan(base.steps);
+      console.log(`${p.id}: RV32I ${base.steps} steps, RV32IM ${m.steps}`);
+    }
+  });
+
+  it('mul / div / rem value by value, floor corrected, x // 0 = -1, x % 0 = x', () => {
+    const vals = [0, 1, -1, 2, -2, 3, -3, 7, -7, 10, -10, 255, 1 << 30, -(1 << 30), 0x7fffffff, -0x80000000, 123456789, -987654321];
+    for (const a of vals) {
+      const src = `xs = [${vals.join(', ')}]
+a = ${a}
+for j in range(${vals.length}):
+    b = xs[j]
+    c = a
+    c //= b
+    d = a
+    d %= b
+    print(a * b, a // b, a % b, c, d)
+`;
+      const { rv } = both(src, 512, true);
+      const want = vals.flatMap((b) => [binop('*', a, b), binop('//', a, b), binop('%', a, b), binop('//', a, b), binop('%', a, b)]);
+      expect(rv, `a = ${a}`).toEqual(want);
+    }
+  });
 });
 
 describe('Python subset: semantics', () => {
@@ -205,6 +236,17 @@ describe('Python subset: random programs, compiled vs interpreted', () => {
       expect(iss.halted, `seed ${seed} halts`).toBe(true);
       expect(outputOf(L, iss.x[3], iss.dmem), `seed ${seed}:\n${src}\n${c.asm}`).toEqual(ref.output);
       ran++;
+      // the same program for RV32IM
+      const cm = compilePy(src, { dmemWords: 512, m: true });
+      if (cm.error && /nests too deeply|keeps them in registers/.test(cm.error.message)) continue;
+      expect(cm.error, `M seed ${seed}:
+${src}`).toBeNull();
+      const im = new ISS(cm.words, { dmemWords: 512, imemWords: pow2(cm.words.length) });
+      while (!im.halted && im.steps < 5_000_000) im.step();
+      expect(im.halted, `M seed ${seed} halts`).toBe(true);
+      expect(outputOf(cm.layout!, im.x[3], im.dmem), `M seed ${seed}:
+${src}
+${cm.asm}`).toEqual(ref.output);
     }
     console.log(`random programs: ${ran} compared, ${skipped} skipped`);
     expect(ran).toBeGreaterThan(SEEDS * 0.7);

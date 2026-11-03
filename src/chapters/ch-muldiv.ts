@@ -8,6 +8,9 @@ import { logicDepth, stats } from '../sim/stats';
 import { M_PROGRAMS } from '../riscv/mprograms';
 import { PIPE_M_PROGRAMS } from '../riscv/pmprograms';
 import { cpuScene } from '../widgets/cpupanel';
+import { PY_PROGRAMS } from '../lang/pyprograms';
+import { pyScene } from '../widgets/python';
+import { GCD_I, PREFIX } from './ch-pipe';
 import { divComparison } from '../widgets/divide';
 import { boothWidget, mulComparison } from '../widgets/muldiv';
 import { mulStyles } from '../widgets/multiply';
@@ -32,6 +35,14 @@ const between = (d: ComponentDef) => CLK_TO_Q + dp(d) + SETUP;
 const mduPart = (name: string) => nd(netlistOf(MDU)!.instances.find((i) => i.name === name)!.def);
 const sp = groupDigits;
 
+const fmt = groupDigits;
+const pySrc = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
+/** chapter 15's samples compiled for RV32IM on the gate-level pipeline (tests/pypipe.test.ts checks every number against the gates). */
+const M_COST = { base: 113438, withM: 145476 };
+const GCD_M = { cycles: 225, instr: 77, divide: 108 };
+const DIV_LINE = 9;
+const SPEEDUPS = [{ id: 'gcd', x: 2409 / 225 }, { id: 'digits', x: 3922 / 422 }, { id: 'isprime', x: 12359 / 1106 }, { id: 'matmul', x: 1682 / 890 }];
+
 export const chMulDiv: Chapter = {
   id: 'muldiv', num: 21, title: 'Multiply & divide', level: 'Arithmetic',
   blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.',
@@ -41,9 +52,10 @@ export const chMulDiv: Chapter = {
     'compare restoring, non-restoring and SRT division by step delay and number of cycles',
     'count what a multiply and a divide cost a program on the single-cycle and pipelined CPUs',
   ],
-  builds: ['adders', 'fastadd', 'pipeline'],
+  builds: ['adders', 'fastadd', 'pipeline', 'python'],
   recap: {
     keep: [
+      'Compiled for RV32IM (chapter 15\'s compiler), a program with variable <code>*</code>, <code>//</code> or <code>%</code> loses its routines: gcd falls from 2409 cycles to 225 on the pipeline for 28 % more gates; a program without them gains nothing.',
       'A partial product is <code>a AND b<sub>i</sub></code>. The array adds the rows with ripple adders: n² cells, and a depth that grows with n (70 NAND delays at 8×8, about 310 at 32×32).',
       'A row of unconnected full adders turns three words into two (x + y + z = s + 2c) in one full-adder delay. A Wallace tree of them leaves a single carry-propagate adder: a 32×32 tree multiplier is about as deep as one 32-bit ripple adder.',
       'Signed operands: Baugh–Wooley inverts the partial products that pair a sign bit with a normal bit and adds one constant. Radix-4 Booth halves the rows, but at 8 bits it is larger and deeper (1062 NANDs and 47 delays, against 972 and 40); it wins from 32 bits (12 658 against 13 293).',
@@ -962,6 +974,36 @@ export const chMulDiv: Chapter = {
         answer: 1,
         why: ['The product is complete only at the end of M, after the add needed it at the start of E.', '', 'After one stall the mul is in W and the add in E: W forwards it, with no wait for the register write.', 'The multiplier is split across E and M and never holds the pipeline. Only a divide does.'],
         explain: 'The 64-bit addition happens in M, so the product is ready at the same point as a word read from memory. Decode marks a multiply as using the load path, and the load-use logic stalls the add for one cycle; then the product is forwarded from W. Splitting the multiplier costs one bubble per dependent use and keeps the clock from growing by a whole 64-bit adder.',
+      },
+    },
+    {
+      title: 'Multiply and divide in hardware',
+      body: `
+        <p>Chapter 15's compiler can target this instruction set too. Compile for <em>RV32IM</em> (the switch in the Python panel, on the pipeline of chapter 17) and the routines disappear: <code>*</code> is one <code>mul</code>, <code>//</code> and <code>%</code>
+        a <code>div</code> or <code>rem</code>. The pipeline gains this chapter's multiplier and divider: ${fmt(M_COST.withM - M_COST.base)} NANDs more
+        (${fmt(M_COST.base)} → ${fmt(M_COST.withM)}, +${(100 * (M_COST.withM - M_COST.base) / M_COST.base).toFixed(1)} %), counted from the two designs.</p>
+        <p>Python's rounding needs care. RISC-V's <code>div</code> truncates toward zero, Python's <code>//</code> floors: for −7 and 2 they give −3 and −4. After <code>rem</code> the compiler
+        tests three things, remainder ≠ 0, divisor ≠ 0 and the operands' signs differ, and only then lowers the quotient by one (or adds the divisor to a remainder). The cases it
+        leaves to the hardware are exactly this subset's: <code>x // 0</code> is −1 and <code>x % 0</code> is x, as RISC-V defines them. Random programs interpreted and compiled both ways
+        agree on every output, and the gate-level pipeline agrees with the golden model after every instruction.</p>
+        <p>gcd: ${fmt(GCD_I.cycles)} cycles with the routines, ${fmt(GCD_M.cycles)} with RV32IM (${(GCD_I.cycles / GCD_M.cycles).toFixed(1)}×) for ${fmt(GCD_I.instr)} → ${fmt(GCD_M.instr)} instructions. The CPI goes <em>up</em>, ${(GCD_I.cycles / GCD_I.instr).toFixed(2)} → ${(GCD_M.cycles / GCD_M.instr).toFixed(2)}: each of its six <code>%</code> holds Execute for
+        ${GCD_M.divide / 6 + 1} cycles (${fmt(GCD_M.divide)} extra cycles, ${Math.round(100 * GCD_M.divide / GCD_M.cycles)} % of the run), the cost of the loop moved into hardware. A program with no <code>*</code>, <code>//</code> or <code>%</code> by a variable
+        gains nothing and still pays for the gates: prefix runs ${fmt(PREFIX.cycles)} cycles either way.</p>`,
+      scene: () => pyScene(pySrc('gcd'), { pipeline: true, m: true }),
+      more: {
+        derive: `<p>The divider is the radix-4 SRT unit above: ${GCD_M.divide / 6 + 1} cycles a divide, one per Execute stay. Speed-up of RV32IM on the pipeline: ${SPEEDUPS.map((r) => `${r.id} ${r.x.toFixed(1)}×`).join(', ')};
+          a multiply by a constant such as 10 or 7 was already shifts and adds, so only variable operands change.</p>`,
+        pitfall: `<p>The floor fix is not free: a <code>%</code> or <code>//</code> by a variable is <code>rem</code>, three tests and the <code>div</code>, ${DIV_LINE} instructions where C needs one. A language whose division truncates (C, Java, Rust) compiles to the bare pair;
+          Python pays for its mathematically nicer rounding on negative operands.</p>`,
+        real: `<p>Compilers for real RV32IM do the same, and hardware often fuses an adjacent <code>div</code> / <code>rem</code> on the same operands into one divide. Many small cores omit M, as the base ISA allows, and ship the routines in a library (libgcc's <code>__divsi3</code>).</p>`,
+      },
+      challenge: {
+        kind: 'quiz',
+        question: `Compiled for RV32IM, gcd's CPI rises from ${(GCD_I.cycles / GCD_I.instr).toFixed(2)} to ${(GCD_M.cycles / GCD_M.instr).toFixed(2)} yet it runs ${(GCD_I.cycles / GCD_M.cycles).toFixed(0)}× faster. How?`,
+        options: ['It executes about twenty times fewer instructions; each divide is slower than an average routine instruction but replaces a whole loop of them', 'The M unit raises the clock frequency', 'The pipeline stops stalling once it has a divider', 'CPI counts only the stalls, which the divider removes'],
+        answer: 0,
+        explain: `Time = instructions × CPI × period. Instructions fell ${(GCD_I.instr / GCD_M.instr).toFixed(0)}×, CPI rose ${((GCD_M.cycles / GCD_M.instr) / (GCD_I.cycles / GCD_I.instr)).toFixed(1)}×, the period is the pipeline\'s either way. A divide spends its cycles in one instruction instead of spreading them over a loop that also flushes the pipeline on every taken branch.`,
+        why: ['', 'The clock is set by the slowest stage; the divider is iterative precisely so that it does not lengthen it.', 'It still stalls and flushes; the divide waits are new.', 'CPI is total cycles over instructions: every bubble and every divide cycle is in it.'],
       },
     },
   ],

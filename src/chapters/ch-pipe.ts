@@ -10,6 +10,9 @@ import { netlistOf, outPorts } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Stage, Widget } from '../view/stage';
 import { cpuScene } from '../widgets/cpupanel';
+import { PY_PROGRAMS } from '../lang/pyprograms';
+import { pyScene } from '../widgets/python';
+import { groupDigits } from '../sim/numfmt';
 import { OWN_ANSWER, OWN_COST, OWN_SOURCE } from '../widgets/owninstr';
 import type { Chapter } from './types';
 
@@ -94,6 +97,13 @@ function payWidget(): Widget {
   return { el };
 }
 
+const fmt = groupDigits;
+const pySrc = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
+/** The pipelined CPU's runs of chapter 15's samples that the last step quotes (tests/pypipe.test.ts checks every number against the gates). */
+const PIPE = { nands: 113438 }, SINGLE = { nands: 100979 };
+export const PREFIX = { cycles: 219, instr: 166, stall: 15, flush: 36, fill: 2 };
+export const GCD_I = { cycles: 2409, instr: 1545, flush: 860 };
+
 export const chPipeline: Chapter = {
   id: 'pipeline', num: 17, title: 'Pipelining', level: 'Processor',
   blurb: 'Five stages working on five instructions at once, and the hazards that come with it.',
@@ -103,9 +113,10 @@ export const chPipeline: Chapter = {
     'say why a load followed by its use costs one stall, and a taken branch two',
     'judge whether a pipeline pays, from its CPI and its clock period',
   ],
-  builds: ['registers', 'cpu'],
+  builds: ['registers', 'cpu', 'python'],
   recap: {
     keep: [
+      'Measured per Python line (chapter 15\'s compiler): every clock is charged to one line, as an issue, a stall behind a load or a flush behind a taken branch, so cycles = instructions + stalls + flushes + fill.',
       'Five stages, one instruction in each: up to one instruction per cycle, at the period of the <em>slowest</em> stage. One instruction takes no less time than before.',
       'Pipeline registers carry each instruction\'s operands, destination and control bits (and a valid bit), so it acts on the right data cycles later.',
       'Structural hazards (two instructions wanting one unit in one cycle) do not occur here: separate instruction and data memories, two read ports and a write port, adders of its own for PC + 4 and the branch target.',
@@ -393,6 +404,41 @@ export const chPipeline: Chapter = {
         <p>The pipelined CPU is checked as the single-cycle one is: the golden model with the same rows steps at each retirement, on directed programs for each hazard and on random programs containing the instructions.</p>`,
       scene: () => ({ ...cpuScene({ source: OWN_SOURCE, custom: [OWN_ANSWER], pipeline: true, highlight: ['ctl', 'hz'] }), autoClock: false }),
       lit: 'The control unit with the lwx class (ctl) and the hazard unit (hz): the stall comes from resultSrc.',
+    },
+    {
+      title: 'A compiled program on the pipeline',
+      body: `
+        <p>Chapter 15's compiler and Python panel, on this chapter's CPU: the compiled words are the same RV32I, only the machine changes. The five-stage pipeline (F, D, E, M, W) runs them
+        on ${fmt(PIPE.nands)} NANDs against the single-cycle CPU's ${fmt(SINGLE.nands)} (+${(100 * (PIPE.nands - SINGLE.nands) / SINGLE.nands).toFixed(1)} %: four stage registers, forwarding, the
+        <span data-show="hz">hazard unit</span>). A cycle is no longer an instruction, so the panel reads the pipeline's own signals at every edge and charges
+        <em>each clock to exactly one Python line</em>.</p>
+        <p>An instruction in Execute is an <em>issue</em> cycle of its line. An empty Execute is charged to the instruction that left it empty:
+        a <em>stall</em> behind a load (its result arrives from Memory, one stage later than the next instruction's Execute wants it;
+        forwarding cannot go back in time, so one bubble), or a <em>flush</em> behind a taken branch or jump (resolved in Execute, so the two
+        instructions fetched behind it are squashed: two bubbles). A not-taken branch costs nothing. The lines add up to the clock, always: cycles = instructions + stalls + flushes + fill.</p>
+        <p>Measured on <code>prefix</code>: ${fmt(PREFIX.cycles)} cycles for ${fmt(PREFIX.instr)} instructions, CPI ${(PREFIX.cycles / PREFIX.instr).toFixed(2)}.
+        ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds), ${fmt(PREFIX.flush)} flushes
+        (${fmt(PREFIX.flush / 2)} taken branches and jumps), ${PREFIX.fill} the pipeline filling. The routines suffer worse: gcd's <code>%</code> loop is branches,
+        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. The pipeline wins
+        only through its shorter clock ("Does it pay? Measured" counted it): CPI is the price, not the figure of merit.</p>`,
+      scene: () => pyScene(pySrc('prefix'), { pipeline: true, switch: false }),
+      more: {
+        derive: `<p>The charge rule, from the stage registers' valid bits: Execute valid → that instruction's line (one cycle; a divide's extra cycles are counted apart). Execute empty → the youngest older instruction still in Memory or
+          Writeback; a load makes it a stall, a branch or jump a flush, and the cycle goes to <em>its</em> line. Nothing older in flight: the pipeline is filling after reset. ${PREFIX.cycles} = ${PREFIX.instr} + ${PREFIX.stall} + ${PREFIX.flush} + ${PREFIX.fill}.
+          A runtime routine's cycles go to the line that called it, so <code>a % b</code> shows its loop's flushes.</p>`,
+        pitfall: `<p>Reading CPI as speed. A program's time is cycles × period. A stall-free pipeline has CPI 1 and the short clock; every bubble is a cycle spent on nothing, but a single-cycle machine pays the long clock on <em>every</em>
+          instruction. Compare cycles only between machines with the same clock, and always report both.</p>`,
+        real: `<p>Real pipelines hide most flushes with branch prediction (chapter 18) and caches; here the branch is resolved in Execute and always predicted not-taken, the plainest design, so every loop iteration pays two bubbles.
+          The same accounting, per source line, is what a profiler reading hardware performance counters reports.</p>`,
+      },
+      challenge: {
+        kind: 'quiz',
+        question: 'In <code>xs[i] += xs[i - 1]</code> the instructions are independent of the loop test, yet each iteration stalls once. Why?',
+        options: ['The load\'s data is only available at the end of Memory; the add right behind it needs it at the start of Execute, so one bubble separates them even with forwarding', 'Loads always take two cycles on this CPU', 'The store at the end of the line must wait for the branch', 'The data memory has one port, shared with instruction fetch'],
+        answer: 0,
+        explain: 'Forwarding moves a result from a later stage register to an earlier stage\'s input in the same cycle; a load\'s value does not exist until Memory has read the RAM. The hazard unit holds the add in Decode one cycle and sends a bubble down behind the load. An add feeding an add needs no bubble: its result exists at the end of Execute.',
+        why: ['', 'A load occupies each stage for one cycle; the cost is the dependent instruction waiting.', 'Stores do not wait for branches; branches only squash what is behind them.', 'Instruction and data memories are separate (Harvard), which is why a load never stalls the fetch.'],
+      },
     },
   ],
 };
