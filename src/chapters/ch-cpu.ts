@@ -1,5 +1,5 @@
 import { groupDigits } from '../sim/numfmt';
-import { alu, addSub, bitwise, regfile, shifter } from '../lib';
+import { alu, addSub, bitwise, CONTROL, regfile, shifter } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
 import { logicDepth, stats } from '../sim/stats';
@@ -8,6 +8,8 @@ import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widgets/owninstr';
+import { controlTableHtml, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
+import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
@@ -401,9 +403,9 @@ export const chIsa: Chapter = {
   blurb: 'RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.',
   goals: [
     'follow a program through fetch, decode and execute, one instruction at a time, and say where PC goes next',
-    'name the six RV32I formats and say why rs1, rs2 and rd never move',
-    'rebuild an immediate from instruction bits (wires, sign copies and ground) and explain why branch offsets count halfwords',
-    'assemble a program in two passes and run it on an instruction-set simulator',
+    'name the six RV32I formats, say why rs1, rs2 and rd never move, and rebuild an immediate from instruction bits (wires, sign copies and ground)',
+    'assemble a program in two passes, say what each pseudo-instruction (li, la, call, ret) becomes, and run it on an instruction-set simulator',
+    'call a function by the calling convention: which registers a callee may clobber, which it must restore, what a stack frame costs',
   ],
   builds: ['binary', 'alu', 'regfile'],
   recap: {
@@ -415,6 +417,8 @@ export const chIsa: Chapter = {
       'Branch and jump offsets count 2-byte units (bit 0 is not stored), so the 16-bit C extension needs no new format.',
       'The assembler works in two passes: labels first (<code>li</code> may grow to <code>lui</code> + <code>addi</code>), then encoding. The instruction-set simulator, written from the specification, is the reference every gate-level CPU is checked against.',
       'Offsets count from the branch or jump\'s own PC. Every I-type immediate is sign-extended, andi / ori / xori / sltiu included. <code>la</code> and <code>call</code> are <code>auipc</code> + addi / jalr: PC-relative, ±2 GiB, with the upper part rounded by + 0x800 like <code>li</code>.',
+      'Pseudo-instructions are the assembler’s, not the hardware’s: <code>mv</code>, <code>neg</code>, <code>ret</code>, <code>j</code> put x0 in a slot, <code>bgt</code> swaps operands, <code>li</code> is one or two words, <code>la</code> / <code>call</code> an <code>auipc</code> pair.',
+      'The calling convention is agreement, not hardware: a0–a7 carry arguments, s0–s11 and sp are callee-saved, a, t and ra are caller-saved; a function that calls another saves ra in a 16-byte-aligned frame, and a leaf needs none.',
     ],
     practise: ['i_enc', 'p_add', 'p_loop', 'p_call'],
     check: [
@@ -566,6 +570,55 @@ export const chIsa: Chapter = {
           alignment. This one resolves everything in two passes because a program here is one file; the principle, count then encode, is the same.</p>`,
       },
     },
+    {
+      title: 'Pseudo-instructions',
+      body: `
+        <p>RV32I has neither <code>mv</code> nor <code>li</code> nor <code>ret</code> nor <code>call</code>. Those are <strong>pseudo-instructions</strong>: names the assembler accepts and replaces with one or two real ones. They cost the hardware nothing, which is the design point:
+        <code>x0</code> reads as 0 and discards writes, so most of them are an ordinary instruction with x0 in a slot. The table is made by running each line through this site's assembler; nothing in it is typed.</p>
+        <ul>
+        <li><strong>x0 in a slot.</strong> <code>mv a0, a1</code> is <code>${expand('mv a0, a1').words[0]}</code>, <code>neg</code> a subtraction from zero, <code>beqz</code> a compare against zero, <code>j</code> a <code>jal</code> that discards the link, <code>ret</code> is <code>${expand('ret').words[0]}</code>.</li>
+        <li><strong>Operands swapped.</strong> There is no <code>bgt</code>: the assembler writes <code>${expand('bgt a0, a1, L').words[0].replace(/, 0x\d+$/, ', L')}</code>. Four comparisons (<code>blt</code>, <code>bge</code> and their unsigned forms) are enough when the operands can swap.</li>
+        <li><strong>Constants.</strong> <code>li</code> is one word if the value fits a signed 12-bit immediate (−2048 … 2047), a lone <code>lui</code> if the low 12 bits are 0, and otherwise two: <code>lui</code> for the top 20 bits, <code>addi</code> for the low 12. Because addi sign-extends, the top part is rounded: 0x12345 is <code>${expand('li t0, 0x12345').words.join('  ;  ')}</code>.</li>
+        <li><strong>Addresses.</strong> <code>la</code>, <code>call</code> and <code>tail</code> are an <code>auipc</code> (PC + upper 20 bits) and a 12-bit completion, so a symbol anywhere within ±2 GiB is reached without a fixed address: <code>${expand('call L').words.join('  ;  ')}</code>.</li>
+        </ul>
+        <p>A line that can be one word or two is why the assembler of the last step needs two passes.</p>
+        <div class="try">Type a line into the box and read what it becomes, then try <code>li a0, 2047</code> and <code>li a0, 2048</code>.</div>`,
+      widget: () => pseudoWidget(),
+      more: {
+        derive: `<p>Sizes of <code>li</code> by value: ${[0, 2047, 2048, 0x12345000, 0x12345678, -1].map((v) => `<code>${v < 0 ? v : '0x' + v.toString(16)}</code> ${expand(`li t0, ${v}`).words.length}`).join(', ')} word(s). 2047 is the largest value of addi's immediate; 2048 needs <code>lui t0, 1</code> and <code>addi t0, t0, -2048</code>.</p>`,
+        pitfall: `<p>Reading a disassembly and looking for <code>mv</code>. A disassembler shows the real instruction (<code>addi a0, a1, 0</code>) unless it pattern-matches back; the hardware never sees the pseudo-instruction, and neither does the golden model.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'Why does <code>call</code> use <code>ra</code> as its scratch register for the <code>auipc</code>, but <code>tail</code> uses <code>t1</code>?',
+        options: ['<code>call</code> overwrites ra with the return address anyway; <code>tail</code> must keep the caller\'s ra, so it needs a temporary', 'Because t1 is not allowed in a call', 'Both use ra; the table is wrong'], answer: 0,
+        why: ['', 'Any register can be used; the choice is about what must survive.', `Run them: ${expand('call L').words[0]} for call, ${expand('tail L').words[0]} for tail.`],
+        explain: `<code>call</code> is <code>${expand('call L').words.join('  ;  ')}</code>: ra is dead the moment the jalr writes the link. <code>tail</code> jumps without linking (<code>${expand('tail L').words[1]}</code>): the callee returns straight to our caller through ra, which must not change, so the address goes through t1.`,
+      },
+    },
+    {
+      title: 'Register names and the calling convention',
+      body: `
+        <p>The hardware gives two things for functions: <code>jal rd, target</code> and <code>jalr</code> save PC + 4 in a register, and any register can be a stack pointer. The rest is <strong>agreement</strong>, the <em>calling convention</em> (the ABI), which is why 32 registers have two names each:</p>
+        ${abiTable()}
+        <p>A callee may overwrite any <strong>caller-saved</strong> register (a, t, ra) and must give back every <strong>callee-saved</strong> one (s0–s11, sp) as it found it. So a value that must survive a call lives in an s register, or the caller stores it on the stack. Arguments go in a0–a7, results in a0 (and a1); more go on the stack.</p>
+        <p>The <strong>stack</strong> is a region of data memory that sp points into, growing down, kept 16-byte aligned. A function that calls another needs a <strong>frame</strong>: it saves ra (the call overwrites it) and any s register it uses. Below is the standard recursion <code>sumto(n) = n + sumto(n − 1)</code>. Run it: for n = 3 it takes ${SUM_RUN.instrs} instructions, reaches ${SUM_RUN.depth} bytes of stack (four frames of 16) and leaves ${SUM_RUN.result} in a0.
+        The dead frames stay in memory below sp: in the data-memory list, address 0x7c holds ${SUM_RUN.mem.find(([a]) => a === 124)![1]} (the return address into the caller), and each deeper frame holds the n it saved in s0 (${[104, 88, 72].map((a) => SUM_RUN.mem.find(([x]) => x === a)![1]).join(', ')}) and a return address inside <code>sumto</code>.</p>
+        <p>Each level of recursion costs ${sumRun(1).instrs - sumRun(0).instrs} instructions here, and only three of them (the test, the decrement, the add) are the function's work; the rest open and close the frame, save and restore two registers, <code>call</code> and <code>ret</code>. A <strong>leaf</strong> function (calling nothing) needs no frame at all. This is the price of a convention, and what a compiler tries to avoid:
+        <a href="#/c/python/0">chapter 15</a> shows one choosing registers to do so.</p>
+        <div class="try">Change <code>li a0, 3</code> to 4 and read the instruction count, then delete the line that restores s0 and watch the result.</div>`,
+      widget: () => assemblerWorkspace(SUM_CALLS),
+      more: {
+        derive: `<p>Instructions for sumto(n), n = 0 … 4: ${[0, 1, 2, 3, 4].map((n) => sumRun(n).instrs).join(', ')}, a line of slope ${sumRun(1).instrs - sumRun(0).instrs}; stack depth ${[0, 1, 2, 3, 4].map((n) => sumRun(n).depth).join(', ')} bytes. Unbounded n walks sp down through the data memory and then into whatever sits below it: there is no hardware check, so a runaway recursion overwrites its own program's data. Stopping that is the job of memory protection (traps and virtual memory, later in the journey).</p>`,
+        pitfall: `<p>Keeping a value in <code>t0</code> across a call. It works until the callee uses t0 as a temporary, which it is entitled to. The failure moves with the callee's code, not the caller's: a bug that appears when a library function is rewritten.</p>`,
+        real: `<p>The full ABI also covers struct arguments, varargs, 64-bit values in register pairs and a red zone; the table is the part every compiler, assembler and debugger agrees on, which is what lets separately compiled code call each other.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'A function keeps a loop counter in <code>t0</code> and calls <code>printf</code> inside the loop. What is wrong?',
+        options: ['Nothing: t0 holds the counter', 'printf may overwrite t0: the counter belongs in an s register, or on the stack across the call', 'Only ra may not be used across a call'], answer: 1,
+        why: ['t registers are caller-saved: the callee is free to use them.', '', 'ra is overwritten by the call itself; all the a and t registers are lost too.'],
+        explain: 'a, t and ra are caller-saved; a value that must survive a call goes in s0–s11 (which the callee then saves and restores) or is stored in the caller\'s own frame.',
+      },
+    },
   ],
 };
 
@@ -588,6 +641,19 @@ const RTYPE = `# R-type and I-type: rd = rs1 op rs2 / imm
         slt  a6, a1, a0     # 1
 halt:   j    halt`;
 
+const CTL_TOUR = `# one instruction of each control class
+        li   a1, 12
+        li   a2, 5
+        add  a0, a1, a2     # R-type: 17
+        sw   a0, 8(zero)    # store
+        lw   a3, 8(zero)    # load
+        beq  a0, a3, over   # branch, taken
+        nop
+over:   jal  ra, there      # jump and link
+        nop
+there:  lui  a4, 0x12345
+halt:   j    halt`;
+
 const MEMOPS = `# loads and stores
         li   t0, 42
         sw   t0, 8(zero)    # mem[8] = 42
@@ -601,8 +667,8 @@ export const chSingleCycle: Chapter = {
   blurb: 'Every block from the previous chapters, wired into a complete RV32I processor.',
   goals: [
     'trace one instruction through fetch, decode, execute, memory and write-back on the gate-level datapath',
-    'set the control signals for add, addi, lw, sw, beq and jal',
-    'say why every instruction of a single-cycle CPU gets the time of the slowest',
+    'read the control table: which signals each instruction class asserts, and why ALUControl is the only column with real logic',
+    'say what sets the clock period (the branch compare and next-PC select, not the load), and why every instruction gets the time of the slowest',
     'run a real program on the gates and check it against the instruction-set simulator',
   ],
   builds: ['alu', 'regfile', 'isa'],
@@ -612,7 +678,7 @@ export const chSingleCycle: Chapter = {
       'Control comes from the opcode: RegWrite, ALUSrcB, ResultSrc, MemWrite, ImmSrc, and ALUControl: {funct7[5], funct3} for an R-type; funct3 for OP-IMM, with bit 30 only for <code>srai</code>; ADD for loads, stores, <code>jalr</code> and <code>auipc</code>; SUB for branches.',
       'Branches subtract in the ALU and read its flags (beq Z, bne ¬Z, blt N⊕V, bge ¬(N⊕V), bltu ¬C, bgeu C); a separate adder computes PC + imm<sub>B</sub>.',
       '<code>jal</code> writes PC + 4 and jumps to PC + imm<sub>J</sub>; <code>jalr</code> jumps to rs1 + imm with bit 0 cleared by wiring.',
-      'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders, and the clock must fit the slowest instruction.',
+      'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders (103 with a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span>), and the clock must fit the slowest path: the ALU compare of a branch through the next-PC select, not a load. Measured on random programs the average cycle settles in about half of that.',
     ],
     practise: ['c_imm', 'c_ctl', 'c_br', 'c_npc', 'c_core1', 'c_core2', 'c_core3'],
     check: [
@@ -629,6 +695,20 @@ export const chSingleCycle: Chapter = {
         answer: 0,
         explain: 'ra gets the return address from the +4 adder; the target PC + imm<sub>J</sub> goes to the PC.',
         why: ['', 'That is the jump target: it goes to the PC, not to ra.', 'The return address comes from the +4 adder; nothing the ALU computes is written back.', 'The result mux passes the immediate for lui, not for jal.'],
+      },
+      {
+        question: 'Which block of the control unit has real logic beyond decoding the opcode?',
+        options: ['ALUControl: R-type passes funct7[5] and funct3, OP-IMM only funct3 (bit 30 is immediate), loads / stores / jalr / auipc force ADD, branches SUB', 'RegWrite, which needs all of funct7', 'MemWrite, which depends on funct3'],
+        answer: 0,
+        explain: 'Every other output is an OR of opcode classes. ALUControl also reads funct3 and funct7, with the exceptions that make one adder serve addresses, compares and arithmetic.',
+        why: ['', 'RegWrite is the OR of the classes that write a register: opcode alone.', 'MemWrite is the store class and nothing else.'],
+      },
+      {
+        question: 'Replacing the ripple adder by a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span> cuts the ALU from 93 to 41 delays. By how much does the clock period fall?',
+        options: ['From 155 to 103: the same 52 delays, since the path crosses the ALU once', 'To a third, since the ALU is 93 of 155', 'Not at all: the load path is the longest'],
+        answer: 0,
+        explain: 'The longest path crosses the ALU once, so its length falls by exactly what the ALU saves. What remains (fetch, decode, next-PC select: 62 delays) is now 60% of the period.',
+        why: ['', 'Only the ALU part of the path shrinks; the 62 delays around it stay.', 'The load and register-file path (132) is shorter than the branch path (155) and falls too.'],
       },
       {
         question: 'A program of mostly <code>addi</code> runs on the single-cycle CPU. Why is each instruction no faster than a load?',
@@ -685,6 +765,41 @@ export const chSingleCycle: Chapter = {
         real: `<p>Almost no shipping core is single-cycle: even small microcontroller cores split the datapath over two or three stages, and this design is where they start. The panel's Slow button
           plays an edge one gate delay at a time at the gate level: the new PC leaves its register, the instruction is fetched and decoded, and the result
           waits at the register file's inputs. That longest ripple sets the clock period.</p>`,
+      },
+    },
+    {
+      title: 'The control table',
+      body: `
+        <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. Here it is, evaluated by the simulator on one instruction of each class:</p>
+        ${controlTableHtml()}
+        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register only for R-type and branches. <strong>ImmSrc</strong> names the immediate format of chapter 13; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
+        <p>The one column with real logic is <strong>ALUControl</strong>. R-type passes {funct7[5], funct3}: <code>add</code> and <code>sub</code> differ in that bit alone. OP-IMM passes funct3 only, because bit 30 of an <code>addi</code> is part of its immediate; the exception is <code>srai</code>, which is how it differs from <code>srli</code>. Loads, stores, <code>jalr</code> and <code>auipc</code> force ADD whatever their funct3 says (it holds a width or nothing), and branches force SUB. The branch kind then reads the ALU's flags.</p>
+        <p>Because a new instruction is a new row, the cost of one is countable: the last step of this chapter adds a row and prices it.</p>
+        <div class="try">Pulse through the program, one instruction of each class, and match each against its row of the table.</div>`,
+      scene: () => cpuScene({ source: CTL_TOUR, highlight: ['ctl'] }),
+      tour: {
+        beats: [
+          { title: 'R-type', reset: true, cycles: 2, show: ['ctl', 'srcB', 'alu'], expect: { pcOut: 8, aluOut: 17 },
+            say: '<p><code>add a0, a1, a2</code> at {v:pcOut}: SrcB takes rs2, the ALU adds 12 + 5 = {v:aluOut}, ResultSrc picks the ALU, RegWrite is 1. ALUControl is {funct7[5], funct3} = ADD.</p>' },
+          { title: 'Store', cycles: 1, show: ['ctl', 'imm', 'dm'], expect: { pcOut: 12, aluOut: 8 },
+            say: '<p><code>sw a0, 8(zero)</code>: ImmSrc is S, SrcB the immediate, the ALU adds 0 + 8 = {v:aluOut} for the address, MemWrite is 1 and RegWrite 0.</p>' },
+          { title: 'Load', cycles: 1, show: ['ctl', 'dm', 'res'], expect: { pcOut: 16, aluOut: 8 },
+            say: '<p><code>lw a3, 8(zero)</code>: the same address {v:aluOut} from the same adder, but ResultSrc is the memory word and RegWrite is 1.</p>' },
+          { title: 'Branch', cycles: 1, show: ['ctl', 'alu', 'npc'], expect: { pcOut: 20, aluOut: 0 },
+            say: '<p><code>beq a0, a3, over</code>: SrcB is rs2 again, ALUControl forces SUB, and 17 − 17 = {v:aluOut} sets the zero flag; Branch = 1 and the zero flag select the target next.</p>' },
+          { title: 'Jump', cycles: 1, show: ['ctl', 'target', 'pcmux'], expect: { pcOut: 28 },
+            say: '<p><code>jal ra, sub1</code> at {v:pcOut}: Jump = 1, ImmSrc is J, ResultSrc is PC + 4 for the link in ra.</p>' },
+        ],
+      },
+      more: {
+        derive: `<p>Class one-hots come from the opcode alone (an AND of its seven bits); each signal ORs the classes that assert it, so RegWrite is the OR of seven of the nine and MemWrite a single wire. The ALUControl block is the only part that reads funct3 and funct7. A 5-input AND for a new opcode costs ${AND5_NANDS} and a new row about ${LWX_NANDS - CONTROL_NANDS} more.</p>`,
+        pitfall: `<p>Treating the table as a program stored somewhere. It is combinational logic: change the opcode on its input and the outputs follow after ${logicDepth(CONTROL)} delays. A microcoded machine does keep a table in a memory, one row per step; that is a later design.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: '<code>lw</code> has funct3 = 010, which in an R-type would mean SLT. What ALUControl does the table give a load, and why?',
+        options: ['ADD: the ALU forms the address rs1 + imm, and funct3 only gives the access width', 'SLT: the control copies funct3', 'SUB: the address is a difference'], answer: 0,
+        why: ['', 'Then every load would compare instead of adding its offset. Only R-type passes funct3 on.', 'Branches subtract, to compare; the address of a load is a sum.'],
+        explain: 'Loads, stores, jalr and auipc use the ALU as an address adder, so the control forces ADD and ignores funct3; the funct3 of a load goes to the memory’s byte and sign handling instead.',
       },
     },
     {
@@ -882,6 +997,25 @@ export const chSingleCycle: Chapter = {
         ],
         answer: 'Press "Run to halt" in the panel (or Pulse about 75 times). The 12th word, at address 0x2C, becomes 89.',
         solve: (st) => { st.runCycles(200, () => { try { return st.sim ? cpuState(st.sim).dmem[11] === 89 : false; } catch { return false; } }); },
+      },
+    },
+    {
+      title: 'What sets the period',
+      body: `
+        <p>One instruction per cycle means one clock period for all of them, so the period is the longest path from a register output back to a register input. Static timing finds it by walking the netlist: with ripple adders <strong>${PERIOD.rca.pc} NAND delays</strong>, and the ribbon below shows where they go. It is not a load.
+        The path starts at the PC (${PERIOD.rca.stages[0][1]}), reads the instruction (${PERIOD.rca.stages[1][1]}), decodes it (${PERIOD.rca.stages[2][1]}) and builds the immediate (${PERIOD.rca.stages[3][1]}); then the ALU subtracts for a <strong>branch</strong> (${PERIOD.rca.stages[5][1]}), its flag chooses between PC + 4 and the target (${PERIOD.rca.stages[6][1] + PERIOD.rca.stages[7][1]}), and the new PC is set up. The register file, written with the ALU or memory result, needs ${PERIOD.rca.rf}, and the data memory's write ${PERIOD.rca.dm}.</p>
+        <p>So the compare of a <code>beq</code> sets the clock, and every instruction pays for it, an <code>lui</code> that is done in a fraction of that included. Switch to the <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span>: the ALU falls from ${PERIOD.rca.stages[5][1]} to ${PERIOD.ks.stages[5][1]} and the period to <strong>${PERIOD.ks.pc}</strong>, and now fetch and decode (${PERIOD.ks.stages.slice(0, 5).reduce((a, [, d]) => a + d, 0)} delays) are ${((100 * PERIOD.ks.stages.slice(0, 5).reduce((a, [, d]) => a + d, 0)) / PERIOD.ks.pc).toFixed(0)}% of it. Faster arithmetic buys less each time.</p>
+        <p><strong>Measure on the gates</strong> runs random programs on the CPU itself and records, for every cycle, how long the logic took to go quiet after the edge, grouped by the class of the instruction that edge fetched. The longest cycle of each class stays below the static bound (data decides how far a carry actually runs), and the <em>mean</em> is around half of it. A clock cannot follow the data, because it must be right for the worst case, so the slack is lost: that is the cost of single-cycle design, and what the next chapters, which overlap instructions, set out to recover.</p>`,
+      widget: () => cpuPeriodWidget(),
+      more: {
+        derive: `<p>Period = clk-to-q (3) + logic + setup (3). The critical path in NAND delays, ripple: ${PERIOD.rca.stages.map(([n, d]) => `${n} ${d}`).join(', ')} = ${PERIOD.rca.pc}. At an illustrative 25 ps a delay that is ${(PERIOD.rca.pc * 0.025).toFixed(2)} ns, ${(1000 / (PERIOD.rca.pc * 0.025)).toFixed(0)} MHz; Kogge–Stone ${(PERIOD.ks.pc * 0.025).toFixed(2)} ns, ${(1000 / (PERIOD.ks.pc * 0.025)).toFixed(0)} MHz. Time for a program is instructions × period whatever the mix.</p>`,
+        pitfall: `<p>Concluding that loads are the slowest instruction because memory is slow. Here the data memory is a small array, its write needs ${PERIOD.rca.dm} and the longest path is the compare-and-select of a branch. A large memory with a slow read changes the answer, which the memory chapters take up.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: `With ripple adders the static path is ${PERIOD.rca.pc} delays and the register file needs ${PERIOD.rca.rf}. Which instruction class sets the clock period?`,
+        options: ['Branches: the ALU subtracts, the flag selects the next PC', 'Loads: the data memory is the slowest block', 'R-type: the result has to be written back'], answer: 0,
+        why: ['', `A load's path ends at the register file, which needs ${PERIOD.rca.rf}, not ${PERIOD.rca.pc}.`, `Writing a result back needs ${PERIOD.rca.rf}: shorter than the PC's ${PERIOD.rca.pc}.`],
+        explain: `The pc input is the latest to settle: ${PERIOD.rca.pc} against ${PERIOD.rca.rf} at the register file and ${PERIOD.rca.dm} at the data memory. Every other instruction waits for the branch's worst case.`,
       },
     },
     {

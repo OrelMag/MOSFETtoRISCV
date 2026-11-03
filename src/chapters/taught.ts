@@ -71,7 +71,7 @@ export const TAUGHT: Record<string, string> = {
   assembly: 'isa',
   branches: 'cpu',
   loadstore: 'cpu',
-  callconv: 'cpu',
+  callconv: 'isa',
   stack: 'memory',
   shiftadd: 'muldiv',
   mmio: 'io',
