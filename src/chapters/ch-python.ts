@@ -16,15 +16,6 @@ const SUM = PROF('sum');
 const lineCycles = (r: { p: ReturnType<typeof pyProfile> }, l: number) => (r.p.own.get(l) ?? 0) + (r.p.rt.get(l) ?? 0);
 const COST = ['sum', 'collatz', 'gcd', 'fib'].map((id) => ({ id, name: PY_PROGRAMS.find((p) => p.id === id)!.name, words: PROF(id).c.words.length, steps: PROF(id).p.steps }));
 /** Calls a recursive fib(n) makes: the whole call tree. */
-/** The pipelined CPU's runs of the samples the new steps quote (tests/python-chapter.test.ts checks every number against the gates). */
-const PIPE = { nands: 113438 }, SINGLE = { nands: 100979 };
-const M_COST = { base: 113438, withM: 145476 };
-const PREFIX = { cycles: 219, instr: 166, stall: 15, flush: 36, fill: 2 };
-const GCD_I = { cycles: 2409, instr: 1545, flush: 860 };
-const GCD_M = { cycles: 225, instr: 77, divide: 108 };
-
-const DIV_LINE = 9;
-const SPEEDUPS = [{ id: 'gcd', x: 2409 / 225 }, { id: 'digits', x: 3922 / 422 }, { id: 'isprime', x: 12359 / 1106 }, { id: 'matmul', x: 1682 / 890 }];
 const primesBelow = (n: number) => { let k = 0; for (let i = 2; i < n; i++) { let p = true; for (let j = 2; j * j <= i; j++) if (i % j === 0) p = false; if (p) k++; } return k; };
 const fibCalls = (n: number): number => (n < 2 ? 1 : 1 + fibCalls(n - 1) + fibCalls(n - 2));
 
@@ -36,7 +27,6 @@ export const chPython: Chapter = {
     'say where a compiler keeps variables (registers, data memory, the stack) and what an expression needs',
     'price a line in clock cycles, and say why <code>a % b</code> costs a loop on a CPU without a divider',
     'run a Python program on the gates and read its variables, its output and its stack from the hardware',
-    'charge every cycle of a pipelined run to a Python line (issue, stall, flush) and weigh a hardware multiplier and divider against the routines',
   ],
   builds: ['isa', 'cpu'],
   recap: {
@@ -44,7 +34,6 @@ export const chPython: Chapter = {
       'A compiler maps a program onto the machine: each variable gets a home (a register while it can, data memory when a function shares it, the stack across calls), each expression a stack of temporaries, each test a branch.',
       'Nothing new runs on the CPU: the compiled words are the same RV32I chapter 14 decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.',
       'Cost is visible per line. On the single-cycle CPU a line costs one cycle per instruction it executes: <code>total += i</code> is one <code>add</code>; <code>a % b</code> with b unknown is a call to a 32-step shift-and-subtract routine, about 240 cycles.',
-      'On the pipeline a line costs more than its instructions: a bubble behind each load whose result the next instruction needs, two behind each taken branch, and (with M) the cycles a divide holds Execute. Every clock is charged to one line, so the lines add up to the run. With mul / div / rem the compiler drops the routines: gcd falls from 2409 cycles to 225 for 28 % more gates.',
       'Calls cost frames: the return address and every saved register go to the stack and come back, and a value computed before a call waits there across it.',
     ],
     check: [
@@ -247,72 +236,6 @@ export const chPython: Chapter = {
         answer: 0,
         explain: 'The calls form a tree, but only one path from the root to the call running now is in progress at a time. fib(7) → fib(6) → … → fib(1) is the deepest path.',
         why: ['', '64 words of data memory would hold more; the depth comes from the program.', 'Every call runs jal and the prologue: watch sp move.', 'Every call that reaches the prologue pushes one.'],
-      },
-    },
-    {
-      title: 'The same program on the pipeline',
-      body: `
-        <p>The compiled words are the same RV32I; only the machine changes. Chapter 17's five-stage pipeline (F, D, E, M, W) runs them
-        on ${fmt(PIPE.nands)} NANDs against the single-cycle CPU's ${fmt(SINGLE.nands)} (+${(100 * (PIPE.nands - SINGLE.nands) / SINGLE.nands).toFixed(1)} %: four stage registers, forwarding, the
-        <span data-show="hz">hazard unit</span>). A cycle is no longer an instruction, so the panel reads the pipeline's own signals at every edge and charges
-        <em>each clock to exactly one Python line</em>.</p>
-        <p>An instruction in Execute is an <em>issue</em> cycle of its line. An empty Execute is charged to the instruction that left it empty:
-        a <em>stall</em> behind a load or multiply (its result arrives from Memory, one stage later than the next instruction's Execute wants it;
-        forwarding cannot go back in time, so one bubble), or a <em>flush</em> behind a taken branch or jump (resolved in Execute, so the two
-        instructions fetched behind it are squashed: two bubbles). A not-taken branch costs nothing; a divide holds the instruction in Execute
-        for as many cycles as it needs. The lines add up to the clock, always: cycles = instructions + stalls + flushes + fill.</p>
-        <p>Measured on <code>prefix</code>: ${fmt(PREFIX.cycles)} cycles for ${fmt(PREFIX.instr)} instructions, CPI ${(PREFIX.cycles / PREFIX.instr).toFixed(2)}.
-        ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds), ${fmt(PREFIX.flush)} flushes
-        (${fmt(PREFIX.flush / 2)} taken branches and jumps), ${PREFIX.fill} the pipeline filling. The routines suffer worse: gcd's <code>%</code> loop is branches,
-        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. The pipeline wins
-        only through its shorter clock (chapter 17 measures it): CPI is the price, not the figure of merit.</p>`,
-      scene: () => pyScene(src('prefix'), { pipeline: true }),
-      more: {
-        derive: `<p>The charge rule, from the stage registers' valid bits: Execute valid → that instruction's line (one cycle; a divide's extra cycles are counted apart). Execute empty → the youngest older instruction still in Memory or
-          Writeback; a load or multiply makes it a stall, a branch or jump a flush, and the cycle goes to <em>its</em> line. Nothing older in flight: the pipeline is filling after reset. ${PREFIX.cycles} = ${PREFIX.instr} + ${PREFIX.stall} + ${PREFIX.flush} + ${PREFIX.fill}.
-          A runtime routine's cycles go to the line that called it, so <code>a % b</code> shows its loop's flushes.</p>`,
-        pitfall: `<p>Reading CPI as speed. A program's time is cycles × period. A stall-free pipeline has CPI 1 and the short clock; every bubble is a cycle spent on nothing, but a single-cycle machine pays the long clock on <em>every</em>
-          instruction. Compare cycles only between machines with the same clock, and always report both.</p>`,
-        real: `<p>Real pipelines hide most flushes with branch prediction (chapter 18) and caches; here the branch is resolved in Execute and always predicted not-taken, the plainest design, so every loop iteration pays two bubbles.
-          The same accounting, per source line, is what a profiler reading hardware performance counters reports.</p>`,
-      },
-      challenge: {
-        kind: 'quiz',
-        question: 'In <code>xs[i] += xs[i - 1]</code> the instructions are independent of the loop test, yet each iteration stalls once. Why?',
-        options: ['The load\'s data is only available at the end of Memory; the add right behind it needs it at the start of Execute, so one bubble separates them even with forwarding', 'Loads always take two cycles on this CPU', 'The store at the end of the line must wait for the branch', 'The data memory has one port, shared with instruction fetch'],
-        answer: 0,
-        explain: 'Forwarding moves a result from a later stage register to an earlier stage\'s input in the same cycle; a load\'s value does not exist until Memory has read the RAM. The hazard unit holds the add in Decode one cycle and sends a bubble down behind the load. An add feeding an add needs no bubble: its result exists at the end of Execute.',
-        why: ['', 'A load occupies each stage for one cycle; the cost is the dependent instruction waiting.', 'Stores do not wait for branches; branches only squash what is behind them.', 'Instruction and data memories are separate (Harvard), which is why a load never stalls the fetch.'],
-      },
-    },
-    {
-      title: 'Multiply and divide in hardware',
-      body: `
-        <p>Compile for <em>RV32IM</em> (the switch in the panel) and the routines disappear: <code>*</code> is one <code>mul</code>, <code>//</code> and <code>%</code>
-        a <code>div</code> or <code>rem</code>. The pipeline gains chapter 21's multiplier and divider: ${fmt(M_COST.withM - M_COST.base)} NANDs more
-        (${fmt(M_COST.base)} → ${fmt(M_COST.withM)}, +${(100 * (M_COST.withM - M_COST.base) / M_COST.base).toFixed(1)} %), counted from the two designs.</p>
-        <p>Python's rounding needs care. RISC-V's <code>div</code> truncates toward zero, Python's <code>//</code> floors: for −7 and 2 they give −3 and −4. After <code>rem</code> the compiler
-        tests three things, remainder ≠ 0, divisor ≠ 0 and the operands' signs differ, and only then lowers the quotient by one (or adds the divisor to a remainder). The cases it
-        leaves to the hardware are exactly this subset's: <code>x // 0</code> is −1 and <code>x % 0</code> is x, as RISC-V defines them. Random programs interpreted and compiled both ways
-        agree on every output, and the gate-level pipeline agrees with the golden model after every instruction.</p>
-        <p>gcd: ${fmt(GCD_I.cycles)} cycles with the routines, ${fmt(GCD_M.cycles)} with RV32IM (${(GCD_I.cycles / GCD_M.cycles).toFixed(1)}×) for ${fmt(GCD_I.instr)} → ${fmt(GCD_M.instr)} instructions. The CPI goes <em>up</em>, ${(GCD_I.cycles / GCD_I.instr).toFixed(2)} → ${(GCD_M.cycles / GCD_M.instr).toFixed(2)}: each of its six <code>%</code> holds Execute for
-        ${GCD_M.divide / 6 + 1} cycles (${fmt(GCD_M.divide)} extra cycles, ${Math.round(100 * GCD_M.divide / GCD_M.cycles)} % of the run), the cost of the loop moved into hardware. A program with no <code>*</code>, <code>//</code> or <code>%</code> by a variable
-        gains nothing and still pays for the gates: prefix runs ${fmt(PREFIX.cycles)} cycles either way.</p>`,
-      scene: () => pyScene(src('gcd'), { pipeline: true, m: true }),
-      more: {
-        derive: `<p>The divider is chapter 21's radix-4 SRT unit: ${GCD_M.divide / 6 + 1} cycles a divide, one per Execute stay. Speed-up of RV32IM on the pipeline: ${SPEEDUPS.map((r) => `${r.id} ${r.x.toFixed(1)}×`).join(', ')};
-          a multiply by a constant such as 10 or 7 was already shifts and adds, so only variable operands change.</p>`,
-        pitfall: `<p>The floor fix is not free: a <code>%</code> or <code>//</code> by a variable is <code>rem</code>, three tests and the <code>div</code>, ${DIV_LINE} instructions where C needs one. A language whose division truncates (C, Java, Rust) compiles to the bare pair;
-          Python pays for its mathematically nicer rounding on negative operands.</p>`,
-        real: `<p>Compilers for real RV32IM do the same, and hardware often fuses an adjacent <code>div</code> / <code>rem</code> on the same operands into one divide. Many small cores omit M, as the base ISA allows, and ship the routines in a library (libgcc's <code>__divsi3</code>).</p>`,
-      },
-      challenge: {
-        kind: 'quiz',
-        question: `Compiled for RV32IM, gcd's CPI rises from ${(GCD_I.cycles / GCD_I.instr).toFixed(2)} to ${(GCD_M.cycles / GCD_M.instr).toFixed(2)} yet it runs ${(GCD_I.cycles / GCD_M.cycles).toFixed(0)}× faster. How?`,
-        options: ['It executes about twenty times fewer instructions; each divide is slower than an average routine instruction but replaces a whole loop of them', 'The M unit raises the clock frequency', 'The pipeline stops stalling once it has a divider', 'CPI counts only the stalls, which the divider removes'],
-        answer: 0,
-        explain: `Time = instructions × CPI × period. Instructions fell ${(GCD_I.instr / GCD_M.instr).toFixed(0)}×, CPI rose ${((GCD_M.cycles / GCD_M.instr) / (GCD_I.cycles / GCD_I.instr)).toFixed(1)}×, the period is the pipeline\'s either way. A divide spends its cycles in one instruction instead of spreading them over a loop that also flushes the pipeline on every taken branch.`,
-        why: ['', 'The clock is set by the slowest stage; the divider is iterative precisely so that it does not lengthen it.', 'It still stalls and flushes; the divide waits are new.', 'CPI is total cycles over instructions: every bubble and every divide cycle is in it.'],
       },
     },
     {

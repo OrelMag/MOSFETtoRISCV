@@ -193,13 +193,15 @@ export interface PyOpts {
   pipeline?: boolean;
   /** With pipeline: compile for RV32IM and add the M unit (mul / div / rem instead of the runtime routines). */
   m?: boolean;
+  /** With pipeline: show the RV32I | RV32IM switch and the M unit's cost (default). Chapter 17 hides them: M is taught in chapter 21. */
+  switch?: boolean;
 }
 
 export function pyScene(source: string, o: PyOpts = {}): Scene {
   const m = !!o.pipeline && !!o.m;
   let c = pyCompile(source, m);
   if (pyProblem(c)) { source = PY_PROGRAMS[0].source; c = pyCompile(source, m); }
-  return cpuScene({ source: c.asm, imemK: PY_IMEM_K, dmemK: PY_DMEM_K, highlight: o.highlight, pipeline: o.pipeline, m, extraPanels: [pyPanel(c, source, !!o.edit, { pipeline: !!o.pipeline, m })] });
+  return cpuScene({ source: c.asm, imemK: PY_IMEM_K, dmemK: PY_DMEM_K, highlight: o.highlight, pipeline: o.pipeline, m, extraPanels: [pyPanel(c, source, !!o.edit, { pipeline: !!o.pipeline, m, sw: o.switch !== false })] });
 }
 
 /** Which function the instruction at pc belongs to ('' the top level, null a runtime routine or the frame). */
@@ -227,12 +229,12 @@ interface PanelState {
   lastLine: number;
 }
 
-function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipeline: boolean; m: boolean }): ScenePanel {
+function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipeline: boolean; m: boolean; sw: boolean }): ScenePanel {
   return (stage: Stage): Widget => {
     const L = c.layout!, A = c.assembled!;
     const lines = pyLines(source);
     const haltPc = A.labels.get('halt') ?? A.labels.get('program.halt') ?? 0;
-    const { pipeline: pipe, m: withM } = target;
+    const { pipeline: pipe, m: withM, sw } = target;
     const prof = pipe ? new PipeProfile(c, haltPc) : null;
     /** The last instruction seen in Execute: the one the pipeline panel follows while Execute holds a bubble. */
     let lastE = 0;
@@ -249,7 +251,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     sel.value = mine?.id ?? '__custom';
     sel.addEventListener('change', () => {
       const p = PY_PROGRAMS.find((q) => q.id === sel.value);
-      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM }));
+      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM, switch: sw }));
     });
 
     // the editor: compiles as you type, the error at its line in Python's terms
@@ -269,7 +271,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         h('button', { class: 'btn sm primary', onclick: () => {
           const why = recheck();
           if (why) { errBox.textContent = why; return; }
-          stage.load(pyScene(editor.value, { edit: true, pipeline: pipe, m: withM }));
+          stage.load(pyScene(editor.value, { edit: true, pipeline: pipe, m: withM, switch: sw }));
         } }, 'Compile & load'),
         h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = true; } }, 'Close')));
     recheck();
@@ -279,7 +281,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = !editWrap.hidden; } }, 'Edit');
     const targetBtn = (m: boolean) => h('button', {
       class: 'btn sm', 'aria-pressed': String(m === withM), title: m ? 'Compile for RV32IM and add the multiplier and divider to the pipeline: * // % become mul / div / rem' : 'Compile for RV32I: * // % call the shift-and-add and shift-and-subtract routines',
-      onclick: () => { if (m !== withM) stage.load(pyScene(source, { edit: !editWrap.hidden, pipeline: true, m })); },
+      onclick: () => { if (m !== withM) stage.load(pyScene(source, { edit: !editWrap.hidden, pipeline: true, m, switch: sw })); },
     }, m ? 'RV32IM' : 'RV32I routines');
     const endBtn = h('button', { class: 'btn sm', title: 'Clock the pipeline until the program halts' }, 'Run to end');
 
@@ -295,7 +297,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: `mem-panel py-panel${pipe ? ' py-pipe' : ''}`, 'data-dock': 'left' }, title,
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn, ...(pipe ? [endBtn] : [])),
-      ...(pipe ? [h('div', { class: 'py-row py-target' }, h('span', { class: 'py-hint' }, 'compile for'), targetBtn(false), targetBtn(true))] : []),
+      ...(pipe && sw ? [h('div', { class: 'py-row py-target' }, h('span', { class: 'py-hint' }, 'compile for'), targetBtn(false), targetBtn(true))] : []),
       blurb, editWrap, status, totals,
       h('div', { class: 'py-cols' },
         h('div', null,
@@ -425,7 +427,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     /** One line's cycles by cause, and its CPI. */
     const pipeRows = (v: LineCost): HTMLElement[] => [
       h('span', { title: 'Instructions of this line that went through Execute: one cycle each' }, 'issue'), h('span', null, fmtCount(v.instr)),
-      h('span', { title: 'A load or multiply result arrives a stage late: the next instruction waited, and a bubble followed the load' }, 'stall (load / multiply use)'), h('span', null, fmtCount(v.stall)),
+      h('span', { title: 'A load or multiply result arrives a stage late: the next instruction waited, and a bubble followed the load' }, withM ? 'stall (load / multiply use)' : 'stall (load use)'), h('span', null, fmtCount(v.stall)),
       h('span', { title: 'A taken branch or jump is resolved in Execute: the two instructions fetched behind it were squashed' }, 'flush (taken branch or jump)'), h('span', null, fmtCount(v.flush)),
       ...(withM ? [h('span', { title: 'The iterative divider holds the instruction in Execute' }, 'divide (extra cycles in Execute)'), h('span', null, fmtCount(v.divide))] : []),
       h('span', null, 'cycles per instruction'), h('span', null, v.instr ? (lineTotal(v) / v.instr).toFixed(2) : '–'),
@@ -437,11 +439,11 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
       const lost = t.stall + t.flush + t.divide + frame.stall + frame.flush + frame.divide;
       totals.replaceChildren(
         h('span', null, 'run so far'), h('span', null, `${fmtCount(all)} cycles · ${fmtCount(n)} instructions · CPI ${n ? (all / n).toFixed(2) : '–'}`),
-        h('span', { title: 'Cycles that retired nothing: bubbles behind loads, taken branches, divides, and the pipeline filling' }, 'lost'), h('span', null, `${fmtCount(lost + prof!.fill)}: ${fmtCount(t.stall + frame.stall)} stall, ${fmtCount(t.flush + frame.flush)} flush${withM ? `, ${fmtCount(t.divide + frame.divide)} divide` : ''}, ${prof!.fill} fill`),
-        h('span', { title: 'Counted from the two designs: the same pipeline and ROM with and without the multiplier and divider' }, 'M unit'),
-        h('span', null, mCost ? `${withM ? 'in the design: ' : 'would add '}${fmtCount(mCost.withM - mCost.base)} NANDs (${fmtCount(mCost.base)} → ${fmtCount(mCost.withM)}, +${((100 * (mCost.withM - mCost.base)) / mCost.base).toFixed(1)} %)` : 'counting…'));
+        h('span', { title: `Cycles that retired nothing: bubbles behind loads, taken branches${withM ? ', divides' : ''}, and the pipeline filling` }, 'lost'), h('span', null, `${fmtCount(lost + prof!.fill)}: ${fmtCount(t.stall + frame.stall)} stall, ${fmtCount(t.flush + frame.flush)} flush${withM ? `, ${fmtCount(t.divide + frame.divide)} divide` : ''}, ${prof!.fill} fill`),
+        ...(sw ? [h('span', { title: 'Counted from the two designs: the same pipeline and ROM with and without the multiplier and divider' }, 'M unit'),
+        h('span', null, mCost ? `${withM ? 'in the design: ' : 'would add '}${fmtCount(mCost.withM - mCost.base)} NANDs (${fmtCount(mCost.base)} → ${fmtCount(mCost.withM)}, +${((100 * (mCost.withM - mCost.base)) / mCost.base).toFixed(1)} %)` : 'counting…')] : []));
     };
-    if (pipe) mTimer = window.setTimeout(() => { mCost = mUnitCost(c.words); mTimer = null; if (stage.sim) pipeTotals(); }, 60);
+    if (pipe && sw) mTimer = window.setTimeout(() => { mCost = mUnitCost(c.words); mTimer = null; if (stage.sim) pipeTotals(); }, 60);
 
     const update = () => {
       const sim = stage.sim;

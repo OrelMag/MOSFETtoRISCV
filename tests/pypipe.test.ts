@@ -1,7 +1,8 @@
 // Chapter 15 on the pipeline: the Python panel's per-line cycles come from the gate-level pipelined CPU's own signals
 // (stage valid bits, the hazard unit, the divider), and must add up to the clock and agree with the golden model.
 import { describe, expect, it } from 'vitest';
-import { chPython } from '../src/chapters/ch-python';
+import { chMulDiv } from '../src/chapters/ch-muldiv';
+import { chPipeline } from '../src/chapters/ch-pipe';
 import { compilePy } from '../src/lang/compile';
 import { lineTotal, PipeProfile } from '../src/lang/pipeprof';
 import { PY_PROGRAMS } from '../src/lang/pyprograms';
@@ -56,9 +57,8 @@ describe('Python on the pipeline: per-line cycles from the gates', () => {
 });
 
 // ---- the numbers the chapter's pipeline steps quote ----
-
 const strip = (t: string) => t.replace(/[\s   ]+/g, '');
-const prose = strip(chPython.steps.map((st) => st.body + Object.values(st.more ?? {}).join('')).join('\n') + chPython.recap!.keep.join('\n'));
+const prose = strip([chPipeline, chMulDiv].map((c) => c.steps.map((st) => st.body + Object.values(st.more ?? {}).join('') + (st.challenge?.kind === 'quiz' ? st.challenge.question : '')).join(' ') + c.recap!.keep.join(' ')).join(' '));
 const quoted = (t: string) => expect(prose).toContain(strip(t));
 
 const totals = (prof: PipeProfile) => {

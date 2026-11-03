@@ -718,10 +718,16 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                golden model; pyDivMod floors, x // 0 = -1 and x % 0 = x as RISC-V's divide), codegen.ts (CodeGen: t0–t6 an
                expression stack, variables in s registers (a leaf function's in a0–a7), shared globals and lists in data
                memory from 0, then the output (gp, print stores there), sp from the top; comparisons straight into
-               branches, constant folding, shifts / masks / shift-adds for constants, rt.mul / rt.divmod otherwise; every
-               line keeps its Python line), compile.ts (compilePy → asm, words, layout, pyOfPc / pcsOfPy; outputOf),
+               branches, constant folding, shifts / masks / shift-adds for constants, rt.mul / rt.divmod otherwise, or with `m` (RV32IM) mul / div / rem, the
+               floor fix around rem and x // 0 left to the hardware; every
+               line keeps its Python line), compile.ts (compilePy({ m }) → asm, words, layout, pyOfPc / pcsOfPy; outputOf),
+               pipeprof.ts (PipeProfile: cycles per Python line on the gate-level pipeline from its own signals, every clock charged
+               to one line as issue / stall / flush / divide, a runtime routine's to its caller; tests/pypipe.test.ts),
                pyprograms.ts (the samples, with what they print), randpy.ts (seeded random programs: tests/pylang.test.ts
-               compiles and interprets them, PY_FUZZ=n for a sweep)
+               compiles and interprets them, also for RV32IM, PY_FUZZ=n for a sweep). widgets/python.ts pyScene({ pipeline, m,
+               switch }): the pipelined CPU with the Python panel (cause bars per line, totals, the RV32I | RV32IM switch and the
+               M unit's NAND cost; `switch: false` hides both: chapter 17 uses it, chapter 21 shows them); the two chapter steps
+               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12
