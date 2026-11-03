@@ -56,7 +56,7 @@ export function ruleFor(id: string): LibRule {
   const lib = new Set<string>(['nand', ...(n0?.gives ?? []), ...(n0?.givesOf?.() ?? [])]);
   for (const a of ancestors(id)) for (const u of nodeById(a)?.unlocks ?? []) lib.add(u);
   if (gates) for (const u of lib) { const d = u.endsWith('*') ? undefined : resolveComponent(u); if (d && transistorLevel(d)) lib.delete(u); }
-  const rule: LibRule = { lib: [...lib].sort() };
+  const rule: LibRule = { lib: [...lib].sort(), ...(n0?.withhold?.length ? { except: n0.withhold } : {}) };
   const n = unlockedPartCount(rule);
   return { ...rule, label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only', ...(gates ? { gates } : {}) };
 }

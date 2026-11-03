@@ -16,7 +16,21 @@ export interface ChapterLink {
 }
 
 /** Metrics a level is graded on (lower is better). */
-export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps';
+export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps' | 'edits';
+
+/** A bug hunt: a level that starts from a faulty drawing of a block an earlier level built (bughunts.ts). */
+export interface BugInfo {
+  /** The level whose block it breaks (it hangs off that level on the map). */
+  after: string;
+  /** HTML: what was wrong and why it showed as it did (Show answer, the after-pass card). */
+  fault: string;
+  /** The kind of fault, a few words ('miswire'). */
+  kind: string;
+  /** HTML: the kind in general, where it bites and how one finds it (the after-pass card). */
+  lesson: string;
+  /** Parts lit by Show answer: paths of part ids from the level's chip ('fwd.m1'). */
+  marks: string[];
+}
 
 export type Par = Partial<Record<Metric, number>>;
 
@@ -54,6 +68,10 @@ export interface CampaignNode {
   par?: Par;
   /** Not built yet: shown on the map, cannot be started. */
   soon?: boolean;
+  /** Library ids taken off this level's parts (a bug hunt's block under repair). */
+  withhold?: string[];
+  /** A bug hunt. */
+  bug?: BugInfo;
 }
 
 export interface Act {
@@ -79,5 +97,6 @@ export function parLimits(par: Par | undefined): Limits | undefined {
   if (par.relays !== undefined) l.maxRelays = par.relays;
   if (par.tubes !== undefined) l.maxTubes = par.tubes;
   if (par.steps !== undefined) l.maxSteps = par.steps;
+  if (par.edits !== undefined) l.maxEdits = par.edits;
   return l;
 }

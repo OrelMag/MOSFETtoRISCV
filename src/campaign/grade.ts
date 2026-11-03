@@ -19,6 +19,7 @@ export const METRIC: Record<Metric, { label: string; unit: string; hint: string 
   tubes: { label: 'Tube sections', unit: 'sections', hint: 'Triode and diode sections (a 6SN7 bulb holds two triodes, a 6AL5 two diodes)' },
   steps: { label: 'Relay steps', unit: 'steps', hint: 'Most relay steps (about 8 ms each) one input change takes to come to rest' },
   idle: { label: 'Idle lanes', unit: '%', hint: 'Lane-steps with the lane switched off, as a share of all lane-steps (100 % − lane utilization), mean over the tests' },
+  edits: { label: 'Edits', unit: 'edits', hint: 'Parts added, removed or swapped and pins moved to another net, counted from the drawing the level started as (moving parts and redrawing wires are free)' },
   laneops: { label: 'Lane-ops', unit: 'lane-ops', hint: 'Instructions times the lanes switched on for them (the work done), mean over the tests. Idle lanes are not graded: at the same cycles they fall only as this rises' },
 };
 
@@ -31,6 +32,7 @@ export function measured(s: Score): Measured {
   if (s.relays !== undefined) m.relays = s.relays;
   if (s.tubes !== undefined) m.tubes = s.tubes;
   if (s.steps !== undefined) m.steps = s.steps;
+  if (s.edits !== undefined) m.edits = s.edits;
   return m;
 }
 
@@ -41,6 +43,8 @@ export function stars(m: Measured, par: Par | undefined): 1 | 2 | 3 {
   let worst = 0;
   for (const k of keys) {
     const v = m[k], p = par![k]!;
+    // Edits come in ones: two stars for up to twice par (1.5 × a par of 1 would leave nothing between the two).
+    if (k === 'edits' && v !== undefined) { worst = Math.max(worst, v <= p ? 0 : v <= 2 * p ? 1.5 : Infinity); continue; }
     worst = Math.max(worst, v === undefined ? Infinity : p > 0 ? v / p : v > 0 ? Infinity : 0);
   }
   return worst <= 1 ? 3 : worst <= 1.5 ? 2 : 1;

@@ -22,6 +22,7 @@ import { RV16_MUX2 } from '../lib/rv16/logic';
 import { F16 } from '../sim/fpref';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
+import { withBugHunts } from './bughunts';
 
 const sandbox = (id: string) => (): BuildChallenge => {
   const c = challengeById(id);
@@ -50,7 +51,7 @@ export const actName = (num: number): string => ACTS.find((a) => a.num === num)?
 /** An act's title by its number (acts are listed in map order, not by number). */
 export const actTitle = (num: number): string => ACTS.find((a) => a.num === num)?.title ?? '';
 
-export const NODES: CampaignNode[] = [
+export const NODES: CampaignNode[] = withBugHunts([
   // ---- Act 0 --------------------------------------------------------------------------------
   {
     id: 'intro', act: 0, title: 'Anatomy of a CPU', kind: 'lesson', requires: [],
@@ -840,6 +841,6 @@ export const NODES: CampaignNode[] = [
     tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. The bench\'s engine, unlike your m_dma, lets you read its count: a load from 0xFFF2 gives the words left, so you know how many have landed. Sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
     codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
   },
-];
+]);
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);
