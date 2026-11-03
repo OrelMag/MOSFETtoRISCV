@@ -66,7 +66,7 @@ export function ruleFor(id: string): LibRule {
 export function unlockedPartCount(rule: Pick<LibRule, 'lib'>): number {
   const ids = new Set<string>();
   for (const c of libraryItems()) for (const it of c.items) if (it.id !== 'nand' && libAllowed(rule as LibRule, it.id)) ids.add(it.id);
-  for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && resolveComponent(id)) ids.add(id);
+  for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && libAllowed(rule as LibRule, id) && resolveComponent(id)) ids.add(id);
   return ids.size;
 }
 

@@ -267,7 +267,8 @@ export class LevelPage implements Page {
     }
     const alts = (c?.alts ?? []).map((a) => ({ a, cost: altCost(a) }));
     let costSec: HTMLElement | undefined;
-    if (c?.cost || alts.length || n.par) {
+    // a bug hunt is graded on edits (or a period) the level bar shows: no cost table
+    if (!n.bug && (c?.cost || alts.length || n.par)) {
       const sec = h('section', null, h('h4', null, 'What it costs'));
       if (c?.cost) sec.append(rich('p', c.cost));
       const rows: [string, string][] = [];

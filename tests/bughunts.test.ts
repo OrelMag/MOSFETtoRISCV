@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BUG_HUNT_IDS } from '../src/campaign/bughunts';
-import { ruleFor } from '../src/campaign/graph';
+import { ruleFor, unlockedPartCount } from '../src/campaign/graph';
 import { levelChallenge } from '../src/campaign/levels';
 import { nodeById } from '../src/campaign/nodes';
 import { checkChallenge, libAllowed, solveChallenge, startChallenge } from '../src/editor/challenges';
@@ -58,6 +58,8 @@ describe('bug hunts', () => {
     }
     expect(libAllowed(ruleFor('b_fa'), 'full_adder')).toBe(false);
     expect(libAllowed(ruleFor('a_add4'), 'full_adder')).toBe(true);
+    // the palette counts what the rule offers: b_fa offers what a_fa did, its own unlocks withheld
+    expect(unlockedPartCount(ruleFor('b_fa'))).toBe(unlockedPartCount(ruleFor('a_fa')));
   });
 
   for (const id of BUG_HUNT_IDS) {

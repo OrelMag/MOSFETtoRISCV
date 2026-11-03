@@ -114,7 +114,7 @@ function unlockedItems(r: LibRule): PaletteItem[] {
     }
   }
   for (const id of r.lib) {
-    if (id.endsWith('*') || id === 'nand' || out.has(id)) continue;
+    if (id.endsWith('*') || id === 'nand' || out.has(id) || !libAllowed(r, id)) continue;
     const d = resolveComponent(id);
     if (d) out.set(id, item(id, d.name, d.category));
   }
