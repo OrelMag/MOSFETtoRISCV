@@ -60,7 +60,7 @@ on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
 It also waits on `fpga`: `scripts/fpga-export.ts counter7 computer` (the sandbox's FPGA export of those examples, through
-editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/).
+editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/; fails above the GW1NR-9's 8640 LUTs / 26 BSRAM), then `scripts/fpga-memcheck.ts`: the exported block-RAM memories (memClock) against asynchronous ones, a ROM → RAM chain, every clk edge.
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
