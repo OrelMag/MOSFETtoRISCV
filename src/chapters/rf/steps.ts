@@ -28,8 +28,7 @@ export const rfSteps: Step[] = [
     get body() {
       const N = RF_NUMBERS();
       return `
-      <p>The file of the previous step writes at the clock edge, so a read of the register being written returns the <em>old</em> word until the edge. A pipeline hits this when an instruction in W writes the register the one in D reads; chapter 17 repairs it in the hazard unit,
-      outside the file. The other repair is inside: <strong>write-through</strong>. A comparator per read port (<span data-show="eq1 eq2">wa = ra</span>) gates a word multiplexer that hands <code>wd</code> to the port instead of the stored word. The select is
+      <p>The file of the previous step writes at the clock edge, so a read of the register being written returns the <em>old</em> word until the edge. A <span data-ahead="pipeline">pipeline (instructions overlapped in stages)</span> hits this when one instruction writes a register that a later one reads in the same cycle; chapter 17 repairs it outside the file, in its <span data-ahead="hazards">hazard logic (the circuit that detects such conflicts)</span>. The other repair is inside: a <strong>bypass</strong>. A comparator per read port (<span data-show="eq1 eq2">wa = ra</span>) gates a word multiplexer that hands <code>wd</code> to the port instead of the stored word. The select is
       <code>we ∧ byp ∧ wa ≠ 0 ∧ wa = ra</code>: the last term is what x0 costs here, a 5-input OR so that a write to x0 is never forwarded (x0 must keep reading 0).</p>
       <p>At 32 × 32 the two comparators, the two selects and the two 32-bit word multiplexers add <strong>${N.by - N.rf} NANDs</strong> to ${g(N.rf)}: ${pct(N.by - N.rf, N.rf)} %. Cheap, but it puts a gate path <code>wd → mux → rd</code> in front of the ALU: a value that was only needed
       at the end of the cycle (to be stored) is now also an input to the next stage's start. And x0 itself: dropping its 32 flip-flops saves ${g(N.x0)} NANDs (one register with enable) against a file that treated register 0 like any other.</p>
@@ -39,8 +38,8 @@ export const rfSteps: Step[] = [
     tour: {
       beats: [
         { title: 'Stale read', reset: true, show: ['rf'], expect: { rd1: 0 },
-          say: '<p>Register 5 is being written with 0x42 this cycle and port 1 reads it. Without write-through the stored word is still 0: rd1 = {v:rd1}.</p>' },
-        { title: 'Write-through', set: { byp: 1 }, show: ['eq1', 'nz'], expect: { rd1: 0x42 },
+          say: '<p>Register 5 is being written with 0x42 this cycle and port 1 reads it. Without bypass the stored word is still 0: rd1 = {v:rd1}.</p>' },
+        { title: 'Bypass', set: { byp: 1 }, show: ['eq1', 'nz'], expect: { rd1: 0x42 },
           say: '<p>wa = ra1, we = 1, wa ≠ 0: the multiplexer passes wd. rd1 = {v:rd1} before the edge. Port 2 reads register 0 and is unaffected: rd2 = {v:rd2}.</p>' },
         { title: 'x0 is never forwarded', set: { wa: 0, ra1: 0 }, show: ['nz'], expect: { rd1: 0 },
           say: '<p>Writing x0 matches ra1 = 0, but wa ≠ 0 is false: rd1 stays {v:rd1}.</p>' },
@@ -57,7 +56,7 @@ export const rfSteps: Step[] = [
       kind: 'reach',
       goal: 'Read register 5 on port 1 while 0x42 is still being written to it (rd1 = 0x42, before any clock edge).',
       check: (st) => st.cycles === 0 && st.getInput('byp') === 1 && st.getInput('we') === 1 && st.getInput('ra1') === 5 && st.value('rd1') === 0x42,
-      hints: ['The register has not been written yet: the stored word is still 0.', 'There is an input that turns the forwarding path on.'],
+      hints: ['The register has not been written yet: the stored word is still 0.', 'There is an input that turns the bypass path on.'],
       answer: 'wa = 5, wd = 0x42, we = 1, ra1 = 5 and byp = 1; do not pulse.',
       solve: (st) => { st.setInputs({ wa: 5, wd: 0x42, we: 1, ra1: 5, byp: 1 }); },
     },
@@ -110,7 +109,7 @@ export const rfSteps: Step[] = [
     get body() {
       const N = RF_NUMBERS();
       return `
-      <p>The dual-issue pipeline of chapter 26 retires two instructions a cycle, so its file has <strong>four read ports and two write ports</strong>. Reads scale by repetition: each port is another 32:1 tree over all the words, ${g(N.port)} NANDs at 32 × 32 (the third port of the 3-read file, ${g(N.r3)} NANDs in all). Writes are harder, because the two ports can name the same
+      <p>The dual-issue core of chapter 26 retires two instructions a cycle, so its file has <strong>four read ports and two write ports</strong>. Reads scale by repetition: each port is another 32:1 tree over all the words, ${g(N.port)} NANDs at 32 × 32 (the third port of the 3-read file, ${g(N.r3)} NANDs in all). Writes are harder, because the two ports can name the same
       register. <span data-show="ws5">Each register's write select</span> takes either decoder's output (OR) and picks port 1's data when port 1 is selected: <strong>port 1, the younger instruction, wins</strong>. That is exactly the program-order result of writing the older one first, and the lost write needs no cancelling.</p>
       <p>Complete file: ${g(N.r2)} NANDs, ${(N.r2 / N.rf).toFixed(2)}× the 2R1W file. Four read trees are ${g(4 * N.port)} of them (${pct(4 * N.port, N.r2)} %): for twice the instruction rate the cost of the file grows by about half, because the storage (${g(31 * 32 * N.dff)} NANDs) is paid once. In
       custom cells a port costs two transistors a bit and the file stays small; in gates, as here, the read trees take over.</p>

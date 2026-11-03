@@ -96,7 +96,7 @@ export const aluSteps: Step[] = [
         that blt already has, as the netlist draws it (<code>ge</code>), and bgeu needs none: C itself.</p>`,
       pitfall: `<p>Branching on <code>a - b &lt; 0</code> in software instead of <code>blt</code>. The subtraction wraps: for values of opposite sign it can have the wrong sign, which is exactly the V flag you did not read. Compilers use <code>blt</code> and the hardware reads N ⊕ V.</p>`,
       real: `<p>Fast cores do not wait for the ALU: the pipeline chapter's branch comparator is its own subtractor (and an equality tree for beq / bne) next to the ALU, so the branch resolves a stage earlier. The conditions above are unchanged.</p>`,
-      numbers: `<p>XOR is ${stats(XOR).nands} NANDs, each inverter 1.</p>`,
+      numbers: `<p>Cost of the condition logic: the XOR is ${stats(XOR).nands} NANDs, each of the three inverters 1, and the 8:1 select ${NPC_COND.mux}; ${NPC_COND.all} NANDs for the whole next-PC decision.</p>`,
     },
     challenge: {
       kind: 'quiz',
@@ -111,11 +111,11 @@ export const aluSteps: Step[] = [
     title: 'The ALU control decode',
     get body() {
       return `
-      <p>The ALU's four control bits come from the instruction's own fields. The control unit's ALU decoder (<span data-show="a0 a1 a2">three ANDs</span>, <span data-show="is101 shR alt1 alt">a small subtract / arithmetic detector</span>, ${g(CTL_PARTS)} NANDs with the field splitters) implements
+      <p>The ALU's four control bits come from the instruction's own fields. The <span data-ahead="control">control unit (the block that turns an instruction's fields into switch settings for the rest of the CPU)</span> has an ALU decoder (<span data-show="a0 a1 a2">three ANDs</span>, <span data-show="is101 shR alt1 alt">a small subtract / arithmetic detector</span>, ${g(CTL_PARTS)} NANDs with the field splitters) implements
       two rules, and no table:</p>
-      <ul><li><strong>ctl[2:0] = aluOp ? funct3 : 000.</strong> A register or immediate arithmetic instruction passes funct3 straight through (which is why the ALU's operation numbers are funct3). Loads, stores, branches, <code>lui</code>, <code>auipc</code> and jumps force 000: they only add (or, for a branch, subtract).</li>
-      <li><strong>ctl[3] = aluOp · f7[5] · (R-type ∨ funct3 = 101) ∨ BRANCH.</strong> The bit that picks <code>sub</code> over <code>add</code> and <code>sra</code> over <code>srl</code> is funct7 bit 5, but only where it means that: an <code>addi</code> whose immediate happens to have bit 30 set must not subtract, and
-      only the shifts <code>srli</code> / <code>srai</code> use the bit in an immediate encoding. Branches force 1 to subtract.</li></ul>
+      <ul><li><strong>ctl[2:0] = aluOp ? funct3 : 000.</strong> An R-type or OP-IMM arithmetic instruction passes funct3 straight through (which is why the ALU's operation numbers are funct3). Loads, stores, branches, <code>lui</code>, <code>auipc</code> and jumps force 000: they only add (or, for a branch, subtract).</li>
+      <li><strong>ctl[3] = aluOp · f7[5] · (R-type ∨ funct3 = 101) ∨ BRANCH.</strong> The bit that picks <code>sub</code> over <code>add</code> and <code>sra</code> over <code>srl</code> is funct7 bit 5, but only where it means that: an <code>addi</code> whose constant happens to set bit 30 of the word must not subtract, and
+      only the shifts <code>srli</code> / <code>srai</code> use that bit in their encoding. Branches force 1 to subtract.</li></ul>
       <table class="mini"><tr><th>instruction</th><th>opcode</th><th>f3</th><th>f7[5]</th><th>ctl</th></tr>${CTL_ROWS.map((r) => `<tr><td>${r.name}</td><td>${r.op.toString(2).padStart(7, '0')}</td><td>${r.f3.toString(2).padStart(3, '0')}</td><td>${(r.f7 >> 5) & 1}</td><td><code>${ctlOf(r).toString(2).padStart(4, '0')}</code></td></tr>`).join('')}</table>
       <p>Each row is the control unit evaluated on those fields. The last rows show the don't-cares: a load with funct7 bit 5 set still gives 0000.</p>
       <div class="try">Set opcode 0010011 (OP-IMM), funct3 = 000, funct7 = 0100000: ctl stays 0000 (add). Change funct3 to 101: ctl = 1101 (<code>srai</code>).</div>`;
@@ -124,7 +124,7 @@ export const aluSteps: Step[] = [
     tour: {
       beats: [
         { title: 'addi with bit 30 set', show: ['alt1', 'is101'], expect: { aluCtl: 0 },
-          say: '<p>OP-IMM, funct3 = 000, funct7[5] = 1 (the immediate\'s bit 30): the subtract detector wants an R-type or funct3 = 101, so ctl = {b:aluCtl}, <code>add</code>.</p>' },
+          say: '<p>OP-IMM, funct3 = 000, funct7[5] = 1 (bit 30 of the word, part of the constant): the subtract detector wants an R-type or funct3 = 101, so ctl = {b:aluCtl}, <code>add</code>.</p>' },
         { title: 'srai', set: { funct3: 5 }, show: ['is101', 'shR', 'alt1', 'alt'], expect: { aluCtl: 13 },
           say: '<p>funct3 = 101: <code>is101</code> and <code>alt1</code> fire, ctl = {b:aluCtl} = 1101, <code>sra</code>.</p>' },
         { title: 'sub', set: { op: 0x33, funct3: 0 }, show: ['shR', 'alt1', 'alt'], expect: { aluCtl: 8 },
@@ -155,7 +155,7 @@ export const aluSteps: Step[] = [
       <p>"The complete ALU" counted depth: the longest path from any input to the result, ${R.depth} delays for the ripple ALU. But the control code is fixed for a whole instruction, and a path only matters if a change can travel it. <strong>Measured</strong> with the code held and the operands moving
       (the widget below runs the 32-bit ALU on a set of carry-chain, shifter and alternating-bit transitions), the result y settles in <strong>${R.ops.and}</strong> delays for <code>and</code> / <code>or</code> and ${R.ops.xor} for <code>xor</code>, ${R.ops.sll} / ${R.ops.srl} / ${R.ops.sra} for the shifts,
       and ${R.ops.add} for <code>add</code>, ${R.ops.sub} for <code>sub</code>, ${R.ops.sltu} for <code>sltu</code>, <strong>${R.ops.slt}</strong> for <code>slt</code>. The ripple carry decides everything the adder touches; the logic operations never see it, although it is in the same circuit.</p>
-      <p>That is also the case against a <em>fixed</em> clock period for all instructions: the slowest op sets it (${R.ops.slt} here against ${R.ops.and} for <code>and</code>), unless the slow ones get more cycles. With a Kogge–Stone adder (chapter 16) the same measurement gives <code>add</code> ${K.ops.add}, <code>slt</code> ${K.ops.slt}: the gap to the shifter (${K.ops.sll}) closes from ${R.ops.add - R.ops.sll} delays to ${K.ops.add - K.ops.sll}, and <code>slt</code> (${K.ops.slt}), which still pays the flag logic after the adder, becomes the slowest. The flags (zero, neg, ovf, carry) follow the adder, ${R.flags} delays here and ${K.flags} with Kogge–Stone: that is what a branch waits for, which is why the pipeline gives branches their own comparator.</p>`;
+      <p>That is also the case against a <em>fixed</em> clock period for all instructions: the slowest op sets it (${R.ops.slt} here against ${R.ops.and} for <code>and</code>), unless the slow ones get more cycles. With <span data-ahead="prefix">a Kogge–Stone adder (a parallel-prefix carry network, chapter 16)</span> the same measurement gives <code>add</code> ${K.ops.add}, <code>slt</code> ${K.ops.slt}: the gap to the shifter (${K.ops.sll}) closes from ${R.ops.add - R.ops.sll} delays to ${K.ops.add - K.ops.sll}, and <code>slt</code> (${K.ops.slt}), which still pays the flag logic after the adder, becomes the slowest. The flags (zero, neg, ovf, carry) follow the adder, ${R.flags} delays here and ${K.flags} with Kogge–Stone: that is what a branch waits for, which is why a <span data-ahead="pipeline">pipelined core (instructions overlapped in stages)</span> gives branches their own comparator.</p>`;
     },
     widget: opDelayWidget,
     more: {
@@ -164,7 +164,7 @@ export const aluSteps: Step[] = [
     },
     challenge: {
       kind: 'quiz',
-      question: 'With a Kogge–Stone adder instead of the ripple adder, which operation of the 32-bit ALU gets no faster?',
+      question: 'With a log-depth adder instead of the ripple adder, which operation of the 32-bit ALU gets no faster?',
       options: ['sll / srl / sra: the shifter does not use the adder', 'add', 'sub', 'slt'],
       answer: 0,
       explain: `Measured: add ${opDelays('rca').ops.add} → ${opDelays('ks').ops.add}, sub ${opDelays('rca').ops.sub} → ${opDelays('ks').ops.sub}, slt ${opDelays('rca').ops.slt} → ${opDelays('ks').ops.slt}; sll ${opDelays('rca').ops.sll} → ${opDelays('ks').ops.sll}, srl ${opDelays('rca').ops.srl} → ${opDelays('ks').ops.srl}.`,

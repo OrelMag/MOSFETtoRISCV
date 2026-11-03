@@ -25,7 +25,7 @@ export const DFF_EDGE6: ComponentDef = define({
   ff: { d: 'd', q: 'q', clk: 'clk' },
   powerOn: { q: 0, q_n: 1 },
   netlist: () => {
-    const b = new Builder(8, 10, 3);
+    const b = new Builder(20, 12, 4);
     b.pins('d', 'clk');
     const n4 = b.add(NAND, 'n4', 'n4');
     const n1 = b.add(NAND, 'n1', 'n1');
@@ -43,7 +43,7 @@ export const DFF_EDGE6: ComponentDef = define({
     b.wire(`${q}.y`, `${qn}.a`); b.wire(`${n3}.y`, `${qn}.b`);
     b.wire(`${q}.y`, 'q'); b.wire(`${qn}.y`, 'q_n');
     for (const [drv, nm] of [['n1.y', 'n1'], ['n2.y', 'n2'], ['n3.y', 'n3'], ['n4.y', 'n4'], ['gq.y', 'q'], ['gqn.y', 'q_n']]) b.name(drv, nm, true);
-    return { pins: { d: [1, 3], clk: [1, 10], q: [b.right + 4, 3], q_n: [b.right + 4, 9] }, instances: b.instances, nets: b.nets() };
+    return { pins: { d: [1, 5], clk: [1, 14], q: [b.right + 2, 4], q_n: [b.right + 2, 12] }, instances: b.instances, nets: b.nets() };
   },
   hdl: {
     verilog: `module dff_edge6 (input logic d, clk, output logic q, q_n);

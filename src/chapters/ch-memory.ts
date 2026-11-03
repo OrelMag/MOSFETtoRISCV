@@ -233,8 +233,8 @@ export const chLatches: Chapter = {
         <strong><span data-show="slave">slave</span></strong> while it is high. At the moment the clock rises, the master closes (capturing d)
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>. At no instant are both open, so there is never
         a transparent path from d to q: that is the whole trick. Cost: two latches and an inverter, ${nands(DFF)} NANDs, ${stats(DFF).transistors} transistors.</p>
-        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here, worst of rising and falling d): d must have crossed
-        <span data-show="master">the master</span> before clk rises; a falling d goes through the master's inverter and a NAND.
+        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here): d must have crossed
+        <span data-show="master">the master</span> before clk rises (the larger of the rising and falling d's setup is quoted); a falling d goes through the master's inverter and a NAND.
         <strong>Hold</strong> (${T.hold} delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
         <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (${T.r.cqRise} delays here for a rising q, ${T.r.cqFall} for a falling one): the time the
         <span data-show="slave">slave</span> takes to show the captured value. Between two flip-flops the period must cover clk-to-q + the
