@@ -141,7 +141,10 @@ class Coach {
     Object.assign(this.ring.style, { left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
     // 'clear' cards are wide and short: they sit in the strip under the circuit, so height is what costs
     const wide = this.beats[this.i].card === 'clear';
-    const cw = Math.min(wide ? 460 : 340, vw - 24);
+    const stageBox = document.querySelector<HTMLElement>('.stage')?.getBoundingClientRect();
+    // 'beside': over the dimmed chapter text, so the circuit it talks about stays in view; only where that column is wide enough
+    const beside = this.beats[this.i].card === 'beside' && !!stageBox && stageBox.left >= 300;
+    const cw = beside ? stageBox.left - 20 : Math.min(wide ? 460 : 340, vw - 24);
     this.card.style.width = `${cw}px`;
     const ch = this.card.offsetHeight;
     const below = vh - y1 - 16 >= ch + 8;
@@ -151,7 +154,12 @@ class Coach {
     const clampT = (v: number) => Math.max(12, Math.min(vh - ch - 12, v));
     let cl: number, ct: number, ax = 0, ay = 0, arrow = true;
     const stage = this.beats[this.i].card === 'clear' ? document.querySelector<HTMLElement>('.stage') : null;
-    if (stage) {
+    if (beside) {
+      cl = 12;
+      ct = clampT(y0);
+      ax = cl + cw - 8;
+      ay = Math.max(ct + 18, Math.min(ct + ch - 18, (y0 + y1) / 2)) - 8;
+    } else if (stage) {
       // clear of the text and of the circuit's top: the stage's lower part, above its control row
       const sr = stage.getBoundingClientRect();
       const bar = stage.querySelector<HTMLElement>('.controls');
