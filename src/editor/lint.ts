@@ -11,7 +11,7 @@ import { deadInstances } from '../sim/dead';
 import { netlistOf } from '../sim/types';
 import type { Compiled, Diag } from './compile';
 import { wireGroups } from './geom';
-import type { ChipDoc } from './model';
+import { type ChipDoc, PIPE_CORE_LIB } from './model';
 
 export interface LintResult {
   diags: Diag[];
@@ -148,7 +148,7 @@ export function deadParts(doc: ChipDoc, built: Compiled): string[] {
 function coreIsa(ref: ChipDoc['parts'][number]['ref']): { xlen: 32 | 64; c: boolean } | null {
   if ('core' in ref) return { xlen: 32, c: false };
   if (!('lib' in ref)) return null;
-  if (ref.lib === 'rv32i_core' || ref.lib === 'rv32i_pipe_core') return { xlen: 32, c: false };
+  if (ref.lib === 'rv32i_core' || PIPE_CORE_LIB.test(ref.lib)) return { xlen: 32, c: false };
   if (ref.lib === 'rv32ic_core') return { xlen: 32, c: true };
   return /^rv64(i|im)(_d[0-9])?_core$/.test(ref.lib) ? { xlen: 64, c: false } : null;
 }
