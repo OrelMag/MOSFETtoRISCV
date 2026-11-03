@@ -68,3 +68,11 @@ describe('solved with help', () => {
     expect(CAMPAIGN_KEY).toBeTruthy();
   });
 });
+
+describe('the walkthrough\'s whole answer', () => {
+  it('marks like Do it for me: the same markHelp key makes the unchanged Check helped', () => {
+    const p = new Progress(new MapKV());
+    p.markHelp('g_xor', 'walk-key'); // levelwalk.ts takeOver at the last step in watch mode
+    expect(p.solve('g_xor', { nand: 5, depth: 3 }, 'walk-key')).toMatchObject({ stars: 0, helped: true });
+  });
+});
