@@ -105,6 +105,9 @@ export class ISS {
   readonly bus: BusMemory | undefined;
   halted = false;
   steps = 0;
+  /** lr.w / sc.w: the reservation, on the 16-byte line (the granule of the coherent caches) of the lr.w's address. */
+  resValid = false;
+  resLine = 0;
   readonly system: boolean;
   /** I/O at 0x8000_0000 (system or mmio). */
   readonly io: boolean;
@@ -447,6 +450,15 @@ export class ISS {
         // the read and the write happen in the same memory access: nothing can come in between
         if (this.system) { trap = new Trap(CAUSE.ILLEGAL); break; }
         const addr = ua >>> 0;
+        if (d.name === 'lr.w') { const v = this.load(addr, 2) >>> 0; this.resValid = true; this.resLine = addr >>> 4; write(v); break; }
+        if (d.name === 'sc.w') {
+          // stores only while the reservation holds; rd = 0 on success, 1 on failure; any sc.w clears it
+          const ok = this.resValid && this.resLine === addr >>> 4;
+          this.resValid = false;
+          if (ok) { this.store(addr, 2, ub >>> 0); store = { addr, value: ub >>> 0 }; }
+          write(ok ? 0 : 1);
+          break;
+        }
         const old = this.load(addr, 2) >>> 0;
         const nv = d.name === 'amoadd.w' ? (old + ub) >>> 0 : ub >>> 0;
         this.store(addr, 2, nv);

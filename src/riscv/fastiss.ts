@@ -126,7 +126,7 @@ export class FastISS {
         k = [alt ? K.SUB : K.ADD, K.SLL, K.SLT, K.SLTU, K.XOR, alt ? K.SRA : K.SRL, K.OR, K.AND][d.funct3];
         break;
       }
-      case OPCODES.AMO: k = this.system ? K.ILLEGAL : d.name === 'amoadd.w' ? K.AMOADD : K.AMOSWAP; break;
+      case OPCODES.AMO: k = this.system ? K.ILLEGAL : d.name === 'amoadd.w' ? K.AMOADD : d.name === 'amoswap.w' ? K.AMOSWAP : K.ILLEGAL; break; // lr.w / sc.w: the multi-core golden model only
       case OPCODES.SYSTEM: k = K.SYSTEM; break;
       default: k = K.NOP; // fence and anything else: no architectural effect
     }
