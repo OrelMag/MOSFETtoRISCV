@@ -53,7 +53,7 @@ export default function mount(host: HTMLElement): void {
     const others = KITCHEN_WINDOWS.map((w) => `${w}: ${kitchenCycles(KITCHEN_PROGRAMS[prog].id, w)}`).join(', ');
     read.textContent = `Cycle ${f.cycle + 1}: ${f.served} of ${r.instructions} tickets served, in ticket order. ${f.out.length ? `Out this cycle: ${f.out.map((q) => '#' + q).join(' ')}. ` : ''}`
       + (last ? `Done in ${r.cycles} cycles. ` : '')
-      + `The pass was full on ${r.frames.slice(0, idx + 1).filter((x) => x.full).length} of the cycles so far. Whole program by window size, in cycles (${others}). The oldest ticket (top, outlined) is the only one that can leave.`;
+      + `The pass was full on ${r.frames.slice(0, idx + 1).filter((x) => x.full).length} of the cycles so far. Whole program by window size, in cycles (${others}). Tickets leave only from the top: up to two a cycle, oldest first, and none past one that is not ready.`;
   };
   host.replaceChildren(svg, h('div', { class: 'af-ctl' }, progs.el, wins.el), h('div', { class: 'af-ctl' }, stepBtn, runBtn, resetBtn), read);
   paint();

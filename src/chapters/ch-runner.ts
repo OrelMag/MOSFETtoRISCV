@@ -159,8 +159,8 @@ export const chAppendixRunner: Chapter = {
         every line from then on: both walls are a pixel further left. Nothing holds where they are. The position is a phase, the difference between
         two counters, and to change it you make one of them lose a count.</p>
         <p>One flip-flop, <code>armed</code>, makes that happen once: it is set on line 50 of a slip frame and cleared by the next wrap, and it is bit 0 of the
-        load value. The slip frame is every other frame (15 pixels a second at 30 frames, a wall every 2.4 s); at a score of 10 it is every frame. That is the whole
-        difficulty curve, one OR gate.</p>
+        load value. The slip frame is every other frame (15 pixels a second at 30 frames, a wall every 2.4 s); at a score of 10 it is every frame. That is the speed half of the
+        difficulty curve, one OR gate; the gates narrow later.</p>
         <p>Cost: ${k(RB_COST.walls)} NANDs for the board, which also keeps your place on the score. A CPU would hold a wall's x in a register and add to it. Here it takes
         a counter that was needed anyway to draw the wall.</p>
         <div class="try">Press <strong>Frame</strong> a few times and read the WC LEDs: at the same beam position, the count differs once per slip.</div>`,
@@ -170,7 +170,7 @@ export const chAppendixRunner: Chapter = {
         question: `What happens to the walls if the slip loads ${RB_WALL_LOAD - 1} instead of ${RB_WALL_LOAD + 1}?`,
         options: ['They move right: the period is one clock longer, so the top of the count comes a clock later', 'They move left twice as fast', 'They disappear', 'They shear'],
         answer: 0,
-        explain: `A load of ${RB_WALL_LOAD - 1} gives one period of ${RB_WALL_PERIOD + 1} clocks: every later wall is a column to the right. One bit of the load value is the direction of the whole game.`,
+        explain: `A load of ${RB_WALL_LOAD - 1} gives one period of ${RB_WALL_PERIOD + 1} clocks: every later wall is a column to the right. The load value alone sets the direction of the whole game: above ${RB_WALL_LOAD} left, below ${RB_WALL_LOAD} right.`,
         why: ['', 'A longer period makes the count late, and late is further along the line: right.', 'The counter still wraps and still decodes count ≥ 60.', 'Every line after the slip is shifted equally; only the one line where it happens is odd, and that line is in blanking.'],
       },
     },
@@ -221,7 +221,7 @@ export const chAppendixRunner: Chapter = {
         <p><code>crash = RUN · NOT GHOST · YOU · WALL · FIELD · NOT (IN GATE · (BIT XNOR COLOUR))</code></p>
         <p>That is one wide AND, high for a clock, on the first pixel of overlap. Neither shape's coordinates enter it, and neither does their size: make the wall wider and collisions are still exact, at no cost.
         The XNOR is the game's one rule. It is also why a gate of the wrong colour behaves as wall, down to the pixel.</p>
-        <p>The first overlapping pixel sets <code>ghost</code>, which blocks further crashes and blinks you until that wall has passed (the same tick that scores). So one wall costs one life, however many pixels overlap. Three flip-flop bits, the rest gates: ${k(RB_COST.rules)} NANDs.</p>
+        <p>The first overlapping pixel sets <code>ghost</code>, which blocks further crashes and blinks you until that wall has passed (the same tick that scores). So one wall costs one life, however many pixels overlap. Four flip-flop bits (run, ghost, two of lives lost), the rest gates: ${k(RB_COST.rules)} NANDs.</p>
         <p>The timing is why this is so cheap. A program would have to compute this per object per frame. Here the beam visits every pixel anyway, and asks one question at each.</p>
         <div class="try">Crash once: watch the HIT LED blink for one clock at slow rates, and the lives go down.</div>`,
       scene: () => runnerScene({ highlight: ['rules'] }),
