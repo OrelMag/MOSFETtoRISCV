@@ -66,3 +66,9 @@ export function relationText(needs: readonly string[], unlocks: readonly string[
   const list = (xs: readonly string[]) => xs.join(', ');
   return [needs.length ? `Needs ${list(needs)}.` : 'Needs nothing else.', unlocks.length ? `Unlocks ${list(unlocks)}.` : 'Unlocks nothing further.'].join(' ');
 }
+
+/** A level's brief as a phone's one-line goal: its plain text, and the first sentence of it. */
+export function goalText(brief: string): { plain: string; first: string } {
+  const plain = brief.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  return { plain, first: plain.match(/^.*?[.:](\s|$)/)?.[0].trim() ?? plain };
+}

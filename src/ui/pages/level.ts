@@ -6,6 +6,7 @@
 // finished CPU. The chip is the same one the sandbox opens ("Open in Sandbox"), nothing is copied.
 // Loaded on demand with the editor (app.ts imports it dynamically).
 
+import { goalText } from '../../campaign/cardlabel';
 import { groupDigits } from '../../sim/numfmt';
 import '../../styles/editor.css';
 import '../../styles/sbchips.css';
@@ -230,8 +231,7 @@ export class LevelPage implements Page {
 
   /** A phone's one-line goal (level.css shows it there only): the brief's first sentence and the par, always on screen. */
   private goalLine(): HTMLElement {
-    const plain = this.ch!.brief.replace(/<[^>]+>/g, '').replace(/s+/g, ' ').trim();
-    const first = plain.match(/^.*?[.:](s|$)/)?.[0].trim() ?? plain;
+    const { plain, first } = goalText(this.ch!.brief);
     const par = this.parText();
     return h('p', { class: 'lv-goal', title: plain }, h('b', null, 'Goal '), first, par.length ? h('span', { class: 'lv-goal-par' }, ` · par ${par.join(' · ')}`) : null);
   }
