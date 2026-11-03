@@ -14,13 +14,13 @@ import { startApp } from './ui/app';
 startApp(document.getElementById('app')!);
 
 // A deploy replaces the hashed chunks under a tab that is already open: a lazy chunk then fails to load (vite:preloadError). One reload
-// fetches the new index.html and its chunks; a second failure within a minute is left to the route's "could not load" panel.
-window.addEventListener('vite:preloadError', (e) => {
+// fetches the new index.html and its chunks; a second failure within a minute is left to the route's "could not load" panel. (No
+// preventDefault: Vite would then resolve the import with undefined, and the route's own handler would trip over it as the page leaves.)
+window.addEventListener('vite:preloadError', () => {
   try {
     const last = Number(sessionStorage.getItem('mosfet:chunk-reload') ?? 0);
     if (Date.now() - last < 60_000) return;
     sessionStorage.setItem('mosfet:chunk-reload', String(Date.now()));
-    e.preventDefault();
     location.reload();
   } catch { /* no sessionStorage: the panel */ }
 });
