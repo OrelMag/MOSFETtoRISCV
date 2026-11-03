@@ -63,7 +63,7 @@ export const IO_MORE: Step[] = [
       <p>The deadline is the previous deadline plus 40, not "now plus 40", so the dots do not drift. The loop is <code>lw</code> and <code>bltu</code>, two cycles, so the
       clock is looked at every second cycle: the read that first sees <code>mtime ≥ deadline</code> is 0 or 1 cycles late, and the dot reaches the console 3 or 4 cycles after the
       deadline (3 here: the compare falls through, <code>li</code>, then the store). Polling quantises time to the length of the loop that does it, and during
-      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter 20</a> measures what that costs against an interrupt.</p>
+      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter 20</a> measures what that costs against <span data-ahead="interrupts">an interrupt (the hardware jumps to a software handler when a device asks)</span>.</p>
       <div class="try">Run the clock and watch mtime in the I/O panel, the loop at pc 12 and 16, and the dot.</div>`,
     scene: () => cpuScene({ source: sys('poll'), system: true, highlight: ['io'] }),
     tour: {
@@ -101,11 +101,11 @@ export const IO_MORE: Step[] = [
         <tr><td>LEDs 0x4</td><td>last value</td><td>8 bits kept</td><td>none: a plain register</td></tr>
         <tr><td>switches 0x8</td><td>the pins</td><td>ignored</td><td>none, but the value moves by itself</td></tr>
         <tr><td>mtime 0x10</td><td>the count</td><td>ignored</td><td>none</td></tr>
-        <tr><td>mtimecmp 0x14</td><td>last value</td><td>32 bits kept</td><td>a store can end the interrupt (mtip falls)</td></tr></table>
+        <tr><td>mtimecmp 0x14</td><td>last value</td><td>32 bits kept</td><td>a store can end the timer request (mtip falls)</td></tr></table>
       <p>Memory promises that a load returns the last store and that doing either twice is the same as once. A device register promises neither: a store to the console prints every time, so
       repeating it is not idempotent; a status register changes between two loads; and some registers act on a <em>read</em>: a UART's receive register pops the byte, a keyboard queue
-      drops its oldest key (the sandbox's keyboard part and chapter 38's key slave work this way), and an interrupt controller's <em>claim</em> register (the next chapters) returns the
-      pending source and clears it. So I/O cannot sit behind a cache, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
+      drops its oldest key (the sandbox's keyboard part and chapter 38's key slave work this way), and a request controller's <em>claim</em> register (chapter 20) returns the
+      pending source and clears it. So I/O cannot sit behind <span data-ahead="cache">a cache (a small fast copy of recent memory, chapter 22)</span>, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
       A pipeline that speculates must not issue such a load early: the chapters' cores only touch I/O at the end of the pipeline for that reason.</p>`,
     scene: () => cpuScene({ source: sys('bytes'), system: true, highlight: ['io'] }),
     more: {

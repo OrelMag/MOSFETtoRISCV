@@ -364,7 +364,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Implementing csrrs / csrrc with rs1 = x0 as writes: they only read, which matters for registers with side effects.',
     ],
     lib: 'rv16_csr', anatomy: ['csr'],
-    chapters: [{ chapter: 'traps', step: 0, label: 'Control and status registers' }, { chapter: 'traps', step: 5, label: 'Inside the trap unit' }],
+    chapters: [{ chapter: 'traps', step: 0, label: 'Control and status registers' }, { chapter: 'traps', step: 9, label: 'Inside the trap unit' }],
   },
   cpi: {
     idea: 'Execution time = instruction count × CPI × clock period. The factors belong to different people: the instruction count to the ISA and the compiler, CPI (average cycles per instruction) to the microarchitecture, the period to the critical path and the process. A design change usually moves two of them in opposite directions, and only the product counts. Single-cycle: CPI = 1, period set by the slowest instruction. Multicycle: shorter period, CPI 3–5. Pipelined: the short period with CPI back near 1, plus stalls and flushes. A hardware multiplier cuts the instruction count of a multiply loop and may lengthen the period of everything else.<br>On this site the period is measured in NAND delays by static timing and CPI by counting cycles on real programs, so the law is checked, not quoted.',
