@@ -55,7 +55,7 @@ function build(): Step[] {
       },
       challenge: {
         kind: 'quiz', question: `The program has halted on this machine (no snooping). What does main memory hold at <code>x</code>?`,
-        options: ['7, core 0 stored it', '0: the 7 is a dirty line in core 0\'s cache; it reaches memory only when the line is evicted', '7, written when core 1 read it', 'Unknown (X)'],
+        options: ['7, core 0 stored it', '0, the 7 is still a dirty line in core 0\'s cache', '7, written when core 1 read it', 'Unknown (X)'],
         answer: 1,
         why: ['A store only writes the cache in a write-back cache; memory is written when a Modified line is evicted.', '', 'Core 1 never read it again before the end: it read its own stale copy.', 'Memory is reset to 0 and nothing wrote it.'],
         explain: `Write-back keeps stores in the cache (a dirty line, state M) and writes memory only on eviction. The panel's last line shows core 0's line as M with 7 while memory still holds 0 (${stale.mem[16]} at the end of the run).`,
