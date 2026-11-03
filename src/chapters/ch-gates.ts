@@ -4,6 +4,7 @@ import { AND, EXTEND4_8, MUX2, NAND, NEGATE4, NOR, NOT, OR, SHIFTS8, XNOR, XOR, 
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
+import { encodingsWidget, fixedWidget, overflowWidget } from '../widgets/numsys';
 import type { Chapter } from './types';
 
 const nd = (d: ComponentDef): number => stats(d).nands;
@@ -303,12 +304,12 @@ export const chGates: Chapter = {
 
 export const chBinary: Chapter = {
   id: 'binary', num: 5, title: 'Binary numbers', level: 'Numbers',
-  blurb: 'Bits as numbers: unsigned, hexadecimal and two\'s complement.',
+  blurb: 'Bits as numbers: unsigned, hex, two\'s complement, overflow, extension, shifts and fixed point.',
   goals: [
-    'convert between binary, hexadecimal and decimal, one hex digit per four bits',
-    'read one bit pattern both as an unsigned and as a two\'s-complement number',
-    'negate a two\'s-complement number by inverting every bit and adding 1',
-    'say why one adder serves signed and unsigned numbers alike',
+    'convert between binary, hexadecimal and decimal, and read one bit pattern as unsigned or two\'s complement',
+    'say why two\'s complement won (one zero, the plain adder) and tell the two overflows apart with C and V',
+    'negate, extend and shift a number, and price each in gates: most of them are only wires',
+    'read fixed-point fractions and say why 0.1 has no exact binary form',
   ],
   builds: ['gates'],
   recap: {
@@ -318,6 +319,9 @@ export const chBinary: Chapter = {
       'Two\'s complement gives the top bit a negative weight (−8 in 4 bits, −128 in 8). All ones is −1.',
       'To negate, invert every bit and add 1. The same adder adds signed and unsigned numbers.',
       'Signed overflow: the true result leaves −2ⁿ⁻¹…2ⁿ⁻¹ − 1 (8 bits: 0x7F + 1 = 0x80 = −128). Operands of opposite sign never overflow.',
+      'C (carry out) flags an unsigned wrap, V (carry into the top column ⊕ carry out) a signed one. Sign-magnitude, one\'s complement and bias all need more than the plain adder.',
+      'Negation is XORs under an OR chain; sign extension copies the top bit, zero extension adds 0s; a constant shift is splitter-to-merger wiring. sra rounds toward −∞.',
+      'Fixed point Qm.f is an integer meaning x / 2ᶠ: same adder, fixed step. 0.1 repeats for ever in binary.',
       'Bits carry no type: the instruction decides how to read them.',
     ],
     practise: ['n_bin', 'n_twos'],
@@ -359,7 +363,13 @@ export const chBinary: Chapter = {
         A–F) for every four bits. <code>0b1010_1111</code> is <code>0xAF</code> is ${parseInt('10101111', 2)}. The grouping costs nothing in hardware:
         a hex digit is four wires read together.</p>
         <div class="try">Flip the bits. Try making 255, then add 1.</div>`,
-      widget: () => numberWidget(8, false),
+      widget: () => numberWidget(8, false, { halve: true }),
+      challenge: {
+        kind: 'quiz', question: 'How many bits does a counter need to count from 0 to 1000?',
+        options: ['10', '9', '1000', '4'], answer: 0,
+        why: ['', '9 bits give 2⁹ = 512 patterns, 0 to 511: not enough.', 'One wire per value is a one-hot code. Binary needs only log₂ of the count.', 'Four decimal digits are not four bits: each bit only doubles the range.'],
+        explain: '0 to 1000 is 1001 values. 2¹⁰ = 1024 ≥ 1001 > 512 = 2⁹, so 10 bits.',
+      },
       more: {
         derive: `<p>A bit string bₙ₋₁…b₁b₀ is worth Σ bᵢ·2ⁱ. For 0b1010_1111: 128 + 32 + 8 + 4 + 2 + 1 = ${128 + 32 + 8 + 4 + 2 + 1}. To convert the other way, divide by 2 and
           keep the remainders (least significant bit first), or subtract the largest power of two that fits at each step. Hex needs no arithmetic at all: 16 = 2⁴, so each hex digit
@@ -404,6 +414,69 @@ export const chBinary: Chapter = {
       },
     },
     {
+      title: 'Why two\'s complement: four ways to sign a number',
+      body: `
+        <p>Two's complement is not the only way to give bits a sign. Three others were built into real machines.
+        <strong>Sign-magnitude</strong>: the top bit is the sign and the rest the size, the way we write −5. <strong>One's complement</strong>:
+        a negative number is its positive with every bit inverted. <strong>Bias</strong>: store x + 8 and read the unsigned value minus 8.</p>
+        <p>Each costs something two's complement does not. Sign-magnitude and one's complement have two zeros, so a test for 0 must
+        accept two patterns, and one pattern is wasted. Worse, a plain adder gets them wrong. Sign-magnitude needs a compare-and-subtract
+        unit when the signs differ. One's complement must add the carry out back in at the bottom (an <em>end-around carry</em>, a second
+        trip along the carry chain). Bias must subtract 8 after every addition. Two's complement uses the unsigned adder unchanged: it is
+        arithmetic modulo 2ⁿ, with each value's representative picked from −2ⁿ⁻¹ … 2ⁿ⁻¹ − 1.</p>
+        <p>The others survive where their strengths matter. Floating point (<a href="#/c/float/0">chapter 24</a>) keeps its significand
+        in sign-magnitude, which multiplies easily, and its exponent biased, so that exponents compare like unsigned integers. The Internet
+        checksum is a one's-complement sum.</p>`,
+      widget: () => encodingsWidget(),
+      more: {
+        derive: `<p>In one's complement −x = (2ⁿ − 1) − x, so its arithmetic is modulo 2ⁿ − 1. A carry out is worth 2ⁿ ≡ 1, which is why it
+          must be added back in at bit 0. In two's complement −x = 2ⁿ − x, the arithmetic is modulo 2ⁿ, and a carry out is worth 2ⁿ ≡ 0: it
+          can simply be dropped.</p>`,
+        real: `<p>The IBM 704 and 7090 used sign-magnitude integers; the UNIVAC 1100 series and the CDC 6600 used one's complement, and
+          their programs had to allow for a −0. Every mainstream processor designed since the 1970s uses two's
+          complement, and C made it mandatory in C23.</p>`,
+        pitfall: `<p>Reading a bias-encoded field as two's complement. A float32 exponent field of 127 means 2⁰, not 2¹²⁷, and the
+          sign bit of a float is not the sign bit of an integer: −0.0 and +0.0 differ in their bits.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'In 4-bit one\'s complement, what number is <code>1111</code>?',
+        options: ['−0', '−1', '15', '−7'], answer: 0,
+        why: ['', 'That is the two\'s-complement reading. One\'s complement negates by inverting only: 1111 is the inverse of 0000.', 'That is the unsigned reading of the same bits.', 'That is 1111 in sign-magnitude (sign 1, size 111).'],
+        explain: 'Inverting every bit of 0000 gives 1111, so 1111 is −0: the second zero that one\'s complement wastes.',
+      },
+    },
+    {
+      title: 'Overflow: two flags from one addition',
+      body: `
+        <p>One addition, two readings, two ways to go wrong. Read unsigned, the sum is wrong exactly when it does not fit in n bits,
+        that is when the carry out of the top column is 1. That bit is the <strong>carry flag</strong>, C. Read signed, the sum is wrong when two
+        numbers of the same sign give a result of the other sign: two positives "add up" to a negative, or two negatives to a positive.
+        That is the <strong>overflow flag</strong>, V. Numbers of opposite sign never overflow, since their sum lies between them.</p>
+        <p>V has a one-gate form: <strong>V = carry into the top column ⊕ carry out of it</strong>. With both operands positive the top column
+        adds 0 + 0 + c, carries nothing out, and the sum's sign is c: overflow is c = 1 against a carry out of 0. With both negative it adds
+        1 + 1 + c, always carries out, and the sign is c again: overflow is c = 0 against 1. With opposite signs it adds 1 + 0 + c, which
+        carries out exactly when c = 1, so the two carries always agree.</p>
+        <p>So the flags are cheap: C is a wire and V one XOR. The adders of <a href="#/c/adders/5">chapter 6</a> bring both out, and
+        comparisons are built on them: a &lt; b unsigned is "a − b borrows", and signed it is the sign of a − b, corrected by V.</p>`,
+      widget: () => overflowWidget(),
+      more: {
+        derive: `<p>The signed sum is wrong exactly when the true result needs n + 1 bits. Extending both operands by one copy of their
+          sign bits makes the true sum fit; the extra column adds aₙ₋₁ + bₙ₋₁ + cₙ. The n-bit result is right when that column's sum bit
+          equals bit n − 1 of the result, and the four cases above reduce this to V = cₙ₋₁ ⊕ cₙ (cᵢ: the carry into column i).</p>`,
+        real: `<p>x86 calls them CF and OF, ARM C and V, both kept in a flags register after every add. RISC-V has no flags at all:
+          <code>sltu</code> after an add finds the carry (the sum is below an operand), and a signed overflow check takes two
+          <code>slt</code>s and a branch. That leaves one less register to rename in an out-of-order core.</p>`,
+        pitfall: `<p>The carry after a subtraction. x86 sets CF on a borrow; ARM sets C to <em>not</em> borrow, because it subtracts by adding
+          ¬b + 1 and keeps the adder's carry out. The same "carry set" test means opposite things on the two machines.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'An 8-bit adder adds <code>0x80 + 0x80</code>. Which flags does it set?',
+        options: ['C and V', 'C only', 'V only', 'Neither'], answer: 0,
+        why: ['', 'Signed, this is −128 + −128 = −256, which does not fit either: two negatives gave 0, which is not negative.', 'Unsigned, 128 + 128 = 256 needs a ninth bit: the carry out is 1.', 'The 8-bit result is 0x00, right in neither reading.'],
+        explain: 'Unsigned 128 + 128 = 256 wraps to 0: C = 1. Signed −128 + −128 = −256 wraps to 0: V = 1 (no carry into the top column, one out of it).',
+      },
+    },
+    {
       title: 'Negation in gates',
       body: `
         <p>¬x + 1 looks like it needs an adder, but the +1 only travels through the low end. The trailing 0s of x are 1s in ¬x: the +1
@@ -414,7 +487,7 @@ export const chBinary: Chapter = {
         down the staircase, and <span data-show="x1 x2 x3">x1, x2, x3</span> invert where it says so. Bit 0 is never inverted; it goes
         straight across to the <span data-show="my">merger</span>.</p>
         <p>Cost: n − 1 XORs and n − 2 ORs, ${nd(NEGATE4)} NANDs at 4 bits, ${logicDepth(NEGATE4)} NAND delays from a[0] to y[3]. The chain grows
-        with the width like the carry of the next chapter's adders. That is no accident: it is an incrementer, with the inversion folded in.</p>
+        with the width like the carry of the next chapter's adders. That is no accident: it is <span data-ahead="incrementer">an incrementer (a chain that adds 1; chapter 9 builds one for its counters)</span>, with the inversion folded in.</p>
         <div class="try">Set a = 5 (0101). y should read 11 = 1011, which is −5.</div>`,
       scene: () => ({ root: NEGATE4, inputs: { a: 3 } }),
       tries: [(st) => st.getInput('a') === 5 && st.value('y') === 11],
@@ -447,7 +520,7 @@ export const chBinary: Chapter = {
         <span data-show="mz">zero</span> half those inputs go to a <span data-show="gnd">tie to GND</span>. No gates, no delay.
         Narrowing is cheaper still: drop the top wires. The value survives only if every dropped bit equals the new top bit.</p>
         <p>Which one is right is not in the bits: the instruction says. RISC-V's <code>lb</code> sign-extends a loaded byte and <code>lbu</code>
-        zero-extends it (<a href="#/c/io/0">chapter 19</a>), and every 12-bit immediate is sign-extended to 32 bits
+        zero-extends it (<a href="#/c/io/0">chapter 19</a>), and every 12-bit <span data-ahead="immediates">immediate (a constant stored inside the instruction word)</span> is sign-extended to 32 bits
         (<a href="#/c/isa/0">chapter 13</a>).</p>
         <div class="try">Set a = 1011. s reads 0xFB (−5 signed), z reads 0x0B (11).</div>`,
       scene: () => ({ root: EXTEND4_8, inputs: { a: 6 } }),
@@ -483,8 +556,8 @@ export const chBinary: Chapter = {
         <p>The arithmetic shift rounds <em>down</em>, toward −∞: −7 ≫ 1 = −4, while −7 / 2 in C, or RISC-V's <code>div</code>, gives −3.
         The bit shifted out is the remainder, and a set one pulls a negative result down. A compiler dividing a signed number by a
         power of two adds a correction first.</p>
-        <p>Cost: no gates for a fixed shift. A shift by an amount held in a register needs muxes: the barrel shifter of
-        <a href="#/c/alu/1">chapter 11</a>, log₂ n stages of them.</p>
+        <p>Cost: no gates for a fixed shift. A shift by an amount held in a register needs muxes: <span data-ahead="shifter">the barrel shifter (log₂ n stages of multiplexers, each shifting by a power
+        of two or passing the word on)</span> of <a href="#/c/alu/1">chapter 11</a>.</p>
         <div class="try">Set a = 0xF9 (−7): sll = 0xF2 (−14), srl = 0x7C (124), sra = 0xFC (−4).</div>`,
       scene: () => ({ root: SHIFTS8, inputs: { a: 0x2C } }),
       tries: [(st) => st.getInput('a') === 0xF9],
@@ -504,6 +577,38 @@ export const chBinary: Chapter = {
         hints: ['sra halves and rounds down. Which number halves to exactly −1?'],
         answer: 'a = 0xFE (−2): −2 ≫ 1 = −1. (−1 ≫ 1 is −1 too: rounding down, −0.5 becomes −1, never 0.)',
         solve: (st) => st.setInputs({ a: 0xFE }),
+      },
+    },
+    {
+      title: 'Fractions: fixed point',
+      body: `
+        <p>A binary point can sit anywhere: the bits to its right weigh ½, ¼, ⅛ … The hardware does not change. A number with f
+        fraction bits is an integer that means x / 2ᶠ. Addition is the same adder, since the points line up. A product has 2f fraction bits,
+        so it is shifted right by f, a constant shift as in the step before. This is <strong>fixed point</strong>, written Qm.f: m integer
+        bits, f fraction bits.</p>
+        <p>The price is a fixed step and a fixed range. Q4.4 counts in sixteenths up to 15.9375, and every value in between rounds to the
+        nearest step. Some decimal fractions never fit exactly. 0.1 is 1/10, and 10 has a factor of 5 that no power of two contains, so its
+        binary expansion repeats for ever, as 1/3 does in decimal. More bits shrink the error but never remove it.</p>
+        <p>DSPs, audio codecs and texture coordinates carry fractions this way, and the vertex kernel of <a href="#/c/graphics/0">chapter 34</a>
+        rotates in 16.16 fixed point. When a range must stretch from tiny to huge the point has to move with the number: that is floating
+        point, <a href="#/c/float/0">chapter 24</a>.</p>`,
+      widget: () => fixedWidget(),
+      more: {
+        derive: `<p>Qa.f × Qb.f: (x / 2ᶠ)(y / 2ᶠ) = xy / 2²ᶠ, so the integer product has 2f fraction bits and a shift right by f brings it back
+          to f. Signed fixed point is two's complement with the same rule: −0.5 in Q4.4 is −8 / 16 = 1111_1000.</p>`,
+        real: `<p>Many DSPs work in Q1.15 or Q1.31, with a multiplier that shifts the product by one place for free and saturating
+          adders that stick at the largest value instead of wrapping. GPUs snap vertex positions to a fixed-point grid (typically 8 fraction
+          bits of a pixel) before rasterizing, so edge tests are exact.</p>`,
+        pitfall: `<p>Rounding by truncation. Shifting right drops the low bits, which rounds toward −∞ (the sra of the step before), so
+          errors pile up on one side over a long sum. Adding half a step, 2ᶠ⁻¹, before the shift rounds to nearest.</p>`,
+        numbers: `<table class="mini"><tr><th>format</th><th>step</th><th>range (unsigned)</th></tr>
+          ${[[8, 0], [4, 4], [1, 7], [16, 16]].map(([m, f]) => `<tr><td>Q${m}.${f}</td><td>${f ? `1/${2 ** f}` : '1'}</td><td>0 … ${(2 ** (m + f) - 1) / 2 ** f}</td></tr>`).join('')}</table>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'In Q4.4, what value is <code>0001_1000</code>?',
+        options: ['1.5', '24', '1.8', '0.15'], answer: 0,
+        why: ['', 'That is the integer reading, without the point: 24 / 16 = 1.5.', 'The fraction bits are binary: 1000 after the point is ½, not 8 tenths.', 'That moves a decimal point, not a binary one.'],
+        explain: 'Integer part 0001 = 1, fraction .1000 = ½: 1.5, which is 24 / 2⁴.',
       },
     },
   ],

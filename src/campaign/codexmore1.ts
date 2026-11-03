@@ -235,7 +235,7 @@ bne  t1, a2, ovf</pre>`,
       'Expecting a trap: RV16 wraps silently, as RISC-V does.',
     ],
     anatomy: ['alu'],
-    chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }, { chapter: 'adders', step: 7, label: 'Signed comparison' }],
+    chapters: [{ chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'adders', step: 7, label: 'Signed comparison' }],
   },
 
   signext: {
@@ -254,7 +254,7 @@ zero-extended instead: 0x003A = 58         an ordinary RAM word</pre>`,
     ],
     lib: 'rv16_imm',
     anatomy: ['imm'],
-    chapters: [{ chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }, { chapter: 'io', step: 2, label: 'Loading a byte' }],
+    chapters: [{ chapter: 'binary', step: 5, label: 'Wider words: sign and zero extension' }, { chapter: 'isa', step: 1, label: 'Six formats, fixed register fields' }, { chapter: 'io', step: 2, label: 'Loading a byte' }],
   },
 
   majority: {
