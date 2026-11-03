@@ -692,11 +692,16 @@ export class SchematicView {
 
   /** The screen rectangle around these instances (null: none drawn). */
   instRect(names: string[]): DOMRect | null {
+    // from the parts' boxes, not the drawn elements: hidden or fixed-size text (view/legible.ts) must not move what points here
+    const m = this.el.getScreenCTM();
+    if (!m) return null;
     let r: DOMRect | null = null;
     for (const n of names) {
-      const b = this.insts.get(n)?.getBoundingClientRect();
-      if (!b || !b.width) continue;
-      r = r ? new DOMRect(Math.min(r.left, b.left), Math.min(r.top, b.top), Math.max(r.right, b.right) - Math.min(r.left, b.left), Math.max(r.bottom, b.bottom) - Math.min(r.top, b.top)) : b;
+      const b = this.boxes.get(n);
+      if (!b) continue;
+      const p = new DOMPoint(b.x - 0.4, b.y - 1.2).matrixTransform(m), q = new DOMPoint(b.x + b.w + 0.4, b.y + b.h + 0.4).matrixTransform(m);
+      if (!(q.x - p.x)) continue;
+      r = r ? new DOMRect(Math.min(r.left, p.x), Math.min(r.top, p.y), Math.max(r.right, q.x) - Math.min(r.left, p.x), Math.max(r.bottom, q.y) - Math.min(r.top, p.y)) : new DOMRect(p.x, p.y, q.x - p.x, q.y - p.y);
     }
     return r;
   }
@@ -793,20 +798,20 @@ export class SchematicView {
    * chapter's text and pinned. Leaves the view alone when none of them is drawn here.
    */
   frameInsts(names: string[], margin = 4, minW = 40): void {
-    const root = this.el.getScreenCTM();
-    if (!root) return;
-    const inv = root.inverse();
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    // from the parts' boxes (and a pin's place with room for its glyph), not the drawn elements: hidden or fixed-size
+    // text (view/legible.ts) must not change the framing
     for (const n of names) {
-      const g = n.startsWith('pin:') ? this.pins.find((p) => p.pin.name === n.slice(4))?.g : this.insts.get(n);
-      const m = g?.getScreenCTM();
-      if (!g || !m) continue;
-      const b = g.getBBox();
-      const toSvg = inv.multiply(m);
-      for (const [px, py] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
-        const p = new DOMPoint(px, py).matrixTransform(toSvg);
-        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+      let b: Rect | undefined;
+      if (n.startsWith('pin:')) {
+        const p = this.pins.find((q) => q.pin.name === n.slice(4))?.pin;
+        if (p) b = { x: p.pos[0] - 3, y: p.pos[1] - 3, w: 6, h: 6 };
+      } else {
+        const r = this.boxes.get(n);
+        if (r) b = { x: r.x, y: r.y - 1.2, w: r.w, h: r.h + 1.2 };
       }
+      if (!b) continue;
+      x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
     }
     if (!Number.isFinite(x0)) return;
     this.cam.fit({ x: x0 - margin, y: y0 - margin, w: x1 - x0 + 2 * margin, h: y1 - y0 + 2 * margin }, this.cover, minW);

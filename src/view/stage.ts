@@ -2142,18 +2142,18 @@ export class Stage {
     const insp = this.inspector, choice = inspectorChoice();
     if (choice !== null) {
       this.inspPending = false;
-      if (insp.folded !== choice) insp.setFolded(choice, true);
+      if (insp.folded !== choice) insp.setFolded(choice, false);
       return;
     }
     if (this.boardOn || this.canvas.clientWidth <= 0) return;
     if (!this.view.fitted) { this.inspPending = false; return; } // the learner zoomed or panned first
-    if (insp.folded) insp.setFolded(false, false); // a scene that folded it by itself: today's layout, then measure
+    if (insp.folded) insp.setFolded(false, true); // a scene that folded it by itself: today's layout, then measure
     if (insp.el.offsetWidth <= 0) return;
     this.inspPending = false;
     this.view.fit();
     const s = this.view.pxPerUnit();
     if (!(s > 0 && s * LABEL_UNITS < MIN_TEXT_PX)) return;
-    insp.setFolded(true, false);
+    insp.setFolded(true, true);
     this.foldPending = true;
     this.autoFold();
     this.inset = this.rightInset();

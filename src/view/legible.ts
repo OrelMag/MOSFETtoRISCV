@@ -17,7 +17,7 @@ export const LABEL_UNITS = 1.05;
 
 /** Text kinds hidden by size: class suffix → font size in grid units (styles/app.css). `tapN` is a tap label of N/10. */
 export const TEXT_UNITS: Record<string, number> = {
-  tiny: 0.75, rail: 0.85, port: 0.8, label: LABEL_UNITS, iname: 0.78, pin: 0.95, tag: 0.8, bus: 0.82, level: 0.8, flow: 0.78,
+  tiny: 0.75, rail: 0.85, port: 0.8, label: LABEL_UNITS, iname: 0.78, pin: 0.95, tag: 0.8, bus: 0.82, level: 0.8, flow: 0.78, probe: 0.78, note: 0.95,
   tap3: 0.3, tap4: 0.4, tap5: 0.5, tap6: 0.6, tap7: 0.7, tap8: 0.8,
 };
 
