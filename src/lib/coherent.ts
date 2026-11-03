@@ -35,12 +35,38 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
-/** A box whose netlist is a Builder's: inputs down the left edge, outputs down the right. */
-function boxOf(id: string, name: string, label: string, summary: string, ports: PortDef[], b: Builder): ComponentDef {
+/**
+ * The face a block shows each port on at the top level, in drawing order: the core-facing ports of a cache and the cache-facing ports
+ * of the bus on the left, the bus-facing ports of a cache and the memory-facing ports of the bus on the right (so the wires between
+ * core, cache, bus and memory run straight across instead of looping back).
+ */
+const FACES: Record<string, { left: string[]; right: string[] }> = {
+  cache: {
+    left: ['instr', 'memAddr', 'memWData', 'memWE', 'memReq', 'grant', 'memRData'],
+    right: ['need', 'upgr', 'wb', 'wr', 'snoopM', 'vtag', 'rd1', 'isCur', 'grantCyc', 'lastCyc', 'dataPh', 'busWr', 'busUpgr', 'busAddr', 'word', 'dbus'],
+  },
+  bus: {
+    left: [...[0, 1].flatMap((i) => [`need${i}`, `upgr${i}`, `wb${i}`, `wr${i}`, `snm${i}`, `vtag${i}`, `addr${i}`, `drd${i}`, `isCur${i}`]), 'grantCyc', 'lastCyc', 'dataPh', 'busWr', 'busUpgr', 'busAddr', 'word', 'dbus'],
+    right: ['memAddr', 'memWd', 'memWE', 'memRd', 'busy'],
+  },
+};
+
+/** A box whose netlist is a Builder's: pins on the faces FACES gives (else inputs left, outputs right). */
+function boxOf(id: string, name: string, label: string, summary: string, ports0: PortDef[], b: Builder): ComponentDef {
   const R = b.right, pins: Record<string, [number, number]> = {};
-  let yi = 4, yo = 4;
+  const faces = FACES[id.replace(/d+n?$/, '').replace(/^coh/, '')];
+  let ports = ports0;
+  if (faces) {
+    const by = new Map(ports0.map((p) => [p.name, p]));
+    const at = (names: string[], side: 'left' | 'right') => names.map((n) => ({ ...by.get(n)!, side }));
+    ports = [...at(faces.left, 'left'), ...at(faces.right, 'right'), ...ports0.filter((p) => p.clock)];
+    if (ports.length !== ports0.length) throw new Error('boxOf: faces of ' + id);
+  }
+  let yl = 4, yr = 4;
   for (const p of ports) {
-    if (p.dir === 'in') { pins[p.name] = [0, yi]; yi += 4; } else { pins[p.name] = [R, yo]; yo += 4; }
+    if (p.clock) continue;
+    const left = p.side ? p.side === 'left' : p.dir === 'in';
+    if (left) { pins[p.name] = [0, yl]; yl += 4; } else { pins[p.name] = [R, yr]; yr += 4; }
   }
   return define({ id, name, category: 'memory', summary, ports, symbol: { kind: 'box', label }, netlist: () => ({ pins, instances: b.instances, nets: b.nets() }) });
 }
@@ -279,8 +305,9 @@ export function coherentDualCore(program: number[], opts: CoherentOptions = {}):
   const key = `cohdual_${CORE.id}_d${K}${coh ? '' : '_nc'}`;
   return memo(key, () => {
     const cg = symbolGeom(CORE), CA = coherentCache(K, coh), ag = symbolGeom(CA), BU = cohBus(K), bg = symbolGeom(BU), DM = sharedMemory(K), dg = symbolGeom(DM);
-    const xC = 20, xA = xC + cg.w + 40, xB = xA + ag.w + 40, xD = xB + bg.w + 40, xP = xD + dg.w + 24;
-    const y0 = 4, y1 = y0 + Math.max(cg.h, ag.h) + 24;
+    // the core sits 4 units above its cache, so the address, write data, write enable and request pins meet straight across
+    const xC = 20, xA = xC + cg.w + 12, xB = xA + ag.w + 26, xD = xB + bg.w + 26, xP = xD + dg.w + 24;
+    const y0 = 8, y1 = y0 + ag.h + 16;
     const T = true as const;
     const I = [0, 1];
     return {
@@ -295,21 +322,22 @@ export function coherentDualCore(program: number[], opts: CoherentOptions = {}):
         instances: [
           ...I.flatMap((i) => [
             { name: `h${i}`, def: constWord(32, i), at: [4, (i ? y1 : y0) + 4] as [number, number], label: `hart ${i}` },
-            { name: `core${i}`, def: CORE, at: [xC, i ? y1 : y0] as [number, number], label: `core ${i}` },
+            { name: `core${i}`, def: CORE, at: [xC, (i ? y1 : y0) - 4] as [number, number], label: `core ${i}` },
             { name: `cache${i}`, def: CA, at: [xA, i ? y1 : y0] as [number, number], label: `cache ${i}` },
           ]),
-          { name: 'bus', def: BU, at: [xB, (y0 + y1) / 2 - 4], label: 'snooping bus' },
-          { name: 'dm', def: DM, at: [xD, (y0 + y1) / 2 - 4], label: 'shared memory' },
+          { name: 'bus', def: BU, at: [xB, (y0 + y1 + ag.h - bg.h) / 2], label: 'snooping bus' },
+          // memory's address pin level with the bus's memAddr pin
+          { name: 'dm', def: DM, at: [xD, (y0 + y1 + ag.h - bg.h) / 2 + bg.ports.memAddr.pos[1] - dg.ports.addr.pos[1]], label: 'shared memory' },
         ],
         nets: [
           { name: 'clk', ends: ['clk', 'core0.clk', 'core1.clk', 'cache0.clk', 'cache1.clk', 'bus.clk', 'dm.clk'], tags: T },
           ...I.flatMap((i) => [
             { name: `hart${i}`, ends: [`h${i}.y`, `core${i}.hartid`] },
-            { name: `instr${i}`, ends: [`core${i}.instrOut`, `cache${i}.instr`], tags: T },
-            { name: `addr${i}`, ends: [`core${i}.memAddr`, `cache${i}.memAddr`, `bus.addr${i}`], tags: T },
-            { name: `wdata${i}`, ends: [`core${i}.memWData`, `cache${i}.memWData`], tags: T },
-            { name: `we${i}`, ends: [`core${i}.memWE`, `cache${i}.memWE`], tags: T },
-            { name: `req${i}`, ends: [`core${i}.memReq`, `cache${i}.memReq`], tags: T },
+            { name: `instr${i}`, ends: [`core${i}.instrOut`, `cache${i}.instr`] },
+            { name: `addr${i}`, ends: [`core${i}.memAddr`, `cache${i}.memAddr`, `bus.addr${i}`], tags: [`bus.addr${i}`] },
+            { name: `wdata${i}`, ends: [`core${i}.memWData`, `cache${i}.memWData`] },
+            { name: `we${i}`, ends: [`core${i}.memWE`, `cache${i}.memWE`] },
+            { name: `req${i}`, ends: [`core${i}.memReq`, `cache${i}.memReq`] },
             { name: `grant${i}`, ends: [`cache${i}.grant`, `core${i}.grant`, `grant${i}`], tags: T },
             { name: `rdata${i}`, ends: [`cache${i}.memRData`, `core${i}.memRData`], tags: T },
             { name: `need${i}`, ends: [`cache${i}.need`, `bus.need${i}`], tags: T },
@@ -318,15 +346,16 @@ export function coherentDualCore(program: number[], opts: CoherentOptions = {}):
             { name: `wr${i}`, ends: [`cache${i}.wr`, `bus.wr${i}`], tags: T },
             { name: `snoopM${i}`, ends: [`cache${i}.snoopM`, `bus.snm${i}`], tags: T },
             { name: `vtag${i}`, ends: [`cache${i}.vtag`, `bus.vtag${i}`], tags: T },
-            { name: `rd1_${i}`, ends: [`cache${i}.rd1`, `bus.drd${i}`], tags: T },
+            { name: `rd1_${i}`, ends: [`cache${i}.rd1`, `bus.drd${i}`] },
             { name: `isCur${i}`, ends: [`bus.isCur${i}`, `cache${i}.isCur`], tags: T },
             { name: `pc${i}`, ends: [`core${i}.pcOut`, `pc${i}`], tags: T },
             { name: `retire${i}`, ends: [`core${i}.retire`, `retire${i}`], tags: T },
           ]),
-          ...(['grantCyc', 'lastCyc', 'dataPh', 'busWr', 'busUpgr', 'busAddr', 'word', 'dbus'] as const).map((n) => ({ name: n, ends: [`bus.${n}`, 'cache0.' + n, 'cache1.' + n], tags: T })),
+          ...(['grantCyc', 'lastCyc', 'dataPh', 'busWr', 'busUpgr', 'word'] as const).map((n) => ({ name: n, ends: [`bus.${n}`, 'cache0.' + n, 'cache1.' + n], tags: T })),
+          ...(['busAddr', 'dbus'] as const).map((n) => ({ name: n, ends: [`bus.${n}`, 'cache0.' + n, 'cache1.' + n] })),
           { name: 'busy', ends: ['bus.busy', 'busy'], tags: T },
-          { name: 'memAddr', ends: ['bus.memAddr', 'dm.addr'], tags: T }, { name: 'memWd', ends: ['bus.memWd', 'dm.wd'], tags: T }, { name: 'memWE', ends: ['bus.memWE', 'dm.we'], tags: T },
-          { name: 'memRd', ends: ['dm.rd', 'bus.memRd'], tags: T },
+          { name: 'memAddr', ends: ['bus.memAddr', 'dm.addr'] }, { name: 'memWd', ends: ['bus.memWd', 'dm.wd'] }, { name: 'memWE', ends: ['bus.memWE', 'dm.we'] },
+          { name: 'memRd', ends: ['dm.rd', 'bus.memRd'] },
         ],
       }),
     } satisfies ComponentDef;

@@ -2587,3 +2587,5 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln { display: grid; grid-template-columns: 46px 1fr 40px; gap: 4px; padding: 1px 4px; }
 .coh-panel .coh-ln.at { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
+.coh-panel .coh-ln { cursor: pointer; }
+.coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }

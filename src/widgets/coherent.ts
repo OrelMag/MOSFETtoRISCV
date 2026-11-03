@@ -14,6 +14,8 @@ import { cpuState } from '../riscv/cosim';
 import { ABI, disasm } from '../riscv/isa';
 import { MultiISS } from '../riscv/multi';
 import { h } from '../ui/dom';
+import { cohUse, isMem } from './cohuse';
+import { showInstrUse, slowControls } from './slowctl';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -64,7 +66,9 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     const stats = h('div', { class: 'coh-stats' });
     const measured = h('div', { class: 'coh-measured' });
     const listingBody = h('div', { class: 'coh-listing-body' });
-    const listing = h('details', { class: 'coh-listing' }, h('summary', null, 'Program, with each core\'s PC'), listingBody);
+    const listing = h('details', { class: 'coh-listing', open: '' }, h('summary', null, 'Program, with each core\'s PC (click a line: its hardware)'), listingBody);
+    const usePath = h('div', { class: 'ibd' });
+    let selPc: number | null = null;
     const ids = opts.programs ?? COH_PROGRAMS.map((p) => p.id);
     const picker = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
     for (const id of ids) { const p = COH_PROGRAMS.find((q) => q.id === id)!; picker.append(h('option', { value: p.id }, p.name)); }
@@ -72,8 +76,12 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     picker.addEventListener('change', () => stage.load(coherentScene(COH_PROGRAMS.find((p) => p.id === picker.value)!.source, opts)));
     const runBtn = h('button', { class: 'btn sm primary' }, 'Run to halt');
     const stop = () => { if (running) cancelAnimationFrame(running); running = null; runBtn.textContent = 'Run to halt'; };
+    const finished = () => model.halted || !!mismatch || stage.cycles > 20000;
+    const slow = slowControls(stage, { multiCycle: true, finished, onStart: stop, maxCycles: 60 });
     runBtn.addEventListener('click', () => {
       if (running) return stop();
+      slow.stop();
+      slow.tracing = false;
       stage.checkpoint();
       runBtn.textContent = 'Stop';
       const tick = () => {
@@ -85,7 +93,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     });
     const title = h('h4', null, coherent ? 'Coherent caches' : 'Private caches', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel coh-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
-      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, picker, runBtn), status, verdict, cores, busEl, stats, listing, measured));
+      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, picker, runBtn), slow.el, status, verdict, cores, busEl, stats, listing, usePath, measured));
 
     const compareHw = (): void => {
       const sim = stage.sim;
@@ -111,6 +119,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
         const hw = [0, 1].map((i) => sim.getBits(root.ports[`retire${i}`])[0] === 1);
         const pre = model.m.harts.map((x): [boolean, number] => [x.resValid, x.resLine]);
         const r = model.step();
+        if (r[0] || r[1]) slow.retired();
         if (!mismatch && (hw[0] !== r[0] || hw[1] !== r[1])) mismatch = `retirement differs from the model at cycle ${model.cycles}`;
         // the same retirements on one plain memory, the reservations as the caches left them
         r.forEach((x, i) => { if (x) { ref.harts[i].resValid = pre[i][0]; ref.harts[i].resLine = pre[i][1]; ref.harts[i].step(); } });
@@ -168,10 +177,26 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
       });
       return h('table', { class: 'coh-lines' }, h('thead', null, h('tr', null, ...['set', 'line', 'state', 'words', ''].map((t) => h('th', null, t)))), h('tbody', null, ...rows));
     };
+    /** Light the clicked line's hardware, or in Slow mode what each core's current instruction uses. */
+    const showUse = (): void => {
+      const sim = stage.sim;
+      if (!sim) return;
+      if (selPc !== null) {
+        const word = asm.words[selPc >>> 2] ?? 0x13, u = cohUse(word, 0);
+        const units = isMem(word) ? ['core0', 'core1', 'cache0', 'cache1', 'bus'] : ['core0', 'core1'];
+        return showInstrUse(stage, usePath, { pc: selPc, word, use: { units, path: u.path }, where: 'not necessarily the current instruction of either core' });
+      }
+      if (!slow.tracing) return showInstrUse(stage, usePath, null);
+      const s = model.s, pcs = [0, 1].map((i) => cpuState(sim, sim.design.root.children!.get(`core${i}`)!).pc);
+      const uses = [0, 1].map((i) => cohUse(asm.words[pcs[i] >>> 2] ?? 0x13, i, { bus: s.busy ? s.owner === i : !!model.last[i]?.need, flush: s.busy && s.owner === i && s.flush }));
+      const first = [0, 1].find((i) => isMem(asm.words[pcs[i] >>> 2] ?? 0x13)) ?? 0;
+      showInstrUse(stage, usePath, { pc: pcs[first], word: asm.words[pcs[first] >>> 2] ?? 0x13, use: { units: [...new Set(uses.flatMap((u) => u.units))], path: uses.map((u, i) => `core ${i}: ${u.path}`).join(' | ') } });
+    };
     const update = (): void => {
       const sim = stage.sim;
       if (!sim) return;
-      if (stage.cycles === 0 && model.cycles > 0) { model = new CohModel(asm.words, { coherent }); ref = new MultiISS(asm.words, 2); mismatch = null; stale = null; }
+      slow.update();
+      if (stage.cycles === 0 && model.cycles > 0) { slow.tracing = false; model = new CohModel(asm.words, { coherent }); ref = new MultiISS(asm.words, 2); mismatch = null; stale = null; }
       const root = sim.design.root, s = model.s;
       status.replaceChildren(
         h('span', null, `cycle ${stage.cycles}`),
@@ -197,9 +222,10 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
           h('div', { class: 'coh-res' }, hw.resV ? `reservation: line ${hex(hw.resLine * 16, 2)}` : 'reservation: none'),
           h('div', { class: 'cpu-mem coh-regs' }, ...SHOWN.map((r) => h('div', { class: `m${st.x[r] ? '' : ' z'}` }, h('span', { class: 'n' }, ABI[r]), h('span', { class: 'v' }, num(st.x[r]))))));
       }));
+      showUse();
       if (listing.open) {
         const pcs = [0, 1].map((i) => cpuState(sim, root.children!.get(`core${i}`)!).pc);
-        listingBody.replaceChildren(...asm.words.map((w, k) => h('div', { class: `coh-ln${pcs.includes(k * 4) ? ' at' : ''}` },
+        listingBody.replaceChildren(...asm.words.map((w, k) => h('div', { class: `coh-ln${pcs.includes(k * 4) ? ' at' : ''}${selPc === k * 4 ? ' sel' : ''}`, title: 'Show the hardware this instruction uses', onclick: () => { selPc = selPc === k * 4 ? null : k * 4; update(); } },
           h('span', { class: 'mono' }, hex(k * 4, 3)), h('code', null, disasm(w, k * 4)), h('span', { class: 'bus-tag mark' }, [0, 1].filter((i) => pcs[i] === k * 4).map((i) => `c${i}`).join(' ')))));
       }
       const log = s.log.slice(-6).reverse();

@@ -4,6 +4,7 @@
 import { dualCore } from '../lib';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState } from '../riscv/cosim';
+import { lrScNote } from '../riscv/hwgaps';
 import { ABI, disasm } from '../riscv/isa';
 import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { MultiISS } from '../riscv/multi';
@@ -95,6 +96,7 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, `stall cycles: core 0 ${stalls[0]}, core 1 ${stalls[1]}`),
         h('span', null, `counter = ${words[16]}`),
+        lrScNote(asm.words) ? h('span', { class: 'warn', title: lrScNote(asm.words)! }, 'lr.w / sc.w: this core runs them as amoswap.w') : '',
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good' }, '✓ matches the multi-hart golden model'),
         ...(m.halted ? [h('span', { class: 'warn' }, 'both halted')] : []));
       cols.replaceChildren(...[0, 1].map((i) => {

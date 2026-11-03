@@ -10,6 +10,7 @@
 // the shared memory. A properties section sets or overrides what detection found (cpu.ts).
 
 import { groupDigits } from '../sim/numfmt';
+import { lrScNote } from '../riscv/hwgaps';
 import '../styles/sbcpu.css';
 import { wordsHash } from '../lib/bigmem';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
@@ -580,7 +581,7 @@ class CpuPanel {
     if (d.retire || d.pipeline || mon.retired !== es.cycles) bits.push(h('span', null, `retired ${mon.retired}${mon.retired ? ` · CPI ${(es.cycles / mon.retired).toFixed(2)}` : ''}`));
     else if (r?.pc !== null && r?.pc !== undefined) bits.push(h('span', null, `PC ${r.pc < 0 ? 'x' : `0x${hex4(r.pc)}`}`));
     if (r && !r.retiring && !d.pipeline && mon.retired > 0 && !mon.iss?.halted) bits.push(h('span', { class: 'warn', title: 'No instruction completes at the next edge: a multi-cycle instruction under way, a cache miss or a divide holds the PC and the register write' }, 'retire = 0'));
-    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the instruction-set simulator; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the instruction-set simulator; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`), ...noteOf(mon.prog?.words));
     else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
     else if (!d.regs || !r?.x) bits.push(h('span', { class: 'warn', title: 'Set the register file in the chip’s properties (CPU)' }, 'not checked'));
     else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
@@ -869,7 +870,7 @@ class CpuPanel {
     const cores = mon.read();
     const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`),
       h('span', { title: 'Cycles each core waited for the shared memory port' }, `stalls ${mon.stalls.map((s, i) => `C${i} ${s}`).join(', ')}`)];
-    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the multi-hart model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the multi-hart model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`), ...noteOf(mon.prog?.words));
     else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
     else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
     else bits.push(h('span', { class: 'good', title: 'Every cycle: which cores retired (the arbitration), every core’s registers and PC, and the shared memory match the multi-hart model' }, '✓ matches the multi-hart golden model'));
@@ -1534,3 +1535,9 @@ registerPropsSection({
         doc.cpu ? h('button', { class: 'btn sm ghost', title: 'Forget the settings above: detect everything', onclick: () => setCpu(ed, { rom: undefined, pc: undefined, regs: undefined, fregs: undefined, dmem: undefined, retire: undefined, pipeline: undefined, iss: undefined }) }, 'Detect again') : null));
   },
 });
+
+/** A warning chip for a program the design's gates cannot run as written (lr.w / sc.w on a core without them). */
+function noteOf(words: readonly number[] | undefined): HTMLElement[] {
+  const n = words ? lrScNote(words) : null;
+  return n ? [h('span', { class: 'warn', title: n }, 'lr.w / sc.w: not in this hardware')] : [];
+}
