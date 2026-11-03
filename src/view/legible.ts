@@ -42,7 +42,7 @@ export const nameRotated = (w: number, h: number): boolean => h > w * 3;
 
 /** The screen rectangle (px, from the block's centre) a fixed name takes. */
 function nameSize(b: NameBox): { w: number; h: number } {
-  const w = b.chars * NAME_PX * 0.6 + 4, h = NAME_PX * 1.25;
+  const w = b.chars * NAME_PX * 0.68 + 6, h = NAME_PX * 1.25;
   return b.rot ? { w: h, h: w } : { w, h };
 }
 
@@ -81,6 +81,7 @@ export class Legibility {
   private planScale = 0;
   private timer = 0;
   private fontScale = 0;
+  private wasFixed = false;
   /** Planning runs this long after the scale stopped changing (ms). */
   settleMs = 90;
 
@@ -94,6 +95,7 @@ export class Legibility {
     this.shown = [];
     this.planScale = 0;
     this.fontScale = 0;
+    this.wasFixed = false;
   }
 
   /** Told after every camera apply, with the scale in px per grid unit (0: not laid out yet). */
@@ -107,8 +109,8 @@ export class Legibility {
     const fixed = needsFixedNames(scale);
     this.svg.classList.toggle('lg-nm', fixed && this.names.length > 0);
     if (!this.names.length) return;
-    if (this.planScale === 0 || !fixed) this.plan();
-    else if (Math.abs(scale / this.planScale - 1) > 0.02) {
+    if (this.planScale === 0 || fixed !== this.wasFixed) { this.wasFixed = fixed; this.plan(); }
+    else if (fixed && Math.abs(scale / this.planScale - 1) > 0.02) {
       clearTimeout(this.timer);
       this.timer = window.setTimeout(() => this.plan(), this.settleMs);
     }
@@ -119,7 +121,7 @@ export class Legibility {
   private size(): void {
     if (!this.shown.length || Math.abs(this.scale / this.fontScale - 1) < 0.002) return;
     this.fontScale = this.scale;
-    const fs = String(NAME_PX / this.scale), sw = String(3 / this.scale);
+    const fs = String(NAME_PX / this.scale), sw = String(2.6 / this.scale);
     for (const t of this.shown) { t.setAttribute('font-size', fs); t.setAttribute('stroke-width', sw); }
   }
 
