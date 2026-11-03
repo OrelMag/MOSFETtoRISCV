@@ -84,8 +84,9 @@ export class Legibility {
   private timer = 0;
   private fontScale = 0;
   private wasFixed = false;
+  private lastPlan = -1e9;
   /** Planning runs this long after the scale stopped changing (ms). */
-  settleMs = 90;
+  settleMs = 60;
 
   constructor(private svg: SVGSVGElement) { svg.classList.add('lg'); }
 
@@ -113,8 +114,13 @@ export class Legibility {
     if (!this.names.length) return;
     if (this.planScale === 0 || fixed !== this.wasFixed) { this.wasFixed = fixed; this.plan(); }
     else if (fixed && Math.abs(scale / this.planScale - 1) > 0.02) {
-      clearTimeout(this.timer);
-      this.timer = window.setTimeout(() => this.plan(), this.settleMs);
+      // at once when the last plan is not recent (a resize, a click on zoom), else after the burst (a wheel turning): a
+      // plan for a scale the view has left would let names overlap
+      if (performance.now() - this.lastPlan >= this.settleMs) this.plan();
+      else {
+        clearTimeout(this.timer);
+        this.timer = window.setTimeout(() => this.plan(), this.settleMs);
+      }
     }
     this.size();
   }
@@ -128,6 +134,8 @@ export class Legibility {
   }
 
   private plan(): void {
+    clearTimeout(this.timer);
+    this.lastPlan = performance.now();
     this.planScale = this.scale;
     const next = planNames(this.names.map((n) => n.box), this.scale);
     this.shown = [];
