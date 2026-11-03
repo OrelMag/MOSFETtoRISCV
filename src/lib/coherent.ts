@@ -118,7 +118,8 @@ export function cohRes(k2: number, coh: boolean): ComponentDef {
     const lrRet = b.name(b.op1(AND, [retire, 'isLR'], 'lr.w done'), 'lrDone', true);
     const scAny = b.op1(AND, [retire, 'isSC'], 'sc.w done');
     const ownClr = b.op1(andN(4), [b.op1(AND, ['lastCyc', 'isCur']), b.op1(NOT, ['busUpgr']), b.op1(AND, [v, setEq]), b.op1(NOT, [mBus])], 'own fill evicts it');
-    const clr = coh ? b.op1(OR, [ownClr, b.op1(andN(4), [b.op1(AND, ['grantCyc', b.op1(NOT, ['isCur'])]), 'busWr', v, mBus], 'snooped invalidation')], 'lost') : ownClr;
+    const lrSame = b.op1(AND, [lrRet, b.op1(equal(k2), ['line', 'busLine'], 'lr.w of the invalidated line')], 'lr.w done on the line');
+    const clr = coh ? b.op1(OR, [ownClr, b.op1(andN(3), [b.op1(AND, ['grantCyc', b.op1(NOT, ['isCur'])]), 'busWr', b.op1(OR, [b.op1(AND, [v, mBus]), lrSame])], 'snooped invalidation')], 'lost') : ownClr;
     b.next();
     b.wire(b.op1(AND, [b.op1(NOT, [clr]), b.op1(OR, [lrRet, b.op1(AND, [v, b.op1(NOT, [scAny])])])], 'next valid'), `${rv}.d`);
     b.wire('line', `${rl}.d`);

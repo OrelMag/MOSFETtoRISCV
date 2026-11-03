@@ -40,8 +40,8 @@
 // Accesses of X's core hit the cache during a flush; X's line is S or I from the grant edge on, so no store can
 // change it behind the Flush; a store X makes in the grant cycle itself is in the array before the Flush reads.
 //
-// SAME EDGE: reservation sets (lr.w) lose against clears (a snooped invalidation or an eviction); sc.w tests the
-// reservation of the cycle's start.
+// SAME EDGE: reservation sets (lr.w) lose against clears (a snooped invalidation of the lr.w's line, or an eviction);
+// sc.w tests the reservation of the cycle's start.
 //
 // MEMORY ORDER. Within a cycle nothing two cores retire touches one line in a way that matters (a write needs M,
 // which excludes any other valid copy), so the golden model's harts (riscv/iss.ts, MultiISS) are stepped in any
@@ -226,7 +226,8 @@ export class CohModel {
           other = { from, to: cx.st[L.set] };
           if (L.wr) {
             s.invalidations++;
-            if (hx.resValid && (hx.resLine & this.lineMask) === L.line) { loseRes[x] = true; resvLost = true; }
+            // a reservation held, or an lr.w retiring in this very cycle on the line: the clear wins
+            if ((hx.resValid && (hx.resLine & this.lineMask) === L.line) || (look[x].kind === 'lr' && look[x].grant && look[x].line === L.line)) { loseRes[x] = true; resvLost = true; }
           }
         }
         if (flush) s.flushes++;
@@ -272,8 +273,12 @@ export class CohModel {
   /** Why the invariants fail now (null: none does). SWMR: at most one M per line and then no other valid copy; every
    *  valid copy equals the golden value; memory equals it for every line with no M copy (except the line in flight). */
   invariants(): string | null {
+    if (!this.coherent) return null;
     const s = this.s, nl = s.mem.length / LINE_WORDS;
-    const inFlight = s.busy && !this.look(s.owner).upgr ? this.look(s.owner).line : -1;
+    const o = s.busy ? this.look(s.owner) : null;
+    // the line being moved, and the owner's old line in its set while the fill overwrites it, are in flight
+    const inFlight = o && !o.upgr ? o.line : -1;
+    const evicted = o && !o.upgr && s.cnt >= 4 && s.caches[s.owner].st[o.set] !== 0 ? (s.caches[s.owner].tag[o.set] << 2) | o.set : -1;
     for (let ln = 0; ln < nl; ln++) {
       const copies = [0, 1].map((i) => {
         const c = s.caches[i], set = ln & 3;
@@ -282,7 +287,7 @@ export class CohModel {
       const mCopies = copies.filter((c) => c!.st === 2);
       if (mCopies.length > 1) return `line ${ln}: two Modified copies`;
       if (mCopies.length === 1 && copies.length > 1) return `line ${ln}: a Modified copy and another valid copy`;
-      if (this.coherent && ln !== inFlight && !mCopies.length) {
+      if (this.coherent && ln !== inFlight && ln !== evicted && !mCopies.length) {
         const mem = s.mem.slice(ln * 4, ln * 4 + 4);
         for (const c of copies) if (c!.words.join() !== mem.join()) return `line ${ln}: a Shared copy in cache ${c!.i} differs from memory`;
       }

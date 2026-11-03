@@ -69,3 +69,16 @@ export function lockStep(r: Run): string | null {
   const inv = r.model.invariants();
   return inv ? `cycle ${r.cycle}: ${inv}` : null;
 }
+
+/** A plain shared-memory replay of a retirement order: the sequentially consistent reference. */
+export function replayCheck(model: CohModel, ref: import('../src/riscv/multi').MultiISS, retired: boolean[], pre: [boolean, number][]): string | null {
+  // the reservations are the caches' business (snooped invalidations, evictions): take them from the model
+  retired.forEach((r, i) => { if (r) { ref.harts[i].resValid = pre[i][0]; ref.harts[i].resLine = pre[i][1]; ref.harts[i].step(); } });
+  for (let i = 0; i < 2; i++) {
+    const a = ref.harts[i], b = model.m.harts[i];
+    if (a.pc !== b.pc) return `SC replay: core ${i} pc ${a.pc} vs ${b.pc}`;
+    const d = a.x.findIndex((v, k) => v !== b.x[k]);
+    if (d >= 0) return `SC replay: core ${i} x${d} ${a.x[d]} vs ${b.x[d]}`;
+  }
+  return null;
+}
