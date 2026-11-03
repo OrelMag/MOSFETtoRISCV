@@ -9,13 +9,24 @@ const PRECACHE = __PRECACHE__;
 const CACHE = `mosfet-assets-${VERSION}`;
 const META = 'mosfet-meta';
 const SKIP = /\/(doom|layout|yosys)\//;
+// Precache fetches in flight at once. Several hundred together queue the page's own chunk requests behind them (HTTP/1.1: six
+// connections a host; Cache Storage writes in one line) and, on a slow link, share its bandwidth with the chunks the learner is waiting for.
+const POOL = 4;
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // one by one: a failed asset must not abort the install (it is fetched and cached when first used)
+    // a failed asset must not abort the install (it is fetched and cached when first used)
     // (hashed assets may come from the HTTP cache, where the page just fetched them; only the page itself is fetched fresh)
-    await Promise.all(['./', ...PRECACHE].map((u) => cache.add(u === './' ? new Request(u, { cache: 'reload' }) : u).catch(() => {})));
+    const todo = ['./', ...PRECACHE];
+    let next = 0;
+    const lane = async () => {
+      while (next < todo.length) {
+        const u = todo[next++];
+        await cache.add(u === './' ? new Request(u, { cache: 'reload' }) : u).catch(() => {});
+      }
+    };
+    await Promise.all(Array.from({ length: POOL }, lane));
     await self.skipWaiting();
   })());
 });
