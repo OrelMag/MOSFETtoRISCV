@@ -109,7 +109,7 @@ export const chSilicon: Chapter = {
   recap: {
     keep: [
       'A transistor is where a strip of polysilicon crosses diffusion. A standard cell sits between a VDD rail on top and a GND rail below, PMOS in the n-well above, NMOS beneath. NAND2 puts its NMOS in series and its PMOS in parallel, NOR2 the mirror image.',
-      'Synthesis ends in technology mapping onto a library of hundreds of cells; placement (simulated annealing) minimizes wire length; routing (Lee\'s maze router, two metal layers and vias) connects every net. A good placement also leaves room to route.',
+      'Synthesis ends in technology mapping onto a library of hundreds of cells; placement minimizes wire length (annealing in our teaching model, analytic in OpenROAD); routing connects every net (Lee\'s maze router on two layers here, global then detailed routing on five in the real flow). A good placement also leaves room to route.',
       'Unbuffered wire delay grows with the square of the length. After routing, static timing is redone with the real parasitics. Skew shifts both checks: a late capture clock helps setup but can break hold, which no slower clock fixes; the tools add buffers to the short paths.',
       'Power: ½ C V² per toggle (the clock tree a large share, cut by clock gating), plus leakage through transistors that are off, delivered through a power grid whose IR drop is checked like timing.',
       'Our dual-core\'s logic is about 0.73 mm on a side in SkyWater 130 nm and 0.2 mm at 28 nm, where the bond pads set the die size. Its exported Verilog, and the RV32IM system core\'s, go through Yosys, OpenROAD and KLayout to a GDS, each synthesized netlist checked cycle by cycle against this site\'s simulation; beside our NAND counts and unit delays, the flow shows how far those estimates are from real cells.',
@@ -185,7 +185,7 @@ export const chSilicon: Chapter = {
         options: ['A robot aligns each transistor', 'The gate is patterned first and itself masks the source/drain implant, so they line up with it automatically', 'Masks are aligned to within one atom', 'Source and drain are drawn on the same mask as the gate'],
         answer: 1,
         why: ['Billions of transistors are patterned at once through masks; nothing places them one by one.', '', 'Mask-to-mask alignment has a real tolerance, and that error is exactly what self-alignment avoids.', 'Diffusion and polysilicon are separate masks. The trick is that the etched gate itself shields the channel during the implant.'],
-        explain: 'Implanting after the gate is etched means the channel under the gate stays undoped while the regions on both sides are doped: the edges match the gate exactly, with no mask-to-mask misalignment. It was one of the inventions that made MOS scaling possible.',
+        explain: 'Implanting after the gate is etched means the channel under the gate is shielded from the source/drain implant while the regions on both sides receive it: the edges match the gate exactly, with no mask-to-mask misalignment. It was one of the inventions that made MOS scaling possible.',
       },
     },
     {
@@ -258,7 +258,7 @@ export const chSilicon: Chapter = {
           Splitting the wire into k segments with a buffer between them gives k · ½ · r · c · (L / k)² = ½ r c L² / k plus k buffer delays: more buffers cut the quadratic term and add a linear one, so
           there is a best k, and the tools find it. The skew inequalities, written out: setup t<sub>cq</sub> + t<sub>logic</sub> + t<sub>setup</sub> ≤ T + skew; hold t<sub>cq</sub> + t<sub>min logic</sub> ≥ t<sub>hold</sub> + skew.</p>`,
         real: `<p>Power is the other thing the clock sets. Every net that switches charges or discharges its capacitance: ½ C V² per toggle, glitches included. That is what the inspector's Power
-          section measures, with C estimated from each net's fan-out. Summed, dynamic power is α C V² f, α the fraction of nets toggling per cycle. Wires
+          section measures, with C estimated from each net's fan-out. Summed, dynamic power is α C V² f, α the fraction of nets rising (0 → 1, so two toggles for a full charge and discharge) per cycle; a clock has α = 1. Wires
           carry much of C, and the clock toggles twice every cycle into every flip-flop, so the clock tree alone often takes a third of a chip's dynamic
           power. <strong>Clock gating</strong> is the cheapest cure: an enable, latched so that it cannot glitch, stops the clock of a register that is
           not being written; synthesis inserts it from enables such as the register file's write enables.</p>
@@ -277,19 +277,19 @@ export const chSilicon: Chapter = {
         <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 27</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
         At 28 nm it shrinks to about 0.2 mm on a side, and then the ring of bond pads, not the logic, sets the die size (pad-limited). Real systems-on-chip are the opposite: billions of transistors, with memories as dense SRAM macros, not flip-flops.</p>
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
-        a layout that SkyWater can manufacture. The next step does it, and its table puts this estimate (each NAND equivalent priced as one NAND2 cell)
+        a layout in SkyWater's process. The next step does it, and its table puts this estimate (each NAND equivalent priced as one NAND2 cell)
         beside the area the cells really took.</p>
         <p>A floorplan is the first step of physical design: the shape of the die, where the blocks go and where the pins come out. Blocks that talk a lot are put side by side, and wide buses
-        decide the aspect ratio. The estimate here is a lower bound in two senses: it counts every NAND as one NAND2 cell, and it leaves out the space the router needs.</p>`,
+        decide the aspect ratio. The estimate is rough both ways: every NAND priced as one NAND2 cell overstates what a real library needs (complex cells do several NANDs' work), and leaving 30 % of the floor to the router is an assumption. The next step measures both.</p>`,
       widget: floorplanWidget,
       more: {
         derive: `<p>Scaling the logic between processes: linear dimensions scale with the feature size F, area with F². From 130 nm to 28 nm that is (28 / 130)² = ${((28 / 130) ** 2).toFixed(3)} of the area, a side of
           ${(28 / 130).toFixed(2)} of the original. Bond pads do not scale with it: they are sized by the wire that is bonded to them and the probe that touches them, tens of micrometres, so below some logic size
-          the pad ring is the die.</p>`,
+          the pad ring is the die. Ideal scaling would give 0.16 mm; the widget takes about 0.3 µm² a NAND2 at 28 nm, less than F² scaling, hence about 0.2 mm.</p>`,
         real: `<p>A system-on-chip is mostly memory: SRAM macros, caches, register files, generated by a compiler for the process, and the logic around them. Our estimate counts flip-flops built from NANDs,
           which is far from a dense SRAM cell, and that is why a real core's area is dominated by what this model leaves out.</p>`,
-        pitfall: `<p>Reading the estimate as a floor-plan prediction. It is the sum of cell areas at 100 % utilization; a placed design leaves 30 to 40 % of the area for routing and buffers. Compare the next step's
-          table, which sets the estimate beside what the cells really took.</p>`,
+        pitfall: `<p>Reading the estimate as a floor-plan prediction. It is the sum of NAND2-priced cell areas at an assumed 70 % utilization, leaving 30 % for routing and buffers. Compare the next step's
+          table: the cells are smaller than priced, and that flow is set to 35 % core utilization.</p>`,
       },
     },
     {
@@ -312,9 +312,9 @@ export const chSilicon: Chapter = {
       more: {
         derive: `<p>The conversion between the two timing scales: if the real critical path takes t ns after routing and ours is d unit delays, one of our delays is worth t / d in that process. Applied to every
           path of the design it predicts how fast the design would run if the unit-delay model held; the difference from the measured path is the cost of wires and load, which a unit-delay model does not carry.</p>`,
-        real: `<p>This is the open flow professional teams use at larger scale: Yosys for synthesis, OpenROAD for floorplan, placement, clock tree and routing, OpenSTA for timing, KLayout for the layout. The
-          sky130 process is a real 130 nm technology that a foundry runs for shuttle programs, so the GDS file here could be sent for fabrication.</p>`,
-        pitfall: `<p>Reading the area ratio as an error. Where sky130 is smaller than our count, a complex cell replaced several NANDs; where larger, flip-flops and buffers took cells our model counted as free.
+        real: `<p>This is the open-source flow, used for research and shuttle tape-outs; large commercial chips go through commercial tools (Synopsys, Cadence, Siemens) doing the same steps: synthesis, floorplan, placement, clock tree, routing, timing signoff. Its pieces: Yosys for synthesis, OpenROAD for floorplan, placement, clock tree and routing, OpenSTA for timing, KLayout for the layout. The
+          sky130 process is a real 130 nm technology that a foundry runs for shuttle programs, so a design like this, inside a padded harness such as the open shuttles' Caravel, could go to fabrication; this GDS is the core block alone, with no pad ring and its memories outside its ports.</p>`,
+        pitfall: `<p>Reading the area ratio as an error. Where sky130 is smaller than our count, a complex cell replaced several NANDs; where larger, Yosys spent big cells on adders (half-adder cells) and buffered heavily loaded nets, which our count has no price for.
           Neither is a mistake in either; they are two different questions, how many NANDs and how large the cells, and the table shows how far apart they are.</p>`,
       },
     },

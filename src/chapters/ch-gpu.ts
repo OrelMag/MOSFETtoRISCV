@@ -1,4 +1,5 @@
 import { groupDigits } from '../sim/numfmt';
+import { stackEntryWidth } from '../lib/lanes';
 import { divergenceWidget, laneCoreScene, lanesVsCoresWidget } from '../widgets/lanes';
 import { accessWidget, tilingWidget } from '../widgets/feed';
 import { occupancyWidget, warpCoreScene } from '../widgets/warps';
@@ -227,8 +228,7 @@ export const chLanes: Chapter = {
           the chapters that follow widen the memory and add threads instead of adding lanes to the datapath.</p>`,
         pitfall: `<p>Do not read the gate saving as a measure of the idea. Here the 18 % is mostly three ROMs; the front end that real lane designs save is orders of magnitude larger
           (out-of-order scheduling, branch predictors, caches), and their registers are SRAM, not flip-flops with multiplexers. The sign of the comparison is the same, its size is not.</p>`,
-        real: `<p>A GPU's streaming multiprocessor is the same trade made at scale: thousands of lanes behind a few dozen front ends, with a register file that is the biggest block on the
-          die. That is also why its programs are written in thousands of threads: the lanes only pay when they are kept busy.</p>`,
+        real: `<p>A GPU's streaming multiprocessor is the same trade made at scale: thousands of lanes behind a few dozen streaming multiprocessors, with register files among the largest blocks of each streaming multiprocessor. That is also why its programs are written in thousands of threads: the lanes only pay when they are kept busy.</p>`,
       },
     },
   ],
@@ -380,7 +380,7 @@ export const chSimt: Chapter = {
       },
       more: {
         derive: `<p>The stack entry is the minimum that lets <code>join</code> finish the job with no other state: the mask to restore (N bits), the else-lanes to run next (N bits), the PC
-          to resume at (32 bits, or fewer with an aligned program) and a pending bit. For ${SAXPY.lanes} lanes that is 2·${SAXPY.lanes} + 32 + 1 = ${2 * SAXPY.lanes + 33} flip-flops an entry, and with four entries the stack is ${4 * (2 * SAXPY.lanes + 33)} flip-flops of
+          to resume at (32 bits, or fewer with an aligned program), a pending bit and a valid bit (a join on an empty stack does nothing). For ${SAXPY.lanes} lanes that is 2·${SAXPY.lanes} + 32 + 2 = ${stackEntryWidth(SAXPY.lanes)} flip-flops an entry, and with four entries the stack is ${4 * stackEntryWidth(SAXPY.lanes)} flip-flops of
           mask logic that no lane ever sees. The cost of one if / else is the then-path plus the else-path plus the two joins: every instruction on both sides is issued once, each with part of the lanes.</p>`,
         real: `<p>Here split and join are instructions the programmer writes. On real GPUs the compiler places them: the warp reconverges at the branch's
           <em>immediate post-dominator</em>, the first instruction every path from the branch must pass through (the end of the if, the exit of the loop).</p>
@@ -562,7 +562,7 @@ export const chWarps: Chapter = {
           { title: 'Waiting', cycles: 2, show: ['mem'], expect: { pcOut: 48, retire: 0 },
             say: '<p>Both loads are in flight. The PC stops at {v:pcOut}, <code>slli a0, t5, 1</code>, the first use of x[i], and <code>retire</code> falls to {v:retire}: nothing can issue, and with one warp there is nothing else to run.</p>' },
           { title: 'Still waiting', cycles: 6, show: ['mem'], expect: { pcOut: 48, retire: 0 },
-            say: '<p>Eight cycles in, the word is still on its way through the memory pipeline: PC {v:pcOut}, retire {v:retire}. Each of these cycles is an empty issue slot.</p>' },
+            say: '<p>Eight cycles in, x[i] has landed, but y[i] is being written back this cycle and the warp sits out so as not to share the write port of its bank: PC {v:pcOut}, retire {v:retire}.</p>' },
           { title: 'Back', cycles: 1, show: ['mem'], expect: { pcOut: 48, retire: 1 },
             say: '<p>The word has been written back and the instruction issues (<code>retire</code> {v:retire}). Seven slots went empty for one load pair.</p>' },
         ],
@@ -594,9 +594,9 @@ export const chWarps: Chapter = {
           { title: 'The loads issue', cycles: 12, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 0 },
             say: '<p>Both loads went through the check (their rs1 is ready, their rd is not pending) and set the pending bits of t5 and a1. The next instruction, at {v:pcOut}, reads t5: the check fails and <code>retire</code> is {v:retire}.</p>' },
           { title: 'Until the word lands', cycles: 6, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 0 },
-            say: '<p>Six more cycles and t5 is still pending. The check reads the pending bits of rs1, rs2 and rd every cycle; it clears only when the load is written back.</p>' },
+            say: '<p>Six more cycles. the bit of t5 cleared a cycle ago and the check on slli now passes, but the word of a1 is being written back, and a warp sits out that cycle.</p>' },
           { title: 'Cleared', cycles: 1, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 1 },
-            say: '<p>The write-back clears the bit; the check passes and the instruction issues. The warp waited only for the register it needed, not for the load instruction itself.</p>' },
+            say: '<p>Both words are in; nothing holds the warp, and the instruction issues. The warp waited only for the registers it needed, not for the load instructions themselves.</p>' },
         ],
       },
       more: {
@@ -604,7 +604,7 @@ export const chWarps: Chapter = {
           and OR the result. Per warp that is a 32-bit AND, a reduction and the decode of which of the three fields are used. The pending word is 32 flip-flops with a set port
           (a load issues) and a clear port (its word is written back), so a scoreboard costs about the same as one register. It stalls a load pair by ${WARP1.latency} − 1 = ${WARP1.latency - 1} cycles at most,
           and by nothing when independent work lies in between.</p>`,
-        pitfall: `<p>The check includes rd, not just the sources: a second load into a register that an earlier load is still filling would let the older word land last and overwrite the newer one
+        pitfall: `<p>The check includes rd, not just the sources. A second load into a register that an earlier load is still filling is the case: one pending bit cannot count two. The first word's return would clear it, and a reader would issue with the older value. With mixed latencies (the next chapter) the older word could even land last and overwrite the newer one
           (a write-after-write hazard). The usual mistake is to leave rd out because "a load only writes". Compile saxpy with both loads into the same register and the stall appears.</p>`,
         real: `<p>Here only loads are slow: the ALU answers in the cycle, so a pending bit per register on loads is all the scoreboard needs. In a real GPU the ALUs are
           pipelined too (about 4 cycles from one FP32 instruction to a dependent one on recent NVIDIA parts, more for the special-function unit), and other warps hide
@@ -618,7 +618,7 @@ export const chWarps: Chapter = {
       challenge: {
         kind: 'quiz', question: 'lw t5, 0(t4) issues in cycle 10 with 8-cycle loads, and lw a1, 256(t4) follows it. If add a0, a0, a1 came right after the second load, in which cycle could it issue at the earliest?',
         options: ['Cycle 11', 'Cycle 18', 'Cycle 19', 'Cycle 26'], answer: 2,
-        explain: 'The second load issues in cycle 11 (it does not depend on the first), so a1 is written back at the end of cycle 18 and an instruction reading it can issue in cycle 19. Waiting for each load in turn would push it to cycle 26. (In saxpy the slli and add on x[i] come first, so that add issues in cycle 20.)',
+        explain: 'The second load issues in cycle 11 (it does not depend on the first), so a1 is written back at the end of cycle 18 and an instruction reading it can issue in cycle 19. Waiting for each load in turn would push it to cycle 26. (In saxpy the slli and the add on x[i] come first, so that add issues in cycle 21.)',
         why: ['Cycle 11 is when the second load issues; its word is still 7 cycles away.', 'a1 is written back at the end of cycle 18, so an instruction reading it issues one cycle later.', '', 'That waits for each load in turn; the second load does not depend on the first, so both are in flight at once.'],
       },
     },
@@ -651,7 +651,7 @@ export const chWarps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>State per warp slot: a PC (32 flip-flops), the active mask (${SAXPY.lanes}), a split / join stack (4 entries of 2·${SAXPY.lanes} + 33 = ${2 * SAXPY.lanes + 33} bits), a running bit and a 32-bit scoreboard. Per lane per
+        derive: `<p>State per warp slot: a PC (32 flip-flops), the active mask (${SAXPY.lanes}), a split / join stack (4 entries of 2·${SAXPY.lanes} + 34 = ${stackEntryWidth(SAXPY.lanes)} bits), a running bit and a 32-bit scoreboard. Per lane per
           warp: 31 × 32 register bits and the multiplexer that the warp number steers. The slot is a few hundred flip-flops; the register banks are 31 × 32 × ${SAXPY.lanes} = ${fmt(31 * 32 * SAXPY.lanes)} bits per warp,
           so the cost of a warp is dominated by its registers by more than an order of magnitude.</p>`,
         pitfall: `<p>A warp does not own an ALU. The picture of four warps as four little cores is wrong: one ALU row, one decoder, one memory, and a scheduler that hands them to a
