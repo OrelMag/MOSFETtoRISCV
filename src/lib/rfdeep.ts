@@ -34,14 +34,14 @@ export function rfBypass(k: number, w: number): ComponentDef {
     const rf = b.add(regfile(k, w), 'register file', 'rf');
     for (const p of ['wa', 'wd', 'we', 'clk', 'ra1', 'ra2']) b.wire(p, `${rf}.${p}`);
     b.next();
-    const nz = b.op1(nonZero(k), ['wa'], 'wa ≠ 0');
-    const hits = [1, 2].map((r) => b.op1(equal(k), ['wa', `ra${r}`], `wa = ra${r}`));
+    const nz = b.op1(nonZero(k), ['wa'], 'wa ≠ 0', 'nz');
+    const hits = [1, 2].map((r) => b.op1(equal(k), ['wa', `ra${r}`], `wa = ra${r}`, `eq${r}`));
     b.next();
-    const go = b.op1(andN(3), ['we', 'byp', nz], 'forward enabled');
+    const go = b.op1(andN(3), ['we', 'byp', nz], 'forward enabled', 'go');
     b.name(go, 'fwd', true);
-    const sel = hits.map((h, i) => b.op1(AND, [h, go], `hit ${i + 1}`));
+    const sel = hits.map((h, i) => b.op1(AND, [h, go], `hit ${i + 1}`, `hit${i + 1}`));
     b.next();
-    const out = [1, 2].map((r) => b.op1(busMux2(w), [`${rf}.rd${r}`, 'wd', sel[r - 1]], `rd${r} / wd`));
+    const out = [1, 2].map((r) => b.op1(busMux2(w), [`${rf}.rd${r}`, 'wd', sel[r - 1]], `rd${r} / wd`, `mx${r}`));
     out.forEach((o, i) => b.wire(o, `rd${i + 1}`));
     const R = b.right;
     return define({
@@ -93,16 +93,16 @@ export function latchFile(k: number, w: number): ComponentDef {
   return memo(`latchfile${k}x${w}`, () => {
     const N = 2 ** k, b = new Builder(10, 10, 4);
     b.pins('wa', 'wd', 'we', 'clk', 'ra1', 'ra2');
-    const dec = b.op(decoder(k, true), ['wa', 'we'], 'write decoder');
+    const dec = b.op(decoder(k, true), ['wa', 'we'], 'write decoder', 'dec');
     b.next();
-    const gates = Array.from({ length: N }, (_, i) => (i === 0 ? '' : b.op1(AND, [`${dec}.y${i}`, 'clk'], `e${i} = y${i} · clk`)));
+    const gates = Array.from({ length: N }, (_, i) => (i === 0 ? '' : b.op1(AND, [`${dec}.y${i}`, 'clk'], `e${i} = y${i} · clk`, `g${i}`)));
     b.next();
-    const words = Array.from({ length: N }, (_, i) => (i === 0 ? b.op1(constWord(w, 0), [], 'x0 = 0') : b.op1(latchWord(w), ['wd', gates[i]], `x${i}`)));
+    const words = Array.from({ length: N }, (_, i) => (i === 0 ? b.op1(constWord(w, 0), [], 'x0 = 0') : b.op1(latchWord(w), ['wd', gates[i]], `x${i}`, `w${i}`)));
     b.next();
     const all = b.name(b.op1(merger(Array(N).fill(w)), words), 'all words', true);
     b.next();
-    b.wire(b.op1(readPort(k, w), [all, 'ra1'], 'read port 1'), 'rd1');
-    b.wire(b.op1(readPort(k, w), [all, 'ra2'], 'read port 2'), 'rd2');
+    b.wire(b.op1(readPort(k, w), [all, 'ra1'], 'read port 1', 'rp1'), 'rd1');
+    b.wire(b.op1(readPort(k, w), [all, 'ra2'], 'read port 2', 'rp2'), 'rd2');
     const R = b.right;
     return define({
       id: `latchfile${N}x${w}`, name: `Latch register file (${N} × ${w})`, category: 'memory',

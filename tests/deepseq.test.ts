@@ -114,3 +114,41 @@ describe('register files', () => {
     expect(stats(regfile(5, 32, false)).nands - rf).toBe(480);
   });
 });
+
+describe('chapter 11: branches, control decode, operation delays', () => {
+  it('NEXT_PC takes each branch exactly when the flag expression says, for every flag combination', async () => {
+    const { NEXT_PC } = await import('../src/lib');
+    const { BRANCHES } = await import('../src/chapters/alu/steps');
+    const { evalOnce } = await import('../src/sim/harness');
+    const s = simulate(NEXT_PC);
+    for (const b of BRANCHES) for (let f = 0; f < 16; f++) {
+      const [z, n, v, c] = [f & 1, (f >> 1) & 1, (f >> 2) & 1, (f >> 3) & 1];
+      expect(evalOnce(s, [z, n, v, c, b.f3, 1, 0, 0])[0], `${b.name} ${f}`).toBe(b.test(z, n, v, c));
+    }
+  });
+  it('the flag model equals the 8-bit ALU on random pairs, and N xor V is the signed order', async () => {
+    const { alu } = await import('../src/lib');
+    const { flags8, BRANCH_WRONG } = await import('../src/chapters/alu/steps');
+    const { evalOnce } = await import('../src/sim/harness');
+    const s = simulate(alu(8));
+    let seed = 3;
+    for (let i = 0; i < 300; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const a = (seed >> 4) & 255, b = (seed >> 13) & 255;
+      const out = evalOnce(s, [a, b, 8]), f = flags8(a, b);
+      expect([out[1], out[2], out[3], out[4]]).toEqual([f.z, f.n, f.v, f.c]);
+    }
+    expect(BRANCH_WRONG.nAlone).toBeGreaterThan(0);
+  });
+  it('the control unit gives the ALU code of every row the step lists', async () => {
+    const { CTL_ROWS, ctlOf } = await import('../src/chapters/alu/steps');
+    const want: Record<string, number> = { add: 0, sub: 8, sll: 1, slt: 2, sltu: 3, xor: 4, srl: 5, sra: 13, or: 6, and: 7, addi: 0, 'addi (imm bit 30 = 1)': 0, srli: 5, srai: 13, 'lw / sw (address add)': 0, 'beq … bgeu (compare)': 8, 'lui / auipc / jal / jalr': 0 };
+    for (const r of CTL_ROWS) expect(ctlOf(r), r.name).toBe(want[r.name]);
+  });
+  it('measured operation delays of the 32-bit ALU (pinned: the recap quotes them)', async () => {
+    const { opDelays } = await import('../src/widgets/opdelay');
+    const R = opDelays('rca'), K = opDelays('ks');
+    expect([R.ops.and, R.ops.or, R.ops.xor, R.ops.sll, R.ops.srl, R.ops.sra, R.ops.add, R.ops.sub, R.ops.sltu, R.ops.slt, R.flags]).toEqual([8, 8, 9, 20, 20, 22, 73, 77, 77, 81, 88]);
+    expect([K.ops.add, K.ops.sll, K.ops.slt, K.flags]).toEqual([23, 20, 29, 36]);
+  });
+});
