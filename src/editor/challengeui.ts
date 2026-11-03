@@ -19,7 +19,7 @@ import { measured } from '../campaign/grade';
 import { isDone, nextAvailable } from '../campaign/graph';
 import { levelChallenge, nodeOfChip } from '../campaign/levels';
 import { actName, actTitle } from '../campaign/nodes';
-import { progress } from '../campaign/progress';
+import { type PassGrade, progress } from '../campaign/progress';
 import type { CampaignNode } from '../campaign/types';
 import { CATS, libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
@@ -136,7 +136,7 @@ const uis = new WeakMap<Editor, ChallengeUi>();
  */
 export interface LevelScreenHooks {
   /** After Check: the result, and the grade when a campaign level passed. */
-  checked(r: CheckResult, grade?: { stars: 1 | 2 | 3; best: boolean; first: boolean }): void;
+  checked(r: CheckResult, grade?: PassGrade): void;
   /** Buttons put before Show answer (the walkthrough). */
   actions?(): HTMLElement[];
   /** Replaces "Show answer" (which would import the answer as chips the screen does not show). */
@@ -507,8 +507,8 @@ class ChallengeUi {
     this.collapsed = false;
     const lv = this.level;
     if (r.ok && lv) {
-      const g = progress().solve(lv.id, measured(r.score));
-      const st = '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
+      const g = progress().solve(lv.id, measured(r.score), ed.compiled?.connKey);
+      const st = g.helped ? '(with help: no stars)' : '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
       if (this.screen) this.screen.checked(r, g);
       else ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
     } else if (r.ok && this.screen?.record) {
@@ -584,6 +584,9 @@ class ChallengeUi {
     if (!ch) return;
     this.closePlayer();
     ed.editWs((ws) => solveChallenge(ws, ch).ws);
+    // a level's pass of this circuit is the answer's: solved with help, no stars (campaign/progress.ts solve)
+    const lv = this.level;
+    if (lv && ed.compiled?.connKey) progress().markHelp(lv.id, ed.compiled.connKey);
     this.results.delete(challengeChipId(ch));
     this.version++;
     ed.toast(`Replaced with the reference answer (${undoKey()} brings yours back)`);

@@ -179,8 +179,8 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const blk = cardBlock(n);
     const vl = hasTwin(n.id) && !n.soon;
     const vlStars = vl ? view(twinKey(n.id))?.stars ?? 0 : 0;
-    const label = `${levelCardLabel(n, st, stars)}${vl ? `, also in Verilog${vlStars ? ` (${vlStars} of 3 stars)` : ''}` : ''}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
-    const heads = cardHeads(n, st, stars);
+    const label = `${levelCardLabel(n, st, stars, !!view(n.id)?.helped)}${vl ? `, also in Verilog${vlStars ? ` (${vlStars} of 3 stars)` : ''}` : ''}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
+    const heads = cardHeads(n, st, stars, !!view(n.id)?.helped);
     const rel = relationText((needsOf.get(n.id) ?? []).map((m) => m.title), (unlocksOf.get(n.id) ?? []).map((m) => m.title));
     const g = s('g', {
       class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.bug ? ' bug' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,

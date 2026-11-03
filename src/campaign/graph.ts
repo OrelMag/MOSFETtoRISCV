@@ -74,6 +74,7 @@ export function unlockedPartCount(rule: Pick<LibRule, 'lib'>): number {
 export interface NodeState {
   status?: 'started' | 'solved' | 'skipped';
   stars?: number;
+  helped?: boolean;
 }
 
 export type ProgressView = (id: string) => NodeState | undefined;

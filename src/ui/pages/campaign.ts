@@ -333,16 +333,19 @@ export class CampaignPage implements Page {
       el.append(h('section', { class: 'cx-check cp-lesson-check' }, h('h4', null, 'Check yourself'),
         ...extra.check.map((q, k) => quizBox(q, `lesson:${n.body}:${k}`, `${k + 1} of ${extra.check.length}`, () => {}))));
     }
+    // A drill's question and a program's editor with its Check come first, right under the title: the essay (why,
+    // costs, criteria) is reference for after the first try, so it sits below them.
+    let practice: HTMLElement[] = [];
     if (ch) el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', ch.brief)));
     if (n.kind === 'drill' && n.drill && !n.soon && st !== 'locked') {
       let card = this.cards.get(n.id);
       if (!card) this.cards.set(n.id, (card = drillCard(n)));
-      el.append(h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Practice'), card));
+      practice = [h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Practice'), card)];
     }
     const pz = n.kind === 'program' && !n.soon ? PUZZLES[n.id] : undefined;
     if (pz) {
-      el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', pz.brief)),
-        h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
+      practice = [h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', pz.brief))];
+      el.append(h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
           h('ul', null, h('li', null, pz.lanes && pz.warps
             ? `${pz.tests().length} tests on the two-warp golden model (${pz.warps} warps of ${pz.lanes} lanes taking turns, one shared memory); each must end within ${groupDigits(pz.maxSteps)} cycles with the expected memory, and again with warp ${pz.warps - 1} running ahead.`
             : pz.lanes
@@ -352,8 +355,12 @@ export class CampaignPage implements Page {
       if (st !== 'locked') {
         let card = this.cards.get(n.id);
         if (!card) this.cards.set(n.id, (card = puzzleCard(n)));
-        el.append(h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Your program'), card));
+        practice.push(h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Your program'), card));
       }
+    }
+    if (practice.length) {
+      const at = el.querySelector(':scope > .th-why');
+      for (const x of practice) el.insertBefore(x, at);
     }
 
     if (n.kind === 'drill' && n.par?.mistakes !== undefined) {
@@ -429,8 +436,12 @@ export class CampaignPage implements Page {
       return bar;
     }
     if (st === 'locked') {
-      const missing = n.requires.filter((r) => !isDone(p.view(r))).map((r) => nodeById(r)?.title ?? r);
-      bar.append(h('p', { class: 'sub' }, `Finish or skip first: ${missing.join(', ')}. Or tick Unlock all.`));
+      const missing = n.requires.filter((r) => !isDone(p.view(r)));
+      bar.append(h('p', { class: 'sub' }, `Finish or skip first: ${missing.map((r) => nodeById(r)?.title ?? r).join(', ')}. Or tick Unlock all.`));
+      // the way on: the first prerequisite that is itself open (a locked one has its own blockers)
+      const open = missing.map((r) => nodeById(r)).find((m): m is CampaignNode => !!m && !m.soon && statusOf(m, p.view, p.unlockAll) !== 'locked') ?? nodeById(missing[0] ?? '');
+      if (open) bar.append(h('a', { class: 'btn primary', href: `#/campaign/n/${open.id}` }, `Open the prerequisite: ${open.title}`, icon('chevR', 14)));
+      bar.classList.add('sticky');
       return bar;
     }
     if (n.kind === 'lesson') {
@@ -446,11 +457,11 @@ export class CampaignPage implements Page {
       const chip = levelChipId(n);
       const exists = !!loadWorkspace().chips[chip];
       bar.append(h('button', { class: 'btn primary', onclick: () => this.start(n, ch) }, icon('play', 14), exists ? 'Continue' : 'Play'));
-      if (exists) bar.append(h('a', { class: 'btn ghost', href: `#/sandbox/${chip}`, title: 'The same chip in the full sandbox editor' }, 'Open in sandbox'));
+      if (exists) bar.append(h('a', { class: 'btn ghost', href: `#/sandbox/${chip}`, title: 'The same chip in the full sandbox editor' }, 'Open in Sandbox'));
       // A core level: start from a copy of the core you built for an earlier level.
       const from = exists ? undefined : startCandidates(n, loadWorkspace())[0];
       if (from) bar.append(h('button', { class: 'btn', title: `A copy of your “${from.title}” chip, with this level's pins added`, onclick: () => this.start(n, ch, levelChipId(from)) }, `Start from ${from.title}`));
-      bar.append(h('button', { class: 'btn', title: 'Import the reference solution as new chips and open it in the sandbox', onclick: () => this.solution(ch) }, 'Show solution'));
+      bar.append(h('button', { class: 'btn ghost', title: 'Import the reference answer as new chips and open it in the sandbox', onclick: () => this.solution(ch) }, 'Show answer'));
     }
     if (n.kind !== 'lesson' && st !== 'solved') {
       bar.append(st === 'skipped'

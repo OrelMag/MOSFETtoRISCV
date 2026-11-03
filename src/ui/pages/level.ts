@@ -3,7 +3,7 @@
 // with the CPU diagram and this block lit; Task; Tips; Codex), and the editor in level mode: the
 // level's chip and the chips it uses, the level's parts only, Check under the canvas. A pass opens
 // a card with the measured cost against par and the alternatives, and what it is worth in the
-// finished CPU. The chip is the same one the sandbox opens ("Open in sandbox"), nothing is copied.
+// finished CPU. The chip is the same one the sandbox opens ("Open in Sandbox"), nothing is copied.
 // Loaded on demand with the editor (app.ts imports it dynamically).
 
 import { groupDigits } from '../../sim/numfmt';
@@ -21,7 +21,7 @@ import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
 import { walkOf } from '../../campaign/walk';
 import { actName, actTitle, nodeById } from '../../campaign/nodes';
-import { progress } from '../../campaign/progress';
+import { type PassGrade, progress } from '../../campaign/progress';
 import type { CampaignNode, Metric, Par } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { hideGlossary, markTerms, setCodexOpener } from '../../campaign/ui/glossaryui';
@@ -201,7 +201,7 @@ export class LevelPage implements Page {
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
       np?.stars ? h('span', { class: 'lv-stars', title: `Best: ${np.stars} of 3 stars` }, '★'.repeat(np.stars), h('span', { class: 'off' }, '★'.repeat(3 - np.stars))) : null,
       h('span', { class: 'lv-spacer' }),
-      h('a', { class: 'btn sm ghost', href: `#/sandbox/${levelChipId(n)}`, title: 'The same chip in the full sandbox editor', 'aria-label': 'Open in sandbox' }, h('span', { class: 'lbl' }, 'Open in sandbox'), icon('open', 13)),
+      h('a', { class: 'btn sm ghost', href: `#/sandbox/${levelChipId(n)}`, title: 'The same chip in the full sandbox editor', 'aria-label': 'Open in Sandbox' }, h('span', { class: 'lbl' }, 'Open in Sandbox'), icon('open', 13)),
       st !== 'solved' ? (st === 'skipped'
         ? h('button', { class: 'btn sm ghost', title: 'Back to unfinished', onclick: () => p.unskip(n.id) }, 'Un-skip')
         : h('button', { class: 'btn sm ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip')) : null,
@@ -419,7 +419,7 @@ export class LevelPage implements Page {
 
   // ---- checks ------------------------------------------------------------------------------------
 
-  private checked(r: CheckResult, g?: { stars: 1 | 2 | 3; best: boolean; first: boolean }): void {
+  private checked(r: CheckResult, g?: PassGrade): void {
     this.renderBar();
     if (r.ok && g) this.showResult(r, g);
   }
@@ -486,7 +486,7 @@ export class LevelPage implements Page {
       top.length ? h('p', { class: 'sub' }, `Selected on the canvas: ${top.join(', ')}${bug.marks.some((m) => m.includes('.')) ? ` (open it: ${bug.marks.filter((m) => m.includes('.')).map((m) => m.split('.').slice(1).join('.')).join(', ')})` : ''}.`) : null,
       h('div', { class: 'lv-res-act' },
         h('button', { class: 'btn ghost', onclick: close }, 'Close'),
-        h('button', { class: 'btn primary', title: 'Redraw the chip as the reference answer (Ctrl+Z brings yours back)', onclick: () => { close(); ed.editWs((ws) => solveChallenge(ws, this.ch!).ws); ed.toast('Fixed: the chip is the reference answer now (Ctrl+Z brings yours back)'); } }, 'Do it for me')));
+        h('button', { class: 'btn primary', title: 'Redraw the chip as the reference answer (Ctrl+Z brings yours back)', onclick: () => { close(); ed.editWs((ws) => solveChallenge(ws, this.ch!).ws); if (ed.compiled?.connKey) progress().markHelp(n.id, ed.compiled.connKey); ed.toast('Fixed: the chip is the reference answer now (Ctrl+Z brings yours back)'); } }, 'Do it for me')));
     this.result = h('div', { class: 'lv-veil', onclick: (e: Event) => { if (e.target === this.result) close(); } }, card);
     this.result.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Escape') close(); });
     this.edWrap.append(this.result);
@@ -494,7 +494,7 @@ export class LevelPage implements Page {
   }
 
   /** The after-pass card: the measured cost against par and the alternatives, and what it is worth in the finished CPU. */
-  private showResult(r: CheckResult, g: { stars: 1 | 2 | 3; best: boolean; first: boolean }): void {
+  private showResult(r: CheckResult, g: PassGrade): void {
     const n = this.node!;
     this.result?.remove();
     const m = measured(r.score);
@@ -516,6 +516,10 @@ export class LevelPage implements Page {
       h('div', { class: 'lv-bars-k' }, `Area, in ${area.unit === 'nand' ? 'NANDs' : METRIC[area.unit].label.toLowerCase()}`),
       h('div', { class: 'lv-bars', title: METRIC[area.unit].hint }, area.bars.flatMap(([k, v, you]) =>
         [h('span', null, k), h('span', { class: 'track' }, h('i', { class: you ? 'you' : '', style: `width:${(100 * v / max).toFixed(1)}%` })), h('span', { class: 'v' }, groupDigits(v))]))) : null;
+    // below three stars: what to improve, by the metric that missed par (★★★ needs every graded metric at or under par)
+    const missed = g.helped || g.stars === 3 ? [] : (Object.keys(par) as Metric[]).filter((k) => par[k] !== undefined && (m[k] ?? Infinity) > par[k]!);
+    const tryFor = missed.length ? h('p', { class: 'lv-tryfor' }, h('b', null, 'Try for ★★★: '),
+      missed.map((k) => `${METRIC[k].label.toLowerCase()} ${m[k] === undefined ? '—' : groupDigits(m[k]!)} against par ${groupDigits(par[k]!)}`).join('; '), '.') : null;
     const callout = h('div', { class: 'lv-callout' });
     const unlocks = (n.unlocks ?? []).filter((u) => !u.endsWith('*')).map((u) => resolveComponent(u)?.name ?? u);
     const codex = n.codex.map((id) => codexById(id)).filter((e) => !!e);
@@ -526,8 +530,10 @@ export class LevelPage implements Page {
     const ended = g.first && closedAct(n, progress().view) !== undefined ? actEndEl(n.act, ctx) : null;
     const close = () => { this.result?.remove(); this.result = null; };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Level passed' },
-      h('h3', null, h('span', { class: 'lv-big' }, '★'.repeat(g.stars), h('span', { class: 'off' }, '★'.repeat(3 - g.stars))),
-        g.stars === 3 ? 'Passed at par' : g.first ? 'Passed' : g.best ? 'New best' : 'Passes'),
+      h('h3', null, g.helped ? null : h('span', { class: 'lv-big' }, '★'.repeat(g.stars), h('span', { class: 'off' }, '★'.repeat(3 - g.stars))),
+        g.helped ? 'Solved with help' : g.stars === 3 ? 'Passed at par' : g.first ? 'Passed' : g.best ? 'New best' : 'Passes'),
+      g.helped ? h('p', { class: 'lv-help' }, 'Do it for me put this answer in: the level counts as solved and the next one opens, with no stars. Build it yourself to earn them.') : null,
+      tryFor,
       table, barEl, n.bug ? h('div', { class: 'lv-bug' },
         h('div', { class: 'lv-bug-k' }, 'The fault'), h('p', { html: n.bug.fault }),
         h('div', { class: 'lv-bug-k' }, `Its kind: ${n.bug.kind}`), h('p', { html: n.bug.lesson })) : null,
