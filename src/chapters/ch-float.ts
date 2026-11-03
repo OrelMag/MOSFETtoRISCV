@@ -41,6 +41,8 @@ function tenth(): number[] {
   for (let i = 0; i < 10; i++) out.push((s = Math.fround(s + Math.fround(0.1))));
   return out;
 }
+/** How many of those ten additions rounded. */
+const tenthInexact = () => tenth().filter((s, i, a) => s !== (i ? a[i - 1] : 0) + Math.fround(0.1)).length;
 /** Measured cycles (single-cycle → pipelined, tests/benchmarks) of the seven FP programs; times and gains follow from the two periods. */
 const SC_PERIOD = 313, PIPE_PERIOD = 121;
 const FP_RUNS: [string, number, number][] = [['0.1 ten times', 41, 67], ['dot product', 80, 137], ['fused multiply-add', 26, 42], ['Horner with fmadd', 23, 45], ['division and square root', 215, 257], ["Newton's √2", 170, 199], ['exception flags', 28, 76]];
@@ -96,7 +98,7 @@ export const chFloat: Chapter = {
       'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster on six of the seven programs; the CSR-heavy one is 5 % slower.',
       'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
       'A near / far adder splits by case: a far path (long alignment, at most a 2-place normalize) and a near path (exponents within 1: no aligner, long normalize). The split alone takes the float32 adder from 181 to 129 NAND delays for 6 % more NANDs; leading-zero anticipation takes it to 114 for 39 % more in all.',
-      'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. Soft-float costs about 233 RV32I instructions per fmul.s.',
+      'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. A partial soft-float fmul.s (normal numbers, RNE only) costs about 233 RV32I instructions.',
       'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers is exact (Sterbenz) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
     ],
     practise: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'],
@@ -262,7 +264,7 @@ export const chFloat: Chapter = {
         pitfall: `<p>Keeping only guard and round and dropping the sticky bit. Then 1.000|10 (an exact tie) and 1.000|10 followed by a non-zero bit far below (above the tie) look identical, and ties-to-even
           rounds both down. Everything shifted out must be summarized: on the circuit, add 3.0 and the smallest subnormal, and see that y is unchanged but NX is raised.</p>`,
         real: `<p>A fast adder runs two paths in parallel: a near path (exponents within 1, a small right shift but a long left shift for cancellation) and a far path (a long right shift, at most one place of
-          normalization), and selects one. The datapath here is shared by both and so is simpler and slower. Denormalized inputs, flags and rounding modes are then bolted onto either.</p>`,
+          normalization), and selects one. The datapath here is shared by both and so is simpler and slower; <a href="#/c/float/15">A faster adder: near and far paths</a> builds the split later in this chapter. Denormalized inputs, flags and rounding modes are then bolted onto either.</p>`,
       })),
       challenge: {
         kind: 'reach', goal: 'Make the result exactly zero by subtracting a number from itself, and check its sign: x − x is +0.',
@@ -299,7 +301,7 @@ export const chFloat: Chapter = {
           { title: 'A tie, last bit odd', set: { mant: 0b10111000 }, show: ['u45'], expect: { y: 0x1c, flags: 1 },
             say: '<p>1.011|1000: the same tie, but the kept bits end in 1. Rounding up gives the even neighbour 1.100: y = {v:y} (0x1C).</p>' },
           { title: 'The carry reaches the exponent', set: { mant: 0b11111100 }, show: ['u45', 'u57'], expect: { y: 0x20, flags: 1 },
-            say: '<p>1.111|1100 rounds up to 10.000: the carry out of the fraction bumps the exponent and the fraction restarts at 0. y = {v:y} (0x20) is exactly 2<sup>exp</sup> with exponent field 4.</p>' },
+            say: '<p>1.111|1100 rounds up to 10.000: the carry out of the fraction bumps the exponent and the fraction restarts at 0. y = {v:y} (0x20) = 1.000₂ × 2<sup>4 − 7</sup>, the exponent field now 4.</p>' },
         ],
       },
       more: lazy(() => ({
@@ -324,7 +326,7 @@ export const chFloat: Chapter = {
       body: `
         <p>RISC-V has five: <span data-show="u6"><strong>RNE</strong></span> (nearest, ties to even, the default), <strong>RTZ</strong> (towards zero: truncate),
         <span data-show="u7"><strong>RDN</strong></span> (towards −∞), <span data-show="u8"><strong>RUP</strong></span> (towards +∞) and <span data-show="u9"><strong>RMM</strong></span> (nearest, ties away from zero).
-        Every arithmetic instruction carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the fcsr register.
+        Every instruction that rounds (add, subtract, multiply, divide, square root, the fused multiply-adds, the conversions) carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the fcsr register.
         RDN and RUP give interval arithmetic: computing a bound twice, once in each mode, brackets the exact result.</p>
         <p>The modes only change one decision: <span data-show="u17">whether to add one unit in the last place</span> to the truncated magnitude, from the sign, the
         last kept bit, G and S. That is this block: 62 NANDs, 13 deep, sitting beside the incrementer of normalize &amp; round. It also says
@@ -526,7 +528,7 @@ export const chFloat: Chapter = {
           but needs a correction step before the remainder can serve as a sticky bit. <a href="#/c/muldiv/17">SRT</a> keeps the remainder in carry-save form, so no carry chain sits in the loop, and
           <a href="#/c/muldiv/19">radix 4</a> makes two quotient bits a clock, at the price of a digit-selection table; real FPUs use radix-4 (or higher) SRT, shared with square root. Here the 58-delay step already
           fits well inside the CPU's clock (313 NAND delays single-cycle, 121 pipelined), so a shorter step buys nothing; fewer steps would: radix 4 would roughly halve the ${F32.M + 6} cycles.</p>
-          <p>Newton–Raphson in the multiplier is the alternative where a multiplier is cheap: it doubles the correct bits each iteration but needs a correction step to be correctly rounded.</p>`,
+          <p>Newton–Raphson in the multiplier is the alternative where a multiplier is cheap: it doubles the correct bits each iteration but needs a correction step to be correctly rounded (<a href="#/c/float/21">Division without a divider</a>, later in this chapter).</p>`,
       })),
       challenge: {
         kind: 'reach', goal: 'Clock the divider until done = 1 with y = 0x2B (1 / 3, rounded to nearest).',
@@ -618,7 +620,7 @@ export const chFloat: Chapter = {
           Cost in float32: ${grp(nands(fpFma(F32)))} NANDs against ${grp(nands(fpMul(F32)) + nands(fpAdd(F32)))} for a separate multiplier and adder, and ${deep(fpFma(F32))} NAND delays against ${deep(fpMul(F32)) + deep(fpAdd(F32))} for the two in a row.</p>`,
         pitfall: `<p>Expecting an fma to give the same bits as a * b + c compiled to two instructions. It will not: results differ in the last place, and a compiler that contracts them (fp-contract) changes
           what a program prints. Reproducible numerics means choosing either, everywhere.</p>`,
-        real: `<p>Every modern core has an fma unit and uses it for multiply and add alike (a multiply is a × b + 0, an add a × 1 + c). It is what makes dot products, polynomial evaluation and Newton iterations
+        real: `<p>Most modern cores have an fma unit, and many use it for multiply and add alike (a multiply is a × b + 0, an add a × 1 + c). It is what makes dot products, polynomial evaluation and Newton iterations
           both faster and more accurate, and the basis of the linear-algebra libraries' peak-FLOPS figures: two floating-point operations in one instruction.</p>`,
       })),
       challenge: {
@@ -699,7 +701,7 @@ export const chFloat: Chapter = {
           'The CPU panel can clock the program until it halts.',
           'Watch a1 in the register list as it runs: the program ends by moving the sum\'s bits there.',
         ],
-        answer: '"Run to halt". Each addition rounds; nine of the ten additions lose a little, and the errors do not cancel: 1.0000001192.',
+        answer: `"Run to halt". Each addition rounds: ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][tenthInexact()]} of the ten additions lose a little (0 + 0.1 and 0.1 + 0.1 are exact), and the errors do not cancel: 1.0000001192.`,
         solve: () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); },
       },
     },
@@ -748,8 +750,8 @@ export const chFloat: Chapter = {
       scene: () => cpuScene({ source: fsrc('divsqrt'), fpu: true, adder: 'ks', highlight: ['fpu'] }),
       more: lazy(() => ({
         derive: `<p>An iterative instruction takes its unit's cycle count: a float32 fdiv is ${F32.M + 6} cycles (${F32.M + 4} quotient steps plus load and present), an fsqrt ${F32.M + 5}. With the stall, CPI of a program is
-          1 + (stall cycles ÷ instructions): "Division and square root" runs 22 instructions in 215 cycles, CPI ${(215 / 22).toFixed(1)}, because each of its divides and roots adds about ${F32.M + 5} cycles. Newton's √2 does it with
-          fmul and fadd in 132 cycles against one fsqrt.s's ${F32.M + 5}: the hardware instruction wins by ${(132 / (F32.M + 5)).toFixed(1)} times, and the CPU does not need to be told.</p>`,
+          1 + (stall cycles ÷ instructions): "Division and square root" runs 22 instructions in 215 cycles, CPI ${(215 / 22).toFixed(1)}, because each of its divides and roots adds about ${F32.M + 5} cycles. Newton's √2 needs an fdiv.s in
+          every iteration as well: 132 cycles for its four iterations against one fsqrt.s's ${F32.M + 5}: the hardware instruction wins by ${(132 / (F32.M + 5)).toFixed(1)} times, and the CPU does not need to be told.</p>`,
         numbers: `<table class="mini"><tr><th>Unit</th><th>NANDs</th><th>Cycles</th><th>Step (NAND delays)</th></tr><tr><td>fdiv.s</td><td>${grp(nands(fpDiv(F32)))}</td><td>${F32.M + 6}</td><td>58</td></tr>
           <tr><td>fsqrt.s</td><td>${grp(nands(fpSqrt(F32)))}</td><td>${F32.M + 5}</td><td>58</td></tr></table>`,
         pitfall: `<p>Writing the registers before the unit is done. The register-file write enable is gated by retire like the PC, but the FPU's flag outputs also change during the division and must not reach fflags until retire: an OR of
@@ -778,7 +780,7 @@ export const chFloat: Chapter = {
         <span data-show="fdec">the decoder</span> hands them to <span data-show="fpu">the unit</span> directly.</p>
         <p>In a single-cycle CPU the deepest instruction sets the clock: adding the fma took the period from 274 to 368 NAND delays (+34 %), paid by
         every add and branch (313 once normalize &amp; round is shortened, below). A pipelined FPU gives fma several cycles of latency instead.</p>
-        <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), then 17, 7, −7, −17 from the four variants.
+        <div class="try">Run "Fused multiply-add": a0 = 0 (fmul then fsub), a1 = 0x33800000 (fmsub.s, 2<sup>−24</sup>), a2 = 0x01 (the flags: only the fmul was inexact), then a3–a6 = 17, 7, −7, −17 from the four variants.
         <span data-ahead="horner">"Horner with fmadd" (a polynomial written as nested multiply-adds)</span> evaluates a cubic in 3 instructions instead of 6.</div>`,
       scene: () => cpuScene({ source: fsrc('fma'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
       more: {
@@ -846,8 +848,8 @@ export const chFloat: Chapter = {
         <p>Measured on the gate-level CPUs, every program co-simulated against the instruction-set simulator: single-cycle → pipelined, cycles (the pipeline's
         include its five-cycle fill) and time = cycles × period (313 and 121 NAND delays).</p>
         ${perfTable()}
-        <p>The pipeline wins 1.3 to 2.2 times on six of the seven programs; the iterative units gain most, because their 28 cycles now run at the short clock. CPI rises from 1 to
-        1.6–2.7 (fadd chains, the fill; 11.7 with divisions). "Exception flags" is slower: almost every other instruction reads fflags, and each CSR access
+        <p>The pipeline wins 1.3 to 2.2 times on six of the seven programs; the iterative units gain most, because their 28 cycles now run at the short clock. The pipeline's CPI is
+        1.6–2.7 without divisions (fadd chains, the fill), 6.4 and 11.7 with them (5.5 and 9.8 on the single-cycle CPU, whose only stalls are the iterative units'). "Exception flags" is slower: almost every other instruction reads fflags, and each CSR access
         <span data-show="fhz">waits for the FP pipe to drain</span>. Real code keeps CSR accesses out of loops and interleaves independent work, as the compiler would schedule it.</p>`,
       scene: () => cpuScene({ source: fsrc('dot'), pipeline: true, fpu: true, adder: 'ks', highlight: ['fhz'] }),
       more: {

@@ -104,7 +104,7 @@ export const newtonSteps: Step[] = [
         <tr><td>soft, with mul / mulhu</td><td>${SOFT_M_INSTRS}</td><td>${SOFT_M_INSTRS}</td><td>${grp(SOFT_M_INSTRS * PERIOD.int)} + a multiplier's period</td><td>a multiplier</td></tr></table>`,
       pitfall: `<p>Reading the 233 as the cost of float arithmetic. It is the cost of this partial routine on a core without a multiplier: with M it is seven times fewer, and an addition needs an alignment shifter and a normalizing loop instead.
         The fair comparison is a complete, flag-correct library routine on a core with M against an FPU that fits the area budget.</p>`,
-      real: `<p>Small RISC-V cores (RV32IMC, Cortex-M0) ship without an FPU and link a soft-float library: a float multiply there costs tens of instructions, and energy follows the instruction count. A core with an FPU spends area, a longer period (or
+      real: `<p>Small cores (RV32IMC microcontrollers, Arm's Cortex-M0) ship without an FPU and link a soft-float library: a float multiply there costs tens of instructions, and energy follows the instruction count. A core with an FPU spends area, a longer period (or
         pipeline stages) and f registers to make every float operation one instruction, which is what numerical and graphics code needs. The choice is made per product: microcontrollers that mostly move integers do not pay for it.</p>`,
     },
     challenge: {

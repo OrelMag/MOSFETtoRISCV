@@ -54,7 +54,7 @@ export const errorSteps: Step[] = [
       <p>The quadratic x² − 10 000 x + 0.1 = 0 has a root near 10<sup>−5</sup>. The textbook formula subtracts √(b² − 4ac) ≈ 10 000 from b = 10 000: in float32 b² − 4ac rounds to b² (the 0.4 is far below half an ulp of 10<sup>8</sup>), the
       square root is exactly 10 000 and the root comes out as ${lab('(10000 - sqrt(10000*10000 - 4*1*0.1)) / (2*1)').v}: relative error ${sci(lab('(10000 - sqrt(10000*10000 - 4*1*0.1)) / (2*1)').rel)}, nothing left. The product of the roots is c/a, so the small root is
       2c / (−b + √(b² − 4ac)), an addition of two positive numbers: ${lab('(2*0.1) / (10000 + sqrt(10000*10000 - 4*1*0.1))').v}, relative error ${sci(lab('(2*0.1) / (10000 + sqrt(10000*10000 - 4*1*0.1))').rel)}, under u. Same inputs, same format,
-      six orders of magnitude apart. And (x − y)(x + y) beats x² − y² for the same reason: the subtraction is on the exact inputs, not on two rounded squares.</p>
+      about ${Math.round(Math.log10(lab('(10000 - sqrt(10000*10000 - 4*1*0.1)) / (2*1)').rel / lab('(2*0.1) / (10000 + sqrt(10000*10000 - 4*1*0.1))').rel))} orders of magnitude apart. And (x − y)(x + y) beats x² − y² for the same reason: the subtraction is on the exact inputs, not on two rounded squares.</p>
       <div class="try">Pick "quadratic root": A loses everything, B keeps about seven digits. Pick "Sterbenz": the subtraction's row says "exact", and the error is all inherited. Then type your own expression.</div>`,
     widget: errorLab,
     more: {
@@ -95,7 +95,7 @@ export const errorSteps: Step[] = [
       same n − 1 additions and needs no extra registers beyond a stack, and it is how vector units and GPUs add up an array: lanes sum independently, then a tree combines them. <strong>Kahan</strong> (compensated)
       summation keeps the rounding error of every addition in a second variable c and feeds it into the next: y = x − c; t = s + y; c = (t − s) − y; s = t. For |s| ≥ |y| the expression (t − s) − y is the <em>exact</em> rounding
       error of s + y (Dekker's fast two-sum), so nothing is lost for good, only deferred: the bound is 2u + O(n·u²), <em>independent of n</em>. The same data: ${sci(sums('absorb', 4096).kahan)}, which is the final rounding of the result and nothing else.</p>
-      <p>The price is four floating-point operations per term instead of one, with a loop-carried dependency through both s and c (so no free overlap on a pipelined FPU, the previous chapter's point); pairwise is the cheaper choice
+      <p>The price is four floating-point operations per term instead of one, with a loop-carried dependency through both s and c (so no free overlap on a pipelined FPU, the point of the dependent fadd chain in "A pipelined FPU"); pairwise is the cheaper choice
       when u·log n is good enough, Kahan when the sum must be as good as one rounding. A compiler that may reassociate (<code>-ffast-math</code>, <code>-fassociative-math</code>) sees (t − s) − y as algebraically zero and deletes it:
       the loop silently becomes naive summation. Numerical code that depends on the correction is built without those flags, or marks it.</p>
       <div class="try">Pick "1.0, then n − 1 × 2⁻²⁴" and slide n up: naive reaches its worst-case line, Kahan stays flat at the last rounding. On "uniform", naive is far below its bound until n gets large, but still grows.</div>`,
@@ -133,7 +133,7 @@ export const errorSteps: Step[] = [
     body: `
       <p>The program adds 2<sup>24</sup> and thirty-two 1.0s twice: <span data-show="frf">in the f registers</span> ft1 is the naive sum, and ft2 / ft3 are Kahan's sum and compensation c. At 2<sup>24</sup> the spacing of floats is 2, so 2<sup>24</sup> + 1 is
       a tie that rounds to even, back to 2<sup>24</sup>: the naive loop never moves, and ends at <strong>0x4B800000</strong> = ${groupDigits(16777216)}, short by 32 (16 ulps, ${sci(32 / 16777248)} relative). The Kahan loop is
-      six instructions on <span data-show="fpu">the FPU</span> per term: <code>fsub.s</code> y = x − c, <code>fadd.s</code> t = s + y, <code>fsub.s</code> t − s, <code>fsub.s</code> c = (t − s) − y, <code>fmv.s</code> s = t.</p>
+      five instructions on <span data-show="fpu">the FPU</span> per term, the four operations and a move: <code>fsub.s</code> y = x − c, <code>fadd.s</code> t = s + y, <code>fsub.s</code> t − s, <code>fsub.s</code> c = (t − s) − y, <code>fmv.s</code> s = t.</p>
       <p>Watch ft3. After the first term t is still 2<sup>24</sup>, so (t − s) − y = 0 − 1 = <strong>c = −1</strong>: the 1 that was lost, with its sign. Next, y = 1 − (−1) = 2 is exactly one ulp, t = 2<sup>24</sup> + 2, and c returns to 0. The third 1 is
       a tie again (2<sup>24</sup> + 3 sits between + 2 and + 4; even is + 4), which makes c = +1, the extra the sum was given. c walks −1, 0, +1, 0: after thirty-two terms ft2 holds <strong>0x4B800010</strong> = ${groupDigits(16777248)}, the exact answer, and a2 = fsub(ft2, ft1) = 32.0 is what the naive loop lost.</p>
       <p>This is also the loop <code>-ffast-math</code> would break: with reassociation allowed, (t − s) − y is simplified to 0, c is constant 0, y = x, and ft2 follows ft1 into the same wrong answer. The hardware does what it is told; the compiler's licence to
@@ -142,7 +142,7 @@ export const errorSteps: Step[] = [
     scene: () => cpuScene({ source: fsrc('kahan'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
     more: {
       derive: `<p>The exact sum is ${groupDigits(16777248)} = 2<sup>24</sup> + 32, representable (spacing 2). The naive loop's error is ${sci(32 / 16777248)} = 32 / 16 777 248, which is 16 ulps at the answer and ${sci(32 / 16777248 / UNIT_ROUNDOFF)} u:
-        a worst-case-style failure from only 32 additions, because the whole total sits above 2<sup>24</sup>, where float32 stops counting by 1. The Kahan loop is the six-operation recurrence of the previous step, checked in tests/fperror.test.ts against the
+        a worst-case-style failure from only 32 additions, because the whole total sits above 2<sup>24</sup>, where float32 stops counting by 1. The Kahan loop is the four-operation recurrence of the previous step, checked in tests/fperror.test.ts against the
         TypeScript float32 loop and the exact sum, and at gate level, on both the single-cycle and the pipelined FPU CPU, by the F-program co-simulation.</p>`,
       pitfall: `<p>Assuming the compensation is harmless to keep and costless to drop. With <code>-ffast-math</code> the program above is as inaccurate as its naive half, silently. If an accurate sum matters, test it (compare against an exact reference like this chapter's), and keep the
         flags that reorder arithmetic off the file that contains it.</p>`,
