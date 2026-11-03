@@ -1020,6 +1020,10 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     swap(dcache ? 'retireW' : 'validW', 'validW', 'retire');
     extraPorts.push(bus('instr', 32, 'in'), bus('memRData', 32, 'in'), bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'));
     Object.assign(portPins, { instr: [0, yb + 4], memRData: [0, yb + 8], memAddr: [xMW + 30, yb + (dcache ? 16 : 13)], memWData: [xMW + 30, yb + (dcache ? 19 : 16)], memWE: [xMW + 30, yb + (dcache ? 22 : 19)] });
+    // the pins sit where the removed memories' pins were, so the program side stays a short straight run beside the PC and the memory side beside M
+    // (not on the part's far edges, which left a blank band across the drawing)
+    Object.assign(portPins, { pcOut: [P('imem', 'data')[0] + 2, P('imem', 'addr')[1] - 4], instr: P('imem', 'data') });
+    if (!dcache) Object.assign(portPins, { memAddr: P('dm', 'addr'), memWData: P('dm', 'wd'), memWE: [P('dm', 'we')[0], P('dm', 'we')[1] + 4], memRData: P('dm', 'rd') });
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
