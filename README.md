@@ -51,7 +51,7 @@ Each chapter opens with the problem before the mechanism and with its goals, and
 and Check yourself questions; challenges are optional, each with a revealable answer. Around the prose:
 **Why?** on any wire traces where its value came from and what each part is for, **Break a part**
 shows what fails without it, guided tours, cost ledgers and layers (the short version, then deeper),
-narration, 25 analogies (each folded under its step with a figure from the chapter's own model and
+narration, 26 analogies (each folded under its step with a figure from the chapter's own model and
 where it breaks down), six passages of the RISC-V manual to read with questions, and a live
 **memory view** of every RAM and register file in a scene. Notes and bookmarks on any step feed a
 review queue; one backup file carries all progress; the site installs as an app and works offline.
@@ -103,7 +103,7 @@ before the transistor (relays, tubes, cards), arithmetic units (floating point, 
 (four lanes, the active mask, a reconvergence stack, two warps, a rasterizer) and memory (a DRAM column,
 a controller, a bus with DMA, a flash store). Each level is built only from parts earlier levels
 unlocked, checked by a full test set and graded against par (NANDs, transistors, depth, clock period;
-every level has one). The order follows use: a level comes just before the first one that needs it,
+every level you build or solve has one). The order follows use: a level comes just before the first one that needs it,
 and its why reads as a thread (the problem, what it costs, where it goes next and which later levels
 reuse it), closing each act with what is now within reach. **My path** maps skills from the codex,
 reads mastery from what you have already done, and places you (Where are you starting?, test-outs);
@@ -227,11 +227,11 @@ Every number on screen comes from the circuit it describes:
 | Pipelined RV32IM, balanced, with a predictor | 141,655 | | period 79 |
 | Dual-issue pipelined RV32IM | 193,768 | | period 80 |
 | Out-of-order RV32IM (2-wide, ROB 16) | 359,262 | | period 93 |
-| Dual-core with shared memory (per hart) | 104,293 | | period 119; 0.71 × 0.71 mm in sky130 |
+| Dual-core with shared memory (both harts) | 104,293 | | period 119; the flow's build (smaller memory, ROMs outside): 84,388 NANDs, period 96, 0.71 × 0.71 mm in sky130 |
 | Graphics pipeline (warp core, rasterizer, two frames) | 3,061,392 | 12,245,568 | the cube spins in the page |
 | MOS 6502 (our NMOS design) | | 4,513 | the real chip: 3,510 + ~1,018 loads |
 
-The CPUs' counts are the Benchmarks tab's: the 64-word data memory included, the program ROM left out.
+The CPUs' counts are the Benchmarks tab's (the RV64 row: chapter 25's, measured the same way): the 64-word data memory included, the program ROM left out.
 
 The chapters compare implementations on these numbers: ripple, carry-lookahead, Brent–Kung,
 Sklansky, Kogge–Stone, carry-select and carry-skip adders (static depth against simulated delay,
@@ -316,12 +316,12 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 - **Power-on is a model.** Storage loops are resolved to a deterministic (or chosen random) state
   so a design can settle; real power-up depends on mismatch, noise and ramp.
 - **The CPUs are teaching microarchitectures**: a cache miss freezes the whole pipeline, the
-  dual-core's atomics are atomic because a round-robin arbiter serializes every access, and the
+  plain dual-core's atomics are atomic because a round-robin arbiter serializes every access (chapter 27's coherent dual-core has private caches and MSI snooping), and the
   out-of-order core is built in gates only 2-wide (ROB 8–32, issue queue 4–16, store queue 2–8; the
   site's is ROB 16, issue queue 8): the lab's other shapes run on its cycle-exact model, timed but not
   priced.
-  The ISA is RV32 (I, M, F, C, Zicsr, the atomics the dual-core needs), and RV64I / M on chapter 25's
-  single-cycle core and its golden model; no lr.w / sc.w, and no RV64 in the pipelines yet.
+  The ISA is RV32 (I, M, F, C, Zicsr, the atomics; lr.w / sc.w on the coherent dual-core), and RV64I / M on chapter 25's
+  single-cycle core and its golden model; no RV64 in the pipelines yet.
 - **Doom runs on an interpreter of our ISA** (checked against the golden model), not on the gates:
   a frame would take about 13 minutes on the gate-level CPU in the page. Appendix B's last step
   hands the running game to the gates for a window of cycles.
@@ -334,10 +334,9 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
   following the loads), and the estimate checked path by path against the sky130 runs.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
-- **ISA breadth, further**: lr.w / sc.w with private caches and a coherent bus in the gate-level cores,
-  RV64 in the pipelines.
+- **ISA breadth, further**: RV64 in the pipelines.
 - **Imported circuits placed again** by logic depth (the Verilog import's placer), and `.dig` export.
-- **Python on the pipeline** (stalls and flushes per line), with RV32IM, strings and a heap.
+- **Python, further**: strings and a heap.
 
 ## Run it
 
@@ -358,8 +357,7 @@ does.
 one file, nothing to install, no network (fonts included). It is the built site inside Electron
 (`desktop/`, a package of its own so the site's install stays small), served from inside the
 executable. Progress and sandbox chips live in a `MOSFET-to-RISCV-data` folder next to the `.exe`,
-so a copy on a USB stick carries them along. The *Desktop program* workflow (run by hand, or a `v*`
-tag) builds it on GitHub and publishes it as the release `desktop-latest`. The `.exe` is unsigned:
+so a copy on a USB stick carries them along. The *Desktop program* workflow (after every deploy, by hand, or on a `v*` tag) builds it on GitHub and publishes it as the release `desktop-latest`. The `.exe` is unsigned:
 SmartScreen asks once (*More info → Run anyway*).
 
 ## How it is built
@@ -379,7 +377,7 @@ the 3D views.
 - `src/hdl/`: HDL in: Yosys in WebAssembly, and its JSON netlist turned into placed, routed chips
 - `src/campaign/`, `src/learn/`, `src/puzzles/`: the campaign (levels, grading, drills, walkthroughs,
   codex), My path (skills, mastery, placement, capstones) and the program puzzles
-- `src/m6502/`, `src/doom/`, `src/sap/`, `src/gfx/`, `src/dram/`, `src/flash/`, `src/bus/`, `src/cards/`: the
+- `src/m6502/`, `src/doom/`, `src/sap/`, `src/gfx/`, `src/dram/`, `src/flash/`, `src/bus/`, `src/cards/`, `src/runner/`: the
   appendices' and tracks' reference models
 - `src/chapters/`: the narrative
 - `CLAUDE.md`: architecture and conventions in detail; `docs/ROADMAP.md`: plan and status
