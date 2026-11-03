@@ -46,6 +46,8 @@ const headful = argv.includes('--headful');
 const only = opt('only');
 const tabs = Number(opt('tabs') ?? Math.max(2, Math.min(6, cpus().length - 1)));
 const routeTimeout = Number(opt('timeout') ?? 60) * 1000;
+// CPU slowdown factor (Emulation.setCPUThrottlingRate): a slow phone's load takes long enough for the service worker to install mid-route.
+const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
 
@@ -550,6 +552,7 @@ class Tab {
     this.session = (await this.cdp.send('Target.attachToTarget', { targetId, flatten: true })).sessionId;
     this.cdp.listen(this.session, (m) => this.event(m));
     for (const d of ['Page', 'Runtime', 'Log', 'Network']) await this.send(`${d}.enable`);
+    if (throttle > 1) await this.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   }
 
   private send(method: string, params: object = {}) {
@@ -652,10 +655,51 @@ class Tab {
     return { route, errors: [...new Set(this.errors)], ms: Date.now() - t0 };
   }
 
+  /** Forget the pending requests the page itself has finished. */
+  private async reconcile(): Promise<void> {
+    try {
+      const pend = [...new Set(this.inflight.values())];
+      const r = await this.send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+        const done = new Set(performance.getEntriesByType('resource').filter((e) => e.responseEnd > 0).map((e) => e.name));
+        return ${JSON.stringify(pend)}.filter((u) => done.has(u));
+      })()` });
+      const done = new Set(r.result.value as string[]);
+      let n = 0;
+      for (const [id, url] of this.inflight) if (done.has(url)) { this.inflight.delete(id); n++; }
+      if (n) console.log(`  note: ${n} requests the page had finished were never reported finished by CDP (${pend[0]})`);
+    } catch { /* the page is gone: the timeout will say so */ }
+  }
+
+  /** What the page and its service worker look like at a timeout: told apart a page that is stuck from accounting that never emptied. */
+  private async diagnose(): Promise<string> {
+    try {
+      const r = await Promise.race([
+        this.send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: `(async () => {
+          const pend = ${JSON.stringify([...this.inflight.values()])};
+          const res = performance.getEntriesByType('resource');
+          const got = pend.filter((u) => res.some((e) => e.name === u && e.responseEnd > 0)).length;
+          const reg = await navigator.serviceWorker?.getRegistration();
+          const sw = reg ? [reg.installing && 'installing', reg.waiting && 'waiting', reg.active && 'active:' + reg.active.state].filter(Boolean).join('+') : 'none';
+          return JSON.stringify({ pendingReceivedByPage: got + '/' + pend.length, ready: document.readyState, ctrl: !!navigator.serviceWorker?.controller, sw, main: (document.querySelector('main, #app')?.textContent ?? '').length, stage: !!document.querySelector('.stage svg, svg.schematic'), busy: !!document.querySelector('[aria-busy]') });
+        })()` }),
+        sleep(3000).then(() => ({ result: { value: 'page unresponsive' } })),
+      ]);
+      return ` [page ${r.result.value}; first pending: ${[...this.inflight.values()].slice(0, 3).join(', ')}]`;
+    } catch (e) { return ` [no diagnosis: ${e}]`; }
+  }
+
   /** Loaded, no request for 500 ms, then two frames and `dwell` ms for work scheduled after them. */
   private async settle(t0: number): Promise<void> {
+    let checked = 0;
     while (!this.loaded || this.inflight.size || Date.now() - this.lastNet < 500) {
-      if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}`);
+      // A request the page has finished (a Resource Timing entry with a response end exists only once it is done) that CDP never
+      // reported finished stays "pending" for ever: seen for requests a service worker answered, on a loaded 2-core runner,
+      // while the page was complete. The page is the authority; a request it has no finished entry for stays pending (and times out).
+      if (this.loaded && this.inflight.size && Date.now() - this.lastNet > 3000 && Date.now() - checked > 3000) {
+        checked = Date.now();
+        await this.reconcile();
+      }
+      if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}${await this.diagnose()}`);
       await sleep(50);
     }
     // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
