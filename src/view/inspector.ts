@@ -35,6 +35,13 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   memory: 'Memory', cpu: 'Processor', ttl: '74xx chip', custom: 'User chip',
 };
 
+/** The learner's own fold or unfold of the inspector, kept across visits (null: never chosen; the stage then folds it
+ *  by itself beside a circuit too large to read, Stage.autoInspector). */
+const FOLD_KEY = 'mosfet.inspector';
+export function inspectorChoice(): boolean | null {
+  try { const v = localStorage.getItem(FOLD_KEY); return v === 'folded' ? true : v === 'open' ? false : null; } catch { return null; }
+}
+
 export class Inspector {
   readonly el: HTMLElement;
   private body: HTMLElement;
@@ -49,6 +56,10 @@ export class Inspector {
   /** "In relays and tubes" is open (kept like the others). */
   private techOpen = false;
   private usedAll = new WeakSet<ComponentDef>();
+  /** Folded to a rail (a large circuit gets its width); `auto`: by the stage, not the learner. */
+  folded = false;
+  auto = false;
+  private rail: HTMLButtonElement;
   private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
 
   constructor() {
@@ -62,8 +73,21 @@ export class Inspector {
     add('info', 'Info', 'info');
     add('truth', 'Table', 'table');
     add('hdl', 'Verilog', 'code');
-    this.el = h('aside', { class: 'inspector' }, tabs, this.body);
+    const fold = h('button', { class: 'insp-fold', title: 'Fold the inspector: the circuit gets its width', 'aria-label': 'Fold the inspector', onclick: () => this.setFolded(true, true) }, icon('sidebar', 14)) as HTMLButtonElement;
+    tabs.append(fold);
+    this.rail = h('button', { class: 'insp-rail', title: 'Show the inspector', 'aria-label': 'Show the inspector', onclick: () => this.setFolded(false, true) }, icon('sidebar', 14), h('span', null, 'Inspector')) as HTMLButtonElement;
+    this.el = h('aside', { class: 'inspector' }, tabs, this.body, this.rail);
     this.setTab('info');
+  }
+
+  /** Fold to a rail or open; `explicit`: the learner's choice, remembered and never overridden by the stage. */
+  setFolded(f: boolean, explicit: boolean): void {
+    this.folded = f;
+    this.auto = f && !explicit;
+    this.el.classList.toggle('folded', f);
+    this.rail.tabIndex = f ? 0 : -1;
+    if (explicit) { try { localStorage.setItem(FOLD_KEY, f ? 'folded' : 'open'); } catch { /* private window */ } }
+    if (explicit) (f ? this.rail : this.el.querySelector<HTMLElement>('.insp-fold'))?.focus();
   }
 
   setTab(t: Tab): void {

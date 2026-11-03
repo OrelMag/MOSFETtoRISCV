@@ -2589,3 +2589,43 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
 .coh-panel .coh-ln { cursor: pointer; }
 .coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }
+
+/* ---------- Readable schematics (view/legible.ts) ----------
+   Text kinds hide once they would render under 7 px on screen (classes lg-h-<kind> on the svg, set when the scale crosses
+   a size); a net's tag keeps its pill, a bus or tap label goes whole. A block name under 12 px is drawn again at 12 px
+   on screen (.lg-name inside the instance, so fading, dragging and heat apply to it); the block's own label gives way
+   while that copy is in use (.lg-nm) and wherever it is shown, never in an exported image (view/image.ts). */
+svg.schematic.lg .lg-name {
+  display: none; pointer-events: none; user-select: none;
+  font-weight: 700; font-family: var(--font-ui); fill: #fff; stroke: #10131b; stroke-linejoin: round; paint-order: stroke; letter-spacing: 0;
+}
+:root[data-parts='cartoon'] svg.schematic.lg .lg-name { font-family: 'Fredoka', var(--font-ui); }
+svg.schematic.lg.lg-nm .inst.lg-named .sym-label,
+svg.schematic.lg.lg-h-tiny .sym-tiny, svg.schematic.lg.lg-h-rail .sym-rail, svg.schematic.lg.lg-h-port .sym-port,
+svg.schematic.lg.lg-h-label .sym-label, svg.schematic.lg.lg-h-iname .inst-name,
+svg.schematic.lg.lg-h-pin .pin-name, svg.schematic.lg.lg-h-pin .pin-value,
+svg.schematic.lg.lg-h-tag .net-tag text, svg.schematic.lg.lg-h-bus .bus-label, svg.schematic.lg.lg-h-level .level-tag, svg.schematic.lg.lg-h-flow .flow-tokens,
+svg.schematic.lg.lg-h-tap3 .tap-label[data-ts='3'], svg.schematic.lg.lg-h-tap4 .tap-label[data-ts='4'],
+svg.schematic.lg.lg-h-tap5 .tap-label[data-ts='5'], svg.schematic.lg.lg-h-tap6 .tap-label[data-ts='6'],
+svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .tap-label[data-ts='8'] { display: none; }
+
+/* The inspector folds to a rail (view/inspector.ts): by the learner, or by the stage beside a circuit too large to read at
+   its fit (Stage.autoInspector). Where the inspector is not a column (a phone, a narrow window) nothing changes. */
+.inspector .insp-rail { display: none; }
+.tabs .insp-fold { margin-left: auto; padding: 7px 8px; }
+.inspector.folded > :not(.insp-rail) { display: none; }
+.inspector.folded { align-items: stretch; }
+.inspector.folded .insp-rail {
+  display: flex; flex: 1; align-items: flex-start; justify-content: center; gap: 8px; border: 0; background: transparent; color: var(--muted);
+  cursor: pointer; padding: 12px 0; writing-mode: vertical-rl; font: 600 12px var(--font-ui);
+}
+.inspector.folded .insp-rail:hover { color: var(--text); background: var(--surface-2); }
+.inspector.folded .insp-rail .icon { transform: rotate(0); }
+@media (min-width: 1181px) {
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 34px; }
+  .bench:not(.no-part):has(> .inspector.folded) { grid-template-columns: 270px 1fr 34px; }
+}
+@media (min-width: 1181px) and (max-width: 1440px) {
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 34px; }
+}
+@media (pointer: coarse) { .tabs .insp-fold, .inspector.folded .insp-rail { min-width: 40px; min-height: 40px; } }

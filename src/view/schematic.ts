@@ -18,6 +18,7 @@ import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, 
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import { menuKeys } from '../ui/menukeys';
+import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -100,6 +101,8 @@ export class SchematicView {
   private notePins: NotePin[] = [];
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
   private cam: Camera;
+  /** Small text hidden and block names kept at a readable size (view/legible.ts): a view rule only. */
+  private legible: Legibility;
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
@@ -153,6 +156,8 @@ export class SchematicView {
     this.tooltip.className = 'wire-tip';
     host.append(this.el, this.tooltip);
     this.cam = new Camera(this.el, host);
+    this.legible = new Legibility(this.el);
+    this.cam.listeners.add(() => this.legible.view(this.cam.pxPerUnit()));
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
       canStart: (e) => !(this.arrange === true && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
@@ -306,7 +311,7 @@ export class SchematicView {
         hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
       }
       for (const t of tapsOf.get(net.index) ?? []) {
-        const g = s('g', { class: 'tap-label' });
+        const g = s('g', { class: 'tap-label', 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
         setNetHue(g, hue);
         const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
@@ -343,6 +348,7 @@ export class SchematicView {
     }
 
     // Instances
+    const names: NameEl[] = [];
     for (const inst of nl.instances) {
       const at: Vec = inst.at ?? [0, 0];
       const geo = orientGeom(inst.def, inst.flip, inst.rot);
@@ -359,6 +365,16 @@ export class SchematicView {
       g.append(drawSymbol(inst.def, inst.flip, inst.rot));
       const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
       if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
+      // A fixed-size copy of the block's label for when its own is too small to read (legible.ts); decoration, so
+      // hidden from assistive tech, never hit, and left out of exported images.
+      const own = g.querySelector('.sym-label');
+      if (nameEligible(own?.textContent, geo.w, geo.h)) {
+        const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
+        const t = s('text', { class: 'lg-name', x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'aria-hidden': 'true', transform: rot ? `rotate(-90 ${cx} ${cy})` : null }, own!.textContent!.trim());
+        g.classList.add('lg-named');
+        g.append(t);
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: own!.textContent!.trim().length, rot } });
+      }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
         badge.append(s('circle', { r: 0.62, cx: 0.5, cy: 0.5 }));
@@ -418,6 +434,7 @@ export class SchematicView {
 
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
+    this.legible.setNames(names);
     if (!keepView) this.fit();
     else this.cam.apply();
     this.drawProbes();
@@ -1237,6 +1254,9 @@ export class SchematicView {
   }
 
   // ---- pan & zoom ---------------------------------------------------------------------
+
+  /** Screen pixels per grid unit now (0 before a layout). */
+  pxPerUnit(): number { return this.cam.pxPerUnit(); }
 
   /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
   contentBox(): ViewBox {
