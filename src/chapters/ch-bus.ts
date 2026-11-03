@@ -52,7 +52,7 @@ export const chBus: Chapter = {
       'A transfer happens at the rising edge where <strong>valid</strong> and <strong>ready</strong> are both 1. The sender raises valid without waiting for ready; either side may stretch the wait.',
       'AXI-lite shape: a write uses AW, W and B, a read AR and R, each with its own handshake. Even a ready slave costs 2 cycles an access; with 3 wait states a store takes 5. Full AXI adds bursts (one address, up to 256 beats) and IDs (several transactions in flight, answered out of order).',
       `The interconnect is an arbiter (round robin), the multiplexers that route the granted master to the addressed slave, and a decoder on the top four address bits: ${nands(axiBus(2, [0, 1, 4, 15]))} NANDs for two masters and four slaves. The grant holds until the response, so a slow slave stalls the other master too.`,
-      `A DMA engine is four registers at 0x4000_0000 and a read-then-write state machine: ${nands(DMA_ENGINE)} NANDs. Two bus transactions a word, irq when done, and the CPU runs meanwhile. Behind a write-back cache, clean before a DMA reads memory, invalidate before the CPU reads what a DMA wrote, fence before the kick (or snoop the DMA).`,
+      `A DMA engine is four registers at 0x4000_0000 and a read-then-write state machine: ${nands(DMA_ENGINE)} NANDs. Two bus transactions a word, irq when done, and the CPU runs meanwhile. Behind a write-back cache, clean before a DMA reads memory, invalidate before a DMA writes memory (and again after, if the CPU prefetches), fence before the kick (or snoop the DMA).`,
       `Booting: a small ROM fetches the program from storage into RAM at 0x${LOAD_AT.toString(16)} and jumps there: ${LOAD_WORDS} words from flash by DMA, or ${CARD_DECK.cards.length} punched cards polled from a reader.`,
     ],
     practise: ['m_bus', 'm_dma', 'p_boot'],
@@ -92,8 +92,8 @@ export const chBus: Chapter = {
           'Nothing: the arbiter orders the CPU\'s stores before the DMA\'s reads',
         ],
         answer: 0,
-        explain: 'The new data sat in dirty lines; the DMA reads RAM, which still held the old. Before a transfer out of memory the driver writes the lines back (clean) and fences, so the data is in RAM before the MMIO store that kicks the engine. Before a transfer into memory it invalidates instead, so the CPU does not read a stale line. A coherent interconnect snoops the DMA\'s accesses and makes both automatic.',
-        why: ['', 'Invalidation is for the other direction: after a DMA writes RAM, so the CPU drops its stale copies. Here the stale copy is in RAM, and invalidating would throw the new data away.', 'Timing is not the problem: however slowly the DMA reads, RAM holds the old words until the cache writes them back.', 'The arbiter orders bus transactions. Stores that hit in a write-back cache never reach the bus until their lines are evicted or cleaned.'],
+        explain: 'The new data sat in dirty lines; the DMA reads RAM, which still held the old. Before a transfer out of memory the driver writes the lines back (clean) and fences, so the data is in RAM before the MMIO store that kicks the engine. Before a transfer into memory the driver invalidates the buffer\'s lines, so no dirty line can later be evicted over the incoming data; after it, on a CPU that speculates or prefetches, it invalidates again, so the CPU does not read a line refilled meanwhile. A coherent interconnect snoops the DMA\'s accesses and makes both automatic.',
+        why: ['', 'Invalidating is for the other direction, a DMA writing RAM. Here the stale copy is in RAM, and invalidating would throw the new data away.', 'Timing is not the problem: however slowly the DMA reads, RAM holds the old words until the cache writes them back.', 'The arbiter orders bus transactions. Stores that hit in a write-back cache never reach the bus until their lines are evicted or cleaned.'],
       },
     ],
   },
@@ -166,10 +166,10 @@ export const chBus: Chapter = {
       tour: {
         beats: [
           { title: 'A store with wait states', reset: true, say: 'A store of 0xABCD to 0x100. AW and W go out together and the slave takes both in the first cycle. <code>done</code> (B) is {v:done}: the RAM now spends its 3 wait states.', set: { req: 1, we: 1, addr: 0x100, wdata: 0xabcd }, cycles: 1, at: [], show: ['ram'], expect: { done: 0 } },
-          { title: 'The response', say: 'Three more clocks and B arrives: <code>done</code> = {v:done}. The panel counts 5 cycles for the store: the request\'s own cycle, the one that takes the address, the wait states, and the answer.', cycles: 3, expect: { done: 1 } },
+          { title: 'The response', say: 'Three more clocks and B arrives: <code>done</code> = {v:done}. The panel counts 5 cycles for the store: the one that raises and hands over the address and data, the 3 wait states, and the answer.', cycles: 3, expect: { done: 1 } },
           { title: 'Let go', say: 'The port drops <code>req</code> and <code>we</code>.', set: { req: 0, we: 0 }, cycles: 1, expect: { done: 0 } },
           { title: 'A read pays too', say: 'The same word read back: wait states are the slave\'s, not the write\'s. After 4 clocks <code>rdata</code> = {v:rdata}.', set: { req: 1, addr: 0x100 }, cycles: 4, show: ['ram'], expect: { done: 1, rdata: 0xabcd } },
-          { title: 'A stray pointer', say: 'Release, then a read of 0x7000_0000. The decoder sends it to the default slave, which answers at once with {v:rdata}: no hang, no error.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
+          { title: 'A stray pointer', say: 'Release. The next request is a read of 0x7000_0000, an address no slave decodes.', set: { req: 0 }, cycles: 1, expect: { done: 0 } },
           { title: 'Default slave answers', say: 'It answers after one clock, with zeros: <code>done</code> = {v:done}, <code>rdata</code> = {v:rdata}.', set: { req: 1, addr: 0x70000000 }, cycles: 1, show: ['bus', 'def'], expect: { done: 1, rdata: 0 } },
         ],
       },
@@ -252,7 +252,7 @@ export const chBus: Chapter = {
         destination, the 16-bit length, the word in flight, the read-back word, the state and the slave's two response flags. Most of the rest steps the addresses and
         multiplexes the registers.</p>
         <p>It costs bus time: two transactions a word, and every one the CPU wants meanwhile waits for the bus. Its gain is that the CPU
-        keeps running, and that a slow source (the flash's ${FLASH_TIMES.read}-cycle page reads) delays the DMA, not the program.</p>
+        keeps running between the DMA's transactions instead of spending its own loads and stores on the copy. On this one-transaction bus a slow source (the flash's ${FLASH_TIMES.read}-cycle page reads) still stalls a CPU that needs the bus meanwhile; a crossbar or split transactions would remove that.</p>
         <p>The engine is a bus master with almost no logic of its own: it has no program, no decoder and no ALU beyond an address incrementer and a down counter. That is why it is cheap, and why
         it is the first thing a system adds after a CPU. The software side of the bargain is a protocol: write the registers, start it, then either poll the status or take the interrupt, and never touch the
         buffer in between.</p>
@@ -264,13 +264,12 @@ export const chBus: Chapter = {
         real: `<p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter 22</a>) in front of it
           and the DMA, which talks to RAM directly, sees two problems. Copying <em>out</em> of a buffer the CPU just wrote, it reads RAM
           while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
-          Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them, or the
-          CPU reads the stale copy. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
+          Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them before the transfer, so no dirty line is later evicted over the incoming data, and again after it on a CPU that speculates or prefetches, so the CPU does not read a refilled stale line. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
           <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 27</a>).
           Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
           reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p>`,
         pitfall: `<p>Starting the engine before the data is in memory, or reading the destination before the interrupt. Both look right in a quick test, because the copy is fast, and fail only under load. In the
-          scene, RAM fills word by word while the copy runs; <code>irq</code> is the only signal that says the last one has landed.</p>`,
+          scene, RAM fills word by word while the copy runs; <code>irq</code>, or the done bit in the status register, is what says the last one has landed.</p>`,
         numbers: `<table class="mini"><tr><th>words</th><th>bus transactions</th></tr>
           ${[4, 16, 64, 256].map((n) => `<tr><td>${n}</td><td>${4 + 2 * n}</td></tr>`).join('')}</table>`,
       },
@@ -294,15 +293,15 @@ export const chBus: Chapter = {
         bus into an instruction register, and loads and stores go over the bus. The CPU waits (retire = 0) until both are done, and
         the decoder sees a NOP while an instruction is on its way. Console, LEDs and timer stay inside.</p>
         <p>At power-up the boot ROM programs <span data-show="dma">the DMA</span> to copy ${LOAD_WORDS} words from <span data-show="flash">the flash</span> to <span data-show="ram">RAM</span> at 0x${LOAD_AT.toString(16)}, waits for it, and
-        jumps there. Every computer boots like this: a small ROM that knows how to fetch the real program from storage.</p>
+        jumps there. Most larger computers boot like this: a small ROM that knows how to fetch the real program from storage. (A microcontroller often skips the copy and runs straight from NOR flash.)</p>
         <pre class="code">${BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
         <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter 19's; only the place the words come from moved, and the
-        memory unit absorbs the difference by stalling the pipeline's bookkeeping (<code>retire</code> low) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
+        memory unit absorbs the difference by stalling the CPU (<code>retire</code> low, no state written) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
         what is behind its port, and put every piece of timing in the port.</p>
         <div class="try">Run, and watch the PC move from the boot ROM into RAM, the console print, and the LEDs count.</div>`,
       more: {
-        derive: `<p>Cycles per instruction from RAM, no wait states: an instruction costs 2 for its fetch (address, word), and a load or store adds 2 for its own access, so 2 for an ALU instruction or a branch and 4 for a load or store.
-          The boot ROM, inside the CPU, delivers its word in the same cycle: 1 and 3. A program of mixed instructions therefore runs at roughly half the speed it had from the ROM,
+        derive: `<p>Cycles per instruction from RAM, no wait states: an instruction costs 2 for its fetch (address, word) and a third in which it executes; a load or store does its access in that cycle and the next, so 3 for an ALU instruction or a branch and 4 for a load or store.
+          In the boot ROM the word arrives in the same cycle: 1 and 2. ALU code runs at about a third of the speed it had from the ROM,
           which is the factor a cache exists to win back.</p>`,
         real: `<p>Every machine has this ladder. A mask ROM in the SoC (the "boot ROM") is the only code that is there at power-up; it initializes just enough (clocks, a memory controller, a storage controller),
           loads the next stage from flash or a card, and often checks its signature before jumping. The chain continues (a first-stage loader, a second stage that trains the DRAM, then an operating-system loader), and each
@@ -310,22 +309,22 @@ export const chBus: Chapter = {
         pitfall: `<p>Reading <code>retire</code> = 0 as a hang. The CPU is waiting for the bus, and in the scene it waits every instruction that runs from RAM. A real hang is a PC that stops
           changing with retire stuck low: a slave that never raises ready, which is why bus fabrics include time-outs.</p>`,
         numbers: `<table class="mini"><tr><th>instruction</th><th>boot ROM</th><th>from RAM</th></tr>
-          <tr><td>ALU, branch</td><td>1</td><td>2</td></tr><tr><td>load, store</td><td>3</td><td>4</td></tr></table>`,
+          <tr><td>ALU, branch</td><td>1</td><td>3</td></tr><tr><td>load, store</td><td>2</td><td>4</td></tr></table>`,
       },
       scene: () => busComputerScene(),
       tries: [(st) => (busComputerState(st)?.booted ?? -1) >= 0],
       challenge: {
         kind: 'quiz',
-        question: 'The loaded program runs from RAM. Why does each of its instructions take at least two cycles, where the boot ROM\'s took one?',
+        question: 'The loaded program runs from RAM. Why does each of its instructions take at least three cycles, where the boot ROM\'s took one?',
         options: ['Each is fetched over the bus: an address handshake, then the data', 'RAM is slower than ROM by nature', 'The DMA is still copying', 'The decoder needs a cycle for the NOP'],
         answer: 0,
         why: [
           '',
-          'The RAM answers as soon as the bus lets it. The second cycle is the handshake: the address one cycle, the word the next.',
+          'The RAM answers as soon as the bus lets it. The extra cycles are the handshake: the address one cycle, the word the next.',
           'The boot ROM waits for the DMA to finish before it jumps into RAM: the copy is over.',
           'The NOP is what the decoder sees while the word is on its way: a consequence of the wait, not its cause.',
         ],
-        explain: 'An instruction from RAM is a bus read like any load: the address one cycle, the word the next. A load or store from RAM code costs two more. Caches (<a href="#/c/cache/0">chapter 22</a>) are what lets a real CPU fetch at full speed from slow memory.',
+        explain: 'An instruction from RAM is a bus read like any load: the address one cycle, the word the next, then the cycle that executes it. A load or store from RAM code costs one more. Caches (<a href="#/c/cache/0">chapter 22</a>) are what lets a real CPU fetch at full speed from slow memory.',
       },
     },
     {
@@ -396,8 +395,8 @@ export const chBus: Chapter = {
         and the DRAM counters: the line's words sit in one row, so after the first access nearly all are row hits.</div>`,
       more: {
         derive: `<p>The DRAM figures are the controller's cycles plus the bus's two: a hit ${accessCycles('hit', TIMING)} + 2 = ${accessCycles('hit', TIMING) + 2}, a miss ${accessCycles('miss', TIMING)} + 2 = ${accessCycles('miss', TIMING) + 2}, a conflict
-          ${accessCycles('conflict', TIMING)} + 2 = ${accessCycles('conflict', TIMING) + 2}. On-chip RAM costs 2. The screen and keyboard are the RAM's own structure (four byte lanes) with a different meaning for the addresses: a store to the frame
-          buffer is an ordinary store whose side effect is a pixel.</p>`,
+          ${accessCycles('conflict', TIMING)} + 2 = ${accessCycles('conflict', TIMING) + 2}. On-chip RAM costs 2. The screen is the RAM's own structure (four byte lanes) with a different meaning for the addresses: a store to the frame
+          buffer is an ordinary store whose side effect is a pixel. The keyboard is a read port: a handshake and a read register in front of the key queue.</p>`,
         real: `<p>The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
           joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
           (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
