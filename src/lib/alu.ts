@@ -280,7 +280,7 @@ export function aluOf(n: number, adder: 'rca' | 'ks', MX: ComponentDef, SH: Comp
     { name: 'xor', def: bw('xor'), at: bwAt(4) },
     { name: 'or', def: bw('or'), at: bwAt(6) },
     { name: 'and', def: bw('and'), at: bwAt(7) },
-    { name: 'mux', def: MX, at: mxAt, label: 'RESULT' },
+    { name: 'mux', def: MX, at: mxAt },
     { name: 'zero', def: ZD, at: zdAt },
     { name: 'sc', def: splitter([3, 1]), at: [4, yC + 1] },
     { name: 'sf', def: splitter([1, 1, 1]), at: [8, yC + 6] },
