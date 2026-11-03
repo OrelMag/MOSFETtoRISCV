@@ -40,6 +40,7 @@ export * from './cache';
 export * from './multicycle';
 export * from './ucode';
 export * from './fpu';
+export * from './fpnearfar';
 export * from './mpdecode';
 export * from './multicore';
 export * from './lanes';

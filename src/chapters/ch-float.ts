@@ -11,6 +11,7 @@ import { floatExplorer, floatLine } from '../widgets/float';
 import type { Chapter, Layers } from './types';
 import { newtonSteps } from './float/newton';
 import { errorSteps } from './float/error';
+import { nearFarSteps } from './float/nearfar';
 
 const E4M3 = { E: 4, M: 3 };
 const F6: FpFormat = { E: 3, M: 2 };
@@ -94,6 +95,7 @@ export const chFloat: Chapter = {
       'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, one rounding against 357 for fmul then fadd.',
       'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster on six of the seven programs; the CSR-heavy one is 5 % slower.',
       'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
+      'A near / far adder splits by case: a far path (long alignment, at most a 2-place normalize) and a near path (exponents within 1: no aligner, long normalize). The split alone takes the float32 adder from 181 to 129 NAND delays for 6 % more NANDs; leading-zero anticipation takes it to 114 for 39 % more in all.',
       'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. Soft-float costs about 233 RV32I instructions per fmul.s.',
       'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers is exact (Sterbenz) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
     ],
@@ -663,6 +665,7 @@ export const chFloat: Chapter = {
       })),
     },
     ...formatSteps,
+    ...nearFarSteps,
     {
       title: 'An FPU in the CPU',
       body: `

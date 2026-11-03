@@ -20,6 +20,7 @@ import { arbiterN } from './mpdecode';
 import { laneUnit, lowestOne, memSequencer, onehotMux, simtControl, simtDecode } from './lanes';
 import { arrayDiv, arrayMul, condNegate, csa, divStep, seqDivider, treeMul } from './muldiv';
 import { fpAdd, fpCompare, fpFromInt, fpMul, fpUnpack, incFast, lzc, normRound, shiftLeft, shiftRightSticky } from './fpu';
+import { fpAddNearFar } from './fpnearfar';
 import { cachedMemory, wayLookup2 } from './cache';
 import { bankedMemory } from './lsu';
 import { clearableRegister, hazardUnit, pipelinedCpu } from './pipeline';
@@ -196,6 +197,7 @@ export const families: Family[] = [
   nBit('srtstep', 'SRT division step', 'arithmetic', [4, 8, 16, 32], 8, (n) => `srtstep${n}`, srtStep),
   float('fpun', 'Float unpack', fpUnpack),
   float('fpadd', 'Float adder / subtractor', fpAdd),
+  float('fpnf', 'Float adder, near / far paths', fpAddNearFar),
   float('fpmul', 'Float multiplier', fpMul),
   float('fpcmp', 'Float comparator', fpCompare),
   nBit('popcnt', 'Population count', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `popcnt${n}`, popcount),
