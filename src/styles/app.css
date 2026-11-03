@@ -49,7 +49,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
    (each link keeps its name as a tooltip). Past that the nav shrinks and scrolls, so the page never scrolls sideways. */
 @media (max-width: 1440px) { .brand small { display: none; } }
 @media (max-width: 1220px) { .tools .lbl { display: none; } }
-@media (max-width: 1140px) { .nav a span { display: none; } }
+@media (max-width: 960px) { .nav a span { display: none; } }
 @media (max-width: 580px) { .brand-name { display: none; } }
 /* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. data-fit (returnto.ts fit):
    the full label while the nav still fits beside it, else the short one ("Ch 07 · 3"), else the arrow alone; the full one in
@@ -184,7 +184,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .qn-row:hover, .qn-row:focus-visible, .qn-row.sel { background: var(--surface-2); }
 .qn-row[aria-current='page'] { background: var(--accent-soft); }
 .qn-row[aria-current='page'].sel, .qn-row[aria-current='page']:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.qn-num { flex: none; width: 22px; font: 600 12px var(--font-mono); color: var(--accent); }
+.qn-num { flex: none; min-width: 22px; white-space: nowrap; font: 600 12px var(--font-mono); color: var(--accent); }
 .qn-row.step .qn-num { color: var(--muted); }
 .qn-main { flex: 1; min-width: 0; }
 .qn-main b { display: block; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -379,7 +379,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* wrap at word boundaries onto a second line before an ellipsis; the full title is also the tooltip */
 .narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
 .narrative-foot .btn .lbl { overflow: hidden; text-align: left; line-height: 1.2; display: flex; flex-direction: column; min-width: 0; }
-.narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
+.narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .narrative-foot .btn .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a neighbour's title needs the room more than the key hint does (the shortcut stays: aria-keyshortcuts, the help sheet) */
 .narrative-foot .btn:has(.lbl) .kbd-hint { display: none; }
@@ -1146,6 +1146,14 @@ svg.schematic .dot.fld { fill: var(--fc); }
   display: flex; flex-direction: column; gap: 6px; position: relative;
   max-height: min(600px, calc(100vh - 160px)); overflow-y: auto; padding: 1px 4px 2px 0; scrollbar-width: thin;
 }
+.ladder { scroll-snap-type: y proximity; }
+.ladder > .rung { scroll-snap-align: start; }
+.ladder-wrap { position: relative; }
+.ladder-up {
+  position: absolute; top: 6px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent-text);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
+}
+.ladder-up[hidden] { display: none; }
 .ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 40px); }
 .ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 40px); }
 .ladder.more-up.more-down { mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 40px), transparent); }

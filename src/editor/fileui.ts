@@ -530,6 +530,8 @@ function deleteDataDialog(ed: Editor): void {
 export interface FilesUi {
   /** Show the banner for a share link's payload (null: the link has none). */
   openShare(payload: string | null): void;
+  /** #/sandbox/<id> names no chip: a banner says so (the page opened Main instead) and Dismiss puts the address right. */
+  missingChip(id: string): void;
   destroy(): void;
 }
 
@@ -672,6 +674,10 @@ export function installFiles(ed: Editor): FilesUi {
 
   return {
     openShare: (p) => void openShare(p),
+    missingChip: (id) => {
+      const el = banner('err', 'missing', [h('b', null, `No chip called “${id}”: `), 'the link may be stale, or the chip lives in another project. Showing the open chip instead.'],
+        [btn('Dismiss', () => { el.remove(); history.replaceState(null, '', `#/sandbox/${ed.chipId}`); })]);
+    },
     destroy: () => {
       dead = true;
       offSave();

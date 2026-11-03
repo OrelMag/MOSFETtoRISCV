@@ -30,6 +30,7 @@ import { anatomySvg } from '../../campaign/ui/svgs';
 import { installChallenges } from '../../editor/challengeui';
 import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, solveChallenge, startChallenge } from '../../editor/challenges';
 import { Editor } from '../../editor/editor';
+import { notFound } from '../notfound';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
 import { resolveComponent } from '../../lib/resolve';
@@ -68,6 +69,8 @@ export class LevelPage implements Page {
   readonly nodeId: string;
   private node?: CampaignNode;
   private ch?: BuildChallenge;
+  /** An error card: app.ts hides the circuit tools (HEX / BIN / DEC). */
+  noTools = false;
   private editor?: Editor;
   private chal?: ReturnType<typeof installChallenges>;
   private bar = h('div', { class: 'lv-bar' });
@@ -95,7 +98,8 @@ export class LevelPage implements Page {
     const ch = n && !n.soon ? levelChallenge(n) : undefined;
     const p = progress();
     if (!n || !ch) {
-      this.el = this.notice('This level is not built in the editor', n ? 'It is a lesson, a drill or a program: it opens on the map.' : `There is no level “${nodeId}”.`, n);
+      this.noTools = true;
+      this.el = n ? this.notice('This level is not built in the editor', 'It is a lesson, a drill or a program: it opens on the map.', n) : notFound(`No level called “${nodeId}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign']]);
       return;
     }
     if (statusOf(n, p.view, p.unlockAll) === 'locked') {
@@ -170,6 +174,7 @@ export class LevelPage implements Page {
   }
 
   private notice(title: string, text: string, n?: CampaignNode, blockers: CampaignNode[] = []): HTMLElement {
+    this.noTools = true;
     // a locked level links to what blocks it (its page when it is a level of the editor, else its map card)
     const go = (m: CampaignNode) => h('a', { class: 'btn primary', href: !m.soon && levelChallenge(m) && statusOf(m, progress().view, progress().unlockAll) !== 'locked' ? `#/campaign/play/${m.id}` : `#/campaign/n/${m.id}` }, m.title, icon('chevR', 14));
     return h('div', { class: 'lv-page lv-notice' }, h('div', { class: 'panel' }, h('h3', null, title), h('p', { class: 'sub' }, text),

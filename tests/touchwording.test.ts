@@ -33,6 +33,7 @@ describe('wording by input device', () => {
   });
 
   it('no touch wording mentions a mouse button, the wheel, hover or a key', () => {
+    for (const b of beatsOf('stage', true, true)) expect(`${b.title} ${b.text}`).not.toMatch(MOUSE_ONLY);
     for (const b of [...STAGE_BEATS, ...SANDBOX_BEATS]) {
       if (!b.touch) continue;
       expect(`${b.touch.title ?? ''} ${b.touch.text}`).not.toMatch(MOUSE_ONLY);

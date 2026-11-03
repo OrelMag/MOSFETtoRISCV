@@ -35,6 +35,7 @@ class Coach {
   readonly el: HTMLElement;
   private opener: HTMLElement | null;
   private raf = 0;
+  private opened = -1;
   private ro: ResizeObserver;
 
   constructor(private kind: CoachKind, beats: CoachBeat[]) {
@@ -127,6 +128,11 @@ class Coach {
       el = shown(this.beats[this.i].target);
       this.refreshCount();
     }
+    // a phone: the circuit sits under the text; open it (once per beat) before a beat about its controls
+    if (coarsePointer() && this.opened !== this.i && el.closest('.stage')) {
+      this.opened = this.i;
+      document.querySelector('.stage')?.scrollIntoView({ block: 'start' });
+    }
     el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const vw = window.innerWidth, vh = window.innerHeight, pad = 4;
     const t = el.getBoundingClientRect();
@@ -142,7 +148,16 @@ class Coach {
     const clampL = (v: number) => Math.max(12, Math.min(vw - cw - 12, v));
     const clampT = (v: number) => Math.max(12, Math.min(vh - ch - 12, v));
     let cl: number, ct: number, ax = 0, ay = 0, arrow = true;
-    if (below || above) {
+    const stage = this.beats[this.i].card === 'clear' ? document.querySelector<HTMLElement>('.stage') : null;
+    if (stage) {
+      // clear of the text and of the circuit's top: the stage's lower part, above its control row
+      const sr = stage.getBoundingClientRect();
+      const bar = stage.querySelector<HTMLElement>('.controls');
+      const bottom = Math.min(vh, bar && bar.getClientRects().length ? bar.getBoundingClientRect().top : sr.bottom);
+      cl = clampL(sr.left + 12);
+      ct = clampT(bottom - ch - 10);
+      arrow = false;
+    } else if (below || above) {
       cl = clampL((x0 + x1) / 2 - cw / 2);
       ct = below ? y1 + 14 : y0 - 14 - ch;
       // on a phone the chapter's Back / Next row is fixed above a bottom-sheet stage: keep the card off it
@@ -204,9 +219,9 @@ const busy = () => ({
 });
 
 /** Play the tour of `kind` now (the ? sheet, the search's actions). False when no control of it is on the page. */
-export function showCoach(kind: CoachKind): boolean {
+export function showCoach(kind: CoachKind, short = false): boolean {
   active?.end(false);
-  const beats = pickBeats(beatsOf(kind, coarsePointer()), (sel) => !!shown(sel));
+  const beats = pickBeats(beatsOf(kind, coarsePointer(), short), (sel) => !!shown(sel));
   if (!beats.length) return false;
   active = new Coach(kind, beats);
   return true;
@@ -217,7 +232,7 @@ export function maybeCoach(kind: CoachKind): void {
   if (!mayAutoStart({ done: settings.coachDone(kind), ...busy() })) return;
   // a beat later: the page has settled and the stage bar has fitted itself
   window.setTimeout(() => {
-    if (coachFits(kind, location.hash) && mayAutoStart({ done: settings.coachDone(kind), ...busy() })) showCoach(kind);
+    if (coachFits(kind, location.hash) && mayAutoStart({ done: settings.coachDone(kind), ...busy() })) showCoach(kind, true);
   }, 700);
 }
 
