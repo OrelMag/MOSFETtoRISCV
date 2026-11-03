@@ -28,6 +28,7 @@ export * from './adders';
 export * from './arrays';
 export * from './cache2';
 export * from './seqparts';
+export * from './cmosgates';
 export * from './storage';
 export * from './cells';
 export * from './dram';
