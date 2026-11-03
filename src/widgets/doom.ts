@@ -231,7 +231,7 @@ export function doomPlay(): Widget {
       if (wadProblem(wad)) throw new Error('not a WAD'); // a host without the file answers with its fallback page
       start(wad, 'Freedoom: Phase 1');
     } catch {
-      status.textContent = 'The bundled Freedoom WAD is missing from this build (the deploy adds it; locally: node scripts/doom/fetch-wad.mjs). Use "Load your own WAD…" instead, or try again.';
+      status.textContent = 'The bundled Freedoom WAD could not be loaded in this copy of the site. Use "Load your own WAD…" with a WAD file you have, or try again.';
       playFree.removeAttribute('disabled');
     }
   } }, 'Play Freedoom (29 MB)');

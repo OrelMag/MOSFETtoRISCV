@@ -90,7 +90,7 @@ export function chipLayoutWidget(): Widget {
       sum = await r.json();
       data = await (await fetch(`${base}cells.json`)).json();
     } catch {
-      if (alive && n === loads) root.replaceChildren(h('p', { class: 'sub' }, 'This layout has not been generated for this build yet. It is produced by the "Chip layout" GitHub workflow (Yosys + OpenROAD on sky130), published as a release and copied into the site by the deploy. Locally: npm run layout:fetch.'));
+      if (alive && n === loads) root.replaceChildren(h('p', { class: 'sub' }, 'The layout picture is not available in this copy of the site: it is made by a separate place-and-route run (Yosys + OpenROAD on sky130) that this build did not include. The numbers and text around it still apply; try again later or from the public site.'));
       return;
     }
     if (!alive || n !== loads) return;
