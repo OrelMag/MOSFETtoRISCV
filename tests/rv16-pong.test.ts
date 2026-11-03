@@ -247,7 +247,7 @@ describe('Play Pong on your core', { timeout: 300000 }, () => {
   it('every core level that offers it: its reference answer plays Pong in lock step with the golden model', async () => {
     const { NODES } = await import('../src/campaign/nodes');
     const { coreSpecOf } = await import('../src/campaign/corecheck');
-    const offered = NODES.filter((n) => n.kind === 'core' && levelChallenge(n) && coreSpecOf(levelChallenge(n)!.check)?.rv16i).map((n) => n.id);
+    const offered = NODES.filter((n) => n.kind === 'core' && !n.bug && levelChallenge(n) && coreSpecOf(levelChallenge(n)!.check)?.rv16i).map((n) => n.id);
     expect(offered.sort()).toEqual(['c_core3', 'c_fast', 'o_bpred', 'o_dcore', 'o_mc', 'o_mcore', 'pi_core3', 'y_final', 'y_irq', 'y_ptrap', 'y_trap']);
     for (const level of offered) {
       const coreDoc = levelChallenge(nodeById(level)!)!.answer().at(-1)!;

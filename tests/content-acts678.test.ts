@@ -35,7 +35,8 @@ const lib = (id: string) => { const d = resolveComponent(id)!; return { nand: st
 const pct = (a: number, b: number) => Math.round(100 * (1 - a / b));
 const more = (a: number, b: number) => Math.round(100 * (a / b - 1));
 const ACTS = [6, 7, 8];
-const mine = NODES.filter((n) => ACTS.includes(n.act));
+// bug hunts (campaign/bughunts.ts) are fixes, not builds: their text and walk are checked in bughunts.test.ts
+const mine = NODES.filter((n) => ACTS.includes(n.act) && !n.bug);
 
 const pipe = (o: Partial<Rv16PipeOptions>) => rv16Pipe({ fwd: true, stall: true, flush: true, ...o });
 const time = (def: ComponentDef, tests: CoreTest[], system = false) => {
@@ -52,7 +53,7 @@ describe('acts 6–8: the thread is filled', () => {
       const t = threadOf(n.id);
       expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeGreaterThanOrEqual(2);
       expect(t!.pitfalls!.length, `${n.id} pitfalls`).toBeLessThanOrEqual(4);
-      for (const d of dependents(n.id)) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
+      for (const d of dependents(n.id).filter((m) => !m.bug)) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
     }
   });
 
@@ -264,6 +265,6 @@ describe('act 8: the numbers', () => {
     expect(plain(threadOf('o_fpnorm')!.usedFor!.o_fpadd)).toContain(`${sp(par('o_fpnorm').nand!)} of the adder's ${sp(par('o_fpadd').nand!)} NANDs`);
     // no RV16 core runs them: no level of any act requires an FP unit
     const fp = new Set(mine.filter((n) => n.id.startsWith('o_fp')).map((n) => n.id));
-    for (const n of NODES) if (n.kind === 'core') for (const r of n.requires) expect(fp.has(r), `${n.id} requires ${r}`).toBe(false);
+    for (const n of NODES) if (n.kind === 'core' && !n.bug) for (const r of n.requires) expect(fp.has(r), `${n.id} requires ${r}`).toBe(false);
   });
 });

@@ -34,7 +34,8 @@ const T = (id: string) => Object.values(threadOf(id)?.usedFor ?? {}).concat(thre
 const alt = (id: string, name: string) => caseOf(id)!.alts!.find((a) => a.name.startsWith(name))!;
 const def = (id: string) => resolveComponent(id)!;
 const MINE = [0, 11, 1, 2];
-const mine = NODES.filter((n) => MINE.includes(n.act));
+// bug hunts (campaign/bughunts.ts) are fixes, not builds: their text and walk are checked in bughunts.test.ts
+const mine = NODES.filter((n) => MINE.includes(n.act) && !n.bug);
 
 const core = rv16Core(true);
 const copies = (id: string) => copiesIn(core, def(id));
@@ -63,7 +64,7 @@ describe('acts 0, P, 1, 2: the shape of the text', () => {
       const t = threadOf(n.id);
       expect(t, n.id).toBeDefined();
       expect(t!.pitfalls?.length, `${n.id} pitfalls`).toBeGreaterThanOrEqual(2);
-      for (const d of dependents(n.id)) if (!d.optional || d.act === 11) expect(t!.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
+      for (const d of dependents(n.id)) if (!d.bug && (!d.optional || d.act === 11)) expect(t!.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
       // act P builds no block of RV16
       if (n.act === 11) expect(t!.uses).toBeUndefined();
     }

@@ -889,6 +889,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   palette.ts     registerPaletteGroup + the palette panel (purist filter); a group's `folders` (My chips): sections
                  in folder order, empty ones too, renamed in place (double-click), drop targets for a dragged chip
   chips.ts       relations (used by / uses), pinOrder, renamePin (keeps parents wired), guessFf, nextDrive (inout)
+  edits.ts       editCount(a, b): edits between two chips (parts added / removed / retyped, pins moved between nets, matched
+                 greedily by shared pins; recursing into user chips on both sides; moves free): a bug hunt's Score.edits
   challenges.ts  build challenges: BuildChallenge (ports, table / sequence check, allowed parts, par),
                  startChallenge (u_ch_<id> with the pins placed), checkChallenge (BitSim / GateSim / SwitchSim;
                  failing vectors, restriction violations on the compiled hierarchy, score incl. static-timing
@@ -1136,6 +1138,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  act 0: ACTS is in map order, so look acts up by number: actName / actTitle)
   graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
                  statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
+  bughunts.ts    bug hunts (withBugHunts: placed after the level each hangs off, optional): a fault planted in that level's
+                 reference netlist (move / swap / tie; `open`: a library block drawn as a chip of its own for a fault inside it),
+                 drawn by docFromDef: BuildChallenge.start (the faulty chips), answer, baseline (edits); CampaignNode.bug
+                 (fault, kind, lesson, marks) and withhold (LibRule.except); b_timing: a right block graded on period
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
