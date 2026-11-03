@@ -129,7 +129,7 @@ export const chTubes: Chapter = {
         The orange line is the beam: it shows while the tube conducts.</p>
         <p>The plate resistor is the price of the output: while the tube conducts, ${w2(SEC.resistor)} W goes into it and ${w2(SEC.plate)} W into the tube, from the supply
         to ground, on top of the heater. A <span data-ahead="cmos inverter">CMOS inverter (a pair of complementary transistors)</span> has no such standing path; the tube circuit is the pseudo-NMOS inverter of
-        <a href="#/c/inverter/3">chapter 2</a>, with a resistor and a switch that is never fully off.</p>
+        <a href="#/c/inverter/4">chapter 2</a>, with a resistor and a switch that is never fully off.</p>
         <div class="try">Toggle <code>g</code> and watch the beam and the plate.</div>`,
       scene: () => ({ root: TRIODE_SWITCH, inputs: { g: 0 } }),
       tries: [(st) => st.value('y') === 0],

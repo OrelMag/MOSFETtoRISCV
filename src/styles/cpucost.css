@@ -1,0 +1,24 @@
+/* chapter 14: control table and clock-period widgets */
+.ctl-tab td, .ctl-tab th { text-align: center; padding: 2px 6px; font-size: 12.5px; }
+.ctl-tab td:first-child { text-align: left; white-space: nowrap; }
+.cp-sws { display: flex; gap: 6px; margin: 4px 0 10px; }
+.cp-ribbon { display: flex; gap: 2px; margin: 6px 0 14px; min-height: 38px; }
+.cp-seg { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; padding: 3px 2px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); font-size: 10.5px; overflow: hidden; }
+.cp-seg b { font-weight: 600; }
+.cp-seg i { font-style: normal; color: var(--muted); font-family: var(--font-mono); }
+.cp-bars { display: grid; gap: 4px; margin: 6px 0 10px; }
+.cp-row { display: grid; grid-template-columns: 150px 1fr 36px; gap: 8px; align-items: center; font-size: 12.5px; }
+.cp-track { position: relative; height: 12px; border-radius: 3px; background: var(--surface-2); }
+.cp-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+.cp-fill.st { background: var(--warn); }
+.cp-mean { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.cp-row b { text-align: right; font-family: var(--font-mono); }
+@media (max-width: 560px) { .cp-row { grid-template-columns: 96px 1fr 30px; } }
+.ctl-scroll { overflow-x: auto; max-width: 100%; }
+.ctl-panel .ctl-tab { width: max-content; }
+.ctl-tab tbody tr { cursor: pointer; }
+.ctl-tab tbody tr:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ctl-tab tbody tr.sel { background: color-mix(in srgb, var(--accent) 24%, transparent); font-weight: 650; }
+.ctl-tab tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (pointer: coarse) { .ctl-tab td, .ctl-tab th { padding: 9px 8px; } }
+.ctl-panel .ctl-tab td, .ctl-panel .ctl-tab th { padding: 2px 5px; font-size: 12px; }

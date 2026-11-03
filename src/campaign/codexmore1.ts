@@ -23,7 +23,7 @@ export const MORE1: Record<string, CodexMore> = {
       'Expecting <code>lw</code> to read the program: instruction ROM and data RAM are separate memories, so a table of constants belongs in <code>.data</code>.',
     ],
     anatomy: ['pc', 'rf', 'imem', 'dmem'],
-    chapters: [{ chapter: 'map', step: 0, label: 'From a switch to a processor' }, { chapter: 'cpu', step: 4, label: 'Run real programs' }],
+    chapters: [{ chapter: 'map', step: 0, label: 'From a switch to a processor' }, { chapter: 'cpu', step: 5, label: 'Run real programs' }],
   },
 
   fde: {
@@ -48,7 +48,7 @@ write back    result mux             4       93
       'Updating the PC early: in a single-cycle CPU the PC, the register and the memory writes all happen at one clock edge; a PC that changes mid-cycle changes the instruction being executed.',
     ],
     anatomy: ['imem', 'ctl', 'rf', 'imm', 'alu', 'dmem', 'wb', 'npc'],
-    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cpu', step: 1, label: 'ALU instructions' }],
+    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cpu', step: 2, label: 'ALU instructions' }],
   },
 
   abstraction: {
@@ -91,8 +91,8 @@ RV16 pipeline             9218 NANDs</pre>`,
     chapters: [
       { chapter: 'inverter', step: 0, label: 'Pull up, pull down' },
       { chapter: 'inverter', step: 1, label: 'Why this is brilliant' },
-      { chapter: 'inverter', step: 2, label: 'The wrong way round: weak levels' },
-      { chapter: 'inverter', step: 3, label: 'The cheaper, hotter way: a pull-up' },
+      { chapter: 'inverter', step: 3, label: 'The wrong way round: weak levels' },
+      { chapter: 'inverter', step: 4, label: 'The cheaper, hotter way: a pull-up' },
     ],
   },
 
@@ -108,7 +108,7 @@ RV16 pipeline             9218 NANDs</pre>`,
       'Choosing NOR for wide functions: its series PMOS make it worse than NAND at every fan-in.',
     ],
     anatomy: ['imm', 'ctl'],
-    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'silicon', step: 2, label: 'A real cell library' }, { chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
+    chapters: [{ chapter: 'nand', step: 1, label: 'Three and four inputs' }, { chapter: 'nand', step: 2, label: 'NOR, for comparison' }, { chapter: 'nand', step: 3, label: 'NOR gets worse faster' }, { chapter: 'silicon', step: 2, label: 'A real cell library' }, { chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
   },
 
   depth: {
@@ -331,6 +331,7 @@ a shift register (q straight into the next d) relies on
     chapters: [
       { chapter: 'latches', step: 3, label: 'The flip-flop: act only on the edge' },
       { chapter: 'fastadd', step: 7, label: 'Static timing on our CPU' },
+      { chapter: 'cpu', step: 6, label: 'What sets the period' },
       { chapter: 'fastadd', step: 8, label: 'Overclock it' },
       { chapter: 'silicon', step: 4, label: 'Wires and the clock' },
     ],
@@ -451,7 +452,7 @@ bne:  imm[5:3]  rs2  rs1  imm[2:0]  op
     ],
     lib: 'rv16_branch',
     anatomy: ['br', 'npc'],
-    chapters: [{ chapter: 'cpu', step: 3, label: 'Branches and jumps' }],
+    chapters: [{ chapter: 'cpu', step: 4, label: 'Branches and jumps' }],
   },
 
   loadstore: {
@@ -474,7 +475,7 @@ loop:   lw   t1, 0(a0)
       'Using a loaded value in the very next instruction on the pipeline: correct, at the cost of one stall cycle (load-use).',
     ],
     anatomy: ['alu', 'dmem', 'mmio'],
-    chapters: [{ chapter: 'cpu', step: 2, label: 'Loads and stores' }],
+    chapters: [{ chapter: 'cpu', step: 3, label: 'Loads and stores' }],
   },
 
   callconv: {
@@ -494,7 +495,7 @@ x6–x7   t0–t1   temporaries           no</pre>`,
       'Returning with sp changed: the caller\'s saved words are then read from the wrong addresses.',
     ],
     anatomy: ['rf', 'npc'],
-    chapters: [{ chapter: 'cpu', step: 3, label: 'Branches and jumps' }],
+    chapters: [{ chapter: 'isa', step: 4, label: 'Register names and the calling convention' }, { chapter: 'cpu', step: 4, label: 'Branches and jumps' }],
   },
 
   stack: {
@@ -574,7 +575,7 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
     ],
     lib: 'rv16_cpu',
     anatomy: ['pc', 'imem', 'rf', 'imm', 'alu', 'br', 'dmem', 'wb', 'npc'],
-    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cpu', step: 1, label: 'ALU instructions' }],
+    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cpu', step: 2, label: 'ALU instructions' }],
   },
 
   singlecycle: {
@@ -594,7 +595,7 @@ lui     1   –      U    imm       0   pc + 1</pre>`,
     compare: ['rv16_cpu_ks'],
     chapters: [
       { chapter: 'cpu', step: 0, label: 'The datapath' },
-      { chapter: 'cpu', step: 4, label: 'Run real programs' },
+      { chapter: 'cpu', step: 5, label: 'Run real programs' },
       { chapter: 'fastadd', step: 9, label: 'Swap in fast adders' },
     ],
   },
