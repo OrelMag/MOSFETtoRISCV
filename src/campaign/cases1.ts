@@ -247,7 +247,7 @@ export const CASES1: Record<string, LevelCase> = {
   o_fpround: {
     problem: 'An exact sum or product has more bits than the 11 a binary16 significand keeps. Rounding it correctly, in any of the five modes, needs only three of them: the last kept bit (lsb), the first dropped bit (guard) and the OR of everything below it (sticky), plus the sign for the directed modes. <code>up</code> says add one unit in the last place; <code>toInf</code> says whether an overflow becomes ∞ or the largest finite number.',
     without: 'Truncation only (round toward zero): results biased toward zero, and not the IEEE 754 default, round to nearest with ties to even.',
-    cost: '62 NANDs, depth 13: decode rm to one line per mode, then a small AND-OR per mode. Every FP result passes through it once, inside normalize &amp; round.',
+    cost: '62 NANDs, depth 13: decode rm to a line for each mode that can round up (RTZ needs none), then a small AND-OR per mode. Every FP result passes through it once, inside normalize &amp; round.',
   },
   o_fpsticky: {
     problem: 'Before two floats are added, the one with the smaller exponent is shifted right by the exponent difference so their binary points line up. The bits shifted out cannot just be dropped: rounding needs to know whether any of them was 1. The sticky shifter is a right barrel shifter (level k shifts by 2<sup>k</sup>) whose levels also OR the bits they drop into one sticky bit.',

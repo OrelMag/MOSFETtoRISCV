@@ -32,7 +32,7 @@ export const formatSteps: Step[] = [
     more: {
       derive: `<p>Largest finite = (2 − 2<sup>−M</sup>) × 2<sup>emax</sup> with emax = 2<sup>E−1</sup> − 1; smallest normal 2<sup>1−emax</sup>; smallest subnormal 2<sup>1−emax−M</sup>. One decimal digit is 3.32 bits, so M + 1 significant bits
         carry (M + 1) · log<sub>10</sub> 2 digits. The ratio largest / smallest subnormal is the <em>dynamic range</em>: bf16 and float32 about 10<sup>${Math.round(Math.log10(r('bf16').max / r('bf16').minSub))}</sup> and 10<sup>${Math.round(Math.log10(r('f32').max / r('f32').minSub))}</sup>, binary16 only 10<sup>${Math.round(Math.log10(r('f16').max / r('f16').minSub))}</sup>.</p>`,
-      real: `<p>Fewer exponent bits also mean a tighter choice of scale: FP8 training keeps a per-tensor scale factor (a power of two, sometimes per block) next to the data, because E4M3's seven binades cannot cover a tensor's spread unaided.
+      real: `<p>Fewer exponent bits also mean a tighter choice of scale: FP8 training keeps a per-tensor scale factor (a power of two, sometimes per block) next to the data, because E4M3's ${2 ** 4 - 2} normal binades (${sciText(r('e4m3').minNormal)} to ${g(r('e4m3').max)}) cannot cover a tensor's spread unaided.
         Real FP8 and bf16 units also tend to flush subnormals and offer fewer rounding modes than the unit measured here, which makes them smaller still.</p>`,
       pitfall: `<p>Quoting "FP8 E4M3 max = 448" and then checking it against a library that follows IEEE rules, or the reverse. Always state which E4M3: the IEEE-style one tops out at 240, the OCP one at 448 and has no ∞.</p>`,
     },
@@ -88,7 +88,7 @@ export const formatSteps: Step[] = [
       ],
       answer: 0,
       explain: `The tree is M²-ish (24 × 24 against 8 × 8), but the unit is tree + normalize & round + the rest. At bf16 the tree is ${g(C.bf16.mul.tree)} of ${g(C.bf16.mul.nands)} NANDs and the rounder, ${g(C.bf16.mul.round)}, is bigger than it. A part that does not shrink caps the saving, in area as in time.`,
-      why: ['', 'Every format here comes from the same generator and the same NAND cells.', 'The product is rounded once, with no further multiplication; the rounder is a shifter and an incrementer.', 'The tree does shrink (${g(C.f32.mul.tree)} → ${g(C.bf16.mul.tree)} NANDs, measured); the exponent adder is a few hundred NANDs, so it explains none of the gap.'],
+      why: ['', 'Every format here comes from the same generator and the same NAND cells.', 'The product is rounded once, with no further multiplication; the rounder is a shifter and an incrementer.', `The tree does shrink (${g(C.f32.mul.tree)} → ${g(C.bf16.mul.tree)} NANDs, measured); the exponent adder is a few hundred NANDs, so it explains none of the gap.`],
     },
   },
 ];

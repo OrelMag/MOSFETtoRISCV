@@ -103,6 +103,8 @@ jobs:
       - run: npm ci
       - run: pip install yowasp-yosys
       - run: npx vite-node scripts/fpga-export.ts counter7 computer
+      # the block-RAM memories read through mem_clk against asynchronous ones, a ROM -> RAM chain, at every clk edge
+      - run: CYCLES=200 npx vite-node scripts/fpga-memcheck.ts
   deploy:
     needs: [test, build, verify-hdl, fpga]
     runs-on: ubuntu-latest

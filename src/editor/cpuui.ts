@@ -691,7 +691,7 @@ class CpuPanel {
     keyed(this.fields, f && w !== null ? `${f.pc}:${w}:${f.role}` : 'none', () => (f && w !== null ? [
       h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, f.pc, this.desc?.iss.custom)), h('span', null, f.role)),
       instrBreakdown(w, {
-        compact: true, selected: this.fieldPin, onField: (k, sticky) => {
+        compact: true, custom: this.desc?.iss.custom, selected: this.fieldPin, onField: (k, sticky) => {
           if (sticky) this.fieldPin = this.fieldPin === k ? null : k;
           else this.fieldHover = k;
           this.fields.querySelectorAll<HTMLElement>('[data-field]').forEach((e) => e.classList.toggle('on', e.dataset.field === this.fieldPin));
