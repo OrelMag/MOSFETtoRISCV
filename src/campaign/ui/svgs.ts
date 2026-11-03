@@ -7,11 +7,9 @@ import { ancestors, isDone, statusOf, type ProgressView } from '../graph';
 import { BAND_GAP, COL_GAP, FOOT_LABEL_W, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS, ROW_GAP, SUB_LINE, SUB_Y, LINK_H, LINK_PAD } from '../layout';
 import { actDone, actEnd, cardBlock, endLinks } from '../thread';
 import { ACTS, actName, NODES } from '../nodes';
-import { levelCardLabel } from '../cardlabel';
+import { cardHeads, levelCardLabel, relationText } from '../cardlabel';
 import { hasTwin, twinKey } from '../twinids';
 import type { CampaignNode } from '../types';
-
-const KIND_MARK: Record<CampaignNode['kind'], string> = { lesson: 'read', drill: 'drill', build: 'build', program: 'code', core: 'CPU' };
 
 const anc = new Map<string, Set<string>>();
 const ancOf = (id: string) => anc.get(id) ?? anc.set(id, ancestors(id)).get(id)!;
@@ -136,13 +134,15 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
   // they are short and always drawn; between acts they cross the whole map, so they appear only for
   // the level pointed at or selected (a port on its left edge says it has some).
   const crossIn = new Map<string, CampaignNode[]>();
+  const needsOf = new Map<string, CampaignNode[]>(), unlocksOf = new Map<string, CampaignNode[]>();
   for (const p of L.nodes.values()) {
     for (const r of drawnRequires(p.node)) {
       const q = L.nodes.get(r);
       if (!q) continue;
+      needsOf.set(p.node.id, [...(needsOf.get(p.node.id) ?? []), q.node]);
+      unlocksOf.set(r, [...(unlocksOf.get(r) ?? []), p.node]);
       const cross = q.node.act !== p.node.act;
       if (cross) crossIn.set(p.node.id, [...(crossIn.get(p.node.id) ?? []), q.node]);
-      const hot = selected !== undefined && (r === selected || p.node.id === selected);
       const x1 = q.x + NODE_W, y1 = q.y + NODE_H / 2, x2 = p.x, y2 = p.y + NODE_H / 2;
       // The gaps between boxes are the channels: the column gap after the requirement, the one before
       // the node, and a row gap (same act) or the gap above the node's act (another act) between them. An edge onto
@@ -156,9 +156,21 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
         d = rounded([[x1, y1], [xa, y1], [xa, yc], [xb, yc], [xb, y2], [x2, y2]]);
       }
       const done = isDone(view(r));
-      edges.append(s('path', { class: `cp-edge${done ? ' done' : ''}${p.node.optional ? ' opt' : ''}${cross ? ' cross' : ''}${hot ? ' hot' : ''}`, d, 'data-a': r, 'data-b': p.node.id }));
+      edges.append(s('path', { class: `cp-edge${done ? ' done' : ''}${p.node.optional ? ' opt' : ''}${cross ? ' cross' : ''}`, d, 'data-a': r, 'data-b': p.node.id }));
     }
   }
+  // The levels a card joins stay lit with their lines and the rest fade: the card pointed at or focused, else the selected one.
+  const trace = (id: string | undefined) => {
+    const at = id ?? selected;
+    const lit = new Set<string>();
+    edges.querySelectorAll('.cp-edge').forEach((e) => {
+      const on = at !== undefined && (e.getAttribute('data-a') === at || e.getAttribute('data-b') === at);
+      e.classList.toggle('hover', on);
+      if (on) { lit.add(e.getAttribute('data-a')!); lit.add(e.getAttribute('data-b')!); }
+    });
+    svg.classList.toggle('tracing', id !== undefined);
+    svg.querySelectorAll('.cp-node').forEach((g) => g.classList.toggle('rel', lit.has(g.getAttribute('data-node')!) || g.getAttribute('data-node') === at));
+  };
   for (const p of L.nodes.values()) {
     const n = p.node;
     const st = statusOf(n, view, unlockAll);
@@ -168,18 +180,18 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const vl = hasTwin(n.id) && !n.soon;
     const vlStars = vl ? view(twinKey(n.id))?.stars ?? 0 : 0;
     const label = `${levelCardLabel(n, st, stars)}${vl ? `, also in Verilog${vlStars ? ` (${vlStars} of 3 stars)` : ''}` : ''}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
+    const heads = cardHeads(n, st, stars);
+    const rel = relationText((needsOf.get(n.id) ?? []).map((m) => m.title), (unlocksOf.get(n.id) ?? []).map((m) => m.title));
     const g = s('g', {
       class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.bug ? ' bug' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
       transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'data-node': n.id,
-      'aria-label': label, 'aria-current': n.id === selected ? 'true' : null,
+      'aria-label': label, 'aria-description': rel, 'aria-current': n.id === selected ? 'true' : null,
     },
-    s('title', null, label),
+    s('title', null, `${label}. ${rel}`),
     s('rect', { class: 'cp-card', width: NODE_W, height: NODE_H, rx: 8 }),
-    s('text', { class: 'cp-node-kind', x: 10, y: 15 }, `${n.bug ? 'bug hunt' : KIND_MARK[n.kind]}${n.optional ? ' · optional' : ''}${n.soon ? ' · soon' : ''}`),
+    s('text', { class: 'cp-node-kind', x: 10, y: 15 }, heads.kind),
     s('text', { class: 'cp-node-title', x: 10, y: 34 }, n.title),
-    st === 'solved' && n.kind !== 'lesson' ? s('text', { class: 'cp-node-stars', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)) : null,
-    st === 'skipped' ? s('text', { class: 'cp-node-skip', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'skipped') : null,
-    st === 'locked' ? s('text', { class: 'cp-node-lock', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'locked') : null);
+    heads.status ? s('text', { class: `cp-node-${heads.statusClass === 'stars' ? 'stars' : heads.statusClass === 'skip' ? 'skip' : 'lock'}`, x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, heads.status) : null);
     if (blk) {
       // the block it ends up in, as a tab on the card's bottom edge (lit while the card is pointed at)
       const w = 16 + blk.label.length * 5.6;
@@ -200,11 +212,10 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
       g.append(s('circle', { class: 'cp-port', cx: 0, cy: NODE_H / 2, r: 4, 'aria-hidden': 'true' },
         s('title', null, `Builds on ${from.map((m) => `${m.title} (${actName(m.act)})`).join(', ')}: point here to see the lines`)));
     }
-    const hover = (on: boolean) => edges.querySelectorAll(`[data-a="${n.id}"], [data-b="${n.id}"]`).forEach((e) => e.classList.toggle('hover', on));
-    g.addEventListener('mouseenter', () => hover(true));
-    g.addEventListener('mouseleave', () => hover(false));
-    g.addEventListener('focus', () => hover(true));
-    g.addEventListener('blur', () => hover(false));
+    g.addEventListener('mouseenter', () => trace(n.id));
+    g.addEventListener('mouseleave', () => trace(undefined));
+    g.addEventListener('focus', () => trace(n.id));
+    g.addEventListener('blur', () => trace(undefined));
     g.addEventListener('click', () => go(n.id));
     g.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -216,7 +227,29 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     g.append(s('rect', { class: 'cp-focus', x: -4, y: -4, width: NODE_W + 8, height: NODE_H + 8, rx: 11 }));
     actGroups.get(n.act)!.append(g);
   }
+  trace(undefined);
+  fitTitles(svg);
   return svg;
+}
+
+/**
+ * A title wider than its card (the longest run to 26 characters) is shrunk to a floor, then cut with an ellipsis; the
+ * full title stays in the card's name and tooltip. Measured once the map is on screen (and again when the fonts arrive).
+ */
+function fitTitles(svg: SVGSVGElement): void {
+  const room = NODE_W - 20, floor = 11;
+  const run = () => svg.querySelectorAll<SVGTextElement>('.cp-node-title').forEach((el) => {
+    const full = el.dataset.full ?? (el.dataset.full = el.textContent ?? '');
+    el.textContent = full;
+    el.style.fontSize = '';
+    let w = el.getComputedTextLength();
+    if (!w || w <= room) return;
+    const px = Math.max(floor, Math.floor((13 * room / w) * 2) / 2);
+    el.style.fontSize = `${px}px`;
+    w = el.getComputedTextLength();
+    for (let k = full.length; w > room && k > 1; k--) { el.textContent = `${full.slice(0, k).trimEnd()}…`; w = el.getComputedTextLength(); }
+  });
+  requestAnimationFrame(() => { run(); void document.fonts?.ready.then(run); });
 }
 
 /** The anatomy diagram; a click on a block calls `pick`. Without `pick` it is a picture (the level panel's, inside a link). */
