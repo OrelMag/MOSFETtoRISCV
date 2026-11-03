@@ -301,7 +301,7 @@ export const chFastAdders: Chapter = {
         <p>The ALU is about 60% of the path, and most of that is the ripple carry.</p>
         <p>Why the analysis never needs a program: a flip-flop can only change at a clock edge, so every signal in the machine is a function of flip-flop outputs after a bounded delay, and the worst such delay is a property of
         the wiring. If the period covers it, every cycle of every program is safe, whatever it executes. That is also why the answer is conservative: it covers the slowest path even when no program makes it matter.</p>
-        <p>Converted at ${PS} ps a delay, ${CPU_PERIOD} NAND delays is ${(CPU_PERIOD * PS / 1000).toFixed(2)} ns, a clock of about ${Math.round(1e6 / (CPU_PERIOD * PS))} MHz: a 1990s microcontroller, built from a textbook ALU.</p>`,
+        <p>Converted at ${PS} ps a delay, ${CPU_PERIOD} NAND delays is ${(CPU_PERIOD * PS / 1000).toFixed(2)} ns, a clock of about ${Math.round(1e6 / (CPU_PERIOD * PS))} MHz: at 28 nm, only what a late-1990s processor reached on a far older process, because of a textbook ALU.</p>`,
       scene: () => cpuScene({ source: src('sum'), timing: true }),
       tour: {
         beats: [
