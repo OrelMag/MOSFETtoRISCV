@@ -535,7 +535,7 @@ export const chInverter: Chapter = {
           the PMOS carries ${MOBILITY_RATIO}× the width. By symmetry V<sub>M</sub> = VDD / 2, and with both in saturation at V<sub>M</sub> the current is (k / 2)·(V<sub>M</sub> − V<sub>t</sub>)² · (1 + λ V<sub>M</sub>) = ${VTC_SC.toFixed(0)} µA. The test pins V<sub>M</sub> to VDD / 2 for the matched pair and
           to the solver's own fixed point elsewhere.</p>`,
         numbers: `<table class="mini"><tr><th>Wp / Wn</th><th>V<sub>M</sub></th><th>NM<sub>L</sub></th><th>NM<sub>H</sub></th></tr>${[1, MOBILITY_RATIO, 4].map((w) => { const m = metrics(strength(w)); return `<tr><td>${w}</td><td>${m.vm.toFixed(2)} V</td><td>${m.nmL.toFixed(2)} V</td><td>${m.nmH.toFixed(2)} V</td></tr>`; }).join('')}</table>`,
-        pitfall: `<p>Reading V<sub>M</sub> = VDD / 2 as a law. It holds only for a matched pair; every real gate has its own V<sub>M</sub> (a NAND with its series NMOS sits below that of an inverter of the same size), and the noise margins follow it.</p>`,
+        pitfall: `<p>Reading V<sub>M</sub> = VDD / 2 as a law. It holds only for a matched pair; every real gate has its own V<sub>M</sub> (a NAND's series NMOS and parallel PMOS put it above that of an inverter of the same size, a NOR's below), and the noise margins follow it.</p>`,
         real: `<p>Supplies have fallen from 5 V to under 1 V while V<sub>t</sub> has not followed, so the margins in volts shrink with VDD and the share of the swing the band takes grows. Process variation moves V<sub>t</sub> between transistors on one chip, which is why designers check the margins at the corners.</p>`,
       },
       challenge: {
@@ -650,7 +650,7 @@ export const chInverter: Chapter = {
       tries: [(st) => st.value('en') === 1],
       more: {
         derive: `<p>With stage delay t<sub>d</sub> the period is 2·N·t<sub>d</sub>, so t<sub>d</sub> = T / 2N. Seven stages at ${PS_PER_NAND} ps: T = ${14 * PS_PER_NAND} ps. The test <code>tests/cmosgates.test.ts</code> runs 3, 5 and 7 stages on the gate simulator and finds 6, 10 and 14 delays between rising edges.</p>`,
-        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter 9) and sits in one of them. Odd is what makes it unable to settle.</p>`,
+        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter 8) and sits in one of them. Odd is what makes it unable to settle.</p>`,
         real: `<p>The simulator settles every circuit it can; an oscillator is the one it cannot, and the stage animates it instead of settling (the Timing panel shows the square wave). In silicon the frequency also drifts with temperature and supply: a ring is a thermometer as much as a clock.</p>`,
       },
       challenge: {
@@ -702,7 +702,7 @@ export const chNand: Chapter = {
       'A CMOS gate is a pull-up network of PMOS and a pull-down network of NMOS that are each other\'s dual: parallel in one, series in the other. For every input exactly one of them conducts.',
       'NAND: PMOS in parallel, NMOS in series. NOR is the dual. A single CMOS stage always inverts, so NAND (4 transistors) is cheaper than <span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span> (6).',
       'NAND is <strong>functionally complete</strong>. Every circuit on this site bottoms out in NANDs, and the gate counts count them.',
-      'An n-input NAND is 2n transistors with a stack n deep: logical effort (n + 2) / 3, parasitic delay n. A NOR is (2n + 1) / 3, so NOR3 is as slow as NAND4. A 4-input <span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span> is faster as two NAND2 into a NOR2 than as a NAND4 and an inverter.',
+      'An n-input NAND is 2n transistors with a stack n deep: logical effort (n + 2) / 3, parasitic delay n. A NOR is (2n + 1) / 3, so NOR3 (7/3) takes more effort than NAND4 (2). A 4-input <span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span> is faster as two NAND2 into a NOR2 than as a NAND4 and an inverter.',
       'A NAND is a function: CMOS, <span data-ahead="relay">relays (switches closed by the magnetic pull of a coil)</span> or tubes change its price (time, power, size), never the netlist.',
     ],
     practise: ['t_nand', 't_nor', 'r_nand'],
@@ -788,7 +788,7 @@ export const chNand: Chapter = {
         <p>Nothing limits a NAND to two inputs: three parallel PMOS, three NMOS in series. Here is the three-input gate, ${stats(cmosNand(3)).transistors} transistors. The pull-down is a stack of
         <span data-show="n1 n2 n3">three NMOS</span>, so it conducts only when all three inputs are 1; any one input at 0 turns on its PMOS in the <span data-show="p1 p2 p3">parallel pull-up</span>.</p>
         <p>What it costs is speed. A series stack of n devices passes about 1/n of the current of one, so to pull down as fast as an inverter each NMOS must be n times wider, and the gate's input capacitance grows with it. In
-        logical effort (the delay of a gate relative to an inverter delivering the same current, in τ, as in chapter 2's last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
+        logical effort (a gate's input capacitance relative to an inverter delivering the same current, so its delay per unit of load in τ, as in chapter 2's last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
         ${[2, 3, 4].map((n) => `NAND${n} g = ${fmtFrac(gNand(n))}, p = ${n}`).join('; ')}. Every extra input loads every gate that drives it and slows the gate itself.</p>
         <p>That is why libraries stop at four inputs and why the brick of this site has two. Wider gates are not forbidden, but a tree of two-input gates is usually as fast and no larger: the NOR step below compares them.</p>
         <div class="try">Make the output 0, then lift any single input and find the PMOS that takes y back up.</div>`,
@@ -853,7 +853,7 @@ export const chNand: Chapter = {
       title: 'NOR gets worse faster',
       body: `
         <p>The same widening argument hits NOR on its PMOS. Three PMOS in <span data-show="p1 p2 p3">series</span> must each be three times as wide to match an inverter's pull-up, and a PMOS is already the weaker device: g<sub>NOR<i>n</i></sub> = <strong>(2n + 1) / 3</strong>.
-        Side by side: ${[2, 3, 4].map((n) => `${n} inputs, NAND ${fmtFrac(gNand(n))}, NOR ${fmtFrac(gNor(n))}`).join('; ')}. NOR3 costs as much as NAND4 in effort, and NOR4 is worse than any gate the site uses.</p>
+        Side by side: ${[2, 3, 4].map((n) => `${n} inputs, NAND ${fmtFrac(gNand(n))}, NOR ${fmtFrac(gNor(n))}`).join('; ')}. NOR3 costs more effort than NAND4 (as much as a NAND5), and NOR4 is worse than any gate the site uses.</p>
         <p>The effect is on whole structures. A 4-input <span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span> driving four loads (H = 4) can be one NAND4 and an inverter, or two NAND2 into a NOR2. Path delay is D = N·F<sup>1/N</sup> + ΣP, with F = G·H the product of the efforts:
         the wide version has G = ${fmtFrac(gNand(4))} · 1, ΣP = ${pGate(4) + 1}, D = ${and4Wide(4).toFixed(1)} τ; the tree has G = ${fmtFrac(gNand(2))} · ${fmtFrac(gNor(2))} = ${(gNand(2) * gNor(2)).toFixed(2)}, ΣP = ${2 * pGate(2)}, D = <strong>${and4Tree(4).toFixed(1)} τ</strong>. The tree wins at every load from 1 to 16
         (${and4Tree(1).toFixed(1)} against ${and4Wide(1).toFixed(1)} τ at H = 1), with shorter stacks. This is the working reason NAND2 is the brick: two-input gates compose into everything with nothing lost.</p>

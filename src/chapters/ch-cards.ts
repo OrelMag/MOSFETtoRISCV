@@ -177,8 +177,7 @@ export const chCards: Chapter = {
         instruction: the 32-bit word along row 9 from column 1, most significant bit first, its source line and the word in
         hex printed along the top. Real machines packed more: the IBM 704 read each of a card's 12 rows as two 36-bit words.
         One word a card wastes 928 of 960 positions, and is readable at a glance.</p>
-        <p>Columns 73–80 hold a <strong>sequence number</strong>, counted in tens so a card can be slipped in later (FORTRAN
-        ignored those columns for this reason). A dropped deck goes back on a <strong>card sorter</strong>: an IBM 082 drops
+        <p>Columns 73–80 hold a <strong>sequence number</strong>, counted in tens so a card can be slipped in later (the IBM 704's card reader read only 72 columns, so FORTRAN never saw these eight, which left them free for this). A dropped deck goes back on a <strong>card sorter</strong>: an IBM 082 drops
         each card into the pocket of the digit in one column, 650 cards a minute. Stack the pockets 0 to 9 and sort on the
         next column to the left: after the last pass the deck is in order. That is the radix sort, least significant digit
         first, a pass per digit, each pass stable.</p>

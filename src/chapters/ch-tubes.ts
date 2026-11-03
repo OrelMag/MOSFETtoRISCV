@@ -79,7 +79,7 @@ export const chTubes: Chapter = {
         brings an oxide-coated <strong>cathode</strong> to about 1000 K, hot enough to boil electrons off its surface;
         a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a wire mesh, the
         <strong>grid</strong>, decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
-        none once the grid is below ${V_CUTOFF} V. Its field pushes them back.</p>
+        none once the grid is below ${V_CUTOFF} V in this model (a real tube tails off a few volts lower). Its field pushes them back.</p>
         <p>This is one section of a 6SN7, the twin triode ENIAC used most. The current follows the space-charge law
         I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> with µ = 20, fitted to the datasheet point (250 V, −8 V,
         9 mA), and works into a 22 kΩ plate resistor. The cathode warms with a 6 s time constant, and emission
@@ -98,7 +98,7 @@ export const chTubes: Chapter = {
           in the resistor and ${w2(SEC.plate)} W in the tube while it conducts.</p>`,
         pitfall: `<p>Reading a cold machine as "all off". Until the cathodes warm (${WARM.t10.toFixed(1)} s to a tenth of the current, ${WARM.t90.toFixed(1)} s to nine tenths) nothing conducts, so every plate
           sits at ${B_PLUS} V, which the logic reads as a 1: the machine wakes up in a state nobody designed, and resets must wait for the heaters.</p>`,
-        real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it almost everywhere. An oxide-coated cathode emits at around 1000 K, which is also why
+        real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it more than any other type. An oxide-coated cathode emits at around 1000 K, which is also why
           tubes dim and fail: the coating evaporates and the heater ages. Computers of the 1950s left their tubes on day and night for this reason.</p>`,
         numbers: `<table class="mini"><tr><th>grid V</th>${[0, -4, -8, -12.5].map((g) => `<td>${g}</td>`).join('')}</tr>
           <tr><th>plate V</th>${[0, -4, -8, -12.5].map((g) => `<td>${v(plateVoltage(g))}</td>`).join('')}</tr></table>`,
@@ -129,7 +129,7 @@ export const chTubes: Chapter = {
         The orange line is the beam: it shows while the tube conducts.</p>
         <p>The plate resistor is the price of the output: while the tube conducts, ${w2(SEC.resistor)} W goes into it and ${w2(SEC.plate)} W into the tube, from the supply
         to ground, on top of the heater. A <span data-ahead="cmos inverter">CMOS inverter (a pair of complementary transistors)</span> has no such standing path; the tube circuit is the pseudo-NMOS inverter of
-        <a href="#/c/inverter/4">chapter 2</a>, with a resistor and a switch that is never fully off.</p>
+        <a href="#/c/inverter/4">chapter 2</a>, with a pull-up resistor that never turns off and a tube that, conducting, never pulls the plate below 81 V.</p>
         <div class="try">Toggle <code>g</code> and watch the beam and the plate.</div>`,
       scene: () => ({ root: TRIODE_SWITCH, inputs: { g: 0 } }),
       tries: [(st) => st.value('y') === 0],
@@ -266,7 +266,7 @@ export const chTubes: Chapter = {
         junction is the <strong>AND</strong> of the inputs; <span data-show="r1 r2">a divider</span> and <span data-show="v1">a triode</span> invert it.</p>
         <p>One NAND: half a 6SN7 and a whole 6AL5 (a twin diode), ${w2(BRICK.total)} W on average:
         ${w2(BRICK.heaters)} W of heaters, ${w2(BRICK.plate)} W through the plate resistor, ${w2(BRICK.divider)} W in the
-        divider. ENIAC itself used 7200 germanium crystal diodes for gates like this one, which saved the heaters.</p>
+        divider. ENIAC already carried 7200 crystal diodes; later machines used them for gates like this one, which saved the heaters.</p>
         <p>The diodes do the logic and the triode restores the level: a diode AND alone has no gain, and every stage through it would lose a diode drop of swing. The
         triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> between the gate and its restoring stage, paid in
         two tube envelopes (${stats(TUBE_NAND).triodes} triode section and ${stats(TUBE_NAND).diodes} diode sections per NAND).</p>
@@ -294,7 +294,7 @@ export const chTubes: Chapter = {
           <tr><td>divider</td><td>${w2(BRICK.divider)} W</td></tr><tr><th>total</th><th>${w2(BRICK.total)} W</th></tr></table>`,
         pitfall: `<p>Chaining diode ANDs without a restoring stage. Each diode drops a fraction of a volt, and a pull-up that fights several parallel diodes lets the junction creep up on a
           nominally low input. After two or three stages the levels are gone. The triode is there to bring them back, which also costs the step.</p>`,
-        real: `<p>ENIAC used crystal diodes (${thin(ENIAC.diodes)} of them) for gates like this and kept the tubes for amplification and storage, which saved a heater for every gate.
+        real: `<p>ENIAC also used crystal diodes (${thin(ENIAC.diodes)} of them), but most of its gating was in tubes. Machines that did gate in diodes, like SEAC and UNIVAC, saved a heater for every gate.
           Germanium diodes also gave less drop than vacuum ones, which made the restoring stage easier.</p>`,
       },
       challenge: {

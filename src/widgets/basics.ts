@@ -1,5 +1,5 @@
 // Chapter 0's explainers (Basics: before the switch): a battery, a switch and a lamp on one loop; why a wire carries two
-// levels, not ten; counting on lamps; a rule as a table (two switches and a lamp); a five-instruction program stepped on
+// levels, not ten; counting on lamps; a rule as a table (two switches and a lamp); a four-instruction program stepped on
 // SAP-1's golden model (Appendix C's computer). Every number on them is computed here, and the prose reads it from here.
 
 import '../styles/basics.css';
