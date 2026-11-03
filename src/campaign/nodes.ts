@@ -328,7 +328,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 's_reg4', act: 3, title: '4-bit register', kind: 'build', requires: ['s_dff', 'g_mux'], base: sandbox('s_reg4'),
     why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Never gate the clock instead; the 16-bit register next is four of these.',
     tips: ['Build a 1-bit flip-flop with enable first, then use it four times.', 'The mux: en = 1 selects d, en = 0 selects the flip-flop\'s own q: 9 + 4 = 13 NANDs a bit.', 'Do not AND en into clk: a change of en while clk is high makes an edge of its own, and the AND delays this clock against every other.'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
   },
   {
     id: 's_reg16', act: 3, title: '16-bit register', kind: 'build', requires: ['s_reg4'],

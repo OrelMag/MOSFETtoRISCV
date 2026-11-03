@@ -285,7 +285,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Giving a pipeline register a clear but no enable, or the reverse: a stall needs hold, a flush needs clear, and both occur.',
     ],
     lib: 'reg4', anatomy: ['pc', 'rf', 'p1', 'p2', 'p3', 'p4', 'csr'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }, { chapter: 'registers', step: 0, label: 'A register is a row of flip-flops' }],
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }, { chapter: 'registers', step: 0, label: 'A register is a row of flip-flops' }],
   },
   counter: {
     idea: 'A counter is a register fed by an incrementer of its own output: q ← q + 1 at every rising edge while enabled. The loop register → logic → register is the shape of every synchronous circuit, and the counter is its simplest case. The 4-bit counter is 80 NANDs: a 60-NAND register and a 20-NAND incrementer. Its period is clk-to-q + the incrementer\'s carry chain + setup, so it slows as it widens unless the incrementer looks ahead.<br>Counters count cycles (RISC-V\'s mcycle, a timer compared with mtimecmp), steps of a multicycle unit (a divider\'s iterations, a cache refill\'s wait) and, with a load input, addresses: the PC is a counter that can jump.',
