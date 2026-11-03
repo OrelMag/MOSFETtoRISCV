@@ -1276,6 +1276,16 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
   padding: 10px 10px 8px;
 }
+/* A panel cut short by the room it has (the Timing drawer under it) scrolls inside: an edge shadow says the rest is there. */
+.mem-panel {
+  background-image:
+    linear-gradient(var(--surface) 30%, transparent), linear-gradient(transparent, var(--surface) 70%),
+    linear-gradient(var(--scroll-shadow), transparent), linear-gradient(to top, var(--scroll-shadow), transparent);
+  background-position: top, bottom, top, bottom;
+  background-size: 100% 28px, 100% 28px, 100% 10px, 100% 10px;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
 .mem-panel h4 { cursor: pointer; user-select: none; margin: 0 0 6px; font-size: 12px; font-weight: 650; color: var(--text-2); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 
 .mem-panel.collapsed > :not(h4) { display: none; }
