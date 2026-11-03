@@ -1,7 +1,7 @@
 # MOSFET → RISC-V
 
 An interactive journey from a single transistor to a multi-core RISC-V processor laid out on
-silicon, and on to a GPU, a memory system and Doom, as a static website.
+silicon, and on to a GPU, a memory system, Doom and a breadboard computer, as a static website.
 **[Open it →](https://orelmag.github.io/MOSFETtoRISCV/)**
 
 ![Drilling from a 4-bit adder into a full adder, into one NAND, down to its four transistors](docs/images/drill.gif)
@@ -17,7 +17,7 @@ both ways: any circuit exports as Verilog, and Verilog written in the sandbox is
 in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (38 chapters,
-three prologue chapters and two appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
+a Basics chapter for newcomers, three prologue chapters and three appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
 (127 levels: build it to unlock it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits, up to whole computers).
@@ -40,10 +40,21 @@ depth and blending, and a graphics pipeline whose vertex kernel runs on the warp
 depth** (a DRAM at switch level, a DDR-style controller, flash with its translation layer, a bus with
 DMA that boots a computer from flash).
 
-Before chapter 1, an optional **prologue** builds the same logic from relays, from vacuum tubes and
-from punched cards. After chapter 38, two **appendices**: the MOS 6502 rebuilt at transistor level, and
-Doom compiled for the site's RV32IM. Each chapter opens with its goals, closes with a recap and Check
-yourself questions, and has optional challenges, each with a revealable answer.
+A **Basics** chapter (a circuit, two levels, counting in binary, truth tables, programs, how to read a schematic here) starts the journey for anyone who needs it,
+and no term is used before the chapter that teaches it (a test holds that at zero). Before chapter 1,
+an optional **prologue** builds the same logic from relays, from vacuum tubes and from punched cards.
+After chapter 38, three **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
+site's RV32IM, and Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
+breadboards and run in lock step with a golden model.
+
+Each chapter opens with the problem before the mechanism and with its goals, and closes with a recap
+and Check yourself questions; challenges are optional, each with a revealable answer. Around the prose:
+**Why?** on any wire traces where its value came from and what each part is for, **Break a part**
+shows what fails without it, guided tours, cost ledgers and layers (the short version, then deeper),
+narration, 25 analogies (each folded under its step with a figure from the chapter's own model and
+where it breaks down), six passages of the RISC-V manual to read with questions, and a live
+**memory view** of every RAM and register file in a scene. Notes and bookmarks on any step feed a
+review queue; one backup file carries all progress; the site installs as an app and works offline.
 
 <table>
 <tr>
@@ -94,7 +105,12 @@ a controller, a bus with DMA, a flash store). Each level is built only from part
 unlocked, checked by a full test set and graded against par (NANDs, transistors, depth, clock period;
 every level has one). The order follows use: a level comes just before the first one that needs it,
 and its why reads as a thread (the problem, what it costs, where it goes next and which later levels
-reuse it), closing each act with what is now within reach.
+reuse it), closing each act with what is now within reach. **My path** maps skills from the codex,
+reads mastery from what you have already done, and places you (Where are you starting?, test-outs);
+**capstones** close each tier without a walkthrough (an adding machine, an RV16 core that plays Pong,
+a pipelined core, and a design brief: the cheapest core that runs the benchmarks, placed on a cost /
+speed chart against three references), and seven levels have **Verilog twins**, written as text,
+synthesized by Yosys in the page and graded by the level's own check.
 
 ![A level passed at par: the learner's adder against two alternatives, and its copies in the finished CPU](docs/images/level.png)
 
@@ -105,7 +121,8 @@ learner's wiring checked against the reference). Number and Boolean drills (gene
 checkers), assembly puzzles on the golden model and a codex of 177 entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
-chapters. Plan and status in
+chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back
+in the review until they stick. Plan and status in
 [docs/CAMPAIGN.md](docs/CAMPAIGN.md).
 
 ## Sandbox
@@ -139,7 +156,10 @@ simulator, so whatever you build is a real component of the site. The full guide
   keyboard with a key queue, a pixel screen, a console, switch banks, a timer, a card reader with
   decks punched from a ROM, a halt part, random sources and cycle counters; comments on the canvas.
 - The **CPU panel** for any chip that is a processor, yours included, with the golden model in
-  lock-step (single core, several cores, the out-of-order core, the 6502, the 4-bit CPU).
+  lock-step (single-cycle and pipelined RV32I, RV32IC, RV64I / RV64IM, several cores, the out-of-order
+  core, the 6502, the 4-bit CPU, the SAP-1), and a **Memory** drawer showing every memory live.
+- **Your own instruction**: a custom RV32 instruction as a row of control signals, on the single-cycle
+  or the pipelined core (hazards from its signals), checked against generated golden-model code.
 - **Programs on your own CPU**: a custom instruction set written as a table gives its own
   assembler and disassembler; 14 program puzzles run on the gates of a ready-made CPU or your own,
   scored on cycles, NANDs and program size.
@@ -158,6 +178,10 @@ simulator, so whatever you build is a real component of the site. The full guide
   what). **Test tables** on any chip, in Digital's test syntax: a Tests pane runs them after every
   edit, fills outputs from the circuit, and opens a failing row in the test player; the imported
   files' own tests come along.
+- **File ▸ Memory map**: address regions (RAM, ROM, screen, console, keys) placed by window, overlaps
+  and gaps named, the decoder generated as a chip, a C header and linker script written, applied as one
+  undo step. **Microcode…**: the multicycle CPU's microprogram painted as a grid, checked against the
+  golden model.
 - Wide pins up to 1024 bits, exact; autosave, chip files, share links, Verilog and image export, and
   **File ▸ Export Verilog for FPGA**: a board top for a Sipeed Tang Nano 9K (clock divider, reset,
   buttons and LEDs) with its pin constraints.
@@ -171,15 +195,16 @@ at run time over a real hierarchy of banks you can open down to the latches. A c
 them: storage, found by its structure (library flip-flops or ones drawn from NANDs, latches,
 resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
 simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
-4–5 kHz in the browser. **Examples ▸** has fourteen ready-made circuits, among them:
+4–5 kHz in the browser. **Examples ▸** has eighteen ready-made circuits, among them:
 
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
-  the golden model checking every instruction (above).
+  the golden model checking every instruction (above). A second version runs the **pipelined** RV32I
+  core on the same pins, with the pipeline diagram; **RV32C** and **RV64** examples run those cores.
 - **4-bit CPU** (4004-inspired, 3 357 NANDs), **6502 computer** (the transistor-level 6502 as a
   part, a ROM in 6502 assembly), **System on a bus** (CPU and DMA masters, RAM, flash, screen,
   keyboard, timer behind an AXI-lite-style bus) and **Boot from cards** (a loader reading a punched
-  deck into RAM, then running it). **RV16: Pong** puts the campaign's RV16 core on a bench with a
+  deck into RAM, then running it), and the **SAP-1** with its switches, bus LEDs and output digits. **RV16: Pong** puts the campaign's RV16 core on a bench with a
   screen and switches; a passed core level offers the same game on your own core.
 
 ## Measured, not drawn
@@ -303,12 +328,10 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 
 - **Load-dependent delay, further**: the gate simulator on the loaded delays (glitches and races
   following the loads), and the estimate checked path by path against the sky130 runs.
-- **A memory-map designer**: address regions (RAM, ROM, screen, console, keys) dragged onto the address
-  space, overlaps and gaps shown, the address decoder opened as a chip.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
-- **ISA breadth, further**: the C extension and RV64 in the sandbox, lr.w / sc.w with private caches
-  and a coherent bus in the gate-level cores.
+- **ISA breadth, further**: lr.w / sc.w with private caches and a coherent bus in the gate-level cores,
+  RV64 in the pipelines.
 - **Imported circuits placed again** by logic depth (the Verilog import's placer), and `.dig` export.
 - **Python on the pipeline** (stalls and flushes per line), with RV32IM, strings and a heap.
 
@@ -350,9 +373,9 @@ the 3D views.
 - `src/widgets/`, `src/gl/`, `src/phys/`: the explainers, the 3D views and the physical models behind them
 - `src/editor/`: the sandbox (document model, compiler to components, user-chip library, editor UI)
 - `src/hdl/`: HDL in: Yosys in WebAssembly, and its JSON netlist turned into placed, routed chips
-- `src/campaign/`, `src/puzzles/`: the campaign (levels, grading, drills, walkthroughs, codex) and
-  the program puzzles
-- `src/m6502/`, `src/doom/`, `src/gfx/`, `src/dram/`, `src/flash/`, `src/bus/`, `src/cards/`: the
+- `src/campaign/`, `src/learn/`, `src/puzzles/`: the campaign (levels, grading, drills, walkthroughs,
+  codex), My path (skills, mastery, placement, capstones) and the program puzzles
+- `src/m6502/`, `src/doom/`, `src/sap/`, `src/gfx/`, `src/dram/`, `src/flash/`, `src/bus/`, `src/cards/`: the
   appendices' and tracks' reference models
 - `src/chapters/`: the narrative
 - `CLAUDE.md`: architecture and conventions in detail; `docs/ROADMAP.md`: plan and status
