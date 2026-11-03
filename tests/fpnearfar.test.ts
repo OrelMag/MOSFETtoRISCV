@@ -70,10 +70,13 @@ describe('near / far adder: cost and depth against the single-path adder (pinned
   it('E4M3', () => {
     expect(measure(fpAdd(E4M3))).toEqual({ nands: 2553, unit: 151, load: 240 });
     expect(measure(fpAddNearFar(E4M3))).toEqual({ nands: 3270, unit: 101, load: 162 });
+    expect(measure(fpAddNearFar(E4M3, false))).toEqual({ nands: 2506, unit: 111, load: 182 });
   });
   it('float32', () => {
     expect(measure(fpAdd(F32))).toEqual({ nands: 8218, unit: 181, load: 293 });
     expect(measure(fpAddNearFar(F32))).toEqual({ nands: 12170, unit: 114, load: 190 });
+    // without anticipation (the count behind the subtractor): most of the depth saving stays, most of the area growth goes
+    expect(measure(fpAddNearFar(F32, false))).toEqual({ nands: 8672, unit: 129, load: 221 });
   });
   it('the paths: far and near are balanced, the shared rounder is the rest', () => {
     const inst = (n: string) => fpAddNearFar(F32).netlist!().instances.find((i) => i.name === n)!.def;
@@ -81,4 +84,18 @@ describe('near / far adder: cost and depth against the single-path adder (pinned
     expect([stats(inst('near')).nands, logicDepth(inst('near'))]).toEqual([6574, 53]);
     expect([stats(inst('rnd')).nands, logicDepth(inst('rnd'))]).toEqual([1497, 27]);
   });
+});
+
+describe('near / far adder without anticipation (the ablation the chapter quotes)', () => {
+  it('is the same function: E3M2 every pair, E4M3, float32', async () => {
+    for (const f of [E3M2, E4M3, F32]) {
+      const pairs = f === F32 ? [] : operandPairs(f), n = pairs.length;
+      if (f === F32) {
+        let seed = 5;
+        const r = () => (seed = (seed * 1103515245 + 12345) >>> 0);
+        const v = Array.from({ length: 20000 }, (_, i) => { const a = (r() & 0xfff00000) | (r() & 0xfffff), e = (a >>> 23) & 0xff; return [a >>> 0, i % 3 ? ((a & 0x80000000 ? 0 : 0x80000000) | ((e - (i % 3 === 1 ? 0 : 1)) << 23) | (r() & 0x7fffff)) >>> 0 : r() >>> 0, i & 1, i % 5]; });
+        await check(fpAddNearFar(f, false), v);
+      } else await check(fpAddNearFar(f, false), { count: 2 * n * MODES.length, gen: (i) => { const [a, b] = pairs[(i >> 1) % n]; return [a, b, i & 1, MODES[Math.floor(i / (2 * n))]]; } });
+    }
+  }, 180000);
 });

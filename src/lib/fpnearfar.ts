@@ -138,13 +138,13 @@ function farPath(f: FpFormat): ComponentDef {
     } else dsat = kA === E ? 'd' : b.op1(merger([E, kA - E]), ['d', b.op1(K(kA - E, 0), [])]);
     const eBz = b.name(zext(b, 'eB', E, XE), 'eBig');
     b.next();
-    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, M + 1]), [b.op1(K(2, 0), []), 'mS']), dsat], 'align');
+    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, M + 1]), [b.op1(K(2, 0), []), 'mS']), dsat], 'align', 'align');
     const em1 = b.op(koggeStone(XE), [eBz, b.op1(K(XE, 2 ** XE - 1), []), b.op1(TIE0, [])], 'e − 1');
     const ex = b.op1(incFast(XE), [eBz], 'e + 1');
     b.next();
     const opB = b.op1(merger([1, 2, M + 1]), [b.op1(TIE0, []), b.op1(K(2, 0), []), 'mB']);
     const opS = b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`]);
-    const sum = b.op(addSubFast(WS), [opB, opS, 'sub'], 'add / subtract');
+    const sum = b.op(addSubFast(WS), [opB, opS, 'sub'], 'add / subtract', 'adder');
     b.next();
     const top = b.name(b.op1(AND, [`${sum}.cout`, b.op1(NOT, ['sub'])], 'carry out (an addition)'), 'carry');
     const sm = b.name(b.op1(merger([WS, 1]), [`${sum}.s`, top]), 'sum');
@@ -200,16 +200,16 @@ function nearPath(f: FpFormat): ComponentDef {
       hiBig = b.op1(TIE0, []);
       em1lo = zext(b, 'em1', E, k);
     }
-    const dec = b.op(decoder(k, true), [em1lo, b.op1(NOT, [hiBig])], 'e − 1 → one-hot');
+    const dec = b.op(decoder(k, true), [em1lo, b.op1(NOT, [hiBig])], 'e − 1 → one-hot', 'clamp');
     const lim = b.op1(merger(ones(P)), Array.from({ length: P }, (_, j) => `${dec}.y${P - 1 - j}`), 'clamp pattern');
     b.next();
     const Y = b.name(b.op1(busMux2(n), [yUp, yDn, 'd1'], 'align: ≤ 1 place'), 'Y');
     b.next();
-    const d1 = b.op(addSubFast(n), [X, Y, b.op1(TIE1, [])], 'X − Y');
-    const d2 = b.op(addSubFast(n), [Y, X, b.op1(TIE1, [])], 'Y − X');
-    const l1 = b.op(lza(n), [X, Y, lim], 'LZA of X − Y');
-    const l2 = b.op(lza(n), [Y, X, lim], 'LZA of Y − X');
-    const eq = b.op1(equal(n), [X, Y], 'X = Y ?');
+    const d1 = b.op(addSubFast(n), [X, Y, b.op1(TIE1, [])], 'X − Y', 'dxy');
+    const d2 = b.op(addSubFast(n), [Y, X, b.op1(TIE1, [])], 'Y − X', 'dyx');
+    const l1 = b.op(lza(n), [X, Y, lim], 'LZA of X − Y', 'lzxy');
+    const l2 = b.op(lza(n), [Y, X, lim], 'LZA of Y − X', 'lzyx');
+    const eq = b.op1(equal(n), [X, Y], 'X = Y ?', 'same');
     b.next();
     const neg = b.name(b.op1(NOT, [`${d1}.cout`], 'X < Y'), 'neg');
     b.next();
@@ -218,7 +218,7 @@ function nearPath(f: FpFormat): ComponentDef {
     const mant0 = b.op1(merger([3, n]), [b.op1(K(3, 0), []), F]);
     const pz = zext(b, p, k, XN);
     b.next();
-    const sh1 = b.op(shiftLeft(w, k), [mant0, p], 'normalize by the anticipated count');
+    const sh1 = b.op(shiftLeft(w, k), [mant0, p], 'normalize by the anticipated count', 'shift');
     const u = b.op(addSubFast(XN), [eBz, pz, b.op1(TIE1, [])], 'e − L');
     const t = b.op(addSubFast(XN), [em1z, pz, b.op1(TIE1, [])], 'e − 1 − L');
     const same = b.op1(equal(k), [em1lo, p], 'L = e − 1 ?');
@@ -236,6 +236,67 @@ function nearPath(f: FpFormat): ComponentDef {
     return define({
       id: `fpnfnear${E}_${M}`, name: 'Near path', category: 'arithmetic',
       summary: 'For a subtraction whose exponents differ by at most 1: no sticky and no long aligner (the smaller operand moves at most one place, into an extra bit), both differences X − Y and Y − X, and the leading-zero count anticipated from the operands in parallel with them. The count may be one short; one correction shift follows. Massive cancellation costs one shifter, not a counter behind the adder.',
+      ports: [bus('eB', E, 'in'), bus('em1', E, 'in'), bus('mB', M + 1, 'in'), bus('mS', M + 1, 'in'), bit('d1', 'in'), bus('m', w, 'out'), bus('e', XE, 'out'), bit('neg', 'out'), bit('eq', 'out')],
+      symbol: { kind: 'box', label: 'NEAR' },
+      netlist: () => ({ pins: { eB: [0, 4], em1: [0, 10], mB: [0, 16], mS: [0, 22], d1: [0, 28], m: [b.right, 4], e: [b.right, 10], neg: [b.right, 16], eq: [b.right, 22] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/**
+ * The near path without anticipation, for comparison: the count of leading zeros is taken from the
+ * selected difference (a counter behind the subtractor and the sign select), the exponent limit by a
+ * comparison behind the counter. Exact count, so no correction shift. Same ports and results as nearPath.
+ */
+function nearPathCounted(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fpnfnearc${E}_${M}`, () => {
+    const XE = xeOf(f), n = M + 2, w = M + 5, P = pow2ceil(n), k = Math.log2(P);
+    const XN = Math.max(E, k) + 2;
+    const b = new Builder();
+    const X = b.name(b.op1(merger([1, M + 1]), [b.op1(TIE0, []), 'mB'], 'X = 2·mB'), 'X');
+    const yUp = b.op1(merger([1, M + 1]), [b.op1(TIE0, []), 'mS'], '2·mS (equal exponents)');
+    const yDn = b.op1(merger([M + 1, 1]), ['mS', b.op1(TIE0, [])], 'mS (one below)');
+    const eBz = b.name(zext(b, 'eB', E, XN), 'eBig');
+    let hiBig: string, em1lo: string;
+    if (E > k) {
+      const sp = b.op(splitter([k, E - k]), ['em1']);
+      hiBig = b.name(nonZero(b, `${sp}.o1`, E - k), 'e−1≥2^k');
+      em1lo = `${sp}.o0`;
+    } else {
+      hiBig = b.op1(TIE0, []);
+      em1lo = zext(b, 'em1', E, k);
+    }
+    b.next();
+    const Y = b.name(b.op1(busMux2(n), [yUp, yDn, 'd1'], 'align: ≤ 1 place'), 'Y');
+    b.next();
+    const d1 = b.op(addSubFast(n), [X, Y, b.op1(TIE1, [])], 'X − Y', 'dxy');
+    const d2 = b.op(addSubFast(n), [Y, X, b.op1(TIE1, [])], 'Y − X', 'dyx');
+    const eq = b.op1(equal(n), [X, Y], 'X = Y ?', 'same');
+    b.next();
+    const neg = b.name(b.op1(NOT, [`${d1}.cout`], 'X < Y'), 'neg');
+    b.next();
+    const F = b.op1(busMux2(n), [`${d1}.s`, `${d2}.s`, neg], 'the magnitude');
+    b.next();
+    const padded = P > n ? b.op1(merger([P - n, n]), [b.op1(K(P - n, 2 ** (P - n) - 1), []), F]) : F;
+    const lz = b.op(lzc(P), [padded], 'count the leading zeros', 'count');
+    const mant0 = b.op1(merger([3, n]), [b.op1(K(3, 0), []), F]);
+    b.next();
+    const p = `${lz}.c`;
+    const cmp = b.op(addSubFast(k + 1), [zext(b, em1lo, k, k + 1), zext(b, p, k, k + 1), b.op1(TIE1, [])], '(e − 1) mod 2^k − count');
+    const canNorm = b.name(b.op1(OR, [hiBig, b.op1(NOT, [`${cmp}.n`])]), 'canNormalize');
+    b.next();
+    const L = b.op1(busMux2(k), [em1lo, p, canNorm], 'shift = min(count, e − 1)');
+    b.next();
+    const sh1 = b.op(shiftLeft(w, k), [mant0, L], 'normalize', 'shift');
+    const u = b.op(addSubFast(XN), [eBz, zext(b, L, k, XN), b.op1(TIE1, [])], 'e − L');
+    b.wire(`${sh1}.y`, 'm');
+    b.wire(zext(b, `${u}.s`, XN, XE), 'e');
+    b.wire(neg, 'neg');
+    b.wire(eq, 'eq');
+    return define({
+      id: `fpnfnearc${E}_${M}`, name: 'Near path (count after the subtract)', category: 'arithmetic',
+      summary: 'The near path without anticipation: both differences, select by sign, count the leading zeros of the result, compare with the exponent, shift. For comparison with the anticipating version.',
       ports: [bus('eB', E, 'in'), bus('em1', E, 'in'), bus('mB', M + 1, 'in'), bus('mS', M + 1, 'in'), bit('d1', 'in'), bus('m', w, 'out'), bus('e', XE, 'out'), bit('neg', 'out'), bit('eq', 'out')],
       symbol: { kind: 'box', label: 'NEAR' },
       netlist: () => ({ pins: { eB: [0, 4], em1: [0, 10], mB: [0, 16], mS: [0, 22], d1: [0, 28], m: [b.right, 4], e: [b.right, 10], neg: [b.right, 16], eq: [b.right, 22] }, instances: b.instances, nets: b.nets() }),
@@ -307,9 +368,10 @@ function roundPack(f: FpFormat): ComponentDef {
 // ---- the adder -------------------------------------------------------------------------------------
 
 /** a ± b with a near path and a far path (see the file header): the same function as fpAdd, shallower and larger. */
-export function fpAddNearFar(f: FpFormat): ComponentDef {
+export function fpAddNearFar(f: FpFormat, anticipate = true): ComponentDef {
   const { E, M } = f;
-  return memo(`fpnf${E}_${M}`, () => {
+  const tag = anticipate ? 'fpnf' : 'fpnfc';
+  return memo(`${tag}${E}_${M}`, () => {
     const XE = xeOf(f), w = M + 5, N = 1 + E + M;
     const b = new Builder();
     const ua = b.op(fpUnpack(f), ['a'], 'unpack a', 'ua'), ub = b.op(fpUnpack(f), ['b'], 'unpack b', 'ub');
@@ -332,7 +394,7 @@ export function fpAddNearFar(f: FpFormat): ComponentDef {
     const near = b.name(b.op1(AND, [effSub, b.op1(NOT, [nonZero(b, `${dsp}.o1`, E - 1)])], 'near: subtract, d ≤ 1'), 'near');
     b.next();
     const far = b.op(farPath(f), [eB, mB, mS, d, effSub], 'far path', 'far');
-    const nr = b.op(nearPath(f), [eB, em1, mB, mS, `${dsp}.o0`], 'near path', 'near');
+    const nr = b.op(anticipate ? nearPath(f) : nearPathCounted(f), [eB, em1, mB, mS, `${dsp}.o0`], 'near path', 'near');
     b.next();
     const negSel = b.op1(AND, [near, `${nr}.neg`], 'near, X < Y');
     const zero = b.name(b.op1(AND, [near, `${nr}.eq`], 'x − x'), 'cancel');
@@ -353,7 +415,7 @@ export function fpAddNearFar(f: FpFormat): ComponentDef {
     b.wire(b.op1(busMux2(N), [y1, nanV, nan], 'NaN'), 'y');
     b.wire(b.op1(busMux2(5), [`${rnd}.flags`, flagWord(b, { nv: invalid }), b.op1(OR, [nan, anyInf])], 'flags'), 'flags');
     return define({
-      id: `fpnf${E}_${M}`, name: `${fmtName(f)} near / far adder`, category: 'arithmetic',
+      id: `${tag}${E}_${M}`, name: `${fmtName(f)} near / far adder${anticipate ? '' : ' (no anticipation)'}`, category: 'arithmetic',
       summary: 'The dual-path adder: swap by exponent only (no magnitude compare); a far path (effective addition, or exponents differing by 2 or more: long right shift, sticky, at most two places of left shift) and a near path (a subtraction with exponents within 1: no aligner, a leading-zero anticipator running beside the subtractor); a select; one shared rounder. Same results and flags as the single-path adder, in fewer gate delays and more gates.',
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bit('sub', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FADD n/f' },
