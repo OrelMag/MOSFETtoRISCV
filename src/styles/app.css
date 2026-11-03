@@ -2579,3 +2579,5 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 
 /* the Coherence panel's small buttons grow to 40 px on touch screens */
 @media (pointer: coarse) { .coh-panel .btn.xs { min-height: 40px; min-width: 40px; height: auto; } }
+.coh-panel .coh-regs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 10px; }
+.coh-panel .coh-regs .m .n { width: 26px; }

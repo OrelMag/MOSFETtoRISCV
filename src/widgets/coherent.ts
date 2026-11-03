@@ -188,7 +188,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
         const waiting = look && look.kind !== 'none' && !look.grant;
         const tx = lastTx(i);
         return h('div', { class: 'coh-core' },
-          h('div', { class: 'cpu-sec' }, `core ${i}`, waiting ? h('span', { class: 'warn', style: 'margin-left:6px' }, look.upgr ? 'waits: BusUpgr' : look.wr ? 'waits: BusRdX' : 'waits: BusRd') : '',
+          h('div', { class: 'cpu-sec' }, `core ${i}`, waiting ? h('span', { class: 'warn', style: 'margin-left:6px' }, s.busy && s.owner === i ? 'waits for its line' : `waits for the bus: ${look.upgr ? 'BusUpgr' : look.wr ? 'BusRdX' : 'BusRd'}`) : '',
             tx && s.busy && s.owner === i ? h('span', { class: 'bus-tag', title: OP_TIP[tx.op] }, tx.op) : ''),
           h('div', { class: 'cpu-now' }, h('code', null, `${hex(st.pc, 3)}  ${disasm(w, st.pc)}`)),
           lineTable(i),
