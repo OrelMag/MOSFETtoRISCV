@@ -204,7 +204,7 @@ export function cachedPort(ib = 2): ComponentDef {
     const x1 = 30, x2 = x1 + 14, x3 = x2 + Math.max(dg.w, tg.w) + 14, x4 = x3 + 16;
     const yT = 2, yD = yT + tg.h + 12, yM = yD + dg.h + 14, yC = yM + 40;
     const instances: InstanceDef[] = [
-      { name: 'sa', def: splitter([2, 2, ib, t, 1]), at: [4, 20] },
+      { name: 'sa', def: splitter([2, 2, ib, t, 1]), at: [4, 6] },
       { name: 'fa', def: merger([2, 2, ib, t, 1]), at: [16, yM + 14] },
       { name: 'z2', def: Z2, at: [4, yM + 12] },
       { name: 'z1', def: TIE0, at: [8, yM + 22] },
@@ -241,7 +241,7 @@ export function cachedPort(ib = 2): ComponentDef {
       { name: 'offset', ends: ['sa.o1', 'oa.i0'], tags: true },
       { name: 'index', ends: ['sa.o2', 'fa.i2', 'oa.i1', 'ca.i1', 'tags.addr'], tags: true },
       { name: 'tag', ends: ['sa.o3', 'fa.i3', 'tv.i0', 'eq.a'], tags: true },
-      { name: 'device', ends: ['sa.o4', 'ndev.a', 'bp.s'], tags: true },
+      { name: 'device', ends: ['sa.o4', 'ndev.a', 'bp.s'], tags: ['bp.s'] },
       { ends: ['z2.y', 'fa.i0'] },
       { ends: ['z1.y', 'fa.i4'] },
       { name: 'fillAddr', ends: ['fa.out', 'ma.b'] },
@@ -260,7 +260,7 @@ export function cachedPort(ib = 2): ComponentDef {
       { name: 'valid', ends: ['st.o1', 'hitg.b'], tags: true },
       { name: 'match', ends: ['eq.eq', 'hitg.a'] },
       { ends: ['hitg.y', 'hit2.a'] },
-      { name: 'cached', ends: ['ndev.y', 'hit2.b', 'cm.b'], tags: ['hit2.b', 'cm.b'] },
+      { name: 'cached', ends: ['ndev.y', 'hit2.b', 'cm.b'], tags: ['cm.b'] },
       { name: 'hit', ends: ['hit2.y', 'nhit.a', 'whit.b', 'hit'], tags: ['whit.b', 'hit'] },
       { ends: ['nhit.y', 'cm.a'] },
       { name: 'miss', ends: ['cm.y', 'stall.b'] },
@@ -290,7 +290,7 @@ export function cachedPort(ib = 2): ComponentDef {
       symbol: { kind: 'box', label: 'D-CACHE' },
       netlist: () => ({
         pins: { addr: [0, 24], wd: [0, yD + 18], we: [0, yD + 22], re: [0, yT + 14], clk: [0, yC + 8], mRD: [0, yM + 30],
-          rd: [right, yD + 28], stall: [right, yT + 13], hit: [right, yT + 5], mAddr: [right, yM + 6], mWD: [right, yM + 10], mWE: [right, yM + 14] },
+          rd: [right, yD + 28], stall: [right, yT + 13], hit: [right, yT + 5], mAddr: [right, yM + 10], mWD: [right, yM + 14], mWE: [right, yM + 18] },
         instances, nets,
       }),
     });

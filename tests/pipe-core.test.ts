@@ -409,8 +409,6 @@ h:    j h`;
       });
       const sw = es.sim!.design.leaves.findIndex((l) => l.node.path.join('.') === 'dev.sw');
       es.pokeLeaf(sw, { v: SW });
-      let frozen = 0;
-      es.edgeHooks.add({ after: () => { const n = es.sim!.design.root.children!.get('cpu')!; if (n.ports.dstall && es.sim!.getBits(n.ports.dstall)[0] === 1) frozen++; } });
       expect(mon.desc).toMatchObject({ core: 'cpu', pipeline: true, retire: { part: 'cpu', port: 'retire' } });
       await run(es, mon, 30000);
       expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
@@ -419,9 +417,52 @@ h:    j h`;
       const io = (kind: 'console' | 'screen') => ioState(es.sim!, ioNodes(es.sim!.design.root).find((x) => x.info.kind === kind)!.node);
       expect(consoleText(io('console') as ConsoleState)).toBe(GREETING + DONE_TEXT);
       expect((io('screen') as ScreenState).px[10 * 64 + 32]).toBe(SW);
-      if (lib === 'rv32i_pipe_dc_core') expect(frozen).toBeGreaterThan(0);
     }, 180_000);
   }
+
+  it('the data cache in the sandbox computer: RAM loads miss and hit, the LEDs and console behind it are read and written as ever', async () => {
+    // an array in RAM summed twice (the second pass hits), the sum on the LEDs; a switch read after it goes past the cache
+    const src = `li a0, 256
+      li t0, 0
+      li t1, 16
+w:    sw t0, 0(a0)
+      addi t0, t0, 3
+      addi a0, a0, 4
+      addi t1, t1, -1
+      bnez t1, w
+      li s2, 0
+      li s3, 2
+p:    li a0, 256
+      li t1, 16
+l:    lw t2, 0(a0)
+      add s2, s2, t2
+      addi a0, a0, 4
+      addi t1, t1, -1
+      bnez t1, l
+      addi s3, s3, -1
+      bnez s3, p
+      li s1, 0x80000000
+      lw s4, 8(s1)
+      add s2, s2, s4
+      sw s2, 4(s1)
+h:    j h`;
+    const { es, mon } = open((ws, id) => {
+      const doc = ws.chips[id];
+      const parts = doc.parts.map((p) => (p.id === 'cpu' ? { ...p, ref: { lib: 'rv32i_pipe_dc_core' } } as typeof p : p.id === 'imem' && 'rom' in p.ref ? { ...p, ref: { rom: { ...p.ref.rom, src } } } as typeof p : p));
+      return { ...ws, chips: { ...ws.chips, [id]: { ...doc, parts } } };
+    });
+    const sw = es.sim!.design.leaves.findIndex((l) => l.node.path.join('.') === 'dev.sw');
+    es.pokeLeaf(sw, { v: 0x11 });
+    let frozen = 0;
+    es.edgeHooks.add({ before: () => { const n = es.sim!.design.root.children!.get('cpu')!; if (es.sim!.getBits(n.ports.dstall)[0] === 1) frozen++; } });
+    await run(es, mon, 3000);
+    expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
+    expect(mon.iss!.halted).toBe(true);
+    expect(mon.leds).toBe((2 * 3 * 120 + 0x11) & 0xff);
+    expect(frozen).toBeGreaterThan(0);
+    expect(frozen % 8).toBe(0);
+    expect(frozen).toBeLessThan(8 * 17); // 64 bytes in 4 lines: 4 misses on the first pass at most plus the lines the stores touched, none on the second
+  }, 120_000);
 
   it('M on the sandbox computer: a mul / div program, the drawer in lock step', async () => {
     const src = MUL_SRC.replace('h:  j h', 'li s1, 0x80000000\n    sw s6, 4(s1)\nh:  j h');
