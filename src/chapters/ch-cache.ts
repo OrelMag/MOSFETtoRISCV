@@ -329,7 +329,6 @@ export const chCache: Chapter = {
     },
     {
       title: 'Errors and ECC',
-      deep: true,
       body: `
         <p>A cell can also flip: a weak DRAM cell leaks early, or a particle strike dumps charge into a node. One <strong>parity</strong> bit
         (an XOR tree) detects any single flip but cannot locate it. A <strong>Hamming code</strong> adds r check bits at positions 1, 2, 4, …:

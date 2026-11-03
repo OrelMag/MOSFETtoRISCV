@@ -90,16 +90,22 @@ export function partsNav(
   const folded = st.folded ?? startFolded();
   const wrap = h('details', { class: 'parts-wrap', ...(folded ? {} : { open: '' }) },
     h('summary', { class: 'parts-status' }, h('span', null, status), icon('chevD', 14)), list);
-  wrap.addEventListener('toggle', () => { st.folded = !wrap.open; });
-  // keep the current step in view in a list that scrolls
-  requestAnimationFrame(() => {
+  // keep the current step in view in a list that scrolls (not while the list is folded: nothing is measured then)
+  const reveal = (): void => {
     const el = list.querySelector<HTMLElement>('.pstep.cur');
-    if (!el || list.scrollHeight <= list.clientHeight) return;
+    if (!el || !wrap.open || list.scrollHeight <= list.clientHeight) return;
     // the current part's heading at the top when the part fits, else its current row in the middle
     const part = el.closest<HTMLElement>('details.part');
     list.scrollTop = part && part.offsetHeight <= list.clientHeight
       ? part.offsetTop - list.offsetTop
       : Math.max(0, el.offsetTop - list.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2);
+  };
+  wrap.addEventListener('toggle', () => {
+    // only a fold the learner made counts: the element's own opening on creation is the default
+    if (wrap.open === !startFolded()) st.folded = null;
+    else st.folded = !wrap.open;
+    if (wrap.open) reveal();
   });
+  requestAnimationFrame(reveal);
   return h('div', { class: 'parts-nav' }, segs, wrap);
 }

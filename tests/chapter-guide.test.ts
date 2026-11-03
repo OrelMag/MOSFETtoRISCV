@@ -4,8 +4,11 @@
 import { describe, expect, it } from 'vitest';
 import { nodeById } from '../src/campaign/nodes';
 import { chapterById, chapters } from '../src/chapters';
+import { Glossary, proseRuns } from '../src/campaign/glossary';
 import { NODES } from '../src/campaign/nodes';
 import { checkKeys } from '../src/chapters/checks';
+import { shownTexts } from '../src/chapters/firstuse';
+import { TAUGHT } from '../src/chapters/taught';
 import { PARTS_MIN, partsOf } from '../src/chapters/parts';
 import type { Quiz } from '../src/chapters/types';
 import { showTarget, viewDef } from '../src/ui/pages/looks';
@@ -131,6 +134,19 @@ describe('chapter guide', () => {
         for (const s of c.steps)
           for (const m of s.body.matchAll(/href="#\/c\/([^/"]+)\/(\d+)/g)) if (m[1] !== c.id && deep.has(`${m[1]}:${m[2]}`)) bad.push(`${c.id} -> ${m[1]}:${m[2]}`);
       expect(bad).toEqual([]);
+      // a term a later chapter takes as taught (taught.ts) is met in a step on the core path, not only in a deep dive
+      const gloss = new Glossary();
+      for (const c of chapters.filter((x) => x.steps.some((st) => st.deep))) {
+        const seen = new Map<string, Set<number>>();
+        for (const [where, html] of shownTexts(c)) {
+          const m = where.match(/^(\d+) /);
+          if (m) for (const run of proseRuns(html)) for (const f of gloss.find(run.text)) (seen.get(f.id) ?? seen.set(f.id, new Set()).get(f.id)!).add(+m[1]);
+        }
+        for (const [id, ch] of Object.entries(TAUGHT)) {
+          const at = [...(seen.get(id) ?? [])];
+          if (ch === c.id && at.length) expect(at.some((i) => !c.steps[i].deep), c.id + ': ' + id + ' is taught only in deep dives').toBe(true);
+        }
+      }
       // the recap's questions are about core material: no deep step is the only place a question's subject is taught
       // (checked by hand when parts were written; a chapter keeps at least half of its steps on the core path)
       for (const c of chapters.filter((x) => x.parts)) expect(c.steps.filter((s) => !s.deep).length / c.steps.length, c.id).toBeGreaterThan(0.5);
