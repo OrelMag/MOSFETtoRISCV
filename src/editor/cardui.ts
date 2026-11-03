@@ -9,7 +9,7 @@ import { type Card, type Deck, deckFromJson, deckToJson, DECK_EXT, dropDeck, MAX
 import { cardSource, deckBits } from '../cards/program';
 import { type CardReaderState, MAX_FEED, readerProgress } from '../cards/reader';
 import type { Vec } from '../sim/geometry';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { saveFile } from '../view/image';
 import { cardView } from '../widgets/carddraw';
 import { cardDoc, deckRef, READER_MAX_CARDS, READER_NAME_MAX, type ReaderRef, refDeck } from './cardparts';
@@ -76,7 +76,7 @@ export function loadDeckIntoRom(ed: Editor, partId: string, deck: Deck): boolean
   const r = romWithDeck(p.ref.rom, deck);
   if ('error' in r) return void ed.toast(`Load deck: ${r.error}`, 'err'), false;
   if (!setPartRef(ed, partId, { rom: r })) return false;
-  ed.toast(`Loaded ${deck.cards.length} card${deck.cards.length === 1 ? '' : 's'} into ${partId} (Ctrl+Z puts the program back)`);
+  ed.toast(`Loaded ${deck.cards.length} card${deck.cards.length === 1 ? '' : 's'} into ${partId} (${undoKey()} puts the program back)`);
   return true;
 }
 
@@ -112,7 +112,7 @@ export async function dropDeckFile(ed: Editor, f: File, at?: Vec): Promise<void>
   const id = r.id;
   ed.edit(() => r.doc);
   ed.select({ parts: [id] });
-  ed.toast(`A card reader holding ${deck.name} (${deck.cards.length} cards): Ctrl+Z removes it`);
+  ed.toast(`A card reader holding ${deck.name} (${deck.cards.length} cards): ${undoKey()} removes it`);
 }
 
 // ---- the reader's properties ---------------------------------------------------------------------

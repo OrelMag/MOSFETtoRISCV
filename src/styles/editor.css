@@ -578,3 +578,6 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sb-minimap { --mm-s: 35%; --mm-l: 30%; } }
 @media (pointer: coarse) { .mm-note { display: none; } .sb-minimap { width: 176px; height: 124px; } }
 @media (max-width: 760px) { .sb-minimap { bottom: 56px; } }
+
+/* 360 px and under: "+ New chip" is its plus (the open tab would slide under the sticky group); it keeps its name as aria-label */
+@media (max-width: 380px) { .sb-new-lbl { display: none; } }

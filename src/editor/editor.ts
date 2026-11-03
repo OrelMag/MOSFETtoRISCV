@@ -17,6 +17,7 @@ import { describeBits } from '../sim/values';
 import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
+import { type PlaceMode, placeMode } from '../ui/wording';
 import { closePopover } from '../view/popover';
 import { type Compiled, type Diag, diagText } from './compile';
 import { addFolder, findFolder, folderGroups, moveToFolder, newFolderName, renameFolder } from './folders';
@@ -139,6 +140,14 @@ function compiledView(ws: Workspace): Workspace {
   return { ...ws, chips };
 }
 
+/** The empty chip's first instruction, by how this screen places parts (ui/wording.ts). */
+function emptyChipText(mode: PlaceMode): (Node | string)[] {
+  const parts = [h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output')];
+  if (mode === 'tap') return ['Tap ', ...parts, ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.'];
+  if (mode === 'drawer') return ['Open ', h('b', null, 'Parts'), ', pick ', ...parts, ' under ', h('i', null, 'Basics'), ', and click the canvas to place each; drag from a pin’s dot to another pin to wire.'];
+  return ['Drag ', ...parts, ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'];
+}
+
 export class Editor {
   readonly el: HTMLElement;
   readonly history: History<Workspace>;
@@ -172,6 +181,7 @@ export class Editor {
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
   private emptyEl: HTMLElement;
+  private emptyText: HTMLElement;
   private lastWs: Workspace | null = null;
   /** The view shows a drag in progress (a cancelled drag must be redrawn). */
   private dragDrawn = false;
@@ -216,11 +226,10 @@ export class Editor {
     // A toolbar action, shown when one is registered (the page imports the plugins after the editor).
     const act = (id: string, label: string, ic: string) => h('button', { class: 'btn sm', 'data-for': id,
       onclick: () => actions.find((x) => x.id === id)?.run(this) }, icon(ic, 14), label);
+    this.emptyText = h('p', null);
     this.emptyEl = h('div', { class: 'sb-empty-chip', hidden: true },
       h('h3', null, 'An empty chip'),
-      coarsePointer()
-        ? h('p', null, 'Tap ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.')
-        : h('p', null, 'Drag ', h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output'), ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'),
+      this.emptyText,
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
@@ -569,6 +578,7 @@ export class Editor {
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
     this.emptyEl.hidden = !!this.level || !!doc.hdl || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length);
+    if (!this.emptyEl.hidden) this.emptyText.replaceChildren(...emptyChipText(placeMode(coarsePointer(), matchMedia('(max-width: 760px)').matches)));
     if (!this.emptyEl.hidden) for (const b of this.emptyEl.querySelectorAll<HTMLElement>('[data-for]')) b.hidden = !actions.some((a) => a.id === b.dataset.for);
     if (switched && this.fitted) this.fitView();
     this.view.setSelection(this.sel);
@@ -742,7 +752,7 @@ export class Editor {
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       grp.append(sel);
     }
-    grp.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', onclick: () => { this.newChip(); this.toast(`New chip “${this.doc.name}” in a new tab`, 'info', { label: 'Undo', run: () => this.undo() }); } }, icon('plus', 14), 'New chip'));
+    grp.append(h('button', { class: 'btn ghost sm sb-new', title: 'A new empty chip', 'aria-label': 'New chip', onclick: () => { this.newChip(); this.toast(`New chip “${this.doc.name}” in a new tab`, 'info', { label: 'Undo', run: () => this.undo() }); } }, icon('plus', 14), h('span', { class: 'sb-new-lbl' }, 'New chip')));
     if (newChipKinds.length) {
       const more: HTMLButtonElement = h('button', { class: 'btn ghost sm sb-new-more', title: 'Other kinds of new chip', 'aria-label': 'Other kinds of new chip', 'aria-haspopup': 'menu',
         onclick: () => this.newChipMenu(more) }, icon('chevD', 12));
@@ -1172,7 +1182,7 @@ export class Editor {
   armPart(item: PaletteItem, key: string): void {
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
-    this.toast(`${item.name}: ${coarsePointer() ? 'tap' : 'click'} the canvas to place it (Esc cancels)`);
+    this.toast(`${item.name}: ${coarsePointer() ? 'tap the canvas to place it' : 'click the canvas to place it (Esc cancels)'}`);
   }
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */

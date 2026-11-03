@@ -6,7 +6,7 @@
 import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
-import { h, icon, placeMenu, s } from '../ui/dom';
+import { h, icon, placeMenu, s, undoKey } from '../ui/dom';
 import { here, registerActions } from '../ui/searchsources';
 import { registerEditorPlugin, registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
@@ -226,7 +226,7 @@ async function importFile(ed: Editor, f: File): Promise<void> {
 
 function summaryDialog(ed: Editor, title: string, sum: ImportSummary): void {
   const chipList = (xs: { id: string; name: string }[]) => h('ul', { class: 'sb-chiplist' }, xs.map((c) => h('li', null, h('b', null, c.name), ' ', h('code', null, c.id))));
-  const body: HTMLElement[] = [h('p', { class: 'sb-dlg-lead' }, `${summaryLine(sum)}.${sum.added.length ? ' Ctrl+Z undoes the import.' : ''}`)];
+  const body: HTMLElement[] = [h('p', { class: 'sb-dlg-lead' }, `${summaryLine(sum)}.${sum.added.length ? ` ${undoKey()} undoes the import.` : ''}`)];
   const fresh = sum.added.filter((a) => !sum.renamed.some((r) => r.to === a.id));
   if (fresh.length) body.push(h('h4', null, `Added (${fresh.length})`), chipList(fresh));
   if (sum.renamed.length) {
@@ -426,7 +426,7 @@ function manageDialog(ed: Editor): void {
         const r = deleteChip(ed.ws, c.id);
         if ('error' in r) return say(`Cannot delete ${c.name}: it is ${r.error}. Remove it from ${r.usedBy.length > 1 ? 'those chips' : 'that chip'} first.`, true);
         ed.editWs(() => r.ws);
-        say(`Deleted ${c.name} (Ctrl+Z brings it back).`);
+        say(`Deleted ${c.name} (${undoKey()} brings it back).`);
       } }, 'Delete');
       if (info.usedBy.length) del.classList.add('sb-blocked');
       const sel = h('select', { 'aria-label': `Folder of ${c.name}` },
@@ -508,7 +508,7 @@ function deleteDataDialog(ed: Editor): void {
   const projects = readProjects().list.length;
   const d = dialog(ed, 'Delete local data', [
     h('p', { class: 'sb-dlg-lead' }, 'Everything you make here lives only in this browser: nothing is kept on a server. ',
-      h('b', null, 'Deleting cannot be undone'), ' (Ctrl+Z will not bring it back): export your chips first to keep a copy.'),
+      h('b', null, 'Deleting cannot be undone'), ` (${undoKey()} will not bring it back): export your chips first to keep a copy.`),
     h('div', { class: 'sb-del-opts', role: 'radiogroup', 'aria-label': 'What to delete' },
       opt('sandbox', 'Sandbox', projects > 1 ? `all ${projects} projects (${plural(n, 'chip')} in this one), palette favorites and the sandbox's preferences` : `your ${plural(n, 'chip')}, palette favorites and the sandbox's preferences`),
       opt('all', 'Everything', 'the sandbox, chapter and campaign progress, and every setting (theme, wire colours, speeds)')),

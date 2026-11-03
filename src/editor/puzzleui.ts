@@ -8,7 +8,7 @@
 import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import '../styles/sbpuzzles.css';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { REF_BY_ID, type RefCpu } from '../puzzles/computers';
 import { dominatedBy, isReferenceProgram, parFor, PuzzleProgress, type PuzzleScore, puzzleStars, refFront, type Stars } from '../puzzles/grade';
 import { type Puzzle, PUZZLE_GROUPS, puzzleChipId, puzzleOfChip, PUZZLES, type PuzzleTest } from '../puzzles/puzzles';
@@ -420,7 +420,7 @@ class PuzzleUi {
     const d = this.dialog(`Start “${p.title}”`, [
       h('p', { class: 'sb-dlg-lead' }, 'Which CPU solves it? The puzzle gets a chip of its own, ', h('code', null, puzzleChipId(p)),
         ': a ready-wired computer, or a copy of your chip with PUZZLE IN, PUZZLE OUT (and a halt part) placed beside it for you to wire.',
-        replace ? h('b', null, ' The puzzle chip you have now is replaced (Ctrl+Z brings it back).') : null),
+        replace ? h('b', null, ` The puzzle chip you have now is replaced (${undoKey()} brings it back).`) : null),
       list,
     ], [
       h('button', { class: 'btn ghost sm', onclick: () => d.close() }, 'Cancel'),

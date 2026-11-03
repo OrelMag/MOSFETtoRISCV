@@ -30,6 +30,7 @@ import { importChips } from '../../editor/store';
 import { h, icon } from '../dom';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
+import { undoKey } from '../dom';
 
 export class WalkMode {
   readonly walk: Walk;
@@ -199,7 +200,7 @@ export class WalkMode {
       return openChip({ ...ws, chips }, this.levelChip);
     });
     ed.select({});
-    ed.toast(this.last ? 'The circuit is your chip now (Ctrl+Z brings your drawing back)' : 'The circuit so far is yours to finish (Ctrl+Z brings your drawing back)');
+    ed.toast(this.last ? `The circuit is your chip now (${undoKey()} brings your drawing back)` : `The circuit so far is yours to finish (${undoKey()} brings your drawing back)`);
   }
 
   /** Leave: the scratch chip and the chips it brought go, the level's chip comes back. */
