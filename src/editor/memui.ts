@@ -8,11 +8,10 @@ import '../styles/memui.css';
 import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
 import { BX, type Bit } from '../sim/types';
 import { memRow } from '../view/memview';
-import { h, icon, placeMenu, rememberFocus, undoKey } from '../ui/dom';
+import { h, icon, rememberFocus } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import type { CodeLang } from '../widgets/codetok';
 import { type Editor, registerToolbarAction } from './editor';
-import { addExample, EXAMPLES } from './examples';
 import {
   addrValue, convertProgram, initText, type ListingRow, parseInit, readRam, ROM_SAMPLES, romImage, romIndex, romListing, type RomRef, sampleK,
 } from './memory';
@@ -543,49 +542,12 @@ registerPropsSection({
 
 // ---- examples ------------------------------------------------------------------------------
 
-let closeMenu: (() => void) | null = null;
-
-function examplesMenu(ed: Editor): void {
-  if (closeMenu) return closeMenu();
-  const btn = ed.actionAnchor('examples');
-  // Esc puts the focus back where the menu was opened from (the toolbar, More, the empty chip's card)
-  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  const r = btn?.getBoundingClientRect();
-  const menu = h('div', { class: 'sb-menu', role: 'menu', 'aria-label': 'Examples' },
-    h('div', { class: 'sb-menu-head' }, 'Load an example as a new chip'),
-    EXAMPLES.map((ex) => h('button', { class: 'sb-menu-item', role: 'menuitem', 'data-example': ex.id, onclick: () => {
-      close();
-      let id = '';
-      ed.editWs((ws) => { const a = addExample(ws, ex); id = a.id; return a.ws; });
-      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (${undoKey()} removes it)`);
-    } }, h('b', null, ex.name), h('small', null, ex.blurb))));
-  // Wide enough for a title on one line; never wider than the window.
-  const W = Math.min(380, innerWidth - 16);
-  placeMenu(menu, { bottom: r?.bottom ?? 48 }, Math.max(8, Math.min(r?.left ?? 8, innerWidth - W - 8)));
-  menu.style.width = `${W}px`;
-  // A press outside closes it; the button's own click toggles it (run() above).
-  const away = (e: Event) => { if (!menu.contains(e.target as Node) && !btn?.contains(e.target as Node)) close(); };
-  const esc = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    close();
-    (opener?.isConnected ? opener : btn)?.focus();
-  };
-  const close = () => {
-    menu.remove();
-    document.removeEventListener('pointerdown', away, true);
-    document.removeEventListener('keydown', esc, true);
-    closeMenu = null;
-  };
-  closeMenu = close;
-  ed.claimMenu(close);
-  document.addEventListener('pointerdown', away, true);
-  document.addEventListener('keydown', esc, true);
-  ed.el.append(menu);
-  (menu.querySelector('.sb-menu-item') as HTMLElement | null)?.focus();
+/** The gallery is a chunk of its own (examplegallery.ts, its styles and the thumbnails' code): fetched on the first click. */
+function examplesGallery(ed: Editor): void {
+  void import('./examplegallery').then((m) => m.openExamplesGallery(ed));
 }
 
-registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples ▾', order: 60, run: examplesMenu });
+registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples', order: 60, run: examplesGallery });
 
 // ---- the pipelined core's variant ---------------------------------------------------------
 

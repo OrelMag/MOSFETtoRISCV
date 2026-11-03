@@ -1,0 +1,36 @@
+/* Sandbox Examples gallery (editor/examplegallery.ts), on top of .sb-help's scrim. */
+.sb-help .ex-panel { width: min(1020px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; }
+.ex-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.ex-head h3 { font-size: 16px; }
+.ex-search {
+  flex: 1 1 180px; min-width: 0; padding: 7px 10px; border: 1px solid var(--border-strong, var(--border)); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); font: 14px var(--font-ui);
+}
+.ex-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ex-hint { color: var(--muted); font-size: 12.5px; }
+.ex-body { overflow: auto; min-height: 0; padding: 2px 18px 18px; }
+.ex-group h4 { margin: 16px 0 8px; font: 600 12px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; }
+.ex-group[hidden], .ex-card[hidden], .ex-empty[hidden] { display: none; }
+.ex-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; padding: 8px; text-align: left;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+}
+.ex-card:hover, .ex-card:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+/* the board colour of the thumbnails (examplethumb.ts), so a missing one is a plain dark tile, in both themes */
+.ex-thumb { aspect-ratio: 16 / 10; border-radius: 6px; overflow: hidden; background: #1b1f2a; margin-bottom: 5px; }
+.ex-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ex-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.ex-blurb { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.ex-tag { align-self: flex-start; margin-top: 4px; padding: 0 7px; border: 1px solid var(--border); border-radius: 99px; font: 500 11px var(--font-mono); color: var(--muted); }
+.ex-empty { margin: 24px 18px; color: var(--muted); }
+@media (max-width: 600px) {
+  .sb-help .ex-panel { width: 96vw; max-height: 92vh; }
+  .ex-hint { display: none; }
+  .ex-grid { grid-template-columns: 1fr; }
+}
+@media (pointer: coarse) {
+  .ex-search { min-height: 40px; }
+  .ex-card { min-height: 40px; }
+  .ex-head .btn { min-width: 40px; min-height: 40px; }
+}
