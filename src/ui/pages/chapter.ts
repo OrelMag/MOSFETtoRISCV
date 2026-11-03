@@ -158,9 +158,11 @@ export class ChapterPage implements Page {
     this.stepNotes = null;
     this.stage.noteMarks = null;
     // the recap leaves the last step's circuit on the stage: say so (app.css .recap-on)
-    this.el.classList.toggle('recap-on', i === this.recap);
+    this.el.classList.remove('recap-on');
     if (i === this.recap) {
       this.show(steps.length - 1, path);
+      // only a circuit: over a widget's card the chip would sit on its title
+      this.el.classList.toggle('recap-on', this.sceneShown);
       this.renderHead();
       this.renderRecap();
     } else {
@@ -372,10 +374,10 @@ export class ChapterPage implements Page {
       this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     } }, icon('chevD', 16), 'Show circuit');
     if (typeof IntersectionObserver !== 'undefined') {
-      // Gone once the stage is mostly in view, and as soon as its bar is: the pill sits where the bar's right-hand icons do.
+      // Gone once the stage is mostly in view, and once its whole bar is (the pill sits where the bar's right-hand icons do); a bar only peeking in at the bottom reads as no circuit, so the pill stays.
       let mostly = false, bar = false;
       const sync = () => { b.hidden = mostly || bar; };
-      const io = new IntersectionObserver((es) => { for (const e of es) { if (e.target === this.stage.el) mostly = e.intersectionRatio > 0.35; else bar = e.isIntersecting; } sync(); }, { threshold: [0, 0.35, 0.6] });
+      const io = new IntersectionObserver((es) => { for (const e of es) { if (e.target === this.stage.el) mostly = e.intersectionRatio > 0.35; else bar = e.intersectionRatio > 0.95; } sync(); }, { threshold: [0, 0.35, 0.6, 0.95] });
       io.observe(this.stage.el);
       const barEl = this.stage.el.querySelector('.stage-bar');
       if (barEl) io.observe(barEl);
@@ -451,20 +453,23 @@ export class ChapterPage implements Page {
     const all = ch.hints ?? [];
     if (all.length) {
       let n = 0;
-      const more = h('button', { class: 'btn ghost sm' }, `Show a hint (0 of ${all.length})`);
+      const more = h('button', { class: 'btn sm' }, `Show a hint (0 of ${all.length})`);
       more.addEventListener('click', () => {
-        hints.append(h('div', { class: 'hint-step' }, h('b', null, `Hint ${n + 1}. `), h('span', { html: all[n] })));
+        const step = h('div', { class: 'hint-step' }, h('b', null, `Hint ${n + 1}. `), h('span', { html: all[n] }));
+        hints.append(step);
+        reveal(step);
         n++;
         if (n >= all.length) more.remove();
         else more.textContent = `Another hint (${n} of ${all.length})`;
       });
       row.append(more);
     }
-    const show = h('button', { class: 'btn ghost sm' }, 'Show answer');
+    const show = h('button', { class: 'btn sm' }, 'Show answer');
     show.addEventListener('click', () => {
       ans.innerHTML = ch.answer;
       show.remove();
       if (ch.solve) row.append(h('button', { class: 'btn sm', onclick: () => ch.solve!(this.stage) }, 'Do it for me'));
+      reveal(ans); // below the fold of a long step otherwise: the click would look like nothing happened
     });
     row.append(show);
     box.append(hints, row, ans, h('div', { class: 'challenge-how' }, how));
