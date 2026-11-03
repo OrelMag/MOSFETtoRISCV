@@ -56,12 +56,12 @@
 .py-target { margin: 0 0 6px; }
 .py-target .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .py-totals { margin-bottom: 8px; }
-.py-pl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 90px) 40px; gap: 3px 8px; align-items: center; max-height: 170px; overflow: auto; }
-.py-pl .k { font: 11.5px var(--font-mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.py-pl .k.on { color: var(--accent); font-weight: 700; }
-.py-pl .v { font: 11.5px var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--text); }
-.py-pl .bw { display: flex; min-width: 0; height: 9px; }
-.py-pl .b { height: 9px; background: var(--accent); min-width: 1px; }
-.py-pl .b.stall { background: var(--warn); }
-.py-pl .b.flush { background: var(--bad); }
-.py-pl .b.divide { background: var(--good); }
+.py-bar { display: inline-flex; width: 64px; height: 9px; align-self: center; margin-left: auto; padding-left: 8px; flex: none; }
+.py-bar .b { height: 9px; min-width: 1px; background: var(--accent); }
+.py-bar .b.stall, .py-sw.stall { background: var(--warn); }
+.py-bar .b.flush, .py-sw.flush { background: var(--bad); }
+.py-bar .b.divide, .py-sw.divide { background: var(--good); }
+.py-bar + .py-cyc { margin-left: 0; min-width: 3.2em; text-align: right; }
+.py-sw.instr { background: var(--accent); }
+.py-legend { margin: 3px 0 0; }
+.py-legend .py-sw { margin: 0 2px 0 6px; }

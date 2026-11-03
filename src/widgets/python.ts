@@ -285,7 +285,6 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
 
     const status = h('div', { class: 'py-hint' });
     const totals = h('div', { class: 'py-kv py-totals', hidden: !pipe });
-    const perLine = h('div', { class: 'py-pl', hidden: !pipe });
     const listing = h('div', { class: 'cpu-listing py-listing' });
     const thisLine = h('div', { class: 'py-kv' });
     const vars = h('div', { class: 'py-kv' });
@@ -294,15 +293,15 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const hasFuncs = L.funcs.length > 0;
     // Bottom-left, beside the CPU panel on the right (two right-docked panels would cover each other).
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel py-panel', 'data-dock': 'left' }, title,
+    const el = h('div', { class: `mem-panel py-panel${pipe ? ' py-pipe' : ''}`, 'data-dock': 'left' }, title,
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn, ...(pipe ? [endBtn] : [])),
       ...(pipe ? [h('div', { class: 'py-row py-target' }, h('span', { class: 'py-hint' }, 'compile for'), targetBtn(false), targetBtn(true))] : []),
       blurb, editWrap, status, totals,
       h('div', { class: 'py-cols' },
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its instructions and hardware')), listing,
-          h('div', { class: 'cpu-sec' }, pipe ? 'This line, in the pipeline' : 'This line, on the hardware'), thisLine,
-          ...(pipe ? [h('div', { class: 'cpu-sec' }, 'Cycles per line', h('span', { class: 'cpu-sec-hint' }, 'issue · stall · flush · divide')), perLine] : [])),
+          ...(pipe ? [h('div', { class: 'py-hint py-legend' }, 'cycles by cause: ', ...(['instr:issue', 'stall:stall', 'flush:flush', ...(withM ? ['divide:divide'] : [])] as const).flatMap((k) => [h('span', { class: `py-sw ${k.split(':')[0]}` }), ` ${k.split(':')[1]} `]))] : []),
+          h('div', { class: 'cpu-sec' }, pipe ? 'This line, in the pipeline' : 'This line, on the hardware'), thisLine),
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Variables, read from the gates'), vars,
           h('div', { class: 'cpu-sec' }, `Output (data memory from ${L.outBase} up to gp)`), out,
@@ -418,6 +417,9 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
 
     const valueOf = (hm: Home, x: number[], dmem: number[]): number => (hm.reg ? x[regIndex(hm.reg)] : dmem[hm.addr! >>> 2] ?? 0);
 
+    /** A line's cycles as a bar split by cause (issue, stall, flush, divide), scaled to the busiest line. */
+    const causeBar = (v: LineCost, max: number): HTMLElement => h('span', { class: 'py-bar' },
+      ...(['instr', 'stall', 'flush', 'divide'] as const).map((k) => (v[k] ? h('span', { class: `b ${k}`, style: `width:${(100 * v[k] / max).toFixed(1)}%` }) : '')));
     /** " · 3 stall, 2 flush" for a tooltip. */
     const lostText = (v: LineCost) => (v.stall + v.flush + v.divide ? ` (${[v.instr && `${v.instr} issue`, v.stall && `${v.stall} stall`, v.flush && `${v.flush} flush`, v.divide && `${v.divide} divide`].filter(Boolean).join(', ')})` : '');
     /** One line's cycles by cause, and its CPI. */
@@ -434,24 +436,12 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
       const t = prof!.total(), frame = prof!.cost(0), all = lineTotal(t) + lineTotal(frame) + prof!.fill, n = t.instr + frame.instr;
       const lost = t.stall + t.flush + t.divide + frame.stall + frame.flush + frame.divide;
       totals.replaceChildren(
-        h('span', null, 'clock cycles'), h('span', null, fmtCount(all)),
-        h('span', null, 'instructions executed'), h('span', null, fmtCount(n)),
-        h('span', null, 'cycles per instruction'), h('span', null, n ? (all / n).toFixed(2) : '–'),
-        h('span', { title: 'Cycles that retired nothing: bubbles behind loads, taken branches, and the pipeline filling' }, 'cycles lost'), h('span', null, `${fmtCount(lost + prof!.fill)} (${fmtCount(t.stall + frame.stall)} stall, ${fmtCount(t.flush + frame.flush)} flush${withM ? `, ${fmtCount(t.divide + frame.divide)} divide` : ''}, ${prof!.fill} fill)`),
+        h('span', null, 'run so far'), h('span', null, `${fmtCount(all)} cycles · ${fmtCount(n)} instructions · CPI ${n ? (all / n).toFixed(2) : '–'}`),
+        h('span', { title: 'Cycles that retired nothing: bubbles behind loads, taken branches, divides, and the pipeline filling' }, 'lost'), h('span', null, `${fmtCount(lost + prof!.fill)}: ${fmtCount(t.stall + frame.stall)} stall, ${fmtCount(t.flush + frame.flush)} flush${withM ? `, ${fmtCount(t.divide + frame.divide)} divide` : ''}, ${prof!.fill} fill`),
         h('span', { title: 'Counted from the two designs: the same pipeline and ROM with and without the multiplier and divider' }, 'M unit'),
-        h('span', null, mCost ? `${withM ? 'in' : 'would add'} ${fmtCount(mCost.withM - mCost.base)} NANDs: ${fmtCount(mCost.base)} → ${fmtCount(mCost.withM)} (+${((100 * (mCost.withM - mCost.base)) / mCost.base).toFixed(1)} %)` : 'counting…'));
+        h('span', null, mCost ? `${withM ? 'in the design: ' : 'would add '}${fmtCount(mCost.withM - mCost.base)} NANDs (${fmtCount(mCost.base)} → ${fmtCount(mCost.withM)}, +${((100 * (mCost.withM - mCost.base)) / mCost.base).toFixed(1)} %)` : 'counting…'));
     };
     if (pipe) mTimer = window.setTimeout(() => { mCost = mUnitCost(c.words); mTimer = null; if (stage.sim) pipeTotals(); }, 60);
-    /** Every line's cycles as a bar split by cause; the line in focus marked. */
-    const pipeBars = (focus: number | null) => {
-      const rows = lines.map((t, i) => ({ n: i + 1, t, v: prof!.cost(i + 1) })).filter((r) => lineTotal(r.v));
-      const max = Math.max(1, ...rows.map((r) => lineTotal(r.v)));
-      perLine.replaceChildren(...rows.flatMap((r) => [
-        h('code', { class: `k${r.n === focus ? ' on' : ''}`, title: `line ${r.n}` }, r.t.trim()),
-        h('span', { class: 'bw', title: `${lineTotal(r.v)} cycles${lostText(r.v)}` }, ...(['instr', 'stall', 'flush', 'divide'] as const).map((k) => (r.v[k] ? h('span', { class: `b ${k}`, style: `width:${(100 * r.v[k] / max).toFixed(1)}%` }) : ''))),
-        h('span', { class: 'v' }, fmtCount(lineTotal(r.v))),
-      ]));
-    };
 
     const update = () => {
       const sim = stage.sim;
@@ -473,11 +463,13 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         const v = prof.cost(n);
         return [lineTotal(v) - v.rt, v.rt];
       };
+      const maxCyc = prof ? Math.max(1, ...lines.map((_, i) => lineTotal(prof.cost(i + 1)))) : 1;
       const keep = listing.scrollTop;
       listing.replaceChildren(...lines.map((t, i) => {
         const n = i + 1, [k, r] = own(n);
         const e = h('div', { class: `ln${n === shown ? ' cur' : ''}${n === selLine ? ' sel' : ''}`, title: c.pcsOfPy(n).length ? 'Show its instructions and their hardware' : '' },
           h('span', { class: 'a' }, String(n)), h('span', { class: 't' }, t || ' '),
+          prof && k + r ? causeBar(prof.cost(n), maxCyc) : '',
           k + r ? h('span', { class: 'py-cyc', title: `${k + r} cycles on this line${r ? `, ${r} of them in a runtime routine` : ''}${prof ? lostText(prof.cost(n)) : ''}` }, fmtCount((k + r))) : '');
         if (c.pcsOfPy(n).length) e.addEventListener('click', () => { selLine = selLine === n ? null : n; update(); });
         return e;
@@ -520,7 +512,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         for (let a = L.stackTop - 4; a >= st.x[2]; a -= 4) rows.push(h('span', null, `[${a}] `, h('span', { class: 'py-where' }, stack.get(a) ?? '')), h('span', null, signed(dmem[a >>> 2] ?? 0)));
         stackBox.replaceChildren(...(rows.length ? rows : [h('span', { class: 'py-hint' }, 'empty: no call in progress'), h('span')]));
       }
-      if (prof) { pipeTotals(); pipeBars(focus); }
+      if (prof) pipeTotals();
       stepBtn.toggleAttribute('disabled', done);
       endBtn.toggleAttribute('disabled', done);
     };
