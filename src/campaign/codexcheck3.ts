@@ -460,10 +460,10 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['', 'Pull-in applies to an open relay; a closed one only drops out below 3.6 V.', 'Hysteresis is what prevents chatter: between the two thresholds the relay keeps its state.'],
     },
     {
-      question: 'A counter is clocked straight from a relay contact. How many counts does one closing give?',
+      question: 'A counter is clocked straight from a contact of this act\'s modelled relay. How many counts does one closing give?',
       options: ['4', '1', '3'],
       answer: 0,
-      explain: 'The blade touches, then bounces three times before it rests: four closings, three extra counts.',
+      explain: 'In the model the blade touches, then bounces three times before it rests (real relays vary): four closings, three extra counts.',
       why: ['', 'One count needs the contact read only after it rests (8.2 ms), as the relay step does.', 'Three is the number of bounces; the first touch counts too.'],
     },
   ],

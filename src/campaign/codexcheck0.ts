@@ -545,7 +545,7 @@ export const CHECK0: Record<string, Quiz[]> = {
     {
       question: 'The word line closes before sae fires. The cell is left with:',
       options: ['The shared level near VDD/2: the read destroyed its charge', 'Its full original level: a read leaves the cell untouched', 'The rail the amplifier picks later'], answer: 0,
-      explain: 'Charge sharing moved the cell toward the middle as much as it moved the line; only the amplifier, with the word line up, writes it back.',
+      explain: 'Charge sharing took from the cell exactly what it gave the line, and with so little capacitance the cell falls almost all the way to the line\'s level; only the amplifier, with the word line up, writes it back.',
       why: ['', 'Charge sharing is mutual: the cell lost what the line gained.', 'The amplifier\'s rail reaches the cell only while the word line is up.'],
     },
   ],
@@ -623,7 +623,7 @@ export const CHECK0: Record<string, Quiz[]> = {
     {
       question: 'q is V1\'s plate. To set q = 1, the set pulse raises the grid of:',
       options: ['V1: a 1 on its grid makes its plate 1', 'V2: it conducts, its low plate cuts V1 off, and q rises', 'Both, so the pair settles faster'], answer: 1,
-      explain: 'A conducting tube pulls its plate low. Making V2 conduct drops nq, which through the divider cuts V1 off: q goes to 250 V.',
+      explain: 'A conducting tube pulls its plate low. Making V2 conduct drops nq, which through the divider cuts V1 off: q rises to about 241 V (250 V less what its divider draws).',
       why: ['A higher grid makes V1 conduct, which pulls q low: the opposite of set.', '', 'With both grids raised both tubes conduct and both plates are low: neither state.'],
     },
     {

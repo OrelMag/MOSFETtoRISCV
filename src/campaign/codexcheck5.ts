@@ -42,7 +42,7 @@ export const CHECK5: Record<string, Quiz[]> = {
       options: ['No: a program writes a register before it reads it; what is read first (the PC, valid bits, control state) is what needs a reset', 'Yes: every flip-flop must have a reset', 'Yes: the X spreads into the ALU for ever', 'No: flip-flops power up at 0'],
       answer: 0,
       explain: 'Resetting every register costs a mux or a bigger flip-flop per bit. Software never relies on a register it has not written; the hardware must not rely on its own state before reset either.',
-      why: ['', 'Only state that is read before it is written needs a known start.', 'A register that is written first never shows its power-on value to anyone.', 'Silicon powers up at random; the simulator shows X.'],
+      why: ['', 'Only state that is read before it is written needs a known start.', 'A register that is written first never shows its power-on value to anyone.', 'Silicon powers up at random. The simulator starts flip-flops at 0 by default as a convenience; its X power-on mode shows what is really known: nothing.'],
     },
     {
       question: 's_pc resets synchronously: while rst = 1 a mux selects 0 into the register. When does the PC read 0?',
