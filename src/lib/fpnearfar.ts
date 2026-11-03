@@ -386,6 +386,7 @@ export function fpAddNearFar(f: FpFormat, anticipate = true): ComponentDef {
     const eB = b.name(b.op1(busMux2(E), [`${ub}.exp`, `${ua}.exp`, ge], 'swap by exponent'), 'eBig');
     const dec1 = (x: string, lbl: string) => `${b.op(koggeStone(E), [x, b.op1(K(E, 2 ** E - 1), []), b.op1(TIE0, [])], lbl)}.s`;
     const em1 = b.name(b.op1(busMux2(E), [dec1(`${ub}.exp`, 'eb − 1'), dec1(`${ua}.exp`, 'ea − 1'), ge], 'e − 1 (formed before the swap)'), 'eBig−1');
+    b.next();
     const mB = b.name(b.op1(busMux2(M + 1), [`${ub}.mant`, `${ua}.mant`, ge]), 'mBig');
     const mS = b.name(b.op1(busMux2(M + 1), [`${ua}.mant`, `${ub}.mant`, ge]), 'mSmall');
     const sB = b.name(b.op1(MUX2, [sbEff, `${ua}.sign`, ge]), 'signBig');
