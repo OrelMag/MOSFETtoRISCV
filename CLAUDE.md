@@ -192,6 +192,9 @@ src/sim/       simulation core (no DOM)
                  the whole truth table (≤ MAX_BITS inputs, bit-parallel three-valued), against the intact one; roleText
                  (tests/ablate.test.ts: equal to simulating the netlist without the part)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
+  edgetiming.ts  setup / hold / clock-to-q read off a flip-flop circuit: captureAt (d flips t delays from the rising edge; q settles old / new / x = the SR race
+                 never decides), sweepEdge(def, 'rise' | 'fall') → setup, hold, clkToQ, qTrace (widgets/edgesweep.ts, chapter 8; tests/deepseq.test.ts pins them)
+  opdelay.ts     portSettle(def, vectors, ports): sensitized delay of chosen outputs only (the ALU's result apart from its flags; widgets/opdelay.ts)
   power.ts       dynamic power estimate: netCaps (C per net from fan-out: FF_INPUT / FF_DRIVER / FF_WIRE, illustrative
                  28 nm-class), ½ C V² per toggle, PowerMeter over a GateSim (reset / mark after settles: settled vs glitch
                  toggles; breakdown(node): switched C by the child driving each net, the clock and inputs at the root),
@@ -251,6 +254,10 @@ src/lib/       the component library (registered in `registry` via define())
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
                  ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
+  seqdeep.ts     chapter 8's deeper parts: DFF_EDGE6 (the 7474: five NANDs and a NAND3, 8 NANDs against the master–slave's 11), CLK_BUF, skewPair(k)
+                 (ff1 → ff2 with k buffers on the second clock: skew, hold race)
+  rfdeep.ts      chapter 12's: rfBypass(k, w) (regfile + write-through: comparator, AND and word mux per read port, byp input, never x0), latchWord(w),
+                 latchFile(k, w) (D latches enabled by decoder · clk: transparent for the whole high phase); regfile() itself is untouched
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
                  CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom, c }) (c: rvc.ts cFetch + PLUS2OR4); opcodeDecoder(extra) /
                  control(custom): the generators (OPCODE_DECODER / CONTROL are the no-customs case): a custom row is
@@ -640,6 +647,9 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer (number
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge; a prologue chapter (num 0, `prologue: 'P1'`,
                between the map and chapter 1, in brass: styles/prologue.css) and an appendix chapter (`appendix: 'A'`) show
                their label instead of a number (chapterNo); Chapter.soon: titles of steps not built yet (dashed dots)
+               step modules beside a chapter file: chapters/float/*.ts (chapter 24), seq/timing.ts (chapter 8: setup / hold sweep widget, clock skew scene with
+               widgets/skewpanel.ts, the six-gate DFF), alu/steps.ts (chapter 11: BRANCHES from NEXT_PC, the control unit's ALU decode, widgets/opdelay.ts
+               per-operation delays), rf/steps.ts (chapter 12: rfBypass, latchFile, regfile2w)
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
                pipe.ts (pipeline register, forwarding, hazard, rv16Pipe with fwd / stall / flush / sys),
