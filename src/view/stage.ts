@@ -2,6 +2,7 @@
 // that can drill into any instance, with input controls, clock, propagation animation and
 // the inspector. Chapters and the workbench are thin wrappers around it.
 
+import { shortStatus } from './statustext';
 import { DualSim } from '../sim/dualsim';
 import { type FlatDesign, findNode, flatten, flattenAsync, type HierNode } from '../sim/flatten';
 import { fmtCount, LoadPlan } from '../sim/loadplan';
@@ -1867,8 +1868,7 @@ export class Stage {
   private setStatus(dot: HTMLElement, msg: string): void {
     const t = this.status.lastElementChild as HTMLElement | null;
     if (t && this.status.childElementCount === 3 && this.status.children[1].textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
-    // a short form for a bar with no room (app.css .status-short), instead of a word cut mid-way
-    const short = msg.replace(/^(edge )?settled in /, '').replace(/^propagating… /, '').replace(/^solved instantly$/, 'solved').replace(/^switching… /, '').replace(/ (d+(.d+)? ms)$/, '');
+    const short = shortStatus(msg);
     this.status.replaceChildren(dot, h('span', { class: 'status-txt status-full' }, msg), h('span', { class: 'status-txt status-short' }, short));
     this.status.title = msg;
   }
