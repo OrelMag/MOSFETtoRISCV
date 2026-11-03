@@ -1196,7 +1196,9 @@ export class Editor {
   armPart(item: PaletteItem, key: string): void {
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
-    this.toast(`${item.name}: ${coarsePointer() ? 'tap the canvas to place it' : 'click the canvas to place it (Esc cancels)'}`);
+    // a touch screen has no Esc: the toast carries the way out
+    if (coarsePointer()) this.toast(`${item.name}: tap the canvas to place it`, 'info', { label: 'Cancel', run: () => this.tools.cancel() });
+    else this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
   }
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */
