@@ -208,7 +208,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
       h('div', { class: 'cpu-sec' }, 'Pins', h('span', { class: 'cpu-sec-hint' }, 'a row per cycle, newest last')), pins,
       h('div', { class: 'cpu-sec' }, `Output port ${hex(IO6502.OUT, 4)}`), console_,
       h('div', { class: 'cpu-sec' }, 'Memory, page ', pages), memGrid);
-    const el = h('div', { class: 'mem-panel cpu-panel m65-panel', 'data-dock': 'right', 'data-fold': 'narrow' },
+    const el = h('div', { class: 'mem-panel cpu-panel m65-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-keep': 'open' },
       h('h4', null, 'MOS 6502, transistor level', h('span', { class: 'fold-hint' })), body);
 
     stage.historyHooks.add({

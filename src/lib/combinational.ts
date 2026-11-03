@@ -503,7 +503,7 @@ export function muxTreeOf(k: number, pitch: number, m2: ComponentDef, id: string
       { name: 's', width: k, dir: 'in', side: 'bottom' },
       { name: 'y', width: w, dir: 'out' },
     ],
-    symbol: { kind: pitch === 2 && N <= 8 ? 'mux' : 'box', label: `MUX ${N}:1`, pitch },
+    symbol: { kind: pitch === 2 && N <= 8 ? 'mux' : 'box', label: `MUX ${N}:1`, pitch, verticalLabel: !(pitch === 2 && N <= 8) },
     spec: (v) => [v[v[N]]],
     netlist: () => ({ pins, instances, nets }),
   });

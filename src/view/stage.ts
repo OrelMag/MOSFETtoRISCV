@@ -29,12 +29,12 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
-import { matches, shortcutAllowed } from '../ui/keys';
+import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { findMemories } from './memfind';
@@ -498,6 +498,26 @@ export class Stage {
       this.fitBar();
       this.fitControls();
     }, { signal: this.life.signal });
+    // F: the circuit alone (every panel and the inspector folded); a second press gives them back
+    this.life.signal.addEventListener('abort', bindKeys({ 'stage.fold': () => this.focusMode() }));
+  }
+
+  /** The panels' and the inspector's fold before focusMode() put them away (null: not in focus mode). */
+  private focusSaved: { open: HTMLElement[]; inspector: boolean } | null = null;
+
+  /** F: fold every open panel and the inspector for the circuit alone, or restore them as they were. */
+  private focusMode(): void {
+    if (this.focusSaved) {
+      for (const el of this.focusSaved.open) el.classList.remove('collapsed');
+      this.inspector.setFolded(this.focusSaved.inspector, false);
+      this.focusSaved = null;
+    } else {
+      const open = this.panels.map((p) => p.el).filter((el) => !el.classList.contains('collapsed') && (el.dataset.dock === 'right' || el.dataset.fold));
+      this.focusSaved = { open, inspector: this.inspector.folded };
+      for (const el of open) el.classList.add('collapsed');
+      this.inspector.setFolded(true, false);
+    }
+    this.syncCover();
   }
 
   /** Open or close the bar's More menu, filled with the shed buttons' actions as they stand now. */
@@ -773,6 +793,7 @@ export class Stage {
     this.panelSize.disconnect();
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.panels = [];
+    this.panelPause = null;
     this.closeLeaf();
     this.view.clear();
     this.board.clear();
@@ -1570,10 +1591,17 @@ export class Stage {
     return this.runClock !== null;
   }
 
+  /** A panel's own Slow run is going (widgets/slowctl.ts): the bar shows it as running, and its Pause stops it. */
+  private panelPause: (() => void) | null = null;
+  setPanelRun(pause: (() => void) | null): void {
+    this.panelPause = pause;
+    this.syncRunBtn();
+  }
+
   private syncRunBtn(): void {
     const b = this.runBtn;
     if (!b) return;
-    const on = !!this.runClock;
+    const on = !!this.runClock || !!this.panelPause;
     // unchanged: every runCycles comes through here, and fitControls forces a layout of the page
     if (b.getAttribute('aria-pressed') === String(on)) return;
     b.classList.toggle('on', on);
@@ -1686,7 +1714,7 @@ export class Stage {
       acts.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       acts.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
       acts.append(labelled('', 'One full clock cycle (pauses a running clock)', 'clock', 'Pulse', () => this.pulse()));
-      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it`, onclick: () => (this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
+      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it (also a panel's Slow run)`, onclick: () => (this.panelPause ? this.panelPause() : this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
       this.syncRunBtn();
       acts.append(this.runBtn);
       if (this.sim?.runUntil) {
@@ -1699,12 +1727,12 @@ export class Stage {
         acts.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
-    this.backBtn = labelled('ghost', 'Step back: undo the last step, clock cycle or input change', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
+    this.backBtn = labelled('ghost', 'Back (stage): undo the last clock cycle, gate step or input change. A panel’s own Back undoes one of its steps', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
     acts.append(this.backBtn);
     if (this.sim?.kind === 'gate' || this.relayTime) {
       acts.append(labelled('ghost', this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', 'step', 'Step', () => this.stepOnce()));
     }
-    acts.append(labelled('ghost', 'Power-cycle the circuit', 'reset', this.scene!.resetLabel ?? 'Reset', () => this.powerCycle()));
+    acts.append(labelled('ghost', 'Reset (stage): power-cycle the whole circuit and clear its panels', 'reset', this.scene!.resetLabel ?? 'Reset', () => this.powerCycle()));
     c.append(h('span', { class: 'ctl-run' }, acts, this.status));
     this.fitControls();
   }
@@ -1838,8 +1866,10 @@ export class Stage {
   /** The status line: a dot and a message, cut with an ellipsis where the bar is short of room (the whole of it is the tooltip). */
   private setStatus(dot: HTMLElement, msg: string): void {
     const t = this.status.lastElementChild as HTMLElement | null;
-    if (t && this.status.childElementCount === 2 && t.textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
-    this.status.replaceChildren(dot, h('span', { class: 'status-txt' }, msg));
+    if (t && this.status.childElementCount === 3 && this.status.children[1].textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
+    // a short form for a bar with no room (app.css .status-short), instead of a word cut mid-way
+    const short = msg.replace(/^(edge )?settled in /, '').replace(/^propagating… /, '').replace(/^solved instantly$/, 'solved').replace(/^switching… /, '').replace(/ (d+(.d+)? ms)$/, '');
+    this.status.replaceChildren(dot, h('span', { class: 'status-txt status-full' }, msg), h('span', { class: 'status-txt status-short' }, short));
     this.status.title = msg;
   }
 
@@ -2150,6 +2180,15 @@ export class Stage {
     if (insp.folded) insp.setFolded(false, true); // a scene that folded it by itself: today's layout, then measure
     if (insp.el.offsetWidth <= 0) return;
     this.inspPending = false;
+    // a panel the step's text is about (data-keep="open") gets the room first: the inspector folds to its rail (a click opens it)
+    if (this.panels.some((p) => p.el.dataset.keep === 'open' && p.el.dataset.dock === 'right')) {
+      insp.setFolded(true, true);
+      this.foldPending = true;
+      this.autoFold();
+      this.inset = this.rightInset();
+      this.view.fit();
+      return;
+    }
     this.view.fit();
     const s = this.view.pxPerUnit();
     if (!(s > 0 && s * LABEL_UNITS < MIN_TEXT_PX)) return;
@@ -2192,7 +2231,10 @@ export class Stage {
     const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     let pick = chooseFolds(fold.length, scaleOf, mine(true));
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
-    if (scaleOf(pick) === null) pick = chooseFolds(fold.length, scaleOf, mine(false));
+    // ... and where they would leave the circuit under KEEP_SCALE of its size with every panel folded (three panels over a
+    // pipeline left ~230 px of it): the usual rule decides, a panel the step's text is about included
+    const kept = scaleOf(pick);
+    if (kept === null || (fold.length > 2 && kept < KEEP_SCALE * (scaleOf(all) ?? 0))) pick = chooseFolds(fold.length, scaleOf, mine(false));
     apply(pick);
   }
 

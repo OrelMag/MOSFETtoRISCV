@@ -214,7 +214,7 @@ function doomGatesPanel(stage: Stage): Widget {
           const wad = await fetchBytes(FREEDOOM, (got, total) => { status.textContent = `Downloading Freedoom: ${(got / 1e6).toFixed(1)}${total ? ` of ${(total / 1e6).toFixed(1)}` : ''} MB…`; });
           if (alive) void begin(wad, 'Freedoom: Phase 1', loaded);
         } catch {
-          status.textContent = 'Freedoom is not part of this build (the deploy adds it; locally: node scripts/doom/fetch-wad.mjs --public). You can load your own WAD instead.';
+          status.textContent = 'Freedoom could not be loaded in this copy of the site. You can load your own WAD instead.';
           play.removeAttribute('disabled');
         }
       } }, 'Play Freedoom (29 MB)');

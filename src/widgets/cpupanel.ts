@@ -371,6 +371,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         log.length = 0;
         logSeq = logShown = 0;
         trace.replaceChildren();
+        narr = []; // the told instruction belongs to the run Reset just ended
         loads = misses = 0;
         prevStall = false;
         stallRun = 0;

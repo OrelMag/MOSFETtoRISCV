@@ -11,6 +11,7 @@
   --surface: #ffffff;
   --surface-2: #f0f2f7;
   --surface-3: #e7eaf2;
+  --scroll-shadow: rgb(15 20 40 / 0.16);
   --border: #e1e4ec;
   --border-strong: #cdd2de;
   --text: #141824;
@@ -109,6 +110,7 @@
     --surface: #11141c;
     --surface-2: #171b25;
     --surface-3: #1f2430;
+    --scroll-shadow: rgb(0 0 0 / 0.5);
     --border: #232835;
     --border-strong: #313849;
     --text: #e8eaf1;
@@ -184,6 +186,7 @@
   --surface: #11141c;
   --surface-2: #171b25;
   --surface-3: #1f2430;
+  --scroll-shadow: rgb(0 0 0 / 0.5);
   --border: #232835;
   --border-strong: #313849;
   --text: #e8eaf1;

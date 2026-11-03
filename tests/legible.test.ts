@@ -29,6 +29,9 @@ describe('which blocks get a name', () => {
     expect(nameEligible('ALU', 4, 10)).toBe(false);
     expect(nameEligible('ALU', 6, 6)).toBe(true);
     expect(nameEligible('IF/ID', 3, 24)).toBe(true);
+    // a ratio in a name is not an assignment: the ALU's result mux (MUX 8:1) is named at the fit
+    expect(nameEligible('MUX 8:1', 10, 116)).toBe(true);
+    expect(nameEligible('bit0 := 0', 20, 20)).toBe(false);
   });
   it('turns a tall narrow block\'s name', () => {
     expect(nameRotated(4, 30)).toBe(true);

@@ -53,6 +53,7 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     stop: () => {
       if (slow) clearTimeout(slow);
       slow = null;
+      stage.setPanelRun(null);
       slowBtn.classList.remove('on');
       slowIdle();
     },
@@ -90,6 +91,7 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     if (level !== 'gate' && stage.sim instanceof DualSim) stage.sim.prepare();
     slowBtn.classList.add('on');
     slowBtn.replaceChildren(icon('pause', 14), 'Pause');
+    stage.setPanelRun(() => ctl.stop());
     loop();
   });
   const stepBtn = h('button', { class: 'btn sm ghost', title: 'One step at the chosen level', onclick: () => {
@@ -98,7 +100,7 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     stage.stopClock();
     if (!opts.finished() || (level === 'gate' && stage.inEdge)) tick();
   } }, icon('step', 14), 'Step');
-  const backBtn = h('button', { class: 'btn sm ghost', title: 'Step back: undo the last step (the golden model and the panel go back too)', onclick: () => {
+  const backBtn = h('button', { class: 'btn sm ghost', title: 'Back (panel): undo the last step at the panel’s level; the golden model and the panel go back too', onclick: () => {
     ctl.stop();
     opts.onStart?.();
     stage.back();
