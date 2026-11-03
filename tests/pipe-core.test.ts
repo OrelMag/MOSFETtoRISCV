@@ -31,6 +31,7 @@ import type { ComponentDef } from '../src/sim/types';
 import type { PortDef } from '../src/sim/types';
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 import { tick } from './yieldtick';
+import { fieldsOf } from '../src/riscv/fields';
 import { COMPUTER_PROGRAMS, DONE_TEXT, GREETING, PICTURE } from '../src/riscv/ioprograms';
 import { ISS } from '../src/riscv/iss';
 import { PipeHistory } from '../src/widgets/pipegrid';
@@ -219,6 +220,10 @@ h:    j h`;
     expect(mon.mismatch && mismatchText(mon.mismatch)).toBeNull();
     expect(mon.iss!.halted).toBe(true);
     expect(mon.leds).toBe(6); // 3 + 5 - 2
+    // the field breakdown names the custom row (instrBreakdown passes desc.iss.custom to fieldsOf), not "not an RV32 opcode"
+    const lwxWord = assemble(src, [lwx, subi]).words[7]!;
+    expect(fieldsOf(lwxWord).at(-1)!.meaning).toBe('not an RV32 opcode');
+    expect(fieldsOf(lwxWord, mon.desc!.iss.custom).at(-1)!.meaning).toContain('lwx');
     // the listing line of a custom instruction lights the units its row uses, on the core's own instances
     const use = instrUse(assemble(src, [lwx, subi]).words[7]!, [lwx, subi]);
     const inner = [...es.sim!.design.root.children!.get('cpu')!.children!.keys()];
