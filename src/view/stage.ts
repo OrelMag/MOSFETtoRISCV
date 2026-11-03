@@ -34,7 +34,7 @@ import { applyLayout, layoutOf } from './layout';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
-import { matches, shortcutAllowed } from '../ui/keys';
+import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { findMemories } from './memfind';
@@ -498,6 +498,26 @@ export class Stage {
       this.fitBar();
       this.fitControls();
     }, { signal: this.life.signal });
+    // F: the circuit alone (every panel and the inspector folded); a second press gives them back
+    this.life.signal.addEventListener('abort', bindKeys({ 'stage.fold': () => this.focusMode() }));
+  }
+
+  /** The panels' and the inspector's fold before focusMode() put them away (null: not in focus mode). */
+  private focusSaved: { open: HTMLElement[]; inspector: boolean } | null = null;
+
+  /** F: fold every open panel and the inspector for the circuit alone, or restore them as they were. */
+  private focusMode(): void {
+    if (this.focusSaved) {
+      for (const el of this.focusSaved.open) el.classList.remove('collapsed');
+      this.inspector.setFolded(this.focusSaved.inspector, false);
+      this.focusSaved = null;
+    } else {
+      const open = this.panels.map((p) => p.el).filter((el) => !el.classList.contains('collapsed') && (el.dataset.dock === 'right' || el.dataset.fold));
+      this.focusSaved = { open, inspector: this.inspector.folded };
+      for (const el of open) el.classList.add('collapsed');
+      this.inspector.setFolded(true, false);
+    }
+    this.syncCover();
   }
 
   /** Open or close the bar's More menu, filled with the shed buttons' actions as they stand now. */
