@@ -25,7 +25,8 @@ import { applyTheme, settings } from '../ui/settings';
 import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
-import { Inspector } from './inspector';
+import { Inspector, inspectorChoice } from './inspector';
+import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
@@ -195,6 +196,8 @@ export class Stage {
   private panelSize = new ResizeObserver(() => this.syncCover());
   /** The scene's foldable panels still wait for their first layout to decide whether they start folded. */
   private foldPending = false;
+  /** The inspector's fold waits for the first layout of the scene (autoInspector). */
+  private inspPending = false;
   private anim: ReturnType<typeof setInterval> | null = null;
   private runClock: ReturnType<typeof setInterval> | null = null;
   private runBtn: HTMLElement | null = null;
@@ -474,6 +477,7 @@ export class Stage {
     // The canvas also changes size during a run (the bottom bar rewraps as values and the status
     // change): a view the learner zoomed into must survive that.
     new ResizeObserver(() => {
+      this.autoInspector();
       this.autoFold();
       this.inset = this.rightInset();
       this.drillLayout();
@@ -736,6 +740,8 @@ export class Stage {
     this.inset = this.rightInset();
     this.layoutDock(false);
     this.view.fit();
+    this.inspPending = true;
+    this.autoInspector();
     this.refresh();
     // A link's view (ui/viewlink.ts): inputs, probes and cycles replayed; a replayed run is left paused where it ends.
     const link = takePendingView();
@@ -2122,6 +2128,36 @@ export class Stage {
       el.classList.toggle('collapsed');
       if (el.dataset.fold) foldChoice.set(el.dataset.dock ?? '', el.classList.contains('collapsed'));
     });
+  }
+
+  /**
+   * The inspector starts folded to a rail beside a circuit too large to read: one whose block labels would render under
+   * MIN_TEXT_PX at the fit with the inspector open (view/legible.ts: its names would be fixed-size stand-ins, all else
+   * hidden). Decided once per scene, from an open inspector; the learner's own fold or unfold (inspectorChoice) always
+   * wins and is applied to every scene. Waits where nothing is laid out yet or the inspector is not a column
+   * (full-width panes, a phone), and for the boards. The room it frees lets the scene's panels be chosen again.
+   */
+  private autoInspector(): void {
+    if (!this.inspPending) return;
+    const insp = this.inspector, choice = inspectorChoice();
+    if (choice !== null) {
+      this.inspPending = false;
+      if (insp.folded !== choice) insp.setFolded(choice, false);
+      return;
+    }
+    if (this.boardOn || this.canvas.clientWidth <= 0) return;
+    if (!this.view.fitted) { this.inspPending = false; return; } // the learner zoomed or panned first
+    if (insp.folded) insp.setFolded(false, true); // a scene that folded it by itself: today's layout, then measure
+    if (insp.el.offsetWidth <= 0) return;
+    this.inspPending = false;
+    this.view.fit();
+    const s = this.view.pxPerUnit();
+    if (!(s > 0 && s * LABEL_UNITS < MIN_TEXT_PX)) return;
+    insp.setFolded(true, true);
+    this.foldPending = true;
+    this.autoFold();
+    this.inset = this.rightInset();
+    this.view.fit();
   }
 
   /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded: as many

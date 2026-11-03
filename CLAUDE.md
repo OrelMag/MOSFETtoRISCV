@@ -571,6 +571,11 @@ src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register fil
                trunk / via; the right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
                whypanel.ts (the Why? card, W: a click on a wire traces it with sim/explain.ts, the chain's parts lit;
                Each part: sim/ablate.ts's table; on the stage and in the sandbox's look inside),
+               legible.ts (readable at any zoom, a view rule only: each text kind is hidden once it would render under 7 px
+               (lg-h-<kind> classes on the svg, set when the scale crosses a size; a net tag keeps its pill), a block label under
+               12 px is drawn again at 12 px (`.lg-name` inside the instance, rotated on tall blocks, the larger block keeps its name
+               on a collision, planned when the scale settles); image.ts drops it all; Inspector folds to a rail beside a circuit whose
+               labels would be under 7 px at fit (Stage.autoInspector; the learner's choice wins, `mosfet.inspector`)),
                crumbvals.ts (the breadcrumb's live values, stage and look inside: each level the output carrying the one
                below, `bit [7] = 1` where the level above's bus was sliced),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
