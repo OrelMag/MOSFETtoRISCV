@@ -256,7 +256,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 [data-nosinglekeys] .kbd-hint { display: none; }
 @media (pointer: coarse), (max-width: 700px) { .kbd-hint { display: none; } }
 @media (pointer: coarse) { .qn-search kbd { display: none; } } /* no keyboard: no shortcut to advertise */
-.kh-back { position: fixed; inset: 0; z-index: 72; display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; background: rgb(10 12 20 / 38%); overflow: auto; }
+.kh-back { position: fixed; inset: 0; z-index: 72; display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; background: light-dark(rgb(10 12 20 / 38%), rgb(0 0 0 / 62%)); overflow: auto; }
 .kh { width: min(1060px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 16px 20px 12px; }
 .kh-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); }
 .kh-head h3 { margin: 0; font-size: 18px; color: var(--text); }

@@ -392,7 +392,7 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   font: 13px var(--font-mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface);
   color: var(--text); outline: none; resize: both; max-width: 60vw;
 }
-.sb-help { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgb(0 0 0 / 35%); }
+.sb-help { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: light-dark(rgb(20 24 40 / 38%), rgb(0 0 0 / 62%)); backdrop-filter: blur(1.5px); }
 .sb-help .panel { width: min(620px, 92vw); max-height: 86vh; overflow: auto; }
 .sb-help-head { display: flex; align-items: center; justify-content: space-between; }
 .sb-help h3 { margin: 0; }
