@@ -306,8 +306,8 @@ export function coherentDualCore(program: number[], opts: CoherentOptions = {}):
   return memo(key, () => {
     const cg = symbolGeom(CORE), CA = coherentCache(K, coh), ag = symbolGeom(CA), BU = cohBus(K), bg = symbolGeom(BU), DM = sharedMemory(K), dg = symbolGeom(DM);
     // the core sits 4 units above its cache, so the address, write data, write enable and request pins meet straight across
-    const xC = 20, xA = xC + cg.w + 12, xB = xA + ag.w + 26, xD = xB + bg.w + 26, xP = xD + dg.w + 24;
-    const y0 = 8, y1 = y0 + ag.h + 16;
+    const xC = 20, xA = xC + cg.w + 12, xB = xA + ag.w + 16, xD = xB + bg.w + 14, xP = xD + dg.w + 10;
+    const y0 = 8, y1 = y0 + ag.h + 10;
     const T = true as const;
     const I = [0, 1];
     return {
