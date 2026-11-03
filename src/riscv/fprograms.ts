@@ -83,6 +83,32 @@ halt:   j    halt`,
 halt:   j    halt`,
   },
   {
+    id: 'kahan',
+    name: 'Naive and Kahan summation',
+    blurb: '2^24 plus thirty-two ones, summed twice: naively (every 1 is absorbed or lost) and with Kahan compensation (the lost low part is carried in c and fed back).',
+    source: `# s = 2^24 + 32 * 1.0, naive and Kahan side by side
+        li   t0, 0x4b800000    # 2^24 = 16777216: from here the ulp is 2
+        fmv.w.x ft1, t0        # naive sum
+        fmv.w.x ft2, t0        # Kahan sum
+        fmv.w.x ft3, zero      # c: the part of the sum lost so far
+        li   t0, 1
+        fcvt.s.w ft0, t0       # x = 1.0, the term
+        li   t1, 32
+loop:   fadd.s ft1, ft1, ft0   # naive: 2^24 + 1 is a tie, rounds back to 2^24 every time
+        fsub.s ft4, ft0, ft3   # y = x - c      (the term, corrected by what was lost)
+        fadd.s ft5, ft2, ft4   # t = sum + y    (low bits of y are lost here)
+        fsub.s ft6, ft5, ft2   # (t - sum)      what was really added
+        fsub.s ft3, ft6, ft4   # c = (t - sum) - y: minus what was lost; algebraically 0
+        fmv.s ft2, ft5         # sum = t
+        addi t1, t1, -1
+        bnez t1, loop
+        fmv.x.w a0, ft1        # naive: 0x4B800000 = 16777216
+        fmv.x.w a1, ft2        # Kahan: 0x4B800010 = 16777248, exact
+        fsub.s ft7, ft2, ft1   # 32.0: what the naive loop lost
+        fmv.x.w a2, ft7
+halt:   j    halt`,
+  },
+  {
     id: 'rmodes',
     name: 'Rounding modes',
     blurb: 'Converts 2.5 and −2.5 to integers in all five rounding modes, rounds 2^24 + 1 to a float statically and with the dynamic mode in frm.',

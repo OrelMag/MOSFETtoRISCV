@@ -1,0 +1,49 @@
+/* Chapter 24's error lab and summation lab (widgets/fperror.ts). Colours from the theme tokens (both themes); series are told apart by marker shape too. */
+
+.fe .fe-const { font-size: 12.5px; color: var(--text-2); margin: 6px 0 10px; line-height: 1.5; }
+.fe-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.fe-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.fe-row > span { flex: none; width: 14px; font: 600 12px var(--font-mono); color: var(--muted); }
+.fe-in { flex: 1; min-width: 0; font: 13px var(--font-mono); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.fe-out { margin-top: 10px; display: grid; gap: 10px; }
+.fe-res { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+.fe-res.bad { border-color: var(--bad); color: var(--bad); }
+.fe-sum { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+.fe-sum > strong:first-child { margin-right: 6px; color: var(--text); }
+.fe-sum code { font: 12.5px var(--font-mono); color: var(--text); }
+.fe-bad { color: var(--bad); }
+.fe-scroll { overflow-x: auto; max-width: 100%; }
+.fe-t { border-collapse: collapse; font: 12px var(--font-mono); min-width: 100%; }
+.fe-t th { text-align: left; font: 600 11px var(--font-ui); color: var(--muted); padding: 3px 8px 3px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.fe-t td { padding: 3px 8px 3px 0; border-bottom: 1px solid var(--border); color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fe-t td.fe-x { color: var(--text); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.fe-t td.fe-n { font: 12px var(--font-ui); white-space: normal; min-width: 180px; }
+.fe-t tfoot td { border-bottom: 0; padding-top: 6px; }
+.fe-h { margin: 18px 0 2px; font-size: 14px; }
+.fe-n2 { font: 12px var(--font-mono); color: var(--text-2); min-width: 80px; }
+
+.fe-chart { width: 100%; max-width: 680px; display: block; margin: 8px 0 4px; }
+.fe-chart .gl { stroke: var(--border); }
+.fe-chart .lb { font: 10px var(--font-mono); fill: var(--muted); }
+.fe-chart .ms { fill: none; stroke-width: 1.6; }
+.fe-chart .bd { fill: none; stroke-width: 1.2; stroke-dasharray: 4 3; opacity: 0.8; stroke: var(--series-1); }
+.fe-chart .cur { stroke: var(--border-strong); stroke-dasharray: 2 3; }
+.fe-chart .ms, .fe-chart .pt { stroke: var(--series-2); }
+.fe-chart .pt { fill: var(--series-2); }
+.fe-chart .pt.zero { fill: var(--surface); stroke-width: 1.6; }
+.fe-chart .naive { stroke: var(--series-2); fill: none; }
+.fe-chart .pt.naive { fill: var(--series-2); }
+.fe-chart .pairwise { stroke: var(--series-1); }
+.fe-chart .pt.pairwise { fill: var(--series-1); }
+.fe-chart .kahan { stroke: var(--series-3); }
+.fe-chart .pt.kahan { fill: var(--series-3); }
+.fe-chart .bd.naive, .fe-chart .bd.pairwise, .fe-chart .bd.kahan { fill: none; opacity: 0.55; }
+.fe-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; align-items: center; margin-bottom: 8px; }
+.fe-legend .k { font: 600 12px var(--font-mono); }
+.fe-legend .k.ms { color: var(--series-2); }
+.fe-legend .k.bd { color: var(--series-1); }
+.fe-legend .k.naive { color: var(--series-2); }
+.fe-legend .k.pairwise { color: var(--series-1); }
+.fe-legend .k.kahan { color: var(--series-3); }
+@media (max-width: 520px) { .fe-t td.fe-n { min-width: 150px; } .fe-in { font-size: 12px; } }
+@media (pointer: coarse) { .fe-presets .btn { min-height: 40px; } .fe-in { min-height: 40px; } }
