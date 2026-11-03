@@ -10,12 +10,18 @@ const E4M3: FpFormat = { E: 4, M: 3 }, E3M2: FpFormat = { E: 3, M: 2 };
 const MODES = [0, 1, 2, 3, 4, 5, 7];
 
 describe('lza', () => {
-  it('the anticipator is within one place of the true count (A ≥ B, exhaustive at 6 bits)', () => {
-    const n = 6, s = simulate(lza(n));
-    for (let a = 0; a < 2 ** n; a++) for (let b = 0; b <= a; b++) {
-      const [c] = evalOnce(s, [a, b]);
-      expect(c).toEqual(lza(n).spec!([a, b])[0]);
-      if (a !== b) { const lz = n - 1 - Math.floor(Math.log2(a - b)); expect([lz, lz - 1]).toContain(c); }
+  it('the count is the true one or one too small (A ≥ B, exhaustive for 4 to 8 bits), and a forced position clamps it', () => {
+    for (const n of [4, 5, 6, 7, 8]) {
+      const s = simulate(lza(n)), P = 2 ** Math.ceil(Math.log2(n));
+      for (let a = 0; a < 2 ** n; a++) for (let b = 0; b <= a; b++) {
+        const [c] = evalOnce(s, [a, b, 0]);
+        expect(c).toEqual(lza(n).spec!([a, b, 0])[0]);
+        if (a !== b) { const lz = n - 1 - Math.floor(Math.log2(a - b)); expect([lz, lz - 1], `${n}: ${a} - ${b}`).toContain(c); }
+        if ((a * 31 + b) % 7 === 0) for (const cap of [0, 1, n - 1]) { // force the pattern position of count `cap`: the count is min(c, cap)
+          const [cc] = evalOnce(s, [a, b, 2 ** (P - 1 - cap)]);
+          expect(cc, `${n}: ${a} - ${b} cap ${cap}`).toBe(Math.min(c, cap));
+        }
+      }
     }
   });
 });
