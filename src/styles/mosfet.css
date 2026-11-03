@@ -80,3 +80,9 @@
 .mos-plot .rl.lin { fill: var(--accent); } .mos-plot .rl.sat { fill: var(--good); }
 .mos-plot .t50 { stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 3 3; }
 .mos-plot .rl.t50l { fill: var(--warn); }
+
+/* chapter 2: inverter chain sizing */
+.sz-chain { display: flex; align-items: flex-end; gap: 10px; margin: 10px 0; min-height: 72px; }
+.sz-inv { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0 8px; border-radius: 6px; background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent)); border: 1.5px solid var(--accent); font: 600 11px var(--font-mono); color: var(--text); }
+.sz-load { margin-left: 6px; padding: 6px 10px; border-radius: 6px; border: 1.5px dashed var(--border-strong); font: 600 11px var(--font-mono); color: var(--text-2); }
+.mini td.sz-best { background: color-mix(in srgb, var(--good) 20%, transparent); font-weight: 700; }
