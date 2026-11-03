@@ -711,6 +711,9 @@ src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand 
                immediate's wiring, text by label, a line parsed in context, program), compose.ts (tableCompose(doc): a table's
                rows as instructions, split operands wired; CPU4_COMPOSE; composeIsaOf(lang, table)); riscv/rv16/compose16.ts
                RV16's (each format's fields written out); tests/compose-isa.test.ts: every adapter against its own assembler
+src/runner/    Appendix D's Bit Runner (docs/RUNNER.md; an original game, not a recreation): model.ts the reference, register by register,
+               crt.ts a monitor on sync and video; lib/bitrunner.ts the 74xx chips (Sheet: logic mapped onto NAND packages), widgets/runner.ts
+               the Screen panel, widgets/runnerlayout.ts the boards; view/bbwires.ts every board's jumpers from the netlist (channels: harnesses)
 src/m6502/     Appendix A's 6502 (DOM-free): isa.ts (151 documented opcodes, modes, disasm; UNDOC: the 85 stable undocumented NMOS
                opcodes (LAX SAX DCP ISC SLO RLA SRE RRA ANC ALR ARR SBX, SBC $EB, the NOP variants) apart, so the PLA / ucode /
                chip stay documented-only; opInfoOf(op) is either; left out: XAA, LAX #, AHX, TAS, SHY, SHX, LAS (unstable) and

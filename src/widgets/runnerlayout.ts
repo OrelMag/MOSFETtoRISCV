@@ -1,24 +1,20 @@
-// Appendix D's boards (DOM-free, so tests validate them): Bit Runner as built, two columns of boards, every chip a 74xx
-// part of lib/bitrunner.ts at its path, every LED a net of the scene's simulation.
+// Appendix D's boards (DOM-free, so tests validate them): Bit Runner as built, a grid of boards with one row of chips each
+// and channels between them for the wires, every chip a 74xx part of lib/bitrunner.ts at its path, every LED a net of
+// the scene's simulation. A module too big for one board goes on to the next, as on a real bench.
 
 import { BIT_RUNNER, RB_ROLES, rbChips } from '../lib/bitrunner';
 import { TTL_PART, TTL_PINS } from '../lib/ttl';
-import { type BbBoard, type BbChip, type BbLed, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
+import { BB, type BbBoard, type BbChip, type BbLed, type BreadboardLayout, chipSize, ledsOf, planBoard } from '../view/bblayout';
 import { pinsOf } from './saplayout';
 
-const COL_W = 56, GAP = 1.6;
+/** A board's width and clear rows above and below its chips; the channels between boards and between columns. */
+const COL_W = 50, AIR = 3, GAP = 6, GUTTER = 14;
 type Spec = Omit<BbBoard, 'at' | 'size'>;
 
 function chipsOn(module: string): BbChip[] {
   return rbChips(BIT_RUNNER).filter((c) => c.path.startsWith(`${module}.`)).map((c) => ({
     path: c.path.split('.'), part: TTL_PART[c.kind], dip: TTL_PINS[c.kind].length, role: RB_ROLES[c.path], pins: pinsOf(c.kind),
   }));
-}
-
-function sized(b: Spec, at: [number, number]): BbBoard {
-  const board = { ...b, at, size: [COL_W, 0] } as BbBoard;
-  board.size = [COL_W, Math.ceil(planBoard(board).need.h * 2) / 2];
-  return board;
 }
 
 const led = (path: string, port: string, label: string, color: BbLed['color'] = 'red', bit?: number): BbLed =>
@@ -62,24 +58,38 @@ const RIGHT: Spec[] = [
   },
 ];
 
-const number = (boards: BbBoard[]) => { let n = 0; for (const b of boards) for (const c of b.chips) c.ref = `U${++n}`; };
-
-function stack(into: BbBoard[], list: Spec[], x: number, y = 0): number {
-  for (const b of list) {
-    const s = sized(b, [x, y]);
-    into.push(s);
-    y = Math.round((y + s.size[1] + GAP) * 10) / 10;
+/** A module on as many boards as one row of chips a board takes; its indicators on the first. */
+function split(m: Spec): Spec[] {
+  const rows: BbChip[][] = [[]];
+  let x = BB.side + 0.6;
+  for (const chip of m.chips) {
+    const w = chipSize(chip.dip).w;
+    if (rows[rows.length - 1].length && x + w > COL_W - BB.side) { rows.push([]); x = BB.side + 0.6; }
+    rows[rows.length - 1].push(chip);
+    x += w + BB.chipGap;
   }
-  return y;
+  return rows.map((chips, i) => (i === 0 ? { ...m, chips, air: AIR } : { title: `${m.title.split(':')[0]} (${i + 1})`, module: m.module, chips, air: AIR }));
 }
 
-/** The whole game on its boards; below a narrow canvas's width, one column. */
+/** Boards in `cols` columns of equal rows, a channel above and below each row, a gutter after each column but a lone column's last. */
+function grid(list: Spec[], cols: number): BreadboardLayout {
+  const gutters = Array.from({ length: Math.max(1, cols - 1) }, (_, i) => ({ x: COL_W + i * (COL_W + GUTTER), w: GUTTER }));
+  const boards: BbBoard[] = [];
+  let y = GAP;
+  for (let i = 0; i < list.length; i += cols) {
+    const row = list.slice(i, i + cols).map((b, k) => ({ ...b, at: [k * (COL_W + GUTTER), y], size: [COL_W, 0] }) as BbBoard);
+    const h = Math.ceil(Math.max(...row.map((b) => planBoard(b).need.h)) * 2) / 2;
+    for (const b of row) { b.size = [COL_W, h]; boards.push(b); }
+    y += h + GAP;
+  }
+  return { boards, channels: { gutters, gap: GAP, w: cols * COL_W + Math.max(1, cols - 1) * GUTTER, h: y } };
+}
+
+/** The whole game on its boards; on a canvas too narrow for the grid, one column. */
 export function runnerLayout(): BreadboardLayout {
-  const boards: BbBoard[] = [], column: BbBoard[] = [];
-  stack(boards, LEFT, 0);
-  stack(boards, RIGHT, COL_W + 2);
-  number(boards);
-  stack(column, RIGHT, 0, stack(column, LEFT, 0));
-  const note = `${rbChips(BIT_RUNNER).length} ICs, no CPU, no ROM`;
-  return { note, boards, narrow: { note, boards: column } };
+  const list = [...LEFT, ...RIGHT].flatMap(split);
+  let n = 0;
+  for (const b of list) for (const chip of b.chips) chip.ref = `U${++n}`;
+  const note = `${rbChips(BIT_RUNNER).length} ICs on ${list.length} boards, no CPU, no ROM`;
+  return { ...grid(list, 3), note, narrow: { ...grid(list, 1), note } };
 }

@@ -58,7 +58,8 @@
 
 :root[data-theme='dark'],
 /* The vivid look's dark board (vivid.css): the boards' canvas takes the dark tokens in either theme. */
-:root[data-look='vivid'][data-board='dark'] .bb-host {
+:root[data-look='vivid'][data-board='dark'] .bb-host,
+:root[data-look='vivid'][data-board='dark'] .stage.bb-mode .canvas {
   --bb-bg: #16181d;
   --bb-caption: #9aa1ab;
   --bb-board-edge: #8f8672;
@@ -278,6 +279,7 @@ svg.breadboard {
 .bb-jumper { fill: none; stroke-width: 0.2; stroke-linecap: round; }
 .bb-jumper.rail { stroke-width: 0.16; opacity: 0.75; }
 .bb-jumpers.across .bb-jumper { opacity: 0.45; stroke-width: 0.14; }
+.bb-jumpers.across .bb-jumper.harness { opacity: 0.95; stroke-width: 0.18; stroke-linejoin: round; }
 .bb-jumper[data-hue='0'] { stroke: var(--bb-j0); } .bb-jumper[data-hue='1'] { stroke: var(--bb-j1); }
 .bb-jumper[data-hue='2'] { stroke: var(--bb-j2); } .bb-jumper[data-hue='3'] { stroke: var(--bb-j3); }
 .bb-jumper[data-hue='4'] { stroke: var(--bb-j4); } .bb-jumper[data-hue='5'] { stroke: var(--bb-j5); }

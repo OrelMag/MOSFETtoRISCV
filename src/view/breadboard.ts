@@ -373,8 +373,8 @@ export class BreadboardView {
     const byNet = new Map<number, { idx: number; els: SVGPathElement[] }>();
     for (const w of planWires(layout, root)) {
       const hue = w.rail ? (w.rail === 'pos' ? 'pos' : 'neg') : String(wireHue(w.net));
-      const el = s('path', { class: `bb-jumper${w.rail ? ' rail' : ''}`, d: wirePath(w), 'data-hue': hue }) as SVGPathElement;
-      if (w.from.board === w.to.board) {
+      const el = s('path', { class: `bb-jumper${w.rail ? ' rail' : ''}${w.joins ? ' harness' : ''}`, d: wirePath(w), 'data-hue': hue }) as SVGPathElement;
+      if (!w.joins && w.from.board === w.to.board) {
         let g = within.get(w.from.board);
         if (!g) { g = s('g', { class: 'bb-jumpers', transform: `translate(${w.from.board.at[0]} ${w.from.board.at[1]})` }); within.set(w.from.board, g); }
         el.setAttribute('transform', `translate(${-w.from.board.at[0]} ${-w.from.board.at[1]})`);
