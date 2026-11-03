@@ -105,7 +105,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   }
   if ('core' in ref) {
     const custom = sanitizeRows(ref.core.custom);
-    return ref.core.pipe ? pipelinedCpu([], { adder: 'ks', ports: true, custom }) : singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
+    return ref.core.pipe ? pipelinedCpu([], { adder: 'ks', ports: true, custom, ...(ref.core.m ? { m: true } : ref.core.dcache ? { dcache: 'wt' as const } : {}) }) : singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
   }
   return { error: 'unknown part kind' };
 }

@@ -1,5 +1,5 @@
 // The compiler's back end: the checked syntax tree → RV32I assembly for the site's CPUs (no M: * // % call
-// shift-and-add / shift-and-subtract routines unless an operand is a power of two). Every emitted line keeps
+// shift-and-add / shift-and-subtract routines unless an operand is a power of two; with `m`, RV32IM: mul / div / rem). Every emitted line keeps
 // the Python line it came from, so the listing, the machine words and the running gates map back to it.
 //
 // Registers: t0–t6 evaluate expressions (a stack, one per nesting level); s0–s11 hold variables (a function's
@@ -201,11 +201,11 @@ export class CodeGen {
   private readonly listAddr = new Map<string, { addr: number; len: number }>();
   private readonly runtime = new Set<string>();
 
-  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number) {
+  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false) {
     const body = foldStmts(mod.body);
     this.mod = { ...mod, body };
     for (const s of body) if (s.kind === 'def') { const f = scope.funcs.get(s.name)!; f.body = s.body; }
-    stmtsRuntime(body, this.runtime);
+    if (!m) stmtsRuntime(body, this.runtime);
     this.layout = { homes: [], lists: [], outBase: 0, stackTop: 4 * dmemWords, dmemWords, runtime: [], funcs: [...scope.funcs.keys()] };
   }
 
@@ -290,7 +290,7 @@ export class CodeGen {
   private func(f: FuncInfo): void {
     const hidden = this.planLoops(f.body, f.name, new Set());
     const rt = new Set<string>();
-    stmtsRuntime(f.body, rt);
+    if (!this.m) stmtsRuntime(f.body, rt);
     const leaf = !f.callsUser && rt.size === 0;
     const names = [...f.locals, ...hidden];
     const regs = leaf ? [...AREGS, ...SREGS] : SREGS;
@@ -634,6 +634,8 @@ export class CodeGen {
       }
     }
     const r = this.gen(right, d);
+    if (this.m && op === '*') { this.emit(`mul  ${dest}, ${l}, ${r}`); return dest; }
+    if (this.m && (op === '//' || op === '%')) return this.divM(op, l, r, d + 1, dest);
     const rt = runtimeOf(op, right);
     if (rt) {
       this.emit(`mv   a0, ${l}`);
@@ -644,6 +646,42 @@ export class CodeGen {
     }
     const ins: Record<string, string> = { '+': 'add', '-': 'sub', '&': 'and', '|': 'or', '^': 'xor', '<<': 'sll', '>>': 'sra' };
     this.emit(`${ins[op].padEnd(4)} ${dest}, ${l}, ${r}`);
+    return dest;
+  }
+
+  /**
+   * Python's floor division / modulo from RISC-V's truncating div / rem (M): the truncated result stands unless
+   * the remainder is non-zero and the operands' signs differ, then the quotient is one lower (the remainder one
+   * divisor higher). A zero divisor is left to the hardware: x // 0 = -1, x % 0 = x, as the subset defines them.
+   * `s` is a scratch temporary; the operands stay intact until the end.
+   */
+  private divM(op: '//' | '%', l: string, r: string, d: number, dest: string): string {
+    const s = this.tmp(d), ok = this.newLabel('fl'), end = `${ok}.end`;
+    this.emit(`rem  ${s}, ${l}, ${r}`);
+    this.emit(`beqz ${s}, ${ok}`);
+    this.emit(`beqz ${r}, ${ok}`);
+    if (op === '//') {
+      this.emit(`xor  ${s}, ${l}, ${r}`);
+      this.emit(`bgez ${s}, ${ok}`);
+      this.emit(`div  ${dest}, ${l}, ${r}`);
+      this.emit(`addi ${dest}, ${dest}, -1`);
+      this.emit(`j    ${end}`);
+      this.label(ok);
+      this.emit(`div  ${dest}, ${l}, ${r}`);
+      this.label(end);
+    } else {
+      // the remainder has the dividend's sign: add the divisor when the divisor's differs
+      const neg = `${ok}.neg`, fix = `${ok}.fix`;
+      this.emit(`bltz ${l}, ${neg}`);
+      this.emit(`bgez ${r}, ${ok}`);
+      this.emit(`j    ${fix}`);
+      this.label(neg);
+      this.emit(`bltz ${r}, ${ok}`);
+      this.label(fix);
+      this.emit(`add  ${s}, ${s}, ${r}`);
+      this.label(ok);
+      this.emit(`mv   ${dest}, ${s}`);
+    }
     return dest;
   }
 

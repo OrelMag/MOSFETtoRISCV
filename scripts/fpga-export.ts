@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import '../src/lib';
 import { addExample, EXAMPLES } from '../src/editor/examples';
-import { fpgaExport } from '../src/editor/fpga';
+import { BOARD, fpgaExport } from '../src/editor/fpga';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace } from '../src/editor/model';
 
@@ -44,7 +44,11 @@ for (const id of ids) {
   const counts = [...stat.matchAll(/^\s+(\d+)\s+(\$\w+|[A-Z][A-Z0-9_]*)\s*$/gm)].map((m) => ({ n: Number(m[1]), type: m[2] }));
   const sum = (re: RegExp) => counts.filter((c) => re.test(c.type)).reduce((n, c) => n + c.n, 0);
   const luts = sum(/^LUT\d$/), ffs = sum(/^DFF/), cells = sum(/^(?!\$scopeinfo$|IBUF$|OBUF$|VCC$|GND$)/);
-  console.log(`${id}: synth_gowin ${out.board}: ${cells} cells (${luts} LUTs, ${ffs} flip-flops), ${out.modules} modules exported`);
+  // block RAM: Gowin's SP / SPX9 / DP / DPB / SDP / SDPB / pROM(X9) primitives
+  const bsram = sum(/^(SP|SPX9|DP|DPX9|DPB|DPX9B|SDP|SDPX9|SDPB|SDPX9B|pROM|pROMX9)$/);
+  console.log(`${id}: synth_gowin ${out.board}: ${cells} cells (${luts} LUTs, ${ffs} flip-flops, ${bsram} block RAMs), ${out.modules} modules exported`);
+  // the example board's FPGA (GW1NR-9): 8640 LUTs, 26 block RAMs
+  if (luts > 8640 || bsram > 26) { console.log(`${id}: does not fit a ${BOARD.device}: ${luts} LUTs (8640), ${bsram} block RAMs (26)`); failed++; }
   if (cells < 10) { console.log(`${id}: Yosys left almost nothing: the outputs do not reach the board`); failed++; }
 }
 process.exit(failed ? 1 : 0);

@@ -7,7 +7,12 @@ import { compilePy, outputOf } from '../lang/compile';
 import type { Compiled } from '../lang/compile';
 import type { Home } from '../lang/codegen';
 import { PY_GROUPS, PY_PROGRAMS } from '../lang/pyprograms';
-import { cpuState } from '../riscv/cosim';
+import { cpuState, pipeSnap } from '../riscv/cosim';
+import { lineTotal, PipeProfile } from '../lang/pipeprof';
+import type { LineCost } from '../lang/pipeprof';
+import { pipelinedCpu } from '../lib';
+import { stats } from '../sim/stats';
+import { pack } from '../sim/values';
 import { ABI, disasm } from '../riscv/isa';
 import { ISS } from '../riscv/iss';
 import { GateSim } from '../sim/gatesim';
@@ -24,8 +29,14 @@ import '../styles/python.css';
 /** The chapter's CPU: the single-cycle RV32I of chapter 14 with a 256-word ROM and 64 words of data memory. */
 export const PY_IMEM_K = 8, PY_DMEM_K = 6;
 
-export function pyCompile(source: string): Compiled {
-  return compilePy(source, { dmemWords: 2 ** PY_DMEM_K });
+export function pyCompile(source: string, m = false): Compiled {
+  return compilePy(source, { dmemWords: 2 ** PY_DMEM_K, m });
+}
+
+/** NANDs of the pipelined CPU of these words without / with the M unit (the same ROM in both, so the difference is the unit). */
+export function mUnitCost(words: number[]): { base: number; withM: number } {
+  const of = (m: boolean) => stats(pipelinedCpu(words, { imemK: PY_IMEM_K, dmemK: PY_DMEM_K, m })).nands;
+  return { base: of(false), withM: of(true) };
 }
 
 /** Why a compiled program cannot be loaded (null: it can). */
@@ -175,10 +186,22 @@ export function pyCost(ids: string[]): Widget {
 // ---- steps 4–6: the Python panel beside the gate-level CPU ----
 
 /** A scene running a Python program on the gate-level single-cycle CPU, with the Python panel. */
-export function pyScene(source: string, o: { edit?: boolean; highlight?: string[] } = {}): Scene {
-  let c = pyCompile(source);
-  if (pyProblem(c)) c = pyCompile(PY_PROGRAMS[0].source);
-  return cpuScene({ source: c.asm, imemK: PY_IMEM_K, dmemK: PY_DMEM_K, highlight: o.highlight, extraPanels: [pyPanel(c, source, !!o.edit)] });
+export interface PyOpts {
+  edit?: boolean;
+  highlight?: string[];
+  /** The five-stage pipelined CPU (chapter 16's) instead of the single-cycle one: cycles per line with stalls and flushes. */
+  pipeline?: boolean;
+  /** With pipeline: compile for RV32IM and add the M unit (mul / div / rem instead of the runtime routines). */
+  m?: boolean;
+  /** With pipeline: show the RV32I | RV32IM switch and the M unit's cost (default). Chapter 17 hides them: M is taught in chapter 21. */
+  switch?: boolean;
+}
+
+export function pyScene(source: string, o: PyOpts = {}): Scene {
+  const m = !!o.pipeline && !!o.m;
+  let c = pyCompile(source, m);
+  if (pyProblem(c)) { source = PY_PROGRAMS[0].source; c = pyCompile(source, m); }
+  return cpuScene({ source: c.asm, imemK: PY_IMEM_K, dmemK: PY_DMEM_K, highlight: o.highlight, pipeline: o.pipeline, m, extraPanels: [pyPanel(c, source, !!o.edit, { pipeline: !!o.pipeline, m, sw: o.switch !== false })] });
 }
 
 /** Which function the instruction at pc belongs to ('' the top level, null a runtime routine or the frame). */
@@ -196,6 +219,8 @@ function scopeAt(c: Compiled, pc: number): string | null {
 }
 
 interface PanelState {
+  prof?: ReturnType<PipeProfile['save']>;
+  lastE: number;
   cycles: [number, number][];
   rt: [number, number][];
   lastToggles: number;
@@ -204,11 +229,15 @@ interface PanelState {
   lastLine: number;
 }
 
-function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
+function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipeline: boolean; m: boolean; sw: boolean }): ScenePanel {
   return (stage: Stage): Widget => {
     const L = c.layout!, A = c.assembled!;
     const lines = pyLines(source);
     const haltPc = A.labels.get('halt') ?? A.labels.get('program.halt') ?? 0;
+    const { pipeline: pipe, m: withM, sw } = target;
+    const prof = pipe ? new PipeProfile(c, haltPc) : null;
+    /** The last instruction seen in Execute: the one the pipeline panel follows while Execute holds a bubble. */
+    let lastE = 0;
     const cycles = new Map<number, number>(), rtCycles = new Map<number, number>(), lineToggles = new Map<number, number>();
     const stack = new Map<number, string>();
     let lastLine = 0, lastToggles = 0, before = 0, edgeLine = 0;
@@ -222,14 +251,14 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     sel.value = mine?.id ?? '__custom';
     sel.addEventListener('change', () => {
       const p = PY_PROGRAMS.find((q) => q.id === sel.value);
-      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden }));
+      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM, switch: sw }));
     });
 
     // the editor: compiles as you type, the error at its line in Python's terms
     const errBox = h('div', { class: 'asm-errors' });
     const stats = h('div', { class: 'py-hint' });
     const recheck = () => {
-      const k = pyCompile(editor.value), why = pyProblem(k);
+      const k = pyCompile(editor.value, withM), why = pyProblem(k);
       editor.setDiagnostics(k.error ? [{ line: k.error.line, message: k.error.message }] : []);
       stats.textContent = why ?? `${pyLines(editor.value).length} Python lines → ${k.words.length} instructions of the ROM's ${2 ** PY_IMEM_K}`;
       errBox.textContent = '';
@@ -242,7 +271,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
         h('button', { class: 'btn sm primary', onclick: () => {
           const why = recheck();
           if (why) { errBox.textContent = why; return; }
-          stage.load(pyScene(editor.value, { edit: true }));
+          stage.load(pyScene(editor.value, { edit: true, pipeline: pipe, m: withM, switch: sw }));
         } }, 'Compile & load'),
         h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = true; } }, 'Close')));
     recheck();
@@ -250,8 +279,14 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     const stepBtn = h('button', { class: 'btn sm', title: 'Clock the CPU until the next Python line starts (Back undoes it)' }, 'Step line');
     const playBtn = h('button', { class: 'btn sm', title: 'Step one Python line about every second' }, 'Run line by line');
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = !editWrap.hidden; } }, 'Edit');
+    const targetBtn = (m: boolean) => h('button', {
+      class: 'btn sm', 'aria-pressed': String(m === withM), title: m ? 'Compile for RV32IM and add the multiplier and divider to the pipeline: * // % become mul / div / rem' : 'Compile for RV32I: * // % call the shift-and-add and shift-and-subtract routines',
+      onclick: () => { if (m !== withM) stage.load(pyScene(source, { edit: !editWrap.hidden, pipeline: true, m, switch: sw })); },
+    }, m ? 'RV32IM' : 'RV32I routines');
+    const endBtn = h('button', { class: 'btn sm', title: 'Clock the pipeline until the program halts' }, 'Run to end');
 
     const status = h('div', { class: 'py-hint' });
+    const totals = h('div', { class: 'py-kv py-totals', hidden: !pipe });
     const listing = h('div', { class: 'cpu-listing py-listing' });
     const thisLine = h('div', { class: 'py-kv' });
     const vars = h('div', { class: 'py-kv' });
@@ -260,13 +295,15 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     const hasFuncs = L.funcs.length > 0;
     // Bottom-left, beside the CPU panel on the right (two right-docked panels would cover each other).
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel py-panel', 'data-dock': 'left' }, title,
-      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn),
-      blurb, editWrap, status,
+    const el = h('div', { class: `mem-panel py-panel${pipe ? ' py-pipe' : ''}`, 'data-dock': 'left' }, title,
+      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn, ...(pipe ? [endBtn] : [])),
+      ...(pipe && sw ? [h('div', { class: 'py-row py-target' }, h('span', { class: 'py-hint' }, 'compile for'), targetBtn(false), targetBtn(true))] : []),
+      blurb, editWrap, status, totals,
       h('div', { class: 'py-cols' },
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its instructions and hardware')), listing,
-          h('div', { class: 'cpu-sec' }, 'This line, on the hardware'), thisLine),
+          ...(pipe ? [h('div', { class: 'py-hint py-legend' }, 'cycles by cause: ', ...(['instr:issue', 'stall:stall', 'flush:flush', ...(withM ? ['divide:divide'] : [])] as const).flatMap((k) => [h('span', { class: `py-sw ${k.split(':')[0]}` }), ` ${k.split(':')[1]} `]))] : []),
+          h('div', { class: 'cpu-sec' }, pipe ? 'This line, in the pipeline' : 'This line, on the hardware'), thisLine),
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Variables, read from the gates'), vars,
           h('div', { class: 'cpu-sec' }, `Output (data memory from ${L.outBase} up to gp)`), out,
@@ -275,8 +312,16 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     /** Each instruction's source form (li, j, …: the assembly the compiler wrote, not the disassembly). */
     const asmText = new Map(A.lines.map((l) => [l.addr, l.text]));
 
-    const pc = () => (stage.sim ? cpuState(stage.sim).pc : 0);
-    const halted = () => pc() === haltPc;
+    const snapNow = () => (pipe && stage.sim ? pipeSnap(stage.sim, stage.sim.design.root, stage.cycles) : null);
+    /** The PC the panel follows: the single-cycle CPU's, or Execute's instruction (the last one while it holds a bubble). */
+    const pc = () => {
+      if (!stage.sim) return 0;
+      if (!pipe) return cpuState(stage.sim).pc;
+      const e = snapNow()?.slots[2];
+      if (e?.valid) lastE = e.pc;
+      return lastE;
+    };
+    const halted = () => (pipe ? prof!.finished : pc() === haltPc);
     const toggleSum = (): number => {
       const sim = stage.sim;
       if (!(sim instanceof GateSim)) return 0;
@@ -286,23 +331,43 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       return s;
     };
 
+    /** A store through sp at pc (its address: sp + offset) is a stack word: label it by what it saves. */
+    const labelStore = (pcv: number, sp: number | null, addr?: number) => {
+      const w = c.words[pcv >>> 2] ?? 0x13;
+      if ((w & 0x7f) !== 0x23 || ((w >>> 15) & 31) !== 2) return;
+      const off = ((w >> 25) << 5) | ((w >>> 7) & 31), rs2 = (w >>> 20) & 31;
+      const fn = scopeAt(c, pcv);
+      const reg = disasm(w, pcv).split(/[\s,]+/)[1];
+      stack.set(addr ?? ((sp! + off) >>> 0), rs2 === 1 ? `${fn ? `${fn}: ` : ''}return address` : reg.startsWith('t') ? `${reg}: waiting across a call` : `${fn ? `${fn}: ` : ''}saved ${reg}`);
+    };
+    /** On the pipeline a store writes memory from Memory: its address is on the data memory's pins that cycle. */
+    const pipeStackLabel = (sim: NonNullable<Stage['sim']>) => {
+      const m = pipeSnap(sim, sim.design.root, stage.cycles)?.slots[3];
+      const dm = sim.design.root.children?.get('dm');
+      if (!m?.valid || !dm || sim.getBits(dm.ports.we)[0] !== 1) return;
+      labelStore(m.pc, null, pack(sim.getBits(dm.ports.addr)) >>> 0);
+    };
+
     // Every rising edge: its cycle and wire toggles go to the Python line it executed; stores to the stack are labelled.
     const hook = {
       before: () => {
         const sim = stage.sim;
         if (!sim) return;
+        if (prof) {
+          prof.sample(sim);
+          pipeStackLabel(sim);
+          return;
+        }
         const st = cpuState(sim), py = c.pyOfPc(st.pc);
         edgeLine = py ?? (scopeAt(c, st.pc) === null ? -lastLine : 0);
         before = toggleSum();
-        const w = c.words[st.pc >>> 2] ?? 0x13;
-        if ((w & 0x7f) === 0x23 && ((w >>> 15) & 31) === 2) {
-          const off = ((w >> 25) << 5) | ((w >>> 7) & 31), rs2 = (w >>> 20) & 31;
-          const fn = scopeAt(c, st.pc);
-          const reg = disasm(w, st.pc).split(/[\s,]+/)[1];
-          stack.set((st.x[2] + off) >>> 0, rs2 === 1 ? `${fn ? `${fn}: ` : ''}return address` : reg.startsWith('t') ? `${reg}: waiting across a call` : `${fn ? `${fn}: ` : ''}saved ${reg}`);
-        }
+        labelStore(st.pc, st.x[2] >>> 0);
       },
       after: () => {
+        if (prof) {
+          if (stage.sim) { const sp = cpuState(stage.sim).x[2]; for (const a of [...stack.keys()]) if (a < sp) stack.delete(a); }
+          return;
+        }
         if (edgeLine > 0) { cycles.set(edgeLine, (cycles.get(edgeLine) ?? 0) + 1); lastLine = edgeLine; }
         else if (edgeLine < 0) rtCycles.set(-edgeLine, (rtCycles.get(-edgeLine) ?? 0) + 1);
         const t = toggleSum();
@@ -314,10 +379,11 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
     };
     stage.edgeHooks.add(hook);
     const hist = {
-      save: (): PanelState => ({ cycles: [...cycles], rt: [...rtCycles], lastToggles, lineToggles: [...lineToggles], stack: [...stack], lastLine }),
+      save: (): PanelState => ({ prof: prof?.save(), lastE, cycles: [...cycles], rt: [...rtCycles], lastToggles, lineToggles: [...lineToggles], stack: [...stack], lastLine }),
       restore: (v: unknown) => {
         const s = v as PanelState;
         stopPlay();
+        if (prof && s.prof) { prof.restore(s.prof); lastE = s.lastE; }
         cycles.clear(); s.cycles.forEach(([k, n]) => cycles.set(k, n));
         rtCycles.clear(); s.rt.forEach(([k, n]) => rtCycles.set(k, n));
         lineToggles.clear(); s.lineToggles.forEach(([k, n]) => lineToggles.set(k, n));
@@ -334,7 +400,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       const from = c.pyOfPc(pc());
       stage.runCycles(20_000, () => {
         const p = pc(), py = c.pyOfPc(p);
-        return p === haltPc || (py !== null && py !== from);
+        return (pipe ? prof!.finished : p === haltPc) || (py !== null && py !== from);
       });
       return true;
     };
@@ -344,6 +410,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       playBtn.textContent = 'Run line by line';
     };
     stepBtn.addEventListener('click', () => { stopPlay(); stepLine(); });
+    endBtn.addEventListener('click', () => { stopPlay(); stage.checkpoint(); stage.runCycles(20_000, () => prof!.finished); });
     playBtn.addEventListener('click', () => {
       if (timer !== null) return stopPlay();
       playBtn.textContent = 'Stop';
@@ -352,21 +419,60 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
 
     const valueOf = (hm: Home, x: number[], dmem: number[]): number => (hm.reg ? x[regIndex(hm.reg)] : dmem[hm.addr! >>> 2] ?? 0);
 
+    /** A line's cycles as a bar split by cause (issue, stall, flush, divide), scaled to the busiest line. */
+    const causeBar = (v: LineCost, max: number): HTMLElement => h('span', { class: 'py-bar' },
+      ...(['instr', 'stall', 'flush', 'divide'] as const).map((k) => (v[k] ? h('span', { class: `b ${k}`, style: `width:${(100 * v[k] / max).toFixed(1)}%` }) : '')));
+    /** " · 3 stall, 2 flush" for a tooltip. */
+    const lostText = (v: LineCost) => (v.stall + v.flush + v.divide ? ` (${[v.instr && `${v.instr} issue`, v.stall && `${v.stall} stall`, v.flush && `${v.flush} flush`, v.divide && `${v.divide} divide`].filter(Boolean).join(', ')})` : '');
+    /** One line's cycles by cause, and its CPI. */
+    const pipeRows = (v: LineCost): HTMLElement[] => [
+      h('span', { title: 'Instructions of this line that went through Execute: one cycle each' }, 'issue'), h('span', null, fmtCount(v.instr)),
+      h('span', { title: 'A load or multiply result arrives a stage late: the next instruction waited, and a bubble followed the load' }, withM ? 'stall (load / multiply use)' : 'stall (load use)'), h('span', null, fmtCount(v.stall)),
+      h('span', { title: 'A taken branch or jump is resolved in Execute: the two instructions fetched behind it were squashed' }, 'flush (taken branch or jump)'), h('span', null, fmtCount(v.flush)),
+      ...(withM ? [h('span', { title: 'The iterative divider holds the instruction in Execute' }, 'divide (extra cycles in Execute)'), h('span', null, fmtCount(v.divide))] : []),
+      h('span', null, 'cycles per instruction'), h('span', null, v.instr ? (lineTotal(v) / v.instr).toFixed(2) : '–'),
+    ];
+    /** The whole run: cycles, CPI, what was lost, and what the M unit costs in gates (measured on the two pipelines). */
+    let mCost: { base: number; withM: number } | null = null, mTimer: number | null = null;
+    const pipeTotals = () => {
+      const t = prof!.total(), frame = prof!.cost(0), all = lineTotal(t) + lineTotal(frame) + prof!.fill, n = t.instr + frame.instr;
+      const lost = t.stall + t.flush + t.divide + frame.stall + frame.flush + frame.divide;
+      totals.replaceChildren(
+        h('span', null, 'run so far'), h('span', null, `${fmtCount(all)} cycles · ${fmtCount(n)} instructions · CPI ${n ? (all / n).toFixed(2) : '–'}`),
+        h('span', { title: `Cycles that retired nothing: bubbles behind loads, taken branches${withM ? ', divides' : ''}, and the pipeline filling` }, 'lost'), h('span', null, `${fmtCount(lost + prof!.fill)}: ${fmtCount(t.stall + frame.stall)} stall, ${fmtCount(t.flush + frame.flush)} flush${withM ? `, ${fmtCount(t.divide + frame.divide)} divide` : ''}, ${prof!.fill} fill`),
+        ...(sw ? [h('span', { title: 'Counted from the two designs: the same pipeline and ROM with and without the multiplier and divider' }, 'M unit'),
+        h('span', null, mCost ? `${withM ? 'in the design: ' : 'would add '}${fmtCount(mCost.withM - mCost.base)} NANDs (${fmtCount(mCost.base)} → ${fmtCount(mCost.withM)}, +${((100 * (mCost.withM - mCost.base)) / mCost.base).toFixed(1)} %)` : 'counting…')] : []));
+    };
+    if (pipe && sw) mTimer = window.setTimeout(() => { mCost = mUnitCost(c.words); mTimer = null; if (stage.sim) pipeTotals(); }, 60);
+
     const update = () => {
       const sim = stage.sim;
       if (!sim) return;
-      if (stage.cycles === 0) { cycles.clear(); rtCycles.clear(); lineToggles.clear(); stack.clear(); lastLine = 0; lastToggles = 0; }
+      if (stage.cycles === 0) { cycles.clear(); rtCycles.clear(); lineToggles.clear(); stack.clear(); lastLine = 0; lastToggles = 0; prof?.reset(); lastE = 0; }
       const st = cpuState(sim);
-      const cur = c.pyOfPc(st.pc), scope = scopeAt(c, st.pc);
+      const fpc = pc(), done = halted();
+      const cur = c.pyOfPc(fpc), scope = scopeAt(c, fpc);
+      if (prof) lastLine = prof.last;
       const shown = cur ?? (scope === null ? lastLine : null);
-      status.textContent = st.pc === haltPc ? `Halted after ${fmtCount(stage.cycles)} cycles.`
-        : cur !== null ? `Running line ${cur}${scope ? ` in ${scope}()` : ''}.` : scope === null ? `Inside a runtime routine, for line ${lastLine}.` : 'Setting up: the stack and the output pointer.';
+      const bubble = pipe && snapNow()?.slots[2].valid === false;
+      const where = pipe ? 'in Execute' : 'running';
+      status.textContent = done ? `Halted after ${fmtCount(prof ? prof.cycles : stage.cycles)} cycles.`
+        : bubble && stage.cycles > 0 ? `A bubble in Execute${prof && prof.last ? `, charged to line ${prof.last}` : ' (the pipeline is filling)'}.`
+          : cur !== null ? `Line ${cur}${scope ? ` of ${scope}()` : ''} ${where}.` : scope === null ? `Inside a runtime routine, for line ${lastLine}.` : 'Setting up: the stack and the output pointer.';
+      /** Cycles charged to a line, and of them the ones inside a runtime routine. */
+      const own = (n: number): [number, number] => {
+        if (!prof) return [cycles.get(n) ?? 0, rtCycles.get(n) ?? 0];
+        const v = prof.cost(n);
+        return [lineTotal(v) - v.rt, v.rt];
+      };
+      const maxCyc = prof ? Math.max(1, ...lines.map((_, i) => lineTotal(prof.cost(i + 1)))) : 1;
       const keep = listing.scrollTop;
       listing.replaceChildren(...lines.map((t, i) => {
-        const n = i + 1, k = cycles.get(n) ?? 0, r = rtCycles.get(n) ?? 0;
+        const n = i + 1, [k, r] = own(n);
         const e = h('div', { class: `ln${n === shown ? ' cur' : ''}${n === selLine ? ' sel' : ''}`, title: c.pcsOfPy(n).length ? 'Show its instructions and their hardware' : '' },
           h('span', { class: 'a' }, String(n)), h('span', { class: 't' }, t || ' '),
-          k + r ? h('span', { class: 'py-cyc', title: `${k} cycles on this line${r ? `, ${r} in a runtime routine` : ''}` }, fmtCount((k + r))) : '');
+          prof && k + r ? causeBar(prof.cost(n), maxCyc) : '',
+          k + r ? h('span', { class: 'py-cyc', title: `${k + r} cycles on this line${r ? `, ${r} of them in a runtime routine` : ''}${prof ? lostText(prof.cost(n)) : ''}` }, fmtCount((k + r))) : '');
         if (c.pcsOfPy(n).length) e.addEventListener('click', () => { selLine = selLine === n ? null : n; update(); });
         return e;
       }));
@@ -377,12 +483,14 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
       // the line in focus: the clicked one, else the one running
       const focus = selLine ?? shown;
       const pcs = focus ? c.pcsOfPy(focus) : [];
+      const fc = focus && prof ? prof.cost(focus) : null;
       thisLine.replaceChildren(...(focus ? [
         h('span', null, 'line'), h('span', null, h('code', null, (lines[focus - 1] ?? '').trim())),
-        h('span', null, 'instructions'), h('span', { class: 'py-ins' }, ...pcs.map((p) => h('code', { class: p === st.pc ? 'now' : '' }, `${p.toString(16).padStart(3, '0')} ${asmText.get(p) ?? disasm(c.words[p >>> 2], p)}`))),
-        h('span', null, 'clock cycles so far'), h('span', null, `${fmtCount((cycles.get(focus) ?? 0))}${rtCycles.get(focus) ? ` + ${fmtCount(rtCycles.get(focus)!)} in rt` : ''}`),
-        ...(sim instanceof GateSim ? [h('span', { title: 'Nets that changed value during its last clock cycle on the gates (glitches included)' }, 'wire toggles, its last cycle'), h('span', null, fmtCount((lineToggles.get(focus) ?? 0)))] : []),
-      ] : [h('span', { class: 'py-hint' }, st.pc === haltPc ? 'The program has halted: click a line to see its instructions.' : 'No Python line yet.'), h('span')]));
+        h('span', null, 'instructions'), h('span', { class: 'py-ins' }, ...pcs.map((p) => h('code', { class: p === fpc ? 'now' : '' }, `${p.toString(16).padStart(3, '0')} ${asmText.get(p) ?? disasm(c.words[p >>> 2], p)}`))),
+        h('span', null, 'clock cycles so far'), h('span', null, `${fmtCount(own(focus)[0])}${own(focus)[1] ? ` + ${fmtCount(own(focus)[1])} in rt` : ''}`),
+        ...(fc ? pipeRows(fc) : []),
+        ...(!pipe && sim instanceof GateSim ? [h('span', { title: 'Nets that changed value during its last clock cycle on the gates (glitches included)' }, 'wire toggles, its last cycle'), h('span', null, fmtCount((lineToggles.get(focus) ?? 0)))] : []),
+      ] : [h('span', { class: 'py-hint' }, done ? 'The program has halted: click a line to see its instructions.' : 'No Python line yet.'), h('span')]));
       if (selLine !== null) {
         const units = [...new Set(pcs.flatMap((p) => instrUse(c.words[p >>> 2]).units))];
         markInstr(stage, c.words[pcs[0] >>> 2] ?? null, units);
@@ -406,13 +514,16 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean): ScenePanel {
         for (let a = L.stackTop - 4; a >= st.x[2]; a -= 4) rows.push(h('span', null, `[${a}] `, h('span', { class: 'py-where' }, stack.get(a) ?? '')), h('span', null, signed(dmem[a >>> 2] ?? 0)));
         stackBox.replaceChildren(...(rows.length ? rows : [h('span', { class: 'py-hint' }, 'empty: no call in progress'), h('span')]));
       }
-      stepBtn.toggleAttribute('disabled', st.pc === haltPc);
+      if (prof) pipeTotals();
+      stepBtn.toggleAttribute('disabled', done);
+      endBtn.toggleAttribute('disabled', done);
     };
     update();
     return {
       el, update, destroy: () => {
         stopPlay();
         if (pend) clearTimeout(pend);
+        if (mTimer !== null) clearTimeout(mTimer);
         stage.edgeHooks.delete(hook);
         stage.historyHooks.delete(hist);
         editor.destroy();

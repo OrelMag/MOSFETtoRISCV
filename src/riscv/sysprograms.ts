@@ -141,6 +141,67 @@ handler:
         mret`,
   },
   {
+    id: 'poll',
+    name: 'Polling the clock',
+    blurb: 'Busy-wait on mtime: a dot every 40 cycles, and nothing else gets done.',
+    source: `        li   a0, 0x80000000
+        lw   s1, 16(a0)        # mtime
+        addi s1, s1, 40        # first deadline
+wait:   lw   t1, 16(a0)        # read the clock (no side effect)
+        bltu t1, s1, wait      # spin until mtime >= deadline
+        li   t2, '.'
+        sb   t2, 0(a0)
+        addi s1, s1, 40        # next deadline, from the last one: no drift
+        addi s2, s2, 1         # events
+        j    wait`,
+  },
+  {
+    id: 'nested',
+    name: 'Nested interrupts',
+    blurb: 'A slow timer handler lets the IRQ button in: it saves mepc, narrows mie to the external bit and sets MIE again.',
+    source: `        la   t0, handler
+        csrw mtvec, t0
+        li   a0, 0x80000000
+        lw   t1, 16(a0)        # mtime
+        addi t1, t1, 40
+        sw   t1, 20(a0)        # mtimecmp = now + 40
+        li   t0, 0x880
+        csrs mie, t0           # timer and external
+        csrsi mstatus, 8
+loop:   addi s0, s0, 1         # main program: just count
+        j    loop
+
+handler:
+        csrr t3, mcause
+        andi t3, t3, 15
+        li   t4, 11
+        beq  t3, t4, ext       # external: the short handler
+timer:  csrr s2, mepc          # a nested trap overwrites mepc
+        lw   t5, 20(a0)
+        addi t5, t5, 200
+        sw   t5, 20(a0)        # next tick, 200 cycles on
+        li   t5, 0x800
+        csrw mie, t5           # only the external interrupt may nest
+        li   s6, 1             # inside the slow handler
+        csrsi mstatus, 8       # MIE again: this handler can be interrupted
+        li   t6, 30
+slow:   addi t6, t6, -1        # the slow part
+        bnez t6, slow
+        csrci mstatus, 8       # no more traps while the state is put back
+        li   s6, 0
+        li   t5, 0x880
+        csrw mie, t5
+        csrw mepc, s2
+        addi s1, s1, 1         # ticks
+        mret
+ext:    lw   t1, 4(a0)
+        xori t1, t1, 0xff
+        sw   t1, 4(a0)         # toggle the LEDs
+        addi s4, s4, 1         # presses
+        add  s5, s5, s6        # of which inside the slow handler
+        mret`,
+  },
+  {
     id: 'faults',
     name: 'Exceptions',
     blurb: 'An illegal instruction, a misaligned load and an ebreak, each caught by the handler, which logs mcause and mtval.',

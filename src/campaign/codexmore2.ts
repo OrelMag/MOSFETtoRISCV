@@ -338,6 +338,7 @@ capture early 2:  T ≥ 3 + 20 + 3 + 2   = 28, hold needs 3 + 1 ≥ t_hold − 2
       'Gating the clock with an AND: it adds skew (and glitches) to that branch; use an enable multiplexer or an integrated clock-gating cell.',
     ],
     chapters: [
+      { chapter: 'latches', step: 5, label: 'Clock skew: hold fails at any period' },
       { chapter: 'silicon', step: 4, label: 'Wires and the clock' },
       { chapter: 'fastadd', step: 7, label: 'Static timing on our CPU' },
     ],

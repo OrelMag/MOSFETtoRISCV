@@ -51,3 +51,17 @@
 .py-panel .py-listing { max-height: 150px; }
 .py-blurb { font-size: 12.5px; color: var(--text-2); margin: -2px 0 8px; max-width: 80ch; }
 .py-blurb:empty { display: none; }
+
+/* the pipeline's Python panel: cycles by cause */
+.py-target { margin: 0 0 6px; }
+.py-target .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.py-totals { margin-bottom: 8px; }
+.py-bar { display: inline-flex; width: 64px; height: 9px; align-self: center; margin-left: auto; padding-left: 8px; flex: none; }
+.py-bar .b { height: 9px; min-width: 1px; background: var(--accent); }
+.py-bar .b.stall, .py-sw.stall { background: var(--warn); }
+.py-bar .b.flush, .py-sw.flush { background: var(--bad); }
+.py-bar .b.divide, .py-sw.divide { background: var(--good); }
+.py-bar + .py-cyc { margin-left: 0; min-width: 3.2em; text-align: right; }
+.py-sw.instr { background: var(--accent); }
+.py-legend { margin: 3px 0 0; }
+.py-legend .py-sw { margin: 0 2px 0 6px; }

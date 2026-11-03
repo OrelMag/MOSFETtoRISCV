@@ -60,7 +60,7 @@ on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
 It also waits on `fpga`: `scripts/fpga-export.ts counter7 computer` (the sandbox's FPGA export of those examples, through
-editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/).
+editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/; fails above the GW1NR-9's 8640 LUTs / 26 BSRAM), then `scripts/fpga-memcheck.ts`: the exported block-RAM memories (memClock) against asynchronous ones, a ROM → RAM chain, every clk edge.
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
@@ -192,6 +192,9 @@ src/sim/       simulation core (no DOM)
                  the whole truth table (≤ MAX_BITS inputs, bit-parallel three-valued), against the intact one; roleText
                  (tests/ablate.test.ts: equal to simulating the netlist without the part)
   settle.ts      outputSettle(def, vectors): simulated input-to-last-output-change delay (sees false paths)
+  edgetiming.ts  setup / hold / clock-to-q read off a flip-flop circuit: captureAt (d flips t delays from the rising edge; q settles old / new / x = the SR race
+                 never decides), sweepEdge(def, 'rise' | 'fall') → setup, hold, clkToQ, qTrace (widgets/edgesweep.ts, chapter 8; tests/deepseq.test.ts pins them)
+  opdelay.ts     portSettle(def, vectors, ports): sensitized delay of chosen outputs only (the ALU's result apart from its flags; widgets/opdelay.ts)
   power.ts       dynamic power estimate: netCaps (C per net from fan-out: FF_INPUT / FF_DRIVER / FF_WIRE, illustrative
                  28 nm-class), ½ C V² per toggle, PowerMeter over a GateSim (reset / mark after settles: settled vs glitch
                  toggles; breakdown(node): switched C by the child driving each net, the clock and inputs at the root),
@@ -212,7 +215,9 @@ src/sim/       simulation core (no DOM)
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD;
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD; memClock (the FPGA
+                 export): `hdl.synthSync` bodies read through a register on an extra input `mem_clk` (every module above a memory
+                 gains it, the top's TopPort.memClock) so memories map to BSRAM (scripts/fpga-memcheck.ts: cycle-exact);
                  externalPorts (+ ioPart): sandbox I/O parts (isExternal, displays) punched up as ports x_<path>_<port>
                  of every module above them; ExportResult.ports: the top's ports (TopPort, `external`: where from)
   vcd.ts         toVcd(): Value Change Dump of recorded traces
@@ -251,6 +256,10 @@ src/lib/       the component library (registered in `registry` via define())
   alu.ts         constWord, zext, wiring boxes, bitwise, orN, isZero, barrel shifter, alu(n)
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
                  ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
+  seqdeep.ts     chapter 8's deeper parts: DFF_EDGE6 (the 7474: five NANDs and a NAND3, 8 NANDs against the master–slave's 11), CLK_BUF, skewPair(k)
+                 (ff1 → ff2 with k buffers on the second clock: skew, hold race)
+  rfdeep.ts      chapter 12's: rfBypass(k, w) (regfile + write-through: comparator, AND and word mux per read port, byp input, never x0), latchWord(w),
+                 latchFile(k, w) (D latches enabled by decoder · clk: transparent for the whole high phase); regfile() itself is untouched
   cpu.ts         single-cycle RV32I: rom (preferBehavior), dataMemory, IMM_GEN, OPCODE_DECODER,
                  CONTROL, NEXT_PC, PLUS4(_FAST), singleCycleCpu(program, { adder, custom, c }) (c: rvc.ts cFetch + PLUS2OR4); opcodeDecoder(extra) /
                  control(custom): the generators (OPCODE_DECODER / CONTROL are the no-customs case): a custom row is
@@ -274,6 +283,9 @@ src/lib/       the component library (registered in `registry` via define())
   numbers.ts     chapter 5's circuits before any adder: negator(n) (XORs under an OR chain: bits above the lowest 1 inverted),
                  extender(m, n) (sign and zero extension side by side, wiring), shifts1(n) (sll / srl / sra by one: a splitter and
                  a merger one row apart); NEGATE4, EXTEND4_8, SHIFTS8
+  intc.ts        chapters 19–20 and 34, stand-alone beside the system CPU (systemCpu / TRAP_UNIT / CSR_UNIT untouched): VECTOR_TARGET (mtvec MODE 1: interrupt n to BASE | 4n, vectorTargetOf its
+                 reference), intc(4) / INTC4 (a pending flip-flop per source set by a request seen at a rising edge, enable mask, priority encoder, claim clears the highest;
+                 IntcModel is its reference, tests/intc.test.ts), LERP8 (a·(16−f) + b·f) >> 4) and BILINEAR8 (three lerps; lerpRef / bilinearRef)
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
                  referenceCpus(): the inspector's "Where it is used"
   hwstats.ts     hwTargets / measure / hwStats (scripts/hwstats.ts → public/hwstats.json at build), hwStatsLive:
@@ -284,7 +296,8 @@ src/lib/       the component library (registered in `registry` via define())
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
                  one or two fetch read ports (BTB = btbOf(1), unchanged). ports: the sandbox's rv32i_pipe_core (lib/resolve.ts, `rv32i_pipe_cx<key>_core` with rows): no imem / dm, pins
                  instr in, pcOut, memAddr / memWData / memWE out of M, memRData in, retire (= validW), pcW; the memory port keeps dataMemory's timing (read from the
-                 address in the same cycle, write at the rising edge), so any RAM that serves the single-cycle rv32i_core serves it, hartid / grant / atomics absent;
+                 address in the same cycle, write at the rising edge), so any RAM that serves the single-cycle rv32i_core serves it, hartid / grant / atomics absent (pipelinedCpu has none);
+                 ports + m: rv32im_pipe_core; ports + dcache 'wt': rv32i_pipe_dc_core (cachedPort in M, `dm`, the memory outside it; a bit-31 address bypasses it; not together with m); editor/model.ts portCoreOf / portCoreRef are the one reading / writing of these refs; the pins sit where the removed imem / dm pins were;
                  not with dcache or m; tests/pipe-core.test.ts. custom: riscv/custom.ts rows, control(custom) in place of CONTROL and
                  nothing else: the hazard unit reads signals, never opcodes (result = mem is resultSrc 01, the load-use stall; rs1 / rs2 forwarding goes by
                  register numbers; branch / jump / jalr redirect from E; memWrite a store); without rows the same component, gate for gate
@@ -392,7 +405,7 @@ src/lib/       the component library (registered in `registry` via define())
                  driver, output inverter; protocol: precharge, activate, sense, read / write, close), DRAM4X4, DRAM8X8;
                  BITLINE_CAP (a bit line's 100 fF as a part, for the campaign's column: sandbox wires carry no value)
   cache.ts       cachedMemory(k, ib) (direct-mapped write-through cache + main memory, stall on
-                 miss), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
+                 miss), cachedPort(ib) (the same cache in front of a memory on ports mAddr / mWD / mWE / mRD; bit 31 = device, never cached: the sandbox's rv32i_pipe_dc_core), wayLookup2; singleCycleCpu(…, { dcache }) uses it (adds `retire`, `dhit`)
   cache2.ts      cacheWay(ib, t), MISS_CTRL, wbCache(k, ib, ways) (write-back, write-allocate, LRU), iCache(rom, ib);
                  singleCycleCpu(…, { dcache: 'wb' | 'wb2', icache }); riscv/cosim.ts cacheLines() + coherent cpuState().dmem
   multicycle.ts  MC_STATES (the state table), MC_FSM (hardwired), MC_MICRO (microcode), microword(),
@@ -509,7 +522,7 @@ src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass asse
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), cohmodel.ts (CohModel: the coherent dual-core's cycle-exact timing model, its header the spec the gates follow; harts' loads and stores go through its cache data, so the variant without snooping reproduces a stale read; invariants(): SWMR), cohprograms.ts (COH_PROGRAMS), cohfuzz.ts (seeded random programs with shared lines, conflict misses and lr / sc loops), cohrun.ts (runCoherent: a program to halt on the model, the numbers chapter 27 quotes; lineStates); lr.w / sc.w in isa / asm / ISS (a reservation on the 16-byte line: ISS.resValid / resLine; the caches' evictions and snooped invalidations are the model's to apply), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its
+               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), cohmodel.ts (CohModel: the coherent dual-core's cycle-exact timing model, its header the spec the gates follow; harts' loads and stores go through its cache data, so the variant without snooping reproduces a stale read; invariants(): SWMR), cohprograms.ts (COH_PROGRAMS), cohfuzz.ts (seeded random programs with shared lines, conflict misses and lr / sc loops), cohrun.ts (runCoherent: a program to halt on the model, the numbers chapter 27 quotes; lineStates); lr.w / sc.w in isa / asm / ISS (a reservation on the 16-byte line: ISS.resValid / resLine; the caches' evictions and snooped invalidations are the model's to apply), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its pollirq.ts (chapter 20: pollIrqSource / runPollIrq / crossover: a polling and a timer-interrupt program run on the system-mode ISS, cycles, work and latency measured; sysprograms also has poll and nested),
                values; narrateCycle(PipeSnap, wordAt): each pipeline stage this cycle, with why it forwards, stalls or flushes; the
                CPU panel's and the sandbox CPU drawer's Narrate section; tests/narrate.test.ts: next pc and written value equal the
                golden model's over the sample programs), ilp.ts (chapter 26: classify(word) → class /
@@ -585,7 +598,7 @@ src/bus/       model.ts: BusMemory / BusModel (the computer's map for the golden
 src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block erase, FLASH_TIMES 64 / 512 / 4096 cycles, wear-out
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
-               randomWrites (seeded, optional hot set)
+               randomWrites (seeded, optional hot set); ecc.ts: bchParity(data, t) = m·t, codewordFail(n, t, p) (binomial tail), maxRber (largest RBER keeping UBER < 1e-15): chapter 37's ECC table
 src/widgets/   bespoke explainers (MOSFET cross-section, number explorer (numbers.ts: 4–32 bits, C / V flags, wheel, halving; numsys.ts
                chapter 5's encodings / overflow-in-columns / fixed-point widgets), memory grid: memgrid.ts memGridPanel, Memory contents of
                the scene's memories with a picker, data-mem, ...); python.ts: chapter 15's (pyLinked:
@@ -653,6 +666,11 @@ src/widgets/   bespoke explainers (MOSFET cross-section, number explorer (number
 src/chapters/  narrative content: chapters → steps → scene / widget / challenge; a prologue chapter (num 0, `prologue: 'P1'`,
                between the map and chapter 1, in brass: styles/prologue.css) and an appendix chapter (`appendix: 'A'`) show
                their label instead of a number (chapterNo); Chapter.soon: titles of steps not built yet (dashed dots)
+               ch-system-more.ts: chapters 19–20's added steps (IO_MORE, TRAPS_MORE: ioProbe / latchedPulse measure what the text quotes; tests/content-deepen.test.ts pins them); widgets/pollirq.ts the
+               polling-vs-interrupt widget (strips and table from riscv/pollirq.ts); chapter 34's Texturing and chapter 37's Bit errors and ECC steps are in ch-gfx.ts / ch-flash.ts
+               step modules beside a chapter file: chapters/float/*.ts (chapter 24), seq/timing.ts (chapter 8: setup / hold sweep widget, clock skew scene with
+               widgets/skewpanel.ts, the six-gate DFF), alu/steps.ts (chapter 11: BRANCHES from NEXT_PC, the control unit's ALU decode, widgets/opdelay.ts
+               per-operation delays), rf/steps.ts (chapter 12: rfBypass, latchFile, regfile2w)
 src/lib/rv16/  the campaign's RV16 hardware, every block built only from parts its level's requirements unlock:
                logic.ts (acts 1–3), cpu.ts (immediates, control, branch, next PC, single-cycle cores),
                pipe.ts (pipeline register, forwarding, hazard, rv16Pipe with fwd / stall / flush / sys),
@@ -728,10 +746,16 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                golden model; pyDivMod floors, x // 0 = -1 and x % 0 = x as RISC-V's divide), codegen.ts (CodeGen: t0–t6 an
                expression stack, variables in s registers (a leaf function's in a0–a7), shared globals and lists in data
                memory from 0, then the output (gp, print stores there), sp from the top; comparisons straight into
-               branches, constant folding, shifts / masks / shift-adds for constants, rt.mul / rt.divmod otherwise; every
-               line keeps its Python line), compile.ts (compilePy → asm, words, layout, pyOfPc / pcsOfPy; outputOf),
+               branches, constant folding, shifts / masks / shift-adds for constants, rt.mul / rt.divmod otherwise, or with `m` (RV32IM) mul / div / rem, the
+               floor fix around rem and x // 0 left to the hardware; every
+               line keeps its Python line), compile.ts (compilePy({ m }) → asm, words, layout, pyOfPc / pcsOfPy; outputOf),
+               pipeprof.ts (PipeProfile: cycles per Python line on the gate-level pipeline from its own signals, every clock charged
+               to one line as issue / stall / flush / divide, a runtime routine's to its caller; tests/pypipe.test.ts),
                pyprograms.ts (the samples, with what they print), randpy.ts (seeded random programs: tests/pylang.test.ts
-               compiles and interprets them, PY_FUZZ=n for a sweep)
+               compiles and interprets them, also for RV32IM, PY_FUZZ=n for a sweep). widgets/python.ts pyScene({ pipeline, m,
+               switch }): the pipelined CPU with the Python panel (cause bars per line, totals, the RV32I | RV32IM switch and the
+               M unit's NAND cost; `switch: false` hides both: chapter 17 uses it, chapter 21 shows them); the two chapter steps
+               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12

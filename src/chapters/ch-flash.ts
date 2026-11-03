@@ -1,6 +1,8 @@
 import { groupDigits } from '../sim/numfmt';
 import { CLOCK_NS } from '../dram/timing';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
+import { bchParity, codewordFail, maxRber } from '../flash/ecc';
+import { eccChannel } from '../lib';
 import { V_READ, vtOf } from '../lib/flash';
 import { findNode } from '../sim/flatten';
 import { FG_READ, FG_STEP, type SwitchSim } from '../sim/switchsim';
@@ -29,6 +31,9 @@ function rowsOf(st: Stage, rows: number): number[] {
 
 const pulses = Math.ceil(FG_READ / FG_STEP);
 const fmtN = groupDigits;
+/** Chapter's ECC table: BCH on 1 KiB codewords, computed from the binomial tail. */
+const ECC_ROWS = [1, 4, 8, 24, 40].map((t) => { const parity = bchParity(8192, t), n = 8192 + parity; return { t, parity, f5: codewordFail(n, t, 1e-5), f3: codewordFail(n, t, 1e-3), max: maxRber(8192, t) }; });
+const sci = (x: number) => { if (x < 1e-99) return '< 10<sup>-99</sup>'; const [m, e] = x.toExponential(1).split('e'); return x > 0.1 ? x.toFixed(2) : m + ' × 10<sup>' + e.replace('+', '').replace('-', '-') + '</sup>'; };
 /** A real page read at our clock, and how far the model scales the busy times down. */
 const READ_REAL = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
 const SCALE = 10 * Math.round(READ_REAL / FLASH_TIMES.read / 10);
@@ -41,6 +46,7 @@ export const chFlash: Chapter = {
     'explain why flash programs only from 1 to 0, a row at a time, and erases only whole blocks',
     'compare NOR and NAND arrays in area, read path and use',
     'follow a flash translation layer through rewrites and garbage collection, and compute its write amplification',
+    'say what ECC buys: BCH parity and the raw bit error rate it absorbs, from the binomial tail',
   ],
   builds: ['mosfet', 'memory'],
   recap: {
@@ -51,6 +57,7 @@ export const chFlash: Chapter = {
       'Several bits a cell (MLC 2, TLC 3, QLC 4: 4 to 16 threshold levels) trade margin for density: slower programs, fewer erases, stronger ECC (BCH, then LDPC). 3D NAND stands the strings up, hundreds of layers high.',
       'NOR: every cell on its bit line, about 10 F², random reads in tens of nanoseconds (boot code, execute in place). NAND: cells in series, about 4 F², a pass voltage on the other rows, pages in tens of microseconds (files, SSDs).',
       'The translation layer writes each version to a fresh page and maps logical to physical pages. Stale pages wait for garbage collection. Write amplification = page programs / host writes; spare space lowers it, wear levelling spreads the erases.',
+      `Raw bit errors (RBER 10<sup>-6</sup> fresh, 10<sup>-3</sup> worn TLC) are corrected by a BCH code per 1 KiB codeword: t errors cost 14 · t parity bits, and t = ${ECC_ROWS[2].t} keeps UBER below 10<sup>-15</sup> only up to RBER ${sci(ECC_ROWS[2].max)}.`,
     ],
     practise: ['m_flash'],
     check: [
@@ -310,6 +317,34 @@ export const chFlash: Chapter = {
           'Write amplification is a ratio, programs per host write. The host writes the same; the copies per write fall.',
         ],
         explain: 'With logical space L on physical space P, the average block is L / P valid. Collecting a block with v valid pages out of n frees n − v pages for v copies; as L / P falls, v falls, and so do the copies per freed page.',
+      },
+    },
+    {
+      title: 'Bit errors and ECC',
+      body: `
+        <p>Everything so far read back exactly what was programmed. Real cells do not: the threshold is analog, it drifts with retention, read disturb, neighbours and wear, and some bits read wrong. The measure is the
+        <strong>raw bit error rate</strong> (RBER), the fraction of bits that read wrong before correction: around 10<sup>-6</sup> for fresh SLC, 10<sup>-4</sup> to 10<sup>-3</sup> for worn TLC. The drive must
+        still show an <strong>uncorrectable bit error rate</strong> (UBER) below about 10<sup>-15</sup>, so every page carries a code. <a href="#/c/cache/0">Chapter 22</a>'s SEC-DED word is the idea, on a
+        small word: the <span data-show="enc">encoder</span> adds check bits on write, flips between write and read corrupt the stored word, the <span data-show="dec">decoder</span> finds one flipped bit and fixes it, or flags two it cannot fix.</p>
+        <p>A page needs a stronger code over a longer word. A <strong>BCH</strong> code on a 1 KiB codeword (${fmtN(8192)} data bits) that corrects <em>t</em> bit errors costs m · <em>t</em> parity bits with m = 14: ${bchParity(8192, 1)} for t = 1, ${bchParity(8192, 8)} for t = 8, ${bchParity(8192, 40)} for t = 40. A 4 KiB page is four codewords, so t = 40 needs ${4 * bchParity(8192, 40) / 8} bytes of the page's spare area. Raw errors are independent,
+        so the codeword fails when more than <em>t</em> of its ${fmtN(8192)}-plus bits flip, a binomial tail, computed here exactly:</p>
+        <table class="mini"><tr><th>code</th><th>parity bits</th><th>fails at RBER 10<sup>-5</sup></th><th>fails at 10<sup>-3</sup></th><th>keeps UBER &lt; 10<sup>-15</sup> up to RBER</th></tr>
+          ${ECC_ROWS.map((r) => `<tr><td>t = ${r.t}</td><td>${r.parity}</td><td>${sci(r.f5)}</td><td>${sci(r.f3)}</td><td>${sci(r.max)}</td></tr>`).join('')}</table>
+        <p>The strength is a wear budget. Fresh flash at RBER 10<sup>-5</sup> needs t = 8 for a 10<sup>-15</sup> UBER; worn TLC at 10<sup>-3</sup> needs t ≈ 40, five times the parity, and past that the controller
+        retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC replace BCH with LDPC and soft reads:
+        the same page sensed at several read voltages gives each bit a confidence, which corrects well beyond the hard-decision limit at the cost of several reads.</p>
+        <div class="try">Set the data, then flip one stored bit (flip = 1), then two (flip = 3): single, then double.</div>`,
+      scene: () => ({ root: eccChannel(8), inputs: { d: 0x5a, flip: 0 }, highlight: ['enc', 'dec'] }),
+      more: {
+        derive: `<p>P(codeword fails) = Σ<sub>i &gt; t</sub> C(n, i) p<sup>i</sup> (1 − p)<sup>n − i</sup> with n = ${fmtN(8192)} + m · t; UBER is that over the ${fmtN(8192)} data bits. The tail falls by roughly <em>np</em>/(<em>t</em> + 1) per extra correctable bit, so each added bit of <em>t</em> buys a growing factor while costing a constant m = 14 parity bits: the first corrections are the cheapest.</p>`,
+        pitfall: `<p>Correction hides wear until it cannot. A drive whose corrected-bit counters have been rising for months looks perfect to the host and then loses a page at once, when one more bit than t flips. SMART's "available spare" and the controller's own scan of corrected bits per page are the early warnings.</p>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'Flip two stored bits so the decoder reports a double error it cannot correct.',
+        check: (st) => st.value('double') === 1,
+        hints: ['flip is a bit mask over the stored word.', 'Set flip to 3: bits 0 and 1.'],
+        answer: 'flip = 0011 (any two bits): double = 1 and single = 0; the decoder detects the error but cannot say which bits to fix. One flipped bit is corrected and reported as single.',
+        solve: (st) => st.setInputs({ d: 0x5a, flip: 3 }),
       },
     },
   ],
