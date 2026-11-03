@@ -295,7 +295,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const hasFuncs = L.funcs.length > 0;
     // Bottom-left, beside the CPU panel on the right (two right-docked panels would cover each other).
     const title = h('h4', null, 'Python', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: `mem-panel py-panel${pipe ? ' py-pipe' : ''}`, 'data-dock': 'left' }, title,
+    const el = h('div', { class: `mem-panel py-panel${pipe ? ' py-pipe' : ''}`, 'data-dock': 'left', 'data-fold': 'narrow' }, title,
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, stepBtn, playBtn, ...(pipe ? [endBtn] : [])),
       ...(pipe && sw ? [h('div', { class: 'py-row py-target' }, h('span', { class: 'py-hint' }, 'compile for'), targetBtn(false), targetBtn(true))] : []),
       blurb, editWrap, status, totals,
@@ -308,7 +308,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
           h('div', { class: 'cpu-sec' }, 'Variables, read from the gates'), vars,
           h('div', { class: 'cpu-sec' }, `Output (data memory from ${L.outBase} up to gp)`), out,
           ...(hasFuncs ? [h('div', { class: 'cpu-sec' }, `The stack (from sp up to ${L.stackTop})`), stackBox] : []))));
-    title.addEventListener('click', () => { el.classList.toggle('collapsed'); stage.layoutDock(); });
+    // folding is the stage's (data-fold: the title's click, and the first layout may start it folded beside the CPU panel and the diagram)
     /** Each instruction's source form (li, j, …: the assembly the compiler wrote, not the disassembly). */
     const asmText = new Map(A.lines.map((l) => [l.addr, l.text]));
 

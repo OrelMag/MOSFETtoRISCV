@@ -29,7 +29,7 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, freeArea, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
@@ -2231,7 +2231,10 @@ export class Stage {
     const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     let pick = chooseFolds(fold.length, scaleOf, mine(true));
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
-    if (scaleOf(pick) === null) pick = chooseFolds(fold.length, scaleOf, mine(false));
+    // ... and where they would leave the circuit under KEEP_SCALE of its size with every panel folded (three panels over a
+    // pipeline left ~230 px of it): the usual rule decides, a panel the step's text is about included
+    const kept = scaleOf(pick);
+    if (kept === null || (fold.length > 2 && kept < KEEP_SCALE * (scaleOf(all) ?? 0))) pick = chooseFolds(fold.length, scaleOf, mine(false));
     apply(pick);
   }
 
