@@ -289,7 +289,7 @@ class ScreensPanel {
     if (on) {
       this.key = '';
       // opening by itself, it waits behind a drawer already shown (the CPU drawer of a computer)
-      dockPane(this.ed, { id: 'screens', label: 'Screens', icon: 'screen', el: this.el, width: 360 }, byUser);
+      dockPane(this.ed, { id: 'screens', label: 'Screens', icon: 'screen', el: this.el, width: 360, onShow: () => this.paint() }, byUser);
       this.build(this.nodes());
     } else undockPane(this.ed, 'screens');
     this.ed.renderActions();

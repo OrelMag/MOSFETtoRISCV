@@ -435,6 +435,8 @@ export class PropsPanel {
       ws = { ...ws, chips: { u_main: blank }, open: ['u_main'] };
     } else if (!ws.open.length) ws = openChip({ ...ws, open: [] }, Object.keys(ws.chips)[0]);
     ed.editWs(() => ws);
+    // the button that was clicked holds the focus, which holds back an update: the pane must show the chip now open
+    this.update(true);
     ed.toast(`Deleted ${doc.name} (${undoKey()} to undo)`);
   }
 

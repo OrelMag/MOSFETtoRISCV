@@ -17,6 +17,8 @@ export interface DockPane {
   el: HTMLElement;
   /** Preferred width in px (default 360). */
   width?: number;
+  /** Called whenever the pane comes to the front: a hidden pane is not repainted while it waits. */
+  onShow?: () => void;
 }
 
 /** A phone-width sandbox: a drawer opening by itself would cover most of the circuit (the toolbar's buttons open them). */
@@ -115,6 +117,7 @@ class Dock {
       onclick: () => this.show(p.id),
     }, icon(p.icon, 13), h('span', null, p.label))));
     this.ed.renderActions();
+    cur.onShow?.();
   }
 }
 

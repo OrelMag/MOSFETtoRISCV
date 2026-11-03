@@ -14,7 +14,7 @@ import type { PowerOnMode } from '../sim/sim';
 import { WEAK_H, weakTag } from '../sim/switchsim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
-import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
+import { coarsePointer, h, hintBadge, icon, placeMenu, undoKey } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { type PlaceMode, placeMode } from '../ui/wording';
@@ -1171,6 +1171,8 @@ export class Editor {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** A message over the canvas; with an action, a button on it (and it stays long enough to reach). */
   toast(msg: string, level: 'info' | 'err' = 'info', action?: { label: string; run(): void }): void {
+    // a toast that says how to take the step back gets the button for it: a touch screen has no Ctrl+Z
+    if (!action && level === 'info' && msg.includes(undoKey()) && this.history.canUndo) action = { label: 'Undo', run: () => this.undo() };
     this.toastEl.textContent = msg;
     if (action) this.toastEl.append(' ', h('button', { type: 'button', class: 'btn sm sb-toast-act', onclick: () => { this.toastEl.className = 'sb-toast'; action.run(); } }, action.label));
     this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;

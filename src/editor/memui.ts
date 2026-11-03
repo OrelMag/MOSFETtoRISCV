@@ -286,6 +286,9 @@ function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Part
 
 /** A large editor for a ROM's program: live re-assembly, gutter diagnostics, listing; Apply = one undo step. */
 /** The program editor of a ROM part of the chip being edited, or of another chip (a ROM inside a placed chip). */
+/** Text left unapplied when a program editor closed, per chip and ROM: reopening brings it back, so a draft is never lost silently. */
+const drafts = new Map<string, string>();
+
 export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId): void {
   const part = () => ed.ws.chips[chipId]?.parts.find((p) => p.id === partId);
   const p0 = part();
@@ -300,7 +303,10 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   let img = romImage(applied);
   /** Row shown as current (undefined: redraw on the next frame). */
   let cur: number | null | undefined;
-  const ce = codeEditor({ value: applied.src, lang: codeOf(applied), rows: 24, onChange: () => schedule() });
+  const dkey = `${chipId}/${partId}`;
+  const draft = drafts.get(dkey);
+  const restored = draft !== undefined && draft !== applied.src;
+  const ce = codeEditor({ value: restored ? draft : applied.src, lang: codeOf(applied), rows: 24, onChange: () => schedule() });
 
   const applyBtn = h('button', { class: 'btn sm primary', title: 'Apply (Ctrl+Enter): one undo step', onclick: () => apply() }, 'Apply') as HTMLButtonElement;
   const rebuild = () => {
@@ -316,7 +322,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     status.className = `sb-rom-dlg-status${errs.length ? ' err' : ''}`;
     status.replaceChildren(errs.length
       ? `${errs.length} problem${errs.length > 1 ? 's' : ''}: ${errs[0].line ? `line ${errs[0].line}: ` : ''}${errs[0].message}${errs.length > 1 ? ' …' : ''}`
-      : `${usage(img)}${ce.value === applied.src ? '' : ' · not applied yet'}`);
+      : `${usage(img)}${ce.value === applied.src ? '' : restored && ce.value === draft ? ' · your unapplied draft, kept from last time' : ' · not applied yet'}`);
   };
   let timer: ReturnType<typeof setTimeout> | null = null;
   const schedule = () => {
@@ -324,8 +330,9 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     timer = setTimeout(() => { timer = null; rebuild(); }, 200);
   };
 
-  const close = () => {
+  const close = (keep = true) => {
     if (timer) clearTimeout(timer);
+    if (keep && ce.value !== applied.src) drafts.set(dkey, ce.value); else drafts.delete(dkey);
     ce.destroy();
     ov.remove();
     ed.view.svg.focus?.();
@@ -334,7 +341,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     const p = part();
     if (!p || !('rom' in p.ref)) {
       ed.toast(`The ROM '${partId}' is gone: nothing to apply to`, 'err');
-      return close();
+      return close(false);
     }
     if (p.ref.rom.src !== ce.value) {
       // typed just now: the debounced check may not have run
@@ -346,13 +353,13 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       if (chipId === ed.chipId) ed.edit(() => r.doc);
       else ed.editWs((ws) => ({ ...ws, chips: { ...ws.chips, [chipId]: r.doc } }));
     }
-    close();
+    close(false);
   };
   const cancel = () => {
     if (ce.value !== applied.src && !ov.classList.contains('confirm')) {
       ov.classList.add('confirm');
       status.className = 'sb-rom-dlg-status err';
-      status.textContent = 'Unapplied changes: Cancel again to discard them, or Apply.';
+      status.textContent = 'Unapplied changes: Cancel again to close (the text is kept as a draft), or Apply.';
       return;
     }
     close();
@@ -401,7 +408,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
         h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
         chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
           if (!d || !loadDeckIntoRom(ed, partId, d)) return;
-          close();
+          close(false);
           openProgramEditor(ed, partId);
         }) }, 'Load deck…') : null,
         h('button', { class: 'btn sm', onclick: cancel }, 'Cancel'),
