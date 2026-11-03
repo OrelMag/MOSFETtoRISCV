@@ -483,8 +483,8 @@ fmul then fadd            357   (176 + 181)</pre>In the single-cycle RV32IF the 
     lib: 'fpfma8_23',
     chapters: [
       { chapter: 'float', step: 11, label: 'Fused multiply-add: one rounding' },
-      { chapter: 'float', step: 16, label: 'fma in the CPU' },
-      { chapter: 'float', step: 17, label: 'A pipelined FPU' },
+      { chapter: 'float', step: 18, label: 'fma in the CPU' },
+      { chapter: 'float', step: 21, label: 'A pipelined FPU' },
     ],
   },
 

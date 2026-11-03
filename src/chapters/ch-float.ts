@@ -81,8 +81,9 @@ export const chFloat: Chapter = {
   goals: [
     'decode a float from its sign, biased exponent and fraction, subnormals, infinities and NaNs included',
     'round a result in any of the five RISC-V modes from its last kept bit, guard and sticky bits, and say which flags it raises',
-    'trace an addition through align, add, normalize and round, and say why a fused multiply-add rounds only once',
-    'weigh the single-cycle FPU against the pipelined one by clock period, CPI and NAND count',
+    'trace an addition through align, add, normalize and round, say why a fused multiply-add rounds only once, and price the same units in f16, bf16, FP8 and f64',
+    'weigh the single-cycle FPU against the pipelined one, and the FPU against Newton–Raphson division and soft-float, by period, cycles and NAND count',
+    'measure a result\'s error in ulps, spot catastrophic cancellation, and say why Kahan summation stays at one rounding error while a plain loop grows with n',
   ],
   builds: ['muldiv', 'pipeline'],
   recap: {
@@ -92,6 +93,9 @@ export const chFloat: Chapter = {
       'RISC-V never traps on a float exception: NV, DZ, OF, UF and NX accumulate in fflags. UF needs a result that is tiny (judged after rounding) <em>and</em> inexact.',
       'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, one rounding against 357 for fmul then fadd.',
       'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster on six of the seven programs; the CSR-heavy one is 5 % slower.',
+      'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
+      'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. Soft-float costs about 233 RV32I instructions per fmul.s.',
+      'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers is exact (Sterbenz) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
     ],
     practise: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'],
     check: [
@@ -658,6 +662,7 @@ export const chFloat: Chapter = {
           from NANDs. GPUs spend their area on thousands of fma units, with the register files that feed them costing as much as the arithmetic.</p>`,
       })),
     },
+    ...formatSteps,
     {
       title: 'An FPU in the CPU',
       body: `
@@ -790,6 +795,7 @@ export const chFloat: Chapter = {
         explain: '−(2) − (−2) = −2 + 2: an exact zero from two terms of opposite sign, which is +0 in every mode except RDN (−0).',
       },
     },
+    ...newtonSteps,
     {
       title: 'A pipelined FPU',
       body: `
@@ -890,8 +896,6 @@ export const chFloat: Chapter = {
         explain: 'NaN means "no meaningful value"; ordering it would be meaningless too. The comparator checks the NaN flags of both operands and forces eq, lt and le to 0.',
       },
     },
-    ...formatSteps,
-    ...newtonSteps,
     ...errorSteps,
   ],
 };

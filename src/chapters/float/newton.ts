@@ -48,7 +48,7 @@ export const newtonSteps: Step[] = [
       the same factor 2 − D each step: the two products are independent, so a pipelined multiplier overlaps them (IBM's System/360 Model 91 and AMD's K7 divide this way). Its rounding errors are not corrected by later steps,
       so it too ends with a residual fma.</p>
       <div class="try">Run "Division by Newton–Raphson": a0 = 0x3FD55556 is a·x for 5 / 3, a1 = 0x3FD55555 the corrected quotient, a2 the same bits from fdiv.s, a3 = 1. The loop is the whole divider; the √2 of
-      <span data-ahead="newton">"Newton's √2"</span> does its division <em>inside</em> the iteration instead.</div>`,
+      <span data-ahead="newton">"Newton's √2" (Newton's method: refine a guess x by x − f(x)/f′(x), here for x² = 2)</span> does its division <em>inside</em> the iteration instead.</div>`,
     scene: () => cpuScene({ source: fsrc('recip'), fpu: true, adder: 'ks', highlight: ['fpu', 'frf'] }),
     tries: [(st) => xreg(st, 13) === 1],
     more: {

@@ -662,13 +662,13 @@ export const NODES: CampaignNode[] = [
     id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3732, depth: 163 },
     why: 'Adding floats means aligning their binary points, adding, then normalizing and rounding, and every block for that is built: 3732 NANDs, depth 163, normalize & round 2058 of them. RV16 has no F registers, so this and the other FP units stand alone: no core in the campaign runs them. The FP multiplier reuses its normalizer, wider.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
-    codex: ['fpadder', 'ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
+    codex: ['fpadder', 'ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 15, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul(F16, RV16_MUX2)), par: { nand: 4912, depth: 150 },
     why: 'Multiplying floats needs no alignment: XOR the signs, add the exponents less one bias, multiply the 11-bit significands, normalize & round. 4912 NANDs at depth 150, against the adder\'s 163; the significand product grows with the square of the width, and the binary32 multiplier is 14 913 NANDs.',
     tips: ['Signs, exponents and significands are three separate datapaths: s = sa XOR sb, e = ea + eb − 15, and the given 11 × 11 multiplier for the significands.', '11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one (and add one to the exponent).', 'Special cases before the arithmetic: 0 × ∞ is NaN, NaN in gives the canonical NaN, and a subnormal input has exponent 1 and no hidden bit, as unpack says.'],
-    codex: ['ieee754', 'fma'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 13, label: 'An FPU in the CPU' }],
+    codex: ['ieee754', 'fma'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 15, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpcmp', act: 8, title: 'FP comparator', kind: 'build', optional: true, requires: ['o_fpunpack'], base: BUILDFP.o_fpcmp, givesOf: fpGives(FP_REF.cmp), par: { nand: 682, depth: 25 },
