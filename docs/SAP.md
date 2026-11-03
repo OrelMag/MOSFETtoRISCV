@@ -208,3 +208,10 @@ control lines in capitals (`ΣO`).
   (chips, bytes, size, NANDs, transistors). The inspector, the breadboard hover card (`insideOf`) and the sandbox's cost
   line show logic and ROM apart: the computer is 3 314 NANDs of logic + 5 × 2 KB of ROM (the simulated mux trees,
   327 620 NANDs, named in the tooltip). The totals are unchanged; other ROMs (a CPU's program ROM) carry no `romBytes`.
+
+## Boards and wires (2026-11-03)
+
+One row of chips a board with room for its jumpers (`oneRowEach`), a module too big for one going on to the next; the ribbon and
+the drive / load rings sit on the board with the 245. Every jumper comes from the netlist (`view/bbwires.ts`): within a board a
+tree of arcs, between boards a harness in the channels and the outer gutters (`BreadboardLayout.channels`), crossing the bus strip
+where it must. `readPx` keeps the whole machine, and the SAP panel beside it, on one screen.

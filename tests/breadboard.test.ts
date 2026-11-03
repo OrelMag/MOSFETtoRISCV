@@ -171,7 +171,7 @@ describe('breadboard view: the drill', () => {
     expect(drillOf(l, [])).toBeNull();
     expect(drillOf(l, ['bus'])).toBeNull();
     // the flags' chips sit on the ALU's board
-    expect(drillOf(l, ['flags', 'reg'])!.board.title).toBe('ALU + flags');
+    expect(drillOf(l, ['flags', 'reg'])!.board.title).toBe('ALU + flags (2)');
   });
 
   it('names the way there: boards, board, chip, the levels below', () => {
@@ -213,7 +213,7 @@ describe('breadboard view: LEDs and keys', () => {
 
   it('finds every board\'s bus drivers: its 245s', () => {
     const m = busDrivers(l, root, l.buses![0]);
-    for (const t of ['Program counter', 'A register', 'Instruction', 'RAM 16 × 8', 'ALU + flags']) {
+    for (const t of ['Program counter', 'A register', 'Instruction', 'RAM 16 × 8 (2)', 'ALU + flags']) {
       expect(m.get(t)?.map((c) => c.part), t).toEqual(['74LS245']);
     }
     expect(m.has('B register')).toBe(false);

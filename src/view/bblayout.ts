@@ -246,6 +246,28 @@ export function planBoard(b: BbBoard): BoardPlan {
   return { chips, beside, switches, leds, digits, window, need: { w: maxW + BB.side - 0.4, h: iy + ih + BB.bottom } };
 }
 
+/**
+ * A board too full for one row of chips as several boards with one row each and `air` around it, as on a real bench: the
+ * indicators stay on the first, its ribbon and rings go with the chip that drives the bus (`driver`; default the first).
+ */
+export function oneRowEach<B extends Omit<BbBoard, 'at' | 'size'>>(m: B, W: number, air: number, driver?: (c: BbChip) => boolean): Omit<BbBoard, 'at' | 'size'>[] {
+  const rows: BbChip[][] = [[]];
+  let x = BB.side + 0.6;
+  for (const chip of m.chips) {
+    const w = chipSize(chip.dip).w;
+    if (rows[rows.length - 1].length && x + w > W - BB.side) { rows.push([]); x = BB.side + 0.6; }
+    rows[rows.length - 1].push(chip);
+    x += w + BB.chipGap;
+  }
+  const at = Math.max(0, driver ? rows.findIndex((r) => r.some(driver)) : 0);
+  const name = m.title.split(':')[0];
+  return rows.map((chips, i) => {
+    const { bus, drives, loads, ...rest } = m;
+    const wired = i === at ? { ...(bus !== undefined ? { bus } : {}), ...(drives ? { drives } : {}), ...(loads ? { loads } : {}) } : {};
+    return i === 0 ? { ...rest, chips, air, ...wired } : { title: `${name} (${i + 1})`, ...(m.module ? { module: m.module } : {}), chips, air, ...wired };
+  });
+}
+
 const overlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 const boxOf = (at: [number, number], size: [number, number]): Box => ({ x: at[0], y: at[1], w: size[0], h: size[1] });
 

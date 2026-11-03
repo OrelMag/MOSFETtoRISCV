@@ -2151,7 +2151,7 @@ export class Stage {
       const r = freeArea(W, H, this.covers(false), bw, bh);
       const s = r ? Math.min(r.w / bw, r.h / bh) : 0;
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
-      return lay && mask !== all && s < BB_READ_PX ? null : s;
+      return lay && mask !== all && s < (lay.readPx ?? BB_READ_PX) ? null : s;
     };
     const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     let pick = chooseFolds(fold.length, scaleOf, mine(true));
