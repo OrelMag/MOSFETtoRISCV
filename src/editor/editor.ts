@@ -655,7 +655,16 @@ export class Editor {
     // only a chip with something besides its pins: an empty level's clock ticking over nothing reads as a running circuit
     if (!this.doc.parts.length) return;
     if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
-    if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
+    if (this.rateSel && sim.mode === 'cycle') {
+      const sel = this.rateSel;
+      // a chip's own rate (Pong's 5 kHz) is not a step: add it in order, or the select shows nothing
+      if (![...sel.options].some((o) => o.value === String(sim.hz))) {
+        const o = h('option', { value: String(sim.hz) }, `${sim.hz >= 1000 ? `${sim.hz / 1000} k` : sim.hz} Hz`) as HTMLOptionElement;
+        const after = [...sel.options].find((x) => Number(x.value) > sim.hz);
+        sel.insertBefore(o, after ?? null);
+      }
+      sel.value = String(sim.hz);
+    }
   }
 
   /** Called after every repaint (live views over the simulation: look inside, inspector). */
@@ -1078,7 +1087,8 @@ export class Editor {
     const step = h('button', { class: 'btn sm ghost', title: sim.mode === 'cycle' ? 'One clock cycle' : 'One gate delay', onclick: () => sim.stepOnce() }, icon('step', 14), 'Step');
     if (sim.mode === 'cycle') {
       this.rateSel = h('select', { 'aria-label': 'Clock rate', title: 'Clock rate' },
-        HZ_STEPS.map((hz) => h('option', { value: String(hz), selected: hz === sim.hz }, Number.isFinite(hz) ? `${hz >= 1000 ? `${hz / 1000} k` : hz} Hz` : 'max'))) as HTMLSelectElement;
+        // a chip's own rate (Pong's 5 kHz) between the steps, or the select would show nothing
+        [...new Set([...HZ_STEPS, sim.hz])].sort((a, b) => a - b).map((hz) => h('option', { value: String(hz), selected: hz === sim.hz }, Number.isFinite(hz) ? `${hz >= 1000 ? `${hz / 1000} k` : hz} Hz` : 'max'))) as HTMLSelectElement;
       this.rateSel.addEventListener('change', () => { sim.hz = Number(this.rateSel.value); this.rateChosen = true; });
     } else {
       this.rateSel = h('select', { 'aria-label': 'Gate delays per second', title: 'Gate delays per second' },
