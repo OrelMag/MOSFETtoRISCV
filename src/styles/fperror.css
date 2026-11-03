@@ -8,7 +8,7 @@
 .fe-out { margin-top: 10px; display: grid; gap: 10px; }
 .fe-res { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
 .fe-res.bad { border-color: var(--bad); color: var(--bad); }
-.fe-sum { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+.fe-sum { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
 .fe-sum > strong:first-child { margin-right: 6px; color: var(--text); }
 .fe-sum code { font: 12.5px var(--font-mono); color: var(--text); }
 .fe-bad { color: var(--bad); }

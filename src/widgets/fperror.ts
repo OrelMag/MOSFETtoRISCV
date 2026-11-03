@@ -42,9 +42,9 @@ function resultBlock(label: string, src: string): HTMLElement {
   const f = qOfBits(r.bits), rel = relErr(f, r.real), ulps = ulpsOff(f, r.real);
   const head = h('div', { class: 'fe-sum' },
     h('strong', null, label),
-    h('span', null, ' float32 ', h('code', null, qText(f, 9)), ` (${hex32(r.bits)})`),
-    h('span', null, ' · real ', h('code', null, qText(r.real, 9))),
-    h('span', null, ' · error ', h('strong', { class: rel !== null && rel > 1e-3 ? 'fe-bad' : '' }, rel === null ? `absolute ${qText(f, 3)}, relative n/a (real value 0)` : `${relText(rel)} relative`),
+    h('span', null, 'float32 ', h('code', null, qText(f, 9)), ` (${hex32(r.bits)})`),
+    h('span', null, '· real ', h('code', null, qText(r.real, 9))),
+    h('span', null, '· error ', h('strong', { class: rel !== null && rel > 1e-3 ? 'fe-bad' : '' }, rel === null ? `absolute ${qText(f, 3)}, relative n/a (real value 0)` : `${relText(rel)} relative`),
       rel !== null ? `, ${ulpText(ulps)} ulp${ulps === 1 ? '' : 's'}${rel <= UNIT_ROUNDOFF ? ' (within u)' : ''}` : ''));
   const rows = r.steps.map((s) => {
     const sf = qOfBits(s.bits), re = relErr(sf, s.real);
@@ -110,7 +110,7 @@ export function errorLab(): Widget {
       h('h4', { class: 'fe-h' }, 'Cancellation as x shrinks: (1 + x) − 1'),
       h('p', { class: 'sub' }, 'The subtraction itself is exact. The loss happened earlier: 1 + x was rounded to a multiple of ε, an absolute error of up to u that the subtraction leaves in place while the result shrinks to x. Relative error: up to u / x (dashed).'),
       cancelChart(),
-      h('div', { class: 'fe-legend' }, h('span', { class: 'k ms' }, 'measured'), h('span', { class: 'k bd' }, 'bound u / x'), h('span', { class: 'sub' }, 'a hollow marker on the floor is an exact result (0 error)')))),
+      h('div', { class: 'fe-legend' }, h('span', { class: 'k ms' }, 'measured'), h('span', { class: 'k bd' }, 'bound u / x')))),
   };
 }
 
