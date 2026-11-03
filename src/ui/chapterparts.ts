@@ -17,7 +17,8 @@ export interface PartsNavState {
 
 export const newPartsNavState = (): PartsNavState => ({ open: new Map(), folded: null, at: -2 });
 
-const phone = (): boolean => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+/** Folded to begin with on a phone, and where a list beside the prose would leave it too little height. */
+const startFolded = (): boolean => typeof matchMedia === 'function' && matchMedia('(max-width: 760px), (max-height: 799px)').matches;
 
 /**
  * The parts block for the chapter header, or null for a chapter without parts. `step` is the step shown (the recap's
@@ -86,7 +87,7 @@ export function partsNav(
       type: 'button', class: `pstep recap${onRecap ? ' cur' : ''}`, ...(onRecap ? { 'aria-current': 'step' } : {}), onclick: () => go(recap),
     }, h('span', { class: 'pn' }, '↳'), h('span', { class: 'pt' }, 'Recap')) : null);
 
-  const folded = st.folded ?? phone();
+  const folded = st.folded ?? startFolded();
   const wrap = h('details', { class: 'parts-wrap', ...(folded ? {} : { open: '' }) },
     h('summary', { class: 'parts-status' }, h('span', null, status), icon('chevD', 14)), list);
   wrap.addEventListener('toggle', () => { st.folded = !wrap.open; });

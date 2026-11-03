@@ -2591,7 +2591,7 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }
 
 /* A long chapter's parts (ui/chapterparts.ts): a segment per part sized by its steps, a status line that folds the list
-   of parts, the current part open. The list takes at most a third of the pane's height and scrolls inside itself, so the
+   of parts, the current part open. The list takes at most a quarter of the screen's height and scrolls inside itself, so the
    prose and the fixed Next bar stay reachable; the pane is only 340 px wide. */
 .parts-nav { display: flex; flex-direction: column; gap: 6px; }
 .parts-segs { display: flex; gap: 4px; }
@@ -2603,10 +2603,10 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .parts-segs i.recap.cur { background: var(--accent); box-shadow: none; }
 .parts-wrap > summary, .part > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
 .parts-wrap > summary::-webkit-details-marker, .part > summary::-webkit-details-marker { display: none; }
-.parts-status { font: 11.5px var(--font-mono); color: var(--muted); min-height: 24px; justify-content: space-between; }
+.parts-status { font: 12px var(--font-ui); letter-spacing: -0.01em; color: var(--muted); min-height: 24px; justify-content: space-between; }
 .parts-status svg, .part > summary svg { flex: none; transition: transform 0.15s; }
 details[open] > .parts-status svg, details.part[open] > summary svg { transform: rotate(180deg); }
-.parts-list { display: flex; flex-direction: column; max-height: min(34vh, 280px); overflow-y: auto; overscroll-behavior: contain; margin-top: 2px; border-top: 1px solid var(--border); }
+.parts-list { display: flex; flex-direction: column; max-height: min(26vh, 230px); overflow-y: auto; overscroll-behavior: contain; margin-top: 2px; border-top: 1px solid var(--border); }
 .part { border-bottom: 1px solid var(--border); }
 .part > summary { padding: 7px 2px; font-weight: 600; font-size: 13.5px; }
 .part > summary .pname { flex: 1; min-width: 0; }
