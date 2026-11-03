@@ -123,7 +123,7 @@ export const COH_STEPS: Step[] = [
       <p>The same machinery shows <strong>false sharing</strong> in gates. <em>False sharing</em> and <em>Padded</em> run one loop: each core adds 1 to its own word twenty times. Four bytes apart the words share a line:
       <strong>${fs.cycles} cycles, ${fs.bus} transactions, ${fs.invalidations} invalidations</strong>. Sixteen bytes apart, a line each: <strong>${pad.cycles} cycles, ${pad.bus} transactions, ${pad.invalidations} invalidations</strong>.
       Nothing about the variables is shared, only the line, and the line moves between the caches ${fs.invalidations} times.</p>
-      <p>One thing the totals hide: test-and-test-and-set is not fair. The core that just released holds the line, so it re-acquires first; core 0 waited ${ttas.stalls[0]} cycles for the bus and core 1 ${ttas.stalls[1]}.
+      <p>One thing the totals hide: test-and-test-and-set is not fair. The core that just released the lock still holds its line and tends to get back to it first: core 0 spent ${ttas.stalls[0]} cycles waiting on the bus and core 1 ${ttas.stalls[1]}.
       Round-robin arbitration is fair per transaction, not per lock.</p>
       <div class="try">Switch between <em>Spin lock: amoswap</em> and <em>Spin lock: test-and-test-and-set</em> and watch the trace. How many BusRdX does each print before the first acquire completes?</div>`,
     scene: () => coherentScene(src('spin'), {
