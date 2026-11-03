@@ -79,7 +79,7 @@ export const chTubes: Chapter = {
         brings an oxide-coated <strong>cathode</strong> to about 1000 K, hot enough to boil electrons off its surface;
         a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a wire mesh, the
         <strong>grid</strong>, decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
-        none once the grid is below ${V_CUTOFF} V in this model (a real tube tails off a few volts lower). Its field pushes them back.</p>
+        none once the grid is below ${V_CUTOFF} V in this model. Its field pushes them back.</p>
         <p>This is one section of a 6SN7, the twin triode ENIAC used most. The current follows the space-charge law
         I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> with µ = 20, fitted to the datasheet point (250 V, −8 V,
         9 mA), and works into a 22 kΩ plate resistor. The cathode warms with a 6 s time constant, and emission
@@ -295,7 +295,7 @@ export const chTubes: Chapter = {
         pitfall: `<p>Chaining diode ANDs without a restoring stage. Each diode drops a fraction of a volt, and a pull-up that fights several parallel diodes lets the junction creep up on a
           nominally low input. After two or three stages the levels are gone. The triode is there to bring them back, which also costs the step.</p>`,
         real: `<p>ENIAC also used crystal diodes (${thin(ENIAC.diodes)} of them), but most of its gating was in tubes. Machines that did gate in diodes, like SEAC and UNIVAC, saved a heater for every gate.
-          Germanium diodes also gave less drop than vacuum ones, which made the restoring stage easier.</p>`,
+          Crystal diodes also gave less drop than vacuum ones, which made the restoring stage easier.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'With a = 0 and b = 1, why does the junction read 0 rather than X, with the pull-up and a diode fighting over it?',
