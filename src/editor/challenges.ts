@@ -15,6 +15,7 @@ import { analyzeTiming } from '../sim/timing';
 import { B0, B1, BZ, type Bit, type ComponentDef, isExternal, isSwitchPrim, netlistOf } from '../sim/types';
 import { ioInfo } from './ioparts';
 import { type Compiled, diagText } from './compile';
+import { editCount } from './edits';
 import { type ChipDoc, emptyChip, type PartDoc, type PinDoc, type Workspace } from './model';
 import { openChip } from './session';
 import { importChips } from './store';
@@ -83,6 +84,8 @@ export type Allowed = 'transistors' | 'nand' | 'any' | LibRule;
 
 export interface LibRule {
   lib: readonly string[];
+  /** Ids taken off the list even where `lib` matches them (a bug hunt withholds the block under repair). */
+  except?: readonly string[];
   /** Short text for the rule badge ('NAND + 6 unlocked parts'). */
   label?: string;
   /**
@@ -116,7 +119,8 @@ export function scoreUnit(ch: BuildChallenge): 'transistors' | 'devices' | 'nand
 
 /** Does a library id match a rule's list (exact, or a `prefix*`)? */
 export function libAllowed(rule: LibRule, id: string): boolean {
-  return rule.lib.some((g) => (g.endsWith('*') ? id.startsWith(g.slice(0, -1)) : g === id));
+  const hit = (g: string) => (g.endsWith('*') ? id.startsWith(g.slice(0, -1)) : g === id);
+  return !rule.except?.some(hit) && rule.lib.some(hit);
 }
 
 export interface Limits {
@@ -134,6 +138,8 @@ export interface Limits {
   maxTubes?: number;
   /** Relay steps from an input change until every armature rests. */
   maxSteps?: number;
+  /** Edits from the drawing a bug hunt starts as. */
+  maxEdits?: number;
 }
 
 export interface BuildChallenge {
@@ -155,6 +161,13 @@ export interface BuildChallenge {
   fsm?: string;
   /** Rules on the circuit's structure beyond its parts (a tube grid read through a divider): each problem fails Check. */
   rules?: (def: ComponentDef) => string[];
+  /**
+   * A bug hunt: the chip starts as this drawing (the chips it places first, its own last, whose pins, parts and wires
+   * become the challenge chip's), not empty. Sub-chips keep their ids, which the answer's sub-chips share.
+   */
+  start?: () => ChipDoc[];
+  /** The starting drawing compiled: Check scores `edits` (edits.ts) against it. */
+  baseline?: () => ComponentDef;
 }
 
 export interface Score {
@@ -171,6 +184,8 @@ export interface Score {
   tubes?: number;
   /** Most relay steps one input change took to come to rest (a chip with relays). */
   steps?: number;
+  /** A bug hunt: edits from the drawing it started as (edits.ts). */
+  edits?: number;
 }
 
 export interface CheckResult {
@@ -229,7 +244,21 @@ export function startChallenge(ws: Workspace, ch: BuildChallenge): { ws: Workspa
   let name = ch.title;
   for (let i = 2; names.has(name); i++) name = `${ch.title} ${i}`;
   const doc: ChipDoc = { ...emptyChip(id, name), notes: `Challenge: ${stripHtml(ch.brief)}`, pins, parts: (ch.given ?? []).map((p) => ({ ...p })) };
+  if (ch.start) return { ws: openChip(seed({ ...ws, chips: { ...ws.chips, [id]: doc } }, id, ch.start()), id), chipId: id, created: true };
   return { ws: openChip({ ...ws, chips: { ...ws.chips, [id]: doc } }, id), chipId: id, created: true };
+}
+
+/**
+ * The challenge chip `id` drawn as `docs`' last (pins, parts, wires, pointers, comments), the chips it places put in
+ * under their own ids (replacing what is there: a bug hunt's sub-chips are its own).
+ */
+function seed(ws: Workspace, id: string, docs: ChipDoc[]): Workspace {
+  const main = docs[docs.length - 1], chips = { ...ws.chips };
+  for (const d of docs.slice(0, -1)) chips[d.id] = structuredClone(d);
+  const { ff: _ff, ...cur } = chips[id];
+  const m = structuredClone(main);
+  chips[id] = { ...cur, pins: m.pins, parts: m.parts, wires: m.wires, labels: m.labels, ...(m.comments ? { comments: m.comments } : {}), ...(m.ff ? { ff: m.ff } : {}) };
+  return { ...ws, chips };
 }
 
 // ---- checking --------------------------------------------------------------------------------
@@ -277,6 +306,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
       if (r.relays !== undefined) res.score.relays = r.relays;
       if (r.steps !== undefined) res.score.steps = r.steps;
     }
+    if (ch.baseline) res.score.edits = editCount(ch.baseline(), def);
   } catch (e) {
     res.failures.push(`cannot simulate: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -618,6 +648,8 @@ export function importAnswer(ws: Workspace, ch: BuildChallenge): { ws: Workspace
  */
 export function solveChallenge(ws: Workspace, ch: BuildChallenge): { ws: Workspace; chipId: string; added: string[] } {
   const started = startChallenge(ws, ch);
+  // A bug hunt is fixed in place: its own chips (and the sub-chips it shares with the answer) take the answer's drawing.
+  if (ch.start) return { ws: openChip(seed(started.ws, started.chipId, ch.answer()), started.chipId), chipId: started.chipId, added: [] };
   const id = started.chipId;
   const r = importChips(ch.answer(), started.ws);
   const mainId = r.order[r.order.length - 1];

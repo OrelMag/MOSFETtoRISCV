@@ -171,7 +171,9 @@ export interface LaterUse {
 export function usedLater(id: string): LaterUse[] {
   const f = threadOf(id)?.usedFor ?? {};
   const ds = dependents(id);
-  return [...ds.filter((d) => !d.optional), ...ds.filter((d) => d.optional)].map((node) => ({ node, ...(f[node.id] ? { clause: f[node.id] } : {}) }));
+  // a bug hunt says what it is: the same block, drawn with a fault to find
+  const clause = (d: CampaignNode) => f[d.id] ?? (d.bug ? `a bug hunt: this block drawn with a fault (${d.bug.kind}) to find and fix` : undefined);
+  return [...ds.filter((d) => !d.optional), ...ds.filter((d) => d.optional)].map((node) => { const c = clause(node); return { node, ...(c ? { clause: c } : {}) }; });
 }
 
 // ---- the why stack ------------------------------------------------------------------------------

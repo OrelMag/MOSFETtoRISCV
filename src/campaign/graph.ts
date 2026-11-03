@@ -56,7 +56,7 @@ export function ruleFor(id: string): LibRule {
   const lib = new Set<string>(['nand', ...(n0?.gives ?? []), ...(n0?.givesOf?.() ?? [])]);
   for (const a of ancestors(id)) for (const u of nodeById(a)?.unlocks ?? []) lib.add(u);
   if (gates) for (const u of lib) { const d = u.endsWith('*') ? undefined : resolveComponent(u); if (d && transistorLevel(d)) lib.delete(u); }
-  const rule: LibRule = { lib: [...lib].sort() };
+  const rule: LibRule = { lib: [...lib].sort(), ...(n0?.withhold?.length ? { except: n0.withhold } : {}) };
   const n = unlockedPartCount(rule);
   return { ...rule, label: n ? `NAND + ${n} unlocked part${n === 1 ? '' : 's'}` : 'NAND only', ...(gates ? { gates } : {}) };
 }
@@ -66,7 +66,7 @@ export function ruleFor(id: string): LibRule {
 export function unlockedPartCount(rule: Pick<LibRule, 'lib'>): number {
   const ids = new Set<string>();
   for (const c of libraryItems()) for (const it of c.items) if (it.id !== 'nand' && libAllowed(rule as LibRule, it.id)) ids.add(it.id);
-  for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && resolveComponent(id)) ids.add(id);
+  for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && libAllowed(rule as LibRule, id) && resolveComponent(id)) ids.add(id);
   return ids.size;
 }
 

@@ -76,6 +76,8 @@ const walks = new Map<string, Walk | null>();
 
 /** The node's walkthrough (memoized), or undefined when it has no challenge. */
 export function walkOf(node: CampaignNode): Walk | undefined {
+  // A bug hunt is a fix, not a build: nothing to walk through from an empty chip.
+  if (node.bug) return undefined;
   let w = walks.get(node.id);
   if (w === undefined) walks.set(node.id, (w = makeWalk(node) ?? null));
   return w ?? undefined;

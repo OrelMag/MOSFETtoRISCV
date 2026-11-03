@@ -18,7 +18,7 @@ in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (38 chapters,
 a Basics chapter for newcomers, three prologue chapters and three appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
-(127 levels: build it to unlock it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
+(140 levels: build it to unlock it, or fix it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits, up to whole computers).
 
@@ -97,7 +97,7 @@ frames.
 
 ![The campaign map with the first acts under way](docs/images/campaign.png)
 
-A tree of **127 levels in twelve acts**, in the spirit of *Turing Complete*, from a NAND made of
+A tree of **140 levels in twelve acts**, in the spirit of *Turing Complete*, from a NAND made of
 transistors to a pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16), with four optional acts:
 before the transistor (relays, tubes, cards), arithmetic units (floating point, multiply, divide), a GPU
 (four lanes, the active mask, a reconvergence stack, two warps, a rasterizer) and memory (a DRAM column,
@@ -110,7 +110,11 @@ reads mastery from what you have already done, and places you (Where are you sta
 **capstones** close each tier without a walkthrough (an adding machine, an RV16 core that plays Pong,
 a pipelined core, and a design brief: the cheapest core that runs the benchmarks, placed on a cost /
 speed chart against three references), and seven levels have **Verilog twins**, written as text,
-synthesized by Yosys in the page and graded by the level's own check.
+synthesized by Yosys in the page and graded by the level's own check. Thirteen optional **bug hunts**
+start from a colleague's faulty drawing of a block you built (a miswire, crossed pins, a missing
+connection, a clocking fault, a forwarding term that is never true, ...): Check shows the symptom, and
+the fix is graded in edits (parts added, removed or swapped and pins moved; moving parts is free). The
+last is timing closure: a right block that misses its clock period.
 
 ![A level passed at par: the learner's adder against two alternatives, and its copies in the finished CPU](docs/images/level.png)
 

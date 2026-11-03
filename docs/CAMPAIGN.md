@@ -588,8 +588,16 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
 - ⏳ **Achievements**: XOR in 4 NANDs, a full adder in 9, CPI < 1.2, a period below the
   reference's.
 - ⏳ **A share link for campaign progress** (stars only).
-- ⏳ **Bug-hunt levels**: a circuit with a planted fault, to find and fix.
-- ⏳ **A timing level**: fix a setup violation, or overclock until it breaks.
+- ✅ **Bug-hunt levels** (campaign/bughunts.ts; mockup approved 2026-11-03): twelve optional levels, each hanging off the level
+  that builds its block, start from that level's reference answer with a planted fault (miswire, swapped pins, one column of
+  many, a missing connection, a corner case, clocking, a spec rule, encoding, a datapath value off by one, a forwarding term),
+  drawn by docFromDef; Check runs on the first visit, so the level opens on its symptom. Graded on edits from the starting
+  drawing (editor/edits.ts: parts added / removed / retyped, pins moved between nets; moving and redrawing free): ★★★ at par,
+  ★★ within twice par. The block under repair is withheld (LibRule.except). Show answer names the fault and selects its parts;
+  Do it for me redraws the chip as the answer in place. tests/bughunts.test.ts: each fault fails, each answer passes, par =
+  the planted fix's edits.
+- ✅ **A timing level** (b_timing, after Core IV): shift and accumulate, right but at period 58 against a target of 40; graded
+  on static period and NANDs (the Kogge–Stone answer: 36, 858 NANDs).
 - ⏳ **Where your NANDs go**: a per-component breakdown of your CPU.
 - ⏳ **Boss level**: snake on an LED matrix, on your own pipelined core.
 - ✅ **Custom ISA**: done in the sandbox (roadmap Phase 12; `src/isa`, File ▸ Instruction sets…): a table of mnemonics,

@@ -57,6 +57,7 @@ export function goalText(ch: BuildChallenge): { goal: string; rule: string; par:
   const l = ch.limits ?? {};
   const n = groupDigits;
   const par = [
+    l.maxEdits !== undefined ? `${n(l.maxEdits)} edit${l.maxEdits === 1 ? '' : 's'}` : '',
     l.maxTransistors !== undefined ? `${n(l.maxTransistors)} transistor${l.maxTransistors === 1 ? '' : 's'}` : '',
     l.maxNand !== undefined ? `${n(l.maxNand)} NAND` : '',
     l.maxRelays !== undefined ? `${n(l.maxRelays)} relay${l.maxRelays === 1 ? '' : 's'}` : '',
@@ -113,7 +114,7 @@ function unlockedItems(r: LibRule): PaletteItem[] {
     }
   }
   for (const id of r.lib) {
-    if (id.endsWith('*') || id === 'nand' || out.has(id)) continue;
+    if (id.endsWith('*') || id === 'nand' || out.has(id) || !libAllowed(r, id)) continue;
     const d = resolveComponent(id);
     if (d) out.set(id, item(id, d.name, d.category));
   }
@@ -352,6 +353,8 @@ class ChallengeUi {
     const score = unit === 'transistors' ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
       : unit === 'devices' ? deviceItems(r, lim, item)
       : [item(r.score.nand, 'NAND', lim.maxNand), item(r.score.depth, 'depth', lim.maxDepth, true), item(r.score.period, 'period', lim.maxPeriod, true), item(r.score.cycles, 'cycles', lim.maxCycles)];
+    // a bug hunt: the edits from the drawing it started as come first, they are what it is graded on
+    if (r.score.edits !== undefined) score.unshift(item(r.score.edits, r.score.edits === 1 ? 'edit' : 'edits', lim.maxEdits));
     return h('span', { class: `sb-chal-sum ${r.ok ? 'ok' : 'bad'}${stale ? ' stale' : ''}`, role: 'status' },
       r.ok ? h('b', { class: 'v' }, icon('check', 13), 'Passes') : h('b', { class: 'v' }, icon('close', 13), 'Not yet'),
       ...score,
@@ -481,6 +484,7 @@ class ChallengeUi {
         period !== undefined && period !== null ? item(period, 'period', lim.maxPeriod, true) : null,
         r.score.cycles !== undefined ? item(r.score.cycles, 'cycles', lim.maxCycles) : null,
         h('span', null, h('b', null, groupDigits(r.score.transistors)), ' transistors')];
+    if (r.score.edits !== undefined) parts.unshift(item(r.score.edits, r.score.edits === 1 ? 'edit' : 'edits', lim.maxEdits));
     // a metric par grades that this circuit could not be measured on
     const unmeasured = lim.maxDepth !== undefined && r.score.depth === null && unit !== 'transistors' && unit !== 'devices';
     return h('div', null, h('p', { class: 'sb-chal-score' }, ...parts, unmeasured ? h('span', { class: 'over' }, 'depth —', h('small', null, ` par ${lim.maxDepth}`)) : null),

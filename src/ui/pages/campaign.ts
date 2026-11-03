@@ -314,7 +314,7 @@ export class CampaignPage implements Page {
       h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `${actName(act.num)}: ${act.title}`),
       h('h2', null, n.title),
       h('div', { class: 'cp-badges' },
-        h('span', { class: 'cp-badge kind' }, KIND_LABEL[n.kind]),
+        h('span', { class: 'cp-badge kind' }, n.bug ? 'Bug hunt' : KIND_LABEL[n.kind]),
         n.optional ? h('span', { class: 'cp-badge opt' }, 'optional') : null,
         n.soon ? h('span', { class: 'cp-badge soon' }, 'coming soon') : h('span', { class: `cp-badge st ${st}` }, STATUS_LABEL[st]),
         np?.stars ? h('span', { class: 'cp-badge stars', title: 'Best result' }, '★'.repeat(np.stars) + '☆'.repeat(3 - np.stars)) : null),

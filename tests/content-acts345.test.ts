@@ -29,7 +29,8 @@ import type { ComponentDef } from '../src/sim/types';
 import { netlistOf } from '../src/sim/types';
 
 const ACTS = [3, 4, 5];
-const mine = NODES.filter((n) => ACTS.includes(n.act));
+// bug hunts (campaign/bughunts.ts) are fixes, not builds: their text and walk are checked in bughunts.test.ts
+const mine = NODES.filter((n) => ACTS.includes(n.act) && !n.bug);
 const node = (id: string) => nodeById(id)!;
 const par = (id: string) => node(id).par!;
 const nand = (id: string) => libCost(id)!.nand;
@@ -83,7 +84,7 @@ describe('acts 3–5 are complete', () => {
       const t = threadOf(n.id);
       expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
       expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeGreaterThanOrEqual(2);
-      for (const d of dependents(n.id)) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
+      for (const d of dependents(n.id).filter((m) => !m.bug)) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
     }
   });
 
