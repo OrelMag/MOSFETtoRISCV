@@ -4,7 +4,12 @@
 import { describe, expect, it } from 'vitest';
 import { nodeById } from '../src/campaign/nodes';
 import { chapterById, chapters } from '../src/chapters';
+import { Glossary, proseRuns } from '../src/campaign/glossary';
+import { NODES } from '../src/campaign/nodes';
 import { checkKeys } from '../src/chapters/checks';
+import { shownTexts } from '../src/chapters/firstuse';
+import { TAUGHT } from '../src/chapters/taught';
+import { PARTS_MIN, partsOf } from '../src/chapters/parts';
 import type { Quiz } from '../src/chapters/types';
 import { showTarget, viewDef } from '../src/ui/pages/looks';
 
@@ -94,5 +99,57 @@ describe('chapter guide', () => {
         for (const m of s.body.matchAll(/href="#\/c\/([^/"]+)/g)) expect(chapterById(m[1]), `${c.id}: ${m[0]}`).toBeTruthy();
       }
     }
+  });
+
+  describe('parts', () => {
+    it('a chapter of PARTS_MIN steps or more has parts, a shorter one has none', () => {
+      for (const c of chapters) {
+        if (c.steps.length >= PARTS_MIN) expect(c.parts, c.id + ' has ' + c.steps.length + ' steps').toBeTruthy();
+        else expect(c.parts, c.id).toBeUndefined();
+      }
+    });
+    it('parts cover every step exactly once, in order, with short unique names', () => {
+      for (const c of chapters.filter((x) => x.parts)) {
+        const ps = partsOf(c);
+        expect(ps, c.id + ': the counts add up to the steps').toBeTruthy();
+        expect(ps!.reduce((n, p) => n + p.count, 0)).toBe(c.steps.length);
+        for (const p of ps!) {
+          expect(p.count, c.id + ' ' + p.name).toBeGreaterThan(0);
+          expect(p.name.length, c.id + ': ' + p.name).toBeLessThanOrEqual(28);
+        }
+        expect(new Set(ps!.map((p) => p.name)).size, c.id + ': unique names').toBe(ps!.length);
+        expect(ps!.length, c.id).toBeGreaterThanOrEqual(4);
+        expect(ps!.length, c.id).toBeLessThanOrEqual(7);
+      }
+    });
+    it('deep dives are only in chapters with parts, and nothing depends on them', () => {
+      const deep = new Set(chapters.flatMap((c) => c.steps.flatMap((s, i) => (s.deep ? [c.id + ':' + i] : []))));
+      for (const c of chapters) if (c.steps.some((s) => s.deep)) expect(c.parts, c.id).toBeTruthy();
+      // a campaign level that sends the learner to a step needs it
+      const nodeLinks = NODES.flatMap((n) => (n.chapters ?? []).map((l) => n.id + ' -> ' + l.chapter + ':' + l.step));
+      expect(nodeLinks.filter((l) => deep.has(l.split(' -> ')[1]))).toEqual([]);
+      // another chapter's text sends the learner there
+      const bad: string[] = [];
+      for (const c of chapters)
+        for (const s of c.steps)
+          for (const m of s.body.matchAll(/href="#\/c\/([^/"]+)\/(\d+)/g)) if (m[1] !== c.id && deep.has(`${m[1]}:${m[2]}`)) bad.push(`${c.id} -> ${m[1]}:${m[2]}`);
+      expect(bad).toEqual([]);
+      // a term a later chapter takes as taught (taught.ts) is met in a step on the core path, not only in a deep dive
+      const gloss = new Glossary();
+      for (const c of chapters.filter((x) => x.steps.some((st) => st.deep))) {
+        const seen = new Map<string, Set<number>>();
+        for (const [where, html] of shownTexts(c)) {
+          const m = where.match(/^(\d+) /);
+          if (m) for (const run of proseRuns(html)) for (const f of gloss.find(run.text)) (seen.get(f.id) ?? seen.set(f.id, new Set()).get(f.id)!).add(+m[1]);
+        }
+        for (const [id, ch] of Object.entries(TAUGHT)) {
+          const at = [...(seen.get(id) ?? [])];
+          if (ch === c.id && at.length) expect(at.some((i) => !c.steps[i].deep), c.id + ': ' + id + ' is taught only in deep dives').toBe(true);
+        }
+      }
+      // the recap's questions are about core material: no deep step is the only place a question's subject is taught
+      // (checked by hand when parts were written; a chapter keeps at least half of its steps on the core path)
+      for (const c of chapters.filter((x) => x.parts)) expect(c.steps.filter((s) => !s.deep).length / c.steps.length, c.id).toBeGreaterThan(0.5);
+    });
   });
 });
