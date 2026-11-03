@@ -7,7 +7,7 @@ import { h, icon } from '../ui/dom';
 import { findMemories, type MemInfo } from '../view/memfind';
 import { memGrid } from '../view/memview';
 import { memSize } from '../widgets/memgrid';
-import { dockPane, paneShown, phoneWidth, showPane, undockPane } from './dock';
+import { dockPane, paneShown, showPane, tightForDrawer, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import type { Sim } from '../sim/sim';
 
@@ -73,7 +73,7 @@ class MemoryDrawer {
       this.mems = sim ? findMemories(sim) : [];
     }
     if (this.mems.length > 0 !== had) this.ed.renderActions();
-    if (!this.open && this.mems.length && !this.closed.has(this.ed.chipId) && !phoneWidth()) {
+    if (!this.open && this.mems.length && !this.closed.has(this.ed.chipId) && !tightForDrawer()) {
       this.setOpen(true);
       this.auto = true;
       this.autoChip = this.ed.chipId;

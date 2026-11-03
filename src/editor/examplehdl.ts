@@ -35,7 +35,7 @@ export function sameAdderChip(id: string, name: string, sub: Record<string, stri
   const s = new Sheet();
   s.pin('a', 'in', [0, 6], 4); s.pin('b', 'in', [0, 12], 4); s.pin('ci', 'in', [0, 18]);
   s.pin('s_drawn', 'out', [48, 6], 4); s.pin('co_drawn', 'out', [48, 10]);
-  s.pin('s_verilog', 'out', [48, 22], 4); s.pin('co_verilog', 'out', [48, 26]);
+  s.pin('s_verilog', 'out', [48, 22], 4); s.pin('co_verilog', 'out', [48, 30]);
   s.part('drawn', { lib: 'rca4' }, [20, 4]);
   s.part('verilog', { chip: sub.add4 }, [20, 20], {}, chipBox(docs.add4));
   for (const p of ['a', 'b', 'ci']) s.tap(`pin:${p}`, p);

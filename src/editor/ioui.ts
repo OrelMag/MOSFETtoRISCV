@@ -10,7 +10,7 @@ import { formatBits } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { h, icon } from '../ui/dom';
 import { saveFile } from '../view/image';
-import { dockPane, paneShown, showPane, undockPane } from './dock';
+import { dockPane, paneShown, showPane, tightForDrawer, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import { fileBase } from './files';
 import { ScreenCanvas, toggleSwitch } from './ioface';
@@ -267,7 +267,7 @@ class ScreensPanel {
     const nested = nodes.some((n) => n.path.length > 1 && n.info.kind !== 'switches');
     // the toolbar button is greyed without any: redraw it when the first one appears or the last goes
     if (nodes.length > 0 !== this.hadAny) { this.hadAny = nodes.length > 0; this.ed.renderActions(); }
-    if (!this.open && nested && !this.closed.has(this.ed.chipId)) {
+    if (!this.open && nested && !this.closed.has(this.ed.chipId) && !tightForDrawer()) {
       this.setOpen(true);
       this.auto = true;
     } else if (this.open && this.auto && !nested) this.setOpen(false);
