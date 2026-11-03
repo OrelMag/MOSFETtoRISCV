@@ -288,7 +288,7 @@ export function openQuickNav(initial = ''): void {
         if (palette === ov) list.append(h('div', { class: 'qn-empty' }, `Could not load ${s.title.toLowerCase()}.`));
       });
     }
-    if (!shown.length && !res.loading.length) out.push(h('div', { class: 'qn-empty' }, 'Nothing matches.'));
+    if (!shown.length && !res.loading.length) out.push(h('div', { class: 'qn-empty' }, `Nothing matches “${q}”. Try one word, or `, h('a', { href: '#/c/map/0', onclick: () => close() }, 'browse the chapter list'), '.'));
     list.replaceChildren(...out);
     live.textContent = q ? `${shown.length} results` : '';
     const was = keep ? sel : 0;

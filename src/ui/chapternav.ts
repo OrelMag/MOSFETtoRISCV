@@ -1,11 +1,15 @@
 // Quick navigation: every chapter and step as a searchable entry (DOM-free, tested in Node).
 
+import { chapterNo } from '../chapters/meta';
+
 /** The part of a Chapter navigation reads (so tests need not load the chapters). */
 export interface NavChapter {
   id: string;
   num: number;
   /** An appendix chapter's letter. */
   appendix?: string;
+  /** A chapter's own label in place of its number ("Start"). */
+  label?: string;
   /** A prologue chapter's label (P1 …). */
   prologue?: string;
   title: string;
@@ -51,7 +55,7 @@ export function navEntries(chs: readonly NavChapter[]): NavEntry[] {
   if (out) return out;
   out = [];
   const entry = (c: NavChapter, step: number, title: string, text: string): NavEntry =>
-    ({ chapter: c.id, step, num: c.num, no: c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0'), level: c.level, chTitle: c.title, title, text, href: `#/c/${c.id}/${Math.max(0, step)}`, lt: title.toLowerCase(), lx: text.toLowerCase() });
+    ({ chapter: c.id, step, num: c.num, no: chapterNo(c), level: c.level, chTitle: c.title, title, text, href: `#/c/${c.id}/${Math.max(0, step)}`, lt: title.toLowerCase(), lx: text.toLowerCase() });
   for (const c of chs) {
     out.push(entry(c, -1, c.title, c.blurb));
     c.steps.forEach((s, i) => out!.push(entry(c, i, s.title, s.text ?? plainText(s.body ?? ''))));

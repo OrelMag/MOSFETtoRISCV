@@ -1,6 +1,8 @@
 /* Design tokens. Every colour is defined for light and dark; "auto" follows the OS. */
 
 :root {
+  --page-gutter: clamp(16px, 3vw, 32px); /* one side gutter for every page: home, path, notes, campaign, statistics */
+  --warn-text: light-dark(#9a5300, var(--warn)); /* --warn as small text: 3.4:1 on --warn-soft in light, this 5:1 */
   color-scheme: light;
   --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;

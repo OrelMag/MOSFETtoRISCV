@@ -218,7 +218,7 @@ export class ChapterPage implements Page {
       const solved = !!s.challenge && settings.isSolved(`${c.id}:${i}`);
       return h('button', {
         class: [i === this.step ? 'cur' : visited.includes(i) ? 'done' : '', solved ? 'solved' : ''].filter(Boolean).join(' '),
-        title: `${i + 1}. ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
+        title: `Step ${i + 1}: ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
         'aria-label': `Step ${i + 1}: ${s.title}${solved ? ', check solved' : ''}`,
         onclick: () => this.goStep(i),
       });
@@ -517,10 +517,10 @@ export class ChapterPage implements Page {
     const last = this.recap >= 0 ? this.recap : n - 1;
     const prevBtn = this.step > 0
       ? h('button', { class: 'btn', onclick: () => this.goStep(this.step - 1) }, icon('chevL', 16), 'Back')
-      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, h('small', null, 'Previous chapter'), h('span', { class: 't' }, prev.title))) : h('span');
+      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, h('small', null, 'Previous'), h('span', { class: 't' }, prev.title))) : h('span');
     const nextBtn = this.step < last
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
-      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, h('small', null, 'Next chapter'), h('span', { class: 't' }, next.title)), icon('chevR', 16))
+      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, h('small', null, 'Next'), h('span', { class: 't' }, next.title)), icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
     // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
     if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {

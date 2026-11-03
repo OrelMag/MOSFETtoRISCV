@@ -61,9 +61,10 @@ export function suggestItems(query: string, max = 6): LibraryItem[] {
       let score: number;
       if (id === q) score = 0;
       else if (id.startsWith(q) || name.startsWith(q.replace(/_/g, ' ')) || initials === q) score = 1;
-      else if (id.includes(q) || words.every((w) => name.includes(w))) score = 2;
+      else if ((q.length > 3 && id.includes(q)) || words.every((w) => name.includes(w))) score = 2;
       else {
         // A family's id carries its parameters (alu8, rf8x32): compare without the digits too.
+        if (q.length <= 3) continue; // too short for a typo to mean anything: "rca" is not "fcsr"
         const bare = (s: string) => s.replace(/\d+(x\d+)*/g, '');
         const d = Math.min(editDistance(q, id), editDistance(bare(q), bare(id)) + 1,
           ...name.split(/[^a-z0-9]+/).filter((w) => w.length > 2).map((w) => editDistance(bare(q), w) + 1));

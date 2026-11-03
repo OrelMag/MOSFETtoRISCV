@@ -4,11 +4,13 @@
 // level screen (pages/level.ts): Play writes the level's chip into the saved workspace and opens
 // #/campaign/play/<node>.
 
+import { setPageTitle } from '../pagetitle';
 import { groupDigits } from '../../sim/numfmt';
 import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
 import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
+import { notFound } from '../notfound';
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
 import { searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
@@ -118,6 +120,9 @@ export class CampaignPage implements Page {
 
   open(parts: string[]): void {
     this.parts = parts;
+    const [a, b] = parts;
+    if (a === 'codex' && codexById(b ?? '')) setPageTitle(codexById(b)!.title, 'Codex');
+    else if (a === 'n' && nodeById(b ?? '')) setPageTitle(nodeById(b)!.title, 'Campaign');
     this.render();
   }
 
@@ -146,7 +151,11 @@ export class CampaignPage implements Page {
     const refocus = keepFocus(this.main, a === 'n' ? b : undefined);
     this.renderHead();
     if (changed) this.cxListOpen = false;
-    if (a === 'intro') this.main.replaceChildren(this.introView());
+    // an address that names no level or entry: the shared notice, with the way back, not the map under a wrong address
+    if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
+    else if (a === 'codex' && b && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
+    else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
+    else if (a === 'intro') this.main.replaceChildren(this.introView());
     else if (a === 'codex') this.main.replaceChildren(this.codexView(b));
     else this.main.replaceChildren(this.mapView(a === 'n' ? b : undefined));
     const sc2 = this.main.querySelector<HTMLElement>('.cp-map-scroll');
@@ -225,8 +234,8 @@ export class CampaignPage implements Page {
         tab('#/campaign/intro', 'The CPU', view === 'intro', 'chip'),
         tab('#/campaign/codex', 'Codex', view === 'codex', 'book')),
       h('div', { class: 'cp-actions' }, unlock,
-        h('button', { class: 'btn sm ghost', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export'),
-        h('button', { class: 'btn sm ghost', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import'),
+        h('button', { class: 'btn sm ghost', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export campaign'),
+        h('button', { class: 'btn sm ghost', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import campaign'),
         file, this.note));
   }
 

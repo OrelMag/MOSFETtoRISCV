@@ -17,6 +17,8 @@ import { isTwinKey } from '../campaign/twinids';
 import { menuKeys } from './menukeys';
 import { installNavFit } from './navfit';
 import { installReturn, type ReturnLabelled } from './returnto';
+import { routeTitle, setPageTitle } from './pagetitle';
+import { notFound } from './notfound';
 
 /**
  * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
@@ -240,6 +242,7 @@ export function startApp(root: HTMLElement): void {
     setPendingView(onStage ? decodeView(query) : null);
     const parts = (onStage ? base : location.hash).replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
+    setPageTitle(...routeTitle(parts, key === 'c' ? outlineOf(parts[1] ?? outline[0].id) : undefined));
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
     const shows = stageTools(parts);
     radix.hidden = !shows.radix;
@@ -247,10 +250,9 @@ export function startApp(root: HTMLElement): void {
     if (key === 'c' && parts[1] && !outlineOf(parts[1])) {
       // a stale or mistyped link: say so rather than quietly showing another chapter under the wrong address
       const bad = parts[1];
-      mount({ el: h('div', { class: 'widget missing-chapter', role: 'status' }, h('div', { class: 'panel' },
-        h('h3', null, 'No such chapter'),
-        h('p', { class: 'sub' }, `There is no chapter called "${bad}". It may have been renamed or removed.`),
-        h('div', { class: 'suggest' }, h('a', { class: 'btn primary', href: '#/c/map/0' }, 'Open the chapter list'), h('a', { class: 'btn', href: `#/c/${outline[0].id}/0` }, 'Start at the first chapter')))), destroy() {} });
+      radix.hidden = animate.hidden = true; // no circuit on an error card
+      mount({ el: notFound('No such chapter', `There is no chapter called "${bad}". It may have been renamed or removed.`,
+        [['Open the chapter list', '#/c/map/0'], ['Start at the first chapter', `#/c/${outline[0].id}/0`]]), destroy() {} });
     } else if (key === 'c') {
       const ch = outlineOf(parts[1] ?? '') ?? outline[0];
       const step = Number(parts[2] ?? 0) || 0;
@@ -374,6 +376,10 @@ export function startApp(root: HTMLElement): void {
       }, (e) => {
         if (seq === routeSeq) view.replaceChildren(loadFailed('sandbox', e));
       });
+    } else if (key !== 'home' && parts.length) {
+      // a mistyped or stale address: say so rather than quietly showing the home page under it
+      radix.hidden = animate.hidden = true;
+      mount({ el: notFound('Nothing at this address', `There is no page called "${parts.join('/')}".`, [['Go to the home page', '#/'], ['Open the chapter list', '#/c/map/0']]), destroy() {} });
     } else {
       mount(homePage());
     }
@@ -382,6 +388,8 @@ export function startApp(root: HTMLElement): void {
     busy(false);
     page?.destroy();
     page = p;
+    // a page with no circuit (an error card on a route that has them) hides the circuit tools
+    if ((p as { noTools?: boolean }).noTools) radix.hidden = animate.hidden = true;
     view.replaceChildren(p.el);
   };
   window.addEventListener('hashchange', route);

@@ -78,7 +78,7 @@ let benchCache: NavItem[] | null = null;
 let benchLoad: Promise<void> | null = null;
 const loadBench = () => benchLoad ??= import('../lib/catalog').then((m) => {
   benchCache = m.libraryItems().flatMap((g) => g.items.map((it): NavItem => ({
-    kind: 'component', id: it.id, title: it.name, sub: `${it.id} · ${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
+    kind: 'component', id: it.id, title: it.name, sub: `${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
     href: `#/workbench/${it.id}`,
   })));
 }, (e) => { benchLoad = null; throw e; });

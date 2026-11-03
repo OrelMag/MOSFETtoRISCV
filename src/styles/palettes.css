@@ -5,7 +5,7 @@
    carrying data-palette, so the palette menu can show each palette's swatch. */
 
 :root, [data-palette='default'] {
-  --w0: light-dark(#b3bac9, #3a4152);
+  --w0: light-dark(#8a93a8, #667089);
   --w1: light-dark(#e8590c, #ff8a3d);
   --w1-glow: light-dark(rgb(232 89 12 / 22%), rgb(255 138 61 / 30%));
   --wx: light-dark(#e11d48, #fb5779);
@@ -32,7 +32,7 @@
 
 :root[data-palette='cb'], [data-palette='cb'] {
   /* Okabe–Ito: distinguishable with deuteranopia / protanopia / tritanopia. */
-  --w0: light-dark(#b3bac9, #3a4152);
+  --w0: light-dark(#8a93a8, #667089);
   --w1: light-dark(#0072b2, #56b4e9);
   --w1-glow: light-dark(rgb(0 114 178 / 20%), rgb(86 180 233 / 28%));
   --wx: light-dark(#d55e00, #ff7f2a);
@@ -47,13 +47,13 @@
 
 :root[data-palette='lsim'], [data-palette='lsim'] {
   /* After Digital Logic Sim: red means 1, near-black means 0, flat and bold. */
-  --w0: light-dark(#3b3f4a, #535968);
+  --w0: light-dark(#3b3f4a, #667089);
   --w1: light-dark(#e5322d, #ff4b42);
   --w1-glow: light-dark(rgb(229 50 45 / 22%), rgb(255 75 66 / 30%));
   --wx: light-dark(#d4a017, #f2c230);
   --wshort: light-dark(#dc2626, #ff6b6b);
   --wz: light-dark(#7c8aa5, #8b97b0);
-  --bus: light-dark(#3b3f4a, #3a3f4c);
+  --bus: light-dark(#3b3f4a, #6d7487);
   --bus1: light-dark(#c42a26, #ff5a52);
   --bus-label-bg: light-dark(#fde8e7, #331716);
   --bus-label-text: light-dark(#a3201c, #ffaaa5);
@@ -114,11 +114,11 @@
    any palette; light-dark() follows the theme. A colour the user picked for a net (sandbox) marks it
    --net-user and shows with the switch off too. */
 :root[data-netcolors='on'] [style*='--nh'], :root [style*='--net-user'] {
-  --w0: light-dark(oklch(0.78 0.08 var(--nh)), oklch(0.50 0.09 var(--nh)));
+  --w0: light-dark(oklch(0.78 0.08 var(--nh)), oklch(0.56 0.09 var(--nh)));
   --w1: light-dark(oklch(0.57 0.19 var(--nh)), oklch(0.80 0.16 var(--nh)));
   --w1-glow: light-dark(oklch(0.57 0.19 var(--nh) / 22%), oklch(0.80 0.16 var(--nh) / 30%));
   --flow1: light-dark(oklch(0.95 0.05 var(--nh)), oklch(0.97 0.04 var(--nh)));
-  --bus: light-dark(oklch(0.72 0.09 var(--nh)), oklch(0.50 0.10 var(--nh)));
+  --bus: light-dark(oklch(0.72 0.09 var(--nh)), oklch(0.56 0.10 var(--nh)));
   --bus1: light-dark(oklch(0.52 0.17 var(--nh)), oklch(0.76 0.15 var(--nh)));
   --bus-label-bg: light-dark(oklch(0.95 0.03 var(--nh)), oklch(0.25 0.05 var(--nh)));
   --bus-label-text: light-dark(oklch(0.42 0.14 var(--nh)), oklch(0.85 0.10 var(--nh)));

@@ -96,3 +96,20 @@ async function apply(text: string): Promise<void> {
   // Settings, the campaign and the editors hold their data in memory: a reload is what makes them read the merge.
   location.reload();
 }
+
+/**
+ * Reset progress: says what goes (chapter steps seen and checks solved, campaign and puzzle progress, in counts) and what stays
+ * (sandbox chips, notes, preferences), and offers the backup first. The native confirm named nothing.
+ */
+export function resetProgressDialog(reset: () => void): void {
+  const kv = storage();
+  const s = kv ? summarize(kv) : null;
+  const goes = s ? [`${s.steps} chapter step${s.steps === 1 ? '' : 's'} seen`, `${s.checks} check${s.checks === 1 ? '' : 's'} solved`,
+    `${s.campaignSolved} campaign level${s.campaignSolved === 1 ? '' : 's'} solved, with stars and tips`, `${s.puzzles} puzzle${s.puzzles === 1 ? '' : 's'} solved`] : ['chapter steps seen, checks solved, campaign and puzzle progress'];
+  modal('Reset your progress?', [
+    h('h4', null, 'This clears'), list(goes),
+    h('h4', null, 'This keeps'), list(['Sandbox projects and chips', 'Notes and bookmarks', 'Settings and look']),
+    h('p', { class: 'bk-sub' }, 'It cannot be undone. Export first to keep a copy you can merge back in later.'),
+  ], [cancelBtn(), h('button', { class: 'btn sm ghost', onclick: () => exportBackup() }, 'Export all progress first'),
+    h('button', { class: 'btn sm primary', onclick: (e: Event) => { (e.target as HTMLElement).closest('dialog')?.close(); reset(); } }, 'Reset progress')]);
+}

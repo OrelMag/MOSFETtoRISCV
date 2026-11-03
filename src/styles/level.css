@@ -21,7 +21,7 @@
 .lv-badge.bug { background: var(--warn-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--warn); }
 .lv-par { font-size: 12.5px; color: var(--text-2); padding: 2px 9px; border: 1px solid var(--border); border-radius: 8px; white-space: nowrap; }
 .lv-par b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
-.lv-stars { color: var(--warn); letter-spacing: 2px; white-space: nowrap; }
+.lv-stars { color: var(--warn-text); letter-spacing: 2px; white-space: nowrap; }
 .lv-stars .off, .lv-big .off { color: var(--border-strong); }
 .lv-spacer { flex: 1; }
 
