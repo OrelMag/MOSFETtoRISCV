@@ -9,7 +9,7 @@ import { groupDigits } from '../sim/numfmt';
 import '../styles/isa.css';
 import { ISA_PRESETS } from '../isa/presets';
 import { type InstrDef, type IsaDoc, type OperandDef, sanitizeIsa, tableOf } from '../isa/table';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Editor } from './editor';
 import { designPane, type DesignState } from './isadesign';
@@ -90,7 +90,7 @@ export function openIsaEditor(ed: Editor, id?: string): void {
     });
     if (err) return void ed.toast(`The decoder could not be built: ${err}`, 'err');
     close();
-    ed.toast(`Opened the ${doc.name} decoder: a match line per instruction (Ctrl+Z removes it)`);
+    ed.toast(`Opened the ${doc.name} decoder: a match line per instruction (${undoKey()} removes it)`);
   });
   const ov = h('div', { class: 'sb-help isa-dlg', role: 'dialog', 'aria-label': 'Instruction sets' },
     h('div', { class: 'panel' },

@@ -14,6 +14,7 @@ import { applyPendingView, decodeView, setPendingView, splitView } from './viewl
 import type { Radix } from '../sim/values';
 import { isTwinKey } from '../campaign/twinids';
 import { menuKeys } from './menukeys';
+import { installNavFit } from './navfit';
 import { installReturn, type ReturnLabelled } from './returnto';
 
 /**
@@ -217,6 +218,7 @@ export function startApp(root: HTMLElement): void {
     nav, ret.el, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   view.tabIndex = -1;
   root.append(skip, topbar, view);
+  installNavFit(topbar, nav);
 
   let page: Page | null = null;
   // A route that loads its page asynchronously must not mount it if another route came since.

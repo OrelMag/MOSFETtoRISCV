@@ -4,7 +4,7 @@
 // back; the ring follows resizes. Finished or skipped is remembered (settings.coachDone); "Show me the controls" in
 // the ? sheet and the search's > actions plays it again. Never starts while a content tour (ui/tour.ts) plays.
 
-import { h } from './dom';
+import { coarsePointer, h } from './dom';
 import { beatsOf, type CoachBeat, type CoachKind, coachFits, mayAutoStart, move, pickBeats } from './coachplan';
 import { settings } from './settings';
 
@@ -206,7 +206,7 @@ const busy = () => ({
 /** Play the tour of `kind` now (the ? sheet, the search's actions). False when no control of it is on the page. */
 export function showCoach(kind: CoachKind): boolean {
   active?.end(false);
-  const beats = pickBeats(beatsOf(kind), (sel) => !!shown(sel));
+  const beats = pickBeats(beatsOf(kind, coarsePointer()), (sel) => !!shown(sel));
   if (!beats.length) return false;
   active = new Coach(kind, beats);
   return true;
@@ -222,4 +222,4 @@ export function maybeCoach(kind: CoachKind): void {
 }
 
 /** Is the stage on this page (the ? sheet and the actions offer the tour only where it has something to show)? */
-export const coachAvailable = (kind: CoachKind): boolean => pickBeats(beatsOf(kind), (sel) => !!shown(sel)).length > 0;
+export const coachAvailable = (kind: CoachKind): boolean => pickBeats(beatsOf(kind, coarsePointer()), (sel) => !!shown(sel)).length > 0;

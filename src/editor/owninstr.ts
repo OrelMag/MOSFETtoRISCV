@@ -10,7 +10,7 @@ import { DIRECTIVES, PSEUDO_OPS } from '../riscv/asm';
 import { buildable, CUSTOM_PRESETS, FMT_FIELDS, meaning, problemsOf, signalsOf, slotOpcode, type CustomFmt, type CustomRow } from '../riscv/custom';
 import { BY_NAME } from '../riscv/isa';
 import { stats } from '../sim/stats';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { dataPath, issCode, LINES } from '../widgets/ownrow';
 import { partAt, resolveCpu } from './cpu';
 import type { Editor } from './editor';
@@ -130,7 +130,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
     });
     if (err) return void ed.toast(err, 'err');
     close();
-    ed.toast(rows.length ? `The core now runs ${rows.map((r) => r.name).join(', ')} (Ctrl+Z undoes)` : 'Custom instructions removed (Ctrl+Z undoes)');
+    ed.toast(rows.length ? `The core now runs ${rows.map((r) => r.name).join(', ')} (${undoKey()} undoes)` : `Custom instructions removed (${undoKey()} undoes)`);
     after?.();
   };
   applyBtn.addEventListener('click', apply);

@@ -7,7 +7,7 @@ import '../styles/editor-import.css';
 import type { Editor } from '../editor/editor';
 import { dialog, registerFileImporter } from '../editor/fileui';
 import { addFolder, cleanFolderName, findFolder, moveToFolder } from '../editor/folders';
-import { h } from '../ui/dom';
+import { h, undoKey } from '../ui/dom';
 import type { ImportFailure, ImportOptions, ImportResult, SourceFile } from './report';
 
 export interface CircuitReader {
@@ -66,7 +66,7 @@ function show(ed: Editor, reader: CircuitReader, files: SourceFile[]): void {
     });
     d.close();
     ed.openChip(top.id);
-    ed.toast(`Imported ${r.chips.length} chip${r.chips.length === 1 ? '' : 's'} into “${name}”${tests ? `, with ${tests} test table${tests > 1 ? 's' : ''} (Tests)` : ''}. Ctrl+Z undoes it`);
+    ed.toast(`Imported ${r.chips.length} chip${r.chips.length === 1 ? '' : 's'} into “${name}”${tests ? `, with ${tests} test table${tests > 1 ? 's' : ''} (Tests)` : ''}. ${undoKey()} undoes it`);
   });
   go.focus();
 }

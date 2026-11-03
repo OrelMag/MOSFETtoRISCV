@@ -62,10 +62,16 @@ interface Route {
   drive?: string;
 }
 
-interface Viewport { width: number; height: number; mobile: boolean; name: string }
+interface Viewport { width: number; height: number; mobile: boolean; name: string; /** a touch screen: `pointer: coarse` is true (Emulation.setTouchEmulationEnabled), which mobile emulation alone does not do */ touch?: boolean }
 const VIEWPORTS: Viewport[] = [
   { width: 1280, height: 800, mobile: false, name: '1280px' },
   { width: 390, height: 844, mobile: true, name: '390px phone' },
+];
+
+// Touch screens: the (pointer: coarse) rules (40 px targets, the touch wording) apply only here. 390 and 360 px are the phones the top bar is fitted for.
+const TOUCH_VIEWPORTS: Viewport[] = [
+  { width: 390, height: 844, mobile: true, touch: true, name: '390px touch phone' },
+  { width: 360, height: 740, mobile: true, touch: true, name: '360px touch phone' },
 ];
 
 const SETTINGS_KEY = 'mosfet2riscv:v1';
@@ -223,6 +229,11 @@ function routes(): Route[] {
   add('#/notes', notesStorage('dark'), ' (dark)');
   add('#/', notesStorage('light'), ' (with notes)');
   add(`#/c/${chapters[1].id}/0`, notesStorage('light'), ' (with a note)');
+  // The phone top bar (ui/navfit.ts) with touch on, where the coarse-pointer rules make it tightest: no caption cut, no overflow.
+  for (const v of TOUCH_VIEWPORTS) {
+    for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
+    add('#/sandbox', notesStorage('dark'), ` (${v.name}, with notes, dark)`, v);
+  }
   // No horizontal overflow on one page of each kind, on a desktop and on a phone.
   for (const v of VIEWPORTS) {
     for (const hash of ['#/', `#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/campaign', '#/sandbox']) add(hash, light, ` (${v.name})`, v);
@@ -394,6 +405,28 @@ const OVERFLOW = `(() => {
 })()`;
 
 /**
+ * The app's top bar on a phone (760 px and under) with a section link cut or scrolled out of its row: the row wider than its
+ * room, a caption wider than its box ("Sandbox" read "Sanc" beside the search icon), or a link past the row's edge.
+ * ui/navfit.ts sheds captions until none is cut, then shows icons alone (each link keeps its aria-label).
+ */
+const NAV_CLIPPED = `(() => {
+  const out = [];
+  if (document.documentElement.clientWidth > 760) return out;
+  const nav = document.querySelector('.topbar .nav');
+  if (!nav || !nav.offsetWidth) return out;
+  const box = nav.getBoundingClientRect();
+  if (nav.scrollWidth > nav.clientWidth + 1) out.push('top bar: the section links are ' + (nav.scrollWidth - nav.clientWidth) + ' px wider than their row');
+  for (const a of nav.querySelectorAll('a')) {
+    if (!a.offsetWidth) continue;
+    const r = a.getBoundingClientRect();
+    if (r.right > box.right + 1 || r.left < box.left - 1) out.push('top bar: ' + (a.getAttribute('aria-label') || a.textContent.trim()) + ' is outside the row');
+    const cap = a.querySelector('.cap');
+    if (cap && cap.offsetWidth && cap.scrollWidth > cap.clientWidth + 1) out.push('top bar: the caption ' + cap.textContent + ' is cut');
+  }
+  return out;
+})()`;
+
+/**
  * The sandbox's top bar with a label cut or scrolled out of view (at 1440 px "+ New chip" read "New chi"
  * under the autosave indicator): the actions that do not fit belong in its More menu (editor.ts fitActions).
  */
@@ -404,6 +437,8 @@ const CLIPPED = `(() => {
   const out = [];
   for (const el of top.querySelectorAll('.sb-tab.on, .sb-open, .sb-new, .sb-top-slot > *, .sb-actions > button')) {
     const b = el.getBoundingClientRect();
+    // the autosave indicator's word is a 1 px label for screen readers on a narrow bar (editor-files.css), shown again when it is a problem
+    if (el.classList.contains('sb-save') && !/error|saving/.test(el.dataset.state || '')) continue;
     if (!b.width) continue;
     const name = (el.textContent || el.getAttribute('aria-label') || el.className).trim().slice(0, 24);
     if (el.scrollWidth > el.clientWidth + 1) out.push('toolbar label cut: ' + name);
@@ -544,9 +579,14 @@ class Tab {
     if (route.viewport) {
       const { width, height, mobile } = route.viewport;
       await this.send('Emulation.setDeviceMetricsOverride', { width, height, mobile, deviceScaleFactor: mobile ? 2 : 1 });
+      await this.send('Emulation.setTouchEmulationEnabled', { enabled: !!route.viewport.touch, maxTouchPoints: route.viewport.touch ? 5 : 1 });
+      // the web font late or never (a slow network): the system fallback is the wider text the top bar must still fit
+      await this.send('Network.setBlockedURLs', { urls: route.viewport.touch ? ['*fonts.googleapis.com*', '*fonts.gstatic.com*'] : [] });
       this.emulated = true;
     } else if (this.emulated) {
       await this.send('Emulation.clearDeviceMetricsOverride');
+      await this.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      await this.send('Network.setBlockedURLs', { urls: [] });
       this.emulated = false;
     }
     // A query of its own makes every route a fresh document (a hash alone would only fire hashchange).
@@ -569,6 +609,8 @@ class Tab {
         for (const p of wide) this.errors.push(`overflow: ${p}`);
         const cut = (await this.send('Runtime.evaluate', { expression: CLIPPED, returnByValue: true })).result.value as string[];
         for (const p of cut) this.errors.push(p);
+        const nav = (await this.send('Runtime.evaluate', { expression: NAV_CLIPPED, returnByValue: true })).result.value as string[];
+        for (const p of nav) this.errors.push(p);
       }
     } catch (e) {
       this.errors.push(String(e instanceof Error ? e.message : e));

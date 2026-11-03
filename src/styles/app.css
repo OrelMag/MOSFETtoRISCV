@@ -2589,3 +2589,14 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
 .coh-panel .coh-ln { cursor: pointer; }
 .coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }
+
+/* ui/navfit.ts: a phone's section captions shed until none is cut (data-nav on the top bar): tighter, then icons alone */
+@media (max-width: 760px) {
+  .topbar[data-nav='tight'] .nav a { padding-inline: 1px; min-width: 30px; }
+  .topbar[data-nav='tight'] .nav a span.cap { font-size: 9px; font-weight: 500; letter-spacing: -0.03em; }
+  .topbar[data-nav='icons'] .nav a span.cap { display: none; }
+  .topbar[data-nav='icons'] .nav a { justify-content: center; min-width: 30px; }
+}
+
+/* the touch hint is one line, and 360 px is a few characters short of the sandbox's */
+@media (max-width: 380px) { .hint-badge.touch { font-size: 11px; } }
