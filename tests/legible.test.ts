@@ -66,3 +66,13 @@ describe('planNames', () => {
     expect(lo.filter(Boolean).length).toBeLessThanOrEqual(hi.filter(Boolean).length);
   });
 });
+
+describe('trivial labels get no fixed name', () => {
+  it('skips assignments and constants drawn as boxes, keeps real names', () => {
+    expect(nameEligible('bit0 := 0', 20, 20)).toBe(false);
+    expect(nameEligible('0x0', 20, 20)).toBe(false);
+    expect(nameEligible('+4', 20, 20)).toBe(false);
+    expect(nameEligible('I/O', 8, 8)).toBe(true);
+    expect(nameEligible('NEXT PC', 8, 8)).toBe(true);
+  });
+});

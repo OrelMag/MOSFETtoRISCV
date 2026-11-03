@@ -17,7 +17,7 @@ const PROPS = [
 ];
 
 /** Layers that are editing feedback, not the circuit (hit areas, previews, the grid, probe flags). */
-const DROP = '.wire-hits, .ed-over, .grid-bg, .probes, .lg-name, defs';
+const DROP = '.wire-hits, .ed-over, .grid-bg, .probes, .lg-names, .lg-name, defs';
 
 /** Grid units → output pixels (1 unit = 10 px, like the schematics). */
 const UNIT = 10;
