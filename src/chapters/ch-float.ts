@@ -5,6 +5,7 @@ import { F_PROGRAMS } from '../riscv/fprograms';
 import { F16, F32, type FpFormat } from '../sim/fpref';
 import { logicDepth, stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
+import { formatSteps } from './float/formats';
 import { cpuScene } from '../widgets/cpupanel';
 import { floatExplorer, floatLine } from '../widgets/float';
 import type { Chapter, Layers } from './types';
@@ -887,6 +888,7 @@ export const chFloat: Chapter = {
         explain: 'NaN means "no meaningful value"; ordering it would be meaningless too. The comparator checks the NaN flags of both operands and forces eq, lt and le to 0.',
       },
     },
+    ...formatSteps,
   ],
 };
 
