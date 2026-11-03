@@ -10,6 +10,7 @@
 // level's chip and checks it; Watch offers Use this answer (as Do it for me) or Build it myself (back to their own).
 
 import { groupDigits } from '../../sim/numfmt';
+import { progress } from '../../campaign/progress';
 import { checkBuild, snapCandidate, type BuildCheck } from '../../campaign/buildalong';
 import { codexById } from '../../campaign/codex';
 import { stepMetrics, partialDoc, type StepMetrics, type Walk, type WalkStep, walkOf, withoutStep } from '../../campaign/walk';
@@ -200,6 +201,8 @@ export class WalkMode {
       return openChip({ ...ws, chips }, this.levelChip);
     });
     ed.select({});
+    // The whole answer taken as the chip is Do it for me's kind of help (Build along's circuit is the learner's own)
+    if (this.last && this.mode === 'watch' && ed.compiled?.connKey) progress().markHelp(this.node.id, ed.compiled.connKey);
     ed.toast(this.last ? `The circuit is your chip now (${undoKey()} brings your drawing back)` : `The circuit so far is yours to finish (${undoKey()} brings your drawing back)`);
   }
 

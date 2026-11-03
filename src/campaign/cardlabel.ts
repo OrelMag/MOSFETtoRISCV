@@ -10,9 +10,9 @@ export const STATUS_LABEL: Record<Status, string> = { locked: 'Locked', availabl
  * A map card's accessible name: "Build: CMOS inverter, locked". A solved level that is graded adds its
  * stars ("2 of 3 stars"), an optional one says so, and one not written yet is "coming soon" whatever its status.
  */
-export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optional' | 'soon' | 'bug'>, st: Status, stars = 0): string {
+export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optional' | 'soon' | 'bug'>, st: Status, stars = 0, helped = false): string {
   const parts = [n.soon ? 'coming soon' : STATUS_LABEL[st].toLowerCase()];
-  if (!n.soon && st === 'solved' && n.kind !== 'lesson') parts.push(`${stars} of 3 stars`);
+  if (!n.soon && st === 'solved' && n.kind !== 'lesson') parts.push(stars ? `${stars} of 3 stars` : helped ? 'solved with help, no stars' : '0 of 3 stars');
   if (n.optional) parts.push('optional');
   return `${n.bug ? `Bug hunt: ${n.title}` : `${KIND_LABEL[n.kind]}: ${n.title}`}, ${parts.join(', ')}`;
 }
@@ -46,9 +46,10 @@ export interface CardHeads { kind: string; status: string; statusClass: 'stars' 
  * (stars, skipped, locked). The kind gets shorter ("opt", "bug") until both fit with a gap; a card that still cannot
  * fit both drops the status (the card's accessible name and the level panel carry it).
  */
-export function cardHeads(n: Pick<CampaignNode, 'kind' | 'optional' | 'soon' | 'bug'>, st: Status, stars = 0): CardHeads {
+export function cardHeads(n: Pick<CampaignNode, 'kind' | 'optional' | 'soon' | 'bug'>, st: Status, stars = 0, helped = false): CardHeads {
   let status = '', statusClass: CardHeads['statusClass'] = '';
-  if (st === 'solved' && n.kind !== 'lesson') { status = '★'.repeat(stars) + '☆'.repeat(3 - stars); statusClass = 'stars'; }
+  if (st === 'solved' && n.kind !== 'lesson' && !stars && helped) { status = 'helped'; statusClass = 'skip'; }
+  else if (st === 'solved' && n.kind !== 'lesson') { status = '★'.repeat(stars) + '☆'.repeat(3 - stars); statusClass = 'stars'; }
   else if (st === 'skipped') { status = 'skipped'; statusClass = 'skip'; }
   else if (st === 'locked') { status = 'locked'; statusClass = 'lock'; }
   const kind = (base: string, opt: string) => [base, n.optional ? opt : '', n.soon ? 'soon' : ''].filter(Boolean).join(' · ');
