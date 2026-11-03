@@ -27,7 +27,7 @@ import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { hideGlossary, markTerms, setCodexOpener } from '../../campaign/ui/glossaryui';
 import { anatomySvg } from '../../campaign/ui/svgs';
 import { installChallenges } from '../../editor/challengeui';
-import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, startChallenge } from '../../editor/challenges';
+import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, solveChallenge, startChallenge } from '../../editor/challenges';
 import { Editor } from '../../editor/editor';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
@@ -108,7 +108,8 @@ export class LevelPage implements Page {
     const chipId = levelChipId(n);
     this.chipId = chipId;
     let ws = loadWorkspace();
-    if (!ws.chips[chipId]) {
+    const fresh = !ws.chips[chipId];
+    if (fresh) {
       ws = startChallenge(ws, ch).ws;
       const saved = saveWorkspace(ws);
       if (!saved.ok) {
@@ -132,6 +133,8 @@ export class LevelPage implements Page {
       showAnswer: () => { this.confirmSolution = false; if (hasWalk) this.startWalk(Infinity); else this.showAnswer(); },
     });
     this.edWrap.append(this.editor.el);
+    // A bug hunt opens with its symptom: Check run once on the drawing as the colleague left it.
+    if (fresh && n.bug) setTimeout(() => this.chal?.check(), 0);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
     this.offs.push(p.onChange(() => { this.renderBar(); this.renderSide(); }));
     // Codex links anywhere on the screen (the tab, an entry's own links, the after-pass card) open the entry in the
@@ -193,7 +196,7 @@ export class LevelPage implements Page {
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
       h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
-      h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
+      n.bug ? h('span', { class: 'lv-badge lv-kind bug', title: n.bug.kind === 'timing closure' ? 'The block is right and too slow: make it meet the period' : 'A faulty drawing to fix in as few edits as you can' }, 'BUG HUNT') : h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
       st === 'solved' ? h('span', { class: 'lv-badge good' }, 'SOLVED') : st === 'skipped' ? h('span', { class: 'lv-badge' }, 'SKIPPED') : null,
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
       np?.stars ? h('span', { class: 'lv-stars', title: `Best: ${np.stars} of 3 stars` }, '★'.repeat(np.stars), h('span', { class: 'off' }, '★'.repeat(3 - np.stars))) : null,
@@ -460,12 +463,33 @@ export class LevelPage implements Page {
   }
 
   private showAnswer(): void {
+    if (this.node?.bug) return this.showFault();
     // Until the walkthrough: the reference answer in the full sandbox, as chips of their own.
     const ed = this.editor!, ch = this.ch!;
     let main = '';
     ed.editWs((ws) => { const r = importAnswer(ws, ch); main = r.main; return r.ws; });
     markJump();
     location.hash = `#/sandbox/${main}`;
+  }
+
+  /** A bug hunt's Show answer: the fault named and its parts selected on the canvas; Do it for me from there. */
+  private showFault(): void {
+    const n = this.node!, bug = n.bug!, ed = this.editor!;
+    this.result?.remove();
+    const top = [...new Set(bug.marks.map((m) => m.split('.')[0]))].filter((id) => ed.doc?.parts.some((p) => p.id === id));
+    if (top.length) ed.select({ parts: top });
+    const close = () => { this.result?.remove(); this.result = null; };
+    const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'The fault' },
+      h('h3', null, 'The fault: ', bug.kind),
+      h('p', { html: bug.fault }),
+      top.length ? h('p', { class: 'sub' }, `Selected on the canvas: ${top.join(', ')}${bug.marks.some((m) => m.includes('.')) ? ` (open it: ${bug.marks.filter((m) => m.includes('.')).map((m) => m.split('.').slice(1).join('.')).join(', ')})` : ''}.`) : null,
+      h('div', { class: 'lv-res-act' },
+        h('button', { class: 'btn ghost', onclick: close }, 'Close'),
+        h('button', { class: 'btn primary', title: 'Redraw the chip as the reference answer (Ctrl+Z brings yours back)', onclick: () => { close(); ed.editWs((ws) => solveChallenge(ws, this.ch!).ws); ed.toast('Fixed: the chip is the reference answer now (Ctrl+Z brings yours back)'); } }, 'Do it for me')));
+    this.result = h('div', { class: 'lv-veil', onclick: (e: Event) => { if (e.target === this.result) close(); } }, card);
+    this.result.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Escape') close(); });
+    this.edWrap.append(this.result);
+    (card.querySelector('.btn.primary') as HTMLElement | null)?.focus();
   }
 
   /** The after-pass card: the measured cost against par and the alternatives, and what it is worth in the finished CPU. */
@@ -476,7 +500,7 @@ export class LevelPage implements Page {
     const par = n.par ?? {};
     const c = caseOf(n.id);
     const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a) }));
-    const metrics = (['nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
+    const metrics = (['edits', 'nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
     const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : groupDigits(v));
     const table = metrics.length ? h('table', { class: 'lv-res-table' },
       h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours'), h('th', null, 'Par'), alts.map((a) => h('th', null, a.name))),
@@ -503,7 +527,10 @@ export class LevelPage implements Page {
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Level passed' },
       h('h3', null, h('span', { class: 'lv-big' }, '★'.repeat(g.stars), h('span', { class: 'off' }, '★'.repeat(3 - g.stars))),
         g.stars === 3 ? 'Passed at par' : g.first ? 'Passed' : g.best ? 'New best' : 'Passes'),
-      table, barEl, callout, ended, ended ? null : reach.el,
+      table, barEl, n.bug ? h('div', { class: 'lv-bug' },
+        h('div', { class: 'lv-bug-k' }, 'The fault'), h('p', { html: n.bug.fault }),
+        h('div', { class: 'lv-bug-k' }, `Its kind: ${n.bug.kind}`), h('p', { html: n.bug.lesson })) : null,
+      callout, ended, ended ? null : reach.el,
       unlocks.length || codex.length ? h('p', { class: 'lv-unl' },
         unlocks.length ? [h('b', null, 'Unlocked: '), unlocks.join(', '), ' (placeable from the next level on)'] : null,
         unlocks.length && codex.length ? ' · ' : null,

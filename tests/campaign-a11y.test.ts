@@ -32,7 +32,7 @@ describe('levelCardLabel', () => {
     const fresh = () => undefined;
     for (const n of NODES) {
       const l = levelCardLabel(n, statusOf(n, fresh), 0);
-      expect(l.startsWith(`${KIND_LABEL[n.kind]}: ${n.title}, `), n.id).toBe(true);
+      expect(l.startsWith(n.bug ? `Bug hunt: ${n.title}, ` : `${KIND_LABEL[n.kind]}: ${n.title}, `), n.id).toBe(true);
     }
     expect(levelCardLabel(nodeById('t_inv')!, statusOf(nodeById('t_inv')!, () => undefined))).toBe('Build: CMOS inverter, locked');
   });

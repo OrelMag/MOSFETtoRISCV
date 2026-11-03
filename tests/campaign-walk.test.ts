@@ -15,7 +15,8 @@ import { UserLibrary } from '../src/editor/library';
 import { workspace } from './editorkit';
 import { breathe } from './setup';
 
-const playable = NODES.filter((n) => levelChallenge(n));
+// bug hunts (campaign/bughunts.ts) are fixes, not builds: their text and walk are checked in bughunts.test.ts
+const playable = NODES.filter((n) => levelChallenge(n) && !n.bug);
 const once = (xs: string[]) => new Set(xs).size === xs.length;
 
 describe('walkthroughs', () => {
@@ -47,7 +48,7 @@ describe('walkthroughs', () => {
   });
 
   it('exist for every playable level and only there', () => {
-    for (const n of NODES) expect(!!walkOf(n), n.id).toBe(!!levelChallenge(n));
+    for (const n of NODES) expect(!!walkOf(n), n.id).toBe(!!levelChallenge(n) && !n.bug);
   });
 
   it('place each part of the reference exactly once, every wire and pointer at some step, and end on the reference', async () => {

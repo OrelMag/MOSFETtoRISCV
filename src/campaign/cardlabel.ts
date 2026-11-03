@@ -10,11 +10,11 @@ export const STATUS_LABEL: Record<Status, string> = { locked: 'Locked', availabl
  * A map card's accessible name: "Build: CMOS inverter, locked". A solved level that is graded adds its
  * stars ("2 of 3 stars"), an optional one says so, and one not written yet is "coming soon" whatever its status.
  */
-export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optional' | 'soon'>, st: Status, stars = 0): string {
+export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optional' | 'soon' | 'bug'>, st: Status, stars = 0): string {
   const parts = [n.soon ? 'coming soon' : STATUS_LABEL[st].toLowerCase()];
   if (!n.soon && st === 'solved' && n.kind !== 'lesson') parts.push(`${stars} of 3 stars`);
   if (n.optional) parts.push('optional');
-  return `${KIND_LABEL[n.kind]}: ${n.title}, ${parts.join(', ')}`;
+  return `${n.bug ? `Bug hunt: ${n.title}` : `${KIND_LABEL[n.kind]}: ${n.title}`}, ${parts.join(', ')}`;
 }
 
 /** What a rule's `prefix*` stands for, in words (a family of library parts of any size). */

@@ -169,13 +169,13 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
     const vlStars = vl ? view(twinKey(n.id))?.stars ?? 0 : 0;
     const label = `${levelCardLabel(n, st, stars)}${vl ? `, also in Verilog${vlStars ? ` (${vlStars} of 3 stars)` : ''}` : ''}${blk ? (blk.all ? ', used in every block' : `, part of the ${blk.label} block`) : ''}`;
     const g = s('g', {
-      class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
+      class: `cp-node ${st}${n.optional ? ' opt' : ''}${n.bug ? ' bug' : ''}${n.soon ? ' soon' : ''}${n.id === selected ? ' sel' : ''}`,
       transform: `translate(${p.x},${p.y})`, tabindex: 0, role: 'button', 'data-node': n.id,
       'aria-label': label, 'aria-current': n.id === selected ? 'true' : null,
     },
     s('title', null, label),
     s('rect', { class: 'cp-card', width: NODE_W, height: NODE_H, rx: 8 }),
-    s('text', { class: 'cp-node-kind', x: 10, y: 15 }, `${KIND_MARK[n.kind]}${n.optional ? ' · optional' : ''}${n.soon ? ' · soon' : ''}`),
+    s('text', { class: 'cp-node-kind', x: 10, y: 15 }, `${n.bug ? 'bug hunt' : KIND_MARK[n.kind]}${n.optional ? ' · optional' : ''}${n.soon ? ' · soon' : ''}`),
     s('text', { class: 'cp-node-title', x: 10, y: 34 }, n.title),
     st === 'solved' && n.kind !== 'lesson' ? s('text', { class: 'cp-node-stars', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, '★'.repeat(stars) + '☆'.repeat(3 - stars)) : null,
     st === 'skipped' ? s('text', { class: 'cp-node-skip', x: NODE_W - 8, y: 15, 'text-anchor': 'end' }, 'skipped') : null,

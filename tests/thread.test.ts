@@ -38,7 +38,7 @@ describe('thread data', () => {
       const n = nodeById(id);
       expect(n, id).toBeDefined();
       const t = threadOf(id)!;
-      const deps = new Set(dependents(id).map((d) => d.id));
+      const deps = new Set(dependents(id).filter((d) => !d.bug).map((d) => d.id));
       for (const k of Object.keys(t.usedFor ?? {})) expect(deps.has(k), `${id}.usedFor.${k} is not a dependent`).toBe(true);
       for (const b of t.uses ?? []) expect(b === 'all' || blocks.has(b), `${id}.uses ${b}`).toBe(true);
       if (t.side) expect(nodeById(t.side)?.optional, `${id}.side`).toBe(true);
@@ -47,7 +47,7 @@ describe('thread data', () => {
   });
 
   it('fills acts 1–2 (the pilot): uses, a clause for every required consumer, pitfalls', () => {
-    for (const n of NODES.filter((m) => (m.act === 1 || m.act === 2))) {
+    for (const n of NODES.filter((m) => (m.act === 1 || m.act === 2) && !m.bug)) {
       const t = threadOf(n.id);
       expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
       expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeTruthy();

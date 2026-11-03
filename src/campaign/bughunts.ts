@@ -190,7 +190,7 @@ const HUNTS: Hunt[] = [
     fault: 'u24, the gate that answers when the signs differ, read b’s sign bit instead of a’s: it answered “b is negative” where the question was “a is negative”.',
     kind: 'corner case', marks: ['u24'],
     lesson: 'A fault in the branch that handles a special case: right on most inputs, wrong on one class (here mixed signs). Tests that sweep small positive numbers never reach it. Name the cases the design distinguishes (signs equal / differ, overflow, zero) and test each.',
-    plant: (nl) => move(nl, 'u24.b', 'u21.o1'), par: { edits: 1 }, codex: ['compare'],
+    plant: (nl) => move(nl, 'u24.b', 'u21.o1'), par: { edits: 1 }, codex: ['flags', 'overflow'],
   },
   {
     id: 'b_dff', after: 's_dff', title: 'See-through flip-flop',
@@ -226,7 +226,7 @@ const HUNTS: Hunt[] = [
     fault: 'The branch immediate’s top bit (merger u3, input 12) was wired to an instruction field bit instead of the sign bit, so the sign extension broke at bit 15.',
     kind: 'encoding', marks: ['u3'],
     lesson: 'A field bit taken from the wrong place: the encoding is right for most words and wrong for those where the two bits differ. Draw the immediate’s bits against the instruction’s, bit by bit, as the encoding table does.',
-    plant: (nl) => move(nl, 'u3.i12', 'u0.o1'), par: { edits: 1 }, codex: ['immediate'],
+    plant: (nl) => move(nl, 'u3.i12', 'u0.o1'), par: { edits: 1 }, codex: ['immediates', 'signext'],
   },
   {
     id: 'b_jal', after: 'c_core3', title: 'The lost return',
@@ -235,15 +235,15 @@ const HUNTS: Hunt[] = [
     fault: 'The result multiplexer’s link input (u9.d2) was wired to <code>pc</code> instead of the next-PC unit’s pc + 1: <code>jal</code> saved its own address, so the return jumped back to the call.',
     kind: 'datapath off by one', marks: ['u9'],
     lesson: 'A datapath value off by one step (pc instead of pc + 1, a register before or after its update). The instruction does nearly the right thing and the program fails later, somewhere else. The first wrong register write, from the golden model’s comparison, points at the instruction; its data path is short.',
-    plant: (nl) => move(nl, 'u9.d2', 'u13.q'), par: { edits: 1 }, withhold: ['rv16_cpu'], codex: ['jal'],
+    plant: (nl) => move(nl, 'u9.d2', 'u13.q'), par: { edits: 1 }, withhold: ['rv16_cpu'], codex: ['cpi'],
   },
   {
-    id: 'b_fwd', after: 'pi_core1', title: 'Stale by one',
-    report: 'Pipeline II forwards results, and most programs run. Two instructions in a row writing the same register, then a third reading it, read the older value.',
-    tips: ['When both M and W hold a result for the register, which should win?', 'The forwarding unit is opened as a chip of its own. Find the term that should say “W, and not M”.', 'u11 should AND W’s match with ¬(M’s match); one input reads W’s match twice.'],
-    fault: 'In the forwarding unit, u11 (forward from W) read W’s match on both inputs instead of W’s match and ¬(M’s match): when M and W both held the register, W’s older value won.',
-    kind: 'priority', marks: ['u23', 'u23.u11'], open: ['u23'],
-    lesson: 'A priority fault: two sources can both claim the answer and the wrong one wins. Each alone is tested; the tie is not. Here the youngest result must win (M before W). Look for the case where two conditions hold at once.',
+    id: 'b_fwd', after: 'pi_core1', title: 'Two back, read stale',
+    report: 'Pipeline II forwards a result to the very next instruction. An instruction that reads a result from two instructions back gets the register file’s old value.',
+    tips: ['Two instructions back, the result is in W. Which forwarding term covers W?', 'The forwarding unit is opened as a chip of its own: fa bit 1 is “W matches and M does not”. Follow it back.', 'u11 ANDs M’s match with its own inverse, which is never true: its first input should be W’s match (u9).'],
+    fault: 'In the forwarding unit, u11 (forward from W) read M’s match and ¬(M’s match), a term that is never true, instead of W’s match and ¬(M’s match): nothing was ever forwarded from W, and a result two instructions back was read stale.',
+    kind: 'a term that is never true', marks: ['u23', 'u23.u11'], open: ['u23'],
+    lesson: 'A condition that can never hold (or always does): the logic it guards is dead, and only the case it should have covered fails. The circuit looks complete. Lint’s unused-part warning and a probe on the term (stuck at 0 whatever the inputs) find it; so does asking, for each case the design must handle, which term handles it.',
     plant: (_nl, inside) => move(inside('u23'), 'u11.a', 'u8.y'), par: { edits: 1 }, withhold: ['rv16_fwd'], codex: ['forwarding'],
   },
 ];
@@ -326,7 +326,7 @@ function huntChallenge(h: Hunt, target: () => BuildChallenge): () => BuildChalle
 const timingNode = (after: CampaignNode): CampaignNode => {
   let base: ComponentDef | undefined;
   return {
-    id: TIMING_ID, act: after.act, title: 'Timing closure: shift and accumulate', kind: 'build', optional: true, requires: [after.id],
+    id: TIMING_ID, act: after.act, title: 'Timing closure', kind: 'build', optional: true, requires: [after.id],
     why: 'This block is right: every test passes with a slow clock. It goes into a system clocked at a period of 40 NAND delays, and static timing says it needs more. Bring the register-to-register path to 40 or under, keeping the results right, for as few NANDs as you can. A faster adder, work moved across the register, anything that passes. The Timing panel and the slack heatmap show where the time goes.',
     tips: ['Open the Timing panel: which part holds most of the critical path?', 'The shifter and the adder are both on the path from acc back to acc. Which one is the long one?', 'The ripple adder is 36 delays; a Kogge–Stone adder (unlocked by Fast adders) does the same sum in far fewer.'],
     codex: ['criticalpath'], par: { period: 40, nand: 858 },
@@ -336,7 +336,7 @@ const timingNode = (after: CampaignNode): CampaignNode => {
       lesson: 'Timing closure: the design is right and the clock is too fast for it. Static timing names the path; the fix is on that path and nowhere else (a faster unit, less work per cycle, a register moved). A gate simulation at a fixed clock shows it breaking: the edge does not wait for the carry, and a late bit is captured stale.',
     },
     base: () => ({
-      id: TIMING_ID, title: 'Timing closure: shift and accumulate', level: 'sequential',
+      id: TIMING_ID, title: 'Timing closure', level: 'sequential',
       brief: 'At each rising edge: <b>acc ← 0</b> if <code>rst</code>, else <b>acc ← (acc &lt;&lt; sh) + x</b> (16 bits, wrapping). The block is right; make its clock period 40 NAND delays or less.',
       ports: TIMING_PORTS, check: { kind: 'sequence', steps: timingSeq() }, allowed: 'any',
       answer: () => timingDocs(true), start: () => timingDocs(false), baseline: () => (base ??= compiled(timingDocs(false))),
@@ -353,7 +353,7 @@ export function withBugHunts(nodes: CampaignNode[]): CampaignNode[] {
     const a = byId.get(h.after);
     if (!a?.base) throw new Error(`bug hunt ${h.id}: no build level ${h.after}`);
     put(h.after, {
-      id: h.id, act: a.act, title: `Bug hunt: ${h.title}`, kind: a.kind === 'core' ? 'core' : 'build', optional: true, requires: [h.after],
+      id: h.id, act: a.act, title: h.title, kind: a.kind === 'core' ? 'core' : 'build', optional: true, requires: [h.after],
       why: h.report, tips: h.tips, codex: h.codex ?? [], par: h.par, ...(h.chapters ? { chapters: h.chapters } : {}),
       withhold: [...(a.unlocks ?? []), ...(h.withhold ?? [])],
       bug: { after: h.after, fault: h.fault, kind: h.kind, lesson: h.lesson, marks: h.marks },
