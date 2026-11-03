@@ -112,6 +112,8 @@ export interface BreadboardLayout {
   note?: string;
   /** Boards in a grid of equal rows with channels between them: wires between boards run there (bbwires.ts), not over chips. */
   channels?: BbChannels;
+  /** Pixels per hole down to which the whole layout is shown (default BB_READ_PX): its overview matters more than its print. */
+  readPx?: number;
   /** The same boards in one column, for a canvas too narrow to read the layout whole (pickArrangement). */
   narrow?: BreadboardLayout;
 }
@@ -285,7 +287,7 @@ export function pickArrangement(l: BreadboardLayout, pw: number, ph: number): 'w
   if (!l.narrow || !(pw > 0 && ph > 0)) return 'wide';
   const b = layoutBounds(l), n = layoutBounds(l.narrow);
   const s = Math.min(pw / (b.w + 2 * BB_MARGIN), ph / (b.h + 2 * BB_MARGIN));
-  if (s >= BB_READ_PX) return 'wide';
+  if (s >= (l.readPx ?? BB_READ_PX)) return 'wide';
   return pw / (n.w + 2 * BB_MARGIN) >= 1.25 * s ? 'narrow' : 'wide';
 }
 

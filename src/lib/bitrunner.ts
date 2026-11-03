@@ -204,7 +204,7 @@ export const RB_SYNC: ComponentDef = (() => {
   const vsync = s.and([v48, v[1]], 'vsync');
   const netlist = s.build(SYNC_PORTS, { h: s.word('mh', h), v: s.word('mv', v), hEnd, frameEnd, line50, active, field, hsync, vsync });
   return define({
-    id: 'rb_sync', name: 'Sync (Bit Runner)', category: 'cpu',
+    id: 'rb_sync', name: 'Sync (Bit Runner)', category: 'sequential',
     summary: 'Two counters are the beam: h counts 72 clocks a line, v counts 52 lines a frame. Sync and blanking are decoded from their top bits.',
     ports: SYNC_PORTS, symbol: { kind: 'box', label: 'SYNC' }, netlist,
   });
@@ -240,7 +240,7 @@ export const RB_WALLS: ComponentDef = (() => {
   register(s, 'st', 'Which wall the beam is on (w), the slip armed for one wrap, and the frame\'s parity (f).', null, [s.xor(w, wrap, 'w next'), armedNext, s.xor(f, 'frameEnd', 'f next'), s.zero]);
   const netlist = s.build(WALLS_PORTS, { wc: s.word('mwc', [...lo, hi[0], hi[1]]), wv, edge, w, f, tick, load });
   return define({
-    id: 'rb_walls', name: 'Walls (Bit Runner)', category: 'cpu',
+    id: 'rb_walls', name: 'Walls (Bit Runner)', category: 'sequential',
     summary: 'A counter of half a line\'s period makes two walls that stand still; loading one count short once a slip frame moves them a pixel left. No position register.',
     ports: WALLS_PORTS, symbol: { kind: 'box', label: 'WALLS' }, netlist,
   });
@@ -266,7 +266,7 @@ export const RB_GAPS: ComponentDef = (() => {
   const inGap = s.and([s.not(d[3]), s.not(d[2]), s.not(s.and(['narrow3', d[1], d[0]])), s.not(s.and(['narrow2', d[1]]))], 'in gate');
   const netlist = s.build(GAPS_PORTS, { inGap, colour: sel[3] });
   return define({
-    id: 'rb_gaps', name: 'Gates (Bit Runner)', category: 'cpu',
+    id: 'rb_gaps', name: 'Gates (Bit Runner)', category: 'sequential',
     summary: 'An LFSR gives each wall a gate while it is off screen; a subtractor shared by both walls decides, line by line, whether the beam is in the gate.',
     ports: GAPS_PORTS, symbol: { kind: 'box', label: 'GATES' }, netlist,
   });
@@ -297,7 +297,7 @@ export const RB_PLAYER: ComponentDef = (() => {
   register(s, 'st', 'Your colour, toggled on each press of Flip; beside it the button as it was a clock ago.', null, [s.xor(b, s.and(['flip', s.not(prev)]), 'bit next'), 'flip', s.zero, s.zero]);
   const netlist = s.build(PLAYER_PORTS, { pv, bit: b });
   return define({
-    id: 'rb_player', name: 'Player (Bit Runner)', category: 'cpu',
+    id: 'rb_player', name: 'Player (Bit Runner)', category: 'sequential',
     summary: 'A counter of one frame\'s period in lines: it is where you are, with no position register. Up loads one count further on, down one count back. Beside it one flip-flop, your colour.',
     ports: PLAYER_PORTS, symbol: { kind: 'box', label: 'PLAYER' }, netlist,
   });
@@ -325,7 +325,7 @@ export const RB_RULES: ComponentDef = (() => {
   register(s, 'st', 'The game\'s state: running, ghost (a wall you hit cannot hit you again until it has passed), and lives lost.', null, [runNext, ghostNext, l0Next, l1Next]);
   const netlist = s.build(RULES_PORTS, { crash, inc, ghost, run, lives: s.word('ml', [l0, l1]) });
   return define({
-    id: 'rb_rules', name: 'Rules (Bit Runner)', category: 'cpu',
+    id: 'rb_rules', name: 'Rules (Bit Runner)', category: 'sequential',
     summary: 'crash = you AND wall AND NOT (in the gate AND colours match): one clock of two video signals high together. It costs a life and makes you a ghost until that wall has passed.',
     ports: RULES_PORTS, symbol: { kind: 'box', label: 'RULES' }, netlist,
   });
@@ -349,7 +349,7 @@ export const RB_SCORE: ComponentDef = (() => {
   const fast = s.or([narrow3, t[0]], '≥ 10');
   const netlist = s.build(SCORE_PORTS, { ones: 'lo.q', tens: 'hi.q', fast, narrow3, narrow2 });
   return define({
-    id: 'rb_score', name: 'Score (Bit Runner)', category: 'cpu',
+    id: 'rb_score', name: 'Score (Bit Runner)', category: 'sequential',
     summary: 'Two decade counters. At 10 the walls slip every frame instead of every other; at 20 and 40 the gates narrow.',
     ports: SCORE_PORTS, symbol: { kind: 'box', label: 'SCORE' }, netlist,
   });
@@ -387,7 +387,7 @@ export const RB_DIGITS: ComponentDef = (() => {
   const pip = s.and([nh6, h[5], h[4], nh1, s.or([r[0], r[1]]), pips], 'pip');
   const netlist = s.build(DIGITS_PORTS, { px: s.or([s.not(y[0], 'rule'), dg, pip], 'status') });
   return define({
-    id: 'rb_digits', name: 'Digits to pixels (Bit Runner)', category: 'cpu',
+    id: 'rb_digits', name: 'Digits to pixels (Bit Runner)', category: 'sequential',
     summary: 'Turns the score and the beam\'s position into one video bit: a font of seven segments, a row decoder, the column from h. A digit is never stored as a picture.',
     ports: DIGITS_PORTS, symbol: { kind: 'box', label: 'DIGITS' }, netlist,
     spec: ([h, v, o, t, lives]) => {
@@ -422,7 +422,7 @@ export const RB_VIDEO: ComponentDef = (() => {
   const cyan = s.and(['active', s.or([s.and([door, 'colour']), s.and([you, 'bit'])])], 'cyan');
   const netlist = s.build(VIDEO_PORTS, { white, amber, cyan });
   return define({
-    id: 'rb_video', name: 'Video (Bit Runner)', category: 'cpu',
+    id: 'rb_video', name: 'Video (Bit Runner)', category: 'sequential',
     summary: 'White, amber and cyan lines: the walls, the doors and you, ORed per colour and gated off during blanking.',
     ports: VIDEO_PORTS, symbol: { kind: 'box', label: 'VIDEO' }, netlist,
     spec: ([active, field, wv, inGap, edge, colour, pv, b, ghost, f, px]) => {
@@ -487,10 +487,11 @@ export const BIT_RUNNER: ComponentDef = (() => {
   b.wire(bitS, 'bit');
   const R = b.right;
   return define({
-    id: 'bit_runner', name: 'Bit Runner', category: 'cpu',
+    id: 'bit_runner', name: 'Bit Runner', category: 'sequential',
     summary: 'A video game with no program: counters, gates and flip-flops, one clock. You are one bit; walls of gates scroll towards you, and a gate passes only a bit of its own colour.',
     ports: RB_PORTS, symbol: { kind: 'box', label: 'BIT RUNNER' },
-    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(outNames(RB_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
+    // every connection between boards a label, as the summary above says: the same wires would lie along each other
+    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(outNames(RB_PORTS), R, 6) }, instances: b.instances, nets: b.nets().map((n) => ({ ...n, tags: true as const })) }),
   });
 })();
 

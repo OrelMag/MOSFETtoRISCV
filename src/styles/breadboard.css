@@ -289,6 +289,8 @@ svg.breadboard[data-wires='value'] .bb-jumper[data-v='1'] { stroke: var(--w1); o
 svg.breadboard[data-wires='value'] .bb-jumper[data-v='x'] { stroke: var(--wx); opacity: 1; }
 svg.breadboard[data-wires='value'] .bb-jumper.rail { opacity: 0.35; }
 svg.breadboard[data-wires='none'] .bb-jumpers { display: none; }
+svg.breadboard.drilled .bb-jumpers.across { opacity: 0.25; }
+:root[data-look='vivid'][data-board='dark'] svg.breadboard { --bb-j-neg: #6b7078; }
 
 /* The boards cover the schematic also where a short panel leaves the canvas bare. */
 .stage.bb-mode:not(.bb-drill) .canvas > svg.schematic { visibility: hidden; }

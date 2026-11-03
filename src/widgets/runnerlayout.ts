@@ -8,7 +8,7 @@ import { BB, type BbBoard, type BbChip, type BbLed, type BreadboardLayout, chipS
 import { pinsOf } from './saplayout';
 
 /** A board's width and clear rows above and below its chips; the channels between boards and between columns. */
-const COL_W = 50, AIR = 3, GAP = 6, GUTTER = 14;
+const COL_W = 50, AIR = 2.5, GAP = 5, GUTTER = 14;
 type Spec = Omit<BbBoard, 'at' | 'size'>;
 
 function chipsOn(module: string): BbChip[] {
@@ -91,5 +91,5 @@ export function runnerLayout(): BreadboardLayout {
   let n = 0;
   for (const b of list) for (const chip of b.chips) chip.ref = `U${++n}`;
   const note = `${rbChips(BIT_RUNNER).length} ICs on ${list.length} boards, no CPU, no ROM`;
-  return { ...grid(list, 3), note, narrow: { ...grid(list, 1), note } };
+  return { ...grid(list, 3), note, readPx: 3, narrow: { ...grid(list, 1), note } };
 }

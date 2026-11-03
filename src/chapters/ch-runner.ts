@@ -234,8 +234,8 @@ export const chAppendixRunner: Chapter = {
         answer: 'Press Start and leave the buttons alone: within a few walls your row is outside a gate, or the gate is the other colour.',
         solve: (st) => {
           startGame(st);
-          let n = 0;
-          st.runCycles(RB_CLOCKS * 400, () => st.value('lives') >= 1 || n++ > RB_CLOCKS * 400);
+          for (let f = 0; f < 400 && st.value('lives') < 1; f++) st.runCycles(RB_CLOCKS, undefined, 0, true);
+          st.refresh();
         },
       },
     },
