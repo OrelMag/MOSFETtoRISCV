@@ -228,6 +228,8 @@ src/lib/       the component library (registered in `registry` via define())
   transistors.ts NMOS, PMOS, rails, CMOS inverter/NOR, NAND (prim + 4-transistor netlist), tie cells
   switchparts.ts RES, CAP (prims), PULLUP / PULLDOWN (resistor + rail), TGATE (transmission gate),
                  TRIINV (clocked CMOS) and TRIBUF (tri-state: y is Z while en = 0), INV_PSEUDO (pseudo-NMOS)
+  cmosgates.ts  cmosNand(3 | 4) / cmosNor(3 | 4) (switch level, 2n transistors, a column of n in series and a row in parallel), ringOsc(n)
+                 (odd n: a NAND with an enable and n − 1 NOTs, period 2n gate delays): chapters 2 and 3; tests/cmosgates.test.ts
   gates.ts       NOT, AND, OR, NOR, XOR, XNOR, MUX2 from NAND
   combinational.ts adders (HA, FA 13- and 9-NAND, rca(n), addSub(n), incrementer(n)), andN,
                  decoder(n, en, pitch), busMux2(w), muxTree(k, w, pitch)
@@ -495,7 +497,7 @@ src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk); ooprice.ts: priceOf(shape) (an out-of-order shape's NANDs and period
                from the gates, only where gateShape: the core's 2-wide shape with measured window sizes; else null: timed, unpriced)
-src/riscv/     isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
+src/riscv/     cycletime.ts (chapter 14: the single-cycle CPU on GateSim over random programs, the settle time after each edge attributed to the class of the instruction that edge fetched; static period and stages from sim/timing.ts), isa.ts (tables, decode, disasm, CSR names), asm.ts (two-pass assembler, CSR
                instructions; assemble(src, custom); c.* mnemonics and `.option rvc` / `norvc`: sizes in bytes settle by
                relaxation (a form grows to 32 bits when its target is out of reach), parcels packed little-endian into
                words, AsmLine.size 2 for a 16-bit one; .half, .align pads to a word with c.nop), rvc.ts (the C extension's
@@ -586,7 +588,7 @@ src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block eras
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
                randomWrites (seeded, optional hot set); ecc.ts: bchParity(data, t) = m·t, codewordFail(n, t, p) (binomial tail), maxRber (largest RBER keeping UBER < 1e-15): chapter 37's ECC table
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer (numbers.ts: 4–32 bits, C / V flags, wheel, halving; numsys.ts
+src/widgets/   vtc.ts (chapter 2's transfer curve with Vin and Wp / Wn sliders), sizing.ts (the inverter chain sizer), abi.ts (chapter 13: PSEUDOS expanded by the assembler, the register-role table from the ABI names, the recursive sumto example run on the ISS: sumRun(n)), cpucost.ts (chapter 14: controlRows(): CONTROL evaluated on one instruction per class; cpuPeriodWidget: the static critical path block by block, PERIOD pinned by tests/cycletime.test.ts, and the settle times measured per instruction class); bespoke explainers (MOSFET cross-section, number explorer (numbers.ts: 4–32 bits, C / V flags, wheel, halving; numsys.ts
                chapter 5's encodings / overflow-in-columns / fixed-point widgets), memory grid: memgrid.ts memGridPanel, Memory contents of
                the scene's memories with a picker, data-mem, ...); python.ts: chapter 15's (pyLinked:
                Python / assembly / ROM words linked by line, the fields; pyCost: cycles per line on the golden model; pyScene:
@@ -1106,7 +1108,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU; CPU props section
-src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): relay.ts (a 24 V telephone relay: saturating
+src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length
                (tests/phys-relay.test.ts holds it to the model), RELAY_COIL_POWER); triode.ts (a 6SN7 section: space-charge

@@ -2109,7 +2109,7 @@ export class Stage {
    * while it is unfolded (syncInset). A bottom-left panel (`data-dock="left"`) is the stage's to fold only with
    * `data-fold` (the others fold themselves: one listener each, or a click would fold and unfold at once).
    * With `data-fold="narrow"` a panel may start folded (autoFold; `data-keep="open"`: the step's text is about it, so it
-   * starts open unless the stage has no room beside it at all), unless the learner already folded or unfolded
+   * starts open unless the stage has no room beside it at all; `"folded"`: another panel is the step's, this one waits), unless the learner already folded or unfolded
    * one on that side by hand (foldChoice, kept for the page's life).
    */
   private foldable(el: HTMLElement): void {
@@ -2149,7 +2149,7 @@ export class Stage {
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < BB_READ_PX ? null : s;
     };
-    const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : null));
+    const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     let pick = chooseFolds(fold.length, scaleOf, mine(true));
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
     if (scaleOf(pick) === null) pick = chooseFolds(fold.length, scaleOf, mine(false));

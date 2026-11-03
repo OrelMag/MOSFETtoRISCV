@@ -24,7 +24,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Driving a large load (a clock net, a long bus) from a minimum-size inverter: delay grows with the load, so real designs taper up through a chain of inverters.',
     ],
     lib: 'inv_cmos', compare: ['not', 'inv_pseudo'],
-    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'inverter', step: 1, label: 'Why this is brilliant' }, { chapter: 'inverter', step: 3, label: 'The cheaper, hotter way: a pull-up' }],
+    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'inverter', step: 1, label: 'Why this is brilliant' }, { chapter: 'inverter', step: 2, label: 'The voltage in between' }, { chapter: 'inverter', step: 4, label: 'The cheaper, hotter way: a pull-up' }],
   },
   nand: {
     idea: 'NAND puts two NMOS in series between the output and ground and two PMOS in parallel from V<sub>DD</sub>. The output is pulled low only when both NMOS conduct (a = b = 1); otherwise at least one PMOS pulls it high. It is the cheapest 2-input CMOS gate that is also universal, and its series devices are the faster NMOS, so it is the brick of the gate level here: every count is in NANDs (4 transistors each) and every delay in NAND delays, one per gate regardless of load.<br>A 3-input NAND stacks three NMOS, and each series device slows the pull-down, so wide functions are built as trees of 2-input gates.',
@@ -35,7 +35,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Expecting one delay per gate in silicon: here every NAND costs 1 whatever it drives; a real gate slows with fan-out and wire load.',
     ],
     lib: 'nand',
-    chapters: [{ chapter: 'nand', step: 0, label: 'Two inputs' }, { chapter: 'nand', step: 2, label: 'One brick to build everything' }, { chapter: 'relays', step: 2, label: 'Contacts conduct both ways' }, { chapter: 'tubes', step: 4, label: 'A NAND from diodes' }],
+    chapters: [{ chapter: 'nand', step: 0, label: 'Two inputs' }, { chapter: 'nand', step: 4, label: 'One brick to build everything' }, { chapter: 'relays', step: 2, label: 'Contacts conduct both ways' }, { chapter: 'tubes', step: 4, label: 'A NAND from diodes' }],
   },
   nor: {
     idea: 'NOR is the dual of NAND: NMOS in parallel (any input at 1 pulls the output down), PMOS in series (the output rises only when every input is 0). It is functionally complete too. Its cost is the series PMOS: holes are 2–3× less mobile than electrons, so a PMOS needs that much more width to conduct like an NMOS, and two in series need twice that again. A NOR is therefore slower than a NAND of the same area, or bigger at the same speed, which is why CMOS logic is mostly NANDs and inverters.<br>From NANDs, NOR is an OR followed by a NOT: 4 NANDs, 3 delays.',
@@ -45,7 +45,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming NAND and NOR cost the same because both have 4 transistors: the series PMOS make the NOR larger or slower.',
     ],
     lib: 'nor_cmos', compare: ['nor'],
-    chapters: [{ chapter: 'nand', step: 1, label: 'NOR, for comparison' }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }, { chapter: 'tubes', step: 3, label: "NOR is the tube's gate" }],
+    chapters: [{ chapter: 'nand', step: 2, label: 'NOR, for comparison' }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }, { chapter: 'tubes', step: 3, label: "NOR is the tube's gate" }],
   },
   universality: {
     idea: 'A set of gates is functionally complete when every Boolean function can be built from it. The proof has two steps: every function is a sum of products of literals (read it off the truth table\'s 1 rows), so AND, OR and NOT suffice; and each of those is a few NANDs: NOT a = NAND(a, a), AND = NOT(NAND), OR = NAND(¬a, ¬b). NOR works the same way by duality. AND and OR alone do not: they are monotone (raising an input never lowers the output), so no circuit of them computes ¬a.<br>This is why one cell type is enough for a CPU and why everything here is counted in NANDs. Completeness says nothing about cost: a NAND realization is only as good as the minimization and sharing behind it.',
@@ -56,7 +56,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Forgetting constants: NOT a = NAND(a, 1) works as well as NAND(a, a), and a tie cell supplies the 1.',
     ],
     lib: 'xor',
-    chapters: [{ chapter: 'nand', step: 2, label: 'One brick to build everything' }, { chapter: 'gates', step: 0, label: 'NOT: tie the inputs together' }, { chapter: 'gates', step: 4, label: 'XOR: are they different?' }],
+    chapters: [{ chapter: 'nand', step: 4, label: 'One brick to build everything' }, { chapter: 'gates', step: 0, label: 'NOT: tie the inputs together' }, { chapter: 'gates', step: 4, label: 'XOR: are they different?' }],
   },
   duality: {
     idea: 'The dual of an expression swaps AND with OR and 0 with 1; variables and their complements stay as they are. If an identity holds, its dual holds, so the laws of Boolean algebra come in pairs: <code>a + 0 = a</code> and <code>a·1 = a</code>, the two distributive laws, the two De Morgan laws. Prove one, get the other.<br>In CMOS, duality is the construction rule. The NMOS pull-down conducts when the output should be 0: series transistors for AND, parallel for OR. The PMOS pull-up is its dual (series ↔ parallel) on the same inputs; since a PMOS conducts on 0, the pull-up conducts exactly when the pull-down does not. Any function of the form ¬(AND–OR of uncomplemented inputs) becomes one complex gate this way.',
@@ -67,7 +67,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Drawing the pull-up as a copy of the pull-down: for some inputs both conduct and short V<sub>DD</sub> to ground, for others neither does and the output floats.',
     ],
     lib: 'nor_cmos',
-    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'nand', step: 1, label: 'NOR, for comparison' }],
+    chapters: [{ chapter: 'inverter', step: 0, label: 'Pull up, pull down' }, { chapter: 'nand', step: 2, label: 'NOR, for comparison' }],
   },
 
   // ---- algebra and gates
@@ -307,7 +307,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Getting the priority of next-PC sources wrong: reset wins over everything, a trap over a branch.',
     ],
     lib: 'rv16_pc', anatomy: ['pc', 'npc', 'plus1'],
-    chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }, { chapter: 'cpu', step: 3, label: 'Branches and jumps' }],
+    chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }, { chapter: 'cpu', step: 4, label: 'Branches and jumps' }],
   },
   ram: {
     idea: 'A RAM is an array of words with an address: a write stores a word at the addressed location, a read returns the addressed word. From registers: a decoder on the address, ANDed with we, gives each word its load enable (one word written per clock edge), and a mux tree on the address picks the word read, combinationally, so the read follows the address within the cycle. The 4 × 4 RAM is 306 NANDs: 240 of registers, 48 of read mux, 18 of write select.<br>That is 15 NANDs (60 transistors) per bit, which is why real memories use 6-transistor SRAM cells (caches, register files) or one transistor and a capacitor (DRAM, main memory), read through sense amplifiers. The organization stays: row decoder, cell array, column select.',
