@@ -15,6 +15,7 @@ import { applyPendingView, decodeView, setPendingView, splitView } from './viewl
 import type { Radix } from '../sim/values';
 import { isTwinKey } from '../campaign/twinids';
 import { menuKeys } from './menukeys';
+import { installNavFit } from './navfit';
 import { installReturn, type ReturnLabelled } from './returnto';
 
 /**
@@ -219,6 +220,7 @@ export function startApp(root: HTMLElement): void {
   view.tabIndex = -1;
   // replaces index.html's loading shell in one step (same classes, same bar height)
   root.replaceChildren(skip, topbar, view);
+  installNavFit(topbar, nav);
 
   let page: Page | null = null;
   // A route that loads its page asynchronously must not mount it if another route came since.

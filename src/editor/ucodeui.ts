@@ -7,6 +7,7 @@ import type { Editor } from './editor';
 import type { PartRef } from './model';
 import { setRef } from './ops';
 import { microcodePart, microprogramOfPart } from './ucodepart';
+import { undoKey } from '../ui/dom';
 
 /** Open the painter on the chip's multicycle CPU. */
 export function openMicrocodeEditor(ed: Editor): void {
@@ -24,7 +25,7 @@ export function openMicrocodeEditor(ed: Editor): void {
         return { ...ws, chips: { ...ws.chips, [ed.chipId]: r.doc } };
       });
       if (err) return void ed.toast(err, 'err');
-      ed.toast(isBook(p) ? 'The controller runs the book\'s microcode again (Ctrl+Z undoes)' : 'The controller runs your microcode (Ctrl+Z undoes); the CPU drawer checks it against the golden model');
+      ed.toast(isBook(p) ? `The controller runs the book's microcode again (${undoKey()} undoes)` : `The controller runs your microcode (${undoKey()} undoes); the CPU drawer checks it against the golden model`);
     },
   }));
 }

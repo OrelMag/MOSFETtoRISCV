@@ -39,6 +39,13 @@ export function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs?: Attrs | 
 /** A touch screen is the main pointer (a phone or tablet): gestures, not a mouse and keys. */
 export const coarsePointer = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+/** One of two wordings by input device, given whether touch is the main pointer (pure: the callers pass coarsePointer()). */
+export const byPointer = <T>(coarse: boolean, mouse: T, touch: T): T => (coarse ? touch : mouse);
+/** The mouse wording, or on a touch screen the touch one. */
+export const tx = (mouse: string, touch: string): string => byPointer(coarsePointer(), mouse, touch);
+/** How a toast says to take a step back: a phone has no Ctrl+Z, the toolbar has an Undo button. */
+export const undoKey = (): string => tx('Ctrl+Z', 'Undo');
+
 /**
  * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
  * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on

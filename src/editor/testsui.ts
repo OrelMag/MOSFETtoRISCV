@@ -6,7 +6,7 @@
 
 import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-tests.css';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import type { CheckResult } from './challenges';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import type { ChipDoc, TestDoc } from './model';
@@ -190,7 +190,7 @@ class TestsPane {
     const i = this.sel;
     this.setTests((ts) => ts.filter((_, k) => k !== i));
     this.sel = Math.max(0, i - 1);
-    this.ed.toast(`Deleted the table “${t.name}”: Ctrl+Z brings it back`);
+    this.ed.toast(`Deleted the table “${t.name}”: ${undoKey()} brings it back`);
   }
 
   private fill(): void {

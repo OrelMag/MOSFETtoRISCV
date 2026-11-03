@@ -3,7 +3,7 @@ import { checksDone } from '../../chapters/checks';
 import { chapterNo, type ChapterMeta } from '../../chapters/meta';
 import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
-import { h, icon } from '../dom';
+import { h, icon, tx } from '../dom';
 import { reportLink } from '../errors';
 import { learn } from '../../learn/store';
 import { notes } from '../notes';
@@ -92,7 +92,7 @@ export function homePage(): Page {
     h('div', { class: 'cards' }, cards, soon),
     h('h2', { class: 'section-title' }, 'How it works'),
     h('div', { class: 'features' },
-      feature('layers', 'Transparent boxes', 'Double-click any part to open it. Breadcrumbs show the way back. It goes all the way down to transistors.'),
+      feature('layers', 'Transparent boxes', tx('Double-click any part to open it. Breadcrumbs show the way back. It goes all the way down to transistors.', 'Double-tap any part to open it. Breadcrumbs show the way back. It goes all the way down to transistors.')),
       feature('chip', 'Real simulation', 'Every wire value is computed: a gate-level simulator in which every NAND takes one delay unit, and a switch-level solver for transistors.'),
       feature('code', 'Real hardware description', 'Every component comes with SystemVerilog, including Verilog generated from the very schematic on screen.'),
       feature('info', 'Cost is visible', 'Transistor counts, gate counts and worst-case delays are measured from the circuit, so you can feel every trade-off.')),

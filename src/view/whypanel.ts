@@ -6,7 +6,7 @@
 import { ablate, roleText, type Ablation } from '../sim/ablate';
 import { explainNets, portValue } from '../sim/explain';
 import { netlistOf } from '../sim/types';
-import { h, icon } from '../ui/dom';
+import { h, icon, tx } from '../ui/dom';
 import type { ViewCtx } from './context';
 
 export interface WhyHost {
@@ -128,7 +128,7 @@ export class WhyPanel {
       h('p', { class: 'why-q' }, `Why is `, h('code', null, name), ` ${portValue(sim, nets)}?`),
       list,
       ...(shown < steps.length ? [h('button', { class: 'btn ghost sm why-more', onclick: () => { this.all = true; this.render(); } }, `Show ${steps.length - shown} more`)] : []),
-      h('p', { class: 'why-hint' }, 'Hover a line to light its part. Open a box to follow the trace inside it.'));
+      h('p', { class: 'why-hint' }, tx('Hover a line to light its part. Open a box to follow the trace inside it.', 'Open a box to follow the trace inside it.')));
   }
 
   private renderParts(): void {
@@ -144,7 +144,7 @@ export class WhyPanel {
     this.body.replaceChildren(
       h('p', { class: 'why-q' }, `Each part removed in turn, over all ${a.rows} rows of the truth table:`),
       partsTable(a, (inst) => this.host.light(inst ? [inst] : [])),
-      h('p', { class: 'why-hint' }, 'Removed: the part\'s outputs left open. Hover a row to light the part; its title gives the rows wrong with the output held at 0 and at 1.'));
+      h('p', { class: 'why-hint' }, tx('Removed: the part\'s outputs left open. Hover a row to light the part; its title gives the rows wrong with the output held at 0 and at 1.', 'Removed: the part\'s outputs left open.')));
   }
 }
 

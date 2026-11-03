@@ -17,7 +17,7 @@ both ways: any circuit exports as Verilog, and Verilog written in the sandbox is
 in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (38 chapters,
-a Basics chapter for newcomers, three prologue chapters and three appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
+a Basics chapter for newcomers, three prologue chapters and four appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
 (140 levels: build it to unlock it, or fix it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits, up to whole computers).
@@ -43,9 +43,9 @@ DMA that boots a computer from flash).
 A **Basics** chapter (a circuit, two levels, counting in binary, truth tables, programs, how to read a schematic here) starts the journey for anyone who needs it,
 and no term is used before the chapter that teaches it (a test holds that at zero). Before chapter 1,
 an optional **prologue** builds the same logic from relays, from vacuum tubes and from punched cards.
-After chapter 38, three **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
-site's RV32IM, and Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
-breadboards and run in lock step with a golden model.
+After chapter 38, four **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
+site's RV32IM, Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
+breadboards and run in lock step with a golden model, and Bit Runner, an original game in 74xx counters and gates with no CPU.
 
 Each chapter opens with the problem before the mechanism and with its goals, and closes with a recap
 and Check yourself questions; challenges are optional, each with a revealable answer. Around the prose:

@@ -166,6 +166,8 @@ export class Camera {
   fitted = false;
   /** Host size (px) the view box was last set for (see resized()). */
   private size: { w: number; h: number } | null = null;
+  /** Host width (px) at the last fit / resize, so the scale is known without reading the layout on every pan or zoom. */
+  private hostPx = 0;
 
   /** `host` gives the visible size (the svg itself unless it sits in a larger container). */
   constructor(readonly svg: SVGSVGElement, private host: Element = svg) {}
@@ -188,6 +190,7 @@ export class Camera {
     const r = this.host.getBoundingClientRect();
     this.vb = fitBox(bbox, r.width, r.height, cover, minW);
     this.fitted = true;
+    this.hostPx = r.width;
     this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
     this.apply();
   }
@@ -197,6 +200,7 @@ export class Camera {
     const r = this.host.getBoundingClientRect();
     this.vb = vb;
     this.fitted = true;
+    this.hostPx = r.width;
     this.size = r.width > 0 && r.height > 0 ? { w: r.width, h: r.height } : null;
     this.apply();
   }
@@ -211,6 +215,7 @@ export class Camera {
     if (this.fitted || !this.size || r.width <= 0 || r.height <= 0) return false;
     this.vb = { ...this.vb, w: this.vb.w * r.width / this.size.w, h: this.vb.h * r.height / this.size.h };
     this.size = { w: r.width, h: r.height };
+    this.hostPx = r.width;
     this.apply();
     return true;
   }
@@ -255,6 +260,11 @@ export class Camera {
     if (!m) return [0, 0];
     const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
     return [p.x, p.y];
+  }
+
+  /** Screen pixels per grid unit, from the host width at the last fit / resize (no layout read; 0 before one). */
+  pxPerUnit(): number {
+    return this.hostPx > 0 && this.vb.w > 0 ? this.hostPx / this.vb.w : 0;
   }
 
   /** World units per screen pixel (the larger axis: the svg letterboxes the other). */

@@ -4,7 +4,7 @@
 // JSON netlists (drawn chips); New chip ▾ Verilog chip. The model is hdl.ts; Yosys runs in hdl/yosys.ts.
 
 import '../styles/editor-hdl.css';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { GATE_SETS, type GateSet, synthesize, YOSYS_BYTES, YOSYS_VERSION, yosysReady } from '../hdl/yosys';
 import { type HdlDiag, type ImportedModule, isYosysJson } from '../hdl/yosysjson';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
@@ -285,7 +285,7 @@ class HdlUi {
     const r = detachGroup(this.ed.ws, this.ed.chipId);
     if (!r.ids.length) return;
     this.ed.editWs(() => r.ws);
-    this.ed.toast(`${r.ids.map((id) => this.ed.ws.chips[id].name).join(', ')}: drawn chips now, edited on the canvas (Ctrl+Z brings the text back)`);
+    this.ed.toast(`${r.ids.map((id) => this.ed.ws.chips[id].name).join(', ')}: drawn chips now, edited on the canvas (${undoKey()} brings the text back)`);
   }
 
   toggleHidden(home: string): void {
@@ -401,7 +401,7 @@ registerFileImporter({
     ed.editWs(() => r.ws);
     const names = r.added.map((id) => ed.ws.chips[id].name);
     dialog(ed, `Imported ${name}`, [
-      h('p', { class: 'sb-dlg-lead' }, `A Yosys netlist: ${names.length} chip${names.length > 1 ? 's' : ''} drawn from its cells (${names.join(', ')}). Ctrl+Z undoes the import.`),
+      h('p', { class: 'sb-dlg-lead' }, `A Yosys netlist: ${names.length} chip${names.length > 1 ? 's' : ''} drawn from its cells (${names.join(', ')}). ${undoKey()} undoes the import.`),
       h('p', { class: 'sb-sum' }, 'A netlist has no source text, so these are ordinary drawn chips. Import the Verilog itself (.v) to keep editing it as text.'),
       r.diags.length ? h('ul', { class: 'hdl-dlg-diags' }, r.diags.map((d) => h('li', { class: d.level }, d.module ? `${d.module}: ` : '', d.msg))) : null,
     ]);

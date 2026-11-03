@@ -15,7 +15,7 @@ import { DELAY_NOTE, fmtDelay } from '../sim/delay';
 import { logicDepth, romSize, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { parseBig } from '../sim/values';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { type Diag, diagText } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
@@ -421,7 +421,7 @@ export class PropsPanel {
       c ? costLine(c.def, (el) => this.depthLater(c.def, el)) : null);
     const users = ed.lib.usedBy(doc.id);
     out.append(h('p', { class: 'sb-sum' }, `id ${doc.id}`),
-      h('div', { class: 'sb-btns' }, this.btn('Delete chip', users.length ? 'Remove it from the chips that use it first' : 'Delete this chip (Ctrl+Z brings it back)', () => this.deleteChip(doc))));
+      h('div', { class: 'sb-btns' }, this.btn('Delete chip', users.length ? 'Remove it from the chips that use it first' : `Delete this chip (${undoKey()} brings it back)`, () => this.deleteChip(doc))));
     return out;
   }
 
@@ -435,7 +435,7 @@ export class PropsPanel {
       ws = { ...ws, chips: { u_main: blank }, open: ['u_main'] };
     } else if (!ws.open.length) ws = openChip({ ...ws, open: [] }, Object.keys(ws.chips)[0]);
     ed.editWs(() => ws);
-    ed.toast(`Deleted ${doc.name} (Ctrl+Z to undo)`);
+    ed.toast(`Deleted ${doc.name} (${undoKey()} to undo)`);
   }
 
   /** Logic depth needs a full flatten: computed shortly after the chip stops changing. */

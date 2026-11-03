@@ -6,6 +6,7 @@ import { testsOf } from '../editor/testtable';
 import { importDigital, isDigitalFile } from './digital';
 import { registerCircuitReader } from './importui';
 import { importLogisim, isLogisimFile, logisimVectors } from './logisim';
+import { undoKey } from '../ui/dom';
 
 const isVectors = (name: string) => /\.txt$/i.test(name);
 
@@ -19,7 +20,7 @@ registerFileImporter({
     if ('error' in v) return void ed.toast(`${name}: ${v.error}`, 'err');
     const base = name.replace(/^.*[\/]/, '').replace(/\.txt$/i, '');
     ed.edit((d) => ({ ...d, tests: [...testsOf(d), { name: base, src: v.src }] }));
-    ed.toast(`${name}: a test table on ${ed.doc.name} (Tests). Ctrl+Z undoes it`);
+    ed.toast(`${name}: a test table on ${ed.doc.name} (Tests). ${undoKey()} undoes it`);
   },
 });
 registerCircuitReader({ tool: 'Digital', accept: ['.dig'], takes: isDigitalFile, read: importDigital });

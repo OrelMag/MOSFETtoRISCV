@@ -3,7 +3,7 @@
 // New chip ▾ Truth table. Every edit of the table is one undo step that redraws the chip (ttable.ts).
 
 import '../styles/editor-table.css';
-import { h } from '../ui/dom';
+import { h, undoKey } from '../ui/dom';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
 import type { TableDoc } from './model';
 import { pinBig } from './model';
@@ -109,7 +109,7 @@ class TableUi {
   private detach(): void {
     const name = this.ed.doc.name;
     this.ed.editWs((ws) => detachTable(ws, this.ed.chipId));
-    this.ed.toast(`${name} is an ordinary drawn chip now (Ctrl+Z puts the table back)`);
+    this.ed.toast(`${name} is an ordinary drawn chip now (${undoKey()} puts the table back)`);
   }
 
   /** One undo step: the table and the redrawn chip. */

@@ -6,7 +6,7 @@ import { NmosSim } from '../sim/nmossim';
 import { SwitchSim, VDD_VOLTS, weakLevel, weakTag } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
-import { h, icon, s } from '../ui/dom';
+import { h, icon, s, tx } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
 import { Camera, fitBox, installPanZoom, underCover, type ViewBox } from './camera';
@@ -18,6 +18,7 @@ import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, 
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import { menuKeys } from '../ui/menukeys';
+import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -100,6 +101,8 @@ export class SchematicView {
   private notePins: NotePin[] = [];
   private bbox = { x: 0, y: 0, w: 10, h: 10 };
   private cam: Camera;
+  /** Small text hidden and block names kept at a readable size (view/legible.ts): a view rule only. */
+  private legible: Legibility;
   private radixOverride = new Map<number, Radix>();
   private interactive = false;
   private selected: string | null = null;
@@ -153,6 +156,8 @@ export class SchematicView {
     this.tooltip.className = 'wire-tip';
     host.append(this.el, this.tooltip);
     this.cam = new Camera(this.el, host);
+    this.legible = new Legibility(this.el);
+    this.cam.listeners.add(() => this.legible.view(this.cam.pxPerUnit()));
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
       canStart: (e) => !(this.arrange === true && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
@@ -306,7 +311,7 @@ export class SchematicView {
         hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
       }
       for (const t of tapsOf.get(net.index) ?? []) {
-        const g = s('g', { class: 'tap-label' });
+        const g = s('g', { class: 'tap-label', 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
         setNetHue(g, hue);
         const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
@@ -343,6 +348,7 @@ export class SchematicView {
     }
 
     // Instances
+    const names: NameEl[] = [];
     for (const inst of nl.instances) {
       const at: Vec = inst.at ?? [0, 0];
       const geo = orientGeom(inst.def, inst.flip, inst.rot);
@@ -359,6 +365,16 @@ export class SchematicView {
       g.append(drawSymbol(inst.def, inst.flip, inst.rot));
       const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
       if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
+      // A fixed-size copy of the block's label for when its own is too small to read (legible.ts); decoration, so
+      // hidden from assistive tech, never hit, and left out of exported images.
+      const own = g.querySelector('.sym-label');
+      if (nameEligible(own?.textContent, geo.w, geo.h)) {
+        const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
+        const t = s('text', { class: 'lg-name', x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'aria-hidden': 'true', transform: rot ? `rotate(-90 ${cx} ${cy})` : null }, own!.textContent!.trim());
+        g.classList.add('lg-named');
+        g.append(t);
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: own!.textContent!.trim().length, rot } });
+      }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
         badge.append(s('circle', { r: 0.62, cx: 0.5, cy: 0.5 }));
@@ -418,6 +434,7 @@ export class SchematicView {
 
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
+    this.legible.setNames(names);
     if (!keepView) this.fit();
     else this.cam.apply();
     this.drawProbes();
@@ -675,11 +692,16 @@ export class SchematicView {
 
   /** The screen rectangle around these instances (null: none drawn). */
   instRect(names: string[]): DOMRect | null {
+    // from the parts' boxes, not the drawn elements: hidden or fixed-size text (view/legible.ts) must not move what points here
+    const m = this.el.getScreenCTM();
+    if (!m) return null;
     let r: DOMRect | null = null;
     for (const n of names) {
-      const b = this.insts.get(n)?.getBoundingClientRect();
-      if (!b || !b.width) continue;
-      r = r ? new DOMRect(Math.min(r.left, b.left), Math.min(r.top, b.top), Math.max(r.right, b.right) - Math.min(r.left, b.left), Math.max(r.bottom, b.bottom) - Math.min(r.top, b.top)) : b;
+      const b = this.boxes.get(n);
+      if (!b) continue;
+      const p = new DOMPoint(b.x - 0.4, b.y - 1.2).matrixTransform(m), q = new DOMPoint(b.x + b.w + 0.4, b.y + b.h + 0.4).matrixTransform(m);
+      if (!(q.x - p.x)) continue;
+      r = r ? new DOMRect(Math.min(r.left, p.x), Math.min(r.top, p.y), Math.max(r.right, q.x) - Math.min(r.left, p.x), Math.max(r.bottom, q.y) - Math.min(r.top, p.y)) : new DOMRect(p.x, p.y, q.x - p.x, q.y - p.y);
     }
     return r;
   }
@@ -776,20 +798,20 @@ export class SchematicView {
    * chapter's text and pinned. Leaves the view alone when none of them is drawn here.
    */
   frameInsts(names: string[], margin = 4, minW = 40): void {
-    const root = this.el.getScreenCTM();
-    if (!root) return;
-    const inv = root.inverse();
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    // from the parts' boxes (and a pin's place with room for its glyph), not the drawn elements: hidden or fixed-size
+    // text (view/legible.ts) must not change the framing
     for (const n of names) {
-      const g = n.startsWith('pin:') ? this.pins.find((p) => p.pin.name === n.slice(4))?.g : this.insts.get(n);
-      const m = g?.getScreenCTM();
-      if (!g || !m) continue;
-      const b = g.getBBox();
-      const toSvg = inv.multiply(m);
-      for (const [px, py] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
-        const p = new DOMPoint(px, py).matrixTransform(toSvg);
-        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+      let b: Rect | undefined;
+      if (n.startsWith('pin:')) {
+        const p = this.pins.find((q) => q.pin.name === n.slice(4))?.pin;
+        if (p) b = { x: p.pos[0] - 3, y: p.pos[1] - 3, w: 6, h: 6 };
+      } else {
+        const r = this.boxes.get(n);
+        if (r) b = { x: r.x, y: r.y - 1.2, w: r.w, h: r.h + 1.2 };
       }
+      if (!b) continue;
+      x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
     }
     if (!Number.isFinite(x0)) return;
     this.cam.fit({ x: x0 - margin, y: y0 - margin, w: x1 - x0 + 2 * margin, h: y1 - y0 + 2 * margin }, this.cover, minW);
@@ -1219,7 +1241,7 @@ export class SchematicView {
         this.closeMenu();
         it.run();
       } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
-        : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.'));
+        : h('p', { class: 'sch-menu-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it.')));
     document.body.append(m);
     // keys: Esc closes it and gives the focus back to what opened it; arrows move between the items
     const opener = document.activeElement as HTMLElement | null;
@@ -1237,6 +1259,9 @@ export class SchematicView {
   }
 
   // ---- pan & zoom ---------------------------------------------------------------------
+
+  /** Screen pixels per grid unit now (0 before a layout). */
+  pxPerUnit(): number { return this.cam.pxPerUnit(); }
 
   /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
   contentBox(): ViewBox {
