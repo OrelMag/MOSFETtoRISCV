@@ -8,6 +8,7 @@ import type { Chapter } from '../src/chapters/types';
 import {
   FCSR, FPU32, ROUND_DECIDE, fmaAdd, fmaMultiply, fmaRound, fpAdd, fpClassify, fpDiv, fpFma, fpMinMax, fpMul, fpPrenorm, fpSqrt, fpToInt, normRound,
 } from '../src/lib';
+import { F_PROGRAMS } from '../src/riscv/fprograms';
 import { F32, canonicalNaN } from '../src/sim/fpref';
 import { logicDepth, stats } from '../src/sim/stats';
 import type { ComponentDef } from '../src/sim/types';
@@ -16,7 +17,7 @@ import { isExhaustive, operandPairs } from './fptest';
 /** Every piece of a chapter's prose, whitespace collapsed. */
 const text = (c: Chapter) => [
   c.blurb, ...(c.recap?.keep ?? []), ...(c.recap?.check ?? []).map((q) => JSON.stringify(q)),
-  ...c.steps.flatMap((s) => [s.body, JSON.stringify(s.challenge ?? '')]),
+  ...c.steps.flatMap((s) => [s.body, JSON.stringify(s.challenge ?? ''), ...Object.values(s.more ?? {}), JSON.stringify(s.tour ?? '')]),
 ].join('\n').replace(/[ \t\r\n]+/g, ' ');
 /** n rounded to a multiple of q, with the chapters' thousands separator (a space). */
 const fmt = (n: number, q = 1) => groupDigits(Math.round(n / q) * q);
@@ -55,6 +56,21 @@ describe('chapter 24 (floating point) quotes measured numbers', () => {
     has(`fflags (5 bits), ${nands(FCSR)} NANDs`);
     has(`(${fmt(nands(fpMinMax(F32)))} NANDs, comparator included)`);
     has(`returns one of ten bits (${nands(fpClassify(F32))} NANDs)`);
+  });
+
+  it('leaves no template placeholder unfilled (a ${…} in a plain string reaches the page as typed)', () => {
+    expect(t).not.toContain('${');
+  });
+
+  it('counts what the programs do', () => {
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+    // ten additions of float32 0.1 from +0: the first two (0 + 0.1, 0.1 + 0.1) are exact
+    let s = 0, inexact = 0;
+    for (let i = 0; i < 10; i++) { const e = s + Math.fround(0.1); s = Math.fround(e); if (s !== e) inexact++; }
+    has(`${words[inexact]} of the ten additions lose a little`);
+    // the Kahan loop per term: its FP instructions, less the naive sum's one fadd.s
+    const loop = F_PROGRAMS.find((p) => p.id === 'kahan')!.source.split('loop:')[1].split('bnez')[0];
+    has(`The Kahan loop is ${words[loop.split('\n').filter((l) => /^\s*f(add|sub|mv)\.s/.test(l)).length - 1]} instructions on`);
   });
 
   it('the canonical NaN', () => {
