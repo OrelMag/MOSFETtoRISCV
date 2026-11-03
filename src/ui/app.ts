@@ -1,11 +1,12 @@
 // App shell: top bar, theme, global settings and hash routing.
 
-import { chapterById, chapters } from '../chapters';
+import { outline, outlineOf } from '../chapters/outline';
+import { loadChapter } from '../chapters/load';
 import { h, icon, s } from './dom';
 import { installErrorReporting, loadFailed } from './errors';
-import { ChapterPage, type Page } from './pages/chapter';
+import type { ChapterPage, Page } from './pages/chapter';
 import { homePage } from './pages/home';
-import { WorkbenchPage } from './pages/workbench';
+import type { WorkbenchPage } from './pages/workbench';
 import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
 import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
@@ -216,11 +217,14 @@ export function startApp(root: HTMLElement): void {
     h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
     nav, ret.el, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   view.tabIndex = -1;
-  root.append(skip, topbar, view);
+  // replaces index.html's loading shell in one step (same classes, same bar height)
+  root.replaceChildren(skip, topbar, view);
 
   let page: Page | null = null;
   // A route that loads its page asynchronously must not mount it if another route came since.
   let routeSeq = 0;
+  // A lazy route with nothing on screen yet (the first load): a placeholder rather than an empty page.
+  const pending = () => { if (!page) view.replaceChildren(loadingPanel()); };
   const route = () => {
     const seq = ++routeSeq;
     ret.route(page as ReturnLabelled | null);
@@ -235,24 +239,31 @@ export function startApp(root: HTMLElement): void {
     const shows = stageTools(parts);
     radix.hidden = !shows.radix;
     animate.hidden = !shows.slow;
-    if (key === 'c' && parts[1] && !chapterById(parts[1])) {
+    if (key === 'c' && parts[1] && !outlineOf(parts[1])) {
       // a stale or mistyped link: say so rather than quietly showing another chapter under the wrong address
       const bad = parts[1];
       mount({ el: h('div', { class: 'widget missing-chapter', role: 'status' }, h('div', { class: 'panel' },
         h('h3', null, 'No such chapter'),
         h('p', { class: 'sub' }, `There is no chapter called "${bad}". It may have been renamed or removed.`),
-        h('div', { class: 'suggest' }, h('a', { class: 'btn primary', href: '#/c/map/0' }, 'Open the chapter list'), h('a', { class: 'btn', href: `#/c/${chapters[0].id}/0` }, 'Start at the first chapter')))), destroy() {} });
+        h('div', { class: 'suggest' }, h('a', { class: 'btn primary', href: '#/c/map/0' }, 'Open the chapter list'), h('a', { class: 'btn', href: `#/c/${outline[0].id}/0` }, 'Start at the first chapter')))), destroy() {} });
     } else if (key === 'c') {
-      const ch = chapterById(parts[1] ?? '') ?? chapters[0];
+      const ch = outlineOf(parts[1] ?? '') ?? outline[0];
       const step = Number(parts[2] ?? 0) || 0;
       // after the step, the part opened on its stage (ui/drillpath.ts)
       const path = parseDrill(parts.slice(3));
-      if (page instanceof ChapterPage && page.chapter === ch) {
-        page.route(step, path);
+      const cp = page as ChapterPage | null;
+      if (cp?.kind === 'chapter' && cp.chapter.id === ch.id) {
+        cp.route(step, path);
         applyPendingView();
         return;
       }
-      mount(new ChapterPage(ch, step, path));
+      // The chapter page and this chapter's module (steps, scenes, the library parts only it uses) are chunks of their own.
+      pending();
+      Promise.all([import('./pages/chapter'), loadChapter(ch.id)]).then(([m, chapter]) => {
+        if (seq === routeSeq) mount(new m.ChapterPage(chapter, step, path));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed('chapter', e));
+      });
     } else if (key === 'workbench' && parts[1] === 'stats') {
       // The Statistics tab: a chunk of its own (its rows come from hwstats.json).
       if ((page as { kind?: string } | null)?.kind === 'hwstats') return;
@@ -279,12 +290,19 @@ export function startApp(root: HTMLElement): void {
       });
     } else if (key === 'workbench') {
       const path = parseDrill(parts.slice(2));
-      if (page instanceof WorkbenchPage) {
-        page.route(parts[1] ?? 'rca4', path);
+      const wb = page as WorkbenchPage | null;
+      if (wb?.kind === 'workbench') {
+        wb.route(parts[1] ?? 'rca4', path);
         applyPendingView();
         return;
       }
-      mount(new WorkbenchPage(parts[1] ?? 'rca4', path));
+      // The workbench is a chunk of its own (it needs the component library).
+      pending();
+      import('./pages/workbench').then((m) => {
+        if (seq === routeSeq) mount(new m.WorkbenchPage(parts[1] ?? 'rca4', path));
+      }, (e) => {
+        if (seq === routeSeq) view.replaceChildren(loadFailed('workbench', e));
+      });
     } else if (key === 'path' || key === 'start') {
       // My path and Where are you starting?: a chunk of their own (the skill map reads the codex and the campaign).
       if ((page as { kind?: string } | null)?.kind === key) return;
@@ -362,4 +380,10 @@ export function startApp(root: HTMLElement): void {
   };
   window.addEventListener('hashchange', route);
   route();
+}
+
+/** What the page area shows while a route's chunks load with nothing on screen yet (the same markup as index.html's shell). */
+function loadingPanel(): HTMLElement {
+  return h('div', { class: 'route-loading', role: 'status', 'aria-label': 'Loading' },
+    h('div', { class: 'rl-line rl-title' }), h('div', { class: 'rl-line' }), h('div', { class: 'rl-line' }), h('div', { class: 'rl-line rl-short' }));
 }

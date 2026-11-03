@@ -1,12 +1,13 @@
-// The search's built-in sources: chapters and steps and the workbench's components (both already in the
-// main bundle), campaign levels and the codex (a chunk loaded on the first keystroke: searchcampaign.ts),
+// The search's built-in sources: chapters and steps (titles from the outline at once, the step text from a file fetched when the
+// search opens: chaptertext.ts), the workbench's components (the library, a chunk loaded when the search opens), campaign levels and
+// the codex (a chunk loaded on the first keystroke: searchcampaign.ts),
 // and the actions everyone has (theme, radix, the stage's controls, the keys …). The sandbox adds its own
 // actions while an editor is mounted (editor/searchactions.ts).
 
-import { chapters } from '../chapters';
 import { checksDone, recapIndex } from '../chapters/checks';
-import { libraryItems } from '../lib/catalog';
-import { navEntries, type NavItem } from './chapternav';
+import { outline, outlineIndex, outlineOf } from '../chapters/outline';
+import { loadChapterText } from './chaptertext';
+import { navEntries, type NavChapter, type NavItem } from './chapternav';
 import { showPageKeys } from './keyhelp';
 import { showCoach } from './coachmarks';
 import { keyDef } from './keys';
@@ -23,19 +24,22 @@ const caps = (id: string) => keyDef(id)?.caps.filter((c) => c !== '·' && c !== 
 
 // ---- chapters and steps ----------------------------------------------------------------------------
 
-let chapterCache: NavItem[] | null = null;
-settings.onChange(() => { chapterCache = null; });
+let chapterCache: NavItem[] | null = null, lightCache: NavItem[] | null = null;
+settings.onChange(() => { chapterCache = lightCache = null; });
 
-function chapterItems(): NavItem[] {
-  if (chapterCache) return chapterCache;
-  const steps = new Map(chapters.map((c) => [c.id, c.steps.length]));
-  return chapterCache = navEntries(chapters).map((e): NavItem => {
-    const n = steps.get(e.chapter) ?? 1;
+/** The step text of every chapter, once fetched (null until then: the chapters source reports itself loading). */
+let chapterText: NavChapter[] | null = null;
+let textLoad: Promise<void> | null = null;
+const loadText = () => textLoad ??= loadChapterText().then((t) => { chapterText = t; chapterCache = null; }, (e) => { textLoad = null; throw e; });
+
+function toItems(chs: readonly NavChapter[], onlyChapters: boolean): NavItem[] {
+  return navEntries(chs).filter((e) => !onlyChapters || e.step < 0).map((e): NavItem => {
+    const m = outlineOf(e.chapter)!;
+    const n = m.steps.length;
     const ch = e.step < 0;
     let note = '';
     if (ch && settings.visited(e.chapter).length) {
-      const c = chapters.find((x) => x.id === e.chapter)!;
-      const { done, total } = checksDone(c, (k) => settings.isSolved(k));
+      const { done, total } = checksDone(m, (k) => settings.isSolved(k));
       if (total) note = ` · ${done} / ${total} checks`;
     }
     return {
@@ -48,8 +52,10 @@ function chapterItems(): NavItem[] {
 registerSearchSource({
   id: 'chapters', title: 'Chapters and steps', scope: 'Chapters',
   order: (ctx) => (route(ctx)[0] === 'workbench' ? 2 : route(ctx)[0] === 'sandbox' ? 3 : 0),
-  items: chapterItems,
-  browse: () => chapterItems().filter((it) => it.kind === 'chapter'),
+  items: () => (chapterText ? chapterCache ??= toItems(chapterText, false) : null),
+  load: loadText, prefetch: true,
+  // the browse list needs no step text: the chapters, straight from the outline
+  browse: () => lightCache ??= toItems(outline, true),
 });
 
 // ---- the learner's notes and bookmarks ---------------------------------------------------------------
@@ -69,13 +75,17 @@ registerSearchSource({
 // ---- workbench components ----------------------------------------------------------------------------
 
 let benchCache: NavItem[] | null = null;
+let benchLoad: Promise<void> | null = null;
+const loadBench = () => benchLoad ??= import('../lib/catalog').then((m) => {
+  benchCache = m.libraryItems().flatMap((g) => g.items.map((it): NavItem => ({
+    kind: 'component', id: it.id, title: it.name, sub: `${it.id} · ${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
+    href: `#/workbench/${it.id}`,
+  })));
+}, (e) => { benchLoad = null; throw e; });
 registerSearchSource({
   id: 'workbench', title: 'Workbench', scope: 'Workbench',
   order: (ctx) => (route(ctx)[0] === 'workbench' ? 0 : route(ctx)[0] === 'sandbox' ? 2 : 1),
-  items: () => benchCache ??= libraryItems().flatMap((g) => g.items.map((it): NavItem => ({
-    kind: 'component', id: it.id, title: it.name, sub: `${it.id} · ${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
-    href: `#/workbench/${it.id}`,
-  }))),
+  items: () => benchCache, load: loadBench, prefetch: true,
 });
 
 // ---- campaign levels and the codex (lazy) --------------------------------------------------------------
@@ -155,11 +165,11 @@ function stageActions(): NavItem[] {
 function chapterActions(ctx: SearchCtx): NavItem[] {
   const [key, id, s] = route(ctx);
   if (key !== 'c') return [];
-  const i = chapters.findIndex((c) => c.id === id);
+  const i = outlineIndex(id);
   if (i < 0) return [];
-  const c = chapters[i], step = Number(s ?? 0) || 0;
+  const c = outline[i], step = Number(s ?? 0) || 0;
   const last = recapIndex(c) ?? c.steps.length - 1;
-  const prev = chapters[i - 1], next = chapters[i + 1];
+  const prev = outline[i - 1], next = outline[i + 1];
   const out: NavItem[] = [];
   if (step < last) out.push(act('step.next', 'Next step', `${c.title} · step ${step + 2}`, go(`#/c/${c.id}/${step + 1}`), caps('step.next')));
   if (step > 0) out.push(act('step.prev', 'Previous step', `${c.title} · step ${step}`, go(`#/c/${c.id}/${step - 1}`), caps('step.prev')));

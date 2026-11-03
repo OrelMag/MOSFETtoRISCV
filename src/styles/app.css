@@ -2589,3 +2589,13 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 .coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
 .coh-panel .coh-ln { cursor: pointer; }
 .coh-panel .coh-ln.sel { outline: 1px solid var(--accent); }
+
+/* ---------- loading shell ---------- */
+/* The page area while a route's chunks load with nothing on screen yet, and index.html's static shell (the same classes, so the real
+   app replaces it without a jump). Quiet pulsing lines in the page's own tokens: light and dark come with them. */
+.route-loading { max-width: 760px; margin: 0 auto; padding: 56px 24px; display: grid; gap: 14px; }
+.rl-line { height: 14px; border-radius: 7px; background: var(--surface-3); animation: rl-pulse 1.4s ease-in-out infinite; }
+.rl-title { height: 28px; width: 46%; margin-bottom: 8px; }
+.rl-short { width: 62%; }
+@keyframes rl-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .rl-line { animation: none; } }

@@ -18,6 +18,7 @@ import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import type { Page } from './chapter';
 
 export class WorkbenchPage implements Page {
+  readonly kind = 'workbench';
   readonly el: HTMLElement;
   private stage: Stage;
   private inspector: Inspector;

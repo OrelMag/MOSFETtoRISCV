@@ -121,9 +121,13 @@ describe('recent picks', () => {
 });
 
 describe('the built-in sources', () => {
-  it('finds a workbench component for "adder", first on the workbench page', () => {
+  it('finds a workbench component for "adder", first on the workbench page', async () => {
     const ctx = { hash: '#/workbench/rca4' };
     const srcs = searchSources(ctx);
+    // the component list and the step text are lazy (the search prefetches them when it opens); before that the source says it is loading
+    expect(searchGroups(srcs, 'adder', ALL, ctx).loading.map((s) => s.id)).toEqual(expect.arrayContaining(['workbench', 'chapters']));
+    expect(searchGroups(srcs, '', ALL, ctx).groups.some((g) => g.id === 'chapters' && g.items.length > 40)).toBe(true);
+    await Promise.all(srcs.filter((s) => s.prefetch).map((s) => s.load!()));
     expect(srcs[0].id).toBe('workbench');
     const r = searchGroups(srcs, 'adder', ALL, ctx);
     expect(r.groups[0].id).toBe('workbench');
@@ -144,6 +148,7 @@ describe('the built-in sources', () => {
 
   it('lists every campaign level and codex entry once loaded, locked ones pointing at their brief', async () => {
     const ctx = { hash: '#/' };
+    await Promise.all(searchSources(ctx).filter((s) => s.prefetch).map((s) => s.load!()));
     const camp = searchSources(ctx).find((s) => s.id === 'campaign')!;
     await camp.load!();
     const levels = camp.items(ctx)!;

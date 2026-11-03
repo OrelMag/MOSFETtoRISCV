@@ -1,7 +1,7 @@
 // Quick navigation UI: the chapter menu (top bar, chapter title) and the search box (Ctrl/⌘ K, `/`).
 
-import { chapters } from '../chapters';
-import { chapterNo } from '../chapters/types';
+import { outline as chapters, outlineOf } from '../chapters/outline';
+import { chapterNo } from '../chapters/meta';
 import { itemSnippet, markRuns, type NavItem, type NavKind } from './chapternav';
 import { h, icon } from './dom';
 import { showPageKeys } from './keyhelp';
@@ -142,6 +142,7 @@ export function openQuickNav(initial = ''): void {
   const back = document.activeElement as HTMLElement | null;
   const ctx = { hash: location.hash };
   const srcs = searchSources(ctx);
+  for (const s of srcs) if (s.prefetch && s.load) void s.load().catch(() => {});
   const recent = recentItems();
   const cur = here();
   const input = h('input', {
@@ -208,7 +209,7 @@ export function openQuickNav(initial = ''): void {
   const end = (it: NavItem): HTMLElement => {
     const e = h('span', { class: 'qn-end' });
     if (it.kind === 'chapter' && it.entry) {
-      const n = chapters.find((c) => c.id === it.entry!.chapter)?.steps.length ?? 1;
+      const n = outlineOf(it.entry!.chapter)?.steps.length ?? 1;
       e.append(progressBar(seen(it.entry.chapter, n)));
     } else if (it.kind === 'step' && it.entry && settings.visited(it.entry.chapter).includes(it.entry.step)) {
       e.append(h('span', { class: 'ok', title: 'Visited' }, icon('check', 13)));

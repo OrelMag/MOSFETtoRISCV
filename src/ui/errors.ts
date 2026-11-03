@@ -53,6 +53,7 @@ export function reportLink(err?: unknown, label = 'Report this problem', cls?: s
 export function loadFailed(what: string, e: unknown): HTMLElement {
   return h('div', { class: 'widget' }, h('div', { class: 'panel' },
     h('h3', null, `The ${what} could not load`), h('p', { class: 'sub' }, String(e)),
+    h('p', { class: 'sub' }, 'If the site was updated while this tab was open, reloading fetches the new version; otherwise check the connection.'),
     h('div', { class: 'err-actions' }, h('button', { class: 'btn sm', onclick: () => location.reload() }, icon('reset', 14), 'Reload'), reportLink(e, 'Report this problem', 'btn sm ghost'))));
 }
 

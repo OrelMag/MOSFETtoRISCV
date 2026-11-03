@@ -3,8 +3,8 @@
 // show it. A filter narrows by title, text and chapter.
 
 import { analogyIndex } from '../chapters/analogies';
-import { chapters } from '../chapters';
-import { chapterNo } from '../chapters/types';
+import { outline, outlineOf } from '../chapters/outline';
+import { chapterNo } from '../chapters/meta';
 import { codexById } from '../campaign/codex';
 import { analogyEl } from './analogy';
 import { h, icon } from './dom';
@@ -12,12 +12,12 @@ import { h, icon } from './dom';
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ');
 
 export function analogyIndexEl(): HTMLElement {
-  const groups = analogyIndex(chapters);
+  const groups = analogyIndex(outline);
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const drawn = groups.reduce((n, g) => n + g.items.filter((x) => x.a.figure).length, 0);
   const rows: { el: HTMLElement; text: string }[] = [];
   const sections = groups.map((g) => {
-    const c = chapters.find((x) => x.id === g.chapter)!;
+    const c = outlineOf(g.chapter)!;
     const head = `${chapterNo(c)} · ${c.title}`;
     const items = g.items.map(({ a, step }) => {
       const el = analogyEl(a, step >= 0 ? { from: { href: `#/c/${c.id}/${step}`, label: `Told in ${head}: ${a.step}` } } : {});

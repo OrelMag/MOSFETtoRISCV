@@ -156,16 +156,8 @@ export interface Chapter {
   soon?: string[];
 }
 
-/** How a chapter is numbered on screen: 07, P1 for a prologue chapter, A for an appendix. */
-export const chapterNo = (c: { num: number; appendix?: string; prologue?: string; label?: string }): string => c.label ?? c.prologue ?? c.appendix ?? String(c.num).padStart(2, '0');
-
-/** Planned chapters, shown greyed out on the map. */
-export interface FutureChapter {
-  num: number;
-  title: string;
-  blurb: string;
-  level: string;
-}
+export { chapterNo } from './meta';
+export type { FutureChapter } from './meta';
 
 const benchCache = new WeakMap<ComponentDef, ComponentDef>();
 

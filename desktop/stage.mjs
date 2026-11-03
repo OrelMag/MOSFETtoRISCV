@@ -38,7 +38,7 @@ writeFileSync(join(fontsDir, 'fonts.css'), css);
 
 const indexPath = join(app, 'index.html');
 const html = readFileSync(indexPath, 'utf8');
-const google = /\s*<link rel="preconnect" href="https:\/\/fonts\.googleapis\.com"[^>]*>\s*<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com"[^>]*>\s*<link href="https:\/\/fonts\.googleapis\.com\/css2[^"]*" rel="stylesheet"\s*\/?>/;
+const google = /\s*<link rel="preconnect" href="https:\/\/fonts\.googleapis\.com"[^>]*>\s*<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com"[^>]*>(?:\s*<!--(?:(?!-->)[\s\S])*-->)?\s*<link href="https:\/\/fonts\.googleapis\.com\/css2[^"]*"[^>]*>/;
 if (!google.test(html)) {
   console.error('index.html: the Google Fonts link was not found; update stage.mjs to match it.');
   process.exit(1);

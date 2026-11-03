@@ -1,6 +1,6 @@
 // A chapter: narrative on the left, the live stage in the middle, the inspector on the right.
 
-import { chapters } from '../../chapters';
+import { outline, outlineIndex, outlineOf } from '../../chapters/outline';
 import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { notes, type Place } from '../notes';
@@ -37,6 +37,7 @@ export interface Page {
 let widgetStepOwner: object | null = null;
 
 export class ChapterPage implements Page {
+  readonly kind = 'chapter';
   readonly el: HTMLElement;
   readonly chapter: Chapter;
   private stage: Stage;
@@ -83,7 +84,7 @@ export class ChapterPage implements Page {
     // [ ] step, { } change chapter (ui/keys.ts): ] and [ press the foot's Next and Back, whatever they lead to
     const press = (el: Element | null) => (el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement ? el.click() : false);
     const jump = (d: number) => {
-      const c = chapters[chapters.indexOf(this.chapter) + d];
+      const c = outline[outlineIndex(this.chapter.id) + d];
       if (!c) return false;
       location.hash = `#/c/${c.id}/0`;
     };
@@ -260,8 +261,8 @@ export class ChapterPage implements Page {
       if (!el.isConnected) return;
       const skip = m.chapterSkip(c);
       for (const b of met) for (const id of m.termsIn(b)) skip.add(id);
-      const at = chapters.indexOf(c);
-      m.markTerms(el, 10, skip, (id) => f.later(chapters, at, id));
+      const at = outlineIndex(c.id);
+      m.markTerms(el, 10, skip, (id) => f.later(outline, at, id));
     }, () => {});
   }
 
@@ -379,7 +380,7 @@ export class ChapterPage implements Page {
 
   private goalsCard(): HTMLElement {
     const c = this.chapter;
-    const builds = (c.builds ?? []).map((id) => chapters.find((x) => x.id === id)).filter((x): x is Chapter => !!x);
+    const builds = (c.builds ?? []).map((id) => outlineOf(id)).filter((x) => !!x);
     return h('div', { class: 'ch-goals' },
       c.goals?.length ? h('div', { class: 'ch-goals-k' }, 'In this chapter you will') : null,
       c.goals?.length ? h('ul', null, c.goals.map((g) => h('li', { html: g }))) : null,
@@ -503,9 +504,9 @@ export class ChapterPage implements Page {
 
   private renderFoot(): void {
     const n = this.chapter.steps.length;
-    const idx = chapters.indexOf(this.chapter);
-    const next = chapters[idx + 1];
-    const prev = chapters[idx - 1];
+    const idx = outlineIndex(this.chapter.id);
+    const next = outline[idx + 1];
+    const prev = outline[idx - 1];
     const last = this.recap >= 0 ? this.recap : n - 1;
     const prevBtn = this.step > 0
       ? h('button', { class: 'btn', onclick: () => this.goStep(this.step - 1) }, icon('chevL', 16), 'Back')
