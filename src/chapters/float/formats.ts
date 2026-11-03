@@ -87,7 +87,7 @@ export const formatSteps: Step[] = [
         'The tree does not shrink: the measured numbers include the wider exponent adder',
       ],
       answer: 0,
-      explain: `The tree is M²-ish (24 × 24 against 8 × 8), but the unit is tree + normalize & round + the rest. At bf16 the tree is ${g(C.bf16.mul.tree)} of ${g(C.bf16.mul.nands)} NANDs and the rounder, ${g(C.bf16.mul.round)}, is bigger than it. Amdahl's law applies to area as to time.`,
+      explain: `The tree is M²-ish (24 × 24 against 8 × 8), but the unit is tree + normalize & round + the rest. At bf16 the tree is ${g(C.bf16.mul.tree)} of ${g(C.bf16.mul.nands)} NANDs and the rounder, ${g(C.bf16.mul.round)}, is bigger than it. A part that does not shrink caps the saving, in area as in time.`,
       why: ['', 'Every format here comes from the same generator and the same NAND cells.', 'The product is rounded once, with no further multiplication; the rounder is a shifter and an incrementer.', 'The tree does shrink (${g(C.f32.mul.tree)} → ${g(C.bf16.mul.tree)} NANDs, measured); the exponent adder is a few hundred NANDs, so it explains none of the gap.'],
     },
   },
