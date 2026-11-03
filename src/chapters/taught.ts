@@ -153,7 +153,7 @@ export const TAUGHT: Record<string, string> = {
   rowhammer: 'dram',
   rv32i: 'isa',
   stdcell: 'silicon',
-  skew: 'fastadd',
+  skew: 'latches',
   power: 'mosfet',
   metastability: 'latches',
   carryselect: 'fastadd',

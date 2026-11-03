@@ -457,7 +457,13 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   Custom… (and the program editor's Custom instructions…) on an rv32i_core; Apply makes it a { core: { custom } }
   part and gives the ROM a copy of the rows. Eight rows run in lock step on the gates (tests/custom-instr.test.ts);
   what a row cannot do in one cycle is named
-- ⏳ 5b. Then: chapter 14's challenge "add indexed load"; the pipelined CPU (a load-like row stalls like a load); RV16
+- ✅ 5b (RV32; RV16 still open). Done: chapter 14's reach challenge "Your own instruction" (define lwx so the array sums to 80; hints,
+  Show answer, Do it for me: chapters/ch-cpu.ts); the pipelined CPU takes rows too (pipelinedCpu({ custom }): hazards read the row's
+  control signals, so a load-like row stalls like a load; random programs with rows in lock step, tests/custom-pipe.test.ts; chapter step
+  in ch-pipe.ts); the sandbox's pipelined port core (rv32i_pipe_core, { core: { custom, pipe } }) with Apply, the drawer lighting a custom
+  row's units, and now its M (rv32im_pipe_core) and write-through data cache (rv32i_pipe_dc_core) variants, rows kept across them; the
+  field breakdown names a custom opcode by its row. Still open: RV16 (the campaign's core has no custom-row support: no row model,
+  assembler or hardware generator for it)
 
 **More builders, after the instruction builder** (proposed 2026-10-19, kept for later)
 - ✅ Microcode painter (mockup approved 2026-11-01): the multicycle CPU's microprogram (lib/ucode.ts, multicycleCpu's `microcode`
@@ -1166,8 +1172,11 @@ links, bus taps, duplicate and pin reordering. The gaps:
   latch loop left is reported; a top wrapper and a pin-constraint example (Gowin .cst) for the board, checked by
   Yosys (synth_gowin) in CI. Done: editor/fpga.ts (sandbox I/O parts become top-level ports, latch loops named by
   their parts, a .zip with the design, a board top with a clock divider and power-on reset, a Tang Nano 9K .cst and a
-  README); CI's `fpga` job synthesizes the counter and computer examples. Open: the computer example needs ~13 K LUTs
-  (its memories read asynchronously, so they become LUT RAM): more than a GW1NR-9 has; no place-and-route in CI
+  README); CI's `fpga` job synthesizes the counter and computer examples and fails above the GW1NR-9's 8640 LUTs.
+  ✅ Memories as block RAM (hdl.synthSync, vexport memClock): a RAM / ROM reads through a register on mem_clk, the
+  board's 27 MHz clock (the design's clock is that divided by 2^DIV_LOG2), so the computer example went from ~13.1 K
+  LUTs (memories as LUT RAM) to ~4.2 K LUTs + 10 BSRAM; cycle-exact against the asynchronous memories
+  (scripts/fpga-memcheck.ts). Open: no place-and-route in CI; ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
 ### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)

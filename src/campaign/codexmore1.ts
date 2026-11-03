@@ -785,7 +785,7 @@ h:      csrr t1, mepc
       { chapter: 'traps', step: 0, label: 'Control and status registers' },
       { chapter: 'traps', step: 1, label: 'ecall: asking the operating system' },
       { chapter: 'traps', step: 2, label: 'Exceptions' },
-      { chapter: 'traps', step: 5, label: 'Inside the trap unit' },
+      { chapter: 'traps', step: 9, label: 'Inside the trap unit' },
     ],
   },
 
@@ -1073,7 +1073,7 @@ and a clock 2 delays late at these 16 flip-flops</pre>`,
     lib: 'dffe',
     compare: ['dff'],
     anatomy: ['pc', 'rf', 'p1'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }],
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }],
   },
 
   forwarding: {

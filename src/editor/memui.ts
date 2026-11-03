@@ -18,6 +18,7 @@ import {
 } from './memory';
 import type { PartDoc } from './model';
 import { setRef } from './ops';
+import { portCoreOf, portCoreRef } from './model';
 import { CORE64, DMEM64_DEFAULT, DMEM64_MAX, DMEM64_MIN, setCore64Memory } from './rv64mon';
 import { registerPaletteGroup } from './palette';
 import { RV64_SOURCE, RVC_SOURCE } from './exampleisa';
@@ -70,6 +71,8 @@ registerPaletteGroup({
   items: () => [
     { id: 'core_rv32', name: 'RV32I core', title: 'The single-cycle RV32I core with a memory port: instr in (from a Program ROM), pcOut and memAddr / memWData / memWE out, memRData in. The CPU drawer follows it.', place: { part: { lib: 'rv32i_core' } } },
     { id: 'core_rv32p', name: 'RV32I pipelined core', title: 'The five-stage pipelined RV32I core on the same two ports: instr in, pcOut and memAddr / memWData / memWE out of the M stage, memRData in; retire = an instruction reaches W. Forwarding, load-use stalls and branch flushes inside. The CPU drawer follows it with the pipeline diagram; Custom… applies to it.', place: { part: { lib: 'rv32i_pipe_core' } } },
+    { id: 'core_rv32pm', name: 'RV32IM pipelined core', title: 'The pipelined core with the M extension: a multiply takes a stage more (it behaves like a load for hazards), a divide stalls the front of the pipeline for 18 cycles; retire = 0 meanwhile. Program ROM: mul / div mnemonics assemble.', place: { part: { lib: 'rv32im_pipe_core' } } },
+    { id: 'core_rv32pd', name: 'RV32I pipelined core + D-cache', title: 'The pipelined core with a write-through data cache (4 lines of 4 words) in its M stage, in front of the memory port: a load miss freezes the pipeline for 8 cycles while the line is read over the port. Addresses with bit 31 set (the console, LEDs, switches, screen) bypass the cache.', place: { part: { lib: 'rv32i_pipe_dc_core' } } },
     { id: 'core_rv32c', name: 'RV32IC core', title: 'RV32I with the C extension: 16-bit instructions expanded inside, PC + 2. Its Program ROM needs the C extension ticked: it answers at any even address.', place: { part: { lib: 'rv32ic_core' } } },
     { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside (Properties: 16 to 256). Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
     { id: 'core_rv64m', name: 'RV64IM core', title: 'The 64-bit core with the M extension (multiply, divide: retire = 0 while a divide runs). Program ROM: tick RV64.', place: { part: { lib: 'rv64im_core' } } },
@@ -575,6 +578,24 @@ function examplesMenu(ed: Editor): void {
 }
 
 registerToolbarAction({ id: 'examples', title: 'Load an example circuit as a new chip', icon: 'book', label: 'Examples ▾', order: 60, run: examplesMenu });
+
+// ---- the pipelined core's variant ---------------------------------------------------------
+
+registerPropsSection({
+  id: 'pipecore', order: 18,
+  render(ed) {
+    const p = selectedPart(ed);
+    const k = p ? portCoreOf(p.ref) : null;
+    if (!p || !k?.pipe) return null;
+    const cur = k.m ? 'm' : k.dcache ? 'dc' : 'plain';
+    return h('section', { class: 'sb-sec-props' }, h('h3', null, 'Pipelined RV32I core'),
+      row('Variant', select(cur, [['plain', 'RV32I'], ['m', 'RV32IM: multiply and divide'], ['dc', 'RV32I + write-through data cache']], (v) => {
+        const r = setRef(ed.doc, p.id, portCoreRef({ pipe: true, m: v === 'm', dcache: v === 'dc', custom: k.custom }), ed.defOf);
+        if (r.reason) return void ed.toast(r.reason, 'err');
+        ed.edit(() => r.doc);
+      }, 'Variant'), 'M: a multiply splits over E and M, a divide (radix-4 SRT) stalls the front for 18 cycles. Data cache: 4 lines × 4 words in M, write-through; a load miss freezes the pipeline 8 cycles; bit-31 addresses (devices) are never cached. Custom instructions are kept.'));
+  },
+});
 
 // ---- the 64-bit core's data memory ---------------------------------------------------------
 

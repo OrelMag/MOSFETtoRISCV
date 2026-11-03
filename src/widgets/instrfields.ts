@@ -4,6 +4,7 @@
 
 import { fieldAt, fieldRole, fieldsOf, immBits, type Field, type FieldKey, type ImmBit } from '../riscv/fields';
 import { decode, FIELDS, type Fmt } from '../riscv/isa';
+import type { CustomRow } from '../riscv/custom';
 import { h } from '../ui/dom';
 
 export interface BreakdownOpts {
@@ -13,6 +14,8 @@ export interface BreakdownOpts {
   onField?(key: FieldKey | null, sticky: boolean): void;
   /** The field pinned by a click, drawn outlined. */
   selected?: FieldKey | null;
+  /** The CPU's custom instruction rows (riscv/custom.ts): a custom opcode is named by its row and decoded in its format, not "not an RV32 opcode". */
+  custom?: readonly CustomRow[];
 }
 
 const role = (key: FieldKey) => `f-${fieldRole(key)}`;
@@ -33,7 +36,7 @@ export function formatStrip(fmt: Fmt): HTMLElement {
 
 export function instrBreakdown(word: number, opts: BreakdownOpts = {}): HTMLElement {
   const w = word >>> 0;
-  const fields = fieldsOf(w);
+  const fields = fieldsOf(w, opts.custom);
   const live = !!opts.onField;
   const el = h('div', { class: 'ibd' });
   const hover = (key: FieldKey) => live ? {
@@ -65,9 +68,9 @@ export function instrBreakdown(word: number, opts: BreakdownOpts = {}): HTMLElem
       h('span', { class: 'k' }, f.key === 'imm' ? 'imm' : f.label), h('span', { class: 'v' }, f.meaning)))));
 
   // The immediate as the immediate generator builds it: bit i of the result ← instruction bit src.
-  const ib = immBits(w);
+  const ib = immBits(w, opts.custom);
   if (ib.length && fields.some((f) => (f.key === 'imm' && f.used) || f.key === 'shamt')) {
-    const d = decode(w);
+    const d = decode(w, opts.custom);
     const cells = h('div', { class: 'cells' }, immRuns(ib).map((r) => {
       const k = r.kind === 'wire' ? fieldAt(fields, r.src).key : r.kind === 'sign' ? fieldAt(fields, 31).key : null;
       const range = (hi: number, lo: number) => (hi === lo ? `${hi}` : `${hi}:${lo}`);

@@ -285,7 +285,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Giving a pipeline register a clear but no enable, or the reverse: a stall needs hold, a flush needs clear, and both occur.',
     ],
     lib: 'reg4', anatomy: ['pc', 'rf', 'p1', 'p2', 'p3', 'p4', 'csr'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }, { chapter: 'registers', step: 0, label: 'A register is a row of flip-flops' }],
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }, { chapter: 'registers', step: 0, label: 'A register is a row of flip-flops' }],
   },
   counter: {
     idea: 'A counter is a register fed by an incrementer of its own output: q ← q + 1 at every rising edge while enabled. The loop register → logic → register is the shape of every synchronous circuit, and the counter is its simplest case. The 4-bit counter is 80 NANDs: a 60-NAND register and a 20-NAND incrementer. Its period is clk-to-q + the incrementer\'s carry chain + setup, so it slows as it widens unless the incrementer looks ahead.<br>Counters count cycles (RISC-V\'s mcycle, a timer compared with mtimecmp), steps of a multicycle unit (a divider\'s iterations, a cache refill\'s wait) and, with a load input, addresses: the PC is a counter that can jump.',
@@ -364,7 +364,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Implementing csrrs / csrrc with rs1 = x0 as writes: they only read, which matters for registers with side effects.',
     ],
     lib: 'rv16_csr', anatomy: ['csr'],
-    chapters: [{ chapter: 'traps', step: 0, label: 'Control and status registers' }, { chapter: 'traps', step: 5, label: 'Inside the trap unit' }],
+    chapters: [{ chapter: 'traps', step: 0, label: 'Control and status registers' }, { chapter: 'traps', step: 9, label: 'Inside the trap unit' }],
   },
   cpi: {
     idea: 'Execution time = instruction count × CPI × clock period. The factors belong to different people: the instruction count to the ISA and the compiler, CPI (average cycles per instruction) to the microarchitecture, the period to the critical path and the process. A design change usually moves two of them in opposite directions, and only the product counts. Single-cycle: CPI = 1, period set by the slowest instruction. Multicycle: shorter period, CPI 3–5. Pipelined: the short period with CPI back near 1, plus stalls and flushes. A hardware multiplier cuts the instruction count of a multiply loop and may lengthen the period of everything else.<br>On this site the period is measured in NAND delays by static timing and CPI by counting cycles on real programs, so the law is checked, not quoted.',

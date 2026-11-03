@@ -328,7 +328,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 's_reg4', act: 3, title: '4-bit register', kind: 'build', requires: ['s_dff', 'g_mux'], base: sandbox('s_reg4'),
     why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Never gate the clock instead; the 16-bit register next is four of these.',
     tips: ['Build a 1-bit flip-flop with enable first, then use it four times.', 'The mux: en = 1 selects d, en = 0 selects the flip-flop\'s own q: 9 + 4 = 13 NANDs a bit.', 'Do not AND en into clk: a change of en while clk is high makes an edge of its own, and the AND delays this clock against every other.'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
   },
   {
     id: 's_reg16', act: 3, title: '16-bit register', kind: 'build', requires: ['s_reg4'],
@@ -578,7 +578,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'y_ptrap', act: 7, title: 'Pipeline V: exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
     why: 'Pipeline IV holds five instructions, so a trap must be precise: older ones finish, younger ones are cancelled, and mepc names the culprit. Taking traps in E, where the instruction has written nothing yet, does it: +2813 NANDs over Pipeline IV, period 81. The finale adds the interrupt to this core.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
-    codex: ['precise', 'flush'], chapters: [{ chapter: 'traps', step: 5, label: 'Inside the trap unit' }],
+    codex: ['precise', 'flush'], chapters: [{ chapter: 'traps', step: 9, label: 'Inside the trap unit' }],
   },
   {
     id: 'y_final', act: 7, title: 'Finale: interrupts', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },
@@ -784,7 +784,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'p_spin', act: 9, title: 'Spin', kind: 'program', optional: true, requires: ['k_frame'], par: { cycles: 1432, laneops: 5282 },
     why: 'Everything at once: warp 0 turns the corners, eight threads clear, lane 0 draws. The clear is 462 of the reference\'s 577 cycles a frame. One screen and no depth buffer: the GPU chapters add both.',
     tips: ['Clearing is most of the work: give all eight threads a share, several stores per pass.', 'Lane i of warp 0 turns corner i; store each corner\'s screen position (64 + (x >> 8)) where lane 0 can load it.', 'Two bars per frame: after clearing and turning (lane 0 needs the corners and a clean screen), and after drawing (nobody clears a frame still being drawn).', 'On the hardware a load from the screen waits for the rasterizer: one before the clear makes the program right there too.'],
-    codex: ['minsky', 'doublebuffer', 'zbuffer'], chapters: [{ chapter: 'graphics', step: 2, label: 'A spinning triangle' }, { chapter: 'graphics', step: 4, label: 'A faster clear' }],
+    codex: ['minsky', 'doublebuffer', 'zbuffer'], chapters: [{ chapter: 'graphics', step: 2, label: 'A spinning triangle' }, { chapter: 'graphics', step: 5, label: 'A faster clear' }],
   },
   // ---- Act 10 -------------------------------------------------------------------------------
   {

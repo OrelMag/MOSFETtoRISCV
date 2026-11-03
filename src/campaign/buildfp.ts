@@ -129,7 +129,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
   }),
   o_fpsticky: () => ({
     id: 'o_fpsticky', title: 'Sticky shifter', level: 'arithmetic', allowed: 'nand',
-    brief: '<b>y = x &gt;&gt; s</b> (13 bits, zeros in from the left), and <b>sticky</b> = 1 when any 1 fell off the right end. Aligning the smaller operand of an addition loses bits; the sticky bit remembers that they were not all zero, which is all rounding needs to know about them. Every shift of 256 patterns, then random ones.',
+    brief: '<b>y = x &gt;&gt; s</b> (13 bits, zeros in from the left), and <b>sticky</b> = 1 when any 1 fell off the right end. Aligning the smaller operand of an addition loses bits; the sticky bit remembers that they were not all zero, which is all rounding needs to know about them. Every shift of 256 random patterns.',
     ports: pins([['x', 13], ['s', 4]], [['y', 13], ['sticky']]),
     check: {
       kind: 'table', spec: ([x, s]) => [Math.floor(x / 2 ** s), x % 2 ** s ? 1 : 0],

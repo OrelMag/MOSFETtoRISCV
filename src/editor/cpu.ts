@@ -32,7 +32,7 @@ import { pack } from '../sim/values';
 import { wordRegs } from '../view/memfind';
 import type { Compiled } from './compile';
 import { romImage, type RomRef } from './memory';
-import type { ChipDoc, PartDoc } from './model';
+import { type ChipDoc, type PartDoc, portCoreOf } from './model';
 
 /** A net of the chip: a pin (by id), a pointer (by name: same name, same net), a wire, or a part's port. */
 export type NetRef = { pin: string } | { pointer: string } | { wire: string } | { part: string; port: string };
@@ -181,7 +181,7 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const wide = pinNamed(doc, 'out', 2, 'retire');
   const retire = validW ?? pinNamed(doc, 'out', 1, 'retire') ?? wide;
   // the pipelined port core (rv32i_pipe_core, or a { core: { pipe } } part): its retire port is validW, its stages sit inside the part
-  const pipeCore = !!core && (('lib' in core.ref && core.ref.lib === 'rv32i_pipe_core') || ('core' in core.ref && !!core.ref.core.pipe));
+  const pipeCore = !!core && !!portCoreOf(core.ref)?.pipe;
   const pipeline = pipeCore || !!validW || !!wide || (!!partNamed(doc, 'FD') && !!partNamed(doc, 'MW'));
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
@@ -191,7 +191,7 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
     rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : pipeCore ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
-    ...(core && (('lib' in core.ref && (core.ref.lib === 'rv32i_core' || core.ref.lib === 'rv32i_pipe_core')) || 'core' in core.ref) ? { core: core.id } : {}),
+    ...(core && portCoreOf(core.ref) ? { core: core.id } : {}),
   };
 }
 
