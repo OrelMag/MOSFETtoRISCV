@@ -7,7 +7,7 @@
 
 import { symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { h, icon, s } from '../ui/dom';
+import { h, icon, rememberFocus, s } from '../ui/dom';
 import { drawSymbol } from '../view/symbols';
 import { relations } from './chips';
 import { drawFace, type FaceEls, paintFace } from './dispface';
@@ -340,10 +340,11 @@ export function packageDialog(ed: Editor): void {
     });
     return true;
   };
+  const back = rememberFocus(() => ed.actionAnchor('package') ?? ed.view.svg);
   const close = () => {
     ed.paintHooks.delete(livePaint);
     ov.remove();
-    ed.view.svg.focus({ preventScroll: true });
+    back();
   };
   const save = (fresh: boolean) => {
     if (!commit()) return;

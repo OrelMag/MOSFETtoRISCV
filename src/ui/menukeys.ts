@@ -40,3 +40,22 @@ export function menuKeys(root: HTMLElement, menu: HTMLElement, opener: HTMLEleme
     items[to].focus();
   });
 }
+
+/**
+ * Arrows, Home and End inside any `role="menu"` under `root`, for menus built one by one (the sandbox's File,
+ * Examples, Timing, Play, More): the focus moves between the menu's enabled buttons and the key goes no further.
+ */
+export function menuArrows(root: HTMLElement): void {
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+    const t = e.target as HTMLElement;
+    const menu = t.closest<HTMLElement>('[role="menu"]');
+    if (!menu || t.closest('input, select, textarea')) return;
+    const items = itemsOf(menu);
+    const to = menuStep(e.key, items.indexOf(document.activeElement as HTMLElement), items.length);
+    if (to < 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    items[to].focus();
+  });
+}

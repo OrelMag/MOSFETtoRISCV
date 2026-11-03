@@ -168,3 +168,16 @@ export function debounce<A extends unknown[]>(fn: (...a: A) => void, ms: number)
     t = setTimeout(() => fn(...a), ms);
   };
 }
+
+/**
+ * Remember what has the focus now; the returned function gives it back (a dialog closing: CLAUDE.md's rule), or to
+ * `fallback()` when that element is gone (a menu item that opened the dialog went with its menu).
+ */
+export function rememberFocus(fallback?: () => HTMLElement | SVGElement | null | undefined): () => void {
+  const a = document.activeElement;
+  const el = (a instanceof HTMLElement && a !== document.body) || a instanceof SVGElement ? a : null;
+  return () => {
+    const t = el?.isConnected ? el : fallback?.();
+    t?.focus({ preventScroll: true });
+  };
+}

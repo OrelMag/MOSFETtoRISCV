@@ -8,7 +8,7 @@ import '../styles/memui.css';
 import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
 import { BX, type Bit } from '../sim/types';
 import { memRow } from '../view/memview';
-import { h, icon, placeMenu, undoKey } from '../ui/dom';
+import { h, icon, placeMenu, rememberFocus, undoKey } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import type { CodeLang } from '../widgets/codetok';
 import { type Editor, registerToolbarAction } from './editor';
@@ -330,12 +330,13 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
     timer = setTimeout(() => { timer = null; rebuild(); }, 200);
   };
 
+  const back = rememberFocus(() => ed.view.svg);
   const close = (keep = true) => {
     if (timer) clearTimeout(timer);
     if (keep && ce.value !== applied.src) drafts.set(dkey, ce.value); else drafts.delete(dkey);
     ce.destroy();
     ov.remove();
-    ed.view.svg.focus?.();
+    back();
   };
   const apply = () => {
     const p = part();

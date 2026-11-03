@@ -14,6 +14,7 @@ import type { PowerOnMode } from '../sim/sim';
 import { WEAK_H, weakTag } from '../sim/switchsim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
+import { menuArrows } from '../ui/menukeys';
 import { coarsePointer, h, hintBadge, icon, placeMenu, undoKey } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
@@ -275,6 +276,7 @@ export class Editor {
     this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
     this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
+    menuArrows(this.el);
     this.tools = new Tools(this);
     this.buildControls();
     this.unsub = settings.onChange(() => {

@@ -9,7 +9,7 @@ import { groupDigits } from '../sim/numfmt';
 import '../styles/isa.css';
 import { ISA_PRESETS } from '../isa/presets';
 import { type InstrDef, type IsaDoc, type OperandDef, sanitizeIsa, tableOf } from '../isa/table';
-import { h, icon, undoKey } from '../ui/dom';
+import { h, icon, rememberFocus, undoKey } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Editor } from './editor';
 import { designPane, type DesignState } from './isadesign';
@@ -75,10 +75,11 @@ export function openIsaEditor(ed: Editor, id?: string): void {
 
   const list = h('div', { class: 'isa-side' });
   const main = h('div', { class: 'isa-main' });
+  const back = rememberFocus(() => ed.actionAnchor('file') ?? ed.view.svg);
   const close = () => {
     ov.remove();
     open = null;
-    ed.view.svg.focus?.();
+    back();
   };
   /** The table's decoder in gates as a new chip (one undo step), opened; the dialog closes. */
   const openDecoder = (doc: IsaDoc) => void Promise.all([import('../lib/isadecoder'), import('./remix')]).then(([{ isaDecoder }, { remixDef }]) => {
