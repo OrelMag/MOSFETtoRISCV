@@ -2,7 +2,7 @@
 // is a chunk of its own) stays within the shell, the outline and the home page. A new static import that pulls in the chapters,
 // the component library or a simulator fails here, with the chain that led to it.
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,5 +69,26 @@ describe('the first-load path', () => {
     const app = readFileSync(join(SRC, 'ui/app.ts'), 'utf8');
     for (const page of ['chapter', 'workbench', 'path', 'campaign', 'sandbox']) expect(app).toMatch(new RegExp(`import\\('\\./pages/${page}'\\)`));
     expect(readFileSync(join(SRC, 'chapters/loaders.ts'), 'utf8')).not.toMatch(/^import .* from '\.\/ch-/m);
+  });
+});
+
+// The component registry fills as lib modules are imported (lib/define.ts: define()); only lib/index.ts imports them all. A page or chapter that
+// reads it (resolve, catalog, usage, hwstats: every part by id, every part that places another) must reach lib/index.ts, or it would
+// quietly see a part of the library, which the first-load split makes possible: nothing imports it for the page any more.
+describe('the registry on lazy pages', () => {
+  const READERS = ['lib/resolve.ts', 'lib/catalog.ts', 'lib/usage.ts', 'lib/hwstats.ts'].map((f) => join(SRC, f));
+  const INDEX = join(SRC, 'lib/index.ts');
+  const entries = [
+    ...readdirSync(join(SRC, 'ui/pages')).filter((f) => f.endsWith('.ts')).map((f) => join(SRC, 'ui/pages', f)),
+    ...readdirSync(join(SRC, 'chapters')).filter((f) => /^ch-.*.ts$/.test(f)).map((f) => join(SRC, 'chapters', f)),
+  ];
+
+  it('is complete wherever it is read', () => {
+    const bad = entries.filter((e) => {
+      const seen = reachable(e);
+      return READERS.some((r) => seen.has(r)) && !seen.has(INDEX);
+    }).map(rel);
+    // (view/inspector.ts reads it only after import('../lib'), so the chapter page is not one of these)
+    expect(bad).toEqual([]);
   });
 });

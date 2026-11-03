@@ -224,9 +224,12 @@ export function startApp(root: HTMLElement): void {
   // A route that loads its page asynchronously must not mount it if another route came since.
   let routeSeq = 0;
   // A lazy route with nothing on screen yet (the first load): a placeholder rather than an empty page.
-  const pending = () => { if (!page) view.replaceChildren(loadingPanel()); };
+  // With a page already shown it stays until the new one is ready, and a thin bar on the top edge says something is coming (styles/app.css).
+  const busy = (on: boolean) => document.documentElement.toggleAttribute('data-busy', on);
+  const pending = () => { busy(true); if (!page) view.replaceChildren(loadingPanel()); };
   const route = () => {
     const seq = ++routeSeq;
+    busy(false);
     ret.route(page as ReturnLabelled | null);
     // A chapter's or the workbench's address may end in a view suffix (?i=…&p=…&n=…, viewlink.ts): taken off here and handed to the
     // stage that builds the scene, so the rest of the routing sees the plain address it always did.
@@ -262,7 +265,7 @@ export function startApp(root: HTMLElement): void {
       Promise.all([import('./pages/chapter'), loadChapter(ch.id)]).then(([m, chapter]) => {
         if (seq === routeSeq) mount(new m.ChapterPage(chapter, step, path));
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(loadFailed('chapter', e));
+        if (seq === routeSeq) { busy(false); view.replaceChildren(loadFailed('chapter', e)); }
       });
     } else if (key === 'workbench' && parts[1] === 'stats') {
       // The Statistics tab: a chunk of its own (its rows come from hwstats.json).
@@ -301,7 +304,7 @@ export function startApp(root: HTMLElement): void {
       import('./pages/workbench').then((m) => {
         if (seq === routeSeq) mount(new m.WorkbenchPage(parts[1] ?? 'rca4', path));
       }, (e) => {
-        if (seq === routeSeq) view.replaceChildren(loadFailed('workbench', e));
+        if (seq === routeSeq) { busy(false); view.replaceChildren(loadFailed('workbench', e)); }
       });
     } else if (key === 'path' || key === 'start') {
       // My path and Where are you starting?: a chunk of their own (the skill map reads the codex and the campaign).
@@ -374,6 +377,7 @@ export function startApp(root: HTMLElement): void {
     }
   };
   const mount = (p: Page) => {
+    busy(false);
     page?.destroy();
     page = p;
     view.replaceChildren(p.el);

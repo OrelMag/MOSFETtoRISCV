@@ -11,7 +11,7 @@ import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
-import { copiesIn, referenceCpus, usedIn, type Parent } from '../lib/usage';
+import type { Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
 import { techTable } from './techtable';
 
@@ -198,9 +198,7 @@ export class Inspector {
   /** The components that place this part, and its copies in each of the chapters' CPUs (lib/usage.ts, on first open). */
   private usedSection(d: ComponentDef): HTMLElement {
     const det = h('details', { class: 'insp-used' }, h('summary', null, 'Where it is used'));
-    const fill = () => {
-      let u = this.usage.get(d);
-      if (!u) this.usage.set(d, (u = { parents: usedIn(d), cpus: referenceCpus().map((c) => ({ label: c.label, n: copiesIn(c.def, d) })) }));
+    const show = (u: { parents: Parent[]; cpus: { label: string; n: number }[] }) => {
       // Sizes of one generator share a name (twelve "3:2 compressor row"s): one row each, with the range.
       const groups = new Map<string, Parent[]>();
       for (const p of u.parents) groups.get(p.def.name)?.push(p) ?? groups.set(p.def.name, [p]);
@@ -219,6 +217,19 @@ export class Inspector {
       if (!all) det.append(h('button', { class: 'btn ghost sm', onclick: () => { this.usedAll.add(d); this.render(); } }, `Show all ${list.length}`));
       det.append(h('div', { class: 'insp-used-h' }, 'Copies in the chapters’ CPUs, flattened'),
         h('table', { class: 'ports used' }, h('tbody', null, u.cpus.map((c) => h('tr', null, h('td', null, c.label), h('td', { class: 'val' }, c.n ? groupDigits(c.n) : '—'))))));
+    };
+    // The whole library is read for this (every part that places it): its chunk loads here, on first open, not with the page.
+    const fill = () => {
+      const known = this.usage.get(d);
+      if (known) return show(known);
+      const wait = h('div', { class: 'insp-used-h' }, 'Reading every library part…');
+      det.append(wait);
+      Promise.all([import('../lib/usage'), import('../lib')]).then(([m]) => {
+        const u = { parents: m.usedIn(d), cpus: m.referenceCpus().map((c) => ({ label: c.label, n: m.copiesIn(c.def, d) })) };
+        this.usage.set(d, u);
+        wait.remove();
+        show(u);
+      }, (e) => { wait.textContent = `Could not load the library: ${String(e)}`; });
     };
     if (this.usedOpen) {
       det.open = true;
