@@ -523,6 +523,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 99px;
 }
 .level-badge:empty { display: none; }
+/* a phone: a right-docked panel's title strip (full width, from the top) sits where the badge does: the strip wins (half a tag is worse than none) */
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .level-badge { display: none; } }
 .hint-badge {
   position: absolute; left: 12px; bottom: 10px; z-index: 2; pointer-events: none;
   font-size: 12px; color: var(--muted);
@@ -710,6 +712,14 @@ html[data-widget-step] .slow-btn { display: none; }
   /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
   .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
   .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
+  /* a cue that the row scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
+  .ctl-pins {
+    background:
+      linear-gradient(to right, var(--surface) 30%, transparent) left / 28px 100% no-repeat local,
+      linear-gradient(to left, var(--surface) 30%, transparent) right / 28px 100% no-repeat local,
+      linear-gradient(to right, var(--scroll-shadow), transparent) left / 10px 100% no-repeat scroll,
+      linear-gradient(to left, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll;
+  }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
@@ -731,6 +741,9 @@ html[data-widget-step] .slow-btn { display: none; }
 .stage .controls .status { justify-content: flex-end; flex: 1 1 auto; min-width: 7em; contain: inline-size; }
 .status .pulse { flex: none; }
 .status-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-short { display: none; }
+.stage .controls .status { container-type: inline-size; }
+@container (max-width: 17em) { .status-full { display: none; } .status-short { display: inline; } }
 .status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .status .pulse.busy { background: var(--w1); animation: blink 0.6s infinite; }
 .status .pulse.warn { background: var(--wx); }

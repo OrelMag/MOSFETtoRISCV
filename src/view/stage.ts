@@ -1866,8 +1866,10 @@ export class Stage {
   /** The status line: a dot and a message, cut with an ellipsis where the bar is short of room (the whole of it is the tooltip). */
   private setStatus(dot: HTMLElement, msg: string): void {
     const t = this.status.lastElementChild as HTMLElement | null;
-    if (t && this.status.childElementCount === 2 && t.textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
-    this.status.replaceChildren(dot, h('span', { class: 'status-txt' }, msg));
+    if (t && this.status.childElementCount === 3 && this.status.children[1].textContent === msg && (this.status.firstElementChild as HTMLElement).className === dot.className) return;
+    // a short form for a bar with no room (app.css .status-short), instead of a word cut mid-way
+    const short = msg.replace(/^(edge )?settled in /, '').replace(/^propagating… /, '').replace(/^solved instantly$/, 'solved').replace(/^switching… /, '').replace(/ (d+(.d+)? ms)$/, '');
+    this.status.replaceChildren(dot, h('span', { class: 'status-txt status-full' }, msg), h('span', { class: 'status-txt status-short' }, short));
     this.status.title = msg;
   }
 
