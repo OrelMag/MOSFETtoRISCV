@@ -80,9 +80,8 @@ export const chRelays: Chapter = {
         <p>Two properties of this curve carry the rest of the chapter. First, <strong>hysteresis</strong>: closing the
         armature across the open gap takes ${ms(PULL.pull ?? 0)} V, but once it is in, the gap is nearly gone and a
         fraction of the current holds it, so it lets go only at ${ms(PULL.drop ?? 0)} V. A supply that sags between the two
-        changes nothing, and a coil fed through its own contact can hold a bit (step 6). Second, <strong>time</strong>: the
-        step is mechanical, ${ms(RELAY_STEP_MS)} ms for an armature and blade of a few grams, and more current shortens it
-        only a little, because the armature, not the coil, is the slow part.</p>
+        changes nothing. And because the coil's own contact keeps the full supply on it, a relay can hold a bit (step 6); the hysteresis is margin on top. Second, <strong>time</strong>: the
+        step is partly electrical and partly mechanical: about 3.6 ms for the coil's current to build (L / R), then the rest for an armature and blade of a few grams to travel and the blade to stop bouncing. Twice the voltage, four times the power, shortens it by only about a quarter.</p>
         <div class="try">Drag the supply below the pull-in voltage, and play the switch-off: the coil's current has to
         go somewhere.</div>`,
       more: {
@@ -202,9 +201,8 @@ export const chRelays: Chapter = {
         <p>A changeover contact chooses between two lines. <span data-show="ra">Relay <code>a</code></span> puts VDD on one of two lines (L0 when
         released, L1 when operated), and <span data-show="rb">relay <code>b</code></span> connects the output to the other one. The output is 1 when
         exactly one of them pulled: an <strong>XOR</strong>, from two relays and one relay step.</p>
-        <p>In <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> an XOR is 4 NANDs, 16 transistors, 3 gate delays deep. Changeover contacts make selection nearly
-        free, and that is the honest comparison: each technology built in its own style, not one copying the other's
-        gates.</p>
+        <p>In <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span>, through this site's NAND brick an XOR is 4 NANDs, 16 transistors, 3 gate delays deep (a dedicated CMOS cell takes about 12). Changeover contacts make selection nearly
+        free: here the relay is in its own style.</p>
         <p>The XOR is ${stats(RELAY_XOR).relays} relays against ${stats(XOR).nands} NANDs (${stats(XOR).transistors} transistors, ${logicDepth(XOR)} gate delays) in the
         brick. The same contacts make a two-way selector or a comparator just as cheaply: here the unit of price is the pole, not the gate.</p>`,
       scene: () => ({ root: RELAY_XOR, inputs: { a: 1, b: 0 }, animate: true }),
@@ -269,7 +267,7 @@ export const chRelays: Chapter = {
           lines connects to the next column: with p = 1 the incoming c passes through, with p = 0 the line is tied to g. Contacts pass the dual-rail carry both ways at full strength, so a chain of
           n columns is one electrical node once the operand relays have settled: 1 relay step for any n. In CMOS the ripple depth is ${logicDepth(rca(4))} gate delays at 4 bits and ${logicDepth(rca(32))} at 32 (2n + 4).</p>`,
         pitfall: `<p>Reading "1 relay step" as "instant". The carry beats the CMOS ripple in <em>steps</em>, but a step is ${ms(RELAY_STEP_MS)} ms, ${thin(RELAY_STEP_MS * 1e-3 / (PS_PER_NAND * 1e-12))} times a NAND delay.
-          And a long chain of contacts in series is a long resistor: the adder cannot grow without bound, as the table's last rows suggest.</p>`,
+          And a long chain of contacts in series is a long resistor: the adder cannot grow without bound, though the table, which counts relay steps only, does not show it.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>relays</th><th>relay adder</th><th>CMOS ripple, depth</th><th>CMOS ripple, time</th></tr>${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(relayAdder(n)).relays}</td><td>${fmtTime(RELAY_STEP_MS * 1e-3)}</td><td>${logicDepth(rca(n))}</td><td>${fmtTime(logicDepth(rca(n))! * PS_PER_NAND * 1e-12)}</td></tr>`).join('')}</table>`,
       },
       challenge: {
@@ -292,7 +290,7 @@ export const chRelays: Chapter = {
         <p>Konrad Zuse's <strong>Z3</strong> (1941) stored 64 words of 22 bits this way, one relay per bit: 1408 of its
         2600 relays were memory. A <span data-ahead="cmos dff">CMOS flip-flop (a clocked one-bit memory made of transistor gates)</span> is ${stats(DFF).nands} NANDs; a relay bit is one relay. Memory was still the
         expensive part, which is why the Z3 had 64 words.</p>
-        <p>The mechanism is feedback through hysteresis. While <code>set</code> is held, k operates. Its make contact now joins the holding line to its own coil, so the coil
+        <p>The mechanism is feedback. While <code>set</code> is held, k operates. Its make contact now joins the holding line to its own coil, so the coil
         stays fed after <code>set</code> returns to 0. Reset cuts the holding line; with no current k falls, and its own contact opens behind it.
         With both held, <code>set</code> wins, since it feeds the coil directly while reset only cuts the holding path.</p>
         <div class="try">Set, let go, and the bit stays. Reset clears it. A pulse shorter than a relay step does
@@ -313,7 +311,7 @@ export const chRelays: Chapter = {
       more: {
         derive: `<p>The next state is q⁺ = set + q·¬reset: set feeds the coil, or q does, unless reset cuts the holding line. That is the SR latch of
           <a href="#/c/latches/0">chapter 8</a> (set dominant here), in three relays (set, reset and the holding relay k) where the NAND version takes ${stats(SR_LATCH).nands} gates, though those relays also supply the set and reset inputs.
-          Holding works because of hysteresis: once in, k holds down to the drop-out voltage (${ms(PULL.drop ?? 0)} V), well below the pull-in (${ms(PULL.pull ?? 0)} V).</p>`,
+          Holding works because of the feedback: k's own contact keeps the full supply on its coil. Hysteresis adds margin: the bit survives a supply sagging to ${ms(PULL.drop ?? 0)} V, well below the pull-in (${ms(PULL.pull ?? 0)} V).</p>`,
         pitfall: `<p>Looking for a clock. There is none: the latch is level-sensitive, a set pulse shorter than a relay step does nothing (the armature never arrives)
           and a longer one is enough. Note too that "both inputs at 0" does not say what q is: the state lives in k, not in the inputs.</p>`,
         real: `<p>The Z3 held 64 words of 22 bits in relays, one relay a bit: ${thin(Z3.memory)} of its ${thin(Z3.relays)} relays. A holding relay draws its coil current for as long as it

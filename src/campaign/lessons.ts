@@ -109,11 +109,11 @@ detector read their inputs as numbers.</p>`,
   mem: `
 <p>You built memory from flip-flops: 13 NANDs per bit (a 9-NAND flip-flop and its 4-NAND enable
 mux), a decoder on the write port and an 8:1 bus mux per read port. Your register file is about 2200 NANDs
-for 112 bits of state: some 20 NANDs, 80 transistors, a bit. A 64-word RAM built the same way is 20 166
+for 112 bits of state: some 20 NANDs, 80 transistors, a bit. The library's 64-word RAM, built from flip-flops the same way (its 11-NAND flip-flops make 15 NANDs a bit), is 20 166
 NANDs, over four times the whole single-cycle core of Act 5.</p>
 <p>Real memories are <b>arrays</b>: an SRAM bit is 6 transistors (caches, register files), a DRAM bit one
 transistor and a capacitor (main memory), read through shared bit lines and sense amplifiers. Act 10
-builds both. From here on they are given parts:</p>
+builds the DRAM column. From here on they are given parts:</p>
 <table class="cp-laws">
   <tr><th>ROM</th><td>the program</td><td>word = rom[addr], combinational: no clock</td></tr>
   <tr><th>RAM</th><td>the data</td><td>read combinationally; written at the rising edge when we = 1</td></tr>
@@ -273,7 +273,7 @@ a time, and every level runs real programs against the golden model:</p>
 comparator and next PC side by side: with ripple adders that is 78 delays, and the pipeline is 4% faster
 than Core III but slower than Core IV. With Kogge–Stone adders in E (the ALU, the comparator's less-than,
 next PC) its period falls to 56, and it beats Core IV by 11%, for 10 102 NANDs against 4938.
-Branch prediction, the act's optional level, attacks the cycles instead: 13% fewer on its loop
+Branch prediction, the act's optional level, attacks the cycles instead: 13% fewer on its 31
 programs, at period 80, still slower than Core IV on its own. Real pipelines do both, and resolve
 branches earlier.</p>
 <h4>This act</h4>
@@ -358,7 +358,7 @@ apart at the start.</p>
 <p>The control is cheap: the SIMD core you will build is 15 669 NANDs, 10 949 more than your
 single-cycle core for three extra lanes, and four single-cycle cores would be 18 880. Most of the
 difference is <b>registers</b>: four register files are 8688 NANDs. A real GPU is the same, with its
-register file the largest structure on the chip.</p>
+register file one of the largest structures in each shader core.</p>
 <h4>Five new instructions</h4>
 <p>Everything else is RV16 unchanged. <code>csrr rd, tid</code> reads CSR 7, the thread's number
 (warp · 4 + lane). The other four take SYSTEM's free funct3 values 4 to 7: <code>split rs1</code> and
@@ -388,7 +388,7 @@ the lanes waiting for the other side of an if. Each side then runs with some lan
 reduction (SIMT), a histogram (two warps) and a spinning square (the frame). Each is graded on
 cycles and on lane-ops, the lane-steps that did work.</p>`,
   memwall: `
-<p>Every core of this campaign reads its data memory in the cycle it asks. A real main memory
+<p>Every scalar core of this campaign reads its data memory in the cycle it asks. A real main memory
 cannot: it is <b>DRAM</b>, one transistor and one capacitor per bit, and a bit is a few tens of
 femtofarads, too little to drive anything. Reading means sharing that charge with a <b>bit line</b>
 precharged to VDD/2, which moves by a tenth of the supply, and letting a <b>sense amplifier</b>

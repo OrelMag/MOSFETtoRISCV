@@ -157,7 +157,7 @@ export const chMulticycle: Chapter = {
           fifth loads (5), a fifth branches (3) and the rest stores (4) averages ${(0.5 * CYC.alu + 0.2 * CYC.load + 0.2 * CYC.branch + 0.1 * CYC.store).toFixed(1)} cycles per instruction.</p>`,
         pitfall: `<p>Leaving out IR. It is tempting to read the instruction from memory in every step, but the memory port is shared: after Fetch the same port serves a load or store, and the address changes. IR is the copy that survives. The same goes for A, B and ALUOut: any value
           needed after the next edge must sit in a register, or the shared unit overwrites it.</p>`,
-        real: `<p>Multicycle designs were the norm while logic was dear: the 6502 spends 2 to 7 cycles per instruction on one ALU and one bus. Their control was often microcode, the subject of the last three steps.</p>`,
+        real: `<p>Multicycle designs were the norm while logic was dear: the 6502 spends 2 to 7 cycles per instruction on one ALU and one bus. Their control was often microcode, the subject of the later steps.</p>`,
       },
     },
     {

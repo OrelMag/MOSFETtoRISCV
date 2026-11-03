@@ -48,7 +48,7 @@ export const chWidths: Chapter = {
       'A parcel is compressed when bits 1:0 ≠ 11, which leaves a quarter of the 16-bit space to the 32-bit instructions. The price of 16 bits: 3-bit register fields (x8–x15: s0, s1, a0–a5), the destination doubling as a source, 6-bit immediates, offsets scaled by the access size.',
       'Every 16-bit instruction is exactly one 32-bit instruction, so the hardware rewrites it before the decoder. The rewrite only moves bits and adds constants: the gates recognize which of the 30 forms it is and pick each field.',
       `The C single-cycle core: ${groupDigits(K.c.nands)} NANDs against ${groupDigits(K.plain.nands)} (+${((100 * (K.c.nands - K.plain.nands)) / K.plain.nands).toFixed(1)} %), period ${K.c.period} against ${K.plain.period} NAND delays (+${pct(K.c.period, K.plain.period)} %): the expander (${K.expander.depth} deep) and the second bank's index sit in series with decode. With a ROM per program, C saves storage and costs speed; it pays where instruction bytes are the bottleneck, a cache or a narrow memory.`,
-      'RV64 widens the registers, the PC and every ALU result to 64 bits and keeps every RV32 encoding. Per block: once per bit doubles (registers, the register file, multiplexers), a tree over the bits doubles and adds a level (adders, shifter), the multiplier quadruples, the iterative divider doubles in area and in time.',
+      'RV64 widens the registers, the PC and every ALU result to 64 bits and keeps every RV32I and M encoding (C is the exception: c.jal becomes c.addiw, c.flw becomes c.ld). Per block: once per bit doubles (registers, the register file, multiplexers), a tree over the bits doubles and adds a level (adders, shifter), the multiplier quadruples, the iterative divider doubles in area and in time.',
       `The W instructions (addw, subw, sllw, srlw, sraw, addiw, the shift immediates, mulw, divw, remw …) keep RV32's 32-bit arithmetic: operands cut to 32 bits and extended, the result's low half sign-extended. In gates, ${fmt(X.wUnit.nands)} NANDs and ${X.wUnit.depth} levels around the 64-bit ALU. lw sign-extends, lwu does not; ld / sd move a doubleword.`,
       `The same single-cycle core at 64 bits: ${fmt(X.rv64im.nands)} NANDs against ${fmt(X.rv32im.nands)} (×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)}), period ${X.rv64im.period} against ${X.rv32im.period}. On 32-bit programs it does the same instructions, slower; it pays when the values are 64 bits wide.`,
     ],
@@ -109,15 +109,15 @@ export const chWidths: Chapter = {
         options: ['It is full of register copies, small constants and stack accesses', 'The compiler emits c.* mnemonics', 'Its loops are shorter, so branches reach'],
         answer: 0,
         why: ['', 'The compiler writes plain RV32I; the assembler picks the 16-bit form wherever one exists.', 'Branches are a small share of either; the difference is in the moves, constants and stack traffic.'],
-        explain: 'The top forms in its output are c.mv, c.li, c.addi and the stack loads and stores (c.lwsp / c.swsp): what a simple compiler does between the useful instructions.',
+        explain: 'Among the top forms in its output are c.mv, c.li, c.addi and the stack loads and stores (c.lwsp / c.swsp): what a simple compiler does between the useful instructions.',
       },
     },
     {
       title: 'What 16 bits give up',
       body: `
         <p>Bits 1:0 are the <strong>quadrant</strong>. 00, 01 and 10 are 16-bit instructions, 11 is the first half of a 32-bit one, so the
-        decoder knows the length from the first two bits it sees. Bits 15:13 (funct3) and a few others pick one of 30 forms within the
-        quadrant.</p>
+        decoder knows the length from the first two bits it sees. Bits 15:13 (funct3) and a few others pick the form within the
+        quadrant, one of 30 in all.</p>
         <p>To fit, a form gives something up:</p>
         <ul>
           <li><strong>Registers</strong>: many forms have 3-bit fields (rd′, rs1′, rs2′) that reach only x8–x15, the registers the calling convention
@@ -159,7 +159,7 @@ export const chWidths: Chapter = {
         quote: [
           'The compressed extensions use a simple compression scheme that offers shorter 16-bit versions of common 32-bit RISC-V instructions when: the immediate or address offset is small, or one of the registers is the zero register (x0), the ABI link register (x1), or the ABI stack pointer (x2), or the destination register and the first source register are identical, or the registers used are the 8 most popular ones.',
           'The Zca extension allows 16-bit instructions to be freely intermixed with 32-bit instructions, with the latter now able to start on any 16-bit boundary, i.e., IALIGN=16.'],
-        note: 'Each clause of the first sentence is a reason a field can be shortened, and each one is a condition the expander\'s FORM decode ANDs in: rd ≠ 0, a 3-bit register, a small immediate.',
+        note: 'Each clause is a reason the assembler can pick a short form. The expander undoes it with wiring: a 3-bit register gets 01 in front, a short immediate is sign-extended, rd is sent to rs1 too.',
         quizzes: [
           { question: 'Which of these has a 16-bit form?', options: ['addi a0, a0, 1', 'addi a0, a1, 1', 'addi a0, a0, 100', 'add a0, a1, a2'], answer: 0,
           why: ['', 'The destination and the first source differ, and neither is sp.', 'The immediate does not fit the 6-bit signed field.', 'Three different registers fit none of the clauses.'],
@@ -321,13 +321,13 @@ export const chWidths: Chapter = {
         options: ['Keep pc >> 2 + 1 in a register of its own, computed from the next PC before the clock edge', 'Use a faster adder in the ALU', 'Make the low bank twice as large'],
         answer: 0,
         why: ['', 'The ALU is not on this part of the path; the fetch is.', 'The bank\'s size does not change which word it must read.'],
-        explain: 'The next PC is known a few gates before the edge; adding one to its word index then, into a second register, moves the incrementer onto the PC-update path, which has slack. The fetch then starts both banks at once.',
+        explain: 'The next PC is known a few gates before the edge; adding one to its word index then, into a second register, moves the incrementer off the fetch and onto the end of the PC update. On this core the branch path through the ALU into the PC is itself critical, so the delay largely comes back there; it pays where the next PC is known early, as in a fetch stage with its own PC register. The fetch then starts both banks at once.',
       },
     },
     {
       title: 'Sixty-four bits',
       body: `
-        <p>RV64 keeps every RV32 instruction and its encoding. What changes is <em>XLEN</em>, the width of the registers, the PC and every
+        <p>RV64 keeps every RV32I and M instruction and its encoding (the C extension is the exception: c.jal becomes c.addiw, c.flw becomes c.ld). What changes is <em>XLEN</em>, the width of the registers, the PC and every
         value the ALU computes: 64 bits, so an address reaches 16 EiB and a counter never wraps. <code>add</code> now adds 64 bits; <code>lw</code>
         still loads 32, sign-extended into 64. A handful of instructions are new (next step).</p>
         <p>Our generators take the width as a parameter: <code>regfile(5, n)</code>, <code>alu(n)</code>, the adders, the shifter, the multiplier.
@@ -378,7 +378,7 @@ export const chWidths: Chapter = {
         <code>mulw</code>, <code>divw</code>, <code>divuw</code>, <code>remw</code>, <code>remuw</code>. Each computes on the low 32 bits and
         <em>sign-extends</em> the result into 64, so a 32-bit value always sits in a register the same way, whatever produced it: <code>lw</code>
         sign-extends too (<code>lwu</code> is the new zero-extending load), and so does <code>lui</code>. Our two benchmarks need four W shifts
-        between them to run correctly on RV64: the generator's three and the CRC's one.</p>
+        between them to run correctly on RV64: the generator's three, in both, and the CRC's one.</p>
         <p>In hardware this is not a second ALU. The <span data-show="wu">W unit</span> sits around the 64-bit <span data-show="alu">ALU</span>:
         when <code>w = 1</code> it cuts each operand to 32 bits and extends it again (zeros for <code>srlw</code>, the sign for <code>sraw</code>),
         clears the shift amount's bit 5, and sign-extends the result's low half. Three multiplexers and wiring:
@@ -456,9 +456,9 @@ export const chWidths: Chapter = {
       tour: {
         beats: [
           { title: 'Power on', reset: true, show: ['pc', 'imem'], expect: { pcOut: 0, retire: 1 },
-            say: '<p>A 64-bit PC and register file, a 32-bit instruction word: the encodings are RV32\'s. This core retires one instruction a cycle, {v:retire} so far.</p>' },
+            say: '<p>A 64-bit PC and register file, a 32-bit instruction word: the encodings are RV32\'s. This core retires one instruction every cycle (retire = {v:retire}).</p>' },
           { title: 'A constant', cycles: 2, show: ['alu', 'rf'], expect: { pcOut: 8, aluOut: 90 },
-            say: '<p>The instruction at {v:pcOut} is <code>li x1, 90</code>: the 64-bit ALU adds 90 to zero, <code>aluOut</code> = {v:aluOut}. The upper 32 bits are zero here.</p>' },
+            say: '<p>The instruction at {v:pcOut} is <code>li t0, 90</code>: the 64-bit ALU adds 90 to zero, <code>aluOut</code> = {v:aluOut}. The upper 32 bits are zero here.</p>' },
           { title: 'Straight on', cycles: 5, show: ['pc'], expect: { pcOut: 28, retire: 1 },
             say: `<p>Seven cycles, seven instructions: the PC is {v:pcOut}. The 32-bit core would take as many cycles on this code, but each of its cycles is shorter: ${X.rv32im.period} NAND delays against ${X.rv64im.period} here.</p>` },
         ],

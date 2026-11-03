@@ -53,7 +53,7 @@ export const chMulticore: Chapter = {
       'Every access is atomic; a load–add–store sequence is not: two cores adding 1 twenty times each end at 20, not 40. <code>amoadd.w</code> reads, adds and writes in one arbitrated access: 40, every time.',
       'An <code>amoswap.w</code> spin lock makes any critical section safe, at a price: over four times the run time of the atomic add, the cores fighting for the port while they spin.',
       'Private write-back caches disagree until they snoop: with no snooping core 1 reads a stale 0 for the 7 core 0 stored. MSI in gates is two state bits per line (I 00, S 10, M 11), BusRd / BusRdX / BusUpgr on a bus that carries one transaction at a time, a second copy of the tags for the snoop, and a Flush from the Modified holder written back on the way. The control is a few percent of a cache; the data array is nine tenths.',
-      'Spinning on a Shared copy (test-and-test-and-set) puts a fraction of the bus traffic of spinning with <code>amoswap.w</code>, because a load that hits never reaches the bus. Two variables on one line ping-pong between caches (false sharing): the same loop, a line apart, is several times faster. MESI\'s Exclusive state would make private data free.',
+      'Spinning on a Shared copy (test-and-test-and-set) puts a fraction of the bus traffic of spinning with <code>amoswap.w</code>, because a load that hits never reaches the bus. Two variables on one line ping-pong between caches (false sharing): the same loop, a line apart, runs about twice as fast with a fifteenth of the traffic. MESI\'s Exclusive state would make private data free.',
       '<code>lr.w</code> / <code>sc.w</code> keep a reservation (valid + line) per cache, cleared by any <code>sc.w</code>, by a snooped BusRdX / BusUpgr for the line or by an eviction. The atomic add as a retry loop is correct and costs failed <code>sc.w</code>s; without a hold-off after <code>lr.w</code> one core can starve the other until it stops.',
       'Real cores reorder (RVWMO): with store buffers both cores of the store-buffering test can read 0. A lock is taken with acquire (<code>amoswap.w.aq</code>) and freed with release (<code>.rl</code> or <code>fence rw,w</code>). LR/SC builds any other atomic as a retry loop, as the coherent dual-core does.',
     ],
@@ -97,7 +97,7 @@ export const chMulticore: Chapter = {
     {
       title: 'Why more cores?',
       body: `
-        <p>For thirty years each process generation made transistors smaller, faster and lower-voltage at constant power density (Dennard scaling).
+        <p>For thirty years each process generation made transistors smaller and faster, and in the ideal (Dennard scaling, 1974) lower-voltage at constant power density.
         Clock rates climbed. Around 2005 the voltage stopped falling, because leakage current grows as the threshold voltage drops. Dynamic power is
         C·V²·f, so faster clocks now meant hotter chips. Frequencies have stayed near 3 to 5 GHz ever since.</p>
         <p>Moore's law kept delivering transistors, though, and the way to use them without raising the clock is <strong>more cores</strong>. Software
@@ -265,8 +265,8 @@ export const chMulticore: Chapter = {
         <em>constrained</em> loop: at most 16 instructions, and between lr and sc only base integer instructions, with no loads, stores, backward
         jumps or taken backward branches, fences or system instructions. An AMO needs no loop: the memory (or the cache that owns the line) does the
         whole operation as one request, so it always completes and stays cheap under contention, where LR/SC retries pile up. LR/SC covers the
-        rest. The cores on this site implement two AMOs, <code>amoadd.w</code> and <code>amoswap.w</code>, and no LR/SC: one arbitrated access is
-        easy to make atomic; a reservation needs a monitor watching every other core's stores.</p>`,
+        rest. This chapter's shared-memory dual-core implements two AMOs, <code>amoadd.w</code> and <code>amoswap.w</code>, and no LR/SC: one arbitrated access is
+        easy to make atomic; a reservation needs a monitor watching the other core's writes, which the coherent dual-core later in the chapter gets from its snoop port.</p>`,
         pitfall: `<p>Using an atomic for part of a sequence. <code>amoadd.w</code> makes the add indivisible; a program that loads the counter with <code>lw</code>, tests it and then
           does an <code>amoadd.w</code> has a gap between the test and the add. A decision that depends on the old value must be made inside the atomic, or under a lock.</p>`,
       },

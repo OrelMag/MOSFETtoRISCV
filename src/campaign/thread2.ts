@@ -261,7 +261,7 @@ export const THREAD2: Record<string, NodeThread> = {
     usedFor: { o_fpnorm: 'the left shift that puts the leading 1 back on top' },
     pitfalls: [
       'Combining halves without v: the upper count only counts when the upper half has a 1.',
-      'An all-zero input: the count is the width, and v = 0 must say so.',
+      'An all-zero input: c is a don’t-care (4 bits cannot hold 16), and v = 0 must say so.',
     ],
   },
   o_fpnorm: {

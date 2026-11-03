@@ -18,7 +18,6 @@ const halted = () => !!document.querySelector('.coh-panel .cpu-status .warn');
 /** Built on first use: the counts take a moment (the netlists' statistics, a few runs of the model) and the chapters load with the app. */
 function build(): Step[] {
   const C = cohCosts();
-  const stale = run("stale", false);
   const spin = run('spin'), ttas = run('ttas'), fs = run('falseshare'), pad = run('padded'), amo = run('atomic'), lr = run('lrsc');
   const [pa, pb] = lineStates(src('predict'), 64);
   const OPTS = ['M, I', 'S, S', 'M, S', 'S, I'];
@@ -32,7 +31,7 @@ function build(): Step[] {
         [3:2] pick the word, [5:4] the set, the rest is the tag. Per set <span data-show="cache0.ctags">a small array holds {m, v, tag}</span> (valid, dirty and the tag),
         and <span data-show="cache0.data">sixteen words of data</span> sit in a register file with two read ports; the second is for the bus, next step.</p>
         <p>A hit costs nothing: <span data-show="cache0.acc">the access decode</span> matches the tag, says <em>grant</em>, and the core retires in that cycle. A miss holds the
-        core (retire = 0) and asks <span data-show="bus">the bus</span>. One transaction at a time, granted by the arbiter of this chapter's second step (ARBITER2, kept quiet while the bus is busy):
+        core (retire = 0) and asks <span data-show="bus">the bus</span>. One transaction at a time, granted by the arbiter of this chapter's third step (ARBITER2, kept quiet while the bus is busy):
         the grant cycle, then counts 0 to 3 write a Modified victim back to <span data-show="dm">memory</span>, a word a cycle, and 4 to 7 bring the new line in. A clean miss holds the bus for 5 cycles, a
         miss over a dirty line for 9; the access then hits.</p>
         <p>The price, counted from the gates: one cache is <strong>${groupDigits(C.privateCache)} NAND</strong>, of which the data array is ${groupDigits(C.data)} (${pct(C.data, C.privateCache)}); the tag array is
@@ -49,7 +48,7 @@ function build(): Step[] {
         derive: `<p>Hit and miss cost. A hit: one tag compare, one data read, no stall. A miss with a clean victim: the grant cycle, then 4 cycles for the 4 words: ${1 + 4} bus cycles, after which the access is a hit
           (one more cycle). With a Modified victim the 4 write-back cycles come first: ${1 + 4 + 4}. The bus is held for the whole transaction, so the other core's misses wait behind it.</p>`,
         real: `<p>A real L1 line is 64 bytes and the fill is one beat of a wide bus or a burst of a few; here it is 16 bytes at a word per cycle so every cycle of a fill can be read on the panel.
-          What carries over unchanged is the structure: tags beside data, a write-back victim buffer, a dirty bit per line, and a miss that holds the pipeline.</p>`,
+          What carries over unchanged is the structure: tags beside data, a dirty bit per line, a victim to write back, and a miss that holds the pipeline. Real cores add a victim buffer and keep running past a miss.</p>`,
         pitfall: `<p>Calling the stale read a bug in the cache. Each cache does exactly what a private write-back cache should; the program is wrong for a machine whose caches do not talk. The shared-memory
           dual-core hid the issue by having no caches at all.</p>`,
       },
@@ -58,7 +57,7 @@ function build(): Step[] {
         options: ['7, core 0 stored it', '0, the 7 is still a dirty line in core 0\'s cache', '7, written when core 1 read it', 'Unknown (X)'],
         answer: 1,
         why: ['A store only writes the cache in a write-back cache; memory is written when a Modified line is evicted.', '', 'Core 1 never read it again before the end: it read its own stale copy.', 'Memory is reset to 0 and nothing wrote it.'],
-        explain: `Write-back keeps stores in the cache (a dirty line, state M) and writes memory only on eviction. The panel's last line shows core 0's line as M with 7 while memory still holds 0 (${stale.mem[16]} at the end of the run).`,
+        explain: `Write-back keeps stores in the cache (a dirty line, state M) and writes memory only on eviction. The panel's last line shows core 0's line as M with 7 while memory still holds 0.`,
       },
     },
     {
@@ -99,7 +98,7 @@ function build(): Step[] {
       },
       more: {
         derive: `<p>Transactions for the chapter's race, counted by the model and equal to the gates': ${run('race').bus} bus transactions (${run('race').rd} BusRd, ${run('race').rdx} BusRdX, ${run('race').upgr} BusUpgr) for 40 increments,
-          of which ${run('race').flushes} were Flushes. Each increment is a <code>lw</code> that misses (its line is in the other cache as M) and a <code>sw</code> that upgrades it.
+          of which ${run('race').flushes} were Flushes. In turn: one core's <code>lw</code> misses and its <code>sw</code> upgrades, invalidating the other's copy; the other core's <code>sw</code> then needs a BusRdX. Three transactions for each two increments.
           Lost updates remain: coherence keeps the caches agreeing, it does not make a load, add and store atomic.</p>`,
         real: `<p>This is MSI. MESI adds an Exclusive state and a "shared" wire so that a read nobody else holds can later be written with no transaction; MOESI and MESIF let a cache answer from its copy instead of memory.
           Intel and AMD cores use such variants, and past a few dozen cores the broadcast gives way to a directory.</p>`,
@@ -121,7 +120,7 @@ function build(): Step[] {
         doing it, <em>each try is a bus transaction</em> and the line ping-pongs. Forty acquires (20 per core) take <strong>${spin.cycles} cycles and ${spin.bus} transactions</strong>: ${per(spin.bus, 40)} per acquire, the bus busy ${pct(spin.busyShare, 1)} of the time.</p>
         <p><strong>Test-and-test-and-set</strong> spins with a plain <code>lw</code> first. The spinner's copy of the lock line is S, so every try is a hit: no bus until the holder's release invalidates it. Then the spinner re-reads
         (one BusRd), sees 0, swaps. The same forty acquires take <strong>${ttas.cycles} cycles and ${ttas.bus} transactions</strong>: ${per(ttas.bus, 40)} per acquire, the bus busy ${pct(ttas.busyShare, 1)}.
-        That is ${pct(ttas.bus, spin.bus)} of the traffic and ${pct(ttas.cycles, spin.cycles)} of the time, from adding one instruction that reads before it writes. The table under the caches is measured by running both programs.</p>
+        That is ${pct(ttas.bus, spin.bus)} of the traffic and ${pct(ttas.cycles, spin.cycles)} of the time, from adding a load and its branch before the write. The table under the caches is measured by running both programs.</p>
         <p>The same machinery shows <strong>false sharing</strong> in gates. <em>False sharing</em> and <em>Padded</em> run one loop: each core adds 1 to its own word twenty times. Four bytes apart the words share a line:
         <strong>${fs.cycles} cycles, ${fs.bus} transactions, ${fs.invalidations} invalidations</strong>. Sixteen bytes apart, a line each: <strong>${pad.cycles} cycles, ${pad.bus} transactions, ${pad.invalidations} invalidations</strong>.
         Nothing about the variables is shared, only the line, and the line moves between the caches ${fs.invalidations} times.</p>
@@ -150,7 +149,7 @@ function build(): Step[] {
     {
       title: 'lr.w and sc.w',
       body: `
-        <p>Two atomics cover every read-modify-write, but a machine with caches can offer something more general: <code>lr.w</code> reads a word and <em>reserves</em> its line; <code>sc.w</code> stores only if
+        <p>Two atomics do an add and a swap, and a lock built on the swap does the rest; a machine with caches can offer something more general: <code>lr.w</code> reads a word and <em>reserves</em> its line; <code>sc.w</code> stores only if
         the reservation still holds and writes 0 to rd, else writes 1 and stores nothing. Any update is then a retry loop: <code>lr.w</code>, compute, <code>sc.w</code>, branch back if rd is not 0.</p>
         <p>The reservation is <span data-show="cache0.res">a valid bit and a line address per cache</span>: ${groupDigits(C.reservation)} NAND. <code>lr.w</code> sets it. It is cleared by <em>any</em> <code>sc.w</code>, by <em>another cache's BusRdX or BusUpgr for
         that line</em> (the snooped invalidation: someone is about to write it, and the snoop tag lookup that detects it exists anyway), and by this cache's own fill evicting the line. A clear beats a set on the same edge, so an

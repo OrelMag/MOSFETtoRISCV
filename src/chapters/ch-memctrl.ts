@@ -5,6 +5,7 @@ import { WB_MISS_CLEAN, WB_MISS_DIRTY } from '../lib/cache2';
 import { accessCycles, DDR4_3200, TIMING } from '../dram/timing';
 import { BENCHMARKS } from '../riscv/benchprograms';
 import { dramCtrl } from '../lib/dramctrl';
+import { dataMemory } from '../lib/cpu';
 import { stats } from '../sim/stats';
 import { cpuScene } from '../widgets/cpupanel';
 import { memCtrlRequest, memCtrlScene, memCtrlState } from '../widgets/dramctrl';
@@ -36,7 +37,7 @@ export const chMemCtrl: Chapter = {
   builds: ['cache', 'dram'],
   recap: {
     keep: [
-      'Commands: ACT, RD, WR, PRE (PREA: every bank), REF (DDR4 adds MRS, ZQ, self-refresh, power-down). Each waits for a rule: tRCD after an ACT, tRP after a PRE, tRAS before a row may close, tRFC after a REF. The device here turns a broken rule into X.',
+      'Commands: ACT, RD, WR, PRE (PREA: every bank), REF (DDR4 adds MRS, ZQ, self-refresh, power-down). Each waits for a rule: tRCD after an ACT, tRP after a PRE, tRAS before a row may close, tRFC after a REF. The device here checks every one: a broken rule raises its error flag and names the rule, and a column command that breaks one reads X.',
       'Overlapping requests across banks adds rules between them: tRRD between ACTs, tFAW (four ACTs a window), tCCD_S / _L between column commands (bank groups: alternate them), tWR before a written row closes, tWTR for the bus to turn from write to read.',
       `The controller is seven state flip-flops, one wait counter that every command loads, an open-row table and a refresh counter: ${fmt(stats(dramCtrl(CFG)).nands)} NANDs, serving one request at a time.`,
       `Open page: a hit ${accessCycles('hit', TIMING)} cycles, a conflict ${accessCycles('conflict', TIMING)}. Closed page: ${accessCycles('miss', TIMING)} every time. The benchmarks' 256 bytes are four rows, so open page wins there.`,
@@ -62,7 +63,7 @@ export const chMemCtrl: Chapter = {
         ],
         answer: 0,
         explain: `The refresh precharged every bank, then the device takes no command for tRFC. Then the request opens its row again: a miss. In all up to ${TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)} cycles.`,
-        why: ['', 'A REF needs every bank precharged first: no row survives it.', 'DDR4 allows postponing up to 8 refreshes, but this controller never does: once due, a refresh goes first at the next idle cycle.', 'The controller holds the request until the device may take commands again. X marks a broken timing rule, and the controller breaks none.'],
+        why: ['', 'A REF needs every bank precharged first: no row survives it.', 'DDR4 allows postponing up to 8 refreshes, but this controller never does: once due, a refresh goes first at the next idle cycle.', 'The controller holds the request until the device may take commands again. The controller breaks no timing rule, so the device has nothing to flag.'],
       },
       {
         question: 'The copy (source word i, destination word i + 1024, rows of 16 words) on 4 banks with the plain mapping. Do its streams still fight?',
@@ -91,8 +92,8 @@ export const chMemCtrl: Chapter = {
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
         refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),
         self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter 35</a>): tRCD after an ACT before a column command, tRP after a PRE
-        before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one, and a
-        command that breaks one turns its data into X.</p>
+        before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one: a broken rule raises its error flag and names the rule, and a
+        column command that breaks one reads X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
         flip-flops</span> (idle when none is set), <span data-show="ctrl.cnt">one wait counter</span> that every command loads with its delay, an open-row table (a valid bit and
         a row register per bank) and a refresh counter. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
@@ -172,7 +173,7 @@ export const chMemCtrl: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'Why does closed page lose even on the copy, a program with little reuse?',
-        options: ['Its reads and writes still hit rows: four lines of a row in a row, and the write-backs follow their fills', 'Closed page cannot refresh', 'Closed page needs more banks', 'The cache is write-through'],
+        options: ['Its requests come back to back, so closed page also waits for each precharge, and a third of them would have hit an open row', 'Closed page cannot refresh', 'Closed page needs more banks', 'The cache is write-through'],
         answer: 0,
         why: [
           '',
@@ -180,7 +181,7 @@ export const chMemCtrl: Chapter = {
           'Both policies run on the same two banks. The policy decides only whether a row stays open after its burst.',
           'The cache here is write-back: dirty lines go out as whole-line write-backs, right before their fills.',
         ],
-        explain: 'Each stream walks its row four lines in a row, so an open row still serves three of four lines of each stream when the streams do not evict each other. Closed page throws that away and pays an activate for every line.',
+        explain: 'The streams evict each other, so open page hits only 33 %, below the 50 % break-even against a flat 12. But closed page does not pay 12 here: a write-back followed at once by a fill waits for the precharge, 15.3 cycles a request on average against open page\'s 14.2.',
       },
     },
     {
@@ -235,7 +236,7 @@ export const chMemCtrl: Chapter = {
         raises <code>req</code> with the line address; if the victim is dirty it first asks for a write (<code>wr</code>) with the victim's
         address, and the controller says which word it wants each cycle; then it asks for the fill and writes each word as
         <code>dv</code> (data valid: the device is delivering a read word) says. The tag is written with the last word. The stall lasts exactly as long as the DRAM takes.</p>
-        <p>Main memory is no longer 64 words of flip-flops in the CPU (${fmt(nands('sc-wb2') - nands('sc-wb2-dram'))} NANDs) but a
+        <p>Main memory is no longer 64 words of flip-flops in the CPU (${fmt(stats(dataMemory(6)).nands)} NANDs, ${fmt(nands('sc-wb2') - nands('sc-wb2-dram'))} saved after paying for the controller) but a
         DRAM device on another chip, so the CPU with its cache and controller is ${fmt(nands('sc-wb2-dram'))} NANDs. Sort over open page
         takes ${fmt(run('sc-wb2-dram', 'sort'))} cycles against ${fmt(run('sc-wb2', 'sort'))} with the fixed cost
         (${slower('sc-wb2-dram', 'sc-wb2', 'sort')} slower). The pipelined CPU loses ${slower('pipe-wb2-dram', 'pipe-wb2', 'matmul')} on matmul.
@@ -289,15 +290,15 @@ export const chMemCtrl: Chapter = {
         derive: `<p>With 2 banks and 16-word rows, the bank is bit 4 of the word address and the row the bits above it. The copy's source word i and destination i + 1024 differ only in
           bit 10, so bit 4 is equal: the same bank, a row 1024 / (16 × 2) = 32 apart. Folding in the parity (XOR of the row bits) gives bank = bit 4 ⊕ parity(row); the two rows differ in one row bit
           (bit 5 of the row number, for rows below 32), their parities differ, and the streams separate. Cost: a parity tree over the row bits and one XOR.</p>`,
-        real: `<p>Intel and AMD controllers hash many address bits (channel, rank, bank group and bank each take an XOR of several higher bits), partly to spread power-of-two strides, partly to spread
-          row hammer's aggressors. The same hashes are why reverse-engineering a machine's mapping is a standard first step for a DRAM side-channel or row-hammer attack.</p>`,
+        real: `<p>Intel and AMD controllers hash many address bits (channel, rank, bank group and bank each take an XOR of several higher bits), to spread power-of-two strides.
+          The same hashes are why reverse-engineering a machine's mapping is a standard first step for a DRAM side-channel or row-hammer attack.</p>`,
         pitfall: `<p>Adding banks and expecting the conflicts to go. Two addresses that agree in the bank bits stay together at any bank count; only a mapping that makes those bits
           differ separates them. The quiz's copy on four banks still fights: 1024 is a multiple of 4 × 16.</p>`,
       },
       widget: ctrlExplorer,
       challenge: {
         kind: 'quiz',
-        question: 'Why do the four benchmarks barely change with 4 banks or the hash, while the copy does?',
+        question: 'Why do fib, sort and crc barely change with 4 banks or the hash, while the hash speeds the copy up by 8 %?',
         options: ['Their data is 256 bytes: a few rows, already mostly hits', 'They have no stores', 'They fit in the cache, so there are no requests', 'The hash only works on 4 K words'],
         answer: 0,
         why: [
@@ -306,7 +307,7 @@ export const chMemCtrl: Chapter = {
           'Every line still comes from DRAM at least once, so there are requests. What keeps them hitting is that the data is only four rows.',
           'The hash is a parity tree and an XOR on the row bits, the same for any size. It helps only where two streams share a bank.',
         ],
-        explain: 'With 64 words, 16 words a row, the whole data set is 4 rows in 2 banks: most requests hit whatever the mapping. Address mapping matters for programs whose streams are far apart in memory.',
+        explain: 'With 64 words, 16 words a row, the whole data set is 4 rows in 2 banks: most requests hit whatever the mapping. Address mapping matters for programs whose streams are far apart in memory. Matmul shows the mapping is a trade: the hash makes it 4 % slower (row hits 76 % to 58 %), 4 banks 4 % faster.',
       },
     },
     {

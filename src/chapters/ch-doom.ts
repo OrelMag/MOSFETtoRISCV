@@ -80,7 +80,7 @@ export const chAppendixDoom: Chapter = {
         that answers the first can be wrapped to answer the second without changing a gate of its own.</p>`,
       more: {
         derive: `<p>Why fixed point needs only M. A 16.16 multiply is (a × b) >> 16: the product of two 32-bit values is 64 bits, of which the middle 32 are wanted. RV32M gives the low half with <code>mul</code> and the high half with <code>mulh</code>
-          (signed), and a shift and an OR join them, so a fixed-point multiply is a handful of instructions. Divide works the same way through <code>div</code> on a pre-shifted value. No floating-point unit is involved anywhere, because the 386 the game was written for had none either.</p>`,
+          (signed), and a shift and an OR join them, so a fixed-point multiply is a handful of instructions. Divide is a 64-bit C division of the value shifted left 16 (RV32's <code>div</code> takes only a 32-bit dividend), so the compiler calls libgcc's <code>__divdi3</code>, a software routine built on <code>divu</code>, <code>remu</code> and <code>mul</code>. No floating-point unit is involved anywhere, because the 386 the game was written for had none either.</p>`,
         real: `<p>Doom has run on nearly everything with a CPU and a frame buffer: calculators, printers, cameras, oscilloscopes. What it needs is not performance (it ran on a 386 at 33 MHz) but a few megabytes,
           a way to draw 320 × 200 pixels and some input. The porting layer, six functions in doomgeneric, is the real interface between a game and a machine.</p>`,
         pitfall: `<p>Reading "runs Doom" as a statement about the CPU's speed or features. The ISA decides whether the code can execute at all; the memory map decides whether it can start; the clock decides how fast it plays.
@@ -110,7 +110,7 @@ export const chAppendixDoom: Chapter = {
         stored per pixel, down the column.</p>
         <p>Why this matters for hardware: the instruction mix is the specification of the CPU the program wants. A third of the words touching memory says the load and store path is the one to make fast;
         jumps and calls at one in eight (branches one in eleven) say the front end matters; multiplies and divides below one in a hundred say a slow multiplier (34 cycles for a divide here) costs little.
-        A chip designer reads a census like this one before choosing what to spend transistors on.</p>`,
+        This census counts words in the image, not instructions executed, and a designer wants the second: FixedMul is six words called from 133 places. The Play step's live instruction mix is the number to read before choosing what to spend transistors on.</p>`,
       more: {
         derive: `<p>The image is 57 889 words, ${groupDigits(57889 * 4)} bytes, or ${Math.round(57889 * 4 / 1024)} KiB of code. It does not fit in anything we have drawn: the program ROM of the earlier CPUs held tens of words. The ROM tree here is built from the
           same banks, 2<sup>16</sup> words of them.</p>`,
@@ -155,7 +155,7 @@ export const chAppendixDoom: Chapter = {
       body: `
         <p>This is Doom (1993): the C source of <a href="https://github.com/ozkl/doomgeneric" target="_blank" rel="noopener">doomgeneric</a>
         compiled by GCC with <code>-march=rv32im</code> into 57 889 instruction words, the ISA of the system CPU of <a href="#/c/io/0">chapters 19–21</a>.
-        No floats (Doom is fixed point), no compressed instructions, machine mode only.</p>
+        No float instructions: the geometry is fixed point, and the few floats elsewhere (a timedemo's fps, config values) go through the compiler's software routines. No compressed instructions, machine mode only.</p>
         <p>The program sees a small computer: 8 MiB of RAM, the game data (a WAD file) mapped read-only at
         <code>0x1000_0000</code>, a 320 × 200 frame buffer of palette indices at <code>0xC000_0000</code>, and three I/O
         registers next to the system CPU's: <code>KEY</code> (a read takes one key event), <code>FLIP</code> (a frame is

@@ -113,7 +113,7 @@ export const THREAD1: Record<string, NodeThread> = {
     uses: ['imem', 'dmem'],
     usedFor: { c_core2: 'the data RAM, on the ALU\'s result: daddr, dwdata, dwe, drdata' },
     pitfalls: [
-      'Reads are combinational, writes happen at the edge: a load right after a store to the same word sees the new value only in the next cycle.',
+      'Reads are combinational, writes happen at the edge: during the store’s own cycle a read of that word still sees the old value; the next instruction’s load sees the new one.',
       'Fetch and load share one cycle: a single memory with one port cannot serve both, hence a ROM and a RAM (Harvard).',
     ],
   },

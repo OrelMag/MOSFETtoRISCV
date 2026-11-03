@@ -62,7 +62,7 @@ export const chPixels: Chapter = {
         question: 'Why does depth set-up cost more than the rest of the rasterizer?',
         options: ['Its slopes divide by twice the area: two runs of a 30-bit divider, 32 cycles each', 'Depth values are 32 bits wide', 'The depth buffer is cleared for every triangle', 'Every pixel needs a multiplication for z'],
         answer: 0,
-        explain: 'Z<sub>x</sub> and Z<sub>y</sub> are quotients by 2·area: four products, two divisions and ten shift-and-add steps, 76 cycles and 12 032 NANDs. Per pixel z is one add.',
+        explain: 'Z<sub>x</sub> and Z<sub>y</sub> are quotients by 2·area: four products, two divisions and ten shift-and-add steps, about 80 cycles that start during the edge set-up, so 76 more cycles before the walk; 12 032 NANDs. Per pixel z is one add.',
         why: ['', 'Width costs adders, not cycles; the time goes into the two divisions.', 'The depth buffer is cleared once a frame, not per triangle.', 'z is linear like the edges: one add per pixel step, no multiplication.'],
       },
       {
@@ -141,9 +141,8 @@ export const chPixels: Chapter = {
           = ${edgeAt([20, 20], [240, 60], P)}; E<sub>bc</sub> = ${edgeAt([240, 60], [40, 230], P)}; E<sub>ca</sub> = ${edgeAt([40, 230], [20, 20], P)}. All three are ≥ 0, so p is inside, and they sum to
           ${edgeAt([20, 20], [240, 60], P) + edgeAt([240, 60], [40, 230], P) + edgeAt([40, 230], [20, 20], P)}, twice the area (${edgeAt([20, 20], [240, 60], [40, 230])}, from the vertex c against edge ab). Width: |A|, |B| ≤ 255 so |E| ≤ 2 · 255² = ${fmt(2 * 255 * 255)}
           &lt; 2<sup>17</sup>: ${Math.ceil(Math.log2(2 * 255 * 255 + 1)) + 1} bits signed.</p>`,
-        pitfall: `<p>A pixel is sampled at its centre, (4x + 2, 4y + 2), not its corner. Sample at the corner and a triangle that covers three quarters of a pixel can miss it while an exact-edge triangle next door also misses it,
-          leaving a crack. The top-left rule then exists only because centres can fall exactly on shared edges, which fixed point makes possible.</p>`,
-        real: `<p>GPUs evaluate the same edge equations, usually on a 4 × 4 or 8 × 8 pixel block at once, with 8 sub-pixel bits or more and 24-bit-wide arithmetic. The top-left rule is in Direct3D's and Vulkan's specifications, so a
+        pitfall: `<p>A pixel is sampled at its centre, (4x + 2, 4y + 2), not its corner. Coverage is decided at that one point, not by area: a triangle covering three quarters of a pixel can still miss the centre. Sampling at a corner would crack nothing but would shift the picture half a pixel. The top-left rule is needed because samples can fall exactly on shared edges, often in fixed point.</p>`,
+        real: `<p>GPUs evaluate the same edge equations, usually on a 4 × 4 or 8 × 8 pixel block at once, with 8 sub-pixel bits or more and 24-bit-wide arithmetic. Direct3D's specification mandates the top-left rule; Vulkan requires only that exactly one of the two triangles covers such a sample, so a
           shared edge is drawn once on every conforming GPU.</p>`,
       },
       challenge: {
@@ -179,7 +178,7 @@ export const chPixels: Chapter = {
           <p>The large triangle's cycles: 8 set-up (the products), 210 tile tests, 106 tiles walked at 16 pixels: ${8 + 210 + 106 * 16} cycles (1914 measured), against 3368 for every pixel of the box. The walk skips ${210 - 106} of 210 tiles
           (${pct(210 - 106, 210)}) for the price of one test cycle each. A tile test costs 1 cycle and saves up to 16, so it pays whenever more than 1 in 16 tested tiles is empty.</p>`,
         pitfall: `<p>The test is conservative: a tile passes if <em>any</em> pixel could be inside, judged by each edge's best corner separately. A tile near a vertex can pass all three edge tests and still contain no pixel
-          centre. It then costs 17 cycles for nothing, and that is why the cost of a thin sliver is dominated by the tests, not by the pixels written.</p>`,
+          centre. It then costs 17 cycles for nothing, and that is why most of a thin sliver's cost is not the pixels written: of its 888 cycles 358 visit empty pixels in tiles that passed, 240 test tiles and 282 write.</p>`,
         real: `<p>Hardware rasterizers walk a hierarchy: coarse tiles of 16 × 16 or more, then 4 × 4 or 8 × 8 blocks, then pixels, rejecting whole levels at once, and write a block of pixels per cycle. This chapter's walk is the same idea with one
           level and one pixel a cycle.</p>`,
       },
@@ -201,7 +200,7 @@ export const chPixels: Chapter = {
         Z<sub>x</sub> = (A<sub>0</sub>·(z<sub>2</sub> − z<sub>0</sub>) + A<sub>2</sub>·(z<sub>1</sub> − z<sub>0</sub>)) / (2·area) (the barycentric weights,
         differentiated), Z<sub>y</sub> the same with B. So a fourth stepper walks it with the edges. Its <span data-show="rast"><strong>depth set-up</strong></span>
         needs a division: four products on its own Booth multiplier, two divisions on <a href="#/c/muldiv/0">chapter 21</a>'s non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
-        z at the first tile. That is 76 more cycles per triangle and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
+        z at the first tile. That is about 80 cycles that start during the edge set-up, so 76 more cycles before the walk, and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
         among many pixel pipelines.</p>
         <p>The buffer keeps 16 bits a pixel. The <span data-show="rop">ROP</span> (raster operations: the depth test and the blend) reads it at the pixel's
         address, compares and writes in the same cycle. Clearing it walks every tile of the screen: ${fmt(CLEAR)} cycles from go (${Z_WALK_START - 1} before the walk starts,
@@ -514,8 +513,8 @@ export const chGfxPipeline: Chapter = {
         close the point is to each: with fractions <em>fx</em>, <em>fy</em> of the way across, first interpolate along x in both rows, then along y between the results. Three linear interpolations
         (<span data-show="u0 u1 u2">lerps</span>), each y = (a · (16 − f) + b · f) &gt;&gt; 4 for a 4-bit fraction: two 8 × 8 multipliers, an adder, and the low four bits dropped.</p>
         <p>One lerp is ${fmt(nd(LERP8))} NANDs, a bilinear unit ${fmt(nd(BILINEAR8))}, and an RGB332 pixel needs one per colour channel: ${fmt(3 * nd(BILINEAR8))}. For scale, chapter 33's whole blend unit (<code>BLEND332</code>) is ${fmt(nd(BLEND332))}.
-        Each sample also reads <strong>4 texels</strong> from memory, and a texture cache exists mainly to serve them: neighbouring pixels share most of their texels. Each stage truncates, so the result is within 1 of the exact weighted
-        average (${bilinearRef(0, 255, 0, 255, 8, 0)} here against 127.5 for the midpoint of 0 and 255): the tests check the circuit against the reference over random inputs.</p>
+        Each sample also reads <strong>4 texels</strong> from memory, and a texture cache exists mainly to serve them: neighbouring pixels share most of their texels. Each stage truncates, so the result can fall up to 1.875 below the exact weighted
+        average, never above it (${bilinearRef(0, 255, 0, 255, 8, 0)} here against 127.5 for the midpoint of 0 and 255): the tests check the circuit against the reference over random inputs.</p>
         <p>Minified textures are the harder half. A 256 × 256 image drawn 32 pixels wide steps 8 texels per pixel; bilinear would read 4 texels spread over 8 and shimmer. A <strong>mipmap</strong> keeps the image at half size,
         quarter size and so on, and the unit picks the level whose texel is about one pixel: ρ = 8 texels per pixel gives level log<sub>2</sub> 8 = 3, the ${256 >> 3} × ${256 >> 3} image. The chain costs ${fmt(MIP_BYTES)} bytes for a ${fmt(256 * 256)}-byte texture,
         ${(MIP_BYTES / 65536).toFixed(3)}× (the series 1 + ¼ + 1/16 + … = 4/3). <strong>Trilinear</strong> blends two adjacent levels (8 texels, 7 lerps per channel); <strong>anisotropic</strong> filtering takes up to 16 such samples along the
@@ -523,9 +522,9 @@ export const chGfxPipeline: Chapter = {
         <div class="try">Put 0 in the left texels and 255 in the right ones, and find the fraction that returns the middle.</div>`,
       scene: () => ({ root: BILINEAR8, inputs: { t00: 0, t01: 255, t10: 0, t11: 255, fx: 4, fy: 0 } }),
       more: {
-        derive: `<p>Bilinear as weights: y = Σ t<sub>ij</sub> · w<sub>ij</sub> with w = (1 − fx)(1 − fy), fx(1 − fy), (1 − fx)fy, fx·fy, summing to 1. Three lerps need 6 multiplies, the four weights need 4 + 4 once the products of fractions are shared; the two-stage form keeps each multiplier 8 × 4 useful bits and is how most hardware is built. Truncating between the stages loses at most 1 per stage; a unit that keeps 12 bits through the second lerp rounds once, at the cost of wider multipliers.</p>`,
+        derive: `<p>Bilinear as weights: y = Σ t<sub>ij</sub> · w<sub>ij</sub> with w = (1 − fx)(1 − fy), fx(1 − fy), (1 − fx)fy, fx·fy, summing to 1. Three lerps need 6 multiplies, the four weights need 4 + 4 once the products of fractions are shared; the two-stage form keeps each multiplier 8 × 5 useful bits and is how most hardware is built. Truncating between the stages loses at most 1 per stage; a unit that keeps 12 bits through the second lerp rounds once, at the cost of wider multipliers.</p>`,
         pitfall: `<p>Filtering gamma-encoded colours as if they were linear light darkens the blend: the average of black and white texels is 128 in the buffer but about 22 % reflectance. Hardware with sRGB textures converts to linear before the lerp, with a lookup per channel; this unit, like RGB332, filters the stored values.</p>`,
-        real: `<p>A modern texture unit filters 4 to 16 texels per clock per SM quadrant, in 16-bit fixed or half-float, behind an L1 texture cache; sampling is also how shaders read ordinary data tables. The same lerp, exposed as <code>mix(a, b, f)</code>, is one instruction on the lanes.</p>`,
+        real: `<p>A modern texture unit filters about one bilinear sample (4 texels) per clock, behind an L1 texture cache; sampling is also how shaders read ordinary data tables. The same lerp, exposed as <code>mix(a, b, f)</code>, is one instruction on the lanes.</p>`,
       },
       challenge: {
         kind: 'reach', goal: 'With 0 on the left and 255 on the right, find the fraction fx that returns the closest value to the midpoint 127.5.',
@@ -545,7 +544,7 @@ export const chGfxPipeline: Chapter = {
         <span data-show="fb">back frame</span>: four RGB332 pixels a cycle, 1024 cycles a frame. The
         depth buffer takes the frame's shape, four banks of 1024 × 16 (pixel x mod 4), so four depths clear in the same cycle. Drawing still writes one
         pixel and one bank, picked by x mod 4. The banks cost the <span data-show="rop">depth test</span> 307 NANDs of multiplexers (1728 against 1421), and the command unit no longer
-        steers the background colour into the rasterizer (1963 against 1997): about 580 NANDs in all.</p>
+        steers the background colour into the rasterizer (1963 against 1997): about 580 NANDs of logic.</p>
         <p>The triangle's frame: the clear 1026 cycles, the triangle 1268, waiting for vsync 778, so 3072 cycles, three scan-outs instead of six. The cube's is
         4096 or 5120, four or five scan-outs (it was 7168 to 8192). The triangle's frame rate doubles, and the rasterizer's pixel a cycle now bounds the frame.</p>
 
@@ -555,7 +554,7 @@ export const chGfxPipeline: Chapter = {
       more: {
         derive: `<p>Clearing words instead of pixels: ${fmt(FRAME_BYTES)} pixels / ${SCREEN.perWord} per cycle = ${FRAME_WORDS} cycles, plus 2 to start, 1026. The frame is then clear + triangle = 1026 + 1268 = ${1026 + 1268} cycles of work, rounded up to ${snap(1026 + 1268)} (${snap(1026 + 1268) / FRAME_WORDS} scan-outs),
           against ${snap(4438 + 1268)} before: ${pct(snap(1026 + 1268), snap(4438 + 1268))} of the old time. The cube's two or three faces (2300 to 3200 cycles) plus the clear land in ${snap(1026 + 2300) / FRAME_WORDS} to ${snap(1026 + 3200) / FRAME_WORDS} scan-outs.</p>`,
-        pitfall: `<p>A faster clear moves the bottleneck, it does not remove it: with the clear at ${FRAME_WORDS} cycles the rasterizer's one pixel a cycle bounds the frame, and doubling the clear again would change nothing. Find the next limit before spending gates on this one.</p>`,
+        pitfall: `<p>A faster clear moves the bottleneck, it does not remove it: with the clear at ${FRAME_WORDS} cycles the rasterizer's one pixel a cycle bounds the frame, and a clear twice as fast would still save a scan-out here (3072 to 2048), but no clear at all would save no more: 1268 cycles of drawing still round up to 2048. Find the next limit before spending gates on this one.</p>`,
         real: `<p>Real GPUs go further: a clear only marks tiles as cleared, a bit each, and the colour is supplied when a tile is first read or written, so a clear
           costs a few cycles whatever the screen size. The price is that flag, checked by the depth test and the scan-out on every access.</p>`,
       },

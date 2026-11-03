@@ -183,7 +183,7 @@ describe('numbers in the whys', () => {
 describe('lessons', () => {
   it('mem: a RAM as flip-flops, and the bench\'s memories', () => {
     const m = lesson('mem');
-    expect(m).toContain(`A 64-word RAM built the same way is ${fmt(nand('ram64x16'))}`);
+    expect(m).toContain(`make 15 NANDs a bit), is ${fmt(nand('ram64x16'))}`);
     expect(m).toContain(`counting ${MEM_DELAY} NAND delays each`);
   });
 

@@ -267,7 +267,7 @@ export const WALKS1: Record<string, WalkScript> = {
       title: 'Bit 1',
       text: 'fa1 adds a[1], b[1] and fa0\'s carry. Its own a and b arrive at once, so the carry from bit 0 is what it waits for: 2 more delays on the carry.',
       parts: ['fa1'], codex: ['ripple'],
-      why: 'fa1 needs three bits: a[1], b[1] and the carry out of bit 0. Its own inputs are ready at once, so the only wait is for fa0\'s carry, 2 NAND delays through g5 and g9.',
+      why: 'fa1 needs three bits: a[1], b[1] and the carry out of bit 0. Its own inputs are ready at once, so the only wait is for fa0\'s carry: 5 NAND delays from a[0] and b[0], 2 from cin through g5 and g9. Each further bit adds 2.',
       whyNot: { text: 'Feeding a half adder here would drop the carry from bit 0: 1 + 1 = 2 would read as 0 in the next column.' },
     },
     {

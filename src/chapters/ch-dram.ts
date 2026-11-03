@@ -113,7 +113,7 @@ export const chDram: Chapter = {
         <p>Why one transistor is enough: a bit is a charge, and a charge needs only a switch to reach it and a capacitor to keep it. The
         feedback that makes an SRAM cell static costs five more transistors per bit, and DRAM pays for its absence in time instead:
         every access is a small analog event (<a href="#/c/dram/1">next step</a>), and the stored value must be restored after a read
-        and renewed while idle. What the capacitor buys is density: the cell is the smallest storage element there is, and the cost per
+        and renewed while idle. What the capacitor buys is density: among memories that can rewrite a single bit, the cell is the smallest storage element there is, and the cost per
         bit of the whole array is set by how many cells share each column's periphery.</p>
         <div class="try">The cells power on unknown (X). In the panel pick a row, then Activate, Sense, choose a column and data,
         Write; Close; Precharge. Each cell shows its voltage, and the wires show theirs.</div>`,
@@ -244,7 +244,7 @@ export const chDram: Chapter = {
           'The charge spread over the bit line; it did not drain to ground. The shared level sits above VDD/2.',
           `The cell holds a definite voltage, ${(share(1) * VDD_VOLTS).toFixed(2)} V. X is only what a logic gate would make of it; the amplifier can still sense it.`,
         ],
-        explain: `Charge sharing moved the cell to the bit line's level and nothing restored it. The next read shares again from ${(share(1) * VDD_VOLTS).toFixed(2)} V: the line moves ${mV(twice - 0.5)} mV, still above the ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV offset. A third read moves it ${(((thrice - 0.5) * VDD_VOLTS) * 1000).toFixed(0)} mV: X. Try it: Activate, Close, Precharge, three times, then Sense.`,
+        explain: `Charge sharing moved the cell to the bit line's level and nothing restored it. The next read shares again from ${(share(1) * VDD_VOLTS).toFixed(2)} V: the line moves ${mV(twice - 0.5)} mV, still above the ${Math.round(SENSE_OFFSET * VDD_VOLTS * 1000)} mV offset. A third read moves it ${(((thrice - 0.5) * VDD_VOLTS) * 1000).toFixed(0)} mV: X. Try it: Activate, Close, Precharge, twice; then Activate and Sense.`,
       },
     },
     {
@@ -274,7 +274,7 @@ export const chDram: Chapter = {
           activations and refresh the neighbours (DDR4's target row refresh, DDR5's refresh management), refresh more often, or add ECC.
           Here cells do not couple: each leaks alone.</p>`,
         pitfall: `<p>Thinking an idle row is safe because nothing touches it: it is the idle rows that leak. And the opposite error: assuming a refresh costs an
-          activate and a read. It does cost a row cycle (tRAS + tRP), but it moves no data over the pins; the controller only has to leave the bank
+          activate and a read. It does cost a row cycle (tRAS + tRP), but it moves no data over the pins; the controller only has to leave the device
           alone for tRFC. In the panel, a row's age resets on Refresh and keeps climbing under Wait, whatever else you do to the other rows.</p>`,
       },
       scene: () => dramScene({ pattern: PATTERN }),
@@ -351,7 +351,7 @@ export const chDram: Chapter = {
           transfer rate rose from 200–400 to 4800 MT/s and more, the prefetch from 2n to 16n; CL in nanoseconds stayed at about 13–17. The latency is the array's, and the
           array has not got faster.</p>`,
         real: `<p>The pins run at ${MTS} MT/s, the array at a small fraction of that; the prefetch and the burst hide the difference. DDR5 splits the
-          module into two independent 32-bit channels and adds bank groups so that more commands overlap; HBM goes the other way, thousands of slower pins on an interposer
+          module into two independent 32-bit channels and doubles the bank groups so that more commands overlap; HBM goes the other way, thousands of slower pins on an interposer
           beside the CPU. All of them still pay tRCD, tCAS and tRP in nanoseconds, because the array's physics did not change.</p>`,
         pitfall: `<p>Comparing latencies in clocks across generations. DDR4-3200 CL22 and DDR5-6400 CL46 have the same CAS latency in time, ${DDR4_3200.tCAS} ns against about 14 ns:
           the bigger count is a faster clock, not a slower memory. Convert to nanoseconds first, then to your CPU's cycles.</p>`,

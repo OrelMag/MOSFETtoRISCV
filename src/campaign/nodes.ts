@@ -32,7 +32,7 @@ const sandbox = (id: string) => (): BuildChallenge => {
 
 export const ACTS: Act[] = [
   { num: 0, title: 'Prologue: what are we building?', blurb: 'A processor is a loop: fetch an instruction, decode it, execute it, write the result back, go again. Every block of that loop is a circuit you will build. It all starts with a switch.' },
-  { num: 11, label: 'Act P', title: 'Before the transistor', blurb: 'Optional, beside act 0: the same logic in what computers were first built from. Relays, whose contacts pass a signal both ways and add 32 bits in one 8 ms step; vacuum tubes, ten thousand times faster, that only pull down and need a divider between every two gates; and cards, how the program got in.' },
+  { num: 11, label: 'Act P', title: 'Before the transistor', blurb: 'Optional, beside act 0: the same logic in what computers were first built from. Relays, whose contacts pass a signal both ways and add 32 bits in one 8 ms step; vacuum tubes, about eight thousand times faster, that only pull down and need a divider between every two gates; and cards, how the program got in.' },
   { num: 1, title: 'Logic', blurb: 'From one gate, every Boolean function. Decoders choose a register, multiplexers route operands, comparators decide branches: the CPU\'s control is all logic.' },
   { num: 2, title: 'Numbers and arithmetic', blurb: 'Bits become numbers when you agree on what they mean. Then one adder does addition, subtraction and comparison: the heart of the ALU.' },
   { num: 3, title: 'State and memory', blurb: 'Logic forgets; a CPU must remember: the program counter, eight registers, data. Feedback makes a latch, two latches make a flip-flop, flip-flops make everything else.' },
@@ -116,13 +116,13 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'r_clock', act: 11, title: 'The buzzer clock', kind: 'build', optional: true, requires: ['r_latch'], base: BUILDR.r_clock, par: { relays: 2 },
-    why: 'A relay fed through its own break contact cannot rest: a buzzer, a clock of two relay steps. A second relay toggling only while the first is in halves it: 2 relays for a counter bit, where the NAND-mapped T flip-flop alone is 23. The card loader counts with such bits.',
+    why: 'A relay fed through its own break contact cannot rest: a buzzer, a clock of two relay steps. A second relay toggling only while the first is in halves it: 2 relays for a counter bit, where the NAND-mapped T flip-flop alone is 23. The counter of the card loader, at par NAND-mapped, is 172 relays for 8 bits.',
     tips: ['Buzzer: en on the common of k\'s break contact, the break contact on k\'s own coil line, which is y.', 'The divider relay t toggles whenever k is operated: its coil then reads a line that carries VDD only while t is released; while k is released it reads one that carries VDD only while t is operated.', 'Both lines come from t\'s own changeover contact with VDD on its common; one more pole of k chooses between them. q: a make contact of t to a load.'],
     codex: ['buzzer'], chapters: [{ chapter: 'relays', step: 6, label: 'A relay that cannot stop' }],
   },
   {
     id: 'v_inv', act: 11, title: 'Two tubes in a row', kind: 'build', optional: true, requires: ['intro'], base: BUILDR.v_inv, par: { tubes: 2 },
-    why: 'A triode switches a thousand times faster than a relay, but its levels do not line up: a plate swings between 81 and 250 V, a grid needs 0 V to conduct and −12.5 V to stop. So every grid reads through a divider to −150 V: 2 triode sections here, the link Eccles–Jordan needs twice.',
+    why: 'A triode switches about eight thousand times faster than a relay, but its levels do not line up: a plate swings between 81 and 250 V, a grid needs 0 V to conduct and −12.5 V to stop. So every grid reads through a divider to −150 V: 2 triode sections here, the link Eccles–Jordan needs twice.',
     tips: ['Each inverter: a plate resistor from B+ (+250 V) to the plate, the triode from the plate to GND (its cathode), the plate is the output.', 'Every grid reads its input through a divider: a divider resistor from the plate (or the input, also a plate level) to the grid, a bias resistor from the grid to −150 V.', 'na is the first plate, y the second.'],
     codex: ['triode', 'griddivider'], chapters: [{ chapter: 'tubes', step: 2, label: 'Levels that do not line up' }],
   },
@@ -134,7 +134,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'h_card', act: 11, title: 'Read a card', kind: 'drill', optional: true, requires: ['intro'], drill: 'hollerith', par: { mistakes: 2 },
-    why: 'A machine with an empty memory needs its program from somewhere, and for seventy years that was cards. Read the Hollerith code both ways, then the binary kind, a word in row 9, one bit a column: Program on cards loads a deck of those.',
+    why: 'A machine with an empty memory needs its program from somewhere, and for some thirty years that was usually cards. Read the Hollerith code both ways, then the binary kind (real ones use all 12 rows; our object card stays readable: a word in row 9, one bit a column): Program on cards loads a deck of those.',
     tips: ['Zones: 12 for A–I, 11 for J–R, 0 for S–Z (S is 0-2, so the digits under that zone start at 2).', 'Object cards: a hole in row 9 is a 1, and column 1 is the most significant bit.'],
     codex: ['hollerith'],
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }],
@@ -326,7 +326,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 's_reg4', act: 3, title: '4-bit register', kind: 'build', requires: ['s_dff', 'g_mux'], base: sandbox('s_reg4'),
-    why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Never gate the clock instead; the 16-bit register next is four of these.',
+    why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Do not gate the clock with a plain AND instead; the 16-bit register next is four of these.',
     tips: ['Build a 1-bit flip-flop with enable first, then use it four times.', 'The mux: en = 1 selects d, en = 0 selects the flip-flop\'s own q: 9 + 4 = 13 NANDs a bit.', 'Do not AND en into clk: a change of en while clk is high makes an edge of its own, and the AND delays this clock against every other.'],
     chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
   },
@@ -564,7 +564,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'y_irq', act: 7, title: 'Interrupts', kind: 'core', requires: ['y_trap'], base: BUILD7.y_irq, par: { nand: 7257, period: 100, cycles: 740 },
-    why: 'Exceptions ignores its irq pin: a device must still be polled. Taking it costs 0 NANDs (the CSR file already computes intr, the cause logic has its term), so this level adds the protocol, checked by an interrupt-driven program: enable order, acknowledge, an mepc naming the instruction not yet run. The finale reuses it.',
+    why: 'Exceptions ignores its irq pin: a device must still be polled. Taking it costs 0 NANDs (the CSR file already computes intr, the cause logic has its term), so this level adds the protocol, checked by an interrupt-driven program: taken with MIE and MEIE on, not taken with MIE off, mcause 0x800B, MIE restored by mret. The finale reuses it.',
     tips: ['intr = MIE · MEIE · irq, from the CSR file.', 'Check it before the instruction at pc runs; it wins over everything else.', 'An interrupt\'s mepc is the pc of the instruction that did not run, and mret returns to it: adding 1, as an ecall handler does, skips an instruction.'],
     codex: ['interrupts'], unlocks: ['rv16_cpu_irq'], chapters: [{ chapter: 'traps', step: 4, label: 'External interrupts' }],
   },
@@ -625,7 +625,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'n_float', act: 8, title: 'Floating point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'float', par: { mistakes: 2 },
-    why: 'A 16-bit integer stops at 32 767 and has no fractions. Binary16 spends the same 16 bits on a sign, an exponent and a fraction, a binary scientific notation that reaches 65 504 and keeps 11 significant bits. Encode and decode it by hand: Float unpack, the first FP unit, reads these fields.',
+    why: 'A 16-bit integer stops at 32 767 and has no fractions. Binary16 spends the same 16 bits on a sign, an exponent and a fraction, a binary scientific notation that reaches 65 504; normal numbers keep 11 significant bits. Encode and decode it by hand: Float unpack, the first FP unit, reads these fields.',
     tips: ['Write the value as 1.f × 2^e; the exponent field is e + 15.', 'Exponent field 0 has no hidden bit (zero and the subnormals, worth 0.f × 2^−14); field 31 is not a number at all, ∞ or NaN.'],
     codex: ['ieee754'], chapters: [{ chapter: 'float', label: 'Floating point' }, { chapter: 'float', step: 0, label: 'Scientific notation in binary' }],
   },

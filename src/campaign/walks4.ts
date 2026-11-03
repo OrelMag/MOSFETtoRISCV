@@ -214,7 +214,7 @@ export const WALKS4: Record<string, WalkScript> = {
       whyNot: { text: 'A faster comparator would cost NANDs and move nothing: the load path sets the period.' },
     },
     {
-      title: 'Next PC, fast adders',
+      title: 'Next PC, unchanged',
       text: 'Next PC keeps its two ripple adders (421 NANDs). Spend NANDs only on the critical path.',
       parts: ['u8'],
       why: 'Only the critical path is worth NANDs. The adders here are not on it.',

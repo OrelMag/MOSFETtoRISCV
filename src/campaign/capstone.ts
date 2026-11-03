@@ -164,7 +164,7 @@ export const PONG_STEPS = 4000;
 
 const PONG_TEST: CoreTest = {
   name: 'Pong', bounded: PONG_STEPS,
-  what: `the game of Pong (${groupDigits(PONG_STEPS)} instructions: the serve, the ball crossing the screen, a paddle and the score)`,
+  what: `the game of Pong (${groupDigits(PONG_STEPS)} instructions: the serve, the paddles drawn, the ball from the middle to the left edge, off the top wall, past the paddle, and the point scored)`,
   src: PONG16,
 };
 

@@ -164,7 +164,7 @@ describe('act 6: the numbers', () => {
     expect(prk.time).toBeLessThan(c4.time);
     expect(cs('o_bpred')).toContain(`Core IV runs these programs in ${sp(c4.time)} NAND delays (${sp(c4.cycles)} cycles at period ${c4.period}), this pipeline in ${sp(pr.time)}`);
     expect(cs('o_bpred')).toContain(`${sp(prk.nand)} NANDs at period ${prk.period}: ${sp(prk.time)}, ${pct(prk.time, c4.time)}% faster than Core IV`);
-    expect(plain(LESSONS.pipe)).toContain(`${pct(pr.cycles, p4.cycles)}% fewer on its loop programs, at period ${pr.period}, still slower than Core IV on its own`);
+    expect(plain(LESSONS.pipe)).toContain(`${pct(pr.cycles, p4.cycles)}% fewer on its 31 programs, at period ${pr.period}, still slower than Core IV on its own`);
   });
 
   it('multicycle', () => {
@@ -246,7 +246,7 @@ describe('act 8: the numbers', () => {
   it('the floating-point ladder', () => {
     const max = (2 - 2 ** -10) * 2 ** 15;
     expect(why('n_float')).toContain(`stops at ${sp(2 ** 15 - 1)}`);
-    expect(why('n_float')).toContain(`reaches ${sp(max)} and keeps 11 significant bits`);
+    expect(why('n_float')).toContain(`reaches ${sp(max)}; normal numbers keep 11 significant bits`);
     expect(cs('n_float')).toContain(`up to ${sp(max)}`);
     expect(cs('n_float')).toContain(`unpack (${par('o_fpunpack').nand} NANDs)`);
     expect(cs('n_float')).toContain(`normalize & round (${sp(par('o_fpnorm').nand!)})`);

@@ -203,7 +203,7 @@ export const THREAD0: Record<string, NodeThread> = {
     usedFor: { c_ctl: 'the same method for each of its outputs: table, minimal sum, NAND–NAND, then what the sums share' },
     pitfalls: [
       '1 is not prime: a = 1 must give 0.',
-      'A 4-input OR of products is not one cell here: its NAND costs 3 NANDs (two ANDs and a NAND).',
+      'A 4-input OR of products is not one cell here: its NAND costs 5 NANDs (two ANDs and a NAND).',
       'The minimal sum of products is 20 NANDs; par 8 comes from factoring, not from a better grouping.',
     ],
   },

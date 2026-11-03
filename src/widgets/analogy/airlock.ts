@@ -42,7 +42,7 @@ export default function mount(host: HTMLElement): void {
     read.textContent = st.outer
       ? 'Clock low: the outer door is open, so the chamber follows D. Q keeps its old value.'
       : st.inner ? "Clock high: the inner door is open and Q has the chamber's value; changing D now does nothing."
-        : 'Both doors shut for an instant: the doors are never open together.';
+        : 'Mid-edge, drawn with both doors shut for a step. In the circuit the inner door opens a gate delay before the outer has shut: the hold time.';
   };
   host.replaceChildren(svg, h('div', { class: 'af-ctl' }, dBtn, clkBtn), read);
   paint();

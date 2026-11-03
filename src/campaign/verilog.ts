@@ -55,7 +55,7 @@ export const TWINS: VerilogTwin[] = [
       '  assign v = c[16] ^ c[15];',
       '',
     ].join('\n'),
-    note: 'Writing <code>a + bb + sub</code> hands the carry chain to Yosys, which builds a carry-lookahead adder: faster and several times larger than the ripple chain you drew. A <code>generate</code> loop of full-adder equations keeps the ripple.',
+    note: 'Writing <code>a + bb + sub</code> hands the carry chain to Yosys. Here it costs about what a <code>generate</code> loop of full-adder equations does (282 and 281 NANDs, both depth 38): a third more than the 212 you drew.',
   },
   {
     twin: 'a_slt', module: 'slt16', hint: 'lt = a < b signed, ltu = a < b unsigned',
@@ -86,7 +86,7 @@ export const TWINS: VerilogTwin[] = [
     note: 'The incrementer is Yosys\'s to build: a half-adder chain, the one you drew.',
   },
   {
-    twin: 'c_imm', module: 'imm16', hint: 'the four sign-extended immediates of an RV16 instruction word',
+    twin: 'c_imm', module: 'imm16', hint: 'the four immediates of an RV16 instruction word',
     start: '  // i, sb, j are sign-extended from instr; u is not (lui): see the level\n',
     reference: [
       '  assign i  = {{10{instr[15]}}, instr[15:10]};',

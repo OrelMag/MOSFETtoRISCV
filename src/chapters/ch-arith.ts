@@ -139,8 +139,8 @@ export const chAdders: Chapter = {
         with <span data-show="ha2">a second</span>, and if either produced a carry, carry out (<span data-show="or1">an OR gate</span>).
         The two half adders can never both carry: if the first carries, its sum bit is 0, and 0 + cin cannot carry again. So the OR
         could just as well be an XOR; OR is cheaper.</p>
-        <p>Cost: two half adders and an OR, ${stats(FULL_ADDER_HA).nands} NANDs, ${logicDepth(FULL_ADDER_HA)} gate delays from a or b to the
-        sum, and ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')} from cin to cout. That last number matters most: in a long adder the carry
+        <p>Cost: two half adders and an OR, ${stats(FULL_ADDER_HA).nands} NANDs, ${pathDepth(FULL_ADDER_HA, 'a', 's')} gate delays from a or b to the
+        sum, ${pathDepth(FULL_ADDER_HA, 'a', 'cout')} to the carry out, and ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')} from cin to cout. That last number matters most: in a long adder the carry
         crosses one full adder per bit.</p>
         <div class="try">Set all three inputs to 1: the answer is 3 = <code>11</code>, so both s and cout are 1.</div>`,
       scene: () => ({ root: FULL_ADDER_HA, inputs: { a: 1, b: 1, cin: 0 } }),
@@ -208,7 +208,7 @@ export const chAdders: Chapter = {
         real: `<p>Logic synthesis does this rewrite automatically ("double inversion removal" and gate merging, the same pass as
           <code>sim/techmap.ts</code> here). Hand-optimized cells go further: the mirror adder shares transistors between sum and carry.</p>`,
         pitfall: `<p>Fewer gates does not always mean faster: a shared gate drives more inputs, and with load-dependent delay (the Load setting in the
-          Timing panel) a gate with fan-out 4, like g1 and g5 here, is slower than one with fan-out 1. Unit delay hides this; check both.</p>`,
+          Timing panel) a gate with fan-out 3, like g1 and g5 here, is slower than one with fan-out 1. Unit delay hides this; check both.</p>`,
         numbers: `<table class="mini"><tr><th></th><th>NANDs</th><th>transistors</th><th>deepest path</th><th>cin → cout</th></tr>
           <tr><td>half adders + OR</td><td>${stats(FULL_ADDER_HA).nands}</td><td>${stats(FULL_ADDER_HA).transistors}</td><td>${logicDepth(FULL_ADDER_HA)}</td><td>${pathDepth(FULL_ADDER_HA, 'cin', 'cout')}</td></tr>
           <tr><td>9-NAND</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(FULL_ADDER).transistors}</td><td>${logicDepth(FULL_ADDER)}</td><td>${pathDepth(FULL_ADDER, 'cin', 'cout')}</td></tr></table>`,
@@ -240,7 +240,7 @@ export const chAdders: Chapter = {
           { title: 'Column 0', set: { a: 9, b: 7, cin: 0 }, show: ['fa0'], expect: { s: 0, cout: 1 },
             say: '<p>9 = 1001, 7 = 0111. fa0 adds the low bits: 1 + 1 + 0 = 10, so s₀ = 0 and it carries into fa1.</p>' },
           { title: 'Column 1', show: ['fa1'],
-            say: '<p>fa1: 0 + 1 + the carry 1 = 10. Another 0, another carry. Neither input bit was 1 on its own: the carry is doing the work.</p>' },
+            say: '<p>fa1: 0 + 1 + the carry 1 = 10. Another 0, another carry. One input bit alone would not have carried: the carry is doing the work.</p>' },
           { title: 'Column 2', show: ['fa2'],
             say: '<p>fa2: 0 + 1 + 1 = 10, the same again.</p>' },
           { title: 'Column 3', show: ['fa3'],
@@ -279,7 +279,7 @@ export const chAdders: Chapter = {
         <span data-show="pin:cin"><code>cin</code></span> to 1. The carry has to pass through every full adder in turn, like a row of falling
         dominoes, and each sum bit flips from 1 to 0 as the carry passes it. Watch the status line: it reports how many gate delays the
         adder took to settle.</p>
-        <p>This is the worst case for a ripple adder: ${logicDepth(rca(8))} gate delays for 8 bits. Most inputs settle sooner, because a carry chain
+        <p>The carry crosses all eight columns: ${pathDepth(rca(8), 'cin', 's')} gate delays on the status line here, 2 per column for seven columns, then the last sum's XOR. The longest path through the adder, from column 0's a or b, is ${logicDepth(rca(8))}: with a = 0xFF and cin = 1, change b from 0x01 to 0x00. Most inputs settle sooner, because a carry chain
         stops at the first column that generates or kills. But a clock must be slow enough for the worst case, so the worst case sets the speed.
         A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the carries in parallel: that is
         <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
@@ -291,7 +291,7 @@ export const chAdders: Chapter = {
           { title: 'Every column propagates', set: { a: 0xff, b: 0, cin: 0 }, show: ['fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5', 'fa6', 'fa7'], expect: { s: 255, cout: 0 },
             say: '<p>a = 1111 1111, b = 0: every column has exactly one 1, so each sum bit is 1 and each column would pass a carry straight on. Nothing generates one yet.</p>' },
           { title: 'Add one', set: { cin: 1 }, show: ['fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5', 'fa6', 'fa7'], expect: { s: 0, cout: 1 },
-            say: `<p>cin = 1: 255 + 1 = 256. The carry enters fa0 and walks up through every full adder, 2 gate delays each; each sum bit drops to 0 as it passes. s = {v:s}, cout = {v:cout}. Worst case: ${logicDepth(rca(8))} delays.</p>` },
+            say: `<p>cin = 1: 255 + 1 = 256. The carry enters fa0 and walks up through every full adder, 2 gate delays each; each sum bit drops to 0 as it passes. s = {v:s}, cout = {v:cout}. ${pathDepth(rca(8), 'cin', 's')} delays here.</p>` },
           { title: 'And back', set: { cin: 0 }, show: ['fa0', 'fa7'], expect: { s: 255, cout: 0 },
             say: '<p>cin back to 0: the carries unwind the same way, column by column. The status line counts the delays again.</p>' },
         ],
@@ -301,7 +301,7 @@ export const chAdders: Chapter = {
           made ripple carry fast enough for 16 to 32 bits in the 1970s and 80s. Above that, carry-lookahead took over.</p>`,
         pitfall: `<p>Average-case delay is not the clock period. Random inputs give short carry chains (about log₂ n on average), but a single
           worst-case pair of inputs that ripples through every column would be read wrong, so the clock must allow for it.</p>`,
-        numbers: `<p>Worst-case delay = 2 gate delays per bit plus the first sum's XOR: ${[8, 16, 32, 64].map((n) => `${n} bits: ${logicDepth(rca(n))}`).join(', ')}.</p>`,
+        numbers: `<p>Longest path = 2 gate delays per bit plus 4: ${[8, 16, 32, 64].map((n) => `${n} bits: ${logicDepth(rca(n))}`).join(', ')}.</p>`,
       },
     },
     {
@@ -589,7 +589,7 @@ export const chRouting: Chapter = {
         <code>s1</code> chooses <span data-show="m1_0">between the winners</span>.</p>
         <p>A 2ᵏ:1 mux needs 2ᵏ − 1 two-input muxes and k levels. The levels set the delay.</p>
         <p>The tree shape is the same halving as binary search: each level discards half the candidates, using one more select bit. For 4 inputs that is ${stats(muxTree(2, 1)).nands} NANDs (three 2:1 muxes at ${stats(MUX2).nands} each) and
-        ${logicDepth(muxTree(2, 1))} gate delays from the data inputs to y; a flat alternative, a decoder gating each input into one big OR, has the same function and a different cost and delay, which the layers below compare.</p>`,
+        ${pathDepth(muxTree(2, 1), 'd0', 'y')} gate delays from the data inputs to y (${logicDepth(muxTree(2, 1))} from the select); a flat alternative, a decoder gating each input into one big OR, has the same function and a different cost and delay, which the layers below compare.</p>`,
       tour: {
         beats: [
           { title: 's = 0: the first of the first pair', set: { s: 0 }, show: ['m0_0', 'm1_0'], expect: { y: 0 },
@@ -658,7 +658,7 @@ export const chRouting: Chapter = {
         <p>Combine both ideas: <span data-show="m0_0 m0_1 m0_2 m0_3 m1_0 m1_1 m2_0">a tree of bus multiplexers</span> selects one of eight 4-bit words. This is exactly the
         <strong>read port</strong> of a memory, which is where we are heading: store eight words, then use the address
         to pick the one you want.</p>
-        <p>The cost follows from the tree: 7 bus multiplexers of 4 bits, ${stats(muxTree(3, 4)).nands} NANDs, ${logicDepth(muxTree(3, 4))} gate delays from data to y. The three select bits fan out to different numbers of muxes: s0 to the four
+        <p>The cost follows from the tree: 7 bus multiplexers of 4 bits, ${stats(muxTree(3, 4)).nands} NANDs, ${pathDepth(muxTree(3, 4), 'd0', 'y')} gate delays from data to y (${logicDepth(muxTree(3, 4))} from the select). The three select bits fan out to different numbers of muxes: s0 to the four
         first-level ones, s2 to the single last one. Doubling the words adds a level (and so the delay), and doubles the number of muxes at the first level.</p>`,
       tour: {
         beats: [
