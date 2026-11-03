@@ -784,7 +784,7 @@ h:      csrr t1, mepc
       { chapter: 'traps', step: 0, label: 'Control and status registers' },
       { chapter: 'traps', step: 1, label: 'ecall: asking the operating system' },
       { chapter: 'traps', step: 2, label: 'Exceptions' },
-      { chapter: 'traps', step: 5, label: 'Inside the trap unit' },
+      { chapter: 'traps', step: 9, label: 'Inside the trap unit' },
     ],
   },
 
