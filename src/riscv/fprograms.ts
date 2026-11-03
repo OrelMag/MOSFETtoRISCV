@@ -83,6 +83,32 @@ halt:   j    halt`,
 halt:   j    halt`,
   },
   {
+    id: 'kahan',
+    name: 'Naive and Kahan summation',
+    blurb: '2^24 plus thirty-two ones, summed twice: naively (every 1 is absorbed or lost) and with Kahan compensation (the lost low part is carried in c and fed back).',
+    source: `# s = 2^24 + 32 * 1.0, naive and Kahan side by side
+        li   t0, 0x4b800000    # 2^24 = 16777216: from here the ulp is 2
+        fmv.w.x ft1, t0        # naive sum
+        fmv.w.x ft2, t0        # Kahan sum
+        fmv.w.x ft3, zero      # c: the part of the sum lost so far
+        li   t0, 1
+        fcvt.s.w ft0, t0       # x = 1.0, the term
+        li   t1, 32
+loop:   fadd.s ft1, ft1, ft0   # naive: 2^24 + 1 is a tie, rounds back to 2^24 every time
+        fsub.s ft4, ft0, ft3   # y = x - c      (the term, corrected by what was lost)
+        fadd.s ft5, ft2, ft4   # t = sum + y    (low bits of y are lost here)
+        fsub.s ft6, ft5, ft2   # (t - sum)      what was really added
+        fsub.s ft3, ft6, ft4   # c = (t - sum) - y: minus what was lost; algebraically 0
+        fmv.s ft2, ft5         # sum = t
+        addi t1, t1, -1
+        bnez t1, loop
+        fmv.x.w a0, ft1        # naive: 0x4B800000 = 16777216
+        fmv.x.w a1, ft2        # Kahan: 0x4B800010 = 16777248, exact
+        fsub.s ft7, ft2, ft1   # 32.0: what the naive loop lost
+        fmv.x.w a2, ft7
+halt:   j    halt`,
+  },
+  {
     id: 'rmodes',
     name: 'Rounding modes',
     blurb: 'Converts 2.5 and −2.5 to integers in all five rounding modes, rounds 2^24 + 1 to a float statically and with the dynamic mode in frm.',
@@ -220,6 +246,93 @@ loop:   fdiv.s ft0, fs0, fa0   # a / x
         fsqrt.s fa1, fs0       # one instruction, 28 cycles
         feq.s a0, fa0, fa1     # 1: the same float
         fmv.x.w a1, fa0        # 0x3FB504F3
+halt:   j    halt`,
+  },
+  {
+    id: 'recip',
+    name: 'Division by Newton–Raphson',
+    blurb: '5 / 3 without the divider: a seed from one integer subtract, three Newton steps of two fma each for 1/3, q = a·x (one ulp too big, 0x3FD55556), then one fma residual and one fma correction: 0x3FD55555, what fdiv.s returns.',
+    source: `# a / b by Newton-Raphson on the fma, then Markstein's correction
+        li   t0, 5
+        fcvt.s.w fa0, t0       # a = 5
+        li   t0, 3
+        fcvt.s.w fa1, t0       # b = 3
+        fmv.x.w t1, fa1
+        li   t2, 0x7ef311c7
+        sub  t1, t2, t1        # seed: magic - bits(b), about 4 bits of 1/b
+        fmv.w.x fa2, t1        # x
+        li   t0, 0x3f800000
+        fmv.w.x fa3, t0        # 1.0
+        li   t3, 3
+loop:   fnmsub.s ft0, fa1, fa2, fa3   # e = 1 - b*x, exact
+        fmadd.s fa2, fa2, ft0, fa2    # x = x + x*e: the error squares
+        addi t3, t3, -1
+        bnez t3, loop          # x = 1/b
+        fmul.s fa4, fa0, fa2   # q = a*x = 0x3FD55556: one ulp too big
+        fnmsub.s ft1, fa1, fa4, fa0   # r = a - b*q, exact
+        fmadd.s fa5, ft1, fa2, fa4    # q = q + r*x = 0x3FD55555
+div:    fdiv.s fa6, fa0, fa1   # the iterative divider, 29 cycles
+        fmv.x.w a0, fa4
+        fmv.x.w a1, fa5
+        fmv.x.w a2, fa6
+        feq.s a3, fa5, fa6     # 1: the same float
+halt:   j    halt`,
+  },
+  {
+    id: 'softmul',
+    name: 'fmul without F',
+    blurb: '0.1f × 0.7f as integer instructions (unpack, a 24-step shift-and-add multiply, normalize, round to nearest even, pack), then the same product by one fmul.s: the same bits, a couple of hundred cycles against one.',
+    source: `# float32 multiply on integers: a0 * a1 -> a2 (normal numbers, round to nearest even)
+        li   a0, 0x3dcccccd    # 0.1f
+        li   a1, 0x3f333333    # 0.7f
+soft:   srli t0, a0, 23
+        andi t0, t0, 255       # exponent of a
+        srli t1, a1, 23
+        andi t1, t1, 255       # exponent of b
+        add  t0, t0, t1
+        addi t0, t0, -127      # ea + eb - bias
+        xor  s0, a0, a1
+        srli s0, s0, 31
+        slli s0, s0, 31        # sign
+        li   t3, 0x7fffff
+        and  t1, a0, t3
+        and  t2, a1, t3
+        addi t4, t3, 1         # 0x800000: the hidden bit
+        or   t1, t1, t4        # ma, 24 bits
+        or   t2, t2, t4        # mb: the low word of the product
+        li   a4, 0             # the high word
+        li   t5, 24
+mul:    andi t6, t2, 1
+        beqz t6, skip
+        add  a4, a4, t1        # add ma where the multiplier bit is 1
+skip:   slli t6, a4, 31
+        srli t2, t2, 1
+        or   t2, t2, t6        # product >> 1 across the two words
+        srli a4, a4, 1
+        addi t5, t5, -1
+        bnez t5, mul           # a4:t2 = ma * mb << 8, 48 bits
+norm:   srli t6, a4, 23        # product in [2, 4)?
+        bnez t6, rnd
+        slli a4, a4, 1         # no: one place left, exponent - 1
+        srli t6, t2, 31
+        or   a4, a4, t6
+        slli t2, t2, 1
+        addi t0, t0, -1
+rnd:    srli t6, t2, 31        # guard bit
+        beqz t6, pack
+        slli t2, t2, 1         # sticky: anything below the guard
+        bnez t2, up
+        andi t6, a4, 1         # a tie: to even
+        beqz t6, pack
+up:     addi a4, a4, 1
+pack:   slli t0, t0, 23
+        add  a2, t0, a4        # a carry out of the fraction lands in the exponent
+        or   a2, a2, s0
+done:   fmv.w.x ft0, a0
+        fmv.w.x ft1, a1
+        fmul.s ft2, ft0, ft1   # the same product in one instruction
+        fmv.x.w a3, ft2
+        sub  a4, a2, a3        # 0: the same bits
 halt:   j    halt`,
   },
   {

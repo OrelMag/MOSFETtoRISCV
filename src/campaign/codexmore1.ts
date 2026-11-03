@@ -905,7 +905,7 @@ both inexact: NX is set</pre>`,
     chapters: [
       { chapter: 'float', step: 4, label: 'Round to nearest, ties to even' },
       { chapter: 'float', step: 5, label: 'Five rounding modes' },
-      { chapter: 'float', step: 19, label: 'Rounding surprises' },
+      { chapter: 'float', step: 25, label: 'Rounding surprises' },
     ],
   },
 

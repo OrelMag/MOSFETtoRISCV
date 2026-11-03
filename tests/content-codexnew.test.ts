@@ -74,7 +74,7 @@ describe('the journey\'s codex entries', () => {
     const fma = fpFma(F32);
     quotes('fma', nands(fma), logicDepth(fma)!, logicDepth(fpMul(F32))! + logicDepth(fpAdd(F32))!);
     expect(text('fma')).toContain(`${logicDepth(fpMul(F32))} + ${logicDepth(fpAdd(F32))}`);
-    stepSays('float', 11, 'multiply (92 deep)'); stepSays('float', 16, 'from 274 to 368');
+    stepSays('float', 11, 'multiply (92 deep)'); stepSays('float', 20, 'from 274 to 368');
   });
 
   it('quote ECC, SRAM, flip-flops and decoders as measured', () => {
