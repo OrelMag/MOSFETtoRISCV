@@ -1792,6 +1792,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .ff-seg.round { background: #d97706; }
 .ff-seg.rest { background: var(--muted); }
 .ff-seg.fma { background: #7c3aed; }
+.ff-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+.ff-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.ff-key .ff-seg { width: 14px; }
 
 /* chapter 27: dual-core panel, coherence explorer */
 .dual-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

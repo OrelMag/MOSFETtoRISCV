@@ -92,7 +92,8 @@ export function formatCostWidget(): Widget {
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
       h('h3', null, 'What each unit costs, measured'),
-      h('p', { class: 'sub' }, 'NANDs and logic depth of the lib/fpu.ts generators at each format (all five rounding modes, full subnormals), counted from the netlists; one bar scale for every row. Multiplier bars: significand tree, normalize & round, everything else. Under each format, its significand product.'),
+      h('p', { class: 'sub' }, 'NANDs and logic depth of the lib/fpu.ts generators at each format (all five rounding modes, full subnormals), counted from the netlists; one bar scale for every row. Under each format, its significand product.'),
+      h('p', { class: 'ff-key' }, ...([['add', 'adder'], ['tree', 'multiplier: significand tree'], ['round', 'normalize & round'], ['rest', 'the rest'], ['fma', 'fma']] as const).map(([c, t]) => h('span', null, h('span', { class: `ff-seg ${c}`, 'aria-hidden': 'true' }), t))),
       wrap(h('table', { class: 'ff-table ff-costs' }, h('thead', null, h('tr', null, ...['format', 'unit', 'cost', 'NANDs', 'depth'].map(th))), h('tbody', null, ...rows))),
       h('p', { class: 'sub' }, 'Depth is in NAND delays (every NAND counts 1).'))),
   };
