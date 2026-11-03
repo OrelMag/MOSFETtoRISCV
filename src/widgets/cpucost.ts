@@ -79,7 +79,7 @@ export function controlPanel(stage: Stage): Widget {
     update();
   };
   const title = h('h4', null, 'Control table', h('span', { class: 'fold-hint' }));
-  const el = h('div', { class: 'mem-panel ctl-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
+  const el = h('div', { class: 'mem-panel ctl-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-keep': 'open', 'data-phone': 'flow' }, title,
     h('div', { class: 'ctl-scroll' }, h('table', { class: 'mini ctl-tab' }, h('thead', null, h('tr', null, ...head.map(([x, full]) => h('th', { title: full }, x)))), h('tbody', null, ...trs))),
     h('p', { class: 'sub' }, 'Click a row: the CPU resets and runs up to that instruction.'));
   const update = () => {
