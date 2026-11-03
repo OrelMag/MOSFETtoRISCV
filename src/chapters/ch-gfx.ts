@@ -1,4 +1,6 @@
 import { groupDigits } from '../sim/numfmt';
+import { BILINEAR8, BLEND332, LERP8, bilinearRef } from '../lib';
+import { stats } from '../sim/stats';
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { drawScene } from '../widgets/drawpad';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
@@ -8,6 +10,9 @@ import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 
 const fmt = groupDigits;
+const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+/** A 256 × 256 one-byte texture with its whole mipmap chain. */
+const MIP_BYTES = Array.from({ length: 9 }, (_, k) => (256 >> k) ** 2).reduce((a, b) => a + b, 0);
 /** The rasterizer's clear, from go: the cycles before the walk's first test, then every 4 × 4 tile of the screen (a test and 16 pixels). */
 const CLEAR = CLEAR_CYCLES + 1;
 /** The screen of chapters 33-34: 64 x 64 pixels, one byte each, four to a word. */
@@ -301,6 +306,7 @@ export const chGfxPipeline: Chapter = {
     'follow a frame through the command unit: launch, clear, triangles, swap, vsync',
     'say where a frame\'s cycles go, and why the frame time snaps to whole scan-outs',
     'say why the clear, not the vertex work, bounded the frame, and what a word-wide clear buys',
+    'filter a texture: bilinear as three lerps, its gate cost, and why a mipmap chain costs 4/3 of the image',
   ],
   builds: ['warps', 'feed', 'pixels'],
   recap: {
@@ -310,6 +316,7 @@ export const chGfxPipeline: Chapter = {
       'Flips happen only at vsync, every 1024 cycles, so a frame snaps to whole scan-outs: the triangle\'s frame was 6144 cycles, 4438 of them the clear.',
       'The warp core is 182 121 NANDs and busy 1 % of the frame; the rasterizer, a seventh of its size, is busy most of it. Software matches the rasterizer only with five or six four-warp cores, but clears the frame in 804 cycles.',
       'A clear unit (a 10-bit word counter, 278 NANDs) with a banked depth buffer clears four pixels a cycle: the triangle\'s frame falls to 3072 cycles, and the rasterizer\'s pixel a cycle now bounds it.',
+      `A texture sample is a bilinear filter: three lerps per channel, y = (a · (16 − f) + b · f) >> 4 each, ${fmt(nd(BILINEAR8))} NANDs per channel and 4 texel reads; a mipmap chain (level ≈ log₂ of the texels per pixel) costs ${(MIP_BYTES / 65536).toFixed(3)}× the image.`,
     ],
     practise: ['k_frame', 'p_spin'],
     check: [
@@ -497,6 +504,35 @@ export const chGfxPipeline: Chapter = {
         options: ['A second warp core', 'Clearing four pixels a cycle', 'A faster vertex kernel', 'Flipping without waiting for vsync'], answer: 1,
         explain: 'The clear falls from 4438 cycles to 1026 (the next step builds it), so the frame snaps to three scan-outs: 3072 cycles instead of 6144. The kernel is hidden in the clear already; flipping without vsync saves at most one scan-out, and tears.',
         why: ['The warp core is busy 1 % of the frame: a second one would have nothing to do.', '', 'The kernel already hides inside the clear.', 'That saves at most one scan-out of 1024 cycles, and the picture tears.'],
+      },
+    },
+    {
+      title: 'Texturing',
+      body: `
+        <p>The triangle so far has one colour. Texturing gives every pixel a colour read from an image: the rasterizer interpolates <strong>(u, v)</strong> across the triangle, and the pixel looks up the
+        <strong>texel</strong> at that position. Almost never does (u, v) land on a texel centre. Taking the nearest texel is blocky when magnified; <strong>bilinear filtering</strong> blends the four around it, weighted by how
+        close the point is to each: with fractions <em>fx</em>, <em>fy</em> of the way across, first interpolate along x in both rows, then along y between the results. Three linear interpolations
+        (<span data-show="u0 u1 u2">lerps</span>), each y = (a · (16 − f) + b · f) &gt;&gt; 4 for a 4-bit fraction: two 8 × 8 multipliers, an adder, and the low four bits dropped.</p>
+        <p>One lerp is ${fmt(nd(LERP8))} NANDs, a bilinear unit ${fmt(nd(BILINEAR8))}, and an RGB332 pixel needs one per colour channel: ${fmt(3 * nd(BILINEAR8))}. For scale, chapter 33's whole blend unit (<code>BLEND332</code>) is ${fmt(nd(BLEND332))}.
+        Each sample also reads <strong>4 texels</strong> from memory, and a texture cache exists mainly to serve them: neighbouring pixels share most of their texels. Each stage truncates, so the result is within 1 of the exact weighted
+        average (${bilinearRef(0, 255, 0, 255, 8, 0)} here against 127.5 for the midpoint of 0 and 255): the tests check the circuit against the reference over random inputs.</p>
+        <p>Minified textures are the harder half. A 256 × 256 image drawn 32 pixels wide steps 8 texels per pixel; bilinear would read 4 texels spread over 8 and shimmer. A <strong>mipmap</strong> keeps the image at half size,
+        quarter size and so on, and the unit picks the level whose texel is about one pixel: ρ = 8 texels per pixel gives level log<sub>2</sub> 8 = 3, the ${256 >> 3} × ${256 >> 3} image. The chain costs ${fmt(MIP_BYTES)} bytes for a ${fmt(256 * 256)}-byte texture,
+        ${(MIP_BYTES / 65536).toFixed(3)}× (the series 1 + ¼ + 1/16 + … = 4/3). <strong>Trilinear</strong> blends two adjacent levels (8 texels, 7 lerps per channel); <strong>anisotropic</strong> filtering takes up to 16 such samples along the
+        long axis of a stretched footprint, which is why texture units are fixed-function: the shader asks for a colour and the unit does 100-odd multiplies.</p>
+        <div class="try">Put 0 in the left texels and 255 in the right ones, and find the fraction that returns the middle.</div>`,
+      scene: () => ({ root: BILINEAR8, inputs: { t00: 0, t01: 255, t10: 0, t11: 255, fx: 4, fy: 0 } }),
+      more: {
+        derive: `<p>Bilinear as weights: y = Σ t<sub>ij</sub> · w<sub>ij</sub> with w = (1 − fx)(1 − fy), fx(1 − fy), (1 − fx)fy, fx·fy, summing to 1. Three lerps need 6 multiplies, the four weights need 4 + 4 once the products of fractions are shared; the two-stage form keeps each multiplier 8 × 4 useful bits and is how most hardware is built. Truncating between the stages loses at most 1 per stage; a unit that keeps 12 bits through the second lerp rounds once, at the cost of wider multipliers.</p>`,
+        pitfall: `<p>Filtering gamma-encoded colours as if they were linear light darkens the blend: the average of black and white texels is 128 in the buffer but about 22 % reflectance. Hardware with sRGB textures converts to linear before the lerp, with a lookup per channel; this unit, like RGB332, filters the stored values.</p>`,
+        real: `<p>A modern texture unit filters 4 to 16 texels per clock per SM quadrant, in 16-bit fixed or half-float, behind an L1 texture cache; sampling is also how shaders read ordinary data tables. The same lerp, exposed as <code>mix(a, b, f)</code>, is one instruction on the lanes.</p>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'With 0 on the left and 255 on the right, find the fraction fx that returns the closest value to the midpoint 127.5.',
+        check: (st) => st.getInput('t00') === 0 && st.getInput('t10') === 0 && st.getInput('t01') === 255 && st.getInput('t11') === 255 && st.value('y') === 127,
+        hints: ['fx is in sixteenths: fx = 8 is half way.', 'y = 255 · fx / 16, rounded down.'],
+        answer: `fx = 8: y = (255 · 8) >> 4 = ${bilinearRef(0, 255, 0, 255, 8, 0)}. The truncation costs half a level; fx = 9 would give ${bilinearRef(0, 255, 0, 255, 9, 0)}.`,
+        solve: (st) => st.setInputs({ t00: 0, t01: 255, t10: 0, t11: 255, fx: 8, fy: 0 }),
       },
     },
     {
