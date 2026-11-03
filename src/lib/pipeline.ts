@@ -11,7 +11,7 @@ import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord } from './alu';
 import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
 export { equal } from './combinational';
-import { cachedMemory } from './cache';
+import { cachedMemory, cachedPort } from './cache';
 import { wbCache } from './cache2';
 import type { DramConfig } from '../dram/controller';
 import { cfgKey } from './dramctrl';
@@ -614,7 +614,7 @@ export interface PipeOptions {
    * The sandbox's core (rv32i_pipe_core): the program and the data memory sit outside. Pins: instr in (the ROM's word at pcOut), pcOut
    * (the PC being fetched) and memAddr / memWData / memWE out of the M stage, memRData in, retire (= validW) and pcW out. The M stage's
    * port keeps the data memory's timing (read combinational from memAddr, write at the rising edge), so any RAM that serves the
-   * single-cycle rv32i_core's memory port serves this one. Not with dcache or m.
+   * single-cycle rv32i_core's memory port serves this one. With m: the M extension inside. With dcache 'wt': cachedPort in M, the memory outside it (devices, bit 31, bypass it).
    */
   ports?: boolean;
 }
@@ -634,8 +634,9 @@ export function pipelinedCpu(program: number[], opts: PipeOptions = {}): Compone
 function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[]; ports: boolean }): ComponentDef {
   const { adder, balanced: bal, predictor: pred, dcache, m } = o;
   if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
+  if (o.ports && dcache && dcache !== 'wt') throw new Error('pipelinedCpu: ports take the write-through data cache only');
   if (o.dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('pipelinedCpu: dram needs a write-back data cache');
-  const DM = dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1, o.dram) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2, o.dram) : dataMemory(o.dmemK);
+  const DM = o.ports && dcache ? cachedPort(2) : dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1, o.dram) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2, o.dram) : dataMemory(o.dmemK);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
@@ -996,30 +997,34 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   const portPins: Record<string, [number, number]> = {};
   if (o.ports) {
-    if (dcache || m) throw new Error('pipelinedCpu: ports with a data cache or M is not supported');
     // the program and the data memory outside: the M stage's memory port keeps dataMemory's timing (read from the address in the
     // same cycle, write at the rising edge), so the sandbox's RAM serves it as it serves the single-cycle port core
-    for (const n of ['imem', 'dm']) instances.splice(instances.findIndex((i) => i.name === n), 1);
+    for (const n of dcache ? ['imem'] : ['imem', 'dm']) instances.splice(instances.findIndex((i) => i.name === n), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     const swap = (name: string, from: string, to: string) => { retargetEnd(net(name), from, to); };
     swap('PCF', 'pcF', 'pcOut');
     net('PCF').ends = net('PCF').ends.filter((e) => e !== 'imem.addr');
     swap('InstrF', 'imem.data', 'instr');
-    swap('ALUResultM', 'dm.addr', 'memAddr'); (net('ALUResultM').tags as string[]).push('memAddr');
-    swap('WriteDataM', 'dm.wd', 'memWData'); net('WriteDataM').tags = ['memWData'];
-    swap('MemWriteM', 'dm.we', 'memWE');
-    swap('ReadDataM', 'dm.rd', 'memRData'); net('ReadDataM').tags = ['memRData'];
-    swap('validW', 'validW', 'retire');
-    const clk = net('clk');
-    clk.ends = clk.ends.filter((e) => e !== 'dm.clk');
-    clk.tags = (clk.tags as string[]).filter((e) => e !== 'dm.clk');
+    if (dcache) {
+      // the cache stays in M: its outside memory is the port (the CPU's address, or a fill's, on memAddr)
+      nets.push({ name: 'memAddr', ends: ['dm.mAddr', 'memAddr'], tags: ['memAddr'] }, { name: 'memWData', ends: ['dm.mWD', 'memWData'], tags: ['memWData'] }, { name: 'memWE', ends: ['dm.mWE', 'memWE'], tags: ['memWE'] }, { name: 'memRData', ends: ['dm.mRD', 'memRData'], tags: ['memRData'] });
+    } else {
+      swap('ALUResultM', 'dm.addr', 'memAddr'); (net('ALUResultM').tags as string[]).push('memAddr');
+      swap('WriteDataM', 'dm.wd', 'memWData'); net('WriteDataM').tags = ['memWData'];
+      swap('MemWriteM', 'dm.we', 'memWE');
+      swap('ReadDataM', 'dm.rd', 'memRData'); net('ReadDataM').tags = ['memRData'];
+      const clk = net('clk');
+      clk.ends = clk.ends.filter((e) => e !== 'dm.clk');
+      clk.tags = (clk.tags as string[]).filter((e) => e !== 'dm.clk');
+    }
+    swap(dcache ? 'retireW' : 'validW', 'validW', 'retire');
     extraPorts.push(bus('instr', 32, 'in'), bus('memRData', 32, 'in'), bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'));
-    Object.assign(portPins, { instr: [0, yb + 4], memRData: [0, yb + 8], memAddr: [xMW + 30, yb + 13], memWData: [xMW + 30, yb + 16], memWE: [xMW + 30, yb + 19] });
+    Object.assign(portPins, { instr: [0, yb + 4], memRData: [0, yb + 8], memAddr: [xMW + 30, yb + (dcache ? 16 : 13)], memWData: [xMW + 30, yb + (dcache ? 19 : 16)], memWE: [xMW + 30, yb + (dcache ? 22 : 19)] });
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: o.ports ? `rv32i_pipe${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}_core` : `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
-    name: o.ports ? 'Pipelined RV32I core (program and memory on ports)' : `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
+    id: o.ports ? `rv32i${m ? 'm' : ''}_pipe${dcache ? '_dc' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}_core` : `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
+    name: o.ports ? `Pipelined RV32I${m ? 'M' : ''} core (program and memory on ports${dcache ? ', write-through data cache' : ''})` : `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus(o.ports ? 'pcOut' : 'pcF', 32, 'out'), bit(o.ports ? 'retire' : 'validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
     symbol: { kind: 'box', label: dcache ? 'RV32I PIPE + D$' : 'RV32I PIPE' },

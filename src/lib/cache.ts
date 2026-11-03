@@ -4,12 +4,13 @@
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import { constWord } from './alu';
 import { busMux2, equal, incrementer } from './combinational';
 import { define, merger, splitter } from './define';
 import { AND, NOT, OR } from './gates';
 import { ram } from './memory';
 import { register } from './sequential';
-import { TIE1 } from './transistors';
+import { TIE0, TIE1 } from './transistors';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -180,6 +181,117 @@ export function wayLookup2(t: number, w: number): ComponentDef {
           { name: 'd0', ends: ['d0', 'mx.a'] }, { name: 'd1', ends: ['d1', 'mx.b'] },
           { name: 'data', ends: ['mx.y', 'data'] },
         ],
+      }),
+    });
+  });
+}
+
+/**
+ * The write-through data cache of cachedMemory in front of a memory outside (the sandbox pipelined core's: `mAddr` / `mWD` /
+ * `mWE` out, `mRD` in, the single-cycle port core's memory timing: read combinational from mAddr, write at the rising edge).
+ * Address = bit 31 (device) | tag (27 - ib bits) | index (ib) | word offset (2) | byte (2). An address with bit 31 set is a device
+ * (the sandbox's console, LEDs, switches, screen): never cached, the load reads `mRD` at once and never stalls. Below, a load miss
+ * stalls 8 cycles as in cachedMemory: mAddr then carries the line's word addresses (count, 0 ... 3) and the burst copies them in;
+ * otherwise mAddr is the CPU's address. Stores go through (mWE = we) and update a cached copy. Memory that changes behind the
+ * cache's back (a DMA master) would leave a stale line: the cache has no snooping.
+ */
+export function cachedPort(ib = 2): ComponentDef {
+  return memo(`dcachep${ib}`, () => {
+    const t = 27 - ib, la = ib + 2;
+    const DATA = ram(la, 32), TAGS = ram(ib, t + 1), CNT = register(3), INC = incrementer(3);
+    const MA = busMux2(32), DA = busMux2(la), DD = busMux2(32), BP = busMux2(32), EQ = equal(t), Z2 = constWord(2, 0);
+    const dg = symbolGeom(DATA), tg = symbolGeom(TAGS);
+    const x1 = 30, x2 = x1 + 14, x3 = x2 + Math.max(dg.w, tg.w) + 14, x4 = x3 + 16;
+    const yT = 2, yD = yT + tg.h + 12, yM = yD + dg.h + 14, yC = yM + 40;
+    const instances: InstanceDef[] = [
+      { name: 'sa', def: splitter([2, 2, ib, t, 1]), at: [4, 20] },
+      { name: 'fa', def: merger([2, 2, ib, t, 1]), at: [16, yM + 14] },
+      { name: 'z2', def: Z2, at: [4, yM + 12] },
+      { name: 'z1', def: TIE0, at: [8, yM + 22] },
+      { name: 'oa', def: merger([2, ib]), at: [14, yD + 6] },
+      { name: 'ca', def: merger([2, ib]), at: [16, yD + 12] },
+      { name: 'tv', def: merger([t, 1]), at: [x1, yT + 2] },
+      { name: 'one', def: TIE1, at: [x1 - 6, yT + 6] },
+      { name: 'tags', def: TAGS, at: [x2, yT], label: 'tag + valid array' },
+      { name: 'st', def: splitter([t, 1]), at: [x3 - 8, yT + 4] },
+      { name: 'eq', def: EQ, at: [x3, yT], label: 'tag match' },
+      { name: 'hitg', def: AND, at: [x4, yT + 4] },
+      { name: 'ndev', def: NOT, at: [x4, yT + 8] },
+      { name: 'hit2', def: AND, at: [x4 + 6, yT + 4] },
+      { name: 'da', def: DA, at: [x1, yD + 4], label: 'line / fill' },
+      { name: 'dd', def: DD, at: [x1, yD + 14], label: 'store / fill data' },
+      { name: 'data', def: DATA, at: [x2, yD], label: 'data array' },
+      { name: 'ma', def: MA, at: [x1, yM + 4], label: 'CPU / fill address' },
+      { name: 'bp', def: BP, at: [x4 + 8, yD + 24], label: 'cache / device' },
+      { name: 'cnt', def: CNT, at: [x2, yC], label: 'miss counter' },
+      { name: 'inc', def: INC, at: [x3, yC] },
+      { name: 'sc', def: splitter([2, 1]), at: [x3 - 6, yC + 10] },
+      { name: 'cs', def: splitter([1, 1]), at: [x3 + 8, yC + 10] },
+      { name: 'nhit', def: NOT, at: [x4, yT + 12] },
+      { name: 'cm', def: AND, at: [x4 + 6, yT + 12] },
+      { name: 'stall', def: AND, at: [x4 + 12, yT + 12] },
+      { name: 'fill', def: AND, at: [x4, yC + 3] },
+      { name: 'l01', def: AND, at: [x4, yC + 10] },
+      { name: 'last', def: AND, at: [x4 + 8, yC + 7] },
+      { name: 'whit', def: AND, at: [x4, yD + 16] },
+      { name: 'dwe', def: OR, at: [x4 + 10, yD + 17] },
+    ];
+    const nets: NetDef[] = [
+      { name: 'addr', ends: ['addr', 'sa.in', 'ma.a'] },
+      { name: 'offset', ends: ['sa.o1', 'oa.i0'], tags: true },
+      { name: 'index', ends: ['sa.o2', 'fa.i2', 'oa.i1', 'ca.i1', 'tags.addr'], tags: true },
+      { name: 'tag', ends: ['sa.o3', 'fa.i3', 'tv.i0', 'eq.a'], tags: true },
+      { name: 'device', ends: ['sa.o4', 'ndev.a', 'bp.s'], tags: true },
+      { ends: ['z2.y', 'fa.i0'] },
+      { ends: ['z1.y', 'fa.i4'] },
+      { name: 'fillAddr', ends: ['fa.out', 'ma.b'] },
+      { name: 'mAddr', ends: ['ma.y', 'mAddr'] },
+      { name: 'lineAddr', ends: ['oa.out', 'da.a'] },
+      { name: 'fillLine', ends: ['ca.out', 'da.b'] },
+      { name: 'dataAddr', ends: ['da.y', 'data.addr'] },
+      { name: 'wd', ends: ['wd', 'mWD', 'dd.a'], tags: ['dd.a'] },
+      { name: 'memWord', ends: ['mRD', 'dd.b', 'bp.b'], tags: ['dd.b', 'bp.b'] },
+      { name: 'dataIn', ends: ['dd.y', 'data.din'] },
+      { name: 'we', ends: ['we', 'mWE', 'whit.a'], tags: ['whit.a'] },
+      { ends: ['one.y', 'tv.i1'] },
+      { name: 'tagIn', ends: ['tv.out', 'tags.din'] },
+      { name: 'stored', ends: ['tags.dout', 'st.in'] },
+      { name: 'storedTag', ends: ['st.o0', 'eq.b'] },
+      { name: 'valid', ends: ['st.o1', 'hitg.b'], tags: true },
+      { name: 'match', ends: ['eq.eq', 'hitg.a'] },
+      { ends: ['hitg.y', 'hit2.a'] },
+      { name: 'cached', ends: ['ndev.y', 'hit2.b', 'cm.b'], tags: ['hit2.b', 'cm.b'] },
+      { name: 'hit', ends: ['hit2.y', 'nhit.a', 'whit.b', 'hit'], tags: ['whit.b', 'hit'] },
+      { ends: ['nhit.y', 'cm.a'] },
+      { name: 'miss', ends: ['cm.y', 'stall.b'] },
+      { name: 're', ends: ['re', 'stall.a'] },
+      { name: 'stall', ends: ['stall.y', 'cnt.en', 'ma.s', 'da.s', 'dd.s', 'fill.a', 'stall'], tags: ['cnt.en', 'ma.s', 'da.s', 'dd.s', 'fill.a'] },
+      { name: 'count', ends: ['cnt.q', 'inc.a', 'sc.in'], tags: ['sc.in'] },
+      { name: 'count+1', ends: ['inc.y', 'cnt.d'], tags: true },
+      { name: 'burstWord', ends: ['sc.o0', 'fa.i1', 'ca.i0', 'cs.in'], tags: ['fa.i1', 'ca.i0'] },
+      { name: 'burst', ends: ['sc.o1', 'fill.b'], tags: true },
+      { name: 'c0', ends: ['cs.o0', 'l01.a'] },
+      { name: 'c1', ends: ['cs.o1', 'l01.b'] },
+      { name: 'word3', ends: ['l01.y', 'last.b'] },
+      { name: 'fillWe', ends: ['fill.y', 'dwe.b', 'last.a'], tags: ['dwe.b'] },
+      { name: 'storeHit', ends: ['whit.y', 'dwe.a'] },
+      { name: 'dataWe', ends: ['dwe.y', 'data.we'], tags: true },
+      { name: 'lastWord', ends: ['last.y', 'tags.we'], tags: true },
+      { ends: ['data.dout', 'bp.a'] },
+      { ends: ['bp.y', 'rd'] },
+      { name: 'clk', ends: ['clk', 'data.clk', 'tags.clk', 'cnt.clk'], tags: true },
+    ];
+    const right = x4 + 30;
+    return define({
+      id: `dcachep${ib}`, name: `Write-through data cache (${16 * 2 ** ib} bytes) in front of an outside memory`, category: 'memory',
+      summary: `A direct-mapped cache of ${2 ** ib} lines × 4 words in front of a memory on ports (mAddr / mWD / mWE out, mRD in), write-through, no write-allocate. Addresses with bit 31 set are devices: never cached. A load miss stalls ${MISS_PENALTY} cycles: 4 of latency, then the line arrives one word per cycle on mAddr.`,
+      ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('re', 'in'), bit('clk', 'in', 'bottom', true), bus('mRD', 32, 'in'),
+        bus('rd', 32, 'out'), bit('stall', 'out'), bit('hit', 'out'), bus('mAddr', 32, 'out'), bus('mWD', 32, 'out'), bit('mWE', 'out')],
+      symbol: { kind: 'box', label: 'D-CACHE' },
+      netlist: () => ({
+        pins: { addr: [0, 24], wd: [0, yD + 18], we: [0, yD + 22], re: [0, yT + 14], clk: [0, yC + 8], mRD: [0, yM + 30],
+          rd: [right, yD + 28], stall: [right, yT + 13], hit: [right, yT + 5], mAddr: [right, yM + 6], mWD: [right, yM + 10], mWE: [right, yM + 14] },
+        instances, nets,
       }),
     });
   });
