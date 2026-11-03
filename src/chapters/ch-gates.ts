@@ -1,6 +1,6 @@
 import { groupDigits } from '../sim/numfmt';
 import type { ComponentDef } from '../sim/types';
-import { AND, MUX2, NAND, NOR, NOT, OR, XNOR, XOR, equal } from '../lib';
+import { AND, EXTEND4_8, MUX2, NAND, NEGATE4, NOR, NOT, OR, SHIFTS8, XNOR, XOR, equal } from '../lib';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
@@ -391,8 +391,8 @@ export const chBinary: Chapter = {
         real: `<p>Every mainstream ISA uses two's complement. RISC-V has one <code>add</code> for both readings; the instructions that differ are the ones whose result depends on the interpretation:
           comparisons (<code>slt</code> against <code>sltu</code>), right shifts (arithmetic against logical), and widening loads (<code>lb</code> sign-extends, <code>lbu</code> does not). Overflow raises
           nothing: software checks if it must.</p>`,
-        pitfall: `<p>The most negative number has no positive partner: in 8 bits, −128 inverted and incremented is −128 again, so its absolute value stays negative. Also,
-          sign-extending a number to a wider register copies the top bit, while zero-extending turns −1 (0xFF) into 255.</p>`,
+        pitfall: `<p>The most negative number has no positive partner: in 8 bits, −128 inverted and incremented is −128 again, so its absolute value stays negative. Widening
+          a signed number needs the right fill, too: see the step on extension below.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>unsigned</th><th>signed</th></tr>
           ${Array.from({ length: 16 }, (_, i) => `<tr><td>${i.toString(2).padStart(4, '0')}</td><td>${i}</td><td>${i >= 8 ? i - 16 : i}</td></tr>`).join('')}</table>`,
       },
@@ -401,6 +401,109 @@ export const chBinary: Chapter = {
         options: ['255', '−1', '−127', '−128'], answer: 1,
         why: ['That is the unsigned reading of the same bits. In two\'s complement the top bit weighs −128.', '', 'That is 0xFF read as sign and magnitude. Two\'s complement gives the top bit weight −128: −128 + 127 = −1.', 'That is 0x80, the top bit alone. 0xFF adds +127 from the seven bits below it.'],
         explain: 'All ones is always −1: add 1 and every bit carries over, leaving 0. (Read as unsigned, the same bits are 255.)',
+      },
+    },
+    {
+      title: 'Negation in gates',
+      body: `
+        <p>¬x + 1 looks like it needs an adder, but the +1 only travels through the low end. The trailing 0s of x are 1s in ¬x: the +1
+        carries through them and leaves 0s. It stops at the first 0 of ¬x, which is x's lowest 1, and sets it. Everything above is still
+        inverted. So <strong>−x keeps x up to and including its lowest 1 and inverts every bit above it</strong>: −0110 (6) = 1010 (−6).</p>
+        <p>In gates: bit i is inverted exactly when some bit below it is 1. An XOR is a controlled inverter (a ⊕ 1 = ¬a, a ⊕ 0 = a), and
+        "some bit below is 1" is an OR of all of them, built as a chain: <span data-show="or1 or2">or1 and or2</span> pass "a 1 so far"
+        down the staircase, and <span data-show="x1 x2 x3">x1, x2, x3</span> invert where it says so. Bit 0 is never inverted; it goes
+        straight across to the <span data-show="my">merger</span>.</p>
+        <p>Cost: n − 1 XORs and n − 2 ORs, ${nd(NEGATE4)} NANDs at 4 bits, ${logicDepth(NEGATE4)} NAND delays from a[0] to y[3]. The chain grows
+        with the width like the carry of the next chapter's adders. That is no accident: it is an incrementer, with the inversion folded in.</p>
+        <div class="try">Set a = 5 (0101). y should read 11 = 1011, which is −5.</div>`,
+      scene: () => ({ root: NEGATE4, inputs: { a: 3 } }),
+      tries: [(st) => st.getInput('a') === 5 && st.value('y') === 11],
+      more: {
+        derive: `<p>Write x = p·1·0ᵏ: some high bits p, its lowest 1, then k zeros. Then ¬x = ¬p·0·1ᵏ, and adding 1 carries through the k ones:
+          ¬x + 1 = ¬p·1·0ᵏ. The low k + 1 bits match x, the bits of p are inverted. For x = 0 there is no lowest 1: nothing is inverted and −0 = 0.</p>`,
+        real: `<p>Processors do not keep a negator: <code>neg</code> in RISC-V is the pseudo-instruction <code>sub rd, x0, rs</code>, and the
+          adder's subtract path does the inverting and the +1 (next chapter). A stand-alone negator appears where an adder would be wasted,
+          such as the sign fix after a divider or an absolute-value unit.</p>`,
+        pitfall: `<p>The most negative number has no positive twin. Its lowest 1 is the top bit, so nothing is inverted and −(−8) = −8 in 4 bits
+          (−2³¹ in 32). <code>abs(INT_MIN)</code> is negative in C, Java and on every two's-complement machine.</p>`,
+        numbers: `<table class="mini"><tr><th>bits</th><th>XOR</th><th>OR</th><th>NANDs</th></tr>
+          ${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${n - 1}</td><td>${n - 2}</td><td>${(n - 1) * nd(XOR) + (n - 2) * nd(OR)}</td></tr>`).join('')}</table>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'Find the one non-zero input whose negation is itself.',
+        check: (st) => st.getInput('a') === 8 && st.value('y') === 8,
+        hints: ['Which 4-bit number has no positive partner in the range −8…7?', 'Its lowest 1 is the top bit: what is above it to invert?'],
+        answer: 'a = 1000 (−8). Its lowest 1 is the top bit, so nothing is inverted and y = 1000. +8 does not fit in 4 bits.',
+        solve: (st) => st.setInputs({ a: 8 }),
+      },
+    },
+    {
+      title: 'Wider words: sign and zero extension',
+      body: `
+        <p>A 4-bit value moved into an 8-bit register needs four new top bits. Unsigned, they are 0: <strong>zero extension</strong>.
+        Signed, they must be copies of the sign bit: <strong>sign extension</strong>. 1011 is −5 in 4 bits and 1111_1011 is −5 in 8, while
+        0000_1011 would be 11. The sign bit weighed −8; spread over five copies it weighs −128 + 64 + 32 + 16 + 8 = −8 again.</p>
+        <p>Both are wiring. In the <span data-show="ms">sign</span> half the top wire fans out to four more merger inputs; in the
+        <span data-show="mz">zero</span> half those inputs go to a <span data-show="gnd">tie to GND</span>. No gates, no delay.
+        Narrowing is cheaper still: drop the top wires. The value survives only if every dropped bit equals the new top bit.</p>
+        <p>Which one is right is not in the bits: the instruction says. RISC-V's <code>lb</code> sign-extends a loaded byte and <code>lbu</code>
+        zero-extends it (<a href="#/c/io/0">chapter 19</a>), and every 12-bit immediate is sign-extended to 32 bits
+        (<a href="#/c/isa/0">chapter 13</a>).</p>
+        <div class="try">Set a = 1011. s reads 0xFB (−5 signed), z reads 0x0B (11).</div>`,
+      scene: () => ({ root: EXTEND4_8, inputs: { a: 6 } }),
+      tries: [(st) => st.getInput('a') === 11],
+      more: {
+        derive: `<p>An m-bit value is x = −2ᵐ⁻¹·b + r, with b the sign bit and r the rest. Sign-extended to n bits it is
+          −2ⁿ⁻¹·b + (2ⁿ⁻¹ − 2ᵐ⁻¹)·b + r: the new copies add 2ᵐ⁻¹ + … + 2ⁿ⁻², which is 2ⁿ⁻¹ − 2ᵐ⁻¹. The two b terms collapse to
+          −2ᵐ⁻¹·b: the same x.</p>`,
+        real: `<p>RV64 keeps 32-bit results sign-extended in its 64-bit registers (<code>addw</code>, <code>lw</code>), so a 32-bit
+          comparison works on the full register; <code>lwu</code> exists for when that is wrong. x86 names the two
+          <code>movsx</code> and <code>movzx</code>.</p>`,
+        pitfall: `<p>Mixing the readings. A byte 0xFF loaded with <code>lb</code> becomes −1 (0xFFFF_FFFF), with <code>lbu</code> 255. In C
+          whether plain <code>char</code> is signed depends on the platform (it is unsigned on RISC-V Linux), so the same source can extend
+          either way.</p>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'Make s read −1 (0xFF) while z reads 15 (0x0F).',
+        check: (st) => st.getInput('a') === 15 && st.value('s') === 255 && st.value('z') === 15,
+        hints: ['Which 4-bit pattern is −1?'],
+        answer: 'a = 1111: −1 in 4 bits. Sign extension copies the 1 into all four new bits (0xFF, still −1); zero extension gives 0x0F = 15.',
+        solve: (st) => st.setInputs({ a: 15 }),
+      },
+    },
+    {
+      title: 'Shifts by a constant are wiring',
+      body: `
+        <p>Moving every bit one place up multiplies by 2; one place down divides by 2. A shift by a fixed amount moves wires, not
+        values: in each block here a <span data-show="s_sll s_srl s_sra">splitter</span> and a merger sit one row apart and every wire
+        runs straight across.</p>
+        <p>Left, <span data-show="sll">sll</span>: a 0 enters at the bottom and the top bit falls off. Right comes in two kinds.
+        <span data-show="srl">Logical</span> brings in a 0 at the top, right for unsigned numbers. <span data-show="sra">Arithmetic</span>
+        brings in a copy of the sign bit, so a negative number stays negative: −8 ≫ 1 = −4.</p>
+        <p>The arithmetic shift rounds <em>down</em>, toward −∞: −7 ≫ 1 = −4, while −7 / 2 in C, or RISC-V's <code>div</code>, gives −3.
+        The bit shifted out is the remainder, and a set one pulls a negative result down. A compiler dividing a signed number by a
+        power of two adds a correction first.</p>
+        <p>Cost: no gates for a fixed shift. A shift by an amount held in a register needs muxes: the barrel shifter of
+        <a href="#/c/alu/1">chapter 11</a>, log₂ n stages of them.</p>
+        <div class="try">Set a = 0xF9 (−7): sll = 0xF2 (−14), srl = 0x7C (124), sra = 0xFC (−4).</div>`,
+      scene: () => ({ root: SHIFTS8, inputs: { a: 0x2C } }),
+      tries: [(st) => st.getInput('a') === 0xF9],
+      more: {
+        derive: `<p>Shifting right by k drops the low k bits, the remainder of a division by 2ᵏ, and keeps the quotient rounded down:
+          a ≫ k = ⌊a / 2ᵏ⌋. That holds for srl on the unsigned reading and for sra on the signed one. Division in C and RISC-V rounds
+          toward 0 instead, so for negative a they differ by one whenever a bit shifted out was 1.</p>`,
+        real: `<p>RISC-V has <code>slli</code>, <code>srli</code> and <code>srai</code> with the amount in the instruction, and <code>sll</code>,
+          <code>srl</code>, <code>sra</code> with it in a register. One bit of the encoding (bit 30) tells the two right shifts apart.
+          Java spells them <code>&gt;&gt;&gt;</code> and <code>&gt;&gt;</code>.</p>`,
+        pitfall: `<p>Shifting by the full width or more. In C it is undefined; RISC-V uses only the low 5 bits of the amount (6 on RV64), so
+          <code>x &lt;&lt; 32</code> on RV32 leaves x unchanged rather than giving 0.</p>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'Make sra read −1 (0xFF) from an input that is not −1.',
+        check: (st) => st.getInput('a') !== 0xFF && st.value('sra') === 0xFF,
+        hints: ['sra halves and rounds down. Which number halves to exactly −1?'],
+        answer: 'a = 0xFE (−2): −2 ≫ 1 = −1. (−1 ≫ 1 is −1 too: rounding down, −0.5 becomes −1, never 0.)',
+        solve: (st) => st.setInputs({ a: 0xFE }),
       },
     },
   ],
