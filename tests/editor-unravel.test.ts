@@ -223,10 +223,11 @@ describe('connectivity never changes', () => {
   }, 400_000);
 
   // (the largest, the rasterizer's set-up, takes ~38 s on a loaded machine: past the default 30 s)
-  it.each(docs.map((d) => [d.id, d] as const))('library: %s', (_, d) => {
+  // (and Bit Runner's digits 67 s on CI's runner: past the worker's 60 s RPC timeout unless it yields)
+  it.each(docs.map((d) => [d.id, d] as const))('library: %s', async (_, d) => {
     const ws = workspace(d);
     if (errors(compileChip(d, (ref) => partDef(ref, () => undefined))).length) return;
-    const { names } = roundTrip(ws, d.id);
+    const { names } = await stepped(roundTripSteps(ws, d.id));
     expect(names.length).toBeGreaterThan(0);
-  }, 120_000);
+  }, 400_000);
 });
