@@ -479,7 +479,7 @@ function manageDialog(ed: Editor): void {
   render();
   const lead = h('p', { class: 'sb-dlg-lead sb-manage-lead' }, 'Project ', h('b', null, projectNameOf(ed.project)),
     ' · drag a chip onto a folder, or pick one in its row: folders only help you find chips, they change no ids or links.');
-  const d = dialog(ed, `Your chips (${Object.keys(ed.ws.chips).length})`, [lead, h('div', { class: 'sb-chips-wrap' }, table), msg], [
+  const d = dialog(ed, `My chips (${Object.keys(ed.ws.chips).length})`, [lead, h('div', { class: 'sb-chips-wrap' }, table), msg], [
     h('button', { class: 'btn ghost sm', onclick: () => {
       const r = addFolder(ed.ws, newFolderName(ed.ws));
       if ('error' in r) return say(`Cannot add a folder: ${r.error}.`, true);
@@ -492,7 +492,7 @@ function manageDialog(ed: Editor): void {
   const head = d.el.querySelector('h3')!;
   const off = ed.onChange(() => {
     if (!d.el.isConnected) return void off();
-    head.textContent = `Your chips (${Object.keys(ed.ws.chips).length})`;
+    head.textContent = `My chips (${Object.keys(ed.ws.chips).length})`;
     render();
   });
 }
