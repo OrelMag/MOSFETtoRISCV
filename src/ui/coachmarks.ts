@@ -139,7 +139,9 @@ class Coach {
     const x0 = Math.max(0, t.left - pad), y0 = Math.max(0, t.top - pad);
     const x1 = Math.min(vw, t.right + pad), y1 = Math.min(vh, t.bottom + pad);
     Object.assign(this.ring.style, { left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
-    const cw = Math.min(340, vw - 24);
+    // 'clear' cards are wide and short: they sit in the strip under the circuit, so height is what costs
+    const wide = this.beats[this.i].card === 'clear';
+    const cw = Math.min(wide ? 460 : 340, vw - 24);
     this.card.style.width = `${cw}px`;
     const ch = this.card.offsetHeight;
     const below = vh - y1 - 16 >= ch + 8;

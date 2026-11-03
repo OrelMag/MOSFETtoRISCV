@@ -2768,3 +2768,8 @@ html[data-busy]::before {
 .pal-menu button[aria-checked='true']::after { content: '\2713'; position: absolute; right: 10px; top: 8px; color: var(--accent); font-weight: 700; }
 .hw-empty { text-align: center !important; padding: 18px; color: var(--text-2); }
 .bm-hit:focus-visible { stroke: var(--accent); stroke-width: 2; outline: none; }
+@media print {
+  /* paper is white whatever the theme: the text tokens in ink, the surfaces off */
+  .narrative, .hw-page, .home { --bg: #fff; --surface: #fff; --surface-2: #fff; --surface-3: #eee; --text: #000; --text-2: #222; --muted: #444; --border: #999; --accent: #000; --accent-soft: #fff; background: #fff; color: #000; }
+  .narrative-head .btn, .tour-go { display: none !important; }
+}

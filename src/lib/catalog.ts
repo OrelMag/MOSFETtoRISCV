@@ -61,7 +61,7 @@ export function suggestItems(query: string, max = 6): LibraryItem[] {
       let score: number;
       if (id === q) score = 0;
       else if (id.startsWith(q) || name.startsWith(q.replace(/_/g, ' ')) || initials === q) score = 1;
-      else if (id.includes(q) || words.every((w) => name.includes(w))) score = 2;
+      else if ((q.length > 3 && id.includes(q)) || words.every((w) => name.includes(w))) score = 2;
       else {
         // A family's id carries its parameters (alu8, rf8x32): compare without the digits too.
         if (q.length <= 3) continue; // too short for a typo to mean anything: "rca" is not "fcsr"
