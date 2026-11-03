@@ -10,6 +10,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { floatExplorer, floatLine } from '../widgets/float';
 import type { Chapter, Layers } from './types';
 import { newtonSteps } from './float/newton';
+import { errorSteps } from './float/error';
 
 const E4M3 = { E: 4, M: 3 };
 const F6: FpFormat = { E: 3, M: 2 };
@@ -891,6 +892,7 @@ export const chFloat: Chapter = {
     },
     ...formatSteps,
     ...newtonSteps,
+    ...errorSteps,
   ],
 };
 
