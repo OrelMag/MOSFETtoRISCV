@@ -34,7 +34,7 @@ import {
   type CpuDesc, type CpuDoc, CpuMonitor, type CpuRead, cpuGaps, detectCpu, fmtWord, mismatchText, type NetRef, nestedRoms, partAt, partNode, pipeRoot,
   memStoreOf, pinNamed, pipelineSlots, readMem, refValue, resolveCpu, romParts,
 } from './cpu';
-import { dockPane, paneShown, phoneWidth, showPane, undockPane } from './dock';
+import { dockPane, paneShown, showPane, tightForDrawer, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import { ioInfo, ioLeaf, type SwitchState } from './ioparts';
 import { romImage } from './memory';
@@ -356,7 +356,7 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        if ((this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !this.closed.has(chip) && !phoneWidth()) this.setOpen(true);
+        if ((this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !this.closed.has(chip) && !tightForDrawer()) this.setOpen(true);
         else if (!this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.m6502) this.setOpen(false);
       }
       this.redock();

@@ -213,7 +213,7 @@ export class PropsPanel {
       this.row('Name', this.text(p.id, (v) => {
         if (this.apply((d) => setPart(d, p.id, { id: v.trim() }, ed.defOf))) ed.select({ parts: [v.trim()] });
       }), 'Instance name: unique in this chip (letters, digits, _)'),
-      this.row('Caption', this.text(p.label ?? '', (v) => this.apply((d) => setPart(d, p.id, { label: v.trim() || undefined })), { placeholder: p.id })));
+      this.row('Caption', this.text(p.label ?? '', (v) => this.apply((d) => setPart(d, p.id, { label: v.trim() || undefined })), { placeholder: 'none: the name is drawn' }), 'Text drawn on the canvas in place of the name; empty: the name'));
 
     if ('lib' in ref) {
       const f = familyOf(ref.lib);
@@ -435,6 +435,8 @@ export class PropsPanel {
       ws = { ...ws, chips: { u_main: blank }, open: ['u_main'] };
     } else if (!ws.open.length) ws = openChip({ ...ws, open: [] }, Object.keys(ws.chips)[0]);
     ed.editWs(() => ws);
+    // the button that was clicked holds the focus, which holds back an update: the pane must show the chip now open
+    this.update(true);
     ed.toast(`Deleted ${doc.name} (${undoKey()} to undo)`);
   }
 

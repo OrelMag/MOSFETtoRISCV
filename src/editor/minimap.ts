@@ -61,6 +61,7 @@ class Minimap {
       if (matches(e, 'sb.minimap') && shortcutAllowed(e)) {
         e.preventDefault();
         settings.set('minimap', !settings.minimap);
+        ed.toast(settings.minimap ? 'Minimap on: it shows while part of the chip is out of view' : 'Minimap off (M brings it back)');
       }
     };
     document.addEventListener('keydown', key);

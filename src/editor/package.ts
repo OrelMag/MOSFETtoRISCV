@@ -7,7 +7,7 @@
 
 import { symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { h, icon, s } from '../ui/dom';
+import { h, icon, rememberFocus, s } from '../ui/dom';
 import { drawSymbol } from '../view/symbols';
 import { relations } from './chips';
 import { drawFace, type FaceEls, paintFace } from './dispface';
@@ -323,7 +323,11 @@ export function packageDialog(ed: Editor): void {
   const commit = (): boolean => {
     const nm = name.value.trim();
     if (!nm) {
+      // say why nothing happened: the browser's own bubble on the field, cleared by typing
+      name.setCustomValidity('Name this chip first: the name is what the palette and the boxes show');
       name.focus();
+      name.reportValidity();
+      name.addEventListener('input', () => name.setCustomValidity(''), { once: true });
       return false;
     }
     const nt = notes.value.trim();
@@ -340,10 +344,11 @@ export function packageDialog(ed: Editor): void {
     });
     return true;
   };
+  const back = rememberFocus(() => ed.actionAnchor('package') ?? ed.view.svg);
   const close = () => {
     ed.paintHooks.delete(livePaint);
     ov.remove();
-    ed.view.svg.focus({ preventScroll: true });
+    back();
   };
   const save = (fresh: boolean) => {
     if (!commit()) return;

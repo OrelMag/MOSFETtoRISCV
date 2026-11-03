@@ -17,10 +17,18 @@ export interface DockPane {
   el: HTMLElement;
   /** Preferred width in px (default 360). */
   width?: number;
+  /** Called whenever the pane comes to the front: a hidden pane is not repainted while it waits. */
+  onShow?: () => void;
 }
 
 /** A phone-width sandbox: a drawer opening by itself would cover most of the circuit (the toolbar's buttons open them). */
 export const phoneWidth = (): boolean => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+
+/**
+ * Too little room for a drawer to open by itself: a phone, or a window where palette, properties and a 360 px drawer
+ * leave the circuit under ~420 px (its labels shrink to 5 px). The toolbar still opens the drawer on a click.
+ */
+export const tightForDrawer = (): boolean => phoneWidth() || (typeof innerWidth === 'number' && innerWidth < 1340);
 
 class Dock {
   readonly host: HTMLElement;
@@ -115,6 +123,7 @@ class Dock {
       onclick: () => this.show(p.id),
     }, icon(p.icon, 13), h('span', null, p.label))));
     this.ed.renderActions();
+    cur.onShow?.();
   }
 }
 

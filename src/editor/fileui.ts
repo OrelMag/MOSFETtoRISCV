@@ -6,7 +6,7 @@
 import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-files.css';
 import { exportHdl } from '../sim/svexport';
-import { h, icon, placeMenu, s, undoKey } from '../ui/dom';
+import { h, icon, placeMenu, rememberFocus, s, undoKey } from '../ui/dom';
 import { here, registerActions } from '../ui/searchsources';
 import { registerEditorPlugin, registerToolbarAction, type Editor } from './editor';
 import { openIsaEditor } from './isaui';
@@ -50,9 +50,11 @@ const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240
 /** A modal dialog over the editor (Esc or a click outside closes it). */
 export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = ''): { el: HTMLElement; body: HTMLElement; close: () => void } {
   closeMenu();
+  // Esc gives the focus back to what opened it: the File menu's button when the menu item went with its menu
+  const back = rememberFocus(() => (menuBack && performance.now() - menuBack.t < 5000 ? menuBack.el : null) ?? ed.view.svg);
   const close = () => {
     ov.remove();
-    ed.view.svg.focus({ preventScroll: true });
+    back();
   };
   const content = h('div', { class: 'sb-dlg-body' }, body);
   const ov = h('div', { class: `sb-help sb-dlg ${cls}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': title, onclick: (e: Event) => { if (e.target === ov) close(); } },
@@ -115,6 +117,9 @@ const MENU: (MenuItem | null)[] = [
   { icon: 'trash', label: 'Delete local data…', hint: 'erase what this site keeps in this browser', run: (ed) => deleteDataDialog(ed) },
 ];
 
+/** Where the File menu was opened from, for a dialog one of its items opens (see dialog). */
+let menuBack: { el: HTMLElement | null; t: number } | null = null;
+
 function openMenu(ed: Editor): void {
   if (menu) return closeMenu();
   const btn = ed.actionAnchor('file');
@@ -125,7 +130,7 @@ function openMenu(ed: Editor): void {
   for (const it of MENU) {
     if (!it) { menu.append(h('hr')); continue; }
     const off = it.enabled && !it.enabled(ed);
-    menu.append(h('button', { role: 'menuitem', disabled: off, title: off ? it.off : undefined, onclick: () => { closeMenu(); it.run(ed); } },
+    menu.append(h('button', { role: 'menuitem', disabled: off, title: off ? it.off : undefined, onclick: () => { menuBack = { el: opener ?? btn, t: performance.now() }; closeMenu(); it.run(ed); } },
       glyph(it.icon), h('span', null, h('b', null, it.label), h('small', null, off && it.off ? `Needs a bus on the chip: ${it.off}` : it.hint))));
   }
   ed.el.append(menu);
@@ -474,7 +479,7 @@ function manageDialog(ed: Editor): void {
   render();
   const lead = h('p', { class: 'sb-dlg-lead sb-manage-lead' }, 'Project ', h('b', null, projectNameOf(ed.project)),
     ' · drag a chip onto a folder, or pick one in its row: folders only help you find chips, they change no ids or links.');
-  const d = dialog(ed, `Your chips (${Object.keys(ed.ws.chips).length})`, [lead, h('div', { class: 'sb-chips-wrap' }, table), msg], [
+  const d = dialog(ed, `My chips (${Object.keys(ed.ws.chips).length})`, [lead, h('div', { class: 'sb-chips-wrap' }, table), msg], [
     h('button', { class: 'btn ghost sm', onclick: () => {
       const r = addFolder(ed.ws, newFolderName(ed.ws));
       if ('error' in r) return say(`Cannot add a folder: ${r.error}.`, true);
@@ -487,7 +492,7 @@ function manageDialog(ed: Editor): void {
   const head = d.el.querySelector('h3')!;
   const off = ed.onChange(() => {
     if (!d.el.isConnected) return void off();
-    head.textContent = `Your chips (${Object.keys(ed.ws.chips).length})`;
+    head.textContent = `My chips (${Object.keys(ed.ws.chips).length})`;
     render();
   });
 }

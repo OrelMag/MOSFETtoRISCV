@@ -15,7 +15,8 @@ import type { PowerOnMode } from '../sim/sim';
 import { WEAK_H, weakTag } from '../sim/switchsim';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { describeBits } from '../sim/values';
-import { coarsePointer, h, hintBadge, icon, placeMenu } from '../ui/dom';
+import { menuArrows } from '../ui/menukeys';
+import { coarsePointer, h, hintBadge, icon, placeMenu, undoKey } from '../ui/dom';
 import { showKeySheet } from '../ui/keyhelp';
 import { settings } from '../ui/settings';
 import { type PlaceMode, placeMode } from '../ui/wording';
@@ -276,6 +277,7 @@ export class Editor {
     this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
     this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
+    menuArrows(this.el);
     this.tools = new Tools(this);
     this.buildControls();
     this.unsub = settings.onChange(() => {
@@ -655,7 +657,16 @@ export class Editor {
     // only a chip with something besides its pins: an empty level's clock ticking over nothing reads as a running circuit
     if (!this.doc.parts.length) return;
     if (!settings.autoClock || sim.autoTried || !sim.autoStart(this.rateChosen ? sim.hz : this.doc.hz ?? AUTO_HZ)) return;
-    if (this.rateSel && sim.mode === 'cycle') this.rateSel.value = String(sim.hz);
+    if (this.rateSel && sim.mode === 'cycle') {
+      const sel = this.rateSel;
+      // a chip's own rate (Pong's 5 kHz) is not a step: add it in order, or the select shows nothing
+      if (![...sel.options].some((o) => o.value === String(sim.hz))) {
+        const o = h('option', { value: String(sim.hz) }, `${sim.hz >= 1000 ? `${sim.hz / 1000} k` : sim.hz} Hz`) as HTMLOptionElement;
+        const after = [...sel.options].find((x) => Number(x.value) > sim.hz);
+        sel.insertBefore(o, after ?? null);
+      }
+      sel.value = String(sim.hz);
+    }
   }
 
   /** Called after every repaint (live views over the simulation: look inside, inspector). */
@@ -953,11 +964,11 @@ export class Editor {
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
       this.tabs.classList.remove('measure');
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
-      // the tabs may take up to 70 % of the bar: as many as fit beside Open… / New chip (the others scroll), the least
+      // the tabs may take up to 30 % of the bar (300 px at least) and shrink or scroll past it: the toolbar's own actions (Examples, Timing, Play) outrank them, the least
       // used actions going into More for them; 4 px of slack
       // every flex item in the row has a gap beside it, an empty one (the top slot, before the autosave indicator) too
       const items = [...top.children].filter((el) => getComputedStyle(el).display !== 'none').length;
-      room -= Math.min(tabsNeed + 4, room * 0.7) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
+      room -= Math.min(tabsNeed + 4, Math.max(room * 0.3, 300)) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
     }
     this.shed = shedActions(btns.map((b) => ({ id: b.dataset.action!, w: b.offsetWidth })), room, moreW, px(getComputedStyle(bar).columnGap));
     for (const b of btns) b.hidden = this.shed.has(b.dataset.action!);
@@ -1078,7 +1089,8 @@ export class Editor {
     const step = h('button', { class: 'btn sm ghost', title: sim.mode === 'cycle' ? 'One clock cycle' : 'One gate delay', onclick: () => sim.stepOnce() }, icon('step', 14), 'Step');
     if (sim.mode === 'cycle') {
       this.rateSel = h('select', { 'aria-label': 'Clock rate', title: 'Clock rate' },
-        HZ_STEPS.map((hz) => h('option', { value: String(hz), selected: hz === sim.hz }, Number.isFinite(hz) ? `${hz >= 1000 ? `${hz / 1000} k` : hz} Hz` : 'max'))) as HTMLSelectElement;
+        // a chip's own rate (Pong's 5 kHz) between the steps, or the select would show nothing
+        [...new Set([...HZ_STEPS, sim.hz])].sort((a, b) => a - b).map((hz) => h('option', { value: String(hz), selected: hz === sim.hz }, Number.isFinite(hz) ? `${hz >= 1000 ? `${hz / 1000} k` : hz} Hz` : 'max'))) as HTMLSelectElement;
       this.rateSel.addEventListener('change', () => { sim.hz = Number(this.rateSel.value); this.rateChosen = true; });
     } else {
       this.rateSel = h('select', { 'aria-label': 'Gate delays per second', title: 'Gate delays per second' },
@@ -1173,6 +1185,8 @@ export class Editor {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** A message over the canvas; with an action, a button on it (and it stays long enough to reach). */
   toast(msg: string, level: 'info' | 'err' = 'info', action?: { label: string; run(): void }): void {
+    // a toast that says how to take the step back gets the button for it: a touch screen has no Ctrl+Z
+    if (!action && level === 'info' && msg.includes(undoKey()) && this.history.canUndo) action = { label: 'Undo', run: () => this.undo() };
     this.toastEl.textContent = msg;
     if (action) this.toastEl.append(' ', h('button', { type: 'button', class: 'btn sm sb-toast-act', onclick: () => { this.toastEl.className = 'sb-toast'; action.run(); } }, action.label));
     this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;
@@ -1184,7 +1198,9 @@ export class Editor {
   armPart(item: PaletteItem, key: string): void {
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
-    this.toast(`${item.name}: ${coarsePointer() ? 'tap the canvas to place it' : 'click the canvas to place it (Esc cancels)'}`);
+    // a touch screen has no Esc: the toast carries the way out
+    if (coarsePointer()) this.toast(`${item.name}: tap the canvas to place it`, 'info', { label: 'Cancel', run: () => this.tools.cancel() });
+    else this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
   }
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */

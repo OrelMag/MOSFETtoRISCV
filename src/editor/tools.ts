@@ -763,6 +763,8 @@ export class Tools {
       }
     };
     this.cancel();
+    // a part dropped by hand is where the learner chose: a still-fitted view must not refit around it when the layout shifts
+    ed.view.cam.fitted = false;
     if ('part' in pl) {
       const def = ed.defOfRef(pl.part);
       if (!def) return void ed.toast(`Cannot place ${item.name}`, 'err');
