@@ -29,7 +29,7 @@ export function vtcWidget(): Widget {
   const ref = svg.appendChild(s('path', { class: 'fam' }));
   const cur = svg.appendChild(s('path', { class: 'cur' }));
   const vmDot = svg.appendChild(s('circle', { r: 4.5, class: 'bound', fill: 'none' }));
-  const vmLab = svg.appendChild(s('text', { class: 'rl sat' }));
+  const vmLab = svg.appendChild(s('text', { class: 'rl sat vm-lab' }));
   const dot = svg.appendChild(s('circle', { r: 5.5, class: 'op' }));
   const pathOf = (pts: { vin: number; vout: number }[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.vin).toFixed(1)},${Y(p.vout).toFixed(1)}`).join('');
   const refCurve = pathOf(curve(1));
@@ -48,8 +48,8 @@ export function vtcWidget(): Widget {
     band.setAttribute('height', String(H - M.t - M.b));
     vmDot.setAttribute('cx', String(X(m.vm)));
     vmDot.setAttribute('cy', String(Y(m.vm)));
-    vmLab.setAttribute('x', String(X(m.vm) + 9));
-    vmLab.setAttribute('y', String(Y(m.vm) - 7));
+    vmLab.setAttribute('x', String(X(m.vm) + 16));
+    vmLab.setAttribute('y', String(Y(m.vm) + 24));
     vmLab.textContent = `VM = ${m.vm.toFixed(2)} V`;
     dot.setAttribute('cx', String(X(vin)));
     dot.setAttribute('cy', String(Y(p.vout)));

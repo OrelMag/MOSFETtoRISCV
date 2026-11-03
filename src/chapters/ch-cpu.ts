@@ -8,7 +8,7 @@ import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widgets/owninstr';
-import { controlTableHtml, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
+import { controlPanel, CONTROL_SOURCE, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
 import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
@@ -650,19 +650,6 @@ const RTYPE = `# R-type and I-type: rd = rs1 op rs2 / imm
         slt  a6, a1, a0     # 1
 halt:   j    halt`;
 
-const CTL_TOUR = `# one instruction of each control class
-        li   a1, 12
-        li   a2, 5
-        add  a0, a1, a2     # R-type: 17
-        sw   a0, 8(zero)    # store
-        lw   a3, 8(zero)    # load
-        beq  a0, a3, over   # branch, taken
-        nop
-over:   jal  ra, there      # jump and link
-        nop
-there:  lui  a4, 0x12345
-halt:   j    halt`;
-
 const MEMOPS = `# loads and stores
         li   t0, 42
         sw   t0, 8(zero)    # mem[8] = 42
@@ -779,27 +766,12 @@ export const chSingleCycle: Chapter = {
     {
       title: 'The control table',
       body: `
-        <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. Here it is, evaluated by the simulator on one instruction of each class:</p>
-        ${controlTableHtml()}
+        <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. The panel beside the circuit is that table, evaluated by the simulator on one instruction of each class: <strong>click a row</strong> to run that instruction on the datapath and watch the signals.</p>
         <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register only for R-type and branches. <strong>ImmSrc</strong> names the immediate format of chapter 13; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
         <p>The one column with real logic is <strong>ALUControl</strong>. R-type passes {funct7[5], funct3}: <code>add</code> and <code>sub</code> differ in that bit alone. OP-IMM passes funct3 only, because bit 30 of an <code>addi</code> is part of its immediate; the exception is <code>srai</code>, which is how it differs from <code>srli</code>. Loads, stores, <code>jalr</code> and <code>auipc</code> force ADD whatever their funct3 says (it holds a width or nothing), and branches force SUB. The branch kind then reads the ALU's flags.</p>
         <p>Because a new instruction is a new row, the cost of one is countable: the last step of this chapter adds a row and prices it.</p>
-        <div class="try">Pulse through the program, one instruction of each class, and match each against its row of the table.</div>`,
-      scene: () => cpuScene({ source: CTL_TOUR, highlight: ['ctl'] }),
-      tour: {
-        beats: [
-          { title: 'R-type', reset: true, cycles: 2, show: ['ctl', 'srcB', 'alu'], expect: { pcOut: 8, aluOut: 17 },
-            say: '<p><code>add a0, a1, a2</code> at {v:pcOut}: SrcB takes rs2, the ALU adds 12 + 5 = {v:aluOut}, ResultSrc picks the ALU, RegWrite is 1. ALUControl is {funct7[5], funct3} = ADD.</p>' },
-          { title: 'Store', cycles: 1, show: ['ctl', 'imm', 'dm'], expect: { pcOut: 12, aluOut: 8 },
-            say: '<p><code>sw a0, 8(zero)</code>: ImmSrc is S, SrcB the immediate, the ALU adds 0 + 8 = {v:aluOut} for the address, MemWrite is 1 and RegWrite 0.</p>' },
-          { title: 'Load', cycles: 1, show: ['ctl', 'dm', 'res'], expect: { pcOut: 16, aluOut: 8 },
-            say: '<p><code>lw a3, 8(zero)</code>: the same address {v:aluOut} from the same adder, but ResultSrc is the memory word and RegWrite is 1.</p>' },
-          { title: 'Branch', cycles: 1, show: ['ctl', 'alu', 'npc'], expect: { pcOut: 20, aluOut: 0 },
-            say: '<p><code>beq a0, a3, over</code>: SrcB is rs2 again, ALUControl forces SUB, and 17 − 17 = {v:aluOut} sets the zero flag; Branch = 1 and the zero flag select the target next.</p>' },
-          { title: 'Jump', cycles: 1, show: ['ctl', 'target', 'pcmux'], expect: { pcOut: 28 },
-            say: '<p><code>jal ra, sub1</code> at {v:pcOut}: Jump = 1, ImmSrc is J, ResultSrc is PC + 4 for the link in ra.</p>' },
-        ],
-      },
+        <div class="try">Click <code>sw</code>, then <code>lw</code>: only MemWrite, RegWrite and ResultSrc differ, and the ALU adds the same address.</div>`,
+      scene: () => cpuScene({ source: CONTROL_SOURCE, highlight: ['ctl'], extraPanels: [controlPanel] }),
       more: {
         derive: `<p>Class one-hots come from the opcode alone (an AND of its seven bits); each signal ORs the classes that assert it, so RegWrite is the OR of seven of the nine and MemWrite a single wire. The ALUControl block is the only part that reads funct3 and funct7. A 5-input AND for a new opcode costs ${AND5_NANDS} and a new row about ${LWX_NANDS - CONTROL_NANDS} more.</p>`,
         pitfall: `<p>Treating the table as a program stored somewhere. It is combinational logic: change the opcode on its input and the outputs follow after ${logicDepth(CONTROL)} delays. A microcoded machine does keep a table in a memory, one row per step; that is a later design.</p>`,

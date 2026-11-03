@@ -6,8 +6,9 @@ import { CONTROL } from '../lib/cpu';
 import { assemble } from '../riscv/asm';
 import { measureClasses, type CycleTimes } from '../riscv/cycletime';
 import { evalOnce, simulate } from '../sim/harness';
+import { pack } from '../sim/values';
 import { h } from '../ui/dom';
-import type { Widget } from '../view/stage';
+import type { Stage, Widget } from '../view/stage';
 import '../styles/cpucost.css';
 
 /** One instruction per control class, in the order the table lists them. */
@@ -51,12 +52,44 @@ export function controlRows(): ControlRow[] {
   });
 }
 
-/** The table as HTML, for a step's body. */
-export function controlTableHtml(): string {
+/** A program with one instruction of each row, in order; a branch or jump goes to the next one, so every row is reachable by falling through. */
+export const CONTROL_SOURCE = (() => {
+  const out: string[] = ['# one instruction of each control class: click a row of the table'];
+  CONTROL_ROWS.forEach((r, i) => {
+    out.push(`        ${r.replace(', L', `, n${i}`)}`);
+    if (r.endsWith(', L')) out.push(`n${i}:`);
+  });
+  out.push('halt:   j    halt');
+  return out.join('\n');
+})();
+
+/** The control table as a panel beside the circuit: a row loads that instruction (a reset, then i cycles) and lights up as the PC reaches it. */
+export function controlPanel(stage: Stage): Widget {
   const rows = controlRows();
-  const head = ['instruction', 'RegWrite', 'ImmSrc', 'SrcA', 'SrcB', 'MemWrite', 'ResultSrc', 'Branch', 'Jump', 'Jalr', 'ALUControl'];
-  const body = rows.map((r) => `<tr><td><code>${r.asm.replace(', L', ', …')}</code></td><td>${r.regWrite}</td><td>${r.imm}</td><td>${r.srcA}</td><td>${r.srcB}</td><td>${r.memWrite}</td><td>${r.regWrite ? r.result : '–'}</td><td>${r.branch}</td><td>${r.jump}</td><td>${r.jalr}</td><td>${r.alu}</td></tr>`).join('');
-  return `<table class="mini ctl-tab"><tr>${head.map((x) => `<th>${x}</th>`).join('')}</tr>${body}</table>`;
+  const head: [string, string][] = [['instr', 'instruction'], ['RegW', 'RegWrite'], ['ImmSrc', 'ImmSrc'], ['SrcA', 'SrcA'], ['SrcB', 'SrcB'], ['MemW', 'MemWrite'], ['Result', 'ResultSrc'], ['Br', 'Branch'], ['Jmp', 'Jump'], ['Jalr', 'Jalr'], ['ALU', 'ALUControl']];
+  const trs = rows.map((r, i) => {
+    const tr = h('tr', { tabindex: '0', role: 'button', 'aria-label': `run ${r.asm.replace(', L', ', …')}`, onclick: () => load(i), onkeydown: (e: Event) => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); load(i); } } },
+      h('td', { title: r.asm.replace(', L', ', …') }, h('code', null, r.asm.split(' ')[0])), ...[r.regWrite, r.imm, r.srcA, r.srcB, r.memWrite, r.regWrite ? r.result : '–', r.branch, r.jump, r.jalr, r.alu].map((v) => h('td', null, String(v))));
+    return tr;
+  });
+  const load = (i: number) => {
+    stage.checkpoint();
+    stage.powerCycle();
+    stage.runCycles(i);
+    update();
+  };
+  const title = h('h4', null, 'Control table', h('span', { class: 'fold-hint' }));
+  const el = h('div', { class: 'mem-panel ctl-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
+    h('div', { class: 'ctl-scroll' }, h('table', { class: 'mini ctl-tab' }, h('thead', null, h('tr', null, ...head.map(([x, full]) => h('th', { title: full }, x)))), h('tbody', null, ...trs))),
+    h('p', { class: 'sub' }, 'Click a row: the CPU resets and runs up to that instruction.'));
+  const update = () => {
+    const root = stage.rootCtx?.node;
+    const sim = stage.sim;
+    if (!sim || !root?.ports.pcOut) return;
+    const pc = pack(sim.getBits(root.ports.pcOut)) >> 2;
+    trs.forEach((tr, i) => tr.classList.toggle('sel', i === pc));
+  };
+  return { el, update };
 }
 
 // ---- the clock period ----------------------------------------------------------------------------------
@@ -71,10 +104,10 @@ export function cpuPeriodWidget(): Widget {
   let adder: 'rca' | 'ks' = 'rca';
   const cache = new Map<string, CycleTimes>();
   const ribbon = h('div', { class: 'cp-ribbon' }), bars = h('div', { class: 'cp-bars' }), note = h('p', { class: 'sub' });
-  const btn = h('button', { class: 'ghost' }, 'Measure on the gates') as HTMLButtonElement;
-  const sw = (['rca', 'ks'] as const).map((a) => h('button', { class: 'cp-sw', onclick: () => { adder = a; paint(); } }, a === 'rca' ? 'Ripple adder' : 'Kogge–Stone'));
+  const btn = h('button', { class: 'btn sm primary' }, 'Measure on the gates') as HTMLButtonElement;
+  const sw = (['rca', 'ks'] as const).map((a) => h('button', { class: 'btn sm', onclick: () => { adder = a; paint(); } }, a === 'rca' ? 'Ripple adder' : 'Kogge–Stone'));
   const paint = () => {
-    sw.forEach((b, i) => b.classList.toggle('on', (i === 0) === (adder === 'rca')));
+    sw.forEach((b, i) => b.classList.toggle('primary', (i === 0) === (adder === 'rca')));
     const p = PERIOD[adder];
     ribbon.replaceChildren(...p.stages.map(([n, d]) => h('span', { class: 'cp-seg', style: `flex:${Math.max(d, 3)}`, title: `${n}: ${d} delays` }, h('b', null, n), h('i', null, String(d)))));
     const r = cache.get(adder);

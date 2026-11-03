@@ -86,3 +86,4 @@
 .sz-inv { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0 8px; border-radius: 6px; background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent)); border: 1.5px solid var(--accent); font: 600 11px var(--font-mono); color: var(--text); }
 .sz-load { margin-left: 6px; padding: 6px 10px; border-radius: 6px; border: 1.5px dashed var(--border-strong); font: 600 11px var(--font-mono); color: var(--text-2); }
 .mini td.sz-best { background: color-mix(in srgb, var(--good) 20%, transparent); font-weight: 700; }
+.mos-plot .vm-lab { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
