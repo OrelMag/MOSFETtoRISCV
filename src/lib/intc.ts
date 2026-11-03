@@ -29,11 +29,11 @@ export const VECTOR_TARGET: ComponentDef = (() => {
   const sm = b.op(splitter([1, 1, 1, 1, 1, 1, 26]), ['mtvec']); // MODE, reserved, BASE[5:2], BASE[31:6]
   const sc = b.op(splitter([1, 1, 1, 1, 27, 1]), ['cause']); // code[3:0], (unused), interrupt flag
   b.next();
-  const vec = b.name(b.op1(AND, [`${sm}.o0`, `${sc}.o5`], 'vectored interrupt'), 'vec', true);
+  const vec = b.name(b.op1(AND, [`${sm}.o0`, `${sc}.o5`], 'vectored interrupt', 'vec'), 'vec', true);
   b.next();
-  const offs = [0, 1, 2, 3].map((i) => b.op1(AND, [vec, `${sc}.o${i}`], `4n, bit ${i + 2}`));
+  const offs = [0, 1, 2, 3].map((i) => b.op1(AND, [vec, `${sc}.o${i}`], `4n, bit ${i + 2}`, `off${i}`));
   b.next();
-  const tgt = [0, 1, 2, 3].map((i) => b.op1(OR, [`${sm}.o${i + 2}`, offs[i]], `BASE | 4n, bit ${i + 2}`));
+  const tgt = [0, 1, 2, 3].map((i) => b.op1(OR, [`${sm}.o${i + 2}`, offs[i]], `BASE | 4n, bit ${i + 2}`, `or${i}`));
   b.next();
   const z = b.op1(TIE0, []);
   b.wire(b.op1(merger([1, 1, 1, 1, 1, 1, 26]), [z, z, ...tgt, `${sm}.o6`], 'target'), 'target');
@@ -78,23 +78,23 @@ export function intc(n = 4): ComponentDef {
   const ss = b.op(splitter(ones(n)), ['src']);
   const se = b.op(splitter(ones(n)), ['en']);
   b.next();
-  const ands = Array.from({ length: n }, (_, i) => b.op(AND, ['', `${se}.o${i}`], `pending ∧ enable ${i}`));
+  const ands = Array.from({ length: n }, (_, i) => b.op(AND, ['', `${se}.o${i}`], `pending ∧ enable ${i}`, `req${i}`));
   b.next();
   const mr = b.op1(merger(ones(n)), ands.map((a) => `${a}.y`), 'requests');
   b.next();
-  const pe = b.op(priorityEncoder(n), [mr], 'highest');
+  const pe = b.op(priorityEncoder(n), [mr], 'highest', 'pri');
   const id = b.name(`${pe}.y`, 'id', true), v = b.name(`${pe}.v`, 'irq', true);
   b.next();
-  const go = b.op1(AND, ['claim', v], 'claim ∧ request');
+  const go = b.op1(AND, ['claim', v], 'claim ∧ request', 'go');
   b.next();
-  const dec = b.op(decoder(k, true), [id, go], 'claimed source');
+  const dec = b.op(decoder(k, true), [id, go], 'claimed source', 'dec');
   b.next();
-  const nots = Array.from({ length: n }, (_, i) => b.op1(NOT, [`${dec}.y${i}`], `keep ${i}`));
-  const holds = Array.from({ length: n }, (_, i) => b.op1(AND, ['', nots[i]], `hold ${i}`));
+  const nots = Array.from({ length: n }, (_, i) => b.op1(NOT, [`${dec}.y${i}`], `keep ${i}`, `nk${i}`));
+  const holds = Array.from({ length: n }, (_, i) => b.op1(AND, ['', nots[i]], `hold ${i}`, `hold${i}`));
   b.next();
-  const nexts = Array.from({ length: n }, (_, i) => b.op1(OR, [`${ss}.o${i}`, holds[i]], `set ∨ hold ${i}`));
+  const nexts = Array.from({ length: n }, (_, i) => b.op1(OR, [`${ss}.o${i}`, holds[i]], `set ∨ hold ${i}`, `set${i}`));
   b.next();
-  const ffs = nexts.map((d, i) => b.op(DFF, [d, 'clk'], `pending ${i}`));
+  const ffs = nexts.map((d, i) => b.op(DFF, [d, 'clk'], `pending ${i}`, `pend${i}`));
   ffs.forEach((f, i) => { b.wire(`${f}.q`, `${ands[i]}.a`); b.wire(`${f}.q`, holds[i].replace(/\.y$/, '.a')); });
   b.next();
   b.wire(b.op1(merger(ones(n)), ffs.map((f) => `${f}.q`), 'pending'), 'pend');
