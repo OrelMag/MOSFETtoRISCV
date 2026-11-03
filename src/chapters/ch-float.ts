@@ -126,6 +126,7 @@ export const chFloat: Chapter = {
       },
     ],
   },
+  parts: [['The format', 3], ['Add and round', 4], ['More operations', 5], ['Other sizes, faster units', 5], ['In the CPU', 6], ['Pipelined', 2], ['When floats surprise', 4]],
   steps: [
     {
       title: 'Scientific notation in binary',

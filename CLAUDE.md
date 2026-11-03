@@ -571,6 +571,11 @@ src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register fil
                trunk / via; the right-click menu and the stage's Layout button; Open in Sandbox takes the arrangement),
                whypanel.ts (the Why? card, W: a click on a wire traces it with sim/explain.ts, the chain's parts lit;
                Each part: sim/ablate.ts's table; on the stage and in the sandbox's look inside),
+               legible.ts (readable at any zoom, a view rule only: each text kind is hidden once it would render under 7 px
+               (lg-h-<kind> classes on the svg, set when the scale crosses a size; a net tag keeps its pill), a block label under
+               12 px is drawn again at 12 px (`.lg-name` inside the instance, rotated on tall blocks, the larger block keeps its name
+               on a collision, planned when the scale settles); image.ts drops it all; Inspector folds to a rail beside a circuit whose
+               labels would be under 7 px at fit (Stage.autoInspector; the learner's choice wins, `mosfet.inspector`)),
                crumbvals.ts (the breadcrumb's live values, stage and look inside: each level the output carrying the one
                below, `bit [7] = 1` where the level above's bus was sliced),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
@@ -1566,6 +1571,11 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
 - A quiz's `why` (one per option) says why a wrong pick is wrong; a reach challenge's `hints` come before Show answer;
   `Step.tries` ticks the body's `.try` boxes in order once a condition holds. Folded asides: `<details class="deeper">`.
 - Checks (challenges and recap questions, chapters/checks.ts) fill the step dots and the chapter menu's counts.
+- A chapter of 15 steps or more (chapters/parts.ts PARTS_MIN) names its parts: `parts: [['Name', stepCount], …]`, counts adding up to the
+  steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
+  progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to
+  begin with on a phone or a short screen). `deep: true` on a step marks a deep dive: it stays in order and is never hidden or
+  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it).
 
 ## Major changes: mockup first
 
