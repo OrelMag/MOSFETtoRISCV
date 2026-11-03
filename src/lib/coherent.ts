@@ -46,7 +46,7 @@ function boxOf(id: string, name: string, label: string, summary: string, ports: 
 }
 
 /** Equality of two w-bit buses (one XNOR for a single bit). */
-const eq = (b: Builder, w: number, x: string, y: string, label?: string) => (w === 1 ? b.op1(XNOR, [x, y], label) : b.op1(equal(w), [x, y], label));
+const eq = (b: Builder, w: number, x: string, y: string, label?: string, name?: string) => (w === 1 ? b.op1(XNOR, [x, y], label, name) : b.op1(equal(w), [x, y], label, name));
 
 /**
  * What a core's access asks of its cache. From the instruction (instrOut) it tells lw / sw / amo* / lr.w / sc.w
@@ -71,7 +71,7 @@ export function cohAccess(t: number): ComponentDef {
     b.next();
     const wr = b.name(b.op1(OR, [isStore, b.op1(AND, [isAmo, b.op1(NOT, [isLR])])], 'writes: sw, amo, sc'), 'wr', true);
     const scFail = b.name(b.op1(AND, [isSC, b.op1(NOT, ['resHit'])], 'sc.w, no reservation'), 'scFail', true);
-    const tm = b.name(eq(b, t, 'tagA', 'tagS', 'tag match'), 'tm', true);
+    const tm = b.name(eq(b, t, 'tagA', 'tagS', 'tag match', 'tagEq'), 'tm', true);
     b.next();
     const hit = b.name(b.op1(AND, [tm, 'v'], 'hit'), 'hit', true);
     const perm = b.name(b.op1(AND, [hit, b.op1(OR, [b.op1(NOT, [wr]), 'm'], 'read, or Modified')], 'may go on'), 'perm', true);
@@ -164,7 +164,7 @@ export function coherentCache(K: number, coh = true): ComponentDef {
     const res = b.op(cohRes(k2, coh), ['memReq', grant, isLR, isSC, line, busLine, busSet, 'grantCyc', 'lastCyc', 'isCur', 'busWr', 'busUpgr', 'clk'], 'reservation', 'res');
     b.wire(`${res}.resHit`, `${acc}.resHit`);
     // the snoop lookup
-    const sHit = coh ? b.name(b.op1(AND, [eq(b, t, `${ss}.o0`, busTag, 'tag match'), `${ss}.o1`], 'snoop hit'), 'snoopHit', true) : '';
+    const sHit = coh ? b.name(b.op1(AND, [eq(b, t, `${ss}.o0`, busTag, 'tag match', 'snoopEq'), `${ss}.o1`], 'snoop hit'), 'snoopHit', true) : '';
     const sM = coh ? b.name(b.op1(AND, [sHit, `${ss}.o2`], 'snoop: Modified'), 'snoopM', true) : '';
     b.next();
     // tag writes: the owner at the last cycle of its transaction, the other cache at the grant edge

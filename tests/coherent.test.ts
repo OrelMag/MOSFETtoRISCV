@@ -29,4 +29,14 @@ describe('coherent dual-core: gates against the timing model, every cycle', () =
       }, 600000);
     }
   }
+  // a 64-word memory: two tag bits
+  for (const id of ['ttas', 'lrsc']) {
+    it(`${id} with dmemK 6`, async () => {
+      const r = open(COH_PROGRAMS.find((p) => p.id === id)!.source, { K: 6 });
+      let bad: string | null = null;
+      for (let c = 0; c < 3000 && !r.model.halted && !bad; c++) { bad = lockStep(r); if (c % 64 === 0) await tick(); }
+      expect(bad).toBeNull();
+      expect(r.model.halted).toBe(true);
+    }, 600000);
+  }
 });

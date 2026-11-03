@@ -36,6 +36,8 @@ const byName = new Intl.Collator('en', { numeric: true }).compare;
 /** Two or more placed CPUs (and no program ROM of the chip's own), or null. */
 export function detectMulti(doc: ChipDoc, chips: Chips | undefined): MultiDesc | null {
   if (!chips || romParts(doc).length) return null;
+  // cores behind caches (lib/coherent.ts) wait on the bus: the plain shared-memory model's arbitration does not apply
+  if (doc.parts.some((p) => 'chip' in p.ref && p.ref.chip.startsWith('u_coh'))) return null;
   const cores: CoreDesc[] = [];
   for (const p of [...doc.parts].sort((a, b) => byName(a.id, b.id))) {
     const sub = 'chip' in p.ref ? chips[p.ref.chip] : undefined;
