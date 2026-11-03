@@ -6,7 +6,7 @@ import { NmosSim } from '../sim/nmossim';
 import { SwitchSim, VDD_VOLTS, weakLevel, weakTag } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
 import { describeBits, formatBits, type Radix } from '../sim/values';
-import { h, icon, s } from '../ui/dom';
+import { h, icon, s, tx } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
 import { Camera, fitBox, installPanZoom, underCover, type ViewBox } from './camera';
@@ -1250,7 +1250,7 @@ export class SchematicView {
         this.closeMenu();
         it.run();
       } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
-        : h('p', { class: 'sch-menu-note' }, 'Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.'));
+        : h('p', { class: 'sch-menu-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it.')));
     document.body.append(m);
     // keys: Esc closes it and gives the focus back to what opened it; arrows move between the items
     const opener = document.activeElement as HTMLElement | null;

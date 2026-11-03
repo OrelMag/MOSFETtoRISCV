@@ -4,7 +4,7 @@
 
 import '../styles/memmap.css';
 import { logicDepth, stats } from '../sim/stats';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { saveFile } from '../view/image';
 import { axiDecoder } from '../lib/axi';
 import type { Editor } from './editor';
@@ -86,7 +86,7 @@ export function openMemoryMap(ed: Editor): void {
     onChip = draft = again;
     sel = null;
     announce('Applied to the bus');
-    ed.toast('Memory map applied to the bus (Ctrl+Z undoes it)');
+    ed.toast(`Memory map applied to the bus (${undoKey()} undoes it)`);
     render();
   };
 
@@ -100,7 +100,7 @@ export function openMemoryMap(ed: Editor): void {
     });
     if (err) return void ed.toast(`The decoder could not be built: ${err}`, 'err');
     close();
-    ed.toast('Opened the address decoder: a select line per region (Ctrl+Z removes it)');
+    ed.toast(`Opened the address decoder: a select line per region (${undoKey()} removes it)`);
   });
 
   // ---- the map tab ------------------------------------------------------------------------------------------

@@ -13,7 +13,7 @@ import '../styles/editor-fsm.css';
 import { fsmDiagram } from '../view/fsmdiagram';
 import { readbackOk, readFsm, fsmStateOf } from '../sim/fsmread';
 import { simulate } from '../sim/harness';
-import { h, s } from '../ui/dom';
+import { h, s, undoKey } from '../ui/dom';
 import { type MenuEntry, showMenu } from './ctxmenu';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
 import type { FsmDoc } from './model';
@@ -152,7 +152,7 @@ class FsmUi {
   private detach(): void {
     const name = this.ed.doc.name;
     this.ed.editWs((ws) => detachFsm(ws, this.ed.chipId));
-    this.ed.toast(`${name} is an ordinary drawn chip now (Ctrl+Z puts the machine back)`);
+    this.ed.toast(`${name} is an ordinary drawn chip now (${undoKey()} puts the machine back)`);
   }
 
   /** One undo step: the machine and its three chips redrawn. */

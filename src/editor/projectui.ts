@@ -3,7 +3,7 @@
 // Import a file as a new project and Delete. Switching saves the current project and rebuilds the
 // editor on the other one (the page does that: ProjectHooks.switchTo).
 
-import { h, icon, placeMenu } from '../ui/dom';
+import { h, icon, placeMenu, undoKey } from '../ui/dom';
 import type { Editor } from './editor';
 import { fileBase, workspaceFileName } from './files';
 import { dialog, glyph, MAX_FILE } from './fileui';
@@ -181,7 +181,7 @@ function deleteDialog(ed: Editor, hooks: ProjectHooks): void {
   const n = Object.keys(ed.ws.chips).length;
   const d = dialog(ed, `Delete ${name}?`, [
     h('p', { class: 'sb-dlg-lead' }, `Its ${plural(n, 'chip')} are erased from this browser. `, h('b', null, 'This cannot be undone'),
-      ' (Ctrl+Z will not bring it back): export the project first to keep a copy. Your other projects are not touched.'),
+      ` (${undoKey()} will not bring it back): export the project first to keep a copy. Your other projects are not touched.`),
   ], [
     h('button', { class: 'btn ghost sm', onclick: () => exportProject(ed) }, glyph('download', 14), 'Export it'),
     h('button', { class: 'btn ghost sm', onclick: () => d.close() }, 'Cancel'),

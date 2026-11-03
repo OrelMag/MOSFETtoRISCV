@@ -9,6 +9,7 @@ import { type Editor, registerEditorPlugin } from './editor';
 import { addExample, EXAMPLES } from './examples';
 import { aliasesOf, itemText } from './palette';
 import { microcodePart } from './ucodepart';
+import { undoKey } from '../ui/dom';
 
 /** A toolbar title's own shortcut, "Undo (Ctrl+Z)" → title "Undo", keys ["Ctrl Z"]. */
 function split(title: string): { name: string; keys?: string[] } {
@@ -54,7 +55,7 @@ function partsOf(ed: Editor): NavItem[] {
     run: () => {
       let id = '';
       ed.editWs((ws) => { const a = addExample(ws, ex); id = a.id; return a.ws; });
-      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (Ctrl+Z removes it)`);
+      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (${undoKey()} removes it)`);
     },
   }))];
 }

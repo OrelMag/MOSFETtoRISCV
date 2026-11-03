@@ -8,7 +8,7 @@ import '../styles/memui.css';
 import { BANK_K, kWords, ramLeafState, ramWord } from '../lib/bigmem';
 import { BX, type Bit } from '../sim/types';
 import { memRow } from '../view/memview';
-import { h, icon, placeMenu } from '../ui/dom';
+import { h, icon, placeMenu, undoKey } from '../ui/dom';
 import { codeEditor } from '../widgets/codeedit';
 import type { CodeLang } from '../widgets/codetok';
 import { type Editor, registerToolbarAction } from './editor';
@@ -549,7 +549,7 @@ function examplesMenu(ed: Editor): void {
       close();
       let id = '';
       ed.editWs((ws) => { const a = addExample(ws, ex); id = a.id; return a.ws; });
-      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (Ctrl+Z removes it)`);
+      ed.toast(`Loaded “${ed.ws.chips[id]?.name ?? ex.name}” (${undoKey()} removes it)`);
     } }, h('b', null, ex.name), h('small', null, ex.blurb))));
   // Wide enough for a title on one line; never wider than the window.
   const W = Math.min(380, innerWidth - 16);

@@ -24,7 +24,7 @@ import type { CampaignNode } from '../campaign/types';
 import { CATS, libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
 import { stats } from '../sim/stats';
-import { h, icon } from '../ui/dom';
+import { h, icon, undoKey } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
@@ -545,7 +545,7 @@ class ChallengeUi {
     });
     // The level screen shows only the level's chips: the bench opens in the full sandbox.
     if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
-    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (Ctrl+Z removes it)`);
+    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (${undoKey()} removes it)`);
   }
 
   /** Pong on a bench around this core (a passing RV16I core level). */
@@ -560,7 +560,7 @@ class ChallengeUi {
       return b.ws;
     });
     if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
-    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run, then switches 7 and 6 move your paddle (Ctrl+Z removes it)`);
+    else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run, then switches 7 and 6 move your paddle (${undoKey()} removes it)`);
   }
 
   private showAnswer(): void {
@@ -574,7 +574,7 @@ class ChallengeUi {
       return r.ws;
     });
     const names = added.map((id) => ed.ws.chips[id]?.name).filter(Boolean);
-    ed.toast(names.length ? `Answer imported: ${names.join(', ')} (Ctrl+Z removes it)` : 'The answer is already among your chips: opened it');
+    ed.toast(names.length ? `Answer imported: ${names.join(', ')} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
   }
 
   private solve(): void {
@@ -586,7 +586,7 @@ class ChallengeUi {
     ed.editWs((ws) => solveChallenge(ws, ch).ws);
     this.results.delete(challengeChipId(ch));
     this.version++;
-    ed.toast('Replaced with the reference answer (Ctrl+Z brings yours back)');
+    ed.toast(`Replaced with the reference answer (${undoKey()} brings yours back)`);
     this.render();
   }
 
@@ -664,7 +664,7 @@ class ChallengeUi {
     if (ed.ws.chips[id]) ed.openChip(id);
     else {
       ed.editWs((ws) => startChallenge(ws, c).ws);
-      ed.toast(`New chip “${ed.doc.name}”: its pins are in place (Ctrl+Z removes it)`);
+      ed.toast(`New chip “${ed.doc.name}”: its pins are in place (${undoKey()} removes it)`);
     }
     this.closeList();
   }
