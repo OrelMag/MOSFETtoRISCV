@@ -48,7 +48,7 @@ type Tab = 'walk' | 'why' | 'task' | 'tips' | 'codex';
 
 const KIND_LABEL: Record<CampaignNode['kind'], string> = { lesson: 'LESSON', drill: 'DRILL', build: 'BUILD', program: 'PROGRAM', core: 'CPU CORE' };
 /** The level screen keeps the toolbar to what building and checking a level needs. */
-const LEVEL_ACTIONS = ['undo', 'redo', 'zout', 'zin', 'fit', 'iobar', 'probe', 'timing', 'package', 'inspect', 'cpu', 'memory', 'props', 'help'];
+const LEVEL_ACTIONS = ['undo', 'redo', 'zout', 'zin', 'fit', 'iobar', 'probe', 'timing', 'inspect', 'cpu', 'memory', 'props', 'help'];
 
 const rich = (tag: 'p' | 'div' | 'li' | 'span', html: string, cls?: string) => {
   const el = h(tag, cls ? { class: cls } : null);
@@ -118,6 +118,8 @@ export class LevelPage implements Page {
       }
     }
     p.open(n.id, true);
+    // The first visit opens on the task: an empty canvas needs the first move, not the case for the level
+    if (fresh && !n.bug) this.tab = 'task';
     // A relay / tube level (a strict rule) lists its own parts under Unlocked parts and has no NAND.
     const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
     const hide = ruleKind(ch.allowed) === 'transistors' ? [] : strict ? ['fets', 'switch', 'lib'] : ['fets', 'switch'];
@@ -136,6 +138,17 @@ export class LevelPage implements Page {
     // A bug hunt opens with its symptom: Check run once on the drawing as the colleague left it.
     if (fresh && n.bug) setTimeout(() => this.chal?.check(), 0);
     this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
+    // The properties overlay stops above the strip and the run row (Show answer and Do it for me live there)
+    const fitProps = () => {
+      const mid = this.edWrap.querySelector('.sb-mid');
+      if (!mid) return;
+      this.edWrap.style.setProperty('--lv-props-bottom', `${Math.max(0, Math.round(this.edWrap.getBoundingClientRect().bottom - mid.getBoundingClientRect().bottom))}px`);
+    };
+    const ro = new ResizeObserver(fitProps);
+    ro.observe(this.edWrap);
+    const mid0 = this.edWrap.querySelector('.sb-mid');
+    if (mid0) ro.observe(mid0);
+    this.offs.push(() => ro.disconnect());
     this.offs.push(p.onChange(() => { this.renderBar(); this.renderSide(); }));
     // Codex links anywhere on the screen (the tab, an entry's own links, the after-pass card) open the entry in the
     // side pane, and so do the hover cards: leaving for the codex page would tear down the editor, its undo history
@@ -171,7 +184,8 @@ export class LevelPage implements Page {
     // a locked level links to what blocks it (its page when it is a level of the editor, else its map card)
     const go = (m: CampaignNode) => h('a', { class: 'btn primary', href: !m.soon && levelChallenge(m) && statusOf(m, progress().view, progress().unlockAll) !== 'locked' ? `#/campaign/play/${m.id}` : `#/campaign/n/${m.id}` }, m.title, icon('chevR', 14));
     return h('div', { class: 'lv-page lv-notice' }, h('div', { class: 'panel' }, h('h3', null, title), h('p', { class: 'sub' }, text),
-      h('p', { class: 'lv-notice-go' }, ...blockers.map(go), h('a', { class: 'btn', href: n ? `#/campaign/n/${n.id}` : '#/campaign' }, icon('chevL', 14), 'Back to the map'))));
+      h('p', { class: 'lv-notice-go' }, ...blockers.map(go), n && !n.soon && !blockers.length ? h('a', { class: 'btn primary', href: `#/campaign/n/${n.id}` }, `Open ${n.title}`, icon('chevR', 14)) : null,
+      h('a', { class: 'btn', href: '#/campaign' }, icon('chevL', 14), 'Back to the map'))));
   }
 
   // ---- the level bar ---------------------------------------------------------------------------
@@ -182,7 +196,6 @@ export class LevelPage implements Page {
     const st = statusOf(n, p.view, p.unlockAll);
     const done = isDone(p.view(n.id));
     const next = done ? this.nextOf() : undefined;
-    const par = n.par ?? {};
     if (this.walk) {
       this.bar.replaceChildren(
         h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
@@ -192,7 +205,7 @@ export class LevelPage implements Page {
         h('button', { class: 'btn sm ghost', title: 'Back to your own circuit, as you left it', 'aria-label': 'Leave the walkthrough', onclick: () => this.leaveWalk() }, h('span', null, 'Leave', h('span', { class: 'lbl' }, ' the walkthrough'))));
       return;
     }
-    const parText = (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${groupDigits(par[k]!)}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
+    const parText = this.parText();
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
       h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
@@ -207,6 +220,20 @@ export class LevelPage implements Page {
         : h('button', { class: 'btn sm ghost', title: 'Count this level as done: its part unlocks (the reference solution stands in for yours)', onclick: () => p.skip(n.id) }, 'Skip')) : null,
       next ? h('a', { class: `btn sm${st === 'solved' ? ' primary' : ''}`, href: levelRoute(next), title: next.title, 'aria-label': `Next: ${next.title}` }, h('span', null, 'Next', h('span', { class: 'lbl' }, `: ${next.title}`)), icon('chevR', 13)) : null,
     ].filter((x): x is HTMLElement => !!x));
+  }
+
+  /** The par per graded metric, as the level bar and the phone's goal line print it. */
+  private parText(): string[] {
+    const par = this.node!.par ?? {};
+    return (Object.keys(par) as Metric[]).map((k) => `${k === 'depth' || k === 'period' ? `${k} ` : ''}${groupDigits(par[k]!)}${k === 'depth' || k === 'period' ? '' : ` ${par[k] === 1 ? METRIC[k].unit.replace(/s$/, '') : METRIC[k].unit}`}`);
+  }
+
+  /** A phone's one-line goal (level.css shows it there only): the brief's first sentence and the par, always on screen. */
+  private goalLine(): HTMLElement {
+    const plain = this.ch!.brief.replace(/<[^>]+>/g, '').replace(/s+/g, ' ').trim();
+    const first = plain.match(/^.*?[.:](s|$)/)?.[0].trim() ?? plain;
+    const par = this.parText();
+    return h('p', { class: 'lv-goal', title: plain }, h('b', null, 'Goal '), first, par.length ? h('span', { class: 'lv-goal-par' }, ` · par ${par.join(' · ')}`) : null);
   }
 
   // ---- the side panel ----------------------------------------------------------------------------
@@ -228,7 +255,8 @@ export class LevelPage implements Page {
     else if (this.tab === 'task') this.taskTab(body);
     else if (this.tab === 'tips') this.tipsTab(body);
     else this.codexTab(body);
-    this.side.replaceChildren(bar, body);
+    if (narrow() && !this.walk) bar.append(h('button', { class: 'lv-sheet-x', 'aria-label': 'Close the brief', title: 'Close the brief', onclick: () => { this.folded = true; this.renderSide(); } }, icon('close', 14)));
+    this.side.replaceChildren(bar, this.goalLine(), body);
     this.side.classList.toggle('folded', this.folded);
     this.el.querySelector('.lv-body')?.classList.toggle('reading', this.tab === 'codex' && this.cxStack.length > 0 && !this.folded);
     if (settings.glossary && this.tab !== 'codex') markTerms(body, 8);

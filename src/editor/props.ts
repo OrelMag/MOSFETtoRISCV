@@ -407,7 +407,7 @@ export class PropsPanel {
     const ports = c?.def.ports ?? [];
     const out = this.section('Chip',
       this.row('Name', this.text(doc.name, (v) => v.trim() && editDoc({ name: v.trim() }))),
-      this.row('Colour', h('span', { class: 'sb-hue-row' }, swatch, hue)),
+      ed.level ? null : this.row('Colour', h('span', { class: 'sb-hue-row' }, swatch, hue)),
       this.row('Notes', notes),
       ed.level ? null : this.row('Folder', this.folderSelect(doc)),
       h('div', { class: 'sb-badges' },

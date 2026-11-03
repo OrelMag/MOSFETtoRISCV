@@ -273,7 +273,24 @@ export class CampaignPage implements Page {
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,
       h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'));
+    // The frontier: the next open level is ringed, and a map opened with no level selected scrolls to it
+    const frontier = nextAvailable(p.view, p.unlockAll)?.id;
+    const ring = () => scroll.querySelector('.cp-node.next')?.classList.remove('next');
+    const mark = () => {
+      ring();
+      if (frontier && !sel) scroll.querySelector(`.cp-node[data-node="${frontier}"]`)?.classList.add('next');
+    };
     const scroll = h('div', { class: 'cp-map-scroll' }, draw(this.mapCols));
+    mark();
+    if (!sel && !this.mapScroll && frontier) {
+      requestAnimationFrame(() => {
+        const node = scroll.querySelector<SVGGraphicsElement>('.cp-node.next');
+        if (!node) return;
+        const r = node.getBoundingClientRect(), v = scroll.getBoundingClientRect();
+        scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
+        scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
+      });
+    }
     this.mapFit?.disconnect();
     this.mapFit = new ResizeObserver(() => {
       const cols = mapColsFor(scroll.clientWidth);
@@ -281,6 +298,7 @@ export class CampaignPage implements Page {
       this.mapCols = cols;
       const refocus = keepFocus(scroll);
       scroll.replaceChildren(draw(cols));
+      mark();
       refocus();
       // the first draw guessed the columns: the selected level moved
       if (performance.now() < this.revealUntil) this.reveal();

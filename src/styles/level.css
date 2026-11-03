@@ -24,6 +24,12 @@
 .lv-stars { color: var(--warn); letter-spacing: 2px; white-space: nowrap; }
 .lv-stars .off, .lv-big .off { color: var(--border-strong); }
 .lv-spacer { flex: 1; }
+.lv-goal, .lv-sheet-x { display: none; }
+/* secondary buttons keep an outline here: bare text read as a caption, not a button */
+.lv-bar .btn.ghost, .sb-chal-actions .btn.ghost, .cp-node-actions .btn.ghost { border-color: var(--border-strong); }
+.lv-bar .btn.ghost:hover, .sb-chal-actions .btn.ghost:hover, .cp-node-actions .btn.ghost:hover { border-color: var(--accent); }
+.lv-help, .lv-tryfor { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text); }
+.lv-tryfor b { color: var(--accent); }
 
 .lv-body { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: 0; }
 .lv-side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
@@ -64,6 +70,7 @@
 .sb-levelmode .sb-props {
   display: none; position: absolute; right: 0; top: 47px; bottom: 0; width: 290px; z-index: 6;
   box-shadow: var(--shadow-lg);
+  bottom: var(--lv-props-bottom, 0px);
 }
 .sb-levelmode.props-on .sb-props, .sb-levelmode.props-sel:not(.walking) .sb-props { display: block; }
 /* a phone: 290 px of panel would cover most of the canvas at every tap on a part or pin; the Properties button pins it */
@@ -126,8 +133,20 @@
   .lv-page { height: calc(100dvh - var(--topbar-h)); }
   .lv-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 42dvh; }
+  .lv-body { position: relative; }
   .lv-side.folded .lv-sidebody { display: none; }
   .lv-side.folded .lv-tabs { border-bottom: 0; }
+  /* the goal in one line, always; an open tab is a sheet over the canvas (a tap on the tab or the x closes it), not a
+     slice of it */
+  .lv-goal { display: block; margin: 0; padding: 2px 10px 5px; font-size: 12.5px; line-height: 1.35; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-goal b { color: var(--text); font-weight: 600; }
+  .lv-goal-par { font-family: var(--font-mono); font-size: 11.5px; }
+  .lv-side { position: relative; max-height: none; }
+  .lv-side:not(.folded) .lv-sidebody {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 30; max-height: 52dvh; background: var(--surface);
+    border-bottom: 1px solid var(--border-strong); box-shadow: var(--shadow-lg);
+  }
+  .lv-side:not(.folded) .lv-sheet-x { display: inline-flex; margin-left: auto; align-items: center; flex: none; border: 0; background: none; color: var(--text-2); padding: 6px 8px; cursor: pointer; }
   .lv-tabs { padding-top: 2px; overflow-x: auto; scrollbar-width: none; }
   .lv-tabs button { flex: none; }
   .lv-bar { padding: 4px 10px; min-height: 0; gap: 6px 8px; }

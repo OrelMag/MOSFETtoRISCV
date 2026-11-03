@@ -195,6 +195,15 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cx-browse { display: none; align-items: center; gap: 6px; }
 .cp-codex-list.open .cx-browse svg:last-child { transform: rotate(180deg); }
 .cp-panel { scroll-margin-top: 8px; }
+/* the next open level on the map */
+.cp-node.next .cp-card { stroke: var(--accent); stroke-width: 3; }
+@media (max-width: 1000px) {
+  /* the page scrolls and the map scrolls inside it: a fade at the foot says there is more, and a fresh visit's welcome
+     (with Begin) comes before the map, not after its 60vh */
+  .cp-map-scroll { background: linear-gradient(var(--surface) 30%, transparent) 0 0 / 100% 24px no-repeat local, linear-gradient(transparent, var(--border-strong)) 0 100% / 100% 14px no-repeat scroll; }
+  .cp-split:has(.cp-welcome) .cp-panel { order: -1; }
+  .cp-split:has(.cp-welcome) .cp-acts, .cp-split:has(.cp-welcome) .cp-welcome h3 { display: none; }
+}
 /* A phone: the document scrolls, so .scroll must not be a scroller of its own (the action bar sticks to the screen). */
 @media (max-width: 760px) { .cp-page { overflow: visible; } }
 @media (max-width: 600px) {

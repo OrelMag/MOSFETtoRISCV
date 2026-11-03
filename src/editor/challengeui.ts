@@ -498,6 +498,8 @@ class ChallengeUi {
     // Check's own simulators are separate; the player's replay is given back first all the same,
     // so a new result never opens over an old replay.
     this.closePlayer();
+    // Check while "Replace your circuit?" waits: the question is dropped, the check runs
+    this.confirming = false;
     const r = checkChallenge(ch, ed.compiled);
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
