@@ -9,7 +9,7 @@ import { BOARD, boardPlan, fpgaExport, latchLoops } from '../src/editor/fpga';
 import { UserLibrary } from '../src/editor/library';
 import type { PartRef, Vec } from '../src/editor/model';
 import { crc32, zipFiles } from '../src/editor/zip';
-import type { TopPort } from '../src/sim/vexport';
+import { synthVerilog, type TopPort } from '../src/sim/vexport';
 import { chip, fan, part, pin, wire, workspace } from './editorkit';
 
 const L = (lib: string): PartRef => ({ lib });
@@ -150,5 +150,58 @@ describe('FPGA export', () => {
     expect(v.getUint32(end, true)).toBe(0x06054b50);
     expect(v.getUint16(end + 10, true)).toBe(2);
     expect(new TextDecoder().decode(z.subarray(30 + 5, 30 + 5 + 5))).toBe('hello');
+  });
+
+  describe('memories for block RAM', () => {
+    // a 256 × 8 RAM whose address comes from a 512 × 8 ROM (a chain of two memories), under a chip of its own
+    const mem = chip('u_mem', 'Memories', {
+      pins: [clk([0, 10]), pin('a', 'in', [0, 2], 9), pin('din', 'in', [0, 6], 8), pin('we', 'in', [0, 8]), pin('q', 'out', [40, 3], 8)],
+      parts: [
+        part('rom', { rom: { k: 9, w: 8, addr: 'word', lang: 'hex', src: '01 02 03 04' } }, [8, 0]),
+        part('ram', { ram: { k: 8, w: 8 } }, [24, 0]),
+      ],
+      wires: [
+        wire('a', 'pin:a', 'rom.addr'), wire('ra', 'rom.data', 'ram.addr'), wire('d', 'pin:din', 'ram.din'),
+        wire('w', 'pin:we', 'ram.we'), wire('c', 'pin:clk', 'ram.clk'), wire('q', 'ram.dout', 'pin:q'),
+      ],
+    });
+    const memDef = () => new UserLibrary(workspace(mem)).compiled('u_mem')!.def;
+
+    it('adds mem_clk to every module above a memory, and the board drives it from the oscillator', () => {
+      const out = fpgaExport(memDef(), 'mem');
+      expect(out.ok).toBe(true);
+      const v = out.files[0].text;
+      expect(v).toContain('module u_mem (a, din, we, clk, q, mem_clk);');
+      expect(v).toMatch(/module ram256x8 \(addr, din, we, clk, dout, mem_clk\);/);
+      expect(v).toContain('always @(posedge mem_clk)');
+      expect(v).not.toContain('assign dout = mem[addr];'); // no asynchronous read left
+      expect(out.files[1].text).toContain('assign p_mem_clk = clk_27m;');
+      expect(out.plan!.bits.some((m) => m.port === 'mem_clk')).toBe(false);
+      const readme = out.files[3].text;
+      expect(readme).toContain('Memories (RAM, ROM)');
+      expect(readme).toMatch(/exported for block RAM/);
+      expect(readme).not.toMatch(/LUT RAM, so a large one/);
+    });
+
+    it('keeps the asynchronous export without memClock (the cross-checked one) and a memory-free design unchanged', () => {
+      const plain = synthVerilog(memDef(), 'm', { powerOnZero: true }).verilog;
+      expect(plain).not.toContain('mem_clk');
+      expect(plain).toContain('assign dout = mem[addr];');
+      const blink = fpgaExport(def('u_top'), 'blinker');
+      expect(blink.files[0].text).not.toContain('mem_clk');
+      expect(blink.files[1].text).not.toContain('mem_clk');
+      expect(blink.files[3].text).not.toContain('Memories');
+    });
+
+    it('renames a user port called mem_clk', () => {
+      const c = chip('u_mc', 'Clash', {
+        pins: [pin('mem_clk', 'in', [0, 2]), pin('din', 'in', [0, 4], 8), pin('we', 'in', [0, 6]), pin('q', 'out', [40, 3], 8)],
+        parts: [part('ram', { ram: { k: 8, w: 8 } }, [8, 0])],
+        wires: [wire('a', 'pin:din', 'ram.addr'), wire('d', 'pin:din', 'ram.din'), wire('w', 'pin:we', 'ram.we'), wire('c', 'pin:mem_clk', 'ram.clk'), wire('q', 'ram.dout', 'pin:q')],
+      });
+      const r = synthVerilog(new UserLibrary(workspace(c)).compiled('u_mc')!.def, 'm', { memClock: true });
+      expect(r.ports.map((p) => p.name)).toEqual(['mem_clk_', 'din', 'we', 'q', 'mem_clk']);
+      expect(r.ports.at(-1)!.memClock).toBe(true);
+    });
   });
 });
