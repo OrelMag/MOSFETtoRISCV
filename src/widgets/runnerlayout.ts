@@ -4,7 +4,7 @@
 
 import { BIT_RUNNER, RB_ROLES, rbChips } from '../lib/bitrunner';
 import { TTL_PART, TTL_PINS } from '../lib/ttl';
-import { BB, type BbBoard, type BbChip, type BbLed, type BreadboardLayout, chipSize, ledsOf, planBoard } from '../view/bblayout';
+import { type BbBoard, type BbChip, type BbLed, type BreadboardLayout, ledsOf, oneRowEach, planBoard } from '../view/bblayout';
 import { pinsOf } from './saplayout';
 
 /** A board's width and clear rows above and below its chips; the channels between boards and between columns. */
@@ -58,19 +58,6 @@ const RIGHT: Spec[] = [
   },
 ];
 
-/** A module on as many boards as one row of chips a board takes; its indicators on the first. */
-function split(m: Spec): Spec[] {
-  const rows: BbChip[][] = [[]];
-  let x = BB.side + 0.6;
-  for (const chip of m.chips) {
-    const w = chipSize(chip.dip).w;
-    if (rows[rows.length - 1].length && x + w > COL_W - BB.side) { rows.push([]); x = BB.side + 0.6; }
-    rows[rows.length - 1].push(chip);
-    x += w + BB.chipGap;
-  }
-  return rows.map((chips, i) => (i === 0 ? { ...m, chips, air: AIR } : { title: `${m.title.split(':')[0]} (${i + 1})`, module: m.module, chips, air: AIR }));
-}
-
 /** Boards in `cols` columns of equal rows, a channel above and below each row, a gutter after each column but a lone column's last. */
 function grid(list: Spec[], cols: number): BreadboardLayout {
   const gutters = Array.from({ length: Math.max(1, cols - 1) }, (_, i) => ({ x: COL_W + i * (COL_W + GUTTER), w: GUTTER }));
@@ -87,7 +74,7 @@ function grid(list: Spec[], cols: number): BreadboardLayout {
 
 /** The whole game on its boards; on a canvas too narrow for the grid, one column. */
 export function runnerLayout(): BreadboardLayout {
-  const list = [...LEFT, ...RIGHT].flatMap(split);
+  const list = [...LEFT, ...RIGHT].flatMap((m) => oneRowEach(m, COL_W, AIR));
   let n = 0;
   for (const b of list) for (const chip of b.chips) chip.ref = `U${++n}`;
   const note = `${rbChips(BIT_RUNNER).length} ICs on ${list.length} boards, no CPU, no ROM`;

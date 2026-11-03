@@ -7,7 +7,7 @@ import { SAP_COMPUTER, type SapChip, sapChips } from '../lib/sap';
 import { TTL_ACTIVE_LOW, TTL_PART, TTL_PINS } from '../lib/ttl';
 import { CTRL_LABEL, SAP_CTRL } from '../sap/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
-import { type BbActive, type BbBoard, type BbBus, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, planBoard } from '../view/bblayout';
+import { type BbActive, type BbBoard, type BbBus, type BbChip, type BbLed, type BbPin, type BbSwitch, type BreadboardLayout, ledsOf, oneRowEach, planBoard } from '../view/bblayout';
 
 /** What each chip does on its board (the hover card), by its path in the computer (a module's: the part after the dot). */
 export const SAP_ROLES: Record<string, string> = {
@@ -88,7 +88,9 @@ const drawn = (part: string, dip: number, role: string): BbChip => ({ part, dip,
 export const sapSelect = (): BbChip => drawn('74LS32', 14, 'Run / step select: (astable AND run) OR (monostable AND step), the OR here, the ANDs and the inverter in spare gates of the 08 and 04. Drawn only: the stage\'s clock is already the chosen one.');
 
 /** Board widths and gaps, in holes. */
-const COL_W = 52, GAP = 1.6, BUS_W = 12;
+const COL_W = 64, GAP = 1.6, BUS_W = 12;
+/** Clear rows above and below a board's chips; the channels between rows; the gutters outside the columns (bblayout.ts channels). */
+const AIR = 2, CHANNEL = 4, GUTTER = 10;
 
 /** Number the chips U1, U2 … in board order. */
 function numberChips(boards: BbBoard[]): void {
@@ -208,33 +210,48 @@ export function sapLayout(def: ComponentDef): BreadboardLayout {
       loads: act('oi', 'shows at the next edge'),
     },
   ];
-  const stack = (into: BbBoard[], list: Omit<BbBoard, 'at' | 'size'>[], x: number, y = 0): number => {
-    for (const b of list) {
-      const s = sized(b, [x, y]);
-      into.push(s);
-      y = Math.round((y + s.size[1] + GAP) * 10) / 10;
-    }
-    return y - GAP;
-  };
-  const boards: BbBoard[] = [];
-  const hl = stack(boards, left, 0);
-  const hr = stack(boards, right, COL_W + BUS_W + 2 * GAP);
-  numberChips(boards);
-  // a narrow canvas (a phone): the right column under the left one, the bus strip beside them both (the chips are
-  // the same objects, numbered the same)
-  const column: BbBoard[] = [];
-  const hn = stack(column, right, 0, stack(column, left, 0) + GAP);
-  // at the foot of the bus column, the bus's own LED: two drivers at once (the strip ends above it, so the layout is no taller)
+  // one row of chips a board; the ribbon goes to the board with the chip that drives the bus
+  const onBoards = (list: Omit<BbBoard, 'at' | 'size'>[]) => list.flatMap((m) => oneRowEach(m, COL_W, AIR, (c) => c.path?.[c.path.length - 1] === 'drv'));
+  const L = onBoards(left), R = onBoards(right);
+  let n = 0;
+  for (const m of [...L, ...R]) for (const c of m.chips) c.ref = `U${++n}`;
+  const ics = n;
+  const note = `${ics} ICs · pale: drawn only`;
   const CLASH_NOTE = 'Lit while two or more boards drive the bus at once: the gate-level bus counts the drivers enabled. Ours, not Ben\'s (his has no such LED).';
-  const clash = (h: number): BbBoard => sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' }, color: 'red', label: 'CLASH', note: CLASH_NOTE }] }, [COL_W + GAP, h - foot + GAP], BUS_W);
-  const foot = sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' } }] }, [0, 0], BUS_W).size[1] + GAP;
-  const H = Math.max(hl, hr);
-  boards.push(clash(H));
-  column.push(clash(hn));
-  // short: the caption is one line over the boards at 1440 px
-  const note = `${boards.reduce((n, b) => n + b.chips.length, 0)} ICs · pale: drawn only`;
-  const bus = (h: number): BbBus[] => [{ id: 'bus', title: 'Bus', at: [COL_W + GAP, 0], size: [BUS_W, h - foot], path: ['bus'], port: 'bus' }];
-  return { note, buses: bus(H), boards, narrow: { note, buses: bus(hn), boards: column } };
+  const clashAt = (x: number, y: number): BbBoard => sized({ title: 'Bus', chips: [], leds: [{ net: { path: ['bus'], port: 'clash' }, color: 'red', label: 'CLASH', note: CLASH_NOTE }] }, [x, y], BUS_W);
+  /** Rows of boards (every row one height), from y = CHANNEL. */
+  const rows = (cols: { x: number; list: Omit<BbBoard, 'at' | 'size'>[] }[]): { boards: BbBoard[]; h: number } => {
+    const boards: BbBoard[] = [];
+    let y = CHANNEL;
+    for (let i = 0; i < Math.max(...cols.map((c) => c.list.length)); i++) {
+      const row = cols.flatMap((c) => (c.list[i] ? [{ ...c.list[i], at: [c.x, y], size: [COL_W, 0] } as BbBoard] : []));
+      const h = Math.ceil(Math.max(...row.map((p) => planBoard(p).need.h)) * 2) / 2;
+      for (const p of row) { p.size = [COL_W, h]; boards.push(p); }
+      y += h + CHANNEL;
+    }
+    // left column first: the boards' order is the chips' numbering
+    return { boards: [...boards].sort((p, q) => p.at[0] - q.at[0] || p.at[1] - q.at[1]), h: y - CHANNEL };
+  };
+  const strip = (x: number, h: number): BbBus[] => [{ id: 'bus', title: 'Bus', at: [x, CHANNEL], size: [BUS_W, h - CHANNEL], path: ['bus'], port: 'bus' }];
+  // gutter, left column, strip, right column, gutter
+  const xl = GUTTER, xs = xl + COL_W + GAP, xr = xs + BUS_W + GAP, W = xr + COL_W + GUTTER;
+  const wide = rows([{ x: xl, list: L }, { x: xr, list: R }]);
+  const wc = clashAt(xs, wide.h + GAP);
+  // a narrow canvas (a phone): one column, the strip beside it, the gutter beyond (the chips are the same objects, numbered the same)
+  const one = rows([{ x: 0, list: [...L, ...R] }]);
+  const nc = clashAt(COL_W + GAP, one.h + GAP);
+  return {
+    note, readPx: 3,
+    buses: strip(xs, wide.h),
+    boards: [...wide.boards, wc],
+    channels: { gutters: [{ x: 0, w: GUTTER }, { x: xr + COL_W, w: GUTTER }], gap: CHANNEL, w: W, h: Math.max(wide.h + CHANNEL, wc.at[1] + wc.size[1]) },
+    narrow: {
+      note,
+      buses: strip(COL_W + GAP, one.h),
+      boards: [...one.boards, nc],
+      channels: { gutters: [{ x: COL_W + GAP + BUS_W + GAP, w: GUTTER }], gap: CHANNEL, w: COL_W + 2 * GAP + BUS_W + GUTTER, h: Math.max(one.h + CHANNEL, nc.at[1] + nc.size[1]) },
+    },
+  };
 }
 
 /** One module on its own board, its root inputs on DIP switches (the clock left to the stage), its outputs on LEDs. */
@@ -277,7 +294,7 @@ export function moduleLayout(def: ComponentDef, o: ModuleLayoutOpts): Breadboard
     return i ? withGap(ls) : ls;
   });
   const W = 64;
-  const top = sized({ title: o.title, chips: [...(o.before ?? []), ...chips], leds, ...(o.drives ? { drives: { path: [], port: o.drives, label: `${portLabel(o.drives)} · drives the bus` } } : {}), ...(o.loads ? { loads: { path: [], port: o.loads, label: `${portLabel(o.loads)} · loads at the next edge` } } : {}) }, [0, 0], W);
+  const top = sized({ title: o.title, air: AIR, chips: [...(o.before ?? []), ...chips], leds, ...(o.drives ? { drives: { path: [], port: o.drives, label: `${portLabel(o.drives)} · drives the bus` } } : {}), ...(o.loads ? { loads: { path: [], port: o.loads, label: `${portLabel(o.loads)} · loads at the next edge` } } : {}) }, [0, 0], W);
   const boards = [top];
   if (switches.length) boards.push(sized({ title: 'Test switches', chips: [], switches }, [0, top.size[1] + GAP], W));
   numberChips(boards);
