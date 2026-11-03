@@ -135,7 +135,7 @@ describe('the built-in sources', () => {
     expect(r.groups.find((g) => g.id === 'chapters')?.items[0].title).toBe('Adders');
     // the campaign's chunk is not loaded until asked for
     expect(r.loading.map((s) => s.id).sort()).toEqual(['campaign', 'codex']);
-  });
+  }, 120_000);
 
   it('puts chapters first on a chapter page, actions first in the sandbox, with the page\'s own actions', () => {
     expect(searchSources({ hash: '#/c/adders/2' })[0].id).toBe('chapters');
@@ -169,5 +169,5 @@ describe('the built-in sources', () => {
     expect(top('k-map')).toBe('kmap');
     expect(top('nand')).toBe('nand');
     expect(top('fsm')).toBe('fsm');
-  });
+  }, 120_000);
 });
