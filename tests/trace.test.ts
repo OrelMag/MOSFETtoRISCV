@@ -8,7 +8,7 @@ import { clockCycle, cpuState } from '../src/riscv/cosim';
 import { ISS } from '../src/riscv/iss';
 import { PROGRAMS } from '../src/riscv/programs';
 import { fmtRate, ratePos, rateScale, stepEffect } from '../src/riscv/trace';
-import { completeEdge, riseEdge, stepEdge } from '../src/sim/edge';
+import { completeEdge, lowerClock, riseEdge, stepEdge } from '../src/sim/edge';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { analyzeTiming } from '../src/sim/timing';
@@ -146,5 +146,25 @@ describe('a clock left high by hand', () => {
     clockCycle(ref);
     expect(cpuState(hand).pc).toBe(cpuState(ref).pc);
     expect(cpuState(hand)).toEqual(cpuState(ref));
+  });
+});
+
+describe('a clock left high by hand, fixed period', () => {
+  it('lowering it settled before a period edge keeps the edge real', () => {
+    const hand = cpu(), ref = cpu();
+    hand.setInput('clk', 1);
+    hand.settle();
+    clockCycle(ref);
+    const P = 400;
+    for (let c = 0; c < 5; c++) {
+      lowerClock(hand, 'clk'); // what Stage.rise does before a period edge
+      const E = hand.time;
+      const e = riseEdge(hand, 'clk', E + Math.ceil(P / 2));
+      completeEdge(hand, e);
+      hand.setInput('clk', 0);
+      hand.runUntil!(E + P);
+      clockCycle(ref);
+      expect(cpuState(hand)).toEqual(cpuState(ref));
+    }
   });
 });

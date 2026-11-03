@@ -229,6 +229,30 @@ function ramSynth(k: number, w: number, init?: ArrayLike<number>): string[] {
 }
 
 /**
+ * The same RAM for block RAM (hdl.synthSync, the FPGA export). The array is read through a register on mem_clk, a
+ * clock much faster than clk (the board divides it down), so it maps to BSRAM; the read settles a mem_clk cycle after
+ * the address moves, the way a combinational read settles after its gates, and only the value at a clk edge is used.
+ * The write is the simulation's own (RamState): we / addr / din are sampled on mem_clk while clk is low, and the word is
+ * written on the mem_clk edge that first sees clk high, i.e. what the rising edge of clk writes; everything reads the
+ * new word from one mem_clk cycle later on. Needs clk at most mem_clk / (2 × the memories chained from an address to
+ * the data it feeds): the board top's DIV_LOG2 ≥ 4 does.
+ */
+function ramSynthSync(k: number, w: number, init?: ArrayLike<number>): string[] {
+  const lines = [`  reg ${range(w)}mem [0:${2 ** k - 1}];`, '  integer i;', '  initial begin', `    for (i = 0; i < ${2 ** k}; i = i + 1) mem[i] = 0;`];
+  if (init) for (let i = 0; i < init.length; i++) if (init[i]) lines.push(`    mem[${i}] = ${hexLit(w, init[i])};`);
+  lines.push('  end',
+    `  reg ${range(w)}q, d_s;`, `  reg ${range(k)}a_s;`, '  reg we_s = 0, clk_p = 0;',
+    '  always @(posedge mem_clk) begin',
+    '    clk_p <= clk;',
+    '    if (!clk) begin we_s <= we; a_s <= addr; d_s <= din; end',
+    '    if (clk && !clk_p && we_s) mem[a_s] <= d_s;',
+    '    q <= mem[addr];',
+    '  end',
+    '  assign dout = q;');
+  return lines;
+}
+
+/**
  * A 2^k × w RAM for k = 7 … 16 (w ≤ 32): banks of banks down to ramBank(w), a behavioural leaf
  * at run time (see the top of this file). Ports as ram(k, w): addr, din, we, clk → dout.
  */
@@ -257,7 +281,7 @@ export function bigRam(k: number, w: number): ComponentDef {
     }),
     preferBehavior: true,
     netlist: () => ramLevel(k, w, sub()),
-    hdl: { verilog: ramVerilog(k, w), synth: ramSynth(k, w) },
+    hdl: { verilog: ramVerilog(k, w), synth: ramSynth(k, w), get synthSync() { return ramSynthSync(k, w); } },
     notes: `Simulated as a lookup table (one evaluation per access). The structure is real: ${n} banks of ${2 ** ks} words behind a `
       + `${b}→${n} decoder and a ${n}:1 multiplexer tree, level after level down to ${2 ** BANK_K}-word banks of flip-flops. `
       + 'Open a bank to see the words it holds.',
@@ -354,7 +378,7 @@ export function bigRamWithInit(k: number, w: number, words: ArrayLike<number>): 
     ...base, id: `${base.id}_i${h}`,
     summary: `${base.summary} Starts with its initial contents at power-on.`,
     behavior: { ...ramBehavior(k, w, init), inside: base.behavior!.inside },
-    hdl: { ...base.hdl, synth: ramSynth(k, w, init) },
+    hdl: { verilog: base.hdl?.verilog, synth: ramSynth(k, w, init), get synthSync() { return ramSynthSync(k, w, init); } },
   };
   initCache.set(key, d);
   if (initCache.size > INIT_CACHE_SIZE) initCache.delete(initCache.keys().next().value!);
@@ -529,6 +553,14 @@ export const ROM_LEAF_K = 8;
 /** Builds a word-addressed ROM of 2^k ≤ 2^ROM_LEAF_K words (the sandbox's mux tree of constants). */
 export type RomLeaf = (k: number, w: number, content: Uint32Array) => ComponentDef;
 
+/** The ROM for block RAM (hdl.synthSync, see ramSynthSync): the address goes through a register on mem_clk. */
+const romSynthSync = (k: number, w: number, rv: boolean, content: Uint32Array): string[] => {
+  const lines = [`  reg ${range(w)}rom [0:${2 ** k - 1}];`, '  integer i;', '  initial begin', `    for (i = 0; i < ${2 ** k}; i = i + 1) rom[i] = 0;`];
+  for (let i = 0; i < content.length; i++) if (content[i]) lines.push(`    rom[${i}] = ${hexLit(w, content[i])};`);
+  lines.push('  end', `  reg ${range(w)}q;`, '  assign data = q;', `  always @(posedge mem_clk) q <= rom[${rv ? `addr[${k + 1}:2]` : 'addr'}];`);
+  return lines;
+};
+
 /** Synthesis body of a ROM: a case table (the classic ROM style; tools read 64K entries of it in seconds). */
 const romSynth = (k: number, w: number, rv: boolean, content: Uint32Array): string[] => {
   const lines = [`  reg ${range(w)}q;`, `  assign data = q;`, `  always @* case (${rv ? `addr[${k + 1}:2]` : 'addr'})`];
@@ -556,7 +588,7 @@ export function romLevels(k: number, w: number, rv: boolean, content: Uint32Arra
     spec: ([a]) => [content[idx(a)]],
     netlist: () => romLevel(k, w, rv, content, id, leaf),
     // built when read (vexport): a case table of every word is large for a big ROM
-    hdl: { get synth() { return romSynth(k, w, rv, content); } },
+    hdl: { get synth() { return romSynth(k, w, rv, content); }, get synthSync() { return romSynthSync(k, w, rv, content); } },
     notes: `Simulated as a lookup table. Its structure is the real circuit: ${n} ROMs of ${2 ** ks} words, each a tree of `
       + `two-input multiplexers whose inputs are tied to the program's bits, and a ${n}:1 tree choosing between them.`,
   };

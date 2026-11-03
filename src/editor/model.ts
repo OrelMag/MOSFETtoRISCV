@@ -313,7 +313,9 @@ export type PartRef =
       /** lang 'asm': assembled for RV64 (ld, sd, the W instructions, li of any 64-bit constant); the words stay 32-bit instructions. */
       xlen?: 64 } }
   /** The memory-port RV32I core (rv32i_core) with custom instructions: its control unit gains a class per row. */
-  | { core: { custom: CustomRow[]; /** The pipelined core (rv32i_pipe_core) instead of the single-cycle one. */ pipe?: true } }
+  | { core: { custom: CustomRow[]; /** The pipelined core (rv32i_pipe_core) instead of the single-cycle one. */ pipe?: true;
+      /** Pipelined only: the M extension inside (rv32im_pipe_core). */ m?: true;
+      /** Pipelined only: a write-through data cache in M in front of the memory port (rv32i_pipe_dc_core; not with m). */ dcache?: true } }
   /** The multicycle CPU's microprogrammed controller (mc_micro) with edited microcode: its ROMs hold this program (lib/ucode.ts). */
   | { ucode: Microprogram }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
@@ -523,4 +525,23 @@ export function onPolyline(pts: Vec[], p: Vec): boolean {
 /** Chips this chip places directly. */
 export function chipDeps(doc: ChipDoc): string[] {
   return [...new Set(doc.parts.flatMap((p) => ('chip' in p.ref ? [p.ref.chip] : [])))];
+}
+
+/** The pipelined port cores by library id: rv32i_pipe_core, rv32im_pipe_core (M), rv32i_pipe_dc_core (a data cache). */
+export const PIPE_CORE_LIB = /^rv32i(m)?_pipe(_dc)?_core$/;
+
+/** What a placed RV32I port core is (null: not the single-cycle or pipelined RV32I port core): pipelined or not, M, data cache, custom rows. */
+export function portCoreOf(ref: PartRef): { pipe: boolean; m: boolean; dcache: boolean; custom: CustomRow[] } | null {
+  if ('core' in ref) return { pipe: !!ref.core.pipe, m: !!ref.core.m, dcache: !!ref.core.dcache, custom: ref.core.custom };
+  if (!('lib' in ref)) return null;
+  if (ref.lib === 'rv32i_core') return { pipe: false, m: false, dcache: false, custom: [] };
+  const p = PIPE_CORE_LIB.exec(ref.lib);
+  return p ? { pipe: true, m: !!p[1], dcache: !!p[2], custom: [] } : null;
+}
+
+/** The part for a port core: a library id while it has no custom rows, else { core } (m and dcache only on the pipelined one, not together). */
+export function portCoreRef(o: { pipe: boolean; m?: boolean; dcache?: boolean; custom: CustomRow[] }): PartRef {
+  const m = o.pipe && !!o.m, dcache = o.pipe && !!o.dcache && !m;
+  if (o.custom.length) return { core: { custom: o.custom, ...(o.pipe ? { pipe: true as const } : {}), ...(m ? { m: true as const } : {}), ...(dcache ? { dcache: true as const } : {}) } };
+  return { lib: !o.pipe ? 'rv32i_core' : `rv32i${m ? 'm' : ''}_pipe${dcache ? '_dc' : ''}_core` };
 }

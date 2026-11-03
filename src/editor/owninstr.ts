@@ -14,7 +14,7 @@ import { h, icon } from '../ui/dom';
 import { dataPath, issCode, LINES } from '../widgets/ownrow';
 import { partAt, resolveCpu } from './cpu';
 import type { Editor } from './editor';
-import type { ChipDoc, PartRef } from './model';
+import { type ChipDoc, type PartRef, portCoreOf, portCoreRef } from './model';
 import { setRef } from './ops';
 
 const TAKEN = new Set([...BY_NAME.keys(), ...PSEUDO_OPS, ...DIRECTIVES]);
@@ -29,8 +29,8 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
   if (!desc || !core) return void ed.toast('Custom instructions need a placed RV32I core (single-cycle or pipelined) with a program ROM (as in Examples ▸ Computer)', 'err');
   open?.remove();
   // the pipelined port core takes rows the same way (its control unit is the same CONTROL, in D)
-  const pipe = ('lib' in core.ref && core.ref.lib === 'rv32i_pipe_core') || ('core' in core.ref && !!core.ref.core.pipe);
-  let rows: CustomRow[] = 'core' in core.ref ? structuredClone(core.ref.core.custom) : [];
+  const kind = portCoreOf(core.ref) ?? { pipe: false, m: false, dcache: false, custom: [] };
+  let rows: CustomRow[] = structuredClone(kind.custom);
   let sel = 0;
   const left = h('div', { class: 'oi-left' });
   const right = h('div', { class: 'oi-right' });
@@ -113,7 +113,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
   const apply = () => {
     const romAt = partAt(ed.doc, desc.rom, ed.ws.chips);
     if (!romAt || !('rom' in romAt.part.ref)) return void ed.toast('The program ROM is gone', 'err');
-    const coreRef: PartRef = rows.length ? { core: { custom: rows, ...(pipe ? { pipe: true as const } : {}) } } : { lib: pipe ? 'rv32i_pipe_core' : 'rv32i_core' };
+    const coreRef: PartRef = portCoreRef({ ...kind, custom: rows }); // the pipelined core keeps its M / cache
     const { custom: _old, ...romRest } = romAt.part.ref.rom;
     const romRef: PartRef = { rom: { ...romRest, ...(rows.length ? { custom: rows } : {}) } };
     let err = '';
@@ -137,7 +137,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
 
   const ov = h('div', { class: 'sb-help sb-rom-dlg oi-dlg', role: 'dialog', 'aria-label': 'Custom instructions' },
     h('div', { class: 'panel' },
-      h('div', { class: 'sb-help-head' }, h('h3', null, icon('code', 16), 'Custom instructions', h('small', null, `${core.id} · ${pipe ? 'pipelined' : 'single-cycle'} RV32I · up to three, on custom-1…3`)),
+      h('div', { class: 'sb-help-head' }, h('h3', null, icon('code', 16), 'Custom instructions', h('small', null, `${core.id} · ${kind.pipe ? 'pipelined' : 'single-cycle'} RV32${kind.m ? 'IM' : 'I'} · up to three, on custom-1…3`)),
         h('button', { class: 'btn ghost icon-only', 'aria-label': 'Cancel', title: 'Cancel (Esc)', onclick: close }, icon('close', 16))),
       h('div', { class: 'oi-body' }, left, right),
       h('div', { class: 'sb-rom-dlg-foot' }, status, h('button', { class: 'btn sm', onclick: close }, 'Cancel'), applyBtn)));

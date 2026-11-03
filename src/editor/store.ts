@@ -17,7 +17,7 @@ import { sanitizeReaderRef } from './cardparts';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
-  type FsmDoc, type TableDoc, SCHEMA, chipDeps, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
+  type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
 } from './model';
@@ -97,8 +97,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
   }
   if (isObj(r.core)) {
     const custom = sanitizeRows(r.core.custom);
-    const pipe = r.core.pipe === true;
-    return custom.length ? { core: { custom, ...(pipe ? { pipe } : {}) } } : { lib: pipe ? 'rv32i_pipe_core' : 'rv32i_core' };
+    return portCoreRef({ pipe: r.core.pipe === true, m: r.core.m === true, dcache: r.core.dcache === true, custom });
   }
   if (isObj(r.ram)) {
     const { k, w, init, ports } = r.ram;

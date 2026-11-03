@@ -85,7 +85,7 @@ export function boardPlan(ports: TopPort[]): BoardPlan {
     }
     if (missing) unplaced.push({ port: p.name, dir: p.dir, bits: missing });
   };
-  const rest = ports.filter((p) => !clocks.includes(p.name) && p.name !== reset?.port);
+  const rest = ports.filter((p) => !clocks.includes(p.name) && p.name !== reset?.port && !p.memClock);
   for (const p of rest.filter((x) => x.dir === 'in')) {
     place(p, () => buttons.shift() ?? (gpio < BOARD.gpio.length ? { kind: 'gpio_in', index: gpioIn++, pin: BOARD.gpio[gpio++] } : undefined));
   }
@@ -134,6 +134,8 @@ export function boardTop(top: string, ports: TopPort[], plan: BoardPlan): string
     '', '  // the design\'s pins');
   for (const p of ports) L.push(`  wire ${p.width > 1 ? `[${p.width - 1}:0] ` : ''}p_${p.name};`);
   for (const c of plan.clocks) L.push(`  assign p_${c} = clk;`);
+  // the memories read through a register on the board's own clock (vexport memClock): block RAM
+  for (const p of ports) if (p.memClock) L.push(`  assign p_${p.name} = clk_27m;  // the memories' read clock: always the full ${BOARD.clockMHz} MHz, so DIV_LOG2 must be at least 4`);
   if (plan.reset) L.push(`  assign p_${plan.reset.port} = ${plan.reset.activeLow ? '!rst' : 'rst'};`);
   const used = { led: new Set<number>() };
   for (const m of plan.bits) {
@@ -146,7 +148,7 @@ export function boardTop(top: string, ports: TopPort[], plan: BoardPlan): string
   for (let i = 0; i < BOARD.leds.length; i++) if (!used.led.has(i)) L.push(`  assign led_n[${i}] = 1'b1;  // LED ${i}: unused, off`);
   const placed = new Set(plan.bits.map((m) => `${m.port}:${m.bit}`));
   for (const p of ports) {
-    if (p.dir !== 'in' || plan.clocks.includes(p.name) || p.name === plan.reset?.port) continue;
+    if (p.dir !== 'in' || plan.clocks.includes(p.name) || p.name === plan.reset?.port || p.memClock) continue;
     for (let b = 0; b < p.width; b++) if (!placed.has(`${p.name}:${b}`)) L.push(`  assign ${bitRef({ port: p.name, bit: b, width: p.width })} = 1'b0;  // no board pin`);
   }
   L.push('', `  ${top} dut (`, ports.map((p) => `    .${p.name}(p_${p.name})`).join(',\n'), '  );', 'endmodule', '');
@@ -183,7 +185,7 @@ export function boardCst(top: string, plan: BoardPlan): string {
   return L.join('\n') + '\n';
 }
 
-function readme(top: string, base: string, issues: FpgaIssue[], plan: BoardPlan): string {
+function readme(top: string, base: string, issues: FpgaIssue[], plan: BoardPlan, usesMemClock: boolean): string {
   const board = `${top}_board`;
   const lines = [
     `${top}: Verilog for an FPGA, exported from the MOSFET → RISC-V sandbox`,
@@ -216,6 +218,22 @@ function readme(top: string, base: string, issues: FpgaIssue[], plan: BoardPlan)
     '',
     'Flip-flops start at 0 when the FPGA is configured, as the sandbox\'s power-on does.',
   ];
+  if (usesMemClock) {
+    lines.push('',
+      'Memories (RAM, ROM)',
+      '  A sandbox memory reads in the cycle it is addressed (an asynchronous read), which FPGA block RAM cannot do; as',
+      '  LUT RAM a big one does not fit a Tang Nano 9K. They are written here to read through a register on mem_clk, the',
+      '  board\'s 27 MHz clock (an extra input of every module above a memory, driven by clk_27m in the board top), so',
+      '  Yosys and Gowin map them to block RAM (BSRAM). The design\'s own clock is that clock divided by 2^DIV_LOG2: the',
+      '  registered read settles a mem_clk cycle after its address moves, thousands of times sooner than the next clock',
+      '  edge, so every flip-flop sees the value the sandbox shows at that edge, cycle for cycle. A RAM keeps the',
+      '  sandbox\'s rule: write enable, address and data are sampled while clk is low and the word is written at the rising',
+      '  edge (the mem_clk edge that sees it), then read back from the next mem_clk cycle.',
+      '  Keep DIV_LOG2 at 4 or more (the default is 22): the divided clock must be slow enough for the memories chained',
+      '  between a register and the next one (an instruction ROM, then a data RAM) to settle, two or three mem_clk',
+      '  cycles. The path from one memory\'s output to the next one\'s address is not a single-cycle path in this design;',
+      '  tell place and route so if it reports it as too slow.');
+  }
   if (issues.length) lines.push('', 'Report', ...issues.map((i) => `  ${i.level === 'error' ? 'ERROR' : i.level === 'warn' ? 'warning' : 'note'}: ${i.text}`));
   return lines.join('\n') + '\n';
 }
@@ -333,7 +351,7 @@ export function fpgaExport(def: ComponentDef, base: string): FpgaExport {
   const issues: FpgaIssue[] = [];
   let res;
   try {
-    res = synthVerilog(def, undefined, { powerOnZero: true, externalPorts: true, ioPart: (d) => displayOf(d) !== null });
+    res = synthVerilog(def, undefined, { powerOnZero: true, externalPorts: true, memClock: true, ioPart: (d) => displayOf(d) !== null });
   } catch (e) {
     return { ok: false, top: '', board: '', files: [], modules: 0, issues: [{ level: 'error', text: `cannot be synthesized: ${(e as Error).message}` }] };
   }
@@ -364,7 +382,8 @@ export function fpgaExport(def: ComponentDef, base: string): FpgaExport {
   unplaced('out', 'left unconnected (synthesis removes what only they used)');
   unplaced('inout', 'bidirectional pins are not wired by the board top');
   for (const d of memories(def)) {
-    issues.push({ level: 'info', text: `${d.name} is read in the same cycle it is addressed (asynchronous read), which FPGA block RAM cannot do: synthesis builds it from LUT RAM, so a large one may not fit a small FPGA (a Tang Nano 9K has 8640 LUTs)` });
+    if (d.hdl?.synthSync) issues.push({ level: 'info', text: `${d.name} is exported for block RAM: read through a register on the board's 27 MHz clock, so it settles a few of those cycles after an address or a write while the design's clock is thousands of times slower (keep DIV_LOG2 at 4 or more). Cycle for cycle it behaves as in the sandbox` });
+    else issues.push({ level: 'info', text: `${d.name} is read in the same cycle it is addressed (asynchronous read), which FPGA block RAM cannot do: synthesis builds it from LUT RAM, so a large one may not fit a small FPGA (a Tang Nano 9K has 8640 LUTs)` });
   }
   const top = res.top, board = `${top}_board`;
   return {
@@ -373,7 +392,7 @@ export function fpgaExport(def: ComponentDef, base: string): FpgaExport {
       { name: `${base}.v`, text: res.verilog },
       { name: `${base}_board.v`, text: boardTop(top, res.ports, plan) },
       { name: 'tangnano9k.cst', text: boardCst(top, plan) },
-      { name: 'README.txt', text: readme(top, base, issues, plan) },
+      { name: 'README.txt', text: readme(top, base, issues, plan, res.ports.some((p) => p.memClock)) },
     ],
   };
 }
