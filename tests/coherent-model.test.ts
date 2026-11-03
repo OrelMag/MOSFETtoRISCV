@@ -60,3 +60,14 @@ describe('coherent model fuzz', () => {
     expect(seen.scOk).toBeGreaterThan(20);
   }, 300000);
 });
+
+// A plain shared memory: the same lr / sc rule through MultiISS alone (every store to a reserved line takes the reservation)
+import { assemble as asmb } from '../src/riscv/asm';
+describe('MultiISS lr.w / sc.w', () => {
+  it('the lr / sc atomic add loses no update on one plain memory either', () => {
+    const m = new MultiISS(asmb(COH_PROGRAMS.find((p) => p.id === 'lrsc')!.source).words);
+    for (let c = 0; c < 4000 && !m.halted; c++) m.step();
+    expect(m.halted).toBe(true);
+    expect(m.dmem[16]).toBe(40);
+  });
+});

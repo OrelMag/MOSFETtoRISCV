@@ -58,6 +58,11 @@ export class MultiISS {
   step(): boolean[] {
     const { wants, grant } = this.arbitrate();
     this.last = this.harts.map((h, i) => (wants[i] && i !== grant ? null : h.step()));
+    // lr.w / sc.w on one memory: a store (a write, an amo, a successful sc.w) to a reserved line takes the other harts' reservations
+    // (the coherent caches do this with a snooped invalidation: riscv/cohmodel.ts)
+    this.last.forEach((info, i) => {
+      if (info?.store) this.harts.forEach((h, j) => { if (j !== i && h.resValid && h.resLine === info.store!.addr >>> 4) h.resValid = false; });
+    });
     const retired = this.last.map((x) => x !== null);
     if (wants.filter(Boolean).length > 1) this.priority = (grant + 1) % this.harts.length;
     this.cycles++;

@@ -22,6 +22,9 @@ export interface CohRun {
   /** The shared memory as the program sees it (the Modified copies over memory). */
   mem: number[];
   halted: boolean;
+  /** Cycle of each core's first and last successful sc.w (null: none). */
+  scFirst: [number | null, number | null];
+  scLast: [number | null, number | null];
 }
 
 const cache = new Map<string, CohRun>();
@@ -31,12 +34,16 @@ export function runCoherent(source: string, opts: { coherent?: boolean; max?: nu
   let r = cache.get(key);
   if (r) return r;
   const m = new CohModel(assemble(source).words, { coherent: opts.coherent });
-  for (let c = 0; c < (opts.max ?? 50000) && !m.halted; c++) m.step();
+  const first: [number | null, number | null] = [null, null], last: [number | null, number | null] = [null, null];
+  for (let c = 0; c < (opts.max ?? 50000) && !m.halted; c++) {
+    m.step();
+    m.last.forEach((l, i) => { if (l.kind === 'sc' && l.grant && !l.scFail) { first[i] ??= c; last[i] = c; } });
+  }
   const s = m.s;
   cache.set(key, r = {
     cycles: m.cycles, bus: s.tx.rd + s.tx.rdx + s.tx.upgr, rd: s.tx.rd, rdx: s.tx.rdx, upgr: s.tx.upgr, invalidations: s.invalidations, flushes: s.flushes,
     writebacks: s.writebacks, scFails: s.scFails[0] + s.scFails[1], scOk: s.scOk[0] + s.scOk[1], busyShare: s.cycles ? s.busBusy / s.cycles : 0,
-    stalls: [s.stalls[0], s.stalls[1]], mem: m.memoryView(), halted: m.halted,
+    stalls: [s.stalls[0], s.stalls[1]], mem: m.memoryView(), halted: m.halted, scFirst: first, scLast: last,
   });
   return r;
 }

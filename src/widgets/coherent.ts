@@ -63,6 +63,8 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     const busEl = h('div', { class: 'coh-bus' });
     const stats = h('div', { class: 'coh-stats' });
     const measured = h('div', { class: 'coh-measured' });
+    const listingBody = h('div', { class: 'coh-listing-body' });
+    const listing = h('details', { class: 'coh-listing' }, h('summary', null, 'Program, with each core\'s PC'), listingBody);
     const ids = opts.programs ?? COH_PROGRAMS.map((p) => p.id);
     const picker = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
     for (const id of ids) { const p = COH_PROGRAMS.find((q) => q.id === id)!; picker.append(h('option', { value: p.id }, p.name)); }
@@ -83,7 +85,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     });
     const title = h('h4', null, coherent ? 'Coherent caches' : 'Private caches', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel coh-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
-      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, picker, runBtn), status, verdict, cores, busEl, stats, measured));
+      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, picker, runBtn), status, verdict, cores, busEl, stats, listing, measured));
 
     const compareHw = (): void => {
       const sim = stage.sim;
@@ -195,6 +197,11 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
           h('div', { class: 'coh-res' }, hw.resV ? `reservation: line ${hex(hw.resLine * 16, 2)}` : 'reservation: none'),
           h('div', { class: 'cpu-mem coh-regs' }, ...SHOWN.map((r) => h('div', { class: `m${st.x[r] ? '' : ' z'}` }, h('span', { class: 'n' }, ABI[r]), h('span', { class: 'v' }, num(st.x[r]))))));
       }));
+      if (listing.open) {
+        const pcs = [0, 1].map((i) => cpuState(sim, root.children!.get(`core${i}`)!).pc);
+        listingBody.replaceChildren(...asm.words.map((w, k) => h('div', { class: `coh-ln${pcs.includes(k * 4) ? ' at' : ''}` },
+          h('span', { class: 'mono' }, hex(k * 4, 3)), h('code', null, disasm(w, k * 4)), h('span', { class: 'bus-tag mark' }, [0, 1].filter((i) => pcs[i] === k * 4).map((i) => `c${i}`).join(' ')))));
+      }
       const log = s.log.slice(-6).reverse();
       busEl.replaceChildren(
         h('div', { class: 'cpu-sec' }, 'Bus', s.busy ? h('span', { class: 'bus-tag', style: 'margin-left:6px' }, `busy: core ${s.owner}, step ${s.cnt}`) : h('span', { style: 'margin-left:6px;color:var(--muted)' }, 'idle')),
@@ -218,6 +225,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
       measured.append(h('div', { class: 'cpu-sec' }, 'Measured, run to halt'),
         h('table', { class: 'coh-trace' }, h('thead', null, h('tr', null, ...['program', 'cycles', 'bus', `per ${measure.unit}`, 'inval.', 'bus busy'].map((t) => h('th', null, t)))), h('tbody', null, ...rows)));
     }
+    listing.addEventListener('toggle', () => update());
     update();
     return { el, update, destroy: stop };
   };

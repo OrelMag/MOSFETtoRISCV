@@ -2581,3 +2581,9 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 @media (pointer: coarse) { .coh-panel .btn.xs { min-height: 40px; min-width: 40px; height: auto; } }
 .coh-panel .coh-regs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 10px; }
 .coh-panel .coh-regs .m .n { width: 26px; }
+
+.coh-panel .coh-listing { margin: 6px 0; font-size: 12px; }
+.coh-panel .coh-listing summary { cursor: pointer; color: var(--muted); }
+.coh-panel .coh-ln { display: grid; grid-template-columns: 46px 1fr 40px; gap: 4px; padding: 1px 4px; }
+.coh-panel .coh-ln.at { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.coh-panel .coh-ln .mark { border: 0; padding: 0; text-align: right; }
