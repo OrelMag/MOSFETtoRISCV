@@ -22,7 +22,7 @@ export function sizingWidget(): Widget {
     note.textContent = `Best: N = ${best}, ρ = ${rho.toFixed(1)}, ${d(best).toFixed(1)} τ = ${(d(best) * PS_PER_TAU).toFixed(0)} ps. A single stage takes ${d(1).toFixed(0)} τ. `
       + `Yardstick: one inverter driving four copies of itself (FO4) is ${FO4_TAU} τ = ${FO4_TAU * PS_PER_TAU} ps.`;
   };
-  const sl = slider('Load / input capacitance', 1, 16, 1, lg, (v) => String(2 ** v), (v) => { lg = v; paint(); });
+  const sl = slider('Load', 1, 16, 1, lg, (v) => `${2 ** v}× input`, (v) => { lg = v; paint(); });
   const el = h('div', { class: 'widget mos' }, h('div', { class: 'panel mos-ctl' }, sl.el, chain, note), h('div', { class: 'panel' }, table));
   paint();
   return { el };

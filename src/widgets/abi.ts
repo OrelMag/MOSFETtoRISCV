@@ -52,8 +52,15 @@ export const ABI_GROUPS: { name: string; regs: string[]; who: string }[] = [
   { name: 'zero, global, thread', regs: ['zero', 'gp', 'tp'], who: 'fixed' },
 ];
 
-export const abiTable = () => `<table class="mini"><tr><th>role</th><th>registers (x numbers)</th><th>who preserves</th></tr>${ABI_GROUPS.map((g) =>
-  `<tr><td>${g.name}</td><td>${g.regs.map((r) => `<code>${r}</code>&nbsp;x${ABI.indexOf(r)}`).join(', ')}</td><td>${g.who}</td></tr>`).join('')}</table>`;
+/** Registers as runs of consecutive numbers: "a0–a7 (x10–x17)". */
+export function regRuns(regs: string[]): string[] {
+  const idx = regs.map((r) => ABI.indexOf(r)).sort((a, b) => a - b), runs: number[][] = [];
+  for (const i of idx) { const last = runs[runs.length - 1]; if (last && i === last[last.length - 1] + 1 && ABI[i][0] === ABI[last[0]][0] && ABI[i] !== 'zero') last.push(i); else runs.push([i]); }
+  return runs.map((r) => (r.length === 1 ? `${ABI[r[0]]} (x${r[0]})` : `${ABI[r[0]]}–${ABI[r[r.length - 1]]} (x${r[0]}–x${r[r.length - 1]})`));
+}
+
+export const abiTable = () => `<table class="mini"><tr><th>role</th><th>registers</th><th>preserved by</th></tr>${ABI_GROUPS.map((g) =>
+  `<tr><td>${g.name}</td><td>${regRuns(g.regs).map((r) => `<code>${r}</code>`).join(', ')}</td><td>${g.who}</td></tr>`).join('')}</table>`;
 
 /** The chapter's recursive example: sum(n) = n + sum(n − 1), a frame of 16 bytes holding ra and s0. */
 export const SUM_CALLS = `        li   sp, 128       # the stack starts at the top of the 128-byte data memory

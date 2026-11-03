@@ -24,3 +24,11 @@ describe('chapter 13: pseudo-instructions and the calling convention', () => {
     expect(SUM_RUN.mem.map(([a]) => a)).toContain(124);
   });
 });
+
+describe('register runs', () => {
+  it('compress consecutive numbers into ranges', async () => {
+    const { regRuns } = await import('../src/widgets/abi');
+    expect(regRuns(['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'])).toEqual(['a0–a7 (x10–x17)']);
+    expect(regRuns(['t0', 't1', 't2', 't3', 't4', 't5', 't6'])).toEqual(['t0–t2 (x5–x7)', 't3–t6 (x28–x31)']);
+  });
+});
