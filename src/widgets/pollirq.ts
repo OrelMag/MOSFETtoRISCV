@@ -32,9 +32,9 @@ export function pollIrqWidget(): Widget {
       oninput: () => { const v = steps ? steps[+inp.value] : +inp.value; set(v); o.textContent = String(v); render(); } }) as HTMLInputElement;
     return [h('span', null, label), inp, o];
   };
-  const el = h('div', { class: 'pi' }, h('div', { class: 'pi-ctl' },
+  const el = h('div', { class: 'widget' }, h('div', { class: 'panel pi' }, h('h3', null, 'Polling against interrupts'), h('div', { class: 'pi-ctl' },
     ...ctl('event period (cycles)', 0, 0, () => period, (v) => (period = v), PERIODS),
-    ...ctl('work between polls (instructions)', 2, 40, () => chunk, (v) => (chunk = v))), out);
+    ...ctl('work between polls (instructions)', 2, 40, () => chunk, (v) => (chunk = v))), out));
 
   function render(): void {
     const p = runPollIrq('poll', period, chunk, RUN), q = runPollIrq('irq', period, chunk, RUN);
