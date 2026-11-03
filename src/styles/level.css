@@ -131,7 +131,7 @@
    editor taking the rest, so the canvas and Check are on screen without scrolling. */
 @media (max-width: 900px) {
   .lv-page { height: calc(100dvh - var(--topbar-h)); }
-  .lv-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .lv-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .lv-side { border-right: 0; border-bottom: 1px solid var(--border); max-height: 42dvh; }
   .lv-body { position: relative; }
   .lv-side.folded .lv-sidebody { display: none; }
