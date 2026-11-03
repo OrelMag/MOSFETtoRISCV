@@ -76,7 +76,7 @@ hart 0:  sw 1 → x      hart 1:  sw 1 → y
       'Using fence where an AMO is needed: ordering does not make a read-modify-write atomic, and atomicity does not order the surrounding accesses.',
     ],
     chapters: [
-      { chapter: 'multicore', step: 7, label: 'Memory ordering' },
+      { chapter: 'multicore', step: 11, label: 'Memory ordering' },
       { chapter: 'multicore', step: 5, label: 'A spin lock' },
     ],
   },

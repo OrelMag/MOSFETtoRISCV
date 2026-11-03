@@ -33,6 +33,31 @@ wait:   addi t3, t3, -1
         lw   t2, 0(s0)         # t2 = 7 with coherence; a private cache answers 0
 halt:   j    halt`,
   },
+  {
+    id: 'predict',
+    name: 'Four accesses to x',
+    blurb: 'Core 0 reads x, core 1 reads x, core 0 writes x, core 1 reads x: in that order, spaced by waiting loops.',
+    source: `# x is at 64. In time order: core 0 reads, core 1 reads, core 0 writes, core 1 reads
+        csrr a0, mhartid
+        li   s0, 64
+        bnez a0, c1
+c0:     lw   t0, 0(s0)         # (1) core 0 reads x
+        li   t3, 25
+w0:     addi t3, t3, -1
+        bnez t3, w0
+        addi t0, t0, 5
+        sw   t0, 0(s0)         # (3) core 0 writes x
+        j    halt
+c1:     li   t3, 12
+w1:     addi t3, t3, -1
+        bnez t3, w1
+        lw   t1, 0(s0)         # (2) core 1 reads x
+        li   t3, 40
+w2:     addi t3, t3, -1
+        bnez t3, w2
+        lw   t2, 0(s0)         # (4) core 1 reads x again
+halt:   j    halt`,
+  },
   mc('race'),
   mc('atomic'),
   mc('harts'),
