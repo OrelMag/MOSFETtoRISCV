@@ -241,7 +241,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'n_twos', act: 2, title: "Two's complement", kind: 'drill', requires: ['n_bin'], drill: 'twos', par: { mistakes: 2 },
     why: 'The ALU must handle negative numbers without a second subtractor. In two\'s complement the top bit weighs −2^15, so −x = ¬x + 1 and one adder serves signed and unsigned alike: a 16-bit word holds −32 768 to 32 767. The adder / subtractor, sra and every immediate rely on it.',
     tips: ['−x = ¬x + 1.', 'Overflow: both operands have the same sign and the result has the other.', 'Overflow is about signs, not the carry out: −1 + 1 carries out of 0xFFFF + 1 and is right.'],
-    codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }],
+    codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }, { chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'binary', step: 5, label: 'Wider words: sign and zero extension' }],
   },
   {
     id: 'a_ha', act: 2, title: 'Half adder', kind: 'build', requires: ['g_xor', 'n_bin'], base: sandbox('a_ha'),

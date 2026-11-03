@@ -37,7 +37,7 @@ export const TAUGHT: Record<string, string> = {
   hex: 'binary',
   twos: 'binary',
   overflow: 'binary',
-  signext: 'isa',
+  signext: 'binary',
   halfadder: 'adders',
   fulladder: 'adders',
   majority: 'adders',

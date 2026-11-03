@@ -271,6 +271,9 @@ src/lib/       the component library (registered in `registry` via define())
   fastadd.ts     gp / gray / black prefix cells, CLA4, prefixAdder (one drawing for any prefix network): koggeStone(n),
                  brentKung(n), sklansky(n) (ksLevels / bkLevels / skLevels, prefixInfo), addSubFast(n)
   wide.ts        bitwise(op, n), orN(n) (shared by alu.ts and fastadd.ts to avoid an import cycle)
+  numbers.ts     chapter 5's circuits before any adder: negator(n) (XORs under an OR chain: bits above the lowest 1 inverted),
+                 extender(m, n) (sign and zero extension side by side, wiring), shifts1(n) (sll / srl / sra by one: a splitter and
+                 a merger one row apart); NEGATE4, EXTEND4_8, SHIFTS8
   usage.ts       usedIn(def) (parents with instance counts, the chapters' CPUs included), copiesIn(top, def),
                  referenceCpus(): the inspector's "Where it is used"
   hwstats.ts     hwTargets / measure / hwStats (scripts/hwstats.ts → public/hwstats.json at build), hwStatsLive:
@@ -570,7 +573,8 @@ src/flash/     model.ts: FlashDevice (program 1 → 0 once per erase, block eras
                after `endurance` erases, factory bad blocks) and Ftl (page map, writes out of place, greedy garbage collection
                when free blocks are down to the reserve, dynamic wear levelling, bad blocks skipped, write amplification);
                randomWrites (seeded, optional hot set)
-src/widgets/   bespoke explainers (MOSFET cross-section, number explorer, memory grid: memgrid.ts memGridPanel, Memory contents of
+src/widgets/   bespoke explainers (MOSFET cross-section, number explorer (numbers.ts: 4–32 bits, C / V flags, wheel, halving; numsys.ts
+               chapter 5's encodings / overflow-in-columns / fixed-point widgets), memory grid: memgrid.ts memGridPanel, Memory contents of
                the scene's memories with a picker, data-mem, ...); python.ts: chapter 15's (pyLinked:
                Python / assembly / ROM words linked by line, the fields; pyCost: cycles per line on the golden model; pyScene:
                the gate-level CPU (PY_IMEM_K / PY_DMEM_K via cpuScene's imemK / dmemK) with the Python panel bottom-left
