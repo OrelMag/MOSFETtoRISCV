@@ -111,7 +111,7 @@ export const DFF: ComponentDef = define({
   }),
   notes: `While <code>clk = 0</code> the master is transparent and follows D, and the slave holds.
     At the rising edge the master closes, capturing D, and the slave opens and passes it on. D can
-    never race straight through, because the two latches are never open at the same time.`,
+    never run straight through to Q: the two latches are open on opposite phases. The inverter leaves both open for one gate delay after the rising edge, too short for D to cross the master (that delay is the hold time).`,
   hdl: {
     verilog: `module dff_ms (input logic d, clk, output logic q);
   logic clk_n, m;

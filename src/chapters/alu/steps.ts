@@ -73,7 +73,7 @@ export const aluSteps: Step[] = [
     title: 'Six branches from one subtraction',
     get body() {
       return `
-      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A branch needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">four inverters and one XOR</span>) turns
+      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A branch needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
       Z, N, V and C into one bit per <code>funct3</code>, and an <span data-show="cond">8:1 multiplexer</span> selects it.</p>
       <table class="mini"><tr><th>funct3</th><th>branch</th><th>taken when</th></tr>${BRANCHES.map((b) => `<tr><td>${b.f3.toString(2).padStart(3, '0')}</td><td><code>${b.name}</code></td><td>${b.expr}</td></tr>`).join('')}</table>
       <p>The condition logic costs ${NPC_COND.flags} NANDs plus ${NPC_COND.mux} for the select; with the jump and jalr muxing the whole next-PC decision is ${NPC_COND.all}. Which shortcut is tempting and wrong? Over all 65 536 pairs of 8-bit operands, N alone gives the wrong signed order for ${g(WRONG.nAlone)} of them (every
@@ -95,7 +95,7 @@ export const aluSteps: Step[] = [
       derive: `<p>With d = a − b computed as a + ¬b + 1: Z = (d = 0); C = 1 iff a ≥ b unsigned; the true sign of the difference is N ⊕ V. So for the six conditions, in the order of the table: Z, ¬Z, N ⊕ V, ¬(N ⊕ V), ¬C, C. bge is one inverter after the XOR
         that blt already has, as the netlist draws it (<code>ge</code>), and bgeu needs none: C itself.</p>`,
       pitfall: `<p>Branching on <code>a - b &lt; 0</code> in software instead of <code>blt</code>. The subtraction wraps: for values of opposite sign it can have the wrong sign, which is exactly the V flag you did not read. Compilers use <code>blt</code> and the hardware reads N ⊕ V.</p>`,
-      real: `<p>Fast cores do not wait for the ALU: the pipeline chapter's branch comparator is its own subtractor (and an equality tree for beq / bne) next to the ALU, so the branch resolves a stage earlier. The conditions above are unchanged.</p>`,
+      real: `<p>Fast cores do not wait for the ALU: chapter 18's branch comparator is an equality tree and its own fast subtractor beside the ALU, so the decision comes earlier in the cycle, without the ALU's result mux and zero detector. The conditions above are unchanged.</p>`,
       numbers: `<p>Cost of the condition logic: the XOR is ${stats(XOR).nands} NANDs, each of the three inverters 1, and the 8:1 select ${NPC_COND.mux}; ${NPC_COND.all} NANDs for the whole next-PC decision.</p>`,
     },
     challenge: {
@@ -152,15 +152,15 @@ export const aluSteps: Step[] = [
     get body() {
       const R = opDelays('rca'), K = opDelays('ks');
       return `
-      <p>"The complete ALU" counted depth: the longest path from any input to the result, ${R.depth} delays for the ripple ALU. But the control code is fixed for a whole instruction, and a path only matters if a change can travel it. <strong>Measured</strong> with the code held and the operands moving
+      <p>"The complete ALU" counted depth: the longest path from any input to any output, ${R.depth} delays for the ripple ALU (87 to the result y, the rest to the zero flag behind it). But the control code is fixed for a whole instruction, and a path only matters if a change can travel it. <strong>Measured</strong> with the code held and the operands moving
       (the widget below runs the 32-bit ALU on a set of carry-chain, shifter and alternating-bit transitions), the result y settles in <strong>${R.ops.and}</strong> delays for <code>and</code> / <code>or</code> and ${R.ops.xor} for <code>xor</code>, ${R.ops.sll} / ${R.ops.srl} / ${R.ops.sra} for the shifts,
       and ${R.ops.add} for <code>add</code>, ${R.ops.sub} for <code>sub</code>, ${R.ops.sltu} for <code>sltu</code>, <strong>${R.ops.slt}</strong> for <code>slt</code>. The ripple carry decides everything the adder touches; the logic operations never see it, although it is in the same circuit.</p>
       <p>That is also the case against a <em>fixed</em> clock period for all instructions: the slowest op sets it (${R.ops.slt} here against ${R.ops.and} for <code>and</code>), unless the slow ones get more cycles. With <span data-ahead="prefix">a Kogge–Stone adder (a parallel-prefix carry network, chapter 16)</span> the same measurement gives <code>add</code> ${K.ops.add}, <code>slt</code> ${K.ops.slt}: the gap to the shifter (${K.ops.sll}) closes from ${R.ops.add - R.ops.sll} delays to ${K.ops.add - K.ops.sll}, and <code>slt</code> (${K.ops.slt}), which still pays the flag logic after the adder, becomes the slowest. The flags (zero, neg, ovf, carry) follow the adder, ${R.flags} delays here and ${K.flags} with Kogge–Stone: that is what a branch waits for, which is why a <span data-ahead="pipeline">pipelined core (instructions overlapped in stages)</span> gives branches their own comparator.</p>`;
     },
     widget: opDelayWidget,
     more: {
-      derive: `<p>The ripple ALU's static depth (${opDelays('rca').depth}) is higher than every measured op delay (the worst is ${Math.max(...Object.values(opDelays('rca').ops))}): the rest is paths from the control input and paths no vector sensitizes (a change of ctl itself is not one of the transitions: that is the control unit's timing, a later chapter's business). Sensitized delay is a lower bound from the vectors tried; static depth an upper bound.</p>`,
-      pitfall: `<p>Reading a timing report by the number of gates in the unit you changed. Replacing the ripple adder by Kogge–Stone cuts <code>add</code> from ${opDelays('rca').ops.add} to ${opDelays('ks').ops.add} but <code>sll</code> not at all (${opDelays('ks').ops.sll}): the new critical path is another unit.</p>`,
+      derive: `<p>The ripple ALU's static depth (${opDelays('rca').depth}, 11 of it the zero detector, which an output y does not include) is higher than every measured op delay (the worst is ${Math.max(...Object.values(opDelays('rca').ops))}): the rest is paths from the control input and paths no vector sensitizes (a change of ctl itself is not one of the transitions: that is the control unit's timing, a later chapter's business). Sensitized delay is a lower bound from the vectors tried; static depth an upper bound.</p>`,
+      pitfall: `<p>Reading a timing report by the number of gates in the unit you changed. Replacing the ripple adder by Kogge–Stone cuts <code>add</code> from ${opDelays('rca').ops.add} to ${opDelays('ks').ops.add} but <code>sll</code> not at all (${opDelays('ks').ops.sll}): the adder's lead over the shifter shrinks to a few delays, so the next speed-up has to touch the shifter as well.</p>`,
     },
     challenge: {
       kind: 'quiz',

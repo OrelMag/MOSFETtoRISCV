@@ -8,7 +8,7 @@ import { cpuState } from '../riscv/cosim';
 import { ISS } from '../riscv/iss';
 import { crossover, runPollIrq } from '../riscv/pollirq';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
-import { stats } from '../sim/stats';
+import { logicDepth, stats } from '../sim/stats';
 import { cpuScene } from '../widgets/cpupanel';
 import { pollIrqWidget } from '../widgets/pollirq';
 import type { Stage } from '../view/stage';
@@ -48,7 +48,7 @@ export function latchedPulse(): { bareServed: boolean; servedAt: number; pending
 
 const SB_CMP = ioProbe('sb', 0x2a, 20), SH_CMP = ioProbe('sh', 0x1234, 20), SW_CMP = ioProbe('sw', 0x1234, 20);
 const SB_LED_OFF = ioProbe('sb', 0xab, 5);
-const NAND_VEC = nd(VECTOR_TARGET), NAND_INTC = nd(INTC4);
+const NAND_VEC = nd(VECTOR_TARGET), NAND_INTC = nd(INTC4), DEPTH_VEC = logicDepth(VECTOR_TARGET);
 const LP = latchedPulse();
 
 // ---- chapter 19 ---------------------------------------------------------------------------------------------
@@ -106,11 +106,11 @@ export const IO_MORE: Step[] = [
       repeating it is not idempotent; a status register changes between two loads; and some registers act on a <em>read</em>: a UART's receive register pops the byte, a keyboard queue
       drops its oldest key (the sandbox's keyboard part and chapter 38's key slave work this way), and a request controller's <em>claim</em> register (chapter 20) returns the
       pending source and clears it. So I/O cannot sit behind <span data-ahead="cache">a cache (a small fast copy of recent memory, chapter 22)</span>, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
-      A pipeline that speculates must not issue such a load early: the chapters' cores only touch I/O at the end of the pipeline for that reason.</p>`,
+      A pipeline that speculates must not issue such a load early: real cores hold device accesses until the instruction can no longer be cancelled. (The system CPU here has no pipeline, so the question does not arise.)</p>`,
     scene: () => cpuScene({ source: sys('bytes'), system: true, highlight: ['io'] }),
     more: {
       derive: `<p>Why replication: the memory side has four byte lanes and a store of size s at offset o raises the byte enables of the lanes it covers; the I/O unit is one 32-bit word behind a decoder, so it takes lane 0 of the replicated word for an 8-bit register and the whole word otherwise. A byte store to LEDs (8 bits) and to mtimecmp (32) therefore differ in what is kept: ${hex(SB_CMP.cmp)} against ${hex(SB_LED_OFF.leds, 2)}.</p>`,
-      real: `<p>RISC-V platforms specify access widths per device in the memory map and mark the region <em>strongly ordered, non-idempotent</em> (PMAs); the PMP and the page tables carry the same bits. A device that needs a byte write declares it, or its register is wider and the driver does read-modify-write.</p>`,
+      real: `<p>RISC-V platforms specify access widths per device in the memory map and mark the region <em>strongly ordered, non-idempotent</em> (PMAs), fixed by the platform; with Svpbmt a page-table entry can override them (PBMT = IO). PMP only grants read, write and execute. A device that needs a byte write declares it, or its register is wider and the driver does read-modify-write.</p>`,
       pitfall: `<p>A debugger that "shows memory" by reading every word of the I/O range changes the machine: it pops the keyboard queue and claims interrupts. Probes of device registers are explicit.</p>`,
     },
     challenge: {
@@ -142,7 +142,7 @@ export const TRAPS_MORE: Step[] = [
       every ${X6} cycles (<em>w</em> = 6); that threshold grows with the chunk, ${X2} at <em>w</em> = 2, ${X14} at 14, ${X30} at 30, because a longer chunk makes each poll cheaper per cycle of work.</p>
       <p>The other axis is latency. The polling program reacts at its next read: up to ${P40.worst} cycles after the deadline here (a chunk, a read, a compare), and a chunk of a million instructions
       would mean a million. The interrupt is taken at the next instruction boundary: ${I40.worst} cycles from the deadline to the handler's store, whatever the main program is doing. So polling wins
-      for rare, tolerant events on a core with nothing else to do; interrupts win on latency, and on work done in between.</p>
+      when events come so often that a trap per event costs more than the looks, or when the core has nothing else to do; interrupts win on latency, and on work done between rare events.</p>
       <div class="try">Drag the period down to the point where the two work columns cross, then raise the chunk and watch the crossing move.</div>`,
     widget: pollIrqWidget,
     more: {
@@ -160,7 +160,7 @@ export const TRAPS_MORE: Step[] = [
   {
     title: 'Nested interrupts',
     body: `
-      <p>A trap clears MIE, so a handler cannot be interrupted: the longest handler sets the response time of every other interrupt. The fix is in software. This timer handler takes ~90 cycles of "slow work"; it
+      <p>A trap clears MIE, so a handler cannot be interrupted: the longest handler sets the response time of every other interrupt. The fix is in software. This timer handler takes about 80 cycles, 60 of them a slow loop; it
       first saves what the next trap would destroy, lets only the more urgent interrupt in, and sets MIE again:</p>
       <ol>
         <li><code>csrr s2, mepc</code>: a nested trap writes mepc (and mcause); without the copy the outer handler could never return.</li>
@@ -169,7 +169,7 @@ export const TRAPS_MORE: Step[] = [
         <li>Before leaving: <code>csrci mstatus, 8</code>, restore mie and mepc, <code>mret</code>. With MIE set during the restore, an interrupt between restoring mepc and mret would overwrite it.</li>
       </ol>
       <p>The hardware saves nothing for the inner trap: its MPIE ← MIE puts the outer handler's "interrupts on" into the one MPIE bit, and the inner <code>mret</code> restores it, so two levels work and the stack of
-      saved states is the handler's job. The nested handler uses t1, t3, t4 only; the outer finished with them. A deeper nest has to save more. Cores with many levels (RISC-V CLIC, Arm NVIC) do this stacking and the priority comparison in hardware.</p>
+      saved states is the handler's job. The nested handler uses t1, t3, t4 only; the outer finished with them. A deeper nest has to save more. Arm's NVIC does this stacking and the priority comparison in hardware; RISC-V's CLIC does the priority comparison and preemption, and software still saves mepc and mcause.</p>
       <div class="try">Run to the slow handler (about 55 cycles after reset) and press IRQ while it spins at pc 108 and 112. s5 counts presses taken inside it.</div>`,
     scene: () => cpuScene({ source: sys('nested'), system: true, highlight: ['csr', 'trap'] }),
     tour: {
@@ -189,13 +189,13 @@ export const TRAPS_MORE: Step[] = [
       ],
     },
     more: {
-      derive: `<p>Depth 2 costs the outer handler 5 instructions of ceremony before the slow work and 5 after (save mepc, load mie, write mie, set a flag, set MIE; clear MIE, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~4 instructions (the time to reach <code>csrsi</code>) instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
+      derive: `<p>Depth 2 costs the outer handler 5 instructions of ceremony before the slow work and 5 after (save mepc, load mie, write mie, set a flag, set MIE; clear MIE, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~13 instructions (dispatch, the tick, reaching <code>csrsi</code>) or ~8 at the end of the handler, instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
       pitfall: `<p>Forgetting to save mepc: the nested trap overwrites it and the outer <code>mret</code> returns into the inner handler's interrupted instruction, so the main loop is skipped or repeated, silently. The same for mcause if the outer handler reads it after the window opens.</p>`,
     },
     challenge: {
       kind: 'reach', goal: 'Get the IRQ button taken inside the slow timer handler (s5 = 1).',
       check: (st) => reg(st, 21) >= 1,
-      hints: ['The window is the slow loop: from about cycle 55 to 138 after reset, at pc 108 and 112.', 'Pulse to the slow loop, then press IRQ (one cycle) in the I/O panel.'],
+      hints: ['The window is the slow loop: from about cycle 58 to 119 after reset, at pc 108 and 112.', 'Pulse to the slow loop, then press IRQ (one cycle) in the I/O panel.'],
       answer: 'Run ~60 cycles after reset, until the pc alternates between 108 and 112, press IRQ for one cycle, then let it finish: s4 = 1 and s5 = 1.',
       solve: (st) => { st.powerCycle(); st.runCycles(60); st.setInputs({ irq: 1 }); st.runCycles(1); st.setInputs({ irq: 0 }); st.runCycles(100); },
     },
@@ -206,15 +206,15 @@ export const TRAPS_MORE: Step[] = [
       <p>With <code>mtvec</code> MODE = 0 every trap lands on BASE and the handler's first job is to read mcause and branch, as the nested handler just did (4 instructions, 4 cycles before the real work).
       MODE = 1 does the dispatch in hardware: <strong>an interrupt with code <em>n</em> jumps to BASE + 4<em>n</em></strong>, exceptions still to BASE. BASE then holds a table of one-instruction slots, typically <code>j handler_n</code>.</p>
       <p>The <span data-show="vec">vector logic</span> is small because BASE is aligned: for 16 causes the table is 64 bytes, so BASE[5:2] is zero and the offset is ORed in, not added. It is an AND of mtvec[0]
-      and mcause[31] (an interrupt in vectored mode), four ANDs that gate mcause[3:0] with it, four ORs into BASE[5:2], and the rest of BASE passes through: ${NAND_VEC} NANDs, one gate delay for the AND and two for the OR. For the timer
+      and mcause[31] (an interrupt in vectored mode), four ANDs that gate mcause[3:0] with it, four ORs into BASE[5:2], and the rest of BASE passes through: ${NAND_VEC} NANDs, ${DEPTH_VEC} NAND delays from mcause to the target. For the timer
       (mcause 0x8000_0007, code 7) with mtvec = 0x1001 the target is ${hex(vectorTargetOf(0x1001, 0x80000007), 4)}; for the external interrupt (code 11) ${hex(vectorTargetOf(0x1001, 0x8000000b), 4)}; an ecall (cause 11, no interrupt bit) goes to ${hex(vectorTargetOf(0x1001, 11), 4)}.</p>
       <p>The system CPU of chapters 19 and 20 keeps MODE wired to 0 and its trap unit is unchanged; this block is what a vectored core adds in front of the PC multiplexer, and it is checked against the formula for random mtvec and mcause.</p>
       <div class="try">Set mtvec = 0x1001 and mcause = 0x8000000B: the target reads 0x102C. Clear mtvec bit 0 and it falls back to 0x1000.</div>`,
     scene: () => ({ root: VECTOR_TARGET, inputs: { mtvec: 0x1001, cause: 0x80000007 } }),
     tries: [(st) => st.getInput('cause') === 0x8000000b && st.getInput('mtvec') === 0x1001],
     more: {
-      derive: `<p>target = BASE | (MODE ∧ int ? code << 2 : 0). The OR equals the sum only because BASE[5:2] = 0, which is the architectural alignment rule for vectored tables; a table placed unaligned would add, with a 4-bit incrementer's worth of carry. Saved per interrupt: the load of mcause, the compare and the branch, ~4 cycles of 1-cycle instructions; on a deep pipeline the mispredicted indirect jump of a software dispatch costs more.</p>`,
-      real: `<p>Rocket and CVA6 implement vectored mtvec; Ibex does for interrupts only, with a 32-entry table at BASE + 4<em>n</em>. Embedded Arm cores always use a table, one word per exception number, loaded by the hardware.</p>`,
+      derive: `<p>target = BASE | (MODE ∧ int ? code << 2 : 0). The OR equals the sum only because BASE[5:2] = 0, The spec requires only 4-byte alignment and lets vectored mode demand more, so an implementation can do without an adder: this block requires 64 bytes, like the FE310 (Ibex: 256); a table placed unaligned would add, with a 4-bit incrementer's worth of carry. Saved per interrupt: the load of mcause, the compare and the branch, ~4 cycles of 1-cycle instructions; on a deep pipeline the mispredicted indirect jump of a software dispatch costs more.</p>`,
+      real: `<p>Rocket, CVA6 and Ibex implement vectored mtvec; Ibex's 32-entry table sits on a 256-byte boundary. Embedded Arm cores always use a table, one word per exception number, loaded by the hardware.</p>`,
       pitfall: `<p>The vector table slots are 4 bytes, so each is one <code>j</code> (±1 MiB) or a compressed jump; a handler that is further away needs a trampoline. And mcause for a synchronous exception has bit 31 clear: an ecall never indexes the table.</p>`,
     },
     challenge: {
@@ -233,7 +233,7 @@ export const TRAPS_MORE: Step[] = [
       a <span data-show="pri">priority encoder</span> that offers the highest enabled pending source on <code>irq</code> and <code>id</code>; and a <strong>claim</strong> that clears the bit it names, so a source is
       served once per request (the PLIC returns the id from a load of its claim register, which is exactly the side-effect read of chapter 19).</p>
       <p>${NAND_INTC} NANDs for 4 sources, against ${nd(TRAP_UNIT)} for the whole trap unit. One pulse on source 1 at cycle 3 while a handler runs with interrupts masked until cycle 9: the bare line loses it; here the pending bit
-      is set at cycle ${LP.pendingFrom} and the request is claimed at cycle ${LP.servedAt}, ${LP.servedAt - 3} cycles after the pulse, exactly once. Two sources pending at once are served highest index first. A source still high when its bit is claimed
+      is set at cycle ${LP.pendingFrom} and the request is claimed at cycle ${LP.servedAt}, ${LP.servedAt - 3} cycles after the pulse, exactly once. Two sources pending at once are served highest index first here; a real PLIC orders them by programmable priority and breaks ties toward the lowest ID. A source still high when its bit is claimed
       sets it again at the next edge: level sources must be cleared at the device first, as with any interrupt.</p>
       <p>This controller is not wired into the system CPU: that would need a claim register in the I/O unit and a trap-taken output, i.e. a new CPU. Here it is a block of its own, drawn and simulated at gate level; its model is
       checked against it every cycle.</p>

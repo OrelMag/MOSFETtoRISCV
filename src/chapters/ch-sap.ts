@@ -101,7 +101,7 @@ export const chAppendixSap: Chapter = {
       'SAP-1 is one 8-bit bus and boards that either drive it (…O) or load from it (…I). The microcode keeps it to one driver at a time; nothing in the wiring does.',
       'Every instruction takes five steps: T0 <code>MI CO</code> and T1 <code>RO II CE</code> fetch, T2–T4 execute. The control word changes on the falling edge, registers load on the rising one.',
       'The control unit is a 74LS161 step counter and two 28C16 EEPROMs addressed by [ZF CF][opcode][step]: changing the ISA is reprogramming two chips, not rewiring.',
-      `Without the EEPROMs it is ${k(SAP_COST.logic)} NANDs (${SAP_COST.chips} chips); our single-cycle RV32I is ${k(RV32I.nands)}. SAP-1 buys that with 16 bytes, an 8-bit adder, no registers beyond A and B, and five clocks an instruction.`,
+      `Without the EEPROMs it is ${k(SAP_COST.logic)} NANDs (${SAP_COST.chips - SAP_COST.eeproms} chips, ${SAP_COST.chips} with them); our single-cycle RV32I is ${k(RV32I.nands)}. SAP-1 buys that with 16 bytes, an 8-bit adder, no registers beyond A and B, and five clocks an instruction.`,
       'The inspector counts the EEPROMs apart, as 5 × 2 KB of ROM: simulated, each is a mux tree of 65 524 NANDs; on silicon it is a transistor per bit and two decoders.',
     ],
     practise: ['s_reg4', 's_cnt4', 'a_addsub16', 'c_ctl', 'o_mc'],
@@ -133,11 +133,11 @@ export const chAppendixSap: Chapter = {
     {
       title: 'The machine and its bus',
       body: `
-        <p>In 2016–17 Ben Eater built an 8-bit computer on breadboards, on video, one module at a time, from
+        <p>Starting in 2016 Ben Eater built an 8-bit computer on breadboards, on video, one module at a time, from
         the design Albert Malvino and Jerald Brown call SAP-1 (<em>Simple As Possible</em>) in <em>Digital Computer
         Electronics</em>. Many have built it since from his kits. Here it is again, module for module, each chip built
         from our gates: open any of them and keep going down to MOSFETs. Our boards add a 74LS04 wherever an active-high
-        control line meets an active-low pin, and the RAM board a 74LS08 and a third 74LS157 for its write.</p>
+        control line meets an active-low pin, and the RAM's write pulse comes from a 74LS08 where Ben has a NAND and an RC.</p>
         <p>Everything meets on one 8-bit <span data-show="bus">bus</span>. A board either <em>drives</em> it (a line
         ending in O: the <span data-show="pc">program counter</span>, the <span data-show="ram">RAM</span>, the
         <span data-show="ir">instruction register</span>'s operand, <span data-show="a">A</span>, the
@@ -166,7 +166,7 @@ export const chAppendixSap: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Five steps an instruction, so the add program (LDA, ADD, OUT, HLT) takes 3 × 5 + 2 = ${ADD_RUN.cycles} cycles to reach HLT, which halts at its second step. Wires: N registers fully connected, N(N − 1); on one bus, 2N
+        derive: `<p>Five steps an instruction, so the add program (LDA, ADD, OUT, HLT) takes 3 × 5 + 2 = ${ADD_RUN.cycles} cycles to reach HLT, which stops the clock after two more rising edges, at T2. Wires: N registers fully connected, N(N − 1); on one bus, 2N
           (an in and an out each), plus 2N control lines. The bus is 8 bits wide, so every transfer moves a byte, and the 4-bit operand shares the instruction byte with the 4-bit opcode: 16 opcodes, 16 addresses.</p>`,
         real: `<p>Ben Eater built this on breadboards with 74LS chips that were already decades old: the TTL families of the 1970s, which is the technology minicomputers and the first microprocessors' support logic were made of.
           A shared bus with tri-state drivers is how those machines were organized, and how a parallel bus on a modern board still works. Inside a modern CPU the wide buses are replaced by point-to-point wires and
@@ -202,7 +202,7 @@ export const chAppendixSap: Chapter = {
         inverter makes <code>nclk</code>, which steps the control unit on the falling edge (see Microcode).</p>
         <p>Why <code>nclk</code> exists: the control unit changes its control word on the falling edge, half a period before the rising edge on which the registers load. That half period is the time the
         EEPROMs and the gates behind them have to settle, and it is why the control word is steady, never glitching, at the moment it matters. A computer that stepped its control unit on the same edge
-        as its registers would have a race between the new control word and the old data.</p>
+        as its registers would have a race between the new control word and the old data. (Stepping on the same edge is fine in a synchronous design with enables, as chapter 23's is. This one gates clocks with its control lines (OI, RI), so those lines must be steady before the clock rises and stay so while it is high.)</p>
         <div class="try">Turn on <code>HLT</code> and Pulse: <code>clk</code> stays dark, so no register anywhere sees
         an edge.</div>`,
       tour: {
@@ -217,8 +217,7 @@ export const chAppendixSap: Chapter = {
       more: {
         derive: `<p>The gating is <code>clk</code> = osc · ¬HLT. Two gates: a 74LS04 inverter and a 74LS08 AND, ${SAP_COST.clock} NANDs in all, and a second inversion for <code>nclk</code> = ¬clk. HLT is a bit of the control word, so it changes only on the falling
           edge (when <code>nclk</code> rises and the step counter advances), i.e. while <code>clk</code> is low: the AND's output is 0 either way, and no partial pulse can be made. The step counter then cannot move off the HLT word, because it needs the very edge that HLT removed.</p>`,
-        real: `<p>Ben's board has three 555 timers: an astable for the free-running clock, a monostable for a single step, a bistable to debounce the mode switch. A mechanical button bounces for milliseconds, which at kilohertz
-          clock rates is thousands of edges; a monostable replaces them with one clean pulse. Clock gating is also how modern chips save power (clock gating cells), with the same rule: change the enable only while the clock is in its inactive phase.</p>`,
+        real: `<p>Ben's board has three 555 timers: an astable for the free-running clock, a monostable for a single step, a bistable to debounce the mode switch. A mechanical button bounces for milliseconds, making several edges where one was meant, and a counter counts every one; a monostable replaces them with one clean pulse. Clock gating is also how modern chips save power (clock gating cells), with the same rule: change the enable only while the clock is in its inactive phase.</p>`,
         pitfall: `<p>Gating a clock with a signal that can change while the clock is high. The result is a runt pulse, or a clock that rises in the middle of a period, and every register on the net sees an extra edge. Here that cannot happen because HLT is
           launched by the falling edge. The same care applies to the output register's clock (CLK AND OI), later in this appendix.</p>`,
       },
@@ -310,10 +309,10 @@ export const chAppendixSap: Chapter = {
       },
       more: {
         derive: `<p>The solver resolves the line by strength: a driver (strength 4 to 2) beats the pull-down resistor (strength 1), and two drivers of different values with equal strength give X and flag a short. The rule is
-          the table under Numbers; the computer's gate-level bus replaces it with an OR of the drivers and a <code>clash</code> output that is 1 exactly when this table gives X. Each tri-state buffer here is 8 transistors: two for the output stage,
+          the table under Numbers; the computer's gate-level bus replaces it with an OR of the drivers and a <code>clash</code> output that is 1 whenever two drivers are enabled, even when they agree: stricter than this table, like the microcode's rule. Each tri-state buffer here is 8 transistors: two for the output stage,
           the rest to switch it off.</p>`,
         real: `<p>Real 3-state outputs do not switch instantly: a driver turns off in a little more or less time than another turns on, so for a few nanoseconds around every handover both can conduct. That is bus contention in
-          miniature, and why bus designs leave a dead cycle between drivers (turnaround). SAP-1 avoids it by changing control words only on the falling edge and leaving a half-cycle of settling time.</p>`,
+          miniature, and why bus designs leave a dead cycle between drivers (turnaround). SAP-1 does not avoid it: at each falling edge one 245 lets go as the next takes over. It only makes it harmless, since nothing loads until the rising edge half a period later.</p>`,
         pitfall: `<p>Calling two agreeing drivers safe. They draw no heavy current today, but the design relies on both always producing the same value, and a single data-dependent difference makes it a short. The microcode rule is stricter and simpler: never
           more than one O line at a time, whatever the data.</p>`,
         numbers: `<table class="mini"><tr><th>drivers enabled</th><th>values</th><th>line</th></tr>
@@ -623,23 +622,22 @@ export const chAppendixSap: Chapter = {
         from the top on what it left (144 and 233): it shows 144, the sum carries at once, and it halts. Power cycle puts
         0 and 1 back.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the
-        bus's OR stand-in) and five EEPROMs. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
+        bus's OR stand-in) and the five EEPROMs counted among the chips. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,
         and runs one 32-bit instruction a clock where SAP-1 needs five for an 8-bit one, from a memory of 16 bytes with
-        no stack, no indexing, no interrupts. Most of its cost is the register file and the 32-bit data path SAP-1
-        does without.</p>
+        no stack, no indexing, no interrupts. Most of its cost is storage built from gates: a 64-word data memory (58 %) and the register file (34 %).</p>
         <p>What a program on this machine teaches is how much a programmer normally gets for free. There are no named registers to hold temporaries, so every variable is a byte of the 16; no immediate larger than 15, so constants live in memory;
         no multiply, so it is a loop; no stack, so no recursion. Each of these is something the later machines in this site provide, and each is a place where this machine's design chose a smaller circuit over a more capable one.</p>`,
       more: {
-        derive: `<p>Instructions executed: Fibonacci takes ${FIB.cycles} cycles at five a step, so ${Math.round(FIB.cycles / 5)} instructions for ${FIB.bytes} bytes of program and data. The cost ratio: ${k(RV32I.nands)} / ${k(SAP_COST.logic)} = ${(RV32I.nands / SAP_COST.logic).toFixed(0)}. Time per instruction:
-          5 cycles against 1, so on the same clock the RV32I does about five times the instructions with 32-bit operands, whose adder alone is four times as wide. Throughput in bytes of ALU work per cycle: 8 bits / 5 cycles against 32 bits / 1: ${(32 / (8 / 5)).toFixed(0)} times.</p>`,
+        derive: `<p>Instructions executed: Fibonacci takes ${FIB.cycles} cycles at five an instruction (HLT stops after two), so ${Math.round((FIB.cycles - 2) / 5)} instructions for ${FIB.bytes} bytes of program and data. The cost ratio: ${k(RV32I.nands)} / ${k(SAP_COST.logic)} = ${(RV32I.nands / SAP_COST.logic).toFixed(0)}. Time per instruction:
+          5 cycles against 1, so on the same clock the RV32I does about five times the instructions with 32-bit operands, whose adder alone is four times as wide. Throughput in bits of ALU work per cycle: 8 bits / 5 cycles against 32 bits / 1: ${(32 / (8 / 5)).toFixed(0)} times.</p>`,
         real: `<p>The textbook SAP-1 is the first of a series (SAP-2, SAP-3) that add registers, a stack, more addressing modes and I/O, each in the direction of a real microprocessor. Eater's kit stops at this one. The chips in it are the same part numbers that
-          built minicomputers and the 8-bit micros' glue logic; it can be replicated for a few tens of dollars, and its limits (16 bytes, 8 bits, no stack) are the reason it fits in the head.</p>`,
+          built minicomputers and the 8-bit micros' glue logic; it can be replicated for a few hundred dollars, and its limits (16 bytes, 8 bits, no stack) are the reason it fits in the head.</p>`,
         pitfall: `<p>A program that needs more than 16 bytes, code and data together. Fibonacci just fits; Ben's multiply fits with its counter in memory. Anything larger either does not load or overwrites itself. Also, 100 cannot be loaded as an immediate: LDI takes only
           0 to 15, so the challenge needs two numbers in memory and an add.</p>`,
         numbers: `<table class="mini"><tr><th></th><th>SAP-1</th><th>our RV32I</th></tr>
           <tr><td>NANDs (no ROM)</td><td>${k(SAP_COST.logic)}</td><td>${k(RV32I.nands)}</td></tr><tr><td>data path</td><td>8 bits</td><td>32 bits</td></tr>
-          <tr><td>memory</td><td>16 bytes</td><td>words, in the thousands</td></tr><tr><td>cycles per instruction</td><td>5</td><td>1</td></tr></table>`,
+          <tr><td>memory</td><td>16 bytes</td><td>64 words (256 bytes), code apart</td></tr><tr><td>cycles per instruction</td><td>5</td><td>1</td></tr></table>`,
       },
       scene: () => sapScene({ program: 'fib', highlight: [] }),
       challenge: {

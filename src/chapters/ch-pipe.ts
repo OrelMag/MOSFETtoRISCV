@@ -132,7 +132,7 @@ export const chPipeline: Chapter = {
         options: ['From the register file', 'Forwarded from EX/MEM', 'Forwarded from MEM/WB', 'It stalls one cycle'],
         answer: 1,
         explain: 'When sub is in E, add is one stage ahead with its result in EX/MEM. M is the most recent writer, so it wins.',
-        why: ['add writes a0 in W, three cycles after sub reads its registers in D: the register file still holds the old value.', '', 'That is distance 2, with one instruction between them.', 'An ALU result is ready at the end of E, in time to forward. Only a load at distance 1 stalls.'],
+        why: ['add writes a0 in W, two cycles after sub reads its registers in D: the register file still holds the old value.', '', 'That is distance 2, with one instruction between them.', 'An ALU result is ready at the end of E, in time to forward. Only a load at distance 1 stalls.'],
       },
       {
         question: '<code>lw t0, 0(a0)</code> then <code>add t1, t0, t0</code>. How many bubbles?',
@@ -202,8 +202,7 @@ export const chPipeline: Chapter = {
         <p>The four tall boxes are the pipeline registers (<span data-show="FD">IF/ID</span>, <span data-show="DE">ID/EX</span>,
         <span data-show="EM">EX/MEM</span>, <span data-show="MW">MEM/WB</span>). Each holds everything the following
         stages need about one instruction: its PC and PC+4, operands, immediate, destination register and the control signals
-        that will be used later, plus a <em>valid</em> bit. They get narrower towards the end: once an instruction has used its
-        operands in E, nothing after it needs them.</p>
+        that will be used later, plus a <em>valid</em> bit. ID/EX is the widest; after E the operands and most control bits are gone.</p>
         <p>Each is a wide register with an <strong>enable</strong> (de-assert to stall) and a <strong>synchronous clear</strong>
         (assert to replace the contents with a bubble: all control bits 0, so it writes nothing). Open one: it is the register
         from <a href="#/c/registers/0">chapter 9</a> with a mask in front. Stalls and flushes, the next steps' tools, are nothing more
@@ -222,7 +221,7 @@ export const chPipeline: Chapter = {
           { title: 'EX/MEM', show: ['EM'],
             say: '<p>EX/MEM carries the ALU result (an address for a load or store), the value to store, rd and the control bits still to be used: MemWrite, RegWrite, the result select.</p>' },
           { title: 'MEM/WB', show: ['MW'],
-            say: '<p>MEM/WB is the narrowest: the value to write, rd and RegWrite. Everything else was used up on the way.</p>' },
+            say: '<p>MEM/WB still holds every candidate for the result (ALU result, loaded word, PC + 4, immediate), with rd, RegWrite and the result select: 169 bits. IF/ID, at 97, is the narrowest.</p>' },
         ],
       },
       more: {
@@ -301,11 +300,11 @@ export const chPipeline: Chapter = {
         ],
       },
       more: {
-        derive: `<p>stall = MemReadE · (rdE = rs1D + rdE = rs2D) · (rdE ≠ 0). While stall is 1: PC enable = 0, IF/ID enable = 0, ID/EX clear = 1. The
+        derive: `<p>stall = validE · (resultSrcE = 01) · (rdE = rs1D + rdE = rs2D). There is no x0 test: a load into x0 can cost a needless stall and nothing else. While stall is 1: PC enable = 0, IF/ID enable = 0, ID/EX clear = 1. The
           instruction in D is simply decoded again next cycle, and the comparison then fails because the load has left E.</p>`,
         real: `<p>Longer pipelines have longer load-use delays: two or three cycles behind an L1 cache hit is common. Out-of-order cores keep working on
           independent instructions meanwhile (<a href="#/c/ooo/0">a later chapter</a>); in-order cores rely on the compiler's scheduling.</p>`,
-        pitfall: `<p>Stalling the whole pipeline would also hold the load in M, and the word it is fetching would never arrive. Only the stages
+        pitfall: `<p>Stalling the whole pipeline would also hold the load in E: it would never reach M, and the stall would never end. Only the stages
           behind the dependent instruction stop; the load keeps going.</p>`,
       },
       challenge: {
@@ -417,10 +416,9 @@ export const chPipeline: Chapter = {
         forwarding cannot go back in time, so one bubble), or a <em>flush</em> behind a taken branch or jump (resolved in Execute, so the two
         instructions fetched behind it are squashed: two bubbles). A not-taken branch costs nothing. The lines add up to the clock, always: cycles = instructions + stalls + flushes + fill.</p>
         <p>Measured on <code>prefix</code>: ${fmt(PREFIX.cycles)} cycles for ${fmt(PREFIX.instr)} instructions, CPI ${(PREFIX.cycles / PREFIX.instr).toFixed(2)}.
-        ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds), ${fmt(PREFIX.flush)} flushes
+        ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds, and <code>print(xs[i])</code> loads a value its next instruction stores), ${fmt(PREFIX.flush)} flushes
         (${fmt(PREFIX.flush / 2)} taken branches and jumps), ${PREFIX.fill} the pipeline filling. The routines suffer worse: gcd's <code>%</code> loop is branches,
-        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. The pipeline wins
-        only through its shorter clock ("Does it pay? Measured" counted it): CPI is the price, not the figure of merit.</p>`,
+        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. A pipeline can win only through its shorter clock, and this one does not yet: its period does not fall far enough to pay for the CPI ("Does it pay? Measured"). Chapter 18 balances it.</p>`,
       scene: () => pyScene(pySrc('prefix'), { pipeline: true, switch: false }),
       more: {
         derive: `<p>The charge rule, from the stage registers' valid bits: Execute valid → that instruction's line (one cycle; a divide's extra cycles are counted apart). Execute empty → the youngest older instruction still in Memory or

@@ -95,7 +95,7 @@ export const chIO: Chapter = {
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
         <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
         <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter 20)</span> and leave it to software; the complete CPU traps.</p>
-        <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, with no multiplexer. All the logic is in the enables, a small
+        <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, and the byte never has to reach a chosen lane. The only data multiplexer picks by size alone (byte copies, half copies or the word), not by address; it is most of the unit's cost. The enables are a small
         decoder of the low two address bits and the size: ${nd(STORE_ALIGN)} NANDs for the whole unit. It also produces <em>misaligned</em>, which the CPU turns into a trap.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
       scene: () => ({ root: STORE_ALIGN, inputs: { wd: 0xab, addr: 2, size: 0 } }),
@@ -157,7 +157,7 @@ export const chIO: Chapter = {
         (<span data-show="zb zh"><code>lbu</code>, <code>lhu</code></span>).
         Both extensions are pure wiring, so the cost is all in the multiplexers.</p>
         <p>Little-endian puts byte 0 in the low bits of the word, so the byte at offset o is bits 8o + 7 … 8o, and a halfword at offset 2 is the top half. The unit is ${nd(LOAD_EXTRACT)} NANDs. Compare the store side: stores replicate and steer by enables, loads select and extend. The asymmetry is
-        why a store needs no multiplexer and a load needs two levels of them.</p>`,
+        why a store's multiplexer looks only at the size, while a load needs two levels, chosen by the address.</p>`,
       scene: () => ({ root: LOAD_EXTRACT, inputs: { rdata: 0x12ab5678, addr: 2, funct3: 0 } }),
       tour: {
         beats: [
@@ -216,7 +216,7 @@ export const chIO: Chapter = {
       more: {
         derive: `<p>The CPU decodes <em>io</em> = addr[31] and gates the memory write with it; the I/O unit then selects a register by addr[4:2]: 0 the console strobe (the low byte as data), 1 the LEDs, 2 the switches (a load), 4 mtime, 5 mtimecmp. The data memory sees the access only when io is clear. The program has ${(sys('hello').match(/\bsb\b/g) ?? []).length} stores and ${(sys('hello').match(/\bli\b/g) ?? []).length} <code>li</code> (one is the console address); a letter that repeats needs no new <code>li</code>.</p>`,
         pitfall: `<p>Treating the console like memory. A load from the console address does not return what was stored: the store went to a device, not to a cell. The same applies to any register of a real device, which is why C marks such pointers <code>volatile</code>: the compiler must not assume a second read returns the first value, or that two stores can be merged.</p>`,
-        real: `<p>The 16550 UART on PCs and the PL011 on Arm boards are mapped this way, each with a status register for "transmitter ready" that this console omits. Memory-mapped I/O needs no extra instructions, but accesses to a device must not be cached or reordered, which is why real cores mark address ranges as device memory.</p>`,
+        real: `<p>The 16550 UART (behind x86 I/O ports on a PC, memory-mapped on many other boards) and the PL011 on Arm boards each have a status register for "transmitter ready" that this console omits. Memory-mapped I/O needs no extra instructions, but accesses to a device must not be cached or reordered, which is why real cores mark address ranges as device memory.</p>`,
       },
       challenge: {
         kind: 'reach', goal: 'Run the program until the console shows the whole greeting.',
@@ -246,11 +246,11 @@ export const chIO: Chapter = {
           { title: 'Flip them', set: { switches: 0xa5 }, cycles: 1, show: ['io'], expect: { leds: 0x5a },
             say: '<p>The switches are now 0xA5, but the LEDs still show {v:leds}: the program has not read the switches again yet. Nothing links the two except the loop.</p>' },
           { title: 'The loop catches up', cycles: 4, show: ['io'], expect: { leds: 0xa5, pcOut: 20 },
-            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is up to one pass, five cycles here.</p>' },
+            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is 4 to 8 cycles here, depending on where the loop was.</p>' },
         ],
       },
       more: {
-        derive: `<p>The loop is five instructions (<code>lw</code>, <code>not</code>, <code>andi</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches within five cycles: a flip just after the <code>lw</code> samples waits for the next pass. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
+        derive: `<p>The loop is five instructions (<code>lw</code>, <code>not</code>, <code>andi</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches in 4 to 8 cycles: a flip just after the <code>lw</code> samples waits for the next pass, then for its <code>sw</code>. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
         pitfall: `<p>Expecting an input to be latched. If the switches change and change back between two loads, the program never sees it. Real devices that must not miss events latch them in a status register, or raise an interrupt (the next chapter).</p>`,
       },
       tries: [(st) => st.value('leds') > 0],
@@ -279,7 +279,7 @@ export const chTraps: Chapter = {
       'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
       'Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per 30 cycles with 6 instructions of work between polls.',
-      'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with four ANDs and four ORs.',
+      'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with five ANDs and four ORs.',
     ],
     practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],    check: [
       {
@@ -324,7 +324,7 @@ export const chTraps: Chapter = {
         note: 'The CSR unit you opened holds mtvec and mepc as registers; the trap unit writes mepc and mcause itself at the edge, and the mstatus bits are the interrupt-enable stack.',
         quizzes: [
           { question: 'An illegal instruction sits at address 0x10 and traps. What does mepc hold?', options: ['0x10', '0x14', 'The instruction word', 'The handler\'s address'], answer: 0,
-          why: ['', 'That would skip the instruction. The hardware saves the faulting one, so a handler can fix and retry it.', 'The word goes to mtval for an illegal instruction.', 'That is mtvec\'s BASE.'],
+          why: ['', 'That would skip the instruction. The hardware saves the faulting one, so a handler can fix and retry it.', 'mtval may get the word on an illegal instruction (here it gets 0); mepc never does.', 'That is mtvec\'s BASE.'],
           explain: 'mepc is the address of the instruction that encountered the exception. For ecall, software adds 4 before mret; the hardware never does.' },
           { question: 'A trap is taken with MIE = 1 and MPIE = 0. After it, MIE and MPIE are:', options: ['MIE = 0, MPIE = 1', 'MIE = 1, MPIE = 0', 'MIE = 0, MPIE = 0', 'MIE = 1, MPIE = 1'], answer: 0,
           why: ['', 'Nothing changed, but the rule says interrupts are disabled on entry.', 'MPIE takes the old MIE, which was 1.', 'MIE is cleared on entry.'],
@@ -383,7 +383,7 @@ export const chTraps: Chapter = {
         (MIE → MPIE, MIE = 0). The handler ends with <code>mret</code>, which jumps back to <code>mepc</code> and restores MIE.
         mtvec's low two bits are its MODE: 0 <em>direct</em> sends every trap to the same address, 1 <em>vectored</em> sends interrupt <em>n</em>
         to BASE + 4<em>n</em> (exceptions still to BASE), saving the handler the dispatch on mcause. Here the two bits are wired to 0: direct only.</p>
-        <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a three-line "OS" prints the
+        <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a six-instruction "OS" prints the
         character in a0. Note the handler adds 4 to mepc so that <code>mret</code> returns <em>after</em> the ecall.</p>
         <p>Everything the hardware does on the trap happens at one clock edge: the PC is replaced, mepc and mcause are written, MIE is cleared, and the instruction that trapped is suppressed. No general register is touched, which is why the handler can start with a free hand only after it has saved
         what it will use.</p>
@@ -409,7 +409,7 @@ export const chTraps: Chapter = {
           it came from in mstatus.MPP (2 bits: 0 U, 1 S, 3 M); <code>mret</code> returns to that mode. Hence three ecall causes: 8 from U, 9 from S,
           11 from M. In U, an access to a machine CSR or an <code>mret</code> is an illegal instruction, and PMP registers fence off memory: that is
           what stops a program from taking over the machine. Here MPP is wired to 3 and ecall's cause is always 11.</p>`,
-        pitfall: `<p>Returning without moving mepc. For a fault that has been fixed, returning to the trapping instruction retries it, which is the point; for an ecall it traps again at once. The handler adds 4 because every instruction here is four bytes; with the C extension the handler must look at the instruction's length.</p>`,
+        pitfall: `<p>Returning without moving mepc. For a fault that has been fixed, returning to the trapping instruction retries it, which is the point; for an ecall it traps again at once. The handler adds 4 because ecall is always four bytes, even with the C extension. A handler that skips other instructions (ebreak has a 2-byte form) must look at the instruction's length.</p>`,
       },
       tries: [(st) => { try { return csrq(st, 'rCause') === 11; } catch { return false; } }],
     },
@@ -422,7 +422,7 @@ export const chTraps: Chapter = {
         (the faulting address, for the misaligned load) into memory and skips the instruction.</p>
         <p>The <span data-show="trap">trap unit</span> is a priority chain of multiplexers: interrupts first, then illegal instruction, ebreak, ecall, misaligned
         fetch, load and store. A trapping instruction writes nothing: its register write, memory write and CSR write are all suppressed.</p>
-        <p>What the handler learns is the pair (mcause, mtval): what happened and what it happened to. For an illegal instruction the value is the instruction word, for a misaligned access the address; the handler here only logs them. The same code serves all three faults, since only mcause differs.</p>`,
+        <p>What the handler learns is the pair (mcause, mtval): what happened and what it happened to. For a misaligned access the value is the address. For an illegal instruction the spec allows the instruction word or zero; this CPU writes zero, so the log's word 1 reads 0. The handler here only logs them. The same code serves all three faults, since only mcause differs.</p>`,
       scene: () => cpuScene({ source: sys('faults'), system: true, highlight: ['sys', 'trap'] }),
       tour: {
         beats: [
@@ -468,7 +468,7 @@ export const chTraps: Chapter = {
         <details class="deeper"><summary>Deeper: nested interrupts</summary>
         <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that should itself be interruptible
         (a slow one, under a more urgent device) saves mepc, mcause and mstatus on its stack, then sets MIE again; before returning it clears MIE
-        and restores them. Cores with many interrupt levels (RISC-V's CLIC, Arm's NVIC) do that stacking in hardware.</p></details>
+        and restores them. Arm's NVIC does this stacking and the priority comparison in hardware; RISC-V's CLIC does the priority comparison and preemption, and software still saves mepc and mcause.</p></details>
         <p>The compare-and-interrupt arrangement is the same in every timer: a counter that always runs, a register the software sets to "wake me at this time", and a comparator. Because the handler sets the next compare value relative to the previous one, the ticks do not drift even if some handlers
         run late.</p>
         <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
@@ -486,7 +486,7 @@ export const chTraps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>The timer line is mtip = (mtime ≥ mtimecmp). It is taken when mtip ∧ mie.MTIE ∧ mstatus.MIE, at an instruction boundary. After the handler writes mtimecmp ← mtimecmp + 40, mtip falls until 40 more cycles have passed, so a tick comes every 40 cycles. Each period includes the handler\'s 7 instructions, which the main loop loses: the overhead here is 7/40 = ${Math.round((7 / 40) * 100)} %.</p>`,
+        derive: `<p>The timer line is mtip = (mtime ≥ mtimecmp). It is taken when mtip ∧ mie.MTIE ∧ mstatus.MIE, at an instruction boundary. After the handler writes mtimecmp ← mtimecmp + 40, mtip falls until 40 more cycles have passed, so a tick comes every 40 cycles. Each period includes the trap entry and the handler\'s 7 instructions: 8/40 = ${Math.round((8 / 40) * 100)} %.</p>`,
         pitfall: `<p>Forgetting to move mtimecmp. While mtime ≥ mtimecmp the interrupt stays pending, so <code>mret</code> would take it again immediately and the main program would never run. A level-triggered interrupt must be cleared at its source; this one is cleared by moving the compare value.</p>`,
         real: `<p>RISC-V\'s machine timer is exactly mtime and mtimecmp. Operating systems program it for the scheduler tick (typically 100 to 1000 per second) and, in tickless kernels, for the next event only.</p>`,
       },

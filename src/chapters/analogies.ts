@@ -98,11 +98,11 @@ export const ANALOGIES: Analogy[] = [
   {
     chapter: 'latches', step: 'The flip-flop: act only on the edge', title: 'An airlock', figure: 'airlock',
     body: `<p>The master and slave latches are the two doors of an airlock. While the clock is low the outer door is open and
-      D walks into the chamber; the inner door is shut, so Q keeps its old value. When the clock rises the outer door shuts
-      first, then the inner one opens and Q takes what is in the chamber. The two doors are never open together, so D can never
-      run straight through to Q: Q changes once a cycle, at the edge.</p>`,
+      D walks into the chamber; the inner door is shut, so Q keeps its old value. When the clock rises
+      the outer door shuts and the inner one opens: Q takes what is in the chamber. Q changes once a cycle, at the edge, and D cannot run
+      straight through to Q while the clock is steady.</p>`,
     breaks: `A person leaves the chamber; a value is copied, and the master keeps it. And a value that arrives just as the
-      outer door shuts can stick halfway for a while (the setup and hold window); people do not.`,
+      outer door shuts can stick halfway for a while (the setup and hold window); people do not. And the doors overlap: the inner opens one gate delay before the outer has shut, so a D changing in that moment gets through. That is the hold time.`,
     codex: ['dff', 'edge'],
   },
   {
@@ -185,11 +185,11 @@ export const ANALOGIES: Analogy[] = [
   {
     chapter: 'cache', step: 'Leaks, refresh and sense amplifiers', title: 'Buckets that sink while nobody looks', figure: 'leaky',
     body: `<p>Each stored bit is a bucket with a pinhole: a 1 is a full bucket, and it drains on its own. Nothing is wrong with it;
-      that is what the part is. Reading tips the bucket into a bigger pipe and leaves it empty, so the read must fill it back.
+      that is what the part is. Reading shares the bucket with a much bigger pipe and leaves both near half, whatever it held, so the read must fill it back.
       Refresh is the rounds: visit every bucket in turn and top it up before a full one has sunk so low that nobody can say
       whether it was full. Chapter 35 builds the bit lines and the sense amplifiers, with the numbers.</p>`,
     breaks: `A real cell leaks at a rate that differs from cell to cell and doubles for about every 10 °C, so the rounds are timed by
-      the worst bucket on the hottest day. And the rounds are not free: a request for a row that is being refreshed waits.`,
+      the worst bucket on the hottest day. And the rounds are not free: a refresh closes every bank, and any request, to any row, waits for it.`,
   },
   {
     chapter: 'dram', step: 'The sense amplifier', title: 'A seesaw tipped by a feather', figure: 'seesaw',
@@ -213,9 +213,8 @@ export const ANALOGIES: Analogy[] = [
   {
     chapter: 'flash', step: 'A gate that remembers', title: 'Charge stranded on an island', figure: 'island',
     body: `<p>The floating gate is an island with no bridge: charge put on it has no way back, so it stays for years without
-      power, and its charge decides whether the transistor above conducts at the read voltage.</p>`,
-    breaks: `There is no bridge, but a strong enough field pushes charge across the water anyway (tunnelling): that is how the
-      cell is programmed and erased. Each crossing damages the oxide a little, which is why a flash block wears out.`,
+      power, and its charge decides whether the channel below it conducts at the read voltage.</p>`,
+    breaks: `There is no bridge, but a strong enough field pushes charge across the water anyway (tunnelling): that is how this cell is programmed and erased. Each crossing damages the oxide a little, which is why a flash block wears out.`,
   },
   {
     chapter: 'ooo', step: 'Rename, wait, commit in order', title: 'A kitchen with a pass', figure: 'kitchen',

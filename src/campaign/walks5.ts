@@ -167,7 +167,7 @@ export const WALKS5: Record<string, WalkScript> = {
       text: 'The given division step (482 NANDs, depth 21) shifts the remainder left with rq\'s top bit and subtracts b: if the difference is not negative it is the new remainder and the quotient bit is 1, else the remainder is just shifted and the bit is 0. Its path is most of the period, 31; 1445 NANDs in all.',
       parts: ['step'],
       why: 'The step is the only arithmetic: shift in a bit, subtract, keep the result if it is not negative. Reusing one block for 16 cycles trades time for gates.',
-      whyNot: { text: 'An array of 16 such steps divides in one cycle, but its path is about 613 deep against this unit\'s period of 31, with 16 copies of the 482-NAND step.' },
+      whyNot: { text: 'An array of 16 such steps divides in one cycle, but it is 4464 NANDs on a 613-deep path against this unit\'s period of 31; 16 copies of this fast 482-NAND step would be 7712 NANDs.' },
       ask: {
         question: 'Each step keeps the difference and sets the quotient bit when (remainder shifted in) − b is not negative. With b = 0, what are q and r after the 16 steps?',
         options: ['q = 0xFFFF, r = a', 'q = 0, r = 0', 'q = 0, r = a', 'They stay X: the hardware needs a divide-by-zero check'],
@@ -197,7 +197,7 @@ export const WALKS5: Record<string, WalkScript> = {
       text: 'divide = MD · f3[2]: div, divu, rem and remu are f3 4 to 7. It drives the MD divider\'s start (2400 NANDs: the 1445-NAND unsigned divider with the signs taken off and put back around it). The divider loads on the first cycle and ignores start while busy.',
       parts: ['u18', 'u19'], codex: ['division'],
       why: 'f3[2] already separates the four divide forms (f3 4 to 7) from the multiplies under the same opcode, so one AND on existing signals starts the divider.',
-      whyNot: { text: 'A second opcode would use up an encoding that RISC-V already assigns to the M extension.' },
+      whyNot: { text: 'There is no second opcode to take: all 16 are in use. RISC-V too keeps multiply and divide under one opcode, told apart by funct3.' },
     },
     {
       title: 'Hold',
@@ -449,7 +449,7 @@ export const WALKS5: Record<string, WalkScript> = {
       title: 'Tiny after rounding',
       text: 'UF is tiny and inexact. Tiny means the hidden bit is 0, unless rounding with an unbounded exponent would reach the smallest normal anyway: a second rounding decision, one place further down with lsb tied to 1, ANDed with the guard bit and a 10-bit AND (fraction all 1s).',
       parts: ['u48', 'u50', 'u54', 'u58', 'u59', 'u60', 'u80'],
-      why: 'IEEE tininess is judged after rounding: a result that rounds up to the smallest normal is not tiny. RISC-V specifies this choice.',
+      why: 'IEEE leaves tininess to the implementation, before or after rounding; RISC-V specifies after: a result that with an unbounded exponent would round to the smallest normal is not tiny.',
       whyNot: { text: 'Taking tiny from the hidden bit alone (tininess before rounding) raises UF for a value that rounds up to the smallest normal.' },
     },
     {
@@ -467,7 +467,7 @@ export const WALKS5: Record<string, WalkScript> = {
       text: 'Two float unpacks (63 NANDs each): sign, exponent (a subnormal\'s as 1), the 11-bit significand with its hidden bit, and the classes the special cases need.',
       parts: ['u0', 'u1'], codex: ['ieee754'],
       why: 'Splitting sign, exponent and significand lets alignment work on plain integers. The class flags wait for the special-case mux at the end.',
-      whyNot: { text: 'Adding the 16-bit patterns as integers is right only for equal exponents and signs: the fields have different weights.' },
+      whyNot: { text: 'Adding the 16-bit patterns as integers is right only in corner cases (a +0 operand, or zeros and subnormals of one sign): 0x3C00 + 0x3C00 (1.0 + 1.0) gives 0x7800, which is 32 768. The fields have different weights.' },
     },
     {
       title: 'Subtract is add',
@@ -534,7 +534,7 @@ export const WALKS5: Record<string, WalkScript> = {
     },
     {
       title: 'Special cases',
-      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output. 3732 NANDs, depth 163 (the library\'s unit also gathers the exception flags, 23 NANDs more).',
+      text: 'invalid = a signaling NaN, or ∞ − ∞ (both infinite and subtracting). Any NaN or invalid gives the canonical NaN 0x7E00; else an infinite operand gives ∞ with its sign; else the rounded sum. Two 16-bit muxes on the output. 3732 NANDs, depth 163 (the exception flags the library\'s unit also gathers take 23 NANDs more).',
       parts: ['u41', 'u42', 'u43', 'u44', 'u45', 'u49', 'u51'],
       why: 'NaN and ∞ results come from the class flags, not from arithmetic, so they override the datapath at the output.',
       whyNot: { text: 'Handling special cases before the datapath saves nothing: the datapath runs anyway. A late override is two 16-bit muxes.' },

@@ -78,9 +78,9 @@ describe('chapter 31: a warp\'s program port', () => {
     const src = WARP_PROGRAMS.find((x) => x.id === 'saxpy64')!.source(4).split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean);
     const i = src.findIndex((l) => /^lw\s+a1, 256\(t4\)/.test(l));
     expect(src[i + 1]).toMatch(/^slli\s+a0, t5, 1/);
-    expect(src[i + 3]).toMatch(/^add\s+a0, a0, a1/); // two instructions later: issued in cycle 20, not 19
+    expect(src[i + 3]).toMatch(/^add\s+a0, a0, a1/); // two instructions later: issued in cycle 21, not 19 (slli 19, add on x[i] 20, add a0 21)
     expect(quizText(chWarps, 'A scoreboard')).toContain('If add a0, a0, a1 came right after the second load');
-    expect(quizText(chWarps, 'A scoreboard')).toContain('that add issues in cycle 20');
+    expect(quizText(chWarps, 'A scoreboard')).toContain('that add issues in cycle 21');
   });
 });
 

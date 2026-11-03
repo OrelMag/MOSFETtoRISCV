@@ -58,7 +58,7 @@ export const chMulDiv: Chapter = {
       'Compiled for RV32IM (chapter 15\'s compiler), a program with variable <code>*</code>, <code>//</code> or <code>%</code> loses its routines: gcd falls from 2409 cycles to 225 on the pipeline for 28 % more gates; a program without them gains nothing.',
       'A partial product is <code>a AND b<sub>i</sub></code>. The array adds the rows with ripple adders: n² cells, and a depth that grows with n (70 NAND delays at 8×8, about 310 at 32×32).',
       'A row of unconnected full adders turns three words into two (x + y + z = s + 2c) in one full-adder delay. A Wallace tree of them leaves a single carry-propagate adder: a 32×32 tree multiplier is about as deep as one 32-bit ripple adder.',
-      'Signed operands: Baugh–Wooley inverts the partial products that pair a sign bit with a normal bit and adds one constant. Radix-4 Booth halves the rows, but at 8 bits it is larger and deeper (1062 NANDs and 47 delays, against 972 and 40); it wins from 32 bits (12 658 against 13 293).',
+      'Signed operands: Baugh–Wooley inverts the partial products that pair a sign bit with a normal bit and adds one constant. Radix-4 Booth halves the rows, but at 8 bits it is larger and deeper (1062 NANDs and 47 delays, against 972 and 40); it is smaller from 24 bits (7 436 against 7 706; 12 658 against 13 293 at 32), though still deeper.',
       'Division is serial: each quotient bit needs the previous remainder. Non-restoring makes every step "add ±d"; SRT keeps the remainder in carry-save form and picks each digit from its top bits (14 NAND delays at any width). Radix 4 makes two bits a step: 19 cycles of 44 delays for 32 bits, against 34 of 31.',
       'On the single-cycle CPU a divide takes 34 cycles: one in twenty instructions gives CPI 2.65. In the pipeline the multiply ends in M, so a dependent instruction stalls once, exactly as after a load.',
     ],
@@ -87,7 +87,7 @@ export const chMulDiv: Chapter = {
           'It cannot: each step adds the full-width remainder first',
         ],
         answer: 0,
-        explain: '+1 is correct anywhere in [0, 2d) and −1 anywhere in [−2d, 0). An estimate that is low by up to one unit still lands in a region whose digit is allowed, so no full-width carry is needed.',
+        explain: '+1 is correct anywhere in [0, 2d) and −1 anywhere in [−2d, 0). An estimate that is low by just under 1 still lands in a region whose digit is allowed, so no full-width carry is needed.',
         why: ['', 'The low bits carry real information. They stop mattering for the choice only because a slightly wrong digit is repaired by later ones.', 'Normalization fixes the thresholds, but with only the digits 0 and 1 the choice would still need the exact sign of the full remainder.', 'That full-width carry chain is what SRT removes: the remainder stays as a sum word and a carry word.'],
       },
       {
@@ -265,7 +265,7 @@ export const chMulDiv: Chapter = {
         <p>This version is the plain recursive one: <span data-show="lo hi">count each half</span>, add the two counts with a small ripple adder. The count gains a
         bit per level: ${nd(popcount(8))} NANDs and ${dp(popcount(8))} gate delays for 8 bits, ${nd(popcount(32))} NANDs and ${dp(popcount(32))} delays for 32.</p>
         <p>The link to multiplication: a column of partial products of the same weight is exactly this problem, counting ones. A multiplier reduces all columns at once with full adders; this circuit
-        counts one column of n bits. Doing it recursively costs a carry-propagate adder at every level, which is why the carry-save version of the quiz is shallower.</p>
+        counts one column of n bits. Doing it recursively costs a carry-propagate adder at every level, but small ones: the whole 32-bit circuit is ${dp(popcount(32))} delays, less than the carry-save version of the quiz, whose levels alone are 48. Carry-save pays when many wide words are added, not for one column.</p>
         <div class="try">Open <span data-show="add">the top adder</span>: it adds two 3-bit counts of the two nibbles.</div>`,
       scene: () => ({ root: popcount(8), inputs: { x: 0xb7 } }),
       tour: {
@@ -283,7 +283,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>Count(n) = Count(n/2) + Count(n/2), each count of width ⌈log₂(n/2 + 1)⌉ bits, plus one adder of that width. The adder widths grow by one per level, so total adder work is Σ over levels of
           (n / 2<sup>k</sup>)·(k + 1) bit-adds, which is O(n). The depth, ${dp(popcount(8))} delays at 8 bits and ${dp(popcount(32))} at 32, is the sum of the ripple delays down the levels.</p>`,
-        pitfall: `<p>Sizing the output to n − 1 bits, or n. The count of n ones is n itself, so an 8-bit input needs the value 8 (four bits), not 3. A count field one bit short wraps all-ones to 0, which only shows on the single input 255.</p>`,
+        pitfall: `<p>Sizing the output to log₂ n bits. The count of n ones is n itself, so an 8-bit input needs the value 8 (four bits), not 3. A count field one bit short wraps all-ones to 0, which only shows on the single input 255.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'The 32-bit popcount is 35 gate delays deep. A carry-save version compresses all 32 bits with full adders first. Roughly how deep would that tree be before the final adder?',
@@ -326,13 +326,13 @@ export const chMulDiv: Chapter = {
           Each level is one full adder, ${dp(csa(4))} NAND delays, whatever the width.</p>`,
         real: `<p>Dadda's tree schedules the same cells later and uses fewer half adders. Industrial multipliers use 4:2 compressors (two full adders, but a path of three XORs instead of four) and lay the tree out with the
           wiring in mind, because the irregular wiring between levels, not the gates, tends to dominate area.</p>`,
-        pitfall: `<p>Assuming the tree is smaller than the array. The cell count is about the same; what shrinks is the depth. At 8 bits the tree is ${nd(treeMul(8))} NANDs against ${nd(arrayMul(8))}, but ${dp(treeMul(8))} delays against ${dp(arrayMul(8))}.</p>`,
+        pitfall: `<p>Assuming the tree is smaller than the array. The tree is somewhat larger; what shrinks is the depth. At 8 bits the tree is ${nd(treeMul(8))} NANDs against ${nd(arrayMul(8))}, but ${dp(treeMul(8))} delays against ${dp(arrayMul(8))}.</p>`,
       },
     },
     {
       title: 'Cost versus speed',
       body: `
-        <p>Measured from the netlists: the tree is about as large as the array, but its depth grows with log n, not n.
+        <p>Measured from the netlists: the tree is somewhat larger than the array (${Math.round((nd(treeMul(8)) / nd(arrayMul(8)) - 1) * 100)} % at 8 bits, ${Math.round((nd(treeMul(32)) / nd(arrayMul(32)) - 1) * 100)} % at 32), but its depth grows with log n, not n.
         A 32×32 tree multiplier is about as deep as a single 32-bit ripple adder.</p>
         <p>At 8 bits the numbers are already clear: the array is ${nd(arrayMul(8))} NANDs and ${dp(arrayMul(8))} delays, the tree ${nd(treeMul(8))} and ${dp(treeMul(8))}. A modest ${Math.round((nd(treeMul(8)) / nd(arrayMul(8)) - 1) * 100)} % more gates
         buys a ${Math.round((1 - dp(treeMul(8)) / dp(arrayMul(8))) * 100)} % shorter path, and the gap widens with every bit. The table below measures the larger sizes.</p>`,
@@ -351,7 +351,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>Two's complement gives the top bit a <em>negative</em> weight, so partial products that pair one sign bit with a normal bit are negative.
         Baugh and Wooley's trick: <strong>invert those bits</strong> (NAND instead of AND) and <span data-show="kbw">add the constant</span> 2<sup>n</sup> + 2<sup>2n−1</sup>.
-        The tree, the adder and the cost do not change.</p>
+        The tree and the adder do not change, and neither does the delay.</p>
         <p>Why it works: as a signed number, a = −a<sub>n−1</sub>2<sup>n−1</sup> + Σ a<sub>i</sub>2<sup>i</sup>. A partial product pairing a<sub>n−1</sub> with b<sub>j</sub> has weight −2<sup>n−1+j</sup>, a negative.
         Replacing a negative term −x by (1 − x) − 1 = ¬x − 1 turns it into an inverted bit minus a constant, and all those constants add up to one correction word.
         The cost is a handful of NANDs for ANDs and a constant row: ${nd(treeMul(8, true))} against ${nd(treeMul(8))} NANDs here, the same ${dp(treeMul(8, true))} delays.</p>
@@ -363,8 +363,8 @@ export const chMulDiv: Chapter = {
             say: '<p>a = 0xF9 = −7, b = 3. The 16-bit product is {v:p} = {b:p}, which as a signed number is −21. The first two rows are ordinary ANDs of a with b0 and b1.</p>' },
           { title: 'The sign row', show: ['pp7', 'kbw'], expect: { p: 65515 },
             say: '<p>Row 7 pairs b7 with every bit of a, and bit 7 of a (the sign) with every bit of b: those partial products are inverted, and the constant row <code>kbw</code> corrects for all of them at once.</p>' },
-          { title: 'Same bits, positive', set: { a: 7 }, expect: { p: 21 },
-            say: '<p>With a = +7 the product is {v:p}. The operand bits differ only in the sign; the extra logic is the same.</p>' },
+          { title: 'Same size, positive', set: { a: 7 }, expect: { p: 21 },
+            say: '<p>With a = +7 the product is {v:p}. The value differs only in sign, though in two\'s complement most bits change; the extra logic is the same.</p>' },
           { title: 'Two negatives', set: { a: 128, b: 128 }, expect: { p: 16384 },
             say: '<p>−128 × −128 = +16384 = {v:p}, the largest product of two 8-bit signed numbers. Both inputs are the most negative value, and the sign-bit terms of rows 7 and the correction constant cancel to leave a positive result.</p>' },
         ],
@@ -372,7 +372,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>For n = 8 the negative terms are −a<sub>7</sub>b<sub>j</sub>2<sup>7+j</sup> (j &lt; 7), −a<sub>i</sub>b<sub>7</sub>2<sup>7+i</sup> (i &lt; 7); the product a<sub>7</sub>b<sub>7</sub>2<sup>14</sup> is positive. Writing −t·2<sup>k</sup> = (¬t)·2<sup>k</sup> − 2<sup>k</sup>
           each exponent k = 7 … 13 occurs twice, so the corrections total 2(2<sup>14</sup> − 2<sup>7</sup>) = 2<sup>15</sup> − 2<sup>8</sup>, and adding the negative of that, mod 2<sup>16</sup>, is the constant 2<sup>8</sup> + 2<sup>15</sup>: bits 8 and 15 of the correction row.</p>`,
-        pitfall: `<p>Treating the product as unsigned with a sign-extended input. That gets the low half right and the high half wrong, which is why <code>mulh</code> (the high half) is a different instruction from <code>mul</code>.</p>`,
+        pitfall: `<p>Multiplying the n-bit patterns as unsigned, without extending them. That gets the low half right and the high half wrong, which is why <code>mulh</code> (the high half) is a different instruction from <code>mul</code>.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'RISC-V has mulh (signed × signed), mulhsu (signed × unsigned) and mulhu (unsigned × unsigned). How can one signed 33×33 multiplier do all three?',
@@ -427,7 +427,7 @@ export const chMulDiv: Chapter = {
       widget: boothWidget,
       more: {
         derive: `<p>A run of ones from bit i to bit j is worth 2<sup>j+1</sup> − 2<sup>i</sup>, one addition and one subtraction instead of j − i + 1 additions. Radix-4 Booth finds the run ends two bits at a time: a digit is
-          non-zero only where a group straddles the start (+) or end (−) of a run, or where the pair inside a group differs.</p>`,
+          non-zero only where a group straddles the top (+) or bottom (−) of a run, or where the pair inside a group differs.</p>`,
         pitfall: `<p>Assuming Booth needs fewer additions on every input. Its row count is fixed at n/2 whatever b is; the saving is a guaranteed halving of rows, not skipping of zero rows. A multiplier of alternating bits (0x55) recodes to all non-zero digits.</p>`,
       },
     },
@@ -439,8 +439,7 @@ export const chMulDiv: Chapter = {
         across the full width, each row's sign bit is inverted and one constant row corrects for all of them. Then the same
         <span data-show="tree.rd">3:2 tree</span> and <span data-show="cpa">fast adder</span>.</p>
         <p>Measured honestly: at 8 bits the Booth version is ${sp(nd(boothMul(8)))} NANDs and ${dp(boothMul(8))} delays deep, against ${nd(treeMul(8, true))} and ${dp(treeMul(8, true))} for Baugh–Wooley. Each Booth bit
-        is a select and an XOR instead of one AND, and the encoders sit in front of everything. Halving the rows only pays at 32 bits
-        (${sp(nd(boothMul(32)))} NANDs against ${sp(nd(treeMul(32, true)))}), and more at 64, which is where real designs use it: fewer rows also means less wiring and power.</p>
+        is a select and an XOR instead of one AND, and the encoders sit in front of everything. Halving the rows pays in NANDs somewhere between 16 and 24 bits (${sp(nd(boothMul(24)))} against ${sp(nd(treeMul(24, true)))} at 24, ${sp(nd(boothMul(32)))} against ${sp(nd(treeMul(32, true)))} at 32), and more at 64, which is where real designs use it: fewer rows also means less wiring and power. It stays about 7 delays deeper at every width built here, because of the encoders in front.</p>
         <div class="try">Open a row and a <code>BIT</code> cell. Then set b = 0x80 (−128): one digit of −2, the others 0.</div>`,
       scene: () => ({ root: boothMul(8), inputs: { a: 0xf9, b: 100 } }),
       tour: {
@@ -515,7 +514,7 @@ export const chMulDiv: Chapter = {
         throughput at a ${period(pipeMul(16))}-delay clock. Which is best depends on whether products depend on each other.</p>`,
       widget: mulStyles,
       more: {
-        pitfall: `<p>Comparing periods alone. The iterative unit has the shortest clock and by far the longest time per product; its 18-cycle latency is not hidden by a short cycle. Compare latency and throughput separately, and compare area as well.</p>`,
+        pitfall: `<p>Comparing periods alone. The pipeline has the shortest clock, the iterative unit one nearly as short and by far the longest time per product; its 18-cycle latency is not hidden by a short cycle. Compare latency and throughput separately, and compare area as well.</p>`,
         real: `<p>Production cores pipeline the multiplier three or four stages deep so that it issues one multiply per cycle, and place registers inside the Booth tree where a cut costs fewest flip-flops. Small cores that rarely multiply use an iterative unit or none at all.</p>`,
       },
       challenge: {
@@ -549,7 +548,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>If 0 ≤ r &lt; d and the next bit is b, then 0 ≤ r2 = 2r + b ≤ 2d − 1. The restoring rule keeps rout = r2 − d if that is non-negative and r2 otherwise; in both cases 0 ≤ rout &lt; d, so the invariant carries to the next step.
           After n steps the dividend a = q·d + r with the n quotient bits emitted most significant first.</p>`,
-        pitfall: `<p>Starting a division with r ≥ d. Then r2 can be 2d or more, one subtraction no longer settles the digit and the quotient comes out wrong. The array divider starts every step with r = 0, which is why its quotient has n bits for an n-bit dividend and a divisor of any size.</p>`,
+        pitfall: `<p>Starting a division with r ≥ d. Then r2 can be 2d or more, one subtraction no longer settles the digit and the quotient comes out wrong. The array divider starts every division with r = 0, which is why its quotient has n bits for an n-bit dividend and a divisor of any size.</p>`,
       },
       tries: [(st) => st.getInput('d') === 4 && st.value('q') === 0],
     },
@@ -617,7 +616,7 @@ export const chMulDiv: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Time per division at n bits is (n + 2) clock periods: 10 · ${period(seqDivider(8))} = ${10 * period(seqDivider(8))} NAND delays at 8 bits, with ${period(seqDivider(8))} the period from static timing (clk-to-q ${CLK_TO_Q}, the 8-bit step's ${dp(divStep(8))}, setup ${SETUP}). The array divider needs ${dp(arrayDiv(8))} for the same division in one go,
+        derive: `<p>Time per division at n bits is (n + 2) clock periods: 10 · ${period(seqDivider(8))} = ${10 * period(seqDivider(8))} NAND delays at 8 bits, with ${period(seqDivider(8))} the period from static timing (clk-to-q ${CLK_TO_Q}, the 8-bit step's ${dp(divStep(8))}, ${period(seqDivider(8)) - CLK_TO_Q - dp(divStep(8)) - SETUP} through the load multiplexer and the register's input, setup ${SETUP}). The array divider needs ${dp(arrayDiv(8))} for the same division in one go,
           so the sequential unit is slower and smaller: the usual trade of space for time.</p>`,
         pitfall: `<p>Reading the result at the wrong time. q and r are final only while done = 1. With start held high, as in this scene, the unit reloads on the next edge, and the result is gone one cycle after it appeared.</p>`,
       },
@@ -653,7 +652,7 @@ export const chMulDiv: Chapter = {
           { title: 'The correction', show: ['st3', 'fix'], expect: { q: 4, r: 1 },
             say: '<p>The last step leaves a remainder of −2. One more addition of d = 3 brings it to 1 (the fix block).</p>' },
           { title: 'An exact quotient', set: { a: 12 }, show: ['st3', 'fix'], expect: { q: 4, r: 0 },
-            say: '<p>12 / 3: the last remainder is exactly 0, so no correction is needed. r = {v:r}.</p>' },
+            say: '<p>12 / 3: the last step leaves −3, and the fix block adds 3 back: r = {v:r}. An even quotient always ends on a negative remainder.</p>' },
           { title: 'A larger remainder', set: { a: 14 }, show: ['fix'], expect: { q: 4, r: 2 },
             say: '<p>14 = 4 · 3 + 2: q = {v:q}, r = {v:r}.</p>' },
         ],
@@ -723,8 +722,8 @@ export const chMulDiv: Chapter = {
       title: 'Choosing the digit',
       body: `
         <p>The digit is chosen from the shifted remainder 2w against fixed thresholds (normalization put d in [½, 1)): +1 if 2w ≥ 0, 0 if −½ ≤ 2w < 0, −1 below.
-        Only the top four bits of the sum and carry words are added, an estimate in steps of ½, so it can be low by up to one step. That is safe:
-        +1 is correct anywhere in [0, 2d), and −1 anywhere in [−2d, 0); the regions overlap around zero and the 0 digit covers the gap.</p>
+        Only the top four bits of the sum and carry words are added, an estimate in steps of ½, so it can be low by almost a whole 1 (just under two steps: each word loses up to just under ½). That is safe:
+        +1 is correct anywhere in [0, 2d), −1 anywhere in [−2d, 0), and 0 anywhere in [−d, d), which overlaps both.</p>
         <p>The circuit does not even form the 4-bit sum. It needs only <span data-show="sign">its sign</span> (<span data-show="cy">a carry into bit 3</span>, looked ahead from the bits below)
         and whether it is −1, which happens exactly when <span data-show="m1">every bit pair differs</span>. ${dp(SRT_SELECT)} NAND delays and ${nd(SRT_SELECT)} NANDs, at any operand width.</p>`,
       scene: () => ({ root: SRT_SELECT, inputs: { s: 0b1110, c: 0b0001 } }),
@@ -741,9 +740,9 @@ export const chMulDiv: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Add the top four bits of s and c as a 4-bit two's complement number e, in steps of ½. The dropped low bits make e at most one step below the true 2w: e ≤ 2w ≤ e + ½. If e ≥ 0 then 2w ≥ 0, and digit +1 is allowed for every 2w in [0, 2d).
-          If e is two steps or more below zero, then 2w ≤ e + ½ &lt; 0, and −1 is allowed for every 2w in [−2d, 0). The one value left, e = −½ (1111), puts 2w between −½ and 0, where digit 0 keeps the new remainder within d because d ≥ ½.</p>`,
-        pitfall: `<p>Choosing from the exact sign of s + c. That needs a full carry chain, which is the delay SRT exists to avoid. The truncated estimate is wrong by up to one unit on purpose, and the overlapping digit regions are what absorb it.</p>`,
+        derive: `<p>Add the top four bits of s and c as a 4-bit two's complement number e, in steps of ½. The dropped low bits make e at most just under 1 below the true 2w: e ≤ 2w &lt; e + 1. If e ≥ 0 then 2w ≥ 0, and digit +1 is allowed for every 2w in [0, 2d).
+          If e is −1 or lower, then 2w &lt; e + 1 ≤ 0, and −1 is allowed for every 2w in [−2d, 0). The one value left, e = −½ (1111), puts 2w in [−½, ½), where digit 0 keeps the new remainder within d because d ≥ ½.</p>`,
+        pitfall: `<p>Choosing from the exact sign of s + c. That needs a full carry chain, which is the delay SRT exists to avoid. The truncated estimate is wrong by just under 1 on purpose, and the overlapping digit regions are what absorb it.</p>`,
         numbers: `<table class="mini"><tr><th>digit select</th><th>NANDs</th><th>delays</th></tr><tr><td>radix 2</td><td>${nd(SRT_SELECT)}</td><td>${dp(SRT_SELECT)}</td></tr></table>`,
       },
       challenge: {
@@ -969,7 +968,7 @@ export const chMulDiv: Chapter = {
         ],
       },
       more: {
-        derive: `<p>A dependent multiply costs one cycle, like a load, because the product is complete only at the end of M while the consumer needs it at the start of E. A dependent divide costs the whole divider time (about 19 cycles) because the consumer is held in D until the result leaves E. The hazard program's 17 instructions take 98 cycles: of the 81 cycles beyond one per instruction, the four divides account for most.</p>`,
+        derive: `<p>A dependent multiply costs one cycle, like a load, because the product is complete only at the end of M while the consumer needs it at the start of E. A divide costs the whole divider time (about 19 cycles) whatever follows it, because everything behind it is held until the result leaves E. The hazard program's 17 instructions take 98 cycles: of the 81 cycles beyond one per instruction, the four divides account for most.</p>`,
         pitfall: `<p>Forwarding a multiply from M. The product is complete only after the 64-bit addition in M, at the end of the stage; the forwarding path starts from the next stage (W). Wire it from M and the clock includes the whole adder after the register.</p>`,
       },
       challenge: {
@@ -985,7 +984,7 @@ export const chMulDiv: Chapter = {
       body: `
         <p>Chapter 15's compiler can target this instruction set too. Compile for <em>RV32IM</em> (the switch in the Python panel, on the pipeline of chapter 17) and the routines disappear: <code>*</code> is one <code>mul</code>, <code>//</code> and <code>%</code>
         a <code>div</code> or <code>rem</code>. The pipeline gains this chapter's multiplier and divider: ${fmt(M_COST.withM - M_COST.base)} NANDs more
-        (${fmt(M_COST.base)} → ${fmt(M_COST.withM)}, +${(100 * (M_COST.withM - M_COST.base) / M_COST.base).toFixed(1)} %), counted from the two designs.</p>
+        (${fmt(M_COST.base)} → ${fmt(M_COST.withM)}, +${(100 * (M_COST.withM - M_COST.base) / M_COST.base).toFixed(1)} %, with this panel's 256-word program ROM and 64-word data memory; the same ${fmt(M_COST.withM - M_COST.base)} NANDs were +45 % on the smaller memories of the last step), counted from the two designs.</p>
         <p>Python's rounding needs care. RISC-V's <code>div</code> truncates toward zero, Python's <code>//</code> floors: for −7 and 2 they give −3 and −4. After <code>rem</code> the compiler
         tests three things, remainder ≠ 0, divisor ≠ 0 and the operands' signs differ, and only then lowers the quotient by one (or adds the divisor to a remainder). The cases it
         leaves to the hardware are exactly this subset's: <code>x // 0</code> is −1 and <code>x % 0</code> is x, as RISC-V defines them. Random programs interpreted and compiled both ways
@@ -997,7 +996,7 @@ export const chMulDiv: Chapter = {
       more: {
         derive: `<p>The divider is the radix-4 SRT unit above: ${GCD_M.divide / 6 + 1} cycles a divide, one per Execute stay. Speed-up of RV32IM on the pipeline: ${SPEEDUPS.map((r) => `${r.id} ${r.x.toFixed(1)}×`).join(', ')};
           a multiply by a constant such as 10 or 7 was already shifts and adds, so only variable operands change.</p>`,
-        pitfall: `<p>The floor fix is not free: a <code>%</code> or <code>//</code> by a variable is <code>rem</code>, three tests and the <code>div</code>, ${DIV_LINE} instructions where C needs one. A language whose division truncates (C, Java, Rust) compiles to the bare pair;
+        pitfall: `<p>The floor fix is not free: a <code>//</code> by a variable is <code>rem</code>, three tests and the <code>div</code>, and a <code>%</code> the <code>rem</code> and its sign tests: ${DIV_LINE} instructions either way where C needs one. A language whose division truncates (C, Java, Rust) compiles to the bare pair;
           Python pays for its mathematically nicer rounding on negative operands.</p>`,
         real: `<p>Compilers for real RV32IM do the same, and hardware often fuses an adjacent <code>div</code> / <code>rem</code> on the same operands into one divide. Many small cores omit M, as the base ISA allows, and ship the routines in a library (libgcc's <code>__divsi3</code>).</p>`,
       },

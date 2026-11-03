@@ -119,7 +119,7 @@ export const chAppendix6502: Chapter = {
         <p>The price is power. While the output is 0, current flows from VDD through the load to GND, all the time,
         computing or not: a whole NMOS chip dissipated a few hundred milliwatts. Designers favoured NOR, whose
         pull-downs are in parallel; a NAND's series pull-downs must each be wider to keep the ratio.</p>
-        <p>Why this was the winning trade in 1975: a CMOS gate needs a p-type device for every n-type one, and p-channel transistors of the time were roughly half as fast per area and needed their own wells.
+        <p>Why this was the winning trade in 1975: a CMOS gate needs a p-type device for every n-type one, and p-channel transistors of the time were roughly half as fast per area, and one type had to sit in a well of its own.
         Giving the pull-up network up altogether made the die smaller, the process shorter (fewer masks) and the chip cheaper, and a logic family with only one transistor type could be laid out densely by hand.
         What it cost was static power and an output that never quite reaches 0, as the derivation shows.</p>
         <div class="try">Set both inputs to 0 and open the load (<code>ld</code>): the depletion transistor is drawn
@@ -234,8 +234,7 @@ ${PHASES}
       },
       more: {
         derive: `<p>Each bit of the bus costs, per source, two series pull-downs (enable and bit), and per destination one pass transistor: 2s + d transistors for s sources and d destinations. A conducting source sets the line to
-          0, a non-conducting source leaves it; the line after φ1 is therefore the AND of the enabled sources' bits, and with no source enabled it stays at its precharge, 1. An AND is also an OR of the complements, which is how the
-          6502's datapath builds both from the same wires.</p>`,
+          0, a non-conducting source leaves it; the line after φ1 is therefore the AND of the enabled sources' bits, and with no source enabled it stays at its precharge, 1. Read inverted, the same line is the OR of the complements. The ALU's AND and OR do not use this: they have gates of their own.</p>`,
         real: `<p>Precharged, discharge-only lines are the same idea as dynamic logic, domino logic and the Manchester carry chain, and as DRAM's bit lines (chapter 35). Wherever a wire is long, the line's capacitance is large
           and a weak driver can only discharge it fast: precharge turns that into the fast path every cycle. A modern CPU has precharged structures in its register files' read ports, cache bit lines and
           wide gates; what has gone is the global bus built that way.</p>`,
@@ -282,7 +281,7 @@ ${PHASES}
           ( LDA abs,X ) spends one cycle adding X to the low address byte and, if it carries, a further cycle fixing the high byte. Transistors per register bit: ${LEDGER.bit6502}, against about ${LEDGER.bitRf} for the RV32I's. For
           a register that is ${8 * LEDGER.bit6502} against ${32 * LEDGER.bitRf} transistors: ${Math.round((32 * LEDGER.bitRf) / (8 * LEDGER.bit6502))} times, for four times the width.</p>`,
         real: `<p>The decimal corrector is a small cell, +6 on a nibble, that let a 1975 chip do BCD arithmetic for cash registers, scales and accounting machines without library code. It is also the part of the 6502 whose flags were
-          longest wrong in emulators: the N, V and Z flags after a decimal add are those of the binary result on the NMOS chip. The 65C02 fixed that.</p>`,
+          longest wrong in emulators: after a decimal add the NMOS chip's Z is that of the binary sum, and its N and V those of a half-corrected sum (low nibble adjusted, high nibble not), so none of the three describes the decimal result. The 65C02 fixed that.</p>`,
         pitfall: `<p>Counting the programmer's registers (A, X, Y, S, P, PC) as the machine's state. Under them sit the latches that hold values in flight: the ALU's input latches AI and BI, its output ADD, the data latch DL, the output
           register DOR, the instruction register, the address registers. They are why a block diagram of the 6502 looks so much more crowded than its programmer's model.</p>`,
         numbers: `<table class="mini"><tr><th></th><th>6502</th><th>RV32I (ours)</th></tr>
@@ -311,8 +310,8 @@ ${PHASES}
         circuit for it, because in NMOS a NOR plane is a grid of transistors where each crossing is a transistor or a gap, and the table is simply the pattern of crossings. The cost is area proportional to rows times
         literals, which is why the real chip's designers spent so much effort sharing rows.</p>`,
       more: {
-        derive: `<p>Instruction timing from the T states, for LDA #imm. Cycle 1: fetch the opcode (this is T1 of whatever ran before, whose rows finish the previous instruction). Cycle 2: IR now holds LDA #; fetch the operand byte into DL (T0 of
-          this instruction). Cycle 3, which is the next instruction's T1: the rows for LDA move DL to A while the next opcode is fetched. The instruction takes 2 cycles because its last step shares a cycle with the next fetch.
+        derive: `<p>Instruction timing from the T states, for LDA #imm. Cycle 1: fetch the opcode (this is T1 of whatever ran before, whose rows finish the previous instruction). Cycle 2: IR now holds LDA #; fetch the operand byte into DL (T2 of
+          this instruction; the real chip calls this cycle T0). Cycle 3, which is the next instruction's T1: the rows for LDA move DL to A while the next opcode is fetched. The instruction takes 2 cycles because its last step shares a cycle with the next fetch.
           The PLA's 245 rows (about 130 on the real chip) are the minimized form of: for each control signal, the set of (opcode, T) pairs where it must be 1, with the 105 undocumented opcodes free to fall wherever they merge rows.</p>`,
         real: `<p>The real PLA is the part of the chip that was reverse-engineered first from photographs, and then completely in 2010 by the Visual6502 team, who photographed the die, traced the layers into a netlist
           and simulated it. The PLA's rows are visible to the eye on the die, which is why the behaviour of the undocumented opcodes could be explained rather than just catalogued.</p>`,
@@ -365,7 +364,7 @@ ${PHASES}
         <p>The panel keeps a reference model of the 6502 in lock-step and compares <strong>every bus cycle</strong>:
         <span data-show="pin:a pin:d pin:rw pin:sync">address, data, R/W and SYNC</span> (high while an opcode is
         fetched). The pin trace is what a logic analyser on the real chip would show.</p>
-        <div class="try">Step through <code>LDA msg,X</code>: three operand fetches, then the read, and the next
+        <div class="try">Step through <code>LDA msg,X</code>: the opcode and two operand fetches, then the read, and the next
         opcode fetch is where A changes. Try the <code>irq</code> program and press <b>IRQ</b>.</div>
         <p>About ${k(LEDGER.m6502)} transistors switch in an event-driven simulation: thousands of cycles a second, where the
         silicon did a million.</p>

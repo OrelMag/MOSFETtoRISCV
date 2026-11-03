@@ -163,7 +163,7 @@ export const chCache: Chapter = {
           <tr><td>Enable flip-flop (register file)</td><td>${ff}</td><td>${ff * 1024}</td></tr>
           <tr><td>6T SRAM cell</td><td>${cell6}</td><td>${cell6 * 1024}</td></tr>
           <tr><td>1T1C DRAM cell</td><td>${cell1}</td><td>${cell1 * 1024}</td></tr></table>`,
-        real: `<p>Last-level and L1 caches of production cores are 6T arrays. Register files and low-voltage arrays often use an 8T cell: two more transistors form a
+        real: `<p>Most last-level and L1 caches of production cores are 6T arrays (some L3s are eDRAM). Register files and low-voltage arrays often use an 8T cell: two more transistors form a
           separate read port, so a read cannot disturb the stored bit and the pull-down need not win a divider contest, at the price of area. Sense
           amplifiers fire on a difference of tens of millivolts rather than waiting for a full swing, which is most of the speed of a real array.</p>`,
         pitfall: `<p>Raising the word line while precharge is still on. The precharge devices hold both bit lines high, not the cell, so the read sees nothing of it. The
@@ -276,7 +276,7 @@ export const chCache: Chapter = {
           { title: 'Write a 1', set: { bl: 1 }, expect: { q: 1 },
             say: '<p>bl = 1 charges the capacitor again: q = {v:q}. The charge on it is the bit.</p>' },
           { title: 'Isolate', set: { wl: 0 }, expect: { q: 1 },
-            say: '<p>The word line falls. The transistor is off and the capacitor holds q = {v:q}, with nothing driving it. In silicon this charge fades within tens of milliseconds; here the simulator holds it until the next write.</p>' },
+            say: '<p>The word line falls. The transistor is off and the capacitor holds q = {v:q}, with nothing driving it. In silicon this charge fades: the weakest cells within tens of milliseconds, which is why every row is refreshed each 64 ms, most far more slowly; here the simulator holds it until the next write.</p>' },
           { title: 'The bit line moves', set: { bl: 0 }, expect: { q: 1 },
             say: '<p>bl swings to {v:bl} and q does not follow: the cell is isolated. This is how thousands of cells share one bit line, with only the selected row connected.</p>' },
           { title: 'Open again', set: { wl: 1 }, expect: { q: 0 },
@@ -414,8 +414,7 @@ export const chCache: Chapter = {
         is the low bits above the offset: consecutive lines then land in consecutive places, and a sweep through memory uses the whole cache before it wraps. The price of
         simplicity is that one address has exactly one place to go. Two addresses a cache-size apart (here 64 bytes) share a line and evict each other, whatever room the rest
         of the cache has.</p>
-        <p>Overhead: this memory has ${split(64, 16, 1, 8).tag}-bit tags and a valid bit on each of 4 lines, ${pct(3 / 128)} of the 128 data bits in each line. Real caches pay about the
-        same fraction or less: the tag grows with the address, the line grows with it too.</p>
+        <p>Overhead: this memory has ${split(64, 16, 1, 8).tag}-bit tags and a valid bit on each of 4 lines, ${pct(3 / 128)} of the 128 data bits in each line. Real caches pay more, about 6 to 8 % with their valid and dirty bits: their addresses are far longer than this memory's 8 bits, and their lines only a few times longer.</p>
         <div class="try">Address 0x24 is a load (read enable <code>re</code> = 1) and misses. Pulse the clock 8 times and watch the counter, the line fill and hit rise.</div>`,
       scene: () => ({ root: cachedMemory(6), inputs: { addr: 0x24, re: 1, we: 0, wd: 0, clk: 0 }, autoClock: false }),
       tour: {
@@ -440,7 +439,7 @@ export const chCache: Chapter = {
           ${[[32768, 64, 8], [32768, 64, 1], [1048576, 64, 16]].map(([s, l, w]) => { const x = split(s, l, w, 48); return `<tr><td>${s / 1024} KB, ${l} B lines, ${w === 1 ? 'direct-mapped' : w + '-way'}</td><td>${x.off}</td><td>${x.idx}</td><td>${x.tag}</td></tr>`; }).join('')}</table>`,
         pitfall: `<p>Comparing the tag without the valid bit. A line that has never been loaded holds zeros, and an address with tag 0 would "hit" on garbage. The valid bit costs one flip-flop a
           line and is part of the hit condition; after Reset every line is invalid, and the first access to each is a compulsory miss.</p>`,
-        real: `<p>Direct-mapped caches survive where a short hit time matters more than the conflict misses, as in some small embedded cores. Desktop L1 data caches are 8-way; lines are 64 bytes.
+        real: `<p>Direct-mapped caches survive where a short hit time matters more than the conflict misses, as in some small embedded cores. Desktop L1 data caches are typically 8- to 12-way; lines are 64 bytes.
           Tags are read in parallel with the data so that the compare overlaps the data array's access.</p>`,
       },
       challenge: {
@@ -463,7 +462,7 @@ export const chCache: Chapter = {
         With a 256-byte cache, the line is evicted before its neighbours are used.</p>
         <p>The point of real traces is that the miss rate is a property of a program and a cache together, not of either alone. The same loads in a different order, or the same
         order through a cache that is a power of two different in size, change the outcome by a factor of four or more. When a result surprises you, change one parameter at a time,
-        and read the miss classes: a conflict miss is cured by ways, a capacity miss only by size or a better loop order, and a compulsory miss only by prefetching.</p>
+        and read the miss classes: a conflict miss is cured by ways, a capacity miss only by size or a better loop order, and a compulsory miss only by bigger lines or prefetching.</p>
         <div class="try">Compare the two matrix sums. Then load "Vector add" at 512 bytes: direct-mapped, 2-way (three arrays per set, still thrashing), 4-way.</div>`,
       widget: () => cacheExplorer({ trace: 'colmajor' }),
       more: {
@@ -519,7 +518,7 @@ export const chCache: Chapter = {
         pitfall: `<p>Assuming more ways always cut misses. Past a point, extra ways cost comparators and a slower hit for no gain: when a loop's conflicts are between 3 arrays, a 4-way cache
           removes them and an 8-way one pays more for the same hit rate. And a loop whose working set exceeds the cache misses at any associativity: that is a capacity miss.</p>`,
         real: `<p>L1 data caches are typically 8-way with 64-byte lines, L2 caches 8 to 16-way, last-level caches 12 to 16-way. Few designs go fully associative, but small structures
-          do: a TLB (page-translation cache) of 32 to 64 entries is a CAM, since a lookup there has to be both fast and conflict-free.</p>`,
+          do: a TLB (page-translation cache) of 32 to 64 entries is often a CAM, since a lookup there has to be both fast and conflict-free.</p>`,
       },
     },
     {
@@ -605,8 +604,7 @@ export const chCache: Chapter = {
       title: 'Two ways and an LRU bit',
       body: `
         <p>"Two arrays, one set" is the worst case for direct mapping: a[i] and b[i] share an index, so each access evicts the other, and every
-        load misses. A <span data-show="dm"><strong>2-way set-associative</strong> cache</span> of the same size has half as many sets, but each holds two lines: both
-        arrays fit. Both ways are compared at once (the 2-way tag compare of a few steps back), and
+        load misses. A <span data-show="dm"><strong>2-way set-associative</strong> cache</span> of the same size has half as many sets, but each holds two lines: the line of a and the line of b in use now sit side by side. Both ways are compared at once (the 2-way tag compare of a few steps back), and
         <span data-show="dm.lru">one <strong>LRU</strong> bit per set</span>,
         set on every hit to point at the other way, names the way to evict next.</p>
         <p>Measured: 33 misses with the direct-mapped write-back cache one step back (32 loads and the final store, which allocates its line),
@@ -730,7 +728,7 @@ export const chCache: Chapter = {
         memory is split into <strong>pages</strong> (4 KB), and a <strong>page table</strong> in memory maps each virtual page to a physical one,
         with permission bits (read, write, execute, user). RISC-V's Sv32 walks a two-level table; a missing or forbidden page traps (a page fault)
         and the OS fixes it, possibly loading the page from disk. Walking the table on every access would multiply memory traffic, so a
-        <strong>TLB</strong> caches recent translations: a small, fully associative cache of page-table entries, 32 to 64 in an L1 TLB.</p>
+        <strong>TLB</strong> caches recent translations: a small, often fully associative cache of page-table entries, 32 to 64 in an L1 TLB.</p>
         <p>Translation sits on the path of every load. L1 caches overlap the two: they are <strong>virtually indexed, physically tagged</strong>.
         The index and offset come from the low 12 bits, which translation does not change, so the set is read while the TLB translates the upper
         bits, and the tag compare uses the physical page number. That caps an L1 at page size × ways: 4 KB × 8 ways = 32 KB, which is why so

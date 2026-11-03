@@ -432,7 +432,7 @@ export const WALKS7: Record<string, WalkScript> = {
       text: 'Each waiting state is entered by its command and held while fbusy = 1: ¬rst · (enter + state · fbusy). The collector\'s read follows the start or a page done, the erase the last page.',
       parts: ['u0', 'u37', 'u38', 'u39', 'u40', 'u41', 'u42', 'u43', 'u44', 'u45', 'u46', 'u47', 'u48', 'u49', 'u50', 'u51', 'u52', 'u53', 'u54', 'u55', 'u56'],
       why: 'The chip takes many cycles per command, so a state stays set while fbusy = 1 and nothing else is issued.',
-      whyNot: { text: 'Advancing after a fixed count hard-codes the flash times (64, 512 and 4096 cycles).' },
+      whyNot: { text: 'Advancing after a fixed count hard-codes the chip\'s times (2, 6 and 20 cycles on this bench; chapter 37\'s flash takes 64, 512 and 4096).' },
     },
     {
       title: 'Choosing the victim',

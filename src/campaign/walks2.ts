@@ -109,7 +109,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Equality',
       text: '16 XORs flag the bits that differ, and a zero detect over them gives a = b: 110 NANDs, depth 12. beq and bne need nothing else.',
       why: 'beq and bne ask only whether every bit matches: the XORs flag the bits that differ and a zero detect says none do.',
-      whyNot: { text: 'Subtracting and testing for zero would reuse the adder of the next step but put its carry chain (depth 39) in front of the test; the XOR form is depth 12.' },
+      whyNot: { text: 'Subtracting and testing for zero would reuse the adder of the next step but put its carry chain in front of the test (depth 37, 46 with the zero detect); the XOR form is depth 12.' },
       parts: ['u1'], codex: ['comparator'],
     },
     {

@@ -100,13 +100,13 @@ export const chPython: Chapter = {
         a0–a7 if it calls nothing (its parameters arrive there), else s registers it saves on entry; a global a
         function reads or writes lives in data memory, the only place every function sees. The table under the
         listing says where each one went.</p>
-        <p>The rule behind the stack of temporaries is the shape of the expression tree: evaluate the left subtree into t<sub>k</sub>, the right into t<sub>k+1</sub>, combine into t<sub>k</sub>.
-        The number of temporaries live at once is the tree's depth to the right, so a left-associative chain <code>a + b + c + d</code> needs two while a right-nested one needs more.
+        <p>The rule behind the stack of temporaries is the shape of the expression tree: evaluate the left subtree into t<sub>k</sub>, the right into t<sub>k+1</sub> (a variable stays in its own register), combine into t<sub>k</sub>.
+        The number of temporaries live at once is the tree's depth to the right, so a left-associative chain <code>a + b + c + d</code> needs one while <code>a + (b + (c + d))</code> needs three.
         Seven is a design limit of this compiler, not of the machine: the ABI's t-registers are the pool it draws from.</p>`,
       widget: () => pyLinked('collatz', 7),
       more: {
-        derive: `<p><code>3 * n + 1</code> with n in s0: the constant 3 has two bits set, so the product is <code>slli t0, s0, 1</code> (2n) then <code>add t0, t0, s0</code> (2n + n), and the
-          <code>+ 1</code> is <code>addi t0, t0, 1</code>. Three instructions, three cycles, no multiply. Compare the generic route (<code>rt.mul</code>, next step) at 32 passes of shift and add. The
+        derive: `<p><code>3 * n + 1</code> with n in s0: the constant 3 has two bits set, so the product is <code>slli t1, s0, 1</code> (2n) then <code>add t0, t1, s0</code> (2n + n), and the
+          <code>+ 1</code> with the store back is <code>addi s0, t0, 1</code>. Three instructions, three cycles, no multiply. Compare the generic route (<code>rt.mul</code>, next step) a loop of a few instructions per bit of the multiplier. The
           compiler chooses between them by the constant\'s bit pattern.</p>`,
         pitfall: `<p>Writing an expression nested more than seven deep, usually by accident in a long arithmetic formula: the compiler refuses it and says so. Break it with a variable. Also remember that
           every Python integer here is 32-bit and wraps: <code>x * 1000003</code> silently overflows where real Python would grow.</p>`,
@@ -121,7 +121,7 @@ export const chPython: Chapter = {
         spends instructions instead.</p>
         <p>A power of two is a shift or a mask: <code>n % 2</code> is one <code>andi</code>, <code>n // 2</code> one
         <code>srai</code> (an arithmetic shift is exactly what Python's <code>//</code> does for 2), <code>x * 8</code> one
-        <code>slli</code>. A constant with two bits set, or one less than a power of two, is two shifts and an add or a
+        <code>slli</code>. A constant with two bits set, or one less than a power of two, is one or two shifts and an add or a
         subtract. Anything else calls a routine: <code>rt.mul</code> adds one shifted copy per bit of the multiplier,
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
         toward minus infinity.</p>
@@ -134,12 +134,12 @@ export const chPython: Chapter = {
       widget: () => pyCost(['gcd']),
       more: {
         derive: `<p><code>x * 5</code> = <code>x * 4 + x</code>: <code>slli</code> then <code>add</code>, two cycles. <code>x * 7</code> = <code>x * 8 − x</code>: <code>slli</code> then <code>sub</code>.
-          A constant that is not 2^k, 2^a + 2^b or 2^a − 1, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one shifted add per bit of the multiplier, 32 passes. <code>rt.divmod</code> does the
+          A constant that is not 2^k, 2^a + 2^b or 2^a − 1, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one shifted add per significant bit of the multiplier: 4 passes for 11, 32 for a negative one. <code>rt.divmod</code> does the
           long division you learned in school in binary: shift the next dividend bit into the remainder, subtract the divisor if it fits, record a quotient bit. 32 passes, a few instructions each, about 240 cycles in all.</p>`,
         numbers: `<table class="mini"><tr><th>program</th><th>instructions</th><th>cycles</th></tr>${COST.map((r) => `<tr><td>${r.name}</td><td>${r.words}</td><td>${fmt(r.steps)}</td></tr>`).join('')}</table>
           <p>Measured on the golden model, which takes one cycle per instruction on the single-cycle CPU. The gap between instructions in the listing and cycles run is the loop count.</p>`,
         pitfall: `<p>Python's <code>//</code> and <code>%</code> floor toward minus infinity, while RISC-V's <code>div</code> and <code>rem</code> (and C's operators) truncate toward zero. <code>-7 // 2</code> is −4 in Python and −3 in C. The
-          generated routine fixes the signs after the unsigned division, which is part of why it is longer than the bare loop. A hand-written shift-and-subtract that ignores signs gives the C answer.</p>`,
+          generated routine fixes the signs after the unsigned division, which is part of why it is longer than the bare loop. A routine that takes absolute values, divides and only restores the signs gives the C answer; the floor needs one correction more.</p>`,
         real: `<p>Hardware dividers take tens of cycles, this site\'s 32 steps among them, and are rarely pipelined; multipliers are far faster. Compilers know this and replace division by a constant with
           a multiplication by its reciprocal (a magic number and a shift), which is one reason constants are cheap and variables are not.</p>`,
       },
@@ -225,8 +225,8 @@ export const chPython: Chapter = {
           so it grows by about 1.6 each step. The stack, in contrast, grows only with the longest path in the call tree: n frames of two words, plus a word for each live t0 waiting across a second call.</p>`,
         pitfall: `<p>A function that calls another and does not save <code>ra</code> returns into itself, forever. Same for a callee that overwrites a register its caller still needs: the symptom is a value that is right
           until the first nested call. In the stack panel the saved words are labelled by the instruction that stored them, so an unsaved register is a missing label.</p>`,
-        real: `<p>The RISC-V calling convention splits registers into caller-saved (t0–t6, a0–a7) and callee-saved (s0–s11, sp, gp): the callee preserves the s-registers, the caller preserves anything in a t-register it
-          needs after a call. This compiler follows it, which is why <code>s0</code> is saved in the prologue and <code>t0</code> around the second call. Real stacks also guard against overflow with a page the OS leaves unmapped; here a stack that
+        real: `<p>The RISC-V calling convention splits registers into caller-saved (t0–t6, a0–a7) and callee-saved (s0–s11, sp); gp and tp are outside the convention, and this compiler uses gp as its output pointer, which a printing function moves. The callee preserves the s-registers, the caller preserves anything in a t-register it
+          needs after a call. This compiler follows that, which is why <code>s0</code> is saved in the prologue and <code>t0</code> around the second call. Real stacks also guard against overflow with a page the OS leaves unmapped; here a stack that
           meets the output overwrites it without a fault.</p>`,
       },
       challenge: {

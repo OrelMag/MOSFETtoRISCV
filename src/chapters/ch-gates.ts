@@ -235,7 +235,7 @@ export const chGates: Chapter = {
         the results together, and you have an <span data-ahead="comparator">equality comparator (a circuit whose output is 1 when two words are equal)</span> (the processor's <code>beq</code>
         instruction will need one).</p>
         <p>The price of that comparator grows with the width: for 32 bits, 32 XNORs and a tree that ANDs 32 results, ${nd(equal(32))} NANDs in all and
-        ${logicDepth(equal(32))} delays deep. The tree is why equality is cheap compared with <em>magnitude</em> comparison, which needs to know which bit decides.</p>`,
+        ${logicDepth(equal(32))} delays deep. Equality is cheap compared with <em>magnitude</em> comparison: each field's answer is one bit, not "greater" and "equal" with a rule for which bit decides.</p>`,
       scene: () => ({ root: XNOR, inputs: { a: 1, b: 1 } }),
       more: {
         derive: `<p>a XNOR b = ¬(a ⊕ b) = a·b + ¬a·¬b: both 1 or both 0. A word compare is x = y exactly when every bit pair agrees:
@@ -281,7 +281,7 @@ export const chGates: Chapter = {
           included where they help, reads off a minimal sum of products by eye, up to four or five inputs. Past that, programs
           do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter 10's PLA</a>) and the heuristics inside synthesis
           tools. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
-        real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, about 8 transistors against ${tr(MUX2)}
+        real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, 6 transistors (8 with an output buffer), against ${tr(MUX2)}
           here. Wide muxes (8:1, 16:1) are built as trees of these or as one-hot AND-OR structures, and the choice of structure decides the delay of the register-file read
           and of a CPU's operand select.</p>`,
         pitfall: `<p>A mux can glitch while s changes even when a and b are equal. With a = b = 1, s falling from 1 to 0 turns g3 off one delay before g2, which waits
@@ -463,7 +463,7 @@ export const chBinary: Chapter = {
         derive: `<p>The signed sum is wrong exactly when the true result needs n + 1 bits. Extending both operands by one copy of their
           sign bits makes the true sum fit; the extra column adds aₙ₋₁ + bₙ₋₁ + cₙ. The n-bit result is right when that column's sum bit
           equals bit n − 1 of the result, and the four cases above reduce this to V = cₙ₋₁ ⊕ cₙ (cᵢ: the carry into column i).</p>`,
-        real: `<p>x86 calls them CF and OF, ARM C and V, both kept in a flags register after every add. RISC-V has no flags at all:
+        real: `<p>x86 calls them CF and OF, ARM C and V, both kept in a flags register, set by every x86 add and by ARM's ADDS. RISC-V has no flags at all:
           <code>sltu</code> after an add finds the carry (the sum is below an operand), and a signed overflow check takes two
           <code>slt</code>s and a branch. That leaves one less register to rename in an out-of-order core.</p>`,
         pitfall: `<p>The carry after a subtraction. x86 sets CF on a borrow; ARM sets C to <em>not</em> borrow, because it subtracts by adding
@@ -498,7 +498,7 @@ export const chBinary: Chapter = {
           adder's subtract path does the inverting and the +1 (next chapter). A stand-alone negator appears where an adder would be wasted,
           such as the sign fix after a divider or an absolute-value unit.</p>`,
         pitfall: `<p>The most negative number has no positive twin. Its lowest 1 is the top bit, so nothing is inverted and −(−8) = −8 in 4 bits
-          (−2³¹ in 32). <code>abs(INT_MIN)</code> is negative in C, Java and on every two's-complement machine.</p>`,
+          (−2³¹ in 32). <code>Math.abs(Integer.MIN_VALUE)</code> is negative in Java; <code>abs(INT_MIN)</code> in C is undefined, and usually comes out negative.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>XOR</th><th>OR</th><th>NANDs</th></tr>
           ${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${n - 1}</td><td>${n - 2}</td><td>${(n - 1) * nd(XOR) + (n - 2) * nd(OR)}</td></tr>`).join('')}</table>`,
       },
@@ -518,7 +518,7 @@ export const chBinary: Chapter = {
         0000_1011 would be 11. The sign bit weighed −8; spread over five copies it weighs −128 + 64 + 32 + 16 + 8 = −8 again.</p>
         <p>Both are wiring. In the <span data-show="ms">sign</span> half the top wire fans out to four more merger inputs; in the
         <span data-show="mz">zero</span> half those inputs go to a <span data-show="gnd">tie to GND</span>. No gates, no delay.
-        Narrowing is cheaper still: drop the top wires. The value survives only if every dropped bit equals the new top bit.</p>
+        Narrowing is cheaper still: drop the top wires. Read as signed, the value survives only if every dropped bit equals the new top bit; read as unsigned, only if every dropped bit is 0.</p>
         <p>Which one is right is not in the bits: the instruction says. RISC-V's <code>lb</code> sign-extends a loaded byte and <code>lbu</code>
         zero-extends it (<a href="#/c/io/0">chapter 19</a>), and every 12-bit <span data-ahead="immediates">immediate (a constant stored inside the instruction word)</span> is sign-extended to 32 bits
         (<a href="#/c/isa/0">chapter 13</a>).</p>

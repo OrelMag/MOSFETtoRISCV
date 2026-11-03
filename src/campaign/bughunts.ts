@@ -168,7 +168,7 @@ const HUNTS: Hunt[] = [
   },
   {
     id: 'b_carry', after: 'a_add4', title: 'The carry chain',
-    report: 'A 4-bit ripple adder that is right for small numbers. 3 + 1 = 4, but 6 + 2 comes out 4.',
+    report: 'A 4-bit ripple adder that gets some sums right. 3 + 1 = 4, but 1 + 1 comes out 6 and 6 + 2 comes out 4.',
     tips: ['Which bit is wrong when it is wrong, and what do those rows share?', 'Follow the carry from one full adder to the next.', 'Bit 2’s carry in comes from bit 0, skipping bit 1.'],
     fault: 'fa2’s carry in was taken from fa0’s carry out, not fa1’s: a carry made in bit 1 never reaches bit 2, and one made in bit 0 jumps a bit.',
     kind: 'miswire', lesson: MISWIRE, marks: ['fa2'],
@@ -221,8 +221,8 @@ const HUNTS: Hunt[] = [
   },
   {
     id: 'b_imm', after: 'c_imm', title: 'Branches land wrong',
-    report: 'Backward branches go to the wrong place; forward ones are fine. The I, J and U immediates are right.',
-    tips: ['Only the branch immediate, and only when it is negative.', 'A negative immediate is a sign extension: every bit above the field is the instruction’s sign bit.', 'sb’s top bit comes from another field, not bit 15.'],
+    report: 'Forward branches go to the wrong place, and so do stores with a positive offset; backward branches and negative offsets are fine. The I, J and U immediates are right.',
+    tips: ['Only the S/B immediate, and only when it is not negative: its upper bits should all be 0 there.', 'A sign extension copies the instruction’s sign bit into every bit above the field. Which of sb’s upper bits is 1 for a positive offset?', 'sb’s top bit comes from another field, not bit 15.'],
     fault: 'The branch immediate’s top bit (merger u3, input 12) was wired to an instruction field bit instead of the sign bit, so the sign extension broke at bit 15.',
     kind: 'encoding', marks: ['u3'],
     lesson: 'A field bit taken from the wrong place: the encoding is right for most words and wrong for those where the two bits differ. Draw the immediate’s bits against the instruction’s, bit by bit, as the encoding table does.',
@@ -239,9 +239,9 @@ const HUNTS: Hunt[] = [
   },
   {
     id: 'b_fwd', after: 'pi_core1', title: 'Two back, read stale',
-    report: 'Pipeline II forwards a result to the very next instruction. An instruction that reads a result from two instructions back gets the register file’s old value.',
+    report: 'Pipeline II forwards a result to the very next instruction. An instruction whose first operand (rs1) is a result from two instructions back gets the register file’s old value; the second operand is fine.',
     tips: ['Two instructions back, the result is in W. Which forwarding term covers W?', 'The forwarding unit is opened as a chip of its own: fa bit 1 is “W matches and M does not”. Follow it back.', 'u11 ANDs M’s match with its own inverse, which is never true: its first input should be W’s match (u9).'],
-    fault: 'In the forwarding unit, u11 (forward from W) read M’s match and ¬(M’s match), a term that is never true, instead of W’s match and ¬(M’s match): nothing was ever forwarded from W, and a result two instructions back was read stale.',
+    fault: 'In the forwarding unit, u11 (forward from W) read M’s match and ¬(M’s match), a term that is never true, instead of W’s match and ¬(M’s match): nothing was forwarded from W to rs1 (fb’s copy of the term is right), and an rs1 result two instructions back was read stale.',
     kind: 'a term that is never true', marks: ['u23', 'u23.u11'], open: ['u23'],
     lesson: 'A condition that can never hold (or always does): the logic it guards is dead, and only the case it should have covered fails. The circuit looks complete. Lint’s unused-part warning and a probe on the term (stuck at 0 whatever the inputs) find it; so does asking, for each case the design must handle, which term handles it.',
     plant: (_nl, inside) => move(inside('u23'), 'u11.a', 'u8.y'), par: { edits: 1 }, withhold: ['rv16_fwd'], codex: ['forwarding'],

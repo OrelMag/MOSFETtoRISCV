@@ -50,7 +50,7 @@ export const rfSteps: Step[] = [
     more: {
       derive: `<p>Per read port: <code>equal(k)</code> on the two addresses, one AND with the shared enable <code>we ∧ byp ∧ nz</code>, and a <em>w</em>-bit 2:1 multiplexer. The shared part (nz and the three-input AND) is paid once. At 32 × 32, ${g(RF_NUMBERS().by - RF_NUMBERS().rf)} NANDs for two ports.</p>`,
       pitfall: `<p>Forwarding the write data into an instruction that reads x0. <code>addi x0, x1, 5</code> in W and <code>add x2, x0, x3</code> in D: x0 must still be 0. Every bypass in this site's pipelines tests rd ≠ 0 for this reason, and this one does too.</p>`,
-      real: `<p>Register files in out-of-order cores are written in the first half of a cycle and read in the second, or built with the read port's address comparison inside the array; either way the same-cycle read sees the new value without a gate-level mux. Which side of the clock holds the boundary decides who needs the bypass.</p>`,
+      real: `<p>Some register files are written in the first half of a cycle and read in the second, or built with the read port's address comparison inside the array; either way the same-cycle read sees the new value without a gate-level mux. Which side of the clock holds the boundary decides who needs the bypass.</p>`,
     },
     challenge: {
       kind: 'reach',

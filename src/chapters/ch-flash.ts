@@ -71,7 +71,7 @@ export const chFlash: Chapter = {
       {
         question: 'Why does a NAND cell take about 4 F² where a NOR cell takes about 10?',
         options: [
-          'Its cells sit in series and share one contact at each end of the string; a NOR cell needs its own bit-line contact',
+          'Its cells sit in series and share one contact at each end of the string; a NOR cell needs a bit-line contact of its own or shared with one neighbour',
           'A NAND cell is a smaller transistor',
           'A NAND cell stores two bits',
           'NAND needs no sense amplifiers',
@@ -106,7 +106,7 @@ export const chFlash: Chapter = {
         it all. The panel's curve is the selected cell's drain current against its gate voltage, the dashed one an erased cell's.</p>
         <p>Why it works: the floating gate is insulated on every side, so charge put there has nowhere to go. The control gate sees the cell through the
         series of two capacitors, and the electrons on the floating gate screen it: a higher control-gate voltage is needed before the channel inverts,
-        which is the shifted threshold. The read does not touch the charge; it applies one voltage between the two thresholds and asks whether the cell conducts.
+        which is the shifted threshold. A read barely touches the charge; it applies one voltage between the two thresholds and asks whether the cell conducts.
         The cost is the insulation itself: forcing charge through it wears it, and that, not any speed limit, is what makes flash programmable only a limited number of times.</p>
         <div class="try">Pick a cell of <span data-show="c0_0 c0_1 c0_2 c0_3">row 0</span>, program the row with data 1110, and watch its threshold climb pulse by pulse.</div>`,
       tour: {
@@ -159,14 +159,13 @@ export const chFlash: Chapter = {
         ${FLASH_REAL_US.read} µs, a page program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. At our
         ${CLOCK_NS.toFixed(2)} ns clock a read alone would be ${fmtN(READ_REAL)} cycles, so the model scales all three down about ${SCALE}×,
         keeping their ratios: ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
-        <p>Why a block and not a row: the erase is done through the substrate, which all the cells of the block share; separating it per row would cost a
-        well and its isolation for every row. So the erase unit is as large as the process makes cheap, and the controller's problem becomes what to do with
+        <p>Why a block and not a row: the erase is done through the well, which a whole plane shares; word-line bias then decides which cells it reaches, grounded in the block being erased and floating elsewhere, and that selection is done for a block's word lines together. So one row cannot be erased alone without disturbing its neighbours, and the controller's problem becomes what to do with
         the rest of a block when one row of it changes. The answer, two steps on, is not to change it in place.</p>
         <div class="try"><span data-show="c1_0 c1_1 c1_2 c1_3">Row 1</span> holds 1010. Make it 0110 and keep rows 0, 2 and 3 as they are.</div>`,
       more: {
         derive: `<p>A program can only clear bits, so it ANDs the data into the stored word: new = old AND data. Row 1 holds 1010 and 0110 is wanted: 1010 AND 0110 = 0010, not 0110,
           because bit 2 would have to rise. Rewriting costs, in the model's cycles, a read of each of the 3 other rows (${3 * FLASH_TIMES.read}), the erase (${FLASH_TIMES.erase}) and a program of each row
-          that needs a 0 (3 × ${FLASH_TIMES.program} = ${3 * FLASH_TIMES.program}): ${3 * FLASH_TIMES.read + FLASH_TIMES.erase + 3 * FLASH_TIMES.program} cycles to change four bits, against ${FLASH_TIMES.program} for a program alone.</p>`,
+          that needs a 0 (3 × ${FLASH_TIMES.program} = ${3 * FLASH_TIMES.program}): ${3 * FLASH_TIMES.read + FLASH_TIMES.erase + 3 * FLASH_TIMES.program} cycles to change two bits, against ${FLASH_TIMES.program} for a program alone.</p>`,
         real: `<p>NAND erases blocks of a few hundred kilobytes to several megabytes, and programs pages of 4 to 16 KB in order inside a block. NOR erases sectors of 64 to 256 KB and programs bytes or words,
           which is why code can be updated in place there with a sector buffer. The asymmetry (read, then program, then erase, each about ten times slower than the last) is a property of the physics,
           not the interface.</p>`,
@@ -193,8 +192,8 @@ export const chFlash: Chapter = {
       title: 'NOR and NAND',
       body: `
         <p>In the <strong>NOR</strong> array every cell sits between its bit line and the source line, so any one cell can be read
-        directly and fast: tens of nanoseconds, fast enough to run code from (execute in place). Each cell needs its own bit-line
-        contact, about 10 F² of silicon (F: the feature size).</p>
+        directly and fast: tens of nanoseconds, fast enough to run code from (execute in place). Each cell needs a bit-line
+        contact, its own or shared with one neighbour, about 10 F² of silicon (F: the feature size).</p>
         <p>A <strong>NAND</strong> string puts its <span data-show="c0_0 c1_0 c2_0 c3_0 c4_0 c5_0 c6_0 c7_0">cells in series</span>, eight here (128 or more in real chips), with
         <span data-show="ss0 gs0">one contact at each end</span>.
         A read puts the selected row at the read voltage and every other row at the <span data-show="p0 p1 p2 p3 p4 p5 p6 p7"><strong>pass voltage</strong></span>, high enough to turn on
@@ -205,7 +204,7 @@ export const chFlash: Chapter = {
         (a small current through many transistors), and every read applies the pass voltage to the other rows, a mild stress that the last step comes back to.</p>
         <div class="try">Read a row: every other row's cells sit at the pass voltage. Program a row, then erase the block.</div>`,
       more: {
-        derive: `<p>Transistors and contacts per bit. NOR: 1 cell and 1 bit-line contact. A NAND string of N cells has N + 2 transistors (the string and ground selects) and a single
+        derive: `<p>Transistors and contacts per bit. NOR: 1 cell and 1 bit-line contact (here one a cell; real arrays often share one between two). A NAND string of N cells has N + 2 transistors (the string and ground selects) and a single
           bit-line contact shared by all N bits, so (N + 2) / N transistors and 1 / N contacts per bit. The contact, not the transistor, sets the pitch, which is why the string length is the lever.</p>`,
         real: `<p>The threshold is analog, so a cell can hold more than one bit: <strong>MLC</strong> places it at one of 4 levels (2 bits),
           <strong>TLC</strong> 8 (3 bits), <strong>QLC</strong> 16 (4 bits). A read then compares against 3, 7 or 15 read voltages, a
@@ -326,17 +325,17 @@ export const chFlash: Chapter = {
         <strong>raw bit error rate</strong> (RBER), the fraction of bits that read wrong before correction: around 10<sup>-6</sup> for fresh SLC, 10<sup>-4</sup> to 10<sup>-3</sup> for worn TLC. The drive must
         still show an <strong>uncorrectable bit error rate</strong> (UBER) below about 10<sup>-15</sup>, so every page carries a code. <a href="#/c/cache/0">Chapter 22</a>'s SEC-DED word is the idea, on a
         small word: the <span data-show="enc">encoder</span> adds check bits on write, flips between write and read corrupt the stored word, the <span data-show="dec">decoder</span> finds one flipped bit and fixes it, or flags two it cannot fix.</p>
-        <p>A page needs a stronger code over a longer word. A <strong>BCH</strong> code on a 1 KiB codeword (${fmtN(8192)} data bits) that corrects <em>t</em> bit errors costs m · <em>t</em> parity bits with m = 14: ${bchParity(8192, 1)} for t = 1, ${bchParity(8192, 8)} for t = 8, ${bchParity(8192, 40)} for t = 40. A 4 KiB page is four codewords, so t = 40 needs ${4 * bchParity(8192, 40) / 8} bytes of the page's spare area. Raw errors are independent,
-        so the codeword fails when more than <em>t</em> of its ${fmtN(8192)}-plus bits flip, a binomial tail, computed here exactly:</p>
+        <p>A page needs a stronger code over a longer word. A <strong>BCH</strong> code on a 1 KiB codeword (${fmtN(8192)} data bits) that corrects <em>t</em> bit errors costs m · <em>t</em> parity bits with m = 14: ${bchParity(8192, 1)} for t = 1, ${bchParity(8192, 8)} for t = 8, ${bchParity(8192, 40)} for t = 40. A 4 KiB page is four codewords, so t = 40 needs ${4 * bchParity(8192, 40) / 8} bytes of the page's spare area. Take raw errors as independent (real ones cluster by block, word line and age, so this is the optimistic case):
+        the codeword fails when more than <em>t</em> of its ${fmtN(8192)}-plus bits flip, a binomial tail, computed here exactly:</p>
         <table class="mini"><tr><th>code</th><th>parity bits</th><th>fails at RBER 10<sup>-5</sup></th><th>fails at 10<sup>-3</sup></th><th>keeps UBER &lt; 10<sup>-15</sup> up to RBER</th></tr>
           ${ECC_ROWS.map((r) => `<tr><td>t = ${r.t}</td><td>${r.parity}</td><td>${sci(r.f5)}</td><td>${sci(r.f3)}</td><td>${sci(r.max)}</td></tr>`).join('')}</table>
-        <p>The strength is a wear budget. Fresh flash at RBER 10<sup>-5</sup> needs t = 8 for a 10<sup>-15</sup> UBER; worn TLC at 10<sup>-3</sup> needs t ≈ 40, five times the parity, and past that the controller
+        <p>The strength is a wear budget. Fresh flash at RBER 10<sup>-5</sup> needs t = 6 (t = 8 leaves a margin) for a 10<sup>-15</sup> UBER; worn TLC at 10<sup>-3</sup> needs t ≈ 40, five times the parity, and past that the controller
         retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC replace BCH with LDPC and soft reads:
         the same page sensed at several read voltages gives each bit a confidence, which corrects well beyond the hard-decision limit at the cost of several reads.</p>
         <div class="try">Set the data, then flip one stored bit (flip = 1), then two (flip = 3): single, then double.</div>`,
       scene: () => ({ root: eccChannel(8), inputs: { d: 0x5a, flip: 0 }, highlight: ['enc', 'dec'] }),
       more: {
-        derive: `<p>P(codeword fails) = Σ<sub>i &gt; t</sub> C(n, i) p<sup>i</sup> (1 − p)<sup>n − i</sup> with n = ${fmtN(8192)} + m · t; UBER is that over the ${fmtN(8192)} data bits. The tail falls by roughly <em>np</em>/(<em>t</em> + 1) per extra correctable bit, so each added bit of <em>t</em> buys a growing factor while costing a constant m = 14 parity bits: the first corrections are the cheapest.</p>`,
+        derive: `<p>P(codeword fails) = Σ<sub>i &gt; t</sub> C(n, i) p<sup>i</sup> (1 − p)<sup>n − i</sup> with n = ${fmtN(8192)} + m · t; UBER is that over the ${fmtN(8192)} data bits. The tail falls by roughly <em>np</em>/(<em>t</em> + 1) per extra correctable bit, so each added bit of <em>t</em> buys a growing factor while costing a constant m = 14 parity bits: each extra bit of strength is a better buy than the last, so t is set by the RBER to survive and the spare area there is.</p>`,
         pitfall: `<p>Correction hides wear until it cannot. A drive whose corrected-bit counters have been rising for months looks perfect to the host and then loses a page at once, when one more bit than t flips. SMART's "available spare" and the controller's own scan of corrected bits per page are the early warnings.</p>`,
       },
       challenge: {

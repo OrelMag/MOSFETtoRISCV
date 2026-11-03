@@ -113,7 +113,7 @@ describe('chapter 26: the gate-level steps', () => {
     expect(part('rob')).toBe(nands(reorderBuffer(43, 65)));
     expect(part('iq')).toBe(nands(issueQueue(PW)));
     expect(logicDepth(SELECT8)).toBe(11);
-    quoted('11 levels');
+    quoted('11 NAND delays');
     expect(PW).toBe(119);
     // the comparators are a small part of an entry
     expect(4 * stats(equal(TAG)).nands).toBeLessThan(stats(iqEntry(PW)).nands / 20);

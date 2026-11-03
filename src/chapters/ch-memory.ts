@@ -40,7 +40,7 @@ export const chLatches: Chapter = {
       'The timing contract: d settled a setup time before the edge, held a hold time after it; q follows clk-to-q later. Period ≥ clk-to-q + slowest logic + setup.',
       `Measured on the circuit: setup ${MS_TIMING().setup}, hold ${MS_TIMING().hold}, clock-to-q ${MS_TIMING().cq} delays (worst case over both directions of d). Between "new captured" and "old kept" is an aperture where q is undecided: the race of the SR latch.`,
       'Hold is a race between two edges of one cycle: a late clock on the capturing flip-flop (skew) breaks it at every frequency. Setup is cured by a longer period, hold only by delay in the data path or less skew.',
-      `The 7474 edge-triggered flip-flop is six gates (${nands(DFF_EDGE6)} NANDs here, against ${nands(DFF)}): fewer gates, but a slower falling output and a wider window.`,
+      `The 7474 edge-triggered flip-flop is six gates (${nands(DFF_EDGE6)} NANDs here, against ${nands(DFF)}): fewer gates, but a slower falling output and a longer hold.`,
       `Load enable: a multiplexer feeds q back into d while en = 0 (${nands(DFFE)} NANDs a bit). The clock itself is not gated (real chips do, with clock-gating cells).`,
     ],
     practise: ['s_sr', 's_dlatch', 's_dff'],
@@ -57,7 +57,7 @@ export const chLatches: Chapter = {
         options: ['The master', 'The slave', 'Both', 'Neither'],
         answer: 0,
         explain: 'The master follows d while the clock is low (d flows into it while the slave holds q). At the rising edge it closes on d, and the slave opens to show it.',
-        why: ['', 'The slave is open while clk is high: it shows what the master caught at the rising edge.', 'Then d would race straight through to q. The opposite enables exist to prevent exactly that.', 'One of the two is always open; the edge is the instant they swap.'],
+        why: ['', 'The slave is open while clk is high: it shows what the master caught at the rising edge.', 'Then d would race straight through to q. The opposite enables exist to prevent exactly that.', 'The two swap at the edge; apart from the inverter\'s one-delay lag, exactly one is open.'],
       },
       {
         question: 'Why do designers keep an SR latch from seeing s_n and r_n released at the same instant?',
@@ -89,7 +89,7 @@ export const chLatches: Chapter = {
         <p>Why does the loop remember? With both inputs at 1, each NAND is an inverter of the other's output. Two inversions in a ring
         regenerate themselves: q = 1 forces q̄ = 0, which forces q = 1 again, and the opposite pair is just as stable. The circuit has two
         stable states and the inputs push it from one to the other. The cost is ${nands(SR_LATCH)} NANDs (${stats(SR_LATCH).transistors} transistors): the cheapest
-        memory there is, and the seed of every register and memory bit in this book.</p>
+        memory you can make from gates, and the seed of every register in this book.</p>
         <div class="try">Set the latch (pulse s_n to 0 and back to 1), then notice q stays 1 with both inputs at 1.</div>`,
       tour: {
         beats: [
@@ -205,9 +205,9 @@ export const chLatches: Chapter = {
           ${nands(D_LATCH)}-NAND latch on stage because its set and reset sides read more plainly.</p>`,
         real: `<p>Latches are real building blocks, not only a stepping stone: a level-sensitive latch is half the area of a flip-flop, and high-speed designs use latch pairs on
           the two phases of the clock on purpose, so that a slow stage can borrow time from the next (time borrowing). Standard-cell latches are about 8 to 12 transistors, against
-          to the ${stats(D_LATCH).transistors} here.</p>`,
+          the ${stats(D_LATCH).transistors} here.</p>`,
         pitfall: `<p>Putting a transparent latch in a feedback loop. With e = 1, a loop of logic from q back to d has no register in it: the signal chases itself around at gate speed and may
-          oscillate (an inverter from q̄ to d does exactly that). A latch is safe when its enable is closed before the loop can come around, and that is what the flip-flop of the next step
+          oscillate (a plain wire from q̄ to d does exactly that). A latch is safe when its enable is closed before the loop can come around, and that is what the flip-flop of the next step
           arranges with a second latch.</p>`,
       },
       scene: () => ({ root: D_LATCH, inputs: { d: 1, e: 1 } }),
@@ -231,8 +231,7 @@ export const chLatches: Chapter = {
         a memory that samples its input at one precise instant.</p>
         <p>Chain two D latches with <span data-show="inv">opposite enables</span>: the <strong><span data-show="master">master</span></strong> is open while the clock is low; the
         <strong><span data-show="slave">slave</span></strong> while it is high. At the moment the clock rises, the master closes (capturing d)
-        and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>. At no instant are both open, so there is never
-        a transparent path from d to q: that is the whole trick. Cost: two latches and an inverter, ${nands(DFF)} NANDs, ${stats(DFF).transistors} transistors.</p>
+        and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>. The two are open on opposite phases, so a change on d cannot run through to q. The inverter leaves them both open for one gate delay after the rising edge, too short for d to cross the master (that delay is the hold time below). That is the whole trick. Cost: two latches and an inverter, ${nands(DFF)} NANDs, ${stats(DFF).transistors} transistors.</p>
         <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here): d must have crossed
         <span data-show="master">the master</span> before clk rises (the larger of the rising and falling d's setup is quoted); a falling d goes through the master's inverter and a NAND.
         <strong>Hold</strong> (${T.hold} delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
@@ -541,8 +540,7 @@ export const chRegisters: Chapter = {
           is j = d, k = ¬d.</p>`,
         real: `<p>The 7476 and 74112 were the standard JK parts of TTL logic. Modern designs, whether FPGA or ASIC, use D flip-flops almost exclusively: a JK's four-way behaviour is a multiplexer
           in front of a D, and a synthesis tool will make exactly that when it needs it.</p>`,
-        pitfall: `<p>The old level-triggered ("master–slave") JK flip-flops had a famous trap: with j = k = 1 and the clock high for longer than a gate delay or two, q can toggle more than once per pulse. Edge triggering,
-          as here, fixes it: one toggle per rising edge, and you can see the one edge in the tour.</p>`,
+        pitfall: `<p>The old level-triggered JK latch had a famous trap: with j = k = 1 and the clock high for longer than a gate delay or two, q toggles more than once per pulse (race-around). The master–slave JK cured that but kept "1s catching": a glitch on j or k during the high phase is remembered. Edge triggering, as here, fixes both: one toggle per rising edge, and you can see the one edge in the tour.</p>`,
       },
       scene: () => ({ root: JKFF, inputs: { j: 1, k: 1, clk: 0, rst_n: 1 } }),
     },
@@ -718,7 +716,7 @@ export const chRegisters: Chapter = {
         <p>As a counter it is a poor one. Each stage switches one flip-flop delay after the previous, so after an edge the bits change one
         after another and the value is briefly wrong (watch the Timing panel). That is why the counters on this page share a single clock
         (synchronous), and why a ripple divider's outputs should not be used as clocks for logic that also sees the original one.</p>
-        <p>The saving is real, though: the later stages switch rarely (stage i toggles at f / 2ⁱ), so the whole chain burns little more than its first flip-flop. Three stages cost ${nands(clockDivider(3))} NANDs
+        <p>The saving is real, though: the later stages switch rarely (stage i toggles at f / 2ⁱ), so however long the chain, it burns less than twice its first flip-flop. Three stages cost ${nands(clockDivider(3))} NANDs
         here, ${nands(clockDivider(3)) - nands(clockDivider(2))} for each added stage.</p>
         <div class="try">Release rst_n and let the clock run: the Timing panel shows each stage at half the rate of the one before.</div>`,
       tour: {
@@ -957,7 +955,7 @@ export const chMemory: Chapter = {
       },
       more: {
         derive: `<p>The read path is a tree of 2:1 multiplexers on the address bits: level j is selected by addr bit j, and a word-wide tree for each of the w bits. The delay is ${logicDepth(muxTree(2, 4))} for two address bits;
-          each added bit adds one multiplexer's select-to-output delay. The decoder plays no part in a read.</p>`,
+          each added bit adds one multiplexer's data-to-output delay (2 NANDs): the deepest path is the first level's select, then data through the rest. The decoder plays no part in a read.</p>`,
         real: `<p>Register files read asynchronously, as here: the operand is needed in the same cycle as the address. Large SRAMs read synchronously: the address is latched on the edge and the data appears a
           cycle later, which lets the array's slow bit-line sensing take its time. That one cycle of latency is why a cache's hit time is not one cycle.</p>`,
         pitfall: `<p>Reading the address being written. The write takes effect at the edge, so before the edge dout shows the old word; after it, the new one. A pipeline that reads and writes the same register in
@@ -1133,7 +1131,7 @@ export const chMemory: Chapter = {
       },
       more: {
         derive: `<p>Slots 0 to 2ᵏ − 1, pointer sp from 0 to 2ᵏ (k + 1 bits, as the FIFO's pointers): push writes slot sp, then sp ← sp + 1; pop does sp ← sp − 1; top = slot[sp − 1]. Empty is sp = 0, full is sp = 2ᵏ.
-          One adder-subtractor on sp replaces the FIFO's two incrementers.</p>`,
+          An incrementer and a decrementer (an adder-subtractor with sub tied high, which also gives the top's address) take the place of the FIFO's two incrementers, with a mux to choose.</p>`,
         real: `<p>A CPU's call stack lives in ordinary memory with sp in a register; a hardware stack is used where the depth is small and the speed matters: return-address predictors, the 4-bit CPU's three-level stack, a
           floating-point register stack (x87). The depth is fixed, so overflow has to be defined by the design.</p>`,
         pitfall: `<p>Underflow and overflow. A pop on an empty stack or a push on a full one needs a rule: ignore it, wrap, or fault. A hardware stack that wraps silently gives wrong return addresses a depth later, a bug that is hard
@@ -1160,7 +1158,7 @@ export const chMemory: Chapter = {
         A valid bit per entry keeps never-written entries from matching.</p>
         <p>One comparator per entry is why CAMs stay small: an address-translation table has tens of entries, a fast buffer that may keep any line in any slot, a few
         hundred lines at most, a network router's lookup table is the big exception, and burns power accordingly.</p>
-        <p>The search takes no clock and no sequencing: all entries compare in parallel, so the lookup time is one comparator plus one priority encoder, independent of the number of entries. What grows is the area: this CAM has four 4-bit entries and costs ${nands(cam(2, 4))} NANDs,
+        <p>The search takes no clock and no sequencing: all entries compare in parallel, so the lookup time is one comparator plus one priority encoder, and only the encoder's log n grows with the entries. What grows is the area: this CAM has four 4-bit entries and costs ${nands(cam(2, 4))} NANDs,
         of which a comparator alone is ${nands(equal(4))}.</p>`,
       tour: {
         beats: [
@@ -1202,9 +1200,8 @@ export const chMemory: Chapter = {
         <p>The register bank of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
-        <p>The cost is not linear: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write
-        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times). Adding ports multiplies the plumbing over the same storage, and in silicon each port also lengthens every bit's wires,
-        so the real cost is higher still.</p>`,
+        <p>Each port adds its own plumbing over the same storage: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write
+        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times for twice the ports). In silicon each port also lengthens every bit's wires, so the real cost grows faster.</p>`,
       more: {
         derive: `<p>With R read and W write ports on N registers of w bits: storage N·w·${nands(DFFE)} NANDs (fixed), read side R·w·(N − 1) multiplexers, write side W decoders plus a W:1 choice per register. The ports grow the plumbing with R and W,
           not the storage.</p>`,

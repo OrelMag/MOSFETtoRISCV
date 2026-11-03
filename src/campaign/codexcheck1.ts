@@ -289,7 +289,7 @@ export const CHECK1: Record<string, Quiz[]> = {
       question: 'In the multicycle microcode, how does a load get from Decode to MemAdr?',
       options: ['Decode\'s sequencing field says dispatch: the opcode indexes the dispatch ROM, which selects MemAdr', 'Decode\'s next-address field holds MemAdr', 'The micro-PC increments from Decode to the next word'],
       answer: 0,
-      explain: 'Decode is shared by every instruction, so its successor depends on the opcode: a dispatch through a second ROM. After that, each word names its successor.',
+      explain: 'Decode is shared by every instruction, so its successor depends on the opcode: a dispatch through a second ROM. MemAdr dispatches once more (load or store); the other words name their successors.',
       why: ['', 'Then every instruction would go to MemAdr after Decode: a fixed field cannot depend on the opcode.', 'The words follow by their next-address fields; and after Decode the path depends on the opcode, which a counter cannot see.'],
     },
   ],

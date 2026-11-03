@@ -15,7 +15,7 @@ export const chBasics: Chapter = {
     'say why a lamp lights only on a closed loop, and what voltage and current measure',
     'explain why a computer reads a wire as one of two levels, not ten',
     'count to 15 on four lamps, and read a truth table',
-    'step a five-line program through a small machine, and read a circuit drawn on this site',
+    'step a four-instruction program through a small machine, and read a circuit drawn on this site',
   ],
   steps: [
     {
@@ -45,7 +45,7 @@ export const chBasics: Chapter = {
         0 to 1 V. So why do computers read a wire as only "low" or "high"?</p>
         <p>Because every real wire picks up <strong>noise</strong>: small, random changes from its neighbours, from heat, from
         the supply. Read as two levels, a wire is wrong only when the noise moves it more than halfway, 0.5 V. Read as ten
-        levels a tenth of a volt apart, it is wrong after ${(1 / 18).toFixed(3)} V.</p>
+        levels a ninth of a volt apart, it is wrong after ${(1 / 18).toFixed(3)} V.</p>
         <p>With ±${NOISE.start} V of noise, ${NOISE.symbols} symbols arrive with ${two} misread at two levels and ${ten} at ten.
         Ten levels would carry ${Math.log2(10).toFixed(2)} bits a symbol against 1, but only on a wire nine times quieter.
         Two levels win: each wire carries one <strong>bit</strong>, 0 or 1, and a circuit can restore a weak 1 to a full one at

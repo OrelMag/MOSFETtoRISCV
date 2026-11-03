@@ -181,7 +181,7 @@ export const chOoo: Chapter = {
           adds has L = k and IPC ≤ 1: nothing to overlap. k independent adds have L = 1 and IPC ≤ k. A loop mixes the two: the iteration's own chain sets L per
           iteration, the iterations overlap when they do not depend on each other (matmul) and do not when each feeds the next (crc).</p>`,
         real: `<p>Limit studies of this kind (David Wall's, in the early 1990s) found that real integer programs, given realistic prediction and a finite window, offer a few
-          instructions per cycle, far under the perfect-machine ceiling. That is the reason the industry's wide cores stop at 4 to 8 wide.</p>`,
+          instructions per cycle, far under the perfect-machine ceiling. That is the reason the industry's wide cores stop at 4 to 10 wide.</p>`,
         pitfall: `<p>Reading the ceiling as what a bigger machine will reach. It assumes unlimited width, an unlimited window and perfect prediction; every later step of
           the chapter takes one of these away.</p>`,
       },
@@ -269,7 +269,7 @@ export const chOoo: Chapter = {
         waits for the value. <strong>WAW</strong> (write after write): while one instruction in flight writes a
         register, another that writes it may not issue, or the older value could land last. <strong>WAR</strong>
         (write after read): an instruction may not overwrite a register that an earlier one has yet to read.</p>
-        <p>Step through Hennessy and Patterson's example with the 6600's latencies (multiply 10, divide 40). The add
+        <p>Step through Hennessy and Patterson's example with its latencies (add 2, multiply 10, divide 40; the real 6600 divided in 29). The add
         is done at cycle 16 but may not write t1 until cycle 22, because the divide, still waiting for the multiply,
         has yet to read the old t1. The second load waits at issue because the one load unit is busy. Only RAW is a
         real dependence. WAR and WAW are clashes of names: the program reuses t1 for a new value. <em>Reused
@@ -366,7 +366,7 @@ export const chOoo: Chapter = {
           { title: 'Same-cycle dependence', show: ['by2', 'by3'], expect: { a1v: 1, a1t: 3 },
             say: '<p>The second instruction reads x5, which the first writes in this very cycle (<code>tag0</code> = 3). The table cannot know yet, but the bypass comparators can: <code>a1v</code> = {v:a1v}, <code>a1t</code> = {v:a1t}.</p>' },
           { title: 'The edge', cycles: 1, show: ['rows'], expect: { a1v: 1, a1t: 3 },
-            say: '<p>One clock edge writes both mappings into the table: x5 → entry 3, x6 → entry 4. The answer for the second instruction does not change, but it now comes from a row, not the bypass.</p>' },
+            say: '<p>One clock edge writes both mappings into the table: x5 → entry 3, x6 → entry 4. The answer for the second instruction does not change, and the row behind the bypass now holds the same tag: with <code>we0</code> still high the bypass goes on answering; once dispatch moves on (next beat) the row does.</p>' },
           { title: 'A later lookup', set: { we0: 0, we1: 0, rs1_0: 5, rs2_0: 6 }, show: ['rows', 'rd0', 'rd1'], expect: { a0v: 1, a0t: 3, b0v: 1, b0t: 4 },
             say: '<p>With nothing being dispatched, a lookup of x5 and x6 reads the rows: x5 waits for entry {v:a0t}, x6 for entry {v:b0t}.</p>' },
         ],
@@ -438,16 +438,16 @@ export const chOoo: Chapter = {
         next), and keeping them sorted would mean shifting ~200-bit entries every cycle. Instead an <strong>age
         matrix</strong> records, for every ordered pair of entries, which holds the older instruction: 56 bits for eight
         entries, 1536 NANDs. A new entry is younger than every entry present: its row clears and its column sets.</p>
-        <p>Select is then two levels of logic. Entry e wins when it is a candidate and no other candidate is older:
+        <p>Select is then two wide stages. Entry e wins when it is a candidate and no other candidate is older:
         <span data-show="blk6">an OR over seven ANDs</span>, <span data-show="g6">then an AND with its own
-        request</span>. The whole grant word is 280 NANDs and 11 levels deep, with no chain from entry 0 to 7 as in a
+        request</span>. The whole grant word is 280 NANDs and 11 NAND delays deep, with no chain from entry 0 to 7 as in a
         priority encoder.</p>
         <div class="try">Entries 6, 3 and 5 are candidates, and the matrix orders the entries 4, 1, 6, 0, 3, 2, 5, 7 from
         the oldest: 6 gets the grant. Clear its bit in <code>cand</code>: 3 wins.</div>
         <p>Wakeup and select together are the loop that sets the clock: a result's tag arrives on a bus, the waiting entry
         wakes, select picks it, and its operands reach the port's register, all within one cycle, or a chain of dependent
-        additions cannot run back to back. In our core this is the critical path, 93 NAND delays against the dual-issue
-        pipeline's 80. Port binding sat on it at first, when dispatch counted each port's entries after this cycle's
+        additions cannot run back to back. It is the loop designers fight for; in our core the 93 NAND delays against the
+        pipeline's 80 come from the path beside it: the divider's result, its result bus and the operand bypass. Port binding sat on the critical path at first, when dispatch counted each port's entries after this cycle's
         picks; counting before the picks and taking them off in parallel moved it off.</p>`,
       scene: () => ({ root: SELECT8, inputs: { cand: SELECT_CAND.reduce((m, e) => m | (1 << e), 0), older: olderBits(SELECT_ORDER) }, highlight: ['blk6', 'g6'] }),
       tries: [(st) => st.value('grant') === 1 << 3],
@@ -465,12 +465,12 @@ export const chOoo: Chapter = {
       },
       more: {
         derive: `<p>With older[i][j] = 1 when entry i is older than j, entry e is granted when cand[e] AND NOT (OR over j ≠ e of (cand[j] AND older[j][e])): nobody older is a
-          candidate. That is an OR over 7 ANDs and one more AND per entry, two levels of logic whatever the position of the entry. The matrix holds one bit for each of the
-          ${8 * 7} ordered pairs. Select alone is ${stats(SELECT8).nands} NANDs, ${logicDepth(SELECT8)} levels deep.</p>`,
+          candidate. That is an OR over 7 ANDs and one more AND per entry, two wide stages whatever the position of the entry. The matrix holds one bit for each of the
+          ${8 * 7} ordered pairs. Select alone is ${stats(SELECT8).nands} NANDs, ${logicDepth(SELECT8)} NAND delays deep.</p>`,
         real: `<p>Cores that issue by age keep the matrix; others pick by position in a collapsing queue, or pick the oldest ready instruction approximately (a random pick,
           or the first of each bank). The pick plus the wakeup is the loop that sets the clock, and wide cores spend design effort cutting it.</p>`,
         pitfall: `<p>Picking by position. An entry that sits in slot 0 is not the oldest: a freed slot takes whatever comes next. Pick by slot number and the youngest instruction may
-          win while an older one that the ROB head is waiting for starves. Clear the 6 in <code>cand</code> and see which entry takes over: it follows the age matrix, not the index.</p>`,
+          win while an older one that the ROB head is waiting for starves. With 6, 3 and 5 as candidates the grant is 6, not the lowest slot: it follows the age matrix, not the index.</p>`,
       },
     },
     {
@@ -514,7 +514,7 @@ export const chOoo: Chapter = {
         derive: `<p>The reorder buffer's storage: 16 entries × 109 bits = ${16 * 109} flip-flops, which with the ports (two allocations, two commits, two result buses writing, operands read by tag)
           is why the buffer takes more NANDs than any other block. Commit throughput: 2 a cycle, at most one store. A flush costs the distance from the branch to the head
           plus the refill of the front end, which the tour shows as the zero-commit cycles.</p>`,
-        real: `<p>Intel's Skylake retires 4 micro-ops a cycle, Apple's recent cores 8. Recovery is faster in real cores: the branch's checkpoint is restored when it
+        real: `<p>Intel's Skylake retires 4 micro-ops a cycle; Apple's recent cores decode and rename 8. Recovery is faster in real cores: the branch's checkpoint is restored when it
           resolves, without waiting for it to reach the head, which is the "recover at execute" row of the speculation table.</p>`,
         pitfall: `<p>Reading the CPU panel's golden-model check as a statement about timing. The ISS agrees after every <em>commit</em> because the registers change only there; it says nothing
           about which cycle an instruction executed in. The Out of order panel's timeline, from the model, is what checks the timing.</p>`,
@@ -582,7 +582,7 @@ export const chOoo: Chapter = {
       },
       more: {
         derive: `<p>Forwarding rule: for a load at address a with the store queue holding older stores s<sub>1</sub> … s<sub>k</sub> in program order, scan from the youngest older store to the oldest;
-          the first whose word address equals a supplies the value (partial words are merged by byte). If none matches, memory supplies it. Every older store must already have its address,
+          the first whose word address equals a supplies the value (our core has word accesses only; a core with byte stores must merge a partial store with memory, by byte, or make the load wait). If none matches, memory supplies it. Every older store must already have its address,
           or the load waits. The cost is a comparator per queue entry (4 entries here) on every load, and a priority chain among the matches.</p>`,
         real: `<p>Big cores let a load run ahead of older stores whose addresses are unknown, guided by a predictor of which loads alias which stores, and replay the load when a
           store proves the guess wrong. The store queue plus the load queue are the memory-ordering hardware, and as large as the reorder buffer in some designs.</p>`,
@@ -604,7 +604,7 @@ export const chOoo: Chapter = {
         <p>Pick a program in the CPU panel and run it to the halt. Its ✓ says the golden model agreed after every commit;
         the Out of order panel's, that the model agreed every cycle.</p>
         <p>Compare the three machines on one number, NANDs for CPI. The pipeline pair spends a third more than one pipeline for a sixth less time. This core spends
-        about two and a half times the single pipeline for CPI near one and a longer clock. The window and its wakeup are where the area goes, and the clock pays for the loop that closes them.</p>`,
+        about two and a half times the single pipeline for CPI near one and a longer clock. The window and its wakeup are where the area goes, and the clock pays for the bypass that feeds them.</p>`,
       scene: () => cpuScene({ source: PROGRAMS.find((p) => p.id === 'sort')!.source, ooo: true }),
       tour: {
         beats: [
@@ -621,7 +621,7 @@ export const chOoo: Chapter = {
       more: {
         derive: `<p>Time per instruction is period × CPI. On sort the out-of-order core has CPI ${cpi('ooo', 'sort')} at a period of ${period('ooo')} NAND delays: ${(period('ooo') * Number(cpi('ooo', 'sort'))).toFixed(1)} delays an instruction;
           the dual-issue pipeline, CPI ${cpi('pipe-2w', 'sort')} at ${period('pipe-2w')}, takes ${(period('pipe-2w') * Number(cpi('pipe-2w', 'sort'))).toFixed(1)}. On matmul the order reverses: ${(period('ooo') * Number(cpi('ooo', 'matmul'))).toFixed(1)} against ${(period('pipe-2w') * Number(cpi('pipe-2w', 'matmul'))).toFixed(1)}.</p>`,
-        real: `<p>In shipping cores the same machine is 4 to 8 wide with windows of 200 to 600 instructions and runs the clock at several GHz by splitting wakeup and select
+        real: `<p>In shipping cores the same machine is 4 to 10 wide with windows of 200 to 600 instructions and runs the clock at several GHz by splitting wakeup and select
           across clusters and pipelining the rest. The cost grows faster than the benefit, which is why the next chapter turns to more cores.</p>`,
         pitfall: `<p>Reading CPI below 1 as success. The machine is also slower in cycle time than the pipeline it beats on CPI; only the product matters. Compare NAND delays per instruction, as the next step does.</p>`,
       },
@@ -633,12 +633,12 @@ export const chOoo: Chapter = {
         single-cycle CPU, the best RV32IM pipeline, the dual-issue pipeline and the out-of-order core. The time of an
         instruction is the clock period times the CPI: NAND delays per instruction.</p>
         <p>The out-of-order core has the lowest CPI, 0.99, but not the shortest time: its period is 93 NAND delays
-        against the dual-issue pipeline's 80 (wakeup and select in one cycle), so an instruction takes 92.3 delays against
+        against the dual-issue pipeline's 80 (the divider's result through the operand bypass), so an instruction takes 92.3 delays against
         83.1, and the pipeline 99.6. With the hardware multiply (matmul-m) it is ahead: 78 against 88. It costs 2.54× the
         pipeline's NANDs and spends 133.6 pJ an instruction, 1.9× the dual-issue pipeline's.</p>
         <p>Pollack's rule says a core's performance grows as the square root of its area: 2.54× the NANDs should buy
         1.59×. Here it buys 1.08×. Our memory answers in one cycle; a real core's misses its caches for hundreds, and
-        hiding that is what large windows are for. The model shows the rest: at 2 wide the window stops paying at 16
+        hiding that is what large windows are for. The model shows the rest, on the five programs with matmul-m (where our core is 0.96): at 2 wide the window stops paying at 16
         entries (CPI 0.96 at 16, 32 and 64), 4 wide reaches 0.83 at 16 and 0.79 at 32, and 1 wide gains nothing from any
         window (1.36). Each step costs more than the last, which is why chips since the mid-2000s spend their transistors on
         more cores rather than wider ones: the next chapter.</p>`,
@@ -648,7 +648,7 @@ export const chOoo: Chapter = {
           best single pipeline, so the rule predicts ${Math.sqrt(RESULTS.cpus.find((c) => c.id === 'ooo')!.nands / RESULTS.cpus.find((c) => c.id === 'pipe-m-bal-bp')!.nands).toFixed(2)}×. Time per instruction is period × CPI, so a core can win on CPI and lose on the clock: the
           out-of-order core's CPI on fib is ${cpi('ooo', 'fib')} at ${period('ooo')} delays, the dual-issue pipeline's ${cpi('pipe-2w', 'fib')} at ${period('pipe-2w')}.</p>`,
         real: `<p>The gap between CPI and speed is why wide cores spent the 2000s fighting the clock: wakeup and select, the bypass network and the register file's ports all
-          scale badly with width. Cores in production are 4 to 8 wide, and the extra transistors went to caches, prediction and more cores.</p>`,
+          scale badly with width. Cores in production are 4 to 10 wide, and the extra transistors went to caches, prediction and more cores.</p>`,
         pitfall: `<p>Comparing CPI alone. The out-of-order core has the lowest average CPI of the machines in the table and a longer clock than either pipeline; only the product, delays per instruction, ranks the machines.
           A machine measured on a memory that answers in one cycle also shows less of what the window is for than a real one would.</p>`,
       },
@@ -695,8 +695,8 @@ export const chOoo: Chapter = {
         <p>crc spends its time on one branch: is the low bit 1? It goes either way at random, so no predictor learns it:
         290 mispredictions in 3049 instructions on our core, each paid when the branch reaches the head of the reorder
         buffer. The cure is in the code. Make the decision data: <code>neg</code> turns the bit into 0 or all ones,
-        <code>and</code> with the polynomial picks it or 0, and the <code>xor</code> always runs. Two more instructions a
-        bit, and no branch.</p>
+        <code>and</code> with the polynomial picks it or 0, and the <code>xor</code> always runs. One and a half more instructions a
+        bit on average, and no branch.</p>
         <p>On the benchmark that is 3819 instructions instead of 3049, but 2330 cycles instead of 3021: 21
         mispredictions. The in-order dual-issue machine of step 3 gains as much (3045 → 2370 cycles): the win is in
         prediction, not in reordering. Compilers do this where they can (if-conversion into a select, cmov on x86,
