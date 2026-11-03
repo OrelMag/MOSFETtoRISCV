@@ -1198,6 +1198,9 @@ links, bus taps, duplicate and pin reordering. The gaps:
 - Copy link to this view: inputs, probes and clock cycles in an optional hash suffix (ui/viewlink.ts, Stage share menu)
 - Text size (90–130 %) and a narrow reading column, prose only
 
+### Appendix D — A game with no program: Bit Runner ✅
+An original video game in 74xx counters and gates, no CPU or ROM, every board wired from the netlist (docs/RUNNER.md).
+
 ### Appendix A — An 8-bit CPU of 1975: the MOS 6502 ✅
 After the journey, a lettered appendix: the real 6502 rebuilt the way 1975 built it, at transistor level, and why
 our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section after chapter 34, the "vintage" accent).

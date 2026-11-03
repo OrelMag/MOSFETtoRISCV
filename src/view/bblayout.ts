@@ -84,6 +84,8 @@ export interface BbBoard {
   switches?: BbSwitch[];
   leds?: BbLed[];
   digits?: BbDigit[];
+  /** Holes of clear board above and below a single row of chips, for its jumpers. */
+  air?: number;
   /** The bus strip (BbBus.id) the board is wired to: a ribbon of jumpers from its side facing the strip. */
   bus?: string;
   drives?: BbActive;
@@ -100,11 +102,18 @@ export interface BbBus {
   port: string;
 }
 
+/** The room for wires between boards: vertical gutters, and `gap` holes above and below every board. `w`, `h`: the grid's extent. */
+export interface BbChannels { gutters: { x: number; w: number }[]; gap: number; w: number; h: number }
+
 export interface BreadboardLayout {
   boards: BbBoard[];
   buses?: BbBus[];
   /** The stage's caption over the boards: '18 ICs, 74LS series'. */
   note?: string;
+  /** Boards in a grid of equal rows with channels between them: wires between boards run there (bbwires.ts), not over chips. */
+  channels?: BbChannels;
+  /** Pixels per hole down to which the whole layout is shown (default BB_READ_PX): its overview matters more than its print. */
+  readPx?: number;
   /** The same boards in one column, for a canvas too narrow to read the layout whole (pickArrangement). */
   narrow?: BreadboardLayout;
 }
@@ -179,7 +188,8 @@ export interface BoardPlan {
 export function planBoard(b: BbBoard): BoardPlan {
   const W = b.size[0];
   const chips: Box[] = [], beside: Box[] = [];
-  let x = BB.side + 0.6, y = BB.top, rowH = 0, maxW = 0;
+  const air = b.air ?? 0;
+  let x = BB.side + 0.6, y = BB.top + air, rowH = 0, maxW = 0;
   const place = (w: number, h: number, gap: number): Box => {
     if (x > BB.side + 0.6 && x + w > W - BB.side) {
       x = BB.side + 0.6;
@@ -199,7 +209,7 @@ export function planBoard(b: BbBoard): BoardPlan {
   for (const l of b.beside ?? []) beside.push(place(BB.led, BB.led + BB.ledLabel, BB.ledGap + (l.gap ? 0.8 : 0)));
   // beside LEDs sit centred on the chip row
   for (const r of beside) r.y += Math.max(0, (rowH - r.h) / 2);
-  let iy = (chips.length || beside.length) ? y + rowH + BB.rowGap : BB.top;
+  let iy = (chips.length || beside.length) ? y + rowH + BB.rowGap + air : BB.top;
   let ix = BB.side;
   const switches: Box[] = [], leds: Box[] = [], digits: Box[] = [];
   let ih = 0;
@@ -246,7 +256,7 @@ export function layoutBounds(l: BreadboardLayout): { w: number; h: number } {
     w = Math.max(w, r.at[0] + r.size[0]);
     hh = Math.max(hh, r.at[1] + r.size[1]);
   }
-  return { w, h: hh };
+  return { w: Math.max(w, l.channels?.w ?? 0), h: Math.max(hh, l.channels?.h ?? 0) };
 }
 
 /** Holes of margin around the boards in a fitted view. */
@@ -277,7 +287,7 @@ export function pickArrangement(l: BreadboardLayout, pw: number, ph: number): 'w
   if (!l.narrow || !(pw > 0 && ph > 0)) return 'wide';
   const b = layoutBounds(l), n = layoutBounds(l.narrow);
   const s = Math.min(pw / (b.w + 2 * BB_MARGIN), ph / (b.h + 2 * BB_MARGIN));
-  if (s >= BB_READ_PX) return 'wide';
+  if (s >= (l.readPx ?? BB_READ_PX)) return 'wide';
   return pw / (n.w + 2 * BB_MARGIN) >= 1.25 * s ? 'narrow' : 'wide';
 }
 
@@ -400,6 +410,12 @@ export class BbNets {
     const id = node?.ports[n.port]?.[n.bit ?? 0];
     this.nets.push(id ?? 0);
     if (id === undefined) this.missing.push(this.nets.length - 1);
+    return this.nets.length - 1;
+  }
+
+  /** Register a flat net by its id; its index into read(). */
+  netById(id: number): number {
+    this.nets.push(id);
     return this.nets.length - 1;
   }
 

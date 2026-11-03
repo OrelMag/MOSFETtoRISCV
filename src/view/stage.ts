@@ -381,7 +381,8 @@ export class Stage {
       segBtn('Breadboard', 'The circuit as built: chips on breadboards, every LED a net of the same simulation', () => this.showBoards(true)));
     this.wireSeg = h('div', { class: 'seg bb-wires bb-only', role: 'group', 'aria-label': 'Wire colours', hidden: true },
       segBtn('Wires as built', 'Jumpers in their own colours', () => this.setWires('built')),
-      segBtn('By value', 'Jumpers coloured by value, as on the schematics', () => this.setWires('value')));
+      segBtn('By value', 'Jumpers coloured by value, as on the schematics', () => this.setWires('value')),
+      segBtn('No wires', 'Hide the jumpers between the chips', () => this.setWires('none')));
     this.board = new BreadboardView({
       toggle: (port, bit) => {
         const p = this.scene?.root.ports.find((q) => q.name === port);
@@ -955,7 +956,7 @@ export class Stage {
     wireChoice = w;
     this.board.wires = w;
     [...this.wireSeg.querySelectorAll('button')].forEach((b, i) => {
-      const on = (i === 0) === (w === 'built');
+      const on = (['built', 'value', 'none'] as const)[i] === w;
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));
     });
@@ -1304,7 +1305,7 @@ export class Stage {
   }
 
   /** Run n clock cycles as fast as possible, refreshing the view once at the end. */
-  runCycles(n: number, stop?: () => boolean, flowMs = 0): number {
+  runCycles(n: number, stop?: () => boolean, flowMs = 0, quiet = false): number {
     const clk = this.clockPort();
     if (!clk || !this.sim) return 0;
     this.stopClock();
@@ -1313,7 +1314,8 @@ export class Stage {
     let i = 0;
     for (; i < n && !(stop && stop()); i++) this.cycle(clk);
     this.lastSettle = null;
-    this.refreshFlowing(flowMs);
+    // quiet: the caller repaints when it wants to (a game's screen runs far faster than the page can redraw the stage)
+    if (!quiet) this.refreshFlowing(flowMs);
     return i;
   }
 
@@ -1566,6 +1568,8 @@ export class Stage {
     const b = this.runBtn;
     if (!b) return;
     const on = !!this.runClock;
+    // unchanged: every runCycles comes through here, and fitControls forces a layout of the page
+    if (b.getAttribute('aria-pressed') === String(on)) return;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
     b.replaceChildren(icon(on ? 'pause' : 'play', 14), h('span', { class: 'lbl' }, on ? 'Pause' : 'Run'));

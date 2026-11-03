@@ -52,6 +52,14 @@ const QUAD_PINS: TtlPin[] = [
  */
 export const TTL_PINS: Record<string, TtlPin[]> = {
   ls00: QUAD_PINS, ls08: QUAD_PINS, ls32: QUAD_PINS, ls86: QUAD_PINS,
+  ls10: [
+    P('1A', 'a', 0), P('1B', 'b', 0), P('2A', 'a', 1), P('2B', 'b', 1), P('2C', 'c', 1), P('2Y', 'y', 1), GND,
+    P('3Y', 'y', 2), P('3A', 'a', 2), P('3B', 'b', 2), P('3C', 'c', 2), P('1Y', 'y', 0), P('1C', 'c', 0), VCC,
+  ],
+  ls20: [
+    P('1A', 'a', 0), P('1B', 'b', 0), P('NC'), P('1C', 'c', 0), P('1D', 'd', 0), P('1Y', 'y', 0), GND,
+    P('2Y', 'y', 1), P('2A', 'a', 1), P('2B', 'b', 1), P('NC'), P('2C', 'c', 1), P('2D', 'd', 1), VCC,
+  ],
   ls02: [
     P('1Y', 'y', 0), P('1A', 'a', 0), P('1B', 'b', 0), P('2Y', 'y', 1), P('2A', 'a', 1), P('2B', 'b', 1), GND,
     P('3A', 'a', 2), P('3B', 'b', 2), P('3Y', 'y', 2), P('4A', 'a', 3), P('4B', 'b', 3), P('4Y', 'y', 3), VCC,
@@ -120,7 +128,7 @@ export const TTL_ACTIVE_LOW: Record<string, string[]> = {
 
 /** The 74xx part numbers as printed on the package, by key. */
 export const TTL_PART: Record<string, string> = {
-  ls00: '74LS00', ls02: '74LS02', ls04: '74LS04', ls08: '74LS08', ls32: '74LS32', ls86: '74LS86', ls138: '74LS138', ls139: '74LS139',
+  ls00: '74LS00', ls10: '74LS10', ls20: '74LS20', ls02: '74LS02', ls04: '74LS04', ls08: '74LS08', ls32: '74LS32', ls86: '74LS86', ls138: '74LS138', ls139: '74LS139',
   ls157: '74LS157', ls161: '74LS161', ls173: '74LS173', ls189: '74LS189', ls245: '74LS245', ls273: '74LS273', ls283: '74LS283',
   ls76: '74LS76', at28c16: '28C16', ne555: 'NE555',
 };
@@ -157,6 +165,44 @@ function quad(id: string, part: string, g: ComponentDef, f: (a: number, b: numbe
 }
 
 export const LS00 = quad('ls00', '74LS00', NAND, (a, b) => ~(a & b), 'NAND');
+/** n-input NAND packages: count gates, each y[i] = NOT (a[i] AND b[i] …). */
+function nandPack(id: string, part: string, g: ComponentDef, names: string[], count: number): ComponentDef {
+  const ports = [...names.map((n) => bus(n, count, 'in')), bus('y', count, 'out')];
+  const b = new Builder(16, 10, 4);
+  b.pins(...names);
+  const parts = names.map((n) => b.op(splitter(ones(count), 4), [n], n.toUpperCase()));
+  b.next();
+  const ys = Array.from({ length: count }, (_, i) => b.op1(g, parts.map((p) => `${p}.o${i}`), undefined, `g${i + 1}`));
+  b.next();
+  b.wire(b.op1(merger(ones(count), 2), ys), 'y');
+  return define({
+    id, name: `${part} ${count === 2 ? 'dual' : 'triple'} ${names.length}-input NAND`, category: 'ttl',
+    summary: `${count === 2 ? 'Two' : 'Three'} independent ${names.length}-input NAND gates in one 14-pin package.`,
+    ports, symbol: { kind: 'box', label: part },
+    spec: (xs) => [Array.from({ length: count }, (_, i) => (xs.every((x) => (x >> i) & 1) ? 0 : 1 << i)).reduce((p, q) => p | q, 0)],
+    netlist: built(b, ports),
+  });
+}
+
+/** A 4-input NAND: the two ANDs of the pairs into a NAND. */
+const NAND4: ComponentDef = (() => {
+  const ports = [bit('a', 'in'), bit('b', 'in'), bit('c', 'in'), bit('d', 'in'), bit('y', 'out')];
+  const b = new Builder(16, 10, 4);
+  b.pins('a', 'b', 'c', 'd');
+  const p = b.op1(AND, ['a', 'b']), q = b.op1(AND, ['c', 'd']);
+  b.next();
+  b.wire(b.op1(NAND, [p, q]), 'y');
+  return define({
+    id: 'nand4', name: '4-input NAND', category: 'gate',
+    summary: 'y = NOT (a AND b AND c AND d), from 2-input NANDs (in CMOS it would be one gate of eight transistors).',
+    ports, symbol: { kind: 'box', label: 'NAND4' },
+    spec: ([a, c, d, e]) => [a && c && d && e ? 0 : 1],
+    netlist: built(b, ports),
+  });
+})();
+
+export const LS10 = nandPack('ls10', '74LS10', NAND3, ['a', 'b', 'c'], 3);
+export const LS20 = nandPack('ls20', '74LS20', NAND4, ['a', 'b', 'c', 'd'], 2);
 export const LS02 = quad('ls02', '74LS02', NOR, (a, b) => ~(a | b), 'NOR');
 export const LS08 = quad('ls08', '74LS08', AND, (a, b) => a & b, 'AND');
 export const LS32 = quad('ls32', '74LS32', OR, (a, b) => a | b, 'OR');
