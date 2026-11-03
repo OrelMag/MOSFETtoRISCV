@@ -698,7 +698,7 @@ export const chSingleCycle: Chapter = {
       },
       {
         question: 'Which block of the control unit has real logic beyond decoding the opcode?',
-        options: ['ALUControl: R-type passes funct7[5] and funct3, OP-IMM only funct3 (bit 30 is immediate), loads / stores / jalr / auipc force ADD, branches SUB', 'RegWrite, which needs all of funct7', 'MemWrite, which depends on funct3'],
+        options: ['ALUControl, which passes funct7[5] and funct3 for an R-type, only funct3 for OP-IMM, and forces ADD for address arithmetic and SUB for branches', 'RegWrite, which needs all of funct7', 'MemWrite, which depends on funct3'],
         answer: 0,
         explain: 'Every other output is an OR of opcode classes. ALUControl also reads funct3 and funct7, with the exceptions that make one adder serve addresses, compares and arithmetic.',
         why: ['', 'RegWrite is the OR of the classes that write a register: opcode alone.', 'MemWrite is the store class and nothing else.'],
