@@ -95,7 +95,11 @@ export function partsNav(
   requestAnimationFrame(() => {
     const el = list.querySelector<HTMLElement>('.pstep.cur');
     if (!el || list.scrollHeight <= list.clientHeight) return;
-    list.scrollTop = Math.max(0, el.offsetTop - list.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2);
+    // the current part's heading at the top when the part fits, else its current row in the middle
+    const part = el.closest<HTMLElement>('details.part');
+    list.scrollTop = part && part.offsetHeight <= list.clientHeight
+      ? part.offsetTop - list.offsetTop
+      : Math.max(0, el.offsetTop - list.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2);
   });
   return h('div', { class: 'parts-nav' }, segs, wrap);
 }
