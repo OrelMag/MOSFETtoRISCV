@@ -21,6 +21,7 @@ import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
 import { chBasics } from './ch-basics';
 import { chAppendix6502 } from './ch-6502';
 import { chAppendixDoom } from './ch-doom';
+import { chAppendixRunner } from './ch-runner';
 import { chAppendixSap } from './ch-sap';
 import { chDram } from './ch-dram';
 import { chMemCtrl } from './ch-memctrl';
@@ -39,7 +40,7 @@ export const chapters: Chapter[] = [
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   // the appendix: after the journey, lettered
-  chAppendix6502, chAppendixDoom, chAppendixSap,
+  chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];
 
 // Planned chapters, shown as "coming soon" (none now: the GPU track is complete).

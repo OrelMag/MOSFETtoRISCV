@@ -437,7 +437,7 @@ export const RB_VIDEO: ComponentDef = (() => {
 export const RB_PORTS: PortDef[] = [
   bit('clk', 'in', true), bit('up', 'in'), bit('down', 'in'), bit('flip', 'in'), bit('start', 'in'),
   bit('white', 'out'), bit('amber', 'out'), bit('cyan', 'out'), bit('hsync', 'out'), bit('vsync', 'out'),
-  bus('ones', 4, 'out'), bus('tens', 4, 'out'), bus('lives', 2, 'out'), bit('run', 'out'), bit('crash', 'out'),
+  bus('ones', 4, 'out'), bus('tens', 4, 'out'), bus('lives', 2, 'out'), bit('run', 'out'), bit('crash', 'out'), bit('bit', 'out'),
 ];
 
 /** Where a test or the panel reads a register: [instance path, output port]. */
@@ -484,6 +484,7 @@ export const BIT_RUNNER: ComponentDef = (() => {
   b.wire(lives, 'lives');
   b.wire(run, 'run');
   b.wire(`${rules}.crash`, 'crash');
+  b.wire(bitS, 'bit');
   const R = b.right;
   return define({
     id: 'bit_runner', name: 'Bit Runner', category: 'cpu',
