@@ -6,6 +6,7 @@
 // finished CPU. The chip is the same one the sandbox opens ("Open in sandbox"), nothing is copied.
 // Loaded on demand with the editor (app.ts imports it dynamically).
 
+import { setPageTitle } from '../pagetitle';
 import { groupDigits } from '../../sim/numfmt';
 import '../../styles/editor.css';
 import '../../styles/sbchips.css';
@@ -90,6 +91,7 @@ export class LevelPage implements Page {
   constructor(nodeId: string) {
     this.nodeId = nodeId;
     const n = nodeById(nodeId);
+    setPageTitle(n?.title ?? 'No such level', 'Campaign');
     const ch = n && !n.soon ? levelChallenge(n) : undefined;
     const p = progress();
     if (!n || !ch) {

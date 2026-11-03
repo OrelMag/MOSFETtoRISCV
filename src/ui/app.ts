@@ -17,6 +17,7 @@ import { isTwinKey } from '../campaign/twinids';
 import { menuKeys } from './menukeys';
 import { installNavFit } from './navfit';
 import { installReturn, type ReturnLabelled } from './returnto';
+import { routeTitle, setPageTitle } from './pagetitle';
 
 /**
  * Which of the top bar's circuit settings a route uses: the bus radix wherever a circuit is drawn
@@ -240,6 +241,7 @@ export function startApp(root: HTMLElement): void {
     setPendingView(onStage ? decodeView(query) : null);
     const parts = (onStage ? base : location.hash).replace(/^#\/?/, '').split('/').filter(Boolean);
     const key = parts[0] ?? 'home';
+    setPageTitle(...routeTitle(parts, key === 'c' ? outlineOf(parts[1] ?? outline[0].id) : undefined));
     for (const a of nav.querySelectorAll<HTMLAnchorElement>('a')) a.classList.toggle('active', a.dataset.key === key || (key === '' && a.dataset.key === 'home'));
     const shows = stageTools(parts);
     radix.hidden = !shows.radix;

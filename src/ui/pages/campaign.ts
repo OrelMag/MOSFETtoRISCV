@@ -4,6 +4,7 @@
 // level screen (pages/level.ts): Play writes the level's chip into the saved workspace and opens
 // #/campaign/play/<node>.
 
+import { setPageTitle } from '../pagetitle';
 import { groupDigits } from '../../sim/numfmt';
 import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
@@ -118,6 +119,9 @@ export class CampaignPage implements Page {
 
   open(parts: string[]): void {
     this.parts = parts;
+    const [a, b] = parts;
+    if (a === 'codex' && codexById(b ?? '')) setPageTitle(codexById(b)!.title, 'Codex');
+    else if (a === 'n' && nodeById(b ?? '')) setPageTitle(nodeById(b)!.title, 'Campaign');
     this.render();
   }
 

@@ -1,6 +1,7 @@
 // The workbench: open any component from the library on its own, drive its inputs freely,
 // and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
+import { setPageTitle } from '../pagetitle';
 import { bench } from '../../chapters/types';
 import { libraryItems, suggestItems } from '../../lib/catalog';
 import { familyOf, resolveComponent } from '../../lib/resolve';
@@ -79,6 +80,7 @@ export class WorkbenchPage implements Page {
     // A pick in the phone's drawer closes it, the circuit comes back into view.
     if (this.el?.classList.contains('lib-open')) this.showLibrary(false);
     const def = resolveComponent(id);
+    setPageTitle(def ? def.name : 'Unknown component', 'Workbench');
     if (def && def.id === this.current && this.stage.target) {
       // the part on the stage already: only the drill path moved (Back / Forward, a link, the Parts tab), or the
       // library's pick of it again goes back to its top level
