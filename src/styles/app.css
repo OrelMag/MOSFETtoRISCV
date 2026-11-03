@@ -717,8 +717,8 @@ html[data-widget-step] .slow-btn { display: none; }
     background:
       linear-gradient(to right, var(--surface) 30%, transparent) left / 28px 100% no-repeat local,
       linear-gradient(to left, var(--surface) 30%, transparent) right / 28px 100% no-repeat local,
-      linear-gradient(to right, var(--scroll-shadow), transparent) left / 10px 100% no-repeat scroll,
-      linear-gradient(to left, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll;
+      linear-gradient(to right, color-mix(in srgb, var(--text) 28%, transparent), transparent) left / 22px 100% no-repeat scroll,
+      linear-gradient(to left, color-mix(in srgb, var(--text) 28%, transparent), transparent) right / 22px 100% no-repeat scroll;
   }
   .controls { row-gap: 6px; }
 }
@@ -2288,6 +2288,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bus-screen { display: block; width: 192px; max-width: 100%; aspect-ratio: 1; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--border); background: #000; }
 .bus-keys { display: flex; gap: 6px; align-items: center; }
 .bus-keys > .btn { flex: none; white-space: nowrap; }
+/* the pseudo-instruction expander's free-text field (widgets/abi.ts): themed, not the browser's white default */
+.asm-try { width: min(100%, 30em); padding: 5px 9px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-2); color: var(--text); font: 13px var(--font-mono); }
 .bus-type { flex: 1 1 auto; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font: 12px var(--font-mono); }
 
 /* ---------- touch: hit areas of 40 px or more on a coarse pointer ----------
@@ -2746,3 +2748,5 @@ html[data-busy]::before {
 }
 @keyframes busy-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(260%); } }
 @media (prefers-reduced-motion: reduce) { html[data-busy]::before { width: 100%; animation: busy-pulse 1.4s ease-in-out 0.25s infinite; } @keyframes busy-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 0.8; } } }
+
+@media (pointer: coarse) { .asm-try { min-height: 40px; } }
