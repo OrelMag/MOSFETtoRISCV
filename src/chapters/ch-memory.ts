@@ -1,9 +1,10 @@
 import { groupDigits } from '../sim/numfmt';
 import { cam, decoder, equal, fifo, LFSR_TAPS, MUX2, muxTree, pla, PLA_PRESETS, plaTerms, regfileMP, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
 import { CLK_TO_Q, SETUP } from '../sim/timing';
-import { DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
+import { DFF_EDGE6, DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
 import { logicDepth, stats } from '../sim/stats';
 import { pack } from '../sim/values';
+import { MS_TIMING, timingSteps } from './seq/timing';
 import { fsmPanel } from '../widgets/fsmpanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
@@ -26,7 +27,8 @@ export const chLatches: Chapter = {
     'store a bit in two cross-coupled NANDs, and say what the forbidden input does to them',
     'explain metastability: a balanced latch that noise resolves, in a time with no upper bound',
     'derive a D latch from the SR latch, transparent while its enable is 1',
-    'build an edge-triggered flip-flop from two latches, state its setup, hold and clock-to-q times, and give it a load enable',
+    'build an edge-triggered flip-flop from two latches, read its setup, hold and clock-to-q off a sweep of the circuit, and give it a load enable',
+    'say why clock skew breaks a hold check at any clock frequency, and what the six-gate 7474 trades for its gates',
   ],
   builds: ['gates'],
   recap: {
@@ -36,6 +38,9 @@ export const chLatches: Chapter = {
       `D latch (${nands(D_LATCH)} NANDs): d and ¬d drive set and reset, gated by e, so the forbidden input cannot occur. Transparent while e = 1, closed while e = 0. Taking r_n = NAND(s_n, e) drops the inverter: ${nands(RV16_DLATCH)} NANDs.`,
       `D flip-flop (${nands(DFF)} NANDs, ${nands(RV16_DFF)} with the ${nands(RV16_DLATCH)}-NAND latch): a master latch open while clk is low, a slave open while it is high. q changes only at the rising edge.`,
       'The timing contract: d settled a setup time before the edge, held a hold time after it; q follows clk-to-q later. Period ≥ clk-to-q + slowest logic + setup.',
+      `Measured on the circuit: setup ${MS_TIMING().setup}, hold ${MS_TIMING().hold}, clock-to-q ${MS_TIMING().cq} delays (worst case over both directions of d). Between "new captured" and "old kept" is an aperture where q is undecided: the race of the SR latch.`,
+      'Hold is a race between two edges of one cycle: a late clock on the capturing flip-flop (skew) breaks it at every frequency. Setup is cured by a longer period, hold only by delay in the data path or less skew.',
+      `The 7474 edge-triggered flip-flop is six gates (${nands(DFF_EDGE6)} NANDs here, against ${nands(DFF)}): fewer gates, but a slower falling output and a wider window.`,
       `Load enable: a multiplexer feeds q back into d while en = 0 (${nands(DFFE)} NANDs a bit). The clock itself is not gated (real chips do, with clock-gating cells).`,
     ],
     practise: ['s_sr', 's_dlatch', 's_dff'],
@@ -219,23 +224,26 @@ export const chLatches: Chapter = {
     },
     {
       title: 'The flip-flop: act only on the edge',
-      body: `
+      get body() {
+        const T = MS_TIMING();
+        return `
         <p>A transparent latch is awkward in a big circuit: while it is open, changes race straight through. We want
         a memory that samples its input at one precise instant.</p>
         <p>Chain two D latches with <span data-show="inv">opposite enables</span>: the <strong><span data-show="master">master</span></strong> is open while the clock is low; the
         <strong><span data-show="slave">slave</span></strong> while it is high. At the moment the clock rises, the master closes (capturing d)
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>. At no instant are both open, so there is never
         a transparent path from d to q: that is the whole trick. Cost: two latches and an inverter, ${nands(DFF)} NANDs, ${stats(DFF).transistors} transistors.</p>
-        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (2 delays here): d must have crossed
-        <span data-show="master">the master</span> before clk rises; a falling d goes through the master's inverter and a NAND.
-        <strong>Hold</strong> (1 delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
-        <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (2 delays here for a rising q, 3 for a falling one): the time the
+        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here): d must have crossed
+        <span data-show="master">the master</span> before clk rises (the larger of the rising and falling d's setup is quoted); a falling d goes through the master's inverter and a NAND.
+        <strong>Hold</strong> (${T.hold} delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
+        <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (${T.r.cqRise} delays here for a rising q, ${T.r.cqFall} for a falling one): the time the
         <span data-show="slave">slave</span> takes to show the captured value. Between two flip-flops the period must cover clk-to-q + the
         slowest logic + setup, and clk-to-q plus the fastest path must outlast the hold time. Here the numbers fall out of unit NAND delays; in
         silicon they come from characterizing the cell, tens of picoseconds each, and a d that changes inside the window can leave
-        the master balanced half way: metastable.</p>
+        the master balanced half way: metastable. The next steps measure all three on this circuit.</p>
         <div class="try">Change d while the clock is low: q does not move. Press <strong>Pulse</strong>: q
-        takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`,
+        takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`;
+      },
       tour: {
         beats: [
           { title: 'Clock low: master open', set: { d: 1 }, show: ['inv', 'master'], expect: { q: 0 },
@@ -260,6 +268,7 @@ export const chLatches: Chapter = {
       scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 }, autoClock: false }),
       tries: [(st) => st.cycles > 0 && st.value('q') === st.getInput('d')],
     },
+    ...timingSteps,
     {
       title: 'Load enable',
       body: `

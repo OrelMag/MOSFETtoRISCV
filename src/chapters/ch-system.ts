@@ -7,6 +7,7 @@ import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Stage } from '../view/stage';
+import { IO_MORE, TRAPS_MORE } from './ch-system-more';
 import type { Chapter } from './types';
 
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
@@ -46,6 +47,7 @@ export const chIO: Chapter = {
     'extract a byte or halfword on a load and sign- or zero-extend it',
     'say which accesses are misaligned',
     'drive a console, LEDs and switches with ordinary loads and stores to I/O addresses',
+    'say why an I/O register is not memory: whole-word writes, reads with side effects, polling the clock',
   ],
   builds: ['memory', 'cpu'],
   recap: {
@@ -55,6 +57,7 @@ export const chIO: Chapter = {
       'A load picks the lane with a 4:1 (byte) or 2:1 (half) mux, then sign- or zero-extends by wiring alone: the cost is all in the multiplexers.',
       'A halfword at an odd address or a word off a 4-byte boundary is misaligned. RISC-V lets an implementation handle it in hardware or <span data-ahead="traps">trap (jump to a software handler, chapter 20)</span>; the complete CPU traps.',
       `Addresses with bit 31 set go to the I/O unit: a store to 0x8000_0000 prints a byte, 0x8000_0004 sets the LEDs, a load from 0x8000_0008 reads the switches. The whole machine is about ${kNands(sysNands(false).core)} NANDs without its program ROM.`,
+      'An I/O register takes the whole word (a sub-word store is replicated into it), a store can be the action itself, and a read can have a side effect: I/O is never cached or reordered. Polling a clock register quantises time to the loop that reads it.',
     ],
     practise: ['c_computer'],
     check: [
@@ -252,6 +255,7 @@ export const chIO: Chapter = {
       },
       tries: [(st) => st.value('leds') > 0],
     },
+    ...IO_MORE,
   ],
 };
 
@@ -263,6 +267,7 @@ export const chTraps: Chapter = {
     'list what the hardware does on a trap and on mret, register by register',
     'tell a pending interrupt from a taken one: mip, mie and mstatus.MIE',
     'order the trap causes by priority and give each its mcause',
+    'weigh polling against interrupts by cycles and latency, and nest, vector and latch interrupts',
   ],
   builds: ['cpu', 'io'],
   recap: {
@@ -273,9 +278,10 @@ export const chTraps: Chapter = {
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
       'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
+      'Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per 30 cycles with 6 instructions of work between polls.',
+      'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with four ANDs and four ORs.',
     ],
-    practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],
-    check: [
+    practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],    check: [
       {
         question: 'An <code>ecall</code> traps to a handler. What must the handler do before <code>mret</code> so that the program continues after the ecall?',
         options: ['Add 4 to mepc', 'Nothing: mepc already points past the ecall', 'Set MIE', 'Clear mcause'],
@@ -532,6 +538,7 @@ export const chTraps: Chapter = {
         explain: 'Pending and enabled are separate: mip shows the line for as long as the device holds it, and the interrupt is taken as soon as mret restores MIE. That is why handlers must clear the cause at the device. This scene\'s IRQ button is different: it raises the line for one cycle and nothing latches it, so a press during the handler is lost. Real systems latch the request, in the device or in an interrupt controller (RISC-V\'s PLIC), until software acknowledges it.',
       },
     },
+    ...TRAPS_MORE,
     {
       title: 'Inside the trap unit',
       body: `

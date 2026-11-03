@@ -11,6 +11,8 @@ import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widge
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { aluSteps, BRANCH_WRONG, CTL_PARTS } from './alu/steps';
+import { RF_NUMBERS, rfSteps } from './rf/steps';
 
 const { control: CONTROL_NANDS, and5: AND5_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
@@ -47,6 +49,7 @@ export const chAlu: Chapter = {
     'build a barrel shifter from log₂ n mux stages, with one right-shifter serving all three shifts',
     'read signed and unsigned less-than from one subtraction (N ⊕ V, ¬C)',
     'say where the ALU control comes from: {funct7[5], funct3} for an R-type, a few gates for <span data-ahead="immediates">immediates (constants stored inside the instruction word)</span>, addresses and branches',
+    'read all six branch conditions off one subtraction, and say which operations of the ALU wait for the carry chain and which do not',
   ],
   builds: ['adders', 'routing'],
   recap: {
@@ -56,6 +59,8 @@ export const chAlu: Chapter = {
       'No comparator: a − b gives Z (equal), N ⊕ V (signed less-than: N alone lies on overflow) and ¬C (unsigned less-than: no carry out of a + ¬b + 1).',
       'Every unit computes every cycle and an 8:1 mux on ctl[2:0] picks the result; ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
       'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere a few gates decide: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
+      `Branches: beq Z, bne ¬Z, blt N ⊕ V, bge ¬(N ⊕ V), bltu ¬C, bgeu C, from the same subtraction (${BRANCH_WRONG.nAlone.toLocaleString('en')} of 65 536 8-bit pairs would be wrong on N alone). The ALU control: ctl[2:0] = aluOp ? funct3 : 0, ctl[3] = aluOp · f7[5] · (R ∨ funct3 = 101) ∨ BRANCH (${CTL_PARTS} NANDs).`,
+      'Held at one control code the result settles in 8 delays for and / or, 20 for a shift, 73 for add and 81 for slt (ripple adder, measured: tests/deepseq.test.ts); with a log-depth adder add is 23 and the shifter is unchanged.',
       'At 32 bits: 2610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
     ],
     practise: ['a_addsub16', 'a_slt', 'a_shift16', 'a_alu16'],
@@ -264,6 +269,7 @@ export const chAlu: Chapter = {
         solve: (st) => st.setInputs({ a: 0x80, b: 3, ctl: 0b1101 }),
       },
     },
+    ...aluSteps,
   ],
 };
 
@@ -274,6 +280,7 @@ export const chRegfile: Chapter = {
     'say why an R-type instruction needs two read ports and one write port, and what each port costs',
     'explain how a constant x0 gives li, nop, j, beqz, neg and ret for free',
     'price the 32 × 32 register file in NANDs against the rest of the CPU',
+    'give a read of the register being written the new value, say what a file of latches saves and what it risks, and say who wins when two write ports name one register',
   ],
   builds: ['registers', 'memory'],
   recap: {
@@ -282,6 +289,7 @@ export const chRegfile: Chapter = {
       'Structure: a write decoder, one register with enable per word, every word bundled onto one bus, and a mux tree per read port.',
       'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>li</code> (addi rd, x0, imm), <code>nop</code>, <code>j</code> (jal x0), <code>beqz</code>, <code>neg</code> (sub rd, x0, rs) and <code>ret</code> (jalr x0, 0(ra)) are pseudo-instructions built on it; <code>mv</code> is addi rd, rs, 0 and needs none.',
       `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter 14 (about 48 000 without its program ROM).`,
+      `A bypass (a comparator and a word mux per read port, ${RF_NUMBERS().by - RF_NUMBERS().rf} NANDs for two) returns the incoming write data for a same-cycle read, never for x0. A latch file stores a bit in ${RF_NUMBERS().latch} NANDs against ${RF_NUMBERS().dff}: ${fmt(RF_NUMBERS().lf)} instead of ${fmt(RF_NUMBERS().rf)}, but its data path is transparent for the whole high phase. With two write ports the younger instruction (port 1) wins a shared register.`,
       `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom memory cell adds a port for about two transistors per bit.`,
     ],
     practise: ['m_rf'],
@@ -393,6 +401,7 @@ export const chRegfile: Chapter = {
           total by tens of percent, and a custom array changes the whole shape of the answer.</p>`,
       },
     },
+    ...rfSteps,
   ],
 };
 
