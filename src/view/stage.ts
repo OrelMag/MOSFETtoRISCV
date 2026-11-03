@@ -793,6 +793,7 @@ export class Stage {
     this.panelSize.disconnect();
     this.panels.forEach((p) => { p.destroy?.(); p.el.remove(); });
     this.panels = [];
+    this.panelPause = null;
     this.closeLeaf();
     this.view.clear();
     this.board.clear();
@@ -1590,10 +1591,17 @@ export class Stage {
     return this.runClock !== null;
   }
 
+  /** A panel's own Slow run is going (widgets/slowctl.ts): the bar shows it as running, and its Pause stops it. */
+  private panelPause: (() => void) | null = null;
+  setPanelRun(pause: (() => void) | null): void {
+    this.panelPause = pause;
+    this.syncRunBtn();
+  }
+
   private syncRunBtn(): void {
     const b = this.runBtn;
     if (!b) return;
-    const on = !!this.runClock;
+    const on = !!this.runClock || !!this.panelPause;
     // unchanged: every runCycles comes through here, and fitControls forces a layout of the page
     if (b.getAttribute('aria-pressed') === String(on)) return;
     b.classList.toggle('on', on);
@@ -1706,7 +1714,7 @@ export class Stage {
       acts.append(h('span', { class: 'label', style: 'margin-left:6px' }, 'Clock'));
       acts.append(this.bitToggle(root.ports.find((q) => q.name === clk)!));
       acts.append(labelled('', 'One full clock cycle (pauses a running clock)', 'clock', 'Pulse', () => this.pulse()));
-      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it`, onclick: () => (this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
+      this.runBtn = h('button', { class: 'btn sm toggle', title: `Run the clock (${1000 / RUN_MS} cycles per second) / pause it (also a panel's Slow run)`, onclick: () => (this.panelPause ? this.panelPause() : this.runClock ? this.stopClock() : this.startClock()) }) as HTMLButtonElement;
       this.syncRunBtn();
       acts.append(this.runBtn);
       if (this.sim?.runUntil) {
@@ -1719,12 +1727,12 @@ export class Stage {
         acts.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
-    this.backBtn = labelled('ghost', 'Step back: undo the last step, clock cycle or input change', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
+    this.backBtn = labelled('ghost', 'Back (stage): undo the last clock cycle, gate step or input change. A panel’s own Back undoes one of its steps', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
     acts.append(this.backBtn);
     if (this.sim?.kind === 'gate' || this.relayTime) {
       acts.append(labelled('ghost', this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', 'step', 'Step', () => this.stepOnce()));
     }
-    acts.append(labelled('ghost', 'Power-cycle the circuit', 'reset', this.scene!.resetLabel ?? 'Reset', () => this.powerCycle()));
+    acts.append(labelled('ghost', 'Reset (stage): power-cycle the whole circuit and clear its panels', 'reset', this.scene!.resetLabel ?? 'Reset', () => this.powerCycle()));
     c.append(h('span', { class: 'ctl-run' }, acts, this.status));
     this.fitControls();
   }
@@ -2170,6 +2178,15 @@ export class Stage {
     if (insp.folded) insp.setFolded(false, true); // a scene that folded it by itself: today's layout, then measure
     if (insp.el.offsetWidth <= 0) return;
     this.inspPending = false;
+    // a panel the step's text is about (data-keep="open") gets the room first: the inspector folds to its rail (a click opens it)
+    if (this.panels.some((p) => p.el.dataset.keep === 'open' && p.el.dataset.dock === 'right')) {
+      insp.setFolded(true, true);
+      this.foldPending = true;
+      this.autoFold();
+      this.inset = this.rightInset();
+      this.view.fit();
+      return;
+    }
     this.view.fit();
     const s = this.view.pxPerUnit();
     if (!(s > 0 && s * LABEL_UNITS < MIN_TEXT_PX)) return;
