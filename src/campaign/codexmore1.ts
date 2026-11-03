@@ -1072,7 +1072,7 @@ and a clock 2 delays late at these 16 flip-flops</pre>`,
     lib: 'dffe',
     compare: ['dff'],
     anatomy: ['pc', 'rf', 'p1'],
-    chapters: [{ chapter: 'latches', step: 4, label: 'Load enable' }],
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }],
   },
 
   forwarding: {
