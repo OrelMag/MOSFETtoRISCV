@@ -212,7 +212,9 @@ src/sim/       simulation core (no DOM)
                  boxes from their bit map)
   svexport.ts    exportHdl(def, 'structure' | 'synth', testbench?): whole hierarchy in one file,
                  self-checking testbench from our simulation (checked against Yosys when installed)
-  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD;
+  vexport.ts     synthesizable Verilog-2005 (flip-flops as processes, `hdl.synth` bodies) for Yosys / OpenROAD; memClock (the FPGA
+                 export): `hdl.synthSync` bodies read through a register on an extra input `mem_clk` (every module above a memory
+                 gains it, the top's TopPort.memClock) so memories map to BSRAM (scripts/fpga-memcheck.ts: cycle-exact);
                  externalPorts (+ ioPart): sandbox I/O parts (isExternal, displays) punched up as ports x_<path>_<port>
                  of every module above them; ExportResult.ports: the top's ports (TopPort, `external`: where from)
   vcd.ts         toVcd(): Value Change Dump of recorded traces

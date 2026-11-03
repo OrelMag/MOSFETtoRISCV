@@ -240,6 +240,12 @@ export interface ComponentDef {
      * their own names) written instead of the structure, e.g. a large memory as `reg mem [..]`.
      */
     synth?: string[];
+    /**
+     * The same memory for block RAM (vexport's memClock option, the FPGA export): read through a register clocked by
+     * the extra input `mem_clk` (a clock much faster than the design's), so the tool can use BSRAM; settles to the
+     * same values the asynchronous `synth` body gives, a few mem_clk cycles after an address or write.
+     */
+    synthSync?: string[];
   };
   /** Long-form notes for the inspector (HTML allowed). */
   notes?: string;

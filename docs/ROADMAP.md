@@ -1166,8 +1166,11 @@ links, bus taps, duplicate and pin reordering. The gaps:
   latch loop left is reported; a top wrapper and a pin-constraint example (Gowin .cst) for the board, checked by
   Yosys (synth_gowin) in CI. Done: editor/fpga.ts (sandbox I/O parts become top-level ports, latch loops named by
   their parts, a .zip with the design, a board top with a clock divider and power-on reset, a Tang Nano 9K .cst and a
-  README); CI's `fpga` job synthesizes the counter and computer examples. Open: the computer example needs ~13 K LUTs
-  (its memories read asynchronously, so they become LUT RAM): more than a GW1NR-9 has; no place-and-route in CI
+  README); CI's `fpga` job synthesizes the counter and computer examples and fails above the GW1NR-9's 8640 LUTs.
+  ✅ Memories as block RAM (hdl.synthSync, vexport memClock): a RAM / ROM reads through a register on mem_clk, the
+  board's 27 MHz clock (the design's clock is that divided by 2^DIV_LOG2), so the computer example went from ~13.1 K
+  LUTs (memories as LUT RAM) to ~4.2 K LUTs + 10 BSRAM; cycle-exact against the asynchronous memories
+  (scripts/fpga-memcheck.ts). Open: no place-and-route in CI; ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
 ### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
