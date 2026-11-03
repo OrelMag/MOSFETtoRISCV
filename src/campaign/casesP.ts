@@ -11,7 +11,7 @@ export const CASESP: Record<string, LevelCase> = {
     cost: 'The coil burns 1.44 W while it is on. The Z3\'s 2600 relays drew about 4 kW.',
   },
   r_nand: {
-    problem: 'Every machine of the 1940s that was not built from tubes was built from relays: Zuse\'s Z3, Aiken\'s Harvard Mark I, the Bell Labs Model V. A relay NAND is the brick in that technology: two break contacts in parallel from the supply, so the output is on the supply unless both coils pull.',
+    problem: 'Most digital machines of the 1940s that were not built from tubes were built from relays: Zuse\'s Z3, the Bell Labs Model V, and in part Aiken\'s Harvard Mark I, whose registers were counter wheels on a shaft. A relay NAND is the brick in that technology: two break contacts in parallel from the supply, so the output is on the supply unless both coils pull.',
     without: 'No inversion: make contacts alone give AND (in series) and OR (in parallel) but never NOT, and AND and OR alone are not complete.',
     cost: 'Two relays and one relay step, 8.2 ms to rest and 0.72 W on average each: a NAND that takes a hundredth of a second. Inside a relay machine a NAND costs one relay (the technology setting\'s price): its inputs arrive as contacts of the relays before it, in series on its own coil, whose break contact is the output. Here a and b are lines, so each needs a relay of its own.',
     alts: [{ name: 'CMOS NAND', lib: 'nand' }, { name: 'Tube NAND (diode AND + triode)', lib: 'tube_nand' }],
@@ -23,7 +23,7 @@ export const CASESP: Record<string, LevelCase> = {
     alts: [{ name: 'XOR from four NANDs', lib: 'xor' }],
   },
   r_adder: {
-    problem: 'A ripple-carry adder waits for its carry: in CMOS the 32-bit one is 68 NAND delays deep. In relays the operands operate the coils and the carry travels through their contacts, on two lines because a contact cannot invert. Nothing waits for a coil, so the sum is ready one relay step after the operands, for 4 bits or 32: the trick that made relay arithmetic usable at all (Stibitz, 1937).',
+    problem: 'A ripple-carry adder waits for its carry: in CMOS the 32-bit one is 68 NAND delays deep. In relays the operands operate the coils and the carry travels through their contacts, on two lines because a contact cannot invert. Nothing waits for a coil, so the sum is ready one relay step after the operands, for 4 bits or 32: the trick that made relay arithmetic usable at all.',
     without: 'Mapped from NANDs, the 4-bit ripple adder is 36 relays and 12 relay steps, about 0.1 s per addition; 32 bits would take 68 steps, over half a second.',
     cost: 'Two relays per bit (5 and 4 poles), one relay step for any width. A 32-bit relay adder is 64 relays where the NAND-mapped one is 288 plus fan-out coils.',
     alts: [{ name: '4-bit ripple-carry adder (NANDs)', lib: 'rca4' }, { name: 'Two-relay full adder (one bit)', lib: 'relay_fa' }],
@@ -41,9 +41,9 @@ export const CASESP: Record<string, LevelCase> = {
     alts: [{ name: 'T flip-flop (NANDs)', lib: 'tff' }],
   },
   v_inv: {
-    problem: 'A triode is a thousand times faster than a relay, about 1 µs a gate, but it only pulls its plate down and its levels do not line up: a plate swings between about 81 and 250 V while the next grid needs 0 V to conduct and −12.5 V to stop. Every gate of a tube machine reads its input through a divider to −150 V. This level is that one link, built twice.',
+    problem: 'A triode is about eight thousand times faster than a relay, about 1 µs a gate, but it only pulls its plate down and its levels do not line up: a plate swings between about 81 and 250 V while the next grid needs 0 V to conduct and −12.5 V to stop. Every gate of a tube machine reads its input through a divider to −150 V. This level is that one link, built twice.',
     without: 'A plate wired straight to the next grid holds it at 81 V or more: that tube conducts whatever the plate says, and logic stops after one gate.',
-    cost: 'Two triode sections (one 6SN7), two plate resistors and two dividers, burning about 3.9 W in heaters, plates and dividers. The NAND-mapped price of a buffer is far higher: every NAND is a triode and two diodes.',
+    cost: 'Two triode sections (one 6SN7), two plate resistors and two dividers, burning about 5.9 W, 3.8 W of it in the heaters. The NAND-mapped price of a buffer is far higher: every NAND is a triode and two diodes.',
     alts: [{ name: 'Tube NOR (the tube\'s natural gate)', lib: 'tube_nor' }],
   },
   v_ff: {
@@ -53,7 +53,7 @@ export const CASESP: Record<string, LevelCase> = {
     alts: [{ name: 'SR latch (two NANDs)', lib: 'sr_latch' }],
   },
   h_card: {
-    problem: 'A card is 80 columns of 12 rows. Hollerith\'s code puts a digit as one hole in rows 0–9 and a letter as a zone hole (12, 11 or 0) plus a digit, so a column reads as one character and a deck as lines of text: the source cards of a program. A machine reads the binary kind, an object card, as bits instead: a word in row 9, one bit a column, the most significant in column 1. Program on cards loads a deck of those, one instruction a card.',
+    problem: 'A card is 80 columns of 12 rows. Hollerith\'s code puts a digit as one hole in rows 0–9 and a letter as a zone hole (12, 11 or 0) plus a digit, so a column reads as one character and a deck as lines of text: the source cards of a program. A machine reads the binary kind, an object card, as bits instead. Real binary cards use all 12 rows as bits; this site\'s object card stays readable: a word in row 9, one bit a column, the most significant in column 1. Program on cards loads a deck of those, one instruction a card.',
     without: 'Every word typed in by hand on a front panel\'s switches, each time the machine is switched on.',
     cost: 'A card holds 80 characters; an object card\'s word takes as many columns as it has bits, so a 16-bit instruction is 16 columns of row 9 and the rest of the card is free for its source and a sequence number.',
   },

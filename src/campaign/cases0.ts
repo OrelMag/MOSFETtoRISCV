@@ -70,7 +70,7 @@ export const CASES0: Record<string, LevelCase> = {
   },
   g_mux: {
     problem: 'Wherever two values can reach one input there is a multiplexer, y = s ? b : a. The ALU\'s b operand is rs2 or the immediate; the PC loads pc + 1 or a jump target; the register file is written the ALU result, a loaded word, pc + 1 or the immediate. Enables, read ports, the shifter and the ALU\'s result select are trees of the same cell: about half the NANDs of both RV16 cores are in 2:1 muxes.',
-    without: 'An AND–OR mux from the gates so far is 8 NANDs and depth 5 per bit. The single-cycle core has 705 bits of 2:1 mux: that would be about 2900 more NANDs.',
+    without: 'An AND–OR mux from the gates so far is 8 NANDs and depth 5 per bit. The single-cycle core has 705 bits of 2:1 mux: that would be about 3400 more NANDs.',
     cost: 'NAND–NAND form ¬(¬(s·b) · ¬(¬s·a)): 4 NANDs, depth 3, one of them the inverter on s, which a bus mux can share across its bits. In CMOS two transmission gates and an inverter make a mux of 6 transistors against these 16, at the price of a path that does not restore the signal level.',
     alts: [{ name: 'AND–OR with a NOT', nand: 8, depth: 5, note: 'NOT s (1), two ANDs (2 each), OR (3); the path is NOT, AND, OR.' }],
   },

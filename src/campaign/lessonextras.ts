@@ -17,12 +17,12 @@ export interface LessonExtra {
 export const LESSON_EXTRAS: Record<string, LessonExtra> = {
   mem: {
     figures: [
-      { lib: 'ram4x4', caption: 'A 4-word RAM of 4-bit words, simulated: a decoder on the write port, flip-flops with an enable, one read mux per bit. Click an input; the lesson\'s 64-word RAM is this drawing 16 times wider and deeper.' },
+      { lib: 'ram4x4', caption: 'A 4-word RAM of 4-bit words, simulated: a decoder on the write port, flip-flops with an enable, one read mux per bit. Click an input; the lesson\'s 64-word RAM is this drawing 16 times deeper and 4 times wider.' },
     ],
     check: [
       { question: 'A 64-word RAM of 16-bit words costs 20 166 NANDs built from flip-flops. About how many NANDs per stored bit?', options: ['About 4', 'About 13', 'About 20', 'About 80'], answer: 2,
-        why: ['A NAND stores nothing alone; a bit needs a feedback pair and its gating.', 'That is the flip-flop and its enable mux alone; the decoder and the read muxes come on top.', '', 'That is the transistor count (4 per NAND), not the NAND count.'],
-        explain: '20 166 / (64 × 16) = 19.7. Thirteen go to the flip-flop and its enable mux, the rest to the write decoder and the read multiplexer tree. That is why real memories are arrays of 6- or 1-transistor cells.' },
+        why: ['A NAND stores nothing alone; a bit needs a feedback pair and its gating.', 'That is your own cell (9-NAND flip-flop and enable mux) alone; the decoder and the read muxes come on top.', '', 'That is the transistor count (4 per NAND), not the NAND count.'],
+        explain: '20 166 / (64 × 16) = 19.7. Fifteen go to the library\'s flip-flop and its enable mux, the rest to the write decoder and the read multiplexer tree. That is why real memories are arrays of 6- or 1-transistor cells.' },
       { question: 'Why does a single-cycle core need two memories, instruction and data (Harvard)?', options: ['Instructions are wider than data', 'It fetches an instruction and accesses data in the same cycle', 'ROM cannot be written', 'To keep the program safe'], answer: 1,
         why: ['Width is not the reason; one array could hold both.', '', 'True, but a load or store needs the data port even if the program were in RAM.', 'Protection is a side effect, not the cost the design avoids.'],
         explain: 'One port cannot serve the fetch and a load or store in one cycle, so there are two: the PC addresses one, the ALU result the other.' },
@@ -35,7 +35,7 @@ export const LESSON_EXTRAS: Record<string, LessonExtra> = {
     check: [
       { question: '<code>li a0, 100</code>: how many words does it take?', options: ['1: addi rd, x0, 100', '2: lui + addi', '3', 'It cannot be written'], answer: 1,
         why: ['imm6 reaches only −32 … 31, so 100 does not fit in an addi.', '', 'seqz takes three because there is no sltiu; li needs at most two.', 'Every 16-bit value can be built with lui and addi.'],
-        explain: '100 does not fit imm6 and is not a multiple of 64, so li is lui (64) + addi (36): two words. A multiple of 64 would need the lui alone.' },
+        explain: '100 does not fit imm6 and is not a multiple of 64, so li is lui (128) + addi (−28): two words. The addi must fit −32 … 31, so the lui rounds to the nearest multiple of 64; a multiple of 64 would need the lui alone.' },
       { question: 'A branch target is 100 words away. Which can reach it?', options: ['beq: imm6', 'jal: imm9', 'Both', 'Neither'], answer: 1,
         why: ['imm6 reaches −32 … 31 words.', '', 'beq stops at 31.', 'jal reaches −256 … 255.'],
         explain: 'jal has 9 immediate bits (the whole rd-less J format), a branch only 6. Farther than 31 words, a conditional branch hops over a jal: the opposite branch around an unconditional jump.' },
@@ -70,7 +70,7 @@ export const LESSON_EXTRAS: Record<string, LessonExtra> = {
   },
   traps: {
     figures: [
-      { lib: 'rv16_csr', caption: 'The CSR file, simulated: mtvec, mepc, mcause, mstatus, mie and mip behind one read mux. A trap writes mepc and mcause on its own at the edge; csr instructions write the rest.' },
+      { lib: 'rv16_csr', caption: 'The CSR file, simulated: mtvec, mepc, mcause, mstatus, mie and mscratch, and mip\'s view of the line, behind one read mux. A trap writes mepc, mcause and mstatus on its own at the edge; csr instructions write the registers.' },
     ],
     check: [
       { question: 'An <code>ecall</code> handler must add 1 to mepc before <code>mret</code>. Why, and why not for an interrupt?', options: ['mepc holds the ecall itself; an interrupt\'s mepc is the instruction that has not run', 'mepc is one behind the PC always', 'ecall is two words long', 'Interrupts reset mepc'], answer: 0,
