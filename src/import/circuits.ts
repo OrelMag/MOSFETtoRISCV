@@ -18,6 +18,11 @@ registerFileImporter({
   run: (ed, name, text) => {
     const v = logisimVectors(text);
     if ('error' in v) return void ed.toast(`${name}: ${v.error}`, 'err');
+    // a notes file is not a table: its header must name at least one of this chip's pins
+    const norm = (x: string) => x.toLowerCase().replace(/\W+/g, '_');
+    const cols = v.src.split('\n')[0].split(/\s+/).filter(Boolean);
+    const pins = new Set(ed.doc.pins.map((p) => norm(p.name)));
+    if (!cols.some((c) => pins.has(norm(c)))) return void ed.toast(`${name} is not a test table for ${ed.doc.name}: its first line (${cols.slice(0, 4).join(' ')}${cols.length > 4 ? ' …' : ''}) names none of the chip's pins`, 'err');
     const base = name.replace(/^.*[\/]/, '').replace(/\.txt$/i, '');
     ed.edit((d) => ({ ...d, tests: [...testsOf(d), { name: base, src: v.src }] }));
     ed.toast(`${name}: a test table on ${ed.doc.name} (Tests). ${undoKey()} undoes it`);

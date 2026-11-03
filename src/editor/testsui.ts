@@ -40,6 +40,10 @@ const fmt = (bits: number[]): string => {
 };
 const cellText = (c: bigint | string) => (typeof c === 'bigint' ? c.toString() : c);
 
+/** Does any row of the plan expect a value (an X or Z cell is not compared)? */
+const checksAny = (plan: { ch: { check: { kind: string; steps?: { expect: object }[] } } }): boolean =>
+  plan.ch.check.kind !== 'sequence' || !!plan.ch.check.steps?.some((st) => Object.keys(st.expect).length > 0);
+
 class TestsPane {
   open = false;
   readonly el = h('div', { class: 'sb-tests', role: 'region', 'aria-label': 'Tests' });
@@ -134,7 +138,9 @@ class TestsPane {
     const o = this.outcome(i);
     if (!o || o.waiting || o.idle) return 'none';
     if (o.error || !o.run) return 'fail';
-    return o.run.failed.length || o.run.error ? 'fail' : 'pass';
+    if (o.run.failed.length || o.run.error) return 'fail';
+    // every expected value an X: nothing was compared, which is not a pass
+    return o.plan && !checksAny(o.plan) ? 'none' : 'pass';
   }
 
   // ---- editing -------------------------------------------------------------------------------
@@ -291,7 +297,7 @@ class TestsPane {
     const bad = run.failed.length;
     box.append(h('p', { class: 'sb-tests-sum' },
       h('b', null, `${groupDigits(steps)} rows`), ' ',
-      h('span', { class: 'ok' }, `${groupDigits(run.steps.length - bad + (run.error ? 1 : 0))} pass`), ' ',
+      checksAny(plan) ? h('span', { class: 'ok' }, `${groupDigits(run.steps.length - bad + (run.error ? 1 : 0))} pass`) : h('span', { class: 'muted' }, 'nothing checked: every expected value is X'), ' ',
       bad ? h('span', { class: 'bad' }, `${bad} fail${bad > 1 ? '' : 's'}`) : null, ' ',
       h('span', { class: 'muted' }, `${o.ms! < 10 ? o.ms!.toFixed(1) : Math.round(o.ms!)} ms`),
       ...plan.notes.map((n) => h('span', { class: 'muted note' }, n))));
