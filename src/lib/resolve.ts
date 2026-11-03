@@ -71,7 +71,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^rv32i_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true })],
   [/^rv64(i|im)(?:_d(\d))?_core$/, (m) => xlenCpu([], { xlen: 64, m: m[1] === 'im', dmemK: m[2] ? +m[2] : 6, imemPort: true })],
   // the pipelined core with the same two ports (the sandbox's: Custom instructions… applies to it too)
-  [/^rv32i_pipe_core$/, () => pipelinedCpu([], { adder: 'ks', ports: true })],
+  [/^rv32i(m)?_pipe(_dc)?_core$/, (m) => pipelinedCpu([], { adder: 'ks', ports: true, ...(m[1] ? { m: true } : {}), ...(m[2] ? { dcache: 'wt' as const } : {}) })],
   [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
