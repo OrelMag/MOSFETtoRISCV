@@ -13,6 +13,7 @@ const x = (a: number, b: number, d = 1) => (a / b).toFixed(d);
 export const formatSteps: Step[] = [
   {
     title: 'Narrower and wider: f16, bf16, FP8, f64',
+    deep: true,
     get body() {
       return `
       <p>The generators take the format as a parameter, so nothing stops us building the others. Six are compared below, all with the same fields (sign, exponent, fraction), the same hidden bit, the same
@@ -52,6 +53,7 @@ export const formatSteps: Step[] = [
   },
   {
     title: 'What the formats cost',
+    deep: true,
     get body() {
       const f32 = C.f32, f16 = C.f16, bf = C.bf16, e5 = C.e5m2, f64 = C.f64;
       return `

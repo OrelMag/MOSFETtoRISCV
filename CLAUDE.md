@@ -1576,6 +1576,11 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
 - A quiz's `why` (one per option) says why a wrong pick is wrong; a reach challenge's `hints` come before Show answer;
   `Step.tries` ticks the body's `.try` boxes in order once a condition holds. Folded asides: `<details class="deeper">`.
 - Checks (challenges and recap questions, chapters/checks.ts) fill the step dots and the chapter menu's counts.
+- A chapter of 15 steps or more (chapters/parts.ts PARTS_MIN) names its parts: `parts: [['Name', stepCount], …]`, counts adding up to the
+  steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
+  progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to
+  begin with on a phone or a short screen). `deep: true` on a step marks a deep dive: it stays in order and is never hidden or
+  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it).
 
 ## Major changes: mockup first
 

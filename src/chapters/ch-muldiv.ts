@@ -99,6 +99,7 @@ export const chMulDiv: Chapter = {
       },
     ],
   },
+  parts: [['Shift and add', 3], ['Carry-save and trees', 5], ['Booth and pipelining', 5], ['Dividing', 4], ['Faster dividers', 4], ['In the CPU', 5]],
   steps: [
     {
       title: 'Long multiplication is AND and add',
@@ -256,6 +257,7 @@ export const chMulDiv: Chapter = {
     },
     {
       title: 'Counting ones',
+      deep: true,
       body: `
         <p>A full adder is also a <em>counter</em>: it turns three bits of equal weight into a 2-bit count of how many are 1. That is why
         it is called a 3:2 counter as well as a 3:2 compressor. Counting all the ones in a word (<strong>population count</strong>,
@@ -476,6 +478,7 @@ export const chMulDiv: Chapter = {
     },
     {
       title: 'Pipelining the multiplier',
+      deep: true,
       body: `
         <p>A tree multiplier is one long combinational path. Put registers inside it, <span data-show="u4 u5 u6 u7 u8">after the Booth rows</span>
         and <span data-show="u10 u11">after the 3:2 tree</span>, and each clock
@@ -505,6 +508,7 @@ export const chMulDiv: Chapter = {
     },
     {
       title: 'Four ways to multiply',
+      deep: true,
       body: `
         <p>The same 16×16 product, four circuits. The table lists area, clock period, latency and the time between results; the bars compare the time per product when products stream.</p>
         <p>Read it as a trade of three quantities. The iterative unit is smallest and slowest: ${sp(nd(seqMul(16)))} NANDs and 18 cycles per product. The two trees finish in one (long) cycle. The pipelined unit keeps the Booth tree's

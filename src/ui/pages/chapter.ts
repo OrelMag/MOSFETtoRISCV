@@ -13,6 +13,7 @@ import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { bindKeys } from '../keys';
 import { toggleChapterMenu } from '../quicknav';
 import { bookmarkButton, StepNotes } from '../notesui';
+import { newPartsNavState, partsNav } from '../chapterparts';
 import { quizBox } from '../quiz';
 import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
@@ -44,6 +45,8 @@ export class ChapterPage implements Page {
   private inspector: Inspector;
   private head: HTMLElement;
   private tools = h('div', { class: 'step-tools' });
+  /** The parts list's open parts (chapters with parts). */
+  private partsState = newPartsNavState();
   private body: HTMLElement;
   /** The walkthrough playing on the stage, if any. */
   private tour: TourPlayer | null = null;
@@ -227,17 +230,21 @@ export class ChapterPage implements Page {
       }));
     }
     const { done, total } = checksDone(c, (k) => settings.isSolved(k));
+    // a long chapter shows named parts in place of the rows of dots
+    const refocus = this.head.contains(document.activeElement) && !!document.activeElement?.classList.contains('pstep');
+    const parts = partsNav(c, this.step, this.recap, visited, (k) => settings.isSolved(k), (i) => this.goStep(i), this.partsState);
     this.head.replaceChildren(
       h('div', { class: `chapter-kicker${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}` }, `${c.appendix ? `Appendix ${c.appendix}` : c.prologue ? `Prologue ${c.prologue}` : c.label ?? `Chapter ${c.num}`} · ${c.level}`),
       h('h1', { class: 'chapter-title' }, h('button', {
         class: 'chapter-switch', title: 'Switch chapter', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
       }, h('span', null, c.title), icon('chevD', 18))),
-      h('div', { class: 'steps-row' },
+      parts ?? h('div', { class: 'steps-row' },
         h('div', { class: 'steps-dots', role: 'tablist' }, dots),
         total ? h('span', { class: 'checks-count', title: 'Questions and challenges solved in this chapter' }, `${done} / ${total} checks`) : null),
       this.tools,
     );
+    if (refocus) this.head.querySelector<HTMLElement>('.pstep.cur')?.focus({ preventScroll: true });
     this.renderTools();
   }
 
