@@ -1,0 +1,24 @@
+/* Chapter 8's setup / hold sweep (widgets/edgesweep.ts). Outcomes are told apart by letter as well as colour. */
+.es-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.es-bar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.es-bar .seg button { border: 0; background: var(--surface); color: var(--text-2); padding: 5px 10px; font: 13px var(--font-ui); cursor: pointer; }
+.es-bar .seg button[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg, #fff); }
+.es-strip { display: grid; grid-template-columns: repeat(17, minmax(0, 1fr)); gap: 2px; margin: 10px 0 4px; }
+.es-cell { border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); padding: 4px 0; font: 600 12px var(--font-mono); cursor: pointer; text-align: center; }
+.es-cell small { display: block; font: 10px var(--font-mono); color: var(--muted); }
+.es-cell.new { background: color-mix(in srgb, var(--good, #2a8) 28%, var(--surface)); }
+.es-cell.old { background: color-mix(in srgb, var(--bad, #d44) 24%, var(--surface)); }
+.es-cell.x { background: color-mix(in srgb, #e90 38%, var(--surface)); }
+.es-cell[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.es-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin: 2px 0 8px; }
+.es-key b { font: 600 12px var(--font-mono); margin-right: 4px; }
+.es-wave { width: 100%; max-width: 640px; display: block; margin: 6px 0; }
+.es-wave .ln { fill: none; stroke: var(--text); stroke-width: 1.6; }
+.es-wave .dl { fill: none; stroke: var(--series-1, var(--accent)); stroke-width: 1.6; }
+.es-wave .ql { fill: none; stroke: var(--series-2, var(--text-2)); stroke-width: 1.6; }
+.es-wave .ed { stroke: var(--border-strong, var(--border)); stroke-dasharray: 3 3; }
+.es-wave text { font: 10px var(--font-mono); fill: var(--muted); }
+.es-read { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.es-read div { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--surface); font-size: 12px; color: var(--text-2); }
+.es-read b { display: block; font: 600 18px var(--font-mono); color: var(--text); }
+@media (max-width: 600px) { .es-strip { grid-template-columns: repeat(9, minmax(0, 1fr)); } }

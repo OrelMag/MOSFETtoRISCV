@@ -59,3 +59,5 @@ export * from './cpu64';
 export * from './ttl';
 export * from './sap';
 export * from './numbers';
+export * from './seqdeep';
+export * from './rfdeep';
