@@ -2,7 +2,7 @@
 // register the top level itself (only its parts), so the schematic tests list them explicitly.
 
 import {
-  dualCore, dualPipeCpu, laneCore, multiCore, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCore, systemCpu,
+  coherentDualCore, dualCore, dualPipeCpu, laneCore, multiCore, multicycleCpu, oooCpu, pipelinedCpu, pipelinedFpCpu, singleCycleCpu, systemCore, systemCpu,
 } from '../src/lib';
 import { assemble } from '../src/riscv/asm';
 import { CACHE_CPU_PROGRAMS } from '../src/riscv/cprograms';
@@ -29,7 +29,7 @@ export function cpuTops(): ComponentDef[] {
     dualPipeCpu(w), oooCpu(w),
     // Appendix B: the system core with ports (the Doom computer's)
     systemCore(), systemCore({ m: true }),
-    multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w),
+    multicycleCpu(w, { control: 'fsm' }), multicycleCpu(w, { control: 'micro' }), dualCore(w), coherentDualCore(w), coherentDualCore(w, { coherent: false }),
     multiCore(w, 4), multiCore(w, 8, { dmemK: 10 }), laneCore(w, 4), laneCore(w, 8),
     // chapter 25: one core at 32 and 64 bits (RV32IM, RV64IM, RV64I)
     ...xlenTops(w),

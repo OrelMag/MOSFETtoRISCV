@@ -21,7 +21,7 @@ export function readArray(sim: S, arr: HierNode, n: number): number[] {
 export function readCache(sim: S, root: HierNode, i: number, K: number): HwCache {
   const c = root.children!.get(`cache${i}`)!, t = K - 4;
   const dec = (a: number[]) => ({ st: a.map((x) => (((x >>> (t + 1)) & 1) ? 2 : ((x >>> t) & 1) ? 1 : 0)), tag: a.map((x) => x & (2 ** t - 1)) });
-  const ct = dec(readArray(sim, c.children!.get('ctags')!, SETS)), stg = dec(readArray(sim, c.children!.get('stags')!, SETS));
+  const ct = dec(readArray(sim, c.children!.get('ctags')!, SETS)), sn = c.children!.get('stags'), stg = sn ? dec(readArray(sim, sn, SETS)) : ct;
   const res = c.children!.get('res')!;
   return { st: ct.st, tag: ct.tag, data: readArray(sim, c.children!.get('data')!, 16), resV: word(sim, res.children!.get('rv')), resLine: word(sim, res.children!.get('rl')), snoopSt: stg.st, snoopTag: stg.tag };
 }

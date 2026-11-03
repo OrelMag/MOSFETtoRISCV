@@ -56,7 +56,7 @@ const eq = (b: Builder, w: number, x: string, y: string, label?: string) => (w =
  */
 export function cohAccess(t: number): ComponentDef {
   return memo(`cohacc${t}`, () => {
-    const b = new Builder(18, 12);
+    const b = new Builder(18, 16, 6);
     b.pins('instr', 'req', 'tagA', 'tagS', 'v', 'm', 'resHit');
     const sp = b.op(splitter([7, 20, 5]), ['instr']);
     const f5 = b.op(splitter([1, 1, 1, 1, 1]), [`${sp}.o2`]);
@@ -101,7 +101,7 @@ export function cohAccess(t: number): ComponentDef {
  */
 export function cohRes(k2: number, coh: boolean): ComponentDef {
   return memo(`cohres${k2}${coh ? '' : 'n'}`, () => {
-    const b = new Builder(18, 12);
+    const b = new Builder(18, 16, 6);
     b.pins('req', 'grant', 'isLR', 'isSC', 'line', 'busLine', 'busSet', 'grantCyc', 'lastCyc', 'isCur', 'busWr', 'busUpgr', 'clk');
     const rv = b.add(DFF, 'reservation valid', 'rv');
     const rl = b.add(register(k2), 'reserved line', 'rl');
@@ -118,8 +118,11 @@ export function cohRes(k2: number, coh: boolean): ComponentDef {
     const lrRet = b.name(b.op1(AND, [retire, 'isLR'], 'lr.w done'), 'lrDone', true);
     const scAny = b.op1(AND, [retire, 'isSC'], 'sc.w done');
     const ownClr = b.op1(andN(4), [b.op1(AND, ['lastCyc', 'isCur']), b.op1(NOT, ['busUpgr']), b.op1(AND, [v, setEq]), b.op1(NOT, [mBus])], 'own fill evicts it');
-    const lrSame = b.op1(AND, [lrRet, b.op1(equal(k2), ['line', 'busLine'], 'lr.w of the invalidated line')], 'lr.w done on the line');
-    const clr = coh ? b.op1(OR, [ownClr, b.op1(andN(3), [b.op1(AND, ['grantCyc', b.op1(NOT, ['isCur'])]), 'busWr', b.op1(OR, [b.op1(AND, [v, mBus]), lrSame])], 'snooped invalidation')], 'lost') : ownClr;
+    let clr = ownClr;
+    if (coh) {
+      const lrSame = b.op1(AND, [lrRet, b.op1(equal(k2), ['line', 'busLine'], 'lr.w of the invalidated line')], 'lr.w done on the line');
+      clr = b.op1(OR, [ownClr, b.op1(andN(3), [b.op1(AND, ['grantCyc', b.op1(NOT, ['isCur'])]), 'busWr', b.op1(OR, [b.op1(AND, [v, mBus]), lrSame])], 'snooped invalidation')], 'lost');
+    }
     b.next();
     b.wire(b.op1(AND, [b.op1(NOT, [clr]), b.op1(OR, [lrRet, b.op1(AND, [v, b.op1(NOT, [scAny])])])], 'next valid'), `${rv}.d`);
     b.wire('line', `${rl}.d`);
@@ -140,7 +143,7 @@ export function cohRes(k2: number, coh: boolean): ComponentDef {
 export function coherentCache(K: number, coh = true): ComponentDef {
   const t = K - 4, k2 = K - 2, rest = 32 - 6 - t;
   return memo(`cohcache${K}${coh ? '' : 'n'}`, () => {
-    const b = new Builder(18, 12);
+    const b = new Builder(18, 16, 6);
     b.pins('instr', 'memAddr', 'memWData', 'memWE', 'memReq', 'isCur', 'grantCyc', 'lastCyc', 'dataPh', 'busWr', 'busUpgr', 'busAddr', 'word', 'dbus', 'clk');
     const sa = b.op(splitter([2, 2, 2, t, rest]), ['memAddr'], 'address fields');
     const ba = b.op(splitter([2, 2, 2, t, rest]), ['busAddr'], 'bus address fields');
@@ -152,23 +155,23 @@ export function coherentCache(K: number, coh = true): ComponentDef {
     b.next();
     // the two tag / state arrays
     const ct = b.op(regfileMP(2, t + 2, 1, 1), ['clk', '', '', '', set], 'core tags {m, v, tag}', 'ctags');
-    const st = b.op(regfileMP(2, t + 2, 1, 1), ['clk', '', '', '', busSet], 'snoop tags {m, v, tag}', 'stags');
+    const st = coh ? b.op(regfileMP(2, t + 2, 1, 1), ['clk', '', '', '', busSet], 'snoop tags {m, v, tag}', 'stags') : '';
     const cs = b.op(splitter([t, 1, 1]), [`${ct}.rd0`], undefined, 'cs');
-    const ss = b.op(splitter([t, 1, 1]), [`${st}.rd0`], undefined, 'ss');
+    const ss = coh ? b.op(splitter([t, 1, 1]), [`${st}.rd0`], undefined, 'ss') : '';
     b.next();
     const acc = b.op(cohAccess(t), ['instr', 'memReq', tagA, `${cs}.o0`, `${cs}.o1`, `${cs}.o2`, ''], 'access', 'acc');
     const grant = b.name(`${acc}.grant`, 'grant', true), wr = b.name(`${acc}.wr`, 'wr', true), isLR = b.name(`${acc}.isLR`, 'isLR', true), isSC = b.name(`${acc}.isSC`, 'isSC', true), scFail = b.name(`${acc}.scFail`, 'scFail', true);
     const res = b.op(cohRes(k2, coh), ['memReq', grant, isLR, isSC, line, busLine, busSet, 'grantCyc', 'lastCyc', 'isCur', 'busWr', 'busUpgr', 'clk'], 'reservation', 'res');
     b.wire(`${res}.resHit`, `${acc}.resHit`);
     // the snoop lookup
-    const sHit = b.name(b.op1(AND, [eq(b, t, `${ss}.o0`, busTag, 'tag match'), `${ss}.o1`], 'snoop hit'), 'snoopHit', true);
-    const sM = b.name(b.op1(AND, [sHit, `${ss}.o2`], 'snoop: Modified'), 'snoopM', true);
+    const sHit = coh ? b.name(b.op1(AND, [eq(b, t, `${ss}.o0`, busTag, 'tag match'), `${ss}.o1`], 'snoop hit'), 'snoopHit', true) : '';
+    const sM = coh ? b.name(b.op1(AND, [sHit, `${ss}.o2`], 'snoop: Modified'), 'snoopM', true) : '';
     b.next();
     // tag writes: the owner at the last cycle of its transaction, the other cache at the grant edge
     const wOwn = b.op1(AND, ['lastCyc', 'isCur'], 'own fill / upgrade done');
     const we = b.name(coh ? b.op1(OR, [wOwn, b.op1(AND, [b.op1(AND, ['grantCyc', b.op1(NOT, ['isCur'])]), sHit])], 'snooped line changes') : wOwn, 'tagWE', true);
     const wd = b.name(b.op1(merger([t, 1, 1]), [busTag, b.op1(OR, ['isCur', b.op1(NOT, ['busWr'])], 'valid'), b.op1(AND, ['isCur', wr], 'Modified')], '{m, v, tag}'), 'tagWD', true);
-    for (const a of [ct, st]) { b.wire(we, `${a}.we0`); b.wire(busSet, `${a}.wa0`); b.wire(wd, `${a}.wd0`); }
+    for (const a of coh ? [ct, st] : [ct]) { b.wire(we, `${a}.we0`); b.wire(busSet, `${a}.wa0`); b.wire(wd, `${a}.wd0`); }
     // the data array: port 0 the core's (and the fill), port 1 the bus's
     const fillSel = b.name(b.op1(andN(3), ['isCur', 'dataPh', b.op1(NOT, ['busUpgr'])], 'fill a word'), 'fill', true);
     const coreWE = b.op1(andN(3), ['memWE', b.op1(NOT, [isLR]), b.op1(NOT, [scFail])], 'store done');
@@ -206,7 +209,7 @@ export function coherentCache(K: number, coh = true): ComponentDef {
 export function cohBus(K: number): ComponentDef {
   const t = K - 4, rest = 32 - 6 - t;
   return memo(`cohbus${K}`, () => {
-    const b = new Builder(18, 12);
+    const b = new Builder(18, 16, 6);
     b.pins('need0', 'need1', 'upgr0', 'upgr1', 'wb0', 'wb1', 'wr0', 'wr1', 'snm0', 'snm1', 'addr0', 'addr1', 'vtag0', 'vtag1', 'drd0', 'drd1', 'memRd', 'clk');
     const busy = b.add(DFF, 'busy', 'busy'), owner = b.add(DFFE, 'owner', 'owner'), flush = b.add(DFFE, 'flush: the other cache supplies', 'flush'), cnt = b.add(register(3), 'count', 'cnt');
     for (const f of [busy, owner, flush, cnt]) b.wire('clk', `${f}.clk`);
