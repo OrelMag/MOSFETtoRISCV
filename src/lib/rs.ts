@@ -151,7 +151,7 @@ export function rsEncoder(nsym = 10): ComponentDef {
 export function rsSynStage(j: number): ComponentDef {
   return memo(`rssyn${j}`, () => {
     const G = gfConst(gfPow(j)), X = bitwise('xor', 8), R = clearableRegister(8);
-    const gg = symbolGeom(G), xg = symbolGeom(X), rg = symbolGeom(R), X1 = 6, X2 = X1 + gg.w + 6, X3 = X2 + xg.w + 6, Rt = X3 + rg.w + 6;
+    const gg = symbolGeom(G), xg = symbolGeom(X), rg = symbolGeom(R), X1 = 12, X2 = X1 + gg.w + 6, X3 = X2 + xg.w + 6, Rt = X3 + rg.w + 18;
     const yMul = 3, yX = Math.max(1, yMul + gg.ports.y.pos[1] - xg.ports.a.pos[1]), yR = Math.max(1, yX + xg.ports.y.pos[1] - rg.ports.d.pos[1]), yB = Math.max(yMul + gg.h, yR + rg.h, yX + xg.h) + 2;
     const instances: InstanceDef[] = [{ name: 'mul', def: G, at: [X1, yMul] }, { name: 'sum', def: X, at: [X2, yX] }, { name: 'reg', def: R, at: [X3, yR] }];
     const nets: NetDef[] = [

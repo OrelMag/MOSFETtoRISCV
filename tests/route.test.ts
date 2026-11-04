@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { brentKung, cachedMemory, coherentDualCore, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
+import { CONV_K3, CONV_K7 } from '../src/comm/conv';
+import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
 import { define } from '../src/lib/define';
 import { reachableDefs } from '../src/lib/resolve';
 import { NAND } from '../src/lib/transistors';

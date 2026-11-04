@@ -95,14 +95,14 @@ export function convEncoder(s: ConvSpec = CONV_K3): ComponentDef {
 export function vitBranch(q: number, w: number): ComponentDef {
   return memo(`vitbm${q}_${w}`, () => {
     const A = rca(q), N = notBus(q), ag = symbolGeom(A), ng = symbolGeom(N), pad = w - q - 1;
-    const Mg = merger(pad > 0 ? [q, 1, pad] : [q, 1], 2), mg = symbolGeom(Mg), P = Math.max(ag.h, mg.h) + 4, XA = 22, XM = XA + ag.w + 6, XR = XM + mg.w + 6;
-    const instances: InstanceDef[] = [{ name: 'n0', def: N, at: [8, 2] }, { name: 'n1', def: N, at: [8, 2 + ng.h + 4] }, { name: 'tie', def: TIE0, at: [XA - 5, 0] }];
-    if (pad > 0) instances.push({ name: 'zero', def: constWord(pad, 0), at: [XM - 4, 2 + P * 4] });
+    const Mg = merger(pad > 0 ? [q, 1, pad] : [q, 1], 2), mg = symbolGeom(Mg), P = Math.max(ag.h, mg.h) + 10, XA = 32, XM = XA + ag.w + 16, XR = XM + mg.w + 6;
+    const instances: InstanceDef[] = [{ name: 'n0', def: N, at: [8, 4] }, { name: 'n1', def: N, at: [8, 4 + ng.h + 4] }, { name: 'tie', def: TIE0, at: [8, 2 + 2 * (ng.h + 4)] }];
+    if (pad > 0) instances.push({ name: 'zero', def: constWord(pad, 0), at: [8, 8 + 2 * (ng.h + 4)] });
     const pairs = [[0, 0], [0, 1], [1, 0], [1, 1]];
     const nets: NetDef[] = [];
     const r0 = ['r0', 'n0.a'], r1 = ['r1', 'n1.a'], nr0 = ['n0.y'], nr1 = ['n1.y'], cin = ['tie.y'], zero = ['zero.y'];
     pairs.forEach(([e0, e1], i) => {
-      const nm = `${e0}${e1}`, y = 2 + P * i;
+      const nm = `${e0}${e1}`, y = 4 + P * i;
       instances.push({ name: `add${nm}`, def: A, at: [XA, y] }, { name: `m${nm}`, def: Mg, at: [XM, y] });
       (e0 ? nr0 : r0).push(`add${nm}.a`);
       (e1 ? nr1 : r1).push(`add${nm}.b`);
@@ -112,8 +112,8 @@ export function vitBranch(q: number, w: number): ComponentDef {
     });
     nets.push({ name: 'r0', ends: r0, tags: true }, { name: 'r1', ends: r1, tags: true }, { name: 'nr0', ends: nr0, tags: true }, { name: 'nr1', ends: nr1, tags: true }, { name: 'cin', ends: cin, tags: true });
     if (pad > 0) nets.push({ name: 'zero', ends: zero, tags: true });
-    const pins: Record<string, [number, number]> = { r0: [0, 2 + ng.ports.a.pos[1]], r1: [0, 6 + ng.h + ng.ports.a.pos[1]] };
-    pairs.forEach(([e0, e1], i) => { pins[`b${e0}${e1}`] = [XR, 2 + P * i + mg.ports.out.pos[1]]; });
+    const pins: Record<string, [number, number]> = { r0: [0, 4 + ng.ports.a.pos[1]], r1: [0, 8 + ng.h + ng.ports.a.pos[1]] };
+    pairs.forEach(([e0, e1], i) => { pins[`b${e0}${e1}`] = [XR, 4 + P * i + mg.ports.out.pos[1]]; });
     const max = 2 ** q - 1;
     return define({
       id: `vitbm${q}_${w}`, name: `Branch metrics, ${q}-bit levels`, category: 'arithmetic',
@@ -130,7 +130,7 @@ export function vitAcs(w: number): ComponentDef {
   return memo(`vitacs${w}`, () => {
     const A = rca(w), N = notBus(w), M = busMux2(w), S = splitter([w - 1, 1], 2);
     const ag = symbolGeom(A), ng = symbolGeom(N), mg = symbolGeom(M), sg = symbolGeom(S);
-    const X0 = 8, Y1 = ag.h + 8, Y2 = Y1 + ag.h + 6, XN = X0 + ag.w + 8, XS = XN + ng.w + 6, XP = XS + ag.w + 6, XM = XS + 6, R = Math.max(XP + sg.w + 8, XM + mg.w + 8);
+    const X0 = 8, Y1 = ag.h + 8, Y2 = Y1 + ag.h + 6, XN = X0 + ag.w + 8, XS = XN + ng.w + 6, XP = XS + ag.w + 6, XM = XS + 6, R = Math.max(XP + sg.w + 22, XM + mg.w + 8);
     const instances: InstanceDef[] = [
       { name: 'add0', def: A, at: [X0, 3], label: 'm0 + b0' },
       { name: 'add1', def: A, at: [X0, Y1], label: 'm1 + b1' },
