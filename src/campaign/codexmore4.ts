@@ -112,7 +112,7 @@ receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>
     compare: ['uart_rx'],
     chapters: [
       { chapter: 'telegraph', step: 3, label: 'Morse against Baudot' },
-      { chapter: 'exchange', step: 6, label: 'Start-stop' },
+      { chapter: 'exchange', step: 7, label: 'Start-stop' },
       { chapter: 'uart', step: 0, label: 'One byte, no clock' },
       { chapter: 'uart', step: 2, label: 'The baud generator' },
       { chapter: 'uart', step: 3, label: 'Sampling in the middle' },
