@@ -96,7 +96,7 @@ export function receiverWidget(): Widget {
 /** The panel on the Schmitt scene: keeper strength, the node m against Vin in both keeper states, the thresholds. */
 export const schmittPanel: ScenePanel = (): Widget => {
   let kappa = KEEPER;
-  const f = frame(300, 200, [0, VDD], [0, VDD], 'Vin (V)', 'node m (V)', 'Node m against input voltage for the two keeper states', 0.6, 0.6, { l: 40, r: 10, t: 10, b: 32 });
+  const f = frame(300, 200, [0, VDD], [0, VDD], 'Vin (V)', 'node m (V)', 'Node m against input voltage for the two keeper states', 0.6, 0.6, { l: 52, r: 10, t: 10, b: 32 });
   const hi = f.svg.appendChild(s('path', { class: 'cur' })), lo = f.svg.appendChild(s('path', { class: 'clk-lo-curve' }));
   f.svg.appendChild(s('line', { class: 'vt', x1: f.X(0), x2: f.X(VDD), y1: f.Y(VM), y2: f.Y(VM) }));
   const up = f.svg.appendChild(s('line', { class: 'bound', y1: f.m.t, y2: f.H - f.m.b })), dn = f.svg.appendChild(s('line', { class: 'bound', y1: f.m.t, y2: f.H - f.m.b }));

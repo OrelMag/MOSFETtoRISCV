@@ -66,3 +66,4 @@
 .clk-w .mos-sl output { width: 84px; }
 .clk-w .mos-sl span { width: 64px; }
 @container (max-width: 520px) { .clk-w .mos-sl { flex-basis: 100%; } }
+.clk-w button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
