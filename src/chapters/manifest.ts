@@ -482,6 +482,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Termination", challenge: "quiz" },
     { title: "Crosstalk, ground bounce and pairs", challenge: "quiz" },
     { title: "An I/O pad, and where the transistors stop", challenge: "reach" },
+    { title: "From the pad to the pin" },
   ] },
   { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], recap: {"checks":3}, steps: [
     { title: "What a receiver decides", challenge: "quiz" },
