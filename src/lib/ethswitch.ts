@@ -6,7 +6,7 @@
 // A port is the byte stream of comm/ethframe.ts (data[7:0], valid, last, ready) plus `err` on the last byte of a receive stream
 // (the MAC saw a bad FCS). A receive stream is always ready: a wire cannot be stopped, so a frame that finds no free cell is dropped.
 
-import { Arbiter, CELLS, COUNT_BITS, PORTS, STAMP_BITS, withDefaults, type SwitchOpts } from '../comm/ethswitch';
+import { Arbiter, COUNT_BITS, PORTS, STAMP_BITS, withDefaults, type SwitchOpts } from '../comm/ethswitch';
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { arbiterN } from './mpdecode';
@@ -36,6 +36,8 @@ function loadReg(m: Rtl, clk: Sig, en: Sig, d: Sig[], name: string): Sig[] {
 }
 const muxBus = (m: Rtl, s: Sig, a: Sig[], b: Sig[]): Sig[] => a.map((x, i) => m.mux(s, x, b[i]));
 /** 4:1 per bit, select s1 s0 (index = 2·s1 + s0). */
+/** n:1 per select bits (LSB first), one bit. */
+const muxN = (m: Rtl, sel: Sig[], d: Sig[]): Sig => { let l = d; for (const s of sel) { const n: Sig[] = []; for (let i = 0; i < l.length; i += 2) n.push(i + 1 < l.length ? m.mux(s, l[i], l[i + 1]) : l[i]); l = n; } return l[0]; };
 const mux4 = (m: Rtl, s0: Sig, s1: Sig, d: Sig[][]): Sig[] => d[0].map((_, i) => m.mux(s1, m.mux(s0, d[0][i], d[1][i]), m.mux(s0, d[2][i], d[3][i])));
 const zeros = (m: Rtl, n: number): Sig[] => Array.from({ length: n }, () => m.const(0));
 
@@ -85,10 +87,8 @@ export function macTable(t = 7, tl = 4): ComponentDef {
       let borrow = m.const(0), d6 = borrow, d7 = borrow;
       for (let i = 0; i < 8; i++) {
         const a = tickF[i], b = stamp[i], x = m.xor(a, b);
-        const d = m.xor(x, borrow);
-        if (i === 6) d6 = d;
-        if (i === 7) d7 = d;
-        borrow = m.or(m.and(m.not(a), b), m.and(m.not(x), borrow));
+        if (i >= 6) { const d = m.xor(x, borrow); if (i === 6) d6 = d; else d7 = d; }
+        if (i < 7) borrow = m.or(m.and(m.not(a), b), m.and(m.not(x), borrow));
       }
       return m.nor(d6, d7);
     };
@@ -170,11 +170,11 @@ function cellRam(m: Rtl, clk: Sig, k: number, waddr: Sig[], wd: Sig[], we: Sig, 
 export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
   const o = withDefaults(opts), K = o.cellK;
   if (K < 5 || K > 11) throw new Error('inputBuffer: cells of 32 … 2048 bytes');
-  const id = `eth_in_${K}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}`;
+  const S = o.cells, sb = log2(S), id = `eth_in_${K}${S === 4 ? '' : `_${S}`}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}`;
   return memo(id, () => {
     const m = new Rtl({
       id, name: `Input buffer (${o.voq ? 'virtual output queues' : 'one FIFO'}, ${o.cut ? 'cut-through' : 'store-and-forward'})`, category: 'memory', label: 'INPUT BUFFER',
-      summary: `Four cells of ${2 ** K} bytes behind a receive stream that is always ready. The frame is written as it arrives; its first 12 bytes are kept to ask the address table, and the answer is an output mask. `
+      summary: `${S} cells of ${2 ** K} bytes behind a receive stream that is always ready. The frame is written as it arrives; its first 12 bytes are kept to ask the address table, and the answer is an output mask. `
         + `${o.cut ? 'Cut-through: the cell is queued as soon as the table answers and an output may start reading it behind the writer.' : 'Store-and-forward: the cell is queued at the last byte, if the receiver found the FCS good.'} `
         + `${o.voq ? 'One queue of cell numbers per output, so a frame for a busy output does not hold back one for an idle output.' : 'One FIFO of cell numbers: only the oldest frame competes for an output.'} A frame that finds no free cell is dropped and counted.`,
     });
@@ -182,17 +182,17 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
     const rxData = m.inputBus('rxData', 8), rxValid = m.input('rxValid'), rxLast = m.input('rxLast'), rxErr = m.input('rxErr');
     const lgrant = m.input('lgrant'), tmask = m.inputBus('tmask', 4), outBusy = m.inputBus('outBusy', 4), gntB = m.inputBus('gnt', 4), adv = m.input('adv');
     const fw = (n: number) => Array.from({ length: n }, () => m.fwd());
-    const txActive = m.fwd('txActive'), txSlot = fw(2), freeF = fw(CELLS), commitF = m.fwd('commit'), cmaskF = fw(4), curSlotF = fw(2);
-    const selF = fw(4), selSlotF = fw(2), gnt = m.fwd('gnt');
-    const widxF = fw(K), wslotF = fw(2), inFrameF = m.fwd('inFrame'), dropF = m.fwd('drop');
+    const txActive = m.fwd('txActive'), txSlot = fw(sb), freeF = fw(S), commitF = m.fwd('commit'), cmaskF = fw(4), curSlotF = fw(sb);
+    const selF = fw(4), selSlotF = fw(sb), gnt = m.fwd('gnt');
+    const widxF = fw(K), wslotF = fw(sb), inFrameF = m.fwd('inFrame'), dropF = m.fwd('drop');
 
     // ---- receive: cell choice, write, header capture, the table request
     const rx = m.scope('rx', 'receive, header capture', () => {
       const inFrame = m.reg(clk, 'inFrame'), drop = m.reg(clk, 'drop');
-      const wslot = [0, 1].map((i) => m.reg(clk, `wslot${i}`)), widx = Array.from({ length: K }, (_, i) => m.reg(clk, `widx${i}`));
+      const wslot = Array.from({ length: sb }, (_, i) => m.reg(clk, `wslot${i}`)), widx = Array.from({ length: K }, (_, i) => m.reg(clk, `widx${i}`));
       m.drive(inFrameF, inFrame); m.drive(dropF, drop); wslot.forEach((q, i) => m.drive(wslotF[i], q)); widx.forEach((q, i) => m.drive(widxF[i], q));
-      const [f0, f1, f2] = freeF;
-      const alloc = [m.and(m.not(f0), m.or(f1, m.not(f2))), m.and(m.not(f0), m.not(f1))];
+      const first = freeF.map((f, s) => (s === 0 ? f : m.and(f, m.not(m.orN(freeF.slice(0, s))))));
+      const alloc = Array.from({ length: sb }, (_, b) => m.orN(first.filter((_f, s) => (s >> b) & 1)));
       const allocOk = m.name(m.orN(freeF), 'allocOk');
       const start = m.name(m.and(rxValid, m.not(inFrame)), 'start');
       const curDrop = m.name(m.mux(inFrame, m.not(allocOk), drop), 'curDrop');
@@ -200,7 +200,6 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       const curSlot = alloc.map((a, i) => m.mux(inFrame, a, wslot[i]));
       curSlot.forEach((s, i) => m.drive(curSlotF[i], s));
       const lastAcc = m.name(m.and(wr, rxLast), 'lastAcc');
-      const vl = m.and(rxValid, rxLast);
       const up = m.inc(widx);
       widx.forEach((q, i) => m.setD(q, m.mux(rxValid, q, m.and(m.not(rxLast), up[i]))));
       wslot.forEach((q, i) => m.setD(q, m.mux(start, q, alloc[i])));
@@ -216,9 +215,13 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       const reqSet = m.and(wr, m.eqConst(widx, 11));
       const req = m.reg(clk, 'reqPending');
       m.setD(req, m.or(reqSet, m.and(req, m.not(lgrant))));
-      const maskReg = loadReg(m, clk, lgrant, tmask, 'mask');
-      const maskValid = m.reg(clk, 'maskValid');
-      m.setD(maskValid, m.and(m.not(vl), m.or(lgrant, maskValid)));
+      // store-and-forward keeps the answer until the last byte; cut-through acts on it at once
+      let maskReg: Sig[] = [], maskValid: Sig = lgrant;
+      if (!o.cut) {
+        maskReg = loadReg(m, clk, lgrant, tmask, 'mask');
+        maskValid = m.reg(clk, 'maskValid');
+        m.setD(maskValid, m.and(m.not(m.and(rxValid, rxLast)), m.or(lgrant, maskValid)));
+      }
       const dropEn = m.and(start, m.not(allocOk)), badEn = m.and(lastAcc, rxErr);
       return { wr, lastAcc, curSlot, req, dstBits, srcBits, maskReg, maskValid, widx, dropEn, badEn, start };
     });
@@ -228,7 +231,7 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       const txIdxF = fw(K);
       const waddr = [...rx.widx, ...rx.curSlot];
       const raddr = [...txIdxF, ...txSlot];
-      const w = cellRam(m, clk, K + 2, waddr, [...rxData, rxLast], rx.wr, raddr);
+      const w = cellRam(m, clk, K + sb, waddr, [...rxData, rxLast], rx.wr, raddr);
       return { w, txIdxF };
     });
 
@@ -237,7 +240,7 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       const commit = m.name(o.cut ? m.and(lgrant, m.orN(tmask)) : m.and(m.and(rx.lastAcc, m.not(rxErr)), m.and(rx.maskValid, m.orN(rx.maskReg))), 'commit');
       const cmask = o.cut ? tmask : rx.maskReg;
       m.drive(commitF, commit); cmask.forEach((c, i) => m.drive(cmaskF[i], c));
-      const rem = Array.from({ length: CELLS }, (_, s) => Array.from({ length: 4 }, (_x, j) => m.reg(clk, `rem${s}_${j}`)));
+      const rem = Array.from({ length: S }, (_, s) => Array.from({ length: 4 }, (_x, j) => m.reg(clk, `rem${s}_${j}`)));
       const free = rem.map((r, s) => m.and(m.and(m.not(m.orN(r)), m.not(m.and(txActive, m.eqConst(txSlot, s)))), m.not(m.and(m.and(inFrameF, m.not(dropF)), m.eqConst(wslotF, s)))));
       free.forEach((f, s) => m.drive(freeF[s], f));
       rem.forEach((r, s) => {
@@ -256,8 +259,8 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       for (let j = 0; j < n; j++) {
         const push = o.voq ? m.and(cells.commit, cells.cmask[j]) : cells.commit;
         pushes.push(push);
-        const [dout, empty] = m.part(fifo(log2(CELLS), 2), [push, popF[j], m.bus(rx.curSlot), clk], o.voq ? `to output ${j}` : 'cell numbers', `q${j}`);
-        heads.push(m.unbus(dout, 2)); empties.push(empty);
+        const [dout, empty] = m.part(fifo(sb, sb), [push, popF[j], m.bus(rx.curSlot), clk], o.voq ? `to output ${j}` : 'cell numbers', `q${j}`);
+        heads.push(m.unbus(dout, sb)); empties.push(empty);
       }
       return { n, heads, empties, popF, pops };
     });
@@ -269,20 +272,20 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
       if (o.voq) { want = qs.empties.map((e) => m.not(e)); head = qs.heads[0]; }
       else {
         head = qs.heads[0];
-        remHead = [0, 1, 2, 3].map((j) => mux4(m, head[0], head[1], cells.rem.map((r) => [r[j]]))[0]);
+        remHead = [0, 1, 2, 3].map((j) => muxN(m, head, cells.rem.map((r) => r[j])));
         want = remHead.map((r) => m.and(m.not(qs.empties[0]), r));
       }
       const cand = want.map((w, j) => m.and(m.and(w, idleOuts[j]), m.not(txActive)));
       const sel = cand.map((c, j) => (j === 0 ? c : m.and(c, m.not(m.orN(cand.slice(0, j))))));
       sel.forEach((s, j) => m.drive(selF[j], s));
-      const selSlot = o.voq ? [0, 1].map((b) => m.orN(sel.map((s, j) => m.and(s, qs.heads[j][b])))) : head;
+      const selSlot = o.voq ? Array.from({ length: sb }, (_, b) => m.orN(sel.map((s, j) => m.and(s, qs.heads[j][b])))) : head;
       selSlot.forEach((s, b) => m.drive(selSlotF[b], s));
       m.drive(gnt, m.orN(gntB));
       // pops
       if (o.voq) qs.popF.forEach((f, j) => m.drive(f, m.and(gnt, sel[j])));
       else m.drive(qs.popF[0], m.and(gnt, m.not(m.orN(remHead!.map((r, j) => m.and(r, m.not(sel[j])))))));
       // the reader
-      const slot = [0, 1].map((i) => m.reg(clk, `txSlot${i}`)), idx = Array.from({ length: K }, (_, i) => m.reg(clk, `txIdx${i}`));
+      const slot = Array.from({ length: sb }, (_, i) => m.reg(clk, `txSlot${i}`)), idx = Array.from({ length: K }, (_, i) => m.reg(clk, `txIdx${i}`));
       const active = m.reg(clk, 'txActive');
       slot.forEach((q, i) => m.drive(txSlot[i], q)); idx.forEach((q, i) => m.drive(word.txIdxF[i], q));
       m.drive(txActive, active);
@@ -381,14 +384,14 @@ const I4 = [0, 1, 2, 3];
 /** The four-port switch, hand placed: input buffers on the left, the table's port and the table, the crossbar, the output ports on the right. */
 export function ethSwitch(opts: Partial<SwitchOpts> = {}): ComponentDef {
   const o = withDefaults(opts);
-  const id = `ethswitch_${o.cellK}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}_${o.tableK}_${o.tickLog2}`;
+  const id = `ethswitch_${o.cellK}${o.cells === 4 ? '' : `_${o.cells}`}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}_${o.tableK}_${o.tickLog2}`;
   return memo(id, () => {
     const IN = inputBuffer(o), OUT = outputPort(), XB = crossbar(), TP = tablePort(), TB = macTable(o.tableK, o.tickLog2);
     const gi = symbolGeom(IN), go = symbolGeom(OUT), gx = symbolGeom(XB), gt = symbolGeom(TP), gb = symbolGeom(TB);
     const sp4 = splitter(ones(4)), mg4 = merger(ones(4)), gs = symbolGeom(sp4), gm = symbolGeom(mg4);
     const gap = 24, rowH = gi.h + 8;
-    const xi = 6, xt = xi + gi.w + gap, xx = xt + Math.max(gt.w, gb.w) + gap, xo = xx + gx.w + gap;
-    const y0 = 4, R = xo + go.w + 10;
+    const xi = 30, xt = xi + gi.w + gap, xx = xt + Math.max(gt.w, gb.w) + gap, xo = xx + gx.w + gap;
+    const y0 = 4, R = xo + go.w + 30;
     const instances: InstanceDef[] = [];
     I4.forEach((i) => instances.push({ name: `in${i}`, def: IN, at: [xi, y0 + i * rowH], label: `Port ${i} input` }));
     instances.push({ name: 'tp', def: TP, at: [xt, y0], label: 'Table port' });
@@ -441,7 +444,7 @@ export function ethSwitch(opts: Partial<SwitchOpts> = {}): ComponentDef {
     for (const p of ports) { if (p.dir === 'in') { pins[p.name] = [0, yi]; yi += 3; } else { pins[p.name] = [R, yo]; yo += 3; } }
     return define({
       id, name: `4-port switch (${o.voq ? 'VOQ' : 'FIFO'}, ${o.cut ? 'cut-through' : 'store-and-forward'}, ${2 ** o.tableK}-entry table)`, category: 'routing',
-      summary: 'Four ports, each a byte stream in and out. Every input buffers its frames in four cells and asks the learning table once a frame; each output has a round-robin arbiter over the inputs that want it, and the crossbar of multiplexers carries the bytes. '
+      summary: 'Four ports, each a byte stream in and out. Every input buffers its frames in cells and asks the learning table once a frame; each output has a round-robin arbiter over the inputs that want it, and the crossbar of multiplexers carries the bytes. '
         + `${o.cut ? 'Cut-through: an output starts as soon as the table has answered.' : 'Store-and-forward: a frame is sent after its last byte has arrived.'} ${o.voq ? 'Each input keeps one queue per output.' : 'Each input keeps one FIFO.'}`,
       ports, symbol: { kind: 'box', label: 'SWITCH' },
       netlist: () => ({ pins, instances, nets }),

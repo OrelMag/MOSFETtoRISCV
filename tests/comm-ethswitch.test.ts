@@ -103,6 +103,12 @@ describe('switch: gates against the golden model, every output every cycle', () 
       expect(r.moved).toBeGreaterThan(500);
     }
   }, 240000);
+  it('eight cells per input: FIFO store-and-forward, VOQ cut-through; two cells', async () => {
+    for (const o of [{ cellK: 7, cells: 8 }, { cellK: 7, cells: 8, voq: true, cut: true }, { cellK: 6, cells: 2, voq: true }]) {
+      const r = await lockstep(o, 2200, 21, { ...SRC, len: [60, 62] });
+      expect(r.moved).toBeGreaterThan(300);
+    }
+  }, 240000);
   it('a small table collides and evicts, a short age expires entries, and the table counters match', async () => {
     const r = await lockstep({ cellK: 7, tableK: 2, tickLog2: 1 }, 3000, 7, { ...SRC, unknown: 0.2 });
     expect(r.m.table.evicted).toBeGreaterThan(0);

@@ -12,7 +12,6 @@
 import { BROADCAST, frameBody, GAP_BYTES, isGroup, MAX_FRAME, type Mac } from './ethframe';
 
 export const PORTS = 4;
-export const CELLS = 4;
 /** Counters are this wide and wrap. */
 export const COUNT_BITS = 16;
 const CMASK = (1 << COUNT_BITS) - 1;
@@ -24,12 +23,14 @@ export interface SwitchOpts {
   voq: boolean;
   /** Start sending when the table has answered (true), or at the last byte (false). */
   cut: boolean;
+  /** Cells in each input buffer (2, 4, 8 or 16). */
+  cells: number;
   /** The table has 2^tableK entries. */
   tableK: number;
   /** One age tick every 2^tickLog2 clock cycles. */
   tickLog2: number;
 }
-export const DEFAULTS: SwitchOpts = { cellK: 11, voq: false, cut: false, tableK: 7, tickLog2: 4 };
+export const DEFAULTS: SwitchOpts = { cellK: 11, cells: 4, voq: false, cut: false, tableK: 7, tickLog2: 4 };
 export const withDefaults = (o: Partial<SwitchOpts> = {}): SwitchOpts => ({ ...DEFAULTS, ...o });
 
 /** An entry younger than this many ticks is live. */
@@ -145,12 +146,13 @@ class Input {
   inFrame = false; drop = false; wslot = 0; widx = 0;
   dst = new Array(6).fill(0); src = new Array(6).fill(0);
   reqPending = false; maskValid = false; maskReg = 0;
-  rem = new Array(CELLS).fill(0);
+  rem: number[];
   q: number[][];
   txActive = false; txSlot = 0; txIdx = 0;
   drops = 0; bad = 0;
   constructor(o: SwitchOpts) {
-    this.mem = Array.from({ length: CELLS }, () => new Uint16Array(2 ** o.cellK));
+    this.rem = new Array(o.cells).fill(0);
+    this.mem = Array.from({ length: o.cells }, () => new Uint16Array(2 ** o.cellK));
     this.q = Array.from({ length: o.voq ? PORTS : 1 }, () => []);
   }
 }
@@ -198,6 +200,20 @@ export class SwitchModel {
   occupancy(i: number): number { const p = this.ins[i]; return p.rem.filter((r, s) => r !== 0 || !this.free(p, s)).length; }
   queueLengths(i: number): number[] { return this.ins[i].q.map((q) => q.length); }
   isBusy(j: number): boolean { return this.busy[j]; }
+  /** Nothing is being received, queued or sent. */
+  quiet(): boolean { return this.ins.every((p) => !p.inFrame && !p.txActive && !p.reqPending && p.q.every((q) => q.length === 0)) && this.busy.every((b) => !b); }
+  /** The cells of input i holding a frame now: [cell, remaining outputs mask]. */
+  cellsOf(i: number): number[] { return this.ins[i].rem.slice(); }
+  /** The input driving output j, or -1 while it is idle. */
+  srcOf(j: number): number { return this.busy[j] ? this.src[j] : -1; }
+  /** Everything a later step can change, copied (for Back). */
+  save(): unknown { return structuredClone({ ins: this.ins, tarb: this.tarb, oarb: this.oarb, table: this.table, busy: this.busy, src: this.src, frames: this.frames, cycle: this.cycle }); }
+  restore(saved: unknown): void {
+    const c = structuredClone(saved) as { ins: Input[]; tarb: Arbiter; oarb: Arbiter[]; table: MacTable; busy: boolean[]; src: number[]; frames: number[]; cycle: number };
+    this.ins.forEach((p, i) => Object.assign(p, c.ins[i]));
+    Object.assign(this.tarb, c.tarb); this.oarb.forEach((a, i) => Object.assign(a, c.oarb[i])); Object.assign(this.table, c.table);
+    this.busy = c.busy; this.src = c.src; this.frames = c.frames; this.cycle = c.cycle;
+  }
 
   step(inp: SwitchIn): void {
     const o = this.o, ins = this.ins;
@@ -241,7 +257,7 @@ export class SwitchModel {
       const p = ins[i], r = inp.rx[i];
       const start = !!r.valid && !p.inFrame;
       let alloc = -1;
-      for (let s = 0; s < CELLS; s++) if (this.free(p, s)) { alloc = s; break; }
+      for (let s = 0; s < o.cells; s++) if (this.free(p, s)) { alloc = s; break; }
       const curDrop = p.inFrame ? p.drop : alloc < 0;
       const wr = !!r.valid && !curDrop;
       const curSlot = p.inFrame ? p.wslot : Math.max(alloc, 0);
@@ -397,24 +413,46 @@ export function runTraffic(t: TrafficOpts): TrafficResult {
   };
 }
 
+export interface Single { firstIn: number; firstOut: number; lastIn: number; lastOut: number; delivered: number; bad: number; dropped: number }
+
+/** One frame of `bytes` from port 0 to host 1 through a switch whose table has learned the hosts, at one byte a cycle; times from its first byte in. */
+export function singleFrame(opts: Partial<SwitchOpts>, bytes: number, err = false): Single {
+  const m = new SwitchModel(opts);
+  teach(m);
+  const f = trafficFrame(0, 1, 1, bytes);
+  const r: Single = { firstIn: 0, firstOut: -1, lastIn: f.length - 1, lastOut: -1, delivered: 0, bad: 0, dropped: 0 };
+  const before = m.out();
+  for (let c = 0; c < f.length + 600; c++) {
+    const i = idleIn();
+    if (c < f.length) i.rx[0] = { valid: 1, data: f[c], last: c === f.length - 1 ? 1 : 0, err: err && c === f.length - 1 ? 1 : 0 };
+    const o = m.out();
+    if (o.tx[1].valid) { if (r.firstOut < 0) r.firstOut = c; if (o.tx[1].last) { r.lastOut = c; r.delivered++; } }
+    m.step(i);
+  }
+  r.bad = m.out().bad[0] - before.bad[0];
+  return r;
+}
+
 // ---- head-of-line blocking in the abstract (fixed cells, one slot each) --------------------------------------------------------
 
 /**
  * The classic experiment: N inputs always have a cell to send, destinations uniform over the N outputs, one cell per output per slot.
  * With one FIFO per input only the head contends (random winner per output); with virtual output queues a maximum matching is found.
  */
-export function holSaturation(N: number, voq: boolean, slots: number, seed = 1): number {
+export function holSaturation(N: number, voq: boolean, slots: number, seed = 1, self = true): number {
   const R = rng(seed);
   let served = 0;
+  /** A destination for input i: any output, or (self = false) any but i, as on a switch whose frames never return to their port. */
+  const dest = (i: number): number => (self ? Math.floor(R() * N) : (i + 1 + Math.floor(R() * (N - 1))) % N);
   if (!voq) {
-    const head = Array.from({ length: N }, () => Math.floor(R() * N));
+    const head = Array.from({ length: N }, (_, i) => dest(i));
     for (let s = 0; s < slots; s++) {
       const by: number[][] = Array.from({ length: N }, () => []);
       head.forEach((d, i) => by[d].push(i));
       for (let d = 0; d < N; d++) {
         if (!by[d].length) continue;
         const w = by[d][Math.floor(R() * by[d].length)];
-        head[w] = Math.floor(R() * N);
+        head[w] = dest(w);
         served++;
       }
     }
@@ -447,6 +485,13 @@ export function sharedCapacity(n: number, p: number, eps: number): number {
   let c = 0;
   while (binomialTail(n, p, c) > eps) c++;
   return c;
+}
+
+/** P(X = k) for X ~ Binomial(n, p). */
+export function binomialPmf(n: number, p: number, k: number): number {
+  let lg = 0;
+  for (let i = 1; i <= k; i++) lg += Math.log((n - k + i) / i);
+  return Math.exp(lg + k * Math.log(p) + (n - k) * Math.log(1 - p));
 }
 
 // ---- timing ------------------------------------------------------------------------------------------------------------------------------

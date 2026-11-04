@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ethSwitch } from '../src/lib/ethswitch';
 import { brentKung, cachedMemory, coherentDualCore, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
@@ -32,6 +33,10 @@ coherentDualCore(words);
 coherentDualCore(words, { coherent: false });
 coherentDualCore(words, { dmemK: 6 });
 cachedMemory(6, 2);
+// Chapter 49's switch: store-and-forward with one FIFO, cut-through with virtual output queues, and the full-size cells.
+ethSwitch({ cellK: 7 });
+ethSwitch({ cellK: 7, cut: true, voq: true, cells: 8 });
+ethSwitch({ cellK: 11 });
 // The parallel-prefix adders beside Kogge–Stone, powers of two and not.
 for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }
 // Every workbench family as it first opens.

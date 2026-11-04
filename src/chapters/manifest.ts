@@ -547,8 +547,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], steps: [
     { title: "Many machines, one wire" },
   ] },
-  { id: "switch", num: 49, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange"], steps: [
-    { title: "Everyone at once" },
+  { id: "switch", num: 49, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange","multicore"], recap: {"checks":3}, steps: [
+    { title: "Everyone at once", challenge: "quiz" },
+    { title: "Learning", challenge: "reach" },
+    { title: "The table's price", challenge: "quiz" },
+    { title: "The crossbar and its arbiter", challenge: "reach" },
+    { title: "Store-and-forward and cut-through", challenge: "quiz" },
+    { title: "Queues and head-of-line blocking", challenge: "quiz" },
+    { title: "A switch on a bench", challenge: "quiz" },
+    { title: "What full duplex changed", challenge: "quiz" },
   ] },
   { id: "appendix-6502", num: 50, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
