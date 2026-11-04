@@ -110,7 +110,7 @@ describe('the comparison', () => {
     expect(compareCapture([{ us: 0, bytes: ping }, { us: 1, bytes: ping }], [rowOf(ping)])[0]).toMatch(/read 1 frames of 2/);
   });
   it('a retransmission\'s bytes count under tshark\'s other name for them, and only if they are the same bytes', () => {
-    const seg = tcpFrame({ ...hdr, sport: 5000, dport: 12000, seq: 1, ack: 1, flags: 0x18, win: 512, data: [1, 2, 3, 4] }).bytes, r = rowOf(seg);
+    const seg = tcpFrame({ ...hdr, sport: 5000, dport: 12000, seq: 1, ack: 1, flags: 0x18, wnd: 512, data: [1, 2, 3, 4] }).bytes, r = rowOf(seg);
     const hex = r['data.data']!;
     delete r['data.data'];
     expect(compareRow(claimOf(seg, 0), { ...r, 'tcp.segment_data': hex })).toEqual([]);
