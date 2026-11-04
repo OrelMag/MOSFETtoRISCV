@@ -4,7 +4,7 @@
 // never wrong). The same FIFO on the cycle engine, to say whether two clocks run there.
 
 import { describe, expect, it } from 'vitest';
-import { AsyncFifoModel, fromGray, grayStep, hamming, interleave, RATIOS, toGray } from '../src/comm/asyncfifo';
+import { AsyncFifoModel, fromGray, grayStep, hamming, interleave, randomInterleave, RATIOS, toGray } from '../src/comm/asyncfifo';
 import { asyncFifo, BIN2GRAY, GRAY2BIN, NMOS_WEAK, PULSE_SYNC, SCHMITT, SYNC2, SYNC_BENCH, syncN } from '../src/lib';
 import { flatten } from '../src/sim/flatten';
 import { DualSim } from '../src/sim/dualsim';
@@ -146,7 +146,7 @@ describe('toggle pulse synchronizer', () => {
 interface Run { edges: number; written: number[]; read: number[]; fullSeen: number; emptySeen: number; staleFull: number; staleEmpty: number }
 
 /** Drive a gate-level asynchronous FIFO and the model through the same edges; compare every output after every edge. */
-async function drive(k: number, w: number, fw: number, fr: number, edges: number, seed: number, pw: number, pr: number): Promise<Run> {
+async function drive(k: number, w: number, fw: number, fr: number, edges: number, seed: number, pw: number, pr: number, random = false): Promise<Run> {
   const def = asyncFifo(k, w);
   const sim = simulate(def);
   const m = new AsyncFifoModel(k, w);
@@ -168,7 +168,7 @@ async function drive(k: number, w: number, fw: number, fr: number, edges: number
   };
   same('power-on');
   let n = 0;
-  for (const e of interleave(fw, fr, edges)) {
+  for (const e of random ? randomInterleave(fw, fr, edges, seed) : interleave(fw, fr, edges)) {
     n++;
     if (e === 'w') {
       const we = rnd(100) < pw ? 1 : 0, wd = rnd(2 ** w);
@@ -225,6 +225,35 @@ describe('asynchronous FIFO against its golden model', () => {
     }
     expect(fulls).toBeGreaterThan(50);
     expect(empties).toBeGreaterThan(50);
+  }, 120000);
+  it('random interleavings: jittered edges in bursts, seeded, several seeds per ratio, gates equal the model', async () => {
+    let longestRun = 0;
+    for (const [fw, fr] of RATIOS) {
+      for (const seed of [21, 22]) {
+        const bias = fw > fr ? [90, 30] : fw < fr ? [30, 90] : [60, 60];
+        const r = await drive(2, 4, fw, fr, 700, seed * 31 + fw * 7 + fr, bias[0], bias[1], true);
+        expect(r.read).toEqual(r.written.slice(0, r.read.length));
+      }
+      const ev = randomInterleave(fw, fr, 3000, 99);
+      let run = 1;
+      for (let i = 1; i < ev.length; i++) { run = ev[i] === ev[i - 1] ? run + 1 : 1; longestRun = Math.max(longestRun, run); }
+    }
+    expect(longestRun).toBeGreaterThanOrEqual(8);
+  }, 240000);
+  it('random interleavings, model only: many seeds, no word lost, repeated or invented, flags never wrong', async () => {
+    for (const [fw, fr] of RATIOS) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const m = new AsyncFifoModel(3, 8), rnd = lcg(seed * 1315 + fw);
+        const written: number[] = [], read: number[] = [];
+        for (const e of randomInterleave(fw, fr, 4000, seed * 7 + fr, 0.5 + seed / 12)) {
+          if (e === 'w') { const wd = rnd(256); if (m.wEdge(rnd(100) < 70, wd).did) written.push(wd); } else { const r = m.rEdge(rnd(100) < 50); if (r.did) read.push(r.word!); }
+          if (!m.full) expect(m.occupancy).toBeLessThan(m.N);
+          if (!m.empty) expect(m.occupancy).toBeGreaterThan(0);
+        }
+        expect(read).toEqual(written.slice(0, read.length));
+      }
+      await yieldTick();
+    }
   }, 120000);
   it('a deeper FIFO: 8 words, several seeds', async () => {
     for (const seed of [11, 12]) {

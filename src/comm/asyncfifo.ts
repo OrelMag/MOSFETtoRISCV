@@ -111,5 +111,27 @@ export function interleave(fw: number, fr: number, edges: number): ('w' | 'r')[]
   return Array.from({ length: edges }, () => s.next());
 }
 
+/**
+ * A seeded random interleaving: each clock has a random start phase and every period is stretched by a random factor in
+ * 1 ± `jitter` (0.9 gives long runs of one clock and sudden swaps), so edges of one domain come in bursts and the pairs
+ * of edges that straddle a synchronizer vary. Times are continuous, so two edges never coincide.
+ */
+export function randomInterleave(fw: number, fr: number, edges: number, seed: number, jitter = 0.9): ('w' | 'r')[] {
+  let a = seed >>> 0;
+  const u = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let tw = u() / fw, tr = u() / fr;
+  const out: ('w' | 'r')[] = [];
+  while (out.length < edges) {
+    if (tw < tr) { out.push('w'); tw += (1 + jitter * (2 * u() - 1)) / fw; } else { out.push('r'); tr += (1 + jitter * (2 * u() - 1)) / fr; }
+  }
+  return out;
+}
+
 /** The ratios the scene's panel offers, as [wclk, rclk] relative rates. */
 export const RATIOS: readonly [number, number][] = [[1, 1], [2, 1], [1, 2], [3, 2], [5, 3], [1, 7], [7, 1]];

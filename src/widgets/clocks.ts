@@ -115,7 +115,7 @@ export const schmittPanel: ScenePanel = (): Widget => {
       : `Solid: the keeper holds m high (output 0), so the input must rise to ${nf(t.up!)} V before m falls below B's threshold. Light: the keeper holds m low, so the input must fall to ${nf(t.down!)} V.`;
   };
   const kSl = slider('Keeper', 0, 1.2, 0.01, kappa, (v) => `${nf(v)}×`, (v) => { kappa = v; paint(); });
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, h('h4', null, 'Thresholds from the current balance', h('span', { class: 'fold-hint' })),
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'Thresholds from the current balance', h('span', { class: 'fold-hint' })),
     f.svg, kSl.el, read, note, h('p', { class: 'sub' }, 'Square-law model of chapter 1 (phys/schmitt.ts). The switch-level circuit beside it shows who wins by strength; this shows at what voltage.'));
   paint();
   return { el };
@@ -347,10 +347,19 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
       cfg.drive?.(e, count[e], stage);
       sim.settle(); // the data is steady before the clock moves: an edge is an event after the inputs, never with them
       sim.setInput(clk, 1); sim.settle(); sim.setInput(clk, 0); sim.settle();
+      record(e);
+    };
+    const record = (e: 'a' | 'b') => {
       count[e]++;
       log.push({ e, n: count[e], vals: cfg.rows.map((r) => fmt(r.read(stage), r.bits)) });
       if (log.length > STRIP) log.shift();
     };
+    // the stage's own clock (the bottom bar's Pulse, Run, Step) is clock A: its edges go through the same drive and strip
+    const hook = {
+      before: () => { cfg.drive?.('a', count.a, stage); stage.sim?.settle(); },
+      after: () => { record('a'); update(); },
+    };
+    stage.edgeHooks.add(hook);
     const act = (f: () => void) => { stage.checkpoint(); f(); stage.refresh(); update(); };
     const next = () => edge(sched.next() === 'w' ? 'a' : 'b');
     const stopRun = () => { if (timer) clearInterval(timer); timer = null; runBtn.textContent = 'Run'; runBtn.setAttribute('aria-pressed', 'false'); };
@@ -392,7 +401,7 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
       action: (i) => act(() => cfg.actions![i].run(stage, () => undefined)),
       steps: (n) => act(() => { for (let k = 0; k < n; k++) next(); }),
     });
-    return { el, update, destroy: () => { stopRun(); clockApi.delete(stage); } };
+    return { el, update, destroy: () => { stopRun(); stage.edgeHooks.delete(hook); clockApi.delete(stage); } };
   };
 }
 
@@ -429,7 +438,7 @@ export function syncScene(): Scene {
     history: { save: () => ({ p: plan.save(), sent, seen, state, bAfter }), restore: (v) => { const x = v as { p: [number[], number]; sent: number; seen: number; state: typeof state; bAfter: number }; plan.load(x.p); ({ sent, seen, state, bAfter } = x); } },
     hint: 'q is 1 when B has seen the level. The sender flop launches a 1 at A\'s edge; B only samples what is on the wire at its own edges.',
   };
-  return { root: SYNC_BENCH, inputs: { send: 0, aclk: 0, bclk: 0 }, clock: 'aclk', autoClock: false, hiddenInputs: ['send'], panels: [twoClockPanel(cfg)] };
+  return { root: SYNC_BENCH, inputs: { send: 0, aclk: 0, bclk: 0 }, clock: 'aclk', autoClock: false, hiddenInputs: ['send', 'bclk'], panels: [twoClockPanel(cfg)] };
 }
 
 /** PULSE_SYNC: events in A, events out in B. */
@@ -456,7 +465,7 @@ export function pulseScene(): Scene {
     history: { save: () => ({ p: plan.save(), sent, got, prev, quiet }), restore: (v) => { const x = v as { p: [number[], number]; sent: number; got: number; prev: number; quiet: number }; plan.load(x.p); ({ sent, got, prev, quiet } = x); } },
     hint: 'The level t flips on each pulse and holds; B synchronizes the level (sync) and out is high for one B cycle when sync differs from its previous value.',
   };
-  return { root: PULSE_SYNC, inputs: { pulse: 0, aclk: 0, bclk: 0 }, clock: 'aclk', autoClock: false, hiddenInputs: ['pulse'], panels: [twoClockPanel(cfg)] };
+  return { root: PULSE_SYNC, inputs: { pulse: 0, aclk: 0, bclk: 0 }, clock: 'aclk', autoClock: false, hiddenInputs: ['pulse', 'bclk'], panels: [twoClockPanel(cfg)] };
 }
 
 /** The asynchronous FIFO with a model beside it. */
@@ -527,7 +536,7 @@ export function fifoScene(k = 2, w = 8): Scene {
     },
     hint: 'W and R are unrelated clocks. Words are numbered 1, 2, 3 … so a lost, repeated or reordered word shows at once. "late" marks a flag that is up while the other side has already moved on.',
   };
-  return { root: asyncFifo(k, w), inputs: { we: 0, re: 0, wdata: 0, wclk: 0, rclk: 0 }, clock: 'wclk', autoClock: false, hiddenInputs: ['we', 're', 'wdata'], panels: [twoClockPanel(cfg)] };
+  return { root: asyncFifo(k, w), inputs: { we: 0, re: 0, wdata: 0, wclk: 0, rclk: 0 }, clock: 'wclk', autoClock: false, hiddenInputs: ['we', 're', 'wdata', 'rclk'], panels: [twoClockPanel(cfg)] };
 }
 
 export { PAIR };

@@ -37,6 +37,17 @@ describe('Schmitt thresholds from the current balance', () => {
     }
     expect(mNode(0.9, 0.3, 'hi')).toBeGreaterThan(mNode(0.9, 0.3, 'lo'));
   });
+  it('the threshold shift is the linear-region keeper current over the transconductance of A: 0.9 κ, and the limit is κ = 1', () => {
+    // at m = VM the keeper has Vov = VDD − Vt and Vsd = VDD − VM (linear), A's devices are saturated: δ = κ·K[Vov·Vsd − Vsd²/2] / (2K(VM − Vt))
+    const delta = ((VDD - 0.45) * (VDD - VM) - (VDD - VM) ** 2 / 2) / (2 * (VM - 0.45));
+    expect(delta).toBeCloseTo(0.9, 12);
+    for (const k of [0.05, 0.15, 0.5]) {
+      const t = thresholds(k);
+      expect(t.up! - VM).toBeCloseTo(delta * k, 2);
+      expect(VM - t.down!).toBeCloseTo(delta * k, 2);
+    }
+    expect(keeperLimit()).toBeCloseTo(1, 6);
+  });
   it('a keeper past the limit holds the output for good', () => {
     const lim = keeperLimit();
     expect(lim).toBeGreaterThan(0.5);

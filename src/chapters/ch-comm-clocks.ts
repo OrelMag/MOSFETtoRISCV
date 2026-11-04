@@ -1,12 +1,12 @@
 import { fmtLog10, log10Mtbf, resolutionTime, T0_PS, TAU_PS, windowRate } from '../phys/metastable';
 import { metrics } from '../phys/inverter';
-import { keeperLimit, KEEPER, thresholds } from '../phys/schmitt';
+import { keeperLimit, KEEPER, thresholds, VM } from '../phys/schmitt';
 import { asyncFifo, BIN2GRAY, fifo, GRAY2BIN, PULSE_SYNC, SCHMITT, SYNC2, syncN } from '../lib';
 import { meanGarbage } from '../comm/graybus';
 import { stats } from '../sim/stats';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import { clockApi, fifoScene, grayBusWidget, metastableWidget, noisyEdgeWidget, pulseScene, receiverWidget, schmittPanel, syncScene, windowWidget } from '../widgets/clocks';
-import { VDD } from '../widgets/mosphys';
+import { VDD, VT } from '../widgets/mosphys';
 import { MS_TIMING } from './seq/timing';
 import type { Chapter } from './types';
 
@@ -101,8 +101,7 @@ export const chClocks: Chapter = {
         <p>The price is area (two more transistors than a buffer of two inverters), a slower edge (the keeper fights every transition) and a hysteresis that moves with process and temperature.</p>`,
       scene: () => ({ root: SCHMITT, inputs: { a: 0 }, panels: [schmittPanel] }),
       more: {
-        derive: `<p>Near threshold both devices of A are in saturation, so id ∝ (Vin − Vt)². With the input δ above VM the NMOS has (VM − Vt + δ)² and the PMOS (VM − Vt − δ)²: the difference is 4δ(VM − Vt). The keeper's current at that node is a constant κ(VDD − Vt)². Setting them
-          equal gives δ ≈ κ(VDD − Vt)² / (4(VM − Vt)), linear in κ. The code solves the balance with the channel-length factor, so its figures differ from this estimate by a few percent.</p>`,
+        derive: `<p>At the node's own threshold m = VM = ${nf(VM)} V the keeper's device has V<sub>ov</sub> = VDD − Vt = ${nf(VDD - VT)} V and V<sub>ds</sub> = VDD − VM = ${nf(VDD - VM)} V: it is in its linear region and carries K[(VDD − Vt)(VDD − VM) − (VDD − VM)²/2] = ${nf((VDD - VT) * (VDD - VM) - (VDD - VM) ** 2 / 2)} K per unit of κ. Both devices of A are saturated there, with currents ∝ (Vin − Vt)². An input δ above VM gives the NMOS (VM − Vt + δ)² and the PMOS (VM − Vt − δ)², a difference of 2Kδ(VM − Vt) = ${nf(2 * (VM - VT))} Kδ. Equating the two, δ = ${nf(((VDD - VT) * (VDD - VM) - (VDD - VM) ** 2 / 2) / (2 * (VM - VT)))} κ volts, linear in κ: the figures above are exactly this (tests/comm-phys.test.ts). At κ = 1 the shift is VM, the upper threshold reaches VDD, and that is the keeper's limit.</p>`,
         real: `<p>Production Schmitt inputs (a 74HC14, a microcontroller pin with hysteresis) use the same idea in a six-transistor circuit in which a second PMOS and NMOS feed back to the source of the first pair. The hysteresis is a datasheet number, typically 10 to 20 % of VDD.</p>`,
         pitfall: `<p>Reading hysteresis as noise immunity at any amplitude. It rejects noise smaller than its width on a slow edge. Noise larger than ${mv(TH.width!)} peak to peak still crosses both thresholds, and the next step shows where that limit is.</p>`,
       },
@@ -173,7 +172,8 @@ export const chClocks: Chapter = {
         ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}. A second flop gives the first a whole period less clock-to-q and setup: t<sub>r</sub> = ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}.
         Doubling the clock to 2 GHz takes the two-flop version to ${h2}. That is why synchronizers are two flops at ordinary clock rates and three at very high ones: the exponent is time, and an extra period is what buys it.</p>
         <p><strong>What these figures are.</strong> The gate simulator resolves a balanced pair in zero time (<code>relax()</code> in gatesim.ts, Gauss–Seidel until one side wins) and cannot time a real race, so every number on this page is the
-        model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>`;
+        model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>
+        <p>T0 is narrower than the setup + hold window of the previous step (1 delay against ${MS_TIMING().setup + MS_TIMING().hold}). The window is where the captured value is uncertain; T0 is the part of it where the decision takes unboundedly long, the sliver around the exact balance point, and it is what enters the MTBF.</p>`;
       },
       widget: metastableWidget,
       more: {
@@ -227,7 +227,7 @@ export const chClocks: Chapter = {
         check: (st) => clockApi.get(st)?.status() === 'lost',
         hints: ['The two pulses must be closer together than the synchronizer\'s latency.', 'Use Send 2 close at 3 : 1 and let it run.'],
         answer: 'Two toggles inside one B period return t to its starting value before B samples it, so the receiver sees no change: both events vanish together.',
-        solve: (st) => { const a = clockApi.get(st); a?.setRatio(0); a?.action(1); a?.steps(30); },
+        solve: (st) => { const a = clockApi.get(st); a?.setRatio(0); a?.action(1); a?.steps(60); },
       },
     },
     {
@@ -270,7 +270,7 @@ export const chClocks: Chapter = {
         check: (st) => st.value('full') === 1,
         hints: ['Press Fill, then Run or Next.', 'Four words fit; the flag goes up as the fourth is written.'],
         answer: 'With Fill, every W edge writes a word until the write pointer is a lap ahead of the (old) read pointer, which takes four writes from empty.',
-        solve: (st) => { const a = clockApi.get(st); a?.action(0); a?.steps(12); },
+        solve: (st) => { const a = clockApi.get(st); a?.setRatio(0); a?.action(0); a?.steps(12); },
       },
     },
   ],
