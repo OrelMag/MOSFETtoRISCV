@@ -1262,6 +1262,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
                  (components, laws, tools) / codexmore1.ts (tricks, concepts) / codexmoreP.ts (act P); loaded on demand
                  with codexcheck.ts (Check yourself: two Quizzes per entry in codexcheck0–3.ts, tests/codex-guide.test.ts)
+                 The Communication entries (chapters 39–47) are codexcomm.ts (summaries; COMM_AWAITING_LEVELS: ids no Act 12 level lists yet),
+                 codexmore4–5.ts and codexcheck6–7.ts, every number pinned by tests/content-codexcomm.test.ts; uart / spi / crc are glossary SKIP
+                 (the CPU chapters name them as examples long before chapter 43); new entries need a chapters/taught.ts row
   codexlinks.ts  how entries connect: CODEX_ORDER, buildsOn / leadsTo (from the level graph), seeAlso (related both ways),
                  neighbours; ui/codexfigs.ts: figures from the site's widgets for entries without a part (number explorer,
                  instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page
