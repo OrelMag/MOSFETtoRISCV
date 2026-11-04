@@ -325,7 +325,7 @@ export class SchematicView {
         hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
       }
       for (const t of tapsOf.get(net.index) ?? []) {
-        const g = s('g', { class: 'tap-label', 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
+        const g = s('g', { class: 'tap-label', 'data-net': net.index, 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
         setNetHue(g, hue);
         const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),

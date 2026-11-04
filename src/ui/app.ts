@@ -184,6 +184,17 @@ export function startApp(root: HTMLElement): void {
   const motionItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('reduceMotion', !settings.reduceMotion); applyTheme(); } },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Reduce motion'), motionWhy));
+  // Text on the schematics: fewer words on a dense level; names come back under the pointer.
+  const labelItem = (key: 'portNames' | 'partNames' | 'busValues' | 'tapRanges', title: string, about: string) =>
+    h('button', { role: 'menuitemcheckbox', class: 'pal-flow', 'data-label': key, onclick: () => { settings.set(key, !settings[key]); applyTheme(); } },
+      h('span', { class: 'pal-flow-sw' }, h('i')),
+      h('span', null, h('b', null, title), h('small', null, about)));
+  const labelItems = [
+    labelItem('portNames', 'Port names', 'The names inside a part; off, shown when you point at it'),
+    labelItem('partNames', 'Part names', 'Block and instance names; off, shown when you point at a part'),
+    labelItem('busValues', 'Bus values', 'Live values on the buses, standing or riding along'),
+    labelItem('tapRanges', 'Bit ranges', 'Where a bus is tapped ([7:0]); off, shown on a net you point at or select'),
+  ];
   // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.
   const minimapItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('minimap', !settings.minimap) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
@@ -199,8 +210,8 @@ export function startApp(root: HTMLElement): void {
     applyTheme();
     syncTools();
   } });
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: text size, wire colours and thickness, the look of parts, grid, motion, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
     palBtn.setAttribute('aria-expanded', String(on));
@@ -231,6 +242,7 @@ export function startApp(root: HTMLElement): void {
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     delayItem.setAttribute('aria-checked', String(settings.loadDelay));
     narrowItem.setAttribute('aria-checked', String(settings.narrowText));
+    for (const b of labelItems) b.setAttribute('aria-checked', String(settings[b.dataset.label as 'portNames']));
     wiresRow.sync();
     gridRow.sync();
     const sysMotion = systemReducedMotion();

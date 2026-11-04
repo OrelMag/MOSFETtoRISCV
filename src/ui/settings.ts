@@ -64,6 +64,11 @@ interface State {
   reduceMotion: boolean;
   wireScale: WireScale;
   grid: GridStyle;
+  /** Text on the schematics; hidden, each still shows under the pointer where it can (app.css data-hide). */
+  portNames: boolean;
+  partNames: boolean;
+  busValues: boolean;
+  tapRanges: boolean;
   /** Prose size in the chapter pane, percent of the designed size (TEXT_SIZES); schematics never scale. */
   textSize: number;
   /** The chapter pane's text held to a comfortable line length (about 62 characters), centred where the pane is wider. */
@@ -86,7 +91,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -106,7 +111,7 @@ function load(): State {
 }
 
 /** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */
-const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'textSize', 'narrowText'] as const;
+const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'textSize', 'narrowText'] as const;
 export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
 
 const pickView = (from: State): ViewState => Object.fromEntries(VIEW_KEYS.map((k) => [k, from[k]])) as unknown as ViewState;
@@ -150,13 +155,17 @@ export const settings = {
   get reduceMotion() { return state.reduceMotion; },
   get wireScale() { return state.wireScale; },
   get grid() { return state.grid; },
+  get portNames() { return state.portNames; },
+  get partNames() { return state.partNames; },
+  get busValues() { return state.busValues; },
+  get tapRanges() { return state.tapRanges; },
   get textSize() { return state.textSize; },
   get narrowText() { return state.narrowText; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -269,6 +278,9 @@ export function applyTheme(): void {
   else root.setAttribute('data-wires', state.wireScale);
   if (state.grid === 'dots') root.removeAttribute('data-grid');
   else root.setAttribute('data-grid', state.grid);
+  const hide = [!state.portNames && 'ports', !state.partNames && 'parts', !state.busValues && 'values', !state.tapRanges && 'taps'].filter(Boolean);
+  if (hide.length) root.setAttribute('data-hide', hide.join(' '));
+  else root.removeAttribute('data-hide');
   if (state.vivid) root.setAttribute('data-look', 'vivid');
   else root.removeAttribute('data-look');
   if (state.vivid && state.board) root.setAttribute('data-board', 'dark');
