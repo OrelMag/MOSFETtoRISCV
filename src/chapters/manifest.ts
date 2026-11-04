@@ -499,14 +499,16 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Phase and amplitude", challenge: "quiz" },
     { title: "Noise decides how many points", challenge: "quiz" },
     { title: "300 b/s to 56 kb/s", challenge: "quiz" },
+    { title: "Many tones, one FFT", challenge: "quiz" },
     { title: "ADSL: many carriers", challenge: "quiz" },
   ] },
-  { id: "serial", num: 46, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 46, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then a wave as harmonics, the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz" },
     { title: "8b/10b and running disparity", challenge: "quiz" },
     { title: "Scrambling instead", challenge: "quiz" },
     { title: "A SerDes in gates", challenge: "reach" },
     { title: "Finding the clock in the data", challenge: "reach" },
+    { title: "A wave is a sum of sines", challenge: "quiz" },
     { title: "The eye diagram", challenge: "quiz" },
     { title: "Equalization", challenge: "quiz" },
     { title: "PAM4", challenge: "quiz" },

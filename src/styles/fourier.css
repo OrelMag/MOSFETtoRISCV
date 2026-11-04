@@ -9,7 +9,11 @@
 .mos-plot .fr-prefix { fill: color-mix(in srgb, var(--warn) 16%, transparent); }
 .mos-plot .fr-target { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
 .mos-plot .fr-dot { fill: var(--accent); fill-opacity: 0.75; }
-.ln-key .fr-k.bits { color: var(--muted); }
-.ln-key .fr-k.kept { color: var(--warn); }
+.ln-key .fr-k { color: var(--muted); }
 .fr-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .fr-scatter { display: block; width: 100%; max-width: 240px; margin: 0 auto; }
+.fr-ctl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fr-ctl output { white-space: nowrap; }
+@container (max-width: 520px) { .fr-ctl { grid-template-columns: minmax(0, 1fr); } }
+.fr-ctl .mos-sl span { width: auto; min-width: 72px; }
+.fr-ctl .btn { justify-self: start; }

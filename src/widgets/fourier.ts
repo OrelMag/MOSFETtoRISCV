@@ -16,12 +16,12 @@ const db = (x: number) => `${x > -0.05 ? '0' : x.toFixed(1).replace('-', '−')}
 /** A vertical marker with a label at the top of the plot, in the plot's clipped layer. */
 function vmark(p: Plot, v: number, label: string, anchor: 'start' | 'end', cls: string) {
   const x = p.X(v);
-  p.layer.append(s('line', { x1: x, x2: x, y1: p.Y(1.45), y2: p.Y(0), class: `fr-mark ${cls}` }), s('text', { x: x + (anchor === 'start' ? 4 : -4), y: p.Y(1.34), 'text-anchor': anchor, class: `fr-ml ${cls}` }, label));
+  p.layer.append(s('line', { x1: x, x2: x, y1: p.Y(1.45), y2: p.Y(0), class: `fr-mark ${cls}` }), s('text', { x: x + (anchor === 'start' ? 4 : -4), y: p.Y(cls === 'pole' ? 1.28 : 1.08), 'text-anchor': anchor, class: `fr-ml ${cls}` }, label));
 }
 
 export function harmonicsWidget(): Widget {
   let pat = 0, kept = 3, rate = 8, bw = 1;
-  const WIN = 8, SAMPLES = 480;
+  const WIN = 8, SAMPLES = 480, MAX_KEPT = 25;
   const time = plotOf({ W: 640, H: 220, x: [0, WIN], y: [-1.45, 1.45], yTicks: [-1, 0, 1], xLabel: 'bits', yLabel: 'level', aria: 'A repeating bit pattern, the sum of the harmonics kept, and the line\'s output, against time', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 0) });
   const spec = plotOf({ W: 640, H: 200, x: [0, 24], y: [0, 1.45], yTicks: [0, 0.5, 1], xLabel: 'GHz', yLabel: 'amplitude', aria: 'The pattern\'s harmonics before and after the line, with the line\'s gain, against frequency', yFmt: (v) => num(v, 1) });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
@@ -30,7 +30,7 @@ export function harmonicsWidget(): Widget {
 
   function paint() {
     const bits = PATTERNS[pat].bits, n = bits.length, f0 = rate / n, a = aOf(rate, bw);
-    const fMax = 3 * rate, series = seriesOf(bits, Math.ceil(fMax / f0)), out = throughPole(series, n, rate, bw);
+    const fMax = 3 * rate, series = seriesOf(bits, Math.max(MAX_KEPT * 2 + 8, Math.ceil(fMax / f0))), out = throughPole(series, n, rate, bw); // the slider's harmonics may lie past the plot
     const ts = Array.from({ length: SAMPLES + 1 }, (_, i) => (i / SAMPLES) * WIN);
     time.clear();
     line(time, ts, ts.map((t) => (bits[Math.min(n - 1, Math.floor(t % n))] ? 1 : -1)), 'ln-s lump');
@@ -45,7 +45,7 @@ export function harmonicsWidget(): Widget {
     if (rate / 2 > bw * 1.6 || rate / 2 < bw / 1.6) vmark(spec, rate / 2, `Nyquist ${num(rate / 2, 1)}`, 'start', 'nyq');
     const dx = Math.min(4, Math.max(1.5, (spec.X(f0) - spec.X(0)) / 4));
     const stem = (f: number, amp: number, off: number, cls: string) => spec.layer.append(s('line', { x1: spec.X(f) + off, x2: spec.X(f) + off, y1: spec.Y(0), y2: spec.Y(amp), class: `fr-stem ${cls}` }));
-    series.harmonics.forEach((hm, i) => { stem(hm.k * f0, hm.amp, -dx / 2, i < kept ? 'in on' : 'in'); stem(hm.k * f0, out.harmonics[i].amp, dx / 2, 'out'); });
+    series.harmonics.forEach((hm, i) => { if (hm.k * f0 > fMax) return; stem(hm.k * f0, hm.amp, -dx / 2, i < kept ? 'in on' : 'in'); stem(hm.k * f0, out.harmonics[i].amp, dx / 2, 'out'); });
 
     let power = series.dc ** 2;
     for (const hm of series.harmonics.slice(0, kept)) power += hm.amp ** 2 / 2;
@@ -58,15 +58,15 @@ export function harmonicsWidget(): Widget {
     note.textContent = `The ${kept} harmonic${kept > 1 ? 's' : ''} kept hold ${(100 * power).toFixed(1)} % of the power${pat === 0 ? `; the first peak overshoots by ${(100 * gibbsOvershoot(kept)).toFixed(1)} % of the step, and more harmonics only narrow it` : ''}. A cut spectrum rings; the pole's spectrum falls smoothly, so it rounds and does not ring.`;
   }
   paint();
-  const key = h('div', { class: 'ln-key' }, h('span', { class: 'fr-k bits' }, 'bits sent'), h('span', { class: 'k-near' }, 'sum of the harmonics kept'), h('span', { class: 'k-far' }, 'after the line'));
-  const key2 = h('div', { class: 'ln-key' }, h('span', { class: 'fr-k kept' }, 'harmonics sent (kept in colour)'), h('span', { class: 'k-far' }, 'after the line'), h('span', { class: 'fr-k bits' }, 'the line\'s gain'));
+  const key = h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'bits sent'), h('span', { class: 'k-near' }, 'sum of the harmonics kept'), h('span', { class: 'k-far' }, 'after the line'));
+  const key2 = h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'harmonics sent (kept in colour)'), h('span', { class: 'k-far' }, 'after the line'), h('span', { class: 'fr-k bits' }, 'the line\'s gain'));
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'The same wave in time'), key, time.el),
       h('div', { class: 'panel' }, h('h3', null, 'And in frequency'), key2, spec.el),
-      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
+      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row fr-ctl' },
         h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Pattern'), sel),
-        slider('Harmonics', 1, 25, 1, kept, (v) => String(v), (v) => { kept = v; paint(); }).el,
+        slider('Harmonics', 1, MAX_KEPT, 1, kept, (v) => String(v), (v) => { kept = v; paint(); }).el,
         slider('Rate', 1, 16, 0.5, rate, (v) => `${v.toFixed(1)} Gb/s`, (v) => { rate = v; paint(); }).el,
         slider('Bandwidth', 0.5, 4, 0.25, bw, (v) => `${v.toFixed(2)} GHz`, (v) => { bw = v; paint(); }).el), chips.el, note)),
   };
@@ -89,7 +89,7 @@ const N_POINTS = 64, TONES = N_POINTS / 2 - 1;
 
 export function ofdmWidget(): Widget {
   let cp = 0, delay = 5, echo = 0.6, seed = 1;
-  const time = plotOf({ W: 640, H: 210, x: [0, N_POINTS + 16], y: [-0.5, 0.5], yTicks: [-0.4, 0, 0.4], xLabel: 'samples', yLabel: 'level', aria: 'The block as sent and as received, the prefix shaded', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 1) });
+  const time = plotOf({ W: 640, H: 210, x: [0, N_POINTS + 16], y: [-1.1, 1.1], yTicks: [-1, 0, 1], xLabel: 'samples', yLabel: 'relative level', aria: 'The block as sent and as received, the prefix shaded', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 1) });
   const raw = scatter('The FFT\'s output per tone, before the one-tap equalizer'), eq = scatter('Each tone after its one complex tap, on the four QPSK points');
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
 
@@ -98,13 +98,13 @@ export function ofdmWidget(): Widget {
     if (delay > 0) taps[delay] = echo; else taps[0] = 1 + echo;
     const r = ofdmLink(sy, prev, N_POINTS, cp, taps), H = toneGains(taps, N_POINTS);
     const errs = qpskErrors(sy, r.equalized), span = N_POINTS + cp;
-    const peak = Math.max(0.2, ...Array.from(r.received, Math.abs), ...Array.from(r.sent, Math.abs)) * 1.1;
-    time.setX(N_POINTS + 16); time.setY(-peak, peak);
+    const peak = Math.max(1e-9, ...Array.from(r.received, Math.abs), ...Array.from(r.sent, Math.abs)), rel = (a: Float64Array) => Array.from(a, (v) => v / peak);
+    time.setX(span);
     time.clear();
-    if (cp > 0) time.layer.append(s('rect', { x: time.X(0), width: time.X(cp) - time.X(0), y: time.Y(peak), height: time.Y(-peak) - time.Y(peak), class: 'fr-prefix' }));
+    if (cp > 0) time.layer.append(s('rect', { x: time.X(0), width: time.X(cp) - time.X(0), y: time.Y(1.1), height: time.Y(-1.1) - time.Y(1.1), class: 'fr-prefix' }));
     const idx = Array.from({ length: span }, (_, i) => i);
-    line(time, idx, Array.from(r.sent), 'ln-s near');
-    line(time, idx, Array.from(r.received), 'ln-s real');
+    line(time, idx, rel(r.sent), 'ln-s near');
+    line(time, idx, rel(r.received), 'ln-s real');
     raw.paint(r.raw);
     eq.paint(r.equalized);
     let weak = Infinity;
@@ -117,17 +117,17 @@ export function ofdmWidget(): Widget {
       ? `The prefix of ${cp} covers the echo of ${delay}: the FFT sees a circular convolution, so tone k comes out as H[k] X[k], and one complex division on each tone puts all ${TONES} back on their points. The price is ${num((100 * cp) / span, 1)} % of the samples.`
       : `The echo of ${delay} is longer than the prefix of ${cp}: ${delay - cp} sample${delay - cp > 1 ? 's' : ''} of the block before leak in and the same number wrap around lost, so the tones are no longer orthogonal, and no division on one tone can remove what came from the others.`;
   }
-  const prefix = slider('Prefix', 0, 16, 1, cp, (v) => `${v} samples`, (v) => { cp = v; paint(); });
+  const prefix = slider('Prefix', 0, 16, 1, cp, (v) => String(v), (v) => { cp = v; paint(); });
   const newBits = h('button', { class: 'btn sm', type: 'button', title: 'Other bits on the tones' }, 'New bits');
   newBits.addEventListener('click', () => { seed++; paint(); });
   paint();
-  const key = h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'as sent'), h('span', { class: 'k-far' }, 'as received'), h('span', { class: 'fr-k bits' }, 'shaded: the prefix'));
+  const key = h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'as sent'), h('span', { class: 'k-far' }, 'as received'), h('span', { class: 'fr-k' }, 'shaded: the prefix'));
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, `One block: ${TONES} QPSK tones through a ${N_POINTS}-point inverse FFT`), key, time.el),
-      h('div', { class: 'panel fr-two' }, h('div', null, h('h3', null, 'Out of the FFT'), raw.svg), h('div', null, h('h3', null, 'After one complex tap a tone'), eq.svg)),
-      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, prefix.el,
-        slider('Echo delay', 0, 16, 1, delay, (v) => `${v} samples`, (v) => { delay = v; paint(); }).el,
+      h('div', { class: 'panel fr-two' }, h('div', null, h('h3', null, 'Out of the FFT'), raw.svg), h('div', null, h('h3', null, 'After one tap'), eq.svg)),
+      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row fr-ctl' }, prefix.el,
+        slider('Echo at', 0, 16, 1, delay, (v) => String(v), (v) => { delay = v; paint(); }).el,
         slider('Echo', 0, 0.95, 0.05, echo, (v) => v.toFixed(2), (v) => { echo = v; paint(); }).el, newBits), chips.el, note)),
   };
 }
