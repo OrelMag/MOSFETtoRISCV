@@ -978,6 +978,9 @@ async function startPreview(): Promise<{ url: string; close(): Promise<void> }> 
 
 // ---- main ------------------------------------------------------------------------------------
 
+const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed/;
+const MAX_RETRIES = 20;
+
 async function main(): Promise<number> {
   const list = routes();
   if (!list.length) {
@@ -1005,6 +1008,18 @@ async function main(): Promise<number> {
         else if (results.length % 50 === 0) console.log(`  ${results.length} / ${list.length}`);
       }
     }));
+    // A failure of the machine, not the page (one asset refused in 1 800 routes costs a 40-minute deploy): such a route gets one more
+    // visit, alone. An exception or a layout failure does not; nor do many routes at once, which is a real outage.
+    const again = results.filter((r) => r.errors.length && r.errors.every((e) => TRANSIENT.test(e)));
+    if (again.length && again.length <= MAX_RETRIES) {
+      const tab = new Tab(cdp, base);
+      await tab.open();
+      for (const r of again) {
+        const second = await tab.visit(r.route, list.indexOf(r.route));
+        console.log(`${second.errors.length ? 'FAILED AGAIN' : 'passed on a second visit'}: ${r.route.label}`);
+        r.errors = second.errors;
+      }
+    }
   } finally {
     cdp.close();
     chrome.proc.kill();
