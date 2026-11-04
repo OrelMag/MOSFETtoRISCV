@@ -1,4 +1,4 @@
-// The fuller texts of the Communication entries of chapters 51-52 (codexcomm.ts): the router and TCP. Every number is the chapter's own, computed from net/ and the library
+// The fuller texts of the Communication entries of chapters 51-53 (codexcomm.ts): the router, TCP and the internet path. Every number is the chapter's own, computed from net/ and the library
 // (tests/content-codexcomm.test.ts pins them to the models, to the gate counts and to the chapter steps that print them). No DOM.
 
 import type { CodexMore } from './codexmore';
@@ -142,6 +142,48 @@ a home router: 1 MB of queue on a 10 Mb/s uplink = 0.8 s on every packet going o
     chapters: [
       { chapter: 'tcp', step: 5, label: 'How fast: the sawtooth' },
       { chapter: 'tcp', step: 6, label: 'Queues that fill' },
+    ],
+  },
+  bgp: {
+    idea: `A router's table must say something about every address on Earth, and no one runs the whole thing. So there are two levels: inside an <b>autonomous system</b> an organization runs link state over links whose costs it sets, and between them <b>BGP</b> decides what crosses links that are contracts.<br><br>Distance vector's problem was that a number does not say how it was reached. BGP advertises the whole list of networks a route crosses, and a network that finds its own number in a path refuses it, so counting to infinity cannot start. That list is the only metric it has: BGP knows nothing of bandwidth or delay. It chooses by <b>policy</b>, and the policy follows the money: a customer pays you, so its routes come first; a peer costs nothing; a provider bills you. The shortest wire is often not used.`,
+    example: {
+      title: 'On the invented network',
+      body: `<pre>the laptop's path: Ridgeway Net → Kestrel Transit → Tarn Backbone → Quillon Hosting
+a router holds 10 or so routes and at most 62 trie nodes: a /16 stands for a whole network
+a false /24 beats the true /16 everywhere it reaches, by longest prefix</pre>`,
+    },
+    mistakes: [
+      'Expecting the shortest path: money comes before length, so a packet often crosses a longer wire than the one next to it.',
+      'Calling it a routing protocol like the others: it carries policy between organizations, and inside each one link state does the path-finding.',
+      'Assuming it checks what it is told: it believes what it hears, so a false route spreads, and longest-prefix match makes a more specific one win.',
+      'Reading a stable table as an optimal one: BGP finds a path each network\'s policy accepts, with nothing global being minimized.',
+    ],
+    chapters: [
+      { chapter: 'path', step: 0, label: 'A network of networks' },
+      { chapter: 'path', step: 1, label: 'BGP: the whole path, and who pays' },
+    ],
+  },
+  internetpath: {
+    idea: `Type a name and press Enter. <b>DNS</b> turns it into an address, walking from the root down: nobody holds the whole table, and each zone is run by whoever owns it. TCP's handshake takes a round trip before any data can flow, TLS another, and the response arrives in slow start, each window a round trip after the last.<br><br>Each packet's delay has four parts. <b>Light</b>: length over speed, 5 µs a kilometre in fibre, which no money changes. <b>Bits</b>: frame size over the link's rate. <b>Queue</b>: what is already waiting, which grows sharply as load nears one. <b>Engine</b>: the router's cycles. Which one matters depends on where you are. <b>Traceroute</b> reads the path with the TTL: send a probe with TTL 1, then 2, then 3, and each router in turn reports the packet it had to kill.`,
+    example: {
+      title: 'One way, on the invented path',
+      body: `<pre>one way 47.7 ms, of which light 47.5 ms: only a shorter route or a nearer copy helps
+at the edge, on the 20 Mb/s line: a full frame's bits 615 µs
+  the queue: 320 µs at half load, 6.1 ms at 95 %
+a name from cold: 3 questions and 8 messages, 194 ms in sequence; two short messages when cached
+a page of 100 kB from cold: about 720 ms, most of it round trips</pre>`,
+    },
+    mistakes: [
+      'Buying a faster link to make pages load sooner: past some point the time is round trips, and only a nearer server shortens those.',
+      'Reading a traceroute line as the time to that router and on: each line is a separate packet, and its time includes a way back that may be a different path.',
+      'Reading a jump in traceroute as a slow router: a router answers from its slow path, and that says little about how fast it forwards.',
+      'Thinking of DNS as one table somewhere: it is split by the dots, and each server knows only the next step down.',
+    ],
+    chapters: [
+      { chapter: 'path', step: 2, label: 'A name, then an address' },
+      { chapter: 'path', step: 3, label: 'Traceroute: asking each router to speak' },
+      { chapter: 'path', step: 5, label: 'One packet, all the way' },
+      { chapter: 'path', step: 6, label: 'A page' },
     ],
   },
 };

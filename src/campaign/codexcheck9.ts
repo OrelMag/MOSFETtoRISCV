@@ -1,4 +1,4 @@
-// Check yourself questions for the entries of codexmore7.ts (see codexcheck.ts), group 9: Communication, chapters 51-52. Answers first: the quiz shuffles the options
+// Check yourself questions for the entries of codexmore7.ts (see codexcheck.ts), group 9: Communication, chapters 51-53. Answers first: the quiz shuffles the options
 // (ui/quiz.ts shuffleOrder). Numbers pinned by tests/content-codexcomm.test.ts. No DOM.
 
 import type { Quiz } from '../chapters/types';
@@ -98,6 +98,38 @@ export const CHECK9: Record<string, Quiz[]> = {
       answer: 0,
       explain: 'TCP fills the queue, since nothing is lost until it is full, and each packet then waits behind all of it. A plain first-in, first-out queue makes every flow pay.',
       why: ['', 'The bottleneck is the uplink, not the faster network behind it.', 'Not in a first-in, first-out queue. Fair queueing would give this, and is part of the cure.', '1 MB is 8 Mb, not 800.'],
+    },
+  ],
+  bgp: [
+    {
+      question: 'Why can BGP not count to infinity, as distance vector does?',
+      options: ['A route carries the whole list of networks it crosses, and a network that finds its own number in it refuses it', 'It runs Dijkstra on a full map', 'Its routes expire after one round', 'A central registry checks every route'],
+      answer: 0,
+      explain: 'Counting to infinity comes from a number that does not say how it was reached. The path says exactly that, so a loop is visible to the network that would close it.',
+      why: ['', 'That is link state, inside one network; no network shows another its whole map.', 'Routes stay until withdrawn.', 'BGP believes what it hears, which is its other weakness.'],
+    },
+    {
+      question: 'A network has two routes to a destination: through a customer, 5 networks long, and through a provider, 2 long. Which does BGP policy usually take?',
+      options: ['The customer: a customer pays you, and a provider bills you, whatever the length', 'The provider: the shorter path wins', 'Both, sharing the load equally', 'Neither: it asks the destination'],
+      answer: 0,
+      explain: 'Policy comes before length: customer, then peer, then provider. Path length only separates routes the policy ranks alike, which is why the shortest wire is often not used.',
+      why: ['', 'Length only breaks ties among routes of the same rank.', 'BGP picks one best route per prefix.', 'Nobody asks the destination; routes are advertised towards you.'],
+    },
+  ],
+  internetpath: [
+    {
+      question: 'One way takes 47.7 ms on a path where 47.5 ms is light. What would make it markedly faster?',
+      options: ['A shorter route or a nearer copy of the content', 'Links ten times faster', 'A faster router engine', 'A larger TCP window'],
+      answer: 0,
+      explain: 'Light in fibre takes 5 µs a kilometre whatever anyone pays. The rest of the delay here is 0.2 ms, so nothing that acts on bits, queues or engines has anything left to save.',
+      why: ['', 'Bits are already a tiny share of this path.', 'The engine is the smallest part of all.', 'A window changes how much is in flight, not how long a packet takes.'],
+    },
+    {
+      question: 'How does traceroute find the routers on a path?',
+      options: ['It sends probes with TTL 1, 2, 3, and each router in turn reports the one it had to kill', 'Each router adds its address to the packet', 'It asks BGP for the path', 'It reads the routers\' tables'],
+      answer: 0,
+      explain: 'A packet arriving with a TTL of 1 cannot go on, so the router sends an ICMP "time exceeded" from its own address. Each line is a separate packet, and its time includes a way back that may differ.',
+      why: ['', 'IP has an option like that, and it is almost never honoured.', 'BGP paths are lists of networks, between routers, and not open to a host.', 'A host has no way to read another\'s tables.'],
     },
   ],
 };

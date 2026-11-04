@@ -205,6 +205,8 @@ export const TAUGHT: Record<string, string> = {
   tcp: 'tcp',
   aimd: 'tcp',
   bufferbloat: 'tcp',
+  bgp: 'path',
+  internetpath: 'path',
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

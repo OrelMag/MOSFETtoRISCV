@@ -2,7 +2,7 @@
 // links and codes, then Ethernet, the switch and the computers on a network. Same shape as codex.ts, appended to CODEX there;
 // the fuller texts are codexmore4.ts (39-44), codexmore5.ts (45-47) and codexmore6.ts (48-50), the questions codexcheck6.ts,
 // codexcheck7.ts and codexcheck8.ts, the numbers pinned by tests/content-codexcomm.test.ts (each is the chapter's own, from
-// comm/, phys/ and the library). In chapter order: chapters 51-52's fuller texts are codexmore7.ts, their questions codexcheck9.ts. No DOM, no library import: the
+// comm/, phys/ and the library). In chapter order: chapters 51-53's fuller texts are codexmore7.ts, their questions codexcheck9.ts. No DOM, no library import: the
 // chapters' hover cards load this.
 
 import type { CodexEntry, CodexKind } from './codex';
@@ -18,8 +18,10 @@ export const COMM_AWAITING_LEVELS: ReadonlySet<string> = new Set([
   'shannon', 'reflection', 'asyncfifo', 'spi', 'qam', 'ofdm', 'eye', 'equalization', 'arq', 'viterbi', 'reedsolomon', 'interleave',
   // chapters 48-50: ethframe, ethmac, learnsw and nicring are listed by l_mac, l_switch and l_driver
   'csmacd', 'crossbar', 'hol',
-  // chapters 51-52: lpm and fastpath are listed by l_fwd
+  // chapters 51-52: lpm and fastpath are listed by l_fwd, ipv4, arp and inetcksum by l_host
   'routing', 'tcp', 'aimd', 'bufferbloat',
+  // chapter 53
+  'bgp', 'internetpath',
 ]);
 
 export const CODEX_COMM: CodexEntry[] = [
@@ -70,4 +72,7 @@ export const CODEX_COMM: CodexEntry[] = [
   E('tcp', 'TCP', 'concept', 'A stream of bytes over packets that may not arrive, built at the two ends alone. Every byte has a sequence number; an ACK names the next byte expected. Three segments open a connection; the receive window keeps a buffer from overflowing; RTO = SRTT + 4 · RTTVAR follows the path, and three duplicate ACKs catch a loss sooner. Ours is 570 lines of Python, 128 clock cycles a byte.', ['aimd', 'bufferbloat', 'arq', 'ipv4']),
   E('aimd', 'AIMD and the congestion window', 'concept', 'Nothing announces what the network can hold, so a sender guesses: it may have min(cwnd, rwnd) unacknowledged. Slow start doubles every round trip, then one segment more per round trip; three duplicate ACKs halve it, a timeout falls to one segment. Additive increase and multiplicative decrease make competing flows converge on equal shares. The sawtooth is what finding an unknown limit looks like.', ['tcp', 'bufferbloat']),
   E('bufferbloat', 'Queues and bufferbloat', 'concept', 'The bottleneck\'s queue sets what a sawtooth costs. Too short, and a loss leaves too few segments for three duplicate ACKs, so the timer does the work. Too long, and it just sits full: no more throughput, and every packet of every flow waits behind it, 0.8 s for 1 MB on a 10 Mb/s uplink. The cure is in the router: drop or mark before the queue fills, and queue each flow fairly.', ['aimd', 'tcp', 'hol']),
+  // ---- chapter 53: the internet path
+  E('bgp', 'BGP and policy', 'concept', 'Inside one network, link state; between networks, BGP, which advertises the whole list of networks a route crosses. A network that finds its own number in a path refuses it, so counting to infinity cannot start. It knows nothing of bandwidth or delay, and chooses by money before length: customer, then peer, then provider. And it believes what it hears: a false /24 beats a true /16 everywhere it reaches.', ['routing', 'lpm', 'internetpath']),
+  E('internetpath', 'The internet path', 'concept', 'What a fetch is made of: a name through DNS (3 questions and 8 messages from cold), a handshake, then packets whose delay is light, bits, queues and the engine. On our invented path one way takes 47.7 ms and 47.5 of it is light, so past some point faster links stop helping and only a nearer copy does. Traceroute reads the path by sending TTLs of 1, 2, 3 and listening to each router report the packet it killed.', ['bgp', 'tcp', 'fastpath', 'ipv4']),
 ];

@@ -29,6 +29,7 @@ import { NIC_BASE, NIC_COSTS, nicPollSource } from '../src/riscv/nicprograms';
 import { arbiterN, cam, macRx, macTx, registry, ROUTER_FAST } from '../src/lib';
 import { bigRam } from '../src/lib/bigmem';
 import { fwdPath } from '../src/lib/ethlevels';
+import { chPath } from '../src/chapters/ch-comm-path';
 import { MEASURED_MBPS, WIRE_DATA_MBPS } from '../src/chapters/ch-comm-tcp';
 import { TTL_DELTA, ttlChecksum } from '../src/net/ipv4';
 import { CHAIN3, DistVec, floodAll, INFINITY, NET7 } from '../src/net/routing';
@@ -77,7 +78,7 @@ const says = (ch: string, step: number, s: string) => {
 
 describe('the Communication codex entries', () => {
   it('are complete: summary, fuller text, chapters, answer-first questions, a TAUGHT row, no level yet', () => {
-    expect(IDS.length).toBe(34);
+    expect(IDS.length).toBe(36);
     for (const e of CODEX_COMM) {
       const m = moreOf(e.id)!;
       expect(m?.idea, `${e.id}: idea`).toBeTruthy();
@@ -382,6 +383,13 @@ describe('the Communication codex entries', () => {
     expect([q(2), q(4), q(8)]).toEqual([[5834908, 14, 14, 67669], [4280132, 9, 1, 98928], [3054241, 0, 0, 153072]]);
     quotes('bufferbloat', '5,834,908', '4,280,132', '3,054,241', '67,669', '98,928', '153,072', '23,600', '0.8 s');
     expect(queueDelay(1, 200)).toBe(23600);
+  });
+
+  it('quote the internet path as chapter 53 computes it', () => {
+    const keep = strip(chPath.recap!.keep.join(' ')).replace(/\s+/g, ' ');
+    for (const s of ['at most 62 trie nodes', 'customer, then peer, then provider', 'Ridgeway Net → Kestrel Transit → Tarn Backbone → Quillon Hosting', 'A false /24 beats the true /16', '3 questions and 8 messages', '194 ms in sequence', 'takes 47.7 ms and 47.5 of it is light', '615 µs for a full frame on the 20 Mb/s line', '320 µs at half load to 6.1 ms at 95 %', 'about 720 ms']) expect(keep, s).toContain(s);
+    quotes('bgp', 'at most 62 trie nodes', 'Ridgeway Net → Kestrel Transit → Tarn Backbone → Quillon Hosting', 'customer, then peer, then provider');
+    quotes('internetpath', '47.7 ms', '47.5', '615 µs', '320 µs', '6.1 ms at 95 %', '3 questions and 8 messages', '194 ms', 'about 720 ms', '5 µs a kilometre');
   });
 
   it('quote the NIC, the checksum, ARP and the ping as built and measured', () => {
