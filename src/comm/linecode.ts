@@ -9,7 +9,7 @@ export type Rd = 0 | 1;
 
 // ---- Manchester ------------------------------------------------------------------------------------------------------------
 
-/** IEEE 802.3 convention: a 1 is low then high, a 0 is high then low; the half-bit levels, two per bit. */
+/** This chapter's convention: a 1 is low then high, a 0 is high then low (the other convention swaps them); the half-bit levels, two per bit. */
 export function manchester(bits: ArrayLike<number>): number[] {
   const out: number[] = [];
   for (let i = 0; i < bits.length; i++) out.push(bits[i] ? 0 : 1, bits[i] ? 1 : 0);

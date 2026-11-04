@@ -32,7 +32,7 @@ function steps(vals: number[], cw: number, x0: number, y0: number, y1: number): 
   return d;
 }
 
-function wavePanel(W: number, rows: { label: string; vals: number[]; cw: number; cls?: string }[], marks: { x: number; label?: string }[] = [], aria = 'Waveforms'): SVGSVGElement {
+export function wavePanel(W: number, rows: { label: string; vals: number[]; cw: number; cls?: string }[], marks: { x: number; label?: string }[] = [], aria = 'Waveforms'): SVGSVGElement {
   const rh = 34, H = rows.length * rh + 22, x0 = 58;
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot sr-wave', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   rows.forEach((r, k) => {
