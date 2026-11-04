@@ -38,6 +38,7 @@ import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
+import { modelLeaf } from '../widgets/modelleaf';
 import { findMemories } from './memfind';
 import { markJump } from '../ui/returnto';
 
@@ -811,13 +812,14 @@ export class Stage {
   }
 
   /** Navigate to a path of instance names from the root. */
-  goTo(path: string[], notify = true): void {
+  goTo(path: string[], notify = true, gates = false): void {
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
     let leafName: string | null = null;
     for (let i = 0; i < path.length; i++) {
       const name = path[i];
+      if (!gates && i === path.length - 1 && ctx.node.children?.get(name)?.def.modelPanel) { leafName = name; break; }
       const c = ctx.child(name);
       if (!c) {
         const def = ctx.node.children?.get(name)?.def;
@@ -923,7 +925,7 @@ export class Stage {
   open(child: string): void {
     if (!this.ctx) return;
     const def = this.ctx.node.children?.get(child)?.def;
-    if (def && (def.prim === 'nmos' || def.prim === 'pmos')) {
+    if (def && (def.prim === 'nmos' || def.prim === 'pmos' || def.modelPanel)) {
       this.openLeaf(child);
       this.renderCrumbs();
       this.showInspector();
@@ -1113,15 +1115,19 @@ export class Stage {
   }
 
   private openLeaf(name: string): void {
-    if (!this.leafFactory || !this.ctx) return;
+    if (!this.ctx) return;
     const ctx = this.ctx;
-    const def = ctx.node.children!.get(name)!.def;
-    const widget = this.leafFactory(def, () => ctx.transistorGate(name));
+    const node = ctx.node.children!.get(name)!, def = node.def;
+    if (!def.modelPanel && !this.leafFactory) return;
+    const li = node.leafIndex;
+    const widget = def.modelPanel
+      ? modelLeaf(def, { state: () => (li === undefined ? undefined : ctx.sim.leafState(li)), gates: def.netlist ? () => this.goTo([...ctx.path, name], true, true) : undefined })
+      : this.leafFactory!(def, () => ctx.transistorGate(name));
     const host = h('div', { class: 'widget-host' }, widget.el);
     widget.el = host;
     this.canvas.append(host);
     this.leaf = { name, widget };
-    this.levelBadge.textContent = 'level: a single transistor';
+    this.levelBadge.textContent = def.modelPanel ? 'level: a model, not transistors' : 'level: a single transistor';
   }
 
   private closeLeaf(): void {

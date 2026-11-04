@@ -9,7 +9,7 @@ import {
 import {
   berOf, ctleNoiseGain, eye, eyePam, gaussian, pam4Ber, pam4Symbols, PAM4_LEVELS, PAM4_PENALTY_DB, prbs, pulseResponse, rng, type ChannelSpec,
 } from '../phys/line';
-import { h, s } from '../ui/dom';
+import { h, keepFocus, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { hline, mkChips, num, plotOf, sci, type Plot } from './line';
 import { slider } from './mosparts';
@@ -191,8 +191,9 @@ export function scramblerWidget(): Widget {
     const line = new Scrambler(taps(), seed).run(data);
     const wire = line.slice();
     if (flipAt >= 0) wire[flipAt] ^= 1;
-    const back = new Descrambler(taps(), seed ^ 0x2a).run(wire);
-    const wrong = back.map((b, i) => (b !== data[i] ? i : -1)).filter((i) => i >= 0 && i >= Math.max(...taps()));
+    // counted against the same descrambler on the clean line, so its start-up transient is not an error and the flip's copies all are
+    const back = new Descrambler(taps(), seed ^ 0x2a).run(wire), clean = new Descrambler(taps(), seed ^ 0x2a).run(line);
+    const wrong = back.map((b, i) => (b !== clean[i] ? i : -1)).filter((i) => i >= 0);
     const same = payload === 'zeros' || payload === 'ones';
     chips.set(0, `${maxRun(data)} → ${maxRun(line)}`, 'longest run: payload → scrambled');
     chips.set(1, `${(transitionDensity(data) * 100).toFixed(0)} % → ${(transitionDensity(line) * 100).toFixed(0)} %`, 'transition density: payload → scrambled');
@@ -200,7 +201,7 @@ export function scramblerWidget(): Widget {
     chips.set(3, same ? 'no guarantee' : 'statistical', 'a long run is unlikely, never impossible: the line code has no bound');
     const cells = line.slice(0, 160).map((_, i) => {
       const e = h('button', { class: `sr-bit sm v${wire[i]}${i === flipAt ? ' flipped' : ''}`, type: 'button', 'aria-label': `line bit ${i}: ${wire[i]}; click to flip it` }, String(wire[i]));
-      e.addEventListener('click', () => { flipAt = flipAt === i ? -1 : i; paint(); });
+      e.addEventListener('click', () => keepFocus(e, () => { flipAt = flipAt === i ? -1 : i; paint(); }));
       return e;
     });
     out.replaceChildren(
@@ -310,7 +311,7 @@ export function pam4Widget(): Widget {
     chips.set(2, `${sci(bn)} | ${sci(bp)}`, 'BER: NRZ | PAM4', Math.min(bn, bp) > 1e-12 ? 'bad' : 'ok');
     chips.set(3, `${loss(rate / 2).toFixed(1)} | ${loss(rate / 4).toFixed(1)} dB`, `channel loss at Nyquist: NRZ ${num(rate / 2, 1)} GHz | PAM4 ${num(rate / 4, 1)} GHz`);
     const d = loss(rate / 2) - loss(rate / 4);
-    verdict.className = `clk-verdict ${bp < bn ? 'ok' : 'bad'}`;
+    verdict.className = `clk-verdict ${d > PAM4_PENALTY_DB ? 'ok' : 'bad'}`;
     verdict.textContent = `PAM4 buys ${d.toFixed(1)} dB of channel loss by halving Nyquist and pays ${PAM4_PENALTY_DB.toFixed(1)} dB of eye height. ${d > PAM4_PENALTY_DB ? 'The loss saved is larger: PAM4 wins here.' : 'The loss saved is smaller: NRZ wins here.'}`;
   };
   const el = h('div', { class: 'widget mos sr-w' },
