@@ -62,6 +62,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   // past 64 words a RAM is the large one (lib/bigmem.ts): a lookup whose banks open down to gates
   [/^ram(\d+)x(\d+)$/, (m) => (log2(+m[1]) > BANK_K ? bigRam : ram)(log2(+m[1]), +m[2])],
+  [/^ramg(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
   [/^ram64x(\d+)_bank$/, (m) => ramBank(+m[1])],
   [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
   [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
