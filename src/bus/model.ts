@@ -1,3 +1,4 @@
+import { UartCore, type UartIn } from '../comm/uart';
 // The memory map of chapter 38's computer, as the golden model sees it: RAM from address 0 (code beyond
 // the boot ROM and every load and store below the flash), the flash read-only at 0x1000_0000, the DRAM at
 // 0x2000_0000, the DMA engine's registers at 0x4000_0000, the screen's frame buffer at 0x5000_0000, the
@@ -5,6 +6,7 @@
 // when started: the hardware takes cycles (two bus transactions a word) but leaves the same memory. DRAM, screen,
 // keyboard and card reader exist only when the computer has them (BusDevices), as in lib/soc.ts busComputer.
 //
+// The UART is the other one (UartDevice).
 // The card reader is the one device whose answer depends on time (a card arrives `feed` edges after the last was
 // taken), so the model counts clock edges too: whoever steps the golden model sets `now` to the rising edges so far
 // before each instruction (CardModel says which edge a read saw).
@@ -18,7 +20,7 @@ export interface BusMemory {
 }
 
 /** Top address nibble of each region (lib/axi.ts BUS_MAP and the SoC's decoder agree). */
-export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7 } as const;
+export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, uart: 0x3, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7 } as const;
 
 /** A card reader's deck as the model reads it: a word a card, and the edges between taking a card and the next one. */
 export interface CardDeck { items: readonly number[]; feed: number }
@@ -26,6 +28,8 @@ export interface CardDeck { items: readonly number[]; feed: number }
 /** The optional slaves: a DRAM of 2^dramK words, an n × n screen (a byte a pixel), a keyboard, a card reader. */
 export interface BusDevices {
   dramK?: number; screen?: number; keys?: boolean; cards?: CardDeck;
+  /** A UART at 0x3000_0000 (comm/uart.ts UartCore); `rx` is the line level at its pin before edge e (zero-based), default idle. */
+  uart?: { rx?: (edge: number) => number };
   /** Where each region sits (its top address nibble), when not at MAP: the memory-map designer's applied map (editor/memmap.ts busMapOf). */
   map?: Partial<Record<keyof typeof MAP, number>>;
 }
@@ -73,6 +77,48 @@ export class CardModel {
   }
 }
 
+/** The UART at 0x3000_0000 as the golden model sees it: comm/uart.ts's core stepped edge by edge, reads and writes landing at the handshake edge (`now` − 1). */
+export class UartDevice {
+  readonly core = new UartCore();
+  /** Edges the core has had. */
+  done = 0;
+  /** Set to an array to log the line level after every edge (tests). */
+  trace: number[] | undefined;
+  private pending = new Map<number, UartIn>();
+  constructor(public rx: (edge: number) => number = () => 1) {}
+  /** Step the core until it has had n edges (the strobes scheduled for an edge go with it). */
+  advanceTo(n: number): void {
+    while (this.done < n) {
+      const p = this.pending.get(this.done + 1);
+      this.pending.delete(this.done + 1);
+      this.core.edge({ ...p, rx: this.rx(this.done) });
+      this.done++;
+      this.trace?.push(this.core.tx);
+    }
+  }
+  private at(edge: number, i: UartIn): void { this.pending.set(edge, { ...this.pending.get(edge), ...i }); }
+  /** A load retiring at edge `now` saw the state before its handshake edge now − 1; reading DATA pops the FIFO at edge `now`. */
+  read(reg: number, now: number): number {
+    this.advanceTo(Math.max(0, now - 2));
+    const c = this.core;
+    switch (reg) {
+      case 0: if (c.rxq.length) this.at(now, { rx: 1, pop: true }); return c.rxData;
+      case 1: return c.status;
+      case 2: return c.div;
+      default: return c.ie;
+    }
+  }
+  /** A store retiring at edge `now` happens at its handshake edge now − 1. */
+  write(reg: number, value: number, now: number): void {
+    this.advanceTo(Math.max(0, now - 2));
+    const e = now - 1;
+    if (reg === 0) this.at(e, { rx: 1, push: true, data: value & 255 });
+    else if (reg === 1) this.at(e, { rx: 1, clrWe: true, wval: value & 0xfff });
+    else if (reg === 2) this.at(e, { rx: 1, divWe: true, wval: value & 0xfff });
+    else this.at(e, { rx: 1, ieWe: true, wval: value & 0xfff });
+  }
+}
+
 /** Merge the strobed bytes of `value` into `old`. */
 const merge = (old: number, value: number, strb: number) => {
   let m = 0;
@@ -90,6 +136,8 @@ export class BusModel implements BusMemory {
   readonly keys: number[] | null;
   /** The card reader (STATUS at 0x7000_0000, DATA at +4). */
   readonly cards: CardModel | null;
+  /** The UART (0x3000_0000: data +0, status +4, divisor +8, interrupt enables +12). */
+  readonly uart: UartDevice | null;
   /** The top nibble of each region. */
   readonly map: Record<keyof typeof MAP, number>;
   /** Rising clock edges so far (set by whoever steps the golden model; only the card reader needs it). */
@@ -107,6 +155,7 @@ export class BusModel implements BusMemory {
     this.screen = dev.screen ? new Uint32Array((dev.screen * dev.screen) / 4) : null;
     this.keys = dev.keys ? [] : null;
     this.cards = dev.cards ? new CardModel(dev.cards.items, dev.cards.feed) : null;
+    this.uart = dev.uart ? new UartDevice(dev.uart.rx) : null;
   }
 
   /** The DMA's interrupt line. */
@@ -120,6 +169,7 @@ export class BusModel implements BusMemory {
     if (nib === MAP.screen && this.screen) return this.screen[w & (this.screen.length - 1)];
     if (nib === MAP.keys && this.keys) return w & 1 ? (this.keys.length ? 1 : 0) : (this.keys.shift() ?? 0);
     if (nib === MAP.cards && this.cards) { const s = this.now - CARD_LAG; return w & 1 ? this.cards.data(s) : this.cards.status(s); }
+    if (nib === MAP.uart && this.uart) return this.uart.read(w & 3, this.now);
     if (nib === MAP.dma) {
       switch (w & 3) {
         case 0: return this.dma.src;
@@ -137,6 +187,7 @@ export class BusModel implements BusMemory {
     if (nib === MAP.ram) store(this.ram);
     else if (nib === MAP.dram && this.dram) store(this.dram);
     else if (nib === MAP.screen && this.screen) store(this.screen);
+    else if (nib === MAP.uart && this.uart) this.uart.write(w & 3, value >>> 0, this.now);
     else if (nib === MAP.dma) {
       switch (w & 3) {
         case 0: this.dma.src = value >>> 0; break;

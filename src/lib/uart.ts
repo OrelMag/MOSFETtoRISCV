@@ -7,7 +7,6 @@
 // until the divisor is written.
 
 import { UART_DIV_BITS } from '../comm/uart';
-import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { isZero } from './alu';
 import { andBus, kit, slaveFsm, slavePorts } from './axi';
