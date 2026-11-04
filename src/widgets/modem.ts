@@ -50,17 +50,17 @@ const seg = <T extends string>(label: string, opts: [T, string][], cur: T, on: (
 export function passbandWidget(): Widget {
   let snrDb = 35;
   const B = 3100, F0 = 300, F1 = 3400;
-  const f = frame(560, 240, [0, 4000], [-50, 5], 'Hz', 'dB', 'The voice channel\'s pass band with the tones of the early modems', 500, 10, { l: 44, r: 14, t: 14, b: 34 }, (v) => `${v}`, (v) => `${v}`);
+  const f = frame(560, 250, [0, 4000], [-50, 5], 'Hz', 'dB', 'The voice channel\'s pass band with the tones of the early modems', 500, 10, { l: 44, r: 14, t: 20, b: 34 }, (v) => `${v}`, (v) => `${v}`);
   // an illustrative trapezoid: a transformer and the exchange's filters cut below 300 Hz and above 3400 Hz
   const resp = (hz: number) => (hz < F0 ? -40 * Math.min(1, (F0 - hz) / 250) * 1 - 3 : hz > F1 ? -3 - 45 * Math.min(1, (hz - F1) / 600) : 0);
-  f.svg.append(s('rect', { class: 'clk-zone', x: f.X(F0), width: f.X(F1) - f.X(F0), y: f.m.t, height: f.H - f.m.t - f.m.b }));
+  f.svg.append(s('rect', { class: 'mdm-band', x: f.X(F0), width: f.X(F1) - f.X(F0), y: f.m.t, height: f.H - f.m.t - f.m.b }));
   f.svg.append(s('path', { class: 'cur', d: path(Array.from({ length: 161 }, (_, i): [number, number] => [f.X(i * 25), f.Y(resp(i * 25))])) }));
   const marks: [number, string, string][] = [
     [BELL103.originate.space, '1070', 'o'], [BELL103.originate.mark, '1270', 'o'], [BELL103.answer.space, '2025', 'a'], [BELL103.answer.mark, '2225', 'a'],
     [1200, 'V.22 o', 'v'], [2400, 'V.22 a', 'v'], [1800, 'V.32', 'w'],
   ];
-  marks.forEach(([hz, t, c], i) => f.svg.append(s('line', { x1: f.X(hz), x2: f.X(hz), y1: f.Y(-46), y2: f.Y(0), class: `mdm-tone ${c}` }), s('text', { x: f.X(hz), y: f.Y(-8 - ((i % 3) * 8)) , 'text-anchor': 'middle', class: 'mdm-tl' }, t)));
-  f.svg.append(s('text', { x: f.X(1850), y: f.Y(3.5), 'text-anchor': 'middle', class: 'mk-l' }, '300 – 3400 Hz'));
+  [...marks].sort((a, b) => a[0] - b[0]).forEach(([hz, t, c], i) => f.svg.append(s('line', { x1: f.X(hz), x2: f.X(hz), y1: f.Y(-46), y2: f.Y(0), class: `mdm-tone ${c}` }), s('text', { x: f.X(hz), y: f.Y(-5 - (i % 4) * 7), 'text-anchor': 'middle', class: 'mdm-tl' }, t)));
+  f.svg.append(s('text', { x: f.X(1850), y: f.m.t - 3, 'text-anchor': 'middle', class: 'mdm-tl' }, '300 – 3400 Hz'));
   const chips = chipsOf(4);
   const note = h('p', { class: 'sub mos-note' });
   const paint = () => {
@@ -84,7 +84,7 @@ export function passbandWidget(): Widget {
 export function fskWidget(): Widget {
   let bits = [1, 0, 1, 1, 0, 0, 1, 0], sigma = 0, seed = 1;
   const W = 600, spb = SAMPLES_PER_BIT;
-  const fW = frame(W, 150, [0, bits.length * spb], [0, 63], 'sample (19 200 Hz)', 'line', 'The line signal: 6-bit samples', 0, 0, { l: 40, r: 10, t: 8, b: 24 });
+  const fW = frame(W, 160, [0, bits.length * spb], [-2, 75], 'sample (19 200 Hz)', 'line', 'The line signal: 6-bit samples', 0, 0, { l: 40, r: 10, t: 8, b: 24 });
   const fD = frame(W, 110, [0, bits.length * spb], [-0.2, 1.2], 'sample', '', 'The receiver\'s decision register and the bits read from it', 0, 0, { l: 40, r: 10, t: 8, b: 24 });
   const wave = fW.svg.appendChild(s('path', { class: 'wave mdm-sig' })), clean = fW.svg.appendChild(s('path', { class: 'mdm-ghost' }));
   const dec = fD.svg.appendChild(s('path', { class: 'wave mdm-dec' })), dots = fD.svg.appendChild(s('g'));
@@ -98,7 +98,7 @@ export function fskWidget(): Widget {
     wave.setAttribute('d', path(line.map((v, i): [number, number] => [fW.X(i), fW.Y(v)])));
     clean.setAttribute('d', sigma > 0 ? path(tx.map((v, i): [number, number] => [fW.X(i), fW.Y(v)])) : '');
     dec.setAttribute('d', path(d.map((v, i): [number, number] => [fD.X(i), fD.Y(v)])));
-    seps.replaceChildren(...bits.map((b, i) => s('text', { x: fW.X((i + 0.5) * spb), y: fW.Y(58), 'text-anchor': 'middle', class: 'mdm-bit' }, String(b))),
+    seps.replaceChildren(...bits.map((b, i) => s('text', { x: fW.X((i + 0.5) * spb), y: fW.Y(70), 'text-anchor': 'middle', class: 'mdm-bit' }, String(b))),
       ...bits.map((_, i) => s('line', { x1: fW.X(i * spb), x2: fW.X(i * spb), y1: fW.m.t, y2: fW.H - fW.m.b, class: 'mk' })));
     const got = bits.map((_, i) => d[Math.floor((i + 0.75) * spb)]);
     dots.replaceChildren(...got.map((g, i) => s('circle', { cx: fD.X((i + 0.75) * spb), cy: fD.Y(g), r: 5, class: `mdm-dot ${g === bits[i] || i < 1 ? 'ok' : 'bad'}` })));
@@ -126,6 +126,7 @@ export function iqWidget(): Widget {
   const cs = () => constellation(kind, M);
   const fC = frame(300, 300, [-1.6, 1.6], [-1.6, 1.6], 'I', 'Q', 'Constellation: click a point', 0, 0, { l: 30, r: 10, t: 10, b: 28 });
   const fW = frame(300, 300, [0, 2], [-1.6, 1.6], 'carrier cycles', '', 'The carrier for the chosen symbol', 0, 0, { l: 14, r: 10, t: 10, b: 28 });
+  fC.svg.classList.add('mdm-sq'); fW.svg.classList.add('mdm-sq');
   const gPts = fC.svg.appendChild(s('g')), cur = fW.svg.appendChild(s('path', { class: 'wave mdm-sig' }));
   fC.svg.append(s('line', { x1: fC.X(-1.6), x2: fC.X(1.6), y1: fC.Y(0), y2: fC.Y(0), class: 'vt' }), s('line', { x1: fC.X(0), x2: fC.X(0), y1: fC.Y(-1.6), y2: fC.Y(1.6), class: 'vt' }));
   fW.svg.append(s('line', { x1: fW.X(0), x2: fW.X(2), y1: fW.Y(0), y2: fW.Y(0), class: 'vt' }));
@@ -153,7 +154,7 @@ export function iqWidget(): Widget {
   const choice = seg('Constellation', [['q4', 'QPSK'], ['p8', '8-PSK'], ['q16', '16-QAM']] as [string, string][], 'q4', (v) => { kind = v[0] === 'p' ? 'psk' : 'qam'; M = Number(v.slice(1)); sel = 0; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos comm mdm-w' }, h('div', { class: 'panel' }, h('h3', null, 'x(t) = I cos 2πft − Q sin 2πft'), choice,
-    h('div', { class: 'clk-two' }, fC.svg, fW.svg),
+    h('div', { class: 'mdm-two' }, fC.svg, fW.svg),
     h('p', { class: 'sub' }, 'Each point is one symbol: its I scales a cosine, its Q a sine, and the sum is one sinusoid of the same frequency with a new amplitude and phase. The dashed curve is the reference carrier. Labels are Gray: neighbours differ in one bit.')), chips.el) };
 }
 
@@ -163,8 +164,9 @@ export function constellationWidget(): Widget {
   let kind: Kind = 'qam', M = 16, snrDb = 18, seed = 1, labels = false;
   const N_DRAW = 1500, N_MC = 20000;
   const f = frame(360, 360, [-1.7, 1.7], [-1.7, 1.7], 'I', 'Q', 'Received symbols in noise', 0, 0, { l: 30, r: 10, t: 10, b: 28 });
+  f.svg.classList.add('mdm-sq');
   const regions = f.svg.appendChild(s('path', { class: 'mdm-regions' })), cloud = f.svg.appendChild(s('path', { class: 'mdm-cloud' })), ideal = f.svg.appendChild(s('path', { class: 'mdm-ideal' })), lab = f.svg.appendChild(s('g'));
-  const chips = chipsOf(6), verdict = h('p', { class: 'clk-verdict', role: 'status' });
+  const chips = chipsOf(6), verdict = h('p', { class: 'mdm-verdict', role: 'status' });
   const paint = () => {
     const c = constellation(kind, M), snr = dbToRatio(snrDb), sg = Math.sqrt(1 / (2 * snr)), u = rng(seed * 7919 + M);
     let d = '';
@@ -190,7 +192,7 @@ export function constellationWidget(): Widget {
     chips.set(3, sci(cf / bitsOf(M)), 'bit errors (Gray)');
     chips.set(4, `${nf(need, 1)} dB`, 'Es/N0 for 1 in 10⁶');
     chips.set(5, `+${nf(need - floor, 1)} dB`, 'above Shannon\'s floor');
-    verdict.className = `clk-verdict ${cf < 1e-3 ? 'ok' : 'bad'}`;
+    verdict.className = `mdm-verdict ${cf < 1e-3 ? 'ok' : 'bad'}`;
     verdict.textContent = cf < 1e-6 ? 'Clean: errors are rarer than a million symbols.' : cf < 1e-3 ? `About one symbol in ${Math.round(1 / cf).toLocaleString('en')} is wrong.` : `One symbol in ${Math.max(1, Math.round(1 / cf))} is wrong: a code on top would have to repair this.`;
   };
   const choice = seg('Modulation', [['p4', 'QPSK'], ['p8', '8-PSK'], ['q16', '16-QAM'], ['q64', '64-QAM'], ['q256', '256-QAM']] as [string, string][], 'q16', (v) => { kind = v[0] === 'p' ? 'psk' : 'qam'; M = Number(v.slice(1)); if (kind === 'psk' && M === 4) kind = 'qam'; paint(); });
@@ -320,7 +322,7 @@ const linkPanel: ScenePanel = (stage: Stage): Widget => {
   const fd = frame(380, 70, [0, SHOW], [-0.2, 1.2], 'clock', '', 'The receiver\'s decision', 0, 0, { l: 12, r: 8, t: 4, b: 20 });
   const pt = f.svg.appendChild(s('path', { class: 'mdm-ghost' })), pr = f.svg.appendChild(s('path', { class: 'wave mdm-sig' })), pd = fd.svg.appendChild(s('path', { class: 'wave mdm-dec' }));
   const input = h('input', { class: 'comm-input', value: MSG, maxlength: '4', 'aria-label': 'Message to send (ASCII, up to 4 characters)' }) as HTMLInputElement;
-  const status = h('div', { class: 'mc-status' }), out = h('div', { class: 'mdm-out', 'aria-live': 'polite' });
+  const status = h('div', { class: 'mc-status' }), out = h('div', { class: 'mdm-out', 'aria-live': 'polite' }), note = h('p', { class: 'sub' });
   const reset = () => { stop(); sent = []; got = []; tx = []; rxin = []; dd = []; queue = []; pos = 0; hitAt = -1; paint(); };
   stage.resetHooks.add(reset);
   const drive = (bit: number, hit: number) => { const sim = stage.sim!; sim.setInput('bit', bit); sim.setInput('hit', hit); sim.settle(); };
@@ -356,10 +358,11 @@ const linkPanel: ScenePanel = (stage: Stage): Widget => {
     const recv = got.slice(2), want = sent.slice(2, 2 + recv.length), errs = recv.filter((x, i) => x !== want[i]).length;
     const text = fromBits(recv.slice(0, Math.max(0, recv.length - (recv.length % 8))));
     status.replaceChildren(h('span', null, 'bits sent ', h('b', null, String(Math.max(0, sent.length - 2)))), h('span', null, 'wrong ', h('b', null, String(errs))));
-    out.textContent = sent.length ? `received: ${recv.join('')}${text ? `  "${text}"` : ''}` : 'Type up to four characters and press Send. Bit timing is shared between the two ends here; a real receiver has to recover it from the signal.';
+    out.textContent = sent.length ? `received: ${recv.join('')}${text ? `  "${text}"` : ''}` : '';
+    note.textContent = sent.length ? '' : 'Type up to four characters and press Send. Bit timing is shared between the two ends here; a real receiver has to recover it from the signal.';
   };
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right' }, h('h4', null, 'Send a message', h('span', { class: 'fold-hint' })),
-    input, h('div', { class: 'dram-ops' }, go, hitBtn), h('div', { class: 'cpu-sec' }, 'Line in (light) and out (dark), then the decision'), f.svg, fd.svg, status, out);
+    input, h('div', { class: 'dram-ops' }, go, hitBtn), h('div', { class: 'cpu-sec' }, 'Line in (light) and out (dark), then the decision'), f.svg, fd.svg, status, out, note);
   paint();
   return { el, update: paint, destroy: stop };
 };

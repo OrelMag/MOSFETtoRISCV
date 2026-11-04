@@ -26,6 +26,13 @@
 .mos-plot .mdm-bars { fill: none; stroke: var(--accent); stroke-linecap: butt; }
 .mdm-bits { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
 .mdm-b { min-width: 34px; font-family: var(--font-mono); font-weight: 700; }
-.mdm-out { font: 600 13px var(--font-mono); color: var(--text-2); word-break: break-all; margin-top: 6px; }
+.mdm-out { font: 600 13px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; margin-top: 6px; }
 .mdm-panel .comm-input { margin-bottom: 6px; }
 @media (pointer: coarse) { .mdm-b { min-width: 40px; min-height: 40px; } }
+.mdm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 720px) { .mdm-two { grid-template-columns: 1fr; } }
+.mos-plot.mdm-sq { width: 100%; max-width: 380px; height: auto; justify-self: center; margin: 0 auto; display: block; }
+.mos-plot .mdm-band { fill: color-mix(in srgb, var(--accent) 9%, transparent); }
+.mdm-verdict { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 13px; background: var(--surface-2); color: var(--text-2); }
+.mdm-verdict.ok { border-left: 3px solid var(--good); }
+.mdm-verdict.bad { border-left: 3px solid var(--bad); }
