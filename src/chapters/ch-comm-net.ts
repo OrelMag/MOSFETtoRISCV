@@ -1,3 +1,4 @@
+import '../lib';
 import NET from '../comm/stack/netcosts.json';
 import { CLOCK_NS } from '../comm/mac';
 import { NIC_COSTS } from '../riscv/nicprograms';
