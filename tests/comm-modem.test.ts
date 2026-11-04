@@ -168,3 +168,86 @@ describe('ADSL bit loading', () => {
     expect(toneSnrDb(40, 3, -120)).toBeGreaterThan(toneSnrDb(200, 3, -120));
   });
 });
+
+// ---- the gates against the models -------------------------------------------------------------------------------------------
+
+import { FSK_RX, FSK_TX, fskLink, modemLine, NCO, SINE_ROM } from '../src/lib';
+import { FskRxModel, FskTxModel, NcoModel } from '../src/comm/modem';
+import { simulate } from '../src/sim/harness';
+import { stats } from '../src/sim/stats';
+import { lcg, out, set, tick as clock, checkSpec } from './util';
+
+describe('gates against the models', () => {
+  it('the sine ROM matches its table (exhaustive)', () => { checkSpec(SINE_ROM); });
+  it('the NCO equals the accumulator every cycle, for random and fixed tuning words', async () => {
+    const sim = simulate(NCO), m = new NcoModel(), r = lcg(3);
+    set(sim, { clk: 0, ftw: 0 });
+    sim.reset('zero');
+    for (let i = 0; i < 600; i++) {
+      const w = i < 300 ? FTW_MARK : r(2 ** ACC_BITS);
+      set(sim, { ftw: w });
+      expect(out(sim, 's'), `cycle ${i}`).toBe(m.sample);
+      clock(sim); m.clock(w);
+      if (i % 100 === 99) await tick();
+    }
+  });
+  it('FSK_TX equals the model every output every cycle on a random bit stream', async () => {
+    const sim = simulate(FSK_TX), m = new FskTxModel(), r = lcg(5);
+    set(sim, { clk: 0, bit: 0 });
+    sim.reset('zero');
+    let b = 0;
+    for (let i = 0; i < 1000; i++) {
+      if (i % 40 === 0) b = r(2);
+      set(sim, { bit: b });
+      expect(out(sim, 's'), `cycle ${i}`).toBe(m.sample);
+      clock(sim); m.clock(b);
+      if (i % 100 === 99) await tick();
+    }
+  });
+  it('FSK_RX equals the model on random samples and on a modulated message, d and the period every cycle', async () => {
+    const sim = simulate(FSK_RX), m = new FskRxModel(), r = lcg(9);
+    set(sim, { clk: 0, s: 0 });
+    sim.reset('zero');
+    const stream = [...Array.from({ length: 400 }, () => r(64)), ...fskModulate([1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1])];
+    for (let i = 0; i < stream.length; i++) {
+      set(sim, { s: stream[i] });
+      clock(sim); m.clock(stream[i]);
+      expect(out(sim, 'd'), `d, cycle ${i}`).toBe(m.d);
+      expect(out(sim, 'period'), `period, cycle ${i}`).toBe(m.cnt);
+      if (i % 100 === 99) await tick();
+    }
+  });
+  it('the line delays by its stages and a hit flips the sign bit', () => {
+    const sim = simulate(modemLine(2));
+    set(sim, { clk: 0, s: 0, hit: 0 });
+    sim.reset('zero');
+    const seq = [5, 40, 17, 63, 32, 0], hits = [0, 0, 1, 0, 0, 0], got: number[] = [];
+    for (let i = 0; i < seq.length + 2; i++) {
+      set(sim, { s: seq[i] ?? 0, hit: hits[i] ?? 0 });
+      clock(sim);
+      got.push(out(sim, 'y'));
+    }
+    expect(got.slice(1, 7)).toEqual([5, 40, 17 ^ 32, 63, 32, 0]);
+  });
+  it('the whole link, end to end: bits sent come out of the receiver', async () => {
+    const sim = simulate(fskLink(2)), bits = [1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1], got: number[] = [];
+    set(sim, { clk: 0, bit: 0, hit: 0 });
+    sim.reset('zero');
+    let c = 0;
+    for (const b of bits) {
+      for (let i = 0; i < 64; i++, c++) {
+        set(sim, { bit: b });
+        clock(sim);
+        if (i === 48) got.push(out(sim, 'd'));
+      }
+      await tick();
+    }
+    expect(got.slice(2)).toEqual(bits.slice(2));
+  });
+  it('costs, from the gates', () => {
+    const c = { rom: stats(SINE_ROM).nands, nco: stats(NCO).nands, tx: stats(FSK_TX).nands, rx: stats(FSK_RX).nands, line: stats(modemLine(2)).nands, link: stats(fskLink(2)).nands };
+    console.log('modem costs', JSON.stringify(c));
+    expect(c.tx).toBeGreaterThan(c.nco);
+    expect(c.link).toBe(c.tx + c.line + c.rx);
+  });
+});
