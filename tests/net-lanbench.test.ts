@@ -8,6 +8,7 @@ import { stackProgram } from '../src/comm/stack';
 import NET from '../src/comm/stack/netcosts.json';
 import { TCP } from '../src/comm/stack/tcp';
 import { tcpReceiver, tcpSender } from '../src/comm/stack/tcpapps';
+import { GateWindow, isQuiet } from '../src/net/gatewindow';
 import { Host, LanBench, RouterMiddle, SwitchMiddle } from '../src/net/lanbench';
 import { tick } from './yieldtick';
 
@@ -26,7 +27,7 @@ function tcpBench(bytes: number, o: { queue?: number; slow?: number; delay?: num
   const router = new RouterMiddle({ ports: [{ host: A.mac, mac: A.gwMac }, { host: B.mac, mac: B.gwMac }], queue: o.queue ?? 8, byteClocks: [32, o.slow ?? 32], delay: o.delay ?? 2000, lose: o.lose });
   router.log = [];
   const bench = new LanBench([new Host(a.compiled.words, k), new Host(b.compiled.words, k)], router);
-  return { bench, router, a, b };
+  return { bench, router, a, b, k };
 }
 
 describe('the bench against the gates', () => {
@@ -50,4 +51,36 @@ describe('TCP across a router', () => {
     expect(hb.iss.console).toBe('received 1000 bytes, all correct\n');
     expect(ha.iss.console).toMatch(/^connected\n/);
   }, 120000);
+});
+
+describe('a gate window on the bench', () => {
+  for (const [who, p] of [['the receiver', 1], ['the sender', 0]] as const) {
+    it(`${who} at gates mid-transfer: registers every instruction, NIC every output every clock, frames both ways, then back to the model and every byte right`, async () => {
+      const t = tcpBench(1500);
+      const K = t.k;
+      while (t.router.forwarded < 6) t.bench.clock();
+      let g = 0;
+      while (!isQuiet(t.bench, p) && g++ < 200000) t.bench.clock();
+      expect(isQuiet(t.bench, p)).toBe(true);
+      const w = new GateWindow(t.bench, p, K);
+      const start = t.bench.c;
+      while (t.bench.c < start + 45000 && !w.mismatch) {
+        t.bench.clock();
+        if ((t.bench.c - start) % 1000 === 0) await tick();
+      }
+      expect(w.mismatch).toBeNull();
+      expect(w.retired).toBeGreaterThan(15000);
+      // frames went out of the gates, and into them
+      const during = t.router.log!.filter((l) => l.t >= start);
+      expect(during.filter((l) => l.from === p).length).toBeGreaterThan(1);
+      expect(during.filter((l) => l.from === 1 - p).length).toBeGreaterThan(1);
+      g = 0;
+      while (!w.tryClose() && g++ < 40000) { t.bench.clock(); if (g % 1000 === 0) await tick(); }
+      expect(w.mismatch).toBeNull();
+      expect(t.bench.ends[p]).toBe(t.bench.hosts[p]);
+      const [, hb] = t.bench.hosts;
+      while (t.bench.c < 4_000_000 && !hb.iss.console.endsWith('\n')) { t.bench.clock(); if (t.bench.c % 200000 === 0) await tick(); }
+      expect(hb.iss.console).toBe('received 1500 bytes, all correct\n');
+    }, 300000);
+  }
 });

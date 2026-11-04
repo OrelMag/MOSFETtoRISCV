@@ -13,8 +13,11 @@ import { ISS } from '../riscv/iss';
 const ZERO_MAC = [0, 0, 0, 0, 0, 0];
 const TX_SEED = 0x155;
 
+/** What sits at a port: the pins, and a clock. */
+export interface Endpoint { rxd: number; crs: number; readonly txd: number; readonly txen: number; clock(c: number): void }
+
 /** A CPU and its NIC. */
-export class Host {
+export class Host implements Endpoint {
   readonly bus = new BusModel(STACK_RAM_K, [], 4096, { nic: {} });
   readonly iss: ISS;
   private wait = 0;
@@ -42,6 +45,8 @@ export class Host {
     this.iss.mtime = c + extra;
     this.iss.step();
   }
+  /** No bus access under way: the next clock starts an instruction. */
+  get atBoundary(): boolean { return this.wait === 0; }
   /** A word of its RAM. */
   word(a: number): number { return this.bus.ram[a >>> 2] >>> 0; }
 }
@@ -153,19 +158,21 @@ export class LanBench {
   readonly rx = [new MacRx(), new MacRx()];
   readonly tx = [new MacTx(), new MacTx()];
   c = 0;
+  /** What takes each port's clocks: the host, or gates in its place. */
+  readonly ends: Endpoint[];
   private readonly rin: RxByte[] = [{ valid: 0, data: 0, last: 0, err: 0 }, { valid: 0, data: 0, last: 0, err: 0 }];
   private readonly ready = [0, 0];
-  constructor(readonly hosts: [Host, Host], readonly middle: Middle) {}
+  constructor(readonly hosts: [Host, Host], readonly middle: Middle) { this.ends = [hosts[0], hosts[1]]; }
   clock(): void {
-    const { hosts, rx, tx, c } = this;
+    const { ends, rx, tx, c } = this;
     for (let p = 0; p < 2; p++) {
-      hosts[p].rxd = tx[p].txd; hosts[p].crs = tx[p].txen;
+      ends[p].rxd = tx[p].txd; ends[p].crs = tx[p].txen;
       this.rin[p].valid = rx[p].valid; this.rin[p].data = rx[p].data; this.rin[p].last = rx[p].last; this.rin[p].err = rx[p].err;
       this.ready[p] = tx[p].ready;
     }
-    const td0 = hosts[0].txd, td1 = hosts[1].txd, te0 = hosts[0].txen, te1 = hosts[1].txen;
+    const td0 = ends[0].txd, td1 = ends[1].txd, te0 = ends[0].txen, te1 = ends[1].txen;
     const out = this.middle.step(c, this.rin, this.ready);
-    hosts[0].clock(c); hosts[1].clock(c);
+    ends[0].clock(c); ends[1].clock(c);
     rx[0].step({ rst: 0, rxd: td0, crs: te0, ready: 1, promisc: 1, addr: ZERO_MAC });
     rx[1].step({ rst: 0, rxd: td1, crs: te1, ready: 1, promisc: 1, addr: ZERO_MAC });
     tx[0].step({ rst: 0, data: out[0].data, valid: out[0].valid, last: out[0].last, crs: 0, col: 0, seed: TX_SEED });
