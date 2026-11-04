@@ -300,7 +300,7 @@ const ncoPanel: ScenePanel = (stage: Stage): Widget => {
     note.textContent = near ? `The nearest word for ${near} Hz, which comes out at ${nf(hz, 1)} Hz.` : `Words per Hz: ${nf(2 ** ACC_BITS / FS, 4)}. Set the word below the clock, or pick a Bell 103 tone.`;
   };
   const btn = (label: string, hz: number) => h('button', { type: 'button', class: 'btn sm', onclick: () => { stage.checkpoint(); stage.sim!.setInput('ftw', tuningWord(hz)); stage.sim!.settle(); stage.refresh(); paint(); } }, label);
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right' }, h('h4', null, 'The oscillator\'s output', h('span', { class: 'fold-hint' })),
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'The oscillator\'s output', h('span', { class: 'fold-hint' })),
     f.svg, h('div', { class: 'dram-ops' }, h('button', { type: 'button', class: 'btn sm primary', onclick: run }, 'Run 256 clocks'), btn('1070 Hz', 1070), btn('1270 Hz', 1270), btn('2025 Hz', 2025), btn('2225 Hz', 2225)), read, note);
   stage.resetHooks.add(() => { ys = []; paint(); });
   paint();
@@ -361,7 +361,7 @@ const linkPanel: ScenePanel = (stage: Stage): Widget => {
     out.textContent = sent.length ? `received: ${recv.join('')}${text ? `  "${text}"` : ''}` : '';
     note.textContent = sent.length ? '' : 'Type up to four characters and press Send. Bit timing is shared between the two ends here; a real receiver has to recover it from the signal.';
   };
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right' }, h('h4', null, 'Send a message', h('span', { class: 'fold-hint' })),
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Send a message', h('span', { class: 'fold-hint' })),
     input, h('div', { class: 'dram-ops' }, go, hitBtn), h('div', { class: 'cpu-sec' }, 'Line in (light) and out (dark), then the decision'), f.svg, fd.svg, status, out, note);
   paint();
   return { el, update: paint, destroy: stop };
