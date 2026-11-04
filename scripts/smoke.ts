@@ -581,6 +581,8 @@ const INSPECT = `(() => {
   const failed = [...view.querySelectorAll('h3, .pulse.warn, .status')].map((e) => (e.closest('.panel, .status') ?? e).textContent.trim())
     .filter((t) => /could not (load|start)/i.test(t));
   if (failed.length) out.push(failed[0].slice(0, 300));
+  // A widget collapsed by what holds it (margin: auto inside a grid) raises no error at all: a 3D stage is never this narrow.
+  for (const st of view.querySelectorAll('.r3-stage')) if (st.clientWidth < 240) out.push('3D stage only ' + st.clientWidth + ' px wide');
   for (const e of document.querySelectorAll('.sb-toast.show.err')) out.push('error toast: ' + e.textContent.trim());
   for (const e of view.querySelectorAll('.sb-diag.error')) out.push('error diagnostic: ' + e.textContent.trim());
   if (!view.children.length || (!view.innerText.trim() && !view.querySelector('svg, canvas, img'))) out.push('the main view is empty');
