@@ -1,0 +1,15 @@
+/* Chapters 45 and 46's Fourier widgets (widgets/fourier.ts), on the line widgets' plots; colours are the theme's tokens. */
+.mos-plot .fr-gain { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.mos-plot .fr-stem { stroke-width: 2.2; stroke-linecap: round; }
+.mos-plot .fr-stem.in { stroke: var(--border-strong); }
+.mos-plot .fr-stem.in.on { stroke: var(--warn); }
+.mos-plot .fr-stem.out { stroke: var(--accent); }
+.mos-plot .fr-mark { stroke-width: 1; stroke-dasharray: 3 3; stroke: var(--muted); }
+.mos-plot .fr-ml { font: 600 calc(10.5px * var(--tk, 1)) var(--font-mono); fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.mos-plot .fr-prefix { fill: color-mix(in srgb, var(--warn) 16%, transparent); }
+.mos-plot .fr-target { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
+.mos-plot .fr-dot { fill: var(--accent); fill-opacity: 0.75; }
+.ln-key .fr-k.bits { color: var(--muted); }
+.ln-key .fr-k.kept { color: var(--warn); }
+.fr-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fr-scatter { display: block; width: 100%; max-width: 240px; margin: 0 auto; }

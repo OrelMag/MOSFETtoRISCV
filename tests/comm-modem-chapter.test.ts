@@ -9,9 +9,9 @@ import { stats } from '../src/sim/stats';
 import { linkScene, ncoScene } from '../src/widgets/modem';
 
 describe('chapter 45 typed numbers', () => {
-  it('is chapter 45, eight steps, builds on earlier chapters, and has both kinds of explainer', () => {
+  it('is chapter 45, nine steps, builds on earlier chapters, and has both kinds of explainer', () => {
     expect(chModem.num).toBe(45);
-    expect(chModem.steps).toHaveLength(8);
+    expect(chModem.steps).toHaveLength(9);
     expect(chapterById('modem')).toBe(chModem);
     for (const id of chModem.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(45);
     expect(chapterById('appendix-6502')!.num).toBeGreaterThan(45);
@@ -42,7 +42,7 @@ describe('chapter 45 typed numbers', () => {
     expect(FS / BELL103.answer.space - FS / BELL103.answer.mark).toBeLessThan(1);
     expect(FS / BELL103.originate.space - FS / BELL103.originate.mark).toBeGreaterThan(2);
   });
-  it('step 8: a symbol every 250 microseconds, ten dB is about three bits', () => {
+  it('step 9: a symbol every 250 microseconds, ten dB is about three bits', () => {
     expect(1e6 / ADSL.symbolRate).toBe(250);
     expect(Math.log2(10)).toBeCloseTo(3.32, 2);
   });
