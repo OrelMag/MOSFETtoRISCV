@@ -3,6 +3,7 @@ import { AND, cmosNand, cmosNor, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR, N
 import { metrics, MOBILITY_RATIO, strength, vout } from '../phys/inverter';
 import { chainDelay, FO4_TAU, P_INV, PS_PER_TAU } from '../phys/sizing';
 import { and4Tree, and4Wide, gNand, gNor, pGate } from '../phys/effort';
+import { mosfet3d, withModel } from '../widgets/modelhost';
 import { sizingWidget } from '../widgets/sizing';
 import { vtcWidget } from '../widgets/vtc';
 import {
@@ -189,7 +190,7 @@ export const chMosfet: Chapter = {
         real: `<p>Vt is set by the doping and the oxide, and it varies from device to device and with temperature. The square law in the panel is the textbook model of a long channel; the next step lists where it fails in
           the short ones of a modern chip.</p>`,
       },
-      widget: () => mosfetWidget({ type: 'n', allowTypeSwitch: false }),
+      widget: () => withModel(mosfetWidget({ type: 'n', allowTypeSwitch: false }), mosfet3d()),
     },
     {
       title: 'Three regions',

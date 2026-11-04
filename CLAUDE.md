@@ -1169,6 +1169,7 @@ src/phys/      lumped physics models behind the prologue's close-ups (DOM-free):
                law fitted to the datasheet, Richardson emission over a 6 s heater warm-up, plateVoltage with divider loads,
                gateLevels(fanout, top, bottom, bias): a chain's margins, sectionPower / nandBrickPower, TUBE_STEP_US (an
                estimate), ENIAC's numbers; tests/phys-triode.test.ts)
+src/widgets/   (3D models, also) modelhost.ts lazyModel / withModel: what a chapter imports (a model under the step's widget; never a grid around a `.widget`: its margin: auto collapses), modelstage.ts modelStage: a model's canvas, SVG fallback (gl/parts.ts flatFaces), labels, chips, theme; gl/parts.ts box / cyl / rod / wire, Anchor: DOM-free parts, so `<x>3dparts.ts` is tested against its model (tests/models3d.test.ts: mosfet3dparts on mosphys.ts). Tokens --m3-* in styles/model3d.css, the stage's classes r3-* in relay3d.css
 src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
                floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
                on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
