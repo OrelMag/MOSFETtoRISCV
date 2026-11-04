@@ -2,22 +2,11 @@
 // Project in 2006, and in the boat's war diary), and the three-rotor machine the M4 had to stay compatible with.
 import { describe, expect, it } from 'vitest';
 import {
-  chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, letterOf, NOTCH_OFFSET, plugMap, REFLECTORS, ROTORS, SOCKET_ROWS, socketOf, stepPeriod, WIDE_REFLECTORS,
+  chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, letterOf, NOTCH_OFFSET, plugMap, REFLECTORS, ROTORS, SOCKET_ROWS, socketOf, stepPeriod, U264, WIDE_REFLECTORS,
   type EnigmaSettings, type RotorName,
 } from '../src/crypto/enigma';
 
 const NAMES = Object.keys(ROTORS) as RotorName[];
-
-const U264: EnigmaSettings = { reflector: 'b', greek: 'beta', rotors: ['II', 'IV', 'I'], rings: 'AAAV', start: 'VJNA', plugs: 'AT BL DF GJ HM NW OP QY RZ VX' };
-const U264_CIPHER = `nczwvusxpnyminhzxmqxsfwxwlkjahshnmcoccakuqpmkcsmhkseinjusblkiosxckubhmllx
-csjusrrdvkohulxwccbgvliyxeoahxrhkkfvdrewezlxobafgyujqukgrtvukameurbveksuh
-hvoyhabcjwmaklfklmyfvnrizrvvrtkofdanjmolbgffleoprgtflvrhowopbekvwmuqfmpwp
-armfhagkxiibg`;
-const U264_PLAIN = `vonvonjlooksjhffttteinseinsdreizwoyyqnnsneuninhaltxxbeiangriffunterwasser
-gedruecktywabosxletztergegnerstandnulachtdreinuluhrmarquantonjotaneunacht
-seyhsdreiyzwozwonulgradyachtsmystossenachxeknsviermbfaelltynnnnnnoooviery
-sichteinsnull`;
-const bare = (s: string) => s.replace(/\s/g, '').toUpperCase();
 
 /** A plain three-rotor machine with a wide reflector, written separately from the class under test. */
 function wide(refl: string, rotors: RotorName[], rings: string, start: string, plugs: string, text: string): string {
@@ -52,14 +41,14 @@ function randomCase(r: (n: number) => number) {
 
 describe('the M4 against history', () => {
   it('deciphers U-264’s 1942 message letter for letter', () => {
-    expect(new Enigma(U264).run(U264_CIPHER)).toBe(bare(U264_PLAIN));
+    expect(new Enigma(U264.settings).run(U264.cipher)).toBe(U264.plain);
   });
   it('enciphers it back: the machine is its own inverse', () => {
-    expect(new Enigma(U264).run(U264_PLAIN)).toBe(bare(U264_CIPHER));
+    expect(new Enigma(U264.settings).run(U264.plain)).toBe(U264.cipher);
   });
   it('the fourth wheel stood still through the whole message', () => {
-    const e = new Enigma(U264);
-    e.run(U264_CIPHER);
+    const e = new Enigma(U264.settings);
+    e.run(U264.cipher);
     expect(e.windows()[0]).toBe('V');
   });
 });
@@ -101,7 +90,7 @@ describe('the tables', () => {
   });
   it('sockets are numbered A = 1, Y = 25, over rows of 9, 8 and 9; keys are all 26 once', () => {
     expect(socketOf('A')).toBe(1); expect(socketOf('Y')).toBe(25); expect(letterOf(26)).toBe('Z');
-    expect(SOCKET_ROWS.reduce((a, b) => a + b)).toBe(26);
+    expect(SOCKET_ROWS[0] + SOCKET_ROWS[1] + SOCKET_ROWS[2]).toBe(26);
     expect([...KEY_ROWS.join('')].sort().join('')).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
   });
 });
@@ -151,8 +140,8 @@ describe('the lamp', () => {
     }
   });
   it('the trace is the output: the current’s path ends where the lamp is', () => {
-    const e = new Enigma(U264), pl = plugMap(U264.plugs);
-    for (const ch of bare(U264_CIPHER).slice(0, 120)) {
+    const e = new Enigma(U264.settings), pl = plugMap(U264.settings.plugs);
+    for (const ch of U264.cipher.slice(0, 120)) {
       const t = e.press(ch);
       expect(t.out).toHaveLength(4); expect(t.ret).toHaveLength(4);
       expect(t.entry).toBe(pl[idx(ch)]);

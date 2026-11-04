@@ -785,6 +785,12 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts)
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
+src/crypto/     enigma.ts: the naval Enigma M4 (DOM-free): wirings, notches, pawl stepping (nextMoves: the double step), trace (the current's
+               contacts wheel by wheel, in the frame's numbering), socketOf (the plugboard is numbered: A = 1), U264 (the message it is held to);
+               tests/enigma.test.ts: that message letter for letter, Beta at A + thin b = wide B, Gamma at A + thin c = wide C, the period
+               26·25·26. widgets/enigma3d.ts / enigma3dview.ts (enigmaView({ settings, view, camera })) / enigma3dparts.ts (mm, measured off
+               photographs; a rim letter stands at WINDOW_PHI + (window − letter) · PITCH, so a notch is at PAWL_PHI exactly when the cipher
+               carries; tests/model-enigma.test.ts), strokefont.ts (lettering as boxes: the renderer has no textures). Not in a chapter yet
 src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12
                … bit 11 row 9), card.ts (Card: 80 column masks + print; Deck; textCard, objectCard: a word in row 9 of columns
                1–32, its source and hex printed, a sequence number in 73–80; wordOf, seqOf, programDeck, sortDeck, dropDeck,

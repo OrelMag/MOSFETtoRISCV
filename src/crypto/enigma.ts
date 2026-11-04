@@ -166,6 +166,13 @@ export class Enigma {
   windows(): string { return this.pos.map(chr).join(''); }
 }
 
+/** The first M4 message the M4 Project broke (2006): Hartwig Looks, U-264, 1942. Its text is in the boat's war diary. */
+export const U264 = {
+  settings: { reflector: 'b', greek: 'beta', rotors: ['II', 'IV', 'I'], rings: 'AAAV', start: 'VJNA', plugs: 'AT BL DF GJ HM NW OP QY RZ VX' } as EnigmaSettings,
+  cipher: 'NCZWVUSXPNYMINHZXMQXSFWXWLKJAHSHNMCOCCAKUQPMKCSMHKSEINJUSBLKIOSXCKUBHMLLXCSJUSRRDVKOHULXWCCBGVLIYXEOAHXRHKKFVDREWEZLXOBAFGYUJQUKGRTVUKAMEURBVEKSUHHVOYHABCJWMAKLFKLMYFVNRIZRVVRTKOFDANJMOLBGFFLEOPRGTFLVRHOWOPBEKVWMUQFMPWPARMFHAGKXIIBG',
+  plain: 'VONVONJLOOKSJHFFTTTEINSEINSDREIZWOYYQNNSNEUNINHALTXXBEIANGRIFFUNTERWASSERGEDRUECKTYWABOSXLETZTERGEGNERSTANDNULACHTDREINULUHRMARQUANTONJOTANEUNACHTSEYHSDREIYZWOZWONULGRADYACHTSMYSTOSSENACHXEKNSVIERMBFAELLTYNNNNNNOOOVIERYSICHTEINSNULL',
+};
+
 /** Key presses before the three moving wheels stand where they started. */
 export function stepPeriod(s: EnigmaSettings = DEFAULT_SETTINGS): number {
   const e = new Enigma(s), seen = new Map<string, number>();

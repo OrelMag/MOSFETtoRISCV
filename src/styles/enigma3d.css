@@ -1,0 +1,52 @@
+/* ---------- The Enigma M4: what it is made of (close in both themes: it is the same machine in any light) ---------- */
+.m3d {
+  --en-wood: light-dark(#a8682f, #9c6230);
+  --en-wood-dark: light-dark(#7a4518, #6f4119);
+  --en-black: light-dark(#17161a, #1b1a1e);
+  --en-panel: light-dark(#27272b, #2c2c31);
+  --en-zinc: light-dark(#a9adb0, #aeb2b5);
+  --en-steel: light-dark(#8d9398, #979da2);
+  --en-brass: light-dark(#b89443, #c29c49);
+  --en-bakelite: light-dark(#5b1f15, #65261a);
+  --en-ivory: light-dark(#ece4cd, #e6dfc9);
+  --en-red: light-dark(#c62f25, #d93c30);
+  --en-paper: light-dark(#ece2c2, #dbd2b4);
+  --en-glass: light-dark(#d9d3bd, #c9c3ad);
+  --en-lamp: light-dark(#ffcf5a, #ffd668);
+  --en-letter: light-dark(#f0ede2, #e9e6db);
+  --en-forward: light-dark(#d8560f, #ff8a3c);
+  --en-back: light-dark(#0e7fbf, #4fbcf2);
+  --en-cable: light-dark(#141317, #1a191d);
+  --en-cotton: light-dark(#a58a52, #a58a52);
+}
+.en .r3 { grid-template-columns: minmax(0, 1fr); }
+.en .r3-stage { aspect-ratio: 16 / 11; max-height: 640px; }
+@container (min-width: 760px) { .en .r3-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; } .en .r3-side h4 { grid-row: 1; } .en .r3-side > .r3-kv { grid-column: 1; grid-row: 2 / span 3; } .en .r3-side > :not(h4, .r3-kv) { grid-column: 2; } }
+.en-views { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.en-views .btn[aria-pressed='true'] { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
+.en-keys { display: grid; gap: 4px; margin: 10px 0 2px; }
+.en-keys > div { display: flex; justify-content: center; gap: 4px; }
+.en-key {
+  flex: 0 1 30px; min-width: 0; aspect-ratio: 1; padding: 0; border-radius: 50%; font: 600 13px var(--font-ui); cursor: pointer;
+  background: #1b1a1e; color: #f0ede2; border: 1px solid var(--border, #555);
+}
+.en-key:active, .en-key.on { transform: translateY(1px); background: #3a3942; }
+.en-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.en-tape {
+  margin: 8px 0 0; font: 13px/1.5 var(--font-mono, monospace); color: var(--text-2); word-break: break-word; min-height: 3em;
+}
+.en-tape b { color: var(--text); font-weight: 600; }
+.en-set { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; font-size: 13px; margin-bottom: 8px; }
+.en-set select, .en-set input { min-width: 0; font: 13px var(--font-mono, monospace); padding: 3px 5px; background: var(--surface); color: var(--text); border: 1px solid var(--border, #777); border-radius: 4px; }
+.en-set input { width: 100%; box-sizing: border-box; text-transform: uppercase; }
+.en-wheels { display: flex; flex-wrap: wrap; gap: 4px; }
+.en-err { color: var(--danger, #c62f25); font-size: 12.5px; min-height: 1.2em; margin: 0 0 6px; }
+.en-path { display: flex; flex-wrap: wrap; gap: 2px 4px; font: 12.5px var(--font-mono, monospace); color: var(--text-2); margin: 6px 0 0; }
+.en-path .f { color: var(--en-forward); font-weight: 600; }
+.en-path .b { color: var(--en-back); font-weight: 600; }
+@media (pointer: coarse) {
+  .en-key { flex-basis: 34px; aspect-ratio: auto; height: 40px; border-radius: 10px; }
+  .en-keys > div { gap: 2px; }
+  .en-set select, .en-set input { min-height: 40px; }
+}
+@container (max-width: 560px) { .en .r3-stage { aspect-ratio: 1; } }
