@@ -7,6 +7,9 @@ import { execFile } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { captureRecord, CLOCK_NS } from '../src/comm/mac';
+import { FastPathModel, S_RX } from '../src/net/fastpath';
+import { hostIp, Internet, traceroute } from '../src/net/internet';
+import { Resolver, SITE, TYPE_A, TYPE_NS, type DnsMessage } from '../src/net/internetdns';
 import { BROADCAST, frameBody } from '../src/comm/ethframe';
 import { arpFrame, icmpEchoFrame, udpFrame } from '../src/comm/netframes';
 import { pcapFile, type Captured } from '../src/comm/pcap';
@@ -17,21 +20,23 @@ import { ethSwitch } from '../src/lib/ethswitch';
 import { ethSegment, ethStationMac } from '../src/lib/ethstation';
 import { lanComputers } from '../src/lib/lan';
 import { DualSim } from '../src/sim/dualsim';
-import { benchDone, tcpBench } from '../src/net/tcpbench';
+import { benchDone, tcpBench, type BenchOptions } from '../src/net/tcpbench';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
 import type { Stage } from '../src/view/stage';
 import { segmentFrame } from '../src/widgets/ethernet2';
 import { Rig } from '../src/widgets/ethswitch';
-import { claimOf, compareCapture, FIELDS, parseRows, tsharkArgs, type Claim } from './tshark-lib';
+import { LAPTOP, traceCapture, WWW } from '../src/widgets/internet';
+import { CH_ADJ, CH_TRIE, FP_FRAMES, FP_INPUTS, ROUTER_SCENE_DEF } from '../src/widgets/router';
+import { claimOf, compareCapture, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, type Claim } from './tshark-lib';
 
 const args = process.argv.slice(2);
 const opt = (k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : undefined);
 const out = resolve(opt('--out') ?? 'tshark-report'), tshark = opt('--tshark') ?? 'tshark', only = opt('--only');
 const dump = args.includes('--dump'), gates = !args.includes('--no-gates');
 
-interface Case { name: string; frames: () => Captured[] | Promise<Captured[]> }
+interface Case { name: string; frames: () => Captured[] | Promise<Captured[]>; claims?: (frames: Captured[]) => Claim[]; allow?: RegExp; must?: (frames: Captured[]) => string | null }
 
 // ---- hand-built: each protocol's frame by itself ----------------------------------------------------------------------------------
 const A = HOSTS.A, B = HOSTS.B;
@@ -116,12 +121,60 @@ async function lanCapture(appA: string, appB: string, until: string, max: number
   return frames.sort((x, y) => x.clock - y.clock).filter((f) => !f.err).map((f) => ({ us: (f.clock * CLOCK_NS) / 1000, bytes: f.bytes }));
 }
 
+// ---- chapter 51: the frames its panel sends that a reader can parse, in and out of the fast path's gates: the TTL and the checksum as the rewrite left them --------
+function routerCapture(): Captured[] {
+  const sim = new GateSim(flatten(ROUTER_SCENE_DEF)), root = sim.design.root, m = new FastPathModel(CH_TRIE, CH_ADJ);
+  sim.reset('zero');
+  const inputs: Record<string, number> = { ...FP_INPUTS };
+  const set = (o: Record<string, number>) => { for (const [k, v] of Object.entries(o)) { inputs[k] = v; sim.setInput(k, v); } sim.settle(); };
+  const get = (p: string) => pack(sim.getBits(root.ports[p]));
+  set({ clk: 0 });
+  const out: Captured[] = [];
+  let clock = 0;
+  const us = () => (clock * CLOCK_NS) / 1000;
+  for (const n of [0, 1, 2, 3, 4, 5]) {
+    const frame = FP_FRAMES[n].frame(), tx: number[] = [];
+    out.push({ us: us(), bytes: frame });
+    let i = 0;
+    for (let guard = 0; guard < 4000; guard++) {
+      const v = i < frame.length && m.s === S_RX, x = { rxd: v ? frame[i] : 0, rxv: v ? 1 : 0, rxl: v && i === frame.length - 1 ? 1 : 0, txr: 1 };
+      set(x);
+      if (get('txv') === 1) { tx.push(get('txd')); if (get('txl') === 1) { out.push({ us: us(), bytes: [...tx] }); tx.length = 0; } }
+      m.step(x);
+      if (v) i++;
+      set({ clk: 1 }); set({ clk: 0 });
+      clock++;
+      if (i >= frame.length && m.s === S_RX && m.i === 0) break;
+    }
+  }
+  return out;
+}
+
+// ---- chapter 53: the traceroute Save capture writes, and the resolver's messages, each record held to what the resolver meant to say ----------------------------------
+const traceFrames = (): Captured[] => traceCapture(traceroute(new Internet(), LAPTOP, hostIp(WWW)));
+const dnsSteps = () => new Resolver(new Internet()).resolve(LAPTOP, SITE, 0).steps;
+const dnsFrames = (): Captured[] => { let us = 0; return dnsSteps().map((s) => { const f = { us: Math.round(us), bytes: s.frame }; us += s.ms * 1000; return f; }); };
+const ipText = (v: number) => [v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255].join('.');
+/** What a message says beyond its header, from the resolver's own record of it, for tshark to read back through the compression pointers. */
+function dnsClaim(m: DnsMessage, base: Claim): Claim {
+  const rrs = [...m.answer, ...m.authority, ...m.additional], list = (x: (string | number)[]) => x.join('|');
+  const a = rrs.filter((r) => r.type === TYPE_A), ns = rrs.filter((r) => r.type === TYPE_NS);
+  const fields: Claim['fields'] = { ...base.fields, 'dns.qry.name': m.qname };
+  if (rrs.length) { fields['dns.resp.name'] = list(rrs.map((r) => r.name)); fields['dns.resp.ttl'] = list(rrs.map((r) => r.ttl)); }
+  if (a.length) fields['dns.a'] = list(a.map((r) => ipText(r.data as number)));
+  if (ns.length) fields['dns.ns'] = list(ns.map((r) => r.data as string));
+  return { ...base, fields };
+}
+const dnsClaims = (frames: Captured[]): Claim[] => { const steps = dnsSteps(); return frames.map((f, i) => dnsClaim(steps[i].msg, claimOf(f.bytes, f.us))); };
+const icmpKinds = (frames: Captured[]) => new Set(frames.map((f) => { const b = f.bytes as number[]; return b[23] === 1 ? `${b[34]}.${b[35]}` : ''; }));
+
 // ---- chapter 52: the Python TCP on the bench, a clean transfer as the router received it, open and close ------------------------------
-function tcpCapture(): Captured[] {
-  const t = tcpBench(1000);
+function tcpCapture(bytes = 1000, o?: BenchOptions): Captured[] {
+  const t = tcpBench(bytes, o);
   t.router.log = [];
   while (t.bench.c < 3_000_000 && !benchDone(t)) t.bench.clock();
   if (!benchDone(t)) throw new Error('the transfer did not finish');
+  if (o && t.router.drops === 0) throw new Error('nothing was lost: this case checks nothing a clean transfer does not');
   return t.router.log.map((l) => ({ us: Math.round(l.t * CLOCK_NS / 1000), bytes: l.bytes }));
 }
 
@@ -132,16 +185,34 @@ const CASES: Case[] = [
     { name: 'ch49-switch', frames: switchCapture },
     { name: 'ch50-ping', frames: () => lanCapture(pingApp(1, 32), hostApp(), 'done', 90_000) },
     { name: 'ch50-udp', frames: () => lanCapture(udpClientApp(3, 16), udpEchoApp(), 'done', 120_000) },
-    { name: 'ch52-tcp', frames: tcpCapture },
+    { name: 'ch51-router', frames: routerCapture, must: (f) => (f.filter((x) => (x.bytes as number[])[22] === 63).length === 3 ? null : 'three frames must leave the gates with TTL 63') },
+    { name: 'ch52-tcp', frames: () => tcpCapture() },
+    // the chapter's "A short queue", the run that loses segments: Save capture writes this too
+    { name: 'ch52-tcp-loss', frames: () => tcpCapture(1500, { queue: 3, byteClocks: 400, delay: 10_000 }), allow: TCP_LOSS_WARNINGS },
+    { name: 'ch53-traceroute', frames: traceFrames, must: (f) => { const k = icmpKinds(f); return k.has('11.0') && k.has('3.3') ? null : 'a trace must hold time exceeded and port unreachable'; } },
+    { name: 'ch53-dns', frames: dnsFrames, claims: dnsClaims },
   ] : []),
 ];
 
 // ---- broken on purpose: each of these must be reported ---------------------------------------------------------------------------------
 const good = () => icmpEchoFrame({ srcMac: A.mac, dstMac: B.mac, src: A.ip, dst: B.ip, id: 9, ident: 7, seq: 1, data: [1, 2, 3, 4] }).bytes;
 const goodUdp = () => udpFrame({ srcMac: A.mac, dstMac: B.mac, src: A.ip, dst: B.ip, id: 9, sport: 5000, dport: 7, data: [1, 2, 3, 4] }).bytes;
+/** A forwarded frame whose TTL fell with the checksum left alone: what a broken rewrite would send. */
+const staleChecksum = () => { const c = FP_FRAMES[0].frame(); c[22] -= 1; return c; };
+/** A question whose name is a pointer to itself, with the UDP and IP checksums made right so that only the name is wrong. */
+function dnsLoop(): number[] {
+  const f = [...dnsSteps()[0].frame], t = 34, d = t + 8;
+  f[d + 12] = 0xc0; f[d + 13] = 12;
+  f[t + 6] = 0; f[t + 7] = 0; // UDP's checksum off: 0 means none
+  return f;
+}
 const flip = (b: number[], i: number) => { const c = [...b]; c[i] ^= 0x10; return c; };
 interface Broken { name: string; frames: Captured[]; claims?: Claim[]; cut?: number; want: RegExp }
+const dnsGood = () => dnsSteps()[3];
 const BROKEN: Broken[] = [
+  { name: 'dns-wrong-record', frames: [{ us: 0, bytes: dnsGood().frame }], claims: [dnsClaim({ ...dnsGood().msg, qname: 'www.other.example' }, claimOf(dnsGood().frame, 0))], want: /dns\.qry\.name/ },
+  { name: 'dns-pointer-to-itself', frames: [{ us: 0, bytes: dnsLoop() }], claims: [claimOf(dnsLoop(), 0)], want: /malformed|expert|dns/ },
+  { name: 'router-ttl-not-updated', frames: [{ us: 0, bytes: staleChecksum() }], want: /ip\.checksum\.status/ },
   { name: 'bad-ip-checksum', frames: [{ us: 0, bytes: flip(good(), 24) }], want: /ip\.checksum\.status/ },
   { name: 'bad-icmp-checksum', frames: [{ us: 0, bytes: flip(good(), 36) }], want: /icmp\.checksum\.status/ },
   { name: 'bad-udp-checksum', frames: [{ us: 0, bytes: flip(goodUdp(), 40) }], want: /udp\.checksum\.status/ },
@@ -160,25 +231,27 @@ const runTshark = (file: string): Promise<{ text: string; err: string; code: num
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'fields.txt'), FIELDS.join('\n'));
 
-async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0): Promise<string[]> {
+async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0, allow?: RegExp): Promise<string[]> {
   const file = join(out, `${name}.pcap`), whole = pcapFile(frames), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
   writeFileSync(file, bytes);
   if (dump) return [];
   const r = await runTshark(file);
   writeFileSync(join(out, `${name}.tsv`), r.text);
-  const problems = compareCapture(frames, parseRows(r.text), claims);
+  const problems = compareCapture(frames, parseRows(r.text), claims, allow);
   if (r.code !== 0 || r.err.trim()) problems.unshift(`tshark exit ${r.code}: ${r.err.trim().slice(0, 300)}`);
   return problems;
 }
 
-const REQUIRED = ['eth:ethertype:arp', 'eth:ethertype:ip:icmp', 'eth:ethertype:ip:udp'];
+const REQUIRED = ['eth:ethertype:arp', 'eth:ethertype:ip:icmp', 'eth:ethertype:ip:udp', 'eth:ethertype:ip:tcp', 'eth:ethertype:ip:udp:dns'];
 const seen = new Set<string>();
 const summary: Record<string, unknown> = {};
 let failed = 0;
 for (const c of CASES) {
   if (only && !c.name.includes(only)) continue;
   const t0 = Date.now();
-  const frames = await c.frames(), problems = await check(c.name, frames);
+  const frames = await c.frames(), problems = await check(c.name, frames, c.claims?.(frames), 0, c.allow);
+  const short = c.must?.(frames);
+  if (short) problems.unshift(short);
   if (c.name !== 'built') for (const f of frames) seen.add(claimOf(f.bytes, 0).chain);
   summary[c.name] = { frames: frames.length, kinds: [...new Set(frames.map((f) => claimOf(f.bytes, 0).chain))], problems };
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${c.name}: ${frames.length} frames, ${((Date.now() - t0) / 1000).toFixed(1)} s`);

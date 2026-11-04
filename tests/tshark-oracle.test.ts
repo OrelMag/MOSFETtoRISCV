@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { icmpEchoFrame, tcpFrame, udpFrame } from '../src/comm/netframes';
 import { HOSTS } from '../src/comm/stack/apps';
-import { claimOf, compareCapture, compareRow, FIELDS, parseRows, tsharkArgs, type Row } from '../scripts/tshark-lib';
+import { claimOf, compareCapture, compareRow, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, type Row } from '../scripts/tshark-lib';
 
 const A = HOSTS.A, B = HOSTS.B, hdr = { srcMac: A.mac, dstMac: B.mac, src: A.ip, dst: B.ip, id: 9 };
 const ping = icmpEchoFrame({ ...hdr, ident: 0x1234, seq: 1, data: [1, 2, 3, 4] }).bytes;
@@ -106,5 +106,22 @@ describe('the comparison', () => {
   });
   it('a capture with a frame missing', () => {
     expect(compareCapture([{ us: 0, bytes: ping }, { us: 1, bytes: ping }], [rowOf(ping)])[0]).toMatch(/read 1 frames of 2/);
+  });
+  it('a lossy transfer may be told so, and only that, only where the case allows it', () => {
+    const r = { ...rowOf(ping), '_ws.expert.severity': 'Warn', '_ws.expert.message': 'Previous segment(s) not captured (common at capture start)' };
+    expect(issues(r).join()).toMatch(/expert/);
+    expect(compareRow(claimOf(ping, 0), r, TCP_LOSS_WARNINGS)).toEqual([]);
+    const bad = { ...r, '_ws.expert.message': 'Bogus IP length' };
+    expect(compareRow(claimOf(ping, 0), bad, TCP_LOSS_WARNINGS).join()).toMatch(/expert/);
+  });
+  it('DNS on port 53 claims its header and its place in the chain, and every record in the column', () => {
+    const q = udpFrame({ ...hdr, sport: 5000, dport: 53, data: [0x4a, 0x10, 0x81, 0, 0, 1, 0, 2, 0, 0, 0, 0] }).bytes, c = claimOf(q, 0);
+    expect(c.chain).toBe('eth:ethertype:ip:udp:dns');
+    expect(c.fields).toMatchObject({ 'dns.id': 0x4a10, 'dns.flags.response': 1, 'dns.count.queries': 1, 'dns.count.answers': 2 });
+    expect(compareRow(c, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp', 'dns.flags.response': 'True' }).join()).toMatch(/protocols/);
+    expect(compareRow(c, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.flags.response': 'True' })).toEqual([]);
+    const two = { ...c, fields: { ...c.fields, 'dns.a': '10.0.0.1|10.0.0.2' } };
+    expect(compareRow(two, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.a': '10.0.0.1|10.0.0.2' })).toEqual([]);
+    expect(compareRow(two, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.a': '10.0.0.1|10.0.0.3' }).join()).toMatch(/dns\.a/);
   });
 });
