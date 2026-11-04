@@ -144,11 +144,11 @@ export const UART_RX: ComponentDef = (() => {
   const nlo = g.not(lo);
   const tc7 = g.and(g.not(tcb[3]), tcb[2], tcb[1], tcb[0]), tc15 = g.and(...tcb), bc7 = g.and(...bcb);
   const detect = b.name(g.and('tick', `${d}.y0`, lo), 'start edge', true);
-  const mid = b.name(g.and('tick', `${d}.y1`, tc7), 'middle of start', true);
+  const mid = b.name(g.and('tick', `${d}.y1`, tc7), 'mid start', true);
   const midOk = g.and(mid, lo);
-  const samp = b.name(g.and('tick', `${d}.y2`, tc15), 'sample a bit', true);
+  const samp = b.name(g.and('tick', `${d}.y2`, tc15), 'bit sample', true);
   const lastd = g.and(samp, bc7);
-  const stp = b.name(g.and('tick', `${d}.y3`, tc15), 'sample the stop', true);
+  const stp = b.name(g.and('tick', `${d}.y3`, tc15), 'stop sample', true);
   const good = b.name(g.and(stp, nlo), 'good frame', true), bad = b.name(g.and(stp, lo), 'framing error', true);
   const brkEnd = g.and('tick', `${d}.y4`, nlo);
   b.next();
