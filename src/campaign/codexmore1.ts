@@ -1475,7 +1475,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
     example: { title: 'm_flash, one logical page rewritten', body: '<pre>write lp5 = 0x1111   head 0 → table[5] = 0\nwrite lp5 = 0x2222   head 1 → table[5] = 1   (page 0 is garbage)\nwrite lp5 = 0x3333   head 2 → table[5] = 2\n…\nhead enters block 1 → collect block 2: read each page, copy the mapped ones, erase</pre>' },
     mistakes: ['Updating the table only when the program finishes, after the read data (and its tag) has left the chip\'s output.', 'Collecting the block the head is writing into.', 'Forgetting that a program into a non-erased page silently corrupts it on real chips (the bench refuses it).'],
     lib: 'rv16_flashstore',
-    chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+    chapters: [{ chapter: 'flash', step: 4, label: 'Never overwrite' }, { chapter: 'flash', step: 5, label: 'Garbage, wear and bad blocks' }],
   },
   boot: {
     idea: 'A processor coming out of reset fetches from a fixed address, which must hold code before anything has been loaded: a small mask ROM or a NOR flash that can be read word by word (executed in place). That first code sets up the memory controller and copies the next stage from slower storage, NAND flash, an SD card or a disk, into RAM, then jumps to it. Each stage is larger and can do more than the one before: ROM, boot loader, operating system.<br>The copy is the slow part, and DMA is how it is done: the boot code programs source, destination and length, and the engine moves the data while the processor sets up the rest. Chapter 38\'s computer boots from flash by DMA. RV16 keeps instructions and data in separate memories, so in p_boot what comes from flash is data, a table the program needs; the race between the copy and the work on it is the same.',
@@ -1491,6 +1491,6 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Counting only the host\'s writes: garbage collection\'s copies wear the flash too (write amplification), and a nearly full drive copies more.',
     ],
     lib: 'rv16_flashstore',
-    chapters: [{ chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+    chapters: [{ chapter: 'flash', step: 5, label: 'Garbage, wear and bad blocks' }],
   },
 };
