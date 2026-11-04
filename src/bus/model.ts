@@ -20,7 +20,7 @@ export interface BusMemory {
 }
 
 /** Top address nibble of each region (lib/axi.ts BUS_MAP and the SoC's decoder agree). */
-export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, uart: 0x3, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7 } as const;
+export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, uart: 0x3, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7, nic: 0x9 } as const;
 
 /** A card reader's deck as the model reads it: a word a card, and the edges between taking a card and the next one. */
 export interface CardDeck { items: readonly number[]; feed: number }
