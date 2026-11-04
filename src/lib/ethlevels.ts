@@ -100,3 +100,84 @@ export function swBrain(): ComponentDef {
   swDef = m.build();
   return swDef;
 }
+
+let fwdDef: ComponentDef | undefined;
+
+/**
+ * A router's forwarding decision at the size of a level: four routes (prefix, a length of 0 to 4 bytes, a port), written one at a time, and for a header's fields in parallel
+ * the answer in the next clock: drop a bad header, send a TTL that has run out up to the slow path, else the longest prefix that matches: no route or port 3 goes up too.
+ * Forwarded, the TTL is one lower and the checksum is updated by adding 0x0100 with the carry brought round (RFC 1624). Chapter 51's fast path does this on a stream, with a trie.
+ */
+export function fwdPath(): ComponentDef {
+  if (fwdDef) return fwdDef;
+  const m = new Rtl({
+    id: 'fwd_path', name: 'Forwarding decision', category: 'sequential', label: 'FORWARD', columnHeight: 40,
+    summary: 'Four routes matched at once, the longest prefix wins; a bad header is dropped, a TTL that has run out, no route or the router itself goes to the slow path; forwarded, TTL − 1 and the checksum updated from the old one.',
+  });
+  const clk = m.input('clk', { clock: true }), rst = m.input('rst');
+  const we = m.input('we'), slot = m.inputBus('slot', 2), prefix = m.inputBus('prefix', 32), bytes = m.inputBus('bytes', 3), portIn = m.inputBus('port_in', 2);
+  const go = m.input('go'), dst = m.inputBus('dst', 32), ttl = m.inputBus('ttl', 8), check = m.inputBus('check', 16), bad = m.input('bad');
+  const rstn = m.not(rst);
+  const v: Sig[] = [], key: Sig[][] = [], len: Sig[][] = [], out: Sig[][] = [];
+  for (let i = 0; i < 4; i++) {
+    const home: [string, string] = [`r${i}`, `route ${i}`];
+    v.push(m.reg(clk, `v${i}`, home));
+    key.push(Array.from({ length: 32 }, (_, b) => m.reg(clk, `k${i}_${b}`, home)));
+    len.push(Array.from({ length: 3 }, (_, b) => m.reg(clk, `l${i}_${b}`, home)));
+    out.push(Array.from({ length: 2 }, (_, b) => m.reg(clk, `o${i}_${b}`, home)));
+  }
+  m.scope('write', 'writing a route', () => {
+    for (let i = 0; i < 4; i++) {
+      const sel = m.and(we, m.eqConst(slot, i));
+      m.setD(v[i], m.and(rstn, m.or(v[i], sel)));
+      key[i].forEach((q, b) => m.setD(q, m.mux(sel, q, prefix[b])));
+      len[i].forEach((q, b) => m.setD(q, m.mux(sel, q, bytes[b])));
+      out[i].forEach((q, b) => m.setD(q, m.mux(sel, q, portIn[b])));
+    }
+  });
+  const look = m.scope('match', 'longest prefix', () => {
+    // per route, per length: does it match, and is this its length. The first address byte is the top one
+    const at = (i: number, L: number) => {
+      const need = Array.from({ length: L }, (_, k) => m.eq(key[i].slice(24 - 8 * k, 32 - 8 * k), dst.slice(24 - 8 * k, 32 - 8 * k)));
+      return m.andN([v[i], m.eqConst(len[i], L), ...need]);
+    };
+    const hit = [0, 1, 2, 3, 4].map((L) => [0, 1, 2, 3].map((i) => at(i, L)));
+    const any = hit.map((h) => m.orN(h));
+    // the longest length with a hit: 4 first
+    const pick: Sig[] = [any[4]];
+    for (let L = 3; L >= 0; L--) pick.unshift(m.and(any[L], m.not(m.orN(any.slice(L + 1)))));
+    const sel = [0, 1, 2, 3].map((i) => m.orN([0, 1, 2, 3, 4].map((L) => m.and(pick[L], hit[L][i]))));
+    const port = [0, 1].map((b) => m.orN(sel.map((s, i) => m.and(s, out[i][b]))));
+    return { port, found: m.name(m.orN(any), 'found') };
+  });
+  const dec = m.scope('act', 'what to do', () => {
+    const expired = m.name(m.not(m.orN(ttl.slice(1))), 'expired');
+    const local = m.name(m.andN(look.port), 'local');
+    const up = m.name(m.and(m.not(bad), m.or(expired, m.or(m.not(look.found), local))), 'up');
+    const fwd = m.name(m.and(m.not(bad), m.not(up)), 'fwd');
+    return { up, fwd };
+  });
+  const upd = m.scope('update', 'TTL and checksum', () => {
+    // TTL − 1: a bit flips when every bit below it is 0
+    const t = ttl.map((q, i) => m.xor(q, m.not(m.orN([m.const(0), ...ttl.slice(0, i)]))));
+    // the checksum + 0x0100, the carry out of the top brought round to the bottom
+    const hi = check.slice(8), lo = check.slice(0, 8), carry = m.name(m.andN(hi), 'round');
+    const hiN = m.inc(hi), loN = m.inc(lo);
+    const low = lo.map((q, i) => m.mux(carry, q, loN[i]));
+    const back = m.and(carry, m.andN(lo));
+    const high = hiN.map((q, i) => (i === 0 ? m.or(q, back) : q));
+    return { t, c: [...low, ...high] };
+  });
+  const ov = m.reg(clk, 'ovalid');
+  m.setD(ov, m.and(rstn, go));
+  const a = [m.reg(clk, 'act0'), m.reg(clk, 'act1')];
+  m.setD(a[0], m.andN([rstn, go, dec.fwd]));
+  m.setD(a[1], m.andN([rstn, go, dec.up]));
+  const pq = [m.reg(clk, 'port0'), m.reg(clk, 'port1')];
+  pq.forEach((q, b) => m.setD(q, m.andN([rstn, go, m.not(bad), m.or(dec.up, look.port[b])])));
+  const tq = upd.t.map((d, i) => { const q = m.reg(clk, `ttlq${i}`); m.setD(q, m.andN([rstn, go, d])); return q; });
+  const cq = upd.c.map((d, i) => { const q = m.reg(clk, `chkq${i}`); m.setD(q, m.andN([rstn, go, d])); return q; });
+  m.output('ovalid', ov); m.outputBus('act', a); m.outputBus('port', pq); m.outputBus('ttl_o', tq); m.outputBus('check_o', cq);
+  fwdDef = m.build();
+  return fwdDef;
+}
