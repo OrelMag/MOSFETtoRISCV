@@ -164,6 +164,9 @@ export class Rtl {
     return out;
   }
 
+  /** A signal to be driven later (a loop through parts built after it): drive() joins it to the real one. */
+  fwd(name?: string): Sig { return this.fresh('', '', name); }
+  drive(f: Sig, to: Sig): void { this.alias[f] = this.root(to); }
   /** A D flip-flop on clk; its d comes later (setD), so a register can feed its own next state. */
   reg(clk: Sig, name?: string): Sig {
     const q = this.gate(DFF, [-1, clk]);

@@ -5,6 +5,9 @@
 import { Rtl, type Sig } from './rtl';
 import { bigRam } from './bigmem';
 import { define } from './define';
+import { edgeKind, peerMiso, type SpiMode } from '../comm/spi';
+import { simulate } from '../sim/harness';
+import { pack } from '../sim/values';
 import type { ComponentDef } from '../sim/types';
 
 let master: ComponentDef | undefined;
@@ -14,9 +17,9 @@ export function spiMaster(): ComponentDef {
   if (master) return master;
   const m = new Rtl({
     id: 'spi_master', name: 'SPI master', category: 'sequential', label: 'SPI master',
-    summary: 'Shifts one byte out on MOSI while one comes in on MISO, in any of the four SPI modes (CPOL, CPHA). Every SCLK edge is two system clocks after the last; CS is low while busy, one half period before the first edge and after the last.',
+    summary: 'Shifts one byte out on MOSI while one comes in on MISO, in any of the four SPI modes (CPOL, CPHA). Every SCLK edge is two system clocks after the last; CS is low while busy or while hold = 1 (one transaction of several bytes), one half period before the first edge and after the last.',
   });
-  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), cpol = m.input('cpol'), cpha = m.input('cpha');
+  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), hold = m.input('hold'), cpol = m.input('cpol'), cpha = m.input('cpha');
   const tx = m.inputBus('tx', 8), miso = m.input('miso');
   const rstn = m.not(rst);
   const busy = m.reg(clk, 'busy'), ph = m.reg(clk, 'ph'), done = m.reg(clk, 'done'), sclk = m.reg(clk, 'sclk_q'), mo = m.reg(clk, 'mo');
@@ -50,7 +53,7 @@ export function spiMaster(): ComponentDef {
     });
     m.setD(mo, m.and(rstn, m.mux(load, m.mux(change, mo, sh[7]), m.and(tx[7], m.not(cpha)))));
   });
-  m.output('sclk', sclk); m.output('mosi', mo); m.output('cs_n', m.not(busy)); m.outputBus('rx', sh); m.output('busy', busy); m.output('done', done);
+  m.output('sclk', sclk); m.output('mosi', mo); m.output('cs_n', m.nor(busy, hold)); m.outputBus('rx', sh); m.output('busy', busy); m.output('done', done);
   master = m.build();
   return master;
 }
@@ -115,3 +118,64 @@ export function spiDevice(): ComponentDef {
   return device;
 }
 export { define };
+
+let pair: ComponentDef | undefined;
+
+/**
+ * Chapter 44's scene: one master and two memories on the four shared wires (SCLK, MOSI, MISO) and a chip select each. `sel` picks
+ * which CS follows the master's; mode3 sets CPOL = CPHA (the memories take mode 0 or 3).
+ */
+export function spiPair(): ComponentDef {
+  if (pair) return pair;
+  const m = new Rtl({
+    id: 'spi_pair', name: 'SPI master with two memories', category: 'cell', label: 'SPI bus',
+    summary: 'A master and two 256-byte SPI memories on SCLK, MOSI and MISO, with a chip select each: sel chooses which one is addressed. MISO is the OR of the two (a real part lets go of the line while its CS is high).',
+  });
+  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), hold = m.input('hold'), sel = m.input('sel'), mode3 = m.input('mode3');
+  const tx = m.inputBus('tx', 8);
+  const miso = m.fwd('miso_in');
+  const [sclk, mosi, csn, rxb, busy, done] = m.part(spiMaster(), [clk, rst, start, hold, mode3, mode3, m.bus(tx), miso]);
+  const cs0 = m.name(m.or(csn, sel), 'cs0_n'), cs1 = m.name(m.or(csn, m.not(sel)), 'cs1_n');
+  const d0 = m.part(spiDevice(), [sclk, cs0, mosi])[0], d1 = m.part(spiDevice(), [sclk, cs1, mosi])[0];
+  m.drive(miso, m.name(m.or(d0, d1), 'miso'));
+  m.outputBus('rx', m.unbus(rxb, 8)); m.output('busy', busy); m.output('done', done);
+  m.output('sclk', sclk); m.output('mosi', mosi); m.output('miso', miso); m.output('cs0_n', cs0); m.output('cs1_n', cs1);
+  pair = m.build();
+  return pair;
+}
+
+/** One clock of a recorded master transfer. */
+export interface MasterClock { sclk: number; mosi: number; miso: number; cs_n: number }
+export interface MasterRun { clocks: MasterClock[]; rx: number; /** clock indices of the SCLK edges, in order */ edges: number[] }
+
+/**
+ * The gate-level master driving one byte in `mode` against a peer that follows the mode's rules (comm/spi.ts peerMiso): every
+ * clock's SCLK, MOSI, MISO and CS, read off the circuit. Two clocks of idle first and last.
+ */
+export function masterRun(mode: SpiMode, tx: number, peer: number): MasterRun {
+  const g = simulate(spiMaster());
+  const out = (p: string) => pack(g.getBits(g.design.root.ports[p]));
+  const set = (v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) g.setInput(k, x); g.settle(); };
+  const clocks: MasterClock[] = [], edges: number[] = [];
+  let changes = 0, edgeNo = 0, prev = mode.cpol, miso = peerMiso(mode, peer, 0);
+  set({ rst: 1, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso });
+  set({ clk: 1 }); set({ clk: 0 }); set({ rst: 0 });
+  const rec = () => clocks.push({ sclk: out('sclk'), mosi: out('mosi'), miso, cs_n: out('cs_n') });
+  rec(); rec();
+  set({ tx, start: 1 });
+  for (let c = 0; c < 200; c++) {
+    set({ clk: 1 }); set({ clk: 0 }); set({ start: 0 });
+    const sc = out('sclk');
+    if (sc !== prev) {
+      if (edgeKind(mode, edgeNo).sample === false) changes++;
+      edges.push(clocks.length);
+      edgeNo++; prev = sc;
+      miso = peerMiso(mode, peer, changes);
+      set({ miso });
+    }
+    rec();
+    if (out('done')) break;
+  }
+  rec(); rec();
+  return { clocks, rx: out('rx'), edges };
+}

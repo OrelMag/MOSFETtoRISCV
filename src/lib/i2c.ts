@@ -8,7 +8,6 @@ import { symbolGeom } from '../sim/geometry';
 import { TIE0, TIE1 } from './transistors';
 import { PULLUP } from './switchparts';
 import { GND, INV_CMOS, NMOS } from './transistors';
-import { ram } from './memory';
 import { Rtl } from './rtl';
 
 // ---- the pad ----------------------------------------------------------------------------------------------------------
@@ -174,9 +173,14 @@ export function i2cTarget(): ComponentDef {
   const { start, stop, take, addrDone, wrDone, ackBegin, ackEnd, rdShift, rdLast, rackNext, rackIdle, rackRise, ackRd, iRack } = e;
   const mem = m.scope('mem', 'four registers', () => {
     const ptrNext = m.inc(ptr);
-    const a = [m.mux(iRack, ptr[0], ptrNext[0]), m.mux(iRack, ptr[1], ptrNext[1])];
-    const out = m.part(ram(2, 8), [m.bus(a), m.bus(sh), wpend, clk]);
-    return { rdata: m.unbus(out[0], 8), ptrNext };
+    const ra = [m.mux(iRack, ptr[0], ptrNext[0]), m.mux(iRack, ptr[1], ptrNext[1])];
+    // reset to 0 like the model; a register is written the clock after its byte completes (wpend), at the pointer
+    const regs = [0, 1, 2, 3].map((r) => {
+      const we = m.and(wpend, m.eqConst(ptr, r));
+      return sh.map((d, b) => { const q = m.reg(clk, `r${r}_${b}`); m.setD(q, m.and(rstn, m.mux(we, q, d))); return q; });
+    });
+    const rdata = sh.map((_, b) => m.mux(ra[1], m.mux(ra[0], regs[0][b], regs[1][b]), m.mux(ra[0], regs[2][b], regs[3][b])));
+    return { rdata, ptrNext };
   });
   const load = m.or(ackRd, rackNext);
   m.scope('fsm', 'phase, bit count, flags', () => {
@@ -221,18 +225,18 @@ export function i2cTarget(): ComponentDef {
 
 // ---- the bus ----------------------------------------------------------------------------------------------------------
 
-export interface I2cTargetSpec { adr: number; stretch?: number }
+export interface I2cTargetSpec { adr: number }
 
 const busCache = new Map<string, ComponentDef>();
 
 /**
  * A bus at switch level: `ctls` controllers and the given targets side by side, each behind two open-drain pads (SDA, SCL) onto two
  * rails, each rail pulled up by its own resistor. The controllers' and targets' gates are flattened to transistors with the pads and
- * resistors: nothing here is a lookup. Ports: clk, rst and per controller go / cmd / din in and ready / dout / ack / lost out; the
+ * resistors: nothing here is a lookup. Ports: clk, rst and per controller go / cmd / din in and ready / dout / ack / lost out, per target stretch in (clocks of SCL held low before a read); the
  * rails sda and scl are inout, so a stage can read them (and a learner can pull one low by hand).
  */
 export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
-  const key = `${ctls}c${targets.map((t) => `${t.adr.toString(16)}s${t.stretch ?? 0}`).join('_')}`;
+  const key = `${ctls}c${targets.map((t) => t.adr.toString(16)).join('_')}`;
   const hit = busCache.get(key);
   if (hit) return hit;
   const C = i2cController(), T = i2cTarget();
@@ -284,7 +288,10 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
       ts.forEach((tn, i) => nets.push({ name: `${tn}`, ends: [`${tn}.y`, `${d}_${name}_m.i${i}`], tags: true }));
       nets.push({ name: `${d}_${name}`, ends: [`${d}_${name}_m.out`, `${d}.${name}`], tags: true });
     };
-    bits('adr', 7, tspec.adr, 2); bits('stretch', 3, tspec.stretch ?? 0, 27);
+    bits('adr', 7, tspec.adr, 2);
+    const sn = `stretch${k}`;
+    ports.push({ name: sn, width: 3, dir: 'in' }); pins[sn] = [0, inY]; inY += 2;
+    nets.push({ name: sn, ends: [sn, `${d}.stretch`], tags: true });
     pad(`ps_t${k}`, d, 'sda_o', 'sda_i', x + 2, sdaEnds, 'sda'); pad(`pc_t${k}`, d, 'scl_o', 'scl_i', x + 2 + pg.w + 4, sclEnds, 'scl');
     x += Math.max(tg.w, 2 * pg.w + 10) + gap;
   });
@@ -306,4 +313,39 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
   });
   busCache.set(key, def);
   return def;
+}
+
+let wired: ComponentDef | undefined;
+
+/**
+ * Two open-drain stages and one pull-up on a wire: chapter 2's wired-AND, with the pad of the bus. a and b are what each stage
+ * wants to say (1: let go); the wire is 1 only if both let go; y reads it back.
+ */
+export function i2cWired2(): ComponentDef {
+  if (wired) return wired;
+  wired = define({
+    id: 'i2c_wired2', name: 'Wired-AND of two open-drain stages', category: 'cell',
+    summary: 'Two pads (an NMOS to ground each) and a pull-up resistor on one wire. Each input says what its stage wants: 1 lets go of the wire, 0 pulls it to ground. The wire is the AND of the two, with no gate in it.',
+    ports: [
+      { name: 'a', width: 1, dir: 'in' }, { name: 'b', width: 1, dir: 'in' },
+      { name: 'wire', width: 1, dir: 'out', tri: true, doc: 'the shared wire' },
+    ],
+    symbol: { kind: 'box', label: 'wired-AND', w: 10, h: 8 },
+    spec: ([a, b]) => [a & b],
+    netlist: () => ({
+      level: 'switch',
+      pins: { a: [1, 3], b: [1, 17], wire: [48, 10] },
+      instances: [
+        { name: 'ia', def: INV_CMOS, at: [5, 1] }, { name: 'ib', def: INV_CMOS, at: [5, 15] },
+        { name: 'pa', def: I2C_PAD, at: [14, 0], label: 'stage a' }, { name: 'pb', def: I2C_PAD, at: [14, 14], label: 'stage b' },
+        { name: 'pu', def: PULLUP, at: [34, 0] },
+      ],
+      nets: [
+        { name: 'a', ends: ['a', 'ia.a'] }, { name: 'b', ends: ['b', 'ib.a'] },
+        { name: 'low_a', ends: ['ia.y', 'pa.low'], tags: true }, { name: 'low_b', ends: ['ib.y', 'pb.low'], tags: true },
+        { name: 'wire', ends: ['wire', 'pa.bus', 'pb.bus', 'pu.y'], trunk: 30 },
+      ],
+    }),
+  });
+  return wired;
 }

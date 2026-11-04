@@ -132,6 +132,7 @@ describe('the bus at switch level (pull-up resistors, open-drain NMOS, every NAN
     for (let c = 0; c < cycles; c++) {
       const rst = c < 2 ? 1 : 0;
       const ins: Record<string, number> = { rst };
+      targets.forEach((t, i) => { ins[`stretch${i}`] = t.stretch ?? 0; });
       const pulls = { sda: [] as number[], scl: [] as number[] };
       mc.forEach((m, k) => {
         let go = 0, cmd = 0, din = 0;
@@ -154,6 +155,10 @@ describe('the bus at switch level (pull-up resistors, open-drain NMOS, every NAN
     const { mt } = await compare([[[START, 0], addrW(0x50), [WRITE, 2], [WRITE, 0x6b], [STOP, 0]]], [{ adr: 0x50 }], 262);
     expect(mt[0].mem[2]).toBe(0x6b);
   }, 120000);
+  it('a target that stretches SCL: the pull-up bus follows the ideal AND while the target holds SCL low', async () => {
+    const { mc } = await compare([[[START, 0], addrW(0x50), [WRITE, 1], [START, 0], addrR(0x50), [READ, 1], [STOP, 0]]], [{ adr: 0x50, stretch: 6 }], 340);
+    expect(mc[0].lost).toBe(0);
+  }, 240000);
   it('two controllers start together on the switch-level bus: the one with the higher address loses in the first bit that differs', async () => {
     const sc = (a: number): Cmd[] => [[START, 0], addrW(a), [WRITE, 0], [WRITE, 0x3c], [STOP, 0]];
     const { mc, mt } = await compare([sc(0x50), sc(0x52)], [{ adr: 0x50 }], 262);

@@ -76,7 +76,7 @@ export class I2cTarget {
   step(i: TgtIn): void {
     const w = { ...this };
     this.sda_s = i.sda_i & 1; this.scl_s = i.scl_i & 1; this.sda_p = w.sda_s; this.scl_p = w.scl_s;
-    if (i.rst) { this.phase = T_IDLE; this.n = 0; this.sh = 0; this.rw = 0; this.ptr = 0; this.pnext = 0; this.mack = 0; this.sda_o = 0; this.scl_o = 0; this.wpend = 0; this.scnt = 0; return; }
+    if (i.rst) { this.mem = [0, 0, 0, 0]; this.phase = T_IDLE; this.n = 0; this.sh = 0; this.rw = 0; this.ptr = 0; this.pnext = 0; this.mack = 0; this.sda_o = 0; this.scl_o = 0; this.wpend = 0; this.scnt = 0; return; }
     const rise = w.scl_s === 1 && w.scl_p === 0, fall = w.scl_s === 0 && w.scl_p === 1;
     const start = w.scl_s === 1 && w.scl_p === 1 && w.sda_p === 1 && w.sda_s === 0;
     const stop = w.scl_s === 1 && w.scl_p === 1 && w.sda_p === 0 && w.sda_s === 1;
@@ -163,3 +163,71 @@ export function runBus(agents: BusAgent[], clocks: number, onClock?: (c: number,
     onClock?.(c, sda, scl);
   }
 }
+
+// ---- reading a bus ---------------------------------------------------------------------------------------------------
+
+export interface BusSample { sda: number; scl: number }
+export type BusEvent =
+  | { t: number; kind: 'start'; repeated: boolean }
+  | { t: number; kind: 'stop' }
+  | { t: number; kind: 'byte'; value: number; ack: boolean; index: number; address: boolean; read: boolean };
+
+/**
+ * What a passive observer of the two wires sees: START (SDA falls while SCL is high), STOP (SDA rises while SCL is high), and
+ * between them bytes, one bit per rising edge of SCL (SDA sampled on it), the ninth bit the acknowledge (0 = ACK). The first byte after a
+ * START is the address (7 bits and R/W), the rest data. Samples are taken once per clock; a START or STOP is a change of SDA seen
+ * with SCL high on both samples around it.
+ */
+export function decodeBus(samples: BusSample[]): BusEvent[] {
+  const ev: BusEvent[] = [];
+  let bits: number[] = [], idx = -1, rw = 0, open = false;
+  for (let t = 1; t < samples.length; t++) {
+    const a = samples[t - 1], b = samples[t];
+    if (a.scl && b.scl && a.sda && !b.sda) { ev.push({ t, kind: 'start', repeated: open }); bits = []; idx = 0; open = true; continue; }
+    if (a.scl && b.scl && !a.sda && b.sda) { ev.push({ t, kind: 'stop' }); bits = []; idx = -1; open = false; continue; }
+    if (!a.scl && b.scl && idx >= 0) {
+      bits.push(b.sda);
+      if (bits.length === 9) {
+        const value = bits.slice(0, 8).reduce((x, y) => (x << 1) | y, 0);
+        const address = idx === 0;
+        if (address) rw = value & 1;
+        ev.push({ t, kind: 'byte', value: address ? value >> 1 : value, ack: bits[8] === 0, index: idx, address, read: !!rw });
+        idx++; bits = [];
+      }
+    }
+  }
+  return ev;
+}
+
+/** A frame in words: "S 0x50 W ✓ 0x01 ✓ 0xA7 ✓ P". */
+export function describeBus(ev: BusEvent[]): string {
+  const hex = (x: number) => `0x${x.toString(16).toUpperCase().padStart(2, '0')}`;
+  return ev.map((e) => (e.kind === 'start' ? (e.repeated ? 'Sr' : 'S') : e.kind === 'stop' ? 'P' : `${hex(e.value)}${e.address ? (e.read ? ' R' : ' W') : ''}${e.ack ? ' ACK' : ' NACK'}`)).join('  ');
+}
+
+// ---- the pull-up -----------------------------------------------------------------------------------------------------
+
+/** The I²C-bus specification's modes (NXP UM10204, table of timing and electrical limits): the clock, the longest rise time, the largest bus capacitance, the sink current at VOL. */
+export interface I2cMode { name: string; fscl: number; trMax: number; cbMax: number; iol: number }
+export const I2C_MODES: I2cMode[] = [
+  { name: 'Standard-mode', fscl: 100e3, trMax: 1000e-9, cbMax: 400e-12, iol: 3e-3 },
+  { name: 'Fast-mode', fscl: 400e3, trMax: 300e-9, cbMax: 400e-12, iol: 3e-3 },
+  { name: 'Fast-mode Plus', fscl: 1e6, trMax: 120e-9, cbMax: 550e-12, iol: 20e-3 },
+];
+/** The spec measures a rise from 30 % to 70 % of VDD: t = R C ln(0.7 / 0.3). */
+export const RISE_30_70 = Math.log(0.7 / 0.3);
+/** VOL(max) of the spec, the level a pad must hold while sinking `iol`. */
+export const VOL_MAX = 0.4;
+/** 30 % to 70 % rise time (s) of a wire of capacitance c (F) pulled up by r (Ω). */
+export const riseTime = (r: number, c: number): number => RISE_30_70 * r * c;
+/** The largest pull-up that still meets a mode's rise time on c, and the smallest one the pad can sink at VDD. */
+export const rpMax = (mode: I2cMode, c: number): number => mode.trMax / (RISE_30_70 * c);
+export const rpMin = (mode: I2cMode, vdd: number): number => (vdd - VOL_MAX) / mode.iol;
+/** Does any pull-up work for this mode, bus capacitance and supply? */
+export const feasible = (mode: I2cMode, c: number, vdd: number): boolean => c <= mode.cbMax && rpMax(mode, c) >= rpMin(mode, vdd);
+/** The fastest mode that works, or null. */
+export const fastestMode = (c: number, vdd: number): I2cMode | null => [...I2C_MODES].reverse().find((m) => feasible(m, c, vdd)) ?? null;
+/** Static current (A) and power (W) while a line is held low through r. */
+export const lowCurrent = (r: number, vdd: number): number => (vdd - VOL_MAX) / r;
+/** Energy (J) a line draws from the supply in one low-then-high cycle: charging C through r (C V²) plus the static draw for `lowTime`. */
+export const cycleEnergy = (r: number, c: number, vdd: number, lowTime: number): number => c * vdd * vdd + vdd * lowCurrent(r, vdd) * lowTime;

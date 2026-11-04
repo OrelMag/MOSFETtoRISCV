@@ -33,16 +33,17 @@ export function spiTrace(m: SpiMode, tx: number, rx: number): SpiTrace {
 
 // ---- the master -------------------------------------------------------------------------------------------------------
 
-export interface MasterIn { rst: number; start: number; cpol: number; cpha: number; tx: number; miso: number }
+export interface MasterIn { rst: number; start: number; hold: number; cpol: number; cpha: number; tx: number; miso: number }
 export interface MasterOut { sclk: number; mosi: number; cs_n: number; rx: number; busy: number; done: number }
 
 /**
  * Registers: busy, ph (the prescaler: SCLK edges every second clock), cnt (5 bits: edges so far, 16 = the tail), sh (transmit bits
- * leave at the top as receive bits enter at the bottom), mo (the MOSI flip-flop), sclk, done. CS is not a flip-flop: cs_n = not busy.
+ * leave at the top as receive bits enter at the bottom), mo (the MOSI flip-flop), sclk, done. CS is not a flip-flop: cs_n = not (busy or hold), where hold is an input that keeps CS low between the bytes of one transaction.
  */
 export class SpiMaster {
-  busy = 0; ph = 0; cnt = 0; sh = 0; mo = 0; sclk = 0; done = 0;
+  busy = 0; ph = 0; cnt = 0; sh = 0; mo = 0; sclk = 0; done = 0; hold = 0;
   step(i: MasterIn): void {
+    this.hold = i.hold & 1;
     if (i.rst) { this.busy = 0; this.ph = 0; this.cnt = 0; this.sh = 0; this.mo = 0; this.sclk = 0; this.done = 0; return; }
     if (!this.busy) {
       this.done = 0;
@@ -62,7 +63,7 @@ export class SpiMaster {
     if (sample) this.sh = ((this.sh << 1) | (i.miso & 1)) & 255;
     else this.mo = (this.sh >> 7) & 1;
   }
-  get out(): MasterOut { return { sclk: this.sclk, mosi: this.mo, cs_n: this.busy ? 0 : 1, rx: this.sh, busy: this.busy, done: this.done }; }
+  get out(): MasterOut { return { sclk: this.sclk, mosi: this.mo, cs_n: this.busy || this.hold ? 0 : 1, rx: this.sh, busy: this.busy, done: this.done }; }
 }
 
 // ---- the target -------------------------------------------------------------------------------------------------------
@@ -120,4 +121,13 @@ export function spiTransfer(t: SpiTarget, bytes: number[]): number[] {
   }
   t.csHigh();
   return got;
+}
+
+/**
+ * What a peer in `m` puts on MISO after `changes` change edges of one byte (CPHA 0: bit 7 is on the line before the first
+ * edge; CPHA 1: it appears at the first, leading edge).
+ */
+export function peerMiso(m: SpiMode, byte: number, changes: number): number {
+  const i = m.cpha === 0 ? changes : changes - 1;
+  return i >= 0 && i <= 7 ? (byte >> (7 - i)) & 1 : 0;
 }

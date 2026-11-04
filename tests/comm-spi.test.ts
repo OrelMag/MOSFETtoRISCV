@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { edgeKind, modeNumber, SPI_MODES, spiTransfer, spiTrace, SpiMaster, SpiTarget, SPI_READ, SPI_WRITE } from '../src/comm/spi';
-import { spiDevice, spiMaster } from '../src/lib/spi';
+import { masterRun, spiDevice, spiMaster } from '../src/lib/spi';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -16,11 +16,11 @@ describe('SPI master', () => {
       const gate = simulate(spiMaster());
       const model = new SpiMaster();
       const rnd = lcg(40 + modeNumber(mode));
-      set(gate, { rst: 1, start: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
-      tickClk(gate); model.step({ rst: 1, start: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
+      set(gate, { rst: 1, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
+      tickClk(gate); model.step({ rst: 1, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
       let bytes = 0;
       for (let c = 0; c < 900; c++) {
-        const i = { rst: 0, start: rnd(6) === 0 ? 1 : 0, cpol: mode.cpol, cpha: mode.cpha, tx: rnd(256), miso: rnd(2) };
+        const i = { rst: 0, start: rnd(6) === 0 ? 1 : 0, hold: rnd(3) === 0 ? 1 : 0, cpol: mode.cpol, cpha: mode.cpha, tx: rnd(256), miso: rnd(2) };
         set(gate, i);
         tickClk(gate); model.step(i);
         const o = model.out;
@@ -35,15 +35,15 @@ describe('SPI master', () => {
     for (const mode of SPI_MODES) {
       const m = new SpiMaster();
       const tx = 0xa5, peer = 0x3c;
-      m.step({ rst: 1, start: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
-      m.step({ rst: 0, start: 1, cpol: mode.cpol, cpha: mode.cpha, tx, miso: 0 });
+      m.step({ rst: 1, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso: 0 });
+      m.step({ rst: 0, start: 1, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx, miso: 0 });
       const seen: number[] = [];
       let edges = 0, prevS = m.out.sclk, bit = 0;
       for (let c = 0; c < 80 && m.out.cs_n === 0; c++) {
         const o = m.out;
         // the peer drives the bit after the change edge; here a model of the target in this mode
         const miso = (peer >> (7 - Math.min(bit, 7))) & 1;
-        m.step({ rst: 0, start: 0, cpol: mode.cpol, cpha: mode.cpha, tx, miso });
+        m.step({ rst: 0, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx, miso });
         if (m.out.sclk !== prevS) {
           const e = edges++;
           if (edgeKind(mode, e).sample) { seen.push(o.mosi); bit++; }
@@ -115,4 +115,19 @@ describe('SPI target', () => {
       await yieldTick();
     }
   });
+});
+
+describe('masterRun (the waveform widget\'s source)', () => {
+  for (const mode of SPI_MODES) {
+    it(`mode ${modeNumber(mode)}: the gates shift 0xA5 out and read the peer's 0x3C, sampling on the edges the mode says`, () => {
+      const r = masterRun(mode, 0xa5, 0x3c);
+      expect(r.rx).toBe(0x3c);
+      expect(r.edges).toHaveLength(16);
+      const bitsOut = r.edges.filter((_, e) => edgeKind(mode, e).sample).map((c) => r.clocks[c - 1].mosi);
+      expect(bitsOut.reduce((a, b) => (a << 1) | b, 0), 'MOSI at the sample edges').toBe(0xa5);
+      const bitsIn = r.edges.filter((_, e) => edgeKind(mode, e).sample).map((c) => r.clocks[c - 1].miso);
+      expect(bitsIn.reduce((a, b) => (a << 1) | b, 0), 'MISO at the sample edges').toBe(0x3c);
+      expect(r.clocks[r.edges[0] - 1].sclk).toBe(mode.cpol);
+    });
+  }
 });
