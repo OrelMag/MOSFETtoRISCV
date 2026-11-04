@@ -437,6 +437,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "flash", num: 37, title: "Flash", blurb: "The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.", level: "Memory in depth", builds: ["mosfet","memory"], recap: {"checks":3}, steps: [
     { title: "A gate that remembers", challenge: "quiz" },
+    { title: "The floating gate, up close" },
     { title: "Program and erase", challenge: "reach" },
     { title: "NOR and NAND", challenge: "quiz" },
     { title: "Never overwrite", challenge: "quiz" },
