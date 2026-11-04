@@ -31,7 +31,6 @@ import {
 } from './ops';
 import type { PaletteItem } from './palette';
 import { matches, shortcutAllowed } from '../ui/keys';
-import { LongPress } from '../ui/longpress';
 
 type State =
   | { k: 'idle' }
@@ -79,9 +78,6 @@ export class Tools {
   /** The last press came from a finger: ports are hit from further away (tol). */
   private touch = false;
   private buttonHeld: PinDoc | null = null;
-  /** iOS sends no contextmenu for a long press: time it (ui/longpress.ts); Android's own event is dropped as a duplicate. */
-  private long = new LongPress((x, y) => this.longPressed(x, y));
-  private pressTarget: EventTarget | null = null;
   private off: (() => void)[] = [];
   /**
    * A mode that takes clicks first (probing): true when it consumed the press; a function to run if the press stays a
@@ -105,7 +101,7 @@ export class Tools {
     on(svg, 'pointerdown', (e) => this.down(e));
     on(svg, 'pointermove', (e) => this.move(e));
     on(svg, 'pointerup', (e) => this.up(e));
-    on(svg, 'pointercancel', (e) => { this.long.release(e.pointerId); this.cancel(); });
+    on(svg, 'pointercancel', () => this.cancel());
     on(svg, 'dblclick', (e) => this.dbl(e));
     on(svg, 'contextmenu', (e) => this.context(e));
     on(svg, 'pointerleave', () => {
@@ -128,7 +124,6 @@ export class Tools {
    * wire being drawn or a part being placed carries on after the zoom.
    */
   private pinched(): void {
-    this.long.cancel();
     const st = this.state;
     if (st.k === 'press' || st.k === 'move' || st.k === 'reshape' || st.k === 'band') this.cancel();
     else if (st.k === 'wire') st.held = false;
@@ -187,7 +182,6 @@ export class Tools {
     e.preventDefault();
     const act = document.activeElement as HTMLElement | null;
     if (act && act !== document.body && !this.ed.view.svg.contains(act)) act.blur();
-    if (e.pointerType === 'touch') { this.long.press(e.pointerId, e.clientX, e.clientY); this.pressTarget = e.target; }
     if (this.panning || e.button !== 0) return;
     this.touch = e.pointerType === 'touch';
     const ed = this.ed;
@@ -251,7 +245,6 @@ export class Tools {
   }
 
   private move(e: PointerEvent): void {
-    this.long.move(e.pointerId, e.clientX, e.clientY);
     if (this.panning) return;
     const ed = this.ed;
     const p = this.world(e);
@@ -260,7 +253,6 @@ export class Tools {
     switch (st.k) {
       case 'press': {
         if (Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < DRAG_PX) return;
-        this.long.cancel();
         // Dragged out of a knob's port side: a wire from the pin, as from its connection point.
         if (st.wire) {
           if (this.buttonHeld) this.release();
@@ -318,7 +310,6 @@ export class Tools {
   }
 
   private up(e: PointerEvent): void {
-    this.long.release(e.pointerId);
     const ed = this.ed;
     if (ed.view.svg.hasPointerCapture(e.pointerId)) ed.view.svg.releasePointerCapture(e.pointerId);
     if (this.panning) { this.panning = false; return; }
@@ -448,31 +439,16 @@ export class Tools {
   /** Right-click: cancel what is in progress, else the actions for what is under the cursor. */
   private context(e: MouseEvent): void {
     e.preventDefault();
-    // Android's long press, when the timer already opened the menu for it
-    if (this.long.duplicate()) return;
-    this.contextAt(e.clientX, e.clientY, e.target);
-  }
-
-  /** The timer's firing: a press still held on the spot (not a drag, not a wire or part being placed) is a right-click. */
-  private longPressed(x: number, y: number): void {
-    const k = this.state.k;
-    if (k !== 'press' && k !== 'band') return;
-    if (this.buttonHeld) this.release();
-    this.cancel();
-    this.contextAt(x, y, this.pressTarget);
-  }
-
-  private contextAt(cx: number, cy: number, target0: EventTarget | null): void {
     if (this.state.k === 'wire' || this.state.k === 'place' || (this.state.k === 'reshape' && this.state.hover)) return this.cancel();
     if (this.state.k !== 'idle') return;
     const ed = this.ed;
-    const p = this.world({ clientX: cx, clientY: cy });
+    const p = this.world(e);
     this.cursor = p;
-    const h = nameHit(target0) ?? this.hit(p);
+    const h = nameHit(e.target) ?? this.hit(p);
     const target: Hit = h.k === 'port' ? hitOwner(h) : h;
     if (target.k !== 'none' && !this.isSelected(target)) ed.select(selOf(target));
     if (target.k === 'none' && ed.selCount) ed.select({});
-    this.onContext?.(cx, cy, p);
+    this.onContext?.(e.clientX, e.clientY, p);
   }
 
   /** Rename the one selected object (F2). */
