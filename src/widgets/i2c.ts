@@ -81,7 +81,7 @@ export function pullupWidget(): Widget {
     }));
     note.textContent = `${best ? `At ${cpf} pF and ${vdd} V the fastest mode with a legal pull-up is ${best.name} (${best.fscl / 1e3} kHz).` : `At ${cpf} pF and ${vdd} V no mode has a legal pull-up.`} Bars: R from 100 Ω to 100 kΩ on a log axis; the marker is your R.`;
   };
-  const vSl = slider('Supply', 1.8, 5, 0.1, vdd, (v) => `${nf(v, 1)} V`, (v) => { vdd = v; paint(); });
+  const vSl = slider('Supply', 2, 5, 0.1, vdd, (v) => `${nf(v, 1)} V`, (v) => { vdd = v; paint(); });
   const cSl = slider('Bus capacitance', 10, 600, 5, cpf, (v) => `${v} pF`, (v) => { cpf = v; paint(); });
   const rSl = slider('Pull-up R', 2, 5, 0.01, lr, (v) => ohms(10 ** v), (v) => { lr = v; paint(); });
   const sel = h('select', { class: 'mc-sel', 'aria-label': 'I²C mode' }) as HTMLSelectElement;
@@ -91,7 +91,7 @@ export function pullupWidget(): Widget {
   const el = h('div', { class: 'widget mos clk-w' },
     h('div', { class: 'panel' }, h('h3', null, 'A 1 is a capacitor charging through a resistor'), svg, h('div', { class: 'mos-row' }, sel),
       h('div', { class: 'mos-row' }, rSl.el, cSl.el, vSl.el), h('div', { class: 'mos-chips' }, ...chips), verdict, limits, note,
-      h('p', { class: 'sub mos-note' }, `Rise time is measured 30 % to 70 % of VDD: t = R C ln(0.7 / 0.3) = ${nf(RISE_30_70, 4)} R C. Limits (rise time, bus capacitance, sink current at ${VOL_MAX} V) are those of NXP UM10204, the I²C-bus specification: Standard-mode 1000 ns, Fast-mode 300 ns, Fast-mode Plus 120 ns; 400, 400 and 550 pF; 3, 3 and 20 mA. The pad's own strength is not modelled; the curve is the ideal RC.`)));
+      h('p', { class: 'sub mos-note' }, `Rise time is measured 30 % to 70 % of VDD: t = R C ln(0.7 / 0.3) = ${nf(RISE_30_70, 4)} R C. Limits (rise time, bus capacitance, sink current at ${VOL_MAX} V) are those of NXP UM10204, the I²C-bus specification: Standard-mode 1000 ns, Fast-mode 300 ns, Fast-mode Plus 120 ns; 400, 400 and 550 pF; 3, 3 and 20 mA. VDD is kept above 2 V (below it the spec's low level is 0.2 VDD). The pad's own strength is not modelled; the curve is the ideal RC.`)));
   paint();
   return { el };
 }

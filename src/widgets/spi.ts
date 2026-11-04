@@ -73,12 +73,12 @@ export function frameCompareWidget(): Widget {
       const inFrame = k >= lead && k < lead + Q + 8 * Q + Q;
       cs.push(inFrame ? 0 : 1);
       const rel = t; // slot index from the first clock edge
-      sclk.push(rel >= 0 && rel < 8 * Q ? (Math.floor(rel / (Q / 2)) % 2 === 0 ? 1 : 0) : 0);
+      sclk.push(rel >= 0 && rel < 8 * Q ? (rel % Q >= Q / 2 ? 1 : 0) : 0); // mode 0: the data change on the falling edge, so a rising edge mid-bit samples a steady bit
       const bi = rel < 0 ? 0 : Math.min(7, Math.floor(rel / Q));
       mosi.push(inFrame ? (byte >> (7 - bi)) & 1 : 1);
     }
     for (let i = 0; i < 8; i++) sspans.push({ from: lead + Q + i * Q, to: lead + Q + (i + 1) * Q, text: String((byte >> (7 - i)) & 1) });
-    const marks: WaveMarks[] = Array.from({ length: 8 }, (_, i) => ({ x: lead + Q + i * Q, kind: 'sample' as const }));
+    const marks: WaveMarks[] = Array.from({ length: 8 }, (_, i) => ({ x: lead + Q + i * Q + Q / 2, kind: 'sample' as const }));
     const svg = waveSvg([
       { label: 'UART', bits: uart, spans: uspans, cls: 'mosi' },
       { label: 'CS', bits: cs, cls: 'cs' },
@@ -158,7 +158,7 @@ export function spiChainWidget(): Widget {
       h('thead', null, h('tr', null, h('th'), h('th', null, 'One CS per device'), h('th', null, 'Daisy chain'))),
       h('tbody', null,
         row('Wires from the master', `${3 + n} (SCLK, MOSI, MISO, ${n} CS)`, '4 (SCLK, MOSI, MISO, one CS)'),
-        row('Master pins, with a 1-of-n decoder', `${3 + k + 1} pins, ${dec} NANDs of decoder`, '4 pins'),
+        row('Master pins, with a 1-of-n decoder', n === 1 ? '4 pins' : `${3 + k + 1} pins, ${dec} NANDs of decoder`, '4 pins'),
         row('Bytes to change one device', '1 register byte (plus command)', `${n} bytes: the data pass through every device (each shifts the next one's)`),
         row(`Time at ${mhz} MHz SCLK`, `${(tByte * 1e6).toFixed(2)} µs a byte`, `${(n * tByte * 1e6).toFixed(2)} µs for the whole chain`),
         row('Reading device j back', 'its own CS, any order', `${n} bytes, the answer arrives j bytes later`),
@@ -246,7 +246,7 @@ export const spiPanel: ScenePanel = (stage: Stage): Widget => {
 
 /** The master and two memories, with the transaction panel. */
 export function spiScene(): Scene {
-  return { root: spiPair(), inputs: { sel: 0, mode3: 0, tx: 0, start: 0, hold: 0, rst: 0 }, clock: 'clk', autoClock: false, hiddenInputs: ['tx', 'start', 'hold', 'rst'], panels: [spiPanel], memory: false };
+  return { root: spiPair(), inputs: { sel: 0, tx: 0, start: 0, hold: 0, rst: 0 }, clock: 'clk', autoClock: false, hiddenInputs: ['tx', 'start', 'hold', 'rst'], panels: [spiPanel], memory: false };
 }
 
 export { spiDevice };

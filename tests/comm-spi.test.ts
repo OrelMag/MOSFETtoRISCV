@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { edgeKind, modeNumber, SPI_MODES, spiTransfer, SpiMaster, SpiTarget, SPI_READ, SPI_WRITE } from '../src/comm/spi';
-import { masterRun, spiDevice, spiMaster } from '../src/lib/spi';
+import { masterRun, spiDevice, spiMaster, spiPair } from '../src/lib/spi';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -130,4 +130,19 @@ describe('masterRun (the waveform widget\'s source)', () => {
       expect(r.clocks[r.edges[0] - 1].sclk).toBe(mode.cpol);
     });
   }
+});
+
+describe('the master with two memories (the chapter\'s scene)', () => {
+  it('writes and reads back through the real master and memory gates; each chip select reaches its own memory; the master is in mode 0', async () => {
+    const g = simulate(spiPair());
+    const set = (v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) g.setInput(k, x); g.settle(); };
+    const tick = () => { set({ clk: 1 }); set({ clk: 0 }); };
+    set({ rst: 1, start: 0, hold: 0, sel: 1, tx: 0 }); tick(); set({ rst: 0 });
+    const xfer = (tx: number) => { set({ tx, start: 1, hold: 1 }); tick(); set({ start: 0 }); let n = 0; while (!out(g, 'done') && n++ < 100) tick(); tick(); return out(g, 'rx'); };
+    const txn = (sel: number, bytes: number[]) => { set({ sel }); const r = bytes.map(xfer); set({ hold: 0 }); tick(); tick(); return r; };
+    txn(1, [SPI_WRITE, 0x10, 0xa5, 0x5a, 0x3c]);
+    expect(txn(1, [SPI_READ, 0x10, 0, 0, 0]).slice(2)).toEqual([0xa5, 0x5a, 0x3c]);
+    expect(txn(0, [SPI_READ, 0x10, 0, 0, 0]).slice(2)).toEqual([0, 0, 0]);
+    await yieldTick();
+  });
 });

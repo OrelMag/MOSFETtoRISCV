@@ -4,6 +4,7 @@
 
 import { symbolGeom } from '../sim/geometry';
 import { OR, NOT } from './gates';
+import { TIE0 } from './transistors';
 import { Rtl } from './rtl';
 import { bigRam } from './bigmem';
 import { define } from './define';
@@ -24,9 +25,10 @@ export function spiMaster(): ComponentDef {
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), hold = m.input('hold'), cpol = m.input('cpol'), cpha = m.input('cpha');
   const tx = m.inputBus('tx', 8), miso = m.input('miso');
   const rstn = m.not(rst);
-  const busy = m.reg(clk, 'busy'), ph = m.reg(clk, 'ph'), done = m.reg(clk, 'done'), sclk = m.reg(clk, 'sclk_q'), mo = m.reg(clk, 'mo');
-  const cnt = [0, 1, 2, 3, 4].map((i) => m.reg(clk, `cnt${i}`));
-  const sh = tx.map((_, i) => m.reg(clk, `sh${i}`));
+  const DIV: [string, string] = ['div', 'prescaler, edge counter'], CTL: [string, string] = ['ctl', 'busy, SCLK, done'], SHF: [string, string] = ['shift', 'shift register, MOSI'];
+  const busy = m.reg(clk, 'busy', CTL), done = m.reg(clk, 'done', CTL), sclk = m.reg(clk, 'sclk_q', CTL);
+  const ph = m.reg(clk, 'ph', DIV), cnt = [0, 1, 2, 3, 4].map((i) => m.reg(clk, `cnt${i}`, DIV));
+  const mo = m.reg(clk, 'mo', SHF), sh = tx.map((_, i) => m.reg(clk, `sh${i}`, SHF));
   const { tick, edge, endt, bz } = m.scope('div', 'prescaler, edge counter', () => {
     const tick = m.name(m.and(busy, ph), 'tick');
     const tail = cnt[4];
@@ -63,7 +65,9 @@ export function spiMaster(): ComponentDef {
 let device: ComponentDef | undefined;
 
 /**
- * The target: 256 bytes behind the 25-series command set in mode 0 or 3 (the two sample on the same edge). Everything inside is
+ * The target: 256 bytes behind a subset of the 25-series command set (read 0x03, write 0x02; real parts also need a write-enable command and
+ * wrap writes within a page) in mode 0. It is not a mode 3 part: its last byte of a write is committed on the falling edge after the eighth rising
+ * edge, which a mode 3 master (SCLK idles high) never makes before it raises CS; a real part commits on CS rising. Everything inside is
  * clocked by SCLK itself, rising for what it samples and falling for what it changes, and reset while CS is high; there is no
  * system clock. MISO is 0 while CS is high (a real part lets go of the line there; the switch-level bus of chapters 5 and 44 can show that).
  */
@@ -71,17 +75,18 @@ export function spiDevice(): ComponentDef {
   if (device) return device;
   const m = new Rtl({
     id: 'spi_device', name: 'SPI memory', category: 'memory', label: 'SPI memory 256 B',
-    summary: '256 bytes behind an SPI port: command 0x03 reads from an address on, 0x02 writes, address and data auto-increment while CS stays low. Clocked by SCLK alone: sampled on the rising edge, shifted out on the falling edge.',
+    summary: '256 bytes behind an SPI port, mode 0: command 0x03 reads from an address on, 0x02 writes, address and data auto-increment while CS stays low. Clocked by SCLK alone: sampled on the rising edge, shifted out on the falling edge.',
   });
   const sclk = m.input('sclk', { clock: true }), csn = m.input('cs_n'), mosi = m.input('mosi');
   const cs = m.not(csn);
   const nsclk = m.not(sclk);
-  const cnt = [0, 1, 2].map((i) => m.regR(sclk, cs, `bcnt${i}`));
-  const sh = Array.from({ length: 8 }, (_, i) => m.regR(sclk, cs, `rsh${i}`));
-  const any = m.regR(sclk, cs, 'any');
-  const A = m.regR(nsclk, cs, 'A'), B = m.regR(nsclk, cs, 'B'), rd = m.regR(nsclk, cs, 'rd'), wr = m.regR(nsclk, cs, 'wr');
-  const addr = Array.from({ length: 8 }, (_, i) => m.regR(nsclk, cs, `addr${i}`));
-  const osh = Array.from({ length: 8 }, (_, i) => m.regR(nsclk, cs, `osh${i}`));
+  const IN: [string, string] = ['in', 'bit counter, input shift'], ST: [string, string] = ['state', 'command, address, data'], AD: [string, string] = ['addr', 'address, +1'], OUT: [string, string] = ['out', 'output shift register'];
+  const cnt = [0, 1, 2].map((i) => m.regR(sclk, cs, `bcnt${i}`, IN));
+  const sh = Array.from({ length: 8 }, (_, i) => m.regR(sclk, cs, `rsh${i}`, IN));
+  const any = m.regR(sclk, cs, 'any', IN);
+  const A = m.regR(nsclk, cs, 'A', ST), B = m.regR(nsclk, cs, 'B', ST), rd = m.regR(nsclk, cs, 'rd', ST), wr = m.regR(nsclk, cs, 'wr', ST);
+  const addr = Array.from({ length: 8 }, (_, i) => m.regR(nsclk, cs, `addr${i}`, AD));
+  const osh = Array.from({ length: 8 }, (_, i) => m.regR(nsclk, cs, `osh${i}`, OUT));
   m.scope('in', 'bit counter, input shift', () => {
     const up = m.inc(cnt);
     cnt.forEach((c, i) => m.setD(c, up[i]));
@@ -125,7 +130,7 @@ let pair: ComponentDef | undefined;
 
 /**
  * Chapter 44's scene: one master and two 256-byte memories on SCLK, MOSI and MISO, with a chip select each: `sel` chooses which
- * select follows the master's; mode3 sets CPOL = CPHA (the memories take mode 0 or 3). Placed by hand: the master left, the two
+ * select follows the master's; the master runs in mode 0 (the memories' only mode). Placed by hand: the master left, the two
  * memories right, the select glue between, every wire a net label.
  */
 export function spiPair(): ComponentDef {
@@ -137,7 +142,6 @@ export function spiPair(): ComponentDef {
   const pins: Record<string, [number, number]> = {};
   for (const p of ['rst', 'start', 'hold', 'tx']) pins[p] = [0, pm(p)[1]];
   pins.clk = [pm('clk')[0], my + mg.h + 5];
-  pins.mode3 = [0, pm('cpol')[1]];
   pins.sel = [0, my + mg.h + 6];
   const W = dx + dg.w + 22;
   const rightY = (p: string) => pm(p)[1];
@@ -147,6 +151,7 @@ export function spiPair(): ComponentDef {
   const gy = my + mg.h + 4;
   const instances = [
     { name: 'master', def: M, at: [mx, my] as [number, number], label: 'controller' },
+    { name: 'tie0', def: TIE0, at: [mx - 8, my + 2] as [number, number] },
     { name: 'nsel', def: NOT, at: [gx, gy + 6] as [number, number] },
     { name: 'or0', def: OR, at: [gx, gy] as [number, number], label: 'CS 0' },
     { name: 'or1', def: OR, at: [gx + 8, gy + 6] as [number, number], label: 'CS 1' },
@@ -157,7 +162,7 @@ export function spiPair(): ComponentDef {
   void og; void ng;
   const nets: NetDef[] = [
     { name: 'clk', ends: ['clk', 'master.clk'] }, { name: 'rst', ends: ['rst', 'master.rst'] }, { name: 'start', ends: ['start', 'master.start'] },
-    { name: 'hold', ends: ['hold', 'master.hold'] }, { name: 'tx', ends: ['tx', 'master.tx'] }, { name: 'mode3', ends: ['mode3', 'master.cpol', 'master.cpha'], tags: true },
+    { name: 'hold', ends: ['hold', 'master.hold'] }, { name: 'tx', ends: ['tx', 'master.tx'] }, { name: 'mode0', ends: ['tie0.y', 'master.cpol', 'master.cpha'], tags: true },
     { name: 'sel', ends: ['sel', 'or0.b', 'nsel.a'], tags: true }, { name: 'nsel', ends: ['nsel.y', 'or1.b'], tags: true },
     { name: 'cs_n', ends: ['master.cs_n', 'or0.a', 'or1.a'], tags: true },
     { name: 'cs0_n', ends: ['or0.y', 'mem0.cs_n', 'cs0_n'], tags: true }, { name: 'cs1_n', ends: ['or1.y', 'mem1.cs_n', 'cs1_n'], tags: true },
@@ -171,7 +176,7 @@ export function spiPair(): ComponentDef {
     summary: 'A master and two 256-byte SPI memories on SCLK, MOSI and MISO, with a chip select each: sel chooses which one is addressed. MISO is the OR of the two (a real part lets go of the line while its CS is high).',
     ports: [
       { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, { name: 'rst', width: 1, dir: 'in' }, { name: 'start', width: 1, dir: 'in' }, { name: 'hold', width: 1, dir: 'in' },
-      { name: 'sel', width: 1, dir: 'in' }, { name: 'mode3', width: 1, dir: 'in' }, { name: 'tx', width: 8, dir: 'in' },
+      { name: 'sel', width: 1, dir: 'in' }, { name: 'tx', width: 8, dir: 'in' },
       { name: 'rx', width: 8, dir: 'out' }, { name: 'busy', width: 1, dir: 'out' }, { name: 'done', width: 1, dir: 'out' },
       { name: 'sclk', width: 1, dir: 'out' }, { name: 'mosi', width: 1, dir: 'out' }, { name: 'miso', width: 1, dir: 'out' }, { name: 'cs0_n', width: 1, dir: 'out' }, { name: 'cs1_n', width: 1, dir: 'out' },
     ],
