@@ -23,10 +23,19 @@ export type MenuEntry = Item | null;
 type Entry = MenuEntry;
 
 let menu: HTMLElement | null = null;
+/** What had the focus when the menu opened: Esc gives it back. */
+let opener: HTMLElement | null = null;
 const onOutside = (e: PointerEvent) => { if (menu && !menu.contains(e.target as Node)) closeContextMenu(); };
 const onKey = (e: KeyboardEvent) => {
   if (!menu) return;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeContextMenu(); return; }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    const back = opener;
+    closeContextMenu();
+    if (back?.isConnected) back.focus({ preventScroll: true });
+    return;
+  }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   e.preventDefault();
   e.stopPropagation();
@@ -186,6 +195,7 @@ export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLEle
   const w = m.offsetWidth, hh = m.offsetHeight;
   m.style.left = `${Math.max(8, x + w > innerWidth - 8 ? x - w : x)}px`;
   m.style.top = `${Math.max(8, y + hh > innerHeight - 8 ? y - hh : y)}px`;
+  opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
   m.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();

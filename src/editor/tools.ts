@@ -11,6 +11,7 @@
 
 import { type ExitDir, orientExit, type Rot, type Vec } from '../sim/geometry';
 import { installPanZoom } from '../view/camera';
+import { installHold } from '../ui/holdpress';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
 import { s } from '../ui/dom';
@@ -78,6 +79,8 @@ export class Tools {
   /** The last press came from a finger: ports are hit from further away (tol). */
   private touch = false;
   private buttonHeld: PinDoc | null = null;
+  /** A hold just opened the menu: the contextmenu some browsers send for the same press is dropped. */
+  private holdQuiet: () => boolean = () => false;
   private off: (() => void)[] = [];
   /**
    * A mode that takes clicks first (probing): true when it consumed the press; a function to run if the press stays a
@@ -104,6 +107,10 @@ export class Tools {
     on(svg, 'pointercancel', () => this.cancel());
     on(svg, 'dblclick', (e) => this.dbl(e));
     on(svg, 'contextmenu', (e) => this.context(e));
+    // A held finger is the right-click (no browser sends a contextmenu for it everywhere): same menu, same rules.
+    const held = installHold(svg, { accept: () => this.state.k === 'press' || this.state.k === 'band', onHold: (x, y) => this.hold(x, y) });
+    this.off.push(held.off);
+    this.holdQuiet = held.quiet;
     on(svg, 'pointerleave', () => {
       if (this.state.k === 'place' && !this.state.drag) this.ed.view.showGhost(null);
       this.ed.view.showHot(null);
@@ -161,8 +168,8 @@ export class Tools {
   cancel(): void {
     const st = this.state;
     if (st.k === 'move' || st.k === 'reshape') this.ed.cancel();
-    // placed, or given up: the phone's "Tap the canvas to place …" hint has done its job
-    if (st.k === 'place') this.ed.endPlaceHint();
+    // placed, finished or given up: the touch screen's "armed" pill has done its job
+    this.ed.endMode();
     this.state = { k: 'idle' };
     this.ed.view.showPreview(null);
     this.ed.view.showBand(null);
@@ -439,16 +446,38 @@ export class Tools {
   /** Right-click: cancel what is in progress, else the actions for what is under the cursor. */
   private context(e: MouseEvent): void {
     e.preventDefault();
+    if (this.holdQuiet()) return;
     if (this.state.k === 'wire' || this.state.k === 'place' || (this.state.k === 'reshape' && this.state.hover)) return this.cancel();
     if (this.state.k !== 'idle') return;
-    const ed = this.ed;
     const p = this.world(e);
     this.cursor = p;
-    const h = nameHit(e.target) ?? this.hit(p);
+    this.menuFor(nameHit(e.target) ?? this.hit(p), e.clientX, e.clientY, p);
+  }
+
+  /** Select what the menu is for (what was under the press), then open it at a screen point. */
+  private menuFor(h: Hit, x: number, y: number, p: Vec): void {
+    const ed = this.ed;
     const target: Hit = h.k === 'port' ? hitOwner(h) : h;
     if (target.k !== 'none' && !this.isSelected(target)) ed.select(selOf(target));
     if (target.k === 'none' && ed.selCount) ed.select({});
-    this.onContext?.(e.clientX, e.clientY, p);
+    this.onContext?.(x, y, p);
+  }
+
+  /**
+   * A finger held still where a press began (hold.ts): the right-click menu for what is under it. The press that is
+   * still down (a part about to be dragged, a band, a held button) is let go first, so the lift does nothing.
+   */
+  private hold(x: number, y: number): boolean {
+    const st = this.state;
+    if (!this.onContext || (st.k !== 'press' && st.k !== 'band') || (st.k === 'press' && st.tap)) return false;
+    const hit: Hit = st.k === 'press' ? st.hit : { k: 'none' };
+    if (this.buttonHeld) this.release();
+    this.state = { k: 'idle' };
+    this.ed.view.showBand(null);
+    const p = this.world({ clientX: x, clientY: y });
+    this.cursor = p;
+    this.menuFor(st.k === 'press' ? hit : this.hit(p), x, y, p);
+    return true;
   }
 
   /** Rename the one selected object (F2). */
@@ -586,6 +615,7 @@ export class Tools {
     const g = 'wire' in from ? null : endGeom(ed.doc, from, ed.defOf);
     const draft = new WireDraft(from, pos, g?.exit ?? null, settings.simpleWires);
     this.state = { k: 'wire', draft, held: true, sx: e.clientX, sy: e.clientY };
+    if (this.touch) ed.showMode('Wire: tap a pin to finish, the canvas to bend');
     ed.view.svg.style.cursor = 'crosshair';
     this.previewWire(draft, this.world(e));
   }
@@ -655,8 +685,10 @@ export class Tools {
   /** Pointer down on a palette item: drag it out, or (released in place) arm it for a click. */
   pickFromPalette(item: PaletteItem, e: PointerEvent): void {
     const ed = this.ed;
-    this.cancel();
     const key = (e.currentTarget as HTMLElement | null)?.dataset.item ?? item.id;
+    // A finger on the item that is already armed lets it go (a touch screen has no Esc; the pill's Cancel does it too).
+    if (e.pointerType === 'touch' && this.state.k === 'place' && !this.state.drag && this.state.key === key) return this.cancel();
+    this.cancel();
     this.state = { k: 'place', item, drag: true, sx: e.clientX, sy: e.clientY, key };
     ed.palette.setArmed(key);
     const svg = ed.view.svg;
