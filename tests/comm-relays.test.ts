@@ -4,7 +4,7 @@ import { flatten } from '../src/sim/flatten';
 import { SwitchSim } from '../src/sim/switchsim';
 import { stats } from '../src/sim/stats';
 import { B1, type ComponentDef } from '../src/sim/types';
-import { DIAL_COUNTER, TELEGRAPH_RELAY, countStage, telegraphChain } from '../src/lib/telegraph';
+import { DIAL_COUNTER, DIAL_SELECTOR, TELEGRAPH_RELAY, countStage, telegraphChain } from '../src/lib/telegraph';
 
 const simOf = (def: ComponentDef) => new SwitchSim(flatten(def, { mode: 'switch' }));
 const out = (sim: SwitchSim, port: string) => sim.getBits(sim.design.root.ports[port]);
@@ -92,5 +92,49 @@ describe('the relay pulse counter', () => {
   it('costs 3 relays a bit and one to hang up', () => {
     expect(stats(DIAL_COUNTER).relays).toBe(10);
     expect(stats(countStage(0)).relays).toBe(3);
+  });
+});
+
+describe('the dial selector', () => {
+  const pulses = (sim: SwitchSim, n: number) => {
+    for (let i = 0; i < n; i++) { sim.setInput('pulse', 1); sim.settle(); sim.setInput('pulse', 0); sim.settle(); }
+  };
+  it('connects the caller line to output n after n pulses, and to no other', () => {
+    const sim = simOf(DIAL_SELECTOR);
+    sim.setInput('line', 1);
+    sim.settle();
+    expect(val(sim, 'y')).toBe(1);
+    for (let n = 1; n <= 8; n++) {
+      pulses(sim, 1);
+      expect(val(sim, 'count')).toBe(n & 7);
+      expect(val(sim, 'y'), `after ${n} pulses`).toBe(1 << (n & 7));
+    }
+  });
+  it('a dial of every digit, then hanging up', () => {
+    const sim = simOf(DIAL_SELECTOR);
+    sim.setInput('line', 1);
+    for (let d = 0; d < 8; d++) {
+      sim.setInput('hangup', 1); sim.settle(); sim.setInput('hangup', 0); sim.settle();
+      pulses(sim, d);
+      expect(val(sim, 'y'), `digit ${d}`).toBe(1 << d);
+    }
+    sim.setInput('hangup', 1);
+    sim.settle();
+    expect(val(sim, 'y')).toBe(1);
+  });
+  it('the tree is contacts on the slave relays: a line change settles in no relay step', () => {
+    const sim = simOf(DIAL_SELECTOR);
+    pulses(sim, 5);
+    sim.setInput('line', 1);
+    const t0 = sim.time;
+    sim.settle();
+    expect(sim.time - t0).toBe(0);
+    expect(val(sim, 'y')).toBe(1 << 5);
+    sim.setInput('line', 0);
+    sim.settle();
+    expect(val(sim, 'y')).toBe(0);
+  });
+  it('is the counter plus a tree: the same 10 relays', () => {
+    expect(stats(DIAL_SELECTOR).relays).toBe(stats(DIAL_COUNTER).relays);
   });
 });

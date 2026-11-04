@@ -116,7 +116,7 @@ export const countStage = memo((extra: number): ComponentDef => {
     id: `count_stage${extra ? `_${extra}` : ''}`, name: `Relay toggle stage${extra ? `, ${extra} tree pole${extra === 1 ? '' : 's'}` : ''}`, category: 'sequential',
     summary: 'Three relays: pulse relay, master and slave. Toggles on the falling edge of p, once per pulse however long it lasts; dropping the hold rail h clears it.',
     ports,
-    symbol: { kind: 'box', label: 'TOGGLE', w: Math.max(8, 2 * (1 + extra) + 2) },
+    symbol: { kind: 'box', label: 'TOGGLE', w: Math.max(8, 2 * Math.max(1 + extra, 2 * extra) + 2) },
     netlist: () => ({ level: 'switch', pins, instances, nets }),
   });
 });
@@ -155,4 +155,49 @@ export const DIAL_COUNTER: ComponentDef = define({
       { name: 'count', ends: ['ms.out', 'count'] },
     ],
   }),
+});
+
+/**
+ * A stepping selector: the counter's three stages with a contact tree on their slave relays. The caller's line passes
+ * through bit 0's changeover, then bit 1's, then bit 2's: after n pulses it is connected to output n of 8, and the other
+ * seven stay open. The tree is only contacts on relays that exist anyway, so selecting adds no relay step. Hanging up
+ * releases the stages and the line falls back to output 0.
+ *     level 1 (bit 0):  line → x[b0]            level 2 (bit 1): x[j] → z[j + 2 b1]
+ *     level 3 (bit 2):  z[j] → y[j + 4 b2]
+ */
+export const DIAL_SELECTOR: ComponentDef = define({
+  id: 'dial_selector', name: 'Dial selector, 1 of 8', category: 'routing',
+  summary: 'The pulse counter with a three-level contact tree: after n pulses the caller line is connected to output n. 10 relays, no extra step for the tree.',
+  ports: [bit('line', 'inout', 'left'), bit('pulse', 'in', 'left'), bit('hangup', 'in', 'left'), { name: 'count', width: 3, dir: 'out' }, { name: 'y', width: 8, dir: 'out' }],
+  symbol: { kind: 'box', label: 'SELECTOR', w: 14 },
+  netlist: () => {
+    const loads: InstanceDef[] = Array.from({ length: 8 }, (_, i) => load(`ld${i}`, [20 + 6 * i, 22]));
+    const nets: NetDef[] = [
+      { name: 'pulse', ends: ['pulse', 'st0.p'] }, { name: 'hangup', ends: ['hangup', 'hr.a'] },
+      { name: 'gnd', ends: ['hr.b', 'ghr.p'] }, { name: 'vdd', ends: ['vhr.p', 'hr.c'] },
+      { name: 'hold', ends: ['hr.nc', 'st0.h', 'st1.h', 'st2.h'], tags: true },
+      { name: 'n0', ends: ['st0.q', 'st1.p', 'mc.i0'], tags: ['mc.i0'] }, { name: 'n1', ends: ['st1.q', 'st2.p', 'mc.i1'], tags: ['mc.i1'] },
+      { name: 'n2', ends: ['st2.q', 'mc.i2'], tags: ['mc.i2'] },
+      { name: 'count', ends: ['mc.out', 'count'] },
+      { name: 'line', ends: ['line', 'st0.tc0'], tags: true },
+      { name: 'x0', ends: ['st0.tn0', 'st1.tc0'], tags: true }, { name: 'x1', ends: ['st0.ty0', 'st1.tc1'], tags: true },
+      { name: 'z0', ends: ['st1.tn0', 'st2.tc0'], tags: true }, { name: 'z2', ends: ['st1.ty0', 'st2.tc2'], tags: true },
+      { name: 'z1', ends: ['st1.tn1', 'st2.tc1'], tags: true }, { name: 'z3', ends: ['st1.ty1', 'st2.tc3'], tags: true },
+      { name: 'y', ends: ['my.out', 'y'] },
+    ];
+    for (let j = 0; j < 4; j++) {
+      nets.push({ name: `y${j}`, ends: [`st2.tn${j}`, `ld${j}.y`, `my.i${j}`], tags: true }, { name: `y${j + 4}`, ends: [`st2.ty${j}`, `ld${j + 4}.y`, `my.i${j + 4}`], tags: true });
+    }
+    return {
+      level: 'switch',
+      pins: { line: [2, 10], pulse: [2, 6], hangup: [2, 30], count: [100, 6], y: [92, 29] },
+      instances: [
+        ...holdRail([6, 26]).instances,
+        { name: 'st0', def: countStage(1), at: [14, 4] }, { name: 'st1', def: countStage(2), at: [34, 4] }, { name: 'st2', def: countStage(4), at: [58, 4] },
+        { name: 'mc', def: merger(ones(3), 2), at: [92, 3] }, { name: 'my', def: merger(ones(8), 2), at: [74, 24] },
+        ...loads,
+      ],
+      nets,
+    };
+  },
 });
