@@ -4,6 +4,7 @@
 // event in a total order: it shows the structure and the latency of these circuits, not the race a real asynchronous
 // arrival can run (phys/metastable.ts models that).
 
+import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
 import { PMOS_WEAK } from './cells';
@@ -256,8 +257,8 @@ export function asyncFifo(k: number, w: number): ComponentDef {
     const b = new Builder(12, 12);
     b.pins('we', 're', 'wdata', 'wclk', 'rclk');
     // write side: pointer, Gray pointer, enable
-    const wen = b.name(b.op1(AND, ['we', b.op1(NOT, ['fl.eq'])], 'write if not full'), 'wen', true);
-    const ren = b.name(b.op1(AND, ['re', b.op1(NOT, ['em.eq'])], 'read if not empty'), 'ren', true);
+    const wen = b.name(b.op1(AND, ['we', b.op1(NOT, ['fl.eq'], undefined, 'nf')], 'write if not full', 'wand'), 'wen', true);
+    const ren = b.name(b.op1(AND, ['re', b.op1(NOT, ['em.eq'], undefined, 'ne')], 'read if not empty', 'rand'), 'ren', true);
     b.next();
     b.op(incrementer(k + 1), ['wb.q'], 'next write pointer', 'winc');
     b.op(incrementer(k + 1), ['rb.q'], 'next read pointer', 'rinc');
@@ -284,7 +285,7 @@ export function asyncFifo(k: number, w: number): ComponentDef {
     b.next();
     // flags
     const sr = b.op(splitter(ones(k + 1)), ['rs.q'], undefined, 'sr');
-    const top = [k - 1, k].map((i) => b.op1(NOT, [`${sr}.o${i}`], `¬ bit ${i}`));
+    const top = [k - 1, k].map((i) => b.op1(NOT, [`${sr}.o${i}`], `¬ bit ${i}`, `nt${i}`));
     const bits = Array.from({ length: k + 1 }, (_, i) => (i === k - 1 ? top[0] : i === k ? top[1] : `${sr}.o${i}`));
     const tgt = b.op1(merger(ones(k + 1)), bits, undefined, 'tgt');
     b.next();
@@ -308,7 +309,36 @@ export function asyncFifo(k: number, w: number): ComponentDef {
     b.wire(b.op1(readPort(k, w), [all, `${sd}.o0`], 'oldest word', 'rd'), 'rdata');
     b.wire('fl.eq', 'full');
     b.wire('em.eq', 'empty');
-    const R = b.right;
+    // The drawing: the two clock domains as bands in the same columns, so each block faces its twin, the crossings
+    // between them by name; the words below, four to a column.
+    const geo = (n: string) => symbolGeom(b.instances.find((i) => i.name === n)!.def);
+    const nts = [`nt${k - 1}`, `nt${k}`];
+    const wordCols = Array.from({ length: Math.ceil(N / 4) }, (_, c) => Array.from({ length: Math.min(4, N - 4 * c) }, (_, r) => `w${4 * c + r}`));
+    const bands: string[][][] = [
+      [['nf', 'wand'], ['winc', 'wgn'], ['wb', 'wg'], ['rs'], [sr, ...nts], ['tgt', 'fl']],
+      [['ne', 'rand'], ['rinc', 'rgn'], ['rb', 'rg'], ['ws'], [], ['em']],
+      [[sw, sd], [dec], ...wordCols, ['all'], ['rd']],
+    ];
+    const X0 = 16, GAP_X = 12, GAP_Y = 4, BAND_GAP = 7;
+    const widths: number[] = [];
+    for (const band of bands.slice(0, 2)) band.forEach((col, c) => { for (const n of col) widths[c] = Math.max(widths[c] ?? 0, geo(n).w); });
+    const xOf = (c: number) => X0 + widths.slice(0, c).reduce((s, v) => s + v + GAP_X, 0);
+    const bandY: number[] = [];
+    let y = 2, right = 0;
+    bands.forEach((band, bi) => {
+      bandY[bi] = y;
+      let bottom = y, x = X0;
+      band.forEach((col, c) => {
+        const cx = bi < 2 ? xOf(c) : x;
+        let cy = y, cw = 0;
+        for (const n of col) { b.instances.find((i) => i.name === n)!.at = [cx, cy]; cy += geo(n).h + GAP_Y; cw = Math.max(cw, geo(n).w); }
+        bottom = Math.max(bottom, cy);
+        right = Math.max(right, cx + cw);
+        x = cx + cw + GAP_X;
+      });
+      y = bottom + BAND_GAP;
+    });
+    const R = right + 10;
     return define({
       id: `afifo${N}x${w}`, name: `${N}-word asynchronous FIFO (${w}-bit)`, category: 'memory',
       summary: `A FIFO of ${N} words written on wclk and read on rclk, clocks unrelated. Gray pointers cross through 2-flop synchronizers; full and empty are late, never wrong. rdata always shows the oldest word. we while full and re while empty are ignored.`,
@@ -317,7 +347,7 @@ export function asyncFifo(k: number, w: number): ComponentDef {
         bit('re', 'in', 'right'), clk('rclk', 'bottom'), bus('rdata', w, 'out'), bit('empty', 'out'),
       ],
       symbol: { kind: 'box', label: 'ASYNC FIFO' },
-      netlist: () => ({ pins: { we: [0, 2], wdata: [0, 6], re: [0, 10], wclk: [0, 14], rclk: [0, 18], rdata: [R, 4], empty: [R, 8], full: [R, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { we: [0, bandY[0] + 1], wclk: [0, bandY[0] + 5], re: [0, bandY[1] + 1], rclk: [0, bandY[1] + 5], wdata: [0, bandY[2] + 1], full: [R, bandY[0] + 1], empty: [R, bandY[1] + 1], rdata: [R, bandY[2] + 1] }, instances: b.instances, nets: b.nets() }),
       hdl: {
         verilog: `// write domain (wclk)
 wire wen = we & ~full;
