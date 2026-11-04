@@ -594,3 +594,9 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 
 /* 360 px and under: "+ New chip" is its plus (the open tab would slide under the sticky group); it keeps its name as aria-label */
 @media (max-width: 380px) { .sb-new-lbl { display: none; } }
+
+/* the communication parts' live tables (the switch's counters and learned addresses) */
+.sb-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 8px; }
+.sb-mini th { text-align: left; color: var(--text-2); font-weight: 500; padding: 2px 6px 2px 0; }
+.sb-mini td { padding: 2px 6px 2px 0; font-variant-numeric: tabular-nums; }
+.sb-mini tr.stale td { color: var(--muted); }

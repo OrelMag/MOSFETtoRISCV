@@ -8,6 +8,7 @@
 // bytes, write-back; the MAC transmitter inside).
 
 import type { ComponentDef } from '../sim/types';
+import { bundled } from './axi';
 import { macRx, macTx } from './ethernet';
 import { Rtl, type Sig } from './rtl';
 
@@ -229,3 +230,6 @@ export function nic(): ComponentDef {
   cached = m.build();
   return cached;
 }
+
+/** The NIC with both its bus links packed (a request and a response bus each): the sandbox's NIC part, id nic_b. Slave link: registers at +0 … +28; master link: the descriptor and frame DMA. */
+export const nicB = (): ComponentDef => bundled(nic(), [['', 'slave'], ['m_', 'master']], 'nic_b');

@@ -8,6 +8,8 @@ import { TIE0 } from './transistors';
 import { Rtl } from './rtl';
 import { bigRam } from './bigmem';
 import { define } from './define';
+import { bundled } from './axi';
+import type { Sig } from './rtl';
 import { edgeKind, peerMiso, type SpiMode } from '../comm/spi';
 import { simulate } from '../sim/harness';
 import { pack } from '../sim/values';
@@ -221,3 +223,66 @@ export function masterRun(mode: SpiMode, tx: number, peer: number): MasterRun {
   rec(); rec();
   return { clocks, rx: out('rx'), edges };
 }
+
+// ---- the master behind chapter 38's bus ---------------------------------------------------------------------------------------
+
+let axi: ComponentDef | undefined;
+
+/**
+ * The SPI master as a bus slave (the style of lib/uart.ts's AXI_UART): +0 DATA (a store loads the byte and starts a transfer unless one is
+ * running; a load reads the byte that came in), +4 STATUS (bit 0 busy, bit 1 done: set when the last transfer ended, cleared by the next
+ * store to DATA; write 1 to bit 1 to clear it), +8 CTRL (bit 0 CPOL, bit 1 CPHA, bit 2 HOLD: CS stays low between bytes, bit 3 interrupt
+ * enable). irq = done · enable. One byte takes 17 SCLK edges' worth of clocks: every SCLK edge is two system clocks after the last
+ * (lib/spi.ts spiMaster). The master is the one above, so the chapter's modes and its CS timing are unchanged.
+ */
+export function axiSpi(): ComponentDef {
+  if (axi) return axi;
+  const m = new Rtl({
+    id: 'axi_spi', name: 'SPI master (bus slave)', category: 'memory', label: 'SPI slave',
+    summary: 'Chapter 44\'s SPI master behind chapter 38\'s bus: +0 DATA (store: send a byte, load: the byte received), +4 STATUS (bit 0 busy, bit 1 done), +8 CTRL (CPOL, CPHA, hold CS low, interrupt enable). sclk, mosi and cs_n are the pins; miso comes in.',
+    notes: 'regs: the bus handshake and the registers. The master inside is the chapter\'s SPI master, unchanged.',
+  });
+  const clk = m.input('clk', { clock: true });
+  const awvalid = m.input('awvalid'), awaddr = m.inputBus('awaddr', 32), wvalid = m.input('wvalid'), wdata = m.inputBus('wdata', 32);
+  const wstrb = m.inputBus('wstrb', 4);
+  const bready = m.input('bready'), arvalid = m.input('arvalid'), araddr = m.inputBus('araddr', 32), rready = m.input('rready');
+  const miso = m.input('miso');
+  const busyF = m.fwd('busy_f'), doneF = m.fwd('done_f'), rxF = Array.from({ length: 8 }, (_, i) => m.fwd(`rx_f${i}`));
+  const R = m.scope('regs', 'bus slave, registers', () => {
+    const bq = m.reg(clk, 'bq'), rq = m.reg(clk, 'rq');
+    const sidle = m.name(m.nor(bq, rq), 'sidle');
+    const wrHs = m.name(m.andN([awvalid, wvalid, sidle]), 'wr_hs'), rdHs = m.name(m.and(arvalid, sidle), 'rd_hs');
+    m.setD(bq, m.or(wrHs, m.and(bq, m.not(bready))));
+    m.setD(rq, m.or(rdHs, m.and(rq, m.not(rready))));
+    const widx = awaddr.slice(2, 4), ridx = araddr.slice(2, 4);
+    const wen = m.name(m.and(wrHs, m.orN(wstrb)), 'wr_en');
+    const w = Array.from({ length: 3 }, (_, k) => m.name(m.and(wen, m.eqConst(widx, k)), `w${k}`));
+    const txr = Array.from({ length: 8 }, (_, i) => m.reg(clk, `tx${i}`));
+    const startq = m.reg(clk, 'startq'), dn = m.reg(clk, 'done_q');
+    const running = m.name(m.or(busyF, startq), 'running');
+    const go = m.name(m.and(w[0], m.not(running)), 'go');
+    txr.forEach((q, i) => m.setD(q, m.mux(go, q, wdata[i])));
+    m.setD(startq, go);
+    // done: set when the master finishes, cleared by a new transfer or a write of 1 to bit 1 of STATUS
+    m.setD(dn, m.and(m.or(doneF, dn), m.nor(go, m.and(w[1], wdata[1]))));
+    const ctl = Array.from({ length: 4 }, (_, i) => { const q = m.reg(clk, `ctl${i}`); m.setD(q, m.mux(w[2], q, wdata[i])); return q; });
+    const z = m.const(0);
+    const word = (bits: Sig[]): Sig[] => Array.from({ length: 32 }, (_, i) => bits[i] ?? z);
+    const words = [word(rxF), word([running, dn]), word(ctl), word([])];
+    const pick = words[0].map((_, i) => m.mux(ridx[1], m.mux(ridx[0], words[0][i], words[1][i]), m.mux(ridx[0], words[2][i], words[3][i])));
+    const rdr = pick.map((d, i) => { const q = m.reg(clk, `rdr${i}`); m.setD(q, m.mux(rdHs, q, d)); return q; });
+    const irq = m.name(m.and(dn, ctl[3]), 'irq_o');
+    return { sidle, bq, rq, rdr, txr, startq, ctl, irq, dn, running };
+  });
+  const [sclk, mosi, csn, rxB, busy, done] = m.part(spiMaster(), [clk, m.const(0), R.startq, R.ctl[2], R.ctl[0], R.ctl[1], m.bus(R.txr), miso], 'SPI master', 'spi');
+  m.drive(busyF, busy); m.drive(doneF, done);
+  m.unbus(rxB, 8).forEach((s, i) => m.drive(rxF[i], s));
+  m.output('awready', R.sidle); m.output('wready', R.sidle); m.output('arready', R.sidle);
+  m.output('bvalid', R.bq); m.output('rvalid', R.rq); m.outputBus('rdata', R.rdr);
+  m.output('sclk', sclk); m.output('mosi', mosi); m.output('cs_n', csn); m.output('irq', R.irq);
+  axi = m.build();
+  return axi;
+}
+
+/** The slave with its bus ports packed into a request and a response bus (the sandbox's SPI controller, id axi_spi_b). */
+export const axiSpiB = (): ComponentDef => bundled(axiSpi(), [['', 'slave']], 'axi_spi_b');
