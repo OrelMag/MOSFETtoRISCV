@@ -291,6 +291,11 @@ describe('channel', () => {
     near(l.ber, qFunc(l.q));
     expect(link(bits, { rate: 1, bandwidth: 0.05 }, 0.1).ber).toBe(0.5);
   });
+  it('pinned: a 50 % opening (1.0 of a 2.0 swing) needs 0.22 of the bit rate, the eye closes altogether at 0.11', () => {
+    expect(minBandwidth(1, 1)).toBeCloseTo(0.2206, 3);
+    expect(minBandwidth(1, 0)).toBeCloseTo(0.11, 3);
+    expect(minBandwidth(1, 0)).toBeLessThan(minBandwidth(1, 1) / 1.9);
+  });
   it('minBandwidth: the bandwidth for an open eye at 1 Gb/s on PRBS-9 is about 0.22 GHz, and doubles with the rate', () => {
     const b1 = minBandwidth(1), b2 = minBandwidth(2);
     near(b2 / b1, 2, 0.02);

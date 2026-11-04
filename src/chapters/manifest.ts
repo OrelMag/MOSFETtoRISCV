@@ -520,20 +520,22 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Phase and amplitude", challenge: "quiz" },
     { title: "Noise decides how many points", challenge: "quiz" },
     { title: "300 b/s to 56 kb/s", challenge: "quiz" },
+    { title: "Many tones, one FFT", challenge: "quiz" },
     { title: "ADSL: many carriers", challenge: "quiz" },
   ] },
-  { id: "serial", num: 46, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 46, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then a wave as harmonics, the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz" },
     { title: "8b/10b and running disparity", challenge: "quiz" },
     { title: "Scrambling instead", challenge: "quiz" },
     { title: "A SerDes in gates", challenge: "reach" },
     { title: "Finding the clock in the data", challenge: "reach" },
+    { title: "A wave is a sum of sines", challenge: "quiz" },
     { title: "The eye diagram", challenge: "quiz" },
     { title: "Equalization", challenge: "quiz" },
     { title: "PAM4", challenge: "quiz" },
     { title: "Fibre", challenge: "quiz" },
   ] },
-  { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
+  { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
     { title: "One extra bit", challenge: "quiz" },
     { title: "Locating the error", challenge: "reach" },
     { title: "A remainder as a check", challenge: "quiz" },
@@ -543,6 +545,11 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where a frame starts", challenge: "quiz" },
     { title: "Asking again", challenge: "quiz" },
     { title: "Correcting instead of asking", challenge: "quiz" },
+    { title: "A code with memory", challenge: "reach" },
+    { title: "The Viterbi decoder", challenge: "reach" },
+    { title: "Reed-Solomon: errors in bytes", challenge: "reach" },
+    { title: "Bursts: interleaving", challenge: "quiz" },
+    { title: "How far from Shannon", challenge: "quiz" },
   ] },
   { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz" },

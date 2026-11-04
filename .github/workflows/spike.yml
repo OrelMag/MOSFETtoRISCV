@@ -9,6 +9,9 @@ on:
   push:
     paths:
       - 'src/riscv/**'
+      # sample programs and the RV16 tools: Spike runs neither
+      - '!src/riscv/*programs*.ts'
+      - '!src/riscv/rv16/**'
       - 'src/sim/fpref.ts'
       - 'tests/verify/spike.ts'
       - 'tests/verify/spike64.ts'

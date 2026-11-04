@@ -72,6 +72,18 @@ describe('the bench rig on the gates', () => {
     expect(rig.rxCaps[0].length + rig.rxDropped[0]).toBe(13);
     expect(rig.txCaps[1].length).toBeGreaterThan(0);
   }, 120000);
+  it('a frame marked bad is not captured: a pcap has no flag for it', () => {
+    const { rig, run } = bench();
+    rig.teach(); run(500);
+    const caps = rig.rxCaps[0].length, gone = rig.rxDropped[0];
+    rig.send(0, hostMac(1), 64, { err: true, delay: 0 });
+    run(300);
+    expect(rig.rxCaps[0].length).toBe(caps);
+    expect(rig.rxDropped[0]).toBe(gone + 1);
+    rig.send(0, hostMac(1), 64, { delay: 0 });
+    run(300);
+    expect(rig.rxCaps[0].length).toBe(caps + 1);
+  }, 120000);
 });
 
 describe('the hash', () => {

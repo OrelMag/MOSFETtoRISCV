@@ -45,7 +45,7 @@ export class Rig {
   private nextId = 1;
   taught = false;
   sent = 0;
-  /** Frames received on each port that found no free cell: left out of the capture. */
+  /** Frames received on each port that found no free cell or were marked bad: left out of the capture. */
   rxDropped = Array(PORTS).fill(0);
   private dropAtStart = Array(PORTS).fill(0);
   constructor(readonly opts: Partial<SwitchOpts>) { this.model = new SwitchModel(opts); }
@@ -125,8 +125,9 @@ export class Rig {
         this.rxCur[p].push(j.bytes[j.k]);
         j.k++;
         if (last) {
-          // the drop counter moves one edge after the first byte: a frame that found no cell is not in the capture
-          if (this.model.out().drops[p] > this.dropAtStart[p]) this.rxDropped[p]++;
+          // the drop counter moves one edge after the first byte: a frame that found no cell is not in the capture, nor one
+          // marked bad, which a pcap (no FCS here, no flag) would show as good
+          if (j.err || this.model.out().drops[p] > this.dropAtStart[p]) this.rxDropped[p]++;
           else this.rxCaps[p].push({ us: this.rxAt[p] * CYCLE_NS / 1000, bytes: this.rxCur[p] });
           this.jobs[p].shift();
         }

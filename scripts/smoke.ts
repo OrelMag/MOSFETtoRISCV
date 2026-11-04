@@ -406,6 +406,15 @@ function routes(): Route[] {
   add('#/workbench/stats', light);
   add('#/workbench/bench', light);
   add('#/workbench/lab', light);
+  // A line opened: its model's panel, not a schematic (widgets/modelleaf.ts).
+  for (const [id, title] of [['serial', 'A SerDes in gates'], ['modem', 'FSK in gates']]) {
+    const c = chapters.find((x) => x.id === id);
+    const i = c?.steps.findIndex((st) => st.title === title) ?? -1;
+    if (i < 0) continue;
+    add(`#/c/${id}/${i}/line`, light, ' (the line opened)');
+    add(`#/c/${id}/${i}/line`, themed('dark'), ' (the line opened, dark)');
+    add(`#/c/${id}/${i}/line`, light, ` (the line opened, ${phoneVp.name})`, phoneVp);
+  }
   add('#/campaign', light);
   add('#/campaign/intro', light);
   add('#/campaign/codex', unlocked);

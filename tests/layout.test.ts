@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ethSwitch } from '../src/lib/ethswitch';
-import { brentKung, cachedMemory, coherentDualCore, dualCore, multicycleCpu, pipelinedCpu, singleCycleCpu, sklansky, systemCpu } from '../src/lib';
+import { CONV_K3, CONV_K7 } from '../src/comm/conv';
+import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
@@ -39,6 +40,9 @@ ethSwitch({ cellK: 7, cut: true, voq: true, cells: 8 });
 ethSwitch({ cellK: 11 });
 // The parallel-prefix adders beside Kogge–Stone, powers of two and not.
 for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }
+// Chapter 47's codes: the scenes' sizes and the K = 7 decoder's top level.
+for (const s of [CONV_K3, CONV_K7]) { convEncoder(s); viterbi(s); }
+viterbi(CONV_K3, { depth: 15 }); viterbi(CONV_K7, { q: 3 }); rsEncoder(10); rsEncoder(32); rsSyndrome(10); gfMulGates();
 // Every workbench family as it first opens.
 for (const f of families) f.make(initialParams(f));
 // The campaign's RV16 cores (built on demand, by the levels' reference answers).

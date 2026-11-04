@@ -48,7 +48,7 @@ span.err-bit { cursor: default; }
 .err-trow.head { color: var(--muted); font-size: 12px; }
 .err-trow.head > span { font-family: inherit; }
 .err-trow.c1 > span:first-child { color: var(--bad); } .err-trow.c2 > span:first-child { color: var(--accent); } .err-trow.c3 > span:first-child { color: var(--good); }
-@container (max-width: 520px) { .err-trow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@container (max-width: 520px) { .err-trow { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px; padding: 3px 2px; font-size: 11.5px; } .err-trow.head { font-size: 11px; } }
 
 /* the frame on the wire */
 .err-strip { display: flex; flex-wrap: wrap; gap: 2px; margin: 8px 0; }
@@ -74,3 +74,43 @@ span.err-bit { cursor: default; }
 .err-w .mos-sl span { width: 104px; }
 @container (max-width: 520px) { .err-w .mos-sl { flex-basis: 100%; } }
 @media (pointer: coarse) { .err-bit { min-width: 36px; height: 40px; } .err-byte .err-bit, .err-strip .err-bit { min-width: 28px; height: 36px; } .err-sl { height: 28px; } }
+
+/* the stronger codes (src/widgets/codes.ts) */
+.mos-plot .err-s.c4 { stroke: var(--warn); } .mos-plot .err-s.c5 { stroke: var(--text-2); }
+.cd-seg { flex-wrap: wrap; margin: 2px 0 6px; }
+.cd-key[aria-pressed="false"] { opacity: .55; }
+.cd-key::before { content: ''; display: inline-block; width: 10px; height: 3px; margin-right: 6px; vertical-align: middle; background: currentColor; }
+.cd-key.c1::before { background: var(--bad); } .cd-key.c2::before { background: var(--accent); } .cd-key.c3::before { background: var(--good); } .cd-key.c4::before { background: var(--warn); } .cd-key.c5::before { background: var(--text-2); }
+.cd-trow { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); }
+@container (max-width: 520px) { .cd-trow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.mos-plot .cd-mark { stroke: var(--accent); stroke-width: 1.5; }
+.mos-plot .cd-dot { stroke: var(--surface); stroke-width: 1.5; }
+.mos-plot .cd-dot.c4 { fill: var(--warn); } .mos-plot .cd-dot.c5 { fill: var(--text-2); }
+.cd-stream { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.cd-sym { display: inline-flex; flex-direction: column; align-items: center; padding: 2px 5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); font: 12px var(--font-mono); }
+.cd-sym i { font-style: normal; color: var(--muted); }
+.cd-chan { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 8px; }
+.cd-bit.err-bit { min-width: 15px; height: 20px; padding: 0 1px; font-size: 11px; border-width: 1px; border-radius: 3px; }
+.cd-bit:nth-child(even) { margin-right: 3px; }
+.cd-bit.past { opacity: .55; cursor: default; }
+.cd-bit.now { border-color: var(--accent); }
+.cd-trellis { width: 100%; max-width: 340px; margin: 6px 0; }
+.mos-plot .cd-edge { stroke: var(--border-strong); stroke-width: 1; }
+.mos-plot .cd-edge.on { stroke: var(--accent); stroke-width: 2.4; }
+.mos-plot .cd-node { fill: var(--surface-2); stroke: var(--border-strong); }
+.mos-plot .cd-node.on { stroke: var(--accent); stroke-width: 2; }
+.mos-plot .cd-node-t { fill: var(--text); font: 600 9.5px var(--font-mono); }
+.cd-out { font: 12px/1.5 var(--font-mono); margin: 4px 0; }
+.cd-o { display: inline-block; width: 11px; text-align: center; color: var(--text-2); }
+.cd-o.ok { color: var(--good); } .cd-o.bad { color: var(--bad); font-weight: 700; }
+.cd-bytes { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin: 4px 0 8px; }
+.cd-b.err-bit { min-width: 24px; height: 22px; padding: 0 2px; font-size: 11px; border-width: 1px; border-radius: 4px; }
+.cd-tag { font-size: 12px; margin-left: 4px; }
+.cd-tag.good { color: var(--good); } .cd-tag.bad { color: var(--bad); }
+.cd-il { display: grid; gap: 2px; overflow-x: auto; margin: 6px 0; }
+.cd-il-row { display: grid; grid-template-columns: 50px repeat(var(--n), minmax(5px, 12px)) 20px; gap: 1px; align-items: center; font: 11px var(--font-mono); color: var(--text-2); }
+.cd-il-row.bad .cd-il-n { color: var(--bad); font-weight: 700; } .cd-il-row.fixed .cd-il-n { color: var(--good); }
+.cd-il-b { height: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; }
+.cd-il-b.hit { background: var(--bad); border-color: var(--bad); }
+.cd-il-n { text-align: right; }
+@media (pointer: coarse) { .cd-bit.err-bit { min-width: 26px; height: 32px; font-size: 12px; } .cd-b.err-bit { min-width: 32px; height: 34px; } }

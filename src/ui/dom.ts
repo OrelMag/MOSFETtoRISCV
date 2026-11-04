@@ -181,3 +181,12 @@ export function rememberFocus(fallback?: () => HTMLElement | SVGElement | null |
     t?.focus({ preventScroll: true });
   };
 }
+
+/** Run a press handler that repaints its controls: focus goes to the button now in the pressed one's place, not to the page. */
+export function keepFocus(b: HTMLElement, f: () => void): void {
+  const root = b.closest('.widget') ?? b.parentElement;
+  const k = root ? [...root.querySelectorAll('button')].indexOf(b as HTMLButtonElement) : -1;
+  const had = document.activeElement === b;
+  f();
+  if (had && !b.isConnected && root && k >= 0) root.querySelectorAll('button')[k]?.focus({ preventScroll: true });
+}
