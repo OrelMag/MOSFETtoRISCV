@@ -3,20 +3,25 @@
 //
 // Sources, fetched 2026-11-04 (not recalled):
 // - Convolutional: IEEE 802.11-99/077a, proposed Annex E (the OFDM worked example), tables 7 and 8: the SIGNAL field and its rate 1/2 coding.
+//   Read from the document 2026-11-04: its table 7 lists bit 0 = LENGTH LSB and the rate in bits 12-15. The FINAL standard puts the rate in
+//   bits 0-3 (reserved 4, length 5-16, parity 17, tail 18-23), so this vector is the draft's, not the final Annex G's; nothing claims the latter.
 // - Reed-Solomon: Wikiversity, "Reed-Solomon codes for coders" (a QR sample, 0x11D, first root α^0) and Thonky's QR tutorial (HELLO WORLD 1-M).
 // - d_free = 10 with 11 paths at that weight for the K = 7 code: US patent 7636397's statement of the best rate 1/2, K = 7 code.
 import { describe, expect, it } from 'vitest';
 import { berlekampMassey, gfMul, gfPow, GF_EXP, GF_LOG, rsBer, rsDecode, rsEncode, rsGenerator, rsStep, rsSyndromes } from '../src/comm/rs';
 import { CONV_K3, CONV_K7, Viterbi, bmMax, convEncode, convStep, metricWidth, spectrum, statesOf, viterbiDecode } from '../src/comm/conv';
-import { biAwgnCapacity, channelP, codingGain, convHardBound, convSoftBound, convTrial, ebn0For, quantize, rsCurve, secdedBer, secdedTrial, shannonBinaryDb, shannonDb, sigmaOf, uncodedBer } from '../src/comm/ber';
+import { biAwgnCapacity, trialSeed, channelP, codingGain, convHardBound, convSoftBound, convTrial, ebn0For, quantize, rsCurve, secdedBer, secdedTrial, shannonBinaryDb, shannonDb, sigmaOf, uncodedBer } from '../src/comm/ber';
 import { burstChannel, burstRate, burstTolerance, deinterleave, interleave, placeOf, secdedOverBursts, worstPerWord } from '../src/comm/interleave';
 import { rng } from '../src/phys/line';
+import { ADSL } from '../src/comm/modem';
+import { blockOf, PATTERNS, smallestSample, swing1010 } from '../src/comm/fourier';
+import { burstOutcome, burstVerdict } from '../src/widgets/codes';
 import { tick } from './yieldtick';
 
 const near = (x: number, y: number, rel: number) => expect(Math.abs(x - y) / y, `${x} vs ${y}`).toBeLessThan(rel);
 
 describe('convolutional encoder', () => {
-  it('802.11\'s worked example: the SIGNAL field, 24 bits, codes to the annex\'s 48', () => {
+  it('the 802.11 task group\'s 1999 proposed annex (99/077a, tables 7 and 8): its SIGNAL field, 24 bits in that draft\'s order (length first), codes to its 48', () => {
     const signal = [0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
     const coded = [0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0];
     expect(convEncode(CONV_K7, signal)).toEqual(coded);
@@ -169,6 +174,8 @@ describe('BER against Eb/N0', () => {
     near(soft.ber, convSoftBound(CONV_K7, 3.75), 0.35); // three-bit levels lose the textbook quarter of a dB
     const shallow = convTrial(CONV_K7, 4, 300000, { q: 3, depth: 35, seed: 2 }); await tick();
     expect(shallow.ber).toBeGreaterThan(5 * soft.ber); // five constraint lengths are enough only when reading the best state
+    const mid = convTrial(CONV_K7, 4, 300000, { q: 3, depth: 50, seed: 2 }); await tick();
+    expect(mid.ber).toBeLessThan(2 * soft.ber); // seven are within a factor of two of the ten the model uses (measured 14 errors against 12)
     const hard = convTrial(CONV_K7, 5, 300000, { q: 1, seed: 3 }); await tick();
     expect(hard.ber).toBeLessThan(convHardBound(CONV_K7, 5) * 1.2);
     expect(hard.ber).toBeGreaterThan(convHardBound(CONV_K7, 5) * 0.1);
@@ -213,5 +220,43 @@ describe('interleaving', () => {
     const alone = secdedOverBursts(1, 32000, 5e-5, 0.2, 5), wide = secdedOverBursts(32, 1000, 5e-5, 0.2, 5);
     expect(alone.failed).toBeGreaterThan(20);
     expect(wide.rate).toBeLessThan(alone.rate / 5);
+  });
+});
+
+describe('audit follow-ups (chapters 45-47)', () => {
+  it('the live run\'s seeds are decorrelated: distinct, and not a progression', () => {
+    const s = Array.from({ length: 2000 }, (_, i) => trialSeed(i, 3));
+    expect(new Set(s).size).toBe(2000);
+    const d = new Set(s.slice(1).map((v, i) => (v - s[i]) >>> 0));
+    expect(d.size).toBeGreaterThan(1990); // consecutive differences all different: no constant stride
+    expect(trialSeed(5, 1)).not.toBe(trialSeed(5, 3));
+  });
+  it('the smallest end-of-bit sample: 1010 is its closed form, 1100 is below it and above the lone bit (chapter 46\'s quiz explanation)', () => {
+    const R = 8, B = 1, a = Math.exp((-2 * Math.PI * B) / R), p = (n: string) => PATTERNS.find((x) => x.name.startsWith(n))!.bits;
+    near(smallestSample(p('1010'), R, B), swing1010(a), 1e-6);
+    const s1100 = smallestSample(p('1100'), R, B), lone = smallestSample(p('One 1'), R, B);
+    expect(s1100).toBeLessThan(swing1010(a));
+    expect(s1100).toBeGreaterThan(lone);
+    near(lone, 1 - 2 * a, 0.05); // one 1 in eight: the run of zeros is long, not endless
+  });
+  it('ADSL\'s 512 points carry 255 tones, not 256: DC and N / 2 stay empty', () => {
+    const syms = (n: number) => Array.from({ length: n }, () => [1, 0] as [number, number]);
+    expect(() => blockOf(syms(ADSL.tones - 1), ADSL.tones * 2)).not.toThrow();
+    expect(() => blockOf(syms(ADSL.tones), ADSL.tones * 2)).toThrow();
+  });
+  it('the interleave verdict follows what the words saw: two hits on check bits that still decode are not "at most one error"', () => {
+    const r = burstOutcome(1, 2, 0); // the two flipped bits are the word\'s check bits: data intact, two errors in the word
+    expect(r.failed).toBe(0);
+    expect(Math.max(...r.errs)).toBe(2);
+    const v = burstVerdict(1, 2, r);
+    expect(v.text).not.toContain('at most one error');
+    expect(v.text).toContain('check bits');
+    expect(burstVerdict(8, 6, burstOutcome(8, 6, 4)).text).toContain('at most one error');
+    expect(burstVerdict(1, 6, burstOutcome(1, 6, 4)).cls).toBe('bad');
+    // every case the verdict claims "at most one" for really has at most one error a word
+    for (let D = 1; D <= 12; D++) for (let b = 1; b <= 30; b++) for (let at = 0; at <= 60; at += 7) {
+      const o = burstOutcome(D, b, at);
+      if (burstVerdict(D, b, o).text.includes('at most one error')) expect(Math.max(...o.errs)).toBeLessThanOrEqual(1);
+    }
   });
 });
