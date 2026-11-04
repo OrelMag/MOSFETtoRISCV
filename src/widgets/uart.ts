@@ -68,6 +68,7 @@ function waveSvg(levels: number[], total: number, from: number, cell: number, la
   let d = '';
   levels.forEach((v, i) => { const y = v ? Y1 : Y0; d += i === 0 ? `M${X(0)},${y}` : `L${X(i)},${levels[i - 1] ? Y1 : Y0}L${X(i)},${y}`; });
   if (levels.length) d += `L${X(levels.length)},${levels[levels.length - 1] ? Y1 : Y0}`;
+  if (!levels.length) d = `M${X(0)},${Y1}L${X(total)},${Y1}`;
   svg.append(s('path', { d, class: 'uart-line' }));
   for (const m of marks) svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: 10, y2: 80, class: m.cls }), ...(m.text ? [s('text', { x: X(m.x) + 2, y: 10, class: 'tick' }, m.text)] : []));
   return svg;
@@ -146,8 +147,8 @@ export function rxScene(): Scene {
       };
       const loop = new Loop(stage, step, () => paintLive(), 40, 30);
       const slSet = { v: 0 };
-      const errSl = slider('Receiver clock error', -8, 8, 0.05, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)} %`, (v) => { slSet.v = v; S.err = v / 100; paint(); });
-      const phSl = slider('Start edge in the tick', 0, 0.99, 0.01, phase, (v) => `${v.toFixed(2)}`, (v) => { phase = v; paint(); });
+      const errSl = slider('Clock error', -8, 8, 0.05, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)} %`, (v) => { slSet.v = v; S.err = v / 100; paint(); });
+      const phSl = slider('Start phase', 0, 0.99, 0.01, phase, (v) => `${v.toFixed(2)}`, (v) => { phase = v; paint(); });
       const sel = select('Byte', [['82', "0x52  'R'"], ['85', "0x55  'U'"], ['0', '0x00'], ['255', '0xFF'], ['128', '0x80'], ['127', '0x7F']], '82', (v) => { code = Number(v); paint(); });
       const send = () => {
         if (loop.running) return;
@@ -186,7 +187,6 @@ export function rxScene(): Scene {
           const good = sm.sees === sm.label;
           svg.append(s('line', { x1: X(sm.at), x2: X(sm.at), y1: 14, y2: 66, class: good ? 'uart-smp ok' : 'uart-smp bad' }), s('circle', { cx: X(sm.at), cy: sm.level ? 22 : 56, r: 3.5, class: good ? 'uart-dot ok' : 'uart-dot bad' }));
         }
-        svg.append(s('text', { x: L, y: 108, class: 'tick' }, 'bit cells in the sender\'s time; each marker is one sample of the receiver, green when it lands in the bit it meant'));
         svgBox.replaceChildren(svg);
         const got8 = r.word;
         read.className = `clk-verdict ${r.ok ? 'ok' : 'bad'}`;
@@ -352,7 +352,7 @@ function regsRow(stage: Stage, path: string[]): HTMLElement {
 
 export function uartBusScene(): Scene {
   return {
-    root: busComputer(words(uartIrqSource(UART_DIV_IN_PROGRAM)), [], { imemK: ROM_K, ramK: 8, uart: true }),
+    root: busComputer(words(uartIrqSource(UART_DIV_IN_PROGRAM)), [0], { imemK: ROM_K, ramK: 8, uart: true }),
     inputs: { clk: 0, switches: 0, uartRx: 1 }, hiddenInputs: ['switches', 'uartRx'], autoClock: false, engine: 'cycle',
     panels: [(stage: Stage): Widget => {
       let q: number[] = [], k = 0, consoleText = '', cycles = 0, txHist: number[] = [], rxHist: number[] = [];
@@ -401,7 +401,7 @@ export const TWO_DIV = 2;
 export function twoScene(): Scene {
   const A = words(uartChatSource(TWO_DIV, false)), B = words(uartChatSource(TWO_DIV, true));
   return {
-    root: twoComputers(A, B), inputs: { clkA: 0, clkB: 0, noiseAB: 0, noiseBA: 0 }, hiddenInputs: ['noiseAB', 'noiseBA'], clock: 'clkA', autoClock: false, engine: 'cycle',
+    root: twoComputers(A, B), inputs: { clkA: 0, clkB: 0, noiseAB: 0, noiseBA: 0 }, hiddenInputs: ['noiseAB', 'noiseBA', 'clkB'], clock: 'clkA', autoClock: false, engine: 'cycle',
     panels: [(stage: Stage): Widget => {
       let ratio = 1, tA = 1, tB = 1, eA = 0, eB = 0;
       const text = { A: '', B: '' };

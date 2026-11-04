@@ -13,12 +13,14 @@ const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name
 
 export interface TwoOptions { delay?: number; imemK?: number; ramK?: number }
 
+/** One word of flash: the sandbox cannot place an empty flash by reference (its id is taken), and nothing here reads it. */
+export const FLASH = [0];
 const cache = new Map<string, ComponentDef>();
 
 /** Two computers running `srcA` and `srcB` from their boot ROMs, a keyboard each (instance 'kbd'), one wire each way. */
 export function twoComputers(srcA: number[], srcB: number[], o: TwoOptions = {}): ComponentDef {
   const delay = o.delay ?? 2, soc: SocOptions = { imemK: o.imemK ?? 8, ramK: o.ramK ?? 8, uart: true, keys: true };
-  const A = busComputer(srcA, [], soc), B = busComputer(srcB, [], soc), L = lineDef(delay);
+  const A = busComputer(srcA, FLASH, soc), B = busComputer(srcB, FLASH, soc), L = lineDef(delay);
   const id = `two_${A.id}_${B.id}_${delay}`;
   let d = cache.get(id);
   if (d) return d;

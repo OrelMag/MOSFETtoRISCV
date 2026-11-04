@@ -81,6 +81,7 @@ export function baudGen(n = UART_DIV_BITS): ComponentDef {
  */
 export const UART_TX: ComponentDef = (() => {
   const b = new Builder(22, 18, 6), g = kit(b);
+  b.maxH = 60;
   b.pins('tick', 'go', 'din', 'clk');
   const one = g.konst(1, 1), zero = g.konst(1, 0);
   const busy = b.op(DFF, ['', 'clk'], 'busy', 'busy');
@@ -128,6 +129,7 @@ export const UART_TX: ComponentDef = (() => {
  */
 export const UART_RX: ComponentDef = (() => {
   const b = new Builder(22, 18, 6), g = kit(b);
+  b.maxH = 60;
   b.pins('rx', 'tick', 'clk');
   const zero = g.konst(1, 0);
   const sy = b.op(SYNC2, [g.not('rx'), 'clk'], 'line low?', 'sy');
@@ -181,6 +183,7 @@ export const UART_RX: ComponentDef = (() => {
  */
 export const UART_CORE: ComponentDef = (() => {
   const b = new Builder(24, 20, 6), g = kit(b);
+  b.maxH = 70;
   b.pins('rx', 'push', 'data', 'pop', 'divWe', 'ieWe', 'clrWe', 'wval', 'clk');
   const divr = b.op(register(UART_DIV_BITS), ['wval', 'divWe', 'clk'], 'divisor', 'divr');
   const ier = b.op(register(2), [g.split('wval', [2, UART_DIV_BITS - 2])[0], 'ieWe', 'clk'], 'interrupt enables', 'ier');
@@ -212,7 +215,7 @@ export const UART_CORE: ComponentDef = (() => {
     bit('tx', 'out'), bus('rxData', 8, 'out'), bus('status', 8, 'out'), bus('div', UART_DIV_BITS, 'out'), bus('ie', 2, 'out'), bit('irq', 'out'), bit('tickOut', 'out'),
   ];
   return define({
-    id: 'uart_core', name: 'UART core (FIFOs, status, divisor)', category: 'sequential',
+    id: 'uart_full', name: 'UART core (FIFOs, status, divisor)', category: 'sequential',
     summary: 'Baud generator, transmitter, receiver, a 16-byte FIFO each way, the divisor and interrupt-enable registers, status bits (rx not empty, tx full, tx idle, framing error, overrun) and the interrupt. push writes a byte to the transmit FIFO, pop takes the oldest received byte; wval with divWe / ieWe / clrWe writes the registers.',
     ports, symbol: { kind: 'box', label: 'UART' },
     netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
@@ -229,6 +232,7 @@ export const UART_CORE: ComponentDef = (() => {
  */
 export const AXI_UART: ComponentDef = (() => {
   const b = new Builder(24, 16, 6), g = kit(b);
+  b.maxH = 60;
   const { wrHs, rdHs } = slaveFsm(b, g, 0);
   b.next();
   const wsel = b.op(decoder(2, false), [g.split('awaddr', [2, 2, 28])[1]], 'which register (write)', 'wdec');

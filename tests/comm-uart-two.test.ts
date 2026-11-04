@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { emptyWorkspace } from '../src/editor/model';
+import { remixDef } from '../src/editor/remix';
+import { busComputer } from '../src/lib/soc';
+import { UART_CORE, UART_RX_BENCH, UART_TX_BENCH } from '../src/lib/uart';
 import { twoComputers } from '../src/lib/uartlink';
+import { deadInstances } from '../src/sim/dead';
+import { netlistOf } from '../src/sim/types';
+import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { assemble } from '../src/riscv/asm';
 import { uartChatSource } from '../src/riscv/uartprograms';
 import { DualSim } from '../src/sim/dualsim';
@@ -48,4 +55,35 @@ describe('two computers on the cycle engine', () => {
       expect(p.consoles.A, `ratio ${ratio}`).toBe('yo');
     }
   }, 240000);
+});
+
+describe('two computers: how far apart the clocks may be', () => {
+  it('works at +-4 %, fails at +-9 % (see step 4)', async () => {
+    const result: Record<string, string> = {};
+    for (const ratio of [1.04, 0.96, 1.09, 0.91]) {
+      const p = pair(uartChatSource(2, false), uartChatSource(2, true), ratio);
+      for (let i = 0; i < 400; i++) p.step();
+      p.type('a', 'Hello');
+      for (let i = 0; i < 14000; i++) { p.step(); if (i % 3000 === 0) await tick(); }
+      result[ratio] = p.consoles.B;
+    }
+    expect(result[1.04]).toBe('Hello');
+    expect(result[0.96]).toBe('Hello');
+    expect(result[1.09]).not.toBe('Hello');
+    expect(result[0.91]).not.toBe('Hello');
+  }, 240000);
+});
+
+describe('the chapter scenes as drawings', () => {
+  const A = words(uartChatSource(2)), B = words(uartChatSource(2, true));
+  const tops = [twoComputers(A, B), busComputer(A, [0], { imemK: 8, ramK: 8, uart: true, keys: true }), UART_TX_BENCH, UART_RX_BENCH, UART_CORE];
+  it.each(tops.map((d) => [d.id, d] as const))('%s: no overlapping labels or symbols, nothing dead, and Open in Sandbox works', (_, d) => {
+    const nl = netlistOf(d)!;
+    expect(labelOverlaps(d, nl)).toEqual([]);
+    expect(symbolOverlaps(nl)).toEqual([]);
+    expect(backwardEnds(d, nl)).toEqual([]);
+    expect(deadInstances(nl, d.ports)).toEqual([]);
+    const r = remixDef(emptyWorkspace(), d);
+    expect('error' in r ? r.error : '').toBe('');
+  }, 120000);
 });
