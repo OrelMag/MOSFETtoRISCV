@@ -56,7 +56,8 @@ export function ram(k: number, w: number): ComponentDef {
   nets.push({ name: 'dout', ends: ['rmux.y', 'dout'] });
 
   const def = define({
-    id: `ram${N}x${w}`, name: `${N}×${w} memory`, category: 'memory',
+    // past 2^6 words bigmem.ts's bigRam has ram<N>x<w>, a behavioural leaf: define() hands back the first part of an id, so sharing it would swap one for the other
+    id: k > 6 ? `ramg${N}x${w}` : `ram${N}x${w}`, name: `${N}×${w} memory`, category: 'memory',
     summary: `${N} words of ${w} bits (${N * w} bits). Writing: the decoder enables exactly one word when we = 1. Reading: a multiplexer tree selects the addressed word.`,
     ports: [
       { name: 'addr', width: k, dir: 'in' },

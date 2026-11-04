@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ethSwitch } from '../src/lib/ethswitch';
 import { CONV_K3, CONV_K7 } from '../src/comm/conv';
 import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
+import { ethSwitch } from '../src/lib/ethswitch';
 import { define } from '../src/lib/define';
 import { reachableDefs } from '../src/lib/resolve';
 import { NAND } from '../src/lib/transistors';
