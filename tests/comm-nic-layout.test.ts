@@ -7,7 +7,7 @@ import { stackProgram } from '../src/comm/stack';
 import { hostApp } from '../src/comm/stack/apps';
 import { emptyWorkspace } from '../src/editor/model';
 import { remixDef } from '../src/editor/remix';
-import { lanComputers, lanSoc } from '../src/lib/lan';
+import { lanComputers, lanSoc, nicLoopback } from '../src/lib/lan';
 import { nic } from '../src/lib/nic';
 import { busComputer } from '../src/lib/soc';
 import { deadInstances } from '../src/sim/dead';
@@ -37,7 +37,7 @@ describe('the NIC, block by block', () => {
 });
 
 describe('the scene circuits', () => {
-  const tops = [lanComputers(prog, prog), busComputer(prog, [0], lanSoc(12)), nic()];
+  const tops = [lanComputers(prog, prog), nicLoopback(prog), busComputer(prog, [0], lanSoc(12)), nic()];
   it.each(tops.map((d) => [d.id, d] as const))('%s: no overlapping labels or symbols, nothing dead, and Open in Sandbox works', (_, d) => {
     const nl = netlistOf(d)!;
     expect(labelOverlaps(d, nl)).toEqual([]);

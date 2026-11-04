@@ -99,6 +99,15 @@ export const chNetwork: Chapter = {
         <p>Every output of the gates is compared with <code>comm/nic.ts</code> on every clock, on a bench with a RAM that makes the master wait, and again with the real computer around it, instruction by instruction against the instruction-set simulator. Press Run: the frame leaves, comes back in through its own receiver and the driver sees it.</p>`;
       },
       scene: () => nicScene(false),
+      tour: {
+        label: 'Follow one frame',
+        beats: [
+          { reset: true, at: [], show: ['c'], title: 'Power on', say: 'The computer starts at the first instruction of the driver. Its RAM is empty and the NIC is held in reset: CTRL.EN is 0, so both MACs and every engine are.' },
+          { at: ['c'], show: ['cpu', 'nic', 'ram'], cycles: 250, title: 'Rings and registers', say: 'About 250 clocks later the driver has written eight descriptors in each ring, the ring bases, the address and the enable bit. The NIC is a bus slave for those writes: <b>nic</b> answers on the same bus as the RAM, a third master beside the CPU and the DMA engine.' },
+          { at: ['c', 'nic'], show: ['regs', 'dma', 'tx'], cycles: 400, title: 'Doorbell and transmit', expect: { txen: 1 }, say: 'The driver has built a 64-byte frame and rung the doorbell. <b>tx</b> read the descriptor, then the buffer, a word at a time, and its MAC started the preamble. <code>txen</code> is up: the cable is busy for the next 2 432 clocks.' },
+          { at: ['c', 'nic'], show: ['rx', 'dma', 'regs'], cycles: 2500, title: 'The frame comes back', expect: { txen: 0 }, say: 'The transmitter is done. The frame went into this NIC\'s own receiver; <b>rx</b> fetched a descriptor at the first byte, wrote the bytes as they arrived, and committed word 1 after the FCS: OWN cleared, length 64. The driver, spinning on that bit, has seen it.' },
+        ],
+      },
       challenge: {
         kind: 'reach',
         goal: 'Run the driver until it has the frame back in its receive buffer.',
@@ -166,7 +175,7 @@ export const chNetwork: Chapter = {
       title: 'Ping across the wire',
       get body() {
         return `
-        <p>Two computers, each the system CPU of chapter 38 with a RAM, a DMA engine and now a NIC, joined through the four-port switch of chapter 49 with a MAC pair on each switch port (the switch's ports are byte streams; the MACs turn them to bits). Computer A runs the ping program, B only <code>net_poll()</code>. Both run <em>the same compiled stack</em>: ${n0(NET.words.a)} instructions in A, ${n0(NET.words.b)} in B, from Python text you can read in <code>src/comm/stack/</code>. All of it is gates: ${n0(N.lan)} NANDs, ${n0(N.switch)} of them the switch (cells of 128 bytes, two a port; a frame longer than that would not fit, so the apps keep to 94 bytes of payload).</p>
+        <p>Two computers, each the system CPU of chapter 38 with a RAM, a DMA engine and now a NIC, joined through the four-port switch of chapter 49 with a MAC pair on each switch port (the switch's ports are byte streams; the MACs turn them to bits). Computer A runs the ping program, B only <code>net_poll()</code>. Both run <em>the same compiled stack</em>: ${n0(NET.words.a)} instructions in A, ${n0(NET.words.b)} in B, from Python text you can read in <code>src/comm/stack/</code>. All of it is gates: ${n0(N.lan)} NANDs, ${n0(N.switch)} of them the switch (cells of 128 bytes, two a port; a frame longer than that would not fit its cell, so the applications keep every frame within 128 bytes: 86 bytes of data in an echo or a datagram).</p>
         <p>Run it. A looks for 10.0.0.2 in its ARP table, finds nothing, and sends the request: broadcast, flooded by the switch to every port, received by B. B learns A, answers; A learns B. A sends the echo request; B answers; A's console prints the round trip. Click a frame in the list to see its bytes, coloured by layer. <strong>Save capture</strong> writes what the switch saw as a <code>.pcap</code> file that Wireshark or <code>tcpdump -r</code> reads: the same bytes, a timestamp from the clock counter at ${CLOCK_NS} ns a clock.</p>
         <p>The numbers: the first reply is at clock ${n0(NET.clocksToFirstReply)} (${us(NET.clocksToFirstReply)} µs), most of it the ARP exchange and the software's patience around it; the ping itself, request to reply, is <strong>${n0(NET.rtt)} clocks</strong> (${us(NET.rtt)} µs). The cable accounts for four frame times of ${n0(ECHO_FRAME)} clocks, since every frame is serialized twice (computer to switch, switch to computer) and the switch is store-and-forward, and the software for the rest. The cycle engine runs this at about a thousand clocks a second, so the first reply takes a minute or so; the clock counter tells you how far it has got.</p>`;
       },
