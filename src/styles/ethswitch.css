@@ -1,0 +1,59 @@
+/* Chapter 49: a switch. Colours come from the theme tokens, so both themes follow. */
+.sw-panel { min-width: 0; }
+.sw-hosts { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.sw-host { padding: 2px 8px; border-radius: 6px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); border-left: 4px solid var(--c, var(--accent)); color: var(--text); }
+.sw-host .mono, .sw-trow .mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.sw-controls { display: grid; gap: 4px; min-width: 0; }
+.sw-lbl { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.sw-lbl .mc-sel { max-width: 100%; min-width: 0; }
+.sw-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text); }
+.sw-body { display: grid; gap: 4px; min-width: 0; }
+.sw-table, .sw-counters, .sw-log { font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); overflow: hidden; min-width: 0; }
+.sw-trow { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 3em 5.5em; gap: 6px; padding: 2px 8px; border-bottom: 1px solid var(--border); }
+.sw-trow.head, .sw-crow.head { color: var(--muted); font-size: 11.5px; }
+.sw-trow.empty { display: block; color: var(--muted); }
+.sw-trow:last-child, .sw-crow:last-child, .sw-line:last-child { border-bottom: 0; }
+.sw-crow { display: grid; grid-template-columns: minmax(7em, 1.6fr) repeat(4, minmax(0, 1fr)); gap: 6px; padding: 2px 8px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; }
+.sw-crow b { font-family: inherit; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.sw-lock { padding: 3px 8px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }
+.sw-lock.bad { color: var(--wx, #d33); }
+.sw-line { padding: 2px 8px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.sw-line.empty { color: var(--muted); font-family: inherit; }
+.sw-line i { font-style: normal; color: var(--muted); }
+.sw-line.flood i { color: var(--warn, #b80); }
+.sw-timeline { width: 100%; height: auto; display: block; }
+.sw-timeline .lbl { fill: var(--muted); font: 10.5px var(--font-mono); }
+.sw-timeline .bar { stroke: none; opacity: 0.9; }
+.sw-cap { align-items: center; }
+.sw-w .sw-plot { min-width: 0; display: grid; gap: 4px; }
+.sw-chart { width: 100%; height: auto; display: block; }
+.sw-chart .bar { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.sw-chart .bar.over { fill: color-mix(in srgb, var(--wx, #d33) 65%, transparent); }
+.sw-chart .cap { stroke: var(--text); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.sw-chart .tick { fill: var(--muted); font: 10.5px var(--font-mono); }
+.sw-chart .grid { stroke: var(--border); stroke-width: 1; }
+.sw-chart .ln { fill: none; stroke-width: 2.2; stroke-linejoin: round; }
+.sw-chart .ln.fifo { stroke: var(--wx, #d33); }
+.sw-chart .ln.voq { stroke: var(--probe-1, #48c); }
+.sw-chart .ln.voq8 { stroke: var(--probe-0, #4c8); }
+.sw-chart .ln.voq16 { stroke: var(--probe-3, #a5c); }
+.sw-key .k.fifo { color: var(--wx, #d33); }
+.sw-key .k.voq { color: var(--probe-1, #48c); }
+.sw-key .k.voq8 { color: var(--probe-0, #4c8); }
+.sw-key .k.voq16 { color: var(--probe-3, #a5c); }
+.sw-chart .ideal { stroke: var(--border-strong, var(--border)); stroke-dasharray: 2 4; }
+.sw-chart .theory { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 3; }
+.sw-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; }
+.sw-key .k { color: var(--muted); }
+.sw-key .k::before { content: ''; display: inline-block; width: 14px; height: 0; border-top: 3px solid currentColor; margin-right: 5px; vertical-align: middle; }
+.sw-key .k.theory::before { border-top-style: dashed; }
+.sw-key .k.ideal::before { border-top-style: dotted; }
+.uart-tbl tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+@media (max-width: 520px) {
+  .sw-crow { grid-template-columns: minmax(5.5em, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 3px; padding: 2px 5px; font-size: 11px; }
+  .sw-trow { grid-template-columns: 2.4em minmax(0, 1fr) 2.4em 4.8em; gap: 4px; }
+}
+@media (pointer: coarse) {
+  .sw-panel .btn.sm, .sw-w .btn.sm { min-height: 40px; }
+  .sw-chk input { width: 22px; height: 22px; }
+}

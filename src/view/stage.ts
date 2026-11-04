@@ -54,6 +54,8 @@ export interface Scene {
   panels?: ScenePanel[];
   /** Hide these inputs from the control bar (driven by the chapter). */
   hiddenInputs?: string[];
+  /** Leave these outputs out of the readout strip (a scene with a panel that shows them better). */
+  hiddenOutputs?: string[];
   /** Always animate propagation in this scene, regardless of the global setting. */
   animate?: boolean;
   /** Open the timing panel (logic analyzer) on load. */
@@ -1698,7 +1700,7 @@ export class Stage {
       if (p.name === clk) continue;
       pins.append(p.width === 1 ? this.bitToggle(p) : this.numInput(p));
     }
-    const outs = outPorts(root);
+    const outs = outPorts(root).filter((p) => !(this.scene!.hiddenOutputs ?? []).includes(p.name));
     if (outs.length) {
       // One sunken strip, so the label wraps together with its readouts.
       pins.append(h('span', { class: 'ctl-group out-strip' }, h('span', { class: 'label' }, 'Outputs'),

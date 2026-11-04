@@ -77,3 +77,4 @@ export * from './uart';
 export * from './uartlink';
 export * from './modem';
 export * from './serdes';
+export * from './ethswitch';
