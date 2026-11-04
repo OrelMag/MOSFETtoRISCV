@@ -47,11 +47,14 @@ function lockstep(s: ConvSpec, q: number, depth: number, steps: number, seed: nu
         for (let b = 0; b < depth; b++) if (got[b] !== v.surv[i][b]) expect(got[b], `${at} survivor ${i} bit ${b}`).toBe(v.surv[i][b]);
       }
     };
+    let enabled = 0;
+    const seen = new Set<number>(); // `out` once the survivors are `depth` long: real decoded data, not the reset's zeros
     set(sim, { r0: 0, r1: 0, en: 0, rst: 1, clk: 0 }); tick(sim); set(sim, { rst: 0 }); v.resetMetrics();
     check('reset');
     for (let t = 0; t < steps; t++) {
       const r0 = r(L), r1 = r(L), en = r(5) ? 1 : 0;
       set(sim, { r0, r1, en });
+      if (en && ++enabled > depth) seen.add(v.out);
       if (en) { // the selects are combinational: read them before the edge
         v.step(r0, r1);
         for (let i = 0; i < n; i++) expect(numOf(sim, [`u${i}`], 'sel'), `t ${t} sel ${i}`).toBe(v.sel[i]);
@@ -60,6 +63,7 @@ function lockstep(s: ConvSpec, q: number, depth: number, steps: number, seed: nu
       check(`t ${t}`);
       if (t % 8 === 7) await yieldTick();
     }
+    if (enabled > depth + 20) expect(seen.size, 'out carried both values after the survivors filled').toBe(2);
   };
 }
 
@@ -67,7 +71,7 @@ describe('Viterbi decoder', () => {
   it('K = 3, hard: every metric, select, survivor and output every clock', lockstep(CONV_K3, 1, 30, 400, 21), 60000);
   it('K = 3, three-bit levels', lockstep(CONV_K3, 3, 12, 200, 22), 60000);
   it('K = 7, hard, the standard code', lockstep(CONV_K7, 1, 70, 120, 23), 300000);
-  it('K = 7, three-bit levels', lockstep(CONV_K7, 3, 70, 60, 24), 300000);
+  it('K = 7, three-bit levels', lockstep(CONV_K7, 3, 70, 120, 24), 600000); // past the depth, so `out` is decoded data
   it('reports its costs', () => {
     // eslint-disable-next-line no-console
     for (const [s, o] of [[CONV_K3, {}], [CONV_K7, {}], [CONV_K7, { q: 3 }]] as const) { const d = viterbi(s, o); console.log(d.name, stats(d).nands, stats(d).transistors, logicDepth(d)); }
