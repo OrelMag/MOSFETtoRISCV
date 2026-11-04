@@ -12,6 +12,7 @@ import { FO4_TAU, PS_PER_TAU } from '../phys/sizing';
 import type { SwitchSim } from '../sim/switchsim';
 import { driverWidget, flightWidget, noiseWidget, padScene, reflectionWidget, repeaterWidget, terminationWidget, wireRcWidget } from '../widgets/line';
 import { cable3d } from '../widgets/cable3d';
+import { package3d } from '../widgets/package3d';
 import { withModel } from '../widgets/modelhost';
 import type { Chapter } from './types';
 
@@ -234,6 +235,13 @@ export const chWire: Chapter = {
       more: {
         real: `<p>Real pads add an ESD structure (two diodes to the rails, the clamp that carries the overshoot of step 5), a bond or bump with a few nanohenries, and slew-rate control to limit ground bounce. Each adds to the ${f1(PAD_PIN_FF / 1000)} pF the driver sees. The model puts the pin capacitance in one illustrative number.</p>`,
       },
+    },
+    {
+      title: 'From the pad to the pin',
+      body: `
+        <p>The pad is not the pin. Between the die and the board sits a bond wire a few millimetres long, a lead in the lead frame, and the board's own copper. A wire carrying current has inductance, a few nH per bond, and every output returns its current through the same few ground wires. When several outputs switch at once the chip's ground lifts by <code>L · n · di/dt</code>, the figure of step 7's noise panel: eight pads, 3 nH and a 1 ns edge give ${f2(bounce(8, 1))} V against V<sub>IL</sub> = ${f2(VIL)} V.</p>
+        <p>Open the package and watch the wires that carry it. Adding ground pins puts bond wires in parallel and divides L; the model here divides it exactly, which a real package does not, because neighbouring wires couple through their mutual inductance.</p>`,
+      widget: () => package3d(),
     },
   ],
 };
