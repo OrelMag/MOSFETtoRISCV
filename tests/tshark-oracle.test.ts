@@ -3,7 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import { icmpEchoFrame, tcpFrame, udpFrame } from '../src/comm/netframes';
 import { HOSTS } from '../src/comm/stack/apps';
-import { claimOf, compareCapture, compareRow, FIELDS, parseRows, tsharkArgs, type Row } from '../scripts/tshark-lib';
+import { checksum } from '../src/net/ipv4';
+import { FP_FRAMES } from '../src/widgets/router';
+import { claimOf, compareCapture, compareRow, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, type Row } from '../scripts/tshark-lib';
 
 const A = HOSTS.A, B = HOSTS.B, hdr = { srcMac: A.mac, dstMac: B.mac, src: A.ip, dst: B.ip, id: 9 };
 const ping = icmpEchoFrame({ ...hdr, ident: 0x1234, seq: 1, data: [1, 2, 3, 4] }).bytes;
@@ -106,5 +108,40 @@ describe('the comparison', () => {
   });
   it('a capture with a frame missing', () => {
     expect(compareCapture([{ us: 0, bytes: ping }, { us: 1, bytes: ping }], [rowOf(ping)])[0]).toMatch(/read 1 frames of 2/);
+  });
+  it('a retransmission\'s bytes count under tshark\'s other name for them, and only if they are the same bytes', () => {
+    const seg = tcpFrame({ ...hdr, sport: 5000, dport: 12000, seq: 1, ack: 1, flags: 0x18, wnd: 512, data: [1, 2, 3, 4] }).bytes, r = rowOf(seg);
+    const hex = r['data.data']!;
+    delete r['data.data'];
+    expect(compareRow(claimOf(seg, 0), { ...r, 'tcp.segment_data': hex })).toEqual([]);
+    expect(compareRow(claimOf(seg, 0), { ...r, 'tcp.segment_data': '09090909' }).join()).toMatch(/data\.data/);
+    expect(compareRow(claimOf(seg, 0), r).join()).toMatch(/data\.data/);
+  });
+  it('a lossy transfer may be told so, and only that, only where the case allows it', () => {
+    const r = { ...rowOf(ping), '_ws.expert.severity': 'Warn', '_ws.expert.message': 'TCP window specified by the receiver is now completely full' };
+    expect(issues(r).join()).toMatch(/expert/);
+    expect(compareRow(claimOf(ping, 0), r, TCP_LOSS_WARNINGS)).toEqual([]);
+    const bad = { ...r, '_ws.expert.message': 'Bogus IP length' };
+    expect(compareRow(claimOf(ping, 0), bad, TCP_LOSS_WARNINGS).join()).toMatch(/expert/);
+  });
+  it('DNS on port 53 claims its header and its place in the chain, and every record in the column', () => {
+    const q = udpFrame({ ...hdr, sport: 5000, dport: 53, data: [0x4a, 0x10, 0x81, 0, 0, 1, 0, 2, 0, 0, 0, 0] }).bytes, c = claimOf(q, 0);
+    expect(c.chain).toBe('eth:ethertype:ip:udp:dns');
+    expect(c.fields).toMatchObject({ 'dns.id': 0x4a10, 'dns.flags.response': 1, 'dns.count.queries': 1, 'dns.count.answers': 2 });
+    expect(compareRow(c, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp', 'dns.flags.response': 'True' }).join()).toMatch(/protocols/);
+    expect(compareRow(c, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.flags.response': 'True' })).toEqual([]);
+    const two = { ...c, fields: { ...c.fields, 'dns.a': '10.0.0.1|10.0.0.2' } };
+    expect(compareRow(two, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.a': '10.0.0.1|10.0.0.2' })).toEqual([]);
+    expect(compareRow(two, { ...rowOf(q), 'frame.protocols': 'eth:ethertype:ip:udp:dns', 'dns.a': '10.0.0.1|10.0.0.3' }).join()).toMatch(/dns\.a/);
+  });
+});
+
+describe('chapter 51\'s frames', () => {
+  it('hold a real UDP header: tshark calls a 4-byte payload marked UDP malformed', () => {
+    for (const n of [0, 1, 2, 3, 4, 5]) {
+      const f = FP_FRAMES[n].frame(), t = 14 + (f[14] & 15) * 4, ipLen = (f[16] << 8) | f[17];
+      expect((f[t + 4] << 8) | f[t + 5]).toBe(ipLen - (t - 14));
+      expect(checksum(f.slice(14, t))).toBe(0);
+    }
   });
 });

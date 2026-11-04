@@ -9,7 +9,8 @@ export const FIELDS = [
   'icmp.type', 'icmp.code', 'icmp.checksum', 'icmp.checksum.status', 'icmp.ident', 'icmp.seq',
   'udp.srcport', 'udp.dstport', 'udp.length', 'udp.checksum', 'udp.checksum.status',
   'tcp.srcport', 'tcp.dstport', 'tcp.seq_raw', 'tcp.ack_raw', 'tcp.flags', 'tcp.window_size_value', 'tcp.checksum', 'tcp.checksum.status',
-  'data.data',
+  'data.data', 'tcp.segment_data',
+  'dns.id', 'dns.flags.response', 'dns.count.queries', 'dns.count.answers', 'dns.count.auth_rr', 'dns.count.add_rr', 'dns.qry.name', 'dns.resp.name', 'dns.ns', 'dns.a', 'dns.resp.ttl',
 ] as const;
 export type Field = typeof FIELDS[number];
 
@@ -64,6 +65,11 @@ export function claimOf(b: ArrayLike<number>, us: number): Claim {
       chain += ':udp';
       Object.assign(fields, { 'udp.srcport': be(b, t, 2), 'udp.dstport': be(b, t + 2, 2), 'udp.length': be(b, t + 4, 2), 'udp.checksum': be(b, t + 6, 2) });
       good.push('udp.checksum.status');
+      if (be(b, t, 2) === 53 || be(b, t + 2, 2) === 53) {
+        chain += ':dns';
+        const d = t + 8;
+        Object.assign(fields, { 'dns.id': be(b, d, 2), 'dns.flags.response': b[d + 2] >> 7, 'dns.count.queries': be(b, d + 4, 2), 'dns.count.answers': be(b, d + 6, 2), 'dns.count.auth_rr': be(b, d + 8, 2), 'dns.count.add_rr': be(b, d + 10, 2) });
+      }
     } else if (proto === 6) {
       chain += ':tcp';
       Object.assign(fields, { 'tcp.srcport': be(b, t, 2), 'tcp.dstport': be(b, t + 2, 2), 'tcp.seq_raw': be(b, t + 4, 4), 'tcp.ack_raw': be(b, t + 8, 4), 'tcp.flags': b[t + 13] & 0x3f, 'tcp.window_size_value': be(b, t + 14, 2), 'tcp.checksum': be(b, t + 16, 2) });
@@ -78,11 +84,13 @@ export function claimOf(b: ArrayLike<number>, us: number): Claim {
 /** The outermost value: an ICMP error holds a second IP header, whose fields follow the first's in an aggregated column. */
 const first = (s: string | undefined): string | undefined => s?.split('|')[0];
 
+const LISTED = new Set<Field>(['dns.resp.name', 'dns.ns', 'dns.a', 'dns.resp.ttl']);
+
 function same(field: Field, want: string | number, got: string | undefined): boolean {
   if (got === undefined) return false;
   if (field === 'frame.time_epoch') return Math.round(Number(got) * 1e6) === want;
   if (field === 'data.data') return got.replace(/[:|]/g, '').toLowerCase() === want;
-  if (typeof want === 'number') return Number(got) === want;
+  if (typeof want === 'number') return Number(got.replace(/^true$/i, '1').replace(/^false$/i, '0')) === want;
   return got.toLowerCase() === want;
 }
 
@@ -92,10 +100,12 @@ const BAD_STATUS = new Set(['0', '4', 'bad', 'illegal']);
 const GOOD_STATUS = new Set(['1', 'good']);
 
 /** Every way tshark's reading of one frame departs from what its bytes claim: empty when they agree. */
-export function compareRow(c: Claim, r: Row): string[] {
+export function compareRow(c: Claim, r: Row, allow?: RegExp): string[] {
   const out: string[] = [];
   for (const [k, want] of Object.entries(c.fields) as [Field, string | number][]) {
-    const got = k === 'data.data' ? r[k] : first(r[k]);
+    // a DNS field lists every record of a message, in order: the whole column is claimed
+    // a segment tshark takes for a retransmission or out of order keeps its bytes, under the other name: no sub-dissector is called on it
+    const got = k === 'data.data' ? r[k] ?? r['tcp.segment_data'] : LISTED.has(k) ? r[k] : first(r[k]);
     if (!same(k, want, got)) out.push(`${k}: tshark ${got ?? 'has nothing'}, the bytes say ${want}`);
   }
   const protos = r['frame.protocols'] ?? '';
@@ -106,16 +116,19 @@ export function compareRow(c: Claim, r: Row): string[] {
     if ((r[f] ?? '').split('|').some((x) => BAD_STATUS.has(x.toLowerCase()))) out.push(`${f}: a bad checksum (${r[f]})`);
   }
   const sev = (r['_ws.expert.severity'] ?? '').split('|'), msg = (r['_ws.expert.message'] ?? '').split('|');
-  sev.forEach((x, i) => { if (SEVERE.test(x)) out.push(`expert ${x}: ${msg[i] ?? ''}`); });
+  sev.forEach((x, i) => { if (SEVERE.test(x) && !allow?.test(msg[i] ?? '')) out.push(`expert ${x}: ${msg[i] ?? ''}`); });
   return out;
 }
+
+/** The one warning a transfer over a short queue rightly gets, about the stream and not the bytes. Its retransmissions and duplicate ACKs are only notes. */
+export const TCP_LOSS_WARNINGS = /^TCP window specified by the receiver is now completely full$/;
 
 export interface Captured2 { us: number; bytes: ArrayLike<number> }
 
 /** A whole capture against tshark's rows. */
-export function compareCapture(frames: readonly Captured2[], rows: readonly Row[], claims: Claim[] = frames.map((f) => claimOf(f.bytes, Math.max(0, Math.round(f.us))))): string[] {
+export function compareCapture(frames: readonly Captured2[], rows: readonly Row[], claims: Claim[] = frames.map((f) => claimOf(f.bytes, Math.max(0, Math.round(f.us)))), allow?: RegExp): string[] {
   const out: string[] = [];
   if (rows.length !== frames.length) out.push(`tshark read ${rows.length} frames of ${frames.length}`);
-  rows.forEach((r, i) => { if (claims[i]) for (const p of compareRow(claims[i], r)) out.push(`frame ${i + 1}: ${p}`); });
+  rows.forEach((r, i) => { if (claims[i]) for (const p of compareRow(claims[i], r, allow)) out.push(`frame ${i + 1}: ${p}`); });
   return out;
 }

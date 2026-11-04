@@ -8,6 +8,7 @@ import { routerFastPath } from '../lib';
 import { mkChips } from './line';
 import { slider } from './mosparts';
 import { CAUSE_NAMES, C_FORWARD, FastPathModel, posOf, STATE_NAMES, S_RX, S_TX, type FpIn } from '../net/fastpath';
+import { udpSegment } from '../net/internet';
 import { checksum, IP_HEADER, ipOf, ipPacket, ipText, onesSum, PROTO_UDP, ttlChecksum } from '../net/ipv4';
 import { CHAIN3, dijkstra, DistVec, floodAll, floodMessages, INFINITY, NET7, type Topology } from '../net/routing';
 import { adjImage, buildTrie, lpmLinear, PORT_CPU, routeMatches, walkTrie, type NextHop, type Route } from '../net/trie';
@@ -141,7 +142,7 @@ export function engineWidget(): Widget {
 // ---- 3. the fast path's scene ----------------------------------------------------------------------------------------------------------
 
 export interface FpFrame { name: string; frame: () => number[] }
-const udp = (dst: string, ttl = 64) => frameBody({ dst: CH_OWN, src: CH_HOST, type: ETHERTYPE_IPV4, payload: ipPacket({ src: ipOf('10.9.9.9'), dst: ipOf(dst), ttl, proto: PROTO_UDP, id: 0x1c46, payload: [0xde, 0xad, 0xbe, 0xef] }) });
+const udp = (dst: string, ttl = 64) => frameBody({ dst: CH_OWN, src: CH_HOST, type: ETHERTYPE_IPV4, payload: ipPacket({ src: ipOf('10.9.9.9'), dst: ipOf(dst), ttl, proto: PROTO_UDP, id: 0x1c46, payload: udpSegment(ipOf('10.9.9.9'), ipOf(dst), 5000, 9, [0xde, 0xad, 0xbe, 0xef]) }) });
 export const FP_FRAMES: FpFrame[] = [
   { name: 'To 10.1.2.9: matches the /24', frame: () => udp('10.1.2.9') },
   { name: 'To 10.1.77.1: the /16', frame: () => udp('10.1.77.1') },
