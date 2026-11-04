@@ -265,7 +265,7 @@ export const descrambler = (taps: [number, number] = [6, 7]): ComponentDef => sc
 // ---- the sender -------------------------------------------------------------------------------------------------------------
 
 /** The sender's bit clock: acc += inc each cycle; the carry out of the 12-bit sum is the tick. inc = 1024 ticks every 4 cycles. */
-export const NCO = memo('nco12', () => {
+export const BIT_NCO = memo('nco12', () => {
   const b = new Builder(10, 12);
   b.pins('inc', 'clk');
   const zero = b.op1(TIE0, []), one = b.op1(TIE1, []);
@@ -322,7 +322,7 @@ export const SERIALIZER10 = memo('ser10', () => {
 export const SER_TX = memo('sertx', () => {
   const b = new Builder(10, 12);
   b.pins('inc', 'word', 'clk');
-  const nco = b.op(NCO, ['inc', 'clk'], 'bit clock', 'nco');
+  const nco = b.op(BIT_NCO, ['inc', 'clk'], 'bit clock', 'nco');
   b.next();
   const ser = b.op(SERIALIZER10, ['word', `${nco}.tick`, 'clk'], 'serializer', 'ser');
   b.next();
