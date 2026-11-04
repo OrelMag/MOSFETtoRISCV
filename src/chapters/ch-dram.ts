@@ -5,6 +5,7 @@ import { findNode } from '../sim/flatten';
 import { SENSE_OFFSET, type SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
 import { dramActions, dramScene, dramState, SAFE_CYCLES } from '../widgets/dram';
+import { dram3d } from '../widgets/dram3d';
 import { rowBufferWidget, timingWidget } from '../widgets/dramtiming';
 import type { Chapter } from './types';
 
@@ -291,6 +292,20 @@ export const chDram: Chapter = {
         answer: `Wait 200, Refresh all, three times. Each row is restored before ${SAFE_CYCLES} cycles pass. Waiting 400 at once would be too late: the 1s would have fallen below ${(READABLE * VDD_VOLTS).toFixed(3)} V.`,
         solve: (st) => { const a = dramActions(st); for (let i = 0; i < 3; i++) { a?.wait(200); a?.refreshAll(); } },
       },
+    },
+    {
+      title: 'The array, live',
+      body: `
+        <p>The model below runs this chapter's 4 × 4 array on its own switch-level simulator. Each column stands as high as the voltage on its node, and
+        its footprint is proportional to its capacitance, so a column's volume is its charge. The bit line is four times the cell
+        (${BITLINE_C} fF against ${CELL_C} fF): when a word line rises the cell's volume spreads over both, and the shared level is
+        (Cs·V<sub>cell</sub> + Cb·VDD/2) / (Cs + Cb), a swing of ${mV(DV)} mV for a full 1. That read destroyed the cell. <strong>Sense</strong>
+        pulls the pair to a rail and the cell refills; <strong>Close</strong> and <strong>Precharge</strong> return it to idle.</p>
+        <p>Then <strong>Wait</strong>: every cell with a 1 sinks, and after ${SAFE_CYCLES} cycles the swing is below the amplifier's
+        ${OFFSET_MV} mV offset and the next read cannot tell it from a 0. <strong>Refresh</strong> a row before that. The numbers on the right
+        are the simulator's, read after each step.</p>
+        <div class="try">Activate row 0, then Sense. Close, Precharge, then Wait 200 and Wait 200 again: activate and sense once more and a 1 that was there has gone.</div>`,
+      widget: () => dram3d(),
     },
     {
       title: 'Rows, columns, banks',

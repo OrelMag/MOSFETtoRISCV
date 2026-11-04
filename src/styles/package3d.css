@@ -1,0 +1,16 @@
+/* The opened package model: materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d {
+  --pk-board: light-dark(#3f7a58, #2f5e46);
+  --pk-lead: light-dark(#a8adb8, #8f96a6);
+  --pk-paddle: light-dark(#c9ced8, #7a8396);
+  --pk-gold: light-dark(#c8921e, #e6b64a);
+  --pk-ground: light-dark(#1d6fa5, #5db3ea);
+  --pk-lit: light-dark(#ff9a2e, #ffb04a);
+  --pk-bad: light-dark(#e04b4b, #ff6b6b);
+}
+.pk-bar { position: relative; height: 14px; margin: 8px 0 2px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); }
+.pk-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--accent); }
+.pk-bar i.bad { background: var(--bad); }
+.pk-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+.pk-scale { position: relative; height: 16px; margin-bottom: 8px; font: 600 10.5px var(--font-mono); color: var(--muted); }
+.pk-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }

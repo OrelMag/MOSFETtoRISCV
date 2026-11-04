@@ -65,6 +65,7 @@ editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design 
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
+`.github/workflows/tshark.yml` (pushes touching comm/pcap.ts, the frames, the stack, the capturing widgets or itself; not a deploy gate) has tshark read each chapter's capture, from the gates and the chapters' own frames (`scripts/tshark-oracle.ts`, `--dump` only writes the files, no tshark on Windows; tshark-lib.ts holds each frame to what its bytes claim: fields, protocols, checksums verified good, nothing malformed, no warnings); captures broken on purpose must be caught, and the .pcap files and tshark's output are kept as an artifact.
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
@@ -1184,7 +1185,7 @@ src/phys/      lumped physics models behind the prologue's close-ups (DOM-free):
                law fitted to the datasheet, Richardson emission over a 6 s heater warm-up, plateVoltage with divider loads,
                gateLevels(fanout, top, bottom, bias): a chain's margins, sectionPower / nandBrickPower, TUBE_STEP_US (an
                estimate), ENIAC's numbers; tests/phys-triode.test.ts)
-src/widgets/   (3D models, also) modelhost.ts lazyModel / withModel: what a chapter imports (a model under the step's widget; never a grid around a `.widget`: its margin: auto collapses), modelstage.ts modelStage: a model's canvas, SVG fallback (gl/parts.ts flatFaces), labels, chips, theme; gl/parts.ts box / cyl / rod / wire, Anchor: DOM-free parts, so `<x>3dparts.ts` is tested against its model (tests/models3d.test.ts: mosfet3dparts on mosphys.ts). Tokens --m3-* in styles/model3d.css, the stage's classes r3-* in relay3d.css
+src/widgets/   (3D models, also) modelhost.ts lazyModel / withModel: what a chapter imports (a model under the step's widget; never a grid around a `.widget`: its margin: auto collapses), modelstage.ts modelStage: a model's canvas, SVG fallback (gl/parts.ts flatFaces), labels, chips, theme; gl/parts.ts box / cyl / rod / wire, Anchor: DOM-free parts, so `<x>3dparts.ts` is tested against its model (tests/models3d.test.ts: mosfet3dparts on mosphys.ts). Tokens --m3-* in styles/model3d.css, the stage's classes r3-* in relay3d.css. The models: mosfet3d, strowger3d (phys/strowger.ts, tests hold it to DIAL_SELECTOR), cable3d (phys/cable.ts), masks3d, fgate3d (phys/fgate.ts on lib/flash.ts), dram3d (its own SwitchSim of DRAM4X4), telegraph3d (phys/telegraph.ts, relay.ts), package3d (phys/line.ts groundBounce), press3d (cards/census.ts, shared with censusWidget)
 src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
                floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
                on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
@@ -1643,6 +1644,7 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
 - A quiz's `why` (one per option) says why a wrong pick is wrong; a reach challenge's `hints` come before Show answer;
   `Step.tries` ticks the body's `.try` boxes in order once a condition holds. Folded asides: `<details class="deeper">`.
 - Checks (challenges and recap questions, chapters/checks.ts) fill the step dots and the chapter menu's counts.
+- A step inserted mid-chapter shifts the steps after it: `chapter: 'x', step: n` links in the codex and levels (tests/campaign-content, content-codexcomm), the review bank's keys (rerun scripts/review-bank.ts, tests/reviewbank), the manifest, and readers' saved `id:i` solved marks, which nothing migrates.
 - A chapter of 15 steps or more (chapters/parts.ts PARTS_MIN) names its parts: `parts: [['Name', stepCount], …]`, counts adding up to the
   steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
   progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to

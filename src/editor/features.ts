@@ -23,6 +23,8 @@ import './cpuui';
 import './memdrawer';
 // Consoles, switch banks and screens: their property sections and the Screens drawer.
 import './ioui';
+// The UART and the line: their palette group and property sections.
+import './commui';
 // The card reader's properties and deck files (also dropped on the canvas).
 import './cardui';
 // Program puzzles: the Puzzles drawer, the start dialog and the strip while a puzzle chip is open.
