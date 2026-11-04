@@ -36,7 +36,10 @@ import { sandboxBus } from './axi';
 import { AXI_UART_B, lineDef, MAX_LINE_DELAY } from './uart';
 import { asyncFifo, BIN2GRAY, GRAY2BIN, syncN } from './sync';
 import { i2cBus, i2cController, i2cTarget, i2cWired2 } from './i2c';
-import { spiDevice, spiMaster, spiPair } from './spi';
+import { axiSpi, axiSpiB, spiDevice, spiMaster, spiPair } from './spi';
+import { nic, nicB } from './nic';
+import { macRx, macTx } from './ethernet';
+import { ethSwitch, switchOptsOf } from './ethswitch';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { crcNext, crcTag, crcUnit } from './crc';
 import { CRC32_REFLECTED } from '../comm/crc';
@@ -95,6 +98,15 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^axibus2_(\d+(?:_\d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
   // chapter 43's UART slave with its bus ports packed, and the line part with its delay in the id (the sandbox's Communication group)
   [/^axi_uart_b$/, () => AXI_UART_B],
+  // chapters 48–50's NIC with both bus links packed, its MACs, the switch with any options in its id, and the SPI master as a bus slave
+  // (all built on first use: they are large, and the registry-wide tests would round-trip them)
+  [/^nic$/, () => nic()],
+  [/^nic_b$/, () => nicB()],
+  [/^eth_mac_rx$/, () => macRx()],
+  [/^eth_mac_tx$/, () => macTx()],
+  [/^ethswitch_\d+(?:_\d+)?[vf][cs]_\d+_\d+$/, (m) => { const o = switchOptsOf(m[0]); if (!o) throw new Error('switch'); return ethSwitch(o); }],
+  [/^axi_spi$/, () => axiSpi()],
+  [/^axi_spi_b$/, () => axiSpiB()],
   [/^line(\d+)$/, (m) => { const n = +m[1]; if (n < 1 || n > MAX_LINE_DELAY || String(n) !== m[1]) throw new Error('line delay'); return lineDef(n); }],
   // a 74LS189 holding its 16 nibbles at power-on (the sandbox's SAP-1 RAM)
   [/^ls189_i([0-9a-f]{16})$/, (m) => ls189With(Array.from(m[1], (c) => parseInt(c, 16)))],

@@ -19,6 +19,10 @@ import { structuralVerilog } from '../src/sim/verilog';
 import { synthVerilog } from '../src/sim/vexport';
 import type { DualSim } from '../src/sim/dualsim';
 import { breathe } from './setup';
+import { ethSwitch, switchId, switchOptsOf } from '../src/lib/ethswitch';
+import { SANDBOX_SWITCH, switchRef } from '../src/editor/commparts';
+import { LAN_SWITCH } from '../src/lib/lan';
+import { isModelDef } from '../src/editor/commparts';
 
 class MapKV implements KV {
   m = new Map<string, string>();
@@ -75,7 +79,7 @@ describe('the line part by id', () => {
   });
 
   it('the palette entries place parts that resolve, and each is owned by its entry', () => {
-    expect(COMM_PARTS.map((c) => c.id)).toEqual(['line', 'uart', 'uart_bus']);
+    expect(COMM_PARTS.map((c) => c.id)).toEqual(['line', 'uart', 'uart_bus', 'nic', 'mac_rx', 'mac_tx', 'switch', 'spi', 'spi_mem']);
     for (const c of COMM_PARTS) {
       const d = partDef(c.ref, () => undefined);
       expect('error' in d, c.id).toBe(false);
@@ -185,4 +189,45 @@ describe('exports', () => {
     expect(issue.text).toMatch(/x_<part>_d/);
     expect(x.files.find((f) => f.name === 'loop.v')!.text).toMatch(/x_ln_d/);
   });
+});
+
+describe('the NIC, the MACs, the switch and the SPI controller by id', () => {
+  it('resolve from the name alone, to the one def, and are real circuits (not models)', () => {
+    for (const id of ['nic', 'nic_b', 'eth_mac_rx', 'eth_mac_tx', 'axi_spi', 'axi_spi_b', 'spi_device', switchId(SANDBOX_SWITCH)]) {
+      const d = resolveComponent(id)!;
+      expect(d, id).toBeTruthy();
+      expect(d.id).toBe(id);
+      expect(resolveComponent(id), id).toBe(d);
+      expect(regenerable(id), id).toBe(true);
+      expect(isModelDef(d), id).toBe(false);
+    }
+    expect(resolveComponent('nic_b')!.ports.map((p) => p.name)).toEqual(expect.arrayContaining(['req', 'rsp', 'm_req', 'm_rsp', 'rxd', 'crs', 'txd', 'txen', 'irq', 'clk']));
+    expect(resolveComponent('axi_spi_b')!.ports.map((p) => p.name)).toEqual(expect.arrayContaining(['req', 'rsp', 'miso', 'sclk', 'mosi', 'cs_n', 'irq', 'clk']));
+    expect(resolveComponent(switchId(SANDBOX_SWITCH))).toBe(ethSwitch(SANDBOX_SWITCH));
+  });
+
+  it('the switch id carries its options both ways, and a bad id resolves to nothing', () => {
+    expect(switchOptsOf('ethswitch_7_2fs_7_8')).toEqual({ cellK: 7, cells: 2, voq: false, cut: false, tableK: 7, tickLog2: 8 });
+    expect(switchOptsOf(switchId({ cellK: 9, cells: 8, voq: true, cut: true, tableK: 5, tickLog2: 3 }))).toEqual({ cellK: 9, cells: 8, voq: true, cut: true, tableK: 5, tickLog2: 3 });
+    for (const bad of ['ethswitch_4fs_7_4', 'ethswitch_12fs_7_4', 'ethswitch_7_3fs_7_4', 'ethswitch_7fs_8_4', 'ethswitch_7fs_7_0', 'ethswitch_07fs_7_4', 'ethswitch_7_4fs_7_4', 'ethswitch_7xs_7_4', 'ethswitch']) {
+      expect(switchOptsOf(bad), bad).toBeNull();
+      expect(resolveComponent(bad), bad).toBeUndefined();
+    }
+    expect(LAN_SWITCH).toMatchObject({ cellK: SANDBOX_SWITCH.cellK, cells: SANDBOX_SWITCH.cells });
+    expect(commPartOf(switchRef({ cellK: 10, cells: 4, voq: false, cut: false, tableK: 6, tickLog2: 4 }))?.id).toBe('switch');
+    expect(commPartOf({ lib: 'ethswitch_7fs' })).toBeUndefined();
+  });
+
+  it('a chip placing all of them saves, reloads, shares and compiles after a reload', async () => {
+    const base = emptyChip('u_net', 'Net');
+    const chip: ChipDoc = { ...base, parts: COMM_PARTS.filter((c) => !['line', 'uart', 'uart_bus'].includes(c.id)).map((c, i) => ({ id: `p${i}`, ref: c.ref, at: [4 + 40 * (i % 3), 4 + 90 * Math.floor(i / 3)] as [number, number] })) };
+    const ws: Workspace = { ...emptyWorkspace(), chips: { [chip.id]: chip }, open: [chip.id] };
+    const kv = new MapKV();
+    expect(saveWorkspace(ws, kv)).toEqual({ ok: true });
+    expect(loadWorkspace(kv).chips[chip.id]).toEqual(chip);
+    expect(await decodeShare(await encodeShare([chip]))).toEqual([chip]);
+    for (const p of chip.parts) expect(sanitizeRef(p.ref)).toEqual(p.ref);
+    const lib = new UserLibrary({ ...emptyWorkspace(), chips: { [chip.id]: loadWorkspace(kv).chips[chip.id] }, open: [chip.id] });
+    expect(lib.compiled(chip.id)!.diags.filter((d) => d.level === 'error')).toEqual([]);
+  }, 60000);
 });

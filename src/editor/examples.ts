@@ -15,6 +15,7 @@ import { busSystemChip } from './examplebus';
 import { rv64Chip, rvcChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
 import { twoComputersChip, uartComputerChip } from './examplecomms';
+import { lanComputerChip, lanSwitchChip, lanTopChip } from './examplenet';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
 import { PONG_HZ, pongChip } from '../campaign/bench';
 
@@ -475,6 +476,16 @@ export const EXAMPLES: Example[] = [
     build: (id, n, _sub, docs) => twoComputersChip(id, n, { a: docs.a, b: docs.b }),
     subchips: { a: { name: 'Computer A', build: (id, n) => uartComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => uartComputerChip(id, n, 'B') } },
     hz: 5000,
+  },
+  {
+    id: 'twocomputers-switch', group: 'computers', short: 'Two computers with NICs and a learning switch.', name: 'Two computers on a switch',
+    blurb: 'The last scene of chapter 50: two RV32I bus cores, each with a boot ROM, RAM and a NIC (descriptor rings, DMA, a MAC), joined by a four-port learning switch. A sends B a frame and B answers it, three times; open the switch and select it to watch it learn. Slow: about 10 000 clocks a round trip.',
+    build: (id, n, _sub, docs) => lanTopChip(id, n, { a: docs.a, b: docs.b, sw: docs.sw }),
+    subchips: {
+      a: { name: 'Computer A', build: (id, n) => lanComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => lanComputerChip(id, n, 'B') },
+      sw: { name: 'Switch (two ports)', build: (id, n) => lanSwitchChip(id, n) },
+    },
+    hz: 5000, // finite: JSON stores Infinity as null, and a reload would run it at 2 Hz
   },
   {
     id: 'cardboot', group: 'computers', drawer: true, short: 'A deck read into RAM, then run.', name: 'Boot from cards',

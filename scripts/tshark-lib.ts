@@ -68,6 +68,8 @@ export function claimOf(b: ArrayLike<number>, us: number): Claim {
       chain += ':tcp';
       Object.assign(fields, { 'tcp.srcport': be(b, t, 2), 'tcp.dstport': be(b, t + 2, 2), 'tcp.seq_raw': be(b, t + 4, 4), 'tcp.ack_raw': be(b, t + 8, 4), 'tcp.flags': b[t + 13] & 0x3f, 'tcp.window_size_value': be(b, t + 14, 2), 'tcp.checksum': be(b, t + 16, 2) });
       good.push('tcp.checksum.status');
+      const data = hexOf(b, t + (b[t + 12] >> 4) * 4, end);
+      if (data) fields['data.data'] = data;
     }
   }
   return { fields, chain, good };

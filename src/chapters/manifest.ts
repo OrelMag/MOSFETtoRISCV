@@ -609,6 +609,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
+  { id: "path", num: 53, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
+    { title: "A network of networks" },
+    { title: "BGP: the whole path, and who pays", challenge: "quiz" },
+    { title: "A name, then an address", challenge: "quiz" },
+    { title: "Traceroute: asking each router to speak" },
+    { title: "The same bytes, on gates", challenge: "reach" },
+    { title: "One packet, all the way", challenge: "quiz" },
+    { title: "A page" },
+  ] },
   { id: "appendix-6502", num: 54, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
