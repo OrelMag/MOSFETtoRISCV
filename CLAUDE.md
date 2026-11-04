@@ -1645,8 +1645,13 @@ get approval. Small fixes and additions inside an existing screen don't need one
 - Before merging, on the branch:
   1. Bring it up to date with `main` (`git fetch && git merge origin/main`, or rebase if
      the branch is unpushed/private) and resolve conflicts.
-  2. Run the full gate: `npm test`, `npm run typecheck`, `npm run build`. All must pass;
-     report failures instead of merging.
+  2. **Rule: run what the change needs, never the whole deck unless it is really justified, and say why when it is.**
+     The gate for what changed: `npm run build` (typecheck included), `vitest related <changed files> --run`, smoke with `--only`
+     on the routes touched. A merge of main that brings nothing near your files needs no rerun beyond that. The whole deck only
+     for a change that reaches shared code (src/sim, src/view, src/ui, src/editor's core, src/lib parts others build on, the
+     stage), and then on a runner: `gh workflow run gate.yml --ref <branch>`, not on this machine, where full suites crash under
+     several sessions' load. All must pass; report failures instead of merging. The deploy still runs the full tests and smoke
+     before anything goes live, so a miss stops the deploy: fix forward.
   3. For visual changes, check `npm run dev` in light and dark themes.
 - **Merge with `--no-ff`** so every feature stays a visible merge commit, from the branch's worktree
   (never the shared checkout): `git checkout --detach origin/main && git merge --no-ff <branch>`, then
@@ -1685,7 +1690,7 @@ Several Claude sessions (and their subagents) work in this repo at once.
 
 ## Testing expectations
 
-- `npm test` and `npm run typecheck` must pass before committing.
+- `npm run typecheck` and the tests related to the change must pass before committing.
 - New component → spec or behaviour test. New simulator feature → unit test.
 - A reported bug → first a failing test that reproduces it (a truth table, a sequence, a layout /
   overlap check in `tests/layout.test.ts` or `tests/route.test.ts`), then the fix; prefer fixing the

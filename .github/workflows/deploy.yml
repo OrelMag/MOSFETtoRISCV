@@ -3,10 +3,12 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**/*.md', '.claude/**']
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -15,6 +17,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What the Yosys jobs have to check. Measured from the last successful deploy, not the previous push: a push
+  # cancels the run before it (concurrency above), and that run's changes must not go unchecked. By hand: all.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      hdl: ${{ steps.diff.outputs.hdl }}
+      fpga: ${{ steps.diff.outputs.fpga }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=$(gh run list --workflow deploy.yml --branch main --status success --limit 1 --json headSha -q '.[0].headSha' --repo "$GITHUB_REPOSITORY" || true)
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ -n "$base" ] && files=$(git diff --name-only "$base" HEAD); then
+            core='^(src/sim/|src/riscv/|src/lib/|package-lock\.json|\.github/workflows/deploy\.yml)'
+            echo "$files" | grep -qE "$core|^scripts/verify-export" && echo hdl=true >> "$GITHUB_OUTPUT" || echo hdl=false >> "$GITHUB_OUTPUT"
+            echo "$files" | grep -qE "$core|^src/editor/|^scripts/fpga-" && echo fpga=true >> "$GITHUB_OUTPUT" || echo fpga=false >> "$GITHUB_OUTPUT"
+          else
+            echo hdl=true >> "$GITHUB_OUTPUT"
+            echo fpga=true >> "$GITHUB_OUTPUT"
+          fi
   # The unit tests (~8 min) run beside the build and its smoke test (~1 + ~8 min), not before them.
   test:
     runs-on: ubuntu-latest
@@ -72,6 +98,8 @@ jobs:
   # dual-core and the system CPUs on their programs: a change that breaks the exported hardware does not
   # deploy. One job per design, in parallel (each 4-9 min), so the deploy waits no longer than the build.
   verify-hdl:
+    needs: changes
+    if: needs.changes.outputs.hdl == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -90,6 +118,8 @@ jobs:
       - run: npx vite-node scripts/verify-export.ts ${{ matrix.design }}
   # the sandbox's File > Export Verilog for FPGA on its examples, through Yosys's Gowin synthesis (Tang Nano 9K)
   fpga:
+    needs: changes
+    if: needs.changes.outputs.fpga == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +136,12 @@ jobs:
       # the block-RAM memories read through mem_clk against asynchronous ones, a ROM -> RAM chain, at every clk edge
       - run: CYCLES=200 npx vite-node scripts/fpga-memcheck.ts
   deploy:
-    needs: [test, build, verify-hdl, fpga]
+    needs: [changes, test, build, verify-hdl, fpga]
+    # a skipped job would otherwise skip this one too; a failed or cancelled one still stops it
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.test.result == 'success' && needs.build.result == 'success' &&
+      (needs.verify-hdl.result == 'success' || needs.verify-hdl.result == 'skipped') &&
+      (needs.fpga.result == 'success' || needs.fpga.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
       name: github-pages
