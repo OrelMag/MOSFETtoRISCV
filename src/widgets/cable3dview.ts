@@ -60,7 +60,8 @@ export function cableView(): Widget {
   };
   const toggle = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Swap in a coax') as HTMLButtonElement;
   const pairCtl = h('div', { class: 'r3-ctl' }, slider('Half twists', 0, 12, 1, st.twists, String, (v) => { st.twists = v; }), slider('dB/dt', 1, 50, 1, dbdt, (v) => `${v} T/s`, (v) => { dbdt = v; }));
-  const coaxCtl = h('div', { class: 'r3-ctl' }, slider('D', 2, 10, 0.1, st.D, (v) => `${v.toFixed(1)} mm`, (v) => { st.D = Math.max(v, st.d * 1.2); }), slider('d', 0.2, 3, 0.1, st.d, (v) => `${v.toFixed(1)} mm`, (v) => { st.d = Math.min(v, st.D / 1.2); }));
+  // d stops short of the smallest D, so the two ranges cannot cross and neither slider has to overrule what it shows.
+  const coaxCtl = h('div', { class: 'r3-ctl' }, slider('D', 2, 10, 0.1, st.D, (v) => `${v.toFixed(1)} mm`, (v) => { st.D = v; }), slider('d', 0.2, 1.6, 0.1, st.d, (v) => `${v.toFixed(1)} mm`, (v) => { st.d = v; }));
   coaxCtl.hidden = true;
   toggle.addEventListener('click', () => {
     st.coax = !st.coax; toggle.setAttribute('aria-pressed', String(st.coax)); toggle.textContent = st.coax ? 'Back to the pair' : 'Swap in a coax';
