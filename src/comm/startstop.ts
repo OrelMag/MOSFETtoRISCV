@@ -38,8 +38,10 @@ export function segments(f: Frame, code: number): Segment[] {
 }
 
 /** Line level at transmitter time t (the idle line before and after the frame is 1). */
-export function levelAt(f: Frame, code: number, t: number): { level: 0 | 1; label: string } {
+export function levelAt(f: Frame, code: number, t: number, backToBack = false): { level: 0 | 1; label: string } {
   for (const g of segments(f, code)) if (t >= g.from && t < g.to) return { level: g.level, label: g.label };
+  // back to back: the next character's start unit follows at once
+  if (backToBack && t >= frameUnits(f) && t < frameUnits(f) + 1) return { level: 0, label: 'next start' };
   return { level: 1, label: 'idle' };
 }
 
@@ -52,6 +54,8 @@ export interface RxOptions {
   phase?: number;
   /** How far into a bit it samples (0.5: the middle). */
   pos?: number;
+  /** The next character follows at once, so the line after the stop unit falls (the default: it idles at 1). */
+  backToBack?: boolean;
 }
 
 export interface Sample { label: string; nominal: number; at: number; level: 0 | 1; sees: string }
@@ -76,7 +80,7 @@ function sampleTime(nominal: number, o: RxOptions): number {
 export function receive(f: Frame, code: number, o: RxOptions): Received {
   const pos = o.pos ?? 0.5, samples: Sample[] = [];
   const at = (label: string, unit: number) => {
-    const nominal = unit + pos, t = sampleTime(nominal, o), r = levelAt(f, code, t);
+    const nominal = unit + pos, t = sampleTime(nominal, o), r = levelAt(f, code, t, o.backToBack);
     samples.push({ label, nominal, at: t, level: r.level, sees: r.label });
     return r.level;
   };
@@ -115,9 +119,11 @@ export function tolerance(f: Frame, o: Omit<RxOptions, 'err'> = {}, step = 1e-4,
 }
 
 /** The same limits in closed form for a continuous receiver clock sampling `pos` of the way in. */
-export function toleranceClosedForm(f: Frame, pos = 0.5): { fast: number; slow: number } {
+export function toleranceClosedForm(f: Frame, pos = 0.5, backToBack = false): { fast: number; slow: number } {
   const K = stopIndex(f);
   // fast: the stop sample, at (K + pos) / (1 + e), must stay at or after K, else it lands in the last data or parity unit
   // slow: the last data or parity sample, at (K - 1 + pos) / (1 + e), must stay before K, else it lands in the stop
-  return { fast: pos / K, slow: (1 - pos) / K };
+  // back to back the stop sample, at (K + pos) / (1 + e), must also precede the next start edge at frameUnits
+  const slow = (1 - pos) / K;
+  return { fast: pos / K, slow: backToBack ? Math.min(slow, 1 - (K + pos) / frameUnits(f)) : slow };
 }
