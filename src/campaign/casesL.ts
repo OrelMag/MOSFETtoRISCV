@@ -41,4 +41,14 @@ export const CASESL: Record<string, LevelCase> = {
     without: 'With push-pull outputs two controllers fighting over a line short the supply through each other. With a central arbiter a third wire is needed, and a controller that does not read back what it sends has no way to find out that it has lost.',
     cost: '659 NANDs for the controller, a few hundred more than the UART receiver\'s: a bit-cell sequencer with a stretch point, an 8-bit shift register and the compare that finds arbitration lost. The price on the wire is speed: the pull-up\'s rise time against the wire\'s capacitance caps a bus at 100 kHz to 1 MHz, a hundredth of what a push-pull link of the same wires would carry.',
   },
+  l_repeater: {
+    problem: 'A telegraph line weakens with its length: the current a battery drives through 4 mm iron wire and a relay coil falls as the wire gets longer, and below the relay\'s pull-in current (38 mA with our 24 V coil) the sounder stays silent. A 24 km section is fine with a margin of 1.08, 48 km is a margin of 0.70. A relay half way takes the weak current and closes a contact that puts a battery of its own on the next section.',
+    without: 'Without the repeater the line has to be shortened, or the voltage raised until the insulators break down, or the wire made thicker at a copper cost per kilometre. With one the line is unlimited: each station restarts the signal.',
+    cost: 'One relay, one relay step (8.2 ms) of delay per station. A signal crosses n stations in n steps, and each one shortens a dot by a little: repeaters balanced their relays to make the two edges equal. A regenerator is also where a signal that was wrong gets repeated wrongly at full strength.',
+  },
+  l_dial: {
+    problem: 'An automatic exchange has to connect a caller to one of its lines when it hears a number: the dial opens the loop n times, and the exchange counts. Strowger\'s switch did it with a magnet, a ratchet and a contact wiper; the relay version counts the pulses in a chain of toggle stages and selects with contacts on the same relays. Chapter 40 builds it for eight lines; the real thing used ten and many ranks.',
+    without: 'Without the counter nothing remembers which pulse this is. Without the contact tree a decoder of gates, here relays, would turn the count into a selection and add a relay step.',
+    cost: 'Ten relays: three toggle stages of three each and the hang-up relay. The tree is free, contacts on relays that exist anyway. The step costs a few relay steps of ripple: the fall of bit 0 clocks bit 1, whose fall clocks bit 2.',
+  },
 };

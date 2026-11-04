@@ -7,12 +7,14 @@ import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { syncN } from '../lib/sync';
 import { crcNext, crcUnit } from '../lib/crc';
+import { countStage, DIAL_SELECTOR, TELEGRAPH_RELAY } from '../lib/telegraph';
+import { RELAY_RULE } from './buildr';
 import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
-import { I2C_SCENARIOS, run8b10b, runI2c, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
+import { DIALLED, runDial, LINE_KM, LINE_SECTION_KM, LINE_VOLTS, repeaterProblems, I2C_SCENARIOS, run8b10b, runI2c, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
 
@@ -110,5 +112,19 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(i2cController()),
     check: { kind: 'custom', describe: I2C_SCENARIOS.length + ' sessions against a target and a wired-AND bus: write and read back with a repeated START, an address nobody has, a target that stretches SCL, and a rival controller started together with you, which you lose at four address bits and win at two. Every output after every clock.', run: runI2c },
     answer: refOf('l_i2c', i2cController, 'I²C controller', () => i2cBlocks().map((d) => [d, d.name] as [ComponentDef, string])),
+  }),
+  l_repeater: () => ({
+    id: 'l_repeater', title: 'Relay repeater', level: 'transistors', allowed: RELAY_RULE,
+    brief: 'A telegraph line ' + LINE_KM + ' km long, a ' + LINE_VOLTS + ' V battery at the key and a relay coil at the far end. One battery drives ' + LINE_SECTION_KM + ' km of iron wire to a coil with margin to spare and ' + LINE_KM + ' km with none: the current is below the relay\'s pull-in and the sounder stays silent. You build the station half way: <b>line</b> is the end of the first section (a coil\'s worth of current at best), <b>out</b> the start of the second. '
+      + 'out must follow line one relay step later, at full strength: from a battery of your own (VDD), through a contact. The bench is the line on both sides and the sounder; it checks the sections as well as the logic: out may share no wire or contact with line, or the weak signal travels on and the second section is ' + LINE_KM + ' km. An open output reads 0 here: end out on a load. Graded in relays and relay steps.',
+    ports: pinsOf(TELEGRAPH_RELAY), check: { kind: 'table', spec: ([a]) => [a] }, rules: repeaterProblems,
+    answer: refOf('l_repeater', () => TELEGRAPH_RELAY, 'Relay repeater'),
+  }),
+  l_dial: () => ({
+    id: 'l_dial', title: 'Dial selector', level: 'transistors', allowed: RELAY_RULE,
+    brief: 'A caller dials by opening the loop: <b>pulse</b> is that loop contact, 1 for the length of each pulse and 0 between them. After n pulses the caller\'s <b>line</b> must be connected to output n of eight: <b>y</b> is the eight output lines, and y bit n carries the line while the selector stands on n (the others end on loads and read 0). <b>count</b> is the number of pulses so far. '
+      + 'The step is taken when a pulse <i>falls</i>, however long it lasted, and nothing may move while it is up. <b>hangup</b> = 1 releases everything: the count is back at 0 and the line on output 0. The bench dials ' + DIALLED.join(', ') + ' in turn, a hang-up after each, and names the first pulse after which the selector is not where it should be. Relays and loads only; graded in relays and relay steps.',
+    ports: pinsOf(DIAL_SELECTOR), check: { kind: 'custom', describe: 'Dials ' + DIALLED.join(', ') + ', each pulse checked up and down (count and y), the line dropped and raised, a hang-up after each number.', run: runDial },
+    answer: refOf('l_dial', () => DIAL_SELECTOR, 'Dial selector', () => [[countStage(1), 'Toggle stage, 1 tree pole'], [countStage(2), 'Toggle stage, 2 tree poles'], [countStage(4), 'Toggle stage, 4 tree poles']]),
   }),
 };

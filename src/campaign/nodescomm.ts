@@ -12,6 +12,18 @@ import { UART_RX, UART_TX } from '../lib/uart';
 
 export const NODES_COMM: CampaignNode[] = [
   {
+    id: 'l_repeater', act: 12, title: 'Relay repeater', kind: 'build', optional: true, requires: ['c_computer'], base: BUILDCOMM.l_repeater, par: { relays: 1, steps: 1 },
+    why: 'A long telegraph line weakens with its length until the far relay no longer pulls in. A relay half way, on a battery of its own, sends a fresh copy: the first regenerator, one relay and one relay step. Chapter 39\'s line, and every amplifier and gate since, does the same.',
+    tips: ['The coil of the relay is the end of the first section: line on its a end, GND on its b end.', 'The second section starts at a battery: VDD behind the relay\'s make contact (c to no). Nothing on out may connect to line.', 'End out on a load: a pull-down, the next coil.'],
+    codex: ['relay', 'openzero'], chapters: [{ chapter: 'telegraph', step: 2, label: 'The relay as a repeater' }],
+  },
+  {
+    id: 'l_dial', act: 12, title: 'Dial selector', kind: 'build', optional: true, requires: ['l_repeater'], base: BUILDCOMM.l_dial, par: { relays: 10, steps: 6 },
+    why: 'A telephone exchange does not know the number until the caller has dialled it: each pulse steps a selector, and the contacts of the stepped relays connect the caller\'s line to one output of eight. Ten relays and no gates; the carry of a falling pulse ripples through the three stages in a handful of relay steps.',
+    tips: ['A counter stage of three relays: a pulse relay follows the pulse; a master takes the inverse of the slave while the pulse is up; the slave copies the master when the pulse falls, so the stage toggles once per pulse however long.', 'Three stages in a ripple: the fall of one stage\'s slave is the next stage\'s pulse. That is a 3-bit counter; the hang-up is a relay in the hold rail that every master and slave is fed through.', 'The selector is a tree of changeover contacts on the slave relays: bit 0 sends the line to one of two lines, bit 1 doubles them to four, bit 2 to eight. Contacts on relays that exist anyway add no relay step.', 'End each of the eight lines on a load.'],
+    codex: ['relay', 'selfhold'], chapters: [{ chapter: 'exchange', step: 1, label: 'Counting dial pulses' }, { chapter: 'exchange', step: 2, label: 'A stepping selector' }],
+  },
+  {
     id: 'l_sync', act: 12, title: 'Synchronizer', kind: 'build', optional: true, requires: ['c_computer'], base: BUILDCOMM.l_sync, givesOf: partsOf(SYNC_REF), unlocks: ['sync2'], par: { nand: 22, period: 6, cycles: 2 },
     why: 'A signal from another clock arrives at any moment, including the one in which the first flip-flop cannot decide. Two flip-flops in a row give it a whole period to decide: 22 NANDs, two cycles of latency, and a failure about once in two million years at 1.6 GHz where one flip-flop read by logic fails in under two days.',
     tips: ['q is the same signal some whole number of cycles later: flip-flops on clk, d into the first.', 'The bench computes the failure rate from the structure. A gate between two flip-flops eats resolution time from the one before it.', 'One flip-flop is not enough at this clock; three are more than enough and cost a cycle more than par.'],

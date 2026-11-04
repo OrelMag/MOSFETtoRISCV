@@ -6,10 +6,13 @@
 
 import type { CustomRun } from '../editor/challenges';
 import { BitSim } from '../sim/bitsim';
+import { SwitchSim } from '../sim/switchsim';
+import { B0, B1 } from '../sim/types';
 import { flatten } from '../sim/flatten';
 import { analyzeTiming } from '../sim/timing';
 import { PS_PER_NAND } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
+import { margin, reachKm } from '../phys/telegraph';
 import { fmtLog10, log10Mtbf, resolutionTime, TAU_PS, T0_PS, windowRate } from '../phys/metastable';
 import { CMD_NAMES as I2C_CMD_NAMES, I2cController as I2cControllerModel, I2cTarget as I2cTargetModel, READ as I2C_READ, START as I2C_START, STOP as I2C_STOP, WRITE as I2C_WRITE } from '../comm/i2c';
 import { codeText, decode8b10b, encodeStream, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
@@ -549,4 +552,86 @@ export function runI2c(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
     return [];
   });
   return finish(fails, n, def);
+}
+
+// ---- l_repeater: a line twice as long as one battery drives ---------------------------------------------------------------------
+
+/** A section a battery can drive to a relay's coil with margin, and the line the station serves: twice that. */
+export const LINE_SECTION_KM = 24, LINE_KM = 2 * LINE_SECTION_KM, LINE_VOLTS = 24;
+
+/**
+ * The line between the far stations is two sections long. A relay at the end of a section sees only what the line lets through, so
+ * the station must send the signal on from a battery of its own: the output must share no conductor with the line. A contact that
+ * joins them passes the weak signal on (and the next section is then 48 km, not 24).
+ */
+export function repeaterProblems(def: ComponentDef): string[] {
+  let d;
+  try { d = flatten(def, { mode: 'switch' }); } catch { return []; }
+  const parent = new Map<number, number>();
+  const find = (x: number): number => { let r = x; while ((parent.get(r) ?? r) !== r) r = parent.get(r)!; parent.set(x, r); return r; };
+  const supply = new Set<number>();
+  for (const l of d.leaves) if ((l.kind === 'vdd' || l.kind === 'gnd') && l.terminals) supply.add(l.terminals[0]);
+  const join = (a: number, b: number) => { if (!supply.has(a) && !supply.has(b)) parent.set(find(a), find(b)); };
+  for (const l of d.leaves) {
+    if (l.kind !== 'relay' || !l.terminals) continue;
+    for (let p = 2; p + 2 < l.terminals.length; p += 3) { join(l.terminals[p], l.terminals[p + 1]); join(l.terminals[p], l.terminals[p + 2]); }
+  }
+  const line = d.root.ports.line ?? [], out = d.root.ports.out ?? [];
+  const reach = reachKm(LINE_VOLTS, 'iron');
+  if (line.length && out.length && find(line[0]) === find(out[0])) {
+    const m1 = margin(LINE_VOLTS, LINE_KM, 'iron');
+    return [`out is joined to line by wire or by contacts: the signal is passed on as it came. The line behind this station is ${LINE_SECTION_KM} km long and a ${LINE_VOLTS} V battery drives ${LINE_SECTION_KM} km of iron wire to a relay coil with a margin of ${margin(LINE_VOLTS, LINE_SECTION_KM, 'iron').toFixed(2)}; passed on, it is ${LINE_KM} km to the far relay, a margin of ${m1.toFixed(2)} (pull-in is 1.00, one battery reaches ${reach.toFixed(0)} km). The station must re-send the signal from a battery of its own: out may share no conductor with line.`];
+  }
+  return [];
+}
+
+// ---- l_dial: a stepping selector ------------------------------------------------------------------------------------------------
+
+/** The numbers dialled, one after another, each after a hang-up. */
+export const DIALLED = [3, 0, 7, 1, 5, 2, 6, 4];
+
+export function runDial(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
+  if (mode !== 'switch') return { failures: ['no relays: build the selector from relays'], tested: 0 };
+  const have = new Set(def.ports.map((p) => p.name));
+  const miss = ['line', 'pulse', 'hangup', 'count', 'y'].filter((p) => !have.has(p));
+  if (miss.length) return { failures: [`missing pins: ${miss.join(', ')}`], tested: 0 };
+  const sim = new SwitchSim(flatten(def, { mode: 'switch' }));
+  if (!sim.hasRelays) return { failures: ['no relays: build the selector from relays'], tested: 0 };
+  const val = (p: string): number => { const b = sim.getBits(sim.design.root.ports[p]); return b.some((x) => x !== B0 && x !== B1) ? -1 : b.reduce<number>((s, x, i) => s + (x === B1 ? 2 ** i : 0), 0); };
+  const show = (p: string, v: number) => (v < 0 ? `${p} = X or Z` : p === 'y' ? `y = ${v} (the line is on output ${v === 0 ? 'none' : Math.log2(v)})` : `${p} = ${v}`);
+  let steps = 0, tested = 0;
+  const fails: string[] = [];
+  const settle = (): boolean => { const t0 = sim.time; sim.settle(); steps = Math.max(steps, sim.time - t0); return !sim.unstable; };
+  sim.setInput('line', 1); sim.setInput('pulse', 0); sim.setInput('hangup', 0);
+  sim.reset('zero');
+  if (!settle()) return { failures: ['at rest with nothing dialled it does not come to rest'], tested: 1 };
+  const expectState = (what: string, n: number, hint: string): boolean => {
+    tested++;
+    const y = val('y'), c = val('count');
+    if (y !== 1 << n || c !== n) { fails.push(`${what}: ${show('y', y)}, ${show('count', c)}; expected y = ${1 << n} (output ${n}) and count = ${n}. ${hint}`); return false; }
+    return true;
+  };
+  if (!expectState('with nothing dialled', 0, 'with every relay released the caller\'s line is on output 0')) return finishRelay(fails, tested, steps);
+  for (const num of DIALLED) {
+    for (let k = 1; k <= num; k++) {
+      sim.setInput('pulse', 1);
+      if (!settle()) { fails.push(`dialling ${num}, pulse ${k} rising: it does not come to rest`); return finishRelay(fails, tested, steps); }
+      if (!expectState(`dialling ${num}, pulse ${k} up`, k - 1, 'nothing may move until the pulse falls: the stage copies on the falling edge, so that a pulse of any length counts once')) return finishRelay(fails, tested, steps);
+      sim.setInput('pulse', 0);
+      if (!settle()) { fails.push(`dialling ${num}, pulse ${k} falling: it does not come to rest`); return finishRelay(fails, tested, steps); }
+      if (!expectState(`dialling ${num}, pulse ${k} down`, k, 'each falling edge advances the selector by one output; bit 0 toggles, and its fall clocks bit 1, as in a ripple counter')) return finishRelay(fails, tested, steps);
+    }
+    sim.setInput('line', 0);
+    settle(); tested++;
+    if (val('y') !== 0) { fails.push(`dialled ${num}, caller\'s line low: ${show('y', val('y'))}; expected y = 0: only the dialled output follows the line`); return finishRelay(fails, tested, steps); }
+    sim.setInput('line', 1);
+    sim.setInput('hangup', 1); settle(); sim.setInput('hangup', 0);
+    if (!settle()) { fails.push('after the hang-up it does not come to rest'); return finishRelay(fails, tested, steps); }
+    if (!expectState(`after dialling ${num} and hanging up`, 0, 'the hang-up opens the hold rail of every stage: all released, the count back at 0')) return finishRelay(fails, tested, steps);
+  }
+  return finishRelay(fails, tested, steps);
+}
+
+function finishRelay(fails: string[], tested: number, steps: number): CustomRun {
+  return { failures: fails.slice(0, 4), tested, steps };
 }
