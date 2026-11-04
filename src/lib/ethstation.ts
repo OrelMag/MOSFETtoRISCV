@@ -94,17 +94,17 @@ export function ethRxBuf(): ComponentDef {
 // ---- a station ---------------------------------------------------------------------------------------------------------
 
 /** Stations on the segment: positions along the cable (clocks of propagation), addresses and LFSR seeds. */
-export const SEG_POSITIONS = [0, 6, 14, 26];
-export const stationMac = (i: number): number[] => [0x02, 0, 0, 0, 0, i + 1];
-export const STATION_SEEDS = [0x155, 0x2b7, 0x0c3, 0x1e9];
-export const macWord = (a: readonly number[]): number => a.reduce((v, b, j) => v + b * 2 ** (8 * j), 0);
+export const ETH_SEG_POSITIONS = [0, 6, 14, 26];
+export const ethStationMac = (i: number): number[] => [0x02, 0, 0, 0, 0, i + 1];
+export const ETH_STATION_SEEDS = [0x155, 0x2b7, 0x0c3, 0x1e9];
+export const ethMacWord = (a: readonly number[]): number => a.reduce((v, b, j) => v + b * 2 ** (8 * j), 0);
 
 /** The bits of a station's `ev` output: what happened this clock. */
-export const EV = { sent: 0, drop: 1, restart: 2, rxgood: 3, rxbad: 4, rxv: 5, rxl: 6, rxe: 7 } as const;
+export const ETH_EV = { sent: 0, drop: 1, restart: 2, rxgood: 3, rxbad: 4, rxv: 5, rxl: 6, rxe: 7 } as const;
 /** `stat`: transmitter state (3 bits), attempts (4), receiver state (2). */
-export const stateOf = (stat: number) => ({ tx: stat & 7, att: (stat >> 3) & 15, rx: (stat >> 7) & 3 });
+export const ethStateOf = (stat: number) => ({ tx: stat & 7, att: (stat >> 3) & 15, rx: (stat >> 7) & 3 });
 /** `counts`: frames kept, thrown away, collisions: 8 bits each. */
-export const countsOf = (c: number) => ({ good: c & 255, bad: Math.floor(c / 256) & 255, col: Math.floor(c / 65536) & 255 });
+export const ethCountsOf = (c: number) => ({ good: c & 255, bad: Math.floor(c / 256) & 255, col: Math.floor(c / 65536) & 255 });
 
 const stations = new Map<number, ComponentDef>();
 
@@ -112,13 +112,13 @@ const stations = new Map<number, ComponentDef>();
  * A MAC transmitter fed from a frame source and a MAC receiver writing a receive buffer, with the carrier and collision glue
  * between them and the wire: carrier = txen or crs, collision = txen and crs (the other stations' carrier heard while sending),
  * and the receiver ignores the carrier while this station sends. Station i has address 02:00:00:00:00:(i+1) and LFSR seed
- * STATION_SEEDS[i]. Outputs are packed: ev (EV), stat (stateOf), counts (countsOf). me = 0 deafens the host port.
+ * ETH_STATION_SEEDS[i]. Outputs are packed: ev (ETH_EV), stat (ethStateOf), counts (ethCountsOf). me = 0 deafens the host port.
  */
 export function ethStation(i = 0): ComponentDef {
   const hit = stations.get(i);
   if (hit) return hit;
   const TX = macTx(), RXM = macRx(), SRC = ethSrc(), RXB = ethRxBuf();
-  const MACC = constWord(48, macWord(stationMac(i))), SEEDC = constWord(LFSR_BITS, STATION_SEEDS[i]), ONE = constWord(1, 1);
+  const MACC = constWord(48, ethMacWord(ethStationMac(i))), SEEDC = constWord(LFSR_BITS, ETH_STATION_SEEDS[i]), ONE = constWord(1, 1);
   const EVM = merger(ones(8)), STM = merger([3, 4, 2]);
   const [gs, gt, gr, gb] = [SRC, TX, RXM, RXB].map((d) => symbolGeom(d));
   const gAnd = symbolGeom(AND), gOr = symbolGeom(OR);
@@ -192,7 +192,7 @@ const segs = new Map<number, ComponentDef>();
 export function ethSegment(n = 4): ComponentDef {
   const hit = segs.get(n);
   if (hit) return hit;
-  const x = SEG_POSITIONS.slice(0, n), W = sharedWire(x), ST = Array.from({ length: n }, (_, i) => ethStation(i));
+  const x = ETH_SEG_POSITIONS.slice(0, n), W = sharedWire(x), ST = Array.from({ length: n }, (_, i) => ethStation(i));
   const DEC = decoder(2), SP = splitter(ones(n)), MG = merger(ones(n));
   const gst = symbolGeom(ST[0]), gd = symbolGeom(DEC);
   const xs = (i: number) => 16 + i * (gst.w + 24);
@@ -200,7 +200,7 @@ export function ethSegment(n = 4): ComponentDef {
   const instances: InstanceDef[] = [
     { name: 'dec', def: DEC, at: [2, yw + 2], label: 'station select' }, { name: 'spp', def: SP, at: [2, yw + gd.h + 10] },
     ...ST.map((d, i): InstanceDef => ({ name: `st${i}`, def: d, at: [xs(i), 6], label: `station ${i + 1}` })),
-    { name: 'mgd', def: MG, at: [xs(1), yw + 2] }, { name: 'mge', def: MG, at: [xs(1), yw + 14] },
+    { name: 'mgd', def: MG, at: [xs(1), yw + 2] }, { name: 'mge', def: MG, at: [xs(1), yw + 14] }, { name: 'mgb', def: MG, at: [xs(1), yw + 26] },
     { name: 'wire', def: W, at: [xs(1) + 12, yw + 2], label: 'shared wire' },
     { name: 'spr', def: SP, at: [xs(2) + 16, yw + 2] }, { name: 'spc', def: SP, at: [xs(2) + 16, yw + 14] },
   ];
@@ -211,18 +211,18 @@ export function ethSegment(n = 4): ComponentDef {
     T('sel', ['sel', 'dec.a']), T('promisc', ['promisc', 'spp.in']),
   ];
   ST.forEach((_, i) => {
-    nets.push(T(`me${i}`, [`dec.y${i}`, `st${i}.me`]), T(`promisc${i}`, [`spp.o${i}`, `st${i}.promisc`]), T(`txd${i}`, [`st${i}.txd`, `mgd.i${i}`]), T(`txen${i}`, [`st${i}.txen`, `mge.i${i}`]),
+    nets.push(T(`me${i}`, [`dec.y${i}`, `st${i}.me`]), T(`promisc${i}`, [`spp.o${i}`, `st${i}.promisc`]), T(`txd${i}`, [`st${i}.txd`, `mgd.i${i}`]), T(`txen${i}`, [`st${i}.txen`, `mge.i${i}`]), T(`busy${i}`, [`st${i}.busy`, `mgb.i${i}`]),
       T(`rxd${i}`, [`spr.o${i}`, `st${i}.rxd`]), T(`crs${i}`, [`spc.o${i}`, `st${i}.crs`]));
     for (const p of ['ev', 'stat', 'counts', 'rd', 'cp']) nets.push(T(`${p}${i}`, [`st${i}.${p}`, `${p}${i}`]));
   });
-  nets.push(T('txds', ['mgd.out', 'wire.txd']), T('txens', ['mge.out', 'wire.txen', 'txen']), T('rxds', ['wire.rxd', 'spr.in']), T('crss', ['wire.crs', 'spc.in']), T('clash', ['wire.clash', 'clash']));
+  nets.push(T('txds', ['mgd.out', 'wire.txd']), T('txens', ['mge.out', 'wire.txen', 'txen']), T('busys', ['mgb.out', 'busy']), T('rxds', ['wire.rxd', 'spr.in']), T('crss', ['wire.crs', 'spc.in']), T('clash', ['wire.clash', 'clash']));
   const ports: PortDef[] = [
     bit('clk', 'in', 'bottom', true), bit('rst', 'in'), bus('sel', 2, 'in'), bus('wa', SRC_BITS, 'in'), bus('wd', 8, 'in'), bit('we', 'in'), bus('len', SRC_BITS, 'in'), bit('go', 'in'),
     bus('ra', RX_BITS, 'in'), bit('hrd', 'in'), bus('promisc', n, 'in'),
-    bus('txen', n, 'out'), bit('clash', 'out'),
+    bus('txen', n, 'out'), bus('busy', n, 'out'), bit('clash', 'out'),
     ...ST.flatMap((_, i): PortDef[] => [bus(`ev${i}`, 8, 'out'), bus(`stat${i}`, 9, 'out'), bus(`counts${i}`, 24, 'out'), bus(`rd${i}`, 8, 'out'), bus(`cp${i}`, RX_BITS, 'out')]),
   ];
-  const Wd = xs(n - 1) + gst.w + 22, H = yw + 30;
+  const Wd = xs(n - 1) + gst.w + 22, H = yw + 42;
   const pins: Record<string, [number, number]> = {};
   let yl = 4, yr = 4;
   for (const p of ports) {

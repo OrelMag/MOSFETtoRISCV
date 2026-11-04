@@ -45,7 +45,7 @@ let txDef: ComponentDef | undefined;
  * four clocks: 7 bytes of 0x55, the SFD 0xD5, the bytes (zero pad up to 60), the four FCS bytes from the CRC unit. It starts
  * when valid, the cable has been quiet for 96 bit times (gap counter) and crs is low; a collision (col while sending) cuts the
  * frame into a 32-bit jam, then waits r slots of 512 bit times, r the low min(n, 10) bits of a free-running LFSR for the n-th
- * collision, and starts over (restart: the source rewinds); the 16th collision drops the frame (drop).
+ * collision, and starts over (restart: the source rewinds); the 16th collision drops the frame (drop). A byte that is not valid when the MAC needs it (an underrun) ends the frame, padded, with its FCS complemented so that every receiver rejects it.
  */
 export function macTx(): ComponentDef {
   if (txDef) return txDef;
@@ -64,7 +64,7 @@ export function macTx(): ComponentDef {
   const c = m.scope('ctl', 'state machine, counters', () => {
     const pre = m.reg(clk, 'pre'), dat = m.reg(clk, 'dat'), fcs = m.reg(clk, 'fcs'), jam = m.reg(clk, 'jam');
     const ph = regs(m, clk, 'ph', 2), bt = regs(m, clk, 'bit', 3), pc = regs(m, clk, 'pc', 3), nb = regs(m, clk, 'nb', 6);
-    const eof = m.reg(clk, 'eof'), fc = regs(m, clk, 'fc', 2), att = regs(m, clk, 'att', 4);
+    const eof = m.reg(clk, 'eof'), under = m.reg(clk, 'under'), fc = regs(m, clk, 'fc', 2), att = regs(m, clk, 'att', 4);
     const rs = m.reg(clk, 'restart_q'), dr = m.reg(clk, 'drop_q'), sn = m.reg(clk, 'sent_q');
     const act = nm(m.orN([pre, dat, fcs, jam]), 'act');
     const idle = m.nor(act, back);
@@ -96,6 +96,7 @@ export function macTx(): ComponentDef {
     const nbi = m.inc(nb);
     nb.forEach((q, i) => m.setD(q, m.and(m.and(rstn, m.not(start)), m.mux(load, q, m.mux(nb60, nbi[i], q)))));
     m.setD(eof, m.andN([rstn, m.not(start), m.mux(ready, eof, m.or(m.not(valid), last))]));
+    m.setD(under, m.andN([rstn, m.not(start), m.or(under, m.and(ready, m.not(valid)))]));
     const fci = m.inc(fc);
     fc.forEach((q, i) => m.setD(q, m.andN([rstn, m.not(start), m.not(datEnd), m.mux(m.and(fcs, bb), q, fci[i])])));
     const ati = m.inc(att);
@@ -103,7 +104,7 @@ export function macTx(): ComponentDef {
     m.setD(rs, m.andN([rstn, jamEnd, m.not(att15)]));
     m.setD(dr, m.andN([rstn, jamEnd, att15]));
     m.setD(sn, m.and(rstn, fcsEnd));
-    return { pre, dat, fcs, jam, act, tick, bb, pc6, pc7, pc3, eof, eof60, start, colhit, load, ready, att, fc, rs, dr, sn, jamEnd, att15, datEnd };
+    return { under, pre, dat, fcs, jam, act, tick, bb, pc6, pc7, pc3, eof, eof60, start, colhit, load, ready, att, fc, rs, dr, sn, jamEnd, att15, datEnd };
   });
 
   const cs = m.scope('csma', 'gap counter, backoff, LFSR', () => {
@@ -154,7 +155,7 @@ export function macTx(): ComponentDef {
     const fci = m.inc(c.fc), i0 = m.and(c.fcs, fci[0]), i1 = m.and(c.fcs, fci[1]);
     for (let k = 0; k < 8; k++) {
       const lo = m.mux(i0, f[k], f[8 + k]), hi = m.mux(i0, f[16 + k], f[24 + k]);
-      m.drive(fbyte[k], nm(m.mux(i1, lo, hi), `fbyte_${k}`));
+      m.drive(fbyte[k], nm(m.xor(m.mux(i1, lo, hi), c.under), `fbyte_${k}`));
     }
   });
 

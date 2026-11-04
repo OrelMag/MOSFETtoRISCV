@@ -8,7 +8,7 @@ import '../styles/ethernet.css';
 import { crc32, fcsBytes } from '../comm/crc';
 import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
 import { BIT_CLOCKS, captureRecord, clocksToUs, frameBitTimes, GAP_BITS, LINK_MBPS, WHY_NAMES } from '../comm/mac';
-import { EV, ethStation, stationMac } from '../lib/ethstation';
+import { ETH_EV, ethStation, ethStationMac } from '../lib/ethstation';
 import { pcapFile } from '../comm/pcap';
 import { h, s } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -68,7 +68,7 @@ export function frameWidget(): Widget {
   const out = h('div'), read = h('div', { class: 'mc-status' });
   const paint = () => {
     const payload = utf8(text).slice(0, MAX_PAYLOAD);
-    const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : stationMac(dst === 'b' ? 1 : 2), src: stationMac(0), type, payload };
+    const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(dst === 'b' ? 1 : 2), src: ethStationMac(0), type, payload };
     const wire = wireBytes(spec), cls = fieldMap(payload.length);
     const fcs = fcsBytes(crc32(frameBody(spec)));
     const bits = frameBitTimes(wire.length - 8);
@@ -115,7 +115,7 @@ export class Bench {
       for (let i = 0; `${src}${i}` in ports; i++) v += f(this.raw(`${src}${i}`)) * 2 ** (w * i);
       return v;
     };
-    if (name in EV) return spread('ev', (v) => (v >> EV[name as keyof typeof EV]) & 1, 1);
+    if (name in ETH_EV) return spread('ev', (v) => (v >> ETH_EV[name as keyof typeof ETH_EV]) & 1, 1);
     if (name === 'txstate') return spread('stat', (v) => v & 7, 3);
     if (name === 'att') return spread('stat', (v) => (v >> 3) & 15, 4);
     if (name === 'rxstate') return spread('stat', (v) => (v >> 7) & 3, 2);
@@ -235,7 +235,7 @@ export function txScene(): Scene {
         stage.checkpoint();
         b.reset();
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : stationMac(1), src: stationMac(0), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload };
         wire = wireBytes(spec); cls = fieldMap(payload.length); plen = payload.length; bits = []; run = 0; done = false; clock = 0; wave = [[], []];
         S.expected = wire; S.done = false; S.sentBytes = [];
         b.send(frameBody(spec));
@@ -320,7 +320,7 @@ export function rxScene(): Scene {
         stage.checkpoint();
         b.reset(); b.set('promisc', promisc ? 1 : 0);
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? stationMac(0) : stationMac(2), src: stationMac(1), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? ethStationMac(0) : ethStationMac(2), src: ethStationMac(1), type: ETHERTYPE_IPV4, payload };
         let bytes = wireBytes(spec);
         if (cut) bytes = bytes.slice(0, 8 + 40);
         const bitIdx = 8 * (8 + 14 + Math.min(payload.length, 10)) + 3;
@@ -401,7 +401,7 @@ export function csmaScene(): Scene {
         b.reset();
         // the cable has been quiet for a long time before the frame is queued: the gap counter is full
         for (let i = 0; i < GAP_BITS * BIT_CLOCKS + 8; i++) b.clock();
-        const spec: FrameSpec = { dst: stationMac(1), src: stationMac(0), type: ETHERTYPE_IPV4, payload: utf8('deferred') };
+        const spec: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload: utf8('deferred') };
         plan = carrierPlan(first, second);
         crsW = []; txW = []; gapW = []; clock = 0; txStart = -1;
         b.send(frameBody(spec));

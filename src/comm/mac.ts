@@ -4,16 +4,17 @@
 //
 // Link speed (roadmap Phase 21, decision 7): a bit is 4 clocks, so a byte is 32 and, at the single-cycle CPU's 3.95 ns
 // clock, the line carries 63 Mb/s. Frame fields, FCS and gaps are IEEE 802.3's (comm/ethframe.ts); the half-duplex
-// constants below are 802.3 clause 4.2.3.2 (slotTime 512 bit times, interFrameGap 96, attemptLimit 16, backoffLimit 10,
-// jamSize 32).
+// constants below are 802.3's (slotTime 512 bit times, interFrameGap 96, attemptLimit 16, backoffLimit 10, jamSize 32),
+// written from memory of the standard, not checked against its text.
 
 import { CRC32_RESIDUE, stepBits } from './crc';
+import { CLOCK_NS } from '../dram/timing';
 import { FCS_BYTES, MAX_FRAME, MIN_FRAME } from './ethframe';
 
 export const BIT_CLOCKS = 4;
 export const BYTE_CLOCKS = 8 * BIT_CLOCKS;
-/** The clock of the single-cycle CPU (CLOCK_NS in dram/timing.ts), and what the link rate follows from. */
-export const CLOCK_NS = 3.95;
+/** The clock of the single-cycle CPU (CLOCK_NS in dram/timing.ts, 3.95 ns), which the link rate follows from. */
+export { CLOCK_NS };
 export const SLOT_BITS = 512;
 export const SLOT_CLOCKS = SLOT_BITS * BIT_CLOCKS;
 export const GAP_BITS = 96;
@@ -44,11 +45,11 @@ export interface TxIn { rst: number; data: number; valid: number; last: number; 
 /**
  * Preamble and SFD, the stream's bytes, zero pad up to the 60 before the FCS, the FCS, with carrier sense, deferral, collision
  * handling and backoff. Serial out, least significant bit first, one bit per BIT_CLOCKS clocks. `ready` (a function of the
- * state alone) is 1 in the clock in which the next stream byte is taken, if `valid` is 1 then; a byte not valid then ends the
- * frame (an underrun is a short frame, padded and checked like any other).
+ * state alone) is 1 in the clock in which the next stream byte is taken, if `valid` is 1 then. A byte not valid then is an
+ * underrun: the frame ends there, padded, and its FCS is complemented on purpose, so that no receiver believes it.
  */
 export class MacTx {
-  pre = 0; dat = 0; fcs = 0; jam = 0; back = 0;
+  pre = 0; dat = 0; fcs = 0; jam = 0; back = 0; under = 0;
   ph = 0; bit = 0; sh = 0; pc = 0; nb = 0; eof = 0; fc = 0; att = 0; bo = 0; slot = 0; gap = 0; lfsr = 0;
   q = 0xffffffff;
   restart = 0; drop = 0; sent = 0;
@@ -64,7 +65,7 @@ export class MacTx {
   step(i: TxIn): void {
     if (i.rst) {
       this.pre = this.dat = this.fcs = this.jam = this.back = 0;
-      this.ph = this.bit = this.sh = this.pc = this.nb = this.eof = this.fc = this.att = this.bo = this.slot = this.gap = 0;
+      this.ph = this.bit = this.sh = this.pc = this.nb = this.eof = this.fc = this.att = this.bo = this.slot = this.gap = this.under = 0;
       this.lfsr = i.seed & 0x3ff; this.restart = this.drop = this.sent = 0;
       return;
     }
@@ -80,7 +81,7 @@ export class MacTx {
     const jamEnd = this.jam === 1 && bb && pc3;
     const loadData = bb && ((this.pre === 1 && pc7) || (this.dat === 1 && !(this.eof === 1 && nb60)));
     const dbyte = i.valid ? i.data & 0xff : 0, dd = this.eof ? 0 : dbyte;
-    const fidx = this.fcs ? (this.fc + 1) & 3 : 0, fbyte = ((~this.q >>> 0) >>> (8 * fidx)) & 0xff;
+    const fidx = this.fcs ? (this.fc + 1) & 3 : 0, fbyte = (((~this.q >>> 0) >>> (8 * fidx)) & 0xff) ^ (this.under ? 0xff : 0);
 
     // the byte the shift register takes at a byte boundary
     let load = 0;
@@ -106,6 +107,7 @@ export class MacTx {
     const n_slot = this.back && this.bo !== 0 ? (this.slot + 1) & 2047 : this.slot;
     const n_gap = i.crs || act ? 0 : gapok ? this.gap : this.gap + 1;
     const n_lfsr = lfsrNext(this.lfsr);
+    const n_under = start ? 0 : this.ready === 1 && !i.valid ? 1 : this.under;
     const n_q = start ? 0xffffffff : loadData ? stepBits(this.q, dd, 8) : this.q;
     this.restart = jamEnd && !att15 ? 1 : 0;
     this.drop = jamEnd && att15 ? 1 : 0;
@@ -127,6 +129,7 @@ export class MacTx {
     this.slot = n_slot;
     this.gap = n_gap;
     this.lfsr = n_lfsr;
+    this.under = n_under;
     this.q = n_q;
   }
 }

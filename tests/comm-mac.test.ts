@@ -8,7 +8,7 @@ import { pcapFile, readPcap } from '../src/comm/pcap';
 import { emptyWorkspace } from '../src/editor/model';
 import { remixDef } from '../src/editor/remix';
 import { macRx, macTx } from '../src/lib/ethernet';
-import { countsOf, ethSegment, ethStation, EV, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethstation';
+import { ethCountsOf, ethSegment, ethStation, ETH_EV, ETH_SEG_POSITIONS, ETH_STATION_SEEDS, ethStationMac } from '../src/lib/ethstation';
 import { deadInstances } from '../src/sim/dead';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
@@ -170,7 +170,7 @@ describe('MAC transmitter model', () => {
       expect(r.t1 - r.t0).toBe(w.length * 8 * BIT_CLOCKS);
     }
   });
-  it('an underrun (valid drops mid-frame) ends the frame: padded and checked like a short one', () => {
+  it('an underrun (valid drops mid-frame) ends the frame, padded, with a complemented FCS: the receiver rejects it, naming the FCS', () => {
     const f = spec(100), body = frameBody(f);
     const m = new MacTx(), src = new Src(body.slice(0, 20));
     m.step({ rst: 1, data: 0, valid: 0, last: 0, crs: 0, col: 0, seed: 7 });
@@ -184,8 +184,40 @@ describe('MAC transmitter model', () => {
       done = m.sent === 1;
     }
     const got = receive(lineOf(bytesOf(bits)), MAC_B, 1);
-    expect(got[0].err).toBe(0);
+    expect(got[0].err).toBe(1);
+    expect(got[0].why).toBe(WHY_FCS);
     expect(got[0].bytes.slice(0, 20)).toEqual(body.slice(0, 20));
+    expect(got[0].bytes).toHaveLength(60);
+  });
+});
+
+describe('MAC transmitter underrun', () => {
+  it('valid low at the clock a byte is needed: gates equal the model every clock, the frame is padded, and the FCS goes out complemented', async () => {
+    const gate = simulate(macTx());
+    const model = new MacTx();
+    const seed = 0x155;
+    const first: TxIn = { rst: 1, data: 0, valid: 0, last: 0, crs: 0, col: 0, seed };
+    set(gate, { ...first }); tickClk(gate); model.step(first);
+    const src = new Src(frameBody(spec(100)));
+    const bits: number[] = [];
+    let run = 0, done = false;
+    for (let c = 0; c < 4000 && !done; c++) {
+      const cut = model.ready === 1 && src.i === 20;
+      const valid = src.valid && !cut ? 1 : 0;
+      const inp: TxIn = { rst: 0, data: src.data, valid, last: 0, crs: 0, col: 0, seed };
+      if (model.ready && valid) src.i++;
+      set(gate, { ...inp }); tickClk(gate);
+      if (model.txen) { if (run % 4 === 0) bits.push(model.txd); run++; }
+      model.step(inp);
+      const o = txOut(model);
+      for (const k of TX_OUT) expect(out(gate, k), `${k} @${c}`).toBe(o[k]);
+      done = model.sent === 1;
+      if (c % 500 === 0) await yieldTick();
+    }
+    expect(done).toBe(true);
+    expect(model.under).toBe(1);
+    const got = receive(lineOf(bytesOf(bits)), MAC_B, 1);
+    expect(got[0].why).toBe(WHY_FCS);
     expect(got[0].bytes).toHaveLength(60);
   });
 });
@@ -204,7 +236,7 @@ describe('MAC transmitter gates', () => {
     set(gate, I(first)); tickClk(gate); model.step(first);
     const body = frameBody(spec(80));
     const src = new Src(body);
-    let sent = 0, restarts = 0, crsHold = 0, colHold = 0;
+    let sent = 0, restarts = 0, crsHold = 0, colHold = 0, vdrop = 0;
     const states = new Set<number>();
     for (let c = 0; c < 90000; c++) {
       if (rnd(3000) === 0 && crsHold === 0) crsHold = 1 + rnd(900);
@@ -215,10 +247,13 @@ describe('MAC transmitter gates', () => {
         for (let n = 0; !p.restart && !p.drop && n < 300; n++) p.step({ rst: 0, data: 0, valid: 1, last: 0, crs: 0, col: 0, seed });
         if (p.restart && p.bo <= 2) colHold = 1 + rnd(3);
       }
-      const inp: TxIn = { rst: c === 0 ? 0 : (rnd(30000) === 0 ? 1 : 0), data: src.data, valid: src.valid, last: src.last, crs: crsHold > 0 ? 1 : 0, col: colHold > 0 && model.txen ? 1 : 0, seed };
+      if (rnd(4000) === 0) vdrop = 1 + rnd(60);
+      const valid = src.valid && vdrop === 0 ? 1 : 0;
+      if (vdrop > 0) vdrop--;
+      const inp: TxIn = { rst: c === 0 ? 0 : (rnd(30000) === 0 ? 1 : 0), data: src.data, valid, last: src.last, crs: crsHold > 0 ? 1 : 0, col: colHold > 0 && model.txen ? 1 : 0, seed };
       if (crsHold > 0) crsHold--;
       if (colHold > 0) colHold--;
-      if (model.ready && src.valid) src.i++;
+      if (model.ready && valid) src.i++;
       if (model.restart || model.sent || model.drop) src.i = 0;
       set(gate, I(inp)); tickClk(gate); model.step(inp);
       const o = txOut(model);
@@ -280,16 +315,16 @@ function loadOps(k: number, bytes: number[]): Op[] {
 }
 
 function newSegment(promisc = [0, 0, 0, 0]): Segment {
-  return new Segment(SEG_POSITIONS.map((_, i) => new Station(stationMac(i), STATION_SEEDS[i], promisc[i])), SEG_POSITIONS);
+  return new Segment(ETH_SEG_POSITIONS.map((_, i) => new Station(ethStationMac(i), ETH_STATION_SEEDS[i], promisc[i])), ETH_SEG_POSITIONS);
 }
 
 describe('segment', () => {
   it('four stations, a collision and a broadcast: every output of the gates equals the software segment after every clock; frames arrive intact', async () => {
     const gate = simulate(ethSegment(4));
     const seg = newSegment([0, 0, 0, 1]);
-    const f01 = frameBody({ dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: Array.from({ length: 50 }, (_, i) => i + 1) });
-    const f10 = frameBody({ dst: stationMac(0), src: stationMac(1), type: 0x0806, payload: Array.from({ length: 10 }, (_, i) => 0xa0 + i) });
-    const fb = frameBody({ dst: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff], src: stationMac(2), type: 0x0800, payload: [9, 8, 7] });
+    const f01 = frameBody({ dst: ethStationMac(1), src: ethStationMac(0), type: 0x0800, payload: Array.from({ length: 50 }, (_, i) => i + 1) });
+    const f10 = frameBody({ dst: ethStationMac(0), src: ethStationMac(1), type: 0x0806, payload: Array.from({ length: 10 }, (_, i) => 0xa0 + i) });
+    const fb = frameBody({ dst: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff], src: ethStationMac(2), type: 0x0800, payload: [9, 8, 7] });
     // both loads are queued first and go together: the stations start in the same clock and collide
     const ops: Op[] = [{ ...NOOP }, ...loadOps(0, f01).slice(0, -1), ...loadOps(1, f10).slice(0, -1), ...loadOps(2, fb).slice(0, -1),
       { ...NOOP, sel: 0, len: f01.length, go: 1 }, { ...NOOP, sel: 1, len: f10.length, go: 1 }];
@@ -304,17 +339,18 @@ describe('segment', () => {
       const ins: StationIn[] = seg.st.map((_, k) => (op.sel === k ? { rst: 0, go: op.go, len: op.len, we: op.we, wa: op.wa, wd: op.wd } : { rst: 0, go: 0, len: 0 }));
       set(gate, { rst: 0, sel: op.sel, wa: op.wa, wd: op.wd, we: op.we, len: op.len, go: op.go, ra: 0, hrd: 0, promisc: 8 });
       tickClk(gate); seg.step(ins);
-      const evOf = (s: Station): number => (s.tx.sent << EV.sent) | (s.tx.drop << EV.drop) | (s.tx.restart << EV.restart) | ((s.rx.valid && s.rx.last && !s.rx.err ? 1 : 0) << EV.rxgood)
-        | ((s.rx.valid && s.rx.last && s.rx.err ? 1 : 0) << EV.rxbad) | (s.rx.valid << EV.rxv) | (s.rx.last << EV.rxl) | (s.rx.err << EV.rxe);
+      const evOf = (s: Station): number => (s.tx.sent << ETH_EV.sent) | (s.tx.drop << ETH_EV.drop) | (s.tx.restart << ETH_EV.restart) | ((s.rx.valid && s.rx.last && !s.rx.err ? 1 : 0) << ETH_EV.rxgood)
+        | ((s.rx.valid && s.rx.last && s.rx.err ? 1 : 0) << ETH_EV.rxbad) | (s.rx.valid << ETH_EV.rxv) | (s.rx.last << ETH_EV.rxl) | (s.rx.err << ETH_EV.rxe);
       seg.st.forEach((s, k) => {
         expect(out(gate, `ev${k}`), `ev${k} @${c}`).toBe(evOf(s));
         if (c % 50 === 0) {
           expect(out(gate, `stat${k}`), `stat${k} @${c}`).toBe(s.tx.state | (s.tx.att << 3) | (s.rx.state << 7));
-          const cn = countsOf(out(gate, `counts${k}`));
+          const cn = ethCountsOf(out(gate, `counts${k}`));
           expect([cn.good, cn.bad, cn.col], `counts${k} @${c}`).toEqual([s.ngood, s.nbad, s.ncol]);
           expect(out(gate, `cp${k}`), `cp${k} @${c}`).toBe(s.cp);
         }
       });
+      expect(out(gate, 'busy'), `busy @${c}`).toBe(seg.st.reduce((v, s, k) => v | (s.busy << k), 0));
       expect(out(gate, 'txen'), `txen @${c}`).toBe(seg.st.reduce((v, s, k) => v | (s.tx.txen << k), 0));
       expect(out(gate, 'clash'), `clash @${c}`).toBe(seg.wire.clash);
       seen.restart += seg.st.reduce((n, s) => n + s.tx.restart, 0); seen.sent += seg.st.reduce((n, s) => n + s.tx.sent, 0); seen.clash += seg.wire.clash;
@@ -337,8 +373,8 @@ describe('segment', () => {
 describe('capture', () => {
   it('a promiscuous station on the gate-level segment keeps every frame; they go through pcapFile, readPcap and parseFrame with their fields and FCS intact', async () => {
     const gate = simulate(ethSegment(4));
-    const f01: FrameSpec = { dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: Array.from({ length: 80 }, (_, i) => (i * 5) & 0xff) };
-    const f12: FrameSpec = { dst: stationMac(2), src: stationMac(1), type: 0x0806, payload: Array.from({ length: 28 }, (_, i) => 0x40 + i) };
+    const f01: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: 0x0800, payload: Array.from({ length: 80 }, (_, i) => (i * 5) & 0xff) };
+    const f12: FrameSpec = { dst: ethStationMac(2), src: ethStationMac(1), type: 0x0806, payload: Array.from({ length: 28 }, (_, i) => 0x40 + i) };
     const bodies = [frameBody(f01), frameBody(f12)];
     const host = (o: Partial<Op> & { ra?: number; hrd?: number; rst?: number }) => set(gate, { rst: 0, sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0, promisc: 8, ...o });
     host({ rst: 1 }); tickClk(gate); tickClk(gate);
@@ -371,7 +407,7 @@ describe('capture', () => {
     expect(sorted).toEqual([1, 2]);
     for (const p of parsed) { expect(p.fcsOk).toBe(true); expect(p.runt).toBe(false); }
     const byFirst = (src: number) => parsed[parsed.findIndex((p) => p.src[5] === src)];
-    expect(byFirst(1).dst).toEqual(stationMac(1)); // frame f01: destination station 2's address 02:..:02, source station 1
+    expect(byFirst(1).dst).toEqual(ethStationMac(1)); // frame f01: destination station 2's address 02:..:02, source station 1
     expect(byFirst(1).type).toBe(0x0800);
     expect(byFirst(1).payload.slice(0, 80)).toEqual(f01.payload);
     expect(byFirst(2).type).toBe(0x0806);
@@ -394,8 +430,8 @@ describe('segment on the cycle engine', () => {
     sim.settle(); sim.prepare(); sim.settle();
     const edge = () => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
     const seg = newSegment([0, 0, 0, 1]);
-    const f01 = frameBody({ dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: [1, 2, 3] });
-    const f10 = frameBody({ dst: stationMac(0), src: stationMac(1), type: 0x0800, payload: [4, 5, 6] });
+    const f01 = frameBody({ dst: ethStationMac(1), src: ethStationMac(0), type: 0x0800, payload: [1, 2, 3] });
+    const f10 = frameBody({ dst: ethStationMac(0), src: ethStationMac(1), type: 0x0800, payload: [4, 5, 6] });
     const ops: Op[] = [{ ...NOOP }, ...loadOps(0, f01).slice(0, -1), ...loadOps(1, f10).slice(0, -1), { ...NOOP, sel: 0, len: f01.length, go: 1 }, { ...NOOP, sel: 1, len: f10.length, go: 1 }];
     edge(); edge();
     seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 }))); seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 })));
@@ -410,7 +446,7 @@ describe('segment on the cycle engine', () => {
       edge();
       seg.step(seg.st.map((_, k) => (op.sel === k ? { rst: 0, go: op.go, len: op.len, we: op.we, wa: op.wa, wd: op.wd } : { rst: 0, go: 0, len: 0 })));
       seg.st.forEach((s, k) => {
-        const ev = (s.tx.sent << EV.sent) | (s.tx.drop << EV.drop) | (s.tx.restart << EV.restart);
+        const ev = (s.tx.sent << ETH_EV.sent) | (s.tx.drop << ETH_EV.drop) | (s.tx.restart << ETH_EV.restart);
         expect(get(`ev${k}`) & 7, `ev${k} @${c}`).toBe(ev);
         if (c % 25 === 0) expect(get(`stat${k}`), `stat${k} @${c}`).toBe(s.tx.state | (s.tx.att << 3) | (s.rx.state << 7));
       });

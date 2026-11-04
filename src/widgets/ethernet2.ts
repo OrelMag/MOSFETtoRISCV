@@ -9,7 +9,7 @@ import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, CLOCK_NS, frameBitTimes, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS,
 } from '../comm/mac';
 import { maxThroughput, runLoad, runPair, type LoadResult } from '../comm/macexp';
-import { ethSegment, stationMac } from '../lib/ethstation';
+import { ethSegment, ethStationMac } from '../lib/ethstation';
 import { h, s } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -95,7 +95,7 @@ export function minFrameWidget(): Widget {
   return {
     el: h('div', { class: 'widget mos clk-w comm' }, h('div', { class: 'panel' }, h('h3', null, 'The minimum frame and the longest cable'),
       h('div', { class: 'mc-row' }, sv.el), tbl,
-      h('p', { class: 'sub' }, `A sender has to still be sending when the news of a collision at the far end comes back, 2d/v later. For the frame of ${MIN_FRAME} bytes plus preamble and SFD that gives d ≤ v · T / 2, with T the frame's time on the wire; the standard's slot time of ${SLOT_BITS} bit times is the same number rounded down, so that the whole of a minimum frame, preamble and all, is left for the round trip.`),
+      h('p', { class: 'sub' }, `A sender has to still be sending when the news of a collision at the far end comes back, 2d/v later. For the frame of ${MIN_FRAME} bytes plus preamble and SFD that gives d ≤ v · T / 2, with T the frame's time on the wire; the standard's slot time of ${SLOT_BITS} bit times is the 64 bytes from destination to FCS, and the preamble and SFD are margin on top.`),
       h('div', { class: 'mc-row' }, sd.el), read, box, verdict)),
   };
 }
@@ -159,11 +159,22 @@ export function throughputWidget(): Widget {
 
 // ---- step 8: the segment ----------------------------------------------------------------------------------------------
 
-export interface SegState { clock: number; collisions: number; sent: number; kept: number[]; log: string[]; capture: Capture | null; queue(from: number, to: number | 'all', text: string): void; saveCapture(): Uint8Array | null; run(): void; pause(): void }
+export interface SegState {
+  clock: number; collisions: number; sent: number; kept: number[]; log: string[]; capture: Capture | null; queued: number[];
+  /** Add a frame to a station's queue; it is written into the station's buffer, and sent, when the station has let go of the one before. */
+  queue(from: number, to: number | 'all', text: string): void;
+  /** Frames for several stations written first, then their go pulses in consecutive clocks: the stations start almost together. */
+  together(pairs: [number, number][]): void;
+  saveCapture(): Uint8Array | null; run(): void; pause(): void;
+}
 const segStates = new WeakMap<Stage, SegState>();
 export const segState = (st: Stage) => segStates.get(st);
 
 const SAMPLE = 8, WINDOW = 880;
+interface HostOp { sel: number; wa: number; wd: number; we: number; len: number; go: number }
+const IDLE_OP: HostOp = { sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0 };
+const writeOps = (k: number, bytes: number[]): HostOp[] => bytes.map((b, i) => ({ ...IDLE_OP, sel: k, wa: i, wd: b, we: 1 }));
+const goOp = (k: number, len: number): HostOp => ({ ...IDLE_OP, sel: k, len, go: 1 });
 
 export function segmentScene(): Scene {
   return {
@@ -174,9 +185,12 @@ export function segmentScene(): Scene {
       const rows: number[][] = [[], [], [], [], []];
       let acc = [0, 0, 0, 0, 0];
       const attempts = [0, 0, 0, 0];
-      const cap = new Capture(b, () => Math.floor(b.get('cp') / 2 ** 33), 3);
+      // frames waiting for their station, and the host port's pending writes: one clock each, one frame at a time
+      const queues: number[][][] = [[], [], [], []];
+      let ops: HostOp[] = [];
+      const cap = new Capture(b, () => b.get('cp3'), 3);
       const strips = h('div', { class: 'uart-svg' }), read = h('div', { class: 'mc-status' }), cards = h('div', { class: 'eth-cards' }), logBox = h('ol', { class: 'eth-log', 'aria-label': 'Events' });
-      const stat = (name: string, i: number, w: number) => Math.floor(b.get(name) / 2 ** (w * i)) % 2 ** w;
+      const field = (name: string, i: number, w: number) => Math.floor(b.get(name) / 2 ** (w * i)) % 2 ** w;
       const note = (t: string) => { log.push(`${clock}: ${t}`); if (log.length > 40) log.shift(); };
       const record = () => {
         clock++;
@@ -185,7 +199,7 @@ export function segmentScene(): Scene {
         acc[4] |= clash;
         if (clock % SAMPLE === 0) { acc.forEach((v, i) => { rows[i].push(v); if (rows[i].length > WINDOW) rows[i].shift(); }); acc = [0, 0, 0, 0, 0]; }
         if (re | dr | sn) for (let i = 0; i < 4; i++) {
-          if ((re >> i) & 1) { collisions++; attempts[i]++; note(`station ${i + 1} collided (attempt ${attempts[i]}), backoff ${stat('att', i, 4)} → draws up to ${Math.min(BACKOFF_LIMIT, attempts[i])} bits`); }
+          if ((re >> i) & 1) { collisions++; attempts[i]++; note(`station ${i + 1} collided (collision ${attempts[i]} for this frame), waits up to ${2 ** Math.min(BACKOFF_LIMIT, attempts[i]) - 1} slots`); }
           if ((dr >> i) & 1) { note(`station ${i + 1} gave up after ${ATTEMPT_LIMIT} attempts`); attempts[i] = 0; }
           if ((sn >> i) & 1) { sent++; note(`station ${i + 1} sent its frame${attempts[i] ? ` (after ${attempts[i]} collision${attempts[i] > 1 ? 's' : ''})` : ''}`); attempts[i] = 0; }
         }
@@ -194,34 +208,64 @@ export function segmentScene(): Scene {
           if ((rg >> i) & 1) note(`station ${i + 1} kept a frame`);
           if ((rb >> i) & 1) note(`station ${i + 1} threw a frame away`);
         }
-        cap.poll(clock * BIT_CLOCKS / BIT_CLOCKS);
+        cap.poll(clock);
+      };
+      /** The next frame of the first station that has let go and has one waiting, written by the host port: only when the port is free. */
+      const pump = () => {
+        if (ops.length) return;
+        const busy = b.get('busy');
+        for (let i = 0; i < 4; i++) {
+          if (queues[i].length && !((busy >> i) & 1)) { const f = queues[i].shift()!; ops.push(...writeOps(i, f), goOp(i, f.length)); return; }
+        }
+      };
+      const step = () => {
+        pump();
+        const op = ops.shift() ?? IDLE_OP;
+        b.set('sel', op.sel); b.set('wa', op.wa); b.set('wd', op.wd); b.set('we', op.we); b.set('len', op.len); b.set('go', op.go);
+        b.clock(); record();
+        return true;
+      };
+      const loop = new Loop(stage, step, () => paint(), 150, 30);
+      const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
+      const runPause = (on: boolean) => { if (on && !loop.running) loop.start(); else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
+      const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
+        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
+        return frameBody(spec);
+      };
+      const queue = (f: number, t: number | 'all', txt: string) => {
+        queues[f].push(frameFor(f, t, txt));
+        note(`station ${f + 1}: ${txt.length} bytes for ${t === 'all' ? 'everyone' : `station ${t + 1}`} queued (${queues[f].length} waiting)`);
+        runPause(true); paint();
+      };
+      const together = (pairs: [number, number][]) => {
+        const idle = !ops.length && pairs.every(([f]) => !queues[f].length && !((b.get('busy') >> f) & 1));
+        const frames = pairs.map(([f, t]) => frameFor(f, t, `from ${f + 1} to ${t + 1}`));
+        if (idle) {
+          ops.push(...pairs.flatMap(([f], k) => writeOps(f, frames[k])), ...pairs.map(([f], k) => goOp(f, frames[k].length)));
+          note(`stations ${pairs.map(([f]) => f + 1).join(', ')}: frames written, go in consecutive clocks`);
+        } else {
+          pairs.forEach(([f], k) => queues[f].push(frames[k]));
+          note('stations are busy: the frames wait their turn, so they will not start together');
+        }
+        runPause(true); paint();
       };
       const S: SegState = {
-        clock: 0, collisions: 0, sent: 0, kept: [0, 0, 0, 0], log, capture: cap,
-        queue: (f, t, txt) => { text = txt; from = f; to = t; queueFrame(); },
+        clock: 0, collisions: 0, sent: 0, kept: [0, 0, 0, 0], log, capture: cap, queued: [0, 0, 0, 0], queue, together,
         saveCapture: () => (cap.frames.length ? cap.pcap() : null), run: () => runPause(true), pause: () => runPause(false),
       };
       segStates.set(stage, S);
-      const loop = new Loop(stage, () => { b.clock(); record(); return true; }, () => paint(), 150, 30);
-      const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
-      const runPause = (on: boolean) => { if (on && !loop.running) { loop.start(); } else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
-      const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
-        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : stationMac(t), src: stationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
-        return frameBody(spec);
-      };
-      const queueFrame = () => { b.send(frameFor(from, to, text), from); note(`station ${from + 1} queued ${text.length} bytes for ${to === 'all' ? 'everyone' : `station ${to + 1}`}`); stage.refresh(); paint(); };
-      const both = (pairs: [number, number][]) => { for (const [f, t] of pairs) b.send(frameFor(f, t, `from ${f + 1} to ${t + 1}`), f); note(`queued ${pairs.length} frames in the same clock span`); stage.refresh(); paint(); };
       const paint = () => {
-        S.clock = clock; S.collisions = collisions; S.sent = sent; S.log = log; S.kept = [0, 1, 2, 3].map((i) => stat('ngood', i, 8));
+        S.clock = clock; S.collisions = collisions; S.sent = sent; S.log = log; S.kept = [0, 1, 2, 3].map((i) => field('ngood', i, 8)); S.queued = queues.map((q) => q.length);
         strips.replaceChildren(strip([...[0, 1, 2, 3].map((i) => ({ label: `station ${i + 1}`, data: rows[i] })), { label: 'clash', data: rows[4], cls: 'jam' }], WINDOW, `Which stations send, in the last ${(WINDOW * SAMPLE).toLocaleString('en')} clocks (one sample per ${SAMPLE})`));
-        const st = (n: string, i: number, w: number) => stat(n, i, w);
+        const busy = b.get('busy');
         cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('div', { class: 'sub' }, i === 3 ? 'promiscuous' : 'own address'),
-          h('div', null, txStateName(st('txstate', i, 3))), h('div', null, `kept ${st('ngood', i, 8)} · dropped ${st('nbad', i, 8)}`), h('div', null, `collisions ${st('ncol', i, 8)}`))));
+          h('div', null, txStateName(field('txstate', i, 3)), (busy >> i) & 1 ? ' · frame held' : ''), h('div', null, `kept ${field('ngood', i, 8)} · dropped ${field('nbad', i, 8)}`),
+          h('div', null, `collisions ${field('ncol', i, 8)}`), h('div', null, `waiting ${queues[i].length}`))));
         read.replaceChildren(h('span', null, 'clocks ', h('b', null, clock.toLocaleString('en'))), h('span', null, 'time ', h('b', null, us(clock))), h('span', null, 'frames sent ', h('b', null, String(sent))), h('span', null, 'collisions ', h('b', null, String(collisions))),
           h('span', null, 'station 4 has captured ', h('b', null, `${cap.frames.length} frame${cap.frames.length === 1 ? '' : 's'}`)));
         logBox.replaceChildren(...log.slice(-8).map((l) => h('li', null, l)));
       };
-      stage.resetHooks.add(() => { clock = 0; collisions = 0; sent = 0; log = []; rows.forEach((r) => { r.length = 0; }); acc = [0, 0, 0, 0, 0]; attempts.fill(0); cap.reset(); b.reset(); paint(); });
+      stage.resetHooks.add(() => { clock = 0; collisions = 0; sent = 0; log = []; rows.forEach((r) => { r.length = 0; }); acc = [0, 0, 0, 0, 0]; attempts.fill(0); queues.forEach((q) => { q.length = 0; }); ops = []; cap.reset(); b.reset(); paint(); });
       b.reset();
       const inp = h('input', { type: 'text', class: 'uart-text', value: text, maxlength: 60, 'aria-label': 'Message', spellcheck: 'false' }) as HTMLInputElement;
       inp.addEventListener('input', () => { text = inp.value; });
@@ -231,16 +275,14 @@ export function segmentScene(): Scene {
       const saveBtn = btn('Save capture', 'Download the frames station 4 received as a .pcap file that Wireshark and tcpdump open', () => {
         const f = S.saveCapture();
         if (f) saveFile('segment.pcap', new Blob([f.buffer as ArrayBuffer], { type: 'application/vnd.tcpdump.pcap' }), 'application/vnd.tcpdump.pcap');
-        else note('nothing captured yet: station 4 keeps every frame it receives, good ones only');
+        else note('nothing captured yet: station 4 keeps every good frame it receives');
         paint();
       });
       const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Four stations on a cable', h('span', { class: 'fold-hint' })),
-        h('div', { class: 'mc-row' }, inp, fSel, tSel, btn('Queue', 'Write the frame into the station\'s buffer and tell it to send', queueFrame)),
-        h('div', { class: 'mc-row' }, btn('1 ↔ 2 together', 'Queue a frame in station 1 and one in station 2 in the same moment: they will collide', () => both([[0, 1], [1, 0]])), btn('1, 2 and 3 together', 'Three stations at once', () => both([[0, 3], [1, 3], [2, 3]])), runBtn, saveBtn),
+        h('div', { class: 'mc-row' }, inp, fSel, tSel, btn('Queue', 'Add the frame to the station\'s queue and run: it is written into the station\'s buffer and sent when the station is free', () => queue(from, to, text))),
+        h('div', { class: 'mc-row' }, btn('1 ↔ 2 together', 'Write a frame for each, then tell both to go in consecutive clocks: they collide', () => together([[0, 1], [1, 0]])), btn('1, 2 and 3 together', 'Three stations at once', () => together([[0, 3], [1, 3], [2, 3]])), runBtn, saveBtn),
         read, cards, strips, logBox);
       return { el, update: paint, destroy: () => loop.stop() };
     }],
   };
 }
-
-
