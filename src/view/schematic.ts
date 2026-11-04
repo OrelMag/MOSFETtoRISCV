@@ -18,6 +18,7 @@ import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, 
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import { menuKeys } from '../ui/menukeys';
+import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
@@ -177,6 +178,14 @@ export class SchematicView {
       onLeave: () => (this.tooltip.style.opacity = '0'),
     });
     this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
+    // A held finger is the right-click (the browser's own contextmenu for it is not reliable): the same menu.
+    this.holdQuiet = installHold(this.el, {
+      onHold: (x, y, e) => {
+        const items = this.layoutItems(e.target as Element);
+        if (!items.length) return false;
+        this.openMenu(items, x, y);
+      },
+    }).quiet;
     this.el.addEventListener('pointerdown', (e) => {
       if (this.arrange === true && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
       const net = this.grabbedNet(e);
@@ -1227,7 +1236,10 @@ export class SchematicView {
     return items;
   }
 
+  private holdQuiet: () => boolean = () => false;
+
   private contextMenu(e: MouseEvent): void {
+    if (this.holdQuiet()) return void e.preventDefault();
     const items = this.layoutItems(e.target as Element);
     if (!items.length) return;
     e.preventDefault();
@@ -1250,7 +1262,7 @@ export class SchematicView {
         this.closeMenu();
         it.run();
       } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
-        : h('p', { class: 'sch-menu-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it.')));
+        : h('p', { class: 'sch-menu-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it. Press and hold a wire to draw it as pointers.')));
     document.body.append(m);
     // keys: Esc closes it and gives the focus back to what opened it; arrows move between the items
     const opener = document.activeElement as HTMLElement | null;

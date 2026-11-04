@@ -23,10 +23,19 @@ export type MenuEntry = Item | null;
 type Entry = MenuEntry;
 
 let menu: HTMLElement | null = null;
+/** What had the focus when the menu opened: Esc gives it back. */
+let opener: HTMLElement | SVGElement | null = null;
 const onOutside = (e: PointerEvent) => { if (menu && !menu.contains(e.target as Node)) closeContextMenu(); };
 const onKey = (e: KeyboardEvent) => {
   if (!menu) return;
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeContextMenu(); return; }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    const back = opener;
+    closeContextMenu();
+    if (back?.isConnected) back.focus({ preventScroll: true });
+    return;
+  }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   e.preventDefault();
   e.stopPropagation();
@@ -164,11 +173,11 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
         ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
       }, 'menuitemradio')), h('hr'));
   }
-  showMenu(x, y, entries(ed, at), m);
+  showMenu(x, y, entries(ed, at), m, ed.view.svg);
 }
 
 /** A menu of these entries at a screen point (null: a separator); `into` an element already holding a header. */
-export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLElement): void {
+export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLElement, back?: HTMLElement | SVGElement): void {
   if (!into) closeContextMenu();
   const m = into ?? h('div', { class: 'sb-ctx', role: 'menu', 'aria-label': 'Actions' });
   for (const it of list) {
@@ -186,6 +195,8 @@ export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLEle
   const w = m.offsetWidth, hh = m.offsetHeight;
   m.style.left = `${Math.max(8, x + w > innerWidth - 8 ? x - w : x)}px`;
   m.style.top = `${Math.max(8, y + hh > innerHeight - 8 ? y - hh : y)}px`;
+  // Esc gives the focus back to what had it, else to the canvas (a press on it leaves the focus on the page)
+  opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : back ?? null;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
   m.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();

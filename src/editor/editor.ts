@@ -180,6 +180,8 @@ export class Editor {
   /** The run bar's problem count (props.ts fills it; a click shows the first one). */
   readonly diagPill = h('button', { class: 'btn sm sb-diag-pill', type: 'button', hidden: true, onclick: () => this.props.showFirstDiag() }) as HTMLButtonElement;
   private toastEl: HTMLElement;
+  private modeEl: HTMLElement;
+  private modeText: HTMLElement;
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
   private emptyEl: HTMLElement;
@@ -224,6 +226,10 @@ export class Editor {
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
+    // What a touch screen is in the middle of (a part armed, a wire begun) and the way out; Esc does it on a keyboard.
+    this.modeText = h('span', { class: 'sb-mode-text' });
+    this.modeEl = h('div', { class: 'sb-mode', role: 'status', 'aria-live': 'polite', hidden: true }, this.modeText,
+      h('button', { type: 'button', class: 'sb-mode-cancel', 'aria-label': 'Cancel', onclick: () => this.tools.cancel() }, 'Cancel'));
     const overlay = h('div', { class: 'sb-overlay' });
     // A toolbar action, shown when one is registered (the page imports the plugins after the editor).
     const act = (id: string, label: string, ic: string) => h('button', { class: 'btn sm', 'data-for': id,
@@ -234,9 +240,9 @@ export class Editor {
       this.emptyText,
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
-    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.tipEl,
+    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl,
       hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
-        'drag from a pin: wire · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
+        'drag from a pin: wire · hold: menu · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
@@ -1046,24 +1052,42 @@ export class Editor {
    */
   private pickPart(item: PaletteItem, e: PointerEvent): void {
     this.tools.pickFromPalette(item, e);
-    if (!this.partsDrawer) return;
+    const drawer = this.partsDrawer, touch = e.pointerType === 'touch';
+    if (!drawer && !touch) return;
     const up = () => {
       document.removeEventListener('pointerup', up);
       const st = this.tools.state;
       if (st.k !== 'place' || st.drag) return;
-      this.showParts(false);
-      this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
-      this.placeHint = `Tap the canvas to place ${item.name}`;
-      this.toast(this.placeHint);
+      if (drawer) {
+        // The tap's own click follows this pointerup and lands on whatever the closed drawer uncovered (an input
+        // toggle under the finger): drop it.
+        const drop = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+        document.addEventListener('click', drop, { capture: true, once: true });
+        setTimeout(() => document.removeEventListener('click', drop, true), 500);
+        this.showParts(false);
+        this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
+      }
+      if (touch) this.showMode(`Tap the canvas to place ${item.name}`);
+      else {
+        this.placeHint = `Tap the canvas to place ${item.name}`;
+        this.toast(this.placeHint);
+      }
     };
     document.addEventListener('pointerup', up);
   }
 
-  /** The phone's tap-to-place hint while it may be on screen. */
+  /** A touch screen's "in the middle of something" pill: what it is and a Cancel (the armed part, a wire begun). */
+  showMode(text: string): void {
+    this.modeText.textContent = text;
+    this.modeEl.hidden = false;
+  }
+
+  /** The mouse's tap-to-place hint in a narrow window (a toast: no touch, no pill). */
   private placeHint = '';
 
-  /** The armed part was placed or let go: its tap-to-place hint goes at once rather than after the toast's time. */
-  endPlaceHint(): void {
+  /** The part was placed, the wire finished or either given up: the pill (or the hint) goes at once. */
+  endMode(): void {
+    this.modeEl.hidden = true;
     if (this.placeHint && this.toastEl.textContent === this.placeHint) {
       if (this.toastTimer) clearTimeout(this.toastTimer);
       this.toastEl.className = 'sb-toast';
@@ -1366,7 +1390,7 @@ const MOUSE_HELP: [string, string][] = [
   ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
   ['Double-click a comment', 'edit it'],
   ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
-  ['Right-click', 'actions for what is under the cursor (or the canvas)'],
+  ['Right-click', 'actions for what is under the cursor (or the canvas); on a touch screen, press and hold'],
   ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
   ['Shift + click', 'add to / remove from the selection'],
   ['Space + drag, middle drag, two fingers', 'pan · wheel or pinch: zoom'],
