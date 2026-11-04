@@ -1262,6 +1262,7 @@ Order, one branch and merge each: a relays + line model (39–42), b UART + SPI 
 switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaign + sandbox.
 
 - ✅ a: chapters 39–42, phys/line.ts, phys/telegraph.ts, phys/schmitt.ts, phys/metastable.ts, comm/ (codes, limits, exchange, startstop, asyncfifo), lib/telegraph.ts, lib/pad.ts, lib/sync.ts. Two clocks run on the cycle engine (one slot per clock pin; tests/comm-sync.test.ts); the scenes use GateSim for Pulse, Step and animation.
+- ⏳ b: chapter 43 A UART ✅ (branch feat/comms-b-uart): comm/uart.ts (the core edge by edge: the golden model the gates and bus/model.ts's UartDevice share), lib/uart.ts (BAUD_GEN, UART_TX, UART_RX, UART_CORE = id uart_full, AXI_UART at 0x3000_0000, LINE), lib/uartlink.ts (twoComputers: two bus computers on their own clock pins, tx crossed to rx through two LINE parts), busComputer({ uart: true }), riscv/uartprograms.ts (polled and interrupt drivers, UART_COSTS measured on the gates), widgets/uart.ts; tests/comm-uart*.test.ts. Chapter 44 (SPI and I²C) not started.
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.

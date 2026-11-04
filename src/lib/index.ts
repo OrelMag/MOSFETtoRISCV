@@ -68,3 +68,5 @@ export * from './intc';
 export * from './seqdeep';
 export * from './rfdeep';
 export * from './sync';
+export * from './uart';
+export * from './uartlink';

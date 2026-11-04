@@ -14,6 +14,8 @@ export class Builder {
   private colW = 0;
   private x: number;
   private n = 0;
+  /** When set, a column that would grow taller than this many units wraps into the next one (blocks of many small gates). */
+  maxH = 0;
   /** x0: first column; gap: between columns; vgap: between parts stacked in a column. */
   constructor(x0 = 10, private gap = 12, private vgap = 4) {
     this.x = x0;
@@ -28,6 +30,7 @@ export class Builder {
   add(def: ComponentDef, label?: string, name?: string): string {
     const nm = name ?? `u${this.n++}`;
     const g = symbolGeom(def);
+    if (this.maxH && this.y > 0 && this.y + g.h > this.maxH) this.next();
     this.instances.push({ name: nm, def, at: [this.x, this.y + 2], label });
     this.y += g.h + this.vgap;
     this.colW = Math.max(this.colW, g.w);
