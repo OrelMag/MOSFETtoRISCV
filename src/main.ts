@@ -6,6 +6,7 @@ import './styles/codeedit.css';
 import './styles/mosfet.css';
 import './styles/m6502.css';
 import './styles/prologue.css';
+import './styles/comm.css';
 import './styles/cards.css';
 import './styles/doom.css';
 import './styles/notes.css';

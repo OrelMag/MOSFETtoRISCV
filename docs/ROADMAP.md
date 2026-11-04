@@ -1261,7 +1261,7 @@ parts (UART, line, NIC, switch), Examples ▸ Two computers.
 Order, one branch and merge each: a relays + line model (39–42), b UART + SPI / I²C (43–44), c modems + fast links + errors (45–47), d Ethernet +
 switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaign + sandbox.
 
-- ⏳ a: foundation (numbering, ladder rung, stubs), chapters 39–42.
+- ✅ a: chapters 39–42, phys/line.ts, phys/telegraph.ts, phys/schmitt.ts, phys/metastable.ts, comm/ (codes, limits, exchange, startstop, asyncfifo), lib/telegraph.ts, lib/pad.ts, lib/sync.ts. Two clocks run on the cycle engine (one slot per clock pin; tests/comm-sync.test.ts); the scenes use GateSim for Pulse, Step and animation.
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.

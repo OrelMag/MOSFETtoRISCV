@@ -9,7 +9,8 @@ import { homePage } from './pages/home';
 import type { WorkbenchPage } from './pages/workbench';
 import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
+import { applyTheme, PALETTES, PRESETS, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale } from './settings';
+import { systemReducedMotion } from './motion';
 import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
@@ -95,12 +96,31 @@ export function startApp(root: HTMLElement): void {
   const palMenu = h('div', { class: 'pal-menu', role: 'menu', 'aria-label': 'View options' });
   // Sections, so the long list reads as four short ones (the backup lives on the home page, the search's actions and the storage note).
   const palHead = (t: string) => h('div', { class: 'pal-head', role: 'presentation' }, t);
+  // Presets first: the short way through a long list. Each offers its undo until the menu closes.
+  const previewHost = h('div', { class: 'pal-preview', 'aria-hidden': 'true' });
+  let undoView: { view: ViewState; theme: Theme } | null = null;
+  const remember = () => { undoView ??= { view: settings.view(), theme: settings.theme }; };
+  const presetBtns = PRESETS.map((p) => h('button', { class: 'btn sm toggle', 'data-preset': p.id, title: p.blurb, onclick: () => {
+    remember();
+    settings.applyPreset(p.id);
+    applyTheme();
+    syncTools();
+  } }, p.name));
+  const undoItem = h('button', { class: 'pal-reset', hidden: true, onclick: () => {
+    if (undoView) {
+      settings.set('theme', undoView.theme);
+      settings.setView(undoView.view);
+    }
+    undoView = null;
+    applyTheme();
+    syncTools();
+  } }, 'Undo: back to what you had');
+  palMenu.append(previewHost, palHead('Presets'), h('div', { class: 'pal-presets', role: 'group', 'aria-label': 'Presets' }, presetBtns), undoItem);
   palMenu.append(palHead('Wire colours'));
   for (const p of PALETTES) {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
       settings.set('palette', p.id);
       applyTheme();
-      palOpen(false);
     } }, h('span', { class: 'pal-sw', 'data-palette': p.id }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' })),
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
@@ -171,11 +191,55 @@ export function startApp(root: HTMLElement): void {
   const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, palHead('Behaviour'), simpleItem, clockItem, delayItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
+  // Thickness and grid: a word each, one row (the same shape as Text size).
+  const choiceRow = <T extends string>(label: string, of: () => T, set: (v: T) => void, opts: [T, string][]) => {
+    const btns = opts.map(([v, t]) => h('button', { class: 'btn sm toggle', 'data-v': v, onclick: () => { set(v); applyTheme(); } }, t));
+    const sync = () => { for (const b of btns) { const on = b.dataset.v === of(); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); } };
+    return { row: h('div', { class: 'pal-choice', role: 'group', 'aria-label': label }, h('span', null, h('b', null, label)), btns), sync };
+  };
+  const wiresRow = choiceRow<WireScale>('Wire thickness', () => settings.wireScale, (v) => settings.set('wireScale', v), [['thin', 'Thin'], ['normal', 'Normal'], ['thick', 'Thick']]);
+  const gridRow = choiceRow<GridStyle>('Grid', () => settings.grid, (v) => settings.set('grid', v), [['dots', 'Dots'], ['lines', 'Lines'], ['off', 'None']]);
+  // Less motion: flowing bits, pulses and smooth scrolling, with or without the system's setting (which then holds it on).
+  const motionWhy = h('small', null);
+  const motionItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('reduceMotion', !settings.reduceMotion); applyTheme(); } },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Reduce motion'), motionWhy));
+  // Text on the schematics: fewer words on a dense level; names come back under the pointer.
+  const labelItem = (key: 'portNames' | 'partNames' | 'busValues' | 'tapRanges', title: string, about: string) =>
+    h('button', { role: 'menuitemcheckbox', class: 'pal-flow', 'data-label': key, onclick: () => { settings.set(key, !settings[key]); applyTheme(); } },
+      h('span', { class: 'pal-flow-sw' }, h('i')),
+      h('span', null, h('b', null, title), h('small', null, about)));
+  const labelItems = [
+    labelItem('portNames', 'Port names', 'The names inside a part; off, shown when you point at it'),
+    labelItem('partNames', 'Part names', 'Block and instance names; off, pointing at a part shows them once it is large enough to read'),
+    labelItem('busValues', 'Bus values', 'Live values on the buses, standing or riding along'),
+    labelItem('tapRanges', 'Bit ranges', 'Where a bus is tapped ([7:0]); off, shown on a net you point at or select'),
+  ];
+  // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.
+  const minimapItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('minimap', !settings.minimap) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Minimap'), h('small', null, 'Sandbox: a map at the canvas corner while part of the chip is out of view (M)')));
+  const singleItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('singleKeys', !settings.singleKeys) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Single-key shortcuts'), h('small', null, 'F, /, [, ? and the like; off, only Ctrl / ⌘ combinations and Esc')));
+  // Reset: every option here, behaviour included, never progress or the theme.
+  const resetItem = h('button', { class: 'pal-reset', onclick: () => {
+    remember();
+    settings.resetView();
+    applyTheme();
+    syncTools();
+    undoItem.focus();
+  } }, 'Reset view options to defaults');
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: presets, text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
     palBtn.setAttribute('aria-expanded', String(on));
+    if (on) void import('./viewpreview').then((m) => { if (palMenu.classList.contains('open')) m.showPreview(previewHost); }).catch(() => { /* offline: the menu works without it */ });
+    else {
+      void import('./viewpreview').then((m) => { if (!palMenu.classList.contains('open')) m.hidePreview(); }).catch(() => {});
+      if (undoView) { undoView = null; syncTools(); }
+    }
   };
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -202,6 +266,18 @@ export function startApp(root: HTMLElement): void {
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     delayItem.setAttribute('aria-checked', String(settings.loadDelay));
     narrowItem.setAttribute('aria-checked', String(settings.narrowText));
+    for (const b of labelItems) b.setAttribute('aria-checked', String(settings[b.dataset.label as 'portNames']));
+    wiresRow.sync();
+    gridRow.sync();
+    const sysMotion = systemReducedMotion();
+    motionItem.setAttribute('aria-checked', String(sysMotion || settings.reduceMotion));
+    motionItem.disabled = sysMotion;
+    motionWhy.textContent = sysMotion ? 'On: your system asks for it' : 'No flowing bits, pulses or smooth scrolling; Slow motion still plays when you ask';
+    minimapItem.setAttribute('aria-checked', String(settings.minimap));
+    singleItem.setAttribute('aria-checked', String(settings.singleKeys));
+    const preset = settings.preset();
+    for (const b of presetBtns) { const on = b.dataset.preset === preset; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
+    undoItem.hidden = !undoView;
     sizeVal.textContent = `${settings.textSize}%`;
     sizeMinus.disabled = settings.textSize <= TEXT_SIZES[0];
     sizePlus.disabled = settings.textSize >= TEXT_SIZES[TEXT_SIZES.length - 1];

@@ -108,7 +108,7 @@ export const chWire: Chapter = {
       },
       challenge: {
         kind: 'quiz', question: 'A wire is made twice as long, and the driver is made four times as wide. The wire\'s own term, 0.38 · R<sub>w</sub> · C<sub>w</sub>, changes by:',
-        options: ['×4: the width of the driver does not enter it', '×2', '×½'],
+        options: ['×4', '×2', '×½'],
         answer: 0,
         why: ['', 'That is the driver\'s term when the driver is unchanged. R<sub>w</sub> and C<sub>w</sub> each double, and the product quadruples.', 'The driver is no part of this term.'],
         explain: 'Both Rw and Cw are proportional to length, so Rw · Cw is proportional to length squared. The driver\'s width only changes the other term.',
@@ -155,7 +155,7 @@ export const chWire: Chapter = {
       title: 'Reflections',
       body: `
         <p>A driver does not see the far pin at first. It sees the line's characteristic impedance, Z₀ = 50 Ω, and launches a divided wave of <code>V · Z₀ / (Z₀ + R<sub>s</sub>)</code>: ${f2(strong.launch)} V from a 10 Ω driver on a ${VIO} V swing. When the wave reaches a termination R it leaves as a reflected wave Γ times its size, <code>Γ = (R − Z₀) / (R + Z₀)</code>: +1 at an open end, −1 at a short, 0 when R = Z₀. An open CMOS input doubles the wave. A low-resistance driver reflects it again with Γ = ${f2(strong.gammaS)}, and the pin rings: each round trip (${f2(2 * L_FLIGHT)} ns here) multiplies the echo by Γ<sub>far</sub> · Γ<sub>driver</sub> = ${f2(strong.gammaL * strong.gammaS)}.</p>
-        <p>The far pin first sees ${f2(strong.firstFar)} V, overshoots to ${f2(strongStats.peak)} V (an ESD clamp would carry it) and falls back below V<sub>IH</sub> = ${f2(VIH)} V for a moment before it settles: a receiver clocked on that edge sees ${strongStats.fallBacks + 1} rising edges. At ${f0(Z0_BOARD)} Ω the echo disappears (series termination), and with a matched far end it never forms (parallel). The widget solves the lattice exactly: the sum of the waves, shifted by the flight time and smoothed by the edge, is the voltage.</p>
+        <p>The far pin first sees ${f2(strong.firstFar)} V, past its final ${VIO} V (an ESD clamp would carry the excess), and falls back below V<sub>IH</sub> = ${f2(VIH)} V for a moment before it settles: a receiver clocked on that edge sees ${strongStats.fallBacks + 1} rising edges. At ${f0(Z0_BOARD)} Ω the echo disappears (series termination), and with a matched far end it never forms (parallel). The widget solves the lattice exactly: the sum of the waves, shifted by the flight time and smoothed by the edge, is the voltage.</p>
         <p><b>Try:</b> find the smallest R<sub>s</sub> at which the far pin, once above V<sub>IH</sub>, stays above it. It is ${RS_MIN} Ω for the default trace and edge, and a different edge on this trace leaves it there: each echo arrives whole, so only Γ matters. Shorten the trace to 3 cm and slow the edge to 0.5 ns: the echoes now overlap the edge that made them, and ${minRsStaysHigh(VIO, Z0_BOARD, boardDelay(30), 0.5)} Ω is enough.</p>`,
       widget: () => reflectionWidget(),
       more: {
