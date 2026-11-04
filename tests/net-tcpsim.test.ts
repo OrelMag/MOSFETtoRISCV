@@ -54,6 +54,20 @@ describe('the simulator', () => {
     expect(Math.min(...r.trace.slice(5).map((p) => p.sndWnd))).toBeLessThan(TCP_K.MSS);
     expect(Math.max(...r.trace.map((p) => p.held))).toBeLessThanOrEqual(TCP_K.RCV);
   });
+  it('a window update does not leave the wait for it timing the data sent next', () => {
+    for (const readEvery of [40_000, 60_000, 80_000, 120_000, 200_000, 400_000]) {
+      const r = runTcp({ bytes: 1500, readEvery, readBytes: 128 });
+      expect(r.got, `read every ${readEvery}`).toEqual(stream(1500));
+      expect(r.timeouts, `read every ${readEvery}`).toBe(0);
+      expect(r.retrans - r.probes, `read every ${readEvery}`).toBeLessThanOrEqual(r.probes);
+    }
+  });
+  it('a frame is 118 bytes: data through the link never beats the ceiling the widget quotes', () => {
+    for (const byteClocks of [32, 200, 400]) {
+      const r = runTcp({ bytes: 8000, byteClocks, queue: 8, delay: 2000 });
+      expect(8000 / r.doneAt).toBeLessThanOrEqual(64 / (118 * byteClocks) + 1e-9);
+    }
+  });
   it('random losses: the data still arrives, later', () => {
     const clean = runTcp({ bytes: 6000 }), lossy = runTcp({ bytes: 6000, lossPct: 5, seed: 3 });
     expect(lossy.got).toEqual(stream(6000));

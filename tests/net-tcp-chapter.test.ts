@@ -57,6 +57,20 @@ describe('chapter 52', () => {
     expect(q(8).drops).toBe(0);
     expect(q(4).drops).toBeGreaterThan(0);
   });
+  it('the ladder step: losing the segment the text names brings a fast retransmit', () => {
+    const o = { bytes: 512, delay: 12000, isnA: 0x1000, isnB: 0x2000 };
+    const k = runTcp(o).segs.findIndex((x) => x.from === 'a' && x.seg.data.length > 0 && x.seg.seq - 0x1000 === 193);
+    expect(k).toBeGreaterThan(0);
+    expect(runTcp({ ...o, lost: new Set([k]) }).fast).toBe(1);
+    expect(chTcp.steps[2].body).toContain('ACK seq 193');
+  });
+  it('the timer step: a wider spread makes the fixed timer fire before the step, and the adaptive one wait longer', () => {
+    const before = (spread: number) => rttSamples(60000, spread).slice(0, 41).filter((r) => r > 78000).length;
+    expect(before(0)).toBe(0);
+    expect(before(80)).toBeGreaterThan(before(40));
+    const last = (spread: number) => { const { rto } = rtoSeries(rttSamples(60000, spread)); return rto[rto.length - 1]; };
+    expect(last(80)).toBeGreaterThan(last(0));
+  });
   it('the adaptive timer fires early less often than a fixed one, on a noisy path', () => {
     for (const spread of [30, 60]) {
       const x = rttSamples(60000, spread), { rto } = rtoSeries(x);

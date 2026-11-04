@@ -75,7 +75,7 @@ const VARS: [string, (m: TcpModel) => number][] = [
   ['snd_max', (m) => m.sndMax], ['snd_end', (m) => m.sndEnd], ['snd_wnd', (m) => m.sndWnd], ['wl1', (m) => m.wl1], ['wl2', (m) => m.wl2], ['rcv_nxt', (m) => m.rcvNxt], ['rcv_read', (m) => m.rcvRead],
   ['fin_in', (m) => +m.finIn], ['fin_want', (m) => +m.finWant], ['ack_pending', (m) => +m.ackPending], ['tcp_mss', (m) => m.mss], ['cwnd', (m) => m.cwnd], ['ssthresh', (m) => m.ssthresh], ['acc', (m) => m.acc],
   ['dupacks', (m) => m.dupacks], ['srtt', (m) => m.srtt], ['rttvar', (m) => m.rttvar], ['rto', (m) => m.rto], ['rto_on', (m) => +m.rtoOn], ['rto_at', (m) => m.rtoAt], ['rtt_on', (m) => +m.rttOn], ['retries', (m) => m.retries],
-  ['tcp_err', (m) => +m.err], ['tcp_passive', (m) => +m.passive], ['probing', (m) => +m.probing],
+  ['tcp_err', (m) => +m.err], ['tcp_passive', (m) => +m.passive], ['probing', (m) => +m.probing], ['tw_at', (m) => m.twAt], ['isn_next', (m) => m.isnNext],
 ];
 
 type Cmd = { k: 'listen'; port: number } | { k: 'connect'; sport: number; dport: number } | { k: 'write'; bytes: number[] } | { k: 'read'; n: number } | { k: 'close' };
@@ -368,6 +368,29 @@ describe('directed: what random traffic does not reach', () => {
     expect(s[0].seg.seq).toBe(una);
     expect(s.reduce((n, x) => n + x.seg.data.length, 0)).toBe(72);
     expect(p.model.probing).toBe(false);
+  });
+  it('the window reopened before a probe: the wait for it does not time the data sent next', () => {
+    const p = established(512);
+    let now = 10;
+    p.step(now += 10, { cmd: { k: 'write', bytes: fill(200) } });
+    const una = p.model.sndNxt;
+    p.step(now += 10, { seg: ack(0x2001, una, 0) });
+    const old = p.model.rtoAt;
+    expect(p.model.rtoOn).toBe(true);
+    p.step(now = old - 5, { seg: ack(0x2001, una, 512) });
+    expect(p.model.rtoAt).toBe((now + p.model.rto) | 0);
+    expect(p.step(old + 1).length).toBe(0);
+  });
+  it('TIME_WAIT: a FIN sent again restarts 2 MSL', () => {
+    const p = established();
+    p.step(10, { cmd: { k: 'close' } });
+    const end = p.model.sndNxt;
+    p.step(11, { seg: ack(0x2001, end) });
+    p.step(12, { seg: segBytes({ ...PEER, seq: 0x2001, ack: end, flags: ACK | FIN, wnd: 512, data: [] }, B, A) });
+    expect(p.model.st).toBe(TIME_WAIT);
+    const r = p.step(5000, { seg: segBytes({ ...PEER, seq: 0x2001, ack: end, flags: ACK | FIN, wnd: 512, data: [] }, B, A) });
+    expect(r.map((x) => x.seg.flags)).toEqual([ACK]);
+    expect(p.model.twAt).toBe(5000 + 400_000);
   });
   it('a reset at the window\'s last byte is challenged, at the first byte past it dropped', () => {
     const p = established();

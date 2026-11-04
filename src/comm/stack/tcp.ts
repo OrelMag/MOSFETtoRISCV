@@ -501,6 +501,9 @@ def tcp_in_sync(t):
         return tcp_output(t)
     if (seg_flags & 16) == 0:
         return 0
+    # our last ACK was lost, and the far end has sent its FIN again: 2 MSL starts over
+    if tcp_st == 10 and (seg_flags & 1):
+        tw_at = t + ${K.TIME_WAIT}
     # only the next byte is taken: what lies ahead is dropped, what was seen already is cut off
     d = rcv_nxt - seg_seq
     if d < 0 or (d > 0 and d >= seg_len + (seg_flags & 1)):
@@ -526,15 +529,18 @@ def tcp_in_sync(t):
         ack_pending = 1
         return tcp_output(t)
     tcp_ack_field(t)
+    shut = snd_wnd == 0
     if (wl1 - seg_seq) < 0 or (wl1 == seg_seq and (wl2 - seg_ack) <= 0):
         snd_wnd = seg_wnd
         wl1 = seg_seq
         wl2 = seg_ack
-    # the window has opened: carry on from what was acknowledged, the probe's byte included if it was refused
+    # the window has opened: what timed the wait for that must not time the data sent now
+    if shut and snd_wnd > 0:
+        rto_on = 0
+    # and carry on from what was acknowledged, the probe's byte included if it was refused
     if probing and snd_wnd > 0:
         probing = 0
         snd_nxt = snd_una
-        rto_on = 0
     if fin_want and snd_una == snd_end + 1:
         if tcp_st == 5:
             tcp_st = 6

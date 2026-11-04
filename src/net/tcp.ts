@@ -6,7 +6,7 @@
 //   one connection at a time; no out-of-order queue: a segment that does not start at rcv_nxt is dropped and acknowledged (so a loss costs everything
 //   sent after it: both fast retransmit and the timer go back to snd_una); an ACK for every segment, none delayed; no options but the handshake's
 //   MSS (so no window scaling, timestamps or SACK); an ACK field on a dropped segment is not looked at; the initial sequence number is a counter, not
-//   RFC 6528's keyed hash.
+//   RFC 6528's keyed hash; close() during a passive open is ignored (an application here closes only what it has accepted).
 //
 // Sequence numbers are int32 here as in the subset: every comparison is on a difference, so they wrap. Time is in clock cycles, also wrapping.
 
@@ -26,7 +26,7 @@ export const TCP_K = {
   RTO_INIT: 200_000,
   RTO_MIN: 40_000,
   RTO_MAX: 6_400_000,
-  /** Timeouts in a row before the connection is given up. */
+  /** Retransmissions in a row before the connection is given up. */
   RETRIES: 8,
   /** 2 MSL, far shorter than the RFC's minutes: no segment lives long on this bench. */
   TIME_WAIT: 400_000,
@@ -310,6 +310,8 @@ export class TcpModel {
     if (syn) { this.ackPending = true; this.output(now); return; }
     if (!ackf) return;
 
+    // our last ACK was lost, and the far end has sent its FIN again: 2 MSL starts over
+    if (this.st === TIME_WAIT && finf) this.twAt = (now + TCP_K.TIME_WAIT) | 0;
     // only the next byte is taken: what lies ahead is dropped, what was seen already is cut off
     const seqlen = dlen + (finf ? 1 : 0), d = (this.rcvNxt - seq) | 0;
     if (d < 0 || (d > 0 && d >= seqlen)) { this.ackPending = true; this.output(now); return; }
@@ -350,9 +352,12 @@ export class TcpModel {
         this.event(now, 'fast');
       }
     }
+    const wasShut = this.sndWnd === 0;
     if (lt(this.wl1, seq) || (this.wl1 === seq && le(this.wl2, s.ack))) { this.sndWnd = s.wnd; this.wl1 = seq; this.wl2 = s.ack; }
-    // the window has opened: carry on from what was acknowledged, the probe's byte included if it was refused
-    if (this.probing && this.sndWnd > 0) { this.probing = false; this.sndNxt = this.sndUna; this.rtoOn = false; }
+    // the window has opened: what timed the wait for that must not time the data sent now
+    if (wasShut && this.sndWnd > 0) this.rtoOn = false;
+    // and carry on from what was acknowledged, the probe's byte included if it was refused
+    if (this.probing && this.sndWnd > 0) { this.probing = false; this.sndNxt = this.sndUna; }
 
     const finAcked = this.finWant && this.sndUna === ((this.sndEnd + 1) | 0);
     if (finAcked) {

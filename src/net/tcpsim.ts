@@ -79,11 +79,11 @@ export function runTcp(o: SimOptions): SimResult {
     if (from === 'a') {
       rec.depth = leaving.length;
       if (leaving.length >= queue) { rec.fate = 'queue'; rec.at = now + delay / 2; return true; }
-      const size = (bytes.length + 14 < 60 ? 60 : bytes.length + 14) * byteClocks;
+      const size = Math.max(60, bytes.length + 34) * byteClocks;
       free = Math.max(free, now) + size;
       leaving.push(free);
       at = free + delay;
-    } else at = now + ackDelay + (bytes.length + 14 < 60 ? 60 : bytes.length + 14) * 32;
+    } else at = now + ackDelay + Math.max(60, bytes.length + 34) * 32;
     rec.at = at;
     wire.push({ at, to: from === 'a' ? 'b' : 'a', bytes, rec });
     return true;

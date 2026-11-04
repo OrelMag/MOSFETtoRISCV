@@ -3,11 +3,11 @@
 .tcp-plot { width: 100%; max-width: 680px; height: auto; display: block; }
 .tcp-plot .grid { stroke: var(--border); stroke-width: 1; }
 .tcp-plot .tick { font: 500 11px var(--font-mono); fill: var(--muted); }
-.tcp-plot .axl { font: 500 12px var(--font-sans, inherit); fill: var(--text-2); }
+.tcp-plot .axl { font: 500 12px var(--font-ui); fill: var(--text-2); }
 .tcp-plot .ln { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .tcp-plot .ln.s1 { stroke: var(--accent); }
 .tcp-plot .ln.s2 { stroke: var(--good); }
-.tcp-plot .ln.s3 { stroke: var(--wire-accent, var(--text-2)); }
+.tcp-plot .ln.s3 { stroke: var(--text-2); }
 .tcp-plot .ln.s4 { stroke: var(--muted); stroke-dasharray: 5 4; }
 .tcp-plot .dot.s3 { fill: var(--text-2); opacity: 0.55; }
 .tcp-plot .mark { stroke-width: 1.5; opacity: 0.75; }
@@ -45,7 +45,7 @@
 .tcp-frow em { font-style: normal; color: var(--text); }
 .tcp-sweep { display: grid; gap: 1px; }
 .tcp-srow { display: grid; grid-template-columns: 0.6fr 1fr 0.7fr 0.7fr 1fr; gap: 6px; padding: 2px 6px; font: 500 12.5px var(--font-mono); color: var(--text-2); border-bottom: 1px solid var(--border); }
-.tcp-srow.head { font: 600 12px var(--font-sans, inherit); }
+.tcp-srow.head { font: 600 12px var(--font-ui); }
 .tcp-srow.on { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 .tcp-con { margin: 0; padding: 8px; min-height: 76px; font: 500 12.5px var(--font-mono); color: var(--text); background: var(--surface-2); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tcp-where { font: 500 12px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; min-height: 1.3em; }

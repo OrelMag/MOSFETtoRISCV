@@ -48,7 +48,7 @@ export const chTcp: Chapter = {
         question: 'cwnd is 16 segments and the receiver announces a window of 8 segments. How much may be unacknowledged?',
         options: ['8 segments: the smaller of the two', '16 segments: cwnd is the sender\'s own', '24 segments: they add', '4 segments: half the smaller'],
         answer: 0,
-        explain: 'The sender obeys both limits: min(cwnd, rwnd). In the fast run of the chapter cwnd climbs to 16 while the window holds it at 8.',
+        explain: 'The sender obeys both limits: min(cwnd, rwnd). In the wire-speed run of this chapter cwnd climbs to 16 segments, while the receive window keeps what is in flight to 8.',
         why: ['', 'Sending past the receive window fills a buffer that is not there.', 'They are two limits on one quantity, not two allowances.', 'Halving is what a loss does to cwnd, and only then.'],
       },
       {
@@ -65,7 +65,7 @@ export const chTcp: Chapter = {
       title: 'A stream over datagrams',
       body: `
         <p>IP delivers packets, sometimes. Chapter 51's router drops them when a queue is full, TTL or checksum fail, and two packets may swap places on two paths or arrive twice after a link retry. Applications want something else: bytes, all of them, in order, as if down a wire. <strong>TCP</strong> (RFC 9293) builds that at the two ends alone, and asks the network for nothing.</p>
-        <p>This is the ARQ of <a href="#/c/errors">chapter 47</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next five steps take these in turn.</p>
+        <p>This is the ARQ of <a href="#/c/errors">chapter 47</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next steps take these in turn.</p>
         <p>Each segment carries the twenty bytes below after the IP header, with ports to name the two applications. Sequence numbers count <em>bytes</em>, not segments, and the checksum covers a pseudo-header of the two addresses as well, so a segment delivered to the wrong machine fails it. <span class="try">Pick each of the three segments and find its flags and its two numbers.</span></p>`,
       widget: () => ladderWidget({ bytes: 0, lose: false }),
       more: {
@@ -98,7 +98,7 @@ export const chTcp: Chapter = {
       body: `
         <p>Data goes out in segments of at most an <strong>MSS</strong>, ${MSS} bytes here, each stamped with the number of its first byte. An <strong>ACK</strong> is cumulative: it names the next byte expected, so one ACK covers everything before it, and a lost ACK costs nothing if a later one arrives.</p>
         <p>A segment that arrives out of order cannot be acknowledged, so the receiver repeats its last ACK. Three such <strong>duplicate ACKs</strong> tell the sender that a segment is gone while later ones are still arriving, a round trip or more before any timer would. Our receiver throws away what arrives ahead of the gap, to keep it small, so both fast retransmit and the timer send everything again from the first unacknowledged byte.</p>
-        <p>The numbers are 32 bits and wrap. Our code compares only differences, as a signed number: <code>(a - b) &lt; 0</code>, so it works across the wrap as long as the two are within 2 GB. <span class="try">Lose a data segment in the middle of a window, and find the duplicate ACKs and what is sent again.</span></p>`,
+        <p>The numbers are 32 bits and wrap. Our code compares only differences, as a signed number: <code>(a - b) &lt; 0</code>, so it works across the wrap as long as the two are within 2 GB. <span class="try">Find the arrow "ACK seq 193" and lose it: the segments behind it bring duplicate ACKs, and the sender goes back. Most other losses here end in a timeout instead, since too few segments follow them.</span></p>`,
       widget: () => ladderWidget({ bytes: 512 }),
       challenge: {
         kind: 'quiz',
@@ -133,8 +133,8 @@ export const chTcp: Chapter = {
       title: 'How long to wait',
       body: `
         <p>A timer that is too long wastes time after a loss. One that is too short sends data that was only late, adding load just when the network is busiest. The right value depends on a path you cannot see, and it moves. So the sender measures: for one segment at a time it notes when it left and when its ACK came, and keeps a smoothed mean and a smoothed deviation (RFC 6298):</p>
-        <p><code>SRTT ← 7/8 SRTT + 1/8 R &nbsp; RTTVAR ← 3/4 RTTVAR + 1/4 |SRTT − R| &nbsp; RTO = SRTT + 4 · RTTVAR</code></p>
-        <p>The shifts make that cheap, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer until a new ACK arrives. <span class="try">Widen the spread and compare how often each timer fires early.</span></p>`,
+        <p><code>RTTVAR ← 3/4 RTTVAR + 1/4 |SRTT − R| &nbsp; SRTT ← 7/8 SRTT + 1/8 R &nbsp; RTO = SRTT + 4 · RTTVAR</code></p>
+        <p>The shifts make that cheap, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer, until the next valid sample resets it. <span class="try">Widen the spread: the fixed timer starts firing early even before the step, while the adaptive one stays out of the way by waiting longer. Watch "RTO now": that wait is what it pays after a real loss.</span></p>`,
       widget: rtoWidget,
       challenge: {
         kind: 'quiz',
@@ -145,14 +145,14 @@ export const chTcp: Chapter = {
         why: ['', 'The deviation is extra state: using the mean alone would be simpler.', 'There is no such rule; the RFC gives a minimum in seconds, and the rest is measured.', 'The application plays no part: the ACK is sent when the data arrives.'],
       },
       more: {
-        numbers: `<p>Our timer starts at ${n0(K.RTO_INIT)} clocks (${n0(us(K.RTO_INIT))} µs), never goes below ${n0(K.RTO_MIN)} or above ${n0(K.RTO_MAX)}, and gives up after ${K.RETRIES} timeouts in a row. RFC 6298 starts at one second with a one-second floor, which is far above a modern data centre's round trip of microseconds, so real stacks use lower floors.</p>`,
+        numbers: `<p>Our timer starts at ${n0(K.RTO_INIT)} clocks (${n0(us(K.RTO_INIT))} µs), never goes below ${n0(K.RTO_MIN)} or above ${n0(K.RTO_MAX)}, and gives up after ${K.RETRIES} retransmissions in a row. RFC 6298 starts at one second with a one-second floor, which is far above a modern data centre's round trip of microseconds, so real stacks use lower floors.</p>`,
       },
     },
     {
       title: 'How fast: the sawtooth',
       body: `
         <p>In October 1986 the link between Lawrence Berkeley Lab and UC Berkeley, 400 yards long, fell from 32 kb/s to 40 b/s: everyone's timers fired, everyone sent again, and the routers carried almost nothing but copies. Van Jacobson's answer in 1988 asks nothing of the routers. Each sender keeps a <strong>congestion window</strong>, a guess at what the network can hold, and treats a loss as the signal to back off.</p>
-        <p><strong>Slow start</strong> begins at two segments and adds one per ACK, so it doubles every round trip until a loss or until <code>ssthresh</code>. <strong>Congestion avoidance</strong> then adds one segment per round trip. On three duplicate ACKs the window halves; on a timeout it falls to one segment and starts again, since a timeout means nothing has been arriving. Halving fast and growing slowly is what makes competing flows converge on equal shares.</p>
+        <p><strong>Slow start</strong> begins at two segments here (RFC 5681 allows up to four at this size, RFC 6928 ten) and adds one per ACK, so it doubles every round trip until a loss or until <code>ssthresh</code>. <strong>Congestion avoidance</strong> then adds one segment per round trip. On three duplicate ACKs the window halves; on a timeout it falls to one segment and starts again, since a timeout means nothing has been arriving. Halving fast and growing slowly is what makes competing flows converge on equal shares.</p>
         <p>The result is a sawtooth, and it is not a fault: a sender with no information finds the limit by exceeding it and backing off. <span class="try">Try "Sawtooth", then move the queue down one frame at a time and watch the time for the same data.</span></p>`,
       widget: sawWidget,
       challenge: {
@@ -165,7 +165,7 @@ export const chTcp: Chapter = {
       },
       more: {
         real: `<p>Reno, our model, ties its rate to the loss rate: about (MSS / RTT) · 1.22 / √p, so a long path at high speed needs an impossibly low loss rate. CUBIC (RFC 9438), Linux's default, grows as a cubic function of the time since the last loss. BBR estimates the path's rate and round trip directly instead of waiting for loss. Routers can also mark packets instead of dropping them (ECN, RFC 3168). Our byte counting is RFC 3465's, chosen here because it needs no division.</p>`,
-        numbers: `<p>On the real stack the same run shows the same shape: ${COSTS.saw.fast} fast retransmits, ${COSTS.saw.timeouts} timeout and ${COSTS.saw.drops} drops for ${n0(COSTS.saw.bytes)} bytes at ${COSTS.saw.o.byteClocks} clocks a byte with a queue of ${COSTS.saw.o.queue}. Shorten the queue to ${COSTS.small.o.queue} on a link at ${COSTS.small.o.byteClocks} clocks a byte, and it is ${COSTS.small.fast} fast retransmits and ${COSTS.small.timeouts} timeouts.</p>`,
+        numbers: `<p>The compiled stack shows the same shape: ${COSTS.saw.fast} fast retransmits, ${COSTS.saw.timeouts} timeout and ${COSTS.saw.drops} drops for ${n0(COSTS.saw.bytes)} bytes at ${COSTS.saw.o.byteClocks} clocks a byte with a queue of ${COSTS.saw.o.queue}. Shorten the queue to ${COSTS.small.o.queue} on a link at ${COSTS.small.o.byteClocks} clocks a byte, and it is ${COSTS.small.fast} fast retransmits and ${COSTS.small.timeouts} timeouts.</p>`,
       },
     },
     {
@@ -173,7 +173,7 @@ export const chTcp: Chapter = {
       body: `
         <p>The sawtooth's teeth are the bottleneck's queue filling. So the queue's size sets what happens, in two opposite ways, and the table under the plots shows both.</p>
         <p><strong>Too short</strong>, and a loss leaves too few segments in flight behind it to produce three duplicate ACKs. Only the timer can recover, after a whole RTO, and from one segment. The rule of thumb is one bandwidth-delay product of buffer: enough that the halved window still fills the link. <strong>Too long</strong>, and it never drops at all until the window reaches it, so it just sits full, and every packet of every flow waits behind it. Throughput gains nothing while the round trip grows by a queue's worth: at ${K.MSS + 54} bytes a frame and 200 clocks a byte, each queued frame adds ${n0((K.MSS + 54) * 200)} clocks.</p>
-        <p>That second failure has a name, <strong>bufferbloat</strong>: memory got cheap, home routers shipped with seconds of buffer, and a single upload could make a web page crawl on the same link. Our window of ${WINDOW_SEGS} segments caps the effect here. A real window of megabytes does not. <span class="try">Pick "Room for the window", then lengthen the queue past ${WINDOW_SEGS} frames: the time stops improving, and nothing else changes.</span></p>`,
+        <p>That second failure has a name, <strong>bufferbloat</strong>: memory got cheap, home routers shipped with seconds of buffer, and a single upload could make a web page crawl on the same link. Our window of ${WINDOW_SEGS} segments caps the effect here. A real window of megabytes does not. <span class="try">Pick "Room for the window", then shorten the queue a frame at a time and find where drops begin. Above that, a longer queue changes nothing here: the window of ${WINDOW_SEGS} segments cannot fill it.</span></p>`,
       widget: sawWidget,
       challenge: {
         kind: 'quiz',

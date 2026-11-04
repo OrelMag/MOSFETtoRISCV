@@ -34,7 +34,7 @@ const niceStep = (range: number): number => {
 };
 
 interface Series { name: string; cls: string; points: [number, number][]; dots?: boolean }
-function plot(series: Series[], o: { h?: number; yLabel: string; yMax?: number; xMax?: number; marks?: { x: number; cls: string; label: string }[]; label: string }): SVGSVGElement {
+function plot(series: Series[], o: { h?: number; yLabel: string; xLabel?: string; yMax?: number; xMax?: number; marks?: { x: number; cls: string; label: string }[]; label: string }): SVGSVGElement {
   const W = 620, H = o.h ?? 190, M = { l: 54, r: 26, t: 22, b: 24 };
   const xMax = o.xMax ?? Math.max(1, ...series.flatMap((v) => v.points.map((p) => p[0])));
   const top = o.yMax ?? Math.max(1, ...series.flatMap((v) => v.points.map((p) => p[1]))), yStep = niceStep(top), yMax = Math.ceil(top / yStep - 1e-9) * yStep, xStep = niceStep(xMax);
@@ -44,7 +44,7 @@ function plot(series: Series[], o: { h?: number; yLabel: string; yMax?: number; 
     svg.append(s('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: M.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'tick' }, v >= 1000 ? n0(v) : String(Math.round(v * 10) / 10)));
   }
   for (let v = 0; v <= xMax; v += xStep) svg.append(s('text', { x: X(v), y: H - M.b + 16, 'text-anchor': v === 0 ? 'start' : 'middle', class: 'tick' }, n0(v)));
-  svg.append(s('text', { x: M.l, y: 13, class: 'axl' }, o.yLabel), s('text', { x: W - M.r, y: 13, 'text-anchor': 'end', class: 'axl' }, 'time: clock cycles'));
+  svg.append(s('text', { x: M.l, y: 13, class: 'axl' }, o.yLabel), s('text', { x: W - M.r, y: 13, 'text-anchor': 'end', class: 'axl' }, o.xLabel ?? 'time: clock cycles'));
   for (const m of o.marks ?? []) svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: M.t, y2: H - M.b, class: `mark ${m.cls}` }));
   for (const v of series) {
     if (v.dots) { for (const [x, y] of v.points) svg.append(s('circle', { cx: X(x), cy: Y(y), r: 2.5, class: `dot ${v.cls}` })); continue; }
@@ -123,8 +123,9 @@ export function windowWidget(): Widget {
     const pts = (f: (p: TracePoint) => number): [number, number][] => r.trace.slice(1).map((p) => [p.t, f(p)]);
     pl.replaceChildren(plot([{ name: 'held', cls: 's1', points: pts((p) => p.held) }, { name: 'wnd', cls: 's2', points: pts((p) => p.sndWnd) }], { yLabel: 'bytes', yMax: TCP_K.RCV, label: `The bytes B holds unread and the window A last heard, over ${n0(r.doneAt)} clock cycles` }));
     status.replaceChildren(stat('delivered', `${n0(r.delivered)} bytes`), stat('zero-window probes', String(r.probes)), stat('lost', String(r.drops + r.losses)), stat('timeouts', String(r.timeouts)), stat('time', `${n0(r.doneAt)} clocks`));
-    note.className = 'err-verdict ok';
-    note.textContent = r.probes ? `The window shut: A sent ${r.probes} one-byte probe${r.probes === 1 ? '' : 's'} to learn when it opens. Nothing was lost or cut.` : 'B reads faster than A sends, or nearly: the window stays open.';
+    const shut = r.trace.some((p) => p.t > 1 && p.sndWnd === 0);
+    note.className = `err-verdict ${r.timeouts ? '' : 'ok'}`;
+    note.textContent = r.timeouts ? `${r.timeouts} timeout${r.timeouts === 1 ? '' : 's'} on the way.` : r.probes ? `The window shut: A sent ${r.probes} one-byte probe${r.probes === 1 ? '' : 's'} to learn when it opens. Nothing was lost or cut.` : shut ? 'The window shut, and B\'s window update reopened it before a probe was due. Nothing was lost or cut.' : 'B keeps up: the window never shuts.';
   };
   const sl = slider('Read 128 bytes every', 0, 600_000, 20_000, every, (v) => (v ? `${n0(v)} clocks` : 'at once'), (v) => { every = v; paint(); });
   paint();
@@ -158,18 +159,18 @@ export function rtoWidget(): Widget {
   const pl = h('div'), status = h('div', { class: 'mc-status' });
   const paint = () => {
     const x = rttSamples(BASE, spread), { srtt, rto } = rtoSeries(x);
-    const idx = x.map((_, i) => i * 1000);
-    const spurious = x.filter((r, i) => i > 0 && r > rto[i - 1]).length, fixed = x.filter((r) => r > FIXED).length;
+    const idx = x.map((_, i) => i), half = x.length >> 1;
+    const spurious = x.filter((r, i) => i > 0 && r > rto[i - 1]).length, fixedA = x.slice(0, half + 1).filter((r) => r > FIXED).length, fixedB = x.slice(half + 1).filter((r) => r > FIXED).length;
     pl.replaceChildren(plot([
       { name: 'r', cls: 's3', dots: true, points: x.map((v, i) => [idx[i], v]) }, { name: 's', cls: 's1', points: srtt.map((v, i) => [idx[i], v]) }, { name: 't', cls: 's2', points: rto.map((v, i) => [idx[i], v]) },
       { name: 'f', cls: 's4', points: [[0, FIXED], [idx[idx.length - 1], FIXED]] },
-    ], { yLabel: 'clocks', label: `Round-trip samples, the smoothed estimate, the timer and a fixed timer, over ${x.length} samples` }));
-    status.replaceChildren(stat('fired early, adaptive', `${spurious} of ${x.length}`), stat('fired early, fixed', `${fixed} of ${x.length}`), stat('RTO now', `${n0(rto[rto.length - 1])} clocks`), stat('SRTT now', `${n0(srtt[srtt.length - 1])} clocks`));
+    ], { yLabel: 'clocks', xLabel: 'round-trip sample', label: `Round-trip samples, the smoothed estimate, the timer and a fixed timer, over ${x.length} samples` }));
+    status.replaceChildren(stat('fired early, adaptive', `${spurious} of ${x.length}`), stat('fired early, fixed', `${fixedA} before the step, ${fixedB} after`), stat('RTO now', `${n0(rto[rto.length - 1])} clocks`), stat('SRTT now', `${n0(srtt[srtt.length - 1])} clocks`));
   };
   const sl = slider('Spread of the round trip', 0, 80, 5, spread, (v) => `±${v} %`, (v) => { spread = v; paint(); });
   paint();
   return { el: h('div', { class: 'widget tcp-w' }, h('div', { class: 'ln-presets' }, sl.el), legend([{ name: 'A round trip measured', cls: 's3' }, { name: 'SRTT', cls: 's1' }, { name: 'RTO', cls: 's2' }, { name: 'A fixed timer', cls: 's4' }]), pl, status,
-    h('p', { class: 'sub' }, 'The samples are invented with a seed, and the round trip steps up by 60 % half way, as when a queue forms. The horizontal axis is the sample number × 1000.')) };
+    h('p', { class: 'sub' }, 'The samples are invented with a seed, and the round trip steps up by 60 % half way, as when a queue forms.')) };
 }
 
 // ---- the sawtooth ----------------------------------------------------------------------------------------------------------------
@@ -196,7 +197,7 @@ export function sawWidget(): Widget {
     status.replaceChildren(stat('time', `${n0(end)} clocks`), stat('throughput', `${mbps(SAW_BYTES, end).toFixed(1)} Mb/s`), stat('dropped', String(r.drops)), stat('fast retransmits', String(r.fast)), stat('timeouts', String(r.timeouts)), stat('SRTT', `${n0(rtt)} clocks`));
     const linkMbps = mbps(TCP_K.MSS, (TCP_K.MSS + 54) * byte);
     note.className = `err-verdict ${r.drops ? '' : 'ok'}`;
-    note.textContent = r.timeouts > r.fast ? `The queue holds too few for three duplicate ACKs: the timer does the work, and each one waits a whole RTO and falls to one segment.` : r.fast ? `The queue fills, one frame is dropped, three duplicate ACKs come back, and the window halves. Data over the link tops out at ${linkMbps.toFixed(1)} Mb/s.` : `No frame dropped: the window stops at the receiver's ${TCP_K.RCV / TCP_K.MSS} segments before the queue fills.`;
+    note.textContent = r.timeouts && r.timeouts >= r.fast ? `The queue holds too few for three duplicate ACKs: the timer does the work, and each one waits a whole RTO and falls to one segment.` : r.fast ? `The queue fills, one frame is dropped, three duplicate ACKs come back, and the window halves. Data over the link tops out at ${linkMbps.toFixed(1)} Mb/s.` : `No frame dropped: the window stops at the receiver's ${TCP_K.RCV / TCP_K.MSS} segments before the queue fills.`;
     table.replaceChildren(h('div', { class: 'cpu-sec' }, 'The same link, whatever the queue'), h('div', { class: 'tcp-srow head' }, h('span', null, 'Queue'), h('span', null, 'Time, clocks'), h('span', null, 'Dropped'), h('span', null, 'Timeouts'), h('span', null, 'SRTT, clocks')),
       ...[1, 2, 3, 4, 6, 8, 12].map((q) => {
         const x = runTcp({ bytes: SAW_BYTES, byteClocks: byte, queue: q, delay }), e = x.doneAt > 0 ? n0(x.doneAt) : 'gave up';
