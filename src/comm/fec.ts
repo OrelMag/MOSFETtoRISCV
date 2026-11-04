@@ -1,6 +1,6 @@
 // Forward error correction as a trade (DOM-free): CRC + retransmission against Hamming SEC-DED blocks + CRC + retransmission
 // on a binary symmetric channel with independent bit errors (real links burst: that needs interleaving and the stronger
-// codes of a later chapter, and is not modelled). Rate, residual frame loss, goodput and the time to deliver a frame, from
+// codes of comm/interleave.ts, conv.ts and rs.ts, and is not modelled here). Rate, residual frame loss, goodput and the time to deliver a frame, from
 // closed forms that tests/comm-fec.test.ts holds to seeded simulations that run the real encoder, errors and decoder.
 
 import { hammingLayout } from '../lib/coding';
