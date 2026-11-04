@@ -5,6 +5,8 @@
 // they are swapped for the length of one figure's synchronous work and put back before the browser can paint: the page behind never
 // flashes. A design too large to simulate is drawn at its top level only: its parts become blocks that compute nothing (values X).
 
+// the drawing code reaches the registry's readers, and nothing else here fills it (tests/firstload.test.ts); this page has its own chunk
+import '../../lib';
 import { flatten, type HierNode } from '../../sim/flatten';
 import { GateSim } from '../../sim/gatesim';
 import { needsSwitchLevel } from '../../sim/harness';
