@@ -2,6 +2,7 @@ import { fmtLog10, log10Mtbf, resolutionTime, T0_PS, TAU_PS, windowRate } from '
 import { metrics } from '../phys/inverter';
 import { keeperLimit, KEEPER, thresholds, VM } from '../phys/schmitt';
 import { asyncFifo, BIN2GRAY, fifo, GRAY2BIN, PULSE_SYNC, SCHMITT, SYNC2, syncN } from '../lib';
+import { CREDIT_EDGES, sustained } from '../comm/asyncfifo';
 import { meanGarbage } from '../comm/graybus';
 import { stats } from '../sim/stats';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
@@ -37,7 +38,7 @@ export const chClocks: Chapter = {
       `A cross-coupled pair resolves as V(t) = Δ·e^(t/τ). The chance of still being undecided after t_r is e^(−t_r/τ), so MTBF = e^(t_r/τ) / (T0 · fclk · fdata): each extra flop adds a period to t_r and multiplies the MTBF by e^(T/τ) (τ is ${nf(TAU_PS, 0)} ps in the model). The gate simulator cannot time a real race, so those figures are the model's.`,
       `A two-flop synchronizer (${nands(SYNC2)} NANDs) carries a level that the receiver sees for a full period, after two receiving edges. A pulse shorter than the receiving period can fall between edges and vanish. A toggle synchronizer (${nands(PULSE_SYNC)} NANDs) turns each pulse into a level change that cannot, provided pulses are spaced by its latency.`,
       `The bits of a bus have separate delays, so a sampler can read any subset of the changing bits flipped. A binary count flips up to n bits at once (${nf(meanGarbage(4, 'binary') * 100, 0)} % of mid-change samples of a 4-bit count are garbage); a Gray count flips one, so any sample is the old value or the new one.`,
-      'The asynchronous FIFO keeps a binary and a Gray write pointer on wclk and the same on rclk; each Gray pointer crosses through a 2-flop synchronizer. empty = (read Gray = synchronized write Gray), full = (write Gray = synchronized read Gray with the top two bits inverted). A synchronized pointer is old, so a flag can be late and never wrong. Depth is a power of two because Gray code is cyclic only over 2^n steps.',
+      'The asynchronous FIFO keeps a binary and a Gray write pointer on wclk and the same on rclk; each Gray pointer crosses through a 2-flop synchronizer. empty = (read Gray = synchronized write Gray), full = (write Gray = synchronized read Gray with the top two bits inverted). A synchronized pointer is old, so a flag can be late and never wrong. The depth is a power of two because the full rule (invert the top two bits) relies on the binary-reflected structure of the code; a one-bit cycle of another even length exists, but it needs a different pointer scheme.',
     ],
     check: [
       {
@@ -161,6 +162,8 @@ export const chClocks: Chapter = {
       title: 'Metastability',
       get body() {
         const m1 = years(1, 1e9), m2 = years(2, 1e9), m3 = years(3, 1e9), h2 = years(2, 2e9);
+        const lone = { logic: 30, m: years(1, 1e9, 100e6, 30) };
+        const slow = fmtLog10(log10Mtbf({ stages: 2, fclk: 1e9, fdata: 100e6, pair: { tau: 2 * TAU_PS, t0: T0_PS } }));
         const tau = (dv: number) => nf(Math.log(0.9 / dv), 1);
         return `
         <p>Sample a signal in the window and the latch's two nodes start almost balanced, apart by some Δ that depends on exactly when the data moved. A cross-coupled pair amplifies a difference exponentially, V(t) = Δ·e<sup>t/τ</sup>,
@@ -168,9 +171,8 @@ export const chClocks: Chapter = {
         sits between the levels, where the next gate can read it either way.</p>
         <p>As a failure rate: the pair is undecided after t<sub>r</sub> with probability e<sup>−t<sub>r</sub>/τ</sup>, and a change lands in the window T0 wide at a rate of T0 · fclk · fdata, so</p>
         <p style="text-align:center"><strong>MTBF = e<sup>t<sub>r</sub>/τ</sup> / (T0 · f<sub>clk</sub> · f<sub>data</sub>)</strong>.</p>
-        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. A single flop followed by 8 NANDs of logic has t<sub>r</sub> =
-        ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}. A second flop gives the first a whole period less clock-to-q and setup: t<sub>r</sub> = ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}.
-        Doubling the clock to 2 GHz takes the two-flop version to ${h2}. That is why synchronizers are two flops at ordinary clock rates and three at very high ones: the exponent is time, and an extra period is what buys it.</p>
+        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. A single flop followed by 8 NANDs of logic has t<sub>r</sub> = ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}, already safe in this model. What a lone flop lacks is margin: its budget is the period less clock-to-q, setup and the logic behind it. Let the logic fill most of the period (${lone.logic} NANDs, ${lone.logic * PS_PER_NAND} ps) and t<sub>r</sub> falls to ${nf(resolutionTime(1, 1000, lone.logic * PS_PER_NAND), 0)} ps, MTBF ${lone.m}. A second flop with nothing between them fixes t<sub>r</sub> at a period less clock-to-q and setup whatever the logic is: ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}. Doubling the clock to 2 GHz takes the two-flop version to ${h2}, and the lone flop with 8 NANDs of logic to ${years(1, 2e9)}. So two flops are the default because they take the logic out of the budget, and a third is added where the clock rate eats the period.</p>
+        <p>Notice what dominates: the exponent. With τ doubled to ${nf((2 * TAU_PS) / PS_PER_NAND, 1)} NAND delays the two-flop figure at 1 GHz falls from ${m2} to ${slow}. The constants here are illustrative, so the sensitivity is the lesson: MTBF is exponential in t<sub>r</sub>/τ, and a factor of two in τ moves the answer by tens of orders of magnitude.</p>
         <p><strong>What these figures are.</strong> The gate simulator resolves a balanced pair in zero time (<code>relax()</code> in gatesim.ts, Gauss–Seidel until one side wins) and cannot time a real race, so every number on this page is the
         model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>
         <p>T0 is narrower than the setup + hold window of the previous step (1 delay against ${MS_TIMING().setup + MS_TIMING().hold}). The window is where the captured value is uncertain; T0 is the part of it where the decision takes unboundedly long, the sliver around the exact balance point, and it is what enters the MTBF.</p>`;
@@ -197,8 +199,8 @@ export const chClocks: Chapter = {
         <p>The standard fix lets the first flop be the one that fails and gives it a period to recover. A <strong>two-flop synchronizer</strong> (${nands(SYNC2)} NANDs, ${stats(SYNC2).transistors} transistors)
         is two flip-flops on the receiving clock with nothing between them. The first samples the asynchronous input and may be undecided; the second samples it a period later, with an MTBF as in the previous step. Nothing else may read the first
         flop's output, and no logic may sit between the two.</p>
-        <p>The gates show the structure and its cost in cycles. A level that appears before an edge of B is captured by the first flop at that edge and appears at <code>q</code> at the next one: two B edges after the sender's change, plus
-        up to one for alignment. The panel ticks the two clocks one edge at a time in the ratio you pick, with the sender flop on A (<span data-show="tx">tx</span>) feeding the <span data-show="sy">synchronizer</span> on B.</p>
+        <p>The gates show the structure and its cost in cycles. A level that appears before an edge of B is captured by the first flop at that edge and appears at <code>q</code> at the next one: the second B edge after the sender's change
+        (measured on the scene, at every ratio, tests/comm-sync.test.ts), which is between 1 and 2 B periods later, plus clk-to-q. The panel ticks the two clocks one edge at a time in the ratio you pick, with the sender flop on A (<span data-show="tx">tx</span>) feeding the <span data-show="sy">synchronizer</span> on B.</p>
         <p>What gets through is a <em>level</em> that B sees at least once. A pulse that lasts one A cycle is wide enough only if B's edges are closer together than the pulse: with A three times faster than B, the pulse can end between two B edges and the synchronizer never sees it.
         The usual rule is that B is at least 1.5 times faster than A for a one-cycle pulse, or that a level is held for at least three B periods.</p>
         <div class="try">At 3 : 1, press <strong>Send 1-cycle pulse</strong> and Run. Then <strong>Hold send 4 cycles</strong>. Then switch to 1 : 3 and send the pulse again.</div>`,
@@ -242,11 +244,11 @@ export const chClocks: Chapter = {
       widget: grayBusWidget,
       challenge: {
         kind: 'quiz',
-        question: 'Why is the depth of an asynchronous FIFO a power of two?',
-        options: ['The Gray sequence changes one bit per step, wrap included, only over 2^n steps', 'The memory decoder needs it', 'Gray code only exists for even widths', 'The synchronizers need two flops per bit'],
+        question: 'Why does this asynchronous FIFO need a depth that is a power of two?',
+        options: ['Its full rule (invert the top two bits of the Gray pointer) holds for the binary-reflected Gray code, which cycles over 2^n values', 'No cyclic one-bit sequence of any other length exists', 'The memory decoder needs it', 'The synchronizers need two flops per bit'],
         answer: 0,
-        explain: 'Gray code is a cycle through all 2^n words with one bit changing per step. Cut it short (say 6 words) and the wrap from the last word to the first changes several bits, which is exactly the case a sampler can misread.',
-        why: ['', 'A decoder works for any depth, and a memory that is not a power of two is common. The constraint comes from the pointers\' crossing.', 'Every width has a Gray code.', 'The synchronizers are 2 flops per bit whatever the depth.'],
+        explain: 'A Gray pointer must change one bit per step, wrap included, and the binary-reflected code does so over 2^n values. Its top two bits inverted lie half a cycle away, which is what makes the full compare work. Trimmed sequences of other even lengths can also be one-bit at every step (001, 011, 010, 110, 111, 101 is one), but the half-cycle rule no longer applies, so such a FIFO needs a different full test.',
+        why: ['', 'They do exist for any even length. What is lost is the simple full rule, not the one-bit property.', 'A decoder works for any depth, and a memory that is not a power of two is common. The constraint comes from the compare on the pointers.', 'The synchronizers are 2 flops per bit whatever the depth.'],
       },
     },
     {
@@ -261,7 +263,7 @@ export const chClocks: Chapter = {
         one lap ahead of the read pointer exactly when that holds, because inverting the top two bits of a Gray code moves it half way round the cycle.</p>
         <p>The synchronized pointer is two edges old. A word written just now is not counted by the read side until it has crossed, so <code>empty</code> stays high a little longer than it should. A slot freed just now is not seen by the write side, so <code>full</code> stays high a little longer. Both errors are <em>conservative</em>: the flag is
         late, never early, so a read never takes an empty slot and a write never lands on a full one. The panel marks a flag that is up while the other side has moved on as "late". The golden model (src/comm/asyncfifo.ts) agrees with the gates at every output after every edge, over seeded interleavings of seven clock ratios, with no word lost, repeated or invented.</p>
-        <p><strong>Cost.</strong> ${a} NANDs for 4 × 8 bits, against ${s} for the single-clock FIFO of the library (${nf((a / s - 1) * 100, 0)} % more): two extra pointers, the Gray logic and ${sy * 2} NANDs of synchronizers. A word appears two edges of the read clock after it was written, and a freed slot is seen two edges of the write clock after the read. Throughput is one word per edge of the slower clock once the FIFO is neither full nor empty, which is what the FIFO is for.</p>
+        <p><strong>Cost.</strong> ${a} NANDs for 4 × 8 bits, against ${s} for the single-clock FIFO of the library (${nf((a / s - 1) * 100, 0)} % more): two extra pointers, the Gray logic and ${sy * 2} NANDs of synchronizers. A word appears two edges of the read clock after it was written, and a freed slot is seen two edges of the write clock after the read. Throughput is limited by the credit loop: a freed slot reaches the writer, and a written word the reader, only after the two synchronizer edges, so a depth of D sustains min(1, D/${CREDIT_EDGES}) words per edge at 1 : 1 (0.40 at depth 2, ${nf(sustained(2, 1, 1), 2)} at depth 4, full rate from depth 8; the model, pinned in tests/comm-sync.test.ts). With the clocks at other ratios depth 4 already gives ${nf(sustained(2, 2, 1), 2)} words per edge of the slower clock. A shallow FIFO between equal clocks therefore runs below full rate; make it deeper than the round trip.</p>
         <div class="try">Press <strong>Fill</strong> and Run at 1 : 1 until <code>full</code> is up. Switch to <strong>Drain</strong> and watch how long full stays up after the first read. Then try 1 : 7 and 7 : 1.</div>`;
       },
       scene: () => fifoScene(2, 8),

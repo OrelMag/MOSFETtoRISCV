@@ -1,96 +1,95 @@
-// The abstraction ladder: every level of the journey, what it is built from, and the chapter that builds it.
+// The map: every chapter in book order, under folding sections (chapters/sections.ts), each row saying what the chapter builds with.
 
-import { h } from '../ui/dom';
+import { chapterNo } from '../chapters/meta';
+import { outline, outlineOf } from '../chapters/outline';
+import { sectionsOf } from '../chapters/sections';
+import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import type { Widget } from '../view/stage';
 
-export interface Rung {
-  title: string;
-  madeOf: string;
-  /** The chapter that builds this level (its id and number). */
-  chapter: string;
-  num: number;
-}
+/** What a chapter's level is made of, by chapter id; a chapter not listed shows its `level`. */
+const MADE_OF: Record<string, string> = {
+  basics: 'voltage, binary, truth tables', map: 'levels, transparent boxes',
+  relays: 'magnets, contacts', tubes: 'triodes, diodes', cards: 'holes, readers',
+  mosfet: 'doped silicon', inverter: '2 transistors', nand: '4 transistors', gates: 'NAND',
+  binary: 'bits', adders: 'gates', routing: 'gates',
+  latches: 'gates with feedback', registers: 'flip-flops', memory: 'decoders, registers, mux trees',
+  alu: 'adders, muxes', regfile: 'registers, muxes', isa: 'bits with agreed meanings', cpu: 'register file, ALU, control, memories', python: 'RV32I instructions, a stack',
+  fastadd: 'prefix networks', pipeline: 'pipeline registers, hazard unit', pipepay: 'balanced stages, a branch predictor',
+  io: 'byte lanes, memory-mapped I/O', traps: 'CSRs, exceptions', muldiv: 'Booth, SRT', cache: 'SRAM, tag arrays', multicycle: 'state machines, a microcode ROM', float: 'IEEE 754 units', widths: 'the C extension, RV64',
+  ooo: 'renaming, a reorder buffer', multicore: 'arbiter, atomics, coherence', silicon: 'standard cells, routing, masks',
+  lanes: 'one decode, four ALUs', simt: 'masks, split / join', warps: 'scoreboards, warps', feed: 'coalescing, banks', pixels: 'a rasterizer, frame buffers', graphics: 'kernels, a command unit',
+  dram: 'capacitors, sense amplifiers', memctrl: 'commands, timing rules', flash: 'floating gates', bus: 'valid / ready, masters',
+  telegraph: 'relays, a line', exchange: 'relays, circuits', wire: 'RC, repeaters', clocks: 'synchronizers', uart: 'a baud divider, shifters', spi: 'a shared clock, two wires', modem: 'FSK', serial: '8b/10b', errors: 'parity, CRC',
+  'appendix-6502': 'NMOS, a PLA', 'appendix-doom': 'C, RV32IM', 'appendix-sap': '74xx TTL', 'appendix-runner': 'counters, gates',
+};
 
-export const LADDER: Rung[] = [
-  { title: 'Communication', madeOf: 'relays, lines, line codes, packets, routers', chapter: 'telegraph', num: 39 },
-  { title: 'Memory in depth', madeOf: 'capacitors, sense amplifiers, row buffers', chapter: 'dram', num: 35 },
-  { title: 'A GPU', madeOf: 'lanes, warps, a rasterizer, frame buffers', chapter: 'lanes', num: 29 },
-  { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', chapter: 'silicon', num: 28 },
-  { title: 'Multi-core processor', madeOf: 'cores, arbiter, atomics, coherence', chapter: 'multicore', num: 27 },
-  { title: 'Out-of-order core', madeOf: 'renaming, issue queues, a reorder buffer, speculation', chapter: 'ooo', num: 26 },
-  { title: 'Floating point & caches', madeOf: 'FPU, SRAM, tag arrays, a slow memory', chapter: 'cache', num: 22 },
-  { title: 'Complete RV32IM system', madeOf: 'CSRs, traps, interrupts, I/O, multiply / divide', chapter: 'io', num: 19 },
-  { title: 'Pipelined RISC-V core', madeOf: 'pipeline registers, hazard unit, branch predictor', chapter: 'pipeline', num: 17 },
-  { title: 'A Python program', madeOf: 'RV32I instructions, registers, a stack', chapter: 'python', num: 15 },
-  { title: 'Single-cycle RISC-V CPU', madeOf: 'register file, ALU, control, memories', chapter: 'cpu', num: 14 },
-  { title: 'Instruction set & assembly', madeOf: 'bits with agreed meanings', chapter: 'isa', num: 13 },
-  { title: 'ALU & register file', madeOf: 'adders, muxes, registers', chapter: 'alu', num: 11 },
-  { title: 'Memory arrays', madeOf: 'decoders, registers, mux trees', chapter: 'memory', num: 10 },
-  { title: 'Registers & counters', madeOf: 'flip-flops', chapter: 'registers', num: 9 },
-  { title: 'Latches & flip-flops', madeOf: 'gates with feedback', chapter: 'latches', num: 8 },
-  { title: 'Adders, decoders, muxes', madeOf: 'gates', chapter: 'adders', num: 6 },
-  { title: 'Logic gates', madeOf: 'NAND', chapter: 'gates', num: 4 },
-  { title: 'NAND gate', madeOf: '4 transistors', chapter: 'nand', num: 3 },
-  { title: 'MOSFET', madeOf: 'doped silicon', chapter: 'mosfet', num: 1 },
-];
+/** Where the journey starts in earnest: until it is opened, the map offers it. */
+const FIRST = 'mosfet';
 
 /**
- * The rung a ladder opens at: the highest one whose chapter the visitor has opened, else the bottom
- * one (the MOSFET, where the journey starts). Its index in LADDER.
+ * The chapter the map opens at: the one being read, else the last one in book order that was opened, else the first real chapter.
+ * Start's chapters count for none of these: they lead to the journey, and a reader far along can come back to them.
  */
-export function ladderFocus(visited: (chapter: string) => boolean): number {
-  const i = LADDER.findIndex((r) => visited(r.chapter));
-  return i < 0 ? LADDER.length - 1 : i;
+export function ladderFocus(seen: (chapter: string) => boolean, last?: string): string {
+  const start = sectionsOf(outline)[0].chapters;
+  const counts = (id: string) => !start.some((c) => c.id === id);
+  if (last && outlineOf(last) && counts(last)) return last;
+  return [...outline].reverse().find((c) => counts(c.id) && seen(c.id))?.id ?? FIRST;
 }
 
 /**
- * The ladder, top rung first (it is built upward), in a box of its own that opens scrolled to the
- * visitor's rung: the bottom one, marked "Start here", until the first chapter is opened.
+ * The map in a box of its own, in book order: a folding row per section with its progress, and a row per chapter. It opens scrolled to
+ * the visitor's section, the only one open, its chapter marked; a new visitor's is the MOSFET, marked "Start here" (`badge`).
  */
 export function ladder(opts: { badge?: boolean } = {}): HTMLElement {
   const seen = (id: string) => settings.visited(id).length > 0;
-  const fresh = !seen(LADDER[LADDER.length - 1].chapter);
-  const focus = ladderFocus(seen);
-  const rungs = LADDER.map((r, i) => {
-    const start = opts.badge !== false && fresh && i === LADDER.length - 1;
-    return h('a', { class: `rung${start ? ' start' : ''}`, href: `#/c/${r.chapter}/0`, title: `Chapter ${r.num}` },
-      h('span', { class: 'n' }, String(r.num).padStart(2, '0')),
-      h('span', { class: 't' }, r.title),
-      start ? h('span', { class: 'start-tag' }, 'Start here') : null,
-      h('span', { class: 'c' }, r.madeOf));
+  const fresh = !seen(FIRST);
+  const focus = ladderFocus(seen, settings.lastStep()?.chapter);
+  const secs = sectionsOf(outline).map((s) => {
+    const steps = s.chapters.reduce((n, c) => n + c.steps.length, 0);
+    const done = s.chapters.reduce((n, c) => n + settings.visited(c.id).filter((k) => k < c.steps.length).length, 0);
+    const pct = steps ? Math.round((100 * done) / steps) : 0;
+    const rungs = s.chapters.map((c) => {
+      const tag = c.id !== focus ? null : !fresh ? 'You are here' : opts.badge !== false ? 'Start here' : null;
+      return h('a', { class: `rung${tag ? ' start' : ''}`, href: `#/c/${c.id}/0`, title: c.blurb, 'aria-current': tag ? 'location' : null },
+        h('span', { class: 'n' }, chapterNo(c)),
+        h('span', { class: 't' }, c.title),
+        tag ? h('span', { class: 'start-tag' }, tag) : null,
+        h('span', { class: 'c' }, MADE_OF[c.id] ?? c.level));
+    });
+    return h('details', { class: `ladder-sec ${s.tone}`, open: s.chapters.some((c) => c.id === focus) },
+      h('summary', { class: 'ladder-head' }, icon('chevR', 14),
+        h('b', null, s.name),
+        s.range ? h('span', { class: 'r' }, s.range) : null,
+        h('span', { class: 'ladder-bar', role: 'img', title: `${pct}% seen`, 'aria-label': `${pct}% seen` }, h('i', { style: `width:${pct}%` }))),
+      h('div', { class: 'ladder-rows' }, rungs));
   });
-  const box = h('nav', { class: 'ladder', 'aria-label': 'The journey, level by level' }, rungs);
+  const box = h('nav', { class: 'ladder', 'aria-label': 'Every chapter, by section' }, secs);
   // A chip names what lies above (the fade alone read as a sliced card); it sits outside the box, which the fade masks.
   const up = h('button', { class: 'ladder-up', type: 'button', hidden: true, onclick: () => box.scrollTo({ top: 0, behavior: 'smooth' }) });
   const wrap = h('div', { class: 'ladder-wrap' }, box, up);
-  // Fades at the edges that have more rungs past them.
+  // Fades at the edges that have more sections past them.
   const edges = () => {
     box.classList.toggle('more-up', box.scrollTop > 2);
     box.classList.toggle('more-down', box.scrollTop + box.clientHeight < box.scrollHeight - 2);
-    const above = rungs.filter((r) => r.offsetTop < box.scrollTop - 2).length;
+    const above = secs.filter((r) => r.offsetTop < box.scrollTop - 2).length;
     up.hidden = !above;
-    up.textContent = `↑ ${above} more above`;
+    up.textContent = `↑ ${above} section${above > 1 ? 's' : ''} above`;
   };
   box.addEventListener('scroll', edges, { passive: true });
-  // The focus rung at the box's bottom once it has a size (it is built before the page is attached), and again
+  secs.forEach((s) => s.addEventListener('toggle', edges));
+  // The open section at the box's top once it has a size (it is built before the page is attached), and again
   // while sizes settle (web fonts, a phone's wrapped rungs), until the visitor scrolls it.
   if (typeof ResizeObserver !== 'undefined') {
+    const open = secs.find((s) => s.open) ?? secs[0];
     const ro = new ResizeObserver(() => {
-      // The box holds whole cards: from the focus rung up, as many as the CSS height allows, the box sized to them
-      // (a slice of the top card read as a bug); sizes settle, so this runs again until the visitor scrolls.
-      box.style.maxHeight = '';
-      const room = box.clientHeight;
-      if (!room) return;
-      const bottom = rungs[focus].offsetTop + rungs[focus].offsetHeight;
-      let first = focus;
-      while (first > 0 && bottom - rungs[first - 1].offsetTop + 1 <= room) first--;
-      box.style.maxHeight = `${bottom - rungs[first].offsetTop + 3}px`;
-      box.scrollTop = rungs[first].offsetTop - 1;
+      if (!box.clientHeight) return;
+      box.scrollTop = open.offsetTop - 1;
       edges();
     });
     ro.observe(box);
-    rungs.forEach((r) => ro.observe(r));
+    ro.observe(open);
     for (const ev of ['wheel', 'touchstart', 'pointerdown', 'keydown']) box.addEventListener(ev, () => ro.disconnect(), { once: true, passive: true });
   }
   return wrap;
@@ -100,8 +99,8 @@ export function journeyWidget(): Widget {
   return {
     el: h('div', { class: 'widget' },
       h('div', { class: 'panel' },
-        h('h3', null, 'The ladder of abstraction'),
-        h('p', { class: 'sub' }, 'Each level uses only the level below it. A rung opens the chapter that builds it.'),
+        h('h3', null, 'The map'),
+        h('p', { class: 'sub' }, 'Every chapter, by section, each using only what came before it. A section opens with a click; a row opens its chapter.'),
         ladder())),
   };
 }

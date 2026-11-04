@@ -317,3 +317,44 @@ describe('two clocks on the cycle engine', () => {
     expect(onFast).toBeGreaterThan(1000);
   }, 120000);
 });
+
+describe('chapter claims measured on the circuits and the model', () => {
+  it('sustained throughput at 1 : 1 is min(1, depth / 5) words per edge; deeper or faster-ratio FIFOs reach 1', async () => {
+    const { sustained, CREDIT_EDGES } = await import('../src/comm/asyncfifo');
+    expect(CREDIT_EDGES).toBe(5);
+    expect(sustained(1, 1, 1)).toBeCloseTo(0.4, 2);
+    expect(sustained(2, 1, 1)).toBeCloseTo(0.8, 2);
+    expect(sustained(3, 1, 1)).toBeCloseTo(1, 2);
+    expect(sustained(2, 2, 1)).toBeCloseTo(1, 2);
+    expect(sustained(2, 1, 2)).toBeCloseTo(1, 2);
+  });
+  it('the synchronizer delivers a level at the second B edge after the sender changes it, at every ratio and under jitter', () => {
+    for (const [fa, fb] of RATIOS) for (const seed of [3, 4]) {
+      const s = simulate(SYNC_BENCH);
+      set(s, { send: 0, aclk: 0, bclk: 0 });
+      let phase: 'idle' | 'wait' | 'drain' = 'idle', bAfter = 0, quiet = 0, ok = 0, nA = 0;
+      for (const e of randomInterleave(fa, fb, 600, seed)) {
+        if (e === 'w') {
+          nA++;
+          if (phase === 'idle' && nA % 4 === 0) set(s, { send: 1 });
+          edge(s, 'aclk');
+          if (phase === 'idle' && out(s, 'a') === 1) { phase = 'wait'; bAfter = 0; }
+        } else {
+          edge(s, 'bclk');
+          if (phase === 'wait') {
+            bAfter++;
+            if (out(s, 'q') === 1) { expect(bAfter, `${fa}:${fb}`).toBe(2); ok++; set(s, { send: 0 }); phase = 'drain'; quiet = 0; }
+          } else if (phase === 'drain') {
+            quiet = out(s, 'a') === 0 && out(s, 'q') === 0 ? quiet + 1 : 0;
+            if (quiet >= 3) phase = 'idle';
+          }
+        }
+      }
+      expect(ok, `${fa}:${fb}`).toBeGreaterThan(3);
+    }
+  });
+  it('a six-word one-bit cycle exists (001 011 010 110 111 101), so the power-of-two depth is about the full rule, not the code', () => {
+    const c = [1, 3, 2, 6, 7, 5];
+    for (let i = 0; i < 6; i++) expect(hamming(c[i], c[(i + 1) % 6])).toBe(1);
+  });
+});

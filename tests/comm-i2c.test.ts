@@ -3,7 +3,7 @@
 // arbitration lost at every bit of the address).
 
 import { describe, expect, it } from 'vitest';
-import { I2cController, I2cTarget, READ, START, STOP, WRITE } from '../src/comm/i2c';
+import { I2cController, I2cTarget, READ, runBus, START, STOP, WRITE } from '../src/comm/i2c';
 import { i2cBus, i2cController, i2cTarget } from '../src/lib/i2c';
 import { flatten } from '../src/sim/flatten';
 import { SwitchSim } from '../src/sim/switchsim';
@@ -165,4 +165,39 @@ describe('the bus at switch level (pull-up resistors, open-drain NMOS, every NAN
     expect(mc.map((m) => m.lost)).toEqual([0, 1]);
     expect(mt[0].mem[0]).toBe(0x3c);
   }, 240000);
+});
+
+describe('clock stretching', () => {
+  /** Clocks from reset until the controller has finished a pointer write and a read, against the model target. */
+  function readClocks(stretch: number): { clocks: number; got: number } {
+    const c = new I2cController(), t = new I2cTarget();
+    t.mem[2] = 0x5c;
+    const script: Cmd[] = [[START, 0], addrW(0x50), [WRITE, 2], [START, 0], addrR(0x50), [READ, 1], [STOP, 0]];
+    let k = 0, clocks = 0, end = 0, got = -1, last = -1;
+    runBus([
+      { step: (sda, scl) => {
+        const rst = clocks === 0 ? 1 : 0;
+        let go = 0, cmd = 0, din = 0;
+        if (!rst && c.out.ready && k < script.length) { if (last === READ) got = c.out.dout; go = 1; [cmd, din] = script[k++]; last = cmd; }
+        c.step({ rst, go, cmd, din, sda_i: sda, scl_i: scl });
+        if (!end && k === script.length && c.out.ready && !rst) end = clocks;
+        clocks++;
+        return c.out;
+      } },
+      { step: (sda, scl) => { t.step({ rst: 0, sda_i: sda, scl_i: scl, adr: 0x50, stretch }); return t.out; } },
+    ], 500);
+    return { clocks: end, got };
+  }
+  it('a target that holds SCL for 40 clocks lengthens the frame, and the data are unchanged; a stretch shorter than the controller\'s own low phase costs nothing', () => {
+    const plain = readClocks(0), two = readClocks(2), long = readClocks(40);
+    expect(plain.got).toBe(0x5c);
+    expect(long.got).toBe(0x5c);
+    expect(two.clocks).toBe(plain.clocks);
+    expect(long.clocks - plain.clocks).toBeGreaterThan(30);
+    expect(long.clocks - plain.clocks).toBeLessThanOrEqual(40);
+  });
+  it('gates equal models with a 40-clock stretch', async () => {
+    const { log } = await session([[START, 0], addrW(0x51), [WRITE, 2], [WRITE, 0x5c], [START, 0], addrW(0x51), [WRITE, 2], [START, 0], addrR(0x51), [READ, 1], [STOP, 0]], { targets: [{ adr: 0x51, stretch: 40 }], limit: 1200 });
+    expect(log.reads).toEqual([0x5c]);
+  });
 });

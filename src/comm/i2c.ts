@@ -84,7 +84,7 @@ export class I2cTarget {
     this.wpend = 0;
     if (w.wpend) { this.mem[w.ptr] = w.sh; this.ptr = (w.ptr + 1) & 3; }
     // stretching: SCL is held for `scnt` more clocks
-    if (w.scl_o) { this.scnt = (w.scnt - 1) & 7; this.scl_o = this.scnt !== 0 ? 1 : 0; }
+    if (w.scl_o) { this.scnt = (w.scnt - 1) & 63; this.scl_o = this.scnt !== 0 ? 1 : 0; }
     if (start) { this.phase = T_ADDR; this.n = 0; this.sda_o = 0; return; }
     if (stop) { this.phase = T_IDLE; this.sda_o = 0; this.scl_o = 0; this.scnt = 0; return; }
     const rbit = w.sda_s;
@@ -109,7 +109,7 @@ export class I2cTarget {
             if (w.phase === T_AACK && w.rw) {
               const d = this.mem[w.ptr];
               this.phase = T_RD; this.sh = d; this.sda_o = (d >> 7) & 1 ? 0 : 1;
-              this.scnt = i.stretch & 7; this.scl_o = (i.stretch & 7) !== 0 ? 1 : 0;
+              this.scnt = i.stretch & 63; this.scl_o = (i.stretch & 63) !== 0 ? 1 : 0;
             } else this.phase = T_WR;
           }
         }
