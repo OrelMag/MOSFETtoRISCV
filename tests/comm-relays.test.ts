@@ -4,7 +4,7 @@ import { flatten } from '../src/sim/flatten';
 import { SwitchSim } from '../src/sim/switchsim';
 import { stats } from '../src/sim/stats';
 import { B1, type ComponentDef } from '../src/sim/types';
-import { DIAL_COUNTER, DIAL_SELECTOR, TELEGRAPH_RELAY, countStage, telegraphChain } from '../src/lib/telegraph';
+import { CROSSBAR3, CROSSPOINT, DIAL_COUNTER, DIAL_SELECTOR, TELEGRAPH_RELAY, countStage, telegraphChain } from '../src/lib/telegraph';
 
 const simOf = (def: ComponentDef) => new SwitchSim(flatten(def, { mode: 'switch' }));
 const out = (sim: SwitchSim, port: string) => sim.getBits(sim.design.root.ports[port]);
@@ -136,5 +136,70 @@ describe('the dial selector', () => {
   });
   it('is the counter plus a tree: the same 10 relays', () => {
     expect(stats(DIAL_SELECTOR).relays).toBe(stats(DIAL_COUNTER).relays);
+  });
+});
+
+describe('the 3 x 3 crossbar', () => {
+  const bits = (sim: SwitchSim, port: string) => out(sim, port).map((b) => (b === B1 ? 1 : 0));
+  /** Select row r and column c together, let it settle, let the selects go. */
+  const call = (sim: SwitchSim, r: number, c: number) => {
+    sim.setInput('rs', 1 << r); sim.setInput('cs', 1 << c); sim.settle();
+    sim.setInput('rs', 0); sim.setInput('cs', 0); sim.settle();
+  };
+  it('joins a row to a column, holds the call after the selects drop, and carries speech both ways', () => {
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const sim = simOf(CROSSBAR3);
+      call(sim, r, c);
+      expect(sim.unstable).toBe(false);
+      expect(bits(sim, 'busy')).toEqual([0, 1, 2].map((k) => (k === c ? 1 : 0)));
+      // caller to called
+      sim.setInput('row', 1 << r); sim.settle();
+      expect(bits(sim, 'col'), `row ${r} to col ${c}`).toEqual([0, 1, 2].map((k) => (k === c ? 1 : 0)));
+      // and called to caller
+      const back = simOf(CROSSBAR3);
+      call(back, r, c);
+      back.setInput('col', 1 << c); back.settle();
+      expect(bits(back, 'row'), `col ${c} to row ${r}`).toEqual([0, 1, 2].map((k) => (k === r ? 1 : 0)));
+    }
+  });
+  it('two calls at once keep their speech apart', () => {
+    const sim = simOf(CROSSBAR3);
+    call(sim, 0, 1);
+    call(sim, 2, 0);
+    expect(bits(sim, 'busy')).toEqual([1, 1, 0]);
+    sim.setInput('row', 0b001); sim.settle();
+    expect(bits(sim, 'col')).toEqual([0, 1, 0]);
+    sim.setInput('row', 0b100); sim.settle();
+    expect(bits(sim, 'col')).toEqual([1, 0, 0]);
+    sim.setInput('row', 0b101); sim.settle();
+    expect(bits(sim, 'col')).toEqual([1, 1, 0]);
+  });
+  it('a call to a busy column is refused, and goes through once the first caller hangs up', () => {
+    const sim = simOf(CROSSBAR3);
+    call(sim, 0, 1);
+    call(sim, 1, 1);
+    sim.setInput('row', 0b010); sim.settle();
+    expect(bits(sim, 'col'), 'row 1 is not connected to the busy column').toEqual([0, 0, 0]);
+    expect(bits(sim, 'busy')).toEqual([0, 1, 0]);
+    sim.setInput('row', 0b001); sim.settle();
+    expect(bits(sim, 'col')).toEqual([0, 1, 0]);
+    sim.setInput('row', 0);
+    sim.setInput('hang', 0b001); sim.settle();
+    sim.setInput('hang', 0); sim.settle();
+    expect(bits(sim, 'busy')).toEqual([0, 0, 0]);
+    call(sim, 1, 1);
+    sim.setInput('row', 0b010); sim.settle();
+    expect(bits(sim, 'col')).toEqual([0, 1, 0]);
+  });
+  it('hanging up one caller leaves the other call alone', () => {
+    const sim = simOf(CROSSBAR3);
+    call(sim, 0, 2); call(sim, 1, 0);
+    sim.setInput('hang', 0b010); sim.settle();
+    sim.setInput('hang', 0); sim.settle();
+    expect(bits(sim, 'busy')).toEqual([0, 0, 1]);
+  });
+  it('counts 21 relays: 9 crosspoints, 3 row selects, 3 column selects, 3 busy, 3 hang-ups', () => {
+    expect(stats(CROSSBAR3).relays).toBe(21);
+    expect(stats(CROSSPOINT).relays).toBe(1);
   });
 });

@@ -4,7 +4,7 @@
 // pull-down) like lib/relays.ts.
 
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { define, merger, ones } from './define';
+import { define, merger, ones, splitter } from './define';
 import { RELAY, relay } from './relays';
 import { PULLDOWN } from './switchparts';
 import { GND, VDD } from './transistors';
@@ -200,4 +200,118 @@ export const DIAL_SELECTOR: ComponentDef = define({
       nets,
     };
   },
+});
+
+/**
+ * One crosspoint: a relay that joins a row line to a column line (pole 1), and holds itself through the row's hold rail
+ * (pole 2) once the select path has fed its coil. Pole 3 marks the column busy. Operating takes the select path; letting
+ * the select go changes nothing.
+ */
+export const CROSSPOINT: ComponentDef = define({
+  id: 'crosspoint', name: 'Crossbar crosspoint', category: 'routing',
+  summary: 'A 3-pole relay: row to column contacts, a hold contact from the row hold rail back to its own coil, and a busy contact onto the column.',
+  ports: [bit('row', 'inout', 'left'), bit('col', 'inout', 'right'), bit('sel', 'in', 'top'), bit('hold', 'inout', 'top'), bit('busy', 'inout', 'bottom')],
+  symbol: { kind: 'box', label: 'X', w: 10, h: 6 },
+  netlist: () => ({
+    level: 'switch',
+    pins: { row: [0, 3], col: [36, 3], sel: [8, 0], hold: [24, 0], busy: [30, 20] },
+    instances: [{ name: 'x', def: relay(3), at: [12, 8] }, { name: 'gx', def: GND, at: [12, 13] }],
+    nets: [
+      { name: 'gnd', ends: ['x.b', 'gx.p'] },
+      { name: 'coil', ends: ['sel', 'x.a', 'x.no2'], tags: true },
+      { name: 'row', ends: ['row', 'x.c1'], tags: true }, { name: 'col', ends: ['x.no1', 'col'], tags: true },
+      { name: 'hold', ends: ['hold', 'x.c2', 'x.c3'], tags: true }, { name: 'busy', ends: ['x.no3', 'busy'], tags: true },
+    ],
+  }),
+});
+
+/**
+ * A 3 × 3 crossbar exchange. Rows are the callers' lines, columns the called lines, and a crosspoint joins one to the
+ * other with a contact that conducts speech both ways. A call is set up by raising a row select rs[r] and a column
+ * select cs[c] together: the row relay puts a feed on its line, the column relay passes it to crosspoint (r, c), which
+ * pulls in and holds itself, so both selects can drop. The column select goes through the column's busy relay's break
+ * contact: while any crosspoint of the column is held, selecting it does nothing, and busy[c] says so. hang[r] opens row
+ * r's hold rail and clears that caller's call. Relays: 9 crosspoints, 3 row selects, 3 column selects, 3 busy, 3 hang-ups.
+ */
+export const CROSSBAR3: ComponentDef = define({
+  id: 'crossbar3', name: 'Crossbar 3 × 3', category: 'routing',
+  summary: 'Nine crosspoint relays on a 3 × 3 grid (21 relays with the selects). Two calls at once; a call to a busy column is refused and busy[c] is raised.',
+  ports: [
+    { name: 'rs', width: 3, dir: 'in' }, { name: 'cs', width: 3, dir: 'in' }, { name: 'hang', width: 3, dir: 'in' },
+    { name: 'row', width: 3, dir: 'inout' }, { name: 'col', width: 3, dir: 'inout' }, { name: 'busy', width: 3, dir: 'out' },
+  ],
+  symbol: { kind: 'box', label: 'CROSSBAR 3×3', w: 16 },
+  netlist: () => {
+    const OY = 14, X0 = 44, DX = 20, Y0 = OY + 8, DY = 14;
+    const instances: InstanceDef[] = [
+      { name: 'sr', def: splitter(ones(3), 2), at: [4, 4] }, { name: 'sc', def: splitter(ones(3), 2), at: [30, 2] }, { name: 'sh', def: splitter(ones(3), 2), at: [4, 60] },
+      { name: 'sw', def: splitter(ones(3), 2), at: [4, 30] }, { name: 'sl', def: splitter(ones(3), 2), at: [4, 44] }, { name: 'mb', def: merger(ones(3), 2), at: [X0 + 3 * DX + 6, Y0 + 3 * DY] },
+    ];
+    const nets: NetDef[] = [
+      { name: 'rs', ends: ['rs', 'sr.in'] }, { name: 'cs', ends: ['cs', 'sc.in'] }, { name: 'hang', ends: ['hang', 'sh.in'] },
+      { name: 'row', ends: ['row', 'sw.in'] }, { name: 'col', ends: ['col', 'sl.in'] }, { name: 'busy', ends: ['mb.out', 'busy'] },
+      { name: 'vdd', ends: [], tags: true },
+    ];
+    const vddEnds: string[] = [];
+    for (let r = 0; r < 3; r++) {
+      const y = Y0 + DY * r;
+      instances.push(
+        { name: `sel${r}`, def: relay(1), at: [10, y] }, { name: `gsel${r}`, def: GND, at: [10, y + 5] },
+        load(`lr${r}`, [34, y]), { name: `hr${r}`, def: relay(1), at: [24, y] }, { name: `ghr${r}`, def: GND, at: [20, y + 6] },
+      );
+      nets.push(
+        { name: `rs${r}`, ends: [`sr.o${r}`, `sel${r}.a`], tags: true }, { name: `gnd sel${r}`, ends: [`sel${r}.b`, `gsel${r}.p`] },
+        { name: `hang${r}`, ends: [`sh.o${r}`, `hr${r}.a`], tags: true }, { name: `gnd hr${r}`, ends: [`hr${r}.b`, `ghr${r}.p`] },
+        { name: `feed${r}`, ends: [`sel${r}.no`, ...[0, 1, 2].map((c) => `sc${c}.c${r + 1}`)], tags: true },
+        { name: `hold${r}`, ends: [`hr${r}.nc`, ...[0, 1, 2].map((c) => `x${r}${c}.hold`)], tags: true },
+        { name: `row${r}`, ends: [`sw.o${r}`, ...[0, 1, 2].map((c) => `x${r}${c}.row`), `lr${r}.y`], tags: true },
+      );
+      vddEnds.push(`sel${r}.c`, `hr${r}.c`);
+    }
+    for (let c = 0; c < 3; c++) {
+      const x = X0 + DX * c;
+      instances.push(
+        { name: `bz${c}`, def: relay(1), at: [x, Y0 + 3 * DY + 4] }, { name: `gbz${c}`, def: GND, at: [x - 4, Y0 + 3 * DY + 10] },
+        { name: `sc${c}`, def: relay(3), at: [x, OY - 12] }, { name: `gsc${c}`, def: GND, at: [x, OY - 7] },
+        load(`lb${c}`, [x + 8, Y0 + 3 * DY - 4]), load(`lcl${c}`, [x + 14, OY - 20]),
+      );
+      nets.push(
+        { name: `cs${c}`, ends: [`sc.o${c}`, `bz${c}.c`], tags: true }, { name: `gnd bz${c}`, ends: [`bz${c}.b`, `gbz${c}.p`] }, { name: `gnd sc${c}`, ends: [`sc${c}.b`, `gsc${c}.p`] },
+        { name: `csel${c}`, ends: [`bz${c}.nc`, `sc${c}.a`], tags: true },
+        { name: `busy${c}`, ends: [`bz${c}.a`, ...[0, 1, 2].map((r) => `x${r}${c}.busy`), `lb${c}.y`, `mb.i${c}`], tags: true },
+        { name: `col${c}`, ends: [`sl.o${c}`, ...[0, 1, 2].map((r) => `x${r}${c}.col`), `lcl${c}.y`], tags: true },
+      );
+      for (let r = 0; r < 3; r++) {
+        instances.push({ name: `x${r}${c}`, def: CROSSPOINT, at: [x, Y0 + DY * r] });
+        nets.push({ name: `sel${r}${c}`, ends: [`sc${c}.no${r + 1}`, `x${r}${c}.sel`], tags: true });
+      }
+    }
+    instances.push({ name: 'vcc', def: VDD, at: [2, 80] });
+    nets[6] = { name: 'vdd', ends: ['vcc.p', ...vddEnds], tags: true };
+    return {
+      level: 'switch',
+      pins: { rs: [0, 6], cs: [0, 12], hang: [0, 62], row: [0, 32], col: [0, 46], busy: [X0 + 3 * DX + 14, Y0 + 3 * DY] },
+      instances, nets,
+    };
+  },
+});
+
+/** The crossbar on a bench for the chapter: what the three callers say goes in, what the three called lines hear comes out. */
+export const CROSSBAR_EXCHANGE: ComponentDef = define({
+  id: 'crossbar_exchange', name: 'Crossbar exchange on a bench', category: 'routing',
+  summary: 'The 3 × 3 crossbar with its speech lines split by direction: talk[r] is what caller r says, heard[c] what called line c hears.',
+  ports: [
+    { name: 'rs', width: 3, dir: 'in' }, { name: 'cs', width: 3, dir: 'in' }, { name: 'hang', width: 3, dir: 'in' },
+    { name: 'talk', width: 3, dir: 'in' }, { name: 'heard', width: 3, dir: 'out' }, { name: 'busy', width: 3, dir: 'out' },
+  ],
+  symbol: { kind: 'box', label: 'EXCHANGE', w: 12 },
+  netlist: () => ({
+    level: 'switch',
+    pins: { rs: [2, 4], cs: [2, 8], hang: [2, 12], talk: [2, 16], heard: [34, 6], busy: [34, 12] },
+    instances: [{ name: 'xb', def: CROSSBAR3, at: [12, 2] }],
+    nets: [
+      { name: 'rs', ends: ['rs', 'xb.rs'] }, { name: 'cs', ends: ['cs', 'xb.cs'] }, { name: 'hang', ends: ['hang', 'xb.hang'] },
+      { name: 'talk', ends: ['talk', 'xb.row'] }, { name: 'heard', ends: ['xb.col', 'heard'] }, { name: 'busy', ends: ['xb.busy', 'busy'] },
+    ],
+  }),
 });
