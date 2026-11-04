@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false # a merge every 20 minutes would cancel every 25-minute run: nothing would ever deploy. One runs, the newest waits.
 
 jobs:
   # What the Yosys jobs have to check. Measured from the last successful deploy, not the previous push: a push
