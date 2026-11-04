@@ -962,13 +962,16 @@ export class Editor {
       const essential = [...this.tabs.children].filter((el) => el.matches('.sb-tab, .sb-new-grp, .sb-trail')) as HTMLElement[];
       const tabsGap = px(getComputedStyle(this.tabs).columnGap);
       const tabsNeed = essential.reduce((s, el) => s + el.offsetWidth, 0) + tabsGap * Math.max(0, essential.length - 1);
+      // two whole tabs (the open one and a neighbour, the widest pair, so it holds in any font) beside Open… and New chip
+      const tabWs = essential.filter((el) => el.matches('.sb-tab')).map((el) => el.offsetWidth).sort((a, b) => b - a);
+      const twoTabs = tabsNeed - tabWs.slice(2).reduce((s, w) => s + w + tabsGap, 0);
       this.tabs.classList.remove('measure');
       const others = [this.partsBtn, this.slots.top].filter((el) => el.offsetWidth > 0);
-      // the tabs may take up to 45 % of the bar (540 px at least: Open…, New chip and two tabs) and shrink or scroll past it: the toolbar's own actions (Examples, Timing, Play) outrank them, the least
+      // the tabs may take up to 45 % of the bar, or two whole tabs' worth up to 70 %, and shrink or scroll past it: the toolbar's own actions (Examples, Timing, Play) outrank them, the least
       // used actions going into More for them; 4 px of slack
       // every flex item in the row has a gap beside it, an empty one (the top slot, before the autosave indicator) too
       const items = [...top.children].filter((el) => getComputedStyle(el).display !== 'none').length;
-      room -= Math.min(tabsNeed + 4, Math.max(room * 0.45, 540)) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
+      room -= Math.min(tabsNeed + 4, Math.max(room * 0.45, Math.min(twoTabs + 8, room * 0.7))) + others.reduce((s, el) => s + el.offsetWidth, 0) + gap * Math.max(0, items - 1);
     }
     this.shed = shedActions(btns.map((b) => ({ id: b.dataset.action!, w: b.offsetWidth })), room, moreW, px(getComputedStyle(bar).columnGap));
     for (const b of btns) b.hidden = this.shed.has(b.dataset.action!);
