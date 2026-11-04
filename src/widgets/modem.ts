@@ -155,7 +155,7 @@ export function iqWidget(): Widget {
   paint();
   return { el: h('div', { class: 'widget mos comm mdm-w' }, h('div', { class: 'panel' }, h('h3', null, 'x(t) = I cos 2πft − Q sin 2πft'), choice,
     h('div', { class: 'mdm-two' }, fC.svg, fW.svg),
-    h('p', { class: 'sub' }, 'Each point is one symbol: its I scales a cosine, its Q a sine, and the sum is one sinusoid of the same frequency with a new amplitude and phase. The dashed curve is the reference carrier. Labels are Gray: neighbours differ in one bit.')), chips.el) };
+    h('p', { class: 'sub' }, 'Each point is one symbol: its I scales a cosine, its Q a sine, and the sum is one sinusoid of the same frequency with a new amplitude and phase. The light curve is the reference carrier. Labels are Gray: neighbours differ in one bit.')), chips.el) };
 }
 
 // ---- 4. a constellation in noise --------------------------------------------------------------------------------------------------
