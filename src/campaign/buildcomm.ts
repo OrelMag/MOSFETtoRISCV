@@ -64,16 +64,16 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
   }),
   l_uarttx: () => ({
     id: 'l_uarttx', title: 'UART transmitter', level: 'sequential', allowed: 'nand',
-    brief: 'A byte in, a frame out. The baud generator is on the bench: <b>tick</b> is high one clock in every <i>div</i> (it is div = ' + TX_CASES.map((k) => k.div).join(', ') + ' in turn), and a bit lasts 16 ticks. '
+    brief: 'A byte in, a frame out. The baud generator is not part of this level: the bench supplies <b>tick</b>, high one clock in every <i>div</i>, and tries only div = ' + TX_CASES.map((k) => k.div).join(', ') + ' (your transmitter has no divisor input of its own), and a bit lasts 16 ticks. '
       + 'With <b>go</b> = 1 while <b>busy</b> = 0 the byte on <b>din</b> is accepted, and <b>taken</b> is 1 in that very cycle. Then tx carries a frame: the start bit (0), the eight data bits least significant first, the stop bit (1), each exactly 16 ticks long, the line changing only on a tick; it idles at 1. <b>busy</b> is 1 while the frame is on the line, and a go while it is 1 must be ignored. '
-      + 'The far end counts clocks: it names the first bit that is the wrong level or the wrong length, at any divisor.',
+      + 'The far end counts clocks: it names the first bit that is the wrong level or the wrong length, at each of those divisors.',
     ports: pinsOf(UART_TX),
     check: { kind: 'custom', describe: `Two bytes at each of ${TX_CASES.length} divisors, with a go in the middle of the first frame that must be ignored and the second byte offered as soon as busy falls: taken, every bit's level and length, busy.`, run: runUartTx },
     answer: refOf('l_uarttx', () => UART_TX, 'UART transmitter'),
   }),
   l_uartrx: () => ({
     id: 'l_uartrx', title: 'UART receiver', level: 'sequential', allowed: 'nand',
-    brief: '<b>rx</b> carries frames from a sender whose clock is not yours, and <b>tick</b> (on the bench) is high one clock in every <i>div</i>; 16 ticks make a nominal bit. A low on rx at a tick may be the start of a frame. Confirm it in the middle of the start bit (a glitch is not a frame), then sample a bit every 16 ticks: eight data bits, least significant first, into <b>data</b>, and a ninth sample for the stop bit. '
+    brief: '<b>rx</b> carries frames from a sender whose clock is not yours, and <b>tick</b>, supplied by the bench (there is no baud generator in this level), is high one clock in every <i>div</i>, tried at div = 1 and 3 only; 16 ticks make a nominal bit. A low on rx at a tick may be the start of a frame. Confirm it in the middle of the start bit (a glitch is not a frame), then sample a bit every 16 ticks: eight data bits, least significant first, into <b>data</b>, and a ninth sample for the stop bit. '
       + 'A stop of 1 gives <b>push</b> for one clock with the byte on data; a stop of 0 gives <b>ferr</b> for one clock and no push, and the receiver waits for the line to go high (a break is one error, not a stream of zero bytes). <b>busy</b> is 0 when it is idle. rx is asynchronous. '
       + 'Be back to idle in the middle of the stop bit: the next start edge may come early. The far end is a sender up to 4% fast or slow, with its start edge anywhere between two ticks.',
     ports: pinsOf(UART_RX).filter((p) => p.name !== 'state'),
@@ -106,7 +106,7 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
   }),
   l_i2c: () => ({
     id: 'l_i2c', title: 'I²C controller', level: 'sequential', allowed: 'nand',
-    brief: 'Two wires, any number of devices, each pulling a line low and never driving it high: a line is 1 only if nobody pulls it. <b>sda_o</b> = 1 pulls SDA to ground (an open-drain pad: the NMOS of chapter 44), 0 lets go; <b>sda_i</b> and <b>scl_i</b> are the wires read back. The bench is that wire, a target (a four-register device) and, in some tests, a rival controller. '
+    brief: 'Two wires, any number of devices, each pulling a line low and never driving it high: a line is 1 only if nobody pulls it. <b>sda_o</b> = 1 pulls SDA to ground (an open-drain pad: the NMOS of chapter 44), 0 lets go; <b>sda_i</b> and <b>scl_i</b> are the wires read back. The pad is not part of this level: the bench is the wire (a JavaScript model of the wired AND, not a switch-level circuit), a target (a four-register device model) and, in some tests, a rival controller model; your controller is gates and sees the wire only through sda_i and scl_i. '
       + 'One command at a time: <b>go</b> with <b>cmd</b> (0 START, 1 WRITE a byte and read the ACK, 2 READ a byte, 3 STOP) and <b>din</b> (the byte; for a READ, din[0] = 1 sends NACK instead of ACK). <b>ready</b> is 1 when idle and 0 from the clock after go until the command is over. A command is bit cells of four phases of two clocks each: 0 SCL pulled low and SDA set, 1 SCL released (and the cell waits here until SCL really reads high: the target or another controller may stretch it), 2 SCL high, SDA sampled at its end, 3 SCL pulled low again. START and STOP are one cell; a byte is eight cells and a ninth for the acknowledge, most significant bit first. '
       + '<b>ack</b> = 1 if the target answered a WRITE; <b>dout</b> is the byte read; <b>lost</b> = 1 when you let go of SDA (sent a 1) and read a 0 in the same cell: arbitration is lost, and both lines must be released at once, so that the winner\'s frame goes on unharmed. The bench runs the golden controller beside yours, clock by clock, and names the first line that differs.',
     ports: pinsOf(i2cController()),

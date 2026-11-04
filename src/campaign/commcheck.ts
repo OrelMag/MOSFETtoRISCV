@@ -111,7 +111,7 @@ export function runSync(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
   return finish(fails, len, def, { cycles: L });
 }
 
-// ---- l_uarttx: a frame at any divisor ------------------------------------------------------------------------------------
+// ---- l_uarttx: a frame at the divisors tried ------------------------------------------------------------------------------------
 
 /** The divisors the transmitter is tried at (a bit lasts 16 · div clocks) and the two bytes of each lane's script. */
 export const TX_CASES: { div: number; a: number; b: number }[] = [

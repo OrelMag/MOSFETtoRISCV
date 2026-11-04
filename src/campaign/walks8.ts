@@ -72,7 +72,7 @@ export const WALKS8: Record<string, WalkScript> = {
     },
     {
       title: 'The line',
-      text: 'ntx holds the inverse of the line, so that the reset state (all zeros) is idle: u22 takes the bit that has just reached the bottom of the register, u23 inverts it into ntx.d, ntx loads on a step, and u24 inverts it back to tx. The line moves only on a tick, so a bit lasts exactly 16 ticks at any divisor.',
+      text: 'ntx holds the inverse of the line, so that the reset state (all zeros) is idle: u22 takes the bit that has just reached the bottom of the register, u23 inverts it into ntx.d, ntx loads on a step, and u24 inverts it back to tx. The line moves only on a tick, so a bit lasts exactly 16 ticks at every divisor tried.',
       parts: ['u22', 'u23', 'ntx', 'u24'], codex: ['edge'],
       why: 'A flip-flop on the line keeps tx glitch-free: it changes once, at a tick edge, never in the middle of a decode.',
       whyNot: { text: 'Driving tx straight from the shift register would put the register\'s settling glitches on the line.' },
