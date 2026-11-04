@@ -485,7 +485,7 @@ export const EXAMPLES: Example[] = [
       a: { name: 'Computer A', build: (id, n) => lanComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => lanComputerChip(id, n, 'B') },
       sw: { name: 'Switch (two ports)', build: (id, n) => lanSwitchChip(id, n) },
     },
-    hz: Infinity,
+    hz: 5000, // finite: JSON stores Infinity as null, and a reload would run it at 2 Hz
   },
   {
     id: 'cardboot', group: 'computers', drawer: true, short: 'A deck read into RAM, then run.', name: 'Boot from cards',
