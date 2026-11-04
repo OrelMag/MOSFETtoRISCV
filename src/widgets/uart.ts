@@ -111,7 +111,7 @@ export function txScene(): Scene {
           h('span', null, 'bit ', h('b', null, `${cell} cycles`), ` (${d} per tick)`), h('span', null, 'frame ', h('b', null, `${10 * cell} cycles`)));
       };
       paint();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'The line, bit by bit', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'The line, bit by bit', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, sel, btn('Send byte', 'Load the byte and clock the transmitter through the whole frame', send, 'btn sm primary')),
         svgBox, read, h('p', { class: 'sub' }, 'Change div on the bar to stretch the bit: it is always 16 ticks, a tick being div clock cycles. The line moves only on a tick.'));
       return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); stage.resetHooks.delete(reset); } };
@@ -202,7 +202,7 @@ export function rxScene(): Scene {
       stage.resetHooks.add(() => { q = []; k = 0; got = -1; pushes = ferrs = 0; paintLive(); });
       stage.historyHooks.add({ save: () => ({ q, k, got, pushes, ferrs }), restore: (v) => { const x = v as { q: number[]; k: number; got: number; pushes: number; ferrs: number }; q = x.q; k = x.k; got = x.got; pushes = x.pushes; ferrs = x.ferrs; paintLive(); } });
       paint(); paintLive();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'A receiver whose clock is off', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'A receiver whose clock is off', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, sel, btn('Send to the gates', 'Drive rx with this frame from the sender\'s clock and clock the receiver', send, 'btn sm primary'), btn('Find the limit', 'Search for the largest clock error at which every byte is received', find)),
         h('div', { class: 'mc-row' }, errSl.el, phSl.el), svgBox, read, limit, live,
         h('p', { class: 'sub' }, 'Sampling: the receiver sees the start edge at the next tick (phase), counts 8 ticks to the middle of the start bit, then 16 per bit. A clock off by e puts the k-th sample e·(k + ½) bit times from where it should be.'));
@@ -277,7 +277,7 @@ export function coreScene(): Scene {
       };
       paint();
       const b = (label: string, title: string, f: () => void) => btn(label, title, () => { if (!loop.running) f(); });
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'What arrives, and what the status says', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'What arrives, and what the status says', h('span', { class: 'fold-hint' })),
         h('div', { class: 'dram-ops' }, b('Good frame', "Send 'A' with a proper stop bit", () => api.frame(0x41)), b('Bad stop bit', 'Send a frame whose stop bit is 0', () => api.frame(0x42, false)), b('Glitch', 'A 2-cycle low pulse on an idle line', api.glitch),
           b('Break', 'Hold the line low for 12 bit times', api.brk), b('Send 20', '20 good frames; nothing reads them', () => api.flood(20)), b('Read all', 'Pop the receive FIFO until empty', api.readAll), b('Clear flags', 'Write 1 to the framing-error and overrun bits', api.clear)),
         lamps, log, strip, h('p', { class: 'sub' }, 'Divisor 1: a bit is 16 cycles. The panel plays the sender and the driver; the circuit is the one you can open.'));
@@ -380,7 +380,7 @@ export function uartBusScene(): Scene {
       stage.historyHooks.add({ save: () => ({ q, k, consoleText, cycles, txHist: [...txHist], rxHist: [...rxHist] }), restore: (v) => { const x = v as { q: number[]; k: number; consoleText: string; cycles: number; txHist: number[]; rxHist: number[] }; q = x.q; k = x.k; consoleText = x.consoleText; cycles = x.cycles; txHist = x.txHist; rxHist = x.rxHist; paint(); } });
       paint();
       const run = btn('Run', 'Clock the computer continuously', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'A computer with a UART', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'A computer with a UART', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run, input, btn('Send to rx', 'Feed these bytes to the rx pin at the divisor\'s rate', () => send(input.value))),
         regs, h('div', { class: 'cpu-sec' }, 'Console'), consoleEl, h('div', { class: 'cpu-sec' }, 'rx pin, then tx pin'), strip,
         h('p', { class: 'sub' }, 'The program sets the divisor, sends "Hi", enables the receive interrupt and counts in a loop; the handler echoes each byte to the console.'));
@@ -444,7 +444,7 @@ export function twoScene(): Scene {
       };
       const rSl = slider('Clock B vs A', -10, 10, 0.5, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} %`, (v) => { ratio = 1 + v / 100; paint(); });
       const run = btn('Run', 'Clock both computers, each at its own rate', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run, btn('Glitch A→B', 'Flip the wire from A to B for six A cycles', () => api.glitch())), rSl.el,
         field('A'), field('B'), h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A (what B sent)'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B (what A sent)'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'The wires, last 480 edges: A → B, B → A'), strip, read);

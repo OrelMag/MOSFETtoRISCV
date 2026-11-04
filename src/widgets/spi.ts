@@ -234,7 +234,7 @@ export const spiPanel: ScenePanel = (stage: Stage): Widget => {
       h('tbody', null, ...(log.length ? log.map((r) => h('tr', null, h('th', { scope: 'row' }, r.role), h('td', null, `0x${hex(r.tx)}`), h('td', null, r.rx < 0 ? 'X' : `0x${hex(r.rx)}`))) : [h('tr', null, h('td', { colspan: 3, class: 'sub' }, 'Choose the device with sel, then a transaction.'))])));
   };
   const btn = (label: string, title: string, f: () => void) => { const b = h('button', { class: 'btn sm', title }, label); b.addEventListener('click', f); return b; };
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
     h('h4', null, 'Transactions', h('span', { class: 'fold-hint' })),
     h('div', { class: 'dram-ops' }, ...OPS.map((o, i) => btn(o.label, o.title, () => run(i))), btn('Clear log', 'Forget the log', () => { log = []; paint(); })),
     table,

@@ -230,7 +230,7 @@ function busPanel({ arb }: Opts): ScenePanel {
     } else {
       controls = [h('div', { class: 'dram-ops' }, ...FRAME_OPS.map((o, i) => btn(o.label, o.title, () => run(i))), btn('Clear', 'Forget the wires', clear))];
     }
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
       h('h4', null, arb ? 'Two controllers, one bus' : 'A frame on the wires', h('span', { class: 'fold-hint' })), ...controls, wave, frame, status,
       h('p', { class: 'sub' }, arb ? 'The top two rows are what each controller sends (1: it lets go). The bus is their AND. Both start in the same clock, so they agree until the first bit where they do not.' : 'The wires are read at the pins of the pads. ACK is SDA pulled low by the receiver for the ninth clock; NACK is the pull-up winning.'));
     paint();
