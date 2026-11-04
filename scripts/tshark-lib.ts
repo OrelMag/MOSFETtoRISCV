@@ -15,8 +15,10 @@ export type Field = typeof FIELDS[number];
 
 /** tshark's options: verify every checksum it is able to; by default it trusts some of them. */
 export const TSHARK_PREFS = ['-o', 'ip.check_checksum:TRUE', '-o', 'udp.check_checksum:TRUE', '-o', 'tcp.check_checksum:TRUE'];
+/** A heuristic takes the ping's payload, 0x10 0x11 …, for this measurement tool's probe, and would hide its bytes from data.data. The headers are unaffected. */
+export const TSHARK_OFF = ['--disable-protocol', 'hipercontracer'];
 /** The file goes in on a pipe: Ubuntu's tshark refuses a path in the runner's work directory ("You don't have permission"), and refuses Node's stdin too, a socket. */
-export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
+export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, ...TSHARK_OFF, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
 
 export type Row = Partial<Record<Field, string>>;
 

@@ -160,12 +160,15 @@ async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0
   return problems;
 }
 
+const REQUIRED = ['eth:ethertype:arp', 'eth:ethertype:ip:icmp', 'eth:ethertype:ip:udp'];
+const seen = new Set<string>();
 const summary: Record<string, unknown> = {};
 let failed = 0;
 for (const c of CASES) {
   if (only && !c.name.includes(only)) continue;
   const t0 = Date.now();
   const frames = await c.frames(), problems = await check(c.name, frames);
+  if (c.name !== 'built') for (const f of frames) seen.add(claimOf(f.bytes, 0).chain);
   summary[c.name] = { frames: frames.length, kinds: [...new Set(frames.map((f) => claimOf(f.bytes, 0).chain))], problems };
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${c.name}: ${frames.length} frames, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   for (const p of problems.slice(0, 40)) console.log(`     ${p}`);
@@ -179,6 +182,8 @@ for (const b of BROKEN) {
   console.log(`${caught ? 'ok  ' : 'FAIL'} broken ${b.name}: ${caught ? 'caught' : `NOT caught, reported ${JSON.stringify(problems)}`}`);
   if (!caught) failed++;
 }
+// the real captures between them must hold every protocol we claim to check: a chapter that stops sending one must not pass by silence
+if (!only && gates && !dump) for (const want of REQUIRED) if (!seen.has(want)) { console.log(`FAIL no real capture holds ${want}`); failed++; }
 writeFileSync(join(out, 'summary.json'), JSON.stringify(summary, null, 1));
 console.log(dump ? `tshark oracle: files written to ${out}, nothing compared` : failed ? `tshark oracle: ${failed} failed` : 'tshark oracle: all agree');
 process.exit(failed ? 1 : 0);
