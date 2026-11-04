@@ -1,0 +1,43 @@
+/* ---------- Chapter 51, A router (src/widgets/router.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.rt-w { display: grid; gap: 10px; }
+.rt-hdr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; max-width: 420px; }
+.rt-byte { position: relative; height: 38px; font: 600 14px var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.rt-byte i { position: absolute; left: 4px; top: 2px; font: 400 9.5px var(--font-mono); color: var(--muted); }
+.rt-byte.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); }
+.rt-byte.bad { border-color: var(--bad); }
+.rt-byte:focus-visible, .rt-to:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rt-table { display: grid; gap: 4px; }
+.rt-route { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 8px; font-size: 13px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; }
+.rt-route code { min-width: 112px; font: 600 13px var(--font-mono); color: inherit; }
+.rt-route em { margin-left: auto; font-style: normal; font-size: 12px; }
+.rt-route.match { color: var(--text); }
+.rt-route.best { border-color: var(--good); background: color-mix(in srgb, var(--good) 12%, var(--surface)); }
+.rt-walk { display: flex; flex-wrap: wrap; gap: 3px; }
+.rt-node { width: 20px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font: 600 11.5px var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; }
+.rt-node.has { background: color-mix(in srgb, var(--good) 28%, var(--surface-2)); border-color: var(--good); }
+.rt-row { display: flex; gap: 8px; margin: 3px 0; }
+.rt-lab { flex: 0 0 26px; font-size: 12px; color: var(--text-2); }
+.rt-bytes { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; font: 500 11.5px var(--font-mono); color: var(--text); }
+.rt-bytes span { padding: 1px 2px; border-radius: 3px; }
+.rt-bytes .chg { background: color-mix(in srgb, var(--accent) 28%, transparent); font-weight: 700; }
+.rt-bytes .dst { text-decoration: underline; }
+.rt-hist span { min-width: 18px; text-align: center; background: var(--surface-2); }
+.rt-to { min-width: 30px; height: 26px; font: 600 12.5px var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; }
+.rt-to.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); }
+.rt-net { width: 100%; max-width: 640px; height: auto; }
+.rt-link { cursor: pointer; }
+.rt-link .hit { stroke: transparent; stroke-width: 16; }
+.rt-link .ln { stroke: var(--muted); stroke-width: 2; }
+.rt-link text { font: 600 12px var(--font-mono); fill: var(--text-2); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
+.rt-link.hi .ln { stroke: var(--good); stroke-width: 4; }
+.rt-link.off .ln { stroke: var(--bad); stroke-dasharray: 5 5; }
+.rt-link.off text { fill: var(--bad); }
+.rt-link:focus-visible .ln { stroke: var(--accent); stroke-width: 4; }
+.rt-link:focus { outline: none; }
+.rt-router circle { fill: var(--surface-2); stroke: var(--border-strong, var(--muted)); stroke-width: 2; }
+.rt-router text { font: 700 14px var(--font-mono); fill: var(--text); }
+.rt-router .rt-d { font: 500 11px var(--font-mono); fill: var(--text-2); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
+.rt-router.dst circle { stroke: var(--accent); stroke-width: 3; }
+.rt-router.done circle { stroke: var(--good); }
+.rt-router.lost circle { stroke: var(--bad); }
+@media (pointer: coarse) { .rt-to, .rt-byte { min-height: 40px; min-width: 40px; } }

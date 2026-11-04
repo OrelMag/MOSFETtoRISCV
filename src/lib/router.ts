@@ -161,10 +161,10 @@ export const RT_WALK: ComponentDef = (() => {
 
 /** The two fields that change. The checksum is RFC 1624's: complement, add 0xFEFF, end-around carry, complement. */
 export const RT_REWRITE: ComponentDef = (() => {
-  const ports: PortDef[] = [bus('buf', 8, 'in'), bus('adj', 8, 'in'), bus('ttl', 8, 'in'), bus('chk', 16, 'in'), bit('rw', 'in'), bit('mac2', 'in'), bit('i22', 'in'), bit('i24', 'in'), bit('i25', 'in'), bit('tx', 'in'),
-    bus('y', 8, 'out')];
+  const ports: PortDef[] = [bus('buf', 8, 'in'), bus('adj', 8, 'in'), bus('ttl', 8, 'in'), bus('chk', 16, 'in'), bit('rw', 'in'), bit('mac2', 'in'), bit('i22', 'in'), bit('i24', 'in'), bit('i25', 'in'), bit('tx', 'in'), bit('atend', 'in'),
+    bus('y', 8, 'out'), bit('last', 'out')];
   const b = new Builder(24, 18, 5), g = kit(b);
-  b.pins('buf', 'adj', 'ttl', 'chk', 'rw', 'mac2', 'i22', 'i24', 'i25', 'tx');
+  b.pins('buf', 'adj', 'ttl', 'chk', 'rw', 'mac2', 'i22', 'i24', 'i25', 'tx', 'atend');
   const allOnes = g.konst(16, 0xffff);
   const inv = b.op1(bitwise('xor', 16), ['chk', allOnes]);
   const add = b.op(rca(16), [inv, g.konst(16, TTL_DELTA), g.konst(1, 0)], 'add 0xFEFF', 'add');
@@ -181,10 +181,115 @@ export const RT_REWRITE: ComponentDef = (() => {
   y = g.mux(8, y, hcHi, g.and('rw', 'i24'), 'checksum');
   y = g.mux(8, y, hcLo, g.and('rw', 'i25'), 'checksum');
   b.wire(g.gate(y, 8, 'tx'), 'y');
+  b.wire(g.and('tx', 'atend'), 'last');
   return define({
     id: 'rtrewrite', name: 'Frame rewrite', category: 'arithmetic',
     summary: 'A forwarded frame is the stored one except in four places: the two MAC addresses, TTL − 1, and the checksum updated from the old one without summing the header again.',
     ports, symbol: { kind: 'box', label: 'REWRITE' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The state register, its table and the moves of a byte. */
+export const RT_CONTROL: ComponentDef = (() => {
+  const ports: PortDef[] = [bit('rxv', 'in'), bit('rxl', 'in'), bit('txr', 'in'), bus('act', 2, 'in'), bit('wend', 'in'), bit('rz', 'in'), bit('atend', 'in'), clk(),
+    bit('mv', 'out'), bit('rxdone', 'out'), bit('txmv', 'out'), bit('clr', 'out'), bit('rx', 'out'), bit('dec', 'out'), bit('walk', 'out'), bit('adj', 'out'), bit('tx', 'out'), bit('nr', 'out'), bus('state', 3, 'out')];
+  const b = new Builder(20, 16, 5), g = kit(b);
+  b.pins('rxv', 'rxl', 'txr', 'act', 'wend', 'rz', 'atend', 'clk');
+  const st = b.op(register(3), ['', g.konst(1, 1), 'clk'], 'state', 'st');
+  b.next();
+  const ctl = b.op(RT_CTL, [`${st}.q`, '', 'act', 'wend', 'rz', ''], 'control table', 'ctl');
+  b.next();
+  const mv = g.and(`${ctl}.rx`, 'rxv'), rxdone = g.and(mv, 'rxl'), txmv = g.and(`${ctl}.tx`, 'txr');
+  b.wire(rxdone, `${ctl}.rxdone`);
+  b.wire(g.and(txmv, 'atend'), `${ctl}.txdone`);
+  b.wire(`${ctl}.ns`, `${st}.d`);
+  b.next();
+  for (const [from, to] of [[mv, 'mv'], [rxdone, 'rxdone'], [txmv, 'txmv'], [`${ctl}.clr`, 'clr'], [`${ctl}.rx`, 'rx'], [`${ctl}.dec`, 'dec'], [`${ctl}.walk`, 'walk'], [`${ctl}.adj`, 'adj'], [`${ctl}.tx`, 'tx'], [`${ctl}.nr`, 'nr'], [`${st}.q`, 'state']]) b.wire(from, to);
+  return define({
+    id: 'rtcontrol', name: 'Fast path control', category: 'sequential',
+    summary: 'Five states in a register, the next one from a table, and when a byte moves: in while RX has valid, out while TX has ready.',
+    ports, symbol: { kind: 'box', label: 'CONTROL' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** One byte counter for both directions, the last byte's index, and what the position means. */
+export const RT_COUNT: ComponentDef = (() => {
+  const posOuts = ['mac', 'src', 'i12', 'i13', 'i14', 'i22', 'i24', 'i25', 'dst', 'hdr', 'i33'];
+  const ports: PortDef[] = [bit('mv', 'in'), bit('txmv', 'in'), bit('rxdone', 'in'), bit('clr', 'in'), clk(),
+    bus('cnt', BUF_K, 'out'), bit('atend', 'out'), bit('odd', 'out'), bit('macs', 'out'), ...posOuts.map((p) => bit(p, 'out')), bus('idx', 3, 'out')];
+  const b = new Builder(20, 16, 5), g = kit(b);
+  b.pins('mv', 'txmv', 'rxdone', 'clr', 'clk');
+  const cnt = b.op(register(BUF_K), ['', '', 'clk'], 'byte counter', 'cnt');
+  const len = b.op(register(BUF_K), [`${cnt}.q`, 'rxdone', 'clk'], 'last byte\'s index', 'len');
+  b.next();
+  const atEnd = b.op1(equal(BUF_K), [`${cnt}.q`, `${len}.q`], 'at the last byte?', 'atend');
+  const [lo6, hi5] = g.split(`${cnt}.q`, [6, BUF_K - 6]);
+  const [odd] = g.split(`${cnt}.q`, [1, BUF_K - 1]);
+  const pos = b.op(RT_POS, [lo6, g.not(anyOf(g, hi5, BUF_K - 6))], 'where in the frame', 'pos');
+  const inc = b.op1(incrementer(BUF_K), [`${cnt}.q`]);
+  b.next();
+  b.wire(g.gate(inc, BUF_K, g.not(g.or('rxdone', 'clr'))), `${cnt}.d`);
+  b.wire(g.or('mv', 'txmv', 'clr'), `${cnt}.en`);
+  b.next();
+  b.wire(`${cnt}.q`, 'cnt'); b.wire(atEnd, 'atend'); b.wire(odd, 'odd'); b.wire(`${pos}.idx`, 'idx'); b.wire(g.or(`${pos}.mac`, `${pos}.src`), 'macs');
+  for (const p of posOuts) b.wire(`${pos}.${p}`, p);
+  return define({
+    id: 'rtcount', name: 'Byte counter and position', category: 'sequential',
+    summary: 'One counter serves both directions: it addresses the packet buffer, and a table says what each position is, so no field needs a parser of its own.',
+    ports, symbol: { kind: 'box', label: 'COUNT' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** Who addresses the two table memories: the walk and the frame's bytes, or the slow path writing. */
+export const RT_ADDR: ComponentDef = (() => {
+  const ports: PortDef[] = [bus('n', TRIE_K, 'in'), bus('best', 4, 'in'), bus('idx', 3, 'in'), bit('mac', 'in'), bit('tx', 'in'), bit('adj', 'in'), bit('cfg_we', 'in'), bit('cfg_t', 'in'), bus('cfg_a', TRIE_K, 'in'), bus('cfg_d', 24, 'in'),
+    bus('ta', TRIE_K, 'out'), bit('twe', 'out'), bus('aa', ADJ_K, 'out'), bit('awe', 'out'), bus('ad', 8, 'out')];
+  const b = new Builder(20, 16, 5), g = kit(b);
+  b.pins('n', 'best', 'idx', 'mac', 'tx', 'adj', 'cfg_we', 'cfg_t', 'cfg_a', 'cfg_d');
+  const twe = g.and('cfg_we', g.not('cfg_t')), awe = g.and('cfg_we', 'cfg_t');
+  const [cfgA7] = g.split('cfg_a', [ADJ_K, TRIE_K - ADJ_K]);
+  const [cfgD8] = g.split('cfg_d', [8, 16]);
+  // next-hop address: entry 0 (our MAC) unless ADJ or the destination MAC going out
+  const hop = g.gate('best', 4, g.or('adj', g.and('tx', 'mac')));
+  const entry = g.mux(3, 'idx', g.konst(3, 6), 'adj');
+  b.next();
+  b.wire(g.mux(TRIE_K, 'n', 'cfg_a', twe, 'trie address'), 'ta');
+  b.wire(g.mux(ADJ_K, g.merge([entry, hop], [3, 4]), cfgA7, awe, 'next-hop address'), 'aa');
+  b.wire(twe, 'twe'); b.wire(awe, 'awe'); b.wire(cfgD8, 'ad');
+  return define({
+    id: 'rtaddr', name: 'Table addressing', category: 'gate',
+    summary: 'The trie is read at the walk\'s node. The next-hop table is read at entry 0, our MAC, except for the chosen hop\'s port and its MAC going out. A slow path writing takes either memory for that cycle.',
+    ports, symbol: { kind: 'box', label: 'ADDR' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** The frame's way out: its port, why, and whether it is rewritten. */
+export const RT_OUT: ComponentDef = (() => {
+  const ports: PortDef[] = [bus('adjd', 8, 'in'), bus('act', 2, 'in'), bus('why', 3, 'in'), bit('dec', 'in'), bit('nr', 'in'), bit('adj', 'in'), bit('clr', 'in'), clk(),
+    bus('port', 2, 'out'), bus('cause', 3, 'out'), bit('rw', 'out')];
+  const b = new Builder(20, 16, 5), g = kit(b);
+  b.pins('adjd', 'act', 'why', 'dec', 'nr', 'adj', 'clr', 'clk');
+  const [portIn] = g.split('adjd', [2, 6]);
+  const local = b.op1(equal(2), [portIn, g.konst(2, PORT_CPU)], 'our own address', 'local');
+  const punt = g.and('dec', b.op1(equal(2), ['act', g.konst(2, ACT_PUNT)]));
+  const toCpu = g.or(punt, 'nr');
+  b.next();
+  const port = b.op(register(2), [g.mux(2, portIn, g.konst(2, PORT_CPU), toCpu), g.or(toCpu, 'adj'), 'clk'], 'output port', 'port');
+  // the cause: DECIDE's, then "no route", "local" or "forwarded"
+  const later = g.mux(3, g.mux(3, g.konst(3, C_FORWARD), g.konst(3, C_LOCAL), local), g.konst(3, C_NO_ROUTE), 'nr');
+  const cause = b.op(register(3), [g.mux(3, later, 'why', 'dec'), g.or('dec', 'nr', 'adj'), 'clk'], 'why', 'cause');
+  const rw = b.op(DFF, ['', 'clk'], 'rewrite this frame', 'rwf');
+  b.wire(g.and(g.or(`${rw}.q`, g.and('adj', g.not(local))), g.not('clr')), `${rw}.d`);
+  b.next();
+  b.wire(`${port}.q`, 'port'); b.wire(`${cause}.q`, 'cause'); b.wire(`${rw}.q`, 'rw');
+  return define({
+    id: 'rtout', name: 'Way out', category: 'sequential',
+    summary: 'Port 3 is the slow path. A frame gets a real port and a rewrite only from the next-hop table, and only if that entry is not this router itself.',
+    ports, symbol: { kind: 'box', label: 'WAY OUT' },
     netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
   });
 })();
@@ -198,86 +303,34 @@ export function routerFastPath(trie?: ArrayLike<number>, adj?: ArrayLike<number>
   if (hit) return hit;
   const ports: PortDef[] = [bus('rxd', 8, 'in'), bit('rxv', 'in'), bit('rxl', 'in'), bit('txr', 'in'), bit('cfg_we', 'in'), bit('cfg_t', 'in'), bus('cfg_a', TRIE_K, 'in'), bus('cfg_d', 24, 'in'), clk(),
     bit('rxr', 'out'), bus('txd', 8, 'out'), bit('txv', 'out'), bit('txl', 'out'), bus('port', 2, 'out'), bus('cause', 3, 'out'), bus('state', 3, 'out')];
-  const b = new Builder(26, 22, 6), g = kit(b);
+  const b = new Builder(24, 18, 6);
   b.pins('rxd', 'rxv', 'rxl', 'txr', 'cfg_we', 'cfg_t', 'cfg_a', 'cfg_d', 'clk');
-
-  // column: control
-  const st = b.op(register(3), ['', g.konst(1, 1), 'clk'], 'state', 'st');
-  const ctl = b.op(RT_CTL, [`${st}.q`, '', '', '', '', ''], 'control', 'ctl');
-  const name = (x: string, n: string) => b.name(x, n, true);
-  name(`${ctl}.rx`, 'in RX'); name(`${ctl}.dec`, 'in DECIDE'); name(`${ctl}.walk`, 'in WALK'); name(`${ctl}.adj`, 'in ADJ'); name(`${ctl}.tx`, 'in TX'); name(`${ctl}.clr`, 'clear');
-  const mv = name(g.and(`${ctl}.rx`, 'rxv'), 'a byte moves in');
-  const rxdone = name(g.and(mv, 'rxl'), 'last byte in');
-  b.wire(`${ctl}.ns`, `${st}.d`);
-  b.wire(rxdone, `${ctl}.rxdone`);
-  b.next();
-
-  // column: the byte counter, shared by both directions, and the position it means
-  const cnt = b.op(register(BUF_K), ['', '', 'clk'], 'byte counter', 'cnt');
-  const len = b.op(register(BUF_K), [`${cnt}.q`, rxdone, 'clk'], 'last byte\'s index', 'len');
-  const atEnd = b.op1(equal(BUF_K), [`${cnt}.q`, `${len}.q`], 'at the last byte?', 'atend');
-  const [lo6, hi5] = g.split(`${cnt}.q`, [6, BUF_K - 6]);
-  const [odd] = g.split(`${cnt}.q`, [1, BUF_K - 1]);
-  const pos = b.op(RT_POS, [lo6, g.not(anyOf(g, hi5, BUF_K - 6))], 'where in the frame', 'pos');
-  const txmv = name(g.and(`${ctl}.tx`, 'txr'), 'a byte moves out');
-  const txdone = name(g.and(txmv, atEnd), 'last byte out');
-  b.wire(txdone, `${ctl}.txdone`);
-  const inc = b.op1(incrementer(BUF_K), [`${cnt}.q`]);
-  b.wire(g.gate(inc, BUF_K, g.not(g.or(rxdone, `${ctl}.clr`))), `${cnt}.d`);
-  b.wire(g.or(mv, txmv, `${ctl}.clr`), `${cnt}.en`);
-  b.next();
-
-  // column: the memories
-  const cfgTrie = name(g.and('cfg_we', g.not('cfg_t')), 'write a route');
-  const cfgAdj = name(g.and('cfg_we', 'cfg_t'), 'write a next hop');
-  const [cfgA7] = g.split('cfg_a', [ADJ_K, TRIE_K - ADJ_K]);
-  const [cfgD8] = g.split('cfg_d', [8, 16]);
-  const packet = b.op(bigRam(BUF_K, 8), [`${cnt}.q`, 'rxd', mv, 'clk'], 'packet buffer', 'buf');
   const trieRam = trie ? bigRamWithInit(TRIE_K, 24, padded(trie, 1 << TRIE_K)) : bigRam(TRIE_K, 24);
   const adjRam = adj ? bigRamWithInit(ADJ_K, 8, padded(adj, 1 << ADJ_K)) : bigRam(ADJ_K, 8);
-  const trieM = b.op(trieRam, ['', 'cfg_d', cfgTrie, 'clk'], 'routes (trie)', 'trie');
-  const adjM = b.op(adjRam, ['', cfgD8, cfgAdj, 'clk'], 'next hops', 'adj');
-  b.next();
 
-  // column: the blocks
-  const chk = b.op(RT_CHECK, ['rxd', mv, `${adjM}.dout`, odd, `${pos}.mac`, `${pos}.i12`, `${pos}.i13`, `${pos}.i14`, `${pos}.i22`, `${pos}.i24`, `${pos}.i25`, `${pos}.hdr`, `${pos}.i33`, `${ctl}.clr`, 'clk'], 'header checks', 'check');
-  const walk = b.op(RT_WALK, ['rxd', mv, `${pos}.dst`, `${ctl}.dec`, `${ctl}.walk`, `${trieM}.dout`, 'clk'], 'lookup', 'walk');
-  b.wire(`${chk}.act`, `${ctl}.act`);
-  b.wire(`${walk}.wend`, `${ctl}.wend`);
-  b.wire(`${walk}.rz`, `${ctl}.rz`);
-  b.wire(g.mux(TRIE_K, `${walk}.n`, 'cfg_a', cfgTrie, 'trie address'), `${trieM}.addr`);
-  // next-hop address: entry 0 (our MAC) unless ADJ or the destination MAC going out
-  const useHop = g.or(`${ctl}.adj`, g.and(`${ctl}.tx`, `${pos}.mac`));
-  const hopSel = g.gate(`${walk}.best`, 4, useHop);
-  const entry = g.mux(3, `${pos}.idx`, g.konst(3, 6), `${ctl}.adj`);
-  b.wire(g.mux(ADJ_K, g.merge([entry, hopSel], [3, 4]), cfgA7, cfgAdj, 'next-hop address'), `${adjM}.addr`);
-  b.next();
-
-  // column: what leaves
-  const [portIn] = g.split(`${adjM}.dout`, [2, 6]);
-  const local = name(b.op1(equal(2), [portIn, g.konst(2, PORT_CPU)]), 'our own address');
-  const nr = `${ctl}.nr`, punt = name(g.and(`${ctl}.dec`, b.op1(equal(2), [`${chk}.act`, g.konst(2, ACT_PUNT)])), 'to the slow path');
-  const toCpu = g.or(punt, nr);
-  const port = b.op(register(2), [g.mux(2, portIn, g.konst(2, PORT_CPU), toCpu), g.or(toCpu, `${ctl}.adj`), 'clk'], 'output port', 'port');
-  // the cause: DECIDE's, then "no route", "local" or "forwarded"
-  const later = g.mux(3, g.mux(3, g.konst(3, C_FORWARD), g.konst(3, C_LOCAL), local), g.konst(3, C_NO_ROUTE), nr);
-  const cause = b.op(register(3), [g.mux(3, later, `${chk}.cause`, `${ctl}.dec`), g.or(`${ctl}.dec`, nr, `${ctl}.adj`), 'clk'], 'why', 'cause');
-  const rw = b.op(DFF, ['', 'clk'], 'rewrite this frame', 'rw');
-  b.wire(g.and(g.or(`${rw}.q`, g.and(`${ctl}.adj`, g.not(local))), g.not(`${ctl}.clr`)), `${rw}.d`);
-  const rew = b.op(RT_REWRITE, [`${packet}.dout`, `${adjM}.dout`, `${chk}.ttl`, `${chk}.chk`, `${rw}.q`, g.or(`${pos}.mac`, `${pos}.src`), `${pos}.i22`, `${pos}.i24`, `${pos}.i25`, `${ctl}.tx`], 'frame going out', 'rewrite');
-  b.next();
-  b.wire(`${ctl}.rx`, 'rxr');
-  b.wire(`${rew}.y`, 'txd');
-  b.wire(`${ctl}.tx`, 'txv');
-  b.wire(g.and(`${ctl}.tx`, atEnd), 'txl');
-  b.wire(`${port}.q`, 'port');
-  b.wire(`${cause}.q`, 'cause');
-  b.wire(`${st}.q`, 'state');
+  // a bank of labelled control signals; the data path is drawn as wires, left to right
+  const ctl = b.op(RT_CONTROL, ['rxv', 'rxl', 'txr', 'check.act', 'walk.wend', 'walk.rz', 'count.atend', 'clk'], 'control', 'control');
+  b.op(RT_COUNT, [`${ctl}.mv`, `${ctl}.txmv`, `${ctl}.rxdone`, `${ctl}.clr`, 'clk'], 'byte counter, position', 'count');
+  const addr = b.op(RT_ADDR, ['walk.n', 'walk.best', 'count.idx', 'count.mac', `${ctl}.tx`, `${ctl}.adj`, 'cfg_we', 'cfg_t', 'cfg_a', 'cfg_d'], 'table addressing', 'addr');
+  const packet = b.op(bigRam(BUF_K, 8), ['count.cnt', 'rxd', `${ctl}.mv`, 'clk'], 'packet buffer', 'buf');
+  const trieM = b.op(trieRam, [`${addr}.ta`, 'cfg_d', `${addr}.twe`, 'clk'], 'routes (trie)', 'trie');
+  const adjM = b.op(adjRam, [`${addr}.aa`, `${addr}.ad`, `${addr}.awe`, 'clk'], 'next hops', 'adj');
+  const chk = b.op(RT_CHECK, ['rxd', `${ctl}.mv`, `${adjM}.dout`, 'count.odd', 'count.mac', 'count.i12', 'count.i13', 'count.i14', 'count.i22', 'count.i24', 'count.i25', 'count.hdr', 'count.i33', `${ctl}.clr`, 'clk'], 'header checks', 'check');
+  b.op(RT_WALK, ['rxd', `${ctl}.mv`, 'count.dst', `${ctl}.dec`, `${ctl}.walk`, `${trieM}.dout`, 'clk'], 'trie walk', 'walk');
+  const way = b.op(RT_OUT, [`${adjM}.dout`, `${chk}.act`, `${chk}.cause`, `${ctl}.dec`, `${ctl}.nr`, `${ctl}.adj`, `${ctl}.clr`, 'clk'], 'way out', 'way');
+  const rew = b.op(RT_REWRITE, [`${packet}.dout`, `${adjM}.dout`, `${chk}.ttl`, `${chk}.chk`, `${way}.rw`, 'count.macs', 'count.i22', 'count.i24', 'count.i25', `${ctl}.tx`, 'count.atend'], 'frame going out', 'rewrite');
+  b.wire(`${ctl}.rx`, 'rxr'); b.wire(`${rew}.y`, 'txd'); b.wire(`${ctl}.tx`, 'txv'); b.wire(`${rew}.last`, 'txl');
+  b.wire(`${way}.port`, 'port'); b.wire(`${way}.cause`, 'cause'); b.wire(`${ctl}.state`, 'state');
+  // three columns: who decides, where things are kept, what is done to the frame
+  const X = [26, 74, 122];
+  const at: Record<string, [number, number]> = { control: [X[0], 2], count: [X[0], 46], addr: [X[1], 2], buf: [X[1], 38], trie: [X[1], 54], adj: [X[1], 70], check: [X[2], 2], walk: [X[2], 42], way: [X[2], 66], rewrite: [X[2], 90] };
+  for (const i of b.instances) i.at = at[i.name];
+  const R = 166;
   const d = define({
     id, name: 'Router fast path', category: 'memory',
     summary: 'A frame in on the stream, into the packet buffer; checks as it passes; a trie walk, one read a level; out with new MACs, TTL − 1 and an updated checksum. Everything else goes up to the slow path unchanged.',
     ports, symbol: { kind: 'box', label: 'FAST PATH' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: sidePins(ports, R, 4), instances: b.instances, nets: b.nets() }),
   });
   cache.set(id, d);
   return d;
