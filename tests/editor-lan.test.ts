@@ -1,25 +1,56 @@
-// Examples ▸ Two computers on a switch: assembles, resolves from names alone, draws without lint warnings, and runs on the cycle engine:
-// A pings, B pongs, the switch learns both stations and floods once. The NIC and switch readers of the property sections are checked on it.
+// Examples ▸ Two computers on a switch: two RV32I bus cores with a NIC each (chapter 50), a four-port learning switch (chapter 49) between
+// them. Compiled from its document it draws without lint warnings, places only parts a fresh page load resolves, runs on the cycle engine:
+// A pings, B pongs, three times; the switch floods the first frame, learns both stations and forwards the rest to one port. The property
+// sections' readers (editor/commparts.ts nicView, switchTable) are checked against the same run.
+
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
-import { performance } from 'node:perf_hooks';
+import { nicView, switchTable } from '../src/editor/commparts';
+import { resolveCpu } from '../src/editor/cpu';
 import { LAN_PING_SOURCE, LAN_PONG_SOURCE, LAN_ROUNDS } from '../src/editor/examplenet';
 import { addExample, EXAMPLES } from '../src/editor/examples';
+import { fpgaExport } from '../src/editor/fpga';
 import { consoleText, type ConsoleState, ioNodes, ioState } from '../src/editor/ioparts';
 import { UserLibrary } from '../src/editor/library';
-import { emptyWorkspace } from '../src/editor/model';
+import { deadParts, lintChip, openInputs } from '../src/editor/lint';
+import { emptyWorkspace, type PartRef, polyline } from '../src/editor/model';
+import { partDef } from '../src/editor/parts';
 import { EditorSim } from '../src/editor/runtime';
+import { registry } from '../src/lib/define';
+import { regenerable } from '../src/lib/resolve';
 import { assemble } from '../src/riscv/asm';
 import type { DualSim } from '../src/sim/dualsim';
-import { breathe } from './setup';
-import { nicView, switchTable } from '../src/editor/commparts';
-import { pack } from '../src/sim/values';
 import type { HierNode } from '../src/sim/flatten';
+import { pack } from '../src/sim/values';
+import { breathe } from './setup';
 
+const atLoad = new Set(registry.keys());
 const EX = EXAMPLES.find((e) => e.id === 'twocomputers-switch')!;
 
+function open() {
+  const { ws, id } = addExample(emptyWorkspace(), EX);
+  const lib = new UserLibrary(ws);
+  const es = new EditorSim({ debounceMs: 0 });
+  es.update(lib.compiled(id)!, ws.chips[id].pins);
+  return { ws, id, lib, es };
+}
+
+const cons = (es: EditorSim): [string, string] => {
+  const text = (name: string) => {
+    const n = ioNodes(es.sim!.design.root).find((x) => x.info.kind === 'console' && x.node.path[x.node.path.length - 1] === name)!;
+    return consoleText(ioState(es.sim!, n.node) as ConsoleState);
+  };
+  return [text('conA'), text('conB')];
+};
+
+const find = (n: HierNode, ok: (id: string) => boolean): HierNode | null => {
+  if (ok(n.def.id)) return n;
+  for (const c of n.children?.values() ?? []) { const r = find(c, ok); if (r) return r; }
+  return null;
+};
+
 describe('Examples ▸ Two computers on a switch', () => {
-  it('assembles both programs', () => {
+  it('assembles both programs into the boot ROMs', () => {
     for (const src of [LAN_PING_SOURCE, LAN_PONG_SOURCE]) {
       const a = assemble(src);
       expect(a.errors).toEqual([]);
@@ -27,39 +58,63 @@ describe('Examples ▸ Two computers on a switch', () => {
     }
   });
 
-  it('measure', async () => {
-    const t0 = performance.now();
-    const { ws, id } = addExample(emptyWorkspace(), EX);
-    const lib = new UserLibrary(ws);
-    const c = lib.compiled(id)!;
-    expect(c.diags).toEqual([]);
-    const t1 = performance.now();
-    const es = new EditorSim({ debounceMs: 0 });
-    es.update(c, ws.chips[id].pins);
-    const t2 = performance.now();
-    const text = (name: string) => {
-      const n = ioNodes(es.sim!.design.root).find((x) => x.info.kind === 'console' && x.node.path[x.node.path.length - 1] === name)!;
-      return consoleText(ioState(es.sim!, n.node) as ConsoleState);
-    };
-    let last = performance.now();
-    for (let i = 0; i < 20; i++) {
-      es.runCycles(2000, () => false, 1e9);
-      await breathe();
-      const n = performance.now();
-      console.log(`cycles ${es.cycles} ${(2000 / ((n - last) / 1000)).toFixed(0)}/s engine ${(es.sim as DualSim).engine} A=${JSON.stringify(text('conA'))} B=${JSON.stringify(text('conB'))}`);
-      last = n;
-      if (text('conA').length >= 5 * LAN_ROUNDS) break;
+  it('places only parts a fresh page load resolves, and draws without lint warnings or errors', () => {
+    const { ws, lib } = open();
+    expect(Object.keys(ws.chips).length).toBe(5); // Main, the two computers, the switch, the top
+    for (const doc of Object.values(ws.chips)) {
+      const lost = doc.parts.flatMap((p) => ('lib' in p.ref && !atLoad.has(p.ref.lib) && !regenerable(p.ref.lib) ? [p.ref.lib] : []));
+      expect(lost, doc.name).toEqual([]);
+      const c = lib.compiled(doc.id)!;
+      expect(c.diags, doc.name).toEqual([]);
+      const defOf = (p: { ref: PartRef }) => {
+        const d = partDef(p.ref, (x) => lib.defOf(x));
+        return !d || 'error' in d ? undefined : d;
+      };
+      const polys = new Map(doc.wires.flatMap((w) => { const q = polyline(doc, w, defOf); return q ? [[w.id, q] as const] : []; }));
+      expect(lintChip(doc, c, polys).diags, doc.name).toEqual([]);
+      expect(deadParts(doc, c), doc.name).toEqual([]);
+      expect(openInputs(c), doc.name).toEqual([]);
     }
-    const find = (n: HierNode, id: (s: string) => boolean): HierNode | null => { if (id(n.def.id)) return n; for (const c of n.children?.values() ?? []) { const r = find(c, id); if (r) return r; } return null; };
-    const root = es.sim!.design.root;
-    for (const nm of ['a', 'b']) { const nic = find(root.children!.get(nm)!, (i) => i === 'nic')!; console.log(nm, JSON.stringify(nicView(es.sim!, nic))); }
+  });
+
+  it('is not taken for a CPU the drawer can follow', () => {
+    const { ws, id } = open();
+    expect(resolveCpu(ws.chips[id], ws.chips)).toBeNull();
+  });
+
+  it('A pings three times, B pongs, the switch floods once and learns both stations; the readers see it all', async () => {
+    const { es } = open();
+    const t0 = performance.now();
+    const want = 'pong\n'.repeat(LAN_ROUNDS);
+    while (cons(es)[0] !== want && es.cycles < 60000) { es.runCycles(1000, () => false, 1e9); await breathe(); }
+    const clocks = es.cycles, secs = (performance.now() - t0) / 1000;
+    console.log(`two computers on a switch: ${clocks} clocks in ${secs.toFixed(1)} s = ${(clocks / secs).toFixed(0)} clocks/s (vitest, node)`);
+    expect(cons(es)).toEqual([want, 'ping\n'.repeat(LAN_ROUNDS)]);
+    expect((es.sim as DualSim).engine).toBe('cycle');
+    const sim = es.sim!, root = sim.design.root;
+    // the NICs: enabled, their addresses and rings, three frames each way
+    for (const [name, mac] of [['a', '02:00:00:00:00:0a'], ['b', '02:00:00:00:00:0b']] as const) {
+      const v = nicView(sim, find(root.children!.get(name)!, (i) => i === 'nic')!)!;
+      expect(v).toMatchObject({ en: 1, promisc: 0, mac, rxbase: 0x1000, txbase: 0x1040, rxHead: LAN_ROUNDS, txHead: LAN_ROUNDS });
+      expect(v.status & 3).toBe(3); // a frame received, a frame sent
+    }
+    // the switch: two stations learned on ports 0 and 1; the first ping flooded (ports 2 and 3 saw one frame each), the rest forwarded
     const sw = find(root, (i) => i.startsWith('ethswitch_'))!;
-    console.log('table', JSON.stringify(switchTable(es.sim as DualSim, sw)));
-    console.log('counters', ['learned', 'evicted', 'flooded', 'filtered', 'frames0', 'frames1', 'frames2', 'frames3', 'drops0', 'drops1', 'bad0', 'bad1'].map((p) => p + '=' + pack(es.sim!.getBits(sw.ports[p]))).join(' '));
-    console.log('probe', find(root.children!.get('a')!, (i) => i === 'nic')!.path.join('/'), sw.path.join('/'), JSON.stringify([...Object.keys(sw.ports)].slice(0, 5)), (es.sim as DualSim).engine, (es.sim as DualSim).time);
-    console.log('probe2', pack(es.sim!.getBits(root.children!.get('a')!.ports.conWe)), pack(es.sim!.getBits(root.children!.get('sw')!.ports.A_rxd)), pack(es.sim!.getBits(sw.ports.clk)), JSON.stringify(Array.from(es.sim!.getBits(sw.ports.learned))));
-    es.sim!.settle();
-    console.log('probe3', pack(es.sim!.getBits(root.children!.get('a')!.ports.conWe)), pack(es.sim!.getBits(sw.ports.learned)), JSON.stringify(Array.from(es.sim!.getBits(root.children!.get('a')!.ports.conData))), JSON.stringify(Array.from(es.sim!.getBits(root.children!.get('a')!.ports.txd))), JSON.stringify(Array.from(es.sim!.getBits(root.children!.get('b')!.ports.txd))), (es.sim as any).whyNot);
-    console.log('compile', (t1 - t0).toFixed(0), 'ms; update', (t2 - t1).toFixed(0), 'ms');
-  }, 300000);
+    const rows = switchTable(sim, sw)!;
+    expect(rows.map((r) => [r.mac, r.port, r.live])).toEqual(expect.arrayContaining([['02:00:00:00:00:0a', 0, true], ['02:00:00:00:00:0b', 1, true]]));
+    expect(rows.length).toBe(2);
+    const n = (p: string) => pack(sim.getBits(sw.ports[p]));
+    expect([n('learned'), n('evicted'), n('flooded'), n('filtered')]).toEqual([2, 0, 1, 0]);
+    expect([n('frames0'), n('frames1'), n('frames2'), n('frames3')]).toEqual([LAN_ROUNDS, LAN_ROUNDS, 1, 1]);
+    expect([n('drops0'), n('drops1'), n('bad0'), n('bad1')]).toEqual([0, 0, 0, 0]);
+  }, 120000);
+
+  it('the FPGA export of the switch and a computer lists real gates: nothing is called a model', () => {
+    const { lib, ws } = open();
+    for (const doc of Object.values(ws.chips).filter((d) => /Switch|Computer/.test(d.name))) {
+      const x = fpgaExport(lib.compiled(doc.id)!.def, 'lan');
+      expect(x.ok, doc.name).toBe(true);
+      expect(x.issues.filter((i) => /model/i.test(i.text)), doc.name).toEqual([]);
+    }
+  }, 60000);
 });

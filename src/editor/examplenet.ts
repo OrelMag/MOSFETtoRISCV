@@ -207,7 +207,7 @@ export function lanSwitchChip(id: string, name: string): ChipDoc {
   const x1 = 30, xs = x1 + rw + 26;
   s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
   (['A', 'B'] as const).forEach((c, i) => {
-    s.pin(`${c}_txd`, 'in', [2, 8 + 6 * i]); s.pin(`${c}_txen`, 'in', [2, 14 + 6 * i]);
+    s.pin(`${c}_txd`, 'in', [2, 8 + 12 * i]); s.pin(`${c}_txen`, 'in', [2, 14 + 12 * i]);
   });
   s.part('sw', SW, [xs, 4], { label: '4-port switch' });
   const xe = xs + sw + 26;
