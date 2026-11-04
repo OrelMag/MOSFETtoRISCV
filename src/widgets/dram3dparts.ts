@@ -47,7 +47,7 @@ export function dramAnchors(s: DramSnap): Anchor[] {
   const r = s.open >= 0 ? s.open : 0;
   return [
     { text: `word line, row ${r}${s.open >= 0 ? ' (up)' : ''}`, p: [X_OF(0) - 7, 0.3, Z_OF(r) + 4.4], side: 'l', n: left },
-    { text: 'bit line: 4x the capacitance', p: [X_OF(1), PAD + HMAX + 1, BL_Z], side: 't', n: up },
+    { text: 'bit line: 4x the capacitance', p: [X_OF(1), PAD + HMAX * 0.62, BL_Z], side: 't', n: up },
     { text: 'VDD/2', p: [X_OF(0) - 7, PAD + HMAX / 2, Z_OF(0) + 7], side: 'l', n: left, minor: true },
   ];
 }
