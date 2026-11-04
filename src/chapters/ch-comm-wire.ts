@@ -108,7 +108,7 @@ export const chWire: Chapter = {
       },
       challenge: {
         kind: 'quiz', question: 'A wire is made twice as long, and the driver is made four times as wide. The wire\'s own term, 0.38 · R<sub>w</sub> · C<sub>w</sub>, changes by:',
-        options: ['×4: the width of the driver does not enter it', '×2', '×½'],
+        options: ['×4', '×2', '×½'],
         answer: 0,
         why: ['', 'That is the driver\'s term when the driver is unchanged. R<sub>w</sub> and C<sub>w</sub> each double, and the product quadruples.', 'The driver is no part of this term.'],
         explain: 'Both Rw and Cw are proportional to length, so Rw · Cw is proportional to length squared. The driver\'s width only changes the other term.',
