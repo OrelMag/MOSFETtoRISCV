@@ -86,7 +86,7 @@ export function decodeDns(b: readonly number[]): DnsMessage {
 
 // ---- the zones ------------------------------------------------------------------------------------------------------------------------
 
-export const TTL_ROOT = 172_800, TTL_TLD = 86_400, TTL_A = 300;
+export const TTL_ROOT = 172_800, TTL_TLD = 172_800, TTL_A = 300;
 export const SITE = 'www.quillon.example';
 
 interface Server { host: number; zone: string; delegations: { zone: string; ns: string; nsHost: number; ttl: number }[]; records: Rr[] }

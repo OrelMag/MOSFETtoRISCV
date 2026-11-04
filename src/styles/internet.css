@@ -1,0 +1,30 @@
+/* ---------- Chapter 53, The internet path (src/widgets/internet.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.in-scroll { overflow-x: auto; }
+.in-map { max-width: 760px; min-width: 520px; }
+.in-as rect { fill: hsl(var(--as-h) 60% 50% / 0.1); stroke: hsl(var(--as-h) 50% 50% / 0.5); stroke-width: 1; }
+.in-as text { font: 500 10.5px var(--font-sans, sans-serif); fill: var(--text-2); }
+.in-map .in-rname { font: 700 11.5px var(--font-mono); }
+.in-map .rt-router { cursor: pointer; }
+.in-map .rt-router:focus-visible circle { stroke: var(--accent); stroke-width: 4; }
+.in-map .rt-router:focus { outline: none; }
+.in-hex { font: 500 11.5px/1.5 var(--font-mono); color: var(--text); overflow-wrap: anywhere; min-height: 1.5em; }
+.in-step { width: 100%; text-align: left; background: none; cursor: pointer; font: inherit; }
+.in-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.in-as-name { min-width: 112px; color: var(--text-2); }
+.in-table { border-collapse: collapse; width: 100%; font-size: 12.5px; color: var(--text); }
+.in-table th { font-weight: 600; color: var(--text-2); text-align: left; padding: 3px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.in-table td { padding: 2px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.in-table .r { text-align: right; font-family: var(--font-mono); }
+.in-table code { font: 600 12px var(--font-mono); }
+.in-table tbody tr[tabindex] { cursor: pointer; }
+.in-table tr.on td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.in-table tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.in-hops { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0; }
+.in-hop { padding: 1px 5px; font: 600 11.5px var(--font-mono); color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; }
+.in-hop.done { color: var(--text); border-color: var(--good); }
+.in-hop.now { background: color-mix(in srgb, var(--good) 26%, var(--surface-2)); }
+.in-bar { display: flex; height: 22px; border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+.in-seg { min-width: 2px; flex-basis: 0; }
+.in-dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 2px; }
+.in-seg0 { background: var(--probe-0, #3a7); } .in-seg1 { background: var(--probe-1, #37a); } .in-seg2 { background: var(--probe-2, #a37); } .in-seg3 { background: var(--probe-3, #a73); } .in-seg4 { background: var(--probe-4, #73a); }
+@media (pointer: coarse) { .in-step, .in-table tbody tr[tabindex] td { min-height: 40px; height: 40px; } }

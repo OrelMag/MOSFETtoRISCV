@@ -35,7 +35,7 @@ export class BgpNet {
   private readonly ann: Announced[];
   private settled = false;
 
-  constructor(private readonly rel: readonly AsRelation[], private readonly o: BgpOptions = {}) {
+  constructor(private readonly rel: readonly AsRelation[], o: BgpOptions = {}) {
     this.policy = o.policy ?? true;
     this.ann = Array.from({ length: AS_COUNT }, (_, i) => { const prefix = ((10 << 24) | ((i + 1) << 16)) >>> 0; return { key: keyOf(prefix, 16), prefix, len: 16, origin: i }; });
     if (o.hijack) this.ann.push({ key: keyOf(o.hijack.prefix, o.hijack.len), prefix: o.hijack.prefix, len: o.hijack.len, origin: o.hijack.as });

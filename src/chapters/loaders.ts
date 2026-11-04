@@ -60,6 +60,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "switch": () => import('./ch-comm-switch').then((m) => m.chSwitch),
   "network": () => import('./ch-comm-net').then((m) => m.chNetwork),
   "router": () => import('./ch-comm-router').then((m) => m.chRouter),
+  "path": () => import('./ch-comm-path').then((m) => m.chPath),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),
