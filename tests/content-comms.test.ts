@@ -89,3 +89,31 @@ describe('chapter 40 content', () => {
     expect(text(chExchange)).toContain('(K = 9)');
   });
 });
+
+describe('audit fixes', () => {
+  it('the counter settles in at most the typed relay steps over 16 pulses', async () => {
+    const { flatten } = await import('../src/sim/flatten');
+    const { SwitchSim } = await import('../src/sim/switchsim');
+    const sim = new SwitchSim(flatten(DIAL_COUNTER, { mode: 'switch' }));
+    let rise = 0, fall = 0;
+    for (let i = 0; i < 16; i++) {
+      sim.setInput('pulse', 1); let t0 = sim.time; sim.settle(); rise = Math.max(rise, sim.time - t0);
+      sim.setInput('pulse', 0); t0 = sim.time; sim.settle(); fall = Math.max(fall, sim.time - t0);
+    }
+    expect([rise, fall]).toEqual([2, 6]);
+    expect(text(chExchange)).toContain('at most 2 relay steps and one that falls in at most 6');
+  });
+  it('back to back, 8N1 tolerates -5.0 % slow, the sweep agrees, and isolated results are unchanged', async () => {
+    const { toleranceClosedForm, tolerance, ITA2_START_STOP } = await import('../src/comm/startstop');
+    expect(toleranceClosedForm(UART_8N1, 0.5, true).slow).toBeCloseTo(0.05, 9);
+    expect(toleranceClosedForm(UART_8N1).slow).toBeCloseTo(0.5 / 9, 9);
+    expect(tolerance(UART_8N1, { backToBack: true }).slow).toBeCloseTo(0.05, 3);
+    expect(toleranceClosedForm(ITA2_START_STOP, 0.5, true)).toEqual(toleranceClosedForm(ITA2_START_STOP));
+    expect(tolerance(ITA2_START_STOP, { backToBack: true }).slow).toBeCloseTo(0.5 / 6, 3);
+  });
+  it('+11.3 % on the teleprinter frame reads 10000 as 00000 with the stop fine', async () => {
+    const { receive, ITA2_START_STOP } = await import('../src/comm/startstop');
+    const r = receive(ITA2_START_STOP, 0b10000, { err: 0.113 });
+    expect([r.word, r.stopOk]).toEqual([0, true]);
+  });
+});
