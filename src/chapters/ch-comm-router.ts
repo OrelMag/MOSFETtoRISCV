@@ -49,7 +49,7 @@ export const chRouter: Chapter = {
   builds: ['ethernet', 'switch'],
   recap: {
     keep: [
-      `A router forwards on one field, the destination, by the longest matching prefix. On the way through it changes four things: destination MAC, source MAC, TTL − 1, and the checksum, updated from the old one by adding 0x${TTL_DELTA.toString(16).toUpperCase()} with end-around carry (RFC 1624), without summing the header again.`,
+      `A router forwards on one field, the destination, by the longest matching prefix. On the way through it changes four things: destination MAC, source MAC, TTL − 1, and the checksum, updated from the old one by adding 0x${TTL_DELTA.toString(16).toUpperCase()} to its complement with end-around carry (RFC 1624), without summing the header again.`,
       `A binary trie makes a lookup one memory read per bit used: at most 33 reads, whatever the table's size. The memory holds ${n0(TRIE_NODES)} nodes of 24 bits here. A CAM answers in one cycle and pays in gates: ${n0(N.cam)} NANDs for 16 entries of 32 bits, and those match exactly, without the mask a prefix needs.`,
       `The fast path is ${n0(LOGIC)} NANDs of logic beside ${n0(MEM.trie + MEM.buf + MEM.adj)} of memory. A ${FRAME_60}-byte frame takes ${CY60} cycles through it, worst case ${CY_WORST}, while the same frame takes ${n0(WIRE_CYCLES)} cycles to cross a ${BYTE_CYCLES}-cycle-a-byte link: that gap is why one engine can serve about ${PORTS} ports.`,
       'Anything the fast path cannot finish goes up unchanged to the slow path, a processor: TTL expired, no route, an address of its own, ARP, options. A bad checksum or another machine\'s MAC is dropped, with no reply.',
