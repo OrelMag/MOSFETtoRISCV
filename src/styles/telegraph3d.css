@@ -1,0 +1,13 @@
+/* The telegraph key and sounder (widgets/telegraph3dview.ts): materials, scoped under .m3d */
+.m3d {
+  --tg-board: light-dark(#cdb98f, #6b5a3e);
+  --tg-wood: light-dark(#8a5a35, #a8734a);
+  --tg-brass: light-dark(#b8862b, #e0b04a);
+  --tg-coil: light-dark(#b9773c, #c98a4f);
+  --tg-glow: light-dark(#d9d2c0, #c9c3b2);
+  --tg-wire: light-dark(#4a4f5c, #aab2c4);
+}
+.tg-btns { flex-wrap: wrap; margin-top: 8px; }
+.tg-key { font-weight: 700; min-width: 150px; min-height: 44px; touch-action: none; user-select: none; }
+.tg-key:active { background: var(--accent-soft); }
+@media (pointer: coarse) { .tg-key { min-height: 52px; } }
