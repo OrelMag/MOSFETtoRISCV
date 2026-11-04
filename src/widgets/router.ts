@@ -279,7 +279,7 @@ export function distVecWidget(): Widget {
     n.paint({
       down: dv.down,
       onLink: (a, b) => { const k = a < b ? `${a}-${b}` : `${b}-${a}`; if (dv.down.has(k)) dv.repair(a, b); else dv.fail(a, b); history = []; paint(); },
-      label: (i) => (i === dest ? 'destination' : dv.dist[i][dest] >= INFINITY ? '∞' : `${dv.dist[i][dest]} via ${dv.via[i][dest] < 0 ? '–' : t.names[dv.via[i][dest]]}`),
+      label: (i) => (i === dest ? 'to here' : dv.dist[i][dest] >= INFINITY ? '∞' : `${dv.dist[i][dest]} via ${dv.via[i][dest] < 0 ? '–' : t.names[dv.via[i][dest]]}`),
       node: (i) => (i === dest ? 'dst' : dv.dist[i][dest] >= INFINITY ? 'lost' : ''),
     });
     tbl.replaceChildren(h('div', { class: 'rt-route' }, h('code', null, 'To'), ...t.names.map((nm, j) => h('button', { type: 'button', class: `rt-to${j === dest ? ' on' : ''}`, 'aria-pressed': String(j === dest), onclick: () => { dest = j; history = []; const k = t.names.indexOf(nm); paint(); (tbl.querySelectorAll('button')[k] as HTMLButtonElement | undefined)?.focus({ preventScroll: true }); } }, nm))));
