@@ -166,7 +166,7 @@ const weightsOf = (name: string): number[] => {
 export function undetectedWidget(): Widget {
   let lp = -3;
   const codes: { id: string; name: string; n: number; cls: string }[] = [{ id: 'parity', name: 'parity bit', n: 17, cls: 'c1' }, { id: 'crc8', name: 'CRC-8', n: 24, cls: 'c2' }, { id: 'crc16', name: 'CRC-16', n: 32, cls: 'c3' }];
-  const pl = logPlot(560, 280, -6, -0.3, -20, 0, 'bit error rate p', 'corrupted words accepted', 'Share of corrupted 16-bit words that a check accepts, against bit error rate', true, 4);
+  const pl = logPlot(560, 280, -6, -0.3, -20, 0, 'bit error rate p', 'share accepted', 'Share of corrupted 16-bit words that a check accepts, against bit error rate', true, 4);
   const marker = pl.svg.appendChild(s('line', { class: 'bound', y1: 12, y2: 244 }));
   const pts = logSpace(-6, -0.3, 60);
   codes.forEach((c) => {
