@@ -2,7 +2,7 @@
 
 import { h } from '../../ui/dom';
 
-export const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+export { reducedMotion } from '../../ui/motion';
 
 /** requestAnimationFrame loop calling `fn(dtMs)` while `host` is in the document; `fn` returns false to stop. */
 export function frames(host: HTMLElement, fn: (dt: number) => boolean | void): void {

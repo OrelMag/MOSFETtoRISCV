@@ -9,6 +9,7 @@
 // shown as its own group shows it here, so purist mode and greying out still apply.
 
 import { libraryItems } from '../lib/catalog';
+import { reducedMotion } from '../ui/motion';
 import { h, icon } from '../ui/dom';
 import { sampleReaderRef } from './cardparts';
 import { folderGroups } from './folders';
@@ -666,7 +667,7 @@ export class PalettePanel {
     for (let d = b.parentElement?.closest('details'); d; d = d.parentElement?.closest('details')) {
       (d as HTMLDetailsElement).open = true;
     }
-    b.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    b.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
     b.classList.remove('sb-flash');
     void b.offsetWidth; // restart the animation
     b.classList.add('sb-flash');

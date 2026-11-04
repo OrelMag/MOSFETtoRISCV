@@ -5,6 +5,7 @@
 // #/campaign/play/<node>.
 
 import { setPageTitle } from '../pagetitle';
+import { reducedMotion } from '../motion';
 import { groupDigits } from '../../sim/numfmt';
 import '../../styles/campaign.css';
 // The level screen's chips, bars and diagram frame, shared by the full codex entry.
@@ -181,7 +182,7 @@ export class CampaignPage implements Page {
     const sc = this.main.querySelector<HTMLElement>('.cp-map-scroll');
     const node = sc?.querySelector<SVGGraphicsElement>('.cp-node.sel');
     if (!sc || !node) return;
-    const behavior: ScrollBehavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    const behavior: ScrollBehavior = reducedMotion() ? 'auto' : 'smooth';
     const r = node.getBoundingClientRect(), v = sc.getBoundingClientRect();
     if (r.top < v.top || r.bottom > v.bottom || r.left < v.left || r.right > v.right) {
       sc.scrollTo({ top: sc.scrollTop + r.top - v.top - (v.height - r.height) / 2, left: sc.scrollLeft + r.left - v.left - (v.width - r.width) / 2, behavior });

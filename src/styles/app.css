@@ -121,6 +121,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+/* Wire thickness and grid: a label and its choices (view options menu); pressed, not checked, so no tick over the words */
+.pal-menu .pal-choice { display: flex; align-items: center; gap: 4px; padding: 6px 10px; }
+.pal-menu .pal-choice > span { flex: 1; min-width: 0; }
+.pal-menu .pal-choice .btn { padding: 4px 8px; }
+.pal-menu .pal-reset { justify-content: center; color: var(--text-2); font-size: 12.5px; }
 /* Text size row: label, A−, value, A+ (view options menu) */
 .pal-menu .pal-size { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
 .pal-menu .pal-size > span:first-child { flex: 1; min-width: 0; }
@@ -932,8 +937,18 @@ pre.code .num { color: var(--w1); }
 
 /* ---------- schematic ---------- */
 svg.schematic { font-family: var(--font-ui); user-select: none; }
+/* Wire thickness (View options) scales whatever the look draws: vivid.css builds its --wire-k on --wire-user too. */
+:root { --wire-user: 1; --wire-k: var(--wire-user); }
+:root[data-wires='thin'] { --wire-user: 0.7; }
+:root[data-wires='thick'] { --wire-user: 1.5; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
+/* View options: the rects stay either way, they take the canvas's clicks. Lines only once a unit is worth drawing. */
+.grid-line { display: none; fill: none; stroke: var(--grid); stroke-width: 0.03; }
+.grid-line.major { stroke-width: 0.07; }
+:root[data-grid] .grid-dot { display: none; }
+:root[data-grid='lines'] .grid-line { display: inline; }
+:root[data-grid='lines'] svg.schematic.lg.lg-h-tiny .grid-line:not(.major) { display: none; }
 .wire { fill: none; stroke: var(--w0); stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
 .flow-front { pointer-events: none; }
 .flow-front.v1 { filter: drop-shadow(0 0 0.5px var(--w1)); }
@@ -957,7 +972,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .wire-flow.faded, .flow-tokens.faded, :root[data-wireflow='off'] :is(.wire-flow, .flow-tokens) { display: none; }
 @keyframes wire-flow { from { stroke-dashoffset: var(--flow-from); } to { stroke-dashoffset: var(--flow-to); } }
 @media (prefers-reduced-motion: reduce) { .wire-flow, .flow-tokens { display: none; } }
-@media (prefers-reduced-motion: no-preference) { :root:not([data-wireflow='off']) .bus-label.riding { display: none; } }
+:root[data-reduce-motion] :is(.wire-flow, .flow-tokens) { display: none; }
+@media (prefers-reduced-motion: no-preference) { :root:not([data-wireflow='off']):not([data-reduce-motion]) .bus-label.riding { display: none; } }
 .dot { fill: var(--w0); }
 .dot.v1 { fill: var(--w1); }
 .dot.vx { fill: var(--wx); }
@@ -1528,6 +1544,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+:root[data-reduce-motion] *, :root[data-reduce-motion] *::before, :root[data-reduce-motion] *::after { animation: none !important; transition: none !important; }
 
 /* ---------- CPU panel, assembler ---------- */
 .cpu-panel { width: 330px; top: 12px; bottom: auto; max-height: calc(100% - 24px); font-size: 12.5px; }

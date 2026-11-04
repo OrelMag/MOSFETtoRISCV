@@ -266,7 +266,7 @@ export class SchematicView {
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
-      <circle cx="0" cy="0" r="0.06" class="grid-dot"/></pattern>`;
+      <circle cx="0" cy="0" r="0.06" class="grid-dot"/><path d="M1,0 H0 V1" class="grid-line"/></pattern>`;
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
     const wiresG = s('g', { class: 'wires' });
