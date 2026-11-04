@@ -4,7 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { I2cController, I2cTarget, READ, START, STOP, WRITE } from '../src/comm/i2c';
-import { i2cController, i2cTarget } from '../src/lib/i2c';
+import { i2cBus, i2cController, i2cTarget } from '../src/lib/i2c';
+import { flatten } from '../src/sim/flatten';
+import { SwitchSim } from '../src/sim/switchsim';
+import { pack } from '../src/sim/values';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -113,4 +116,48 @@ describe('seeded random sessions', () => {
       await session(script, { targets: [{ adr, stretch: rnd(4) }], limit: 6000 });
     }
   });
+});
+
+describe('the bus at switch level (pull-up resistors, open-drain NMOS, every NAND four transistors)', () => {
+  /** Run scripts on the switch-level bus and on the models over an ideal wired AND; the lines must agree on every clock. */
+  async function compare(scripts: Cmd[][], targets: { adr: number; stretch?: number }[], cycles: number) {
+    const def = i2cBus(scripts.length, targets);
+    const s = new SwitchSim(flatten(def, { mode: 'switch' }));
+    const put = (v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) s.setInput(k, x); s.settle(); };
+    const get = (p: string) => pack(s.getBits(s.design.root.ports[p]));
+    const mc = scripts.map(() => new I2cController()), mt = targets.map(() => new I2cTarget());
+    const idx = scripts.map(() => 0);
+    let sda = 1, scl = 1;
+    const acks: number[][] = scripts.map(() => []);
+    for (let c = 0; c < cycles; c++) {
+      const rst = c < 2 ? 1 : 0;
+      const ins: Record<string, number> = { rst };
+      const pulls = { sda: [] as number[], scl: [] as number[] };
+      mc.forEach((m, k) => {
+        let go = 0, cmd = 0, din = 0;
+        if (!rst && m.out.ready && idx[k] < scripts[k].length && !(m.lost && scripts[k][idx[k]][0] !== START)) { go = 1; [cmd, din] = scripts[k][idx[k]++]; }
+        if (go && cmd !== START && scripts[k][idx[k] - 2]?.[0] === WRITE) acks[k].push(m.out.ack);
+        Object.assign(ins, { [`go${k}`]: go, [`cmd${k}`]: cmd, [`din${k}`]: din });
+        m.step({ rst, go, cmd, din, sda_i: sda, scl_i: scl });
+        pulls.sda.push(m.out.sda_o); pulls.scl.push(m.out.scl_o);
+      });
+      mt.forEach((m, t) => { m.step({ rst, sda_i: sda, scl_i: scl, adr: targets[t].adr, stretch: targets[t].stretch ?? 0 }); pulls.sda.push(m.out.sda_o); pulls.scl.push(m.out.scl_o); });
+      sda = pulls.sda.some((x) => x) ? 0 : 1; scl = pulls.scl.some((x) => x) ? 0 : 1;
+      put({ ...ins, clk: 0 }); put({ clk: 1 }); put({ clk: 0 });
+      if (c >= 2) { expect(get('sda'), `sda @${c}`).toBe(sda); expect(get('scl'), `scl @${c}`).toBe(scl); }
+      mc.forEach((m, k) => { expect(get(`lost${k}`), `lost${k} @${c}`).toBe(m.lost); expect(get(`ready${k}`)).toBe(m.out.ready); });
+      if (c % 10 === 0) await yieldTick();
+    }
+    return { mc, mt };
+  }
+  it('a write frame: the lines at the pins equal the ideal wired AND on every clock, and the target holds the byte', async () => {
+    const { mt } = await compare([[[START, 0], addrW(0x50), [WRITE, 2], [WRITE, 0x6b], [STOP, 0]]], [{ adr: 0x50 }], 262);
+    expect(mt[0].mem[2]).toBe(0x6b);
+  }, 120000);
+  it('two controllers start together on the switch-level bus: the one with the higher address loses in the first bit that differs', async () => {
+    const sc = (a: number): Cmd[] => [[START, 0], addrW(a), [WRITE, 0], [WRITE, 0x3c], [STOP, 0]];
+    const { mc, mt } = await compare([sc(0x50), sc(0x52)], [{ adr: 0x50 }], 262);
+    expect(mc.map((m) => m.lost)).toEqual([0, 1]);
+    expect(mt[0].mem[0]).toBe(0x3c);
+  }, 240000);
 });
