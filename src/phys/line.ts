@@ -466,6 +466,36 @@ export interface ChannelSpec {
   de?: number;
   /** Samples per bit in the waveform. */
   spu?: number;
+  /** Identical single poles in cascade (default 1): 6 dB per octave each past the corner. One pole gives PAM4 no edge over NRZ; two or more (a lossy trace) do. */
+  poles?: number;
+  /** Receive equalizer 1, a CTLE whose zero cancels the channel's pole and whose own pole sits at `ctle` × bandwidth (1 = none): the pair is a single pole at the higher bandwidth. */
+  ctle?: number;
+  /** Receive equalizer 2, a decision-feedback equalizer with this many taps: each removes one post-cursor of the bits already decided (assumed right). */
+  dfe?: number;
+}
+
+/** One sample step through the cascade of poles held in `y` (each a first-order low-pass of the one before): the last one's value. */
+function cascade(y: Float64Array, x: number, k: number): number {
+  for (let p = 0; p < y.length; p++) { y[p] += (x - y[p]) * k; x = y[p]; }
+  return x;
+}
+
+/** The unit-interval samples a bit's pulse response is built from: transmit FFE taps (1 − de/2, −de/2), the channel's pole (the CTLE moves it to ctle × bandwidth). */
+export function pulseResponse(ch: ChannelSpec, bits: number): Float64Array {
+  const spu = ch.spu ?? 40, ui = 1000 / ch.rate, tau = 1000 / (2 * Math.PI * ch.bandwidth * (ch.ctle ?? 1)), de = ch.de ?? 0;
+  const k = 1 - Math.exp(-(ui / spu) / tau), out = new Float64Array(bits * spu);
+  const y = new Float64Array(ch.poles ?? 1);
+  for (let i = 0; i < bits; i++) {
+    const target = i === 0 ? 1 - de / 2 : i === 1 ? -de / 2 : 0;
+    for (let j = 0; j < spu; j++) { out[i * spu + j] = cascade(y, target, k); }
+  }
+  return out;
+}
+
+/** The CTLE's noise gain, taken at Nyquist: |H(j·π·rate)| = √(1 + (fN / bw)²) / √(1 + (fN / (m · bw))²). A model choice: real noise is shaped by the whole front end. */
+export function ctleNoiseGain(ch: ChannelSpec): number {
+  const m = ch.ctle ?? 1, fn = ch.rate / 2;
+  return Math.sqrt(1 + (fn / ch.bandwidth) ** 2) / Math.sqrt(1 + (fn / (m * ch.bandwidth)) ** 2);
 }
 
 export interface EyeResult {
@@ -493,15 +523,24 @@ export interface EyeResult {
  * dropped from the front so the start-up does not count.
  */
 export function eye(bits: ArrayLike<number>, ch: ChannelSpec, skip = 20): EyeResult {
-  const spu = ch.spu ?? 40, ui = 1000 / ch.rate, tau = 1000 / (2 * Math.PI * ch.bandwidth), de = ch.de ?? 0;
+  const spu = ch.spu ?? 40, ui = 1000 / ch.rate, tau = 1000 / (2 * Math.PI * ch.bandwidth * (ch.ctle ?? 1)), de = ch.de ?? 0;
   const k = 1 - Math.exp(-(ui / spu) / tau);
   const wave = new Float64Array(bits.length * spu);
-  let y = -1;
+  const y = new Float64Array(ch.poles ?? 1).fill(-1);
   for (let i = 0; i < bits.length; i++) {
     const d = bits[i] ? 1 : -1, p = i ? (bits[i - 1] ? 1 : -1) : -1;
     // de-emphasis: a bit equal to the previous one is sent at (1 − de) of the swing, a transition at full swing
     const target = d === p ? d * (1 - de) : d;
-    for (let j = 0; j < spu; j++) { y += (target - y) * k; wave[i * spu + j] = y; }
+    for (let j = 0; j < spu; j++) wave[i * spu + j] = cascade(y, target, k);
+  }
+  if (ch.dfe) {
+    // each tap subtracts the pulse response of an earlier, decided bit at the same phase
+    const hp = pulseResponse(ch, ch.dfe + 2), x = (i: number) => (bits[i] ? 1 : -1), src = wave.slice();
+    for (let i = ch.dfe; i < bits.length; i++) for (let j = 0; j < spu; j++) {
+      let c = 0;
+      for (let t = 1; t <= ch.dfe; t++) c += x(i - t) * hp[t * spu + j];
+      wave[i * spu + j] = src[i * spu + j] - c;
+    }
   }
   const lowOnes = new Float64Array(spu).fill(Infinity), highZeros = new Float64Array(spu).fill(-Infinity);
   for (let i = skip; i < bits.length; i++) for (let p = 0; p < spu; p++) {
@@ -536,3 +575,52 @@ export function minBandwidth(rate: number, min = 1, de = 0): number {
   }
   return hi;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// PAM4: two bits a symbol, four levels, a third of the NRZ eye each at the same swing, half the symbol rate
+
+/** Gray-coded PAM4 levels in the ±1 swing: bit pairs 00, 01, 11, 10 map to −1, −⅓, +⅓, +1. */
+export const PAM4_LEVELS = [-1, -1 / 3, 1 / 3, 1];
+export const PAM4_GRAY = [0, 1, 3, 2];
+
+/** Bits to PAM4 symbols (first bit the most significant): the level of each pair. */
+export function pam4Symbols(bits: ArrayLike<number>): Float64Array {
+  const n = bits.length >> 1, out = new Float64Array(n);
+  for (let i = 0; i < n; i++) out[i] = PAM4_LEVELS[PAM4_GRAY.indexOf((bits[2 * i] << 1) | bits[2 * i + 1])];
+  return out;
+}
+
+export interface EyePam {
+  /** Symbol period (ps), samples per symbol, the waveform (symbols × spu). */
+  ui: number; spu: number; wave: Float64Array;
+  /** Best sampling phase, and the vertical opening of each of the three eyes there (lowest sample of the upper level minus the highest of the lower). */
+  phase: number; openings: number[]; opening: number;
+}
+
+/** The eye of a multilevel signal: `rate` is the symbol rate (Gbaud). The pole and the transmit FFE act as in eye(). */
+export function eyePam(symbols: ArrayLike<number>, levels: number[], ch: ChannelSpec, skip = 20): EyePam {
+  const spu = ch.spu ?? 40, ui = 1000 / ch.rate, tau = 1000 / (2 * Math.PI * ch.bandwidth * (ch.ctle ?? 1)), de = ch.de ?? 0;
+  const k = 1 - Math.exp(-(ui / spu) / tau), wave = new Float64Array(symbols.length * spu);
+  const y = new Float64Array(ch.poles ?? 1).fill(levels[0]);
+  for (let i = 0; i < symbols.length; i++) {
+    const target = symbols[i] * (1 - de / 2) - (i ? symbols[i - 1] : levels[0]) * (de / 2);
+    for (let j = 0; j < spu; j++) wave[i * spu + j] = cascade(y, target, k);
+  }
+  const M = levels.length, lo = Array.from({ length: M }, () => new Float64Array(spu).fill(Infinity)), hi = Array.from({ length: M }, () => new Float64Array(spu).fill(-Infinity));
+  for (let i = skip; i < symbols.length; i++) {
+    const l = levels.findIndex((v) => Math.abs(v - symbols[i]) < 1e-9);
+    for (let p = 0; p < spu; p++) { const x = wave[i * spu + p]; lo[l][p] = Math.min(lo[l][p], x); hi[l][p] = Math.max(hi[l][p], x); }
+  }
+  let best = -Infinity, phase = 0, bestOpen: number[] = [];
+  for (let p = 0; p < spu; p++) {
+    const open = Array.from({ length: M - 1 }, (_, l) => lo[l + 1][p] - hi[l][p]), m = Math.min(...open);
+    if (m > best) { best = m; phase = p; bestOpen = open; }
+  }
+  return { ui, spu, wave, phase, openings: bestOpen, opening: best };
+}
+
+/** Gray-coded PAM4 bit error rate for an eye opened `opening` (every eye the same) and Gaussian noise `sigma`: symbol error (3/2) · Q(half / σ), one bit in a symbol error. */
+export const pam4Ber = (opening: number, sigma: number): number => (opening <= 0 ? 0.5 : 0.75 * berOf(opening / 2, sigma));
+
+/** The penalty of four levels in dB at equal swing: the eye is a third of the NRZ eye, 20 · log10 3. */
+export const PAM4_PENALTY_DB = 20 * Math.log10(3);

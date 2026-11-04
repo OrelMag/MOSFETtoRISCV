@@ -35,6 +35,8 @@ import { ls189With } from './ttl';
 import { sandboxBus } from './axi';
 import { asyncFifo, BIN2GRAY, GRAY2BIN, syncN } from './sync';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
+import { crcNext, crcTag, crcUnit } from './crc';
+import { CRC32_REFLECTED } from '../comm/crc';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 // Single parts the sandbox palette and examples place by id (registered on import).
 import './switchparts';
@@ -208,6 +210,8 @@ export const families: Family[] = [
   nBit('parity', 'Parity', 'gate', [3, 4, 8, 16, 32], 8, (n) => `parity${n}`, parity),
   { id: 'hamenc', name: 'Hamming SEC-DED encoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamenc${p['data bits']}`, make: (p) => hammingEnc(p['data bits']) },
   { id: 'hamdec', name: 'Hamming SEC-DED decoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamdec${p['data bits']}`, make: (p) => hammingDec(p['data bits']) },
+  { id: 'crcnext', name: 'CRC-32 next state', category: 'gate', params: [count('bits a step', [1, 8], 8), { name: 'terms', values: [0, 1], initial: 1, label: (v) => (v ? 'shared' : 'separate') }], key: (p) => `next${crcTag(32, CRC32_REFLECTED, p['bits a step'], p.terms === 1)}`, make: (p) => crcNext(32, CRC32_REFLECTED, p['bits a step'], p.terms === 1) },
+  { id: 'crcunit', name: 'CRC-32 generator', category: 'sequential', params: [count('bits a clock', [1, 8], 1)], key: (p) => `unit${crcTag(32, CRC32_REFLECTED, p['bits a clock'], true)}`, make: (p) => crcUnit(32, CRC32_REFLECTED, p['bits a clock']) },
   { id: 'ecc', name: 'SEC-DED round trip', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `ecc${p['data bits']}`, make: (p) => eccChannel(p['data bits']) },
   { id: 'and', name: 'Wide AND', category: 'gate', params: [count('inputs', [3, 4, 5, 6, 8], 4)], key: (p) => `and${p.inputs}`, make: (p) => andN(p.inputs) },
   { id: 'or', name: 'Wide OR', category: 'gate', params: [count('inputs', [3, 4, 8, 16, 32], 4)], key: (p) => `or${p.inputs}`, make: (p) => orN(p.inputs) },

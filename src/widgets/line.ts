@@ -18,7 +18,7 @@ import '../styles/line.css';
 // ---------------------------------------------------------------------------------------------------------------------
 // A small plot: fixed axes, a layer that is redrawn
 
-interface PlotOpts {
+export interface PlotOpts {
   W?: number; H?: number;
   /** x runs from 0 to x[1]; setX moves the end and redraws the ticks. */
   x: [number, number]; y: [number, number];
@@ -26,9 +26,9 @@ interface PlotOpts {
   xLabel: string; yLabel: string; aria: string;
   xFmt?: (v: number) => string; yFmt?: (v: number) => string;
 }
-interface Plot { el: SVGSVGElement; X(v: number): number; Y(v: number): number; layer: SVGGElement; clear(): void; setX(max: number): void; setY(lo: number, hi: number): void; xMax: number; x0: number; x1: number }
+export interface Plot { el: SVGSVGElement; X(v: number): number; Y(v: number): number; layer: SVGGElement; clear(): void; setX(max: number): void; setY(lo: number, hi: number): void; xMax: number; x0: number; x1: number }
 
-const num = (v: number, d = 1) => (Math.abs(v) < 1e-9 ? '0' : v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''));
+export const num = (v: number, d = 1) => (Math.abs(v) < 1e-9 ? '0' : v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''));
 
 /** A "nice" tick step (1, 2, 5 × 10^k) giving about n ticks on [0, max]. */
 function tickStep(max: number, n = 4): number {
@@ -36,7 +36,7 @@ function tickStep(max: number, n = 4): number {
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
 }
 
-function plotOf(o: PlotOpts): Plot {
+export function plotOf(o: PlotOpts): Plot {
   const W = o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
   let xMax = o.x[1], yLo = o.y[0], yHi = o.y[1];
   const X = (v: number) => m.l + (v / xMax) * (W - m.l - m.r);
@@ -74,27 +74,27 @@ function plotOf(o: PlotOpts): Plot {
   return p;
 }
 
-const line = (p: Plot, xs: number[], ys: number[], cls: string) => {
+export const line = (p: Plot, xs: number[], ys: number[], cls: string) => {
   let d = '';
   for (let i = 0; i < xs.length; i++) d += `${i ? 'L' : 'M'}${p.X(xs[i]).toFixed(1)},${p.Y(ys[i]).toFixed(1)}`;
   p.layer.append(s('path', { d, class: `ln-s ${cls}` }));
 };
 /** A horizontal marker across the plot, labelled at its right end. */
-const hline = (p: Plot, v: number, label: string, cls = 'th') => {
+export const hline = (p: Plot, v: number, label: string, cls = 'th') => {
   p.layer.append(s('line', { x1: p.x0, x2: p.x1, y1: p.Y(v), y2: p.Y(v), class: `ln-h ${cls}` }),
     s('text', { x: p.x1 - 4, y: p.Y(v) - 4, 'text-anchor': 'end', class: `ln-hl ${cls}` }, label));
 };
 
-const mkChips = (n: number) => {
+export const mkChips = (n: number) => {
   const cells = Array.from({ length: n }, () => { const b = h('b'), sp = h('span'); return { b, sp, el: h('div', null, b, sp) }; });
   return { cells, el: h('div', { class: 'mos-chips' }, ...cells.map((c) => c.el)), set(i: number, b: string, sp: string, cls = '') { cells[i].b.textContent = b; cells[i].b.className = cls; cells[i].sp.textContent = sp; } };
 };
 
 const ns = (v: number) => (v < 0.1 ? `${(v * 1000).toFixed(0)} ps` : `${v.toFixed(2)} ns`);
-const ps = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} ns` : `${v.toFixed(0)} ps`);
+export const ps = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} ns` : `${v.toFixed(0)} ps`);
 const ohm = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} kΩ` : `${v.toFixed(0)} Ω`);
 const fj = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} pJ` : `${v.toFixed(0)} fJ`);
-const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ? b.toFixed(2) : b.toExponential(0).replace('e-', ' × 10⁻'));
+export const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ? b.toFixed(2) : b.toExponential(0).replace('e-', ' × 10⁻'));
 
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. The driver and its load

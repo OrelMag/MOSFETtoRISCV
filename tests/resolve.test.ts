@@ -24,9 +24,9 @@ describe('resolve', () => {
     const idx = defIndex();
     expect(idx.get('nand')).toBeDefined();
     expect(idx.size).toBe(new Set(reachableDefs().map((d) => d.id)).size);
-    expect(idx.has('rca13')).toBe(false);
-    rca(13);
-    expect(defIndex().get('rca13')).toBe(rca(13));
+    expect(idx.has('rca29')).toBe(false);
+    rca(29);
+    expect(defIndex().get('rca29')).toBe(rca(29));
   });
 
   it('lists the library by category', () => {
