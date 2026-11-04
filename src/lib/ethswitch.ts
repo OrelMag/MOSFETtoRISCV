@@ -381,10 +381,25 @@ const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: bo
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const I4 = [0, 1, 2, 3];
 
+/** The id of the switch with these options (what a saved document names: the sandbox's Switch part resolves it from the id alone). */
+export function switchId(opts: Partial<SwitchOpts> = {}): string {
+  const o = withDefaults(opts);
+  return `ethswitch_${o.cellK}${o.cells === 4 ? '' : `_${o.cells}`}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}_${o.tableK}_${o.tickLog2}`;
+}
+
+/** The options an id names (null when it names none the switch can be built with). */
+export function switchOptsOf(id: string): SwitchOpts | null {
+  const m = id.match(/^ethswitch_(d+)(?:_(d+))?([vf])([cs])_(d+)_(d+)$/);
+  if (!m) return null;
+  const o: SwitchOpts = { cellK: +m[1], cells: m[2] ? +m[2] : 4, voq: m[3] === 'v', cut: m[4] === 'c', tableK: +m[5], tickLog2: +m[6] };
+  const ok = o.cellK >= 5 && o.cellK <= 11 && [2, 4, 8, 16].includes(o.cells) && o.tableK >= 2 && o.tableK <= 7 && o.tickLog2 >= 1 && o.tickLog2 <= 8;
+  return ok && switchId(o) === id ? o : null;
+}
+
 /** The four-port switch, hand placed: input buffers on the left, the table's port and the table, the crossbar, the output ports on the right. */
 export function ethSwitch(opts: Partial<SwitchOpts> = {}): ComponentDef {
   const o = withDefaults(opts);
-  const id = `ethswitch_${o.cellK}${o.cells === 4 ? '' : `_${o.cells}`}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}_${o.tableK}_${o.tickLog2}`;
+  const id = switchId(o);
   return memo(id, () => {
     const IN = inputBuffer(o), OUT = outputPort(), XB = crossbar(), TP = tablePort(), TB = macTable(o.tableK, o.tickLog2);
     const gi = symbolGeom(IN), go = symbolGeom(OUT), gx = symbolGeom(XB), gt = symbolGeom(TP), gb = symbolGeom(TB);
