@@ -3,7 +3,6 @@
 
 import { describe, expect, it } from 'vitest';
 import { chErrors } from '../src/chapters/ch-comm-errors';
-import { chAppendix6502 } from '../src/chapters/ch-6502';
 import { chapterById, chapters } from '../src/chapters';
 import { aOf, fullWindow, rttOf, utilization } from '../src/comm/arq';
 import { CRC16, CRC32_POLY, CRC32_REFLECTED, CRC32_RESIDUE, CRC8, crc32, polyRem, weightDistribution } from '../src/comm/crc';
@@ -36,14 +35,12 @@ describe('chapter 47 typed numbers', () => {
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeGreaterThan(3.5);
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeLessThan(4.5);
   });
-  it('is chapter 47, fourteen steps, between the clocks chapter and the appendices', () => {
+  it('is chapter 47, fourteen steps, after what it builds on, with the appendices after every numbered chapter', () => {
     expect(chErrors.num).toBe(47);
     expect(chErrors.steps).toHaveLength(14);
     expect(chapterById('errors')).toBe(chErrors);
     for (const id of chErrors.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(47);
-    expect(chAppendix6502.num).toBe(48);
     const last = Math.max(...chapters.filter((c) => !c.appendix).map((c) => c.num));
-    expect(last).toBe(47);
     for (const c of chapters.filter((x) => x.appendix)) expect(c.num).toBeGreaterThan(last);
     expect(chErrors.steps.every((s) => !!s.scene !== !!s.widget && s.challenge)).toBe(true);
     expect(chErrors.recap!.check).toHaveLength(3);

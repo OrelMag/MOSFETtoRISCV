@@ -15,6 +15,7 @@ import { symbolGeom } from '../sim/geometry';
 import { Builder } from './builder';
 import { define } from './define';
 import { OR } from './gates';
+import { nic as nicDef } from './nic';
 import { AXI_UART } from './uart';
 import { systemCpu } from './system';
 
@@ -40,6 +41,8 @@ export interface SocOptions {
   cardFeed?: number;
   /** A UART at 0x3000_0000 (AXI_UART, instance 'uart'): pins uartRx and uartTx, its interrupt ORed into the DMA's. */
   uart?: boolean;
+  /** A network interface at 0x7000_0000 (lib/nic.ts, instance 'nic'; comm/nic.ts is its model): a third bus master. Pins rxd, crs in; txd, txen out; its interrupt is ORed into the CPU's. */
+  nic?: boolean;
 }
 
 /** The screen's side in pixels. */
@@ -48,20 +51,21 @@ export const SOC_SCREEN = 64;
 /** The golden model's devices for a computer built with these options (bus/model.ts BusModel). */
 export const socDevices = (o: SocOptions) => ({
   dramK: o.dram ? BUS_DRAM.k : undefined, screen: o.screen ? SOC_SCREEN : undefined, keys: !!o.keys,
-  cards: o.cards ? { items: deckWords(o.cards), feed: o.cardFeed ?? CARD_FEED } : undefined, uart: o.uart ? {} : undefined,
+  cards: o.cards ? { items: deckWords(o.cards), feed: o.cardFeed ?? CARD_FEED } : undefined, uart: o.uart ? {} : undefined, nic: o.nic ? {} : undefined,
 });
 
 const cache = new Map<string, ComponentDef>();
 
 export function busComputer(program: number[], flashImage: ArrayLike<number> = [], o: SocOptions = {}): ComponentDef {
   const imemK = o.imemK ?? 7, ramK = o.ramK ?? 12, wait = o.ramWait ?? 0;
+  if (o.nic && o.cards) throw new Error("the NIC and the card reader both sit at 0x7000_0000 (the system CPU takes every address with bit 31 set for its console and timer, so the free nibbles are few)");
   const CPU = systemCpu(program, { imemK, bus: true }), FL = axiFlash(flashImage);
   const RD = o.cards ? deckReader(o.cards, 'word', { feed: o.cardFeed ?? CARD_FEED }) : null;
-  const id = `soc_${CPU.id}_${FL.id}_${ramK}_${wait}${o.dram ? '_dram' : ''}${o.screen ? '_scr' : ''}${o.keys ? '_kbd' : ''}${RD ? `_${RD.id}` : ''}${o.uart ? '_uart' : ''}`;
+  const id = `soc_${CPU.id}_${FL.id}_${ramK}_${wait}${o.dram ? '_dram' : ''}${o.screen ? '_scr' : ''}${o.keys ? '_kbd' : ''}${RD ? `_${RD.id}` : ''}${o.uart ? '_uart' : ''}${o.nic ? '_nic' : ''}`;
   let d = cache.get(id);
   if (d) return d;
   const b = new Builder(10, 24);
-  b.pins('clk', 'switches', ...(o.uart ? ['uartRx'] : []));
+  b.pins('clk', 'switches', ...(o.uart ? ['uartRx'] : []), ...(o.nic ? ['rxd', 'crs'] : []));
   const cpu = b.op(CPU, [], 'CPU', 'cpu');
   const dma = b.op(DMA_ENGINE, [], 'DMA', 'dma');
   b.next();
@@ -75,13 +79,14 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
     ...(o.keys ? [[MAP.keys, () => b.op(AXI_KEYS, [], 'keyboard port', 'keys')] as [number, () => string]] : []),
     ...(RD ? [[MAP.cards, () => b.op(AXI_CARDS, [], 'card reader port', 'cardport')] as [number, () => string]] : []),
     ...(o.uart ? [[MAP.uart, () => b.op(AXI_UART, [], 'UART', 'uart')] as [number, () => string]] : []),
+    ...(o.nic ? [[MAP.nic, () => b.op(nicDef(), [], 'NIC', 'nic')] as [number, () => string]] : []),
     [0xf, () => b.op(AXI_DEFAULT, [], 'default', 'def')],
   ];
-  const bx = b.op(axiBus(2, map.map(([c]) => c)), [], 'interconnect', 'bus');
+  const bx = b.op(axiBus(o.nic ? 3 : 2, map.map(([c]) => c)), [], 'interconnect', 'bus');
   b.next();
   const slaves = map.map(([, make]) => make());
-  for (const s of M_OUT) { b.wire(`${cpu}.${s}`, `${bx}.m0_${s}`); b.wire(`${dma}.m_${s}`, `${bx}.m1_${s}`); }
-  for (const s of M_IN) { b.wire(`${bx}.m0_${s}`, `${cpu}.${s}`); b.wire(`${bx}.m1_${s}`, `${dma}.m_${s}`); }
+  for (const s of M_OUT) { b.wire(`${cpu}.${s}`, `${bx}.m0_${s}`); b.wire(`${dma}.m_${s}`, `${bx}.m1_${s}`); if (o.nic) b.wire('nic.m_' + s, `${bx}.m2_${s}`); }
+  for (const s of M_IN) { b.wire(`${bx}.m0_${s}`, `${cpu}.${s}`); b.wire(`${bx}.m1_${s}`, `${dma}.m_${s}`); if (o.nic) b.wire(`${bx}.m2_${s}`, 'nic.m_' + s); }
   slaves.forEach((sl, i) => {
     for (const s of M_OUT) b.wire(`${bx}.s${i}_${s}`, `${sl}.${s}`);
     for (const s of M_IN) b.wire(`${sl}.${s}`, `${bx}.s${i}_${s}`);
@@ -98,19 +103,21 @@ export function busComputer(program: number[], flashImage: ArrayLike<number> = [
     for (const p of ['data', 'ready', 'empty']) b.wire(`${rd}.${p}`, `cardport.${p}`);
   }
   b.wire('switches', `${cpu}.switches`);
-  if (o.uart) {
-    b.wire(b.op1(OR, [`${dma}.irq`, 'uart.irq'], 'DMA or UART'), `${cpu}.irq`);
-    b.wire('uartRx', 'uart.rx'); b.wire('uart.tx', 'uartTx');
-  } else b.wire(`${dma}.irq`, `${cpu}.irq`);
+  if (o.nic) { b.wire('rxd', 'nic.rxd'); b.wire('crs', 'nic.crs'); b.wire('nic.txd', 'txd'); b.wire('nic.txen', 'txen'); }
+  if (o.uart) b.wire('uartRx', 'uart.rx'), b.wire('uart.tx', 'uartTx');
+  let irq = `${dma}.irq`;
+  if (o.uart) irq = b.op1(OR, [irq, 'uart.irq'], 'DMA or UART');
+  if (o.nic) irq = b.op1(OR, [irq, 'nic.irq'], o.uart ? '… or NIC' : 'DMA or NIC');
+  b.wire(irq, `${cpu}.irq`);
   for (const p of ['pcOut', 'consoleData', 'consoleValid', 'leds', 'retire']) b.wire(`${cpu}.${p}`, p);
   b.wire(`${dma}.busy`, 'dmaBusy');
   const R = b.right, cg = symbolGeom(CPU), cpuY = b.instances.find((i) => i.name === cpu)!.at![1];
   d = define({
-    id, name: `Computer on a bus (CPU, DMA, RAM, flash${o.dram ? ', DRAM' : ''}${o.screen ? ', screen' : ''}${o.keys ? ', keyboard' : ''}${RD ? ', card reader' : ''}${o.uart ? ', UART' : ''})`, category: 'cpu',
-    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.${o.dram ? ' A DRAM (chapter 36\'s controller) at 0x2000_0000.' : ''}${o.screen ? ` A ${SOC_SCREEN} × ${SOC_SCREEN} screen (a byte a pixel) at 0x5000_0000.` : ''}${o.keys ? ' A keyboard at 0x6000_0000 (+0 the oldest key, taken when read; +4 status).' : ''}${RD ? ` A card reader at 0x7000_0000 holding a deck of ${o.cards!.cards.length} cards (+0 status: bit 0 a card waits, bit 1 the hopper is empty; +4 the card's word, taken when read).` : ''}`,
-    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('retire', 'out'), bit('dmaBusy', 'out'), ...(o.uart ? [bit('uartRx', 'in'), bit('uartTx', 'out')] : [])],
+    id, name: `Computer on a bus (CPU, DMA, RAM, flash${o.dram ? ', DRAM' : ''}${o.screen ? ', screen' : ''}${o.keys ? ', keyboard' : ''}${RD ? ', card reader' : ''}${o.uart ? ', UART' : ''}${o.nic ? ', NIC' : ''})`, category: 'cpu',
+    summary: `The system CPU and a DMA engine share one bus to a ${4 * 2 ** ramK}-byte RAM at 0, a flash at 0x1000_0000 and the DMA's registers at 0x4000_0000. The boot ROM (${4 * 2 ** imemK} bytes) holds the first instructions; everything else is fetched over the bus. The DMA's done interrupt is the CPU's external interrupt.${o.dram ? ' A DRAM (chapter 36\'s controller) at 0x2000_0000.' : ''}${o.screen ? ` A ${SOC_SCREEN} × ${SOC_SCREEN} screen (a byte a pixel) at 0x5000_0000.` : ''}${o.keys ? ' A keyboard at 0x6000_0000 (+0 the oldest key, taken when read; +4 status).' : ''}${RD ? ` A card reader at 0x7000_0000 holding a deck of ${o.cards!.cards.length} cards (+0 status: bit 0 a card waits, bit 1 the hopper is empty; +4 the card's word, taken when read).` : ''}${o.nic ? ' A network interface (chapter 50) at 0x7000_0000: registers as a slave, descriptor rings and frame buffers in RAM as a third bus master.' : ''}`,
+    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bit('retire', 'out'), bit('dmaBusy', 'out'), ...(o.uart ? [bit('uartRx', 'in'), bit('uartTx', 'out')] : []), ...(o.nic ? [bit('rxd', 'in'), bit('crs', 'in'), bit('txd', 'out'), bit('txen', 'out')] : [])],
     symbol: { kind: 'box', label: 'COMPUTER' },
-    netlist: () => ({ pins: { clk: [0, cpuY + cg.ports.clk.pos[1]], switches: [0, cpuY + cg.ports.switches.pos[1]], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19], ...(o.uart ? { uartRx: [0, cpuY + cg.ports.switches.pos[1] + 16], uartTx: [R, 22] } : {}) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { clk: [0, cpuY + cg.ports.clk.pos[1]], switches: [0, cpuY + cg.ports.switches.pos[1]], pcOut: [R, 4], consoleData: [R, 7], consoleValid: [R, 10], leds: [R, 13], retire: [R, 16], dmaBusy: [R, 19], ...(o.uart ? { uartRx: [0, cpuY + cg.ports.switches.pos[1] + 16], uartTx: [R, 22] } : {}), ...(o.nic ? { rxd: [0, cpuY + cg.ports.switches.pos[1] + 19], crs: [0, cpuY + cg.ports.switches.pos[1] + 22], txd: [R, 25], txen: [R, 28] } : {}) }, instances: b.instances, nets: b.nets() }),
   });
   cache.set(id, d);
   return d;

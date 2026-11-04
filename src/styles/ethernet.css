@@ -1,0 +1,37 @@
+/* Chapter 48: Ethernet. Colours are the theme's tokens (probe colours for the frame's fields), so both themes are covered. */
+.eth-hex { display: grid; gap: 2px; margin: 4px 0; font: 12px var(--font-mono); overflow-x: auto; }
+.eth-row { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.eth-off { color: var(--muted); width: 3.2em; flex: none; }
+.eth-b { padding: 1px 4px; border-radius: 4px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); }
+.eth-b.f-pre, .eth-sw.f-pre { background: color-mix(in srgb, var(--muted) 22%, var(--surface)); }
+.eth-b.f-dst, .eth-sw.f-dst { background: color-mix(in srgb, var(--probe-0) 38%, var(--surface)); }
+.eth-b.f-src, .eth-sw.f-src { background: color-mix(in srgb, var(--probe-1) 38%, var(--surface)); }
+.eth-b.f-type, .eth-sw.f-type { background: color-mix(in srgb, var(--probe-2) 38%, var(--surface)); }
+.eth-b.f-data, .eth-sw.f-data { background: color-mix(in srgb, var(--probe-3) 38%, var(--surface)); }
+.eth-b.f-pad, .eth-sw.f-pad { background: color-mix(in srgb, var(--probe-4) 30%, var(--surface)); }
+.eth-b.f-fcs, .eth-sw.f-fcs { background: color-mix(in srgb, var(--probe-5) 42%, var(--surface)); }
+.eth-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-2); margin: 2px 0 6px; }
+.eth-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.eth-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); }
+.eth-panel { min-width: 0; }
+.eth-panel .mc-row { align-items: center; }
+.eth-panel .uart-text { min-width: 0; }
+.eth-strip .uart-line { stroke: var(--w1); }
+.eth-strip .uart-line.heard { stroke: var(--accent); }
+.eth-strip .uart-line.jam, .eth-strip .uart-line.gap { stroke: var(--wx, #d33); }
+.eth-mark { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.eth-mark.bad { stroke: var(--wx, #d33); }
+.eth-mark.ok { stroke: var(--good); }
+.eth-plot .eth-ideal { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.eth-plot .eth-curve { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; }
+.eth-plot .eth-dot { fill: var(--accent); }
+.eth-plot .grid { stroke: var(--border); stroke-width: 1; }
+.eth-plot .tick { fill: var(--muted); font: 10.5px var(--font-mono); }
+.eth-scroll { overflow-x: auto; max-width: 100%; }
+.eth-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 4px 0; }
+.eth-card { padding: 5px 7px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); font-size: 12px; min-width: 0; overflow-wrap: anywhere; }
+.eth-card.mon { border-color: var(--accent); }
+.eth-log { margin: 4px 0 0; padding-left: 0; list-style: none; font: 12px var(--font-mono); color: var(--text-2); max-height: 11em; overflow: auto; }
+.eth-buf { font: 12px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
+.eth-bufrow { margin: 1px 0; }
+@media (max-width: 520px) { .eth-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
