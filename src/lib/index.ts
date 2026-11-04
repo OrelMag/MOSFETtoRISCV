@@ -58,6 +58,7 @@ export * from './gfxpipe';
 export * from './m6502/core';
 export * from './rvc';
 export * from './cpu64';
+export * from './pad';
 export * from './ttl';
 export * from './sap';
 export * from './bitrunner';
