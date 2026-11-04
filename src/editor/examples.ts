@@ -471,7 +471,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'twocomputers', group: 'computers', short: 'Two computers chat over a wire.', name: 'Two computers on a wire',
-    blurb: 'The last scene of chapter 43: two RV32I bus cores, each with a boot ROM, RAM, a UART and a console, joined by two line parts (a model of a cable). A says ping, B answers pong. Hold a NOISE button to corrupt a byte in flight.',
+    blurb: 'The last scene of chapter 43: two RV32I bus cores, each with a boot ROM, RAM, a UART and a console, joined by two line parts (a model of a cable). A sends a message, B answers it. Hold a NOISE button to corrupt a byte in flight.',
     build: (id, n, _sub, docs) => twoComputersChip(id, n, { a: docs.a, b: docs.b }),
     subchips: { a: { name: 'Computer A', build: (id, n) => uartComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => uartComputerChip(id, n, 'B') } },
     hz: 5000,
