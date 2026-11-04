@@ -101,3 +101,28 @@ export function searchCodex(query: string, entries: readonly CodexEntry[] = CODE
   return idx.map((x) => ({ x, ...score(x, q, words) })).filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || a.len - b.len || a.x.order - b.x.order).map((r) => r.x.e);
 }
+
+/**
+ * Why an entry matched, for the list under a query: nothing when its title does, "also called X" for an alias, else a
+ * piece of its summary around the first place the query (or its first word) occurs, the hit between « ».
+ */
+export function matchNote(e: CodexEntry, query: string, n = 70): string {
+  const q = normalizeQuery(query);
+  if (!q) return '';
+  const names = namesOf(e);
+  if (names.some((x) => x.title && hit(squash(x.text), q) > 0)) return '';
+  const alias = names.find((x) => !x.title && hit(squash(x.text), q) > 0);
+  if (alias) return `also called ${alias.text}`;
+  const text = plain(e.body).trim();
+  const esc = (w: string) => [...w].map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s\\-–—\'’]*');
+  const words = query.split(/\s+/).filter(Boolean);
+  for (const pat of [esc(q), ...words.map((w) => esc(normalizeQuery(w)))]) {
+    if (!pat) continue;
+    const m = new RegExp(pat, 'i').exec(text);
+    if (!m) continue;
+    const from = Math.max(0, m.index - Math.floor((n - m[0].length) / 2));
+    const to = Math.min(text.length, from + n);
+    return `${from ? '…' : ''}${text.slice(from, m.index)}«${m[0]}»${text.slice(m.index + m[0].length, to)}${to < text.length ? '…' : ''}`.replace(/\s+/g, ' ');
+  }
+  return '';
+}
