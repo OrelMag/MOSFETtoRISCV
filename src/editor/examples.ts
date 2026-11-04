@@ -14,6 +14,7 @@ import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
 import { rv64Chip, rvcChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
+import { twoComputersChip, uartComputerChip } from './examplecomms';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
 import { PONG_HZ, pongChip } from '../campaign/bench';
 
@@ -467,6 +468,13 @@ export const EXAMPLES: Example[] = [
     blurb: 'A 4-bit adder twice: the library\'s ripple-carry ADD4, and one line of Verilog drawn by Yosys in the page. Compare their NANDs and depth; edit the text.',
     build: (id, n, sub, docs) => sameAdderChip(id, n, sub, docs),
     subchips: { add4: { name: 'add4', build: add4VerilogChip } },
+  },
+  {
+    id: 'twocomputers', group: 'computers', short: 'Two computers chat over a wire.', name: 'Two computers on a wire',
+    blurb: 'The last scene of chapter 43: two RV32I bus cores, each with a boot ROM, RAM, a UART and a console, joined by two line parts (a model of a cable). A sends a message, B answers it. Hold a NOISE button to corrupt a byte in flight.',
+    build: (id, n, _sub, docs) => twoComputersChip(id, n, { a: docs.a, b: docs.b }),
+    subchips: { a: { name: 'Computer A', build: (id, n) => uartComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => uartComputerChip(id, n, 'B') } },
+    hz: 5000,
   },
   {
     id: 'cardboot', group: 'computers', drawer: true, short: 'A deck read into RAM, then run.', name: 'Boot from cards',

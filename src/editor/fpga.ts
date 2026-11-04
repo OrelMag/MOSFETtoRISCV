@@ -9,6 +9,7 @@
 // initial contents that do not travel, pins the example board has no room for.
 
 import { flatten, type HierNode } from '../sim/flatten';
+import { isLineDef } from '../lib/uart';
 import { type ComponentDef, isExternal, netlistOf } from '../sim/types';
 import { ffLeaf, synthVerilog, type TopPort } from '../sim/vexport';
 import { displayOf } from './parts';
@@ -328,6 +329,21 @@ function memories(root: ComponentDef): ComponentDef[] {
   return out;
 }
 
+/** The line parts below (chapter 43's cable model: a box that does not end in transistors), by the path of instances to each. */
+function linePaths(root: ComponentDef): string[] {
+  const out: string[] = [], seen = new Set<ComponentDef>();
+  const walk = (d: ComponentDef, path: string[]) => {
+    if (d.id === 'nand' || d.prim || seen.has(d)) return;
+    seen.add(d);
+    for (const i of netlistOf(d)?.instances ?? []) {
+      if (isLineDef(i.def)) out.push([...path, i.name].join('.'));
+      else if (!isExternal(i.def)) walk(i.def, [...path, i.name]);
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
 /** What the export cannot write cleanly, found by walking the definitions (each once). */
 function structureIssues(root: ComponentDef): FpgaIssue[] {
   const out: FpgaIssue[] = [];
@@ -356,6 +372,10 @@ export function fpgaExport(def: ComponentDef, base: string): FpgaExport {
     return { ok: false, top: '', board: '', files: [], modules: 0, issues: [{ level: 'error', text: `cannot be synthesized: ${(e as Error).message}` }] };
   }
   issues.push(...structureIssues(def));
+  const lines = linePaths(def);
+  if (lines.length) {
+    issues.push({ level: 'warn', text: `${lines.length === 1 ? 'a line part' : `${lines.length} line parts`} (${lines.slice(0, 6).join(', ')}${lines.length > 6 ? ' …' : ''}): a line is a model of a cable (chapter 41), not transistors and not hardware, so it is not synthesized. Its d pin becomes an output and its q pin an input of the top module (x_<part>_d, x_<part>_q): on a board, join them with a wire. The delay and the noise input belong to the model and are not exported` });
+  }
   try {
     const loops = latchLoops(def);
     for (const l of loops.slice(0, 8)) {
