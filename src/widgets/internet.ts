@@ -211,7 +211,7 @@ export function dnsWidget(): Widget {
 // ---- traceroute -----------------------------------------------------------------------------------------------------------------------
 
 /** The bytes of a capture: every probe and its reply, timed as the model times them. */
-function traceCapture(rows: readonly TraceRow[]): Captured[] {
+export function traceCapture(rows: readonly TraceRow[]): Captured[] {
   let us = 0;
   const out: Captured[] = [];
   for (const r of rows) {

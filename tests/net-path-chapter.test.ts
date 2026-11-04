@@ -6,6 +6,10 @@ import { CLOCK_NS } from '../src/dram/timing';
 import { Internet, HOSTS, LINKS, linkBetween, R, ROUTERS, RELATIONS, ASES, neighboursOf } from '../src/net/internet';
 import { INIT_WINDOW, propMs, queueMs, serMs, CROSS_BYTES, WIRE_EXTRA, FIBRE_KM_PER_S } from '../src/net/internetdelay';
 import { TTL_A, TTL_ROOT, TTL_TLD } from '../src/net/internetdns';
+import { hostId, hostIp, traceroute } from '../src/net/internet';
+import { parseIp } from '../src/net/ipv4';
+import { pcapFile, readPcap } from '../src/comm/pcap';
+import { traceCapture } from '../src/widgets/internet';
 
 const text = chPath.steps.map((s) => s.body).join(' ');
 
@@ -38,5 +42,19 @@ describe('chapter 53 typed numbers', () => {
   it('nothing in the chapter claims a real traceroute: the model is named', () => {
     expect(text).toContain('never touches your network');
     expect(new Internet().bgp.rounds).toBeGreaterThan(0);
+  });
+});
+
+describe('Save capture', () => {
+  it('writes every probe and reply, readable back, each header valid, in time order', () => {
+    const rows = traceroute(new Internet(), hostId('laptop'), hostIp(hostId('www')));
+    const back = readPcap(pcapFile(traceCapture(rows)));
+    expect(back.length).toBe(rows.length * 2);
+    let last = -1;
+    for (const f of back) {
+      expect(parseIp(Array.from(f.bytes).slice(14)).checkOk).toBe(true);
+      expect(f.us).toBeGreaterThanOrEqual(last);
+      last = f.us;
+    }
   });
 });
