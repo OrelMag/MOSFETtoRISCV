@@ -12,8 +12,8 @@ import { tick as yieldTick } from './yieldtick';
 
 type Gate = ReturnType<typeof simulate>;
 const tickClk = (s: Gate) => { set(s, { clk: 1 }); set(s, { clk: 0 }); };
-const TX_OUT = ['ready', 'txd', 'txen', 'restart', 'drop', 'sent', 'state', 'att', 'backoff'] as const;
-const txOut = (m: MacTx): Record<(typeof TX_OUT)[number], number> => ({ ready: m.ready, txd: m.txd, txen: m.txen, restart: m.restart, drop: m.drop, sent: m.sent, state: m.state, att: m.att, backoff: m.bo });
+const TX_OUT = ['ready', 'txd', 'txen', 'restart', 'drop', 'sent', 'state', 'att', 'backoff', 'gap'] as const;
+const txOut = (m: MacTx): Record<(typeof TX_OUT)[number], number> => ({ ready: m.ready, txd: m.txd, txen: m.txen, restart: m.restart, drop: m.drop, sent: m.sent, state: m.state, att: m.att, backoff: m.bo, gap: m.gap });
 const RX_OUT = ['data', 'valid', 'last', 'err', 'why', 'drop', 'state'] as const;
 const rxOut = (m: MacRx): Record<(typeof RX_OUT)[number], number> => ({ data: m.data, valid: m.valid, last: m.last, err: m.err, why: m.why, drop: m.drop, state: m.state });
 

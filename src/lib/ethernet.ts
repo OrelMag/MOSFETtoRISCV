@@ -10,7 +10,7 @@
 
 import { CRC32_REFLECTED } from '../comm/crc';
 import {
-  BIT_CLOCKS, GAP_CLOCKS, LFSR_BITS, RX_BITS, SRC_BITS, wireHistory, wireOutputs, wirePush, type StationIn,
+  LFSR_BITS, RX_BITS, SRC_BITS, wireHistory, wireOutputs, wirePush,
 } from '../comm/mac';
 import { MAX_FRAME } from '../comm/ethframe';
 import type { ComponentDef, PortDef } from '../sim/types';
@@ -19,8 +19,6 @@ import { bigRam } from './bigmem';
 import { crcUnit } from './crc';
 import { define } from './define';
 import { Rtl, type Sig } from './rtl';
-
-void BIT_CLOCKS; void GAP_CLOCKS;
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -131,7 +129,7 @@ export function macTx(): ComponentDef {
     const si = m.inc(slot);
     slot.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(wait, q, si[i]))));
     m.setD(bk, m.and(rstn, m.or(enter, wait)));
-    return { bo };
+    return { bo, gap };
   });
 
   const sh = m.scope('shift', 'shift register, byte select', () => {
@@ -169,6 +167,7 @@ export function macTx(): ComponentDef {
   m.outputBus('state', [m.orN([c.pre, c.fcs, back]), m.or(c.dat, c.fcs), m.or(c.jam, back)]);
   m.outputBus('att', c.att);
   m.outputBus('backoff', cs.bo);
+  m.outputBus('gap', cs.gap);
   txDef = m.build();
   return txDef;
 }
@@ -344,7 +343,7 @@ export function ethStation(): ComponentDef {
   const rstn = m.not(rst);
   const vF = m.fwd('f_valid'), lF = m.fwd('f_last'), dF = Array.from({ length: 8 }, (_, i) => m.fwd(`f_data${i}`));
   const crsF = m.fwd('f_crs'), colF = m.fwd('f_col');
-  const [ready, txd, txen, restart, drop, sent, tstate, att, backoff] = m.part(macTx(), [clk, rst, m.bus(dF), vF, lF, crsF, colF, m.bus(seed)], 'MAC TX', 'tx');
+  const [ready, txd, txen, restart, drop, sent, tstate, att, backoff, gap] = m.part(macTx(), [clk, rst, m.bus(dF), vF, lF, crsF, colF, m.bus(seed)], 'MAC TX', 'tx');
   m.drive(crsF, m.name(m.or(txen, crsO), 'carrier'));
   m.drive(colF, m.name(m.and(txen, crsO), 'collision'));
   const rxcr = m.name(m.and(crsO, m.not(txen)), 'rx_carrier');
@@ -392,6 +391,7 @@ export function ethStation(): ComponentDef {
   m.outputBus('rd', rxbS.rd); m.outputBus('cp', rxbS.cp); m.outputBus('wp', rxbS.wp);
   m.outputBus('txstate', m.unbus(tstate, 3)); m.outputBus('att', m.unbus(att, 4)); m.outputBus('backoff', m.unbus(backoff, 10));
   m.outputBus('rxstate', m.unbus(rstate, 2));
+  m.outputBus('gap', m.unbus(gap, 9));
   void rdrop;
   stDef = m.build();
   return stDef;
@@ -450,5 +450,3 @@ export function ethSegment(n = 4): ComponentDef {
   return d;
 }
 
-export { bit, bus, define, constWord, bigRam, SRC_BITS };
-export type { StationIn };

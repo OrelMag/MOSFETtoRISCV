@@ -89,30 +89,45 @@ export class MacTx {
     else if (this.fcs) load = fbyte;
     else if (this.jam) load = pc3 ? 0 : JAM_BYTE;
 
-    const n = {
-      sh: colhit ? JAM_BYTE : start ? 0x55 : tick && !bb ? this.sh >> 1 : bb ? load : this.sh,
-      pre: start || (this.pre === 1 && !preEnd && !colhit) ? 1 : 0,
-      dat: (preEnd && !colhit) || (this.dat === 1 && !datEnd && !colhit) ? 1 : 0,
-      fcs: (datEnd && !colhit) || (this.fcs === 1 && !fcsEnd && !colhit) ? 1 : 0,
-      jam: colhit || (this.jam === 1 && !jamEnd) ? 1 : 0,
-      back: (jamEnd && !att15) || (this.back === 1 && this.bo !== 0) ? 1 : 0,
-      ph: colhit || start ? 0 : act ? (this.ph + 1) & 3 : 0,
-      bit: colhit || start ? 0 : tick ? (this.bit + 1) & 7 : this.bit,
-      pc: colhit || start ? 0 : bb ? (preEnd || jamEnd || this.dat || this.fcs ? 0 : (this.pc + 1) & 7) : this.pc,
-      nb: start ? 0 : loadData ? (nb60 ? 60 : this.nb + 1) : this.nb,
-      eof: start ? 0 : bb && ((this.pre === 1 && pc7) || (this.dat === 1 && !this.eof)) ? (i.valid && !i.last ? 0 : 1) : this.eof,
-      fc: start || datEnd ? 0 : this.fcs && bb ? (this.fc + 1) & 3 : this.fc,
-      att: fcsEnd || (jamEnd && att15) ? 0 : jamEnd ? this.att + 1 : this.att,
-      bo: jamEnd && !att15 ? this.lfsr & backoffMask(this.att + 1) : this.back && this.bo !== 0 && this.slot === 2047 ? this.bo - 1 : this.bo,
-      slot: this.back && this.bo !== 0 ? (this.slot + 1) & 2047 : this.slot,
-      gap: i.crs || act ? 0 : gapok ? this.gap : this.gap + 1,
-      lfsr: lfsrNext(this.lfsr),
-      q: start ? 0xffffffff : loadData ? stepBits(this.q, dd, 8) : this.q,
-    };
+    const n_sh = colhit ? JAM_BYTE : start ? 0x55 : tick && !bb ? this.sh >> 1 : bb ? load : this.sh;
+    const n_pre = start || (this.pre === 1 && !preEnd && !colhit) ? 1 : 0;
+    const n_dat = (preEnd && !colhit) || (this.dat === 1 && !datEnd && !colhit) ? 1 : 0;
+    const n_fcs = (datEnd && !colhit) || (this.fcs === 1 && !fcsEnd && !colhit) ? 1 : 0;
+    const n_jam = colhit || (this.jam === 1 && !jamEnd) ? 1 : 0;
+    const n_back = (jamEnd && !att15) || (this.back === 1 && this.bo !== 0) ? 1 : 0;
+    const n_ph = colhit || start ? 0 : act ? (this.ph + 1) & 3 : 0;
+    const n_bit = colhit || start ? 0 : tick ? (this.bit + 1) & 7 : this.bit;
+    const n_pc = colhit || start ? 0 : bb ? (preEnd || jamEnd || this.dat || this.fcs ? 0 : (this.pc + 1) & 7) : this.pc;
+    const n_nb = start ? 0 : loadData ? (nb60 ? 60 : this.nb + 1) : this.nb;
+    const n_eof = start ? 0 : bb && ((this.pre === 1 && pc7) || (this.dat === 1 && !this.eof)) ? (i.valid && !i.last ? 0 : 1) : this.eof;
+    const n_fc = start || datEnd ? 0 : this.fcs && bb ? (this.fc + 1) & 3 : this.fc;
+    const n_att = fcsEnd || (jamEnd && att15) ? 0 : jamEnd ? this.att + 1 : this.att;
+    const n_bo = jamEnd && !att15 ? this.lfsr & backoffMask(this.att + 1) : this.back && this.bo !== 0 && this.slot === 2047 ? this.bo - 1 : this.bo;
+    const n_slot = this.back && this.bo !== 0 ? (this.slot + 1) & 2047 : this.slot;
+    const n_gap = i.crs || act ? 0 : gapok ? this.gap : this.gap + 1;
+    const n_lfsr = lfsrNext(this.lfsr);
+    const n_q = start ? 0xffffffff : loadData ? stepBits(this.q, dd, 8) : this.q;
     this.restart = jamEnd && !att15 ? 1 : 0;
     this.drop = jamEnd && att15 ? 1 : 0;
     this.sent = fcsEnd ? 1 : 0;
-    Object.assign(this, n);
+    this.sh = n_sh;
+    this.pre = n_pre;
+    this.dat = n_dat;
+    this.fcs = n_fcs;
+    this.jam = n_jam;
+    this.back = n_back;
+    this.ph = n_ph;
+    this.bit = n_bit;
+    this.pc = n_pc;
+    this.nb = n_nb;
+    this.eof = n_eof;
+    this.fc = n_fc;
+    this.att = n_att;
+    this.bo = n_bo;
+    this.slot = n_slot;
+    this.gap = n_gap;
+    this.lfsr = n_lfsr;
+    this.q = n_q;
   }
 }
 
