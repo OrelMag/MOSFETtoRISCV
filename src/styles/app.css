@@ -503,10 +503,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* The bar's buttons keep their size; the hierarchy takes what is left. A name longer than that is
    cut with an ellipsis (the full name is the button's title) instead of running under the buttons,
    as a nowrap button in a shrunk .crumbs used to. Stage.fitBar first drops the button labels
-   (.compact) to give the name room. */
+   (.compact; Probe and Why? keep theirs until .tight, the two whose glyphs a learner cannot guess and uses most) to give the name room. */
 .stage-bar > :not(.crumbs) { flex-shrink: 0; }
 .stage-bar .crumbs button { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.stage-bar.compact .btn .lbl { display: none; }
+.stage-bar.compact .btn:not(.keep) .lbl { display: none; }
+.stage-bar.compact.tight .btn .lbl { display: none; }
 .stage-bar.stacked { flex-wrap: wrap; row-gap: 2px; padding-top: 4px; padding-bottom: 4px; }
 .stage-bar.stacked > .crumbs { flex: 1 1 100%; }
 /* One row: the levels above the open one give up their width first (cut, never below a few letters); the open

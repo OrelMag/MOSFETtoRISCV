@@ -272,7 +272,7 @@ export class Stage {
     this.crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Hierarchy' });
     const btn = (ic: string, title: string, fn: () => void, cls = '') =>
       h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
-    this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
+    this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn keep', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
     this.why = new WhyPanel({
       ctx: () => this.ctx,
@@ -288,7 +288,7 @@ export class Stage {
       },
     });
     new ResizeObserver(() => this.why.on && (this.placeWhy(), this.view.setCover(this.covers()))).observe(this.why.el);
-    this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
+    this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn keep', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
       icon('why', 15), h('span', { class: 'lbl' }, 'Why?')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
       icon('wave', 15), h('span', { class: 'lbl' }, 'Timing')) as HTMLButtonElement;
@@ -2054,7 +2054,7 @@ export class Stage {
     }
   }
 
-  /** Drop the bar's button labels (icons and tooltips remain) when the open level's name would otherwise be
+  /** Drop the bar's button labels (all but Probe and Why?, then those too; icons and tooltips remain) when the open level's name would otherwise be
    *  cut; measured with the labels shown, so they come back once there is room. Still cut, the least used
    *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe),
    *  and only then (a phone: the buttons take the whole bar, the name read "4…") the hierarchy gets a row of
@@ -2063,7 +2063,7 @@ export class Stage {
   private fitBar(): void {
     const bar = this.bar;
     const moreWrap = this.moreBtn.parentElement!;
-    bar.classList.remove('compact', 'stacked');
+    bar.classList.remove('compact', 'tight', 'stacked');
     for (const g of this.shedGroups) g.els.forEach((el) => el.classList.remove('shed'));
     moreWrap.hidden = true;
     // only what the bar shows (not a scene's hidden Open in Sandbox, nor a phone's zoom buttons)
@@ -2076,6 +2076,8 @@ export class Stage {
     const fits = () => cur.scrollWidth <= cur.clientWidth + 1 && crumbs.scrollWidth <= crumbs.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2;
     if (fits()) return this.toggleMore(false);
     bar.classList.add('compact');
+    if (fits()) return this.toggleMore(false);
+    bar.classList.add('tight');
     if (fits()) return this.toggleMore(false);
     moreWrap.hidden = false;
     for (let k = 1; k <= live.length; k++) {
