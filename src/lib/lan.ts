@@ -50,8 +50,8 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
     { name: 'sw', def: SW, at: [xs, 8], label: 'Switch' },
     { name: 'rx0', def: RX, at: [xm, yA], label: 'Port 0 MAC RX' }, { name: 'rx1', def: RX, at: [xm, yB], label: 'Port 1 MAC RX' },
     { name: 'tx0', def: TX, at: [xe, yA], label: 'Port 0 MAC TX' }, { name: 'tx1', def: TX, at: [xe, yB], label: 'Port 1 MAC TX' },
-    { name: 'z8', def: z8, at: [x0, H] }, { name: 'z48', def: z48, at: [x0 + 14, H] }, { name: 'z10', def: z10, at: [x0 + 30, H] },
-    { name: 'lo', def: TIE0, at: [x0 + 46, H] }, { name: 'hi', def: TIE1, at: [x0 + 52, H] },
+    { name: 'z8', def: z8, at: [x0, H] }, { name: 'z48', def: z48, at: [x0, H + 8] }, { name: 'z10', def: z10, at: [x0, H + 16] },
+    { name: 'lo', def: TIE0, at: [x0, H + 24] }, { name: 'hi', def: TIE1, at: [x0, H + 32] },
   ];
   void z8g;
   const nets: NetDef[] = [];
