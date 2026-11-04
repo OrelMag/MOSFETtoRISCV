@@ -201,6 +201,59 @@ const TOUCH_DRIVE = `(async () => {
       if (document.querySelector('.sb-mode:not([hidden])')) bad.push('Cancel left the pill');
     }
   }
+  // an input pin placed by two taps, then flipped by a tap on its knob and by its switch under the canvas
+  document.querySelector('.sb-parts-btn')?.click(); await wait(300);
+  const pin = document.querySelector('.sb-item[data-item="basics/in1"]');
+  if (!pin) return [...bad, 'no input pin in the parts drawer'];
+  const q = pin.getBoundingClientRect();
+  ptr(pin, 'pointerdown', q.left + 10, q.top + 10); ptr(pin, 'pointerup', q.left + 10, q.top + 10); await wait(700);
+  ptr(svg, 'pointerdown', at[0], at[1]); ptr(svg, 'pointerup', at[0], at[1]); await wait(400);
+  const knob = svg.querySelector('[data-pin-id] circle');
+  const tog = () => document.querySelector('.in-toggle')?.className;
+  if (!knob || !tog()) return [...bad, 'tapping the canvas with an armed pin placed none'];
+  const k = knob.getBoundingClientRect(), v0 = tog();
+  ptr(svg, 'pointerdown', k.left + k.width / 2, k.top + k.height / 2); ptr(svg, 'pointerup', k.left + k.width / 2, k.top + k.height / 2); await wait(300);
+  if (tog() === v0) bad.push('a tap on a pin's knob did not flip the input');
+  const v1 = tog();
+  document.querySelector('.in-toggle').click(); await wait(200);
+  if (tog() === v1) bad.push('the switch under the canvas did not flip the input');
+  return bad;
+})()`;
+
+/**
+ * The stage on a touch screen: a tap on an input pin flips it, a press and hold on a wire opens the layout menu
+ * (the stage's right-click), a tap does not.
+ */
+const STAGE_TOUCH_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const svg = document.querySelector('svg.schematic');
+  if (!svg) return ['no stage'];
+  svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; svg.hasPointerCapture = () => false; // synthetic pointers are not active ones
+  const ptr = (el, type, x, y) => el.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: 81, isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  const centre = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const pin = svg.querySelector('g.pin-in');
+  if (!pin) return ['no input pin on the stage'];
+  const v0 = pin.getAttribute('class'), [px, py] = centre(pin);
+  ptr(pin, 'pointerdown', px, py); ptr(pin, 'pointerup', px, py); pin.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: px, clientY: py })); await wait(300);
+  if (pin.getAttribute('class') === v0) bad.push('a tap on an input pin did not flip it');
+  let wire = null;
+  for (const e of svg.querySelectorAll('path[data-net]')) {
+    const r = e.getBoundingClientRect();
+    if (r.width < 30 && r.height < 30) continue;
+    const L = e.getTotalLength(), pt = e.getPointAtLength(L / 2), m = e.getScreenCTM();
+    wire = [e, pt.x * m.a + pt.y * m.c + m.e, pt.x * m.b + pt.y * m.d + m.f];
+    break;
+  }
+  if (!wire) return [...bad, 'no wire to hold on'];
+  ptr(wire[0], 'pointerdown', wire[1], wire[2]); await wait(250); ptr(wire[0], 'pointerup', wire[1], wire[2]); await wait(100);
+  if (document.querySelector('.sch-menu')) bad.push('a tap opened the layout menu');
+  ptr(wire[0], 'pointerdown', wire[1], wire[2]); await wait(750);
+  const m = document.querySelector('.sch-menu button');
+  if (!m) bad.push('a press and hold on a wire opened no layout menu');
+  else if (m.getBoundingClientRect().height < 39.5) bad.push('a layout menu item under 40 px');
+  ptr(wire[0], 'pointerup', wire[1], wire[2]); await wait(100);
+  if (!document.querySelector('.sch-menu')) bad.push('lifting the finger closed the layout menu');
   return bad;
 })()`;
 
@@ -391,7 +444,8 @@ function routes(): Route[] {
   add('#/sandbox', light, ` (examples gallery, ${phoneVp.name})`, phoneVp, GALLERY_DRIVE);
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
-  add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
+  add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
+  add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The memory-map designer on System on a bus, opened from File, in both themes.
   for (const [theme, viewport] of [['light', undefined], ['dark', undefined]] as const) {
     add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'bussystem')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (memory map, ${theme}${viewport ? ', phone' : ''})`, viewport, MEMMAP_DRIVE);

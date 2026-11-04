@@ -14,7 +14,7 @@ import { installPanZoom } from '../view/camera';
 import { installHold } from '../ui/holdpress';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
-import { s } from '../ui/dom';
+import { coarsePointer, s } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { settings } from '../ui/settings';
 import { nextDrive } from './chips';
@@ -198,6 +198,14 @@ export class Tools {
     closePopover();
     const st = this.state;
 
+    // A bend carried without a mouse: the press picks it up, and it follows the finger until it lifts.
+    if (st.k === 'reshape' && st.hover && this.touch) {
+      st.hover = false;
+      st.at = p;
+      st.d = [0, 0];
+      ed.endMode();
+      return;
+    }
     if (st.k === 'reshape' && st.hover) {
       this.state = { k: 'idle' };
       ed.view.svg.style.cursor = '';
@@ -555,7 +563,8 @@ export class Tools {
     this.ed.begin();
     this.state = { k: 'reshape', id, grab: { bend: g.seg, at }, at, base: this.ed.doc, d: [0, 0], hover: true };
     this.ed.view.svg.style.cursor = 'move';
-    this.ed.toast('Move the bend, click to drop it (Esc cancels)');
+    if (this.touch) this.ed.showMode('Bend: drag anywhere to move it, lift to drop');
+    else this.ed.toast('Move the bend, click to drop it (Esc cancels)');
   }
 
   /** The corner of a wire's polyline under p (within the click tolerance), or -1. */
@@ -754,6 +763,7 @@ export class Tools {
     this.cancel();
     this.state = { k: 'place', item, drag: false, sx: 0, sy: 0, key };
     this.ed.palette.setArmed(key);
+    if (coarsePointer()) this.ed.showMode(`Tap the canvas to place ${item.name}`);
     if (this.cursor) this.ghost(item, this.cursor);
   }
 

@@ -1067,7 +1067,11 @@ export class Editor {
         this.showParts(false);
         this.palette.clearSearch(); // the drawer reopens on the whole palette, not on this search's results
       }
-      this.showMode(`Tap the canvas to place ${item.name}`);
+      if (touch) this.showMode(`Tap the canvas to place ${item.name}`);
+      else {
+        this.placeHint = `Tap the canvas to place ${item.name}`;
+        this.toast(this.placeHint);
+      }
     };
     document.addEventListener('pointerup', up);
   }
@@ -1078,9 +1082,17 @@ export class Editor {
     this.modeEl.hidden = false;
   }
 
-  /** The part was placed, the wire finished or either given up: the pill goes. */
+  /** The mouse's tap-to-place hint in a narrow window (a toast: no touch, no pill). */
+  private placeHint = '';
+
+  /** The part was placed, the wire finished or either given up: the pill (or the hint) goes at once. */
   endMode(): void {
     this.modeEl.hidden = true;
+    if (this.placeHint && this.toastEl.textContent === this.placeHint) {
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastEl.className = 'sb-toast';
+    }
+    this.placeHint = '';
   }
 
   /** The palette is a drawer (editor.css, max-width 760px) and open. */
