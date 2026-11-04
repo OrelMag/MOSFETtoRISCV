@@ -199,6 +199,12 @@ export const TAUGHT: Record<string, string> = {
   inetcksum: 'network',
   arp: 'network',
   ipv4: 'network',
+  lpm: 'router',
+  fastpath: 'router',
+  routing: 'router',
+  tcp: 'tcp',
+  aimd: 'tcp',
+  bufferbloat: 'tcp',
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

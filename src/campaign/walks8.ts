@@ -381,6 +381,57 @@ export const WALKS8: Record<string, WalkScript> = {
       whyNot: { text: 'Building a separate full-duplex MAC would copy the datapath and drop the backoff logic, a third of the transmitter\'s gates.' },
     },
   ],
+  l_fwd: [
+    {
+      title: 'The inputs, split',
+      text: 'sp_slot, sp_prefix, sp_bytes and sp_port_in split what a route is written with; sp_dst, sp_ttl and sp_check split the three fields of a header. Nothing else of the packet reaches this block.',
+      parts: ['sp_slot', 'sp_prefix', 'sp_bytes', 'sp_port_in', 'sp_dst', 'sp_ttl', 'sp_check'], codex: ['ipv4'],
+      why: 'A router looks up one field and changes two; the rest of a packet goes through it unread.',
+      whyNot: { text: 'Taking the whole header in would be wires with nothing to do; the checks that need it have already reported in bad.' },
+    },
+    {
+      title: 'Four routes',
+      text: 'r0 to r3 are the table: a valid bit, 32 bits of prefix, 3 of length in bytes and 2 of port, in flip-flops. write picks a slot with we and slot, and sets its valid bit; reset clears only the valid bits, since an invalid route never matches, whatever it holds.',
+      parts: ['r0', 'r1', 'r2', 'r3', 'write'], codex: ['lpm'],
+      why: 'The table is the only memory here, and software fills it: the routing protocol runs on the slow path, and its answers arrive as writes while packets flow.',
+      whyNot: { text: 'Clearing every bit on reset spends an AND per flip-flop on values nothing reads until they are written.' },
+    },
+    {
+      title: 'The longest match',
+      text: 'match asks, for each route and each of five lengths: is it valid, is this its length, and do the leading bytes equal the address? An OR per length says whether any route of that length matches; a length is picked only when no longer one has a match; the picked route\'s port comes out through an AND-OR, and found says whether anything matched at all.',
+      parts: ['match'], codex: ['lpm'],
+      ask: {
+        question: 'The table holds 10.0.0.0/8 to port 0 and 10.1.0.0/16 to port 1. Where does 10.1.9.9 go, if the /8 is in slot 0?',
+        options: ['Port 1: the /16 is longer, and the slot means nothing', 'Port 0: the first route that matches wins', 'Both: both routes match', 'The slow path: two matches are a conflict'],
+        answer: 0,
+        explain: 'Prefixes nest on purpose: a general route and exceptions to it. The longest match is the most specific statement anyone made about this address, which is why a default route, of length 0, can sit in the same table and lose to everything.',
+        why: ['', 'That is what a list of rules in order would do, and then the order of arrival would be the policy. Length decides.', 'A unicast packet leaves by one port.', 'Nested routes are the normal case: a table with none would be enormous.'],
+      },
+      why: 'Comparing all routes at once answers in one clock, at a price per route, and that is what a TCAM sells.',
+      whyNot: { text: 'Searching the routes one by one takes a clock per route, and a minimum frame at wire speed does not wait.' },
+    },
+    {
+      title: 'What to do',
+      text: 'act decides, in the order a frame can fail: a bad header goes nowhere; expired says the TTL is 0 or 1, all of its bits above bit 0 being 0; local says the route\'s port is 3, the router itself. Any of these but the bad header, or no route, sends it up; the rest is forwarded.',
+      parts: ['act'], codex: ['fastpath'],
+      why: 'Whatever needs an answer goes to software: time exceeded, no route. The fast path only ever forwards or hands on.',
+      whyNot: { text: 'Answering a bad header sends a message to an address that may be the very bit that was damaged.' },
+    },
+    {
+      title: 'One lower, and the checksum',
+      text: 'update lowers the TTL: a bit flips when all the bits below it are 0. The checksum is RFC 1624\'s: inverted, 0xFEFF added, the carry out of the top (round) brought back in at the bottom, inverted again.',
+      parts: ['update'], codex: ['inetcksum'],
+      why: 'A ones\' complement sum moves by exactly what one word moves by: one constant addition stands for summing twenty bytes again.',
+      whyNot: { text: 'Adding 0x0100 to the field itself looks the same, and gives 0xFFFF for a checksum of 0xFEFF, where the sum says 0: the next router drops that one.' },
+    },
+    {
+      title: 'The answer, a clock later',
+      text: 'The flip-flops hold the answer for the clock after go: ovalid, act, port, the new TTL and the new checksum, each gated with go and the reset so that nothing is shown without a header. mg_act, mg_port, mg_ttl_o and mg_check_o bundle them for the pins.',
+      parts: [...Array.from({ length: 1379 - 1288 + 1 }, (_, i) => `g${1288 + i}`), 'g0', 'mg_act', 'mg_port', 'mg_ttl_o', 'mg_check_o'], codex: ['fastpath'],
+      why: 'A register at the output gives the next stage a whole clock: the matching logic is the slowest path in this block.',
+      whyNot: { text: 'Without the flip-flops the decision would add to the delay of whatever reads it, and that sets the clock of the whole router.' },
+    },
+  ],
   l_switch: [
     {
       title: 'The header, split',

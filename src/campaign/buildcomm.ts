@@ -12,7 +12,8 @@ import { RELAY_RULE } from './buildr';
 import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
-import { ethMacFd, swBrain } from '../lib/ethlevels';
+import { ethMacFd, fwdPath, swBrain } from '../lib/ethlevels';
+import { FWD_LANES, PORT_UP, runFwd } from './fwdcheck';
 import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
 import { MAC_BIT, MAC_GAP, MAC_RX_LANES, MAC_TX_LANES, runMac, runSwitch, SWITCH_LANES } from './ethcheck';
@@ -140,6 +141,16 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(swBrain()),
     check: { kind: 'custom', describe: SWITCH_LANES.length + ' traffic scripts of up to 60 frames: hosts announcing themselves, every pair talking, a host nobody has heard, two hosts behind one port, a host that moves, damaged frames, the broadcast address as a source, a fifth host, a frame to its own sender, frames on consecutive clocks and random traffic: the output set after every go, against the model.', run: runSwitch },
     answer: refOf('l_switch', swBrain, 'Learning switch', () => rtlBoxes(swBrain(), 'sw_brain_')),
+  }),
+  l_fwd: () => ({
+    id: 'l_fwd', title: 'Forwarding path', level: 'sequential', allowed: 'nand',
+    brief: 'The decision at the heart of a router. <b>Routes</b>: four slots, each written with <b>we</b> and <b>slot</b>: <b>prefix</b> (32 bits), <b>bytes</b> (how many of its leading bytes count, 0 to 4: /0, /8, /16, /24, /32) and <b>port_in</b>. The table starts empty. '
+      + '<b>A header</b>: with <b>go</b> for one clock come its <b>dst</b>, <b>ttl</b> and <b>check</b> (the checksum field), and <b>bad</b> = 1 if the checksum failed. In the next clock <b>ovalid</b> = 1 and <b>act</b> says what to do: 0 drop, 1 forward, 2 up to the slow path. The order is the order a frame can fail: a bad header is dropped (<b>port</b> 0); a TTL of 0 or 1 goes up; then the <i>longest</i> prefix that matches gives the port, and no match, or port ' + PORT_UP + ' (the router itself), goes up (port ' + PORT_UP + '). '
+      + 'Forwarded, <b>ttl_o</b> is one lower and <b>check_o</b> the new checksum, without summing the header again (RFC 1624): complement the old one, add 0xFEFF, bring the carry out of the top round to the bottom, complement again. Lowering the TTL lowers one word by 0x0100, and that addition is what it comes to. '
+      + 'Two routes alike (the same leading bytes and length) are never in the table. The bench is a model of the table, and it sums each whole header again for the checksum it expects. A real router holds a million routes, in a trie or a TCAM (chapter 51); four keep this one small enough to draw.',
+    ports: pinsOf(fwdPath()),
+    check: { kind: 'custom', describe: FWD_LANES.length + ' scripts of routes and headers: an empty table, nested prefixes in either order, a default route, a slot rewritten, the router\'s own address, TTLs of 0, 1, 2 and 255, checksums that carry round and the one RFC 1624 corrects, bad headers, a header every clock, and random traffic.', run: runFwd },
+    answer: refOf('l_fwd', fwdPath, 'Forwarding decision', () => rtlBoxes(fwdPath(), 'fwd_path_')),
   }),
   l_repeater: () => ({
     id: 'l_repeater', title: 'Relay repeater', level: 'transistors', allowed: RELAY_RULE,

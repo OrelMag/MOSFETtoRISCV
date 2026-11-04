@@ -3,6 +3,7 @@
 // (chapter 49's table and flood rule at a size a level can ask for: the model of the real 48-bit hashed table is comm/ethswitch.ts).
 
 import type { ComponentDef } from '../sim/types';
+import { rca } from './combinational';
 import { macRx, macTx } from './ethernet';
 import { Rtl, type Sig } from './rtl';
 
@@ -101,17 +102,18 @@ export function swBrain(): ComponentDef {
   return swDef;
 }
 
-let fwdDef: ComponentDef | undefined;
+const fwdDefs = new Map<boolean, ComponentDef>();
 
 /**
  * A router's forwarding decision at the size of a level: four routes (prefix, a length of 0 to 4 bytes, a port), written one at a time, and for a header's fields in parallel
  * the answer in the next clock: drop a bad header, send a TTL that has run out up to the slow path, else the longest prefix that matches: no route or port 3 goes up too.
- * Forwarded, the TTL is one lower and the checksum is updated by adding 0x0100 with the carry brought round (RFC 1624). Chapter 51's fast path does this on a stream, with a trie.
+ * Forwarded, the TTL is one lower and the checksum is updated as RFC 1624 says: complement it, add 0xFEFF with the carry brought round, complement it. Chapter 51's fast path does this on a stream, with a trie.
  */
-export function fwdPath(): ComponentDef {
-  if (fwdDef) return fwdDef;
+export function fwdPath(shortcut = false): ComponentDef {
+  const hit = fwdDefs.get(shortcut);
+  if (hit) return hit;
   const m = new Rtl({
-    id: 'fwd_path', name: 'Forwarding decision', category: 'sequential', label: 'FORWARD', columnHeight: 40,
+    id: shortcut ? 'fwd_path_rfc1141' : 'fwd_path', name: shortcut ? 'Forwarding decision, the older checksum update' : 'Forwarding decision', category: 'sequential', label: 'FORWARD', columnHeight: 40,
     summary: 'Four routes matched at once, the longest prefix wins; a bad header is dropped, a TTL that has run out, no route or the router itself goes to the slow path; forwarded, TTL − 1 and the checksum updated from the old one.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst');
@@ -145,7 +147,7 @@ export function fwdPath(): ComponentDef {
     const any = hit.map((h) => m.orN(h));
     // the longest length with a hit: 4 first
     const pick: Sig[] = [any[4]];
-    for (let L = 3; L >= 0; L--) pick.unshift(m.and(any[L], m.not(m.orN(any.slice(L + 1)))));
+    for (let L = 3; L >= 0; L--) pick.unshift(m.name(m.and(any[L], m.not(m.orN(any.slice(L + 1)))), `long${L}`));
     const sel = [0, 1, 2, 3].map((i) => m.orN([0, 1, 2, 3, 4].map((L) => m.and(pick[L], hit[L][i]))));
     const port = [0, 1].map((b) => m.orN(sel.map((s, i) => m.and(s, out[i][b]))));
     return { port, found: m.name(m.orN(any), 'found') };
@@ -159,14 +161,17 @@ export function fwdPath(): ComponentDef {
   });
   const upd = m.scope('update', 'TTL and checksum', () => {
     // TTL − 1: a bit flips when every bit below it is 0
-    const t = ttl.map((q, i) => m.xor(q, m.not(m.orN([m.const(0), ...ttl.slice(0, i)]))));
-    // the checksum + 0x0100, the carry out of the top brought round to the bottom
-    const hi = check.slice(8), lo = check.slice(0, 8), carry = m.name(m.andN(hi), 'round');
-    const hiN = m.inc(hi), loN = m.inc(lo);
-    const low = lo.map((q, i) => m.mux(carry, q, loN[i]));
-    const back = m.and(carry, m.andN(lo));
-    const high = hiN.map((q, i) => (i === 0 ? m.or(q, back) : q));
-    return { t, c: [...low, ...high] };
+    const t = ttl.map((q, i) => m.name(m.xor(q, m.not(m.orN([m.const(0), ...ttl.slice(0, i)]))), `t${i}`));
+    // RFC 1624: ~(~HC + ~m + m'), and for {TTL, protocol} falling by 0x0100, ~m + m' is always 0xFEFF. Adding 0x0100 to HC itself is one case wrong: HC = 0xFEFF gives 0xFFFF, where the sum says 0
+    const one = m.const(1), zero = m.const(0), K = Array.from({ length: 16 }, (_, i) => ((0xfeff >> i) & 1 ? one : zero));
+    const [sum, cout] = m.part(rca(16), [m.bus(check.map((q) => m.not(q))), m.bus(K), zero], 'add 0xFEFF', 'add');
+    const s = m.unbus(sum, 16), carry = m.name(cout, 'round'), sN = m.inc(s);
+    if (shortcut) {
+      // the older update, for the test that the bench rejects it: 0x0100 added to the field itself, the carry brought round
+      const hi = check.slice(8), lo = check.slice(0, 8), c8 = m.andN(hi), hiN = m.inc(hi), loN = m.inc(lo);
+      return { t, c: [...lo.map((q, i) => m.mux(c8, q, loN[i])), ...hiN] };
+    }
+    return { t, c: s.map((q, i) => m.not(m.mux(carry, q, sN[i]))) };
   });
   const ov = m.reg(clk, 'ovalid');
   m.setD(ov, m.and(rstn, go));
@@ -178,6 +183,7 @@ export function fwdPath(): ComponentDef {
   const tq = upd.t.map((d, i) => { const q = m.reg(clk, `ttlq${i}`); m.setD(q, m.andN([rstn, go, d])); return q; });
   const cq = upd.c.map((d, i) => { const q = m.reg(clk, `chkq${i}`); m.setD(q, m.andN([rstn, go, d])); return q; });
   m.output('ovalid', ov); m.outputBus('act', a); m.outputBus('port', pq); m.outputBus('ttl_o', tq); m.outputBus('check_o', cq);
-  fwdDef = m.build();
-  return fwdDef;
+  const def = m.build();
+  fwdDefs.set(shortcut, def);
+  return def;
 }

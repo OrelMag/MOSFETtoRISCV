@@ -275,7 +275,7 @@ export const chTelegraph: Chapter = {
       title: 'The rest of the track',
       body: `
         <p>A key and a sounder answer the five questions with a human in the loop: the operator hears the pattern, finds the letters and decides who sends. The rest of the track asks what a machine needs instead, one rung at a time, each built from
-        the ones below it:</p>
+        the ones below it, up to <span data-ahead="tcp">TCP, a reliable stream over packets that may not arrive</span>, and the path a packet takes:</p>
         <table class="mini ladder"><tr><th>Chapter</th><th>Title</th></tr>${LADDER.map(([n, t]) => `<tr><td>${n}</td><td>${t}</td></tr>`).join('')}</table>
         <p>And the questions, with where each is answered:</p>
         <table class="mini ladder"><tr><th>Question</th><th>Chapters</th></tr>${QUESTIONS.map((q) => `<tr><td>${q[0]}</td><td>${q[2].join(', ')}</td></tr>`).join('')}</table>

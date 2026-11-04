@@ -69,6 +69,14 @@ export const FWD_LANES: { name: string; ops: FwdOp[] }[] = (() => {
     }
     throw new Error('no carrying header');
   };
+  /** The header RFC 1624 is about: a checksum of 0xFEFF, where adding 0x0100 to the field gives 0xFFFF and the sum says 0. */
+  const minusZero = (dst: number): FwdOp => {
+    for (let s = 0; s < 800000; s++) {
+      const h = { dst, ttl: 64, bad: 0, src: (ip(172, 16, 0, 0) + s) >>> 0, id: 9 };
+      if (checkOf(h) === 0xfeff) return { h };
+    }
+    throw new Error('no such header');
+  };
   const random = (seed: number): FwdOp[] => {
     const q = rng(seed), pick = (n: number) => Math.floor(q() * n), ops: FwdOp[] = [];
     const nets = [ip(10, 0, 0, 0), ip(10, 1, 0, 0), ip(10, 1, 2, 0), ip(172, 16, 0, 0), ip(172, 16, 9, 0), ip(8, 8, 8, 8)];
@@ -102,6 +110,7 @@ export const FWD_LANES: { name: string; ops: FwdOp[] }[] = (() => {
     { name: 'TTL: 0 and 1 go up, 2 and 255 go on one lower', ops: [W(0, 0, 0, 1), H(ip(1, 2, 3, 4), 0), H(ip(1, 2, 3, 4), 1), H(ip(1, 2, 3, 4), 2), H(ip(1, 2, 3, 4), 255)] },
     { name: 'an expired TTL with no route: the TTL is tested first', ops: [H(ip(1, 2, 3, 4), 1)] },
     { name: 'a checksum whose high byte is 0xFF: the update carries round', ops: [W(0, 0, 0, 2), carrying(ip(9, 9, 9, 9)), carrying(ip(9, 9, 9, 10)), carrying(ip(77, 1, 1, 1))] },
+    { name: 'a checksum of 0xFEFF: the one case where adding 0x0100 to the field is wrong', ops: [W(0, 0, 0, 1), minusZero(ip(9, 9, 9, 9)), minusZero(ip(9, 9, 9, 10))] },
     { name: 'a bad header goes nowhere, even with its TTL out or no route', ops: [W(0, ip(10, 1, 0, 0), 2, 1), H(ip(10, 1, 0, 1), 64, 1), H(ip(10, 1, 0, 1), 1, 1), H(ip(99, 1, 0, 1), 64, 1), H(ip(10, 1, 0, 1), 64, 0)] },
     { name: 'a header every clock, with and without gaps', ops: [W(0, ip(10, 0, 0, 0), 1, 1), H(ip(10, 0, 0, 1)), H(ip(11, 0, 0, 1)), H(ip(10, 0, 0, 2)), null, null, H(ip(10, 0, 0, 3)), W(1, ip(11, 0, 0, 0), 1, 2), H(ip(11, 0, 0, 1)), null] },
     { name: 'random traffic 1', ops: random(21) }, { name: 'random traffic 2', ops: random(22) }, { name: 'random traffic 3', ops: random(23) }, { name: 'random traffic 4', ops: random(24) },
@@ -154,8 +163,8 @@ export function runFwd(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
       if (to[i] !== h.ttl - 1) { quiet(i, `${who}: ttl_o = ${to[i]}, expected ${h.ttl - 1}: every router lowers it by one`); continue; }
       const c = checkOf(h, h.ttl - 1);
       if (co[i] !== c) {
-        const plain = (checkOf(h) + 0x100) & 0xffff;
-        quiet(i, `${who}: check_o = ${hex(co[i], 4)}, expected ${hex(c, 4)} (the whole header summed again, from ${hex(checkOf(h), 4)}): ${co[i] === plain ? 'adding 0x0100 ran off the top: in ones\' complement the carry comes back in at the bottom' : 'lowering the TTL lowers its word by 0x0100, so the checksum, its complement, rises by 0x0100, with the carry brought round'}`);
+        const old = checkOf(h), plain = (old + 0x100) & 0xffff;
+        quiet(i, `${who}: check_o = ${hex(co[i], 4)}, expected ${hex(c, 4)} (the whole header summed again, from ${hex(old, 4)}): ${old === 0xfeff && co[i] === 0xffff ? 'this is the case RFC 1624 corrected: adding 0x0100 to the field gives 0xFFFF, but a sum of non-zero words is never 0, so the checksum cannot be 0xFFFF. Work on the complement: ~(~HC + 0xFEFF)' : co[i] === plain ? 'the carry ran off the top: in ones\' complement it comes back in at the bottom' : 'complement the old checksum, add 0xFEFF, bring the carry round, complement again'}`);
       }
     }
   }

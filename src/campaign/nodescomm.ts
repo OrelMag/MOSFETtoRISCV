@@ -9,7 +9,7 @@ import { crcGives, i2cBlocks, leafGives, rtlBoxes, SYNC_REF } from './buildcomm'
 import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
-import { ethMacFd, swBrain } from '../lib/ethlevels';
+import { ethMacFd, fwdPath, swBrain } from '../lib/ethlevels';
 
 export const NODES_COMM: CampaignNode[] = [
   {
@@ -79,9 +79,10 @@ export const NODES_COMM: CampaignNode[] = [
     codex: ['learnsw'], chapters: [{ chapter: 'switch', step: 0, label: 'Everyone at once' }, { chapter: 'switch', step: 1, label: 'Learning' }],
   },
   {
-    id: 'l_fwd', act: 12, title: 'Forwarding path', kind: 'build', optional: true, soon: true, requires: ['l_switch'],
-    why: 'Coming with chapters 49 and 51: a frame in, a lookup, a frame out on another port, at line rate.',
-    tips: [], codex: [],
+    id: 'l_fwd', act: 12, title: 'Forwarding path', kind: 'build', optional: true, requires: ['l_switch'], base: BUILDCOMM.l_fwd, givesOf: leafGives(fwdPath, () => rtlBoxes(fwdPath(), 'fwd_path_').map(([d]) => d)), par: { nand: 5847, period: 61 },
+    why: 'A switch learns where machines are, one table line per machine, which stops working somewhere past a building. A router keeps one line per network and forwards on the longest one that matches, and every packet it touches comes out with a lower TTL, so a routing mistake cannot run forever. It decides once per packet, at the speed of the wire: nothing here may take a second clock.',
+    tips: ['Per route and per length, an AND: the slot is valid, its length is this one, and each byte that counts is equal. That gives five rows of four matches.', 'The longest length with any match wins: an OR per row, and a row is chosen only if no longer row has a match. Then the chosen route\'s port, an AND-OR.', 'Test the TTL before the lookup, and a bad header before both: a TTL of 0 or 1 has bits 7 to 1 all 0.', 'The checksum: invert it, add 0xFEFF, and if that carried out of the top, add one more; invert again. Simply adding 0x0100 to the field looks the same, and is wrong for one checksum in 65 536.'],
+    codex: ['lpm', 'fastpath'], chapters: [{ chapter: 'router', step: 1, label: 'Longest prefix wins' }, { chapter: 'router', step: 3, label: 'Four changed bytes and a constant' }, { chapter: 'router', step: 4, label: 'What the fast path will not do' }],
   },
   {
     id: 'l_driver', act: 12, title: 'Packet driver', kind: 'program', optional: true, requires: ['l_mac'], par: { size: 84, cycles: 641 },
@@ -90,8 +91,9 @@ export const NODES_COMM: CampaignNode[] = [
     codex: ['nicring', 'handshake'], chapters: [{ chapter: 'network', step: 1, label: 'Registers and rings' }, { chapter: 'network', step: 3, label: 'A driver in assembly' }],
   },
   {
-    id: 'l_host', act: 12, title: 'Reach the far host', kind: 'build', optional: true, soon: true, requires: ['l_driver', 'l_fwd'],
-    why: 'Coming with chapter 53: a packet from your driver across the switch to a host on the other side.',
-    tips: [], codex: [],
+    id: 'l_host', act: 12, title: 'Reach the far host', kind: 'program', optional: true, requires: ['l_driver', 'l_fwd'], par: { size: 202, cycles: 16347 },
+    why: 'Your driver can answer the machine at the other end of its cable. Reaching one on another network takes two addresses that name different things: the IP address names the far host, end to end, and the MAC only the next hop, which is the gateway. So you ask ARP for the gateway, never the host, and build a real packet by hand, checksums and all. This is what every stack on Earth does before anything else can happen.',
+    tips: ['ARP first: a broadcast asking for 10.0.1.1. Every other frame that arrives gets its buffer handed back, including ARP for somebody else, and the answer is the one of operation 2 from 10.0.1.1. The sender\'s MAC is at byte 22.', 'The IP header starts at byte 14, so whole words hold the end of one field and the start of the next: a word store at offset 18 is not aligned. Build the frame from words at 12, 16, 20 … .', 'Both checksums are complements of a ones\' complement sum, with the field at 0 while summing. The sum does not care about byte order if you store it the way you read it: lhu to add, sh to store.', 'The reply is the frame with ICMP type 0, from 10.0.2.2, with your identifier and sequence. Others arrive first in one scenario.'],
+    codex: ['arp', 'ipv4', 'inetcksum'], chapters: [{ chapter: 'network', step: 5, label: 'ARP: IP address to MAC address' }, { chapter: 'network', step: 6, label: 'IPv4 and UDP' }, { chapter: 'network', step: 7, label: 'ICMP: echo' }, { chapter: 'router', step: 0, label: 'An address with a shape' }],
   },
 ];
