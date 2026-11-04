@@ -116,10 +116,10 @@ export class GateWindow implements Endpoint {
   /** After each clock: the instruction just retired, if any. */
   onClock?: (c: number, retired: boolean) => void;
 
-  constructor(readonly bench: LanBench, readonly p: number, imemK: number, design?: FlatDesign) {
+  constructor(readonly bench: LanBench, readonly p: number, imemK: number, design?: FlatDesign, sim?: DualSim) {
     if (!isQuiet(bench, p)) throw new Error('gate window: not at a quiet moment');
     this.host = bench.hosts[p];
-    this.sim = new DualSim(design ?? computerDesign(this.host.iss.imem, imemK));
+    this.sim = sim ?? new DualSim(design ?? computerDesign(this.host.iss.imem, imemK));
     this.root = this.sim.design.root;
     this.nicNode = this.root.children!.get('nic')!;
     this.rf = this.root.children!.get('cpu')!.children!.get('rf')!;

@@ -598,6 +598,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Link state: everyone holds the map" },
     { title: "What one engine can carry" },
   ] },
+  { id: "tcp", num: 52, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router"], recap: {"checks":3}, steps: [
+    { title: "A stream over datagrams" },
+    { title: "Three segments to begin", challenge: "quiz" },
+    { title: "Numbers that count bytes", challenge: "quiz" },
+    { title: "The window: room at the far end", challenge: "quiz" },
+    { title: "How long to wait", challenge: "quiz" },
+    { title: "How fast: the sawtooth", challenge: "quiz" },
+    { title: "Queues that fill", challenge: "quiz" },
+    { title: "The same rules, on our CPU" },
+    { title: "A window into the gates", challenge: "reach" },
+  ] },
   { id: "appendix-6502", num: 54, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
