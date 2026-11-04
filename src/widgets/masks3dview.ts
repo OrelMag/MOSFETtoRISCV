@@ -16,7 +16,7 @@ export function masksView(): Widget {
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
     aria: 'An inverter cell in 3D, built layer by layer; the current step’s mask floats above it',
-    camera: { target: [0, 4, 0], yaw: -1.3, pitch: 0.45, dist: 92 },
+    camera: { target: [0, 4, 0], yaw: -1.3, pitch: 0.45, dist: 70 },
     limits: { minDist: 30, maxDist: 220 },
     note: 'The cell’s footprint is to scale; heights are exaggerated and the layers pulled apart. The mask is drawn above the die only to show its pattern.',
     draw,
