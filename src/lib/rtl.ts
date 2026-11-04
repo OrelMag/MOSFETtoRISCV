@@ -4,6 +4,7 @@
 // driver is one named port on every box between. Everything is NAND gates (through the library's gates), the library's
 // D flip-flop and tie cells: the result is an ordinary netlist, simulated, counted, drawn and opened like any other.
 
+import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
 import { define, merger, ones, splitter } from './define';
@@ -52,9 +53,13 @@ export class Rtl {
 
   /** Everything made inside fn belongs to a box of its own, `name` (a short identifier) drawn with `label`. */
   scope<T>(name: string, label: string, fn: () => T): T {
-    const s: Scope = { id: this.scopes.length, name, label, parent: this.cur, kids: [] };
-    this.scopes.push(s);
-    this.scopes[this.cur].kids.push(s.id);
+    // a scope of the same name in the same parent is entered again: registers can be made at the top and still live in their block
+    let s = this.scopes[this.cur].kids.map((k) => this.scopes[k]).find((k) => k.name === name);
+    if (!s) {
+      s = { id: this.scopes.length, name, label, parent: this.cur, kids: [] };
+      this.scopes.push(s);
+      this.scopes[this.cur].kids.push(s.id);
+    }
     const was = this.cur;
     this.cur = s.id;
     try { return fn(); } finally { this.cur = was; }
@@ -165,18 +170,24 @@ export class Rtl {
   fwd(name?: string): Sig { return this.fresh('', '', name); }
   drive(f: Sig, to: Sig): void { this.alias[f] = this.root(to); }
   /** A D flip-flop on clk; its d comes later (setD), so a register can feed its own next state. */
-  reg(clk: Sig, name?: string): Sig {
-    const q = this.gate(DFF, [-1, clk]);
-    if (name) this.name(q, name);
-    this.pending.set(q, this.gates[this.gates.length - 1]);
-    return q;
+  reg(clk: Sig, name?: string, home?: [string, string]): Sig {
+    const make = () => {
+      const q = this.gate(DFF, [-1, clk]);
+      if (name) this.name(q, name);
+      this.pending.set(q, this.gates[this.gates.length - 1]);
+      return q;
+    };
+    return home ? this.scope(home[0], home[1], make) : make();
   }
   /** A flip-flop with an asynchronous active-low reset. */
-  regR(clk: Sig, rstn: Sig, name?: string): Sig {
-    const q = this.gate(DFF_R, [-1, clk, rstn]);
-    if (name) this.name(q, name);
-    this.pending.set(q, this.gates[this.gates.length - 1]);
-    return q;
+  regR(clk: Sig, rstn: Sig, name?: string, home?: [string, string]): Sig {
+    const make = () => {
+      const q = this.gate(DFF_R, [-1, clk, rstn]);
+      if (name) this.name(q, name);
+      this.pending.set(q, this.gates[this.gates.length - 1]);
+      return q;
+    };
+    return home ? this.scope(home[0], home[1], make) : make();
   }
   setD(q: Sig, d: Sig): void {
     const g = this.pending.get(q);
@@ -213,7 +224,6 @@ export class Rtl {
     const { imp, exp } = this.plumbing();
     const built = new Map<number, ComponentDef>();
     const rootOf = (s: Sig) => this.root(s);
-    const H = this.opt.columnHeight ?? 70;
 
     const buildScope = (sc: Scope): ComponentDef => {
       const isRoot = sc.id === 0;
@@ -231,9 +241,13 @@ export class Rtl {
       // drivers of each signal as seen in this scope
       const drv = new Map<Sig, string>();
       for (const s of importList) drv.set(s, netName(s));
+      // columns tall enough for a roughly square drawing: ~24 units a column, ~8 a gate
+      const H = this.opt.columnHeight ?? Math.max(40, Math.round(Math.sqrt(192 * this.gates.filter((g) => g.scope === sc.id).length)));
+      let colH = 0;
       const place = (def: ComponentDef, label: string | undefined, name: string) => {
         b.add(def, label, name);
-        if (b.instances.length > 0 && b.height > H) { b.next(); }
+        colH += symbolGeom(def).h + 4;
+        if (colH > H) { b.next(); colH = 0; }
       };
       // root pins that are buses: a splitter / merger each
       const ports: PortDef[] = [];
@@ -250,7 +264,7 @@ export class Rtl {
           pinNames.add(p.name);
           b.pins(p.name);
         }
-        b.next();
+        b.next(); colH = 0;
       } else {
         for (const s of importList) { ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }); pinNames.add(netName(s)); b.pins(netName(s)); }
       }
@@ -263,7 +277,7 @@ export class Rtl {
         kidInst.set(k, nm);
         for (const s of exp[k]) drv.set(rootOf(s), `${nm}.${netName(s)}`);
       }
-      b.next();
+      b.next(); colH = 0;
       for (const g of myGates) {
         place(g.def, g.label, g.name);
         OUT_PORTS(g.def).forEach((p, i) => drv.set(g.out[i], `${g.name}.${p}`));
@@ -281,7 +295,7 @@ export class Rtl {
       for (const k of sc.kids) for (const s of imp[k]) link(s, `${this.scopes[k].name}.${netName(s)}`);
       // outputs
       if (isRoot) {
-        b.next();
+        b.next(); colH = 0;
         for (const o of this.outs) {
           ports.push({ name: o.name, width: o.width, dir: 'out' });
           if (o.width === 1) link(o.sigs[0], o.name);
