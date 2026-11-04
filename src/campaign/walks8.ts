@@ -196,4 +196,34 @@ export const WALKS8: Record<string, WalkScript> = {
       whyNot: { text: 'Deciding the 4b block from rd alone ignores what the 6b block did to the disparity, and the line drifts by two.' },
     },
   ],
+  l_cdr: [
+    {
+      title: 'Look at the line every cycle',
+      text: 'Five flip-flops in a row sample rxd: x0 is the newest, x4 the oldest. At four cycles a bit they cover a bit and a bit again. The strobe will pick the instants at which x0 is a data sample; x2 is the sample two cycles before, near the edge between bits.',
+      parts: ['x0', 'x1', 'x2', 'x3', 'x4'], codex: ['edge'],
+      why: 'Oversampling by four turns "where is the edge" into a question about neighbouring samples, in a circuit that has only a clock and flip-flops.',
+      whyNot: { text: 'A phase-locked loop with a voltage-controlled oscillator would follow a clock more smoothly, but it is an analog circuit; this one is gates.' },
+    },
+    {
+      title: 'Early or late',
+      text: 'u0 asks whether the data changed between x4 and x0. u1 and u2 compare the edge sample x2 with the old data x4: u2 is 1 when x2 still shows the old value (the strobe is early), u1 when it already shows the new (late). u3 = changed AND old: early. u4 = changed AND new: late. Without a change there is no vote.',
+      parts: ['u0', 'u1', 'u2', 'u3', 'u4'], codex: ['edge'],
+      why: 'Three samples tell which side of the edge the middle one fell on. This is an Alexander (bang-bang) phase detector: it says only early or late, never how much.',
+      whyNot: { text: 'Measuring how far the edge is from the strobe takes a time-to-digital converter; a one-bit vote is enough for a loop that moves a sample at a time.' },
+    },
+    {
+      title: 'Count to the next strobe, and filter the votes',
+      text: 'c counts down to the strobe; a period is normally four cycles. f accumulates the votes: early adds one, late subtracts one. ctl (its own chip) fires the strobe at zero, and only when f reaches plus or minus four does it make the next period five or three cycles and clear f. u5 is the constant one that enables both registers.',
+      parts: ['u5', 'c', 'f', 'ctl'], codex: ['edge'],
+      ask: {
+        question: 'The sender\'s clock is 2% fast. Why does the strobe need to move at all, and why only after four votes?',
+        options: ['The edges walk toward the early side by 1/50 of a bit per bit; after about 12 bits the sample point is a whole sample off. Four votes the same way separate a steady drift from the noise of a single edge', 'It never needs to move; the sender and receiver clocks are the same after lock', 'It moves on every vote, so that it follows jitter as well', 'Four votes are needed because the data repeats every four bits'],
+        answer: 0,
+        explain: 'A drift is a steady push on every transition, so the votes keep coming the same way; noise gives votes both ways that cancel in the filter. Moving on one vote would put the jitter of every edge on the strobe.',
+        why: ['', 'Locking aligns the phase, not the frequency. A 2% error is a full sample of drift every 12 bits, forever.', 'Following every vote makes the strobe dither by a sample at each transition: jitter on the sampling point that the filter exists to remove.', 'Nothing in the data repeats every four bits; four is the filter length, a compromise between how fast it follows drift and how well it rejects noise.'],
+      },
+      why: 'The loop is a counter whose period the filter trims: every few bits it is told to be one cycle longer or shorter.',
+      whyNot: { text: 'A filter of one vote reacts at once but jitters at every edge; a filter of sixteen follows a drift too slowly to keep a 2% sender in lock.' },
+    },
+  ],
 };

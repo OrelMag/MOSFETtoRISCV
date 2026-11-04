@@ -7,11 +7,11 @@ import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { syncN } from '../lib/sync';
 import { crcNext, crcUnit } from '../lib/crc';
-import { DEC56, DEC34, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
+import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
-import { run8b10b, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
+import { run8b10b, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
 
@@ -44,7 +44,6 @@ export const leafGives = (def: () => ComponentDef, subs: () => ComponentDef[]) =
   const skip = new Set(subs().map((d) => d.id));
   return [...new Set([def(), ...subs()].flatMap((d) => netlistOf(d)?.instances ?? []).map((i) => i.def.id).filter((id) => !skip.has(id)))];
 };
-void DEC56; void DEC34;
 
 export const SYNC_REF = (): ComponentDef => syncN(2);
 
@@ -90,5 +89,13 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(ENC8B10B),
     check: { kind: 'custom', describe: '268 symbols at both disparities (the sub-blocks stay within ±1, no run over five, rdout right, the symbol decodes to its byte), then 32 seeded streams with rdout fed back (the line\'s disparity and runs across symbols).', run: run8b10b },
     answer: refOf('l_8b10b', () => ENC8B10B, '8b/10b encoder', () => [[ENC56, '5b/6b encoder'], [ENC34, '3b/4b encoder']]),
+  }),
+  l_cdr: () => ({
+    id: 'l_cdr', title: 'Clock recovery', level: 'sequential', allowed: 'nand',
+    brief: 'The line <b>rxd</b> carries an 8b/10b stream at four clock cycles a bit, from a sender whose clock is not yours: up to 2.5% fast or slow, and drifting while it runs. Nothing else arrives with it. Take a sample of the line every cycle, and raise <b>strobe</b> once a bit, at the moment <b>bit</b> (the newest sample) is the middle of a bit cell. '
+      + 'The transitions in the data are the clock: compare the samples around an edge (an early or late vote, the Alexander detector), filter the votes (four the same way) and only then move the strobe by one sample. The far end sends ' + CDR_SCENARIOS.length + ' streams and checks that, after 100 bits of lock-in, the bits taken at the strobe are the bits sent, none twice and none lost.',
+    ports: pinsOf(CDR).filter((p) => ['rxd', 'clk', 'bit', 'strobe'].includes(p.name)),
+    check: { kind: 'custom', describe: CDR_SCENARIOS.length + ' streams of about 1700 bits (a comma every eighth word): nominal, 1.5% fast, 1.5% slow, drifting to 2.5% either way, and a drift that changes sign: strobes about every 4 cycles, then every bit equal to the one sent.', run: runCdr },
+    answer: refOf('l_cdr', () => CDR, 'Clock recovery', () => [[CDR_CTL, 'Strobe counter and vote filter']]),
   }),
 };

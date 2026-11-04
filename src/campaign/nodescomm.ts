@@ -6,7 +6,7 @@ import type { CampaignNode } from './types';
 import { BUILDCOMM } from './buildcomm';
 import { partsOf } from './build8';
 import { crcGives, leafGives, SYNC_REF } from './buildcomm';
-import { ENC34, ENC56, ENC8B10B } from '../lib/serdes';
+import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 
 export const NODES_COMM: CampaignNode[] = [
@@ -39,5 +39,11 @@ export const NODES_COMM: CampaignNode[] = [
     why: 'A fast serial link sends no clock, and its receiver is AC coupled: a long run of equal bits drifts the level and starves clock recovery. 8b/10b spends two extra bits in ten to guarantee a transition every five and a running disparity within one. Two small tables and an XOR for each disparity change.',
     tips: ['Split the byte: five low bits (x) go through the 5b/6b table, three high bits (y) through the 3b/4b table. The disparity entering the 4b block is the one after the 6b block.', 'Most 5b/6b blocks have two forms, complements of each other, chosen by the running disparity; balanced ones have one. Two exceptions are balanced yet depend on rd.', 'D.x.7 has an alternate 4b form (a run of five would otherwise form after certain x); K28 uses its own 6b block and a different 4b.', 'rdout: flip the disparity at each block that is not balanced, an XOR of rd with the block\'s flip.'],
     codex: ['ecc'], chapters: [{ chapter: 'serial', step: 1, label: '8b/10b and running disparity' }],
+  },
+  {
+    id: 'l_cdr', act: 12, title: 'Clock recovery', kind: 'build', optional: true, requires: ['l_sync', 'l_8b10b'], base: BUILDCOMM.l_cdr, givesOf: leafGives(() => CDR, () => [CDR_CTL]), par: { nand: 487, period: 29 },
+    why: 'The line carries no clock, and the sender\'s is never quite yours. Every transition in the data is a free look at where the sender\'s bit boundaries are; a loop that nudges its strobe toward them, a sample at a time, follows a clock that drifts. That is why 8b/10b guarantees a transition every five bits.',
+    tips: ['Sample the line every cycle into a chain of flip-flops. At a strobe, three of them are what the detector needs: the newest data sample, the one two cycles before it (the sample near the edge) and the data sample two cycles before that.', 'If the data changed between the two data samples and the edge sample still shows the old value, the strobe was early; if it already shows the new one, late. If the data did not change there is no vote.', 'A counter of 0 to 3 times the strobe (4 cycles a bit). A vote filter counts early minus late and only at four the same way makes the next period 5 or 3 cycles instead of 4: a bang-bang loop with hysteresis.', 'Do not move on one vote: a single noisy edge would shake the strobe, and a sample point that moves every bit is jitter.'],
+    codex: ['edge'], chapters: [{ chapter: 'serial', step: 4, label: 'Finding the clock in the data' }],
   },
 ];

@@ -11,7 +11,7 @@ import { analyzeTiming } from '../sim/timing';
 import { PS_PER_NAND } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
 import { fmtLog10, log10Mtbf, resolutionTime, TAU_PS, T0_PS, windowRate } from '../phys/metastable';
-import { codeText, decode8b10b, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
+import { codeText, decode8b10b, encodeStream, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
 import { CRC32_INIT, CRC32_RESIDUE, fcsBytes, stepBits } from '../comm/crc';
 import { rng } from './drills';
 
@@ -396,4 +396,67 @@ export function run8b10b(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun 
     }
   }
   return finish(fails, vecs.length, def);
+}
+
+// ---- l_cdr: clock recovery on a drifting stream ------------------------------------------------------------------------------
+
+interface CdrScenario { name: string; /** accumulator step per cycle at cycle t (4096 per bit; 1024 is 4 cycles a bit) */ inc: (t: number) => number; acc0: number; seed: number; hint: string }
+export const CDR_CYCLES = 7000;
+export const CDR_SCENARIOS: CdrScenario[] = [
+  { name: 'a sender on the nominal rate', inc: () => 1024, acc0: 0, seed: 1, hint: 'four cycles a bit exactly, the start edge anywhere' },
+  { name: 'a sender 1.5% fast', inc: () => 1039, acc0: 1500, seed: 2, hint: 'the sender is 1.5% fast: its edges walk toward the early side and the strobe must follow them, one sample at a time' },
+  { name: 'a sender 1.5% slow', inc: () => 1009, acc0: 3000, seed: 3, hint: 'the sender is 1.5% slow: its edges walk toward the late side' },
+  { name: 'a sender drifting from nominal to 2.5% fast', inc: (t) => Math.round(1024 * (1 + (0.025 * t) / CDR_CYCLES)), acc0: 700, seed: 4, hint: 'the sender\'s clock changes while the stream runs (a warming crystal): the loop must keep following' },
+  { name: 'a sender drifting from nominal to 2.5% slow', inc: (t) => Math.round(1024 * (1 - (0.025 * t) / CDR_CYCLES)), acc0: 2300, seed: 5, hint: 'the same in the other direction' },
+  { name: 'a sender 2% slow then 2% fast', inc: (t) => (t < CDR_CYCLES / 2 ? 1004 : 1044), acc0: 100, seed: 6, hint: 'the drift changes sign halfway: the loop must unwind what it has accumulated' },
+];
+
+/** A scenario's line, a level per cycle, and the bits behind it. */
+export function cdrLine(s: CdrScenario): { line: number[]; bits: number[] } {
+  const r = rng(300 + s.seed);
+  const words: { v: number; k?: boolean }[] = [];
+  for (let i = 0; i < 400; i++) words.push(i % 8 === 0 ? { v: (5 << 5) | 28, k: true } : { v: Math.floor(r() * 256) });
+  const bits = encodeStream(words).bits;
+  const line: number[] = [];
+  let acc = s.acc0, i = 0;
+  for (let t = 0; t < CDR_CYCLES; t++) {
+    line.push(bits[i % bits.length]);
+    acc += s.inc(t);
+    while (acc >= 4096) { acc -= 4096; i++; }
+  }
+  return { line, bits };
+}
+
+export function runCdr(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the receiver is gates'], tested: 0 };
+  const sim = simOf(def, ['rxd', 'clk', 'bit', 'strobe']);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const sc = CDR_SCENARIOS, n = sc.length, ls = sc.map(cdrLine);
+  const got: number[][] = sc.map(() => []), at: number[][] = sc.map(() => []);
+  for (let t = 0; t < CDR_CYCLES; t++) {
+    sim.setInput('rxd', ls.map((l) => l.line[t]));
+    sim.settle();
+    const st = sim.get('strobe', n), bit = sim.get('bit', n);
+    for (let l = 0; l < n; l++) if (st[l]) { got[l].push(bit[l]); at[l].push(t); }
+    sim.cycle();
+  }
+  const fails: string[] = [];
+  const SKIP = 100;
+  sc.forEach((s, l) => {
+    const rec = got[l], sent = ls[l].bits;
+    const per = (CDR_CYCLES / Math.max(1, rec.length)).toFixed(2);
+    if (rec.length < 0.9 * CDR_CYCLES / 4.3) { fails.push(`${s.name}: ${rec.length} strobes in ${CDR_CYCLES} cycles (one every ${per}): the bit strobe must come once a bit, about every 4 cycles. ${s.hint}`); return; }
+    const win = rec.slice(SKIP, SKIP + 40).join('');
+    let off = -999;
+    for (let o = -60; o < 200 && off === -999; o++) if (sent.slice(o + SKIP, o + SKIP + 40).join('') === win) off = o;
+    if (off === -999) { fails.push(`${s.name}: no lock. The bits taken at the strobe, from bit ${SKIP + 1} on, never match the stream that was sent. ${s.hint}`); return; }
+    for (let i = SKIP; i < rec.length; i++) {
+      if (rec[i] !== sent[(off + i) % sent.length]) {
+        const dup = rec[i] === sent[(off + i - 1 + sent.length) % sent.length] && rec[i + 1] === sent[(off + i) % sent.length];
+        fails.push(`${s.name}: locked, then at bit ${i + 1} (cycle ${at[l][i]}) it read ${rec[i]}, the stream had ${sent[(off + i) % sent.length]}${dup ? ': a bit was sampled twice' : ''}. The sample point slipped by a whole bit. ${s.hint}`);
+        return;
+      }
+    }
+  });
+  return finish(fails, n, def);
 }

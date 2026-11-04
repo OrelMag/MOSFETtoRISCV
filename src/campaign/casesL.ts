@@ -31,4 +31,9 @@ export const CASESL: Record<string, LevelCase> = {
     without: 'A byte stream of all zeros is a line held low. Without the code the receiver loses the clock; with a transformer the signal droops toward the middle and every bit after the first is misread.',
     cost: '1195 NANDs and 29 gate delays of combinational logic against a raw byte\'s zero: two tables and two XORs. The price on the wire is 25% of the bandwidth: 1.25 Gb/s of line for 1 Gb/s of data, where 64b/66b pays 3%.',
   },
+  l_cdr: {
+    problem: 'A serial link has no clock wire, and the sender\'s oscillator is a different crystal from the receiver\'s, tens of parts per million off and drifting with temperature. The receiver has to put its sampling instant in the middle of every bit, and keep it there. The transitions the code guarantees are the only information it has: each edge says where a bit boundary is.',
+    without: 'A receiver that samples at a fixed rate from its own clock slips a bit every 1/ppm bits: at 100 ppm, one bit in ten thousand is read twice or lost, a link that would corrupt ten times a second at 1 Gb/s. A receiver that tries to follow every single edge instead jitters and samples at the boundary half the time.',
+    cost: '487 NANDs: five sampling flip-flops, the early/late detector, a strobe counter and a four-vote filter. The loop follows a clock up to about 3% off, which is thousands of times what crystals give; the limit is the transition density of the code (8b/10b guarantees one in five bits).',
+  },
 };
