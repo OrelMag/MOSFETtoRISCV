@@ -21,7 +21,10 @@ import { DIAL_SELECTOR } from '../src/lib/telegraph';
 import { UART_RX } from '../src/lib/uart';
 import { bitwise } from '../src/lib/wide';
 import { force, hold, swap, tie } from './mutate';
-import { ethMacFd, swBrain } from '../src/lib/ethlevels';
+import { ethMacFd, fwdPath, swBrain } from '../src/lib/ethlevels';
+import { HOST_REF, HOST_STARTER } from '../src/campaign/hostbench';
+import { checkOf, FWD_LANES } from '../src/campaign/fwdcheck';
+import { stats } from '../src/sim/stats';
 import { DRIVER_REF, DRIVER_STARTER } from '../src/campaign/nicbench';
 import { PUZZLES, runPuzzle } from '../src/campaign/puzzles';
 import { macRx, macTx } from '../src/lib/ethernet';
@@ -194,5 +197,103 @@ describe('l_driver: the far end of the cable names the rule a driver breaks', ()
   });
   it('the starter assembles and fails', () => {
     expect(fails(DRIVER_STARTER)).toMatch(/must serve the rings forever/);
+  });
+});
+
+describe('l_fwd: the model of the table names the rule a circuit breaks', () => {
+  const fwd = fwdPath();
+  it('the reference passes with a measured par, and another arrangement of the same function passes', () => {
+    const r = check('l_fwd', fwd);
+    expect(r.failures).toEqual([]);
+    expect(stats(fwd).nands).toBe(nodeById('l_fwd')!.par!.nand);
+    expect(r.score?.period).toBe(nodeById('l_fwd')!.par!.period);
+  });
+  it('matching', () => {
+    expect(bad('l_fwd', inside(fwd, ['match'], (d) => force(d, driver(d, 'long0'), 1)))).toMatch(/the longest match is 10\.1\.0\.0\/16/);
+    expect(bad('l_fwd', inside(fwd, ['match'], (d) => force(d, driver(d, 'found'), 1)))).toMatch(/no route matches: it goes up/);
+    expect(bad('l_fwd', tie(fwd, 'write.we', 0))).toMatch(/the longest match is/);
+    expect(bad('l_fwd', inside(fwd, ['act'], (d) => force(d, driver(d, 'local'), 0)))).toMatch(/the router itself/);
+  });
+  it('the order of the tests', () => {
+    expect(bad('l_fwd', tie(fwd, 'act.bad', 0))).toMatch(/checksum failed goes nowhere/);
+    expect(bad('l_fwd', inside(fwd, ['act'], (d) => force(d, driver(d, 'expired'), 0)))).toMatch(/cannot go one lower/);
+    expect(bad('l_fwd', inside(fwd, ['act'], (d) => force(d, driver(d, 'expired'), 1)))).toMatch(/act = slow path, expected forward/);
+  });
+  it('the header', () => {
+    expect(bad('l_fwd', inside(fwd, ['update'], (d) => force(d, driver(d, 'round'), 0)))).toMatch(/check_o = 0x[0-9a-f]{4}, expected 0x[0-9a-f]{4}/);
+    expect(bad('l_fwd', inside(fwd, ['update'], (d) => force(d, driver(d, 't0'), 0)))).toMatch(/ttl_o = \d+, expected \d+: every router lowers it by one/);
+    expect(bad('l_fwd', hold(fwd, 'go', 0))).toMatch(/ovalid = 0 in the clock after go/);
+  });
+  it('the shortcut RFC 1624 corrected: adding 0x0100 to the field passes every header but one kind, and that one is on the bench', () => {
+    const r = check('l_fwd', fwdPath(true));
+    expect(r.failures.length).toBe(1);
+    expect(r.failures[0]).toMatch(/a checksum of 0xFEFF: .*check_o = 0xffff, expected 0x0000.*the case RFC 1624 corrected/);
+    const m = FWD_LANES.find((l) => /0xFEFF/.test(l.name))!;
+    const hs = m.ops.flatMap((o) => (o && 'h' in o ? [o.h] : []));
+    expect(hs.length).toBeGreaterThan(0);
+    for (const h of hs) {
+      expect(checkOf(h)).toBe(0xfeff);
+      expect(checkOf(h, h.ttl - 1)).toBe(0);
+      expect((checkOf(h) + 0x0100) & 0xffff).toBe(0xffff);
+    }
+  });
+});
+
+describe('l_host: the router and the far host name the rule a program breaks', () => {
+  const ref = HOST_REF;
+  const fails = (src: string): string => {
+    expect(src, 'the mutant must differ').not.toBe(ref);
+    const r = runPuzzle(PUZZLES.l_host, src);
+    expect(r.errors).toEqual([]);
+    expect(r.ok, 'the mutant must not pass').toBe(false);
+    return r.results.filter((t) => !t.ok).map((t) => t.why).join(' | ');
+  };
+  it('the reference passes with a measured par', () => {
+    const r = runPuzzle(PUZZLES.l_host, ref);
+    expect(r.results.map((x) => x.why)).toEqual([undefined, undefined, undefined]);
+    expect(r.ok).toBe(true);
+    expect(r.size).toBe(nodeById('l_host')!.par!.size);
+    expect(r.cycles).toBe(nodeById('l_host')!.par!.cycles);
+  });
+  it('the starter assembles and fails', () => {
+    expect(fails(HOST_STARTER)).toMatch(/doorbell .*rung 0 times/);
+  });
+  it('asking ARP for the far host: it is on another network', () => {
+    expect(fails(ref.replace('li   t0, 0x00000101\n        sw   t0, 40(a0)', 'li   t0, 0x00000202\n        sw   t0, 40(a0)').replace('li   t0, 0x000a0000\n        sw   t0, 36(a0)         # target IP', 'li   t0, 0x000a0000\n        sw   t0, 36(a0)         # target IP'))).toMatch(/ARP works only on your own network/);
+  });
+  it('an ARP request that is not a broadcast', () => {
+    expect(fails(ref.replace('li   t0, 0xffffffff\n        sw   t0, 0(a0)', 'li   t0, 0x00000102\n        sw   t0, 0(a0)'))).toMatch(/you do not know who has the address yet/);
+  });
+  it('a gateway MAC assumed, not asked for: the next scenario has another card', () => {
+    const fixed = ref.replace('        lbu  t5, 0(t4)\n', '        li   t5, 2\n');
+    expect(fails(fixed)).toMatch(/destination MAC is .*use the MAC in the gateway's ARP answer/i);
+  });
+  it('taking any ARP answer: another machine answers first in one scenario', () => {
+    expect(fails(ref.replace('        lw   t0, 28(a0)\n        li   t1, 0x0101000a\n        bne  t0, t1, arpno\n', ''))).toMatch(/destination MAC is/);
+  });
+  it('a checksum left at 0, in the header and in the message', () => {
+    expect(fails(ref.replace('        sh   a4, 24(a0)         # IP header checksum\n', ''))).toMatch(/IP header checksum is wrong/);
+    expect(fails(ref.replace('        sh   a4, 36(a0)         # ICMP checksum\n', ''))).toMatch(/ICMP checksum is wrong/);
+  });
+  it('a TTL of 1 dies at the first hop', () => {
+    expect(fails(ref.replace('li   t0, 0x01400040', 'li   t0, 0x01010040'))).toMatch(/TTL .*dies at the first hop/);
+  });
+  it('a wrong address, type or length', () => {
+    expect(fails(ref.replace('li   t0, 0x00080202', 'li   t0, 0x00080302'))).toMatch(/destination address is 10\.0\.2\.3/);
+    expect(fails(ref.replace('li   t0, 0x00080202', 'li   t0, 0x00000202'))).toMatch(/ICMP type and code/);
+  });
+  it('a K on the first frame back: the true reply is not the first in one scenario', () => {
+    const anyFrame = ref.replace('        lhu  t0, 38(a0)\n        li   t1, 0x3412\n        bne  t0, t1, no\n', '');
+    expect(fails(anyFrame)).toMatch(/before the true reply had finished arriving/);
+    const anySeq = ref.replace('        lhu  t0, 40(a0)\n        li   t1, 0x0100\n        bne  t0, t1, no\n', '');
+    expect(fails(anySeq)).toMatch(/before the true reply/);
+    const anySrc = ref.replace('        lhu  t0, 28(a0)\n        li   t1, 0x0202\n        bne  t0, t1, no\n', '');
+    expect(fails(anySrc)).toMatch(/before the true reply/);
+  });
+  it('frames ignored but never handed back: the ring runs dry', () => {
+    expect(fails(ref.replace('no:     jal  ra, back\n        j    wait', 'no:     j    done'))).toMatch(/no 'K'|STATUS\.MISS|no .K./);
+  });
+  it('no K at all', () => {
+    expect(fails(ref.replace('        sw   t0, 0(t1)\ndone:', 'done:'))).toMatch(/no 'K' came to the console/);
   });
 });

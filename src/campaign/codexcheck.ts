@@ -12,7 +12,8 @@ import { CHECK5 } from './codexcheck5';
 import { CHECK6 } from './codexcheck6';
 import { CHECK7 } from './codexcheck7';
 import { CHECK8 } from './codexcheck8';
+import { CHECK9 } from './codexcheck9';
 
-export const CHECKS: Record<string, Quiz[]> = { ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4, ...CHECK5, ...CHECK6, ...CHECK7, ...CHECK8 };
+export const CHECKS: Record<string, Quiz[]> = { ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4, ...CHECK5, ...CHECK6, ...CHECK7, ...CHECK8, ...CHECK9 };
 
 export const checkOf = (id: string): Quiz[] => CHECKS[id] ?? [];

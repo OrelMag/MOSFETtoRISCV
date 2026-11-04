@@ -18,7 +18,7 @@ const RAM_K = 13, IMEM_K = 8;
 const hex = (v: number, d = 2) => `0x${(v >>> 0).toString(16).padStart(d, '0')}`;
 
 /** Clocks of an instruction on the system CPU: one, two for a load or a store (a bus access). */
-const clocksOf = (text: string): number => (/^(lw|lh|lb|lhu|lbu|sw|sh|sb)\b/.test(text) ? 2 : 1);
+export const clocksOf = (text: string): number => (/^(lw|lh|lb|lhu|lbu|sw|sh|sb)\b/.test(text) ? 2 : 1);
 
 interface Request { spec: FrameSpec; body: number[] }
 export interface DriverScenario { name: string; sizes: number[]; mode: 'one' | 'burst' }

@@ -8,6 +8,7 @@ import { CHECKS } from '../src/campaign/codexcheck';
 import { CHECK6 } from '../src/campaign/codexcheck6';
 import { CHECK7 } from '../src/campaign/codexcheck7';
 import { CHECK8 } from '../src/campaign/codexcheck8';
+import { CHECK9 } from '../src/campaign/codexcheck9';
 import { CODEX_COMM, COMM_AWAITING_LEVELS } from '../src/campaign/codexcomm';
 import { moreOf } from '../src/campaign/codexmore';
 import { NODES } from '../src/campaign/nodes';
@@ -25,7 +26,18 @@ import { arpFrame, checksum, icmpEchoFrame, ip4, onesSum } from '../src/comm/net
 import * as NF from '../src/comm/stack/netfacts';
 import NET from '../src/comm/stack/netcosts.json';
 import { NIC_BASE, NIC_COSTS, nicPollSource } from '../src/riscv/nicprograms';
-import { arbiterN, cam, macRx, macTx, registry } from '../src/lib';
+import { arbiterN, cam, macRx, macTx, registry, ROUTER_FAST } from '../src/lib';
+import { bigRam } from '../src/lib/bigmem';
+import { fwdPath } from '../src/lib/ethlevels';
+import { chPath } from '../src/chapters/ch-comm-path';
+import { MEASURED_MBPS, WIRE_DATA_MBPS } from '../src/chapters/ch-comm-tcp';
+import { TTL_DELTA, ttlChecksum } from '../src/net/ipv4';
+import { CHAIN3, DistVec, floodAll, INFINITY, NET7 } from '../src/net/routing';
+import { TCP_K } from '../src/net/tcp';
+import COSTS from '../src/net/tcpcosts.json';
+import { queueDelay, runTcp } from '../src/net/tcpsim';
+import { ADJ_K, BUF_K, TRIE_K, TRIE_NODES } from '../src/net/trie';
+import { engineCycles, FRAME_60, portsServed, wireCycles } from '../src/widgets/router';
 import { nic } from '../src/lib/nic';
 import { crossbar, ethSwitch, inputBuffer, macTable, outputPort, tablePort } from '../src/lib/ethswitch';
 import { BENCH_OPTS } from '../src/widgets/ethswitch';
@@ -66,7 +78,7 @@ const says = (ch: string, step: number, s: string) => {
 
 describe('the Communication codex entries', () => {
   it('are complete: summary, fuller text, chapters, answer-first questions, a TAUGHT row, no level yet', () => {
-    expect(IDS.length).toBe(28);
+    expect(IDS.length).toBe(36);
     for (const e of CODEX_COMM) {
       const m = moreOf(e.id)!;
       expect(m?.idea, `${e.id}: idea`).toBeTruthy();
@@ -80,7 +92,7 @@ describe('the Communication codex entries', () => {
       expect(TAUGHT[e.id], `${e.id}: TAUGHT`).toBeTruthy();
       expect(m.chapters!.map((l) => l.chapter), `${e.id}: taught chapter is a link`).toContain(TAUGHT[e.id]);
     }
-    expect(Object.keys({ ...CHECK6, ...CHECK7, ...CHECK8 }).sort()).toEqual([...IDS].sort());
+    expect(Object.keys({ ...CHECK6, ...CHECK7, ...CHECK8, ...CHECK9 }).sort()).toEqual([...IDS].sort());
   });
 
   it('link real chapter steps by their titles, and real library parts', () => {
@@ -335,6 +347,49 @@ describe('the Communication codex entries', () => {
     quotes('hol', '0.6553', '0.655', '0.5858', '0.590', '0.691', '0.680', '+945', '+2059', '+4621', '0.80', '0.88', '0.92', '142,221');
     says('switch', 5, '0.6553'); says('switch', 5, '0.5858'); says('switch', 5, '0.691'); says('switch', 5, '0.680'); says('switch', 5, '0.590'); says('switch', 5, '+945 NANDs at 4 cells');
     says('switch', 5, 'about 0.80'); says('switch', 5, '0.88'); says('switch', 5, '0.92');
+  });
+
+  it('quote the router as built and as the chapter prints it', () => {
+    const mem = nands(bigRam(TRIE_K, 24)) + nands(bigRam(BUF_K, 8)) + nands(bigRam(ADJ_K, 8)), all = stats(ROUTER_FAST).nands;
+    expect([mem, all - mem, TRIE_NODES]).toEqual([836585, 4214, 1024]);
+    expect(Math.round((1000 * mem) / all) / 10).toBe(99.5);
+    expect([engineCycles(FRAME_60, 33), wireCycles(FRAME_60), portsServed(FRAME_60, 33)]).toEqual([155, 2688, 17]);
+    expect(stats(cam(4, 32)).nands).toBe(11725);
+    expect(stats(fwdPath()).nands).toBe(5847);
+    quotes('lpm', '33', '1,024 nodes', '11,725 NANDs', '5,847 NANDs');
+    quotes('fastpath', '4,214 NANDs', '836,585', '155 cycles', '2,688 cycles', '17 ports', '99.5 %', '0xFEFF', '65 536');
+    // RFC 1624's form: the field usually rises by 0x0100, and the one exception is why the form exists
+    expect(TTL_DELTA).toBe(0xfeff);
+    for (const c of [0x6cea, 0xb861, 0xff12]) { const s = c + 0x0100; expect(ttlChecksum(c)).toBe((s & 0xffff) + (s >>> 16)); }
+    expect(ttlChecksum(0xfeff)).toBe(0);
+    const d = new DistVec(NET7); d.settle();
+    const ch = new DistVec(CHAIN3); ch.settle(); ch.fail(1, 2);
+    const po = new DistVec(CHAIN3, true); po.settle(); po.fail(1, 2);
+    expect([NET7.names.length, NET7.links.length, d.rounds, d.messages, floodAll(NET7), ch.settle(), po.settle(), INFINITY]).toEqual([7, 10, 6, 120, 98, 15, 2, 16]);
+    quotes('routing', '7 routers', '10 links', '6 rounds', '120 whole tables', '98 short reports', '15 rounds', '2 rounds');
+  });
+
+  it('quote TCP as measured, and the queues as the model runs them', () => {
+    expect([TCP_K.MSS, TCP_K.RCV / TCP_K.MSS, COSTS.lines, COSTS.words.a, COSTS.fast.clocks, Math.floor(COSTS.fast.clocks / COSTS.fast.bytes)]).toEqual([64, 8, 570, 3241, 1027057, 128]);
+    expect([WIRE_DATA_MBPS.toFixed(1), MEASURED_MBPS.toFixed(1), LINK_MBPS.toFixed(1)]).toEqual(['28.5', '15.8', '63.3']);
+    quotes('tcp', '570 lines', '3,241 words', '142 bytes', '28.5', '63.3 Mb/s', '1,027,057 cycles', '128 a byte', '15.8 Mb/s', '3.4 s');
+    says('tcp', 7, '15.8 Mb/s'); says('tcp', 7, '28.5 Mb/s');
+    const { saw, small, fast } = COSTS;
+    expect([saw.bytes, saw.o.byteClocks, saw.o.queue, saw.drops, saw.fast, saw.timeouts]).toEqual([6000, 200, 4, 7, 5, 1]);
+    expect([small.bytes, small.o.byteClocks, small.o.queue, small.drops, small.fast, small.timeouts]).toEqual([3000, 400, 3, 8, 0, 5]);
+    expect([fast.bytes, fast.drops, fast.fast, fast.timeouts, fast.cwnd[fast.cwnd.length - 1].cwnd / TCP_K.MSS]).toEqual([8000, 0, 0, 0, 16]);
+    quotes('aimd', '7 drops, 5 fast retransmits, 1 timeout', '8 drops, 0 fast retransmits, 5 timeouts', '32 kb/s to 40 b/s');
+    const q = (queue: number) => { const r = runTcp({ bytes: 8000, byteClocks: 200, queue, delay: 20000 }); return [r.doneAt, r.drops, r.timeouts, r.rtts[r.rtts.length - 1]]; };
+    expect([q(2), q(4), q(8)]).toEqual([[5834908, 14, 14, 67669], [4280132, 9, 1, 98928], [3054241, 0, 0, 153072]]);
+    quotes('bufferbloat', '5,834,908', '4,280,132', '3,054,241', '67,669', '98,928', '153,072', '23,600', '0.8 s');
+    expect(queueDelay(1, 200)).toBe(23600);
+  });
+
+  it('quote the internet path as chapter 53 computes it', () => {
+    const keep = strip(chPath.recap!.keep.join(' ')).replace(/\s+/g, ' ');
+    for (const s of ['at most 62 trie nodes', 'customer, then peer, then provider', 'Ridgeway Net → Kestrel Transit → Tarn Backbone → Quillon Hosting', 'A false /24 beats the true /16', '3 questions and 8 messages', '194 ms in sequence', 'takes 47.7 ms and 47.5 of it is light', '615 µs for a full frame on the 20 Mb/s line', '320 µs at half load to 6.1 ms at 95 %', 'about 720 ms']) expect(keep, s).toContain(s);
+    quotes('bgp', 'at most 62 trie nodes', 'Ridgeway Net → Kestrel Transit → Tarn Backbone → Quillon Hosting', 'customer, then peer, then provider');
+    quotes('internetpath', '47.7 ms', '47.5', '615 µs', '320 µs', '6.1 ms at 95 %', '3 questions and 8 messages', '194 ms', 'about 720 ms', '5 µs a kilometre');
   });
 
   it('quote the NIC, the checksum, ARP and the ping as built and measured', () => {

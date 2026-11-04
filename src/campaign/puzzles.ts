@@ -14,6 +14,7 @@ import { Warps16 } from '../riscv/rv16/warps16';
 import { rng } from './drills';
 import { draw16, FB16, SCREEN16 } from '../gfx/raster16';
 import type { Vtx } from '../gfx/raster';
+import { HOST_REF, HOST_SCENARIOS, HOST_STARTER, runHostPuzzle } from './hostbench';
 import { DRIVER_REF, DRIVER_SCENARIOS, DRIVER_STARTER, runNicPuzzle } from './nicbench';
 
 export interface PuzzleTest {
@@ -48,6 +49,8 @@ export interface ProgramPuzzle {
   raster?: boolean;
   /** The packet driver: RV32 assembly for the computer with a NIC, judged by the far end of a cable (nicbench.ts); cycles are clocks from a request to its reply. */
   nic?: boolean;
+  /** With nic: the far host, judged by hostbench.ts: a router and a host, not a mirror. */
+  host?: boolean;
 }
 
 export interface PuzzleRun {
@@ -106,7 +109,7 @@ export const puzzleUnit = (p: ProgramPuzzle): 'instructions' | 'warp instruction
 
 /** Run every test of a puzzle on a source. Never throws. */
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
-  if (p.nic) return runNicPuzzle(src);
+  if (p.nic) return p.host ? runHostPuzzle(src) : runNicPuzzle(src);
   const a = assemble16(src);
   const size = a.words.length;
   if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0, laneOps: 0 } : {}) };
@@ -161,6 +164,16 @@ export const PUZZLES: Record<string, ProgramPuzzle> = {
     tests: () => DRIVER_SCENARIOS.map((s) => ({ name: s.name, expect: {} })),
     maxSteps: 3_000_000,
     nic: true,
+  },
+  l_host: {
+    brief: 'The same computer: you are 10.0.1.2, MAC 02:00:00:00:00:0a, on 10.0.1.0/24, and your gateway is 10.0.1.1. Ping 10.0.2.2, a machine on another network, from nothing: no stack, only your assembly. Ask ARP for the gateway\'s MAC (a broadcast, EtherType 0x0806), and send it an ICMP echo request for 10.0.2.2 (EtherType 0x0800; a 20-byte IP header, 0x45, protocol 1, a TTL of at least 2; ICMP type 8, code 0, an identifier and a sequence number; both checksums right). When the reply to your request has arrived, store one \'K\' to the console at 0x8000_0000. Everything on the wire goes most significant byte first. '
+      + 'The far end is a model of the router and the host behind it. It names the first rule you break, and it does not help: another scenario, another gateway card, and frames for somebody else arrive too, each to be handed back to the NIC. Graded on the program\'s size and the clocks from reset to the \'K\'.',
+    starter: HOST_STARTER,
+    ref: HOST_REF,
+    tests: () => HOST_SCENARIOS.map((s) => ({ name: s.name, expect: {} })),
+    maxSteps: 3_000_000,
+    nic: true,
+    host: true,
   },
   p_add: {
     brief: `Read two numbers from IN and write their sum (mod 2<sup>16</sup>) to OUT. ${IO_HELP}`,
