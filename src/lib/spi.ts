@@ -2,7 +2,7 @@
 // 25-series command set. Both are written with lib/rtl.ts, so they are NAND gates and the library's flip-flops in boxes of their
 // own; comm/spi.ts holds the models the tests compare them with every cycle.
 
-import { Rtl, type Sig } from './rtl';
+import { Rtl } from './rtl';
 import { bigRam } from './bigmem';
 import { define } from './define';
 import { edgeKind, peerMiso, type SpiMode } from '../comm/spi';
@@ -134,9 +134,9 @@ export function spiPair(): ComponentDef {
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), hold = m.input('hold'), sel = m.input('sel'), mode3 = m.input('mode3');
   const tx = m.inputBus('tx', 8);
   const miso = m.fwd('miso_in');
-  const [sclk, mosi, csn, rxb, busy, done] = m.part(spiMaster(), [clk, rst, start, hold, mode3, mode3, m.bus(tx), miso]);
+  const [sclk, mosi, csn, rxb, busy, done] = m.part(spiMaster(), [clk, rst, start, hold, mode3, mode3, m.bus(tx), miso], 'master', 'master');
   const cs0 = m.name(m.or(csn, sel), 'cs0_n'), cs1 = m.name(m.or(csn, m.not(sel)), 'cs1_n');
-  const d0 = m.part(spiDevice(), [sclk, cs0, mosi])[0], d1 = m.part(spiDevice(), [sclk, cs1, mosi])[0];
+  const d0 = m.part(spiDevice(), [sclk, cs0, mosi], 'memory 0', 'mem0')[0], d1 = m.part(spiDevice(), [sclk, cs1, mosi], 'memory 1', 'mem1')[0];
   m.drive(miso, m.name(m.or(d0, d1), 'miso'));
   m.outputBus('rx', m.unbus(rxb, 8)); m.output('busy', busy); m.output('done', done);
   m.output('sclk', sclk); m.output('mosi', mosi); m.output('miso', miso); m.output('cs0_n', cs0); m.output('cs1_n', cs1);
@@ -157,7 +157,7 @@ export function masterRun(mode: SpiMode, tx: number, peer: number): MasterRun {
   const out = (p: string) => pack(g.getBits(g.design.root.ports[p]));
   const set = (v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) g.setInput(k, x); g.settle(); };
   const clocks: MasterClock[] = [], edges: number[] = [];
-  let changes = 0, edgeNo = 0, prev = mode.cpol, miso = peerMiso(mode, peer, 0);
+  let changes = 0, edgeNo = 0, prev: number = mode.cpol, miso = peerMiso(mode, peer, 0);
   set({ rst: 1, start: 0, hold: 0, cpol: mode.cpol, cpha: mode.cpha, tx: 0, miso });
   set({ clk: 1 }); set({ clk: 0 }); set({ rst: 0 });
   const rec = () => clocks.push({ sclk: out('sclk'), mosi: out('mosi'), miso, cs_n: out('cs_n') });

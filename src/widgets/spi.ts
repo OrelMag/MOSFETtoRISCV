@@ -7,7 +7,6 @@ import { edgeKind, modeNumber, SPI_MODES, type SpiMode } from '../comm/spi';
 import { masterRun, spiDevice, spiMaster, spiPair } from '../lib/spi';
 import { decoder } from '../lib/combinational';
 import { stats } from '../sim/stats';
-import { bench } from '../chapters/types';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';
@@ -50,6 +49,51 @@ export function waveSvg(rows: WaveRow[], n: number, opts: { marks?: WaveMarks[];
   return svg;
 }
 
+// ---- 1. a byte on a UART and on SPI --------------------------------------------------------------------------------------------
+
+/** One byte as a UART frame (8N1, LSB first) and as SPI mode 0, on the same time axis: what the clock wire replaces. */
+export function frameCompareWidget(): Widget {
+  let byte = 0xa5;
+  const view = h('div', { class: 'spi-view' }), note = h('p', { class: 'clk-verdict ok', role: 'status' });
+  const paint = () => {
+    const Q = 4; // slots per bit time
+    const bitAt = (i: number) => (byte >> i) & 1;
+    // UART: idle, start, d0 … d7, stop, idle
+    const uart: number[] = [], uspans: { from: number; to: number; text: string }[] = [];
+    const putBit = (v: number, text: string) => { uspans.push({ from: uart.length, to: uart.length + Q, text }); for (let k = 0; k < Q; k++) uart.push(v); };
+    for (let k = 0; k < Q; k++) uart.push(1);
+    putBit(0, 'S'); for (let i = 0; i < 8; i++) putBit(bitAt(i), String(bitAt(i))); putBit(1, 'P');
+    for (let k = 0; k < Q; k++) uart.push(1);
+    const n = uart.length;
+    // SPI mode 0: CS low a bit time before the first edge, then 8 clocks of Q slots (MOSI changes at the falling edge)
+    const cs: number[] = [], sclk: number[] = [], mosi: number[] = [], sspans: { from: number; to: number; text: string }[] = [];
+    const lead = Q;
+    for (let k = 0; k < n; k++) {
+      const t = k - lead - Q;
+      const inFrame = k >= lead && k < lead + Q + 8 * Q + Q;
+      cs.push(inFrame ? 0 : 1);
+      const rel = t; // slot index from the first clock edge
+      sclk.push(rel >= 0 && rel < 8 * Q ? (Math.floor(rel / (Q / 2)) % 2 === 0 ? 1 : 0) : 0);
+      const bi = rel < 0 ? 0 : Math.min(7, Math.floor(rel / Q));
+      mosi.push(inFrame ? (byte >> (7 - bi)) & 1 : 1);
+    }
+    for (let i = 0; i < 8; i++) sspans.push({ from: lead + Q + i * Q, to: lead + Q + (i + 1) * Q, text: String((byte >> (7 - i)) & 1) });
+    const marks: WaveMarks[] = Array.from({ length: 8 }, (_, i) => ({ x: lead + Q + i * Q, kind: 'sample' as const }));
+    const svg = waveSvg([
+      { label: 'UART', bits: uart, spans: uspans, cls: 'mosi' },
+      { label: 'CS', bits: cs, cls: 'cs' },
+      { label: 'SCLK', bits: sclk, cls: 'clk' },
+      { label: 'MOSI', bits: mosi, spans: sspans, cls: 'mosi' },
+    ], n, { marks, slotW: Math.max(5, Math.min(12, 520 / n)), label: 'One byte on a UART line and on SPI mode 0, on the same time axis' });
+    view.replaceChildren(svg);
+    note.textContent = `The UART line carries 10 bit times for 0x${hex(byte)}: a start bit (0), the 8 bits least significant first, a stop bit (1), and the receiver samples in the middle of each of them with a clock of its own. SPI carries the same 8 bits in 8 clock periods, most significant first, each sampled on the rising edge of SCLK (dashed marks); CS brackets the byte. Same time per bit here, 20 % fewer bit times, and no guess about when to look.`;
+  };
+  const sl = slider('Byte', 0, 255, 1, byte, (v) => `0x${hex(v)}`, (v) => { byte = v; paint(); });
+  const el = h('div', { class: 'widget mos clk-w' }, h('div', { class: 'panel' }, h('h3', null, 'The same byte, with and without a clock wire'), view, h('div', { class: 'mos-row' }, sl.el), note));
+  paint();
+  return { el };
+}
+
 // ---- 3. the four modes ------------------------------------------------------------------------------------------------------
 
 /** Four modes, drawn from the gate-level master against a peer that follows the mode's rules. */
@@ -64,7 +108,7 @@ export function spiModesWidget(): Widget {
       // a bit lies between the change edge before its sample edge and the one after it
       const sample = r.edges.filter((_, e) => edgeKind(mode, e).sample), change = r.edges.filter((_, e) => !edgeKind(mode, e).sample);
       void sampled; void pre;
-      return sample.map((c, i) => {
+      return sample.map((_c, i) => {
         const from = mode.cpha === 0 ? (i === 0 ? 0 : change[i - 1]) : change[i];
         const to = mode.cpha === 0 ? (i === 7 ? n : change[i]) : (i === 7 ? n : change[i + 1]);
         return { from, to, text: String((byte >> (7 - i)) & 1) };
@@ -202,7 +246,7 @@ export const spiPanel: ScenePanel = (stage: Stage): Widget => {
 
 /** The master and two memories, with the transaction panel. */
 export function spiScene(): Scene {
-  return { root: bench(spiPair()), inputs: { sel: 0, mode3: 0, tx: 0, start: 0, hold: 0, rst: 0 }, clock: 'clk', autoClock: false, hiddenInputs: ['tx', 'start', 'hold', 'rst'], panels: [spiPanel], memory: false };
+  return { root: spiPair(), inputs: { sel: 0, mode3: 0, tx: 0, start: 0, hold: 0, rst: 0 }, clock: 'clk', autoClock: false, hiddenInputs: ['tx', 'start', 'hold', 'rst'], panels: [spiPanel], memory: false };
 }
 
 export { spiDevice };

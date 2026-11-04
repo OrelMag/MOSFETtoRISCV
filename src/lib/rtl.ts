@@ -45,9 +45,6 @@ export class Rtl {
   private clocks = new Set<string>();
   private pending = new Map<Sig, Gate>();
   private used = new Set<string>();
-  private n = 0;
-  private zero?: Sig;
-  private one?: Sig;
 
   constructor(private opt: RtlOptions) {}
 
@@ -106,15 +103,15 @@ export class Rtl {
 
   // ---- gates -------------------------------------------------------------------------------------------------------
 
-  private parts(def: ComponentDef, ins: Sig[], label?: string): Sig[] {
-    const name = `g${this.gates.length}`;
+  private parts(def: ComponentDef, ins: Sig[], label?: string, inst?: string): Sig[] {
+    const name = inst ?? `g${this.gates.length}`;
     const out = OUT_PORTS(def).map((p) => this.fresh(name, p));
     this.gates.push({ scope: this.cur, name, def, ins, out, label });
     return out;
   }
   private gate(def: ComponentDef, ins: Sig[], label?: string): Sig { return this.parts(def, ins, label)[0]; }
   /** Any library part: inputs in port order, every output returned. Buses go through bus() / unbus(). */
-  part(def: ComponentDef, ins: Sig[], label?: string): Sig[] { return this.parts(def, ins, label); }
+  part(def: ComponentDef, ins: Sig[], label?: string, inst?: string): Sig[] { return this.parts(def, ins, label, inst); }
   /** w bits (LSB first) into one w-bit bus, and back. */
   bus(sigs: Sig[]): Sig { return this.gate(merger(ones(sigs.length)), sigs); }
   unbus(s: Sig, w: number): Sig[] { return this.parts(splitter(ones(w)), [s]); }

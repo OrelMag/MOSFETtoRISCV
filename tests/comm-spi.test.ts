@@ -2,7 +2,7 @@
 // every SCLK edge (target), in all four modes, with seeded random MISO and random start times.
 
 import { describe, expect, it } from 'vitest';
-import { edgeKind, modeNumber, SPI_MODES, spiTransfer, spiTrace, SpiMaster, SpiTarget, SPI_READ, SPI_WRITE } from '../src/comm/spi';
+import { edgeKind, modeNumber, SPI_MODES, spiTransfer, SpiMaster, SpiTarget, SPI_READ, SPI_WRITE } from '../src/comm/spi';
 import { masterRun, spiDevice, spiMaster } from '../src/lib/spi';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';

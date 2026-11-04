@@ -494,8 +494,16 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "uart", num: 43, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["clocks","bus"], steps: [
     { title: "One byte, no clock" },
   ] },
-  { id: "spi", num: 44, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart"], steps: [
-    { title: "Send the clock too" },
+  { id: "spi", num: 44, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart","clocks"], recap: {"checks":3}, steps: [
+    { title: "Send the clock too", challenge: "quiz" },
+    { title: "SPI: a ring of shift registers", challenge: "quiz" },
+    { title: "Four modes", challenge: "quiz" },
+    { title: "Many devices: select, or chain", challenge: "quiz" },
+    { title: "Two wires, any number of devices", challenge: "reach" },
+    { title: "What the pull-up costs", challenge: "quiz" },
+    { title: "The I²C frame", challenge: "quiz" },
+    { title: "Arbitration: two controllers at once", challenge: "quiz" },
+    { title: "Three ways to move a byte", challenge: "quiz" },
   ] },
   { id: "appendix-6502", num: 48, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
