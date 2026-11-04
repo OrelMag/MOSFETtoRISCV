@@ -11,6 +11,8 @@ import { VDD, energyFj } from '../sim/power';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { strowger3d } from '../widgets/strowger3d';
+import { telegraph3d } from '../widgets/telegraph3d';
+import { withModel } from '../widgets/modelhost';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
 import type { Chapter } from './types';
@@ -137,7 +139,7 @@ export const chTelegraph: Chapter = {
         240 V, the voltage of some two hundred cells in series. Beyond that the insulation leaks and the battery becomes the bill. The curve plots the loop current against the route length;
         the grey line is the other metal. Add a repeater and every section starts again from a fresh battery.</p>
         <div class="try">Set 150 km of iron on 48 V, and watch the current fall under the pull-in line. Add one repeater.</div>`,
-      widget: () => telegraphLineWidget(),
+      widget: () => withModel(telegraphLineWidget(), telegraph3d()),
       more: {
         derive: `<p>The coil's pull-in current is ${mA(PULL_I)} mA = ${PULL_V.toFixed(2)} V / 400 Ω (the force balance of <code>phys/relay.ts</code>). With r Ω/km of wire, the reach of one section is
           (V / I<sub>pull</sub> − R<sub>coil</sub>) / r. For iron at 24 V: (${f0(24 / PULL_I)} − 400) / ${f1(ohmsPerKm('iron'))} = ${f0(reachKm(24, 'iron'))} km. Resistance per km is ρ / A with ρ = 1.0 × 10<sup>−7</sup> Ω·m for iron

@@ -4,6 +4,8 @@ import { deckReader } from '../cards/reader';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { cardEditorWidget, censusWidget, deckWidget, loomWidget, readerPanel, sampleDeck } from '../widgets/cards';
+import { withModel } from '../widgets/modelhost';
+import { press3d } from '../widgets/press3d';
 import { bench, type Chapter } from './types';
 
 const SUM = assemble(PROGRAMS.find((p) => p.id === 'sum')!.source);
@@ -125,7 +127,7 @@ export const chCards: Chapter = {
         real: `<p>Later tabulators moved the wiring to a removable plugboard, so a machine was reprogrammed by plugging wires: a program held in wires, between the fixed
           machine and the deck of data. Hollerith's firm, merged into C-T-R in 1911, was renamed IBM in 1924, and the card stayed the computer's input for half a century.</p>`,
       },
-      widget: () => censusWidget(),
+      widget: () => withModel(censusWidget(), press3d()),
       challenge: {
         kind: 'quiz', question: 'How would the tabulator count people who are married OR born abroad, with one dial?',
         options: ['Drive the dial through the two holes\' relay contacts in parallel', 'In series', 'Add the two dials afterwards', 'It cannot'],

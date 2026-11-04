@@ -424,6 +424,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The read, in slow motion", challenge: "reach" },
     { title: "The sense amplifier", challenge: "quiz" },
     { title: "Leaks and refresh", challenge: "reach" },
+    { title: "The array, live" },
     { title: "Rows, columns, banks", challenge: "quiz" },
     { title: "Bursts and timings", challenge: "quiz" },
   ] },
@@ -437,6 +438,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "flash", num: 37, title: "Flash", blurb: "The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.", level: "Memory in depth", builds: ["mosfet","memory"], recap: {"checks":3}, steps: [
     { title: "A gate that remembers", challenge: "quiz" },
+    { title: "The floating gate, up close" },
     { title: "Program and erase", challenge: "reach" },
     { title: "NOR and NAND", challenge: "quiz" },
     { title: "Never overwrite", challenge: "quiz" },
@@ -480,6 +482,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Termination", challenge: "quiz" },
     { title: "Crosstalk, ground bounce and pairs", challenge: "quiz" },
     { title: "An I/O pad, and where the transistors stop", challenge: "reach" },
+    { title: "From the pad to the pin" },
   ] },
   { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], recap: {"checks":3}, steps: [
     { title: "What a receiver decides", challenge: "quiz" },

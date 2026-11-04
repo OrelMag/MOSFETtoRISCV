@@ -130,9 +130,9 @@ registerPropsSection({
     const id = s.parts[0];
     const part = ed.doc.parts.find((p) => p.id === id);
     if (!part) return null;
-    const look = canLookInside(ed, id);
+    const look = canLookInside(ed, id), model = !!ed.defOf(part)?.modelPanel;
     return h('section', { class: 'sb-sec-props' }, h('h3', null, 'Look inside'),
-      h('p', { class: 'sb-sum' }, look
+      h('p', { class: 'sb-sum' }, model ? 'A model, not a circuit: it opens onto the panel of what it stands for (no gates, no transistors).' : look
         ? `Opens its schematic with live values from this circuit (a library part's wires can be moved, as on the stage); keep opening parts down to transistors.${'chip' in part.ref ? '' : ' (Double-click does the same.)'}`
         : 'A primitive of the simulator: it has no inside to show.'),
       h('div', { class: 'sb-btns' },

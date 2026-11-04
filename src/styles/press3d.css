@@ -1,0 +1,11 @@
+/* ---------- Hollerith's pin press (widgets/press3dview.ts): materials ---------- */
+.m3d {
+  --pr-card: light-dark(#e6d9b0, #d9c995);
+  --pr-hg: light-dark(#9aa3b5, #c9d0de);
+  --pr-cup: light-dark(#6c7690, #7f8aa6);
+  --pr-face: light-dark(#efe9d6, #d9d3c0);
+  --pr-hand: light-dark(#2b2f3a, #14161c);
+  --pr-brass: light-dark(#b8862b, #e0b04a);
+  --pr-pad: light-dark(#8a93ad, #565f7a);
+}
+.pr-stroke output { width: 44px; }

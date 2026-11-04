@@ -16,6 +16,7 @@ import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../vie
 import { SchematicView } from '../view/schematic';
 import { WhyPanel } from '../view/whypanel';
 import type { Widget } from '../view/stage';
+import { modelLeaf } from '../widgets/modelleaf';
 import { transistorLeaf } from '../widgets/mosfet';
 import type { Editor } from './editor';
 import { drawFace, type FaceEls, paintFace } from './dispface';
@@ -41,7 +42,7 @@ export function lookInside(ed: Editor, path: string[]): void {
   const node = sim.design.root.children?.get(path[0]);
   if (!node) return void ed.toast('Not wired into the circuit yet', 'err');
   const prim = node.def.prim;
-  if (!netlistOf(node.def) && prim !== 'nmos' && prim !== 'pmos') {
+  if (!netlistOf(node.def) && prim !== 'nmos' && prim !== 'pmos' && !node.def.modelPanel) {
     return void ed.toast(`${node.def.name} has no inside: it is a primitive of the simulator`);
   }
   let v = views.get(ed);
@@ -52,7 +53,7 @@ export function lookInside(ed: Editor, path: string[]): void {
 /** Can this part be looked inside? (Has a structure, or is a transistor.) */
 export function canLookInside(ed: Editor, part: string): boolean {
   const d = ed.defOf(ed.doc.parts.find((p) => p.id === part)!);
-  return !!d && (!!netlistOf(d) || d.prim === 'nmos' || d.prim === 'pmos');
+  return !!d && (!!netlistOf(d) || d.prim === 'nmos' || d.prim === 'pmos' || !!d.modelPanel);
 }
 
 class InsideView {
@@ -168,8 +169,8 @@ class InsideView {
         c = null; // its inside cannot be simulated on its own: stop at the parent
       }
       if (!c) {
-        const p = ctx.node.children?.get(path[i])?.def.prim;
-        if ((p === 'nmos' || p === 'pmos') && i === path.length - 1) leaf = path[i];
+        const d = ctx.node.children?.get(path[i])?.def;
+        if ((d?.prim === 'nmos' || d?.prim === 'pmos' || d?.modelPanel) && i === path.length - 1) leaf = path[i];
         break;
       }
       ctx = c;
@@ -245,8 +246,11 @@ class InsideView {
 
   private openLeaf(name: string): void {
     const ctx = this.ctx!;
-    const def = ctx.node.children!.get(name)!.def;
-    const w = transistorLeaf(def, () => ctx.transistorGate(name));
+    const node = ctx.node.children!.get(name)!, def = node.def;
+    // a model (a line part: chapter 41's cable) shows its panel; a transistor its cross-section
+    const w = def.modelPanel
+      ? modelLeaf(def, { state: () => (node.leafIndex === undefined ? undefined : ctx.sim.leafState(node.leafIndex)) })
+      : transistorLeaf(def, () => ctx.transistorGate(name));
     const host = h('div', { class: 'widget-host' }, w.el);
     this.canvas.append(host);
     this.leaf = { name, w: { ...w, el: host } };
@@ -320,7 +324,7 @@ class InsideView {
     this.leaf?.w.update?.();
     this.syncCrumbVals();
     const nl = netlistOf(ctx.def);
-    const what = this.leaf ? 'a single transistor' : nl?.level === 'switch' ? 'transistors' : 'gates & blocks';
+    const what = this.leaf ? (this.ctx?.node.children?.get(this.leaf.name)?.def.modelPanel ? 'a model, not transistors' : 'a single transistor') : nl?.level === 'switch' ? 'transistors' : 'gates & blocks';
     const txt = `${what} · ${ctx.isSubSim ? 'own simulation, driven by its parent' : 'live'}`;
     if (this.badge.textContent !== txt) this.badge.textContent = txt;
   }

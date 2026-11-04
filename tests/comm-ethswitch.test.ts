@@ -2,8 +2,8 @@
 // promises about the traffic itself (delivery, order, floods, no echo), its counters and the closed forms the chapter quotes.
 
 import { describe, expect, it } from 'vitest';
-import { BROADCAST, frameBody, parseFrame, type Mac } from '../src/comm/ethframe';
-import { addrOf, bitOf, HOL_LIMIT, holSaturation, hostMac, hashAddr, idleIn, MacTable, PORTS, rng, SwitchModel, type SwitchIn, type SwitchOpts } from '../src/comm/ethswitch';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, parseFrame, type Mac } from '../src/comm/ethframe';
+import { addrOf, bitOf, HOL_LIMIT, holSaturation, hostMac, hashAddr, idleIn, MacTable, PORTS, rng, SwitchModel, teachFrames, trafficFrame, type SwitchIn, type SwitchOpts } from '../src/comm/ethswitch';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
@@ -191,5 +191,17 @@ describe('closed forms and the classic experiment', () => {
     expect(n4).toBeLessThan(0.67);
     expect(Math.abs(holSaturation(64, false, 20000, 6) - HOL_LIMIT)).toBeLessThan(0.025);
     expect(holSaturation(4, true, 1000)).toBe(1);
+  });
+});
+
+// tshark called these malformed when they were tagged IPv4 and ARP without an IP or ARP header (its check reads the
+// rig's capture, not these): they carry demo bytes, and must say so.
+describe('the traffic frames say what they are', () => {
+  it('trafficFrame and the teach frames use the local experimental type', () => {
+    const typeOf = (f: number[]) => (f[12] << 8) | f[13];
+    expect(ETHERTYPE_LOCAL).toBe(0x88b5);
+    expect(typeOf(trafficFrame(0, 1, 7, 64))).toBe(ETHERTYPE_LOCAL);
+    expect(typeOf(trafficFrame(2, 3, 9, 200))).toBe(ETHERTYPE_LOCAL);
+    expect(teachFrames().map(typeOf)).toEqual(Array(PORTS).fill(ETHERTYPE_LOCAL));
   });
 });
