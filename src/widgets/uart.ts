@@ -12,6 +12,7 @@ import { twoComputers } from '../lib/uartlink';
 import { assemble } from '../riscv/asm';
 import { UART_COSTS, uartChatSource, uartIrqSource } from '../riscv/uartprograms';
 import { findNode } from '../sim/flatten';
+import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { h, s } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -120,7 +121,7 @@ export function txScene(): Scene {
 // ---- the receiver scene and the clock-error panel ----------------------------------------------------------------------
 
 /** The last search's result, for challenges. */
-export interface RxState { err: number; found: { fast: number; slow: number } | null; last: { ok: boolean; byte: number } | null }
+export interface RxState { err: number; found: { fast: number; slow: number } | null; last: { ok: boolean; byte: number; err: number } | null; set(err: number): void; send(): void }
 const rxStates = new WeakMap<Stage, RxState>();
 export const rxState = (st: Stage) => rxStates.get(st);
 
@@ -128,7 +129,7 @@ export function rxScene(): Scene {
   return {
     root: UART_RX_BENCH, inputs: { div: 2, rx: 1, clk: 0 }, hiddenInputs: ['rx'], autoClock: false,
     panels: [(stage: Stage): Widget => {
-      const S: RxState = { err: 0, found: null, last: null };
+      const S: RxState = { err: 0, found: null, last: null, set: (e) => { S.err = e; errSl.set(100 * e); paint(); }, send: () => send() };
       rxStates.set(stage, S);
       let code = 0x52, phase = 0.5;
       const svgBox = h('div', { class: 'uart-svg' }), read = h('div', { class: 'clk-verdict' }), live = h('div', { class: 'mc-status' }), limit = h('p', { class: 'sub' });
@@ -196,7 +197,7 @@ export function rxScene(): Scene {
       const paintLive = () => {
         live.replaceChildren(h('span', null, 'gates: state ', h('b', null, RX_STATE_NAMES[lastState] ?? '?')), h('span', null, 'frames ', h('b', null, String(pushes))), h('span', null, 'framing errors ', h('b', null, String(ferrs))),
           h('span', null, 'byte ', h('b', null, got >= 0 ? `0x${hex2(got)} '${chr(got)}'` : '—')));
-        if (!loop.running && (pushes || ferrs)) S.last = { ok: pushes > 0 && got === code, byte: got };
+        if (!loop.running && (pushes || ferrs)) S.last = { ok: pushes > 0 && got === code, byte: got, err: S.err };
       };
       stage.resetHooks.add(() => { q = []; k = 0; got = -1; pushes = ferrs = 0; paintLive(); });
       stage.historyHooks.add({ save: () => ({ q, k, got, pushes, ferrs }), restore: (v) => { const x = v as { q: number[]; k: number; got: number; pushes: number; ferrs: number }; q = x.q; k = x.k; got = x.got; pushes = x.pushes; ferrs = x.ferrs; paintLive(); } });
@@ -390,7 +391,7 @@ export function uartBusScene(): Scene {
 
 // ---- two computers on a wire -------------------------------------------------------------------------------------------
 
-export interface TwoApi { type(side: 'A' | 'B', text: string): void; consoleOf(side: 'A' | 'B'): string; setRatio(r: number): void; edges(): [number, number]; glitch(): void }
+export interface TwoApi { run(): void; type(side: 'A' | 'B', text: string): void; consoleOf(side: 'A' | 'B'): string; setRatio(r: number): void; edges(): [number, number]; glitch(): void }
 const twoApis = new WeakMap<Stage, TwoApi>();
 export const twoApi = (st: Stage) => twoApis.get(st);
 
@@ -426,7 +427,7 @@ export function twoScene(): Scene {
         if (lineAB.length > 480) { lineAB = lineAB.slice(-480); lineBA = lineBA.slice(-480); }
       };
       const loop = new Loop(stage, () => { edge(); return true; }, () => paint(), 24, 30);
-      const api: TwoApi = { type, consoleOf: (side) => text[side], setRatio: (r) => { ratio = r; }, edges: () => [eA, eB], glitch: () => { glitchLeft = 6; } };
+      const api: TwoApi = { run: () => { if (!loop.running) { loop.start(); run.textContent = 'Pause'; } }, type, consoleOf: (side) => text[side], setRatio: (r) => { ratio = r; }, edges: () => [eA, eB], glitch: () => { glitchLeft = 6; } };
       twoApis.set(stage, api);
       const paint = () => {
         cons.A.textContent = text.A || ' '; cons.B.textContent = text.B || ' ';
@@ -451,4 +452,29 @@ export function twoScene(): Scene {
       return { el, update: paint, destroy: () => loop.stop() };
     }],
   };
+}
+
+// ---- the frame --------------------------------------------------------------------------------------------------------
+
+export function frameWidget(): Widget {
+  let code = 0x52;
+  const box = h('div', { class: 'uart-svg' }), read = h('div', { class: 'mc-status' });
+  const paint = () => {
+    const unit = 20, levels: number[] = [];
+    for (let i = 0; i < 12 * unit; i++) levels.push(i < unit || i >= 11 * unit ? 1 : levelAt(UART_8N1, code, (i - unit) / unit).level);
+    const svg = waveSvg(levels, 12 * unit, unit, unit, ['start', ...Array.from({ length: 8 }, (_, i) => `d${i}`), 'stop'], 'A UART frame: idle, start, eight data bits least significant first, stop, idle');
+    box.replaceChildren(svg);
+    const bits = segments(UART_8N1, code).map((g) => g.level);
+    read.replaceChildren(h('span', null, 'byte ', h('b', null, `0x${hex2(code)} ${chr(code)}`)), h('span', null, 'on the line ', h('b', null, bits.join(' '))), h('span', null, 'bits per byte ', h('b', null, '10')), h('span', null, 'payload ', h('b', null, '80 %')));
+  };
+  const sel = select('Byte', [['82', "0x52  'R'"], ['85', "0x55  'U'"], ['0', '0x00'], ['255', '0xFF'], ['10', '0x0A  newline']], '82', (v) => { code = Number(v); paint(); });
+  paint();
+  return { el: h('div', { class: 'widget mos clk-w' }, h('div', { class: 'panel' }, h('h3', null, 'One byte on one wire'), h('div', { class: 'mc-row' }, h('label', { class: 'mos-sl' }, h('span', null, 'Byte'), sel)), box, read,
+    h('p', { class: 'sub' }, 'Idle is 1. The falling edge of the start bit is the only synchronization: from it, the receiver looks at the line once per bit.'))) };
+}
+
+/** NAND count of the two-computer scene's circuit (its line parts cost nothing). */
+export function twoComputersNands(): number {
+  const sc = twoScene();
+  return stats(sc.root).nands;
 }

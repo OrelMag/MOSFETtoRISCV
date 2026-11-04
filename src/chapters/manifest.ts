@@ -491,8 +491,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A bus is not synchronized bit by bit", challenge: "quiz" },
     { title: "An asynchronous FIFO", challenge: "reach" },
   ] },
-  { id: "uart", num: 43, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["clocks","bus"], steps: [
-    { title: "One byte, no clock" },
+  { id: "uart", num: 43, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["telegraph","exchange","clocks","bus"], recap: {"checks":3}, steps: [
+    { title: "One byte, no clock", challenge: "quiz" },
+    { title: "The transmitter", challenge: "quiz" },
+    { title: "The baud generator", challenge: "quiz" },
+    { title: "Sampling in the middle", challenge: "reach" },
+    { title: "Errors: framing, false start, break, overrun", challenge: "reach" },
+    { title: "FIFOs and flow control", challenge: "quiz" },
+    { title: "A UART on the bus", challenge: "reach" },
+    { title: "Two computers chat", challenge: "reach" },
   ] },
   { id: "spi", num: 44, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart"], steps: [
     { title: "Send the clock too" },
