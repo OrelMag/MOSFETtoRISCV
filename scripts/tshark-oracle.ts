@@ -138,13 +138,12 @@ const BROKEN: Broken[] = [
   { name: 'ip-longer-than-frame', frames: [{ us: 0, bytes: good().slice(0, 40) }], want: /malformed|expert|icmp|data/ },
   { name: 'a-wrong-claim', frames: [{ us: 0, bytes: good() }], claims: [{ ...claimOf(good(), 0), fields: { ...claimOf(good(), 0).fields, 'ip.src': '10.9.9.9' } }], want: /ip\.src/ },
   { name: 'a-wrong-time', frames: [{ us: 1_000_000, bytes: good() }], claims: [claimOf(good(), 2_000_000)], want: /time_epoch/ },
-  { name: 'file-cut-short', frames: [{ us: 0, bytes: good() }, { us: 1, bytes: good() }], cut: 20, want: /tshark/ },
+  { name: 'file-cut-short', frames: [{ us: 0, bytes: good() }, { us: 1, bytes: good() }], cut: 20, want: /cut short/ },
 ];
 
-const runTshark = (file: Uint8Array): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
-  const p = execFile(tshark, tsharkArgs(), { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
-  p.stdin!.on('error', () => {}); // it may stop reading early: its exit says why
-  p.stdin!.end(file);
+const runTshark = (file: string): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
+  const pipe = 'f=$1; t=$2; shift 2; cat "$f" | "$t" "$@"';
+  execFile('sh', ['-c', pipe, 'sh', file, tshark, ...tsharkArgs()], { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
 });
 
 mkdirSync(out, { recursive: true });
@@ -154,7 +153,7 @@ async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0
   const file = join(out, `${name}.pcap`), whole = pcapFile(frames), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
   writeFileSync(file, bytes);
   if (dump) return [];
-  const r = await runTshark(bytes);
+  const r = await runTshark(file);
   writeFileSync(join(out, `${name}.tsv`), r.text);
   const problems = compareCapture(frames, parseRows(r.text), claims);
   if (r.code !== 0 || r.err.trim()) problems.unshift(`tshark exit ${r.code}: ${r.err.trim().slice(0, 300)}`);

@@ -15,7 +15,7 @@ export type Field = typeof FIELDS[number];
 
 /** tshark's options: verify every checksum it is able to; by default it trusts some of them. */
 export const TSHARK_PREFS = ['-o', 'ip.check_checksum:TRUE', '-o', 'udp.check_checksum:TRUE', '-o', 'tcp.check_checksum:TRUE'];
-/** The file goes in on stdin: Ubuntu's tshark may refuse a path by policy ("You don't have permission"), which would say nothing about the file. */
+/** The file goes in on a pipe: Ubuntu's tshark refuses a path in the runner's work directory ("You don't have permission"), and refuses Node's stdin too, a socket. */
 export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
 
 export type Row = Partial<Record<Field, string>>;
