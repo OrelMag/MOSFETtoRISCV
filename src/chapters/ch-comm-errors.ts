@@ -1,14 +1,15 @@
 // Chapter 47, When bits go wrong (level Communication): how a receiver knows a bit was damaged and what it does then. Parity and
 // Hamming from the library (lib/coding.ts), CRC-32 in gates one bit and one byte a clock (lib/crc.ts, comm/crc.ts, checked against
 // zlib), framing (comm/framing.ts), stop-and-wait and sliding-window repeat request (comm/arq.ts), and forward error correction as a
-// trade against retransmission (comm/fec.ts). Every number below is computed or pinned in tests/comm-errors.test.ts.
+// trade against retransmission (comm/fec.ts), then stronger codes (ch-comm-codes.ts). Every number below is computed or pinned in tests/comm-errors.test.ts.
 
 import { aOf, fullWindow, rttOf, utilization } from '../comm/arq';
 import { CRC32_POLY, CRC32_REFLECTED, CRC32_RESIDUE, CRC8, crc32, parityUndetected, undetected, weightDistribution } from '../comm/crc';
 import { codeOf, crcOnly, crossover, crossoverTime, secdedCrc } from '../comm/fec';
 import { cobsWorst, stuffRate } from '../comm/framing';
 import { CLOCK_NS } from '../dram/timing';
-import { crcNext, crcUnit, eccChannel, hammingDec, hammingEnc, hammingLayout, parity } from '../lib';
+import { CONV_K3, CONV_K7 } from '../comm/conv';
+import { crcNext, crcUnit, eccChannel, hammingDec, hammingEnc, hammingLayout, parity, rsEncoder, viterbi } from '../lib';
 import { berOf } from '../phys/line';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
@@ -16,6 +17,7 @@ import { analyzeTiming } from '../sim/timing';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import { arqWidget, crcApi, crcExplorerWidget, crcScene, fecWidget, framingWidget, parityWidget, undetectedWidget } from '../widgets/errors';
 import type { Scene } from '../view/stage';
+import { codeSteps } from './ch-comm-codes';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -44,13 +46,14 @@ const A8 = weightDistribution(16, CRC8), SHARE8 = undetected(A8, 1e-4) / (1 - (1
 
 export const chErrors: Chapter = {
   id: 'errors', num: 47, title: 'When bits go wrong', level: 'Communication',
-  blurb: 'Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.',
+  blurb: 'Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.',
   goals: [
     'say what a code of Hamming distance d detects and corrects, and what one parity bit and SEC-DED cost in NANDs and levels',
     'compute a CRC as the remainder of a polynomial division over GF(2), name the error patterns it is guaranteed to catch, and read its miss rate off the code\'s weight distribution',
     'build the CRC-32 register one bit and one byte a clock from XOR gates, and say what each costs in NANDs, delay and bits per second',
     'frame a bit stream with flags and stuffing, and state the overhead exactly',
     'size a sliding window from the bandwidth-delay product, and weigh forward error correction against retransmission by goodput and by delivery time',
+    'build a convolutional encoder, a Viterbi decoder and a Reed-Solomon encoder, say what each costs, and read their coding gains off a bit error rate plot against Shannon\'s limit',
   ],
   builds: ['cache', 'registers', 'wire', 'clocks'],
   recap: {
@@ -62,6 +65,9 @@ export const chErrors: Chapter = {
       `HDLC stuffs a 0 after five 1s so the flag 01111110 cannot occur in the data: 1 bit in ${nf(1 / stuffRate(), 0)} on random data, 1 in 5 in the worst case. COBS removes zero bytes instead: at most one byte in 254.`,
       `Stop-and-wait uses (1 − p)/(1 + 2a) of the link, where a is the one-way delay in frame times. A window of 1 + 2a frames fills the pipe: ${fullWindow(a)} frames for ${FRAME_BYTES}-byte frames at ${nf(RATE / 1e6, 0)} Mb/s over 10 ms. Go-back-N then costs 1 + 2a slots per loss; selective repeat costs one, but needs about three round trips of window to deliver 1 − p.`,
       `Forward error correction buys down the retransmission rate with redundancy that is paid on every frame. SEC-DED(72, 64) is 12.5 % redundancy and wins on goodput only above a bit error rate near ${sci(crossover(FRAME_BYTES)!)} for ${FRAME_BYTES}-byte frames; at a long delay it wins on delivery time at a far lower one.`,
+      `A convolutional encoder is a shift register and XOR trees, a few dozen NANDs. Its Viterbi decoder keeps one path per state: an add-compare-select, a metric that wraps, and a survivor, ${withCommas(nands(viterbi(CONV_K3)))} NANDs for K = 3 and ${withCommas(nands(viterbi(CONV_K7)))} for K = 7, mostly survivors. Three-bit levels instead of hard decisions gain about 2 dB for little more logic.`,
+      `Reed-Solomon corrects t wrong bytes with 2t check bytes. Its encoder is the CRC's circuit over GF(256), with constant multipliers that are only XORs (${withCommas(nands(rsEncoder(32)))} NANDs for 32 check bytes); correcting takes general multipliers, and is a model here. Interleaving D words turns a burst of b bits into at most ⌈b / D⌉ errors a word, for no redundancy and D words of delay.`,
+      `On an Eb/N0 axis, a code of rate R gives each channel bit R of the energy, so the rate is already counted. At 10<sup>−5</sup>, K = 7 with soft decisions gains about 5 dB and sits about 4 dB above Shannon's limit for rate ½, which is 0 dB (0.19 dB with binary inputs).`,
     ],
     check: [
       {
@@ -266,7 +272,7 @@ export const chErrors: Chapter = {
         return `
         <p><strong>Forward error correction</strong> pays for reliability in advance. The Hamming step's code can be run on the link: cut the frame and its CRC into 64-bit blocks, send each as a SEC-DED(${codeOf(64).n}, 64) word, correct the single errors in each block, and let the CRC and a retransmission handle what is left. The redundancy is fixed, ${codeOf(64).r} bits in ${codeOf(64).n} (rate ${nf(100 * codeOf(64).rate, 1)} %), whether or not errors occur. What it buys is that a frame fails only when some block has <em>two</em> errors.</p>
         <p>At a bit error rate of ${sci(p, 0)} a ${FRAME_BYTES}-byte frame (${withCommas(A.wire)} bits with its CRC) fails with probability ${nf(100 * A.pFail, 1)} %. With SEC-DED on ${withCommas(B.wire)} bits it fails with probability ${(100 * B.pFail).toExponential(1)} % (the formula is checked against the real encoder, errors and decoder, tests/comm-fec.test.ts). Whether that is a gain depends on what you count. <strong>Goodput</strong>, payload per wire bit, is ${nf(100 * A.goodput, 1)} % for CRC with retransmission and ${nf(100 * B.goodput, 1)} % for the code at this error rate; the code overtakes above ${sci(c1)}. <strong>Delivery time</strong> adds the round trip each repeat costs: with a one-way delay of 1 µs the code is faster only above ${sci(near)}, with 250 ms (a geostationary hop) above ${sci(far)}. A deep-space link, where the round trip is hours, cannot ask again at all and carries heavy redundancy.</p>
-        <p>The trade has three axes: rate (what fraction of the wire carries payload), correction (how many errors per block), and latency (the cost of a repeat). A stronger code corrects more per block and costs more rate and decoder logic; the decoder here is ${withCommas(nands(hammingDec(64)))} NANDs. Real links burst, which this model does not capture: a burst breaks a Hamming block with many errors at once, so interleaving and stronger block and convolutional codes are used there. They are the same trade with better numbers, and are not built here.</p>
+        <p>The trade has three axes: rate (what fraction of the wire carries payload), correction (how many errors per block), and latency (the cost of a repeat). A stronger code corrects more per block and costs more rate and decoder logic; the decoder here is ${withCommas(nands(hammingDec(64)))} NANDs. Real links burst, which this model does not capture: a burst breaks a Hamming block with many errors at once. The next steps build the stronger codes and the interleaver used there: the same trade with better numbers.</p>
         <div class="try">At 1500-byte frames set the one-way delay to 1 µs and move the bit error rate through 10<sup>−7</sup> to 10<sup>−4</sup>. Then slide the delay to 250 ms.</div>`;
       },
       widget: fecWidget,
@@ -279,5 +285,6 @@ export const chErrors: Chapter = {
         why: ['', 'It does correct them, but there are too few to repay the redundancy at this error rate and delay.', 'The CRC is unchanged, but the frame is longer on the wire and the wire carries the same payload rate it did, minus the check bits.', 'The decoder is ' + depth(hammingDec(64)) + ' levels deep and keeps up easily at this speed.'],
       },
     },
+    ...codeSteps,
   ],
 };
