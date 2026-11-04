@@ -220,7 +220,10 @@ export class Rtl {
       const id = isRoot ? this.opt.id : `${this.opt.id}_${sc.name}`;
       // children first
       for (const k of sc.kids) built.set(k, buildScope(this.scopes[k]));
-      const b = new Builder(10, 12);
+      // a label is ~0.5 units a character beside its pin and stub: two of them must fit in a column gap
+      const L = Math.max(4, ...this.names.filter((_, i) => this.alias[i] === i).map((nm) => nm.length));
+      const gapW = Math.ceil(L + 7);
+      const b = new Builder(gapW, gapW);
       const myGates = this.gates.filter((g) => g.scope === sc.id);
       const importList = isRoot ? [] : [...imp[sc.id]].map(rootOf);
       const exportList = isRoot ? [] : [...exp[sc.id]].map(rootOf);

@@ -111,10 +111,8 @@ export function i2cController(): ComponentDef {
     const eStop = m.and(e0, e1), eByte = m.xor(e0, e1);
     const sclNew = m.or(qz, m.and(q3, m.not(eStop)));
     const bc7 = m.and(m.and(bc[0], bc[1]), bc[2]);
-    const sbitNext = m.mux(isWrite, m.mux(bc7, m.const(1), ack), m.mux(bc7, sh[6], m.const(1)));
-    // (read: the ACK slot sends the NACK flag; write: bit 6 moves up, and the ACK slot releases)
+    // read: the ACK slot sends the NACK flag; write: bit 6 moves up into place, and the ACK slot releases
     const sbit = m.mux(goEff, m.mux(isWrite, m.mux(bc7, m.const(1), ack), m.mux(bc7, sh[6], m.const(1))), m.mux(m.and(e0, m.not(e1)), m.const(1), din[7]));
-    void sbitNext;
     const sdaNew = m.mux(eByte, m.xor(q1, eStop), m.mux(qz, sdaO, m.not(sbit)));
     const upd = m.or(goEff, m.and(adv, m.nor(fin, lostNow)));
     m.setD(sclO, m.and(m.and(rstn, m.not(lostNow)), m.mux(upd, sclO, sclNew)));

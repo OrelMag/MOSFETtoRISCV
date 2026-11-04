@@ -60,6 +60,8 @@ export * from './m6502/core';
 export * from './rvc';
 export * from './cpu64';
 export * from './pad';
+export * from './spi';
+export * from './i2c';
 export * from './ttl';
 export * from './sap';
 export * from './bitrunner';
