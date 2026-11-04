@@ -50,11 +50,11 @@ export const ROUTERS: RouterInfo[] = [
   { name: 'q1', as: AS_QUIL, at: [690, 190] }, { name: 'q2', as: AS_QUIL, at: [690, 260] },
 ];
 
-/** Lengths and rates are invented but of the usual size: a street, a town, a country, an ocean; 1 Gb/s at the edge, 100 Gb/s in a backbone. */
+/** Lengths and rates are invented but of the usual size: a street, a town, a country, an ocean; tens of Mb/s at the edge, 100 Gb/s in a backbone. */
 export const LINKS: NetLink[] = [
-  { a: R.f1, b: R.f2, km: 12, mbps: 1000, load: 0.3, note: 'town' },
+  { a: R.f1, b: R.f2, km: 12, mbps: 20, load: 0.3, note: 'the access line' },
   { a: R.f2, b: R.r1, km: 60, mbps: 10000, load: 0.3, note: 'to the provider' },
-  { a: R.s1, b: R.r1, km: 45, mbps: 1000, load: 0.3, note: 'to the provider' },
+  { a: R.s1, b: R.r1, km: 45, mbps: 50, load: 0.3, note: 'to the provider' },
   { a: R.r1, b: R.r2, km: 180, mbps: 10000, load: 0.4, note: 'region' },
   { a: R.r2, b: R.k1, km: 30, mbps: 10000, load: 0.4, note: 'to the provider' },
   { a: R.r2, b: R.o1, km: 25, mbps: 10000, load: 0.2, note: 'peering, an exchange point' },
@@ -65,7 +65,7 @@ export const LINKS: NetLink[] = [
   { a: R.t2, b: R.t3, km: 800, mbps: 100000, load: 0.4, note: 'country' },
   { a: R.o1, b: R.o2, km: 400, mbps: 10000, load: 0.3, note: 'region' },
   { a: R.o2, b: R.t1, km: 20, mbps: 10000, load: 0.3, note: 'to the provider' },
-  { a: R.o1, b: R.b1, km: 35, mbps: 1000, load: 0.3, note: 'to the provider' },
+  { a: R.o1, b: R.b1, km: 35, mbps: 20, load: 0.3, note: 'to the provider' },
   { a: R.t3, b: R.q1, km: 15, mbps: 10000, load: 0.3, note: 'to the provider' },
   { a: R.q1, b: R.q2, km: 1, mbps: 10000, load: 0.2, note: 'data centre' },
 ];
@@ -211,7 +211,9 @@ export class Internet {
     }
     for (const p of this.bgp.prefixes()) {
       const best = this.bgp.best(as, p.key);
-      if (!best || best.path.length === 0) continue;
+      if (!best) continue;
+      // a prefix this network itself announces beyond its own /16 is a claim: what arrives for it stops here
+      if (best.path.length === 0) { if (p.len > 16) routes.push({ prefix: p.prefix, len: p.len, hop: self }); continue; }
       const v = this.egress(r, best.path[0]);
       if (v === null) continue;
       const nb = nbrs.find((x) => x.router === v);
@@ -374,3 +376,11 @@ export function linksOf(j: Journey): number[] {
 
 /** Every entry an independent scan of the routes would pick: the trie's answer checked in tests. */
 export const scanRoute = (t: RouterTable, ip: number): number => lpmLinear(t.routes, ip);
+
+/** The writes that fill a fast path's two memories with a router's table: what its slow path does when routing changes (chapter 51's cfg port). */
+export function loadWrites(t: RouterTable): { cfgWe: 1; cfgT: 0 | 1; cfgA: number; cfgD: number }[] {
+  const w: { cfgWe: 1; cfgT: 0 | 1; cfgA: number; cfgD: number }[] = t.trie.map((d, a) => ({ cfgWe: 1, cfgT: 0, cfgA: a, cfgD: d }));
+  const used = (Math.max(...Object.keys(t.hops).map(Number)) + 1) * 8;
+  for (let a = 0; a < used; a++) w.push({ cfgWe: 1, cfgT: 1, cfgA: a, cfgD: t.adj[a] });
+  return w;
+}

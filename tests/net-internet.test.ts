@@ -135,7 +135,7 @@ describe('forwarding', () => {
     const n = new Internet({ hijack });
     const j = n.send(LAPTOP, hostFrame(LAPTOP, www, 64, PROTO_UDP, [1, 2, 3, 4, 5, 6, 7, 8]));
     expect(routersOf(j).map((r) => ROUTERS[r].as)).toContain(AS_SABLE);
-    expect(j.end.kind === 'host').toBe(false);
+    expect(j.end).toEqual({ kind: 'router', router: R.s1 });
     expect(n.bgp.best(AS_TARN, keyOf(hijack.prefix, 24))).toBeDefined();
   });
 });
