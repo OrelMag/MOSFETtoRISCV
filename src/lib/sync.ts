@@ -53,7 +53,7 @@ export const SCHMITT: ComponentDef = define({
       { name: 'n1', def: NMOS, at: [5, 9] }, { name: 'gnd1', def: GND, at: [7, 14] },
       { name: 'vdd2', def: VDD, at: [23, 0] }, { name: 'p2', def: PMOS, at: [21, 3] },
       { name: 'n2', def: NMOS, at: [21, 9] }, { name: 'gnd2', def: GND, at: [23, 14] },
-      { name: 'vdd3', def: VDD, at: [15, 17] }, { name: 'pk', def: PMOS_WEAK, at: [13, 20], label: 'keeper' },
+      { name: 'vdd3', def: VDD, at: [15, 17] }, { name: 'pk', def: PMOS_WEAK, at: [13, 20] },
       { name: 'nk', def: NMOS_WEAK, at: [13, 26] }, { name: 'gnd3', def: GND, at: [15, 31] },
     ],
     nets: [
@@ -288,8 +288,8 @@ export function asyncFifo(k: number, w: number): ComponentDef {
     const bits = Array.from({ length: k + 1 }, (_, i) => (i === k - 1 ? top[0] : i === k ? top[1] : `${sr}.o${i}`));
     const tgt = b.op1(merger(ones(k + 1)), bits, undefined, 'tgt');
     b.next();
-    b.op(equal(k + 1), ['wg.q', tgt], 'full: write = read with the top two bits inverted', 'fl');
-    b.op(equal(k + 1), ['rg.q', 'ws.q'], 'empty: read = write', 'em');
+    b.op(equal(k + 1), ['wg.q', tgt], 'full', 'fl');
+    b.op(equal(k + 1), ['rg.q', 'ws.q'], 'empty', 'em');
     b.name('fl.eq', 'full', true);
     b.name('em.eq', 'empty', true);
     b.next();

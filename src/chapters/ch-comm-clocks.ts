@@ -41,10 +41,10 @@ export const chClocks: Chapter = {
     ],
     check: [
       {
-        question: 'A Schmitt trigger has thresholds 0.77 V and 1.03 V. A slow edge crosses 0.9 V with 0.05 V of noise on it. How many times does the output switch?',
-        options: ['Once: the noise never gets across the 0.26 V between the thresholds', 'Several times, like a plain inverter', 'Zero: hysteresis blocks slow edges', 'Twice: once at each threshold'],
+        question: `A Schmitt trigger has thresholds ${nf(TH.down!)} V and ${nf(TH.up!)} V. A slow edge crosses ${nf(M.vm)} V with 0.05 V of noise on it. How many times does the output switch?`,
+        options: [`Once: the noise never gets across the ${mv(TH.width!)} between the thresholds`, 'Several times, like a plain inverter', 'Zero: hysteresis blocks slow edges', 'Twice: once at each threshold'],
         answer: 0,
-        explain: 'After the output has risen at the upper threshold the input would have to fall back below the lower one to switch it again. Noise of 0.05 V cannot move a signal 0.26 V.',
+        explain: `After the output has risen at the upper threshold the input would have to fall back below the lower one to switch it again. Noise of 0.05 V cannot move a signal ${mv(TH.width!)}.`,
         why: ['', 'A plain inverter has one threshold, so noise that crosses it flips the output each time. The second threshold is what removes that.', 'The output does switch once the input has travelled to the far threshold: hysteresis delays the switch and does not forbid it.', 'The two thresholds apply to different directions: a rising edge meets only the upper one.'],
       },
       {
@@ -98,7 +98,7 @@ export const chClocks: Chapter = {
         threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
         <strong>VT− = ${nf(TH.down!)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
         input inverter no longer wins at any voltage up to VDD and the output sticks.</p>
-        <p>The price is area (three more transistors than a buffer), a slower edge (the keeper fights every transition) and a hysteresis that moves with process and temperature.</p>`,
+        <p>The price is area (two more transistors than a buffer of two inverters), a slower edge (the keeper fights every transition) and a hysteresis that moves with process and temperature.</p>`,
       scene: () => ({ root: SCHMITT, inputs: { a: 0 }, panels: [schmittPanel] }),
       more: {
         derive: `<p>Near threshold both devices of A are in saturation, so id ∝ (Vin − Vt)². With the input δ above VM the NMOS has (VM − Vt + δ)² and the PMOS (VM − Vt − δ)²: the difference is 4δ(VM − Vt). The keeper's current at that node is a constant κ(VDD − Vt)². Setting them
@@ -123,7 +123,7 @@ export const chClocks: Chapter = {
         and stays there until the input has fallen back by the full hysteresis.</p>
         <p>The rule of thumb is a hysteresis of at least twice the noise amplitude (about 6 σ peak to peak for Gaussian noise) and no more than would hide a real signal. The keeper's width is the knob;
         a wider keeper costs more delay and drifts more over process corners.</p>
-        <div class="try">Set the noise to 0.05 V: both receivers make one transition. Set it to 0.12 V and compare. Then move the keeper to 0 and watch the Schmitt trigger become the plain receiver.</div>`,
+        <div class="try">At 0.04 V of noise the plain receiver already chatters while the Schmitt trigger switches once. Raise the noise until the Schmitt trigger chatters too: that happens when the excursions approach the hysteresis. Then move the keeper to 0 and watch it become the plain receiver.</div>`,
       widget: noisyEdgeWidget,
       challenge: {
         kind: 'quiz',
@@ -137,13 +137,13 @@ export const chClocks: Chapter = {
     {
       title: 'Two clocks are a different problem',
       get body() {
-        const ms = MS_TIMING(), win = (ms.setup + ms.hold) * PS_PER_NAND, frac = win / 1e4;
+        const ms = MS_TIMING(), win = (ms.setup + ms.hold) * PS_PER_NAND, frac = win / 1e3;
         return `
         <p>Inside one clock domain the contract of chapter 8 holds by construction. A flip-flop launches a change clk-to-q (${CLK_TO_Q} delays) after an edge, the logic adds its delay, and the next edge of the <em>same</em> clock
         captures it, provided the change is there a setup time earlier and stays a hold time after. Static timing walks every path and checks both. It can, because the phase between the launching and the capturing edge is a number it knows.</p>
         <p>Across two clocks that phase is whatever it is. A sender at fA changes data at its own edges, a receiver at fB samples at its edges, and the position of a change inside the receiver's period is
         (n · fB / fA) mod 1. For a ratio like 1.37 that visits 137 values, and with oscillators that drift by parts per million it visits every value in between. The window around the receiver's edge in which a change is neither safely captured nor safely missed is setup + hold = ${ms.setup} + ${ms.hold} delays
-        as measured in chapter 8, ${win} ps at ${PS_PER_NAND} ps per NAND delay. At a 100 MHz receiver that is ${nf(frac * 100, 1)} % of the period, so one change in ${Math.round(1 / frac)} lands in it: at a data rate of 100 MHz, about ${nf(1e8 * frac / 1e6, 0)} per microsecond. That is not a rare event.</p>
+        as measured in chapter 8, ${win} ps at ${PS_PER_NAND} ps per NAND delay. At a 1 GHz receiver that is ${nf(frac * 100, 1)} % of the period, so one change in ${Math.round(1 / frac)} lands in it: at a data rate of 100 MHz, about ${nf(1e8 * frac / 1e6, 1)} per microsecond. That is not a rare event.</p>
         <p>What happens inside the window is the aperture of chapter 8: the master latch is released with its two cross-coupled NANDs balanced, an SR pair freed from both sides at once. The gate simulator
         settles that race by relaxation, in zero time, and picks a side. Silicon does not, as the next step shows.</p>
         <div class="try">Set fA / fB to 1.00 and slide the phase: the edge is in the window at a few phases and nowhere else. Then 1.50, then 1.37.</div>`;

@@ -22,6 +22,7 @@ import { fitText, slider } from './mosparts';
 import { MS_TIMING } from '../chapters/seq/timing';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
+const decimals = (step: number): number => String(step).split('.')[1]?.length ?? 0;
 
 /** A plot frame: grid, ticks and axis labels in a viewBox, returning the scales. */
 function frame(W: number, H: number, xr: [number, number], yr: [number, number], xl: string, yl: string, label: string, xt: number, yt: number, m = { l: 50, r: 14, t: 14, b: 38 }) {
@@ -29,8 +30,8 @@ function frame(W: number, H: number, xr: [number, number], yr: [number, number],
   fitText(svg, W);
   const X = (v: number) => m.l + ((v - xr[0]) / (xr[1] - xr[0])) * (W - m.l - m.r);
   const Y = (v: number) => H - m.b - ((v - yr[0]) / (yr[1] - yr[0])) * (H - m.t - m.b);
-  for (let v = xr[0]; v <= xr[1] + 1e-9; v += xt) svg.append(s('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(v), y: H - m.b + 14, 'text-anchor': 'middle', class: 'tick' }, nf(v, xt < 1 ? 1 : 0)));
-  for (let v = yr[0]; v <= yr[1] + 1e-9; v += yt) svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: m.l - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'tick' }, nf(v, yt < 1 ? 1 : 0)));
+  if (xt > 0) for (let v = xr[0]; v <= xr[1] + 1e-9; v += xt) svg.append(s('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(v), y: H - m.b + 14, 'text-anchor': 'middle', class: 'tick' }, nf(v, decimals(xt))));
+  for (let v = yr[0]; v <= yr[1] + 1e-9; v += yt) svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: m.l - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'tick' }, nf(v, decimals(yt))));
   svg.append(s('line', { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: 'ax' }), s('line', { x1: m.l, x2: m.l, y1: m.t, y2: H - m.b, class: 'ax' }),
     s('text', { x: W - m.r, y: H - 4, 'text-anchor': 'end', class: 'axl' }, xl),
     s('text', { x: 6, y: m.t, 'text-anchor': 'end', 'dominant-baseline': 'hanging', transform: `rotate(-90 6 ${m.t})`, class: 'axl' }, yl));
@@ -49,7 +50,7 @@ export function receiverWidget(): Widget {
   f.svg.append(s('path', { class: 'cur', d: path(curve(1, 240).map((p) => [f.X(p.vin), f.Y(p.vout)])) }),
     s('text', { class: 'rl sat', x: f.X(m.vm), y: f.m.t + 12, 'text-anchor': 'middle' }, 'undefined'));
   const dot = f.svg.appendChild(s('circle', { r: 5.5, class: 'op' }));
-  const lad = frame(260, 300, [0, 2], [0, VDD], '', 'V', 'Driver levels against receiver thresholds', 1, 0.3, { l: 40, r: 8, t: 14, b: 22 });
+  const lad = frame(260, 300, [0, 2], [0, VDD], '', '', 'Driver levels against receiver thresholds', 0, 0.3, { l: 40, r: 8, t: 14, b: 22 });
   const rect = (x0: number, x1: number, y0: number, y1: number, cls: string) => lad.svg.appendChild(s('rect', { x: lad.X(x0), width: lad.X(x1) - lad.X(x0), y: lad.Y(y1), height: lad.Y(y0) - lad.Y(y1), class: cls }));
   rect(0.1, 0.9, 0, m.vol, 'clk-lo'); rect(0.1, 0.9, m.voh, VDD, 'clk-hi');
   rect(1.1, 1.9, 0, m.vil, 'clk-lo'); rect(1.1, 1.9, m.vil, m.vih, 'clk-zone'); rect(1.1, 1.9, m.vih, VDD, 'clk-hi');
@@ -123,7 +124,7 @@ export const schmittPanel: ScenePanel = (): Widget => {
 // ---- 3. a noisy slow edge --------------------------------------------------------------------------------------------
 
 export function noisyEdgeWidget(): Widget {
-  let sigma = 0.12, seed = 7, kappa = KEEPER;
+  let sigma = 0.04, seed = 7, kappa = KEEPER;
   const N = 400;
   const f = frame(560, 210, [0, N], [0, VDD], 'sample', 'input (V)', 'A slow noisy edge with the receivers thresholds', 100, 0.6, { l: 44, r: 10, t: 10, b: 30 });
   const trace = f.svg.appendChild(s('path', { class: 'clk-in' }));
@@ -171,7 +172,7 @@ export function windowWidget(): Widget {
   const win2 = f.svg.appendChild(s('rect', { class: 'clk-zone', x: f.X(0), width: f.X(N) - f.X(0) }));
   const dots = f.svg.appendChild(s('g', { class: 'clk-dots' }));
   const out = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub mos-note' });
-  const fb = 100e6; // clock B, for the picoseconds only
+  const fb = 1e9; // clock B, for the picoseconds only
   const paint = () => {
     const ms = MS_TIMING(), win0 = (ms.setup * PS_PER_NAND) / (1e12 / fb), winA = (ms.hold * PS_PER_NAND) / (1e12 / fb); // before the edge: setup; after: hold, in periods of B
     const l = landings(ratio, 1, N, win0, winA, offset);
@@ -198,12 +199,12 @@ export function windowWidget(): Widget {
 
 export function metastableWidget(): Widget {
   let dvExp = -4, stages = 2, fclkMHz = 1000, fdataMHz = 100, logic = 8;
-  const T = 800; // ps shown
-  const f = frame(520, 200, [0, T], [-V_DECIDED, V_DECIDED], 't after the sampling edge (ps)', 'difference (V)', 'A cross-coupled pair resolving from a small difference', 200, 0.45, { l: 50, r: 12, t: 10, b: 30 });
+  const T = 400; // ps shown
+  const f = frame(520, 200, [0, T], [-V_DECIDED, V_DECIDED], 't after the sampling edge (ps)', 'difference (V)', 'A cross-coupled pair resolving from a small difference', 100, 0.45, { l: 50, r: 12, t: 10, b: 30 });
   const curveP = f.svg.appendChild(s('path', { class: 'cur' }));
   const per = f.svg.appendChild(s('line', { class: 'bound', y1: f.m.t, y2: f.H - f.m.b }));
   const tmark = f.svg.appendChild(s('text', { class: 'rl sat', 'text-anchor': 'end' }));
-  const g = frame(520, 220, [0.2, 3], [-6, 60], 'receiving clock (GHz)', 'log10 MTBF (seconds)', 'MTBF against clock rate for one, two and three flip-flops', 0.4, 10, { l: 50, r: 12, t: 10, b: 32 });
+  const g = frame(520, 220, [0.2, 3], [0, 70], 'receiving clock (GHz)', 'log10 MTBF (s)', 'MTBF against clock rate for one, two and three flip-flops', 0.4, 10, { l: 50, r: 12, t: 10, b: 32 });
   const curves = [1, 2, 3].map((n) => g.svg.appendChild(s('path', { class: `clk-mt c${n}` })));
   const age = g.svg.appendChild(s('line', { class: 'vt', x1: g.X(0.2), x2: g.X(3) }));
   g.svg.append(s('text', { x: g.X(3) - 2, class: 'tick', 'text-anchor': 'end', id: 'clk-age' }));
@@ -216,17 +217,18 @@ export function metastableWidget(): Widget {
     curveP.setAttribute('d', path(Array.from({ length: 161 }, (_, i): [number, number] => [f.X((i / 160) * T), f.Y(voltage(dv, (i / 160) * T))])));
     const periodPs = 1e6 / fclkMHz;
     per.setAttribute('x1', String(f.X(Math.min(T, periodPs)))); per.setAttribute('x2', String(f.X(Math.min(T, periodPs))));
-    tmark.setAttribute('x', String(f.X(Math.min(T, tr)) - 4)); tmark.setAttribute('y', String(f.Y(V_DECIDED) + 14));
+    per.style.display = periodPs <= T ? '' : 'none';
+    tmark.setAttribute('x', String(f.X(Math.min(T, tr)) + 8)); tmark.setAttribute('y', String(f.Y(V_DECIDED) + 16)); tmark.setAttribute('text-anchor', 'start');
     tmark.textContent = tr > T ? `decided at ${nf(tr, 0)} ps` : `decided at ${nf(tr, 0)} ps = ${nf(tr / TAU_PS, 1)} τ`;
     curves.forEach((c, i) => c.setAttribute('d', path(Array.from({ length: 80 }, (_, k): [number, number] => {
       const gh = 0.2 + (k / 79) * 2.8, l = log10Mtbf({ stages: i + 1, fclk: gh * 1e9, fdata: fdataMHz * 1e6, logic });
-      return [g.X(gh), g.Y(Math.max(-6, Math.min(60, l)))];
+      return [g.X(gh), g.Y(Math.max(0, Math.min(70, l)))];
     }))));
     const yAge = Math.log10(AGE_OF_UNIVERSE_YEARS * 365.25 * 86400);
     age.setAttribute('y1', String(g.Y(yAge))); age.setAttribute('y2', String(g.Y(yAge)));
     const inp = { stages, fclk: fclkMHz * 1e6, fdata: fdataMHz * 1e6, logic };
     const l = log10Mtbf(inp), trs = resolutionTime(stages, 1e6 / fclkMHz, logic * PS_PER_NAND), rate = windowRate(inp.fclk, inp.fdata);
-    pt.setAttribute('cx', String(g.X(fclkMHz / 1000))); pt.setAttribute('cy', String(g.Y(Math.max(-6, Math.min(60, l)))));
+    pt.setAttribute('cx', String(g.X(fclkMHz / 1000))); pt.setAttribute('cy', String(g.Y(Math.max(0, Math.min(70, l)))));
     const vals: [string, string][] = [[`${nf(trs, 0)} ps`, 'resolution time t_r'], [`${rate.toExponential(1)} /s`, 'events in the window T0·fclk·fdata'], [`${nf(Math.exp(-trs / TAU_PS) > 0 ? trs / TAU_PS : 0, 1)} τ`, 'e-foldings available'], [fmtLog10(l), 'MTBF']];
     readout.querySelectorAll('div').forEach((c, i) => (c as HTMLElement).replaceChildren(h('b', null, vals[i][0]), h('span', null, vals[i][1])));
     const y = 10 ** (l - Math.log10(365.25 * 86400));
@@ -235,7 +237,7 @@ export function metastableWidget(): Widget {
       : y > 1e3 ? `One failure in ${fmtLog10(l)}.` : `One failure in ${fmtLog10(l)}: a product that ships ten million units fails somewhere every ${fmtDuration(10 ** l / 1e7)}.`;
     void tr;
   };
-  const dSl = slider('Δ at the edge', -9, -1, 0.1, dvExp, (v) => `10^${nf(v, 1)} V`, (v) => { dvExp = v; paint(); });
+  const dSl = slider('Δ at the edge', -9, -1, 0.1, dvExp, (v) => `${(10 ** v).toExponential(0)} V`, (v) => { dvExp = v; paint(); });
   const sSl = slider('Flops', 1, 3, 1, stages, (v) => String(v), (v) => { stages = v; paint(); });
   const cSl = slider('fclk', 200, 3000, 50, fclkMHz, (v) => `${v} MHz`, (v) => { fclkMHz = v; paint(); });
   const fSl = slider('fdata', 1, 500, 1, fdataMHz, (v) => `${v} MHz`, (v) => { fdataMHz = v; paint(); });
@@ -265,7 +267,7 @@ export function grayBusWidget(): Widget {
     info.replaceChildren(h('span', null, 'bus ', h('b', null, `${bin(r.from)} → ${bin(r.to)}`)), h('span', null, 'bits changing ', h('b', null, String(r.flips))), h('span', null, 'possible readings ', h('b', null, String(r.reads))),
       h('span', null, 'garbage ', h('b', null, String(r.bad))), h('span', null, 'worst error ', h('b', null, code === 'binary' ? `${r.err} counts` : `${r.err} (a Gray word)`)));
     bars.replaceChildren(...rows[code].map((q, i) => h('button', { class: `clk-bar${i === step ? ' on' : ''}${q.bad ? ' bad' : ''}`, title: `${bin(q.from)} → ${bin(q.to)}: ${q.reads} readings`, 'aria-label': `step ${i}: ${q.reads} possible readings`, style: `--hgt:${(q.reads / 16) * 100}%`, onclick: () => { step = i; paint(); } }, h('i'), h('span', null, String(i)))));
-    gates.textContent = `Mean chance that a mid-change sample is garbage over all ${2 ** n} steps: binary ${nf(meanGarbage(n, 'binary') * 100, 0)} %, Gray 0 %. In gates: binary → Gray is ${stats(BIN2GRAY(n)).nands} NANDs (${n - 1} XORs, one level), Gray → binary ${stats(GRAY2BIN(n)).nands} NANDs (a chain ${n - 1} deep). The Gray word's readings were taken as its bits, value shown is the code word.`;
+    gates.textContent = `Mean chance that a mid-change sample is garbage over all ${2 ** n} steps: binary ${nf(meanGarbage(n, 'binary') * 100, 0)} %, Gray 0 %. In gates: binary → Gray is ${stats(BIN2GRAY(n)).nands} NANDs (${n - 1} XORs, one level), Gray → binary ${stats(GRAY2BIN(n)).nands} NANDs (a chain ${n - 1} deep). In Gray mode the words shown are code words.`;
   };
   const sel = h('div', { class: 'mos-row' });
   for (const c of ['binary', 'gray'] as const) {
@@ -343,6 +345,7 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
       if (!sim) return;
       const clk = e === 'a' ? cfg.a.clk : cfg.b.clk;
       cfg.drive?.(e, count[e], stage);
+      sim.settle(); // the data is steady before the clock moves: an edge is an event after the inputs, never with them
       sim.setInput(clk, 1); sim.settle(); sim.setInput(clk, 0); sim.settle();
       count[e]++;
       log.push({ e, n: count[e], vals: cfg.rows.map((r) => fmt(r.read(stage), r.bits)) });
@@ -361,7 +364,7 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
     sel.addEventListener('change', () => { ri = Number(sel.value); stage.checkpoint(); sched = new EdgeSchedule(...ratios[ri]); update(); });
     const strip = h('div', { class: 'clk-strip', role: 'group', 'aria-label': 'What each signal was after each clock edge' });
     const extra = h('div', { class: 'clk-extra' });
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
       h('h4', null, cfg.title, h('span', { class: 'fold-hint' })),
       h('div', { class: 'mc-row' }, sel),
       h('div', { class: 'dram-ops' },
