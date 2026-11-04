@@ -19,6 +19,12 @@ export const ROW_HEAD = 22;
  * what it adds. Every level of such an act is in exactly one row; no level requires one in a later row.
  */
 export const ACT_ROWS: Readonly<Record<number, readonly { label: string; ids: readonly string[] }[]>> = {
+  12: [
+    { label: 'Wires and clocks', ids: ['l_repeater', 'l_dial', 'l_sync'] },
+    { label: 'Serial buses', ids: ['l_uarttx', 'l_uartrx', 'l_i2c'] },
+    { label: 'Codes and links', ids: ['l_crc', 'l_8b10b', 'l_cdr'] },
+    { label: 'Ethernet and beyond', ids: ['l_mac', 'l_switch', 'l_fwd', 'l_driver', 'l_host'] },
+  ],
   8: [
     { label: 'Multiply & divide', ids: ['o_lesson', 'o_mulseq', 'o_mularr', 'o_mcore', 'o_div', 'o_dcore'] },
     { label: 'Floating point', ids: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'] },

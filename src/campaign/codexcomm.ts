@@ -14,8 +14,7 @@ const E = (id: string, title: string, kind: CodexKind, body: string, related?: s
  * untaught ids).
  */
 export const COMM_AWAITING_LEVELS: ReadonlySet<string> = new Set([
-  'shannon', 'reflection', 'cdc', 'asyncfifo', 'uart', 'spi', 'i2c', 'qam', 'ofdm', 'linecode', 'cdr', 'eye', 'equalization',
-  'crc', 'arq', 'viterbi', 'reedsolomon', 'interleave',
+  'shannon', 'reflection', 'asyncfifo', 'spi', 'qam', 'ofdm', 'eye', 'equalization', 'arq', 'viterbi', 'reedsolomon', 'interleave',
 ]);
 
 export const CODEX_COMM: CodexEntry[] = [

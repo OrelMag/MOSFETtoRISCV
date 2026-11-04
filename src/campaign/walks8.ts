@@ -236,8 +236,8 @@ export const WALKS8: Record<string, WalkScript> = {
     },
     {
       title: 'The state',
-      text: 'g0 to g24 and g188 are the machine\'s flip-flops and one inverter: busy, a flag for the second clock of a phase, the acknowledge, lost, the two line drives, the command (2 bits), the phase (2 bits), the bit count (4 bits) and the 8-bit shift register for the byte. Each is a plain D flip-flop; what makes them a controller is the logic that sets them.',
-      parts: ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g14', 'g15', 'g16', 'g17', 'g18', 'g19', 'g20', 'g21', 'g22', 'g23', 'g24', 'g188'], codex: ['edge'],
+      text: 'g0 (the machine\'s flip-flops, a chip of its own) and g188 (an inverter) hold: busy, a flag for the second clock of a phase, the acknowledge, lost, the two line drives, the command (2 bits), the phase (2 bits), the bit count (4 bits) and the 8-bit shift register for the byte. Each is a plain D flip-flop; what makes them a controller is the logic that sets them.',
+      parts: ['g0', 'g188'], codex: ['edge'],
       why: 'The controller is one state machine on one clock; the bus timing comes from counting clocks, not from any clock on the wires.',
       whyNot: { text: 'Letting SCL itself clock a shift register (as a target does) would not work for a controller that has to wait for a stretching target and for other controllers.' },
     },
