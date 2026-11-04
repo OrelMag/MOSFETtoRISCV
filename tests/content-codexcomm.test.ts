@@ -150,8 +150,8 @@ describe('the Communication codex entries', () => {
     expect(nands(resolveComponent('uart_rx')!)).toBe(526);
     expect(nands(fifo(4, 8))).toBe(2803);
     expect(nands(resolveComponent('uart_full')!)).toBe(7307);
-    quotes('uart', '115 741', '0.47 %', '86.8 µs', '526 NANDs', '2 803 NANDs', '7 307', '5.55 %', '5.0 %', '1 851 852', 'divisor (7)', '7.0 %', '3.3 µs');
-    says('uart', 3, '526 NANDs'); says('uart', 3, '5.55 % slower and 5.0 % faster'); says('uart', 3, '±5.56 %'); quotes('uart', '±5.56 %');
+    quotes('uart', '115 741', '0.47 %', '86.8 µs', '526 NANDs', '2 803 NANDs', '7 307', '5.55 %', '4.9 %', '1 851 852', 'divisor (7)', '7.0 %', '3.3 µs');
+    says('uart', 3, '526 NANDs'); says('uart', 3, '5.55 % slower and 4.9 % faster'); says('uart', 3, '±5.56 %'); quotes('uart', '±5.56 %');
     says('uart', 5, '86.8 µs'); says('uart', 5, '2 803 NANDs'); says('uart', 5, '7 307');
     says('uart', 2, '0.47 %');
   });
@@ -169,9 +169,9 @@ describe('the Communication codex entries', () => {
     expect(Math.round(rpMax(fast, 400e-12))).toBe(885);
     expect(Math.round(1e12 * fast.trMax / (RISE_30_70 * rpMin(fast, 3.3)))).toBe(366);
     expect(plus.iol).toBe(20e-3);
-    quotes('i2c', '3541 Ω', '11802 Ω', '967 Ω', '885 Ω', '366 pF', '0.8473', '659 NANDs', '1524');
+    quotes('i2c', '3541 Ω', '11802 Ω', '967 Ω', '885 Ω', '366 pF', '0.8473', '659 NANDs', '1 524');
     says('spi', 5, '3541 Ω'); says('spi', 5, '11802 Ω'); says('spi', 5, '967 Ω'); says('spi', 5, '885 Ω'); says('spi', 5, '366 pF');
-    says('spi', 6, '659 NANDs'); says('spi', 6, '1524 NANDs');
+    says('spi', 6, '659 NANDs'); says('spi', 6, '1 524 NANDs');
   });
 
   it('quote the modem as computed', () => {

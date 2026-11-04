@@ -101,7 +101,7 @@ a word written on wclk is visible 2 rclk edges later; a freed slot, 2 wclk edges
 clock 50 MHz, divisor 27: 50e6 / (16 · 27)   = 115 741 baud, 0.47 % high
 one bit at 115 200 baud                      = 8.68 µs; one byte = 86.8 µs
 8N1: 8 data bits in 10 bit times             = 80 %
-receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>The gates, searched at divisor 1, accept a sender 5.55 % slower and 5.0 % faster than the receiver.`,
+receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>The gates, searched at divisors 1 and 4, accept a sender 5.55 % slower and 4.9 % faster than the receiver.`,
     },
     mistakes: [
       'Configuring the two ends at the "same" baud from different clocks without checking the divisor error: 0.47 % is fine, but a 12 MHz clock at its nearest divisor (7) is 7.0 % slow, past what the sampling tolerates against a sender that is exact.',
@@ -150,7 +150,7 @@ receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>
 C_b = 100 pF, Standard    (t_r ≤ 1000 ns):  R_p ≤ 11802 Ω
 Fast-mode, I_OL = 3 mA:                     R_p ≥ (3.3 − 0.4) V / 3 mA      =  967 Ω
 C_b = 400 pF, Fast-mode:                    R_p ≤ 885 Ω  &lt;  967 Ω: no resistor works
-the window closes at 300 ns / (0.8473 · 967 Ω) = 366 pF</pre>Fast-mode Plus, with 20 mA pads, has a window at 400 pF. The chapter's controller is 659 NANDs, the target (four registers, address pins, START/STOP detector) 1524, and a pad 5 transistors.`,
+the window closes at 300 ns / (0.8473 · 967 Ω) = 366 pF</pre>Fast-mode Plus, with 20 mA pads, has a window at 400 pF. The chapter's controller is 659 NANDs, the target (four registers, address pins, START/STOP detector) 1 524, and a pad 5 transistors.`,
     },
     mistakes: [
       'Sizing the pull-up for speed only: a resistor small enough for the rise time can exceed what the pads must sink, and the wire never reaches V<sub>OL</sub>.',
