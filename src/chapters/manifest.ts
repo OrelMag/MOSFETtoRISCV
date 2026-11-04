@@ -458,8 +458,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["telegraph"], steps: [
     { title: "Everyone to everyone" },
   ] },
-  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], steps: [
-    { title: "The driver and its load" },
+  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], recap: {"checks":3}, steps: [
+    { title: "The driver and its load", challenge: "quiz" },
+    { title: "A long wire on a chip", challenge: "quiz" },
+    { title: "Repeaters", challenge: "quiz" },
+    { title: "Off the chip: a node or a line", challenge: "quiz" },
+    { title: "Reflections", challenge: "quiz" },
+    { title: "Termination", challenge: "quiz" },
+    { title: "Crosstalk, ground bounce and pairs", challenge: "quiz" },
+    { title: "An I/O pad, and where the transistors stop", challenge: "reach" },
   ] },
   { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], steps: [
     { title: "What a receiver decides" },
