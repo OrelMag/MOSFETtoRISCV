@@ -1204,13 +1204,29 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero-ladder { min-width: 0; }
 .ladder-cap { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-/* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
+/* the map scrolls in its own box (opened at the visitor's section, journey.ts), faded where more sections lie past an edge */
 .ladder {
   display: flex; flex-direction: column; gap: 6px; position: relative;
   max-height: min(600px, calc(100vh - 160px)); overflow-y: auto; padding: 1px 4px 2px 0; scrollbar-width: thin;
 }
 .ladder { scroll-snap-type: y proximity; }
-.ladder > .rung { scroll-snap-align: start; }
+.ladder > .ladder-sec { scroll-snap-align: start; }
+.ladder-head {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; cursor: pointer; list-style: none; font-size: 13.5px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.ladder-head::-webkit-details-marker { display: none; }
+.ladder-head:hover, .ladder-head:focus-visible { border-color: var(--accent); }
+.ladder-head > svg { flex: none; color: var(--muted); transition: rotate 0.12s; }
+.ladder-sec[open] > .ladder-head > svg { rotate: 90deg; }
+.ladder-head b { flex: 1; min-width: 0; font-weight: 600; }
+.ladder-head .r { font: 12px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.ladder-sec.prologue .ladder-head b { color: var(--brass); }
+.ladder-sec.appendix .ladder-head b { color: var(--vintage); }
+.ladder-bar { flex: none; width: 44px; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.ladder-bar i { display: block; height: 100%; background: var(--accent); }
+.ladder-rows { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 4px 10px; }
+@media (pointer: coarse) { .ladder-head { min-height: 40px; } }
 .ladder-wrap { position: relative; }
 .ladder-up {
   position: absolute; top: -11px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent);
@@ -1230,7 +1246,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
   display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 12px;
   background: var(--surface); border: 1px solid var(--border); font-size: 14px;
 }
-.rung .n { font: 700 12px var(--font-mono); color: var(--muted); width: 22px; }
+.rung .n { font: 700 12px var(--font-mono); color: var(--muted); min-width: 22px; }
 .rung .t { font-weight: 600; flex: 1; }
 .rung .c { font: 12px var(--font-mono); color: var(--muted); }
 a.rung { color: inherit; text-decoration: none; border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); transition: border-color 0.12s, background 0.12s; }
