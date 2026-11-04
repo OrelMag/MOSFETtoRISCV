@@ -11,6 +11,7 @@ import { analyzeTiming } from '../sim/timing';
 import { PS_PER_NAND } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
 import { fmtLog10, log10Mtbf, resolutionTime, TAU_PS, T0_PS, windowRate } from '../phys/metastable';
+import { CMD_NAMES as I2C_CMD_NAMES, I2cController as I2cControllerModel, I2cTarget as I2cTargetModel, READ as I2C_READ, START as I2C_START, STOP as I2C_STOP, WRITE as I2C_WRITE } from '../comm/i2c';
 import { codeText, decode8b10b, encodeStream, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
 import { CRC32_INIT, CRC32_RESIDUE, fcsBytes, stepBits } from '../comm/crc';
 import { rng } from './drills';
@@ -457,6 +458,95 @@ export function runCdr(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
         return;
       }
     }
+  });
+  return finish(fails, n, def);
+}
+
+// ---- l_i2c: a controller on a wired-AND bus ----------------------------------------------------------------------------------
+
+type I2cCmd = [number, number];
+const addrW = (a: number): I2cCmd => [I2C_WRITE, a << 1], addrR = (a: number): I2cCmd => [I2C_WRITE, (a << 1) | 1];
+interface I2cScenario { name: string; script: I2cCmd[]; target?: { adr: number; stretch?: number }; /** a rival controller's script, started together */ rival?: I2cCmd[]; lostExpected?: boolean }
+const frame = (a: number): I2cCmd[] => [[I2C_START, 0], addrW(a), [I2C_WRITE, 0], [I2C_WRITE, 0x3c], [I2C_STOP, 0]];
+export const I2C_SCENARIOS: I2cScenario[] = [
+  { name: 'write a register, then read it back after a repeated START', script: [[I2C_START, 0], addrW(0x50), [I2C_WRITE, 1], [I2C_WRITE, 0xa7], [I2C_STOP, 0], [I2C_START, 0], addrW(0x50), [I2C_WRITE, 1], [I2C_START, 0], addrR(0x50), [I2C_READ, 0], [I2C_READ, 1], [I2C_STOP, 0]], target: { adr: 0x50 } },
+  { name: 'an address nobody has', script: [[I2C_START, 0], addrW(0x2a), [I2C_WRITE, 3], [I2C_WRITE, 0x11], [I2C_STOP, 0]], target: { adr: 0x50 } },
+  { name: 'a target that stretches SCL', script: [[I2C_START, 0], addrW(0x51), [I2C_WRITE, 2], [I2C_WRITE, 0x5c], [I2C_START, 0], addrW(0x51), [I2C_WRITE, 2], [I2C_START, 0], addrR(0x51), [I2C_READ, 1], [I2C_STOP, 0]], target: { adr: 0x51, stretch: 5 } },
+  ...[0, 2, 4, 6].map((bit): I2cScenario => {
+    const win = 0x50, lose = win ^ (1 << (6 - bit)) | 0;
+    const a = Math.max(win, lose), b = Math.min(win, lose);
+    return { name: `arbitration lost at address bit ${bit} (yours ${a.toString(16)}, theirs ${b.toString(16)})`, script: frame(a), rival: frame(b), target: { adr: b }, lostExpected: true };
+  }),
+  ...[1, 5].map((bit): I2cScenario => {
+    const win = 0x50, other = win ^ (1 << (6 - bit));
+    const mine = Math.min(win, other), theirs = Math.max(win, other);
+    return { name: `arbitration won at address bit ${bit} (yours ${mine.toString(16)}, theirs ${theirs.toString(16)})`, script: frame(mine), rival: frame(theirs), target: { adr: mine } };
+  }),
+];
+
+const OUT_RULES: Record<string, string> = {
+  ready: 'ready is 0 from the clock after go until the command\'s last phase is over; a command is four phases of two clocks per bit cell (START and STOP are one cell, a byte is nine)',
+  dout: 'dout is the byte read, shifted in at the end of each SCL-high phase, most significant bit first',
+  ack: 'ack is 1 when the target pulled SDA low in the ninth cell of a WRITE (sampled at the end of its SCL-high phase)',
+  lost: 'a controller that let go of SDA (sent a 1) and reads 0 at the end of the SCL-high phase has lost: lost = 1 and both lines are released at once',
+  sda_o: 'sda_o = 1 pulls SDA low; it changes only as a cell\'s phase 0 begins (START and STOP: at the phases the standard puts the edge)',
+  scl_o: 'scl_o = 1 pulls SCL low: low in phases 0 and 3, released in 1 and 2, and phase 1 waits until SCL really reads high (clock stretching, other controllers)',
+};
+
+export function runI2c(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
+  if (mode === 'switch') return { failures: ['gate level: the controller\'s pads are the bench\'s wired AND'], tested: 0 };
+  const sim = simOf(def, ['clk', 'rst', 'go', 'cmd', 'din', 'sda_i', 'scl_i', 'ready', 'dout', 'ack', 'lost', 'sda_o', 'scl_o']);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const sc = I2C_SCENARIOS, n = sc.length;
+  const gold = sc.map(() => new I2cControllerModel()), riv = sc.map(() => new I2cControllerModel()), tgt = sc.map((s) => (s.target ? new I2cTargetModel() : undefined));
+  const idx = sc.map(() => 0), ridx = sc.map(() => 0), last = sc.map(() => -1);
+  const sda = new Array<number>(n).fill(1), scl = new Array<number>(n).fill(1);
+  const why = new Array<string>(n).fill('');
+  const names = ['ready', 'dout', 'ack', 'lost', 'sda_o', 'scl_o'] as const;
+  const finished = (l: number, c: number) => c > 8 && gold[l].out.ready && (idx[l] >= sc[l].script.length || gold[l].lost) && (!sc[l].rival || (riv[l].out.ready && (ridx[l] >= sc[l].rival!.length || riv[l].lost)));
+  for (let c = 0; c < 2600 && why.some((w, l) => !w && !finished(l, c)); c++) {
+    const rst = c === 0 ? 1 : 0;
+    const ins = sc.map((s, l) => {
+      let go = 0, cmd = 0, din = 0;
+      const g = gold[l];
+      if (!rst && g.out.ready && idx[l] < s.script.length && !(g.lost && s.script[idx[l]][0] !== I2C_START)) { go = 1; [cmd, din] = s.script[idx[l]++]; last[l] = cmd; }
+      return { rst, go, cmd, din, sda_i: sda[l], scl_i: scl[l] };
+    });
+    for (const k of ['rst', 'go', 'cmd', 'din', 'sda_i', 'scl_i'] as const) sim.setInput(k, ins.map((i) => i[k]));
+    sim.cycle();
+    const got: Record<string, number[]> = {};
+    for (const nm of names) got[nm] = sim.get(nm, n);
+    sc.forEach((s, l) => {
+      const i = ins[l], g = gold[l];
+      const ph = g.ph, bc = g.bc, cmd = g.cmd;
+      g.step(i);
+      if (!why[l]) {
+        for (const nm of names) {
+          if (got[nm][l] !== g.out[nm]) {
+            why[l] = `${s.name}, clock ${c}: ${nm} = ${got[nm][l]}, expected ${g.out[nm]} (${I2C_CMD_NAMES[g.cmd]}${g.act ? `, bit cell ${g.bc}, phase ${g.ph}` : ''}; before this clock: ${I2C_CMD_NAMES[cmd]}, cell ${bc}, phase ${ph}). ${OUT_RULES[nm]}`;
+            break;
+          }
+        }
+      }
+      const outs = [g.out];
+      if (s.rival) {
+        const r = riv[l];
+        let go = 0, cmd2 = 0, din = 0;
+        if (!rst && r.out.ready && ridx[l] < s.rival.length && !(r.lost && s.rival[ridx[l]][0] !== I2C_START)) { go = 1; [cmd2, din] = s.rival[ridx[l]++]; }
+        r.step({ rst, go, cmd: cmd2, din, sda_i: sda[l], scl_i: scl[l] });
+        outs.push(r.out);
+      }
+      const t = tgt[l];
+      let to = { sda_o: 0, scl_o: 0 };
+      if (t) { t.step({ rst, sda_i: sda[l], scl_i: scl[l], adr: s.target!.adr, stretch: s.target!.stretch ?? 0 }); to = t.out; }
+      sda[l] = outs.some((o) => o.sda_o) || to.sda_o ? 0 : 1;
+      scl[l] = outs.some((o) => o.scl_o) || to.scl_o ? 0 : 1;
+    });
+  }
+  const fails = sc.flatMap((s, l) => {
+    if (why[l]) return [why[l]];
+    if (s.lostExpected && !gold[l].lost) return [`${s.name}: the bench\'s own model did not lose; the scenario is wrong`];
+    return [];
   });
   return finish(fails, n, def);
 }

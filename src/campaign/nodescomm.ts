@@ -5,7 +5,8 @@
 import type { CampaignNode } from './types';
 import { BUILDCOMM } from './buildcomm';
 import { partsOf } from './build8';
-import { crcGives, leafGives, SYNC_REF } from './buildcomm';
+import { crcGives, i2cBlocks, leafGives, SYNC_REF } from './buildcomm';
+import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 
@@ -45,5 +46,11 @@ export const NODES_COMM: CampaignNode[] = [
     why: 'The line carries no clock, and the sender\'s is never quite yours. Every transition in the data is a free look at where the sender\'s bit boundaries are; a loop that nudges its strobe toward them, a sample at a time, follows a clock that drifts. That is why 8b/10b guarantees a transition every five bits.',
     tips: ['Sample the line every cycle into a chain of flip-flops. At a strobe, three of them are what the detector needs: the newest data sample, the one two cycles before it (the sample near the edge) and the data sample two cycles before that.', 'If the data changed between the two data samples and the edge sample still shows the old value, the strobe was early; if it already shows the new one, late. If the data did not change there is no vote.', 'A counter of 0 to 3 times the strobe (4 cycles a bit). A vote filter counts early minus late and only at four the same way makes the next period 5 or 3 cycles instead of 4: a bang-bang loop with hysteresis.', 'Do not move on one vote: a single noisy edge would shake the strobe, and a sample point that moves every bit is jitter.'],
     codex: ['edge'], chapters: [{ chapter: 'serial', step: 4, label: 'Finding the clock in the data' }],
+  },
+  {
+    id: 'l_i2c', act: 12, title: 'I²C controller', kind: 'build', optional: true, requires: ['l_sync'], base: BUILDCOMM.l_i2c, givesOf: leafGives(i2cController, i2cBlocks), par: { nand: 659, period: 32 },
+    why: 'Two wires shared by any number of chips, each of which can pull a line down and none of which can push it up: the wired AND of chapter 2, with a pull-up resistor. Two controllers may start together; each reads back what it sends, and the one that sent a 1 and read a 0 steps aside without corrupting the other\'s frame.',
+    tips: ['Per bit cell: a phase counter of 0 to 3 (two clocks each, so a half-phase flag too) and a bit counter of 0 to 8. START, STOP, WRITE and READ differ only in what the lines do in each phase.', 'sda_o and scl_o are flip-flops, set as a phase begins, so the lines never glitch. Phase 1 holds until scl_i (through two samplers) reads 1.', 'Arbitration: in phase 2 of a WRITE data cell, if the bit you sent was 1 (you let go) and sda_i reads 0, set lost, clear busy and release both lines in that clock.', 'A WRITE shifts its byte left one place after each cell; a READ shifts sda_i in at the end of phase 2.'],
+    codex: ['arbitration'], chapters: [{ chapter: 'spi', step: 6, label: 'The I²C frame' }, { chapter: 'spi', step: 7, label: 'Arbitration: two controllers at once' }],
   },
 ];

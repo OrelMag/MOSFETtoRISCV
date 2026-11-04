@@ -141,6 +141,7 @@ export const NUDGES: Record<string, string> = {
   l_crc: 'The remainder after a byte is a fixed XOR of some bits of what you had and some bits of the byte: find which, once.',
   l_8b10b: 'Choose each half-symbol from the disparity so far, so that the line is pulled back toward zero, never pushed away.',
   l_cdr: 'Every transition says where a bit boundary is; take no step until the same hint has come several times.',
+  l_i2c: 'What you send you also read back; a difference, at the moment a bit counts, means somebody else is sending too.',
   p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
 };
 

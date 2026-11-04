@@ -36,4 +36,9 @@ export const CASESL: Record<string, LevelCase> = {
     without: 'A receiver that samples at a fixed rate from its own clock slips a bit every 1/ppm bits: at 100 ppm, one bit in ten thousand is read twice or lost, a link that would corrupt ten times a second at 1 Gb/s. A receiver that tries to follow every single edge instead jitters and samples at the boundary half the time.',
     cost: '487 NANDs: five sampling flip-flops, the early/late detector, a strobe counter and a four-vote filter. The loop follows a clock up to about 3% off, which is thousands of times what crystals give; the limit is the transition density of the code (8b/10b guarantees one in five bits).',
   },
+  l_i2c: {
+    problem: 'A board has a temperature sensor, an EEPROM, a clock chip and a display driver, and no pins to spare. I²C puts all of them on two wires with a pull-up resistor each. Every device pulls a line low and none pushes it high, so any number can share it and the wire is the AND of what they say. That same property gives a second controller its chance: both start together, each compares what it sent with what it reads, and the one that sent a 1 and read a 0 steps aside without a collision.',
+    without: 'With push-pull outputs two controllers fighting over a line short the supply through each other. With a central arbiter a third wire is needed, and a controller that does not read back what it sends has no way to find out that it has lost.',
+    cost: '659 NANDs for the controller, a few hundred more than the UART receiver\'s: a bit-cell sequencer with a stretch point, an 8-bit shift register and the compare that finds arbitration lost. The price on the wire is speed: the pull-up\'s rise time against the wire\'s capacitance caps a bus at 100 kHz to 1 MHz, a hundredth of what a push-pull link of the same wires would carry.',
+  },
 };

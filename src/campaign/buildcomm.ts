@@ -7,13 +7,17 @@ import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { syncN } from '../lib/sync';
 import { crcNext, crcUnit } from '../lib/crc';
+import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
-import { run8b10b, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
+import { I2C_SCENARIOS, run8b10b, runI2c, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
+
+/** The controller's Rtl blocks (decode, sequencer, shifter …): sub-chips of its drawing. */
+export const i2cBlocks = (): ComponentDef[] => (netlistOf(i2cController())?.instances ?? []).map((i) => i.def).filter((d) => d.id.startsWith('i2c_controller_'));
 
 const answers = new Map<string, ChipDoc[]>();
 /** A reference answer: the top def drawn as a chip, and `subs` (def → chip) drawn as chips it places. */
@@ -97,5 +101,14 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(CDR).filter((p) => ['rxd', 'clk', 'bit', 'strobe'].includes(p.name)),
     check: { kind: 'custom', describe: CDR_SCENARIOS.length + ' streams of about 1700 bits (a comma every eighth word): nominal, 1.5% fast, 1.5% slow, drifting to 2.5% either way, and a drift that changes sign: strobes about every 4 cycles, then every bit equal to the one sent.', run: runCdr },
     answer: refOf('l_cdr', () => CDR, 'Clock recovery', () => [[CDR_CTL, 'Strobe counter and vote filter']]),
+  }),
+  l_i2c: () => ({
+    id: 'l_i2c', title: 'I²C controller', level: 'sequential', allowed: 'nand',
+    brief: 'Two wires, any number of devices, each pulling a line low and never driving it high: a line is 1 only if nobody pulls it. <b>sda_o</b> = 1 pulls SDA to ground (an open-drain pad: the NMOS of chapter 44), 0 lets go; <b>sda_i</b> and <b>scl_i</b> are the wires read back. The bench is that wire, a target (a four-register device) and, in some tests, a rival controller. '
+      + 'One command at a time: <b>go</b> with <b>cmd</b> (0 START, 1 WRITE a byte and read the ACK, 2 READ a byte, 3 STOP) and <b>din</b> (the byte; for a READ, din[0] = 1 sends NACK instead of ACK). <b>ready</b> is 1 when idle and 0 from the clock after go until the command is over. A command is bit cells of four phases of two clocks each: 0 SCL pulled low and SDA set, 1 SCL released (and the cell waits here until SCL really reads high: the target or another controller may stretch it), 2 SCL high, SDA sampled at its end, 3 SCL pulled low again. START and STOP are one cell; a byte is eight cells and a ninth for the acknowledge, most significant bit first. '
+      + '<b>ack</b> = 1 if the target answered a WRITE; <b>dout</b> is the byte read; <b>lost</b> = 1 when you let go of SDA (sent a 1) and read a 0 in the same cell: arbitration is lost, and both lines must be released at once, so that the winner\'s frame goes on unharmed. The bench runs the golden controller beside yours, clock by clock, and names the first line that differs.',
+    ports: pinsOf(i2cController()),
+    check: { kind: 'custom', describe: I2C_SCENARIOS.length + ' sessions against a target and a wired-AND bus: write and read back with a repeated START, an address nobody has, a target that stretches SCL, and a rival controller started together with you, which you lose at four address bits and win at two. Every output after every clock.', run: runI2c },
+    answer: refOf('l_i2c', i2cController, 'I²C controller', () => i2cBlocks().map((d) => [d, d.name] as [ComponentDef, string])),
   }),
 };
