@@ -9,7 +9,8 @@ import { homePage } from './pages/home';
 import type { WorkbenchPage } from './pages/workbench';
 import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, PALETTES, settings, TEXT_SIZES, type Theme } from './settings';
+import { applyTheme, PALETTES, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale } from './settings';
+import { systemReducedMotion } from './motion';
 import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
 import type { Radix } from '../sim/values';
@@ -100,7 +101,6 @@ export function startApp(root: HTMLElement): void {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
       settings.set('palette', p.id);
       applyTheme();
-      palOpen(false);
     } }, h('span', { class: 'pal-sw', 'data-palette': p.id }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' })),
     h('span', null, h('b', null, p.name), h('small', null, p.blurb)));
     palMenu.append(item);
@@ -171,11 +171,40 @@ export function startApp(root: HTMLElement): void {
   const narrowItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('narrowText', !settings.narrowText); applyTheme(); } },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Narrow reading column'), h('small', null, 'Chapter text held to about 62 characters a line')));
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, palHead('Behaviour'), simpleItem, clockItem, delayItem);
-  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: wire and module colours, vivid look, cartoon parts, flowing bits, colour per net, simple connections, automatic clock, load-dependent delay', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
+  // Thickness and grid: a word each, one row (the same shape as Text size).
+  const choiceRow = <T extends string>(label: string, of: () => T, set: (v: T) => void, opts: [T, string][]) => {
+    const btns = opts.map(([v, t]) => h('button', { class: 'btn sm toggle', 'data-v': v, onclick: () => { set(v); applyTheme(); } }, t));
+    const sync = () => { for (const b of btns) { const on = b.dataset.v === of(); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); } };
+    return { row: h('div', { class: 'pal-choice', role: 'group', 'aria-label': label }, h('span', null, h('b', null, label)), btns), sync };
+  };
+  const wiresRow = choiceRow<WireScale>('Wire thickness', () => settings.wireScale, (v) => settings.set('wireScale', v), [['thin', 'Thin'], ['normal', 'Normal'], ['thick', 'Thick']]);
+  const gridRow = choiceRow<GridStyle>('Grid', () => settings.grid, (v) => settings.set('grid', v), [['dots', 'Dots'], ['lines', 'Lines'], ['off', 'None']]);
+  // Less motion: flowing bits, pulses and smooth scrolling, with or without the system's setting (which then holds it on).
+  const motionWhy = h('small', null);
+  const motionItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => { settings.set('reduceMotion', !settings.reduceMotion); applyTheme(); } },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Reduce motion'), motionWhy));
+  // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.
+  const minimapItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('minimap', !settings.minimap) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Minimap'), h('small', null, 'Sandbox: a map at the canvas corner while part of the chip is out of view (M)')));
+  const singleItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('singleKeys', !settings.singleKeys) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Single-key shortcuts'), h('small', null, 'F, /, [, ? and the like; off, only Ctrl / ⌘ combinations and Esc')));
+  // Reset: every option here, never progress or the theme. Offers its own undo until the menu closes.
+  let beforeReset: ViewState | null = null;
+  const resetItem = h('button', { class: 'pal-reset', onclick: () => {
+    if (beforeReset) { settings.setView(beforeReset); beforeReset = null; }
+    else { beforeReset = settings.view(); settings.resetView(); }
+    applyTheme();
+    syncTools();
+  } });
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: text size, wire colours and thickness, the look of parts, grid, motion, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
     palBtn.setAttribute('aria-expanded', String(on));
+    if (!on && beforeReset) { beforeReset = null; syncTools(); }
   };
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -202,6 +231,15 @@ export function startApp(root: HTMLElement): void {
     clockItem.setAttribute('aria-checked', String(settings.autoClock));
     delayItem.setAttribute('aria-checked', String(settings.loadDelay));
     narrowItem.setAttribute('aria-checked', String(settings.narrowText));
+    wiresRow.sync();
+    gridRow.sync();
+    const sysMotion = systemReducedMotion();
+    motionItem.setAttribute('aria-checked', String(sysMotion || settings.reduceMotion));
+    motionItem.disabled = sysMotion;
+    motionWhy.textContent = sysMotion ? 'On: your system asks for it' : 'No flowing bits, pulses or smooth scrolling; Slow motion still plays when you ask';
+    minimapItem.setAttribute('aria-checked', String(settings.minimap));
+    singleItem.setAttribute('aria-checked', String(settings.singleKeys));
+    resetItem.textContent = beforeReset ? 'Undo reset' : 'Reset view options to defaults';
     sizeVal.textContent = `${settings.textSize}%`;
     sizeMinus.disabled = settings.textSize <= TEXT_SIZES[0];
     sizePlus.disabled = settings.textSize >= TEXT_SIZES[TEXT_SIZES.length - 1];

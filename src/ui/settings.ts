@@ -9,6 +9,11 @@ export type TraceLevel = 'gate' | 'cycle' | 'instr';
 export const TEXT_SIZES = [90, 100, 110, 120, 130] as const;
 export type Palette = 'default' | 'cb' | 'lsim' | 'contrast' | 'print';
 
+/** Wire thickness over whatever the look draws (styles/app.css --wire-user). */
+export type WireScale = 'thin' | 'normal' | 'thick';
+/** The canvas's grid: points, lines, or a bare canvas. */
+export type GridStyle = 'dots' | 'lines' | 'off';
+
 /** Wire palettes (colours live in styles/palettes.css). */
 export const PALETTES: { id: Palette; name: string; blurb: string }[] = [
   { id: 'default', name: 'Default', blurb: 'Orange 1, grey 0, blue buses' },
@@ -55,6 +60,10 @@ interface State {
   minimap: boolean;
   /** Coach-mark tours finished or skipped (ui/coachmarks.ts): "stage", "sandbox". */
   coachDone: Record<string, boolean>;
+  /** Stop animations whatever the system says (the system's own preference is always honoured: ui/motion.ts). */
+  reduceMotion: boolean;
+  wireScale: WireScale;
+  grid: GridStyle;
   /** Prose size in the chapter pane, percent of the designed size (TEXT_SIZES); schematics never scale. */
   textSize: number;
   /** The chapter pane's text held to a comfortable line length (about 62 characters), centred where the pane is wider. */
@@ -77,7 +86,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -95,6 +104,12 @@ function load(): State {
   } catch { /* private mode, blocked storage, ... */ }
   return { ...defaults };
 }
+
+/** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */
+const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'textSize', 'narrowText'] as const;
+export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
+
+const pickView = (from: State): ViewState => Object.fromEntries(VIEW_KEYS.map((k) => [k, from[k]])) as unknown as ViewState;
 
 const state = load();
 const listeners = new Set<() => void>();
@@ -132,13 +147,16 @@ export const settings = {
   get singleKeys() { return state.singleKeys; },
   get loadDelay() { return state.loadDelay; },
   get minimap() { return state.minimap; },
+  get reduceMotion() { return state.reduceMotion; },
+  get wireScale() { return state.wireScale; },
+  get grid() { return state.grid; },
   get textSize() { return state.textSize; },
   get narrowText() { return state.narrowText; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -154,6 +172,20 @@ export const settings = {
     if (!on) state.vividNets = false;
     save();
     listeners.forEach((f) => f());
+  },
+  /** The menu's options as they are now, to give back to setView. */
+  view(): ViewState {
+    return pickView(state);
+  },
+  /** Several options at once: one save, one notification. */
+  setView(v: Partial<ViewState>): void {
+    Object.assign(state, v);
+    save();
+    listeners.forEach((f) => f());
+  },
+  /** Every option in the menu back to its default; progress and the theme stay. */
+  resetView(): void {
+    this.setView(pickView(defaults));
   },
   onChange(f: () => void): () => void {
     listeners.add(f);
@@ -232,6 +264,11 @@ export function applyTheme(): void {
   if (size === 100) root.style.removeProperty('--prose-scale');
   else root.style.setProperty('--prose-scale', String(size / 100));
   root.toggleAttribute('data-narrow-text', state.narrowText);
+  root.toggleAttribute('data-reduce-motion', state.reduceMotion);
+  if (state.wireScale === 'normal') root.removeAttribute('data-wires');
+  else root.setAttribute('data-wires', state.wireScale);
+  if (state.grid === 'dots') root.removeAttribute('data-grid');
+  else root.setAttribute('data-grid', state.grid);
   if (state.vivid) root.setAttribute('data-look', 'vivid');
   else root.removeAttribute('data-look');
   if (state.vivid && state.board) root.setAttribute('data-board', 'dark');

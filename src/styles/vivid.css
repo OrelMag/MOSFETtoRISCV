@@ -6,7 +6,7 @@
    chrome, the dock and the panels keep the theme. Symbol sizes and port positions are unchanged. */
 
 :root[data-look='vivid'] {
-  --wire-k: 1.6;
+  --wire-k: calc(1.6 * var(--wire-user));
   --bus0-opacity: 0.8;
 }
 
