@@ -11,6 +11,7 @@
   --m3-dim: var(--accent);
 }
 .m3d .r3-sl span { width: auto; min-width: 48px; }
+.m3d .r3-btns { flex-wrap: wrap; }
 .m3-face { stroke: color-mix(in srgb, var(--text) 25%, transparent); stroke-width: 0.5; stroke-linejoin: round; }
 .m3-flat-lbl { font: 600 13px var(--font-ui); fill: var(--text); paint-order: stroke; stroke: var(--canvas); stroke-width: 3px; }
 .m3-title { margin: 0 0 2px; font-size: 15px; }

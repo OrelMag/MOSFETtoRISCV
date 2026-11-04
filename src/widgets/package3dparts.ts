@@ -64,7 +64,7 @@ export function pkParts(st: PkState, P: PkPalette): Part[] {
 export function pkAnchors(st: PkState): Anchor[] {
   const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.3, 1], g = GROUND_SLOTS[0];
   return [
-    { text: 'die', p: [0, 2.1, 6], side: 't', n: up },
+    { text: 'die', p: [0, 2.1, 6], side: 'b', n: up },
     { text: 'signal bond wire', p: [13, 3.6, slotZ(9)], side: 'r', n: front },
     { text: 'lead frame', p: [30, 0.5, slotZ(9) * 2.2], side: 'b', n: front },
     { text: 'board', p: [0, -1, 26], side: 'b', n: front },
