@@ -263,3 +263,18 @@ export function bitLoad(km: number, floor: number, gap: number): { bits: number[
   const total = bits.reduce((a, b) => a + b, 0);
   return { bits, total, rate: total * ADSL.symbolRate };
 }
+
+/**
+ * The oscillator's own noise: the table's 6-bit samples against an ideal sine of the same (full-resolution) phase, over whole
+ * periods of a tuning word, as signal power over error power (dB). Phase truncated to six bits and amplitude to six bits.
+ */
+export function ncoSnrDb(word = FTW_MARK): number {
+  const nco = new NcoModel(), n = 2 ** ACC_BITS;
+  let ps = 0, pe = 0;
+  for (let i = 0; i < n; i++) {
+    const ideal = 31.5 * Math.sin((2 * Math.PI * nco.acc) / 2 ** ACC_BITS), got = nco.sample - 31.5;
+    ps += ideal * ideal; pe += (got - ideal) * (got - ideal);
+    nco.clock(word);
+  }
+  return ratioToDb(ps / pe);
+}
