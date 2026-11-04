@@ -21,7 +21,7 @@ import { h } from '../dom';
 /** The attributes that shape a drawn circuit, and what paper wants of each (null: absent). */
 const PAPER: [string, string | null][] = [
   ['data-theme', 'light'], ['data-palette', 'print'], ['data-modules', 'plain'], ['data-wireflow', 'off'],
-  ['data-netcolors', null], ['data-look', null], ['data-board', null], ['data-parts', null], ['data-wires', null],
+  ['data-netcolors', null], ['data-look', null], ['data-board', null], ['data-parts', null], ['data-wires', null], ['data-hide', null],
   // (print.css: no transitions meanwhile, or a wire whose class just changed to 1 is read still on its way from 0's grey)
   ['data-paper', ''],
 ];

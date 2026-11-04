@@ -64,6 +64,25 @@ describe('view options', () => {
     expect(app).not.toMatch(/\[data-grid[^\]]*\][^{]*\.grid-bg/);
   });
 
+  it('labels can go, but the reset brings them back', () => {
+    for (const k of ['portNames', 'partNames', 'busValues', 'tapRanges'] as const) settings.set(k, false);
+    expect([settings.portNames, settings.partNames, settings.busValues, settings.tapRanges]).toEqual([false, false, false, false]);
+    settings.resetView();
+    expect([settings.portNames, settings.partNames, settings.busValues, settings.tapRanges]).toEqual([true, true, true, true]);
+  });
+
+  it('a hidden name still shows under the pointer, and paper never loses one', () => {
+    const app = css('app.css');
+    expect(app).toMatch(/data-hide~='ports'\] svg\.schematic \.inst:not\(:hover\) \.sym-port/);
+    expect(app).toMatch(/data-hide~='parts'\] svg\.schematic \.inst:not\(:hover\) :is\(\.sym-label, \.inst-name\)/);
+    // the fixed-size names set an inline display (view/legible.ts)
+    expect(app).toMatch(/data-hide~='parts'\] svg\.schematic \.lg-name \{ display: none !important; \}/);
+    expect(app).toMatch(/\.tap-label:not\(\.net-hover, \.net-sel, \.fld\)/);
+    const paper = readFileSync(new URL('../src/ui/pages/printfig.ts', import.meta.url), 'utf8');
+    expect(paper).toContain("['data-hide', null]");
+    expect(paper).toContain("['data-wires', null]");
+  });
+
   it('the switch does what the system preference does', () => {
     const app = css('app.css');
     expect(app).toMatch(/:root\[data-reduce-motion\] \*, [^{]*\{ animation: none !important; transition: none !important; \}/);

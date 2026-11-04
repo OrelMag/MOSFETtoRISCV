@@ -2703,6 +2703,14 @@ svg.schematic.lg.lg-h-tap3 .tap-label[data-ts='3'], svg.schematic.lg.lg-h-tap4 .
 svg.schematic.lg.lg-h-tap5 .tap-label[data-ts='5'], svg.schematic.lg.lg-h-tap6 .tap-label[data-ts='6'],
 svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .tap-label[data-ts='8'] { display: none; }
 
+/* View options' labels: a view rule like the sizes above. A hidden name comes back under the pointer, so a part can still be read
+   and renamed in place, a bit range on its hovered or selected net; a field colouring (.fld) is the point of its step and stays. */
+:root[data-hide~='ports'] svg.schematic .inst:not(:hover) .sym-port,
+:root[data-hide~='parts'] svg.schematic .inst:not(:hover) :is(.sym-label, .inst-name),
+:root[data-hide~='values'] svg.schematic :is(.bus-label, .flow-tokens),
+:root[data-hide~='taps'] svg.schematic .tap-label:not(.net-hover, .net-sel, .fld) { display: none; }
+:root[data-hide~='parts'] svg.schematic .lg-name { display: none !important; }
+
 /* The inspector folds to a rail (view/inspector.ts): by the learner, or by the stage beside a circuit too large to read at
    its fit (Stage.autoInspector). Only where the inspector is a column (1181 px and up); a phone's or tablet's drawer is untouched. */
 .inspector .insp-rail, .insp-head .insp-fold { display: none; }
