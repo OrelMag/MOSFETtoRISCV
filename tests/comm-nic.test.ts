@@ -8,6 +8,7 @@ import { NIC_REG, OWN, ST_BAD, ST_MISS, ST_RXI, ST_TXI, TX_DROPPED } from '../sr
 import { stats } from '../src/sim/stats';
 import { nic } from '../src/lib/nic';
 import { bench, decodeLine, frameFor, RegScript, serialLine, type Bench, type RegOp } from './nickit';
+import { dmaRx, dmaTx } from '../src/widgets/net';
 import { tick } from './yieldtick';
 
 const MAC = [0x02, 0x00, 0x00, 0x00, 0x00, 0x0a], PEER = [0x02, 0x00, 0x00, 0x00, 0x00, 0x0b];
@@ -157,6 +158,28 @@ describe('NIC model: descriptors, bad frames, misses', () => {
     expect(b.ram.ram[(TXR + 12) >>> 2] >>> 0).toBe(s.length);
     // the FCS of the first is the CRC-32 of its bytes
     void fcsBytes; void crc32;
+  });
+});
+
+describe('NIC: bus transactions per frame (the chapter formulas)', () => {
+  it('transmit: 3 + ceil(len / 4) reads and one write; receive: two reads and ceil(max(60, len) / 4) + 1 writes', () => {
+    for (const len of [42, 50, 61, 64, 100]) {
+      const b = bench(0, 8192, false);
+      rings(b);
+      run(b, new RegScript(SETUP), null, 200, false);
+      const n0 = b.ram.log.length;
+      const out = frameFor(PEER, MAC, 0x0800, Array.from({ length: Math.max(0, len - 14) }, (_, i) => i)).slice(0, len);
+      b.ram.setBytes(TXB, out);
+      b.ram.ram[(TXR + 4) >>> 2] = (OWN | len) >>> 0;
+      run(b, new RegScript([w(NIC_REG.KICK, 1)]), null, 6000, false);
+      const tx = b.ram.log.slice(n0);
+      expect({ reads: tx.filter((x) => !x[0]).length, writes: tx.filter((x) => x[0]).length }, `transmit ${len}`).toEqual(dmaTx(len));
+      const n1 = b.ram.log.length;
+      const l = serialLine(frameFor(MAC, PEER, 0x0800, Array.from({ length: Math.max(0, len - 14) }, (_, i) => i)), 30, 300);
+      run(b, null, l, l.rxd.length + 300, false);
+      const rx = b.ram.log.slice(n1);
+      expect({ reads: rx.filter((x) => !x[0]).length, writes: rx.filter((x) => x[0]).length }, `receive ${len}`).toEqual(dmaRx(len));
+    }
   });
 });
 

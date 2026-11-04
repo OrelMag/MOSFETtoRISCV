@@ -21,7 +21,31 @@ import { h, s } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
-import { btn, Loop, outAt, outp, pulse, select, waveSvg } from './uart';
+import { btn, outAt, outp, pulse, select, waveSvg } from './uart';
+
+/**
+ * Like uart.ts's Loop, but each tick simulates for a time budget instead of a fixed number of steps: a computer pair on the cycle engine runs at about a
+ * thousand clocks a second, so a fixed batch would hold the page for most of every tick. One history checkpoint at the start.
+ */
+class SliceLoop {
+  private t: ReturnType<typeof setTimeout> | null = null;
+  constructor(private stage: Stage, private step: () => boolean, private after: () => void, private budgetMs = 18, private gapMs = 6) {}
+  get running(): boolean { return this.t !== null; }
+  start(): void {
+    if (this.t) return;
+    this.stage.checkpoint();
+    const tick = () => {
+      const end = performance.now() + this.budgetMs;
+      let go = true;
+      do go = this.step(); while (go && performance.now() < end);
+      this.stage.refresh(); this.after();
+      this.t = go ? setTimeout(tick, this.gapMs) : null;
+      if (!go) this.after();
+    };
+    this.t = setTimeout(tick, 0);
+  }
+  stop(): void { if (this.t) clearTimeout(this.t); this.t = null; this.after(); }
+}
 
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
 const hex4 = (v: number) => v.toString(16).padStart(4, '0');
@@ -51,7 +75,7 @@ export function pathWidget(): Widget {
     read.replaceChildren(h('span', null, 'on the wire ', h('b', null, `${total} bytes`)), h('span', null, 'cable busy ', h('b', null, `${n0(wireClocks(frame))} clocks`)), h('span', null, 'at 3.95 ns ', h('b', null, `${(wireClocks(frame) * CLOCK_NS / 1000).toFixed(1)} µs`)),
       h('span', null, 'payload share ', h('b', null, `${(100 * n / total).toFixed(0)} %`)));
   };
-  const sl = slider('Data bytes in the echo', 0, 94, 1, n, (v) => String(v), (v) => { n = v; paint(); });
+  const sl = slider('Echo data', 0, 86, 1, n, (v) => String(v), (v) => { n = v; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos clk-w net-w' }, h('div', { class: 'panel' }, h('h3', null, 'From a buffer to the wire'), sl.el, box, read,
     h('p', { class: 'sub' }, 'Each layer prepends its header; the MAC wraps the result. One byte takes 32 clocks on this link (a bit every 4 clocks).'))) };
@@ -147,7 +171,7 @@ export function frameWidget(kinds: Kind[] = ['arp-req', 'arp-rep', 'echo-req', '
     }
   };
   let hot = -1;
-  const paint = () => {
+  let paint = () => {
     const f = build();
     const owner: { layer: Layer; field: number }[] = [];
     f.fields.forEach((fl, k) => fl.bytes.forEach(() => owner.push({ layer: fl.layer, field: k })));
@@ -181,6 +205,10 @@ export function frameWidget(kinds: Kind[] = ['arp-req', 'arp-rep', 'echo-req', '
   const seqSl = slider('Sequence', 1, 9, 1, seq, (v) => String(v), (v) => { seq = v; paint(); });
   const txt = h('input', { type: 'text', value: text, maxlength: 16, class: 'uart-text', 'aria-label': 'UDP data' }) as HTMLInputElement;
   txt.addEventListener('input', () => { text = txt.value; paint(); });
+  // the sequence slider belongs to an echo, the text to a datagram
+  const paintControls = () => { seqSl.el.style.display = kind.startsWith('echo') ? '' : 'none'; txt.style.display = kind === 'udp' ? '' : 'none'; };
+  const basePaint = paint;
+  paint = () => { basePaint(); paintControls(); };
   paint();
   return { el: h('div', { class: 'widget mos clk-w net-w' }, h('div', { class: 'panel' }, h('h3', null, 'A frame, field by field'), h('div', { class: 'mc-row' }, sel, ...(kinds.some((k) => k.startsWith('echo')) ? [seqSl.el] : []), ...(kinds.includes('udp') ? [txt] : [])),
     key, dump, table, sums, h('p', { class: 'sub' }, 'Computed by comm/netframes.ts, a second implementation of what the Python stack builds on the CPU; a test compares them byte for byte. Hover a row to find its bytes.'))) };
@@ -188,8 +216,8 @@ export function frameWidget(kinds: Kind[] = ['arp-req', 'arp-rep', 'echo-req', '
 
 // ---- the cost of a packet -------------------------------------------------------------------------------------------
 
-/** DMA transactions the NIC makes for a frame: transmit reads two descriptor words and the buffer a word at a time and writes one back; receive reads two, writes the words, writes one. */
-export const dmaTx = (len: number) => ({ reads: 2 + Math.ceil(len / 4), writes: 1 });
+/** DMA transactions the NIC makes for a frame: transmit reads two descriptor words, the buffer a word at a time and the next descriptor, and writes one back; receive reads two, writes the words, writes one (tests/comm-nic.test.ts counts them). */
+export const dmaTx = (len: number) => ({ reads: 3 + Math.ceil(len / 4), writes: 1 });
 export const dmaRx = (len: number) => ({ reads: 2, writes: Math.ceil(Math.max(60, len) / 4) + 1 });
 
 export interface CostRow { who: 'a' | 'b'; what: string; instr: number; clocks: number; loads: number; stores: number; layers: Record<string, { instr: number; clocks: number }> }
@@ -211,7 +239,7 @@ export function costWidget(): Widget {
   const tbl = h('table', { class: 'net-frames' }, h('tr', null, h('th', null, 'Computer'), h('th', null, 'Work'), h('th', null, 'Instr.'), h('th', null, 'Clocks'), h('th', null, 'Loads'), h('th', null, 'Stores'), ...layers.map((l) => h('th', { title: 'clocks in this layer' }, l))));
   for (const r of rows) tbl.append(h('tr', null, h('td', null, r.who.toUpperCase()), h('td', null, r.what), h('td', { class: 'num' }, String(r.instr)), h('td', { class: 'num' }, String(r.clocks)), h('td', { class: 'num' }, String(r.loads)), h('td', { class: 'num' }, String(r.stores)),
     ...layers.map((l) => h('td', { class: 'num' }, r.layers[l] ? String(r.layers[l].clocks) : '–'))));
-  const wire = [42, 50].map((len) => `${len}-byte frame: ${n0(wireClocks(len))} clocks on the cable`).join(' · ');
+  const wire = `A frame shorter than 60 bytes is padded to 60, so an ARP packet (42 bytes) and an echo (50 bytes) alike hold the cable for ${n0(wireClocks(42))} clocks`;
   return { el: h('div', { class: 'widget mos clk-w net-w' }, h('div', { class: 'panel' }, h('h3', null, 'What a packet costs the computers'), h('div', { class: 'net-wide' }, tbl),
     h('div', { class: 'mc-status' }, h('span', null, 'round trip of the first ping ', h('b', null, `${n0(NET_COSTS.rtt)} clocks`)), h('span', null, `${(NET_COSTS.rtt * CLOCK_NS / 1000).toFixed(1)} µs at 3.95 ns`), h('span', null, 'one polling pass ', h('b', null, `${NET_COSTS.pollPass.b} clocks`))),
     h('p', { class: 'sub' }, `Measured on the gates over the first ping and the ARP exchange before it, by program counter, the retire strobe and the bus handshakes of every clock; the stack is ${NET_COSTS.words.a} and ${NET_COSTS.words.b} instructions. ${wire}.`))) };
@@ -233,7 +261,7 @@ export function nicScene(irq = false): Scene {
       const result = () => ({ done: reg(23) === 1, kick: reg(20), seen: reg(21), len: reg(24), setup: reg(25), back: reg(26) });
       const status = h('div', { class: 'mc-status' }), strip = h('div', { class: 'uart-svg' });
       const step = () => { pulse(stage, 'clk'); clocks++; if (clocks % 8 === 0) { txen.push(outp(stage, 'txen')); irqH.push(outAt(stage, ['c', 'nic'], 'irq')); if (txen.length > 480) { txen = txen.slice(-480); irqH = irqH.slice(-480); } } return !result().done; };
-      const loop = new Loop(stage, step, () => paint(), 120, 30);
+      const loop = new SliceLoop(stage, step, () => paint());
       const paint = () => {
         const r = result();
         status.replaceChildren(h('span', null, 'clocks ', h('b', null, n0(clocks))), h('span', null, 'pc ', h('b', null, `0x${(outp(stage, 'pcOut') >>> 0).toString(16)}`)),
@@ -296,7 +324,7 @@ export function lanScene(): Scene {
         pulse(stage, 'clk'); clocks++;
       };
       let t0 = 0;
-      const loop = new Loop(stage, () => { edge(); return !text.A.includes('done'); }, () => paint(), 80, 30);
+      const loop = new SliceLoop(stage, () => { edge(); return !text.A.includes('done'); }, () => paint());
       const paint = () => {
         cons.A.textContent = text.A || ' '; cons.B.textContent = text.B || ' ';
         const secs = started ? (performance.now() - t0) / 1000 : 0;
@@ -327,7 +355,7 @@ export function lanScene(): Scene {
         h('div', { class: 'mc-row' }, run, save), read,
         h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'Frames at the switch'), list, detail,
-        h('p', { class: 'sub' }, 'Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter 49\'s. About 28 000 clocks to the first reply: a minute or so of waiting at the speed shown.'));
+        h('p', { class: 'sub' }, 'Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter 49\'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.'));
       return { el, update: paint, destroy: () => loop.stop() };
     }],
   };

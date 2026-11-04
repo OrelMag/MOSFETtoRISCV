@@ -50,8 +50,8 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
     { name: 'sw', def: SW, at: [xs, 8], label: 'Switch' },
     { name: 'rx0', def: RX, at: [xm, yA], label: 'Port 0 MAC RX' }, { name: 'rx1', def: RX, at: [xm, yB], label: 'Port 1 MAC RX' },
     { name: 'tx0', def: TX, at: [xe, yA], label: 'Port 0 MAC TX' }, { name: 'tx1', def: TX, at: [xe, yB], label: 'Port 1 MAC TX' },
-    { name: 'z8', def: z8, at: [x1 + 6, 8] }, { name: 'z48', def: z48, at: [x1 + 6, 14] }, { name: 'z10', def: z10, at: [x1 + 6, 20] },
-    { name: 'lo', def: TIE0, at: [x1 + 6, 26] }, { name: 'hi', def: TIE1, at: [x1 + 6, 30] },
+    { name: 'z8', def: z8, at: [x0, H] }, { name: 'z48', def: z48, at: [x0 + 14, H] }, { name: 'z10', def: z10, at: [x0 + 30, H] },
+    { name: 'lo', def: TIE0, at: [x0 + 46, H] }, { name: 'hi', def: TIE1, at: [x0 + 52, H] },
   ];
   void z8g;
   const nets: NetDef[] = [];
@@ -80,8 +80,7 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
     ...([0, 1] as const).flatMap((p) => [bus(`rxData${p}`, 8, 'out'), bit(`rxValid${p}`, 'out'), bit(`rxLast${p}`, 'out'), bit(`rxErr${p}`, 'out')])];
   const pins: Record<string, [number, number]> = { clk: [0, 6] };
   let y = 4;
-  for (const p of ports) if (p.dir === 'out') { pins[p.name] = [x1 + 40, y]; y += 3; }
-  void H;
+  for (const p of ports) if (p.dir === 'out') { pins[p.name] = [x1 + 10, y]; y += 3; }
   const d = define({
     id, name: 'Two computers on a switch', category: 'cpu',
     summary: 'Two bus computers, each with a NIC (descriptor rings in RAM, DMA, a MAC), joined by a four-port learning switch through one MAC pair a port. Everything runs on one clock; the consoles are the computers\' own.',
