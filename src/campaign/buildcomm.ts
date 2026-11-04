@@ -6,8 +6,9 @@ import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { syncN } from '../lib/sync';
+import { UART_RX, UART_TX } from '../lib/uart';
 import type { ComponentDef } from '../sim/types';
-import { runSync, SYNC_PORT } from './commcheck';
+import { runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
 
@@ -40,5 +41,23 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(SYNC_REF()),
     check: { kind: 'custom', describe: 'Eight pulse trains on d (runs of 3 to 8 cycles): q must be d delayed by one fixed whole number of cycles, never the same cycle; then the failure rate of that many flip-flops with the logic inside the chain, at the port\'s clock and data rates, against 100 years.', run: runSync },
     answer: refOf('l_sync', SYNC_REF, 'Synchronizer'),
+  }),
+  l_uarttx: () => ({
+    id: 'l_uarttx', title: 'UART transmitter', level: 'sequential', allowed: 'nand',
+    brief: 'A byte in, a frame out. The baud generator is on the bench: <b>tick</b> is high one clock in every <i>div</i> (it is div = ' + TX_CASES.map((k) => k.div).join(', ') + ' in turn), and a bit lasts 16 ticks. '
+      + 'With <b>go</b> = 1 while <b>busy</b> = 0 the byte on <b>din</b> is accepted, and <b>taken</b> is 1 in that very cycle. Then tx carries a frame: the start bit (0), the eight data bits least significant first, the stop bit (1), each exactly 16 ticks long, the line changing only on a tick; it idles at 1. <b>busy</b> is 1 while the frame is on the line, and a go while it is 1 must be ignored. '
+      + 'The far end counts clocks: it names the first bit that is the wrong level or the wrong length, at any divisor.',
+    ports: pinsOf(UART_TX),
+    check: { kind: 'custom', describe: `Two bytes at each of ${TX_CASES.length} divisors, with a go in the middle of the first frame that must be ignored and the second byte offered as soon as busy falls: taken, every bit's level and length, busy.`, run: runUartTx },
+    answer: refOf('l_uarttx', () => UART_TX, 'UART transmitter'),
+  }),
+  l_uartrx: () => ({
+    id: 'l_uartrx', title: 'UART receiver', level: 'sequential', allowed: 'nand',
+    brief: '<b>rx</b> carries frames from a sender whose clock is not yours, and <b>tick</b> (on the bench) is high one clock in every <i>div</i>; 16 ticks make a nominal bit. A low on rx at a tick may be the start of a frame. Confirm it in the middle of the start bit (a glitch is not a frame), then sample a bit every 16 ticks: eight data bits, least significant first, into <b>data</b>, and a ninth sample for the stop bit. '
+      + 'A stop of 1 gives <b>push</b> for one clock with the byte on data; a stop of 0 gives <b>ferr</b> for one clock and no push, and the receiver waits for the line to go high (a break is one error, not a stream of zero bytes). <b>busy</b> is 0 when it is idle. rx is asynchronous. '
+      + 'Be back to idle in the middle of the stop bit: the next start edge may come early. The far end is a sender up to 4% fast or slow, with its start edge anywhere between two ticks.',
+    ports: pinsOf(UART_RX).filter((p) => p.name !== 'state'),
+    check: { kind: 'custom', describe: `${RX_SCENARIOS.length} lines: back-to-back frames, gaps, senders 2 to 4% fast and slow, glitches of a few ticks on an idle line, a framing error and a break: every byte pushed once and in order, ferr counted, busy.`, run: runUartRx },
+    answer: refOf('l_uartrx', () => UART_RX, 'UART receiver'),
   }),
 };

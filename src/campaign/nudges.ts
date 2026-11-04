@@ -136,6 +136,8 @@ export const NUDGES: Record<string, string> = {
   m_flash: 'You can never write in place: write somewhere new each time, remember where, and win the space back before it runs out.',
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
+  l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',
+  l_uartrx: 'Look at the line twice per frame start: once to notice it, once half a bit later to believe it.',
   p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
 };
 
