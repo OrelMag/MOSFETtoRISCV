@@ -300,9 +300,9 @@ describe('the Communication codex entries', () => {
     expect(bitsMin * BIT_CLOCKS / 2).toBe(1152);
     quotes('csmacd', '5,065 m', '507 m', '51 m', '800 m', '1 152 clocks', '179.2 µs', '2 048 clocks', 'jam of 32 bits', '16 attempts', '96 bit times');
     says('ethernet', 5, '5 065 m'); says('ethernet', 5, '507 m'); says('ethernet', 5, '51 m'); says('ethernet', 5, '800 m'); says('ethernet', 5, '1 152 clocks');
-    expect([n(macTx()), n(macRx()), n(crcUnit(32, CRC32_REFLECTED, 8))]).toEqual([3553, 3197, 1027]);
-    quotes('ethmac', '3,553 NANDs', '3,197 NANDs', '1,027 NANDs', '0xDEBB20E3', '385 clocks', '2,304 clocks', '384 clocks', '1,518 bytes');
-    says('ethernet', 1, '3 553 NANDs'); says('ethernet', 1, '1 027 NANDs'); says('ethernet', 1, `${GAP_CLOCKS + 1} clocks in`); says('ethernet', 2, '3 197 NANDs');
+    expect([n(macTx()), n(macRx()), n(crcUnit(32, CRC32_REFLECTED, 8))]).toEqual([3553, 3213, 1027]);
+    quotes('ethmac', '3,553 NANDs', '3,213 NANDs', '1,027 NANDs', '0xDEBB20E3', '385 clocks', '2,304 clocks', '384 clocks', '1,518 bytes');
+    says('ethernet', 1, '3 553 NANDs'); says('ethernet', 1, '1 027 NANDs'); says('ethernet', 1, `${GAP_CLOCKS + 1} clocks in`); says('ethernet', 2, '3 213 NANDs');
     expect(resolveComponent('eth_mac_rx')).toBeTruthy();
   });
 
@@ -340,13 +340,13 @@ describe('the Communication codex entries', () => {
   it('quote the NIC, the checksum, ARP and the ping as built and measured', () => {
     expect([DESCRIPTORS, OWN, LEN_MASK, TX_DROPPED, NIC_BASE]).toEqual([8, 0x80000000, 0x7ff, 0x40000000, 0x70000000]);
     const nicN = stats(nic()).nands;
-    expect([nicN, NET.nands.nic, NET.nands.macTx + NET.nands.macRx]).toEqual([15409, 15409, 6750]);
+    expect([nicN, NET.nands.nic, NET.nands.macTx + NET.nands.macRx]).toEqual([15425, 15425, 6766]);
     expect([NF.PING_DMA.send, NF.PING_DMA.receive]).toEqual([{ reads: 22, writes: 1 }, { reads: 2, writes: 20 }]);
     expect(nicPollSource().split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith('#')).length).toBe(63);
     const C = NIC_COSTS;
     expect([C.doorbellToWire, C.wireClocks, C.pollPass, C.pollSeen, C.irqSeen, C.handler, C.freePermille]).toEqual([279, 2432, 4, 2726, 2718, 11, 996]);
-    quotes('nicring', '15,409 NANDs', '6750', '22 reads', '20 writes', '279 clocks', '2432 clocks', '2726 clocks', '2718', '11 clocks', '99.6 %', '63 lines', '0x7000_0000', '1,536-byte');
-    says('network', 1, 'Eight descriptors a ring, a buffer of 1536 bytes'); says('network', 1, '0x7000_0000'); says('network', 2, '15 409 NANDs, 6 750 of them');
+    quotes('nicring', '15,425 NANDs', '6766', '22 reads', '20 writes', '279 clocks', '2432 clocks', '2726 clocks', '2718', '11 clocks', '99.6 %', '63 lines', '0x7000_0000', '1,536-byte');
+    says('network', 1, 'Eight descriptors a ring, a buffer of 1536 bytes'); says('network', 1, '0x7000_0000'); says('network', 2, '15 425 NANDs, 6 766 of them');
     says('network', 3, '63 lines'); says('network', 3, '2726 clocks after the doorbell'); says('network', 3, 'seen at 2718'); says('network', 3, 'The handler is 11 clocks'); says('network', 3, '99.6 %');
     says('network', 3, '279 clocks'); says('network', 9, '3 + ⌈len/4⌉ reads and 1 write');
     const w = (a: number[]) => a.flatMap((x) => [x >> 8, x & 255]);
@@ -370,10 +370,10 @@ describe('the Communication codex entries', () => {
     expect([NF.PING_FRAME, NF.PING_SERIAL, NF.PING_SERIAL / 32, NF.PING_FRAME_TIME, NET.rtt, RT.cable, RT.software, RT.turnaround, Math.round(100 * RT.cable / NET.rtt)]).toEqual([74, 2752, 86, 3136, 14689, 11008, 3673, 8, 75]);
     expect(RT.cable).toBe(4 * NF.PING_SERIAL);
     expect((NET.rtt * 3.95 / 1000).toFixed(1)).toBe('58.0');
-    expect([NF.B_ECHO.total.instr, NF.B_ECHO.total.clocks, NF.B_BUSY_PERCENT, NET.words.a, NET.words.b, NET.nands.lan]).toEqual([1491, 1882, 60, 1711, 1322, 12471757]);
-    quotes('ipv4', '74 bytes', '2752 clocks', '3136', '14,689 clocks', '58.0 µs', '11008', '3673', '1491 instructions, 1882 clocks', '60 %', '48 %', '12,471,757 NANDs', '1,711 instructions', '1,322', '0x003C', '75 %', '86 bytes');
+    expect([NF.B_ECHO.total.instr, NF.B_ECHO.total.clocks, NF.B_BUSY_PERCENT, NET.words.a, NET.words.b, NET.nands.lan]).toEqual([1491, 1882, 60, 1711, 1322, 12471821]);
+    quotes('ipv4', '74 bytes', '2752 clocks', '3136', '14,689 clocks', '58.0 µs', '11008', '3673', '1491 instructions, 1882 clocks', '60 %', '48 %', '12,471,821 NANDs', '1,711 instructions', '1,322', '0x003C', '75 %', '86 bytes');
     says('network', 0, '86 bytes on the cable'); says('network', 8, '14 689 clocks'); says('network', 8, '58.0 µs'); says('network', 8, '11 008'); says('network', 8, '3 673'); says('network', 8, '2 752 clocks');
-    says('network', 8, '12 471 757 NANDs'); says('network', 8, '1 711 instructions in A, 1 322 in B'); says('network', 7, '1 491 instructions in 1 882 clocks'); says('network', 9, '60 % of a frame time');
+    says('network', 8, '12 471 821 NANDs'); says('network', 8, '1 711 instructions in A, 1 322 in B'); says('network', 7, '1 491 instructions in 1 882 clocks'); says('network', 9, '60 % of a frame time');
     says('network', 9, '3 136'); says('network', 9, 'adds 8 clocks');
   });
 });

@@ -61,7 +61,7 @@ news returns in time while the cable delay is under 576 · 4 / 2 = 1 152 clocks<
     example: {
       title: 'Cost and timing of the pair',
       body: `<pre>transmitter 3 553 NANDs (of which the byte-wide CRC unit 1 027)
-receiver    3 197 NANDs
+receiver    3 213 NANDs
 one bit 4 clocks, one byte 32 clocks
 minimum frame: 576 bit times = 2 304 clocks   (+ gap 384 clocks)
 first frame after reset: 385 clocks in at the earliest
@@ -159,7 +159,7 @@ cost over one FIFO per input:  +945 NANDs (4 cells), +2 059 (8), +4 621 (16)</pr
       title: 'A 74-byte ping frame through the NIC',
       body: `<pre>send:    3 + ⌈74 / 4⌉ = 22 reads (two descriptor words, 19 frame words, a look at the next)  + 1 write
 receive:  2 reads + ⌈74 / 4⌉ + 1 = 20 writes (the commit is the last)
-NIC 15 409 NANDs, of which the two MACs 3 553 + 3 197 = 6 750
+NIC 15 425 NANDs, of which the two MACs 3 553 + 3 213 = 6 766
 8 descriptors a ring, 1 536-byte buffers (the longest frame is 1 514)
 driver (polled): 63 lines; a 64-byte frame, doorbell to wire 279 clocks, 2 432 clocks on the cable
   polled:      4 clocks a pass, frame seen 2 726 clocks after the doorbell, CPU busy all the time
@@ -232,7 +232,7 @@ round trip, request to reply: 14 689 clocks = 58.0 µs at 3.95 ns
   cable 11 008 (four serializations of 2 752: two links each way, switch store-and-forward)
   software 3 673;  the switch's turnaround 8
 receive and answer one echo request: 1 491 instructions, 1 882 clocks = 60 % of a frame time
-  48 % of those clocks are the byte helpers</pre>Two computers, each the system CPU with a NIC, behind the four-port switch: 12,471,757 NANDs, the compiled stack 1,711 instructions in A and 1,322 in B.`,
+  48 % of those clocks are the byte helpers</pre>Two computers, each the system CPU with a NIC, behind the four-port switch: 12,471,821 NANDs, the compiled stack 1,711 instructions in A and 1,322 in B.`,
     },
     mistakes: [
       'Using the frame\'s length as the datagram\'s: a 20-byte message is padded to 60 bytes of frame, and only the total length says where it ends.',
