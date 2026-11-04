@@ -123,3 +123,11 @@ handler: lw  s3, 4(s1)
         addi s8, s8, -1
         j    handler
 out:    mret`;
+
+/**
+ * Measured on the gate-level computer (tests/comm-uart-bus.test.ts), 8 bytes at divisor 1: cycles from a byte reaching
+ * the receive FIFO until the CPU has taken it (polling: the range over the poll loop's phase; interrupt: constant),
+ * the cycles the handler runs per byte (entry to mret, including its second status check that finds the FIFO empty),
+ * and the share of all cycles left to the main loop, in thousandths.
+ */
+export const UART_COSTS = { pollLatency: [6, 9], irqLatency: 7, handlerPerByte: 14, freePermille: 941 } as const;
