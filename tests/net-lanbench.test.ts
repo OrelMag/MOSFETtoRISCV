@@ -46,8 +46,7 @@ describe('TCP across a router', () => {
   it('a clean transfer: every byte, in order, and what it costs', async () => {
     const t = tcpBench(1000);
     const [ha, hb] = t.bench.hosts;
-    while (t.bench.c < 3_000_000 && !hb.iss.console.endsWith('
-')) { t.bench.clock(); if (t.bench.c % 200000 === 0) await tick(); }
+    while (t.bench.c < 3_000_000 && !hb.iss.console.endsWith('\n')) { t.bench.clock(); if (t.bench.c % 200000 === 0) await tick(); }
     expect(hb.iss.console).toBe('received 1000 bytes, all correct\n');
     expect(ha.iss.console).toMatch(/^connected\n/);
   }, 120000);
