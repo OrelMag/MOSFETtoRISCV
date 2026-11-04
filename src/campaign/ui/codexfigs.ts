@@ -149,6 +149,22 @@ const FIGS: Record<string, () => CodexFigure> = {
   utilization: () => lazy(() => import('../../widgets/lanes').then((m) => m.divergenceWidget()), 'Masked lanes do nothing: utilization falls with every split.'),
   occupancy: () => lazy(() => import('../../widgets/warps').then((m) => m.occupancyWidget()), 'Resident warps against cycles: more warps fill more issue slots.'),
   scoreboard: () => lazy(() => import('../../widgets/ooo').then((m) => m.scoreboardWidget()), 'The CDC 6600\'s scoreboard, cycle by cycle: an instruction issues when the registers it needs are not pending.'),
+  // Communication (the chapters' own widgets)
+  shannon: () => lazy(() => import('../../widgets/comm').then((m) => m.limitsWidget(true)), 'The Nyquist rate and the Shannon capacity of a channel: the levels the noise leaves, against the SNR.'),
+  reflection: () => lazy(() => import('../../widgets/line').then((m) => m.reflectionWidget()), 'A driver, a line and an open pin: the lattice of waves and the voltage at the far pin, for any series resistor.'),
+  cdc: () => lazy(() => import('../../widgets/clocks').then((m) => m.grayBusWidget()), 'A bus sampled mid-change: binary counts can read as any word, Gray counts only as the old or the new one.'),
+  uart: () => lazy(() => import('../../widgets/uart').then((m) => m.frameWidget()), 'One frame on the line: start, eight data bits least significant first, stop, and where the receiver samples.'),
+  spi: () => lazy(() => import('../../widgets/spi').then((m) => m.spiModesWidget()), 'The four SPI modes: SCLK, MOSI and MISO, with the sampling edges marked.'),
+  qam: () => lazy(() => import('../../widgets/modem').then((m) => m.constellationWidget()), 'Constellations from 4 to 1024 points against the SNR: the symbol error rate, closed form and simulated.'),
+  ofdm: () => lazy(() => import('../../widgets/modem').then((m) => m.adslWidget()), 'The tones of ADSL: bits loaded on each from its own SNR, and the rate the line gives.'),
+  linecode: () => lazy(() => import('../../widgets/serial').then((m) => m.disparityWidget()), '8b/10b: bytes to ten-bit codes, the running disparity and the runs.'),
+  eye: () => lazy(() => import('../../widgets/serial').then((m) => m.eyeWidget()), 'The eye of a one-pole channel at the bit rate you pick, and its bit error rate.'),
+  equalization: () => lazy(() => import('../../widgets/serial').then((m) => m.eyeWidget({ eq: true })), 'The same eye with transmit de-emphasis, a CTLE or a DFE.'),
+  crc: () => lazy(() => import('../../widgets/errors').then((m) => m.crcExplorerWidget()), 'A message divided by the generator: flip bits and see the remainder change.'),
+  arq: () => lazy(() => import('../../widgets/errors').then((m) => m.arqWidget()), 'Stop-and-wait, go-back-N and selective repeat over a lossy path with a delay.'),
+  viterbi: () => lazy(() => import('../../widgets/codes').then((m) => m.berWidget(['none', 'hard', 'soft'])), 'Bit error rate against E_b/N_0: uncoded, K = 7 hard, K = 7 soft, and the Shannon limit for rate one half.'),
+  reedsolomon: () => lazy(() => import('../../widgets/codes').then((m) => m.berWidget(['none', 'rs'])), 'Bit error rate against E_b/N_0 for RS(255, 223) against no code.'),
+  interleave: () => lazy(() => import('../../widgets/codes').then((m) => m.interleaveWidget()), 'A burst of errors against the interleaving depth: words that fail, words that survive.'),
 };
 
 /** The figure for an entry, or null. */

@@ -86,6 +86,8 @@ span.err-bit { cursor: default; }
 .mos-plot .cd-mark { stroke: var(--accent); stroke-width: 1.5; }
 .mos-plot .cd-dot { stroke: var(--surface); stroke-width: 1.5; }
 .mos-plot .cd-dot.c4 { fill: var(--warn); } .mos-plot .cd-dot.c5 { fill: var(--text-2); }
+/* no errors seen: hollow, at 1 / bits (the rate is below it) */
+.mos-plot .cd-dot.zero { fill: var(--surface); stroke-width: 2.5; } .mos-plot .cd-dot.zero.c4 { stroke: var(--warn); } .mos-plot .cd-dot.zero.c5 { stroke: var(--text-2); }
 .cd-stream { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
 .cd-sym { display: inline-flex; flex-direction: column; align-items: center; padding: 2px 5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); font: 12px var(--font-mono); }
 .cd-sym i { font-style: normal; color: var(--muted); }
@@ -113,4 +115,4 @@ span.err-bit { cursor: default; }
 .cd-il-b { height: 11px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; }
 .cd-il-b.hit { background: var(--bad); border-color: var(--bad); }
 .cd-il-n { text-align: right; }
-@media (pointer: coarse) { .cd-bit.err-bit { min-width: 26px; height: 32px; font-size: 12px; } .cd-b.err-bit { min-width: 32px; height: 34px; } }
+@media (pointer: coarse) { .cd-bit.err-bit { min-width: 40px; height: 40px; font-size: 12px; } .cd-b.err-bit { min-width: 40px; height: 40px; } }

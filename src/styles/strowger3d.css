@@ -1,0 +1,18 @@
+/* ---------- The Strowger selector (widgets/strowger3dview.ts): materials and the busy grid ---------- */
+.m3d {
+  --sw-brass: light-dark(#b8862b, #e0b04a);
+  --sw-free: light-dark(#5d6a82, #9aa6bf);
+  --sw-busy: light-dark(#cf4a4a, #ef6a6a);
+  --sw-coil: light-dark(#b9773c, #c98a4f);
+  --sw-lit: light-dark(#ff9a2e, #ffb04a);
+}
+.sw-dial { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw-key { min-width: 34px; font-weight: 600; }
+.sw-grid { display: grid; grid-template-columns: auto repeat(10, minmax(0, 1fr)); gap: 3px; max-width: 360px; font-size: 11px; }
+.sw-col { text-align: center; color: var(--muted); font: 600 10.5px var(--font-mono); }
+.sw-row { all: unset; cursor: pointer; padding: 0 6px 0 0; font: 600 10.5px var(--font-mono); color: var(--text-2); text-align: right; }
+.sw-row:focus-visible, .sw-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sw-cell { aspect-ratio: 1; min-height: 20px; padding: 0; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); }
+.sw-cell.busy { background: var(--bad-soft); border-color: var(--bad); }
+.sw-cell.at { box-shadow: 0 0 0 2px var(--accent); }
+@media (pointer: coarse) { .sw-key { min-height: 40px; min-width: 40px; } .sw-cell, .sw-row { min-height: 40px; } .sw-grid { max-width: none; } }
