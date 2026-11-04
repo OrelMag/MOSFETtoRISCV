@@ -85,6 +85,14 @@ describe('distance vector', () => {
     expect(dv.settle()).toBeLessThanOrEqual(2);
     expect(dv.dist[0][2]).toBe(INFINITY);
   });
+  it('the round counts chapter 51 prints', () => {
+    const net = new DistVec(NET7); net.settle();
+    expect(net.rounds).toBe(6);
+    const chain = new DistVec(CHAIN3); chain.settle(); chain.fail(1, 2);
+    expect(chain.settle()).toBe(15);
+    const poison = new DistVec(CHAIN3, true); poison.settle(); poison.fail(1, 2);
+    expect(poison.settle()).toBe(2);
+  });
   it('the rounds and messages the chapter quotes', () => {
     const dv = new DistVec(NET7);
     const k = dv.settle();

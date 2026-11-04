@@ -40,4 +40,10 @@
 .rt-router.dst circle { stroke: var(--accent); stroke-width: 3; }
 .rt-router.done circle { stroke: var(--good); }
 .rt-router.lost circle { stroke: var(--bad); }
-@media (pointer: coarse) { .rt-to, .rt-byte { min-height: 40px; min-width: 40px; } }
+@media (pointer: coarse) { .rt-to, .rt-byte { min-height: 40px; min-width: 40px; } .rt-link .hit { stroke-width: 60; } }
+/* the drawing is 600 units wide: on a phone a unit is about 0.6 px, so its text is set larger in units */
+@media (max-width: 760px) {
+  .rt-link text { font-size: 20px; }
+  .rt-router text { font-size: 22px; }
+  .rt-router .rt-d { font-size: 18px; }
+}

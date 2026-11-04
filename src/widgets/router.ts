@@ -11,7 +11,7 @@ import { CAUSE_NAMES, C_FORWARD, FastPathModel, posOf, STATE_NAMES, S_RX, S_TX, 
 import { checksum, IP_HEADER, ipOf, ipPacket, ipText, onesSum, PROTO_UDP, ttlChecksum } from '../net/ipv4';
 import { CHAIN3, dijkstra, DistVec, floodAll, floodMessages, INFINITY, NET7, type Topology } from '../net/routing';
 import { adjImage, buildTrie, lpmLinear, PORT_CPU, routeMatches, walkTrie, type NextHop, type Route } from '../net/trie';
-import { h, s } from '../ui/dom';
+import { h, keepFocus, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
@@ -50,14 +50,15 @@ const FIELDS: { from: number; to: number; name: string; note: string }[] = [
 ];
 
 export function ipHeaderWidget(): Widget {
-  let pkt = ipPacket({ src: ipOf('10.9.9.9'), dst: ipOf('10.1.2.9'), ttl: 64, proto: PROTO_UDP, id: 0x1c46, payload: [] }), sel = 8, flipped = -1;
+  let pkt = ipPacket({ src: ipOf('10.9.9.9'), dst: ipOf('10.1.2.9'), ttl: 64, proto: PROTO_UDP, id: 0x1c46, payload: [] }), sel = 8;
+  const flipped = new Set<number>();
   const grid = h('div', { class: 'rt-hdr', role: 'group', 'aria-label': 'The twenty header bytes' }), note = h('p', { class: 'sub' }), sum = h('div', { class: 'err-verdict' });
   const paint = () => {
     grid.replaceChildren(...Array.from({ length: IP_HEADER }, (_, i) => {
       const f = FIELDS.find((x) => i >= x.from && i <= x.to)!, active = sel >= f.from && sel <= f.to;
-      const b = h('button', { type: 'button', class: `rt-byte${active ? ' on' : ''}${i === flipped ? ' bad' : ''}`, title: f.name, 'aria-label': `Byte ${i}, ${f.name}: 0x${hex2(pkt[i])}`, 'aria-pressed': String(active) },
+      const b = h('button', { type: 'button', class: `rt-byte${active ? ' on' : ''}${flipped.has(i) ? ' bad' : ''}`, title: f.name, 'aria-label': `Byte ${i}, ${f.name}: 0x${hex2(pkt[i])}`, 'aria-pressed': String(active) },
         h('i', null, String(i)), hex2(pkt[i]));
-      b.addEventListener('click', () => { sel = i; paint(); });
+      b.addEventListener('click', () => keepFocus(b, () => { sel = i; paint(); }));
       return b;
     }));
     const f = FIELDS.find((x) => sel >= x.from && sel <= x.to)!;
@@ -69,12 +70,12 @@ export function ipHeaderWidget(): Widget {
   const decTtl = btn('Lower the TTL, fix the checksum', 'What a router does: RFC 1624\'s update from the old checksum, no re-summing', () => {
     if (pkt[8] === 0) return;
     const old = (pkt[10] << 8) | pkt[11], c = ttlChecksum(old);
-    pkt = [...pkt]; pkt[8]--; pkt[10] = c >> 8; pkt[11] = c & 255; flipped = -1; sel = 8; paint();
+    pkt = [...pkt]; pkt[8]--; pkt[10] = c >> 8; pkt[11] = c & 255; sel = 8; paint();
   });
-  const flip = btn('Flip a bit in the selected byte', 'A bit error in the header', () => { pkt = [...pkt]; pkt[sel] ^= 1; flipped = flipped === sel ? -1 : sel; paint(); });
+  const flip = btn('Flip a bit in the selected byte', 'A bit error in the header', () => { pkt = [...pkt]; pkt[sel] ^= 1; if (flipped.has(sel)) flipped.delete(sel); else flipped.add(sel); paint(); });
   const fresh = btn('Sum it again', 'Recompute the checksum from the whole header', () => {
     pkt = [...pkt.slice(0, 10), 0, 0, ...pkt.slice(12, 20)];
-    const c = checksum(pkt); pkt[10] = c >> 8; pkt[11] = c & 255; flipped = -1; paint();
+    const c = checksum(pkt); pkt[10] = c >> 8; pkt[11] = c & 255; flipped.clear(); paint();
   });
   paint();
   return { el: h('div', { class: 'widget rt-w' }, grid, note, sum, h('div', { class: 'ln-presets' }, decTtl, flip, fresh)) };
@@ -199,9 +200,9 @@ function fastPathPanel(start: number): ScenePanel {
       },
     });
     const act = (f: () => void) => { stage.checkpoint(); f(); stage.refresh(); schedule(); };
-    const load = (n: number) => { frame = FP_FRAMES[n].frame(); sent = [...frame]; out = []; i = 0; frames++; drive(); };
-    const idleSoon = () => i >= frame.length && m.s === S_RX;
-    const runFrame = () => { let guard = 8000; while (guard-- > 0) { stage.runCycles(1); if (idleSoon()) break; } };
+    const runFrame = () => { let guard = 8000; while (guard-- > 0) { stage.runCycles(1); if (i >= frame.length && m.s === S_RX && m.i === 0) break; } };
+    const load = (n: number) => { if (i < frame.length || m.s !== S_RX || m.i !== 0) runFrame(); frame = FP_FRAMES[n].frame(); sent = [...frame]; out = []; i = 0; frames++; drive(); };
+    
     const sel = h('select', { class: 'mc-sel', 'aria-label': 'Frame to send' }, ...FP_FRAMES.map((f, n) => h('option', { value: String(n) }, f.name))) as HTMLSelectElement;
     sel.value = String(start);
     const bytes = h('div'), status = h('div', { class: 'mc-status' }), lamp = h('div', { class: 'sr-lock' });
@@ -222,7 +223,7 @@ function fastPathPanel(start: number): ScenePanel {
         : `${CAUSE_NAMES[lastCause]}, port ${m.port}${m.port === PORT_CPU ? ' (the slow path)' : ''}. Gates and model agree over ${cycles} cycles.`;
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; update(); }); };
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel rt-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel rt-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'A frame through the fast path', h('span', { class: 'fold-hint' })),
       h('div', { class: 'mc-row' }, sel),
       h('div', { class: 'dram-ops' },
@@ -250,9 +251,10 @@ function netSvg(t: Topology, W = 600, H = 300): { el: SVGSVGElement; paint(o: { 
       el.replaceChildren();
       for (const l of t.links) {
         const [x1, y1] = t.at[l.a], [x2, y2] = t.at[l.b], key = l.a < l.b ? `${l.a}-${l.b}` : `${l.b}-${l.a}`, off = o.down?.has(key);
-        const g = s('g', { class: `rt-link${off ? ' off' : ''}${o.hi?.has(key) ? ' hi' : ''}`, role: 'button', tabindex: '0', 'aria-label': `Link ${t.names[l.a]} to ${t.names[l.b]}, cost ${l.cost}, ${off ? 'down' : 'up'}` });
+        const g = s('g', { class: `rt-link${off ? ' off' : ''}${o.hi?.has(key) ? ' hi' : ''}`, 'data-k': key, role: 'button', tabindex: '0', 'aria-label': `Link ${t.names[l.a]} to ${t.names[l.b]}, cost ${l.cost}, ${off ? 'down' : 'up'}` });
         g.append(s('line', { x1, y1, x2, y2, class: 'hit' }), s('line', { x1, y1, x2, y2, class: 'ln' }), s('text', { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 6, 'text-anchor': 'middle' }, off ? '✕' : String(l.cost)));
-        const go = () => o.onLink?.(l.a, l.b);
+        // the repaint makes new links: the keyboard stays on this one
+        const go = () => { o.onLink?.(l.a, l.b); (el.querySelector(`[data-k="${key}"]`) as SVGGElement | null)?.focus({ preventScroll: true }); };
         g.addEventListener('click', go);
         g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); go(); } });
         el.append(g);
@@ -280,7 +282,7 @@ export function distVecWidget(): Widget {
       label: (i) => (i === dest ? 'destination' : dv.dist[i][dest] >= INFINITY ? '∞' : `${dv.dist[i][dest]} via ${dv.via[i][dest] < 0 ? '–' : t.names[dv.via[i][dest]]}`),
       node: (i) => (i === dest ? 'dst' : dv.dist[i][dest] >= INFINITY ? 'lost' : ''),
     });
-    tbl.replaceChildren(h('div', { class: 'rt-route' }, h('code', null, 'To'), ...t.names.map((nm, j) => h('button', { type: 'button', class: `rt-to${j === dest ? ' on' : ''}`, 'aria-pressed': String(j === dest), onclick: () => { dest = j; history = []; paint(); } }, nm))));
+    tbl.replaceChildren(h('div', { class: 'rt-route' }, h('code', null, 'To'), ...t.names.map((nm, j) => h('button', { type: 'button', class: `rt-to${j === dest ? ' on' : ''}`, 'aria-pressed': String(j === dest), onclick: () => { dest = j; history = []; const k = t.names.indexOf(nm); paint(); (tbl.querySelectorAll('button')[k] as HTMLButtonElement | undefined)?.focus({ preventScroll: true }); } }, nm))));
     rounds.replaceChildren(h('span', null, 'rounds ', h('b', null, String(dv.rounds))), h('span', null, 'tables sent ', h('b', null, String(dv.messages))));
     hist.replaceChildren(...history.map((v) => h('span', null, v >= INFINITY ? '∞' : String(v))));
     hist.setAttribute('aria-label', `Cost at ${t.names[Math.max(0, t.names.length - 2)]} to the destination, round by round: ${history.join(', ')}`);
@@ -322,7 +324,7 @@ export function linkStateWidget(): Widget {
       label: (i) => (done.has(i) ? String(r.dist[i]) : ''), node: (i) => (i === src ? 'dst' : done.has(i) ? 'done' : ''),
     });
     order.replaceChildren(h('span', null, 'settled ', h('b', null, r.order.slice(0, k).map((v) => NET7.names[v]).join(' ') || 'none')));
-    table.replaceChildren(h('div', { class: 'rt-route' }, h('code', null, 'From'), ...NET7.names.map((nm, j) => h('button', { type: 'button', class: `rt-to${j === src ? ' on' : ''}`, 'aria-pressed': String(j === src), onclick: () => { src = j; k = NET7.names.length; paint(); } }, nm))));
+    table.replaceChildren(h('div', { class: 'rt-route' }, h('code', null, 'From'), ...NET7.names.map((nm, j) => h('button', { type: 'button', class: `rt-to${j === src ? ' on' : ''}`, 'aria-pressed': String(j === src), onclick: () => { src = j; k = NET7.names.length; paint(); (table.querySelectorAll('button')[j] as HTMLButtonElement | undefined)?.focus({ preventScroll: true }); } }, nm))));
     const dv = new DistVec(NET7); dv.down = new Set(down); dv.settle();
     cost.textContent = `From nothing: flooding sends ${floodAll(NET7, down)} link reports (${floodMessages(NET7, src, down)} for ${NET7.names[src]}'s own), and each router runs Dijkstra alone. Distance vector, on the same links, sends ${dv.messages} whole tables over ${dv.rounds} rounds.`;
   };

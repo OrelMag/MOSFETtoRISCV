@@ -187,7 +187,7 @@ export const chRouter: Chapter = {
       body: `
         <p>Put the numbers side by side. A minimum frame takes ${n0(WIRE_CYCLES)} cycles to cross our ${BYTE_CYCLES}-cycles-a-byte link and ${CY60} to ${CY_WORST} cycles through the engine. So the engine is idle most of the time on one port, and it could serve about <strong>${PORTS} ports</strong> before it became the limit, provided each port had a buffer to hold what arrives while the engine is busy. Those buffers are memory, and memory is what a router is mostly made of: here ${n0(MEM.trie + MEM.buf + MEM.adj)} NANDs against ${n0(LOGIC)} of logic.</p>
         <p>The lookup is where it would hurt first. At 400 Gb/s a minimum frame arrives every 1.68 ns, a few clock cycles, so one read per address bit from an external RAM is out by two orders of magnitude. This is why real forwarding chips read several bits a step, split the table across on-chip memories, or use TCAM, and why they run the walk as a pipeline, so that one lookup finishes every cycle even though each takes many.</p>
-        <p>Move the frame size and the matched prefix: the engine's cycles grow with both, the wire's with the frame alone. <span class="try">Find the frame size at which one engine serves the most ports.</span></p>`,
+        <p>Move the frame size and the matched prefix: the engine's cycles grow with both, the wire's with the frame alone. <span class="try">Take the frame from the minimum to 1514 bytes and see how the count of ports moves.</span></p>`,
       widget: engineWidget,
     },
   ],

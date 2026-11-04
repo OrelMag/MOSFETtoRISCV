@@ -192,6 +192,17 @@ describe('the fast path in gates, every output every clock', () => {
       await yieldTick();
     }
   });
+  it('corner routes: a default, a /1, a /32 at the top of the space, the last hop number', async () => {
+    const routes: Route[] = [{ prefix: 0, len: 0, hop: 1 }, { prefix: 0x80000000, len: 1, hop: 2 }, { prefix: 0xffffffff, len: 32, hop: 15 }, { prefix: ipOf('10.1.2.1'), len: 32, hop: 4 }];
+    const hops = { ...HOPS, 15: { mac: [0x02, 0, 0, 0, 0xf, 0xf], port: 2 } };
+    const trie = buildTrie(routes), adj = adjImage(OWN, hops), sim = simulate(routerFastPath(trie, adj, '_corner')), m = new FastPathModel(trie, adj);
+    for (const dst of ['1.2.3.4', '127.255.255.255', '128.0.0.0', '255.255.255.255', '255.255.255.254', '10.1.2.1']) {
+      const ip = ipOf(dst), f = udp(dst), hop = lpmLinear(routes, ip), r = run(sim, m, f, () => 0, () => 0);
+      if (hop === 4) expect(r.cause).toBe(C_LOCAL);
+      else { expect(r.cause).toBe(C_FORWARD); expectForwarded(f, r.out, hops[hop as keyof typeof hops].mac); }
+      await yieldTick();
+    }
+  });
   it('a slow path installs a route through the cfg port', () => {
     const sim = simulate(routerFastPath()), m = new FastPathModel([], []);
     const write = (t: number, a: number, d: number) => { const x: FpIn = { rxd: 0, rxv: 0, rxl: 0, txr: 1, cfgWe: 1, cfgT: t, cfgA: a, cfgD: d }; drive(sim, x); m.step(x); pulse(sim); };
