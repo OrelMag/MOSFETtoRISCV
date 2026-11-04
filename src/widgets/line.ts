@@ -367,8 +367,12 @@ export function noiseWidget(): Widget {
   const paintGb = () => {
     const i = padSwing(), v = groundBounce(n, i, gbr, lnh);
     gbChips.set(0, `${(i * 1000).toFixed(1)} mA`, `each pad: ${VIO} V / (${padDriveOhms().toFixed(0)} Ω driver + ${Z0_BOARD} Ω line)`);
-    gbChips.set(1, `${v.toFixed(2)} V`, `L · n · di/dt for ${n} pads at once through ${lnh} nH in ${ns(gbr)}`, v > VIL ? 'bad' : '');
-    gbChips.set(2, v > VIL ? 'a 0 reads as a 1' : `${(v / VIL * 100).toFixed(0)} % of VIL`, v > VIL ? 'the chip\'s ground has lifted past VIL: a quiet low output is read high' : 'of the low-level noise margin');
+    gbChips.set(1, v >= VIO ? `${v.toFixed(2)} V (> VDD)` : `${v.toFixed(2)} V`, `L · n · di/dt for ${n} pads at once through ${lnh} nH in ${ns(gbr)}`, v >= VIL ? 'bad' : '');
+    const st = v >= VIO ? ['beyond the supply', 'the linear estimate is invalid here: the lifted ground cuts the drive and slows the edge, so the real bounce is smaller']
+      : v >= VIH ? ['a 0 can read as a 1', `above VIH = ${VIH.toFixed(2)} V: a quiet low output may be read high`]
+      : v >= VIL ? ['input undefined', `between VIL = ${VIL.toFixed(2)} V and VIH = ${VIH.toFixed(2)} V: a receiver may read either`]
+      : [`${((v / VIL) * 100).toFixed(0)} % of VIL`, 'of the low-level noise margin'];
+    gbChips.set(2, st[0], st[1], v >= VIL ? 'bad' : '');
   };
   const paintDf = () => {
     const d = differential({ amp: 0.2, common: cm, mismatch: mis / 100, cmrrDb: cmrr, offset: 0.005, vcm: 0.9, range: [0.2, 1.6] });

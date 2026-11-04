@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { tolerance, UART_8N1 } from '../src/comm/startstop';
-import { lineStream, receiveBytes, UART_TOLERANCE, UartCore, type UartIn } from '../src/comm/uart';
+import { receive } from '../src/comm/startstop';
+import { rxFrameLevels } from '../src/comm/uartdrive';
+import { lineStream, receiveBytes, SLOW_LIMIT_BACK_TO_BACK, SLOW_LIMIT_ISOLATED, UART_TOLERANCE, UartCore, type UartIn } from '../src/comm/uart';
 import { UART_CORE, UART_RX, UART_RX_BENCH, UART_TX } from '../src/lib/uart';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
@@ -141,44 +143,63 @@ describe('transmitter and receiver alone', () => {
   });
 });
 
-describe('the receiver\'s tolerance to a clock that is off: predicted by comm/startstop.ts, measured here', () => {
-  /** Largest error at which every code is received at every phase, by search on the golden model. */
-  function measured(div: number, codes: number[], phases: number[]): { fast: number; slow: number } {
-    const ok = (err: number): boolean => codes.every((c) => phases.every((p) => {
-      const r = receiveBytes(div, lineStream([c], 16 * div * (1 + err), 4 * div + p * div), 14 * 16 * div + 40);
-      return r.bytes.length === 1 && r.bytes[0] === c && r.framing === 0;
-    }));
-    const search = (sign: 1 | -1): number => { let e = 0; while (e < 0.2 && ok(sign * (e + 0.0005))) e += 0.0005; return e; };
-    return { fast: search(-1), slow: search(1) };
-  }
+describe('the receiver tolerance to a clock that is off: predicted by comm/startstop.ts, measured here', () => {
+  const PHASES = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875];
   // the line's bit period is 16·div·(1 + err) receiver cycles: err > 0 is a sender slower than the receiver,
   // that is startstop's "receiver clock fast" case with the same sign of error
-  it('the model agrees with startstop.tolerance within the synchronizer\'s latency, and converges at large divisors', () => {
-    const pred = tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4);
-    const codes = [0x00, 0x80, 0xff, 0x7f, 0x55, 0xaa];
-    const rows = [1, 4, 16].map((div) => ({ div, ...measured(div, codes, [0, 0.25, 0.5, 0.75, 0.999]) }));
-    for (const r of rows) {
-      const lat = 2 / (16 * r.div);
-      expect(Math.abs(r.slow - pred.fast)).toBeLessThan(lat + 0.012);
-      expect(Math.abs(r.fast - pred.slow)).toBeLessThan(lat + 0.012);
+  const isolatedOk = (div: number, err: number): boolean => {
+    for (let c = 0; c < 256; c++) for (const p of PHASES) {
+      const r = receiveBytes(div, lineStream([c], 16 * div * (1 + err), 4 * div + p * div), 14 * 16 * div + 40);
+      if (r.bytes.length !== 1 || r.bytes[0] !== c || r.framing) return false;
     }
+    return true;
+  };
+  const streams: number[][] = [[0, 0, 0, 0, 0, 0, 0, 0], [255, 255, 255, 255, 255, 255], [0x80, 0x80, 0x80, 0x80, 0x80, 0x80], [0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa],
+    ...Array.from({ length: 12 }, (_, i) => { const r = rng(i + 1); return Array.from({ length: 10 }, () => Math.floor(r() * 256)); })];
+  const burstOk = (div: number, err: number): boolean => {
+    for (const bytes of streams) for (const p of PHASES) {
+      const r = receiveBytes(div, lineStream(bytes, 16 * div * (1 + err), 4 * div + p * div, 0), Math.ceil((bytes.length * 10 + 3) * 16 * div * Math.max(1, 1 + err)) + 100);
+      if (r.bytes.length !== bytes.length || r.bytes.some((x, i) => x !== bytes[i]) || r.framing) return false;
+    }
+    return true;
+  };
+
+  it('every byte at every phase is received just inside each pinned limit and some fail 0.05 % beyond it, isolated and back to back', async () => {
+    for (const m of UART_TOLERANCE.measured) {
+      expect(isolatedOk(m.div, m.senderSlow)).toBe(true);
+      expect(isolatedOk(m.div, m.senderSlow + 0.0005)).toBe(false);
+      expect(isolatedOk(m.div, -m.senderFast)).toBe(true);
+      expect(isolatedOk(m.div, -(m.senderFast + 0.0005))).toBe(false);
+      await tick();
+      expect(burstOk(m.div, m.backToBackSlow)).toBe(true);
+      expect(burstOk(m.div, m.backToBackSlow + 0.0005)).toBe(false);
+      expect(burstOk(m.div, -m.backToBackFast)).toBe(true);
+      expect(burstOk(m.div, -(m.backToBackFast + 0.0005))).toBe(false);
+      await tick();
+    }
+  }, 240000);
+
+  it('agrees with startstop.tolerance and the closed forms', () => {
+    const pred = tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4);
     expect(pred.fast).toBeCloseTo(UART_TOLERANCE.predicted.senderSlow, 4);
     expect(pred.slow).toBeCloseTo(UART_TOLERANCE.predicted.senderFast, 4);
-    for (const r of rows) {
-      const m = UART_TOLERANCE.measured.find((x) => x.div === r.div)!;
-      expect(r.fast).toBeCloseTo(m.senderFast, 4);
-      expect(r.slow).toBeCloseTo(m.senderSlow, 4);
+    for (const m of UART_TOLERANCE.measured) {
+      expect(m.senderSlow).toBeLessThanOrEqual(0.5 / 9);
+      expect(m.senderSlow).toBeGreaterThan(0.5 / 9 - 0.0006);
+      expect(Math.abs(m.senderFast - SLOW_LIMIT_ISOLATED)).toBeLessThan(0.0006);
+      expect(Math.abs(m.backToBackFast - SLOW_LIMIT_BACK_TO_BACK)).toBeLessThan(0.0006);
+      expect(Math.abs(m.senderFast - pred.slow)).toBeLessThan(0.001);
     }
-  }, 120000);
+  });
 
   it('the gate-level receiver agrees with the search: it takes every code just inside each limit and fails some just outside', () => {
     const div = 2, codes = [0x00, 0x80, 0xff, 0x7f, 0x55, 0xaa, 0x01, 0xfe];
     const r = bench(UART_RX_BENCH);
     const run = (err: number, code: number, phase: number): number => {
-      const line = lineStream([code], 16 * div * (1 + err), 4 * div + phase * div);
+      const q = rxFrameLevels(div, code, err, phase);
       r.sim.reset('zero'); r.set('div', div); r.set('clk', 0); r.set('rx', 1); r.sim.settle();
       let data = -1;
-      for (let k = 0; k < 13 * 16 * div; k++) { r.set('rx', line(k)); r.sim.settle(); if (r.out('push') === 1) data = r.out('data'); r.edge(); }
+      for (let k = 0; k < q.length + 8 * 16 * div; k++) { r.set('rx', k < q.length ? q[k] : 1); r.sim.settle(); if (r.out('push') === 1) data = r.out('data'); r.edge(); }
       return data;
     };
     const allOk = (err: number) => codes.every((c) => [0, 0.5, 0.99].every((p) => run(err, c, p) === c));
@@ -187,5 +208,26 @@ describe('the receiver\'s tolerance to a clock that is off: predicted by comm/st
     expect(allOk(-(m.senderFast - 0.003))).toBe(true);
     expect(allOk(m.senderSlow + 0.012)).toBe(false);
     expect(allOk(-(m.senderFast + 0.012))).toBe(false);
+  }, 240000);
+});
+
+describe('the receiver panel: the verdict drawn from the model is the gates\' verdict', () => {
+  it('gates and receive() agree on every error and phase near both limits, at divisors 1, 2 and 3', () => {
+    const r = bench(UART_RX_BENCH);
+    const gates = (div: number, code: number, err: number, ph: number): boolean => {
+      const q = rxFrameLevels(div, code, err, ph);
+      r.sim.reset('zero'); r.set('div', div); r.set('clk', 0); r.set('rx', 1); r.sim.settle();
+      let data = -1, ferr = 0;
+      for (let k = 0; k < q.length + 8 * 16 * div; k++) { r.set('rx', k < q.length ? q[k] : 1); r.sim.settle(); if (r.out('push') === 1) data = r.out('data'); if (r.out('ferr') === 1) ferr++; r.edge(); }
+      return data === code && ferr === 0;
+    };
+    let n = 0, disagree: string[] = [];
+    for (const div of [1, 2, 3]) for (const code of [0x00, 0x80, 0x52, 0xff]) for (const err of [-0.06, -0.052, -0.05, -0.047, -0.04, 0.04, 0.05, 0.054, 0.057, 0.06]) for (const ph of [0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99]) {
+      n++;
+      const m = receive(UART_8N1, code, { err, ticks: 16, phase: ph }).ok, g = gates(div, code, err, ph);
+      if (m !== g) disagree.push(`div ${div} 0x${code.toString(16)} e ${err} ph ${ph}: model ${m} gates ${g}`);
+    }
+    expect(n).toBe(840);
+    expect(disagree).toEqual([]);
   }, 240000);
 });

@@ -165,7 +165,7 @@ export function startStopWidget(): Widget {
     chips.set(1, bin(r.word), r.word === code ? 'received: the same' : 'received: different');
     chips.set(2, r.stopOk ? 'stop seen' : 'framing error', r.stopOk ? 'the line is high where the stop unit should be' : 'the stop sample found the line low');
     const cf = toleranceClosedForm(f);
-    chips.set(3, `+${(100 * cf.fast).toFixed(2)} % / −${(100 * cf.slow).toFixed(2)} %`, `speed error allowed, sampling mid-bit (${stopIndex(f)} units before the stop)`);
+    chips.set(3, `+${(100 * cf.fast).toFixed(2)} % / −${(100 * cf.slow).toFixed(2)} %`, `speed error allowed for an isolated character, sampling mid-bit (${stopIndex(f)} units before the stop)`);
     note.textContent = r.ok ? 'Every sample falls inside its own unit.' : 'A sample has crossed into a neighbouring unit: it reads that unit instead. The error is invisible when the neighbour has the same level, which is why one data word can pass where another fails.';
     note.classList.toggle('bad', !r.ok);
   }
