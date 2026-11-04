@@ -47,7 +47,7 @@ function plot(series: Series[], o: { h?: number; yLabel: string; xLabel?: string
   svg.append(s('text', { x: M.l, y: 13, class: 'axl' }, o.yLabel), s('text', { x: W - M.r, y: 13, 'text-anchor': 'end', class: 'axl' }, o.xLabel ?? 'time: clock cycles'));
   for (const m of o.marks ?? []) svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: M.t, y2: H - M.b, class: `mark ${m.cls}` }));
   for (const v of series) {
-    if (v.dots) { for (const [x, y] of v.points) svg.append(s('circle', { cx: X(x), cy: Y(y), r: 2.5, class: `dot ${v.cls}` })); continue; }
+    if (v.dots) { for (const [x, y] of v.points) svg.append(s('circle', { cx: X(x), cy: Y(y), r: 2.2, class: `dot ${v.cls}` })); continue; }
     let d = '';
     v.points.forEach(([x, y], i) => { d += i === 0 ? `M${X(x).toFixed(1)} ${Y(y).toFixed(1)}` : `H${X(x).toFixed(1)}V${Y(y).toFixed(1)}`; });
     svg.append(s('path', { d, class: `ln ${v.cls}` }));

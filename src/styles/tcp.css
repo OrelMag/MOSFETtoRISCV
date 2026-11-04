@@ -9,7 +9,7 @@
 .tcp-plot .ln.s2 { stroke: var(--good); }
 .tcp-plot .ln.s3 { stroke: var(--text-2); }
 .tcp-plot .ln.s4 { stroke: var(--muted); stroke-dasharray: 5 4; }
-.tcp-plot .dot.s3 { fill: var(--text-2); opacity: 0.55; }
+.tcp-plot .dot.s3 { fill: var(--text); }
 .tcp-plot .mark { stroke-width: 1.5; opacity: 0.75; }
 .tcp-plot .mark.fast { stroke: var(--warn, var(--muted)); stroke-dasharray: 3 3; }
 .tcp-plot .mark.timeout { stroke: var(--bad); }
