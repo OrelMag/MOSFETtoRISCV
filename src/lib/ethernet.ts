@@ -218,7 +218,8 @@ export function macRx(): ComponentDef {
     const bi = m.inc(bt), start = m.or(m.and(idle, crs), sfd);
     const bsmp = m.and(smp, body);
     bt.forEach((q, i) => m.setD(q, m.andN([rstn, m.not(start), m.mux(bsmp, q, bi[i])])));
-    sh.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(smp, q, nsh[i]))));
+    // cleared between frames: the last frame's final byte and the first preamble bit could look like an SFD
+    sh.forEach((q, i) => m.setD(q, m.andN([rstn, nidle, m.mux(smp, q, nsh[i])])));
     return { smp, fall, sfd, nsh, bsmp, complete: nm(m.and(bsmp, m.andN(bt)), 'complete') };
   });
 
