@@ -1104,11 +1104,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  foreignObject, repainted when the frame buffer's version moves (image.ts exports it as an <image>)
   ioui.ts        plugin: console / switch / screen property sections (live text, counters, Clear, Save PNG) and the
                  Screens drawer: every console, screen and switch bank in the hierarchy by path, live; opens by itself
-                 for a nested console or screen (unless closed for that chip), behind a drawer already shown
+                 for a nested console or screen (unless closed for that chip, or tightForDrawer: under 1340 px / a phone), behind a drawer already shown
                  (dockPane's `front` false); its console scrolls natively and follows only at the bottom
   memdrawer.ts   plugin: the Memory drawer (Memory contents): view/memfind.ts's memories of the chip and the chips it places,
                  the chosen one in view/memview.ts's grid (Go to past 64 words), a learner's memory with its probe's problems;
-                 opens by itself like the Screens drawer, redraws at most every 100 ms while running; the level screen lists it
+                 opens by itself like the Screens drawer (same tightForDrawer rule), redraws at most every 100 ms while running; the level screen lists it
   cardui.ts      plugin: the card reader's property section (mode, bits, feed; the deck listed, the selected card drawn by
                  widgets/carddraw.ts and punched by hand, the read station followed live; load / save / punch from a ROM /
                  type a source card / drop / sort / delete / clear, each one undo step); deck files (pickDeck, saveDeck,
@@ -1134,8 +1134,8 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  against par, the cycles / NANDs chart, Show answer, Do it for me; PUZZLE IN gets the selected test's
                  words whenever the circuit powers on (autoload)
   inspect.ts     the Inspector in a drawer for the chip or a part; chipprops.ts: chip / part property sections
-  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several; phoneWidth(): on a phone
-                 the CPU and Memory drawers do not open by themselves (they would cover the circuit; the toolbar opens them);
+  dock.ts        the right-hand dock: drawers (Inspector, CPU, Screens, challenges) share it, tabs when several; phoneWidth(): tightForDrawer(): on a phone or under 1340 px
+                 the CPU, Memory and Screens drawers do not open by themselves (they would cover the circuit; the toolbar opens them);
                  sets --dock-space on the overlay so look inside stops at its edge and Fit (Editor.fitView) leaves room
                  for it (a still-fitted view refits when a drawer opens or closes)
   analysis.ts    plugin: probe mode (P) + LogicAnalyzer in slots.bottom, Timing props section with
@@ -1154,7 +1154,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
-                 opened by itself for a complete CPU; CPU props section
+                 opened by itself for a complete CPU at 1340 px and wider (below, or on a phone, a toast once per chip offers "Open CPU panel": hintPanel); CPU props section
 src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length

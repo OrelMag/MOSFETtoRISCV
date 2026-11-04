@@ -471,14 +471,14 @@ export class Editor {
     this.changed();
     this.view.setSelection(this.sel);
     this.props.update(true);
-    if (this.level) this.el.classList.toggle('props-sel', this.selCount > 0);
+    if (this.level) { this.el.classList.toggle('props-sel', this.selCount > 0); this.clearOfProps(); }
   }
 
   select(sel: Sel): void {
     this.sel = sel;
     this.view.setSelection(sel);
     this.props.update();
-    if (this.level) this.el.classList.toggle('props-sel', this.selCount > 0);
+    if (this.level) { this.el.classList.toggle('props-sel', this.selCount > 0); this.clearOfProps(); }
   }
 
   /** Level screen: the properties panel pinned open (it also shows while something is selected). */
@@ -486,7 +486,40 @@ export class Editor {
   toggleProps(): void {
     this.propsPinned = !this.propsPinned;
     this.el.classList.toggle('props-on', this.propsPinned);
+    this.clearOfProps();
     this.renderActions();
+  }
+
+  /** The view as it was before it was panned clear of the properties overlay: the offset (world units) and the x it left. */
+  private propsPan: { dx: number; x: number; fitted: boolean } | null = null;
+  /**
+   * Level screen: the properties float over the canvas's right edge, where the output pins are. Rather than refit under
+   * the learner's click (that would rescale), pan: the circuit's right edge moves left of the overlay (never past its own
+   * left edge, never a zoom), and back when the overlay goes, unless the learner has moved the view since. Where that
+   * cannot clear it, the overlay does not open by itself for a selection (the Properties button pins it).
+   */
+  private clearOfProps(): void {
+    const cam = this.view.cam, was = this.propsPan;
+    if (was) {
+      this.propsPan = null;
+      if (cam.vb.x === was.x) { cam.vb = { ...cam.vb, x: cam.vb.x - was.dx }; cam.fitted = was.fitted; cam.apply(); }
+    }
+    const el = this.el.querySelector<HTMLElement>('.sb-props');
+    if (!el || !(this.propsPinned || this.selCount > 0) || !el.getClientRects().length) return;
+    const b = this.view.contentBox(this.defOf), s = cam.pxPerUnit();
+    if (!b || !(s > 0)) return;
+    const host = this.view.svg.getBoundingClientRect(), vb = cam.vb;
+    const right = host.left + (b.x + b.w - vb.x) * s, limit = el.getBoundingClientRect().left - 12;
+    const room = (b.x - vb.x) * s - 12; // what the left edge may still move before it leaves the canvas
+    const need = right - limit, px = Math.min(need, room);
+    // no room to move it clear (a drawing that fills the canvas): selecting must not hide its output pins, the Properties button still opens it
+    if (px < need - 0.5 && !this.propsPinned) this.el.classList.remove('props-sel');
+    if (!(px > 0)) return;
+    const dx = px / s;
+    this.propsPan = { dx, x: vb.x + dx, fitted: cam.fitted };
+    cam.vb = { ...vb, x: vb.x + dx };
+    cam.fitted = false;
+    cam.apply();
   }
 
   get selCount(): number {

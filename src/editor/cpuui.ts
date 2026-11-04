@@ -356,7 +356,9 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        if ((this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !this.closed.has(chip) && !tightForDrawer()) this.setOpen(true);
+        const complete = !!(this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502);
+        if (complete && !this.closed.has(chip) && !tightForDrawer()) this.setOpen(true);
+        else if (complete && !this.closed.has(chip)) this.hintPanel(chip);
         else if (!this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.m6502) this.setOpen(false);
       }
       this.redock();
@@ -364,6 +366,21 @@ class CpuPanel {
     } finally {
       this.syncing = false;
     }
+  }
+
+  /** Chips already told that their CPU panel stayed closed for lack of room (once per chip). */
+  private hinted = new Set<string>();
+  /**
+   * The panel did not open by itself (tightForDrawer): say where it is, once per chip. A beat later, so the first-run
+   * tour (which starts at 700 ms) is seen first and the hint is dropped while it or a dialog is on screen.
+   */
+  private hintPanel(chip: string): void {
+    if (this.hinted.has(chip)) return;
+    this.hinted.add(chip);
+    setTimeout(() => {
+      if (this.shownFor !== chip || this.open || document.querySelector('.coach-card, .tour-card, dialog[open]')) return;
+      this.ed.toast('This chip has a CPU: the panel stays closed here to leave room for the circuit', 'info', { label: 'Open CPU panel', run: () => this.setOpen(true, true) });
+    }, 1200);
   }
 
   // ---- actions ---------------------------------------------------------------------------

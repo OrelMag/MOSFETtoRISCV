@@ -12,7 +12,7 @@ import '../../styles/level.css';
 import { BLOCKS, blockNodes } from '../../campaign/anatomy';
 import { notFound } from '../notfound';
 import { CODEX, CODEX_KINDS, codexById, type CodexEntry } from '../../campaign/codex';
-import { searchCodex } from '../../campaign/codexsearch';
+import { matchNote, searchCodex } from '../../campaign/codexsearch';
 import type { CodexMore } from '../../campaign/codexmore';
 import { CODEX_ACTS, CODEX_BY_KIND, CODEX_ORDER } from '../../campaign/codexlinks';
 import type { Quiz } from '../../chapters/types';
@@ -479,7 +479,7 @@ export class CampaignPage implements Page {
           // the panel redrew: keyboard focus goes to the way on (Next), not back to the top of the page
           this.main.querySelector<HTMLElement>('.cp-next')?.focus({ preventScroll: true });
         } }, icon('check', 15), 'Done reading'));
-      if (n.id === 'intro') bar.append(h('a', { class: 'btn', href: '#/campaign/intro' }, 'The full diagram'));
+      if (n.id === 'intro') bar.append(h('a', { class: 'btn sm', href: '#/campaign/intro' }, 'The full diagram'));
     } else if (ch) {
       const chip = levelChipId(n);
       const exists = !!loadWorkspace().chips[chip];
@@ -506,7 +506,7 @@ export class CampaignPage implements Page {
       if (main && n.kind === 'lesson') bar.insertBefore(go, bar.children[1] ?? null);
       else bar.append(go);
     }
-    if (reach?.side && reach.side.id !== next?.id) bar.append(h('a', { class: 'btn ghost', href: `#/campaign/n/${reach.side.id}` }, `Side quest: ${reach.side.title}`));
+    if (reach?.side && reach.side.id !== next?.id) bar.append(h('a', { class: 'btn sm ghost cp-side', href: `#/campaign/n/${reach.side.id}`, title: `Side quest: ${reach.side.title}` }, `Side quest: ${reach.side.title}`));
     // sticky (campaign.css) only with a main action to keep in reach: a drill's lone Skip stays at the end
     bar.classList.toggle('sticky', !!bar.querySelector('.btn.primary'));
     return bar;
@@ -624,7 +624,11 @@ export class CampaignPage implements Page {
       ranked.hidden = !q;
       if (q) {
         const hits = searchCodex(q).filter((e) => !this.cxKind || e.kind === this.cxKind);
-        ranked.replaceChildren(...hits.map(item));
+        ranked.replaceChildren(...hits.map((e) => {
+          const li = item(e), why = matchNote(e, q);
+          if (why) li.append(h('span', { class: 'cx-why' }, why));
+          return li;
+        }));
         shown = hits.length;
         for (const g of sections) g.el.hidden = true;
       } else {

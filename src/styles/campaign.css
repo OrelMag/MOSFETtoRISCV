@@ -129,6 +129,8 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 }
 .cp-node-actions.sticky { position: sticky; bottom: -16px; z-index: 1; }
 .cp-intro .cp-node-actions { margin: 18px 0 0; padding: 14px 0 0; background: none; }
+/* the side quest shares the row beside the other extra and gives way to it (the title is on hover) */
+.cp-node-actions .cp-side { flex: 1 1 140px; min-width: 0; max-width: max-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; text-align: left; }
 .cp-node-actions .sub { flex-basis: 100%; margin: 0; }
 .cp-done { display: inline-flex; align-items: center; gap: 5px; color: var(--good); font-weight: 600; }
 .cp-mini-anatomy { display: block; margin-top: 10px; }

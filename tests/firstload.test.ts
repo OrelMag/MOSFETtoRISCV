@@ -17,6 +17,21 @@ function resolveSpec(from: string, spec: string): string | null {
   return null;
 }
 
+// One read per file: the registry test below walks the graph from every chapter and page, and re-reading it each time took minutes on a loaded machine.
+const imports = new Map<string, string[]>();
+function importsOf(f: string): string[] {
+  let out = imports.get(f);
+  if (!out) {
+    out = [];
+    for (const m of readFileSync(f, 'utf8').matchAll(STATIC)) {
+      const r = resolveSpec(f, m[1]);
+      if (r) out.push(r);
+    }
+    imports.set(f, out);
+  }
+  return out;
+}
+
 /** Every file statically reachable from `entry`, with the file that first imported it. */
 function reachable(entry: string): Map<string, string | null> {
   const seen = new Map<string, string | null>();
@@ -26,11 +41,7 @@ function reachable(entry: string): Map<string, string | null> {
     if (seen.has(f)) continue;
     seen.set(f, parent);
     if (!f.endsWith('.ts')) continue;
-    const src = readFileSync(f, 'utf8');
-    for (const m of src.matchAll(STATIC)) {
-      const r = resolveSpec(f, m[1]);
-      if (r) queue.push([r, f]);
-    }
+    for (const r of importsOf(f)) queue.push([r, f]);
   }
   return seen;
 }
@@ -90,6 +101,5 @@ describe('the registry on lazy pages', () => {
     }).map(rel);
     // (view/inspector.ts reads it only after import('../lib'), so the chapter page is not one of these)
     expect(bad).toEqual([]);
-    // walks the import graph from every chapter: 7 s alone, past vitest's 30 s beside the full suite on a loaded machine
-  }, 120_000);
+  });
 });

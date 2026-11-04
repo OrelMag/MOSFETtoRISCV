@@ -40,11 +40,12 @@ describe('toolbar overflow (More menu)', () => {
     expect(tight.has('package')).toBe(true);
   });
 
-  it('Package stays until Tests, CPU and the Play menu have gone', () => {
+  it('Package stays until Tests and the Play menu have gone; CPU outlasts it (below 1340 px its button is the way in)', () => {
     const bar = [...BAR.filter((it) => !['probe', 'timing', 'challenges', 'puzzles'].includes(it.id)), { id: 'timingmenu', w: 90 }, { id: 'play', w: 70 }, { id: 'tests', w: 70 }];
     for (let room = MORE; room <= width(bar); room += 5) {
       const shed = shedActions(bar, room, MORE, GAP);
-      if (shed.has('package')) for (const id of ['tests', 'cpu', 'play']) expect(shed.has(id), `room ${room}: ${id}`).toBe(true);
+      if (shed.has('package')) for (const id of ['tests', 'play']) expect(shed.has(id), `room ${room}: ${id}`).toBe(true);
+      if (shed.has('cpu')) expect(shed.has('package'), `room ${room}: package`).toBe(true);
     }
   });
 
