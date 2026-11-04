@@ -46,6 +46,8 @@ const headful = argv.includes('--headful');
 const only = opt('only');
 const tabs = Number(opt('tabs') ?? Math.max(2, Math.min(6, cpus().length - 1)));
 const routeTimeout = Number(opt('timeout') ?? 60) * 1000;
+// CPU slowdown factor (Emulation.setCPUThrottlingRate): a slow phone's load takes long enough for the service worker to install mid-route.
+const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
 
@@ -145,6 +147,57 @@ const MEMMAP_DRIVE = `(async () => {
 })()`;
 
 /**
+ * Opens the Examples gallery (behind More on a phone), checks a card per example, that the search filters and says so when nothing
+ * matches, that the arrows move between the cards, that every thumbnail loads (scrolled into view), and that Esc closes the
+ * dialog and gives the focus back to the button it came from.
+ */
+const GALLERY_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const vis = (b) => b && !b.hidden && b.offsetParent !== null;
+  const find = (t) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === t && vis(b));
+  let opener = find('Examples');
+  if (!opener) {
+    const more = document.querySelector('button.sb-more');
+    if (!more || !vis(more)) return ['no Examples button and no More button'];
+    more.click(); await wait(200);
+    opener = [...document.querySelectorAll('.sb-more-menu button')].find((b) => /^Examples/.test(b.textContent.trim()));
+    if (!opener) return ['no Examples item in More'];
+  }
+  opener.click(); await wait(1500);
+  const dlg = document.querySelector('.ex-gallery');
+  if (!dlg) return ['the gallery did not open'];
+  const search = dlg.querySelector('.ex-search');
+  if (document.activeElement !== search) bad.push('the search box is not focused on open');
+  const shown = () => [...dlg.querySelectorAll('.ex-card')].filter((c) => !c.hidden);
+  if (dlg.querySelectorAll('.ex-card').length !== ${EXAMPLES.length}) bad.push('expected ${EXAMPLES.length} cards');
+  const panel = dlg.querySelector('.panel').getBoundingClientRect();
+  if (panel.right > innerWidth + 1 || panel.left < -1) bad.push('the gallery is wider than the screen');
+  const set = (v) => { search.value = v; search.dispatchEvent(new Event('input', { bubbles: true })); };
+  set('pong'); await wait(100);
+  if (shown().length !== 1 || shown()[0].dataset.example !== 'rv16pong') bad.push('searching "pong" should leave only the RV16 Pong card');
+  if ([...dlg.querySelectorAll('.ex-group')].filter((g) => !g.hidden).length !== 1) bad.push('a section with no match stays visible');
+  set('zzzz nothing'); await wait(100);
+  if (shown().length || !/No example matches/.test(dlg.querySelector('.ex-empty').textContent)) bad.push('no "nothing matches" message');
+  set(''); await wait(100);
+  if (shown().length !== ${EXAMPLES.length}) bad.push('clearing the search should bring every card back');
+  // every thumbnail loads: scroll each card into view (they load lazily), then none may be broken or missing
+  for (const c of dlg.querySelectorAll('.ex-card')) { c.scrollIntoView({ block: 'center' }); await wait(60); }
+  await wait(500);
+  for (const img of dlg.querySelectorAll('.ex-thumb img')) if (!img.complete || !img.naturalWidth) bad.push('thumbnail ' + img.getAttribute('src') + ' did not load');
+  search.focus();
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })); await wait(50);
+  if (document.activeElement !== shown()[0]) bad.push('ArrowDown from the search box should focus the first card');
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await wait(50);
+  if (document.activeElement !== shown()[1]) bad.push('ArrowRight should focus the next card');
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(150);
+  if (document.querySelector('.ex-gallery')) bad.push('Esc did not close the gallery');
+  const back = document.activeElement;
+  if (!back || !/Examples/.test(back.textContent) && !back.classList.contains('sb-more')) bad.push('Esc should give the focus back to the Examples button (or More)');
+  return bad;
+})()`;
+
+/**
  * Opens every Analogy aside on the step (a figure loads and mounts when its aside opens), turns on the Water | Cross-section
  * views of the step's widget, and waits for the figures to draw; a figure that stays empty or says it could not load is a problem.
  */
@@ -165,6 +218,30 @@ const ANALOGY_DRIVE = `(async () => {
   }
   for (const h of document.querySelectorAll('.wt-host')) if (/did not load/.test(h.textContent)) bad.push('a water view did not load');
   await wait(400);
+  return bad;
+})()`;
+/**
+ * Print this chapter (ui/pages/print.ts): waits for the figures, then checks that every one drew (an SVG on a white board, none
+ * left waiting), that the dialog was asked for exactly once (window.print is stubbed for every route: see visit()), and that a
+ * wrong theme did not leak into the sheet (the page behind keeps the learner's own).
+ */
+const PRINT_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const page = document.querySelector('.print-view');
+  if (!page) return ['no print view'];
+  for (let i = 0; i < 120 && page.dataset.printReady !== 'yes'; i++) await wait(250);
+  if (page.dataset.printReady !== 'yes') return ['the print view never finished building'];
+  const figs = [...page.querySelectorAll('.pd-fig-body')];
+  if (figs.length < 3) bad.push('only ' + figs.length + ' figures');
+  for (const f of figs) {
+    if (!f.querySelector('svg')) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
+    else if (f.querySelector('svg').getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+  }
+  if (page.querySelector('.pd-wait')) bad.push('a figure is still waiting');
+  if (window.__printed !== 1) bad.push('window.print was called ' + window.__printed + ' times');
+  if (!page.querySelector('.pd-q') || !page.querySelector('.pd-answers li')) bad.push('no questions and answers');
+  if (document.querySelector('.topbar') && document.documentElement.getAttribute('data-palette') === 'print') bad.push('the figures left <html> in the paper palette');
   return bad;
 })()`;
 
@@ -213,6 +290,10 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // Print this chapter: the gates chapter's figures and truth tables, from the dark theme (the sheet is paper whatever the theme) and on a phone.
+  const printCh = chapters.find((c) => c.id === 'gates') ?? chapters[1];
+  add(`#/c/${printCh.id}/print`, themed('dark'), ' (dark)', undefined, PRINT_DRIVE);
+  add(`#/c/${printCh.id}/print`, light, ` (${VIEWPORTS[VIEWPORTS.length - 1].name})`, VIEWPORTS[VIEWPORTS.length - 1], PRINT_DRIVE);
   // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
   for (const theme of ['light', 'dark'] as const) {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
@@ -247,6 +328,9 @@ function routes(): Route[] {
   add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
   // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
+  // The Examples gallery, opened from the toolbar (More on a phone), in both themes.
+  for (const theme of ['light', 'dark'] as const) add('#/sandbox', themed(theme), ` (examples gallery, ${theme})`, undefined, GALLERY_DRIVE);
+  add('#/sandbox', light, ` (examples gallery, ${phoneVp.name})`, phoneVp, GALLERY_DRIVE);
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
   // The memory-map designer on System on a bus, opened from File, in both themes.
@@ -550,6 +634,7 @@ class Tab {
     this.session = (await this.cdp.send('Target.attachToTarget', { targetId, flatten: true })).sessionId;
     this.cdp.listen(this.session, (m) => this.event(m));
     for (const d of ['Page', 'Runtime', 'Log', 'Network']) await this.send(`${d}.enable`);
+    if (throttle > 1) await this.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   }
 
   private send(method: string, params: object = {}) {
@@ -606,7 +691,8 @@ class Tab {
     this.loaded = false;
     // Storage as the route wants it, set before any of the page's scripts run.
     if (this.script) await this.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: this.script });
-    const seed = `try { if (location.protocol.startsWith('http')) { localStorage.clear(); const s = ${JSON.stringify(route.storage)}; for (const k in s) localStorage.setItem(k, s[k]); } } catch (e) {}`;
+    // no route may open a print dialog (it would block the page): window.print only counts
+    const seed = `window.__printed = 0; window.print = () => { window.__printed++; }; try { if (location.protocol.startsWith('http')) { localStorage.clear(); const s = ${JSON.stringify(route.storage)}; for (const k in s) localStorage.setItem(k, s[k]); } } catch (e) {}`;
     this.script = (await this.send('Page.addScriptToEvaluateOnNewDocument', { source: seed })).identifier;
     if (route.viewport) {
       const { width, height, mobile } = route.viewport;
@@ -652,10 +738,51 @@ class Tab {
     return { route, errors: [...new Set(this.errors)], ms: Date.now() - t0 };
   }
 
+  /** Forget the pending requests the page itself has finished. */
+  private async reconcile(): Promise<void> {
+    try {
+      const pend = [...new Set(this.inflight.values())];
+      const r = await this.send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
+        const done = new Set(performance.getEntriesByType('resource').filter((e) => e.responseEnd > 0).map((e) => e.name));
+        return ${JSON.stringify(pend)}.filter((u) => done.has(u));
+      })()` });
+      const done = new Set(r.result.value as string[]);
+      let n = 0;
+      for (const [id, url] of this.inflight) if (done.has(url)) { this.inflight.delete(id); n++; }
+      if (n) console.log(`  note: ${n} requests the page had finished were never reported finished by CDP (${pend[0]})`);
+    } catch { /* the page is gone: the timeout will say so */ }
+  }
+
+  /** What the page and its service worker look like at a timeout: told apart a page that is stuck from accounting that never emptied. */
+  private async diagnose(): Promise<string> {
+    try {
+      const r = await Promise.race([
+        this.send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: `(async () => {
+          const pend = ${JSON.stringify([...this.inflight.values()])};
+          const res = performance.getEntriesByType('resource');
+          const got = pend.filter((u) => res.some((e) => e.name === u && e.responseEnd > 0)).length;
+          const reg = await navigator.serviceWorker?.getRegistration();
+          const sw = reg ? [reg.installing && 'installing', reg.waiting && 'waiting', reg.active && 'active:' + reg.active.state].filter(Boolean).join('+') : 'none';
+          return JSON.stringify({ pendingReceivedByPage: got + '/' + pend.length, ready: document.readyState, ctrl: !!navigator.serviceWorker?.controller, sw, main: (document.querySelector('main, #app')?.textContent ?? '').length, stage: !!document.querySelector('.stage svg, svg.schematic'), busy: !!document.querySelector('[aria-busy]') });
+        })()` }),
+        sleep(3000).then(() => ({ result: { value: 'page unresponsive' } })),
+      ]);
+      return ` [page ${r.result.value}; first pending: ${[...this.inflight.values()].slice(0, 3).join(', ')}]`;
+    } catch (e) { return ` [no diagnosis: ${e}]`; }
+  }
+
   /** Loaded, no request for 500 ms, then two frames and `dwell` ms for work scheduled after them. */
   private async settle(t0: number): Promise<void> {
+    let checked = 0;
     while (!this.loaded || this.inflight.size || Date.now() - this.lastNet < 500) {
-      if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}`);
+      // A request the page has finished (a Resource Timing entry with a response end exists only once it is done) that CDP never
+      // reported finished stays "pending" for ever: seen for requests a service worker answered, on a loaded 2-core runner,
+      // while the page was complete. The page is the authority; a request it has no finished entry for stays pending (and times out).
+      if (this.loaded && this.inflight.size && Date.now() - this.lastNet > 3000 && Date.now() - checked > 3000) {
+        checked = Date.now();
+        await this.reconcile();
+      }
+      if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}${await this.diagnose()}`);
       await sleep(50);
     }
     // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was

@@ -47,7 +47,7 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
   // polite: a screen reader reads the verdict out after a pick
   const explain = h('div', { class: 'explain', 'aria-live': 'polite' });
   const opts = h('div', { class: 'options' });
-  const reveal = h('button', { class: 'btn ghost sm', style: 'margin-top:8px' }, 'Show answer');
+  const reveal = h('button', { class: 'btn sm', style: 'margin-top:8px' }, 'Show answer');
   const buttons: HTMLElement[] = [];
   const right = () => {
     buttons[q.answer].classList.add('right');

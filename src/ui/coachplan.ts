@@ -11,15 +11,18 @@ export interface CoachBeat {
   text: string;
   /** What a touch screen reads instead (each gesture confirmed with touch emulation: ui/wording.ts, tests/touchwording.test.ts). */
   touch?: { title?: string; text: string };
+  /** Where the card goes: next to the control (default), 'clear': the lower part of the circuit's stage, off the chapter text, or
+   *  'beside': over the chapter text, the whole circuit in view. */
+  card?: 'clear' | 'beside';
 }
 
 export const STAGE_BEATS: readonly CoachBeat[] = [
-  { id: 'drill', target: '.stage .crumbs', title: 'Open any box',
+  { id: 'drill', target: '.stage .crumbs', card: 'beside', title: 'Open any box',
     text: 'Double-click a part to look inside it, all the way down to the MOSFETs: every level is built from the one below. This path shows where you are; click a name to climb back, or press Esc.',
     touch: { text: 'Double-tap a part to look inside it, all the way down to the MOSFETs: every level is built from the one below. This path shows where you are; tap a name to climb back, or use the up-arrow button.' } },
-  { id: 'walk', target: '.tour-go', title: 'Walk me through it',
+  { id: 'walk', target: '.tour-go', title: 'Walk me through it', card: 'clear',
     text: 'Plays this step as a narrated tour on the live circuit: inputs set, cycles run, parts lit. Next and Back move through it, and every value shown is the simulation\'s.' },
-  { id: 'probe', target: '.stage .probe-btn', title: 'Probe a wire (P)',
+  { id: 'probe', target: '.stage .probe-btn', card: 'clear', title: 'Probe a wire (P)',
     text: 'Press Probe, then click any wire. It gets a coloured flag and a lane in the Timing panel, so you can see when it changes and how many gate delays it took.',
     touch: { title: 'Probe a wire', text: 'Tap Probe, then tap any wire. It gets a coloured flag and a lane in the Timing panel, so you can see when it changes and how many gate delays it took.' } },
   { id: 'why', target: '.stage .why-btn', title: 'Why? (W)',
@@ -54,12 +57,20 @@ export const SANDBOX_BEATS: readonly CoachBeat[] = [
     text: 'Export and import chips, share a link, save images, export Verilog for a Yosys or FPGA flow, and keep several projects apart.' },
 ];
 
+/** The first-run stage tour: three beats; the rest of the controls are one line on the ? sheet ("Show me the controls" plays all seven). */
+export const STAGE_SHORT: readonly string[] = ['drill', 'walk', 'probe'];
+export const SHORT_TAIL = ' Why?, Step, Share and Open in Sandbox are on the ? sheet.';
+
 /** The beat as this screen reads it: its touch wording (title and text) when touch is the main pointer. */
 export const beatText = (b: CoachBeat, coarse: boolean): { title: string; text: string } =>
   coarse && b.touch ? { title: b.touch.title ?? b.title, text: b.touch.text } : { title: b.title, text: b.text };
 
-export function beatsOf(kind: CoachKind, coarse = false): readonly CoachBeat[] {
-  const beats = kind === 'stage' ? STAGE_BEATS : SANDBOX_BEATS;
+export function beatsOf(kind: CoachKind, coarse = false, short = false): readonly CoachBeat[] {
+  let beats = kind === 'stage' ? STAGE_BEATS : SANDBOX_BEATS;
+  if (short && kind === 'stage') {
+    const keep = beats.filter((b) => STAGE_SHORT.includes(b.id));
+    beats = keep.map((b, i) => i === keep.length - 1 ? { ...b, text: b.text + SHORT_TAIL, touch: b.touch && { ...b.touch, text: b.touch.text + SHORT_TAIL } } : b);
+  }
   return coarse ? beats.map((b) => ({ ...b, ...beatText(b, true) })) : beats;
 }
 

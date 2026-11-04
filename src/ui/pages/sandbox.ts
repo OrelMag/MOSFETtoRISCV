@@ -44,6 +44,12 @@ export class SandboxPage implements Page {
     if (!share) maybeCoach('sandbox');
     if (share) this.files.openShare(shareRoute(location.hash));
     if (made !== null) this.makeNew(made);
+    else if (!share) this.checkChip(chipId);
+  }
+
+  /** An address naming a chip that does not exist: say so (editor/fileui.ts) instead of a silent Main under it. */
+  private checkChip(chipId?: string): void {
+    if (chipId && chipId !== NEW_SEG && chipId !== SHARE_SEG && !this.editor.ws.chips[chipId]) this.files.missingChip(chipId);
   }
 
   /** #/sandbox/new/<kind> (a chapter's link): a new chip of that kind, opened, the address then its own. */
@@ -89,6 +95,7 @@ export class SandboxPage implements Page {
     if (chipId === NEW_SEG) return this.makeNew();
     if (isLevelChip(chipId) && this.editor.project !== MAIN_PROJECT) return this.switchTo(MAIN_PROJECT, chipId);
     if (chipId && chipId !== this.editor.chipId) this.editor.openChip(chipId);
+    this.checkChip(chipId);
   }
 
   private teardown(): void {

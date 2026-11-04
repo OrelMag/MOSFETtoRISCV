@@ -395,10 +395,19 @@ export function computerChip(id: string, name: string, sub: { mem: string; dev: 
   });
 }
 
+/** The gallery's sections (editor/examplegallery.ts), in order. */
+export type ExampleGroup = 'first' | 'computers' | 'widths' | 'techniques';
+
 export interface Example {
   id: string;
   name: string;
+  /** Full description: the search rows and the card's tooltip. */
   blurb: string;
+  /** One line for the gallery's card. */
+  short: string;
+  group: ExampleGroup;
+  /** Opens with the CPU drawer (editor/cpuui.ts follows it): the gallery's tag. */
+  drawer?: true;
   /** The example's chip; `sub` holds the ids given to its sub-chips, `docs` the sub-chips themselves. */
   build(id: string, name: string, sub: Record<string, string>, docs: Record<string, ChipDoc>): ChipDoc;
   /** Chips the example places (its packaged blocks), added alongside it under fresh ids and names. */
@@ -408,80 +417,80 @@ export interface Example {
 }
 
 export const EXAMPLES: Example[] = [
-  { id: 'fetch', name: 'Fetch loop', blurb: 'PC register, PC + 4 and a program ROM: the instruction fetch of a CPU.', build: (id, n) => fetchChip(id, n) },
-  { id: 'counter7', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
-  { id: 'console', name: 'Console: hello', blurb: 'A counter walks a ROM holding a message; a console prints it, a character per clock edge.', build: consoleChip },
-  { id: 'screen', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches.', build: screenChip },
+  { id: 'fetch', group: 'first', short: 'PC register, PC + 4 and a program ROM: the fetch of a CPU.', name: 'Fetch loop', blurb: 'PC register, PC + 4 and a program ROM: the instruction fetch of a CPU.', build: (id, n) => fetchChip(id, n) },
+  { id: 'counter7', group: 'first', short: 'A counter, a font ROM as the decoder, a digit.', name: '4-bit counter on a 7-segment display', blurb: 'A counter, a font ROM as the decoder, a 7-segment digit.', build: counterSeg7Chip },
+  { id: 'console', group: 'first', short: 'A counter walks a ROM and prints it.', name: 'Console: hello', blurb: 'A counter walks a ROM holding a message; a console prints it, a character per clock edge.', build: consoleChip },
+  { id: 'screen', group: 'first', short: 'A counter draws on a pixel screen.', name: 'Screen: a sweeping beam', blurb: 'A counter sweeps a 16 × 16 screen pixel by pixel in the colour set on four switches.', build: screenChip },
   {
-    id: 'computer', name: 'Computer: RISC-V with a screen and a console',
+    id: 'computer', group: 'computers', drawer: true, short: 'Runs a program and draws a picture.', name: 'Computer: RISC-V with a screen and a console',
     blurb: 'An RV32I core, a program ROM, 4K words of RAM, a 64 × 64 screen, a console, LEDs and switches behind a memory map. Run: it greets, then paints.',
     build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev }),
     subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip } },
     hz: 10000,
   },
   {
-    id: 'computer-pipe', name: 'Computer: the pipelined RISC-V core',
+    id: 'computer-pipe', group: 'computers', drawer: true, short: 'The same computer on the pipelined core.', name: 'Computer: the pipelined RISC-V core',
     blurb: 'The computer again with the five-stage pipelined RV32I core on the same memory map: the CPU drawer draws the pipeline diagram and checks every retired instruction; Custom… adds your own instruction to it.',
     build: (id, n, sub) => computerChip(id, n, { mem: sub.mem, dev: sub.dev, halt: sub.halt }, PICTURE, true),
     subchips: { mem: { name: 'Memory', build: memoryChip }, dev: { name: 'Devices', build: devicesChip }, halt: { name: 'Halt', build: haltChip } },
     hz: 10000,
   },
   {
-    id: 'cpu4', name: '4-bit CPU (4004-inspired)',
+    id: 'cpu4', group: 'computers', drawer: true, short: 'An accumulator machine in 16-bit words.', name: '4-bit CPU (4004-inspired)',
     blurb: 'An accumulator machine with the 4004\'s instructions in six blocks you can open down to NANDs, a ROM in 4-bit assembly, four digits, LEDs, switches and a TEST key. Run: 1234 + 5876 in BCD.',
     build: (id, n, sub) => cpu4Chip(id, n, sub),
     subchips: CPU4_SUBCHIPS,
     hz: 1000,
   },
   {
-    id: 'm6502', name: '6502 computer (1975)',
+    id: 'm6502', group: 'computers', drawer: true, short: 'The part, a ROM in 6502 assembly, RAM and devices.', name: '6502 computer (1975)',
     blurb: 'The MOS 6502 (cycle-exact; open it for its transistors), a 4K ROM in 6502 assembly, 2K of RAM, a console, LEDs and switches behind a memory map. Run: the Fibonacci numbers in decimal.',
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
     hz: 10000,
   },
   {
-    id: 'sap1', name: 'SAP-1 breadboard computer',
+    id: 'sap1', group: 'computers', drawer: true, short: 'The classic 8-bit teaching computer, chip by chip.', name: 'SAP-1 breadboard computer',
     blurb: 'Ben Eater’s 8-bit breadboard computer: 13 modules of 74xx chips on one bus, 16 bytes of RAM, a microcoded control unit with five steps an instruction. Run: Fibonacci on the digits; PROG, the DIP switches and W program it by hand.',
     build: (id, n, sub, docs) => sapChip(id, n, sub, docs),
     subchips: SAP_SUBCHIPS,
     hz: 100,
   },
   {
-    id: 'bussystem', name: 'System on a bus',
+    id: 'bussystem', group: 'computers', short: 'Masters, slaves and a boot from flash.', name: 'System on a bus',
     blurb: 'Chapter 38\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 36, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
     build: busSystemChip,
   },
   {
-    id: 'verilog-adder', name: 'The same adder in Verilog',
+    id: 'verilog-adder', group: 'techniques', short: 'A 4-bit adder twice: library parts and synthesized.', name: 'The same adder in Verilog',
     blurb: 'A 4-bit adder twice: the library\'s ripple-carry ADD4, and one line of Verilog drawn by Yosys in the page. Compare their NANDs and depth; edit the text.',
     build: (id, n, sub, docs) => sameAdderChip(id, n, sub, docs),
     subchips: { add4: { name: 'add4', build: add4VerilogChip } },
   },
   {
-    id: 'cardboot', name: 'Boot from cards',
+    id: 'cardboot', group: 'computers', drawer: true, short: 'A deck read into RAM, then run.', name: 'Boot from cards',
     blurb: 'An RV32I core whose boot ROM reads a deck from a card reader into RAM and jumps to it, like the IBM 1401\'s Load key. Run; then drop the deck, Reset and Run, and sort it.',
     build: (id, n) => cardsBootChip(id, n),
   },
   {
-    id: 'rvc', name: 'RV32C: compressed instructions',
+    id: 'rvc', group: 'widths', drawer: true, short: '16-bit parcels beside 32-bit words.', name: 'RV32C: compressed instructions',
     blurb: 'The RV32I core with the C extension: a ROM that reads at any even address, 16-bit instructions expanded in the core, PC + 2. Run: it prints 0–9 from compressed code.',
     build: (id, n) => rvcChip(id, n),
   },
   {
-    id: 'rv64', name: 'RV64: 64-bit registers',
+    id: 'rv64', group: 'widths', drawer: true, short: 'The core at 64 bits.', name: 'RV64: 64-bit registers',
     blurb: 'The 64-bit core with its program ROM assembled for RV64: ld / sd, the W instructions, a multiply and fib(90), all 64 bits in the CPU drawer, checked against the golden model.',
     build: (id, n) => rv64Chip(id, n),
   },
   {
-    id: 'rv16pong', name: 'RV16: Pong on the campaign core',
+    id: 'rv16pong', group: 'computers', drawer: true, short: 'Pong on a screen and switches.', name: 'RV16: Pong on the campaign core',
     blurb: 'The campaign’s single-cycle RV16 core on its bench with a 32 × 32 screen and switches: Pong in RV16 assembly, the golden model in lock step. Run; switches 7 and 6 move your paddle.',
     build: pongChip,
     hz: PONG_HZ,
   },
-  { id: 'sharedbus', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
-  { id: 'wiredand', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
-  { id: 'wiredor', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },
+  { id: 'sharedbus', group: 'techniques', short: 'Tri-state drivers taking turns on one line.', name: 'Shared bus', blurb: 'Two tri-state drivers and a pull-down on one wire: a value, a held 0, or a fight (X).', build: sharedBusChip },
+  { id: 'wiredand', group: 'techniques', short: 'Open drains and a pull-up.', name: 'Wired-AND', blurb: 'Open-drain NMOS stages and a pull-up: the wire is 1 only when every stage lets go.', build: (id, n) => wiredChip(id, n, 'and') },
+  { id: 'wiredor', group: 'techniques', short: 'Open sources and a pull-down.', name: 'Wired-OR', blurb: 'Open-source PMOS stages and a pull-down: the wire is 1 when any stage pulls it up.', build: (id, n) => wiredChip(id, n, 'or') },
 ];
 
 /** Add an example as a new chip (fresh id and name), with its sub-chips, and open it. */

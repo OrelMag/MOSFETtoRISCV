@@ -7,6 +7,7 @@
 // or volatile() (open tabs, input values: saved, never undone). refresh() then brings the
 // library, view, simulation and panels up to date; during a drag it runs once per frame.
 
+import { setPageTitle } from '../ui/pagetitle';
 import { setUserResolver } from '../lib/resolve';
 import { bodyKey, isGenerated } from './hdl';
 import type { Vec } from '../sim/geometry';
@@ -564,6 +565,7 @@ export class Editor {
     }
     this.dragDrawn = false;
     this.lastWs = ws;
+    if (!this.level) setPageTitle(ws.chips[this.chipId]?.name ?? '', 'Sandbox');
     this.lib.update(compiledView(ws));
     setUserResolver(this.lib.resolver());
     const id = this.chipId;

@@ -73,6 +73,9 @@ export function freeRect(width: number, height: number, cover: Rect[], bw: numbe
 
 /** freeRect's choice, or null when no rectangle clear of the covers is MIN_FIT_PX wide and MIN_FIT_H high (the
  *  drawing would be fitted to the whole host, under the covers). */
+/** The share of the best scale a roomier free rectangle may give up (freeArea). */
+const NEAR_BEST = 0.95;
+
 export function freeArea(width: number, height: number, cover: Rect[], bw: number, bh: number, gap = COVER_GAP): Rect | null {
   const host: Rect = { x: 0, y: 0, w: width, h: height };
   const boxes = cover.map((c) => {
@@ -85,16 +88,22 @@ export function freeArea(width: number, height: number, cover: Rect[], bw: numbe
   const edges = (a: number[]) => [...new Set(a)].sort((p, q) => p - q);
   const xs = edges([0, width, ...boxes.flatMap((b) => [b.x, b.x + b.w])]);
   const ys = edges([0, height, ...boxes.flatMap((b) => [b.y, b.y + b.h])]);
-  let best: Rect | null = null, bestS = 0;
+  const found: { r: Rect; s: number }[] = [];
+  let bestS = 0;
   for (let i = 0; i < xs.length; i++) for (let j = i + 1; j < xs.length; j++) {
     if (xs[j] - xs[i] < MIN_FIT_PX) continue;
     for (let k = 0; k < ys.length; k++) for (let l = k + 1; l < ys.length; l++) {
       const r = { x: xs[i], y: ys[k], w: xs[j] - xs[i], h: ys[l] - ys[k] };
       if (r.h < MIN_FIT_H || boxes.some((b) => overlaps(r, b))) continue;
       const s = Math.min(r.w / bw, r.h / bh);
-      if (!best || s > bestS * (1 + 1e-9) || (s >= bestS * (1 - 1e-9) && r.w * r.h > best.w * best.h)) { best = r; bestS = s; }
+      found.push({ r, s });
+      if (s > bestS) bestS = s;
     }
   }
+  // Within NEAR_BEST of the largest scale the roomier rectangle wins: a tall drawing's best fit is often a narrow strip
+  // squeezed past a one-line hint at the bottom, a few percent larger but far off-centre beside a wide empty canvas.
+  let best: Rect | null = null, bestA = 0;
+  for (const { r, s } of found) if (s >= bestS * NEAR_BEST && r.w * r.h > bestA * (1 + 1e-9)) { best = r; bestA = r.w * r.h; }
   return best;
 }
 

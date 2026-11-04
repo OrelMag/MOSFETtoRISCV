@@ -15,7 +15,7 @@ export const PALETTES: { id: Palette; name: string; blurb: string }[] = [
   { id: 'cb', name: 'Colour-blind safe', blurb: 'Okabe–Ito: blue 1, vermillion X, green buses' },
   { id: 'lsim', name: 'Logic Sim', blurb: 'Red 1, near-black 0, bold flat wires' },
   { id: 'contrast', name: 'High contrast', blurb: 'Thick wires, strong 0/1 difference' },
-  { id: 'print', name: 'Print', blurb: 'No hue: heavy 1, thin dashed 0, dotted X' },
+  { id: 'print', name: 'Monochrome', blurb: 'No hue (reads in grey or on paper): heavy 1, thin dashed 0, dotted X' },
 ];
 
 interface State {

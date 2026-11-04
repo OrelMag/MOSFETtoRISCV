@@ -1,6 +1,7 @@
 // The workbench: open any component from the library on its own, drive its inputs freely,
 // and drill into it; "Open in Sandbox" (stage bar) copies it into the editor as a chip.
 
+import { setPageTitle } from '../pagetitle';
 import { bench } from '../../chapters/types';
 import { libraryItems, suggestItems } from '../../lib/catalog';
 import { familyOf, resolveComponent } from '../../lib/resolve';
@@ -33,6 +34,7 @@ export class WorkbenchPage implements Page {
   private mark = h('div', { class: 'bench-mark' });
   /** Following the address bar (a route): the stage's moves are not new history entries. */
   private routing = false;
+  private search!: HTMLInputElement;
 
   constructor(id: string, path?: string[]) {
     const inspector = this.inspector = new Inspector();
@@ -41,6 +43,13 @@ export class WorkbenchPage implements Page {
     this.stage.onReady(() => maybeCoach('stage'));
     const search = h('input', { type: 'search', placeholder: 'Search components…', 'aria-label': 'Search components' }) as HTMLInputElement;
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
+    // Enter opens the first hit
+    search.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const first = this.list.querySelector<HTMLButtonElement>('.lib-item');
+      if (first) { e.preventDefault(); first.click(); }
+    });
+    this.search = search;
     this.list = h('div', { class: 'lib-list' });
     this.params = h('div', { class: 'param-row', style: 'padding:0 12px 10px' });
     const lib = h('aside', { class: 'library', id: 'bench-library' }, benchTabs('components'), this.mark, search, this.params, this.list);
@@ -79,6 +88,7 @@ export class WorkbenchPage implements Page {
     // A pick in the phone's drawer closes it, the circuit comes back into view.
     if (this.el?.classList.contains('lib-open')) this.showLibrary(false);
     const def = resolveComponent(id);
+    setPageTitle(def ? def.name : 'Unknown component', 'Workbench');
     if (def && def.id === this.current && this.stage.target) {
       // the part on the stage already: only the drill path moved (Back / Forward, a link, the Parts tab), or the
       // library's pick of it again goes back to its top level
@@ -132,9 +142,11 @@ export class WorkbenchPage implements Page {
     this.params.replaceChildren();
     const f = familyOf(this.current);
     if (!f) return;
+    // a label, so the selects read as the size of this part and not as filters of the list under them
+    this.params.append(h('span', { class: 'param-k' }, 'Size of this part'));
     for (const p of f.fam.params) {
       const sel = h('select', { 'aria-label': p.name }) as HTMLSelectElement;
-      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${p.name}`));
+      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${v === 1 ? p.name.replace(/s$/, '') : p.name}`));
       sel.addEventListener('change', () => {
         const values = { ...f.values, [p.name]: Number(sel.value) };
         this.open(f.fam.make(values).id);
@@ -146,16 +158,21 @@ export class WorkbenchPage implements Page {
   private renderList(): void {
     const l = this.list;
     l.replaceChildren();
+    let any = false;
     for (const { title, items } of libraryItems()) {
       const shown = items.filter((i) => !this.filter || i.name.toLowerCase().includes(this.filter) || i.id.includes(this.filter));
       if (!shown.length) continue;
+      any = true;
       l.append(h('div', { class: 'lib-cat' }, title));
       const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
         const on = it.id === this.current || (!!it.family && familyOf(it.id)?.fam === fam);
-        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
+        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
       }
     }
+    if (!any) l.append(h('div', { class: 'lib-empty' }, `No component matches “${this.filter}”. `, h('button', { class: 'btn sm', onclick: () => { this.search.value = ''; this.filter = ''; this.renderList(); this.search.focus(); } }, 'Clear the search')));
+    // the open part in view (a long list opens at the top otherwise)
+    if (!this.filter) l.querySelector<HTMLElement>('.lib-item.on')?.scrollIntoView({ block: 'nearest' });
   }
 
   /** The top bar's way back (ui/returnto.ts): the part on the bench. */

@@ -78,6 +78,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'chapter.prev', group: 'chapter', caps: ['{'], does: 'previous chapter', match: [{ code: 'BracketLeft', codeOnly: true, shift: true }] },
   // ---- the stage (chapters and the workbench)
   { id: 'stage.focus', group: 'stage', caps: ['S'], does: 'focus the circuit (Tab from it goes on to its controls)', match: [letter('s')] },
+  { id: 'stage.fold', group: 'stage', caps: ['F'], does: 'focus mode: fold every panel and the inspector for the circuit alone; again to bring them back', match: [letter('f')] },
   { id: 'stage.probe', group: 'stage', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')] },
   { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
   { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },

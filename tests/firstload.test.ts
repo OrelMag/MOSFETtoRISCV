@@ -90,5 +90,6 @@ describe('the registry on lazy pages', () => {
     }).map(rel);
     // (view/inspector.ts reads it only after import('../lib'), so the chapter page is not one of these)
     expect(bad).toEqual([]);
-  });
+    // walks the import graph from every chapter: 7 s alone, past vitest's 30 s beside the full suite on a loaded machine
+  }, 120_000);
 });

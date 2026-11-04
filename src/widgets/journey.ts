@@ -47,12 +47,12 @@ export function ladderFocus(visited: (chapter: string) => boolean): number {
  * The ladder, top rung first (it is built upward), in a box of its own that opens scrolled to the
  * visitor's rung: the bottom one, marked "Start here", until the first chapter is opened.
  */
-export function ladder(): HTMLElement {
+export function ladder(opts: { badge?: boolean } = {}): HTMLElement {
   const seen = (id: string) => settings.visited(id).length > 0;
   const fresh = !seen(LADDER[LADDER.length - 1].chapter);
   const focus = ladderFocus(seen);
   const rungs = LADDER.map((r, i) => {
-    const start = fresh && i === LADDER.length - 1;
+    const start = opts.badge !== false && fresh && i === LADDER.length - 1;
     return h('a', { class: `rung${start ? ' start' : ''}`, href: `#/c/${r.chapter}/0`, title: `Chapter ${r.num}` },
       h('span', { class: 'n' }, String(r.num).padStart(2, '0')),
       h('span', { class: 't' }, r.title),
@@ -60,26 +60,39 @@ export function ladder(): HTMLElement {
       h('span', { class: 'c' }, r.madeOf));
   });
   const box = h('nav', { class: 'ladder', 'aria-label': 'The journey, level by level' }, rungs);
+  // A chip names what lies above (the fade alone read as a sliced card); it sits outside the box, which the fade masks.
+  const up = h('button', { class: 'ladder-up', type: 'button', hidden: true, onclick: () => box.scrollTo({ top: 0, behavior: 'smooth' }) });
+  const wrap = h('div', { class: 'ladder-wrap' }, box, up);
   // Fades at the edges that have more rungs past them.
   const edges = () => {
     box.classList.toggle('more-up', box.scrollTop > 2);
     box.classList.toggle('more-down', box.scrollTop + box.clientHeight < box.scrollHeight - 2);
+    const above = rungs.filter((r) => r.offsetTop < box.scrollTop - 2).length;
+    up.hidden = !above;
+    up.textContent = `↑ ${above} more above`;
   };
   box.addEventListener('scroll', edges, { passive: true });
   // The focus rung at the box's bottom once it has a size (it is built before the page is attached), and again
   // while sizes settle (web fonts, a phone's wrapped rungs), until the visitor scrolls it.
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
-      if (!box.clientHeight) return;
-      const r = rungs[focus];
-      box.scrollTop = focus === LADDER.length - 1 ? box.scrollHeight : r.offsetTop + r.offsetHeight + 24 - box.clientHeight;
+      // The box holds whole cards: from the focus rung up, as many as the CSS height allows, the box sized to them
+      // (a slice of the top card read as a bug); sizes settle, so this runs again until the visitor scrolls.
+      box.style.maxHeight = '';
+      const room = box.clientHeight;
+      if (!room) return;
+      const bottom = rungs[focus].offsetTop + rungs[focus].offsetHeight;
+      let first = focus;
+      while (first > 0 && bottom - rungs[first - 1].offsetTop + 1 <= room) first--;
+      box.style.maxHeight = `${bottom - rungs[first].offsetTop + 3}px`;
+      box.scrollTop = rungs[first].offsetTop - 1;
       edges();
     });
     ro.observe(box);
     rungs.forEach((r) => ro.observe(r));
     for (const ev of ['wheel', 'touchstart', 'pointerdown', 'keydown']) box.addEventListener(ev, () => ro.disconnect(), { once: true, passive: true });
   }
-  return box;
+  return wrap;
 }
 
 export function journeyWidget(): Widget {

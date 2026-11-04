@@ -28,9 +28,19 @@ export interface NodeProgress {
   src?: string;
   /** When last solved (ms since epoch). */
   at?: number;
+  /**
+   * Passed with the reference answer put in by Do it for me: solved (the next level opens), no stars of its own. Stars
+   * earned before (or by a later rebuild by hand) stay; this clears when a pass of the learner's own earns them.
+   */
+  helped?: boolean;
+  /** connKey of the circuit Do it for me left: a Check of it unchanged is still the answer's, not the learner's. */
+  helpKey?: string;
   /** The design brief's submissions (cap_t4), newest first: what was measured, not the chip. */
   subs?: Submission[];
 }
+
+/** What a pass earned: 0 stars is a lesson or a pass with the answer put in (`helped`). */
+export interface PassGrade { stars: 0 | 1 | 2 | 3; best: boolean; first: boolean; helped: boolean }
 
 /** One measured design of the tier 4 brief. */
 export interface Submission { nand: number; period: number; cycles: number; stars: 1 | 2 | 3; at: number }
@@ -81,6 +91,8 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
     }
     if (typeof v.tips === 'number' && v.tips >= 0) p.tips = Math.floor(Math.min(v.tips, 20));
     if (v.seen === true) p.seen = true;
+    if (v.helped === true) p.helped = true;
+    if (typeof v.helpKey === 'string' && v.helpKey.length < 200) p.helpKey = v.helpKey;
     if (typeof v.src === 'string' && v.src.length < 100_000) p.src = v.src;
     if (typeof v.at === 'number' && Number.isFinite(v.at)) p.at = v.at;
     const subs = cleanSubs(v.subs);
@@ -168,21 +180,46 @@ export class Progress {
     if (JSON.stringify(p) !== before) this.save(false);
   }
 
-  /** A pass: solved, best result kept. Returns the stars of this result and whether it is a new best. */
-  solve(id: string, m: Measured = {}): { stars: 1 | 2 | 3; best: boolean; first: boolean } {
+  /** Do it for me replaced the circuit: remember which one, so a Check of it unchanged counts as helped. */
+  markHelp(id: string, key: string): void {
+    this.node(id).helpKey = key;
+    this.save(false);
+  }
+
+  /**
+   * A pass: solved, best result kept. Returns the stars of this result and whether it is a new best. A lesson earns no
+   * stars; a pass of the answer Do it for me put in (`key` = the circuit's connKey) is solved "with help": no stars.
+   */
+  solve(id: string, m: Measured = {}, key?: string): PassGrade {
     const par = nodeById(id)?.par;
-    const s = starsOf(m, par);
     const p = this.node(id);
     const first = p.status !== 'solved';
+    if (nodeById(id)?.kind === 'lesson') {
+      p.status = 'solved';
+      p.at = Date.now();
+      delete p.stars;
+      this.save();
+      return { stars: 0, best: false, first, helped: false };
+    }
+    if (key !== undefined && p.helpKey === key) {
+      p.status = 'solved';
+      p.at = Date.now();
+      if (!p.stars) p.helped = true;
+      this.save();
+      return { stars: 0, best: false, first, helped: true };
+    }
+    const s = starsOf(m, par);
     const best = better({ stars: s, m }, p.stars ? { stars: p.stars, m: p.best ?? {} } : undefined, par);
     p.status = 'solved';
     p.at = Date.now();
+    delete p.helped;
+    delete p.helpKey;
     if (best) {
       p.stars = s;
       p.best = m;
     }
     this.save();
-    return { stars: s, best, first };
+    return { stars: s, best, first, helped: false };
   }
 
   /**
@@ -290,7 +327,8 @@ export class Progress {
         if (!n.optional) requiredDone++;
       }
       if (!n.soon && n.kind !== 'lesson') maxStars += 3;
-      stars += p?.stars ?? 0;
+      // a lesson earns none (older saves may hold some)
+      if (n.kind !== 'lesson') stars += p?.stars ?? 0;
     }
     return { done, required, requiredDone, stars, maxStars, playable };
   }
@@ -323,6 +361,9 @@ export function mergeCampaign(a: CampaignState, b: CampaignState): CampaignState
     const tips = Math.max(x.tips ?? 0, y.tips ?? 0);
     if (tips) p.tips = tips;
     if (x.seen || y.seen) p.seen = true;
+    if ((x.helped || y.helped) && p.stars === undefined) p.helped = true;
+    else delete p.helped;
+    if (!p.helped && !(x.helpKey ?? y.helpKey)) delete p.helpKey;
     const subs = [...(y.subs ?? []), ...(x.subs ?? [])].filter((q, i, a) => a.findIndex((r) => r.at === q.at) === i).sort((a, b) => b.at - a.at).slice(0, MAX_SUBMISSIONS);
     if (subs.length) p.subs = subs;
     p.src = y.src ?? x.src;

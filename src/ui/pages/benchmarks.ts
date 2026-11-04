@@ -121,7 +121,11 @@ export class BenchmarksPage implements Page {
     svg.append(s('polyline', { class: 'bm-front', points: fr.map((c) => `${X(xOf(c))},${Y(meanOf(c, 'time'))}`).join(' ') }));
     for (const c of cpus) {
       const cx = X(xOf(c)), cy = Y(meanOf(c, 'time'));
-      const hit = s('circle', { class: 'bm-hit', cx, cy, r: 14 });
+      // a dot is a button: focusable, named by its CPU, Enter / Space open its row like a click
+      const hit = s('circle', { class: 'bm-hit', cx, cy, r: 14, role: 'button', tabindex: '0', 'aria-label': `${c.name}: ${fmt(meanOf(c, 'time'), 1)} microseconds per program, ${fmt(c.nands)} NANDs. Open its row` });
+      hit.addEventListener('focus', () => { this.showTip(c, cx / W, cy / H); this.mark(c.id); });
+      hit.addEventListener('blur', () => { this.tip.hidden = true; this.mark(null); });
+      hit.addEventListener('keydown', (e) => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); hit.dispatchEvent(new Event('click')); } });
       hit.addEventListener('pointerenter', () => { this.showTip(c, cx / W, cy / H); this.mark(c.id); });
       hit.addEventListener('pointerleave', () => { this.tip.hidden = true; this.mark(null); });
       hit.addEventListener('click', () => {
@@ -153,7 +157,7 @@ export class BenchmarksPage implements Page {
   }
 
   private showTip(c: BenchCpu, fx: number, fy: number): void {
-    this.tip.replaceChildren(h('b', null, c.name),
+    this.tip.replaceChildren(h('b', null, c.name), c.id !== c.name ? h('small', null, c.id) : '',
       h('span', null, `${fmt(meanOf(c, 'time'), 1)} µs · ${fmt(c.nands)} NAND${c.offChip ? ' + a DRAM chip' : ''} · CPI ${fmt(meanOf(c, 'cpi'), 2)} · ${mhz(c.period)} MHz · ${fmt(meanOf(c, 'energy'))} nJ`));
     this.tip.hidden = false;
     this.tip.style.left = `${(fx * 100).toFixed(1)}%`;

@@ -49,7 +49,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
    (each link keeps its name as a tooltip). Past that the nav shrinks and scrolls, so the page never scrolls sideways. */
 @media (max-width: 1440px) { .brand small { display: none; } }
 @media (max-width: 1220px) { .tools .lbl { display: none; } }
-@media (max-width: 1140px) { .nav a span { display: none; } }
+@media (max-width: 960px) { .nav a span { display: none; } }
 @media (max-width: 580px) { .brand-name { display: none; } }
 /* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. data-fit (returnto.ts fit):
    the full label while the nav still fits beside it, else the short one ("Ch 07 · 3"), else the arrow alone; the full one in
@@ -105,7 +105,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 320px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px;
   /* A short window: the list scrolls rather than running off the bottom of the screen. */
-  max-height: calc(100dvh - var(--topbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain;
+  max-height: calc(100dvh - var(--topbar-h) - 12px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  /* shadows at the edges that have more past them (scroll-attached gradients), so a cut list says it scrolls */
+  background:
+    linear-gradient(var(--surface) 30%, transparent) 0 0 / 100% 28px local no-repeat,
+    linear-gradient(transparent, var(--surface) 70%) 0 100% / 100% 28px local no-repeat,
+    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--text) 28%, transparent), transparent) 0 0 / 100% 10px scroll no-repeat,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--text) 28%, transparent), transparent) 0 100% / 100% 10px scroll no-repeat,
+    var(--surface);
 }
 .pal-menu.open { display: grid; gap: 2px; }
 .pal-menu button {
@@ -184,7 +191,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .qn-row:hover, .qn-row:focus-visible, .qn-row.sel { background: var(--surface-2); }
 .qn-row[aria-current='page'] { background: var(--accent-soft); }
 .qn-row[aria-current='page'].sel, .qn-row[aria-current='page']:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.qn-num { flex: none; width: 22px; font: 600 12px var(--font-mono); color: var(--accent); }
+.qn-num { flex: none; min-width: 22px; white-space: nowrap; font: 600 12px var(--font-mono); color: var(--accent); }
 .qn-row.step .qn-num { color: var(--muted); }
 .qn-main { flex: 1; min-width: 0; }
 .qn-main b { display: block; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -255,7 +262,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .btn.primary .kbd-hint { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent); }
 [data-nosinglekeys] .kbd-hint { display: none; }
 @media (pointer: coarse), (max-width: 700px) { .kbd-hint { display: none; } }
-@media (pointer: coarse) { .qn-search kbd { display: none; } } /* no keyboard: no shortcut to advertise */
+@media (pointer: coarse) { .qn-search kbd { display: none; } .qn-print { min-height: 40px; } } /* no keyboard: no shortcut to advertise */
 .kh-back { position: fixed; inset: 0; z-index: 72; display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; background: light-dark(rgb(10 12 20 / 38%), rgb(0 0 0 / 62%)); overflow: auto; }
 .kh { width: min(1060px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 16px 20px 12px; }
 .kh-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); }
@@ -340,14 +347,23 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .narrative-head { padding: 18px 22px 10px; border-bottom: 1px solid var(--border); }
 .chapter-kicker { font: 600 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
 .chapter-title { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; margin: 2px 0 10px; line-height: 1.2; }
-.steps-dots { display: flex; gap: 5px; flex-wrap: wrap; }
+/* one row: the dots shrink together (to 6 px) before the last one drops alone onto a second line */
+.steps-dots { display: flex; gap: 5px; flex-wrap: nowrap; min-width: 0; flex: 0 1 auto; }
 .steps-dots button {
-  width: 22px; height: 6px; border-radius: 4px; border: 0; padding: 0; cursor: pointer;
+  width: 22px; flex: 0 1 22px; min-width: 6px; height: 6px; border-radius: 4px; border: 0; padding: 0; cursor: pointer;
   background: var(--surface-3);
 }
 .steps-dots button.done { background: color-mix(in srgb, var(--accent) 45%, var(--surface-3)); }
 .steps-dots button.cur { background: var(--accent); }
-.narrative-body { flex: 1; overflow-y: auto; padding: 18px 22px 24px; zoom: var(--prose-scale, 1); }
+.narrative-body {
+  flex: 1; overflow-y: auto; padding: 18px 22px 24px; zoom: var(--prose-scale, 1); scroll-padding-bottom: 20px;
+  /* scroll shadows: an edge shadow shows only while text continues past it (the 'local' covers hide it at the end) */
+  background:
+    linear-gradient(var(--surface) 30%, transparent) top / 100% 28px no-repeat local,
+    linear-gradient(transparent, var(--surface) 70%) bottom / 100% 28px no-repeat local,
+    linear-gradient(var(--scroll-shadow), transparent) top / 100% 10px no-repeat scroll,
+    linear-gradient(to top, var(--scroll-shadow), transparent) bottom / 100% 10px no-repeat scroll;
+}
 /* Reading width (Settings ▸ Narrow reading column): a line of about 62 characters, centred in a pane wider than that (a phone or tablet stacks it full width). */
 :root[data-narrow-text] .narrative-body > * { max-width: 62ch; margin-inline: auto; }
 .step-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
@@ -379,7 +395,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* wrap at word boundaries onto a second line before an ellipsis; the full title is also the tooltip */
 .narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
 .narrative-foot .btn .lbl { overflow: hidden; text-align: left; line-height: 1.2; display: flex; flex-direction: column; min-width: 0; }
-.narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
+.narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .narrative-foot .btn .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a neighbour's title needs the room more than the key hint does (the shortcut stays: aria-keyshortcuts, the help sheet) */
 .narrative-foot .btn:has(.lbl) .kbd-hint { display: none; }
@@ -391,13 +407,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   background: var(--surface-2); padding: 14px;
 }
 .challenge-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
-.challenge-head .tag { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn); background: var(--warn-soft); padding: 1px 7px; border-radius: 99px; }
+.challenge-head .tag { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-text); background: var(--warn-soft); padding: 1px 7px; border-radius: 99px; }
 .challenge.solved { border-color: var(--good); background: var(--good-soft); }
 .challenge.solved .tag { color: var(--good); background: transparent; }
 .challenge .options { display: grid; gap: 6px; margin-top: 8px; }
 .challenge .options button { text-align: left; justify-content: flex-start; white-space: normal; }
 .challenge .options button.right { border-color: var(--good); background: var(--good-soft); }
 .challenge .options button.wrong { border-color: var(--wx); opacity: 0.75; }
+/* the verdict is not by colour alone */
+.challenge .options button.wrong::before, .challenge .options button.right::before { flex: none; font-weight: 800; margin-right: 6px; }
+.challenge .options button.wrong::before { content: '\2715'; color: var(--wx); }
+.challenge .options button.right::before { content: '\2713'; color: var(--good); }
 .challenge .explain { margin-top: 8px; font-size: 14px; color: var(--text-2); }
 .challenge-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .challenge .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
@@ -409,10 +429,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .steps-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
 .steps-dots button.solved { background: var(--good); }
 .steps-dots button.solved.cur { background: var(--accent); box-shadow: 0 0 0 2px var(--good-soft), 0 0 0 3px var(--good); }
-.steps-dots button.recap { width: 12px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--border-strong); }
+.steps-dots button.recap { width: 12px; flex: none; background: transparent; box-shadow: inset 0 0 0 1.5px var(--border-strong); }
 .steps-dots button.recap.cur { background: var(--accent); box-shadow: none; }
 /* a step not built yet (Chapter.soon) */
-.steps-dots .soon { width: 22px; height: 6px; align-self: center; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--border-strong); background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); opacity: 0.7; }
+.steps-dots .soon { width: 22px; flex: 0 1 22px; min-width: 6px; height: 6px; align-self: center; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--border-strong); background: repeating-linear-gradient(90deg, var(--border-strong) 0 3px, transparent 3px 6px); opacity: 0.7; }
 .checks-count { font: 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
 .ch-goals {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
@@ -510,6 +530,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   border: 1px solid var(--border); padding: 3px 8px; border-radius: 99px;
 }
 .level-badge:empty { display: none; }
+/* a phone: a right-docked panel's title strip (full width, from the top) sits where the badge does: the strip wins (half a tag is worse than none) */
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .level-badge { display: none; } }
 .hint-badge {
   position: absolute; left: 12px; bottom: 10px; z-index: 2; pointer-events: none;
   font-size: 12px; color: var(--muted);
@@ -571,7 +593,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .stage-goal .tag {
   flex: none; display: inline-flex; align-items: center; gap: 3px;
-  font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn);
+  font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-text);
 }
 .stage-goal .txt { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .stage-goal .more { flex: none; align-self: center; font-size: 16px; line-height: 1; color: var(--muted); }
@@ -697,6 +719,14 @@ html[data-widget-step] .slow-btn { display: none; }
   /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
   .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
   .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
+  /* a cue that the row scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
+  .ctl-pins {
+    background:
+      linear-gradient(to right, var(--surface) 30%, transparent) left / 28px 100% no-repeat local,
+      linear-gradient(to left, var(--surface) 30%, transparent) right / 28px 100% no-repeat local,
+      linear-gradient(to right, color-mix(in srgb, var(--text) 28%, transparent), transparent) left / 22px 100% no-repeat scroll,
+      linear-gradient(to left, color-mix(in srgb, var(--text) 28%, transparent), transparent) right / 22px 100% no-repeat scroll;
+  }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
@@ -718,6 +748,9 @@ html[data-widget-step] .slow-btn { display: none; }
 .stage .controls .status { justify-content: flex-end; flex: 1 1 auto; min-width: 7em; contain: inline-size; }
 .status .pulse { flex: none; }
 .status-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-short { display: none; }
+.stage .controls .status { container-type: inline-size; }
+@container (max-width: 17em) { .status-full { display: none; } .status-short { display: inline; } }
 .status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .status .pulse.busy { background: var(--w1); animation: blink 0.6s infinite; }
 .status .pulse.warn { background: var(--wx); }
@@ -1129,7 +1162,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .bits-row { display: flex; gap: 3px; }
 
 /* ---------- home ---------- */
-.home { max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
+.home { max-width: 1120px; margin: 0 auto; padding: 48px var(--page-gutter) 80px; }
 .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; margin-bottom: 56px; }
 .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.04; letter-spacing: -0.035em; margin: 10px 0 16px; font-weight: 800; }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), #e8590c); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -1139,16 +1172,24 @@ svg.schematic .dot.fld { fill: var(--fc); }
 .hero .cta-more .btn { max-width: 100%; padding-inline: 8px; }
 .hero .cta-campaign { display: contents; }
 .hero-ladder { min-width: 0; }
-.ladder-cap { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
+.ladder-cap { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); } /* its button swapped once the campaign is known to be started (home.ts) */
 .eyebrow { font: 600 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 /* the ladder scrolls in its own box (opened at the visitor's rung, journey.ts), faded where more rungs lie past an edge */
 .ladder {
   display: flex; flex-direction: column; gap: 6px; position: relative;
   max-height: min(600px, calc(100vh - 160px)); overflow-y: auto; padding: 1px 4px 2px 0; scrollbar-width: thin;
 }
-.ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 40px); }
-.ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 40px); }
-.ladder.more-up.more-down { mask-image: linear-gradient(to bottom, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.ladder { scroll-snap-type: y proximity; }
+.ladder > .rung { scroll-snap-align: start; }
+.ladder-wrap { position: relative; }
+.ladder-up {
+  position: absolute; top: -11px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
+}
+.ladder-up[hidden] { display: none; }
+.ladder.more-up { mask-image: linear-gradient(to bottom, transparent, #000 14px); }
+.ladder.more-down { mask-image: linear-gradient(to top, transparent, #000 14px); }
+.ladder.more-up.more-down { mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
 .widget .ladder { max-height: max(320px, calc(100vh - 250px)); }
 .rung.start { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
 .rung .start-tag {
@@ -1250,6 +1291,16 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
   padding: 10px 10px 8px;
 }
+/* A panel cut short by the room it has (the Timing drawer under it) scrolls inside: an edge shadow says the rest is there. */
+.mem-panel {
+  background-image:
+    linear-gradient(var(--surface) 30%, transparent), linear-gradient(transparent, var(--surface) 70%),
+    linear-gradient(var(--scroll-shadow), transparent), linear-gradient(to top, var(--scroll-shadow), transparent);
+  background-position: top, bottom, top, bottom;
+  background-size: 100% 28px, 100% 28px, 100% 10px, 100% 10px;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
 .mem-panel h4 { cursor: pointer; user-select: none; margin: 0 0 6px; font-size: 12px; font-weight: 650; color: var(--text-2); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 
 .mem-panel.collapsed > :not(h4) { display: none; }
@@ -1296,7 +1347,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bench-tab.on { color: var(--accent); border-color: var(--accent); }
 .widget .suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hw-page { height: 100%; overflow: auto; background: var(--bg); }
-.hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px 20px 40px; }
+.hw-inner { max-width: 1280px; margin: 0 auto; padding: 4px var(--page-gutter) 40px; }
 .hw-inner > .bench-tabs { padding: 8px 0 0; margin-bottom: 16px; }
 .hw-page h1 { font-size: 22px; margin: 0 0 4px; }
 .hw-sub { color: var(--text-2); margin: 0 0 16px; max-width: 900px; }
@@ -1336,7 +1387,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .hw-table td.hw-name { white-space: normal; min-width: 220px; }
 .hw-name a { color: var(--text); font-weight: 500; }
 /* a generated id (soc_sys_rom_70ec…_dram_scr_kbd) is cut, whole in its tooltip: it widened the table past its frame */
-.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: 6px; display: inline-block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.hw-name code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: none; margin-left: 6px; display: inline-block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .hw-tag { color: var(--muted); font-size: 12px; margin-left: 6px; font-weight: 400; }
 .hw-cat { color: var(--text-2); }
 .hw-cat .hw-dot { margin-right: 6px; }
@@ -1441,7 +1492,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .qnav-back { padding-top: 8px; }
   .layout, .layout.no-inspector { display: flex; flex-direction: column; height: auto; }
   .narrative { border-right: 0; border-bottom: 1px solid var(--border); }
-  .narrative-body { overflow: visible; }
+  .narrative-body { overflow: visible; background: none; }
   .stage { height: 72vh; }
   .hero { grid-template-columns: 1fr; }
   /* the buttons in a tidy grid: the primary one across, the rest two to a row (not ragged by label length) */
@@ -2251,6 +2302,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bus-map span:last-child { color: var(--text-2); }
 .bus-screen { display: block; width: 192px; max-width: 100%; aspect-ratio: 1; image-rendering: pixelated; border-radius: 4px; border: 1px solid var(--border); background: #000; }
 .bus-keys { display: flex; gap: 6px; align-items: center; }
+.bus-keys > .btn { flex: none; white-space: nowrap; }
+/* the pseudo-instruction expander's free-text field (widgets/abi.ts): themed, not the browser's white default */
+.asm-try { width: min(100%, 30em); padding: 5px 9px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-2); color: var(--text); font: 13px var(--font-mono); }
 .bus-type { flex: 1 1 auto; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font: 12px var(--font-mono); }
 
 /* ---------- touch: hit areas of 40 px or more on a coarse pointer ----------
@@ -2709,3 +2763,53 @@ html[data-busy]::before {
 }
 @keyframes busy-sweep { 0% { opacity: 1; transform: translateX(-100%); } 100% { opacity: 1; transform: translateX(260%); } }
 @media (prefers-reduced-motion: reduce) { html[data-busy]::before { width: 100%; animation: busy-pulse 1.4s ease-in-out 0.25s infinite; } @keyframes busy-pulse { 0%, 100% { opacity: 0; } 50% { opacity: 0.8; } } }
+
+/* ---------- Phone nav: equal 38 px targets with 2 px between (Chapters and Campaign no longer touch) ---------- */
+@media (pointer: coarse) and (max-width: 420px) {
+  .nav { gap: 2px; }
+  .nav a { min-width: 38px; }
+}
+
+/* ---------- Forced colours (Windows high contrast): system colours only, so icons, the current page and the swatches must say what they are ---------- */
+@media (forced-colors: active) {
+  .nav a.active { outline: 2px solid Highlight; outline-offset: -2px; text-decoration: underline; }
+  .btn, .look, .pal-btn { border: 1px solid ButtonText; }
+  .btn.primary, .stage-bar .btn.on, .look.on { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .look svg, .btn svg, .nav a svg { stroke: currentColor; }
+  .pal-sw, .pal-sw i, .pal-board-sw i, .pal-nets-sw i { forced-color-adjust: none; }
+  .pal-menu button[aria-checked='true'] { outline: 2px solid Highlight; }
+  .steps-dots button { border: 1px solid ButtonText; }
+  .steps-dots button.cur { background: Highlight; }
+  a.rung, .card { border: 1px solid LinkText; }
+}
+
+/* ---------- Print: a chapter's prose and the statistics table on paper, without the app around them ---------- */
+@media print {
+  html, body, #app, #view, .scroll, .layout, .narrative, .narrative-body, .hw-inner, .hw-table-wrap, .home, .cp-page { height: auto !important; max-height: none !important; overflow: visible !important; position: static !important; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .layout { display: block !important; }
+  .topbar, .skip-link, .stage, .inspector, .show-circuit, .narrative-foot, .return-pill, .coach, .tour-card, .pal-menu, .gl-card, .hw-chips, .hw-tech, .stage-notes, .step-notes .note-btn, .layers .layer-tabs, .quiz .opts button { display: none !important; }
+  .narrative { width: auto !important; border: 0 !important; }
+  .narrative-body { padding: 0 !important; zoom: 1 !important; }
+  a { color: inherit; }
+  .hw-table { width: 100%; font-size: 9pt; }
+  .hw-table thead { display: table-header-group; }
+  .hw-table tr, pre, .challenge, figure { break-inside: avoid; }
+  h1, h2, h3, h4 { break-after: avoid; }
+}
+
+/* Workbench list: the open part carries a bar, not only a faint fill; a size row says what it is; an empty search says so */
+.lib-item[aria-current='true'] { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+.param-k { flex-basis: 100%; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.lib-empty { padding: 14px 12px; color: var(--text-2); font-size: 13px; display: grid; gap: 8px; justify-items: start; }
+/* View options: a chosen row carries a check as well as the fill (colour alone is not a state) */
+.pal-menu button[aria-checked='true'] { position: relative; }
+.pal-menu button[aria-checked='true']::after { content: '\2713'; position: absolute; right: 10px; top: 8px; color: var(--accent); font-weight: 700; }
+.hw-empty { text-align: center !important; padding: 18px; color: var(--text-2); }
+.bm-hit:focus-visible { stroke: var(--accent); stroke-width: 2; outline: none; }
+@media print {
+  /* paper is white whatever the theme: the text tokens in ink, the surfaces off */
+  .narrative, .hw-page, .home { --bg: #fff; --surface: #fff; --surface-2: #fff; --surface-3: #eee; --text: #000; --text-2: #222; --muted: #444; --border: #999; --accent: #000; --accent-soft: #fff; background: #fff; color: #000; }
+  .narrative-head .btn, .tour-go { display: none !important; }
+}
+@media (pointer: coarse) { .asm-try { min-height: 40px; } }

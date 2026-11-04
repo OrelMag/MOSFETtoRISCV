@@ -42,6 +42,11 @@ export function inspectorChoice(): boolean | null {
   try { const v = localStorage.getItem(FOLD_KEY); return v === 'folded' ? true : v === 'open' ? false : null; } catch { return null; }
 }
 
+/** A section just opened sits at the dock's bottom: scroll it into view (the click would look like nothing happened). */
+function peek(det: HTMLElement): void {
+  requestAnimationFrame(() => det.scrollIntoView({ block: 'nearest', behavior: 'auto' }));
+}
+
 export class Inspector {
   readonly el: HTMLElement;
   private body: HTMLElement;
@@ -71,7 +76,7 @@ export class Inspector {
       tabs.append(b);
     };
     add('info', 'Info', 'info');
-    add('truth', 'Table', 'table');
+    add('truth', 'Truth table', 'table');
     add('hdl', 'Verilog', 'code');
     const fold = h('button', { class: 'insp-fold', title: 'Fold the inspector: the circuit gets its width', 'aria-label': 'Fold the inspector', onclick: () => this.userFold(true) }, icon('sidebar', 14)) as HTMLButtonElement;
     this.rail = h('button', { class: 'insp-rail', title: 'Show the inspector', 'aria-label': 'Show the inspector', onclick: () => this.userFold(false) }, icon('sidebar', 14), h('span', null, 'Inspector')) as HTMLButtonElement;
@@ -204,6 +209,7 @@ export class Inspector {
     det.addEventListener('toggle', () => {
       this.powerOpen = det.open;
       if (det.open && det.childElementCount === 1) fill();
+      if (det.open) peek(det);
     });
     return det;
   }
@@ -219,6 +225,7 @@ export class Inspector {
     det.addEventListener('toggle', () => {
       this.techOpen = det.open;
       if (det.open && det.childElementCount === 1) fill();
+      if (det.open) peek(det);
     });
     return det;
   }
@@ -257,6 +264,7 @@ export class Inspector {
         this.usage.set(d, u);
         wait.remove();
         show(u);
+        if (det.open) peek(det);
       }, (e) => { wait.textContent = `Could not load the library: ${String(e)}`; });
     };
     if (this.usedOpen) {
@@ -266,6 +274,7 @@ export class Inspector {
     det.addEventListener('toggle', () => {
       this.usedOpen = det.open;
       if (det.open && det.childElementCount === 1) fill();
+      if (det.open) peek(det);
     });
     return det;
   }

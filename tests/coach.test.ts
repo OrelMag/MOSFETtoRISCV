@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { move, mayAutoStart, pickBeats, SANDBOX_BEATS, STAGE_BEATS } from '../src/ui/coachplan';
+import { beatsOf, move, mayAutoStart, pickBeats, SANDBOX_BEATS, STAGE_BEATS } from '../src/ui/coachplan';
 
 describe('coach marks', () => {
   it('keeps the beats whose control is on the page, in order', () => {
@@ -12,6 +12,16 @@ describe('coach marks', () => {
       expect(new Set(set.map((b) => b.id)).size).toBe(set.length);
       for (const b of set) { expect(b.target).toBeTruthy(); expect(b.title).toBeTruthy(); expect(b.text.length).toBeGreaterThan(40); }
     }
+  });
+  it('the first-run stage tour is three beats ending on where the rest is; the ? sheet plays all seven', () => {
+    for (const coarse of [false, true]) {
+      const short = beatsOf('stage', coarse, true);
+      expect(short.map((b) => b.id)).toEqual(['drill', 'walk', 'probe']);
+      expect(short[2].text.endsWith('Why?, Step, Share and Open in Sandbox are on the ? sheet.')).toBe(true);
+      expect(short[0].text).not.toMatch(/sheet/);
+      expect(beatsOf('stage', coarse, false)).toHaveLength(STAGE_BEATS.length);
+    }
+    expect(STAGE_BEATS).toHaveLength(7);
   });
   it('moves: back stops at the first, next past the last ends the tour', () => {
     expect(move({ index: 0, count: 3 }, 'back')).toBe(0);

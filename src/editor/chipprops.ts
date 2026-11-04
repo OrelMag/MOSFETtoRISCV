@@ -32,7 +32,7 @@ registerPropsSection({
     const { usedBy, uses } = relations(ed.ws, ed.chipId);
     return h('section', { class: 'sb-sec-props' }, h('h3', null, 'As a chip'),
       h('div', { class: 'sb-btns' },
-        btn('Package…', 'Name, colour and notes, with a preview of the box it becomes', () => packageDialog(ed), 'chip'),
+        ed.level ? null : btn('Package…', 'Name, colour and notes, with a preview of the box it becomes', () => packageDialog(ed), 'chip'),
         btn('Inspect', 'Info, truth table and Verilog of this chip', () => inspect(ed), 'table')),
       h('div', { class: 'sb-rel-row' }, h('span', null, 'Used by'),
         usedBy.length ? chipLinks(ed, usedBy, (id) => ed.openChip(id)) : h('span', { class: 'sb-sum' }, 'no chip yet')),
@@ -46,7 +46,8 @@ registerPropsSection({
   // folded away unless the chip is marked, or has the pins a flip-flop needs
   advanced: (ed) => !ed.doc.ff && !guessFf(ed.doc),
   render(ed) {
-    if (!nothingSelected(ed)) return null;
+    // a level's chip is graded as drawn: nothing to mark (the level screen's chip is not a flip-flop to package)
+    if (!nothingSelected(ed) || (ed.level && !ed.doc.ff)) return null;
     const doc = ed.doc;
     const ff = doc.ff;
     const set = (next: ChipDoc['ff']) => ed.edit((d) => {

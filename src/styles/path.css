@@ -1,6 +1,6 @@
 /* My path and Where are you starting? (ui/pages/path.ts, start.ts, learn/asker.ts). Site tokens only, both themes. */
 
-.lp-page { max-width: 1180px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 48px; display: flex; flex-direction: column; gap: 18px; }
+.lp-page { max-width: 1180px; margin: 0 auto; padding: 28px var(--page-gutter) 48px; display: flex; flex-direction: column; gap: 18px; }
 .lp-page h1 { margin: 2px 0 0; font-size: 30px; letter-spacing: -0.01em; }
 .lp-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
 .lp-actions { display: flex; flex-wrap: wrap; gap: 8px; }

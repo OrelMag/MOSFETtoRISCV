@@ -78,7 +78,7 @@ let benchCache: NavItem[] | null = null;
 let benchLoad: Promise<void> | null = null;
 const loadBench = () => benchLoad ??= import('../lib/catalog').then((m) => {
   benchCache = m.libraryItems().flatMap((g) => g.items.map((it): NavItem => ({
-    kind: 'component', id: it.id, title: it.name, sub: `${it.id} · ${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
+    kind: 'component', id: it.id, title: it.name, sub: `${g.title}${it.family ? ' · sizes' : ''}`, alt: `${it.id} ${g.title}`,
     href: `#/workbench/${it.id}`,
   })));
 }, (e) => { benchLoad = null; throw e; });
@@ -175,6 +175,7 @@ function chapterActions(ctx: SearchCtx): NavItem[] {
   if (step > 0) out.push(act('step.prev', 'Previous step', `${c.title} · step ${step}`, go(`#/c/${c.id}/${step - 1}`), caps('step.prev')));
   if (next) out.push(act('chapter.next', 'Next chapter', next.title, go(`#/c/${next.id}/0`), caps('chapter.next')));
   if (prev) out.push(act('chapter.prev', 'Previous chapter', prev.title, go(`#/c/${prev.id}/0`), caps('chapter.prev')));
+  out.push(act('chapter.print', 'Print this chapter', `${c.title} · every step with its circuits as figures, then Save as PDF`, go(`#/c/${c.id}/print/${Math.min(step, c.steps.length - 1)}`)));
   return out;
 }
 
