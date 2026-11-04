@@ -87,7 +87,8 @@ describe('the drawing', () => {
   });
   it('the shaft rises with the level, and the connected contact is marked live', () => {
     const shaft = (level: number) => swParts({ level, line: 0, vmag: false, rmag: false }, HOME, none(), P).find((p) => p.color === P.shaft && p.scale![1] === 28)!;
-    expect(shaft(6).pos[1] - shaft(1).pos[1]).toBeCloseTo(5 * 5, 6);
+    // Level 4 up: below that the shaft is cut off at the base.
+    expect(shaft(9).pos[1] - shaft(4).pos[1]).toBeCloseTo(5 * 5, 6);
     const live = swParts({ level: 4, line: 4, vmag: false, rmag: false }, { level: 4, line: 4, mode: 'connected' }, none(), P).filter((p) => p.color === P.live);
     expect(live.map((p) => p.pos)).toContainEqual(contactAt(4, 4));
   });

@@ -27,7 +27,7 @@ const lit = (c: RGB, k = 0.5): RGB => [c[0] * k, c[1] * k, c[2] * k];
 export function swParts(p: SwPose, s: State, busy: readonly (readonly boolean[])[], P: SwPalette): Part[] {
   const out: Part[] = [], yw = levelY(p.level);
   // Base, with the shaft sliding in it at rest.
-  out.push(cyl(P.frame, 0, 0, -20, 0, 31, 0.1));
+  out.push(cyl(P.frame, 0, 0, -5, 0, 30, 0.1));
   // The bank: a contact for every line of every level, free, busy, or the one the call is on.
   for (let l = 1; l <= LEVELS; l++) for (let j = 1; j <= LINES; j++) {
     const here = s.mode === 'connected' && s.level === l && s.line === j, bad = busy[l - 1]?.[j - 1];
@@ -37,12 +37,12 @@ export function swParts(p: SwPose, s: State, busy: readonly (readonly boolean[])
   for (const d of [-80, 0, 80]) { const [x, , z] = at(d, R + 2.6, 0); out.push(cyl(P.frame, x, z, 0, levelY(LEVELS) + 4, 0.7, 0.1)); }
   out.push(...wire(P.frame, Array.from({ length: 17 }, (_, i) => at(-80 + 10 * i, R + 2.6, levelY(LEVELS) + 4)), 0.6, 0.1));
   // The shaft, rings to show it sliding, the hub and the wiper arm.
-  out.push(cyl(P.shaft, 0, 0, yw - 20, yw + 8, 1.3, 0.6));
-  for (let i = 0; i < 7; i++) out.push(cyl(P.shaft, 0, 0, yw - 18 + 4 * i, yw - 17.4 + 4 * i, 2, 0.6));
+  out.push(cyl(P.shaft, 0, 0, Math.max(0, yw - 20), yw + 8, 1.3, 0.6));
+  for (let i = 0; i < 7; i++) if (yw - 18 + 4 * i > 0) out.push(cyl(P.shaft, 0, 0, yw - 18 + 4 * i, yw - 17.4 + 4 * i, 2, 0.6));
   out.push(cyl(P.brass, 0, 0, yw - 1.5, yw + 1.5, 2.4, 0.5));
   const tip = wiperTip(p), live = s.mode === 'connected' && p.line === s.line;
-  out.push(rod(P.brass, [0, yw, 0], tip, 0.45, 0.5));
-  out.push({ ...box(live ? P.live : P.probe, -0.8, 0.8, -1.8, 1.8, -0.6, 0.6), pos: tip, rot: quatAxisAngle([0, 1, 0], -rad(lineAngle(p.line))), emissive: lit(live ? P.live : P.probe, 0.4) });
+  out.push(rod(P.brass, [0, yw, 0], tip, 0.8, 0.5));
+  out.push({ ...box(live ? P.live : P.probe, -1.2, 1.2, -2, 2, -0.9, 0.9), pos: tip, rot: quatAxisAngle([0, 1, 0], -rad(lineAngle(p.line))), emissive: lit(live ? P.live : P.probe, 0.4) });
   // The two magnets in front: vertical on the left, rotary on the right; a coil glows while it pulls.
   for (const [x, on] of [[-15, p.vmag], [15, p.rmag]] as const) {
     out.push(box(P.frame, x - 4.5, x + 4.5, 0, 3, 8, 16), cyl(on ? P.lit : P.coil, x, 12, 3, 13, 3.4, 0.3), box(P.shaft, x - 4, x + 4, 13, 14.5, 9, 15, 0.4));

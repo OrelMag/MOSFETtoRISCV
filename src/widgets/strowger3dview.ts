@@ -28,7 +28,7 @@ export function strowgerView(): Widget {
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
     aria: 'A Strowger selector in 3D: a vertical shaft with a wiper that turns over a bank of ten levels of ten contacts',
-    camera: { target: [0, 21, -4], yaw: 0.5, pitch: 0.3, dist: 178 },
+    camera: { target: [0, 23, -4], yaw: 0.5, pitch: 0.3, dist: 132 },
     limits: { minDist: 50, maxDist: 320 },
     note: 'One of the three wipers is drawn, the shaft’s ratchet and the release mechanism are left out, and the contacts are far larger than life.',
     draw,
@@ -112,7 +112,7 @@ export function strowgerView(): Widget {
     return b;
   });
   const resume = h('button', { type: 'button', class: 'btn sm' }, 'Continue the call') as HTMLButtonElement;
-  resume.addEventListener('click', () => { playing = true; repaint(); });
+  resume.addEventListener('click', () => { if (reducedMotion()) tm = end(); else playing = true; repaint(); });
   const hang = h('button', { type: 'button', class: 'btn sm' }, 'Hang up');
   hang.addEventListener('click', hangUp);
 
