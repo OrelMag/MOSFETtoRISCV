@@ -11,18 +11,34 @@ import { codeOf, crcOnly, crossover, crossoverTime, secdedCrc } from '../src/com
 import { stuffRate } from '../src/comm/framing';
 import { CLOCK_NS } from '../src/dram/timing';
 import { crcNext, crcUnit, eccChannel, hammingDec, hammingEnc, hammingLayout, parity } from '../src/lib';
+import { codingGain, convSoftBound, ebn0For, shannonBinaryDb } from '../src/comm/ber';
+import { CONV_K7 } from '../src/comm/conv';
+import { systemCpu, viterbi } from '../src/lib';
+import { assemble } from '../src/riscv/asm';
+import { PROGRAMS } from '../src/riscv/programs';
+import { VIT_FLIPS, vitStreamErrors } from '../src/widgets/codes';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { flatten } from '../src/sim/flatten';
 import { logicDepth, stats } from '../src/sim/stats';
 import { analyzeTiming } from '../src/sim/timing';
 
+const soft5 = () => codingGain((d) => convSoftBound(CONV_K7, d), 1e-5);
 const popcount = (x: number) => { let n = 0; for (let v = x >>> 0; v; v >>>= 1) n += v & 1; return n; };
 const period = (w: number) => analyzeTiming(flatten(crcUnit(32, CRC32_REFLECTED, w), { mode: 'gate' }))!.period;
 
 describe('chapter 47 typed numbers', () => {
-  it('is chapter 47, nine steps, between the clocks chapter and the appendices', () => {
+  it('the stronger codes: the Viterbi challenge\'s flips, the K = 7 decoder against the system CPU, the distance from Shannon', () => {
+    expect(vitStreamErrors(VIT_FLIPS)).toBeGreaterThan(0);
+    for (let a = 10; a < 32; a++) for (let b = a + 1; b < 32; b++) expect(vitStreamErrors([a, b]), `flips ${a} ${b}`).toBe(0);
+    const cpu = stats(systemCpu(assemble(PROGRAMS[0].source).words, { m: true })).nands, v7 = stats(viterbi(CONV_K7)).nands;
+    expect(v7 / cpu).toBeGreaterThan(0.75); expect(v7 / cpu).toBeLessThan(1.25);
+    expect(soft5()).toBeGreaterThan(4.6); expect(soft5()).toBeLessThan(5.6);
+    expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeGreaterThan(3.5);
+    expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeLessThan(4.5);
+  });
+  it('is chapter 47, fourteen steps, between the clocks chapter and the appendices', () => {
     expect(chErrors.num).toBe(47);
-    expect(chErrors.steps).toHaveLength(9);
+    expect(chErrors.steps).toHaveLength(14);
     expect(chapterById('errors')).toBe(chErrors);
     for (const id of chErrors.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(47);
     expect(chAppendix6502.num).toBe(48);

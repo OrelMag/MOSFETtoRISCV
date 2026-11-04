@@ -71,3 +71,5 @@ export * from './rfdeep';
 export * from './sync';
 export * from './modem';
 export * from './serdes';
+export * from './viterbi';
+export * from './rs';
