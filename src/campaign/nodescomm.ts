@@ -5,10 +5,11 @@
 import type { CampaignNode } from './types';
 import { BUILDCOMM } from './buildcomm';
 import { partsOf } from './build8';
-import { crcGives, i2cBlocks, leafGives, SYNC_REF } from './buildcomm';
+import { crcGives, i2cBlocks, leafGives, rtlBoxes, SYNC_REF } from './buildcomm';
 import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
+import { ethMacFd, swBrain } from '../lib/ethlevels';
 
 export const NODES_COMM: CampaignNode[] = [
   {
@@ -66,14 +67,16 @@ export const NODES_COMM: CampaignNode[] = [
     codex: ['i2c', 'arbitration'], chapters: [{ chapter: 'spi', step: 6, label: 'The I²C frame' }, { chapter: 'spi', step: 7, label: 'Arbitration: two controllers at once' }],
   },
   {
-    id: 'l_mac', act: 12, title: 'Ethernet MAC', kind: 'build', optional: true, soon: true, requires: ['l_crc', 'l_8b10b'],
-    why: 'Coming with chapter 48: a frame with a preamble, addresses, a length and the CRC you built, sent and received a byte a clock.',
-    tips: [], codex: [],
+    id: 'l_mac', act: 12, title: 'Ethernet MAC', kind: 'build', optional: true, requires: ['l_crc', 'l_uarttx'], base: BUILDCOMM.l_mac, givesOf: leafGives(ethMacFd, () => rtlBoxes(ethMacFd(), 'eth_mac_').map(([d]) => d)), par: { nand: 6766, period: 38 },
+    why: 'A wire carries bits; a network needs frames. The MAC puts a preamble and a start delimiter in front so the far end can find the bit clock and the first byte, pads a short frame so that a collision is always heard, appends the CRC you built, and keeps the line quiet between frames; the other half finds the delimiter in a stream of bits, strips what was added and throws a frame away whose check fails. 6 766 NANDs here, 3 553 of them the sender (half of that carrier sense and backoff, which this level leaves out).',
+    tips: ['Sending is a state machine over a byte counter and a bit counter: preamble (7 bytes of 0x55), SFD, data, pad (zeros until the frame is 60 bytes), FCS (4 bytes from the CRC unit, fed every byte that went out), then silence. A shift register holds the byte being sent, least significant bit first; load it at a byte boundary.', 'The gap is a counter that runs while txen is low and holds at 96 bit times (384 clocks); a new frame may start only when it has run out. The stream\'s ready is 1 in the clock in which a byte is loaded.', 'Receiving: sample the line in the middle of each bit (find the bit boundary from the edges of the preamble), shift the bits into an 8-bit register and look for 0xD5; from there a byte counter. Feed every byte through the CRC unit and compare its register at the end with 0xDEBB20E3.', 'The bytes leave four late, behind a four-byte delay: the FCS is in them until you know it is the FCS, and the last data byte leaves with rlast when the carrier falls. Clear the shift register between frames: the end of the last FCS and the first preamble bit must not look like an SFD.'],
+    codex: ['crc', 'ethframe', 'ethmac'], chapters: [{ chapter: 'ethernet', step: 1, label: 'The transmitter' }, { chapter: 'ethernet', step: 2, label: 'The receiver' }],
   },
   {
-    id: 'l_switch', act: 12, title: 'Learning switch', kind: 'build', optional: true, soon: true, requires: ['l_mac'],
-    why: 'Coming with chapter 49: a table of addresses learned from the frames that pass, and a frame sent only where its destination is.',
-    tips: [], codex: [],
+    id: 'l_switch', act: 12, title: 'Learning switch', kind: 'build', optional: true, requires: ['l_mac'], base: BUILDCOMM.l_switch, givesOf: leafGives(swBrain, () => rtlBoxes(swBrain(), 'sw_brain_').map(([d]) => d)), par: { nand: 1426, period: 37 },
+    why: 'A hub repeats every frame to every port; a switch looks at the addresses and sends a frame only where its destination is. Nobody configures it: it reads the source address of every good frame and remembers which port it came in on, so the next frame to that host goes there alone. A frame to a host it has not heard of is flooded to every port but the one it came in on; a frame for a host on the same port is not sent at all. 1 426 NANDs for four hosts; the table of a real one is a RAM.',
+    tips: ['A table of four entries: valid, station (8 bits), port (2 bits). Lookup is four comparators against dst, an OR of the matches, and the matched entry\'s port (an AND-OR). Broadcast (0xFF) is a flood whatever the table says.', 'The output set: flood = everyone but inport; a hit on the input port = none; a hit elsewhere = that port\'s bit alone; bad = none. Decode the 2-bit ports to one-hot before comparing.', 'Learning uses the same clock\'s src: if an entry already has it, overwrite its port; else write the next slot of a 2-bit round-robin pointer and advance it. Only when go = 1, bad = 0 and src is not 0xFF.', 'Register the answer: mask and ovalid are flip-flops loaded at the edge where go is 1, zero otherwise. The lookup must see the table as it was before this frame taught it.'],
+    codex: ['learnsw'], chapters: [{ chapter: 'switch', step: 0, label: 'Everyone at once' }, { chapter: 'switch', step: 1, label: 'Learning' }],
   },
   {
     id: 'l_fwd', act: 12, title: 'Forwarding path', kind: 'build', optional: true, soon: true, requires: ['l_switch'],
