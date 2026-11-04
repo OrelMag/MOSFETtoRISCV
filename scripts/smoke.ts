@@ -220,6 +220,30 @@ const ANALOGY_DRIVE = `(async () => {
   await wait(400);
   return bad;
 })()`;
+/**
+ * Print this chapter (ui/pages/print.ts): waits for the figures, then checks that every one drew (an SVG on a white board, none
+ * left waiting), that the dialog was asked for exactly once (window.print is stubbed for every route: see visit()), and that a
+ * wrong theme did not leak into the sheet (the page behind keeps the learner's own).
+ */
+const PRINT_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const page = document.querySelector('.print-view');
+  if (!page) return ['no print view'];
+  for (let i = 0; i < 120 && page.dataset.printReady !== 'yes'; i++) await wait(250);
+  if (page.dataset.printReady !== 'yes') return ['the print view never finished building'];
+  const figs = [...page.querySelectorAll('.pd-fig-body')];
+  if (figs.length < 3) bad.push('only ' + figs.length + ' figures');
+  for (const f of figs) {
+    if (!f.querySelector('svg')) bad.push('a figure is not drawn: ' + f.textContent.trim().slice(0, 80));
+    else if (f.querySelector('svg').getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
+  }
+  if (page.querySelector('.pd-wait')) bad.push('a figure is still waiting');
+  if (window.__printed !== 1) bad.push('window.print was called ' + window.__printed + ' times');
+  if (!page.querySelector('.pd-q') || !page.querySelector('.pd-answers li')) bad.push('no questions and answers');
+  if (document.querySelector('.topbar') && document.documentElement.getAttribute('data-palette') === 'print') bad.push('the figures left <html> in the paper palette');
+  return bad;
+})()`;
 
 function routes(): Route[] {
   const out: Route[] = [];
@@ -266,6 +290,10 @@ function routes(): Route[] {
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);
+  // Print this chapter: the gates chapter's figures and truth tables, from the dark theme (the sheet is paper whatever the theme) and on a phone.
+  const printCh = chapters.find((c) => c.id === 'gates') ?? chapters[1];
+  add(`#/c/${printCh.id}/print`, themed('dark'), ' (dark)', undefined, PRINT_DRIVE);
+  add(`#/c/${printCh.id}/print`, light, ` (${VIEWPORTS[VIEWPORTS.length - 1].name})`, VIEWPORTS[VIEWPORTS.length - 1], PRINT_DRIVE);
   // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
   for (const theme of ['light', 'dark'] as const) {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
@@ -663,7 +691,8 @@ class Tab {
     this.loaded = false;
     // Storage as the route wants it, set before any of the page's scripts run.
     if (this.script) await this.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: this.script });
-    const seed = `try { if (location.protocol.startsWith('http')) { localStorage.clear(); const s = ${JSON.stringify(route.storage)}; for (const k in s) localStorage.setItem(k, s[k]); } } catch (e) {}`;
+    // no route may open a print dialog (it would block the page): window.print only counts
+    const seed = `window.__printed = 0; window.print = () => { window.__printed++; }; try { if (location.protocol.startsWith('http')) { localStorage.clear(); const s = ${JSON.stringify(route.storage)}; for (const k in s) localStorage.setItem(k, s[k]); } } catch (e) {}`;
     this.script = (await this.send('Page.addScriptToEvaluateOnNewDocument', { source: seed })).identifier;
     if (route.viewport) {
       const { width, height, mobile } = route.viewport;

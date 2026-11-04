@@ -70,6 +70,13 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
     closeChapterMenu();
     openQuickNav();
   });
+  // on a chapter: the whole chapter as a page to print or save as PDF (ui/pages/print.ts)
+  const print = cur ? h('button', { class: 'qn-search qn-print', role: 'menuitem', title: 'The whole chapter, with its circuits as figures, then the print dialog (Save as PDF)' },
+    icon('download', 15), h('span', null, 'Print this chapter')) : null;
+  print?.addEventListener('click', () => {
+    closeChapterMenu();
+    location.hash = `#/c/${cur!.chapter}/print/${cur!.step}`;
+  });
   // the prologue and the appendix under their own headings
   const group = (cls: string, text: string) => h('div', { class: `qn-group${cls}`, role: 'presentation' }, text);
   const listed = rows.flatMap((r, i) => {
@@ -78,13 +85,13 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
       : c.prologue && !prev?.prologue ? [group(' prologue', 'Prologue'), r]
       : !c.prologue && !c.appendix && prev?.prologue ? [group(' journey', 'The journey'), r] : [r];
   });
-  const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, h('div', { class: 'qn-list' }, listed));
+  const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, print, h('div', { class: 'qn-list' }, listed));
   const r = anchor.getBoundingClientRect();
   el.style.top = `${Math.round(r.bottom + 6)}px`;
   el.style.left = `${Math.round(Math.max(8, Math.min(r.left, innerWidth - 400)))}px`;
   document.body.append(el);
 
-  const items = [search, ...rows];
+  const items = [search, ...(print ? [print] : []), ...rows];
   const onDown = (e: PointerEvent) => {
     if (!el.contains(e.target as Node) && !anchor.contains(e.target as Node)) closeChapterMenu();
   };

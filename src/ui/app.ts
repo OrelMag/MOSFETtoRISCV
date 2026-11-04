@@ -253,6 +253,16 @@ export function startApp(root: HTMLElement): void {
       radix.hidden = animate.hidden = true; // no circuit on an error card
       mount({ el: notFound('No such chapter', `There is no chapter called "${bad}". It may have been renamed or removed.`,
         [['Open the chapter list', '#/c/map/0'], ['Start at the first chapter', `#/c/${outline[0].id}/0`]]), destroy() {} });
+    } else if (key === 'c' && parts[2] === 'print') {
+      // Print this chapter (#/c/<id>/print[/<step it was asked from>]): a page of its own, loaded with the chapter
+      radix.hidden = animate.hidden = true;
+      const ch = outlineOf(parts[1] ?? '')!;
+      pending();
+      Promise.all([import('./pages/print'), loadChapter(ch.id)]).then(([m, chapter]) => {
+        if (seq === routeSeq) mount(new m.PrintPage(chapter, Number(parts[3]) || 0));
+      }, (e) => {
+        if (seq === routeSeq) { busy(false); view.replaceChildren(loadFailed('the print view', e)); }
+      });
     } else if (key === 'c') {
       const ch = outlineOf(parts[1] ?? '') ?? outline[0];
       const step = Number(parts[2] ?? 0) || 0;
