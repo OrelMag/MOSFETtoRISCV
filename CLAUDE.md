@@ -1155,6 +1155,13 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  (widgets/pipegrid), the system CPU's I/O, registers, fcsr, memory, retired; Run to halt,
                  Step, Slow (instructions per second), Reset, Edit program; the multi-core view),
                  opened by itself for a complete CPU at 1340 px and wider (below, or on a phone, a toast once per chip offers "Open CPU panel": hintPanel); CPU props section
+src/comm/uart.ts  chapter 43's UART as a golden model, edge by edge (UartCore: baud counter, transmitter, receiver, two 16-byte FIFOs, status / divisor /
+               enable registers, irq; zero = idle so the gates reset into it): lib/uart.ts is the same machine in gates (tests/comm-uart.test.ts: every
+               output every cycle, under divisors, clock errors, framing / break / overrun; UART_TOLERANCE pins the search against comm/startstop.ts) and
+               bus/model.ts's UartDevice steps it to a load's or store's handshake edge (now − 1), so the instruction-level model stays in lock step
+               with the computer (busComputer({ uart: true }), MAP.uart = 0x3, tests/comm-uart-bus.test.ts; UART_COSTS in riscv/uartprograms.ts are measured
+               there). lib/uartlink.ts twoComputers(srcA, srcB): two bus computers on clkA / clkB, tx crossed to rx through two LINE parts (an external seq
+               leaf on the sender's clock: the one box that does not end in transistors), run on the cycle engine; widgets/uart.ts the chapter's scenes
 src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length

@@ -34,6 +34,8 @@ import { srt4Divider, srt4Step } from './srt4';
 import { ls189With } from './ttl';
 import { sandboxBus } from './axi';
 import { asyncFifo, BIN2GRAY, GRAY2BIN, syncN } from './sync';
+import { i2cBus, i2cController, i2cTarget, i2cWired2 } from './i2c';
+import { spiDevice, spiMaster, spiPair } from './spi';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { crcNext, crcTag, crcUnit } from './crc';
 import { CRC32_REFLECTED } from '../comm/crc';
@@ -277,6 +279,14 @@ export const families: Family[] = [
   {
     id: 'sync', name: 'Synchronizer (flip-flops in series)', category: 'sequential', params: [count('flops', [2, 3], 2), bits([1, 4, 8], 1)],
     key: (p) => (p.bits === 1 ? `sync${p.flops}` : `sync${p.flops}x${p.bits}`), make: (p) => syncN(p.flops, p.bits),
+  },
+  {
+    id: 'spi', name: 'SPI (chapter 44)', category: 'sequential', params: [{ name: 'part', values: [0, 1, 2], initial: 0, label: (v) => ['master', '256-byte memory', 'master with two memories'][v] }],
+    key: (p) => ['spi_master', 'spi_device', 'spi_pair'][p.part], make: (p) => [spiMaster, spiDevice, spiPair][p.part](),
+  },
+  {
+    id: 'i2c', name: 'I²C (chapter 44)', category: 'sequential', params: [{ name: 'part', values: [0, 1, 2, 3, 4], initial: 0, label: (v) => ['controller', 'target (4 registers)', 'wired-AND of two open-drain stages', 'bus: one controller, one target', 'bus: two controllers, one target'][v] }],
+    key: (p) => ['i2c_controller', 'i2c_target', 'i2c_wired2', 'i2c_bus_1c50', 'i2c_bus_2c50'][p.part], make: (p) => [i2cController, i2cTarget, i2cWired2, () => i2cBus(1, [{ adr: 0x50 }]), () => i2cBus(2, [{ adr: 0x50 }])][p.part](),
   },
   nBit('iter', 'Iteration control', 'sequential', [4, 8, 16, 32], 8, (n) => `iter${n}`, iterCtrl),
   // memory

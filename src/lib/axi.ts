@@ -271,7 +271,7 @@ export function axiBus(M: number, codes: number[]): ComponentDef {
  * A slave's handshake: ready while idle; the response valid `wait` + 1 cycles after the address (wait
  * states), until the master takes it. Returns the handshake strobes and the response valids.
  */
-function slaveFsm(b: Builder, g: ReturnType<typeof kit>, wait: number) {
+export function slaveFsm(b: Builder, g: ReturnType<typeof kit>, wait: number) {
   const bq = b.op(DFF, ['', 'clk'], 'bvalid', 'bq'), rq = b.op(DFF, ['', 'clk'], 'rvalid', 'rq');
   let pend = '', pendWr = '', cnt = '', cw = 0;
   if (wait > 0) {
