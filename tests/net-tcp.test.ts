@@ -336,7 +336,13 @@ describe('retransmission and congestion', () => {
     expect(t.log[n].s.data.length).toBe(1);
     expect(t.a.cwnd).toBe(cw);
     const got: number[] = [];
-    t.run(() => { if (sent < d.length) sent += t.a.write(d.slice(sent), t.now()); got.push(...t.b.read(100, t.now())); return got.length >= d.length; }, 400_000_000);
+    // what the application has not read holds no event of its own: read until nothing more comes
+    for (let k = 0; k < 100 && got.length < d.length; k++) {
+      t.run(() => { if (sent < d.length) sent += t.a.write(d.slice(sent), t.now()); got.push(...t.b.read(100, t.now())); return got.length >= d.length; }, 400_000_000);
+      got.push(...t.b.read(100, t.now()));
+    }
     expect(got).toEqual(d);
+    // no timeout on the way: reopening carried on from the refused byte
+    expect(t.a.retries).toBe(0);
   });
 });

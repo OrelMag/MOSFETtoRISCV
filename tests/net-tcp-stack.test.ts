@@ -75,7 +75,7 @@ const VARS: [string, (m: TcpModel) => number][] = [
   ['snd_max', (m) => m.sndMax], ['snd_end', (m) => m.sndEnd], ['snd_wnd', (m) => m.sndWnd], ['wl1', (m) => m.wl1], ['wl2', (m) => m.wl2], ['rcv_nxt', (m) => m.rcvNxt], ['rcv_read', (m) => m.rcvRead],
   ['fin_in', (m) => +m.finIn], ['fin_want', (m) => +m.finWant], ['ack_pending', (m) => +m.ackPending], ['tcp_mss', (m) => m.mss], ['cwnd', (m) => m.cwnd], ['ssthresh', (m) => m.ssthresh], ['acc', (m) => m.acc],
   ['dupacks', (m) => m.dupacks], ['srtt', (m) => m.srtt], ['rttvar', (m) => m.rttvar], ['rto', (m) => m.rto], ['rto_on', (m) => +m.rtoOn], ['rto_at', (m) => m.rtoAt], ['rtt_on', (m) => +m.rttOn], ['retries', (m) => m.retries],
-  ['tcp_err', (m) => +m.err], ['tcp_passive', (m) => +m.passive],
+  ['tcp_err', (m) => +m.err], ['tcp_passive', (m) => +m.passive], ['probing', (m) => +m.probing],
 ];
 
 type Cmd = { k: 'listen'; port: number } | { k: 'connect'; sport: number; dport: number } | { k: 'write'; bytes: number[] } | { k: 'read'; n: number } | { k: 'close' };
@@ -363,11 +363,11 @@ describe('directed: what random traffic does not reach', () => {
     expect(p.model.err).toBe(false);
     expect([p.model.cwnd, p.model.ssthresh]).toEqual([cw, ss]);
     expect(p.model.retries).toBe(0);
-    // the window opens: the rest goes, from the probe's byte on
+    // the window opens with the probe's byte refused: the rest goes from that byte on, none of it skipped
     const s = p.step(now += 1, { seg: ack(0x2001, una, 512) });
-    expect(s.length).toBeGreaterThan(0);
-    const last = p.step(now += 1, { seg: ack(0x2001, (una + 1) | 0, 512) });
-    expect([...s, ...last].reduce((n, x) => n + x.seg.data.length, 0)).toBe(71);
+    expect(s[0].seg.seq).toBe(una);
+    expect(s.reduce((n, x) => n + x.seg.data.length, 0)).toBe(72);
+    expect(p.model.probing).toBe(false);
   });
   it('a reset at the window\'s last byte is challenged, at the first byte past it dropped', () => {
     const p = established();

@@ -102,6 +102,8 @@ export class TcpModel {
   cwnd: number = 2 * TCP_K.MSS; ssthresh: number = TCP_K.SND; acc = 0; dupacks = 0;
   srtt = 0; rttvar = 0; rto: number = TCP_K.RTO_INIT; rtoOn = false; rtoAt = 0; rttOn = false; rttSeq = 0; rttT = 0; retries = 0;
   finWant = false; finIn = false; ackPending = false; twAt = 0;
+  /** A zero-window probe is out: its byte was past the window, so the far end may well have refused it. */
+  probing = false;
   /** True once the connection failed: reset by the peer, or given up after RETRIES timeouts. */
   err = false;
   readonly sb = new Uint8Array(TCP_K.SND);
@@ -121,7 +123,7 @@ export class TcpModel {
     this.rcvNxt = this.rcvRead = 0;
     this.mss = TCP_K.MSS; this.cwnd = 2 * TCP_K.MSS; this.ssthresh = TCP_K.SND; this.acc = 0; this.dupacks = 0;
     this.srtt = 0; this.rttvar = 0; this.rto = TCP_K.RTO_INIT; this.rtoOn = false; this.rttOn = false; this.retries = 0;
-    this.finWant = false; this.finIn = false; this.ackPending = false;
+    this.finWant = false; this.finIn = false; this.ackPending = false; this.probing = false;
   }
   private drop(): void { this.reset(); this.st = this.passive ? LISTEN : CLOSED; }
   private start(): void {
@@ -215,6 +217,7 @@ export class TcpModel {
     if (this.st >= ESTABLISHED && this.sndWnd === 0 && ((this.sndNxt - this.sndUna) | 0) <= 1 && ((this.sndEnd - this.sndUna) | 0) > 0) {
       // the zero-window probe, the same byte each time: past the window, so its going unanswered is no loss. Nothing is cut and it never gives up
       this.sndNxt = this.sndUna;
+      this.probing = true;
       if (this.emit(ACK, this.sndNxt, 1)) {
         this.sndNxt = (this.sndNxt + 1) | 0;
         if (lt(this.sndMax, this.sndNxt)) this.sndMax = this.sndNxt;
@@ -348,6 +351,8 @@ export class TcpModel {
       }
     }
     if (lt(this.wl1, seq) || (this.wl1 === seq && le(this.wl2, s.ack))) { this.sndWnd = s.wnd; this.wl1 = seq; this.wl2 = s.ack; }
+    // the window has opened: carry on from what was acknowledged, the probe's byte included if it was refused
+    if (this.probing && this.sndWnd > 0) { this.probing = false; this.sndNxt = this.sndUna; this.rtoOn = false; }
 
     const finAcked = this.finWant && this.sndUna === ((this.sndEnd + 1) | 0);
     if (finAcked) {
