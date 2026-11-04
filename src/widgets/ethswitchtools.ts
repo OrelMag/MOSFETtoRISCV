@@ -8,6 +8,7 @@ import '../styles/uart.css';
 import { MAX_FRAME } from '../comm/ethframe';
 import { addrOf, binomialPmf, binomialTail, holSaturation, HOL_LIMIT, HOL_N4, hostMac, MacTable, rng, runTraffic, sharedCapacity, singleFrame, type Pattern } from '../comm/ethswitch';
 import { cam } from '../lib/storage';
+import { registry } from '../lib/define';
 import { macTable } from '../lib/ethswitch';
 import { stats } from '../sim/stats';
 import { h, s } from '../ui/dom';
@@ -77,17 +78,17 @@ export function tableWidget(): Widget {
     const r = hitRate(t, hosts, how);
     read.replaceChildren(reading(['entries', String(2 ** t)], ['hosts', String(hosts)], ['hit rate, hashed RAM', pct(r.hash)], ['hit rate, CAM with LRU', pct(r.lru)], ['evictions per frame (hashed)', r.evict.toFixed(3)]));
     const rows = [2, 3, 4, 5, 6, 7].map((k) => {
-      const a = stats(macTable(k, 4)).nands, c = stats(cam(k, 48)).nands;
-      return h('tr', { class: k === t ? 'sel' : '' }, h('td', null, String(2 ** k)), h('td', { class: 'num' }, n0(a)), h('td', { class: 'num' }, n0(c)), h('td', { class: 'num' }, (c / a).toFixed(2)));
+      const a = stats(macTable(k, 4)).nands, ram = stats(registry.get(`mac_table${k}_4_ram`)!).nands, c48 = stats(cam(k, 48)).nands, c59 = stats(cam(k, 59)).nands;
+      return h('tr', { class: k === t ? 'sel' : '' }, h('td', null, String(2 ** k)), h('td', { class: 'num' }, n0(a)), h('td', { class: 'num' }, n0(ram)), h('td', { class: 'num' }, n0(c59)), h('td', { class: 'num' }, n0(c48)));
     });
-    cost.replaceChildren(h('table', { class: 'uart-tbl' }, h('tr', null, h('th', null, 'entries'), h('th', null, 'hashed RAM, NANDs'), h('th', null, 'CAM keys alone, NANDs'), h('th', null, 'CAM / RAM')), ...rows));
+    cost.replaceChildren(h('table', { class: 'uart-tbl' }, h('tr', null, h('th', null, 'entries'), h('th', null, 'table as built'), h('th', null, 'its two RAM blocks'), h('th', null, 'CAM, 59-bit entries'), h('th', null, 'CAM, 48-bit keys')), ...rows));
   };
   const tS = slider('Entries', 2, 7, 1, t, (v) => String(2 ** v), (v) => { t = v; paint(); });
   const hS = slider('Hosts', 4, 200, 2, hosts, (v) => String(v), (v) => { hosts = v; paint(); });
   const how_ = select('Address assignment', [['seq', 'consecutive NICs'], ['rand', 'random addresses']], how, (v) => { how = v as 'seq' | 'rand'; paint(); });
   paint();
   return { el: shell('The table: hashed in RAM against a CAM', tS.el, hS.el, h('div', { class: 'mc-row' }, h('label', { class: 'sw-lbl' }, 'addresses', how_)), read, cost,
-    h('p', { class: 'sub' }, 'Uniform conversation among the hosts, 4 ports, no ageing. A miss is flooded; a CAM is exact up to its size, then replaces the least recently used entry. The hashed table pays for collisions at any size. Costs: the switch\'s own table (key, valid, port, stamp) against the key store and comparators of the library\'s cam, which has no port or age yet.')) };
+    h('p', { class: 'sub' }, 'Uniform conversation among the hosts, 4 ports, no ageing. A miss is flooded; a CAM is exact up to its size, then replaces the least recently used entry. The hashed table pays for collisions at any size. Costs, in NANDs: the whole table as built (RAM, XOR-fold hash, comparators, ageing, four counters); only its two RAM blocks, which hold the 59-bit entries with two ports; and the library cam(k, w) at the entry width and at the key width. Compare the RAM blocks with the CAM columns, not the first column with them.')) };
 }
 
 // ---- store-and-forward against cut-through ----------------------------------------------------------------------------------------
@@ -103,8 +104,8 @@ export function latencyWidget(): Widget {
     const len = Math.min(120, Math.max(60, bytes - 4));
     const a = singleFrame({ cellK: 7 }, len, bad), b = singleFrame({ cellK: 7, cut: true }, len, bad);
     const row = (name: string, r: ReturnType<typeof singleFrame>) => h('tr', null, h('td', null, name), h('td', { class: 'num' }, r.firstOut < 0 ? '—' : String(r.firstOut)), h('td', { class: 'num' }, r.lastOut < 0 ? '—' : String(r.lastOut)), h('td', { class: 'num' }, String(r.delivered)), h('td', { class: 'num' }, String(r.bad)));
-    meas.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 'uart-tbl' }, h('tr', null, h('th', null, `gate-level switch, a ${len}-byte frame, 1 byte a cycle`), h('th', null, 'first byte out (cycle)'), h('th', null, 'last byte out'), h('th', null, 'frames out'), h('th', null, 'bad FCS seen')), row('store-and-forward', a), row('cut-through', b))),
-      h('p', { class: 'sub' }, bad ? 'The receiving MAC flags the frame at its last byte. Store-and-forward has not sent anything yet and drops it; cut-through has sent it all.' : `The frame's last byte enters at cycle ${len - 1}. Store-and-forward starts after it; cut-through starts once the table has answered, about cycle 12 plus the lookup.`));
+    meas.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 'uart-tbl' }, h('tr', null, h('th', null, `the model the gates are checked against, a ${len}-byte frame, 1 byte a cycle`), h('th', null, 'first byte out (cycle)'), h('th', null, 'last byte out'), h('th', null, 'frames out'), h('th', null, 'bad FCS seen')), row('store-and-forward', a), row('cut-through', b))),
+      h('p', { class: 'sub' }, bad ? 'The receiving MAC flags the frame at its last byte. Store-and-forward has not sent anything yet and drops it; cut-through has sent it all, and this bench has no way to mark it bad downstream.' : `The frame's last byte enters at cycle ${len - 1}. Store-and-forward starts after it; cut-through starts once the table has answered, about cycle 12 plus the lookup.`));
   };
   const bS = slider('Frame', 64, MAX_FRAME, 2, bytes, (v) => `${v} B`, (v) => { bytes = v; paint(); });
   const rSel = select('Link rate', RATES.map(([t]) => [t, t] as [string, string]), '100 Mb/s', (v) => { rate = RATES.find(([t]) => t === v)![1]; paint(); });
