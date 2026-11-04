@@ -6,6 +6,9 @@ import { strings } from './apps';
 import { STACK_LAYOUT as L } from './layout';
 import { TCP_MEM } from './tcp';
 
+/** The bench's port. Not 5000: Wireshark gives that port to GSM's IPA, and a learner who opens a capture would see good frames called malformed. */
+export const TCP_PORT = 12000;
+
 export interface TcpHost { ip: number; mac: readonly number[]; gw: number; gwMac: readonly number[] }
 
 /** Above the rings: a scratch page for what the applications read and write a pass. */

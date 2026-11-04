@@ -66,9 +66,8 @@ describe('a TCP segment', () => {
     expect(issues({ ...taken, 'frame.protocols': 'eth:ethertype:ip:tcp:gsm_ipa' }, b).join()).toMatch(/data\.data: tshark has nothing/);
     expect(issues({ ...r, 'data.data': '00010203ff' }, b).join()).toMatch(/data\.data/);
   });
-  it('the heuristics that guess at a payload are off', () => {
-    const a = tsharkArgs();
-    for (const p of ['hipercontracer', 'gsm_ipa']) expect(a[a.indexOf(p) - 1]).toBe('--disable-protocol');
+  it('nothing that could claim a TCP payload is turned off to make this pass: a learner opens the same capture with everything on', () => {
+    expect(tsharkArgs()).not.toContain('gsm_ipa');
   });
 });
 
