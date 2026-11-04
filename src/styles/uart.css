@@ -1,0 +1,22 @@
+/* Chapter 43: a UART */
+.uart-svg { display: grid; gap: 4px; min-width: 0; }
+.uart-wave { width: 100%; height: auto; display: block; }
+.uart-wave .uart-line { fill: none; stroke: var(--w1); stroke-width: 2; stroke-linejoin: round; }
+.uart-wave .uart-seg { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.uart-wave .uart-smp { stroke-width: 1.6; stroke-dasharray: 3 2; }
+.uart-wave .uart-smp.ok, .uart-wave .uart-dot.ok { stroke: var(--good); fill: var(--good); }
+.uart-wave .uart-smp.bad, .uart-wave .uart-dot.bad { stroke: var(--wx, #d33); fill: var(--wx, #d33); }
+.uart-wave .grid { stroke: var(--border); stroke-width: 1; }
+.uart-wave .tick { fill: var(--muted); font: 10.5px var(--font-mono); }
+.uart-lamps { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.uart-lamp { padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1.5px solid var(--border-strong, var(--border)); color: var(--muted); background: var(--surface-2); }
+.uart-lamp.on { color: var(--text); border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, var(--surface-2)); }
+.uart-lamp.on.bad { border-color: var(--wx, #d33); background: color-mix(in srgb, var(--wx, #d33) 18%, var(--surface-2)); }
+.uart-console { margin: 2px 0 6px; padding: 6px 8px; min-height: 2.4em; max-height: 7em; overflow: auto; white-space: pre-wrap; word-break: break-all; font: 13px var(--font-mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+.uart-text { flex: 1 1 140px; min-width: 0; padding: 4px 8px; font: 13px var(--font-mono); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong, var(--border)); border-radius: 6px; }
+.uart-cons2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.uart-tbl { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+.uart-tbl th, .uart-tbl td { padding: 3px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.uart-tbl td.num, .uart-tbl th:not(:first-child) { text-align: right; font-family: var(--font-mono); }
+.uart-tbl .uart-good { color: var(--good); } .uart-tbl .uart-warn { color: var(--warn, #b80); } .uart-tbl .uart-bad { color: var(--wx, #d33); }
+@media (max-width: 520px) { .uart-cons2 { grid-template-columns: minmax(0, 1fr); } }

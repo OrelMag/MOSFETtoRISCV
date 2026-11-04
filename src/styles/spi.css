@@ -1,0 +1,50 @@
+/* ---------- Chapter 44, SPI and I²C (src/widgets/spi.ts, i2c.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.spi-view { overflow-x: auto; }
+.spi-wave { width: 100%; height: auto; display: block; }
+.spi-wave .spi-line { fill: none; stroke-width: 1.8; stroke: var(--text-2); stroke-linejoin: round; }
+.spi-wave .spi-line.clk { stroke: var(--probe-0); }
+.spi-wave .spi-line.mosi, .spi-wave .spi-line.sda { stroke: var(--probe-1); }
+.spi-wave .spi-line.miso, .spi-wave .spi-line.sda2 { stroke: var(--probe-2); }
+.spi-wave .spi-line.cs, .spi-wave .spi-line.scl { stroke: var(--probe-3); }
+.spi-wave .spi-line.lost { stroke: var(--wx, #d33); }
+.spi-wave .spi-z { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.spi-wave .spi-lab { text-anchor: start; fill: var(--text-2); font-weight: 600; }
+.spi-wave .spi-bit { fill: var(--text); font: 600 9.5px var(--font-mono); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.spi-wave .spi-mark { stroke-width: 1; }
+.spi-wave .spi-mark.sample { stroke: var(--accent); stroke-dasharray: 3 2; }
+.spi-wave .spi-mark.change { stroke: var(--border-strong); }
+.spi-wave .spi-ev { fill: var(--text-2); font: 600 9px var(--font-mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.spi-wave .spi-ev.lost { fill: var(--wx, #d33); }
+
+.spi-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0; }
+.spi-table th, .spi-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.spi-table thead th { color: var(--text-2); font-weight: 600; }
+.spi-table tbody th { font-weight: 600; color: var(--text); white-space: nowrap; }
+.spi-log td { font-family: var(--font-mono); }
+.spi-cmp td.num, .spi-cmp th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.spi-cmp td.ok { color: var(--good); }
+.spi-cmp td.bad { color: var(--wx, #d33); }
+
+/* the I²C panels */
+.i2c-frame { font: 600 12px var(--font-mono); line-height: 1.7; margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.i2c-frame .k { color: var(--accent); }
+.i2c-frame .nack { color: var(--wx, #d33); }
+.i2c-lost { margin: 4px 0; padding: 7px 10px; border-radius: 8px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
+.i2c-lost.bad { border-color: var(--wx, #d33); }
+.i2c-lost.ok { border-color: var(--good); }
+.i2c-sel { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; }
+.i2c-sel select { max-width: 100%; }
+
+/* the pull-up widget */
+.pu-limits { display: grid; gap: 6px; }
+.pu-limits .pu-bar { position: relative; height: 22px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.pu-limits .pu-ok { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--good) 32%, transparent); }
+.pu-limits .pu-at { position: absolute; top: -1px; bottom: -1px; width: 3px; background: var(--text); }
+.pu-limits .pu-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 150px; gap: 8px; align-items: center; font-size: 12.5px; }
+.pu-limits .pu-row b { font-family: var(--font-mono); }
+@container (max-width: 560px) { .pu-limits .pu-row { grid-template-columns: minmax(0, 1fr); } }
+.mos-plot .pu-rise { fill: none; stroke: var(--accent); stroke-width: 2; }
+.mos-plot .pu-lim { stroke: var(--wx, #d33); stroke-dasharray: 4 3; stroke-width: 1.2; }
+.mos-plot .pu-30 { stroke: var(--border-strong); stroke-dasharray: 2 3; }
+
+@media (pointer: coarse) { .spi-table th, .spi-table td { padding: 8px; } }
