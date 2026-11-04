@@ -19,11 +19,12 @@ describe('chapter 49 typed numbers', () => {
     expect(((1518 + 8) * 8) / 100e6 * 1e6).toBeCloseTo(122.08, 2);
   });
   it('step 6: the saturation figures typed in the text', () => {
-    const at = (voq: boolean, cells: number) => runTraffic({ pattern: 'uniform', load: 1, frameBytes: 64, cycles: 120000, seed: 11, opts: { cellK: 7, voq, cells } }).throughput;
+    const at = (voq: boolean, cells: number) => runTraffic({ pattern: 'uniform', load: 1, frameBytes: 64, cycles: 250000, seed: 11, opts: { cellK: 7, voq, cells } }).throughput;
     expect(at(false, 4)).toBeCloseTo(0.68, 2);
-    expect(at(true, 4)).toBeCloseTo(0.8, 1);
-    expect(at(true, 8)).toBeCloseTo(0.89, 1);
-    expect(at(true, 16)).toBeCloseTo(0.93, 1);
+    const v4 = at(true, 4), v8 = at(true, 8), v16 = at(true, 16);
+    expect(v4).toBeGreaterThan(0.79); expect(v4).toBeLessThan(0.81);
+    expect(v8).toBeGreaterThan(0.87); expect(v8).toBeLessThan(0.895);
+    expect(v16).toBeGreaterThan(0.915); expect(v16).toBeLessThan(0.935);
     expect(holSaturation(4, false, 400000, 3)).toBeCloseTo(0.655, 2);
     expect(holSaturation(4, false, 400000, 3, false) * 64 / 65).toBeCloseTo(0.68, 2);
   }, 120000);

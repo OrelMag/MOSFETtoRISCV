@@ -45,6 +45,9 @@ export class Rig {
   private nextId = 1;
   taught = false;
   sent = 0;
+  /** Frames received on each port that found no free cell: left out of the capture. */
+  rxDropped = Array(PORTS).fill(0);
+  private dropAtStart = Array(PORTS).fill(0);
   constructor(readonly opts: Partial<SwitchOpts>) { this.model = new SwitchModel(opts); }
 
   reset(): void {
@@ -54,20 +57,20 @@ export class Rig {
     this.seen = []; this.rxCaps.forEach((c) => { c.length = 0; }); this.txCaps.forEach((c) => { c.length = 0; });
     this.timeline = Array.from({ length: PORTS }, () => []);
     this.txCur = Array.from({ length: PORTS }, () => []); this.rxCur = Array.from({ length: PORTS }, () => []);
-    this.gap = Array(PORTS).fill(0); this.taught = false; this.sent = 0; this.gen.on = false; this.R = rng(7);
+    this.gap = Array(PORTS).fill(0); this.taught = false; this.sent = 0; this.gen.on = false; this.R = rng(7); this.rxDropped = Array(PORTS).fill(0); this.dropAtStart = Array(PORTS).fill(0);
   }
 
   save(): unknown {
     return structuredClone({ model: this.model.save(), cycle: this.cycle, jobs: this.jobs, checked: this.checked, mismatches: this.mismatches, firstBad: this.firstBad, seen: this.seen,
       rxCaps: this.rxCaps.map((c) => c.map((f) => ({ us: f.us, bytes: Array.from(f.bytes) }))), txCaps: this.txCaps.map((c) => c.map((f) => ({ us: f.us, bytes: Array.from(f.bytes) }))), timeline: this.timeline,
-      txCur: this.txCur, txAt: this.txAt, rxCur: this.rxCur, rxAt: this.rxAt, gap: this.gap, taught: this.taught, sent: this.sent, nextId: this.nextId, gen: this.gen });
+      txCur: this.txCur, txAt: this.txAt, rxCur: this.rxCur, rxAt: this.rxAt, gap: this.gap, taught: this.taught, sent: this.sent, nextId: this.nextId, gen: this.gen, rxDropped: this.rxDropped, dropAtStart: this.dropAtStart });
   }
   restore(saved: unknown): void {
     const s = structuredClone(saved) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     this.model.restore(s.model);
     this.cycle = s.cycle; this.jobs = s.jobs; this.checked = s.checked; this.mismatches = s.mismatches; this.firstBad = s.firstBad; this.seen = s.seen;
     this.rxCaps = s.rxCaps; this.txCaps = s.txCaps; this.timeline = s.timeline; this.txCur = s.txCur; this.txAt = s.txAt; this.rxCur = s.rxCur; this.rxAt = s.rxAt;
-    this.gap = s.gap; this.taught = s.taught; this.sent = s.sent; this.nextId = s.nextId; this.gen = s.gen;
+    this.gap = s.gap; this.taught = s.taught; this.sent = s.sent; this.nextId = s.nextId; this.gen = s.gen; this.rxDropped = s.rxDropped; this.dropAtStart = s.dropAtStart;
   }
 
   send(port: number, dst: Mac, bytes = 64, o: { err?: boolean; delay?: number; what?: string } = {}): void {
@@ -118,10 +121,15 @@ export class Rig {
       if (j && this.cycle >= j.startAt) {
         const last = j.k === j.bytes.length - 1;
         inp.rx[p] = { valid: 1, data: j.bytes[j.k], last: last ? 1 : 0, err: last && j.err ? 1 : 0 };
-        if (j.k === 0) { this.rxCur[p] = []; this.rxAt[p] = this.cycle; }
+        if (j.k === 0) { this.rxCur[p] = []; this.rxAt[p] = this.cycle; this.dropAtStart[p] = this.model.out().drops[p]; }
         this.rxCur[p].push(j.bytes[j.k]);
         j.k++;
-        if (last) { this.rxCaps[p].push({ us: this.rxAt[p] * CYCLE_NS / 1000, bytes: this.rxCur[p] }); this.jobs[p].shift(); }
+        if (last) {
+          // the drop counter moves one edge after the first byte: a frame that found no cell is not in the capture
+          if (this.model.out().drops[p] > this.dropAtStart[p]) this.rxDropped[p]++;
+          else this.rxCaps[p].push({ us: this.rxAt[p] * CYCLE_NS / 1000, bytes: this.rxCur[p] });
+          this.jobs[p].shift();
+        }
       }
       sim.setInput(`rxData${p}`, inp.rx[p].data); sim.setInput(`rxValid${p}`, inp.rx[p].valid); sim.setInput(`rxLast${p}`, inp.rx[p].last); sim.setInput(`rxErr${p}`, inp.rx[p].err);
       sim.setInput(`txReady${p}`, 1);
@@ -132,10 +140,11 @@ export class Rig {
     for (let p = 0; p < PORTS; p++) {
       const got = [outp(st, `txValid${p}`), outp(st, `txData${p}`), outp(st, `txLast${p}`)], want = [w.tx[p].valid, w.tx[p].data, w.tx[p].last];
       if (got.some((v, i) => v !== want[i]) && !this.firstBad) { this.firstBad = `cycle ${this.cycle}, port ${p}: gates ${got.join(',')}, model ${want.join(',')}`; this.mismatches++; } else if (got.some((v, i) => v !== want[i])) this.mismatches++;
-      if (w.tx[p].valid) {
+      // the frames out are what the gates drive (equal to the model unless the mismatch counter says otherwise)
+      if (got[0]) {
         if (this.txCur[p].length === 0) this.txAt[p] = this.cycle;
-        this.txCur[p].push(w.tx[p].data);
-        if (w.tx[p].last) this.finishTx(p);
+        this.txCur[p].push(got[1]);
+        if (got[2]) this.finishTx(p);
       }
       const tl = this.timeline[p];
       tl.push(this.model.srcOf(p));
@@ -149,7 +158,10 @@ export class Rig {
     this.txCaps[p].push({ us: this.txAt[p] * CYCLE_NS / 1000, bytes });
     const f = parseFrame([...bytes, 0, 0, 0, 0]);
     const id = (bytes[14] << 24 | bytes[15] << 16 | bytes[16] << 8 | bytes[17]) >>> 0;
-    this.seen.push({ port: p, src: f.src, dst: f.dst, bytes: bytes.length, at: this.cycle, kind: (f.dst[0] & 1) ? 'flood' : 'unicast', id });
+    // a flood is a group address, an address the table did not hold, or a frame that left on more than one port
+    let kind: Seen['kind'] = (f.dst[0] & 1) || !this.model.table.peek(addrOf(f.dst), addrOf(f.src), 0).hit ? 'flood' : 'unicast';
+    if (this.seen.some((s) => s.id === id && s.port !== p)) { kind = 'flood'; for (const s of this.seen) if (s.id === id) s.kind = 'flood'; }
+    this.seen.push({ port: p, src: f.src, dst: f.dst, bytes: bytes.length, at: this.cycle, kind, id });
     if (this.seen.length > 40) this.seen.shift();
   }
 
@@ -163,18 +175,21 @@ export class Rig {
 }
 
 const CHECK_CYCLES = 8;
+/** The sources button label follows the rig state, so Reset and Back cannot leave it inverted. */
+export const genLabel = (on: boolean): string => (on ? 'Stop sources' : 'Start sources');
 
 /** Wire a rig to a stage: hooks, Back, Reset. Returns a loop that runs the clock until a condition holds. */
 export function attachRig(stage: Stage, rig: Rig, paint: () => void) {
-  stage.edgeHooks.add({ before: () => rig.before(stage), after: () => rig.after() });
-  stage.resetHooks.add(() => { rig.reset(); paint(); });
-  stage.historyHooks.add({ save: () => rig.save(), restore: (v) => { rig.restore(v); paint(); } });
   let t: ReturnType<typeof setInterval> | null = null, quietFor = 0;
+  stage.edgeHooks.add({ before: () => rig.before(stage), after: () => rig.after() });
+  // Reset and Back end a run: the loop would otherwise keep clocking a switch that is no longer where it was
+  stage.resetHooks.add(() => { loop.stop(); rig.reset(); paint(); });
+  stage.historyHooks.add({ save: () => rig.save(), restore: (v) => { loop.stop(); rig.restore(v); paint(); } });
   const loop = {
     get running() { return t !== null; },
-    start(until: () => boolean = () => !rig.pending()) {
-      if (t) return;
-      stage.checkpoint();
+    /** Clock until `until` has held for a few cycles; `force` replaces a run already going (a new stop condition). */
+    start(until: () => boolean = () => !rig.pending(), force = false) {
+      if (t) { if (!force) return; clearInterval(t); t = null; } else stage.checkpoint();
       quietFor = 0;
       t = setInterval(() => {
         const t0 = performance.now();
@@ -223,22 +238,22 @@ const HIDDEN_OUT = (() => { const a: string[] = ['learned', 'evicted', 'flooded'
 function tableView(rig: Rig): HTMLElement {
   const T = rig.model.table, rows = T.entries.map((e, i) => ({ e, i })).filter((x) => T.live(x.e));
   const box = h('div', { class: 'sw-table', role: 'table', 'aria-label': 'Address table' });
-  box.append(h('div', { class: 'sw-trow head', role: 'row' }, h('span', null, 'slot'), h('span', null, 'address'), h('span', null, 'port'), h('span', null, 'age')));
-  if (!rows.length) box.append(h('div', { class: 'sw-trow empty' }, 'empty: every unicast is flooded'));
+  box.append(h('div', { class: 'sw-trow head', role: 'row' }, ...['slot', 'address', 'port', 'age'].map((t) => h('span', { role: 'columnheader' }, t))));
+  if (!rows.length) box.append(h('div', { class: 'sw-trow empty', role: 'row' }, 'empty: every unicast is flooded'));
   for (const { e, i } of rows) {
     const age = (T.tick - e.stamp) & 255;
-    box.append(h('div', { class: 'sw-trow', role: 'row' }, h('span', null, String(i)), h('span', { class: 'mono' }, `${hostName(Array.from({ length: 6 }, (_, k) => Math.floor(e.key / 2 ** (8 * (5 - k))) % 256))} ${mac(Array.from({ length: 6 }, (_, k) => Math.floor(e.key / 2 ** (8 * (5 - k))) % 256))}`), h('span', null, String(e.port)), h('span', null, `${age} / 64`)));
+    box.append(h('div', { class: 'sw-trow', role: 'row' }, h('span', { role: 'cell' }, String(i)), h('span', { role: 'cell', class: 'mono' }, `${hostName(Array.from({ length: 6 }, (_, k) => Math.floor(e.key / 2 ** (8 * (5 - k))) % 256))} ${mac(Array.from({ length: 6 }, (_, k) => Math.floor(e.key / 2 ** (8 * (5 - k))) % 256))}`), h('span', { role: 'cell' }, String(e.port)), h('span', { role: 'cell' }, `${age} / 64`)));
   }
   return box;
 }
 
 function counters(st: Stage, rig: Rig): HTMLElement {
   const g = (n: string) => outp(st, n);
-  const row = (label: string, vals: (number | string)[]) => h('div', { class: 'sw-crow' }, h('b', null, label), ...vals.map((v) => h('span', null, String(v))));
+  const row = (label: string, vals: (number | string)[]) => h('div', { class: 'sw-crow', role: 'row' }, h('b', { role: 'rowheader' }, label), ...vals.map((v) => h('span', { role: 'cell' }, String(v))));
   return h('div', { class: 'sw-counters', role: 'table', 'aria-label': 'Counters' },
-    h('div', { class: 'sw-crow head' }, h('b', null, ''), ...[0, 1, 2, 3].map((p) => h('span', null, `port ${p}`))),
+    h('div', { class: 'sw-crow head', role: 'row' }, h('b', { role: 'columnheader' }, ''), ...[0, 1, 2, 3].map((p) => h('span', { role: 'columnheader' }, `port ${p}`))),
     row('frames out', [0, 1, 2, 3].map((p) => g(`frames${p}`))), row('dropped (no cell)', [0, 1, 2, 3].map((p) => g(`drops${p}`))), row('bad FCS', [0, 1, 2, 3].map((p) => g(`bad${p}`))),
-    h('div', { class: 'sw-crow head' }, h('b', null, 'table'), h('span', null, 'learned'), h('span', null, 'flooded'), h('span', null, 'filtered'), h('span', null, 'evicted')),
+    h('div', { class: 'sw-crow head', role: 'row' }, h('b', { role: 'columnheader' }, 'table'), ...['learned', 'flooded', 'filtered', 'evicted'].map((t) => h('span', { role: 'columnheader' }, t))),
     row('count', [g('learned'), g('flooded'), g('filtered'), g('evicted')]),
     h('div', { class: `sw-lock${rig.mismatches ? ' bad' : ''}` }, rig.mismatches ? `Gates and model differ: ${rig.firstBad}` : `Gates equal the golden model: ${rig.checked} cycles checked, no difference`));
 }
@@ -274,6 +289,7 @@ function benchPanel(o: PanelOpts, opts: Partial<SwitchOpts>) {
   return (stage: Stage): Widget => {
     const rig = new Rig(opts);
     let from = 0, to = 'host1', len = 64, bad = false;
+    let onb: HTMLButtonElement | null = null;
     const body = h('div', { class: 'sw-body' }), controls = h('div', { class: 'sw-controls' });
     const paint = () => {
       body.replaceChildren(
@@ -283,6 +299,7 @@ function benchPanel(o: PanelOpts, opts: Partial<SwitchOpts>) {
         ...(o.counters ? [counters(stage, rig)] : []),
       );
       run.textContent = loop.running ? 'Pause' : 'Run';
+      if (onb) onb.textContent = genLabel(rig.gen.on);
     };
     const loop = attachRig(stage, rig, paint);
     const run = btn('Run', 'Clock the switch until every frame has left', () => { if (loop.running) loop.stop(); else loop.start(); }, 'btn sm primary');
@@ -315,17 +332,17 @@ function benchPanel(o: PanelOpts, opts: Partial<SwitchOpts>) {
       const pat = select('Traffic pattern', [['uniform', 'uniform: any other host'], ['permutation', 'permutation: A→B, B→C, C→D, D→A'], ['hotspot', 'hot spot: half to host A']], 'uniform', (v) => { rig.gen.pattern = v as Pattern; });
       const ld = slider('Offered load', 10, 100, 5, 50, (v) => `${v} %`, (v) => { rig.gen.load = v / 100; });
       const ln = slider('Frame', 60, 120, 4, 64, (v) => `${v} B`, (v) => { rig.gen.bytes = v; });
-      const onb = btn('Start sources', 'Four hosts send frames at the offered load until stopped', () => {
+      onb = btn(genLabel(false), 'Four hosts send frames at the offered load until stopped', () => {
         rig.gen.on = !rig.gen.on;
-        onb.textContent = rig.gen.on ? 'Stop sources' : 'Start sources';
-        if (rig.gen.on && !loop.running) loop.start(() => false); else if (!rig.gen.on && loop.running) loop.start(() => !rig.pending());
+        // started: clock until Pause; stopped: clock on until the queues have drained, then stop by itself
+        if (rig.gen.on) loop.start(() => false, true); else loop.start(() => !rig.pending(), true);
         paint();
       }, 'btn sm primary');
       controls.append(h('div', { class: 'mc-row' }, pat), ld.el, ln.el, h('div', { class: 'mc-row' }, onb, run));
     }
     if (o.capture) {
       controls.append(h('div', { class: 'mc-row sw-cap', role: 'group', 'aria-label': 'Save capture' }, h('span', { class: 'cpu-sec' }, 'Save capture'),
-        ...[0, 1, 2, 3].map((p) => btn(`port ${p}`, `A .pcap of everything that came in or went out on port ${p}: open it in Wireshark or tcpdump`, () => {
+        ...[0, 1, 2, 3].map((p) => btn(`port ${p}`, `A .pcap of the frames that came in on port ${p} (those that found a cell) and went out of it, as the gates drove them: open it in Wireshark or tcpdump`, () => {
           const f = rig.capture(p);
           saveFile(`switch-port${p}.pcap`, new Blob([f.slice().buffer as ArrayBuffer], { type: 'application/vnd.tcpdump.pcap' }));
         }))));
