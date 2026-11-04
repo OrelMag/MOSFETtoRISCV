@@ -49,3 +49,4 @@
 .mos-plot .pu-30 { stroke: var(--border-strong); stroke-dasharray: 2 3; }
 
 @media (pointer: coarse) { .spi-table th, .spi-table td { padding: 8px; } }
+.spi-cmp th.num, .spi-cmp td.num { white-space: nowrap; }

@@ -250,3 +250,45 @@ export function spiScene(): Scene {
 }
 
 export { spiDevice };
+
+// ---- 9. what a payload costs on each link ------------------------------------------------------------------------------------
+
+/** Bit times on the wire for `n` data bytes: UART 8N1, SPI (CS aside) and an I²C write frame (address byte, START and STOP as one bit time each). */
+export const wireBits = (n: number): { uart: number; spi: number; i2c: number } => ({ uart: 10 * n, spi: 8 * n, i2c: 9 * (n + 1) + 2 });
+
+export interface CompareCosts { spiMaster: number; spiTarget: number; i2cController: number; i2cTarget: number; spiClocks: number; i2cClocks: number }
+
+/** The comparison table (costs measured on the chapter's blocks) and the payload calculator under it. */
+export function throughputWidget(c: CompareCosts): Widget {
+  let n = 4;
+  const body = h('div');
+  const thin = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+  const cmp = h('div', { class: 'spi-scroll' }, h('table', { class: 'spi-table spi-cmp' },
+    h('thead', null, h('tr', null, h('th'), h('th', null, 'UART'), h('th', null, 'SPI'), h('th', null, 'I²C'))),
+    h('tbody', null, ...([
+      ['Wires', '2 (+ ground)', '3 + 1 select per target', '2, any number of devices'],
+      ['Bits on the wire per data byte', '10', '8 (plus CS)', '9, plus a 9-bit address byte per frame and START / STOP'],
+      ['Addressing', 'none: point to point', 'a select wire per target', '7-bit address in the frame (10-bit extension)'],
+      ['Usual top speed', '115 200 baud; megabaud with care', 'tens of MHz, serial flash 100 MHz and more', '100 kHz, 400 kHz, 1 MHz (Fast-mode Plus); 3.4 MHz (High-speed mode); 5 MHz (Ultra Fast-mode, push-pull, one way)'],
+      ['Direction', 'full duplex, two wires', 'full duplex, two data wires', 'half duplex, one data wire'],
+      ['Who decides', 'either end', 'the controller only', 'a controller; several may arbitrate'],
+      ["Receiver's clock", 'its own, matched within a few percent', 'none: SCLK', 'none: SCL, which it may stretch'],
+      ['NANDs here (without storage)', 'chapter 43', `controller ${thin(c.spiMaster)}, target ${thin(c.spiTarget)}`, `controller ${thin(c.i2cController)}, target ${thin(c.i2cTarget)} (its four registers included)`],
+      ['System clocks per byte (this implementation)', 'chapter 43', String(c.spiClocks), String(c.i2cClocks)],
+    ] as string[][]).map((r) => h('tr', null, h('th', { scope: 'row' }, r[0]), ...r.slice(1).map((x) => h('td', null, x)))))));
+  const paint = () => {
+    const b = wireBits(n);
+    const usual = { uart: 115200, spi: 10e6, i2c: 400e3 };
+    const ms = (bits: number, f: number) => `${((bits / f) * 1e3).toFixed(bits / f < 1e-3 ? 3 : 2)} ms`;
+    const rows: [string, number, number][] = [['UART 8N1', b.uart, usual.uart], ['SPI', b.spi, usual.spi], ['I²C write frame', b.i2c, usual.i2c]];
+    body.replaceChildren(h('table', { class: 'spi-table spi-cmp' },
+      h('thead', null, h('tr', null, h('th'), h('th', { class: 'num' }, 'bit times'), h('th', { class: 'num' }, 'data / bit times'), h('th', { class: 'num' }, 'usual rate'), h('th', { class: 'num' }, 'time'))),
+      h('tbody', null, ...rows.map(([name, bits, f]) => h('tr', null, h('th', { scope: 'row' }, name), h('td', { class: 'num' }, String(bits)), h('td', { class: 'num' }, `${((8 * n / bits) * 100).toFixed(0)} %`),
+        h('td', { class: 'num' }, f >= 1e6 ? `${f / 1e6} MHz` : f === 115200 ? '115 200 baud' : `${f / 1e3} kHz`), h('td', { class: 'num' }, ms(bits, f)))))),
+      h('p', { class: 'sub' }, `${n} data byte${n === 1 ? '' : 's'}. The UART pays 2 of every 10 bit times for framing; SPI pays nothing per byte, only the CS and the command a device expects; an I²C frame pays one address byte (9 bit times with its ACK), a bit time each for START and STOP, and 9 per data byte for the ACK. At one data byte the frame is ${(8 / wireBits(1).i2c * 100).toFixed(0)} % efficient, at 64 bytes ${(8 * 64 / wireBits(64).i2c * 100).toFixed(0)} %. The usual rates are 115 200 baud, 10 MHz and Fast-mode's 400 kHz: speed differs by two orders of magnitude between the links, and framing efficiency by far less.`));
+  };
+  const sl = slider('Data bytes', 1, 64, 1, n, (v) => String(v), (v) => { n = v; paint(); });
+  const el = h('div', { class: 'widget mos clk-w' }, h('div', { class: 'panel' }, h('h3', null, 'Three links, side by side'), cmp), h('div', { class: 'panel' }, h('h3', null, 'The same payload on each'), h('div', { class: 'mos-row' }, sl.el), body));
+  paint();
+  return { el };
+}

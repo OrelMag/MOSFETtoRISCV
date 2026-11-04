@@ -7,7 +7,7 @@ import { spiDevice, spiMaster } from '../lib/spi';
 import { stats } from '../sim/stats';
 import { groupDigits } from '../sim/numfmt';
 import { i2cArbScene, i2cFrameScene, pullupWidget, wiredScene } from '../widgets/i2c';
-import { frameCompareWidget, spiChainWidget, spiModesWidget, spiScene } from '../widgets/spi';
+import { frameCompareWidget, spiChainWidget, spiModesWidget, spiScene, throughputWidget } from '../widgets/spi';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
@@ -345,21 +345,12 @@ export const chSpi: Chapter = {
       title: 'Three ways to move a byte',
       get body() {
         return `
-        <p>The three links of this track answer the same question differently, and the costs here are measured on the blocks of this chapter. UART, chapter 43: two wires and a ground between two devices, 10 bits on the wire for 8 of data, no address and no clock; the receiver is a counter that samples in the middle of a bit, its cost listed there. SPI and I²C add the sender's clock, in different ways.</p>
-        <div class="spi-scroll"><table class="spi-table spi-cmp"><thead><tr><th></th><th>UART</th><th>SPI</th><th>I²C</th></tr></thead><tbody>
-          <tr><th scope="row">Wires</th><td>2 (+ ground)</td><td>3 + 1 select per target</td><td>2, any number of devices</td></tr>
-          <tr><th scope="row">Bits on the wire per data byte</th><td>10</td><td>8 (plus CS)</td><td>9, plus a 9-bit address byte per frame and START / STOP</td></tr>
-          <tr><th scope="row">Addressing</th><td>none: point to point</td><td>a select wire per target</td><td>7-bit address in the frame (10-bit extension)</td></tr>
-          <tr><th scope="row">Usual top speed</th><td>115 200 baud; megabaud with care</td><td>tens of MHz, serial flash 100 MHz and more</td><td>100 kHz, 400 kHz, 1 MHz (Fast-mode Plus); 3.4 MHz (High-speed mode); 5 MHz (Ultra Fast-mode, push-pull, one way)</td></tr>
-          <tr><th scope="row">Direction</th><td>full duplex, two wires</td><td>full duplex, two data wires</td><td>half duplex, one data wire</td></tr>
-          <tr><th scope="row">Who decides</th><td>either end</td><td>the controller only</td><td>a controller; several may arbitrate</td></tr>
-          <tr><th scope="row">Receiver's clock</th><td>its own, matched within a few percent</td><td>none: SCLK</td><td>none: SCL, which it may stretch</td></tr>
-          <tr><th scope="row">NANDs here (without storage)</th><td>chapter 43</td><td>controller ${thin(N_SPI_MASTER)}, target ${thin(N_SPI_DEV)}</td><td>controller ${thin(N_I2C_CTL)}, target ${thin(N_I2C_TGT)} (its four registers included)</td></tr>
-          <tr><th scope="row">System clocks per byte (this implementation)</th><td>chapter 43</td><td>${SPI_BYTE_CLOCKS}</td><td>${I2C_BYTE_CLOCKS}</td></tr>
-        </tbody></table></div>
+        <p>The three links of this track answer the same question differently; the table beside is the comparison, and its costs are measured on the blocks of this chapter. UART, chapter 43: two wires and a ground between two devices, 10 bits on the wire for 8 of data, no address and no clock; the receiver is a counter that samples in the middle of a bit, its cost listed there. SPI and I²C add the sender's clock, in different ways.</p>
+
         <p>The I²C controller is ${nf(N_I2C_CTL / N_SPI_MASTER, 1)} times the gates of the SPI master, and its target ${nf(N_I2C_TGT / N_SPI_DEV, 1)} times the SPI target's logic. The difference is the framing, the address compare, the START and STOP detection, the ACK handshake and arbitration, all of which SPI gets from a select wire. Each I²C pad costs ${T_PAD} transistors at either end, and the pull-ups, one per wire, cost nothing but the speed and current of the last two steps.</p>
         <p>Pick by what the system needs. A fast device with one target at a time (flash, a display, a radio): SPI. Many slow devices, little board area, a configuration or sensor bus (a temperature sensor, an EEPROM, a power controller, a camera's control port): I²C. Two chips that talk freely at a modest rate: UART. The next chapters are about what happens when the wire gets longer than a few centimetres: modulation (45), serial links at gigabits (46) and surviving errors (47). The idea that data and clock should share one wire so that nothing skews returns there as the <em>embedded clock</em>.</p>`;
       },
+      widget: () => throughputWidget({ spiMaster: N_SPI_MASTER, spiTarget: N_SPI_DEV, i2cController: N_I2C_CTL, i2cTarget: N_I2C_TGT, spiClocks: SPI_BYTE_CLOCKS, i2cClocks: I2C_BYTE_CLOCKS }),
       challenge: {
         kind: 'quiz',
         question: 'A board has a temperature sensor, a real-time clock and a small EEPROM, each read a few times a second, and only two spare microcontroller pins. Which link?',
