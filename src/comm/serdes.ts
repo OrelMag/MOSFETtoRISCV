@@ -12,6 +12,8 @@
 //             f ± 1 per vote; at ±F the strobe period is 5 (delay) or 3 (advance) once and f is cleared
 //   deserializer 10-bit shift register on the strobe; a comma (0011111 / 1100000) in its low 7 bits sets the bit count to 7
 
+import { encode8b10b, type Rd } from './linecode';
+
 export const NCO_BITS = 12;
 export const NOMINAL_INC = 1 << (NCO_BITS - 2);   // 1024: a tick every 4 cycles
 export const CYCLES_PER_BIT = 4;
@@ -101,3 +103,62 @@ export function runLink(words: WordSource, cycles: number, inc = NOMINAL_INC, de
   }
   return { got, at, sent };
 }
+
+// ---- the loop's lock range, from the model ----------------------------------------------------------------------------------------
+
+/** The byte for word n of a stream: a pattern is a function of the word's number and a random byte source. */
+export type BytePattern = (n: number, rnd: () => number) => { v: number; k: boolean };
+const COMMA = { v: 0xbc, k: true };
+/** The patterns the link scene offers: a comma every eighth word, between them these. */
+export const LINK_PATTERNS: { name: string; din: number | null; kin: number; bytes: BytePattern }[] = [
+  { name: 'Commas and random bytes', din: null, kin: 0, bytes: (n, r) => (n % 8 === 0 ? COMMA : { v: r(), k: false }) },
+  { name: 'D21.5 between commas (1010101010)', din: 0xb5, kin: 0, bytes: (n) => (n % 8 === 0 ? COMMA : { v: 0xb5, k: false }) },
+  { name: 'D30.3 between commas (few edges)', din: 30 + 3 * 32, kin: 0, bytes: (n) => (n % 8 === 0 ? COMMA : { v: 30 + 3 * 32, k: false }) },
+  { name: 'K28.5 only', din: 0xbc, kin: 1, bytes: () => COMMA },
+];
+
+/** Words the receiver gets wrong (after the first 20) with the sender's accumulator step at `inc`, on this pattern, by the models. */
+export function wrongWords(pattern: BytePattern, inc: number, cycles = 24000): number {
+  let rd: Rd = 0, st = 1, n = 0;
+  const rnd = () => { st = (Math.imul(st, 1664525) + 1013904223) >>> 0; return st >>> 24; };
+  const tx = new TxModel(), line = new LineModel(3), rx = new RxModel();
+  const sent: number[] = [], got: number[] = [];
+  const make = () => { const b = pattern(n++, rnd), e = encode8b10b(b.v, b.k, rd); rd = e.rd; return e.code; };
+  let next = make();
+  for (let t = 0; t < cycles; t++) {
+    if (rx.wv) got.push(rx.word);
+    const load = tx.wload(inc);
+    if (load) sent.push(next);
+    const word = next;
+    rx.step(line.out()); line.step(tx.txd(), 0); tx.step(inc, word);
+    if (load) next = make();
+  }
+  let best = Infinity;
+  for (let off = 0; off < 8; off++) {
+    let e = 0;
+    for (let i = 20; i < got.length; i++) { const sv = sent[i + off - 4]; if (sv !== undefined && sv !== got[i]) e++; }
+    best = Math.min(best, e);
+  }
+  return best;
+}
+
+/** The largest offset of the accumulator step, in counts, at which both signs still give no wrong word. */
+export function lockRange(pattern: BytePattern, cycles = 24000): number {
+  const side = (sign: number) => { let lo = 0, hi = 200; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (wrongWords(pattern, NOMINAL_INC + sign * m, cycles) === 0) lo = m; else hi = m; } return lo; };
+  return Math.min(side(1), side(-1));
+}
+
+/** Fraction of bit periods of a pattern's stream that carry a transition: the votes the loop gets. */
+export function patternDensity(pattern: BytePattern): number {
+  let rd: Rd = 0, st = 1, tr = 0, bits = 0, last = 0;
+  const rnd = () => { st = (Math.imul(st, 1664525) + 1013904223) >>> 0; return st >>> 24; };
+  for (let i = 0; i < 400; i++) {
+    const b = pattern(i, rnd), e = encode8b10b(b.v, b.k, rd);
+    rd = e.rd;
+    for (let j = 9; j >= 0; j--) { const bit = (e.code >> j) & 1; if (bits && bit !== last) tr++; last = bit; bits++; }
+  }
+  return tr / (bits - 1);
+}
+
+/** The lock range from the pattern's transition density: a slip of one sample takes F votes, a bit is 4 samples. */
+export const theoryRange = (density: number): number => density / (4 * FILTER_LIMIT);

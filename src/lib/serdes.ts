@@ -483,7 +483,8 @@ export const SER_RX = memo('serrx', () => {
 export const LINK_DELAY = 3;
 
 /**
- * The whole link on one clock: a byte source (a K28.5 comma every eighth word, pseudo-random bytes between, or din / kin by hand),
+ * The whole link on one clock: a byte source (a K28.5 comma every eighth word, between them pseudo-random bytes or din by hand; kin
+ * with manual makes every word a control code),
  * the 8b/10b encoder with its running disparity, the sender, a line with an error input, the receiver, and the decoder with its own
  * running disparity (a comma sets it). inc sets the sender's bit rate against the receiver's 4 samples a bit.
  */
@@ -499,10 +500,11 @@ export const SERDES_LINK = memo('serdeslink', () => {
   const anySet = b.op1(orN(3), [`${wsp}.o0`, `${wsp}.o1`, `${wsp}.o2`], 'count not 0?');
   const kauto = b.op1(NOT, [anySet], 'every 8th word: a comma');
   b.next();
-  const vauto = b.op1(busMux2(8), [`${rnd}.q`, bcw, kauto], 'comma or random byte', 'vauto');
+  const vdata = b.op1(busMux2(8), [`${rnd}.q`, 'din', 'manual'], 'din by hand?', 'vdata');
   b.next();
-  const v = b.op1(busMux2(8), [vauto, 'din', 'manual'], 'by hand?', 'vmux');
-  const k = b.op1(busMux2(1), [kauto, 'kin', 'manual'], 'by hand?', 'kmux');
+  const v = b.op1(busMux2(8), [vdata, bcw, kauto], 'every 8th word: K28.5', 'vmux');
+  const hand = b.op1(AND, ['manual', 'kin'], 'kin by hand');
+  const k = b.op1(OR, [kauto, hand], 'K flag', 'kmux');
   b.name(v, 'byte', true); b.name(k, 'kflag', true);
   b.next();
   const enc = b.op(ENC8B10B, [v, k, 'rdt.q'], 'encoder', 'enc');

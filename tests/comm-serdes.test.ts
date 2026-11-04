@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   A7_AT_NEG, classOf, dec4, dec6, decode8b10bTracking, Descrambler, encode4, encode6, encode8b10b, K_CODES, POLY_7, type Rd, Scrambler,
 } from '../src/comm/linecode';
-import { LineModel, NCO_BITS, NOMINAL_INC, RxModel, TxModel, FILTER_LIMIT, GATE_MBPS, GATE_BIT_NS } from '../src/comm/serdes';
+import { GATE_BIT_NS, GATE_MBPS, LineModel, LINK_PATTERNS, lockRange, NCO_BITS, NOMINAL_INC, patternDensity, RxModel, theoryRange, TxModel } from '../src/comm/serdes';
 import {
   CDR_CTL, DEC34, DEC56, DEC8B10B, descrambler, ENC34, ENC56, ENC8B10B, MANCH_DEC, MANCH_ENC, scrambler, SERDES_LINK, serialLine, SER_RX, SER_TX,
 } from '../src/lib';
@@ -210,62 +210,21 @@ describe('the whole link', () => {
 });
 
 describe('the clock-recovery loop: lock range from the model', () => {
-  type Pattern = (n: number, rnd: () => number) => { v: number; k: boolean };
-  /** Words wrong after the first 20, for a given offset of the sender's accumulator step, on a given pattern of bytes. */
-  function wrong(pattern: Pattern, inc: number): number {
-    let rd: Rd = 0, s = 1;
-    const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s >>> 24; };
-    const tx = new TxModel(), line = new LineModel(3), rx = new RxModel();
-    const sent: number[] = [], got: number[] = [];
-    let n = 0;
-    const make = () => { const b = pattern(n++, rnd), e = encode8b10b(b.v, b.k, rd); rd = e.rd; return e.code; };
-    let next = make();
-    for (let t = 0; t < 24000; t++) {
-      if (rx.wv) got.push(rx.word);
-      const load = tx.wload(inc);
-      if (load) sent.push(next);
-      const word = next;
-      rx.step(line.out()); line.step(tx.txd(), 0); tx.step(inc, word);
-      if (load) next = make();
-    }
-    let best = Infinity;
-    for (let off = 0; off < 8; off++) { let e = 0; for (let i = 20; i < got.length; i++) { const sv = sent[i + off - 4]; if (sv !== undefined && sv !== got[i]) e++; } best = Math.min(best, e); }
-    return best;
-  }
-  /** The largest |offset| in accumulator counts (the worse sign) at which the loop still has no error. */
-  function lockRange(pattern: Pattern): number {
-    const side = (sign: number) => { let lo = 0, hi = 200; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (wrong(pattern, NOMINAL_INC + sign * m) === 0) lo = m; else hi = m; } return lo; };
-    return Math.min(side(1), side(-1));
-  }
-  /** Transition density of a pattern: the fraction of bit periods that have an edge to vote on. */
-  function density(pattern: Pattern): number {
-    let rd: Rd = 0, s = 1, tr = 0, bits = 0, last = 0;
-    const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s >>> 24; };
-    for (let i = 0; i < 400; i++) {
-      const b = pattern(i, rnd), e = encode8b10b(b.v, b.k, rd); rd = e.rd;
-      for (let j = 9; j >= 0; j--) { const bit = (e.code >> j) & 1; if (bits && bit !== last) tr++; last = bit; bits++; }
-    }
-    return tr / (bits - 1);
-  }
-  it('is the pattern\'s transition density over (4 samples a bit x F votes a slip): checked on three patterns', async () => {
-    const pats: [string, Pattern][] = [
-      ['K28.5', () => ({ v: 0xbc, k: true })],
-      ['D30.3', (n) => (n < 2 ? { v: 0xbc, k: true } : { v: 30 + 3 * 32, k: false })],
-      ['random', (n, r) => (n % 8 === 0 ? { v: 0xbc, k: true } : { v: r(), k: false })],
-    ];
+  it('is the transition density of the pattern over (4 samples a bit x F votes a slip): checked on the link patterns', async () => {
     const res = [];
-    for (const [name, p] of pats) {
-      const rho = density(p);
-      res.push({ name, rho, theory: rho / (4 * FILTER_LIMIT), measured: lockRange(p) / NOMINAL_INC });
+    for (const p of LINK_PATTERNS) {
+      const rho = patternDensity(p.bytes);
+      res.push({ name: p.name, rho, theory: theoryRange(rho), measured: lockRange(p.bytes) / NOMINAL_INC });
       await yieldTick();
     }
     console.log('lock range', JSON.stringify(res));
     for (const r of res) {
       expect(r.measured).toBeLessThanOrEqual(r.theory * 1.1);
-      expect(r.measured).toBeGreaterThanOrEqual(r.theory * (r.name === 'random' ? 0.45 : 0.85));
+      // the ceiling is met where the votes agree (K28.5, D30.3); a dense pattern gets noisy votes (the sender's edges are quantized to a sample too)
+      expect(r.measured).toBeGreaterThanOrEqual(r.theory * ({ 'Commas and random bytes': 0.45, 'D21.5 between commas (1010101010)': 0.35 }[r.name] ?? 0.85));
     }
     // the worst the code guarantees (one transition in five bits) gives the floor
-    expect(0.2 / (4 * FILTER_LIMIT)).toBeCloseTo(0.0125, 6);
+    expect(theoryRange(0.2)).toBeCloseTo(0.0125, 6);
   }, 240_000);
   it('link speed convention: 4 cycles a bit at 3.95 ns is 63 Mb/s', () => {
     expect(GATE_BIT_NS).toBeCloseTo(15.8, 6);
