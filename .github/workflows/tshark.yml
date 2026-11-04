@@ -12,6 +12,8 @@ on:
       - 'src/comm/mac.ts'
       - 'src/comm/ethswitch.ts'
       - 'src/comm/stack/**'
+      - 'src/net/tcp*'
+      - 'src/net/lanbench.ts'
       - 'src/comm/nic.ts'
       - 'src/lib/ethernet.ts'
       - 'src/lib/ethstation.ts'

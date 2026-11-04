@@ -14,6 +14,7 @@ import { Warps16 } from '../riscv/rv16/warps16';
 import { rng } from './drills';
 import { draw16, FB16, SCREEN16 } from '../gfx/raster16';
 import type { Vtx } from '../gfx/raster';
+import { DRIVER_REF, DRIVER_SCENARIOS, DRIVER_STARTER, runNicPuzzle } from './nicbench';
 
 export interface PuzzleTest {
   name: string;
@@ -45,6 +46,8 @@ export interface ProgramPuzzle {
   dma?: boolean;
   /** Warps with k_frame's rasterizer as a device (lane 0's stores to 0xFFF0 … 0xFFF6 draw into the screen at 0xF000). */
   raster?: boolean;
+  /** The packet driver: RV32 assembly for the computer with a NIC, judged by the far end of a cable (nicbench.ts); cycles are clocks from a request to its reply. */
+  nic?: boolean;
 }
 
 export interface PuzzleRun {
@@ -99,10 +102,11 @@ function mismatch(t: PuzzleTest, mc: Iss16 | Simt16 | Warps16): string | null {
 }
 
 /** What a puzzle's graded count (Measured.cycles) counts: instructions on the golden model, warp instructions on a warp, cycles where warps take turns or flash stalls. */
-export const puzzleUnit = (p: ProgramPuzzle): 'instructions' | 'warp instructions' | 'cycles' => (p.warps || p.dma ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions');
+export const puzzleUnit = (p: ProgramPuzzle): 'instructions' | 'warp instructions' | 'cycles' | 'clocks' => (p.nic ? 'clocks' : p.warps || p.dma ? 'cycles' : p.lanes ? 'warp instructions' : 'instructions');
 
 /** Run every test of a puzzle on a source. Never throws. */
 export function runPuzzle(p: ProgramPuzzle, src: string): PuzzleRun {
+  if (p.nic) return runNicPuzzle(src);
   const a = assemble16(src);
   const size = a.words.length;
   if (a.errors.length) return { ok: false, errors: a.errors, results: [], size, cycles: 0, ...(p.lanes ? { idle: 0, laneOps: 0 } : {}) };
@@ -148,6 +152,16 @@ const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory
 const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one with <code>sw rs, -3(x0)</code> (OUT), stop with <code>halt</code>.';
 
 export const PUZZLES: Record<string, ProgramPuzzle> = {
+  l_driver: {
+    brief: 'The computer of chapter 50: a system CPU, RAM and a NIC at 0x7000_0000 with two rings of eight descriptors (two words each: the buffer\'s address, then OWN | length; OWN = bit 31). Write the driver of a <b>reflector</b>: for every frame the NIC receives, send it back with its destination and source addresses swapped. The setup (rings, the NIC\'s address, enable) is given. '
+      + 'The NIC fills a receive descriptor and clears its OWN bit when the whole frame is in (the length is in the low 11 bits, without the FCS); you give the buffer back by setting OWN again. To send, write the transmit buffer, then word 1 of the transmit descriptor as OWN | length, then write 1 to KICK (+28): the NIC sends, adds the FCS, clears OWN and looks at the next descriptor. After descriptor 7 comes descriptor 0 in both rings. '
+      + 'The far end of the cable is a model that sends frames from 60 to 614 bytes, one at a time, in a burst and a long one, and reads what comes back: it names the first rule broken (no doorbell, no OWN, a wrong wrap, a wrong byte, a reply too early). Each load or store takes 2 clocks, any other instruction 1. Graded on words and on the clocks from the end of a request on the wire to the first bit of its reply, averaged.',
+    starter: DRIVER_STARTER,
+    ref: DRIVER_REF,
+    tests: () => DRIVER_SCENARIOS.map((s) => ({ name: s.name, expect: {} })),
+    maxSteps: 3_000_000,
+    nic: true,
+  },
   p_add: {
     brief: `Read two numbers from IN and write their sum (mod 2<sup>16</sup>) to OUT. ${IO_HELP}`,
     starter: `# a0 ← IN, a1 ← IN, OUT ← a0 + a1\n        lw   a0, -4(x0)\n        \n        halt\n`,

@@ -1,4 +1,4 @@
-// The Communication entries (codexcomm.ts, codexmore4/5.ts, codexcheck6/7.ts): complete, linked to real chapter steps, and every
+// The Communication entries (codexcomm.ts, codexmore4/5/6.ts, codexcheck6/7/8.ts): complete, linked to real chapter steps, and every
 // number they quote equal to the comm/ and phys/ models and the library, or to the chapter step that prints it.
 
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import { codexById } from '../src/campaign/codex';
 import { CHECKS } from '../src/campaign/codexcheck';
 import { CHECK6 } from '../src/campaign/codexcheck6';
 import { CHECK7 } from '../src/campaign/codexcheck7';
+import { CHECK8 } from '../src/campaign/codexcheck8';
 import { CODEX_COMM, COMM_AWAITING_LEVELS } from '../src/campaign/codexcomm';
 import { moreOf } from '../src/campaign/codexmore';
 import { NODES } from '../src/campaign/nodes';
@@ -15,7 +16,19 @@ import { TAUGHT } from '../src/chapters/taught';
 import { ADSL, bitLoad, bitsForTone, bitsOf, gapDb, snrForSer } from '../src/comm/modem';
 import { ebn0AtCapacity, EBN0_MIN, levelsSupported, nyquistBitRate, nyquistSymbolRate, ratioToDb, shannonDb, snrNeeded } from '../src/comm/limits';
 import { aOf, fullWindow, rttOf, utilization } from '../src/comm/arq';
-import { CRC32_POLY, crc32 } from '../src/comm/crc';
+import { CRC32_POLY, CRC32_REFLECTED, CRC32_RESIDUE, crc32 } from '../src/comm/crc';
+import { FCS_BYTES, HEADER_BYTES, MAX_FRAME, MIN_FRAME, MIN_PAYLOAD } from '../src/comm/ethframe';
+import { ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, GAP_BITS, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, SLOT_BITS, SLOT_CLOCKS, backoffMask, frameBitTimes, maxCableMetres } from '../src/comm/mac';
+import { AGE_TICKS, HOL_LIMIT, HOL_N4, STAMP_BITS, binomialTail, cutThroughBits, hashAddr, holSaturation, sharedCapacity, singleFrame, storeAndForwardBits } from '../src/comm/ethswitch';
+import { DESCRIPTORS, LEN_MASK, OWN, TX_DROPPED } from '../src/comm/nic';
+import { arpFrame, checksum, icmpEchoFrame, ip4, onesSum } from '../src/comm/netframes';
+import * as NF from '../src/comm/stack/netfacts';
+import NET from '../src/comm/stack/netcosts.json';
+import { NIC_BASE, NIC_COSTS, nicPollSource } from '../src/riscv/nicprograms';
+import { arbiterN, cam, macRx, macTx, registry } from '../src/lib';
+import { nic } from '../src/lib/nic';
+import { crossbar, ethSwitch, inputBuffer, macTable, outputPort, tablePort } from '../src/lib/ethswitch';
+import { BENCH_OPTS } from '../src/widgets/ethswitch';
 import { fftMults } from '../src/comm/fourier';
 import { burstTolerance, worstPerWord } from '../src/comm/interleave';
 import { I2C_MODES, RISE_30_70, rpMax, rpMin } from '../src/comm/i2c';
@@ -53,7 +66,7 @@ const says = (ch: string, step: number, s: string) => {
 
 describe('the Communication codex entries', () => {
   it('are complete: summary, fuller text, chapters, answer-first questions, a TAUGHT row, no level yet', () => {
-    expect(IDS.length).toBe(18);
+    expect(IDS.length).toBe(28);
     for (const e of CODEX_COMM) {
       const m = moreOf(e.id)!;
       expect(m?.idea, `${e.id}: idea`).toBeTruthy();
@@ -67,7 +80,7 @@ describe('the Communication codex entries', () => {
       expect(TAUGHT[e.id], `${e.id}: TAUGHT`).toBeTruthy();
       expect(m.chapters!.map((l) => l.chapter), `${e.id}: taught chapter is a link`).toContain(TAUGHT[e.id]);
     }
-    expect(Object.keys({ ...CHECK6, ...CHECK7 }).sort()).toEqual([...IDS].sort());
+    expect(Object.keys({ ...CHECK6, ...CHECK7, ...CHECK8 }).sort()).toEqual([...IDS].sort());
   });
 
   it('link real chapter steps by their titles, and real library parts', () => {
@@ -267,5 +280,100 @@ describe('the Communication codex entries', () => {
     expect(worstPerWord(32, 32)).toBe(1);
     quotes('interleave', '32 bits', '1017', '128 bytes');
     says('errors', 12, '32 bits for 32 SEC-DED words'); says('errors', 12, '1017 bits');
+  });
+
+  it('quote the Ethernet frame, the CSMA/CD rules and the MAC as built', () => {
+    const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+    expect([MIN_FRAME, MAX_FRAME, MIN_PAYLOAD, HEADER_BYTES, FCS_BYTES]).toEqual([64, 1518, 46, 14, 4]);
+    const bitsMin = frameBitTimes(MIN_FRAME), bitsMax = frameBitTimes(MAX_FRAME);
+    expect([bitsMin, bitsMax + GAP_BITS, GAP_BITS, bitsMin + GAP_BITS]).toEqual([576, 12304, 96, 672]);
+    expect([Math.round(100 * 8 * MIN_PAYLOAD / (bitsMin + GAP_BITS)), Math.round(100 * 8 * 1500 / (bitsMax + GAP_BITS))]).toEqual([55, 98]);
+    expect([bitsMin * BIT_CLOCKS, ((bitsMin / LINK_MBPS)).toFixed(1), LINK_MBPS.toFixed(0)]).toEqual([2304, '9.1', '63']);
+    expect(CRC32_RESIDUE.toString(16)).toBe('debb20e3');
+    quotes('ethframe', '1,518 bytes', '576 bit times', '55 %', '98 %', '0xDEBB20E3', '0xD5', '2,304 clocks', '9.1 µs', '63 Mb/s', '12304', '672 bit times');
+    says('ethernet', 0, '576 bit times'); says('ethernet', 0, '2 304 clocks, 9.1 µs at 63 Mb/s'); says('ethernet', 0, '55 % of the time for minimum frames and 98 %'); says('ethernet', 2, '0xDEBB20E3');
+    expect([JAM_BYTES * 8, SLOT_BITS, ATTEMPT_LIMIT, BACKOFF_LIMIT, GAP_CLOCKS, SLOT_CLOCKS]).toEqual([32, 512, 16, 10, 384, 2048]);
+    expect([backoffMask(1), backoffMask(2), backoffMask(3), backoffMask(11)]).toEqual([1, 3, 7, 1023]);
+    expect((3.5 * SLOT_BITS / 10).toFixed(1)).toBe('179.2');
+    const m = (mbps: number) => Math.round(maxCableMetres(SLOT_BITS, 0.66, mbps));
+    expect([m(10), m(100), m(1000), m(LINK_MBPS)]).toEqual([5065, 507, 51, 800]);
+    expect(bitsMin * BIT_CLOCKS / 2).toBe(1152);
+    quotes('csmacd', '5,065 m', '507 m', '51 m', '800 m', '1 152 clocks', '179.2 µs', '2 048 clocks', 'jam of 32 bits', '16 attempts', '96 bit times');
+    says('ethernet', 5, '5 065 m'); says('ethernet', 5, '507 m'); says('ethernet', 5, '51 m'); says('ethernet', 5, '800 m'); says('ethernet', 5, '1 152 clocks');
+    expect([n(macTx()), n(macRx()), n(crcUnit(32, CRC32_REFLECTED, 8))]).toEqual([3553, 3213, 1027]);
+    quotes('ethmac', '3,553 NANDs', '3,213 NANDs', '1,027 NANDs', '0xDEBB20E3', '385 clocks', '2,304 clocks', '384 clocks', '1,518 bytes');
+    says('ethernet', 1, '3 553 NANDs'); says('ethernet', 1, '1 027 NANDs'); says('ethernet', 1, `${GAP_CLOCKS + 1} clocks in`); says('ethernet', 2, '3 213 NANDs');
+    expect(resolveComponent('eth_mac_rx')).toBeTruthy();
+  });
+
+  it('quote the switch as built and as simulated', () => {
+    const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+    const TAB4 = n(macTable(4, 4)), TAB7 = n(macTable(7, 4)), CAM4 = n(cam(4, 48)), CAM7 = n(cam(7, 48)), CAM4W = n(cam(4, 59)), RAM4 = n(registry.get('mac_table4_4_ram')!);
+    expect([TAB4, RAM4, CAM4W, CAM4, TAB7, CAM7]).toEqual([28876, 26008, 21229, 17357, 213699, 139748]);
+    expect(48 + 1 + 2 + 8).toBe(59);
+    expect([AGE_TICKS, STAMP_BITS]).toEqual([64, 8]);
+    expect([hashAddr(0x7f, 4), hashAddr(0x80, 4)]).toEqual([8, 8]);
+    const SHARE = sharedCapacity(20, 0.1, 1e-6);
+    expect([SHARE, binomialTail(20, 0.1, SHARE) < 1e-6]).toEqual([10, true]);
+    quotes('learnsw', '28,876 NANDs', '26,008', '21,229', '17,357', '213,699', '139,748', '59 bits', '64 ahead', 'one in a million', '10 units', '20 reserved', '7 ⊕ F = 8', '8 ⊕ 0 = 8');
+    says('switch', 2, '28 876 NANDs'); says('switch', 2, '26 008'); says('switch', 2, '21 229'); says('switch', 2, '17 357'); says('switch', 2, '213 699'); says('switch', 2, '139 748');
+    says('switch', 2, '59 bits'); says('switch', 0, `takes ${SHARE} units`);
+    const XB = n(crossbar()), ARB = n(arbiterN(4)), OUT = n(outputPort()), TP = n(tablePort());
+    const IN7 = n(inputBuffer({ cellK: 7 })), IN11 = n(inputBuffer({ cellK: 11 }));
+    const BENCH = n(ethSwitch(BENCH_OPTS)), BENCH11 = n(ethSwitch({ ...BENCH_OPTS, cellK: 11 }));
+    expect([XB, ARB, OUT, TP, IN7, IN11, BENCH, BENCH11]).toEqual([724, 125, 516, 1292, 142221, 2219295, 1195167, 17810671]);
+    const saf = singleFrame({ cellK: 7 }, 64), ct = singleFrame({ cellK: 7, cut: true }, 64);
+    expect([saf.firstOut, saf.lastIn, saf.lastOut, ct.firstOut]).toEqual([65, 63, 128, 14]);
+    expect([storeAndForwardBits(1518), cutThroughBits(), (storeAndForwardBits(1518) / 100).toFixed(1), (cutThroughBits() / 100).toFixed(1)]).toEqual([12208, 112, '122.1', '1.1']);
+    quotes('crossbar', '724 NANDs', '125 NANDs', '516', '1292', '142,221', '2,219,295', '1,195,167', '17,810,671', 'cycle 65', 'cycle 14', '122.1 µs', '1.1 µs', '12 208 bits', '112 bits');
+    says('switch', 3, '724 NANDs'); says('switch', 3, '125 NANDs'); says('switch', 3, '516'); says('switch', 3, '1 292'); says('switch', 3, '142 221'); says('switch', 3, '2 219 295');
+    says('switch', 4, `cycle ${saf.firstOut}`); says('switch', 4, `cycle ${ct.firstOut}`); says('switch', 6, '1 195 167'); says('switch', 6, '17 810 671');
+    const HOL4 = holSaturation(4, false, 400000, 3), HOL4N = holSaturation(4, false, 400000, 3, false), HOLBIG = holSaturation(64, false, 20000, 3);
+    expect([HOL4.toFixed(3), HOL4N.toFixed(3), (HOL4N * 64 / 65).toFixed(3), HOLBIG.toFixed(3), HOL_N4, HOL_LIMIT.toFixed(4)]).toEqual(['0.655', '0.691', '0.680', '0.590', 0.6553, '0.5858']);
+    const voq = [4, 8, 16].map((cells) => n(inputBuffer({ cellK: 7, cells, voq: true })) - n(inputBuffer({ cellK: 7, cells })));
+    expect(voq).toEqual([945, 2059, 4621]);
+    quotes('hol', '0.6553', '0.655', '0.5858', '0.590', '0.691', '0.680', '+945', '+2059', '+4621', '0.80', '0.88', '0.92', '142,221');
+    says('switch', 5, '0.6553'); says('switch', 5, '0.5858'); says('switch', 5, '0.691'); says('switch', 5, '0.680'); says('switch', 5, '0.590'); says('switch', 5, '+945 NANDs at 4 cells');
+    says('switch', 5, 'about 0.80'); says('switch', 5, '0.88'); says('switch', 5, '0.92');
+  });
+
+  it('quote the NIC, the checksum, ARP and the ping as built and measured', () => {
+    expect([DESCRIPTORS, OWN, LEN_MASK, TX_DROPPED, NIC_BASE]).toEqual([8, 0x80000000, 0x7ff, 0x40000000, 0x70000000]);
+    const nicN = stats(nic()).nands;
+    expect([nicN, NET.nands.nic, NET.nands.macTx + NET.nands.macRx]).toEqual([15425, 15425, 6766]);
+    expect([NF.PING_DMA.send, NF.PING_DMA.receive]).toEqual([{ reads: 22, writes: 1 }, { reads: 2, writes: 20 }]);
+    expect(nicPollSource().split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith('#')).length).toBe(63);
+    const C = NIC_COSTS;
+    expect([C.doorbellToWire, C.wireClocks, C.pollPass, C.pollSeen, C.irqSeen, C.handler, C.freePermille]).toEqual([279, 2432, 4, 2726, 2718, 11, 996]);
+    quotes('nicring', '15,425 NANDs', '6766', '22 reads', '20 writes', '279 clocks', '2432 clocks', '2726 clocks', '2718', '11 clocks', '99.6 %', '63 lines', '0x7000_0000', '1,536-byte');
+    says('network', 1, 'Eight descriptors a ring, a buffer of 1536 bytes'); says('network', 1, '0x7000_0000'); says('network', 2, '15 425 NANDs, 6 766 of them');
+    says('network', 3, '63 lines'); says('network', 3, '2726 clocks after the doorbell'); says('network', 3, 'seen at 2718'); says('network', 3, 'The handler is 11 clocks'); says('network', 3, '99.6 %');
+    says('network', 3, '279 clocks'); says('network', 9, '3 + ⌈len/4⌉ reads and 1 write');
+    const w = (a: number[]) => a.flatMap((x) => [x >> 8, x & 255]);
+    const rfc = w([0x0001, 0xf203, 0xf4f5, 0xf6f7]);
+    expect([0x0001 + 0xf203 + 0xf4f5 + 0xf6f7, onesSum(rfc), checksum(rfc)]).toEqual([0x2ddf0, 0xddf2, 0x220d]);
+    expect(0xddf0 + 2).toBe(0xddf2);
+    const hdr = [0x4500, 0x0073, 0x0000, 0x4000, 0x4011, 0, 0xc0a8, 0x0001, 0xc0a8, 0x00c7];
+    expect([checksum(w(hdr)), onesSum(w(hdr.map((x, i) => (i === 5 ? 0xb861 : x))))]).toEqual([0xb861, 0xffff]);
+    expect(2 ** 16).toBe(65536);
+    quotes('inetcksum', '0xDDF2', '0x220D', '0xB861', '0x2DDF0', '0xFFFF', '0xDDF0 + 2 = 0xDDF2', '48 %');
+    says('network', 4, '0xB861'); says('network', 9, '48 % of the echo request');
+    expect(NF.BYTES_PERCENT).toBe(48);
+    const arp = arpFrame({ op: 1, sha: [2, 0, 0, 0, 0, 1], spa: ip4(10, 0, 0, 1), tha: [0, 0, 0, 0, 0, 0], tpa: ip4(10, 0, 0, 2) });
+    expect([arp.bytes.length, arp.bytes.length - HEADER_BYTES, NF.wireClocks(42), (NF.wireClocks(42) * 3.95 / 1000).toFixed(1)]).toEqual([42, 28, 2688, '10.6']);
+    expect([NF.win('a', 0).total.instr, NF.win('a', 0).total.clocks, NF.win('b', 0).total.instr, NF.win('b', 0).total.clocks]).toEqual([410, 510, 719, 912]);
+    quotes('arp', '42 bytes', '28-byte', '0x0806', '2,688 clocks', '410 instructions', '510 clocks', '719', '912 clocks', '10.6 µs');
+    says('network', 5, '2 688 clocks'); says('network', 5, '410 instructions and 510 clocks'); says('network', 5, '719 instructions and 912 clocks');
+    const echo = icmpEchoFrame({ src: ip4(10, 0, 0, 1), dst: ip4(10, 0, 0, 2), id: 1, srcMac: [2, 0, 0, 0, 0, 1], dstMac: [2, 0, 0, 0, 0, 2], ident: 1, seq: 1, data: Array.from({ length: 32 }, (_, i) => 16 + i) });
+    expect([echo.bytes.length, echo.bytes[14], (echo.bytes[16] << 8) | echo.bytes[17], echo.bytes[23]]).toEqual([74, 0x45, 60, 1]);
+    const RT = NF.roundTrip();
+    expect([NF.PING_FRAME, NF.PING_SERIAL, NF.PING_SERIAL / 32, NF.PING_FRAME_TIME, NET.rtt, RT.cable, RT.software, RT.turnaround, Math.round(100 * RT.cable / NET.rtt)]).toEqual([74, 2752, 86, 3136, 14689, 11008, 3673, 8, 75]);
+    expect(RT.cable).toBe(4 * NF.PING_SERIAL);
+    expect((NET.rtt * 3.95 / 1000).toFixed(1)).toBe('58.0');
+    expect([NF.B_ECHO.total.instr, NF.B_ECHO.total.clocks, NF.B_BUSY_PERCENT, NET.words.a, NET.words.b, NET.nands.lan]).toEqual([1491, 1882, 60, 1711, 1322, 12471821]);
+    quotes('ipv4', '74 bytes', '2752 clocks', '3136', '14,689 clocks', '58.0 µs', '11008', '3673', '1491 instructions, 1882 clocks', '60 %', '48 %', '12,471,821 NANDs', '1,711 instructions', '1,322', '0x003C', '75 %', '86 bytes');
+    says('network', 0, '86 bytes on the cable'); says('network', 8, '14 689 clocks'); says('network', 8, '58.0 µs'); says('network', 8, '11 008'); says('network', 8, '3 673'); says('network', 8, '2 752 clocks');
+    says('network', 8, '12 471 821 NANDs'); says('network', 8, '1 711 instructions in A, 1 322 in B'); says('network', 7, '1 491 instructions in 1 882 clocks'); says('network', 9, '60 % of a frame time');
+    says('network', 9, '3 136'); says('network', 9, 'adds 8 clocks');
   });
 });

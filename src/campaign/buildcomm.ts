@@ -12,8 +12,10 @@ import { RELAY_RULE } from './buildr';
 import { i2cController } from '../lib/i2c';
 import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
+import { ethMacFd, swBrain } from '../lib/ethlevels';
 import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
+import { MAC_BIT, MAC_GAP, MAC_RX_LANES, MAC_TX_LANES, runMac, runSwitch, SWITCH_LANES } from './ethcheck';
 import { DIALLED, runDial, LINE_KM, LINE_SECTION_KM, LINE_VOLTS, repeaterProblems, I2C_SCENARIOS, run8b10b, runI2c, runCdr, CDR_SCENARIOS, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
@@ -49,6 +51,14 @@ export const crcGives = (): string[] => [...new Set([...(netlistOf(CRC_UNIT())?.
 export const leafGives = (def: () => ComponentDef, subs: () => ComponentDef[]) => (): string[] => {
   const skip = new Set(subs().map((d) => d.id));
   return [...new Set([def(), ...subs()].flatMap((d) => netlistOf(d)?.instances ?? []).map((i) => i.def.id).filter((id) => !skip.has(id)))];
+};
+
+/** Every box of an Rtl-built reference below its top (the scopes), as (def, name) for refOf: they are drawn as chips of their own. */
+export const rtlBoxes = (top: ComponentDef, prefix: string): [ComponentDef, string][] => {
+  const seen = new Map<string, ComponentDef>();
+  const walk = (d: ComponentDef) => { for (const i of netlistOf(d)?.instances ?? []) if (i.def.id.startsWith(prefix) && !seen.has(i.def.id)) { seen.set(i.def.id, i.def); walk(i.def); } };
+  walk(top);
+  return [...seen.values()].map((d) => [d, d.name ?? d.id] as [ComponentDef, string]);
 };
 
 export const SYNC_REF = (): ComponentDef => syncN(2);
@@ -112,6 +122,24 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(i2cController()),
     check: { kind: 'custom', describe: I2C_SCENARIOS.length + ' sessions against a target and a wired-AND bus: write and read back with a repeated START, an address nobody has, a target that stretches SCL, and a rival controller started together with you, which you lose at four address bits and win at two. Every output after every clock.', run: runI2c },
     answer: refOf('l_i2c', i2cController, 'I²C controller', () => i2cBlocks().map((d) => [d, d.name] as [ComponentDef, string])),
+  }),
+  l_mac: () => ({
+    id: 'l_mac', title: 'Ethernet MAC', level: 'sequential', allowed: 'nand',
+    brief: 'The sending and receiving halves of a full-duplex Ethernet link. <b>Sending</b>: a frame arrives as a byte stream (<b>data</b>, <b>valid</b>, <b>last</b>; a byte moves at a clock where valid and <b>ready</b> are both 1; the frame runs from the destination address to its last payload byte). It goes out on <b>txd</b> with <b>txen</b> high for exactly the frame: seven bytes of 0x55, the start-of-frame delimiter 0xD5, the stream\'s bytes, zero padding up to 60 bytes, then the four bytes of FCS (the complement of the CRC-32 you built, least significant byte first). Each byte goes least significant bit first, each bit lasts ' + MAC_BIT + ' clocks, and the line stays quiet for 96 bit times (' + MAC_GAP + ' clocks) between frames. '
+      + '<b>Receiving</b>: <b>rxd</b> carries the same, with <b>crs</b> high while a frame is on the wire; find the SFD in the stream of bits whatever the length of the preamble, and give the frame\'s bytes without preamble, SFD and FCS on <b>rdata</b> / <b>rvalid</b>, <b>rlast</b> on its last byte, and <b>rerr</b> = 1 with it if the frame is to be thrown away (the bytes cannot be taken back once they have gone out: err comes with the last). A frame is good when the CRC-32 register over destination to FCS holds 0xDEBB20E3 and it is at least 64 bytes with the FCS. '
+      + 'The bench does not model a cable: the far end is a JavaScript receiver that decodes your txd a bit at a time and names the first field that is wrong, and a sender of good, damaged and awkward frames (short preambles, payloads of 0xD5, a frame after one whose FCS ends in 0xAA or 0xAB). Carrier sense and collisions are not part of this level (a full-duplex link has neither).',
+    ports: pinsOf(ethMacFd()),
+    check: { kind: 'custom', describe: MAC_TX_LANES.length + ' sending scenarios (frames from 14 to 160 bytes before the pad, back to back: preamble, SFD, bytes, pad, FCS, bit lengths, the gap) and ' + MAC_RX_LANES.length + ' receiving ones (good frames, a flipped data bit, a flipped FCS bit, a runt, short preambles, a frame after FCS bytes of 0xAA and 0xAB, payloads that look like the SFD): bytes, last and err.', run: runMac },
+    answer: refOf('l_mac', ethMacFd, 'Ethernet MAC', () => rtlBoxes(ethMacFd(), 'eth_mac_')),
+  }),
+  l_switch: () => ({
+    id: 'l_switch', title: 'Learning switch', level: 'sequential', allowed: 'nand',
+    brief: 'The brain of a four-port switch: frames arrive on <b>inport</b> (0 to 3) with a source and a destination station number (8 bits each; 0xFF means everyone) and <b>bad</b> = 1 if the MAC found their FCS wrong. For one clock <b>go</b> is 1 with the frame\'s header; in that same clock edge <b>mask</b> (a bit per output port) and <b>ovalid</b> = 1 must show where the frame goes, and with go = 0 both read 0. '
+      + 'The rules: a frame goes to the port its destination was last heard from, and only there; to every port but the input if the destination is a broadcast or has never been heard (<i>flooding</i>); to none if the destination is on the port it came in on (the segment behind that port already has it) and to none if bad = 1. A good frame teaches the table where its source is (a host that moves is found at its new port; a bad frame teaches nothing; 0xFF is never learned), and the lookup uses the table as it was before this frame. The table holds four hosts; a fifth overwrites the oldest entry. '
+      + 'The bench is a JavaScript model of the same table and of who is on which port; a real switch has 48-bit addresses in a hashed RAM (chapter 49), here station numbers keep the table small enough to draw as gates. The far end names the first frame whose output set is wrong and the rule it breaks.',
+    ports: pinsOf(swBrain()),
+    check: { kind: 'custom', describe: SWITCH_LANES.length + ' traffic scripts of up to 60 frames: hosts announcing themselves, every pair talking, a host nobody has heard, two hosts behind one port, a host that moves, damaged frames, the broadcast address as a source, a fifth host, a frame to its own sender, frames on consecutive clocks and random traffic: the output set after every go, against the model.', run: runSwitch },
+    answer: refOf('l_switch', swBrain, 'Learning switch', () => rtlBoxes(swBrain(), 'sw_brain_')),
   }),
   l_repeater: () => ({
     id: 'l_repeater', title: 'Relay repeater', level: 'transistors', allowed: RELAY_RULE,
