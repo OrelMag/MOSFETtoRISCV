@@ -141,18 +141,20 @@ const BROKEN: Broken[] = [
   { name: 'file-cut-short', frames: [{ us: 0, bytes: good() }, { us: 1, bytes: good() }], cut: 20, want: /tshark/ },
 ];
 
-const runTshark = (file: string): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
-  execFile(tshark, tsharkArgs(file), { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
+const runTshark = (file: Uint8Array): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
+  const p = execFile(tshark, tsharkArgs(), { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
+  p.stdin!.on('error', () => {}); // it may stop reading early: its exit says why
+  p.stdin!.end(file);
 });
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'fields.txt'), FIELDS.join('\n'));
 
 async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0): Promise<string[]> {
-  const file = join(out, `${name}.pcap`), bytes = pcapFile(frames);
-  writeFileSync(file, cut ? bytes.slice(0, bytes.length - cut) : bytes);
+  const file = join(out, `${name}.pcap`), whole = pcapFile(frames), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
+  writeFileSync(file, bytes);
   if (dump) return [];
-  const r = await runTshark(file);
+  const r = await runTshark(bytes);
   writeFileSync(join(out, `${name}.tsv`), r.text);
   const problems = compareCapture(frames, parseRows(r.text), claims);
   if (r.code !== 0 || r.err.trim()) problems.unshift(`tshark exit ${r.code}: ${r.err.trim().slice(0, 300)}`);

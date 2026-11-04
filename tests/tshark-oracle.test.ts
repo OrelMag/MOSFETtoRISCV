@@ -26,7 +26,7 @@ describe('reading tshark', () => {
     expect(parseRows('')).toEqual([]);
   });
   it('asks for every checksum and one column per field', () => {
-    const a = tsharkArgs('x.pcap');
+    const a = tsharkArgs();
     for (const p of ['ip.check_checksum:TRUE', 'udp.check_checksum:TRUE', 'tcp.check_checksum:TRUE']) expect(a).toContain(p);
     expect(a.filter((x) => x === '-e').length).toBe(FIELDS.length);
   });
@@ -37,6 +37,10 @@ describe('what the bytes claim', () => {
     const c = claimOf(ping, 5);
     expect(c.chain).toBe('eth:ethertype:ip:icmp');
     expect(c.fields).toMatchObject({ 'eth.type': 0x800, 'ip.src': '10.0.0.1', 'ip.dst': '10.0.0.2', 'ip.proto': 1, 'icmp.type': 8, 'icmp.ident': 0x1234, 'icmp.seq': 1, 'data.data': '01020304', 'frame.time_epoch': 5 });
+  });
+  it('a frame cut short claims what it holds, and does not throw', () => {
+    expect(claimOf(ping.slice(0, 40), 0).fields['data.data']).toBeUndefined();
+    expect(claimOf(ping.slice(0, 44), 0).fields['data.data']).toBe('0102');
   });
   it('a type that is neither claims only Ethernet', () => {
     const b = [...ping]; b[12] = 0x88; b[13] = 0xb5;

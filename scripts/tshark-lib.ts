@@ -15,7 +15,8 @@ export type Field = typeof FIELDS[number];
 
 /** tshark's options: verify every checksum it is able to; by default it trusts some of them. */
 export const TSHARK_PREFS = ['-o', 'ip.check_checksum:TRUE', '-o', 'udp.check_checksum:TRUE', '-o', 'tcp.check_checksum:TRUE'];
-export const tsharkArgs = (file: string): string[] => ['-r', file, '-n', ...TSHARK_PREFS, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
+/** The file goes in on stdin: Ubuntu's tshark may refuse a path by policy ("You don't have permission"), which would say nothing about the file. */
+export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
 
 export type Row = Partial<Record<Field, string>>;
 
@@ -30,7 +31,7 @@ export function parseRows(text: string): Row[] {
 const be = (a: ArrayLike<number>, i: number, n: number): number => { let v = 0; for (let k = 0; k < n; k++) v = v * 256 + a[i + k]; return v; };
 const macAt = (a: ArrayLike<number>, i: number) => Array.from({ length: 6 }, (_, k) => a[i + k].toString(16).padStart(2, '0')).join(':');
 const ipAt = (a: ArrayLike<number>, i: number) => [a[i], a[i + 1], a[i + 2], a[i + 3]].join('.');
-const hexOf = (a: ArrayLike<number>, from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, k) => a[from + k].toString(16).padStart(2, '0')).join('');
+const hexOf = (a: ArrayLike<number>, from: number, to: number) => Array.from({ length: Math.max(0, Math.min(to, a.length) - from) }, (_, k) => a[from + k].toString(16).padStart(2, '0')).join('');
 
 export interface Claim { fields: Partial<Record<Field, string | number>>; chain: string; /** Checksums that must read good. */ good: Field[] }
 
@@ -54,7 +55,8 @@ export function claimOf(b: ArrayLike<number>, us: number): Claim {
       good.push('icmp.checksum.status');
       if (b[t] === 0 || b[t] === 8) {
         Object.assign(fields, { 'icmp.ident': be(b, t + 4, 2), 'icmp.seq': be(b, t + 6, 2) });
-        if (end > t + 8) fields['data.data'] = hexOf(b, t + 8, end);
+        const data = hexOf(b, t + 8, end);
+        if (data) fields['data.data'] = data;
       }
     } else if (proto === 17) {
       chain += ':udp';
