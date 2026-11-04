@@ -479,7 +479,7 @@ export class CampaignPage implements Page {
           // the panel redrew: keyboard focus goes to the way on (Next), not back to the top of the page
           this.main.querySelector<HTMLElement>('.cp-next')?.focus({ preventScroll: true });
         } }, icon('check', 15), 'Done reading'));
-      if (n.id === 'intro') bar.append(h('a', { class: 'btn', href: '#/campaign/intro' }, 'The full diagram'));
+      if (n.id === 'intro') bar.append(h('a', { class: 'btn sm', href: '#/campaign/intro' }, 'The full diagram'));
     } else if (ch) {
       const chip = levelChipId(n);
       const exists = !!loadWorkspace().chips[chip];
@@ -506,7 +506,7 @@ export class CampaignPage implements Page {
       if (main && n.kind === 'lesson') bar.insertBefore(go, bar.children[1] ?? null);
       else bar.append(go);
     }
-    if (reach?.side && reach.side.id !== next?.id) bar.append(h('a', { class: 'btn ghost', href: `#/campaign/n/${reach.side.id}` }, `Side quest: ${reach.side.title}`));
+    if (reach?.side && reach.side.id !== next?.id) bar.append(h('a', { class: 'btn sm ghost cp-side', href: `#/campaign/n/${reach.side.id}`, title: `Side quest: ${reach.side.title}` }, `Side quest: ${reach.side.title}`));
     // sticky (campaign.css) only with a main action to keep in reach: a drill's lone Skip stays at the end
     bar.classList.toggle('sticky', !!bar.querySelector('.btn.primary'));
     return bar;
