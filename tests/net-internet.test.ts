@@ -138,6 +138,17 @@ describe('forwarding', () => {
     expect(j.end).toEqual({ kind: 'router', router: R.s1 });
     expect(n.bgp.best(AS_TARN, keyOf(hijack.prefix, 24))).toBeDefined();
   });
+  it('a hijack beats the victim\'s own inside route too: ns1 to www, one network, ends at Sable', () => {
+    const www = hostIp(WWW), hijack = { as: AS_SABLE, prefix: (www & 0xffffff00) >>> 0, len: 24 };
+    const ns1 = hostId('ns1'), frame = () => hostFrame(ns1, www, 64, PROTO_UDP, [1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(new Internet().send(ns1, frame()).end).toMatchObject({ kind: 'host', host: WWW });
+    expect(new Internet({ hijack }).send(ns1, frame()).end).toEqual({ kind: 'router', router: R.s1 });
+  });
+  it('a probe\'s port starts where Unix traceroute starts: 33434 at TTL 1, one more a TTL', () => {
+    const port = (f: number[]) => (f[36] << 8) | f[37];
+    expect(port(probeFrame(LAPTOP, hostIp(WWW), 1))).toBe(33434);
+    expect(port(probeFrame(LAPTOP, hostIp(WWW), 2))).toBe(33435);
+  });
 });
 
 describe('traceroute', () => {

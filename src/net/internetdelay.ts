@@ -110,16 +110,31 @@ export function slowStartRounds(segments: number): number {
   return n;
 }
 
-/** DNS, then TCP's handshake, TLS if any, the request, the response in slow start: round trips plus the bottleneck's serialization. No loss. */
+/** A segment's headers on the wire: Ethernet 14 + 24, IP 20, TCP 20. */
+const SEG_EXTRA = 78;
+/** From the first byte of the response to its last. Window k leaves k round trips in; the bits of an earlier window pass inside those round trips, so the last byte comes
+ *  at the latest of k·RTT + what is still to send from window k on, over the bottleneck: a FIFO that may still be busy with earlier windows. */
+export function responseMs(pageBytes: number, rttMs: number, bottleneckMbps: number): number {
+  const segs = Math.max(1, Math.ceil(pageBytes / MSS));
+  let sent = 0, w = INIT_WINDOW, k = 0, last = 0;
+  while (sent < segs) {
+    const left = Math.max(0, pageBytes - sent * MSS) + (segs - sent) * SEG_EXTRA;
+    last = Math.max(last, k * rttMs + (left * 8) / (bottleneckMbps * 1000));
+    sent += w; w *= 2; k++;
+  }
+  return last;
+}
+
+/** DNS, then TCP's handshake, TLS if any, the request, the response in slow start. No loss, and an ACK for every segment. */
 export function fetchPhases(f: FetchSpec): FetchPhase[] {
   const think = f.thinkMs ?? THINK_MS, segs = Math.max(1, Math.ceil(f.pageBytes / MSS)), rounds = slowStartRounds(segs);
-  const onWire = ((f.pageBytes + segs * 78) * 8) / (f.bottleneckMbps * 1000);
+  const onWire = ((f.pageBytes + segs * SEG_EXTRA) * 8) / (f.bottleneckMbps * 1000);
   const out: FetchPhase[] = [];
   if (f.dnsMs > 0) out.push({ name: 'DNS', ms: f.dnsMs, what: 'name to address' });
   out.push({ name: 'TCP handshake', ms: f.rttMs, what: 'SYN, SYN-ACK: one round trip before any data' });
   if (f.tls) out.push({ name: 'TLS', ms: f.rttMs, what: 'one more round trip for keys (TLS 1.3); not built in this book' });
   out.push({ name: 'Request, to first byte', ms: f.rttMs + think, what: `one round trip and ${think} ms of the server's own (assumed)` });
-  out.push({ name: `Response: ${segs} segment${segs === 1 ? '' : 's'}`, ms: (rounds - 1) * f.rttMs + onWire, what: `${rounds} window${rounds === 1 ? '' : 's'} from ${INIT_WINDOW}, doubling, ${onWire.toFixed(1)} ms at the narrowest link` });
+  out.push({ name: `Response: ${segs} segment${segs === 1 ? '' : 's'}`, ms: responseMs(f.pageBytes, f.rttMs, f.bottleneckMbps), what: `${rounds} window${rounds === 1 ? '' : 's'} from ${INIT_WINDOW}, doubling; ${onWire.toFixed(1)} ms of bits at the narrowest link${rounds > 1 ? ', some of them inside those round trips' : ''}` });
   return out;
 }
 export const fetchMs = (f: FetchSpec): number => fetchPhases(f).reduce((a, p) => a + p.ms, 0);

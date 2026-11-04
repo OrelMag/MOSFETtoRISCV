@@ -92,7 +92,7 @@ const asPathText = (j: Journey): string => {
 const endText = (j: Journey): string => {
   const e = j.end;
   if (e.kind === 'host') return `arrives at ${HOSTS[e.host].name}`;
-  if (e.kind === 'noroute') return `stops at ${ROUTERS[e.router].name}: no route, and an ICMP "unreachable" goes back`;
+  if (e.kind === 'noroute') return `stops at ${ROUTERS[e.router].name}: no route. A real router sends ICMP "unreachable" back, traceroute's !N; this model only drops it`;
   if (e.kind === 'router') return `ends inside ${ROUTERS[e.router].name}, in ${ASES[ROUTERS[e.router].as].name}`;
   if (e.kind === 'expired') return `TTL runs out at ${ROUTERS[e.router].name}`;
   return 'is lost';
@@ -264,9 +264,9 @@ export function tracerouteWidget(): Widget {
         btn('Next probe', 'One more TTL', () => { if (shown < rows.length) { shown++; sel = shown - 1; paint(); } }, 'btn sm primary'),
         btn('All', 'Run it out', () => { shown = rows.length; sel = shown - 1; paint(); }),
         btn('Probe again', 'Three more probes per TTL, with different luck in the queues', () => { seed = (seed + 1) >>> 0; compute(); paint(); }),
-        btn('Save capture', 'A .pcap of the probes and replies, for Wireshark', save)),
+        btn('Save capture', 'A .pcap of one probe and reply per line, for Wireshark', save)),
       h('div', { class: 'in-scroll' }, map.el), rowsEl, detail, h('div', { class: 'cpu-sec' }, 'The reply\'s ICMP message'), bytes,
-      h('p', { class: 'sub' }, 'No packet leaves your machine. This is the model\'s network, and its times are the model\'s: light, bits and seeded queues. Click a link to fail it.')),
+      h('p', { class: 'sub' }, 'No packet leaves your machine. This is the model\'s network, and its times are the model\'s: light, bits and seeded queues. The capture holds one probe a line, at the mean delays, not these samples. Click a link to fail it.')),
   };
 }
 
@@ -319,11 +319,12 @@ function pathPanel(start: number): ScenePanel {
     };
     stage.edgeHooks.add(hook);
     const clear = () => { m = blank(); j = net.send(LAPTOP, PATH_FRAMES[choice].frame()); hop = 0; writes = []; wi = 0; frame = []; i = 0; out = []; lastCause = -1; cycles = 0; agree = true; wrong = ''; same = true; doneHops = 0; loadCycles = 0; frameCycles = 0; };
-    stage.resetHooks.add(() => { clear(); drive(); schedule(); });
+    stage.resetHooks.add(() => { stopAll(); clear(); drive(); schedule(); });
     const snap = () => ({ buf: m.buf.slice(), trie: m.trie.slice(), adj: m.adj.slice(), rest: { ...m, buf: undefined, trie: undefined, adj: undefined }, choice, j, hop, writes, wi, frame, i, out: [...out], lastCause, cycles, agree, wrong, same, doneHops, loadCycles, frameCycles });
     stage.historyHooks.add({
       save: snap,
       restore: (v) => {
+        stopAll();
         const x = v as ReturnType<typeof snap>;
         Object.assign(m, x.rest, { buf: x.buf.slice(), trie: x.trie.slice(), adj: x.adj.slice() });
         out = [...x.out];
@@ -350,7 +351,7 @@ function pathPanel(start: number): ScenePanel {
     };
     const act = (f: () => void) => { stage.checkpoint(); f(); stage.refresh(); schedule(); };
     const stopAll = () => { if (timer) { clearTimeout(timer); timer = 0; } };
-    const all = () => { stage.checkpoint(); const go = () => { timer = 0; if (runHop()) { stage.refresh(); schedule(); timer = window.setTimeout(go, 0); } else { stage.refresh(); schedule(); } }; go(); };
+    const all = () => { if (timer) return; stage.checkpoint(); const go = () => { timer = 0; if (runHop()) { stage.refresh(); schedule(); timer = window.setTimeout(go, 0); } else { stage.refresh(); schedule(); } }; go(); };
     const choose = (n: number) => { stopAll(); stage.checkpoint(); choice = n; sel.value = String(n); j = net.send(LAPTOP, PATH_FRAMES[n].frame()); hop = 0; doneHops = 0; same = true; writes = []; wi = 0; frame = []; i = 0; out = []; lastCause = -1; drive(); stage.refresh(); schedule(); };
 
     const sel = pick('Frame to carry', PATH_FRAMES.map((f, n) => [String(n), f.name]), String(start), (v) => choose(+v));
@@ -451,7 +452,7 @@ export function fetchWidget(): Widget {
     bar.replaceChildren(...ph.map((p, i) => h('span', { class: `in-seg in-seg${i}`, style: `flex-grow:${p.ms}`, title: `${p.name}: ${ms2(p.ms)} ms` })));
     rows.replaceChildren(...ph.map((p, i) => h('div', { class: 'rt-route' }, h('i', { class: `in-dot in-seg${i}` }), h('code', null, p.name), h('span', null, p.what), h('em', null, `${ms2(p.ms)} ms`))));
     const waiting = ph.filter((p) => !p.name.startsWith('Response')).reduce((a, p) => a + p.ms, 0);
-    read.textContent = `${ms2(total)} ms for ${kb} kB: round trip ${ms2(rttMs)} ms, narrowest link ${n0(narrow)} Mb/s free. ${Math.round((waiting / total) * 100)} % of the time passes before the first byte of the page. A link ten times faster would change only the serialization part of the last line.`;
+    read.textContent = `${ms2(total)} ms for ${kb} kB: round trip ${ms2(rttMs)} ms, narrowest link ${n0(narrow)} Mb/s free. ${Math.round((waiting / total) * 100)} % of the time passes before the first byte of the page. A link ten times faster would change only the serialization part of the last line.${near ? ' The name is looked up as before: a real content network usually answers that from nearby too, which this model leaves out.' : ''}`;
   };
   const sk = slider('Page', 1, 2000, 1, kb, (v) => `${v} kB`, (v) => { kb = v; paint(); });
   paint();

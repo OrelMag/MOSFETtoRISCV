@@ -297,7 +297,7 @@ export function hostFrame(host: number, dst: number, ttl: number, proto: number,
 export const TRACE_PORT = 33434;
 /** Traceroute's probe as Unix sends it: UDP to a port nobody listens on, so the far host answers too, and the TTL decides who speaks. */
 export const probeFrame = (host: number, dst: number, ttl: number): number[] =>
-  hostFrame(host, dst, ttl, PROTO_UDP, udpSegment(hostIp(host), dst, 33000 + host, TRACE_PORT + ttl, new Array<number>(12).fill(0)), 0x1000 + ttl);
+  hostFrame(host, dst, ttl, PROTO_UDP, udpSegment(hostIp(host), dst, 33000 + host, TRACE_PORT + ttl - 1, new Array<number>(12).fill(0)), 0x1000 + ttl);
 
 export const ICMP_TIME_EXCEEDED = 11, ICMP_UNREACHABLE = 3;
 /** RFC 792: type, code, checksum, four unused bytes, then the offending IP header and its first eight bytes, so the sender can tell which probe it was. */

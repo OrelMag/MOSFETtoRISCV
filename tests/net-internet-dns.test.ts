@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { hostId, hostIp, Internet, LINKS, linkBetween, probeFrame, R } from '../src/net/internet';
 import { CLASS_IN, decodeDns, encodeDns, Resolver, SITE, TTL_A, TYPE_A, TYPE_NS, type DnsMessage } from '../src/net/internetdns';
-import { CROSS_BYTES, engineMs, fetchMs, fetchPhases, journeyDelays, LinkQueue, oneWayMs, propMs, queueMs, serMs, slowStartRounds, WIRE_EXTRA } from '../src/net/internetdelay';
+import { CROSS_BYTES, engineMs, fetchMs, fetchPhases, journeyDelays, MSS, responseMs, LinkQueue, oneWayMs, propMs, queueMs, serMs, slowStartRounds, WIRE_EXTRA } from '../src/net/internetdelay';
 import { engineCycles } from '../src/widgets/router';
 import { CLOCK_NS } from '../src/dram/timing';
 
@@ -100,5 +100,33 @@ describe('the delays', () => {
     const f = { dnsMs: 0, rttMs: 100, pageBytes: 1460, bottleneckMbps: 20, tls: false, thinkMs: 0 };
     expect(fetchPhases(f).length).toBe(3);
     expect(fetchMs(f)).toBeCloseTo(200 + ((1460 + 78) * 8) / 20000, 9);
+  });
+});
+
+describe('the response', () => {
+  /** Segment by segment through a FIFO at the bottleneck, window k arriving k round trips in: what responseMs must equal. */
+  const fifo = (bytes: number, rtt: number, mbps: number): number => {
+    const segs = Math.max(1, Math.ceil(bytes / MSS));
+    let free = 0, k = 0, w = 10, n = 0, left = bytes;
+    while (n < segs) {
+      for (let i = 0; i < w && n < segs; i++, n++) {
+        const pay = Math.min(left, MSS);
+        left -= pay;
+        free = Math.max(free, k * rtt) + ((pay + 78) * 8) / (mbps * 1000);
+      }
+      k++; w *= 2;
+    }
+    return free;
+  };
+  it('equals a packet-by-packet queue at every size, so no bit is counted twice', () => {
+    for (const kb of [1, 14, 15, 44, 100, 167, 500, 2000]) for (const [rtt, mbps] of [[95.39, 14], [10, 1000], [300, 2]])
+      expect(responseMs(kb * 1000, rtt, mbps)).toBeCloseTo(fifo(kb * 1000, rtt, mbps), 6);
+  });
+  it('is round trips for a small page and the link for a large one', () => {
+    const rtt = 95.39, mbps = 14;
+    expect(responseMs(100_000, rtt, mbps)).toBeLessThan(226);
+    expect(responseMs(100_000, rtt, mbps)).toBeGreaterThan(2 * rtt);
+    expect(responseMs(2_000_000, rtt, mbps)).toBeCloseTo(1454, -1);
+    expect(responseMs(2_000_000, rtt, mbps)).toBeLessThan(2 * ((2_000_000 + 1370 * 78) * 8) / (mbps * 1000));
   });
 });
