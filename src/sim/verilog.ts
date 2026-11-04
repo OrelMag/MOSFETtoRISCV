@@ -152,7 +152,7 @@ export function structuralVerilog(def: ComponentDef): string | null {
     if (isExternal(c)) {
       // a key, keyboard, switch bank, console or screen: the world outside the circuit, so no module; its outputs are left undriven
       const outs = c.ports.filter((p) => p.dir === 'out').map((p) => conn(p.name)).filter(Boolean);
-      lines.push(`  // ${inst.name}: ${c.name} (a sandbox part outside the circuit, not hardware)${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`);
+      lines.push(`  // ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium, not transistors and not synthesizable: on hardware it is a wire' : 'a sandbox part outside the circuit, not hardware'})${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`);
       continue;
     }
     const args = c.ports.map((p) => `.${id(p.name)}(${conn(p.name)})`);
