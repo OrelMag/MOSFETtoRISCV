@@ -234,7 +234,7 @@ export const spiPanel: ScenePanel = (stage: Stage): Widget => {
       h('tbody', null, ...(log.length ? log.map((r) => h('tr', null, h('th', { scope: 'row' }, r.role), h('td', null, `0x${hex(r.tx)}`), h('td', null, r.rx < 0 ? 'X' : `0x${hex(r.rx)}`))) : [h('tr', null, h('td', { colspan: 3, class: 'sub' }, 'Choose the device with sel, then a transaction.'))])));
   };
   const btn = (label: string, title: string, f: () => void) => { const b = h('button', { class: 'btn sm', title }, label); b.addEventListener('click', f); return b; };
-  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
+  const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
     h('h4', null, 'Transactions', h('span', { class: 'fold-hint' })),
     h('div', { class: 'dram-ops' }, ...OPS.map((o, i) => btn(o.label, o.title, () => run(i))), btn('Clear log', 'Forget the log', () => { log = []; paint(); })),
     table,
@@ -256,7 +256,7 @@ export { spiDevice };
 /** Bit times on the wire for `n` data bytes: UART 8N1, SPI (CS aside) and an I²C write frame (address byte, START and STOP as one bit time each). */
 export const wireBits = (n: number): { uart: number; spi: number; i2c: number } => ({ uart: 10 * n, spi: 8 * n, i2c: 9 * (n + 1) + 2 });
 
-export interface CompareCosts { spiMaster: number; spiTarget: number; i2cController: number; i2cTarget: number; spiClocks: number; i2cClocks: number }
+export interface CompareCosts { uartNands: string; uartClocks: number; spiMaster: number; spiTarget: number; i2cController: number; i2cTarget: number; spiClocks: number; i2cClocks: number }
 
 /** The comparison table (costs measured on the chapter's blocks) and the payload calculator under it. */
 export function throughputWidget(c: CompareCosts): Widget {
@@ -273,8 +273,8 @@ export function throughputWidget(c: CompareCosts): Widget {
       ['Direction', 'full duplex, two wires', 'full duplex, two data wires', 'half duplex, one data wire'],
       ['Who decides', 'either end', 'the controller only', 'a controller; several may arbitrate'],
       ["Receiver's clock", 'its own, matched within a few percent', 'none: SCLK', 'none: SCL, which it may stretch'],
-      ['NANDs here (without storage)', 'chapter 43', `controller ${thin(c.spiMaster)}, target ${thin(c.spiTarget)}`, `controller ${thin(c.i2cController)}, target ${thin(c.i2cTarget)} (its four registers included)`],
-      ['System clocks per byte (this implementation)', 'chapter 43', String(c.spiClocks), String(c.i2cClocks)],
+      ['NANDs here (without storage or FIFOs)', c.uartNands, `controller ${thin(c.spiMaster)}, target ${thin(c.spiTarget)}`, `controller ${thin(c.i2cController)}, target ${thin(c.i2cTarget)} (its four registers included)`],
+      ['System clocks per byte (this implementation, at its fastest)', String(c.uartClocks), String(c.spiClocks), String(c.i2cClocks)],
     ] as string[][]).map((r) => h('tr', null, h('th', { scope: 'row' }, r[0]), ...r.slice(1).map((x) => h('td', null, x)))))));
   const paint = () => {
     const b = wireBits(n);

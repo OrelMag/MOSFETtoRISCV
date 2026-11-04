@@ -146,3 +146,17 @@ describe('the master with two memories (the chapter\'s scene)', () => {
     await yieldTick();
   });
 });
+
+describe('the memory is a mode 0 part', () => {
+  it('a mode 3 master (SCLK idles high, the first edge falls) loses the last byte of a write: no falling edge follows the last rising edge before CS rises', () => {
+    const g = simulate(spiDevice());
+    const set2 = (v: Record<string, number>) => set(g, v);
+    set2({ sclk: 1, cs_n: 0, mosi: 0 });
+    for (const tx of [SPI_WRITE, 5, 0xab]) for (let i = 0; i < 8; i++) { set2({ sclk: 0, mosi: (tx >> (7 - i)) & 1 }); set2({ sclk: 1 }); }
+    set2({ cs_n: 1 });
+    expect(gateTransfer(g, [SPI_READ, 5, 0]).slice(2)).toEqual([0]);
+    // the same bytes in mode 0 are kept
+    gateTransfer(g, [SPI_WRITE, 5, 0xab]);
+    expect(gateTransfer(g, [SPI_READ, 5, 0]).slice(2)).toEqual([0xab]);
+  });
+});

@@ -110,7 +110,7 @@ export const busApi = new WeakMap<Stage, BusApi>();
 const FRAME_OPS: { label: string; title: string; cmds: Cmd[] }[] = [
   { label: 'Write 0xA7 to register 1', title: 'START, address 0x50 + W, register pointer 1, data 0xA7, STOP', cmds: [[START, 0], addrW(TARGET), [WRITE, 1], [WRITE, 0xa7], [STOP, 0]] },
   { label: 'Read register 1 back', title: 'START, address + W, pointer 1, repeated START, address + R, one byte with NACK, STOP', cmds: [[START, 0], addrW(TARGET), [WRITE, 1], [START, 0], addrR(TARGET), [READ, 1], [STOP, 0]] },
-  { label: 'Address nobody has', title: 'START, address 0x2A + W, which no target answers, STOP', cmds: [[START, 0], addrW(0x2a), [WRITE, 0], [STOP, 0]] },
+  { label: 'Address nobody has', title: 'START, address 0x2A + W, which no target answers, STOP', cmds: [[START, 0], addrW(0x2a), [STOP, 0]] },
 ];
 const ADDR_LABEL = ['A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'A0', 'R/W'];
 
@@ -188,7 +188,7 @@ function busPanel({ arb }: Opts): ScenePanel {
       const sc = (a: number): Cmd[] => [[START, 0], addrW(a), [WRITE, 0], [WRITE, 0x3c], [STOP, 0]];
       return [sc(TARGET), sc(a1)];
     };
-    const run = (i: number) => (arb ? start(arbScripts(), 'arbitration', i === 0) : start([FRAME_OPS[i].cmds], FRAME_OPS[i].label));
+    const run = (i: number) => (busy() ? (stopWhenLost = false, go()) : arb ? start(arbScripts(), 'arbitration', i === 0) : start([FRAME_OPS[i].cmds], FRAME_OPS[i].label));
     const WIN = arb ? 100 : 150;
     const wave = h('div', { class: 'spi-view' }), frame = h('div', { class: 'i2c-frame', role: 'status' }), status = h('div', { class: 'i2c-lost', role: 'status' });
     const paint = () => {
@@ -232,7 +232,7 @@ function busPanel({ arb }: Opts): ScenePanel {
     } else {
       controls = [h('div', { class: 'dram-ops' }, ...FRAME_OPS.map((o, i) => btn(o.label, o.title, () => run(i))), btn('Clear', 'Forget the wires', clear))];
     }
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
       h('h4', null, arb ? 'Two controllers, one bus' : 'A frame on the wires', h('span', { class: 'fold-hint' })), ...controls, wave, frame, status,
       h('p', { class: 'sub' }, arb ? 'The top two rows are what each controller sends (1: it lets go). The bus is their AND. Both start in the same clock, so they agree until the first bit where they do not.' : 'The wires are read at the pins of the pads. ACK is SDA pulled low by the receiver for the ninth clock; NACK is the pull-up winning.'));
     paint();

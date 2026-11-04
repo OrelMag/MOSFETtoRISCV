@@ -4,6 +4,8 @@ import { bigRam } from '../lib/bigmem';
 import { decoder } from '../lib/combinational';
 import { i2cBus, i2cController, i2cTarget, I2C_PAD } from '../lib/i2c';
 import { spiDevice, spiMaster } from '../lib/spi';
+import { baudGen, UART_RX, UART_TX } from '../lib/uart';
+import { OVERSAMPLE } from '../comm/uart';
 import { stats } from '../sim/stats';
 import { groupDigits } from '../sim/numfmt';
 import { i2cArbScene, i2cFrameScene, pullupWidget, wiredScene } from '../widgets/i2c';
@@ -153,7 +155,7 @@ export const chSpi: Chapter = {
           { title: 'Start a byte', set: { tx: 0x02, start: 1, hold: 1 }, cycles: 1, expect: { busy: 1, cs0_n: 0, cs1_n: 1 },
             say: '<p>The controller loads <code>0x02</code> (the write command) into its shift register and pulls CS low: <code>cs0_n</code> = {v:cs0_n} for memory 0, while memory 1 still sees {v:cs1_n} and ignores the wires.</p>' },
           { title: 'Eight clocks', set: { start: 0 }, cycles: 18, expect: { busy: 1, cs0_n: 0 },
-            say: '<p>Halfway through the byte. SCLK has toggled; each rising edge moves one bit of the command out of the controller\'s register, along MOSI, into memory 0\'s shift register. Each falling edge moves the memory\'s next output bit along MISO.</p>' },
+            say: '<p>Halfway through the byte. SCLK has toggled; each falling edge puts the next bit of the command on MOSI (the controller changes on the falling edge in mode 0) and each rising edge lets memory 0 sample it into its shift register. The memory changes MISO on falling edges too.</p>' },
           { title: 'The byte is done', cycles: 20, expect: { busy: 0, cs0_n: 0 },
             say: '<p>The byte is out and one has come back: <code>rx</code> = {v:rx} (the memory had nothing to say yet). CS stays low, because <code>hold</code> is still 1: memory 0 has counted 8 clock edges, taken the command, and waits for an address.</p>' },
           { title: 'CS rises', set: { hold: 0 }, cycles: 2, expect: { cs0_n: 1, cs1_n: 1 },
@@ -204,7 +206,7 @@ export const chSpi: Chapter = {
         return `
         <p>Four signals are cheap when there is one target. With more, two arrangements. <strong>A select per target</strong>: SCLK, MOSI and MISO shared (a bus), one CS wire each. The controller addresses any one target in one transaction, in any order; a target whose select is high must ignore the clock and let go of MISO. The cost is pins on the controller, or an external 1-of-n decoder to save them: a 3-to-8 decoder with an enable is ${dec3} NANDs in this book, and it adds a gate delay between the controller's address and the select.</p>
         <p><strong>A daisy chain</strong>: one shared CS and the clock, but each device's MISO wired to the next device's MOSI, and the last back to the controller. All the devices form one long shift register of 8n bits. A transaction moves n bytes through, one for each device, and CS rising latches them all at once (LED drivers and shift-register ICs work this way: a shift stage and a latch). The wiring is minimal and the cost is time: to change one device the controller sends all n bytes. It also asks more of each device, which must echo its input eight clocks later, and it is found only on parts designed for it.</p>
-        <p>The tri-state output of an unselected device decides whether a shared MISO works at all. Two push-pull outputs on one wire fight when they disagree: a short through an NMOS and a PMOS, as in <a href="#/c/inverter/0">chapter 2</a>. A device that drives MISO only while its CS is low (a tri-state output stage, the pad of <a href="#/c/wire/0">chapter 41</a>) avoids the fight, and a part that forgets to is the classic cause of a bus that works with one device and fails with two. The two wires of the next step avoid the problem differently: nobody drives high at all.</p>
+        <p>The tri-state output of an unselected device decides whether a shared MISO works at all. Two push-pull outputs on one wire fight when they disagree: a short through an NMOS and a PMOS, as in <a href="#/c/inverter/0">chapter 2</a>. A device that drives MISO only while its CS is low (a tri-state buffer, <a href="#/c/routing/0">chapter 7</a>; the output stage of a pad, <a href="#/c/wire/0">chapter 41</a>) avoids the fight, and a part that forgets to is the classic cause of a bus that works with one device and fails with two. The two wires of the next step avoid the problem differently: nobody drives high at all.</p>
         <div class="try">Slide the number of devices from 1 to 8 and watch the wires and the bytes per update cross over.</div>`;
       },
       widget: spiChainWidget,
@@ -324,7 +326,7 @@ export const chSpi: Chapter = {
         <p>No data is damaged, because the AND of a 1 and a 0 is the winner's 0, and everything the loser did up to then was identical to what the winner did. The winner is the controller whose bits are lowest first: priority is by address, and the lower address, which pulls low sooner, wins. The loser retries after the STOP. The clocks are synchronized the same way: SCL is a wired-AND too, so the slower of two controllers' clocks sets the pace (each waits in its second phase until SCL really reads high).</p>
         <p>The scene is two <span data-show="c0 c1">controllers</span> on the same two wires, both told to send a write frame to different addresses, beginning in the same clock so that their START and first bits coincide. The addresses ${hex(ARB_A)} and ${hex(ARB_B)} first differ at ${BIT_NAME(ARB.bit)}, so ${ARB.loser} loses there. Choose the bit where the two addresses differ and watch what each sends against the wire: the top rows are each controller's own bit, the third is the bus, their AND. In the bit where the loser sends 1 and the bus is 0 it stops. The winner's frame goes on to its end.</p>
         <p>The idea is Ethernet's (<em>look while you talk and notice a collision</em>, chapter 48) with the loss taken out. Ethernet finds a collision after the fact, throws the frame away and backs off for a random time. Here the bits are compared as they are sent, the address is a priority, and the winner continues unharmed. It works only because a bit lasts long enough, on a short bus, for every controller to see the wire before the next edge, and because each sender reads its own bit back.</p>
-        <div class="try">Choose <strong>${BIT_NAME(ARB.bit)}</strong> and press <strong>Start both, stop at the loss</strong>. Then <strong>A6</strong>, where controller 0 is the one that loses. Each run takes about a hundred clocks of switch-level solving.</div>`;
+        <div class="try">Choose <strong>${BIT_NAME(ARB.bit)}</strong> and press <strong>Start both, stop at the loss</strong>. Let the frames finish (press <strong>Start both, whole frames</strong>), then choose <strong>A6</strong> and start again: there controller 0 is the one that loses. Each run takes about a hundred clocks of switch-level solving.</div>`;
       },
       scene: i2cArbScene,
       more: {
@@ -350,7 +352,7 @@ export const chSpi: Chapter = {
         <p>The I²C controller is ${nf(N_I2C_CTL / N_SPI_MASTER, 1)} times the gates of the SPI master, and its target ${nf(N_I2C_TGT / N_SPI_DEV, 1)} times the SPI target's logic. The difference is the framing, the address compare, the START and STOP detection, the ACK handshake and arbitration, all of which SPI gets from a select wire. Each I²C pad costs ${T_PAD} transistors at either end, and the pull-ups, one per wire, cost nothing but the speed and current of the last two steps.</p>
         <p>Pick by what the system needs. A fast device with one target at a time (flash, a display, a radio): SPI. Many slow devices, little board area, a configuration or sensor bus (a temperature sensor, an EEPROM, a power controller, a camera's control port): I²C. Two chips that talk freely at a modest rate: UART. The next chapters are about what happens when the wire gets longer than a few centimetres: modulation (45), serial links at gigabits (46) and surviving errors (47). The idea that data and clock should share one wire so that nothing skews returns there as the <em>embedded clock</em>.</p>`;
       },
-      widget: () => throughputWidget({ spiMaster: N_SPI_MASTER, spiTarget: N_SPI_DEV, i2cController: N_I2C_CTL, i2cTarget: N_I2C_TGT, spiClocks: SPI_BYTE_CLOCKS, i2cClocks: I2C_BYTE_CLOCKS }),
+      widget: () => throughputWidget({ uartNands: `transmitter ${thin(nands(UART_TX))}, receiver ${thin(nands(UART_RX))}, baud generator ${thin(nands(baudGen()))}`, uartClocks: 10 * OVERSAMPLE, spiMaster: N_SPI_MASTER, spiTarget: N_SPI_DEV, i2cController: N_I2C_CTL, i2cTarget: N_I2C_TGT, spiClocks: SPI_BYTE_CLOCKS, i2cClocks: I2C_BYTE_CLOCKS }),
       challenge: {
         kind: 'quiz',
         question: 'A board has a temperature sensor, a real-time clock and a small EEPROM, each read a few times a second, and only two spare microcontroller pins. Which link?',
