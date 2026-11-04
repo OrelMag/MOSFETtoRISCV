@@ -243,7 +243,7 @@ export function eyeWidget(opt: { eq?: boolean; rate?: number } = {}): Widget {
     const open = Math.max(e.opening, 0), ber = e.opening <= 0 ? 0.5 : berOf(open / 2, sg);
     if (open > 0) p.layer.append(s('line', { x1: p.X(1), x2: p.X(1), y1: p.Y(e.lowOne), y2: p.Y(e.highZero), class: 'ln-open' }));
     hline(p, e.threshold, 'slicer');
-    chips.set(0, e.opening > 0 ? `${(e.opening * 500).toFixed(0)} mV` : 'closed', `eye height at the best phase, of a ±1 V swing (${(e.opening * 50).toFixed(0)} % of ideal)`, e.opening > 0 ? '' : 'bad');
+    chips.set(0, e.opening > 0 ? `${(e.opening * 1000).toFixed(0)} mV` : 'closed', `eye height at the best phase, of a ±1 V swing (${(e.opening * 50).toFixed(0)} % of ideal)`, e.opening > 0 ? '' : 'bad');
     chips.set(1, `${e.ui.toFixed(0)} ps`, `bit period · ${(e.width * 100).toFixed(0)} % of it open sideways`);
     chips.set(2, `${(sg * 1000).toFixed(0)} mV`, gain > 1.001 ? `noise at the slicer: ${sig} mV × CTLE gain ${gain.toFixed(2)}` : 'noise σ at the slicer');
     chips.set(3, sci(ber), 'BER = Q(half the opening / σ)', ber > 1e-12 ? 'bad' : 'ok');
@@ -252,7 +252,7 @@ export function eyeWidget(opt: { eq?: boolean; rate?: number } = {}): Widget {
       const base = { ...ch, dfe: 0 }, pr = pulseResponse(base, 7), ph = e.phase;
       const hk = Array.from({ length: 6 }, (_, k) => pr[k * S + ph]);
       const mx = Math.max(Math.abs(hk[0]), 1e-9);
-      taps.replaceChildren(h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'cursor'), h('span', { class: 'k-near' }, 'post-cursor left'), h('span', { class: 'k-lump' }, 'removed by the DFE')),
+      taps.replaceChildren(h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'cursor'), h('span', { class: 'k-good' }, 'post-cursor left'), h('span', { class: 'k-lump' }, 'removed by the DFE')),
         h('div', { class: 'sr-bars sr-stems', role: 'img', 'aria-label': 'Pulse response sampled at the best phase: the cursor and five post-cursors' },
           ...hk.map((v, k) => h('span', { class: 'sr-bar' }, h('i', { class: k === 0 ? 'bar-a' : k <= dfe ? 'bar-x' : 'bar-b', style: `height:${Math.max(3, (Math.abs(v) / mx) * 64)}px` }), h('em', null, k === 0 ? 'h0' : `h${k}`), h('small', null, v.toFixed(2))))));
     }
@@ -305,8 +305,8 @@ export function pam4Widget(): Widget {
     draw(pn, e.wave, e.spu, e.phase, 24, 150, noise); draw(pp, ep.wave, ep.spu, ep.phase, 24, 150, noise);
     const bn = e.opening <= 0 ? 0.5 : berOf(e.opening / 2, sg), bp = pam4Ber(ep.opening, sg);
     const loss = (f: number) => poles * 10 * Math.log10(1 + (f / bw) ** 2);
-    chips.set(0, e.opening > 0 ? `${(e.opening * 500).toFixed(0)} mV` : 'closed', 'NRZ eye height', e.opening > 0 ? '' : 'bad');
-    chips.set(1, ep.opening > 0 ? `${(ep.opening * 500).toFixed(0)} mV` : 'closed', 'PAM4 eye height, the smallest of three', ep.opening > 0 ? '' : 'bad');
+    chips.set(0, e.opening > 0 ? `${(e.opening * 1000).toFixed(0)} mV` : 'closed', 'NRZ eye height', e.opening > 0 ? '' : 'bad');
+    chips.set(1, ep.opening > 0 ? `${(ep.opening * 1000).toFixed(0)} mV` : 'closed', 'PAM4 eye height, the smallest of three', ep.opening > 0 ? '' : 'bad');
     chips.set(2, `${sci(bn)} | ${sci(bp)}`, 'BER: NRZ | PAM4', Math.min(bn, bp) > 1e-12 ? 'bad' : 'ok');
     chips.set(3, `${loss(rate / 2).toFixed(1)} | ${loss(rate / 4).toFixed(1)} dB`, `channel loss at Nyquist: NRZ ${num(rate / 2, 1)} GHz | PAM4 ${num(rate / 4, 1)} GHz`);
     const d = loss(rate / 2) - loss(rate / 4);

@@ -37,7 +37,7 @@ export interface SerdesApi {
 /** What a challenge (check, solve) can ask of the link panel. */
 export const serdesApi = new WeakMap<Stage, SerdesApi>();
 
-const STRIP = 96, WINDOW = 24;
+const STRIP = 64, CW = 4.5, WINDOW = 24;
 type Word = [number, number, number];
 
 export function serdesScene(view: 'link' | 'cdr'): Scene {
@@ -143,10 +143,10 @@ export function serdesPanel(view: 'link' | 'cdr'): ScenePanel {
     const update = () => {
       const pad = (a: number[]) => [...Array(Math.max(0, STRIP - a.length)).fill(0), ...a];
       const rows = [
-        { label: 'tx', vals: pad(tx), cw: 7, cls: 'tx' }, { label: 'line', vals: pad(rx), cw: 7, cls: 'rx' }, { label: 'strobe', vals: pad(st), cw: 7, cls: 'strobe' },
-        ...(view === 'cdr' ? [{ label: 'early', vals: pad(ea), cw: 7, cls: 'early' }, { label: 'late', vals: pad(la), cw: 7, cls: 'late' }] : []),
+        { label: 'tx', vals: pad(tx), cw: CW, cls: 'tx' }, { label: 'line', vals: pad(rx), cw: CW, cls: 'rx' }, { label: 'strobe', vals: pad(st), cw: CW, cls: 'strobe' },
+        ...(view === 'cdr' ? [{ label: 'early', vals: pad(ea), cw: CW, cls: 'early' }, { label: 'late', vals: pad(la), cw: CW, cls: 'late' }] : []),
       ];
-      waves.replaceChildren(wavePanel(740, rows, Array.from({ length: Math.floor(STRIP / CYCLES_PER_BIT) + 1 }, (_, i) => ({ x: i * CYCLES_PER_BIT * 7 })), `The last ${STRIP} cycles of the line`));
+      waves.replaceChildren(wavePanel(58 + STRIP * CW + 6, rows, Array.from({ length: Math.floor(STRIP / CYCLES_PER_BIT) + 1 }, (_, i) => ({ x: i * CYCLES_PER_BIT * CW })), `The last ${STRIP} cycles of the line`));
       const v = verdict();
       const last = <T,>(xs: T[], n: number) => xs.slice(-n);
       words.replaceChildren(

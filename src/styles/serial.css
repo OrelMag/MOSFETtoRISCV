@@ -53,3 +53,4 @@
 .sr-lock { padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
 .sr-lock.ok { border-color: var(--good); }
 .sr-lock.bad { border-color: var(--bad); }
+.ln-key .k-good { color: var(--good); }
