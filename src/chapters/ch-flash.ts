@@ -7,6 +7,7 @@ import { V_READ, vtOf } from '../lib/flash';
 import { findNode } from '../sim/flatten';
 import { FG_READ, FG_STEP, type SwitchSim } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
+import { fgate3d } from '../widgets/fgate3d';
 import { flashActions, flashScene, ftlWidget, wearWidget } from '../widgets/flash';
 import type { Chapter } from './types';
 
@@ -144,6 +145,19 @@ export const chFlash: Chapter = {
         ],
         explain: `${vtOf(FG_STEP).toFixed(1)} V is below the ${V_READ} V read voltage, so the cell still turns on: 1. That is why programming verifies after each pulse and repeats: here ${pulses} pulses. Too many pulses push the threshold needlessly high and wear the oxide.`,
       },
+    },
+    {
+      title: 'The floating gate, up close',
+      body: `
+        <p>The same cell, drawn as a stack: p substrate, a thin tunnel oxide, the <strong>floating gate</strong>, a second oxide, the <strong>control gate</strong>.
+        The control gate has a wire to its word line. The floating gate has none: it is sealed in oxide on every side, which is why charge put there stays.
+        Four cells share one strip, as in a NAND string, with the n+ regions between them as shared source and drain.</p>
+        <p>A program pulse tunnels electrons from the channel through the tunnel oxide into the floating gate: ${FG_STEP} of charge a pulse,
+        Vt = 1 + 5q, so ${pulses} pulses carry Vt past the read voltage of ${V_READ} V. Erase empties every cell of the block at once. A read of one cell puts ${V_READ} V on its control gate and a
+        pass voltage on the others, high enough that they conduct whatever they hold. The string carries current only if the chosen cell does, so its
+        bit is read through the other cells, which are all on.</p>
+        <div class="try">Choose cell 3, pulse until the string goes from conducting to blocked, then erase the block.</div>`,
+      widget: () => fgate3d(),
     },
     {
       title: 'Program and erase',
