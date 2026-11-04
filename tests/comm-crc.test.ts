@@ -110,3 +110,15 @@ describe('polynomial division and undetected errors', () => {
 });
 
 function rev8(x: number): number { let r = 0; for (let i = 0; i < 8; i++) r = (r << 1) | ((x >>> i) & 1); return r; }
+
+import { divisionSteps } from '../src/comm/crc';
+describe('long division', () => {
+  it('the worked division leaves the remainder polyRem computes, for random data and each generator', () => {
+    const r = rng(53);
+    for (const c of [CRC8, CRC16]) for (let t = 0; t < 100; t++) {
+      const d = Math.floor(r() * 2 ** 16), bits = wordBits(d, 16), out = divisionSteps(bits, c.poly, c.width);
+      expect(out.remainder).toBe(polyRem(bits, c.poly, c.width));
+      expect(out.steps.length).toBeLessThanOrEqual(16);
+    }
+  });
+});

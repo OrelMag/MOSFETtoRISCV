@@ -1,0 +1,72 @@
+/* ---------- Chapter 47, When bits go wrong (src/widgets/errors.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.err-w { gap: 12px; }
+.err-rows { display: grid; gap: 8px; margin: 6px 0; }
+.err-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.err-lab { flex: 0 0 66px; font-size: 12.5px; color: var(--text-2); }
+.err-cells { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.err-bit { min-width: 28px; height: 30px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; font: 600 13px var(--font-mono); border-radius: 6px; border: 1.5px solid var(--border-strong); background: var(--surface-2); color: var(--text); cursor: pointer; }
+span.err-bit { cursor: default; }
+.err-bit.on { background: color-mix(in srgb, var(--w1) 32%, var(--surface-2)); }
+.err-bit.par { border-style: dashed; border-color: var(--accent); }
+.err-bit.flip { color: var(--muted); }
+.err-bit.flip.on { color: var(--text); border-color: var(--bad); background: color-mix(in srgb, var(--bad) 18%, var(--surface-2)); }
+.err-bit.hit, .err-bit.rx.hit { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 20%, var(--surface-2)); }
+.err-bit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.err-verdict { margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
+.err-verdict.ok { border-color: var(--good); }
+.err-verdict.bad { border-color: var(--bad); }
+.err-lab-in { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); margin: 4px 0; flex-wrap: wrap; }
+.err-in { font: 600 13px var(--font-mono); padding: 4px 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; min-width: 0; flex: 0 1 220px; }
+
+/* the message bits and the CRC readout */
+.err-grid { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 6px 0; }
+.err-byte { display: flex; flex-direction: column; gap: 3px; }
+.err-byte > div { display: flex; gap: 2px; }
+.err-byte .err-bit { min-width: 20px; height: 26px; padding: 0 2px; font-size: 12px; }
+.err-ch { font: 600 12px var(--font-mono); color: var(--text-2); text-align: center; min-height: 15px; }
+.err-crc { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.err-crc > div { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; min-width: 0; }
+.err-crc span { display: block; font-size: 11.5px; color: var(--muted); }
+.err-crc b { font: 700 14px var(--font-mono); overflow-wrap: anywhere; }
+.err-div { margin: 8px 0 0; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; font: 12px/1.35 var(--font-mono); overflow-x: auto; max-height: 340px; color: var(--text); }
+
+/* plots */
+.err-plot { max-width: 100%; }
+.mos-plot .err-s { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.mos-plot .err-s.c1 { stroke: var(--bad); } .mos-plot .err-s.c2 { stroke: var(--accent); } .mos-plot .err-s.c3 { stroke: var(--good); }
+.err-key span.c1::before { background: var(--bad); } .err-key span.c2::before { background: var(--accent); } .err-key span.c3::before { background: var(--good); }
+.err-key span.f1::before { background: var(--accent); } .err-key span.f2::before { background: var(--border-strong); } .err-key span.f3::before { background: var(--good); }
+.err-key span.f4::before { background: var(--warn); } .err-key span.f5::before { background: var(--bad); } .err-key span.f6::before { background: var(--muted); }
+.err-tab { display: grid; gap: 2px; margin: 8px 0; font-size: 13px; }
+.err-trow { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr); gap: 8px; padding: 3px 6px; border-radius: 6px; align-items: baseline; }
+.err-trow > span { min-width: 0; overflow-wrap: anywhere; }
+.err-trow > span:not(:first-child) { font-family: var(--font-mono); }
+.err-trow.head { color: var(--muted); font-size: 12px; }
+.err-trow.head > span { font-family: inherit; }
+.err-trow.c1 > span:first-child { color: var(--bad); } .err-trow.c2 > span:first-child { color: var(--accent); } .err-trow.c3 > span:first-child { color: var(--good); }
+@container (max-width: 520px) { .err-trow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* the frame on the wire */
+.err-strip { display: flex; flex-wrap: wrap; gap: 2px; margin: 8px 0; }
+.err-strip .err-bit { min-width: 15px; height: 24px; padding: 0 1px; font-size: 11.5px; }
+.err-strip .err-bit.flag { border-color: var(--accent); }
+.err-strip .err-bit.data { border-color: var(--border-strong); }
+.err-strip .err-bit.fcs { border-color: var(--good); }
+.err-strip .err-bit.stuffed { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 22%, var(--surface-2)); }
+.err-gap { flex: 0 0 6px; }
+
+/* the repeat-request timeline */
+.err-tl { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; margin: 8px 0; }
+.err-sl { height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font: 600 10px var(--font-mono); border: 1px dashed var(--border); color: var(--text-2); overflow: hidden; }
+.err-sl.new { border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--surface-2)); color: var(--text); }
+.err-sl.retx { border: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 26%, var(--surface-2)); color: var(--text); }
+.err-sl.lost { border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 22%, var(--surface-2)); color: var(--text); text-decoration: line-through; }
+.err-sl.drop { border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--muted); }
+
+.err-panel { min-width: 0; }
+.err-status .good { color: var(--good); } .err-status .bad { color: var(--bad); font-weight: 600; }
+.err-w button[aria-pressed="true"]:not(.err-bit) { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.err-w .mos-sl output { width: 84px; }
+.err-w .mos-sl span { width: 90px; }
+@container (max-width: 520px) { .err-w .mos-sl { flex-basis: 100%; } }
+@media (pointer: coarse) { .err-bit { min-width: 36px; height: 40px; } .err-byte .err-bit, .err-strip .err-bit { min-width: 28px; height: 36px; } .err-sl { height: 28px; } }

@@ -211,3 +211,32 @@ export function evalPlan(p: XorPlan, inputs: number, x: bigint): bigint {
   p.out.forEach((o, i) => { if (o >= 0 && v[o]) r |= 1n << BigInt(i); });
   return r;
 }
+
+// ---- long division, for the chapter's worked example --------------------------------------------------------------------
+
+export interface DivStep {
+  /** Bit position (from the left of the dividend) where the divisor is aligned. */
+  at: number;
+  /** The dividend's bits before this step and after the XOR (strings of the full length). */
+  before: string;
+  after: string;
+}
+
+/**
+ * The textbook long division of (data bits followed by `width` zeros) by the generator x^width + poly: at every leading 1
+ * within the data the divisor is XORed in. Returns the steps and the remainder (equal to polyRem on the data bits).
+ */
+export function divisionSteps(data: ArrayLike<number>, poly: number, width: number): { dividend: string; divisor: string; steps: DivStep[]; remainder: number } {
+  const n = data.length, len = n + width, a = Array.from(data).concat(Array(width).fill(0));
+  const div = [1, ...wordBits(poly, width)];
+  const steps: DivStep[] = [];
+  for (let i = 0; i < n; i++) {
+    if (!a[i]) continue;
+    const before = a.join('');
+    for (let k = 0; k <= width; k++) a[i + k] ^= div[k];
+    steps.push({ at: i, before, after: a.join('') });
+  }
+  let rem = 0;
+  for (let i = len - width; i < len; i++) rem = rem * 2 + a[i];
+  return { dividend: Array.from(data).concat(Array(width).fill(0)).join(''), divisor: div.join(''), steps, remainder: rem };
+}
