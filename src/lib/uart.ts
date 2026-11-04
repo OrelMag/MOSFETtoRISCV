@@ -282,7 +282,7 @@ export function lineDef(delay = 2): ComponentDef {
     id: `line${delay}`, name: `Line (${delay} cycles)`, category: 'memory',
     summary: `A wire between two machines as one box: the level the sender drove, ${delay} sender clock cycles later, with an input that flips it for a cycle (noise). Pulled up: idle is 1. It stands for the cable and costs nothing; chapter 41 models what is inside.`,
     ports: [bit('d', 'in'), bit('noise', 'in'), bit('clk', 'in', 'bottom', true), bit('q', 'out')],
-    symbol: { kind: 'box', label: 'LINE' },
+    symbol: { kind: 'box', label: 'LINE' }, modelPanel: 'cable',
     behavior: {
       delay: 1,
       seq: { clk: 'clk', comb: [] },

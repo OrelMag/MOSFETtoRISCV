@@ -114,9 +114,9 @@ export const FSK_TX: ComponentDef = memo('fsk_tx', () => define({
 export function modemLine(stages: number): ComponentDef {
   return memo(`modem_line${stages}`, () => define({
     id: `modem_line${stages}`, name: `Line (${stages} clocks of delay)`, category: 'sequential',
-    summary: `A stand-in for the telephone line: the sample bus delayed by ${stages} clocks, and a hit input that inverts the sample's sign bit while it is 1. In the real chain this is copper, a hybrid transformer and the exchange; the model of its noise is in the widgets.`,
+    summary: `A stand-in for the telephone line: the sample bus delayed by ${stages} clocks, and a hit input that inverts the sample's sign bit while it is 1. In the real chain this is copper, a hybrid transformer and the exchange; opened, the stage shows that model, with the delay's registers a button away.`,
     ports: [bus('s', SINE_W, 'in'), bit('hit', 'in'), clk(), bus('y', SINE_W, 'out')],
-    symbol: { kind: 'box', label: 'LINE' },
+    symbol: { kind: 'box', label: 'LINE' }, modelPanel: 'phone',
     netlist: () => {
       const b = new Builder(10, 12);
       b.pins('s', 'hit', 'clk');

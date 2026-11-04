@@ -1,6 +1,6 @@
 // Line codes for a link with no clock of its own (chapter 46), DOM-free: the golden models the gates are compared with.
 // Manchester (a transition in the middle of every bit), 8b/10b (Widmer and Franaszek, IBM J. R&D 1983; IEEE 802.3 Clause 36
-// tables, typed out once below) with its running disparity, and the self-synchronizing scrambler of 64b/66b.
+// tables, typed out once below; tests/fixtures/8b10b-ug196.txt holds a vendor's printed table) with its running disparity, and the self-synchronizing scrambler of 64b/66b.
 //
 // A 10-bit code is a number whose bit 9 is `a`, the first bit on the wire, and bit 0 is `j`. A byte is HGF EDCBA (value 0 … 255),
 // named D.x.y or K.x.y with x = EDCBA and y = HGF. The running disparity RD is 0 for "RD−" (more zeros sent so far) and 1 for "RD+".

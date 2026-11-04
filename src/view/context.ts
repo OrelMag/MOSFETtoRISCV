@@ -57,11 +57,11 @@ export class ViewCtx {
     return this.driver !== null;
   }
 
-  /** Can this child be opened? (Has an inside, or is a transistor with its own explainer.) */
+  /** Can this child be opened? (Has an inside, is a transistor with its own explainer, or a part with a model's panel.) */
   canOpen(childName: string): boolean {
     const c = this.node.children?.get(childName);
     if (!c) return false;
-    return c.expanded || !!netlistOf(c.def) || c.def.prim === 'nmos' || c.def.prim === 'pmos';
+    return c.expanded || !!netlistOf(c.def) || c.def.prim === 'nmos' || c.def.prim === 'pmos' || !!c.def.modelPanel;
   }
 
   child(name: string): ViewCtx | null {
