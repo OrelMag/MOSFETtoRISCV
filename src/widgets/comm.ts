@@ -82,7 +82,7 @@ export function telegraphLineWidget(): Widget {
   const kmSl = slider('Route', 1, XMAX, 1, km, (v) => `${v} km`, (v) => { km = v; paint(); });
   const vSl = slider('Battery', 24, 240, 4, volts, (v) => `${v} V`, (v) => { volts = v; paint(); });
   const rSl = slider('Repeaters', 0, 8, 1, repeaters, (v) => String(v), (v) => { repeaters = v; paint(); });
-  const el = h('div', { class: 'widget mos' },
+  const el = h('div', { class: 'widget mos comm' },
     h('div', { class: 'panel' }, h('h3', null, 'Key, battery, wire and relay coil in series ', seg), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, kmSl.el, vSl.el, rSl.el), verdict,
       h('p', { class: 'sub mos-note' }, `Model: the telephone relay of the previous chapters (pull-in ${PULL_V.toFixed(1)} V on 400 Ω), 4 mm wire, one wire with the earth as the return, ${CELL_V} V a cell. Leakage over damp insulators and the line's inductance are left out; both cost real lines more.`)),
@@ -96,7 +96,7 @@ export function telegraphLineWidget(): Widget {
 export function codesWidget(): Widget {
   let text = 'SOS 73', unitMs = 20;
   const input = h('input', { type: 'text', class: 'comm-input', value: text, maxlength: 18, 'aria-label': 'Text to send', spellcheck: 'false', autocomplete: 'off' }) as HTMLInputElement;
-  const W = 640, ML = 56, MR = 10, ROW = 46;
+  const W = 640, ML = 84, MR = 10, ROW = 46;
   const holder = h('div', { class: 'comm-tapes' });
   const chips = chipRow();
   const note = h('p', { class: 'sub mos-note' });
@@ -137,7 +137,7 @@ export function codesWidget(): Widget {
   }
   input.addEventListener('input', () => { text = input.value; paint(); });
   const uSl = slider('Unit', 10, 100, 5, unitMs, (v) => `${v} ms`, (v) => { unitMs = v; paint(); });
-  const el = h('div', { class: 'widget mos' },
+  const el = h('div', { class: 'widget mos comm' },
     h('div', { class: 'panel' }, h('h3', null, 'Type text, read both codes'), input, holder),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, uSl.el), note), chips.el);
   paint();
@@ -161,11 +161,12 @@ export function limitsWidget(withNoise: boolean): Widget {
   shan.setAttribute('d', path(pts));
   if (withNoise) for (const m of MARKED) {
     const eta = m.rate / m.B, y = Y(eta);
-    marks.append(s('line', { x1: Mg.l, x2: W - Mg.r, y1: y, y2: y, class: 'mk' }), s('text', { x: Mg.l + 4, y: y - 4, class: 'tick mk-l' }, `${m.name}: ${eta.toFixed(1)} bit/s per Hz, needs ${ratioToDb(snrNeeded(eta)).toFixed(0)} dB at least`));
+    marks.append(s('line', { x1: Mg.l, x2: W - Mg.r, y1: y, y2: y, class: 'mk' }), s('text', { x: Mg.l + 4, y: y - 4, class: 'tick mk-l' }, m.short));
   }
   const chips = chipRow();
   const verdict = h('p', { class: 'sub mos-note' });
   const table = h('table', { class: 'mini comm-table' });
+  const legend = h('p', { class: 'sub mos-note' }, MARKED.map((m) => `${m.short}: ${(m.rate / m.B).toFixed(1)} bit/s per Hz, so at least ${ratioToDb(snrNeeded(m.rate / m.B)).toFixed(0)} dB if it used no more than ${fmtHz(m.B)}. `).join(''));
   function paint() {
     const b = B(), snr = dbToRatio(snrDb), m = M();
     const nyqRate = nyquistBitRate(b, m), cap = shannon(b, snr), eta = Math.log2(m);
@@ -195,9 +196,9 @@ export function limitsWidget(withNoise: boolean): Widget {
   const bSl = slider('Bandwidth', 1, 8, 0.01, bExp, (v) => fmtHz(10 ** v), (v) => { bExp = v; paint(); });
   const lSl = slider('Levels', 1, 8, 1, levelExp, (v) => String(2 ** v), (v) => { levelExp = v; paint(); });
   const nSl = slider('SNR', -10, 60, 1, snrDb, (v) => `${v} dB`, (v) => { snrDb = v; paint(); });
-  const el = h('div', { class: 'widget mos' },
+  const el = h('div', { class: 'widget mos comm' },
     h('div', { class: 'panel' }, h('h3', null, withNoise ? 'Capacity against signal-to-noise ratio, per hertz of bandwidth' : 'Symbols a second, and bits a symbol'), withNoise ? svg : table),
-    h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, bSl.el, lSl.el, ...(withNoise ? [nSl.el] : [])), verdict), chips.el);
+    h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, bSl.el, lSl.el, ...(withNoise ? [nSl.el] : [])), verdict, ...(withNoise ? [legend] : [])), chips.el);
   paint();
   return { el };
 }

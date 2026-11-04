@@ -33,10 +33,10 @@ export function meshWidget(): Widget {
     chips.set(1, String(n - 1), 'jacks on each phone in the mesh (1 on the exchange)');
     chips.set(2, n0(meshWires(1000)), 'wires for 1 000 phones in a mesh');
     chips.set(3, n0(crossbarCrosspoints(1000)), 'crosspoints in a 1 000 × 1 000 crossbar: contacts, not wires');
-    note.textContent = `The exchange turns n(n − 1) / 2 permanent wires into n wires and a switch that makes the one wire a call needs. The mesh is cheapest at n = 3 (${meshWires(3)} wires against 3 and a switch).`;
+    note.textContent = `The exchange turns n(n − 1) / 2 permanent wires into n wires and a switch that makes the one wire a call needs. From four phones up the star needs fewer wires (${meshWires(4)} for a mesh, 4 for a star).`;
   }
   const nSl = slider('Phones', 2, 16, 1, n, (v) => String(v), (v) => { n = v; paint(); });
-  const el = h('div', { class: 'widget mos' }, h('div', { class: 'panel' }, h('h3', null, 'Everyone to everyone, or everyone to one place'), svg),
+  const el = h('div', { class: 'widget mos comm' }, h('div', { class: 'panel' }, h('h3', null, 'Everyone to everyone, or everyone to one place'), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, nSl.el), note), chips.el);
   paint();
   return { el };
@@ -72,10 +72,10 @@ export function networkCostWidget(): Widget {
     chips.set(1, n0(c.crosspoints), `Clos, n = ${c.n}, r = ${c.r}, m = ${c.m}: 2Nm + m r²`);
     chips.set(2, `${(crossbarCrosspoints(N) / c.crosspoints).toFixed(2)} ×`, c.crosspoints < crossbarCrosspoints(N) ? 'fewer crosspoints than the crossbar' : 'the crossbar is still cheaper here');
     chips.set(3, n0(cr.crosspoints), `Clos with m = n = ${c.n}: only rearrangeably non-blocking`);
-    note.textContent = `A call can be blocked in a Clos network by calls already up, unless the middle stage has m ≥ 2n − 1 switches (Clos, 1953); with m ≥ n every blocked call can be made to fit by re-routing calls in progress, which a telephone line in the middle of a word cannot take. Lines: black curve a crossbar, grey a switch per pair (N(N − 1) / 2), dashed a Clos network at its best n.`;
+    note.textContent = `A call can be blocked in a Clos network by calls already up, unless the middle stage has m ≥ 2n − 1 switches (Clos, 1953); with m ≥ n every blocked call can be made to fit by re-routing calls in progress, which a telephone line in the middle of a word cannot take. Plot: the solid curve is a crossbar, the thin one a switch per pair (N(N − 1) / 2), the dashed one a Clos network at its best n.`;
   }
   const kSl = slider('Lines', K0, K1, 1, k, (v) => n0(2 ** v), (v) => { k = v; paint(); });
-  const el = h('div', { class: 'widget mos' }, h('div', { class: 'panel' }, h('h3', null, 'What it costs to let any line reach any other'), svg),
+  const el = h('div', { class: 'widget mos comm' }, h('div', { class: 'panel' }, h('h3', null, 'What it costs to let any line reach any other'), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, kSl.el), note), chips.el);
   paint();
   return { el };
@@ -85,7 +85,7 @@ export function networkCostWidget(): Widget {
 
 export function erlangWidget(): Widget {
   let subs = 1000, perHour = 2, holdMin = 3, trunks = 60;
-  const W = 640, H = 270, M = { l: 52, r: 18, t: 14, b: 34 }, TMAX = 200;
+  const W = 640, H = 270, M = { l: 66, r: 18, t: 14, b: 34 }, TMAX = 200;
   const X = (m: number) => M.l + (m / TMAX) * (W - M.l - M.r);
   const Y = (b: number) => M.t + ((Math.log10(1) - Math.log10(Math.max(b, 1e-4))) / 4) * (H - M.t - M.b);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot', role: 'img', 'aria-label': 'Probability that a call is blocked against the number of trunks' });
@@ -114,7 +114,7 @@ export function erlangWidget(): Widget {
   const cSl = slider('Calls/h', 0.5, 6, 0.5, perHour, (v) => String(v), (v) => { perHour = v; paint(); });
   const hSl = slider('Holding', 1, 10, 0.5, holdMin, (v) => `${v} min`, (v) => { holdMin = v; paint(); });
   const tSl = slider('Trunks', 1, TMAX, 1, trunks, (v) => String(v), (v) => { trunks = v; paint(); });
-  const el = h('div', { class: 'widget mos' }, h('div', { class: 'panel' }, h('h3', null, 'Trunks between two exchanges, and the busy tone'), svg),
+  const el = h('div', { class: 'widget mos comm' }, h('div', { class: 'panel' }, h('h3', null, 'Trunks between two exchanges, and the busy tone'), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, sSl.el, cSl.el), h('div', { class: 'mos-row' }, hSl.el, tSl.el), note), chips.el);
   paint();
   return { el };
@@ -183,7 +183,7 @@ export function startStopWidget(): Widget {
   });
   const eSl = slider('Receiver', -12, 12, 0.1, err, (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} %`, (v) => { err = v; paint(); });
   const cSl = (() => { const x = slider('Data', 0, 2 ** FRAMES[which].f.data - 1, 1, code, (v) => v.toString(2).padStart(FRAMES[which].f.data, '0'), (v) => { code = v; paint(); }); const inp = x.el.querySelector('input')!; return { ...x, setMax(m: number) { inp.max = String(m); } }; })();
-  const el = h('div', { class: 'widget mos' }, h('div', { class: 'panel' }, h('h3', null, 'A character, and a receiver whose clock is not quite right ', seg), holder),
+  const el = h('div', { class: 'widget mos comm' }, h('div', { class: 'panel' }, h('h3', null, 'A character, and a receiver whose clock is not quite right ', seg), holder),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, eSl.el, cSl.el), h('label', { class: 'comm-check' }, tickBox, ' receiver counts 16 ticks a bit, and notices the start edge up to a tick late'), note, h('div', { class: 'mos-row' }, search), found), chips.el);
   paint();
   return { el };

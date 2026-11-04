@@ -31,7 +31,7 @@ export const TELEGRAPH_RELAY: ComponentDef = define({
   id: 'telegraph_relay', name: 'Telegraph repeater', category: 'sequential',
   summary: 'A relay on the incoming line, a local battery behind its make contact: the next line gets the full battery voltage, one relay step later.',
   ports: [bit('line', 'in'), bit('out', 'out')],
-  symbol: { kind: 'box', label: 'REPEAT', w: 6, h: 4 },
+  symbol: { kind: 'box', label: 'REPEAT', w: 10, h: 4 },
   netlist: () => ({
     level: 'switch',
     pins: { line: [2, 5], out: [20, 10] },
@@ -50,7 +50,7 @@ export const TELEGRAPH_RELAY: ComponentDef = define({
 /** key → n repeater stations → sounder: the key's level reaches the sounder n relay steps later. */
 export const telegraphChain = memo((n: number): ComponentDef => {
   if (!(n >= 1 && n <= 6)) throw new Error(`telegraphChain: 1 to 6 stations, not ${n}`);
-  const X0 = 6, P = 12;
+  const X0 = 6, P = 16;
   const instances: InstanceDef[] = [], nets: NetDef[] = [];
   for (let i = 0; i < n; i++) {
     instances.push({ name: `st${i}`, def: TELEGRAPH_RELAY, at: [X0 + P * i, 3] });
@@ -168,7 +168,7 @@ export const DIAL_COUNTER: ComponentDef = define({
 export const DIAL_SELECTOR: ComponentDef = define({
   id: 'dial_selector', name: 'Dial selector, 1 of 8', category: 'routing',
   summary: 'The pulse counter with a three-level contact tree: after n pulses the caller line is connected to output n. 10 relays, no extra step for the tree.',
-  ports: [bit('line', 'inout', 'left'), bit('pulse', 'in', 'left'), bit('hangup', 'in', 'left'), { name: 'count', width: 3, dir: 'out' }, { name: 'y', width: 8, dir: 'out' }],
+  ports: [bit('line', 'in', 'left'), bit('pulse', 'in', 'left'), bit('hangup', 'in', 'left'), { name: 'count', width: 3, dir: 'out' }, { name: 'y', width: 8, dir: 'out' }],
   symbol: { kind: 'box', label: 'SELECTOR', w: 14 },
   netlist: () => {
     const loads: InstanceDef[] = Array.from({ length: 8 }, (_, i) => load(`ld${i}`, [20 + 6 * i, 22]));

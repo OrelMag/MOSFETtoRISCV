@@ -24,3 +24,5 @@
 .comm-table th:first-child, .comm-table td:first-child { text-align: left; }
 .comm-table tr.now td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 700; }
 @media (pointer: coarse) { .comm-input, .comm-check input { min-height: 40px; } }
+.comm .mos-sl span { width: auto; min-width: 56px; }
+.comm .mos-sl output { width: auto; min-width: 62px; white-space: nowrap; }

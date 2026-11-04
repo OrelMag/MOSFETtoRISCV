@@ -162,7 +162,7 @@ const rawTelegraph: Chapter = {
         the first working telegraphs; Joseph Henry's electromagnets and Edward Davy's relay are the names usually attached to the idea.</p>
         <p>This is the first <strong>regenerator</strong>: the output has no memory of how weak or noisy the input was, only of whether it crossed the threshold.
         It is what a gate does to a level (<a href="#/c/inverter/0">chapter 2</a>), done with an armature. Here a chain of ${stats(telegraphChain(3)).relays} stations: <span data-show="st0 st1 st2">key to sounder</span> through
-        three relays, each on a battery of its own. The cost is time: the signal crosses one relay step (${RELAY_STEP_MS} ms) per station, so the sounder follows the key 3
+        three relays, each on a battery of its own. The cost is time: the signal crosses one relay step per station, ${RELAY_STEP_MS} ms with our relay, so the sounder follows the key 3
         steps later, the status line's <em>settled in 3 relay steps</em>.</p>
         <div class="try">Press the key and count steps to the sounder. Then release it.</div>`,
       scene: () => ({ root: telegraphChain(3), inputs: { key: 0 }, animate: true }),
@@ -364,7 +364,7 @@ const rawExchange: Chapter = {
         follows the loop, and something must count its pulses.</p>
         <p>The counter below is <span data-show="st0 st1 st2">three toggle stages</span> of three relays each. In a stage the <em>pulse relay</em> p follows its input; a master m and a slave s hold the state, and each is fed through p's contacts:
         <code>m' = p ? ¬s : m</code> and <code>s' = p ? s : m</code>. While the pulse is up, m takes the inverse of s and s holds; when it falls, s copies m. So s toggles
-        once per pulse, on the falling edge, however long the pulse lasts, unlike a toggle like the prologue's clock divider, which would flip at every relay step its input stays up. This is the master-slave pair of
+        once per pulse, on the falling edge, however long the pulse lasts. (The prologue's clock divider, by contrast, would flip on every step its input stays up.) This is the master-slave pair of
         <a href="#/c/latches/0">chapter 8</a> with relay steps as the phases. Each stage's slave clocks the next, a ripple counter, and <span data-show="hr">the hang-up relay</span> opens the rail that feeds every master and slave, so a caller who hangs up releases the counter.</p>
         <p>The whole counter is ${CTR.relays} relays: three per bit and one to hang up. A ripple through all three bits takes a handful of relay steps, well inside the 100 ms between pulses.</p>
         <div class="try">Pulse three times, then hang up.</div>`,
@@ -401,7 +401,7 @@ const rawExchange: Chapter = {
       body: `
         <p>The counter knows how many pulses came. A <strong>selector</strong> uses the count to connect the caller's line to one of eight outgoing lines. The same three stages carry a <em>contact tree</em> on their slave relays: bit 0's changeover sends the line to
         one of two wires, bit 1's two changeovers pass each on to one of two, bit 2's four to one of eight. The line goes through <em>three</em> contacts in series and out of exactly one of eight outputs, y<sub>n</sub> after n pulses. The tree is only extra poles on relays that exist anyway:
-        the selector is ${SEL.relays} relays like the counter, and <strong>selecting adds no relay step</strong>; the contacts the line crosses were already in place when the count settled.</p>
+        the selector is ${SEL.relays} relays like the counter, and <strong>selecting costs no time of its own</strong>: no relay step is added, because the contacts the line crosses were already in place when the count settled.</p>
         <p>The real <em>Strowger</em> switch (patented 1891) worked quite differently. One magnet stepped a shaft of contacts up, one level for each pulse of the first digit; a second mechanism then turned the contacts along that level for the next digit's pulses.
         The position of the mechanism was the count: no relay held a bit. A hang-up released it. Ours counts in binary with relays and routes with contacts; the idea of letting the dialled digits drive the switch directly is the same.</p>
         <div class="try">Set <code>line</code> to 1 and dial three.</div>`,
@@ -542,7 +542,7 @@ const rawExchange: Chapter = {
 // is, once per text (chapters/firstuse.ts). The first use in each text carries a short explanation; later ones are plain.
 
 const AHEAD: [RegExp, string, string][] = [
-  [/\b(?:relay steps?|pull-in|drop-out)\b/i, 'relaystep relay', ' (the time for a relay to settle after its coil changes)'],
+  [/\b(?:relay steps?|pull-in|drop-out)\b/i, 'relaystep relay', ` (a relay circuit's time unit: every armature moves, then the contacts settle)`],
   [/\brelays?\b/i, 'relay', ' (an electromagnetic switch, from prologue P1)'],
 ];
 

@@ -27,6 +27,8 @@ export const ebn0AtCapacity = (bitsPerHz: number): number => snrNeeded(bitsPerHz
 /** Real systems to mark, with numbers that are published (the channel's SNR is ours to assume, said where used). */
 export interface Marked {
   name: string;
+  /** A tag for the plot. */
+  short: string;
   /** Bandwidth (Hz), bit rate achieved (bit/s) and, where the standard fixes it, the symbol alphabet. */
   B: number;
   rate: number;
@@ -34,7 +36,7 @@ export interface Marked {
   note: string;
 }
 export const MARKED: Marked[] = [
-  { name: 'Telegraph, 50 baud', B: 25, rate: 50 * (5 / 7.5), levels: 2, note: 'a binary signal at 50 baud needs 25 Hz at least; the 5 data bits of a 7.5-unit character' },
-  { name: 'V.34 modem', B: 3100, rate: 33600, note: 'a voice line of about 3.1 kHz, 33.6 kb/s' },
-  { name: 'Gigabit Ethernet pair', B: 62.5e6, rate: 250e6, levels: 5, note: '125 Mbaud on each of 4 pairs, 5 levels (PAM-5), 2 bits per symbol after coding: 250 Mb/s a pair' },
+  { name: 'Telegraph, 50 baud', short: 'telegraph', B: 25, rate: 50 * (5 / 7.5), levels: 2, note: 'a binary signal at 50 baud needs 25 Hz at least; the 5 data bits of a 7.5-unit character' },
+  { name: 'V.34 modem', short: 'V.34', B: 3100, rate: 33600, note: 'a voice line of about 3.1 kHz, 33.6 kb/s' },
+  { name: 'Gigabit Ethernet pair', short: '1000BASE-T', B: 62.5e6, rate: 250e6, levels: 5, note: '125 Mbaud on each of 4 pairs, 5 levels (PAM-5), 2 bits per symbol after coding: 250 Mb/s a pair' },
 ];
