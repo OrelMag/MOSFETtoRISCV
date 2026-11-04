@@ -1,6 +1,7 @@
 import { outline as chapters, future } from '../../chapters/outline';
 import { checksDone } from '../../chapters/checks';
 import { chapterNo, type ChapterMeta } from '../../chapters/meta';
+import { sectionsOf } from '../../chapters/sections';
 import { ladder } from '../../widgets/journey';
 import { chapterMark, resumeTarget } from '../chapternav';
 import { h, icon, tx } from '../dom';
@@ -41,23 +42,22 @@ export function homePage(): Page {
   const campaign = h('span', { class: 'cta-campaign' }, h('a', { class: 'btn ghost', href: '#/campaign' }, icon('flag', 16), 'Play the campaign'));
   campaignLink(campaign);
 
-  const cards = chapters.flatMap((c, i) => {
+  const card = (c: ChapterMeta) => {
     const p = progress(c.id, c.steps.length);
-    // the prologue (before the transistor) and the appendix (after the journey), behind dividers
-    const prev = chapters[i - 1];
-    const divider = c.appendix && !prev?.appendix ? [h('div', { class: 'cards-divider' }, 'Appendix')]
-      : c.prologue && !prev?.prologue ? [h('div', { class: 'cards-divider prologue' }, 'Prologue: before the transistor')]
-      : !c.prologue && !c.appendix && prev?.prologue ? [h('div', { class: 'cards-divider journey' }, 'The journey')] : [];
     // The full tick only for a finished chapter (every step seen, every check solved); all seen with checks left: a lighter mark.
     const mark = chapterMark(p, checksDone(c, (k) => settings.isSolved(k)));
-    return [...divider, h('a', { class: `card${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}`, href: `#/c/${c.id}/0` },
+    return h('a', { class: `card${c.appendix ? ' appendix' : c.prologue ? ' prologue' : ''}`, href: `#/c/${c.id}/0` },
       mark === 'done' ? h('span', { class: 'done-badge', title: 'Finished: every step seen, every check solved', 'aria-label': 'Finished' }, icon('check', 16))
         : mark === 'seen' ? h('span', { class: 'done-badge seen', title: 'Every step seen; some checks are still open', 'aria-label': 'All steps seen' }, icon('check', 13)) : null,
       h('span', { class: 'num' }, `${chapterNo(c)} · ${c.level}`),
       h('h3', null, c.title),
       h('p', null, c.blurb),
-      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? seenNote(c, p) : '')))];
-  });
+      h('div', { class: 'meta' }, h('span', null, `${c.steps.length} steps`), h('span', null, p > 0 ? seenNote(c, p) : '')));
+  };
+  // Under the book's sections (chapters/sections.ts), as on the map and in the chapter menu
+  const cards = sectionsOf(chapters).flatMap((s) => [
+    h('div', { class: `cards-divider ${s.tone}`, role: 'heading', 'aria-level': 3 }, s.range ? `${s.name} · ${s.range}` : s.name),
+    ...s.chapters.map(card)]);
   const soon = future.map((c) =>
     h('div', { class: 'card soon' },
       h('span', { class: 'num' }, `${String(c.num).padStart(2, '0')} · ${c.level}`),
@@ -85,7 +85,7 @@ export function homePage(): Page {
           h('a', { class: 'btn ghost', href: '#/workbench/rca4' }, icon('bench', 16), 'Workbench'),
           h('a', { class: 'btn ghost', href: '#/sandbox' }, icon('chip', 16), 'Sandbox'),
           notes().count ? h('a', { class: 'btn ghost', href: '#/notes', title: 'Your notes and bookmarks, and the review queue' }, icon('note', 16), `My notes · ${notes().count}`) : null)),
-      h('div', { class: 'hero-ladder' }, h('p', { class: 'ladder-cap' }, 'The key levels, each built from the one below. Numbers are chapters; the chapters between fill in the steps.'), ladder({ badge: false }))),
+      h('div', { class: 'hero-ladder' }, h('p', { class: 'ladder-cap' }, 'Every chapter, by section, each using only what came before it. Your section starts open.'), ladder({ badge: false }))),
     h('h2', { class: 'section-title', id: 'chapters' }, 'Chapters'),
     h('p', { class: 'section-sub' }, 'Each chapter uses only what the previous ones built.'),
     h('div', { class: 'cards' }, cards, soon),

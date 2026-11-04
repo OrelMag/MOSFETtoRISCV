@@ -82,6 +82,9 @@ export function poleAt(bits: readonly number[], r: number, b: number, t: number)
   return x + (ys[i] - x) * a ** (tt - i);
 }
 
+/** The smallest end-of-bit sample, in the bit's own direction, of a repeating pattern through the pole: how far its worst bit gets. */
+export const smallestSample = (bits: readonly number[], r: number, b: number): number => Math.min(...bits.map((v, i) => (v ? 1 : -1) * poleAt(bits, r, b, i + 1 - 1e-9)));
+
 /** Half the swing of the repeating 1010 at a pole: (1 − a) / (1 + a) at the sampling instant. */
 export const swing1010 = (a: number): number => (1 - a) / (1 + a);
 
@@ -165,7 +168,7 @@ export function randomQpsk(n: number, seed: number): [number, number][] {
 
 /**
  * A real time block of N samples carrying `syms` on tones 1 … syms.length: tone k's conjugate on N − k makes the inverse FFT real,
- * so N points carry N / 2 − 1 tones (DC and N / 2 stay empty). This is how ADSL's 512 points carry its 256 tones.
+ * so N points carry N / 2 − 1 tones (DC and N / 2 stay empty). This is how ADSL's 512 points carry its tones 1 … 255 (G.992.1 numbers 256, from 0; tone 0 is DC).
  */
 export function blockOf(syms: readonly (readonly [number, number])[], N: number): Float64Array {
   if (syms.length > N / 2 - 1) throw new Error('blockOf: too many tones');

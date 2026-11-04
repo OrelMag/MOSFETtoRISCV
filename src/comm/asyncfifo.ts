@@ -135,3 +135,17 @@ export function randomInterleave(fw: number, fr: number, edges: number, seed: nu
 
 /** The ratios the scene's panel offers, as [wclk, rclk] relative rates. */
 export const RATIOS: readonly [number, number][] = [[1, 1], [2, 1], [1, 2], [3, 2], [5, 3], [1, 7], [7, 1]];
+
+/** Edges the credit loop takes: a slot freed (or a word written) is seen on the far side after its 2-flop synchronizer, and the flag then lets the next transfer through. */
+export const CREDIT_EDGES = 5;
+
+/** Words per edge of the slower clock that a depth-2^k FIFO sustains with the writer and reader always ready, at fw : fr (model, after a warm-up). */
+export function sustained(k: number, fw: number, fr: number, edges = 20000): number {
+  const m = new AsyncFifoModel(k, 8);
+  let rd = 0, w = 0, r = 0;
+  interleave(fw, fr, edges).forEach((e, i) => {
+    const count = i > edges / 10;
+    if (e === 'w') { m.wEdge(true, 1); if (count) w++; } else { const x = m.rEdge(true); if (count) { r++; if (x.did) rd++; } }
+  });
+  return rd / Math.min(r, w);
+}

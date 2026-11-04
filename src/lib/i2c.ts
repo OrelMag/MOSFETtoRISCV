@@ -28,7 +28,7 @@ export const I2C_PAD: ComponentDef = define({
   netlist: () => ({
     level: 'switch',
     pins: { low: [1, 6], bus: [14, 20], rx: [38, 6] },
-    pinDirs: { bus: 'down' },
+    pinDirs: { bus: 'up' },
     instances: [
       { name: 'n', def: NMOS, at: [10, 8] },
       { name: 'gnd', def: GND, at: [12, 16] },
@@ -62,10 +62,11 @@ export function i2cController(): ComponentDef {
   const cmdIn = m.inputBus('cmd', 2), din = m.inputBus('din', 8);
   const sdaIn = m.input('sda_i'), sclIn = m.input('scl_i');
   const rstn = m.not(rst);
-  const act = m.reg(clk, 'act'), pre = m.reg(clk, 'pre'), ack = m.reg(clk, 'ack'), lost = m.reg(clk, 'lost');
-  const sdaO = m.reg(clk, 'sda_o_q'), sclO = m.reg(clk, 'scl_o_q'), sdaS = m.reg(clk, 'sda_s'), sclS = m.reg(clk, 'scl_s');
-  const c = [0, 1].map((i) => m.reg(clk, `cmd${i}`)), p = [0, 1].map((i) => m.reg(clk, `ph${i}`));
-  const bc = [0, 1, 2, 3].map((i) => m.reg(clk, `bc${i}`)), sh = din.map((_, i) => m.reg(clk, `sh${i}`));
+  const SMP: [string, string] = ['smp', 'input samplers'], SEQ: [string, string] = ['seq', 'phase, bit count, command'], SHF: [string, string] = ['shift', 'shift register'], DRV: [string, string] = ['drive', 'SDA and SCL drive'];
+  const act = m.reg(clk, 'act', SEQ), pre = m.reg(clk, 'pre', SEQ), ack = m.reg(clk, 'ack', SEQ), lost = m.reg(clk, 'lost', SEQ);
+  const sdaO = m.reg(clk, 'sda_o_q', DRV), sclO = m.reg(clk, 'scl_o_q', DRV), sdaS = m.reg(clk, 'sda_s', SMP), sclS = m.reg(clk, 'scl_s', SMP);
+  const c = [0, 1].map((i) => m.reg(clk, `cmd${i}`, SEQ)), p = [0, 1].map((i) => m.reg(clk, `ph${i}`, SEQ));
+  const bc = [0, 1, 2, 3].map((i) => m.reg(clk, `bc${i}`, SEQ)), sh = din.map((_, i) => m.reg(clk, `sh${i}`, SHF));
 
   m.scope('smp', 'input samplers', () => { m.setD(sdaS, sdaIn); m.setD(sclS, sclIn); });
   const d = m.scope('dec', 'decode, events', () => {
@@ -136,14 +137,15 @@ export function i2cTarget(): ComponentDef {
     summary: 'Four 8-bit registers behind a 7-bit address (the adr pins). START and STOP are found from two samples of each line; the address, then bytes: with R/W = 0 the first sets the register pointer and the rest are written at the pointer; with R/W = 1 the register at the pointer is sent and the pointer advances on each ACK. stretch holds SCL low for that many clocks before the first data bit of a read.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), sdaIn = m.input('sda_i'), sclIn = m.input('scl_i');
-  const adr = m.inputBus('adr', 7), st = m.inputBus('stretch', 3);
+  const adr = m.inputBus('adr', 7), st = m.inputBus('stretch', 6);
   const rstn = m.not(rst);
-  const sdaS = m.reg(clk, 'sda_s'), sclS = m.reg(clk, 'scl_s'), sdaP = m.reg(clk, 'sda_p'), sclP = m.reg(clk, 'scl_p');
-  const ph = [0, 1, 2].map((i) => m.reg(clk, `phase${i}`)), n = [0, 1, 2].map((i) => m.reg(clk, `n${i}`));
-  const sh = Array.from({ length: 8 }, (_, i) => m.reg(clk, `sh${i}`));
-  const rw = m.reg(clk, 'rw'), ptr = [0, 1].map((i) => m.reg(clk, `ptr${i}`));
-  const pnext = m.reg(clk, 'pnext'), mack = m.reg(clk, 'mack'), sdaO = m.reg(clk, 'sda_o_q'), sclO = m.reg(clk, 'scl_o_q'), wpend = m.reg(clk, 'wpend');
-  const scnt = [0, 1, 2].map((i) => m.reg(clk, `scnt${i}`));
+  const SMP: [string, string] = ['smp', 'samplers'], FSM: [string, string] = ['fsm', 'phase, bit count, flags'], SHF: [string, string] = ['shift', 'shift register'], LIN: [string, string] = ['line', 'SDA and SCL drive'];
+  const sdaS = m.reg(clk, 'sda_s', SMP), sclS = m.reg(clk, 'scl_s', SMP), sdaP = m.reg(clk, 'sda_p', SMP), sclP = m.reg(clk, 'scl_p', SMP);
+  const ph = [0, 1, 2].map((i) => m.reg(clk, `phase${i}`, FSM)), n = [0, 1, 2].map((i) => m.reg(clk, `n${i}`, FSM));
+  const sh = Array.from({ length: 8 }, (_, i) => m.reg(clk, `sh${i}`, SHF));
+  const rw = m.reg(clk, 'rw', FSM), ptr = [0, 1].map((i) => m.reg(clk, `ptr${i}`, FSM));
+  const pnext = m.reg(clk, 'pnext', FSM), mack = m.reg(clk, 'mack', FSM), sdaO = m.reg(clk, 'sda_o_q', LIN), sclO = m.reg(clk, 'scl_o_q', LIN), wpend = m.reg(clk, 'wpend', FSM);
+  const scnt = [0, 1, 2, 3, 4, 5].map((i) => m.reg(clk, `scnt${i}`, LIN));
   const n7 = m.name(m.andN(n), 'n7');
 
   m.scope('smp', 'samplers', () => { m.setD(sdaS, sdaIn); m.setD(sclS, sclIn); m.setD(sdaP, sdaS); m.setD(sclP, sclS); });
@@ -288,7 +290,7 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
     };
     bits('adr', 7, tspec.adr, 2);
     const sn = `stretch${k}`;
-    ports.push({ name: sn, width: 3, dir: 'in' }); pins[sn] = [0, inY]; inY += 2;
+    ports.push({ name: sn, width: 6, dir: 'in' }); pins[sn] = [0, inY]; inY += 2;
     nets.push({ name: sn, ends: [sn, `${d}.stretch`], tags: true });
     pad(`ps_t${k}`, d, 'sda_o', 'sda_i', x + 2, sdaEnds, 'sda'); pad(`pc_t${k}`, d, 'scl_o', 'scl_i', x + 2 + pg.w + 4, sclEnds, 'scl');
     x += Math.max(tg.w, 2 * pg.w + 10) + gap;
