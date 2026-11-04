@@ -66,3 +66,4 @@ export * from './numbers';
 export * from './intc';
 export * from './seqdeep';
 export * from './rfdeep';
+export * from './sync';
