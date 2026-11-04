@@ -48,7 +48,7 @@ span.err-bit { cursor: default; }
 .err-trow.head { color: var(--muted); font-size: 12px; }
 .err-trow.head > span { font-family: inherit; }
 .err-trow.c1 > span:first-child { color: var(--bad); } .err-trow.c2 > span:first-child { color: var(--accent); } .err-trow.c3 > span:first-child { color: var(--good); }
-@container (max-width: 520px) { .err-trow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@container (max-width: 520px) { .err-trow { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px; padding: 3px 2px; font-size: 11.5px; } .err-trow.head { font-size: 11px; } }
 
 /* the frame on the wire */
 .err-strip { display: flex; flex-wrap: wrap; gap: 2px; margin: 8px 0; }
