@@ -1,0 +1,26 @@
+/* The Communication track's widgets (widgets/comm.ts, exchange.ts), on the MOSFET widgets' plot and panel styles.
+   Colours are the theme's tokens, so both themes are covered. */
+.mos-plot .op.bad { fill: var(--bad); }
+.mos-plot .mk { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 4; }
+.mos-plot .mk-l { fill: var(--text-2); }
+.mos-plot .wave { fill: none; stroke-width: 2.2; stroke-linejoin: miter; }
+.mos-plot .wave.morse { stroke: var(--w1); }
+.mos-plot .wave.ita { stroke: var(--accent); }
+.mos-plot .samp { stroke-width: 1.8; }
+.mos-plot .samp.ok { stroke: var(--good); }
+.mos-plot .samp.bad { stroke: var(--bad); }
+.mos-plot .bad-l { fill: var(--bad); font-weight: 700; }
+.mos-plot .mesh-wire { stroke: var(--border-strong); stroke-width: 1; }
+.mos-plot .mesh-wire.star { stroke: var(--accent); stroke-width: 1.6; }
+.mos-plot .mesh-node { fill: var(--surface-2); stroke: var(--text-2); stroke-width: 1.5; }
+.mos-plot .mesh-ex { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.6; }
+.comm-input { width: 100%; box-sizing: border-box; margin: 4px 0 8px; padding: 7px 10px; font: 600 15px var(--font-mono); letter-spacing: 0.04em; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 8px; }
+.comm-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.comm-tapes svg { max-height: 240px; }
+.comm-check { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.comm-check input { flex: none; accent-color: var(--accent); }
+.comm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comm-table th, .comm-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.comm-table th:first-child, .comm-table td:first-child { text-align: left; }
+.comm-table tr.now td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 700; }
+@media (pointer: coarse) { .comm-input, .comm-check input { min-height: 40px; } }
