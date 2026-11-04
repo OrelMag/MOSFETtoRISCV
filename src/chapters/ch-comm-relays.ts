@@ -10,6 +10,7 @@ import { FF_DRIVER, FF_INPUT, FF_WIRE } from '../sim/netcap';
 import { VDD, energyFj } from '../sim/power';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
+import { strowger3d } from '../widgets/strowger3d';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
 import type { Chapter } from './types';
@@ -431,6 +432,14 @@ export const chExchange: Chapter = {
         answer: 'Six pulses of pulse = 1, then 0 give count 6 (110): bit 1 and bit 2 operated, and the line leaves by output 6, y = 01000000.',
         solve: (st) => { for (let i = 0; i < 6; i++) { st.setInputs({ pulse: 1 }); st.sim?.settle(); st.setInputs({ pulse: 0 }); st.sim?.settle(); } },
       },
+    },
+    {
+      title: 'The machine itself',
+      body: `
+        <p>The relay selector above is a chain of latches that decodes a count. The Strowger switch has no count to decode: its <strong>position is the state</strong>, and it moves in two directions. Each pulse of the first digit steps a shaft up one level of a bank of ten; the shaft's height is the digit. Then the shaft turns instead of rising: the rotary magnet steps the wipers along that level of ten lines by itself, without further pulses, until a line is free.</p>
+        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (a test holds the model to the ${SEL.relays}-relay selector for 0 to 7 pulses), but a busy line is skipped by the wiper, and a level busy to the end gives the busy tone. Hanging up releases the shaft and it drops to rest.</p>
+        <div class="try">Dial 4, mark lines on level 4 busy, and dial again. Fill a whole level with its L button and watch the wiper run off the end.</div>`,
+      widget: () => strowger3d(),
     },
     {
       title: 'A crossbar',
