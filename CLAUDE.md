@@ -1645,11 +1645,13 @@ get approval. Small fixes and additions inside an existing screen don't need one
 - Before merging, on the branch:
   1. Bring it up to date with `main` (`git fetch && git merge origin/main`, or rebase if
      the branch is unpushed/private) and resolve conflicts.
-  2. Run the gate for what changed, not everything every time: `npm run build` (typecheck included), `vitest related
-     <changed files> --run`, smoke with `--only` on the routes touched. If the change reaches shared code (src/sim, src/view,
-     src/ui, src/editor's core, src/lib parts others build on, the stage), also the full run on a runner: `gh workflow run gate.yml
-     --ref <branch>`. Full suites on this machine crash under several sessions' load. All must pass; report failures instead
-     of merging. The deploy always runs the full tests and smoke before anything goes live, so a miss stops the deploy: fix forward.
+  2. **Rule: run what the change needs, never the whole deck unless it is really justified, and say why when it is.**
+     The gate for what changed: `npm run build` (typecheck included), `vitest related <changed files> --run`, smoke with `--only`
+     on the routes touched. A merge of main that brings nothing near your files needs no rerun beyond that. The whole deck only
+     for a change that reaches shared code (src/sim, src/view, src/ui, src/editor's core, src/lib parts others build on, the
+     stage), and then on a runner: `gh workflow run gate.yml --ref <branch>`, not on this machine, where full suites crash under
+     several sessions' load. All must pass; report failures instead of merging. The deploy still runs the full tests and smoke
+     before anything goes live, so a miss stops the deploy: fix forward.
   3. For visual changes, check `npm run dev` in light and dark themes.
 - **Merge with `--no-ff`** so every feature stays a visible merge commit, from the branch's worktree
   (never the shared checkout): `git checkout --detach origin/main && git merge --no-ff <branch>`, then
