@@ -373,14 +373,16 @@ export class SchematicView {
       // A fixed-size copy of the block's label for when its own is too small to read (legible.ts); decoration, so
       // hidden from assistive tech, never hit, and left out of exported images.
       const own = g.querySelector('.sym-label');
-      if (nameEligible(own?.textContent, geo.w, geo.h)) {
+      // a box whose symbol is one glyph (a comparator's "=") is named by its instance label ("wa = ra1") when it has one
+      const nm = nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
+      if (nm) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
         const ax = at[0] + cx, ay = at[1] + cy;
-        const t = s('text', { class: 'lg-name', x: ax, y: ay, 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: rot ? `rotate(-90 ${ax} ${ay})` : null }, own!.textContent!.trim());
+        const t = s('text', { class: 'lg-name', x: ax, y: ay, 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: rot ? `rotate(-90 ${ax} ${ay})` : null }, nm);
         g.classList.add('lg-named');
         nameG.append(t);
         this.nameOf.set(inst.name, t);
-        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: own!.textContent!.trim().length, rot } });
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot } });
       }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });

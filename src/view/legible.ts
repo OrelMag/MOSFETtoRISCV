@@ -35,8 +35,9 @@ export interface NameBox { cx: number; cy: number; w: number; h: number; chars: 
 /** Is this block's label worth a fixed name? Not: no label, one character (a constant, a bit), a small box. */
 export function nameEligible(label: string | null | undefined, w: number, h: number): boolean {
   const t = label?.trim() ?? '';
-  // not an assignment or a constant drawn as a box ("bit0 := 0", "0x0"): those sit on their own stubs
-  return t.length >= 2 && !/^[01]$/.test(t) && !/=|^0x|^[\d.]+$/.test(t) && /[A-Za-z].*[A-Za-z]/.test(t) && (w >= 6 || h >= 20);
+  // not an assignment or a constant drawn as a box ("bit0 := 0", "x0 = 0", "0x0"): those sit on their own stubs;
+  // a comparison of two names ("wa = ra1") is a name like any other
+  return t.length >= 2 && !/^[01]$/.test(t) && !/:=|=\s*(0x[\da-f]+|[\d.]+)$|^0x|^[\d.]+$/i.test(t) && /[A-Za-z].*[A-Za-z]/.test(t) && (w >= 6 || h >= 20);
 }
 
 /** A tall narrow block (a pipeline register) gets its name turned. */

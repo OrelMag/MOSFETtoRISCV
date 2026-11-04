@@ -275,14 +275,35 @@ export class HwStatsPage implements Page {
           ? h('td', { class: 'hw-nands' }, bar(it.values.nands as number, max), range('nands')) : h('td', null, range(c.k))))));
       if (open) for (const m of it.members) out.push(this.row(m, max, true));
     }
-    if (!out.length) {
+    const empty = !out.length;
+    if (empty) {
       // nothing matches: say what to do (the filters are chips, a search and a switch: easy to forget one)
       const reset = h('button', { class: 'btn sm', onclick: () => { this.q = ''; this.search.value = ''; this.cats = new Set(ORDER); this.renderChips(); this.render(); } }, 'Clear the search and filters');
       out.push(h('tr', null, h('td', { colspan: String(columns(this.tech).length), class: 'hw-empty' }, 'No part matches. ', reset)));
     }
+    this.holdColumns(empty);
     this.body.replaceChildren(...out);
     // the tile above counts every library part; this is how many of all the table's rows (wiring parts included) pass the filters
     this.count.textContent = `${groupDigits(rows.length)} of ${groupDigits(this.rows.length)} parts shown${this.group ? `, in ${groupDigits(items.length)} rows (sizes grouped)` : ''}`;
+  }
+
+  /** Widths of the header's columns as the unfiltered table laid them out, and whether the table on screen is that one. */
+  private colW: number[] = [];
+  private full = false;
+
+  /** A table with no row would size its columns to the header alone and shift them: while it is empty the columns keep the
+   *  widths the full table gave them (measured just before the next render replaces it, once the fonts are in; a narrowed
+   *  table sizes to its few rows, so only the unfiltered one is taken). */
+  private holdColumns(empty: boolean): void {
+    const table = this.body.parentElement as HTMLTableElement | null;
+    if (!table) return;
+    const ths = [...this.head.children] as HTMLElement[];
+    if (this.full) this.colW = ths.map((th) => th.offsetWidth);
+    this.full = !empty && !this.q && this.cats.size === ORDER.length;
+    if (!empty) { table.style.tableLayout = ''; return; }
+    if (this.colW.length !== ths.length || this.colW.some((w) => !w)) return;
+    ths.forEach((th, i) => { th.style.width = `${this.colW[i]}px`; });
+    table.style.tableLayout = 'fixed';
   }
 
   /** A family row's range end, formatted for its column. */
