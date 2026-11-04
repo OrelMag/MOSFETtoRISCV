@@ -37,8 +37,8 @@ export const chMap: Chapter = {
         are 1) but never its insides, so a designer working on an adder thinks in gates and needs no transistor in mind. The price of the rule is
         that every level adds overhead the one above cannot see; the benefit is that the descriptions stay small enough to hold in a head. Each chapter
         here ends by pricing what it built in the level below, so you can see both sides.</p>
-        <div class="note">The ladder of abstraction is the whole journey, from the transistor on its bottom rung upward. Each rung
-        lists what it is made of; a click opens the chapter that builds it.</div>`,
+        <div class="note">The map below is the whole journey, in reading order, by section. Each row
+        lists what its chapter builds with; a click opens the chapter.</div>`,
       more: {
         derive: `<p>One number shows why levels are needed. This site's 4-bit adder is ${stats(rca(4)).transistors} transistors; a 32-bit one is ${stats(rca(32)).transistors}, and each
           doubling of width doubles the count. A processor is ${stats(rca(32)).transistors} transistors times thousands of such blocks: no one can hold that in mind transistor by
