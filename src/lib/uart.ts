@@ -9,7 +9,7 @@
 import { UART_DIV_BITS } from '../comm/uart';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { isZero } from './alu';
-import { andBus, kit, slaveFsm, slavePorts } from './axi';
+import { andBus, bundled, kit, slaveFsm, slavePorts } from './axi';
 import { Builder } from './builder';
 import { decoder, incrementer, muxTree } from './combinational';
 import { define } from './define';
@@ -265,10 +265,18 @@ export const AXI_UART: ComponentDef = (() => {
   });
 })();
 
+/** The slave with its bus ports packed into a request and a response bus: the sandbox's UART slave on a bus (id axi_uart_b). */
+export const AXI_UART_B: ComponentDef = bundled(AXI_UART, [['', 'slave']], 'axi_uart_b');
+
 // ---- the line ----------------------------------------------------------------------------------------------------------
 
 /** The line part's state: the levels sampled at the last `delay` sender edges, the clock and the inputs as they were. */
 export interface LineState { buf: number[]; clk: number; d: number; noise: number; delay: number }
+/** The longest line the sandbox part offers (cycles of the sender's clock). */
+export const MAX_LINE_DELAY = 64;
+const lineDefs = new WeakSet<ComponentDef>();
+/** Is this def a line part (the one box that does not end in transistors)? Any delay. */
+export const isLineDef = (d: ComponentDef | undefined): boolean => !!d && lineDefs.has(d);
 export const isLine = (s: unknown): s is LineState => !!s && typeof s === 'object' && Array.isArray((s as LineState).buf) && 'noise' in s;
 
 /**
@@ -278,7 +286,7 @@ export const isLine = (s: unknown): s is LineState => !!s && typeof s === 'objec
  * transistors: a transmission line is chapter 41's model (phys/line.ts), not a circuit.
  */
 export function lineDef(delay = 2): ComponentDef {
-  return memo(`line${delay}`, () => ({
+  return memo(`line${delay}`, () => { const d: ComponentDef = {
     id: `line${delay}`, name: `Line (${delay} cycles)`, category: 'memory',
     summary: `A wire between two machines as one box: the level the sender drove, ${delay} sender clock cycles later, with an input that flips it for a cycle (noise). Pulled up: idle is 1. It stands for the cable and costs nothing; chapter 41 models what is inside.`,
     ports: [bit('d', 'in'), bit('noise', 'in'), bit('clk', 'in', 'bottom', true), bit('q', 'out')],
@@ -297,7 +305,7 @@ export function lineDef(delay = 2): ComponentDef {
       },
       carry: (prev) => prev,
     },
-  }));
+  }; lineDefs.add(d); return d; });
 }
 export const LINE = lineDef(2);
 
