@@ -69,3 +69,4 @@ export * from './seqdeep';
 export * from './rfdeep';
 export * from './sync';
 export * from './modem';
+export * from './serdes';
