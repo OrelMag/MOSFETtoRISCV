@@ -7,8 +7,8 @@ import { frameBody, frameBytes, parseFrame, wireBytes, type FrameSpec } from '..
 import { pcapFile, readPcap } from '../src/comm/pcap';
 import { emptyWorkspace } from '../src/editor/model';
 import { remixDef } from '../src/editor/remix';
-import { macRx, macTx } from '../src/lib/ethernet';
-import { ethCountsOf, ethSegment, ethStation, ETH_EV, ETH_SEG_POSITIONS, ETH_STATION_SEEDS, ethStationMac } from '../src/lib/ethstation';
+import { ETH_SEG_POSITIONS, macRx, macTx } from '../src/lib/ethernet';
+import { ethCountsOf, ethSegment, ethStation, ETH_EV, ETH_STATION_SEEDS, ethStationMac } from '../src/lib/ethstation';
 import { deadInstances } from '../src/sim/dead';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';

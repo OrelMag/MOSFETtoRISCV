@@ -50,7 +50,7 @@ let txDef: ComponentDef | undefined;
 export function macTx(): ComponentDef {
   if (txDef) return txDef;
   const m = new Rtl({
-    id: 'eth_mac_tx', name: 'Ethernet MAC transmitter', category: 'sequential', label: 'MAC TX', columnHeight: 60,
+    id: 'eth_mac_tx', name: 'Ethernet MAC transmitter', category: 'sequential', label: 'MAC TX', columnHeight: 34,
     summary: 'Preamble, SFD, frame bytes from a stream, pad to 64, FCS from a CRC-32 unit, then the gap; half duplex adds carrier sense, collision detect, jam and truncated binary exponential backoff. One bit every four clocks, least significant bit first.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst');
@@ -160,10 +160,14 @@ export function macTx(): ComponentDef {
   });
 
   m.output('ready', c.ready);
-  m.output('txd', m.and(sh.s[0], c.act));
+  const enc = m.scope('out', 'line output, state code', () => ({
+    txd: m.name(m.and(sh.s[0], c.act), 'txd_o'),
+    state: [m.orN([c.pre, c.fcs, back]), m.or(c.dat, c.fcs), m.or(c.jam, back)].map((x, i) => m.name(x, `st${i}`)),
+  }));
+  m.output('txd', enc.txd);
   m.output('txen', c.act);
   m.output('restart', c.rs); m.output('drop', c.dr); m.output('sent', c.sn);
-  m.outputBus('state', [m.orN([c.pre, c.fcs, back]), m.or(c.dat, c.fcs), m.or(c.jam, back)]);
+  m.outputBus('state', enc.state);
   m.outputBus('att', c.att);
   m.outputBus('backoff', cs.bo);
   m.outputBus('gap', cs.gap);
@@ -187,7 +191,7 @@ let rxDef: ComponentDef | undefined;
 export function macRx(): ComponentDef {
   if (rxDef) return rxDef;
   const m = new Rtl({
-    id: 'eth_mac_rx', name: 'Ethernet MAC receiver', category: 'sequential', label: 'MAC RX', columnHeight: 60,
+    id: 'eth_mac_rx', name: 'Ethernet MAC receiver', category: 'sequential', label: 'MAC RX', columnHeight: 34,
     summary: 'Finds the SFD in the bit stream, delivers the frame as bytes without preamble and FCS, checks the FCS and the length, filters by destination address; err at last says the consumer must discard the frame.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), rxd = m.input('rxd'), crs = m.input('crs'), ready = m.input('ready'), promisc = m.input('promisc');
@@ -317,3 +321,9 @@ export function sharedWire(x: readonly number[]): ComponentDef {
   return d;
 }
 
+
+/** Positions of the segment's four stations along the cable, in clocks of propagation. */
+export const ETH_SEG_POSITIONS = [0, 6, 14, 26];
+export const MAC_TX = macTx();
+export const MAC_RX = macRx();
+export const SHARED_WIRE = sharedWire(ETH_SEG_POSITIONS);

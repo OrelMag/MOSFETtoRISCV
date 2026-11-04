@@ -9,7 +9,7 @@ import { constWord } from './alu';
 import { bigRam } from './bigmem';
 import { decoder } from './combinational';
 import { define, merger, ones, splitter } from './define';
-import { macRx, macTx, sharedWire } from './ethernet';
+import { ETH_SEG_POSITIONS, macRx, macTx, sharedWire } from './ethernet';
 import { AND, NOT, OR } from './gates';
 import { Rtl, type Sig } from './rtl';
 
@@ -93,8 +93,7 @@ export function ethRxBuf(): ComponentDef {
 
 // ---- a station ---------------------------------------------------------------------------------------------------------
 
-/** Stations on the segment: positions along the cable (clocks of propagation), addresses and LFSR seeds. */
-export const ETH_SEG_POSITIONS = [0, 6, 14, 26];
+/** Stations on the segment: addresses and LFSR seeds (positions along the cable: ETH_SEG_POSITIONS). */
 export const ethStationMac = (i: number): number[] => [0x02, 0, 0, 0, 0, i + 1];
 export const ETH_STATION_SEEDS = [0x155, 0x2b7, 0x0c3, 0x1e9];
 export const ethMacWord = (a: readonly number[]): number => a.reduce((v, b, j) => v + b * 2 ** (8 * j), 0);
@@ -238,3 +237,6 @@ export function ethSegment(n = 4): ComponentDef {
   segs.set(n, d);
   return d;
 }
+
+export const ETH_STATION = ethStation(0);
+export const ETH_SEGMENT = ethSegment(4);

@@ -258,7 +258,7 @@ export function segmentScene(): Scene {
         S.clock = clock; S.collisions = collisions; S.sent = sent; S.log = log; S.kept = [0, 1, 2, 3].map((i) => field('ngood', i, 8)); S.queued = queues.map((q) => q.length);
         strips.replaceChildren(strip([...[0, 1, 2, 3].map((i) => ({ label: `station ${i + 1}`, data: rows[i] })), { label: 'clash', data: rows[4], cls: 'jam' }], WINDOW, `Which stations send, in the last ${(WINDOW * SAMPLE).toLocaleString('en')} clocks (one sample per ${SAMPLE})`));
         const busy = b.get('busy');
-        cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('div', { class: 'sub' }, i === 3 ? 'promiscuous' : 'own address'),
+        cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('div', { class: 'sub' }, i === 3 ? 'monitor' : 'host'),
           h('div', null, txStateName(field('txstate', i, 3)), (busy >> i) & 1 ? ' · frame held' : ''), h('div', null, `kept ${field('ngood', i, 8)} · dropped ${field('nbad', i, 8)}`),
           h('div', null, `collisions ${field('ncol', i, 8)}`), h('div', null, `waiting ${queues[i].length}`))));
         read.replaceChildren(h('span', null, 'clocks ', h('b', null, clock.toLocaleString('en'))), h('span', null, 'time ', h('b', null, us(clock))), h('span', null, 'frames sent ', h('b', null, String(sent))), h('span', null, 'collisions ', h('b', null, String(collisions))),
