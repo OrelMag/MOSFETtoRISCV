@@ -189,6 +189,16 @@ export const TAUGHT: Record<string, string> = {
   viterbi: 'errors',
   reedsolomon: 'errors',
   interleave: 'errors',
+  ethframe: 'ethernet',
+  csmacd: 'ethernet',
+  ethmac: 'ethernet',
+  learnsw: 'switch',
+  crossbar: 'switch',
+  hol: 'switch',
+  nicring: 'network',
+  inetcksum: 'network',
+  arp: 'network',
+  ipv4: 'network',
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */
