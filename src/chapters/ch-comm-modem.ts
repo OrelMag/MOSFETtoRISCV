@@ -97,7 +97,7 @@ export const chModem: Chapter = {
         kind: 'quiz', question: `A modem occupies the whole ${n0(B)} Hz band with a carrier and sends complex (I, Q) symbols as fast as the band allows. How many symbols a second, at most?`,
         options: [`About ${n0(B)}: one complex symbol per hertz of band`, `${n0(2 * B)}: Nyquist's 2B`, `${n0(B / 2)}: half the band`, `Unlimited: the SNR sets the rate, not the band`],
         answer: 0,
-        explain: `Nyquist's 2B counts real values; a carrier with I and Q makes each symbol two of them, so a pass band of B holds B symbols a second. V.34's top rate of ${n0(mdm('v34').baud)} baud is that limit reached in practice.`,
+        explain: `Nyquist's 2B counts real values; a carrier with I and Q makes each symbol two of them, so a pass band of B holds B symbols a second. V.34's top rate of ${n0(mdm('v34').baud)} baud needs more than this nominal band: it measures the line when it connects and uses the wider band a good line offers, at least 3.4 kHz.`,
         why: ['', 'That counts the real values per second. One I/Q symbol is two of them.', 'Half of B is what a baseband signal of bandwidth B/2 would hold. A pass band of width B holds B complex symbols.', 'The SNR sets how many bits each symbol holds. The band still limits how many symbols fit.'],
       },
     },
@@ -196,7 +196,7 @@ export const chModem: Chapter = {
         options: [`${db(needDb(256) - needDb(16), 0)}: 12 dB, six per two bits`, 'The same: the decision regions rescale', '3 dB: one more bit', '24 dB: the squared number of points'],
         answer: 0,
         explain: `Two doublings of the points on each axis cost 4 times the SNR twice: ${db(needDb(16))} to ${db(needDb(256))}, a difference of ${db(needDb(256) - needDb(16))}.`,
-        why: ['', 'The energy is fixed, so the grid of 256 points is finer and the same noise crosses more boundaries.', 'One more bit a symbol is 3 dB; 16 to 256 is four bits.', '24 dB would be the 16-fold increase in points; each axis has 4 times, and the SNR scales as M.'],
+        why: ['', 'The energy is fixed, so the grid of 256 points is finer and the same noise crosses more boundaries.', 'One more bit a symbol is 3 dB; 16 to 256 is four bits.', '24 dB would be a 256-fold increase. The points grow 16-fold and the SNR needed grows about as M, so it is about 12 dB.'],
       },
     },
     {
