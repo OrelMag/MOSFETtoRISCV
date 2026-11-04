@@ -1,6 +1,7 @@
 // comm/linecode.ts: Manchester, 8b/10b against the published codes and its defining properties over all 256 data bytes and the
 // 12 control codes at both disparities, and the self-synchronizing scrambler.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   byteOf, codeText, COMMAS, decode8b10b, Descrambler, disparityOf, encode8b10b, encodeStream, isKCode, K_CODES, manchester, maxRun, MAX_RUN_8B10B,
@@ -165,5 +166,23 @@ describe('scrambler', () => {
     const out = new Scrambler(POLY_64B66B, 0x15555555555555).run(zeros);
     expect(maxRun(out)).toBeLessThan(40);
     expect(transitionDensity(out.slice(120))).toBeGreaterThan(0.4);
+  });
+});
+
+describe('8b/10b: the whole published table', () => {
+  // tests/fixtures/8b10b-ug196.txt is Xilinx's table as printed, extracted from the PDF, never from our encoder.
+  const rows = readFileSync(new URL('./fixtures/8b10b-ug196.txt', import.meta.url), 'utf8').split(/\r?\n/).filter((l) => l && !l.startsWith('#'))
+    .map((l) => /^(\S+) ([01]{3}) ([01]{5}) (\S+ \S+) (\S+ \S+)$/.exec(l)!);
+  it('lists all 268 symbols, each with the byte its name says', () => {
+    expect(rows.length).toBe(268);
+    expect(new Set(rows.map((r) => r[1])).size).toBe(268);
+    for (const r of rows) expect(byteOf(r[1]).v).toBe(parseInt(r[2] + r[3], 2));
+  });
+  it('every code at both disparities equals the table', () => {
+    for (const r of rows) {
+      const { v, k } = byteOf(r[1]);
+      expect(codeText(encode8b10b(v, k, 0).code), `${r[1]} at RD-`).toBe(r[4]);
+      expect(codeText(encode8b10b(v, k, 1).code), `${r[1]} at RD+`).toBe(r[5]);
+    }
   });
 });

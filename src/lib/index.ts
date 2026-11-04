@@ -76,3 +76,5 @@ export * from './uartlink';
 export * from './modem';
 export * from './serdes';
 export * from './router';
+export * from './viterbi';
+export * from './rs';
