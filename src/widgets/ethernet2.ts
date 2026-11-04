@@ -4,7 +4,7 @@
 import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
-import { BROADCAST, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
 import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, CLOCK_NS, frameBitTimes, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS,
 } from '../comm/mac';
@@ -235,7 +235,7 @@ export function segmentScene(): Scene {
       const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
       const runPause = (on: boolean) => { if (on && !loop.running) loop.start(); else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
       const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
-        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
+        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_LOCAL, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
         return frameBody(spec);
       };
       const queue = (f: number, t: number | 'all', txt: string) => {

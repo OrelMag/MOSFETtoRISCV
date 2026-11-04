@@ -22,6 +22,8 @@ export const GAP_BYTES = 12;
 export const BROADCAST = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 export const ETHERTYPE_IPV4 = 0x0800;
 export const ETHERTYPE_ARP = 0x0806;
+/** IEEE 802's local experimental type: what a frame of demo bytes says it is. Tagged 0x0800 without an IP header, a dissector rightly calls it malformed. */
+export const ETHERTYPE_LOCAL = 0x88b5;
 
 export type Mac = readonly number[];
 
