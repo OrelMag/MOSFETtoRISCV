@@ -452,7 +452,19 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Booting from cards", challenge: "reach" },
     { title: "Everything on one bus", challenge: "reach" },
   ] },
-  { id: "appendix-6502", num: 39, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["relays","bus"], steps: [
+    { title: "A line that fades" },
+  ] },
+  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["telegraph"], steps: [
+    { title: "Everyone to everyone" },
+  ] },
+  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], steps: [
+    { title: "The driver and its load" },
+  ] },
+  { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], steps: [
+    { title: "What a receiver decides" },
+  ] },
+  { id: "appendix-6502", num: 43, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -462,14 +474,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 40, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 44, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 41, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 45, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -482,7 +494,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 42, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 46, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },

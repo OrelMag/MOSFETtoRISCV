@@ -1231,6 +1231,37 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
 
 ---
 
+
+### Phase 21 — Journey and campaign track: Communication ⏳
+
+Approved 2026-11-04 (mockup: E:/mockups/comms/comms-mockup.html, https://claude.ai/artifact/73HtYnFcawpnnxx3DZe4qC). From relays to the
+path across the internet, at the depth of the MOSFET-to-CPU journey: level "Communication", chapters 39–53 after Buses and DMA; each
+chapter uses only what is below it, and any box opens down to its devices. Appendices keep their letters; their `num` follows the last
+chapter.
+
+Ladder: 39 Two machines, one wire · 40 The telephone exchange · 41 A wire is not a wire · 42 Crossing clocks · 43 A UART · 44 SPI and I²C ·
+45 Modems · 46 Fast serial links · 47 When bits go wrong · 48 Ethernet · 49 A switch · 50 Computers on a network · 51 A router · 52 TCP ·
+53 The internet path.
+
+Decisions: (1) scope and placement as above. (2) Analog boundary: `src/phys/line.ts` holds the line, channel and noise (like relay.ts,
+triode.ts), tested against closed forms; drivers and receivers are MOSFETs at switch level, the voltage between them comes from the
+model; past the slicer it is all gates. (3) On gate-level scenes a line is one part with a delay and an optional error stream; opening it
+shows the model's panel: the one box that does not end in transistors, and the prose says so. (4) Metastability is a model (MTBF from the
+standard exponential formula, labelled constants); the gates show the synchronizer's structure and latency. (5) Real formats: Ethernet
+II, ARP, IPv4, ICMP, UDP bytes; Save capture writes a .pcap; CI checks captures with tshark (Spike-oracle style); our simplifications named (no
+autonegotiation, no 100BASE-TX line code). (6) The internet is a model, the hops are gates: chapter 53's packet-level model of an invented
+network in `src/net/`, routing protocols run on it, one or two hops at a time at gate level on the same bytes; the site never touches
+the learner's real network. (7) Link speed: 4 cycles a bit, 63 Mb/s at 3.95 ns. (8) Verification: DOM-free `src/comm/` golden model per
+block, gates compared every output every cycle; oracles zlib.crc32, published 8b/10b tables, tshark. (9) Ping fully at gate level on the cycle
+engine; long TCP transfers on FastISS with devices modelled, plus a gate window (Appendix B's pattern). (10) Driver in RV32 assembly; ARP, IP,
+ICMP, UDP, TCP in chapter 15's Python subset, compiled live. (11) Packet buffers in bigRam, the switch's address table hashed in RAM (cam(4, 48) =
+17 357 NANDs is the priced alternative), UART FIFOs as fifo. (12) Optional campaign Act 12 "Links" (14 levels), ~25 codex entries, sandbox
+parts (UART, line, NIC, switch), Examples ▸ Two computers.
+
+Order, one branch and merge each: a relays + line model (39–42), b UART + SPI / I²C (43–44), c modems + fast links + errors (45–47), d Ethernet +
+switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaign + sandbox.
+
+- ⏳ a: foundation (numbering, ladder rung, stubs), chapters 39–42.
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
