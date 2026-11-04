@@ -1,0 +1,50 @@
+name: Full gate on a branch
+
+# The full tests and smoke run on a runner instead of this machine: `gh workflow run gate.yml --ref <branch>`, for a
+# branch whose change reaches shared code (CLAUDE.md, Git workflow). Nothing is deployed from here.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
+        uses: actions/cache@v4
+        with:
+          path: .cache/doom
+          key: freedoom-0.13.0
+      - run: node scripts/doom/fetch-wad.mjs
+      - run: npm test
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
+        uses: actions/cache@v4
+        with:
+          path: .cache/doom
+          key: freedoom-0.13.0
+      - run: node scripts/doom/fetch-wad.mjs --public
+      - run: npm run build
+      - run: npm run smoke
