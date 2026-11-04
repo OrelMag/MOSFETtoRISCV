@@ -10,6 +10,7 @@ import { FF_DRIVER, FF_INPUT, FF_WIRE } from '../sim/netcap';
 import { VDD, energyFj } from '../sim/power';
 import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
+import { strowger3d } from '../widgets/strowger3d';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
 import type { Chapter } from './types';
@@ -248,7 +249,7 @@ export const chTelegraph: Chapter = {
         errors as rare as you like, given a good enough code, and no more than that with any code. Setting 2B log<sub>2</sub> M equal to B log<sub>2</sub>(1 + SNR) gives <strong>M = √(1 + SNR)</strong>:
         the number of levels the noise leaves distinguishable. On ${groupDigits(TONE.B)} Hz at ${TONE.db} dB (${f0(dbToRatio(TONE.db))} ×) that is ${levelsSupported(dbToRatio(TONE.db)).toFixed(1)} levels and
         ${f1(shannon(TONE.B, dbToRatio(TONE.db)) / 1e3)} kb/s.</p>
-        <p>The marked lines are systems with published rates. The V.34 voice modem, ${f0(V34.rate / 1e3)} kb/s on about ${f1(V34.B / 1e3)} kHz of telephone channel, is ${V34_ETA.toFixed(1)} bit/s per hertz, so by Shannon's theorem that line had at least
+        <p>The marked lines are systems with published rates. The V.34 voice modem, ${(V34.rate / 1e3).toFixed(1)} kb/s on about ${f1(V34.B / 1e3)} kHz of telephone channel, is ${V34_ETA.toFixed(1)} bit/s per hertz, so by Shannon's theorem that line had at least
         ${f0(ratioToDb(snrNeeded(V34_ETA)))} dB of SNR (assuming that bandwidth). The theorem says a code exists and not what it is: closing the gap to the limit took the error-correcting codes of chapter 47 and
         decades of work.</p>
         <div class="try">Hold the bandwidth, raise the levels and find the SNR at which they fit. Then drop the SNR by 10 dB.</div>`,
@@ -292,7 +293,9 @@ export const chTelegraph: Chapter = {
 const CTR = stats(DIAL_COUNTER), SEL = stats(DIAL_SELECTOR), XB = stats(CROSSBAR3);
 const BEST = bestClos(1024);
 const CLOS36 = clos(36, 3, 5)!;
-const SS = { ita2: toleranceClosedForm(ITA2_START_STOP), uart: toleranceClosedForm(UART_8N1) };
+const SS = { ita2: toleranceClosedForm(ITA2_START_STOP), uart: toleranceClosedForm(UART_8N1), uartB2B: toleranceClosedForm(UART_8N1, 0.5, true) };
+/** Relay steps the counter takes to settle after a rising and a falling pulse edge over 16 pulses (tests/content-comms.test.ts measures them). */
+const SETTLE = { rise: 2, fall: 6 };
 const K_ITA2 = stopIndex(ITA2_START_STOP);
 const E10 = erlangB(10, 10);
 const ERL = { E: offered(1000, 2, 3) };
@@ -313,7 +316,7 @@ export const chExchange: Chapter = {
       `A relay pulse counter toggles on the falling edge of each pulse however long it lasts (m' = p ? ¬s : m, s' = p ? s : m): ${CTR.relays} relays for 3 bits. A contact tree on the same relays makes it a selector, ${SEL.relays} relays, 1 of 8, with no extra step.`,
       `A crossbar crosspoint is a relay that joins a row to a column and holds itself. N lines cost N² crosspoints; a three-stage Clos network needs m ≥ 2n − 1 middle switches never to block (${thin(BEST.crosspoints)} against ${thin(crossbarCrosspoints(1024))} crosspoints at 1 024 lines).`,
       `Erlang B gives the chance a call finds every trunk busy: ${f0(100 * E10)} % at 10 Erlangs on 10 trunks, 1 % with ${trunksFor(10, 0.01)}. Big trunk groups carry more per trunk.`,
-      `A start-stop receiver synchronizes on the start edge only, then samples at fixed offsets of its own clock: it tolerates ±${(100 * SS.ita2.fast).toFixed(1)} % speed error with the teleprinter's frame (5 data bits, stop 1.5) and ±${(100 * SS.uart.fast).toFixed(1)} % with 8N1.`,
+      `A start-stop receiver synchronizes on the start edge only, then samples at fixed offsets of its own clock: it tolerates ±${(100 * SS.ita2.fast).toFixed(1)} % speed error with the teleprinter's frame (5 data bits, stop 1.5) and ±${(100 * SS.uart.fast).toFixed(1)} % with 8N1 for an isolated character (back to back, a slow receiver is limited to −${(100 * SS.uartB2B.slow).toFixed(1)} %, since its stop sample must precede the next start edge).`,
     ],
     check: [
       {
@@ -365,7 +368,7 @@ export const chExchange: Chapter = {
         <code>m' = p ? ¬s : m</code> and <code>s' = p ? s : m</code>. While the pulse is up, m takes the inverse of s and s holds; when it falls, s copies m. So s toggles
         once per pulse, on the falling edge, however long the pulse lasts. (The prologue's clock divider, by contrast, would flip on every step its input stays up.) This is the master-slave pair of
         <a href="#/c/latches/0">chapter 8</a> with relay steps as the phases. Each stage's slave clocks the next, a ripple counter, and <span data-show="hr">the hang-up relay</span> opens the rail that feeds every master and slave, so a caller who hangs up releases the counter.</p>
-        <p>The whole counter is ${CTR.relays} relays: three per bit and one to hang up. A ripple through all three bits takes a handful of relay steps, well inside the 100 ms between pulses.</p>
+        <p>The whole counter is ${CTR.relays} relays: three per bit and one to hang up. Measured on this circuit, a pulse that rises settles in at most ${SETTLE.rise} relay steps and one that falls in at most ${SETTLE.fall} (${f0(SETTLE.fall * RELAY_STEP_MS)} ms at ${RELAY_STEP_MS} ms a step, the ripple through all three bits). That fits the 100 ms period of a dial but not always its roughly 40 ms make interval: the worst ripple can still be moving when the next pulse begins. The count stays right because each stage is clocked by an edge and holds its state, not by the time between edges.</p>
         <div class="try">Pulse three times, then hang up.</div>`,
       scene: () => ({ root: DIAL_COUNTER, inputs: { pulse: 0, hangup: 0 }, animate: true }),
       tour: {
@@ -429,6 +432,14 @@ export const chExchange: Chapter = {
         answer: 'Six pulses of pulse = 1, then 0 give count 6 (110): bit 1 and bit 2 operated, and the line leaves by output 6, y = 01000000.',
         solve: (st) => { for (let i = 0; i < 6; i++) { st.setInputs({ pulse: 1 }); st.sim?.settle(); st.setInputs({ pulse: 0 }); st.sim?.settle(); } },
       },
+    },
+    {
+      title: 'The machine itself',
+      body: `
+        <p>The relay selector above is a chain of latches that decodes a count. The Strowger switch has no count to decode: its <strong>position is the state</strong>, and it moves in two directions. Each pulse of the first digit steps a shaft up one level of a bank of ten; the shaft's height is the digit. Then the shaft turns instead of rising: the rotary magnet steps the wipers along that level of ten lines by itself, without further pulses, until a line is free.</p>
+        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (a test holds the model to the ${SEL.relays}-relay selector for 0 to 7 pulses), but a busy line is skipped by the wiper, and a level busy to the end gives the busy tone. Hanging up releases the shaft and it drops to rest.</p>
+        <div class="try">Dial 4, mark lines on level 4 busy, and dial again. Fill a whole level with its L button and watch the wiper run off the end.</div>`,
+      widget: () => strowger3d(),
     },
     {
       title: 'A crossbar',
@@ -516,7 +527,7 @@ export const chExchange: Chapter = {
         edge releases a clutch and the receiver's shaft turns one revolution, with cams that look at the line at fixed offsets from the start: the middle of each unit. At the end of the revolution the stop unit's 1 re-latches the clutch. The two motors have to agree only
         for the length of one character, ${frameUnits(ITA2_START_STOP)} units, since every start edge re-synchronizes the receiver.</p>
         <p>How far can they differ? A receiver that is e too fast reaches its stop sample, ${K_ITA2} + ½ units after the start edge, early by about ${K_ITA2} e units, and the sample must stay at or after the stop unit's beginning. The closed form is ±½ / K for the K = ${K_ITA2} units before the stop:
-        ±${(100 * SS.ita2.fast).toFixed(2)} % for the teleprinter, ±${(100 * SS.uart.fast).toFixed(2)} % for eight data bits and one stop bit (K = 9). The widget searches every code to find where the first one fails (a code ending in 0 goes first: a sample that
+        ±${(100 * SS.ita2.fast).toFixed(2)} % for the teleprinter, ±${(100 * SS.uart.fast).toFixed(2)} % for eight data bits and one stop bit (K = 9), both for an isolated character. With characters back to back the slow side of 8N1 tightens to −${(100 * SS.uartB2B.slow).toFixed(2)} %, because the stop sample at 9.5 / (1 + e) must come before the next start edge at 10; the teleprinter's 1.5 stop units leave it unaffected. The widget searches every code to find where the first one fails (a code ending in 0 goes first: a sample that
         lands in a neighbour of the same level reads right). The frame is general: chapter 43's UART reuses it with another length, and a clock that counts sixteen ticks a bit loses part of the margin.</p>
         <div class="try">Move the receiver's speed until a sample crosses a boundary. Then pick the 8-bit frame, and search every code.</div>`,
       widget: () => startStopWidget(),
@@ -529,7 +540,7 @@ export const chExchange: Chapter = {
         kind: 'quiz', question: `The teleprinter's receiver motor runs ${f1(100 * SS.ita2.fast + 3)} % fast (sampling mid-unit, a continuous clock). A character ending in a 0 bit:`,
         options: ['is received wrong: the stop sample lands in that last bit, a framing error', 'is received right: nothing goes wrong below ±15 %', 'is received right but its stop unit is lost'],
         answer: 0,
-        explain: `The limit is ±${(100 * SS.ita2.fast).toFixed(2)} %. Beyond it the sample for the stop unit falls in the last data unit, reads its 0, and the receiver reports a framing error. A character ending in 1 would pass until the next boundary.`,
+        explain: `The limit is ±${(100 * SS.ita2.fast).toFixed(2)} %. Beyond it the sample for the stop unit falls in the last data unit, reads its 0, and the receiver reports a framing error. At this speed the earlier samples cross too: the sample for the last data bit lands in the unit before it, so even a character ending in 1 can be misread (10000 arrives as 00000, with the stop unit fine).`,
         why: ['', `±${(100 * SS.ita2.fast).toFixed(2)} % is the limit for the frame: half a unit over the ${K_ITA2} units before the stop.`, 'The stop unit is sampled, not skipped: a sample in the wrong place reads the wrong unit.'],
       },
     },

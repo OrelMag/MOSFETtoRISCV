@@ -1,6 +1,6 @@
 // Bit error rate against Eb/N0 (DOM-free): chapter 47's plot. BPSK on Gaussian noise. The rate scaling is the whole game: a code of
 // rate R spends Eb on 1/R channel bits, so each channel bit sees R · Eb/N0 and its raw error rate is Q(√(2 R Eb/N0)). Q is phys/line.ts's and
-// the limit's arithmetic comm/limits.ts's. Closed forms here; tests/comm-ber.test.ts holds them to seeded runs of the real decoders.
+// the limit's arithmetic comm/limits.ts's. Closed forms here; tests/comm-codes.test.ts holds them to seeded runs of the real decoders.
 
 import { dbToRatio, ebn0AtCapacity, ratioToDb } from './limits';
 import { convEncode, Viterbi, spectrum, type ConvSpec } from './conv';
@@ -125,4 +125,14 @@ export function secdedTrial(ebn0Db: number, blocks: number, seed = 1, k = 64): B
     r.data.forEach((v, i) => { if (v !== d[i]) errors++; });
   }
   return { bits: blocks * bitsPer, errors, ber: errors / (blocks * bitsPer) };
+}
+
+/** The live run's schedule (widgets/codes.ts berWidget): chunks short enough for a frame (a K = 7 trial costs about 20 µs a bit), each decoder run to this many errors or this many bits. */
+export const BER_CHUNK = 4000, BER_MIN_ERRORS = 100, BER_MAX_BITS = 400000;
+
+/** The seed of chunk `i` of job `j`: a mixed hash, since the generator's consecutive small seeds give correlated noise. */
+export function trialSeed(i: number, j: number): number {
+  let h = Math.imul(i + 1, 0x9e3779b1) ^ Math.imul(j + 1, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d); h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+  return (h ^ (h >>> 16)) >>> 0;
 }

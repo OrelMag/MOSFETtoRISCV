@@ -9,7 +9,7 @@
 // idle output it has a frame for, and each output grants one of the inputs that picked it, round robin. A transfer reads the cell
 // a byte a cycle while the output's ready is 1. Everything below is the register-transfer description of that, cycle by cycle.
 
-import { BROADCAST, frameBody, GAP_BYTES, isGroup, MAX_FRAME, type Mac } from './ethframe';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, GAP_BYTES, isGroup, MAX_FRAME, type Mac } from './ethframe';
 
 export const PORTS = 4;
 /** Counters are this wide and wrap. */
@@ -344,13 +344,13 @@ export function rng(seed: number): () => number {
 export function trafficFrame(src: number, dst: number, id: number, bytes: number): number[] {
   const plen = Math.max(0, bytes - 14);
   const payload = Array.from({ length: Math.max(plen, 4) }, (_, k) => (k < 4 ? (id >> (8 * (3 - k))) & 255 : (id + k) & 255));
-  const f = frameBody({ dst: hostMac(dst), src: hostMac(src), type: 0x0800, payload });
+  const f = frameBody({ dst: hostMac(dst), src: hostMac(src), type: ETHERTYPE_LOCAL, payload });
   return f;
 }
 
 function teach(m: SwitchModel): void {
   // each host speaks once to the broadcast address, which teaches the table where it is
-  const frames = Array.from({ length: PORTS }, (_, p) => frameBody({ dst: BROADCAST, src: hostMac(p), type: 0x0806, payload: [0, 0, 0, 0] }));
+  const frames = Array.from({ length: PORTS }, (_, p) => frameBody({ dst: BROADCAST, src: hostMac(p), type: ETHERTYPE_LOCAL, payload: [0, 0, 0, 0] }));
   for (let p = 0; p < PORTS; p++) {
     for (const [k, b] of frames[p].entries()) {
       const i = idleIn();

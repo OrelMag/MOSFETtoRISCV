@@ -71,7 +71,7 @@ export class SpiMaster {
 export const SPI_READ = 0x03, SPI_WRITE = 0x02;
 
 /**
- * A 256-byte memory behind SPI (the 25-series command set, mode 0 or 3): byte 1 the command (0x03 read, 0x02 write), byte 2 the
+ * A 256-byte memory behind SPI (a subset of the 25-series command set, mode 0): byte 1 the command (0x03 read, 0x02 write), byte 2 the
  * address, then data bytes at address, address + 1 … while CS stays low. Inputs are sampled on rising SCLK edges; MISO changes on falling ones.
  */
 export class SpiTarget {

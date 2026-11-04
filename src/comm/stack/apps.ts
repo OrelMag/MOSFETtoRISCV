@@ -24,6 +24,8 @@ export function strings(texts: Record<string, string>): { py: string; at: Record
 
 /** The switch of lib/lan.ts keeps a frame in a 128-byte cell: 14 + 20 + 8 bytes of headers leave 86 for data. ip_send itself does not check. */
 export const MAX_DATA = 86;
+/** The data bytes of the chapter's ping: a ping frame is 14 + 20 + 8 + PING_DATA = 74 bytes. */
+export const PING_DATA = 32;
 
 const hx = (n: number) => `0x${(n >>> 0).toString(16).padStart(8, '0')}`;
 const netInit = (h: { ip: number; mac: readonly number[] }) => `net_init(${hx(h.ip)}, ${h.mac.join(', ')})`;
@@ -55,7 +57,7 @@ def put_dec(v):
 `;
 
 /** Computer A pings B `count` times, with `ndata` bytes of data (the console shows each reply and its round trip in clock cycles). */
-export function pingApp(count = 3, ndata = 32): string {
+export function pingApp(count = 3, ndata = PING_DATA): string {
   if (ndata > MAX_DATA) throw new Error(`ping data of ${ndata} bytes: the switch's cells hold frames of 128 bytes, ${MAX_DATA} of data at most`);
   const s = strings({ reply: '64 bytes from 10.0.0.2: seq=', time: ' time=', cycles: ' cycles\n', arp: 'arp: 10.0.0.2 is at 02:00:00:00:00:02\n', done: 'done\n' });
   return `${CONSOLE_PY}

@@ -356,6 +356,30 @@ const PRINT_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/**
+ * Chapter 50's two-computer scene: Run until two frames are in the capture list, pick one, and check that the button follows the loop (Pause while it
+ * runs, Run after) and that the capture list, the frame's hex dump and the cost table each scroll inside their own container: none may widen the page.
+ */
+const NET_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const btn = () => document.querySelector('.mem-panel.net-w .mc-row button');
+  const run = btn();
+  if (!run) return ['no Run button'];
+  run.click();
+  for (let i = 0; i < 200 && document.querySelectorAll('.net-frames tr[role="row"]').length < 2; i++) await wait(200);
+  const rows = document.querySelectorAll('.net-frames tr[role="row"]');
+  if (rows.length < 2) return ['fewer than two frames listed after 40 s (' + (document.querySelector('.mc-status')?.textContent ?? 'no readout') + ')'];
+  rows[1].click(); await wait(200);
+  if (btn().textContent.trim() !== 'Pause') bad.push('the button should say Pause while the loop runs');
+  btn().click(); await wait(300);
+  if (btn().textContent.trim() !== 'Run') bad.push('the button should say Run after Pause');
+  const W = document.documentElement.clientWidth;
+  if (document.documentElement.scrollWidth > W + 1) bad.push('the page is wider than the window');
+  for (const w of document.querySelectorAll('.net-wide, .net-dump')) if (w.getBoundingClientRect().right > W + 1) bad.push('a table or dump runs past the window');
+  return bad;
+})()`;
+
 function routes(): Route[] {
   const out: Route[] = [];
   const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => out.push({ hash, storage, label: hash + note, viewport, drive });
@@ -445,6 +469,13 @@ function routes(): Route[] {
   // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
   const phone = VIEWPORTS.find((v) => v.mobile)!;
   for (const hash of ['#/c/pixels/5', '#/c/graphics/1', '#/c/ooo/8']) add(hash, light, ` (${phone.name})`, phone);
+  // Chapter 50: the field tables and the cost table on a phone, and the two-computer scene running with a capture listed.
+  const net = chapters.find((c) => c.id === 'network');
+  if (net) {
+    const stepOf = (t: string) => net.steps.findIndex((st) => st.title === t);
+    for (const t of ['Registers and rings', 'ARP: IP address to MAC address', 'The cost of a packet']) add(`#/c/network/${stepOf(t)}`, light, ` (${phone.name})`, phone);
+    for (const v of [undefined, phone]) add(`#/c/network/${stepOf('Ping across the wire')}`, light, ` (running${v ? ', ' + v.name : ''})`, v, NET_DRIVE);
+  }
   add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
   // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
@@ -581,6 +612,8 @@ const INSPECT = `(() => {
   const failed = [...view.querySelectorAll('h3, .pulse.warn, .status')].map((e) => (e.closest('.panel, .status') ?? e).textContent.trim())
     .filter((t) => /could not (load|start)/i.test(t));
   if (failed.length) out.push(failed[0].slice(0, 300));
+  // A widget collapsed by what holds it (margin: auto inside a grid) raises no error at all: a 3D stage is never this narrow.
+  for (const st of view.querySelectorAll('.r3-stage')) if (st.clientWidth < 240) out.push('3D stage only ' + st.clientWidth + ' px wide');
   for (const e of document.querySelectorAll('.sb-toast.show.err')) out.push('error toast: ' + e.textContent.trim());
   for (const e of view.querySelectorAll('.sb-diag.error')) out.push('error diagnostic: ' + e.textContent.trim());
   if (!view.children.length || (!view.innerText.trim() && !view.querySelector('svg, canvas, img'))) out.push('the main view is empty');

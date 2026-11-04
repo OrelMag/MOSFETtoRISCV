@@ -170,6 +170,25 @@ export const TAUGHT: Record<string, string> = {
   fpadder: 'float',
   tristate: 'routing',
   bin2dec: 'adders',
+  // Communication (campaign/codexcomm.ts)
+  shannon: 'telegraph',
+  reflection: 'wire',
+  cdc: 'clocks',
+  asyncfifo: 'clocks',
+  uart: 'telegraph',
+  spi: 'spi',
+  i2c: 'spi',
+  qam: 'modem',
+  ofdm: 'modem',
+  linecode: 'serial',
+  cdr: 'serial',
+  eye: 'serial',
+  equalization: 'serial',
+  crc: 'errors',
+  arq: 'errors',
+  viterbi: 'errors',
+  reedsolomon: 'errors',
+  interleave: 'errors',
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

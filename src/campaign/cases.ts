@@ -7,6 +7,7 @@
 
 import { CASES0 } from './cases0';
 import { CASES1 } from './cases1';
+import { CASESL } from './casesL';
 import { CASESP } from './casesP';
 
 /** Another way to build the same block, shown next to the learner's result. */
@@ -32,7 +33,7 @@ export interface LevelCase {
   counts?: string;
 }
 
-const ALL: Record<string, LevelCase> = { ...CASES0, ...CASES1, ...CASESP };
+const ALL: Record<string, LevelCase> = { ...CASES0, ...CASES1, ...CASESP, ...CASESL };
 
 export function caseOf(nodeId: string): LevelCase | undefined {
   return ALL[nodeId];

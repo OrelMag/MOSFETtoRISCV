@@ -5,7 +5,8 @@
 import '../styles/clocks.css';
 import '../styles/uart.css';
 import { frameUnits, levelAt, receive, segments, tolerance, toleranceClosedForm, UART_8N1 } from '../comm/startstop';
-import { bytesPerSecond, divisorFor, fifoBudget, FIFO_DEPTH, lineStream, ST_FRAMING, ST_OVERRUN, ST_RXNE, ST_TXFULL, ST_TXIDLE, RX_STATE_NAMES, UART_TOLERANCE } from '../comm/uart';
+import { bytesPerSecond, divisorFor, fifoBudget, FIFO_DEPTH, ST_FRAMING, ST_OVERRUN, ST_RXNE, ST_TXFULL, ST_TXIDLE, RX_STATE_NAMES, UART_TOLERANCE } from '../comm/uart';
+import { RxFeeder, rxFrameLevels, TwoDrive } from '../comm/uartdrive';
 import { UART_CORE, UART_RX_BENCH, UART_TX_BENCH } from '../lib/uart';
 import { busComputer } from '../lib/soc';
 import { twoComputers } from '../lib/uartlink';
@@ -111,7 +112,7 @@ export function txScene(): Scene {
           h('span', null, 'bit ', h('b', null, `${cell} cycles`), ` (${d} per tick)`), h('span', null, 'frame ', h('b', null, `${10 * cell} cycles`)));
       };
       paint();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'The line, bit by bit', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'The line, bit by bit', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, sel, btn('Send byte', 'Load the byte and clock the transmitter through the whole frame', send, 'btn sm primary')),
         svgBox, read, h('p', { class: 'sub' }, 'Change div on the bar to stretch the bit: it is always 16 ticks, a tick being div clock cycles. The line moves only on a tick.'));
       return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); stage.resetHooks.delete(reset); } };
@@ -148,15 +149,14 @@ export function rxScene(): Scene {
       const loop = new Loop(stage, step, () => paintLive(), 40, 30);
       const slSet = { v: 0 };
       const errSl = slider('Clock error', -8, 8, 0.05, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(2)} %`, (v) => { slSet.v = v; S.err = v / 100; paint(); });
-      const phSl = slider('Start phase', 0, 0.99, 0.01, phase, (v) => `${v.toFixed(2)}`, (v) => { phase = v; paint(); });
+      const phSl = slider('Late by', 0, 0.99, 0.01, phase, (v) => `${v.toFixed(2)} tick`, (v) => { phase = v; paint(); });
       const sel = select('Byte', [['82', "0x52  'R'"], ['85', "0x55  'U'"], ['0', '0x00'], ['255', '0xFF'], ['128', '0x80'], ['127', '0x7F']], '82', (v) => { code = Number(v); paint(); });
       const send = () => {
         if (loop.running) return;
         stage.checkpoint();
         const d = div();
         // the line's bit lasts 16·div·(1 + err) receiver cycles: err > 0 is a receiver clock fast by err
-        const f = lineStream([code], 16 * d * (1 + S.err), 3 * d + phase * d);
-        q = Array.from({ length: Math.ceil(11 * 16 * d * (1 + S.err)) + 3 * d + 2 }, (_, i) => f(i));
+        q = rxFrameLevels(d, code, S.err, phase);
         k = 0; got = -1; pushes = 0; ferrs = 0;
         loop.start();
       };
@@ -202,7 +202,7 @@ export function rxScene(): Scene {
       stage.resetHooks.add(() => { q = []; k = 0; got = -1; pushes = ferrs = 0; paintLive(); });
       stage.historyHooks.add({ save: () => ({ q, k, got, pushes, ferrs }), restore: (v) => { const x = v as { q: number[]; k: number; got: number; pushes: number; ferrs: number }; q = x.q; k = x.k; got = x.got; pushes = x.pushes; ferrs = x.ferrs; paintLive(); } });
       paint(); paintLive();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'A receiver whose clock is off', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'A receiver whose clock is off', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, sel, btn('Send to the gates', 'Drive rx with this frame from the sender\'s clock and clock the receiver', send, 'btn sm primary'), btn('Find the limit', 'Search for the largest clock error at which every byte is received', find)),
         h('div', { class: 'mc-row' }, errSl.el, phSl.el), svgBox, read, limit, live,
         h('p', { class: 'sub' }, 'Sampling: the receiver sees the start edge at the next tick (phase), counts 8 ticks to the middle of the start bit, then 16 per bit. A clock off by e puts the k-th sample e·(k + ½) bit times from where it should be.'));
@@ -277,7 +277,7 @@ export function coreScene(): Scene {
       };
       paint();
       const b = (label: string, title: string, f: () => void) => btn(label, title, () => { if (!loop.running) f(); });
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'What arrives, and what the status says', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'What arrives, and what the status says', h('span', { class: 'fold-hint' })),
         h('div', { class: 'dram-ops' }, b('Good frame', "Send 'A' with a proper stop bit", () => api.frame(0x41)), b('Bad stop bit', 'Send a frame whose stop bit is 0', () => api.frame(0x42, false)), b('Glitch', 'A 2-cycle low pulse on an idle line', api.glitch),
           b('Break', 'Hold the line low for 12 bit times', api.brk), b('Send 20', '20 good frames; nothing reads them', () => api.flood(20)), b('Read all', 'Pop the receive FIFO until empty', api.readAll), b('Clear flags', 'Write 1 to the framing-error and overrun bits', api.clear)),
         lamps, log, strip, h('p', { class: 'sub' }, 'Divisor 1: a bit is 16 cycles. The panel plays the sender and the driver; the circuit is the one you can open.'));
@@ -299,7 +299,7 @@ export function baudWidget(): Widget {
     const rows = BAUDS.map((b) => {
       const r = divisorFor(f, b), cls = Math.abs(r.error) < 0.02 ? 'good' : Math.abs(r.error) < 0.035 ? 'warn' : 'bad';
       return h('tr', null, h('td', null, String(b)), h('td', { class: 'num' }, r.div < 2 && f / 16 < b * 0.9 ? 'too fast' : String(r.div)), h('td', { class: 'num' }, r.div < 2 && f / 16 < b * 0.9 ? '—' : `${r.actual.toFixed(0)}`),
-        h('td', { class: `num uart-${cls}` }, f / 16 < b * 0.9 ? '—' : pct(r.error)), h('td', { class: 'num' }, `${(1e6 / bytesPerSecond(r.actual)).toFixed(1)} µs`));
+        h('td', { class: `num uart-${cls}` }, f / 16 < b * 0.9 ? '—' : pct(r.error)), h('td', { class: 'num' }, f / 16 < b * 0.9 ? '—' : `${(1e6 / bytesPerSecond(r.actual)).toFixed(1)} µs`));
     });
     tbl.replaceChildren(h('table', { class: 'uart-tbl' }, h('thead', null, th), h('tbody', null, ...rows)));
     note.textContent = `${CLOCKS[ci][1]} / 16 = ${(f / 16 / 1e6).toFixed(4)} Mbaud is the fastest rate this clock can make (divisor 1). Two ends can each be off by about ${pct(UART_TOLERANCE.predicted.senderFast / 2, 1)} before their sum reaches the receiver's ±${pct(UART_TOLERANCE.predicted.senderFast, 1)}. Green: under 2 %, amber: under 3.5 %.`;
@@ -314,17 +314,17 @@ export function baudWidget(): Widget {
 export function fifoWidget(): Widget {
   let baud = 115200, depth = 16, level = 8, mhz = 100;
   const out = h('div', { class: 'mc-status' }), tbl = h('div', { class: 'scroll' }), note = h('p', { class: 'sub' });
-  const service = UART_COSTS.handlerPerByte + 10; // handler plus entry and exit
+  const ENTRY_EXIT = 10; // assumed cycles of entry and exit, paid once per interrupt
   const paint = () => {
     const f = fifoBudget(baud, depth, level), cyc = (us: number) => Math.round(us * mhz);
     out.replaceChildren(h('span', null, 'byte ', h('b', null, `${(10e6 / baud).toFixed(1)} µs`)), h('span', null, 'time to fill ', h('b', null, `${f.fillUs.toFixed(0)} µs`)), h('span', null, 'slack after the interrupt ', h('b', null, `${f.slackUs.toFixed(0)} µs = ${cyc(f.slackUs).toLocaleString('en')} cycles`)),
-      h('span', null, 'interrupts ', h('b', null, `${f.irqPerSecond.toFixed(0)} / s`)), h('span', null, 'CPU in the handler ', h('b', null, pct((f.irqPerSecond * level * service) / (mhz * 1e6), 2))));
+      h('span', null, 'interrupts ', h('b', null, `${f.irqPerSecond.toFixed(0)} / s`)), h('span', null, 'CPU in the handler ', h('b', null, pct((f.irqPerSecond * (level * UART_COSTS.handlerPerByte + ENTRY_EXIT)) / (mhz * 1e6), 2))));
     const rows = [9600, 115200, 921600, 3e6].map((b) => {
       const g = fifoBudget(b, 16, 1), g8 = fifoBudget(b, 16, 8);
       return h('tr', null, h('td', null, String(b)), h('td', { class: 'num' }, `${g.irqPerSecond.toFixed(0)}`), h('td', { class: 'num' }, `${g8.irqPerSecond.toFixed(0)}`), h('td', { class: 'num' }, `${g8.slackUs.toFixed(0)} µs`));
     });
     tbl.replaceChildren(h('table', { class: 'uart-tbl' }, h('thead', null, h('tr', null, h('th', null, 'baud'), h('th', null, 'IRQ/s, level 1'), h('th', null, 'IRQ/s, level 8'), h('th', null, 'slack, level 8'))), h('tbody', null, ...rows)));
-    note.textContent = `Handler cost per byte: ${service} cycles (${UART_COSTS.handlerPerByte} measured on the gates plus an assumed 10 for entry and exit). The receive interrupt fires when the FIFO holds ${level} of ${depth} bytes; the CPU then has ${depth - level} more byte times before the next byte is lost.`;
+    note.textContent = `Handler cost: ${UART_COSTS.handlerPerByte} cycles a byte (measured on the gates) plus an assumed ${ENTRY_EXIT} for entry and exit, paid once per interrupt. The receive interrupt fires when the FIFO holds ${level} of ${depth} bytes; the CPU then has at most ${depth - level} more byte times before a byte is lost (a byte already in the receiver's shift register arrives as well, so one byte time less is the safe figure). Rows of the table marked too fast in the baud table have no byte time: that clock cannot make the rate.`;
   };
   const bSel = select('Bit rate', [9600, 115200, 921600, 3e6].map((b) => [String(b), `${b} baud`]), String(baud), (v) => { baud = Number(v); paint(); });
   const dSl = slider('FIFO depth', 2, FIFO_DEPTH, 1, depth, (v) => `${v}`, (v) => { depth = v; level = Math.min(level, v); lSl.set(level); paint(); });
@@ -355,32 +355,28 @@ export function uartBusScene(): Scene {
     root: busComputer(words(uartIrqSource(UART_DIV_IN_PROGRAM)), [0], { imemK: ROM_K, ramK: 8, uart: true }),
     inputs: { clk: 0, switches: 0, uartRx: 1 }, hiddenInputs: ['switches', 'uartRx'], autoClock: false, engine: 'cycle',
     panels: [(stage: Stage): Widget => {
-      let q: number[] = [], k = 0, consoleText = '', cycles = 0, txHist: number[] = [], rxHist: number[] = [];
+      const feeder = new RxFeeder(1);
+      let consoleText = '', cycles = 0, txHist: number[] = [], rxHist: number[] = [], lastRx = 1;
       const consoleEl = h('pre', { class: 'uart-console', 'aria-label': 'Console' }), regs = h('div'), strip = h('div', { class: 'uart-svg' });
       const input = h('input', { type: 'text', value: 'Hello', maxlength: 24, 'aria-label': 'Text to send into the rx pin', class: 'uart-text' }) as HTMLInputElement;
-      const div = () => Math.max(1, outAt(stage, ['uart', 'core'], 'div'));
-      const before = () => { stage.sim!.setInput('uartRx', k < q.length ? q[k] : 1); k++; if (outp(stage, 'consoleValid') === 1) consoleText += String.fromCharCode(outp(stage, 'consoleData')); };
-      const after = () => { cycles++; txHist.push(outp(stage, 'uartTx')); rxHist.push(k <= q.length ? q[k - 1] : 1); if (txHist.length > 600) { txHist = txHist.slice(-600); rxHist = rxHist.slice(-600); } };
+      const div = () => Math.max(0, outAt(stage, ['uart', 'core'], 'div'));
+      const before = () => { lastRx = feeder.level(div()); stage.sim!.setInput('uartRx', lastRx); if (outp(stage, 'consoleValid') === 1) consoleText += String.fromCharCode(outp(stage, 'consoleData')); };
+      const after = () => { cycles++; txHist.push(outp(stage, 'uartTx')); rxHist.push(lastRx); if (txHist.length > 600) { txHist = txHist.slice(-600); rxHist = rxHist.slice(-600); } };
       const hook = { before, after: () => { after(); paint(); } };
       stage.edgeHooks.add(hook);
       const loop = new Loop(stage, () => { before(); pulse(stage, 'clk'); after(); return true; }, () => paint(), 60, 30);
-      const send = (text: string) => {
-        const d = div(), bytes = [...text].map((c) => c.charCodeAt(0) & 127);
-        const f = lineStream(bytes, 16 * d, 0, 1);
-        q = q.slice(k).concat(Array.from({ length: bytes.length * 11 * 16 * d + 2 }, (_, i) => f(i))); k = 0;
-        if (!loop.running) loop.start();
-      };
+      const send = (text: string) => { feeder.send(text); if (!loop.running) loop.start(); };
       busApis.set(stage, { send, console: () => consoleText, cycles: () => cycles });
       const paint = () => {
         consoleEl.textContent = consoleText || ' ';
-        regs.replaceChildren(regsRow(stage, ['uart']), h('div', { class: 'mc-status' }, h('span', null, 'cycles ', h('b', null, String(cycles))), h('span', null, 'a bit is ', h('b', null, `${16 * div()} cycles`)), h('span', null, 'retired ', h('b', null, String(outp(stage, 'retire'))))));
+        regs.replaceChildren(regsRow(stage, ['uart']), h('div', { class: 'mc-status' }, h('span', null, 'cycles ', h('b', null, String(cycles))), h('span', null, 'a bit is ', h('b', null, div() ? `${16 * div()} cycles` : 'not set yet')), h('span', null, 'retired ', h('b', null, String(outp(stage, 'retire'))))));
         strip.replaceChildren(waveSvg(rxHist, 600, -1, 1, [], 'rx pin over the last 600 cycles'), waveSvg(txHist, 600, -1, 1, [], 'tx pin over the last 600 cycles'));
       };
-      stage.resetHooks.add(() => { q = []; k = 0; consoleText = ''; cycles = 0; txHist = []; rxHist = []; paint(); });
-      stage.historyHooks.add({ save: () => ({ q, k, consoleText, cycles, txHist: [...txHist], rxHist: [...rxHist] }), restore: (v) => { const x = v as { q: number[]; k: number; consoleText: string; cycles: number; txHist: number[]; rxHist: number[] }; q = x.q; k = x.k; consoleText = x.consoleText; cycles = x.cycles; txHist = x.txHist; rxHist = x.rxHist; paint(); } });
+      stage.resetHooks.add(() => { feeder.clear(); consoleText = ''; cycles = 0; txHist = []; rxHist = []; paint(); });
+      stage.historyHooks.add({ save: () => ({ feeder: feeder.save(), consoleText, cycles, txHist: [...txHist], rxHist: [...rxHist] }), restore: (v) => { const x = v as { feeder: unknown; consoleText: string; cycles: number; txHist: number[]; rxHist: number[] }; feeder.restore(x.feeder); consoleText = x.consoleText; cycles = x.cycles; txHist = x.txHist; rxHist = x.rxHist; paint(); } });
       paint();
       const run = btn('Run', 'Clock the computer continuously', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'A computer with a UART', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'A computer with a UART', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run, input, btn('Send to rx', 'Feed these bytes to the rx pin at the divisor\'s rate', () => send(input.value))),
         regs, h('div', { class: 'cpu-sec' }, 'Console'), consoleEl, h('div', { class: 'cpu-sec' }, 'rx pin, then tx pin'), strip,
         h('p', { class: 'sub' }, 'The program sets the divisor, sends "Hi", enables the receive interrupt and counts in a loop; the handler echoes each byte to the console.'));
@@ -403,48 +399,31 @@ export function twoScene(): Scene {
   return {
     root: twoComputers(A, B), inputs: { clkA: 0, clkB: 0, noiseAB: 0, noiseBA: 0 }, hiddenInputs: ['noiseAB', 'noiseBA', 'clkB'], clock: 'clkA', autoClock: false, engine: 'cycle',
     panels: [(stage: Stage): Widget => {
-      let ratio = 1, tA = 1, tB = 1, eA = 0, eB = 0;
-      const text = { A: '', B: '' };
-      let lineAB: number[] = [], lineBA: number[] = [];
+      const drive = new TwoDrive(stage.sim!);
       const cons = { A: h('pre', { class: 'uart-console', 'aria-label': 'Console A' }), B: h('pre', { class: 'uart-console', 'aria-label': 'Console B' }) };
       const strip = h('div', { class: 'uart-svg' }), read = h('div', { class: 'mc-status' });
-      const kbd = (side: 'A' | 'B') => findNode(stage.sim!.design.root, [side === 'A' ? 'a' : 'b', 'kbd']);
-      const type = (side: 'A' | 'B', t: string) => {
-        const n = kbd(side); if (!n) return;
-        const cur = stage.sim!.leafState(n.leafIndex!) as { q: number[]; clk: number; ack: number };
-        stage.sim!.poke(n.leafIndex!, { ...cur, q: [...cur.q, ...[...t].map((c) => c.charCodeAt(0) & 127)].slice(0, 16) });
-        stage.sim!.settle();
-      };
-      let glitchLeft = 0;
-      const edge = () => {
-        const sim = stage.sim!, a = tA <= tB, S = a ? 'A' : 'B', clk = a ? 'clkA' : 'clkB';
-        if (outp(stage, `consoleValid${S}`) === 1) text[S] += String.fromCharCode(outp(stage, `consoleData${S}`));
-        sim.setInput(a ? 'noiseAB' : 'noiseBA', glitchLeft > 0 ? 1 : 0);
-        if (glitchLeft > 0 && a) glitchLeft--;
-        pulse(stage, clk);
-        if (a) { tA += 1; eA++; } else { tB += 1 / ratio; eB++; }
-        lineAB.push(outp(stage, 'lineAB')); lineBA.push(outp(stage, 'lineBA'));
-        if (lineAB.length > 480) { lineAB = lineAB.slice(-480); lineBA = lineBA.slice(-480); }
-      };
-      const loop = new Loop(stage, () => { edge(); return true; }, () => paint(), 24, 30);
-      const api: TwoApi = { run: () => { if (!loop.running) { loop.start(); run.textContent = 'Pause'; } }, type, consoleOf: (side) => text[side], setRatio: (r) => { ratio = r; }, edges: () => [eA, eB], glitch: () => { glitchLeft = 6; } };
+      // the stage's own Step / Pulse / Run clock A alone: those edges go through the same bookkeeping
+      const hook = { before: () => drive.externalBefore(), after: () => { drive.externalAfter(); paint(); } };
+      stage.edgeHooks.add(hook);
+      const loop = new Loop(stage, () => { drive.edge(); return true; }, () => paint(), 24, 30);
+      const api: TwoApi = { run: () => { if (!loop.running) { loop.start(); run.textContent = 'Pause'; } }, type: (s, t) => drive.type(s, t), consoleOf: (side) => drive.text[side], setRatio: (r) => { drive.ratio = r; }, edges: () => [drive.eA, drive.eB], glitch: () => drive.glitch() };
       twoApis.set(stage, api);
       const paint = () => {
-        cons.A.textContent = text.A || ' '; cons.B.textContent = text.B || ' ';
-        read.replaceChildren(h('span', null, 'A edges ', h('b', null, String(eA))), h('span', null, 'B edges ', h('b', null, String(eB))), h('span', null, 'B clock / A clock ', h('b', null, ratio.toFixed(3))), h('span', null, 'bit ', h('b', null, `${16 * TWO_DIV} A-cycles`)));
-        strip.replaceChildren(waveSvg(lineAB, 480, -1, 1, [], 'The wire from A to B'), waveSvg(lineBA, 480, -1, 1, [], 'The wire from B to A'));
+        cons.A.textContent = drive.text.A || ' '; cons.B.textContent = drive.text.B || ' ';
+        read.replaceChildren(h('span', null, 'A edges ', h('b', null, String(drive.eA))), h('span', null, 'B edges ', h('b', null, String(drive.eB))), h('span', null, 'B clock / A clock ', h('b', null, drive.ratio.toFixed(3))), h('span', null, 'bit ', h('b', null, `${16 * TWO_DIV} A-cycles`)));
+        strip.replaceChildren(waveSvg(drive.lineAB, 480, -1, 1, [], 'The wire from A to B'), waveSvg(drive.lineBA, 480, -1, 1, [], 'The wire from B to A'));
       };
-      stage.resetHooks.add(() => { tA = tB = 1; eA = eB = 0; text.A = text.B = ''; lineAB = []; lineBA = []; paint(); });
-      stage.historyHooks.add({ save: () => ({ tA, tB, eA, eB, ta: text.A, tb: text.B, lineAB: [...lineAB], lineBA: [...lineBA], ratio }), restore: (v) => { const x = v as { tA: number; tB: number; eA: number; eB: number; ta: string; tb: string; lineAB: number[]; lineBA: number[]; ratio: number }; tA = x.tA; tB = x.tB; eA = x.eA; eB = x.eB; text.A = x.ta; text.B = x.tb; lineAB = x.lineAB; lineBA = x.lineBA; ratio = x.ratio; paint(); } });
+      stage.resetHooks.add(() => { drive.reset(); paint(); });
+      stage.historyHooks.add({ save: () => drive.save(), restore: (v) => { drive.restore(v); paint(); } });
       const field = (side: 'A' | 'B') => {
         const inp = h('input', { type: 'text', maxlength: 16, placeholder: `type on ${side}`, 'aria-label': `Type on computer ${side}`, class: 'uart-text' }) as HTMLInputElement;
-        const go = () => { if (inp.value) { type(side, inp.value); inp.value = ''; if (!loop.running) { loop.start(); run.textContent = 'Pause'; } } };
+        const go = () => { if (inp.value) { drive.type(side, inp.value); inp.value = ''; if (!loop.running) { loop.start(); run.textContent = 'Pause'; } } };
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
         return h('div', { class: 'mc-row' }, inp, btn(`Send from ${side}`, `Put the text in computer ${side}'s keyboard queue`, go));
       };
-      const rSl = slider('Clock B vs A', -10, 10, 0.5, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} %`, (v) => { ratio = 1 + v / 100; paint(); });
+      const rSl = slider('Clock B vs A', -10, 10, 0.5, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} %`, (v) => { drive.ratio = 1 + v / 100; paint(); });
       const run = btn('Run', 'Clock both computers, each at its own rate', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run, btn('Glitch A→B', 'Flip the wire from A to B for six A cycles', () => api.glitch())), rSl.el,
         field('A'), field('B'), h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A (what B sent)'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B (what A sent)'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'The wires, last 480 edges: A → B, B → A'), strip, read);

@@ -6,7 +6,7 @@ import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
 import { crc32, fcsBytes } from '../comm/crc';
-import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, ETHERTYPE_LOCAL, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
 import { BIT_CLOCKS, captureRecord, clocksToUs, frameBitTimes, GAP_BITS, LINK_MBPS, WHY_NAMES } from '../comm/mac';
 import { ETH_EV, ethStation, ethStationMac } from '../lib/ethstation';
 import { pcapFile } from '../comm/pcap';
@@ -58,13 +58,13 @@ export function legend(used: Iterable<string>): HTMLElement {
 }
 
 export const macLabel = (m: readonly number[]): string => m.map(hex2).join(':');
-export const ETHERTYPES: [string, string][] = [[String(ETHERTYPE_IPV4), '0x0800 IPv4'], [String(ETHERTYPE_ARP), '0x0806 ARP'], [String(0x88b5), '0x88B5 local experimental']];
+export const ETHERTYPES: [string, string][] = [[String(ETHERTYPE_IPV4), '0x0800 IPv4'], [String(ETHERTYPE_ARP), '0x0806 ARP'], [String(ETHERTYPE_LOCAL), '0x88B5 local experimental']];
 const utf8 = (t: string): number[] => Array.from(new TextEncoder().encode(t));
 
 // ---- step 1: the frame builder -----------------------------------------------------------------------------------------
 
 export function frameWidget(): Widget {
-  let text = 'hello from A', dst = 'b', type = ETHERTYPE_IPV4;
+  let text = 'hello from A', dst = 'b', type = ETHERTYPE_LOCAL;
   const out = h('div'), read = h('div', { class: 'mc-status' });
   const paint = () => {
     const payload = utf8(text).slice(0, MAX_PAYLOAD);
@@ -152,12 +152,16 @@ export class Capture {
   poll(clock: number): void {
     const cp = this.cp();
     if (cp === this.last) return;
+    if (((cp - this.last) & 0x7ff) > 1514) { this.last = cp; return; } // a pointer that jumped (after Back) is not a frame
     const bytes: number[] = [];
     for (let a = this.last; a !== cp; a = (a + 1) & 0x7ff) bytes.push(this.b.rx(a, this.sel));
     this.frames.push({ clock, bytes });
     this.last = cp;
   }
   reset(cp = 0): void { this.frames = []; this.last = cp; }
+  /** For Back: the frames kept so far and the pointer they reach (a frame is never longer than the maximum, so a pointer that jumped is not one). */
+  save(): { frames: { clock: number; bytes: number[] }[]; last: number } { return { frames: this.frames.map((f) => ({ clock: f.clock, bytes: [...f.bytes] })), last: this.last }; }
+  restore(s: { frames: { clock: number; bytes: number[] }[]; last: number }): void { this.frames = s.frames.map((f) => ({ clock: f.clock, bytes: [...f.bytes] })); this.last = s.last; }
   pcap(): Uint8Array { return pcapFile(this.frames.map((f) => captureRecord(f.clock, f.bytes))); }
 }
 
@@ -235,7 +239,7 @@ export function txScene(): Scene {
         stage.checkpoint();
         b.reset();
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_LOCAL, payload };
         wire = wireBytes(spec); cls = fieldMap(payload.length); plen = payload.length; bits = []; run = 0; done = false; clock = 0; wave = [[], []];
         S.expected = wire; S.done = false; S.sentBytes = [];
         b.send(frameBody(spec));
@@ -320,7 +324,7 @@ export function rxScene(): Scene {
         stage.checkpoint();
         b.reset(); b.set('promisc', promisc ? 1 : 0);
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? ethStationMac(0) : ethStationMac(2), src: ethStationMac(1), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? ethStationMac(0) : ethStationMac(2), src: ethStationMac(1), type: ETHERTYPE_LOCAL, payload };
         let bytes = wireBytes(spec);
         if (cut) bytes = bytes.slice(0, 8 + 40);
         const bitIdx = 8 * (8 + 14 + Math.min(payload.length, 10)) + 3;
@@ -335,7 +339,7 @@ export function rxScene(): Scene {
         read.replaceChildren(h('span', null, 'receiver ', h('b', null, RX_STATES[b.get('rxstate')] ?? '?')), h('span', null, 'SFD seen at ', h('b', null, sfdAt >= 0 ? `clock ${sfdAt}` : '-')),
           h('span', null, 'bytes delivered ', h('b', null, String(delivered.length))), h('span', null, 'frames kept ', h('b', null, String(kept))), h('span', null, 'thrown away ', h('b', null, String(gone))), h('span', null, 'buffer ', h('b', null, `commit ${b.get('cp')}, write ${b.get('wp')}`)));
         const rcls = delivered.map((_, j) => (j < 6 ? 'dst' : j < 12 ? 'src' : j < 14 ? 'type' : 'data'));
-        hexBox.replaceChildren(delivered.length ? hexDump(delivered, rcls) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, four bytes behind the wire.'), ...(delivered.length ? [legend(rcls), h('p', { class: 'sub' }, 'Payload and pad are one run here: the receiver cannot tell them apart.')] : []));
+        hexBox.replaceChildren(delivered.length ? hexDump(delivered, rcls) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, five bytes behind the wire, the last one when the carrier falls.'), ...(delivered.length ? [legend(rcls), h('p', { class: 'sub' }, 'Payload and pad are one run here: the receiver cannot tell them apart.')] : []));
         const at = loop.running || sfdAt < 0 ? k : Math.min(q.rxd.length, sfdAt + 56), from = Math.max(0, at - 96);
         line.replaceChildren(strip([{ label: 'rxd', data: q.rxd.slice(from, at) }, { label: 'crs', data: q.crs.slice(from, at) }], 96, 'The receive wire: data and carrier, 24 bits, the last of the preamble and the SFD once the frame is in'));
         if (lastV) {
@@ -347,6 +351,7 @@ export function rxScene(): Scene {
         buf.replaceChildren(...(u ? [h('div', { class: 'sub' }, `Receive buffer holds ${u} frame${u > 1 ? 's' : ''}:`)] : []), ...cap.frames.map((f, i) => h('div', { class: 'eth-bufrow' }, `#${i + 1} `, h('b', null, `${f.bytes.length} B`), ` ${f.bytes.slice(0, 18).map(hex2).join(' ')} …`)));
       };
       stage.resetHooks.add(() => { q = { rxd: [], crs: [] }; k = 0; delivered = []; lastV = null; sfdAt = -1; clock = 0; cap.reset(); paint(); });
+      stage.historyHooks.add({ save: () => ({ k, delivered: [...delivered], lastV, sfdAt, state, clock, kept, gone, cap: cap.save(), q }), restore: (v) => { const x = v as { k: number; delivered: number[]; lastV: typeof lastV; sfdAt: number; state: number; clock: number; kept: number; gone: number; cap: ReturnType<Capture['save']>; q: typeof q }; k = x.k; delivered = [...x.delivered]; lastV = x.lastV; sfdAt = x.sfdAt; state = x.state; clock = x.clock; kept = x.kept; gone = x.gone; cap.restore(x.cap); q = x.q; paint(); } });
       const inp = h('input', { type: 'text', class: 'uart-text', value: text, maxlength: 60, 'aria-label': 'Message in the frame', spellcheck: 'false' }) as HTMLInputElement;
       inp.addEventListener('input', () => { text = inp.value; });
       const toSel = select('Destination of the frame', [['me', 'to this station'], ['other', 'to station 3'], ['all', 'to everyone']], dst, (v) => { dst = v as typeof dst; });
@@ -401,7 +406,7 @@ export function csmaScene(): Scene {
         b.reset();
         // the cable has been quiet for a long time before the frame is queued: the gap counter is full
         for (let i = 0; i < GAP_BITS * BIT_CLOCKS + 8; i++) b.clock();
-        const spec: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload: utf8('deferred') };
+        const spec: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_LOCAL, payload: utf8('deferred') };
         plan = carrierPlan(first, second);
         crsW = []; txW = []; gapW = []; clock = 0; txStart = -1;
         b.send(frameBody(spec));
@@ -425,6 +430,7 @@ export function csmaScene(): Scene {
         } else { verdict.className = 'clk-verdict'; verdict.textContent = ''; }
       };
       stage.resetHooks.add(() => { crsW = []; txW = []; gapW = []; clock = 0; txStart = -1; plan = []; paint(); });
+      stage.historyHooks.add({ save: () => ({ crsW: [...crsW], txW: [...txW], gapW: [...gapW], clock, txStart, plan }), restore: (v) => { const x = v as { crsW: number[]; txW: number[]; gapW: number[]; clock: number; txStart: number; plan: [number, number][] }; crsW = [...x.crsW]; txW = [...x.txW]; gapW = [...x.gapW]; clock = x.clock; txStart = x.txStart; plan = x.plan; paint(); } });
       const sl1 = slider('Carrier lasts', 0, 300, 10, first, (v) => `${v} bit times`, (v) => { first = v; });
       const sl2 = slider('Second burst', 0, 90, 10, second, (v) => (v ? `${v} bit times after` : 'none'), (v) => { second = v; });
       paint();

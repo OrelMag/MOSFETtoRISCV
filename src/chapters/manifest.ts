@@ -465,6 +465,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Everyone to everyone", challenge: "quiz" },
     { title: "Counting dial pulses", challenge: "reach" },
     { title: "A stepping selector", challenge: "reach" },
+    { title: "The machine itself" },
     { title: "A crossbar", challenge: "reach" },
     { title: "What a switching network costs", challenge: "quiz" },
     { title: "The busy tone", challenge: "quiz" },
