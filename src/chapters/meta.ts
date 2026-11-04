@@ -14,6 +14,8 @@ export interface ChapterHead {
   title: string;
   blurb: string;
   level: string;
+  /** Chapters it builds on (ids): an optional chapter named here counts as read by this one's reader (chapters/firstuse.ts). */
+  builds?: string[];
 }
 
 /** One step as the outline knows it. Extend here (and in scripts/chapter-manifest.ts) for anything else a list needs per step. */
@@ -24,8 +26,6 @@ export interface StepMeta {
 }
 
 export interface ChapterMeta extends ChapterHead {
-  /** Chapters it builds on (ids). */
-  builds?: string[];
   /** The recap (the step after the last): how many Check-yourself questions it has. */
   recap?: { checks: number };
   steps: StepMeta[];

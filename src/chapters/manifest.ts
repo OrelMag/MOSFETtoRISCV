@@ -461,7 +461,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Shannon: what noise leaves", challenge: "quiz" },
     { title: "The rest of the track", challenge: "quiz" },
   ] },
-  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["telegraph"], recap: {"checks":3}, steps: [
+  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph"], recap: {"checks":3}, steps: [
     { title: "Everyone to everyone", challenge: "quiz" },
     { title: "Counting dial pulses", challenge: "reach" },
     { title: "A stepping selector", challenge: "reach" },

@@ -12,7 +12,7 @@ import { stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
-import type { Challenge, Chapter, Quiz, Step } from './types';
+import type { Chapter } from './types';
 
 const thin = (n: number) => groupDigits(Math.round(n));
 const f1 = (x: number) => x.toFixed(1);
@@ -54,7 +54,7 @@ const QUESTIONS: [string, string, number[]][] = [
   ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', [40, 44, 48, 49, 51]],
 ];
 
-const rawTelegraph: Chapter = {
+export const chTelegraph: Chapter = {
   id: 'telegraph', num: 39, title: 'Two machines, one wire', level: 'Communication',
   blurb: 'Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.',
   goals: [
@@ -130,7 +130,7 @@ const rawTelegraph: Chapter = {
       body: `
         <p>A telegraph is the simplest link there is: a <strong>key</strong> at one end closes a circuit through a <strong>battery</strong> and a long wire to a
         <strong>sounder</strong> or relay coil at the other, and the earth returns the current. One loop, in series, so
-        I = V / (R<sub>line</sub> + R<sub>coil</sub>). The coil pulls in only above its pull-in current: our relay (the telephone relay of <a href="#/c/relays/0">prologue P1</a>) needs
+        I = V / (R<sub>line</sub> + R<sub>coil</sub>). The coil pulls in only above its pull-in current: our relay (a coil that moves a contact, the telephone relay of <a href="#/c/relays/0">prologue P1</a>) needs
         ${PULL_V.toFixed(1)} V across its 400 Ω, ${mA(PULL_I)} mA. It is a current threshold, so the wire matters: 4 mm iron wire is ${f1(ohmsPerKm('iron'))} Ω/km, copper ${f1(ohmsPerKm('copper'))} Ω/km.</p>
         <p>At 24 V the loop reaches ${f0(reachKm(24, 'iron'))} km on iron before the current falls under ${mA(PULL_I)} mA, ${f0(reachKm(24, 'copper'))} km on copper. The reach grows linearly with the battery: ${f0(reachKm(240, 'iron'))} km on iron at
         240 V, the voltage of some two hundred cells in series. Beyond that the insulation leaks and the battery becomes the bill. The curve plots the loop current against the route length;
@@ -158,8 +158,7 @@ const rawTelegraph: Chapter = {
       title: 'The relay as a repeater',
       body: `
         <p>The relay was devised for exactly this. A weak current from the line operates <span data-show="st0">a relay</span>, and the relay's make contact closes a
-        circuit of its own: a local battery onto the next line. The sounder, or the next station, sees a full-strength copy. Relays were on telegraph lines within a few decades of
-        the first working telegraphs; Joseph Henry's electromagnets and Edward Davy's relay are the names usually attached to the idea.</p>
+        circuit of its own: a local battery onto the next line. The sounder, or the next station, sees a full-strength copy. Relays were on telegraph lines in the telegraph's early decades; Joseph Henry's electromagnets and Edward Davy's relay are the names usually attached to the idea.</p>
         <p>This is the first <strong>regenerator</strong>: the output has no memory of how weak or noisy the input was, only of whether it crossed the threshold.
         It is what a gate does to a level (<a href="#/c/inverter/0">chapter 2</a>), done with an armature. Here a chain of ${stats(telegraphChain(3)).relays} stations: <span data-show="st0 st1 st2">key to sounder</span> through
         three relays, each on a battery of its own. The cost is time: the signal crosses one relay step per station, ${RELAY_STEP_MS} ms with our relay, so the sounder follows the key 3
@@ -298,7 +297,7 @@ const K_ITA2 = stopIndex(ITA2_START_STOP);
 const E10 = erlangB(10, 10);
 const ERL = { E: offered(1000, 2, 3) };
 
-const rawExchange: Chapter = {
+export const chExchange: Chapter = {
   id: 'exchange', num: 40, title: 'The telephone exchange', level: 'Communication',
   blurb: 'How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.',
   goals: [
@@ -307,7 +306,7 @@ const rawExchange: Chapter = {
     'use Erlang B to say how many trunks a given traffic needs',
     'derive how much clock error a start-stop receiver tolerates, and why only the start edge has to be found',
   ],
-  builds: ['telegraph'],
+  builds: ['relays', 'telegraph'],
   recap: {
     keep: [
       `n telephones joined pairwise need n(n − 1) / 2 wires (${thin(meshWires(1000))} for 1 000); an exchange needs n and a switch. A <strong>circuit-switched</strong> call owns a path end to end for its whole duration, speaking or not. Chapter 49 and the chapters after it return to the other way: packets, which share links.`,
@@ -360,7 +359,7 @@ const rawExchange: Chapter = {
     {
       title: 'Counting dial pulses',
       body: `
-        <p>To make a call the exchange must be told whom. A rotary dial does it by breaking the telephone's loop current: a digit n is n breaks at about ten a second, roughly 60 % of each cycle with the loop open, and 0 is ten pulses. The exchange's line relay
+        <p>To make a call the exchange must be told whom. A rotary dial does it by breaking the telephone's loop current: a digit n is n breaks at about ten a second, roughly 60 % of each cycle with the loop open, and in most countries 0 is ten pulses. The exchange's line relay
         follows the loop, and something must count its pulses.</p>
         <p>The counter below is <span data-show="st0 st1 st2">three toggle stages</span> of three relays each. In a stage the <em>pulse relay</em> p follows its input; a master m and a slave s hold the state, and each is fed through p's contacts:
         <code>m' = p ? ¬s : m</code> and <code>s' = p ? s : m</code>. While the pulse is up, m takes the inverse of s and s holds; when it falls, s copies m. So s toggles
@@ -538,75 +537,3 @@ const rawExchange: Chapter = {
 };
 
 // ---- the prologue's words, explained in place
-// Relays are taught in the optional prologue (P1), so a journey chapter that uses the word before a reader has met it says what it
-// is, once per text (chapters/firstuse.ts). The first use in each text carries a short explanation; later ones are plain.
-
-const AHEAD: [RegExp, string, string][] = [
-  [/\b(?:relay steps?|pull-in|drop-out)\b/i, 'relaystep relay', ` (a relay circuit's time unit: every armature moves, then the contacts settle)`],
-  [/\brelays?\b/i, 'relay', ' (an electromagnetic switch, from prologue P1)'],
-];
-
-/** Wrap the first use of each term across a text's fields (in order); later fields are left alone once a term is explained. */
-function explain(fields: string[]): string[] {
-  const done = new Set<number>();
-  const SKIP_TAG = /^(a|code|pre|h[1-4]|button|svg|kbd)$/i, SKIP_ATTR = /\bdata-show=|\bdata-ahead=|\bclass="[^"]*\b(gl|no-gloss)\b/;
-  return fields.map((html) => {
-    const stack: boolean[] = [];
-    return html.split(/(<[^>]+>)/).map((part) => {
-      if (part.startsWith('<')) {
-        const m = /^<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>$/.exec(part);
-        if (!m || m[4] || /^(br|img|hr|input|wbr)$/i.test(m[2])) return part;
-        if (m[1]) stack.pop();
-        else stack.push(!!stack.at(-1) || SKIP_TAG.test(m[2]) || SKIP_ATTR.test(m[3]));
-        return part;
-      }
-      if (stack.at(-1)) return part;
-      let out = '', rest = part;
-      for (;;) {
-        let best: { k: number; index: number; len: number } | null = null;
-        AHEAD.forEach(([re], k) => {
-          if (done.has(k)) return;
-          const m = re.exec(rest);
-          if (m && (!best || m.index < best.index)) best = { k, index: m.index, len: m[0].length };
-        });
-        if (!best) break;
-        const { k, index, len } = best as { k: number; index: number; len: number };
-        done.add(k);
-        if (k === 0) done.add(1);
-        out += rest.slice(0, index) + '<span data-ahead="' + AHEAD[k][1] + '">' + rest.slice(index, index + len) + AHEAD[k][2] + '</span>';
-        rest = rest.slice(index + len);
-      }
-      return out + rest;
-    }).join('');
-  });
-}
-
-const quizFields = (q: Quiz): Quiz => {
-  const n = q.options.length, f = explain([q.question, ...q.options, q.explain, ...(q.why ?? [])]);
-  return { ...q, question: f[0], options: f.slice(1, 1 + n), explain: f[1 + n], ...(q.why ? { why: f.slice(2 + n) } : {}) };
-};
-
-function challengeOf(c: Challenge | undefined): Challenge | undefined {
-  if (!c) return c;
-  if (c.kind === 'quiz') return { ...quizFields(c), kind: 'quiz' };
-  const h = c.hints ?? [], f = explain([c.goal, ...h, c.answer]);
-  return { ...c, goal: f[0], ...(c.hints ? { hints: f.slice(1, 1 + h.length) } : {}), answer: f[1 + h.length] };
-}
-
-function teach(ch: Chapter): Chapter {
-  const stepOf = (s: Step): Step => ({
-    ...s,
-    body: explain([s.body])[0],
-    ...(s.tour ? { tour: { ...s.tour, beats: s.tour.beats.map((b) => ({ ...b, say: explain([b.title ?? '', b.say])[1] })) } } : {}),
-    ...(s.challenge ? { challenge: challengeOf(s.challenge) } : {}),
-  });
-  return {
-    ...ch,
-    goals: ch.goals?.map((g) => explain([g])[0]),
-    steps: ch.steps.map(stepOf),
-    ...(ch.recap ? { recap: { ...ch.recap, keep: ch.recap.keep.map((k) => explain([k])[0]), ...(ch.recap.check ? { check: ch.recap.check.map(quizFields) } : {}) } } : {}),
-  };
-}
-
-export const chTelegraph: Chapter = teach(rawTelegraph);
-export const chExchange: Chapter = teach(rawExchange);
