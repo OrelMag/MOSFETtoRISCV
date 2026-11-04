@@ -424,6 +424,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The read, in slow motion", challenge: "reach" },
     { title: "The sense amplifier", challenge: "quiz" },
     { title: "Leaks and refresh", challenge: "reach" },
+    { title: "The array, live" },
     { title: "Rows, columns, banks", challenge: "quiz" },
     { title: "Bursts and timings", challenge: "quiz" },
   ] },
