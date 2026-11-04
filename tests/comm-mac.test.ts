@@ -12,9 +12,9 @@ import { ethCountsOf, ethSegment, ethStation, ETH_EV, ETH_STATION_SEEDS, ethStat
 import { deadInstances } from '../src/sim/dead';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
-import { netlistOf } from '../src/sim/types';
+import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { pack } from '../src/sim/values';
-import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
+import { backwardEnds, labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -459,6 +459,26 @@ describe('segment on the cycle engine', () => {
     expect(sent).toBeGreaterThan(0);
     console.log(`segment on the cycle engine: ${Math.round((N / dt) * 1000)} clocks/s (${N} clocks, ${dt.toFixed(0)} ms)`);
   }, 180000);
+});
+
+describe('every part of the chapter as a drawing', () => {
+  const all = (() => {
+    const seen = new Set<ComponentDef>();
+    const visit = (d: ComponentDef) => {
+      if (seen.has(d) || !d.id.startsWith('eth_')) return;
+      seen.add(d);
+      for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
+    };
+    for (const d of [ethSegment(4), ethStation(0), macTx(), macRx()]) visit(d);
+    return [...seen].filter((d) => netlistOf(d));
+  })();
+  it('covers the segment, the stations, both MACs, the buffers and every scope box', () => expect(all.length).toBeGreaterThan(14));
+  it.each(all.map((d) => [d.id, d] as const))('%s: no two nets on one line, no label hides another, no symbol on another', (_, d) => {
+    const nl = netlistOf(d)!;
+    expect(wireOverlaps(routeNetlist(d, nl).nets)).toEqual([]);
+    expect(labelOverlaps(d, nl)).toEqual([]);
+    expect(symbolOverlaps(nl)).toEqual([]);
+  }, 120000);
 });
 
 describe('the chapter scenes as drawings', () => {

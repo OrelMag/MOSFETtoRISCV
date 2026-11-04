@@ -322,8 +322,5 @@ export function sharedWire(x: readonly number[]): ComponentDef {
 }
 
 
-/** Positions of the segment's four stations along the cable, in clocks of propagation. */
+/** Positions of the segment's four stations along the cable, in clocks of propagation. (The parts are built on first use, not at import: a drawing of a few hundred labels makes the sandbox round-trip tests take minutes.) */
 export const ETH_SEG_POSITIONS = [0, 6, 14, 26];
-export const MAC_TX = macTx();
-export const MAC_RX = macRx();
-export const SHARED_WIRE = sharedWire(ETH_SEG_POSITIONS);

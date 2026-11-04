@@ -238,5 +238,3 @@ export function ethSegment(n = 4): ComponentDef {
   return d;
 }
 
-export const ETH_STATION = ethStation(0);
-export const ETH_SEGMENT = ethSegment(4);
