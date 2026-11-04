@@ -152,12 +152,16 @@ export class Capture {
   poll(clock: number): void {
     const cp = this.cp();
     if (cp === this.last) return;
+    if (((cp - this.last) & 0x7ff) > 1514) { this.last = cp; return; } // a pointer that jumped (after Back) is not a frame
     const bytes: number[] = [];
     for (let a = this.last; a !== cp; a = (a + 1) & 0x7ff) bytes.push(this.b.rx(a, this.sel));
     this.frames.push({ clock, bytes });
     this.last = cp;
   }
   reset(cp = 0): void { this.frames = []; this.last = cp; }
+  /** For Back: the frames kept so far and the pointer they reach (a frame is never longer than the maximum, so a pointer that jumped is not one). */
+  save(): { frames: { clock: number; bytes: number[] }[]; last: number } { return { frames: this.frames.map((f) => ({ clock: f.clock, bytes: [...f.bytes] })), last: this.last }; }
+  restore(s: { frames: { clock: number; bytes: number[] }[]; last: number }): void { this.frames = s.frames.map((f) => ({ clock: f.clock, bytes: [...f.bytes] })); this.last = s.last; }
   pcap(): Uint8Array { return pcapFile(this.frames.map((f) => captureRecord(f.clock, f.bytes))); }
 }
 
@@ -335,7 +339,7 @@ export function rxScene(): Scene {
         read.replaceChildren(h('span', null, 'receiver ', h('b', null, RX_STATES[b.get('rxstate')] ?? '?')), h('span', null, 'SFD seen at ', h('b', null, sfdAt >= 0 ? `clock ${sfdAt}` : '-')),
           h('span', null, 'bytes delivered ', h('b', null, String(delivered.length))), h('span', null, 'frames kept ', h('b', null, String(kept))), h('span', null, 'thrown away ', h('b', null, String(gone))), h('span', null, 'buffer ', h('b', null, `commit ${b.get('cp')}, write ${b.get('wp')}`)));
         const rcls = delivered.map((_, j) => (j < 6 ? 'dst' : j < 12 ? 'src' : j < 14 ? 'type' : 'data'));
-        hexBox.replaceChildren(delivered.length ? hexDump(delivered, rcls) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, four bytes behind the wire.'), ...(delivered.length ? [legend(rcls), h('p', { class: 'sub' }, 'Payload and pad are one run here: the receiver cannot tell them apart.')] : []));
+        hexBox.replaceChildren(delivered.length ? hexDump(delivered, rcls) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, five bytes behind the wire, the last one when the carrier falls.'), ...(delivered.length ? [legend(rcls), h('p', { class: 'sub' }, 'Payload and pad are one run here: the receiver cannot tell them apart.')] : []));
         const at = loop.running || sfdAt < 0 ? k : Math.min(q.rxd.length, sfdAt + 56), from = Math.max(0, at - 96);
         line.replaceChildren(strip([{ label: 'rxd', data: q.rxd.slice(from, at) }, { label: 'crs', data: q.crs.slice(from, at) }], 96, 'The receive wire: data and carrier, 24 bits, the last of the preamble and the SFD once the frame is in'));
         if (lastV) {
@@ -347,6 +351,7 @@ export function rxScene(): Scene {
         buf.replaceChildren(...(u ? [h('div', { class: 'sub' }, `Receive buffer holds ${u} frame${u > 1 ? 's' : ''}:`)] : []), ...cap.frames.map((f, i) => h('div', { class: 'eth-bufrow' }, `#${i + 1} `, h('b', null, `${f.bytes.length} B`), ` ${f.bytes.slice(0, 18).map(hex2).join(' ')} …`)));
       };
       stage.resetHooks.add(() => { q = { rxd: [], crs: [] }; k = 0; delivered = []; lastV = null; sfdAt = -1; clock = 0; cap.reset(); paint(); });
+      stage.historyHooks.add({ save: () => ({ k, delivered: [...delivered], lastV, sfdAt, state, clock, kept, gone, cap: cap.save(), q }), restore: (v) => { const x = v as { k: number; delivered: number[]; lastV: typeof lastV; sfdAt: number; state: number; clock: number; kept: number; gone: number; cap: ReturnType<Capture['save']>; q: typeof q }; k = x.k; delivered = [...x.delivered]; lastV = x.lastV; sfdAt = x.sfdAt; state = x.state; clock = x.clock; kept = x.kept; gone = x.gone; cap.restore(x.cap); q = x.q; paint(); } });
       const inp = h('input', { type: 'text', class: 'uart-text', value: text, maxlength: 60, 'aria-label': 'Message in the frame', spellcheck: 'false' }) as HTMLInputElement;
       inp.addEventListener('input', () => { text = inp.value; });
       const toSel = select('Destination of the frame', [['me', 'to this station'], ['other', 'to station 3'], ['all', 'to everyone']], dst, (v) => { dst = v as typeof dst; });
@@ -425,6 +430,7 @@ export function csmaScene(): Scene {
         } else { verdict.className = 'clk-verdict'; verdict.textContent = ''; }
       };
       stage.resetHooks.add(() => { crsW = []; txW = []; gapW = []; clock = 0; txStart = -1; plan = []; paint(); });
+      stage.historyHooks.add({ save: () => ({ crsW: [...crsW], txW: [...txW], gapW: [...gapW], clock, txStart, plan }), restore: (v) => { const x = v as { crsW: number[]; txW: number[]; gapW: number[]; clock: number; txStart: number; plan: [number, number][] }; crsW = [...x.crsW]; txW = [...x.txW]; gapW = [...x.gapW]; clock = x.clock; txStart = x.txStart; plan = x.plan; paint(); } });
       const sl1 = slider('Carrier lasts', 0, 300, 10, first, (v) => `${v} bit times`, (v) => { first = v; });
       const sl2 = slider('Second burst', 0, 90, 10, second, (v) => (v ? `${v} bit times after` : 'none'), (v) => { second = v; });
       paint();
