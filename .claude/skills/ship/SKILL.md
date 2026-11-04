@@ -12,9 +12,11 @@ Merging deploys the site. Work from the branch's own worktree, never from the sh
 2. **Up to date.** In the worktree: `git fetch origin && git merge origin/main` (rebase only if the branch
    was never pushed). Resolve conflicts; flag anything ambiguous instead of guessing.
 3. **Gate** (all must pass; on failure stop and report the output, do not merge):
-   - `node node_modules/vitest/vitest.mjs run`
    - `node node_modules/typescript/bin/tsc --noEmit -p .`
-   - `node node_modules/vite/bin/vite.js build`
+   - `npm run build`'s steps (typecheck, hwstats, example thumbnails, manifest, vite build)
+   - `node node_modules/vitest/vitest.mjs related <changed files> --run`, and smoke with `--only` on the routes touched
+   - if the change reaches shared code (src/sim, src/view, src/ui, src/editor's core, src/lib parts others build on, the stage):
+     the full run, on a runner: `gh workflow run gate.yml --ref <branch>`, and wait for it to pass
    - if `src/sim/svexport.ts`, `src/sim/vexport.ts`, `src/sim/verilog.ts`, `src/lib/multicore.ts`,
      `src/lib/mpdecode.ts` or `src/lib/system.ts` changed: `node node_modules/vite-node/vite-node.mjs scripts/verify-export.ts all`
      (needs `pip install yowasp-yosys`; say so if unavailable)

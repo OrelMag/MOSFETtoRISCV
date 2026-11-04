@@ -24,6 +24,12 @@ export function current(vov: number, vds: number): { id: number; region: string;
 export const C_GATE = 1;
 export const C_WIRE = 1;
 
+/** Id of a device W and L times the reference one: k holds W/L, so the current scales with it. */
+export const sizedCurrent = (vov: number, vds: number, w = 1, l = 1): number => (current(vov, vds).id * w) / l;
+
+/** The gate's capacitance: the area of the plate. */
+export const gateCap = (w = 1, l = 1): number => C_GATE * w * l;
+
 /** The load on an output driving `fanout` CMOS inputs (an NMOS and a PMOS gate each) plus its wire. */
 export const loadOf = (fanout: number): number => fanout * 2 * C_GATE + C_WIRE;
 

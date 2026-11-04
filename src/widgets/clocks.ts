@@ -260,13 +260,27 @@ export function grayBusWidget(): Widget {
   const bin = (x: number) => x.toString(2).padStart(n, '0');
   const rows = { binary: table(n, 'binary'), gray: table(n, 'gray') };
   const list = h('div', { class: 'clk-reads' }), info = h('div', { class: 'mc-status' }), bars = h('div', { class: 'clk-bars' });
+  // the bars are built once and updated in place, so a keyboard user keeps the focus on the bar they pressed
+  const barBtns = Array.from({ length: 2 ** n }, (_, i) => {
+    const b = h('button', { class: 'clk-bar' }, h('i'), h('span', null, String(i)));
+    b.addEventListener('click', () => { step = i; paint(); });
+    return b;
+  });
+  bars.append(...barBtns);
   const gates = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const r = rows[code][step], rd = readings(r.from, r.to);
     list.replaceChildren(...rd.map((w) => h('span', { class: `clk-rd ${w === r.from ? 'old' : w === r.to ? 'new' : 'bad'}`, title: w === r.from ? 'the old value' : w === r.to ? 'the new value' : 'neither the old nor the new value' }, h('b', null, bin(w)), h('span', null, `${w}`))));
     info.replaceChildren(h('span', null, 'bus ', h('b', null, `${bin(r.from)} → ${bin(r.to)}`)), h('span', null, 'bits changing ', h('b', null, String(r.flips))), h('span', null, 'possible readings ', h('b', null, String(r.reads))),
       h('span', null, 'garbage ', h('b', null, String(r.bad))), h('span', null, 'worst error ', h('b', null, code === 'binary' ? `${r.err} counts` : `${r.err} (a Gray word)`)));
-    bars.replaceChildren(...rows[code].map((q, i) => h('button', { class: `clk-bar${i === step ? ' on' : ''}${q.bad ? ' bad' : ''}`, title: `${bin(q.from)} → ${bin(q.to)}: ${q.reads} readings`, 'aria-label': `step ${i}: ${q.reads} possible readings`, style: `--hgt:${(q.reads / 16) * 100}%`, onclick: () => { step = i; paint(); } }, h('i'), h('span', null, String(i)))));
+    rows[code].forEach((q, i) => {
+      const b = barBtns[i];
+      b.className = `clk-bar${i === step ? ' on' : ''}${q.bad ? ' bad' : ''}`;
+      b.title = `${bin(q.from)} → ${bin(q.to)}: ${q.reads} readings`;
+      b.setAttribute('aria-label', `step ${i}: ${q.reads} possible readings`);
+      b.setAttribute('aria-pressed', String(i === step));
+      b.style.setProperty('--hgt', `${(q.reads / 16) * 100}%`);
+    });
     gates.textContent = `Mean chance that a mid-change sample is garbage over all ${2 ** n} steps: binary ${nf(meanGarbage(n, 'binary') * 100, 0)} %, Gray 0 %. In gates: binary → Gray is ${stats(BIN2GRAY(n)).nands} NANDs (${n - 1} XORs, one level), Gray → binary ${stats(GRAY2BIN(n)).nands} NANDs (a chain ${n - 1} deep). In Gray mode the words shown are code words.`;
   };
   const sel = h('div', { class: 'mos-row' });
@@ -298,8 +312,10 @@ export interface TwoClockConfig {
   actions?: { label: string; title: string; run: (stage: Stage, start: () => void) => void }[];
   /** A summary beneath the strip, rebuilt after every edge. */
   extra?: (stage: Stage) => HTMLElement[];
-  /** Called when the strip is cleared (Reset, ratio change). */
+  /** Called when the stage resets the circuit (a power cycle): the scene's own bookkeeping goes back to its start. Clear strip does not call it. */
   reset?: () => void;
+  /** Controls built once and kept (sliders, selects): unlike `extra` they are not rebuilt after every edge, so they can be dragged and keep focus. */
+  controls?: (stage: Stage) => HTMLElement[];
   /** A word for the scene's outcome so far ('lost', 'seen' …): what the chapter's challenges check. */
   status?: () => string;
   /** The scene's own state that Back puts back with the circuit. */
@@ -337,6 +353,7 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
       save: () => ({ ...snap(), own: cfg.history?.save() }),
       restore: (v) => { const x = v as ReturnType<typeof snap> & { own: unknown }; cfg.history?.restore(x.own); ri = x.ri; sched = new EdgeSchedule(...ratios[ri]); sched.i = x.i; sched.j = x.j; count = { ...x.count }; log.length = 0; log.push(...x.log); sel.value = String(ri); update(); },
     });
+    const clearStrip = () => { log.length = 0; update(); };
     const clear = () => { log.length = 0; count = { a: 0, b: 0 }; sched = new EdgeSchedule(...ratios[ri]); cfg.reset?.(); update(); };
     stage.resetHooks.add(() => { stopRun(); clear(); });
     const fmt = (v: number | string, bits?: number) => (typeof v === 'string' ? v : v < 0 ? 'X' : bits && bits > 1 ? v.toString(16).toUpperCase() : String(v));
@@ -373,6 +390,7 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
     sel.addEventListener('change', () => { ri = Number(sel.value); stage.checkpoint(); sched = new EdgeSchedule(...ratios[ri]); update(); });
     const strip = h('div', { class: 'clk-strip', role: 'group', 'aria-label': 'What each signal was after each clock edge' });
     const extra = h('div', { class: 'clk-extra' });
+    const controls = h('div', { class: 'clk-extra' }, ...(cfg.controls?.(stage) ?? []));
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' },
       h('h4', null, cfg.title, h('span', { class: 'fold-hint' })),
       h('div', { class: 'mc-row' }, sel),
@@ -381,8 +399,8 @@ export function twoClockPanel(cfg: TwoClockConfig): ScenePanel {
         btn(`${cfg.b.name} edge`, `One rising edge of ${cfg.b.clk}`, () => act(() => edge('b'))),
         btn('Next', 'The next edge in the ratio\'s order', () => act(next)), runBtn,
         ...(cfg.actions ?? []).map((a) => btn(a.label, a.title, () => act(() => a.run(stage, () => { startRun(); })))),
-        btn('Clear strip', 'Forget the strip (the circuit keeps its state)', () => act(clear))),
-      h('div', { class: 'cpu-sec' }, `Every edge, the last ${STRIP}`), strip, extra, cfg.hint ? h('p', { class: 'sub' }, cfg.hint) : null);
+        btn('Clear strip', 'Forget the strip (the circuit and the scene keep their state)', () => act(clearStrip))),
+      h('div', { class: 'cpu-sec' }, `Every edge, the last ${STRIP}`), strip, extra, controls, cfg.hint ? h('p', { class: 'sub' }, cfg.hint) : null);
     const update = () => {
       const lab = (t: string, cls: string) => h('span', { class: `clk-lab ${cls}` }, t);
       strip.replaceChildren(
@@ -505,6 +523,18 @@ export function fifoScene(k = 2, w = 8): Scene {
       { label: 'Both', title: 'Write and read at random', run: () => { mode = 'both'; } },
     ],
     status: () => (lost ? 'wrong' : ''),
+    controls: () => {
+      const rate = (label: string, aria: string, get: () => number, set: (v: number) => void) => {
+        const out = h('output', null, String(get()));
+        const input = h('input', { type: 'range', min: 0, max: 100, step: 5, value: get(), 'aria-label': aria }) as HTMLInputElement;
+        input.addEventListener('input', () => { set(Number(input.value)); out.textContent = input.value; });
+        return h('label', { class: 'mos-sl clk-tr' }, h('span', null, label), input, out);
+      };
+      return [
+        rate('Write %', 'Probability of a write at each W edge in Both mode', () => pw, (v) => { pw = v; }),
+        rate('Read %', 'Probability of a read at each R edge in Both mode', () => pr, (v) => { pr = v; }),
+      ];
+    },
     extra: (st) => {
       const wb = portAt(st, ['wb'], 'q'), rb = portAt(st, ['rb'], 'q'), mask = 2 ** (k + 1) - 1;
       const rSeen = fromGray(portAt(st, ['rs'], 'q')), wSeen = fromGray(portAt(st, ['ws'], 'q'));
@@ -524,9 +554,7 @@ export function fifoScene(k = 2, w = 8): Scene {
           h('span', null, 'full ', h('b', { class: full && truth < N ? 'bad' : '' }, full ? (truth < N ? 'high, late' : 'high') : 'low')),
           h('span', null, 'empty ', h('b', { class: empty && truth > 0 ? 'bad' : '' }, empty ? (truth > 0 ? 'high, late' : 'high') : 'low'))),
         h('div', { class: 'mc-status' }, h('span', null, 'written ', h('b', null, String(wrote))), h('span', null, 'read ', h('b', null, String(readN))), h('span', null, 'wrong words ', h('b', { class: lost ? 'bad' : 'good' }, String(lost))),
-          h('span', null, 'model ', h('b', { class: match ? 'good' : 'bad' }, match ? 'agrees' : 'differs'))),
-        h('label', { class: 'mos-sl clk-tr' }, h('span', null, 'Write %'), Object.assign(h('input', { type: 'range', min: 0, max: 100, step: 5, value: pw, 'aria-label': 'Probability of a write at each W edge in Both mode' }), { oninput: (ev: Event) => { pw = Number((ev.target as HTMLInputElement).value); } }), h('output', null, `${pw}`)),
-        h('label', { class: 'mos-sl clk-tr' }, h('span', null, 'Read %'), Object.assign(h('input', { type: 'range', min: 0, max: 100, step: 5, value: pr, 'aria-label': 'Probability of a read at each R edge in Both mode' }), { oninput: (ev: Event) => { pr = Number((ev.target as HTMLInputElement).value); } }), h('output', null, `${pr}`)),
+          h('span', null, 'model ', h('b', { class: match ? 'good' : 'bad' }, match ? 'agrees' : 'differs')))
       ];
     },
     reset: () => { model.s = new AsyncFifoModel(k, w).s; wseq = 1; wrote = readN = lost = 0; mode = 'both'; rng = 12345; },

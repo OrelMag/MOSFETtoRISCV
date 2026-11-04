@@ -1,0 +1,18 @@
+/* ---------- The 3D models on widgets/modelstage.ts: the relay's stage (relay3d.css) with these materials ---------- */
+.m3d {
+  --m3-si: light-dark(#a7aecb, #6f7898);
+  --m3-p: light-dark(#7fb2dd, #4f86b8);
+  --m3-n: light-dark(#dd7c8e, #c9627a);
+  --m3-poly: light-dark(#cf5a5a, #d96a6a);
+  --m3-oxide: light-dark(#dbe5f1, #c5d3e6);
+  --m3-metal: light-dark(#8f98a8, #a3acbd);
+  --m3-charge: light-dark(#1f9a63, #3ecb8a);
+  --m3-carrier: light-dark(#f0f6ff, #ffffff);
+  --m3-dim: var(--accent);
+}
+.m3d .r3-sl span { width: auto; min-width: 48px; }
+.m3-face { stroke: color-mix(in srgb, var(--text) 25%, transparent); stroke-width: 0.5; stroke-linejoin: round; }
+.m3-flat-lbl { font: 600 13px var(--font-ui); fill: var(--text); paint-order: stroke; stroke: var(--canvas); stroke-width: 3px; }
+.m3-title { margin: 0 0 2px; font-size: 15px; }
+.m3-sub { margin: 0 0 10px; color: var(--text-2); font-size: 13.5px; max-width: 72ch; }
+@media (pointer: coarse) { .m3d .btn.sm { min-height: 40px; } .m3d .r3-sl input { min-height: 40px; } }

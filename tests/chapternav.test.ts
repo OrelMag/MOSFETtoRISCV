@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { chapterById, chapters } from '../src/chapters';
-import { LADDER, ladderFocus } from '../src/widgets/journey';
+import { ladderFocus } from '../src/widgets/journey';
+import { SECTIONS, sectionsOf } from '../src/chapters/sections';
 import { chapterMark, navEntries, plainText, resumeTarget, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
 
 const book: NavChapter[] = [
@@ -71,21 +72,29 @@ describe('chapter navigation', () => {
   });
 });
 
-describe('the journey ladder', () => {
-  it('links every rung to a real chapter, numbered as that chapter, in descending order', () => {
-    for (const r of LADDER) expect(chapterById(r.chapter)?.num, r.title).toBe(r.num);
-    const nums = LADDER.map((r) => r.num);
-    expect(nums).toEqual([...nums].sort((a, b) => b - a));
-    // The top rung opens the last track (the chapters sharing the last chapter's level): the ladder reaches the end.
-    // Appendices come after the journey and are not on it.
-    const last = chapters.filter((c) => !c.appendix).at(-1)!;
-    expect(LADDER[0].num).toBe(chapters.find((c) => c.level === last.level)?.num);
+describe('the map', () => {
+  it('cuts the book into its sections: all there, in order, each chapter once', () => {
+    const secs = sectionsOf(chapters);
+    expect(secs.map((s) => s.name)).toEqual(SECTIONS.map((s) => s.name));
+    expect(secs.flatMap((s) => s.chapters.map((c) => c.id))).toEqual(chapters.map((c) => c.id));
+    for (const s of SECTIONS) expect(chapterById(s.first), s.name).toBeTruthy();
   });
 
-  it('opens at the bottom rung (the first chapter) for a new visitor, else at the highest rung visited', () => {
-    expect(LADDER.at(-1)!.chapter).toBe(chapters.find((c) => c.num === 1 && !c.prologue && !c.appendix)!.id);
-    expect(ladderFocus(() => false)).toBe(LADDER.length - 1);
-    expect(LADDER[ladderFocus((id) => id === 'mosfet' || id === 'cpu' || id === 'alu')].chapter).toBe('cpu');
+  it('gives each section the tone of its chapters and the range of their numbers', () => {
+    for (const s of sectionsOf(chapters)) for (const c of s.chapters) expect(c.appendix ? 'appendix' : c.prologue ? 'prologue' : 'journey', c.id).toBe(s.tone);
+    const of = (name: string) => sectionsOf(chapters).find((s) => s.name === name)!;
+    expect(of('Transistors to gates').range).toBe('01–04');
+    expect(of('Prologue: before the transistor').range).toBe('P1–P3');
+    expect(of('Start').range).toBe('');
+  });
+
+  it('opens at the MOSFET for a new visitor or one still in Start, else at the chapter being read or the last one opened', () => {
+    expect(ladderFocus(() => false)).toBe('mosfet');
+    expect(ladderFocus((id) => id === 'basics', 'map')).toBe('mosfet');
+    expect(ladderFocus((id) => id === 'mosfet' || id === 'cpu' || id === 'alu')).toBe('cpu');
+    expect(ladderFocus(() => true, 'dram')).toBe('dram');
+    expect(ladderFocus((id) => id === 'cpu', 'no-such-chapter')).toBe('cpu');
+    expect(ladderFocus((id) => id === 'cpu' || id === 'map', 'map')).toBe('cpu');
   });
 });
 

@@ -3,7 +3,7 @@
 // with the model's decoder on the word it made, and interleaving against a burst.
 
 import '../styles/errors.css';
-import { channelP, codingGain, convHardBound, convSoftBound, convTrial, rsCurve, secdedBer, shannonBinaryDb, shannonDb, uncodedBer } from '../comm/ber';
+import { BER_CHUNK, BER_MAX_BITS, BER_MIN_ERRORS, channelP, codingGain, convHardBound, convSoftBound, convTrial, rsCurve, secdedBer, shannonBinaryDb, shannonDb, trialSeed, uncodedBer } from '../comm/ber';
 import { CONV_K3, CONV_K7, Viterbi, convEncode, convStep, statesOf } from '../comm/conv';
 import { codeOf, secdedDecode, secdedEncode } from '../comm/fec';
 import { deinterleave, interleave, placeOf, secdedOverBursts, worstPerWord } from '../comm/interleave';
@@ -78,20 +78,20 @@ export function berWidget(keys: string[] = CURVES.map((c) => c.key)): Widget {
   const run = () => {
     window.clearTimeout(timer);
     dots.replaceChildren();
-    const at = db, jobs = [{ q: 1, cls: 'c4', name: 'hard' }, { q: 3, cls: 'c5', name: 'soft' }], total = 100000;
-    const tally = jobs.map(() => ({ bits: 0, errors: 0 }));
+    const at = db, jobs = [{ q: 1, cls: 'c4', name: 'hard' }, { q: 3, cls: 'c5', name: 'soft' }];
+    const tally = jobs.map(() => ({ bits: 0, errors: 0, chunks: 0 })), finished = (i: number) => tally[i].errors >= BER_MIN_ERRORS || tally[i].bits >= BER_MAX_BITS;
     const circles = jobs.map((j) => dots.appendChild(s('circle', { r: 5, class: `cd-dot ${j.cls}`, cx: X(at), cy: -20 })));
-    let seed = 1;
     const tick = () => {
       if (!alive) return;
       const t0 = performance.now();
-      while (performance.now() - t0 < 12 && tally[0].bits < total) {
-        jobs.forEach((j, i) => { const r = convTrial(CONV_K7, at, 1500, { q: j.q, seed: seed * 7 + i }); tally[i].bits += r.bits; tally[i].errors += r.errors; });
-        seed++;
+      while (performance.now() - t0 < 12 && !jobs.every((_, i) => finished(i))) {
+        jobs.forEach((j, i) => { if (finished(i)) return; const r = convTrial(CONV_K7, at, BER_CHUNK, { q: j.q, seed: trialSeed(tally[i].chunks++, j.q) }); tally[i].bits += r.bits; tally[i].errors += r.errors; });
       }
-      tally.forEach((t, i) => { if (t.errors) circles[i].setAttribute('cy', String(Y(t.errors / t.bits))); });
-      runNote.textContent = `The real decoder, at ${at.toFixed(1)} dB, three-bit levels for soft: ` + jobs.map((j, i) => `${j.name} ${tally[i].errors} errors in ${tally[i].bits.toLocaleString('en-US')} bits`).join(', ') + (tally[0].bits < total ? ' …' : '.');
-      if (tally[0].bits < total) timer = window.setTimeout(tick, 0);
+      // a dot with no errors is hollow and sits at 1 / bits: the rate is below it, not on it
+      tally.forEach((t, i) => { if (t.bits) { circles[i].setAttribute('cy', String(Y(Math.max(t.errors, 1) / t.bits))); circles[i].classList.toggle('zero', t.errors === 0); } });
+      const done = jobs.every((_, i) => finished(i));
+      runNote.textContent = `The real decoder, at ${at.toFixed(1)} dB, three-bit levels for soft, each run to ${BER_MIN_ERRORS} errors or ${BER_MAX_BITS.toLocaleString('en-US')} bits: ` + jobs.map((j, i) => `${j.name} ${tally[i].errors} error${tally[i].errors === 1 ? '' : 's'} in ${tally[i].bits.toLocaleString('en-US')} bits${tally[i].errors ? ` (${sci(tally[i].errors / tally[i].bits)})` : ' (hollow dot: below 1 in that many)'}`).join(', ') + (done ? '.' : ' …');
+      if (!done) timer = window.setTimeout(tick, 0);
     };
     tick();
   };
@@ -299,7 +299,7 @@ export function rsPanel(): ScenePanel {
       const rx = cw.map((b, i) => b ^ (hits.get(i) ?? 0)), d = rsDecode(rx, nsym), right = d.word && d.word.every((v, i) => v === cw[i]);
       verdict.className = `err-verdict ${d.word === null ? 'bad' : right ? 'ok' : 'bad'}`;
       verdict.textContent = hits.size === 0 ? 'A clean word: every syndrome is 0, and the decoder has nothing to do.'
-        : d.word === null ? `${hits.size} bytes hit, more than t = 5. The decoder (the model, not gates) knows it failed: the locator has no ${d.errors} roots in the word. A retransmission or an outer code takes over.`
+        : d.word === null ? `${hits.size} bytes hit, more than t = 5. The decoder (the model, not gates) knows it failed: ${2 * d.errors > nsym ? `the error locator it finds has degree ${d.errors}, above t = ${nsym / 2}, so there is no solution` : `the error locator it finds (degree ${d.errors}) has roots that do not all lie in the word, so there is no solution`}. A retransmission or an outer code takes over.`
           : right ? `${hits.size} byte${hits.size > 1 ? 's' : ''} hit, whatever the bits in them: found and corrected at position${d.fixed.length > 1 ? 's' : ''} ${d.fixed.join(', ')}. Corrected by the model's Berlekamp-Massey, Chien and Forney, not gates.`
             : `${hits.size} bytes hit, and the word was moved onto a different code word: a miscorrection, the case only a CRC above it can catch.`;
     };
@@ -330,6 +330,14 @@ export function burstOutcome(D: number, b: number, at: number): { n: number; err
   return { n, errs, failed, total: D };
 }
 
+/** The verdict under the grid, decided on what the words saw: a word with two errors that still decoded (both hits on check bits) is luck, not the guarantee. */
+export function burstVerdict(D: number, b: number, r: { errs: number[]; failed: number }): { cls: 'ok' | 'bad'; text: string } {
+  const worst = Math.max(...r.errs);
+  if (r.failed) return { cls: 'bad', text: `A burst of ${b} puts ${worst} errors into one word, beyond SEC-DED's one. ${r.failed} word${r.failed > 1 ? 's' : ''} wrong.` };
+  if (worst > 1) return { cls: 'ok', text: `A burst of ${b} puts ${worst} errors into one word, beyond SEC-DED's one, yet its data came out right: the extra hits fell on check bits. That is luck, not the code's guarantee, which is one error a word.` };
+  return { cls: 'ok', text: `Written across ${D} word${D > 1 ? 's' : ''}, the burst of ${b} leaves at most one error in any word, and every word corrects it. The redundancy did not change.` };
+}
+
 export function interleaveWidget(): Widget {
   let D = 1, b = 6, at = 4;
   const runs = new Map<number, number>();
@@ -337,16 +345,23 @@ export function interleaveWidget(): Widget {
   const grid = h('div', { class: 'cd-il' }), verdict = h('p', { class: 'err-verdict' }), chips = h('div', { class: 'err-crc' }), note = h('p', { class: 'sub mos-note' });
   const stat = (k: string, v: string) => h('div', null, h('span', null, k), h('b', null, v));
   const paint = () => {
-    const r = burstOutcome(D, b, at), n = r.n, total = D * n, start = Math.min(at, Math.max(0, total - b));
+    const n = codeOf(IL_K).n, total = D * n;
+    // the block is all there is to hit: a burst is clipped to it and a start is held inside it, and the sliders say so
+    if (b > total) { b = total; sB.set(b); }
+    if (at > total - b) { at = total - b; sA.set(at); }
+    setMax(sB, Math.min(30, total)); setMax(sA, Math.min(60, total - b));
+    const r = burstOutcome(D, b, at), start = at, worst = Math.max(...r.errs);
     grid.style.setProperty('--n', String(n));
     grid.replaceChildren(...Array.from({ length: Math.min(D, 12) }, (_, w) => h('div', { class: `cd-il-row${r.errs[w] > 1 ? ' bad' : r.errs[w] === 1 ? ' fixed' : ''}` }, h('span', { class: 'cd-il-lab' }, `word ${w}`),
       ...Array.from({ length: n }, (_, i) => { const c = i * D + w, hit = c >= start && c < start + b; return h('span', { class: `cd-il-b${hit ? ' hit' : ''}` }); }),
       h('span', { class: 'cd-il-n' }, r.errs[w] ? String(r.errs[w]) : ''))));
-    chips.replaceChildren(stat('worst word sees', `${Math.max(...r.errs)} (⌈${b}/${D}⌉ = ${worstPerWord(b, D)})`), stat('words lost', `${r.failed} of ${r.total}`), stat('buffer each end', `${(D * n).toLocaleString('en-US')} bits`), stat('added delay', `${(D * n).toLocaleString('en-US')} bit times`));
-    verdict.className = `err-verdict ${r.failed ? 'bad' : 'ok'}`;
-    verdict.textContent = r.failed ? `A burst of ${b} puts ${Math.max(...r.errs)} errors into one word, beyond SEC-DED's one. ${r.failed} word${r.failed > 1 ? 's' : ''} wrong.` : `Written across ${D} word${D > 1 ? 's' : ''}, the burst of ${b} leaves at most one error in any word, and every word corrects it. The redundancy did not change.`;
+    chips.replaceChildren(stat('worst word sees', `${worst} (⌈${b}/${D}⌉ = ${worstPerWord(b, D)})`), stat('words lost', `${r.failed} of ${r.total}`), stat('buffer each end', `${(D * n).toLocaleString('en-US')} bits`), stat('added delay', `${(D * n).toLocaleString('en-US')} bit times`));
+    const v = burstVerdict(D, b, r);
+    verdict.className = `err-verdict ${v.cls}`;
+    verdict.textContent = v.text;
     note.textContent = `On a seeded burst channel (a bad state entered 2 in 10 000 bits, five bits long on average, half the bits wrong) SEC-DED(72, 64) loses ${(100 * lost(1)).toFixed(2)} % of words without interleaving${D > 1 ? ` and ${(100 * lost(D)).toFixed(2)} % at depth ${D}, the same errors spread out` : ''}.`;
   };
+  const setMax = (sl: { el: HTMLElement }, max: number) => { (sl.el.querySelector('input') as HTMLInputElement).max = String(max); };
   const sD = slider('Depth D (words)', 1, 12, 1, D, (v) => String(v), (v) => { D = v; paint(); });
   const sB = slider('Burst length', 1, 30, 1, b, (v) => `${v} bits`, (v) => { b = v; paint(); });
   const sA = slider('Burst starts at', 0, 60, 1, at, (v) => `bit ${v}`, (v) => { at = v; paint(); });
