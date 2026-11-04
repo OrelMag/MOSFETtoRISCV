@@ -7,6 +7,7 @@
 .in-map .rt-router { cursor: pointer; }
 .in-map .rt-router:focus-visible circle { stroke: var(--accent); stroke-width: 4; }
 .in-map .rt-router:focus { outline: none; }
+.rt-w .err-lab-in { margin-right: 10px; }
 .in-hex { font: 500 11.5px/1.5 var(--font-mono); color: var(--text); overflow-wrap: anywhere; min-height: 1.5em; }
 .in-step { width: 100%; text-align: left; background: none; cursor: pointer; font: inherit; }
 .in-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

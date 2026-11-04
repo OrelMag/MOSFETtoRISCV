@@ -20,7 +20,7 @@ import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title, type: 'button' }, label); b.addEventListener('click', f); return b; };
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
 const hexText = (b: readonly number[]) => b.map(hex2).join(' ');
-const ms2 = (v: number) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+const ms2 = (v: number) => (v > 0 && v < 0.001 ? '<0.001' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const pick = (label: string, options: [string, string][], value: string, f: (v: string) => void) => {
   const e = h('select', { class: 'mc-sel', 'aria-label': label }, ...options.map(([v, t]) => h('option', { value: v }, t))) as HTMLSelectElement;
@@ -51,9 +51,11 @@ function netMap() {
       const kids: SVGElement[] = [];
       ASES.forEach((a, i) => {
         const rs = ROUTERS.filter((r) => r.as === i);
-        const x0 = Math.min(...rs.map((r) => r.at[0])) - 26, x1 = Math.max(...rs.map((r) => r.at[0])) + 26, y0 = Math.min(...rs.map((r) => r.at[1])) - 22, y1 = Math.max(...rs.map((r) => r.at[1])) + 22;
+        // the name has a row of its own under the routers, centred, where no link passes
+        const half = a.name.length * 2.9 + 6, xa = Math.min(...rs.map((r) => r.at[0])), xb = Math.max(...rs.map((r) => r.at[0])), mid = (xa + xb) / 2;
+        const x0 = Math.min(xa - 26, mid - half), x1 = Math.max(xb + 26, mid + half), y0 = Math.min(...rs.map((r) => r.at[1])) - 20, y1 = Math.max(...rs.map((r) => r.at[1])) + 32;
         const g = s('g', { class: 'in-as', style: `--as-h:${a.hue}` });
-        g.append(s('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 10 }), s('text', { x: x0 + 5, y: y1 - 5 }, a.name));
+        g.append(s('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 10 }), s('text', { x: mid, y: y1 - 5, 'text-anchor': 'middle' }, a.name));
         kids.push(g);
       });
       LINKS.forEach((l, i) => {
@@ -151,7 +153,7 @@ export function bgpWidget(): Widget {
     chips.replaceChildren(h('span', null, 'rounds ', h('b', null, String(b.rounds))), h('span', null, 'updates ', h('b', null, String(b.messages))), h('span', null, 'refused, own number in the path ', h('b', null, String(b.refused))));
     const net = new Internet({ policy, hijack: hijack ? claim : undefined }), j = net.send(LAPTOP, hostFrame(LAPTOP, dest === AS_QUIL ? hostIp(WWW) : routerIp(ROUTERS.findIndex((x) => x.as === dest)), 64, PROTO_UDP, new Array<number>(20).fill(0)));
     verdict.className = `err-verdict ${j.end.kind === 'host' ? 'ok' : 'bad'}`;
-    verdict.textContent = `Settled, the laptop's packets go ${asPathText(j)}, and ${endText(j)}.`;
+    verdict.textContent = `Settled, a packet from the laptop goes ${asPathText(j)} and ${endText(j)}.`;
   };
   const restart = () => { b = new BgpNet(RELATIONS, opts()); paint(); };
   paint();
