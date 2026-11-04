@@ -80,7 +80,7 @@ export function baudGen(n = UART_DIV_BITS): ComponentDef {
  * bit is exactly 16 ticks long. Stored inverted (zero = idle high), so tx comes out of an inverter.
  */
 export const UART_TX: ComponentDef = (() => {
-  const b = new Builder(10, 12), g = kit(b);
+  const b = new Builder(22, 18, 6), g = kit(b);
   b.pins('tick', 'go', 'din', 'clk');
   const one = g.konst(1, 1), zero = g.konst(1, 0);
   const busy = b.op(DFF, ['', 'clk'], 'busy', 'busy');
@@ -127,9 +127,9 @@ export const UART_TX: ComponentDef = (() => {
  * a start edge from a slightly fast sender is never missed.
  */
 export const UART_RX: ComponentDef = (() => {
-  const b = new Builder(10, 12), g = kit(b);
+  const b = new Builder(22, 18, 6), g = kit(b);
   b.pins('rx', 'tick', 'clk');
-  const one = g.konst(1, 1), zero = g.konst(1, 0);
+  const zero = g.konst(1, 0);
   const sy = b.op(SYNC2, [g.not('rx'), 'clk'], 'line low?', 'sy');
   const lo = b.name(`${sy}.q`, 'lo', true);
   const st = b.op(register(3), ['', '', 'clk'], 'state', 'st');
@@ -143,7 +143,7 @@ export const UART_RX: ComponentDef = (() => {
   const tc7 = g.and(g.not(tcb[3]), tcb[2], tcb[1], tcb[0]), tc15 = g.and(...tcb), bc7 = g.and(...bcb);
   const detect = b.name(g.and('tick', `${d}.y0`, lo), 'start edge', true);
   const mid = b.name(g.and('tick', `${d}.y1`, tc7), 'middle of start', true);
-  const midOk = g.and(mid, lo), midBad = g.and(mid, nlo);
+  const midOk = g.and(mid, lo);
   const samp = b.name(g.and('tick', `${d}.y2`, tc15), 'sample a bit', true);
   const lastd = g.and(samp, bc7);
   const stp = b.name(g.and('tick', `${d}.y3`, tc15), 'sample the stop', true);
@@ -163,7 +163,6 @@ export const UART_RX: ComponentDef = (() => {
   b.wire(bad, 'ferr');
   b.wire(`${st}.q`, 'state');
   b.wire(g.not(`${d}.y0`), 'busy');
-  void midBad; void one;
   const ports: PortDef[] = [bit('rx', 'in'), bit('tick', 'in'), bit('clk', 'in', 'bottom', true), bus('data', 8, 'out'), bit('push', 'out'), bit('ferr', 'out'), bus('state', 3, 'out'), bit('busy', 'out')];
   return define({
     id: 'uart_rx', name: 'UART receiver', category: 'sequential',
@@ -181,9 +180,8 @@ export const UART_RX: ComponentDef = (() => {
  * (AXI_UART) only decodes addresses into these strobes.
  */
 export const UART_CORE: ComponentDef = (() => {
-  const b = new Builder(8, 10), g = kit(b);
+  const b = new Builder(24, 20, 6), g = kit(b);
   b.pins('rx', 'push', 'data', 'pop', 'divWe', 'ieWe', 'clrWe', 'wval', 'clk');
-  const one = g.konst(1, 1);
   const divr = b.op(register(UART_DIV_BITS), ['wval', 'divWe', 'clk'], 'divisor', 'divr');
   const ier = b.op(register(2), [g.split('wval', [2, UART_DIV_BITS - 2])[0], 'ieWe', 'clk'], 'interrupt enables', 'ier');
   const baud = b.op(baudGen(), [`${divr}.q`, 'clk'], 'baud ÷N', 'baud');
@@ -209,7 +207,6 @@ export const UART_CORE: ComponentDef = (() => {
   b.wire(`${divr}.q`, 'div');
   b.wire(`${ier}.q`, 'ie');
   b.wire(`${baud}.tick`, 'tickOut');
-  void one;
   const ports: PortDef[] = [
     bit('rx', 'in'), bit('push', 'in'), bus('data', 8, 'in'), bit('pop', 'in'), bit('divWe', 'in'), bit('ieWe', 'in'), bit('clrWe', 'in'), bus('wval', UART_DIV_BITS, 'in'), bit('clk', 'in', 'bottom', true),
     bit('tx', 'out'), bus('rxData', 8, 'out'), bus('status', 8, 'out'), bus('div', UART_DIV_BITS, 'out'), bus('ie', 2, 'out'), bit('irq', 'out'), bit('tickOut', 'out'),
@@ -231,7 +228,7 @@ export const UART_CORE: ComponentDef = (() => {
  * empty). irq is the OR of the enabled conditions.
  */
 export const AXI_UART: ComponentDef = (() => {
-  const b = new Builder(14, 14), g = kit(b);
+  const b = new Builder(24, 16, 6), g = kit(b);
   const { wrHs, rdHs } = slaveFsm(b, g, 0);
   b.next();
   const wsel = b.op(decoder(2, false), [g.split('awaddr', [2, 2, 28])[1]], 'which register (write)', 'wdec');
@@ -299,3 +296,41 @@ export function lineDef(delay = 2): ComponentDef {
   }));
 }
 export const LINE = lineDef(2);
+
+// ---- benches for the chapter's scenes ----------------------------------------------------------------------------------
+
+/** A transmitter with its baud generator: div, go, din, clk in; tx, busy, tick out. */
+export const UART_TX_BENCH: ComponentDef = (() => {
+  const b = new Builder(24, 20, 6);
+  b.pins('div', 'go', 'din', 'clk');
+  const baud = b.op(baudGen(), ['div', 'clk'], 'baud ÷N', 'baud');
+  b.next();
+  const tx = b.op(UART_TX, [`${baud}.tick`, 'go', 'din', 'clk'], 'transmitter', 'xmit');
+  b.next();
+  b.wire(`${tx}.tx`, 'tx'); b.wire(`${tx}.busy`, 'busy'); b.wire(`${baud}.tick`, 'tick'); b.wire(`${tx}.taken`, 'taken');
+  const ports: PortDef[] = [bus('div', UART_DIV_BITS, 'in'), bit('go', 'in'), bus('din', 8, 'in'), bit('clk', 'in', 'bottom', true), bit('tx', 'out'), bit('busy', 'out'), bit('tick', 'out'), bit('taken', 'out')];
+  return define({
+    id: 'uart_tx_bench', name: 'UART transmitter on a bench', category: 'sequential',
+    summary: 'The baud generator and the transmitter: set div, put a byte on din and raise go; tx carries the frame.',
+    ports, symbol: { kind: 'box', label: 'TX BENCH' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();
+
+/** A receiver with its baud generator: div, rx, clk in; data, push, ferr, state, tick out. */
+export const UART_RX_BENCH: ComponentDef = (() => {
+  const b = new Builder(24, 20, 6);
+  b.pins('div', 'rx', 'clk');
+  const baud = b.op(baudGen(), ['div', 'clk'], 'baud ÷N', 'baud');
+  b.next();
+  const rx = b.op(UART_RX, ['rx', `${baud}.tick`, 'clk'], 'receiver', 'recv');
+  b.next();
+  b.wire(`${rx}.data`, 'data'); b.wire(`${rx}.push`, 'push'); b.wire(`${rx}.ferr`, 'ferr'); b.wire(`${rx}.state`, 'state'); b.wire(`${baud}.tick`, 'tick');
+  const ports: PortDef[] = [bus('div', UART_DIV_BITS, 'in'), bit('rx', 'in'), bit('clk', 'in', 'bottom', true), bus('data', 8, 'out'), bit('push', 'out'), bit('ferr', 'out'), bus('state', 3, 'out'), bit('tick', 'out')];
+  return define({
+    id: 'uart_rx_bench', name: 'UART receiver on a bench', category: 'sequential',
+    summary: 'The baud generator and the receiver: drive rx with a frame from a clock of your choice; data holds the byte, push pulses when a frame with a good stop bit arrives.',
+    ports, symbol: { kind: 'box', label: 'RX BENCH' },
+    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+  });
+})();

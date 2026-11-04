@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { tolerance, UART_8N1 } from '../src/comm/startstop';
-import { lineStream, receiveBytes, UartCore, type UartIn } from '../src/comm/uart';
-import { UART_CORE, UART_RX, UART_TX } from '../src/lib/uart';
+import { lineStream, receiveBytes, UART_TOLERANCE, UartCore, type UartIn } from '../src/comm/uart';
+import { UART_CORE, UART_RX, UART_RX_BENCH, UART_TX } from '../src/lib/uart';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import type { ComponentDef } from '../src/sim/types';
@@ -162,7 +162,30 @@ describe('the receiver\'s tolerance to a clock that is off: predicted by comm/st
       expect(Math.abs(r.slow - pred.fast)).toBeLessThan(lat + 0.012);
       expect(Math.abs(r.fast - pred.slow)).toBeLessThan(lat + 0.012);
     }
-    // eslint-disable-next-line no-console
-    console.log('predicted', JSON.stringify(pred), 'measured', JSON.stringify(rows));
+    expect(pred.fast).toBeCloseTo(UART_TOLERANCE.predicted.senderSlow, 4);
+    expect(pred.slow).toBeCloseTo(UART_TOLERANCE.predicted.senderFast, 4);
+    for (const r of rows) {
+      const m = UART_TOLERANCE.measured.find((x) => x.div === r.div)!;
+      expect(r.fast).toBeCloseTo(m.senderFast, 4);
+      expect(r.slow).toBeCloseTo(m.senderSlow, 4);
+    }
   }, 120000);
+
+  it('the gate-level receiver agrees with the search: it takes every code just inside each limit and fails some just outside', () => {
+    const div = 2, codes = [0x00, 0x80, 0xff, 0x7f, 0x55, 0xaa, 0x01, 0xfe];
+    const r = bench(UART_RX_BENCH);
+    const run = (err: number, code: number, phase: number): number => {
+      const line = lineStream([code], 16 * div * (1 + err), 4 * div + phase * div);
+      r.sim.reset('zero'); r.set('div', div); r.set('clk', 0); r.set('rx', 1); r.sim.settle();
+      let data = -1;
+      for (let k = 0; k < 13 * 16 * div; k++) { r.set('rx', line(k)); r.sim.settle(); if (r.out('push') === 1) data = r.out('data'); r.edge(); }
+      return data;
+    };
+    const allOk = (err: number) => codes.every((c) => [0, 0.5, 0.99].every((p) => run(err, c, p) === c));
+    const m = UART_TOLERANCE.measured[0];
+    expect(allOk(m.senderSlow - 0.003)).toBe(true);
+    expect(allOk(-(m.senderFast - 0.003))).toBe(true);
+    expect(allOk(m.senderSlow + 0.012)).toBe(false);
+    expect(allOk(-(m.senderFast + 0.012))).toBe(false);
+  }, 240000);
 });

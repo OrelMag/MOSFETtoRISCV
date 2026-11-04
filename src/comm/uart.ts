@@ -209,3 +209,18 @@ export function fifoBudget(baud: number, depth: number, level: number): { fillUs
   const byteUs = 1e6 * 10 / baud;
   return { fillUs: depth * byteUs, irqPerSecond: baud / 10 / level, slackUs: (depth - level) * byteUs };
 }
+
+/**
+ * The receiver's tolerance to a sender whose bit is off, as a fraction of a bit: the prediction of comm/startstop.ts
+ * (tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4)) and what the model, equal to the gates, measures at three divisors
+ * (tests/comm-uart.test.ts pins both). A sender slower than the receiver is the receiver being fast; the stop bit's sample
+ * then lands early. The difference is the synchronizer's two cycles, 2 / (16 · div) of a bit, and the 0.0005 search step.
+ */
+export const UART_TOLERANCE = {
+  predicted: { senderFast: 0.0485, senderSlow: 0.0555 },
+  measured: [
+    { div: 1, senderFast: 0.05, senderSlow: 0.0555 },
+    { div: 4, senderFast: 0.05, senderSlow: 0.0555 },
+    { div: 16, senderFast: 0.049, senderSlow: 0.056 },
+  ],
+} as const;
