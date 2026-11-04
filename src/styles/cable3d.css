@@ -1,0 +1,15 @@
+/* The twisted pair and coax model: materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d {
+  --m3-wire-a: light-dark(#c4561f, #f08a4e);
+  --m3-wire-b: light-dark(#1d6fa5, #5db3ea);
+  --m3-loop-pos: light-dark(#d9534f, #ff7b72);
+  --m3-loop-neg: light-dark(#2a6fdb, #6aa3ff);
+  --m3-shield: light-dark(#8f98a8, #a3acbd);
+  --m3-core: light-dark(#b9791f, #e0a24a);
+  --m3-field: light-dark(#5b6275, #b5bccd);
+}
+.cb-sum { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 0; font: 600 11.5px var(--font-mono); font-variant-numeric: tabular-nums; }
+.cb-sum span { padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+.cb-sum .p { color: var(--bad); }
+.cb-sum .n { color: var(--accent); }
+.cb-sum .tot { margin-left: auto; color: var(--text); }
