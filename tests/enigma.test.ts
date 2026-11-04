@@ -107,6 +107,11 @@ describe('stepping', () => {
     const seen = Array.from({ length: 5 }, () => { e.step(); return e.windows(); });
     expect(seen).toEqual(['AADV', 'AAEW', 'ABFX', 'ABFY', 'ABFZ']);
   });
+  it('at a double step the middle wheel is moved by the left pawl: its own pawl stays up on the right wheel’s lip', () => {
+    const e = at(['I', 'II', 'III'], 'AAEG'); // II at its turnover, III nowhere near
+    expect(e.nextMoves()).toEqual([true, true, true]);
+    expect(e.pawls()).toEqual([true, false, true]);
+  });
   it('VI turns the next wheel over at both Z and M', () => {
     for (const s of ['AAAZ', 'AAAM']) expect(at(['I', 'II', 'VI'], s).nextMoves()[1]).toBe(true);
     expect(at(['I', 'II', 'VI'], 'AAAL').nextMoves()[1]).toBe(false);

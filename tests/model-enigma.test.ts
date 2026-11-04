@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { chr, DEFAULT_SETTINGS, Enigma, idx, NOTCH_OFFSET, ROTORS, socketOf, type EnigmaSettings, type RotorName } from '../src/crypto/enigma';
 import type { RGB } from '../src/gl/instances';
 import {
-  AX_Y, AX_Z, CASE_D, CASE_H, CASE_W, CONTACT_R, contactPoint, enigmaAnchors, enigmaParts, keyAt, lampAt, notchPhi, PAWL_PHI, pathPoints, PITCH, RIM_R, RIM_X, samePhi, socketAt, THUMB_DX, THUMB_R, WINDOW_PHI, WALL_H,
+  LIP_R, NOTCH_R, pawlTipR, AX_Y, AX_Z, CASE_D, CASE_H, CASE_W, CONTACT_R, contactPoint, enigmaAnchors, enigmaParts, keyAt, lampAt, notchPhi, PAWL_PHI, pathPoints, PITCH, RIM_R, RIM_X, samePhi, socketAt, THUMB_DX, THUMB_R, WINDOW_PHI, WALL_H,
   type EnigmaPalette, type EnigmaPose,
 } from '../src/widgets/enigma3dparts';
 import { quatRotate } from '../src/gl/math';
@@ -18,7 +18,7 @@ const P: EnigmaPalette = {
 const NAMES = Object.keys(ROTORS) as RotorName[];
 const pose = (s: EnigmaSettings, o: Partial<EnigmaPose> = {}): EnigmaPose => {
   const e = new Enigma(s);
-  return { settings: s, pos: e.pos, lid: 1, cover: 1, flap: 1, lamps: 0, out: 0, ghost: false, key: null, lit: null, stroke: 0, moves: e.nextMoves(), trace: null, ...o };
+  return { settings: s, pos: e.pos, lid: 1, cover: 1, flap: 1, lamps: 0, out: 0, ghost: false, key: null, lit: null, stroke: 0, pawls: e.pawls(), trace: null, ...o };
 };
 /** The world extent of a part. */
 function extent(p: Part): { lo: [number, number, number]; hi: [number, number, number] } {
@@ -41,9 +41,13 @@ describe('the notch and the pawl', () => {
     expect(Math.sin(PAWL_PHI)).toBeLessThan(-0.95);
     expect(PAWL_PHI).toBeCloseTo(WINDOW_PHI - NOTCH_OFFSET * PITCH);
   });
-  it('the moves the drawing is given are the cipher’s: the notch under the middle pawl moves all three', () => {
+  it('at a double step the drawing has the left pawl down and the middle one riding high, whatever moves', () => {
     const s: EnigmaSettings = { ...DEFAULT_SETTINGS, start: 'AAEB' }; // II at its turnover E
-    expect(pose(s).moves).toEqual([true, true, true]);
+    expect(new Enigma(s).nextMoves()).toEqual([true, true, true]);
+    expect(pose(s).pawls).toEqual([true, false, true]);
+    const tip = (down: boolean, slot: 1 | 2 | 3) => pawlTipR(down) + slot * 0;
+    expect(tip(true, 1)).toBeLessThan(NOTCH_R);
+    expect(tip(false, 2)).toBeGreaterThan(LIP_R);
     const notch = ROTORS.II.notch[0];
     expect(samePhi(notchPhi(notch, idx('E')), PAWL_PHI)).toBe(true);
   });
@@ -62,6 +66,14 @@ describe('the machine’s measures', () => {
       expect(lo[2]).toBeGreaterThanOrEqual(-CASE_D / 2 - margin);
       expect(hi[2]).toBeLessThanOrEqual(CASE_D / 2 + 1);
     }
+  });
+  it('under the shut cover only the thumbwheels stand above the panel', () => {
+    const parts = enigmaParts(pose(DEFAULT_SETTINGS, { cover: 0 }), P).filter((p) => p.color === P.bakelite || p.color === P.ivory);
+    for (const p of parts) if (p.pos[2] < -40 && p.pos[1] < 150) expect(extent(p).hi[1]).toBeLessThan(98.5);
+  });
+  it('the lamp cover, taken off, rests on the table', () => {
+    const low = (lamps: number) => Math.min(...enigmaParts(pose(DEFAULT_SETTINGS, { lamps }), P).filter((p) => p.pos[0] > 150).map((p) => extent(p).lo[1]));
+    expect(low(1)).toBeCloseTo(0, 0);
   });
   it('the flap lies flat on the table when down', () => {
     const open = enigmaParts(pose(DEFAULT_SETTINGS, { flap: 1 }), P);

@@ -63,7 +63,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     back: stage.rgb('--en-back'), cable: stage.rgb('--en-cable'), cotton: stage.rgb('--en-cotton'),
   });
   const pose = (): EnigmaPose => ({
-    settings, pos: shown, ...open, ghost: !!view.ghost, key, lit, stroke, moves: machine.nextMoves(), trace: view.ghost ? trace : null, lite: stage.isFlat(),
+    settings, pos: shown, ...open, ghost: !!view.ghost, key, lit, stroke, pawls: machine.pawls(), trace: view.ghost ? trace : null, lite: stage.isFlat(),
   });
   function paint(): void { const p = pose(); stage.paint(enigmaParts(p, palette()), enigmaAnchors(p)); }
 
@@ -81,7 +81,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
       ['Wheels', `${settings.greek === 'beta' ? 'β' : 'γ'} ${settings.rotors.join(' ')}`],
       ['Reflector', `thin ${settings.reflector}`],
       ['Next press moves', will],
-      ['Plugs, as a key sheet gave them', settings.plugs ? settings.plugs.split(/\s+/).map((p) => `${socketOf(p[0])}/${socketOf(p[1])}`).join(' ') : 'none'],
+      ['Plugs, by socket number', settings.plugs ? settings.plugs.split(/\s+/).map((p) => `${socketOf(p[0])}/${socketOf(p[1])}`).join(' ') : 'none'],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     if (trace) {

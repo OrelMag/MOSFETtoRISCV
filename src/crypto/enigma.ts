@@ -127,6 +127,10 @@ export class Enigma {
     return [midNotch, midNotch || rightNotch, true];
   }
 
+  /** Which pawls drop into their wheel's ratchet: left, middle, right. Not the same as what moves: at a double step the
+   *  middle pawl rides high on the right wheel's lip, and the middle wheel is pushed by the left pawl, down in its notch. */
+  pawls(): Moved { return [this.atNotch(2), this.atNotch(3), true]; }
+
   /** Move the wheels as a key press does (before the contact closes). */
   step(): Moved {
     const m = this.nextMoves();

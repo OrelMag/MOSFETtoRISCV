@@ -53,8 +53,8 @@ export interface EnigmaPose {
   key: string | null; lit: string | null;
   /** 0 at rest, 1 at the bottom of a key's travel. */
   stroke: number;
-  /** The pawls that will drop in: left, middle, right (from Enigma.nextMoves). */
-  moves: Moved;
+  /** The pawls down in their ratchets: left, middle, right (Enigma.pawls). */
+  pawls: Moved;
   trace: Trace | null;
   /** Fewer facets for the flat SVG fallback. */
   lite?: boolean;
@@ -205,8 +205,8 @@ function stackParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   {
     out.push(disc(P.black, 6, 6.2, 34, 0.1));
     if (!lite) for (let j = 0; j < 26; j++) out.push(rod(P.brass, round(6.2, CONTACT_R, -j * PITCH), round(6.4, CONTACT_R, -j * PITCH), 1.9, 0.5));
-    out.push(box(ukw, -6, 6, 26, 42, -16, 8, 0.25), box(P.black, -7.2, 7.2, -41, -32, -5, 5, 0.1));
-    strokeText(out, s.reflector === 'b' ? 'B' : 'C', [0, 42.1, -4], [1, 0, 0], [0, 0, -1], { size: 7, color: P.ivory, weight: 1.2 });
+    out.push(box(ukw, -6, 6, 26, 36.8, -16, 8, 0.25), box(P.black, -7.2, 7.2, -41, -32, -5, 5, 0.1));
+    strokeText(out, s.reflector === 'b' ? 'B' : 'C', [0, 36.9, -4], [1, 0, 0], [0, 0, -1], { size: 7, color: P.ivory, weight: 1.2 });
     out.push(rod(P.steel, [6, 30, -13], [8, 30, -13], 1.1, 0.5));
   }
   shift(out, u0, [ux, AX_Y + lift, AX_Z]);
@@ -244,7 +244,7 @@ function pawlParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   out.push(rod(P.steel, [-66, shaftY, shaftZ], [36, shaftY, shaftZ], 2.2, 0.4));
   out.push(rod(P.black, [-66, shaftY + 15, shaftZ - 6], [36, shaftY + 15, shaftZ - 6], 2.6, 0.2));
   for (const slot of [1, 2, 3] as const) {
-    const x = pawlX(slot), down = p.moves[slot - 1], lit = p.ghost && down;
+    const x = pawlX(slot), down = p.pawls[slot - 1], lit = p.ghost && down;
     const phi = PAWL_PHI + p.stroke * PITCH, tip: Vec3 = [x, AX_Y + pawlTipR(down) * Math.cos(phi), AX_Z + pawlTipR(down) * Math.sin(phi)];
     const c = lit ? P.forward : down ? P.red : P.steel;
     out.push(rod(c, [x, shaftY, shaftZ], tip, 1.5, 0.4));
@@ -335,7 +335,7 @@ function lampParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
     out.push(cyl(P.steel, x, 27, yTop, yTop + 2, 5.4, 0.5), cyl(P.red, x, 27, yTop + 2, yTop + 2.3, 3.4), cyl(P.zinc, x, 27, yTop + 2.3, yTop + 2.6, 1.8, 0.4));
     screw(out, P.brass, x, yTop, -30, 1.6);
   }
-  shift(out, c0, [p.lamps > 0.5 ? (p.lamps - 0.5) * 2 * 290 : 0, Math.min(1, p.lamps * 2) * 70 - Math.max(0, p.lamps - 0.5) * 2 * (92 + 70 - 66), 0]);
+  shift(out, c0, [p.lamps > 0.5 ? (p.lamps - 0.5) * 2 * 290 : 0, Math.min(1, p.lamps * 2) * 70 - Math.max(0, p.lamps - 0.5) * 2 * (70 + 62), 0]); // down on the table beside the machine
 }
 
 // ---------------------------------------------------------------- the keyboard
