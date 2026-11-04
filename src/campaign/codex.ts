@@ -5,6 +5,7 @@
 
 import { CODEX_NEW } from './codexnew';
 import { CODEX_NEW3 } from './codexnew3';
+import { CODEX_COMM } from './codexcomm';
 
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
 
@@ -192,6 +193,8 @@ export const CODEX: CodexEntry[] = [
   // the journey's topics beyond the levels (codexnew.ts)
   ...CODEX_NEW,
   ...CODEX_NEW3,
+  // the Communication level (codexcomm.ts)
+  ...CODEX_COMM,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);
