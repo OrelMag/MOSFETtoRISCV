@@ -11,7 +11,7 @@ import { cobsEncode, FLAG, frame, receive, stuffedMask } from '../comm/framing';
 import { parity } from '../lib';
 import { rng } from '../phys/line';
 import { logicDepth, stats } from '../sim/stats';
-import { h, s } from '../ui/dom';
+import { h, keepFocus, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { crcUnit } from '../lib';
 import { CRC32_REFLECTED } from '../comm/crc';
@@ -39,7 +39,7 @@ const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLB
 /** A button that is a bit: pressed = 1, with an accessible name that says which bit. */
 function bitButton(label: string, on: boolean, cls: string, f: () => void, text?: string): HTMLButtonElement {
   const b = h('button', { class: `err-bit ${cls}${on ? ' on' : ''}`, type: 'button', 'aria-pressed': on, 'aria-label': label, title: label }, text ?? (on ? '1' : '0'));
-  b.addEventListener('click', f);
+  b.addEventListener('click', () => keepFocus(b, f));
   return b;
 }
 
@@ -49,16 +49,17 @@ interface LogPlot { svg: SVGSVGElement; X(v: number): number; Y(v: number): numb
 
 /** Decade axes: x from 10^x0 to 10^x1, y from 10^y0 to 10^y1 (ylog false: y linear from y0 to y1). */
 function logPlot(W: number, H: number, x0: number, x1: number, y0: number, y1: number, xl: string, yl: string, label: string, ylog = true, ystep = 1): LogPlot {
-  const m = { l: 66, r: 14, t: 12, b: 36 };
+  const m = { l: 66, r: 14, t: 26, b: 36 };
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot err-plot', role: 'img', 'aria-label': label }) as SVGSVGElement;
   const X = (v: number) => m.l + ((Math.log10(v) - x0) / (x1 - x0)) * (W - m.l - m.r);
   const Y = (v: number) => H - m.b - (((ylog ? Math.log10(Math.max(v, 10 ** (y0 - 1))) : v) - y0) / (y1 - y0)) * (H - m.t - m.b);
-  for (let e = Math.ceil(x0); e <= x1; e++) svg.append(s('line', { x1: X(10 ** e), x2: X(10 ** e), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(10 ** e), y: H - m.b + 14, 'text-anchor': 'middle', class: 'tick' }, `1e${e}`));
+  // the first x label starts at the axis, clear of the last y label in the corner
+  for (let e = Math.ceil(x0); e <= x1; e++) svg.append(s('line', { x1: X(10 ** e), x2: X(10 ** e), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(10 ** e), y: H - m.b + 14, 'text-anchor': e === x0 ? 'start' : 'middle', class: 'tick' }, `1e${e}`));
   if (ylog) for (let e = y0; e <= y1; e += ystep) svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(10 ** e), y2: Y(10 ** e), class: 'grid' }), s('text', { x: m.l - 6, y: Y(10 ** e) + 3.5, 'text-anchor': 'end', class: 'tick' }, `1e${e}`));
   else for (let v = y0; v <= y1 + 1e-9; v += ystep) svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: m.l - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'tick' }, v.toFixed(1)));
   svg.append(s('line', { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: 'ax' }), s('line', { x1: m.l, x2: m.l, y1: m.t, y2: H - m.b, class: 'ax' }),
     s('text', { x: W - m.r, y: H - 4, 'text-anchor': 'end', class: 'axl' }, xl),
-    s('text', { x: 6, y: m.t, 'text-anchor': 'end', 'dominant-baseline': 'hanging', transform: `rotate(-90 6 ${m.t})`, class: 'axl' }, yl));
+    s('text', { x: m.l, y: 14, 'text-anchor': 'start', class: 'axl' }, yl));
   fitText(svg, W);
   const layer = svg.appendChild(s('g'));
   return { svg, X, Y, layer };
@@ -116,7 +117,7 @@ export function crcExplorerWidget(): Widget {
   const paint = () => {
     const b = bytesOf(), bits = bitsLsb(b), got = bits.map((v, i) => v ^ (flipped.has(i) ? 1 : 0));
     const rx = b.map((_, k) => got.slice(8 * k, 8 * k + 8).reduce((a, v, i) => a | (v << i), 0));
-    grid.replaceChildren(...b.map((_c, k) => h('div', { class: 'err-byte' }, h('span', { class: 'err-ch' }, text[k] ?? ''),
+    grid.replaceChildren(...b.map((_c, k) => h('div', { class: 'err-byte' }, h('span', { class: 'err-ch' }, b[k] >= 32 && b[k] < 127 ? String.fromCharCode(b[k]) : '·'),
       h('div', null, ...bits.slice(8 * k, 8 * k + 8).map((_v, i) => { const idx = 8 * k + i, on = flipped.has(idx); return bitButton(`Message bit ${idx}, byte ${k}, bit ${i}, now ${got[idx]}: press to flip`, !!got[idx], on ? 'hit' : '', () => { if (flipped.has(idx)) flipped.delete(idx); else flipped.add(idx); paint(); }); })),
       )));
     const sent = crc32(b), recv = crc32(rx);
@@ -145,7 +146,7 @@ export function crcExplorerWidget(): Widget {
       h('div', { class: 'mos-row' }, lenSl.el, posSl.el),
       h('div', { class: 'dram-ops' },
         btn('Flip the burst', 'Flip every bit from the chosen position, burst length bits long', () => { const n = 8 * bytesOf().length; for (let i = start; i < Math.min(n, start + burst); i++) { if (flipped.has(i)) flipped.delete(i); else flipped.add(i); } paint(); }),
-        btn('Three random bits', 'Flip three bits chosen by a seeded generator', () => { const n = 8 * bytesOf().length, r = rng(flipped.size + 7 + n); for (let k = 0; k < 3; k++) { const i = Math.floor(r() * n); if (flipped.has(i)) flipped.delete(i); else flipped.add(i); } paint(); }),
+        btn('Three random bits', 'Flip three bits chosen by a seeded generator', () => { const n = 8 * bytesOf().length, r = rng(flipped.size + 7 + n); const picked = new Set<number>(); while (picked.size < Math.min(3, n)) picked.add(Math.floor(r() * n)); for (const i of picked) { if (flipped.has(i)) flipped.delete(i); else flipped.add(i); } paint(); }),
         btn('Clear', 'Put every bit back', () => { flipped = new Set(); paint(); })),
       h('p', { class: 'sub mos-note' }, 'Bits are shown in transmission order: each byte least significant bit first, as the reflected CRC register takes them. The CRC starts from all ones and is complemented at the end, so it matches zlib.crc32 and Ethernet.')),
     h('div', { class: 'panel' }, h('h3', null, 'The same arithmetic by hand: a CRC-8 as long division'), h('label', { class: 'err-lab-in' }, 'Data (16 bits, hex) ', dIn), div,
@@ -167,7 +168,7 @@ export function undetectedWidget(): Widget {
   let lp = -3;
   const codes: { id: string; name: string; n: number; cls: string }[] = [{ id: 'parity', name: 'parity bit', n: 17, cls: 'c1' }, { id: 'crc8', name: 'CRC-8', n: 24, cls: 'c2' }, { id: 'crc16', name: 'CRC-16', n: 32, cls: 'c3' }];
   const pl = logPlot(560, 280, -6, -0.3, -20, 0, 'bit error rate p', 'share accepted', 'Share of corrupted 16-bit words that a check accepts, against bit error rate', true, 4);
-  const marker = pl.svg.appendChild(s('line', { class: 'bound', y1: 12, y2: 244 }));
+  const marker = pl.svg.appendChild(s('line', { class: 'bound', y1: 26, y2: 244 }));
   const pts = logSpace(-6, -0.3, 60);
   codes.forEach((c) => {
     const A = weightsOf(c.id);
@@ -314,7 +315,7 @@ export function arqWidget(): Widget {
     }));
     const sim = simulate(proto, a, W, p, 20000, 11), R = rttOf(a), f = utilization(proto, a, W, p);
     const cell = (b: string, t: string) => h('div', null, h('b', null, b), h('span', null, t));
-    chips.replaceChildren(cell(pct(sim.u), 'simulated utilization'), cell(pct(f), proto === 'sr' && W < 3 * R ? 'closed form (ideal window)' : 'closed form'), cell(String(fullWindow(a)), 'frames in flight to fill the pipe'), cell(`${sim.perFrame.toFixed(2)}`, 'transmissions per frame'));
+    chips.replaceChildren(cell(pct(sim.u), 'simulated utilization'), cell(pct(f), proto === 'sr' && W >= R && W < 3 * R ? 'closed form (ideal window)' : 'closed form'), cell(String(fullWindow(a)), 'frames in flight to fill the pipe'), cell(`${sim.perFrame.toFixed(2)}`, 'transmissions per frame'));
     const ft = (1500 * 8) / 63e6;
     note.textContent = `One-way delay a = ${a} frame times: with 1500-byte frames at 63 Mb/s (${si(ft, 's')} each) that is ${si(a * ft, 's')}, a round trip of ${R} slots. ${proto === 'saw' ? 'Stop-and-wait sends one frame, then waits a round trip for the acknowledgement.' : proto === 'gbn' ? 'Go-back-N: an unacknowledged frame times out after a round trip and the sender goes back, resending it and everything after it; the receiver discards frames that arrive out of order.' : 'Selective repeat: only the frame that timed out is resent, but the window cannot slide past it, so it takes about three round trips of window to reach 1 − p.'}`;
   };

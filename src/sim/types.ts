@@ -173,6 +173,9 @@ export interface InsideSeed {
   readonly sim?: Sim;
 }
 
+/** Which model a part opens onto: the serial channel, the telephone line, a cable between two machines. */
+export type ModelPanel = 'serial' | 'phone' | 'cable';
+
 export interface ComponentDef {
   id: string;
   name: string;
@@ -202,6 +205,12 @@ export interface ComponentDef {
    * same electrical node. Costs nothing and has no delay.
    */
   alias?: [string, number, string, number][];
+
+  /**
+   * Stands for something that is a model, not a circuit (a line: roadmap decision 3): opening it shows that model's panel
+   * (widgets/modelleaf.ts). Gates it carries for the simulation stay one button away.
+   */
+  modelPanel?: ModelPanel;
 
   /** Internal structure (lazy so generators and recursive libraries stay cheap). */
   netlist?: () => Netlist;

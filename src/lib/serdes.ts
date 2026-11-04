@@ -346,7 +346,7 @@ export function serialLine(delay: number): ComponentDef {
   return memo(`serline${delay}`, () => define({
     id: `serline${delay}`, name: `Line (${delay} cycles)`, category: 'memory',
     summary: `A serial line: the bit that entered ${delay} cycles ago comes out, flipped if err was 1 as it entered. It stands for the channel of phys/line.ts; opened, the stage shows its eye diagram, not transistors.`,
-    ports: [bit('in', 'in'), bit('err', 'in'), clk(), bit('out', 'out')], symbol: { kind: 'box', label: 'LINE' },
+    ports: [bit('in', 'in'), bit('err', 'in'), clk(), bit('out', 'out')], symbol: { kind: 'box', label: 'LINE' }, modelPanel: 'serial',
     behavior: {
       delay: 1,
       seq: { clk: 'clk', comb: [] },
