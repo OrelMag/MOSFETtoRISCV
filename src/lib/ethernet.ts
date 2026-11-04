@@ -178,7 +178,7 @@ const JAM = 0xaa;
 
 // ---- the receiver ------------------------------------------------------------------------------------------------------
 
-let rxDef: ComponentDef | undefined;
+let rxDef: ComponentDef | undefined, rxStaleDef: ComponentDef | undefined;
 
 /**
  * Serial in, byte stream out. While crs is high it aligns its four-clock bit to the preamble's edges, samples the third clock
@@ -188,10 +188,11 @@ let rxDef: ComponentDef | undefined;
  * reasons (FCS, runt, too long, not for me, overrun). The consumer must take every byte: there is no way to stall a wire, so a
  * byte offered while ready is 0 is lost and the frame is marked.
  */
-export function macRx(): ComponentDef {
-  if (rxDef) return rxDef;
+export function macRx(stale = false): ComponentDef {
+  // `stale`: the receiver as it was before the shift register was cleared between frames (a mutant for the level's bench, never drawn in a chapter)
+  if (stale ? rxStaleDef : rxDef) return (stale ? rxStaleDef : rxDef)!;
   const m = new Rtl({
-    id: 'eth_mac_rx', name: 'Ethernet MAC receiver', category: 'sequential', label: 'MAC RX', columnHeight: 34,
+    id: stale ? 'eth_mac_rx_stale' : 'eth_mac_rx', name: 'Ethernet MAC receiver', category: 'sequential', label: 'MAC RX', columnHeight: 34,
     summary: 'Finds the SFD in the bit stream, delivers the frame as bytes without preamble and FCS, checks the FCS and the length, filters by destination address; err at last says the consumer must discard the frame.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), rxd = m.input('rxd'), crs = m.input('crs'), ready = m.input('ready'), promisc = m.input('promisc');
@@ -219,7 +220,7 @@ export function macRx(): ComponentDef {
     const bsmp = m.and(smp, body);
     bt.forEach((q, i) => m.setD(q, m.andN([rstn, m.not(start), m.mux(bsmp, q, bi[i])])));
     // cleared between frames: the last frame's final byte and the first preamble bit could look like an SFD
-    sh.forEach((q, i) => m.setD(q, m.andN([rstn, nidle, m.mux(smp, q, nsh[i])])));
+    sh.forEach((q, i) => m.setD(q, stale ? m.and(rstn, m.mux(smp, q, nsh[i])) : m.andN([rstn, nidle, m.mux(smp, q, nsh[i])])));
     return { smp, fall, sfd, nsh, bsmp, complete: nm(m.and(bsmp, m.andN(bt)), 'complete') };
   });
 
@@ -276,8 +277,9 @@ export function macRx(): ComponentDef {
   m.outputBus('data', o_.o);
   m.output('valid', o_.v); m.output('last', o_.l); m.output('err', o_.e); m.outputBus('why', o_.w); m.output('drop', o_.dr);
   m.outputBus('state', [hunt, body]);
-  rxDef = m.build();
-  return rxDef;
+  const built = m.build();
+  if (stale) rxStaleDef = built; else rxDef = built;
+  return built;
 }
 // ---- the shared wire ---------------------------------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@
 import { h, icon } from '../../ui/dom';
 import { codeEditor } from '../../widgets/codeedit';
 import { assemble16, type AsmResult16 } from '../../riscv/rv16/asm16';
+import { assemble } from '../../riscv/asm';
 import { REG_NAMES16 } from '../../riscv/rv16/isa16';
 import { Iss16 } from '../../riscv/rv16/iss16';
 import type { Simt16 } from '../../riscv/rv16/simt16';
@@ -27,7 +28,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
   const pr = progress();
   let timer = 0;
   const ed = codeEditor({
-    value: pr.get(n.id)?.src ?? p.starter, lang: 'rv16asm', rows: 16,
+    value: pr.get(n.id)?.src ?? p.starter, lang: p.nic ? 'rvasm' : 'rv16asm', rows: p.nic ? 24 : 16,
     onChange: (v) => {
       clearTimeout(timer);
       timer = window.setTimeout(() => {
@@ -40,7 +41,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
   const dbg = h('div', { class: 'cp-pz-dbg' });
   let asm: AsmResult16 = assemble16(ed.value);
   const diagnose = () => {
-    asm = assemble16(ed.value);
+    asm = p.nic ? ({ ...assemble16(''), errors: assemble(ed.value).errors } as AsmResult16) : assemble16(ed.value);
     ed.setDiagnostics(asm.errors);
   };
   diagnose();
@@ -158,7 +159,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
         diagnose();
       } }, 'Show solution')),
     result,
-    h('details', { class: 'cp-pz-step' }, h('summary', null, p.warps ? 'Step through a test (the warps)' : p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
+    p.nic ? null : h('details', { class: 'cp-pz-step' }, h('summary', null, p.warps ? 'Step through a test (the warps)' : p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
       h('div', { class: 'cp-pz-bar' }, sel,
         h('button', { class: 'btn sm', onclick: () => reset() }, icon('reset', 13), 'Restart'),
         h('button', { class: 'btn sm', onclick: () => step(1) }, icon('step', 13), 'Step'),
