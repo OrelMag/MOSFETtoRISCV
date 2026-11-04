@@ -49,7 +49,10 @@ export class PyError extends Error {
 }
 
 /** Built-in functions the compiler and the interpreter both know. */
-export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range'] as const;
+export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range', 'load8', 'store8', 'load32', 'store32'] as const;
+
+/** The memory builtins: an address is an int, load8 is unsigned, load32 / store32 are little-endian and need a word-aligned address (as lw / sw do). */
+export const MEMORY_BUILTINS: Record<string, number> = { load8: 1, load32: 1, store8: 2, store32: 2 };
 
 /** Reserved words of the subset (and Python's others, so they are not taken as names). */
 export const KEYWORDS = new Set([

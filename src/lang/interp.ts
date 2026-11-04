@@ -52,17 +52,25 @@ export interface RunResult {
   steps: number;
   /** Where Python would have stopped, if it did. */
   error?: PyError;
+  /** The bytes load8 / store8 / load32 / store32 touched: a sparse byte map (an address never stored reads 0). */
+  memory: Map<number, number>;
 }
+
+/** Little-endian word and byte access over a sparse byte map: the interpreter's model of the memory the builtins reach. Addresses are taken mod 2^32. */
+export const memLoad8 = (m: Map<number, number>, a: number): number => m.get(a >>> 0) ?? 0;
+export const memStore8 = (m: Map<number, number>, a: number, v: number): void => { m.set(a >>> 0, v & 255); };
+export const memLoad32 = (m: Map<number, number>, a: number): number => (memLoad8(m, a) | (memLoad8(m, a + 1) << 8) | (memLoad8(m, a + 2) << 16) | (memLoad8(m, a + 3) << 24)) | 0;
+export const memStore32 = (m: Map<number, number>, a: number, v: number): void => { for (let k = 0; k < 4; k++) memStore8(m, a + k, v >>> (8 * k)); };
 
 class Return { constructor(readonly value: number) {} }
 class Break {}
 class Continue {}
 const BREAK = new Break(), CONTINUE = new Continue();
 
-export function runPy(src: string | Module, opts: { maxSteps?: number; maxDepth?: number } = {}): RunResult {
+export function runPy(src: string | Module, opts: { maxSteps?: number; maxDepth?: number; memory?: Map<number, number> } = {}): RunResult {
   const mod = typeof src === 'string' ? parse(src) : src;
   const scope = analyze(mod);
-  return new Interp(scope, opts.maxSteps ?? 1_000_000, opts.maxDepth ?? 200).run(mod);
+  return new Interp(scope, opts.maxSteps ?? 1_000_000, opts.maxDepth ?? 200, opts.memory ?? new Map()).run(mod);
 }
 
 class Interp {
@@ -71,16 +79,16 @@ class Interp {
   readonly lists = new Map<string, number[]>();
   steps = 0;
   depth = 0;
-  constructor(private readonly scope: Scope, private readonly maxSteps: number, private readonly maxDepth: number) {}
+  constructor(private readonly scope: Scope, private readonly maxSteps: number, private readonly maxDepth: number, readonly memory: Map<number, number>) {}
 
   run(mod: Module): RunResult {
     try {
       this.block(mod.body, null);
     } catch (e) {
-      if (e instanceof PyError) return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps, error: e };
+      if (e instanceof PyError) return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps, error: e, memory: this.memory };
       throw e;
     }
-    return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps };
+    return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps, memory: this.memory };
   }
 
   private block(body: Stmt[], fr: Frame | null): void {
@@ -192,6 +200,10 @@ class Interp {
       case 'abs': return wrap(Math.abs(args[0]));
       case 'min': return Math.min(...args);
       case 'max': return Math.max(...args);
+      case 'load8': return memLoad8(this.memory, args[0]);
+      case 'load32': return memLoad32(this.memory, args[0]);
+      case 'store8': memStore8(this.memory, args[0], args[1]); return 0;
+      case 'store32': memStore32(this.memory, args[0], args[1]); return 0;
     }
     const fn = this.scope.funcs.get(e.fn)!;
     if (++this.depth > this.maxDepth) throw new PyError(`RecursionError: more than ${this.maxDepth} calls deep`, e.line);

@@ -4,7 +4,7 @@ import { compilePy, outputOf } from '../src/lang/compile';
 import type { Compiled } from '../src/lang/compile';
 import { binop, runPy } from '../src/lang/interp';
 import { PY_PROGRAMS } from '../src/lang/pyprograms';
-import { randomPyProgram } from '../src/lang/randpy';
+import { MEM_BASE, randomPyProgram } from '../src/lang/randpy';
 import { clockCycle, cpuState } from '../src/riscv/cosim';
 import { ISS } from '../src/riscv/iss';
 import { flatten } from '../src/sim/flatten';
@@ -249,6 +249,50 @@ ${src}
 ${cm.asm}`).toEqual(ref.output);
     }
     console.log(`random programs: ${ran} compared, ${skipped} skipped`);
+    expect(ran).toBeGreaterThan(SEEDS * 0.7);
+  }, 120000);
+});
+
+describe('Python subset: load8 / store8 / load32 / store32', () => {
+  it('bytes and words are little-endian, load8 is unsigned, the interpreter and the compiled code agree', () => {
+    const src = `store32(0x400, 0x11223344)
+store8(0x404, 0xfff)
+store8(0x405, 0x80)
+print(load8(0x400), load8(0x401), load8(0x402), load8(0x403))
+print(load8(0x404), load8(0x405), load32(0x404))
+store32(0x408, -1)
+print(load32(0x408), load8(0x40b))
+a = 0x400
+print(load32(a + 0), load8(a + 3), load8(a - 0))
+`;
+    const { py, rv } = both(src, 512);
+    expect(py).toEqual([0x44, 0x33, 0x22, 0x11, 0xff, 0x80, 0x80ff, -1, 255, 0x11223344, 0x11, 0x44]);
+    expect(rv).toEqual(py);
+  });
+  it('arity is checked', () => {
+    expect(compilePy('x = load8(1, 2)').error?.message).toMatch(/takes 1 argument/);
+    expect(compilePy('store8(1)').error?.message).toMatch(/takes 2 arguments/);
+  });
+  const SEEDS = Number(process.env.PY_FUZZ ?? 300);
+  it(`${SEEDS} seeded programs with memory accesses, output and memory agree`, () => {
+    let ran = 0;
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const src = randomPyProgram(seed, true);
+      const ref = runPy(src, { maxSteps: 200_000 });
+      if (ref.error) continue;
+      const c = compilePy(src, { dmemWords: 512 });
+      if (c.error && /nests too deeply|keeps them in registers/.test(c.error.message)) continue;
+      expect(c.error, `seed ${seed}:\n${src}`).toBeNull();
+      const L = c.layout!;
+      if (ref.output.length > (L.stackTop - L.outBase) / 4 - 64) continue;
+      const iss = new ISS(c.words, { dmemWords: L.dmemWords, imemWords: pow2(c.words.length) });
+      while (!iss.halted && iss.steps < 5_000_000) iss.step();
+      expect(iss.halted, `seed ${seed} halts`).toBe(true);
+      expect(outputOf(L, iss.x[3], iss.dmem), `seed ${seed}:\n${src}\n${c.asm}`).toEqual(ref.output);
+      const bytes = Array.from({ length: 256 }, (_, i) => (iss.dmem[(MEM_BASE + i) >>> 2] >>> (8 * (i & 3))) & 255);
+      expect(bytes, `seed ${seed} memory`).toEqual(Array.from({ length: 256 }, (_, i) => ref.memory.get(MEM_BASE + i) ?? 0));
+      ran++;
+    }
     expect(ran).toBeGreaterThan(SEEDS * 0.7);
   }, 120000);
 });

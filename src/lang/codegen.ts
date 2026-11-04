@@ -780,6 +780,18 @@ export class CodeGen {
         this.emit(`sub  ${r}, ${r}, ${s}`);
         return r;
       }
+      case 'load8': case 'load32': {
+        const [base, off] = this.addrOf(e.args[0], d);
+        const r = dest ?? this.tmp(d);
+        this.emit(`${e.fn === 'load8' ? 'lbu ' : 'lw  '} ${r}, ${off}(${base})`);
+        return r;
+      }
+      case 'store8': case 'store32': {
+        const [base, off] = this.addrOf(e.args[0], d);
+        const v = this.gen(e.args[1], d + 1);
+        this.emit(`${e.fn === 'store8' ? 'sb  ' : 'sw  '} ${v}, ${off}(${base})`);
+        return dest ? (this.emit(`li   ${dest}, 0`), dest) : 'zero';
+      }
       case 'min': case 'max': {
         const r = this.tmp(d);
         this.genTo(e.args[0], d, r);
@@ -810,6 +822,16 @@ export class CodeGen {
     const r = dest ?? this.tmp(d);
     if (r !== 'a0') this.emit(`mv   ${r}, a0`);
     return r;
+  }
+
+  /** An address expression as (register, byte offset): a constant added to or subtracted from it rides in the instruction's immediate. */
+  private addrOf(a: Expr, d: number): [string, number] {
+    if (a.kind === 'bin' && (a.op === '+' || a.op === '-') && a.right.kind === 'num') {
+      const off = a.op === '+' ? a.right.value : -a.right.value;
+      if (fitsI(off)) return [this.gen(a.left, d), off];
+    }
+    if (a.kind === 'num' && fitsI(a.value)) return ['zero', a.value];
+    return [this.gen(a, d), 0];
   }
 
   // ---- runtime routines (RV32I has no multiply or divide) ----
