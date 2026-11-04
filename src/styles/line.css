@@ -61,3 +61,6 @@
   .ln-presets .btn { min-height: 40px; }
   .ln-sel select { min-height: 40px; }
 }
+.ln-key .k-lump { color: var(--muted); } .ln-key .k-wire { color: var(--bad); } .ln-key .k-drv { color: var(--good); }
+.ln-sec .mos-sl output { width: 84px; }
+.ln-sec .mos-sl span { width: 72px; }

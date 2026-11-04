@@ -1,6 +1,6 @@
 // Chapter 41's I/O pad at switch level: the last transistors before the wire and the first after it. The output path is a
 // tri-state driver (switchparts.ts TRIINV) behind a chain of inverters, each four times the last (chapter 2's sizing for
-// a load of 64: 2×, 8×, 32×, then the 128× output stage); the input path is a small buffer reading the pin. A bidirectional
+// a load of 64: 4×, 16×, 64×, then the 256× output stage); the input path is a small buffer reading the pin. A bidirectional
 // pin: with en = 0 the pad lets go (Z) and whatever is on the wire reaches y.
 //
 // The switch-level solver has strengths, not widths, so the widths are labels on the drawing; phys/line.ts turns the
@@ -14,8 +14,8 @@ import { INV_CMOS } from './transistors';
 import { TRIINV } from './switchparts';
 
 /** Widths (unit transistors) of the inverter chain in front of the output stage, and of the output stage. */
-export const PAD_CHAIN = [2, 8, 32] as const;
-export const PAD_FINAL = 128;
+export const PAD_CHAIN = [4, 16, 64] as const;
+export const PAD_FINAL = 256;
 /** The receiver's two inverters. */
 export const PAD_RX = [1, 4] as const;
 

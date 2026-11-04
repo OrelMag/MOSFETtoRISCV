@@ -32,9 +32,9 @@ describe('I/O pad', () => {
   it('transistor count: 3 chain inverters and the buffer pair (2 each), the tri-state inverter (6, with its enable inverter)', () => {
     expect(stats(IO_PAD).transistors).toBe(5 * 2 + 6);
   });
-  it('the output stage is about the board impedance, and a narrower stage is weaker', () => {
-    expect(Math.round(padDriveOhms())).toBe(48);
-    expect(padDriveOhms(64)).toBeCloseTo(2 * padDriveOhms(128), 6);
+  it('the output stage is about half the board impedance, and a narrower stage is weaker', () => {
+    expect(Math.round(padDriveOhms())).toBe(24);
+    expect(padDriveOhms(128)).toBeCloseTo(2 * padDriveOhms(), 6);
     expect(PAD_CHAIN.map((w, i) => PAD_CHAIN[i + 1] / w).slice(0, 2)).toEqual([4, 4]);
     expect(PAD_FINAL / PAD_CHAIN[2]).toBe(4);
     expect(ioPad(64)).not.toBe(IO_PAD);

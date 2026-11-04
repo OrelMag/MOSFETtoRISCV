@@ -26,9 +26,9 @@ interface PlotOpts {
   xLabel: string; yLabel: string; aria: string;
   xFmt?: (v: number) => string; yFmt?: (v: number) => string;
 }
-interface Plot { el: SVGSVGElement; X(v: number): number; Y(v: number): number; layer: SVGGElement; clear(): void; setX(max: number): void; xMax: number; x0: number; x1: number }
+interface Plot { el: SVGSVGElement; X(v: number): number; Y(v: number): number; layer: SVGGElement; clear(): void; setX(max: number): void; setY(lo: number, hi: number): void; xMax: number; x0: number; x1: number }
 
-const num = (v: number, d = 1) => (Math.abs(v) < 1e-9 ? '0' : v.toFixed(d).replace(/.0+$/, ''));
+const num = (v: number, d = 1) => (Math.abs(v) < 1e-9 ? '0' : v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''));
 
 /** A "nice" tick step (1, 2, 5 × 10^k) giving about n ticks on [0, max]. */
 function tickStep(max: number, n = 4): number {
@@ -38,18 +38,22 @@ function tickStep(max: number, n = 4): number {
 
 function plotOf(o: PlotOpts): Plot {
   const W = o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
-  let xMax = o.x[1];
+  let xMax = o.x[1], yLo = o.y[0], yHi = o.y[1];
   const X = (v: number) => m.l + (v / xMax) * (W - m.l - m.r);
-  const Y = (v: number) => H - m.b - ((v - o.y[0]) / (o.y[1] - o.y[0])) * (H - m.t - m.b);
+  const Y = (v: number) => H - m.b - ((v - yLo) / (yHi - yLo)) * (H - m.t - m.b);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot ln-plot', role: 'img', 'aria-label': o.aria }) as SVGSVGElement;
   const yf = o.yFmt ?? ((v: number) => num(v, 2));
   const gx = svg.appendChild(s('g'));
-  for (const v of o.yTicks) svg.append(s('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: m.l - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'tick' }, yf(v)));
+  const gy = svg.appendChild(s('g'));
+  const drawY = (ticks: number[]) => gy.replaceChildren(...ticks.flatMap((v) => [s('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: m.l - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'tick' }, yf(v))]));
+  drawY(o.yTicks);
+  const clipId = `lnclip${Math.random().toString(36).slice(2, 8)}`;
+  svg.append(s('clipPath', { id: clipId }, s('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b })));
   svg.append(s('line', { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, class: 'ax' }), s('line', { x1: m.l, x2: m.l, y1: m.t, y2: H - m.b, class: 'ax' }),
     s('text', { x: W - m.r, y: H - 4, 'text-anchor': 'end', class: 'axl' }, o.xLabel),
     s('text', { x: 6, y: m.t, 'text-anchor': 'end', 'dominant-baseline': 'hanging', transform: `rotate(-90 6 ${m.t})`, class: 'axl' }, o.yLabel));
   fitText(svg, W);
-  const layer = svg.appendChild(s('g'));
+  const layer = svg.appendChild(s('g', { 'clip-path': `url(#${clipId})` }));
   const xf = o.xFmt;
   const p: Plot = {
     el: svg, X, Y, layer, clear: () => layer.replaceChildren(), xMax, x0: m.l, x1: W - m.r,
@@ -58,6 +62,12 @@ function plotOf(o: PlotOpts): Plot {
       const st = tickStep(max), d = st < 1 ? 1 : 0, kids: SVGElement[] = [];
       for (let v = 0; v <= max * 1.0001; v += st) kids.push(s('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(v), y: H - m.b + 14, 'text-anchor': 'middle', class: 'tick' }, xf ? xf(v) : num(v, d + (st < 0.1 ? 2 : st < 1 ? 1 : 0))));
       gx.replaceChildren(...kids);
+    },
+    setY(lo, hi) {
+      yLo = lo; yHi = hi;
+      const st = tickStep(hi - lo, 4), ticks: number[] = [];
+      for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) ticks.push(Math.abs(v) < st * 1e-6 ? 0 : v);
+      drawY(ticks);
     },
   };
   p.setX(xMax);
@@ -91,11 +101,11 @@ const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ?
 
 export function driverWidget(): Widget {
   let lw = 3, c = 100;
-  const plot = plotOf({ x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'ps', yLabel: 'V', aria: 'Output voltage of an inverter discharging a capacitor, against an RC exponential', xFmt: (v) => num(v, 0) });
+  const plot = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'ps', yLabel: 'V', aria: 'Output voltage of an inverter discharging a capacitor, against an RC exponential', xFmt: (v) => num(v, 0) });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const w = 2 ** lw, R = rEff(w), tau = (R * c) / 1000, span = 5 * tau;
-    const d = discharge(w, c, span, span / 120);
+    const d = discharge(w, c, span, Math.max(0.01, Math.round(span / 120 / 0.01) * 0.01));
     plot.clear();
     plot.setX(span);
     // the lumped model with the effective R: V = VDD · 2^(−t / t50), so it crosses VDD / 2 where the device does
@@ -147,7 +157,7 @@ export function wireRcWidget(): Widget {
     }
     line(gr, xs, wr, 'wire'); line(gr, xs, drv, 'drv'); line(gr, xs, tot, 'real');
     gr.layer.append(s('circle', { cx: gr.X(len), cy: gr.Y(Math.min(8, t.total / 1000)), r: 5, class: 'ln-pt' }));
-    gr.layer.append(s('text', { x: gr.X(10) - 4, y: gr.Y(Math.min(7.6, tot[tot.length - 1])) + 14, 'text-anchor': 'end', class: 'ln-hl' }, 'total'));
+    
     chips.set(0, ps(t.total), `${len.toFixed(1)} mm from a ${w}× driver`);
     chips.set(1, ps(t.driver + t.load), 'driver and load: ln 2 · (Rd · C + Rw · Cl)');
     chips.set(2, ps(t.wire), 'the wire itself: 0.38 · Rw · Cw');
@@ -158,7 +168,7 @@ export function wireRcWidget(): Widget {
   };
   const wSl = slider('Driver', 0, 8, 1, lw, (v) => `${2 ** v}×`, (v) => { lw = v; paint(); });
   const lSl = slider('Length', 0.1, 10, 0.1, len, (v) => `${v.toFixed(1)} mm`, (v) => { len = v; paint(); });
-  const el = h('div', { class: 'widget mos' }, h('div', { class: 'mos-charts' }, h('div', { class: 'panel' }, wf.el), h('div', { class: 'panel' }, gr.el)),
+  const el = h('div', { class: 'widget mos' }, h('div', { class: 'mos-charts' }, h('div', { class: 'panel' }, h('p', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'Far end (40-section ladder)'), h('span', { class: 'k-near' }, 'Near end'), h('span', { class: 'k-lump' }, 'Lumped guess')), wf.el), h('div', { class: 'panel' }, h('p', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'Total'), h('span', { class: 'k-wire' }, 'Wire term'), h('span', { class: 'k-drv' }, 'Driver and load')), gr.el)),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, wSl.el, lSl.el), note), chips.el);
   paint();
   return { el };
@@ -169,7 +179,7 @@ export function wireRcWidget(): Widget {
 
 export function repeaterWidget(): Widget {
   let len = 10, kForce = 0;
-  const gr = plotOf({ x: [0, 20], y: [0, 8], yTicks: [0, 2, 4, 6, 8], xLabel: 'length (mm)', yLabel: 'delay (ns)', aria: 'Delay against length with and without repeaters', xFmt: (v) => num(v, 0) });
+  const gr = plotOf({ W: 720, H: 260, x: [0, 20], y: [0, 8], yTicks: [0, 2, 4, 6, 8], xLabel: 'length (mm)', yLabel: 'delay (ns)', aria: 'Delay against length with and without repeaters', xFmt: (v) => num(v, 0) });
   const chips = mkChips(4), strip = h('div', { class: 'ln-rep' }), note = h('p', { class: 'sub mos-note' });
   const opt = repeaterOptimum();
   const paint = () => {
@@ -181,14 +191,14 @@ export function repeaterWidget(): Widget {
     line(gr, xs, a, 'wire'); line(gr, xs, b, 'real');
     gr.layer.append(s('circle', { cx: gr.X(len), cy: gr.Y(Math.min(8, p.delay / 1000)), r: 5, class: 'ln-pt' }),
       s('text', { x: gr.X(20) - 4, y: gr.Y(7.2), 'text-anchor': 'end', class: 'ln-hl wire' }, 'one driver: quadratic'),
-      s('text', { x: gr.X(20) - 4, y: gr.Y(b[b.length - 1]) + 16, 'text-anchor': 'end', class: 'ln-hl' }, 'repeaters: linear'));
+      s('text', { x: gr.X(20) - 4, y: gr.Y(b[b.length - 1]) - 12, 'text-anchor': 'end', class: 'ln-hl' }, 'repeaters: linear'));
     strip.replaceChildren(h('span', { class: 'ln-rep-src' }, 'driver'),
       ...Array.from({ length: Math.min(k, 24) }, (_, i) => h('span', { class: 'ln-rep-seg', title: `segment ${i + 1}: ${(len / k).toFixed(2)} mm` }, i < Math.min(k, 24) - 1 ? '▷' : '')),
       h('span', { class: 'ln-rep-load' }, k > 24 ? `${k} segments` : 'load'));
     chips.set(0, `${k} × ${(len / k).toFixed(2)} mm`, kForce ? 'segments you chose' : `segments: the best of 1 … 256 (optimum ${(opt.kPerMm * len).toFixed(1)})`);
     chips.set(1, ps(p.delay), `${ps(bare)} with one driver, ${(bare / p.delay).toFixed(1)}× slower`);
     chips.set(2, `${Math.round(p.area)}`, `unit inverters of area: ${k} repeaters of ${opt.h.toFixed(0)}×`);
-    chips.set(3, fj(p.switched * VIO * VIO), `½ C V² ×2 per cycle: wire + ${k} repeaters (wire alone ${fj(len * WIRE_C_PER_MM * VIO * VIO)})`);
+    chips.set(3, fj(0.5 * p.switched * VIO * VIO), `½ C V² per transition: wire + ${k} repeaters (wire alone ${fj(0.5 * len * WIRE_C_PER_MM * VIO * VIO)})`);
     note.textContent = `Each repeater is ${opt.h.toFixed(0)}× a unit inverter. By logical effort each stage drives ${p.stageEffort.toFixed(1)}× its own input capacitance (the wire's ${(len * WIRE_C_PER_MM / k).toFixed(0)} fF plus the next repeater's gate, over its own gate): `
       + `a segment is one more stage in an inverter chain, with the wire as the load. The closed-form optimum is ${opt.psPerMm.toFixed(0)} ps per mm for any length, ${(opt.segMm * 1000).toFixed(0)} µm between repeaters.`;
   };
@@ -204,7 +214,7 @@ export function repeaterWidget(): Widget {
 
 export function flightWidget(): Widget {
   let len = 150, rise = 0.3, z0 = Z0_BOARD, tFrac = 0.5;
-  const pr = plotOf({ x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'mm along the trace', yLabel: 'V', aria: 'Voltage along the line at one instant', xFmt: (v) => num(v, 0) });
+  const pr = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'mm along the trace', yLabel: 'V', aria: 'Voltage along the line at one instant', xFmt: (v) => num(v, 0) });
   const chips = mkChips(4), verdict = h('p', { class: 'sub mos-note' }), tOut = h('output', null);
   const paint = () => {
     const td = boardDelay(len), lumped = isLumped(td, rise), tMax = td + rise + 0.2 * td, t = tFrac * tMax;
@@ -244,7 +254,7 @@ const lineSpec = (rs: number, rl: number, lenMm: number, rise: number): LineSpec
 
 export function reflectionWidget(): Widget {
   let rs = 10, len = 150, rise = 0.2, rl = Infinity;
-  const pl = plotOf({ x: [0, 16], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'V', aria: 'Voltage at the near and far ends of the line against time' });
+  const pl = plotOf({ W: 720, H: 270, x: [0, 16], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'V', aria: 'Voltage at the near and far ends of the line against time' });
   const chips = mkChips(4), key = h('p', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'Near end (at the driver)'), h('span', { class: 'k-far' }, 'Far pin'));
   const sel = h('select', { 'aria-label': 'Far end' }, h('option', { value: 'open' }, 'Open CMOS input'), h('option', { value: '50' }, '50 Ω to ground'), h('option', { value: '150' }, '150 Ω to ground')) as HTMLSelectElement;
   const note = h('p', { class: 'sub mos-note' });
@@ -333,7 +343,7 @@ export function terminationWidget(): Widget {
 export const padSwing = (): number => VIO / (padDriveOhms() + Z0_BOARD);
 
 export function noiseWidget(): Widget {
-  let sh = 1, len = 100, rise = 0.2, n = 8, lnh = 3, cm = 0.3, cmrr = 40, mis = 2, rate = 1, bw = 0.5, sig = 60;
+  let sh = 1, len = 100, rise = 0.2, gbr = 1, n = 8, lnh = 3, cm = 0.3, cmrr = 40, mis = 2, rate = 1, bw = 0.5, sig = 60;
   const xt = plotOf({ W: 340, H: 190, x: [0, 2], y: [-60, 160], yTicks: [-50, 0, 50, 100, 150], xLabel: 'ns', yLabel: 'mV', aria: 'Crosstalk on a quiet victim line, near and far end', xFmt: (v) => num(v, 1), yFmt: (v) => num(v, 0) });
   const xtChips = mkChips(4), gbChips = mkChips(3), dfChips = mkChips(4), eyeChips = mkChips(4);
   const dfBars = h('div', { class: 'ln-bars' });
@@ -345,17 +355,19 @@ export function noiseWidget(): Widget {
     xt.clear();
     const T = 2, ts = Array.from({ length: 401 }, (_, i) => (i * T) / 400);
     // the pulse sits on a time axis in ns; long runs are clipped by the axis
+    const top = Math.max(x.next, x.fext, 0.05) * 1150, bot = Math.min(x.next, x.fext, 0) * 1150;
+    xt.setY(Math.min(-20, bot), Math.max(60, top));
     line(xt, ts, ts.map((t) => x.nearAt(t) * 1000), 'near'); line(xt, ts, ts.map((t) => x.farAt(t) * 1000), 'real');
-    xt.layer.append(s('text', { x: xt.X(T) - 4, y: xt.Y(-45), 'text-anchor': 'end', class: 'ln-hl' }, `near-end pulse lasts ${ns(x.nextWidth)}`));
+    xt.layer.append(s('text', { x: xt.X(T) - 4, y: xt.Y(Math.min(-20, bot)) - 6, 'text-anchor': 'end', class: 'ln-hl' }, `near-end pulse lasts ${ns(x.nextWidth)}`));
     xtChips.set(0, `${(x.next * 1000).toFixed(0)} mV`, `near end: Kb = ¼ (kc + kl) = ${x.kb.toFixed(3)}, ${((x.next / VIL) * 100).toFixed(0)} % of VIL`, x.next > VIL / 2 ? 'bad' : '');
     xtChips.set(1, `${(x.fext * 1000).toFixed(0)} mV`, `far end: ½ (kc − kl) · delay / edge · V (negative: inductive coupling wins)`);
     xtChips.set(2, `${kl.toFixed(2)} / ${kc.toFixed(2)}`, 'coupling kl = Lm/L, kc = Cm/C at this spacing');
     xtChips.set(3, ns(td), 'flight time of the parallel run');
   };
   const paintGb = () => {
-    const i = padSwing(), v = groundBounce(n, i, rise, lnh);
+    const i = padSwing(), v = groundBounce(n, i, gbr, lnh);
     gbChips.set(0, `${(i * 1000).toFixed(1)} mA`, `each pad: ${VIO} V / (${padDriveOhms().toFixed(0)} Ω driver + ${Z0_BOARD} Ω line)`);
-    gbChips.set(1, `${v.toFixed(2)} V`, `L · n · di/dt for ${n} pads at once through ${lnh} nH in ${ns(rise)}`, v > VIL ? 'bad' : '');
+    gbChips.set(1, `${v.toFixed(2)} V`, `L · n · di/dt for ${n} pads at once through ${lnh} nH in ${ns(gbr)}`, v > VIL ? 'bad' : '');
     gbChips.set(2, v > VIL ? 'a 0 reads as a 1' : `${(v / VIL * 100).toFixed(0)} % of VIL`, v > VIL ? 'the chip\'s ground has lifted past VIL: a quiet low output is read high' : 'of the low-level noise margin');
   };
   const paintDf = () => {
@@ -393,10 +405,10 @@ export function noiseWidget(): Widget {
   const sec = (title: string, lead: string, ...kids: (Node | string)[]) => h('div', { class: 'panel ln-sec' }, h('h4', null, title), h('p', { class: 'sub' }, lead), ...kids);
   const el = h('div', { class: 'widget mos ln-noise' },
     sec('Crosstalk', 'An aggressor edge on one trace, a quiet neighbour.',
-      xt.el, h('div', { class: 'mos-row' }, sl('Spacing', 0.5, 5, 0.1, sh, (v) => `${v.toFixed(1)}·h`, (v) => { sh = v; paintXt(); }), sl('Run', 10, 300, 10, len, (v) => `${v} mm`, (v) => { len = v; paintXt(); paintGb(); }),
-        sl('Edge', 0.05, 2, 0.05, rise, ns, (v) => { rise = v; paintXt(); paintGb(); })), xtChips.el),
+      xt.el, h('div', { class: 'mos-row' }, sl('Spacing', 0.5, 5, 0.1, sh, (v) => `${v.toFixed(1)}·h`, (v) => { sh = v; paintXt(); }), sl('Run', 10, 300, 10, len, (v) => `${v} mm`, (v) => { len = v; paintXt(); }),
+        sl('Edge', 0.05, 2, 0.05, rise, ns, (v) => { rise = v; paintXt(); })), xtChips.el),
     sec('Ground bounce', 'Pads that switch together share one return path.',
-      h('div', { class: 'mos-row' }, sl('Pads', 1, 32, 1, n, (v) => String(v), (v) => { n = v; paintGb(); }), sl('L', 0.5, 10, 0.5, lnh, (v) => `${v} nH`, (v) => { lnh = v; paintGb(); })), gbChips.el),
+      h('div', { class: 'mos-row' }, sl('Pads', 1, 32, 1, n, (v) => String(v), (v) => { n = v; paintGb(); }), sl('L', 0.5, 10, 0.5, lnh, (v) => `${v} nH`, (v) => { lnh = v; paintGb(); }), sl('Edge', 0.1, 4, 0.1, gbr, ns, (v) => { gbr = v; paintGb(); })), gbChips.el),
     sec('A differential pair', 'The same noise on both legs; the receiver subtracts them.',
       dfBars, h('div', { class: 'mos-row' }, sl('Common', 0, 1, 0.05, cm, (v) => `${v.toFixed(2)} V`, (v) => { cm = v; paintDf(); }), sl('CMRR', 20, 80, 5, cmrr, (v) => `${v} dB`, (v) => { cmrr = v; paintDf(); }), sl('Mismatch', 0, 20, 1, mis, (v) => `${v} %`, (v) => { mis = v; paintDf(); })), dfChips.el),
     sec('What noise does to a bit', 'A pseudo-random pattern through a single-pole channel; chapter 46 reads this picture in depth.',
