@@ -4,6 +4,8 @@ import { bigRam } from '../lib/bigmem';
 import { decoder } from '../lib/combinational';
 import { i2cBus, i2cController, i2cTarget, I2C_PAD } from '../lib/i2c';
 import { spiDevice, spiMaster } from '../lib/spi';
+import { baudGen, UART_RX, UART_TX } from '../lib/uart';
+import { OVERSAMPLE } from '../comm/uart';
 import { stats } from '../sim/stats';
 import { groupDigits } from '../sim/numfmt';
 import { i2cArbScene, i2cFrameScene, pullupWidget, wiredScene } from '../widgets/i2c';
@@ -355,8 +357,8 @@ export const chSpi: Chapter = {
           <tr><th scope="row">Direction</th><td>full duplex, two wires</td><td>full duplex, two data wires</td><td>half duplex, one data wire</td></tr>
           <tr><th scope="row">Who decides</th><td>either end</td><td>the controller only</td><td>a controller; several may arbitrate</td></tr>
           <tr><th scope="row">Receiver's clock</th><td>its own, matched within a few percent</td><td>none: SCLK</td><td>none: SCL, which it may stretch</td></tr>
-          <tr><th scope="row">NANDs here (without storage)</th><td>chapter 43</td><td>controller ${thin(N_SPI_MASTER)}, target ${thin(N_SPI_DEV)}</td><td>controller ${thin(N_I2C_CTL)}, target ${thin(N_I2C_TGT)} (its four registers included)</td></tr>
-          <tr><th scope="row">System clocks per byte (this implementation)</th><td>chapter 43</td><td>${SPI_BYTE_CLOCKS}</td><td>${I2C_BYTE_CLOCKS}</td></tr>
+          <tr><th scope="row">NANDs here (without storage or FIFOs)</th><td>transmitter ${thin(nands(UART_TX))}, receiver ${thin(nands(UART_RX))}, baud generator ${thin(nands(baudGen()))}</td><td>controller ${thin(N_SPI_MASTER)}, target ${thin(N_SPI_DEV)}</td><td>controller ${thin(N_I2C_CTL)}, target ${thin(N_I2C_TGT)} (its four registers included)</td></tr>
+          <tr><th scope="row">System clocks per byte (this implementation, at its fastest)</th><td>${10 * OVERSAMPLE}</td><td>${SPI_BYTE_CLOCKS}</td><td>${I2C_BYTE_CLOCKS}</td></tr>
         </tbody></table>
         <p>The I²C controller is ${nf(N_I2C_CTL / N_SPI_MASTER, 1)} times the gates of the SPI master, and its target ${nf(N_I2C_TGT / N_SPI_DEV, 1)} times the SPI target's logic. The difference is the framing, the address compare, the START and STOP detection, the ACK handshake and arbitration, all of which SPI gets from a select wire. Each I²C pad costs ${T_PAD} transistors at either end, and the pull-ups, one per wire, cost nothing but the speed and current of the last two steps.</p>
         <p>Pick by what the system needs. A fast device with one target at a time (flash, a display, a radio): SPI. Many slow devices, little board area, a configuration or sensor bus (a temperature sensor, an EEPROM, a power controller, a camera's control port): I²C. Two chips that talk freely at a modest rate: UART. The next chapters are about what happens when the wire gets longer than a few centimetres: modulation (45), serial links at gigabits (46) and surviving errors (47). The idea that data and clock should share one wire so that nothing skews returns there as the <em>embedded clock</em>.</p>`;

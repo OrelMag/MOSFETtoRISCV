@@ -1,0 +1,56 @@
+/* ---------- Chapter 46: fast serial links (src/widgets/serial.ts, serdes.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.sr-w { gap: 12px; }
+.sr-in { flex: 1; min-width: 0; font: 600 13px var(--font-mono); padding: 4px 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; }
+.sr-field { flex: 1 1 100%; }
+.sr-field span { width: 52px; }
+.sr-sels { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; }
+.sr-wave { max-width: 100%; }
+.sr-tr { fill: none; stroke: var(--text-2); stroke-width: 1.8; stroke-linejoin: round; }
+.sr-tr.nrz { stroke: var(--accent); }
+.sr-tr.man { stroke: var(--good); }
+.sr-tr.rx { stroke: var(--probe-1); }
+.sr-tr.tx { stroke: var(--probe-0); }
+.sr-tr.strobe { stroke: var(--warn); stroke-width: 1.4; }
+.sr-tr.early { stroke: var(--accent); stroke-width: 1.6; }
+.sr-tr.late { stroke: var(--bad); stroke-width: 1.6; }
+.sr-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.sr-halves, .sr-bitrow { display: flex; flex-wrap: wrap; gap: 2px; }
+.sr-half, .sr-bit { min-width: 20px; height: 22px; padding: 0; border: 1px solid var(--border-strong); border-radius: 4px; font: 600 11px var(--font-mono); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.sr-half.v1, .sr-bit.v1 { background: color-mix(in srgb, var(--accent) 30%, var(--surface-2)); color: var(--text); }
+.sr-half.flipped, .sr-bit.flipped { outline: 2px solid var(--bad); outline-offset: 0; }
+.sr-bit.sm { min-width: 14px; height: 18px; font-size: 10px; }
+.sr-bit.gap { margin-left: 5px; }
+.sr-table td, .sr-table th { padding: 3px 8px; font-size: 12.5px; vertical-align: middle; }
+.sr-table tr.bad td { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.sr-table .sr-bits { display: flex; gap: 1px; padding: 3px 8px; }
+.sr-sym { font: 700 12.5px var(--font-mono); white-space: nowrap; }
+.sr-sym small, .sr-dec small { color: var(--muted); font-weight: 500; }
+.sr-dec { font: 600 12px var(--font-mono); white-space: nowrap; }
+.sr-reach { font: 700 13px var(--font-mono); white-space: nowrap; }
+.ln-key .k-lump { color: var(--muted); }
+.sr-hists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@container (max-width: 520px) { .sr-hists, .sr-two { grid-template-columns: minmax(0, 1fr); } }
+.sr-hist b { font-size: 12.5px; color: var(--text-2); }
+.sr-bars { display: flex; gap: 3px; align-items: flex-end; height: 92px; margin-top: 4px; }
+.sr-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 1px; height: 100%; }
+.sr-bar i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--accent); }
+.sr-bar i.bar-b { background: var(--good); }
+.sr-bar i.bar-x { background: var(--muted); opacity: 0.55; }
+.sr-bar em { font: normal 10.5px var(--font-mono); color: var(--muted); }
+.sr-bar small { font: 10px var(--font-mono); color: var(--muted); }
+.sr-stems { height: 112px; max-width: 360px; }
+.sr-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sr-two h4 { margin: 0 0 2px; font-size: 13px; color: var(--text-2); }
+
+/* the link panel */
+.sr-panel { min-width: 0; }
+.sr-panel .mc-status span b.bad { color: var(--bad); }
+.sr-panel .mc-status span b.good { color: var(--good); }
+.sr-words { display: flex; flex-wrap: wrap; gap: 3px; font: 600 11px var(--font-mono); margin: 2px 0 6px; }
+.sr-words span { padding: 1px 5px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); }
+.sr-words span.bad { border-color: var(--bad); color: var(--bad); }
+.sr-words span.k { border-color: var(--warn); }
+.sr-lock { padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
+.sr-lock.ok { border-color: var(--good); }
+.sr-lock.bad { border-color: var(--bad); }
+.ln-key .k-good { color: var(--good); }
