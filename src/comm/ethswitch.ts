@@ -348,9 +348,12 @@ export function trafficFrame(src: number, dst: number, id: number, bytes: number
   return f;
 }
 
+/** The frame each host sends once to teach the table where it is. */
+export const teachFrames = (): number[][] => Array.from({ length: PORTS }, (_, p) => frameBody({ dst: BROADCAST, src: hostMac(p), type: ETHERTYPE_LOCAL, payload: [0, 0, 0, 0] }));
+
 function teach(m: SwitchModel): void {
   // each host speaks once to the broadcast address, which teaches the table where it is
-  const frames = Array.from({ length: PORTS }, (_, p) => frameBody({ dst: BROADCAST, src: hostMac(p), type: ETHERTYPE_LOCAL, payload: [0, 0, 0, 0] }));
+  const frames = teachFrames();
   for (let p = 0; p < PORTS; p++) {
     for (const [k, b] of frames[p].entries()) {
       const i = idleIn();
