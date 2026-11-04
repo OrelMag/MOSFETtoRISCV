@@ -32,6 +32,8 @@ export interface RtlOptions {
   notes?: string;
   /** Wrap a column of the drawing after this many grid units. */
   columnHeight?: number;
+  /** Width of the top box in grid units (default: from its label). */
+  boxW?: number;
 }
 
 export class Rtl {
@@ -327,7 +329,7 @@ export class Rtl {
         category: isRoot ? this.opt.category : this.opt.category,
         summary: isRoot ? this.opt.summary : `${sc.label} (a block of ${this.opt.name}).`,
         ports,
-        symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label },
+        symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label, ...(isRoot && this.opt.boxW ? { w: this.opt.boxW } : {}) },
         netlist: () => ({ pins, instances, nets }),
         ...(isRoot && this.opt.notes ? { notes: this.opt.notes } : {}),
       });

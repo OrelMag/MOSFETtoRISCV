@@ -3,6 +3,8 @@ import { MUX2 } from '../lib';
 import { stats } from '../sim/stats';
 import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
+import { masks3d } from '../widgets/masks3d';
+import { withModel } from '../widgets/modelhost';
 import { clockTreeWidget, fabWidget, floorplanWidget, layoutWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
 import { fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, TECH } from '../lib/tech';
@@ -170,7 +172,7 @@ export const chSilicon: Chapter = {
         Lithography sets the smallest feature. Today's leading processes print with 13.5 nm extreme-ultraviolet light.</p>
         <p>Most of the cost of a chip is in these repetitions. A modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
         the fab, and a single defect on any layer can kill the die it lands on. That is what the yield step prices.</p>`,
-      widget: fabWidget,
+      widget: () => withModel(fabWidget(), masks3d()),
       more: {
         derive: `<p>The smallest printable half-pitch is R = k<sub>1</sub> · λ / NA. With EUV light at λ = 13.5 nm, a numerical aperture of 0.33 and a process factor k<sub>1</sub> of about 0.3 that is
           ${(0.3 * 13.5 / 0.33).toFixed(0)} nm. Argon fluoride light (193 nm) with immersion (NA about 1.35) and the same k<sub>1</sub> gives ${(0.3 * 193 / 1.35).toFixed(0)} nm in one exposure, which is why finer features there need

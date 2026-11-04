@@ -2,7 +2,7 @@
 // global lists, global scalars and each function's locals (Python's rule: a name assigned in a function is
 // local unless declared global), with the errors Python would raise, found before anything runs.
 
-import { BUILTINS, PyError } from './ast';
+import { BUILTINS, MEMORY_BUILTINS, PyError } from './ast';
 import type { Expr, Module, Stmt } from './ast';
 import { constValue } from './parse';
 
@@ -179,6 +179,7 @@ export function analyze(mod: Module): Scope {
           if (e.fn === 'print') { if (n < 1) throw new PyError('print() needs a value to print', e.line); return; }
           if (e.fn === 'abs') { if (n !== 1) throw new PyError('abs() takes one argument', e.line); return; }
           if (e.fn === 'min' || e.fn === 'max') { if (n < 2) throw new PyError(`${e.fn}() takes two or more arguments`, e.line); return; }
+          if (Object.hasOwn(MEMORY_BUILTINS, e.fn)) { if (n !== MEMORY_BUILTINS[e.fn]) throw new PyError(`${e.fn}() takes ${MEMORY_BUILTINS[e.fn]} argument${MEMORY_BUILTINS[e.fn] === 1 ? '' : 's'}, got ${n}`, e.line); return; }
           if (e.fn === 'range') throw new PyError('range() only appears in a for loop', e.line);
           const f = funcs.get(e.fn);
           if (!f) throw new PyError(lists.has(e.fn) || globals.includes(e.fn) || isLocal(e.fn) ? `"${e.fn}" is not a function` : `function "${e.fn}" is not defined`, e.line);

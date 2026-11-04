@@ -25,9 +25,9 @@ const panel = (title: string, sub: string, ...kids: (Node | string)[]) => h('div
 
 // ---- standard-cell layout -------------------------------------------------------------------------
 
-type Layer = 'nwell' | 'pdiff' | 'ndiff' | 'poly' | 'metal' | 'contact';
-interface Shape { layer: Layer; r: [number, number, number, number]; node?: string; gate?: [string, 'p' | 'n'] }
-interface Cell { name: string; w: number; inputs: string[]; shapes: Shape[]; eval: (v: Record<string, number>) => Record<string, number | 'z'>; transistors: number }
+export type Layer = 'nwell' | 'pdiff' | 'ndiff' | 'poly' | 'metal' | 'contact';
+export interface Shape { layer: Layer; r: [number, number, number, number]; node?: string; gate?: [string, 'p' | 'n'] }
+export interface Cell { name: string; w: number; inputs: string[]; shapes: Shape[]; eval: (v: Record<string, number>) => Record<string, number | 'z'>; transistors: number }
 
 const rail = (w: number): Shape[] => [
   { layer: 'nwell', r: [0, 0, w, 22] },
@@ -35,7 +35,7 @@ const rail = (w: number): Shape[] => [
 ];
 const C = (x: number, y: number): Shape => ({ layer: 'contact', r: [x, y, 2, 2] });
 
-const CELLS: Cell[] = [
+export const CELLS: Cell[] = [
   {
     name: 'INV', w: 16, inputs: ['A'], transistors: 2,
     eval: ({ A }) => ({ vdd: 1, gnd: 0, y: A ? 0 : 1 }),
@@ -77,7 +77,7 @@ const CELLS: Cell[] = [
 
 /** Heights of the 3D view (layout units, not to scale): diffusion at the surface, poly over the gate oxide, contacts up
  *  to metal 1. `spread` (0 … 1) pulls the layers apart to show what lies under the poly and the metal. */
-function levels(spread: number) {
+export function levels(spread: number) {
   const diff = 0.6, poly0 = diff + 0.3 + 3 * spread, poly1 = poly0 + 1, metal0 = poly1 + 1.6 + 4 * spread;
   return { sub: -2.5, diff, poly0, poly1, metal0, metal1: metal0 + 0.8 };
 }
@@ -212,7 +212,7 @@ export function layoutWidget(): Widget {
 
 // ---- fabrication -------------------------------------------------------------------------------------
 
-const FAB: [string, string][] = [
+export const FAB: [string, string][] = [
   ['Substrate', 'A polished wafer of lightly p-doped silicon, 300 mm across and under 1 mm thick, cut from a single crystal.'],
   ['N-well', 'Photoresist masks the wafer; phosphorus ions implanted into the exposed area make an n-type well where the PMOS transistors will live.'],
   ['Isolation', 'Shallow trenches are etched between transistors and filled with oxide (STI) so neighbouring devices cannot leak into each other.'],

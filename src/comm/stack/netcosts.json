@@ -1,0 +1,739 @@
+{
+ "windows": [
+  {
+   "computer": "a",
+   "start": 923,
+   "end": 1433,
+   "entry": "arp_request",
+   "visited": [
+    "arp_request",
+    "tx_buf",
+    "eth_src_type",
+    "arp_fill",
+    "put16",
+    "put32",
+    "tx_commit"
+   ],
+   "layers": {
+    "arp": {
+     "instr": 212,
+     "clocks": 263,
+     "loads": 18,
+     "stores": 31
+    },
+    "eth": {
+     "instr": 97,
+     "clocks": 120,
+     "loads": 12,
+     "stores": 11
+    },
+    "bytes": {
+     "instr": 101,
+     "clocks": 127,
+     "loads": 6,
+     "stores": 20
+    }
+   },
+   "total": {
+    "instr": 410,
+    "clocks": 510,
+    "loads": 36,
+    "stores": 62
+   }
+  },
+  {
+   "computer": "b",
+   "start": 6086,
+   "end": 6998,
+   "entry": "eth_input",
+   "visited": [
+    "eth_input",
+    "arp_input",
+    "get16",
+    "get32",
+    "arp_learn",
+    "arp_find",
+    "tx_buf",
+    "eth_src_type",
+    "arp_fill",
+    "put16",
+    "put32",
+    "tx_commit"
+   ],
+   "layers": {
+    "eth": {
+     "instr": 123,
+     "clocks": 156,
+     "loads": 18,
+     "stores": 15
+    },
+    "arp": {
+     "instr": 418,
+     "clocks": 526,
+     "loads": 55,
+     "stores": 49
+    },
+    "bytes": {
+     "instr": 178,
+     "clocks": 230,
+     "loads": 26,
+     "stores": 26
+    }
+   },
+   "total": {
+    "instr": 719,
+    "clocks": 912,
+    "loads": 99,
+    "stores": 90
+   }
+  },
+  {
+   "computer": "a",
+   "start": 11663,
+   "end": 12053,
+   "entry": "eth_input",
+   "visited": [
+    "eth_input",
+    "arp_input",
+    "get16",
+    "get32",
+    "arp_learn",
+    "arp_find"
+   ],
+   "layers": {
+    "eth": {
+     "instr": 26,
+     "clocks": 36,
+     "loads": 6,
+     "stores": 4
+    },
+    "arp": {
+     "instr": 200,
+     "clocks": 251,
+     "loads": 29,
+     "stores": 22
+    },
+    "bytes": {
+     "instr": 77,
+     "clocks": 103,
+     "loads": 20,
+     "stores": 6
+    }
+   },
+   "total": {
+    "instr": 303,
+    "clocks": 390,
+    "loads": 55,
+    "stores": 32
+   }
+  },
+  {
+   "computer": "a",
+   "start": 12574,
+   "end": 13786,
+   "entry": "icmp_echo",
+   "visited": [
+    "icmp_echo",
+    "tx_buf",
+    "put16",
+    "ones_sum",
+    "ip_send",
+    "arp_find",
+    "put32",
+    "eth_src_type",
+    "tx_commit"
+   ],
+   "layers": {
+    "icmp": {
+     "instr": 296,
+     "clocks": 350,
+     "loads": 10,
+     "stores": 44
+    },
+    "eth": {
+     "instr": 97,
+     "clocks": 120,
+     "loads": 12,
+     "stores": 11
+    },
+    "bytes": {
+     "instr": 409,
+     "clocks": 507,
+     "loads": 66,
+     "stores": 32
+    },
+    "ip": {
+     "instr": 179,
+     "clocks": 226,
+     "loads": 22,
+     "stores": 21
+    },
+    "arp": {
+     "instr": 8,
+     "clocks": 9,
+     "loads": 1,
+     "stores": 0
+    }
+   },
+   "total": {
+    "instr": 989,
+    "clocks": 1212,
+    "loads": 111,
+    "stores": 108
+   }
+  },
+  {
+   "computer": "b",
+   "start": 19296,
+   "end": 21178,
+   "entry": "eth_input",
+   "visited": [
+    "eth_input",
+    "ip_input",
+    "get16",
+    "ones_sum",
+    "get32",
+    "icmp_input",
+    "tx_buf",
+    "put16",
+    "ip_send",
+    "arp_find",
+    "put32",
+    "eth_src_type",
+    "tx_commit"
+   ],
+   "layers": {
+    "eth": {
+     "instr": 129,
+     "clocks": 162,
+     "loads": 18,
+     "stores": 15
+    },
+    "ip": {
+     "instr": 260,
+     "clocks": 332,
+     "loads": 36,
+     "stores": 32
+    },
+    "bytes": {
+     "instr": 733,
+     "clocks": 911,
+     "loads": 144,
+     "stores": 34
+    },
+    "icmp": {
+     "instr": 361,
+     "clocks": 468,
+     "loads": 54,
+     "stores": 53
+    },
+    "arp": {
+     "instr": 8,
+     "clocks": 9,
+     "loads": 1,
+     "stores": 0
+    }
+   },
+   "total": {
+    "instr": 1491,
+    "clocks": 1882,
+    "loads": 253,
+    "stores": 134
+   }
+  },
+  {
+   "computer": "a",
+   "start": 26647,
+   "end": 27324,
+   "entry": "eth_input",
+   "visited": [
+    "eth_input",
+    "ip_input",
+    "get16",
+    "ones_sum",
+    "get32",
+    "icmp_input",
+    "now"
+   ],
+   "layers": {
+    "eth": {
+     "instr": 36,
+     "clocks": 46,
+     "loads": 6,
+     "stores": 4
+    },
+    "ip": {
+     "instr": 81,
+     "clocks": 106,
+     "loads": 14,
+     "stores": 11
+    },
+    "bytes": {
+     "instr": 348,
+     "clocks": 436,
+     "loads": 82,
+     "stores": 6
+    },
+    "icmp": {
+     "instr": 61,
+     "clocks": 89,
+     "loads": 13,
+     "stores": 15
+    }
+   },
+   "total": {
+    "instr": 526,
+    "clocks": 677,
+    "loads": 115,
+    "stores": 36
+   }
+  }
+ ],
+ "clocksToFirstReply": 27874,
+ "rtt": 14689,
+ "wire": {
+  "aTx": [
+   [
+    1435,
+    3739
+   ],
+   [
+    13756,
+    16508
+   ]
+  ],
+  "toB": [
+   [
+    3743,
+    6047
+   ],
+   [
+    16512,
+    19264
+   ]
+  ],
+  "bTx": [
+   [
+    6977,
+    9281
+   ],
+   [
+    21104,
+    23856
+   ]
+  ],
+  "toA": [
+   [
+    9285,
+    11589
+   ],
+   [
+    23860,
+    26612
+   ]
+  ]
+ },
+ "words": {
+  "a": 1711,
+  "b": 1322
+ },
+ "layers": {
+  "a": {
+   "app": {
+    "instr": 4750,
+    "clocks": 5428,
+    "loads": 541,
+    "stores": 134
+   },
+   "eth": {
+    "instr": 10557,
+    "clocks": 15170,
+    "loads": 2824,
+    "stores": 1748
+   },
+   "arp": {
+    "instr": 5097,
+    "clocks": 5770,
+    "loads": 615,
+    "stores": 53
+   },
+   "bytes": {
+    "instr": 935,
+    "clocks": 1173,
+    "loads": 174,
+    "stores": 64
+   },
+   "icmp": {
+    "instr": 357,
+    "clocks": 439,
+    "loads": 23,
+    "stores": 59
+   },
+   "ip": {
+    "instr": 260,
+    "clocks": 332,
+    "loads": 36,
+    "stores": 32
+   }
+  },
+  "b": {
+   "app": {
+    "instr": 1945,
+    "clocks": 1986,
+    "loads": 12,
+    "stores": 29
+   },
+   "eth": {
+    "instr": 16527,
+    "clocks": 23850,
+    "loads": 4484,
+    "stores": 2745
+   },
+   "arp": {
+    "instr": 426,
+    "clocks": 535,
+    "loads": 56,
+    "stores": 49
+   },
+   "bytes": {
+    "instr": 911,
+    "clocks": 1141,
+    "loads": 170,
+    "stores": 60
+   },
+   "ip": {
+    "instr": 260,
+    "clocks": 332,
+    "loads": 36,
+    "stores": 32
+   },
+   "icmp": {
+    "instr": 361,
+    "clocks": 468,
+    "loads": 54,
+    "stores": 53
+   }
+  }
+ },
+ "functions": {
+  "a": {
+   "(top)": {
+    "instr": 3525,
+    "clocks": 4052,
+    "loads": 417,
+    "stores": 107
+   },
+   "net_init": {
+    "instr": 35,
+    "clocks": 58,
+    "loads": 8,
+    "stores": 15
+   },
+   "nic_init": {
+    "instr": 270,
+    "clocks": 313,
+    "loads": 6,
+    "stores": 37
+   },
+   "arp_find": {
+    "instr": 4718,
+    "clocks": 5293,
+    "loads": 572,
+    "stores": 0
+   },
+   "arp_request": {
+    "instr": 75,
+    "clocks": 91,
+    "loads": 4,
+    "stores": 10
+   },
+   "tx_buf": {
+    "instr": 32,
+    "clocks": 40,
+    "loads": 8,
+    "stores": 0
+   },
+   "eth_src_type": {
+    "instr": 126,
+    "clocks": 154,
+    "loads": 12,
+    "stores": 16
+   },
+   "arp_fill": {
+    "instr": 137,
+    "clocks": 172,
+    "loads": 14,
+    "stores": 21
+   },
+   "put16": {
+    "instr": 140,
+    "clocks": 180,
+    "loads": 0,
+    "stores": 40
+   },
+   "put32": {
+    "instr": 104,
+    "clocks": 128,
+    "loads": 12,
+    "stores": 12
+   },
+   "tx_commit": {
+    "instr": 36,
+    "clocks": 46,
+    "loads": 4,
+    "stores": 6
+   },
+   "net_poll": {
+    "instr": 9992,
+    "clocks": 14473,
+    "loads": 2774,
+    "stores": 1666
+   },
+   "eth_input": {
+    "instr": 58,
+    "clocks": 78,
+    "loads": 12,
+    "stores": 8
+   },
+   "arp_input": {
+    "instr": 65,
+    "clocks": 86,
+    "loads": 12,
+    "stores": 9
+   },
+   "get16": {
+    "instr": 75,
+    "clocks": 105,
+    "loads": 30,
+    "stores": 0
+   },
+   "get32": {
+    "instr": 84,
+    "clocks": 108,
+    "loads": 12,
+    "stores": 12
+   },
+   "arp_learn": {
+    "instr": 102,
+    "clocks": 128,
+    "loads": 13,
+    "stores": 13
+   },
+   "puts": {
+    "instr": 559,
+    "clocks": 674,
+    "loads": 100,
+    "stores": 15
+   },
+   "putc": {
+    "instr": 358,
+    "clocks": 358,
+    "loads": 0,
+    "stores": 0
+   },
+   "now": {
+    "instr": 8,
+    "clocks": 8,
+    "loads": 0,
+    "stores": 0
+   },
+   "icmp_echo": {
+    "instr": 296,
+    "clocks": 350,
+    "loads": 10,
+    "stores": 44
+   },
+   "ones_sum": {
+    "instr": 532,
+    "clocks": 652,
+    "loads": 120,
+    "stores": 0
+   },
+   "ip_send": {
+    "instr": 179,
+    "clocks": 226,
+    "loads": 22,
+    "stores": 21
+   },
+   "ip_input": {
+    "instr": 81,
+    "clocks": 106,
+    "loads": 14,
+    "stores": 11
+   },
+   "icmp_input": {
+    "instr": 61,
+    "clocks": 89,
+    "loads": 13,
+    "stores": 15
+   },
+   "put_dec": {
+    "instr": 308,
+    "clocks": 344,
+    "loads": 24,
+    "stores": 12
+   }
+  },
+  "b": {
+   "(top)": {
+    "instr": 1852,
+    "clocks": 1878,
+    "loads": 0,
+    "stores": 26
+   },
+   "net_init": {
+    "instr": 35,
+    "clocks": 58,
+    "loads": 8,
+    "stores": 15
+   },
+   "nic_init": {
+    "instr": 270,
+    "clocks": 313,
+    "loads": 6,
+    "stores": 37
+   },
+   "puts": {
+    "instr": 61,
+    "clocks": 76,
+    "loads": 12,
+    "stores": 3
+   },
+   "putc": {
+    "instr": 32,
+    "clocks": 32,
+    "loads": 0,
+    "stores": 0
+   },
+   "net_poll": {
+    "instr": 15970,
+    "clocks": 23161,
+    "loads": 4434,
+    "stores": 2663
+   },
+   "eth_input": {
+    "instr": 58,
+    "clocks": 78,
+    "loads": 12,
+    "stores": 8
+   },
+   "arp_input": {
+    "instr": 140,
+    "clocks": 177,
+    "loads": 18,
+    "stores": 15
+   },
+   "get16": {
+    "instr": 65,
+    "clocks": 91,
+    "loads": 26,
+    "stores": 0
+   },
+   "get32": {
+    "instr": 84,
+    "clocks": 108,
+    "loads": 12,
+    "stores": 12
+   },
+   "arp_learn": {
+    "instr": 102,
+    "clocks": 128,
+    "loads": 13,
+    "stores": 13
+   },
+   "arp_find": {
+    "instr": 41,
+    "clocks": 46,
+    "loads": 5,
+    "stores": 0
+   },
+   "tx_buf": {
+    "instr": 32,
+    "clocks": 40,
+    "loads": 8,
+    "stores": 0
+   },
+   "eth_src_type": {
+    "instr": 126,
+    "clocks": 154,
+    "loads": 12,
+    "stores": 16
+   },
+   "arp_fill": {
+    "instr": 143,
+    "clocks": 184,
+    "loads": 20,
+    "stores": 21
+   },
+   "put16": {
+    "instr": 126,
+    "clocks": 162,
+    "loads": 0,
+    "stores": 36
+   },
+   "put32": {
+    "instr": 104,
+    "clocks": 128,
+    "loads": 12,
+    "stores": 12
+   },
+   "tx_commit": {
+    "instr": 36,
+    "clocks": 46,
+    "loads": 4,
+    "stores": 6
+   },
+   "ip_input": {
+    "instr": 81,
+    "clocks": 106,
+    "loads": 14,
+    "stores": 11
+   },
+   "ones_sum": {
+    "instr": 532,
+    "clocks": 652,
+    "loads": 120,
+    "stores": 0
+   },
+   "icmp_input": {
+    "instr": 361,
+    "clocks": 468,
+    "loads": 54,
+    "stores": 53
+   },
+   "ip_send": {
+    "instr": 179,
+    "clocks": 226,
+    "loads": 22,
+    "stores": 21
+   }
+  }
+ },
+ "dma": {
+  "a": {
+   "reads": 40,
+   "writes": 38
+  },
+  "b": {
+   "reads": 40,
+   "writes": 38
+  }
+ },
+ "pollPass": {
+  "a": 31,
+  "b": 28
+ },
+ "console": {
+  "a": "arp: 10.0.0.2 is at 02:00:00:00:00:02\n64 bytes from 10.0.0.2: seq=1 time=14689 cycles\ndone",
+  "b": "host up\n"
+ },
+ "nands": {
+  "nic": 15409,
+  "macTx": 3553,
+  "macRx": 3197,
+  "computerNic": 5975353,
+  "computer": 5959086,
+  "switch": 507551,
+  "lan": 12471757
+ }
+}

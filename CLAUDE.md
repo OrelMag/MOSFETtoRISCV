@@ -1162,6 +1162,21 @@ src/comm/uart.ts  chapter 43's UART as a golden model, edge by edge (UartCore: b
                with the computer (busComputer({ uart: true }), MAP.uart = 0x3, tests/comm-uart-bus.test.ts; UART_COSTS in riscv/uartprograms.ts are measured
                there). lib/uartlink.ts twoComputers(srcA, srcB): two bus computers on clkA / clkB, tx crossed to rx through two LINE parts (an external seq
                leaf on the sender's clock: the one box that does not end in transistors), run on the cycle engine; widgets/uart.ts the chapter's scenes
+src/comm/nic.ts  chapter 50's network interface card as a golden model, clock by clock (NicCore: eight registers, a bus master serving receive before transmit, a receive
+               engine that packs bytes into words and writes them before the MAC's FCS verdict and commits the descriptor only for a good frame, a transmit engine that
+               fetches a word at a time as the MAC asks for bytes; comm/mac.ts's MacTx / MacRx inside; full duplex, 16-bit addresses, descriptors of two words: buffer address,
+               OWN | length): lib/nic.ts is the same machine in gates (tests/comm-nic.test.ts: every output every clock against a RAM with random wait states;
+               tests/comm-nic-soc.test.ts: in a computer, registers every instruction against the ISS, the NIC's inputs the gates' own). bus/model.ts NicDevice at MAP.nic = 0x7
+               (shared with the card reader: the system CPU takes every address with bit 31 set) steps the core itself on the model's RAM (fast play) or in replay mode;
+               busComputer({ nic: true }) makes it a third bus master. riscv/nicprograms.ts the assembly driver (polled, by interrupt; NIC_COSTS measured on the gates).
+src/comm/stack/ the stack as Python text (StackModule { name, py }): eth (rings, net_poll, tx_buf / tx_commit, eth_input), arp, ip (get16 / put16 / get32 / put32, ones_sum, ip_input,
+               ip_send), icmp, udp (all in the subset of chapter 15, with load8 / store8 / load32 / store32); layout.ts the RAM map (rings at 0x1800 / 0x1840, buffers 1536 bytes
+               from 0x1900 / 0x4900, the compiler's data, output and stack below 0x1800), index.ts stackProgram(modules, app) (one compile, line numbers back per module, tcp_input
+               and udp_rx stubs), all.ts DEFAULT_STACK, apps.ts (ping, host, UDP echo and client), netcosts.json (scripts/net-costs.ts --write: instructions, clocks, loads and stores
+               per piece of work and per layer, measured on the gates; tests/comm-lan.test.ts pins it). comm/netframes.ts builds the same frames independently (ARP, ICMP echo, UDP,
+               the Internet checksum) and dissects captures; tests/comm-stack.test.ts holds hand-derived frames, comm-netframes.test.ts compares the compiled stack with it.
+               lib/lan.ts lanComputers(srcA, srcB): two computers with NICs, MAC pairs on switch ports 0 and 1, an ethSwitch (cells of 128 bytes, two a port; on the cycle engine
+               1 200 to 1 600 clocks a second in node, 2 433 in headless Chrome with the time-sliced loop: the first ping reply in about 12 s), nicLoopback; widgets/net.ts the chapter's widgets and scenes (the ping's frame list is a mirror of the switch's receive streams).
 src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length
@@ -1263,6 +1278,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
   codexmore.ts   the fuller codex (idea, example, mistakes, lib figure, compare, anatomy, chapters) in codexmore0.ts
                  (components, laws, tools) / codexmore1.ts (tricks, concepts) / codexmoreP.ts (act P); loaded on demand
                  with codexcheck.ts (Check yourself: two Quizzes per entry in codexcheck0–3.ts, tests/codex-guide.test.ts)
+                 The Communication entries (chapters 39–47) are codexcomm.ts (summaries; COMM_AWAITING_LEVELS: ids no Act 12 level lists yet),
+                 codexmore4–5.ts and codexcheck6–7.ts, every number pinned by tests/content-codexcomm.test.ts; uart / spi / crc are glossary SKIP
+                 (the CPU chapters name them as examples long before chapter 43); new entries need a chapters/taught.ts row
   codexlinks.ts  how entries connect: CODEX_ORDER, buildsOn / leadsTo (from the level graph), seeAlso (related both ways),
                  neighbours; ui/codexfigs.ts: figures from the site's widgets for entries without a part (number explorer,
                  instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page
