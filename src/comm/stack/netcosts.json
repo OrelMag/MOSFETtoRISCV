@@ -728,12 +728,12 @@
   "b": "host up\n"
  },
  "nands": {
-  "nic": 15409,
+  "nic": 15425,
   "macTx": 3553,
-  "macRx": 3197,
-  "computerNic": 5975353,
+  "macRx": 3213,
+  "computerNic": 5975369,
   "computer": 5959086,
   "switch": 507551,
-  "lan": 12471757
+  "lan": 12471821
  }
 }

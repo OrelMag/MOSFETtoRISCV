@@ -95,6 +95,40 @@ describe('MAC receiver model', () => {
   });
 });
 
+/** A burst ending in `last`, then a good frame: what the shift register still holds must not make the next preamble look like an SFD. */
+const afterBurst = (last: number, f: FrameSpec) => {
+  const a = lineOf([...wireBytes(spec(20)), last], 9, 30), b = lineOf(wireBytes(f), 9, 30);
+  return { rxd: [...a.rxd, ...b.rxd], crs: [...a.crs, ...b.crs] };
+};
+
+describe('a frame after another', () => {
+  it('whatever byte the last frame ended on, the next one is received: the shift register does not carry over', () => {
+    const f = spec(30);
+    for (let last = 0; last < 256; last++) {
+      const g = receive(afterBurst(last, f), MAC_B);
+      const second = g[g.length - 1];
+      expect(second.bytes, `after a last byte of 0x${last.toString(16)}`).toEqual(frameBody(f));
+      expect([second.err, second.why], `after a last byte of 0x${last.toString(16)}`).toEqual([0, 0]);
+    }
+  });
+  it('the gates too', () => {
+    for (const last of [0xaa, 0xab, 0x55]) {
+      const gate = simulate(macRx()), line = afterBurst(last, spec(30)), addr = addrBus(MAC_B), got: number[][] = [];
+      let cur: number[] = [];
+      set(gate, { rst: 1, rxd: 0, crs: 0, ready: 1, promisc: 0, addr });
+      tickClk(gate);
+      let err = 0;
+      for (let c = 0; c < line.rxd.length; c++) {
+        set(gate, { rst: 0, rxd: line.rxd[c], crs: line.crs[c], ready: 1, promisc: 0, addr });
+        tickClk(gate);
+        if (out(gate, 'valid')) { cur.push(out(gate, 'data')); if (out(gate, 'last')) { got.push(cur); err = out(gate, 'err'); cur = []; } }
+      }
+      expect(got[got.length - 1], `after 0x${last.toString(16)}`).toEqual(frameBody(spec(30)));
+      expect(err).toBe(0);
+    }
+  });
+});
+
 describe('MAC receiver gates', () => {
   it('every output equals the model after every clock: good frames, flipped bits, runts, other addresses, glitches on crs', async () => {
     const gate = simulate(macRx());
