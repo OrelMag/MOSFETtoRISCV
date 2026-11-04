@@ -4,6 +4,7 @@
 
 import type { ChipDoc, EndRef, LabelDoc, PartDoc, PartRef, PinDoc, Vec, WireDoc, Workspace } from './model';
 import { slug, uniqueName } from './model';
+import { MAX_FOLDERS, MAX_FOLDER_NAME, moveToFolder, newFolderName } from './folders';
 import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
@@ -505,5 +506,11 @@ export function addExample(ws: Workspace, ex: Example): { ws: Workspace; id: str
     sub[k] = sid;
   }
   chips[id] = ex.hz ? { ...ex.build(id, name, sub, docs), hz: ex.hz } : ex.build(id, name, sub, docs);
-  return { ws: openChip({ ...ws, chips }, id), id };
+  // the sub-chips go into a folder named after the example, not loose among the learner's own chips (one level only)
+  let out: Workspace = { ...ws, chips };
+  const short = (name.split(':')[0] || name).slice(0, MAX_FOLDER_NAME - 4);
+  const folder = newFolderName(out, short);
+  if (Object.keys(sub).length && (out.folders?.length ?? 0) < MAX_FOLDERS)
+    for (const sid of Object.values(sub)) out = moveToFolder(out, sid, folder);
+  return { ws: openChip(out, id), id };
 }
