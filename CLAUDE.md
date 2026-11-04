@@ -1237,7 +1237,12 @@ src/net/       the network past one Ethernet (DOM-free): ipv4.ts (IPv4's bytes, 
                comm/stack/tcp.ts is the same rules in the Python subset, tests/net-tcp-stack.test.ts compares every frame and state variable), tcpsim.ts (runTcp: the explorers' event simulator
                over a modelled bottleneck), lanbench.ts (Host, LanBench: two computers on the golden model, comm/nic.ts and comm/mac.ts on one clock, a switch or a router with a queue in between),
                tcpbench.ts (tcpBench, measureBench: chapter 52's setting; scripts/tcp-costs.ts --write → tcpcosts.json), gatewindow.ts (GateWindow: one computer into its gates at a quiet moment, on the bench's wire,
-               registers every instruction and NIC outputs every clock against the models, tryClose hands back; widgets/tcp.ts windowPanel)
+               registers every instruction and NIC outputs every clock against the models, tryClose hands back; widgets/tcp.ts windowPanel),
+               internet.ts (chapter 53's invented map: 8 networks, 16 routers of at most 3 ports, documentation AS numbers,
+               private addresses, .example; Internet: link state inside, BGP between, tableOf(r) as routes + chapter 51's trie and next-hop bytes, forward / send a frame
+               byte by byte, traceroute with real ICMP, loadWrites: a table through the fast path's cfg port), internetbgp.ts (BgpNet: path vector in rounds, Gao-Rexford
+               policy, a false longer prefix), internetdns.ts (RFC 1035 bytes, Resolver: iterative, TTLs), internetdelay.ts (light, bits, M/M/1 and LinkQueue, the engine's
+               cycles, a page's phases); widgets/internet.ts; tests/net-internet-gates.test.ts: every hop's gates against FastPathModel and the network model's bytes
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)
