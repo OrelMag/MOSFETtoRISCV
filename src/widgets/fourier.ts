@@ -23,7 +23,7 @@ export function harmonicsWidget(): Widget {
   let pat = 0, kept = 3, rate = 8, bw = 1;
   const WIN = 8, SAMPLES = 480, MAX_KEPT = 25;
   const time = plotOf({ W: 640, H: 220, x: [0, WIN], y: [-1.45, 1.45], yTicks: [-1, 0, 1], xLabel: 'bits', yLabel: 'level', aria: 'A repeating bit pattern, the sum of the harmonics kept, and the line\'s output, against time', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 0) });
-  const spec = plotOf({ W: 640, H: 200, x: [0, 24], y: [0, 1.45], yTicks: [0, 0.5, 1], xLabel: 'GHz', yLabel: 'amplitude', aria: 'The pattern\'s harmonics before and after the line, with the line\'s gain, against frequency', yFmt: (v) => num(v, 1) });
+  const spec = plotOf({ W: 640, H: 200, x: [0, 24], y: [0, 1.45], yTicks: [0, 1], xLabel: 'GHz', yLabel: 'amplitude', aria: 'The pattern\'s harmonics before and after the line, with the line\'s gain, against frequency', yFmt: (v) => num(v, 1) });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   const sel = h('select', { 'aria-label': 'Bit pattern' }, ...PATTERNS.map((p, i) => h('option', { value: String(i) }, p.name))) as HTMLSelectElement;
   sel.addEventListener('change', () => { pat = Number(sel.value); paint(); });
@@ -59,7 +59,7 @@ export function harmonicsWidget(): Widget {
   }
   paint();
   const key = h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'bits sent'), h('span', { class: 'k-near' }, 'sum of the harmonics kept'), h('span', { class: 'k-far' }, 'after the line'));
-  const key2 = h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'harmonics sent (kept in colour)'), h('span', { class: 'k-far' }, 'after the line'), h('span', { class: 'fr-k bits' }, 'the line\'s gain'));
+  const key2 = h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'harmonics sent (kept in colour)'), h('span', { class: 'k-far' }, 'after the line'), h('span', { class: 'fr-k' }, 'the line\'s gain'));
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'The same wave in time'), key, time.el),
