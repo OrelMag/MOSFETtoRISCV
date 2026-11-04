@@ -38,8 +38,8 @@ const CURVES: Curve[] = [
   { key: 'soft', name: 'K = 7, soft', cls: 'c5', rate: 0.5, f: (d) => convSoftBound(CONV_K7, d) },
 ];
 
-/** `keys`: which curves it starts with; the step after the codes shows them all. */
-export function berWidget(keys: string[] = ['none', 'secded']): Widget {
+/** `keys`: which curves it starts with. */
+export function berWidget(keys: string[] = CURVES.map((c) => c.key)): Widget {
   let db = 6, alive = true, timer = 0;
   const W = 620, H = 300, M = { l: 62, r: 14, t: 12, b: 36 }, X0 = -2, X1 = 12, Y0 = -8, Y1 = 0;
   const X = (d: number) => M.l + ((d - X0) / (X1 - X0)) * (W - M.l - M.r);
@@ -52,12 +52,12 @@ export function berWidget(keys: string[] = ['none', 'secded']): Widget {
   const lim = shannonDb(0.5), limB = shannonBinaryDb(0.5);
   svg.append(s('line', { x1: X(lim), x2: X(lim), y1: M.t, y2: H - M.b, class: 'bound' }), s('text', { x: X(lim) + 4, y: H - M.b - 6, class: 'tick' }, 'Shannon, rate ½'));
   fitText(svg, W);
-  const marker = svg.appendChild(s('line', { class: 'bound', y1: M.t, y2: H - M.b }));
+  const marker = svg.appendChild(s('line', { class: 'cd-mark', y1: M.t, y2: H - M.b }));
   const dots = svg.appendChild(s('g'));
   const on = new Set(keys), paths = new Map<string, SVGElement>();
   const pts = Array.from({ length: 141 }, (_, i) => X0 + (i * (X1 - X0)) / 140);
   for (const c of CURVES) {
-    const d = pts.map((x) => [x, c.f(x)] as const).filter(([, b]) => b >= 10 ** Y0).map(([x, b], i) => `${i ? 'L' : 'M'}${X(x).toFixed(1)},${Y(b).toFixed(1)}`).join('');
+    const d = pts.map((x) => [x, c.f(x)] as const).filter(([, b]) => b >= 10 ** Y0 && b < 0.2).map(([x, b], i) => `${i ? 'L' : 'M'}${X(x).toFixed(1)},${Y(b).toFixed(1)}`).join('');
     paths.set(c.key, svg.appendChild(s('path', { class: `err-s ${c.cls}`, d })) as SVGElement);
   }
   const key = h('div', { class: 'seg cd-seg', role: 'group', 'aria-label': 'Curves shown' });
@@ -73,7 +73,7 @@ export function berWidget(keys: string[] = ['none', 'secded']): Widget {
     for (const c of CURVES) paths.get(c.key)!.style.display = on.has(c.key) ? '' : 'none';
     tab.replaceChildren(row('head', 'code', 'rate', 'channel bit wrong', 'decoded bit wrong', 'gain at 10⁻⁵'),
       ...CURVES.filter((c) => on.has(c.key)).map((c) => row('', c.name, c.rate === 1 ? '1' : c.rate.toFixed(3), sci(channelP(db, c.rate)), sci(c.f(db)), c.key === 'none' ? '' : `${codingGain(c.f, 1e-5).toFixed(1)} dB`)));
-    note.textContent = `Eb is the energy per data bit, so a code of rate R gives each channel bit only R of it: Q(√(2R·Eb/N0)) is that channel bit's error rate. No code of rate ½ can work below ${lim.toFixed(2)} dB (${limB.toFixed(2)} dB with ±1 as the only inputs). The K = 7 curves are union bounds, which climb away from the truth above about 10⁻³; press Run for the decoder itself.`;
+    note.textContent = `Eb is the energy per data bit, so a code of rate R gives each channel bit only R of it: Q(√(2R·Eb/N0)) is that channel bit's error rate. No code of rate ½ can work below ${Math.abs(lim) < 0.005 ? '0' : lim.toFixed(2)} dB (${limB.toFixed(2)} dB with ±1 as the only inputs). The K = 7 curves are union bounds, which climb away from the truth above about 10⁻³; press Run for the decoder itself.`;
   };
   const run = () => {
     window.clearTimeout(timer);
@@ -286,7 +286,7 @@ export function rsPanel(): ScenePanel {
     const act = (f: () => void) => { stage.checkpoint(); f(); stage.refresh(); update(); };
     const send = () => { edge({ clr: 1, en: 0 }); for (const b of RS_MESSAGE) edge({ d: b, msg: 1, en: 1 }); };
     const status = h('div', { class: 'cd-bytes' }), wordEl = h('div', { class: 'cd-bytes cd-word' }), verdict = h('p', { class: 'err-verdict' });
-    const sHits = slider('Bytes hit at random', 0, 8, 1, 0, (v) => String(v), (v) => { hits = new Map(); let seed = 12345 + v * 77; const r = (m: number) => { seed = (seed * 1103515245 + 12345) >>> 0; return Math.floor((seed / 2 ** 32) * m); }; while (hits.size < v) hits.set(r(cw.length), 1 + r(255)); update(); });
+    const sHits = slider('Bytes hit', 0, 8, 1, 0, (v) => String(v), (v) => { hits = new Map(); let seed = 12345 + v * 77; const r = (m: number) => { seed = (seed * 1103515245 + 12345) >>> 0; return Math.floor((seed / 2 ** 32) * m); }; while (hits.size < v) hits.set(r(cw.length), 1 + r(255)); update(); });
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-rs', 'data-dock': 'right' },
       h('h4', null, 'RS (26, 16)', h('span', { class: 'fold-hint' })),
       h('div', { class: 'dram-ops' }, btn('Encode the message', 'Clear, then clock the 16 data bytes in', () => act(send)), btn('Clear', 'One clock edge with clr = 1', () => act(() => edge({ clr: 1, en: 0 })))),
@@ -332,6 +332,8 @@ export function burstOutcome(D: number, b: number, at: number): { n: number; err
 
 export function interleaveWidget(): Widget {
   let D = 1, b = 6, at = 4;
+  const runs = new Map<number, number>();
+  const lost = (d: number) => { let v = runs.get(d); if (v === undefined) runs.set(d, (v = secdedOverBursts(d, Math.ceil(3000 / d), 2e-4, 0.2, 7).rate)); return v; };
   const grid = h('div', { class: 'cd-il' }), verdict = h('p', { class: 'err-verdict' }), chips = h('div', { class: 'err-crc' }), note = h('p', { class: 'sub mos-note' });
   const stat = (k: string, v: string) => h('div', null, h('span', null, k), h('b', null, v));
   const paint = () => {
@@ -343,8 +345,7 @@ export function interleaveWidget(): Widget {
     chips.replaceChildren(stat('worst word sees', `${Math.max(...r.errs)} (⌈${b}/${D}⌉ = ${worstPerWord(b, D)})`), stat('words lost', `${r.failed} of ${r.total}`), stat('buffer each end', `${(D * n).toLocaleString('en-US')} bits`), stat('added delay', `${(D * n).toLocaleString('en-US')} bit times`));
     verdict.className = `err-verdict ${r.failed ? 'bad' : 'ok'}`;
     verdict.textContent = r.failed ? `A burst of ${b} puts ${Math.max(...r.errs)} errors into one word, beyond SEC-DED's one. ${r.failed} word${r.failed > 1 ? 's' : ''} wrong.` : `Written across ${D} word${D > 1 ? 's' : ''}, the burst of ${b} leaves at most one error in any word, and every word corrects it. The redundancy did not change.`;
-    const alone = secdedOverBursts(1, 3000, 2e-4, 0.2, 7), wide = secdedOverBursts(D, Math.ceil(3000 / D), 2e-4, 0.2, 7);
-    note.textContent = `On a seeded burst channel (a bad state entered 2 in 10 000 bits, five bits long on average, half the bits wrong) SEC-DED(72, 64) loses ${(100 * alone.rate).toFixed(2)} % of words alone and ${(100 * wide.rate).toFixed(2)} % at depth ${D}, the same errors spread out.`;
+    note.textContent = `On a seeded burst channel (a bad state entered 2 in 10 000 bits, five bits long on average, half the bits wrong) SEC-DED(72, 64) loses ${(100 * lost(1)).toFixed(2)} % of words without interleaving${D > 1 ? ` and ${(100 * lost(D)).toFixed(2)} % at depth ${D}, the same errors spread out` : ''}.`;
   };
   const sD = slider('Depth D (words)', 1, 12, 1, D, (v) => String(v), (v) => { D = v; paint(); });
   const sB = slider('Burst length', 1, 30, 1, b, (v) => `${v} bits`, (v) => { b = v; paint(); });

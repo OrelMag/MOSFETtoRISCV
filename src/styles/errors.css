@@ -82,6 +82,7 @@ span.err-bit { cursor: default; }
 .cd-key::before { content: ''; display: inline-block; width: 10px; height: 3px; margin-right: 6px; vertical-align: middle; background: currentColor; }
 .cd-key.c1::before { background: var(--bad); } .cd-key.c2::before { background: var(--accent); } .cd-key.c3::before { background: var(--good); } .cd-key.c4::before { background: var(--warn); } .cd-key.c5::before { background: var(--text-2); }
 .cd-trow { grid-template-columns: minmax(96px, 1.4fr) repeat(4, minmax(56px, 1fr)); }
+.mos-plot .cd-mark { stroke: var(--accent); stroke-width: 1.5; }
 .mos-plot .cd-dot { stroke: var(--surface); stroke-width: 1.5; }
 .mos-plot .cd-dot.c4 { fill: var(--warn); } .mos-plot .cd-dot.c5 { fill: var(--text-2); }
 .cd-stream { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
