@@ -1262,7 +1262,7 @@ Order, one branch and merge each: a relays + line model (39–42), b UART + SPI 
 switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaign + sandbox.
 
 - ✅ a: chapters 39–42, phys/line.ts, phys/telegraph.ts, phys/schmitt.ts, phys/metastable.ts, comm/ (codes, limits, exchange, startstop, asyncfifo), lib/telegraph.ts, lib/pad.ts, lib/sync.ts. Two clocks run on the cycle engine (one slot per clock pin; tests/comm-sync.test.ts); the scenes use GateSim for Pulse, Step and animation.
-- ✅ c: chapters 45–47 (modem, serial, errors): comm/ (modem, linecode, serdes, crc, framing, arq, fec), lib/modem.ts, lib/serdes.ts, lib/crc.ts, phys/line.ts equalization and PAM4. Open: on the gate-level scenes the line is a part with a delay and an error input, and opening it does not show the model's panel (decision 3); the 8b/10b table is checked against the known symbols, not diffed against the standard's text.
+- ✅ c: chapters 45–47 (modem, serial, errors): comm/ (modem, linecode, serdes, crc, framing, arq, fec), lib/modem.ts, lib/serdes.ts, lib/crc.ts, phys/line.ts equalization and PAM4. A line part opens onto its model's panel (`ComponentDef.modelPanel`, widgets/modelleaf.ts; decision 3). The 8b/10b encoder equals a vendor's printed table on all 268 symbols at both disparities (Xilinx UG196, tests/fixtures/8b10b-ug196.txt) and SATA 1.0's on the 258 it prints; IEEE 802.3's own Clause 36 tables are behind a login and were not read.
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
