@@ -911,6 +911,8 @@ pre.code {
     linear-gradient(to left, color-mix(in srgb, var(--text) 16%, transparent), transparent) right / 10px 100% no-repeat scroll,
     var(--surface-2);
 }
+/* the inspector is a narrow column: a long line wraps rather than run off the right edge with only a faint shadow to say so */
+.inspector pre.code { white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.code .kw { color: var(--accent); font-weight: 600; }
 pre.code .cm { color: var(--muted); font-style: italic; }
 .dl-hdl { margin-bottom: 14px; }
