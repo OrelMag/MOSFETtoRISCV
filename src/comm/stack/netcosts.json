@@ -68,9 +68,9 @@
      "stores": 15
     },
     "arp": {
-     "instr": 407,
-     "clocks": 502,
-     "loads": 46,
+     "instr": 418,
+     "clocks": 526,
+     "loads": 55,
      "stores": 49
     },
     "bytes": {
@@ -78,12 +78,6 @@
      "clocks": 230,
      "loads": 26,
      "stores": 26
-    },
-    "ip": {
-     "instr": 11,
-     "clocks": 24,
-     "loads": 9,
-     "stores": 0
     }
    },
    "total": {
@@ -114,9 +108,9 @@
      "stores": 4
     },
     "arp": {
-     "instr": 189,
-     "clocks": 231,
-     "loads": 20,
+     "instr": 200,
+     "clocks": 251,
+     "loads": 29,
      "stores": 22
     },
     "bytes": {
@@ -124,12 +118,6 @@
      "clocks": 103,
      "loads": 20,
      "stores": 6
-    },
-    "ip": {
-     "instr": 11,
-     "clocks": 20,
-     "loads": 9,
-     "stores": 0
     }
    },
    "total": {
@@ -158,7 +146,7 @@
    "layers": {
     "icmp": {
      "instr": 296,
-     "clocks": 354,
+     "clocks": 350,
      "loads": 10,
      "stores": 44
     },
@@ -175,21 +163,15 @@
      "stores": 32
     },
     "ip": {
-     "instr": 168,
-     "clocks": 202,
-     "loads": 13,
+     "instr": 179,
+     "clocks": 226,
+     "loads": 22,
      "stores": 21
     },
     "arp": {
      "instr": 8,
      "clocks": 9,
      "loads": 1,
-     "stores": 0
-    },
-    "udp": {
-     "instr": 11,
-     "clocks": 20,
-     "loads": 9,
      "stores": 0
     }
    },
@@ -228,9 +210,9 @@
      "stores": 15
     },
     "ip": {
-     "instr": 249,
-     "clocks": 308,
-     "loads": 27,
+     "instr": 260,
+     "clocks": 332,
+     "loads": 36,
      "stores": 32
     },
     "bytes": {
@@ -240,9 +222,9 @@
      "stores": 34
     },
     "icmp": {
-     "instr": 372,
-     "clocks": 492,
-     "loads": 63,
+     "instr": 361,
+     "clocks": 468,
+     "loads": 54,
      "stores": 53
     },
     "arp": {
@@ -315,41 +297,23 @@
  },
  "layers": {
   "a": {
-   "runtime": {
-    "instr": 3,
-    "clocks": 3,
-    "loads": 0,
-    "stores": 0
+   "app": {
+    "instr": 4750,
+    "clocks": 5428,
+    "loads": 541,
+    "stores": 134
    },
    "eth": {
-    "instr": 7793,
-    "clocks": 10733,
-    "loads": 1162,
-    "stores": 1753
+    "instr": 10557,
+    "clocks": 15170,
+    "loads": 2824,
+    "stores": 1748
    },
    "arp": {
-    "instr": 7857,
-    "clocks": 10200,
-    "loads": 2268,
-    "stores": 54
-   },
-   "ip": {
-    "instr": 262,
-    "clocks": 331,
-    "loads": 36,
-    "stores": 33
-   },
-   "icmp": {
-    "instr": 361,
-    "clocks": 451,
-    "loads": 23,
-    "stores": 63
-   },
-   "app": {
-    "instr": 4734,
-    "clocks": 5401,
-    "loads": 541,
-    "stores": 123
+    "instr": 5097,
+    "clocks": 5770,
+    "loads": 615,
+    "stores": 53
    },
    "bytes": {
     "instr": 935,
@@ -357,55 +321,55 @@
     "loads": 174,
     "stores": 64
    },
-   "udp": {
-    "instr": 11,
-    "clocks": 20,
-    "loads": 9,
-    "stores": 0
+   "icmp": {
+    "instr": 357,
+    "clocks": 439,
+    "loads": 23,
+    "stores": 59
+   },
+   "ip": {
+    "instr": 260,
+    "clocks": 332,
+    "loads": 36,
+    "stores": 32
    }
   },
   "b": {
-   "runtime": {
-    "instr": 3,
-    "clocks": 3,
-    "loads": 0,
-    "stores": 0
+   "app": {
+    "instr": 1945,
+    "clocks": 1986,
+    "loads": 12,
+    "stores": 29
    },
    "eth": {
-    "instr": 12103,
-    "clocks": 16730,
-    "loads": 1826,
-    "stores": 2750
+    "instr": 16527,
+    "clocks": 23850,
+    "loads": 4484,
+    "stores": 2745
    },
    "arp": {
-    "instr": 4846,
-    "clocks": 7644,
-    "loads": 2705,
-    "stores": 50
-   },
-   "ip": {
-    "instr": 262,
-    "clocks": 335,
-    "loads": 36,
-    "stores": 33
-   },
-   "icmp": {
-    "instr": 376,
-    "clocks": 500,
-    "loads": 63,
-    "stores": 57
-   },
-   "app": {
-    "instr": 1929,
-    "clocks": 1959,
-    "loads": 12,
-    "stores": 18
+    "instr": 426,
+    "clocks": 535,
+    "loads": 56,
+    "stores": 49
    },
    "bytes": {
     "instr": 911,
     "clocks": 1141,
     "loads": 170,
     "stores": 60
+   },
+   "ip": {
+    "instr": 260,
+    "clocks": 332,
+    "loads": 36,
+    "stores": 32
+   },
+   "icmp": {
+    "instr": 361,
+    "clocks": 468,
+    "loads": 54,
+    "stores": 53
    }
   }
  },
@@ -720,5 +684,14 @@
  "console": {
   "a": "arp: 10.0.0.2 is at 02:00:00:00:00:02\n64 bytes from 10.0.0.2: seq=1 time=14689 cycles\ndone",
   "b": "host up\n"
+ },
+ "nands": {
+  "nic": 15409,
+  "macTx": 3553,
+  "macRx": 3197,
+  "computerNic": 5975353,
+  "computer": 5959086,
+  "switch": 507551,
+  "lan": 12471757
  }
 }

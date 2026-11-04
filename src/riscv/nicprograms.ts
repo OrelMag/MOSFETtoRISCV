@@ -109,3 +109,11 @@ handler: lw  s5, 16(s0)
         sw   t5, 4(s2)          # give the buffer back
         li   s7, 1
         mret`;
+
+/**
+ * Measured on the gates (tests/comm-nic-soc.test.ts) for the 64-byte frame above, in clocks: the cable holds the frame (preamble, SFD, 64 bytes, FCS) for
+ * wireClocks; the transmitter starts doorbellToWire after the doorbell; the CPU sees the received frame pollSeen (polled) or irqSeen (by interrupt: the
+ * handler's first instruction) after the doorbell; a pass of the poll loop takes pollPass and there were polls of them; the interrupt line rises irqEntry
+ * clocks before the handler runs, the handler takes handler clocks, and the main loop had freePermille thousandths of the clocks after the doorbell.
+ */
+export const NIC_COSTS = { wireClocks: 2432, doorbellToWire: 279, pollSeen: 2726, irqSeen: 2718, pollPass: 4, polls: 680, irqEntry: 1, handler: 11, freePermille: 996, doorbell: 4 } as const;

@@ -6,6 +6,13 @@ import { DEFAULT_STACK } from '../src/comm/stack/all';
 import { hostApp, pingApp } from '../src/comm/stack/apps';
 import { stackProgram, type StackBuild } from '../src/comm/stack';
 import { lanComputers } from '../src/lib/lan';
+import { macRx, macTx } from '../src/lib/ethernet';
+import { ethSwitch } from '../src/lib/ethswitch';
+import { nic } from '../src/lib/nic';
+import { busComputer } from '../src/lib/soc';
+import { lanSoc } from '../src/lib/lan';
+import { stats } from '../src/sim/stats';
+import { LAN_SWITCH } from '../src/lib/lan';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
 import { pack } from '../src/sim/values';
@@ -61,11 +68,16 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
   };
   /** The byte helpers (ip.ts) serve every layer: counted apart, so that ARP and ICMP are not billed to IP. */
   const BYTES = new Set(['get16', 'put16', 'get32', 'put32', 'ones_sum']);
+  // a function belongs to the module (layer) whose text defines it, the application's own functions to 'app'
+  const moduleOf = { a: new Map<string, string>(), b: new Map<string, string>() };
+  for (const c of ['a', 'b'] as const) {
+    const lines = builds[c].source.split('\n');
+    for (const r of builds[c].ranges) for (const line of lines.slice(r.first - 1, r.last)) { const m = /^def (\w+)\(/.exec(line); if (m) moduleOf[c].set(m[1], r.name === 'stub' ? 'udp' : r.name); }
+  }
   const layerOf = (c: 'a' | 'b', pc: number): string => {
-    if (BYTES.has(fnAt(c, pc))) return 'bytes';
-    const l = builds[c].layerOfPc(pc);
-    if (l) return l === 'app' ? 'app' : l;
-    return 'runtime';
+    const fn = fnAt(c, pc);
+    if (BYTES.has(fn)) return 'bytes';
+    return moduleOf[c].get(fn) ?? (fn === '(top)' ? 'app' : 'runtime');
   };
   const node = (c: 'a' | 'b', n: string) => root.children!.get(c)!.children!.get(n)!;
   const cpu = { a: node('a', 'cpu'), b: node('b', 'cpu') };
@@ -121,4 +133,13 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
     windows, clocksToFirstReply, rtt, words: { a: A.compiled.words.length, b: B.compiled.words.length }, layers, functions, dma,
     pollPass: { a: gaps(entries.a), b: gaps(entries.b) }, console: con,
   };
+}
+
+/** NAND counts of the parts the chapter quotes (symbolic: nothing is simulated). */
+export function nandCounts(): Record<string, number> {
+  const prog = [0x13];
+  const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+  const withNic = busComputer(prog, [0], lanSoc(12)), without = busComputer(prog, [0], { ...lanSoc(12), nic: false });
+  const sw = ethSwitch(LAN_SWITCH);
+  return { nic: n(nic()), macTx: n(macTx()), macRx: n(macRx()), computerNic: n(withNic), computer: n(without), switch: n(sw), lan: 2 * n(withNic) + n(sw) + 2 * n(macTx()) + 2 * n(macRx()) };
 }

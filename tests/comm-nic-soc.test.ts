@@ -9,7 +9,7 @@ import { STACK_LAYOUT as L, STACK_RAM_K } from '../src/comm/stack/layout';
 import { busComputer, type SocOptions } from '../src/lib/soc';
 import { assemble } from '../src/riscv/asm';
 import { ISS } from '../src/riscv/iss';
-import { nicIrqSource, nicPollSource } from '../src/riscv/nicprograms';
+import { NIC_COSTS, nicIrqSource, nicPollSource } from '../src/riscv/nicprograms';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
@@ -87,30 +87,48 @@ describe('the computer with a NIC, in lock-step', () => {
 });
 
 /** Run a driver and read the cost of each step off the gates. */
-async function costs(src: string) {
+export async function measureDriver(src: string) {
   const m = build(src, false);
-  let irqRise = -1, handlerAt = -1;
   const hpc = assemble(src).labels?.get?.('handler') as number | undefined;
+  let irqRise = -1, handlerAt = -1, handlerClocks = 0, mainClocks = 0, txStart = -1, txEnd = -1, inHandler = false;
+  const root = m.sim.design.root;
   for (let n = 0; n < 12000 && m.reg(23) !== 1; n++) {
-    const pc = pack(m.sim.getBits(m.sim.design.root.ports.pcOut)) >>> 0;
-    if (hpc !== undefined && handlerAt < 0 && irqRise >= 0 && pc === hpc) handlerAt = m.clocks;
+    const pc = pack(m.sim.getBits(root.ports.pcOut)) >>> 0;
+    const h = hpc !== undefined && pc >= hpc && inHandler === (pc >= hpc);
+    if (hpc !== undefined && pc >= hpc) { if (handlerAt < 0) handlerAt = m.clocks; handlerClocks++; inHandler = true; } else if (m.reg(20) !== 0) mainClocks++;
+    void h;
+    if (m.out('txen') === 1 && txStart < 0) txStart = m.clocks;
+    if (m.out('txen') === 0 && txStart >= 0 && txEnd < 0) txEnd = m.clocks;
     m.step();
     if (m.np('irq') === 1 && irqRise < 0) irqRise = m.clocks;
     if (n % 3000 === 0) await tick();
   }
   const r = (i: number) => m.reg(i);
-  return { done: r(23), kick: r(20), seen: r(21), count: r(22), len: r(24), setup: r(25), back: r(26), txBack: r(27), irqRise, handlerAt, clocks: m.clocks };
+  return { done: r(23), kick: r(20), seen: r(21), count: r(22), len: r(24), setup: r(25), doorbell: r(26) - r(20), irqRise, handlerAt, handlerClocks, mainClocks, txStart, txEnd, clocks: m.clocks };
 }
 
 describe('what the driver costs, read off the gates', () => {
-  it('polled and by interrupt: the frame arrives after the same time; the interrupt frees the CPU', async () => {
-    const poll = await costs(nicPollSource()), irq = await costs(nicIrqSource());
+  it('polled and by interrupt: the same frame arrives after the same time; the interrupt frees the CPU', async () => {
+    const poll = await measureDriver(nicPollSource()), irq = await measureDriver(nicIrqSource());
     expect(poll.done).toBe(1);
     expect(irq.done).toBe(1);
     expect(poll.len).toBe(64);
     expect(irq.len).toBe(64);
-    // the send path in clocks: from the doorbell to the CPU free again, and to the frame in the receive buffer
-    console.log('poll', JSON.stringify(poll), 'irq', JSON.stringify(irq));
-    expect(poll.seen - poll.kick).toBeGreaterThan(64 * 32);
+    const got = {
+      // the cable: preamble, SFD, 64 bytes, FCS = 76 bytes of 32 clocks
+      wireClocks: poll.txEnd - poll.txStart,
+      // from the doorbell store to the transmitter's first bit
+      doorbellToWire: poll.txStart - poll.kick,
+      // from the doorbell to the CPU seeing the frame in its receive descriptor, polled and by interrupt
+      pollSeen: poll.seen - poll.kick, irqSeen: irq.seen - irq.kick,
+      // one pass of the poll loop (addi, lw, bltz) and how many there were
+      pollPass: Math.round((poll.seen - poll.kick) / poll.count), polls: poll.count,
+      // the interrupt: asserted at, first handler instruction at, handler clocks, share of the clocks the main loop had
+      irqEntry: irq.handlerAt - irq.irqRise, handler: irq.handlerClocks,
+      freePermille: Math.round((1000 * irq.mainClocks) / (irq.mainClocks + irq.handlerClocks)),
+      doorbell: poll.doorbell,
+    };
+    console.log(JSON.stringify(got), JSON.stringify({ poll, irq }));
+    expect(got).toEqual({ ...NIC_COSTS });
   }, 300000);
 });
