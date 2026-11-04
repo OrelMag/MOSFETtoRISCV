@@ -21,7 +21,7 @@ export function onesSum(bytes: ArrayLike<number>, start = 0): number {
 /** The checksum to store: the complement of the sum. */
 export const checksum = (bytes: ArrayLike<number>, start = 0): number => ~onesSum(bytes, start) & 0xffff;
 
-export type Layer = 'eth' | 'arp' | 'ip' | 'icmp' | 'udp' | 'data' | 'pad' | 'fcs';
+export type Layer = 'eth' | 'arp' | 'ip' | 'icmp' | 'udp' | 'tcp' | 'data' | 'pad' | 'fcs';
 export interface Field { layer: Layer; name: string; bytes: number[]; /** How to read it. */ value: string }
 export interface Built { bytes: number[]; fields: Field[] }
 
@@ -105,6 +105,30 @@ export function udpFrame(u: UdpSpec): Built {
   return ipFrame({ ...u, proto: 17 }, t);
 }
 
+export interface TcpSpec extends Omit<IpSpec, 'proto'> { sport: number; dport: number; seq: number; ack: number; flags: number; wnd: number; mss?: number; data: number[] }
+const TCP_FLAG_NAMES: [number, string][] = [[2, 'SYN'], [16, 'ACK'], [1, 'FIN'], [4, 'RST'], [8, 'PSH']];
+export const tcpFlagText = (f: number): string => TCP_FLAG_NAMES.filter(([m]) => f & m).map(([, n]) => n).join(', ') || 'none';
+/** TCP over IPv4 (RFC 9293): the checksum covers the same kind of pseudo-header as UDP's, with protocol 6, and the length is not in the segment. */
+export function tcpFrame(u: TcpSpec): Built {
+  const opt = u.mss === undefined ? [] : [2, 4, ...be16(u.mss)], hl = 20 + opt.length, len = hl + u.data.length;
+  const pseudo = onesSum([...be32(u.src), ...be32(u.dst), 0, 6, ...be16(len)]);
+  const ck = checksum([...be16(u.sport), ...be16(u.dport), ...be32(u.seq), ...be32(u.ack), (hl / 4) << 4, u.flags, ...be16(u.wnd), 0, 0, 0, 0, ...opt, ...u.data], pseudo);
+  const t: Field[] = [
+    { layer: 'tcp', name: 'source port', bytes: be16(u.sport), value: `${u.sport}` },
+    { layer: 'tcp', name: 'destination port', bytes: be16(u.dport), value: `${u.dport}` },
+    { layer: 'tcp', name: 'sequence number', bytes: be32(u.seq), value: `${u.seq >>> 0}` },
+    { layer: 'tcp', name: 'acknowledgment number', bytes: be32(u.ack), value: `${u.ack >>> 0}` },
+    { layer: 'tcp', name: 'header length', bytes: [(hl / 4) << 4], value: `${hl / 4} words` },
+    { layer: 'tcp', name: 'flags', bytes: [u.flags], value: tcpFlagText(u.flags) },
+    { layer: 'tcp', name: 'window', bytes: be16(u.wnd), value: `${u.wnd} bytes` },
+    { layer: 'tcp', name: 'checksum', bytes: be16(ck), value: `0x${ck.toString(16).padStart(4, '0')}` },
+    { layer: 'tcp', name: 'urgent pointer', bytes: [0, 0], value: '0' },
+    ...(opt.length ? [{ layer: 'tcp' as const, name: 'option: maximum segment size', bytes: opt, value: `${u.mss} bytes` }] : []),
+    { layer: 'data', name: 'data', bytes: u.data, value: `${u.data.length} bytes` },
+  ];
+  return ipFrame({ ...u, proto: 6 }, t);
+}
+
 /** What goes on the wire after the frame: padding to 60 bytes (the MAC adds it) and the 4-byte FCS. */
 export const onWire = (f: Built): number[] => frameBody({ dst: f.bytes.slice(0, 6), src: f.bytes.slice(6, 12), type: (f.bytes[12] << 8) | f.bytes[13], payload: f.bytes.slice(14) });
 
@@ -121,6 +145,7 @@ export function dissect(b: ArrayLike<number>): string {
     const src = ipText(ip4(a[26], a[27], a[28], a[29])), dst = ipText(ip4(a[30], a[31], a[32], a[33])), hl = (a[14] & 15) * 4, proto = a[23], t = 14 + hl;
     if (proto === 1 && a.length >= t + 8) return `ICMP ${a[t] === 8 ? 'echo request' : a[t] === 0 ? 'echo reply' : `type ${a[t]}`} ${src} > ${dst} id 0x${((a[t + 4] << 8) | a[t + 5]).toString(16)} seq ${(a[t + 6] << 8) | a[t + 7]}`;
     if (proto === 17 && a.length >= t + 8) return `UDP ${src}:${(a[t] << 8) | a[t + 1]} > ${dst}:${(a[t + 2] << 8) | a[t + 3]} length ${((a[t + 4] << 8) | a[t + 5]) - 8}`;
+    if (proto === 6 && a.length >= t + 20) { const w = (o: number) => ip4(a[o], a[o + 1], a[o + 2], a[o + 3]); const n = ((a[16] << 8) | a[17]) - (t - 14) - (a[t + 12] >> 4) * 4; return `TCP ${src}:${(a[t] << 8) | a[t + 1]} > ${dst}:${(a[t + 2] << 8) | a[t + 3]} [${tcpFlagText(a[t + 13])}] seq ${w(t + 4)} ack ${w(t + 8)} win ${(a[t + 14] << 8) | a[t + 15]} len ${n}`; }
     return `IPv4 protocol ${proto} ${src} > ${dst}`;
   }
   return `EtherType 0x${type.toString(16)}, ${a.length} bytes`;

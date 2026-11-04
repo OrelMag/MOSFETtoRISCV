@@ -56,7 +56,7 @@ const words = (src: string): number[] => { const a = assemble(src); if (a.errors
 export const wireBytes = (frameLen: number) => 8 + Math.max(60, frameLen) + 4;
 export const wireClocks = (frameLen: number) => 32 * (wireBytes(frameLen) + 12);
 
-const LAYER_NAME: Record<Layer, string> = { eth: 'Ethernet', arp: 'ARP', ip: 'IPv4', icmp: 'ICMP', udp: 'UDP', data: 'data', pad: 'padding', fcs: 'FCS' };
+const LAYER_NAME: Record<Layer, string> = { eth: 'Ethernet', arp: 'ARP', ip: 'IPv4', icmp: 'ICMP', udp: 'UDP', tcp: 'TCP', data: 'data', pad: 'padding', fcs: 'FCS' };
 
 // ---- the path ---------------------------------------------------------------------------------------------------------
 
