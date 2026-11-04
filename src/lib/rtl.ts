@@ -68,7 +68,10 @@ export class Rtl {
   private fresh(inst: string, port: string, name?: string): Sig {
     const id = this.drivers.length;
     this.drivers.push({ scope: this.cur, inst, port });
-    this.names.push(name ?? `n${id}`);
+    let nm = name ?? `n${id}`;
+    while (this.used.has(nm)) nm = `${nm}_${id}`;
+    this.used.add(nm);
+    this.names.push(nm);
     this.alias.push(id);
     return id;
   }
@@ -77,14 +80,15 @@ export class Rtl {
   /** Name a signal (its net and port label); the last name given wins. Names must be unique: a clash gets the signal's number. */
   name(s: Sig, name: string): Sig {
     s = this.root(s);
-    this.names[s] = this.used.has(name) ? `${name}_${s}` : name;
-    this.used.add(this.names[s]);
+    let nm = name;
+    while (this.used.has(nm)) nm = `${nm}_${s}`;
+    this.names[s] = nm;
+    this.used.add(nm);
     return s;
   }
 
   input(name: string, opts: { clock?: boolean } = {}): Sig {
     const s = this.fresh('', name, name);
-    this.used.add(name);
     this.ins.push({ name, width: 1, sigs: [s] });
     if (opts.clock) this.clocks.add(name);
     return s;
@@ -92,7 +96,7 @@ export class Rtl {
   /** A bus pin of w bits, LSB first. */
   inputBus(name: string, w: number): Sig[] {
     const sp = `sp_${name}`;
-    this.used.add(name);
+    this.used.add(name); // the bus pin itself; its bits are ${name}0, ${name}1 …
     const sigs = Array.from({ length: w }, (_, i) => this.fresh(sp, `o${i}`, `${name}${i}`));
     this.ins.push({ name, width: w, sigs });
     return sigs;
