@@ -25,7 +25,7 @@ export function pressView(): Widget {
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
     aria: 'Hollerith’s pin press in 3D: a head of spring pins above a census card, mercury cups below it and a row of counting dials',
-    camera: { target: [0, 25, 8], yaw: 0.5, pitch: 0.3, dist: 124 },
+    camera: { target: [0, 23, 8], yaw: 0.5, pitch: 0.3, dist: 142 },
     limits: { minDist: 60, maxDist: 360 },
     note: 'Only the census card’s ten positions are drawn, far fewer than a real card had, and the stroke is a drawing: the pins are not modelled.',
     draw: () => paint(),
