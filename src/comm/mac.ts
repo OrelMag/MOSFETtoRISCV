@@ -203,36 +203,50 @@ export const wireDelay = (x: readonly number[], i: number, j: number): number =>
  * the delay, which is how it knows (collision = I am sending and I hear someone). `clash` is the cable's own view: two
  * drivers on at the same instant, undelayed. A station's own signal is not here: it is at its own end of the wire at once.
  */
+/** The history a wire keeps: per station, the last samples of (txen << 1 | txd), newest first. */
+export const wireHistory = (x: readonly number[]): number[][] => {
+  const L = Math.max(1, ...x.flatMap((_, i) => x.map((__, j) => (i === j ? 0 : wireDelay(x, i, j)))));
+  return x.map(() => new Array<number>(L).fill(0));
+};
+/** Sample the drivers at a rising edge into the history. */
+export function wirePush(hist: number[][], txd: readonly number[], txen: readonly number[]): void {
+  for (let j = 0; j < hist.length; j++) { hist[j].pop(); hist[j].unshift((txen[j] << 1) | (txd[j] & 1)); }
+}
+/** What every station hears given the history (rxd, crs) and the cable's own two-drivers flag. */
+export function wireOutputs(x: readonly number[], hist: readonly number[][]): { rxd: number[]; crs: number[]; clash: number } {
+  const n = x.length, rxd: number[] = [], crs: number[] = [];
+  let on = 0;
+  for (let j = 0; j < n; j++) on += hist[j][0] >> 1;
+  for (let i = 0; i < n; i++) {
+    let c = 0, d = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue;
+      const v = hist[j][wireDelay(x, i, j) - 1];
+      c |= v >> 1; d |= v & (v >> 1);
+    }
+    crs.push(c); rxd.push(d);
+  }
+  return { rxd, crs, clash: on >= 2 ? 1 : 0 };
+}
+
 export class SharedWire {
   hist: number[][];
   rxd: number[]; crs: number[]; clash = 0;
   constructor(public x: readonly number[]) {
-    const L = Math.max(1, ...x.flatMap((a, i) => x.map((_, j) => (i === j ? 0 : wireDelay(x, i, j)))));
-    this.hist = x.map(() => new Array<number>(L).fill(0));
+    this.hist = wireHistory(x);
     this.rxd = x.map(() => 0); this.crs = x.map(() => 0);
   }
   /** Sample the drivers at a rising edge (txd, txen: one entry per station). */
   step(txd: readonly number[], txen: readonly number[]): void {
-    const n = this.x.length;
-    for (let j = 0; j < n; j++) { this.hist[j].pop(); this.hist[j].unshift((txen[j] << 1) | (txd[j] & 1)); }
-    let on = 0;
-    for (let j = 0; j < n; j++) on += txen[j];
-    this.clash = on >= 2 ? 1 : 0;
-    for (let i = 0; i < n; i++) {
-      let c = 0, d = 0;
-      for (let j = 0; j < n; j++) {
-        if (j === i) continue;
-        const v = this.hist[j][wireDelay(this.x, i, j) - 1];
-        c |= v >> 1; d |= v & (v >> 1);
-      }
-      this.crs[i] = c; this.rxd[i] = d;
-    }
+    wirePush(this.hist, txd, txen);
+    const o = wireOutputs(this.x, this.hist);
+    this.rxd = o.rxd; this.crs = o.crs; this.clash = o.clash;
   }
 }
 
 // ---- a station and a segment -------------------------------------------------------------------------------------------
 
-export interface StationIn { rst: number; go: number; len: number; hrd?: number; ra?: number }
+export interface StationIn { rst: number; go: number; len: number; we?: number; wa?: number; wd?: number }
 
 /**
  * ETH_STATION in software: a frame source (a byte buffer and a read pointer) feeding a MacTx, a MacRx behind the address
@@ -267,6 +281,7 @@ export class Station {
     const rwp = this.wp;
     tx.step(txIn);
     rx.step(rxIn);
+    if (i.we) this.txmem[(i.wa ?? 0) & 0x7ff] = (i.wd ?? 0) & 0xff;
     if (i.rst) { this.busy = this.tail = this.len = this.rp = this.wp = this.cp = this.ngood = this.nbad = this.ncol = 0; return; }
     if (i.go && !this.busy) { this.busy = 1; this.len = i.len & 0x7ff; this.rp = 0; this.tail = 0; }
     else {
@@ -326,5 +341,15 @@ export const propagationBitTimes = (metres: number, v: number, mbps: number): nu
  * must still be sending when the news of a collision at the far end comes back, which takes the round trip 2d/v.
  */
 export const maxCableMetres = (bits: number, v: number, mbps: number): number => ((bits / (mbps * 1e6)) * v * 299792458) / 2;
+
+/**
+ * A pcap record for a frame the receive buffer kept: bytes from the destination to the pad (no FCS, as captures have it),
+ * stamped with the time its first byte reached the receiver: the commit comes at the last bit, so back up by the frame's
+ * wire time (preamble, SFD, bytes, FCS) at 32 clocks a byte.
+ */
+export function captureRecord(commitClock: number, bytes: number[]): { us: number; bytes: number[] } {
+  const wireClocks = (PREAMBLE_BYTES + bytes.length + FCS_BYTES) * BYTE_CLOCKS;
+  return { us: clocksToUs(Math.max(0, commitClock - wireClocks)), bytes };
+}
 
 export { FCS_BYTES };

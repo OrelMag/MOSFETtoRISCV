@@ -2,9 +2,10 @@
 // every clock; the bytes on the wire against comm/ethframe.ts; the shared wire, the station and the segment.
 
 import { describe, expect, it } from 'vitest';
-import { BIT_CLOCKS, GAP_CLOCKS, MacRx, MacTx, WHY_ADDR, WHY_FCS, WHY_LONG, WHY_RUNT, type RxIn, type TxIn } from '../src/comm/mac';
-import { frameBody, frameBytes, wireBytes, type FrameSpec } from '../src/comm/ethframe';
-import { macRx, macTx } from '../src/lib/ethernet';
+import { BIT_CLOCKS, captureRecord, GAP_CLOCKS, MacRx, MacTx, Segment, Station, type StationIn, WHY_ADDR, WHY_FCS, WHY_LONG, WHY_RUNT, type RxIn, type TxIn } from '../src/comm/mac';
+import { frameBody, frameBytes, parseFrame, wireBytes, type FrameSpec } from '../src/comm/ethframe';
+import { pcapFile, readPcap } from '../src/comm/pcap';
+import { ethSegment, macRx, macTx, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethernet';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -256,5 +257,119 @@ describe('MAC transmitter attempt limit', () => {
     expect(drops).toBe(1);
     expect(restarts).toBe(15);
     expect(atts).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
+  }, 120000);
+});
+
+// ---- the segment: four stations on a cable, gates against the software segment ----------------------------------------
+
+interface Op { sel: number; wa: number; wd: number; we: number; len: number; go: number }
+const NOOP: Op = { sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0 };
+
+/** The host's cycles for loading a frame into station k and sending it: one write a clock, then go. */
+function loadOps(k: number, bytes: number[]): Op[] {
+  return [...bytes.map((b, i) => ({ ...NOOP, sel: k, wa: i, wd: b, we: 1 })), { ...NOOP, sel: k, len: bytes.length, go: 1 }];
+}
+
+function newSegment(promisc = [0, 0, 0, 0]): Segment {
+  return new Segment(SEG_POSITIONS.map((_, i) => new Station(stationMac(i), STATION_SEEDS[i], promisc[i])), SEG_POSITIONS);
+}
+
+describe('segment', () => {
+  it('four stations, a collision and a broadcast: every output of the gates equals the software segment after every clock; frames arrive intact', async () => {
+    const gate = simulate(ethSegment(4));
+    const seg = newSegment([0, 0, 0, 1]);
+    const f01 = frameBody({ dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: Array.from({ length: 50 }, (_, i) => i + 1) });
+    const f10 = frameBody({ dst: stationMac(0), src: stationMac(1), type: 0x0806, payload: Array.from({ length: 10 }, (_, i) => 0xa0 + i) });
+    const fb = frameBody({ dst: [0xff, 0xff, 0xff, 0xff, 0xff, 0xff], src: stationMac(2), type: 0x0800, payload: [9, 8, 7] });
+    // both loads are queued first and go together: the stations start in the same clock and collide
+    const ops: Op[] = [{ ...NOOP }, ...loadOps(0, f01).slice(0, -1), ...loadOps(1, f10).slice(0, -1), ...loadOps(2, fb).slice(0, -1),
+      { ...NOOP, sel: 0, len: f01.length, go: 1 }, { ...NOOP, sel: 1, len: f10.length, go: 1 }];
+    // station 2 goes later, while the others are busy: it defers
+    const goLater = 9000;
+    set(gate, { rst: 1, sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0, promisc: 8 });
+    tickClk(gate); tickClk(gate);
+    seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 }))); seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 })));
+    const seen = { restart: 0, sent: 0, good: 0, bad: 0, clash: 0 };
+    for (let c = 0; c < 60000; c++) {
+      const op: Op = c < ops.length ? ops[c] : c === goLater ? { ...NOOP, sel: 2, len: fb.length, go: 1 } : NOOP;
+      const ins: StationIn[] = seg.st.map((_, k) => (op.sel === k ? { rst: 0, go: op.go, len: op.len, we: op.we, wa: op.wa, wd: op.wd } : { rst: 0, go: 0, len: 0 }));
+      set(gate, { rst: 0, sel: op.sel, wa: op.wa, wd: op.wd, we: op.we, len: op.len, go: op.go, ra: 0, hrd: 0, promisc: 8 });
+      tickClk(gate); seg.step(ins);
+      const bitsOf = (f: (s: Station) => number) => seg.st.reduce((v, s, i) => v | (f(s) << i), 0);
+      const exp: Record<string, number> = {
+        txen: bitsOf((s) => s.tx.txen), busy: bitsOf((s) => s.busy), sent: bitsOf((s) => s.tx.sent), restart: bitsOf((s) => s.tx.restart), drop: bitsOf((s) => s.tx.drop),
+        rxgood: bitsOf((s) => (s.rx.valid && s.rx.last && !s.rx.err ? 1 : 0)), rxbad: bitsOf((s) => (s.rx.valid && s.rx.last && s.rx.err ? 1 : 0)), clash: seg.wire.clash,
+      };
+      for (const k of Object.keys(exp)) expect(out(gate, k), `${k} @${c}`).toBe(exp[k]);
+      seen.restart += seg.st.reduce((n, s) => n + s.tx.restart, 0); seen.sent += seg.st.reduce((n, s) => n + s.tx.sent, 0); seen.clash += seg.wire.clash;
+      if (c % 100 === 0) {
+        const wide = (f: (s: Station) => number, w: number) => seg.st.reduce((v, s, i) => v + f(s) * 2 ** (w * i), 0);
+        expect(out(gate, 'ngood'), `ngood @${c}`).toBe(wide((s) => s.ngood, 8));
+        expect(out(gate, 'nbad'), `nbad @${c}`).toBe(wide((s) => s.nbad, 8));
+        expect(out(gate, 'ncol'), `ncol @${c}`).toBe(wide((s) => s.ncol, 8));
+        expect(out(gate, 'cp'), `cp @${c}`).toBe(wide((s) => s.cp, 11));
+        expect(out(gate, 'txstate'), `txstate @${c}`).toBe(wide((s) => s.tx.state, 3));
+        expect(out(gate, 'att'), `att @${c}`).toBe(wide((s) => s.tx.att, 4));
+        expect(out(gate, 'rxstate'), `rxstate @${c}`).toBe(wide((s) => s.rx.state, 2));
+      }
+      if (c % 400 === 0) await yieldTick();
+    }
+    expect(seen.clash).toBeGreaterThan(0);
+    expect(seen.restart).toBeGreaterThan(1);
+    expect(seen.sent).toBe(3);
+    // station 1 kept f01 (addressed to it) and the broadcast, 0 kept f10 and the broadcast, 2 sent the broadcast and kept nothing,
+    // 3 is promiscuous and kept all three
+    expect([seg.st[0].ngood, seg.st[1].ngood, seg.st[2].ngood, seg.st[3].ngood]).toEqual([2, 2, 0, 3]);
+    // the bytes in station 1's receive buffer: f01 and the broadcast, each as a whole frame, in the order they were kept
+    const kept = seg.st[1].frameAt(0, seg.st[1].cp);
+    expect(kept).toHaveLength(f01.length + fb.length);
+    const first = kept.slice(0, 60), second = kept.slice(60);
+    expect([first, second]).toSatisfy((p: number[][]) => (JSON.stringify(p) === JSON.stringify([f01, fb])) || (JSON.stringify(p) === JSON.stringify([fb, f01])));
+  }, 180000);
+});
+
+describe('capture', () => {
+  it('a promiscuous station on the gate-level segment keeps every frame; they go through pcapFile, readPcap and parseFrame with their fields and FCS intact', async () => {
+    const gate = simulate(ethSegment(4));
+    const f01: FrameSpec = { dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: Array.from({ length: 80 }, (_, i) => (i * 5) & 0xff) };
+    const f12: FrameSpec = { dst: stationMac(2), src: stationMac(1), type: 0x0806, payload: Array.from({ length: 28 }, (_, i) => 0x40 + i) };
+    const bodies = [frameBody(f01), frameBody(f12)];
+    const host = (o: Partial<Op> & { ra?: number; hrd?: number; rst?: number }) => set(gate, { rst: 0, sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0, promisc: 8, ...o });
+    host({ rst: 1 }); tickClk(gate); tickClk(gate);
+    for (const [k, b] of [[0, bodies[0]], [1, bodies[1]]] as const) {
+      b.forEach((v, i) => { host({ sel: k, wa: i, wd: v, we: 1 }); tickClk(gate); });
+    }
+    host({ sel: 0, len: bodies[0].length, go: 1 }); tickClk(gate);
+    host({});
+    const cpOf = () => Math.floor(out(gate, 'cp') / 2 ** 33);
+    const marks: { clock: number; from: number; to: number }[] = [];
+    let last = 0;
+    for (let c = 0; c < 9000; c++) {
+      if (c === 3500) { host({ sel: 1, len: bodies[1].length, go: 1 }); tickClk(gate); host({}); } else tickClk(gate);
+      const cp = cpOf();
+      if (cp !== last) { marks.push({ clock: c, from: last, to: cp }); last = cp; }
+      if (c % 400 === 0) await yieldTick();
+    }
+    expect(marks).toHaveLength(2);
+    const frames = marks.map((mk) => {
+      const bytes: number[] = [];
+      for (let a = mk.from; a < mk.to; a++) { host({ sel: 3, ra: a, hrd: 1 }); bytes.push(out(gate, 'rd')); }
+      return captureRecord(mk.clock, bytes);
+    });
+    const file = pcapFile(frames);
+    const back = readPcap(file);
+    expect(back).toHaveLength(2);
+    const parsed = back.map((r) => { const b = Array.from(r.bytes); return parseFrame([...b, ...frameBytes({ dst: b.slice(0, 6), src: b.slice(6, 12), type: (b[12] << 8) | b[13], payload: b.slice(14) }).slice(-4)]); });
+    expect(back.map((r) => Array.from(r.bytes))).toEqual(bodies); // the bytes the gates received are the bytes the other station's gates sent
+    const sorted = parsed.map((p) => p.src[5]).sort();
+    expect(sorted).toEqual([1, 2]);
+    for (const p of parsed) { expect(p.fcsOk).toBe(true); expect(p.runt).toBe(false); }
+    const byFirst = (src: number) => parsed[parsed.findIndex((p) => p.src[5] === src)];
+    expect(byFirst(1).dst).toEqual(stationMac(1)); // frame f01: destination station 2's address 02:..:02, source station 1
+    expect(byFirst(1).type).toBe(0x0800);
+    expect(byFirst(1).payload.slice(0, 80)).toEqual(f01.payload);
+    expect(byFirst(2).type).toBe(0x0806);
+    expect(byFirst(2).payload.slice(0, 28)).toEqual(f12.payload);
+    expect(back[1].us).toBeGreaterThan(back[0].us);
   }, 120000);
 });

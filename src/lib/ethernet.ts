@@ -10,7 +10,7 @@
 
 import { CRC32_REFLECTED } from '../comm/crc';
 import {
-  BIT_CLOCKS, GAP_CLOCKS, LFSR_BITS, RX_BITS, SRC_BITS, SharedWire, wireDelay, type StationIn,
+  BIT_CLOCKS, GAP_CLOCKS, LFSR_BITS, RX_BITS, SRC_BITS, wireHistory, wireOutputs, wirePush, type StationIn,
 } from '../comm/mac';
 import { MAX_FRAME } from '../comm/ethframe';
 import type { ComponentDef, PortDef } from '../sim/types';
@@ -276,3 +276,179 @@ export function macRx(): ComponentDef {
   rxDef = m.build();
   return rxDef;
 }
+// ---- the shared wire ---------------------------------------------------------------------------------------------------
+
+interface WireState { hist: number[][]; clk: number; txd: number; txen: number }
+const wires = new Map<string, ComponentDef>();
+
+/**
+ * The cable: stations at positions x (in clocks of propagation) along it. Each hears the OR of the others' signals, delayed
+ * by the distance; two senders at once superpose into garbage. One box, like chapter 43's LINE: a transmission line is
+ * chapter 41's model (phys/line.ts), not a circuit, so this is the part of the book that does not end in transistors.
+ * clash is the cable's own view of two drivers on at once.
+ */
+export function sharedWire(x: readonly number[]): ComponentDef {
+  const n = x.length, key = x.join('_');
+  const hit = wires.get(key);
+  if (hit) return hit;
+  const mask = 2 ** n - 1;
+  const unpack = (v: number): number[] => Array.from({ length: n }, (_, i) => Math.floor(v / 2 ** i) & 1);
+  const pack = (a: number[]): number => a.reduce((v, b, i) => v + b * 2 ** i, 0);
+  const d = define({
+    id: `eth_wire_${key}`, name: `Shared wire (${n} stations)`, category: 'memory',
+    summary: `One cable with ${n} stations at ${x.join(', ')} clocks along it. Each station hears the OR of the others' signals (txd while txen), delayed by the distance, and a carrier (crs) while any other is sending. A station's own signal is not here: it is at its own end of the wire at once. clash is 1 while two drivers are on at the same instant. A transmission line is not a circuit, so this one box does not open into transistors.`,
+    ports: [bus('txd', n, 'in'), bus('txen', n, 'in'), bit('clk', 'in', 'bottom', true), bus('rxd', n, 'out'), bus('crs', n, 'out'), bit('clash', 'out')],
+    symbol: { kind: 'box', label: 'WIRE' },
+    behavior: {
+      delay: 1,
+      seq: { clk: 'clk', comb: [] },
+      init: (): WireState => ({ hist: wireHistory(x), clk: 0, txd: 0, txen: 0 }),
+      eval: ([txd, txen, clk], st) => {
+        const s = st as WireState;
+        const k = clk < 0 ? 2 : clk;
+        if (k !== 1) { s.txd = txd < 0 ? 0 : txd & mask; s.txen = txen < 0 ? 0 : txen & mask; }
+        if (s.clk === 0 && k === 1) wirePush(s.hist, unpack(s.txd), unpack(s.txen));
+        s.clk = k;
+        const o = wireOutputs(x, s.hist);
+        return [pack(o.rxd), pack(o.crs), o.clash];
+      },
+      carry: (prev) => prev,
+    },
+  });
+  wires.set(key, d);
+  return d;
+}
+
+// ---- a station ---------------------------------------------------------------------------------------------------------
+
+let stDef: ComponentDef | undefined;
+
+/**
+ * A MAC TX with its frame source and a MAC RX with its receive buffer. Sending: write the frame (destination to pad, no
+ * FCS) through wa / wd / we at addresses from 0, put its length on len and pulse go; the source feeds the byte stream,
+ * rewinds on a collision (restart) and lets go on sent or drop. Receiving: every byte of every frame is written at wp; at
+ * last, err = 0 moves the commit pointer cp up to wp (the frame is kept, rxgood pulses), err = 1 moves wp back to cp (the
+ * frame is gone, rxbad pulses). This is the buffer-until-the-FCS-is-known policy: the receiver delivers a frame it cannot
+ * yet vouch for, so the consumer has to be able to take it back. hrd = 1 reads the receive buffer at ra on rd.
+ */
+export function ethStation(): ComponentDef {
+  if (stDef) return stDef;
+  const m = new Rtl({
+    id: 'eth_station', name: 'Ethernet station', category: 'sequential', label: 'STATION', columnHeight: 70,
+    summary: 'A MAC transmitter fed from a frame buffer and a MAC receiver writing a receive buffer, on a (txd, txen) / (rxd, crs) serial pair: the host writes a frame, pulses go and reads the frames that were kept. Half duplex: the wire inputs carry what the other stations send; the station adds its own end.',
+  });
+  const clk = m.input('clk', { clock: true }), rst = m.input('rst');
+  const mac = m.inputBus('mac', 48), promisc = m.input('promisc'), seed = m.inputBus('seed', LFSR_BITS);
+  const wa = m.inputBus('wa', SRC_BITS), wd = m.inputBus('wd', 8), we = m.input('we'), lenIn = m.inputBus('len', SRC_BITS), go = m.input('go');
+  const ra = m.inputBus('ra', RX_BITS), hrd = m.input('hrd'), rxdO = m.input('rxd'), crsO = m.input('crs');
+  const rstn = m.not(rst);
+  const vF = m.fwd('f_valid'), lF = m.fwd('f_last'), dF = Array.from({ length: 8 }, (_, i) => m.fwd(`f_data${i}`));
+  const crsF = m.fwd('f_crs'), colF = m.fwd('f_col');
+  const [ready, txd, txen, restart, drop, sent, tstate, att, backoff] = m.part(macTx(), [clk, rst, m.bus(dF), vF, lF, crsF, colF, m.bus(seed)], 'MAC TX', 'tx');
+  m.drive(crsF, m.name(m.or(txen, crsO), 'carrier'));
+  m.drive(colF, m.name(m.and(txen, crsO), 'collision'));
+  const rxcr = m.name(m.and(crsO, m.not(txen)), 'rx_carrier');
+  const [rdata, rv, rl, re, rwhy, rdrop, rstate] = m.part(macRx(), [clk, rst, rxdO, rxcr, m.const(1), promisc, m.bus(mac)], 'MAC RX', 'rx');
+  const od = m.unbus(rdata, 8);
+
+  const srcS = m.scope('src', 'frame source: buffer and pointer', () => {
+    const busy = m.reg(clk, 'busy'), tail = m.reg(clk, 'tail'), len = regs(m, clk, 'len', SRC_BITS), rp = regs(m, clk, 'rp', SRC_BITS);
+    const valid = m.name(m.and(busy, m.not(tail)), 'valid_s');
+    const take = m.and(ready, valid), rp1 = m.inc(rp), lastS = m.eq(rp1, len);
+    const goS = m.and(go, m.not(busy));
+    m.setD(busy, m.and(rstn, m.or(goS, m.and(busy, m.nor(sent, drop)))));
+    len.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(goS, q, lenIn[i]))));
+    const hold = m.andN([rstn, m.not(goS), m.not(restart)]);
+    rp.forEach((q, i) => m.setD(q, m.and(hold, m.mux(take, q, rp1[i]))));
+    m.setD(tail, m.and(hold, m.or(tail, m.and(take, lastS))));
+    const addr = rp.map((q, i) => m.mux(we, q, wa[i]));
+    const [dout] = m.part(bigRam(SRC_BITS, 8), [m.bus(addr), m.bus(wd), we, clk], 'frame buffer', 'txmem');
+    m.unbus(dout, 8).forEach((q, i) => m.drive(dF[i], m.name(q, `tx_data${i}`)));
+    m.drive(vF, valid);
+    m.drive(lF, m.name(lastS, 'last_s'));
+    return { busy };
+  });
+
+  const rxbS = m.scope('rxb', 'receive buffer, commit pointer, counters', () => {
+    const wp = regs(m, clk, 'wp', RX_BITS), cp = regs(m, clk, 'cp', RX_BITS);
+    const ng = regs(m, clk, 'ngood', 8), nbd = regs(m, clk, 'nbad', 8), nc = regs(m, clk, 'ncol', 8);
+    const good = m.name(m.andN([rv, rl, m.not(re)]), 'good'), bad = m.name(m.andN([rv, rl, re]), 'bad');
+    const wp1 = m.inc(wp);
+    wp.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(rv, q, m.mux(bad, wp1[i], cp[i])))));
+    cp.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(good, q, wp1[i]))));
+    const count = (r: Sig[], en: Sig) => { const inc = m.inc(r); r.forEach((q, i) => m.setD(q, m.and(rstn, m.mux(en, q, inc[i])))); };
+    count(ng, good); count(nbd, bad); count(nc, m.or(restart, drop));
+    const addr = wp.map((q, i) => m.mux(hrd, q, ra[i]));
+    const [dout] = m.part(bigRam(RX_BITS, 8), [m.bus(addr), m.bus(od), m.and(rv, m.not(hrd)), clk], 'receive buffer', 'rxmem');
+    return { wp, cp, ng, nbd, nc, rd: m.unbus(dout, 8), good, bad };
+  });
+
+  m.output('txd', txd); m.output('txen', txen); m.output('busy', srcS.busy);
+  m.output('sent', sent); m.output('drop', drop); m.output('restart', restart);
+  m.output('rxgood', rxbS.good); m.output('rxbad', rxbS.bad);
+  m.output('rxv', rv); m.output('rxl', rl); m.output('rxe', re);
+  m.outputBus('rxbyte', od); m.outputBus('why', m.unbus(rwhy, 5));
+  m.outputBus('ngood', rxbS.ng); m.outputBus('nbad', rxbS.nbd); m.outputBus('ncol', rxbS.nc);
+  m.outputBus('rd', rxbS.rd); m.outputBus('cp', rxbS.cp); m.outputBus('wp', rxbS.wp);
+  m.outputBus('txstate', m.unbus(tstate, 3)); m.outputBus('att', m.unbus(att, 4)); m.outputBus('backoff', m.unbus(backoff, 10));
+  m.outputBus('rxstate', m.unbus(rstate, 2));
+  void rdrop;
+  stDef = m.build();
+  return stDef;
+}
+
+// ---- a segment ---------------------------------------------------------------------------------------------------------
+
+/** Stations on the segment: positions along the cable (clocks of propagation), addresses and LFSR seeds. */
+export const SEG_POSITIONS = [0, 6, 14, 26];
+export const stationMac = (i: number): number[] => [0x02, 0, 0, 0, 0, i + 1];
+export const STATION_SEEDS = [0x155, 0x2b7, 0x0c3, 0x1e9];
+export const macWord = (a: readonly number[]): number => a.reduce((v, b, j) => v + b * 2 ** (8 * j), 0);
+
+const segs = new Map<number, ComponentDef>();
+
+/**
+ * Four stations on one cable (sharedWire), one host port with a station select: sel picks whose buffers wa / wd / we,
+ * len / go and ra / hrd reach, and whose receive byte shows on rd. The outputs are one bit (or field) per station, station 0
+ * lowest. Addresses 02:00:00:00:00:01 to 04, a different LFSR seed each, so that two stations that collided draw different
+ * backoffs.
+ */
+export function ethSegment(n = 4): ComponentDef {
+  const hit = segs.get(n);
+  if (hit) return hit;
+  const x = SEG_POSITIONS.slice(0, n), W = sharedWire(x), ST = ethStation();
+  const m = new Rtl({
+    id: n === 4 ? 'eth_segment' : `eth_segment${n}`, name: `Ethernet segment (${n} stations)`, category: 'sequential', label: 'SEGMENT', columnHeight: 90,
+    summary: `${n} Ethernet stations on one shared cable. The host port reaches one station at a time (sel); every station sends, defers, collides, backs off and receives by itself, in gates.`,
+  });
+  const selw = Math.ceil(Math.log2(n));
+  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), sel = m.inputBus('sel', selw);
+  const wa = m.inputBus('wa', SRC_BITS), wd = m.inputBus('wd', 8), we = m.input('we'), lenIn = m.inputBus('len', SRC_BITS), go = m.input('go');
+  const ra = m.inputBus('ra', RX_BITS), hrd = m.input('hrd'), promisc = m.inputBus('promisc', n);
+  const rxdF = Array.from({ length: n }, (_, i) => m.fwd(`f_rxd${i}`)), crsF = Array.from({ length: n }, (_, i) => m.fwd(`f_crs${i}`));
+  const pick = Array.from({ length: n }, (_, i) => m.name(m.eqConst(sel, i), `sel${i}`));
+  const st = Array.from({ length: n }, (_, i) => {
+    const [macW] = m.part(constWord(48, macWord(stationMac(i))), [], `MAC ${i + 1}`, `mac${i}`);
+    const [seedW] = m.part(constWord(LFSR_BITS, STATION_SEEDS[i]), [], `seed ${i + 1}`, `seed${i}`);
+    return m.part(ST, [clk, rst, macW, promisc[i], seedW, m.bus(wa), m.bus(wd), m.and(we, pick[i]), m.bus(lenIn), m.and(go, pick[i]), m.bus(ra), m.and(hrd, pick[i]), rxdF[i], crsF[i]], `station ${i + 1}`, `st${i}`);
+  });
+  // station outputs, in port order: txd txen busy sent drop restart rxgood rxbad rxv rxl rxe rxbyte why ngood nbad ncol rd cp wp txstate att backoff rxstate
+  const O = { txd: 0, txen: 1, busy: 2, sent: 3, drop: 4, restart: 5, rxgood: 6, rxbad: 7, rxbyte: 11, ngood: 13, nbad: 14, ncol: 15, rd: 16, cp: 17, txstate: 19, att: 20, rxstate: 22 };
+  const col = (k: number) => st.map((o) => o[k]);
+  const [rxd, crs, clash] = m.part(W, [m.bus(col(O.txd)), m.bus(col(O.txen)), clk], 'shared wire', 'wire');
+  m.unbus(rxd, n).forEach((q, i) => m.drive(rxdF[i], q));
+  m.unbus(crs, n).forEach((q, i) => m.drive(crsF[i], q));
+  const rds = st.map((o) => m.unbus(o[O.rd], 8));
+  const rdSel = Array.from({ length: 8 }, (_, b) => m.orN(st.map((_o, i) => m.and(pick[i], rds[i][b]))));
+  const bits = (name: string, k: number) => m.outputBus(name, col(k));
+  bits('txen', O.txen); bits('busy', O.busy); bits('sent', O.sent); bits('restart', O.restart); bits('drop', O.drop); bits('rxgood', O.rxgood); bits('rxbad', O.rxbad);
+  m.output('clash', clash); m.outputBus('rd', rdSel);
+  const cat = (name: string, k: number) => m.outputBus(name, st.flatMap((o) => m.unbus(o[k], k === O.ngood || k === O.nbad || k === O.ncol ? 8 : k === O.cp ? RX_BITS : k === O.txstate ? 3 : k === O.att ? 4 : 2)));
+  cat('ngood', O.ngood); cat('nbad', O.nbad); cat('ncol', O.ncol); cat('cp', O.cp); cat('txstate', O.txstate); cat('att', O.att); cat('rxstate', O.rxstate);
+  const d = m.build();
+  segs.set(n, d);
+  return d;
+}
+
+export { bit, bus, define, constWord, bigRam, SRC_BITS };
+export type { StationIn };
