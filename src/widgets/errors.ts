@@ -18,7 +18,14 @@ import { CRC32_REFLECTED } from '../comm/crc';
 import { fitText, slider } from './mosparts';
 
 const hex = (v: number, w = 8) => (v >>> 0).toString(16).padStart(w, '0').toUpperCase();
-const sci = (x: number): string => (x === 0 ? '0' : x >= 0.01 && x < 1000 ? x.toPrecision(3).replace(/\.?0+$/, '') : x.toExponential(1).replace('e-', ' x 10^-').replace('e+', ' x 10^'));
+const SUP: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+const sci = (x: number): string => {
+  if (x === 0) return '0';
+  if (x >= 0.01 && x < 1000) { const t = x.toPrecision(3); return t.includes('.') ? t.replace(/\.?0+$/, '') : t; }
+  const [m, e] = x.toExponential(1).split('e');
+  return `${m.replace(/\.0$/, '')} × 10${[...String(Number(e))].map((c) => SUP[c] ?? c).join('')}`;
+};
+const pctS = (x: number): string => (x === 0 ? '0 %' : x < 1e-3 ? `${sci(100 * x)} %` : `${(100 * x).toFixed(x < 0.1 ? 2 : 1)} %`);
 const oneIn = (x: number): string => (x > 0 ? `1 in ${Math.round(1 / x).toLocaleString('en-US')}` : 'never');
 const pct = (x: number): string => `${(100 * x).toFixed(x < 0.1 ? 2 : 1)} %`;
 const si = (v: number, unit: string): string => (v >= 1 ? `${+v.toPrecision(3)} ${unit}` : v >= 1e-3 ? `${+(v * 1e3).toPrecision(3)} m${unit}` : v >= 1e-6 ? `${+(v * 1e6).toPrecision(3)} µ${unit}` : `${+(v * 1e9).toPrecision(3)} n${unit}`);
@@ -42,7 +49,7 @@ interface LogPlot { svg: SVGSVGElement; X(v: number): number; Y(v: number): numb
 
 /** Decade axes: x from 10^x0 to 10^x1, y from 10^y0 to 10^y1 (ylog false: y linear from y0 to y1). */
 function logPlot(W: number, H: number, x0: number, x1: number, y0: number, y1: number, xl: string, yl: string, label: string, ylog = true, ystep = 1): LogPlot {
-  const m = { l: 52, r: 14, t: 12, b: 36 };
+  const m = { l: 66, r: 14, t: 12, b: 36 };
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot err-plot', role: 'img', 'aria-label': label }) as SVGSVGElement;
   const X = (v: number) => m.l + ((Math.log10(v) - x0) / (x1 - x0)) * (W - m.l - m.r);
   const Y = (v: number) => H - m.b - (((ylog ? Math.log10(Math.max(v, 10 ** (y0 - 1))) : v) - y0) / (y1 - y0)) * (H - m.t - m.b);
@@ -84,7 +91,7 @@ export function parityWidget(): Widget {
         : `${n} bits flipped, an even number: the XOR is back to 0 and the receiver accepts a wrong word. Parity cannot see this.`;
     const p = 10 ** lp, any = 1 - (1 - p) ** 9, miss = parityUndetected(9, p);
     const cell = (b: string, t: string) => h('div', null, h('b', null, b), h('span', null, t));
-    chips.replaceChildren(cell(sci(any), 'P(some bit of 9 flips)'), cell(sci(miss), 'P(wrong word accepted)'), cell(`${Math.round((100 * miss) / any)} %`, 'of corrupted words slip through'),
+    chips.replaceChildren(cell(sci(any), 'P(some bit of 9 flips)'), cell(sci(miss), 'P(wrong word accepted)'), cell(pctS(miss / any), 'of corrupted words slip through'),
       cell(`${stats(P).nands} NANDs`, `8-bit parity: ${logicDepth(P)} levels`));
   };
   const sl = slider('Bit error rate', -6, -1, 0.1, lp, (v) => `1e${v.toFixed(1)}`, (v) => { lp = v; paint(); });
@@ -166,7 +173,7 @@ export function undetectedWidget(): Widget {
     const A = weightsOf(c.id);
     pl.svg.append(s('path', { class: `err-s ${c.cls}`, d: pathOf(pts.map((p): [number, number] => [pl.X(p), pl.Y(undetected(A, p) / (1 - (1 - p) ** c.n))])) }));
   });
-  [8, 16].forEach((r) => pl.svg.append(s('line', { class: 'ln-h', x1: pl.X(1e-6), x2: pl.X(0.5), y1: pl.Y(2 ** -r), y2: pl.Y(2 ** -r) }), s('text', { class: 'ln-hl', x: pl.X(1e-6) + 4, y: pl.Y(2 ** -r) - 3 }, `2^-${r}`)));
+  [8, 16].forEach((r) => pl.svg.append(s('line', { class: 'err-ref', x1: pl.X(1e-6), x2: pl.X(0.5), y1: pl.Y(2 ** -r), y2: pl.Y(2 ** -r) }), s('text', { class: 'err-reftxt', x: pl.X(1e-6) + 4, y: pl.Y(2 ** -r) - 3 }, `2^-${r}`)));
   const table = h('div', { class: 'err-tab' });
   const paint = () => {
     const p = 10 ** lp;
@@ -175,7 +182,7 @@ export function undetectedWidget(): Widget {
       ...codes.map((c) => { const A = weightsOf(c.id), u = undetected(A, p), bad = 1 - (1 - p) ** c.n; return h('div', { class: `err-trow ${c.cls}` }, h('span', null, c.name), h('span', null, `16 + ${c.n - 16}`), h('span', null, sci(u)), h('span', null, oneIn(u / bad))); }));
   };
   const sl = slider('Bit error rate', -6, -0.3, 0.1, lp, (v) => `1e${v.toFixed(1)}`, (v) => { lp = v; paint(); });
-  const key = h('div', { class: 'clk-legend err-key' }, h('span', { class: 'c1' }, 'parity bit'), h('span', { class: 'c2' }, 'CRC-8'), h('span', { class: 'c3' }, 'CRC-16'));
+  const key = h('div', { class: 'err-key' }, h('span', { class: 'c1' }, 'parity bit'), h('span', { class: 'c2' }, 'CRC-8'), h('span', { class: 'c3' }, 'CRC-16'));
   const el = h('div', { class: 'widget mos err-w' }, h('div', { class: 'panel' }, h('h3', null, 'What a check lets through'), key, pl.svg),
     h('div', { class: 'panel mos-ctl' }, sl.el, table, h('p', { class: 'sub mos-note' }, 'Exact: 16 data bits, every one of the 65 536 code words enumerated for its weight distribution, so an error pattern is accepted exactly when it is itself a code word (comm/crc.ts). The vertical axis is the share of corrupted words accepted. A CRC with r check bits approaches 2^−r when the channel is pure noise (right edge), and does far better at low error rates, because the few-bit errors that occur there are all caught.')));
   paint();
@@ -281,7 +288,7 @@ export function framingWidget(): Widget {
   const el = h('div', { class: 'widget mos err-w' }, h('div', { class: 'panel' }, h('h3', null, 'A frame between two flags'),
     h('label', { class: 'err-lab-in' }, 'Payload ', input),
     h('div', { class: 'dram-ops' }, btn('Six 0xFF bytes', 'The worst case for stuffing: only 1s', () => { allOnes = true; flips = new Set(); paint(); }), btn('Clear flips', 'Undo the flipped bits', () => { flips = new Set(); paint(); })),
-    h('div', { class: 'clk-legend err-key' }, h('span', { class: 'f1' }, 'flag 01111110'), h('span', { class: 'f2' }, 'payload'), h('span', { class: 'f3' }, 'CRC-32'), h('span', { class: 'f4' }, 'stuffed 0')),
+    h('div', { class: 'err-key' }, h('span', { class: 'f1' }, 'flag 01111110'), h('span', { class: 'f2' }, 'payload'), h('span', { class: 'f3' }, 'CRC-32'), h('span', { class: 'f4' }, 'stuffed 0')),
     strip, stats_, verdict, cobs));
   paint();
   return { el };
@@ -298,7 +305,7 @@ export function arqWidget(): Widget {
   const tabs = (['saw', 'gbn', 'sr'] as Proto[]).map((k) => { const b = btn(PROTO_NAMES[k], `Simulate ${PROTO_NAMES[k]}`, () => { proto = k; paint(); }); b.setAttribute('aria-pressed', 'false'); return [k, b] as const; });
   const paint = () => {
     for (const [k, b] of tabs) b.setAttribute('aria-pressed', String(k === proto));
-    const run = simulate(proto, a, W, p, 60, 3, 400), by = new Map(run.events.map((e) => [e.t, e]));
+    const run = simulate(proto, a, W, p, 400, 3, 400), by = new Map(run.events.map((e) => [e.t, e]));
     strip.replaceChildren(...Array.from({ length: slots }, (_, t) => {
       const e = by.get(t);
       if (!e) return h('span', { class: 'err-sl idle', title: `slot ${t}: idle` }, '');
@@ -314,7 +321,7 @@ export function arqWidget(): Widget {
   const sA = slider('One-way delay a', 0, 30, 1, a, (v) => `${v} frames`, (v) => { a = v; paint(); });
   const sW = slider('Window', 1, 64, 1, W, (v) => `${v} frames`, (v) => { W = v; paint(); });
   const sP = slider('Loss', 0, 0.3, 0.01, p, (v) => pct(v), (v) => { p = v; paint(); });
-  const key = h('div', { class: 'clk-legend err-key' }, h('span', { class: 'f1' }, 'new frame'), h('span', { class: 'f4' }, 'repeat'), h('span', { class: 'f5' }, 'corrupted'), h('span', { class: 'f6' }, 'discarded'));
+  const key = h('div', { class: 'err-key' }, h('span', { class: 'f1' }, 'new frame'), h('span', { class: 'f4' }, 'repeat'), h('span', { class: 'f5' }, 'corrupted'), h('span', { class: 'f6' }, 'discarded'));
   const el = h('div', { class: 'widget mos err-w' }, h('div', { class: 'panel' }, h('h3', null, 'The first 96 slots'), h('div', { class: 'dram-ops' }, ...tabs.map(([, b]) => b)), key, strip),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, sA.el, sW.el, sP.el), chips, note));
   paint();
@@ -343,13 +350,13 @@ export function fecWidget(): Widget {
     const A = crcOnly(bytes, p), B = secdedCrc(bytes, p), tA = deliveryTime(A.wire, A.pFail, RATE, oneWay), tB = deliveryTime(B.wire, B.pFail, RATE, oneWay);
     const row = (c: string, l: string, a: string, b: string) => h('div', { class: `err-trow ${c}` }, h('span', null, l), h('span', null, a), h('span', null, b));
     tab.replaceChildren(row('head', '', 'CRC + retransmit', `SEC-DED + CRC + retransmit`), row('', 'bits on the wire', String(A.wire), String(B.wire)), row('', 'rate', pct(A.payload / A.wire), pct(B.payload / B.wire)),
-      row('', 'frames repeated', pct(A.pFail), pct(B.pFail)), row('', 'goodput', pct(A.goodput), pct(B.goodput)), row('', 'mean delivery time', si(tA, 's'), si(tB, 's')));
+      row('', 'frames repeated', pctS(A.pFail), pctS(B.pFail)), row('', 'goodput', pct(A.goodput), pct(B.goodput)), row('', 'mean delivery time', si(tA, 's'), si(tB, 's')));
     const c1 = crossover(bytes), c2 = crossoverTime(bytes, RATE, oneWay);
     note.textContent = `SEC-DED(${codeOf(64).n}, 64) adds ${codeOf(64).r} check bits to every 64 data bits (rate ${pct(codeOf(64).rate)}) and corrects any one error in a block; two in one block, and the frame is repeated. ${c1 ? `Goodput: the code wins above a bit error rate of ${sci(c1)}.` : 'Goodput: no crossover in range.'} ${c2 ? `Delivery time at a one-way delay of ${si(oneWay, 's')}: the code is faster above ${sci(c2)}.` : 'Delivery time: no crossover in range.'} Errors are independent here; real links burst.`;
   };
   const sP = slider('Bit error rate', -8, -2, 0.1, lp, (v) => `1e${v.toFixed(1)}`, (v) => { lp = v; paint(); });
   const sD = slider('One-way delay', -6, -0.5, 0.1, ld, (v) => si(10 ** v, 's'), (v) => { ld = v; paint(); });
-  const key = h('div', { class: 'clk-legend err-key' }, h('span', { class: 'c2' }, 'CRC + retransmit'), h('span', { class: 'c3' }, 'SEC-DED + CRC + retransmit'));
+  const key = h('div', { class: 'err-key' }, h('span', { class: 'c2' }, 'CRC + retransmit'), h('span', { class: 'c3' }, 'SEC-DED + CRC + retransmit'));
   const el = h('div', { class: 'widget mos err-w' }, h('div', { class: 'panel' }, h('h3', null, 'Goodput against bit error rate'), key, pl.svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, sel, sP.el, sD.el), tab, note));
   paint();
