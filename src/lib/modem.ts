@@ -202,3 +202,7 @@ export function fskLink(lineStages = 2): ComponentDef {
     },
   }));
 }
+
+/** The chapter's scene root and the line, registered so the library's checks (layout, routing) see them. */
+export const MODEM_LINE: ComponentDef = modemLine(2);
+export const FSK_LINK: ComponentDef = fskLink(2);

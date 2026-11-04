@@ -1,0 +1,31 @@
+/* Chapter 45's widgets (widgets/modem.ts), on the MOSFET widgets' plot and panel styles; colours are the theme's tokens. */
+.mos-plot .mdm-sig { stroke: var(--accent); stroke-width: 1.6; }
+.mos-plot .mdm-dec { stroke: var(--w1); stroke-width: 2; }
+.mos-plot .mdm-ghost { fill: none; stroke: var(--border-strong); stroke-width: 1.4; }
+.mos-plot .mdm-tone { stroke-width: 1.6; stroke-dasharray: 3 3; }
+.mos-plot .mdm-tone.o { stroke: var(--accent); }
+.mos-plot .mdm-tone.a { stroke: var(--w1); }
+.mos-plot .mdm-tone.v { stroke: var(--good); }
+.mos-plot .mdm-tone.w { stroke: var(--bad); }
+.mos-plot .mdm-tl { font: 600 calc(10.5px * var(--tk, 1)) var(--font-mono); fill: var(--text-2); }
+.mos-plot .mdm-tl.l { text-anchor: start; }
+.mos-plot .mdm-bit { font: 700 calc(12px * var(--tk, 1)) var(--font-mono); fill: var(--text); }
+.mos-plot .mdm-dot.ok { fill: var(--good); stroke: var(--surface); stroke-width: 2; }
+.mos-plot .mdm-dot.bad { fill: var(--bad); stroke: var(--surface); stroke-width: 2; }
+.mos-plot .mdm-pt { cursor: pointer; }
+.mos-plot .mdm-pt circle { fill: var(--surface-2); stroke: var(--text-2); stroke-width: 2; }
+.mos-plot .mdm-pt.on circle { fill: var(--accent); stroke: var(--accent); }
+.mos-plot .mdm-pt:focus-visible { outline: none; }
+.mos-plot .mdm-pt:focus-visible circle { stroke: var(--text); stroke-width: 3; }
+.mos-plot .mdm-cloud { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; opacity: 0.45; }
+.mos-plot .mdm-ideal { fill: none; stroke: var(--text); stroke-width: 7; stroke-linecap: round; }
+.mos-plot .mdm-regions { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.mos-plot .mdm-lvl { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 4; }
+.mos-plot .mdm-lvl.v90 { stroke: var(--bad); stroke-dasharray: 5 4; }
+.mos-plot .mdm-m { fill: var(--w1); stroke: var(--surface); stroke-width: 2; }
+.mos-plot .mdm-bars { fill: none; stroke: var(--accent); stroke-linecap: butt; }
+.mdm-bits { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.mdm-b { min-width: 34px; font-family: var(--font-mono); font-weight: 700; }
+.mdm-out { font: 600 13px var(--font-mono); color: var(--text-2); word-break: break-all; margin-top: 6px; }
+.mdm-panel .comm-input { margin-bottom: 6px; }
+@media (pointer: coarse) { .mdm-b { min-width: 40px; min-height: 40px; } }
