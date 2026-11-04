@@ -1,6 +1,6 @@
 // Act 12, Links (roadmap Phase 21 g): optional levels from chapters 39–47 (relays, crossing clocks, a UART, I²C, CRC, 8b/10b, clock
-// recovery). The levels whose parts come with chapters 48–53 (Ethernet, a switch, the stack) are on the map as "coming soon"
-// in the order they will play. No DOM.
+// recovery) and the Ethernet ones of chapters 48-50 (a MAC, a learning switch, a packet driver). The two levels whose parts come with
+// chapters 51-53 (a router, the stack) are on the map as "coming soon" in the order they will play. No DOM.
 
 import type { CampaignNode } from './types';
 import { BUILDCOMM } from './buildcomm';
@@ -84,9 +84,10 @@ export const NODES_COMM: CampaignNode[] = [
     tips: [], codex: [],
   },
   {
-    id: 'l_driver', act: 12, title: 'Packet driver', kind: 'build', optional: true, soon: true, requires: ['l_mac'],
-    why: 'Coming with chapter 50: a program in assembly that sends and receives frames through the MAC.',
-    tips: [], codex: [],
+    id: 'l_driver', act: 12, title: 'Packet driver', kind: 'program', optional: true, requires: ['l_mac'], par: { size: 84, cycles: 641 },
+    why: 'The MAC delivers frames to RAM and takes them from RAM, and tells the CPU through one bit per descriptor: OWN, who holds the buffer now. A driver is the loop that watches that bit, does something with what arrived and hands the buffer back. Here it reflects every frame to its sender: 84 words, and 641 clocks on average from the last bit of a request on the wire to the first bit of the reply, most of it copying.',
+    tips: ['Poll word 1 of the receive descriptor at s2 until its OWN bit (bit 31) is clear: bltz on the loaded word is the test. The length is its low 11 bits.', 'The first twelve bytes are three words: w0 = d0 d1 d2 d3, w1 = d4 d5 s0 s1, w2 = s2 s3 s4 s5 (little endian). The reply wants s0..s5 d0..d5: (w1 >> 16 | w2 << 16), (w2 >> 16 | w0 << 16), (w0 >> 16 | w1 << 16). The rest of the frame is copied as it is, a word at a time.', 'Order matters: the buffer first, then word 1 of the transmit descriptor (OWN | length), then the doorbell (write 1 to the NIC at +28). Give the receive buffer back last, with OWN set.', 'Both rings are eight descriptors of eight bytes: when the pointer reaches the end, it goes back to the start, in the receive ring and in the transmit ring.'],
+    codex: ['nicring', 'handshake'], chapters: [{ chapter: 'network', step: 1, label: 'Registers and rings' }, { chapter: 'network', step: 3, label: 'A driver in assembly' }],
   },
   {
     id: 'l_host', act: 12, title: 'Reach the far host', kind: 'build', optional: true, soon: true, requires: ['l_driver', 'l_fwd'],

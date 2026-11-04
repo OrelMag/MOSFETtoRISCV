@@ -144,6 +144,7 @@ export const NUDGES: Record<string, string> = {
   l_i2c: 'What you send you also read back; a difference, at the moment a bit counts, means somebody else is sending too.',
   l_mac: 'Both halves are one shift register and a counter each; the pad, the preamble and the FCS are what the counter says is next.',
   l_switch: 'Four comparators and an OR give known; everything else is choosing which of four bits to raise.',
+  l_driver: 'The NIC and the CPU share a descriptor by passing one bit back and forth: wait until it is yours, use the buffer, give it back.',
   l_repeater: 'A signal that arrived weak can only be made strong by something with a supply of its own.',
   l_dial: 'Count the falling edges, not the pulses; and let the contacts of the counting relays do the choosing.',
   p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',

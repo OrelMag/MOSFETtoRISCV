@@ -37,10 +37,10 @@ export const MAC_TX_LANES: { name: string; frames: FrameSpec[] }[] = (() => {
   ];
 })();
 
-interface Burst { start: number; bits: number[]; ragged: number }
+export interface Burst { start: number; bits: number[]; ragged: number }
 
 /** The transmissions on a lane's line: from txen rising to txen falling, each bit read from its four clocks. */
-function bursts(txd: number[], txen: number[]): Burst[] {
+export function bursts(txd: number[], txen: number[]): Burst[] {
   const out: Burst[] = [];
   for (let c = 0; c < txen.length; c++) {
     if (!txen[c] || (c > 0 && txen[c - 1])) continue;
@@ -58,7 +58,7 @@ function bursts(txd: number[], txen: number[]): Burst[] {
   }
   return out;
 }
-const bytesOf = (bits: number[]): number[] => Array.from({ length: Math.floor(bits.length / 8) }, (_, i) => bits.slice(8 * i, 8 * i + 8).reduce((v, b, j) => v | (b << j), 0));
+export const bytesOf = (bits: number[]): number[] => Array.from({ length: Math.floor(bits.length / 8) }, (_, i) => bits.slice(8 * i, 8 * i + 8).reduce((v, b, j) => v | (b << j), 0));
 
 function checkWire(name: string, bs: Burst[], frames: FrameSpec[], fails: string[]): void {
   const bad = (m: string) => { if (!fails.some((f) => f.startsWith(name))) fails.push(`${name}: ${m}`); };

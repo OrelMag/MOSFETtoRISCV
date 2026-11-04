@@ -22,6 +22,8 @@ import { UART_RX } from '../src/lib/uart';
 import { bitwise } from '../src/lib/wide';
 import { force, hold, swap, tie } from './mutate';
 import { ethMacFd, swBrain } from '../src/lib/ethlevels';
+import { DRIVER_REF, DRIVER_STARTER } from '../src/campaign/nicbench';
+import { PUZZLES, runPuzzle } from '../src/campaign/puzzles';
 import { macRx, macTx } from '../src/lib/ethernet';
 
 const compiled = (def: ComponentDef, mode: 'gate' | 'switch'): Compiled =>
@@ -155,5 +157,42 @@ describe('act 12 Ethernet benches reject wrong circuits, each with a named rule'
     expect(bad('l_switch', tie(sw, 'mask.bad', 0))).toMatch(/bad FCS goes nowhere/);
     expect(bad('l_switch', tie(sw, 'learn.bad', 0))).toMatch(/heard only in a damaged frame/);
     expect(bad('l_switch', force(sw, 'look.flood', 0))).toMatch(/destination is unknown/);
+  });
+});
+
+describe('l_driver: the far end of the cable names the rule a driver breaks', () => {
+  const ref = DRIVER_REF;
+  const fails = (src: string): string => {
+    const r = runPuzzle(PUZZLES.l_driver, src);
+    expect(r.errors).toEqual([]);
+    expect(r.ok, 'the mutant must not pass').toBe(false);
+    return r.results.filter((t) => !t.ok).map((t) => t.why).join(' | ');
+  };
+  const without = (src: string, line: string): string => { expect(src).toContain(line); return src.replace(line, ''); };
+
+  it('the reference passes with a measured par', () => {
+    const r = runPuzzle(PUZZLES.l_driver, ref);
+    expect(r.ok).toBe(true);
+    expect(r.size).toBe(nodeById('l_driver')!.par!.size);
+    expect(r.cycles).toBe(nodeById('l_driver')!.par!.cycles);
+  });
+  it('ignoring OWN: a reply before the frame has arrived', () => {
+    expect(fails(without(ref, '        bltz t0, poll           # OWN still set: the NIC is not done with it\n'))).toMatch(/doorbell was rung for frame 1 at clock [0-9]+, before it had finished arriving/);
+  });
+  it('a ring that does not wrap', () => {
+    expect(fails(ref.replace('bne  s2, s6, rxok', 'j    rxok'))).toMatch(/past the end of the receive ring/);
+  });
+  it('no doorbell', () => {
+    expect(fails(without(ref, '        sw   t5, 28(s1)         # the doorbell\n'))).toMatch(/the doorbell \(KICK.*was rung 0 times/);
+  });
+  it('a receive buffer never handed back: the NIC runs out', () => {
+    expect(fails(without(ref, '        sw   t4, 4(s2)          # the receive buffer goes back to the NIC\n'))).toMatch(/receive descriptor 0 was never handed back/);
+  });
+  it('the addresses are not swapped / a wrong length', () => {
+    expect(fails(ref.replace('sw   t4, 4(t3)', 'sw   a1, 4(t3)'))).toMatch(/byte 5 \(destination address/);
+    expect(fails(ref.replace('or   t4, t4, t2', 'addi t4, t4, 0'))).toMatch(/0 bytes|bytes, expected/);
+  });
+  it('the starter assembles and fails', () => {
+    expect(fails(DRIVER_STARTER)).toMatch(/must serve the rings forever/);
   });
 });
