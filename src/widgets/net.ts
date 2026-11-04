@@ -260,8 +260,10 @@ export function nicScene(irq = false): Scene {
       const reg = (i: number) => { const n = findNode(stage.sim!.design.root, ['c', 'cpu', 'rf', `w${i}`]); return n ? (outAt(stage, ['c', 'cpu', 'rf', `w${i}`], 'q') >>> 0) : 0; };
       const result = () => ({ done: reg(23) === 1, kick: reg(20), seen: reg(21), len: reg(24), setup: reg(25), back: reg(26) });
       const status = h('div', { class: 'mc-status' }), strip = h('div', { class: 'uart-svg' });
-      const step = () => { pulse(stage, 'clk'); clocks++; if (clocks % 8 === 0) { txen.push(outp(stage, 'txen')); irqH.push(outAt(stage, ['c', 'nic'], 'irq')); if (txen.length > 480) { txen = txen.slice(-480); irqH = irqH.slice(-480); } } return !result().done; };
-      const loop = new SliceLoop(stage, step, () => paint());
+      const after = () => { clocks++; if (clocks % 8 === 0) { txen.push(outp(stage, 'txen')); irqH.push(outAt(stage, ['c', 'nic'], 'irq')); if (txen.length > 480) { txen = txen.slice(-480); irqH = irqH.slice(-480); } } };
+      const hook = { before: () => {}, after };
+      stage.edgeHooks.add(hook);
+      const loop = new SliceLoop(stage, () => { pulse(stage, 'clk'); after(); return !result().done; }, () => paint());
       const paint = () => {
         const r = result();
         status.replaceChildren(h('span', null, 'clocks ', h('b', null, n0(clocks))), h('span', null, 'pc ', h('b', null, `0x${(outp(stage, 'pcOut') >>> 0).toString(16)}`)),
@@ -277,7 +279,7 @@ export function nicScene(irq = false): Scene {
       const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, irq ? 'A frame to itself, by interrupt' : 'A frame to itself, polled', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run), status, h('div', { class: 'cpu-sec' }, 'txen: the cable is busy'), strip,
         h('p', { class: 'sub' }, irq ? 'The driver enables the receive interrupt and counts in a loop; the NIC raises irq when it has committed the frame, and the handler hands the buffer back.' : 'The driver builds a 64-byte frame addressed to itself, rings the doorbell and spins on the receive descriptor. Open the NIC (one level down) to follow the descriptor fetch and the DMA.'));
-      return { el, update: paint, destroy: () => loop.stop() };
+      return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); } };
     }],
   };
 }
@@ -312,7 +314,8 @@ export function lanScene(): Scene {
       let sel = -1;
       const cons = { A: h('pre', { class: 'uart-console', 'aria-label': 'Console A' }), B: h('pre', { class: 'uart-console', 'aria-label': 'Console B' }) };
       const list = h('div', { class: 'net-wide' }), detail = h('div'), read = h('div', { class: 'mc-status' });
-      const edge = () => {
+      // what the panel sees of every rising edge: before it (the consoles and the switch's receive streams as they are) and after it (the count). The stage's Pulse, Step and Run reach the same hooks.
+      const before = () => {
         for (const S of ['A', 'B'] as const) if (outp(stage, `consoleValid${S}`) === 1) text[S] += String.fromCharCode(outp(stage, `consoleData${S}`));
         for (const p of [0, 1] as const) {
           if (outp(stage, `rxValid${p}`) === 1) {
@@ -321,10 +324,12 @@ export function lanScene(): Scene {
             if (outp(stage, `rxLast${p}`) === 1) { frames.push({ clock: first[p], from: p === 0 ? 'A' : 'B', bytes: cur[p]!, err: outp(stage, `rxErr${p}`) === 1 }); cur[p] = null; frames.sort((x, y) => x.clock - y.clock); }
           }
         }
-        pulse(stage, 'clk'); clocks++;
       };
+      const after = () => { clocks++; };
+      const hook = { before, after };
+      stage.edgeHooks.add(hook);
       let t0 = 0;
-      const loop = new SliceLoop(stage, () => { edge(); return !text.A.includes('done'); }, () => paint());
+      const loop = new SliceLoop(stage, () => { before(); pulse(stage, 'clk'); after(); return !text.A.includes('done'); }, () => paint());
       const paint = () => {
         cons.A.textContent = text.A || ' '; cons.B.textContent = text.B || ' ';
         const secs = started ? (performance.now() - t0) / 1000 : 0;
@@ -347,6 +352,10 @@ export function lanScene(): Scene {
         pcap: () => pcapFile(frames.filter((f) => !f.err).map((f): Captured => ({ us: f.clock * CLOCK_NS / 1000, bytes: f.bytes }))),
       };
       lanApis.set(stage, api);
+      stage.historyHooks.add({
+        save: () => ({ clocks, a: text.A, b: text.B, frames: frames.map((f) => ({ ...f, bytes: [...f.bytes] })), cur: cur.map((c) => (c ? [...c] : null)), first: [...first] }),
+        restore: (v) => { const x = v as { clocks: number; a: string; b: string; frames: typeof frames; cur: (number[] | null)[]; first: number[] }; clocks = x.clocks; text.A = x.a; text.B = x.b; frames.length = 0; frames.push(...x.frames); cur[0] = x.cur[0]; cur[1] = x.cur[1]; first = x.first; paint(); },
+      });
       stage.resetHooks.add(() => { clocks = 0; text.A = text.B = ''; frames.length = 0; cur[0] = cur[1] = null; sel = -1; started = 0; paint(); });
       const run = btn('Run', 'Clock both computers and the switch', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { api.run(); } }, 'btn sm primary');
       const save = btn('Save capture', 'Write the frames seen so far as a .pcap file Wireshark or tcpdump opens', () => saveFile('ping.pcap', new Blob([api.pcap().slice().buffer], { type: 'application/vnd.tcpdump.pcap' }), 'application/vnd.tcpdump.pcap'));
@@ -356,7 +365,7 @@ export function lanScene(): Scene {
         h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'Frames at the switch'), list, detail,
         h('p', { class: 'sub' }, 'Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter 49\'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.'));
-      return { el, update: paint, destroy: () => loop.stop() };
+      return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); } };
     }],
   };
 }

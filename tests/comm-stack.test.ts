@@ -122,8 +122,11 @@ print(icmp_echo(0x0a000002, 0x1234, 1, 8))
     expect(stackProgram(DEFAULT_STACK, app).compiled.error).toBeNull();
     const sb = stackProgram(DEFAULT_STACK, app);
     void sb;
-    const i = viaInterpreter(app);
+    const i = viaInterpreter(app), s = viaIss(app);
     expect(i.rxWord[0]).toBe(0x80000000);
+    // the reply was noticed: one seen, its identifier and sequence
+    expect(i.output).toEqual([1, 0x1234, 1]);
+    expect(s.output).toEqual([1, 0x1234, 1]);
   });
 
   it('UDP: the exact echo datagram; a zero checksum is accepted; a wrong one and another port are not', () => {

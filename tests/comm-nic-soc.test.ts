@@ -132,3 +132,19 @@ describe('what the driver costs, read off the gates', () => {
     expect(got).toEqual({ ...NIC_COSTS });
   }, 300000);
 });
+
+describe('the NIC model driving itself (fast play: no gates)', () => {
+  it('the polled driver on the instruction-set simulator, the NIC stepped by the model, loops a frame back', () => {
+    const program = words(nicPollSource());
+    const bus = new BusModel(STACK_RAM_K, [], 4096, { nic: {} });
+    const dev = bus.nic!;
+    dev.line = () => ({ rxd: dev.core.tx.txd, crs: dev.core.tx.txen });
+    const iss = new ISS(program, { system: true, imemWords: 2 ** IMEM_K, bus });
+    for (let n = 0; n < 400000 && iss.x[23] !== 1; n++) { bus.now = 2 * n; iss.step(); }
+    expect(iss.x[23]).toBe(1);
+    expect(iss.x[24]).toBe(64);
+    const at = (base: number) => Array.from({ length: 64 }, (_, i) => (bus.ram[(base + i) >>> 2] >>> (8 * (i & 3))) & 255);
+    expect(at(L.rxBuf)).toEqual(at(L.txBuf));
+    expect(bus.ram[(L.rxRing + 4) >>> 2] >>> 0).toBe(64);
+  }, 120000);
+});
