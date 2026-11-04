@@ -41,7 +41,7 @@ const CURVES: Curve[] = [
 /** `keys`: which curves it starts with. */
 export function berWidget(keys: string[] = CURVES.map((c) => c.key)): Widget {
   let db = 4, alive = true, timer = 0;
-  const W = 620, H = 300, M = { l: 62, r: 14, t: 12, b: 36 }, X0 = -2, X1 = 12, Y0 = -8, Y1 = 0;
+  const W = 620, H = 300, M = { l: 78, r: 14, t: 12, b: 36 }, X0 = -2, X1 = 12, Y0 = -8, Y1 = 0;
   const X = (d: number) => M.l + ((d - X0) / (X1 - X0)) * (W - M.l - M.r);
   const Y = (b: number) => M.t + ((Y1 - Math.log10(Math.max(b, 10 ** (Y0 - 1)))) / (Y1 - Y0)) * (H - M.t - M.b);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot err-plot', role: 'img', 'aria-label': 'Bit error rate against Eb/N0 for each code, with Shannon\'s limit for rate one half' }) as SVGSVGElement;
