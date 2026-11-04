@@ -225,7 +225,7 @@ export function crcPanel(w: 1 | 8): ScenePanel {
     inp.addEventListener('input', () => { text = inp.value; fed = 0; update(); });
     const status = h('div', { class: 'mc-status err-status' });
     const note = h('p', { class: 'sub' });
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, `CRC-32, ${w === 1 ? 'one bit' : 'one byte'} a clock`, h('span', { class: 'fold-hint' })),
       h('label', { class: 'err-lab-in' }, 'Message ', inp),
       h('div', { class: 'dram-ops' },
