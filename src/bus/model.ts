@@ -1,3 +1,4 @@
+import { idleIn, NicCore, type NicIn, type NicOut } from '../comm/nic';
 import { UartCore, type UartIn } from '../comm/uart';
 // The memory map of chapter 38's computer, as the golden model sees it: RAM from address 0 (code beyond
 // the boot ROM and every load and store below the flash), the flash read-only at 0x1000_0000, the DRAM at
@@ -20,7 +21,7 @@ export interface BusMemory {
 }
 
 /** Top address nibble of each region (lib/axi.ts BUS_MAP and the SoC's decoder agree). */
-export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, uart: 0x3, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7, nic: 0x9 } as const;
+export const MAP = { ram: 0x0, flash: 0x1, dram: 0x2, uart: 0x3, dma: 0x4, screen: 0x5, keys: 0x6, cards: 0x7, nic: 0x7 } as const;
 
 /** A card reader's deck as the model reads it: a word a card, and the edges between taking a card and the next one. */
 export interface CardDeck { items: readonly number[]; feed: number }
@@ -30,6 +31,8 @@ export interface BusDevices {
   dramK?: number; screen?: number; keys?: boolean; cards?: CardDeck;
   /** A UART at 0x3000_0000 (comm/uart.ts UartCore); `rx` is the line level at its pin before edge e (zero-based), default idle. */
   uart?: { rx?: (edge: number) => number };
+  /** A NIC at 0x7000_0000 (comm/nic.ts NicCore stepped edge by edge, its descriptors and frames in this model's RAM); `line` gives the serial pair at its pins before edge e. */
+  nic?: { line?: (edge: number) => { rxd: number; crs: number } };
   /** Where each region sits (its top address nibble), when not at MAP: the memory-map designer's applied map (editor/memmap.ts busMapOf). */
   map?: Partial<Record<keyof typeof MAP, number>>;
 }
@@ -119,6 +122,87 @@ export class UartDevice {
   }
 }
 
+/**
+ * The NIC at 0x7000_0000 as the golden model sees it: comm/nic.ts's core stepped edge by edge, with the bus answering its master as chapter 38's RAM slave does
+ * (a transaction's response comes the clock after its address; one at a time), a register write landing at its handshake edge (`now` − 1) and a read seeing
+ * the state before it (`now` − 2), as UartDevice. Frames move between the NIC and this model's RAM at the edges the gates move them.
+ *
+ * Two ways to drive it. Self-driven (the default): advanceTo(n) steps the core with the bus answers it computes itself, assuming the bus is free whenever the
+ * NIC wants it; a CPU transaction at the same time would delay the real one by a few clocks, so lock-step tests that need clock-exactness feed the model
+ * what the gates saw instead (replay: the caller calls step() with the inputs of each clock and writeRam() is not needed, the answers coming from the gates).
+ */
+export class NicDevice {
+  readonly core = new NicCore();
+  /** Edges the core has had. */
+  done = 0;
+  /** True when the caller steps the core itself with the inputs the gates saw (a lock-step test): advanceTo, sync and write do nothing, and loads read the recorded register words. */
+  replay = false;
+  /** The line at the pins before edge e (idle: nothing). */
+  line: (edge: number) => { rxd: number; crs: number } = () => ({ rxd: 0, crs: 0 });
+  /** What the core drove on its line after each edge (txd, txen), when asked to keep it. */
+  trace: { txd: number; txen: number }[] | undefined;
+  /** The register words (readReg of 0..7) before each edge, for the loads that retire a couple of edges later. */
+  private hist: number[][] = [];
+  private pend = new Map<number, { idx: number; data: number }>();
+  private resp: 'b' | 'r' | null = null; private busy = false; private rdata = 0;
+  constructor(readonly ram: Uint32Array, line?: NicDevice['line']) { if (line) this.line = line; }
+
+  private regs(): number[] {
+    const c = this.core;
+    return [(c.promisc << 1) | c.en, c.sRx | (c.sTx << 1) | (c.sMiss << 2) | (c.sBad << 3), c.ie, c.rxbase, c.txbase, c.macl >>> 0, c.mach, c.rxhead | (c.txhead << 3) | ((c.ts ? 1 : 0) << 6) | (c.act << 7)];
+  }
+
+  /** One clock with the given inputs (the self-driven loop builds them; a replay passes the gates' own). */
+  step(i: NicIn): NicOut {
+    this.hist[this.done] = this.regs();
+    if (this.hist.length > 64) delete this.hist[this.done - 64];
+    const o = this.core.out();
+    this.core.step(i);
+    this.done++;
+    this.trace?.push({ txd: o.txd, txen: o.txen });
+    return o;
+  }
+
+  /** Step the core until it has had n edges. */
+  advanceTo(n: number): void {
+    if (this.replay) return;
+    while (this.done < n) {
+      const e = this.done, p = this.pend.get(e);
+      this.pend.delete(e);
+      const i: NicIn = { ...idleIn(), ...this.line(e) };
+      if (p) { i.awvalid = 1; i.wvalid = 1; i.wstrb = 15; i.awaddr = p.idx << 2; i.wdata = p.data; }
+      // the RAM as the slave: ready when idle; the response the clock after the handshake
+      const ready = !this.busy;
+      Object.assign(i, { m_awready: ready ? 1 : 0, m_wready: ready ? 1 : 0, m_arready: ready ? 1 : 0, m_bvalid: this.resp === 'b' ? 1 : 0, m_rvalid: this.resp === 'r' ? 1 : 0, m_rdata: this.resp === 'r' ? this.rdata : 0 });
+      const o = this.step(i);
+      if (this.resp) { this.resp = null; this.busy = false; }
+      else if (ready) {
+        if (o.m_awvalid && o.m_wvalid) {
+          const w = (o.m_awaddr >>> 2) % this.ram.length;
+          let mask = 0;
+          for (let b = 0; b < 4; b++) if ((o.m_wstrb >> b) & 1) mask |= 255 << (8 * b);
+          this.ram[w] = ((this.ram[w] & ~mask) | (o.m_wdata & mask)) >>> 0;
+          this.busy = true; this.resp = 'b';
+        } else if (o.m_arvalid) {
+          this.rdata = this.ram[(o.m_araddr >>> 2) % this.ram.length];
+          this.busy = true; this.resp = 'r';
+        }
+      }
+    }
+  }
+  /** The RAM as the CPU reads it at edge `now`: the core has had every edge up to the handshake. */
+  sync(now: number): void { this.advanceTo(Math.max(0, now - 2)); }
+  read(idx: number, now: number): number {
+    this.sync(now);
+    return (this.hist[Math.max(0, now - 2)] ?? this.regs())[idx & 7] >>> 0;
+  }
+  write(idx: number, value: number, now: number): void {
+    if (this.replay) return;
+    this.sync(now);
+    this.pend.set(Math.max(this.done, now - 1), { idx: idx & 7, data: value >>> 0 });
+  }
+}
+
 /** Merge the strobed bytes of `value` into `old`. */
 const merge = (old: number, value: number, strb: number) => {
   let m = 0;
@@ -138,6 +222,8 @@ export class BusModel implements BusMemory {
   readonly cards: CardModel | null;
   /** The UART (0x3000_0000: data +0, status +4, divisor +8, interrupt enables +12). */
   readonly uart: UartDevice | null;
+  /** The NIC (0x7000_0000: CTRL +0, STATUS +4, IE +8, RXBASE +12, TXBASE +16, MACL +20, MACH +24, KICK +28, a doorbell). */
+  readonly nic: NicDevice | null;
   /** The top nibble of each region. */
   readonly map: Record<keyof typeof MAP, number>;
   /** Rising clock edges so far (set by whoever steps the golden model; only the card reader needs it). */
@@ -156,20 +242,22 @@ export class BusModel implements BusMemory {
     this.keys = dev.keys ? [] : null;
     this.cards = dev.cards ? new CardModel(dev.cards.items, dev.cards.feed) : null;
     this.uart = dev.uart ? new UartDevice(dev.uart.rx) : null;
+    this.nic = dev.nic ? new NicDevice(this.ram, dev.nic.line) : null;
   }
 
   /** The DMA's interrupt line. */
-  get irq(): boolean { return this.dma.done; }
+  get irq(): boolean { return this.dma.done || !!this.nic?.core.irq; }
 
   read(addr: number): number {
     const a = addr >>> 0, nib = a >>> 28, w = (a >>> 2), MAP = this.map;
-    if (nib === MAP.ram) return this.ram[w & (this.ram.length - 1)];
+    if (nib === MAP.ram) { this.nic?.sync(this.now); return this.ram[w & (this.ram.length - 1)]; }
     if (nib === MAP.flash) return this.flash[w & (this.flash.length - 1)];
     if (nib === MAP.dram && this.dram) return this.dram[w & (this.dram.length - 1)];
     if (nib === MAP.screen && this.screen) return this.screen[w & (this.screen.length - 1)];
     if (nib === MAP.keys && this.keys) return w & 1 ? (this.keys.length ? 1 : 0) : (this.keys.shift() ?? 0);
     if (nib === MAP.cards && this.cards) { const s = this.now - CARD_LAG; return w & 1 ? this.cards.data(s) : this.cards.status(s); }
     if (nib === MAP.uart && this.uart) return this.uart.read(w & 3, this.now);
+    if (nib === MAP.nic && this.nic) return this.nic.read(w & 7, this.now);
     if (nib === MAP.dma) {
       switch (w & 3) {
         case 0: return this.dma.src;
@@ -184,10 +272,11 @@ export class BusModel implements BusMemory {
   write(addr: number, value: number, strb: number): void {
     const a = addr >>> 0, nib = a >>> 28, w = a >>> 2, MAP = this.map;
     const store = (m: Uint32Array) => { const i = w & (m.length - 1); m[i] = merge(m[i], value, strb); };
-    if (nib === MAP.ram) store(this.ram);
+    if (nib === MAP.ram) { this.nic?.sync(this.now); store(this.ram); }
     else if (nib === MAP.dram && this.dram) store(this.dram);
     else if (nib === MAP.screen && this.screen) store(this.screen);
     else if (nib === MAP.uart && this.uart) this.uart.write(w & 3, value >>> 0, this.now);
+    else if (nib === MAP.nic && this.nic) this.nic.write(w & 7, value >>> 0, this.now);
     else if (nib === MAP.dma) {
       switch (w & 3) {
         case 0: this.dma.src = value >>> 0; break;

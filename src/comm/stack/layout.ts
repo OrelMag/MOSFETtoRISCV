@@ -14,7 +14,7 @@ export const STACK_LAYOUT = {
   txBuf: 0x4900,
   bufSize: 0x600,
   /** Where the NIC's registers are (lib/soc.ts nic option: MAP.nic) and the system CPU's free-running counter (riscv/iss.ts IO.MTIME). */
-  nic: 0x90000000,
+  nic: 0x70000000,
   mtime: 0x80000010,
   console: 0x80000000,
   /** Text the apps print, copied here at start (the subset has no strings). */
