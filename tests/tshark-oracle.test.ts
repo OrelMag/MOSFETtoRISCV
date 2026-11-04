@@ -1,7 +1,7 @@
 // The tshark oracle's comparison, without tshark: rows written out as tshark prints them, and what must be reported. The real run is .github/workflows/tshark.yml.
 
 import { describe, expect, it } from 'vitest';
-import { icmpEchoFrame, udpFrame } from '../src/comm/netframes';
+import { icmpEchoFrame, tcpFrame, udpFrame } from '../src/comm/netframes';
 import { HOSTS } from '../src/comm/stack/apps';
 import { claimOf, compareCapture, compareRow, FIELDS, parseRows, tsharkArgs, type Row } from '../scripts/tshark-lib';
 
@@ -46,6 +46,29 @@ describe('what the bytes claim', () => {
     const b = [...ping]; b[12] = 0x88; b[13] = 0xb5;
     expect(claimOf(b, 0).chain).toBe('eth:ethertype');
     expect(claimOf(b, 0).good).toEqual([]);
+  });
+});
+
+describe('a TCP segment', () => {
+  const seg = (data: number[]) => tcpFrame({ ...hdr, sport: 40000, dport: 5000, seq: 1, ack: 1, flags: 16, wnd: 512, data }).bytes;
+  it('its bytes claim the payload, and a segment with none claims none', () => {
+    expect(claimOf(seg([0, 1, 2, 3]), 0).fields['data.data']).toBe('00010203');
+    expect(claimOf(seg([]), 0).fields['data.data']).toBeUndefined();
+  });
+  it('a padded ACK claims no pad: the IP total length says where it ends', () => {
+    const b = seg([]);
+    expect(claimOf([...b, ...new Array<number>(60 - b.length).fill(0)], 0).fields['data.data']).toBeUndefined();
+  });
+  it('a dissector that takes the payload, or another byte in it, is a difference', () => {
+    const b = seg([0, 1, 2, 3]), r = rowOf(b);
+    expect(issues(r, b)).toEqual([]);
+    const { 'data.data': _gone, ...taken } = r;
+    expect(issues({ ...taken, 'frame.protocols': 'eth:ethertype:ip:tcp:gsm_ipa' }, b).join()).toMatch(/data\.data: tshark has nothing/);
+    expect(issues({ ...r, 'data.data': '00010203ff' }, b).join()).toMatch(/data\.data/);
+  });
+  it('the heuristics that guess at a payload are off', () => {
+    const a = tsharkArgs();
+    for (const p of ['hipercontracer', 'gsm_ipa']) expect(a[a.indexOf(p) - 1]).toBe('--disable-protocol');
   });
 });
 

@@ -15,8 +15,8 @@ export type Field = typeof FIELDS[number];
 
 /** tshark's options: verify every checksum it is able to; by default it trusts some of them. */
 export const TSHARK_PREFS = ['-o', 'ip.check_checksum:TRUE', '-o', 'udp.check_checksum:TRUE', '-o', 'tcp.check_checksum:TRUE'];
-/** A heuristic takes the ping's payload, 0x10 0x11 …, for this measurement tool's probe, and would hide its bytes from data.data. The headers are unaffected. */
-export const TSHARK_OFF = ['--disable-protocol', 'hipercontracer'];
+/** Heuristics that guess at a payload and would hide its bytes from data.data: the ping's, 0x10 0x11 …, reads as a measurement tool's probe, and TCP's test stream, 0x00 0x01 0x02 …, as GSM's IPA (and is then called malformed). The headers are unaffected. */
+export const TSHARK_OFF = ['--disable-protocol', 'hipercontracer', '--disable-protocol', 'gsm_ipa'];
 /** The file goes in on a pipe: Ubuntu's tshark refuses a path in the runner's work directory ("You don't have permission"), and refuses Node's stdin too, a socket. */
 export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, ...TSHARK_OFF, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
 
@@ -68,6 +68,8 @@ export function claimOf(b: ArrayLike<number>, us: number): Claim {
       chain += ':tcp';
       Object.assign(fields, { 'tcp.srcport': be(b, t, 2), 'tcp.dstport': be(b, t + 2, 2), 'tcp.seq_raw': be(b, t + 4, 4), 'tcp.ack_raw': be(b, t + 8, 4), 'tcp.flags': b[t + 13] & 0x3f, 'tcp.window_size_value': be(b, t + 14, 2), 'tcp.checksum': be(b, t + 16, 2) });
       good.push('tcp.checksum.status');
+      const data = hexOf(b, t + (b[t + 12] >> 4) * 4, end);
+      if (data) fields['data.data'] = data;
     }
   }
   return { fields, chain, good };
