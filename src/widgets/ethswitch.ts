@@ -217,6 +217,8 @@ function inputsFor(): Record<string, number> {
 }
 const HIDDEN = (() => { const a: string[] = []; for (let p = 0; p < PORTS; p++) a.push(`rxData${p}`, `rxValid${p}`, `rxLast${p}`, `rxErr${p}`, `txReady${p}`); return a; })();
 
+const HIDDEN_OUT = (() => { const a: string[] = ['learned', 'evicted', 'flooded', 'filtered']; for (let p = 0; p < PORTS; p++) a.push(`rxReady${p}`, `drops${p}`, `bad${p}`, `frames${p}`); return a; })();
+
 /** The table as the model holds it: live entries with their port and age. */
 function tableView(rig: Rig): HTMLElement {
   const T = rig.model.table, rows = T.entries.map((e, i) => ({ e, i })).filter((x) => T.live(x.e));
@@ -236,7 +238,8 @@ function counters(st: Stage, rig: Rig): HTMLElement {
   return h('div', { class: 'sw-counters', role: 'table', 'aria-label': 'Counters' },
     h('div', { class: 'sw-crow head' }, h('b', null, ''), ...[0, 1, 2, 3].map((p) => h('span', null, `port ${p}`))),
     row('frames out', [0, 1, 2, 3].map((p) => g(`frames${p}`))), row('dropped (no cell)', [0, 1, 2, 3].map((p) => g(`drops${p}`))), row('bad FCS', [0, 1, 2, 3].map((p) => g(`bad${p}`))),
-    h('div', { class: 'sw-crow' }, h('b', null, 'table'), h('span', null, `learned ${g('learned')}`), h('span', null, `flooded ${g('flooded')}`), h('span', null, `filtered ${g('filtered')}`), h('span', null, `evicted ${g('evicted')}`)),
+    h('div', { class: 'sw-crow head' }, h('b', null, 'table'), h('span', null, 'learned'), h('span', null, 'flooded'), h('span', null, 'filtered'), h('span', null, 'evicted')),
+    row('count', [g('learned'), g('flooded'), g('filtered'), g('evicted')]),
     h('div', { class: `sw-lock${rig.mismatches ? ' bad' : ''}` }, rig.mismatches ? `Gates and model differ: ${rig.firstBad}` : `Gates equal the golden model: ${rig.checked} cycles checked, no difference`));
 }
 
@@ -327,7 +330,7 @@ function benchPanel(o: PanelOpts, opts: Partial<SwitchOpts>) {
           saveFile(`switch-port${p}.pcap`, new Blob([f.slice().buffer as ArrayBuffer], { type: 'application/vnd.tcpdump.pcap' }));
         }))));
     }
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel sw-panel', 'data-dock': 'right' }, h('h4', null, o.title, h('span', { class: 'fold-hint' })),
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel sw-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, o.title, h('span', { class: 'fold-hint' })),
       h('div', { class: 'sw-hosts', 'aria-label': 'The four hosts' }, ...HOSTS.map((x, i) => h('span', { class: 'sw-host', style: `--c:${PORT_COLOURS[i]}` }, h('b', null, `host ${x.name}`), ` port ${i}  `, h('span', { class: 'mono' }, mac(x.mac))))),
       controls, body);
     paint();
@@ -343,7 +346,7 @@ export const rigOf = (st: Stage): Rig | undefined => swRigs.get(st);
 const SCENE_SWITCH: Partial<SwitchOpts> = { cellK: 7, tableK: 4, tickLog2: 5 };
 
 function sceneOf(opts: Partial<SwitchOpts>, p: PanelOpts, extra: Partial<Scene> = {}): Scene {
-  return { root: ethSwitch(opts), inputs: inputsFor(), hiddenInputs: HIDDEN, autoClock: false, engine: 'cycle', panels: [benchPanel(p, opts)], ...extra };
+  return { root: ethSwitch(opts), inputs: inputsFor(), hiddenInputs: HIDDEN, hiddenOutputs: HIDDEN_OUT, autoClock: false, engine: 'cycle', panels: [benchPanel(p, opts)], ...extra };
 }
 
 /** Step 2: learning. Send frames from any host to any host and watch the table and the floods. */

@@ -33,7 +33,7 @@ export function muxWidget(): Widget {
   const plot = h('div', { class: 'sw-plot' }), read = h('div');
   const paint = () => {
     const C = sharedCapacity(n, p, eps), mean = n * p;
-    const W = 420, H = 110, L = 28, B = 22, top = 8;
+    const W = 760, H = 190, L = 28, B = 24, top = 10;
     const kmax = Math.min(n, Math.max(C + 4, Math.ceil(mean * 2.2) + 3));
     const pm = Array.from({ length: kmax + 1 }, (_, k) => binomialPmf(n, p, k)), pmax = Math.max(...pm);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sw-chart', role: 'img', 'aria-label': `Number of sources sending at once, ${n} sources each active ${pct(p, 0)} of the time; a shared link of ${C} units covers all but ${eps} of the time` });
@@ -42,7 +42,7 @@ export function muxWidget(): Widget {
     svg.append(s('line', { x1: L + (C + 1) * bw, x2: L + (C + 1) * bw, y1: top - 2, y2: H - B, class: 'cap' }), s('text', { x: L + (C + 1) * bw + 3, y: top + 8, class: 'tick' }, `link: ${C}`));
     svg.append(s('text', { x: L, y: H - 6, class: 'tick' }, '0'), s('text', { x: W - 8, y: H - 6, class: 'tick', 'text-anchor': 'end' }, `${kmax} sources active at once`));
     plot.replaceChildren(svg);
-    read.replaceChildren(reading(['circuit switching reserves', `${n} units (one per source, for its peak)`], ['mean demand', `${mean.toFixed(1)} units`], ['a shared packet link needs', `${C} units for overflow below ${eps.toExponential(0)}`], ['gain', `${(n / C).toFixed(1)} ×`], ['P(more than the link) at the mean + 0', pct(binomialTail(n, p, Math.floor(mean)), 0)]));
+    read.replaceChildren(reading(['circuit switching reserves', `${n} units (one per source, for its peak)`], ['mean demand', `${mean.toFixed(1)} units`], ['a shared packet link needs', `${C} units for overflow below ${eps.toExponential(0)}`], ['gain', `${(n / C).toFixed(1)} ×`], ['overflow at that size', binomialTail(n, p, C).toExponential(1)]));
   };
   const nS = slider('Sources', 2, 100, 1, n, (v) => String(v), (v) => { n = v; paint(); });
   const pS = slider('Active fraction', 1, 60, 1, p * 100, (v) => `${v} %`, (v) => { p = v / 100; paint(); });
@@ -125,12 +125,12 @@ export function holWidget(): Widget {
   interface Pt { fifo: number; voq4: number; voq8: number; voq16: number }
   let pts: (Pt | null)[] = [];
   const draw = () => {
-    const W = 440, H = 190, L = 34, B = 24, T = 10, R = 10;
+    const W = 760, H = 300, L = 40, B = 26, T = 12, R = 12;
     const X = (v: number) => L + v * (W - L - R), Y = (v: number) => T + (1 - v) * (H - B - T);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sw-chart', role: 'img', 'aria-label': 'Throughput against offered load for one FIFO per input and for virtual output queues' });
     for (const v of [0, 0.25, 0.5, 0.75, 1]) svg.append(s('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: L - 4, y: Y(v) + 3, class: 'tick', 'text-anchor': 'end' }, v.toFixed(2)), s('text', { x: X(v), y: H - 8, class: 'tick', 'text-anchor': 'middle' }, v.toFixed(2)));
     svg.append(s('line', { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), class: 'ideal' }));
-    for (const [v, t] of [[HOL_N4, 'N = 4: 0.6553'], [HOL_LIMIT, 'large N: 0.5858']] as const) svg.append(s('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'theory' }), s('text', { x: W - R - 2, y: Y(v) - 3, class: 'tick', 'text-anchor': 'end' }, t));
+    for (const [v, t, dy] of [[HOL_N4, 'published, N = 4: 0.6553', -4], [HOL_LIMIT, 'published, large N: 0.5858', 12]] as const) svg.append(s('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'theory' }), s('text', { x: L + 6, y: Y(v) + dy, class: 'tick' }, t));
     const line = (key: keyof Pt, cls: string) => {
       const p = LOADS.map((l, i) => (pts[i] ? [l, pts[i]![key]] : null)).filter(Boolean) as number[][];
       if (p.length) svg.append(s('path', { d: p.map((q, i) => `${i ? 'L' : 'M'}${X(q[0])},${Y(q[1])}`).join(''), class: `ln ${cls}` }));

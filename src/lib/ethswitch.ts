@@ -56,7 +56,7 @@ export function macTable(t = 7, tl = 4): ComponentDef {
   if (t < 2 || t > 7) throw new Error('macTable: 2^2 … 2^7 entries');
   return memo(`mactable${t}_${tl}`, () => {
     const m = new Rtl({
-      id: `mac_table${t}_${tl}`, name: `MAC table (${2 ** t} entries)`, category: 'memory', label: 'MAC TABLE',
+      id: `mac_table${t}_${tl}`, name: `MAC table (${2 ** t} entries)`, category: 'memory', label: 'MAC TABLE', boxW: 14,
       summary: `A learning table of ${2 ** t} entries hashed in RAM: the destination address is looked up and the source learned in one cycle. `
         + `A hit sends the frame to one port; a miss or a group address floods every port but the source; a hit on the source's own port filters it. `
         + `Two addresses that hash alike share a slot and the newer evicts the older (counted). Entries age out after 64 ticks of 2^${tl} clocks.`,
@@ -173,7 +173,7 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
   const S = o.cells, sb = log2(S), id = `eth_in_${K}${S === 4 ? '' : `_${S}`}${o.voq ? 'v' : 'f'}${o.cut ? 'c' : 's'}`;
   return memo(id, () => {
     const m = new Rtl({
-      id, name: `Input buffer (${o.voq ? 'virtual output queues' : 'one FIFO'}, ${o.cut ? 'cut-through' : 'store-and-forward'})`, category: 'memory', label: 'INPUT BUFFER',
+      id, name: `Input buffer (${o.voq ? 'virtual output queues' : 'one FIFO'}, ${o.cut ? 'cut-through' : 'store-and-forward'})`, category: 'memory', label: 'INPUT BUFFER', boxW: 14,
       summary: `${S} cells of ${2 ** K} bytes behind a receive stream that is always ready. The frame is written as it arrives; its first 12 bytes are kept to ask the address table, and the answer is an output mask. `
         + `${o.cut ? 'Cut-through: the cell is queued as soon as the table answers and an output may start reading it behind the writer.' : 'Store-and-forward: the cell is queued at the last byte, if the receiver found the FCS good.'} `
         + `${o.voq ? 'One queue of cell numbers per output, so a frame for a busy output does not hold back one for an idle output.' : 'One FIFO of cell numbers: only the oldest frame competes for an output.'} A frame that finds no free cell is dropped and counted.`,
@@ -336,7 +336,7 @@ export function outputPort(): ComponentDef {
 export function crossbar(): ComponentDef {
   return memo('eth_xbar', () => {
     const m = new Rtl({
-      id: 'eth_xbar', name: 'Crossbar', category: 'routing', label: 'CROSSBAR',
+      id: 'eth_xbar', name: 'Crossbar', category: 'routing', label: 'CROSSBAR', boxW: 12,
       summary: 'Four multiplexers of 4:1, one per output, 10 bits wide (data, last, valid) selected by the output\'s source register. A byte is shown only while the output is busy; the output\'s ready goes back through the same selection as `adv` to the input that owns the output.',
     });
     const D = [0, 1, 2, 3].map((i) => m.inputBus(`txData${i}`, 8)), L = [0, 1, 2, 3].map((i) => m.input(`txLast${i}`)), V = [0, 1, 2, 3].map((i) => m.input(`txValid${i}`));
@@ -362,7 +362,7 @@ export function crossbar(): ComponentDef {
 export function tablePort(): ComponentDef {
   return memo('eth_tport', () => {
     const m = new Rtl({
-      id: 'eth_tport', name: 'Table port', category: 'routing', label: 'TABLE PORT',
+      id: 'eth_tport', name: 'Table port', category: 'routing', label: 'TABLE PORT', boxW: 14,
       summary: 'One lookup a cycle for the whole switch: the ports with a request (twelve bytes in) go through a round-robin arbiter, and the winner\'s destination and source addresses and port number go to the table.',
     });
     const clk = m.input('clk', { clock: true }), req = m.inputBus('req', 4);

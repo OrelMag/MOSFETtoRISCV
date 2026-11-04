@@ -1,7 +1,6 @@
 import { binomialTail, HOL_LIMIT, HOL_N4, holSaturation, sharedCapacity, singleFrame } from '../comm/ethswitch';
-import { arbiterN } from '../lib/mpdecode';
+import { arbiterN, cam } from '../lib';
 import { crossbar, ethSwitch, inputBuffer, macTable, outputPort, tablePort } from '../lib/ethswitch';
-import { cam } from '../lib/storage';
 import { stats } from '../sim/stats';
 import { benchScene, crossbarScene, learnScene, rigOf } from '../widgets/ethswitch';
 import { duplexWidget, holWidget, latencyWidget, muxWidget, sharedEfficiency, tableWidget } from '../widgets/ethswitchtools';
@@ -138,7 +137,7 @@ export const chSwitch: Chapter = {
       title: 'The crossbar and its arbiter',
       body: `
         <p>Once the table has said which output a frame needs, the bytes must get there. The most direct fabric is the <strong>crossbar</strong>: every input can reach every output, with a multiplexer in front of each output choosing the input that drives it. For four ports that is four 4:1 multiplexers, ten bits wide each (the byte, <code>last</code> and <code>valid</code>): ${n0(XB)} NANDs including the return path of
-        ready. It has no internal blocking: any set of inputs addressed to different outputs moves at once. N inputs and N outputs cost N² crosspoints, which is chapter 40's crossbar again, now carrying bytes through gates where it carried calls through relay contacts.</p>
+        ready. It has no internal blocking: any set of inputs addressed to different outputs moves at once. N inputs and N outputs cost N² crosspoints, which is chapter 40's crossbar again, now carrying bytes through gates where it carried calls through contacts.</p>
         <p>What a crossbar cannot decide is what happens when two inputs want the <em>same</em> output. Each output owns that decision: an <span data-show="out0">output port</span> holds a <strong>round-robin arbiter</strong> (${n0(ARB)} NANDs, the one built in <a href="#/c/multicore/2">chapter 27</a>), a busy flag that holds the output for the length of a frame, and the register that says which input drives it. Every cycle each idle input that has a frame
         waiting offers itself to the <em>lowest-numbered idle output</em> it has a frame for; each idle output grants one of the inputs that chose it, in rotating priority, so nobody starves. An input that is not granted offers itself again next cycle, by which time another output may have freed. One round of request and grant per cycle, with no iteration, is what keeps the arbiter small; what it loses is quantified two steps on.</p>
         <p>A granted frame is read from the input's buffer one byte a cycle, through the crossbar, for as long as the output's <code>ready</code> is 1. A MAC that takes bytes at a wire's pace holds ready low most of the time, and the input simply waits: the reader advances only when the byte moves. Press <em>Three hosts to D at once</em>: the three frames queue for output 3 and the timeline shows the arbiter handing it to one input after another.</p>`,
