@@ -6,7 +6,7 @@ import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
 import { crc32, fcsBytes } from '../comm/crc';
-import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, ETHERTYPE_LOCAL, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
 import { BIT_CLOCKS, captureRecord, clocksToUs, frameBitTimes, GAP_BITS, LINK_MBPS, WHY_NAMES } from '../comm/mac';
 import { ETH_EV, ethStation, ethStationMac } from '../lib/ethstation';
 import { pcapFile } from '../comm/pcap';
@@ -58,13 +58,13 @@ export function legend(used: Iterable<string>): HTMLElement {
 }
 
 export const macLabel = (m: readonly number[]): string => m.map(hex2).join(':');
-export const ETHERTYPES: [string, string][] = [[String(ETHERTYPE_IPV4), '0x0800 IPv4'], [String(ETHERTYPE_ARP), '0x0806 ARP'], [String(0x88b5), '0x88B5 local experimental']];
+export const ETHERTYPES: [string, string][] = [[String(ETHERTYPE_IPV4), '0x0800 IPv4'], [String(ETHERTYPE_ARP), '0x0806 ARP'], [String(ETHERTYPE_LOCAL), '0x88B5 local experimental']];
 const utf8 = (t: string): number[] => Array.from(new TextEncoder().encode(t));
 
 // ---- step 1: the frame builder -----------------------------------------------------------------------------------------
 
 export function frameWidget(): Widget {
-  let text = 'hello from A', dst = 'b', type = ETHERTYPE_IPV4;
+  let text = 'hello from A', dst = 'b', type = ETHERTYPE_LOCAL;
   const out = h('div'), read = h('div', { class: 'mc-status' });
   const paint = () => {
     const payload = utf8(text).slice(0, MAX_PAYLOAD);
@@ -239,7 +239,7 @@ export function txScene(): Scene {
         stage.checkpoint();
         b.reset();
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_LOCAL, payload };
         wire = wireBytes(spec); cls = fieldMap(payload.length); plen = payload.length; bits = []; run = 0; done = false; clock = 0; wave = [[], []];
         S.expected = wire; S.done = false; S.sentBytes = [];
         b.send(frameBody(spec));
@@ -324,7 +324,7 @@ export function rxScene(): Scene {
         stage.checkpoint();
         b.reset(); b.set('promisc', promisc ? 1 : 0);
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
-        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? ethStationMac(0) : ethStationMac(2), src: ethStationMac(1), type: ETHERTYPE_IPV4, payload };
+        const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : dst === 'me' ? ethStationMac(0) : ethStationMac(2), src: ethStationMac(1), type: ETHERTYPE_LOCAL, payload };
         let bytes = wireBytes(spec);
         if (cut) bytes = bytes.slice(0, 8 + 40);
         const bitIdx = 8 * (8 + 14 + Math.min(payload.length, 10)) + 3;
@@ -406,7 +406,7 @@ export function csmaScene(): Scene {
         b.reset();
         // the cable has been quiet for a long time before the frame is queued: the gap counter is full
         for (let i = 0; i < GAP_BITS * BIT_CLOCKS + 8; i++) b.clock();
-        const spec: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_IPV4, payload: utf8('deferred') };
+        const spec: FrameSpec = { dst: ethStationMac(1), src: ethStationMac(0), type: ETHERTYPE_LOCAL, payload: utf8('deferred') };
         plan = carrierPlan(first, second);
         crsW = []; txW = []; gapW = []; clock = 0; txStart = -1;
         b.send(frameBody(spec));

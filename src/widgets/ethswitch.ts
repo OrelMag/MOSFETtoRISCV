@@ -4,7 +4,7 @@
 
 import '../styles/clocks.css';
 import '../styles/ethswitch.css';
-import { BROADCAST, frameBody, macText, parseFrame, type Mac } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, macText, parseFrame, type Mac } from '../comm/ethframe';
 import { addrOf, hostMac, idleIn, PORTS, rng, SwitchModel, type Pattern, type SwitchIn, type SwitchOpts } from '../comm/ethswitch';
 import { CYCLE_NS } from '../comm/serdes';
 import { pcapFile, type Captured } from '../comm/pcap';
@@ -76,7 +76,7 @@ export class Rig {
   send(port: number, dst: Mac, bytes = 64, o: { err?: boolean; delay?: number; what?: string } = {}): void {
     const id = this.nextId++;
     const src = hostMac(port), payload = Array.from({ length: Math.max(4, bytes - 14) }, (_, k) => (k < 4 ? (id >> (8 * (3 - k))) & 255 : (id + k) & 255));
-    const b = frameBody({ dst, src, type: 0x0800, payload });
+    const b = frameBody({ dst, src, type: ETHERTYPE_LOCAL, payload });
     this.jobs[port].push({ bytes: b, err: !!o.err, startAt: this.cycle + (o.delay ?? 0), k: 0, what: o.what ?? '' });
     this.sent++;
   }
@@ -84,7 +84,7 @@ export class Rig {
   teach(): void {
     for (let p = 0; p < PORTS; p++) {
       const id = this.nextId++;
-      const b = frameBody({ dst: BROADCAST, src: hostMac(p), type: 0x0806, payload: [0, 0, 0, id & 255] });
+      const b = frameBody({ dst: BROADCAST, src: hostMac(p), type: ETHERTYPE_LOCAL, payload: [0, 0, 0, id & 255] });
       this.jobs[p].push({ bytes: b, err: false, startAt: this.cycle + 80 * p, k: 0, what: 'hello' });
       this.sent++;
     }

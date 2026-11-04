@@ -4,7 +4,7 @@
 import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
-import { BROADCAST, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
 import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, CLOCK_NS, frameBitTimes, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS,
 } from '../comm/mac';
@@ -21,7 +21,7 @@ const utf8 = (t: string): number[] => Array.from(new TextEncoder().encode(t));
 
 /** What the panel queues: station f's message, for station t or everyone. The tshark oracle reads these too. */
 export function segmentFrame(f: number, t: number | 'all', txt: string): number[] {
-  const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
+  const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_LOCAL, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
   return frameBody(spec);
 }
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
