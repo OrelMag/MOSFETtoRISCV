@@ -82,18 +82,31 @@ export function validByte(v: number, k: boolean): boolean {
   return v >= 0 && v < 256 && (!k || isKCode(v));
 }
 
+/** The 5b/6b block of x = EDCBA at running disparity rd (k: the control column; only K28 differs from the data block). Total: no validation. */
+export function encode6(x: number, k: boolean, rd: Rd): number {
+  const pair = k && x === 28 ? K28_6 : (typeof T6[x] === 'string' ? [T6[x], T6[x]] : T6[x]) as [string, string];
+  return bitsOf(pair[rd]);
+}
+
+/** x whose 3b/4b block may take the alternate 7 when the disparity after the 6b block is RD−, and RD+. */
+export const A7_AT_NEG = [17, 18, 20], A7_AT_POS = [11, 13, 14];
+
+/** The 3b/4b block of y = HGF, read at rd6 (the disparity after the 6b block of x). */
+export function encode4(y: number, k: boolean, rd6: Rd, x: number): number {
+  let four: string;
+  if (k) four = T4K[y][rd6];
+  else if (y === 7 && ((rd6 === 0 && A7_AT_NEG.includes(x)) || (rd6 === 1 && A7_AT_POS.includes(x)))) four = A7[rd6];
+  else four = T4D[y][rd6];
+  return bitsOf(four);
+}
+
 /** Encode one byte at running disparity `rd`: the code, and the disparity after it. */
 export function encode8b10b(v: number, k: boolean, rd: Rd): Encoded {
   if (!validByte(v, k)) throw new Error(`no such code: ${nameOf(v, k)}`);
   const x = v & 31, y = v >> 5;
-  const pair = k && x === 28 ? K28_6 : (typeof T6[x] === 'string' ? [T6[x], T6[x]] : T6[x]) as [string, string];
-  const six = bitsOf(pair[rd]);
+  const six = encode6(x, k, rd);
   const rd6: Rd = disparityOf(six, 6) !== 0 ? ((rd ^ 1) as Rd) : rd;
-  let four: string;
-  if (k) four = T4K[y][rd6];
-  else if (y === 7 && ((rd6 === 0 && (x === 17 || x === 18 || x === 20)) || (rd6 === 1 && (x === 11 || x === 13 || x === 14)))) four = A7[rd6];
-  else four = T4D[y][rd6];
-  const f = bitsOf(four);
+  const f = encode4(y, k, rd6, x);
   const rd2: Rd = disparityOf(f, 4) !== 0 ? ((rd6 ^ 1) as Rd) : rd6;
   return { code: (six << 4) | f, rd: rd2, six, four: f, rd6 };
 }
@@ -180,3 +193,46 @@ export class Descrambler {
 
 /** Overhead of a code as extra bits on the wire per payload bit. */
 export const overhead = { manchester: 1, '8b/10b': 0.25, '64b/66b': 2 / 64, scrambler: 0 };
+
+// ---- the two sub-blocks the gates are built from ------------------------------------------------------------------------------
+
+const nonNeutral = (code: number, n: number): number => (disparityOf(code, n) !== 0 ? 1 : 0);
+/** x classes the 3b/4b block depends on: the alternate 7 after RD− (xa0), after RD+ (xa1), and the x that can be a K code with y = 7 (xk). */
+export const classOf = (x: number): { xa0: number; xa1: number; xk: number } => ({
+  xa0: A7_AT_NEG.includes(x) ? 1 : 0, xa1: A7_AT_POS.includes(x) ? 1 : 0, xk: [23, 27, 29, 30].includes(x) ? 1 : 0,
+});
+
+export interface Dec6 { x: number; k28: number; xk: number; xa0: number; xa1: number; bad: number; rd1: number }
+const K28_SIX = [bitsOf(K28_6[0]), bitsOf(K28_6[1])];
+
+/** The 6b half of the decoder: x, whether it is K28 (legal at either disparity: a comma tells the receiver where the running disparity stands), the x classes, bad = not legal at rd, and the disparity after the block. */
+export function dec6(six: number, rd: Rd): Dec6 {
+  const find = (r: Rd): number => { for (let x = 0; x < 32; x++) if (encode6(x, false, r) === six) return x; return -1; };
+  if (K28_SIX.includes(six)) return { x: 28, k28: 1, xk: 0, xa0: 0, xa1: 0, bad: 0, rd1: (six >> 5) ^ 1 };
+  let x = find(rd), bad = 0;
+  if (x < 0) { bad = 1; x = find((rd ^ 1) as Rd); }
+  const c = x < 0 ? { xa0: 0, xa1: 0, xk: 0 } : classOf(x);
+  return { x: Math.max(x, 0), k28: 0, ...c, bad, rd1: rd ^ nonNeutral(six, 6) };
+}
+
+export interface Dec4 { y: number; kseven: number; bad: number; flip: number }
+
+/** The 4b half: y, kseven (a K.x.7 behind the alternate 7), bad, and whether the block flips the disparity. */
+export function dec4(four: number, rd1: Rd, k28: number, xk: number, xa0: number, xa1: number): Dec4 {
+  const x = xa0 ? 17 : xa1 ? 11 : xk ? 23 : 0;
+  const cands = (r: Rd): { y: number; kseven: number; four: number }[] => {
+    const l: { y: number; kseven: number; four: number }[] = [];
+    for (let y = 0; y < 8; y++) l.push({ y, kseven: 0, four: encode4(y, !!k28, r, x) });
+    if (xk && !k28) l.push({ y: 7, kseven: 1, four: encode4(7, true, r, x) });
+    return l;
+  };
+  let hit = cands(rd1).find((c) => c.four === four), bad = 0;
+  if (!hit) { bad = 1; hit = cands((rd1 ^ 1) as Rd).find((c) => c.four === four); }
+  return { y: hit?.y ?? 0, kseven: hit?.kseven ?? 0, bad: hit ? bad : 1, flip: nonNeutral(four, 4) };
+}
+
+/** Decode as the gates do: a K28 code first fixes the running disparity from its own polarity (the comma resynchronizes it). */
+export function decode8b10bTracking(code: number, rd: Rd): Decoded {
+  const six = code >> 4;
+  return decode8b10b(code, K28_SIX.includes(six) ? (((six >> 5) & 1) as Rd) : rd);
+}
