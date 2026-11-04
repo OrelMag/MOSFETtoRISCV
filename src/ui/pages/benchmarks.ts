@@ -23,6 +23,7 @@ const METRICS: { k: Metric; label: string; unit: string; digits: number }[] = [
 type SortKey = 'name' | 'nands' | 'period' | 'mean' | string;
 type ChartX = 'nands' | 'energy';
 
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const fmt = (x: number, d = 0) => groupFixed(x, d);
 const mhz = (period: number) => Math.round(1e6 / (period * RESULTS.psPerNand));
 const extOf = (id: string) => { const n = BENCHMARKS.find((b) => b.id === id)!.needs; return n?.m ? 'RV32IM' : n?.f ? 'RV32IF' : ''; };
@@ -51,6 +52,8 @@ export class BenchmarksPage implements Page {
   private tip = h('div', { class: 'bm-tip', hidden: true });
   private chartHead = h('div', { class: 'bm-card-head' });
   private chartBox = h('div', { class: 'bm-chart' });
+  /** After a dot sent the page to its row: a way back, shown while the chart is out of view. */
+  private back = h('button', { class: 'btn sm bm-back', hidden: true, onclick: () => { this.back.hidden = true; this.chartBox.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' }); } }, '↑ Back to the chart');
 
   constructor() {
     this.el = h('div', { class: 'hw-page' }, h('div', { class: 'hw-inner' },
@@ -67,12 +70,20 @@ export class BenchmarksPage implements Page {
       h('p', { class: 'hw-note' }, `${PS_NOTE} NAND counts include the ${RESULTS.dmemWords}-word data memory (and the caches), not the `,
         `${RESULTS.imemWords}-word instruction ROM, whose size follows the program (a larger ROM is a deeper read tree: the single-cycle CPU’s period here is a few delays above the chapters’, which run smaller programs). The dual-core runs each program on hart 0, hart 1 parked. `,
         'Measured by scripts/benchmarks.ts.'),
-      h('p', { class: 'hw-note' }, `Energy at ${VDD} V: each run simulated again on the event-driven gate simulator, every net’s toggles counted. ${POWER_NOTE}`)));
+      h('p', { class: 'hw-note' }, `Energy at ${VDD} V: each run simulated again on the event-driven gate simulator, every net’s toggles counted. ${POWER_NOTE}`),
+      this.back));
+    // the way back shows only while the chart is off screen and a dot has taken the page away from it
+    if (typeof IntersectionObserver !== 'undefined') {
+      this.seen = new IntersectionObserver((es) => { if (es[es.length - 1].isIntersecting) this.back.hidden = true; });
+      this.seen.observe(this.chartBox);
+    }
     this.renderChart();
     this.render();
   }
 
-  destroy(): void { /* nothing running */ }
+  private seen: IntersectionObserver | null = null;
+
+  destroy(): void { this.seen?.disconnect(); }
 
   private tiles(): HTMLElement {
     const cpus = RESULTS.cpus;
@@ -132,7 +143,8 @@ export class BenchmarksPage implements Page {
         this.open.add(c.id);
         this.render();
         const row = this.body.querySelector<HTMLElement>(`tr[data-cpu="${CSS.escape(c.id)}"]`);
-        row?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        row?.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' });
+        this.back.hidden = false;
         this.mark(c.id);
       });
       this.dotAt.set(c.id, [cx / W, cy / H]);

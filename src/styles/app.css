@@ -1427,6 +1427,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-dot.wide { fill: var(--series-4); }
 .bm-dot.off { fill-opacity: 0.18; stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 2 2; }
 .bm-hit { fill: transparent; cursor: pointer; }
+/* sticky at the foot of the page: a dot's click scrolls to its row, this brings the chart back */
+.bm-back { position: sticky; bottom: 16px; margin-left: auto; display: flex; z-index: 5; box-shadow: 0 4px 14px rgb(0 0 0 / 0.18); background: var(--surface); border: 1px solid var(--border-strong); }
+.bm-back[hidden] { display: none; }
 .bm-dot.hl { stroke: var(--text); stroke-width: 3; }
 .bm-table tr.hl > td { background: var(--accent-soft); }
 .bm-tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 12px)); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; }
@@ -2813,4 +2816,4 @@ html[data-busy]::before {
   .narrative, .hw-page, .home { --bg: #fff; --surface: #fff; --surface-2: #fff; --surface-3: #eee; --text: #000; --text-2: #222; --muted: #444; --border: #999; --accent: #000; --accent-soft: #fff; background: #fff; color: #000; }
   .narrative-head .btn, .tour-go { display: none !important; }
 }
-@media (pointer: coarse) { .asm-try { min-height: 40px; } }
+@media (pointer: coarse) { .asm-try, .bm-back { min-height: 40px; } }
