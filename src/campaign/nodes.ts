@@ -805,7 +805,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_bank', act: 10, title: 'A bank with refresh', kind: 'build', optional: true, requires: ['m_sense'], base: BUILDM.m_bank, par: { nand: 319, period: 30, cycles: 5917 },
     why: 'An open row\'s words are a cycle away; another row costs a close and an open, and every row leaks. 319 NANDs keep the open row and refresh, the 1970s way: between a cache\'s miss port and the cell array.',
     tips: ['State: is a row open, which one, the next row to refresh, and a counter of the cycles since the last refresh.', 'A request hits when a row is open and it is the request\'s row: RW, busy = 0. Otherwise PRE if a row is open, else ACT the request\'s row; busy = 1.', 'A refresh is just ACT of the refresh row (after a PRE if needed): leave that row open, the next request may want it. 16 rows in 288 cycles: one refresh every 18 cycles is enough.', 'Refresh early when nobody is asking (the timer past 8), and force it when it is due (15), ahead of any request.'],
-    codex: ['refresh', 'rowhammer', 'ecc'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 4, label: 'Rows, columns, banks' }],
+    codex: ['refresh', 'rowhammer', 'ecc'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 5, label: 'Rows, columns, banks' }],
   },
   {
     id: 'm_ctrl', act: 10, title: 'Row-buffer controller', kind: 'build', optional: true, requires: ['m_bank'], base: BUILDM.m_ctrl, par: { nand: 779, period: 36, cycles: 10690 },
