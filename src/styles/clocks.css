@@ -1,0 +1,65 @@
+/* ---------- Chapter 42, Crossing clocks (src/widgets/clocks.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.clk-w { gap: 12px; }
+.clk-two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+@container (max-width: 640px) { .clk-two { grid-template-columns: minmax(0, 1fr); } }
+
+/* chart parts */
+.mos-plot .clk-zone { fill: color-mix(in srgb, var(--warn) 16%, transparent); stroke: none; }
+.mos-plot .clk-hi { fill: color-mix(in srgb, var(--accent) 38%, transparent); }
+.mos-plot .clk-lo { fill: color-mix(in srgb, var(--muted) 30%, transparent); }
+.mos-plot .clk-noise { fill: color-mix(in srgb, var(--wx, #d33) 35%, transparent); }
+.mos-plot .clk-in { fill: none; stroke: var(--text-2); stroke-width: 1.1; }
+.mos-plot .clk-lo-curve { fill: none; stroke: var(--text-2); stroke-width: 1.8; opacity: 0.65; }
+.mos-plot .clk-out-plain { fill: none; stroke: var(--wx, #d33); stroke-width: 1.8; }
+.mos-plot .clk-out-sch { fill: none; stroke: var(--good); stroke-width: 1.8; }
+.mos-plot .clk-dig { display: block; }
+.mos-plot .clk-dots circle { fill: var(--accent); opacity: 0.85; }
+.mos-plot .clk-mt { fill: none; stroke-width: 2; }
+.mos-plot .clk-mt.c1 { stroke: var(--wx, #d33); } .mos-plot .clk-mt.c2 { stroke: var(--accent); } .mos-plot .clk-mt.c3 { stroke: var(--good); }
+.clk-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin: 2px 0 6px; }
+.clk-legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.clk-legend .c1::before { background: var(--wx, #d33); } .clk-legend .c2::before { background: var(--accent); } .clk-legend .c3::before { background: var(--good); }
+.clk-outs { display: grid; gap: 6px; }
+.clk-outs .lbl { font-size: 12.5px; color: var(--text-2); }
+.clk-outs b { font-family: var(--font-mono); color: var(--text); margin: 0 3px; }
+.clk-outs svg { height: 44px; width: 100%; }
+
+.clk-verdict { margin: 4px 0 0; padding: 7px 10px; border-radius: 8px; font-size: 13px; background: var(--surface-2); border: 1px solid var(--border); }
+.clk-verdict.ok { border-color: var(--good); }
+.clk-verdict.bad { border-color: var(--wx, #d33); }
+
+/* binary against Gray */
+.clk-bars { display: flex; gap: 3px; align-items: flex-end; height: 74px; margin: 6px 0 8px; }
+.clk-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 2px; padding: 0; border: 0; background: none; cursor: pointer; font: 10px var(--font-mono); color: var(--muted); }
+.clk-bar i { display: block; height: var(--hgt); min-height: 3px; border-radius: 3px 3px 0 0; background: var(--good); }
+.clk-bar.bad i { background: var(--wx, #d33); }
+.clk-bar.on i { outline: 2px solid var(--text); outline-offset: 1px; }
+.clk-bar span { text-align: center; }
+.clk-reads { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.clk-reads .clk-rd { display: inline-flex; flex-direction: column; align-items: center; padding: 4px 8px; border-radius: 8px; border: 1.5px solid var(--border-strong); font: 12px var(--font-mono); background: var(--surface-2); }
+.clk-reads .clk-rd span { font-size: 10.5px; color: var(--muted); }
+.clk-reads .clk-rd.old { border-color: var(--text-2); } .clk-reads .clk-rd.new { border-color: var(--good); } .clk-reads .clk-rd.bad { border-color: var(--wx, #d33); background: color-mix(in srgb, var(--wx, #d33) 14%, var(--surface-2)); }
+
+/* the two-clock panel */
+.clk-panel { min-width: 0; }
+.clk-strip { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; font: 600 10px var(--font-mono); padding-bottom: 2px; }
+.clk-row { display: flex; gap: 1px; align-items: center; }
+.clk-lab { flex: 0 0 44px; color: var(--muted); font-weight: 500; }
+.clk-lab.a, .clk-c.a { color: var(--probe-0); } .clk-lab.b, .clk-c.b { color: var(--probe-1); }
+.clk-c { flex: 0 0 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; background: var(--surface-2); color: var(--text-2); overflow: hidden; }
+.clk-c.a, .clk-c.b { background: color-mix(in srgb, currentColor 18%, var(--surface-2)); }
+.clk-c.v1 { background: color-mix(in srgb, var(--w1) 38%, var(--surface-2)); color: var(--text); }
+.clk-c.vx { background: color-mix(in srgb, var(--wx, #d33) 38%, var(--surface-2)); }
+.clk-c.chg { outline: 1px solid var(--text-2); outline-offset: -1px; }
+.clk-extra { display: grid; gap: 4px; margin-top: 6px; }
+.clk-slots { display: flex; gap: 4px; }
+.clk-slot { flex: 1 1 0; min-width: 0; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1.5px dashed var(--border-strong); border-radius: 6px; font: 600 11px var(--font-mono); color: var(--muted); }
+.clk-slot.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.clk-slot.head { box-shadow: 0 0 0 2px var(--good); }
+.clk-tr { flex: 1 1 auto; }
+.clk-tr span { width: 62px; }
+.clk-extra .mc-status .bad { color: var(--wx, #d33); font-weight: 600; } .clk-extra .mc-status .good { color: var(--good); }
+.clk-result.lost { background: color-mix(in srgb, var(--wx, #d33) 14%, var(--surface-2)); }
+.clk-result.seen { background: color-mix(in srgb, var(--good) 14%, var(--surface-2)); }
+
+@media (pointer: coarse) { .clk-bar { min-width: 24px; } .clk-bars { height: 90px; } }

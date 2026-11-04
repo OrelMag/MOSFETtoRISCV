@@ -90,17 +90,25 @@ export class AsyncFifoModel {
 }
 
 /**
- * An interleaving of two clocks' edges as a string of 'w' and 'r': wclk runs at `fw`, rclk at `fr` (any units), with
- * the first rclk edge a quarter period after the first wclk edge so that no two edges coincide.
+ * The order of two clocks' edges, one at a time: wclk at `fw`, rclk at `fr` (any units), the first rclk edge a quarter
+ * period after the first wclk edge so that no two edges coincide.
  */
-export function interleave(fw: number, fr: number, edges: number): ('w' | 'r')[] {
-  const out: ('w' | 'r')[] = [];
-  let i = 0, j = 0;
-  while (out.length < edges) {
-    const tw = (i + 0.25) / fw, tr = (j + 0.625) / fr;
-    if (tw <= tr) { out.push('w'); i++; } else { out.push('r'); j++; }
+export class EdgeSchedule {
+  i = 0;
+  j = 0;
+  constructor(readonly fw: number, readonly fr: number) {}
+  next(): 'w' | 'r' {
+    const tw = (this.i + 0.25) / this.fw, tr = (this.j + 0.625) / this.fr;
+    if (tw <= tr) { this.i++; return 'w'; }
+    this.j++;
+    return 'r';
   }
-  return out;
+}
+
+/** The first `edges` edges of two clocks as a string of 'w' and 'r'. */
+export function interleave(fw: number, fr: number, edges: number): ('w' | 'r')[] {
+  const s = new EdgeSchedule(fw, fr);
+  return Array.from({ length: edges }, () => s.next());
 }
 
 /** The ratios the scene's panel offers, as [wclk, rclk] relative rates. */

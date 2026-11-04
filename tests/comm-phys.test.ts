@@ -127,3 +127,63 @@ describe('metastability model', () => {
     expect(AGE_OF_UNIVERSE_YEARS).toBeGreaterThan(1e10);
   });
 });
+
+import { garbage, meanGarbage, pGarbage, readings, table, worstError } from '../src/comm/graybus';
+import { interleave, EdgeSchedule } from '../src/comm/asyncfifo';
+import { inWindow, landings, phaseOf, reduce, windowFraction } from '../src/comm/phase';
+
+describe('what a sampler reads mid-change', () => {
+  it('binary 0111 → 1000: all sixteen words are possible, and one is 15 away', () => {
+    expect(readings(0b0111, 0b1000)).toEqual(Array.from({ length: 16 }, (_, i) => i));
+    expect(garbage(0b0111, 0b1000)).toHaveLength(14);
+    expect(worstError(0b0111, 0b1000)).toBe(8);
+    expect(pGarbage(0b0111, 0b1000)).toBeCloseTo(1 - 2 / 16, 12);
+  });
+  it('a single-bit change has only the old and the new word', () => {
+    expect(readings(5, 4)).toEqual([4, 5]);
+    expect(garbage(5, 4)).toEqual([]);
+    expect(pGarbage(5, 4)).toBe(0);
+  });
+  it('Gray: every step of an n-bit counter, wrap included, offers two readings and no garbage', () => {
+    for (const n of [2, 3, 4, 5]) {
+      for (const r of table(n, 'gray')) { expect(r.flips).toBe(1); expect(r.reads).toBe(2); expect(r.bad).toBe(0); }
+      expect(meanGarbage(n, 'gray')).toBe(0);
+    }
+  });
+  it('binary: the step has trailing-ones + 1 changing bits, and garbage is common', () => {
+    const t = table(4, 'binary');
+    expect(t.map((r) => r.flips)).toEqual([1, 2, 1, 3, 1, 2, 1, 4, 1, 2, 1, 3, 1, 2, 1, 4]);
+    expect(t.every((r) => r.reads === 2 ** r.flips)).toBe(true);
+    expect(meanGarbage(4, 'binary')).toBeCloseTo(t.reduce((a, r) => a + r.p, 0) / 16, 12);
+    expect(meanGarbage(4, 'binary')).toBeGreaterThan(0.25);
+  });
+});
+
+describe('clock edges landing in a window', () => {
+  it('related clocks repeat their phases: 1:1 never meets a window it started outside of', () => {
+    const l = landings(1, 1, 1000, 0.05, 0.05, 0.4);
+    expect(l.distinct).toBe(1);
+    expect(l.hits).toBe(0);
+    expect(landings(1, 1, 1000, 0.05, 0.05, 0.99).hits).toBe(1000);
+  });
+  it('3:2 has two phases', () => expect(landings(3, 2, 600, 0.05, 0.05).distinct).toBe(3));
+  it('unrelated clocks fill the period evenly, so the hit rate is the window fraction', () => {
+    const fa = Math.PI, l = landings(fa, 1, 20000, 0.01, 0.02);
+    expect(l.hits / 20000).toBeCloseTo(windowFraction(0.01, 0.02), 2);
+    expect(l.distinct).toBeGreaterThan(19000);
+  });
+  it('phase and window', () => {
+    expect(phaseOf(1, 2, 1)).toBeCloseTo(0.5, 12);
+    expect(inWindow(0.97, 0.05, 0.05)).toBe(true);
+    expect(inWindow(0.5, 0.05, 0.05)).toBe(false);
+    expect(reduce(1.5)).toEqual([3, 2]);
+    expect(reduce(1.37)).toEqual([137, 100]);
+  });
+  it('the edge schedule never has two edges at once and keeps the ratio', () => {
+    const e = interleave(3, 2, 5000);
+    const w = e.filter((x) => x === 'w').length, r = e.length - w;
+    expect(w / r).toBeCloseTo(1.5, 1);
+    const s = new EdgeSchedule(1, 1);
+    expect([s.next(), s.next(), s.next()]).toEqual(['w', 'r', 'w']);
+  });
+});

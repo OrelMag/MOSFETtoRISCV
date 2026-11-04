@@ -461,8 +461,16 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], steps: [
     { title: "The driver and its load" },
   ] },
-  { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], steps: [
-    { title: "What a receiver decides" },
+  { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], recap: {"checks":3}, steps: [
+    { title: "What a receiver decides", challenge: "quiz" },
+    { title: "A Schmitt trigger", challenge: "quiz" },
+    { title: "Noise on a slow edge", challenge: "quiz" },
+    { title: "Two clocks are a different problem", challenge: "quiz" },
+    { title: "Metastability", challenge: "quiz" },
+    { title: "The two-flop synchronizer", challenge: "reach" },
+    { title: "Passing one event", challenge: "reach" },
+    { title: "A bus is not synchronized bit by bit", challenge: "quiz" },
+    { title: "An asynchronous FIFO", challenge: "reach" },
   ] },
   { id: "appendix-6502", num: 43, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
