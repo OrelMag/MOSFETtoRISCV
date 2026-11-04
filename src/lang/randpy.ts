@@ -1,5 +1,9 @@
 // Seeded random programs in the Python subset, for fuzzing the compiler against the interpreter
-// (tests/pylang.test.ts; PY_FUZZ=<n> for a longer sweep). Indices are masked to the list, loops are bounded.
+// (tests/pylang.test.ts; PY_FUZZ=<n> for a longer sweep). Indices are masked to the list, loops are bounded. With
+// `memory`, load8 / store8 / load32 / store32 reach MEM_BASE .. MEM_BASE + 255, a region above the data (lists from 0) and below the
+// output and the stack that nothing else touches, so the compiled program and the interpreter see the same bytes.
+
+export const MEM_BASE = 0x400;
 
 
 function rng(seed: number) {
@@ -9,14 +13,14 @@ function rng(seed: number) {
 }
 
 /** A seeded random program: globals, a list, up to two functions, nested blocks; every while loop is bounded. */
-export function randomPyProgram(seed: number): string {
+export function randomPyProgram(seed: number, memory = false): string {
   const r = rng(seed);
   const out: string[] = [];
   const G = ['g0', 'g1', 'g2', 'g3'];
   const consts = () => r.pick([0, 1, 2, 3, 5, 7, 8, 16, -1, -3, 100, 2047, 2048, -2049, 65536, 0x7fffffff, -0x80000000, r.int(1000) - 500]);
   const funcs: { name: string; arity: number }[] = [];
   const expr = (vars: string[], depth: number, calls: boolean): string => {
-    const k = depth <= 0 ? r.int(3) : r.int(14);
+    const k = depth <= 0 ? r.int(3) : r.int(memory ? 16 : 14);
     switch (k) {
       case 0: return String(consts());
       case 1: case 2: return r.pick(vars);
@@ -39,6 +43,8 @@ export function randomPyProgram(seed: number): string {
         const f = r.pick(['abs', 'min', 'max']);
         return f === 'abs' ? `abs(${expr(vars, depth - 1, calls)})` : `${f}(${expr(vars, depth - 1, calls)}, ${expr(vars, depth - 1, calls)})`;
       }
+      case 14: return `load8(${MEM_BASE} + (${expr(vars, depth - 1, calls)} & 255))`;
+      case 15: return `load32(${MEM_BASE} + ((${expr(vars, depth - 1, calls)} & 63) << 2))`;
       default: {
         if (!calls || !funcs.length) return r.pick(vars);
         const f = r.pick(funcs);
@@ -49,7 +55,7 @@ export function randomPyProgram(seed: number): string {
   let loopN = 0;
   const block = (ind: string, vars: string[], writable: string[], depth: number, calls: boolean, lines: string[], n: number) => {
     for (let i = 0; i < n; i++) {
-      const k = depth <= 0 ? r.int(4) : r.int(8);
+      const k = depth <= 0 ? r.int(4) : r.int(memory ? 10 : 8);
       switch (k) {
         case 0: lines.push(`${ind}${r.pick(writable)} = ${expr(vars, 3, calls)}`); break;
         case 1: lines.push(`${ind}${r.pick(writable)} ${r.pick(['+=', '-=', '*=', '^=', '//=', '%=', '|=', '&=', '<<=', '>>='])} ${expr(vars, 2, calls)}`); break;
@@ -78,6 +84,8 @@ export function randomPyProgram(seed: number): string {
           block(ind + '    ', vars, writable, depth - 1, calls, lines, 1 + r.int(2));
           break;
         }
+        case 8: lines.push(`${ind}store8(${MEM_BASE} + (${expr(vars, 2, calls)} & 255), ${expr(vars, 2, calls)})`); break;
+        case 9: lines.push(`${ind}store32(${MEM_BASE} + ((${expr(vars, 2, calls)} & 63) << 2), ${expr(vars, 2, calls)})`); break;
         default: lines.push(`${ind}print(${expr(vars, 2, calls)}, ${expr(vars, 2, calls)})`);
       }
     }
