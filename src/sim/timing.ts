@@ -181,7 +181,10 @@ export function analyzeTiming(design: FlatDesign, opts: { outputs?: boolean; del
   const nets: number[] = [];
   let net = cap.net;
   let launch: string[] = [];
-  while (net >= 0) {
+  // A net seen twice is a loop the arrival counted as 0 (storage with no `ff` mark, DFF_R): the path ends there.
+  const seen = new Set<number>();
+  while (net >= 0 && !seen.has(net)) {
+    seen.add(net);
     nets.push(net);
     if (qSource.has(net)) { launch = qSource.get(net)!; break; }
     const d = driver[net];
