@@ -62,4 +62,11 @@ describe('Save capture', () => {
       last = f.us;
     }
   });
+  it('writes its Try boxes as blocks: an inline one draws its border through the lines around it', () => {
+    for (const step of chPath.steps) {
+      const body = String(step.body);
+      expect(body).not.toMatch(/<span class="try">/);
+      expect(body).not.toMatch(/<p>\s*<div class="try">/);
+    }
+  });
 });

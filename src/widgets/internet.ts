@@ -414,7 +414,7 @@ export function onePacketWidget(): Widget {
       const l = x.link!, back = rows[k + 1]?.back ?? rows[rows.length - 1].back, backLen = back.end.kind === 'host' ? back.end.frame.length : 60;
       t += x.total; sumP += x.prop; sumS += x.ser; sumQ += x.queue; sumE += x.engine;
       const rtt = t + oneWayMs(back, backLen, loadOf), nextName = k + 1 < d.length ? ROUTERS[d[k + 1].router].name : HOSTS[WWW].name;
-      return h('tr', null, h('td', null, String(k + 2)), h('td', null, h('code', null, `${ROUTERS[x.router].name} → ${nextName}`)), h('td', null, `${l.note}, ${l.km < 1 ? l.km : n0(l.km)} km, ${l.mbps >= 1000 ? `${l.mbps / 1000} Gb/s` : `${l.mbps} Mb/s`}`),
+      return h('tr', null, h('td', null, String(k + 2)), h('td', null, h('code', null, `${ROUTERS[x.router].name} → ${nextName}`)), h('td', { class: 'in-link' }, `${l.note}, ${l.km < 1 ? l.km : n0(l.km)} km, ${l.mbps >= 1000 ? `${l.mbps / 1000} Gb/s` : `${l.mbps} Mb/s`}`),
         h('td', { class: 'r' }, ms2(x.prop)), h('td', { class: 'r' }, ms2(x.ser)), h('td', { class: 'r' }, ms2(x.queue)), h('td', { class: 'r' }, ms2(x.engine)), h('td', { class: 'r' }, ms2(rtt)));
     }));
     read.textContent = `One way, ${ms2(t)} ms: light ${ms2(sumP)}, bits ${ms2(sumS)}, queues ${ms2(sumQ)}, ${d.length} engines ${ms2(sumE)}. The access line's queue alone: ${ms2(queueMs(LINKS[ACCESS_LINK], load))} ms at ${Math.round(load * 100)} % load.`;
@@ -425,7 +425,7 @@ export function onePacketWidget(): Widget {
   return {
     el: h('div', { class: 'widget rt-w' }, sb.el, sl.el,
       h('div', { class: 'in-scroll' }, h('table', { class: 'in-table' },
-        h('thead', null, h('tr', null, h('th', null, 'TTL'), h('th', null, 'Hop'), h('th', null, 'Link'), h('th', { class: 'r' }, 'Light, ms'), h('th', { class: 'r' }, 'Bits'), h('th', { class: 'r' }, 'Queue'), h('th', { class: 'r' }, 'Engine'), h('th', { class: 'r' }, 'Round trip so far'))), body)),
+        h('thead', null, h('tr', null, h('th', null, 'TTL'), h('th', null, 'Hop'), h('th', { class: 'in-link' }, 'Link'), h('th', { class: 'r' }, 'Light, ms'), h('th', { class: 'r' }, 'Bits'), h('th', { class: 'r' }, 'Queue'), h('th', { class: 'r' }, 'Engine'), h('th', { class: 'r' }, 'Round trip so far'))), body)),
       read,
       h('p', { class: 'sub' }, 'TTL: the first that gets an answer from past this link. Round trip: there at this size, back as a small ICMP reply. Queue: M/M/1, the traffic an assumption; the lengths and rates are invented, of the usual size.')),
   };

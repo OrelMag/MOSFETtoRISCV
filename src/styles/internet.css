@@ -28,4 +28,6 @@
 .in-seg { min-width: 2px; flex-basis: 0; }
 .in-dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 2px; }
 .in-seg0 { background: var(--probe-0, #3a7); } .in-seg1 { background: var(--probe-1, #37a); } .in-seg2 { background: var(--probe-2, #a37); } .in-seg3 { background: var(--probe-3, #a73); } .in-seg4 { background: var(--probe-4, #73a); }
+/* on a phone the delay columns, the table's point, must not sit a whole Link column off screen */
+@media (max-width: 560px) { .in-table .in-link { white-space: normal; min-width: 104px; max-width: 120px; } }
 @media (pointer: coarse) { .in-step, .in-table tbody tr[tabindex] td { min-height: 40px; height: 40px; } }
