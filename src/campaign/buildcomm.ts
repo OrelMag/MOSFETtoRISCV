@@ -6,9 +6,12 @@ import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
 import { syncN } from '../lib/sync';
+import { crcNext, crcUnit } from '../lib/crc';
+import { DEC56, DEC34, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
+import { netlistOf } from '../sim/types';
 import type { ComponentDef } from '../sim/types';
-import { runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
+import { run8b10b, runCrc, runSync, runUartRx, runUartTx, RX_SCENARIOS, SYNC_PORT, TX_CASES } from './commcheck';
 
 export const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p.name, dir: p.dir === 'out' ? 'out' : 'in', width: p.width, ...(p.clock ? { clock: true } : {}) }));
 
@@ -30,6 +33,18 @@ export const refOf = (id: string, def: () => ComponentDef, name: string, subs: (
   answers.set(id, (a = [...docs, { ...top, notes: `Reference answer. ${def().summary ?? ''}`.trim() }]));
   return a;
 };
+
+export const CRC_UNIT = (): ComponentDef => crcUnit(32, undefined, 8);
+export const CRC_NEXT = (): ComponentDef => crcNext(32, undefined, 8);
+/** The library ids the CRC reference is drawn from, its XOR network's gates included (the network itself is what the level builds). */
+export const crcGives = (): string[] => [...new Set([...(netlistOf(CRC_UNIT())?.instances ?? []), ...(netlistOf(CRC_NEXT())?.instances ?? [])].map((i) => i.def.id).filter((id) => id !== CRC_NEXT().id))];
+
+/** The library ids a reference is drawn from, its sub-chips' parts included (the sub-chips themselves are what the level builds). */
+export const leafGives = (def: () => ComponentDef, subs: () => ComponentDef[]) => (): string[] => {
+  const skip = new Set(subs().map((d) => d.id));
+  return [...new Set([def(), ...subs()].flatMap((d) => netlistOf(d)?.instances ?? []).map((i) => i.def.id).filter((id) => !skip.has(id)))];
+};
+void DEC56; void DEC34;
 
 export const SYNC_REF = (): ComponentDef => syncN(2);
 
@@ -59,5 +74,21 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
     ports: pinsOf(UART_RX).filter((p) => p.name !== 'state'),
     check: { kind: 'custom', describe: `${RX_SCENARIOS.length} lines: back-to-back frames, gaps, senders 2 to 4% fast and slow, glitches of a few ticks on an idle line, a framing error and a break: every byte pushed once and in order, ferr counted, busy.`, run: runUartRx },
     answer: refOf('l_uartrx', () => UART_RX, 'UART receiver'),
+  }),
+  l_crc: () => ({
+    id: 'l_crc', title: 'CRC-32', level: 'sequential', allowed: 'nand',
+    brief: 'The check at the end of an Ethernet frame. A register of 32 flip-flops holds the running remainder, <b>q</b>. <b>init</b> = 1 loads all ones at the next clock, whatever <b>en</b> says; with <b>en</b> = 1 each clock takes one byte on <b>d</b>, the first bit sent in d[0], through the generator 0xEDB88320 (the reflected form of 0x04C11DB7: each bit is a right shift, and a 1 shifted out XORs the generator in); with en = 0 it holds. '
+      + '<b>fcs</b> is the complement of q: the check sequence as it goes on the wire, least significant byte first. After a frame and its own FCS, q is the constant 0xDEBB20E3. The far end is a sender: it checks q after every clock against a model, then appends the FCS of each frame and checks the residue. A byte is eight bit steps in one clock: build one bit step as a chip, or find which inputs each output bit is the XOR of.',
+    ports: pinsOf(CRC_UNIT()),
+    check: { kind: 'custom', describe: '16 frames (the check string "123456789", an empty frame, seeded frames of 1 to 24 bytes) with idle clocks that must be ignored and an init beating en: q after every clock, fcs = ~q, and the residue after each frame and its FCS.', run: runCrc },
+    answer: refOf('l_crc', CRC_UNIT, 'CRC-32 byte unit', () => [[CRC_NEXT(), 'CRC-32 next state']]),
+  }),
+  l_8b10b: () => ({
+    id: 'l_8b10b', title: '8b/10b encoder', level: 'sequential', allowed: 'nand',
+    brief: 'A byte <b>d</b> (or, with <b>k</b> = 1, one of the twelve control codes) and the running disparity <b>rd</b> (0: more zeros sent so far, 1: more ones) become ten bits <b>code</b>, a first (bit 9), and <b>rdout</b>, the disparity after. The line must stay balanced: after every symbol the ones sent exceed the zeros by at most one, or the zeros the ones, with a 6-bit block and a 4-bit block each balanced or off by two in the direction that pulls back; and no more than five equal bits in a row, so the receiver can find the clock. '
+      + 'The far end is a decoder that follows the running disparity: it checks every one of the 256 data bytes and 12 control codes at both disparities, then 32 streams of 40 symbols with rdout fed back.',
+    ports: pinsOf(ENC8B10B),
+    check: { kind: 'custom', describe: '268 symbols at both disparities (the sub-blocks stay within ±1, no run over five, rdout right, the symbol decodes to its byte), then 32 seeded streams with rdout fed back (the line\'s disparity and runs across symbols).', run: run8b10b },
+    answer: refOf('l_8b10b', () => ENC8B10B, '8b/10b encoder', () => [[ENC56, '5b/6b encoder'], [ENC34, '3b/4b encoder']]),
   }),
 };

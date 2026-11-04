@@ -138,6 +138,8 @@ export const NUDGES: Record<string, string> = {
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
   l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',
   l_uartrx: 'Look at the line twice per frame start: once to notice it, once half a bit later to believe it.',
+  l_crc: 'The remainder after a byte is a fixed XOR of some bits of what you had and some bits of the byte: find which, once.',
+  l_8b10b: 'Choose each half-symbol from the disparity so far, so that the line is pulled back toward zero, never pushed away.',
   p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
 };
 

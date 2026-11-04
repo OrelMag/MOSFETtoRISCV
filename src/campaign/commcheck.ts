@@ -11,6 +11,8 @@ import { analyzeTiming } from '../sim/timing';
 import { PS_PER_NAND } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
 import { fmtLog10, log10Mtbf, resolutionTime, TAU_PS, T0_PS, windowRate } from '../phys/metastable';
+import { codeText, decode8b10b, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
+import { CRC32_INIT, CRC32_RESIDUE, fcsBytes, stepBits } from '../comm/crc';
 import { rng } from './drills';
 
 export const hex = (v: number, d = 2) => `0x${(v >>> 0).toString(16).padStart(d, '0')}`;
@@ -262,4 +264,136 @@ export function runUartRx(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun
     else if (!busyAt[l].some((b) => b === 1)) fails.push(`${w}: busy never rose: it is 1 from a start edge until the receiver is back to idle`);
   });
   return finish(fails, n, def);
+}
+
+// ---- l_crc: CRC-32, a byte a clock -------------------------------------------------------------------------------------------
+
+const bitsDiffer = (a: number, b: number): string => { const x = (a ^ b) >>> 0, l: number[] = []; for (let i = 0; i < 32; i++) if ((x >>> i) & 1) l.push(i); return l.length > 6 ? `${l.length} bits` : `bit${l.length > 1 ? 's' : ''} ${l.join(', ')}`; };
+
+interface CrcStep { init: number; en: number; d: number; /** what the model's register holds after this clock */ q: number; what: string }
+
+/**
+ * Lane schedules: lane 0 is the standard check string "123456789", lane 1 an empty frame, the others seeded frames with idle clocks
+ * (en = 0, junk on d) and, on some, an init in the middle (it beats en); each ends with the frame's own FCS, least significant byte first,
+ * after which the register must hold the residue.
+ */
+export function crcSchedules(lanes: number): { name: string; steps: CrcStep[] }[] {
+  return Array.from({ length: lanes }, (_, l) => {
+    const r = rng(900 + l);
+    const frame = l === 0 ? Array.from('123456789', (c) => c.charCodeAt(0)) : Array.from({ length: l === 1 ? 0 : 1 + Math.floor(r() * 24) }, () => Math.floor(r() * 256));
+    const steps: CrcStep[] = [];
+    let q = 0;
+    const push = (init: number, en: number, d: number, what: string) => {
+      q = init ? CRC32_INIT : en ? stepBits(q, d, 8) >>> 0 : q;
+      steps.push({ init, en, d, q, what });
+    };
+    push(1, 0, 0, 'after init');
+    if (l % 5 === 4) { push(0, 1, Math.floor(r() * 256), 'after a byte'); push(1, 1, 0xaa, 'after init with en = 1 (init beats en)'); }
+    let n = 0;
+    for (const b of frame) {
+      if (l > 1 && r() < 0.25) { const junk = Math.floor(r() * 256); push(0, 0, junk, `with en = 0 and d = ${hex(junk)} (en = 0 holds the register)`); }
+      push(0, 1, b, `after byte ${++n} (${hex(b)})`);
+    }
+    const fcs = fcsBytes((~q) >>> 0);
+    fcs.forEach((b, i) => push(0, 1, b, `after FCS byte ${i + 1} (${hex(b)})`));
+    return { name: l === 0 ? 'the check string "123456789"' : l === 1 ? 'an empty frame' : `a frame of ${frame.length} byte${frame.length === 1 ? '' : 's'} (seed ${l})`, steps };
+  });
+}
+
+export function runCrc(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the CRC unit is gates'], tested: 0 };
+  const sim = simOf(def, ['d', 'en', 'init', 'clk', 'q', 'fcs']);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const lanes = 16, sch = crcSchedules(lanes), fails: string[] = [], failed = new Set<number>();
+  const nSteps = Math.max(...sch.map((s) => s.steps.length));
+  for (let t = 0; t < nSteps; t++) {
+    const st = sch.map((s) => s.steps[t] ?? { init: 0, en: 0, d: 0, q: 0, what: '' });
+    sim.setInput('init', st.map((s) => s.init)); sim.setInput('en', st.map((s) => s.en)); sim.setInput('d', st.map((s) => s.d));
+    sim.cycle();
+    const q = sim.get('q', lanes), fcs = sim.get('fcs', lanes);
+    for (let l = 0; l < lanes; l++) {
+      const s = sch[l].steps[t];
+      if (!s || failed.has(l)) continue;
+      if (q[l] >>> 0 !== s.q) {
+        failed.add(l);
+        const hint = s.init ? 'init loads all ones, whatever en says' : s.en ? 'the first bit sent is d[0]; the register shifts right, the generator is the reflected 0xEDB88320 and a byte is eight such steps' : 'en = 0 holds the register';
+        fails.push(`${sch[l].name}, ${s.what}: q = ${hex(q[l], 8)}, expected ${hex(s.q, 8)} (${bitsDiffer(q[l], s.q)} differ). ${hint}`);
+      } else if (fcs[l] >>> 0 !== (~q[l]) >>> 0) {
+        failed.add(l);
+        fails.push(`${sch[l].name}, ${s.what}: fcs = ${hex(fcs[l], 8)} but q = ${hex(q[l], 8)}: fcs is the complement of q, the check sequence as it goes on the wire`);
+      }
+    }
+  }
+  if (!fails.length) {
+    for (const s of sch) {
+      const end = s.steps[s.steps.length - 1].q;
+      if (end !== CRC32_RESIDUE) fails.push(`${s.name}: after the frame and its own FCS the register holds ${hex(end, 8)}, not the residue ${hex(CRC32_RESIDUE, 8)}`);
+    }
+  }
+  return finish(fails, lanes, def);
+}
+
+// ---- l_8b10b: an encoder that keeps the line balanced ------------------------------------------------------------------------
+
+const ones10 = (x: number) => { let n = 0; for (let i = 0; i < 10; i++) n += (x >> i) & 1; return n; };
+const bitsOf10 = (x: number): number[] => Array.from({ length: 10 }, (_, i) => (x >> (9 - i)) & 1); // a first
+const runOf = (bits: number[]): number => { let best = 0, run = 0, prev = -1; for (const b of bits) { run = b === prev ? run + 1 : 1; prev = b; best = Math.max(best, run); } return best; };
+
+/** Every byte and the twelve control codes at both disparities, then streams: the far end is a decoder that follows the running disparity. */
+export function run8b10b(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the encoder is gates'], tested: 0 };
+  const sim = simOf(def, ['d', 'k', 'rd', 'code', 'rdout']);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const fails: string[] = [];
+  const vecs: { v: number; k: boolean; rd: Rd }[] = [];
+  for (const rd of [0, 1] as Rd[]) {
+    for (let v = 0; v < 256; v++) { if (validByte(v, false)) vecs.push({ v, k: false, rd }); }
+    for (const v of K_CODES) vecs.push({ v, k: true, rd });
+  }
+  const rdName = (rd: number) => (rd ? 'RD+' : 'RD−');
+  const judge = (x: { v: number; k: boolean; rd: Rd }, code: number, rdout: number, ctx = ''): string | null => {
+    const nm = nameOf(x.v, x.k), at = `${nm} at ${rdName(x.rd)}${ctx}`;
+    const six = code >> 4, four = code & 15;
+    const d6 = disparityOf(six, 6), d4 = disparityOf(four, 4);
+    if (![-2, 0, 2].includes(d6)) return `${at}: ${codeText(code)} has ${ones10(six)} ones in its 6b block: a block may be balanced or off by two, never more`;
+    if (![-2, 0, 2].includes(d4)) return `${at}: ${codeText(code)} has ${ones10(four)} ones in its 4b block: a block may be balanced or off by two, never more`;
+    const after6 = (x.rd ? 1 : -1) + d6;
+    if (Math.abs(after6) > 1) return `${at}: ${codeText(code)}: the 6b block takes the running disparity from ${rdName(x.rd)} to ${after6 > 0 ? '+' : ''}${after6}: with ${rdName(x.rd)} it must have ${x.rd ? 'no more ones than zeros' : 'no fewer ones than zeros'} (a disparity within ±1 on the wire)`;
+    const after4 = after6 + d4;
+    if (Math.abs(after4) > 1) return `${at}: ${codeText(code)}: the 4b block takes the running disparity from ${after6 > 0 ? '+1' : '−1'} to ${after4 > 0 ? '+' : ''}${after4}: it must pull back toward zero`;
+    if (runOf(bitsOf10(code)) > MAX_RUN_8B10B) return `${at}: ${codeText(code)} has a run of ${runOf(bitsOf10(code))} equal bits; the receiver\'s clock recovery needs a transition at least every ${MAX_RUN_8B10B}`;
+    const want = after4 > 0 ? 1 : 0;
+    if (rdout !== want) return `${at}: ${codeText(code)} leaves the running disparity at ${rdName(want)}, but rdout = ${rdout}`;
+    const dec = decode8b10b(code, x.rd);
+    if (dec.err || dec.v !== x.v || dec.k !== x.k) return `${at}: ${codeText(code)} decodes as ${dec.err ? `an error (${dec.err})` : nameOf(dec.v, dec.k)}: the table says another code stands for ${nm}`;
+    return null;
+  };
+  const lanes = 32;
+  for (let o = 0; o < vecs.length && fails.length < 3; o += lanes) {
+    const part = vecs.slice(o, o + lanes);
+    sim.setInput('d', part.map((x) => x.v)); sim.setInput('k', part.map((x) => (x.k ? 1 : 0))); sim.setInput('rd', part.map((x) => x.rd));
+    sim.settle();
+    const code = sim.get('code', part.length), rdo = sim.get('rdout', part.length);
+    part.forEach((x, i) => { if (fails.length < 3) { const m = judge(x, code[i], rdo[i]); if (m) fails.push(m); } });
+  }
+  if (!fails.length) {
+    // streams: the learner's own rdout fed back, 32 seeded streams of 40 symbols with commas and data; the line's balance and runs across symbol boundaries
+    const r = rng(77), N = 40;
+    const stream = Array.from({ length: lanes }, () => Array.from({ length: N }, () => { const kk = r() < 0.15; const v = kk ? K_CODES[Math.floor(r() * K_CODES.length)] : Math.floor(r() * 256); return { v, k: kk }; }));
+    const rd = new Array<number>(lanes).fill(0), bits: number[][] = Array.from({ length: lanes }, () => []), disp = new Array<number>(lanes).fill(0);
+    for (let t = 0; t < N && !fails.length; t++) {
+      const cur = stream.map((s, l) => ({ v: s[t].v, k: s[t].k, rd: rd[l] as Rd }));
+      sim.setInput('d', cur.map((x) => x.v)); sim.setInput('k', cur.map((x) => (x.k ? 1 : 0))); sim.setInput('rd', cur.map((x) => x.rd));
+      sim.settle();
+      const code = sim.get('code', lanes), rdo = sim.get('rdout', lanes);
+      for (let l = 0; l < lanes && !fails.length; l++) {
+        const m = judge(cur[l], code[l], rdo[l], ` (stream ${l + 1}, symbol ${t + 1})`);
+        if (m) { fails.push(m); break; }
+        rd[l] = rdo[l]; bits[l].push(...bitsOf10(code[l])); disp[l] += ones10(code[l]) * 2 - 10;
+        if (Math.abs(disp[l]) > 2) fails.push(`stream ${l + 1}, symbol ${t + 1}: the line has drifted to a disparity of ${disp[l]}: each symbol must leave the running disparity at +1 or −1`);
+        if (runOf(bits[l].slice(-20)) > MAX_RUN_8B10B) fails.push(`stream ${l + 1}, symbol ${t + 1}: a run of ${runOf(bits[l].slice(-20))} equal bits across two symbols`);
+      }
+    }
+  }
+  return finish(fails, vecs.length, def);
 }
