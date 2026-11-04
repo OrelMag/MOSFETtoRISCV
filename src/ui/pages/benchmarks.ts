@@ -4,6 +4,7 @@
 // against cost (or energy), the table gives each program, a row opens on its misses, stalls and energy.
 
 import { groupFixed } from '../../sim/numfmt';
+import { reducedMotion } from '../motion';
 import { COMMON, FAMILIES, RESULTS, chapterOf, familyOf, front, meanOf, metricOf, runNj, runOf, runUs, type BenchCpu, type Family, type Metric } from '../../bench/summary';
 import { assemble } from '../../riscv/asm';
 import { BENCHMARKS } from '../../riscv/benchprograms';
@@ -23,7 +24,7 @@ const METRICS: { k: Metric; label: string; unit: string; digits: number }[] = [
 type SortKey = 'name' | 'nands' | 'period' | 'mean' | string;
 type ChartX = 'nands' | 'energy';
 
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduced = reducedMotion;
 const fmt = (x: number, d = 0) => groupFixed(x, d);
 const mhz = (period: number) => Math.round(1e6 / (period * RESULTS.psPerNand));
 const extOf = (id: string) => { const n = BENCHMARKS.find((b) => b.id === id)!.needs; return n?.m ? 'RV32IM' : n?.f ? 'RV32IF' : ''; };

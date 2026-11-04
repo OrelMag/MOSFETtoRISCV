@@ -452,11 +452,23 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Booting from cards", challenge: "reach" },
     { title: "Everything on one bus", challenge: "reach" },
   ] },
-  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["relays","bus"], steps: [
-    { title: "A line that fades" },
+  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["relays","bus"], recap: {"checks":3}, steps: [
+    { title: "Moving a bit", challenge: "quiz" },
+    { title: "A line that fades", challenge: "quiz" },
+    { title: "The relay as a repeater", challenge: "quiz" },
+    { title: "Morse against Baudot", challenge: "quiz" },
+    { title: "Nyquist: symbols a second", challenge: "quiz" },
+    { title: "Shannon: what noise leaves", challenge: "quiz" },
+    { title: "The rest of the track", challenge: "quiz" },
   ] },
-  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["telegraph"], steps: [
-    { title: "Everyone to everyone" },
+  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph"], recap: {"checks":3}, steps: [
+    { title: "Everyone to everyone", challenge: "quiz" },
+    { title: "Counting dial pulses", challenge: "reach" },
+    { title: "A stepping selector", challenge: "reach" },
+    { title: "A crossbar", challenge: "reach" },
+    { title: "What a switching network costs", challenge: "quiz" },
+    { title: "The busy tone", challenge: "quiz" },
+    { title: "Start-stop", challenge: "quiz" },
   ] },
   { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], recap: {"checks":3}, steps: [
     { title: "The driver and its load", challenge: "quiz" },

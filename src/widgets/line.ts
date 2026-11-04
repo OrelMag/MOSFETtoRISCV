@@ -101,7 +101,7 @@ const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ?
 
 export function driverWidget(): Widget {
   let lw = 3, c = 100;
-  const plot = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'ps', yLabel: 'V', aria: 'Output voltage of an inverter discharging a capacitor, against an RC exponential', xFmt: (v) => num(v, 0) });
+  const plot = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'ps', yLabel: 'volts', aria: 'Output voltage of an inverter discharging a capacitor, against an RC exponential', xFmt: (v) => num(v, 0) });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const w = 2 ** lw, R = rEff(w), tau = (R * c) / 1000, span = 5 * tau;
@@ -214,7 +214,7 @@ export function repeaterWidget(): Widget {
 
 export function flightWidget(): Widget {
   let len = 150, rise = 0.3, z0 = Z0_BOARD, tFrac = 0.5;
-  const pr = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'mm along the trace', yLabel: 'V', aria: 'Voltage along the line at one instant', xFmt: (v) => num(v, 0) });
+  const pr = plotOf({ W: 720, H: 260, x: [0, 1], y: [0, VIO], yTicks: [0, 0.6, 1.2, 1.8], xLabel: 'mm along the trace', yLabel: 'volts', aria: 'Voltage along the line at one instant', xFmt: (v) => num(v, 0) });
   const chips = mkChips(4), verdict = h('p', { class: 'sub mos-note' }), tOut = h('output', null);
   const paint = () => {
     const td = boardDelay(len), lumped = isLumped(td, rise), tMax = td + rise + 0.2 * td, t = tFrac * tMax;
@@ -254,7 +254,7 @@ const lineSpec = (rs: number, rl: number, lenMm: number, rise: number): LineSpec
 
 export function reflectionWidget(): Widget {
   let rs = 10, len = 150, rise = 0.2, rl = Infinity;
-  const pl = plotOf({ W: 720, H: 270, x: [0, 16], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'V', aria: 'Voltage at the near and far ends of the line against time' });
+  const pl = plotOf({ W: 720, H: 270, x: [0, 16], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'volts', aria: 'Voltage at the near and far ends of the line against time' });
   const chips = mkChips(4), key = h('p', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'Near end (at the driver)'), h('span', { class: 'k-far' }, 'Far pin'));
   const sel = h('select', { 'aria-label': 'Far end' }, h('option', { value: 'open' }, 'Open CMOS input'), h('option', { value: '50' }, '50 Ω to ground'), h('option', { value: '150' }, '150 Ω to ground')) as HTMLSelectElement;
   const note = h('p', { class: 'sub mos-note' });
@@ -300,7 +300,7 @@ export function terminationWidget(): Widget {
     { name: 'Series', note: `${seriesResistor(RD, Z0_BOARD)} Ω at the driver`, rs: Z0_BOARD, rl: Infinity },
     { name: 'Parallel', note: '50 Ω to ground at the far end', rs: RD, rl: Z0_BOARD },
   ];
-  const plots = schemes.map(() => plotOf({ W: 300, H: 190, x: [0, 12], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'V', aria: 'Near and far voltage' }));
+  const plots = schemes.map(() => plotOf({ W: 300, H: 190, x: [0, 12], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'volts', aria: 'Near and far voltage' }));
   const tbl = h('div', { class: 'ln-tbl' });
   const note = h('p', { class: 'sub mos-note' });
   const paint = () => {
@@ -430,7 +430,7 @@ function padPanel(): ScenePanel {
   return (stage: Stage): Widget => {
     const st: PadLinkState = { rs: 0, len: 150, last: null, contention: false };
     padStates.set(stage, st);
-    const pl = plotOf({ W: 340, H: 180, x: [0, 8], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'V', aria: 'Voltage at the driving pad and at the far pad after the last edge' });
+    const pl = plotOf({ W: 340, H: 180, x: [0, 8], y: [-0.4, 3.6], yTicks: [0, 1, 2, 3], xLabel: 'ns', yLabel: 'volts', aria: 'Voltage at the driving pad and at the far pad after the last edge' });
     const chips = mkChips(4), status = h('p', { class: 'sub ln-status' });
     const title = h('h4', null, 'The wire: a model', h('span', { class: 'fold-hint' }));
     const lenOut = slider('Trace', 20, 600, 10, st.len, (v) => `${v / 10} cm`, (v) => { st.len = v; draw(); });

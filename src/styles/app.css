@@ -121,6 +121,18 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+/* The live circuit (ui/viewpreview.ts): stays in view while the list scrolls under it; looked at, never touched. */
+.pal-menu .pal-preview { position: sticky; top: -6px; z-index: 2; height: 116px; margin: -6px -6px 2px; overflow: hidden; pointer-events: none; background: var(--canvas); border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0; }
+.pal-preview svg.schematic { display: block; width: 100%; height: 100%; }
+.pal-preview .lg-name { display: none; }
+@media (max-height: 560px) { .pal-menu .pal-preview { display: none; } }
+.pal-menu .pal-presets { display: flex; gap: 4px; padding: 4px 10px 6px; }
+.pal-menu .pal-presets .btn { flex: 1; justify-content: center; padding: 4px 6px; }
+/* Wire thickness and grid: a label and its choices (view options menu); pressed, not checked, so no tick over the words */
+.pal-menu .pal-choice { display: flex; align-items: center; gap: 4px; padding: 6px 10px; }
+.pal-menu .pal-choice > span { flex: 1; min-width: 0; }
+.pal-menu .pal-choice .btn { padding: 4px 8px; }
+.pal-menu .pal-reset { justify-content: center; color: var(--text-2); font-size: 12.5px; }
 /* Text size row: label, A−, value, A+ (view options menu) */
 .pal-menu .pal-size { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
 .pal-menu .pal-size > span:first-child { flex: 1; min-width: 0; }
@@ -932,8 +944,18 @@ pre.code .num { color: var(--w1); }
 
 /* ---------- schematic ---------- */
 svg.schematic { font-family: var(--font-ui); user-select: none; }
+/* Wire thickness (View options) scales whatever the look draws: vivid.css builds its --wire-k on --wire-user too. */
+:root { --wire-user: 1; --wire-k: var(--wire-user); }
+:root[data-wires='thin'] { --wire-user: 0.7; }
+:root[data-wires='thick'] { --wire-user: 1.5; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
+/* View options: the rects stay either way, they take the canvas's clicks. Every unit's line only once it is worth drawing; the fives stay. */
+.grid-line { display: none; fill: none; stroke: var(--grid); stroke-width: 0.03; }
+.grid-line.major { stroke-width: 0.1; }
+:root[data-grid] .grid-dot { display: none; }
+:root[data-grid='lines'] .grid-line { display: inline; }
+:root[data-grid='lines'] svg.schematic.lg.lg-h-label .grid-line:not(.major) { display: none; }
 .wire { fill: none; stroke: var(--w0); stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
 .flow-front { pointer-events: none; }
 .flow-front.v1 { filter: drop-shadow(0 0 0.5px var(--w1)); }
@@ -957,7 +979,8 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .wire-flow.faded, .flow-tokens.faded, :root[data-wireflow='off'] :is(.wire-flow, .flow-tokens) { display: none; }
 @keyframes wire-flow { from { stroke-dashoffset: var(--flow-from); } to { stroke-dashoffset: var(--flow-to); } }
 @media (prefers-reduced-motion: reduce) { .wire-flow, .flow-tokens { display: none; } }
-@media (prefers-reduced-motion: no-preference) { :root:not([data-wireflow='off']) .bus-label.riding { display: none; } }
+:root[data-reduce-motion] :is(.wire-flow, .flow-tokens) { display: none; }
+@media (prefers-reduced-motion: no-preference) { :root:not([data-wireflow='off']):not([data-reduce-motion]) .bus-label.riding { display: none; } }
 .dot { fill: var(--w0); }
 .dot.v1 { fill: var(--w1); }
 .dot.vx { fill: var(--wx); }
@@ -1528,6 +1551,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+:root[data-reduce-motion] *, :root[data-reduce-motion] *::before, :root[data-reduce-motion] *::after { animation: none !important; transition: none !important; }
 
 /* ---------- CPU panel, assembler ---------- */
 .cpu-panel { width: 330px; top: 12px; bottom: auto; max-height: calc(100% - 24px); font-size: 12.5px; }
@@ -2685,6 +2709,14 @@ svg.schematic.lg.lg-h-tag .net-tag text, svg.schematic.lg.lg-h-bus .bus-label, s
 svg.schematic.lg.lg-h-tap3 .tap-label[data-ts='3'], svg.schematic.lg.lg-h-tap4 .tap-label[data-ts='4'],
 svg.schematic.lg.lg-h-tap5 .tap-label[data-ts='5'], svg.schematic.lg.lg-h-tap6 .tap-label[data-ts='6'],
 svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .tap-label[data-ts='8'] { display: none; }
+
+/* View options' labels: a view rule like the sizes above. A hidden name comes back under the pointer, so a part can still be read
+   and renamed in place, a bit range on its hovered or selected net; a field colouring (.fld) is the point of its step and stays. */
+:root[data-hide~='ports'] svg.schematic .inst:not(:hover) .sym-port,
+:root[data-hide~='parts'] svg.schematic .inst:not(:hover) :is(.sym-label, .inst-name),
+:root[data-hide~='values'] svg.schematic :is(.bus-label, .flow-tokens),
+:root[data-hide~='taps'] svg.schematic .tap-label:not(.net-hover, .net-sel, .fld) { display: none; }
+:root[data-hide~='parts'] svg.schematic .lg-name { display: none !important; }
 
 /* The inspector folds to a rail (view/inspector.ts): by the learner, or by the stage beside a circuit too large to read at
    its fit (Stage.autoInspector). Only where the inspector is a column (1181 px and up); a phone's or tablet's drawer is untouched. */
