@@ -203,7 +203,7 @@ export const chTcp: Chapter = {
     {
       title: 'A window into the gates',
       body: `
-        <p>At about 5 000 clock cycles a second on the gates, a whole transfer would take many minutes. So it runs on the models, and you can put a computer into its gates at any quiet moment. The registers, PC, CSRs and timer go into their flip-flops, the RAM into its leaves, and the NIC's configuration into its registers, as Appendix B does for Doom. The far computer and the router stay models, on the wire at this computer's pins.</p>
+        <p>At several thousand clock cycles a second on the gates, a whole transfer would take minutes. So it runs on the models, and you can put a computer into its gates at any quiet moment. The registers, PC, CSRs and timer go into their flip-flops, the RAM into its leaves, and the NIC's configuration into its registers, as Appendix B does for Doom. The far computer and the router stay models, on the wire at this computer's pins.</p>
         <p>While the window is open, the golden model and the NIC model step beside the gates: every register after every instruction, every NIC output every clock. The panel names the Python line that the PC is on, so you can watch <code>tcp_input</code> run through the circuit. Open the CPU in the schematic while it runs. Then hand it back, and the models carry on from the state the gates reached; the receiver still finds every byte right.</p>
         <p>Quiet means no frame at this computer's pins and nothing in the NIC's bus engine, so that nothing mid-frame needs loading. What the window does not load, the bus fields left over from the last transaction, means nothing until its valid is next raised, and it is compared only then.</p>`,
       scene: tcpWindowScene,

@@ -27,19 +27,24 @@ export const mbps = (bytes: number, clocks: number): number => (bytes * 8 * 1000
 
 // ---- a time plot: one measure, steps, one axis -----------------------------------------------------------------------------------
 
+/** A round step of about a quarter of the range: 1, 2 or 5 times a power of ten. */
+const niceStep = (range: number): number => {
+  const p = 10 ** Math.floor(Math.log10(range / 4 || 1)), m = range / 4 / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+};
+
 interface Series { name: string; cls: string; points: [number, number][]; dots?: boolean }
 function plot(series: Series[], o: { h?: number; yLabel: string; yMax?: number; xMax?: number; marks?: { x: number; cls: string; label: string }[]; label: string }): SVGSVGElement {
-  const W = 620, H = o.h ?? 190, M = { l: 54, r: 12, t: 22, b: 30 };
+  const W = 620, H = o.h ?? 190, M = { l: 54, r: 26, t: 22, b: 24 };
   const xMax = o.xMax ?? Math.max(1, ...series.flatMap((v) => v.points.map((p) => p[0])));
-  const yMax = o.yMax ?? Math.max(1, ...series.flatMap((v) => v.points.map((p) => p[1])));
+  const top = o.yMax ?? Math.max(1, ...series.flatMap((v) => v.points.map((p) => p[1]))), yStep = niceStep(top), yMax = Math.ceil(top / yStep - 1e-9) * yStep, xStep = niceStep(xMax);
   const X = (x: number) => M.l + (x / xMax) * (W - M.l - M.r), Y = (y: number) => H - M.b - (y / yMax) * (H - M.t - M.b);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tcp-plot', role: 'img', 'aria-label': o.label }) as SVGSVGElement;
-  for (let i = 0; i <= 4; i++) {
-    const v = (yMax * i) / 4;
+  for (let v = 0; v <= yMax + 1e-9; v += yStep) {
     svg.append(s('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), class: 'grid' }), s('text', { x: M.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'tick' }, v >= 1000 ? n0(v) : String(Math.round(v * 10) / 10)));
   }
-  for (let i = 0; i <= 4; i++) { const v = (xMax * i) / 4; svg.append(s('text', { x: X(v), y: H - M.b + 16, 'text-anchor': i === 0 ? 'start' : i === 4 ? 'end' : 'middle', class: 'tick' }, n0(v))); }
-  svg.append(s('text', { x: M.l, y: 13, class: 'axl' }, o.yLabel), s('text', { x: W - M.r, y: H - 2, 'text-anchor': 'end', class: 'axl' }, 'clock cycles'));
+  for (let v = 0; v <= xMax; v += xStep) svg.append(s('text', { x: X(v), y: H - M.b + 16, 'text-anchor': v === 0 ? 'start' : 'middle', class: 'tick' }, n0(v)));
+  svg.append(s('text', { x: M.l, y: 13, class: 'axl' }, o.yLabel), s('text', { x: W - M.r, y: 13, 'text-anchor': 'end', class: 'axl' }, 'time: clock cycles'));
   for (const m of o.marks ?? []) svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: M.t, y2: H - M.b, class: `mark ${m.cls}` }));
   for (const v of series) {
     if (v.dots) { for (const [x, y] of v.points) svg.append(s('circle', { cx: X(x), cy: Y(y), r: 2.5, class: `dot ${v.cls}` })); continue; }
@@ -70,7 +75,7 @@ export function ladderWidget(o: { bytes: number; lose?: boolean; close?: boolean
     if (sel >= segs.length) sel = 0;
     const times = [...new Set(segs.flatMap((x) => [x.t, x.at]))].sort((a, b) => a - b);
     const rank = new Map(times.map((t, i) => [t, i]));
-    const W = 560, ROW = 15, H = 30 + ROW * Math.max(6, times.length), XA = 90, XB = W - 90;
+    const W = 560, ROW = 18, H = 30 + ROW * Math.max(6, times.length), XA = 90, XB = W - 90;
     const Y = (t: number) => 24 + ROW * (rank.get(t) ?? 0);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tcp-lad', role: 'group', 'aria-label': 'Segments between computer A and computer B' }) as SVGSVGElement;
     svg.append(s('text', { x: XA, y: 13, 'text-anchor': 'middle', class: 'who' }, 'A'), s('text', { x: XB, y: 13, 'text-anchor': 'middle', class: 'who' }, 'B'),
