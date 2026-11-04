@@ -43,7 +43,9 @@ export const ALIASES: Record<string, string[]> = {
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
-const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract']);
+const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract',
+  // acronyms the CPU chapters name as examples long before the Communication chapters teach them (registers, memory, io, widths, ooo)
+  'uart', 'spi', 'crc']);
 
 /** Entries whose names mean something else before the GPU chapters: a loom's warp, a byte lane, an energy barrier. */
 const GPU_ONLY = ['warp', 'lane', 'barrier'];
