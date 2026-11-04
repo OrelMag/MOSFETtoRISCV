@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { settings } from '../src/ui/settings';
+import { PRESETS, settings } from '../src/ui/settings';
+import { evalOnce, simulate } from '../src/sim/harness';
+import { PREVIEW_DEF } from '../src/ui/viewpreview';
 
 const css = (f: string) => readFileSync(new URL(`../src/styles/${f}`, import.meta.url), 'utf8');
 
@@ -81,6 +83,51 @@ describe('view options', () => {
     const paper = readFileSync(new URL('../src/ui/pages/printfig.ts', import.meta.url), 'utf8');
     expect(paper).toContain("['data-hide', null]");
     expect(paper).toContain("['data-wires', null]");
+  });
+
+  it('a preset decides the look and is recognized, by hand it stops being one', () => {
+    settings.set('theme', 'auto');
+    settings.resetView();
+    expect(settings.preset()).toBe('standard');
+    for (const p of PRESETS) {
+      settings.applyPreset(p.id);
+      expect(settings.preset()).toBe(p.id);
+    }
+    settings.applyPreset('classroom');
+    expect([settings.palette, settings.wireScale, settings.textSize, settings.reduceMotion]).toEqual(['contrast', 'thick', 120, true]);
+    settings.set('grid', 'lines');
+    expect(settings.preset()).toBeNull();
+    settings.set('theme', 'auto');
+  });
+
+  it('a preset leaves the behaviour alone, and every preset can be left again', () => {
+    settings.set('singleKeys', false);
+    settings.set('simpleWires', true);
+    settings.set('autoClock', false);
+    settings.applyPreset('plain');
+    expect([settings.singleKeys, settings.simpleWires, settings.autoClock]).toEqual([false, true, false]);
+    settings.applyPreset('standard');
+    expect([settings.vivid, settings.netColors, settings.cartoon, settings.palette]).toEqual([true, true, true, 'default']);
+    expect(settings.singleKeys).toBe(false);
+    // Standard hands colour per net back to the vivid look
+    settings.setVivid(false);
+    expect(settings.netColors).toBe(false);
+    settings.set('theme', 'auto');
+  });
+
+  it('the Paper preset turns the theme light; an undo snapshot plus the theme brings all back', () => {
+    settings.set('theme', 'dark');
+    const before = { view: settings.view(), theme: settings.theme };
+    settings.applyPreset('print');
+    expect([settings.theme, settings.palette, settings.vivid]).toEqual(['light', 'print', false]);
+    settings.set('theme', before.theme);
+    settings.setView(before.view);
+    expect([settings.theme, settings.palette, settings.vivid, settings.netColors]).toEqual(['dark', 'default', true, true]);
+    settings.set('theme', 'auto');
+  });
+
+  it('the preview is a working circuit: a ^ b, the low bit inverted', () => {
+    expect(evalOnce(simulate(PREVIEW_DEF), [0b0101, 0b0011])).toEqual([1, 0b011]);
   });
 
   it('the switch does what the system preference does', () => {

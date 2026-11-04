@@ -121,6 +121,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .pal-menu button:hover { background: var(--surface-2); }
 .pal-menu button[aria-checked='true'] { background: var(--accent-soft); }
+/* The live circuit (ui/viewpreview.ts): stays in view while the list scrolls under it; looked at, never touched. */
+.pal-menu .pal-preview { position: sticky; top: -6px; z-index: 2; height: 116px; margin: -6px -6px 2px; overflow: hidden; pointer-events: none; background: var(--canvas); border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0; }
+.pal-preview svg.schematic { display: block; width: 100%; height: 100%; }
+.pal-preview .lg-name { display: none; }
+@media (max-height: 560px) { .pal-menu .pal-preview { display: none; } }
+.pal-menu .pal-presets { display: flex; gap: 4px; padding: 4px 10px 6px; }
+.pal-menu .pal-presets .btn { flex: 1; justify-content: center; padding: 4px 6px; }
 /* Wire thickness and grid: a label and its choices (view options menu); pressed, not checked, so no tick over the words */
 .pal-menu .pal-choice { display: flex; align-items: center; gap: 4px; padding: 6px 10px; }
 .pal-menu .pal-choice > span { flex: 1; min-width: 0; }
@@ -943,12 +950,12 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 :root[data-wires='thick'] { --wire-user: 1.5; }
 .grid-bg { pointer-events: all; }
 .grid-dot { fill: var(--grid); }
-/* View options: the rects stay either way, they take the canvas's clicks. Lines only once a unit is worth drawing. */
+/* View options: the rects stay either way, they take the canvas's clicks. Every unit's line only once it is worth drawing; the fives stay. */
 .grid-line { display: none; fill: none; stroke: var(--grid); stroke-width: 0.03; }
-.grid-line.major { stroke-width: 0.07; }
+.grid-line.major { stroke-width: 0.1; }
 :root[data-grid] .grid-dot { display: none; }
 :root[data-grid='lines'] .grid-line { display: inline; }
-:root[data-grid='lines'] svg.schematic.lg.lg-h-tiny .grid-line:not(.major) { display: none; }
+:root[data-grid='lines'] svg.schematic.lg.lg-h-label .grid-line:not(.major) { display: none; }
 .wire { fill: none; stroke: var(--w0); stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); stroke-dasharray: var(--wire-dash0); stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.12s; }
 .flow-front { pointer-events: none; }
 .flow-front.v1 { filter: drop-shadow(0 0 0.5px var(--w1)); }
