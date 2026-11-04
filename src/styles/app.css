@@ -388,6 +388,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 0.9em 0; color: var(--text);
 }
 .prose .try {
+  display: block;
   position: relative;
   border: 1px dashed var(--border-strong); padding: 10px 12px 10px 38px; border-radius: 10px; margin: 0.9em 0;
   color: var(--text); font-size: 14px;
