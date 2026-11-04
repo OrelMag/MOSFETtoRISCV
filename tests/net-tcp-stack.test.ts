@@ -304,3 +304,111 @@ describe('the Python TCP against the reference', () => {
     for (let seed = 1; seed <= 8; seed++) await converse({ seed: 300 + seed, junk: 12, loss: 3, n: 400 });
   }, 240000);
 });
+
+// Paths the random conversations did not reach: a harness check that broke each rule on purpose found them (a wrong rule went unnoticed).
+describe('directed: what random traffic does not reach', () => {
+  const PEER = { sport: 80, dport: 40000 };
+  /** An established connection with the peer at sequence 0x2001 and a window of `wnd`. */
+  function established(wnd = 512) {
+    const p = new Pair(0x1000);
+    p.step(1, { cmd: { k: 'connect', sport: 40000, dport: 80 } });
+    p.step(2, { seg: segBytes({ ...PEER, seq: 0x2000, ack: 0x1001, flags: SYN | ACK, wnd, mss: 64, data: [] }, B, A) });
+    return p;
+  }
+  const ack = (seq: number, a: number, wnd = 512, flags = ACK, data: number[] = []) => segBytes({ ...PEER, seq, ack: a, flags, wnd, data }, B, A);
+  const fill = (n: number) => Array.from({ length: n }, (_, i) => (i * 3) & 255);
+
+  it('a timeout with a large window: ssthresh is half of what was out, cwnd one segment, and it goes back', () => {
+    const p = established();
+    let now = 10, una = 0x1001;
+    // grow the window with clean ACKs until more than 8 segments are allowed
+    for (let k = 0; k < 12; k++) {
+      p.step(now += 100, { cmd: { k: 'write', bytes: fill(BUF_N) } });
+      una = p.model.sndNxt;
+      p.step(now += 100, { seg: ack(0x2001, una) });
+    }
+    expect(p.model.cwnd).toBeGreaterThan(6 * 64);
+    p.step(now += 100, { cmd: { k: 'write', bytes: fill(BUF_N) } });
+    p.step(now += 100, { cmd: { k: 'write', bytes: fill(BUF_N) } });
+    p.step(now += 100, { cmd: { k: 'write', bytes: fill(BUF_N) } });
+    const flight = (p.model.sndMax - p.model.sndUna) | 0;
+    expect(flight).toBeGreaterThan(4 * 64);
+    const s = p.step(p.model.rtoAt + 1);
+    expect(p.model.ssthresh).toBe(flight >> 1);
+    expect(p.model.cwnd).toBe(64);
+    expect(s[0].seg.seq).toBe(p.model.sndUna);
+    expect(s.length).toBe(1);
+  });
+  it('zero window: the same byte probes on a doubling timer, longer than the retry limit, nothing cut, until the window opens', () => {
+    const p = established(512);
+    let now = 10;
+    p.step(now += 10, { cmd: { k: 'write', bytes: fill(200) } });
+    const una = p.model.sndNxt;
+    expect(una).toBe(0x1001 + 128);
+    p.step(now += 10, { seg: ack(0x2001, una, 0) });
+    expect(p.model.sndWnd).toBe(0);
+    expect(p.model.sndEnd - p.model.sndNxt).toBe(72);
+    const cw = p.model.cwnd, ss = p.model.ssthresh;
+    let rto = p.model.rto;
+    for (let k = 0; k < 12; k++) {
+      now = p.model.rtoAt + 1;
+      const s = p.step(now);
+      expect(s.map((x) => [x.seg.seq, x.seg.data.length]), `probe ${k}`).toEqual([[una, 1]]);
+      expect(p.model.rto).toBe(Math.min(2 * rto, 6_400_000));
+      rto = p.model.rto;
+      // refused: the receiver's window is still shut
+      p.step(now += 1, { seg: ack(0x2001, una, 0) });
+    }
+    expect(p.model.st).toBe(ESTABLISHED);
+    expect(p.model.err).toBe(false);
+    expect([p.model.cwnd, p.model.ssthresh]).toEqual([cw, ss]);
+    expect(p.model.retries).toBe(0);
+    // the window opens: the rest goes, from the probe's byte on
+    const s = p.step(now += 1, { seg: ack(0x2001, una, 512) });
+    expect(s.length).toBeGreaterThan(0);
+    const last = p.step(now += 1, { seg: ack(0x2001, (una + 1) | 0, 512) });
+    expect([...s, ...last].reduce((n, x) => n + x.seg.data.length, 0)).toBe(71);
+  });
+  it('a reset at the window\'s last byte is challenged, at the first byte past it dropped', () => {
+    const p = established();
+    const free = 512;
+    const inside = (0x2001 + free - 1) | 0, past = (0x2001 + free) | 0;
+    expect(p.step(10, { seg: segBytes({ ...PEER, seq: inside, ack: 0, flags: RST, wnd: 0, data: [] }, B, A) }).map((x) => x.seg.flags)).toEqual([ACK]);
+    expect(p.step(11, { seg: segBytes({ ...PEER, seq: past, ack: 0, flags: RST, wnd: 0, data: [] }, B, A) })).toEqual([]);
+    expect(p.model.st).toBe(ESTABLISHED);
+  });
+  it('a retransmission that overlaps what arrived: the old part is cut, the new part taken in order', () => {
+    const p = established();
+    const d = fill(30);
+    p.step(10, { seg: ack(0x2001, 0x1001, 512, ACK | PSH, d.slice(0, 10)) });
+    // 4 bytes seen already, 16 new
+    p.step(11, { seg: ack(0x2001 + 6, 0x1001, 512, ACK | PSH, d.slice(6, 26)) });
+    expect(p.model.rcvNxt).toBe(0x2001 + 26);
+    p.step(12, { cmd: { k: 'read', n: 100 } });
+    expect(Array.from(p.cpu.d8.subarray(BUF, BUF + 26))).toEqual(d.slice(0, 26));
+    // wholly old: acknowledged and dropped
+    expect(p.step(13, { seg: ack(0x2001, 0x1001, 512, ACK | PSH, d.slice(0, 10)) }).map((x) => x.seg.ack)).toEqual([0x2001 + 26]);
+  });
+  it('options in a SYN: NOPs and unknown kinds are walked, an end-of-list stops, a bad length stops', () => {
+    const syn = (opts: number[]) => {
+      const pad = [...opts]; while (pad.length % 4) pad.push(0);
+      const hl = 20 + pad.length;
+      const b = [0xc3, 0x50, 0, 80, 0, 0, 0x30, 0, 0, 0, 0, 0, (hl / 4) << 4, SYN, 2, 0, 0, 0, 0, 0, ...pad];
+      const sum = (x: number[], st: number) => { let s = st; for (let i = 0; i < x.length; i += 2) s += (x[i] << 8) | (x[i + 1] ?? 0); while (s > 0xffff) s = (s & 0xffff) + (s >>> 16); return s; };
+      const c = ~sum(b, sum([10, 0, 0, 2, 10, 0, 0, 1, 0, 6, 0, hl], 0)) & 0xffff;
+      b[16] = c >> 8; b[17] = c & 255;
+      return b;
+    };
+    const mssOf = (opts: number[]) => {
+      const p = new Pair(0x1000);
+      p.step(1, { cmd: { k: 'listen', port: 80 } });
+      p.step(2, { seg: syn(opts) });
+      return p.model.mss;
+    };
+    expect(mssOf([1, 1, 2, 4, 0, 40])).toBe(40);
+    expect(mssOf([1, 3, 3, 7, 2, 4, 0, 32])).toBe(32);
+    expect(mssOf([0, 2, 4, 0, 32])).toBe(64);
+    expect(mssOf([2, 0, 2, 4, 0, 32])).toBe(64);
+    expect(mssOf([])).toBe(64);
+  });
+});

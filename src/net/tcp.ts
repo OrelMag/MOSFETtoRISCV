@@ -212,9 +212,9 @@ export class TcpModel {
 
   private onTimeout(now: number): void {
     this.rtoOn = false;
-    const avail = (this.sndEnd - this.sndNxt) | 0;
-    if (this.st >= ESTABLISHED && this.sndNxt === this.sndUna && this.sndWnd === 0 && avail > 0) {
-      // the zero-window probe: one byte past the window, not a loss, so nothing is cut and it never gives up
+    if (this.st >= ESTABLISHED && this.sndWnd === 0 && ((this.sndNxt - this.sndUna) | 0) <= 1 && ((this.sndEnd - this.sndUna) | 0) > 0) {
+      // the zero-window probe, the same byte each time: past the window, so its going unanswered is no loss. Nothing is cut and it never gives up
+      this.sndNxt = this.sndUna;
       if (this.emit(ACK, this.sndNxt, 1)) {
         this.sndNxt = (this.sndNxt + 1) | 0;
         if (lt(this.sndMax, this.sndNxt)) this.sndMax = this.sndNxt;
@@ -334,7 +334,8 @@ export class TcpModel {
       }
       if (this.cwnd > TCP_K.SND) this.cwnd = TCP_K.SND;
       this.event(now, 'ack');
-    } else if (s.ack === this.sndUna && dlen === 0 && !finf && s.wnd === this.sndWnd && this.sndMax !== this.sndUna) {
+    } else if (s.ack === this.sndUna && dlen === 0 && !finf && s.wnd === this.sndWnd && s.wnd !== 0 && this.sndMax !== this.sndUna) {
+      // (with the window shut these are answers to a probe, not news of a loss)
       this.dupacks++;
       if (this.dupacks === TCP_K.DUPACKS) {
         // fast retransmit: halve, and go back (no out-of-order queue at the far end to save the rest)

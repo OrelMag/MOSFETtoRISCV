@@ -236,8 +236,9 @@ def tcp_output(t):
 def tcp_timeout():
     global rto_on, rto, snd_nxt, snd_max, retries, tcp_err, ssthresh, cwnd, acc, dupacks, rtt_on
     rto_on = 0
-    if tcp_st >= 4 and snd_nxt == snd_una and snd_wnd == 0 and (snd_end - snd_nxt) > 0:
-        # the zero-window probe: one byte past the window, not a loss, so nothing is cut and it never gives up
+    if tcp_st >= 4 and snd_wnd == 0 and (snd_nxt - snd_una) <= 1 and (snd_end - snd_una) > 0:
+        # the zero-window probe, the same byte each time: past the window, so its going unanswered is no loss. Nothing is cut and it never gives up
+        snd_nxt = snd_una
         if tcp_emit(16, snd_nxt, 1, 20):
             snd_nxt = snd_nxt + 1
             if (snd_max - snd_nxt) < 0:
@@ -438,7 +439,8 @@ def tcp_ack_field(t):
                 cwnd += tcp_mss
         if cwnd > ${K.SND}:
             cwnd = ${K.SND}
-    elif seg_ack == snd_una and seg_len == 0 and (seg_flags & 1) == 0 and seg_wnd == snd_wnd and snd_max != snd_una:
+    elif seg_ack == snd_una and seg_len == 0 and (seg_flags & 1) == 0 and seg_wnd == snd_wnd and seg_wnd != 0 and snd_max != snd_una:
+        # (with the window shut these are answers to a probe, not news of a loss)
         dupacks += 1
         if dupacks == ${K.DUPACKS}:
             # fast retransmit: halve, and go back (no out-of-order queue at the far end to save the rest)
