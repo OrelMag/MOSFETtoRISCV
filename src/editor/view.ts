@@ -130,9 +130,9 @@ export class EditorView {
     this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas', tabindex: -1 });
     const defs = s('defs');
     defs.innerHTML = `<pattern id="ed-grid" width="1" height="1" patternUnits="userSpaceOnUse">
-      <circle cx="0" cy="0" r="0.07" class="grid-dot"/></pattern>
+      <circle cx="0" cy="0" r="0.07" class="grid-dot"/><path d="M1,0 H0 V1" class="grid-line"/></pattern>
       <pattern id="ed-grid5" width="5" height="5" patternUnits="userSpaceOnUse">
-      <circle cx="0" cy="0" r="0.12" class="grid-dot ed-grid-major"/></pattern>`;
+      <circle cx="0" cy="0" r="0.12" class="grid-dot ed-grid-major"/><path d="M5,0 H0 V5" class="grid-line major"/></pattern>`;
     const L = (cls: string) => s('g', { class: cls });
     this.gComments = L('ed-notes');
     this.gWires = L('wires');

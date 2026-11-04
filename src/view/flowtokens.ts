@@ -8,6 +8,7 @@
 
 import type { Vec } from '../sim/geometry';
 import { s } from '../ui/dom';
+import { reducedMotion } from '../ui/motion';
 import { FLOW_SPEED } from './flow';
 import { setNetHue } from './nethue';
 import { textWidth } from './route';
@@ -25,11 +26,10 @@ interface Entry { hue?: number; g: SVGGElement; lanes: readonly Lane[]; tracks: 
 
 const live = new Set<FlowTokens>();
 let raf = 0;
-const motion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
 function loop(t: number): void {
   raf = 0;
-  const on = document.documentElement.getAttribute('data-wireflow') !== 'off' && !motion?.matches;
+  const on = document.documentElement.getAttribute('data-wireflow') !== 'off' && !reducedMotion();
   for (const ft of live) {
     if (!ft.layer.isConnected || !ft.size) live.delete(ft);
     else if (on) ft.tick(t / 1000);

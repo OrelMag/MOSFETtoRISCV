@@ -266,9 +266,11 @@ export class SchematicView {
 
     const defs = s('defs');
     defs.innerHTML = `<pattern id="grid" width="1" height="1" patternUnits="userSpaceOnUse">
-      <circle cx="0" cy="0" r="0.06" class="grid-dot"/></pattern>`;
+      <circle cx="0" cy="0" r="0.06" class="grid-dot"/><path d="M1,0 H0 V1" class="grid-line"/></pattern>
+      <pattern id="grid5" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5,0 H0 V5" class="grid-line major"/></pattern>`;
     this.el.append(defs);
     const gridRect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid)' });
+    const grid5Rect = s('rect', { class: 'grid-bg', x: -500, y: -500, width: 1000, height: 1000, fill: 'url(#grid5)' });
     const wiresG = s('g', { class: 'wires' });
     this.flowG = s('g', { class: 'wire-flows' });
     const tokG = s('g', { class: 'flow-tokens-layer' });
@@ -282,7 +284,7 @@ export class SchematicView {
     // the fixed-size block names (legible.ts) have a layer of their own, last: nothing is painted over them
     const nameG = s('g', { class: 'lg-names', 'aria-hidden': 'true' });
     this.nameOf.clear();
-    this.el.append(gridRect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG, nameG);
+    this.el.append(gridRect, grid5Rect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG, nameG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -325,7 +327,7 @@ export class SchematicView {
         hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
       }
       for (const t of tapsOf.get(net.index) ?? []) {
-        const g = s('g', { class: 'tap-label', 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
+        const g = s('g', { class: 'tap-label', 'data-net': net.index, 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
         setNetHue(g, hue);
         const { x, y, w: tw, h: th } = t.rect;
         g.append(s('rect', { x, y, width: tw, height: th, rx: th / 2 }),
