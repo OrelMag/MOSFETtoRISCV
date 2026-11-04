@@ -169,9 +169,9 @@ describe('the Communication codex entries', () => {
     expect(Math.round(rpMax(fast, 400e-12))).toBe(885);
     expect(Math.round(1e12 * fast.trMax / (RISE_30_70 * rpMin(fast, 3.3)))).toBe(366);
     expect(plus.iol).toBe(20e-3);
-    quotes('i2c', '3541 Ω', '11802 Ω', '967 Ω', '885 Ω', '366 pF', '0.8473', '659 NANDs', '1 524');
+    quotes('i2c', '3541 Ω', '11802 Ω', '967 Ω', '885 Ω', '366 pF', '0.8473', '659 NANDs', '1 638');
     says('spi', 5, '3541 Ω'); says('spi', 5, '11802 Ω'); says('spi', 5, '967 Ω'); says('spi', 5, '885 Ω'); says('spi', 5, '366 pF');
-    says('spi', 6, '659 NANDs'); says('spi', 6, '1 524 NANDs');
+    says('spi', 6, '659 NANDs'); says('spi', 6, '1 638 NANDs');
   });
 
   it('quote the modem as computed', () => {
