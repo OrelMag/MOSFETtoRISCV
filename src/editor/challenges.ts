@@ -68,6 +68,8 @@ export interface CustomRun {
   cycles?: number;
   /** The clock period, when the bench measures it itself (a core with its memories). */
   period?: number;
+  /** Most relay steps one input change took (a bench stepping relays itself). */
+  steps?: number;
   /** Relays, when the bench prices the circuit itself (a gate-level chip counted as relay logic). */
   relays?: number;
   /** Indices of the tests (e.g. the programs) that failed. */
