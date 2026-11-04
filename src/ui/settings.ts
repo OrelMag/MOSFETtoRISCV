@@ -114,6 +114,19 @@ function load(): State {
 const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'textSize', 'narrowText'] as const;
 export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
 
+/** What a preset decides: how the circuits look and how large the prose reads, never how the site behaves (shortcuts, new wires, the clock). */
+const LOOK_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'textSize'] as const;
+type LookKey = (typeof LOOK_KEYS)[number];
+export type PresetId = 'standard' | 'classroom' | 'print' | 'plain';
+
+/** Each preset names only what differs from the defaults. */
+export const PRESETS: { id: PresetId; name: string; blurb: string; theme?: Theme; look: Partial<Pick<State, LookKey>> }[] = [
+  { id: 'standard', name: 'Standard', blurb: 'The look the site ships with', look: {} },
+  { id: 'classroom', name: 'Classroom', blurb: 'For a projector: high contrast, thick wires, larger text, no motion', look: { palette: 'contrast', cartoon: false, wireFlow: false, reduceMotion: true, wireScale: 'thick', textSize: 120 } },
+  { id: 'print', name: 'Paper', blurb: 'Light and monochrome, for screenshots that will be printed: no colour fills, no grid, no motion', theme: 'light', look: { palette: 'print', vivid: false, board: false, cartoon: false, modules: false, netColors: false, wireFlow: false, reduceMotion: true, grid: 'off' } },
+  { id: 'plain', name: 'Plain', blurb: 'A textbook schematic: outlined parts, one wire colour, nothing moving along the wires', look: { vivid: false, board: false, cartoon: false, modules: false, netColors: false, wireFlow: false } },
+];
+
 const pickView = (from: State): ViewState => Object.fromEntries(VIEW_KEYS.map((k) => [k, from[k]])) as unknown as ViewState;
 
 const state = load();
@@ -191,6 +204,18 @@ export const settings = {
     Object.assign(state, v);
     save();
     listeners.forEach((f) => f());
+  },
+  /** A preset: the look decided, the behaviour options left alone (the theme too unless it names one). */
+  applyPreset(id: PresetId): void {
+    const p = PRESETS.find((x) => x.id === id)!;
+    const look = Object.fromEntries(LOOK_KEYS.map((k) => [k, p.look[k] ?? defaults[k]])) as Pick<State, LookKey>;
+    if (p.theme) state.theme = p.theme;
+    this.setView({ ...look, vividNets: look.vivid && look.netColors });
+  },
+  /** The preset the look matches now (null: changed by hand). A preset naming a theme asks for it too. */
+  preset(): PresetId | null {
+    const on = PRESETS.find((p) => (!p.theme || p.theme === state.theme) && LOOK_KEYS.every((k) => state[k] === (p.look[k] ?? defaults[k])));
+    return on?.id ?? null;
   },
   /** Every option in the menu back to its default; progress and the theme stay. */
   resetView(): void {

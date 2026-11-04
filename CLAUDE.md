@@ -1516,6 +1516,11 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
   during a run) refits only a fitted view, else `resized()` keeps the scale and top-left corner.
 - Hops, tap bit ranges, net selection and probe flags are computed in the view from the
   routed nets; nothing to author.
+- View options (ui/app.ts, the top bar's swatch; settings.ts): `PRESETS` set the look only (LOOK_KEYS, never the behaviour options), `resetView` every option in
+  the menu (VIEW_KEYS, never progress or the theme), both undoable until the menu closes. Wire thickness is `data-wires` → `--wire-user`, which `--wire-k` is built on; grid `data-grid`
+  (the `.grid-bg` rects stay: they take the canvas's clicks); reduce motion `data-reduce-motion`, read through ui/motion.ts `reducedMotion()` (never a private matchMedia); labels `data-hide`
+  (a token per kind; names come back under the pointer). A new attribute that shapes a drawing also goes in printfig.ts PAPER. ui/viewpreview.ts: the live circuit at the menu's top, its own
+  chunk, the svg in the page only while the menu is open (so nothing looking for "the circuit" finds it).
 - Flowing bits (`settings.wireFlow`, a switch in the wire-colour menu; `data-wireflow="off"` on
   `<html>` hides it): a 1-bit wire carrying a 1 shows pellets (view/flow.ts: a dash pattern on an
   overlay path `.wire-flow`, CSS-animated); a bus carrying a non-zero word shows its value riding
