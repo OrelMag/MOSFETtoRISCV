@@ -210,17 +210,23 @@ export function fifoBudget(baud: number, depth: number, level: number): { fillUs
   return { fillUs: depth * byteUs, irqPerSecond: baud / 10 / level, slackUs: (depth - level) * byteUs };
 }
 
+/** Closed forms (fractions of a bit): a receiver slow by more than this puts the last data sample of an isolated frame in its stop bit, and, in a back-to-back stream, the stop sample in the next start bit (the next edge is 10 bits after this one, the receiver samples at 9½, and a tick of detection delay is 1/16). */
+export const SLOW_LIMIT_ISOLATED = 1 - 8.5 / (9 - 1 / 16);
+export const SLOW_LIMIT_BACK_TO_BACK = 1 - 9.5 / (10 - 1 / 16);
+
 /**
- * The receiver's tolerance to a sender whose bit is off, as a fraction of a bit: the prediction of comm/startstop.ts
- * (tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4)) and what the model, equal to the gates, measures at three divisors
- * (tests/comm-uart.test.ts pins both). A sender slower than the receiver is the receiver being fast; the stop bit's sample
- * then lands early. The difference is the synchronizer's two cycles, 2 / (16 · div) of a bit, and the 0.0005 search step.
+ * The receiver's tolerance to a sender whose bit is off, as a fraction of a bit. `predicted` is comm/startstop.ts
+ * (tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4): isolated frames, three phases); `measured` is a search of the
+ * golden model (equal to the gates) over all 256 bytes and 8 start phases in steps of 0.05 %, at two divisors, the same for
+ * a back-to-back stream of ten-byte bursts (tests/comm-uart.test.ts pins both). A sender slower than the receiver is the
+ * receiver being fast. The synchronizer delays detection and every sample alike, so the divisor does not move the limit.
+ * The measured slow-receiver side (sender faster) is 4.9 % isolated against the closed form 4.90 %, and 4.35 % back to back
+ * against 4.40 %: the search steps down by 0.05 %. The fast side stops at 5.55 %, just under 0.5 / 9 = 5.556 %.
  */
 export const UART_TOLERANCE = {
   predicted: { senderFast: 0.0485, senderSlow: 0.0555 },
   measured: [
-    { div: 1, senderFast: 0.05, senderSlow: 0.0555 },
-    { div: 4, senderFast: 0.05, senderSlow: 0.0555 },
-    { div: 16, senderFast: 0.049, senderSlow: 0.056 },
+    { div: 1, senderFast: 0.049, senderSlow: 0.0555, backToBackFast: 0.0435, backToBackSlow: 0.0555 },
+    { div: 4, senderFast: 0.049, senderSlow: 0.0555, backToBackFast: 0.0435, backToBackSlow: 0.0555 },
   ],
 } as const;
