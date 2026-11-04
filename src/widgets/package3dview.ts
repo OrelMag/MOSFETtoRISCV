@@ -55,12 +55,12 @@ export function packageView(): Widget {
     return h('label', { class: 'r3-sl' }, h('span', null, label), input, out);
   };
   const ctl = h('div', { class: 'r3-ctl' },
-    slider('Outputs switching', 1, SIGNALS, 1, st.n, String, (v) => { st.n = v; }), slider('Ground pins shared', 1, GROUNDS, 1, st.g, String, (v) => { st.g = v; }),
-    slider('Edge time', 0.1, 4, 0.1, st.rise, (v) => `${v.toFixed(1)} ns`, (v) => { st.rise = v; }), slider('Inductance per bond', 0.5, 10, 0.5, st.lnh, (v) => `${v} nH`, (v) => { st.lnh = v; }));
+    slider('Outputs', 1, SIGNALS, 1, st.n, String, (v) => { st.n = v; }), slider('Ground pins', 1, GROUNDS, 1, st.g, String, (v) => { st.g = v; }),
+    slider('Edge', 0.1, 4, 0.1, st.rise, (v) => `${v.toFixed(1)} ns`, (v) => { st.rise = v; }), slider('L per bond', 0.5, 10, 0.5, st.lnh, (v) => `${v} nH`, (v) => { st.lnh = v; }));
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'From the pad to the pin'),
-    h('p', { class: 'm3-sub' }, 'The die sits on a paddle; a bond wire runs from each pad to a lead, and the lead fans out to the board. Every output returns its current through the ground bond wires (blue), and a wire of a few mm has a few nH. When n outputs switch in one edge, that shared inductance sees n times di/dt and the chip\'s ground lifts by L · n · di/dt, the figure of the noise panel of step 7 at the same settings. Bonding k ground wires is modelled as L / k, which ignores their mutual inductance: neighbouring wires couple, so a real set does worse than the division says. Beyond VDD the linear formula is invalid.'),
+    h('p', { class: 'm3-sub' }, 'The die sits on a paddle; a bond wire runs from each pad to a lead, and the lead fans out to the board. Every output returns its current through the ground bond wires (blue), and a wire of a few mm has a few nH. When n outputs switch in one edge, that shared inductance sees n times di/dt and the chip\'s ground lifts by L · n · di/dt, the figure of the noise panel on “Crosstalk, ground bounce and pairs” at the same settings. Bonding k ground wires is modelled as L / k, which ignores their mutual inductance: neighbouring wires couple, so a real set does worse than the division says. Beyond VDD the linear formula is invalid.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' }, ctl, stage.el, stage.hint, h('div', { class: 'r3-btns' }, stage.resetBtn)),
       h('div', { class: 'r3-side' }, h('h4', null, 'The ground wire ', h('span', { class: 'r3-badge' }, 'model')), bar, scale, kv)));
