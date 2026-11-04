@@ -30,6 +30,8 @@ import { chBus } from './ch-bus';
 import { chExchange, chTelegraph } from './ch-comm-relays';
 import { chWire } from './ch-comm-wire';
 import { chClocks } from './ch-comm-clocks';
+import { chUart } from './ch-comm-uart';
+import { chSpi } from './ch-comm-spi';
 import { chRelays } from './ch-relays';
 import { chTubes } from './ch-tubes';
 import { chCards } from './ch-cards';
@@ -42,7 +44,7 @@ export const chapters: Chapter[] = [
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
-  chTelegraph, chExchange, chWire, chClocks,
+  chTelegraph, chExchange, chWire, chClocks, chUart, chSpi,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];
