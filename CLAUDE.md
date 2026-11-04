@@ -1231,7 +1231,9 @@ src/doom/      Appendix B's Doom computer (DOM-free): machine.ts (the memory map
 src/net/       the network past one Ethernet (DOM-free): ipv4.ts (IPv4's bytes, RFC 1624's TTL update), trie.ts (buildTrie, walkTrie, adjImage), fastpath.ts (FastPathModel: chapter 51's
                fast path, the reference for lib/router.ts, every output every clock), routing.ts (NET7, CHAIN3, dijkstra, DistVec, flooding); tcp.ts (TcpModel: chapter 52's TCP, one connection;
                comm/stack/tcp.ts is the same rules in the Python subset, tests/net-tcp-stack.test.ts compares every frame and state variable), tcpsim.ts (runTcp: the explorers' event simulator
-               over a modelled bottleneck), lanbench.ts (Host, LanBench: two computers on the golden model, comm/nic.ts and comm/mac.ts on one clock, a switch or a router with a queue in between)
+               over a modelled bottleneck), lanbench.ts (Host, LanBench: two computers on the golden model, comm/nic.ts and comm/mac.ts on one clock, a switch or a router with a queue in between),
+               tcpbench.ts (tcpBench, measureBench: chapter 52's setting; scripts/tcp-costs.ts --write → tcpcosts.json), gatewindow.ts (GateWindow: one computer into its gates at a quiet moment, on the bench's wire,
+               registers every instruction and NIC outputs every clock against the models, tryClose hands back; widgets/tcp.ts windowPanel)
 src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/CAMPAIGN.md). DOM-free:
   types.ts       CampaignNode (act, kind lesson / drill / build / program / core, requires, why, tips, codex,
                  unlocks: library ids or `prefix*` later levels may place, anatomy blocks, base challenge, par, soon)

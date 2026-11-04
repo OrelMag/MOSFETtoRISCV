@@ -17,6 +17,7 @@ import { ethSwitch } from '../src/lib/ethswitch';
 import { ethSegment, ethStationMac } from '../src/lib/ethstation';
 import { lanComputers } from '../src/lib/lan';
 import { DualSim } from '../src/sim/dualsim';
+import { benchDone, tcpBench } from '../src/net/tcpbench';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
@@ -115,6 +116,15 @@ async function lanCapture(appA: string, appB: string, until: string, max: number
   return frames.sort((x, y) => x.clock - y.clock).filter((f) => !f.err).map((f) => ({ us: (f.clock * CLOCK_NS) / 1000, bytes: f.bytes }));
 }
 
+// ---- chapter 52: the Python TCP on the bench, a clean transfer as the router received it, open and close ------------------------------
+function tcpCapture(): Captured[] {
+  const t = tcpBench(1000);
+  t.router.log = [];
+  while (t.bench.c < 3_000_000 && !benchDone(t)) t.bench.clock();
+  if (!benchDone(t)) throw new Error('the transfer did not finish');
+  return t.router.log.map((l) => ({ us: Math.round(l.t * CLOCK_NS / 1000), bytes: l.bytes }));
+}
+
 const CASES: Case[] = [
   { name: 'built', frames: built },
   ...(gates ? [
@@ -122,6 +132,7 @@ const CASES: Case[] = [
     { name: 'ch49-switch', frames: switchCapture },
     { name: 'ch50-ping', frames: () => lanCapture(pingApp(1, 32), hostApp(), 'done', 90_000) },
     { name: 'ch50-udp', frames: () => lanCapture(udpClientApp(3, 16), udpEchoApp(), 'done', 120_000) },
+    { name: 'ch52-tcp', frames: tcpCapture },
   ] : []),
 ];
 
