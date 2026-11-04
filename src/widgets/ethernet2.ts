@@ -202,7 +202,7 @@ export function segmentScene(): Scene {
         saveCapture: () => (cap.frames.length ? cap.pcap() : null), run: () => runPause(true), pause: () => runPause(false),
       };
       segStates.set(stage, S);
-      const loop = new Loop(stage, () => { b.clock(); record(); return true; }, () => paint(), 60, 30);
+      const loop = new Loop(stage, () => { b.clock(); record(); return true; }, () => paint(), 150, 30);
       const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
       const runPause = (on: boolean) => { if (on && !loop.running) { loop.start(); } else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
       const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
@@ -234,7 +234,7 @@ export function segmentScene(): Scene {
         else note('nothing captured yet: station 4 keeps every frame it receives, good ones only');
         paint();
       });
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right' }, h('h4', null, 'Four stations on a cable', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Four stations on a cable', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, inp, fSel, tSel, btn('Queue', 'Write the frame into the station\'s buffer and tell it to send', queueFrame)),
         h('div', { class: 'mc-row' }, btn('1 ↔ 2 together', 'Queue a frame in station 1 and one in station 2 in the same moment: they will collide', () => both([[0, 1], [1, 0]])), btn('1, 2 and 3 together', 'Three stations at once', () => both([[0, 3], [1, 3], [2, 3]])), runBtn, saveBtn),
         read, cards, strips, logBox);

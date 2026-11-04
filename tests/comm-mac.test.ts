@@ -5,8 +5,16 @@ import { describe, expect, it } from 'vitest';
 import { BIT_CLOCKS, captureRecord, GAP_CLOCKS, MacRx, MacTx, Segment, Station, type StationIn, WHY_ADDR, WHY_FCS, WHY_LONG, WHY_RUNT, type RxIn, type TxIn } from '../src/comm/mac';
 import { frameBody, frameBytes, parseFrame, wireBytes, type FrameSpec } from '../src/comm/ethframe';
 import { pcapFile, readPcap } from '../src/comm/pcap';
+import { emptyWorkspace } from '../src/editor/model';
+import { remixDef } from '../src/editor/remix';
 import { macRx, macTx } from '../src/lib/ethernet';
-import { countsOf, ethSegment, EV, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethstation';
+import { countsOf, ethSegment, ethStation, EV, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethstation';
+import { deadInstances } from '../src/sim/dead';
+import { DualSim } from '../src/sim/dualsim';
+import { flatten } from '../src/sim/flatten';
+import { netlistOf } from '../src/sim/types';
+import { pack } from '../src/sim/values';
+import { backwardEnds, labelOverlaps, symbolOverlaps } from '../src/view/route';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -369,5 +377,63 @@ describe('capture', () => {
     expect(byFirst(2).type).toBe(0x0806);
     expect(byFirst(2).payload.slice(0, 28)).toEqual(f12.payload);
     expect(back[1].us).toBeGreaterThan(back[0].us);
+  }, 120000);
+});
+
+// ---- the segment on the cycle engine, as the scene runs it; the drawings; Open in Sandbox -------------------------------
+
+describe('segment on the cycle engine', () => {
+  it('runs on the cycle engine (not refused) and equals the software segment on every ev / stat output, through a collision', async () => {
+    const sim = new DualSim(flatten(ethSegment(4)));
+    sim.preferFast = true;
+    sim.reset('zero');
+    const root = sim.design.root;
+    const get = (n: string) => pack(sim.getBits(root.ports[n]));
+    const put = (v: Record<string, number>) => { for (const [k, x] of Object.entries(v)) sim.setInput(k, x); };
+    put({ clk: 0, rst: 1, sel: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0, promisc: 8 });
+    sim.settle(); sim.prepare(); sim.settle();
+    const edge = () => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
+    const seg = newSegment([0, 0, 0, 1]);
+    const f01 = frameBody({ dst: stationMac(1), src: stationMac(0), type: 0x0800, payload: [1, 2, 3] });
+    const f10 = frameBody({ dst: stationMac(0), src: stationMac(1), type: 0x0800, payload: [4, 5, 6] });
+    const ops: Op[] = [{ ...NOOP }, ...loadOps(0, f01).slice(0, -1), ...loadOps(1, f10).slice(0, -1), { ...NOOP, sel: 0, len: f01.length, go: 1 }, { ...NOOP, sel: 1, len: f10.length, go: 1 }];
+    edge(); edge();
+    seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 }))); seg.step(seg.st.map(() => ({ rst: 1, go: 0, len: 0 })));
+    put({ rst: 0 });
+    const t0 = performance.now();
+    const N = 26000;
+    let sent = 0, restarts = 0;
+    for (let c = 0; c < N; c++) {
+      const op = c < ops.length ? ops[c] : NOOP;
+      put({ sel: op.sel, wa: op.wa, wd: op.wd, we: op.we, len: op.len, go: op.go });
+      sim.settle();
+      edge();
+      seg.step(seg.st.map((_, k) => (op.sel === k ? { rst: 0, go: op.go, len: op.len, we: op.we, wa: op.wa, wd: op.wd } : { rst: 0, go: 0, len: 0 })));
+      seg.st.forEach((s, k) => {
+        const ev = (s.tx.sent << EV.sent) | (s.tx.drop << EV.drop) | (s.tx.restart << EV.restart);
+        expect(get(`ev${k}`) & 7, `ev${k} @${c}`).toBe(ev);
+        if (c % 25 === 0) expect(get(`stat${k}`), `stat${k} @${c}`).toBe(s.tx.state | (s.tx.att << 3) | (s.rx.state << 7));
+      });
+      sent += seg.st.reduce((n, s) => n + s.tx.sent, 0); restarts += seg.st.reduce((n, s) => n + s.tx.restart, 0);
+      if (c % 2000 === 0) await yieldTick();
+    }
+    const dt = performance.now() - t0;
+    expect(sim.engine, `engine ${sim.engine}: ${sim.whyNot ?? ''}`).toBe('cycle');
+    expect(restarts).toBeGreaterThan(0);
+    expect(sent).toBeGreaterThan(0);
+    console.log(`segment on the cycle engine: ${Math.round((N / dt) * 1000)} clocks/s (${N} clocks, ${dt.toFixed(0)} ms)`);
+  }, 180000);
+});
+
+describe('the chapter scenes as drawings', () => {
+  const tops = [ethStation(0), ethSegment(4), macTx(), macRx()];
+  it.each(tops.map((d) => [d.id, d] as const))('%s: no overlapping labels or symbols, nothing dead, and Open in Sandbox works', (_, d) => {
+    const nl = netlistOf(d)!;
+    expect(labelOverlaps(d, nl)).toEqual([]);
+    expect(symbolOverlaps(nl)).toEqual([]);
+    expect(backwardEnds(d, nl)).toEqual([]);
+    expect(deadInstances(nl, d.ports)).toEqual([]);
+    const r = remixDef(emptyWorkspace(), d);
+    expect('error' in r ? r.error : '').toBe('');
   }, 120000);
 });

@@ -163,7 +163,7 @@ export class Capture {
 
 /** A row of digital signals as step lines, `labels` down the left. */
 export function strip(rows: { label: string; data: number[]; cls?: string }[], total: number, aria: string, marks: { x: number; text: string; cls?: string }[] = []): SVGSVGElement {
-  const W = 640, L = 62, R = 8, RH = 26, H = rows.length * RH + 14 + (marks.length ? 36 : 10);
+  const W = 640, L = 62, R = 8, RH = 26, H = rows.length * RH + 14 + (marks.length ? 48 : 10);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot uart-wave eth-strip', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   const X = (i: number) => L + (i / Math.max(1, total)) * (W - L - R);
   rows.forEach((r, k) => {
@@ -174,7 +174,7 @@ export function strip(rows: { label: string; data: number[]; cls?: string }[], t
     if (r.data.length) d += `L${X(r.data.length)},${r.data[r.data.length - 1] ? y1 : y0}`;
     svg.append(s('path', { d, class: `uart-line ${r.cls ?? ''}` }));
   });
-  marks.forEach((m, k) => svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: 2, y2: H - 8 - (k % 3) * 11 - 10, class: `eth-mark ${m.cls ?? ''}` }), s('text', { x: Math.min(W - 90, X(m.x) + 3), y: H - 8 - (k % 3) * 11, class: 'tick' }, m.text)));
+  marks.forEach((m, k) => svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: 2, y2: H - 8 - (k % 4) * 11 - 10, class: `eth-mark ${m.cls ?? ''}` }), s('text', { x: Math.min(W - 90, X(m.x) + 3), y: H - 8 - (k % 4) * 11, class: 'tick' }, m.text)));
   return svg;
 }
 
@@ -263,7 +263,7 @@ export function txScene(): Scene {
       inp.addEventListener('input', () => { text = inp.value; });
       const toSel = select('Destination', [['b', 'station 2'], ['all', 'everyone']], dst, (v) => { dst = v; });
       paint();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right' }, h('h4', null, 'The transmitter, byte by byte', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'The transmitter, byte by byte', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, inp, toSel, btn('Send', 'Load the frame into the buffer and run the clock until the last FCS bit is out', start, 'btn sm primary')),
         read, hexBox, waveBox, verdict,
         h('p', { class: 'sub' }, 'The frame leaves a bit every 4 clocks. Watch the state: idle until the gap counter reaches 96 bit times, then the preamble and SFD, the frame, the FCS.'));
@@ -352,7 +352,7 @@ export function rxScene(): Scene {
       const toSel = select('Destination of the frame', [['me', 'to this station'], ['other', 'to station 3'], ['all', 'to everyone']], dst, (v) => { dst = v as typeof dst; });
       const chk = (label: string, on: (v: boolean) => void) => { const c = h('input', { type: 'checkbox' }) as HTMLInputElement; c.addEventListener('change', () => on(c.checked)); return h('label', { class: 'comm-check' }, c, label); };
       paint();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right' }, h('h4', null, 'The receiver', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'The receiver', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, inp, toSel, btn('Send into the receiver', 'Drive rxd and crs with the frame, a bit every 4 clocks', start, 'btn sm primary')),
         h('div', { class: 'mc-row' }, chk('flip one bit in the payload', (v) => { flip = v; }), chk('cut it short (runt)', (v) => { cut = v; }), chk('promiscuous', (v) => { promisc = v; })),
         read, line, hexBox, verdict, buf);
@@ -428,7 +428,7 @@ export function csmaScene(): Scene {
       const sl1 = slider('Carrier lasts', 0, 300, 10, first, (v) => `${v} bit times`, (v) => { first = v; });
       const sl2 = slider('Second burst', 0, 90, 10, second, (v) => (v ? `${v} bit times after` : 'none'), (v) => { second = v; });
       paint();
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right' }, h('h4', null, 'Listen before talking', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Listen before talking', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, sl1.el, sl2.el, btn('Queue a frame', 'Queue one frame with another station talking as set, then run', start, 'btn sm primary')),
         read, box, verdict,
         h('p', { class: 'sub' }, 'Another station\'s carrier (crs) is driven from the moment the frame is queued. The station defers until the cable has been silent for 96 bit times; a second burst that comes inside the gap restarts the count.'));

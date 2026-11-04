@@ -126,7 +126,7 @@ export function ethStation(i = 0): ComponentDef {
   const xs = 16, xt = xs + gs.w + 26, xr = xs + gs.w + 14, xb = xr + gr.w + 24;
   const y0 = 4, yr = y0 + Math.max(gs.h, gt.h) + 12;
   const xg = xt + gt.w + 12;
-  const W = Math.max(xb + gb.w + 14, xg + 22) + 8, H = Math.max(yr + Math.max(gr.h, gb.h), y0 + gt.h + 30) + 12;
+  const W = Math.max(xb + gb.w + 44, xg + 22) + 8, H = Math.max(yr + Math.max(gr.h, gb.h), y0 + gt.h + 30) + 12;
   const gy = y0 + 2;
   const instances: InstanceDef[] = [
     { name: 'src', def: SRC, at: [xs, y0], label: 'frame source' },
@@ -139,9 +139,9 @@ export function ethStation(i = 0): ComponentDef {
     { name: 'or1', def: OR, at: [xg, gy], label: 'carrier' },
     { name: 'and1', def: AND, at: [xg, gy + gOr.h + 3], label: 'collision' },
     { name: 'not1', def: NOT, at: [xg, gy + gOr.h + gAnd.h + 8] },
-    { name: 'and2', def: AND, at: [xg + 8, gy + gOr.h + gAnd.h + 8], label: 'rx carrier' },
-    { name: 'evm', def: EVM, at: [xb + gb.w + 8, yr + 2] },
-    { name: 'stm', def: STM, at: [xb + gb.w + 8, yr + 22] },
+    { name: 'and2', def: AND, at: [xg + 6, gy + gOr.h + gAnd.h + 8 + 8], label: 'rx carrier' },
+    { name: 'evm', def: EVM, at: [xb + gb.w + 30, yr + 2] },
+    { name: 'stm', def: STM, at: [xb + gb.w + 30, yr + 24] },
   ];
   const N = (name: string, ends: string[], tags = true): NetDef => (tags ? { name, ends, tags } : { name, ends });
   const nets: NetDef[] = [
@@ -152,7 +152,7 @@ export function ethStation(i = 0): ComponentDef {
     N('restart', ['tx.restart', 'src.restart', 'rxb.restart', 'evm.i2']), N('drop', ['tx.drop', 'src.drop', 'rxb.drop', 'evm.i1']), N('sent', ['tx.sent', 'src.sent', 'evm.i0']),
     N('seed', ['seedc.y', 'tx.seed']), N('addr', ['macc.y', 'rx.addr']), N('one', ['one.y', 'rx.ready']),
     N('txen', ['tx.txen', 'txen', 'or1.a', 'and1.a', 'not1.a']), N('txd', ['tx.txd', 'txd']),
-    N('crs', ['crs', 'or1.b', 'and1.b', 'and2.a']), N('carrier', ['or1.y', 'tx.crs']), N('collision', ['and1.y', 'tx.col']), N('nottx', ['not1.y', 'and2.b']), N('rxcr', ['and2.y', 'rx.crs']),
+    N('crs', ['crs', 'or1.b', 'and1.b', 'and2.a']), N('carrier', ['or1.y', 'tx.crs']), N('collision', ['and1.y', 'tx.col']), N('nottx', ['not1.y', 'and2.b'], false), N('rxcr', ['and2.y', 'rx.crs']),
     N('rxbyte', ['rx.data', 'rxb.od', 'rxbyte']), N('rxv', ['rx.valid', 'rxb.rv', 'evm.i5']), N('rxl', ['rx.last', 'rxb.rl', 'evm.i6']), N('rxe', ['rx.err', 'rxb.re', 'evm.i7']), N('why', ['rx.why', 'why']),
     N('good', ['rxb.good', 'evm.i3']), N('bad', ['rxb.bad', 'evm.i4']),
     N('busy', ['src.busy', 'busy']), N('rd', ['rxb.rd', 'rd']), N('counts', ['rxb.counts', 'counts']), N('cp', ['rxb.cp', 'cp']), N('wp', ['rxb.wp', 'wp']),
@@ -195,7 +195,7 @@ export function ethSegment(n = 4): ComponentDef {
   const x = SEG_POSITIONS.slice(0, n), W = sharedWire(x), ST = Array.from({ length: n }, (_, i) => ethStation(i));
   const DEC = decoder(2), SP = splitter(ones(n)), MG = merger(ones(n));
   const gst = symbolGeom(ST[0]), gd = symbolGeom(DEC);
-  const xs = (i: number) => 16 + i * (gst.w + 10);
+  const xs = (i: number) => 16 + i * (gst.w + 24);
   const yw = 6 + gst.h + 18;
   const instances: InstanceDef[] = [
     { name: 'dec', def: DEC, at: [2, yw + 2], label: 'station select' }, { name: 'spp', def: SP, at: [2, yw + gd.h + 10] },
