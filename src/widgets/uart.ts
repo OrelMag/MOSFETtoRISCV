@@ -25,12 +25,12 @@ const words = (src: string): number[] => { const a = assemble(src); if (a.errors
 
 // ---- helpers over a stage's simulation ---------------------------------------------------------------------------------
 
-const outp = (st: Stage, name: string): number => pack(st.sim!.getBits(st.sim!.design.root.ports[name]));
-const outAt = (st: Stage, path: string[], name: string): number => { const n = findNode(st.sim!.design.root, path); return n ? pack(st.sim!.getBits(n.ports[name])) : -1; };
-function pulse(st: Stage, clk: string): void { const sim = st.sim!; sim.settle(); sim.setInput(clk, 1); sim.settle(); sim.setInput(clk, 0); sim.settle(); }
+export const outp = (st: Stage, name: string): number => pack(st.sim!.getBits(st.sim!.design.root.ports[name]));
+export const outAt = (st: Stage, path: string[], name: string): number => { const n = findNode(st.sim!.design.root, path); return n ? pack(st.sim!.getBits(n.ports[name])) : -1; };
+export function pulse(st: Stage, clk: string): void { const sim = st.sim!; sim.settle(); sim.setInput(clk, 1); sim.settle(); sim.setInput(clk, 0); sim.settle(); }
 
 /** A timer-driven loop of `step` calls (`perTick` of them every `ms`) until step returns false; one history checkpoint at the start. */
-class Loop {
+export class Loop {
   private t: ReturnType<typeof setInterval> | null = null;
   constructor(private stage: Stage, private step: () => boolean, private after: () => void, private perTick = 40, private ms = 30) {}
   get running(): boolean { return this.t !== null; }
@@ -47,8 +47,8 @@ class Loop {
   stop(): void { if (this.t) clearInterval(this.t); this.t = null; this.after(); }
 }
 
-const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title }, label); b.addEventListener('click', f); return b; };
-const select = (label: string, opts: [string, string][], value: string, on: (v: string) => void) => {
+export const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title }, label); b.addEventListener('click', f); return b; };
+export const select = (label: string, opts: [string, string][], value: string, on: (v: string) => void) => {
   const sel = h('select', { class: 'mc-sel', 'aria-label': label }) as HTMLSelectElement;
   for (const [v, t] of opts) sel.append(h('option', { value: v }, t));
   sel.value = value;
@@ -57,7 +57,7 @@ const select = (label: string, opts: [string, string][], value: string, on: (v: 
 };
 
 /** A waveform of one line level per cycle with the frame's cells marked: `labels` start at `from`, each `cell` cycles wide. */
-function waveSvg(levels: number[], total: number, from: number, cell: number, labels: string[], aria: string, marks: { x: number; cls: string; text?: string }[] = []): SVGSVGElement {
+export function waveSvg(levels: number[], total: number, from: number, cell: number, labels: string[], aria: string, marks: { x: number; cls: string; text?: string }[] = []): SVGSVGElement {
   const W = 640, H = 96, L = 8, R = 8, Y1 = 26, Y0 = 62;
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot uart-wave', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   const X = (i: number) => L + (i / Math.max(1, total)) * (W - L - R);

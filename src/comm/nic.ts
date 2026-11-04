@@ -119,7 +119,7 @@ export class NicCore {
     const wrHs = !!(i.awvalid && i.wvalid && idle), rdHs = !!(i.arvalid && idle);
     const widx = (i.awaddr >>> 2) & 7, ridx = (i.araddr >>> 2) & 7;
     const wd = u32(i.wdata);
-    const w = (k: number) => wrHs && widx === k;
+    const w = (k: number) => wrHs && i.wstrb !== 0 && widx === k;
     // ---- master
     const doneRx = this.doneq === 1 && this.who === 1, doneTx = this.doneq === 1 && this.who === 0;
     const start = this.masterIdle && !this.doneq && this.wants;

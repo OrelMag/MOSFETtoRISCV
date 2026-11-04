@@ -32,7 +32,7 @@ export function nic(): ComponentDef {
   });
   const clk = m.input('clk', { clock: true });
   const awvalid = m.input('awvalid'), awaddr = m.inputBus('awaddr', 32), wvalid = m.input('wvalid'), wdata = m.inputBus('wdata', 32);
-  m.inputBus('wstrb', 4);
+  const wstrb = m.inputBus('wstrb', 4);
   const bready = m.input('bready'), arvalid = m.input('arvalid'), araddr = m.inputBus('araddr', 32), rready = m.input('rready');
   const mAwready = m.input('m_awready'), mWready = m.input('m_wready'), mBvalid = m.input('m_bvalid'), mArready = m.input('m_arready'), mRvalid = m.input('m_rvalid');
   const mRdata = m.inputBus('m_rdata', 32);
@@ -54,7 +54,9 @@ export function nic(): ComponentDef {
     m.setD(bq, m.or(wrHs, m.and(bq, m.not(bready))));
     m.setD(rq, m.or(rdHs, m.and(rq, m.not(rready))));
     const widx = awaddr.slice(2, 5), ridx = araddr.slice(2, 5);
-    const w = Array.from({ length: 8 }, (_, k) => m.name(m.and(wrHs, m.eqConst(widx, k)), `w${k}`));
+    // a write with no byte strobe set changes nothing (the registers are words: any byte lane counts)
+    const wen = m.name(m.and(wrHs, m.orN(wstrb)), 'wr_en');
+    const w = Array.from({ length: 8 }, (_, k) => m.name(m.and(wen, m.eqConst(widx, k)), `w${k}`));
     const reg1 = (name: string, en: Sig, d: Sig): Sig => { const q = m.reg(clk, name); m.setD(q, m.mux(en, q, d)); return q; };
     const en = reg1('en', w[0], wdata[0]), promisc = reg1('promisc', w[0], wdata[1]);
     const ie = [reg1('ie0', w[2], wdata[0]), reg1('ie1', w[2], wdata[1])];

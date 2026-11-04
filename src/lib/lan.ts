@@ -66,7 +66,7 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
     // the computer's pair into the port's receiver, the transmitter's pair back
     tag(`${c}txd`, [`${c}.txd`, `rx${p}.rxd`]); tag(`${c}txen`, [`${c}.txen`, `rx${p}.crs`, `${c}txenOut`]);
     tag(`${c}rxd`, [`tx${p}.txd`, `${c}.rxd`]); tag(`${c}crs`, [`tx${p}.txen`, `${c}.crs`, `${c}crsOut`]);
-    tag(`rxData${p}`, [`rx${p}.data`, `sw.rxData${p}`]); tag(`rxValid${p}`, [`rx${p}.valid`, `sw.rxValid${p}`]); tag(`rxLast${p}`, [`rx${p}.last`, `sw.rxLast${p}`]); tag(`rxErr${p}`, [`rx${p}.err`, `sw.rxErr${p}`]);
+    tag(`rxData${p}`, [`rx${p}.data`, `sw.rxData${p}`, `rxData${p}`]); tag(`rxValid${p}`, [`rx${p}.valid`, `sw.rxValid${p}`, `rxValid${p}`]); tag(`rxLast${p}`, [`rx${p}.last`, `sw.rxLast${p}`, `rxLast${p}`]); tag(`rxErr${p}`, [`rx${p}.err`, `sw.rxErr${p}`, `rxErr${p}`]);
     tag(`rxReady${p}`, [`sw.rxReady${p}`, `rx${p}.ready`]);
     tag(`txData${p}`, [`sw.txData${p}`, `tx${p}.data`]); tag(`txValid${p}`, [`sw.txValid${p}`, `tx${p}.valid`]); tag(`txLast${p}`, [`sw.txLast${p}`, `tx${p}.last`]);
     tag(`txReady${p}`, [`tx${p}.ready`, `sw.txReady${p}`]);
@@ -75,7 +75,9 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
   });
   const ports: PortDef[] = [bit('clk', 'in', 'left', true),
     ...(['A', 'B'] as const).flatMap((s) => [bus(`consoleData${s}`, 8, 'out'), bit(`consoleValid${s}`, 'out'), bus(`leds${s}`, 8, 'out'), bit(`retire${s}`, 'out'), bus(`pc${s}`, 32, 'out')]),
-    bit('atxenOut', 'out'), bit('btxenOut', 'out'), bit('acrsOut', 'out'), bit('bcrsOut', 'out')];
+    bit('atxenOut', 'out'), bit('btxenOut', 'out'), bit('acrsOut', 'out'), bit('bcrsOut', 'out'),
+    // the byte streams into the switch, one a port: every frame either computer sends, as the switch receives it (a mirror port)
+    ...([0, 1] as const).flatMap((p) => [bus(`rxData${p}`, 8, 'out'), bit(`rxValid${p}`, 'out'), bit(`rxLast${p}`, 'out'), bit(`rxErr${p}`, 'out')])];
   const pins: Record<string, [number, number]> = { clk: [0, 6] };
   let y = 4;
   for (const p of ports) if (p.dir === 'out') { pins[p.name] = [x1 + 40, y]; y += 3; }
@@ -84,6 +86,33 @@ export function lanComputers(srcA: number[], srcB: number[], o: LanOptions = {})
     id, name: 'Two computers on a switch', category: 'cpu',
     summary: 'Two bus computers, each with a NIC (descriptor rings in RAM, DMA, a MAC), joined by a four-port learning switch through one MAC pair a port. Everything runs on one clock; the consoles are the computers\' own.',
     ports, symbol: { kind: 'box', label: 'LAN' },
+    netlist: () => ({ pins, instances, nets }),
+  });
+  cache.set(id, d);
+  return d;
+}
+
+/** One computer with a NIC whose transmitter is wired to its own receiver: the driver of riscv/nicprograms.ts sends a frame to itself. */
+export function nicLoopback(program: number[], imemK = 8): ComponentDef {
+  const C = busComputer(program, FLASH, { imemK, ramK: STACK_RAM_K, nic: true }), id = `nicloop_${C.id}`;
+  const hit = cache.get(id);
+  if (hit) return hit;
+  const g = symbolGeom(C), z8 = constWord(8, 0);
+  const instances: InstanceDef[] = [{ name: 'c', def: C, at: [12, 6], label: 'Computer with a NIC' }, { name: 'z8', def: z8, at: [2, 6 + g.h + 6] }];
+  const nets: NetDef[] = [
+    { name: 'clk', ends: ['clk', 'c.clk'], tags: true }, { name: 'zero8', ends: ['z8.y', 'c.switches'], tags: true },
+    { name: 'txd', ends: ['c.txd', 'c.rxd'], tags: true }, { name: 'txen', ends: ['c.txen', 'c.crs', 'txen'], tags: true },
+  ];
+  const outs: [string, number][] = [['consoleData', 8], ['consoleValid', 1], ['leds', 8], ['retire', 1], ['pcOut', 32]];
+  for (const [p] of outs) nets.push({ name: p, ends: [`c.${p}`, p] });
+  const ports: PortDef[] = [bit('clk', 'in', 'left', true), ...outs.map(([p, w]) => (w === 1 ? bit(p, 'out') : bus(p, w, 'out'))), bit('txen', 'out')];
+  const pins: Record<string, [number, number]> = { clk: [0, 6] };
+  let y = 4;
+  for (const p of ports) if (p.dir === 'out') { pins[p.name] = [12 + g.w + 24, y]; y += 3; }
+  const d = define({
+    id, name: 'A computer with a NIC, looped back', category: 'cpu',
+    summary: 'A bus computer with a NIC whose transmitter feeds its own receiver: a frame it sends to its own address comes back in through the receive ring.',
+    ports, symbol: { kind: 'box', label: 'NIC LOOP' },
     netlist: () => ({ pins, instances, nets }),
   });
   cache.set(id, d);
