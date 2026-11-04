@@ -49,7 +49,7 @@ arp_learn(${hx(h.gw)}, ${SCRATCH})
 export function tcpSender(h: TcpHost, to: number, bytes: number, o: { port?: number; isn?: number } = {}): string {
   const s = strings({ up: 'connected\n', done: 'sent ', c: ' bytes in ', cy: ' cycles\n', fail: 'failed\n' });
   return `${s.py}
-${COMMON}${hostInit(h, o.isn)}tcp_connect(${hx(to)}, 40000, ${o.port ?? 5000})
+${COMMON}${hostInit(h, o.isn)}tcp_connect(${hx(to)}, 40000, ${o.port ?? TCP_PORT})
 while tcp_st != 4 and tcp_err == 0:
     net_poll()
     tcp_tick()
@@ -99,7 +99,7 @@ def take():
     got += n
     return n
 
-${hostInit(h, o.isn)}tcp_listen(${o.port ?? 5000})
+${hostInit(h, o.isn)}tcp_listen(${o.port ?? TCP_PORT})
 t = now()
 while tcp_st != 7:
     net_poll()
