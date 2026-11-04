@@ -65,6 +65,7 @@ editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design 
 `.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
+`.github/workflows/tshark.yml` (pushes touching comm/pcap.ts, the frames, the stack, the capturing widgets or itself; not a deploy gate) has tshark read each chapter's capture, from the gates and the chapters' own frames (`scripts/tshark-oracle.ts`, `--dump` only writes the files, no tshark on Windows; tshark-lib.ts holds each frame to what its bytes claim: fields, protocols, checksums verified good, nothing malformed, no warnings); captures broken on purpose must be caught, and the .pcap files and tshark's output are kept as an artifact.
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
