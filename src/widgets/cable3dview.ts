@@ -14,7 +14,7 @@ import { modelStage } from './modelstage';
 const RUN = 1, SPACING_MM = 1, ER = 2.3;
 
 export function cableView(): Widget {
-  const st: CableState = { twists: 5, coax: false, D: 4.6, d: 0.9 };
+  const st: CableState = { twists: 5, coax: false, D: 3.2, d: 0.9 };
   let dbdt = 10; // T / s
   const panel = h('div', { class: 'panel' });
   const palette = (): CablePalette => ({
