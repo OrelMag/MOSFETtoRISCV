@@ -287,17 +287,20 @@ export class HwStatsPage implements Page {
     this.count.textContent = `${groupDigits(rows.length)} of ${groupDigits(this.rows.length)} parts shown${this.group ? `, in ${groupDigits(items.length)} rows (sizes grouped)` : ''}`;
   }
 
-  /** Widths of the header's columns as the last table with rows laid them out. */
+  /** Widths of the header's columns as the unfiltered table laid them out, and whether the table on screen is that one. */
   private colW: number[] = [];
+  private full = false;
 
   /** A table with no row would size its columns to the header alone and shift them: while it is empty the columns keep the
-   *  widths the rows gave them (measured before the rows go, or kept from the previous empty render). */
+   *  widths the full table gave them (measured just before the next render replaces it, once the fonts are in; a narrowed
+   *  table sizes to its few rows, so only the unfiltered one is taken). */
   private holdColumns(empty: boolean): void {
     const table = this.body.parentElement as HTMLTableElement | null;
     if (!table) return;
     const ths = [...this.head.children] as HTMLElement[];
+    if (this.full) this.colW = ths.map((th) => th.offsetWidth);
+    this.full = !empty && !this.q && this.cats.size === ORDER.length;
     if (!empty) { table.style.tableLayout = ''; return; }
-    if (table.style.tableLayout !== 'fixed') this.colW = ths.map((th) => th.offsetWidth);
     if (this.colW.length !== ths.length || this.colW.some((w) => !w)) return;
     ths.forEach((th, i) => { th.style.width = `${this.colW[i]}px`; });
     table.style.tableLayout = 'fixed';
