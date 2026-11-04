@@ -174,7 +174,7 @@ export function serdesPanel(view: 'link' | 'cdr'): ScenePanel {
         btn('Flip a line bit', 'Corrupt the next bit on the line', () => act(() => { stage.setInput('flip', 1); stage.runCycles(1); stage.setInput('flip', 0); }), 'btn sm'),
         ...(view === 'cdr' ? [limitBtn] : [])),
       waves, words, loop, lock, view === 'cdr' ? limit : null,
-      h('p', { class: 'sub' }, `${CYCLES_PER_BIT} cycles a bit at ${GATE_BIT_NS.toFixed(2)} ns a cycle is ${GATE_MBPS.toFixed(0)} Mb/s: the gate-level link's speed. The rates of the later steps are the channel model's.`));
+      h('p', { class: 'sub' }, `${CYCLES_PER_BIT} cycles a bit at ${(GATE_BIT_NS / CYCLES_PER_BIT).toFixed(2)} ns a cycle is ${GATE_MBPS.toFixed(0)} Mb/s: the gate-level link's speed. The rates of the later steps are the channel model's.`));
     update();
     serdesApi.set(stage, {
       status: verdict,
