@@ -10,7 +10,7 @@ import { arpFrame, checksum, dissect, icmpEchoFrame, ip4, ipText, onesSum, udpFr
 import { pcapFile, type Captured } from '../comm/pcap';
 import { runPy } from '../lang/interp';
 import { DEFAULT_STACK } from '../comm/stack/all';
-import { hostApp, pingApp } from '../comm/stack/apps';
+import { hostApp, PING_DATA, pingApp } from '../comm/stack/apps';
 import { stackProgram } from '../comm/stack';
 import NET_COSTS from '../comm/stack/netcosts.json';
 import { lanComputers, nicLoopback } from '../lib/lan';
@@ -20,11 +20,12 @@ import { findNode } from '../sim/flatten';
 import { h, s } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Scene, Stage, Widget } from '../view/stage';
+import { dmaRx, dmaTx, MIN_FRAME_TIME, PING_FRAME, PING_FRAME_TIME, wireBytes, wireClocks } from '../comm/stack/netfacts';
 import { slider } from './mosparts';
 import { btn, outAt, outp, pulse, select, waveSvg } from './uart';
 
 /**
- * Like uart.ts's Loop, but each tick simulates for a time budget instead of a fixed number of steps: a computer pair on the cycle engine runs at about a
+ * Like uart.ts's Loop, but each tick simulates for a time budget instead of a fixed number of steps: a computer pair on the cycle engine runs at a few
  * thousand clocks a second, so a fixed batch would hold the page for most of every tick. One history checkpoint at the start.
  */
 class SliceLoop {
@@ -52,9 +53,7 @@ const hex4 = (v: number) => v.toString(16).padStart(4, '0');
 const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const words = (src: string): number[] => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
 
-/** Bytes a frame takes on the wire and the clocks it holds the cable: preamble and SFD, the frame padded to 60 bytes, the FCS, then the 12-byte gap. */
-export const wireBytes = (frameLen: number) => 8 + Math.max(60, frameLen) + 4;
-export const wireClocks = (frameLen: number) => 32 * (wireBytes(frameLen) + 12);
+export { dmaRx, dmaTx, wireBytes, wireClocks };
 
 const LAYER_NAME: Record<Layer, string> = { eth: 'Ethernet', arp: 'ARP', ip: 'IPv4', icmp: 'ICMP', udp: 'UDP', tcp: 'TCP', data: 'data', pad: 'padding', fcs: 'FCS' };
 
@@ -148,7 +147,7 @@ export function checksumWidget(): Widget {
   paint();
   return { el: h('div', { class: 'widget mos clk-w net-w' }, h('div', { class: 'panel' }, h('h3', null, 'The Internet checksum'),
     h('div', { class: 'mc-row' }, ...Object.keys(EXAMPLES).map(setHdr)), input, out, cpu,
-    h('p', { class: 'sub' }, 'Sixteen-bit words added with the carry brought around (ones\' complement), then inverted. Any order of the words gives the same sum, and a changed word changes it, with a few exceptions (swapped bytes in a word of 0x00ff, for one).'))) };
+    h('p', { class: 'sub' }, 'Sixteen-bit words added with the carry brought around (ones\' complement), then inverted. Any order of the words gives the same sum, and a changed word changes it, with a few exceptions: a word 0x0000 turned into 0xffff, or two words swapped, leave it as it was.'))) };
 }
 
 // ---- frames field by field ---------------------------------------------------------------------------------------------
@@ -165,8 +164,8 @@ export function frameWidget(kinds: Kind[] = ['arp-req', 'arp-rep', 'echo-req', '
     switch (kind) {
       case 'arp-req': return arpFrame({ op: 1, sha: A_MAC, spa: A, tha: [0, 0, 0, 0, 0, 0], tpa: B });
       case 'arp-rep': return arpFrame({ op: 2, sha: B_MAC, spa: B, tha: A_MAC, tpa: A });
-      case 'echo-req': return icmpEchoFrame({ srcMac: A_MAC, dstMac: B_MAC, src: A, dst: B, id: 1, ident: 0x1234, seq, data: Array.from({ length: 8 }, (_, i) => 16 + i) });
-      case 'echo-rep': return icmpEchoFrame({ srcMac: B_MAC, dstMac: A_MAC, src: B, dst: A, id: 1, ident: 0x1234, seq, data: Array.from({ length: 8 }, (_, i) => 16 + i), reply: true });
+      case 'echo-req': return icmpEchoFrame({ srcMac: A_MAC, dstMac: B_MAC, src: A, dst: B, id: 1, ident: 0x1234, seq, data: Array.from({ length: PING_DATA }, (_, i) => 16 + i) });
+      case 'echo-rep': return icmpEchoFrame({ srcMac: B_MAC, dstMac: A_MAC, src: B, dst: A, id: 1, ident: 0x1234, seq, data: Array.from({ length: PING_DATA }, (_, i) => 16 + i), reply: true });
       case 'udp': return udpFrame({ srcMac: A_MAC, dstMac: B_MAC, src: A, dst: B, id: 1, sport: 1234, dport: 7, data: [...text].slice(0, 16).map((c) => c.charCodeAt(0) & 255) });
     }
   };
@@ -216,9 +215,6 @@ export function frameWidget(kinds: Kind[] = ['arp-req', 'arp-rep', 'echo-req', '
 
 // ---- the cost of a packet -------------------------------------------------------------------------------------------
 
-/** DMA transactions the NIC makes for a frame: transmit reads two descriptor words, the buffer a word at a time and the next descriptor, and writes one back; receive reads two, writes the words, writes one (tests/comm-nic.test.ts counts them). */
-export const dmaTx = (len: number) => ({ reads: 3 + Math.ceil(len / 4), writes: 1 });
-export const dmaRx = (len: number) => ({ reads: 2, writes: Math.ceil(Math.max(60, len) / 4) + 1 });
 
 export interface CostRow { who: 'a' | 'b'; what: string; instr: number; clocks: number; loads: number; stores: number; layers: Record<string, { instr: number; clocks: number }> }
 const WHAT: Record<string, string> = { arp_request: 'send an ARP request', icmp_echo: 'send an echo request' };
@@ -239,7 +235,7 @@ export function costWidget(): Widget {
   const tbl = h('table', { class: 'net-frames' }, h('tr', null, h('th', null, 'Computer'), h('th', null, 'Work'), h('th', null, 'Instr.'), h('th', null, 'Clocks'), h('th', null, 'Loads'), h('th', null, 'Stores'), ...layers.map((l) => h('th', { title: 'clocks in this layer' }, l))));
   for (const r of rows) tbl.append(h('tr', null, h('td', null, r.who.toUpperCase()), h('td', null, r.what), h('td', { class: 'num' }, String(r.instr)), h('td', { class: 'num' }, String(r.clocks)), h('td', { class: 'num' }, String(r.loads)), h('td', { class: 'num' }, String(r.stores)),
     ...layers.map((l) => h('td', { class: 'num' }, r.layers[l] ? String(r.layers[l].clocks) : '–'))));
-  const wire = `A frame shorter than 60 bytes is padded to 60, so an ARP packet (42 bytes) and an echo (50 bytes) alike hold the cable for ${n0(wireClocks(42))} clocks`;
+  const wire = `A frame shorter than 60 bytes is padded to 60, so an ARP packet (42 bytes) holds the cable for ${n0(MIN_FRAME_TIME)} clocks; the ping's echo is ${PING_FRAME} bytes and holds it for ${n0(PING_FRAME_TIME)}, the 12-byte gap included`;
   return { el: h('div', { class: 'widget mos clk-w net-w' }, h('div', { class: 'panel' }, h('h3', null, 'What a packet costs the computers'), h('div', { class: 'net-wide' }, tbl),
     h('div', { class: 'mc-status' }, h('span', null, 'round trip of the first ping ', h('b', null, `${n0(NET_COSTS.rtt)} clocks`)), h('span', null, `${(NET_COSTS.rtt * CLOCK_NS / 1000).toFixed(1)} µs at 3.95 ns`), h('span', null, 'one polling pass ', h('b', null, `${NET_COSTS.pollPass.b} clocks`))),
     h('p', { class: 'sub' }, `Measured on the gates over the first ping and the ARP exchange before it, by program counter, the retire strobe and the bus handshakes of every clock; the stack is ${NET_COSTS.words.a} and ${NET_COSTS.words.b} instructions. ${wire}.`))) };
@@ -265,14 +261,15 @@ export function nicScene(irq = false): Scene {
       stage.edgeHooks.add(hook);
       const loop = new SliceLoop(stage, () => { pulse(stage, 'clk'); after(); return !result().done; }, () => paint());
       const paint = () => {
+        run.textContent = loop.running ? 'Pause' : 'Run';
         const r = result();
         status.replaceChildren(h('span', null, 'clocks ', h('b', null, n0(clocks))), h('span', null, 'pc ', h('b', null, `0x${(outp(stage, 'pcOut') >>> 0).toString(16)}`)),
           h('span', null, 'doorbell at ', h('b', null, r.kick ? n0(r.kick) : '–')), h('span', null, 'frame seen at ', h('b', null, r.seen ? n0(r.seen) : '–')), h('span', null, 'length ', h('b', null, r.len ? String(r.len) : '–')),
           h('span', null, 'NIC irq ', h('b', null, String(outAt(stage, ['c', 'nic'], 'irq')))));
         strip.replaceChildren(waveSvg(txen, 480, -1, 1, [], 'txen over the last 3840 clocks (one point every 8)'), ...(irq ? [waveSvg(irqH, 480, -1, 1, [], 'The NIC interrupt line')] : []));
       };
-      const run = btn('Run', 'Clock the computer until the driver has the frame back', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      nicApis.set(stage, { run: () => { if (!loop.running) { loop.start(); run.textContent = 'Pause'; } }, clocks: () => clocks, result });
+      const run = btn('Run', 'Clock the computer until the driver has the frame back', () => { if (loop.running) loop.stop(); else { loop.start(); paint(); } }, 'btn sm primary');
+      nicApis.set(stage, { run: () => { if (!loop.running) { loop.start(); paint(); } }, clocks: () => clocks, result });
       stage.resetHooks.add(() => { clocks = 0; txen = []; irqH = []; paint(); });
       stage.historyHooks.add({ save: () => ({ clocks, txen: [...txen], irqH: [...irqH] }), restore: (v) => { const x = v as { clocks: number; txen: number[]; irqH: number[] }; clocks = x.clocks; txen = x.txen; irqH = x.irqH; paint(); } });
       paint();
@@ -294,7 +291,7 @@ export const lanApi = (st: Stage) => lanApis.get(st);
 let lanProgs: { a: number[]; b: number[] } | undefined;
 const lanWords = () => {
   if (!lanProgs) {
-    const a = stackProgram(DEFAULT_STACK, pingApp(3, 32)), b = stackProgram(DEFAULT_STACK, hostApp());
+    const a = stackProgram(DEFAULT_STACK, pingApp(3, PING_DATA)), b = stackProgram(DEFAULT_STACK, hostApp());
     if (a.compiled.error || b.compiled.error) throw new Error('the stack does not compile');
     lanProgs = { a: a.compiled.words, b: b.compiled.words };
   }
@@ -328,13 +325,14 @@ export function lanScene(): Scene {
       const after = () => { clocks++; };
       const hook = { before, after };
       stage.edgeHooks.add(hook);
-      let t0 = 0;
+      let t0 = 0, c0 = 0; // wall time and clock count when the loop last started: the speed readout counts from there
       const loop = new SliceLoop(stage, () => { before(); pulse(stage, 'clk'); after(); return !text.A.includes('done'); }, () => paint());
       const paint = () => {
+        run.textContent = loop.running ? 'Pause' : 'Run';
         cons.A.textContent = text.A || ' '; cons.B.textContent = text.B || ' ';
         const secs = started ? (performance.now() - t0) / 1000 : 0;
         read.replaceChildren(h('span', null, 'clocks ', h('b', null, n0(clocks))), h('span', null, 'time ', h('b', null, `${(clocks * CLOCK_NS / 1000).toFixed(1)} µs`)), h('span', null, 'frames on the cable ', h('b', null, String(frames.length))),
-          ...(loop.running || secs ? [h('span', null, 'speed ', h('b', null, secs > 0.5 ? `${n0(clocks / secs)} clocks/s` : '…'))] : []));
+          ...(loop.running || secs ? [h('span', null, 'speed ', h('b', null, secs > 0.5 ? `${n0((clocks - c0) / secs)} clocks/s` : '…'))] : []));
         const tb = h('table', { class: 'net-frames' }, h('tr', null, h('th', null, '#'), h('th', null, 'µs'), h('th', null, 'From'), h('th', null, 'Bytes'), h('th', null, 'Frame')));
         frames.forEach((f, i) => {
           const tr = h('tr', { tabindex: '0', 'aria-selected': String(i === sel), role: 'row' }, h('td', { class: 'num' }, String(i + 1)), h('td', { class: 'num' }, (f.clock * CLOCK_NS / 1000).toFixed(1)), h('td', null, f.from), h('td', { class: 'num' }, String(f.bytes.length)), h('td', null, f.err ? 'bad FCS' : dissect(f.bytes)));
@@ -347,17 +345,17 @@ export function lanScene(): Scene {
         detail.replaceChildren(...(f ? [h('div', { class: 'net-dump' }, ...Array.from({ length: Math.ceil(f.bytes.length / 16) }, (_, r) => [h('div', { class: 'off' }, (16 * r).toString(16).padStart(4, '0')), h('div', { class: 'row' }, ...f.bytes.slice(16 * r, 16 * r + 16).map((b, i) => h('span', { class: 'b', 'data-l': layerAt(f.bytes, 16 * r + i) }, hex2(b))))]).flat())] : []));
       };
       const api: LanApi = {
-        run: () => { if (!loop.running) { t0 = performance.now(); started = 1; loop.start(); run.textContent = 'Pause'; } },
+        run: () => { if (!loop.running) { t0 = performance.now(); c0 = clocks; started = 1; loop.start(); paint(); } },
         consoleOf: (side) => text[side], frames: () => frames, clocks: () => clocks,
         pcap: () => pcapFile(frames.filter((f) => !f.err).map((f): Captured => ({ us: f.clock * CLOCK_NS / 1000, bytes: f.bytes }))),
       };
       lanApis.set(stage, api);
       stage.historyHooks.add({
-        save: () => ({ clocks, a: text.A, b: text.B, frames: frames.map((f) => ({ ...f, bytes: [...f.bytes] })), cur: cur.map((c) => (c ? [...c] : null)), first: [...first] }),
-        restore: (v) => { const x = v as { clocks: number; a: string; b: string; frames: typeof frames; cur: (number[] | null)[]; first: number[] }; clocks = x.clocks; text.A = x.a; text.B = x.b; frames.length = 0; frames.push(...x.frames); cur[0] = x.cur[0]; cur[1] = x.cur[1]; first = x.first; paint(); },
+        save: () => ({ sel, started, clocks, a: text.A, b: text.B, frames: frames.map((f) => ({ ...f, bytes: [...f.bytes] })), cur: cur.map((c) => (c ? [...c] : null)), first: [...first] }),
+        restore: (v) => { const x = v as { sel: number; started: number; clocks: number; a: string; b: string; frames: typeof frames; cur: (number[] | null)[]; first: number[] }; clocks = x.clocks; text.A = x.a; text.B = x.b; frames.length = 0; frames.push(...x.frames); cur[0] = x.cur[0]; cur[1] = x.cur[1]; first = x.first; sel = x.sel < frames.length ? x.sel : -1; started = x.started; t0 = performance.now(); c0 = clocks; paint(); },
       });
       stage.resetHooks.add(() => { clocks = 0; text.A = text.B = ''; frames.length = 0; cur[0] = cur[1] = null; sel = -1; started = 0; paint(); });
-      const run = btn('Run', 'Clock both computers and the switch', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { api.run(); } }, 'btn sm primary');
+      const run = btn('Run', 'Clock both computers and the switch', () => { if (loop.running) loop.stop(); else api.run(); }, 'btn sm primary');
       const save = btn('Save capture', 'Write the frames seen so far as a .pcap file Wireshark or tcpdump opens', () => saveFile('ping.pcap', new Blob([api.pcap().slice().buffer], { type: 'application/vnd.tcpdump.pcap' }), 'application/vnd.tcpdump.pcap'));
       paint();
       const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two net-w', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, h('h4', null, 'A pings B', h('span', { class: 'fold-hint' })),

@@ -34,7 +34,7 @@ const actions = new WeakMap<Stage, DramActions>();
 export const dramActions = (st: Stage): DramActions | undefined => actions.get(st);
 
 /** Nets and leaves the panel reads, by path in the flat design. */
-function probes(sim: SwitchSim, def: ComponentDef) {
+export function probes(sim: SwitchSim, def: ComponentDef) {
   const root = sim.design.root, R = def.ports.find((p) => p.name === 'row')!.width, C = def.ports.find((p) => p.name === 'col')!.width;
   const rows = 1 << R, cols = 1 << C;
   const netOf = (n: HierNode | null, name: string) => {

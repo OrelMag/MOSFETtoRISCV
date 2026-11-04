@@ -6,6 +6,7 @@
 import {
   type Card, COLUMNS, SEQ_FROM, SEQ_LEN, blankCard, dropDeck, inSequence, programDeck, sorterColumns, sorterPass, textCard, textOf, unpunchable, wordOf,
 } from '../cards/card';
+import { FIELDS, STACK, censusPeople, marriedWoman, newCounts, tallyCard } from '../cards/census';
 import { CHARSET, charOf, punchOf, rowsOf } from '../cards/hollerith';
 import { type CardReaderState, readerLeaves, readerProgress } from '../cards/reader';
 import { assemble } from '../riscv/asm';
@@ -15,12 +16,6 @@ import type { Stage, Widget } from '../view/stage';
 import { cardView } from './carddraw';
 
 const hex8 = (w: number) => (w >>> 0).toString(16).padStart(8, '0');
-
-/** A deterministic LCG in [0, 1). */
-function lcg(seed: number) {
-  let x = seed >>> 0 || 1;
-  return () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 2 ** 32; };
-}
 
 /** Run `f` every `ms` until it returns false or stop() is called. */
 function ticker(ms: number) {
@@ -107,22 +102,11 @@ export function loomWidget(): Widget {
 // pin that finds a hole dips into a cup of mercury and closes a circuit, and that circuit steps a dial on. A count of
 // a combination (married women) runs through relay contacts, one per condition, in series.
 
-const FIELDS: { name: string; opts: string[] }[] = [
-  { name: 'Sex', opts: ['M', 'F'] },
-  { name: 'Age', opts: ['0–19', '20–39', '40–59', '60+'] },
-  { name: 'Married', opts: ['yes', 'no'] },
-  { name: 'Born', opts: ['US', 'abroad'] },
-];
-const STACK = 60;
 
 export function censusWidget(): Widget {
-  const rnd = lcg(1890);
-  const people = Array.from({ length: STACK }, () => {
-    const age = Math.floor(rnd() * 4);
-    return [rnd() < 0.51 ? 0 : 1, age, age > 0 && rnd() < 0.62 ? 0 : 1, rnd() < 0.85 ? 0 : 1];
-  });
+  const people = censusPeople();
   let fed = 0;
-  const counts = FIELDS.map((f) => f.opts.map(() => 0));
+  const counts = newCounts();
   let combo = 0;
   const run = ticker(140);
 
@@ -145,7 +129,7 @@ export function censusWidget(): Widget {
       });
     });
     dials.replaceChildren(...FIELDS.flatMap((f, i) => f.opts.map((o, j) => dial(`${f.name} ${o}`, counts[i][j], p !== null && p[i] === j))),
-      dial('married women (two relays)', combo, p !== null && p[0] === 1 && p[2] === 0, true));
+      dial('married women (two relays)', combo, p !== null && marriedWoman(p), true));
     info.textContent = fed === STACK ? `All ${STACK} cards counted: ${counts[0][1]} women, ${combo} of them married. The dials are the census.`
       : `${STACK - fed} cards left in the hopper.`;
   };
@@ -160,8 +144,7 @@ export function censusWidget(): Widget {
   const press = () => {
     if (fed >= STACK) return false;
     const p = people[fed++];
-    p.forEach((v, i) => { counts[i][v]++; });
-    if (p[0] === 1 && p[2] === 0) combo++;
+    combo += tallyCard(counts, p);
     paint();
     return fed < STACK;
   };

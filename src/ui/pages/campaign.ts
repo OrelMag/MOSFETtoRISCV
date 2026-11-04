@@ -374,7 +374,9 @@ export class CampaignPage implements Page {
     if (pz) {
       practice = [h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', pz.brief))];
       el.append(h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
-          h('ul', null, h('li', null, pz.lanes && pz.warps
+          h('ul', null, h('li', null, pz.nic
+            ? `${pz.tests().length} scenarios: the far end of a cable sends frames to the NIC and reads what it sends back; every reply must be the request with its addresses swapped, and not begin before the request has arrived.`
+            : pz.lanes && pz.warps
             ? `${pz.tests().length} tests on the two-warp golden model (${pz.warps} warps of ${pz.lanes} lanes taking turns, one shared memory); each must end within ${groupDigits(pz.maxSteps)} cycles with the expected memory, and again with warp ${pz.warps - 1} running ahead.`
             : pz.lanes
             ? `${pz.tests().length} tests on the lane golden model (${pz.lanes} lanes, one shared memory); each must halt within ${groupDigits(pz.maxSteps)} warp instructions with the expected memory.`

@@ -166,7 +166,7 @@ export function serdesPanel(view: 'link' | 'cdr'): ScenePanel {
       limitText = `${p.name}: ${(rho * 100).toFixed(0)} % of bit periods have an edge, so at most ${(theoryRange(rho) * 100).toFixed(1)} % (= ${(rho * 100).toFixed(0)} % ÷ (4 samples × ${FILTER_LIMIT} votes)); measured ±${(range * 100).toFixed(1)} %.`;
       limit.textContent = limitText;
     });
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel sr-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel sr-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, view === 'cdr' ? 'Clock recovery' : 'SerDes link', h('span', { class: 'fold-hint' })),
       h('div', { class: 'mc-row' }, patSel),
       h('div', { class: 'mc-row' }, off.el),

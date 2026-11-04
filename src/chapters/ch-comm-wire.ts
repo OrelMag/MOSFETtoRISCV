@@ -11,6 +11,9 @@ import {
 import { FO4_TAU, PS_PER_TAU } from '../phys/sizing';
 import type { SwitchSim } from '../sim/switchsim';
 import { driverWidget, flightWidget, noiseWidget, padScene, reflectionWidget, repeaterWidget, terminationWidget, wireRcWidget } from '../widgets/line';
+import { cable3d } from '../widgets/cable3d';
+import { package3d } from '../widgets/package3d';
+import { withModel } from '../widgets/modelhost';
 import type { Chapter } from './types';
 
 const f0 = (v: number) => v.toFixed(0), f1 = (v: number) => v.toFixed(1), f2 = (v: number) => v.toFixed(2);
@@ -28,6 +31,7 @@ const xt1 = crosstalk({ v: VIO, rise: 0.2, delay: boardDelay(100), kc: x1.kc, kl
 const xt3 = crosstalk({ v: VIO, rise: 0.2, delay: boardDelay(100), kc: x3.kc, kl: x3.kl });
 const I_PAD = VIO / (R_PAD + Z0_BOARD);
 const bounce = (n: number, rise: number) => groundBounce(n, I_PAD, rise, 3);
+const mv = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v * 1000).toFixed(0)} mV`;
 const FO4_PS = FO4_TAU * PS_PER_TAU;
 
 export const chWire: Chapter = {
@@ -66,7 +70,7 @@ export const chWire: Chapter = {
       },
       {
         question: 'An open CMOS input at the end of a 15 cm trace is driven by a 10 Ω output. What does the far pin see first?',
-        options: ['Almost twice the launched wave: ' + f2(strong.firstFar) + ' V on a ' + VIO + ' V swing, then ringing', 'The full ' + VIO + ' V swing, cleanly, after one flight time', 'Half the swing, until the wave returns'],
+        options: ['Twice the launched wave: ' + f2(strong.firstFar) + ' V against ' + f2(strong.launch) + ' V, then ringing', 'The full ' + VIO + ' V swing, cleanly, after one flight time', 'Half the swing, until the wave returns'],
         answer: 0,
         explain: 'The line launches V·Z₀ / (Z₀ + Rs) = ' + f2(strong.launch) + ' V; an open end reflects it with Γ = +1, so the pin sees double. The driver\'s low resistance then reflects the echo with Γ = ' + f2(strong.gammaS) + ', and the pin rings.',
         why: ['', 'A clean step needs the echo absorbed, which takes Rs ≈ Z₀ (series termination) or a matched far end.', 'Half the swing is what a series-terminated line shows at the driver. The open far end doubles the wave.'],
@@ -174,7 +178,7 @@ export const chWire: Chapter = {
       title: 'Termination',
       body: `
         <p>Reflections need two ends that disagree with the line. Fix one of them. <strong>Series termination</strong> adds a resistor at the driver so that R<sub>s</sub> + R<sub>driver</sub> = Z₀ (${seriesResistor(10, Z0_BOARD)} Ω after a 10 Ω driver): the launched wave is half the swing, the open far end doubles it to the full swing, and the echo is absorbed at the driver. <strong>Parallel termination</strong> puts a resistor of Z₀ to ground at the far end, so there is no echo at all.</p>
-        <p>The costs differ. Series needs no DC power and adds one round trip of half-swing at the driver pin: anything connected along the trace sees ${f2(seriesL.launch)} V for ${f2(2 * L_FLIGHT)} ns before the real edge, so it suits point-to-point links. Parallel gives every receiver on the line a clean edge on arrival and a DC path while the line is high: ${f0(parallelPower(VIO, 10, Z0_BOARD) * 1000)} mW per line from a 10 Ω driver, which is why it is rare on wide buses and common on a few fast signals. Its final level also drops to ${f2((VIO * Z0_BOARD) / (Z0_BOARD + 10))} V, a divider between the driver and the terminator, which eats noise margin.</p>
+        <p>The costs differ. Series needs no DC power and adds one round trip of half-swing at the driver pin: anything connected along the trace sees ${f2(seriesL.launch)} V for ${f2(2 * L_FLIGHT)} ns before the real edge, so it suits point-to-point links. Parallel gives every receiver on the line a clean edge on arrival and a DC path while the line is high: ${f0(parallelPower(VIO, 10, Z0_BOARD) * 1000)} mW in the terminator from a 10 Ω driver (the supply delivers V² / (R<sub>s</sub> + R<sub>t</sub>) = ${f0((VIO * VIO / (10 + Z0_BOARD)) * 1000)} mW, the driver's own channel taking the rest), which is why it is rare on wide buses and common on a few fast signals. Its final level also drops to ${f2((VIO * Z0_BOARD) / (Z0_BOARD + 10))} V, a divider between the driver and the terminator, which eats noise margin.</p>
         <p>Neither saves delay. The edge reaches the far pin after the flight time and the edge itself, and the series line crosses V<sub>IH</sub> ${f2(seriesStats.firstHigh! - strongStats.firstHigh!)} ns after the unterminated line's first, wrong, crossing, but it crosses once and stays.</p>`,
       widget: () => terminationWidget(),
       challenge: {
@@ -188,10 +192,10 @@ export const chWire: Chapter = {
     {
       title: 'Crosstalk, ground bounce and pairs',
       body: `
-        <p>Two traces side by side share a mutual capacitance and a mutual inductance. When one switches, the other, quiet, carries a pulse. The near end (at the aggressor's driver) sees <code>K<sub>b</sub> · V</code> with <code>K<sub>b</sub> = ¼ (C<sub>m</sub>/C + L<sub>m</sub>/L)</code>, for as long as the run lasts, twice its flight time. The far end sees <code>½ (C<sub>m</sub>/C − L<sub>m</sub>/L) · (T<sub>d</sub> / t<sub>r</sub>) · V</code>, a pulse of the edge's width: zero in a homogeneous medium and negative on a microstrip, where the inductive part wins. At a spacing equal to the height over the plane (s = h) and a 0.2 ns edge over 10 cm this model gives ${f0(xt1.next * 1000)} mV at the near end and ${f0(xt1.fext * 1000)} mV at the far end, against ${f0(VIL * 1000)} mV of low-level margin. Spreading the pair to 3h cuts the near end to ${f0(xt3.next * 1000)} mV (the three-width rule of thumb). The coupling coefficients are a rule of thumb in the model, not a field solution.</p>
-        <p><strong>Ground bounce</strong> is the same coupling through the chip's own return path. A pad driving a ${f0(Z0_BOARD)} Ω line draws about ${f1(I_PAD * 1000)} mA (${VIO} V over the ${f0(R_PAD)} Ω driver and the line); eight of them switching in 1 ns through 3 nH of package ground lift the chip's ground by <code>L · n · di/dt</code> = ${f2(bounce(8, 1))} V. In a 0.2 ns edge it would be ${f2(bounce(8, 0.2))} V, enough to read a low output as high, which is why pads have slew-rate control and a package has many ground pins.</p>
-        <p>A <strong>differential pair</strong> sends the signal as the difference of two legs and puts the noise in the common part. A receiver that subtracts them rejects what is equal on both, up to its common-mode rejection and the mismatch of the legs. The last panel passes a pseudo-random pattern through a single-pole channel with Gaussian noise: the eye closes as the bandwidth falls below about ${f2(minBandwidth(1))} of the bit rate, and the bit-error rate follows the Gaussian tail, ½ erfc(Q/√2). Chapter 46 reads this picture in depth.</p>`,
-      widget: () => noiseWidget(),
+        <p>Two traces side by side share a mutual capacitance and a mutual inductance. When one switches, the other, quiet, carries a pulse. The near end (at the aggressor's driver) sees <code>K<sub>b</sub> · V</code> with <code>K<sub>b</sub> = ¼ (C<sub>m</sub>/C + L<sub>m</sub>/L)</code>, for as long as the run lasts, twice its flight time. The far end sees <code>½ (C<sub>m</sub>/C − L<sub>m</sub>/L) · (T<sub>d</sub> / t<sub>r</sub>) · V</code>, a pulse of the edge's width: zero in a homogeneous medium and negative on a microstrip, where the inductive part wins. At a spacing equal to the height over the plane (s = h) and a 0.2 ns edge over 10 cm this model gives ${f0(xt1.next * 1000)} mV at the near end and ${mv(xt1.fext)} at the far end, against ${f0(VIL * 1000)} mV of low-level margin. Spreading the pair to 3h cuts the near end to ${f0(xt3.next * 1000)} mV (layout guides give a similar rule, spacing of three trace widths). The coupling coefficients are a rough estimate in the model, not a field solution, and the far-end figure in particular is only an order of magnitude at this geometry.</p>
+        <p><strong>Ground bounce</strong> is the same coupling through the chip's own return path. A pad driving a ${f0(Z0_BOARD)} Ω line draws about ${f1(I_PAD * 1000)} mA (${VIO} V over the ${f0(R_PAD)} Ω driver and the line); eight of them switching in 1 ns through 3 nH of package ground lift the chip's ground by <code>L · n · di/dt</code> = ${f2(bounce(8, 1))} V, which already passes V<sub>IL</sub> = ${f2(VIL)} V. Between V<sub>IL</sub> and V<sub>IH</sub> = ${f2(VIH)} V a receiver's input is undefined; above V<sub>IH</sub> a quiet low can be read as high. In a 0.2 ns edge the linear formula gives ${f2(bounce(8, 0.2))} V, more than the ${VIO} V supply, which cannot happen: the lifted ground reduces the drive current and slows the edge, so the formula is valid only while the bounce is a small fraction of the supply, and the widget flags it beyond that. This is why pads have slew-rate control and a package has many ground pins.</p>
+        <p>A <strong>differential pair</strong> sends the signal as the difference of two legs and puts the noise in the common part. A receiver that subtracts them rejects what is equal on both, up to its common-mode rejection and the mismatch of the legs. The last panel passes a pseudo-random pattern through a single-pole channel with Gaussian noise: the eye closes as the bandwidth narrows: a 50 % opening needs about ${f2(minBandwidth(1))} of the bit rate in bandwidth, and the eye closes altogether near ${f2(minBandwidth(1, 0))}, and the bit-error rate follows the Gaussian tail, ½ erfc(Q/√2). Chapter 46 reads this picture in depth.</p>`,
+      widget: () => withModel(noiseWidget(), cable3d()),
       more: {
         derive: `<p>The near-end coefficient saturates once the run is longer than half the edge: the aggressor's edge, rising over t<sub>r</sub>, couples K<sub>b</sub> · dV/dt for as long as the victim's backward wave keeps arriving, which is 2T<sub>d</sub>. A shorter run (2T<sub>d</sub> &lt; t<sub>r</sub>) reaches only K<sub>b</sub> · V · 2T<sub>d</sub> / t<sub>r</sub>. The far-end wave adds up as it travels with the aggressor's edge, which is why it grows with T<sub>d</sub> / t<sub>r</sub>.</p>`,
       },
@@ -231,6 +235,13 @@ export const chWire: Chapter = {
       more: {
         real: `<p>Real pads add an ESD structure (two diodes to the rails, the clamp that carries the overshoot of step 5), a bond or bump with a few nanohenries, and slew-rate control to limit ground bounce. Each adds to the ${f1(PAD_PIN_FF / 1000)} pF the driver sees. The model puts the pin capacitance in one illustrative number.</p>`,
       },
+    },
+    {
+      title: 'From the pad to the pin',
+      body: `
+        <p>The pad is not the pin. Between the die and the board sits a bond wire a few millimetres long, a lead in the lead frame, and the board's own copper. A wire carrying current has inductance, a few nH per bond, and every output returns its current through the same few ground wires. When several outputs switch at once the chip's ground lifts by <code>L · n · di/dt</code>, the figure of the noise panel on “Crosstalk, ground bounce and pairs”: eight pads, 3 nH and a 1 ns edge give ${f2(bounce(8, 1))} V against V<sub>IL</sub> = ${f2(VIL)} V.</p>
+        <p>Open the package and watch the wires that carry it. Adding ground pins puts bond wires in parallel and divides L; the model here divides it exactly, which a real package does not, because neighbouring wires couple through their mutual inductance.</p>`,
+      widget: () => package3d(),
     },
   ],
 };

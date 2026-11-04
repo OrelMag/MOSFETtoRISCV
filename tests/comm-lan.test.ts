@@ -94,6 +94,7 @@ describe('costs and capture', () => {
     const m = await measureLan(1, tick);
     expect(m.windows.map((w) => ({ c: w.computer, e: w.entry, t: w.total, l: w.layers }))).toEqual((NET.windows as typeof m.windows).map((w) => ({ c: w.computer, e: w.entry, t: w.total, l: w.layers })));
     expect(m.rtt).toBe(NET.rtt);
+    expect(m.wire).toEqual(NET.wire);
     expect(m.clocksToFirstReply).toBe(NET.clocksToFirstReply);
     expect(m.words).toEqual(NET.words);
     expect(m.dma).toEqual(NET.dma);

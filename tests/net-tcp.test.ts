@@ -148,6 +148,19 @@ describe('the state machine', () => {
     const fins = t.log.filter((x) => x.s.flags & FIN);
     expect(fins.map((x) => x.from)).toEqual(['a', 'b']);
   });
+  it('a FIN sent again in TIME_WAIT is acknowledged, and 2 MSL starts over', () => {
+    const t = bench();
+    open(t);
+    t.a.close(t.now());
+    t.run(() => t.a.st === 6 && t.b.st === 7);
+    t.b.close(t.now());
+    t.run(() => t.a.st === TIME_WAIT);
+    const at = t.a.twAt, n = t.log.length;
+    const fin = segBytes({ sport: 80, dport: 40000, seq: (t.b.sndEnd) | 0, ack: t.b.rcvNxt, flags: ACK | FIN, wnd: 512, data: [] }, B, A);
+    t.a.input(fin, B, at - 100);
+    expect(t.a.twAt).toBe((at - 100 + TCP_K.TIME_WAIT) | 0);
+    expect(t.log[n].s.flags).toBe(ACK);
+  });
   it('close from both at once meets in CLOSING and both reach TIME_WAIT', () => {
     const t = bench();
     open(t);
@@ -336,7 +349,13 @@ describe('retransmission and congestion', () => {
     expect(t.log[n].s.data.length).toBe(1);
     expect(t.a.cwnd).toBe(cw);
     const got: number[] = [];
-    t.run(() => { if (sent < d.length) sent += t.a.write(d.slice(sent), t.now()); got.push(...t.b.read(100, t.now())); return got.length >= d.length; }, 400_000_000);
+    // what the application has not read holds no event of its own: read until nothing more comes
+    for (let k = 0; k < 100 && got.length < d.length; k++) {
+      t.run(() => { if (sent < d.length) sent += t.a.write(d.slice(sent), t.now()); got.push(...t.b.read(100, t.now())); return got.length >= d.length; }, 400_000_000);
+      got.push(...t.b.read(100, t.now()));
+    }
     expect(got).toEqual(d);
+    // no timeout on the way: reopening carried on from the refused byte
+    expect(t.a.retries).toBe(0);
   });
 });

@@ -4,7 +4,7 @@
 import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
-import { BROADCAST, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, MAX_PAYLOAD, MIN_FRAME, type FrameSpec } from '../comm/ethframe';
 import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, CLOCK_NS, frameBitTimes, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS,
 } from '../comm/mac';
@@ -18,6 +18,12 @@ import { slider } from './mosparts';
 
 const C_LIGHT = 299792458;
 const utf8 = (t: string): number[] => Array.from(new TextEncoder().encode(t));
+
+/** What the panel queues: station f's message, for station t or everyone. The tshark oracle reads these too. */
+export function segmentFrame(f: number, t: number | 'all', txt: string): number[] {
+  const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_LOCAL, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
+  return frameBody(spec);
+}
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const us = (clocks: number): string => `${((clocks * CLOCK_NS) / 1000).toFixed(2)} µs`;
 
@@ -147,7 +153,7 @@ export function throughputWidget(): Widget {
     busy = false; paint();
   };
   const nSel = select('Stations', [['2', '2 stations'], ['4', '4 stations'], ['8', '8 stations']], '4', (v) => { S.n = Number(v); gen++; busy = false; S.points = []; S.saturated = null; paint(); });
-  const pSel = select('Frame size', [['46', '64-byte frames'], ['500', '512-byte payload'], ['1500', '1500-byte payload']], '46', (v) => { S.payload = Math.min(MAX_PAYLOAD, Number(v)); gen++; busy = false; S.points = []; S.saturated = null; paint(); });
+  const pSel = select('Frame size', [['46', '64-byte frames'], ['500', '500-byte payload'], ['1500', '1500-byte payload']], '46', (v) => { S.payload = Math.min(MAX_PAYLOAD, Number(v)); gen++; busy = false; S.points = []; S.saturated = null; paint(); });
   paint();
   const el = h('div', { class: 'widget mos clk-w comm' }, h('div', { class: 'panel' }, h('h3', null, 'Throughput against load'),
     h('div', { class: 'mc-row' }, nSel, pSel, btn('Run', 'Run the model at eight loads and once saturated', () => { void compute(); }, 'btn sm primary')),
@@ -211,9 +217,15 @@ export function segmentScene(): Scene {
         cap.poll(clock);
       };
       /** The next frame of the first station that has let go and has one waiting, written by the host port: only when the port is free. */
+      let waiting: [number, number][] | null = null;
+      const togetherOps = (pairs: [number, number][]): HostOp[] => {
+        const frames = pairs.map(([f, t]) => frameFor(f, t, `from ${f + 1} to ${t + 1}`));
+        return [...pairs.flatMap(([f], k) => writeOps(f, frames[k])), ...pairs.map(([f], k) => goOp(f, frames[k].length))];
+      };
       const pump = () => {
         if (ops.length) return;
         const busy = b.get('busy');
+        if (waiting && waiting.every(([f]) => !queues[f].length && !((busy >> f) & 1))) { ops.push(...togetherOps(waiting)); note(`stations ${waiting.map(([f]) => f + 1).join(', ')}: frames written, go in consecutive clocks`); waiting = null; return; }
         for (let i = 0; i < 4; i++) {
           if (queues[i].length && !((busy >> i) & 1)) { const f = queues[i].shift()!; ops.push(...writeOps(i, f), goOp(i, f.length)); return; }
         }
@@ -228,26 +240,16 @@ export function segmentScene(): Scene {
       const loop = new Loop(stage, step, () => paint(), 150, 30);
       const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
       const runPause = (on: boolean) => { if (on && !loop.running) loop.start(); else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
-      const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
-        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
-        return frameBody(spec);
-      };
+      const frameFor = segmentFrame;
       const queue = (f: number, t: number | 'all', txt: string) => {
         queues[f].push(frameFor(f, t, txt));
         note(`station ${f + 1}: ${txt.length} bytes for ${t === 'all' ? 'everyone' : `station ${t + 1}`} queued (${queues[f].length} waiting)`);
         runPause(true); paint();
       };
       const together = (pairs: [number, number][]) => {
-        const idle = !ops.length && pairs.every(([f]) => !queues[f].length && !((b.get('busy') >> f) & 1));
-        const frames = pairs.map(([f, t]) => frameFor(f, t, `from ${f + 1} to ${t + 1}`));
-        if (idle) {
-          ops.push(...pairs.flatMap(([f], k) => writeOps(f, frames[k])), ...pairs.map(([f], k) => goOp(f, frames[k].length)));
-          note(`stations ${pairs.map(([f]) => f + 1).join(', ')}: frames written, go in consecutive clocks`);
-        } else {
-          pairs.forEach(([f], k) => queues[f].push(frames[k]));
-          note('stations are busy: the frames wait their turn, so they will not start together');
-        }
-        runPause(true); paint();
+        waiting = pairs;
+        note('together: waiting until those stations have let go of earlier frames');
+        runPause(true); pump(); paint();
       };
       const S: SegState = {
         clock: 0, collisions: 0, sent: 0, kept: [0, 0, 0, 0], log, capture: cap, queued: [0, 0, 0, 0], queue, together,
@@ -261,11 +263,19 @@ export function segmentScene(): Scene {
         cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('div', { class: 'sub' }, i === 3 ? 'monitor' : 'host'),
           h('div', null, txStateName(field('txstate', i, 3)), (busy >> i) & 1 ? ' · frame held' : ''), h('div', null, `kept ${field('ngood', i, 8)} · dropped ${field('nbad', i, 8)}`),
           h('div', null, `collisions ${field('ncol', i, 8)}`), h('div', null, `waiting ${queues[i].length}`))));
-        read.replaceChildren(h('span', null, 'clocks ', h('b', null, clock.toLocaleString('en'))), h('span', null, 'time ', h('b', null, us(clock))), h('span', null, 'frames sent ', h('b', null, String(sent))), h('span', null, 'collisions ', h('b', null, String(collisions))),
+        read.replaceChildren(h('span', null, 'clocks ', h('b', null, clock.toLocaleString('en'))), h('span', null, 'time ', h('b', null, us(clock))), h('span', null, 'frames sent ', h('b', null, String(sent))), h('span', { title: 'Each station that detects a collision counts it once: two stations colliding count 2' }, 'collisions detected ', h('b', null, String(collisions))),
           h('span', null, 'station 4 has captured ', h('b', null, `${cap.frames.length} frame${cap.frames.length === 1 ? '' : 's'}`)));
         logBox.replaceChildren(...log.slice(-8).map((l) => h('li', null, l)));
       };
-      stage.resetHooks.add(() => { clock = 0; collisions = 0; sent = 0; log = []; rows.forEach((r) => { r.length = 0; }); acc = [0, 0, 0, 0, 0]; attempts.fill(0); queues.forEach((q) => { q.length = 0; }); ops = []; cap.reset(); b.reset(); paint(); });
+      stage.historyHooks.add({
+        save: () => ({ clock, collisions, sent, log: [...log], rows: rows.map((r) => [...r]), acc: [...acc], attempts: [...attempts], queues: queues.map((q) => [...q]), ops: [...ops], cap: cap.save() }),
+        restore: (v) => {
+          const x = v as { clock: number; collisions: number; sent: number; log: string[]; rows: number[][]; acc: number[]; attempts: number[]; queues: number[][][]; ops: HostOp[]; cap: ReturnType<Capture['save']> };
+          clock = x.clock; collisions = x.collisions; sent = x.sent; log = [...x.log]; x.rows.forEach((r, i) => { rows[i] = [...r]; }); acc = [...x.acc]; x.attempts.forEach((a, i) => { attempts[i] = a; });
+          x.queues.forEach((q, i) => { queues[i] = q.map((f) => [...f]); }); ops = [...x.ops]; cap.restore(x.cap); paint();
+        },
+      });
+      stage.resetHooks.add(() => { clock = 0; collisions = 0; sent = 0; log = []; rows.forEach((r) => { r.length = 0; }); acc = [0, 0, 0, 0, 0]; attempts.fill(0); queues.forEach((q) => { q.length = 0; }); ops = []; waiting = null; cap.reset(); b.reset(); paint(); });
       b.reset();
       const inp = h('input', { type: 'text', class: 'uart-text', value: text, maxlength: 60, 'aria-label': 'Message', spellcheck: 'false' }) as HTMLInputElement;
       inp.addEventListener('input', () => { text = inp.value; });

@@ -1,0 +1,60 @@
+/* ---------- Chapter 52, TCP (src/widgets/tcp.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.tcp-w { display: grid; gap: 10px; }
+.tcp-plot { width: 100%; max-width: 680px; height: auto; display: block; }
+.tcp-plot .grid { stroke: var(--border); stroke-width: 1; }
+.tcp-plot .tick { font: 500 11px var(--font-mono); fill: var(--muted); }
+.tcp-plot .axl { font: 500 12px var(--font-ui); fill: var(--text-2); }
+.tcp-plot .ln { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.tcp-plot .ln.s1 { stroke: var(--accent); }
+.tcp-plot .ln.s2 { stroke: var(--good); }
+.tcp-plot .ln.s3 { stroke: var(--text-2); }
+.tcp-plot .ln.s4 { stroke: var(--muted); stroke-dasharray: 5 4; }
+.tcp-plot .dot.s3 { fill: var(--text); }
+.tcp-plot .mark { stroke-width: 1.5; opacity: 0.75; }
+.tcp-plot .mark.fast { stroke: var(--warn, var(--muted)); stroke-dasharray: 3 3; }
+.tcp-plot .mark.timeout { stroke: var(--bad); }
+.tcp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--text-2); }
+.tcp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tcp-legend i { width: 16px; height: 0; border-top: 2px solid var(--muted); }
+.tcp-legend i.s1 { border-color: var(--accent); }
+.tcp-legend i.s2 { border-color: var(--good); }
+.tcp-legend i.s3 { border-color: var(--text-2); }
+.tcp-legend i.s4 { border-top-style: dashed; }
+.tcp-legend i.fast { border-color: var(--warn, var(--muted)); border-top-style: dotted; }
+.tcp-legend i.timeout { border-color: var(--bad); }
+.tcp-sliders { display: grid; gap: 4px; }
+.tcp-lad { width: 100%; max-width: 620px; height: auto; display: block; }
+.tcp-lad .who { font: 700 14px var(--font-mono); fill: var(--text); }
+.tcp-lad .life { stroke: var(--text-2); stroke-width: 2; }
+.tcp-lad .arrow { cursor: pointer; outline: none; }
+.tcp-lad .hit { stroke: transparent; stroke-width: 15; }
+.tcp-lad .ar { stroke: var(--accent); stroke-width: 1.6; }
+.tcp-lad .arrow.b .ar { stroke: var(--good); }
+.tcp-lad .head { fill: var(--accent); }
+.tcp-lad .arrow.b .head { fill: var(--good); }
+.tcp-lad .lab { font: 500 10.5px var(--font-mono); fill: var(--text-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3; }
+.tcp-lad .arrow.lost .ar { stroke: var(--bad); stroke-dasharray: 4 3; }
+.tcp-lad .x { stroke: var(--bad); stroke-width: 2; fill: none; }
+.tcp-lad .arrow.again .lab { fill: var(--text); font-weight: 700; }
+.tcp-lad .arrow.on .ar { stroke-width: 3; }
+.tcp-lad .arrow.on .lab { fill: var(--text); font-weight: 700; }
+.tcp-lad .arrow:focus-visible .ar { stroke-width: 4; }
+.tcp-fields { display: grid; gap: 2px; }
+.tcp-frow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; padding: 2px 6px; font-size: 12.5px; color: var(--text-2); border-bottom: 1px solid var(--border); }
+.tcp-frow code { font: 500 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+.tcp-frow em { font-style: normal; color: var(--text); }
+.tcp-sweep { display: grid; gap: 1px; }
+.tcp-srow { display: grid; grid-template-columns: 0.6fr 1fr 0.7fr 0.7fr 1fr; gap: 6px; padding: 2px 6px; font: 500 12.5px var(--font-mono); color: var(--text-2); border-bottom: 1px solid var(--border); }
+.tcp-srow.head { font: 600 12px var(--font-ui); }
+.tcp-srow.on { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.tcp-con { margin: 0; padding: 8px; min-height: 76px; font: 500 12.5px var(--font-mono); color: var(--text); background: var(--surface-2); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tcp-where { font: 500 12px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; min-height: 1.3em; }
+@media (pointer: coarse) { .tcp-lad .hit { stroke-width: 28; } }
+@media (max-width: 760px) {
+  .tcp-lad .lab { font-size: 13px; }
+  .tcp-plot .tick { font-size: 14px; }
+  .tcp-plot .axl { font-size: 15px; }
+  .tcp-frow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tcp-frow em { grid-column: 1 / -1; }
+  .tcp-srow { font-size: 11.5px; gap: 4px; }
+}

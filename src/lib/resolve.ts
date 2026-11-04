@@ -33,6 +33,7 @@ import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegis
 import { srt4Divider, srt4Step } from './srt4';
 import { ls189With } from './ttl';
 import { sandboxBus } from './axi';
+import { AXI_UART_B, lineDef, MAX_LINE_DELAY } from './uart';
 import { asyncFifo, BIN2GRAY, GRAY2BIN, syncN } from './sync';
 import { i2cBus, i2cController, i2cTarget, i2cWired2 } from './i2c';
 import { spiDevice, spiMaster, spiPair } from './spi';
@@ -61,6 +62,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^counter(\d+)$/, (m) => counter(+m[1])],
   // past 64 words a RAM is the large one (lib/bigmem.ts): a lookup whose banks open down to gates
   [/^ram(\d+)x(\d+)$/, (m) => (log2(+m[1]) > BANK_K ? bigRam : ram)(log2(+m[1]), +m[2])],
+  [/^ramg(\d+)x(\d+)$/, (m) => ram(log2(+m[1]), +m[2])],
   [/^ram64x(\d+)_bank$/, (m) => ramBank(+m[1])],
   [/^alu(\d+)(ks)?$/, (m) => alu(+m[1], m[2] ? 'ks' : 'rca')],
   [/^ks(\d+)$/, (m) => koggeStone(+m[1])],
@@ -91,6 +93,9 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^fpcvt(\d+)_(\d+)_(\d+)$/, (m) => fpFromInt({ E: +m[1], M: +m[2] }, +m[3])],
   // the sandbox bus with other slave codes (the memory-map designer's Apply makes one: a saved chip places it by id)
   [/^axibus2_(\d+(?:_\d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
+  // chapter 43's UART slave with its bus ports packed, and the line part with its delay in the id (the sandbox's Communication group)
+  [/^axi_uart_b$/, () => AXI_UART_B],
+  [/^line(\d+)$/, (m) => { const n = +m[1]; if (n < 1 || n > MAX_LINE_DELAY || String(n) !== m[1]) throw new Error('line delay'); return lineDef(n); }],
   // a 74LS189 holding its 16 nibbles at power-on (the sandbox's SAP-1 RAM)
   [/^ls189_i([0-9a-f]{16})$/, (m) => ls189With(Array.from(m[1], (c) => parseInt(c, 16)))],
 ];

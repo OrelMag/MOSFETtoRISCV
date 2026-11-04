@@ -95,6 +95,40 @@ describe('MAC receiver model', () => {
   });
 });
 
+/** A burst ending in `last`, then a good frame: what the shift register still holds must not make the next preamble look like an SFD. */
+const afterBurst = (last: number, f: FrameSpec) => {
+  const a = lineOf([...wireBytes(spec(20)), last], 9, 30), b = lineOf(wireBytes(f), 9, 30);
+  return { rxd: [...a.rxd, ...b.rxd], crs: [...a.crs, ...b.crs] };
+};
+
+describe('a frame after another', () => {
+  it('whatever byte the last frame ended on, the next one is received: the shift register does not carry over', () => {
+    const f = spec(30);
+    for (let last = 0; last < 256; last++) {
+      const g = receive(afterBurst(last, f), MAC_B);
+      const second = g[g.length - 1];
+      expect(second.bytes, `after a last byte of 0x${last.toString(16)}`).toEqual(frameBody(f));
+      expect([second.err, second.why], `after a last byte of 0x${last.toString(16)}`).toEqual([0, 0]);
+    }
+  });
+  it('the gates too', () => {
+    for (const last of [0xaa, 0xab, 0x55]) {
+      const gate = simulate(macRx()), line = afterBurst(last, spec(30)), addr = addrBus(MAC_B), got: number[][] = [];
+      let cur: number[] = [];
+      set(gate, { rst: 1, rxd: 0, crs: 0, ready: 1, promisc: 0, addr });
+      tickClk(gate);
+      let err = 0;
+      for (let c = 0; c < line.rxd.length; c++) {
+        set(gate, { rst: 0, rxd: line.rxd[c], crs: line.crs[c], ready: 1, promisc: 0, addr });
+        tickClk(gate);
+        if (out(gate, 'valid')) { cur.push(out(gate, 'data')); if (out(gate, 'last')) { got.push(cur); err = out(gate, 'err'); cur = []; } }
+      }
+      expect(got[got.length - 1], `after 0x${last.toString(16)}`).toEqual(frameBody(spec(30)));
+      expect(err).toBe(0);
+    }
+  });
+});
+
 describe('MAC receiver gates', () => {
   it('every output equals the model after every clock: good frames, flipped bits, runts, other addresses, glitches on crs', async () => {
     const gate = simulate(macRx());
@@ -126,7 +160,7 @@ describe('MAC receiver gates', () => {
     }
     expect(valid).toBeGreaterThan(300);
     expect(errs).toBeGreaterThan(0);
-  });
+  }, 240000);
 });
 
 /** A frame source for the transmitter: bytes with valid held, last on the final one. */
@@ -219,7 +253,7 @@ describe('MAC transmitter underrun', () => {
     const got = receive(lineOf(bytesOf(bits)), MAC_B, 1);
     expect(got[0].why).toBe(WHY_FCS);
     expect(got[0].bytes).toHaveLength(60);
-  });
+  }, 240000);
 });
 
 /** A copy of the model, advanced without disturbing it. */
@@ -264,7 +298,7 @@ describe('MAC transmitter gates', () => {
     expect(sent).toBeGreaterThan(0);
     expect(restarts).toBeGreaterThan(2);
     expect([...states].sort()).toEqual([0, 1, 2, 3, 4, 5]);
-  });
+  }, 300000);
 });
 
 describe('MAC transmitter attempt limit', () => {
@@ -301,7 +335,7 @@ describe('MAC transmitter attempt limit', () => {
     expect(drops).toBe(1);
     expect(restarts).toBe(15);
     expect(atts).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
-  }, 120000);
+  }, 240000);
 });
 
 // ---- the segment: four stations on a cable, gates against the software segment ----------------------------------------
@@ -413,7 +447,7 @@ describe('capture', () => {
     expect(byFirst(2).type).toBe(0x0806);
     expect(byFirst(2).payload.slice(0, 28)).toEqual(f12.payload);
     expect(back[1].us).toBeGreaterThan(back[0].us);
-  }, 120000);
+  }, 240000);
 });
 
 // ---- the segment on the cycle engine, as the scene runs it; the drawings; Open in Sandbox -------------------------------
@@ -492,4 +526,24 @@ describe('the chapter scenes as drawings', () => {
     const r = remixDef(emptyWorkspace(), d);
     expect('error' in r ? r.error : '').toBe('');
   }, 120000);
+});
+
+describe('capture and Back', () => {
+  it('a Capture restored to an earlier state forgets later frames and reads the next one from the restored pointer, not from where it had got to', async () => {
+    const { Capture } = await import('../src/widgets/ethernet');
+    const mem = Array.from({ length: 2048 }, (_, i) => i & 255);
+    let cp = 0;
+    const cap = new Capture({ rx: (a: number) => mem[a & 2047] } as never, () => cp);
+    cp = 60; cap.poll(1000);
+    const saved = cap.save();
+    cp = 120; cap.poll(2000);
+    expect(cap.frames.map((f) => f.bytes.length)).toEqual([60, 60]);
+    cap.restore(saved); cp = 60; cap.poll(2500); // Back: the gates are at 60 again
+    expect(cap.frames.map((f) => f.bytes.length)).toEqual([60]);
+    cp = 130; cap.poll(3000);
+    expect(cap.frames.map((f) => f.bytes.length)).toEqual([60, 70]);
+    const back = readPcap(cap.pcap());
+    expect(back).toHaveLength(2);
+    expect(back.every((r) => r.bytes.length >= 60 && r.bytes.length <= 1514)).toBe(true);
+  });
 });

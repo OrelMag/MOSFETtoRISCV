@@ -23,6 +23,7 @@ import { F16 } from '../sim/fpref';
 import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
 import { withBugHunts } from './bughunts';
+import { NODES_COMM } from './nodescomm';
 
 const sandbox = (id: string) => (): BuildChallenge => {
   const c = challengeById(id);
@@ -43,6 +44,7 @@ export const ACTS: Act[] = [
   { num: 8, title: 'Arithmetic units', blurb: 'Optional: multiply and divide, and floating point. Each trades area or cycles against your core\'s NANDs, period and cycles, and each level measures which way the trade went.' },
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, from Core III on: throughput. Lanes: one instruction stream, four datapaths, a mask and a stack. Warps: hide memory latency. Pixels: a rasterizer beside the lanes.' },
   { num: 10, title: 'Memory', blurb: 'Optional, from A computer on: what sits behind the data port. DRAM, its controller and a cache; a bus other masters share, a DMA engine, and flash to boot from.' },
+  { num: 12, title: 'Links', blurb: 'Optional, from A computer on: how a bit gets from one machine to another. Relays that repeat and select, a clock that crosses to another, a UART and an I²C controller, the checks that catch a flipped bit, a code that keeps the line balanced and a receiver that finds the clock in the data. Each bench is the far end of the link, and it names the first rule you broke.' },
 ];
 
 /** An act's name as the map and the crumbs show it: "Act 3", or its own label ("Act P"). */
@@ -803,7 +805,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_bank', act: 10, title: 'A bank with refresh', kind: 'build', optional: true, requires: ['m_sense'], base: BUILDM.m_bank, par: { nand: 319, period: 30, cycles: 5917 },
     why: 'An open row\'s words are a cycle away; another row costs a close and an open, and every row leaks. 319 NANDs keep the open row and refresh, the 1970s way: between a cache\'s miss port and the cell array.',
     tips: ['State: is a row open, which one, the next row to refresh, and a counter of the cycles since the last refresh.', 'A request hits when a row is open and it is the request\'s row: RW, busy = 0. Otherwise PRE if a row is open, else ACT the request\'s row; busy = 1.', 'A refresh is just ACT of the refresh row (after a PRE if needed): leave that row open, the next request may want it. 16 rows in 288 cycles: one refresh every 18 cycles is enough.', 'Refresh early when nobody is asking (the timer past 8), and force it when it is due (15), ahead of any request.'],
-    codex: ['refresh', 'rowhammer', 'ecc'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 4, label: 'Rows, columns, banks' }],
+    codex: ['refresh', 'rowhammer', 'ecc'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 5, label: 'Rows, columns, banks' }],
   },
   {
     id: 'm_ctrl', act: 10, title: 'Row-buffer controller', kind: 'build', optional: true, requires: ['m_bank'], base: BUILDM.m_ctrl, par: { nand: 779, period: 36, cycles: 10690 },
@@ -833,7 +835,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_flash', act: 10, title: 'Flash page store', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_flash, par: { nand: 1049, period: 38, cycles: 7844 },
     why: 'Flash keeps data without power but cannot overwrite: a page is written once per erase of its whole block. A page store writes somewhere new each time and keeps a map, as every SSD does: 1049 NANDs.',
     tips: ['Write as a log: a head pointer to the next erased page, a table of 8 entries saying where each logical page lives. A write programs the head (with the logical page number as its tag), points the entry there, and moves the head.', 'Keep one block erased ahead of the head. When the head enters a new block, collect the block after it: read each page; if the table still points at it (its tag says whose it was), program it at the head and repoint the entry; then erase the block.', 'Update the table and the head when you issue the program, not when it finishes: fq shows the read page only until the next command.', 'A small state machine: idle, waiting on a read or a program, and the collector\'s read, copy and erase. While fbusy is 1 issue nothing.'],
-    codex: ['ftl', 'wearlevel'], unlocks: ['rv16_flashstore'], chapters: [{ chapter: 'flash', step: 3, label: 'Never overwrite' }, { chapter: 'flash', step: 4, label: 'Garbage, wear and bad blocks' }],
+    codex: ['ftl', 'wearlevel'], unlocks: ['rv16_flashstore'], chapters: [{ chapter: 'flash', step: 4, label: 'Never overwrite' }, { chapter: 'flash', step: 5, label: 'Garbage, wear and bad blocks' }],
   },
   {
     id: 'p_boot', act: 10, title: 'Boot from flash', kind: 'program', optional: true, requires: ['m_dma', 'm_flash'], par: { size: 18, cycles: 253 },
@@ -841,6 +843,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     tips: ['Loading the table straight from flash works: 8 stall cycles a word. The DMA copies a word every 4.', 'Simplest: start the copy, wait until 0xFFF9 reads 1, clear it, then sum the copy in RAM.', 'Faster: don\'t wait for the whole copy. The bench\'s engine, unlike your m_dma, lets you read its count: a load from 0xFFF2 gives the words left, so you know how many have landed. Sum each one as soon as it is there.', 'RV16 is word addressed and its offsets reach −32 … 31: the device registers are -16(x0) … -13(x0), irq is -7(x0), OUT is -3(x0).'],
     codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
   },
+  ...NODES_COMM,
 ]);
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);

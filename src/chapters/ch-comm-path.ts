@@ -47,7 +47,7 @@ export const chPath: Chapter = {
     'read a traceroute, and say what each line proves and what it does not',
     'add up one packet\'s delay from light, bits, queues and the engine, and say which one matters where',
   ],
-  builds: ['router', 'network', 'ethernet'],
+  builds: ['tcp', 'router', 'network', 'ethernet'],
   recap: {
     keep: [
       `A network of networks: link state inside each, BGP between them. A router here holds ${ROUTE_COUNT} or so routes and at most ${NODES} trie nodes, because a /16 stands for a whole network.`,
@@ -188,12 +188,12 @@ export const chPath: Chapter = {
     {
       title: 'A page',
       body: `
-        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and with TLS a second for keys. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is chapter 52's slow start with no loss, from RFC 6928's ten segments of 1460 bytes; chapter 52's small TCP starts from two of 64.</p>
+        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and with TLS a second for keys. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is <a href="#/c/tcp">chapter 52</a>'s slow start with no loss, from RFC 6928's ten segments of 1460 bytes; chapter 52's small TCP starts from two of 64.</p>
         <p>From cold, 100 kB takes about <strong>${ms1(PAGE_MS)} ms</strong>, and the round trip of ${ms1(RTT)} ms sets nearly all of it. Move the size and see how little the page itself matters until it gets large. A link ten times faster changes only the serialization. What helps is fewer round trips or shorter ones: a cached name, and a copy of the site nearby, which is what a content delivery network sells. <span class="try">Put a copy of the site at the access provider.</span> <span class="try">Make the page 2000 kB, and see when bandwidth begins to matter.</span></p>
         <p>Open any of it and you can keep going down. The page is bytes in <a href="#/c/ethernet">an Ethernet frame</a>, the frame a stream through <a href="#/c/router">a router's</a> gates, the gates are NANDs from <a href="#/c/nand">chapter 3</a>, and a NAND is four of <a href="#/c/mosfet">chapter 1's</a> transistors. Except for the model of the line, and the invented map, it has all been built here.</p>`,
       widget: fetchWidget,
       more: {
-        real: `<p>A real page is many objects from several hosts, and modern browsers reuse connections, resolve names ahead of time, and use QUIC to fold transport and TLS into one round trip. TLS itself, HTTP's meaning, routers' own failures, carrier NAT, Wi-Fi and the radio network are all outside this book. Loss changes the transfer too: chapter 52 follows it.</p>`,
+        real: `<p>A real page is many objects from several hosts, and modern browsers reuse connections, resolve names ahead of time, and use QUIC to fold transport and TLS into one round trip. TLS itself, HTTP's meaning, routers' own failures, carrier NAT, Wi-Fi and the radio network are all outside this book. Loss changes the transfer too: <a href="#/c/tcp">chapter 52</a> follows it.</p>`,
       },
     },
   ],

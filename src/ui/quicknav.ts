@@ -2,6 +2,7 @@
 
 import { outline as chapters, outlineOf } from '../chapters/outline';
 import { chapterNo } from '../chapters/meta';
+import { sectionsOf } from '../chapters/sections';
 import { itemSnippet, markRuns, type NavItem, type NavKind } from './chapternav';
 import { h, icon } from './dom';
 import { showPageKeys } from './keyhelp';
@@ -77,14 +78,9 @@ export function toggleChapterMenu(anchor: HTMLElement): void {
     closeChapterMenu();
     location.hash = `#/c/${cur!.chapter}/print/${cur!.step}`;
   });
-  // the prologue and the appendix under their own headings
-  const group = (cls: string, text: string) => h('div', { class: `qn-group${cls}`, role: 'presentation' }, text);
-  const listed = rows.flatMap((r, i) => {
-    const c = chapters[i], prev = chapters[i - 1];
-    return c.appendix && !prev?.appendix ? [group('', 'Appendix'), r]
-      : c.prologue && !prev?.prologue ? [group(' prologue', 'Prologue'), r]
-      : !c.prologue && !c.appendix && prev?.prologue ? [group(' journey', 'The journey'), r] : [r];
-  });
+  // under the book's sections, the prologue and the appendix in their own colours
+  let at = 0;
+  const listed = sectionsOf(chapters).flatMap((sec) => [h('div', { class: `qn-group ${sec.tone}`, role: 'presentation' }, sec.name), ...rows.slice(at, at += sec.chapters.length)]);
   const el = h('div', { class: 'ch-menu', role: 'menu', 'aria-label': 'Chapters' }, search, print, h('div', { class: 'qn-list' }, listed));
   const r = anchor.getBoundingClientRect();
   el.style.top = `${Math.round(r.bottom + 6)}px`;

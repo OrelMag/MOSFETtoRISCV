@@ -424,6 +424,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The read, in slow motion", challenge: "reach" },
     { title: "The sense amplifier", challenge: "quiz" },
     { title: "Leaks and refresh", challenge: "reach" },
+    { title: "The array, live" },
     { title: "Rows, columns, banks", challenge: "quiz" },
     { title: "Bursts and timings", challenge: "quiz" },
   ] },
@@ -437,6 +438,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "flash", num: 37, title: "Flash", blurb: "The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.", level: "Memory in depth", builds: ["mosfet","memory"], recap: {"checks":3}, steps: [
     { title: "A gate that remembers", challenge: "quiz" },
+    { title: "The floating gate, up close" },
     { title: "Program and erase", challenge: "reach" },
     { title: "NOR and NAND", challenge: "quiz" },
     { title: "Never overwrite", challenge: "quiz" },
@@ -465,6 +467,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Everyone to everyone", challenge: "quiz" },
     { title: "Counting dial pulses", challenge: "reach" },
     { title: "A stepping selector", challenge: "reach" },
+    { title: "The machine itself" },
     { title: "A crossbar", challenge: "reach" },
     { title: "What a switching network costs", challenge: "quiz" },
     { title: "The busy tone", challenge: "quiz" },
@@ -479,6 +482,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Termination", challenge: "quiz" },
     { title: "Crosstalk, ground bounce and pairs", challenge: "quiz" },
     { title: "An I/O pad, and where the transistors stop", challenge: "reach" },
+    { title: "From the pad to the pin" },
   ] },
   { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], recap: {"checks":3}, steps: [
     { title: "What a receiver decides", challenge: "quiz" },
@@ -594,7 +598,18 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Link state: everyone holds the map" },
     { title: "What one engine can carry" },
   ] },
-  { id: "path", num: 53, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["router","network","ethernet"], recap: {"checks":3}, steps: [
+  { id: "tcp", num: 52, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router"], recap: {"checks":3}, steps: [
+    { title: "A stream over datagrams" },
+    { title: "Three segments to begin", challenge: "quiz" },
+    { title: "Numbers that count bytes", challenge: "quiz" },
+    { title: "The window: room at the far end", challenge: "quiz" },
+    { title: "How long to wait", challenge: "quiz" },
+    { title: "How fast: the sawtooth", challenge: "quiz" },
+    { title: "Queues that fill", challenge: "quiz" },
+    { title: "The same rules, on our CPU" },
+    { title: "A window into the gates", challenge: "reach" },
+  ] },
+  { id: "path", num: 53, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
     { title: "A name, then an address", challenge: "quiz" },

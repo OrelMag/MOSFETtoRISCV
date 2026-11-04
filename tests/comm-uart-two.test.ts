@@ -3,6 +3,7 @@ import { emptyWorkspace } from '../src/editor/model';
 import { remixDef } from '../src/editor/remix';
 import { busComputer } from '../src/lib/soc';
 import { UART_CORE, UART_RX_BENCH, UART_TX_BENCH } from '../src/lib/uart';
+import { TwoDrive } from '../src/comm/uartdrive';
 import { twoComputers } from '../src/lib/uartlink';
 import { deadInstances } from '../src/sim/dead';
 import { netlistOf } from '../src/sim/types';
@@ -60,7 +61,7 @@ describe('two computers on the cycle engine', () => {
 describe('two computers: how far apart the clocks may be', () => {
   it('works at +-4 %, fails at +-9 % (see step 4)', async () => {
     const result: Record<string, string> = {};
-    for (const ratio of [1.04, 0.96, 1.09, 0.91]) {
+    for (const ratio of [1.04, 0.96, 0.955, 1.09, 0.91]) {
       const p = pair(uartChatSource(2, false), uartChatSource(2, true), ratio);
       for (let i = 0; i < 400; i++) p.step();
       p.type('a', 'Hello');
@@ -69,6 +70,7 @@ describe('two computers: how far apart the clocks may be', () => {
     }
     expect(result[1.04]).toBe('Hello');
     expect(result[0.96]).toBe('Hello');
+    expect(result[0.955]).not.toBe('Hello'); // 4.5 % slow on the receiving side: past the back-to-back limit of 4.4 %
     expect(result[1.09]).not.toBe('Hello');
     expect(result[0.91]).not.toBe('Hello');
   }, 240000);
@@ -86,4 +88,37 @@ describe('the chapter scenes as drawings', () => {
     const r = remixDef(emptyWorkspace(), d);
     expect('error' in r ? r.error : '').toBe('');
   }, 120000);
+});
+
+describe('the two-computer panel driver', () => {
+  const make = () => {
+    const def = twoComputers(words(uartChatSource(2)), words(uartChatSource(2, true)));
+    const sim = new DualSim(flatten(def));
+    sim.preferFast = true; sim.reset('zero');
+    for (const p of ['clkA', 'clkB', 'noiseAB', 'noiseBA']) sim.setInput(p, 0);
+    sim.settle(); sim.prepare(); sim.settle();
+    return { sim, d: new TwoDrive(sim) };
+  };
+  it('Glitch A to B flips the A to B wire and leaves the B to A wire alone', () => {
+    const { sim, d } = make();
+    for (let i = 0; i < 100; i++) d.edge();
+    d.glitch(6);
+    const noiseBA: number[] = [];
+    for (let i = 0; i < 40; i++) { d.edge(); noiseBA.push(sim.getInput('noiseBA')); }
+    expect(d.lineAB.includes(0)).toBe(true); // the glitch: an idle line (1) driven to 0
+    expect(d.lineBA.every((v) => v === 1)).toBe(true);
+    expect(noiseBA.every((v) => v === 0)).toBe(true);
+  }, 120000);
+  it('edges of the stage own clock (A alone) are counted and the A console is read as it prints', async () => {
+    const { sim, d } = make();
+    d.type('A', 'x'); d.type('B', 'y');
+    for (let i = 0; i < 4000; i++) { d.edge(); if (i % 1000 === 0) await tick(); }
+    expect(d.text.A).toBe('y');
+    expect(d.text.B).toBe('x');
+    // now only A runs, as the bar's Pulse or Step would, through the external hooks
+    d.type('B', 'z');
+    for (let i = 0; i < 3000; i++) { d.externalBefore(); sim.settle(); sim.setInput('clkA', 1); sim.settle(); sim.setInput('clkA', 0); sim.settle(); d.externalAfter(); if (i % 1000 === 0) await tick(); }
+    expect(d.eA).toBeGreaterThan(3000);
+    expect(d.eB).toBeLessThan(d.eA);
+  }, 240000);
 });

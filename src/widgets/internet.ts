@@ -459,7 +459,7 @@ export function fetchWidget(): Widget {
     el: h('div', { class: 'widget rt-w' }, sk.el,
       h('div', { class: 'ln-presets' }, check('Name already in the resolver\'s cache', dnsCached, (v) => { dnsCached = v; paint(); }), check('A copy of the site at the access provider', near, (v) => { near = v; paint(); }), check('TLS', tls, (v) => { tls = v; paint(); })),
       bar, rows, read,
-      h('p', { class: 'sub' }, 'No loss, one connection, one object. A real page is many objects, and chapter 52 is what happens when a segment is lost.')),
+      h('p', { class: 'sub' }, 'No loss, one connection, one object. A real page is many objects, and ', h('a', { href: '#/c/tcp' }, 'chapter 52'), ' is what happens when a segment is lost.')),
   };
 }
 

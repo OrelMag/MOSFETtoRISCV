@@ -169,6 +169,8 @@ export class MacRx {
     this.valid = 0; this.last = 0; this.err = 0; this.why = 0; this.drop = 0;
     this.rq = i.rxd;
     if (idle) {
+      // nothing of the last frame stays behind: its final byte and the first preamble bit could look like an SFD
+      this.sh = 0;
       if (cr) { this.hunt = 1; this.ph = 1; this.bit = 0; } else this.ph = 0;
       return;
     }

@@ -4,7 +4,8 @@ import { BusModel } from '../src/bus/model';
 import { busComputer, socDevices, type SocOptions } from '../src/lib/soc';
 import { assemble } from '../src/riscv/asm';
 import { ISS } from '../src/riscv/iss';
-import { UART_COSTS, uartCostIrq, uartCostPoll, uartPollSource } from '../src/riscv/uartprograms';
+import { RxFeeder } from '../src/comm/uartdrive';
+import { UART_COSTS, uartCostIrq, uartCostPoll, uartIrqSource, uartPollSource } from '../src/riscv/uartprograms';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { pack } from '../src/sim/values';
@@ -114,4 +115,24 @@ describe('polling against interrupts, measured on the gates (riscv/uartprograms.
     expect(r.irq.handler / 8).toBe(UART_COSTS.handlerPerByte);
     expect(Math.round((1000 * r.irq.free) / r.irq.cycles)).toBe(UART_COSTS.freePermille);
   }, 240000);
+});
+
+describe('Send to rx on a fresh scene', () => {
+  it('"Hello" queued at cycle 0 waits for the program to set the divisor and arrives intact', async () => {
+    const o: SocOptions = { imemK: IMEM_K, ramK: RAM_K, uart: true };
+    const sim = new GateSim(flatten(busComputer(words(uartIrqSource(2)), [0], o)));
+    sim.reset('zero'); sim.setInput('clk', 0); sim.setInput('switches', 0); sim.setInput('uartRx', 1); sim.settle();
+    const root = sim.design.root, core = root.children!.get('uart')!.children!.get('core')!;
+    const out = (p: string) => pack(sim.getBits(root.ports[p]));
+    const f = new RxFeeder(1);
+    f.send('Hello');
+    let cons = '';
+    for (let c = 0; c < 6000; c++) {
+      sim.setInput('uartRx', f.level(pack(sim.getBits(core.ports.div)))); sim.settle();
+      if (out('consoleValid') === 1) cons += String.fromCharCode(out('consoleData'));
+      sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle();
+      if (c % 3000 === 0) await tick();
+    }
+    expect(cons).toBe('Hello');
+  }, 120000);
 });

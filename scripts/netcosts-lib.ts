@@ -3,7 +3,7 @@
 // transactions. Shared by scripts/net-costs.ts (--write saves src/comm/stack/netcosts.json) and tests/comm-net-costs.test.ts (pins the file).
 
 import { DEFAULT_STACK } from '../src/comm/stack/all';
-import { hostApp, pingApp } from '../src/comm/stack/apps';
+import { hostApp, PING_DATA, pingApp } from '../src/comm/stack/apps';
 import { stackProgram, type StackBuild } from '../src/comm/stack';
 import { lanComputers } from '../src/lib/lan';
 import { macRx, macTx } from '../src/lib/ethernet';
@@ -25,6 +25,8 @@ export interface LanCosts {
   /** Clock at which the first ARP request left computer A, and at which A printed its first reply line; the round trip A printed. */
   clocksToFirstReply: number;
   rtt: number;
+  /** Intervals [first clock, clock after the last] in which each link carried a frame: computer A's transmitter, the switch's port to B, B's transmitter, the switch's port to A (txen / carrier sense pins). */
+  wire: Record<'aTx' | 'toB' | 'bTx' | 'toA', [number, number][]>;
   words: { a: number; b: number };
   /** Per computer, per layer (eth, arp, ip, icmp, app, runtime) and per function. */
   layers: Record<'a' | 'b', Record<string, Cost>>;
@@ -47,7 +49,7 @@ function functionTable(sb: StackBuild): { name: string; at: number }[] {
 }
 
 export async function measureLan(pings = 1, tick: () => Promise<void> = async () => {}, maxClocks = 120000): Promise<LanCosts> {
-  const A = stackProgram(DEFAULT_STACK, pingApp(pings, 32)), B = stackProgram(DEFAULT_STACK, hostApp());
+  const A = stackProgram(DEFAULT_STACK, pingApp(pings, PING_DATA)), B = stackProgram(DEFAULT_STACK, hostApp());
   if (A.compiled.error || B.compiled.error) throw new Error('the stack does not compile');
   const sim = new DualSim(flatten(lanComputers(A.compiled.words, B.compiled.words)));
   sim.preferFast = true;
@@ -94,6 +96,10 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
   const poll = { a: A.compiled.assembled!.labels as Map<string, number>, b: B.compiled.assembled!.labels as Map<string, number> };
   const at = (r: Record<string, Cost>, k: string) => (r[k] ??= zero());
   let clocksToFirstReply = -1, rtt = 0, c = 0;
+  const wire: LanCosts['wire'] = { aTx: [], toB: [], bTx: [], toA: [] };
+  const pins = { aTx: 'atxenOut', toB: 'bcrsOut', bTx: 'btxenOut', toA: 'acrsOut' } as const;
+  // a pin already high at power-on (a carrier from before the first clock) opens no interval
+  const level: Record<keyof typeof pins, number | undefined> = { aTx: undefined, toB: undefined, bTx: undefined, toA: undefined };
   for (; c < maxClocks; c++) {
     for (const S of ['A', 'B'] as const) if (out(`consoleValid${S}`) === 1) con[S.toLowerCase() as 'a' | 'b'] += String.fromCharCode(out(`consoleData${S}`));
     for (const x of ['a', 'b'] as const) {
@@ -119,6 +125,12 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
       if (get(nn, 'm_awvalid') && get(nn, 'm_awready') && get(nn, 'm_wready')) dma[x].writes++;
       if (startOf[x].get(pc) === 'net_poll') entries[x].push(c);
     }
+    for (const k of Object.keys(pins) as (keyof typeof pins)[]) {
+      const v = out(pins[k]);
+      if (level[k] !== undefined && v && !level[k]) wire[k].push([c, c]);
+      if (level[k] && !v && wire[k].length && wire[k][wire[k].length - 1][0] === wire[k][wire[k].length - 1][1]) wire[k][wire[k].length - 1][1] = c;
+      level[k] = v;
+    }
     sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle();
     if (c % 5000 === 0) await tick();
     if (clocksToFirstReply < 0 && con.a.includes('time=')) clocksToFirstReply = c;
@@ -130,7 +142,7 @@ export async function measureLan(pings = 1, tick: () => Promise<void> = async ()
   // one pass of the polling loop when idle: the shortest gaps between entries into net_poll (the frame-handling passes are longer)
   const gaps = (e: number[]) => { const g = e.slice(1).map((v, i) => v - e[i]).sort((x, y) => x - y); return g.length ? g[Math.floor(g.length / 2)] : 0; };
   return {
-    windows, clocksToFirstReply, rtt, words: { a: A.compiled.words.length, b: B.compiled.words.length }, layers, functions, dma,
+    windows, clocksToFirstReply, rtt, wire, words: { a: A.compiled.words.length, b: B.compiled.words.length }, layers, functions, dma,
     pollPass: { a: gaps(entries.a), b: gaps(entries.b) }, console: con,
   };
 }

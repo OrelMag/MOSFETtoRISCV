@@ -87,17 +87,42 @@ print(ones_sum(4200, 20, 0), (~ones_sum(4200, 20, 0)) & 0xffff)
 
   it('ICMP: a bad ICMP checksum, a bad IP checksum, another destination, a fragment and a short header are all dropped', () => {
     const corrupt = (f: number[], at: number, v: number) => f.map((x, k) => (k === at ? v : x));
+    // the header words of ECHO_REQ sum to d929 (its checksum 26d6). A case that changes a field of the header has the checksum worked again by hand, so
+    // that the field alone is what the stack can object to: destination 0a00 0009: d930, checksum 26cf; flags 6000 (DF and MF): f929, checksum 06d6;
+    // TTL 41: da29, checksum 25d6 (the control: a valid header with another TTL is answered)
+    const withCsum = (f: number[], hi: number, lo: number) => corrupt(corrupt(f, 14 + 10, hi), 14 + 11, lo);
     const cases: Record<string, number[]> = {
       icmpCsum: corrupt(ECHO_REQ, 14 + 20 + 2, 0x99 ^ 1),
       ipCsum: corrupt(ECHO_REQ, 14 + 10, 0x27),
-      otherDst: corrupt(ECHO_REQ, 14 + 19, 9),
-      fragment: corrupt(ECHO_REQ, 14 + 6, 0x60),
+      otherDst: withCsum(corrupt(ECHO_REQ, 14 + 19, 9), 0x26, 0xcf),
+      fragment: withCsum(corrupt(ECHO_REQ, 14 + 6, 0x60), 0x06, 0xd6),
       notV4: corrupt(ECHO_REQ, 14, 0x65),
     };
+    const ttl41 = withCsum(corrupt(ECHO_REQ, 14 + 8, 0x41), 0x25, 0xd6);
+    for (const r of Object.values(both(`${NET_INIT_B}
+${inject(0, ARP_REQ)}
+${inject(1, ttl41)}
+net_poll()
+net_poll()
+`))) expect(r.txWord[1], 'control: a valid header with TTL 0x41').toBe((0x80000000 | 50) >>> 0);
     for (const [name, f] of Object.entries(cases)) {
       const app = `${NET_INIT_B}\n${inject(0, ARP_REQ)}\n${inject(1, f)}\nnet_poll()\nnet_poll()\n`;
       const { i, s } = both(app);
       for (const r of [i, s]) expect(r.txWord[1], name).toBe(0);
+    }
+  });
+
+  it('ICMP: nothing learns from a packet\'s source: an echo request from a host we have not ARPed is not answered, an ARP request goes out in its place', () => {
+    const { i, s } = both(`${NET_INIT_B}
+${inject(0, ECHO_REQ)}
+net_poll()
+print(arp_find(0x0a000001))
+`);
+    for (const r of [i, s]) {
+      expect(r.output).toEqual([-1]);
+      expect(r.tx(0, 42).slice(0, 14)).toEqual(hex(`ffffffffffff ${B_MAC} 0806`)); // a broadcast ARP request from B
+      expect(r.tx(0, 42).slice(14 + 6, 14 + 8)).toEqual([0, 1]);
+      expect(r.txWord[1]).toBe(0);
     }
   });
 

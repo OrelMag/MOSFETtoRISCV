@@ -35,7 +35,7 @@ describe('chapter 47 typed numbers', () => {
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeGreaterThan(3.5);
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeLessThan(4.5);
   });
-  it('is chapter 47, fourteen steps, between the clocks chapter and the appendices', () => {
+  it('is chapter 47, fourteen steps, after what it builds on, with the appendices after every numbered chapter', () => {
     expect(chErrors.num).toBe(47);
     expect(chErrors.steps).toHaveLength(14);
     expect(chapterById('errors')).toBe(chErrors);

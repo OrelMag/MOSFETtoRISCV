@@ -236,7 +236,7 @@ function moduleText(def: ComponentDef, nameOf: (d: ComponentDef) => string, opts
       continue;
     }
     if (isExternal(c)) {
-      lines.push(`  // ${inst.name}: ${c.name} (a sandbox part outside the circuit, not hardware): its outputs are left undriven`);
+      lines.push(`  // ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium, not transistors and not synthesizable: on hardware it is a wire' : 'a sandbox part outside the circuit, not hardware'}): its outputs are left undriven`);
       continue;
     }
     let iname = ident(inst.name, 'u');

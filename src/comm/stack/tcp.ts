@@ -34,6 +34,7 @@ fin_in = 0
 fin_want = 0
 ack_pending = 0
 tw_at = 0
+probing = 0
 tcp_mss = ${K.MSS}
 cwnd = ${2 * K.MSS}
 ssthresh = ${K.SND}
@@ -62,7 +63,7 @@ seg_skip = 0
 
 def tcp_reset():
     global snd_una, snd_nxt, snd_max, snd_end, rcv_nxt, rcv_read, tcp_mss, cwnd, ssthresh, acc, dupacks
-    global srtt, rttvar, rto, rto_on, rtt_on, retries, fin_want, fin_in, ack_pending
+    global srtt, rttvar, rto, rto_on, rtt_on, retries, fin_want, fin_in, ack_pending, probing
     snd_una = 0
     snd_nxt = 0
     snd_max = 0
@@ -83,6 +84,7 @@ def tcp_reset():
     fin_want = 0
     fin_in = 0
     ack_pending = 0
+    probing = 0
 
 def tcp_drop():
     global tcp_st
@@ -234,11 +236,12 @@ def tcp_output(t):
     return 0
 
 def tcp_timeout():
-    global rto_on, rto, snd_nxt, snd_max, retries, tcp_err, ssthresh, cwnd, acc, dupacks, rtt_on
+    global rto_on, rto, snd_nxt, snd_max, retries, tcp_err, ssthresh, cwnd, acc, dupacks, rtt_on, probing
     rto_on = 0
     if tcp_st >= 4 and snd_wnd == 0 and (snd_nxt - snd_una) <= 1 and (snd_end - snd_una) > 0:
         # the zero-window probe, the same byte each time: past the window, so its going unanswered is no loss. Nothing is cut and it never gives up
         snd_nxt = snd_una
+        probing = 1
         if tcp_emit(16, snd_nxt, 1, 20):
             snd_nxt = snd_nxt + 1
             if (snd_max - snd_nxt) < 0:
@@ -481,7 +484,7 @@ def tcp_take_data(t):
 
 # a connection that has seen both SYNs (RFC 9293 section 3.10.7.4, with RFC 5961's rules for a reset and a SYN)
 def tcp_in_sync(t):
-    global tcp_err, ack_pending, seg_seq, seg_len, seg_skip, snd_una, tcp_st, retries, snd_wnd, wl1, wl2, rto_on, tw_at
+    global tcp_err, ack_pending, seg_seq, seg_len, seg_skip, snd_una, snd_nxt, tcp_st, retries, snd_wnd, wl1, wl2, rto_on, tw_at, probing
     if seg_flags & 4:
         if seg_seq == rcv_nxt:
             tcp_err = 1
@@ -498,6 +501,9 @@ def tcp_in_sync(t):
         return tcp_output(t)
     if (seg_flags & 16) == 0:
         return 0
+    # our last ACK was lost, and the far end has sent its FIN again: 2 MSL starts over
+    if tcp_st == 10 and (seg_flags & 1):
+        tw_at = t + ${K.TIME_WAIT}
     # only the next byte is taken: what lies ahead is dropped, what was seen already is cut off
     d = rcv_nxt - seg_seq
     if d < 0 or (d > 0 and d >= seg_len + (seg_flags & 1)):
@@ -523,10 +529,18 @@ def tcp_in_sync(t):
         ack_pending = 1
         return tcp_output(t)
     tcp_ack_field(t)
+    shut = snd_wnd == 0
     if (wl1 - seg_seq) < 0 or (wl1 == seg_seq and (wl2 - seg_ack) <= 0):
         snd_wnd = seg_wnd
         wl1 = seg_seq
         wl2 = seg_ack
+    # the window has opened: what timed the wait for that must not time the data sent now
+    if shut and snd_wnd > 0:
+        rto_on = 0
+    # and carry on from what was acknowledged, the probe's byte included if it was refused
+    if probing and snd_wnd > 0:
+        probing = 0
+        snd_nxt = snd_una
     if fin_want and snd_una == snd_end + 1:
         if tcp_st == 5:
             tcp_st = 6

@@ -3,6 +3,7 @@ import { AND, cmosNand, cmosNor, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR, N
 import { metrics, MOBILITY_RATIO, strength, vout } from '../phys/inverter';
 import { chainDelay, FO4_TAU, P_INV, PS_PER_TAU } from '../phys/sizing';
 import { and4Tree, and4Wide, gNand, gNor, pGate } from '../phys/effort';
+import { mosfet3d, withModel } from '../widgets/modelhost';
 import { sizingWidget } from '../widgets/sizing';
 import { vtcWidget } from '../widgets/vtc';
 import {
@@ -37,8 +38,8 @@ export const chMap: Chapter = {
         are 1) but never its insides, so a designer working on an adder thinks in gates and needs no transistor in mind. The price of the rule is
         that every level adds overhead the one above cannot see; the benefit is that the descriptions stay small enough to hold in a head. Each chapter
         here ends by pricing what it built in the level below, so you can see both sides.</p>
-        <div class="note">The ladder of abstraction is the whole journey, from the transistor on its bottom rung upward. Each rung
-        lists what it is made of; a click opens the chapter that builds it.</div>`,
+        <div class="note">The map below is the whole journey, in reading order, by section. Each row
+        lists what its chapter builds with; a click opens the chapter.</div>`,
       more: {
         derive: `<p>One number shows why levels are needed. This site's 4-bit adder is ${stats(rca(4)).transistors} transistors; a 32-bit one is ${stats(rca(32)).transistors}, and each
           doubling of width doubles the count. A processor is ${stats(rca(32)).transistors} transistors times thousands of such blocks: no one can hold that in mind transistor by
@@ -189,7 +190,7 @@ export const chMosfet: Chapter = {
         real: `<p>Vt is set by the doping and the oxide, and it varies from device to device and with temperature. The square law in the panel is the textbook model of a long channel; the next step lists where it fails in
           the short ones of a modern chip.</p>`,
       },
-      widget: () => mosfetWidget({ type: 'n', allowTypeSwitch: false }),
+      widget: () => withModel(mosfetWidget({ type: 'n', allowTypeSwitch: false }), mosfet3d()),
     },
     {
       title: 'Three regions',
