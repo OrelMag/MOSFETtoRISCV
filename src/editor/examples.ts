@@ -479,7 +479,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'twocomputers-switch', group: 'computers', short: 'Two computers with NICs and a learning switch.', name: 'Two computers on a switch',
-    blurb: 'The last scene of chapter 50: two RV32I bus cores, each with a boot ROM, RAM and a NIC (descriptor rings, DMA, a MAC), joined by a four-port learning switch. A sends B a frame saying ping, B answers pong; open the switch and select it to watch it learn. Slow: about 10 000 clocks a round trip.',
+    blurb: 'The last scene of chapter 50: two RV32I bus cores, each with a boot ROM, RAM and a NIC (descriptor rings, DMA, a MAC), joined by a four-port learning switch. A sends B a frame and B answers it, three times; open the switch and select it to watch it learn. Slow: about 10 000 clocks a round trip.',
     build: (id, n, _sub, docs) => lanTopChip(id, n, { a: docs.a, b: docs.b, sw: docs.sw }),
     subchips: {
       a: { name: 'Computer A', build: (id, n) => lanComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => lanComputerChip(id, n, 'B') },

@@ -920,6 +920,10 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  it, so a build of your own branch must too, or the smoke's failed-request check fails; not in the service worker's precache: only
                  assets/ is); tests/example-gallery.test.ts: every example has a group, card line and blurb, the filter, a drawing each; the smoke's
                  GALLERY_DRIVE opens it (phone: via More), searches, checks every thumbnail loaded, arrows, Esc
+  commparts.ts   the Communication palette group's table COMM_PARTS (line, UART core / slave, NIC `nic_b`, MAC RX / TX, switch `ethswitch_…` with its options in the id, SPI controller `axi_spi_b`, SPI memory: each resolves by id
+                 in lib/resolve.ts, built on first use and never registered at import; only the line is a model), and the readers of the property sections (netOf / bitNamed:
+                 an expanded node's nets by name; nicView, switchTable from the table's two RAM leaves); commui.ts the sections (live state, the switch's options as ids);
+                 examplecomms.ts Examples ▸ Two computers on a wire; examplenet.ts … on a switch (NICs, MAC pairs, switch; raw frames from short assembly)
   examples.ts    EXAMPLES (each with group, short, blurb, drawer: new ones need all three; fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer

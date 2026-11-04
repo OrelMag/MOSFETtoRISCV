@@ -27,6 +27,11 @@ import { breathe } from './setup';
 const atLoad = new Set(registry.keys());
 const EX = EXAMPLES.find((e) => e.id === 'twocomputers-switch')!;
 
+// nothing large is registered at import: tests/editor-unravel.test.ts round-trips every registered part, and never finishes on the LAN
+it('registers none of the NIC, the MACs, the switch or the SPI slave at import', () => {
+  expect([...atLoad].filter((k) => /^(nic|eth_mac_|ethswitch_|axi_spi|lan_|eth_station|eth_segment)/.test(k))).toEqual([]);
+});
+
 function open() {
   const { ws, id } = addExample(emptyWorkspace(), EX);
   const lib = new UserLibrary(ws);

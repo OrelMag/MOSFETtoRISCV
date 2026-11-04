@@ -236,7 +236,7 @@ function switchProps(ed: Editor, p: PartDoc): HTMLElement {
     row('Table', totals, 'Learned: new sources stored; evicted: a live entry replaced by another address that hashes to the same slot; flooded: frames sent to every other port (miss or group address); filtered: frames whose destination is on the port they came from'),
     h('p', { class: 'sb-sum' }, `The learned table (${2 ** o.tableK} slots, an address hashed to one; an entry stays live ${TABLE_LIVE} ticks of ${2 ** o.tickLog2} clocks and is refreshed whenever the address is seen as a source):`), tbl, note,
     h('p', { class: 'sb-sum' }, 'Each port is a byte stream in and out, not a cable: join a MAC RX (its data, valid, last, err to rxData, rxValid, rxLast, rxErr) and a MAC TX (txData, txValid, txLast to its data, valid, last, and its ready back to txReady) to every port you use; tie an unused port\'s rxValid, rxLast, rxErr low and its txReady high. Open the switch for the input buffers, the table port and table, the crossbar and the output arbiters, down to gates.'));
-  let lastTbl = '', lastPorts = '';
+  let lastTbl: string | null = null, lastPorts = '';
   liveUntil(out, () => {
     const node = nodeOf(ed, p.id), sim = ed.sim.sim;
     if (!node || !sim || !node.def.id.startsWith('ethswitch_')) { set(totals, '–'); return; }
