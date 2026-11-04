@@ -389,7 +389,7 @@ export function switchId(opts: Partial<SwitchOpts> = {}): string {
 
 /** The options an id names (null when it names none the switch can be built with). */
 export function switchOptsOf(id: string): SwitchOpts | null {
-  const m = id.match(/^ethswitch_(d+)(?:_(d+))?([vf])([cs])_(d+)_(d+)$/);
+  const m = id.match(/^ethswitch_(\d+)(?:_(\d+))?([vf])([cs])_(\d+)_(\d+)$/);
   if (!m) return null;
   const o: SwitchOpts = { cellK: +m[1], cells: m[2] ? +m[2] : 4, voq: m[3] === 'v', cut: m[4] === 'c', tableK: +m[5], tickLog2: +m[6] };
   const ok = o.cellK >= 5 && o.cellK <= 11 && [2, 4, 8, 16].includes(o.cells) && o.tableK >= 2 && o.tableK <= 7 && o.tickLog2 >= 1 && o.tickLog2 <= 8;

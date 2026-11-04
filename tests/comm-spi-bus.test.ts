@@ -14,7 +14,6 @@ import type { ComponentDef, PortDef } from '../src/sim/types';
 import { tick } from './yieldtick';
 
 const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, clock });
-const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 
 /** The controller and a memory on SCLK, MOSI, MISO and CS, the bus pins out to the test. */
 function bench(withMemory: boolean): ComponentDef {

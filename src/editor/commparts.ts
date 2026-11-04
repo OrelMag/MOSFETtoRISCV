@@ -28,8 +28,8 @@ export interface CommPart {
 }
 
 export const LINE_DEFAULT = 2;
-/** The switch the palette places: chapter 50's (cells of 128 bytes, two a port: a frame up to 128 bytes, a small simulation); the properties change it. */
-export const SANDBOX_SWITCH: Partial<SwitchOpts> = { cellK: 7, cells: 2 };
+/** The switch the palette places: chapter 50's cells (128 bytes, two a port: a frame up to 128 bytes, a small simulation) with a slower age tick (an entry lives 64 · 256 clocks, so it outlasts a ping and its pong); the properties change it. */
+export const SANDBOX_SWITCH: Partial<SwitchOpts> = { cellK: 7, cells: 2, tickLog2: 8 };
 export const LINE_MODEL = 'A model of a cable (chapter 41), the one box here that does not end in transistors: opening it shows its panel, not a circuit. It costs nothing, and the exports say so: Verilog leaves it as a comment, and the FPGA export turns d into an output and q into an input of the top module (join them with a wire on the board).';
 
 const isLib = (ref: PartRef, f: (id: string) => boolean) => 'lib' in ref && f(ref.lib);
@@ -140,7 +140,11 @@ export function bitsNamed(sim: BitReader, node: HierNode | undefined, base: stri
 }
 
 /** One bit by net name (-1: X, Z or missing). */
-export const bitNamed = (sim: BitReader, node: HierNode | undefined, name: string): number => bitsNamed(sim, node, name, 1) < 0 ? -1 : bitsNamed(sim, node, name, 1);
+export function bitNamed(sim: BitReader, node: HierNode | undefined, name: string): number {
+  const nets = netOf(node, name);
+  const b = nets ? sim.getBits(nets)[0] : undefined;
+  return b === 0 || b === 1 ? b : -1;
+}
 
 /** The first net of a node whose name starts `<base><digit>`, per digit (the transmit head's names carry the signal's number: head0_1285). */
 function headNets(node: HierNode | undefined): number[][] | null {
@@ -148,7 +152,7 @@ function headNets(node: HierNode | undefined): number[][] | null {
   if (!m || !node?.nets) return null;
   const out: number[][] = [];
   for (let d = 0; d < 3; d++) {
-    const i = m.findIndex((n) => n.name !== undefined && new RegExp(`^head${d}(_\d+)?$`).test(n.name));
+    const i = m.findIndex((n) => n.name !== undefined && new RegExp('^head' + d + '(_[0-9]+)?$').test(n.name));
     if (i < 0) return null;
     out.push(node.nets[i]);
   }
