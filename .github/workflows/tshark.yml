@@ -1,0 +1,53 @@
+name: tshark oracle
+
+# Does tshark read what Save capture writes? Each chapter's capture, from the gates and the chapters' own frames, is decoded by tshark and every frame held to
+# what its bytes claim: fields, protocols, every checksum verified good, nothing malformed, no warnings (scripts/tshark-oracle.ts; roadmap Phase 21,
+# decision 5). Captures broken on purpose must be caught. The .pcap files, tshark's output and a summary are kept as an artifact, on failure too.
+on:
+  push:
+    paths:
+      - 'src/comm/pcap.ts'
+      - 'src/comm/netframes.ts'
+      - 'src/comm/ethframe.ts'
+      - 'src/comm/mac.ts'
+      - 'src/comm/ethswitch.ts'
+      - 'src/comm/stack/**'
+      - 'src/widgets/ethernet.ts'
+      - 'src/widgets/ethernet2.ts'
+      - 'src/widgets/ethswitch.ts'
+      - 'src/widgets/net.ts'
+      - 'scripts/tshark-oracle.ts'
+      - 'scripts/tshark-lib.ts'
+      - 'tests/tshark-oracle.test.ts'
+      - '.github/workflows/tshark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tshark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: tshark
+        run: |
+          echo 'wireshark-common wireshark-common/install-setuid boolean false' | sudo debconf-set-selections
+          sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y tshark
+          tshark --version | head -2
+      - run: npm ci
+      - name: The comparison, without tshark
+        run: npx vitest run tests/tshark-oracle.test.ts
+      - name: Compare
+        run: npx vite-node scripts/tshark-oracle.ts --out tshark-report
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tshark-report
+          path: tshark-report
+          if-no-files-found: ignore

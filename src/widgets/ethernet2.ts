@@ -18,6 +18,12 @@ import { slider } from './mosparts';
 
 const C_LIGHT = 299792458;
 const utf8 = (t: string): number[] => Array.from(new TextEncoder().encode(t));
+
+/** What the panel queues: station f's message, for station t or everyone. The tshark oracle reads these too. */
+export function segmentFrame(f: number, t: number | 'all', txt: string): number[] {
+  const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
+  return frameBody(spec);
+}
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 const us = (clocks: number): string => `${((clocks * CLOCK_NS) / 1000).toFixed(2)} µs`;
 
@@ -234,10 +240,7 @@ export function segmentScene(): Scene {
       const loop = new Loop(stage, step, () => paint(), 150, 30);
       const runBtn = btn('Run', 'Run the clock', () => runPause(!loop.running), 'btn sm primary');
       const runPause = (on: boolean) => { if (on && !loop.running) loop.start(); else if (!on && loop.running) loop.stop(); runBtn.textContent = loop.running ? 'Pause' : 'Run'; };
-      const frameFor = (f: number, t: number | 'all', txt: string): number[] => {
-        const spec: FrameSpec = { dst: t === 'all' ? BROADCAST : ethStationMac(t), src: ethStationMac(f), type: ETHERTYPE_IPV4, payload: utf8(txt).slice(0, MAX_PAYLOAD) };
-        return frameBody(spec);
-      };
+      const frameFor = segmentFrame;
       const queue = (f: number, t: number | 'all', txt: string) => {
         queues[f].push(frameFor(f, t, txt));
         note(`station ${f + 1}: ${txt.length} bytes for ${t === 'all' ? 'everyone' : `station ${t + 1}`} queued (${queues[f].length} waiting)`);
