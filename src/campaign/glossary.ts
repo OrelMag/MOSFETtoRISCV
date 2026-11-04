@@ -40,10 +40,18 @@ export const ALIASES: Record<string, string[]> = {
   booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'],
   clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
   tristate: ['tri-state', 'tri-state buffer', 'tri-state driver', 'tristate'], bin2dec: ['double dabble'],
+  // Communication (codexcomm.ts)
+  shannon: ['Shannon', 'Nyquist'], reflection: ['reflection', 'series termination', 'parallel termination'], cdc: ['clock-domain crossing', 'clock domain crossing'],
+  asyncfifo: ['asynchronous FIFO'], qam: ['QAM', '16-QAM', 'QPSK'], ofdm: ['OFDM'], linecode: ['8b/10b', '64b/66b', 'Manchester', 'line code'],
+  cdr: ['clock recovery', 'clock and data recovery'], eye: ['eye diagram', 'intersymbol interference'], equalization: ['equalizing'],
+  arq: ['ARQ', 'go-back-N', 'selective repeat', 'stop-and-wait'], viterbi: ['Viterbi', 'convolutional code'], reedsolomon: ['Reed-Solomon', 'Reed–Solomon'],
+  interleave: ['interleaver'],
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
-const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract']);
+const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract',
+  // acronyms the CPU chapters name as examples long before the Communication chapters teach them (registers, memory, io, widths, ooo)
+  'uart', 'spi', 'crc']);
 
 /** Entries whose names mean something else before the GPU chapters: a loom's warp, a byte lane, an energy barrier. */
 const GPU_ONLY = ['warp', 'lane', 'barrier'];

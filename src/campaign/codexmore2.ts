@@ -249,6 +249,7 @@ flip 6 and 9:     syndrome 6⊕9 = 15, parity even → double</pre>Here: encoder
     compare: ['hamenc8', 'hamdec8'],
     chapters: [
       { chapter: 'cache', step: 4, label: 'Errors and ECC' },
+      { chapter: 'errors', step: 1, label: 'Locating the error' },
     ],
   },
 
@@ -382,6 +383,8 @@ two flip-flops, ~0.95 ns:         e^47.5 / 2e5 ≈ 2 × 10^15 s, about 67 millio
     chapters: [
       { chapter: 'latches', step: 1, label: 'The forbidden input, and races' },
       { chapter: 'registers', step: 3, label: 'Asynchronous reset' },
+      { chapter: 'clocks', step: 4, label: 'Metastability' },
+      { chapter: 'clocks', step: 5, label: 'The two-flop synchronizer' },
     ],
   },
 
