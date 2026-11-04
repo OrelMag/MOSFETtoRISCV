@@ -28,7 +28,7 @@ export const I2C_PAD: ComponentDef = define({
   netlist: () => ({
     level: 'switch',
     pins: { low: [1, 6], bus: [14, 20], rx: [38, 6] },
-    pinDirs: { bus: 'down' },
+    pinDirs: { bus: 'up' },
     instances: [
       { name: 'n', def: NMOS, at: [10, 8] },
       { name: 'gnd', def: GND, at: [12, 16] },

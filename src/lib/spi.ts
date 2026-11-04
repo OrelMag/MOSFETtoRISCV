@@ -2,13 +2,15 @@
 // 25-series command set. Both are written with lib/rtl.ts, so they are NAND gates and the library's flip-flops in boxes of their
 // own; comm/spi.ts holds the models the tests compare them with every cycle.
 
+import { symbolGeom } from '../sim/geometry';
+import { OR, NOT } from './gates';
 import { Rtl } from './rtl';
 import { bigRam } from './bigmem';
 import { define } from './define';
 import { edgeKind, peerMiso, type SpiMode } from '../comm/spi';
 import { simulate } from '../sim/harness';
 import { pack } from '../sim/values';
-import type { ComponentDef } from '../sim/types';
+import type { ComponentDef, NetDef } from '../sim/types';
 
 let master: ComponentDef | undefined;
 
@@ -122,25 +124,60 @@ export { define };
 let pair: ComponentDef | undefined;
 
 /**
- * Chapter 44's scene: one master and two memories on the four shared wires (SCLK, MOSI, MISO) and a chip select each. `sel` picks
- * which CS follows the master's; mode3 sets CPOL = CPHA (the memories take mode 0 or 3).
+ * Chapter 44's scene: one master and two 256-byte memories on SCLK, MOSI and MISO, with a chip select each: `sel` chooses which
+ * select follows the master's; mode3 sets CPOL = CPHA (the memories take mode 0 or 3). Placed by hand: the master left, the two
+ * memories right, the select glue between, every wire a net label.
  */
 export function spiPair(): ComponentDef {
   if (pair) return pair;
-  const m = new Rtl({
-    id: 'spi_pair', name: 'SPI master with two memories', category: 'cell', label: 'SPI bus',
+  const M = spiMaster(), D = spiDevice();
+  const mg = symbolGeom(M), dg = symbolGeom(D), og = symbolGeom(OR), ng = symbolGeom(NOT);
+  const mx = 22, my = 4, gx = 52, dx = 70, dy0 = 4, dy1 = dy0 + dg.h + 10;
+  const pm = (p: string): [number, number] => [mx + mg.ports[p].pos[0], my + mg.ports[p].pos[1]];
+  const pins: Record<string, [number, number]> = {};
+  for (const p of ['rst', 'start', 'hold', 'tx']) pins[p] = [0, pm(p)[1]];
+  pins.clk = [pm('clk')[0], my + mg.h + 5];
+  pins.mode3 = [0, pm('cpol')[1]];
+  pins.sel = [0, my + mg.h + 6];
+  const W = dx + dg.w + 22;
+  const rightY = (p: string) => pm(p)[1];
+  for (const p of ['rx', 'busy', 'done', 'sclk', 'mosi']) pins[p] = [W, rightY(p)];
+  pins.cs0_n = [W, dy0 + dg.ports.cs_n.pos[1]]; pins.cs1_n = [W, dy1 + dg.ports.cs_n.pos[1]];
+  pins.miso = [W, dy1 + dg.h + 6];
+  const gy = my + mg.h + 4;
+  const instances = [
+    { name: 'master', def: M, at: [mx, my] as [number, number], label: 'controller' },
+    { name: 'nsel', def: NOT, at: [gx, gy + 6] as [number, number] },
+    { name: 'or0', def: OR, at: [gx, gy] as [number, number], label: 'CS 0' },
+    { name: 'or1', def: OR, at: [gx + 8, gy + 6] as [number, number], label: 'CS 1' },
+    { name: 'mem0', def: D, at: [dx, dy0] as [number, number], label: 'memory 0' },
+    { name: 'mem1', def: D, at: [dx, dy1] as [number, number], label: 'memory 1' },
+    { name: 'orm', def: OR, at: [gx + 8, dy1 + dg.h + 4] as [number, number], label: 'MISO' },
+  ];
+  void og; void ng;
+  const nets: NetDef[] = [
+    { name: 'clk', ends: ['clk', 'master.clk'] }, { name: 'rst', ends: ['rst', 'master.rst'] }, { name: 'start', ends: ['start', 'master.start'] },
+    { name: 'hold', ends: ['hold', 'master.hold'] }, { name: 'tx', ends: ['tx', 'master.tx'] }, { name: 'mode3', ends: ['mode3', 'master.cpol', 'master.cpha'], tags: true },
+    { name: 'sel', ends: ['sel', 'or0.b', 'nsel.a'], tags: true }, { name: 'nsel', ends: ['nsel.y', 'or1.b'], tags: true },
+    { name: 'cs_n', ends: ['master.cs_n', 'or0.a', 'or1.a'], tags: true },
+    { name: 'cs0_n', ends: ['or0.y', 'mem0.cs_n', 'cs0_n'], tags: true }, { name: 'cs1_n', ends: ['or1.y', 'mem1.cs_n', 'cs1_n'], tags: true },
+    { name: 'sclk', ends: ['master.sclk', 'mem0.sclk', 'mem1.sclk', 'sclk'], tags: true }, { name: 'mosi', ends: ['master.mosi', 'mem0.mosi', 'mem1.mosi', 'mosi'], tags: true },
+    { name: 'miso0', ends: ['mem0.miso', 'orm.a'], tags: true }, { name: 'miso1', ends: ['mem1.miso', 'orm.b'], tags: true },
+    { name: 'miso', ends: ['orm.y', 'master.miso', 'miso'], tags: true },
+    { name: 'rx', ends: ['master.rx', 'rx'] }, { name: 'busy', ends: ['master.busy', 'busy'] }, { name: 'done', ends: ['master.done', 'done'] },
+  ];
+  pair = define({
+    id: 'spi_pair', name: 'SPI master with two memories', category: 'cell',
     summary: 'A master and two 256-byte SPI memories on SCLK, MOSI and MISO, with a chip select each: sel chooses which one is addressed. MISO is the OR of the two (a real part lets go of the line while its CS is high).',
+    ports: [
+      { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, { name: 'rst', width: 1, dir: 'in' }, { name: 'start', width: 1, dir: 'in' }, { name: 'hold', width: 1, dir: 'in' },
+      { name: 'sel', width: 1, dir: 'in' }, { name: 'mode3', width: 1, dir: 'in' }, { name: 'tx', width: 8, dir: 'in' },
+      { name: 'rx', width: 8, dir: 'out' }, { name: 'busy', width: 1, dir: 'out' }, { name: 'done', width: 1, dir: 'out' },
+      { name: 'sclk', width: 1, dir: 'out' }, { name: 'mosi', width: 1, dir: 'out' }, { name: 'miso', width: 1, dir: 'out' }, { name: 'cs0_n', width: 1, dir: 'out' }, { name: 'cs1_n', width: 1, dir: 'out' },
+    ],
+    symbol: { kind: 'box', label: 'SPI bus' },
+    netlist: () => ({ pins, pinDirs: { clk: 'up' as const }, instances, nets }),
   });
-  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), start = m.input('start'), hold = m.input('hold'), sel = m.input('sel'), mode3 = m.input('mode3');
-  const tx = m.inputBus('tx', 8);
-  const miso = m.fwd('miso_in');
-  const [sclk, mosi, csn, rxb, busy, done] = m.part(spiMaster(), [clk, rst, start, hold, mode3, mode3, m.bus(tx), miso], 'master', 'master');
-  const cs0 = m.name(m.or(csn, sel), 'cs0_n'), cs1 = m.name(m.or(csn, m.not(sel)), 'cs1_n');
-  const d0 = m.part(spiDevice(), [sclk, cs0, mosi], 'memory 0', 'mem0')[0], d1 = m.part(spiDevice(), [sclk, cs1, mosi], 'memory 1', 'mem1')[0];
-  m.drive(miso, m.name(m.or(d0, d1), 'miso'));
-  m.outputBus('rx', m.unbus(rxb, 8)); m.output('busy', busy); m.output('done', done);
-  m.output('sclk', sclk); m.output('mosi', mosi); m.output('miso', miso); m.output('cs0_n', cs0); m.output('cs1_n', cs1);
-  pair = m.build();
   return pair;
 }
 

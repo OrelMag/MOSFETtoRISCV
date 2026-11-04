@@ -33,7 +33,7 @@ export function wiredScene(): Scene {
 
 export function pullupWidget(): Widget {
   let vdd = 3.3, cpf = 100, lr = 3.3, mode = 1;
-  const W = 520, H = 210, m = { l: 52, r: 12, t: 12, b: 34 };
+  const W = 520, H = 210, m = { l: 52, r: 30, t: 12, b: 34 };
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot', role: 'img', 'aria-label': 'Rise of the wire through the pull-up resistor against the mode\'s limit' }) as SVGSVGElement;
   fitText(svg, W);
   const curve = svg.appendChild(s('path', { class: 'pu-rise' }));
@@ -192,11 +192,13 @@ function busPanel({ arb }: Opts): ScenePanel {
     const WIN = arb ? 100 : 150;
     const wave = h('div', { class: 'spi-view' }), frame = h('div', { class: 'i2c-frame', role: 'status' }), status = h('div', { class: 'i2c-lost', role: 'status' });
     const paint = () => {
-      const tail = clocks.slice(-WIN);
+      const tail: (Clock | null)[] = clocks.slice(-WIN);
+      while (tail.length < WIN) tail.push(null); // a fixed width, so a short run is drawn at the same scale
+      const at = (f: (c: Clock) => number) => tail.map((c) => (c ? f(c) : null));
       const rows: WaveRow[] = arb
-        ? [{ label: 'ctl 0', bits: tail.map((c) => c.send0), cls: 'sda' }, { label: 'ctl 1', bits: tail.map((c) => c.send1), cls: 'sda2' }, { label: 'SDA', bits: tail.map((c) => c.sda), cls: 'cs' }, { label: 'SCL', bits: tail.map((c) => c.scl), cls: 'clk' }]
-        : [{ label: 'SDA', bits: tail.map((c) => c.sda), cls: 'sda' }, { label: 'SCL', bits: tail.map((c) => c.scl), cls: 'scl' }];
-      wave.replaceChildren(clocks.length ? waveSvg(rows, tail.length, { slotW: 3.1, rowH: 30, labelW: 40, label: `SDA and SCL over the last ${tail.length} clocks` }) : h('p', { class: 'sub' }, 'Nothing on the wires yet.'));
+        ? [{ label: 'ctl 0', bits: at((c) => c.send0), cls: 'sda' }, { label: 'ctl 1', bits: at((c) => c.send1), cls: 'sda2' }, { label: 'SDA', bits: at((c) => c.sda), cls: 'cs' }, { label: 'SCL', bits: at((c) => c.scl), cls: 'clk' }]
+        : [{ label: 'SDA', bits: at((c) => c.sda), cls: 'sda' }, { label: 'SCL', bits: at((c) => c.scl), cls: 'scl' }];
+      wave.replaceChildren(clocks.length ? waveSvg(rows, WIN, { slotW: 3.1, rowH: 30, labelW: 40, label: `SDA and SCL over the last ${Math.min(clocks.length, WIN)} clocks` }) : h('p', { class: 'sub' }, 'Nothing on the wires yet.'));
       wave.scrollLeft = wave.scrollWidth;
       const ev = decodeBus(clocks);
       frame.replaceChildren(h('span', { class: 'k' }, scriptName ? `${scriptName}: ` : 'frame: '), ev.length ? describeBus(ev) : '–');
