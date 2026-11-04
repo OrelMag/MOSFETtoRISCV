@@ -51,4 +51,15 @@ export const CASESL: Record<string, LevelCase> = {
     without: 'Without the counter nothing remembers which pulse this is. Without the contact tree a decoder of gates, here relays, would turn the count into a selection and add a relay step.',
     cost: 'Ten relays: three toggle stages of three each and the hang-up relay. The tree is free, contacts on relays that exist anyway. The step costs a few relay steps of ripple: the fall of bit 0 clocks bit 1, whose fall clocks bit 2.',
   },
+  l_mac: {
+    problem: 'A wire carries bits; two machines need frames. The receiver must find where a frame starts in a stream that is idle for any length of time (a preamble of alternating bits and a delimiter), where it ends (the carrier falls) and whether it arrived whole (the CRC you built). The sender must pad a short frame, append the check and keep the line quiet between frames. The MAC is these rules in gates; software above it sees destination, source, type and payload.',
+    without: 'Without the preamble the receiver has no bit clock; without the delimiter it cannot tell where the first byte is; without the check a frame with one flipped bit goes up as if it were whole; without the gap two frames run together. A receiver that does not clear its shift register between frames finds a delimiter in the tail of the last frame and reads the next one a bit off: about one frame in 128 on a clean link.',
+    cost: '6 766 NANDs for both halves: 3 553 in the transmitter (1 107 of them the gap counter, backoff and LFSR a shared cable needs and this link mostly does not) and 3 213 in the receiver, each with a byte-wide CRC-32 unit of 1 027. At four clocks a bit the link carries 63 Mb/s.',
+    alts: [{ name: 'CRC-32, a byte a clock (library)', lib: 'unitcrc32_EDB88320_8s' }],
+  },
+  l_switch: {
+    problem: 'A hub repeats every frame to every port, so the network\'s capacity is one link\'s however many hosts there are. A switch sends a frame only where its destination is. It is not told: it learns, from the source address of every frame that passes, which port that host is on. A frame to a host it has not heard of is flooded once, a frame to a host on its own side is dropped, and a damaged frame goes nowhere.',
+    without: 'A switch that floods a known destination is a hub. One that sends a frame back out of its own port echoes every frame to its sender. One that forwards a bad frame spreads the damage; one that learns from a bad frame can send traffic to the wrong port for as long as the entry stays.',
+    cost: '1 426 NANDs for four hosts: four entries of eleven flip-flops, four 8-bit comparators for the lookup and four for the learning, a port decoder and the output flip-flops. A real switch holds thousands of 48-bit addresses in a hashed RAM; the rule it applies is this one.',
+  },
 };
