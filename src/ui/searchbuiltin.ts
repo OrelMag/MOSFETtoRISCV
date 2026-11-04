@@ -175,6 +175,7 @@ function chapterActions(ctx: SearchCtx): NavItem[] {
   if (step > 0) out.push(act('step.prev', 'Previous step', `${c.title} · step ${step}`, go(`#/c/${c.id}/${step - 1}`), caps('step.prev')));
   if (next) out.push(act('chapter.next', 'Next chapter', next.title, go(`#/c/${next.id}/0`), caps('chapter.next')));
   if (prev) out.push(act('chapter.prev', 'Previous chapter', prev.title, go(`#/c/${prev.id}/0`), caps('chapter.prev')));
+  out.push(act('chapter.print', 'Print this chapter', `${c.title} · every step with its circuits as figures, then Save as PDF`, go(`#/c/${c.id}/print/${Math.min(step, c.steps.length - 1)}`)));
   return out;
 }
 

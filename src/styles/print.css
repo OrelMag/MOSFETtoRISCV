@@ -1,0 +1,99 @@
+/* Print this chapter (ui/pages/print.ts). Loaded as text and put in a <style> while that page is shown, so its @page footer never
+   reaches Ctrl+P on another page. The sheet is always paper: white, dark ink, whatever the theme. */
+
+.print-view {
+  --bg: #fff; --surface: #fff; --surface-2: #f3f4f7; --surface-3: #e8eaef; --text: #111; --text-2: #222; --muted: #4a4f5c;
+  --border: #b5b9c4; --accent: #1d3fa8; --accent-soft: #e8edfb;
+  color-scheme: light;
+  background: #dfe2e8; color: #111; font-size: 15px; line-height: 1.55;
+}
+.print-view .pv-tools {
+  position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border); color: #111;
+}
+.print-view .pv-status { flex: 1 1 200px; font-size: 13px; }
+.print-view .pv-bar { flex: 1 1 160px; max-width: 320px; height: 8px; border-radius: 4px; background: var(--surface-3); border: 1px solid var(--border); overflow: hidden; }
+.print-view .pv-bar[hidden] { display: none; }
+.print-view .pv-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
+.print-view .pv-tools .btn { background: #fff; color: #111; border-color: var(--border); }
+.print-view .pv-tools .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.print-view .pv-tools [hidden] { display: none; }
+
+.pd-doc { max-width: 820px; margin: 16px auto 40px; padding: 36px 40px; background: #fff; box-shadow: 0 2px 14px rgb(0 0 0 / 18%); overflow-wrap: anywhere; }
+.pd-doc h1 { font-size: 30px; line-height: 1.15; margin: 2px 0 6px; letter-spacing: -0.01em; }
+.pd-doc h2 { font-size: 20px; line-height: 1.25; margin: 0 0 2px; }
+.pd-kicker { font: 600 11px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pd-blurb { margin: 0 0 10px; font-size: 16px; color: var(--text-2); }
+.pd-goals ul { margin: 4px 0 8px; padding-left: 20px; }
+.pd-builds, .pd-src, .pd-addr { font-size: 12px; color: var(--muted); margin: 2px 0 8px; }
+.pd-addr { font-family: var(--font-mono); font-size: 11px; margin-bottom: 10px; }
+.pd-head { padding-bottom: 14px; border-bottom: 2px solid #111; margin-bottom: 18px; }
+.pd-step { margin: 0 0 26px; }
+.pd-step + .pd-step { padding-top: 16px; border-top: 1px solid var(--border); }
+.pd-prose p, .pd-prose li { margin: 0 0 8px; }
+.pd-prose ul, .pd-prose ol { margin: 0 0 8px; padding-left: 22px; }
+.pd-prose a, .pd-doc a { color: var(--accent); }
+.pd-prose code, .pd-prose kbd { background: var(--surface-2); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
+.pd-prose pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; overflow-x: auto; font-size: 12px; }
+.pd-prose .try { border: 1px dashed var(--border); border-radius: 4px; padding: 6px 10px; margin: 8px 0; background: var(--surface-2); }
+.pd-prose details > summary { font-weight: 600; margin-bottom: 4px; }
+.pd-prose table { border-collapse: collapse; margin: 6px 0; font-size: 13px; }
+.pd-prose th, .pd-prose td { border: 1px solid var(--border); padding: 2px 8px; }
+
+.pd-figwrap { margin: 10px 0 12px; }
+.pd-fig { margin: 0; break-inside: avoid; }
+.pd-fig-body { border: 1px solid var(--border); background: #fff; padding: 6px; text-align: center; }
+.pd-fig-body svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+.pd-wait { color: var(--muted); font-size: 12px; }
+.pd-fig figcaption { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.pd-truth { border-collapse: collapse; margin: 8px 0; font: 500 13px var(--font-mono); break-inside: avoid; }
+.pd-truth caption { text-align: left; font: 600 12px var(--font-ui); margin-bottom: 2px; }
+.pd-truth th, .pd-truth td { border: 1px solid var(--border); padding: 1px 12px; text-align: center; }
+.pd-truth .out { background: var(--surface-2); }
+.pd-note { font-size: 12.5px; color: var(--text-2); border-left: 3px solid var(--border); padding: 2px 10px; margin: 8px 0; break-inside: avoid; }
+
+.pd-aside { border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; margin: 10px 0; font-size: 14px; break-inside: avoid-page; }
+.pd-aside blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--border); font-style: italic; }
+.pd-map dt { font-weight: 600; }
+.pd-map dd { margin: 0 0 4px 14px; }
+.pd-challenge { border: 1px solid #111; border-radius: 4px; padding: 6px 12px; margin: 10px 0; break-inside: avoid; }
+.pd-try { font-size: 12px; margin-top: 3px; }
+.pd-q { border-left: 4px solid #111; padding: 2px 0 2px 12px; margin: 12px 0; break-inside: avoid; }
+.pd-q-k, .pd-k { font: 600 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
+.pd-q-text { font-weight: 600; margin: 2px 0 4px; }
+.pd-opts { margin: 0; padding-left: 26px; list-style-type: upper-alpha; }
+.pd-answers ol { padding-left: 26px; }
+.pd-answers li { margin-bottom: 6px; }
+.pd-explain { color: var(--text-2); font-size: 13.5px; }
+
+@media (max-width: 700px) {
+  .pd-doc { margin: 0; padding: 18px 16px 28px; box-shadow: none; }
+  .pd-doc h1 { font-size: 24px; }
+  .print-view .pv-tools { padding: 8px 12px; }
+  .pd-fig-body { padding: 2px; }
+}
+@media (pointer: coarse) { .print-view .pv-tools .btn { min-height: 40px; } }
+
+/* a figure being drawn (ui/pages/printfig.ts onPaper): computed styles are read at once, so nothing may be mid-transition */
+:root[data-paper] svg.schematic * { transition: none !important; animation: none !important; }
+
+@media print {
+  html, body { background: #fff !important; }
+  .print-view { background: #fff; font-size: 10.5pt; line-height: 1.45; }
+  .print-view .pv-tools { display: none !important; }
+  .pd-doc { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+  .pd-doc h1 { font-size: 24pt; }
+  .pd-doc h2 { font-size: 15pt; break-after: avoid; }
+  .pd-step + .pd-step { border-top-color: #999; }
+  .pd-fig-body { border-color: #777; }
+  .pd-doc a { color: inherit; text-decoration: none; }
+  .pd-prose pre, .pd-prose .try, .pd-note { break-inside: avoid; }
+  .pd-answers { break-before: page; }
+  .pd-fig-body svg { max-height: 175mm; }
+  @page {
+    margin: 16mm 15mm 18mm;
+    @bottom-center { font: 8pt sans-serif; color: #555; }
+    @bottom-left { content: 'MOSFET \2192  RISC-V'; font: 8pt sans-serif; color: #555; }
+    @bottom-right { content: 'Page ' counter(page) ' of ' counter(pages); font: 8pt sans-serif; color: #555; }
+  }
+}

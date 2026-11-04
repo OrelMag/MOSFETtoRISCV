@@ -48,7 +48,7 @@ made in the program point at the public site (editor/files.ts `SITE_URL`). `.git
 `scripts/smoke.ts` (no dependency: launches Chrome itself, `CHROME` env else the usual paths, and speaks the DevTools
 Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated
 from the code (chapter steps in both themes, each workbench family's default, campaign map / intro / codex / every
-level, sandbox and its examples seeded in localStorage) as a fresh load in parallel tabs (`--tabs n`), each in its own
+level, sandbox and its examples seeded in localStorage), the gates chapter's print view (dark, and on a phone: every figure drawn, one print call; window.print is stubbed for every route) as a fresh load in parallel tabs (`--tabs n`), each in its own
 browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
@@ -74,7 +74,7 @@ into dist/layout/ (widgets/chiplayout.ts).
 
 - Vite + TypeScript (strict, `verbatimModuleSyntax`: use `import type` for types). No UI
   framework: plain DOM + SVG with small helpers in `src/ui/dom.ts`. Keep the bundle small.
-- Hash routing (`#/c/<chapter>/<step>[/<inst>…]`, `#/workbench/<componentId>[/<inst>…]` — the optional segments are the
+- Hash routing (`#/c/<chapter>/<step>[/<inst>…]`, `#/c/<chapter>/print[/<step it was asked from>]` (Print this chapter), `#/workbench/<componentId>[/<inst>…]` — the optional segments are the
   part opened on the stage, one history entry per level, `~` for the top when the scene opens deeper (ui/drillpath.ts) — `#/workbench/stats`, `#/workbench/bench`, `#/workbench/lab`, `#/sandbox/<chipId>`, `#/campaign[/n/<node> | /play/<node> | /intro | /codex[/<id>]]`,
   `#/sandbox/s/<payload>` for a share link) so the site works on
   any static host or sub-path.
@@ -683,6 +683,12 @@ src/chapters/  narrative content: chapters → steps → scene / widget / challe
                Also: a prologue chapter (num 0, `prologue: 'P1'`,
                between the map and chapter 1, in brass: styles/prologue.css) and an appendix chapter (`appendix: 'A'`) show
                their label instead of a number (chapterNo); Chapter.soon: titles of steps not built yet (dashed dots)
+               printplan.ts: Print this chapter's plan (DOM-free, tests/printplan.test.ts over every chapter): planChapter(c) → per step a
+               mode: sim (a scene up to SIM_MAX = 20 000 instances by flatten's estimate: simulated at its initial inputs), top (larger, or on the
+               cycle engine, with at most TOP_MAX_PARTS top-level parts: drawn at its top level only), link (a nmos / noRemix scene, a switch-level
+               design too large, a top level over the limit: no picture, the step's address), live (a widget: a note and the address), none; figures
+               numbered per chapter (figureNo: "4.3", "P1.2", "A.1"), questions numbered in reading order (answers at the end), reach challenges listed;
+               truthEligible / truthTable (a combinational scene with ≤ 4 input bits gets its table)
                ch-system-more.ts: chapters 19–20's added steps (IO_MORE, TRAPS_MORE: ioProbe / latchedPulse measure what the text quotes; tests/content-deepen.test.ts pins them); widgets/pollirq.ts the
                polling-vs-interrupt widget (strips and table from riscv/pollirq.ts); chapter 34's Texturing and chapter 37's Bit errors and ECC steps are in ch-gfx.ts / ch-flash.ts
                step modules beside a chapter file: chapters/float/*.ts (chapter 24), seq/timing.ts (chapter 8: setup / hold sweep widget, clock skew scene with
@@ -1301,7 +1307,18 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  checks both); measure.ts; grade.ts stars against the reference points (★★ none both cheaper and
                  faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
                  replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
-src/ui/        app shell, router, theme, settings, progress; chapternav.ts (DOM-free: every chapter / step as a
+src/ui/        app shell, router, theme, settings, progress; pages/print.ts (PrintPage, its own chunk, #/c/<id>/print: the whole chapter as a book
+               flow: goals, each step's title, address and prose (data-show / data-ahead dropped, details open, links absolute to SITE_URL), its figure with a
+               numbered caption and a truth table, layers and analogies as asides (an analogy with a live figure: a note), questions with options and
+               the answers at the end, reach challenges with a link; a progress bar, Cancel (what is not drawn becomes a link line), window.print()
+               once every figure is done, then Print again / Back to the chapter stay on screen; data-print-ready="yes" when done), pages/printfig.ts
+               (FigureMaker: one off-screen SchematicView, svgImage on a white board; onPaper swaps <html>'s data-theme / palette 'print' (Monochrome) /
+               look / board / parts / netcolors for the length of one synchronous figure, so nothing paints in between and the page behind keeps the learner's
+               look; data-paper switches transitions off, or a wire read just after its class changed is still the 0 grey; topLevelOnly: every part below the
+               root a stub block with no behaviour, values X), styles/print.css (loaded as text into a <style> while the page is shown, so its @page footer
+               never reaches Ctrl+P on another page; the sheet is paper in any theme). Footer: Chrome's @page margin boxes (site name, "#/c/<id>", page n of
+               m; Chrome 131+, none of it in Firefox, whose own Headers and footers option is the substitute: unverified here); Chrome has no running
+               headers, so a step's address is printed under its title. app.css's @media print stays for Ctrl+P on a step; chapternav.ts (DOM-free: every chapter / step as a
                searchable entry, searchNav ranking; NavItem / rankItems for every kind of search row), quicknav.ts
                (chapter menu on the top bar and the chapter title; the search box: Ctrl/⌘ K or `/`, groups, scope chips
                on Tab, `>` actions, a footer naming ↵ / Shift ↵; focusStage, the skip link's target); searchsources.ts

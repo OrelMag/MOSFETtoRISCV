@@ -10,6 +10,8 @@ export function routeTitle(parts: string[], chapter?: { title: string; steps: St
   switch (parts[0]) {
     case 'c': {
       if (!chapter) return ['No such chapter'];
+      // the print view's title is the saved PDF's file name
+      if (parts[2] === 'print') return [chapter.title];
       const i = Number(parts[2] ?? 0) || 0;
       const step = i >= chapter.steps.length ? 'Recap' : chapter.steps[Math.max(i, 0)].title;
       return [step, chapter.title];
