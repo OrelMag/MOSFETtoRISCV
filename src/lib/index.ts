@@ -16,6 +16,7 @@ export * from './system';
 export { registry, splitter, merger } from './define';
 export * from './muldiv';
 export * from './coding';
+export * from './crc';
 export * from './divide';
 export * from './srt4';
 export * from './pipem';

@@ -512,6 +512,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "PAM4", challenge: "quiz" },
     { title: "Fibre", challenge: "quiz" },
   ] },
+  { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
+    { title: "One extra bit", challenge: "quiz" },
+    { title: "Locating the error", challenge: "reach" },
+    { title: "A remainder as a check", challenge: "quiz" },
+    { title: "How good is a check?", challenge: "quiz" },
+    { title: "CRC in gates, a bit a clock", challenge: "reach" },
+    { title: "A byte at a time", challenge: "quiz" },
+    { title: "Where a frame starts", challenge: "quiz" },
+    { title: "Asking again", challenge: "quiz" },
+    { title: "Correcting instead of asking", challenge: "quiz" },
+  ] },
   { id: "appendix-6502", num: 48, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
