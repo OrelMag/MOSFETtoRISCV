@@ -1,7 +1,7 @@
 // Chapter 53's typed numbers, pinned to what they describe; the computed ones come from the code.
 
 import { describe, expect, it } from 'vitest';
-import { chPath } from '../src/chapters/ch-comm-path';
+import { chPath, VIA_KESTREL, VIA_ORCHARD } from '../src/chapters/ch-comm-path';
 import { CLOCK_NS } from '../src/dram/timing';
 import { Internet, HOSTS, LINKS, linkBetween, R, ROUTERS, RELATIONS, ASES, neighboursOf } from '../src/net/internet';
 import { INIT_WINDOW, propMs, queueMs, serMs, CROSS_BYTES, WIRE_EXTRA, FIBRE_KM_PER_S } from '../src/net/internetdelay';
@@ -22,6 +22,11 @@ describe('chapter 53 typed numbers', () => {
     expect(RELATIONS.filter((r) => r.kind === 'peer').length).toBe(2);
     expect(Math.max(...ROUTERS.map((_, r) => new Set(neighboursOf(r).map((n) => n.port)).size))).toBe(3);
   });
+  it('the detour is 1 590 km, in the prose as computed', () => {
+    expect(VIA_KESTREL - VIA_ORCHARD).toBe(1590);
+    expect(text).toContain('1 590 km');
+  });
+  it('the slider\'s size is the IP packet: 1500 bytes is a 1514-byte frame', () => { expect(text).toContain('1514-byte frame'); });
   it('5 µs a kilometre in fibre', () => { expect(1e6 / FIBRE_KM_PER_S).toBe(5); });
   it('the delegations last two days', () => { expect(TTL_ROOT).toBe(2 * 86_400); expect(TTL_TLD).toBe(2 * 86_400); expect(text).toContain('two days'); expect(TTL_A).toBeLessThan(TTL_TLD); });
   it('the backbone is five thousand times the access line', () => {

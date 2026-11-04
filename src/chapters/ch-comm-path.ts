@@ -17,10 +17,16 @@ const TRACE = traceroute(NET, LAPTOP, DST);
 const LIGHT = linksOf(J).reduce((a, i) => a + propMs(LINKS[i]), 0);
 const FRAME = probeFrame(LAPTOP, DST, 64).length;
 const ONE_WAY = oneWayMs(J, FRAME);
-const BIG = 1500;
+/** A full packet, and its frame: the slider's size is the IP packet's, as an MTU is. */
+const BIG = 1500, BIG_FRAME = BIG + 14;
 const OCEAN = LINKS[linkBetween(R.t1, R.t2)], ACCESS = LINKS[linkBetween(R.f1, R.f2)];
 const ROUTE_COUNT = NET.tableOf(R.f1).routes.length;
-const NODES = Math.max(...ROUTERS.map((_, r) => NET.tableOf(r).trie.length));
+const NODES = Math.max(...ROUTERS.map((_, r) => NET.tableOf(r).trie.length)), F1_NODES = NET.tableOf(R.f1).trie.length;
+/** Ridgeway to Tarn: through the backbone, as policy has it, against through its peer, which policy forbids. */
+export const VIA_KESTREL = [[R.r2, R.k1], [R.k1, R.k2], [R.k2, R.k3], [R.k3, R.t1]].reduce((a, [x, y]) => a + LINKS[linkBetween(x, y)].km, 0);
+export const VIA_ORCHARD = [[R.r2, R.o1], [R.o1, R.o2], [R.o2, R.t1]].reduce((a, [x, y]) => a + LINKS[linkBetween(x, y)].km, 0);
+const DETOUR = VIA_KESTREL - VIA_ORCHARD;
+const km = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
 const DNS = new Resolver(NET).resolve(LAPTOP, SITE, 0);
 const READS = J.hops[0].result.reads;
 const ENGINE_NS = engineMs(FRAME, READS) * 1e6;
@@ -30,7 +36,7 @@ const NO_POLICY = new Internet({ policy: false }).bgp.best(AS_FERN, keyOf(asPref
 const RTT = ONE_WAY * 2;
 const PAGE = { dnsMs: DNS.ms, rttMs: RTT, pageBytes: 100_000, bottleneckMbps: ACCESS.mbps * (1 - ACCESS.load), tls: true };
 const PAGE_MS = fetchMs(PAGE);
-const SER_FULL = serMs(ACCESS, BIG), Q50 = queueMs(ACCESS, 0.5), Q95 = queueMs(ACCESS, 0.95);
+const SER_FULL = serMs(ACCESS, BIG_FRAME), Q50 = queueMs(ACCESS, 0.5), Q95 = queueMs(ACCESS, 0.95);
 
 export const chPath: Chapter = {
   id: 'path', num: 53, title: 'The internet path', level: 'Communication',
@@ -58,7 +64,7 @@ export const chPath: Chapter = {
         options: ['Orchard learned that route from its provider, and sends a provider\'s routes only to its customers', 'The backbones are physically shorter', 'BGP measures delay, and the peering link is slower', 'Ridgeway has not heard of Orchard'],
         answer: 0,
         explain: 'Carrying Ridgeway\'s traffic up to Tarn would make Orchard pay its provider for traffic that earns it nothing. So Orchard never offers the route, and Ridgeway never sees it.',
-        why: ['', 'They are thousands of kilometres longer here: distance is exactly what this choice does not use.', 'BGP carries no delay at all, only the path and policy.', 'It has: its routes to Brackwater go over that link.'],
+        why: ['', `They are ${km(DETOUR)} km longer here: distance is exactly what this choice does not use.`, 'BGP carries no delay at all, only the path and policy.', 'It has: its routes to Brackwater go over that link.'],
       },
       {
         question: 'A traceroute shows hop 7 at 12 ms and hop 8 at 9 ms. What does that show?',
@@ -82,11 +88,11 @@ export const chPath: Chapter = {
       body: `
         <p>A router's table has to say something about every address on Earth, and no one organization runs the whole thing. So the internet has two levels. Inside one <strong>autonomous system</strong>, an organization runs a protocol from <a href="#/c/router">chapter 51</a>, link state, over links whose costs it sets itself. Between autonomous systems the links are contracts, and a different protocol decides what crosses them.</p>
         <p>The map below is a model. A static web page cannot run a real traceroute, and this one never touches your network: everything here runs inside the page on an invented network of ${ASES.length} networks, ${ROUTERS.length} routers and ${HOSTS.length} hosts. The AS numbers come from the range reserved for documentation, the addresses are private, and the names are under <code>.example</code>, so none can belong to anyone.</p>
-        <p>Each network announces one /16, and each router owns a /24 of it. That is why a table stays small: f1 holds ${ROUTE_COUNT} routes, its trie at most ${NODES} nodes on this map, against the 1024 of chapter 51's memory. Its next hop comes from one of two sources, marked in the table: link state for addresses in its own network, BGP for the others. When a network has two exits, a router takes the nearer one, called hot-potato routing: hand the packet on as soon as you may, so that it costs someone else.</p>
+        <p>Each network announces one /16, and each router owns a /24 of it. That is why a table stays small: f1 holds ${ROUTE_COUNT} routes in ${F1_NODES} trie nodes (${NODES} at most on this map), against the 1024 of chapter 51's memory. Its next hop comes from one of two sources, marked in the table: link state for addresses in its own network, BGP for the others.</p>
         <p>Every router here has at most three ports, because chapter 51's fast path has only a 2-bit port field beside the slow path's. The map obeys that limit so that any hop can be opened on gates. <span class="try">Fail the k1 - k2 link and see what the laptop can still reach.</span> <span class="try">Click r2 and find which of its routes came from BGP.</span></p>`,
       widget: networkWidget,
       more: {
-        real: `<p>About 75 000 networks announce about a million IPv4 prefixes. Most are small customers of one or two providers; a small number of large networks reach nearly everything through peering, without paying anyone for transit. Inside a real network, BGP also runs between its own routers (iBGP), and a label or tunnel often carries the packet across, so its core routers need not hold the full table. Our routers each hold the whole small table, and BGP here does not hear of a failure inside a network, so a broken link in a backbone leaves a black hole until that network's own routing is told; a real network's iBGP sessions would withdraw the route.</p>`,
+        real: `<p>When a network has two exits to the same place, a router takes the nearer, called hot-potato routing: hand the packet on as soon as you may, so that it costs someone else. Here no network has two, so the rule is in the model and never decides. About 75 000 networks announce about a million IPv4 prefixes. Most are small customers of one or two providers; a small number of large networks reach nearly everything through peering, without paying anyone for transit. Inside a real network, BGP also runs between its own routers (iBGP), and a label or tunnel often carries the packet across, so its core routers need not hold the full table. Our routers each hold the whole small table, and BGP here does not hear of a failure inside a network, so a broken link in a backbone leaves a black hole until that network's own routing is told; a real network's iBGP sessions would withdraw the route.</p>`,
       },
     },
     {
@@ -94,7 +100,7 @@ export const chPath: Chapter = {
       body: `
         <p>Distance vector's problem was that a number does not say how it was reached. <strong>BGP</strong> advertises the whole list of networks a route crosses. A network that sees its own number in a path refuses it, so counting to infinity cannot begin. <span class="try">Run rounds from the start, and watch a route to Quillon spread one network a round.</span></p>
         <p>The list is also the only metric it has. BGP does not know about bandwidth or delay. It chooses by <strong>policy</strong>, and the policy follows the money: a customer pays you, so its routes come first; a peer costs nothing; a provider bills you, so its routes come last. Only then does the shorter path count. Export follows the same logic: you tell your peers and providers only your own and your customers' routes, because carrying anything else for them would cost you and earn nothing.</p>
-        <p>So paths go up, cross at most one peering link, and come down. Here Fernbank reaches Quillon by ${FR_PATH.join(' → ')}, thousands of kilometres out of the way, although Ridgeway peers directly with Orchard, a customer of Quillon's own provider. Orchard learned that route from its provider, and does not offer it to a peer. Without policy the path would be ${NO_POLICY.join(' → ')}. Fernbank reaches Brackwater over the peering link, ${FR_BRACK.join(' → ')}, since Brackwater is Orchard's customer. <span class="try">Turn policy off and compare the path from Fernbank to Quillon.</span></p>
+        <p>So paths go up, cross at most one peering link, and come down. Here Fernbank reaches Quillon by ${FR_PATH.join(' → ')}, ${km(DETOUR)} km of fibre further than it need be, although Ridgeway peers directly with Orchard, a customer of Quillon's own provider. Orchard learned that route from its provider, and does not offer it to a peer. Without policy the path would be ${NO_POLICY.join(' → ')}. Fernbank reaches Brackwater over the peering link, ${FR_BRACK.join(' → ')}, since Brackwater is Orchard's customer. <span class="try">Turn policy off and compare the path from Fernbank to Quillon.</span></p>
         <p>BGP also believes what it hears. Turn on Sable's claim below: Sable announces a /24 inside Quillon's /16, and every router on the path applies chapter 51's rule, so the longer prefix wins wherever it reaches. Nothing in the protocol asks whether Sable owns it. <span class="try">Turn on the false claim, and see where the laptop's packets end.</span></p>`,
       widget: bgpWidget,
       challenge: {
@@ -156,14 +162,14 @@ export const chPath: Chapter = {
         solve: (st) => pathApi.get(st)?.all(),
       },
       more: {
-        numbers: `<p>At f1, a ${FRAME}-byte frame takes ${READS} trie reads and ${(ENGINE_NS / CLOCK_NS).toFixed(0)} cycles, ${ENGINE_NS.toFixed(0)} ns at ${CLOCK_NS} ns a cycle. That is a byte a cycle, about 2 Gb/s. It serves this model's access links and falls far short of its 100 Gb/s backbones: a real backbone router's engine is wider and pipelined, with a shorter path through it, so this column is an upper bound on what its engine adds.</p>`,
+        numbers: `<p>At f1, a ${FRAME}-byte frame takes ${READS} trie reads and ${(ENGINE_NS / CLOCK_NS).toFixed(0)} cycles, ${ENGINE_NS.toFixed(0)} ns at ${CLOCK_NS} ns a cycle. That is a byte a cycle, about 2 Gb/s. It serves this model's access links and falls short of its 10 and 100 Gb/s links: a real backbone router's engine is wider and pipelined, with a shorter path through it, so this column is an upper bound on what its engine adds.</p>`,
       },
     },
     {
       title: 'One packet, all the way',
       body: `
         <p>Four delays make up the time at each hop. <strong>Light</strong>: length over speed, an assumed 200 000 km/s in fibre, 5 µs a kilometre, which no money can change. <strong>Bits</strong>: frame size over the link's rate, with 24 bytes of wire overhead. <strong>Queue</strong>: what is already waiting ahead of you, here M/M/1's mean, ρ / (1 − ρ) service times, for cross traffic of an assumed size. <strong>Engine</strong>: chapter 51's cycles.</p>
-        <p>The table shows which one matters where, and it is not the same one. In the backbone, a ${BIG}-byte frame takes ${(serMs(OCEAN, BIG) * 1000).toFixed(2)} µs of bits and ${ms1(propMs(OCEAN))} ms of light on the ocean: light is everything. On the access line, the same frame is ${(SER_FULL * 1000).toFixed(0)} µs of bits, while light for those ${ACCESS.km} km takes ${(propMs(ACCESS) * 1000).toFixed(0)} µs. One way is ${ms1(ONE_WAY)} ms for a small frame, ${ms1(LIGHT)} ms of that light.</p>
+        <p>The table shows which one matters where, and it is not the same one. In the backbone, a ${BIG}-byte packet, a ${BIG_FRAME}-byte frame, takes ${(serMs(OCEAN, BIG_FRAME) * 1000).toFixed(2)} µs of bits and ${ms1(propMs(OCEAN))} ms of light on the ocean: light is everything. On the access line, the same frame takes ${(SER_FULL * 1000).toFixed(0)} µs of bits, while light for those ${ACCESS.km} km takes ${(propMs(ACCESS) * 1000).toFixed(0)} µs. One way is ${ms1(ONE_WAY)} ms for a small frame, ${ms1(LIGHT)} ms of that light.</p>
         <p>The queue behaves differently from the others: it is not proportional to load. At half load it is ${(Q50 * 1000).toFixed(0)} µs on this line, one service time. At 95 % it is ${ms1(Q95)} ms, nineteen. Past 100 % it has no mean: it grows until a buffer overflows, and that loss is what <a href="#/c/router">a router</a> without room does and what TCP reads as the signal to slow down. <span class="try">Take the access load from 50 to 95 %, and see which column moves.</span> <span class="try">Take the packet from 1500 to 64 bytes, and see which rows change at all.</span></p>`,
       widget: onePacketWidget,
       challenge: {
@@ -182,7 +188,7 @@ export const chPath: Chapter = {
     {
       title: 'A page',
       body: `
-        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and with TLS a second for keys. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is chapter 52's protocol with no loss.</p>
+        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and with TLS a second for keys. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is chapter 52's slow start with no loss, from RFC 6928's ten segments of 1460 bytes; chapter 52's small TCP starts from two of 64.</p>
         <p>From cold, 100 kB takes about <strong>${ms1(PAGE_MS)} ms</strong>, and the round trip of ${ms1(RTT)} ms sets nearly all of it. Move the size and see how little the page itself matters until it gets large. A link ten times faster changes only the serialization. What helps is fewer round trips or shorter ones: a cached name, and a copy of the site nearby, which is what a content delivery network sells. <span class="try">Put a copy of the site at the access provider.</span> <span class="try">Make the page 2000 kB, and see when bandwidth begins to matter.</span></p>
         <p>Open any of it and you can keep going down. The page is bytes in <a href="#/c/ethernet">an Ethernet frame</a>, the frame a stream through <a href="#/c/router">a router's</a> gates, the gates are NANDs from <a href="#/c/nand">chapter 3</a>, and a NAND is four of <a href="#/c/mosfet">chapter 1's</a> transistors. Except for the model of the line, and the invented map, it has all been built here.</p>`,
       widget: fetchWidget,

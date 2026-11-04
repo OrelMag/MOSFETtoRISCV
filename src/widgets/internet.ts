@@ -406,7 +406,7 @@ export function onePacketWidget(): Widget {
   const body = h('tbody'), read = h('div', { class: 'err-verdict ok' });
   const dst = hostIp(WWW);
   const paint = () => {
-    const f = hostFrame(LAPTOP, dst, 64, PROTO_UDP, new Array<number>(Math.max(26, bytes - 42)).fill(0)), j = net.send(LAPTOP, f), n = f.length;
+    const f = hostFrame(LAPTOP, dst, 64, PROTO_UDP, new Array<number>(bytes - 20).fill(0)), j = net.send(LAPTOP, f), n = f.length;
     const loadOf = (i: number, l: typeof LINKS[number]) => (i === ACCESS_LINK ? load : l.load);
     const d = journeyDelays(j, n, loadOf), rows = traceroute(net, LAPTOP, dst);
     let t = propMs(LAN) + serMs(LAN, n), sumP = propMs(LAN), sumS = serMs(LAN, n), sumQ = 0, sumE = 0;
@@ -419,7 +419,7 @@ export function onePacketWidget(): Widget {
     }));
     read.textContent = `One way, ${ms2(t)} ms: light ${ms2(sumP)}, bits ${ms2(sumS)}, queues ${ms2(sumQ)}, ${d.length} engines ${ms2(sumE)}. The access line's queue alone: ${ms2(queueMs(LINKS[ACCESS_LINK], load))} ms at ${Math.round(load * 100)} % load.`;
   };
-  const sb = slider('Packet', 64, 1500, 4, bytes, (v) => `${v} bytes`, (v) => { bytes = v; paint(); });
+  const sb = slider('IP packet', 64, 1500, 4, bytes, (v) => `${v} bytes`, (v) => { bytes = v; paint(); });
   const sl = slider('Access line load', 0, 95, 1, LOAD0, (v) => `${v} %`, (v) => { load = v / 100; paint(); });
   paint();
   return {
