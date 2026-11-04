@@ -127,7 +127,7 @@ export function convEncPanel(): ScenePanel {
     };
     const act = (f: () => void) => { stage.checkpoint(); f(); stage.refresh(); update(); };
     const status = h('div', { class: 'mc-status err-status' }), stream = h('div', { class: 'cd-stream' }), note = h('p', { class: 'sub' });
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'Encoder, K = 3', h('span', { class: 'fold-hint' })),
       h('div', { class: 'dram-ops' }, btn('Send 0', 'One clock edge with u = 0', () => act(() => edge(0))), btn('Send 1', 'One clock edge with u = 1', () => act(() => edge(1)))),
       status, stream, note);
@@ -204,7 +204,7 @@ export function viterbiPanel(): ScenePanel {
     const chan = h('div', { class: 'cd-chan' }), tre = s('svg', { class: 'mos-plot cd-trellis', role: 'img', 'aria-label': 'The trellis: each state at each step, its surviving incoming branch, and the survivor of the best state in bold' }) as SVGSVGElement;
     const status = h('div', { class: 'mc-status err-status' }), out = h('div', { class: 'cd-out' }), note = h('p', { class: 'sub' });
     const wrongNow = () => decoded.reduce((a, b, i) => a + (i < VIT_MESSAGE.length && b !== VIT_MESSAGE[i] ? 1 : 0), 0);
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-vit', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-vit', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'Viterbi, K = 3', h('span', { class: 'fold-hint' })),
       h('p', { class: 'sub' }, 'The channel: click a bit to flip it, before it is sent.'), chan,
       h('div', { class: 'dram-ops' }, btn('Step', 'One received pair, one clock edge', () => act(stepOne)), btn('Run', 'Send every remaining pair', () => act(() => { while (t < msg.length) stepOne(); })), btn('Start over', 'Metrics to zero, and the same flips sent again', () => act(restart)), btn('No flips', 'A clean channel, started over', () => act(() => { flips = new Set(); restart(); }))),
@@ -287,7 +287,7 @@ export function rsPanel(): ScenePanel {
     const send = () => { edge({ clr: 1, en: 0 }); for (const b of RS_MESSAGE) edge({ d: b, msg: 1, en: 1 }); };
     const status = h('div', { class: 'cd-bytes' }), wordEl = h('div', { class: 'cd-bytes cd-word' }), verdict = h('p', { class: 'err-verdict' });
     const sHits = slider('Bytes hit', 0, 8, 1, 0, (v) => String(v), (v) => { hits = new Map(); let seed = 12345 + v * 77; const r = (m: number) => { seed = (seed * 1103515245 + 12345) >>> 0; return Math.floor((seed / 2 ** 32) * m); }; while (hits.size < v) hits.set(r(cw.length), 1 + r(255)); update(); });
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-rs', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-rs', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'RS (26, 16)', h('span', { class: 'fold-hint' })),
       h('div', { class: 'dram-ops' }, btn('Encode the message', 'Clear, then clock the 16 data bytes in', () => act(send)), btn('Clear', 'One clock edge with clr = 1', () => act(() => edge({ clr: 1, en: 0 })))),
       h('p', { class: 'sub' }, 'Registers, highest first:'), status,
