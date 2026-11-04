@@ -211,7 +211,7 @@ interface Broken { name: string; frames: Captured[]; claims?: Claim[]; cut?: num
 const dnsGood = () => dnsSteps()[3];
 const BROKEN: Broken[] = [
   { name: 'dns-wrong-record', frames: [{ us: 0, bytes: dnsGood().frame }], claims: [dnsClaim({ ...dnsGood().msg, qname: 'www.other.example' }, claimOf(dnsGood().frame, 0))], want: /dns\.qry\.name/ },
-  { name: 'dns-pointer-to-itself', frames: [{ us: 0, bytes: dnsLoop() }], claims: [claimOf(dnsLoop(), 0)], want: /malformed|expert|dns/ },
+  { name: 'dns-pointer-to-itself', frames: [{ us: 0, bytes: dnsLoop() }], claims: [dnsClaim(dnsSteps()[0].msg, claimOf(dnsLoop(), 0))], want: /dns\.qry\.name/ },
   { name: 'router-ttl-not-updated', frames: [{ us: 0, bytes: staleChecksum() }], want: /ip\.checksum\.status/ },
   { name: 'bad-ip-checksum', frames: [{ us: 0, bytes: flip(good(), 24) }], want: /ip\.checksum\.status/ },
   { name: 'bad-icmp-checksum', frames: [{ us: 0, bytes: flip(good(), 36) }], want: /icmp\.checksum\.status/ },

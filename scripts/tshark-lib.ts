@@ -9,7 +9,7 @@ export const FIELDS = [
   'icmp.type', 'icmp.code', 'icmp.checksum', 'icmp.checksum.status', 'icmp.ident', 'icmp.seq',
   'udp.srcport', 'udp.dstport', 'udp.length', 'udp.checksum', 'udp.checksum.status',
   'tcp.srcport', 'tcp.dstport', 'tcp.seq_raw', 'tcp.ack_raw', 'tcp.flags', 'tcp.window_size_value', 'tcp.checksum', 'tcp.checksum.status',
-  'data.data',
+  'data.data', 'tcp.segment_data',
   'dns.id', 'dns.flags.response', 'dns.count.queries', 'dns.count.answers', 'dns.count.auth_rr', 'dns.count.add_rr', 'dns.qry.name', 'dns.resp.name', 'dns.ns', 'dns.a', 'dns.resp.ttl',
 ] as const;
 export type Field = typeof FIELDS[number];
@@ -104,7 +104,8 @@ export function compareRow(c: Claim, r: Row, allow?: RegExp): string[] {
   const out: string[] = [];
   for (const [k, want] of Object.entries(c.fields) as [Field, string | number][]) {
     // a DNS field lists every record of a message, in order: the whole column is claimed
-    const got = k === 'data.data' || LISTED.has(k) ? r[k] : first(r[k]);
+    // a segment tshark takes for a retransmission or out of order keeps its bytes, under the other name: no sub-dissector is called on it
+    const got = k === 'data.data' ? r[k] ?? r['tcp.segment_data'] : LISTED.has(k) ? r[k] : first(r[k]);
     if (!same(k, want, got)) out.push(`${k}: tshark ${got ?? 'has nothing'}, the bytes say ${want}`);
   }
   const protos = r['frame.protocols'] ?? '';
@@ -119,8 +120,8 @@ export function compareRow(c: Claim, r: Row, allow?: RegExp): string[] {
   return out;
 }
 
-/** What tshark rightly says of a transfer that lost segments: its analysis of the stream, about the stream and not the bytes. Only a lossy capture may have these. */
-export const TCP_LOSS_WARNINGS = /^(TCP )?(Previous segment|ACKed segment|Out-Of-Order|Connection reset)|retransmission|Duplicate ACK|Spurious|window/i;
+/** The one warning a transfer over a short queue rightly gets, about the stream and not the bytes. Its retransmissions and duplicate ACKs are only notes. */
+export const TCP_LOSS_WARNINGS = /^TCP window specified by the receiver is now completely full$/;
 
 export interface Captured2 { us: number; bytes: ArrayLike<number> }
 
