@@ -56,7 +56,7 @@ export function tableBlock(id: string, name: string, summary: string, ins: TPort
       let ob = 0;
       outs.forEach((p, j) => { for (let k = 0; k < p.width; k++) { if (care && !care(v, j)) dcSets[ob + k].push(m); else if ((o[j] >> k) & 1) onSets[ob + k].push(m); } ob += p.width; });
     }
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(22, 18, 4);
     b.pins(...ins.map((p) => p.name));
     const src: string[] = [];
     for (const p of ins) {
