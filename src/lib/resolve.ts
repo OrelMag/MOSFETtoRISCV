@@ -33,6 +33,7 @@ import { clockDivider, cycleCounter, lfsr, randomSource, ringCounter, shiftRegis
 import { srt4Divider, srt4Step } from './srt4';
 import { ls189With } from './ttl';
 import { sandboxBus } from './axi';
+import { asyncFifo, BIN2GRAY, GRAY2BIN, syncN } from './sync';
 import { iterCtrl, nrArrayDiv, nrDivStep, nrSeqDivider, srtDivider, srtStep } from './divide';
 import { absValue, demux, eccChannel, encoder, hammingDec, hammingEnc, magComparator, parity, popcount, priorityEncoder } from './coding';
 // Single parts the sandbox palette and examples place by id (registered on import).
@@ -267,6 +268,12 @@ export const families: Family[] = [
   nBit('nrsdiv', 'Iterative non-restoring divider', 'sequential', [4, 8, 16, 32], 8, (n) => `nrsdiv${n}`, nrSeqDivider),
   nBit('srt4div', 'Iterative radix-4 SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srt4div${n}`, srt4Divider),
   nBit('srtdiv', 'Iterative SRT divider', 'sequential', [4, 8, 16, 32], 8, (n) => `srtdiv${n}`, srtDivider),
+  nBit('bin2gray', 'Binary to Gray', 'routing', [2, 3, 4, 8], 4, (n) => `bin2gray${n}`, BIN2GRAY),
+  nBit('gray2bin', 'Gray to binary', 'routing', [2, 3, 4, 8], 4, (n) => `gray2bin${n}`, GRAY2BIN),
+  {
+    id: 'sync', name: 'Synchronizer (flip-flops in series)', category: 'sequential', params: [count('flops', [2, 3], 2), bits([1, 4, 8], 1)],
+    key: (p) => (p.bits === 1 ? `sync${p.flops}` : `sync${p.flops}x${p.bits}`), make: (p) => syncN(p.flops, p.bits),
+  },
   nBit('iter', 'Iteration control', 'sequential', [4, 8, 16, 32], 8, (n) => `iter${n}`, iterCtrl),
   // memory
   {
@@ -281,6 +288,10 @@ export const families: Family[] = [
   {
     id: 'fifo', name: 'FIFO', category: 'memory', params: [count('words', [4, 8, 16], 4), bits([4, 8], 8)],
     key: (p) => `fifo${p.words}x${p.bits}`, make: (p) => fifo(log2(p.words), p.bits),
+  },
+  {
+    id: 'afifo', name: 'Asynchronous FIFO', category: 'memory', params: [count('words', [2, 4, 8, 16], 4), bits([4, 8], 8)],
+    key: (p) => `afifo${p.words}x${p.bits}`, make: (p) => asyncFifo(log2(p.words), p.bits),
   },
   {
     id: 'stack', name: 'Stack', category: 'memory', params: [count('words', [4, 8, 16], 4), bits([4, 8], 8)],

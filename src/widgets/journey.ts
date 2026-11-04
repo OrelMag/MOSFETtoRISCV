@@ -13,6 +13,7 @@ export interface Rung {
 }
 
 export const LADDER: Rung[] = [
+  { title: 'Communication', madeOf: 'relays, lines, line codes, packets, routers', chapter: 'telegraph', num: 39 },
   { title: 'Memory in depth', madeOf: 'capacitors, sense amplifiers, row buffers', chapter: 'dram', num: 35 },
   { title: 'A GPU', madeOf: 'lanes, warps, a rasterizer, frame buffers', chapter: 'lanes', num: 29 },
   { title: 'A chip on a wafer', madeOf: 'standard cells, placement, routing, masks', chapter: 'silicon', num: 28 },

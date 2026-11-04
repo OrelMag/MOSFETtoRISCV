@@ -30,13 +30,15 @@ const optional = (c: ChapterHead) => !!(c.prologue || c.appendix);
 
 /**
  * Has a reader of `chs[at]` been taught `id`? A journey chapter knows what the journey taught up to it; a prologue or
- * appendix chapter also what it, or an earlier chapter of its own group, explains (TAUGHT_OPTIONAL). Untaught ids: yes.
+ * appendix chapter also what it, or an earlier chapter of its own group, explains (TAUGHT_OPTIONAL); any chapter also what
+ * an optional chapter on its Builds on line explains. Untaught ids: yes.
  */
 export function knows(chs: readonly ChapterHead[], at: number, id: string): boolean {
   const t = TAUGHT[id];
   const ti = t ? chs.findIndex((c) => c.id === t) : -1;
   if (ti >= 0 && ti <= at) return true;
   const c = chs[at];
+  if (c.builds?.some((b) => TAUGHT_OPTIONAL[id]?.includes(b))) return true;
   if (optional(c)) {
     for (let k = at; k >= 0 && optional(chs[k]) && !!chs[k].prologue === !!c.prologue; k--)
       if (TAUGHT_OPTIONAL[id]?.includes(chs[k].id)) return true;

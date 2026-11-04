@@ -1,0 +1,66 @@
+/* ---------- Chapter 41: a wire is not a wire (src/widgets/line.ts). Plots reuse .mos-plot; colours from the theme tokens, so both themes follow. ---------- */
+.ln-plot { max-width: 100%; }
+.ln-s { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.ln-s.real { stroke: var(--accent); }
+.ln-s.near { stroke: var(--warn); stroke-width: 1.8; }
+.ln-s.lump, .ln-s.lump2 { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.ln-s.wire { stroke: var(--bad); stroke-width: 1.8; }
+.ln-s.drv { stroke: var(--good); stroke-width: 1.8; }
+.ln-h { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.ln-h.t50 { stroke: var(--warn); }
+.ln-hl { font: 600 calc(10.5px * var(--tk, 1)) var(--font-mono); fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.ln-hl.t50 { fill: var(--warn); }
+.ln-hl.wire { fill: var(--bad); }
+.ln-pt { fill: var(--w1, var(--accent)); stroke: var(--surface); stroke-width: 2; }
+.ln-open { stroke: var(--good); stroke-width: 3; }
+.ln-eye .eyeline { stroke: var(--accent); stroke-width: 0.9; stroke-opacity: 0.4; }
+
+.ln-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 4px; font-size: 12.5px; font-weight: 600; }
+.ln-key .k-near { color: var(--warn); } .ln-key .k-far { color: var(--accent); }
+.ln-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ln-sel select { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; }
+.ln-plots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ln-plots h4 { margin: 0 0 4px; font-size: 13px; color: var(--text-2); }
+@container (max-width: 760px) { .ln-plots { grid-template-columns: minmax(0, 1fr); } }
+.ln-scroll { overflow-x: auto; }
+.ln-table { min-width: 520px; }
+.ln-table th:first-child { text-align: left; white-space: nowrap; }
+.ln-table td, .ln-table th { padding: 4px 8px; font-size: 12.5px; vertical-align: top; }
+.ln-noise { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@container (max-width: 760px) { .ln-noise { grid-template-columns: minmax(0, 1fr); } }
+.ln-sec h4 { margin: 0 0 2px; font-size: 14px; }
+.ln-sec .sub { margin: 0 0 8px; }
+.ln-sec .mos-row { margin: 8px 0; }
+.ln-sec .mos-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mos-chips b.bad, .ln-bar b.bad, .ln-panel b.bad { color: var(--bad); }
+.mos-chips b.ok, .ln-bar b.ok { color: var(--good); }
+.ln-bars { display: grid; gap: 6px; margin: 6px 0; }
+.ln-bar { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 4.8em; align-items: center; gap: 8px; font-size: 12.5px; }
+.ln-bar b { font: 700 12.5px var(--font-mono); text-align: right; }
+.ln-barbox { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; height: 12px; overflow: hidden; }
+.ln-barbox i { display: block; height: 100%; }
+.ln-barbox i.ok { background: var(--good); } .ln-barbox i.bad { background: var(--bad); }
+.ln-rep { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 10px 0; font: 600 12px var(--font-mono); }
+.ln-rep-src, .ln-rep-load { padding: 4px 8px; border-radius: 6px; border: 1.5px solid var(--accent); background: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); }
+.ln-rep-load { border-style: dashed; border-color: var(--border-strong); background: none; color: var(--text-2); }
+.ln-rep-seg { min-width: 20px; text-align: center; border-bottom: 2px solid var(--muted); color: var(--accent); }
+
+/* the panel beside the pad scene */
+.ln-panel { width: min(360px, 100%); }
+.ln-panel .mos-plot { width: 100%; height: auto; }
+.ln-panel .mos-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 6px; }
+.ln-pctl { display: grid; gap: 4px; margin-top: 4px; }
+.ln-status { margin: 0 0 6px; font-size: 12.5px; }
+.ln-panel .mos-sl span { width: 64px; }
+.ln-panel .mos-sl { flex-basis: 100%; }
+@media (max-width: 520px) {
+  .ln-bar { grid-template-columns: 7.5em minmax(0, 1fr) 4.4em; }
+  .mos-sl span { width: 52px; }
+}
+@media (pointer: coarse) {
+  .ln-presets .btn { min-height: 40px; }
+  .ln-sel select { min-height: 40px; }
+}
+.ln-key .k-lump { color: var(--muted); } .ln-key .k-wire { color: var(--bad); } .ln-key .k-drv { color: var(--good); }
+.ln-sec .mos-sl output { width: 84px; }
+.ln-sec .mos-sl span { width: 72px; }
