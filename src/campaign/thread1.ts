@@ -303,6 +303,11 @@ export const THREAD1: Record<string, NodeThread> = {
     usedFor: {
       y_lesson: 'devices like its LEDs are what raise interrupts',
       m_lesson: 'what sits behind its RAM in a real machine',
+      l_repeater: 'one computer is enough to want a second: the wire between them starts with a relay',
+      l_sync: 'another machine\'s signal reaches it with no relation to its clock',
+      l_uarttx: 'a device on its bus that sends a byte with no clock wire',
+      l_crc: 'its bytes on a long wire arrive changed, and it has to be able to tell',
+      l_8b10b: 'its bytes have runs of 0s, and a line with no clock wire needs edges',
     },
     pitfalls: [
       'The ROM has 32 words: its address is pc[4:0], and the program must fit.',
