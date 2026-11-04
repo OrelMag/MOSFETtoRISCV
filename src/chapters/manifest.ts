@@ -479,7 +479,18 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A bus is not synchronized bit by bit", challenge: "quiz" },
     { title: "An asynchronous FIFO", challenge: "reach" },
   ] },
-  { id: "appendix-6502", num: 43, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
+    { title: "One extra bit", challenge: "quiz" },
+    { title: "Locating the error", challenge: "reach" },
+    { title: "A remainder as a check", challenge: "quiz" },
+    { title: "How good is a check?", challenge: "quiz" },
+    { title: "CRC in gates, a bit a clock", challenge: "reach" },
+    { title: "A byte at a time", challenge: "quiz" },
+    { title: "Where a frame starts", challenge: "quiz" },
+    { title: "Asking again", challenge: "quiz" },
+    { title: "Correcting instead of asking", challenge: "quiz" },
+  ] },
+  { id: "appendix-6502", num: 48, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -489,14 +500,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 44, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 49, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 45, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 50, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -509,7 +520,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 46, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 51, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },
