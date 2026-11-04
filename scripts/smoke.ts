@@ -147,6 +147,57 @@ const MEMMAP_DRIVE = `(async () => {
 })()`;
 
 /**
+ * Opens the Examples gallery (behind More on a phone), checks a card per example, that the search filters and says so when nothing
+ * matches, that the arrows move between the cards, that every thumbnail loads (scrolled into view), and that Esc closes the
+ * dialog and gives the focus back to the button it came from.
+ */
+const GALLERY_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const vis = (b) => b && !b.hidden && b.offsetParent !== null;
+  const find = (t) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === t && vis(b));
+  let opener = find('Examples');
+  if (!opener) {
+    const more = document.querySelector('button.sb-more');
+    if (!more || !vis(more)) return ['no Examples button and no More button'];
+    more.click(); await wait(200);
+    opener = [...document.querySelectorAll('.sb-more-menu button')].find((b) => /^Examples/.test(b.textContent.trim()));
+    if (!opener) return ['no Examples item in More'];
+  }
+  opener.click(); await wait(1500);
+  const dlg = document.querySelector('.ex-gallery');
+  if (!dlg) return ['the gallery did not open'];
+  const search = dlg.querySelector('.ex-search');
+  if (document.activeElement !== search) bad.push('the search box is not focused on open');
+  const shown = () => [...dlg.querySelectorAll('.ex-card')].filter((c) => !c.hidden);
+  if (dlg.querySelectorAll('.ex-card').length !== ${EXAMPLES.length}) bad.push('expected ${EXAMPLES.length} cards');
+  const panel = dlg.querySelector('.panel').getBoundingClientRect();
+  if (panel.right > innerWidth + 1 || panel.left < -1) bad.push('the gallery is wider than the screen');
+  const set = (v) => { search.value = v; search.dispatchEvent(new Event('input', { bubbles: true })); };
+  set('pong'); await wait(100);
+  if (shown().length !== 1 || shown()[0].dataset.example !== 'rv16pong') bad.push('searching "pong" should leave only the RV16 Pong card');
+  if ([...dlg.querySelectorAll('.ex-group')].filter((g) => !g.hidden).length !== 1) bad.push('a section with no match stays visible');
+  set('zzzz nothing'); await wait(100);
+  if (shown().length || !/No example matches/.test(dlg.querySelector('.ex-empty').textContent)) bad.push('no "nothing matches" message');
+  set(''); await wait(100);
+  if (shown().length !== ${EXAMPLES.length}) bad.push('clearing the search should bring every card back');
+  // every thumbnail loads: scroll each card into view (they load lazily), then none may be broken or missing
+  for (const c of dlg.querySelectorAll('.ex-card')) { c.scrollIntoView({ block: 'center' }); await wait(60); }
+  await wait(500);
+  for (const img of dlg.querySelectorAll('.ex-thumb img')) if (!img.complete || !img.naturalWidth) bad.push('thumbnail ' + img.getAttribute('src') + ' did not load');
+  search.focus();
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })); await wait(50);
+  if (document.activeElement !== shown()[0]) bad.push('ArrowDown from the search box should focus the first card');
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await wait(50);
+  if (document.activeElement !== shown()[1]) bad.push('ArrowRight should focus the next card');
+  document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait(150);
+  if (document.querySelector('.ex-gallery')) bad.push('Esc did not close the gallery');
+  const back = document.activeElement;
+  if (!back || !/Examples/.test(back.textContent) && !back.classList.contains('sb-more')) bad.push('Esc should give the focus back to the Examples button (or More)');
+  return bad;
+})()`;
+
+/**
  * Opens every Analogy aside on the step (a figure loads and mounts when its aside opens), turns on the Water | Cross-section
  * views of the step's widget, and waits for the figures to draw; a figure that stays empty or says it could not load is a problem.
  */
@@ -249,6 +300,9 @@ function routes(): Route[] {
   add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
   // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
+  // The Examples gallery, opened from the toolbar (More on a phone), in both themes.
+  for (const theme of ['light', 'dark'] as const) add('#/sandbox', themed(theme), ` (examples gallery, ${theme})`, undefined, GALLERY_DRIVE);
+  add('#/sandbox', light, ` (examples gallery, ${phoneVp.name})`, phoneVp, GALLERY_DRIVE);
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
   // The memory-map designer on System on a bus, opened from File, in both themes.

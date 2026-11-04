@@ -32,7 +32,7 @@ npm install          # once
 npm run dev          # Vite dev server
 npm test             # Vitest (simulation + library correctness), must stay green
 npm run typecheck    # tsc --noEmit (strict)
-npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + production build into dist/ (relative base)
+npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + the Examples gallery's thumbnails (npm run thumbs, ~1 s) + production build into dist/ (relative base)
 npm run preview      # serve dist/
 npm run manifest     # rewrite src/chapters/manifest.ts + loaders.ts after adding / renaming / reordering a chapter or step (a test fails when stale)
 npm run smoke        # every route of dist/ in headless Chrome, fails on any runtime error (~3 min)
@@ -904,7 +904,17 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  FsmDoc with `of`: ins + st<i>, outs + ld_<reg> sel_<reg><b> u<k>s<b>), fsmdTopDef (Builder: controller
                  chip `ctl`, op<k> units, r_<reg> registers, cmp<i>, st<i>), fsmdCheck (circuit against the reference per
                  cycle), GCD_FSMD; fsmchip.ts setFsm builds <id>_ctl (fsmOwnerOf: read-only there) then the top level
-  examples.ts    EXAMPLES (fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
+  examplegallery.ts the Examples button's dialog (memui.ts imports it on the first click; styles/examplegallery.css): a search box (focused,
+                 live over name / card line / blurb, says so when nothing matches), cards in the four EXAMPLE_GROUPS (a thumbnail lazy-loaded from
+                 examples/<id>.svg, a missing one leaves the dark placeholder; name, `short`, a "CPU drawer" tag where `drawer`), arrows between
+                 cards (nextCard), a card = addExample + toast, Esc gives the focus back to the button (or More); one column on a phone;
+                 examplefilter.ts (DOM-free): EXAMPLE_GROUPS, exampleMatches, filterExamples; examplethumb.ts (DOM-free): exampleThumb(ex) / chipThumb
+                 draw the top level from the chip's own document (part boxes via geom.ts partBox, wires via model.ts polyline, pins, names where they fit)
+                 as a 16:10 SVG on a dark board; scripts/example-thumbs.ts writes public/examples/<id>.svg (gitignored, ~45 KB for all; npm run build runs
+                 it, so a build of your own branch must too, or the smoke's failed-request check fails; not in the service worker's precache: only
+                 assets/ is); tests/example-gallery.test.ts: every example has a group, card line and blurb, the filter, a drawing each; the smoke's
+                 GALLERY_DRIVE opens it (phone: via More), searches, checks every thumbnail loaded, arrows, Esc
+  examples.ts    EXAMPLES (each with group, short, blurb, drawer: new ones need all three; fetch loop, counter + font ROM on a 7-segment digit, console, screen, the computer, shared bus,
                  wired-AND / OR, RV16 Pong: campaign/bench.ts pongChip), addExample: new chip (and an example's
                  `subchips`, fresh ids), opened. The computer
                  (computerChip, ~60 × 64 units: readable at fit with the CPU drawer): rv32i_core (lib/resolve.ts
@@ -1066,7 +1076,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  new project, Delete); the page (ui/pages/sandbox.ts) rebuilds the editor on another project, and a
                  campaign level's chip (u_ch_cp_*) always opens in the first project
   memui.ts       Memory palette group, ROM / RAM property sections (live listing, RAM grid, initial
-                 contents), the program editor dialog, Examples ▸; values polled per frame while shown; long
+                 contents), the program editor dialog, the Examples button (opens examplegallery.ts, its own chunk); values polled per frame while shown; long
                  lists build only the rows in view (vlist.ts: virtualRows), a large RAM's grid has Go to
   romcompose.ts  the instruction builder in a ROM's program editor, any language but hex / 6502 (Ctrl+Space / Build
                  instruction): the caret's line, its address and labels from isa.program; Replace keeps label, indentation
