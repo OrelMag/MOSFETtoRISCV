@@ -52,7 +52,7 @@ export function telegraphView(): Widget {
     aria: 'A telegraph key, a line on poles and a sounder with two coils, an armature and an anvil, in 3D',
     camera: { target: [2, 6, 2], yaw: 0.45, pitch: 0.7, dist: 215 },
     limits: { minDist: 90, maxDist: 440 },
-    note: 'The line is drawn short and its length is not to scale; the armature gap is drawn five times its size and the coils are far larger than life.',
+    note: 'The line is drawn short and its length is not to scale; the armature gap is drawn five times its size and the coils are far larger than life. Near pull-in the model has not seated the armature by the end of its run, so the last stretch onto the anvil is eased, not computed.',
     draw: () => stage.paint(tgParts(pose(), palette()), tgAnchors(pose())),
   });
   const palette = (): TgPalette => ({
