@@ -9,7 +9,7 @@ import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, CLOCK_NS, frameBitTimes, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS,
 } from '../comm/mac';
 import { maxThroughput, runLoad, runPair, type LoadResult } from '../comm/macexp';
-import { ethSegment, stationMac } from '../lib/ethernet';
+import { ethSegment, stationMac } from '../lib/ethstation';
 import { h, s } from '../ui/dom';
 import { saveFile } from '../view/image';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -43,7 +43,7 @@ export function collisionWidget(): Widget {
       verdict.className = 'clk-verdict bad';
       verdict.textContent = t.detectB >= 0 && t.startB < d
         ? `Both started before the other's first bit arrived. B hears A at ${d} and detects at ${t.detectB}; A hears B at ${t.startB + d} and detects at ${t.detectA}. Each sends a ${JAM_BYTES * 8}-bit jam so that everyone sees the collision, then draws a backoff. In the end A kept ${t.goodA} and B kept ${t.goodB} frames.`
-        : `B started at ${t.startB}, after A's carrier had reached it at ${d}: it should have deferred. The station decides on the carrier it sees, ${d} clocks late, and still collides when ${'its decision came before that'}.`;
+        : `B started at ${t.startB}, about when A's carrier reached it (${d}): its decision to start came a clock or two before the carrier showed.`;
     } else {
       verdict.className = 'clk-verdict ok';
       verdict.textContent = t.startB > d ? `B's carrier sense saw A's frame (arriving at ${d}) before it was ready: it deferred and went after the gap. No collision. A kept ${t.goodA} and B kept ${t.goodB} frames.` : 'No collision.';
@@ -112,10 +112,10 @@ export function throughputWidget(): Widget {
   const plot = h('div', { class: 'uart-svg' }), read = h('div', { class: 'mc-status' }), tbl = h('div', { class: 'eth-scroll' }), prog = h('span', { class: 'sub', role: 'status' });
   let busy = false, gen = 0;
   const paint = () => {
-    const W = 640, H = 230, L = 40, R = 10, T = 12, B = 30, gx = (g: number) => L + (g / 3) * (W - L - R), gy = (v: number) => H - B - v * (H - B - T);
+    const W = 640, H = 246, L = 40, R = 10, T = 12, B = 30, gx = (g: number) => L + (g / 3) * (W - L - R), gy = (v: number) => H - B - v * (H - B - T);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot eth-plot', role: 'img', 'aria-label': 'Throughput against offered load' }) as SVGSVGElement;
     for (const v of [0, 0.25, 0.5, 0.75, 1]) svg.append(s('line', { x1: L, x2: W - R, y1: gy(v), y2: gy(v), class: 'grid' }), s('text', { x: 4, y: gy(v) + 4, class: 'tick' }, v.toFixed(2)));
-    for (const g of [0, 1, 2, 3]) svg.append(s('text', { x: gx(g), y: H - 12, 'text-anchor': 'middle', class: 'tick' }, String(g)));
+    for (const g of [0, 1, 2, 3]) svg.append(s('text', { x: gx(g), y: H - 16, 'text-anchor': 'middle', class: 'tick' }, String(g)));
     svg.append(s('text', { x: (L + W) / 2, y: H - 1, 'text-anchor': 'middle', class: 'tick' }, 'offered load (fraction of capacity)'));
     const mx = maxThroughput(S.payload);
     svg.append(s('path', { d: `M${gx(0)},${gy(0)}L${gx(mx)},${gy(mx)}L${gx(3)},${gy(mx)}`, class: 'eth-ideal' }));
@@ -215,7 +215,7 @@ export function segmentScene(): Scene {
         S.clock = clock; S.collisions = collisions; S.sent = sent; S.log = log; S.kept = [0, 1, 2, 3].map((i) => stat('ngood', i, 8));
         strips.replaceChildren(strip([...[0, 1, 2, 3].map((i) => ({ label: `station ${i + 1}`, data: rows[i] })), { label: 'clash', data: rows[4], cls: 'jam' }], WINDOW, `Which stations send, in the last ${(WINDOW * SAMPLE).toLocaleString('en')} clocks (one sample per ${SAMPLE})`));
         const st = (n: string, i: number, w: number) => stat(n, i, w);
-        cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('span', { class: 'sub' }, i === 3 ? ' (promiscuous)' : ''),
+        cards.replaceChildren(...[0, 1, 2, 3].map((i) => h('div', { class: `eth-card${i === 3 ? ' mon' : ''}` }, h('b', null, `Station ${i + 1}`), h('div', { class: 'sub' }, i === 3 ? 'promiscuous' : 'own address'),
           h('div', null, txStateName(st('txstate', i, 3))), h('div', null, `kept ${st('ngood', i, 8)} · dropped ${st('nbad', i, 8)}`), h('div', null, `collisions ${st('ncol', i, 8)}`))));
         read.replaceChildren(h('span', null, 'clocks ', h('b', null, clock.toLocaleString('en'))), h('span', null, 'time ', h('b', null, us(clock))), h('span', null, 'frames sent ', h('b', null, String(sent))), h('span', null, 'collisions ', h('b', null, String(collisions))),
           h('span', null, 'station 4 has captured ', h('b', null, `${cap.frames.length} frame${cap.frames.length === 1 ? '' : 's'}`)));

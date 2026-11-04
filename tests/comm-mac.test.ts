@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { BIT_CLOCKS, captureRecord, GAP_CLOCKS, MacRx, MacTx, Segment, Station, type StationIn, WHY_ADDR, WHY_FCS, WHY_LONG, WHY_RUNT, type RxIn, type TxIn } from '../src/comm/mac';
 import { frameBody, frameBytes, parseFrame, wireBytes, type FrameSpec } from '../src/comm/ethframe';
 import { pcapFile, readPcap } from '../src/comm/pcap';
-import { ethSegment, macRx, macTx, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethernet';
+import { macRx, macTx } from '../src/lib/ethernet';
+import { countsOf, ethSegment, EV, SEG_POSITIONS, STATION_SEEDS, stationMac } from '../src/lib/ethstation';
 import { simulate } from '../src/sim/harness';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
@@ -295,23 +296,20 @@ describe('segment', () => {
       const ins: StationIn[] = seg.st.map((_, k) => (op.sel === k ? { rst: 0, go: op.go, len: op.len, we: op.we, wa: op.wa, wd: op.wd } : { rst: 0, go: 0, len: 0 }));
       set(gate, { rst: 0, sel: op.sel, wa: op.wa, wd: op.wd, we: op.we, len: op.len, go: op.go, ra: 0, hrd: 0, promisc: 8 });
       tickClk(gate); seg.step(ins);
-      const bitsOf = (f: (s: Station) => number) => seg.st.reduce((v, s, i) => v | (f(s) << i), 0);
-      const exp: Record<string, number> = {
-        txen: bitsOf((s) => s.tx.txen), busy: bitsOf((s) => s.busy), sent: bitsOf((s) => s.tx.sent), restart: bitsOf((s) => s.tx.restart), drop: bitsOf((s) => s.tx.drop),
-        rxgood: bitsOf((s) => (s.rx.valid && s.rx.last && !s.rx.err ? 1 : 0)), rxbad: bitsOf((s) => (s.rx.valid && s.rx.last && s.rx.err ? 1 : 0)), clash: seg.wire.clash,
-      };
-      for (const k of Object.keys(exp)) expect(out(gate, k), `${k} @${c}`).toBe(exp[k]);
+      const evOf = (s: Station): number => (s.tx.sent << EV.sent) | (s.tx.drop << EV.drop) | (s.tx.restart << EV.restart) | ((s.rx.valid && s.rx.last && !s.rx.err ? 1 : 0) << EV.rxgood)
+        | ((s.rx.valid && s.rx.last && s.rx.err ? 1 : 0) << EV.rxbad) | (s.rx.valid << EV.rxv) | (s.rx.last << EV.rxl) | (s.rx.err << EV.rxe);
+      seg.st.forEach((s, k) => {
+        expect(out(gate, `ev${k}`), `ev${k} @${c}`).toBe(evOf(s));
+        if (c % 50 === 0) {
+          expect(out(gate, `stat${k}`), `stat${k} @${c}`).toBe(s.tx.state | (s.tx.att << 3) | (s.rx.state << 7));
+          const cn = countsOf(out(gate, `counts${k}`));
+          expect([cn.good, cn.bad, cn.col], `counts${k} @${c}`).toEqual([s.ngood, s.nbad, s.ncol]);
+          expect(out(gate, `cp${k}`), `cp${k} @${c}`).toBe(s.cp);
+        }
+      });
+      expect(out(gate, 'txen'), `txen @${c}`).toBe(seg.st.reduce((v, s, k) => v | (s.tx.txen << k), 0));
+      expect(out(gate, 'clash'), `clash @${c}`).toBe(seg.wire.clash);
       seen.restart += seg.st.reduce((n, s) => n + s.tx.restart, 0); seen.sent += seg.st.reduce((n, s) => n + s.tx.sent, 0); seen.clash += seg.wire.clash;
-      if (c % 100 === 0) {
-        const wide = (f: (s: Station) => number, w: number) => seg.st.reduce((v, s, i) => v + f(s) * 2 ** (w * i), 0);
-        expect(out(gate, 'ngood'), `ngood @${c}`).toBe(wide((s) => s.ngood, 8));
-        expect(out(gate, 'nbad'), `nbad @${c}`).toBe(wide((s) => s.nbad, 8));
-        expect(out(gate, 'ncol'), `ncol @${c}`).toBe(wide((s) => s.ncol, 8));
-        expect(out(gate, 'cp'), `cp @${c}`).toBe(wide((s) => s.cp, 11));
-        expect(out(gate, 'txstate'), `txstate @${c}`).toBe(wide((s) => s.tx.state, 3));
-        expect(out(gate, 'att'), `att @${c}`).toBe(wide((s) => s.tx.att, 4));
-        expect(out(gate, 'rxstate'), `rxstate @${c}`).toBe(wide((s) => s.rx.state, 2));
-      }
       if (c % 400 === 0) await yieldTick();
     }
     expect(seen.clash).toBeGreaterThan(0);
@@ -341,7 +339,7 @@ describe('capture', () => {
     }
     host({ sel: 0, len: bodies[0].length, go: 1 }); tickClk(gate);
     host({});
-    const cpOf = () => Math.floor(out(gate, 'cp') / 2 ** 33);
+    const cpOf = () => out(gate, 'cp3');
     const marks: { clock: number; from: number; to: number }[] = [];
     let last = 0;
     for (let c = 0; c < 9000; c++) {
@@ -353,7 +351,7 @@ describe('capture', () => {
     expect(marks).toHaveLength(2);
     const frames = marks.map((mk) => {
       const bytes: number[] = [];
-      for (let a = mk.from; a < mk.to; a++) { host({ sel: 3, ra: a, hrd: 1 }); bytes.push(out(gate, 'rd')); }
+      for (let a = mk.from; a < mk.to; a++) { host({ sel: 3, ra: a, hrd: 1 }); bytes.push(out(gate, 'rd3')); }
       return captureRecord(mk.clock, bytes);
     });
     const file = pcapFile(frames);

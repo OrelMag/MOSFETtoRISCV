@@ -6,9 +6,9 @@ import '../styles/clocks.css';
 import '../styles/uart.css';
 import '../styles/ethernet.css';
 import { crc32, fcsBytes } from '../comm/crc';
-import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_FRAME, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
+import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, MAX_PAYLOAD, MIN_PAYLOAD, wireBytes, type FrameSpec } from '../comm/ethframe';
 import { BIT_CLOCKS, captureRecord, clocksToUs, frameBitTimes, GAP_BITS, LINK_MBPS, WHY_NAMES } from '../comm/mac';
-import { ethStation, macWord, stationMac } from '../lib/ethernet';
+import { EV, ethStation, stationMac } from '../lib/ethstation';
 import { pcapFile } from '../comm/pcap';
 import { h, s } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
@@ -100,7 +100,31 @@ export function frameWidget(): Widget {
 export class Bench {
   constructor(readonly st: Stage) {}
   get sim() { return this.st.sim!; }
-  get(name: string): number { return pack(this.sim.getBits(this.sim.design.root.ports[name])); }
+  private raw(name: string): number { return pack(this.sim.getBits(this.sim.design.root.ports[name])); }
+  /**
+   * A port by name. The station packs its events (ev), states (stat) and counters (counts); here they read by name, and on a
+   * segment (ports ev0, ev1 …) one bit or field a station is packed into a number, station 0 lowest.
+   */
+  get(name: string): number {
+    const ports = this.sim.design.root.ports;
+    const single = (n: string, f: (v: number) => number): number => (n in ports ? f(this.raw(n)) : -1);
+    const spread = (src: string, f: (v: number) => number, w: number): number => {
+      const one = single(src, f);
+      if (one >= 0) return one;
+      let v = 0;
+      for (let i = 0; `${src}${i}` in ports; i++) v += f(this.raw(`${src}${i}`)) * 2 ** (w * i);
+      return v;
+    };
+    if (name in EV) return spread('ev', (v) => (v >> EV[name as keyof typeof EV]) & 1, 1);
+    if (name === 'txstate') return spread('stat', (v) => v & 7, 3);
+    if (name === 'att') return spread('stat', (v) => (v >> 3) & 15, 4);
+    if (name === 'rxstate') return spread('stat', (v) => (v >> 7) & 3, 2);
+    if (name === 'ngood') return spread('counts', (v) => v & 255, 8);
+    if (name === 'nbad') return spread('counts', (v) => Math.floor(v / 256) & 255, 8);
+    if (name === 'ncol') return spread('counts', (v) => Math.floor(v / 65536) & 255, 8);
+    if (name === 'cp' && !('cp' in ports)) return spread('cp', (v) => v, 11);
+    return this.raw(name);
+  }
   set(name: string, v: number): void { this.sim.setInput(name, v); }
   clock(): void { const m = this.sim; m.settle(); m.setInput('clk', 1); m.settle(); m.setInput('clk', 0); m.settle(); }
   reset(): void { this.set('rst', 1); this.clock(); this.clock(); this.set('rst', 0); this.sim.settle(); }
@@ -114,7 +138,7 @@ export class Bench {
   rx(addr: number, sel?: number): number {
     if (sel !== undefined) this.set('sel', sel);
     this.set('ra', addr); this.set('hrd', 1); this.sim.settle();
-    const v = this.get('rd');
+    const v = 'rd' in this.sim.design.root.ports ? this.get('rd') : this.get(`rd${sel ?? 0}`);
     this.set('hrd', 0); this.sim.settle();
     return v;
   }
@@ -139,7 +163,7 @@ export class Capture {
 
 /** A row of digital signals as step lines, `labels` down the left. */
 export function strip(rows: { label: string; data: number[]; cls?: string }[], total: number, aria: string, marks: { x: number; text: string; cls?: string }[] = []): SVGSVGElement {
-  const W = 640, L = 62, R = 8, RH = 26, H = rows.length * RH + 24;
+  const W = 640, L = 62, R = 8, RH = 26, H = rows.length * RH + 14 + (marks.length ? 36 : 10);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'mos-plot uart-wave eth-strip', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   const X = (i: number) => L + (i / Math.max(1, total)) * (W - L - R);
   rows.forEach((r, k) => {
@@ -150,7 +174,7 @@ export function strip(rows: { label: string; data: number[]; cls?: string }[], t
     if (r.data.length) d += `L${X(r.data.length)},${r.data[r.data.length - 1] ? y1 : y0}`;
     svg.append(s('path', { d, class: `uart-line ${r.cls ?? ''}` }));
   });
-  for (const m of marks) svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: 2, y2: H - 18, class: `eth-mark ${m.cls ?? ''}` }), s('text', { x: Math.min(W - 40, X(m.x) + 3), y: H - 6, class: 'tick' }, m.text));
+  marks.forEach((m, k) => svg.append(s('line', { x1: X(m.x), x2: X(m.x), y1: 2, y2: H - 8 - (k % 3) * 11 - 10, class: `eth-mark ${m.cls ?? ''}` }), s('text', { x: Math.min(W - 90, X(m.x) + 3), y: H - 8 - (k % 3) * 11, class: 'tick' }, m.text)));
   return svg;
 }
 
@@ -177,8 +201,8 @@ export const txStateName = (v: number): string => TX_STATES[v] ?? '?';
 const RX_STATES = ['idle', 'hunting for the SFD', 'receiving'];
 
 /** The station on the stage as the scenes use it: address 1, nothing on the wire, a seed. */
-const stationInputs = (): Record<string, number> => ({ mac: macWord(stationMac(0)), seed: 0x155, promisc: 0, rxd: 0, crs: 0, rst: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0 });
-const HIDDEN = ['mac', 'seed', 'promisc', 'rxd', 'crs', 'rst', 'wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'];
+const stationInputs = (): Record<string, number> => ({ me: 1, promisc: 0, rxd: 0, crs: 0, rst: 0, wa: 0, wd: 0, we: 0, len: 0, go: 0, ra: 0, hrd: 0 });
+const HIDDEN = ['me', 'promisc', 'rxd', 'crs', 'rst', 'wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'];
 
 // ---- step 2: the transmitter -------------------------------------------------------------------------------------------
 
@@ -192,7 +216,7 @@ export function txScene(): Scene {
     panels: [(stage: Stage): Widget => {
       const b = new Bench(stage);
       let text = 'hello from A', dst = 'b';
-      let bits: number[] = [], wire: number[] = [], run = 0, done = false, cls: string[] = [], clock = 0, wave: number[][] = [[], []];
+      let bits: number[] = [], wire: number[] = [], run = 0, done = false, cls: string[] = [], clock = 0, wave: number[][] = [[], []], plen = 0;
       const hexBox = h('div'), read = h('div', { class: 'mc-status' }), waveBox = h('div', { class: 'uart-svg' }), verdict = h('div', { class: 'clk-verdict' });
       const bytes = (): number[] => { const o: number[] = []; for (let k = 0; k + 8 <= bits.length; k += 8) o.push(bits.slice(k, k + 8).reduce((v, x, j) => v | (x << j), 0)); return o; };
       const record = () => {
@@ -212,7 +236,7 @@ export function txScene(): Scene {
         b.reset();
         const payload = utf8(text).slice(0, MAX_PAYLOAD);
         const spec: FrameSpec = { dst: dst === 'all' ? BROADCAST : stationMac(1), src: stationMac(0), type: ETHERTYPE_IPV4, payload };
-        wire = wireBytes(spec); cls = fieldMap(payload.length); bits = []; run = 0; done = false; clock = 0; wave = [[], []];
+        wire = wireBytes(spec); cls = fieldMap(payload.length); plen = payload.length; bits = []; run = 0; done = false; clock = 0; wave = [[], []];
         S.expected = wire; S.done = false; S.sentBytes = [];
         b.send(frameBody(spec));
         stage.refresh();
@@ -229,7 +253,7 @@ export function txScene(): Scene {
         if (done) {
           const ok = got.length === wire.length && got.every((v, i) => v === wire[i]);
           verdict.className = `clk-verdict ${ok ? 'ok' : 'bad'}`;
-          verdict.textContent = ok ? `The gates sent ${got.length} bytes, equal to the frame builder's: ${wire.length - 8 - 4} bytes of frame (${Math.max(0, MIN_FRAME - 4 - (wire.length - 8 - 4))} of them pad) behind 8 of preamble, with the CRC-32 the unit computed on the way out as the last four. Frame time ${frameBitTimes(wire.length - 8)} bit times = ${(frameBitTimes(wire.length - 8) * BIT_CLOCKS)} clocks.`
+          verdict.textContent = ok ? `The gates sent ${got.length} bytes, equal to the frame builder's: ${wire.length - 8 - 4} bytes of frame (${Math.max(0, MIN_PAYLOAD - plen)} of them pad) behind 8 of preamble, with the CRC-32 the unit computed on the way out as the last four. Frame time ${frameBitTimes(wire.length - 8)} bit times = ${(frameBitTimes(wire.length - 8) * BIT_CLOCKS)} clocks.`
             : 'The bytes differ from the frame builder\'s.';
         } else { verdict.className = 'clk-verdict'; verdict.textContent = ''; }
       };
@@ -310,9 +334,10 @@ export function rxScene(): Scene {
         const u = cap.frames.length;
         read.replaceChildren(h('span', null, 'receiver ', h('b', null, RX_STATES[b.get('rxstate')] ?? '?')), h('span', null, 'SFD seen at ', h('b', null, sfdAt >= 0 ? `clock ${sfdAt}` : '-')),
           h('span', null, 'bytes delivered ', h('b', null, String(delivered.length))), h('span', null, 'frames kept ', h('b', null, String(kept))), h('span', null, 'thrown away ', h('b', null, String(gone))), h('span', null, 'buffer ', h('b', null, `commit ${b.get('cp')}, write ${b.get('wp')}`)));
-        hexBox.replaceChildren(delivered.length ? hexDump(delivered, fieldMap(Math.max(0, delivered.length - 18), false)) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, four bytes behind the wire.'));
-        const bitsOut = q.rxd.slice(Math.max(0, k - 96), k);
-        line.replaceChildren(strip([{ label: 'rxd', data: bitsOut }, { label: 'crs', data: q.crs.slice(Math.max(0, k - 96), k) }], 96, 'The receive wire: data and carrier, the last 24 bits'));
+        const rcls = delivered.map((_, j) => (j < 6 ? 'dst' : j < 12 ? 'src' : j < 14 ? 'type' : 'data'));
+        hexBox.replaceChildren(delivered.length ? hexDump(delivered, rcls) : h('p', { class: 'sub' }, 'Send a frame: its bytes appear here as the receiver hands them over, four bytes behind the wire.'), ...(delivered.length ? [legend(rcls), h('p', { class: 'sub' }, 'Payload and pad are one run here: the receiver cannot tell them apart.')] : []));
+        const at = loop.running || sfdAt < 0 ? k : Math.min(q.rxd.length, sfdAt + 56), from = Math.max(0, at - 96);
+        line.replaceChildren(strip([{ label: 'rxd', data: q.rxd.slice(from, at) }, { label: 'crs', data: q.crs.slice(from, at) }], 96, 'The receive wire: data and carrier, 24 bits, the last of the preamble and the SFD once the frame is in'));
         if (lastV) {
           const why = WHY_NAMES.filter((_, i) => (lastV!.why >> i) & 1);
           verdict.className = `clk-verdict ${lastV.err ? 'bad' : 'ok'}`;
@@ -338,63 +363,75 @@ export function rxScene(): Scene {
 
 // ---- step 4: carrier sense and deferral --------------------------------------------------------------------------------
 
-export interface CsmaState { startedAt: number; busyUntil: number; txStart: number; run(busyFrom: number, busyBits: number): void }
+export interface CsmaState { lastCarrierEnd: number; txStart: number; run(firstBits: number, secondAfter: number): void }
 const csmaStates = new WeakMap<Stage, CsmaState>();
 export const csmaState = (st: Stage) => csmaStates.get(st);
+
+/** The carrier the scene drives, in clocks from the moment the frame is queued: a burst of `a` bit times, then (if `g` > 0) a second of 30 bit times `g` bit times after it. */
+export function carrierPlan(a: number, g: number): [number, number][] {
+  const out: [number, number][] = [];
+  if (a > 0) out.push([0, a * BIT_CLOCKS]);
+  if (a > 0 && g > 0) out.push([(a + g) * BIT_CLOCKS, (a + g + 30) * BIT_CLOCKS]);
+  return out;
+}
 
 export function csmaScene(): Scene {
   return {
     root: ethStation(), inputs: stationInputs(), hiddenInputs: HIDDEN, autoClock: false, engine: 'cycle',
     panels: [(stage: Stage): Widget => {
       const b = new Bench(stage);
-      let busyFrom = 100, busyBits = 150;
-      let crsW: number[] = [], txW: number[] = [], gapW: number[] = [], clock = 0, txStart = -1, busyEnd = -1;
+      let first = 100, second = 0;
+      let crsW: number[] = [], txW: number[] = [], gapW: number[] = [], clock = 0, txStart = -1, plan: [number, number][] = [];
       const box = h('div', { class: 'uart-svg' }), read = h('div', { class: 'mc-status' }), verdict = h('div', { class: 'clk-verdict' });
-      const S: CsmaState = { startedAt: 0, busyUntil: 0, txStart: -1, run: (f, n) => { busyFrom = f; busyBits = n; start(); } };
+      const S: CsmaState = { lastCarrierEnd: -1, txStart: -1, run: (a, g) => { first = a; second = g; start(); } };
       csmaStates.set(stage, S);
-      const bf = () => busyFrom * BIT_CLOCKS, be = () => (busyFrom + busyBits) * BIT_CLOCKS;
+      const lastEnd = () => (plan.length ? plan[plan.length - 1][1] : -1);
       const loop = new Loop(stage, () => {
-        const on = busyBits > 0 && clock >= bf() && clock < be() ? 1 : 0;
+        const on = plan.some(([f, t]) => clock >= f && clock < t) ? 1 : 0;
         b.set('crs', on);
         b.clock();
         crsW.push(on); txW.push(b.get('txen')); gapW.push(b.get('gap'));
         if (txStart < 0 && txW[txW.length - 1] === 1) txStart = clock;
         clock++;
-        return clock < Math.max(be(), 0) + 800 && !(txStart >= 0 && b.get('sent') === 1);
+        return clock < lastEnd() + 1100 && !(txStart >= 0 && b.get('sent') === 1);
       }, () => paint(), 60, 30);
       const start = () => {
         if (loop.running) return;
         stage.checkpoint();
         b.reset();
+        // the cable has been quiet for a long time before the frame is queued: the gap counter is full
+        for (let i = 0; i < GAP_BITS * BIT_CLOCKS + 8; i++) b.clock();
         const spec: FrameSpec = { dst: stationMac(1), src: stationMac(0), type: ETHERTYPE_IPV4, payload: utf8('deferred') };
-        crsW = []; txW = []; gapW = []; clock = 0; txStart = -1; busyEnd = be();
+        plan = carrierPlan(first, second);
+        crsW = []; txW = []; gapW = []; clock = 0; txStart = -1;
         b.send(frameBody(spec));
         stage.refresh();
         loop.start();
       };
       const paint = () => {
-        S.txStart = txStart; S.busyUntil = busyEnd; S.startedAt = clock;
+        S.txStart = txStart; S.lastCarrierEnd = lastEnd();
         const total = Math.max(crsW.length, 400);
-        box.replaceChildren(strip([{ label: 'carrier', data: crsW }, { label: 'txen', data: txW }, { label: 'gap', data: gapW.map((g) => (g >= 384 ? 1 : 0)), cls: 'gap' }], total, 'Carrier from another station, this station\'s carrier enable, and whether its gap counter has reached 96 bit times',
-          [...(busyEnd >= 0 ? [{ x: busyEnd, text: 'carrier off', cls: '' }] : []), ...(txStart >= 0 ? [{ x: txStart, text: 'txen', cls: 'ok' }] : [])]));
+        const end = lastEnd();
+        box.replaceChildren(strip([{ label: 'carrier', data: crsW }, { label: 'txen', data: txW }, { label: 'gap full', data: gapW.map((g) => (g >= GAP_BITS * BIT_CLOCKS ? 1 : 0)), cls: 'gap' }], total, 'Carrier from another station, this station\'s carrier enable, and whether its gap counter has reached 96 bit times',
+          [...(end >= 0 && crsW.length > end ? [{ x: end, text: 'carrier off', cls: '' }] : []), ...(txStart >= 0 ? [{ x: txStart, text: 'txen', cls: 'ok' }] : [])]));
         const gap = gapW.length ? gapW[gapW.length - 1] : 0;
-        read.replaceChildren(h('span', null, 'state ', h('b', null, txStateName(b.get('txstate')))), h('span', null, 'gap counter ', h('b', null, `${gap} / 384`), ' clocks'), h('span', null, 'clock ', h('b', null, String(clock))));
-        if (txStart >= 0 && busyEnd >= 0) {
-          const dly = txStart - busyEnd;
-          verdict.className = `clk-verdict ${busyBits > 0 && dly >= 384 ? 'ok' : ''}`;
-          verdict.textContent = busyBits > 0 && busyEnd > 0
-            ? `The other station stopped at clock ${busyEnd}; this one started ${dly} clocks later (${(dly / BIT_CLOCKS).toFixed(0)} bit times): the gap of ${GAP_BITS} bit times counted again from the end of the carrier.`
-            : `No carrier: the station started at clock ${txStart}, ${GAP_BITS} bit times after reset.`;
+        read.replaceChildren(h('span', null, 'state ', h('b', null, txStateName(b.get('txstate')))), h('span', null, 'gap counter ', h('b', null, `${gap} / ${GAP_BITS * BIT_CLOCKS}`), ' clocks'), h('span', null, 'clock ', h('b', null, String(clock))));
+        if (txStart >= 0) {
+          const dly = txStart - Math.max(0, end);
+          verdict.className = `clk-verdict ${end < 0 || dly >= GAP_BITS * BIT_CLOCKS ? 'ok' : ''}`;
+          verdict.textContent = end > 0
+            ? `The last carrier ended at clock ${end}; this station started at clock ${txStart}, ${dly} clocks (${(dly / BIT_CLOCKS).toFixed(0)} bit times) later: the gap of ${GAP_BITS} bit times, counted from the end of the last carrier${second > 0 ? ', and restarted by the second burst' : ''}.`
+            : `The wire was quiet and the gap counter already full: the station started at clock ${txStart}, a couple of clocks after the frame was queued.`;
         } else { verdict.className = 'clk-verdict'; verdict.textContent = ''; }
       };
-      stage.resetHooks.add(() => { crsW = []; txW = []; gapW = []; clock = 0; txStart = -1; busyEnd = -1; paint(); });
-      const sl1 = slider('Carrier starts', 0, 300, 10, busyFrom, (v) => `bit ${v}`, (v) => { busyFrom = v; });
-      const sl2 = slider('Carrier lasts', 0, 300, 10, busyBits, (v) => `${v} bit times`, (v) => { busyBits = v; });
+      stage.resetHooks.add(() => { crsW = []; txW = []; gapW = []; clock = 0; txStart = -1; plan = []; paint(); });
+      const sl1 = slider('Carrier lasts', 0, 300, 10, first, (v) => `${v} bit times`, (v) => { first = v; });
+      const sl2 = slider('Second burst', 0, 90, 10, second, (v) => (v ? `${v} bit times after` : 'none'), (v) => { second = v; });
       paint();
       const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel eth-panel', 'data-dock': 'right' }, h('h4', null, 'Listen before talking', h('span', { class: 'fold-hint' })),
-        h('div', { class: 'mc-row' }, sl1.el, sl2.el, btn('Queue a frame', 'Reset the station, queue one frame and run with another station talking as set', start, 'btn sm primary')),
+        h('div', { class: 'mc-row' }, sl1.el, sl2.el, btn('Queue a frame', 'Queue one frame with another station talking as set, then run', start, 'btn sm primary')),
         read, box, verdict,
-        h('p', { class: 'sub' }, 'Another station\'s carrier (crs) is driven by the sliders. The queued frame goes only after the cable has been silent for 96 bit times; any carrier restarts the count.'));
+        h('p', { class: 'sub' }, 'Another station\'s carrier (crs) is driven from the moment the frame is queued. The station defers until the cable has been silent for 96 bit times; a second burst that comes inside the gap restarts the count.'));
       return { el, update: paint, destroy: () => loop.stop() };
     }],
   };
