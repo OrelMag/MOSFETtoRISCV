@@ -544,8 +544,16 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Asking again", challenge: "quiz" },
     { title: "Correcting instead of asking", challenge: "quiz" },
   ] },
-  { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], steps: [
-    { title: "Many machines, one wire" },
+  { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
+    { title: "Many machines, one wire", challenge: "quiz" },
+    { title: "The transmitter", challenge: "quiz" },
+    { title: "The receiver", challenge: "quiz" },
+    { title: "Listen before talking", challenge: "quiz" },
+    { title: "Collisions", challenge: "quiz" },
+    { title: "Why a minimum frame exists", challenge: "quiz" },
+    { title: "Binary exponential backoff", challenge: "quiz" },
+    { title: "A segment", challenge: "reach" },
+    { title: "Where this went" },
   ] },
   { id: "switch", num: 49, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange"], steps: [
     { title: "Everyone at once" },
