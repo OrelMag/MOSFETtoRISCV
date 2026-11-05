@@ -10,7 +10,7 @@ import { moreOf } from '../src/campaign/codexmore';
 import { chapterById } from '../src/chapters';
 import { TAUGHT } from '../src/chapters/taught';
 
-describe('the Signal processing level's codex entries', () => {
+describe("the Signal processing level's codex entries", () => {
   it('have no id twice, and a chapter of their own', () => {
     expect(new Set(CODEX_DSP.map((e) => e.id)).size).toBe(CODEX_DSP.length);
     expect(Object.keys(TAUGHT_DSP).sort()).toEqual(CODEX_DSP.map((e) => e.id).sort());
