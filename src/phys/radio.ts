@@ -52,6 +52,8 @@ export const logDistanceDb = (m: number, ghz: number, n: number, d0 = 1): number
 // ---- noise and budget --------------------------------------------------------------------------------------------------------------
 /** kT at 290 K: −174 dBm/Hz. */
 export const noiseFloorDbm = (mhz: number, nfDb = 0): number => -173.98 + 10 * Math.log10(mhz * 1e6) + nfDb;
+/** Wall loss per wall: illustrative, more at the higher band. */
+export const WALL_DB = (ghz: number): number => (ghz > 3 ? 16 : 12);
 export const KT_DBM_HZ = 10 * Math.log10(1.380649e-23 * 290 / 1e-3);
 export interface Budget { txDbm: number; gtDbi: number; grDbi: number; km: number; ghz: number; extraDb: number; mhz: number; nfDb: number }
 export interface BudgetResult { eirp: number; path: number; rx: number; noise: number; snr: number; capacityMbps: number }

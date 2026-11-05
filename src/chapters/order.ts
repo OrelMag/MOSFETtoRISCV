@@ -74,6 +74,7 @@ const BOOK = [
   'wifi',
   'cellular',
   'datacentre',
+  'bench',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

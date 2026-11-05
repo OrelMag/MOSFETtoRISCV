@@ -14,6 +14,7 @@ on:
       - 'src/lib/usb.ts'
       - 'src/widgets/usb.ts'
       - 'src/comm/ethswitch.ts'
+      - 'src/campaign/capcomm.ts'
       - 'src/comm/stack/**'
       - 'src/net/**'
       - 'src/lib/router.ts'

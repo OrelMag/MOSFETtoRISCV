@@ -8,7 +8,7 @@ import type { ChipDoc, Workspace } from '../editor/model';
 import { better, type Measured, stars as starsOf } from './grade';
 import { isDone, type ProgressView } from './graph';
 import { levelChipId } from './levels';
-import { CAPSTONES } from '../learn/capstones';
+import { CAPSTONES, COMM_CAPSTONES } from '../learn/capstones';
 import { NODES, nodeById } from './nodes';
 import { isTwinKey } from './twinids';
 
@@ -70,7 +70,7 @@ export const emptyCampaign = (): CampaignState => ({ schema: SCHEMA, nodes: {} }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** A tier capstone (learn/capstones.ts): recorded here beside the nodes, not on the campaign map. */
-const isCapstone = (id: string) => CAPSTONES.some((c) => c.id === id);
+const isCapstone = (id: string) => CAPSTONES.some((c) => c.id === id) || COMM_CAPSTONES.some((c) => c.id === id);
 const STATUSES = new Set(['started', 'solved', 'skipped']);
 
 /** Untrusted JSON → a state with only known nodes and well-formed fields. */
@@ -338,7 +338,7 @@ export class Progress {
 
 /** The campaign as a file: progress plus the level chips and every chip they use. */
 export function exportCampaign(st: CampaignState, ws: Workspace): string {
-  const ids = [...NODES.map(levelChipId), ...CAPSTONES.map((c) => `u_ch_${c.id}`)].filter((id) => ws.chips[id]);
+  const ids = [...NODES.map(levelChipId), ...[...CAPSTONES, ...COMM_CAPSTONES].map((c) => `u_ch_${c.id}`)].filter((id) => ws.chips[id]);
   return JSON.stringify({ format: CAMPAIGN_FORMAT, schema: SCHEMA, progress: st, chips: closure(ws, ids) }, null, 2);
 }
 
