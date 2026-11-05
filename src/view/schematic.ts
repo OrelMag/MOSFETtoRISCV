@@ -20,9 +20,11 @@ import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, 
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import type { ViewFocus } from '../ui/viewlink';
-import { factsOf, type NetEnd } from './netfacts';
-import { type MeasureHost, partHeader, partMeasure, wireHeader, wireRows } from './tracemenu';
-import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
+import type { NetEnd } from './netfacts';
+import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
+import type { MenuSite } from './circuitmenu';
+import type { ComponentDef } from '../sim/types';
+import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
@@ -47,14 +49,14 @@ export interface SchematicEvents {
   inspect?(child: string | null): void;
   /** May the menu offer Inspect now (a level's look inside: its drawer has a Verilog tab)? Absent: yes, if there is an inspect. */
   canInspect?(): boolean;
-  /** The menu's Explain for a part or (null) the level on screen. */
-  explain?(child: string | null): MenuEntry[];
+  /** The menu's Explain for a part or (null) the level on screen: what it is about, and how this surface opens things. */
+  explain?(child: string | null): { def: ComponentDef; host: ExplainHost } | null;
   /** The menu's Measure: probes, timing and power for a net or a part of this level. */
   measure?(target: ViewFocus): MeasureHost;
   /** Up one level, for the menu's jump to a port of this level. */
   up?(): void;
-  /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen. */
-  elsewhere?(target: ViewFocus | null): MenuEntry[];
+  /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen (null: nothing goes). */
+  elsewhere?(target: ViewFocus | null): ElsewhereHost | null;
   /** The probe on a net of the current view, if any. */
   probeOf?(net: number): { color: number; label: string } | null;
   /** The learner moved a part or a wire, or unravelled a pointer (the level was redrawn). */
@@ -1318,62 +1320,50 @@ export class SchematicView {
   private menuItems(target: Element | null): MenuItem[] {
     const items = this.layoutItems(target);
     if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
-    const more = [
+    // the groups' rows load when one opens (view/circuitmenu.ts)
+    const later = (label: string, which: 'explain' | 'elsewhere'): MenuItem => ({ label, sub: () => import('./circuitmenu').then((m) => m.levelGroup(this.events, which)) });
+    const more: MenuItem[] = [
       ...(this.events.inspect && this.events.canInspect?.() !== false ? [{ label: 'Inspect', run: () => this.events.inspect!(null) }] : []),
-      ...(this.events.explain?.(null) ?? []),
-      ...(this.events.elsewhere?.(null) ?? []),
-    ].filter((x): x is MenuItem => !!x);
+      ...(this.events.explain?.(null) ? [later('Explain', 'explain')] : []),
+      ...(this.events.elsewhere?.(null) ? [later('Take it elsewhere', 'elsewhere')] : []),
+    ];
     return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...more, ...items];
   }
 
-  /** A wire's or a part's full menu: its header, what a surface offers, then the layout rows. */
+  /** A wire's or a part's full menu. It selects what it is for now; its rows load on the first right-click
+   *  (view/circuitmenu.ts), so a stage page carries only the shell. */
   private traceMenu(target: Element, x: number, y: number): boolean {
     const ctx = this.ctx;
     if (!this.trace || !ctx) return false;
-    const into = h('div', {});
-    const layout = this.layoutItems(target);
     const ni = target.closest('[data-net]')?.getAttribute('data-net');
+    const name = ni == null ? target.closest('[data-inst]')?.getAttribute('data-inst') : null;
+    if (ni == null && (!name || !ctx.node.children?.has(name))) return false;
     if (ni != null) {
-      const idx = Number(ni), f = factsOf(ctx.def, idx);
-      if (!f) return false;
+      const idx = Number(ni);
       if (idx !== this.selectedNet) {
         this.select(null);
         this.events.select(null);
         this.selectNet(idx);
       }
-      wireHeader(into, f, () => ctx.netBits(idx), () => this.netNote(ctx, idx));
-      const sw = ctx.sim instanceof SwitchSim || ctx.sim instanceof NmosSim;
-      const rows = wireRows(f, {
-        highlight: () => { this.select(null); this.selectNet(idx); },
-        jump: (e) => this.jumpTo(e),
-        upLevel: (e) => e.inst === null && !!ctx.parent,
-        ...(this.events.why ? { why: () => this.events.why!(idx) } : { whyOff: 'The Why? card is on stages and in Look inside.' }),
-        design: () => ctx.sim.design,
-        flat: () => ctx.node.nets?.[idx] ?? [],
-        transistors: sw,
-        more: this.events.elsewhere?.({ net: idx }) ?? [],
-        ...(this.events.measure ? { measure: this.events.measure({ net: idx }) } : {}),
-      });
-      showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for wire ${f.name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
-      return true;
-    }
-    const name = target.closest('[data-inst]')?.getAttribute('data-inst');
-    const node = name ? ctx.node.children?.get(name) : undefined;
-    if (!name || !node) return false;
-    if (!this.group.has(name)) {
+    } else if (!this.group.has(name!)) {
       this.setGroup([]);
-      this.select(name);
-      this.events.select(name);
+      this.select(name!);
+      this.events.select(name!);
     }
-    partHeader(into, name, node.def);
-    const rows: MenuItem[] = [
-      { label: 'Look inside', key: 'double-click', run: () => this.events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
-      ...(this.events.inspect && this.events.canInspect?.() !== false ? [{ label: 'Inspect', hint: 'Its datasheet and cost', run: () => this.events.inspect!(name) }] : []),
-      ...(this.events.measure ? partMeasure(name, this.events.measure({ inst: name })).filter((x): x is MenuItem => !!x) : []),
-      ...(this.events.explain?.(name).filter((x): x is MenuItem => !!x) ?? []),
-      ...(this.events.elsewhere?.({ inst: name }).filter((x): x is MenuItem => !!x) ?? []),
-    ];
-    showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for part ${name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
+    const site: MenuSite = {
+      ctx, events: this.events, owner: this, back: this.menuBack, layout: this.layoutItems(target),
+      selectNet: (i) => { this.select(null); this.selectNet(i); },
+      jump: (e) => this.jumpTo(e),
+      netNote: (i) => this.netNote(ctx, i),
+    };
+    void import('./circuitmenu').then(
+      (m) => {
+        // the view moved on while it loaded (another level, a cleared scene): the menu would be for something gone
+        if (this.ctx !== ctx) return;
+        if (!(ni != null ? m.openNet(site, Number(ni), x, y) : m.openPart(site, name!, x, y))) this.openMenu(site.layout.filter((r): r is MenuItem => !!r), x, y);
+      },
+      // offline with a stale page: the layout rows still answer
+      () => this.openMenu(site.layout.filter((r): r is MenuItem => !!r), x, y));
     return true;
   }
 
@@ -1474,7 +1464,7 @@ export class SchematicView {
     const nl = this.base;
     if (!nl) return;
     const back = this.menuBack;
-    showPicker('Pick a part or wire', [
+    void import('../ui/menupick').then(({ showPicker }) => showPicker('Pick a part or wire', [
       ...nl.instances.map((i) => ({ label: i.name, note: i.def.name, run: () => {
         this.select(i.name);
         this.events.select(i.name);
@@ -1486,7 +1476,7 @@ export class SchematicView {
         this.selectNet(i);
         this.keyMenu();
       } })),
-    ], back, this);
+    ], back, this));
   }
 
   /** The level's layout actions as a menu at a point on the screen (the stage's Layout button, `toggle`). */

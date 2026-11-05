@@ -37,8 +37,9 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
-import { isMenuKey, type MenuEntry } from '../ui/menu';
-import { elsewhereGroup, elsewhereRows, explainGroup, type MeasureHost, powerOff } from './tracemenu';
+import { isMenuKey } from '../ui/menu';
+import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
+import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -1167,9 +1168,9 @@ export class Stage {
   }
 
   /** The right-click menu's Explain for a part or (null) this level. */
-  private explain(c: string | null): MenuEntry[] {
+  private explain(c: string | null): { def: ComponentDef; host: ExplainHost } | null {
     const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
-    if (!def) return [];
+    if (!def) return null;
     const at = (section: 'truth' | 'used') => () => {
       this.select(c);
       this.showInspector();
@@ -1179,21 +1180,21 @@ export class Stage {
       markJump();
       location.hash = href;
     };
-    return explainGroup(def, {
+    return { def, host: {
       truth: at('truth'), used: at('used'),
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
-    });
+    } };
   }
 
   /** The right-click menu's Take it elsewhere for a part, a wire or (null) this level. */
-  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+  private elsewhere(t: ViewFocus | null): ElsewhereHost | null {
     const ctx = this.ctx;
-    if (!ctx) return [];
+    if (!ctx) return null;
     const inst = t && 'inst' in t ? t.inst : null;
     const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
     const say = (msg: string) => this.flashNow(msg);
-    return elsewhereGroup(elsewhereRows({
+    return {
       def, say,
       ...(this.scene?.noRemix ? {} : { sandbox: { label: 'Open in Sandbox', run: () => this.remix(def ?? undefined) } }),
       verilog: true,
@@ -1205,7 +1206,7 @@ export class Stage {
         } : 'It has no inside to draw.')
         : (kind: 'svg' | 'png') => this.exportImage(kind) } : {}),
       link: { label: 'Copy a link to this view', hint: t ? 'Opens here, with this one picked out' : 'Step, part, inputs, probes, clock cycles', run: () => void this.copyViewLink(t ?? undefined) },
-    }));
+    };
   }
 
   /** A part or the level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */

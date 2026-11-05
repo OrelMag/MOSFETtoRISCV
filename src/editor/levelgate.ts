@@ -4,7 +4,7 @@
 import type { ComponentDef } from '../sim/types';
 import { markJump } from '../ui/returnto';
 import type { MenuEntry } from '../ui/menu';
-import { explainGroup } from '../view/tracemenu';
+import { explainGroup, type ExplainHost } from '../view/tracemenu';
 import type { Editor } from './editor';
 
 /** A level's chip (u_ch_cp_<node>) or a walkthrough's (u_walk_<node>). */
@@ -19,19 +19,24 @@ export function handout(o: { chipId: string; level: boolean; own: boolean }): { 
 
 /** Explain on the sandbox's surfaces: a level's codex entries read in its side pane, since leaving would tear down its editor. */
 export function explainOn(ed: Editor, def: ComponentDef, inspectAt: ((at: 'truth' | 'used') => void) | null): MenuEntry[] {
+  return explainGroup(def, explainHostOn(ed, inspectAt));
+}
+
+/** The same, as what a surface hands the menu: how it opens things here. */
+export function explainHostOn(ed: Editor, inspectAt: ((at: 'truth' | 'used') => void) | null): ExplainHost {
   const away = (href: string) => {
     // a level keeps its screen: the chapter opens beside it (the desktop program opens no second window of its own pages)
     if (ed.level && /^https?:/.test(location.href)) return void window.open(href, '_blank', 'noopener');
     markJump();
     location.hash = href;
   };
-  return explainGroup(def, {
+  return {
     ...(inspectAt ? { truth: () => inspectAt('truth'), used: () => inspectAt('used') } : {}),
     openCodex: (id) => (ed.openCodex ? ed.openCodex(id) : away(`#/campaign/codex/${id}`)),
     ...(ed.openCodex ? { readsLocked: true } : {}),
     openChapter: away,
     chip: { id: ed.level?.chipId ?? ed.chipId, level: !!ed.level },
-  });
+  };
 }
 
 /** A library part as a chip of the open project (one undo step), opened. */

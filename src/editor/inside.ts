@@ -11,11 +11,12 @@
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
-import { isMenuKey, type MenuEntry } from '../ui/menu';
+import { isMenuKey } from '../ui/menu';
 import type { ViewFocus } from '../ui/viewlink';
-import { elsewhereGroup, elsewhereRows, type MeasureHost, powerOff } from '../view/tracemenu';
+import type { ElsewhereHost, MeasureHost } from '../view/tracemenu';
+import { powerOff } from '../view/truthrule';
 import { netEnds } from './probes';
-import { copyAsChip, explainOn, handout } from './levelgate';
+import { copyAsChip, explainHostOn, handout } from './levelgate';
 import { probeRow } from './probehook';
 import { SwitchSim } from '../sim/switchsim';
 import { NmosSim } from '../sim/nmossim';
@@ -172,7 +173,7 @@ class InsideView {
       measure: (t) => this.measure(t),
       explain: (c) => {
         const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
-        return def ? explainOn(this.ed, def, this.gated() ? null : (at) => this.inspectPart(c, at)) : [];
+        return def ? { def, host: explainHostOn(this.ed, this.gated() ? null : (at) => this.inspectPart(c, at)) } : null;
       },
     });
     this.view.radix = ed.view.radix;
@@ -218,12 +219,12 @@ class InsideView {
   }
 
   /** The right-click menu's Take it elsewhere: a level's parts stay on the level. */
-  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+  private elsewhere(t: ViewFocus | null): ElsewhereHost | null {
     const ctx = this.ctx;
-    if (!ctx || handout({ chipId: this.ed.chipId, level: !!this.ed.level, own: false }).none) return [];
+    if (!ctx || handout({ chipId: this.ed.chipId, level: !!this.ed.level, own: false }).none) return null;
     const inst = t && 'inst' in t ? t.inst : null;
     const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
-    return elsewhereGroup(elsewhereRows({
+    return {
       def,
       say: (msg, err) => this.ed.toast(msg, err ? 'err' : 'info'),
       // a chip of the learner's is already one
@@ -235,7 +236,7 @@ class InsideView {
         return child ? import('../view/image').then((m) => m.exportInside(child, this.view.el, kind)) : this.ed.toast('It has no inside to draw', 'err');
       } : 'It has no inside to draw.' } : {}),
       link: { label: 'Copy a link to this view', why: 'Look inside has no address of its own. Use Share link on the Sandbox’s chip.' },
-    }));
+    };
   }
 
   /** (Re)attach to the editor's current simulator. */

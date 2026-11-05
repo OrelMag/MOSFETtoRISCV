@@ -5,7 +5,7 @@
 
 import type { Vec } from '../sim/geometry';
 import { h } from '../ui/dom';
-import { closeMenu, type MenuEntry, showMenu, showPicker } from '../ui/menu';
+import { closeMenu, type MenuEntry, showMenu } from '../ui/menu';
 import { type Editor, registerEditorPlugin } from './editor';
 import { canTurn } from './face';
 import { canLookInside, lookInside } from './inside';
@@ -258,7 +258,7 @@ function pickEntries(ed: Editor): { label: string; note: string; run(): void }[]
 }
 
 function pickTarget(ed: Editor): void {
-  showPicker('Pick a part or wire', pickEntries(ed), ed.view.svg);
+  void import('../ui/menupick').then(({ showPicker }) => showPicker('Pick a part or wire', pickEntries(ed), ed.view.svg));
 }
 
 /** Open the menu at a screen point for the current selection (empty: the canvas's actions at `at`). */

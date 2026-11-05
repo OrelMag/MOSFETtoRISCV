@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { anchorPoint, flySpot, isMenuKey, menuSpot, pickRows, typeAhead } from '../src/ui/menu';
+import { anchorPoint, flySpot, isMenuKey, menuSpot, typeAhead } from '../src/ui/menu';
+import { pickRows } from '../src/ui/menupick';
 
 describe('the menu shell', () => {
   it('knows the menu key and Shift+F10, and only those', () => {
