@@ -4,6 +4,7 @@
 // (the Goertzel state is an integer, the coefficient Q2.14, the product rounded half up once). tests/dsp-spectrum.test.ts holds this to scipy's vectors.
 
 import { cx, fft, fftMults } from '../comm/fourier';
+import { convolve } from './zplane';
 import { bitsToHold, satTo, shiftRound, wrapTo } from './fixed';
 
 // ---- windows ---------------------------------------------------------------------------------------------------------------------------------
@@ -173,6 +174,22 @@ export function overlapSave(x: readonly number[], h: readonly number[], N: numbe
     blocks++;
   }
   return { y: keepAll ? y : y.slice(0, total), blocks, hop: L };
+}
+/** What a block's circular result gets wrong: the largest error in its first M − 1 samples (wrap-around) and in the rest, against the true convolution. */
+export function blockErrors(x: readonly number[], h: readonly number[], N: number): { wrapped: number; kept: number } {
+  const M = h.length, L = N - M + 1, want = convolve(x, h), H = fft(cx([...h, ...new Array<number>(N - M).fill(0)]));
+  const padded = [...new Array<number>(M - 1).fill(0), ...x, ...new Array<number>(N).fill(0)];
+  let wrapped = 0, kept = 0;
+  for (let b = 0; b * L < want.length; b++) {
+    const X = fft(cx(padded.slice(b * L, b * L + N))), re = new Float64Array(N), im = new Float64Array(N);
+    for (let k = 0; k < N; k++) { re[k] = X.re[k] * H.re[k] - X.im[k] * H.im[k]; im[k] = X.re[k] * H.im[k] + X.im[k] * H.re[k]; }
+    const r = fft({ re, im }, true).re;
+    for (let i = 0; i < N; i++) {
+      const pos = b * L + i - (M - 1), e = Math.abs(r[i] - (pos >= 0 && pos < want.length ? want[pos] : 0));
+      if (i < M - 1) wrapped = Math.max(wrapped, e); else kept = Math.max(kept, e);
+    }
+  }
+  return { wrapped, kept };
 }
 /** Real multiplications a sample: direct form one a tap; blocks two FFTs and N products of complex numbers per L outputs, 4 real each, the real input's savings not taken. */
 export const directMults = (M: number): number => M;

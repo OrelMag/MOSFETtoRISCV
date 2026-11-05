@@ -77,6 +77,7 @@ const BOOK = [
   'bench',
   'fixed',
   'zplane',
+  'spectrum',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
