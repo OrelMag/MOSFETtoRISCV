@@ -142,7 +142,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       o.camera = v;
       const c = renderer?.camera;
       if (!c) { if (mode === 'flat') o.draw(); return; }
-      c.target = [...v.target]; c.yaw = v.yaw; c.pitch = v.pitch; c.dist = v.dist;
+      c.rehome(v, c.limits);
       renderer?.invalidate();
     },
     rgb: (t) => colors.rgb(t),

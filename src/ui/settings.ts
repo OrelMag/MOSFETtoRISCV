@@ -1,6 +1,7 @@
 // User settings and progress, persisted per browser (best effort: storage may be unavailable).
 
 import type { Radix } from '../sim/values';
+import { moveProgress, STEP_MOVES } from '../chapters/stepmoves';
 
 export type Theme = 'auto' | 'light' | 'dark';
 /** What one slow-mode tick advances: a gate delay, a clock cycle, or a retired instruction. */
@@ -86,6 +87,8 @@ interface State {
   last?: { chapter: string; step: number };
   /** "chapterId:step" → solved */
   solved: Record<string, boolean>;
+  /** Batches of chapters/stepmoves.ts already applied to the progress. */
+  moved?: number;
   /** Campaign map: optional acts unfolded (true) or folded (false) by the learner; absent: the default. */
   openActs: Record<string, boolean>;
 }
@@ -104,10 +107,10 @@ function load(): State {
         if (!st.vivid) st.netColors = true;
         st.vivid = true; st.cartoon = true; st.looks = 1;
       }
-      return st;
+      return moveProgress(st);
     }
   } catch { /* private mode, blocked storage, ... */ }
-  return { ...defaults };
+  return { ...defaults, moved: STEP_MOVES.length };
 }
 
 /** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */

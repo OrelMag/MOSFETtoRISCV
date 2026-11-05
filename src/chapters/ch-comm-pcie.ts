@@ -1,10 +1,13 @@
 // PCIe and USB (level Communication): the packet buses inside the box. PCIe in gates against a golden model (comm/pcie.ts, lib/pcie.ts): TLPs, credits, the
-// data link layer's replay, link training. Every number is computed or pinned by tests/comm-pcie*. The gate-level link is a symbol a clock, one lane; the multi-gigabit figures
+// data link layer's replay, link training; USB (comm/usb.ts, lib/usb.ts): packets, CRCs, enumeration. Model and gate numbers are computed or pinned by tests/comm-pcie*, comm-usb*; history and lane rates are typed. The gate-level link is a symbol a clock, one lane; the multi-gigabit figures
 // are real PCIe's, and the prose says which is which.
 
 import { ACK_LIMIT, ADV_NPH, ADV_PD, ADV_PH, creditOk, DL_UP, FC_PERIOD_BITS, LINE_DELAY, LINK_IN0, PcieLink, REPLAY_LIMIT, REPLAY_SLOTS, TS_RX, TS_TX, type LinkIn } from '../comm/pcie';
 import { busWidget, creditScene, laneGBs, parallelGBs, parallelMHz, PCIE_GENS, pcieApi, pcieCosts, pcieScene, tlpWidget } from '../widgets/pcie';
 import { numOf } from './order';
+import { CRC5_POLY, DEVICE_DESCRIPTOR, BIT_CLOCKS, MAX_PACKET, UsbBench, UsbDevice, crc16, crc5Token, tokenBytes, PID } from '../comm/usb';
+import { usbCosts } from '../lib/usb';
+import { usbApi, usbPacketWidget, usbScene } from '../widgets/usb';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -30,6 +33,11 @@ export function linkFacts() {
 const F = linkFacts();
 let costs: ReturnType<typeof pcieCosts> | null = null;
 const C = () => (costs ??= pcieCosts());
+/** A whole enumeration on the golden model: the clocks it takes. */
+const USB_CLOCKS = (() => { const b = new UsbBench(new UsbDevice()); b.run(60000); return b.clock; })();
+let usbC: ReturnType<typeof usbCosts> | null = null;
+const UC = () => (usbC ??= usbCosts());
+const hx = (b: readonly number[]) => b.map((x) => x.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 const SK = 1000, W64 = 64;
 const G5 = PCIE_GENS[4];
 
@@ -228,6 +236,77 @@ export const chPcie: Chapter = {
         why: ['', 'Per wire a SerDes is far faster; a bus just has many short wires.', 'A TLP carries an address well enough.', 'PCIe runs over board traces, and chiplets use short serial links too.'],
       },
     },
+    {
+      title: 'USB: one master, and nobody else speaks',
+      body: `
+        <p>USB answers the same question for a different customer. A keyboard must be cheap, needs few wires, and has to work when plugged into a running machine by someone who knows nothing about it. So all the intelligence goes in the host: the bus has one master, and a device speaks only when spoken to. No arbitration, no interrupts: a "USB interrupt" is the host asking, on a schedule.</p>
+        <p>The wires are one differential pair, half duplex. Idle is <strong>J</strong> (at full speed, D+ high), its opposite is <strong>K</strong>, and both low is <strong>SE0</strong>, which marks the end of a packet. The bits go <strong>NRZI</strong>: a 0 is a change of level, a 1 is none. A long run of 0s has edges to recover a clock from; a long run of 1s doesn't, so after six 1s the sender <strong>stuffs</strong> a 0, whatever comes next, and the receiver removes it. Every packet starts with a SYNC pattern, KJKJKJKK, and the receiver has no clock of its own to speak of: it oversamples and resynchronizes on each transition, as the UART does on a start bit, but all along.</p>
+        <p>A <strong>transaction</strong> is up to three packets. A token from the host says who and which way: <code>SETUP</code>, <code>IN</code> or <code>OUT</code>, a 7-bit address, a 4-bit endpoint and a CRC5. For address 0, endpoint 0 that is <code>${hx(tokenBytes(PID.SETUP, 0, 0))}</code> (CRC5 ${crc5Token(0, 0).toString(2).padStart(5, '0')}). Then a data packet, <code>DATA0</code> or <code>DATA1</code>, with a CRC16. Then a one-byte handshake: <code>ACK</code>, <code>NAK</code> ("not now, ask again") or <code>STALL</code> ("no"). The PID byte carries its own check: the high nibble is the complement of the low.</p>
+        <p>The DATA0 / DATA1 alternation is the whole retry protocol: <strong>stop and wait with a one-bit sequence number</strong>, the errors chapter's ARQ. If an ACK is lost, the sender repeats, and the receiver recognizes the toggle and takes nothing twice. Compare a PCIe port's window of sequence numbers: one packet outstanding needs no more.</p>
+        <p>The explorer builds a real packet from field to line. The CRCs are the catalogue's CRC-5 and CRC-16/USB; the tests hold them to a published list, and a tshark check reads the packets our gates send. Flip a bit and the CRC fails.</p>`,
+      widget: usbPacketWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'Why does USB stuff a 0 after six 1s, when SYNC already lets the receiver find the clock?',
+        options: ['In NRZI a 1 makes no transition, so a long run of 1s leaves the receiver with nothing to resynchronize on', 'To balance the voltage on the line', 'To mark the end of a byte', 'To make room for the CRC'],
+        answer: 0,
+        explain: 'SYNC gets the phase once; the two ends\' clocks then drift. Six 1s is the longest allowed gap between edges, so that a 0.25 % clock tolerance can never slip a bit.',
+        why: ['', 'That is what 8b/10b\'s disparity does. USB\'s stuffing does not balance anything.', 'A byte has no marker on the wire: position is counted from SYNC.', 'The CRC is ordinary data.'],
+      },
+      more: {
+        numbers: `<p>Oracles: the CRC-16/USB check value (${crc16(Array.from('123456789', (c) => c.charCodeAt(0))).toString(16).toUpperCase()}), published CRC5 and NRZI examples (valentyusb's documentation), and Wireshark's USB link-layer dissector, which reads the captures of our gates' packets in CI and checks every CRC. The generator polynomials are x⁵ + x² + 1 (reflected 0x${CRC5_POLY.toString(16)}) and x¹⁶ + x¹⁵ + x² + 1.</p>`,
+      },
+    },
+    {
+      title: 'Enumeration: a stranger introduces itself',
+      body: `
+        <p>Here is a USB device in gates: ${n0(UC().total)} NANDs. <span data-show="rx">Bit recovery, NRZI and stuffing</span>, <span data-show="pkt">packet fields</span>, <span data-show="crc">the two CRCs</span>, <span data-show="tx">a transmitter with its descriptor ROM</span> and <span data-show="ctl">the control endpoint</span>. A host model drives its wires, and a device model runs beside the gates, compared at every clock.</p>
+        <p>A device plugged in knows nothing and has address 0. The host resets the bus (SE0 held long) and walks it through a fixed dialogue on endpoint 0, the <strong>control pipe</strong>. Each request is an 8-byte SETUP packet, then a data stage, then a status stage in the opposite direction:</p>
+        <ol>
+          <li><code>GET_DESCRIPTOR(device, 8)</code> at address 0: the first 8 bytes, to learn the packet size (${DEVICE_DESCRIPTOR[7]} here). Another reset.</li>
+          <li><code>SET_ADDRESS(5)</code>: from now on this device, not "whoever just arrived".</li>
+          <li><code>GET_DESCRIPTOR(device, 18)</code>: vendor, product, class. In ${MAX_PACKET}-byte packets, each DATA1, DATA0, DATA1 in turn.</li>
+          <li><code>GET_DESCRIPTOR(configuration)</code>: first 9 bytes for the total length, then all of it: interfaces, endpoints, power. This is how the host picks a driver.</li>
+          <li><code>SET_CONFIGURATION(1)</code>: the device is live.</li>
+        </ol>
+        <p><strong>The trap.</strong> SET_ADDRESS is a control transfer, so it ends with a status stage, and the status stage is addressed to the <em>old</em> address, 0. A device that moves on acknowledging the SETUP never hears the IN token of its own status stage. Ours moves when the host acknowledges the status packet. <em>Step transaction</em> through it and watch the log: the token before says addr 0, the token after says addr 5.</p>
+        <p>Press <em>Corrupt next packet</em> first: the device ignores what fails its CRC, the host times out and repeats, and after three errors in a row a real host gives up on the transaction. The whole dialogue takes ${n0(USB_CLOCKS)} clocks here (${BIT_CLOCKS} clocks a bit, a gate-level rate near 63 Mb/s; real full speed is 12 Mb/s, and a real host waits milliseconds between steps).</p>`,
+      scene: usbScene,
+      challenge: {
+        kind: 'reach',
+        goal: 'Take the device from reset to Configured, at the new address, with gates and model agreeing.',
+        check: (st) => { const a = usbApi.get(st)?.status(); return !!a && a.configured && a.stateName === 'Configured' && a.mismatches === 0; },
+        hints: ['Run enumeration does it all; Step transaction shows it one at a time.', 'Watch the address change only after the status stage of SET_ADDRESS.'],
+        answer: `Run enumeration: about ${n0(USB_CLOCKS)} clocks. The log shows the two resets, the address change and the descriptors.`,
+        solve: (st) => usbApi.get(st)?.run(),
+      },
+      more: {
+        numbers: `<p>Device ${n0(UC().total)} NANDs: ${Object.entries(UC().blocks).filter(([k]) => !k.includes('.')).map(([k, v]) => `${k} ${n0(v)}`).join(', ')}. The vendor and product ids are pid.codes' test id, 0x1209 and 0x0001.</p>`,
+        pitfall: '<p>Left out, and named in comm/usb.ts: start-of-frame timing, suspend, low and high speed, hubs, attach detection. If the host\'s last ACK of SET_ADDRESS is lost, the host believes the address changed and the device has not: the next transaction goes unanswered, and that is real behaviour a host recovers from with a reset.</p>',
+      },
+    },
+    {
+      title: 'Two answers to one question',
+      body: `
+        <table class="mini"><tr><th></th><th>PCIe</th><th>USB 2.0</th></tr>
+        <tr><td>Who may send</td><td>Either end, any time it has credit</td><td>Host only; a device answers</td></tr>
+        <tr><td>Overrun</td><td>Prevented: credits before sending</td><td>Refused: a device says NAK and is asked again</td></tr>
+        <tr><td>Retry</td><td>Sequence numbers, replay buffer, a window</td><td>A one-bit toggle, one packet at a time</td></tr>
+        <tr><td>Check</td><td>LCRC per link, CRC-16 on DLLPs</td><td>CRC5 on tokens, CRC16 on data</td></tr>
+        <tr><td>Clock and code</td><td>Recovered, 8b/10b or 128b/130b, scrambled</td><td>Recovered, NRZI with stuffing</td></tr>
+        <tr><td>Finding each other</td><td>Link training in hardware; software walks configuration space</td><td>Reset and descriptors on a control pipe</td></tr>
+        <tr><td>Cost here</td><td>${n0(C().port - C().buffers)} NANDs of port logic, each end, plus buffers</td><td>${n0(UC().total)} NANDs a device</td></tr></table>
+        <p>Both use the same pieces, picked by who pays. PCIe's customer wants throughput and low latency between peers with silicon to spare: credits, windows, full duplex. USB's wants a device that costs less than its cable: the host does the scheduling, retries and thinking, and a device is a small state machine and a ROM. A mouse's chip could not afford a replay buffer and has no need of one.</p>
+        <p>The speeds have since converged, and the differences with them. USB 3 (5 Gb/s, 2008) added separate full-duplex differential pairs and uses 8b/10b, link training and credit-like flow control: a PCIe-like physical layer under USB's model. USB4 (40 Gb/s and up), based on Thunderbolt, is a tunnel: PCIe TLPs, DisplayPort and USB packets all travel on one link as frames. PCIe's packets in USB's connector, which is the kind of layering every chapter of this part has been building up to.</p>
+        <p>Next, the same questions on a shared medium: who may talk, how a frame is framed and checked, and what to do with a frame that has nowhere to go. There, unlike here, dropping is allowed.</p>`,
+      challenge: {
+        kind: 'quiz',
+        question: 'A USB device is out of buffer. What happens, compared with a PCIe receiver out of buffer?',
+        options: ['USB: the host sends, the device NAKs, and it costs bus time. PCIe: the sender never sends, because it has no credit', 'Both drop the packet', 'USB stalls the whole bus; PCIe drops the packet', 'Both raise an interrupt'],
+        answer: 0,
+        explain: 'USB finds out by trying: a NAK burns a token and possibly a data packet. Credits move the knowledge to the sender before the bytes go out, at the cost of counters at both ends and DLLPs to carry updates.',
+        why: ['', 'Neither drops: USB refuses and retries, PCIe waits.', 'STALL means an unsupported request; a NAK delays one endpoint and the others carry on.', 'A USB device cannot interrupt anything: it speaks only when asked.'],
+      },
+    },
   ],
 };
-

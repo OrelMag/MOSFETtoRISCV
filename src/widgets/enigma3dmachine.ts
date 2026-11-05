@@ -32,7 +32,7 @@ export function enigmaAnchors(p: EnigmaPose): Anchor[] {
   }
   if (p.box) a.push({ text: 'Spare wheels', p: [BOX_AT[0], 120, BOX_AT[2] - 20], side: 't', n: up });
   if (p.inside) {
-    a.push({ text: 'Key switches', p: [-122, 33, 60], side: 'l', n: up }, { text: 'Cloth loom to the entry wheel', p: [117, 17, 20], side: 'r', n: [1, 0, 0] });
+    a.push({ text: 'Key switches', p: [-122, 33, 60], side: 'l', n: up }, { text: 'Cloth loom', p: [117, 17, 20], side: 'r', n: [1, 0, 0] });
     a.push({ text: 'Lamp plate', p: [-116, 80, -30], side: 'l', n: up });
     a.push({ text: 'Plugboard’s back', p: [-132, 30, FACE_Z - 3], side: 'l', n: [-1, 0, 0] });
     a.push({ text: 'Battery', p: [97, 93, -105], side: 'r', n: up, minor: true });

@@ -179,7 +179,7 @@ describe('the wiring is the machine’s circuit', () => {
       }
     }
   });
-  it('the pressed key cuts off its own lamp: that is why no letter enciphers to itself', () => {
+  it('the pressed key cuts off its own lamp in the wiring, and only its own', () => {
     for (const ch of 'AQZ') for (let k = 0; k < 26; k++) expect(reach(`etw:${k}`, ch, '').has(`lamp:${ch}`)).toBe(false);
     // Unpressed, the same contact does reach that lamp.
     expect(reach('etw:0', 'Z', '').has('lamp:A')).toBe(true);
