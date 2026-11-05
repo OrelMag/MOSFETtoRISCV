@@ -324,8 +324,13 @@ class Analysis {
     const built = this.ed.sim.built;
     if (!this.gate) return 'Switch level has no gate time: the solver returns settled values.';
     if (!this.sim || !built) return 'Not simulated yet: finish the wiring (see the diagnostics).';
-    if (!resolveProbe(target, this.ed.doc, built, this.sim.design)) return 'Not on a working net of the chip\'s simulation.';
+    const r = resolveProbe(target, this.ed.doc, built, this.sim.design);
+    if (!r) return 'Not on a working net of the chip\'s simulation.';
     const on = [...this.targets.values()].some((t) => sameTarget(t, target, this.ed.doc, built));
+    // a pin's own lane is already this net
+    const key = r.nets.join(',');
+    const port = !on && this.la.lanes.find((l) => !l.probe && l.nets.join(',') === key);
+    if (port) return `Its lane is already in the Timing panel: ${port.label}.`;
     return { label: on ? 'Remove its probe' : 'Add a probe and timing lane', run: () => {
       // the panel first, as probe mode opens it: opening it lays out its lanes again
       if (!on && !this.open) this.setOpen(true);

@@ -13,8 +13,11 @@ export type ProbeTarget =
   | { wires: string[] }
   | { pin: string }
   | { pointer: string }
-  /** A net inside a part (look inside): the instance path from the chip, and the net's index at that level. */
-  | { path: string[]; net: number };
+  /** A net inside a part (look inside): the instance path from the chip, the net's index at that level, and what it joins. */
+  | { path: string[]; net: number; ends?: string };
+
+/** What a net joins, as a probe remembers it. */
+export const netEnds = (n: { ends: string[] }): string => [...n.ends].sort().join(' ');
 
 export interface ResolvedProbe {
   /** Flat nets in the simulation, LSB first. */
@@ -59,6 +62,7 @@ export function resolveProbe(t: ProbeTarget, doc: ChipDoc, built: Compiled, desi
     const flat = node?.nets?.[t.net];
     const nd = node && netlistOf(node.def)?.nets[t.net];
     if (!flat || !nd) return null;
+    if (t.ends !== undefined && netEnds(nd) !== t.ends) return null;
     return { nets: [...flat], label: [...t.path, nd.name ?? nd.ends[0] ?? `net${t.net}`].join('.'), target: t, net: -1 };
   }
   if ('pin' in t) {

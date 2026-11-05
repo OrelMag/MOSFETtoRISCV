@@ -13,7 +13,8 @@ import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ViewFocus } from '../ui/viewlink';
-import { elsewhereGroup, elsewhereRows, type MeasureHost } from '../view/tracemenu';
+import { elsewhereGroup, elsewhereRows, type MeasureHost, powerOff } from '../view/tracemenu';
+import { netEnds } from './probes';
 import { copyAsChip, explainOn, handout } from './levelgate';
 import { probeRow } from './probehook';
 import { SwitchSim } from '../sim/switchsim';
@@ -191,13 +192,15 @@ class InsideView {
     const sw = sim instanceof SwitchSim || sim instanceof NmosSim;
     const timing = sw ? 'Switch level has no gate delay.' : sub ? 'Timing covers the chip’s own design, and this leaf has a simulation of its own.' : { design: sim!.design, at: ctx.path };
     const light = (paths: string[][]) => {
-      this.pathLit = this.view.lightPaths(paths) > 0;
-      if (!this.pathLit) this.ed.toast('Its slowest path runs through no other part of this level');
+      if (this.view.lightPaths(paths) > 0) this.pathLit = true;
+      else this.ed.toast('Its slowest path stays inside it');
     };
     if ('inst' in t) {
-      return { timing, light, ...(this.gated() ? {} : { power: () => this.inspectPart(t.inst, 'power') }) };
+      const off = powerOff(ctx.node.children?.get(t.inst)?.def, false);
+      return { timing, light, ...(this.gated() ? {} : { power: off ?? (() => this.inspectPart(t.inst, 'power')) }) };
     }
-    const probe = sub ? 'A separate lock-step simulation. Probe its ports from the level above.' : probeRow(this.ed, { path: ctx.path, net: t.net });
+    const nd = netlistOf(ctx.def)?.nets[t.net];
+    const probe = sub ? 'A separate lock-step simulation. Probe its ports from the level above.' : probeRow(this.ed, { path: ctx.path, net: t.net, ...(nd ? { ends: netEnds(nd) } : {}) });
     return { probe, timing, light, toggles: sw ? 'Power is counted from gate toggles, and this level has none.' : () => null };
   }
 
@@ -244,6 +247,7 @@ class InsideView {
   }
 
   goTo(path: string[], keepView = false): void {
+    this.pathLit = false;
     this.bind();
     this.closeLeaf();
     if (!this.root) return this.close();

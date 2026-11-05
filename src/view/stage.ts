@@ -38,7 +38,7 @@ import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
-import { elsewhereGroup, elsewhereRows, explainGroup, type MeasureHost } from './tracemenu';
+import { elsewhereGroup, elsewhereRows, explainGroup, type MeasureHost, powerOff } from './tracemenu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -476,7 +476,8 @@ export class Stage {
       if (e.key === 'Escape' && this.view.dropGroup()) return;
       if (e.key === 'Escape' && this.pathLit) {
         this.pathLit = false;
-        this.view.highlight(this.scene?.highlight ?? []);
+        // the scene's own highlight belongs to its top level, as Why? puts it back
+        this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : []);
         return;
       }
       if (matches(e, 'stage.probe') && shortcutAllowed(e)) this.setProbeMode(!this.probeMode);
@@ -844,6 +845,8 @@ export class Stage {
 
   /** Navigate to a path of instance names from the root. */
   goTo(path: string[], notify = true, gates = false): void {
+    // another level: a path lit on this one is gone with it
+    this.pathLit = false;
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
@@ -1131,10 +1134,11 @@ export class Stage {
     const light = (paths: string[][]) => {
       const n = this.view.lightPaths(paths);
       this.pathLit = n > 0;
-      this.flashNow(n ? `The slowest path through it: ${n} part${n === 1 ? '' : 's'} lit here (Esc puts the scene back)` : 'Its slowest path runs through no other part of this level');
+      this.flashNow(n ? `Slowest path: ${n} part${n === 1 ? '' : 's'} lit · Esc clears` : 'Its slowest path stays inside it');
     };
     if ('inst' in t) {
-      const power = cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
+      const off = powerOff(ctx.node.children?.get(t.inst)?.def, !sub && !sw && !cycle);
+      const power = off ? off : cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
         : sw ? 'Power is counted from gate toggles, and this level has none.'
           : sub ? 'Power is counted on the scene’s GateSim, and this leaf has its own simulation.'
             : () => { this.select(t.inst); this.showInspector(); this.inspector.openAt('power'); };
@@ -1146,7 +1150,10 @@ export class Stage {
         : !nets ? 'A separate lock-step simulation. Probe its ports from the level above.'
           : (() => {
             const hit = this.analyzer.probeFor(netKey(nets));
-            return hit ? { label: 'Remove its probe', run: () => this.analyzer.remove(hit.id) }
+            // a port's own lane is already this net
+        const port = this.analyzer.lanes.find((l) => !l.probe && netKey(l.nets) === netKey(nets));
+        if (port && !hit) return `Its lane is already in the Timing panel: ${port.label}.`;
+        return hit ? { label: 'Remove its probe', run: () => this.analyzer.remove(hit.id) }
               : { label: 'Add a probe and timing lane', run: () => { this.addProbe(ctx, t.net, nets); this.showAnalyzer(true); } };
           })();
     const toggles = cycle ? 'The cycle engine counts no toggles, so there is no power to read.'

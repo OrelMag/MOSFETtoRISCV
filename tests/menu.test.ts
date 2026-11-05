@@ -20,6 +20,9 @@ describe('the menu shell', () => {
   it('opens a group beside the menu, on the other side when there is no room', () => {
     expect(flySpot({ left: 100, right: 300 }, 200, 250, 100, 1000, 800)).toEqual({ left: 297, top: 194 });
     expect(flySpot({ left: 700, right: 900 }, 200, 250, 100, 1000, 800)).toEqual({ left: 453, top: 194 });
+    // no room either side: the side with more of it
+    expect(flySpot({ left: 300, right: 600 }, 200, 400, 100, 800, 800).left).toBe(8);
+    expect(flySpot({ left: 200, right: 500 }, 200, 400, 100, 800, 800).left).toBe(392);
     // a low row: the group moves up to stay on screen
     expect(flySpot({ left: 100, right: 300 }, 780, 250, 100, 1000, 800).top).toBe(692);
   });

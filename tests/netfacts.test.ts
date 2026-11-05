@@ -18,7 +18,7 @@ import { levelChipId } from '../src/campaign/levels';
 import { NODES, nodeById } from '../src/campaign/nodes';
 import { elsewhereGroup, type ElsewhereHost, elsewhereRows } from '../src/view/tracemenu';
 import { partDef } from '../src/editor/parts';
-import { resolveProbe, sameTarget } from '../src/editor/probes';
+import { netEnds, resolveProbe, sameTarget } from '../src/editor/probes';
 import { flatten } from '../src/sim/flatten';
 import { readersOf } from '../src/sim/netcap';
 import { crossings, factsOf, fanText, valueRows } from '../src/view/netfacts';
@@ -141,6 +141,14 @@ describe('a probe of a net inside a part', () => {
     }
     expect(r!.nets).toEqual([...node.nets[0]]);
     expect(r!.label.startsWith(part + '.')).toBe(true);
+  });
+
+  it('drops a net whose index now joins other ends (an edit inside the chip)', () => {
+    const node = design.root.children!.get(part)!;
+    if (!node.nets) return;
+    const nd = netlistOf(node.def)!.nets[0];
+    expect(resolveProbe({ path: [part], net: 0, ends: netEnds(nd) }, doc, c, design)).not.toBeNull();
+    expect(resolveProbe({ path: [part], net: 0, ends: 'someone else' }, doc, c, design)).toBeNull();
   });
 
   it('is gone with its part, and the same only as itself', () => {

@@ -184,6 +184,13 @@ async function timingRows(host: MeasureHost, nets: () => readonly number[], inst
   ];
 }
 
+/** Why a part has no power of its own to show (null: it has); `live`: a running scene's meter counts it. As the Inspector's section. */
+export function powerOff(d: ComponentDef | undefined, live: boolean): string | null {
+  if (!d || !d.prim) return null;
+  if (d.prim === 'nand' && live) return null;
+  return 'Counted for circuits, not for one primitive: see the level above.';
+}
+
 /** Measure for a part. */
 export function partMeasure(inst: string, host: MeasureHost): MenuEntry[] {
   return [{ label: 'Measure', sub: async () => [

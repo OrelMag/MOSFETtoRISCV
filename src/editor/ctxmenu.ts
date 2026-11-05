@@ -20,7 +20,7 @@ import { colourNets, hueOfNets } from './wirehue';
 import { netMembers, netOfSelection } from './netsel';
 import { factsOf, type NetEnd } from '../view/netfacts';
 import { ViewCtx } from '../view/context';
-import { elsewhereGroup, elsewhereRows, type MeasureHost, partHeader, partMeasure, wireHeader, wireRows } from '../view/tracemenu';
+import { elsewhereGroup, elsewhereRows, type MeasureHost, partHeader, partMeasure, powerOff, wireHeader, wireRows } from '../view/tracemenu';
 import { probeRow } from './probehook';
 import type { ProbeTarget } from './probes';
 import { exportImage, shareDialog } from './fileui';
@@ -196,7 +196,9 @@ function lightParts(ed: Editor, paths: string[][]): void {
 }
 
 function measureOf(ed: Editor, partId: string): MenuEntry[] {
-  return partMeasure(partId, { timing: timingOf(ed), light: (paths) => lightParts(ed, paths), power: () => inspect(ed, partId, 'power') });
+  const p = ed.doc.parts.find((q) => q.id === partId);
+  const off = powerOff(p ? ed.defOf(p) : undefined, false);
+  return partMeasure(partId, { timing: timingOf(ed), light: (paths) => lightParts(ed, paths), power: off ?? (() => inspect(ed, partId, 'power')) });
 }
 
 /** Explain for a part of this chip (a chip of the learner's has no entry to read: its own properties say the rest). */

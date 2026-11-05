@@ -52,10 +52,11 @@ export function menuSpot(x: number, y: number, w: number, hh: number, vw: number
 
 /** Where a group opens beside its row: right of the menu, else left of it; level with the row, kept on screen. */
 export function flySpot(menu: { left: number; right: number }, rowTop: number, w: number, hh: number, vw: number, vh: number): { left: number; top: number } {
-  return {
-    left: Math.max(EDGE, menu.right - 3 + w > vw - EDGE ? menu.left - w + 3 : menu.right - 3),
-    top: Math.max(EDGE, Math.min(rowTop - 6, vh - hh - EDGE)),
-  };
+  const right = menu.right - 3, left = menu.left - w + 3;
+  const fitsRight = right + w <= vw - EDGE, fitsLeft = left >= EDGE;
+  // neither fits: the side with more room, kept on screen
+  const x = fitsRight ? right : fitsLeft ? left : vw - EDGE - menu.right > menu.left - EDGE ? vw - EDGE - w : EDGE;
+  return { left: Math.max(EDGE, x), top: Math.max(EDGE, Math.min(rowTop - 6, vh - hh - EDGE)) };
 }
 
 /** A point for a menu opened by key: on the target (`box`), within what is on screen of its view. */
@@ -267,13 +268,18 @@ function openFly(row: HTMLElement, it: MenuItem, focus: boolean): void {
   document.body.append(f);
   cur.fly = { el: f, row };
   row.setAttribute('aria-expanded', 'true');
-  fillSub(f, it, () => {
-    const m = cur?.el.getBoundingClientRect();
+  const place = () => {
+    const m = cur?.fly?.el === f ? cur.el.getBoundingClientRect() : null;
     if (!m) return;
     const r = row.getBoundingClientRect();
     const s = flySpot(m, r.top, f.offsetWidth, f.offsetHeight, innerWidth, innerHeight);
     f.style.left = `${s.left}px`;
     f.style.top = `${s.top}px`;
+  };
+  // placed again whenever it changes size: a group that loads its rows grows after "Loading…" was placed
+  if (typeof ResizeObserver === 'function') new ResizeObserver(place).observe(f);
+  fillSub(f, it, () => {
+    place();
     if (focus && cur?.fly?.el === f && !f.contains(document.activeElement)) itemsOf(f)[0]?.focus({ preventScroll: true });
   });
 }

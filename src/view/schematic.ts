@@ -1417,7 +1417,8 @@ export class SchematicView {
     const at = this.ctx?.path ?? [];
     const names = new Set<string>();
     for (const p of paths) if (p.length > at.length && at.every((x, i) => p[i] === x) && this.insts.has(p[at.length])) names.add(p[at.length]);
-    this.highlight([...names], true);
+    // nothing of this level on it: what is lit stays lit
+    if (names.size) this.highlight([...names], true);
     return names.size;
   }
 
