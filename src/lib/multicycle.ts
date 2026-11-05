@@ -394,8 +394,8 @@ function buildMicro(P: Microprogram, id: string, shared: boolean): ComponentDef 
   void mg;
   const nets: NetDef[] = [
     { name: 'clk', ends: ['clk', 'upc.clk'] }, { ends: ['one.y', 'upc.en'] },
-    { name: 'µPC', ends: ['upc.q', 'ua.i1', 'state'], tags: ['state'] },
-    { ends: ['z2.y', 'ua.i0', 'd1a.i0', 'd2a.i0'], tags: true }, { ends: ['z26.y', 'ua.i2'] },
+    { name: 'µPC', ends: ['upc.q', 'ua.i1', 'state'], via: { state: [[20, 21], [20, 10]] } },
+    { ends: ['z2.y', 'ua.i0', 'd1a.i0', 'd2a.i0'], tags: ['d1a.i0', 'd2a.i0'] }, { ends: ['z26.y', 'ua.i2'] },
     { name: 'µaddr', ends: ['ua.out', 'urom.addr'] },
     { name: 'microword', ends: ['urom.data', 'sw.in'] },
     { name: 'op', ends: ['op', 'op.in'] },
@@ -404,22 +404,25 @@ function buildMicro(P: Microprogram, id: string, shared: boolean): ComponentDef 
     { ends: ['z25.y', 'd1a.i2'] }, { ends: ['z29.y', 'd2a.i2'] },
     { name: 'd1addr', ends: ['d1a.out', 'd1.addr'] }, { name: 'd2addr', ends: ['d2a.out', 'd2.addr'] },
     { name: 'd1word', ends: ['d1.data', 'd1s.in'] }, { name: 'd2word', ends: ['d2.data', 'd2s.in'] },
-    { name: 'dispatch1', ends: ['d1s.o0', 'mx.d1'], tags: true }, { name: 'dispatch2', ends: ['d2s.o0', 'mx.d2'], tags: true },
+    // the returns to the sequencer: out of the splitters, down to rows above the dispatch ROMs, left past the sequencer, up into its pins;
+    // the leftmost lane takes the lowest row, so on the left nothing crosses
+    { name: 'dispatch1', ends: ['d1s.o0', 'mx.d1'], via: { 'mx.d1': [[63, 57], [63, 49], [-10, 49], [-10, 24]] } },
+    { name: 'dispatch2', ends: ['d2s.o0', 'mx.d2'], via: { 'mx.d2': [[62, 79], [62, 48], [-8, 48], [-8, 26]] } },
     { ends: ['z4.y', 'mx.d3'] },
     { name: 'µnext', ends: ['mx.y', 'upc.d'] },
   ];
   const nf = MC_FIELDS.length;
-  MC_FIELDS.forEach(([f], i) => nets.push({ name: f, ends: [`sw.o${i}`, f], tags: true }));
-  nets.push({ name: 'nextAddr', ends: [`sw.o${nf}`, 'mx.d0'], tags: true }, { name: 'seq', ends: [`sw.o${nf + 1}`, 'mx.s'], tags: true });
+  MC_FIELDS.forEach(([f], i) => nets.push({ name: f, ends: [`sw.o${i}`, f] }));
+  nets.push({ name: 'nextAddr', ends: [`sw.o${nf}`, 'mx.d0'], via: { 'mx.d0': [[64, 37.5], [64, 50], [-12, 50], [-12, 22]] } }, { name: 'seq', ends: [`sw.o${nf + 1}`, 'mx.s'], via: { 'mx.s': [[61, 40.5], [61, 47], [4, 47]] } });
   const pins: Record<string, [number, number]> = { clk: [0, 40], op: [0, 60] };
   MC_FIELDS.forEach(([f], i) => (pins[f] = [xS + 24, 2 + 4 * i]));
-  pins.state = [xS + 24, 2 + 4 * nf];
+  pins.state = [22, 10];
   const def: ComponentDef = {
     id, name: P === MC_PROGRAM ? 'Microprogrammed multicycle controller' : 'Microprogrammed multicycle controller (edited)', category: 'cpu',
     summary: `The same ${P.states.length}-state machine stored as data: a micro-PC, a ROM of ${CTRL_BITS + 6}-bit microwords (control signals, next address, sequencing mode) and two dispatch ROMs indexed by the opcode. Changing the instruction set means changing the ROM contents, not the wiring.`,
     ports: ctrlPorts(),
     symbol: { kind: 'box', label: 'µCODE CONTROL' },
-    netlist: () => ({ pins, instances, nets }),
+    netlist: () => ({ pins, pinDirs: { state: 'left' }, instances, nets }),
   };
   return shared ? define(def) : def;
 }
