@@ -25,6 +25,17 @@ export function netCaps(d: FlatDesign): Float64Array {
   return c;
 }
 
+/** Inputs reading each net, across the design's leaves. */
+const readerCache = new WeakMap<FlatDesign, Int32Array>();
+export function readersOf(d: FlatDesign): Int32Array {
+  const hit = readerCache.get(d);
+  if (hit) return hit;
+  const r = new Int32Array(d.netCount);
+  for (const l of d.leaves) for (const p of l.inputs) for (const net of p) r[net]++;
+  readerCache.set(d, r);
+  return r;
+}
+
 /** The leaf driving each net (−1: a root input, or nothing). */
 const driverCache = new WeakMap<FlatDesign, Int32Array>();
 export function driverOf(d: FlatDesign): Int32Array {

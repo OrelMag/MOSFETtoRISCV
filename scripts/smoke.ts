@@ -168,7 +168,7 @@ const TOUCH_DRIVE = `(async () => {
     if (e && svg.contains(e) && !e.closest('[data-part], [data-wire], [data-pin-id], [data-label], .ed-ptr')) { at = [x, y]; break; }
   }
   if (!at) return ['no empty canvas to hold on'];
-  const menu = () => document.querySelector('.sb-ctx');
+  const menu = () => document.querySelector('.ctx-menu');
   ptr(svg, 'pointerdown', at[0], at[1]); await wait(250); ptr(svg, 'pointerup', at[0], at[1]); await wait(100);
   if (menu()) bad.push('a tap opened the menu');
   ptr(svg, 'pointerdown', at[0], at[1]); await wait(250); ptr(svg, 'pointermove', at[0] + 30, at[1]); await wait(450); ptr(svg, 'pointerup', at[0] + 30, at[1]); await wait(100);
@@ -177,9 +177,10 @@ const TOUCH_DRIVE = `(async () => {
   const m = menu();
   if (!m) bad.push('a press and hold opened no menu');
   else {
+    if (!m.classList.contains('sheet')) bad.push('the menu on a touch screen is not a sheet');
     const labels = [...m.querySelectorAll('button')].map((b) => b.textContent);
     if (!labels.some((l) => /Add a pointer here/.test(l))) bad.push('the menu is not the canvas menu: ' + labels.join(' | ').slice(0, 80));
-    if (document.querySelectorAll('.sb-ctx').length !== 1) bad.push('more than one menu');
+    if (document.querySelectorAll('.ctx-menu').length !== 1) bad.push('more than one menu');
     for (const b of m.querySelectorAll('button')) if (b.getBoundingClientRect().height < 39.5) { bad.push('a menu item under 40 px: ' + b.textContent); break; }
   }
   ptr(svg, 'pointerup', at[0], at[1]); await wait(100);
@@ -248,13 +249,13 @@ const STAGE_TOUCH_DRIVE = `(async () => {
   }
   if (!wire) return [...bad, 'no wire to hold on'];
   ptr(wire[0], 'pointerdown', wire[1], wire[2]); await wait(250); ptr(wire[0], 'pointerup', wire[1], wire[2]); await wait(100);
-  if (document.querySelector('.sch-menu')) bad.push('a tap opened the layout menu');
+  if (document.querySelector('.ctx-menu')) bad.push('a tap opened the layout menu');
   ptr(wire[0], 'pointerdown', wire[1], wire[2]); await wait(750);
-  const m = document.querySelector('.sch-menu button');
+  const m = document.querySelector('.ctx-menu button');
   if (!m) bad.push('a press and hold on a wire opened no layout menu');
   else if (m.getBoundingClientRect().height < 39.5) bad.push('a layout menu item under 40 px');
   ptr(wire[0], 'pointerup', wire[1], wire[2]); await wait(100);
-  if (!document.querySelector('.sch-menu')) bad.push('lifting the finger closed the layout menu');
+  if (!document.querySelector('.ctx-menu')) bad.push('lifting the finger closed the layout menu');
   return bad;
 })()`;
 
@@ -263,6 +264,115 @@ const STAGE_TOUCH_DRIVE = `(async () => {
  * matches, that the arrows move between the cards, that every thumbnail loads (scrolled into view), and that Esc closes the
  * dialog and gives the focus back to the button it came from.
  */
+/**
+ * The right-click menu's shell (ui/menu.ts), by key and pointer, on a stage and on the sandbox's canvas: the menu key opens one
+ * menu with the picker first (and the canvas's own rows), a letter stays in the menu, Esc closes it, gives the focus back
+ * and leaves the route alone; the picker opens from it and Esc closes that. The real thing was driven once with trusted input.
+ */
+const MENU_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const key = (el, k, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+  const menu = () => document.querySelectorAll('.ctx-menu');
+  const stage = document.querySelector('[aria-label="Circuit"]');
+  const route = location.hash;
+  const onKey = () => (stage ? stage : document.body);
+  if (stage) stage.focus();
+  key(onKey(), 'ContextMenu'); await wait(120);
+  if (menu().length !== 1) return ['the menu key opened ' + menu().length + ' menus'];
+  const labels = [...menu()[0].querySelectorAll('button')].map((b) => b.textContent);
+  if (!stage) {
+    // an empty chip: nothing to pick yet, the canvas's rows
+    if (!labels.some((l) => /Add a pointer here/.test(l))) bad.push('not the canvas menu: ' + labels.join(' | ').slice(0, 80));
+  } else if (!/^Pick a part or wire/.test(labels[0] ?? '')) bad.push('no picker first: ' + labels.join(' | ').slice(0, 80));
+  if (document.activeElement?.closest('.ctx-menu') !== menu()[0]) bad.push('the menu did not take the focus');
+  key(document.activeElement, 'z'); await wait(60);
+  if (menu().length !== 1) bad.push('a letter closed the menu');
+  if (stage) {
+    key(document.activeElement, 'Home');
+    key(document.activeElement, 'Enter'); await wait(120);
+    const input = document.querySelector('.ctx-pick input');
+    if (!input) bad.push('Enter on the first row opened no picker');
+    else if (document.activeElement !== input) bad.push('the picker did not take the focus');
+    if (menu().length) bad.push('the menu stayed under the picker');
+    if (input) { key(input, 'Escape'); await wait(60); }
+    if (document.querySelector('.ctx-pick')) bad.push('Esc did not close the picker');
+    if (document.activeElement !== stage) bad.push('the picker did not give the focus back');
+    key(stage, 'F10', { shiftKey: true }); await wait(120);
+    if (menu().length !== 1) bad.push('Shift+F10 opened no menu');
+  }
+  key(document.activeElement, 'Escape'); await wait(60);
+  if (menu().length) bad.push('Esc did not close the menu');
+  if (stage && document.activeElement !== stage) bad.push('Esc did not give the focus back');
+  if (location.hash !== route) bad.push('Esc left the route: ' + location.hash);
+  // Trace on a wire of a stage: the value in the header, a group from the keyboard, a jump that selects
+  const wire = stage && [...document.querySelectorAll('svg.schematic [data-net]')].find((e) => e.getBoundingClientRect().width > 20);
+  if (wire) {
+    const b = wire.getBoundingClientRect();
+    wire.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: b.left + 4, clientY: b.top + 4 })); await wait(80);
+    const m = menu()[0];
+    if (!m?.querySelector('.ctx-head')) bad.push('a wire menu has no header');
+    if (!m?.querySelector('.ctx-val')) bad.push('a wire menu has no value');
+    if (document.activeElement?.classList.contains('ctx-val')) bad.push('the wire menu starts on a value row');
+    const row = (t) => [...(menu()[0]?.querySelectorAll('button') ?? [])].find((x) => x.textContent.startsWith(t));
+    const group = row('Measure');
+    if (!group) bad.push('no Measure group');
+    else {
+      group.focus();
+      key(group, 'ArrowRight'); await wait(80);
+      if (menu().length !== 2) bad.push('the arrow did not open a group beside the menu');
+      if (!/^Fan-out: [0-9]/.test(document.activeElement?.textContent ?? '')) bad.push('no fan-out in Measure: ' + document.activeElement?.textContent);
+      key(document.activeElement, 'ArrowLeft'); await wait(60);
+      if (menu().length !== 1) bad.push('the arrow did not close the group');
+    }
+    const away = row('Take it elsewhere');
+    if (!away) bad.push('no Take it elsewhere on a wire');
+    else {
+      away.focus();
+      key(away, 'ArrowRight'); await wait(80);
+      if (!/^Copy a link/.test(document.activeElement?.textContent ?? '')) bad.push('a wire has no link: ' + document.activeElement?.textContent);
+      key(document.activeElement, 'ArrowLeft'); await wait(60);
+    }
+    const jump = row('Jump to the sink') ?? row('Jump to the driver');
+    if (jump && !jump.disabled) { jump.click(); await wait(80); }
+    if (menu().length) bad.push('a jump left the menu open');
+    if (jump && !document.querySelector('svg.schematic .selected, svg.schematic .net-sel')) bad.push('a jump selected nothing');
+  }
+  // the sandbox: a pin's menu reads its net (compile.ts keys its maps by id)
+  const pinEl = !stage && document.querySelector('svg.ed-svg [data-pin-id]');
+  if (pinEl) {
+    pinEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: pinEl.getBoundingClientRect().left + 2, clientY: pinEl.getBoundingClientRect().top + 2 })); await wait(80);
+    if (!menu()[0]?.querySelector('.ctx-val')) bad.push('a pin menu has no value');
+    key(document.activeElement, 'Escape'); await wait(60);
+  }
+  // Shift leaves it to the browser; F5 stays the browser's; a command or a press outside closes it
+  const svg = document.querySelector('svg.schematic, svg.ed-svg');
+  const box = svg.getBoundingClientRect();
+  const right = (extra = {}) => svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: box.left + 8, clientY: box.top + 8, ...extra }));
+  if (right({ shiftKey: true }) === false) bad.push('Shift + right-click did not leave it to the browser');
+  if (menu().length) bad.push('Shift + right-click opened the menu');
+  if (right() !== false) bad.push('a right-click left the browser its menu');
+  await wait(60);
+  if (menu().length !== 1) return [...bad, 'a right-click opened no menu'];
+  const f5 = new KeyboardEvent('keydown', { key: 'F5', bubbles: true, cancelable: true });
+  document.activeElement.dispatchEvent(f5);
+  if (f5.defaultPrevented) bad.push('the menu took F5');
+  key(document.activeElement, 'y', { ctrlKey: true }); await wait(60);
+  if (menu().length) bad.push('a command left the menu open');
+  right(); await wait(60);
+  document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); await wait(60);
+  if (menu().length) bad.push('a press outside left the menu open');
+  // the Layout button toggles
+  const lb = stage && [...stage.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Layout' && b.offsetParent);
+  if (lb) {
+    lb.click(); await wait(60);
+    if (menu().length !== 1) bad.push('the Layout button opened no menu');
+    lb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); lb.click(); await wait(60);
+    if (menu().length) bad.push('the Layout button did not close its menu');
+  }
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -486,6 +596,8 @@ function routes(): Route[] {
   add('#/sandbox', light, ` (examples gallery, ${phoneVp.name})`, phoneVp, GALLERY_DRIVE);
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
+  add('#/workbench/xor', light, ' (menu by key)', undefined, MENU_DRIVE);
+  add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The memory-map designer on System on a bus, opened from File, in both themes.

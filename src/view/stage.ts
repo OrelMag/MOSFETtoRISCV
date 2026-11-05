@@ -23,7 +23,7 @@ import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
 import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
-import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewState } from '../ui/viewlink';
+import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector, inspectorChoice } from './inspector';
@@ -37,6 +37,8 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
+import { isMenuKey, type MenuEntry } from '../ui/menu';
+import { elsewhereGroup, elsewhereRows } from './tracemenu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -317,16 +319,13 @@ export class Stage {
     document.addEventListener('pointerdown', (e) => {
       if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) showImg(false);
     }, { signal: this.life.signal });
-    // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it. The menu closes on any
-    // press outside it, this button's too: a press that found it open only closes it.
-    let layoutWasOpen = false;
+    // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it.
     const layoutBtn = h('button', {
       class: 'btn ghost sm', title: 'Layout: unravel pointers into wires, or reset this level (drag a part or a wire to move it)', 'aria-haspopup': 'menu',
-      onpointerdown: () => (layoutWasOpen = this.view.menuOpen),
       onclick: (e: Event) => {
-        if (layoutWasOpen) return;
-        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        this.view.layoutMenu(r.left, r.bottom + 6);
+        if (this.view.menuOpen) return this.view.closeMenu();
+        const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
+        this.view.layoutMenu(r.left, r.bottom + 6, b);
       },
     }, icon('move', 15), h('span', { class: 'lbl' }, 'Layout'));
     // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
@@ -434,8 +433,20 @@ export class Stage {
       editInput: (p, r) => this.editInput(p, r),
       netClick: (i) => this.netClick(i),
       probeOf: (i) => this.probeOf(i),
+      why: (i) => {
+        this.why.setOn(true);
+        this.why.netClick(i);
+      },
+      inspect: (c) => {
+        this.select(c);
+        this.showInspector();
+      },
+      up: () => this.up(),
+      elsewhere: (t) => this.elsewhere(t),
     });
     this.view.arrange = true;
+    this.view.pickable = true;
+    this.view.trace = true;
     this.view.badge = () => {
       const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
       return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
@@ -443,9 +454,16 @@ export class Stage {
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
     this.el.setAttribute('aria-label', 'Circuit');
+    this.view.menuBack = this.el;
     this.el.addEventListener('keydown', (e) => {
       if (this.pending) return;
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      // on the circuit, or a control of its drawing: a button or a panel with the focus keeps the browser's own menu
+      if (isMenuKey(e) && !this.boardOn && (e.target === this.el || this.view.el.contains(e.target as Node))) {
+        e.preventDefault();
+        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
+        return;
+      }
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
@@ -569,6 +587,8 @@ export class Stage {
 
   /** Replace the schematic with a bespoke widget (null returns to schematic mode). */
   showWidget(w: Widget | null): void {
+    // a widget in the canvas's place (a page's "unknown component"): nothing for the Why? card to explain
+    if (w) this.why.setOn(false);
     if (w && this.pending) {
       // a widget step came before the big scene was built: it wins
       this.loadSeq++;
@@ -1088,9 +1108,31 @@ export class Stage {
     if (docked) this.layoutDock();
   }
 
-  /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
-  private remix(): void {
-    const shown = this.ctx?.def;
+  /** The right-click menu's Take it elsewhere for a part, a wire or (null) this level. */
+  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+    const ctx = this.ctx;
+    if (!ctx) return [];
+    const inst = t && 'inst' in t ? t.inst : null;
+    const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
+    const say = (msg: string) => this.flashNow(msg);
+    return elsewhereGroup(elsewhereRows({
+      def, say,
+      ...(this.scene?.noRemix ? {} : { sandbox: { label: 'Open in Sandbox', run: () => this.remix(def ?? undefined) } }),
+      verilog: true,
+      ...(def ? { image: inst
+        // the child's simulation is built on the click: a menu must open at once on a large block
+        ? (def.netlist ? (kind: 'svg' | 'png') => {
+          const child = ctx.child(inst);
+          return child ? import('./image').then((m) => m.exportInside(child, this.view.el, kind)) : say('It has no inside to draw');
+        } : 'It has no inside to draw.')
+        : (kind: 'svg' | 'png') => this.exportImage(kind) } : {}),
+      link: { label: 'Copy a link to this view', hint: t ? 'Opens here, with this one picked out' : 'Step, part, inputs, probes, clock cycles', run: () => void this.copyViewLink(t ?? undefined) },
+    }));
+  }
+
+  /** A part or the level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
+  private remix(what?: ComponentDef): void {
+    const shown = what ?? this.ctx?.def;
     if (!shown) return;
     // as the learner arranged it: moved parts, unravelled pointers drawn as wires
     const lay = layoutOf(shown.id), authored = netlistOf(shown), nl = authored && drawnNetlist(shown, authored);
@@ -1485,11 +1527,12 @@ export class Stage {
     return !!this.sim && this.el.isConnected;
   }
 
-  /** Copy the link to this view; the status line says what it holds. */
-  async copyViewLink(): Promise<void> {
-    const url = linkTo(this.viewHash());
+  /** Copy the link to this view (`focus`: picking this part or wire out); the status line says what it holds. */
+  async copyViewLink(focus?: ViewFocus): Promise<void> {
     const v = this.viewState();
-    const what = isEmptyView(v) ? 'this view' : [Object.keys(v.inputs).length ? 'inputs' : '', v.probes.length ? 'probes' : '', v.cycles ? `${v.cycles} cycle${v.cycles === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+    if (focus) v.focus = focus;
+    const url = linkTo(splitView(location.hash).route + encodeView(v));
+    const what = focus ? 'this part or wire picked out' : isEmptyView(v) ? 'this view' : [Object.keys(v.inputs).length ? 'inputs' : '', v.probes.length ? 'probes' : '', v.cycles ? `${v.cycles} cycle${v.cycles === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
     if (await copyText(url)) this.flashNow(`Link copied (${what})`);
     else window.prompt('Copy this link (Ctrl+C):', url);
   }
@@ -1531,9 +1574,10 @@ export class Stage {
       const done = this.runCycles(v.cycles, () => performance.now() > deadline);
       if (done < v.cycles) note = `Link opened: replayed ${done} of ${v.cycles} clock cycles (the rest would take too long here)`;
     }
-    if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     this.history = [];
     this.refresh();
+    if (v.focus && !this.boardOn && !this.view.showTarget(v.focus)) skipped++;
+    if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     if (note) this.flashNow(note);
   }
 
