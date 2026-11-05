@@ -6,6 +6,7 @@
 // chapters' hover cards load this.
 
 import type { CodexEntry, CodexKind } from './codex';
+import { CODEX_COMM2 } from './codexcomm2';
 
 const E = (id: string, title: string, kind: CodexKind, body: string, related?: string[]): CodexEntry => ({ id, title, kind, body, related });
 
@@ -22,6 +23,8 @@ export const COMM_AWAITING_LEVELS: ReadonlySet<string> = new Set([
   'routing', 'tcp', 'aimd', 'bufferbloat',
   // chapter 53
   'bgp', 'internetpath',
+  // the extension's entries: no new levels (codexcomm2.ts)
+  ...CODEX_COMM2.map((e) => e.id),
 ]);
 
 export const CODEX_COMM: CodexEntry[] = [

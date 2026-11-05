@@ -125,7 +125,7 @@ export function concatWidget(): Widget {
     const Y = (v: number) => 112 - Math.min(v, 32) * 3;
     words.replaceChildren(s('line', { x1: 0, x2: 640, y1: Y(16), y2: Y(16), class: 'cn-limit' }), s('text', { x: 636, y: Y(16) - 3, 'text-anchor': 'end', class: 'cn-lab' }, 't = 16'),
       ...perWord.flatMap((v, i) => [s('rect', { x: 12 + i * 78, y: Y(v), width: 60, height: 112 - Y(v), class: v > 16 ? 'cn-bar bad' : 'cn-bar' }), s('text', { x: 42 + i * 78, y: Y(v) - 3, 'text-anchor': 'middle', class: 'cn-lab' }, String(v)), s('text', { x: 42 + i * 78, y: 126, 'text-anchor': 'middle', class: 'cn-lab' }, `word ${i}`)]));
-    chips.set(0, `${(r.innerBitErrors / r.innerBits).toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d)$/, (_, d) => `⁻${'⁰¹²³⁴⁵⁶⁷⁸⁹'[+d]}`)}`, 'bit error rate after Viterbi');
+    chips.set(0, `${(r.innerBitErrors / r.innerBits).toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d+)$/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`)}`, 'bit error rate after Viterbi');
     chips.set(1, `${r.byteErrors}`, 'wrong bytes in the frame');
     chips.set(2, `${r.failed} of ${r.words}`, 'Reed-Solomon words lost', r.failed ? 'bad' : 'ok');
     chips.set(3, (100 * concatRate()).toFixed(1) + ' %', 'of the channel carries data');
@@ -241,14 +241,14 @@ export const CONCAT_MEASURED = [52, 25, 5], CONCAT_WORDS = 384;
 
 export interface FallPoint { db: number; ber: number; errors: number; bits: number; meanIter: number; n: number }
 
-/** Message updates a data bit against Viterbi's add-compares, as the rate and the mean iterations move. */
+/** Message updates a data bit against Viterbi's branch additions, as the rate and the mean iterations move. */
 export function costWidget(): Widget {
   let dv = 3, it = 11;
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const dc = 2 * dv, msgs = (2 * dv) / 0.5;
     chips.set(0, String(msgs * it), `message updates a data bit, (${dv}, ${dc}) at rate ½`);
-    chips.set(1, '128', 'add-compares a data bit, K = 7 Viterbi');
+    chips.set(1, '128', 'branch additions a data bit, K = 7 Viterbi');
     chips.set(2, `${(msgs * it / 128).toFixed(1)} ×`, 'LDPC against Viterbi, in operations');
     note.textContent = 'Operations are not the bottleneck. Every edge needs its message in memory, and a bit may reach any check in the block: that is what the silicon pays for.';
   };

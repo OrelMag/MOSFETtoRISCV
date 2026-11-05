@@ -1,0 +1,34 @@
+// Codex entries for the Communication extension: message, signals, noise. Same shape as codex.ts, gathered by codexcomm2.ts; the fuller texts are codexmore8a.ts, the questions codexcheck10a.ts,
+// the numbers pinned by tests/content-codexcomm2a.test.ts. No DOM, no library import: the chapters' hover cards load this.
+
+import type { CodexEntry, CodexKind } from './codex';
+
+const E = (id: string, title: string, kind: CodexKind, body: string, related?: string[]): CodexEntry => ({ id, title, kind, body, related });
+
+export const CODEX_A: CodexEntry[] = [
+  E('bdp', 'Bandwidth-delay product', 'concept', `Rate × travel time is how many bytes are on the line at once, and rate × round trip is how many a sender must keep in flight, and remember until they are acknowledged, to keep the line busy. At 10 Gb/s to London (5,600 km, 28 ms) 35 MB are in the fibre before the first byte arrives; 1 Gb/s with a 100 ms round trip is 12.5 MB, 8,333 packets of 1,500 bytes. A window below it leaves the line idle; one BDP of buffer is enough for one Reno flow, and more only adds delay.`, ['tcp', 'littleslaw', 'cubic', 'bbr']),
+  E('layers', 'Protocol layers', 'concept', `The job of sending is split into layers, each using the one below as a service and wrapping its data in a header of its own: TCP numbers the bytes, IP names the machine anywhere, Ethernet names the next machine on this cable. At each hop the outer envelope is opened and replaced and the inner ones travel untouched. The layers change independently, which lets one page cross Wi-Fi, fibre and copper; the price is 78 bytes around every packet, so a full 1,460-byte one is 94.9 % data and a one-byte message 1.2 %.`, ['tcp', 'crc', 'bdp']),
+  E('decibel', 'Decibels', 'tool', `A decibel is 10 log<sub>10</sub> of a power ratio, so a chain of gains and losses adds instead of multiplying. 10 dB is ten times, 3 dB is about twice (1.995), a negative number is a loss; 20 dB, −60 dB and +30 dB in a row make −10 dB, one tenth. dBm is a level, not a ratio: decibels above one milliwatt, so 20 dBm into a 90 dB loss leaves −70 dBm, a ten-millionth of a milliwatt.`, ['thermalnoise', 'linkbudget', 'shannon']),
+  E('fourier', 'Fourier series and spectrum', 'tool', `A linear, time-invariant channel scales and shifts each sine and adds nothing, so any signal can be split into sines, treated one by one and summed. A ±1 square wave is (4 / π) Σ sin(2π k f t) / k over odd k: its fundamental holds 81 % of the power and the first three odd harmonics 93 %, yet a sum cut short overshoots each edge by 8.95 % of the step however many terms it keeps. N samples and N / 2 + 1 frequencies are the same numbers read two ways, and a pulse made shorter takes a proportionally wider band.`, ['fft', 'firfilter', 'aliasing', 'ofdm']),
+  E('firfilter', 'FIR filter', 'component', `A finite-impulse-response filter is a weighted sum of delayed samples, y[n] = Σ h[k] x[n − k]; the weights are the taps and also the output for a single 1. Its gain is the DFT of the taps, a moving average of n has nulls at multiples of 1 / n, and a sharper edge costs length: about 3.3 / n cycles a sample of transition under a Hamming window. With the taps 1 4 6 4 1 the multiplications are shifts and the filter is 1,140 NANDs, 600 of them registers; programmable taps would add three 8 × 8 multipliers, 1,896 more.`, ['fourier', 'matchedfilter', 'aliasing']),
+  E('aliasing', 'Sampling and aliasing', 'concept', `A signal with nothing at or above fs / 2 is fixed by its samples at fs; above that line the samples still exist and are wrong, because a tone at f and one at fs − f give identical numbers. So every frequency folds into 0 … fs / 2: a 7 kHz tone sampled at 10 kHz reads as 3 kHz, a 30 kHz one at 48 kHz as 18 kHz, and nothing digital can tell it from the real thing. The only cure is an analog filter before the converter, which is why telephone speech is cut near 3.4 kHz and sampled at 8 kHz.`, ['fourier', 'firfilter', 'shannon', 'mixer']),
+  E('mixer', 'Mixer', 'component', `A mixer is a multiplier: cos a · cos b = ½ cos(a − b) + ½ cos(a + b), so a tone at f times a carrier at fc gives lines at fc − f and fc + f, and a band of 0 to 4 kHz on a 100 kHz carrier occupies 96 to 104 kHz. Multiplying by the same carrier again brings the band back to zero, with a copy near 2fc for a low-pass filter to remove. A station as far on the other side of the oscillator lands on the same output, the image; I and Q arms, one on cos and one on sin, remove it if matched.`, ['qam', 'ofdm', 'linkbudget', 'aliasing']),
+  E('thermalnoise', 'Thermal noise and noise figure', 'law', `Charge carriers in anything warm move randomly and that motion is a voltage: an open 1 kΩ resistor shows 4.0 nV RMS in 1 Hz at 290 K. The power it can deliver is kT per hertz, −174 dBm/Hz, flat far past any radio band, so a channel of B collects −174 dBm + 10 log<sub>10</sub> B and a receiver adds its noise figure on top: 20 MHz with 6 dB gives −95.0 dBm. In a chain each stage's excess noise is divided by the gain before it (Friis), so the first amplifier sets the figure and loss ahead of it counts in full.`, ['decibel', 'ebn0', 'linkbudget', 'matchedfilter']),
+  E('matchedfilter', 'Matched filter', 'tool', `For a known pulse p in white noise, the weights w on a sum of samples that maximise the SNR are proportional to p itself, and the SNR they reach is E / σ², the pulse's energy over the noise per sample, whatever its shape. For a rectangle the weights are all equal, so the best receiver just averages: over 16 samples that gains 12.0 dB on looking at one. In continuous time the filter's impulse response is the pulse reversed in time, hence the name.`, ['ebn0', 'firfilter', 'viterbi', 'thermalnoise']),
+  E('ebn0', 'Eb/N0', 'concept', `E<sub>b</sub> is the energy per bit, N<sub>0</sub> the noise density, and their ratio is dimensionless, so links of any rate can be compared: SNR = (E<sub>b</sub> / N<sub>0</sub>) (R / B). Uncoded ±1 signalling with a matched filter errs with probability Q(√(2 E<sub>b</sub> / N<sub>0</sub>)): 9.6 dB for one bit in 10<sup>5</sup>, 12.5 dB for one in 10<sup>9</sup>. No code of any kind works below ln 2, −1.59 dB, so the gap to close at 10<sup>−5</sup> is 11.2 dB, a factor of 13 in power.`, ['shannon', 'viterbi', 'thermalnoise', 'matchedfilter']),
+];
+
+/** Codex id → the chapter that teaches it. */
+export const TAUGHT_A: Record<string, string> = {
+  bdp: 'message', layers: 'message', decibel: 'message',
+  fourier: 'signals', firfilter: 'signals', aliasing: 'signals', mixer: 'signals',
+  thermalnoise: 'noise', matchedfilter: 'noise', ebn0: 'noise',
+};
+
+/** Other names an entry goes by in the chapters' prose (glossary.ts). */
+export const ALIASES_A: Record<string, string[]> = {
+  decibel: ['decibel'],
+  fourier: ['Fourier analysis'],
+  aliasing: ['aliasing', 'sampling theorem'],
+  thermalnoise: ['noise figure'],
+};

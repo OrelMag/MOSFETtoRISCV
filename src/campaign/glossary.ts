@@ -7,6 +7,7 @@
 
 import { CODEX, type CodexEntry } from './codex';
 import { numOf } from '../chapters/order';
+import { ALIASES_COMM2 } from './codexcomm2';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -47,6 +48,8 @@ export const ALIASES: Record<string, string[]> = {
   cdr: ['clock recovery', 'clock and data recovery'], eye: ['eye diagram', 'intersymbol interference'], equalization: ['equalizing'],
   arq: ['ARQ', 'go-back-N', 'selective repeat', 'stop-and-wait'], viterbi: ['Viterbi', 'convolutional code'], reedsolomon: ['Reed-Solomon', 'Reed–Solomon'],
   interleave: ['interleaver'],
+  // the extension (codexcomm2.ts)
+  ...ALIASES_COMM2,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */

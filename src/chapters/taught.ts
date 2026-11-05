@@ -3,6 +3,8 @@
 // the earliest on the journey, unless that chapter only cites the term (cpi, coherence, horner name a later
 // one). OPTIONAL: the prologue and appendix chapters that also explain an entry, for readers who took that path.
 
+import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
+
 /** Codex id → the journey chapter that teaches it. */
 export const TAUGHT: Record<string, string> = {
   cpu: 'map',
@@ -207,6 +209,8 @@ export const TAUGHT: Record<string, string> = {
   bufferbloat: 'tcp',
   bgp: 'path',
   internetpath: 'path',
+  // the extension's (campaign/codexcomm2.ts)
+  ...TAUGHT_COMM2,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

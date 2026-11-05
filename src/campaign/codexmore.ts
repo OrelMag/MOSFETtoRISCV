@@ -15,6 +15,10 @@ import { MORE4 } from './codexmore4';
 import { MORE5 } from './codexmore5';
 import { MORE6 } from './codexmore6';
 import { MORE7 } from './codexmore7';
+import { MORE8A } from './codexmore8a';
+import { MORE8B } from './codexmore8b';
+import { MORE8C } from './codexmore8c';
+import { MORE8D } from './codexmore8d';
 
 export { checkOf } from './codexcheck';
 
@@ -34,7 +38,7 @@ export interface CodexMore {
   chapters?: ChapterLink[];
 }
 
-const ALL: Record<string, CodexMore> = { ...MORE0, ...MORE1, ...MOREP, ...MORE2, ...MORE3, ...MORE4, ...MORE5, ...MORE6, ...MORE7 };
+const ALL: Record<string, CodexMore> = { ...MORE0, ...MORE1, ...MOREP, ...MORE2, ...MORE3, ...MORE4, ...MORE5, ...MORE6, ...MORE7, ...MORE8A, ...MORE8B, ...MORE8C, ...MORE8D };
 
 export function moreOf(id: string): CodexMore | undefined {
   return ALL[id];
