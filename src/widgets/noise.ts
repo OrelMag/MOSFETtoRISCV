@@ -198,7 +198,7 @@ export function randomCodeWidget(): Widget {
   note.textContent = 'Press Run: a few seconds of real decoding.';
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'The code from Shannon\'s proof'), h('div', { class: 'ln-key' }, ...CODE_LENGTHS.map((n, i) => h('span', { class: ['fr-k', 'k-near', 'k-far'][i] }, `${n} bits`))), plot.el, chips.el, note),
+      h('div', { class: 'panel' }, h('h3', null, 'Words wrong: the code from Shannon\'s proof'), h('div', { class: 'ln-key' }, ...CODE_LENGTHS.map((n, i) => h('span', { class: ['fr-k', 'k-near', 'k-far'][i] }, `${n} bits`))), plot.el, chips.el, note),
       h('div', { class: 'panel mos-ctl' }, h('button', { type: 'button', class: 'btn sm primary', onclick: run }, 'Run'))),
     destroy() { clearTimeout(timer); },
   };
