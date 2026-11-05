@@ -55,7 +55,7 @@ before relying on them. Add to this as chapters land.
 
 ## Filters that learn (`adaptive`)
 
-- B. Widrow, M. E. Hoff, "Adaptive switching circuits", IRE WESCON Convention Record, 1960: **secondary**. The year and the names are from comments in the Linux kernel's `drivers/misc/echo/echo.h`, seen through search results; the paper was not opened. The chapter says only that they took the one-sample gradient seriously in 1960.
+- Widrow and Hoff, 1960: the names and the year are **secondary**, from comments in the Linux kernel's `drivers/misc/echo/echo.h`, seen through search results. The title "Adaptive switching circuits" and its venue, IRE WESCON Convention Record, are **unread**, from memory: the search found neither, and the paper was not opened. The chapter says only that they took the one-sample gradient seriously in 1960.
 - ITU-T G.168: **secondary**, an IEEE topic page seen through search results says it specifies test methods and requirements for digital network echo cancellers. The Recommendation was not opened, and the chapter claims no compliance.
 - Levinson's recursion: **ran**, against scipy's `solve_toeplitz` (`scripts/dsp/oracle.py`, `tests/dsp/vectors/adaptive.json`).
 - LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and the divergence just above it is measured here on this far end. The far-end sound and the echo paths are generated models, not recordings or measured paths.
