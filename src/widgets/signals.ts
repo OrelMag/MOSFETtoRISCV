@@ -212,7 +212,7 @@ export function quantizeWidget(): Widget {
     err.clear(); line(err, ts, x.map((v, i) => v - q[i]), 'ln-s near');
     chips.set(0, String(2 ** bits), 'levels');
     chips.set(1, `${sqnrDb(bits).toFixed(1)} dB`, 'signal to rounding error, 6.02 b + 1.76');
-    chips.set(2, `${measuredSqnrDb(bits).toFixed(1)} dB`, 'the same measured on 65 536 samples');
+    chips.set(2, `${measuredSqnrDb(bits).toFixed(1)} dB`, 'the same measured on 65 536 samples');
   }
   paint();
   return {

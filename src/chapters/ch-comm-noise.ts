@@ -62,7 +62,7 @@ export const chNoise: Chapter = {
         question: 'Why can nobody simply use the random code from Shannon\'s proof?',
         options: ['Decoding by comparing with every codeword takes 2^(nR) comparisons, and n must be large', 'It does not actually reach the limit', 'Random codes have no check bits', 'It only works at low noise'],
         answer: 0,
-        explain: 'A random code has no structure for a decoder to exploit. At n = 1 000 and rate ½ that is 2⁵⁰⁰ words. The whole of modern coding is structure that keeps the performance and loses the search.',
+        explain: 'A random code has no structure for a decoder to exploit. At n = 1000 and rate ½ that is 2⁵⁰⁰ words. The whole of modern coding is structure that keeps the performance and loses the search.',
         why: ['', 'As n grows it does reach it. That is the proof.', 'Every bit of a codeword is redundant in a sense, and none is separately a check bit. That is no obstacle.', 'It works at any noise below the limit.'],
       },
     ],
@@ -162,7 +162,7 @@ export const chNoise: Chapter = {
         <p>Send a block of n values, each of power P, through noise of power N. The received vector lies, with near certainty as n grows, inside a ball of radius √(n(P + N)). Around each transmitted vector, the noise puts it on a small ball of radius √(nN). If those small balls do not overlap, the receiver can always tell which was sent. So the most codewords that can fit is the ratio of the volumes: (√(n(P + N)) / √(nN))<sup>n</sup> = (1 + P / N)<sup>n/2</sup>.</p>
         <p>That is ½ log₂(1 + P / N) bits per value. At 2B values a second it is exactly <strong>C = B log₂(1 + SNR)</strong>. The bound comes from nothing but counting and geometry. The other half of the theorem is stranger: pick the codewords <em>at random</em>, with no design at all, and as n grows the error rate falls to zero at any rate below that.</p>
         <p>The plot runs that code. Every point draws fresh random codewords at rate ½ and decodes by comparing with all of them, the best any receiver can do. Below the limit of ${db(shannonBinaryDb(0.5), 2)} for ±1 signals at this rate, a longer code does worse. Well above it, a longer code does better. The curves pivot not far from the limit, and steepen as n grows, which is the theorem appearing. Twenty bits is still far from the limit's sharp edge: the curve only becomes a cliff with very large n.</p>
-        <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1 000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/errors/9">a code with memory</a> is the first of them.</p>
+        <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/errors/9">a code with memory</a> is the first of them.</p>
         <div class="try">Run it. Compare the three lengths at 6 dB, then at −3 dB, and find where they cross.</div>`,
       widget: randomCodeWidget,
       challenge: {

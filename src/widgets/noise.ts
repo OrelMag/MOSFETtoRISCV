@@ -10,7 +10,7 @@ import { gaussian, rng } from '../phys/line';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { line, mkChips, num, plotOf, sci } from './line';
-import { fmtRate } from './message';
+import { fmtRate, pow10 } from './message';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
@@ -62,7 +62,7 @@ export function decisionWidget(): Widget {
     plot.layer.append(s('line', { x1: plot.X(SPAN), x2: plot.X(SPAN), y1: plot.Y(1), y2: plot.Y(0), class: 'sg-th' }));
     chips.set(0, db(20 * Math.log10(1 / sigma)), 'SNR: level² ÷ σ²');
     chips.set(1, sci(decisionError(1, sigma)), 'the Gaussian tail, Q(1 / σ)');
-    chips.set(2, sci(measuredDecision(sigma, 200000, 9)), 'the share wrong in 200 000 counted');
+    chips.set(2, sci(measuredDecision(sigma, 200000, 9)), 'the share wrong in 200 000 counted');
   }
   paint();
   return {
@@ -91,7 +91,7 @@ export function matchedWidget(): Widget {
     chips.set(0, db(10 * Math.log10(snr)), 'SNR of the decision');
     chips.set(1, db(10 * Math.log10(best / snr)), 'below the best any weights can do', best / snr > 1.001 ? 'bad' : 'good');
     chips.set(2, sci(errorAfter(snr)), 'errors, closed form');
-    chips.set(3, sci(measuredReceiver(p, w, sigma, 40000, 13)), 'errors in 40 000 counted');
+    chips.set(3, sci(measuredReceiver(p, w, sigma, 40000, 13)), 'errors in 40 000 counted');
   }
   paint();
   return {
@@ -107,7 +107,7 @@ const DB0 = 4;
 
 export function berCurveWidget(): Widget {
   let at = 7;
-  const plot = plotOf({ W: 640, H: 260, x: [0, 16], y: [-7, 0], yTicks: [0, -2, -4, -6], xLabel: 'Eb/N0, dB', yLabel: 'bit errors', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: (v) => (v === 0 ? '1' : `10^${v}`.replace('-', '−')) });
+  const plot = plotOf({ W: 640, H: 260, x: [0, 16], y: [-7, 0], yTicks: [0, -2, -4, -6], xLabel: 'Eb/N0, dB', yLabel: 'bit errors', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
   const chips = mkChips(3);
   const dots: [number, number][] = [];
   for (const d of [0, 2, 4, 6, 7, 8]) { const b = measuredBer(d, 400000, 41 + d); if (b > 0) dots.push([d, b]); }
@@ -126,7 +126,7 @@ export function berCurveWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'The curve every link is judged on'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'closed form'), h('span', { class: 'k-near' }, 'counted (400 000 bits)')), plot.el, chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'The curve every link is judged on'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'closed form'), h('span', { class: 'k-near' }, 'counted (400 000 bits)')), plot.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, slider('Eb/N0', -3, 12, 0.5, at, (v) => db(v), (v) => { at = v; paint(); }).el)),
   };
 }
@@ -134,7 +134,7 @@ export function berCurveWidget(): Widget {
 export function capacityWidget(): Widget {
   let pn = 6;
   // x is log10 of the band over P/N0, shifted to start at 0: from a hundredth of it to a hundred times
-  const plot = plotOf({ W: 640, H: 220, x: [0, 4], y: [0, 1.1], yTicks: [0, 0.5, 1], xLabel: 'band ÷ (P / N0)', yLabel: 'share of the ceiling', aria: 'Capacity against bandwidth at fixed power: it rises, then flattens at a ceiling', xFmt: (v) => `10^${v - 2}`.replace('-', '−') });
+  const plot = plotOf({ W: 640, H: 220, x: [0, 4], y: [0, 1.1], yTicks: [0, 0.5, 1], xLabel: 'band ÷ (P / N0)', yLabel: 'share of the ceiling', aria: 'Capacity against bandwidth at fixed power: it rises, then flattens at a ceiling', xFmt: (v) => pow10(v - 2) });
   const chips = mkChips(3);
   function paint() {
     const p = 10 ** pn, top = capacityCeiling(p), xs = Array.from({ length: 81 }, (_, i) => i / 20);
@@ -160,7 +160,7 @@ const CODE_TRIALS = 600;
 const CODE_CLASS = ['ln-s lump', 'ln-s near', 'ln-s real'];
 
 export function randomCodeWidget(): Widget {
-  const plot = plotOf({ W: 640, H: 240, x: [0, 10], y: [-3, 0], yTicks: [0, -1, -2, -3], xLabel: 'Eb/N0, dB', yLabel: 'words wrong', aria: 'Word error rate of random codes of rate one half at three lengths, against the limit for that rate', xFmt: (v) => num(v - DB0, 0), yFmt: (v) => (v === 0 ? '1' : `10^${v}`.replace('-', '−')) });
+  const plot = plotOf({ W: 640, H: 240, x: [0, 10], y: [-3, 0], yTicks: [0, -1, -2, -3], xLabel: 'Eb/N0, dB', yLabel: 'wrong', aria: 'Word error rate of random codes of rate one half at three lengths, against the limit for that rate', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
   const results = CODE_LENGTHS.map(() => new Array<number>(CODE_DBS.length).fill(NaN));
   const note = h('p', { class: 'sub mos-note' }), chips = mkChips(2);
   let timer = 0, running = false;

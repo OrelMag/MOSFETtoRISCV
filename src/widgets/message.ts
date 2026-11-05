@@ -12,6 +12,9 @@ import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
 
+/** 10 to a whole power, set as text: 10⁻³. */
+export const pow10 = (e: number): string => (e === 0 ? '1' : `10${e < 0 ? '⁻' : ''}${[...String(Math.abs(e))].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`);
+
 /** A time, in the unit that reads best. */
 export function fmtTime(t: number): string {
   if (t < 1e-6) return `${+(t * 1e9).toPrecision(3)} ns`;
@@ -39,7 +42,7 @@ export function fmtRate(r: number): string {
 
 const RATES = [300, 56e3, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 4e11, 8e11, 1.6e12];
 const SIZES = [100, 500, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10];
-const DISTS: [number, string][] = [[10, '10 m'], [1e3, '1 km'], [5e5, '500 km'], [5.6e6, '5 600 km'], [2e7, '20 000 km']];
+const DISTS: [number, string][] = [[10, '10 m'], [1e3, '1 km'], [5e5, '500 km'], [5.6e6, '5600 km'], [2e7, '20 000 km']];
 
 // ---- a message as bits ------------------------------------------------------------------------------------------------------------
 
@@ -146,20 +149,20 @@ const MESSAGE = 1e6, HEADER = 40;
 export function packetWidget(): Widget {
   let exp = 3, hops = 4, rate = 1e7, ber = -6;
   // the x axis is log10 of the payload, from 10 B (1) to the whole message (6)
-  const plot = plotOf({ W: 640, H: 220, x: [0, 6], y: [0, 4], yTicks: [0, 1, 2, 3, 4], xLabel: 'data bytes a packet', yLabel: 'seconds', aria: 'Time to deliver a megabyte over the links, against the size of a packet', xFmt: (v) => (v === 0 ? '1' : `10^${v}`) });
+  const plot = plotOf({ W: 640, H: 220, x: [0, 6], y: [0, 1], yTicks: [0, 0.5, 1], xLabel: 'data bytes a packet', yLabel: 'share of the longest', aria: 'Time to deliver a megabyte over the links, against the size of a packet', xFmt: pow10 });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   function paint() {
     const payload = Math.round(10 ** exp), plan = { bytes: MESSAGE, payload, header: HEADER, rate, hops };
     const xs = Array.from({ length: 61 }, (_, i) => i / 10), ys = xs.map((x) => (x < 1 ? NaN : storeAndForward({ ...plan, payload: Math.round(10 ** x) })));
     const top = Math.max(...ys.filter((v) => !Number.isNaN(v)));
     plot.clear();
-    const scaled = (v: number) => (v / top) * 4;
+    const scaled = (v: number) => v / top;
     const keep = xs.map((_, i) => i).filter((i) => !Number.isNaN(ys[i]));
     line(plot, keep.map((i) => xs[i]), keep.map((i) => scaled(ys[i])), 'ln-s real');
     plot.layer.append(s('circle', { cx: plot.X(exp), cy: plot.Y(scaled(storeAndForward(plan))), r: 5, class: 'sg-dot' }));
     chips.set(0, String(packetCount(plan)), 'packets');
     chips.set(1, fmtTime(storeAndForward(plan)), `to deliver 1 MB over ${hops} links at ${fmtRate(rate)}`);
-    chips.set(2, `${(100 * cleanChance(payload + HEADER, 10 ** ber)).toFixed(1)} %`, `of packets arrive with no bit wrong, one bit in 10^${-ber} flipped`);
+    chips.set(2, `${(100 * cleanChance(payload + HEADER, 10 ** ber)).toFixed(1)} %`, `of packets arrive with no bit wrong, one bit in ${pow10(-ber)} flipped`);
     chips.set(3, fmtBytes(bytesWithLoss(plan, 10 ** ber)), 'sent in all, wrong ones sent again');
     note.textContent = `The curve's top is ${fmtTime(top)}. Small packets lose to their ${HEADER}-byte headers; large ones wait, whole, at every link.`;
   }
@@ -171,7 +174,7 @@ export function packetWidget(): Widget {
         slider('Packet', 1, 6, 0.25, exp, (v) => fmtBytes(Math.round(10 ** v)), (v) => { exp = v; paint(); }).el,
         slider('Links', 1, 12, 1, hops, (v) => String(v), (v) => { hops = v; paint(); }).el,
         slider('Rate', 6, 9, 1, 7, (v) => fmtRate(10 ** v), (v) => { rate = 10 ** v; paint(); }).el,
-        slider('Wrong bits', -9, -4, 1, ber, (v) => `1 in 10^${-v}`, (v) => { ber = v; paint(); }).el))),
+        slider('Wrong bits', -9, -4, 1, ber, (v) => `1 in ${pow10(-v)}`, (v) => { ber = v; paint(); }).el))),
   };
 }
 

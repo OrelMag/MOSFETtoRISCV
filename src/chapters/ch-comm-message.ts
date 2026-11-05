@@ -27,7 +27,7 @@ export const chMessage: Chapter = {
   recap: {
     keep: [
       'A message is bits, and a bit on a wire is a level held for a time. Rate is bits a second; size ÷ rate is the time to send.',
-      `A delay has two parts: pushing the bits onto the line (size ÷ rate) and travelling the distance (about ${(travelTime(1e6) * 1e3).toFixed(0)} ms per 1 000 km in cable or fibre). A faster link shortens only the first.`,
+      `A delay has two parts: pushing the bits onto the line (size ÷ rate) and travelling the distance (about ${(travelTime(1e6) * 1e3).toFixed(0)} ms per 1000 km in cable or fibre). A faster link shortens only the first.`,
       `Rate × travel time is how much is on the line at once. A fast long line holds megabytes, which the sender must keep until it hears they arrived.`,
       'Packets let many talkers share a line, and mean a wrong bit costs one packet, not the whole message. Each costs a header, and each is held whole at every link.',
       `Layers wrap each other, each with its own header and job. A full Ethernet frame is ${(100 * full.share).toFixed(1)} % data; a one-byte message costs ${tiny.total} bytes.`,
@@ -45,12 +45,12 @@ export const chMessage: Chapter = {
         question: 'Why is a message cut into packets rather than sent whole?',
         options: ['A line can be shared packet by packet, and a wrong bit costs one packet instead of the whole message', 'Packets travel faster along the wire than a long message', 'A long message would be too heavy for the wire', 'Headers make the data smaller'],
         answer: 0,
-        explain: `With one bit in a million wrong, a 1 MB message sent whole almost never arrives clean; cut into 1 000-byte packets it costs ${(bytesWithLoss(CUT, 1e-6) / 1e6).toFixed(2)} MB in all.`,
+        explain: `With one bit in a million wrong, a 1 MB message sent whole almost never arrives clean; cut into 1000-byte packets it costs ${(bytesWithLoss(CUT, 1e-6) / 1e6).toFixed(2)} MB in all.`,
         why: ['', 'Every bit travels at the same speed, in a packet or not.', 'A wire has no limit of that kind; what it has is other users and errors.', 'Headers add bytes.'],
       },
       {
         question: 'An amplifier of +20 dB, a cable of −60 dB and an amplifier of +30 dB, in a row. What does the chain do to the power?',
-        options: ['Divides it by 10: the sum is −10 dB', 'Multiplies it by 36 000: 20 × 60 × 30', 'Nothing: the amplifiers make up for the cable', 'Divides it by 60'],
+        options: ['Divides it by 10: the sum is −10 dB', 'Multiplies it by 36 000: 20 × 60 × 30', 'Nothing: the amplifiers make up for the cable', 'Divides it by 60'],
         answer: 0,
         explain: `Decibels add: 20 − 60 + 30 = −10 dB, a ratio of ${dbToRatio(-10)}.`,
         why: ['', 'Decibels are already logarithms, so they add. Multiplying them has no meaning.', 'The amplifiers add 50 dB and the cable takes 60.', 'That treats −60 dB as a ratio of 60. It is a ratio of a million.'],
@@ -77,9 +77,9 @@ export const chMessage: Chapter = {
     {
       title: 'How long does it take?',
       body: `
-        <p>A message waits for two separate things. Its bits must be <strong>pushed onto the line</strong>, one after another; that depends on the size and the rate. Then each bit must <strong>travel the distance</strong>, at about two thirds of the speed of light in a cable or a fibre: ${(travelTime(1e6) * 1e3).toFixed(0)} ms for every 1 000 km.</p>
+        <p>A message waits for two separate things. Its bits must be <strong>pushed onto the line</strong>, one after another; that depends on the size and the rate. Then each bit must <strong>travel the distance</strong>, at about two thirds of the speed of light in a cable or a fibre: ${(travelTime(1e6) * 1e3).toFixed(0)} ms for every 1000 km.</p>
         <p>The two have nothing to do with each other. A faster link pushes faster and travels no faster at all, because the signal's speed is set by the material of the cable.</p>
-        <div class="try">Send 1 KB from New York to London, about 5 600 km. Raise the rate as far as it goes: the whole delay stops falling long before you reach the end of the slider. Then make the message 10 GB and watch the other part take over.</div>`,
+        <div class="try">Send 1 KB from New York to London, about 5600 km. Raise the rate as far as it goes: the whole delay stops falling long before you reach the end of the slider. Then make the message 10 GB and watch the other part take over.</div>`,
       widget: delayWidget,
       challenge: {
         kind: 'quiz', question: `A game sends small messages to a server ${FAR / 1e6 * 1000} km away. Its players want the shortest delay. What helps most?`,
@@ -110,7 +110,7 @@ export const chMessage: Chapter = {
       body: `
         <p>A network shares its lines among everybody using them, and the fair way to share is to take turns in small pieces. So a message is cut into <strong>packets</strong>, each with a <strong>header</strong> saying where it is going. A switch in the middle receives a packet whole, checks it, and sends it on.</p>
         <p>Cutting costs headers, and it also saves time. One 1 MB message over ${BIG.hops} links at 10 Mb/s waits whole at every one: ${fmtTime(storeAndForward(BIG))}. In ${packetCount(CUT)} packets, each link is busy with the next packet while the first has moved on: ${fmtTime(storeAndForward(CUT))}.</p>
-        <p>It also limits what an error costs. If one bit in a million flips, a 1 MB message almost never arrives clean, and sending it whole again and again costs thousands of times its size. Sent as 1 000-byte packets, only the few that were hit go again: ${(bytesWithLoss(CUT, 1e-6) / 1e6).toFixed(2)} MB in all.</p>
+        <p>It also limits what an error costs. If one bit in a million flips, a 1 MB message almost never arrives clean, and sending it whole again and again costs thousands of times its size. Sent as 1000-byte packets, only the few that were hit go again: ${(bytesWithLoss(CUT, 1e-6) / 1e6).toFixed(2)} MB in all.</p>
         <div class="try">Slide the packet from small to large: the time falls, then climbs. Add links and the best size moves down. Raise the wrong bits and watch the bytes sent.</div>`,
       widget: packetWidget,
       challenge: {
@@ -147,7 +147,7 @@ export const chMessage: Chapter = {
       widget: decibelWidget,
       challenge: {
         kind: 'quiz', question: 'A transmitter puts out 20 dBm into a path that loses 90 dB. What arrives?',
-        options: ['−70 dBm: 20 − 90, a ten-millionth of a milliwatt', '−1 800 dBm: 20 × −90', '110 dBm: 20 + 90', '70 dBm: the sign of a loss does not matter'],
+        options: ['−70 dBm: 20 − 90, a ten-millionth of a milliwatt', '−1800 dBm: 20 × −90', '110 dBm: 20 + 90', '70 dBm: the sign of a loss does not matter'],
         answer: 0,
         explain: 'A level in dBm plus a gain in dB is a level in dBm. Add them.',
         why: ['', 'Multiplying logarithms has no meaning here.', 'A loss subtracts.', 'It does: 70 dBm would be ten kilowatts.'],
