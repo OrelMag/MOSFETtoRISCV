@@ -1232,7 +1232,7 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
 ---
 
 
-### Phase 21 — Journey and campaign track: Communication ⏳
+### Phase 21 — Journey and campaign track: Communication ✅ (2026-11-05: 29 chapters, Act 12, capstones, codex; live)
 
 Approved 2026-11-04 (mockup: E:/mockups/comms/comms-mockup.html, https://claude.ai/artifact/73HtYnFcawpnnxx3DZe4qC). From relays to the
 path across the internet, at the depth of the MOSFET-to-CPU journey: level "Communication", chapters 39–53 after Buses and DMA; each
