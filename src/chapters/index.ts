@@ -62,6 +62,7 @@ import { chFixed } from './ch-dsp-fixed';
 import { chZplane } from './ch-dsp-zplane';
 import { chSpectrum } from './ch-dsp-spectrum';
 import { chFirDesign } from './ch-dsp-firdesign';
+import { chIir } from './ch-dsp-iir';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
@@ -71,7 +72,7 @@ export const chapters: Chapter[] = [
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
-  chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign,
+  chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign, chIir,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];

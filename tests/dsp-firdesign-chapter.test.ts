@@ -12,7 +12,7 @@ import { firCosts, firMac } from '../src/lib/firmac';
 import { stats } from '../src/sim/stats';
 
 describe('the book', () => {
-  it('follows the z-plane', () => expect(numOf('firdesign')).toBe(numOf('zplane') + 1));
+  it('follows Measuring a spectrum', () => expect(numOf('firdesign')).toBe(numOf('spectrum') + 1));
   it('has its steps, each with words and something to do', () => {
     expect(chFirDesign.steps.length).toBe(8);
     for (const s of chFirDesign.steps) { expect(s.body.length, s.title).toBeGreaterThan(600); expect(!!s.widget || !!s.scene, s.title).toBe(true); expect(s.challenge, s.title).toBeTruthy(); }

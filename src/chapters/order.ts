@@ -79,6 +79,7 @@ const BOOK = [
   'zplane',
   'spectrum',
   'firdesign',
+  'iir',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

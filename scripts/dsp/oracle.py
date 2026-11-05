@@ -205,7 +205,101 @@ def firdesign():
         'lfilter': {'taps': r(ints), 'x': x, 'y': r(y)},
     }
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign}
+
+def stable_exact(a):
+    """Exact stability of a polynomial in z^-1 with integer coefficients, a[0] > 0 (Schur-Cohn without a division): the same steps as dsp/iir.ts stableExact.
+    No root finder, so a double root on the circle or a cluster of near-equal poles cannot fool it."""
+    a = [int(v) for v in a]
+    while len(a) > 1:
+        m = len(a) - 1
+        if a[0] <= 0 or abs(a[m]) >= a[0]:
+            return False
+        a = [a[0] * a[i] - a[m] * a[m - i] for i in range(m)]
+    return a[0] > 0
+
+
+def rnd(v):
+    """Round half up, the way the hardware and dsp/fixed.ts do (Python's round() sends ties to even)."""
+    return int(np.floor(v + 0.5))
+
+
+def quant_direct(coef, bits):
+    """Direct form: every coefficient after a0 in one word of `bits` bits whose integer part (sign included) is just big enough for the largest. Returns (ints, fractional bits)."""
+    mx = max(abs(v) for v in coef)
+    ib = max(2, int(np.floor(np.log2(mx))) + 2)
+    f = bits - ib
+    return [rnd(v * 2.0**f) for v in coef], f
+
+
+def iir():
+    wp, ws, rp, rs = 0.2, 0.25, 0.1, 60  # scipy's units: fractions of Nyquist. In cycles a sample the mask is 0.1 and 0.125.
+    des = {}
+    for name, ordf, design in [
+        ('butter', signal.buttord, lambda n, wn: signal.butter(n, wn, output='zpk')),
+        ('cheby1', signal.cheb1ord, lambda n, wn: signal.cheby1(n, rp, wn, output='zpk')),
+        ('ellip', signal.ellipord, lambda n, wn: signal.ellip(n, rp, rs, wn, output='zpk')),
+    ]:
+        n, wn = ordf(wp, ws, rp, rs)
+        z, p, k = design(n, wn)
+        sos = signal.zpk2sos(z, p, k)
+        des[name] = {'order': int(n), 'wn': float(f'{wn:.12g}'), 'z': cx(z), 'p': cx(p), 'k': float(f'{k:.12g}'), 'sos': r(sos),
+                     'sections': int(sos.shape[0]), 'gain': r(np.abs(signal.sosfreqz(sos, worN=np.array(FS), fs=1)[1]))}
+    # a few more designs, odd and even, to test the prototypes and the transform on their own
+    extra = []
+    for name, n, args in [('butter', 5, ()), ('butter', 4, ()), ('cheby1', 4, (1,)), ('cheby1', 5, (0.5,)), ('ellip', 5, (0.5, 40)), ('ellip', 6, (0.1, 60)), ('ellip', 4, (1, 50))]:
+        wn = 0.35
+        z, p, k = getattr(signal, name)(n, *args, wn, output='zpk')
+        _, h = signal.freqz(*signal.zpk2tf(z, p, k), worN=np.array(FS), fs=1)
+        extra.append({'kind': name, 'order': n, 'args': list(args), 'f': wn / 2, 'z': cx(z), 'p': cx(p), 'k': float(f'{k:.12g}'), 'gain': r(np.abs(h))})
+    ap = []
+    for name, n, args in [('buttap', 5, ()), ('cheb1ap', 4, (1,)), ('ellipap', 5, (0.5, 40)), ('ellipap', 6, (0.1, 60))]:
+        z, p, k = getattr(signal, name)(n, *args)
+        ap.append({'kind': name, 'order': n, 'args': list(args), 'z': cx(z), 'p': cx(p), 'k': float(f'{k:.12g}')})
+    # the bilinear transform on its own: an analog zpk at one sample a second
+    za, pa, ka = signal.ellipap(4, 1, 50)
+    zb, pb, kb = signal.bilinear_zpk(0.9 * za, 0.9 * pa, ka * 0.9**0, 1.0)
+    # the mask: how many taps the FIR designs need
+    # 0.1 dB of ripple is peak to peak, the way scipy's cheby1 / ellip rp is: for an FIR the gain stays within 1 +- dp with (1 + dp) / (1 - dp) = 10^(rp/20)
+    g = 10 ** (rp / 20)
+    dp, ds = (g - 1) / (g + 1), 10 ** (-rs / 20)
+    kaiser = int(signal.kaiserord(rs, (ws - wp) / 1.0 * 1.0 / 1.0)[0])
+    pm = pm_odd = None
+    for n in range(40, 300):
+        h = signal.remez(n, [0, wp / 2, ws / 2, 0.5], [1, 0], weight=[1 / dp, 1 / ds], fs=1, maxiter=200, grid_density=32)
+        w, hh = signal.freqz(h, worN=8192, fs=1)
+        a = np.abs(hh)
+        if np.max(np.abs(a[w <= wp / 2] - 1)) <= dp and np.max(a[w >= ws / 2]) <= ds:
+            pm = pm or n
+            if n % 2 == 1:
+                pm_odd = n
+                break
+    # the narrow elliptic low-pass of the sensitivity step: edge 0.04 cycles a sample, order 6, 0.1 dB, 60 dB
+    zn, pn, kn = signal.ellip(6, 0.1, 60, 0.08, output='zpk')
+    sosn = signal.zpk2sos(zn, pn, kn)
+    bn, an = signal.zpk2tf(zn, pn, kn)
+    sens = []
+    for bits in range(8, 33):
+        qa, f = quant_direct(list(an[1:]), bits)
+        df = stable_exact([2**f] + qa)
+        S, hi = 2 ** (bits - 2), 2 ** (bits - 1) - 1
+        sec = [stable_exact([S, int(np.clip(rnd(s[4] * S), -hi - 1, hi)), int(np.clip(rnd(s[5] * S), -hi - 1, hi))]) for s in sosn]
+        rad = float(max(abs(np.roots([1.0] + [v / 2.0**f for v in qa]))))
+        sens.append({'bits': bits, 'direct': bool(df), 'sections': [bool(v) for v in sec], 'radius': float(f'{rad:.12g}')})
+    x = noise(256, 777)
+    sx, sy = signal.sosfilt(sosn, x), signal.lfilter(bn, an, x)
+    return {
+        'fs': FS, 'mask': {'wp': wp, 'ws': ws, 'rp': rp, 'rs': rs}, 'designs': des, 'extra': extra, 'analog': ap,
+        'bilinear': {'z': cx(zb), 'p': cx(pb), 'k': float(f'{kb:.12g}'), 'in': {'z': cx(0.9 * za), 'p': cx(0.9 * pa), 'k': float(f'{ka:.12g}')}},
+        'fir': {'kaiser': kaiser, 'pm': pm, 'pm_odd': pm_odd, 'dp': float(f'{dp:.12g}'), 'ds': float(f'{ds:.12g}')},
+        'narrow': {'z': cx(zn), 'p': cx(pn), 'k': float(f'{kn:.12g}'), 'sos': r(sosn), 'b': r(bn), 'a': r(an), 'sens': sens,
+                   'rule': 'direct form: every a[k], k >= 1, one word of `bits` bits, integer part (with sign) = floor(log2 max|a|) + 2, rounded half up; sections: a1, a2 in Q2.(bits-2), rounded half up, clamped',
+                   'x': r(x), 'sosfilt': r(sx), 'lfilter': r(sy)},
+    }
+
+
+FS = [0, 0.01, 0.03, 0.05, 0.08, 0.1, 0.11, 0.125, 0.15, 0.2, 0.3, 0.4, 0.47]
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir}
 
 
 def stamp(data):
