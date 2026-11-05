@@ -360,18 +360,6 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 }
 .sb-prompt input { font: 600 13px var(--font-mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); width: 150px; outline: none; }
 .sb-prompt small { color: var(--muted); font-size: 11px; max-width: 150px; line-height: 1.35; }
-.sb-ctx {
-  position: fixed; z-index: 70; min-width: 210px; display: grid; gap: 1px; padding: 5px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg);
-}
-.sb-ctx button {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 0; background: transparent;
-  color: var(--text); padding: 5px 9px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; text-align: left;
-}
-.sb-ctx button:hover:not(:disabled), .sb-ctx button:focus-visible { background: var(--surface-2); outline: none; }
-.sb-ctx button:disabled { color: var(--muted); cursor: default; }
-.sb-ctx kbd { font: 11px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 0; }
-.sb-ctx hr { border: 0; border-top: 1px solid var(--border); margin: 3px 4px; }
 .ed-svg .inst-name, .ed-svg .pin-name { pointer-events: bounding-box; cursor: text; }
 .sb-iobar { min-height: 0; padding: 6px 12px; }
 .sb-iobar .sb-io-v {
@@ -523,7 +511,7 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 /* Net colour swatches (hueswatch.ts): the right-click menu and the wire / pointer properties. The colour is
    drawn by ::before, so the menu's hover background on its buttons cannot paint over it. */
 .sb-hues { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.sb-hues .sb-hue-sw, .sb-ctx .sb-hues .sb-hue-sw {
+.sb-hues .sb-hue-sw, .ctx-menu .sb-hues .sb-hue-sw {
   position: relative; width: 18px; height: 18px; padding: 0; flex: none; border-radius: 50%; cursor: pointer;
   border: 0; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong);
 }
@@ -548,9 +536,8 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
   .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
   .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
-  .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act, .sb-diag-pill, .sb-ctx button, .sb-mode-cancel { min-height: 40px; }
+  .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act, .sb-diag-pill, .sb-mode-cancel { min-height: 40px; }
   .sb-advanced > summary { padding: 10px 0; }
-  .sb-ctx kbd { display: none; } /* shortcuts mean nothing to a finger */
   /* the save state: a dot and a word in the bar, its tap area spread around it */
   .sb-save { position: relative; }
   .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }

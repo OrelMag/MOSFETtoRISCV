@@ -3,7 +3,7 @@
 // pal-menu user (top bar View options, the stage's Share and More, the layout menu).
 
 /** The enabled items of a menu, in order. */
-const itemsOf = (menu: HTMLElement): HTMLElement[] =>
+export const itemsOf = (menu: HTMLElement): HTMLElement[] =>
   [...menu.querySelectorAll<HTMLElement>('button')].filter((b) => !(b as HTMLButtonElement).disabled && !b.hidden);
 
 /** Where an arrow key goes from item `at` (-1: none focused) among `n` items; Home / End jump. */

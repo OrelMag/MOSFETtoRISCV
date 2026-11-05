@@ -19,7 +19,7 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
-import { menuKeys } from '../ui/menukeys';
+import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
@@ -44,7 +44,7 @@ export interface SchematicEvents {
   layoutChanged?(): void;
 }
 
-interface MenuItem { label: string; hint?: string; run: () => void }
+type MenuItem = NonNullable<MenuEntry>;
 
 /** A level routed faster than this (ms) re-routes its wires live while a part is dragged. */
 const LIVE_ROUTE_MS = 25;
@@ -153,7 +153,6 @@ export class SchematicView {
   private atOf = new Map<string, Vec>();
   private boxes = new Map<string, Rect>();
   private routeMs = 0;
-  private menu: HTMLElement | null = null;
   private tooltip: HTMLDivElement;
 
   constructor(private host: HTMLElement, private events: SchematicEvents) {
@@ -184,7 +183,7 @@ export class SchematicView {
     // A held finger is the right-click (the browser's own contextmenu for it is not reliable): the same menu.
     this.holdQuiet = installHold(this.el, {
       onHold: (x, y, e) => {
-        const items = this.layoutItems(e.target as Element);
+        const items = this.menuItems(e.target as Element);
         if (!items.length) return false;
         this.openMenu(items, x, y);
       },
@@ -193,9 +192,6 @@ export class SchematicView {
       if (this.arrange === true && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
       const net = this.grabbedNet(e);
       if (net >= 0) this.dragWire(e, net);
-    });
-    document.addEventListener('pointerdown', (e) => {
-      if (this.menu && !this.menu.contains(e.target as Node)) this.closeMenu();
     });
   }
 
@@ -1285,43 +1281,73 @@ export class SchematicView {
 
   private contextMenu(e: MouseEvent): void {
     if (this.holdQuiet()) return void e.preventDefault();
-    const items = this.layoutItems(e.target as Element);
+    // Shift: the browser's own menu, the way out of this one
+    if (e.shiftKey) return;
+    const items = this.menuItems(e.target as Element);
     if (!items.length) return;
     e.preventDefault();
     this.openMenu(items, e.clientX, e.clientY);
   }
 
-  /** The level's layout actions as a menu at a point on the screen (the stage's Layout button). */
-  layoutMenu(x: number, y: number): void {
-    this.openMenu(this.layoutItems(), x, y);
+  /** A host whose canvas takes the focus sets this: the level's menu then offers the picker, a keyboard's way to any target. */
+  pickable = false;
+
+  /** What the menu holds for what is under the pointer: on empty ground, a way to everything else first. */
+  private menuItems(target: Element | null): MenuItem[] {
+    const items = this.layoutItems(target);
+    if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
+    return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...items];
+  }
+
+  /** The menu key: for the selected wire or part, at its place; with nothing selected, the level's. */
+  keyMenu(from?: Element | null): void {
+    if (!this.ctx) return;
+    // a control of the drawing with the focus (a pin, a part) goes first
+    const el = from?.closest('[data-inst], [data-net]') ?? (this.selectedNet >= 0 ? this.el.querySelector(`[data-net="${this.selectedNet}"]`)
+      : this.selected ? this.el.querySelector(`[data-inst="${CSS.escape(this.selected)}"]`) : null);
+    const { x, y } = anchorPoint(el?.getBoundingClientRect() ?? null, this.host.getBoundingClientRect());
+    this.openMenu(this.menuItems(el), x, y);
+  }
+
+  private pickTarget(): void {
+    const nl = this.base;
+    if (!nl) return;
+    const back = this.menuBack;
+    showPicker('Pick a part or wire', [
+      ...nl.instances.map((i) => ({ label: i.name, note: i.def.name, run: () => {
+        this.select(i.name);
+        this.events.select(i.name);
+        this.keyMenu();
+      } })),
+      ...nl.nets.map((n, i) => ({ label: n.name ?? n.ends[0] ?? `net ${i}`, note: 'wire', run: () => {
+        this.select(null);
+        this.events.select(null);
+        this.selectNet(i);
+        this.keyMenu();
+      } })),
+    ], back, this);
+  }
+
+  /** The level's layout actions as a menu at a point on the screen (the stage's Layout button, `toggle`). */
+  layoutMenu(x: number, y: number, toggle?: Element): void {
+    this.openMenu(this.layoutItems(), x, y, toggle);
   }
 
   get menuOpen(): boolean {
-    return !!this.menu;
+    return menuOpenFor(this);
   }
 
-  private openMenu(items: MenuItem[], x: number, y: number): void {
-    this.closeMenu();
-    const m = this.menu = h('div', { class: 'pal-menu open sch-menu', role: 'menu' },
-      items.length ? items.map((it) => h('button', { role: 'menuitem', onclick: () => {
-        this.closeMenu();
-        it.run();
-      } }, h('span', null, h('b', null, it.label), it.hint && h('small', null, it.hint))))
-        : h('p', { class: 'sch-menu-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it. Press and hold a wire to draw it as pointers.')));
-    document.body.append(m);
-    // keys: Esc closes it and gives the focus back to what opened it; arrows move between the items
-    const opener = document.activeElement as HTMLElement | null;
-    menuKeys(m, m, opener ?? document.body, () => this.closeMenu());
-    m.tabIndex = -1;
-    (m.querySelector<HTMLElement>('button') ?? m).focus({ preventScroll: true });
-    const r = m.getBoundingClientRect();
-    m.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
-    m.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 4))}px`;
+  /** What takes the focus when a menu over this view closes, if nothing had it. */
+  menuBack: HTMLElement | null = null;
+
+  private openMenu(items: MenuItem[], x: number, y: number, toggle?: Element): void {
+    const into = items.length ? undefined : h('div', {}, h('p', { class: 'ctx-note' }, tx('Drag a part to move it (shift-click or shift-drag to pick several), or a wire to move it sideways. Right-click a wire to draw it as pointers.', 'Drag a part to move it; a wire moves sideways once you have tapped it. Press and hold a wire to draw it as pointers.')));
+    showMenu(x, y, items, { owner: this, ...(into ? { into } : {}), ...(toggle ? { toggle } : {}), ...(this.menuBack ? { back: this.menuBack } : {}) });
   }
 
   closeMenu(): void {
-    this.menu?.remove();
-    this.menu = null;
+    closeMenu(this);
+    closePicker(this);
   }
 
   // ---- pan & zoom ---------------------------------------------------------------------

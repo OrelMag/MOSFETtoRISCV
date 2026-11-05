@@ -37,6 +37,7 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
+import { isMenuKey } from '../ui/menu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -317,16 +318,13 @@ export class Stage {
     document.addEventListener('pointerdown', (e) => {
       if (!imgMenu.contains(e.target as Node) && !imgBtn.contains(e.target as Node)) showImg(false);
     }, { signal: this.life.signal });
-    // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it. The menu closes on any
-    // press outside it, this button's too: a press that found it open only closes it.
-    let layoutWasOpen = false;
+    // The learner's layout of this level (view/layout.ts): unravel its pointers, reset it.
     const layoutBtn = h('button', {
       class: 'btn ghost sm', title: 'Layout: unravel pointers into wires, or reset this level (drag a part or a wire to move it)', 'aria-haspopup': 'menu',
-      onpointerdown: () => (layoutWasOpen = this.view.menuOpen),
       onclick: (e: Event) => {
-        if (layoutWasOpen) return;
-        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        this.view.layoutMenu(r.left, r.bottom + 6);
+        if (this.view.menuOpen) return this.view.closeMenu();
+        const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
+        this.view.layoutMenu(r.left, r.bottom + 6, b);
       },
     }, icon('move', 15), h('span', { class: 'lbl' }, 'Layout'));
     // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
@@ -436,6 +434,7 @@ export class Stage {
       probeOf: (i) => this.probeOf(i),
     });
     this.view.arrange = true;
+    this.view.pickable = true;
     this.view.badge = () => {
       const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
       return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
@@ -443,9 +442,16 @@ export class Stage {
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
     this.el.setAttribute('aria-label', 'Circuit');
+    this.view.menuBack = this.el;
     this.el.addEventListener('keydown', (e) => {
       if (this.pending) return;
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      // on the circuit, or a control of its drawing: a button or a panel with the focus keeps the browser's own menu
+      if (isMenuKey(e) && !this.boardOn && (e.target === this.el || this.view.el.contains(e.target as Node))) {
+        e.preventDefault();
+        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
+        return;
+      }
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {

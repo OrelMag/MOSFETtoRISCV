@@ -81,6 +81,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'stage.fold', group: 'stage', caps: ['F'], does: 'focus mode: fold every panel and the inspector for the circuit alone; again to bring them back', match: [letter('f')] },
   { id: 'stage.probe', group: 'stage', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')] },
   { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
+  { id: 'stage.menu', group: 'stage', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selected wire or part, else of this level, with a list to pick any of them' },
   { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },
   { id: 'stage.undo', group: 'stage', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: 'undo · redo moving parts' },
   // ---- the sandbox (and campaign levels)
@@ -94,6 +95,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.nudge', group: 'select', caps: ['←↑↓→'], does: 'nudge the selection (Shift: ×5)' },
   { id: 'sb.all', group: 'select', caps: [`${MOD} A`], does: 'select all' },
   { id: 'sb.clear', group: 'select', caps: ['Esc'], does: 'clear the selection' },
+  { id: 'sb.menu', group: 'select', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selection, else of the canvas, with a list to pick anything on it' },
   { id: 'sb.rename', group: 'edit', caps: ['F2'], does: 'rename the selected part, pin or pointer (a comment: edit its text)' },
   { id: 'sb.flip', group: 'edit', caps: ['F'], does: 'flip the selection left–right (while placing: the part to be placed)', match: [letter('f')], taken: ['f'] },
   { id: 'sb.rotate', group: 'edit', caps: ['R', '·', 'Shift R'], does: 'turn the selection a quarter clockwise · anticlockwise (while placing: the part to be placed)', match: [letter('r')], taken: ['r'] },
