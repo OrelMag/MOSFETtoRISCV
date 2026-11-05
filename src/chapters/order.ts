@@ -58,6 +58,7 @@ const BOOK = [
   'modem',
   'carriers',
   'serial',
+  'glass',
   'errors',
   'codes',
   'ethernet',
