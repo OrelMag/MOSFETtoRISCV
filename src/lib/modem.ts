@@ -27,7 +27,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** A lookup table in gates: a decoder raises one word line, each output bit ORs the lines whose word has that bit set (as romArray). */
-function lookupRom(id: string, name: string, k: number, w: number, data: number[], summary: string): ComponentDef {
+export function lookupRom(id: string, name: string, k: number, w: number, data: number[], summary: string): ComponentDef {
   return memo(id, () => {
     const b = new Builder(10, 14);
     b.pins('addr');
@@ -35,6 +35,7 @@ function lookupRom(id: string, name: string, k: number, w: number, data: number[
     b.next();
     const bits = Array.from({ length: w }, (_, j) => {
       const lines = data.map((v, i) => ((v >> j) & 1 ? `${dec}.y${i}` : '')).filter(Boolean);
+      if (!lines.length) return b.op1(TIE0, []);
       return lines.length === 1 ? lines[0] : b.op1(lines.length === 2 ? OR : orN(lines.length), lines, `bit ${j}`);
     });
     b.next();

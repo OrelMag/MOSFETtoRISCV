@@ -1,14 +1,19 @@
 // Keeping it secret: how strangers share a secret in public. It opens on the Enigma M4 (crypto/enigma.ts, widgets/enigma3d.ts), a
-// permutation of wired switches that was broken for reasons that are still the rules. AES, SHA-256 and a TLS 1.3 handshake follow
-// (Chapter.soon until they are built). History here is checked against the sources in the "Where this comes from" asides.
+// permutation of wired switches that was broken for reasons that are still the rules. Then AES and SHA-256 in gates (lib/aes.ts,
+// lib/sha256.ts, checked against NIST vectors and node:crypto), and key exchange and TLS 1.3 in software on the RV32 (crypto/tls, checked against RFC 8448 and Node's tls). History here is checked against the sources in the "Where this comes from" asides.
 
 import { periodOf, involutions26, m4KeySpace, plugCount } from '../crypto/bombe';
 import '../lib';
 import { add26, m4Gates, sub26, wheelStage } from '../lib/enigmagates';
+import COSTS from '../crypto/gatecosts.json';
 import { stats } from '../sim/stats';
 import { idx, ROTORS, U264 } from '../crypto/enigma';
 import { enigma3d } from '../widgets/enigma3d';
 import { withModel } from '../widgets/modelhost';
+import TLS from '../crypto/tls/costs.json';
+import { aesExplorerWidget, avalancheWidget, modesWidget, shaWidget } from '../widgets/secretaes';
+import { costsWidget, curveWidget, dhWidget, handshakeWidget, mitmWidget } from '../widgets/secrettls';
+import { aesCoreScene, aesRoundScene, sboxScene, shaCoreScene, shaRoundScene } from '../widgets/secretscenes';
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -31,20 +36,26 @@ const m4Scene = () => ({
 
 export const chSecret: Chapter = {
   id: 'secret', num: numOf('secret'), title: 'Keeping it secret', level: 'Communication',
-  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.',
+  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448\'s recorded server.',
   goals: [
-    'describe the Enigma as a permutation that changes with every key press, and say what its wiring forces it to do',
-    'use a crib and the machine\'s flaw to rule out settings, and explain how the Bombe discards the plugboard from the search',
-    'state the design rules that Enigma\'s failures gave modern ciphers',
-    'say what separates a stored-program computer from the machines built to break these ciphers',
+    'describe the Enigma as a permutation that changes with every key press, and explain how a crib and the Bombe went round its plugboard',
+    'state the design rules that its failures gave modern ciphers, and see them in AES and SHA-256 built from gates',
+    'say what a mode of operation adds to a block cipher, and what goes wrong without one',
+    'follow a TLS 1.3 handshake: how two strangers reach a shared secret in public, and what proves who is at the other end',
   ],
   builds: ['tcp'],
+  parts: [['The Enigma', 3], ['How it broke', 4], ['AES', 6], ['SHA-256', 3], ['Strangers', 5]],
   recap: {
     keep: [
       'A key press steps the wheels, then the current runs from the key through plugs, entry wheel, four wheels, the reflector and back. Each position is one fixed permutation of 26 letters, made of 13 swaps: the same setting deciphers what it enciphered, and no letter ever lights itself.',
       `The M4's key has ${sci(KS.total)} settings, about 2<sup>${KS.bits.toFixed(1)}</sup>, of which the plugboard is ${sci(KS.plugs)}. Without the plugs there are only ${sci(KS.withoutPlugs)}, and an attack that gets round the plugboard has only those to try.`,
       'A crib is plaintext you can guess. Because no letter enciphers to itself, a crib can only stand where no letter falls on itself. From a crib the Bombe follows a guess about one plug through the scrambler, whose wiring is known; a contradiction rules out that wheel position whatever the other plugs are.',
       'The lessons became rules: the design is public and only the key is secret (Kerckhoffs); a cipher must not have a structural tell; key bits must not be separable into parts attacked one at a time; and a key must not be reused or sent twice.',
+      `AES-128 is a key XOR, then ten rounds of SubBytes, ShiftRows, MixColumns and AddRoundKey over a 16-byte state, the last round without MixColumns. In gates here: an S-box of ${n0(COSTS.parts.aes_sbox.nands)} NANDs, a round of ${n0(COSTS.parts.aes_round.nands)}, a core of ${n0(COSTS.cores.aes_core.nands)} taking ${COSTS.cores.aes_core.cycles} clocks a block, with the key in a register.`,
+      'A block cipher alone only enciphers 16 bytes. ECB shows repeats; CTR hides them but dies if a counter is reused and does not notice changes; GCM adds a tag, so a changed message is refused.',
+      `SHA-256 turns any message into 256 bits so that changing one bit changes about half of them: a core of ${n0(COSTS.cores.sha_core.nands)} NANDs and ${COSTS.cores.sha_core.cycles} clocks per 64-byte block. It has no key: anyone can compute it.`,
+      'Diffie-Hellman gives two strangers a shared secret from public messages: each keeps a private number, and only a discrete logarithm would recover it. X25519 does this on a curve. On its own it says nothing about who is at the other end.',
+      'A TLS 1.3 handshake is one round trip: key shares in the clear, then everything else encrypted. The server signs the transcript with a key a client trusts, and both sides confirm with a Finished. Each session has fresh keys, so a stolen long-term key does not read old traffic.',
     ],
     check: [
       {
@@ -60,6 +71,27 @@ export const chSecret: Chapter = {
         answer: 0,
         explain: 'The reasoning needs only that a plug is a swap. It discards a wheel position without enumerating pluggings: the huge factor in the key space never enters the search.',
         why: ['', 'At a million plug settings a second, that alone takes about five years for each wheel position, and there are 17 576 positions per wheel order. No machine tried them.', 'Captured material helped at times, but the Bombe\'s method needed no plug settings.', 'It multiplied the key space enormously. The point is that the method goes round it, not that it is absent.'],
+      },
+      {
+        question: 'A picture is enciphered with AES in ECB mode, and its outline is still visible. Why?',
+        options: ['Equal 16-byte blocks of input give equal blocks of output', 'AES is too weak to hide images', 'The key was too short', 'ECB leaves the first round out'],
+        answer: 0,
+        explain: 'Each block is enciphered alone with the same key, so a flat area of the picture turns into one repeated block. The cipher is doing its job on each block; the mode gives the pattern away.',
+        why: ['', 'AES is fine: the same cipher in CTR mode hides the picture completely.', 'A longer key changes which block each block turns into, not that equal blocks stay equal.', 'ECB runs all the rounds. The problem is what happens between blocks: nothing.'],
+      },
+      {
+        question: 'Eve records a whole X25519 exchange and has unlimited storage. What stops Eve computing the shared secret?',
+        options: ['A private key is needed, and getting one from a public key is a discrete logarithm, out of reach of ordinary computers at this size', 'The public keys are encrypted', 'The secret is sent under AES', 'The exchange is too fast to record'],
+        answer: 0,
+        explain: 'Eve sees both public values. No known way of combining them into the secret is easier than solving the discrete logarithm on the curve. A large quantum computer would change that: Shor\'s algorithm solves discrete logarithms.',
+        why: ['', 'They are sent in the clear, in the ClientHello and ServerHello: anyone can read them.', 'The shared secret is never sent at all, under anything. Both sides compute it.', 'Recording is easy. The protection is in the mathematics, not in timing.'],
+      },
+      {
+        question: 'A TLS 1.3 handshake completes with no certificate check. What has been achieved?',
+        options: ['An encrypted channel to whoever answered, who may be an attacker', 'Nothing: without a certificate the keys are not secret', 'Full security: encryption is what matters', 'The handshake cannot complete without one'],
+        answer: 0,
+        explain: 'Key exchange gives a secret shared with the other end, whoever that is. A man in the middle simply runs one exchange with each side. Authentication is a separate job, and the signature over the transcript does it.',
+        why: ['', 'The keys are secret from a passive listener; the trouble is the active one.', 'An attacker in the middle reads and changes everything, under keys shared with you.', 'The chapter’s client completes with no pin, and says so: the mathematics does not require one.'],
       },
       {
         question: 'Which of these machines stored its program in the memory it worked on?',
@@ -123,7 +155,7 @@ export const chSecret: Chapter = {
     {
       title: 'What the breaking taught',
       body: `
-        <p>Modern cipher design reads like a list of what went wrong here. Each row here is a rule still in force, and AES, which is among the steps still to come in this chapter, follows all of them.</p>
+        <p>Modern cipher design reads like a list of what went wrong here. Each row here is a rule still in force, and AES, built later in this chapter, follows all of them.</p>
         <p>Key sizes are worth a sum. If a machine could try one key per clock at 1 GHz, the M4's ${sci(KS.withoutPlugs)} wheel-and-ring settings take under ${n0(Math.ceil(Number(KS.withoutPlugs) / 1e9 / 60))} minutes: that part alone is nothing today. AES-128 has 2<sup>128</sup> keys. Nothing you can build gets near that, and the design's job is to make sure nothing cleverer does either.</p>`,
       widget: lessonsWidget,
     },
@@ -132,12 +164,132 @@ export const chSecret: Chapter = {
       body: `
         <p>It is often said that breaking Enigma gave us the computer. The real line is more interesting, and you have already walked its end of it.</p>
         <p><b>1936.</b> Before any of this, Turing's paper <em>On Computable Numbers</em> describes a universal machine: one fixed machine that takes another machine's description as input. Program and data share one memory, the idea behind the CPU you built.</p>
-        <p><b>1940: the Bombe</b> is electromechanical and built for one job. Its "program" is a menu wired up on the back. It decides nothing beyond stop or carry on. Turing designed it, but it does not embody his universal machine.</p>
+        <p><b>1940: the Bombe</b> is electromechanical and built for one job. Its "program" is a menu wired up on the back. It decides nothing beyond stop or carry on. Turing designed it, but it does not embody the universal machine.</p>
         <p><b>1943–44: Colossus</b>, Tommy Flowers's machine at Bletchley, is electronic, with 1 600 and later 2 400 valves. It did not attack Enigma: it attacked the Lorenz teleprinter cipher, and Turing did not design it, though both are often said. It was programmable by switches and plugs, and is regarded as the first programmable electronic digital computer. It was not a stored-program machine, and its secrecy limited its influence: EDVAC's design was the one that spread.</p>
-        <p><b>1948: the Manchester Baby.</b> Max Newman, who had worked on Colossus at Bletchley, championed the Manchester project: he recruited F. C. Williams and arranged the funding and surplus parts, Colossus material among them. Williams, Tom Kilburn and Geoff Tootill built it. On 21 June 1948 the Baby ran a program held in read-write electronic memory. Turing wrote the third program it ran. Compare the three on this site's terms: the Bombe's function is its wiring, as with a chapter's gates; Colossus's is set by switches; the Baby's is words in memory, as in the CPU you built with its instruction memory and fetch.</p>
+        <p><b>1948: the Manchester Baby.</b> Max Newman, who had worked on Colossus at Bletchley, championed the Manchester project, recruiting F. C. Williams and arranging the funding and surplus parts, Colossus material among them. Williams, Tom Kilburn and Geoff Tootill built it. On 21 June 1948 the Baby ran a program held in read-write electronic memory. Turing wrote the third program it ran. Compare the three on this site's terms: the Bombe's function is its wiring, as with a chapter's gates; Colossus's is set by switches; the Baby's is words in memory, as in the CPU you built with its instruction memory and fetch.</p>
         <details class="deeper"><summary>Where this comes from</summary><p><a href="https://en.wikipedia.org/wiki/Colossus_computer" target="_blank" rel="noopener">Colossus computer</a> (the Lorenz target, valve counts, not stored-program, little direct influence), <a href="https://en.wikipedia.org/wiki/Manchester_Baby" target="_blank" rel="noopener">Manchester Baby</a> (the date, Newman, the surplus parts, Turing's program), <a href="https://en.wikipedia.org/wiki/Universal_Turing_machine" target="_blank" rel="noopener">Universal Turing machine</a> (Davis on the action table in the same memory as the data), <a href="https://en.wikipedia.org/wiki/Bombe" target="_blank" rel="noopener">Bombe</a>, and <a href="https://en.wikipedia.org/wiki/Kerckhoffs%27s_principle" target="_blank" rel="noopener">Kerckhoffs's principle</a> for the previous step. All Wikipedia, read for their citations: treat "first" with care, as those articles do. The Zuse Z3 of 1941 is the first programmable electromechanical one, and which machine counts as first depends on the definition.</p></details>`,
       widget: machinesWidget,
     },
+    {
+      title: 'AES: four steps and a key',
+      body: `
+        <p>Now the design that followed those rules. AES-128 works on 16 bytes, written as four columns of four, and repeats a round ten times. A round is four steps, and each has one job: <b>SubBytes</b> breaks linearity, a byte at a time; <b>ShiftRows</b> and <b>MixColumns</b> spread each byte across the block; <b>AddRoundKey</b> brings in the key. Before round 1 the key is XORed in once, because without that an attacker could undo the first round's steps with no key at all.</p>
+        <p>The round keys come from the 128-bit key by a small schedule, one new key a round, using the S-box and a constant. Compare the wheel: there the "key" is which wires and where they stand, and it is a fixed part of a machine. Here it is sixteen bytes in a register, and the structure never changes.</p>
+        <p class="try"><b>Try:</b> step through round 1 with the buttons. In orange: what that step changed. Then take the round slider to 10 and find the MixColumns that is not there.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p>The values are <a href="https://csrc.nist.gov/pubs/fips/197/final" target="_blank" rel="noopener">FIPS 197</a>'s Appendix B, which the test suite compares with every state of every round, then with SP 800-38A's vectors and 300 random blocks against Node's own crypto.</p></details>`,
+      widget: aesExplorerWidget,
+    },
+    {
+      title: 'The S-box, in gates',
+      body: `
+        <p>Most descriptions show the S-box as a table of 256 numbers, and in software it often is one. It is not arbitrary: it is the inverse in GF(2⁸), then an affine map. The inverse has very low correlation between input and output, which is what the known attacks on such a table need, and the affine map removes its fixed points at 0 and 1. So here there is no ROM at all.</p>
+        <p>Inverting directly in GF(2⁸) would be large, so this splits the field into a tower, GF(4) inside GF(16) inside GF(256): a byte becomes two half-sized numbers, and the inverse needs a few multiplications and one inverse in the smaller field, and so on down. The whole S-box is <b>${n0(COSTS.parts.aes_sbox.nands)} NANDs</b>, of which the inverse is ${n0(COSTS.parts.aes_gf256_inverse.nands)}, with a depth of ${COSTS.parts.aes_sbox.depth} gate delays. In software the same table lives in memory, and its access time depends on what was recently read, which is how table-based AES has leaked keys through caches. These gates read no memory, so that leak is gone. Their power draw still varies with the data, which is a different attack.</p>
+        <p class="try"><b>Try:</b> set <em>x</em> to 0x53. FIPS 197's example gives 0xED. Open the blocks and keep going: every level is a smaller field, down to NANDs.</p>`,
+      scene: sboxScene,
+    },
+    {
+      title: 'A round, and the core',
+      body: `
+        <p>Open the box and a round is what the explorer showed: sixteen S-boxes side by side, then ShiftRows, which is <b>no gates at all</b>, only wires going elsewhere, then four MixColumn blocks of ${n0(COSTS.parts.aes_mixcolumn.nands)} NANDs each, built from XORs, then an XOR with the key. The total is ${n0(COSTS.parts.aes_round.nands)} NANDs, and ${n0(COSTS.parts.aes_subbytes.nands)} of them are the S-boxes: the non-linear step is where the cost goes. Set <em>last</em> to 1 and the round bypasses MixColumns.</p>
+        <p>The whole core uses that one round again and again: a state register, a round-key register, a key-schedule step of ${n0(COSTS.parts.aes_key_step.nands)} NANDs and a counter. That is <b>${n0(COSTS.cores.aes_core.nands)} NANDs</b> and ${COSTS.cores.aes_core.cycles} clocks a block, at a period of ${COSTS.cores.aes_core.period} gate delays. The Enigma in gates took ${n0(GATES)}. For under three times the gates you get a key you can change by writing a register, and a key space no search will finish.</p>
+        <p class="try"><b>Try:</b> toggle <em>last</em> and watch the round's output <em>y</em> change. The next step runs the whole core.</p>`,
+      scene: () => ({ ...aesRoundScene(), path: ['round'] }),
+    },
+    {
+      title: 'The core runs the standard',
+      body: `
+        <p>This is the core on FIPS 197's example, with the key and block wired in, as a stage input holds only 53 exact bits. It takes ${COSTS.cores.aes_core.cycles} clocks: one to load and one per round. The test suite compares every register after every clock with the golden model, on this example, SP 800-38A's blocks and random ones, and holds the model to the standard's table and to Node's crypto.</p>
+        <p class="try"><b>Try:</b> set <em>start</em> to 1 and press Pulse once. Set <em>start</em> to 0 and press Pulse ten times. <em>done</em> rises and <em>out</em> reads 0x320B6A19_978511DC_FB09DC02_1D842539. That is the standard's ciphertext, 39 25 84 1d … 0b 32, backwards: the first byte is the low end of this bus, and hex prints the high end first.</p>`,
+      scene: () => ({ ...aesCoreScene(), engine: 'cycle' as const }),
+    },
+    {
+      title: 'One bit changes everything',
+      body: `
+        <p>Here is the Enigma's other weakness, measured. Flip one bit of input and follow the difference through the rounds. MixColumns spreads each changed byte to four, ShiftRows sends those to four columns, and the S-box makes the change unpredictable: within two or three rounds about half the state differs, which is what two unrelated random blocks would show.</p>
+        <p>This is <b>diffusion</b>, and it is what a crib cannot get a grip on: a guess about part of a block tells you nothing about the rest. An Enigma never mixes one letter with another. Each letter meets the machine alone, which is why the Bombe could reason along a crib one place at a time.</p>
+        <p class="try"><b>Try:</b> move the slider to flip other bits. The first bars depend on which bit. The last ones hardly do, and they sit around 64.</p>`,
+      widget: avalancheWidget,
+    },
+    {
+      title: 'Modes: blocks are not enough',
+      body: `
+        <p>A block cipher turns 16 bytes into 16 bytes. Messages are longer, and how you chain the blocks matters as much as the cipher. Enciphering each block alone, <b>ECB</b>, leaks every repeat. <b>CTR</b> enciphers a counter and XORs the result in, which turns AES into a stream and hides repeats. It needs only the encrypt direction, so these gates do both jobs.</p>
+        <p>CTR has one absolute rule. Use a counter value twice under one key and the keystream cancels, with no key needed. That is the Enigma operators' reused settings again, and exactly what real systems still get wrong. It also has no idea whether anyone changed the message: flip a ciphertext bit, and that plaintext bit flips, and nothing notices.</p>
+        <p><b>GCM</b> adds a tag: a keyed polynomial over the ciphertext, computed in GF(2¹²⁸). A changed bit anywhere makes the tag fail, and the message is refused. TLS 1.3 only allows authenticated encryption of this kind. Enigma had nothing like it: anyone could inject a message that looked right if they had the machine and the key sheet.</p>
+        <p class="try"><b>Try:</b> look at ECB, then CTR, then what the same nonce twice gives. No key was used in that last picture.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://csrc.nist.gov/pubs/sp/800/38/a/final" target="_blank" rel="noopener">SP 800-38A</a> for ECB and CTR, <a href="https://csrc.nist.gov/pubs/sp/800/38/d/final" target="_blank" rel="noopener">SP 800-38D</a> for GCM. CTR and GCM here are checked against Node's crypto and GCM's published test cases.</p></details>`,
+      widget: modesWidget,
+    },
+    {
+      title: 'A fingerprint: SHA-256',
+      body: `
+        <p>A hash has no key. It turns any message into 256 bits so that nobody can find a message for a given digest, or two messages with one digest. So it is a fingerprint: publish the digest, and anyone can check the file. Everything later in this chapter leans on it, because keys are derived with it and handshakes are bound together by it.</p>
+        <p>A message is padded and cut into 64-byte blocks. Each block is expanded to 64 words and stirred through 64 rounds into eight 32-bit registers, whose starting values and round constants are the fractional bits of square and cube roots of primes. That is deliberately nothing-up-my-sleeve: anyone can recompute them, and here the code does.</p>
+        <p class="try"><b>Try:</b> change one letter. About half the digest's bits move, as with AES, and for the same reason.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final" target="_blank" rel="noopener">FIPS 180-4</a>. The test suite compares the constants with the standard, every round of NIST's worked examples, and random messages with Node's crypto.</p></details>`,
+      widget: shaWidget,
+    },
+    {
+      title: 'SHA-256 in gates',
+      body: `
+        <p>A round is below: two of the Σ functions, Ch, Maj and seven 32-bit adders. Rotations are wires, so Σ costs only its XORs. This is all adders and logic, with no S-box, and a different kind of mixing: addition carries across bits, which XOR does not, and the two together are hard to invert. One round costs ${n0(COSTS.parts.sha_round.nands)} NANDs, about a quarter of an AES round.</p>
+        <p>The core adds a message schedule of ${n0(COSTS.parts.sha_schedule.nands)} NANDs, because it stores 16 words, and a table of constants of ${n0(COSTS.parts.sha_k_rom.nands)}. In all <b>${n0(COSTS.cores.sha_core.nands)} NANDs</b> and ${COSTS.cores.sha_core.cycles} clocks per 64 bytes, against AES's ${COSTS.cores.aes_core.cycles} clocks per 16. Per byte that is ${(COSTS.cores.sha_core.cycles / 64).toFixed(2)} clocks against AES's ${(COSTS.cores.aes_core.cycles / 16).toFixed(2)}, at a period of ${COSTS.cores.sha_core.period} gate delays against ${COSTS.cores.aes_core.period}.</p>
+        <p class="try"><b>Try:</b> open the block to see the round on the first round of "abc", as NIST's worked example has it. Open Σ0 and find that its rotations cost nothing.</p>`,
+      scene: shaRoundScene,
+    },
+    {
+      title: 'The SHA-256 core runs "abc"',
+      body: `
+        <p>The whole compression, on the block that holds "abc" and its padding. The test suite compares a to h after every clock with NIST's table of 64 rounds, then the digest of longer messages with Node's crypto.</p>
+        <p class="try"><b>Try:</b> set <em>start</em> to 1, Pulse once, set <em>start</em> to 0, then Run until <em>done</em> lights. <em>out</em> reads 0xF20015AD_B410FF61_96177A9C_B00361A3_5DAE2223_414140DE_8F01CFEA_BA7816BF. That is the standard's digest of "abc", ba7816bf 8f01cfea … f20015ad, with its first word at the low end of the bus.</p>`,
+      scene: () => ({ ...shaCoreScene(), engine: 'cycle' as const }),
+    },
+    {
+      title: 'Sharing a secret in public',
+      body: `
+        <p>Everything so far assumed both ends already hold the key. The navy printed key lists and carried them to every boat, and a capture gave them away: the trawler Krebs, taken in March 1941, held all of February's keys. Two strangers on a network have no list. In 1976 Diffie and Hellman showed they do not need one.</p>
+        <p>Take a public prime <em>p</em> and a number <em>g</em>. Alice keeps a secret <em>a</em> and sends <em>gᵃ mod p</em>. Bob keeps <em>b</em> and sends <em>gᵇ mod p</em>. Each raises what arrived to their own secret, and both get <em>gᵃᵇ mod p</em>, because the order of exponents does not matter. Anyone watching has both public numbers, and to get further needs to undo an exponentiation, the <b>discrete logarithm</b>, for which no fast method is known on ordinary computers at the right sizes.</p>
+        <p>Note what is new: <b>the shared secret is never sent</b>, under any cipher. That is the answer to the key sheet, and nothing in the Enigma's world had anything like it.</p>
+        <p class="try"><b>Try:</b> move the secrets. The two computed numbers stay equal. Then let Eve search.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p>W. Diffie and M. Hellman, <em>New Directions in Cryptography</em>, IEEE Transactions on Information Theory, 1976. They were not alone. Ralph Merkle contributed to the invention of public-key cryptography, and in 2006 Hellman argued the exchange should carry Merkle's name too (<a href="https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange" target="_blank" rel="noopener">Wikipedia</a>, which also covers Shor's algorithm and the number field sieve). And at GCHQ, after James Ellis's idea of non-secret encryption, Clifford Cocks developed an early public-key system in the early 1970s, classified until 1997 (<a href="https://en.wikipedia.org/wiki/Clifford_Cocks" target="_blank" rel="noopener">Clifford Cocks</a>). The capture of Krebs: <a href="https://en.wikipedia.org/wiki/Cryptanalysis_of_the_Enigma" target="_blank" rel="noopener">Cryptanalysis of the Enigma</a>. 2³¹ − 1 and 16807 are the MINSTD pair, as Park and Miller suggested in 1988 (<a href="https://en.wikipedia.org/wiki/Lehmer_random_number_generator" target="_blank" rel="noopener">Lehmer generator</a>); a test here proves 16807 generates the whole group.</p></details>`,
+      widget: dhWidget,
+    },
+    {
+      title: 'X25519 on our CPU',
+      body: `
+        <p>Modern TLS does this on an elliptic curve, where the same security needs far smaller numbers. Instead of multiplying numbers, you add points: <em>a</em> times a point on the curve is easy, and getting <em>a</em> back from the result is the hard direction. X25519 is one such curve, with 255-bit numbers, chosen so a careful implementation is simple.</p>
+        <p>This one is ordinary Python from the chapter on compiling it, built to RV32IM. There is no bigint in that subset, so a number is 32 limbs of 8 bits. One multiplication walks 255 bits with the Montgomery ladder, each step a handful of field multiplications, each of those about a thousand limb products. That comes to <b>${n0(TLS.primitives.x25519)} cycles</b>, against ${n0(TLS.primitives['aes-128 block'])} for an AES block in the same software. It runs here, in this page, on the same golden model that checks the gate-level CPUs.</p>
+        <p class="try"><b>Try:</b> run it. The keys are RFC 7748's own example: every output is compared with the RFC's value and turns green if it matches.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://www.rfc-editor.org/rfc/rfc7748" target="_blank" rel="noopener">RFC 7748</a>. The test suite checks its section 5.2 vectors and section 6.1 exchange on the CPU. Its 1 000 and 1 000 000 iteration vectors are not run: at these speeds they would take far too long. This is teaching code: the ladder runs the same sequence of operations for every key, but nothing here has been hardened against side channels.</p></details>`,
+      widget: curveWidget,
+    },
+    {
+      title: 'Who is at the other end',
+      body: `
+        <p>Key exchange has a blind spot, one it shares with the key sheet: it tells you nothing about who holds the other copy. It proves you share a secret with <em>someone</em>. A man in the middle runs one exchange with you and another with the server, and reads and rewrites everything. Encryption cannot see him.</p>
+        <p>What closes the hole is a <b>signature</b>. The server holds a long-term private key, and signs the hash of the whole conversation so far, including both key shares. Substitute another share and the signature no longer covers what you saw, and without the server's key the attacker cannot make one that does. Replaying an old signature does not help either: the transcript has your fresh random in it.</p>
+        <p>That moves the question to: whose public key is this? A <b>certificate</b> is someone else's signature on "this key belongs to this name", in a chain that ends at a key your browser already holds. <b>Our client does not do that.</b> It checks one thing: that the server's key hashes to a value given to it in advance, a pin. It checks no chain, no dates and no host name, and with no pin it trusts anyone. A real client needs all of them, and much of its code goes there.</p>
+        <p>One more thing the Enigma never had: the session's keys come only from the X25519 exchange, and are thrown away. Steal the server's signing key tomorrow and yesterday's recordings still stay shut. This is <b>forward secrecy</b>. A captured key list opened everything sent under it.</p>
+        <p>The next step runs this for real. The check is at <em>A key you do not trust</em> and <em>Trust no one</em>.</p>`,
+      widget: mitmWidget,
+    },
+    {
+      title: 'A TLS 1.3 handshake',
+      body: `
+        <p>All of it together, one round trip. The client sends a <b>ClientHello</b> with a random number and its X25519 public key. The server answers with a <b>ServerHello</b> holding its own. From here both have the shared secret, and HKDF, built from HMAC and SHA-256, stretches it into keys. Everything else the server sends is under AES-128-GCM: <b>EncryptedExtensions</b>, its <b>Certificate</b>, <b>CertificateVerify</b>, which is the signature, and <b>Finished</b>, an HMAC over the whole transcript. The client checks each in turn, answers with its own Finished, and application data can follow.</p>
+        <p>Below is that client, ${n0(TLS.lines.total.python)} lines of Python compiled to ${n0(TLS.words.total)} words of RV32IM (${n0(TLS.words.app)} of them start-up tables and the command loop), on the golden model. Its counterpart is not a simulation of a server: it is the server's side of the example printed in RFC 8448, replayed byte for byte, which is why the client's own Finished can be compared with the RFC's. The test suite compares every derived secret with the RFC, and has this same client complete a live handshake with Node's own TLS server and exchange data with it.</p>
+        <p>Notice where the cycles go. X25519 twice and one signature check are nearly all of it, and the symmetric work that protects the data barely shows. That signature is RSA with the RFC example's 1024-bit key, far too short to trust today: real servers use ECDSA, Ed25519 or RSA of 2048 bits or more, and 2048 bits costs this client ${n0(TLS.primitives['rsa-pss-sha256 verify, 2048-bit key'])} cycles against ${n0(TLS.primitives['rsa-pss-sha256 verify, 1024-bit key (RFC 8448)'])}.</p>
+        <p class="try"><b>Try:</b> run it as recorded, then break it each way. Every button runs the CPU again, and a failure stops at the first check that can see it.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://www.rfc-editor.org/rfc/rfc8446" target="_blank" rel="noopener">RFC 8446</a> (TLS 1.3) and <a href="https://www.rfc-editor.org/rfc/rfc8448" target="_blank" rel="noopener">RFC 8448</a> (its example traces). Not implemented: retry requests, key updates, client certificates and resumption; a retry or key update is refused with its own error rather than ignored.</p></details>`,
+      widget: handshakeWidget,
+    },
+    {
+      title: 'What it all costs',
+      body: `
+        <p>Now the sums. Public-key work is enormously more expensive than symmetric work, by thousands of times here, and this is why every protocol has the same shape: public keys once, to agree a symmetric key, and AES and a hash for everything after.</p>
+        <p>The table also shows why processors grow instructions for this. In software, one AES block takes ${n0(TLS.primitives['aes-128 block'])} cycles on our RV32IM, with the round keys already made. The core you built takes ${COSTS.cores.aes_core.cycles} clocks for ${n0(COSTS.cores.aes_core.nands)} NANDs, key schedule included. That is hundreds of times fewer clocks, though a clock of the core and a cycle of the CPU are not the same length. And with no table in memory, the cache side channel goes too.</p>
+        <p>Set this against the opening. The Enigma took ${n0(GATES)} NANDs in gates and nothing in software, had one key per network per day, and could be attacked by a method that needed only known plaintext. The stack in this chapter needs a CPU and about ${Math.round(TLS.handshake['rfc8448 (1024-bit RSA, three cipher suites offered)'].cycles / 1e6)} million cycles, once. Then two machines that have never met talk under a key nobody ever sent, and a recording of it stays useless.</p>`,
+      widget: costsWidget,
+    },
   ],
-  soon: ['AES: four steps and a key', 'The S-box and a round, in gates', 'Modes: blocks are not enough', 'SHA-256 in gates', 'Sharing a secret in public', 'X25519 on our CPU', 'Who is at the other end', 'A TLS 1.3 handshake', 'What it all costs'],
 };

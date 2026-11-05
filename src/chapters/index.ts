@@ -36,15 +36,19 @@ import { chClocks } from './ch-comm-clocks';
 import { chUart } from './ch-comm-uart';
 import { chSpi } from './ch-comm-spi';
 import { chModem } from './ch-comm-modem';
+import { chCarriers } from './ch-comm-carriers';
 import { chSerial } from './ch-comm-serial';
 import { chErrors } from './ch-comm-errors';
+import { chCodes } from './ch-comm-codes';
 import { chEthernet } from './ch-comm-ethernet';
 import { chSwitch } from './ch-comm-switch';
 import { chNetwork } from './ch-comm-net';
 import { chRouter } from './ch-comm-router';
 import { chTcp } from './ch-comm-tcp';
+import { chQueues } from './ch-comm-queues';
 import { chSecret } from './ch-secret';
 import { chPath } from './ch-comm-path';
+import { chDatacentre } from './ch-comm-dc';
 import { chRelays } from './ch-relays';
 import { chTubes } from './ch-tubes';
 import { chCards } from './ch-cards';
@@ -57,7 +61,7 @@ export const chapters: Chapter[] = [
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
-  chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chSerial, chErrors, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chSecret, chPath,
+  chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chErrors, chCodes, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chDatacentre,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];

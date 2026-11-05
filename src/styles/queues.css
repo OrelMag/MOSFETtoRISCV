@@ -1,0 +1,18 @@
+/* Queues and congestion: the plane, the bars and the marks. Colours are the site's tokens, so both themes follow. */
+.qu-center { display: flex; flex-direction: column; align-items: center; }
+.qu-center h3 { align-self: flex-start; }
+.widget .mos-plot.qu-plane { width: min(100%, 380px); height: auto; display: block; }
+.qu-duel { width: 100%; height: auto; display: block; }
+.qu-axis { stroke: var(--border-strong, var(--border)); }
+.qu-full { stroke: var(--bad, #c93232); stroke-dasharray: 5 4; }
+.qu-fair { stroke: var(--good, #0b8259); stroke-dasharray: 5 4; }
+.qu-path { fill: none; stroke: var(--accent); stroke-width: 1; opacity: .85; }
+.qu-lab { font-size: 11px; fill: var(--text-2); }
+.qu-dot { stroke: var(--surface); }
+.qu-dot.a { fill: var(--accent); }
+.qu-dot.b { fill: var(--warn, #a85f07); }
+.qu-mark { stroke: var(--text-2); stroke-dasharray: 4 3; }
+.qu-bar.a { fill: var(--accent); }
+.qu-bar.b { fill: var(--warn, #a85f07); }
+.qu-check { display: inline-flex; gap: 5px; align-items: center; font-size: 12.5px; color: var(--text-2); }
+@media (pointer: coarse) { .qu-check input { width: 24px; height: 24px; } }

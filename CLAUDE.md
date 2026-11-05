@@ -794,7 +794,16 @@ src/crypto/     enigma.ts: the naval Enigma M4 (DOM-free): wirings, notches, paw
                WINDOW_PHI + (window − letter) · PITCH, so a notch is at PAWL_PHI exactly when the cipher carries; pawls() is not nextMoves():
                at a double step the middle pawl rides high) and enigma3dextras.ts (harness(): the 78 real wires, key switches, the spare
                wheel box, the Schreibmax; tests/model-enigma.test.ts walks the wires as a circuit to the lamp the cipher names),
-               strokefont.ts (lettering as boxes: the renderer has no textures). Not in a chapter yet
+               strokefont.ts (lettering as boxes: the renderer has no textures). bombe.ts: key space (m4KeySpace, BigInt), cribOffsets, the
+               Bombe's reasoning (bombeRun over 17 576 positions with the plugs unknown; menuOf, diagonal board); lib/enigmagates.ts m4Gates(settings) (the M4 in NANDs,
+               tests/secret-enigma-gates.test.ts: every press against the cipher). aes.ts, sha256.ts (golden models with per-round traces, S-box and constants computed),
+               tower.ts (the S-box's GF(4) → GF(16) → GF(256)), modes.ts (ECB, CTR, GCM; picture), dhtoy.ts, vectors.ts, costs.ts + gatecosts.json (scripts/secret-costs.ts --write);
+               lib/aes.ts, lib/sha256.ts: aesSbox, aesRound, aesCore, shaRound, shaCore (widgets/secretscenes.ts: benches with NIST vectors wired in, as Scene.inputs are exact only
+               to 53 bits; the stage prints those buses high end first, and the chapter quotes them so). tls/: a TLS 1.3 client in the Python subset (sha, aes, x25519, rsa, x509, tls, app as
+               stack modules; build.ts fullBuild(m), machine.ts TlsMachine on FastISS, run.ts runTlsClient: DOM-free, an async generator of events over a Transport, with Tamper;
+               rfc8448.json for the browser, scripts/tls-flight-write.ts; costs.json, scripts/tls-costs.ts --write). tests/crypto-tls-*: NIST / RFC vectors, RFC 8448 byte for byte, a live
+               handshake with Node's tls, every tamper caught by the right check. Trust is an SPKI pin only: no chain, dates or host name, and no side-channel protection (teaching code).
+               chapters/ch-secret.ts, widgets/secretenigma.ts, secretaes.ts, secrettls.ts.
 src/cards/      punched cards (DOM-free): hollerith.ts (the IBM 029 code: punchOf / charOf, a column = 12-bit mask, bit 0 row 12
                … bit 11 row 9), card.ts (Card: 80 column masks + print; Deck; textCard, objectCard: a word in row 9 of columns
                1–32, its source and hex printed, a sequence number in 73–80; wordOf, seqOf, programDeck, sortDeck, dropDeck,

@@ -216,8 +216,8 @@ describe('the Communication codex entries', () => {
     expect(gapDb(1e-7).toFixed(1)).toBe('10.0');
     expect(bitsForTone(100, 10.0)).toBe(15);
     quotes('ofdm', '2,304', '262,144', '114', '4,312.5 Hz', '1.104 MHz', '4 058.8', '19.2 %', '15');
-    says('modem', 7, '2,304'); says('modem', 7, '262,144'); says('modem', 7, '114 times'); says('modem', 7, '19.2 %'); says('modem', 7, '4058.8');
-    says('modem', 8, '1682'); says('modem', 8, '6.73 Mb/s'); says('modem', 8, '370 bits'); says('modem', 8, '1.48 Mb/s');
+    says('carriers', 0, '2,304'); says('carriers', 0, '262,144'); says('carriers', 0, '114 times'); says('carriers', 0, '19.2 %'); says('carriers', 0, '4058.8');
+    says('carriers', 5, '1682'); says('carriers', 5, '6.73 Mb/s'); says('carriers', 5, '370 bits'); says('carriers', 5, '1.48 Mb/s');
     expect([l3.total, l5.total]).toEqual([1682, 370]);
     quotes('ofdm', '1682', '6.73 Mb/s', '370 bits', '1.48 Mb/s');
   });
@@ -279,19 +279,19 @@ describe('the Communication codex entries', () => {
     // Viterbi, RS, interleaving
     expect([nands(convEncoder(CONV_K3)), nands(convEncoder(CONV_K7))]).toEqual([42, 122]);
     quotes('viterbi', '42 NANDs', '122', '3,118', '101,094', '110,578', '1,579', '160', '5.4 dB', '3.1 dB', '9.59 dB', '2.4 dB');
-    says('errors', 9, '42 NANDs'); says('errors', 9, '122 NANDs'); says('errors', 10, '3,118 NANDs'); says('errors', 10, '101,094'); says('errors', 10, '110,578'); says('errors', 10, '1,579'); says('errors', 10, '160');
-    says('errors', 13, '9.59 dB'); says('errors', 13, '5.4 dB'); says('errors', 13, '3.1 dB'); says('errors', 13, '3.4 dB');
+    says('codes', 0, '42 NANDs'); says('codes', 0, '122 NANDs'); says('codes', 1, '3,118 NANDs'); says('codes', 1, '101,094'); says('codes', 1, '110,578'); says('codes', 1, '1,579'); says('codes', 1, '160');
+    says('codes', 6, '9.59 dB'); says('codes', 6, '5.4 dB'); says('codes', 6, '3.1 dB'); says('codes', 6, '3.4 dB');
     const enc10 = nands(rsEncoder(10)), enc32 = nands(rsEncoder(32)), syn10 = nands(rsSyndrome(10)), mul = nands(gfMulGates());
     expect([enc10, enc32, syn10, mul]).toEqual([2356, 7452, 2366, 416]);
     quotes('reedsolomon', c(enc10), c(enc32), c(syn10), '416 NANDs', '121 bits', '3.4 dB', 'x8 + x4 + x3 + x2 + 1');
-    says('errors', 11, '2,356 NANDs'); says('errors', 11, '7,452'); says('errors', 11, '2,366'); says('errors', 11, '416 NANDs'); says('errors', 11, '121 bits');
+    says('codes', 2, '2,356 NANDs'); says('codes', 2, '7,452'); says('codes', 2, '2,366'); says('codes', 2, '416 NANDs'); says('codes', 2, '121 bits');
     expect(1 + 15 * 8).toBe(121);
     expect(burstTolerance(32, 1)).toBe(32);
     expect(burstTolerance(8, 16)).toBe(128);
     expect(8 * 128 - 7).toBe(1017);
     expect(worstPerWord(32, 32)).toBe(1);
     quotes('interleave', '32 bits', '1017', '128 bytes');
-    says('errors', 12, '32 bits for 32 SEC-DED words'); says('errors', 12, '1017 bits');
+    says('codes', 5, '32 bits for 32 SEC-DED words'); says('codes', 5, '1017 bits');
   });
 
   it('quote the Ethernet frame, the CSMA/CD rules and the MAC as built', () => {
