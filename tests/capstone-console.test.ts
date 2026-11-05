@@ -52,6 +52,11 @@ describe('the console capstone', () => {
     expect(r.failures ?? []).toEqual([]);
     expect(r.ok).toBe(true);
   }, 120_000);
+  it('its rule offers no processor parts, and what the console is built from', () => {
+    const lib = (capstoneRule('cap_console') as { lib: string[] }).lib;
+    expect(lib.filter((id) => /^rv16_/.test(id))).toEqual([]);
+    for (const given of ['uart_tx', 'uart_rx', 'fifo16x8', 'reg*', 'counter*']) expect(lib, given).toContain(given);
+  });
   it('the library core passes the bench directly', () => {
     expect(runConsole(UART_CORE, 'gate').failures).toEqual([]);
   }, 60_000);

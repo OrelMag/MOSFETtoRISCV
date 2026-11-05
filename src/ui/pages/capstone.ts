@@ -322,7 +322,7 @@ export class CapstonePage implements Page {
     const close = () => { this.result?.remove(); this.result = null; };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Capstone passed' },
       h('h3', null, icon('check', 20), g.first ? (cap.tier ? `Tier ${cap.tier} capstone passed` : 'Capstone passed') : g.best ? 'New best' : 'Passes'),
-      h('p', { class: 'sub' }, g.first ? 'The tier is marked done on My path. Show answer and the reference are open now; the reference is the same task done one way, not the only way.' : 'Still passing.'),
+      h('p', { class: 'sub' }, g.first ? `${cap.tier ? 'The tier is' : 'It is'} marked done on My path. Show answer and the reference are open now; the reference is the same task done one way, not the only way.` : 'Still passing.'),
       table,
       h('div', { class: 'lv-res-act' },
         h('button', { class: 'btn ghost', onclick: close }, 'Close'),

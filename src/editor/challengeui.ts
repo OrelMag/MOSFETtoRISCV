@@ -330,9 +330,9 @@ class ChallengeUi {
   /** A failing result's size, and Show / Hide for the details. */
   private foldEl(ch: BuildChallenge, r: CheckResult): HTMLElement {
     const bad = r.failed?.length ?? 0;
-    const what = ch.check.kind === 'table' ? 'rows' : ch.check.kind === 'custom' ? 'programs' : 'steps';
+    const what = ch.check.kind === 'table' ? 'rows' : ch.check.kind === 'custom' ? `${ch.check.unit ?? 'test'}s` : 'steps';
     const text = r.restrictionViolations.length && !bad ? `${r.restrictionViolations.length} part${r.restrictionViolations.length > 1 ? 's' : ''} not allowed`
-      : r.tested ? `${bad} of ${r.tested} ${what} wrong` : 'not simulated';
+      : !r.tested ? 'not simulated' : r.failed || !r.failures.length ? `${bad} of ${r.tested} ${what} wrong` : `${r.failures.length} problem${r.failures.length > 1 ? 's' : ''} in ${r.tested} ${what}`;
     const open = !!this.openResult;
     return h('span', { class: 'sb-chal-fold-line' }, text, ' · ',
       h('button', { class: 'btn-link', 'data-chal': 'details', 'aria-expanded': String(open), onclick: () => { this.openResult = !open; this.version++; this.render(); } }, open ? 'Hide' : 'Show'));
@@ -412,10 +412,10 @@ class ChallengeUi {
 
   private resultEl(ch: BuildChallenge, r: CheckResult, stale: boolean): HTMLElement {
     const el = h('div', { class: `sb-chal-result ${r.ok ? 'ok' : 'bad'}${stale ? ' stale' : ''}`, role: 'status' });
-    const what = ch.check.kind === 'table' ? `${r.tested} input combination${r.tested === 1 ? '' : 's'}` : ch.check.kind === 'custom' ? `${r.tested} test program${r.tested === 1 ? '' : 's'}` : `${r.tested} steps`;
+    const what = ch.check.kind === 'table' ? `${r.tested} input combination${r.tested === 1 ? '' : 's'}` : ch.check.kind === 'custom' ? `${r.tested} ${ch.check.unit ?? 'test'}${r.tested === 1 ? '' : 's'}` : `${r.tested} steps`;
     el.append(h('div', { class: 'sb-chal-verdict' },
       r.ok ? h('b', null, icon('check', 14), 'Passes') : h('b', null, icon('close', 14), 'Not yet'),
-      h('span', null, r.ok ? `all ${what} correct` : r.tested ? `checked ${what}` : 'not simulated'),
+      h('span', null, r.ok ? `all ${what} correct` : r.tested ? (ch.check.kind === 'custom' ? `${what} run` : `checked ${what}`) : 'not simulated'),
       stale ? h('span', { class: 'sb-chal-stale' }, 'edited since: check again') : null,
       !this.player && r.tested && ch.check.kind !== 'custom'
         ? h('button', { class: 'btn sm ghost sb-chal-watch', 'data-chal': 'watch', title: 'Play the tests one by one on your circuit: step, scrub, jump to failures',
@@ -491,10 +491,20 @@ class ChallengeUi {
       unmeasured ? h('p', { class: 'sb-chal-note' }, 'Depth: not measured (transistor-level parts have no gate delay). Build it from NANDs to be graded on depth.') : null);
   }
 
+  /** A slow bench's Check has shown its message. */
+  private announced = false;
   check(): void {
     const ed = this.ed;
     const ch = this.challenge;
     if (!ch) return;
+    // a bench that holds the page for many seconds says so first, and gets a frame to say it in
+    if (ch.check.kind === 'custom' && ch.check.slow && !this.announced) {
+      this.announced = true;
+      const btn = document.querySelector<HTMLButtonElement>('[data-chal="check"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Checking… the page holds still'; }
+      requestAnimationFrame(() => setTimeout(() => { this.check(); this.announced = false; }, 0));
+      return;
+    }
     // Check's own simulators are separate; the player's replay is given back first all the same,
     // so a new result never opens over an old replay.
     this.closePlayer();
