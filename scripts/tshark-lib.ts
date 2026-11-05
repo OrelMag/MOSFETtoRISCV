@@ -12,21 +12,26 @@ export const FIELDS = [
   'data.data', 'tcp.segment_data',
   'dns.id', 'dns.flags.response', 'dns.count.queries', 'dns.count.answers', 'dns.count.auth_rr', 'dns.count.add_rr', 'dns.qry.name', 'dns.resp.name', 'dns.ns', 'dns.a', 'dns.resp.ttl',
 ] as const;
-export type Field = typeof FIELDS[number];
+/** USB's own list (usbll, Wireshark 4.2 packet-usbll.c): kept apart so that a name tshark does not know cannot take the Ethernet cases down with it. */
+export const USB_FIELDS = [
+  'frame.number', 'frame.len', 'frame.time_epoch', 'frame.protocols', '_ws.malformed', '_ws.expert.severity', '_ws.expert.message',
+  'usbll.pid', 'usbll.device_addr', 'usbll.endp', 'usbll.frame_num', 'usbll.crc5', 'usbll.crc5.status', 'usbll.data', 'usbll.crc16', 'usbll.crc16.status',
+] as const;
+export type Field = string;
 
 /** tshark's options: verify every checksum it is able to; by default it trusts some of them. */
 export const TSHARK_PREFS = ['-o', 'ip.check_checksum:TRUE', '-o', 'udp.check_checksum:TRUE', '-o', 'tcp.check_checksum:TRUE'];
 /** A heuristic takes the ping's payload, 0x10 0x11 …, for this measurement tool's probe, and would hide its bytes from data.data. The headers are unaffected. */
 export const TSHARK_OFF = ['--disable-protocol', 'hipercontracer'];
 /** The file goes in on a pipe: Ubuntu's tshark refuses a path in the runner's work directory ("You don't have permission"), and refuses Node's stdin too, a socket. */
-export const tsharkArgs = (): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, ...TSHARK_OFF, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...FIELDS.flatMap((f) => ['-e', f])];
+export const tsharkArgs = (fields: readonly string[] = FIELDS): string[] => ['-r', '-', '-n', ...TSHARK_PREFS, ...TSHARK_OFF, '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=a', '-E', 'aggregator=|', ...fields.flatMap((f) => ['-e', f])];
 
-export type Row = Partial<Record<Field, string>>;
+export type Row = Partial<Record<string, string>>;
 
-export function parseRows(text: string): Row[] {
+export function parseRows(text: string, fields: readonly string[] = FIELDS): Row[] {
   return text.split('\n').filter((l) => l.length > 0).map((l) => {
     const cols = l.replace(/\r$/, '').split('\t'), r: Row = {};
-    FIELDS.forEach((f, i) => { if (cols[i]) r[f] = cols[i]; });
+    fields.forEach((f, i) => { if (cols[i]) r[f] = cols[i]; });
     return r;
   });
 }
@@ -112,7 +117,7 @@ export function compareRow(c: Claim, r: Row, allow?: RegExp): string[] {
   if (!(protos === c.chain || protos.startsWith(`${c.chain}:`))) out.push(`protocols: tshark ${protos || 'has none'}, the bytes say ${c.chain}`);
   if (r['_ws.malformed'] !== undefined || protos.includes('malformed')) out.push(`malformed: ${r['_ws.expert.message'] ?? protos}`);
   for (const f of c.good) { const s = first(r[f])?.toLowerCase(); if (!s || !GOOD_STATUS.has(s)) out.push(`${f}: ${s ?? 'not verified'}, not good`); }
-  for (const f of ['ip.checksum.status', 'icmp.checksum.status', 'udp.checksum.status', 'tcp.checksum.status'] as const) {
+  for (const f of ['ip.checksum.status', 'icmp.checksum.status', 'udp.checksum.status', 'tcp.checksum.status', 'usbll.crc5.status', 'usbll.crc16.status']) {
     if ((r[f] ?? '').split('|').some((x) => BAD_STATUS.has(x.toLowerCase()))) out.push(`${f}: a bad checksum (${r[f]})`);
   }
   const sev = (r['_ws.expert.severity'] ?? '').split('|'), msg = (r['_ws.expert.message'] ?? '').split('|');
@@ -131,4 +136,24 @@ export function compareCapture(frames: readonly Captured2[], rows: readonly Row[
   if (rows.length !== frames.length) out.push(`tshark read ${rows.length} frames of ${frames.length}`);
   rows.forEach((r, i) => { if (claims[i]) for (const p of compareRow(claims[i], r, allow)) out.push(`frame ${i + 1}: ${p}`); });
   return out;
+}
+
+// ---- USB: link type 288, one packet a record, PID byte first ---------------------------------------------------------------------------
+const hx = (a: ArrayLike<number>, from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, k) => a[from + k].toString(16).padStart(2, '0')).join('');
+
+/** What a USB packet's bytes say they are, by the spec's field layout (comm/usb.ts parsePacket is a third reading; this one is by fixed offsets). */
+export function usbClaimOf(b: ArrayLike<number>, us: number): Claim {
+  const pid = b[0] & 15, fields: Claim['fields'] = { 'frame.len': b.length, 'frame.time_epoch': us, 'usbll.pid': b[0] };
+  const good: Field[] = [];
+  if ((pid & 3) === 1) {
+    const w = b[1] | (b[2] << 8);
+    if (pid === 5) fields['usbll.frame_num'] = w & 0x7ff; else Object.assign(fields, { 'usbll.device_addr': w & 0x7f, 'usbll.endp': (w >> 7) & 15 });
+    fields['usbll.crc5'] = w >> 11;
+    good.push('usbll.crc5.status');
+  } else if ((pid & 3) === 3) {
+    if (b.length > 3) fields['usbll.data'] = hx(b, 1, b.length - 2);
+    fields['usbll.crc16'] = b[b.length - 2] | (b[b.length - 1] << 8);
+    good.push('usbll.crc16.status');
+  }
+  return { fields, chain: 'usbll', good };
 }
