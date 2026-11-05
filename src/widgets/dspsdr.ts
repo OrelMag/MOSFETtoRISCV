@@ -5,8 +5,8 @@
 import { signedOf, wordOf } from '../comm/signals';
 import type { Clip } from '../dsp/clip';
 import {
-  ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, carson, CIC_GAIN, CIC_R, DEV, FrontModel, FS, FS_CIC, keyingRatio, mixBlock, MixModel,
-  mixerSfdr, modIndex, NCO_K, occupied, receive, sample, STATIONS, stationAt, synthBand, TAU, TEST_TONE_HZ, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, workPerSecond, type Band,
+  ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, stationBand, carson, CIC_GAIN, CIC_R, FrontModel, FS, FS_CIC, keyingRatio, mixBlock, MixModel,
+  mixerSfdr, modIndex, NCO_K, occupied, receive, sample, STATIONS, stationAt, synthBand, TAU, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, workPerSecond, type Band,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS, gateClip, modelClip } from '../dsp/sdrclip';
 import { fft } from '../comm/fourier';
@@ -57,7 +57,7 @@ export function bandWidget(): Widget {
     const b = band(), smp = sample(b, noise, 0, 1 << 16), sp2 = bandSpectrum(smp.xr, smp.xi);
     plot.clear();
     drawSpectrum(plot, sp2, FS);
-    STATIONS.forEach((st) => { band2(plot, (st.f - carson(DEV, 3000) / 2) / 1000, (st.f + carson(DEV, 3000) / 2) / 1000, 'sdr-occ'); label(plot, st.f / 1000, plot.Y(9), st.short); });
+    STATIONS.forEach((st) => { band2(plot, (st.f - stationBand(st) / 2) / 1000, (st.f + stationBand(st) / 2) / 1000, 'sdr-occ'); label(plot, st.f / 1000, plot.Y(9), st.short); });
     chips.set(0, `${sp(FS)} /s`, 'complex samples a second, I and Q');
     chips.set(1, `${W_IN} bits`, `each of I and Q; ±${2 ** (W_IN - 1)} steps`);
     chips.set(2, `${num(20 * Math.log10(STATIONS[0].a / STATIONS[3].a), 0)} dB`, 'loudest station over the weakest');
@@ -65,9 +65,9 @@ export function bandWidget(): Widget {
   };
   const sn = slider('Noise', -60, 0, 1, noise, (v) => `${v} dB`, (v) => { noise = v; paint(); });
   const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'))),
-    ...STATIONS.map((st, k) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(carson(DEV, k === 3 ? 700 : k === 2 ? 3000 : k === 1 ? 1100 : TEST_TONE_HZ) / 1000, 0)} kHz`))));
+    ...STATIONS.map((st) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(stationBand(st) / 1000, 0)} kHz`))));
   paint();
-  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: the band each station occupies, with 3 kHz audio')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: the band each station occupies, by Carson\'s rule')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
 }
 
 // ---- how wide a station is -----------------------------------------------------------------------------------------------------------------------
@@ -242,7 +242,7 @@ export function channelWidget(): Widget {
     const m = Math.floor((5e-3 * FS_CIC)), start = 3000, d = r.chain.disc;
     line(sp2, range(m).map((i) => (i / FS_CIC) * 1000), range(m).map((i) => d[start + i]), 'real');
     chips.set(0, `${CHAN_TAPS} taps`, `${sp(workPerSecond.channel)} multiplications a second, I and Q`);
-    chips.set(1, `${num(-dbOf(f240(CHAN, 100_000)), 0)} dB`, 'down at 100 kHz, where the next station\'s edge is');
+    chips.set(1, `${num(-dbOf(f240(CHAN, 100_000)), 0)} dB`, 'the channel filter\'s attenuation 100 kHz from the tuned station');
     chips.set(2, `${num(Math.max(...range(m).map((i) => Math.abs(d[start + i]))), 2)}`, 'largest discriminator output, in deviations');
     chips.set(3, `${r.clipped}`, 'ADC samples at full scale');
     picks.forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
@@ -302,7 +302,7 @@ export function dialWidget(): Widget {
     let mx = 1e-6;
     for (let i = 0; i < n; i++) mx = Math.max(mx, Math.abs(a[w0 + i]));
     line(wave, range(n).map((i) => (i / AUD) * 1000), range(n).map((i) => a[w0 + i] / mx), 'real');
-    const st = stationAt(f), bw = st ? carson(DEV, st === STATIONS[0] ? 1000 : st === STATIONS[3] ? 700 : 3000) : 0;
+    const st = stationAt(f), bw = st ? stationBand(st) : 0;
     const bits: (Node | string)[] = [];
     const tag = (label: string, value: string, cls = '') => h('span', null, `${label} `, h('b', { class: cls }, value));
     bits.push(tag('Tuned to', st ? st.name : 'nothing that was put there'));

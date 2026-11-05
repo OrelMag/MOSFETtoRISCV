@@ -4,7 +4,7 @@
 
 import { cicAliasDb, cicResponse } from '../dsp/multirate';
 import {
-  ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
+  ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, stationBand, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
   workPerSecond,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS } from '../dsp/sdrclip';
@@ -19,8 +19,8 @@ const d1 = (x: number) => x.toFixed(1);
 const khzf = (hz: number) => `${n0(hz / 1000)} kHz`;
 const memo = <T>(f: () => T): (() => T) => { let v: T | undefined; return () => (v ??= f()); };
 const nands = memo(nandsOf);
-const tone = memo(() => [-40, -25, -10].map((nd) => ({ nd, snr: toneSnr(receive(band(), STATIONS[0].f, nd).chain.audio), cn: carrierToNoise(1, nd, carson(DEV, TEST_TONE_HZ)) })));
-const weak = memo(() => [-40, -25, -15].map((nd) => ({ nd, key: keyingRatio(receive(band(), STATIONS[3].f, nd).chain.audio), cn: carrierToNoise(STATIONS[3].a, nd, carson(DEV, 700)) })));
+const tone = memo(() => [-40, -25, -10].map((nd) => ({ nd, snr: toneSnr(receive(band(), STATIONS[0].f, nd).chain.audio), cn: carrierToNoise(STATIONS[0].a, nd, stationBand(STATIONS[0])) })));
+const weak = memo(() => [-40, -25, -15].map((nd) => ({ nd, key: keyingRatio(receive(band(), STATIONS[3].f, nd).chain.audio), cn: carrierToNoise(STATIONS[3].a, nd, stationBand(STATIONS[3])) })));
 const measuredBw = memo(() => ({ tone: occupied(toneFm(DEV, TEST_TONE_HZ), 0.98), wide: occupied(toneFm(DEV, 15_000), 0.98) }));
 /** The closest two stations are this far apart. */
 const closest = () => Math.min(...STATIONS.map((s) => s.f).sort((a, b) => a - b).map((f, i, a) => (i ? f - a[i - 1] : Infinity)));

@@ -126,14 +126,17 @@ export function frontBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: nu
 
 // ---- the band ------------------------------------------------------------------------------------------------------------------------------
 
-export interface Station { f: number; a: number; name: string; short: string }
+/** `fm`: the highest audio frequency the station sends, for Carson's rule. */
+export interface Station { f: number; a: number; name: string; short: string; fm: number }
 export const STATIONS: readonly Station[] = [
-  { f: -300_000, a: 1, name: 'Test tone, 1 kHz', short: 'tone' },
-  { f: -60_000, a: 0.5, name: 'Arpeggio', short: 'arpeggio' },
-  { f: 140_000, a: 0.7, name: 'Sweep', short: 'sweep' },
-  { f: 340_000, a: 0.04, name: 'Weak station, sending Morse', short: 'weak' },
+  { f: -300_000, a: 1, name: 'Test tone, 1 kHz', short: 'tone', fm: 1000 },
+  { f: -60_000, a: 0.5, name: 'Arpeggio', short: 'arpeggio', fm: 1046 },
+  { f: 140_000, a: 0.7, name: 'Sweep', short: 'sweep', fm: 3000 },
+  { f: 340_000, a: 0.04, name: 'Weak station, sending Morse', short: 'weak', fm: 700 },
 ];
 export const TEST_TONE_HZ = 1000;
+/** Carson's band of one of the four stations, from its own deviation and highest audio frequency. */
+export const stationBand = (st: Station): number => 2 * (DEV + st.fm);
 const NOTES = [262, 330, 392, 523, 392, 330];
 // D S P in Morse: -.. ... .--. , one unit a character of this string
 const MORSE = '1110101' + '000' + '10101' + '000' + '10111011101';
@@ -148,7 +151,7 @@ export function program(k: number, n: number): Float64Array {
   return m;
 }
 
-/** First-order pre-emphasis, scaled so a full-scale tone never leaves the deviation. de-emphasis is its exact inverse. */
+/** First-order pre-emphasis, scaled so its gain is 1 at the top of the audio band and less below. de-emphasis is its exact inverse. */
 export function preEmphasis(m: Float64Array): Float64Array {
   const out = new Float64Array(m.length);
   let prev = 0;
@@ -174,6 +177,14 @@ export function addFm(re: Float32Array, im: Float32Array, f: number, a: number, 
   }
 }
 
+const peaks = new Map<number, number>();
+/** The loudest the pre-emphasised programme of station k gets in its first second (the same whatever length of band is made). */
+export function programPeak(k: number): number {
+  let p = peaks.get(k);
+  if (p === undefined) { const e = preEmphasis(program(k, AUD + 2)); p = Math.max(...e.map(Math.abs)); peaks.set(k, p); }
+  return p;
+}
+
 export interface Band { n: number; re: Float32Array; im: Float32Array; noiseRe: Float32Array; noiseIm: Float32Array }
 const bands = new Map<number, Band>();
 /** The four stations, n samples long, and a fixed stream of unit complex Gaussian noise to scale (so the same slider position is the same sound everywhere). */
@@ -181,7 +192,12 @@ export function synthBand(n: number = FS): Band {
   const hit = bands.get(n);
   if (hit) return hit;
   const re = new Float32Array(n), im = new Float32Array(n), nre = new Float32Array(n), nim = new Float32Array(n), na = Math.ceil(n / (FS / AUD)) + 2;
-  STATIONS.forEach((st, k) => addFm(re, im, st.f, st.a, preEmphasis(program(k, na))));
+  // each station's pre-emphasised programme is scaled so its loudest moment of a second is the peak deviation: a station modulates to its limit, whatever it sends
+  STATIONS.forEach((st, k) => {
+    const e = preEmphasis(program(k, na)), top = programPeak(k);
+    for (let i = 0; i < e.length; i++) e[i] /= top;
+    addFm(re, im, st.f, st.a, e, DEV);
+  });
   let s = 99;
   const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return (s + 0.5) / 4294967296; };
   for (let i = 0; i < n; i++) { const r = Math.sqrt(-2 * Math.log(rnd())), a = 2 * Math.PI * rnd(); nre[i] = r * Math.cos(a) * Math.SQRT1_2; nim[i] = r * Math.sin(a) * Math.SQRT1_2; }

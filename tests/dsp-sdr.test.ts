@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
   ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
-  synthBand, keyingRatio, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
+  synthBand, TEST_TONE_HZ, keyingRatio, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';
 import { complexMixer, sdrFront } from '../src/lib/sdr';
@@ -90,8 +90,8 @@ describe('the receiver', () => {
     expect(snr).toBeGreaterThan(30);
   });
   it('tuned between stations it gives noise, not the tone', () => {
-    const r = receive(band, -180_000, -40);
-    expect(stationAt(-180_000)).toBeUndefined();
+    const r = receive(band, -440_000, -40);
+    expect(stationAt(-440_000)).toBeUndefined();
     expect(toneSnr(r.chain.audio)).toBeLessThan(5);
   });
   it('more noise, a worse tone, and C/N moves one for one', () => {
@@ -107,12 +107,25 @@ describe('the receiver', () => {
       expect(e / (a.length - 2000)).toBeGreaterThan(0.005);
     }
   });
-  it('de-emphasis undoes pre-emphasis', () => {
-    const r = receive(band, STATIONS[0].f, -60), a = r.chain.audio;
-    let peak = 0;
-    for (let i = 4000; i < a.length; i++) peak = Math.max(peak, Math.abs(a[i]));
-    expect(peak).toBeGreaterThan(0.9);
-    expect(peak).toBeLessThan(1.1);
+  it('the stations deviate to their limit, and de-emphasis gives the programme back', () => {
+    // the test tone's samples: the frequency step between neighbours, from the band itself, peaks at the deviation
+    const b4 = synthBand(FS / 4), n = 20000, z = (i: number) => [b4.re[i], b4.im[i]];
+    // tuned and filtered to the station alone the discriminator reads ±1 deviation at the loudest moment
+    const r = receive(b4, STATIONS[0].f, -60);
+    let top = 0;
+    for (let i = 3000; i < r.chain.disc.length - 100; i++) top = Math.max(top, Math.abs(r.chain.disc[i]));
+    expect(z(0).length + n).toBeGreaterThan(0);
+    expect(top).toBeGreaterThan(0.9);
+    expect(top).toBeLessThan(1.1);
+    // the audio is the programme: correlation with the test tone, any delay within a few samples, is near 1
+    const a = r.chain.audio, ref = (i: number) => Math.sin((2 * Math.PI * TEST_TONE_HZ * i) / AUD);
+    let best = 0;
+    for (let d = -10; d <= 10; d++) {
+      let c = 0, ea = 0, er = 0;
+      for (let i = 400; i < a.length - 20; i++) { const x = a[i], y = ref(i + d); c += x * y; ea += x * x; er += y * y; }
+      best = Math.max(best, Math.abs(c) / Math.sqrt(ea * er));
+    }
+    expect(best).toBeGreaterThan(0.995);
   });
   it('the spectrum shows the four peaks', () => {
     const s = sample(band, -40), sp = bandSpectrum(s.xr, s.xi);
