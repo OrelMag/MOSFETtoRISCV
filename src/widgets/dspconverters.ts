@@ -86,9 +86,9 @@ export function sdWidget(): Widget {
   const chips = mkChips(4);
   const paint = () => {
     const osr = 2 ** osrLog, k = Math.max(3, Math.round(SD_N / osr / 8)) | 1, x = sdBitstream(order, SD_N, k, level), p = powerSpectrum(x);
-    // bins averaged in fours above the band, so the noise reads as a curve
+    // bins grouped more widely as they go up, the largest of each, so a log axis reads as a curve
     const fs: number[] = [], ys: number[] = [];
-    for (let i = 2; i < p.length; i = Math.max(i + 1, Math.floor(i * 1.04))) { const e = Math.max(i + 1, Math.floor(i * 1.04)); let s = 0; for (let j = i; j < e; j++) s = Math.max(s, p[j]); fs.push(Math.log10(i / SD_N)); ys.push(Math.max(-120, 10 * Math.log10(s + 1e-14))); }
+    for (let i = 2; i < p.length; i = Math.max(i + 1, Math.floor(i * 1.04))) { const e = Math.min(p.length, Math.max(i + 1, Math.floor(i * 1.04))); let s = 0; for (let j = i; j < e; j++) s = Math.max(s, p[j]); fs.push(Math.log10(i / SD_N)); ys.push(Math.max(-120, 10 * Math.log10(s + 1e-14))); }
     plot.clear();
     line(plot, fs, ys, 'ln-s real');
     const edge = Math.log10(sdBand(osr));
