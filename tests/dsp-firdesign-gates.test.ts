@@ -118,7 +118,7 @@ describe('the filter on one multiplier, against its model every cycle', () => {
     const { cfg } = sceneMac(), rows = firCosts(cfg), one = rows.find((r) => r.cycles === cfg.taps.length)!, direct = rows[0];
     expect(one.nands).toBe(stats(firMac(cfg)).nands);
     expect(one.nands).toBeLessThan(direct.nands / 3);
-    expect(rows[1].mults).toBe(8); expect(rows[1].nands).toBeLessThan(direct.nands);
+    expect(rows[1].mults).toBe(8); expect(rows[1].nands).toBeLessThan(direct.nands); expect(rows[2].nands, 'constants in shifts and adders beat the general multipliers').toBeLessThan(rows[1].nands);
   });
 });
 

@@ -41,3 +41,21 @@
 .dsp-conv .lab { text-align: left; color: var(--muted); padding-right: 8px; white-space: nowrap; }
 .dsp-conv .hit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .dsp-eq { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12.5px; overflow-x: auto; white-space: nowrap; padding: 4px 0; }
+
+/* FIR design */
+.fir-forbid { fill: color-mix(in srgb, var(--bad) 14%, transparent); stroke: none; }
+.fir-edge { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.fir-ext { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.fir-key { color: var(--bad); }
+.fir-key::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 5px; background: color-mix(in srgb, var(--bad) 22%, transparent); border: 1px solid var(--bad); }
+.fir-ext-key { color: var(--accent); }
+.fir-plane .zero.off { stroke: var(--accent); }
+.fir-scroll { overflow-x: auto; }
+.fir-diagram-box { overflow-x: auto; }
+.fir-diagram { display: block; width: 100%; min-width: 520px; max-width: 640px; height: auto; margin: 4px auto; }
+.fir-diagram text { fill: var(--text); font-size: 11px; }
+.fir-diagram .fd-wire { stroke: var(--muted); stroke-width: 1.4; }
+.fir-diagram .fd-dot { fill: var(--muted); }
+.fir-diagram .fd-node { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.fir-diagram .fd-box { fill: var(--surface); stroke: var(--warn); stroke-width: 1.6; }
+.fir-table { margin-top: 8px; }

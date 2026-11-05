@@ -381,7 +381,7 @@ export const outRange = (w: number): [number, number] => [wordMin(w), wordMax(w)
 // ---- the filter drawn in gates ----------------------------------------------------------------------------------------------------------
 
 /** What the gate-level scene filters with: 16 taps, equal weights, pass to 0.10 and stop from 0.20 cycles a sample. A looser mask than the chapter's: sixteen taps cannot reach 60 dB. */
-export const SCENE_MASK: Mask = { pass: 0.1, stop: 0.2, rippleDb: 1, stopDb: 40 };
+export const SCENE_MASK: Mask = { pass: 0.1, stop: 0.2, rippleDb: 1, stopDb: 30 };
 export const SCENE_TAPS = 16;
 let sceneMemo: { design: RemezResult; words: number[]; cfg: MacConfig; report: MaskReport } | null = null;
 export function sceneMac(): { design: RemezResult; words: number[]; cfg: MacConfig; report: MaskReport } {
@@ -390,4 +390,29 @@ export function sceneMac(): { design: RemezResult; words: number[]; cfg: MacConf
     sceneMemo = { design, words, cfg: { taps: words, w, frac, guard: guardFor(words, w) }, report: maskReport(tapValues(words, frac), SCENE_MASK) };
   }
   return sceneMemo;
+}
+
+// ---- searching and listening ----------------------------------------------------------------------------------------------------------
+
+/** |H| at one frequency (cycles a sample). */
+export function gainOf(taps: readonly number[], f: number): number {
+  let re = 0, im = 0;
+  taps.forEach((h, k) => { re += h * Math.cos(2 * Math.PI * f * k); im -= h * Math.sin(2 * Math.PI * f * k); });
+  return Math.hypot(re, im);
+}
+
+/**
+ * The smallest odd length in [lo, hi] that meets the mask (odd only, so every candidate is a type I filter). Bisection finds where meeting begins, and a scan
+ * of the 15 odd lengths below it settles the first: meeting a mask is not quite monotone in length for a window design, and a bisection alone can land a few taps high.
+ */
+export function fewestOdd(design: (n: number) => number[], mask: Mask, lo: number, hi: number): number | null {
+  let a = lo % 2 ? lo : lo + 1, b = hi % 2 ? hi : hi - 1;
+  if (!maskReport(design(b), mask).ok) return null;
+  while (a < b) {
+    const m = (a + b) / 2 | 0, mid = m % 2 ? m : m + 1;
+    if (mid >= b) break;
+    if (maskReport(design(mid), mask).ok) b = mid; else a = mid + 2;
+  }
+  for (let n = Math.max(lo % 2 ? lo : lo + 1, b - 30); n < b; n += 2) if (n % 2 === 1 && maskReport(design(n), mask).ok) return n;
+  return b;
 }

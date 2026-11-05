@@ -328,7 +328,8 @@ export function firCosts(cfg: MacConfig): FirCost[] {
   return [
     { name: 'Direct form, all parallel', nands: N * mul + (N - 1) * add + (N - 1) * reg, mults: N, cycles: 1, note: `${N} multipliers, ${N - 1} adders, ${N - 1} sample registers` },
     { name: 'Folded: add the pair, then multiply', nands: half * mul1 + (N >> 1) * pre + (half - 1) * add + (N - 1) * reg, mults: half, cycles: 1, note: `${half} multipliers one bit wider, ${N >> 1} pre-adders, ${half - 1} adders` },
-    { name: 'Transposed form', nands: N * mul + (N - 1) * add + (N - 1) * nands(register(A)), mults: N, cycles: 1, note: `${N} multipliers fed by the input at once, ${N - 1} accumulator-wide registers` },
+    { name: 'Folded, taps in shifts and adders', nands: taps.slice(0, half).reduce((t, c) => t + nands(csdMultiplier(c, w + 1)), 0) + (N >> 1) * pre + (half - 1) * add + (N - 1) * reg, mults: 0, cycles: 1, note: `${half} constant multipliers, no general multiplier at all` },
+    { name: 'Transposed form, mirror taps sharing a product', nands: half * mul + (N - 1) * add + (N - 1) * nands(register(A)), mults: half, cycles: 1, note: `${half} multipliers fed by the input at once, ${N - 1} accumulator-wide registers` },
     { name: 'One multiplier, N clocks a sample', nands: nands(firMac(cfg)), mults: 1, cycles: N, note: `the gates built here: ring, ROM, one multiplier, accumulator, rounding` },
   ];
 }

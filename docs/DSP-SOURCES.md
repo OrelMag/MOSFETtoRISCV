@@ -31,3 +31,19 @@ before relying on them. Add to this as chapters land.
 
 - Nobody has listened to the clips. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
   are the numbers beside each clip, and the sentence in "Wrap or saturate" about what you will hear has not been confirmed by ear.
+
+## FIR design (`firdesign`)
+
+- scipy 1.16.3 (**ran**): `remez`, `firwin`, `kaiserord`, `freqz`, `lfilter` in `scripts/dsp/oracle.py` (generator `firdesign`, vectors in `tests/dsp/vectors/firdesign.json`).
+  Our Parks–McClellan matches `remez` to better than 1e-9 of the largest tap on five cases (types I and II, low-pass, band-pass); windows match `firwin` to 1e-11.
+- The mask (pass to 0.10, stop from 0.125 cycles a sample, 0.1 dB **peak to peak**, 60 dB) and its fewest lengths were searched, not quoted: Parks–McClellan 114
+  (113 misses), Kaiser 147 from `kaiserord` (146 found by search, even length), Hamming 489 and Hann 269 by our search. The mockup's 115 is the fewest *odd*
+  length. A ±0.1 dB reading of the ripple gives 105 instead, which is why the definition is stated in the text and pinned.
+- Rounding the 114-tap design to 16-bit words (17 bits after the point) misses the mask by 0.22 dB; 115 taps meet it. Found by our test, confirmed by scipy's `freqz`.
+- The Remez exchange (Parks and McClellan 1972; McClellan, Parks and Rabiner's program): **unread**. The implementation is written from the alternation theorem and
+  checked by scipy's output and by each result against its mask. The grid rule copies scipy's `remez` behaviour as observed in its results, not its source.
+- Kaiser's length estimate and β formulas: `kaiserord` implements them (**ran**); Kaiser's papers are **unread**.
+- Canonical signed digits: exhaustive check on every integer from −2000 to 2000 (digits sum to the value, none adjacent, never more than binary). No textbook opened.
+- Linear phase, type I / II zero at z = −1, folding, transposed form: standard results stated from memory, and checked by test: exact equality of the three structures' outputs
+  on integers against `lfilter`.
+- Costs are counted from our gates with `stats()`; no outside area figure is used. No clip in this chapter has been listened to.
