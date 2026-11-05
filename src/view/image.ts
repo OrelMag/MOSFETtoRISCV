@@ -119,6 +119,8 @@ export async function exportInside(ctx: ViewCtx, like: Element, kind: 'svg' | 'p
   const host = h('div', { 'aria-hidden': 'true', style: 'position:fixed;left:-100000px;top:0;width:1200px;height:800px' });
   document.body.append(host);
   const view = new SchematicView(host, { open: () => {}, select: () => {}, editInput: () => {}, toggleInput: () => {} });
+  // as the learner arranged it, like an image of the level on screen
+  view.arrange = true;
   try {
     view.show(ctx, false);
     view.update();

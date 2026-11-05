@@ -22,7 +22,7 @@ import { factsOf, type NetEnd } from '../view/netfacts';
 import { ViewCtx } from '../view/context';
 import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
 import { exportImage, shareDialog } from './fileui';
-import { copyAsChip, isLevelChip } from './levelgate';
+import { copyAsChip, handout } from './levelgate';
 import type { WireDoc } from './model';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
@@ -146,27 +146,27 @@ const shareRow = (ed: Editor): NonNullable<MenuEntry> => ({ label: 'Share linkâ€
 /** Take it elsewhere for a part (or, with none, the chip). On a level only the learner's own may go. */
 function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
   const say = (m: string, e?: boolean) => ed.toast(m, e ? 'err' : 'info');
-  const level = isLevelChip(ed);
   if (partId === undefined) {
-    return elsewhereGroup(elsewhereRows({ def: ed.compiled.def, say, verilog: true, image: (kind) => exportImage(ed, kind), ...(level ? {} : { link: shareRow(ed) }) }));
+    const may = handout({ chipId: ed.chipId, level: !!ed.level, own: true });
+    return elsewhereGroup(elsewhereRows({ def: ed.compiled.def, say, verilog: may.verilog, ...(may.image ? { image: (kind: 'svg' | 'png') => exportImage(ed, kind) } : {}), ...(may.link ? { link: shareRow(ed) } : {}) }));
   }
   const p = ed.doc.parts.find((q) => q.id === partId);
   const def = p && ed.defOf(p);
   const sim = ed.sim.sim;
   if (!p || !def) return [];
-  const own = 'chip' in p.ref;
-  if (level && !own) return [];
+  const may = handout({ chipId: ed.chipId, level: !!ed.level, own: 'chip' in p.ref });
+  if (may.none) return [];
   const node = sim?.design.root.children?.get(partId);
   const inside = () => (sim && node ? new ViewCtx(sim, sim.design.root).child(partId) : null);
   return elsewhereGroup(elsewhereRows({
     def, say,
-    ...(own || level ? {} : { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(ed, def) } }),
-    verilog: true,
-    image: node && def.netlist ? (kind) => {
+    ...(may.sandbox ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(ed, def) } } : {}),
+    verilog: may.verilog,
+    ...(may.image ? { image: node && def.netlist ? (kind: 'svg' | 'png') => {
       const ctx = inside();
       return ctx ? import('../view/image').then((m) => m.exportInside(ctx, ed.view.svg, kind)) : say('It has no inside to draw', true);
-    } : 'It has no inside to draw.',
-    ...(level ? {} : { link: shareRow(ed) }),
+    } : 'It has no inside to draw.' } : {}),
+    ...(may.link ? { link: shareRow(ed) } : {}),
   }));
 }
 
@@ -192,7 +192,7 @@ function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
     design: () => ed.sim.sim?.design ?? null,
     flat,
     transistors: ed.compiled.mode === 'switch',
-    more: isLevelChip(ed) ? [] : elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })),
+    more: handout({ chipId: ed.chipId, level: !!ed.level, own: true }).link ? elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })) : [],
   }), null];
 }
 

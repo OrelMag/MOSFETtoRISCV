@@ -7,7 +7,12 @@ import type { Editor } from './editor';
 /** A level's chip (u_ch_cp_<node>) or a walkthrough's (u_walk_<node>). */
 export const isLevelChipId = (id: string): boolean => /^u_(ch_cp|walk)_/.test(id);
 
-export const isLevelChip = (ed: Editor): boolean => !!ed.level || isLevelChipId(ed.chipId);
+/** What may leave this chip. A walkthrough's chips are the reference answer: nothing goes. A level's: only the learner's own, and only as itself. */
+export function handout(o: { chipId: string; level: boolean; own: boolean }): { none: boolean; sandbox: boolean; verilog: boolean; image: boolean; link: boolean } {
+  if (o.chipId.startsWith('u_walk_')) return { none: true, sandbox: false, verilog: false, image: false, link: false };
+  if (!o.level && !isLevelChipId(o.chipId)) return { none: false, sandbox: !o.own, verilog: true, image: true, link: true };
+  return { none: !o.own, sandbox: false, verilog: o.own, image: o.own, link: false };
+}
 
 /** A library part as a chip of the open project (one undo step), opened. */
 export function copyAsChip(ed: Editor, def: ComponentDef): void {

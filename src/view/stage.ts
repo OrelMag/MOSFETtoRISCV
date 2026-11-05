@@ -1114,14 +1114,17 @@ export class Stage {
     if (!ctx) return [];
     const inst = t && 'inst' in t ? t.inst : null;
     const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
-    const child = inst && ctx.canOpen(inst) ? ctx.child(inst) : null;
     const say = (msg: string) => this.flashNow(msg);
     return elsewhereGroup(elsewhereRows({
       def, say,
       ...(this.scene?.noRemix ? {} : { sandbox: { label: 'Open in Sandbox', run: () => this.remix(def ?? undefined) } }),
       verilog: true,
       ...(def ? { image: inst
-        ? (child ? (kind: 'svg' | 'png') => import('./image').then((m) => m.exportInside(child, this.view.el, kind)) : 'It has no inside to draw.')
+        // the child's simulation is built on the click: a menu must open at once on a large block
+        ? (def.netlist ? (kind: 'svg' | 'png') => {
+          const child = ctx.child(inst);
+          return child ? import('./image').then((m) => m.exportInside(child, this.view.el, kind)) : say('It has no inside to draw');
+        } : 'It has no inside to draw.')
         : (kind: 'svg' | 'png') => this.exportImage(kind) } : {}),
       link: { label: 'Copy a link to this view', hint: t ? 'Opens here, with this one picked out' : 'Step, part, inputs, probes, clock cycles', run: () => void this.copyViewLink(t ?? undefined) },
     }));
@@ -1571,10 +1574,9 @@ export class Stage {
       const done = this.runCycles(v.cycles, () => performance.now() > deadline);
       if (done < v.cycles) note = `Link opened: replayed ${done} of ${v.cycles} clock cycles (the rest would take too long here)`;
     }
-    if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     this.history = [];
     this.refresh();
-    if (v.focus && !this.view.showTarget(v.focus)) skipped++;
+    if (v.focus && !this.boardOn && !this.view.showTarget(v.focus)) skipped++;
     if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     if (note) this.flashNow(note);
   }

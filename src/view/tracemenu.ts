@@ -96,9 +96,9 @@ export function elsewhereRows(o: ElsewhereHost): NonNullable<MenuEntry>[] {
   // a primitive (a transistor, a rail) is no circuit to edit
   if (o.sandbox && def?.netlist) rows.push({ label: o.sandbox.label, ...(stats(def).nands > SLOW_REMIX_NANDS ? { hint: 'A large block: this can take minutes' } : {}), run: () => o.sandbox!.run() });
   if (o.verilog && def) {
-    rows.push(def.netlist ? { label: 'Copy Verilog', run: () => void import('../sim/verilog').then(async ({ structuralVerilog }) => {
-      const text = structuralVerilog(def);
-      if (!text) return o.say(`${def.name} has no structure to write as Verilog`, true);
+    // the whole hierarchy: one module alone names submodules nothing defines, and would not elaborate
+    rows.push(def.netlist ? { label: 'Copy Verilog', hint: 'With every module under it', run: () => void import('../sim/svexport').then(async ({ exportHdl }) => {
+      const { text } = exportHdl(def, 'structure');
       const done = await copyText(text);
       o.say(done ? `Copied the Verilog of ${def.name}` : 'The browser would not give access to the clipboard', !done);
     }, () => o.say('Could not load: reload the page', true)) } : { label: 'Copy Verilog', why: 'A primitive of the simulator: it has no structure to write out.' });

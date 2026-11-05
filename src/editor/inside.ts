@@ -14,7 +14,7 @@ import { h, hintBadge, icon, s } from '../ui/dom';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ViewFocus } from '../ui/viewlink';
 import { elsewhereGroup, elsewhereRows } from '../view/tracemenu';
-import { copyAsChip, isLevelChip } from './levelgate';
+import { copyAsChip, handout } from './levelgate';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
@@ -168,16 +168,20 @@ class InsideView {
   /** The right-click menu's Take it elsewhere: a level's parts stay on the level. */
   private elsewhere(t: ViewFocus | null): MenuEntry[] {
     const ctx = this.ctx;
-    if (!ctx || isLevelChip(this.ed)) return [];
+    if (!ctx || handout({ chipId: this.ed.chipId, level: !!this.ed.level, own: false }).none) return [];
     const inst = t && 'inst' in t ? t.inst : null;
     const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
-    const child = inst && ctx.canOpen(inst) ? ctx.child(inst) : inst ? null : ctx;
     return elsewhereGroup(elsewhereRows({
       def,
       say: (msg, err) => this.ed.toast(msg, err ? 'err' : 'info'),
-      ...(def ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(this.ed, def) } } : {}),
+      // a chip of the learner's is already one
+      ...(def && !def.id.startsWith('u_') ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(this.ed, def) } } : {}),
       verilog: true,
-      ...(def ? { image: child ? (kind: 'svg' | 'png') => import('../view/image').then((m) => m.exportInside(child, this.view.el, kind)) : 'It has no inside to draw.' } : {}),
+      ...(def ? { image: def.netlist ? (kind: 'svg' | 'png') => {
+        // built on the click: a menu must open at once on a large block
+        const child = inst ? ctx.child(inst) : ctx;
+        return child ? import('../view/image').then((m) => m.exportInside(child, this.view.el, kind)) : this.ed.toast('It has no inside to draw', 'err');
+      } : 'It has no inside to draw.' } : {}),
       link: { label: 'Copy a link to this view', why: 'Look inside has no address of its own. Use Share link on the Sandbox’s chip.' },
     }));
   }

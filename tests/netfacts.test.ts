@@ -6,7 +6,11 @@ import { B0, B1, BX, BZ, type Bit, netlistOf } from '../src/sim/types';
 import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import type { ChipDoc } from '../src/editor/model';
+import { handout, isLevelChipId } from '../src/editor/levelgate';
 import { netMembers, netOfSelection } from '../src/editor/netsel';
+import { levelChipId } from '../src/campaign/levels';
+import { NODES } from '../src/campaign/nodes';
+import { elsewhereGroup, type ElsewhereHost, elsewhereRows } from '../src/view/tracemenu';
 import { partDef } from '../src/editor/parts';
 import { flatten } from '../src/sim/flatten';
 import { readersOf } from '../src/sim/netcap';
@@ -111,6 +115,48 @@ describe('a sandbox selection as a net', () => {
     expect(netOfSelection(c, { parts: [doc.parts[0].id] })).toBe(-1);
     expect(netOfSelection(c, { pins: doc.pins.map((p) => p.id) })).toBe(-1);
     expect(netOfSelection(c, { wires: ['no such wire'] })).toBe(-1);
+  });
+});
+
+describe('what may leave a chip', () => {
+  const on = (m: ReturnType<typeof handout>) => (['sandbox', 'verilog', 'image', 'link'] as const).filter((k) => m[k]);
+  it('everything from an ordinary chip; a chip of the learner needs no copying', () => {
+    expect(on(handout({ chipId: 'u_adder', level: false, own: false }))).toEqual(['sandbox', 'verilog', 'image', 'link']);
+    expect(on(handout({ chipId: 'u_adder', level: false, own: true }))).toEqual(['verilog', 'image', 'link']);
+  });
+  it('from a level only the learner’s own, and never to the sandbox or a link', () => {
+    for (const o of [{ chipId: 'u_ch_cp_g_or', level: true }, { chipId: 'u_ch_cp_g_or', level: false }, { chipId: 'u_my_helper', level: true }]) {
+      expect(handout({ ...o, own: false }).none).toBe(true);
+      expect(on(handout({ ...o, own: false }))).toEqual([]);
+      expect(on(handout({ ...o, own: true }))).toEqual(['verilog', 'image']);
+    }
+  });
+  it('nothing from a walkthrough, which is the reference answer', () => {
+    for (const level of [true, false]) for (const own of [true, false]) expect(on(handout({ chipId: 'u_walk_g_or', level, own }))).toEqual([]);
+  });
+  it('recognizes the chips the campaign really names', () => {
+    expect(isLevelChipId(levelChipId(NODES.find((n) => n.id === 'g_or')!))).toBe(true);
+    expect(isLevelChipId('u_ch_nand')).toBe(false);
+    expect(isLevelChipId('u_pz_sum')).toBe(false);
+  });
+});
+
+describe('the rows of Take it elsewhere', () => {
+  const labels = (o: Partial<ElsewhereHost> & { def: ElsewhereHost['def'] }) => elsewhereRows({ say: () => {}, ...o }).map((r) => r.label);
+  const xor = resolveComponent('xor')!, nmos = resolveComponent('nmos')!;
+  const run = () => {};
+  it('offers only what the host gives', () => {
+    expect(labels({ def: xor })).toEqual([]);
+    expect(elsewhereGroup([])).toEqual([]);
+    expect(labels({ def: xor, sandbox: { label: 'Open in Sandbox', run }, verilog: true, image: run, link: { label: 'Copy a link', run } }))
+      .toEqual(['Open in Sandbox', 'Copy Verilog', 'Save an image as SVG', 'Save an image as PNG', 'Copy a link']);
+    // a wire: the link alone
+    expect(labels({ def: null, sandbox: { label: 'Open in Sandbox', run }, verilog: true, link: { label: 'Copy a link', run } })).toEqual(['Copy a link']);
+  });
+  it('a primitive: no copy, its Verilog off with the reason', () => {
+    const rows = elsewhereRows({ def: nmos, say: () => {}, sandbox: { label: 'Open in Sandbox', run }, verilog: true, image: 'It has no inside to draw.' });
+    expect(rows.map((r) => r.label)).toEqual(['Copy Verilog', 'Save an image']);
+    expect(rows.every((r) => !!r.why)).toBe(true);
   });
 });
 
