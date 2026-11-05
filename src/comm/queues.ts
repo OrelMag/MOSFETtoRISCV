@@ -4,7 +4,8 @@
 // Time is slots, a slot being one packet's time on the bottleneck. In each slot: ACKs and loss notices due arrive; senders send what their window and pacing allow; what is sent meets the queue's discipline; one packet
 // leaves. A packet that leaves is acknowledged one base RTT later; one dropped is noticed one base RTT later (as duplicate ACKs would tell it) and its data is sent again as new packets, so goodput is packets acknowledged.
 // No timeouts and no slow-start restart: the model's window never gets small enough to need them. Senders' rules are Reno (one cut a round trip), CUBIC (RFC 9438, with its Reno-friendly region) and BBR v1 (Cardwell
-// et al., 2016: the delivery rate's maximum over ten round trips, the RTT's minimum over ten seconds, gains 2.89 / 1.25 / 0.75, a window of two BDPs, ignoring loss), simplified where noted.
+// et al., 2016: the delivery rate's maximum over ten round trips, the RTT's minimum over ten seconds, gains 2.89 / 1.25 / 0.75, a window of two BDPs, ignoring loss). Simplified: BBR's gain phases last one base RTT each with no early exit, and it has no packet conservation in recovery;
+// RED has no idle-time decay and no gentle region; FQ-CoDel is packet round robin per flow, with no byte quantum and no new-flow list, and the delay probe always has a queue of its own (real fq_codel hashes, and serves sparse flows first).
 
 import { rng } from '../phys/line';
 
@@ -78,7 +79,7 @@ export const cubicCurve = (t: number, wmax: number): number => CUBIC_C * (t - cu
 export const cubicWindow = (p: number, rtt: number): number => ((CUBIC_C * (3 + CUBIC_BETA)) / (4 * (1 - CUBIC_BETA))) ** 0.25 * (rtt / p) ** 0.75;
 
 /**
- * The sawtooth's utilization: the window runs from half of the pipe plus buffer to all of it, one packet a round trip. While it is under the pipe the link has that share of its packets; while above, all of them.
+ * The sawtooth's utilization: the window runs from half of the pipe plus buffer to all of it, one packet a round trip. While it is under the pipe the link has that share of its packets; while above, all of them. Each window counted equal: above the pipe the round trip is longer, so this understates a little for 0 < B < BDP.
  * B ≥ BDP: all of it. B = 0: three quarters.
  */
 export function renoUtilization(bdp: number, buffer: number): number {
@@ -228,7 +229,7 @@ class Sender {
 const cubicCurve2 = (t: number, wmax: number, k: number): number => CUBIC_C * (t - k) ** 3 + wmax;
 
 /** CoDel's state for one queue, RFC 8289's dequeue logic. */
-class CoDel {
+export class CoDel {
   first = 0; dropping = false; dropNext = 0; count = 0; lastCount = 0;
   constructor(readonly target: number, readonly interval: number) {}
   private okToDrop(sojourn: number, t: number, qlen: number): boolean {
@@ -246,7 +247,8 @@ class CoDel {
     }
     if (ok) {
       this.dropping = true;
-      this.count = this.count > 2 && t - this.dropNext < 16 * this.interval ? this.count - 2 : 1;
+      const delta = this.count - this.lastCount;
+      this.count = delta > 1 && t - this.dropNext < 16 * this.interval ? delta : 1;
       this.lastCount = this.count;
       this.dropNext = codelNext(t, this.interval, this.count);
       return true;

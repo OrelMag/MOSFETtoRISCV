@@ -28,10 +28,11 @@ describe('what the text says', () => {
     expect(c.pingMeanMs).toBeLessThan(r.pingMeanMs / 2);
     expect(f.pingMeanMs).toBeLessThanOrEqual(c.pingMeanMs);
   });
-  it('the Try box: BBR on a tail-drop queue alone gets 18 Mb/s under 50 ms of delay, CUBIC cannot', () => {
+  it('the Try box: BBR on a tail-drop queue alone gets 18 Mb/s under 50 ms of delay, where CUBIC stays far above it', () => {
     const b = labRun({ aqm: 'tail', buffer: 1000, rtt: 50, flows: [{ cc: 'bbr', rttMs: 50 }] });
     expect(b.goodputMbps[0]).toBeGreaterThan(18);
     expect(b.pingMeanMs).toBeLessThan(50);
+    expect(labRun({ aqm: 'tail', buffer: 1000, rtt: 50, flows: [cubic] }).pingMeanMs).toBeGreaterThan(50);
   });
   it('the duel: shallow to BBR, deep more even, a queue per flow equal', () => {
     const s = duelRun(40), d = duelRun(320), f = duelRun(40, 'fq');
