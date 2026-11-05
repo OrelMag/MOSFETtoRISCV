@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
-import { AC_LUMA, ANNEX_K1, blockAt, category, DC_LUMA, DCT_F, DCT_WI, DCT_WO, dct2Fixed, dct8Fixed, decimationTaps, encodeJpeg, extraBits, fdct, filter1d, filter2d, huffCodes, idct, KERNELS, pictureOf, qualityTable, scene, ZIGZAG } from '../src/dsp/pictures';
+import { AC_LUMA, ANNEX_K1, blockAt, category, DC_LUMA, DCT_F, DCT_K, DCT_WI, DCT_WO, dct2Fixed, dct8Fixed, decimationTaps, encodeJpeg, extraBits, fdct, filter1d, filter2d, huffCodes, idct, KERNELS, pictureOf, qualityTable, scene, ZIGZAG } from '../src/dsp/pictures';
 import { constMul, dctStage } from '../src/lib/dct';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
@@ -42,7 +42,7 @@ describe('the tables', () => {
 
 describe('the transform', () => {
   it('A.3.3\'s FDCT is scipy\'s orthonormal DCT-II on both axes, and the IDCT undoes it', () => {
-    for (const c of V.dct) { near(fdct(c.x), c.S, 1e-9); near(idct(fdct(c.x)), c.x, 1e-9); }
+    for (const c of V.dct) { near(fdct(c.x), c.S, 1e-9); near(idct(fdct(c.x)), c.x, 1e-12); }
   });
   it('a smooth block puts almost all its energy in a few coefficients', () => {
     const blk = pictureOf(8, 8, (x, y) => 128 + 10 * x + 5 * y), S = fdct(blockAt(blk, 0, 0)), e = S.map((v) => v * v), all = e.reduce((a, b) => a + b, 0);
@@ -112,11 +112,12 @@ describe('the fixed-point DCT', () => {
 });
 
 describe('the gates', () => {
-  it('a constant multiplier equals k × x for every input it takes', () => {
-    for (const k of [400, 1703, 2009]) {
-      const d = constMul(k, 13), sim = new BitSim(flatten(d));
-      for (let x0 = -4096; x0 < 4096; x0 += 32) {
-        sim.setInput('x', Array.from({ length: 32 }, (_, l) => wordOf(x0 + l, 13))); sim.settle();
+  it('every constant multiplier equals k × x for every input it takes, at the width the stage uses it', () => {
+    // s0 and s4 are 15 bits wide, d0 and d1 14, the b's 13
+    for (const [k, w] of [[DCT_K[4], 15], [DCT_K[2], 14], [DCT_K[6], 14], [DCT_K[1], 13], [DCT_K[3], 13], [DCT_K[5], 13], [DCT_K[7], 13]]) {
+      const d = constMul(k, w), sim = new BitSim(flatten(d));
+      for (let x0 = -(2 ** (w - 1)); x0 < 2 ** (w - 1); x0 += 32) {
+        sim.setInput('x', Array.from({ length: 32 }, (_, l) => wordOf(x0 + l, w))); sim.settle();
         const got = sim.get('y');
         for (let l = 0; l < 32; l++) if (signedOf(got[l], 28) !== k * (x0 + l)) expect([k, x0 + l, signedOf(got[l], 28)]).toEqual([k, x0 + l, k * (x0 + l)]);
       }

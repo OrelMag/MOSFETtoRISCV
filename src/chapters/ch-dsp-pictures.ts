@@ -1,11 +1,14 @@
 // Pictures (level Signal processing): why does a JPEG look blocky? 2-D filtering and resizing on generated pictures, the 8 × 8 DCT (an 8-point stage in gates, lib/dct.ts,
 // compared with dsp/pictures.ts every vector), quantization with T.81's Annex K table, zig-zag and Huffman, and a real baseline file that libjpeg (through Pillow) and the browser decode.
 
-import { encodeJpeg, filterCost, grow, psnr, scene, shrink, zonePlate } from '../dsp/pictures';
+import { blockAt, DCT_F, DCT_K, dct2Fixed, encodeJpeg, fdct, filterCost, grow, psnr, scene, shrink, zonePlate } from '../dsp/pictures';
+import { muxTree } from '../lib/combinational';
+import { csdDigits } from '../lib/fft';
 import { dctStage } from '../lib/dct';
 import { register } from '../lib/sequential';
 import { stats } from '../sim/stats';
-import { dctApi, dctScene, dctWidget, fileApi, fileWidget, filterWidget, huffWidget, pictureWidget, qualityWidget, resizeWidget } from '../widgets/dsppictures';
+import { dctApi, dctScene, dctWidget, fileWidget, filterWidget, huffWidget, pictureWidget, qualityWidget, resizeWidget } from '../widgets/dsppictures';
+import { PICTURE_BLOCKS } from '../widgets/dsppictures';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -30,7 +33,7 @@ export const chPictures: Chapter = {
       'A picture is a 2-D signal. Sampling, folding and filtering work along each axis as they did along time, and a kernel that is a product of two 1-D filters costs 2n multiplications a sample, not n².',
       'Shrinking keeps one sample in m, so anything above 1/(2m) cycles a sample folds into false patterns unless a low-pass removes it first.',
       'The 8 × 8 DCT loses nothing. It moves a block\'s energy into a few low-frequency coefficients, and it is two passes of an 8-point transform, rows then columns.',
-      'Quantization is JPEG\'s only loss: each coefficient divided by its table entry and rounded. The quality setting only scales T.81\'s example table.',
+      'Quantization is the only loss JPEG prescribes: each coefficient divided by its table entry and rounded. The transform\'s own rounding and the final 8-bit rounding are far smaller. The quality setting only scales T.81\'s example table.',
       'Zig-zag order puts the zeros in long runs, and Huffman codes the (run, size) pairs, with the magnitudes as plain extra bits behind them.',
     ],
     check: [
@@ -43,7 +46,7 @@ export const chPictures: Chapter = {
       },
       {
         question: 'Where in a JPEG encoder is information thrown away?',
-        options: ['In rounding each coefficient over its table entry', 'In the DCT itself', 'In the Huffman coding', 'In the zig-zag reordering of the block'],
+        options: ['In rounding each coefficient to its step', 'In the DCT, which moves the energy around', 'In the Huffman coding of the runs', 'In the zig-zag reordering of the block'],
         answer: 0,
         explain: 'The transform can be undone to rounding, and zig-zag and Huffman are exact. Only quantization loses.',
         why: ['', 'Its inverse gives the block back, to the last bit of a float.', 'A Huffman code decodes to exactly what went in.', 'A reordering only changes which coefficient is sent first.'],
@@ -66,12 +69,12 @@ export const chPictures: Chapter = {
         <p>Sound was one row of samples in time. A grey picture is samples on a grid: ${p.w} across, ${p.h} down, each a level from 0 to 255. At 8 bits a sample that is ${n0(p.w * p.h)} bytes, before anything is done to it. Colour would be three such grids.</p>
         <p>Everything learned about samples still holds, one axis at a time. A row is a signal along x, a column along y, and a picture has a spectrum in two dimensions: smooth sky is low frequency, a sharp edge or fine stripes are high. <a href="#/c/signals/5">Sampling folds</a> anything above half the rate, along either axis.</p>
         <p>The pictures in this chapter are generated, so every number is the same everywhere: a sky, a sun, a mountain, stripes, rings and a little noise. The last step takes a picture of your own, read in your browser and never sent anywhere.</p>
-        <div class="try">Move the row down from the sky into the stripes, and watch the plot go from a gentle slope to a square wave.</div>`;
+        <div class="try">Move the row down from the sky into the stripes, and watch the plot go from a flat line with the sun's step in it to a square wave.</div>`;
       },
       widget: pictureWidget,
       challenge: {
         kind: 'quiz', question: 'A row crosses the striped area. What does its plot look like?',
-        options: ['A square wave, high and low in turn', 'A gentle ramp', 'A flat line', 'Noise with no pattern'],
+        options: ['A square wave', 'A gentle ramp from dark to light', 'A flat line at one level', 'Noise with no pattern to it'],
         answer: 0,
         explain: 'Stripes three samples wide, light and dark in turn: along a row that is a square wave, a signal full of high frequencies.',
         why: ['', 'That is the sky, which changes slowly from top to bottom.', 'Only an even area is flat.', 'The noise is small, and the stripes are far larger.'],
@@ -106,7 +109,7 @@ export const chPictures: Chapter = {
       widget: resizeWidget,
       challenge: {
         kind: 'quiz', question: 'A picture is shrunk to a quarter of its width with no filter first. What appears?',
-        options: ['False patterns from detail that folds', 'Nothing: it only gets smaller', 'A uniform blur everywhere', 'Blocks eight samples wide'],
+        options: ['False patterns that were never there', 'Nothing at all: it only gets smaller', 'A uniform blur over everything', 'Blocks eight samples wide, as in JPEG'],
         answer: 0,
         explain: 'Detail above an eighth of a cycle a sample cannot be held after keeping one sample in four, and it does not vanish: it folds to a lower frequency and draws itself there.',
         why: ['', 'It is the folding that a small picture cannot avoid without a low-pass.', 'Blur is what the low-pass gives, and here there is none.', 'Those come from JPEG\'s blocks, not from resizing.'],
@@ -120,13 +123,13 @@ export const chPictures: Chapter = {
    × cos((2x + 1)uπ/16)
    × cos((2y + 1)vπ/16)
 C(0) = 1/√2, otherwise 1</pre>
-        <p>The samples are shifted down by 128 first, so a mid-grey block is all zeros. S(0, 0) is then eight times the block's mean, and the rest are how much of each pattern it holds. The tests hold this equal to scipy's orthonormal DCT on both axes, to 9 places, and its inverse gives the block back to 13: nothing is lost here.</p>
-        <p>What the transform does is move energy. A smooth block has nearly all of its energy in a handful of low-frequency coefficients, and the rest are close to zero. A block of fine detail spreads wider. It is separable, so it can be done as an 8-point transform on each row and then on each column.</p>
+        <p>The samples are shifted down by 128 first, so a mid-grey block is all zeros. S(0, 0) is then eight times the block's mean, and the rest are how much of each pattern it holds. The tests hold this equal to scipy's orthonormal DCT on both axes, to 9 places, and its inverse gives the block back to 12: nothing is lost here.</p>
+        <p>What the transform does is move energy. A smooth block has nearly all of its energy in a handful of low-frequency coefficients, and the rest are close to zero. A block with edges and texture spreads wider. A block that already looks like one of the patterns, the stripes for instance, packs into a few as well. The transform is separable, so it can be done as an 8-point transform on each row and then on each column.</p>
         <div class="try">Pick the sky, then the sun's edge, then the checks. See how many coefficients of 10 or more each needs: the sky gets by on two.</div>`,
       widget: dctWidget,
       challenge: {
         kind: 'quiz', question: 'What does the DCT of a smooth block look like?',
-        options: ['A few large coefficients, low and top left', 'Every coefficient about the same size', 'All 64 coefficients exactly zero', 'One large coefficient at the bottom right'],
+        options: ['A few large coefficients, low and top left', 'Every coefficient about the same size', 'All 64 coefficients exactly zero', 'One large coefficient alone, at the bottom right'],
         answer: 0,
         explain: 'Smooth means slowly changing, so the low-frequency patterns are enough. Those sit at the top left: u and v both small.',
         why: ['', 'That is how a noisy block looks.', 'Only a block of exactly mid-grey is all zeros.', 'The bottom right is the finest pattern, and a smooth block has least of it.'],
@@ -138,9 +141,9 @@ C(0) = 1/√2, otherwise 1</pre>
         const s = nands(dctStage()), reg = nands(register(12));
         return `
         <p>An 8-point DCT is 64 multiplications done directly. The cosines have symmetries that cut that down. Add and subtract each sample and its mirror, x<sub>i</sub> ± x<sub>7−i</sub>, and the even outputs only need the sums and the odd outputs only the differences. Split the even half once more, and what is left is 22 products by constants: 2 for X0 and X4, 4 for X2 and X6, and 16 for the four odd outputs.</p>
-        <p>A product by a constant needs no multiplier. Each constant is written in signed digits, and each digit is the input moved by wiring and added or subtracted, so 1 703 is four adders and 784 is two. Every bit is kept, each output is rounded once at the end, and two extra fraction bits ride along so the second pass starts from better than whole numbers. The stage is ${n0(s)} NANDs. The tests compare it with an integer model on every basis vector, the extremes and thousands of random rows, and every constant multiplier on every input it can take.</p>
-        <p>A whole 8 × 8 block is the stage sixteen times: eight rows, then eight columns. Sixteen stages side by side would be about ${n0(16 * s)} NANDs. One stage used sixteen times needs a store to turn rows into columns: 64 words of 12 bits, about ${n0(64 * reg)} NANDs as plain registers, and a counter to run it. The panel here does that turning itself, and says so. On this block the result is within half a level of the true DCT.</p>
-        <div class="try">Run a block. Every pass is checked against the model, and the panel shows the coefficients beside how far they are from the exact ones.</div>`;
+        <p>A product by a constant needs no multiplier. Each constant is written in signed digits, and each digit is the input moved by wiring and added or subtracted, so ${DCT_K[3]} is ${csdDigits(DCT_K[3]).length - 1} adders and ${DCT_K[6]} is ${csdDigits(DCT_K[6]).length - 1}. Every bit is kept, each output is rounded once at the end, and two extra fraction bits ride along so the second pass starts from better than whole numbers. The stage is ${n0(s)} NANDs. The tests compare it with an integer model on every basis vector, the extremes and thousands of random rows, and every constant multiplier on every input it can take at the width it is used at.</p>
+        <p>A whole 8 × 8 block is the stage sixteen times: eight rows, then eight columns. Sixteen stages side by side would be about ${n0(16 * s)} NANDs. One stage used sixteen times needs a store to turn rows into columns: 64 words of 12 bits are ${n0(64 * reg)} NANDs as plain registers, and reading 8 of them out at a time takes 8 multiplexers of 16 to 1, ${n0(8 * nands(muxTree(4, 12)))} more, so at least ${n0(64 * reg + 8 * nands(muxTree(4, 12)))} before its decoder and the counter that runs it. The panel here does that turning itself, and says so. On the block it runs, the result is within ${worstOff().toFixed(2)} of the true DCT. The rounding can reach half a level on some blocks, and no more.</p>
+        <div class="try">Run a block. Every pass is checked against the model, and the panel shows the coefficients and how far the worst of them is from the exact one.</div>`;
       },
       scene: dctScene,
       lit: '',
@@ -165,7 +168,7 @@ C(0) = 1/√2, otherwise 1</pre>
       widget: qualityWidget,
       challenge: {
         kind: 'quiz', question: 'Why are JPEG\'s blocks most visible in smooth areas at low quality?',
-        options: ['Each block keeps little more than its mean', 'Smooth areas have more high frequencies', 'The DCT is less exact there', 'Huffman codes them with fewer bits'],
+        options: ['Each block keeps little more than its mean', 'Smooth areas have more of the high frequencies', 'The DCT is less exact there', 'Huffman codes them with fewer bits'],
         answer: 0,
         explain: 'With most coefficients rounded away, a block becomes nearly flat at its own mean. Neighbouring blocks have slightly different means, so the grid shows as steps where the original had a smooth slope.',
         why: ['', 'They have fewer, and that is why so little is kept.', 'The transform is exact to rounding everywhere.', 'The coding is exact; what is lost was lost in quantizing.'],
@@ -196,18 +199,25 @@ C(0) = 1/√2, otherwise 1</pre>
         const r = at()[1];
         return `
         <p>Put it together, and it is a file. A baseline JPEG is a list of segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data, and end of image. For this scene at quality 50 it is ${n0(r.bytes.length)} bytes.</p>
-        <p>This page wrote every one of those bytes, and two programs that had no part in it read them. The tests decode this chapter's files with libjpeg through Pillow and find every pixel within one level of our own reconstruction. Here your browser decodes the same bytes. A level or so either way is expected: T.81 sets how exact an inverse DCT must be, not one way of computing it, and fast decoders use integer ones.</p>
+        <p>This page wrote every one of those bytes, and two programs that had no part in it read them. The tests decode files made this way, the scene at 96 × 96 and qualities 10 and 75, with libjpeg through Pillow, and find every pixel within one level of our own reconstruction. Here your browser decodes the same bytes. A level or so either way is expected: T.81 sets how exact an inverse DCT must be, not one way of computing it, and fast decoders use integer ones.</p>
         <p>Try a picture of your own. It is read and turned grey by your browser, and goes nowhere.</p>
         <div class="try">Lower the quality until you can see the blocks in the browser's own decode. Then save the file and open it in another program.</div>`;
       },
       widget: fileWidget,
       challenge: {
-        kind: 'reach', goal: 'Have the browser decode a file from this page within a level of our reconstruction.',
-        check: () => fileApi.decoded && fileApi.maxDiff >= 0 && fileApi.maxDiff <= 1,
-        hints: ['The widget does it as it loads. If the chip shows no difference, it is already done.'],
-        answer: 'The browser decodes the bytes with its own decoder, and the canvas read back from it differs from our reconstruction by at most a level.',
+        kind: 'quiz', question: 'The browser\'s decode and ours differ by one level on about 1 % of the pixels. Why?',
+        options: ['Their inverse DCTs are computed differently', 'The file was damaged in a few of its bytes', 'One of them reads the quantization table wrongly', 'The browser quietly sharpens what it shows'],
+        answer: 0,
+        explain: 'T.81 sets how exact an inverse DCT must be, not how to compute it. A fast integer one and a float one round a few results the other way.',
+        why: ['', 'A damaged byte would wreck a whole block or more, not move single pixels by one.', 'A wrong table would be off everywhere, by far more than a level.', 'Read back from a canvas, the browser\'s pixels are what it decoded.'],
       },
     },
   ],
 };
 
+
+/** The gate scene's block, through the stage sixteen times, against the exact DCT: the worst coefficient's distance. */
+function worstOff(): number {
+  const { bx, by } = PICTURE_BLOCKS[1], blk = blockAt(scene(), bx, by), f = fdct(blk), g = dct2Fixed(blk);
+  return Math.max(...g.map((v, i) => Math.abs(v / 2 ** (2 * DCT_F) - f[i])));
+}

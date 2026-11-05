@@ -833,7 +833,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The DCT in gates", challenge: "reach" },
     { title: "Quantization is the only loss", challenge: "quiz" },
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
-    { title: "A file another program opens", challenge: "reach" },
+    { title: "A file another program opens", challenge: "quiz" },
   ] },
   { id: "appendix-6502", num: 74, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },

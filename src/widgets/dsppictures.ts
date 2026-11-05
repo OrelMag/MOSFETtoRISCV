@@ -81,7 +81,7 @@ export function filterWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'A kernel slid across the picture'), h('div', { class: 'pic-row' }, fig(a, 'In'), fig(b, 'Out'), fig(ktab, 'The kernel')), chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'A kernel slid across the picture'), h('div', { class: 'pic-row' }, fig(a, 'In'), fig(b, KNAMES[pick] === 'edges' ? 'Out, drawn as 128 + half the slope' : 'Out'), fig(ktab, 'The kernel')), chips.el),
       h('div', { class: 'panel mos-ctl' }, sel('Kernel', KNAMES, pick, (i) => { pick = i; paint(); }), sel('Picture', ['The scene', 'A zone plate'], src, (i) => { src = i; paint(); }))),
   };
 }
@@ -97,7 +97,7 @@ export function resizeWidget(): Widget {
     const ref = pictureOf(z.w, z.h, (x, y) => z.px[y * z.w + x]), cut = (p: Picture) => pictureOf(Math.min(p.w, ref.w), Math.min(p.h, ref.h), (x, y) => p.px[y * p.w + x]);
     chips.set(0, `${num(0.5 / m, 3)} cycles a sample`, `the most that is left after keeping 1 in ${m}; the plate reaches 0.5 at its edge`);
     chips.set(1, `${num(psnr(cut(ref), cut(up(raw))), 1)} dB`, 'against the original, nothing before the cut');
-    chips.set(2, `${num(psnr(cut(ref), cut(up(flt))), 1)} dB`, 'with the low-pass first: the fine rings are gone, but no false ones are made');
+    chips.set(2, `${num(psnr(cut(ref), cut(up(flt))), 1)} dB`, 'with the low-pass first: the fine rings are gone, and almost no false ones are made');
   };
   paint();
   return {
@@ -109,7 +109,7 @@ export function resizeWidget(): Widget {
 
 // ---- the 8 × 8 DCT -------------------------------------------------------------------------------------------------------------------------------------
 
-const BLOCKS = [{ name: 'Sky', bx: 4, by: 3 }, { name: 'The sun\'s edge', bx: 15, by: 3 }, { name: 'Stripes', bx: 2, by: 18 }, { name: 'Rings', bx: 10, by: 19 }, { name: 'Checks', bx: 18, by: 19 }];
+const BLOCKS = [{ name: 'Sky', bx: 4, by: 3 }, { name: 'The sun\'s edge', bx: 16, by: 3 }, { name: 'Stripes', bx: 2, by: 18 }, { name: 'Rings', bx: 10, by: 19 }, { name: 'Checks', bx: 18, by: 19 }];
 function grid(vals: ArrayLike<number>, fmt: (v: number) => string, shade: (v: number) => number): HTMLElement {
   return h('table', { class: 'dct-grid' }, ...range(8).map((v) => h('tr', null, ...range(8).map((u) => { const val = vals[v * 8 + u], td = h('td', null, fmt(val)); td.style.setProperty('--w', `${Math.round(100 * shade(val))}%`); return td; }))));
 }
@@ -123,11 +123,11 @@ export function dctWidget(): Widget {
     const { bx, by } = BLOCKS[pick], blk = blockAt(theScene(), bx, by), S = fdct(blk);
     paintPicture(big, pictureOf(8, 8, (x, y) => blk[y * 8 + x] + 128));
     const top = Math.max(...Array.from(S, Math.abs));
-    coef.replaceChildren(grid(S, (v) => minus(v.toFixed(0)), (v) => Math.abs(v) / top));
+    coef.replaceChildren(grid(S, (v) => minus(String(Math.round(v) || 0)), (v) => Math.abs(v) / top));
     const e = Array.from(S, (v) => v * v).slice(1).sort((a, b) => b - a), all = e.reduce((a, b) => a + b, 0);
     chips.set(0, `${num((100 * (e[0] + e[1] + e[2] + e[3] + e[4])) / Math.max(all, 1e-9), 1)} %`, 'of the energy apart from the mean, in the five largest other coefficients');
-    chips.set(1, String(Array.from(S).filter((v) => Math.abs(v) >= 10).length), 'coefficients of 10 or more, of 64: about what quality 50\'s smallest divisors let through');
-    chips.set(2, minus(S[0].toFixed(1)), 'S(0, 0): 8 times the block\'s mean, less 128');
+    chips.set(1, String(Array.from(S).filter((v) => Math.abs(v) >= 10).length), 'coefficients of 10 or more, of 64');
+    chips.set(2, minus(S[0].toFixed(1)), 'S(0, 0): 8 × (the block\'s mean − 128)');
   };
   paint();
   return {
@@ -228,8 +228,6 @@ async function browserDecode(bytes: Uint8Array, w: number, hh: number): Promise<
     return pictureOf(w, hh, (x, y) => d[4 * (y * w + x)]);
   } catch { return null; }
 }
-/** The last comparison, for the step's check. */
-export const fileApi = { maxDiff: -1, decoded: false };
 export function fileWidget(): Widget {
   let q = 75, own: Picture | null = null, token = 0;
   const shown = h('img', { class: 'pic', alt: 'Our JPEG file, decoded by the browser', width: SIZE }) as HTMLImageElement, ours = canvasOf(theScene(), 1, 'Our own reconstruction');
@@ -244,10 +242,9 @@ export function fileWidget(): Widget {
     chips.set(0, `${n0(r.bytes.length)} bytes`, `${p.w} × ${p.h}, quality ${q}`);
     const d = await browserDecode(r.bytes, p.w, p.h);
     if (t !== token) return;
-    if (!d) { fileApi.decoded = false; chips.set(1, '—', 'the browser did not decode it'); note.textContent = 'This browser would not decode the file, so nothing could be compared.'; return; }
+    if (!d) { chips.set(1, '—', 'the browser did not decode it'); note.textContent = 'This browser would not decode the file, so nothing could be compared.'; return; }
     let worst = 0, off = 0;
     for (let i = 0; i < d.px.length; i++) { const e = Math.abs(d.px[i] - r.out.px[i]); worst = Math.max(worst, e); if (e) off++; }
-    fileApi.decoded = true; fileApi.maxDiff = worst;
     chips.set(1, String(worst), 'largest difference, in levels, between the browser\'s decode and ours');
     chips.set(2, `${num((100 * off) / d.px.length, 1)} %`, 'of pixels differ at all');
     chips.set(3, `${num(psnr(p, r.out), 1)} dB`, 'PSNR against the picture that went in');
