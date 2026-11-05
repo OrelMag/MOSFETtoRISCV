@@ -46,8 +46,13 @@ const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
+<<<<<<< HEAD
   [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('carriers'), 'Many carriers'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
   [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('path'), 'The internet path'],
+=======
+  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('secret'), 'Keeping it secret'], [numOf('path'), 'The internet path'],
+>>>>>>> origin/main
 ];
 /** The five questions, with the chapters of the track that answer each. */
 const QUESTIONS: [string, string, ChapterId[]][] = [
