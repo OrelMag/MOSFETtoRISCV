@@ -64,6 +64,7 @@ const BOOK = [
   'path',
   'radio',
   'wifi',
+  'cellular',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
