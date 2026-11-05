@@ -2,21 +2,15 @@
 // pointers p0–p3 (X) and p4–p7 (Y) with the address generators' base, length and modifier, a 40-bit accumulator, a loop
 // unit one level deep, and the X and Y memories of 256 words. Halts on `halt` (the PC stays).
 
-import { decode24, MEM24_WORDS, ROM24_WORDS, UREGS24 } from './isa24';
+import { accAfter, MAC_F3, raccOf } from './mac';
+import { decode24, MEM24_WORDS, ROM24_WORDS } from './isa24';
 
-export const ACC_BITS = 40;
-const ACC_MOD = 2 ** ACC_BITS, ACC_HALF = 2 ** (ACC_BITS - 1);
-/** The 40-bit accumulator wraps (two's complement). */
-export const wrap40 = (v: number): number => ((((v + ACC_HALF) % ACC_MOD) + ACC_MOD) % ACC_MOD) - ACC_HALF;
 export const s16 = (v: number): number => ((v & 0xffff) ^ 0x8000) - 0x8000;
 export const s8 = (v: number): number => ((v & 0xff) ^ 0x80) - 0x80;
 export const sat16 = (v: number): number => Math.max(-32768, Math.min(32767, v));
 
-/** The accumulator to 16 bits: shift right by sh with the first dropped bit added back (round half up), then saturate. */
-export function rndOf(acc: number, sh: number): number {
-  const v = (BigInt(acc) + (sh > 0 ? 1n << BigInt(sh - 1) : 0n)) >> BigInt(sh);
-  return v > 32767n ? 32767 : v < -32768n ? -32768 : Number(v);
-}
+/** The accumulator to 16 bits, as the MAC block reads it (dsp/mac.ts raccOf: shift, add the first dropped bit back, clamp 32) and a clamp to 16 after it. */
+export const rndOf = (acc: bigint, sh: number): number => sat16(raccOf(acc, sh).y);
 
 export function rev8(v: number): number {
   let r = 0;
@@ -25,21 +19,23 @@ export function rev8(v: number): number {
 }
 
 /**
- * The address generator's update of one pointer after an access. mode: 0 unchanged, 1 +1, 2 −1, 3 +m, 4 +1 circular,
- * 5 −1 circular, 6 bit-reversed (reverse-carry add of m), 7 +m circular. A circular step that leaves the window
- * [base, base + len) comes back by len, once (so |step| ≤ len). m is signed except in mode 6, where the 8 bits are the
- * reverse-carry modifier: rev(rev(p) + rev(m)), which counts a 2^k-point bit-reversed order for m = 2^(k−1).
+ * The address generator's update of one pointer after an access, all arithmetic modulo 256. mode: 0 unchanged, 1 +1, 2 −1,
+ * 3 +m, 4 +1 circular, 5 −1 circular, 6 bit-reversed (reverse-carry add of m), 7 −m. The circular modes wrap at the window's
+ * edges, by equality: +1 from base + len − 1 goes to base, and −1 from base goes to base + len − 1. A pointer outside its
+ * window just steps. The reverse-carry add is rev(rev(p) + rev(m)), which counts a 2^k-point bit-reversed order for m = 2^(k−1).
  */
 export function aguStep(p: number, mode: number, base: number, len: number, m: number): number {
-  if (mode === 0) return p;
-  if (mode === 6) return rev8((rev8(p) + rev8(m)) & 255);
-  const step = mode === 1 || mode === 4 ? 1 : mode === 2 || mode === 5 ? -1 : s8(m);
-  let t = p + step;
-  if (mode >= 4 && mode !== 6) {
-    if (step >= 0 && t >= base + len) t -= len;
-    else if (step < 0 && t < base) t += len;
+  const end = (base + len) & 255;
+  switch (mode) {
+    case 0: return p;
+    case 1: return (p + 1) & 255;
+    case 2: return (p - 1) & 255;
+    case 3: return (p + m) & 255;
+    case 4: return ((p + 1) & 255) === end ? base : (p + 1) & 255;
+    case 5: return p === base ? (end - 1) & 255 : (p - 1) & 255;
+    case 6: return rev8((rev8(p) + rev8(m)) & 255);
+    default: return (p - m) & 255;
   }
-  return t & 255;
 }
 
 export interface Step24 {
@@ -55,7 +51,7 @@ export interface Step24 {
 }
 
 export interface Iss24State {
-  pc: number; steps: number; halted: boolean; acc: number;
+  pc: number; steps: number; halted: boolean; acc: bigint;
   r: number[]; p: number[]; xb: number; xl: number; xm: number; yb: number; yl: number; ym: number;
   ls: number; le: number; lc: number; la: number;
   x: number[]; y: number[]; out: number[];
@@ -65,7 +61,7 @@ export class Iss24 {
   pc = 0;
   steps = 0;
   halted = false;
-  acc = 0;
+  acc = 0n;
   r = new Uint16Array(8);
   p = new Uint8Array(8);
   /** Address generator registers: base, length, modifier, per memory. */
@@ -84,19 +80,21 @@ export class Iss24 {
     for (let i = 0; i < Math.min(MEM24_WORDS, y.length); i++) this.y[i] = y[i] & 0xffff;
   }
 
-  /** A unified register (0–7 r, 8–15 p, 16–21 xb xl xm yb yl ym) as the instructions read it. */
+  /** A unified register (0–7 r, 8–15 p, 16–18 xb xl xm, 20–22 yb yl ym; the others read 0) as the instructions read it. */
   getReg(n: number): number {
     if (n < 8) return this.r[n];
     if (n < 16) return this.p[n - 8];
-    return [this.xb, this.xl, this.xm, this.yb, this.yl, this.ym][n - 16] ?? 0;
+    return n === 16 ? this.xb : n === 17 ? this.xl : n === 18 ? this.xm : n === 20 ? this.yb : n === 21 ? this.yl : n === 22 ? this.ym : 0;
   }
   setReg(n: number, v: number): void {
     if (n < 8) this.r[n] = v & 0xffff;
     else if (n < 16) this.p[n - 8] = v & 255;
-    else if (n < UREGS24) {
-      const k = (['xb', 'xl', 'xm', 'yb', 'yl', 'ym'] as const)[n - 16];
-      this[k] = v & 255;
-    }
+    else if (n === 16) this.xb = v & 255;
+    else if (n === 17) this.xl = v & 255;
+    else if (n === 18) this.xm = v & 255;
+    else if (n === 20) this.yb = v & 255;
+    else if (n === 21) this.yl = v & 255;
+    else if (n === 22) this.ym = v & 255;
   }
 
   private upd(bus: 0 | 1, i: number, mode: number): void {
@@ -117,7 +115,7 @@ export class Iss24 {
     let isLoop = false;
     const alu = (v: number) => { r[d.rd] = v & 0xffff; };
     switch (d.name) {
-      case 'halt': this.halted = true; break;
+      case 'halt': this.halted = true; this.steps++; return st;
       case 'mov': this.setReg(d.dst, this.getReg(d.src)); break;
       case 'ldi': this.setReg(d.dst, d.imm14 & 0x2000 ? d.imm14 - 0x4000 : d.imm14); break;
       case 'ldh': r[d.rd] = (d.imm8 << 8) | (r[d.rd] & 255); break;
@@ -145,24 +143,15 @@ export class Iss24 {
         this.upd(bus as 0 | 1, i, d.xmode);
         break;
       }
-      case 'ld2': {
-        const xv = this.x[xa], yv = this.y[ya];
-        r[d.rd] = xv;
-        r[d.ra] = yv;
+      case 'clr': this.acc = 0n; break;
+      case 'mac':
+        this.acc = accAfter(this.acc, MAC_F3.mac, this.x[xa], this.y[ya]);
         this.upd(0, d.xp, d.xmode);
         this.upd(1, d.yp, d.ymode);
         break;
-      }
-      case 'clr': this.acc = 0; break;
-      case 'mac': {
-        this.acc = wrap40(this.acc + s16(this.x[xa]) * s16(this.y[ya]));
-        this.upd(0, d.xp, d.xmode);
-        this.upd(1, d.yp, d.ymode);
-        break;
-      }
       case 'rnd': case 'rndc':
         r[d.rd] = rndOf(this.acc, d.sh) & 0xffff;
-        if (d.name === 'rndc') this.acc = 0;
+        if (d.name === 'rndc') this.acc = 0n;
         break;
       case 'out': this.out.push(a); st.out = a; break;
       case 'loop':

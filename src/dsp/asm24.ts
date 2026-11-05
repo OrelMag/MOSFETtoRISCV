@@ -1,7 +1,7 @@
 // DSP24's assembler: two passes, labels, one 24-bit word per instruction, `.word` for raw words, `.org`.
 // Registers r0–r7, pointers p0–p7 (p0–p3 address X, p4–p7 address Y), xb xl xm yb yl ym. A memory operand is the memory
 // letter, the pointer in brackets and the update that follows the access: x(p0)  x(p0)+  y(p5)-  x(p1)+m  x(p0)+c
-// y(p4)-c  x(p2)+r  x(p0)+mc. Comments: ; # //. Numbers: decimal, 0x, 0b, 'c'. Mnemonics in any case.
+// y(p4)-c  x(p2)+r  x(p0)-m. Comments: ; # //. Numbers: decimal, 0x, 0b, 'c'. Mnemonics in any case.
 
 import { AsmError, commentStart, parseImm, splitArgs } from '../riscv/asm';
 import { BY_NAME24, enc24, gpr24, MODES24, regNumber24, ROM24_WORDS } from './isa24';
@@ -69,7 +69,7 @@ export function assemble24(src: string): AsmResult24 {
 
 /** A memory operand: the bus, the pointer index 0–3 within that bus, the mode. */
 export function parseMem24(a: string): { bus: 0 | 1; p: number; mode: number } {
-  const m = a.trim().toLowerCase().match(/^([xy])\s*\(\s*p([0-7])\s*\)\s*(\+mc|\+m|\+c|-c|\+r|\+|-)?$/);
+  const m = a.trim().toLowerCase().match(/^([xy])\s*\(\s*p([0-7])\s*\)\s*(-m|\+m|\+c|-c|\+r|\+|-)?$/);
   if (!m) throw new AsmError(`not a memory operand: "${a.trim()}" (x(p0)+, y(p4)-c, ...)`);
   const bus = m[1] === 'x' ? 0 : 1, pn = +m[2];
   if (bus === 0 && pn > 3) throw new AsmError(`x(...) takes p0–p3, not p${pn}: p4–p7 address Y`);
@@ -138,11 +138,6 @@ function encodeStmt(s: Stmt, labels: Map<string, number>): number[] {
       want(2);
       const m = parseMem24(args[0]);
       return [enc24.st(o, gp(args[1]), m.mode, m.p, m.bus)];
-    }
-    case 'ld2': {
-      want(4);
-      const x = mem(args[2], 0), y = mem(args[3], 1);
-      return [enc24.ld2(o, gp(args[0]), gp(args[1]), x.mode, x.p, y.mode, y.p)];
     }
     case 'r': want(1); return [enc24.r(o, gp(args[0]))];
     case 'rsh': want(2); return [enc24.rsh(o, gp(args[0]), num(args[1], 0, 63, 'shift'))];

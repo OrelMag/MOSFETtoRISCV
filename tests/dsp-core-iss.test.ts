@@ -32,7 +32,7 @@ describe('the benchmarks on the golden model', () => {
   });
   it('dot product: the 40-bit accumulator, then two roundings', () => {
     const { iss } = build('dot');
-    expect(iss.acc).toBe(V.dot.acc);
+    expect(Number(iss.acc)).toBe(V.dot.acc);
     expect(iss.out.map(s16)).toEqual([V.dot.out15, V.dot.out13]);
     expect(V.dot.scipy).toBe(V.dot.acc);
   });

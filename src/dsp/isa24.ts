@@ -1,5 +1,5 @@
 // DSP24, the DSP core's own instruction set (chapter "A DSP core"): 16-bit data, 24-bit instructions, one instruction per
-// clock, 28 instructions. Not a real DSP's ISA. What makes it a DSP: one instruction reads a sample from X memory and a
+// clock, 27 instructions. Not a real DSP's ISA. What makes it a DSP: one instruction reads a sample from X memory and a
 // coefficient from Y memory and multiply-accumulates them, each address register stepping as it is used (plus 1, minus 1,
 // by a modifier, round a circular window, or in bit-reversed order), and a loop instruction repeats the instructions up to
 // an end address with no branch. Words the table does not name execute as NOP, in the golden model and the hardware.
@@ -8,12 +8,12 @@
 //   rd 18..16, ra 15..13, rb 12..10                   register fields (r0..r7)
 //   X operand 12..8 = mode 12..10, pointer 9..8       (p0..p3 of the X address generator)
 //   Y operand  7..3 = mode  7..5,  pointer 4..3       (p4..p7 of the Y address generator)
-//   ld / st: the one operand sits in the X slot, bit 2 picks the memory (0 X, 1 Y)
+//   ld / st: the one operand sits in the X slot, bit 2 picks the memory (0 X, 1 Y); then the other memory is not touched
 //   mov: dst 18..16 (low) + 12..11 (high), src 15..13 (low) + 10..9 (high); ldi: dst 18..16 + 15..14, imm14 13..0
 
 /** Operand shapes. */
 export type Shape24 =
-  | '' | 'rrr' | 'rri' | 'ri' | 'mov' | 'ldi' | 'mem2' | 'memld' | 'memst' | 'ld2' | 'r' | 'rsh' | 'loop' | 'a' | 'ra';
+  | '' | 'rrr' | 'rri' | 'ri' | 'mov' | 'ldi' | 'mem2' | 'memld' | 'memst' | 'r' | 'rsh' | 'loop' | 'a' | 'ra';
 
 export interface Instr24 { name: string; op: number; shape: Shape24; summary: string }
 
@@ -22,7 +22,7 @@ export const INSTRS24: Instr24[] = [
   { name: 'halt', op: 1, shape: '', summary: 'stop: the PC stays on this instruction' },
   { name: 'mov', op: 2, shape: 'mov', summary: 'dst ← src, any of r0–r7, p0–p7, xb xl xm yb yl ym (pointers keep the low 8 bits)' },
   { name: 'ldi', op: 3, shape: 'ldi', summary: 'dst ← signed 14-bit constant' },
-  { name: 'ldh', op: 4, shape: 'ri', summary: 'rd[15:8] ← constant, rd[7:0] kept' },
+  { name: 'ldh', op: 4, shape: 'ri', summary: 'rd[15:8] ← constant, rd[7:0] kept (the encoding names rd twice: it is read and written)' },
   { name: 'addi', op: 5, shape: 'rri', summary: 'rd ← ra + signed 8-bit constant' },
   { name: 'add', op: 6, shape: 'rrr', summary: 'rd ← ra + rb (wraps)' },
   { name: 'sub', op: 7, shape: 'rrr', summary: 'rd ← ra − rb (wraps)' },
@@ -36,16 +36,15 @@ export const INSTRS24: Instr24[] = [
   { name: 'sar', op: 15, shape: 'rrr', summary: 'rd ← ra >> rb[3:0], sign in' },
   { name: 'ld', op: 16, shape: 'memld', summary: 'rd ← X[p] or Y[p]; the pointer steps' },
   { name: 'st', op: 17, shape: 'memst', summary: 'X[p] or Y[p] ← ra; the pointer steps' },
-  { name: 'ld2', op: 18, shape: 'ld2', summary: 'rd ← X[p], re ← Y[q] in one cycle; both pointers step' },
-  { name: 'clr', op: 19, shape: '', summary: 'acc ← 0' },
-  { name: 'mac', op: 20, shape: 'mem2', summary: 'acc ← acc + X[p] × Y[q] (signed 16 × 16 into 40 bits); both pointers step' },
-  { name: 'rnd', op: 21, shape: 'rsh', summary: 'rd ← clamp16(round(acc >> sh)): rounded half up once, saturated once; acc kept' },
-  { name: 'rndc', op: 22, shape: 'rsh', summary: 'as rnd, and acc ← 0 at the same clock edge (read and clear)' },
-  { name: 'out', op: 23, shape: 'r', summary: 'output port ← ra (one word of the result stream)' },
-  { name: 'loop', op: 24, shape: 'loop', summary: 'repeat the instructions after this one, up to and including `end`, count times (a register: 0 means 65 536)' },
-  { name: 'jmp', op: 25, shape: 'a', summary: 'PC ← address' },
-  { name: 'jz', op: 26, shape: 'ra', summary: 'if ra = 0: PC ← address' },
-  { name: 'jnz', op: 27, shape: 'ra', summary: 'if ra ≠ 0: PC ← address' },
+  { name: 'clr', op: 18, shape: '', summary: 'acc ← 0' },
+  { name: 'mac', op: 19, shape: 'mem2', summary: 'acc ← acc + X[p] × Y[q] (signed 16 × 16 into 40 bits); both pointers step' },
+  { name: 'rnd', op: 20, shape: 'rsh', summary: 'rd ← clamp16(round(acc >> sh)): rounded half up once, saturated once; acc kept' },
+  { name: 'rndc', op: 21, shape: 'rsh', summary: 'as rnd, and acc ← 0 at the same clock edge (read and clear)' },
+  { name: 'out', op: 22, shape: 'r', summary: 'output port ← ra (one word of the result stream)' },
+  { name: 'loop', op: 23, shape: 'loop', summary: 'repeat the instructions after this one, up to and including `end`, count times (a register: 0 means 65 536)' },
+  { name: 'jmp', op: 24, shape: 'a', summary: 'PC ← address' },
+  { name: 'jz', op: 25, shape: 'ra', summary: 'if ra = 0: PC ← address' },
+  { name: 'jnz', op: 26, shape: 'ra', summary: 'if ra ≠ 0: PC ← address' },
 ];
 
 export const BY_NAME24 = new Map(INSTRS24.map((i) => [i.name, i]));
@@ -56,15 +55,15 @@ export const ROM24_WORDS = 256;
 export const MEM24_WORDS = 256;
 
 /** Address update after an access (the mode field): what the pointer does as it is used. */
-export const MODES24 = ['', '+', '-', '+m', '+c', '-c', '+r', '+mc'] as const;
+export const MODES24 = ['', '+', '-', '+m', '+c', '-c', '+r', '-m'] as const;
 export const MODE_NOTES24 = [
   'unchanged', 'plus 1', 'minus 1', 'plus the modifier m', 'plus 1 round the circular window',
-  'minus 1 round the circular window', 'bit-reversed: reverse-carry add of m', 'plus m round the circular window',
+  'minus 1 round the circular window', 'bit-reversed: reverse-carry add of m', 'minus the modifier m',
 ] as const;
 
-/** Unified register names: 0–7 r0–r7, 8–15 p0–p7, 16–18 xb xl xm, 19–21 yb yl ym. */
-export const REGNAMES24: readonly string[] = [
-  'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'xb', 'xl', 'xm', 'yb', 'yl', 'ym',
+/** Unified register numbers: 0–7 r0–r7, 8–15 p0–p7, 16–18 xb xl xm, 20–22 yb yl ym. Numbers in between and above read 0 and ignore writes. */
+export const REGNAMES24: readonly (string | undefined)[] = [
+  'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'xb', 'xl', 'xm', undefined, 'yb', 'yl', 'ym',
 ];
 export const UREGS24 = REGNAMES24.length;
 export function regNumber24(s: string): number | null {
@@ -115,14 +114,13 @@ export function decode24(w: number): Decoded24 {
 export const enc24 = {
   rrr: (op: number, rd: number, ra: number, rb: number) => (op << 19) | (rd << 16) | (ra << 13) | (rb << 10),
   rri: (op: number, rd: number, ra: number, imm: number) => (op << 19) | (rd << 16) | (ra << 13) | (imm & 255),
-  ri: (op: number, rd: number, imm: number) => (op << 19) | (rd << 16) | (imm & 255),
+  ri: (op: number, rd: number, imm: number) => (op << 19) | (rd << 16) | (rd << 13) | (imm & 255),
   mov: (op: number, dst: number, src: number) => (op << 19) | ((dst & 7) << 16) | ((src & 7) << 13) | ((dst >> 3) << 11) | ((src >> 3) << 9),
   ldi: (op: number, dst: number, imm: number) => (op << 19) | ((dst & 7) << 16) | ((dst >> 3) << 14) | (imm & 0x3fff),
   slot: (mode: number, p: number) => (mode << 2) | p,
   mem2: (op: number, xm: number, xp: number, ym: number, yp: number) => (op << 19) | (xm << 10) | (xp << 8) | (ym << 5) | (yp << 3),
   ld: (op: number, r: number, mode: number, p: number, bus: number) => (op << 19) | (r << 16) | (mode << 10) | (p << 8) | (bus << 2),
   st: (op: number, ra: number, mode: number, p: number, bus: number) => (op << 19) | (ra << 13) | (mode << 10) | (p << 8) | (bus << 2),
-  ld2: (op: number, rd: number, re: number, xm: number, xp: number, ym: number, yp: number) => (op << 19) | (rd << 16) | (re << 13) | (xm << 10) | (xp << 8) | (ym << 5) | (yp << 3),
   r: (op: number, ra: number) => (op << 19) | (ra << 13),
   rsh: (op: number, rd: number, sh: number) => (op << 19) | (rd << 16) | (sh & 63),
   loop: (op: number, reg: number, cnt: number, end: number) => (op << 19) | (reg ? (1 << 18) | (cnt << 13) : (cnt & 0x3ff) << 8) | (end & 255),
@@ -149,7 +147,6 @@ export function disasm24(w: number): string {
     case 'mem2': return `${m} ${memOp('x', d.xmode, d.xp)}, ${memOp('y', d.ymode, d.yp)}`;
     case 'memld': return `${m} r${d.rd}, ${memOp(d.bus ? 'y' : 'x', d.xmode, d.xp)}`;
     case 'memst': return `${m} ${memOp(d.bus ? 'y' : 'x', d.xmode, d.xp)}, r${d.ra}`;
-    case 'ld2': return `${m} r${d.rd}, r${d.ra}, ${memOp('x', d.xmode, d.xp)}, ${memOp('y', d.ymode, d.yp)}`;
     case 'r': return `${m} r${d.ra}`;
     case 'rsh': return `${m} r${d.rd}, ${d.sh}`;
     case 'loop': return `${m} ${d.loopReg ? `r${d.ra}` : d.cnt}, ${hx(d.addr)}`;
