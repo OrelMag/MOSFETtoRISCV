@@ -88,6 +88,16 @@ export function renoUtilization(bdp: number, buffer: number): number {
   return (((bdp * bdp - low * low) / 2 + bdp * (top - bdp)) / (top - low)) / bdp;
 }
 
+// ---- DCTCP, Alizadeh et al. (2010), for a window W* = (C RTT + K) / N at the top
+
+export const DCTCP_G = 1 / 16;
+/** The steady share marked. */
+export const dctcpAlpha = (wStar: number): number => Math.sqrt(2 / wStar);
+/** The queue's swing: ½ √(2 N W*) · √N, for one flow ½ √(2 W*). */
+export const dctcpAmplitude = (wStar: number, N = 1): number => (N / 2) * Math.sqrt(2 * wStar);
+/** The smallest K that keeps the link busy, by the paper's bound: C RTT / 7 (with synchronized flows). */
+export const dctcpMinK = (bdp: number): number => bdp / 7;
+
 // ---- the disciplines' own rules ----------------------------------------------------------------------------------------------
 
 /** RED's initial drop chance from the averaged queue: 0 below min, up to maxP at max, then every packet. */
@@ -101,8 +111,8 @@ export const codelNext = (t: number, interval: number, count: number): number =>
 
 // ---- the bottleneck --------------------------------------------------------------------------------------------------------
 
-export type CcKind = 'reno' | 'cubic' | 'bbr';
-export type AqmKind = 'tail' | 'red' | 'codel' | 'fq';
+export type CcKind = 'reno' | 'cubic' | 'bbr' | 'dctcp';
+export type AqmKind = 'tail' | 'red' | 'codel' | 'fq' | 'step';
 export interface FlowSpec { cc: CcKind; rttMs: number; startS?: number; ecn?: boolean; /** No Reno-friendly region and no fast convergence: CUBIC as its pure curve, which is what the closed form averages. */ pureCubic?: boolean }
 export interface LinkSpec {
   mbps: number; bufferPkts: number; aqm?: AqmKind; pktBytes?: number;
@@ -110,6 +120,7 @@ export interface LinkSpec {
   /** Deterministic loss: every this many packets on the wire. */ lossEvery?: number;
   /** A small packet every this many ms measures the delay a video call would see. */ pingMs?: number;
   /** CoDel's target and interval, ms (RFC 8289: 5 and 100). */ target?: number; interval?: number;
+  /** The 'step' queue: mark every packet that arrives with at least this many queued (a data-centre switch). */ markK?: number;
   seed?: number;
 }
 
@@ -124,6 +135,7 @@ export interface SimResult {
   meanDelayMs: number; pingMeanMs: number; pingP95Ms: number; pingLost: number;
   drops: number; marks: number; wireLost: number; slotMs: number; bdpPkts: number;
   /** Mean window per flow, after warm-up. */ meanCwnd: number[];
+  minQueue?: number; /** The first DCTCP flow's α at the end. */ dctcpAlpha?: number;
   jain: number;
 }
 
@@ -131,6 +143,8 @@ class Sender {
   cwnd = 10; ssthresh = Infinity; inflight = 0; delivered = 0; recoverUntil = -1; acked = 0; sumCwnd = 0; nCwnd = 0;
   // cubic
   wmax = 0; lastWmax = 0; epoch = -1; k = 0; wEst = 0;
+  // dctcp
+  alpha = 1; ackedW = 0; markedW = 0; windowEnd = 0;
   // bbr
   btlbw = 0; samples: { t: number; v: number }[] = []; minRtt = Infinity; minRttAt = 0; state: 'startup' | 'drain' | 'probe' | 'probertt' = 'startup'; credit = 0; gainAt = 0; gainIdx = 0; fullBw = 0; fullCount = 0; roundEnd = 0; rttEnd = 0;
   constructor(readonly spec: FlowSpec, readonly rtt: number, readonly slotS: number, readonly start: number) {}
@@ -153,9 +167,14 @@ class Sender {
     this.inflight--; this.delivered++; this.acked++;
     const s = this.spec.cc;
     if (s === 'bbr') { this.bbrAck(p, t); return; }
-    if (p.ce) this.congest(t);
+    if (s === 'dctcp') {
+      // Alizadeh et al., 2010: over each window of data, α ← (1 − g) α + g F, F the share marked; a marked window cuts by α / 2 once
+      this.ackedW++; if (p.ce) this.markedW++;
+      if (p.ce && t > this.recoverUntil) { this.recoverUntil = t + this.rtt; this.cwnd = Math.max(2, this.cwnd * (1 - this.alpha / 2)); this.ssthresh = this.cwnd; }
+      if (this.delivered >= this.windowEnd) { this.alpha = (1 - DCTCP_G) * this.alpha + DCTCP_G * (this.markedW / Math.max(1, this.ackedW)); this.ackedW = 0; this.markedW = 0; this.windowEnd = this.delivered + this.cwnd; }
+    } else if (p.ce) this.congest(t);
     if (this.cwnd < this.ssthresh) { this.cwnd += 1; return; }
-    if (s === 'reno') { this.cwnd += 1 / this.cwnd; return; }
+    if (s === 'reno' || s === 'dctcp') { this.cwnd += 1 / this.cwnd; return; }
     // CUBIC, one ACK's worth towards the curve one RTT ahead
     const RTT = this.rtt * this.slotS;
     if (this.epoch < 0) { this.epoch = t; this.wmax = this.cwnd; this.k = 0; this.wEst = this.cwnd; }
@@ -197,7 +216,7 @@ class Sender {
   congest(t: number): void {
     if (this.spec.cc === 'bbr' || t <= this.recoverUntil) return;
     this.recoverUntil = t + this.rtt;
-    if (this.spec.cc === 'reno') { this.cwnd = Math.max(2, this.cwnd / 2); this.ssthresh = this.cwnd; return; }
+    if (this.spec.cc === 'reno' || this.spec.cc === 'dctcp') { this.cwnd = Math.max(2, this.cwnd / 2); this.ssthresh = this.cwnd; return; }
     const w = this.cwnd;
     this.wmax = !this.spec.pureCubic && w < this.lastWmax ? (w * (1 + CUBIC_BETA)) / 2 : w;
     this.lastWmax = w;
@@ -251,7 +270,7 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
   const cod = new CoDel(target, interval), cods = Array.from({ length: N + 1 }, () => new CoDel(target, interval));
   let rr = 0, total = 0, avg = 0, redCount = 0;
   const minTh = link.bufferPkts * 0.2, maxTh = link.bufferPkts * 0.6, maxP = 0.1, wq = 0.002;
-  let drops = 0, marks = 0, wireLost = 0, wirePkts = 0, out = 0, sumQ = 0, maxQ = 0, sumDelay = 0, nDelay = 0, pingLost = 0;
+  let drops = 0, marks = 0, wireLost = 0, wirePkts = 0, out = 0, sumQ = 0, maxQ = 0, minQ = Infinity, sumDelay = 0, nDelay = 0, pingLost = 0;
   const pingDelays: number[] = [], samples: Sample[] = [], acked0 = new Array<number>(N).fill(0);
   const every = Math.max(1, Math.round(T / 400)), rateMark = new Array<number>(N).fill(0);
   const pingEvery = link.pingMs ? link.pingMs / slotMs : 0;
@@ -262,6 +281,7 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
   const ecnOf = (p: Pkt) => p.flow !== pingFlow && flows[p.flow].ecn;
 
   const enqueue = (p: Pkt, t: number) => {
+    if (aqm === 'step' && total >= (link.markK ?? Infinity) && ecnOf(p)) { p.ce = true; marks++; }
     if (aqm === 'red') {
       avg = (1 - wq) * avg + wq * total;
       const pb = redBase(avg, minTh, maxTh, maxP);
@@ -345,7 +365,7 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
     }
     if (pingEvery && t >= nextPing) { nextPing += pingEvery; enqueue({ flow: pingFlow, sentAt: t, enq: t, deliveredAtSend: 0, ce: false }, t); }
     // 3. one packet leaves
-    if (counted) { sumQ += total; if (total > maxQ) maxQ = total; }
+    if (counted) { sumQ += total; if (total > maxQ) maxQ = total; if (total < minQ) minQ = total; }
     const p = dequeue(t);
     if (p) {
       if (counted) out++;
@@ -370,6 +390,6 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
     samples, goodputMbps: goodput, utilization: out / (T - W), meanQueue: sumQ / (T - W), maxQueue: maxQ,
     meanDelayMs: nDelay ? sumDelay / nDelay : 0, pingMeanMs: pd.length ? pd.reduce((a, b) => a + b, 0) / pd.length : 0, pingP95Ms: pd.length ? pd[Math.floor(pd.length * 0.95)] : 0, pingLost,
     drops, marks, wireLost, slotMs, bdpPkts: (flows[0].rttMs / slotMs),
-    meanCwnd: senders.map((s) => s.sumCwnd / Math.max(1, s.nCwnd)), jain: jain(goodput),
+    meanCwnd: senders.map((s) => s.sumCwnd / Math.max(1, s.nCwnd)), jain: jain(goodput), minQueue: minQ, dctcpAlpha: senders.find((s) => s.spec.cc === 'dctcp')?.alpha,
   };
 }

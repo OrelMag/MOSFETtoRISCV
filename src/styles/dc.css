@@ -1,0 +1,16 @@
+/* Inside the data centre: the fabric, the bars and the ring. Colours are the site's tokens, so both themes follow. */
+.dc-map { width: 100%; height: auto; display: block; }
+.widget .mos-plot.dc-ring { width: min(100%, 360px); height: auto; display: block; }
+.dc-center { display: flex; flex-direction: column; align-items: center; }
+.dc-center h3 { align-self: flex-start; }
+.dc-link { stroke: var(--border-strong, var(--border)); stroke-width: 1; }
+.dc-link.on { stroke: var(--accent); stroke-width: 2.4; }
+.dc-link.stuck { stroke: var(--bad, #c93232); stroke-width: 2.4; }
+.dc-sw { fill: var(--surface-2); stroke: var(--text-2); }
+.dc-host { fill: var(--surface); stroke: var(--text-2); }
+.dc-lab { font-size: 11px; fill: var(--text-2); }
+.dc-bar { fill: var(--accent); }
+.dc-bar.hot { fill: var(--warn, #a85f07); }
+.dc-bar.idle { fill: var(--surface-3, var(--surface-2)); }
+.dc-dot { fill: var(--accent); stroke: var(--surface); }
+.dc-k { stroke: var(--text-2); stroke-dasharray: 5 4; }

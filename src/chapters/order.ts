@@ -63,6 +63,7 @@ const BOOK = [
   'queues',
   'secret',
   'path',
+  'datacentre',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

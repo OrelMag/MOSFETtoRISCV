@@ -111,7 +111,7 @@ export function lossWidget(): Widget {
 // ---- the lab ---------------------------------------------------------------------------------------------------------------
 
 export interface LabPreset { aqm: AqmKind; buffer: number; flows: FlowSpec[]; rtt?: number; mbps?: number; lossP?: number; note?: string }
-const CC_NAME: Record<CcKind, string> = { reno: 'Reno', cubic: 'CUBIC', bbr: 'BBR' };
+const CC_NAME: Record<CcKind, string> = { reno: 'Reno', cubic: 'CUBIC', bbr: 'BBR', dctcp: 'DCTCP' };
 const FLOW_SETS: Record<string, CcKind[]> = { reno: ['reno'], cubic: ['cubic'], bbr: ['bbr'], cubic2: ['cubic', 'cubic'], bbr2: ['bbr', 'cubic'], reno3: ['reno', 'reno', 'reno'] };
 
 /** One run of the lab: what the chapter's text quotes comes from the same call. */
