@@ -4,6 +4,7 @@
 
 import { ACK_LIMIT, ADV_NPH, ADV_PD, ADV_PH, creditOk, DL_UP, FC_PERIOD_BITS, LINE_DELAY, LINK_IN0, PcieLink, REPLAY_LIMIT, REPLAY_SLOTS, TS_RX, TS_TX, type LinkIn } from '../comm/pcie';
 import { busWidget, creditScene, laneGBs, parallelGBs, parallelMHz, PCIE_GENS, pcieApi, pcieCosts, pcieScene, tlpWidget } from '../widgets/pcie';
+import { numOf } from './order';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -33,7 +34,7 @@ const SK = 1000, W64 = 64;
 const G5 = PCIE_GENS[4];
 
 export const chPcie: Chapter = {
-  id: 'pcie', num: 47.5, title: 'PCIe and USB', level: 'Communication',
+  id: 'pcie', num: numOf('pcie'), title: 'PCIe and USB', level: 'Communication',
   blurb: 'The packet buses inside the box: PCIe\'s TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB\'s tokens, CRCs and enumeration.',
   goals: [
     'say why a shared parallel bus stopped scaling and what a point-to-point lane spends to replace it',

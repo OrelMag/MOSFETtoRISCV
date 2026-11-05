@@ -55,6 +55,7 @@ const BOOK = [
   'modem',
   'serial',
   'errors',
+  'pcie',
   'ethernet',
   'switch',
   'network',
