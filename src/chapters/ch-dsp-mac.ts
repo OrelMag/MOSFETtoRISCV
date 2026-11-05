@@ -31,7 +31,7 @@ export const chMac: Chapter = {
   recap: {
     keep: [
       'A filter is multiply-accumulate and little else. On a core with no multiplier the multiply is a loop of shifts and adds, and it is the whole cost.',
-      'The accumulator is wide so that sums do not round on the way: 40 bits hold 2^8 products of two 16-bit words before they can wrap. The shift, the one rounding and the one clamp happen once, when racc reads it.',
+      'The accumulator is wide so that sums do not round on the way: 40 bits hold 2^9 products of two 16-bit words (the largest is (−32768)² = 2^30) before they can wrap, or 2^8 mac2 steps (up to 2^31 each). The shift, the one rounding and the one clamp happen once, when racc reads it.',
       'Four instructions share one opcode, custom-2, told apart by funct3. Anything else on custom-2 does nothing, on the model and in the gates, so the learner\'s own instructions keep custom-1 and custom-3.',
       'mac alone saves a multiply, not the loads: two lw and two pointer steps still surround every product. mac2 does two products from the same two loads, and the packed layout is what pays for it.',
       'The numbers here were measured on gates, with each result checked against the exact answer. Where a count worked out on paper before the run was wrong, the page says so.',
@@ -67,7 +67,7 @@ export const chMac: Chapter = {
         const a = perProduct('rv32i', 'fir64'), b = perProduct('rv32im', 'fir64'), c = benchFig('rv32i', 'fir64');
         return `
         <p>A FIR filter is a loop: fetch a sample and a tap, multiply, add to a sum. <a href="#/c/firdesign/1">The FIR chapter</a> did it with one multiplier and a counter. A processor does it with instructions, and the RV32I of <a href="#/c/cpu/1">chapter ${numOf('cpu')}</a> has no multiply instruction. The multiply is a routine: fifteen steps of "if the low bit of the tap is 1, add the sample; shift both", and a last step for the tap's sign.</p>
-        <p>We ran it. On the single-cycle core in gates, the 64-tap filter's inner loop needs <strong>${f1(a)} clocks a product</strong>: ${n0(c.kernel)} clocks for ${c.products} products, the data setup taken out. A count on paper gives about 70, taking each step as five instructions. The steps are six or seven, because the add is skipped only for the zero bits of a tap, and the arithmetic shifts, the counter and the branch are always there.</p>
+        <p>We ran it. On the single-cycle core in gates, the 64-tap filter's inner loop needs <strong>${f1(a)} clocks a product</strong>: ${n0(c.kernel)} clocks for ${c.products} products, the data setup taken out. A count on paper, fifteen steps of five instructions, gives about 75. The steps are six or seven, because the add is skipped only for the zero bits of a tap, and the arithmetic shifts, the counter and the branch are always there.</p>
         <p>With the M extension the same product is one <code>mul</code> and the loop is ${f1(b)} clocks a product, ${f1(a / b)} times faster. That core is <a href="#/c/widths/1">chapter ${numOf('widths')}'s</a> at 32 bits, since chapter ${numOf('cpu')}'s has no M option; it costs ${n0(machineCost('rv32im').nands)} NANDs against ${n0(machineCost('rv32i').nands)}, and its period is ${machineCost('rv32im').period} NAND delays against ${machineCost('rv32i').period}.</p>
         <p>Both use the same exact data, and every output word is checked against the integers that <code>scripts/dsp/oracle.py</code> computes with scipy. The taps sum to 1.0 in magnitude and the samples are 16-bit, so even a 32-bit sum cannot overflow: the machines must agree to the last bit, and they do.</p>
         <div class="try">Pick the 64-tap filter and then the dot product. The ratio between the two machines hardly moves: the multiply is the cost, whatever the kernel.</div>`;
@@ -88,7 +88,7 @@ export const chMac: Chapter = {
         return `
         <p>The cure is hardware for the one operation the loop is made of. The unit below is ours, built only from earlier chapters' parts: two signed 16 × 16 <a href="#/c/muldiv/5">tree multipliers</a> (the low halves of the two operands, and the high halves), an adder for the pair of products, a 40-bit adder and register for the accumulator, and a read path at the right. ${n0(unitNands())} NANDs in all.</p>
         <p><strong>mac</strong> adds the product of the low halves to the accumulator. <strong>mac2</strong> adds both products, low × low and high × high. <strong>clracc</strong> empties it. In all three the register file's two read ports are the unit's inputs, and nothing is written back. The fourth instruction, <strong>racc</strong>, is how the accumulator leaves: shift, round, clamp, into a register. The next steps open it.</p>
-        <p>Put in the single-cycle core beside the ALU, with the result mux gaining a fifth input, it adds <strong>${n0(d.nands)} NANDs</strong> to the core (both with the same memories, no program ROM) and ${d.period} NAND delay${d.period === 1 ? '' : 's'} to the clock period. The critical path is the multiplier and two adders in series; it is a little longer than the ALU's, and so it sets the period.</p>
+        <p>Put in the single-cycle core below the datapath, under the ALU and the control unit, with the result mux gaining a fifth input, it adds <strong>${n0(d.nands)} NANDs</strong> to the core (both with the same memories, no program ROM) and ${d.period} NAND delay${d.period === 1 ? '' : 's'} to the clock period. The critical path is the multiplier and two adders in series; it is a little longer than the ALU's, and so it sets the period.</p>
         <div class="try">Pick mac2, leave the operands, and press Issue × 64. Then try 64 more: the accumulator wraps, and the gates and the model agree on the wrapped value.</div>`;
       },
       scene: unitScene,
@@ -99,7 +99,7 @@ export const chMac: Chapter = {
         check: (st) => { const a = macApi.get(st); return !!a && a.agrees() && a.wrapped(); },
         hints: ['Each mac2 adds the product of two pairs of 16-bit words. Large operands add about 2^31.', 'Set all four sliders to an extreme, then press Issue × 64 a few times.'],
         answer: 'Set rs1 and rs2 both halves to −32768: every mac2 adds 2^31. After 256 of them the sum reaches 2^39, one past the largest the 40-bit register holds, and wraps to −2^39.',
-        solve: (st) => { macApi.get(st)?.issue('clracc', 1); },
+        solve: (st) => { macApi.get(st)?.fullScale(); },
       },
     },
     {
@@ -108,7 +108,7 @@ export const chMac: Chapter = {
         const rows = MAC_INSTRS.map((i) => `<tr><td><code>${i.name === 'clracc' ? 'clracc' : i.name === 'racc' ? 'racc rd, rs1' : `${i.name} rs1, rs2`}</code></td><td>${F3(i.name)}</td><td>${{ mac: 'acc ← acc + sext16(rs1[15:0]) × sext16(rs2[15:0])', mac2: 'acc ← acc + lo × lo + hi × hi', clracc: 'acc ← 0', racc: 'rd ← clamp32(round(acc ≫ rs1[5:0]))' }[i.name]}</td></tr>`).join('');
         return `
         <p>RISC-V leaves four major opcodes for the designer, custom-0 to custom-3. <a href="#/c/simt/1">The GPU chapters</a> took custom-0 and the learner's own instructions (the sandbox's Custom instructions, introduced in <a href="#/c/cpu">chapter ${numOf('cpu')}</a>) take custom-1 and custom-3. The MAC takes <strong>custom-2</strong>, opcode 0x5B, as R-type with funct7 = 0, and funct3 tells the four apart:</p>
-        <div class="ln-scroll"><table class="ln-table"><thead><tr><th>Assembly</th><th>funct3</th><th>Does</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <table class="dm-enc"><thead><tr><th>Assembly</th><th>funct3</th><th>Does</th></tr></thead><tbody>${rows}</tbody></table>
         <p>What the decoder does with everything else on custom-2 is part of the definition: a word with funct7 ≠ 0, or with funct3 above 3, is not a MAC instruction and <em>does nothing</em>, in the golden model and in the gates. The control unit pays about a dozen gates to check that, and a random-program test puts such words among real instructions.</p>
         <p>The control unit gains one opcode class, <code>macEn</code> (the accumulator may change at the next edge; racc never changes it) and a third bit on the result select: racc writes a register and takes the mux's fifth input. The circuit below is the core with its MAC; double-click the MAC to open it. A learner's own row on custom-2 is refused on this core, with the reason.</p>
         <p>The program on the panel's right ends with the four. Step it, and watch <code>acc</code> at the top of the register list, compared with the golden model like any register.</p>`;
@@ -127,10 +127,10 @@ export const chMac: Chapter = {
       title: 'The accumulator and its read',
       get body() {
         return `
-        <p>Two 16-bit words give a 32-bit product, and a filter adds up to 64 of them. So the accumulator has to be wider than a word. It is <strong>${ACC_BITS} bits</strong>: eight more than a product, enough for 256 products of full-scale operands before it can wrap, and 2^8 is more taps than any filter here has. Past that it wraps as two's complement, with no flag and no clamp: a guard that saturated would need a comparator on every add, and the filter never wants one.</p>
+        <p>Two 16-bit words give a 32-bit product, and a filter adds up to 64 of them. So the accumulator has to be wider than a word. It is <strong>${ACC_BITS} bits</strong>: eight more than a product, enough for 512 mac products of full-scale operands (each at most 2^30) or 256 mac2 steps (at most 2^31 each) before it can wrap. A 64-tap Q1.15 filter adds at most 64 × 2^30 = 2^36: three bits to spare. Past that it wraps as two's complement, with no flag and no clamp: a guard that saturated would need a comparator on every add, and the filter never wants one.</p>
         <p>The read happens once, when the sum is finished. <code>racc rd, rs1</code> takes the shift from the low six bits of <code>rs1</code>, shifts the accumulator right (arithmetic), adds the first bit that fell off (rounding half up, as <a href="#/c/fixed/1">chapter ${numOf('fixed')}</a> defined it), and clamps to 32 bits. The clamp is once, and at 32 bits, not 16: the word the next instruction uses as a 16-bit operand must still fit 16 bits, and that is the program's job.</p>
         <p>In gates the trick is a 41-bit shifter fed with the accumulator and one zero below it: the bit that falls out first is the rounding bit, and the rest goes to a rounder of half adders and the clamp. About ${n0(stats(macRead()).nands)} NANDs; the six stages of the shifter are most of it.</p>
-        <div class="try">Take the magnitude to 38 bits at shift 15 and then lower the shift to 0: the clamp acts when the rounded value passes 32 bits. Then set the shift to 40 or more: only the sign survives.</div>`;
+        <div class="try">Take the magnitude to 38 bits at shift 15 and then lower the shift to 0: the clamp acts when the rounded value passes 32 bits. Then set the shift to 39, where only the sign and the rounding bit are left (−1 or 1 at the extremes), and to 40 or more, where the result is always 0.</div>`;
       },
       widget: readWidget,
       challenge: {
@@ -147,7 +147,7 @@ export const chMac: Chapter = {
         return `
         <p>Now run one. The program below is an 8-tap filter, one output: samples and taps packed two to a 32-bit word, four <code>lw</code> pairs and four <code>mac2</code>, then <code>racc</code> at shift 15. The first lines write the data, which the core has no other way to get at: its memory starts empty.</p>
         <p>The panel at the right is the golden model beside the gates. It compares the pc, every register and the accumulator after each instruction; "✓ matches golden model" is that comparison. The answer is ${FILTER_Y}, computed here as an exact sum and rounded once.</p>
-        <p>Run to halt, then look at <code>a0</code>. The whole inner part took four loads and four mac2 plus the setup around them.</p>
+        <p>Run to halt, then look at <code>a0</code>. The whole inner part took eight loads (four pairs) and four mac2, plus the setup around them.</p>
         <div class="try">Press Run to halt. The accumulator at the top of the register list ends at 0x${accHex(FILTER_SUM)}, the exact sum of the eight products, and a0 holds ${FILTER_Y}.</div>`;
       },
       scene: () => cpuScene({ source: filterSource(), mac: true, highlight: ['macu'], imemK: 6, dmemK: 5 }),
@@ -169,7 +169,7 @@ export const chMac: Chapter = {
         <p>Look at the loop for the 64-tap filter on <code>mac</code>: <code>lw lw mac addi addi bne</code>. It is six instructions a tap. Take out the multiply, as the M extension and mac both do, and what remains is two loads that bring in the operands, two pointer steps and the branch that counts. The multiply was one of seven.</p>
         <p>Measured: <strong>${f1(m)}</strong> clocks a product on mac, against ${f1(im)} with a plain <code>mul</code> on RV32IM and ${f1(perProduct('rv32i', 'fir64'))} in software. A cycle a tap is not what the MAC was meant to give; the loads are what costs now. Samples are 16 bits, and a load brings in 32. The core has word loads only, so a mac loop uses half of each load.</p>
         <p>This is the same lesson as <a href="#/c/cache/1">the cache chapters</a>: once the arithmetic is cheap, the memory system sets the speed. A DSP's answer is two memories read together; ours, in the next chapter's core, will do exactly that. Here the answer is smaller: use both halves of the word. That is <code>mac2</code>, at <strong>${f1(m2)}</strong> clocks a product, nearly twice as fast again, from the same two loads.</p>
-        <div class="try">Compare the three machines on the 64-tap filter. Then switch to the biquad: the order of the bars changes.</div>`;
+        <div class="try">Compare the four machines on the 64-tap filter, where mac2 is the shortest bar. Then switch to the biquad: mac2's bar is now longer than mac's.</div>`;
       },
       widget: barsWidget(['rv32i', 'rv32im', 'mac', 'mac2'], 'fir64'),
       challenge: {
@@ -205,7 +205,7 @@ export const chMac: Chapter = {
         const best = (b: 'fir16' | 'fir64' | 'biquad' | 'dot') => (['rv32i', 'rv32im', 'mac', 'mac2', 'mac2u'] as const).reduce((x, y) => (timePerProduct(y, b) < timePerProduct(x, b) ? y : x));
         const t = timePerProduct('rv32i', 'fir64') / timePerProduct('mac2u', 'fir64');
         return `
-        <p>Everything above in one place. Each row is a machine with its own period, so the last column multiplies clocks by the period static timing gives each core: NAND delays a product. All figures are measured: the cycles on gates (one build, thirty-two programs side by side), the NANDs from the netlists and the period from static timing.</p>
+        <p>Everything above in one place. Each row is a machine with its own period, so the last column multiplies clocks by the period static timing gives each core: NAND delays a product. All figures are measured: the cycles on gates (one build, thirty-two programs side by side; the software-multiply machine's three long kernels are re-counted on the golden model in the test that pins them, which the gates equalled clock for clock), the NANDs from the netlists and the period from static timing.</p>
         <p>On the 64-tap filter, mac2 unrolled takes ${n0(timePerProduct('mac2u', 'fir64'))} NAND delays a product against ${n0(timePerProduct('rv32i', 'fir64'))} for software multiplication: <strong>${f1(t)} times</strong>, for ${n0(macDelta().nands)} more NANDs on a core of ${n0(machineCost('rv32i').nands)}. Against RV32IM the gain is ${f1(timePerProduct('rv32im', 'fir64') / timePerProduct('mac2u', 'fir64'))} times, on a core whose adders are different, so that comparison carries its basis with it.</p>
         <p>The quickest machine per kernel is ${(['fir16', 'fir64', 'biquad', 'dot'] as const).map((b) => `${{ fir16: '16-tap', fir64: '64-tap', biquad: 'biquad', dot: 'dot product' }[b]}: ${{ rv32i: 'RV32I', rv32im: 'RV32IM', mac: 'mac', mac2: 'mac2', mac2u: 'mac2 unrolled' }[best(b)]}`).join(', ')}. The numbers here replace the estimates the chapter was planned with, which were low for software (about 70 clocks a product) and about right for the MAC loops.</p>
         <p>None of this is a DSP yet. The multiplier and the memory are still shared with everything else the core does, and every sample still goes through the register file. Next, a core designed around the loop.</p>`;

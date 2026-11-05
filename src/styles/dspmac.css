@@ -9,3 +9,10 @@
 .dm-rows .dm-head code, .dm-rows .dm-head span { font-weight: 600; color: var(--muted); }
 .dm-word { font: 11.5px/1.5 var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; margin: 4px 0; }
 @media (max-width: 520px) { .dm-rows > div { grid-template-columns: 6em minmax(0, 1fr); } .dm-rows > div > code:nth-child(3) { grid-column: 2; } }
+.dm-enc { width: 100%; border-collapse: collapse; margin: 6px 0; }
+.dm-enc th, .dm-enc td { padding: 4px 6px; font-size: 12.5px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+.dm-enc th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+.dm-enc td { border-bottom: 1px solid var(--border); }
+.dm-enc th { white-space: nowrap; }
+.dm-enc td, .dm-enc td code { overflow-wrap: normal; }
+.dm-enc td:nth-child(3) { overflow-wrap: anywhere; }

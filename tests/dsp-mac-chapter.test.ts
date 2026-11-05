@@ -35,6 +35,11 @@ describe('A MAC on the RV32', () => {
     expect(raccOf(-5n, 1).y).toBe(-2);
     expect(raccOf(2n ** 38n, 0).sat).toBe(true);
     expect(raccOf(-(2n ** 39n), 63).y).toBe(0);
+    // step 4's Try: at shift 39 only the sign and the rounding bit are left, at 40 and more the result is 0
+    expect(raccOf(-(2n ** 39n), 39).y).toBe(-1); expect(raccOf(2n ** 39n - 1n, 39).y).toBe(1);
+    for (const a of [-(2n ** 39n), -1n, 2n ** 39n - 1n]) for (let sh = 40; sh < 64; sh++) expect(raccOf(a, sh).y).toBe(0);
+    // headroom: 512 mac products or 256 mac2 steps, and 64 Q1.15 taps leave three bits
+    expect(512n * 2n ** 30n).toBe(2n ** 39n); expect(2n ** 36n * 8n).toBe(2n ** 39n);
   });
   it('step 5: the filter on the panel gives its answer on the gates, in lock step', async () => {
     const w = assemble(filterSource(), [], { mac: true }).words;

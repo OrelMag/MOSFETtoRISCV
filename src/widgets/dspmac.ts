@@ -58,21 +58,22 @@ export function barsWidget(machines: readonly MacMachine[], first: MacBench = 'f
 
 // ---- the unit, driven an instruction at a time ---------------------------------------------------------------------------------------------
 
-export const macApi = new WeakMap<Stage, { issued: () => number; agrees: () => boolean; wrapped: () => boolean; issue: (op: MacOp, n: number) => void }>();
+export const macApi = new WeakMap<Stage, { issued: () => number; agrees: () => boolean; wrapped: () => boolean; issue: (op: MacOp, n: number) => void; fullScale: () => void }>();
 const pulse = (st: Stage) => { st.sim!.setInput('clk', 1); st.sim!.settle(); st.sim!.setInput('clk', 0); st.sim!.settle(); };
 const u32 = (v: number) => v >>> 0;
 
 const unitPanel: ScenePanel = (stage: Stage): Widget => {
   let op: MacOp = 'mac2', alo = 3000, ahi = -2000, blo = -1234, bhi = 4321, sh = 15;
-  let model = new MacModel(), ran = 0, ok = true, wraps = 0, lastY = 0;
+  let model = new MacModel(), ran = 0, ok = true, wraps = 0;
   const status = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' }), word = h('div', { class: 'dm-word' });
   const sel = h('select', { 'aria-label': 'instruction' }, ...MAC_OPS.map((o) => h('option', { value: o }, o))) as HTMLSelectElement;
   sel.value = op;
   const a = () => u32(((ahi & 0xffff) << 16) | (alo & 0xffff)), b = () => u32(((bhi & 0xffff) << 16) | (blo & 0xffff));
   const paint = () => {
     const sim = stage.sim;
+    const lastY = raccOf(model.acc, sh).y;
     const acc = sim ? BigInt.asIntN(ACC_BITS, BigInt(stage.value('acc'))) : 0n;
-    status.replaceChildren(h('span', null, 'issued ', h('b', null, String(ran))), h('span', null, 'acc ', h('b', null, `0x${accHex(acc)}`)), h('span', null, 'racc would give ', h('b', null, String(lastY))));
+    status.replaceChildren(h('span', null, 'issued ', h('b', null, String(ran))), h('span', null, 'acc ', h('b', null, `0x${accHex(acc)}`)), h('span', null, 'y (racc) = ', h('b', null, String(lastY))));
     word.textContent = `rs1 = 0x${u32(a()).toString(16).padStart(8, '0')} (hi ${ahi}, lo ${alo})   rs2 = 0x${u32(b()).toString(16).padStart(8, '0')} (hi ${bhi}, lo ${blo})`;
     note.textContent = !ran ? 'Issue an instruction: the gates take it at the clock edge, and the model is asked the same.' : ok ? `At every clock the gates' accumulator and result matched the model${wraps ? `; the accumulator has wrapped ${wraps} time${wraps === 1 ? '' : 's'} (two's complement, 40 bits)` : ''}.` : 'The gates and the model disagreed.';
   };
@@ -82,28 +83,30 @@ const unitPanel: ScenePanel = (stage: Stage): Widget => {
     stage.checkpoint();
     for (let i = 0; i < n; i++) {
       const f3 = MAC_F3[o], before = model.acc;
-      sim.setInput('a', a()); sim.setInput('b', b()); sim.setInput('op', f3); sim.setInput('en', 1); sim.setInput('sh', o === 'racc' ? sh : u32(a()) & 63); sim.settle();
-      if (o === 'racc') { lastY = model.exec(f3, sh, 0) ?? 0; if (BigInt(stage.value('y') | 0) !== BigInt(lastY | 0)) ok = false; }
+      sim.setInput('a', a()); sim.setInput('b', b()); sim.setInput('op', f3); sim.setInput('en', 1); sim.setInput('sh', sh); sim.settle();
+      if (o === 'racc' && BigInt(stage.value('y') | 0) !== BigInt(raccOf(model.acc, sh).y)) ok = false;
       pulse(stage);
       if (o !== 'racc') { model.exec(f3, a(), b()); if (f3 < 2 && wrapAcc(before + macProduct(f3, a(), b())) !== before + macProduct(f3, a(), b())) wraps++; }
       if (BigInt.asIntN(ACC_BITS, BigInt(stage.value('acc'))) !== model.acc) ok = false;
       ran++;
     }
     sim.setInput('en', 0); sim.settle();
+    if (BigInt(stage.value('y') | 0) !== BigInt(raccOf(model.acc, sh).y)) ok = false; // y follows the accumulator and the shift at all times
     stage.refresh();
     paint();
   };
-  macApi.set(stage, { issued: () => ran, agrees: () => ok && ran > 0, wrapped: () => wraps > 0, issue });
+  const fullScale = () => { alo = ahi = blo = bhi = -32768; sls.slice(0, 4).forEach((s) => s.set(-32768)); issue('clracc', 1); issue('mac2', 320); };
+  macApi.set(stage, { issued: () => ran, agrees: () => ok && ran > 0, wrapped: () => wraps > 0, issue, fullScale });
   sel.addEventListener('change', () => { op = sel.value as MacOp; paint(); });
   const sls = [
     slider('rs1 low', -32768, 32767, 1, alo, String, (v) => { alo = v; paint(); }), slider('rs1 high', -32768, 32767, 1, ahi, String, (v) => { ahi = v; paint(); }),
     slider('rs2 low', -32768, 32767, 1, blo, String, (v) => { blo = v; paint(); }), slider('rs2 high', -32768, 32767, 1, bhi, String, (v) => { bhi = v; paint(); }),
-    slider('Shift', 0, 63, 1, sh, String, (v) => { sh = v; }),
+    slider('Shift', 0, 63, 1, sh, String, (v) => { sh = v; stage.sim?.setInput('sh', sh); stage.sim?.settle(); stage.refresh(); paint(); }),
   ];
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Issue an instruction'),
     h('div', { class: 'dram-ops' }, sel, h('button', { type: 'button', class: 'btn sm', onclick: () => issue(op, 1) }, 'Issue'), h('button', { type: 'button', class: 'btn sm', onclick: () => issue(op, 64) }, 'Issue × 64')),
     ...sls.map((s) => s.el), word, status, note);
-  stage.resetHooks.add(() => { model = new MacModel(); ran = 0; ok = true; wraps = 0; lastY = 0; paint(); });
+  stage.resetHooks.add(() => { model = new MacModel(); ran = 0; ok = true; wraps = 0; paint(); });
   paint();
   return { el, update: paint };
 };

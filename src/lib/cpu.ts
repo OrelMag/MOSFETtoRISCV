@@ -690,7 +690,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'shift', ends: ['shamt.y', 'macu.sh'] },
       { name: 'macOp', ends: ['f3op.y', 'macu.op'] },
       { name: 'MacEn', ends: ['ctl.macEn', 'macu.en'], tags: true as const },
-      { name: 'MacOut', ends: ['macu.y', 'res.d4', 'res.d5', 'res.d6', 'res.d7'] },
+      { name: 'MacOut', ends: ['macu.y', 'res.d4', 'res.d5', 'res.d6', 'res.d7'] }, // inputs 4 to 7 all read the unit (5 to 7 are never selected): one trunk beside the mux, not four routes
       { name: 'accOut', ends: ['macu.acc', 'accOut'], tags: true as const },
     ] : []),
     // control, as net labels
@@ -709,6 +709,10 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true },
     { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true },
   ];
+  if (mac) {
+    const mo = nets.find((n) => n.name === 'MacOut')!, my = P('macu', 'y'), tx = P('res', 'd0')[0] - 1.5;
+    mo.via = Object.fromEntries(['d4', 'd5', 'd6', 'd7'].map((d) => [`res.${d}`, [[tx, my[1]], [tx, P('res', d)[1]]] as [number, number][]]));
+  }
   if (wired) {
     const rows = (name: string, via: NonNullable<NetDef['via']>, tags?: string[]) => {
       const n = nets.find((x) => x.name === name)!;
