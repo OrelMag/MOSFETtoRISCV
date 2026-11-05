@@ -681,9 +681,10 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     rows('JalrTarget', { 'pcmux.d2': [[P('clr0', 'out')[0] + 1, P('clr0', 'out')[1]], [P('clr0', 'out')[0] + 1, 69], [0.5, 69], [0.5, P('pcmux', 'd2')[1]]] });
     rows('PCSrc', { 'pcmux.s': [[resY[0], P('npc', 'pcSrc')[1]], [resY[0], 72], [P('pcmux', 's')[0], 72]] });
     // the PC's other readers, over the register file; the store data the same way
+    const pcRow = c ? 25 : 30.5; // over the register file, and over +2/4 where the C fetch lifts the file
     rows('PC', {
-      'srcA.b': [[pcq[0] + 3, pcq[1]], [pcq[0] + 3, 30.5], [rfR + 5, 30.5], [rfR + 5, P('srcA', 'b')[1]]],
-      'target.a': [[pcq[0] + 3, pcq[1]], [pcq[0] + 3, 30.5], [rfR + 5, 30.5], [rfR + 5, P('target', 'a')[1]]],
+      'srcA.b': [[pcq[0] + 3, pcq[1]], [pcq[0] + 3, pcRow], [rfR + 5, pcRow], [rfR + 5, P('srcA', 'b')[1]]],
+      'target.a': [[pcq[0] + 3, pcq[1]], [pcq[0] + 3, pcRow], [rfR + 5, pcRow], [rfR + 5, P('target', 'a')[1]]],
     }, ['pcOut']);
     rows('WriteData', { 'dm.wd': [[rfR + 2.5, P('rf', 'rd2')[1]], [rfR + 2.5, 30], [dmX - 3, 30], [dmX - 3, P('dm', 'wd')[1]]] });
     // the instruction's fields to control, down past the datapath and in from the left
@@ -692,7 +693,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     rows('op', { 'ctl.op': lane('o0', 48 + dx, 75.5, 'op', 28) });
     rows('funct3', {
       'ctl.funct3': lane('o2', 49.5 + dx, 76.5, 'funct3', 27),
-      'npc.funct3': [[49.5 + dx, P('si', 'o2')[1]], [49.5 + dx, 76.5], [P('npc', 'funct3')[0] - 7, 76.5], [P('npc', 'funct3')[0] - 7, P('npc', 'funct3')[1]]],
+      'npc.funct3': [[49.5 + dx, P('si', 'o2')[1]], [49.5 + dx, 71], [P('npc', 'funct3')[0] - 7, 71], [P('npc', 'funct3')[0] - 7, P('npc', 'funct3')[1]]],
     });
     rows('funct7', { 'ctl.funct7': lane('o5', 51 + dx, 77.5, 'funct7', 26) });
     // control: each signal straight out of its port, then up to its unit
@@ -707,7 +708,18 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     up('Jalr', 'jalr', 'npc.jalr', P('npc', 'jalr')[0] - 4, [P('npc', 'jalr')[0] - 4, P('npc', 'jalr')[1]]);
     up('ALUControl', 'aluCtl', 'alu.ctl', P('target', 'a')[0] - 1.5, [P('target', 'a')[0] - 1.5, P('alu', 'ctl')[1] + 2], [P('alu', 'ctl')[0], P('alu', 'ctl')[1] + 2]);
     for (const n of nets) if (['RegWrite', 'ImmSrc', 'ALUSrcA', 'ALUSrcB', 'MemWrite', 'ResultSrc', 'Branch', 'Jump', 'Jalr', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'C', 'op', 'funct3', 'funct7'].includes(n.name!)) n.quiet = true;
-    delete nets.find((n) => n.name === 'gndT')!.via; // in line with its pin
+    // the tie in line with a pin on the adder's left; the ripple adder's is on top, clear of the ALUControl lane
+    const cinTop = g(ADD).ports.cin.exit === 'up';
+    if (cinTop) at.set('gndT', [P('target', 'cin')[0] - 4, P('target', 'cin')[1] - 3]);
+    const tie = nets.find((n) => n.name === 'gndT')!;
+    instances.find((i) => i.name === 'gndT')!.at = at.get('gndT');
+    if (cinTop) tie.via = { 'target.cin': [[P('target', 'cin')[0], P('gndT', 'y')[1]]] };
+    else delete tie.via;
+    // a cache is wider than the memory: its clock comes round the next-PC unit under it
+    if (P('dm', 'clk')[0] > P('npc', 'zero')[0]) clkVia['dm.clk'] = [[P('npc', 'zero')[0] - 1, bottom], [P('npc', 'zero')[0] - 1, P('dm', 'clk')[1] + 0.5], [P('dm', 'clk')[0], P('dm', 'clk')[1] + 0.5]];
+    // the register file's clock passes beside the immediate generator, which sits under it
+    const immR = at.get('imm')![0] + g(IMM_GEN).w;
+    clkVia['rf.clk'] = [[immR + 1, bottom], [immR + 1, P('rf', 'clk')[1] + 2], [P('rf', 'clk')[0], P('rf', 'clk')[1] + 2]];
     if (c) rows('C', { 'plus4.c': [[P('imem', 'c')[0] + 1, P('imem', 'c')[1]], [P('imem', 'c')[0] + 1, 31.5], [P('plus4', 'c')[0], 31.5]] });
     // the ALU's flags, nested so that they do not cross each other
     ([['Zero', 'zero', 108.5], ['Neg', 'neg', 107], ['Ovf', 'ovf', 105.5], ['Carry', 'carry', 104]] as const).forEach(([name, port, x0]) => { const x = x0 + dx;
