@@ -165,7 +165,8 @@ function flight(sizes: number[], rtt: number, mbps: number, w0: number): { at: n
     free = Math.max(free, k * rtt) + ((b + SEG_EXTRA) * 8) / (mbps * 1000);
     return free;
   });
-  return { at, w: w * 2 };
+  // An ACK a packet: a window not filled grows only by what was sent of it.
+  return { at, w: w + inWindow };
 }
 const objectPackets = (bytes: number): number[] => {
   const n = Math.max(1, Math.ceil(bytes / MSS));
@@ -174,17 +175,17 @@ const objectPackets = (bytes: number): number[] => {
 
 function carry(stack: StackName, c: StackSpec): StackRun {
   const think = c.thinkMs ?? THINK_MS, setupMs = (stack === 'h3' ? 1 : 2) * c.rttMs, firstByteMs = setupMs + c.rttMs + think, pk = objectPackets(c.objectBytes);
-  // The packet half way through the page's bytes is the one lost, and comes again one round trip later. The window is not cut: a comparison of what waits, not of congestion control.
-  const lost = c.loss ? Math.floor((c.objects * pk.length) / 2) : -1, doneMs: number[] = [];
+  // The same packet is lost on all three, half way through the middle object, and comes again one round trip later at best. The window is not cut: a comparison of what waits, not of congestion control.
+  const lostObject = c.loss ? c.objects >> 1 : -1, lostPacket = pk.length >> 1, doneMs: number[] = [];
   let heldPackets = 0;
   const held = new Set<number>();
   if (stack === 'h1') {
     // One object at a time: each request a round trip after the last object's end.
     let t = setupMs, w = INIT_WINDOW;
     for (let o = 0; o < c.objects; o++) {
-      const start = t + c.rttMs + think, r = flight(pk, c.rttMs, c.bottleneckMbps, w), i = lost - o * pk.length;
+      const start = t + c.rttMs + think, r = flight(pk, c.rttMs, c.bottleneckMbps, w), i = o === lostObject ? lostPacket : -1;
       let end = start + r.at[r.at.length - 1];
-      if (i >= 0 && i < pk.length) {
+      if (i >= 0) {
         end = Math.max(end, start + r.at[i] + c.rttMs);
         held.add(o);
         for (let j = i + 1; j < pk.length; j++) if (r.at[j] < r.at[i] + c.rttMs) heldPackets++;
@@ -196,7 +197,7 @@ function carry(stack: StackName, c: StackSpec): StackRun {
     // Every object's frames interleaved, a packet each in turn, on one connection.
     const sizes: number[] = [], owner: number[] = [];
     for (let i = 0; i < pk.length; i++) for (let o = 0; o < c.objects; o++) { sizes.push(pk[i]); owner.push(o); }
-    const { at } = flight(sizes, c.rttMs, c.bottleneckMbps, INIT_WINDOW), retry = lost >= 0 ? at[lost] + c.rttMs : 0;
+    const lost = c.loss ? lostPacket * c.objects + lostObject : -1, { at } = flight(sizes, c.rttMs, c.bottleneckMbps, INIT_WINDOW), retry = lost >= 0 ? at[lost] + c.rttMs : 0;
     for (let o = 0; o < c.objects; o++) doneMs.push(0);
     at.forEach((a, i) => {
       // TCP hands bytes over in order, whatever object they are; QUIC in order within a stream.

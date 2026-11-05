@@ -41,7 +41,7 @@ export function dhWidget(): Widget {
   }
   const go = h('button', { type: 'button', class: 'btn sm' }, 'Eve searches from A') as HTMLButtonElement;
   go.addEventListener('click', () => {
-    const r = dh(a, b), e = eveSearch(r.A), t0 = performance.now();
+    const r = dh(a, b), e = eveSearch(r.A), t0 = performance.now(), had = document.activeElement === go;
     // The sliders wait: the result names the secret on screen.
     go.disabled = true; sliders.forEach((x) => { x.disabled = true; });
     const frame = () => {
@@ -49,7 +49,8 @@ export function dhWidget(): Widget {
       let found: bigint | null = null;
       while (performance.now() - t1 < 12 && found === null) found = e.step(4000);
       if (found === null) { eve.textContent = `Eve has tried ${n0(e.tried())} exponents…`; raf = requestAnimationFrame(frame); return; }
-      go.disabled = false; sliders.forEach((x) => { x.disabled = false; }); go.focus({ preventScroll: true });
+      go.disabled = false; sliders.forEach((x) => { x.disabled = false; });
+      if (had) go.focus({ preventScroll: true });
       eve.textContent = `Eve found Alice's secret in ${n0(e.tried())} tries and ${n0(Math.round(performance.now() - t0))} ms, by multiplying by ${DH_G} until A came up. That works here because the secret is below 10 million. Each extra bit of the secret doubles the work, so 255 bits are out of reach of this method.`;
     };
     raf = requestAnimationFrame(frame);
@@ -199,8 +200,9 @@ export function handshakeWidget(): Widget {
     btns.forEach((x) => { x.disabled = true; x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
     say.textContent = c.say; verdict.textContent = 'Running the client…';
     later(() => { if (dead) return; void runHandshake(c.pin, c.tamper).then(({ result: r, ms }) => {
+      if (dead) return;
       btns.forEach((x) => { x.disabled = false; });
-      if (had && !dead) b.focus({ preventScroll: true });
+      if (had) b.focus({ preventScroll: true });
       show(r, ms, !c.tamper && !!c.pin && c.pin === pinOk);
     }); });
   };
