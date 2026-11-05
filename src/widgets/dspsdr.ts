@@ -67,7 +67,7 @@ export function bandWidget(): Widget {
   const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'))),
     ...STATIONS.map((st, k) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(carson(DEV, k === 3 ? 700 : k === 2 ? 3000 : k === 1 ? 1100 : TEST_TONE_HZ) / 1000, 0)} kHz`))));
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: the band each station occupies, with 3 kHz audio')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: the band each station occupies, with 3 kHz audio')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
 }
 
 // ---- how wide a station is -----------------------------------------------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ export function carsonWidget(): Widget {
   const sd = slider('Deviation', 5_000, 75_000, 5_000, dev, (v) => `${v / 1000} kHz`, (v) => { dev = v; paint(); });
   const sf = slider('Audio tone', 1_000, 15_000, 1_000, fm, (v) => `${v / 1000} kHz`, (v) => { fm = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One station, modulated by a single tone'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'spectrum'), h('span', { class: 'fr-k' }, 'shaded: Carson\'s band · dashed: measured 98 %')), chips.el), h('div', { class: 'panel mos-ctl' }, sd.el, sf.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One station, modulated by a single tone'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'spectrum'), h('span', { class: 'fr-k' }, 'shaded: Carson\'s band · dashed: measured 98 %')), chips.el), h('div', { class: 'panel mos-ctl' }, sd.el, sf.el)) };
 }
 
 // ---- moving a station to zero --------------------------------------------------------------------------------------------------------------------
@@ -119,7 +119,7 @@ export function tuneWidget(): Widget {
   };
   const sf = slider('Tune, kHz', -440, 440, 5, f / 1000, (v) => `${v > 0 ? '+' : ''}${v}`, (v) => { f = v * 1000; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Before the mixer'), before.el), h('div', { class: 'panel' }, h('h3', null, 'After it: the station you chose is at zero'), after.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'shaded: the channel the next filter keeps, ± 75 kHz')), chips.el), h('div', { class: 'panel mos-ctl' }, sf.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Before the mixer'), before.el), h('div', { class: 'panel' }, h('h3', null, 'After it: the station you chose is at zero'), after.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'shaded: the channel the next filter keeps, ± 75 kHz')), chips.el), h('div', { class: 'panel mos-ctl' }, sf.el)) };
 }
 
 // ---- the gates, with a panel ---------------------------------------------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
     let f = STATIONS[0].f, ok = true, ran = false, outs = 0;
     let ia: number[] = [], qa: number[] = [];
     const plot = o.front
-      ? plotOf({ W: 380, H: 220, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC, Q against I, as a share of full scale: a station that is tuned traces an arc of a circle', xFmt: (v) => num(v, 1) })
+      ? plotOf({ W: 300, H: 280, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC, Q against I, as a share of full scale: a station that is tuned traces an arc of a circle', xFmt: (v) => num(v, 1) })
       : plotOf({ W: 380, H: 190, x: [0, o.clocks], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: '', aria: 'The mixer\'s I and Q outputs, as a share of the ADC\'s full scale' });
     const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
     const paint = () => {
@@ -185,10 +185,10 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
 export const MIXER_CLOCKS = 240;
 export const FRONT_CLOCKS = 800;
 export function mixerScene(): Scene {
-  return { root: complexMixer(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'Four stations through the mixer', clocks: MIXER_CLOCKS, front: false, intro: `Pick a station. The ADC's samples go in at every clock, ${MIXER_CLOCKS} of them, and the tuned station should settle near zero.` })] };
+  return { root: complexMixer(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'Four stations through the mixer', clocks: MIXER_CLOCKS, front: false, intro: `Pick a station. The ADC's samples go in at every clock, ${MIXER_CLOCKS} of them. The tuned station now turns slowly, within its own deviation; the others spin across it at their distance.` })] };
 }
 export function frontScene(): Scene {
-  return { root: sdrFront(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'A station through the front end', clocks: FRONT_CLOCKS, front: true, intro: `Pick a station. ${FRONT_CLOCKS} clocks go in and ${FRONT_CLOCKS / CIC_R} words of I and Q come out, drawn as a point in the plane.` })] };
+  return { root: sdrFront(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'A station through the front end', clocks: FRONT_CLOCKS, front: true, intro: `Pick a station. ${FRONT_CLOCKS} clocks go in and ${FRONT_CLOCKS / CIC_R} words of I and Q come out, each drawn as a point in the plane and joined to the last.` })] };
 }
 export const nandsOf = () => ({ mixer: stats(complexMixer()).nands, nco: stats(sdrNco()).nands, front: stats(sdrFront()).nands });
 
@@ -217,7 +217,7 @@ export function tableWidget(): Widget {
   const play = clipButton('Hear the weak station', () => ({ samples: receive(band(), STATIONS[3].f, -40, FS, k).chain.audio, rate: AUD, source: 'model', note: `${2 ** k}-step table, one second` } satisfies Clip));
   const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', { class: 'num' }, 'Bits'), h('th', { class: 'num' }, 'Steps'), h('th', { class: 'num' }, 'NANDs, oscillator'), h('th', { class: 'num' }, 'Spur-free range'), h('th', { class: 'num' }, 'Key down / up'))), body);
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The oscillator\'s table, bit by bit'), table, chips.el), h('div', { class: 'panel mos-ctl' }, sk.el, play.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The oscillator\'s table, bit by bit'), table, chips.el), h('div', { class: 'panel mos-ctl' }, sk.el, play.el)) };
 }
 
 // ---- the channel filter and the discriminator (the DSP core's job) ---------------------------------------------------------------------------------
@@ -250,7 +250,7 @@ export function channelWidget(): Widget {
   const picks = STATIONS.map((st, i) => h('button', { type: 'button', class: 'btn sm', onclick: () => { k = i; paint(); } }, `${st.short} · ${khz(st.f)}`));
   buttons.append(...picks);
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'After the CIC, at 240 kHz: model, floating point'), sp1.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'the station and its neighbours'), h('span', { class: 'k-near' }, 'the channel filter\'s response')), chips.el),
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'After the CIC, at 240 kHz: model, floating point'), sp1.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'the station and its neighbours'), h('span', { class: 'k-near' }, 'the channel filter\'s response')), chips.el),
     h('div', { class: 'panel' }, h('h3', null, 'The discriminator: the phase step between neighbours'), sp2.el), h('div', { class: 'panel mos-ctl sdr-pick' }, buttons)) };
 }
 
@@ -276,7 +276,7 @@ export function audioWidget(): Widget {
   const raw = Float32Array.from({ length: ar.chain.audio.length }, () => 0);
   // without de-emphasis: the filtered discriminator itself
   { const d = ar.chain.disc; for (let i = 0; i < raw.length; i++) { let v = 0; for (let t = 0, m = Math.min(AUDIO_TAPS, i * AUDIO_R + 1); t < m; t++) v += AUDIO[t] * d[i * AUDIO_R - t]; raw[i] = v; } }
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The audio filter, ÷ 10 to 24 kHz: model, floating point'), sp1.el, chips.el),
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The audio filter, ÷ 10 to 24 kHz: model, floating point'), sp1.el, chips.el),
     h('div', { class: 'panel' }, h('h3', null, 'Pre-emphasis at the transmitter and its mirror at the receiver'), sp2.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, 'pre-emphasis, at the transmitter'), h('span', { class: 'k-far' }, 'de-emphasis, at the receiver'))),
     h('div', { class: 'panel mos-ctl' }, clipButton('Hear the arpeggio without de-emphasis', () => ({ samples: raw, rate: AUD, source: 'model', note: 'treble boosted, as it was sent' })).el, clipButton('Hear it with de-emphasis', () => ({ samples: ar.chain.audio, rate: AUD, source: 'model', note: 'as received' })).el)) };
 }
@@ -337,7 +337,7 @@ export function dialWidget(): Widget {
     } finally { gateBtn.disabled = false; }
   });
   paint();
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The band, and the channel you tuned'), spec.el, wave.el, read, working),
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The band, and the channel you tuned'), spec.el, wave.el, read, working),
     h('div', { class: 'panel mos-ctl' }, sf.el, sn.el, playModel.el), h('div', { class: 'panel mos-ctl' }, gateBtn, playGates.el, gateSay)) };
 }
 

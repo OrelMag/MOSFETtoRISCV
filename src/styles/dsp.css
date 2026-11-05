@@ -117,3 +117,5 @@
 .sdr-occ { fill: color-mix(in srgb, var(--warn) 16%, transparent); stroke: none; }
 .mini tr.sel td { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); font-weight: 600; }
 .sdr-pick .btn[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.sdr-w .mos-sl > span { min-width: 64px; }
+.sdr-w .mos-sl output { min-width: 92px; white-space: nowrap; text-align: right; }

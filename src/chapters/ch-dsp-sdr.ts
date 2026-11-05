@@ -132,7 +132,7 @@ export const chSdr: Chapter = {
         <p>Here it is, drawn from parts you have: a ${NCO_BITS}-bit register that adds the tuning word at every clock, two tables addressed by its top ${NCO_K} bits, four ${W_IN}-bit multipliers and two adders. The register is the <em>numerically controlled oscillator</em> of <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a>, with a cosine table beside the sine one. The whole mixer is ${n0(b.mixer)} NANDs, of which the oscillator is ${n0(b.nco)} and the multipliers and adders the rest.</p>
         <p>The tables hold ±127, and a product leaves bits to drop: the mixer keeps ${W_MIX} bits of the sum from bit 7 up, a floor, since a rotated sample can be √2 as large as it was. Nothing rounds, saturates or stores a coefficient. The integer model in the tests equals these gates on every clock, at several tunings and several table sizes.</p>
         <p>One sample goes in at every clock, so a second of the band is ${n0(FS)} clocks, too many to run a gate simulator through live. The page keeps that in mind: sound for a full second comes from the model, which does these gates' arithmetic on typed arrays, and a short clip comes from the gates themselves.</p>
-        <div class="try">Pick a station and run ${MIXER_CLOCKS} clocks. The tuned one settles near zero, and the others beat across it at their distance from it.</div>`;
+        <div class="try">Pick a station and run ${MIXER_CLOCKS} clocks. The tuned one is at zero frequency now, so its phasor turns only as fast as its own deviation. The others spin across it at their distance from it.</div>`;
       },
       scene: mixerScene,
       lit: '',
@@ -171,7 +171,7 @@ export const chSdr: Chapter = {
         return `
         <p>The channel is ±${khzf(CHAN_EDGE)} wide in a band of ±${n0(FS / 2000)}, so most of the samples are not needed, and <a href="#/c/multirate/0">the rate chapter</a> said what to do about that: a CIC, which is adders and registers with no multiplier. Behind each of I and Q goes an order-${CIC_N} CIC, ÷ ${CIC_R}, from ${W_MIX}-bit words. Its registers grow by N log₂ R = ${CIC_N * Math.log2(CIC_R)} bits to ${W_CIC}, and the gain at zero is ${n0(CIC_GAIN)}. One CIC is ${n0(cic)} NANDs; the whole front end, mixer and two CICs, is ${n0(b.front)}.</p>
         <p>At ${n0(FS_CIC / 1000)} kHz what folds onto the channel's edge is ${d1(-alias)} dB down, and the droop at the channel's edge is ${d1(-droop)} dB. Neither is a clean cut, and neither needs to be: a short filter at the low rate finishes the job, next step.</p>
-        <div class="try">Run the tuned test tone: ${FRONT_CLOCKS} clocks in, ${FRONT_CLOCKS / CIC_R} points out. An FM station has a constant amplitude, so the points trace an arc of a circle; the sound is how fast they move round it.</div>`;
+        <div class="try">Run the tuned test tone: ${FRONT_CLOCKS} clocks in, ${FRONT_CLOCKS / CIC_R} points out. An FM station has a constant amplitude, so the points stay on a circle; the sound is how fast, and which way, they go round it.</div>`;
       },
       scene: frontScene,
       lit: '',
