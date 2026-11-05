@@ -2,6 +2,7 @@
 // benches' own models). No DOM.
 
 import type { LevelCase } from './cases';
+import { numOf } from '../chapters/order';
 
 export const CASESL: Record<string, LevelCase> = {
   l_sync: {
@@ -44,7 +45,7 @@ export const CASESL: Record<string, LevelCase> = {
   l_fwd: {
     problem: 'A switch\'s table has a line per machine, learned by flooding, which no network the size of the internet could keep or survive. A router\'s has a line per network: an address has a shape, its leading bits name a network, and the longest prefix that matches says which way to send it. It decides for every packet, and it changes the packet as it goes, so that a loop in somebody\'s tables burns out in 255 hops.',
     without: 'First match instead of longest: a default route swallows everything. No TTL: one wrong table and a packet circles forever, and more follow. Summing the header again at each hop: it costs twenty bytes of adding per packet, where one addition does it, as long as it is RFC 1624\'s and not the older shortcut, which is wrong for one checksum in 65 536. A bad header answered: the address it would answer to is the part that cannot be trusted.',
-    cost: '5 847 NANDs for four routes, nearly all of it 160 flip-flops and the comparisons. Matching every route at once is what a TCAM does, and it pays per route: chapter 51 walks a trie in RAM instead, one read per bit of the address, and its whole fast path is 4 214 NANDs of logic beside 836 585 of memory, which holds 1 024 nodes.',
+    cost: `5 847 NANDs for four routes, nearly all of it 160 flip-flops and the comparisons. Matching every route at once is what a TCAM does, and it pays per route: chapter ${numOf('router')} walks a trie in RAM instead, one read per bit of the address, and its whole fast path is 4 214 NANDs of logic beside 836 585 of memory, which holds 1 024 nodes.`,
   },
   l_repeater: {
     problem: 'A telegraph line weakens with its length: the current a battery drives through 4 mm iron wire and a relay coil falls as the wire gets longer, and below the relay\'s pull-in current (38 mA with our 24 V coil) the sounder stays silent. A 24 km section is fine with a margin of 1.08, 48 km is a margin of 0.70. A relay half way takes the weak current and closes a contact that puts a battery of its own on the next section.',

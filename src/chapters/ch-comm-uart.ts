@@ -5,6 +5,7 @@ import { UART_COSTS, uartIrqSource, uartPollSource } from '../riscv/uartprograms
 import { stats } from '../sim/stats';
 import { baudWidget, busUartApi, coreApi, coreScene, coreState, fifoWidget, frameWidget, rxScene, rxState, twoApi, twoComputersNands, twoScene, txScene, TWO_DIV, uartBusScene } from '../widgets/uart';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
@@ -21,7 +22,7 @@ const FIFO_N = nands(fifo(4, 8));
 const CORE_N = nands(UART_CORE);
 
 export const chUart: Chapter = {
-  id: 'uart', num: 43, title: 'A UART', level: 'Communication',
+  id: 'uart', num: numOf('uart'), title: 'A UART', level: 'Communication',
   blurb: 'How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.',
   goals: [
     'frame a byte for a wire with no clock, and say what the start and stop bits each buy the receiver',

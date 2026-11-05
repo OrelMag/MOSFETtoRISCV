@@ -14,6 +14,7 @@ import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';
 import { CH_ROUTES, CH_TRIE, distVecWidget, engineWidget, fastPathScene, FP_FRAMES, ipHeaderWidget, linkStateWidget, lpmWidget, routerApi, ROUTER_SCENE_DEF } from '../widgets/router';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
@@ -38,7 +39,7 @@ const FLOOD = floodAll(NET7);
 const HC_EXAMPLE = ttlChecksum(0xb861);
 
 export const chRouter: Chapter = {
-  id: 'router', num: 51, title: 'A router', level: 'Communication',
+  id: 'router', num: numOf('router'), title: 'A router', level: 'Communication',
   blurb: 'Past one Ethernet: IPv4\'s bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.',
   goals: [
     'read an IPv4 header byte by byte, and say why a router touches only the TTL, the checksum and the two MAC addresses',
@@ -114,10 +115,10 @@ export const chRouter: Chapter = {
     {
       title: 'The fast path in gates',
       body: `
-        <p>Now the whole journey of a frame, a byte a cycle on the stream of chapter 48: data, valid, last, ready. A frame comes in and goes into the <span data-show="buf">packet buffer</span> while <span data-show="check">the header checks</span> watch it pass: is this our MAC or a broadcast, type 0x0800, version 0x45, is the sum right, what is the TTL. No byte is read twice. <span data-show="count">The byte counter</span> and a table beside it say what each byte is.</p>
+        <p>Now the whole journey of a frame, a byte a cycle on the stream of chapter ${numOf('ethernet')}: data, valid, last, ready. A frame comes in and goes into the <span data-show="buf">packet buffer</span> while <span data-show="check">the header checks</span> watch it pass: is this our MAC or a broadcast, type 0x0800, version 0x45, is the sum right, what is the TTL. No byte is read twice. <span data-show="count">The byte counter</span> and a table beside it say what each byte is.</p>
         <p>After the last byte, one cycle decides. A frame going on <span data-show="walk">walks the trie</span>, a read a cycle, then reads <span data-show="adj">the next-hop table</span> for its port. It then leaves from the buffer through <span data-show="rewrite">the rewrite</span>, which passes the stored byte except in four places.</p>
         <p>Next hops are stored as bytes, eight to an entry, and entry 0 is our own MAC. So there is no 48-bit register or comparator anywhere: a MAC is compared and written a byte at a time, as it passes. A 48-bit comparator and register would be ${n0(WIDE.cmp + WIDE.reg)} NANDs; the byte comparator is ${n0(WIDE.cmp8)}. The header checks use the same idea.</p>
-        <p><strong>Cost.</strong> ${n0(LOGIC)} NANDs of logic (checks ${n0(N.check)}, walk ${n0(N.walk)}, rewrite ${n0(N.rew)}), beside ${n0(MEM.buf)} for a ${2 ** BUF_K}-byte buffer, ${n0(MEM.trie)} for the trie and ${n0(MEM.adj)} for the next hops: memory is ${MEM_PCT} % of it. Longest path ${PERIOD} NAND delays. This one engine holds one frame: store and forward, no queue, and a second frame waits at the sender with ready low. Real line cards put queues on both sides, and chapter 53 shows what those queues do.</p>
+        <p><strong>Cost.</strong> ${n0(LOGIC)} NANDs of logic (checks ${n0(N.check)}, walk ${n0(N.walk)}, rewrite ${n0(N.rew)}), beside ${n0(MEM.buf)} for a ${2 ** BUF_K}-byte buffer, ${n0(MEM.trie)} for the trie and ${n0(MEM.adj)} for the next hops: memory is ${MEM_PCT} % of it. Longest path ${PERIOD} NAND delays. This one engine holds one frame: store and forward, no queue, and a second frame waits at the sender with ready low. Real line cards put queues on both sides, and chapter ${numOf('path')} shows what those queues do.</p>
         <p>The gates are compared with the model <code>net/fastpath.ts</code> at every output of every clock, and each forwarded frame separately against what a router must do (tests/net-fastpath). <span class="try">Send the first frame and find the four changed places on the Out row.</span> <span class="try">Send a frame the fast path does not forward.</span></p>`,
       scene: () => fastPathScene(0),
       tries: [(st) => (routerApi.get(st)?.status().forwarded ?? 0) > 0, (st) => { const x = routerApi.get(st)?.status(); return !!x && (x.punted > 0 || x.dropped > 0); }],
@@ -152,7 +153,7 @@ export const chRouter: Chapter = {
       title: 'What the fast path will not do',
       body: `
         <p>The fast path does one thing. Everything else goes up to the <strong>slow path</strong>, a processor on port 3 with software on it, with the frame unchanged and a reason attached: ${[C_TTL, C_NO_ROUTE, C_LOCAL].map((c) => CAUSE_NAMES[c]).join(', ')}, ARP, options. This is the split between the <em>data plane</em>, which moves every packet in hardware, and the <em>control plane</em>, which handles the exceptions and writes the tables through <span data-show="trie">the cfg port</span>.</p>
-        <p>Two frames get no reply from anyone: a bad checksum, since the addresses in that header cannot be trusted, and another machine's MAC. All the others can get one. TTL expired is the important one. The router sends an ICMP "time exceeded" back to the source, from its own address, so a sender that sends TTL 1, 2, 3 … hears from each router in turn: that is <em>traceroute</em>, and chapter 53 runs it.</p>
+        <p>Two frames get no reply from anyone: a bad checksum, since the addresses in that header cannot be trusted, and another machine's MAC. All the others can get one. TTL expired is the important one. The router sends an ICMP "time exceeded" back to the source, from its own address, so a sender that sends TTL 1, 2, 3 … hears from each router in turn: that is <em>traceroute</em>, and chapter ${numOf('path')} runs it.</p>
         <p>The loop guard is the TTL itself: a packet in a routing loop falls by one at each router and dies within 255 hops, so a mistake in a table wastes bandwidth and does not melt the network. A frame on a switch has no such field, which is why a loop of switches is a storm. <span class="try">Send the TTL-of-1 frame and the one for no route, and compare what comes out with what went in.</span></p>`,
       scene: () => fastPathScene(3),
       tries: [(st) => { const x = routerApi.get(st)?.status(); return !!x && x.lastCause !== C_FORWARD && x.lastCause > 0; }],

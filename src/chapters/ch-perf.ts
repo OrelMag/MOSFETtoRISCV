@@ -9,6 +9,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { adderVariants } from '../widgets/adders';
 import { adderComparison, prefixDelays } from '../widgets/timing';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 const fmt = (x: number | null) => (x ?? 0).toFixed(1);
@@ -22,7 +23,7 @@ const PS = 25; // illustrative ps per NAND delay (the timing panel's conversion)
 const fo16 = { drawn: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE), false)), buffered: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE))) };
 
 export const chFastAdders: Chapter = {
-  id: 'fastadd', num: 16, title: 'Faster adders', level: 'Optimization',
+  id: 'fastadd', num: numOf('fastadd'), title: 'Faster adders', level: 'Optimization',
   blurb: 'Carry-lookahead, Kogge–Stone, carry-select and carry-skip: trading gates for speed, measured on the CPU\'s critical path.',
   goals: [
     'say why a ripple adder\'s depth grows as 2n, and what that costs the CPU',

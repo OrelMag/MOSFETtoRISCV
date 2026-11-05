@@ -16,6 +16,7 @@ import { draw16, FB16, SCREEN16 } from '../gfx/raster16';
 import type { Vtx } from '../gfx/raster';
 import { HOST_REF, HOST_SCENARIOS, HOST_STARTER, runHostPuzzle } from './hostbench';
 import { DRIVER_REF, DRIVER_SCENARIOS, DRIVER_STARTER, runNicPuzzle } from './nicbench';
+import { numOf } from '../chapters/order';
 
 export interface PuzzleTest {
   name: string;
@@ -156,7 +157,7 @@ const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one wit
 
 export const PUZZLES: Record<string, ProgramPuzzle> = {
   l_driver: {
-    brief: 'The computer of chapter 50: a system CPU, RAM and a NIC at 0x7000_0000 with two rings of eight descriptors (two words each: the buffer\'s address, then OWN | length; OWN = bit 31). Write the driver of a <b>reflector</b>: for every frame the NIC receives, send it back with its destination and source addresses swapped. The setup (rings, the NIC\'s address, enable) is given. '
+    brief: `The computer of chapter ${numOf('network')}: a system CPU, RAM and a NIC at 0x7000_0000 with two rings of eight descriptors (two words each: the buffer's address, then OWN | length; OWN = bit 31). Write the driver of a <b>reflector</b>: for every frame the NIC receives, send it back with its destination and source addresses swapped. The setup (rings, the NIC's address, enable) is given. `
       + 'The NIC fills a receive descriptor and clears its OWN bit when the whole frame is in (the length is in the low 11 bits, without the FCS); you give the buffer back by setting OWN again. To send, write the transmit buffer, then word 1 of the transmit descriptor as OWN | length, then write 1 to KICK (+28): the NIC sends, adds the FCS, clears OWN and looks at the next descriptor. After descriptor 7 comes descriptor 0 in both rings. '
       + 'The far end of the cable is a model that sends frames from 60 to 614 bytes, one at a time, in a burst and a long one, and reads what comes back: it names the first rule broken (no doorbell, no OWN, a wrong wrap, a wrong byte, a reply too early). Each load or store takes 2 clocks, any other instruction 1. Graded on words and on the clocks from the end of a request on the wire to the first bit of its reply, averaged.',
     starter: DRIVER_STARTER,

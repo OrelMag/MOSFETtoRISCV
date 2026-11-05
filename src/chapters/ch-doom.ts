@@ -6,8 +6,8 @@ import { doomPlay } from '../widgets/doom';
 import { doomGatesScene } from '../widgets/doomgates';
 import { doomMemoryMap, doomNeeds, doomProgram } from '../widgets/doominfo';
 import { RESULTS } from '../bench/summary';
-import { chAppendix6502 } from './ch-6502';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** A demo frame's median cycles (scripts/doom/bench.ts). */
 const FRAME_CYCLES = 1.9e6;
@@ -20,7 +20,7 @@ const GATE_CPS = 2400, NOMINAL_HZ = 40e6;
 
 export const chAppendixDoom: Chapter = {
   // numbered after Appendix A, whatever the journey's length (chapters before it get renumbered)
-  id: 'appendix-doom', num: chAppendix6502.num + 1, appendix: 'B', title: 'Doom on our RISC-V', level: 'Software',
+  id: 'appendix-doom', num: numOf('appendix-doom'), appendix: 'B', title: 'Doom on our RISC-V', level: 'Software',
   blurb: 'A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.',
   goals: [
     'say why RV32IM is enough for Doom, and what a computer must add around the CPU before it runs',
