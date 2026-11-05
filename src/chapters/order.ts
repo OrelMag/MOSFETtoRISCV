@@ -54,6 +54,7 @@ const BOOK = [
   'spi',
   'modem',
   'serial',
+  'glass',
   'errors',
   'ethernet',
   'switch',

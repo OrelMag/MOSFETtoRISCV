@@ -7,6 +7,7 @@ import {
 } from '../phys/fibre';
 import { amplifierWidget, coherentWidget, lossWidget, modesWidget, oceanWidget, pulseWidget, rayWidget, wdmWidget } from '../widgets/glass';
 import { MMF, SMF } from '../widgets/serial';
+import { numOf } from './order';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -25,7 +26,7 @@ const REACH = REQ.map((r) => maxSpans(r, NFDB, SPAN_DB, 32) * SPAN_KM);
 const OCEAN = Math.ceil(6600 / SPAN_KM), BEST = bestPower(OCEAN, NFDB, SPAN_DB, 32);
 
 export const chGlass: Chapter = {
-  id: 'glass', num: 46.5, title: 'Light in glass', level: 'Communication',
+  id: 'glass', num: numOf('glass'), title: 'Light in glass', level: 'Communication',
   blurb: 'How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.',
   goals: [
     'explain the shape of the loss curve from two physical causes, and why communications settled at 1550 nm',
