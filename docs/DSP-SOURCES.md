@@ -144,7 +144,12 @@ before relying on them. Add to this as chapters land.
 - BT.601's luminance weights (0.299, 0.587, 0.114) for a learner's own picture: **unread**, from memory.
 - IEEE 1180: not used. There is no inverse DCT in gates, so its test does not apply.
 - The DCT stage's cost and accuracy: measured from the gates and held by `tests/dsp-pictures.test.ts`. The cost of a 64-word transpose store is quoted as plain registers. That store is not built.
-- Pictures: generated scenes. The public-domain photograph the plan mentions is **owed**, not added.
+- Pictures: generated scenes, and one photograph, **read**: NASA's AS11-40-5903, Buzz Aldrin on the Moon, Apollo 11, 21 July 1969, photographed by Neil Armstrong.
+  - Source: Wikimedia Commons, https://commons.wikimedia.org/wiki/File:Aldrin_Apollo_11_original.jpg, licence template {{PD-USGov-NASA}}: "This file is in the public domain in the United States because it was solely created by NASA."
+  - Commons' metadata: LicenseShortName "Public domain", Copyrighted False; credited to the NASA Image and Video Library.
+  - File: Commons' 960 px rendition (https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Aldrin_Apollo_11_original.jpg/960px-Aldrin_Apollo_11_original.jpg), 280 403 bytes, sha256 7ea66a1e….
+  - Processing: Pillow 13.0.0 converted it to grey ('L', ITU-R 601-2 luma), cropped a centred square, and resampled it to 192 × 192 with Lanczos. It is stored as public/dsp/aldrin-192.pgm, 36 879 bytes.
+  - Commons warns that NASA's logos and insignia are restricted. None appears in this crop.
 
 ## Sound
 
