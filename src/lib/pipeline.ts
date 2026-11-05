@@ -861,7 +861,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
 
   if (wired) {
     // ---- drawn with wires. The pipeline registers wall the middle off (y 6 to 80), so a signal going back to an earlier stage
-    // runs over the top (ResultW, FwdM, the register file's write port) or under the hazard unit (the next-PC feedback). The
+    // runs over the top (ResultW, FwdM, the register file's write port, the next-PC targets) or under the hazard unit (PCSrcE). The
     // hazard unit sits flipped below the decode stage: its inputs face the later stages, its outputs the earlier ones. The
     // control rows of the pipeline registers (y 44 and below) run straight on across a stage; the datapath sits above them.
     const net = (name: string) => nets.find((n) => n.name === name)!;
@@ -876,15 +876,15 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       if (tags) n.tags = tags; else delete n.tags;
     };
     const TOP = { regWriteW: -4.5, ResultW: -3.5, rdW: -2.5, FwdM: -1.5 };
-    const BOT = { jalr: 127, pcSrc: 128.5, target: 130 };
+    const BOT = { pcSrc: 128.5 };
     // F ---------------------------------------------------------------------------------------------------------------
     rows('enPC', { 'pc.en': [[10, yOf('hz.enPC')], [10, yOf('pc.en')]] });
     rows('PCPlus4F', {
       'pcmux.d0': [[35, 16], [35, 11], [-1, 11], [-1, yOf('pcmux.d0')]],
       'pcmux.d3': [[35, 16], [35, 11], [-4, 11], [-4, yOf('pcmux.d3')]],
     });
-    rows('PCTargetE', { 'pcmux.d1': [[194, yOf('target.s')], [194, BOT.target], [-3, BOT.target], [-3, yOf('pcmux.d1')]] });
-    rows('JalrTargetE', { 'pcmux.d2': [[180, yOf('clr0.out')], [180, BOT.jalr], [-2, BOT.jalr], [-2, yOf('pcmux.d2')]] });
+    rows('PCTargetE', { 'pcmux.d1': [[194, yOf('target.s')], [194, -7.5], [-3, -7.5], [-3, yOf('pcmux.d1')]] });
+    rows('JalrTargetE', { 'pcmux.d2': [[180, yOf('clr0.out')], [180, -6.5], [-2, -6.5], [-2, yOf('pcmux.d2')]] });
     rows('PCSrcE', {
       'pcmux.s': [[198, yOf('npc.pcSrc')], [198, BOT.pcSrc], [xOf('pcmux.s'), BOT.pcSrc]],
       'hz.pcSrcE': [[198, yOf('npc.pcSrc')], [198, yOf('hz.pcSrcE')]],
@@ -895,13 +895,14 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     // D ---------------------------------------------------------------------------------------------------------------
     rows('rs1D', {}, ['hz.rs1D']);
     rows('rs2D', {}, ['hz.rs2D']);
-    rows('opD', {}); rows('rdD', {}); rows('funct3D', {}); rows('funct7D', {});
+    rows('opD', {}); rows('rdD', {}); rows('funct3D', { 'DE.funct3D': [[50.5, yOf('si.o2')], [50.5, 69.5], [111, 69.5], [111, yOf('DE.funct3D')]] }); rows('funct7D', {});
     rows('bypassA', { 'byA.s': [[82, yOf('hz.bypassA')], [82, 24.5], [xOf('byA.s'), 24.5]] });
     rows('bypassB', { 'byB.s': [[83, yOf('hz.bypassB')], [83, 28.5], [xOf('byB.s'), 28.5]] });
     rows('ImmSrcD', { 'imm.src': [[106, yOf('ctl.immSrc')], [106, 32], [xOf('imm.src'), 32]] });
     // E: the hazard unit's inputs from the registers beside it
-    // (they would climb down through every control row: a pointer at the hazard unit instead)
-    for (const n of ['rs1E', 'rs2E', 'rdE', 'resultSrcE', 'validE'] as const) rows(n, {}, [`hz.${n}`]);
+    for (const [n, x] of [['rs1E', 117], ['rs2E', 116]] as const) rows(n, { [`hz.${n}`]: [[x, yOf(`DE.${n}`)], [x, yOf(`hz.${n}`)]] });
+    // (these three would climb down through every control row as well, and run on to EM: a pointer at the hazard unit instead)
+    for (const n of ['rdE', 'resultSrcE', 'validE'] as const) rows(n, {}, [`hz.${n}`]);
     rows('rdM', { 'hz.rdM': [[209, yOf('EM.rdM')], [209, yOf('hz.rdM')]] });
     rows('regWriteM', { 'hz.regWriteM': [[211, yOf('EM.regWriteM')], [211, yOf('hz.regWriteM')]] });
     rows('rdW', { 'rf.wa': [[246, yOf('MW.rdW')], [246, TOP.rdW], [59, TOP.rdW], [59, yOf('rf.wa')]], 'hz.rdW': [[246, yOf('MW.rdW')], [246, yOf('hz.rdW')]] });
@@ -929,7 +930,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     // control into the datapath
     rows('ALUSrcAE', { 'srcA.s': [[143, yOf('DE.aluSrcAE')], [143, 28.5], [xOf('srcA.s'), 28.5]] });
     rows('ALUSrcBE', { 'srcB.s': [[xOf('srcB.s'), yOf('DE.aluSrcBE')]] });
-    rows('ALUControlE', { 'alu.ctl': [[158, yOf('DE.aluCtlE')], [158, 44], [xOf('alu.ctl'), 44]] });
+    rows('ALUControlE', { 'alu.ctl': [[158, yOf('DE.aluCtlE')], [158, 43], [xOf('alu.ctl'), 43]] });
     rows('BranchE', { 'npc.branch': [[162, yOf('DE.branchE')], [162, yOf('npc.branch')]] });
     rows('JumpE', { 'npc.jump': [[161, yOf('DE.jumpE')], [161, yOf('npc.jump')]] });
     rows('JalrE', { 'npc.jalr': [[160, yOf('DE.jalrE')], [160, yOf('npc.jalr')]] });
@@ -962,7 +963,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       'EM.clr': [[xEM - 2, yOf('clr0E.y')], [xEM - 2, yOf('EM.clr')]],
       'MW.clr': [[xMW - 2, yOf('clr0E.y')], [xMW - 2, yOf('MW.clr')]],
     });
-    rows('clk', Object.fromEntries(['FD.clk', 'DE.clk', 'EM.clk', 'MW.clk'].map((e) => [e, [[xOf(e), 86]]])), ['pc.clk', 'rf.clk', 'dm.clk']);
+    rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
     for (const n of nets) if (['enPC', 'enFD', 'flushFD', 'flushDE', 'bypassA', 'bypassB', 'forwardA', 'forwardB', 'PCSrcE', 'ImmSrcD', 'opD', 'funct3D', 'funct7D', 'ALUSrcAE', 'ALUSrcBE', 'BranchE', 'JumpE', 'JalrE', 'ALUControlE', 'funct3E', 'Zero', 'Neg', 'Ovf', 'Carry', 'rs1E', 'rs2E', 'rdE', 'validE', 'resultSrcE', 'regWriteE', 'memWriteE', 'rdM', 'regWriteM', 'rdW', 'regWriteW', 'en1', 'clr0', 'MemWriteM', 'resultSrcM', 'resultSrcW', 'rs1D', 'rs2D'].includes(n.name!)) n.quiet = true;
     net('PCF').tags = ['pcF'];
   }
