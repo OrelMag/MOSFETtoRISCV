@@ -3,4 +3,164 @@
 import type { Quiz } from '../chapters/types';
 
 export const CHECK10C: Record<string, Quiz[]> = {
+  pcie: [
+    {
+      question: 'Why does widening a parallel bus stop paying off?',
+      options: ['Every line must be valid at one clock edge, so more lines spread over more skew and the clock falls', 'Software cannot issue transfers wider than the processor\'s register, so extra lines idle', 'Wide buses draw so much power that the clock must be throttled to stay cool', 'Address and data lines must be the same width, so a wide bus needs a wide address'],
+      answer: 0,
+      explain: 'The receiver can only sample where every line has settled, and a wider bus has more traces to match over a bigger board. With 1 ns of skew and half a period kept for set-up, the clock stops at 500 MHz; a lane carries its clock in its data and has no such limit.',
+      why: ['', 'Software copies whatever the hardware moves; the limit is in the wires, not the registers.', 'Power is a cost, but the limit the chapter computes is timing: skew against the clock period.', 'Address width and data width are separate things; neither forces the other.'],
+    },
+    {
+      question: 'A switch corrupts a TLP in its own memory and forwards it. What does the next receiver see?',
+      options: ['A good LCRC, made fresh for that link; only an end-to-end ECRC would show the damage', 'A bad LCRC, so it sends a Nak and the switch replays the original TLP', 'A bad sequence number, so it asks the switch to retrain the link', 'Nothing at all: the damaged packet is never forwarded to the next link'],
+      answer: 0,
+      explain: 'Sequence number and LCRC belong to one link: a switch strips them on the way in and makes new ones on the way out, so integrity is checked per hop. The optional ECRC travels with the TLP end to end and is what would catch it.',
+      why: ['', 'The switch computed the LCRC over the already damaged TLP, so it matches.', 'The sequence number is assigned by the switch\'s own data link layer and is correct.', 'The switch has no way to know its memory flipped a bit, so it forwards the packet.'],
+    },
+  ],
+  credits: [
+    {
+      question: 'With 8-bit header counters, CREDIT_LIMIT is 2 and CREDITS_CONSUMED is 254. How many header credits remain?',
+      options: ['4', '0', '252', '256'],
+      answer: 0,
+      explain: 'Both counters wrap, so only the difference modulo 256 means anything: (2 − 254) mod 256 = 4. The plain comparison 2 ≥ 254 would wrongly say none are left.',
+      why: ['', 'That is what comparing 2 with 254 as plain numbers would suggest, but the limit has wrapped past it.', 'That would be 254 − 2, the distance in the wrong direction.', 'The full range of the counter; a receiver never grants more than half of it at once.'],
+    },
+    {
+      question: 'Why does an endpoint advertise infinite completion credits?',
+      options: ['It only asks for answers it has room for, and a completion that had to wait could deadlock reads behind it', 'Completions are small enough that a buffer for them is never needed, so none is counted', 'A full receiver drops completions, so counting credits for them would be pointless', 'Completion data is not covered by the link\'s CRC, so it needs no flow control'],
+      answer: 0,
+      explain: 'Every completion answers a read the endpoint issued when it had room for the reply, so the space is already reserved. If completions waited for credits, a read waiting behind a completion that waits for a read could stall the fabric forever.',
+      why: ['', 'Completions carry data and need real buffers; the room is reserved when the read is issued.', 'Nothing is dropped on PCIe: that is the point of credits.', 'Completions are TLPs like the rest, with the same LCRC.'],
+    },
+  ],
+  replay: [
+    {
+      question: 'An Ack is lost on the wire. Who notices, and how?',
+      options: ['The sender, when its replay timer expires with TLPs still unacknowledged', 'The receiver, which sees a gap and sends a Nak for the missing Ack', 'The transaction layer, which times out the request and retries it itself', 'The physical layer, which sees the missing symbols and retrains the lane'],
+      answer: 0,
+      explain: 'A Nak needs a receiver that noticed something wrong, and here it noticed nothing. The sender\'s timer runs while anything is unacknowledged and restarts on progress; when it runs out, everything unacknowledged is replayed, and the duplicate is dropped and acknowledged again.',
+      why: ['', 'The receiver delivered the TLP and sent its Ack; it has no way to know the Ack was hit.', 'Retries are the data link layer\'s job; nothing above it ever learns of one.', 'Only the Ack\'s CRC failed; the lane\'s symbols were fine.'],
+    },
+    {
+      question: 'What does REPLAY_NUM wrapping mean?',
+      options: ['Four replays achieved nothing, so the link is sent through Recovery', 'The 12-bit sequence number has wrapped, so the buffer is full and must be flushed', 'Four TLPs in a row were Nak\'d, so they are now discarded for good', 'The replay timer expired once, so the TLP is given up and reported to software'],
+      answer: 0,
+      explain: 'Every replay, by Nak or by timer, increments the 2-bit counter and any forward progress clears it. A wrap means four tries without progress, so the link itself is suspect; the replay buffer still holds the TLP through Recovery.',
+      why: ['', 'Sequence numbers wrap as a matter of course, modulo 4096, and have their own rules.', 'Nothing is discarded: the buffer keeps the TLP until it is acknowledged.', 'One expiry is just a replay; REPLAY_NUM counts them and a single one does not wrap it.'],
+    },
+  ],
+  linktraining: [
+    {
+      question: 'Why must a port see eight TS1s or TS2s in a row, not just one?',
+      options: ['A single one could be a noise burst that happens to look like an ordered set', 'The receiver needs eight symbols in a row to recover the lane\'s clock', 'Each ordered set carries only one bit of the lane number, so eight are needed', 'A link has at most eight lanes, and each lane sends one set'],
+      answer: 0,
+      explain: 'Requiring a run of them is the filter: a noise burst is unlikely to repeat as eight valid ordered sets. Clock and symbol boundaries come from the line code and the comma, not from this count.',
+      why: ['', 'Clock recovery works from the data\'s edges, as in a SerDes, long before this count.', 'Ordered sets are 16 symbols with fixed fields; the count is a confidence test, not a way to send a number.', 'Links are ×1, ×4, ×16 and so on; the eight is a guard, not a lane count.'],
+    },
+    {
+      question: 'Both ports have reached L0. What has not happened yet?',
+      options: ['The data link layer has not exchanged InitFC, so no TLP may be sent', 'The lanes have not yet found their symbol boundaries or settled on a width', 'The two ends have not yet detected that anything is plugged in', 'Neither port has yet sent a TS1 or a TS2 to the other'],
+      answer: 0,
+      explain: 'Training belongs to the physical layer. Only once the link is up does the data link layer begin, with InitFC1 and InitFC2 DLLPs telling each side the other\'s buffer sizes; the first TLP may go after that.',
+      why: ['', 'Boundaries come from the comma in Polling, which is long finished.', 'Detect is the first state; L0 comes after it.', 'The TS1s and TS2s are exactly what carried the ports to L0.'],
+    },
+  ],
+  usbenum: [
+    {
+      question: 'Why does the host read only 8 bytes of the device descriptor first?',
+      options: ['It does not know the packet size yet, and the first 8 bytes carry it', 'A device at address 0 can send no more than 8 bytes at a time', 'The descriptor is only 8 bytes long and the rest is padding', 'Eight bytes is the most the packet\'s CRC can protect'],
+      answer: 0,
+      explain: 'Packet size is a property of the device, so the host asks for the one thing it needs, the maximum packet size, at address 0, resets, and asks for the full 18 bytes after SET_ADDRESS in packets of that size.',
+      why: ['', 'It is the device\'s own maximum packet size that limits it, and the host does not yet know it.', 'The device descriptor is 18 bytes.', 'CRC16 on data packets is not what limits this.'],
+    },
+    {
+      question: 'The host\'s last ACK of SET_ADDRESS is lost. What follows?',
+      options: ['They disagree on the address, and the next transaction goes unanswered until a reset', 'The device keeps answering to both addresses until the host picks one', 'The host repeats the ACK until the device answers to the new address', 'The device moves to the new address anyway once a timeout passes'],
+      answer: 0,
+      explain: 'The device moves only when the host acknowledges the status packet. If that ACK is lost the host believes the address changed and the device has not. A real host recovers with a reset.',
+      why: ['', 'A device answers to one address at a time.', 'An ACK is a handshake in answer to a packet; the host cannot send one on its own.', 'The device\'s state changes on that acknowledgement, not on a timer.'],
+    },
+  ],
+  aes: [
+    {
+      question: 'What would an attacker gain if the key were not XORed in before round 1?',
+      options: ['The first round\'s steps are keyless, so they could be undone without the key', 'The first round would run with the last round key, so the order could be reversed', 'The state would be one column short, so the first block would be wasted', 'MixColumns would skip its first column, so a leak would appear there'],
+      answer: 0,
+      explain: 'SubBytes, ShiftRows and MixColumns use no key. Without an initial AddRoundKey, an attacker who knew the output of round 1 could simply run those steps backwards and the round would add no strength.',
+      why: ['', 'Round keys come from the schedule in order; nothing swaps them.', 'The state is always 16 bytes; the key XOR does not change its size.', 'MixColumns treats all four columns alike.'],
+    },
+    {
+      question: 'Why does the S-box in the chapter\'s gates need no ROM?',
+      options: ['It is the inverse in GF(2⁸) plus an affine map, built as a tower of smaller fields', 'Its 256 entries are produced by a counter feeding a tree of XOR gates', 'ShiftRows already contains the substitution, so SubBytes is only wires', 'It is replaced by a MixColumns block of 464 NANDs repeated sixteen times'],
+      answer: 0,
+      explain: 'The S-box is not arbitrary: splitting GF(256) into GF(16) and GF(4) turns the inverse into a few multiplications and an inverse in a smaller field, down to NANDs. The whole S-box is 584 NANDs and reads no memory.',
+      why: ['', 'There is no counter; the output is computed from the input byte.', 'ShiftRows is wires only and moves bytes; it substitutes nothing.', 'MixColumns is linear; SubBytes is the non-linear step and is where most of the cost goes.'],
+    },
+  ],
+  sha256: [
+    {
+      question: 'Why can anyone recompute SHA-256\'s starting values and round constants?',
+      options: ['They are fractional bits of square and cube roots of primes, so nothing is hidden', 'They are derived from the digest of the message being hashed, so each run has its own', 'They are random bits that the standard publishes and nobody can check', 'They are the shared key that sender and receiver agreed on beforehand'],
+      answer: 0,
+      explain: 'Constants taken from roots of primes leave no room for a designer to hide a weakness in them, which is what nothing-up-my-sleeve means. A hash has no key, and the constants are the same for every message.',
+      why: ['', 'They are fixed in the standard; they do not depend on the input.', 'Because they are derived, anyone can check them, and the chapter\'s code does.', 'A hash has no key at all; anyone can compute it.'],
+    },
+    {
+      question: 'One bit of the input is flipped. About how many of the 256 digest bits change?',
+      options: ['About 128, as many as differ between two unrelated digests', 'Exactly one, the digest bit that corresponds to the flipped input bit', 'About 8, one for each byte of the padded block that was touched', 'None, because the padding absorbs a change of one bit'],
+      answer: 0,
+      explain: 'Addition carries and the mixing rounds spread a change over the whole state, so about half the bits move. "abc" against "abb" differs in 124 of 256, and nearness of the inputs tells nothing about the digests.',
+      why: ['', 'That would make a digest predictable from the input and a search for collisions easy.', 'There is no such per-byte link; every input bit reaches every part of the state.', 'Padding is appended after the message and does not hide any of its bits.'],
+    },
+  ],
+  blockmode: [
+    {
+      question: 'Two 16-byte blocks of a message are equal. Under which mode are their ciphertext blocks equal too?',
+      options: ['ECB, which enciphers each block alone under the same key', 'CTR, because the same key is used for every block', 'GCM, because its tag covers all blocks alike', 'None of them: AES never outputs the same block twice'],
+      answer: 0,
+      explain: 'ECB has nothing between blocks, so equal input blocks give equal output blocks and a flat area of a picture shows through. CTR XORs in a different counter block each time.',
+      why: ['', 'CTR enciphers the counter, which changes every block, then XORs it in.', 'GCM is built on a counter mode, so its blocks differ too; the tag is separate.', 'AES is a permutation: the same input and key always give the same output.'],
+    },
+    {
+      question: 'Two messages are enciphered in CTR under one key with the same counter values. What can an eavesdropper compute without the key?',
+      options: ['The XOR of the two plaintexts, from the XOR of the ciphertexts', 'The key itself, from comparing the two ciphertexts block by block', 'Nothing: each message has its own keystream under one key', 'Only the first block of each message, since later counters differ'],
+      answer: 0,
+      explain: 'Both ciphertexts are the plaintext XOR the same keystream, so XORing them cancels it and leaves the XOR of the plaintexts. That is the Enigma operators\' reused settings again.',
+      why: ['', 'The keystream cancels, but AES still hides the key.', 'The keystream depends only on key and counter; same counters, same keystream.', 'If every counter value repeats, every block is exposed, not just the first.'],
+    },
+  ],
+  keyexchange: [
+    {
+      question: 'In a Diffie–Hellman exchange, what travels over the network?',
+      options: ['Only the two public values; the shared secret is never sent', 'The shared secret, enciphered under the two public values', 'Both private numbers, hashed so that the watcher cannot read them', 'The shared secret, split across the two messages'],
+      answer: 0,
+      explain: 'Each side computes the secret from its own private number and the other\'s public value. A watcher has both public values and would have to undo an exponentiation, the discrete logarithm.',
+      why: ['', 'There is no cipher to encipher it with yet; the secret is what the exchange creates.', 'Private numbers never leave their owner.', 'Nothing is sent in pieces; both sides compute the same number.'],
+    },
+    {
+      question: 'What does using an elliptic curve change about Diffie–Hellman?',
+      options: ['Points are added in place of numbers multiplied, and far smaller numbers give the same security', 'It removes the private number, so each side needs only a public one', 'It makes the shared secret authenticated, so a man in the middle is excluded', 'It makes the exchange safe against a large quantum computer'],
+      answer: 0,
+      explain: 'On a curve, a times a point is easy and recovering a from the result is the hard direction. X25519 works with 255-bit numbers. The exchange still says nothing about who is at the other end.',
+      why: ['', 'The private number is still what each side keeps secret.', 'Authentication is a separate job done by the signature over the transcript.', 'A large quantum computer would change the hardness, since Shor\'s algorithm solves discrete logarithms.'],
+    },
+  ],
+  tls: [
+    {
+      question: 'Where do almost all of the chapter\'s client\'s 81,277,693 handshake cycles go?',
+      options: ['Two X25519 runs and one RSA signature check; AES and HMAC barely show', 'Encrypting the application data under AES-128-GCM, a block at a time', 'HKDF stretching the shared secret into the traffic keys', 'Hashing the transcript with SHA-256 after every message'],
+      answer: 0,
+      explain: 'The two X25519 runs are 69,139,884 cycles, 85 % of the total, and the 1024-bit RSA verification adds 10,310,029 more. The symmetric work that protects the data is a small fraction.',
+      why: ['', 'Symmetric work is thousands of times cheaper than public-key work here.', 'The two HKDF calls take 779,480 cycles in all.', 'Hashing is cheap next to a point multiplication; SHA-256 takes 8,364 cycles per 64-byte block.'],
+    },
+    {
+      question: 'A year later the server\'s long-term signing key is stolen. What does that open?',
+      options: ['Nothing recorded earlier, since the session keys came only from the exchange and were discarded', 'Every recorded session, because the key signed the handshake of each', 'Only the sessions that used the same certificate as the stolen key', 'The ClientHello of earlier sessions, which was sent encrypted under it'],
+      answer: 0,
+      explain: 'The signing key proves who the server is; it never derives a session key. With fresh keys per session this is forward secrecy, unlike a captured key list that opened everything sent under it.',
+      why: ['', 'A signature authenticates; it is not a key that decrypts the traffic.', 'The certificate only names the key; the traffic was not encrypted under it.', 'The ClientHello goes in the clear, and nothing in it depends on the signing key.'],
+    },
+  ],
 };
