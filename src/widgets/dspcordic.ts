@@ -17,19 +17,17 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const ONE = 2 ** 14;
 const VIEW: CordicSpec = { w: 18, z: 16, n: 14 };
 
-/** Plots run from 0 on x, so a plane centred on the origin is drawn shifted by this much, and its ticks labelled back. */
-const RX = 2;
 /** A circle has to look like one, so this plot keeps its own width rather than the panel's. */
-const squarePlot = (aria: string) => { const p = plotOf({ W: 340, H: 340, x: [0, 2 * RX], y: [-RX, RX], yTicks: [-2, -1, 0, 1, 2], xLabel: 'x', yLabel: 'y', aria, xFmt: (v) => num(v - RX, 0) }); p.el.style.maxWidth = '380px'; return p; };
+const squarePlot = (aria: string) => { const p = plotOf({ W: 340, H: 340, x: [-2, 2], y: [-2, 2], yTicks: [-2, -1, 0, 1, 2], xLabel: 'x', yLabel: 'y', aria }); p.el.style.maxWidth = '380px'; return p; };
 
 /** The unit circle, the axes, and a path of vectors from the origin, the last one bold. */
 function drawPath(p: ReturnType<typeof plotOf>, pts: { x: number; y: number }[]) {
   p.clear();
   const c = range(129).map((i) => (2 * Math.PI * i) / 128);
-  line(p, c.map((t) => Math.cos(t) + RX), c.map(Math.sin), 'ln-s lump');
+  line(p, c.map(Math.cos), c.map(Math.sin), 'ln-s lump');
   pts.forEach((q, i) => {
     const last = i === pts.length - 1;
-    p.layer.append(s('line', { x1: p.X(RX), y1: p.Y(0), x2: p.X(q.x + RX), y2: p.Y(q.y), class: `sg-stem${last ? ' out' : ''}`, 'stroke-opacity': last ? 1 : 0.35 }));
+    p.layer.append(s('line', { x1: p.X(0), y1: p.Y(0), x2: p.X(q.x), y2: p.Y(q.y), class: `sg-stem${last ? ' out' : ''}`, 'stroke-opacity': last ? 1 : 0.35 }));
   });
 }
 

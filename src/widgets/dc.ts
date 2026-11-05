@@ -144,7 +144,7 @@ export function dctcpWidget(): Widget {
 
 export function arqWidget(): Widget {
   let gbps = 100, rttUs = 10;
-  const plot = plotOf({ W: 640, H: 240, x: [2, 7], y: [0, 1.05], yTicks: [0, 0.25, 0.5, 0.75, 1], xLabel: 'one loss in 10^x packets', yLabel: 'goodput, of the link', aria: 'Goodput against loss rate for go-back-N and selective repeat', xFmt: (v) => String(v) });
+  const plot = plotOf({ W: 640, H: 240, x: [1, 7], y: [0, 1.05], yTicks: [0, 0.25, 0.5, 0.75, 1], xLabel: 'one loss in 10^x packets', yLabel: 'goodput, of the link', aria: 'Goodput against loss rate for go-back-N and selective repeat', xFmt: (v) => String(v) });
   plot.setX(7);
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
   const paint = () => {

@@ -204,6 +204,8 @@ export class Editor {
   private sims = new Map<string, EditorSim>();
   private simChip = '';
 
+  /** Where the right-click menu opens a codex entry, when a page has its own place for it (the level screen's side pane). */
+  openCodex: ((id: string) => void) | null = null;
   /** A campaign level screen: see EditorOptions.level. */
   readonly level: EditorOptions['level'];
   /** The level's own chip: level.chipId names the walkthrough's chip while it is shown (levelwalk.ts). */

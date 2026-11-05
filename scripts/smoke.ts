@@ -338,6 +338,25 @@ const MENU_DRIVE = `(async () => {
     if (menu().length) bad.push('a jump left the menu open');
     if (jump && !document.querySelector('svg.schematic .selected, svg.schematic .net-sel')) bad.push('a jump selected nothing');
   }
+  // Explain on a part of a stage: the group loads, with a truth table and something to read
+  const part = stage && document.querySelector('svg.schematic [data-inst]');
+  if (part) {
+    const b = part.getBoundingClientRect();
+    part.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: b.left + 4, clientY: b.top + 4 })); await wait(80);
+    const group = [...(menu()[0]?.querySelectorAll('button') ?? [])].find((x) => x.textContent.startsWith('Explain'));
+    if (!group) bad.push('no Explain on a part');
+    else {
+      group.focus();
+      key(group, 'ArrowRight');
+      for (let i = 0; i < 40 && !document.querySelector('.ctx-menu.fly button'); i++) await wait(100);
+      const rows = [...document.querySelectorAll('.ctx-menu.fly button')].map((x) => x.textContent);
+      if (!rows.some((t) => t.startsWith('Truth table'))) bad.push('no truth table row: ' + rows.join(' | '));
+      if (!rows.some((t) => t.startsWith('Codex:'))) bad.push('no codex row: ' + rows.join(' | '));
+      if (document.querySelector('.ctx-menu.fly .ctx-note')) bad.push('Explain did not load: ' + document.querySelector('.ctx-menu.fly .ctx-note').textContent);
+    }
+    key(document.activeElement, 'Escape'); await wait(60);
+    key(document.activeElement, 'Escape'); await wait(60);
+  }
   // the sandbox: a pin's menu reads its net (compile.ts keys its maps by id)
   const pinEl = !stage && document.querySelector('svg.ed-svg [data-pin-id]');
   if (pinEl) {
