@@ -1,4 +1,4 @@
-// MOSFET → RISC-V as a desktop program: the built site (app/) served from inside the executable
+// From Switch to RISC-V and Beyond as a desktop program: the built site (app/) served from inside the executable
 // on a private app:// origin, in a window of its own. Nothing is fetched from the network.
 const { app, BrowserWindow, Menu, nativeTheme, protocol, shell } = require('electron');
 const { existsSync, mkdirSync, accessSync, constants } = require('node:fs');
@@ -8,6 +8,9 @@ const path = require('node:path');
 const SCHEME = 'app';
 const ORIGIN = `${SCHEME}://mosfet`;
 const ROOT = path.join(__dirname, 'app');
+
+// The per-user folder is named after the program unless told otherwise: it keeps the name it had, or a rename would lose what is in it.
+app.setPath('userData', path.join(app.getPath('appData'), 'MOSFET to RISC-V'));
 
 // A portable program keeps its data (progress, sandbox chips, settings) next to the .exe, so a copy on
 // a USB stick carries them along. Falls back to the usual per-user folder when that place is read-only.
@@ -55,7 +58,7 @@ let win = null;
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 720, minHeight: 480, show: false,
-    title: 'MOSFET → RISC-V',
+    title: 'From Switch to RISC-V and Beyond',
     icon: path.join(__dirname, 'icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0c12' : '#f5f6fa',
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },

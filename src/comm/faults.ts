@@ -344,7 +344,7 @@ function linkWall(seed: number, healthy: boolean): FaultCase {
     evidence: [
       { kind: 'counters', title: 'The budget, 20 MHz at 5.5 GHz', rows: [['Transmitter and both antennas', `${AIR.tx + 2 * AIR.ga} dBm`], [`Path, ${m} m indoors`, db(logDistanceDb(m, AIR.ghz, AIR.n))], ['Walls', `${healthy ? 1 : 2}, ${db((healthy ? 1 : 2) * WALL_DB(AIR.ghz))}`], ['Arriving', dbm(b.rx)], ['Noise floor', dbm(b.noise)], ['SNR', db(b.snr)], ['SNR the top rate needs', db(top.snrDb)]] },
       { kind: 'counters', title: `The access point, over ${totalUs / 1e6} s, with this one laptop sending`, rows: [['Frames tried', String(r.frames)], ['Frames lost', String(r.lost)], ['Carried', `${r.mbps.toFixed(1)} Mb/s`], ['Carried last week', `${was.mbps.toFixed(1)} Mb/s`]] },
-      { kind: 'series', title: 'The rate the laptop picks', xLabel: 'µs', yLabel: 'Mb/s', lines: [{ name: 'rate', xs: pts.map((p) => p.us), ys: pts.map((p) => p.mbps) }] },
+      { kind: 'series', title: 'The rate the laptop picks', xLabel: 'ms', yLabel: 'Mb/s', lines: [{ name: 'rate', xs: pts.map((p) => p.us / 1000), ys: pts.map((p) => p.mbps) }] },
     ],
     metrics: { snr: b.snr, mbps: r.mbps, lost: r.lost, frames: r.frames, was: was.mbps, shortfall: top.snrDb - b.snr },
   };

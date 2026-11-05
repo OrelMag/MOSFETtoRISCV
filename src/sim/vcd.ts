@@ -31,7 +31,7 @@ function valueText(v: number | bigint, width: number, id: string): string {
 export function toVcd(signals: TraceSignal[], opts: { date?: string; scope?: string } = {}): string {
   const out: string[] = [];
   if (opts.date) out.push(`$date ${opts.date} $end`);
-  out.push('$version MOSFET → RISC-V logic analyzer $end');
+  out.push('$version From Switch to RISC-V and Beyond logic analyzer $end');
   out.push('$comment 1 time unit = 1 NAND gate delay $end');
   out.push('$timescale 1ns $end');
   out.push(`$scope module ${(opts.scope ?? 'top').replace(/[^\w$]/g, '_')} $end`);
