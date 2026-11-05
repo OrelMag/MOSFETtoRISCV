@@ -895,7 +895,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     // D ---------------------------------------------------------------------------------------------------------------
     rows('rs1D', {}, ['hz.rs1D']);
     rows('rs2D', {}, ['hz.rs2D']);
-    rows('opD', {}); rows('rdD', {}); rows('funct3D', { 'DE.funct3D': [[50.5, yOf('si.o2')], [50.5, 69.5], [111, 69.5], [111, yOf('DE.funct3D')]] }); rows('funct7D', {});
+    rows('opD', { 'ctl.op': [[52, yOf('si.o0')], [52, yOf('ctl.op')]] }); rows('funct7D', { 'ctl.funct7': [[51, yOf('si.o5')], [51, yOf('ctl.funct7')]] }); rows('rdD', {}); rows('funct3D', { 'DE.funct3D': [[50.5, yOf('si.o2')], [50.5, 69.5], [111, 69.5], [111, yOf('DE.funct3D')]] });
     rows('bypassA', { 'byA.s': [[82, yOf('hz.bypassA')], [82, 24.5], [xOf('byA.s'), 24.5]] });
     rows('bypassB', { 'byB.s': [[83, yOf('hz.bypassB')], [83, 28.5], [xOf('byB.s'), 28.5]] });
     rows('ImmSrcD', { 'imm.src': [[106, yOf('ctl.immSrc')], [106, 32], [xOf('imm.src'), 32]] });
@@ -942,7 +942,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('ALUResultM', {
       'fwdM.d0': [[xEM + 6, yOf('EM.aluResultM')], [xEM + 6, yOf('fwdM.d0')]],
       'fwdM.d1': [[xEM + 6, yOf('EM.aluResultM')], [xEM + 6, yOf('fwdM.d1')]],
-      'dm.addr': [[xEM + 11, yOf('EM.aluResultM')], [xEM + 11, yOf('dm.addr')]],
+      'dm.addr': [[xEM + 14, yOf('EM.aluResultM')], [xEM + 14, yOf('dm.addr')]],
     });
     rows('WriteDataM', { 'dm.wd': [[xEM + 12, yOf('EM.writeDataM')], [xEM + 12, yOf('dm.wd')]] });
     rows('MemWriteM', { 'dm.we': [[xEM + 13, yOf('EM.memWriteM')], [xEM + 13, yOf('dm.we')]] });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pipelinedCpu } from '../src/lib';
 import { OWN_ANSWER } from '../src/widgets/owninstr';
 import { netlistOf } from '../src/sim/types';
+import { symbolGeom } from '../src/sim/geometry';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import { wireCrossings } from '../src/view/wirefirst';
 
@@ -19,6 +20,14 @@ describe('the pipelined CPU drawn with wires', () => {
       expect(wireOverlaps(r)).toEqual([]);
       expect(symbolOverlaps(nl)).toEqual([]);
       expect(labelOverlaps(d, nl)).toEqual([]);
+      // no wire runs through a part (a splitter bar excepted)
+      const through: string[] = [];
+      r.forEach((n, k) => { for (const p of n.paths) for (let i = 0; i + 1 < p.length; i++) {
+        const [x0, y0] = p[i], [x1, y1] = p[i + 1];
+        for (const inst of nl.instances) { if (inst.def.prim === 'alias') continue; const g = symbolGeom(inst.def); const [bx, by] = inst.at!; const e = 1e-6;
+          const hit = x0 === x1 ? x0 > bx + e && x0 < bx + g.w - e && Math.max(y0, y1) > by + e && Math.min(y0, y1) < by + g.h - e : y0 > by + e && y0 < by + g.h - e && Math.max(x0, x1) > bx + e && Math.min(x0, x1) < bx + g.w - e;
+          if (hit) through.push(`${nl.nets[k].name} through ${inst.name}`); } } });
+      expect(through).toEqual([]);
       // plain unravelling of the author's original placement was 920 crossings
       expect(wireCrossings(r)).toBeLessThan(600);
     });
