@@ -84,3 +84,5 @@ export * from './rsdec';
 export * from './fft';
 export * from './ethswitch';
 export * from './enigmagates';
+export * from './aes';
+export * from './sha256';

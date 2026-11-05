@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONV_K3, CONV_K7 } from '../src/comm/conv';
-import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsDecoder, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
+import { aesCore, shaCore, brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsDecoder, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { registry } from '../src/lib/define';
 import { assemble } from '../src/riscv/asm';
@@ -44,6 +44,8 @@ for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }
 for (const s of [CONV_K3, CONV_K7]) { convEncoder(s); viterbi(s); }
 viterbi(CONV_K3, { depth: 15 }); viterbi(CONV_K7, { q: 3 }); rsEncoder(10); rsEncoder(32); rsSyndrome(10); gfMulGates();
 rsDecoder(10, 26); rsDecoder(4, 15);
+// Chapter "Keeping it secret": the AES core (S-box in a tower field) and the SHA-256 compression core.
+for (const d of [aesCore, shaCore]) d();
 // Every workbench family as it first opens.
 for (const f of families) f.make(initialParams(f));
 // The campaign's RV16 cores (built on demand, by the levels' reference answers).

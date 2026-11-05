@@ -639,7 +639,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "CUBIC meets BBR", challenge: "quiz" },
     { title: "Choosing for a link", challenge: "quiz" },
   ] },
-  { id: "secret", num: 56, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
+  { id: "secret", num: 56, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["tcp"], recap: {"checks":6}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },
@@ -647,8 +647,22 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The Bombe: going round the plugboard" },
     { title: "What the breaking taught" },
     { title: "From the Bombe to the stored program" },
+    { title: "AES: four steps and a key" },
+    { title: "The S-box, in gates" },
+    { title: "A round, and the core" },
+    { title: "The core runs the standard" },
+    { title: "One bit changes everything" },
+    { title: "Modes: blocks are not enough" },
+    { title: "A fingerprint: SHA-256" },
+    { title: "SHA-256 in gates" },
+    { title: "The SHA-256 core runs \"abc\"" },
+    { title: "Sharing a secret in public" },
+    { title: "X25519 on our CPU" },
+    { title: "Who is at the other end" },
+    { title: "A TLS 1.3 handshake" },
+    { title: "What it all costs" },
   ] },
-  { id: "path", num: 57, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
+  { id: "path", num: 57, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
     { title: "A name, then an address", challenge: "quiz" },
@@ -656,6 +670,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same bytes, on gates", challenge: "reach" },
     { title: "One packet, all the way", challenge: "quiz" },
     { title: "A page" },
+    { title: "Many objects: HTTP/2 and QUIC" },
   ] },
   { id: "datacentre", num: 58, title: "Inside the data centre", blurb: "How a hundred thousand machines talk: the exchange's Clos network folded in Ethernet, ECMP, incast, DCTCP, RDMA, lossless Ethernet and its deadlock, and the tail at scale, on labelled models with closed forms.", level: "Communication", builds: ["exchange","switch","tcp","queues"], recap: {"checks":3}, steps: [
     { title: "The exchange, folded", challenge: "quiz" },
