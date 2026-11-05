@@ -532,7 +532,7 @@ def post_hs():
 # up to max bytes of application data at p: the count; 0 when the peer closed (close_notify); negative: 0 - error code. Blocks for a record when none is pending
 def tls_recv(p, mx):
     global app_ptr, app_left, tls_st, tls_alert
-    if tls_st != 2:
+    if tls_st != 2 and tls_st != 5:
         if tls_st == 4:
             return 0
         return 0 - ${E.state}
@@ -563,7 +563,7 @@ def tls_recv(p, mx):
     app_left -= k
     return k
 
-# close_notify, then nothing more is accepted
+# close_notify out (state 5: nothing more is sent, the peer's last records can still be read; 4 is closed by the peer)
 def tls_close():
     global tls_st
     if tls_st != 2:
@@ -571,7 +571,7 @@ def tls_close():
     store8(${MEM.scratch}, 1)
     store8(${MEM.scratch} + 1, 0)
     rec_send(21, ${MEM.scratch}, 2)
-    tls_st = 4
+    tls_st = 5
     return 0
 `,
 };

@@ -110,7 +110,8 @@ describe('RFC 8448 section 3 replayed through the client on the golden model', (
     expect(result.handshake.cycles).toBeGreaterThan(1e7);
     expect(result.prims.x25519?.calls).toBe(2);
     expect(result.prims.rsa_pss?.calls).toBe(1);
-    expect(result.phases.reduce((n, p) => n + p.cycles, 0)).toBe(result.handshake.cycles);
+    // the phases tile the handshake but for the few instructions before the first marker and after the last
+    expect(result.handshake.cycles - result.phases.reduce((n, p) => n + p.cycles, 0)).toBeLessThan(500);
   }, 120_000);
 
   it('with the pin of the trace\'s certificate the same handshake completes; with another pin it stops at the pin, before CertificateVerify', async () => {

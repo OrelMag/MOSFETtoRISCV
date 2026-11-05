@@ -29,7 +29,7 @@ export const ascii = (s: string): Uint8Array => Uint8Array.from(s, (c) => c.char
 
 /** The n-th (from 0) RFC 8448 trace item with this action prefix and field name. */
 export function trace(action: string | RegExp, field: string, nth = 0): Uint8Array {
-  const m = V.rfc8448.filter((i) => i.field === field && (typeof action === 'string' ? i.action === action : action.test(`${i.who} ${i.action}`)));
+  const m = V.rfc8448.filter((i) => i.field === field && (typeof action === 'string' ? i.action === action || `${i.who} ${i.action}` === action : action.test(`${i.who} ${i.action}`)));
   if (!m[nth]) throw new Error(`RFC 8448: no ${String(action)} / ${field} #${nth}`);
   return unhex(m[nth].hex);
 }
