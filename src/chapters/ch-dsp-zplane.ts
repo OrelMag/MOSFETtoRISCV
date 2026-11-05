@@ -68,7 +68,7 @@ export const chZplane: Chapter = {
         <p style="text-align:center"><strong>y[n] = b₀x[n] + b₁x[n−1] + … − a₁y[n−1] − a₂y[n−2] − …</strong></p>
         <p>This is the <strong>difference equation</strong>. If every a is zero it uses only inputs: it has a finite memory, and an input stops mattering after a fixed number of samples, so it is <strong>FIR</strong>. With feedback, a sample is in the output for ever, fading if the filter is well made, and it is <strong>IIR</strong>, infinite impulse response.</p>
         <p>What it costs can be read straight off the equation: one multiplication for each coefficient, one addition for each term after the first, and one word of memory for each delay. Everything else in this chapter is about what these coefficients do.</p>
-        <div class="try">Step the one-pole filter through an impulse, reading the equation at each sample. Then give the moving average a step. Then give the resonator an impulse and go a long way along.</div>`;
+        <div class="try">Step the one-pole filter through an impulse, reading the equation at each sample: each output is 0.9 of the last. Then give the moving average a step. Then give the resonator an impulse and go a long way along.</div>`;
       },
       widget: equationWidget,
       challenge: {

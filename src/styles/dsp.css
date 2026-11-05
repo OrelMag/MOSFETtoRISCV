@@ -8,6 +8,7 @@
 .dsp-bit.sign span { color: var(--warn); }
 .dsp-bit.before-point { margin-right: 10px; }
 .dsp-k3 { color: var(--good); }
+.dsp-probe-dot { fill: var(--good); stroke: var(--surface); stroke-width: 1.5; }
 .dsp-table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
 .dsp-table th { text-align: left; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 3px 10px 3px 0; border-bottom: 1px solid var(--border); }
 .dsp-table td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--border); }

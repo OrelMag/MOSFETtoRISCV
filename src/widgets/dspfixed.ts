@@ -18,7 +18,7 @@ import '../styles/fourier.css';
 import '../styles/dsp.css';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const db = (v: number) => (v > 200 ? 'above 200 dB' : `${v.toFixed(1)} dB`);
+const db = (v: number) => (v > 200 ? 'above 200 dB' : `${Math.abs(v) < 0.05 ? '0.0' : v.toFixed(1).replace('-', '−')} dB`);
 
 // ---- a word and its point -------------------------------------------------------------------------------------------------------------
 
@@ -58,17 +58,18 @@ export function qWidget(): Widget {
 export function overflowWidget(): Widget {
   let g = 6, b = 16, mode: PastFull = 'wrap', run = overflowRun(g, b, mode);
   const SHOW = 160, plot = plotOf({ W: 640, H: 220, x: [0, SHOW / (TONES_RATE / 1000)], y: [-2, 2], yTicks: [-1, 0, 1], xLabel: 'ms', yLabel: 'level', aria: 'The stored word against the signal it should hold, over ten milliseconds' });
-  const chips = mkChips(3);
+  const chips = mkChips(3), scaled = h('p', { class: 'sub mos-note' });
   const sel = h('select', { 'aria-label': 'Past full scale' }, h('option', { value: 'wrap' }, 'Wrap'), h('option', { value: 'sat' }, 'Saturate'), h('option', { value: 'scale' }, 'Scale down first')) as HTMLSelectElement;
   sel.addEventListener('change', () => { mode = sel.value as PastFull; paint(); });
   const paint = () => {
     run = overflowRun(g, b, mode);
-    const top = Math.max(1.2, 0.9 * 10 ** (g / 20) * 1.1), ms = range(SHOW + 1).map((i) => i / (TONES_RATE / 1000));
+    const top = Math.max(1.2, 0.9 * 10 ** (g / 20) * 1.2), ms = range(SHOW + 1).map((i) => i / (TONES_RATE / 1000));
     plot.setY(-top, top);
     plot.clear();
     hline(plot, 1, '', 'th'); hline(plot, -1, '', 'th');
     line(plot, ms, ms.map((_, i) => run.ideal[i]), 'lump');
     line(plot, ms, ms.map((_, i) => run.out[i]), 'real');
+    scaled.textContent = mode === 'scale' && run.shift ? `Drawn shifted back up by ${run.shift} bit${run.shift === 1 ? '' : 's'}, to compare with the signal: the word itself stays between the dashed rails.` : '';
     chips.set(0, db(run.snrDb), 'signal to error', run.snrDb < 20 ? 'bad' : '');
     chips.set(1, `${(100 * run.overShare).toFixed(1)} %`, 'of the samples would not fit');
     chips.set(2, mode === 'scale' ? `${run.shift}` : `${(6.02 * b + 1.76).toFixed(1)} dB`, mode === 'scale' ? 'bits spent shifting down' : 'the ceiling for a full-scale sine at this width');
@@ -77,7 +78,7 @@ export function overflowWidget(): Widget {
   const clip = clipButton('Play', () => ({ samples: run.out, rate: TONES_RATE, source: 'model', note: `${mode === 'wrap' ? 'wrapped' : mode === 'sat' ? 'saturated' : 'scaled'}, ${b} bits` }));
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'Two tones in a word'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'what it should hold'), h('span', { class: 'k-far' }, 'what the word holds')), plot.el, chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'Two tones in a word'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'what it should hold'), h('span', { class: 'k-far' }, 'what the word holds')), plot.el, scaled, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         slider('Gain', -6, 18, 1, g, (v) => `${v > 0 ? '+' : ''}${v} dB`, (v) => { g = v; paint(); }).el,
         slider('Word', 3, 16, 1, b, (v) => `${v} bits`, (v) => { b = v; paint(); }).el,
@@ -91,7 +92,7 @@ const MODES: [Rounding, string, string][] = [['trunc', 'Truncate', 'near'], ['ha
 
 export function roundingWidget(): Widget {
   let s = 3;
-  const N = 4000, plot = plotOf({ W: 640, H: 210, x: [0, N], y: [-14000, 2000], yTicks: [-10000, 0], xLabel: 'samples', yLabel: 'running sum of the error', aria: 'The running sum of the rounding error under each rule', yFmt: (v) => num(v, 0) });
+  const N = 4000, plot = plotOf({ W: 640, H: 210, x: [0, N], y: [-14000, 2000], yTicks: [-10000, 0], xLabel: 'samples', yLabel: 'summed error', aria: 'The running sum of the rounding error under each rule', yFmt: (v) => (Math.abs(v) >= 1000 ? `${num(v / 1000, 1)}k` : num(v, 0)).replace('-', '−') });
   const rows = h('tbody');
   const paint = () => {
     const xs = range(N), runs = MODES.map(([m]) => roundingRun(m, s, N));
@@ -108,7 +109,7 @@ export function roundingWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'What a dropped bit leaves behind'), h('div', { class: 'ln-key' }, ...MODES.map(([, name, c]) => h('span', { class: c === 'near' ? 'k-near' : c === 'real' ? 'k-far' : 'dsp-k3' }, name))), plot.el,
         h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Rule'), h('th', { class: 'num' }, 'Mean error'), h('th', { class: 'num' }, 'Its variance'))), rows), want),
-      h('div', { class: 'panel mos-ctl' }, slider('Bits dropped', 1, 6, 1, s, (v) => String(v), (v) => { s = v; paint(); }).el)),
+      h('div', { class: 'panel mos-ctl' }, slider('Bits dropped', 2, 6, 1, s, (v) => String(v), (v) => { s = v; paint(); }).el)),
   };
 }
 
@@ -131,21 +132,22 @@ export function wrapOrderWidget(): Widget {
     const span = Math.max(300, ...r.truth.map(Math.abs)) * 1.1;
     plot.setY(-span, span);
     plot.clear();
-    hline(plot, wordMax(w), '', 'th'); hline(plot, wordMin(w), '', 'th');
+    hline(plot, wordMax(w), String(wordMax(w)), 'th'); hline(plot, wordMin(w), String(wordMin(w)).replace('-', '−'), 'th');
     line(plot, xs, r.truth, 'lump'); line(plot, xs, r.wrapped, 'real'); line(plot, xs, r.clamped, 'near');
     const fits = t <= wordMax(w) && t >= wordMin(w);
     chips.set(0, String(t), 'the true sum');
     chips.set(1, String(last(r.wrapped)), 'wrapping', last(r.wrapped) === t ? '' : 'bad');
     chips.set(2, String(last(r.clamped)), 'saturating at each step', last(r.clamped) === t ? '' : 'bad');
-    note.textContent = fits ? 'The true sum fits, so wrapping ends exactly right however far it strayed. Saturating threw away what it clipped and never gets it back.' : `The true sum needs more than ${w} bits, so neither can hold it. Saturating at least ends at the right end of the range. ${bitsToHold(t)} bits would hold it: guard bits.`;
+    const satRight = last(r.clamped) === t;
+    note.textContent = satRight && fits ? 'The accumulator is wide enough now that nothing ever left it, so the two rules agree: these are guard bits doing their job.' : fits ? 'The true sum fits, so wrapping ends exactly right however far it strayed. Saturating threw away what it clipped and never gets it back.' : `The true sum needs more than ${w} bits, so neither can hold it. Saturating at least ends at the right end of the range. ${bitsToHold(t)} bits would hold it: guard bits.`;
   };
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'Eight words, added one at a time'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'no limit'), h('span', { class: 'k-far' }, 'wrapped'), h('span', { class: 'k-near' }, 'saturated')), plot.el, chips.el, note),
+      h('div', { class: 'panel' }, h('h3', null, 'Eight words, added one at a time'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'no limit'), h('span', { class: 'k-far' }, 'wrapped'), h('span', { class: 'k-near' }, 'saturated'), h('span', { class: 'fr-k' }, 'level lines: the accumulator\'s limits')), plot.el, chips.el, note),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'The words'), sel),
-        slider('Accumulator', 8, 11, 1, w, (v) => `${v} bits`, (v) => { w = v; paint(); }).el))),
+        slider('Width', 8, 11, 1, w, (v) => `${v} bits`, (v) => { w = v; paint(); }).el))),
   };
 }
 

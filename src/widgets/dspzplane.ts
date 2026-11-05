@@ -16,7 +16,8 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const stems = (p: Plot, ys: readonly number[], cls = '') => {
   ys.forEach((y, i) => { if (Math.abs(y) > 1e-9) p.layer.append(s('line', { x1: p.X(i), x2: p.X(i), y1: p.Y(0), y2: p.Y(y), class: `sg-stem ${cls}` })); });
 };
-const coeff = (v: number) => num(v, 3);
+const minus = (t: string) => t.replace(/-/g, '−');
+const coeff = (v: number) => minus(num(v, 3));
 
 /** White noise, seeded: what the plane's filter plays. */
 export function noiseBlock(n: number, seed = 12345): number[] {
@@ -29,8 +30,8 @@ export function noiseBlock(n: number, seed = 12345): number[] {
 const EQS: { name: string; b: number[]; a: number[] }[] = [
   { name: 'Moving average of 4', b: [0.25, 0.25, 0.25, 0.25], a: [1] },
   { name: 'FIR5, gain 16 removed', b: [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16], a: [1] },
-  { name: 'One pole: y[n] = 0.1 x[n] + 0.9 y[n−1]', b: [0.1], a: [1, -0.9] },
-  { name: 'A resonator', b: [0.06], a: pairCoeffs(0.97, 0.5) },
+  { name: 'One pole: x[n] + 0.9 y[n−1]', b: [1], a: [1, -0.9] },
+  { name: 'A resonator', b: [1], a: pairCoeffs(0.97, 0.5) },
 ];
 const INPUTS: { name: string; at: (n: number) => number }[] = [
   { name: 'An impulse', at: (n) => (n === 0 ? 1 : 0) },
@@ -119,7 +120,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   const zeros = o.zeros.map((p) => ({ ...p })), poles = o.poles.map((p) => ({ ...p }));
   let f = 0.1, drag: Pair | null = null, isPole = false;
   const plane = s('svg', { viewBox: `0 0 ${SIZE} ${SIZE}`, class: 'dsp-plane', role: 'group', 'aria-label': 'The z-plane. Drag a pole or a zero, or use the sliders below.' }) as SVGSVGElement;
-  const gain = plotOf({ W: 380, H: 170, x: [0, 0.5], y: [DB_FLOOR, 6], yTicks: [0, -20, -40, -60], xLabel: 'cycles a sample', yLabel: 'gain, dB from the peak', aria: 'Gain against frequency', yFmt: (v) => num(v, 0) });
+  const gain = plotOf({ W: 380, H: 170, x: [0, 0.5], y: [DB_FLOOR, 6], yTicks: [0, -20, -40, -60], xLabel: 'cycles a sample', yLabel: 'gain, dB (floor −60)', aria: 'Gain against frequency', yFmt: (v) => num(v, 0) });
   const imp = plotOf({ W: 380, H: 130, x: [0, 40], y: [-1.1, 1.1], yTicks: [-1, 0, 1], xLabel: 'n', yLabel: 'impulse, scaled', aria: 'The impulse response, scaled to fit' });
   const chips = mkChips(o.probe ? 4 : 3), taps = h('p', { class: 'sub mos-note' });
   const coeffs = () => ({ b: pairsPoly(zeros), a: pairsPoly(poles) });
@@ -142,7 +143,7 @@ export function planeWidget(o: PlaneOpts): Widget {
       const x = PX(p.r * Math.cos(p.t)), y = PY(g * p.r * Math.sin(p.t)), k = `${Math.round(x)},${Math.round(y)}`, e = spots.get(k);
       if (e) e.n++; else spots.set(k, { x, y, n: 1 });
     }
-    for (const e of spots.values()) if (e.n > 1) nodes.push(s('text', { x: e.x + 9, y: e.y - 8, class: 'count' }, `×${e.n}`));
+    for (const e of spots.values()) if (e.n > 1) nodes.push(s('text', { x: e.x + (e.x > C ? -9 : 9), y: e.y - 8, 'text-anchor': e.x > C ? 'end' : 'start', class: 'count' }, `×${e.n}`));
     for (const p of poles) for (const g of [1, -1]) {
       const X = PX(p.r * Math.cos(p.t)), Y = PY(g * p.r * Math.sin(p.t)), m = 6;
       nodes.push(s('path', { d: `M${X - m} ${Y - m}L${X + m} ${Y + m}M${X - m} ${Y + m}L${X + m} ${Y - m}`, class: `pole${p.r >= 1 ? ' out' : ''}` }));
@@ -152,10 +153,12 @@ export function planeWidget(o: PlaneOpts): Widget {
     const fs = range(961).map((i) => (i / 960) * 0.5), gs = fs.map((x) => gainAt(b, a, x)), top = Math.max(...gs.filter(Number.isFinite), 1e-12);
     gain.clear();
     line(gain, fs, gs.map((g) => Math.max(DB_FLOOR, 20 * Math.log10(Math.max((Number.isFinite(g) ? Math.min(g, top) : top) / top, 1e-9)))), 'real');
-    if (o.probe) { const g = gainAt(b, a, f); gain.layer.append(s('circle', { cx: gain.X(f), cy: gain.Y(Math.max(DB_FLOOR, 20 * Math.log10(Math.max((Number.isFinite(g) ? Math.min(g, top) : top) / top, 1e-9)))), r: 4, class: 'sg-pt' })); }
-    const ir = impulse(b, a, 41), big = Math.max(1e-9, ...ir.map(Math.abs));
+    if (o.probe) { const g = gainAt(b, a, f); gain.layer.append(s('circle', { cx: gain.X(f), cy: gain.Y(Math.max(DB_FLOOR, 20 * Math.log10(Math.max((Number.isFinite(g) ? Math.min(g, top) : top) / top, 1e-9)))), r: 4, class: 'dsp-probe-dot' })); }
+    const longest = poles.length && ok ? Math.max(...poles.map(settleOfPair)) : 40, shown = Math.max(40, Math.min(400, longest));
+    imp.setX(shown);
+    const ir = impulse(b, a, shown + 1), big = Math.max(1e-9, ...ir.map(Math.abs));
     imp.clear(); stems(imp, ir.map((v) => v / big), ok ? '' : 'out');
-    chips.set(0, ok ? 'stable' : state === 'unstable' ? 'unstable: it grows' : 'on the circle: it never dies', poles.length ? 'largest pole radius ' + num(rad, 3) : 'no feedback, so always stable', ok ? '' : 'bad');
+    chips.set(0, ok ? 'stable' : state === 'unstable' ? 'unstable: it grows' : 'on the circle: it never dies', ok ? (poles.length ? 'largest pole radius ' + num(rad, 3) : 'no feedback, so always stable') : `pole radius ${num(rad, 3)}: no steady gain, so the gain plot is only the formula`, ok ? '' : 'bad');
     chips.set(1, num(Math.max(0, ...poles.map((p) => p.t / (2 * Math.PI))), 3), poles.length ? 'pole\'s angle, in cycles a sample' : 'no poles');
     chips.set(2, ok ? String(Math.max(0, ...poles.map(settleOfPair))) : 'never', 'samples to fall to 1 %');
     if (!poles.length) chips.set(2, String(b.length - 1), 'samples of memory');
@@ -164,7 +167,7 @@ export function planeWidget(o: PlaneOpts): Widget {
       chips.set(3, Number.isFinite(g) ? num(g, 3) : '∞', `|H| at ${num(f, 3)}: distances to the zeros over those to the poles`);
     }
     clip?.reset();
-    if (o.taps) taps.textContent = `b = ${b.map((v) => num(v, 3)).join('  ')}${poles.length ? `    a = ${a.map((v) => num(v, 3)).join('  ')}` : ''}`;
+    if (o.taps) taps.textContent = minus(`b = ${b.map((v) => num(v, 3)).join('  ')}${poles.length ? `    a = ${a.map((v) => num(v, 3)).join('  ')}` : ''}`);
   };
   // roots: nearest in the upper half-plane
   const toPlane = (e: PointerEvent): [number, number] => {
@@ -208,7 +211,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'))), h('div', null, gain.el, imp.el)),
+      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'), o.probe ? h('span', { class: 'dsp-k3' }, '● the point on the circle') : '')), h('div', null, gain.el, imp.el)),
       h('div', { class: 'panel' }, chips.el, o.taps ? taps : ''),
       h('div', { class: 'panel mos-ctl' }, presets.length ? h('div', { class: 'dram-ops' }, ...presets) : '', h('div', { class: 'mos-row' }, ...ctl), clip ? clip.el : '')),
   };
@@ -225,7 +228,7 @@ export const outer = (r: number, t: number): number[] => [...pairCoeffs(r, t)].r
 
 export function delayWidget(): Widget {
   let r = 0.7, t = 1.0;
-  const imp = plotOf({ W: 640, H: 150, x: [0, 2.5], y: [-2, 2], yTicks: [-1, 0, 1], xLabel: 'n', yLabel: 'impulse response', aria: 'The two impulse responses' });
+  const imp = plotOf({ W: 640, H: 150, x: [0, 4], y: [-2, 2], yTicks: [-1, 0, 1], xLabel: 'n', yLabel: 'impulse response', aria: 'The two impulse responses' });
   const del = plotOf({ W: 640, H: 170, x: [0, 0.5], y: [-2, 6], yTicks: [0, 2, 4], xLabel: 'cycles a sample', yLabel: 'delay, samples', aria: 'The group delay of the two filters, and of their product' });
   const chips = mkChips(3);
   const paint = () => {
