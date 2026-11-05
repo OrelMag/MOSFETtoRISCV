@@ -53,6 +53,10 @@ import { chDatacentre } from './ch-comm-dc';
 import { chRelays } from './ch-relays';
 import { chTubes } from './ch-tubes';
 import { chCards } from './ch-cards';
+import { chPcie } from './ch-comm-pcie';
+import { chRadio } from './ch-comm-radio';
+import { chWifi } from './ch-comm-wifi';
+import { chCellular } from './ch-comm-cellular';
 import type { Chapter, FutureChapter } from './types';
 
 export const chapters: Chapter[] = [
