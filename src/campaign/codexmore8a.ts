@@ -66,6 +66,7 @@ single pole, 1 GHz, at 4 GHz: gain 1 / √17 in amplitude = −12.3 dB</pre>`,
       { chapter: 'signals', step: 0, label: 'A wave is a sum of sines' },
       { chapter: 'noise', step: 0, label: 'The floor' },
       { chapter: 'radio', step: 2, label: 'The link budget' },
+      { chapter: 'converters', step: 3, label: 'A shaky clock' },
     ],
   },
   fourier: {
