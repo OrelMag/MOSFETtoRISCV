@@ -110,10 +110,10 @@ export const chFixed: Chapter = {
       get body() {
         const sat = nands(satAdder(8)), add = nands(rca(9)), cl = nands(clampWord(8));
         return `
-        <p>To know whether a sum fits, compute it with one more bit. <span data-show="xa xb">Two wires copy each input's sign upward</span>, which costs nothing. <span data-show="add">An adder one bit wider</span> cannot overflow, since the sum of two w-bit words always fits in w + 1.</p>
+        <p>To know whether a sum fits, compute it with one more bit. <span data-show="xa xb">Two wires copy each input's sign upward</span>, which costs nothing. <span data-show="add">An adder one bit wider</span>, its carry-in tied to 0, cannot overflow, since the sum of two w-bit words always fits in w + 1.</p>
         <p>Now read the top two bits of the sum. If they agree the value fits in w bits and the upper one is redundant. If they differ it does not fit, and the top bit is its true sign. <span data-show="clamp">The clamp</span> does exactly that: an XOR on the two bits, the limit made from wires (the sign on top, its inverse below, so 100…0 or 011…1), and a mux. Open it.</p>
         <p>At 8 bits that is ${sat} NANDs: ${add} for the adder and ${cl} for the clamp. Most of the clamp is the mux, one per bit, and every result pays that whether it overflowed or not, along with the mux's delay. <code>sat</code> tells the outside that it happened, and a real part usually makes that bit sticky, so that a program can look afterwards.</p>
-        <div class="try">Set a = 100, b = 20, and read the sum. Raise b until <code>sat</code> lights. Then try two negative words: a = 156 and b = 156 mean −100 each.</div>`;
+        <div class="try">Set a = 100, b = 20, and read the sum. Raise b until <code>sat</code> lights. Then try two negative words: a = 156 and b = 156 mean −100 each, and y reads 128, which means −128. The bar under the circuit shows words unsigned, in the number base you pick at the top of the page.</div>`;
       },
       scene: satScene,
       lit: '',
@@ -134,7 +134,7 @@ export const chFixed: Chapter = {
         <p>Dropped bits are not simply gone. <span data-show="round">The rounder</span> adds the first dropped bit back, which is round half up, and it does so once, at the end. Rounding the terms of a sum one by one would add noise for each. Inside each butterfly, the FFT of <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> follows the same rule.</p>
         <p>The upper sign bit earns its place in one case. −1 × −1 = +1, and +1 does not exist in this format. <span data-show="clamp">The clamp</span> is there for that one input pair out of 65 536. Leave it out and −1 × −1 gives −1, so a filter with a coefficient of −1 can flip the sign of a full-scale sample. That bug tends to stay hidden until a test finally drives the rail.</p>
         <p>In all ${n0(all)} NANDs, of which the signed multiplier is ${n0(m)}. Multipliers are the expensive thing in this level. The later chapters on machines are about sharing one.</p>
-        <div class="try">Set 96 × 64 (0.75 × 0.5) and read 48 (0.375). Then find the pair that lights <code>sat</code>.</div>`;
+        <div class="try">Set a = 96 and b = 64 in the bar under the circuit (0.75 × 0.5) and read y = 48 (0.375). Then find the pair that lights <code>sat</code>.</div>`;
       },
       scene: mulScene,
       lit: '',
@@ -152,7 +152,7 @@ export const chFixed: Chapter = {
         const t = roundingRun('trunc', 3), c = roundingRun('convergent', 3), u = roundingRun('half-up', 3);
         return `
         <p>Dropping bits is the cheapest rounding there is, and it always goes down, so its error has a mean of about half a step. That looks harmless. Now run a long sum: a filter's output, an integrator, a level meter. A small constant error adds up in a straight line, and the plot below shows it.</p>
-        <p>Adding the first dropped bit back, <strong>round half up</strong>, centres the error, except on exact ties, which always go up: a much smaller bias. Sending ties to the even neighbour, <strong>convergent rounding</strong>, removes that as well, for the price of one more test on the bits.</p>
+        <p>Adding the first dropped bit back, <strong>round half up</strong>, centres the error, except on exact ties, which always go up: half an input step, much smaller than truncation's once a few bits are dropped. Sending ties to the even neighbour, <strong>convergent rounding</strong>, removes that as well, for the price of one more test on the bits.</p>
         <p>With 3 bits dropped from this signal, the mean error is ${t.mean.toFixed(2)} input steps for truncation, ${u.mean.toFixed(2)} for half up and ${c.mean.toFixed(2)} for ties to even. Notice that the variance hardly moves, ${t.variance.toFixed(2)} against ${c.variance.toFixed(2)}: each rule adds about the noise power you met in <a href="#/c/signals/6">the rounding step</a>, q² / 12, here ${roundingNoise(8).toFixed(2)}. The rule only changes where the mean sits.</p>
         <div class="try">Raise the bits dropped and watch truncation's drift grow with the step. Which line stays nearest zero?</div>`;
       },

@@ -80,6 +80,8 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "zplane": () => import('./ch-dsp-zplane').then((m) => m.chZplane),
   "multirate": () => import('./ch-dsp-multirate').then((m) => m.chMultirate),
   "cordic": () => import('./ch-dsp-cordic').then((m) => m.chCordic),
+  "converters": () => import('./ch-dsp-converters').then((m) => m.chConverters),
+  "adaptive": () => import('./ch-dsp-adaptive').then((m) => m.chAdaptive),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),
