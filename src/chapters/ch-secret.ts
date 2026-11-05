@@ -1,6 +1,6 @@
 // Keeping it secret: how strangers share a secret in public. It opens on the Enigma M4 (crypto/enigma.ts, widgets/enigma3d.ts), a
 // permutation of wired switches that was broken for reasons that are still the rules. Then AES and SHA-256 in gates (lib/aes.ts,
-// lib/sha256.ts, checked against NIST vectors and node:crypto); key exchange and TLS 1.3 follow (Chapter.soon until they are built). History here is checked against the sources in the "Where this comes from" asides.
+// lib/sha256.ts, checked against NIST vectors and node:crypto), and key exchange and TLS 1.3 in software on the RV32 (crypto/tls, checked against RFC 8448 and Node's tls). History here is checked against the sources in the "Where this comes from" asides.
 
 import { periodOf, involutions26, m4KeySpace, plugCount } from '../crypto/bombe';
 import '../lib';
@@ -10,7 +10,9 @@ import { stats } from '../sim/stats';
 import { idx, ROTORS, U264 } from '../crypto/enigma';
 import { enigma3d } from '../widgets/enigma3d';
 import { withModel } from '../widgets/modelhost';
+import TLS from '../crypto/tls/costs.json';
 import { aesExplorerWidget, avalancheWidget, modesWidget, shaWidget } from '../widgets/secretaes';
+import { costsWidget, curveWidget, dhWidget, handshakeWidget, mitmWidget } from '../widgets/secrettls';
 import { aesCoreScene, aesRoundScene, sboxScene, shaCoreScene, shaRoundScene } from '../widgets/secretscenes';
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
 import { numOf } from './order';
@@ -34,16 +36,15 @@ const m4Scene = () => ({
 
 export const chSecret: Chapter = {
   id: 'secret', num: numOf('secret'), title: 'Keeping it secret', level: 'Communication',
-  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.',
+  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a real TLS 1.3 handshake, run by our CPU.',
   goals: [
-    'describe the Enigma as a permutation that changes with every key press, and say what its wiring forces it to do',
-    'use a crib and the machine\'s flaw to rule out settings, and explain how the Bombe discards the plugboard from the search',
-    'state the design rules that Enigma\'s failures gave modern ciphers, and see them in AES and SHA-256 built from gates',
+    'describe the Enigma as a permutation that changes with every key press, and explain how a crib and the Bombe went round its plugboard',
+    'state the design rules that its failures gave modern ciphers, and see them in AES and SHA-256 built from gates',
     'say what a mode of operation adds to a block cipher, and what goes wrong without one',
-    'say what separates a stored-program computer from the machines built to break these ciphers',
+    'follow a TLS 1.3 handshake: how two strangers reach a shared secret in public, and what proves who is at the other end',
   ],
   builds: ['tcp'],
-  parts: [['The Enigma', 3], ['How it broke', 4], ['AES', 6], ['SHA-256', 3]],
+  parts: [['The Enigma', 3], ['How it broke', 4], ['AES', 6], ['SHA-256', 3], ['Strangers', 5]],
   recap: {
     keep: [
       'A key press steps the wheels, then the current runs from the key through plugs, entry wheel, four wheels, the reflector and back. Each position is one fixed permutation of 26 letters, made of 13 swaps: the same setting deciphers what it enciphered, and no letter ever lights itself.',
@@ -53,6 +54,8 @@ export const chSecret: Chapter = {
       `AES-128 is ten rounds of SubBytes, ShiftRows, MixColumns and AddRoundKey over a 16-byte state. In gates here: an S-box of ${n0(COSTS.parts.aes_sbox.nands)} NANDs, a round of ${n0(COSTS.parts.aes_round.nands)}, a core of ${n0(COSTS.cores.aes_core.nands)} taking ${COSTS.cores.aes_core.cycles} clocks a block, with the key in a register.`,
       'A block cipher alone only enciphers 16 bytes. ECB shows repeats; CTR hides them but dies if a counter is reused and does not notice changes; GCM adds a tag, so a changed message is refused.',
       `SHA-256 turns any message into 256 bits so that changing one bit changes about half of them: a core of ${n0(COSTS.cores.sha_core.nands)} NANDs and ${COSTS.cores.sha_core.cycles} clocks per 64-byte block. It has no key: anyone can compute it.`,
+      'Diffie-Hellman gives two strangers a shared secret from public messages: each keeps a private number, and only a discrete logarithm would recover it. X25519 does this on a curve. On its own it says nothing about who is at the other end.',
+      'A TLS 1.3 handshake is one round trip: key shares in the clear, then everything else encrypted. The server signs the transcript with a key a client trusts, and both sides confirm with a Finished. Each session has fresh keys, so a stolen long-term key does not read old traffic.',
     ],
     check: [
       {
@@ -75,6 +78,20 @@ export const chSecret: Chapter = {
         answer: 0,
         explain: 'Each block is enciphered alone with the same key, so a flat area of the picture turns into one repeated block. The cipher is doing its job on each block; the mode gives the pattern away.',
         why: ['', 'AES is fine: the same cipher in CTR mode hides the picture completely.', 'A longer key changes which block each block turns into, not that equal blocks stay equal.', 'ECB runs all the rounds. The problem is what happens between blocks: nothing.'],
+      },
+      {
+        question: 'Eve records a whole X25519 exchange and has unlimited storage. What stops her computing the shared secret?',
+        options: ['She would need a private key, and getting one from a public key is a discrete logarithm, out of reach at this size', 'The public keys are encrypted', 'The secret is sent under AES', 'The exchange is too fast to record'],
+        answer: 0,
+        explain: 'She sees both public values. Nothing in them lets her combine them into the secret without solving the discrete logarithm on the curve.',
+        why: ['', 'They are sent in the clear, in the ClientHello and ServerHello: anyone can read them.', 'The shared secret is never sent at all, under anything. Both sides compute it.', 'Recording is easy. The protection is in the mathematics, not in timing.'],
+      },
+      {
+        question: 'A TLS 1.3 handshake completes with no certificate check. What has been achieved?',
+        options: ['An encrypted channel to whoever answered, who may be an attacker', 'Nothing: without a certificate the keys are not secret', 'Full security: encryption is what matters', 'The handshake cannot complete without one'],
+        answer: 0,
+        explain: 'Key exchange gives a secret shared with the other end, whoever that is. A man in the middle simply runs one exchange with each side. Authentication is a separate job, and the signature over the transcript does it.',
+        why: ['', 'The keys are secret from a passive listener; the trouble is the active one.', 'An attacker in the middle reads and changes everything, under keys he shares with you.', 'The chapter’s client completes with no pin, and says so: the mathematics does not require one.'],
       },
       {
         question: 'Which of these machines stored its program in the memory it worked on?',
@@ -227,6 +244,52 @@ export const chSecret: Chapter = {
         <p class="try"><b>Try:</b> set <em>start</em> to 1, Pulse once, set <em>start</em> to 0, then Run until <em>done</em> lights. <em>out</em> reads 0xF20015AD_B410FF61_96177A9C_B00361A3_5DAE2223_414140DE_8F01CFEA_BA7816BF. That is the standard's digest of "abc", ba7816bf 8f01cfea … f20015ad, with its first word at the low end of the bus.</p>`,
       scene: () => ({ ...shaCoreScene(), engine: 'cycle' as const }),
     },
+    {
+      title: 'Sharing a secret in public',
+      body: `
+        <p>Everything so far assumed both ends already hold the key. The navy printed sheets and carried them to every boat, and a captured sheet opened a month of traffic. Two strangers on a network have no sheet. In 1976 Diffie and Hellman showed they do not need one.</p>
+        <p>Take a public prime <em>p</em> and a number <em>g</em>. Alice keeps a secret <em>a</em> and sends <em>gᵃ mod p</em>. Bob keeps <em>b</em> and sends <em>gᵇ mod p</em>. Each raises what arrived to their own secret, and both get <em>gᵃᵇ mod p</em>, because the order of exponents does not matter. Anyone watching has both public numbers, and to get further needs to undo an exponentiation, the <b>discrete logarithm</b>, for which no fast method is known at the right sizes.</p>
+        <p>Note what is new: <b>the shared secret is never sent</b>, under any cipher. That is the answer to the key sheet, and nothing in the Enigma's world had anything like it.</p>
+        <p class="try"><b>Try:</b> move the secrets. The two computed numbers stay equal. Then let Eve search.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p>W. Diffie and M. Hellman, <em>New Directions in Cryptography</em>, IEEE Transactions on Information Theory, 1976. 2³¹ − 1 and 16807 are the classic Lewis–Goodman–Miller pair; a test here proves 16807 generates the whole group.</p></details>`,
+      widget: dhWidget,
+    },
+    {
+      title: 'X25519 on our CPU',
+      body: `
+        <p>Modern TLS does this on an elliptic curve, where the same security needs far smaller numbers. Instead of multiplying numbers, you add points: <em>a</em> times a point on the curve is easy, and getting <em>a</em> back from the result is the hard direction. X25519 is one such curve, with 255-bit numbers, chosen so a careful implementation is simple.</p>
+        <p>This one is ordinary Python from the chapter on compiling it, built to RV32IM. There is no bigint in that subset, so a number is 32 limbs of 8 bits. One multiplication walks 255 bits with the Montgomery ladder, each step a handful of field multiplications, each of those about a thousand limb products. That comes to <b>${n0(TLS.primitives.x25519)} cycles</b>, against ${n0(TLS.primitives['aes-128 block'])} for an AES block in the same software. It runs here, in this page, on the same golden model that checks the gate-level CPUs.</p>
+        <p class="try"><b>Try:</b> run it. The keys are RFC 7748's own example: every output is compared with the RFC's value and turns green if it matches.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://www.rfc-editor.org/rfc/rfc7748" target="_blank" rel="noopener">RFC 7748</a>. The test suite checks its section 5.2 vectors and section 6.1 exchange on the CPU. Its 1 000 and 1 000 000 iteration vectors are not run: at these speeds they would take far too long. This is teaching code: it makes no attempt to resist side channels.</p></details>`,
+      widget: curveWidget,
+    },
+    {
+      title: 'Who is at the other end',
+      body: `
+        <p>Key exchange has a hole, and it is the same hole as a stolen key sheet with the roles reversed. It proves you share a secret with <em>someone</em>. A man in the middle runs one exchange with you and another with the server, and reads and rewrites everything. Encryption cannot see him.</p>
+        <p>What closes the hole is a <b>signature</b>. The server holds a long-term private key, and signs the hash of the whole conversation so far, including both key shares. If he substitutes his own share, the signature no longer covers what you saw, and he cannot make one with the server's key. Since the server also signs in this session only, recording an old signature does not help him: the transcript has your fresh random in it.</p>
+        <p>That moves the question to: whose public key is this? A <b>certificate</b> is someone else's signature on "this key belongs to this name", in a chain that ends at a key your browser already holds. <b>Our client does not do that.</b> It checks one thing: that the server's key hashes to a value given to it in advance, a pin. It checks no chain, no dates and no host name, and with no pin it trusts anyone. A real client needs all of them, and much of its code goes there.</p>
+        <p>One more thing the Enigma never had: the session's keys come only from the X25519 exchange, and are thrown away. Steal the server's signing key tomorrow and yesterday's recordings still stay shut. This is <b>forward secrecy</b>. Capture of a U-boat's key sheet opened everything sent under it.</p>
+        <p>The next step runs this for real. The check is at <em>A key you do not trust</em> and <em>Trust no one</em>.</p>`,
+      widget: mitmWidget,
+    },
+    {
+      title: 'A TLS 1.3 handshake',
+      body: `
+        <p>All of it together, one round trip. The client sends a <b>ClientHello</b> with a random number and its X25519 public key. The server answers with a <b>ServerHello</b> holding its own. From here both have the shared secret, and HKDF, built from HMAC and SHA-256, stretches it into keys. Everything else the server sends is under AES-128-GCM: <b>EncryptedExtensions</b>, its <b>Certificate</b>, <b>CertificateVerify</b>, which is the signature, and <b>Finished</b>, an HMAC over the whole transcript. The client checks each in turn, answers with its own Finished, and application data can follow.</p>
+        <p>Below is that client, ${n0(TLS.lines.total.python)} lines of Python compiled to ${n0(TLS.words.total)} words of RV32IM, on the golden model. Its counterpart is not a simulation of a server: it is the server's side of the example printed in RFC 8448, replayed byte for byte, which is why the client's own Finished can be compared with the RFC's. The test suite compares every derived secret with the RFC, and has this same client complete a live handshake with Node's own TLS server and exchange data with it.</p>
+        <p>Notice where the cycles go. X25519 twice and one signature check are nearly all of it, and the symmetric work that protects the data barely shows.</p>
+        <p class="try"><b>Try:</b> run it as recorded, then break it each way. Every button runs the CPU again, and a failure stops at the first check that can see it.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://www.rfc-editor.org/rfc/rfc8446" target="_blank" rel="noopener">RFC 8446</a> (TLS 1.3) and <a href="https://www.rfc-editor.org/rfc/rfc8448" target="_blank" rel="noopener">RFC 8448</a> (its example traces). Not implemented: retry requests, key updates, client certificates and resumption; a retry or key update is refused with its own error rather than ignored.</p></details>`,
+      widget: handshakeWidget,
+    },
+    {
+      title: 'What it all costs',
+      body: `
+        <p>Now the sums. Public-key work is enormously more expensive than symmetric work, by thousands of times here, and this is why every protocol has the same shape: public keys once, to agree a symmetric key, and AES and a hash for everything after.</p>
+        <p>The table also shows why processors grow instructions for this. In software, one AES block takes ${n0(TLS.primitives['aes-128 block'])} cycles on our RV32IM. The core you built takes ${COSTS.cores.aes_core.cycles} clocks for ${n0(COSTS.cores.aes_core.nands)} NANDs. A few thousand S-box gates beside an ALU buy a speedup of hundreds of times, and removing table lookups closes the cache side channel too.</p>
+        <p>Set this against the opening. The Enigma took ${n0(GATES)} NANDs in gates and nothing in software, had one key per network per day, and could be attacked by a method that needed only known plaintext. The stack in this chapter needs a CPU and some tens of millions of cycles, once. Then two machines that have never met talk under a key nobody ever sent, and a recording of it stays useless.</p>`,
+      widget: costsWidget,
+    },
   ],
-  soon: ['Sharing a secret in public', 'X25519 on our CPU', 'Who is at the other end', 'A TLS 1.3 handshake', 'What it all costs'],
 };
