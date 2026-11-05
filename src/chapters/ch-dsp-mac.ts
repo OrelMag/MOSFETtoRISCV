@@ -2,7 +2,7 @@
 // four instructions on custom-2, the golden model and the single-cycle core in lock step (tests/dsp-mac-*.test.ts), and four filter kernels measured on gates on five machines
 // (dsp/macbench.json). Every figure on the page is read from the gates or the measured file; a figure the text had expected and the gates did not give is said so.
 
-import { ACC_BITS, raccOf } from '../dsp/mac';
+import { ACC_BITS, accHex, raccOf } from '../dsp/mac';
 import { macPlan } from '../dsp/macbench';
 import { macRead } from '../lib/macunit';
 import { MAC_INSTRS } from '../riscv/isa';
@@ -10,7 +10,7 @@ import { stats } from '../sim/stats';
 import { cpuState } from '../riscv/cosim';
 import { cpuScene } from '../widgets/cpupanel';
 import {
-  alignWidget, barsWidget, benchFig, f1, f2, filterSource, FILTER_Y, macApi, macDelta, machineCost, perProduct, readWidget, tableWidget, timePerProduct, unitNands, unitScene,
+  alignWidget, barsWidget, benchFig, f1, f2, filterSource, FILTER_SUM, FILTER_Y, macApi, macDelta, machineCost, perProduct, readWidget, tableWidget, timePerProduct, unitNands, unitScene,
 } from '../widgets/dspmac';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -107,8 +107,8 @@ export const chMac: Chapter = {
       get body() {
         const rows = MAC_INSTRS.map((i) => `<tr><td><code>${i.name === 'clracc' ? 'clracc' : i.name === 'racc' ? 'racc rd, rs1' : `${i.name} rs1, rs2`}</code></td><td>${F3(i.name)}</td><td>${{ mac: 'acc ← acc + sext16(rs1[15:0]) × sext16(rs2[15:0])', mac2: 'acc ← acc + lo × lo + hi × hi', clracc: 'acc ← 0', racc: 'rd ← clamp32(round(acc ≫ rs1[5:0]))' }[i.name]}</td></tr>`).join('');
         return `
-        <p>RISC-V leaves four major opcodes for the designer, custom-0 to custom-3. <a href="#/c/simt/1">The GPU chapters</a> took custom-0 and the learner's own instructions (<a href="#/c/cpu">chapter ${numOf('cpu')}'s last step</a>) take custom-1 and custom-3. The MAC takes <strong>custom-2</strong>, opcode 0x5B, as R-type with funct7 = 0, and funct3 tells the four apart:</p>
-        <table class="ln-table"><thead><tr><th>Assembly</th><th>funct3</th><th>Does</th></tr></thead><tbody>${rows}</tbody></table>
+        <p>RISC-V leaves four major opcodes for the designer, custom-0 to custom-3. <a href="#/c/simt/1">The GPU chapters</a> took custom-0 and the learner's own instructions (the sandbox's Custom instructions, introduced in <a href="#/c/cpu">chapter ${numOf('cpu')}</a>) take custom-1 and custom-3. The MAC takes <strong>custom-2</strong>, opcode 0x5B, as R-type with funct7 = 0, and funct3 tells the four apart:</p>
+        <div class="ln-scroll"><table class="ln-table"><thead><tr><th>Assembly</th><th>funct3</th><th>Does</th></tr></thead><tbody>${rows}</tbody></table></div>
         <p>What the decoder does with everything else on custom-2 is part of the definition: a word with funct7 ≠ 0, or with funct3 above 3, is not a MAC instruction and <em>does nothing</em>, in the golden model and in the gates. The control unit pays about a dozen gates to check that, and a random-program test puts such words among real instructions.</p>
         <p>The control unit gains one opcode class, <code>macEn</code> (the accumulator may change at the next edge; racc never changes it) and a third bit on the result select: racc writes a register and takes the mux's fifth input. The circuit below is the core with its MAC; double-click the MAC to open it. A learner's own row on custom-2 is refused on this core, with the reason.</p>
         <p>The program on the panel's right ends with the four. Step it, and watch <code>acc</code> at the top of the register list, compared with the golden model like any register.</p>`;
@@ -148,10 +148,11 @@ export const chMac: Chapter = {
         <p>Now run one. The program below is an 8-tap filter, one output: samples and taps packed two to a 32-bit word, four <code>lw</code> pairs and four <code>mac2</code>, then <code>racc</code> at shift 15. The first lines write the data, which the core has no other way to get at: its memory starts empty.</p>
         <p>The panel at the right is the golden model beside the gates. It compares the pc, every register and the accumulator after each instruction; "✓ matches golden model" is that comparison. The answer is ${FILTER_Y}, computed here as an exact sum and rounded once.</p>
         <p>Run to halt, then look at <code>a0</code>. The whole inner part took four loads and four mac2 plus the setup around them.</p>
-        <div class="try">Press Run to halt. The accumulator at the top of the register list ends at a value of 0x…, and a0 holds ${FILTER_Y}.</div>`;
+        <div class="try">Press Run to halt. The accumulator at the top of the register list ends at 0x${accHex(FILTER_SUM)}, the exact sum of the eight products, and a0 holds ${FILTER_Y}.</div>`;
       },
       scene: () => cpuScene({ source: filterSource(), mac: true, highlight: ['macu'], imemK: 6, dmemK: 5 }),
       lit: '',
+      tries: [(st) => !!st.sim && st.cycles > 0 && cpuState(st.sim).acc === FILTER_SUM && (cpuState(st.sim).x[10] | 0) === FILTER_Y],
       challenge: {
         kind: 'reach', goal: `Run the filter to its end, with a0 = ${FILTER_Y}.`,
         check: (st) => !!st.sim && st.cycles > 0 && (cpuState(st.sim).x[10] | 0) === FILTER_Y,

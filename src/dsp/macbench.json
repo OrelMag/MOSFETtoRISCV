@@ -69,7 +69,7 @@
    }
   },
   "mac": {
-   "nands": 59048,
+   "nands": 59066,
    "period": 159,
    "benches": {
     "fir16": {
@@ -99,7 +99,7 @@
    }
   },
   "mac2": {
-   "nands": 59048,
+   "nands": 59066,
    "period": 159,
    "benches": {
     "fir16": {
@@ -129,7 +129,7 @@
    }
   },
   "mac2u": {
-   "nands": 59048,
+   "nands": 59066,
    "period": 159,
    "benches": {
     "fir16": {

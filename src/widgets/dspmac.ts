@@ -190,7 +190,8 @@ export function tableWidget(): Widget {
 export const FILTER_X = [1200, -800, 3000, 2500, -1500, 700, -300, 2000];
 export const FILTER_H = [1000, 3000, 6000, 9000, 8000, 3500, 1500, 500];
 /** One output of an 8-tap FIR on packed samples: four words of mac2, read at shift 15. The answer, from the exact model. */
-export const FILTER_Y = raccOf(FILTER_X.reduce((a, x, i) => a + BigInt(x * FILTER_H[i]), 0n), 15).y;
+export const FILTER_SUM = FILTER_X.reduce((a, x, i) => a + BigInt(x * FILTER_H[i]), 0n);
+export const FILTER_Y = raccOf(FILTER_SUM, 15).y;
 const packW = (lo: number, hi: number) => (((hi & 0xffff) << 16) | (lo & 0xffff)) | 0;
 export function filterSource(): string {
   const out: string[] = ['# one output of an 8-tap filter, samples and taps packed two to a word'];

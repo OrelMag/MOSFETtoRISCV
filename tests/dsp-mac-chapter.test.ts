@@ -10,7 +10,7 @@ import { firstMismatch } from './verify/maclock';
 describe('A MAC on the RV32', () => {
   it('sits in the level, with a why for every wrong option', () => {
     expect(chMac.level).toBe(DSP_LEVEL);
-    const qs = [...chMac.recap!.check, ...chMac.steps.map((s) => s.challenge).filter((c) => c?.kind === 'quiz')] as { options: string[]; answer: number; why: string[] }[];
+    const qs = [...(chMac.recap!.check ?? []), ...chMac.steps.map((s) => s.challenge).filter((c) => c?.kind === 'quiz')] as { options: string[]; answer: number; why: string[] }[];
     for (const q of qs) { expect(q.why.length).toBe(q.options.length); q.why.forEach((w, i) => expect(w === '').toBe(i === q.answer)); }
   });
   it('step 1: software multiplication is about a hundred clocks a product, and RV32IM many times faster', () => {
