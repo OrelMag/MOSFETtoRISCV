@@ -9,6 +9,7 @@ import { bigRam, bigRamWithInit } from './bigmem';
 import { assemble24 } from '../dsp/asm24';
 import { BENCH24 } from '../dsp/programs24';
 import { Builder } from './builder';
+import { Sheet } from './dsp24draw';
 import { busMux2, decoder, muxTree } from './combinational';
 import { define, merger } from './define';
 import { DSP24_ALU, DSP24_DECODE } from './dsp24';
@@ -24,7 +25,6 @@ const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> =>
   Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
 const ins = (ps: PortDef[]) => ps.filter((p) => p.dir === 'in').map((p) => p.name);
-const outs = (ps: PortDef[]) => ps.filter((p) => p.dir === 'out').map((p) => p.name);
 
 // ---- Registers -------------------------------------------------------------------------------
 
@@ -149,48 +149,101 @@ export const DSP24_PORTS: PortDef[] = [
   bit('clk', 'in', true), bus('pc', 8, 'out'), bus('out', 16, 'out'), bit('outv', 'out'), bit('halt', 'out'),
 ];
 
-interface Wiring { instr: string; xd: string; yd: string; sinks: { pc: string[]; xa: string[]; ya: string[]; xwe: string[]; ywe: string[]; wd: string[] } }
+/** The memories of the computer: the core without them has pins where their ports are, so one drawing serves both. */
+interface Mems { rom: ComponentDef; xram: ComponentDef; yram: ComponentDef }
 
-/** The datapath: Decode, registers, ALU, the two address generators, the MAC, the sequencer; returns nothing, the sinks are wired. */
-function dsp24Body(b: Builder, w: Wiring): void {
-  const dec = b.op(DSP24_DECODE, [w.instr], 'Decode', 'dec');
-  const c = (n: string) => b.name(`${dec}.${n}`, n, true);
-  const regs = b.op(DSP24_REGS, [c('ra'), c('rb'), c('rd'), c('rwe'), '', 'clk'], 'Registers', 'regs');
-  const qa = b.name(`${regs}.qa`, 'qa', true), qb = b.name(`${regs}.qb`, 'qb', true);
-  const seq = b.op(DSP24_SEQ, [c('halt'), c('jmp'), c('jz'), c('jnz'), qa, c('addr'), c('isloop'), c('lreg'), c('cnt'), c('lend'), 'clk'], 'Sequencer', 'seq');
-  const pc = b.name(`${seq}.pc`, 'pc', true);
-  for (const s of w.sinks.pc) b.wire(pc, s);
-  b.next();
-  const agx = b.op(DSP24_AGU, [c('xp'), c('xmode'), c('xact'), c('wex'), c('wsel'), '', c('rsel'), 'clk'], 'AGU X', 'aguX');
-  const agy = b.op(DSP24_AGU, [c('yp'), c('ymode'), c('yact'), c('wey'), c('wsel'), '', c('rsel'), 'clk'], 'AGU Y', 'aguY');
-  for (const s of w.sinks.xa) b.wire(`${agx}.a`, s);
-  for (const s of w.sinks.ya) b.wire(`${agy}.a`, s);
-  b.next();
-  const mac = b.op(DSP24_MAC, [w.xd, w.yd, c('macop'), c('macen'), c('sh'), 'clk'], 'MAC', 'mac');
-  const imm = c('imm');
-  const imm8 = b.op1(cut(14, 0, 8), [imm], 'imm8');
-  const imm8sx = b.op1(placed(8, 0, 16), [imm8], 'imm8, signed');
-  const ldi = b.op1(placed(14, 0, 16), [imm], 'imm14, signed');
-  const bsel = b.op1(busMux2(16), [qb, imm8sx, c('bimm')], 'b operand');
-  const alu = b.op(DSP24_ALU, [qa, bsel, c('aluf')], 'ALU', 'alu');
-  b.next();
-  const qxy = b.op1(busMux2(8), [`${agx}.q`, `${agy}.q`, c('srcy')], 'AGU register read');
-  const z8 = b.op1(constWord(8, 0), []), z16 = b.op1(constWord(16, 0), []);
-  const qxz = b.op1(merger([8, 8], 2), [qxy, z8], 'zero-extended');
-  const movv = b.op1(muxTree(2, 16), [qa, qxz, qxz, z16, c('msrc')], 'mov source');
-  const ldh = b.op1(merger([8, 8], 2), [b.op1(cut(16, 0, 8), [qa]), imm8], 'ldh: {imm8, rd low}');
-  b.next();
-  const d = b.name(b.op1(muxTree(3, 16), [`${alu}.y`, w.xd, w.yd, movv, ldi, ldh, `${mac}.r`, z16, c('wsrc')], 'register write data'), 'd', true);
-  b.wire(d, `${regs}.d`);
-  const dlow = b.op1(cut(16, 0, 8), [d], 'low byte');
-  b.wire(dlow, `${agx}.wd`);
-  b.wire(dlow, `${agy}.wd`);
-  for (const s of w.sinks.xwe) b.wire(c('xwe'), s);
-  for (const s of w.sinks.ywe) b.wire(c('ywe'), s);
-  for (const s of w.sinks.wd) b.wire(qa, s);
-  b.wire(c('halt'), 'halt');
-  b.wire(c('outv'), 'outv');
-  b.wire(qa, 'out');
+/**
+ * The datapath drawn by hand, left to right as the mockup shows: fetch (SEQUENCER, PROGRAM, DECODE), the two address generators and
+ * their memories, the MAC, the registers and the ALU, and the register write multiplexer. The X and Y buses are real wires from the
+ * memories to the MAC and the write multiplexer. What DECODE sends to the units is a label (control), and so are the few long ways
+ * back (the register write data, the store data).
+ */
+function dsp24Drawing(mem: Mems | null): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const S = new Sheet();
+  const M16 = busMux2(16);
+  const XR = 88, YR = 88; // memories' column
+  const XY = 9, YY = 81; // top rows of the X and Y memories
+  if (mem) {
+    S.alignY('rom', mem.rom, 24, 'addr', 38, 'program');
+    S.place('xram', mem.xram, XR, XY, 'X memory');
+    S.place('yram', mem.yram, YR, YY, 'Y memory');
+  }
+  S.place('dec', DSP24_DECODE, 40, 2, 'Decode');
+  S.place('regs', DSP24_REGS, 112, 22, 'Registers');
+  S.alignY('seq', DSP24_SEQ, 0, 'pc', 38, 'Sequencer');
+  S.place('aguX', DSP24_AGU, 68, 4, 'AGU X');
+  S.place('aguY', DSP24_AGU, 68, 76, 'AGU Y');
+  S.place('mac', DSP24_MAC, 130, 60, 'MAC');
+  S.place('u0', cut(14, 0, 8), 112, 40, 'imm8');
+  S.place('u1', placed(8, 0, 16), 122, 40, 'imm8, signed');
+  S.place('u2', placed(14, 0, 16), 142, 36, 'imm14, signed');
+  S.place('u3', M16, 130, 31, 'b operand');
+  S.place('alu', DSP24_ALU, 140, 25, 'ALU');
+  S.place('u4', busMux2(8), 112, 46, 'AGU register read');
+  S.place('u5', constWord(8, 0), 118, 52);
+  S.place('u6', constWord(16, 0), 126, 54);
+  S.place('u7', merger([8, 8], 2), 126, 49, 'zero-extended');
+  S.place('u8', muxTree(2, 16), 136, 44, 'mov source');
+  S.place('u9', cut(16, 0, 8), 126, 43);
+  S.place('u10', merger([8, 8], 2), 146, 41, 'ldh: {imm8, rd low}');
+  S.place('u11', muxTree(3, 16), 160, 27, 'register write data');
+  S.place('u12', cut(16, 0, 8), 170, 35, 'low byte');
+
+  const ctl = (n: string, ...sinks: string[]): NetDef => ({ name: n, ends: [`dec.${n}`, ...sinks], tags: true });
+  const mx = (inst: string, pin: string) => (mem ? inst : pin);
+  const nets: NetDef[] = [
+    { name: 'clk', ends: ['clk', ...(mem ? ['xram.clk', 'yram.clk'] : []), 'regs.clk', 'seq.clk', 'aguX.clk', 'aguY.clk', 'mac.clk'], tags: true },
+    { name: 'instr', ends: [mem ? 'rom.data' : 'instr', 'dec.instr'] },
+    ctl('ra', 'regs.ra'), ctl('rb', 'regs.rb'), ctl('rd', 'regs.wi'), ctl('rwe', 'regs.we'),
+    ctl('halt', 'seq.halt', 'halt'), ctl('jmp', 'seq.jmp'), ctl('jz', 'seq.jz'), ctl('jnz', 'seq.jnz'),
+    {
+      name: 'qa', ends: ['regs.qa', 'alu.a', 'u8.d0', 'u9.a', 'seq.qa', ...(mem ? ['xram.din', 'yram.din'] : ['wdata']), 'out'],
+      tags: ['seq.qa', ...(mem ? ['xram.din', 'yram.din'] : ['wdata']), 'out'],
+    },
+    ctl('addr', 'seq.addr'), ctl('isloop', 'seq.isloop'), ctl('lreg', 'seq.lreg'), ctl('cnt', 'seq.cnt'), ctl('lend', 'seq.lend'),
+    { name: 'pc', ends: ['seq.pc', ...(mem ? ['rom.addr'] : []), 'pc'], tags: ['pc'] },
+    ctl('xp', 'aguX.sel'), ctl('xmode', 'aguX.mode'), ctl('xact', 'aguX.act'), ctl('wex', 'aguX.we'),
+    ctl('wsel', 'aguX.wsel', 'aguY.wsel'), ctl('rsel', 'aguX.rsel', 'aguY.rsel'),
+    ctl('yp', 'aguY.sel'), ctl('ymode', 'aguY.mode'), ctl('yact', 'aguY.act'), ctl('wey', 'aguY.we'),
+    { ends: ['aguX.a', mx('xram.addr', 'xaddr')] },
+    { ends: ['aguY.a', mx('yram.addr', 'yaddr')] },
+    { ends: [mx('xram.dout', 'xdata'), 'mac.x', 'u11.d1'], via: { 'u11.d1': [[158, 13], [158, 31]] } },
+    { ends: [mx('yram.dout', 'ydata'), 'mac.y', 'u11.d2'], via: { 'u11.d2': [[156, 85], [156, 33]] } },
+    ctl('macop', 'mac.op'), ctl('macen', 'mac.en'), ctl('sh', 'mac.sh'),
+    ctl('imm', 'u0.a', 'u2.a'),
+    { ends: ['u0.y', 'u1.a', 'u10.i1'] },
+    { name: 'qb', ends: ['regs.qb', 'u3.a'] },
+    { ends: ['u1.y', 'u3.b'] },
+    ctl('bimm', 'u3.s'),
+    { ends: ['u3.y', 'alu.b'] },
+    ctl('aluf', 'alu.f'),
+    { ends: ['aguX.q', 'u4.a'] },
+    { ends: ['aguY.q', 'u4.b'] },
+    ctl('srcy', 'u4.s'),
+    { ends: ['u4.y', 'u7.i0'] },
+    { ends: ['u5.y', 'u7.i1'] },
+    { ends: ['u7.out', 'u8.d1', 'u8.d2'] },
+    { ends: ['u6.y', 'u8.d3', 'u11.d7'], tags: ['u11.d7'] },
+    ctl('msrc', 'u8.s'),
+    { ends: ['u9.y', 'u10.i0'] },
+    { ends: ['alu.y', 'u11.d0'] },
+    { ends: ['u8.y', 'u11.d3'] },
+    { ends: ['u2.y', 'u11.d4'] },
+    { ends: ['u10.out', 'u11.d5'] },
+    { ends: ['mac.r', 'u11.d6'], via: { 'u11.d6': [[152, 65], [152, 41]] } },
+    ctl('wsrc', 'u11.s'),
+    { name: 'd', ends: ['u11.y', 'regs.d', 'u12.a'], tags: ['regs.d'] },
+    { ends: ['u12.y', 'aguX.wd', 'aguY.wd'], tags: true },
+    ctl('xwe', mx('xram.we', 'xwe')), ctl('ywe', mx('yram.we', 'ywe')),
+    ctl('outv', 'outv'),
+  ];
+  const pins: Record<string, [number, number]> = mem
+    ? { clk: [0, 90], pc: [20, 32], out: [180, 22], outv: [180, 26], halt: [180, 30] }
+    : {
+      clk: [0, 90], instr: [34, 38], xdata: [104, 13], ydata: [104, 85], pc: [22, 38], xaddr: [84, 11], yaddr: [84, 83], xwe: [84, 15], ywe: [84, 87],
+      wdata: [84, 13], out: [180, 22], outv: [180, 26], halt: [180, 30],
+    };
+  return { instances: S.instances(), nets, pins };
 }
 
 const cores = new Map<string, ComponentDef>();
@@ -199,16 +252,12 @@ const cores = new Map<string, ComponentDef>();
 export function dsp24Core(): ComponentDef {
   let d = cores.get('core');
   if (d) return d;
-  const b = new Builder(18, 12, 6);
-  b.pins('clk', 'instr', 'xdata', 'ydata');
-  dsp24Body(b, { instr: 'instr', xd: 'xdata', yd: 'ydata', sinks: { pc: ['pc'], xa: ['xaddr'], ya: ['yaddr'], xwe: ['xwe'], ywe: ['ywe'], wd: ['wdata'] } });
-  const R = b.right;
   d = define({
     id: 'dsp24_core', name: 'DSP core without memories', category: 'cpu',
     summary: 'The DSP core with its program and data memories outside: it shows its PC on pc and runs the 24-bit word on instr at every rising clk edge; X and Y are read on xaddr / xdata and yaddr / ydata in the same clock, and a store puts qa on wdata with xwe or ywe.',
     ports: DSP24_CORE_PORTS,
     symbol: { kind: 'box', label: 'DSP CORE' },
-    netlist: () => ({ pins: { ...pinsAt(ins(DSP24_CORE_PORTS), 0, 6), ...pinsAt(outs(DSP24_CORE_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => dsp24Drawing(null),
   });
   cores.set('core', d);
   return d;
@@ -221,22 +270,13 @@ export function dsp24Computer(program: ArrayLike<number>, x: ArrayLike<number> =
   let d = cores.get(key);
   if (d) return d;
   const mem = (words: ArrayLike<number>) => (Array.from({ length: 256 }, (_, i) => words[i] ?? 0).some((v) => v) ? bigRamWithInit(8, 16, Array.from({ length: 256 }, (_, i) => (words[i] ?? 0) & 0xffff)) : bigRam(8, 16));
-  const b = new Builder(10, 12, 6);
-  b.pins('clk');
-  const rom = b.op(R0, [''], 'program', 'rom');
-  const xr = b.op(mem(x), ['', '', '', 'clk'], 'X memory', 'xram');
-  const yr = b.op(mem(y), ['', '', '', 'clk'], 'Y memory', 'yram');
-  dsp24Body(b, {
-    instr: b.name(`${rom}.data`, 'instr', true), xd: `${xr}.dout`, yd: `${yr}.dout`,
-    sinks: { pc: [`${rom}.addr`, 'pc'], xa: [`${xr}.addr`], ya: [`${yr}.addr`], xwe: [`${xr}.we`], ywe: [`${yr}.we`], wd: [`${xr}.din`, `${yr}.din`] },
-  });
-  const R = b.right;
+  const mems = { rom: R0, xram: mem(x), yram: mem(y) };
   d = define({
     id: `dsp24_${R0.id.slice('dsp24_rom_'.length)}`, name: 'DSP core computer', category: 'cpu',
     summary: 'A small DSP core of our own: 16-bit data, 24-bit instructions, one per clock. Two data memories (X for samples, Y for coefficients) read in the same cycle by one instruction, an address generator for each (post-increment, circular windows, bit-reversed order), a hardware loop with no branch, and the RV32 chapter\'s MAC unit.',
     ports: DSP24_PORTS,
     symbol: { kind: 'box', label: 'DSP CORE' },
-    netlist: () => ({ pins: { ...pinsAt(ins(DSP24_PORTS), 0, 6), ...pinsAt(outs(DSP24_PORTS), R, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => dsp24Drawing(mems),
   });
   cores.set(key, d);
   return d;
