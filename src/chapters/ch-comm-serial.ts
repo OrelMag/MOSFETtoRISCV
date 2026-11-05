@@ -48,7 +48,8 @@ const eq = (ch: Parameters<typeof eye>[1]) => {
   return { o, g, ber: o > 0 ? berOf(o / 2, SIG * g) : 0.5 };
 };
 const E_NONE = eq({ rate: R8, bandwidth: B1 }), E_DE = eq({ rate: R8, bandwidth: B1, de: 0.3 }), E_CTLE = eq({ rate: R8, bandwidth: B1, ctle: 2 }), E_DFE = eq({ rate: R8, bandwidth: B1, dfe: 1 });
-const sci = (b: number) => (b < 1e-30 ? '< 10⁻³⁰' : b.toExponential(0).replace('e-', ' × 10⁻').replace('e+', ' × 10'));
+const sup = (e: string) => [...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('');
+const sci = (b: number) => (b < 1e-30 ? '< 10⁻³⁰' : b.toExponential(0).replace(/e-(\d+)/, (_, e: string) => ` × 10⁻${sup(e)}`).replace('e+', ' × 10'));
 const A8 = Math.exp((-2 * Math.PI * B1) / R8);
 const reach = mediaReach(10), reach56 = mediaReach(56);
 

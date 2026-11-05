@@ -95,7 +95,7 @@ const ns = (v: number) => (v < 0.1 ? `${(v * 1000).toFixed(0)} ps` : `${v.toFixe
 export const ps = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} ns` : `${v.toFixed(0)} ps`);
 const ohm = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} kΩ` : `${v.toFixed(0)} Ω`);
 const fj = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} pJ` : `${v.toFixed(0)} fJ`);
-export const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ? b.toFixed(2) : b.toExponential(0).replace('e-', ' × 10⁻'));
+export const sci = (b: number) => (b <= 0 || b < 1e-30 ? 'below 10⁻³⁰' : b > 0.1 ? b.toFixed(2) : b.toExponential(0).replace('e-', ' × 10⁻').replace(/⁻(\d+)/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`));
 
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. The driver and its load
