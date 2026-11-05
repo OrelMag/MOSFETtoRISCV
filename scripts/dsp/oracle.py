@@ -93,11 +93,98 @@ def adaptive():
     return {'cases': rows}
 
 
-GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive}
+def zigzag():
+    """T.81 Figure A.6, built the same way as dsp/pictures.ts: diagonals of u + v, alternating direction."""
+    o = []
+    for s in range(15):
+        cells = [v * 8 + (s - v) for v in range(8) if 0 <= s - v < 8]
+        o += cells if s % 2 else cells[::-1]
+    return o
+
+
+def segments(data):
+    """A JPEG's marker segments up to the scan: (marker, body)."""
+    i, out = 2, []
+    while i < len(data):
+        m, n = data[i + 1], data[i + 2] * 256 + data[i + 3]
+        out.append((m, data[i + 4:i + 2 + n]))
+        if m == 0xDA:
+            break
+        i += 2 + n
+    return out
+
+
+def pictures():
+    import io
+    import PIL
+    from PIL import Image, features
+    from scipy import fft, ndimage
+    zz = zigzag()
+    # the 2-D DCT: T.81 A.3.3 is scipy's orthonormal DCT-II along both axes
+    blocks = [np.reshape(np.round(np.array(noise(64, seed)) * 128), (8, 8)) for seed in (1, 2, 3)]
+    blocks.append(np.full((8, 8), -128.0))
+    dct = [{'x': r(b), 'S': r(fft.dctn(b, type=2, norm='ortho'))} for b in blocks]
+    # libjpeg's quality scaling and the Annex K tables, as Pillow writes them
+    img = Image.new('L', (16, 16))
+    img.putdata([(x * 13 + y * 7) % 256 for y in range(16) for x in range(16)])
+    tables = {}
+    for q in (1, 10, 25, 30, 33, 50, 75, 95, 100):
+        f = io.BytesIO()
+        img.save(f, 'JPEG', quality=q, optimize=False)
+        body = next(b for m, b in segments(f.getvalue()) if m == 0xDB)
+        natural = [0] * 64
+        for k in range(64):
+            natural[zz[k]] = body[1 + k]
+        tables[str(q)] = natural
+    f = io.BytesIO()
+    img.save(f, 'JPEG', quality=50, optimize=False)
+    huff = {}
+    for m, b in segments(f.getvalue()):
+        if m == 0xC4:
+            j = 0
+            while j < len(b):
+                bits = list(b[j + 1:j + 17])
+                huff['dc' if b[j] >> 4 == 0 else 'ac'] = {'bits': bits, 'vals': list(b[j + 17:j + 17 + sum(bits)])}
+                j += 17 + sum(bits)
+    # 2-D filtering: correlation, the edge sample repeated (mode 'nearest')
+    W, H = 16, 12
+    p = np.array([[(x * 37 + y * 91 + x * y * 13) % 256 for x in range(W)] for y in range(H)], float)
+    kernels = {
+        'box': np.ones((3, 3)) / 9, 'blur': np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]]) / 16,
+        'sharpen': np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], float), 'edges': np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], float),
+    }
+    filt = {k: r(ndimage.correlate(p, v, mode='nearest')) for k, v in kernels.items()}
+    shrink = {}
+    for m in (2, 3):
+        n = 8 * m + 1
+        t = np.arange(n) - (n - 1) / 2
+        taps = np.where(t == 0, 1 / m, np.sin(np.pi * t / m) / (np.pi * np.where(t == 0, 1, t))) * (0.54 - 0.46 * np.cos(2 * np.pi * np.arange(n) / (n - 1)))
+        taps = taps / taps.sum()
+        q = ndimage.correlate1d(ndimage.correlate1d(p, taps, axis=1, mode='nearest'), taps, axis=0, mode='nearest')
+        shrink[str(m)] = {'taps': r(taps), 'filtered': r(q)}
+    # our own files, decoded by libjpeg through Pillow
+    decoded = {}
+    for q in (10, 75):
+        im = Image.open(OUT / f'pictures-q{q}.jpg')
+        im.load()
+        decoded[str(q)] = {'mode': im.mode, 'size': list(im.size), 'px': list(im.tobytes())}
+    return {
+        'pillow': PIL.__version__, 'libjpeg_turbo': features.version('libjpeg_turbo'),
+        'dct': dct, 'tables': tables, 'huff': huff, 'picture': {'w': W, 'h': H, 'px': r(p)}, 'filters': filt, 'shrink': shrink, 'decoded': decoded,
+    }
+
+
+GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures}
 
 
 def stamp(data):
-    return {'tools': {'python': sys.version.split()[0], 'numpy': np.__version__, 'scipy': scipy.__version__}, **data}
+    tools = {'python': sys.version.split()[0], 'numpy': np.__version__, 'scipy': scipy.__version__}
+    try:
+        import PIL
+        tools['pillow'] = PIL.__version__
+    except ImportError:
+        pass
+    return {'tools': tools, **data}
 
 
 def close(a, b, path=''):
