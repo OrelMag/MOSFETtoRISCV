@@ -20,7 +20,7 @@ import { type BuildChallenge, type CheckResult, importAnswer, startChallenge } f
 import { Editor } from '../../editor/editor';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
-import type { Capstone } from '../../learn/capstones';
+import type { AnyCapstone } from '../../learn/capstones';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
 import { markJump } from '../returnto';
@@ -70,7 +70,7 @@ export class CapstonePage implements Page {
   readonly kind = 'capstone';
   readonly el: HTMLElement;
   readonly nodeId: string;
-  private cap?: Capstone;
+  private cap?: AnyCapstone;
   private ch?: BuildChallenge;
   private editor?: Editor;
   private chal?: ReturnType<typeof installChallenges>;
@@ -146,7 +146,7 @@ export class CapstonePage implements Page {
     const others = builtCapstones().filter((c) => c.id !== cap.id);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: '#/campaign', title: 'The campaign' }, icon('chevL', 14), 'Campaign'),
-      h('span', { class: 'lv-badge cap-tier' }, `TIER ${cap.tier} CAPSTONE`),
+      h('span', { class: 'lv-badge cap-tier' }, cap.tier ? `TIER ${cap.tier} CAPSTONE` : 'COMMUNICATION CAPSTONE'),
       h('span', { class: 'lv-crumb' }, h('b', null, cap.title)),
       this.isBrief() ? this.briefBadge() : this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
       h('span', { class: 'lv-spacer' }),
@@ -321,7 +321,7 @@ export class CapstonePage implements Page {
       shown.map(([label, k], i) => h('tr', null, h('td', null, label), h('td', null, cell(val(m, k))), refCells[i])));
     const close = () => { this.result?.remove(); this.result = null; };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'Capstone passed' },
-      h('h3', null, icon('check', 20), g.first ? `Tier ${cap.tier} capstone passed` : g.best ? 'New best' : 'Passes'),
+      h('h3', null, icon('check', 20), g.first ? (cap.tier ? `Tier ${cap.tier} capstone passed` : 'Capstone passed') : g.best ? 'New best' : 'Passes'),
       h('p', { class: 'sub' }, g.first ? 'The tier is marked done on My path. Show answer and the reference are open now; the reference is the same task done one way, not the only way.' : 'Still passing.'),
       table,
       h('div', { class: 'lv-res-act' },

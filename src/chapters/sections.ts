@@ -20,6 +20,7 @@ export const SECTIONS: readonly { name: string; first: string }[] = [
   { name: 'Communication: the channel', first: 'signals' },
   { name: 'Communication: getting it right', first: 'errors' },
   { name: 'Communication: networks', first: 'ethernet' },
+  { name: 'Communication: the air and the bench', first: 'radio' },
   { name: 'Appendix', first: 'appendix-6502' },
 ];
 
