@@ -29,7 +29,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** The plan's XOR gates over `srcs`, one column per level; returns each output's driver. */
-function xorColumns(b: Builder, plan: XorPlan, srcs: string[]): string[] {
+export function xorColumns(b: Builder, plan: XorPlan, srcs: string[]): string[] {
   const inputs = srcs.length, level = new Array<number>(inputs).fill(0), gate: string[] = [];
   plan.pairs.forEach(([x, y], k) => { level[inputs + k] = Math.max(level[x], level[y]) + 1; });
   const drv = (id: number) => (id < inputs ? srcs[id] : gate[id - inputs]);

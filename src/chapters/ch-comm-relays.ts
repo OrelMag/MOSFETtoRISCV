@@ -46,7 +46,7 @@ const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
-  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('carriers'), 'Many carriers'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('codes'), 'Codes near the limit'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
   [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('queues'), 'Queues and congestion'], [numOf('secret'), 'Keeping it secret'], [numOf('path'), 'The internet path'],
 ];
 /** The five questions, with the chapters of the track that answer each. */
@@ -253,7 +253,7 @@ export const chTelegraph: Chapter = {
         the number of levels the noise leaves distinguishable. On ${groupDigits(TONE.B)} Hz at ${TONE.db} dB (${f0(dbToRatio(TONE.db))} ×) that is ${levelsSupported(dbToRatio(TONE.db)).toFixed(1)} levels and
         ${f1(shannon(TONE.B, dbToRatio(TONE.db)) / 1e3)} kb/s.</p>
         <p>The marked lines are systems with published rates. The V.34 voice modem, ${(V34.rate / 1e3).toFixed(1)} kb/s on about ${f1(V34.B / 1e3)} kHz of telephone channel, is ${V34_ETA.toFixed(1)} bit/s per hertz, so by Shannon's theorem that line had at least
-        ${f0(ratioToDb(snrNeeded(V34_ETA)))} dB of SNR (assuming that bandwidth). The theorem says a code exists and not what it is: closing the gap to the limit took the error-correcting codes of chapter ${numOf('errors')} and
+        ${f0(ratioToDb(snrNeeded(V34_ETA)))} dB of SNR (assuming that bandwidth). The theorem says a code exists and not what it is: closing the gap to the limit took the error-correcting codes of chapter ${numOf('codes')} and
         decades of work.</p>
         <div class="try">Hold the bandwidth, raise the levels and find the SNR at which they fit. Then drop the SNR by 10 dB.</div>`,
       widget: () => limitsWidget(true),

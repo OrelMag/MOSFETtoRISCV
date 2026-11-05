@@ -12,7 +12,19 @@ export interface StepMove {
   title: string;
 }
 
-export const STEP_MOVES: readonly (readonly StepMove[])[] = [];
+export const STEP_MOVES: readonly (readonly StepMove[])[] = [
+  [
+    { from: 'modem', step: 7, to: 'carriers', toStep: 0, title: 'Many tones, one FFT' },
+    { from: 'modem', step: 8, to: 'carriers', toStep: 5, title: 'ADSL: many carriers' },
+  ],
+  [
+    { from: 'errors', step: 9, to: 'codes', toStep: 0, title: 'A code with memory' },
+    { from: 'errors', step: 10, to: 'codes', toStep: 1, title: 'The Viterbi decoder' },
+    { from: 'errors', step: 11, to: 'codes', toStep: 2, title: 'Reed-Solomon: errors in bytes' },
+    { from: 'errors', step: 12, to: 'codes', toStep: 5, title: 'Bursts: interleaving' },
+    { from: 'errors', step: 13, to: 'codes', toStep: 6, title: 'How far from Shannon' },
+  ],
+];
 
 export interface StepPlace { chapter: string; step: number }
 

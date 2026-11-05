@@ -1,0 +1,37 @@
+/* Codes near the limit: the decoder's phases, the burst map, the graph and the plots' extras. Colours are the site's tokens, so both themes follow. */
+.cn-phases { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0; }
+.cn-phase { font: 11px var(--font-mono, monospace); padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
+.cn-phase.past { color: var(--text-2); background: var(--surface-2); }
+.cn-phase.on { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+.cn-read { font: 12px var(--font-mono, monospace); color: var(--text); gap: 4px 12px; align-items: center; }
+.cn-name { font: 12px var(--font-mono, monospace); color: var(--text-2); margin-right: 4px; align-self: center; }
+.err-bit.fix { background: var(--good-soft, var(--surface-2)); color: var(--good, #0b8259); }
+.err-bit.sent { opacity: .75; }
+.cn-map { width: 100%; height: auto; display: block; }
+.cn-track { fill: var(--surface-2); }
+.cn-err { fill: var(--bad, #c93232); }
+.cn-bar { fill: var(--accent); }
+.cn-bar.bad { fill: var(--bad, #c93232); }
+.cn-limit { stroke: var(--text-2); stroke-dasharray: 5 4; }
+.cn-lab { font-size: 11px; fill: var(--text-2); }
+.cn-graph { width: 100%; height: auto; display: block; }
+.cn-msg { stroke: var(--border-strong, var(--border)); }
+.cn-msg.good { stroke: var(--good, #0b8259); opacity: .75; }
+.cn-msg.bad { stroke: var(--bad, #c93232); opacity: .85; }
+.cn-chk { fill: var(--surface-2); stroke: var(--text-2); }
+.cn-chk.bad { fill: var(--bad-soft, var(--surface-3)); stroke: var(--bad, #c93232); }
+.cn-var { fill: var(--surface); stroke: var(--good, #0b8259); stroke-width: 1.6; }
+.cn-var.weak { stroke: var(--warn, #a85f07); }
+.cn-var.bad { fill: var(--bad-soft, var(--surface-3)); stroke: var(--bad, #c93232); }
+.cn-var-g { cursor: pointer; }
+.cn-var-g:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cn-t { font-size: 11px; fill: var(--text); pointer-events: none; }
+.cn-web { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.cn-v { stroke-dasharray: 4 3; }
+.cn-v.lim { stroke: var(--bad, #c93232); }
+.cn-v.th { stroke: var(--good, #0b8259); }
+.cn-rs { stroke: var(--warn, #a85f07); }
+.cn-sq { fill: var(--warn, #a85f07); }
+.cn-pt { fill: var(--accent); stroke: var(--surface); }
+.cn-pt.hollow { fill: var(--surface); stroke: var(--accent); }
+@media (pointer: coarse) { .cn-var { stroke-width: 2.4; } }
