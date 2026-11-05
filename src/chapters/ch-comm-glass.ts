@@ -1,5 +1,5 @@
 // Light in glass (level Communication): how bits cross an ocean. It starts where Fast serial links' reach comparison stops. All models (phys/fibre.ts), labelled as models: there are no
-// gates here, and the only part with a transistor is the laser driver and the photodiode's amplifier, which the chapter leaves out. Every number below is computed by the models or pinned by tests.
+// gates here, and the only part with a transistor is the laser driver and the photodiode's amplifier, which the chapter leaves out. Model numbers below are computed by the models; dates, records and cable figures are typed, from public sources.
 
 import { dbToRatio } from '../comm/limits';
 import {
@@ -60,7 +60,7 @@ export const chGlass: Chapter = {
         why: ['', 'That is the case of a source wider than the modulation.', 'That is what happens going from 10 to 40 Gb/s: four times the rate.', 'The reach depends on the rate, through the pulse\'s bandwidth.'],
       },
       {
-        question: `Past the optimum launch power, each extra dB lowers SNR by about 2 dB. Why?`,
+        question: `Far past the optimum launch power, each extra dB lowers SNR by about 2 dB. Why?`,
         options: ['Nonlinear noise rises with P³ while the signal rises with P, so the ratio falls as P²', 'The amplifiers saturate', 'The fibre starts to absorb more', 'The receiver overloads'],
         answer: 0,
         explain: 'The Kerr effect makes the index depend on intensity, and in a wide WDM system the result looks like noise that goes as the cube of the power. Signal over that noise goes as P⁻².',
@@ -74,9 +74,9 @@ export const chGlass: Chapter = {
       title: 'Why glass',
       body: `
         <p>The fast serial links chapter ended on a comparison: copper loses tens of dB a metre at tens of GHz, single-mode fibre about ${SMF.dbPerKm} dB a <em>kilometre</em> at any rate you could modulate. This chapter is about that fibre: what the loss is made of, how light stays in the glass, what happens to pulses over thousands of kilometres, and how a link under an ocean is budgeted. It has no gates in it. These are models, each tested against a closed form, and the prose says when it is simplifying.</p>
-        <p>Purified silica has two ways to lose light. <strong>Rayleigh scattering</strong> comes from density fluctuations frozen in when the glass cooled, far smaller than a wavelength; it goes as λ⁻⁴, the reason the sky is blue. <strong>Infrared absorption</strong> is the Si–O bond vibrating, whose tail rises exponentially at long wavelengths. Between them there is a minimum at about ${nf(MIN.um * 1000, 0)} nm, ${nf(MIN.db, 2)} dB/km in this model: real fibre reaches about 0.17, and the record is near 0.14.</p>
-        <p>Move the wavelength. At 850 nm, the first window, cheap lasers and silicon detectors work but the loss is ${nf(lossDb(0.85), 1)} dB/km of scattering alone (and a multimode core's heavier doping brings it to about ${MMF.dbPerKm}). At 1310 nm it is ${nf(lossDb(1.31, 0), 2)}. At 1550 nm it is ${nf(lossDb(1.55), 2)}. Over 100 km that is the difference between ${nf(100 * 10 ** (-lossDb(1.55) * 10 / 10), 1)} % of the light left and ${nf(100 * 10 ** (-lossDb(1.31, 0) * 10 / 10), 1)} %. The bump at 1383 nm is OH⁻ left from manufacture, removed in "low water peak" fibre.</p>
-        <p>History in one line: about 20 dB/km was the 1970 Corning result that made fibre communication plausible, and silica had reached 0.2 dB/km by 1979, close to this floor. The rest of the gains in this chapter came from what is done with the light.</p>`,
+        <p>Purified silica has two ways to lose light. <strong>Rayleigh scattering</strong> comes from density fluctuations frozen in when the glass cooled, far smaller than a wavelength; it goes as λ⁻⁴, the reason the sky is blue. <strong>Infrared absorption</strong> is the Si–O bond vibrating, whose tail rises exponentially at long wavelengths. Between them there is a minimum at about ${nf(MIN.um * 1000, 0)} nm, ${nf(MIN.db, 2)} dB/km in this model: commercial low-loss fibre reaches about 0.15, and the record is near 0.14.</p>
+        <p>Move the wavelength. At 850 nm, the first window, cheap lasers and silicon detectors work but the loss is ${nf(lossDb(0.85), 1)} dB/km of scattering alone (and a multimode core's heavier doping brings it to about ${MMF.dbPerKm}). At 1310 nm it is ${nf(lossDb(1.31, 0), 2)}. At 1550 nm it is ${nf(lossDb(1.55), 2)}. Over 100 km that is the difference between ${nf(100 * 10 ** (-lossDb(1.55) * 100 / 10), 1)} % of the light left and ${nf(100 * 10 ** (-lossDb(1.31, 0) * 100 / 10), 1)} %. The bump at 1383 nm is OH⁻ left from manufacture, removed in "low water peak" fibre.</p>
+        <p>History in one line: 17 dB/km was the 1970 Corning result that made fibre communication plausible (20 was the target of the day), and silica had reached 0.2 dB/km by 1979, close to this floor. The rest of the gains in this chapter came from what is done with the light.</p>`,
       widget: lossWidget,
       challenge: {
         kind: 'quiz',
@@ -103,7 +103,7 @@ export const chGlass: Chapter = {
         options: ['A large step means more modes and larger delay differences; a small step, with a small core, gives one mode', 'Dopant is expensive', 'A small step reduces loss by a large factor', 'A large step cannot be drawn into a fibre'],
         answer: 0,
         explain: 'NA grows with Δ, and so does V, the count of modes. Multimode systems trade reach for easy coupling; long haul wants one mode. Doping does also add some scattering, but that is the smaller effect.',
-        why: ['', 'Germanium doping is a fine cost beside a 6 000 km cable.', 'It helps a little. It is not the deciding reason.', 'Multimode fibre has a step three times larger.'],
+        why: ['', 'Doping costs little per kilometre. The modes are the reason.', 'It helps a little. It is not the deciding reason.', 'Multimode fibre has a step three times larger.'],
       },
     },
     {
@@ -112,7 +112,7 @@ export const chGlass: Chapter = {
         <p>Rays are an approximation. The core is a waveguide, and only certain field patterns, <strong>modes</strong>, propagate. A mode must fit: the fields of a cylindrical guide are Bessel functions, and each mode has a cutoff at a zero of one. One number decides how many fit:</p>
         <p><code>V = 2π a NA / λ</code></p>
         <p>Below <strong>V = 2.405</strong>, the first zero of J₀, only the fundamental mode LP01 exists (in two polarizations). That is <strong>single-mode fibre</strong>: a ${nf(SMF_G652.aUm * 2, 0)} µm core with V = ${nf(VS, 2)} at 1550 nm, and a cutoff near ${nf(cutoffUm(SMF_G652.aUm, NAS) * 1000, 0)} nm below which it isn't single-mode any more. Press the presets: the same fibre at 850 nm carries several.</p>
-        <p>A 50 µm core at 850 nm has V = ${nf(VM, 0)} and about ${n0(modesLarge(VM))} modes (V²/2), which is why a cheap transmitter can couple into it. Each mode has its own speed, which in a step core gives a spread of n₁Δ/c: ${nf(stepDelayPsKm(MMF_50) / 1000, 0)} ns/km, a few tens of Mb/s·km. The cure was a parabolic index profile, where a steep ray spends its extra distance in lower-index glass where light goes faster. In theory the spread falls by Δ/8, to ${nf(gradedDelayPsKm(MMF_50), 0)} ps/km: the ${MMF.modalMHzKm} MHz·km of OM4 fibre in the fast serial links chapter is the graded core, and it is a few hundred metres at 100 Gb/s.</p>
+        <p>A 50 µm core at 850 nm has V = ${nf(VM, 0)} and, with a step index, about ${n0(modesLarge(VM))} modes (V²/2; half that with the parabolic index below), which is why a cheap transmitter can couple into it. Each mode has its own speed, which in a step core gives a spread of n₁Δ/c: ${nf(stepDelayPsKm(MMF_50) / 1000, 0)} ns/km, about 10 MHz·km. The cure was a parabolic index profile, where a steep ray spends its extra distance in lower-index glass where light goes faster. In theory the spread falls by Δ/8, to ${nf(gradedDelayPsKm(MMF_50), 0)} ps/km: the ${MMF.modalMHzKm} MHz·km of OM4 fibre in the fast serial links chapter is the graded core, and by that chapter's rule it is about ${nf((MMF.modalMHzKm / (0.7 * 100000)) * 1000, 0)} m on one 100 Gb/s lane.</p>
         <p>Inside a data centre that is fine. Across anything longer, you pay for the harder alignment and take the single mode: no modal delay at all.</p>`,
       widget: modesWidget,
       challenge: {
@@ -127,7 +127,7 @@ export const chGlass: Chapter = {
     {
       title: 'Colours at different speeds',
       body: `
-        <p>One mode still doesn't give one speed. Glass's index depends on wavelength (that is what a prism does), and a pulse holds a band of wavelengths. So its colours drift apart: <strong>chromatic dispersion</strong>, <code>D</code> in ps per nm of bandwidth per km. For standard fibre it crosses zero at ${LAMBDA0} nm and is about ${nf(D1550, 1)} ps/(nm·km) at 1550 (the G.652 fit (S₀/4)(λ − λ₀⁴/λ³), S₀ = ${S0}).</p>
+        <p>One mode still doesn't give one speed. Glass's index depends on wavelength (that is what a prism does), and a pulse holds a band of wavelengths. So its colours drift apart: <strong>chromatic dispersion</strong>, <code>D</code> in ps per nm of bandwidth per km. For standard fibre it crosses zero at ${LAMBDA0} nm and is about ${nf(D1550, 1)} ps/(nm·km) at 1550 (the G.652 fit (S₀/4)(λ − λ₀⁴/λ³) at the standard's largest slope, S₀ = ${S0}, so the top of the 16.5 to 17.5 real fibres show).</p>
         <p>Physicists write it β₂ = −Dλ²/(2πc) = ${nf(B2, 1)} ps²/km. A Gaussian pulse of half-width T₀ grows as T = T₀ √(1 + (|β₂| L / T₀²)²), where L<sub>D</sub> = T₀² / |β₂| is its <strong>dispersion length</strong>. Far past it, the width is proportional to distance and <em>inversely</em> to T₀: a short pulse has a wide spectrum and spreads fastest. So a pulse at twice the bit rate is half as long, spreads twice as fast and has half as much room: reach goes as <strong>1 / B²</strong>.</p>
         <p>The usual rule keeps the rms width below a quarter of a bit, which gives <code>L ≤ 1 / (16 B² |β₂|)</code>: ${n0(reachNarrowKm(10, B2))} km at 10 Gb/s and ${nf(reachNarrowKm(40, B2), 1)} km at 40 for a clean laser, one whose linewidth is less than its modulation. A cheap source a nanometre wide spreads by D Δλ regardless of the rate: ${nf(reachWideKm(10, D1550, 1), 1)} km at 10 Gb/s.</p>
         <p>Three cures, in order of history. Work at 1310 nm, where D ≈ 0, and take the higher loss. Build dispersion-shifted fibre (which, for many wavelengths at once, turned out to be nearly the worst thing to do: colours that stay in step beat together through the nonlinearity of the last step). Put in <strong>dispersion-compensating fibre</strong> of the opposite sign every span, the 1990s' solution. Or do it in a DSP, as now, since dispersion is linear and can be run backwards, the same mathematics in reverse.</p>`,
@@ -146,8 +146,8 @@ export const chGlass: Chapter = {
       body: `
         <p>A lane of copper is one signal. A fibre carries many without them interfering, because light of different wavelengths doesn't interact (not much: see the last step), and a prism-like device can split them apart. That is <strong>wavelength division multiplexing</strong>.</p>
         <p>Channels sit on the ITU's grid, anchored at 193.1 THz (about 1552.5 nm), at 100, 50 or finer GHz spacing. The C band, 1530 to 1565 nm, is ${nf((299792.458 / C_BAND[0] - 299792.458 / C_BAND[1]), 1)} THz: ${C50} channels at 50 GHz, each ${nf(spacingNm(50, 1550), 1)} nm apart. Add the L band and it is ${CL50}. At 32 GBd, two polarizations and a rate-${FEC_RATE} code, QPSK is ${R4.toFixed(0)} Gb/s a channel and 16-QAM ${R16.toFixed(0)}, so 16-QAM over C alone is ${nf((C50 * R16) / 1000, 1)} Tb/s on a single fibre, each way.</p>
-        <p>The bandwidth is there: the C band alone is more than ten times everything we use for radio. What limits a channel is not how fast you can modulate, but what the receiver's SNR will pay for. The next three steps are that budget.</p>
-        <p>Change the symbol rate. A channel needs a little more than its symbol rate in bandwidth, so higher rates mean wider spacing with the same total: a modem at 130 GBd in 150 GHz is the same use of glass as 32 GBd in 37.5 GHz, but with fewer lasers.</p>`,
+        <p>The bandwidth is there: the C band alone is ${nf(299792.458 / C_BAND[0] - 299792.458 / C_BAND[1], 1)} THz, more than ten times all the radio spectrum below 300 GHz. What limits a channel is not how fast you can modulate, but what the receiver's SNR will pay for. The next three steps are that budget.</p>
+        <p>Change the symbol rate. A channel needs a little more than its symbol rate in bandwidth, so higher rates mean wider spacing with the same total: a modem at 128 GBd in 150 GHz is the same use of glass as four at 32 GBd in 37.5 GHz, but with fewer lasers.</p>`,
       widget: wdmWidget,
       challenge: {
         kind: 'quiz',
@@ -172,7 +172,7 @@ export const chGlass: Chapter = {
       widget: amplifierWidget,
       challenge: {
         kind: 'quiz',
-        question: 'Keep total distance fixed and double the number of spans, halving each. What happens to OSNR, for a 16 dB span?',
+        question: 'Keep total distance fixed and double the number of spans, halving each. What happens to OSNR, for a 16 dB span that is all fibre?',
         options: ['It rises by 5 dB: 8 dB less loss per span, 3 dB more amplifiers', 'It falls by 3 dB: twice as many amplifiers', 'It is unchanged: the same fibre, the same amplification', 'It rises by 8 dB'],
         answer: 0,
         explain: 'OSNR has −L_span − 10 log N. L_span goes down by 8 dB and N doubles, costing 3 dB: a net gain of 5.',
@@ -182,8 +182,8 @@ export const chGlass: Chapter = {
     {
       title: 'A receiver that sees the field',
       body: `
-        <p>A photodiode measures intensity. All phase information is gone: four-level PAM is the best it can see, and a pulse spread by dispersion stays spread, because the operation that made it can't be inverted from |A|² alone.</p>
-        <p>A <strong>coherent receiver</strong> mixes the incoming light with a local laser on a 90° hybrid, an optical mixer, and four photodiodes read its I and Q in both polarizations. The ADCs get the optical field itself, as complex samples, the modem chapter's I and Q at 193 THz: mixing a light wave down to baseband, in effect. Everything linear that the fibre did can now be undone in a DSP.</p>
+        <p>A photodiode measures intensity. All phase information is gone: it can tell amplitude levels apart, as PAM4 does, and a pulse spread by dispersion stays spread, because the operation that made it can't be inverted from |A|² alone.</p>
+        <p>A <strong>coherent receiver</strong> mixes the incoming light with a local laser on a 90° hybrid, an optical mixer, and balanced pairs of photodiodes, eight in all, read its I and Q in both polarizations. The ADCs get the optical field itself, as complex samples, the modem chapter's I and Q at 193 THz: mixing a light wave down to baseband, in effect. Everything linear that the fibre did can now be undone in a DSP.</p>
         <p>Here is QPSK at 32 GBd, simulated sample by sample. With the box unticked, 500 km of dispersion smears the symbols past recognition. <strong>Undo the dispersion</strong> by the opposite phase, frequency by frequency, and the four clusters come back with exactly the BER the SNR predicts: Q(√SNR). Dispersion was never lost information. At 6 000 km it would need ${n0(cdTaps(B2, 6000, 32))} taps at 64 GS/s; a frequency-domain equalizer does it by FFT, the many-carriers mathematics again.</p>
         <p>Add a laser's <strong>linewidth</strong>: a phase random-walk from the two lasers. Without help the constellation turns and smears into a ring; a <strong>carrier tracker</strong> that takes each symbol to the fourth power (which removes QPSK's data, leaving 4 × the phase) follows it. Real receivers do polarization separation (a 2 × 2 adaptive equalizer), clock recovery and soft-decision FEC as well, all in one modem chip at over 100 GBd.</p>
         <p>This is why 100 Gb/s and beyond are coherent across long distances, while short data-centre links stay with direct detection and PAM4: coherent optics are costly and the links are short enough that dispersion can be lived with.</p>`,
@@ -194,7 +194,7 @@ export const chGlass: Chapter = {
         options: ['It has the complex field, and dispersion is a linear all-pass filter on the field, so it inverts', 'It has more bandwidth', 'It runs at lower power', 'It uses a different fibre'],
         answer: 0,
         explain: 'Dispersion multiplies each frequency by a phase. Multiply by the opposite phase and it is gone. A photodiode\'s output, intensity, has already lost those phases.',
-        why: ['', 'Bandwidth is not the difference; phase is.', 'It takes more power rather than less.', 'The fibre is the same; the receiver changes.'],
+        why: ['', 'Bandwidth is not the difference; phase is.', 'Power cannot invert a phase operation; only knowing the phase can.', 'The fibre is the same; the receiver changes.'],
       },
     },
     {
@@ -202,9 +202,9 @@ export const chGlass: Chapter = {
       body: `
         <p>So why not just launch more power? Glass isn't quite linear. Its index depends slightly on intensity (the <strong>Kerr effect</strong>), and a core only 10 µm across makes the intensity of even a milliwatt large, so a signal shifts its own phase and its neighbours'. Across a band of channels that behaves like additional noise, growing as P³ (the Gaussian-noise model):</p>
         <p><code>SNR = P / (N·A + N·η·P³)</code></p>
-        <p>where A is one span's amplifier noise and η the fibre's coefficient, here an illustrative 33 dB of SNR for a single span at 0 dBm. There is a best launch power, where nonlinear noise is half the amplifier noise. Below it you are short of signal; above it each extra dB costs 2. No amount of power beats this: the fibre has a capacity.</p>
+        <p>where A is one span's amplifier noise and η the fibre's coefficient, here illustrative: nonlinear noise alone would leave 33 dB of SNR after a single span at 0 dBm. There is a best launch power, where nonlinear noise is half the amplifier noise. Below it you are short of signal; above it SNR falls, gently at first and then by 2 dB for each dB. No amount of power beats this: the fibre has a capacity.</p>
         <p>Take a 6 600 km ocean in 60 km spans, ${SPAN_DB} dB each with splices and margin, and ${NFDB} dB amplifiers: ${OCEAN} repeaters. Best launch is ${nf(BEST.pDbm, 1)} dBm, for ${nf(BEST.snrDb, 1)} dB of SNR. QPSK needs ${nf(REQ[0], 1)} dB and closes, with reach ${n0(REACH[0])} km; 16-QAM needs ${nf(REQ[1], 1)}, reach ${n0(REACH[1])} km; 64-QAM reach ${n0(REACH[2])} km. So the same fibre carries different rates over different distances, and modern modems choose: rate is traded for reach at the ends, without touching the wet part of the cable.</p>
-        <p>Real figures to compare with: a modern trans-Atlantic cable is 10 to 20 fibre pairs at about 15 to 20 Tb/s per pair, with repeaters powered by a current of around an ampere fed at up to 10 to 15 kV down the cable's copper shell, from both ends. Each of the numbers worked here is in the design of one. At each end the light turns back into electrical lanes, of the kind in the fast serial links chapter, and joins the networks of the chapters ahead.</p>`,
+        <p>Real figures to compare with: recent trans-Atlantic cables are 8 to 16 fibre pairs (MAREA 8, Dunant 12, Grace Hopper 16) at about 20 to 30 Tb/s per pair, with repeaters powered by a current of around an ampere fed at up to 10 to 15 kV down the cable's copper shell, from both ends. Each of the numbers worked here is in the design of one. At each end the light turns back into electrical lanes, of the kind in the fast serial links chapter, and joins the networks of the chapters ahead.</p>`,
       widget: oceanWidget,
       challenge: {
         kind: 'quiz',
@@ -216,7 +216,7 @@ export const chGlass: Chapter = {
       },
       more: {
         numbers: `<p>${REQ.map((r, i) => `${QAMS[i].name}: ${nf(r, 1)} dB at a pre-FEC BER of ${FEC_BER}`).join(', ')}, a threshold standing for a strong soft-decision code of rate ${FEC_RATE}, taken as a constant. Shannon's capacity per channel at the SNR the panel shows is printed beside the rate. The η here is fit to a textbook span; a real design has its own value, with its fibre's effective area and each span's length. ${nf(dbToRatio(0), 0)} mW is 0 dBm.</p>`,
-        pitfall: '<p>The model has one type of span and flat gain, no polarization effects beyond the receiver\'s, and no margin for ageing. The last of these alone is several dB on a real cable, because it has to work for 25 years.</p>',
+        pitfall: '<p>The model has one type of span and flat gain, no polarization effects beyond the receiver\'s, nonlinear noise adding span by span (real systems add a little faster, so its reach is slightly optimistic), and no margin for ageing. The last of these alone is several dB on a real cable, because it has to work for 25 years.</p>',
       },
     },
   ],

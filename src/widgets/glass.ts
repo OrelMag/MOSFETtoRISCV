@@ -57,7 +57,7 @@ export function lossWidget(): Widget {
 
 // ---- a ray in a core --------------------------------------------------------------------------------------------------------------
 export function rayWidget(): Widget {
-  let deg = 6, deltaPct = 1;
+  let deg = 6, deltaPct = 0.34;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const n1 = 1.46;
   const paint = () => {
@@ -81,7 +81,7 @@ export function rayWidget(): Widget {
     out.replaceChildren(stat('Critical angle', `${nf(criticalDeg(n1, n2), 2)}°`), stat('NA', nf(na, 3)), stat('Accepted from air', `±${nf(acceptanceDeg(na), 1)}°`), stat('This ray', r.guided ? 'stays in' : 'leaks out', r.guided ? 'good' : 'bad'), r.guided ? stat('Longer path', `${nf((r.stretch - 1) * 100, 3)} %`) : h('span'), r.guided ? stat('Arrives late by', `${nf(delay / 1000, 1)} ns/km`) : h('span'));
   };
   const a = slider('Launch angle in air', 0, 25, 0.5, deg, (v) => `${v}°`, (v) => { deg = v; paint(); });
-  const b = slider('Index step Δ', 0.2, 2, 0.1, deltaPct, (v) => `${nf(v, 1)} %`, (v) => { deltaPct = v; paint(); });
+  const b = slider('Index step Δ', 0.2, 2, 0.02, deltaPct, (v) => `${nf(v, 1)} %`, (v) => { deltaPct = v; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), plot, out, h('p', { class: 'sub' }, 'Drawn six times taller than it is: the real angles are very small.')) };
 }
@@ -112,12 +112,13 @@ export function pulseWidget(): Widget {
   const paint = () => {
     const D = dispersionD(nm), b2 = beta2Of(D, nm), bit = 1000 / gbps, t0 = 0.3 * bit, t1 = gaussianWidth(t0, b2, km);
     const pattern = [1, 0, 1, 1, 0, 1, 0, 0, 1], span = pattern.length * bit;
-    const a = axes([0, span], [0, 1.3], pattern.map((_, i) => i * bit), [0, 0.5, 1], (v) => (v / bit) % 2 === 0 ? `${(v / bit).toFixed(0)}` : '', (v) => String(v), 'bits', 'intensity', false);
+    const a = axes([0, span], [0, 1.3], pattern.map((_, i) => i * bit), [0, 0.5, 1], (v) => Math.round(v / bit) % 2 === 0 ? `${Math.round(v / bit)}` : '', (v) => String(v), 'bits', 'intensity', false);
     const at = (t: number, w: number, amp: number) => pattern.reduce((sum, b, i) => sum + (b ? amp * Math.exp(-(((t - (i + 0.5) * bit) / w) ** 2)) : 0), 0);
     const pts = (w: number, amp: number) => Array.from({ length: 280 }, (_, i) => { const t = (i / 279) * span; return [a.x(t), a.y(Math.min(1.3, at(t, w, amp)))] as [number, number]; });
     plot.replaceChildren(svgOf(a, `A pulse pattern before and after ${km} km`, ...a.g, poly(pts(t0, 1), 'gl-l2'), poly(pts(t1, t0 / t1), 'gl-l1')));
-    const closed = t1 > bit * 0.55;
-    out.replaceChildren(stat('D', `${nf(D, 1)} ps/(nm·km)`), stat('β₂', `${nf(b2, 1)} ps²/km`), stat('Bit', `${nf(bit, 1)} ps`), stat('Pulse', `${nf(t0, 1)} → ${nf(t1, 1)} ps`, closed ? 'bad' : ''), stat('Doubles in width after', `${nf(dispersionLength(t0, b2) * Math.sqrt(3), 1)} km`), stat('Clean laser reach', `${nf(reachNarrowKm(gbps, b2), 0)} km`), stat('1 nm wide source', `${nf(reachWideKm(gbps, D, 1), 1)} km`));
+    const closed = 4 * (t1 / Math.SQRT2) > bit;   // the same rule as the reach below: an rms width over a quarter of a bit
+    const flat = Math.abs(D) < 0.01;
+    out.replaceChildren(stat('D', `${nf(D, 1)} ps/(nm·km)`), stat('β₂', `${nf(b2, 1)} ps²/km`), stat('Bit', `${nf(bit, 1)} ps`), stat('Pulse', `${nf(t0, 1)} → ${nf(t1, 1)} ps`, closed ? 'bad' : ''), stat('Doubles in width after', flat ? 'no limit from D' : `${nf(dispersionLength(t0, b2) * Math.sqrt(3), 1)} km`), stat('Clean laser reach', flat ? 'no limit from D' : `${nf(reachNarrowKm(gbps, b2), 0)} km`), stat('1 nm wide source', flat ? 'no limit from D' : `${nf(reachWideKm(gbps, D, 1), 1)} km`));
   };
   const a = slider('Bit rate', 2.5, 100, 2.5, gbps, (v) => `${v} Gb/s`, (v) => { gbps = v; paint(); });
   const b = slider('Distance', 0, 200, 1, km, (v) => `${v} km`, (v) => { km = v; paint(); });
@@ -132,7 +133,7 @@ export function wdmWidget(): Widget {
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
     const chans = gridChannels(ghz) + (band ? gridChannels(ghz, L_BAND) : 0), fits = gbd * 1.2 <= ghz;
-    const W = 560, H = 70, t0 = 186, t1 = 196, x = (t: number) => 10 + ((t - t0) / (t1 - t0)) * (W - 20);
+    const W = 560, H = 70, t0 = 184, t1 = 196, x = (t: number) => 10 + ((t - t0) / (t1 - t0)) * (W - 20);
     const rect = (b: [number, number], cls: string) => s('rect', { x: x(299792.458 / b[1]), y: 12, width: x(299792.458 / b[0]) - x(299792.458 / b[1]), height: 36, class: cls });
     const kids: SVGElement[] = [rect(C_BAND, 'gl-band'), ...(band ? [rect(L_BAND, 'gl-band')] : [])];
     const pitch = ghz / 1000;
@@ -157,7 +158,7 @@ export function wdmWidget(): Widget {
 
 // ---- an amplifier chain ---------------------------------------------------------------------------------------------------------------
 export function amplifierWidget(): Widget {
-  let spans = 10, kmSpan = 80, p = 0, nf_ = 5;
+  let spans = 10, kmSpan = 80, p = 0, nf_ = 4.5;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
     const spanDb = kmSpan * 0.2, show = Math.min(spans, 12);
@@ -200,7 +201,7 @@ export function coherentWidget(): Widget {
   const c = slider('Laser linewidth', 0, 5, 0.1, lw, (v) => `${nf(v, 1)} MHz`, (v) => { lw = v; paint(); });
   const box = (label: string, on: boolean, f: (v: boolean) => void) => { const i = h('input', { type: 'checkbox' }) as HTMLInputElement; i.checked = on; i.addEventListener('change', () => { f(i.checked); paint(); }); return h('label', { class: 'gl-box' }, i, ` ${label}`); };
   paint();
-  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'dram-ops' }, box('Undo the dispersion', comp, (v) => { comp = v; }), box('Track the carrier phase', track, (v) => { track = v; })), plot, out, h('p', { class: 'sub' }, 'QPSK at 32 GBd, one polarization, simulated sample by sample at 2 samples a symbol. A model: no optics, an already known clock.')) };
+  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'dram-ops' }, box('Undo the dispersion', comp, (v) => { comp = v; }), box('Track the carrier phase', track, (v) => { track = v; })), plot, out, h('p', { class: 'sub' }, 'QPSK at 32 GBd, one polarization, simulated sample by sample at 2 samples a symbol. A model: no optics, an already known clock, and the first symbols standing in as pilots to pick the tracker\'s quadrant.')) };
 }
 
 // ---- the ocean --------------------------------------------------------------------------------------------------------------------------
@@ -222,7 +223,7 @@ export function oceanWidget(): Widget {
     plot.replaceChildren(svgOf(a, `SNR against launch power over ${km} km; the best is ${nf(best.snrDb, 1)} dB at ${nf(best.pDbm, 1)} dBm`, ...a.g, poly(linear, 'gl-l2'), poly(curve, 'gl-l1'), line(44, yNeed, a.w - 10, yNeed, 'gl-need'), txt(a.w - 12, yNeed - 4, `${QAMS[q].name} needs ${nf(need, 1)} dB`, 'gl-t', 'end'), s('circle', { cx: a.x(best.pDbm), cy: a.y(Math.max(0, best.snrDb)), r: 4, class: 'gl-amp' }), s('circle', { cx: a.x(p), cy: a.y(Math.max(0, Math.min(30, s0))), r: 3.5, class: 'gl-cur-dot' })));
     const closes = s0 >= need, chans = gridChannels(50) + gridChannels(50, L_BAND), rate = 2 * gbd * QAMS[q].bitsPerPolSym * FEC_RATE, reach = maxSpans(need, nfdb, spanDb, gbd) * kmSpan;
     const lim = (2 * shannon(gbd, 10 ** (best.snrDb / 10))).toFixed(0);
-    out.replaceChildren(stat('Amplifiers', String(spans)), stat('This power', `${nf(s0, 1)} dB`, closes ? 'good' : 'bad'), stat('Best power', `${nf(best.pDbm, 1)} dBm, ${nf(best.snrDb, 1)} dB`), stat(`${QAMS[q].name} reach`, `${reach.toLocaleString('en-US')} km`), stat('Channel', `${rate.toFixed(0)} Gb/s (Shannon at this SNR: ${lim})`), stat('C + L, 50 GHz', `${(chans * rate / 1000).toFixed(1)} Tb/s a fibre pair direction`));
+    out.replaceChildren(stat('Amplifiers', String(spans)), stat('This power', `${nf(s0, 1)} dB`, closes ? 'good' : 'bad'), stat('Best power', `${nf(best.pDbm, 1)} dBm, ${nf(best.snrDb, 1)} dB`), stat(`${QAMS[q].name} reach`, `${reach.toLocaleString('en-US')} km`), stat('Channel', `${rate.toFixed(0)} Gb/s (Shannon at the best SNR: ${lim})`), stat('C + L, 50 GHz', `${(chans * rate / 1000).toFixed(1)} Tb/s each way on one pair`));
   };
   const sel = h('select', { class: 'mc-sel', 'aria-label': 'Modulation' }, ...QAMS.map((m, i) => h('option', { value: String(i) }, m.name)));
   sel.addEventListener('change', () => { q = Number((sel as HTMLSelectElement).value); paint(); });

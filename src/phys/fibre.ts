@@ -65,7 +65,7 @@ export function besselJ(n: number, x: number): number {
 /** LP modes in order of cutoff V (zeros of J_(l−1)), each with its degeneracy: polarizations × orientations. */
 export const LP_MODES: { name: string; cutoff: number; count: number }[] = [
   { name: 'LP01', cutoff: 0, count: 2 }, { name: 'LP11', cutoff: 2.4048, count: 4 }, { name: 'LP21', cutoff: 3.8317, count: 4 }, { name: 'LP02', cutoff: 3.8317, count: 2 },
-  { name: 'LP31', cutoff: 5.1356, count: 4 }, { name: 'LP12', cutoff: 5.5201, count: 4 }, { name: 'LP41', cutoff: 6.3802, count: 4 }, { name: 'LP22', cutoff: 7.0156, count: 4 }, { name: 'LP03', cutoff: 7.0156, count: 2 },
+  { name: 'LP31', cutoff: 5.1356, count: 4 }, { name: 'LP12', cutoff: 5.5201, count: 4 }, { name: 'LP41', cutoff: 6.3802, count: 4 }, { name: 'LP22', cutoff: 7.0156, count: 4 }, { name: 'LP03', cutoff: 7.0156, count: 2 }, { name: 'LP51', cutoff: 7.5883, count: 4 },
 ];
 export const modesAt = (v: number): typeof LP_MODES => LP_MODES.filter((m) => m.cutoff < v);
 /** Modes of a large core, polarizations counted: V² / 2. */
@@ -117,7 +117,11 @@ export const thzOf = (nm: number): number => C_NM_PS / nm;
 export const nmOf = (thz: number): number => C_NM_PS / thz;
 /** ITU-T G.694.1's fixed grid is anchored at 193.1 THz. */
 export const ANCHOR_THZ = 193.1, C_BAND: [number, number] = [1530, 1565], L_BAND: [number, number] = [1565, 1625];
-export const gridChannels = (ghz: number, band: [number, number] = C_BAND): number => Math.floor(((thzOf(band[0]) - thzOf(band[1])) * 1000) / ghz);
+/** Points of the grid inside a band: anchor + k × spacing. */
+export function gridChannels(ghz: number, band: [number, number] = C_BAND): number {
+  const lo = thzOf(band[1]), hi = thzOf(band[0]), step = ghz / 1000;
+  return Math.floor((hi - ANCHOR_THZ) / step) - Math.ceil((lo - ANCHOR_THZ) / step) + 1;
+}
 export const gridNm = (i: number, ghz: number): number => nmOf(ANCHOR_THZ + (i * ghz) / 1000);
 /** Wavelength spacing of a frequency spacing at nm: Δλ = λ² Δf / c. */
 export const spacingNm = (ghz: number, nm: number): number => (nm * nm * ghz * 1e-3) / C_NM_PS;
@@ -161,7 +165,7 @@ export function requiredSnrDb(q: Qam, ber = FEC_BER): number {
 // ---- the Kerr limit ------------------------------------------------------------------------------------------------------------
 /**
  * The Gaussian-noise model of nonlinear interference: per span, NLI power relative to the signal grows as P², so SNR = P / (N·A + N·η·P³) where A is one span's ASE in the
- * signal's band, and η the fibre's coefficient, illustrative (a span alone at 0 dBm gives a 33 dB SNR). Optimum where NLI = ASE / 2.
+ * signal's band, and η the fibre's coefficient, illustrative (nonlinear noise alone leaves 33 dB after one span at 0 dBm). NLI adding linearly with N is the incoherent approximation: slightly optimistic. Optimum where NLI = ASE / 2.
  */
 export const NLI_ETA = 10 ** (-33 / 10);
 export const aseSpanMw = (nfDb: number, spanDb: number, gbd: number, nm = 1550): number => dbToRatio(nfDb + spanDb + photonFloorDbm(nm)) * (gbd / BREF_GHZ);
@@ -179,7 +183,8 @@ export function maxSpans(reqDb: number, nfDb: number, spanDb: number, gbd: numbe
   while (n < 5000 && bestPower(n + 1, nfDb, spanDb, gbd).snrDb >= reqDb + marginDb) n++;
   return n;
 }
-export const cdTaps = (beta2: number, km: number, gbd: number): number => Math.ceil(Math.abs(beta2) * km * 2 * Math.PI * (gbd * 1e-3) * (2 * gbd * 1e-3));
+/** FIR length that undoes L km at 2 samples a symbol: 2π |β₂| L / T² (Savory's formula), T the sample time. */
+export const cdTaps = (beta2: number, km: number, gbd: number): number => Math.ceil(2 * Math.PI * Math.abs(beta2) * km * (2 * gbd * 1e-3) ** 2);
 
 // ---- a coherent receiver, simulated -----------------------------------------------------------------------------------------------
 export interface CoherentOpts { symbols: number; gbd: number; km: number; beta2: number; snrDb: number; compensate: boolean; linewidthMHz: number; seed: number; track: boolean }

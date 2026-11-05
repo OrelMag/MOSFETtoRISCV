@@ -64,6 +64,9 @@ describe('modes', () => {
     const c = cutoffUm(SMF_G652.aUm, na);
     expect(c).toBeGreaterThan(1.1); expect(c).toBeLessThan(1.3);
   });
+  it('the exact list holds at the top of the widget\'s range', () => {
+    expect(modesAt(7.8).reduce((s, m) => s + m.count, 0)).toBe(34);
+  });
   it('a 50 µm core at 850 nm has hundreds of modes, and V²/2 counts them: the exact list agrees where it reaches', () => {
     const na = naOf(MMF_50.n1, n2Of(MMF_50)), v = vNumber(MMF_50.aUm, na, 0.85);
     expect(modesLarge(v)).toBeGreaterThan(300);
@@ -117,7 +120,8 @@ describe('wavelengths', () => {
   });
   it('C band holds about 4.4 THz: 88 channels at 50 GHz', () => {
     expect(gridChannels(50)).toBeGreaterThanOrEqual(86); expect(gridChannels(50)).toBeLessThanOrEqual(90);
-    expect(gridChannels(100)).toBeCloseTo(gridChannels(50) / 2, -0.5);
+    expect(gridChannels(100)).toBe(44);    // 191.7 … 196.0 THz would be the band's points; the count of anchor + k × 100 GHz in it
+    expect(gridChannels(50)).toBe(87);
     expect(spacingNm(100, 1550)).toBeCloseTo(0.8, 1);
     expect(spacingNm(12.5, 1550)).toBeCloseTo(0.1, 1);
   });
@@ -128,7 +132,13 @@ describe('amplifier chains', () => {
     expect(photonFloorDbm(1550)).toBeCloseTo(-58, 0);
   });
   it('the rule of thumb equals the sum of the amplifiers\' noise', () => {
-    for (const [p, nf, sp, n] of [[0, 5, 20, 10], [2, 4.5, 16, 100], [-1, 6, 25, 3]]) expect(osnrDb(p, nf, sp, n)).toBeCloseTo(osnrBySum(p, nf, sp, n), 6);
+    // from the definitions, written out again: each amplifier adds F G hν B of noise, in mW
+    const hnub = (6.62607015e-34 * 299792458 / 1550e-9) * 12.5e9 / 1e-3;
+    for (const [p, nf, sp, n] of [[0, 5, 20, 10], [2, 4.5, 16, 100], [-1, 6, 25, 3]]) {
+      const ase = n * 10 ** (nf / 10) * 10 ** (sp / 10) * hnub;
+      expect(osnrDb(p, nf, sp, n)).toBeCloseTo(p - 10 * Math.log10(ase), 6);
+      expect(osnrBySum(p, nf, sp, n)).toBeCloseTo(p - 10 * Math.log10(ase), 6);
+    }
   });
   it('doubling the spans costs 3 dB, 3 dB more span loss costs 3 dB, whichever it comes from', () => {
     expect(osnrDb(0, 5, 20, 10) - osnrDb(0, 5, 20, 20)).toBeCloseTo(3.01, 2);
@@ -159,8 +169,9 @@ describe('the Kerr limit', () => {
     const a = aseSpanMw(5, 16, 32), P = dbToRatio(b.pDbm);
     expect(a / (P ** 3 * 10 ** (-33 / 10))).toBeCloseTo(2, 5);
   });
-  it('more launch power does not help past the optimum: it falls by 2 dB a dB', () => {
+  it('more launch power does not help past the optimum: gently at first, by 2 dB a dB far above it', () => {
     const b = bestPower(100, 5, 16, 32);
+    expect(b.snrDb - snrWithNli(b.pDbm + 1, 100, 5, 16, 32)).toBeLessThan(0.5);
     expect(snrWithNli(b.pDbm + 8, 100, 5, 16, 32) - snrWithNli(b.pDbm + 9, 100, 5, 16, 32)).toBeCloseTo(2, 0);
   });
   it('the design point: QPSK crosses an ocean, 64-QAM does not', () => {
@@ -172,7 +183,9 @@ describe('the Kerr limit', () => {
   });
   it('taps a dispersion compensator would need across an ocean', () => {
     const t = cdTaps(beta2Of(dispersionD(1550), 1550), 6000, 32);
-    expect(t).toBeGreaterThan(1000); expect(t).toBeLessThan(5000);
+    // Savory: 2π|β₂|z / T², T = 1 / (64 GS/s) = 15.625 ps
+    expect(t).toBeCloseTo(2 * Math.PI * Math.abs(beta2Of(dispersionD(1550), 1550)) * 6000 / 15.625 ** 2, -1);
+    expect(t).toBeGreaterThan(3000); expect(t).toBeLessThan(4000);
   });
 });
 
