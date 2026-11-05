@@ -96,8 +96,8 @@ export function farEnd(n: number, seed: number): number[] {
 
 export interface EchoRun { d: number[]; e: number[]; w: number[]; erle: number; misalign: number[] }
 /** A far-end signal through a hidden path, a canceller learning the path, and optionally near-end talk or noise on top. erle is over the last quarter, against the echo alone. */
-export function runEcho(o: { n: number; seed: number; taps: number; mu: number; normalized: boolean; noise?: number; talkFrom?: number; talkTo?: number; freeze?: boolean; x?: readonly number[] }): EchoRun {
-  const x = o.x ?? farEnd(o.n, o.seed), h = echoPath(o.seed + 7), u = rng(o.seed + 11), near = farEnd(o.n, o.seed + 99);
+export function runEcho(o: { n: number; seed: number; taps: number; mu: number; normalized: boolean; noise?: number; talkFrom?: number; talkTo?: number; freeze?: boolean; x?: readonly number[]; near?: readonly number[] }): EchoRun {
+  const x = o.x ?? farEnd(o.n, o.seed), h = echoPath(o.seed + 7), u = rng(o.seed + 11), near = o.near ?? farEnd(o.n, o.seed + 99);
   const f = new Lms(o.taps, o.mu, o.normalized), hist = new Array<number>(h.length).fill(0);
   const d: number[] = [], e: number[] = [], clean: number[] = [], residual: number[] = [], misalign: number[] = [];
   const pathEnergy = h.reduce((a, b) => a + b * b, 0);

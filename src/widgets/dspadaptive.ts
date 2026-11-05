@@ -1,8 +1,10 @@
-// "Filters that learn"'s explorers: the error's bowl and a step down it, the step size, an echo canceller on generated speech-like sound, an equalizer, and the integer filter in gates. Every number is dsp/adaptive.ts's. Nothing here is a recording.
+// "Filters that learn"'s explorers: the error's bowl and a step down it, the step size, an echo canceller on a real reading (public domain, widgets/dspaudio.ts) through a model echo path, an equalizer, and the integer filter in gates. Every number is dsp/adaptive.ts's.
 
 import { signedOf, wordOf } from '../comm/signals';
 import { prepareClip, type Clip } from '../dsp/clip';
-import { correlate, ECHO_RATE, farEnd, levinson, Lms, LmsFixed, peakEnergy, runEcho, runEqualizer, type LmsSpec } from '../dsp/adaptive';
+import { correlate, ECHO_RATE, levinson, Lms, LmsFixed, peakEnergy, runEcho, runEqualizer, type LmsSpec } from '../dsp/adaptive';
+import { ECHO_RUN, ROOM_NOISE, TALK, voiceEcho } from '../dsp/echofigs';
+import { CLIPS, loadClip } from './dspaudio';
 import { lmsFilter } from '../lib/sigmadelta';
 import { gaussian, rng } from '../phys/line';
 import { h } from '../ui/dom';
@@ -61,22 +63,26 @@ export function bowlWidget(): Widget {
 
 // ---- an echo canceller --------------------------------------------------------------------------------------------------------------------------------
 
-export const ECHO_N = 32000, ECHO_TAPS = 128;
+export const ECHO_N = ECHO_RUN, ECHO_TAPS = 128;
 /** The plain form's μ is this much of the slider's, so the slider reaches past its limit (peakEnergy). */
 const PLAIN = 0.15;
-export function echoClip(which: 'mic' | 'after'): Clip {
-  const r = runEcho({ n: ECHO_N, seed: 3, taps: ECHO_TAPS, mu: 0.5, normalized: true });
+/** The recording's far end and near-end talker, once loaded. */
+let voice: { x: number[]; near: number[] } | null = null;
+export function echoClip(which: 'mic' | 'after'): Clip | null {
+  if (!voice) return null;
+  const r = runEcho({ n: ECHO_N, seed: 3, taps: ECHO_TAPS, mu: 0.5, normalized: true, x: voice.x, near: voice.near, noise: ROOM_NOISE });
   const raw = which === 'mic' ? r.d : r.e, peak = r.d.reduce((m, v) => Math.max(m, Math.abs(v)), 1e-9);
-  return { samples: prepareClip(raw, { scale: 0.3 / peak }), rate: ECHO_RATE, source: 'model', note: which === 'mic' ? 'generated sound, through a hidden path' : 'the same, less what the canceller subtracts' };
+  return { samples: prepareClip(raw, { scale: 0.3 / peak }), rate: ECHO_RATE, source: 'model', note: which === 'mic' ? 'the reading, through a hidden path, with room noise' : 'the same, less what the canceller subtracts' };
 }
 export function echoWidget(): Widget {
   let lm = -0.3, taps = ECHO_TAPS, normalized = true, talk = false, freeze = false, loud = 1;
   const mu = (l = lm) => (normalized ? 10 ** l : PLAIN * 10 ** l);
   const plot = plotOf({ W: 640, H: 200, x: [0, ECHO_N / ECHO_RATE], y: [-80, 0], yTicks: [-80, -60, -40, -20, 0], xLabel: 'seconds', yLabel: 'dB', aria: 'The microphone\'s level and what is left after the canceller, over time' });
-  const chips = mkChips(3);
+  const chips = mkChips(3), note = h('p', { class: 'sub' }, 'Loading the recording…');
   const paint = () => {
-    const x = farEnd(ECHO_N, 3).map((v) => v * loud);
-    const r = runEcho({ n: ECHO_N, seed: 3, taps, mu: mu(), normalized, x, ...(talk ? { talkFrom: 18000, talkTo: 25000, freeze } : {}) });
+    if (!voice) return;
+    const x = voice.x.map((v) => v * loud);
+    const r = runEcho({ n: ECHO_N, seed: 3, taps, mu: mu(), normalized, x, near: voice.near, noise: ROOM_NOISE, ...(talk ? { talkFrom: TALK.from, talkTo: TALK.to, freeze } : {}) });
     plot.clear();
     const t = every(range(ECHO_N), 40).map((i) => i / ECHO_RATE), cl = (a: number[]) => every(a, 40).map((v) => Math.max(-80, Math.min(0, Number.isFinite(v) ? v : 0)));
     line(plot, t, cl(smooth(r.d, 240)), 'ln-s lump');
@@ -90,10 +96,10 @@ export function echoWidget(): Widget {
   const st = slider('Taps', 8, 128, 8, taps, (x) => String(x), (x) => { taps = x; paint(); });
   const sv = slider('Loudness', 0.1, 2, 0.1, loud, (x) => num(x, 1), (x) => { loud = x; paint(); });
   const cb = (label: string, on: boolean, set: (v: boolean) => void) => h('label', { class: 'cd-check' }, h('input', { type: 'checkbox', checked: on, onchange: (e: Event) => { set((e.target as HTMLInputElement).checked); paint(); } }), ` ${label}`);
-  paint();
+  loadClip('voice').then((v) => { voice = voiceEcho(v.x); note.textContent = `Far end and near-end talker: ${CLIPS.voice.credit}. The echo path and the room noise are models.`; paint(); }).catch((e: Error) => { note.textContent = `The recording would not load: ${e.message}`; });
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'An echo you cannot measure'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'at the microphone'), h('span', { class: 'k-far' }, 'after the canceller')), chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'An echo you cannot measure'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'at the microphone'), h('span', { class: 'k-far' }, 'after the canceller')), chips.el, note),
       h('div', { class: 'panel mos-ctl' }, sm.el, st.el, sv.el, cb('Normalized (NLMS)', normalized, (v) => { normalized = v; sm.set(lm); }), cb('Someone talks at the near end', talk, (v) => { talk = v; }), cb('Stop learning while they talk', freeze, (v) => { freeze = v; }),
         clipButton('Hear the microphone', () => echoClip('mic')).el, clipButton('Hear what is left', () => echoClip('after')).el)),
   };
