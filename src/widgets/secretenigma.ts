@@ -109,27 +109,32 @@ const BUDGET_MS = 12;
 /** Every wheel position tried for one wheel order, with the plugboard unknown. */
 export function bombeWidget(): Widget {
   const cipher = bombeCipher();
-  let diagonal = true, run: BombeRun | null = null, raf = 0, began = 0, took = 0, lastStops = -1;
-  const setup = (): BombeSetup => ({ rotors: BOMBE_KEY.rotors, rings: BOMBE_KEY.rings, reflector: 'b', greek: 'beta', greekAt: BOMBE_KEY.start[0], crib: BOMBE_PLAIN, cipher, diagonal });
+  let diagonal = true, len = BOMBE_PLAIN.length, run: BombeRun | null = null, raf = 0, began = 0, took = 0, last = '', ranWith = '';
+  const crib = () => BOMBE_PLAIN.slice(0, len), under = () => cipher.slice(0, len);
+  const setup = (): BombeSetup => ({ rotors: BOMBE_KEY.rotors, rings: BOMBE_KEY.rings, reflector: 'b', greek: 'beta', greekAt: BOMBE_KEY.start[0], crib: crib(), cipher: under(), diagonal });
+  const describe = () => `${len} letters, ${diagonal ? 'with' : 'without'} the board`;
   const go = h('button', { type: 'button', class: 'btn sm' }, 'Run all 17 576 positions') as HTMLButtonElement;
   const toggle = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Diagonal board' }) as HTMLInputElement;
   const bar = h('div', { class: 'se-bar' }), fill = h('i');
   bar.append(fill);
-  const out = h('p', { class: 'se-read', 'aria-live': 'polite' }, 'Press Run. Each position is tested as the Bombe tested it.');
+  bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-label', 'Positions tried'); bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '17576');
+  const out = h('p', { class: 'se-read' }, 'Press Run. Each position is tested as the Bombe tested it.'), said = h('p', { class: 'se-read', 'aria-live': 'polite' });
+  const menuBox = h('div'), cribCode = h('code'), cipherCode = h('code');
+  const lenIn = h('input', { type: 'range', min: 6, max: BOMBE_PLAIN.length, step: 1, value: len, 'aria-label': 'Letters of the crib' }) as HTMLInputElement, lenOut = h('output');
+  const drawCrib = () => { cribCode.textContent = crib(); cipherCode.textContent = under(); lenOut.textContent = String(len); menuBox.replaceChildren(menuSvg(crib(), under())); test.textContent = `Test letter ${centreOf(crib(), under())}.`; };
+  const test = h('span');
   const list = h('div', { class: 'se-stops' });
   function show(): void {
     if (!run) return;
     fill.style.width = `${(run.done / run.total) * 100}%`;
+    bar.setAttribute('aria-valuenow', String(run.done));
     const finished = run.done >= run.total;
     if (!finished) { out.textContent = `Position ${n0(run.done)} of ${n0(run.total)}, ${run.stops.length} stops so far.`; return; }
     const hit = run.stops.some((x) => x.windows === BOMBE_KEY.start);
-    out.replaceChildren(
-      h('b', null, String(run.stops.length)), ` ${run.stops.length === 1 ? 'stop' : 'stops'} in ${n0(took)} ms in this browser`,
-      lastStops >= 0 && lastStops !== run.stops.length ? ` (the last run, ${diagonal ? 'without' : 'with'} the board: ${lastStops})` : '',
-      `. ${hit ? 'The true setting is among them.' : 'The true setting is not among them.'}`,
-    );
+    const text = `${n0(run.stops.length)} ${run.stops.length === 1 ? 'stop' : 'stops'} (${ranWith}) in ${n0(took)} ms in this browser${last ? `. Before: ${last}` : ''}. ${hit ? 'The true setting is among them.' : 'The true setting is not among them.'}`;
+    out.textContent = ''; said.textContent = text;
     list.replaceChildren(...run.stops.slice(0, 40).map((x) => h('span', { class: x.windows === BOMBE_KEY.start ? 'stop true' : 'stop' }, `${x.windows.slice(1)} ${x.plug}/${x.value}`)));
-    lastStops = run.stops.length;
+    last = `${n0(run.stops.length)} (${ranWith})`;
   }
   function frame(): void {
     raf = 0;
@@ -142,20 +147,23 @@ export function bombeWidget(): Widget {
     raf = requestAnimationFrame(frame);
   }
   go.addEventListener('click', () => {
-    run = bombeRun(setup()); began = performance.now(); list.replaceChildren(); go.disabled = true;
+    ranWith = describe(); run = bombeRun(setup()); began = performance.now(); list.replaceChildren(); said.textContent = ''; go.disabled = true;
     raf = requestAnimationFrame(frame);
   });
   toggle.addEventListener('change', () => { diagonal = toggle.checked; });
-  const pair = (t: string, v: string) => h('div', { class: 'se-pair' }, h('span', { class: 'se-label' }, t), h('code', null, v));
+  lenIn.addEventListener('input', () => { len = Number(lenIn.value); drawCrib(); });
+  const pair = (t: string, v: HTMLElement) => h('div', { class: 'se-pair' }, h('span', { class: 'se-label' }, t), v);
   const el = h('div', { class: 'panel se' },
     h('h3', { class: 'm3-title' }, 'A crib, its menu, and a run'),
     h('div', { class: 'se-bombe' },
       h('div', { class: 'se-col' },
-        pair('Crib', BOMBE_PLAIN), pair('Cipher', cipher),
-        h('p', { class: 'm3-sub' }, `Wheel order ${BOMBE_KEY.rotors.join(' ')}, the only part of the key assumed known: in practice each order was another run. Test letter ${centreOf(BOMBE_PLAIN, cipher)}.`),
+        pair('Crib', cribCode), pair('Cipher', cipherCode),
+        h('p', { class: 'm3-sub' }, `Assumed known: wheel order ${BOMBE_KEY.rotors.join(' ')}, rings ${BOMBE_KEY.rings}, reflector b, Beta at ${BOMBE_KEY.start[0]}. The plugs are not. `, test),
+        h('label', { class: 'se-slide' }, h('span', null, 'Crib letters'), lenIn, lenOut),
         h('div', { class: 'se-row' }, go, h('label', { class: 'se-check' }, toggle, h('span', null, 'Diagonal board'))),
-        bar, out, list),
-      h('div', { class: 'se-col' }, menuSvg(BOMBE_PLAIN, cipher))));
+        bar, out, said, list),
+      h('div', { class: 'se-col' }, menuBox)));
+  drawCrib();
   return { el, destroy() { cancelAnimationFrame(raf); run = null; } };
 }
 
@@ -168,9 +176,9 @@ export function lessonsWidget(): Widget {
   return { el: h('div', { class: 'panel se' }, h('h3', { class: 'm3-title' }, 'The failures, and the rules they became'), table(['Enigma', 'The rule it taught', 'AES-128 and modern practice'], [
     ['No letter enciphers to itself: a tell that needs no key.', 'No structural property may hold across keys.', 'Designed so that no such relation is known. A block can map to itself, as it should for a random permutation.'],
     ['Its strength is mostly the plugboard, and a method goes round it.', 'A key must not split into parts attacked one at a time. Count what an attack does, not the settings.', 'Every output bit depends on every key bit within a few rounds. 128 bits, with no known shortcut of practical size.'],
-    ['Wheels and procedure were kept secret, then captured or worked out.', 'Only the key is secret (Kerckhoffs, 1883).', 'The design and its test vectors are published. You will check gates against them.'],
+    ['Wheels and procedure were kept secret, then captured or worked out.', 'Only the key is secret (Kerckhoffs, 1883).', 'The design and its test vectors are published. Anyone can check an implementation against them.'],
     ['Message keys sent twice; stereotyped openings gave cribs.', 'Assume the attacker knows or chooses the plaintext.', 'Security is defined against chosen plaintext. Fresh nonces, never reused.'],
-    ['The same day\'s key for a whole network, printed on paper.', 'Key distribution is the hard problem.', 'Key exchange in public, so no sheet is printed: the end of this chapter.'],
+    ['The same day\'s key for a whole network, printed on paper.', 'Key distribution is the hard problem.', 'Key exchange in public, so no sheet is printed.'],
   ])) };
 }
 

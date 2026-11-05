@@ -1,6 +1,6 @@
 // What the M4 hides and what came with it (DOM-free, tested): the wiring and key switches under the deck, the box of spare
 // wheels, the Schreibmax printer. Each key is a changeover switch: at rest its common goes to its own lamp, pressed to the
-// battery. So the pressed key's lamp is cut off, which is why no letter ever enciphers to itself. Sizes of the leaf switches and
+// battery. So the pressed key's lamp is cut off, as the reflector's pairing already requires: no letter ever enciphers to itself. Sizes of the leaf switches and
 // the loom's course from Crypto Museum's photographs of an opened Enigma I; the box and the printer's sizes are estimated from
 // theirs, the box's checked by the wheels having to fit.
 

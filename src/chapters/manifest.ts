@@ -609,7 +609,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
-  { id: "secret", num: 52.5, title: "Keeping it secret", blurb: "How can strangers share a secret in public? The Enigma M4 in brass and in gates, why it broke and what that taught; then AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
+  { id: "secret", num: 52.5, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },

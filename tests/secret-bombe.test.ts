@@ -62,8 +62,10 @@ describe('the crib', () => {
     const at = U264.plain.indexOf('BEIANGRIFF');
     const o = cribOffsets(U264.cipher, 'BEIANGRIFF');
     expect(o).toContain(at);
-    expect(o.length).toBeLessThan(U264.cipher.length - 10 + 1);
-    expect(o.length).toBeGreaterThan(1);
+    // What the page says: about three in ten fail at once for ten letters, as (25/26)^10 predicts.
+    const left = o.length / (U264.cipher.length - 10 + 1);
+    expect(left).toBeGreaterThan(0.6);
+    expect(left).toBeLessThan(0.8);
   });
   it('the longer the crib the fewer places survive', () => {
     expect(cribOffsets(U264.cipher, 'BEIANGRIFFUNTERWASSER').length).toBeLessThan(cribOffsets(U264.cipher, 'BEIANGRIFF').length);
@@ -80,7 +82,7 @@ describe('the Bombe', () => {
   it('finds the true setting among its stops, with the plugboard unknown', () => {
     const stops = bombeStops(setup());
     expect(stops.map((s) => s.windows)).toContain(windows);
-    expect(stops.length).toBeLessThan(200);
+    expect(stops.length).toBeLessThan(5);
   });
   it('names the true plug for the centre letter at the true stop', () => {
     const c = centreOf(BOMBE_PLAIN, bombeCipher()), pl = plugMap(BOMBE_KEY.plugs), stops = bombeStops(setup()).filter((s) => s.windows === windows);
@@ -91,6 +93,18 @@ describe('the Bombe', () => {
   it('the diagonal board rules out more: Welchman’s improvement, measured', () => {
     const w = bombeStops(setup({ diagonal: true })).length, wo = bombeStops(setup({ diagonal: false })).length;
     expect(w).toBeLessThan(wo);
+  });
+  it('finds settings whose crib crosses a middle-wheel turnover, and a left-wheel carry', () => {
+    // BOMBE_KEY's right wheel is III (turns over at V), its middle wheel V (at Z).
+    for (const start of ['AQHR', 'AQZC', 'AQYU']) {
+      const key = { ...BOMBE_KEY, start }, cipher = new Enigma(key).run(BOMBE_PLAIN);
+      expect(bombeStops(setup({ cipher })).map((s) => s.windows), start).toContain(start);
+    }
+  });
+  it('a shorter crib gives more false stops, and the true one stays', () => {
+    const at = (n: number) => bombeStops(setup({ crib: BOMBE_PLAIN.slice(0, n), cipher: bombeCipher().slice(0, n) }));
+    expect(at(8).length).toBeGreaterThan(at(BOMBE_PLAIN.length).length);
+    for (const n of [8, 12, 16]) expect(at(n).map((s) => s.windows)).toContain(windows);
   });
   it('a wrong wheel order gives no true stop', () => {
     expect(bombeStops(setup({ rotors: ['I', 'V', 'III'] })).map((s) => s.windows)).not.toContain(windows);
