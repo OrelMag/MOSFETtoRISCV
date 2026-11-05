@@ -80,3 +80,27 @@ export const isStable = (a: readonly number[]): boolean => poleRadius(a) < 1 - 1
 
 /** A conjugate pair at radius r, angle θ (radians), as z⁻¹ coefficients 1, −2r cos θ, r². */
 export const pairCoeffs = (r: number, t: number): number[] => [1, -2 * r * Math.cos(t), r * r];
+
+/** A conjugate pair: radius and angle (radians, 0 … π); at 0 or π it is a double real root. */
+export interface Pair { r: number; t: number }
+/** The polynomial in z⁻¹ of these pairs (for no pairs, 1). */
+export const pairsPoly = (pairs: readonly Pair[]): number[] => pairs.reduce<number[]>((c, p) => convolve(c, pairCoeffs(p.r, p.t)), [1]);
+
+/** |H| read off the plane: the distances from the point on the circle to each zero, over those to each pole. Equal to gainAt of the polynomials. */
+export function gainByDistances(zeros: readonly Pair[], poles: readonly Pair[], f: number): number {
+  const x = Math.cos(2 * Math.PI * f), y = Math.sin(2 * Math.PI * f);
+  const d = (p: Pair, sign: number) => Math.hypot(x - p.r * Math.cos(p.t), y - sign * p.r * Math.sin(p.t));
+  let g = 1;
+  for (const z of zeros) g *= d(z, 1) * d(z, -1);
+  for (const p of poles) g /= d(p, 1) * d(p, -1);
+  return g;
+}
+
+/** Group delay in samples at f: −dφ/dω, exact for a polynomial as Re(Σ k c[k] z⁻ᵏ / Σ c[k] z⁻ᵏ), numerator minus denominator. */
+export function groupDelay(b: readonly number[], a: readonly number[], f: number): number {
+  const of = (c: readonly number[]) => {
+    const n = polyAt(c, f), r = polyAt(c.map((v, k) => k * v), f), m = n.re * n.re + n.im * n.im;
+    return (r.re * n.re + r.im * n.im) / m;
+  };
+  return of(b) - of(a);
+}

@@ -1,0 +1,42 @@
+/* The signal processing level's explorers (widgets/dsp*.ts). */
+.dsp-bits { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 10px; }
+.dsp-bit { display: flex; flex-direction: column; align-items: center; min-width: 38px; padding: 4px 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-variant-numeric: tabular-nums; }
+.dsp-bit b { font-size: 15px; color: var(--muted); }
+.dsp-bit.on { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); border-color: var(--accent); }
+.dsp-bit.on b { color: var(--text); }
+.dsp-bit span { font-size: 10.5px; color: var(--muted); }
+.dsp-bit.sign span { color: var(--warn); }
+.dsp-bit.before-point { margin-right: 10px; }
+.dsp-k3 { color: var(--good); }
+.dsp-table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+.dsp-table th { text-align: left; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 3px 10px 3px 0; border-bottom: 1px solid var(--border); }
+.dsp-table td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--border); }
+.dsp-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsp-barcell { width: 40%; }
+.dsp-barcell i { display: block; height: 9px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.clip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 8px; }
+.clip-what { font-size: 12px; color: var(--muted); }
+.dsp-ladder { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+.dsp-ladder td, .dsp-ladder th { padding: 3px 12px 3px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.dsp-ladder th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.dsp-ladder .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* the z-plane */
+.dsp-plane { display: block; width: 100%; max-width: 360px; height: auto; touch-action: none; cursor: grab; margin: 0 auto; }
+.dsp-plane .circle { fill: none; stroke: var(--border-strong, var(--border)); stroke-width: 1.5; }
+.dsp-plane .axis { stroke: var(--border); stroke-width: 1; }
+.dsp-plane text { fill: var(--muted); font-size: 11px; }
+.dsp-plane .zero { fill: var(--surface); stroke: var(--warn); stroke-width: 2.4; }
+.dsp-plane .pole { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.dsp-plane .pole.out { stroke: var(--bad); }
+.dsp-plane .asked { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.dsp-plane .lattice { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; opacity: 0.55; fill: none; }
+.dsp-plane .probe { fill: var(--good); }
+.dsp-plane .reach { stroke: var(--good); stroke-width: 1; opacity: 0.6; }
+.dsp-zgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 10px; align-items: start; }
+@media (max-width: 720px) { .dsp-zgrid { grid-template-columns: minmax(0, 1fr); } }
+.dsp-conv { display: grid; grid-template-columns: max-content repeat(auto-fit, minmax(30px, 1fr)); gap: 2px; font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 8px 0; overflow-x: auto; }
+.dsp-conv > * { text-align: center; padding: 2px; border-radius: 3px; }
+.dsp-conv .lab { text-align: left; color: var(--muted); padding-right: 8px; white-space: nowrap; }
+.dsp-conv .hit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.dsp-eq { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12.5px; overflow-x: auto; white-space: nowrap; padding: 4px 0; }

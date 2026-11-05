@@ -1,7 +1,7 @@
 // dsp/zplane.ts against scipy's answers (tests/dsp/vectors/zplane.json, scripts/dsp/oracle.py).
 import { describe, expect, it } from 'vitest';
 import vectors from './dsp/vectors/zplane.json';
-import { convolve, filter, gainAt, impulse, isStable, pairCoeffs, phaseAt, polyFromRoots, polyRoots, poleRadius } from '../src/dsp/zplane';
+import { convolve, filter, gainAt, gainByDistances, groupDelay, impulse, isStable, pairCoeffs, pairsPoly, phaseAt, polyFromRoots, polyRoots, poleRadius } from '../src/dsp/zplane';
 
 const near = (got: number[], want: number[], tol: number, what: string) => {
   expect(got.length, what).toBe(want.length);
@@ -48,5 +48,21 @@ describe('poles', () => {
     const late = (a: number[]) => Math.max(...impulse([1], a, 4000).slice(-100).map(Math.abs));
     expect(late(pairCoeffs(0.97, 0.25))).toBeLessThan(1e-20);
     expect(late([1, -1.1])).toBeGreaterThan(1e20);
+  });
+});
+
+describe('reading the plane', () => {
+  it('distances give the gain the polynomials give', () => {
+    const z = [{ r: 1, t: 0.8 }, { r: 0.9, t: 2.1 }], p = [{ r: 0.95, t: 0.8 }, { r: 0.5, t: 1.7 }];
+    for (const f of [0.02, 0.1, 0.2, 0.33, 0.48]) expect(gainByDistances(z, p, f)).toBeCloseTo(gainAt(pairsPoly(z), pairsPoly(p), f), 9);
+  });
+  it('two pairs at π are FIR5', () => {
+    expect(pairsPoly([{ r: 1, t: Math.PI }, { r: 1, t: Math.PI }]).map((v) => Math.round(v * 1e9) / 1e9)).toEqual([1, 4, 6, 4, 1]);
+  });
+  it('group delay against the phase\'s slope, and a symmetric FIR is half its length', () => {
+    const b = pairsPoly([{ r: 0.8, t: 1 }]), a = pairsPoly([{ r: 0.7, t: 0.5 }]), f = 0.13, e = 1e-5;
+    const slope = -(phaseAt(b, a, f + e) - phaseAt(b, a, f - e)) / (2 * e * 2 * Math.PI);
+    expect(groupDelay(b, a, f)).toBeCloseTo(slope, 5);
+    for (const x of [0.03, 0.1, 0.2]) expect(groupDelay([1, 4, 6, 4, 1], [1], x)).toBeCloseTo(2, 9);
   });
 });

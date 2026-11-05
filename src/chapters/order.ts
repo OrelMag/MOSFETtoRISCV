@@ -75,6 +75,8 @@ const BOOK = [
   'cellular',
   'datacentre',
   'bench',
+  'fixed',
+  'zplane',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
