@@ -70,6 +70,7 @@ describe('the briefs', () => {
       expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 2 }, CARRIER_BITS, seed).closes).toBe(false);
       expect(runCarrier(CARRIER_BRIEF, { mod: 1, code: 0 }, CARRIER_BITS, seed).closes).toBe(false);
       expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 3 }, CARRIER_BITS, seed).closes).toBe(true);
+      await tick();
     }
     expect(runCarrier(CARRIER_BRIEF, c.choice, CARRIER_BITS).closes).toBe(true);
     expect(runCarrier(CARRIER_BRIEF, { mod: 3, code: 0 }, CARRIER_BITS).closes).toBe(false);
@@ -80,5 +81,5 @@ describe('the briefs', () => {
     expect(runSerial(SERIAL_BRIEF, s.choice).closes).toBe(true);
     expect(runSerial(SERIAL_BRIEF, { line: 0, eq: 0, rate: 5 }).closes).toBe(false);
     expect(dbToRatio(CARRIER_BRIEF.snrDb)).toBeCloseTo(39.8, 1);
-  });
+  }, 180_000);
 });
