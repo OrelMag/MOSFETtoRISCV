@@ -2881,3 +2881,18 @@ html[data-busy]::before {
 @keyframes hold-ring { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 0.85; } }
 @media (prefers-reduced-motion: reduce) { .hold-ring { animation: none; } }
 @media (forced-colors: active) { .hold-ring { border-color: Highlight; background: transparent; } }
+
+/* A pointer whose name is too small to read: a dot at the end of its stub, the box kept only as what the pointer hits.
+   Hovering or selecting the net draws lines to its other pointers (view/partners.ts). */
+.net-tag .tag-end { display: none; fill: var(--w0); }
+.net-tag.v1 .tag-end { fill: var(--w1); }
+.net-tag.vx .tag-end { fill: var(--wx); }
+.net-tag.bus .tag-end { fill: var(--bus); }
+.net-tag.bus.bus1 .tag-end { fill: var(--bus1); }
+svg.schematic.lg.lg-h-tag .net-tag .tag-end { display: inline; }
+svg.schematic.lg.lg-h-tag .net-tag rect { fill: transparent; stroke: none; pointer-events: all; }
+svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .net-tag.net-sel rect { stroke: var(--hl); stroke-width: 0.2; }
+.partner-lines { pointer-events: none; }
+.partner-line, .partner-flow { fill: none; stroke: var(--w1); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.partner-line.bus, .partner-flow.bus { stroke: var(--bus1); }
+.partner-line { stroke-dasharray: 5 4; opacity: 0.75; }

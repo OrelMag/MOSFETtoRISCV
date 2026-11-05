@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DFF_EDGE6 } from '../src/lib/seqdeep';
 import { netlistOf, type ComponentDef, type Netlist } from '../src/sim/types';
 import { reachableDefs } from '../src/lib/resolve';
-import { labelOverlaps, routeNetlist, wireOverlaps } from '../src/view/route';
+import { partnerLines } from '../src/view/partners';
+import { labelOverlaps, routeNetlist, wireOverlaps, type NetTag } from '../src/view/route';
 import { drawnNetlist, MAX_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings } from '../src/view/wirefirst';
 import { tick } from './yieldtick';
 
@@ -43,4 +44,15 @@ describe('wires first', () => {
     }
     expect(bad).toEqual([]);
   }, 600_000);
+});
+
+describe('partner lines', () => {
+  const tag = (end: string, x: number): NetTag => ({ end, pos: [x, 0], dir: 'right', stub: 1 });
+  it('run from the driver pointer to every other pointer', () => {
+    const lines = partnerLines({ tags: [tag('a.y', 0), tag('b.a', 10), tag('c.a', 20)], paths: [] }, 'n', 'a.y');
+    expect(lines).toEqual([[[1, 0], [11, 0]], [[1, 0], [21, 0]]]);
+  });
+  it('start at the wires when the driver has no pointer', () => {
+    expect(partnerLines({ tags: [tag('c.a', 20)], paths: [[[3, 4], [5, 4]]] }, 'n', 'a.y')).toEqual([[[3, 4], [21, 0]]]);
+  });
 });
