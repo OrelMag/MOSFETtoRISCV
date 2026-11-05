@@ -591,7 +591,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
   place('plus4', P4, [27, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 24);
-  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] + (wired ? 1 : -5)]);
+  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', custom.length ? control(custom) : CONTROL, wired ? [30, 78] : [8, 0]);
@@ -706,6 +706,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     up('Jalr', 'jalr', 'npc.jalr', P('npc', 'jalr')[0] - 4, [P('npc', 'jalr')[0] - 4, P('npc', 'jalr')[1]]);
     up('ALUControl', 'aluCtl', 'alu.ctl', P('target', 'a')[0] - 1.5, [P('target', 'a')[0] - 1.5, P('alu', 'ctl')[1] + 2], [P('alu', 'ctl')[0], P('alu', 'ctl')[1] + 2]);
     for (const n of nets) if (['RegWrite', 'ImmSrc', 'ALUSrcA', 'ALUSrcB', 'MemWrite', 'ResultSrc', 'Branch', 'Jump', 'Jalr', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'op', 'funct3', 'funct7'].includes(n.name!)) n.quiet = true;
+    delete nets.find((n) => n.name === 'gndT')!.via; // in line with its pin
     // the ALU's flags, nested so that they do not cross each other
     ([['Zero', 'zero', 108.5], ['Neg', 'neg', 107], ['Ovf', 'ovf', 105.5], ['Carry', 'carry', 104]] as const).forEach(([name, port, x]) =>
       rows(name, { [`npc.${port}`]: [[x, P('alu', port)[1]], [x, P('npc', port)[1]]] }));
