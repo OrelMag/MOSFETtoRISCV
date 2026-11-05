@@ -27,7 +27,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** Wiring: `w` bits to `to`, moved up `shift` places (`z` fills below) and sign-extended above. */
-function placed(w: number, shift: number, to: number): ComponentDef {
+export function placed(w: number, shift: number, to: number): ComponentDef {
   return memo(`fxplace${w}_${shift}_${to}`, () => {
     const alias: [string, number, string, number][] = [];
     for (let i = 0; i < to; i++) alias.push(i < shift ? ['z', 0, 'y', i] : ['a', Math.min(i - shift, w - 1), 'y', i]);
@@ -41,7 +41,7 @@ function placed(w: number, shift: number, to: number): ComponentDef {
 }
 
 /** Wiring: `w` bits of a word, from bit `lo`. */
-function cut(n: number, lo: number, w: number): ComponentDef {
+export function cut(n: number, lo: number, w: number): ComponentDef {
   return memo(`fxcut${n}_${lo}_${w}`, () => define({
     id: `fxcut${n}_${lo}_${w}`, name: `Wiring: bits ${lo + w - 1}:${lo}`, category: 'plumbing',
     summary: 'Keeps some of a word\'s bits: dropping the low ones is a shift right, and it costs nothing.',
