@@ -175,7 +175,7 @@ export const chWifi: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'A link upgrades from 54 Mb/s to 540 Mb/s of raw rate with no other change, for 100-byte frames. What happens?',
-        options: ['Little: the frame shrinks, but DIFS, backoff, SIFS, preamble and ACK dominate, and they do not shrink', 'Ten times the throughput', 'Less throughput, because of more errors', 'Twice the throughput'],
+        options: ['A little more throughput', 'Ten times the throughput', 'Less throughput, because of more errors', 'Twice the throughput'],
         answer: 0,
         explain: `At 54 Mb/s a 100-byte frame with its header is 5 symbols of data, 20 µs: already small beside about ${nf(exchangeUs(100, R54) - 20, 0)} µs of everything else. A ten-fold rate saves at most those 20 µs. This is why aggregation matters more than rate, for small frames.`,
         why: ['', 'Only for payload-dominated exchanges.', 'Error rates are not part of this question.', 'It is less than that.'],
