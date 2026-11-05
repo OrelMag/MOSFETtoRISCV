@@ -41,7 +41,8 @@ function hkdfCases(): { n: number; ikm: string; salt: string; info: string; l: n
     const a = t.indexOf(`A.${n}.  Test Case ${n}`);
     const sec = t.slice(a, t.indexOf(`A.${n + 1}.  Test Case`, a));
     const f = (name: string): string => {
-      const m = new RegExp(`\\n   ${name}\\s*=\\s*((?:0x[0-9a-f]*|\\(0 octets\\))(?:[^\\n]*\\n\\s+[0-9a-f]+\\s*(?:\\(\\d+ octets\\))?)*)`).exec(sec);
+      // from the name's '=' to the '(N octets)' that ends the value (it can run over a page break)
+      const m = new RegExp(`\\n   ${name}\\s*=\\s*([\\s\\S]*?\\(\\d+ octets\\))`).exec(sec);
       if (!m) throw new Error(`RFC 5869 case ${n}: no ${name}`);
       return hex(m[1].replace(/\(\d+ octets\)/g, '').replace(/\(0 octets\)/, '').replace(/0x/g, ''));
     };
