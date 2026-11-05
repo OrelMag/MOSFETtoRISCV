@@ -127,17 +127,17 @@ export function resolvingSep(N: number, kind: WinKind): number {
 }
 
 export const SEEN_BY = 6;
-/** Is the second tone seen? Its frequency reads at least SEEN_BY dB away (up, or down where it cancels the first tone's skirt) from what the first tone alone puts there. */
+/** Is the second tone seen? It is when it stands at least SEEN_BY dB above the first tone's skirt at its frequency. The skirt is its envelope (skirtAt: the highest point within half a bin), not
+ *  the value at the exact separation: at a whole number of bins the rectangle's and Hann's skirts have exact zeros, and a weak tone placed on one would show far below the level the skirt chip reads.
+ *  `byDb` is how far above (or, negative, below) the envelope the tone is. */
 export function seenAt(N: number, sep: number, relDb: number, kind: WinKind): { seen: boolean; byDb: number } {
-  const p = pairOf(N, sep, relDb), both = amplitudeSpectrum(twoTones(p), kind, PAD), alone = amplitudeSpectrum(centred(N, p.f1 / N), kind, PAD);
-  const i = Math.round((p.f1 + sep) * (paddedLength(N, PAD) / N)), by = dbOf(both[i]) - dbOf(alone[i]);
-  return { seen: Math.abs(by) >= SEEN_BY, byDb: by };
+  const by = relDb - skirtAt(kind, sep, N);
+  return { seen: by >= SEEN_BY, byDb: by };
 }
-/** The weakest level (dB under the first tone, in steps of 1) still seen, counting down from 0 while every level above it is seen too. */
+/** The weakest level (dB under the first tone, in steps of 1) still seen; Infinity when not even an equal tone is. */
 export function weakestSeen(N: number, sep: number, kind: WinKind, floor = -140): number {
-  let last = 1;
-  for (let r = 0; r >= floor; r--) { if (!seenAt(N, sep, r, kind).seen) break; last = r; }
-  return last === 1 ? Infinity : last;
+  const r = Math.max(floor, Math.ceil(skirtAt(kind, sep, N) + SEEN_BY));
+  return r > 0 ? Infinity : r;
 }
 
 // ---- time and frequency ----------------------------------------------------------------------------------------------------------------------
@@ -221,7 +221,7 @@ export function goertzelRun(x: readonly number[], c: number): { s1: number; s2: 
   for (const v of x) { const s = v + c * s1 - s2; states.push(s); s2 = s1; s1 = s; }
   return { s1, s2, states };
 }
-/** |X(f)|² from the last two states: s1² + s2² − c s1 s2, three multiplications for the whole block. */
+/** |X(f)|² from the last two states: s1² + s2² − c s1 s2, four multiplications as written, three as s1² + s2 (s2 − c s1). */
 export const goertzelPower = (s1: number, s2: number, c: number): number => s1 * s1 + s2 * s2 - c * s1 * s2;
 /** |Σ x[n] e^(−j2πfn)|² by its definition, N complex multiplications. */
 export function dftPowerAt(x: readonly number[], f: number): number {
@@ -271,7 +271,7 @@ export function worstInput(C: number, N: number): number[] {
 /** Multiplications for K bins of an N-point block: Goertzel one a sample a bin, the FFT's butterflies at 4 real each (all bins at once). */
 export const goertzelMults = (K: number, N: number): number => K * N;
 export const fftRealMults = (N: number): number => 4 * fftMults(N);
-/** How many bins before the FFT is cheaper: 4 (N / 2) log₂N / N = 2 log₂N. */
+/** How many bins before the FFT is cheaper: 4 (N / 2) log₂N / N = 2 log₂N (each Goertzel's three final multiplications left out: they move it by under 5 %). */
 export const binsBreakEven = (N: number): number => fftRealMults(N) / N;
 
 // ---- DTMF ------------------------------------------------------------------------------------------------------------------------------------
@@ -329,4 +329,14 @@ export function dtmfClip(keys: string, on = 800, off = 480, amp = 0.4): number[]
     for (let n = 0; n < off; n++) out.push(0);
   }
   return out;
+}
+
+/** Like resolvingSep, but the second tone leads the first by `phase` radians at the middle of the block: the figure for tones in phase is the one in the text, and others differ. */
+export function resolvingSepAt(N: number, kind: WinKind, phase: number): number {
+  for (let s = 5; s <= 600; s++) {
+    const sep = s / 20, p = pairOf(N, sep), f2 = (p.f1 + sep) / N;
+    const a = centred(N, p.f1 / N), b = tone(N, f2, 1, (-2 * Math.PI * f2 * (N - 1)) / 2 + phase);
+    if (dipIn(amplitudeSpectrum(a.map((v, i) => v + b[i]), kind, PAD), paddedLength(N, PAD) / N, p.f1, p.f1 + sep).resolved) return sep;
+  }
+  return Infinity;
 }

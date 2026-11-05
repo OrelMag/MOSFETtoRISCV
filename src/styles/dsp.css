@@ -61,3 +61,9 @@
 .dsp-bar b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .dsp-bar span { min-height: 1.2em; font-variant-numeric: tabular-nums; }
 @media (pointer: coarse) { .dsp-keys .btn { min-height: 40px; } }
+
+.dsp-sgkey { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11px; color: var(--muted); margin: 0 0 4px 38px; }
+.dsp-sgkey span { white-space: nowrap; }
+.dsp-sgkey i { flex: 0 0 90px; height: 8px; border-radius: 4px; border: 1px solid var(--border); }
+.dsp-sgnote { margin: 2px 0 6px 38px; font-size: 11px; }
+.dsp-bar span { white-space: nowrap; }

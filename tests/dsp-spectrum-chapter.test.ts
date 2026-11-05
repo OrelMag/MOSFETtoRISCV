@@ -7,7 +7,7 @@ import { numOf } from '../src/chapters/order';
 import { DSP_LADDER } from '../src/chapters/dspladder';
 import {
   amplitudeSpectrum, bestBlock, bestBlockFor, binsBreakEven, blockErrors, crossoverTaps, dbOf, dftPowerAt, dipOf, dtmfFreqs, fftRealMults, goertzelCoef, goertzelPower, goertzelRun, olsMults,
-  resolvingSep, seenAt, skirtAt, spectrogramSignal, stateGain, tone, weakestSeen, windowFigures, windowOf, WINDOWS, type WinKind,
+  resolvingSep, resolvingSepAt, seenAt, skirtAt, spectrogramSignal, stateGain, tone, weakestSeen, windowFigures, windowOf, WINDOWS, type WinKind,
 } from '../src/dsp/spectrum';
 import {
   DTMF_N, dtmfCoefs, leakStats, misreads, NOISES, olsSignal, padDip, padTones, PADS, runKey, SG_FRAMES,
@@ -219,5 +219,31 @@ describe('the text', () => {
   it('the recap\'s quizzes: answers first, a why for every wrong option', () => {
     for (const c of chSpectrum.recap!.check!) { expect(c.answer).toBe(0); expect(c.why!.length).toBe(c.options!.length); expect(c.why![0]).toBe(''); }
     expect(bestBlock(64)).toBeGreaterThan(64);
+  });
+});
+
+describe('the audit\'s claims', () => {
+  it('the leakage plot is not the window\'s own skirt: in a real block it levels off, and the text says by how much', () => {
+    const f = spectrumFacts();
+    expect(f.leakFar.db).toBeGreaterThan(f.leakFar.oneSkirt + 3); expect(f.leakFar.db).toBeGreaterThan(-31); expect(f.leakFar.db).toBeLessThan(-28);
+    // the window's own (one-sided) transform keeps the 6 dB rule to 8 bins and beyond
+    expect(skirtAt('rect', 8, 64) - skirtAt('rect', 16, 64)).toBeGreaterThan(4);
+  });
+  it('resolution is a figure for tones in phase: a quarter turn and opposite phase give the text\'s numbers', () => {
+    const f = spectrumFacts();
+    expect(f.phase90.rect).toBeCloseTo(1.2, 5); expect(f.phase90.hann).toBeCloseTo(1.95, 5); expect(f.phase180.rect).toBeCloseTo(0.25, 5);
+    expect(resolvingSepAt(64, 'rect', 0)).toBe(resolvingSep(64, 'rect'));
+  });
+  it('step 3\'s last Try: Hamming at 2 bins shows a dip under 3 dB, which the chip calls shallow, not "one lump"', () => {
+    const d = dipOf(64, 2, 'hamming');
+    expect(d.dipDb).toBeGreaterThan(0.5); expect(d.dipDb).toBeLessThan(3); expect(d.resolved).toBe(false);
+  });
+  it('the factored final power equals the four-multiplication form', () => {
+    const x = tone(205, 1000 / 8000), c = goertzelCoef(1000 / 8000), r = goertzelRun(x, c);
+    expect(r.s1 * r.s1 + r.s2 * (r.s2 - c * r.s1)).toBeCloseTo(goertzelPower(r.s1, r.s2, c), 6);
+  });
+  it('the two FFTs and a complex multiplier are smaller than 128 parallel multipliers, as the text says', () => {
+    const f = spectrumFacts();
+    expect(2 * f.fft256 + 4 * f.mul).toBeLessThan(128 * f.mul);
   });
 });

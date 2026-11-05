@@ -4,11 +4,12 @@ import vectors from './dsp/vectors/spectrum.json';
 import { convolve } from '../src/dsp/zplane';
 import { signedOf, wordOf } from '../src/comm/signals';
 import { stats } from '../src/sim/stats';
+import { treeMul } from '../src/lib/muldiv';
 import { simulate } from '../src/sim/harness';
 import { goertzelCell, GZ_STATE } from '../src/lib';
 import {
   amplitudeSpectrum, bestBlock, bestBlockFor, binOffset, binsBreakEven, centred, chirp, coefWord, cosineTerms, crossoverTaps, dbOf, dftPowerAt, dipOf, pairOf, dtmfBlock, dtmfDecode, dtmfFreqs, enbwBins, enbwClosed,
-  fftRealMults, frameCount, goertzelCoef, goertzelFx, goertzelPower, goertzelRun, keyAt, olsMults, overlapSave, resolvingSep, seenAt, skirtAt, spectrogram, spectrogramSignal, stateBits, stateGain,
+  fftRealMults, frameCount, goertzelCoef, goertzelFx, goertzelPower, goertzelRun, keyAt, olsMults, SEEN_BY, twoTones, overlapSave, resolvingSep, seenAt, skirtAt, spectrogram, spectrogramSignal, stateBits, stateGain,
   tone, weakestSeen, windowFigures, windowOf, WINDOWS, worstInput, DTMF_KEYS, type WinKind,
 } from '../src/dsp/spectrum';
 import { out, set, tick as clock } from './util';
@@ -99,10 +100,20 @@ describe('two tones', () => {
     expect(sep('rect')).toBeLessThan(sep('hann')); expect(sep('hann')).toBeLessThan(sep('blackman'));
     expect(weak('rect')).toBeGreaterThan(weak('hann')); expect(weak('hann')).toBeGreaterThan(weak('blackmanharris'));
   });
-  it('the weakest tone seen is within 12 dB of what the first tone skirt alone puts at its frequency', () => {
-    for (const k of ['rect', 'hann', 'blackman'] as WinKind[]) {
-      const p = pairOf(64, 10), alone = amplitudeSpectrum(centred(64, p.f1 / 64), k, 16), skirt = dbOf(alone[Math.round((p.f1 + 10) * 16)]);
-      expect(Math.abs(weakestSeen(64, 10, k) - skirt), k).toBeLessThan(12);
+  it('the weakest tone seen sits SEEN_BY above the skirt the chip shows, at whole and half-bin separations alike', () => {
+    // a whole-number separation falls on the rectangle's and Hann's exact zeros: measured at the exact frequency, a tone 20 dB under the skirt still moved the spectrum
+    for (const k of ['rect', 'hann', 'blackman'] as WinKind[]) for (const sep of [6, 6.5, 9.5, 10]) {
+      const gap = weakestSeen(64, sep, k) - skirtAt(k, sep, 64);
+      expect(gap, `${k} ${sep}`).toBeGreaterThanOrEqual(SEEN_BY - 0.001); expect(gap, `${k} ${sep}`).toBeLessThan(SEEN_BY + 1);
+      expect(seenAt(64, sep, weakestSeen(64, sep, k), k).seen).toBe(true); expect(seenAt(64, sep, weakestSeen(64, sep, k) - 1, k).seen).toBe(false);
+    }
+  });
+  it('a tone seen at a half-bin separation moves the real two-tone spectrum there by a lot; one hidden does not', () => {
+    for (const sep of [9.5, 10.5]) {
+      const p = pairOf(64, sep, -10), at = Math.round((p.f1 + sep) * 16);
+      const alone = dbOf(amplitudeSpectrum(centred(64, p.f1 / 64), 'rect', 16)[at]), both = (rel: number) => dbOf(amplitudeSpectrum(twoTones(pairOf(64, sep, rel)), 'rect', 16)[at]);
+      expect(Math.abs(both(-10) - alone), 'a tone above the skirt shows').toBeGreaterThan(SEEN_BY);
+      expect(Math.abs(both(-60) - alone), 'a tone far under the skirt does not').toBeLessThan(2);
     }
   });
   it('rectangular: tones a whole bin apart merge and tones 3 bins apart do not', () => {
@@ -153,10 +164,13 @@ describe('overlap-save', () => {
   it('keeping the wrapped samples corrupts exactly the first M − 1 of each block', () => {
     const N = 64, M = h.length, L = N - M + 1, bad = overlapSave(x, h, N, true).y, want = convolve(x, h);
     // the kept samples of block b are bad[b * N + M − 1 …]; the first M − 1 of block 0 are circular wrap
-    let wrapped = 0;
-    for (let i = 0; i < M - 1; i++) if (Math.abs(bad[i] - (want[i - (M - 1)] ?? 0)) > 1e-9) wrapped++;
+    // exactly the first M − 1 samples of every block are wrong, and every one of them (the signal has no zero samples to hide a coincidence)
     expect(L).toBe(44);
-    expect(wrapped).toBeGreaterThanOrEqual(0);
+    for (let b = 0; b < 3; b++) {
+      let wrapped = 0;
+      for (let i = 0; i < M - 1; i++) if (Math.abs(bad[b * N + i] - (want[b * L + i - (M - 1)] ?? 0)) > 1e-6) wrapped++;
+      expect(wrapped, `block ${b}`).toBe(M - 1);
+    }
     for (let b = 0; b < 3; b++) for (let i = M - 1; i < N; i++) expect(bad[b * N + i]).toBeCloseTo(want[b * L + i - (M - 1)], 9);
   });
   it('the cost: direct wins for a few taps, the block wins for many, and the crossover is what the chapter quotes', () => {
@@ -247,7 +261,7 @@ describe('the cell in gates', () => {
     expect(out(sim, 's1')).toBe(0); expect(out(sim, 's2')).toBe(0);
   });
   it('costs what the chapter counts', () => {
-    const n = stats(goertzelCell()).nands;
-    expect(n).toBeGreaterThan(3000); expect(n).toBeLessThan(12000);
+    // the chapter's figures: 4 419 in all, of which the 16 × 16 multiplier (30-bit product) is 3 427, pinned as the text says them
+    expect(stats(goertzelCell()).nands).toBe(4419); expect(stats(treeMul(16, true, 30)).nands).toBe(3427);
   });
 });

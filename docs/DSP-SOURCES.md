@@ -41,7 +41,7 @@ before relying on them. Add to this as chapters land.
   values were not read from a book; the test computes them from the definitions.
 - Spectrogram: `scipy.signal.stft` (Hann, no padding, no detrend), ran. Overlap-save: `scipy.signal.oaconvolve` and a direct convolution, ran. Goertzel: `scipy.signal.lfilter`
   of the resonator and a direct DFT sum, with an integer recursion written separately in Python, ran.
-- Resolution (a 3 dB dip between two equal tones) and "a weak tone is seen" (its own frequency moves by 6 dB) are definitions of ours, stated in the chapter. Phases are set
+- Resolution (a 3 dB dip between two equal tones) and "a weak tone is seen" (it stands 6 dB above the skirt envelope, the top of the skirt's lobes, at its frequency) are definitions of ours, stated in the chapter. Phases are set
   so the tones add in phase at the middle of the block; with other phases the dip moves.
 - Fast convolution cost: 4 real multiplications per complex one, no real-input savings, is a counting rule of ours. The break-even of 44 taps follows from it and is not a
   published figure.

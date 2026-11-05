@@ -43,7 +43,7 @@ export function leakStats(f: number, kind: WinKind): { top: number; far: number;
 export function leakageWidget(kinds: readonly WinKind[] = ['rect']): Widget {
   let f = 10.5, kind: WinKind = kinds[0];
   const N = LEAK_N, PAD = 16;
-  const plot = plotOf({ W: 640, H: 230, x: [0, N / 2], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins (cycles per block)', yLabel: 'dB, a tone of 1 reads 0', aria: 'The spectrum of one tone: the bins the transform has, and the curve between them', yFmt: (v) => num(v, 0) });
+  const plot = plotOf({ W: 640, H: 230, x: [0, N / 2], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins (cycles per block)', yLabel: '', aria: 'The spectrum of one tone: the bins the transform has, and the curve between them', yFmt: (v) => num(v, 0) });
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const x = tone(N, f / N), dense = amplitudeSpectrum(x, kind, PAD), bins = amplitudeSpectrum(x, kind, 1);
@@ -55,13 +55,13 @@ export function leakageWidget(kinds: readonly WinKind[] = ['rect']): Widget {
     chips.set(1, dbl(far) <= FLOOR ? `below ${FLOOR} dB` : `${num(dbl(far), 1)} dB`, `the bin ${LEAK_AWAY} bins away`);
     chips.set(2, String(above60), 'of the 33 bins read above −60 dB');
     const onBin = Math.abs(f - Math.round(f)) < 1e-9;
-    note.textContent = onBin ? 'The tone fits the block a whole number of times, so every other bin of the transform lands on a zero of the skirt. The skirt is still there between the bins, in grey.'
+    note.textContent = onBin ? 'The tone fits the block a whole number of times, so all the other bins of the transform land on zeros of the skirt. The skirt is still there between the bins, in grey.'
       : `Between bins the block cuts the tone off in the middle of a cycle. Each bin now reads a different point of the same skirt, and none is zero.`;
   };
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, `${N} samples of one tone`), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the skirt, finely sampled'), h('span', { class: 'k-far' }, 'what the transform gives: one value a bin')), plot.el, chips.el, note),
+      h('div', { class: 'panel' }, h('h3', null, `${N} samples of one tone`), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the skirt, finely sampled'), h('span', { class: 'k-far' }, 'what the transform gives: one value a bin'), h('span', { class: 'fr-k' }, '0 dB = a tone of amplitude 1')), plot.el, chips.el, note),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, slider('Tone, in bins', 8, 13, 0.05, f, (v) => num(v, 2), (v) => { f = v; paint(); }).el,
         kinds.length > 1 ? windowSelect(() => kind, (k) => { kind = k; paint(); }, kinds) : ''))),
   };
@@ -72,8 +72,8 @@ export function leakageWidget(kinds: readonly WinKind[] = ['rect']): Widget {
 export function windowsWidget(): Widget {
   let kind: WinKind = 'hann';
   const N = 64, BINS = 12;
-  const tw = plotOf({ W: 300, H: 170, x: [0, N], y: [0, 1.05], yTicks: [0, 0.5, 1], xLabel: 'sample n', yLabel: 'w[n]', aria: 'The window over one block' });
-  const fr = plotOf({ W: 460, H: 170, x: [0, BINS], y: [-120, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins from the tone', yLabel: 'dB', aria: 'The window\'s transform: the skirt a tone takes', yFmt: (v) => num(v, 0) });
+  const tw = plotOf({ W: 300, H: 170, x: [0, N], y: [0, 1.05], yTicks: [0, 0.5, 1], xLabel: 'sample n', yLabel: '', aria: 'The window over one block' });
+  const fr = plotOf({ W: 460, H: 170, x: [0, BINS], y: [-120, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins from the tone', yLabel: '', aria: 'The window\'s transform: the skirt a tone takes', yFmt: (v) => num(v, 0) });
   const rows = h('tbody');
   const fig = (k: WinKind) => windowFigures(k, 128);
   const paint = () => {
@@ -85,7 +85,7 @@ export function windowsWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel dsp-wgrid' }, h('div', null, h('h3', null, 'The window'), tw.el), h('div', null, h('h3', null, 'The skirt it gives a tone (its transform)'), fr.el)),
+      h('div', { class: 'panel dsp-wgrid' }, h('div', null, h('h3', null, 'The window, w[n]'), tw.el), h('div', null, h('h3', null, 'The skirt it gives a tone (its transform), dB'), fr.el)),
       h('div', { class: 'panel' }, h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Window'), h('th', { class: 'num' }, 'Main lobe, bins'), h('th', { class: 'num' }, 'Highest sidelobe, dB'), h('th', { class: 'num' }, 'Noise bandwidth, bins'), h('th', { class: 'num' }, 'Loss at half a bin, dB'))), rows)),
       h('div', { class: 'panel mos-ctl' }, windowSelect(() => kind, (k) => { kind = k; paint(); }))),
   };
@@ -97,7 +97,7 @@ export const RES_N = 64;
 export function resolveWidget(): Widget {
   let kind: WinKind = 'rect', sep = 6, rel = -40;
   const N = RES_N, PAD = 16;
-  const plot = plotOf({ W: 640, H: 240, x: [0, 32], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins', yLabel: 'dB, the first tone reads 0', aria: 'The spectrum of two tones', yFmt: (v) => num(v, 0) });
+  const plot = plotOf({ W: 640, H: 240, x: [0, 32], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins', yLabel: '', aria: 'The spectrum of two tones', yFmt: (v) => num(v, 0) });
   const chips = mkChips(4);
   const paint = () => {
     const p = pairOf(N, sep, rel), x = centred(N, p.f1 / N).map((v, n) => v + centred(N, (p.f1 + sep) / N, 10 ** (rel / 20))[n]);
@@ -109,14 +109,14 @@ export function resolveWidget(): Widget {
     for (const [nu, y] of [[p.f1, 0], [p.f1 + sep, rel]] as [number, number][]) plot.layer.append(s('circle', { cx: plot.X(nu), cy: plot.Y(Math.max(FLOOR, y)), r: 5, class: 'sg-pt' }));
     const d = dipOf(N, sep, kind), seen = seenAt(N, sep, rel, kind);
     chips.set(0, `${num(d.dipDb, 1)} dB`, `dip if the two tones were equal, ${num(sep, 2)} bins apart`, d.resolved ? '' : 'bad');
-    chips.set(1, d.resolved ? 'resolved' : 'one lump', `needs a dip of ${DIP_NEEDED} dB`, d.resolved ? '' : 'bad');
-    chips.set(2, `${num(skirtAt(kind, sep, N), 1)} dB`, `this window's skirt ${num(sep, 2)} bins from a tone`);
-    chips.set(3, seen.seen ? 'seen' : 'hidden', `the weak tone moves its own frequency by ${num(seen.byDb, 1)} dB; ${SEEN_BY} dB counts`, seen.seen ? '' : 'bad');
+    chips.set(1, d.resolved ? 'resolved' : d.dipDb >= 0.5 ? 'a shallow dip' : 'one lump', d.resolved ? `a dip of ${DIP_NEEDED} dB or more` : d.dipDb >= 0.5 ? `a dip shows, but ${DIP_NEEDED} dB is the rule` : `needs a dip of ${DIP_NEEDED} dB`, d.resolved ? '' : 'bad');
+    chips.set(2, `${num(skirtAt(kind, sep, N), 1)} dB`, `the top of this window's skirt ${num(sep, 2)} bins from a tone`);
+    chips.set(3, seen.seen ? 'seen' : 'hidden', `the weak tone stands ${num(Math.abs(seen.byDb), 1)} dB ${seen.byDb >= 0 ? 'above' : 'below'} that skirt; ${SEEN_BY} dB above counts`, seen.seen ? '' : 'bad');
   };
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, `Two tones in ${N} samples`), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the first tone alone'), h('span', { class: 'k-far' }, 'both tones'), h('span', { class: 'k-near' }, '● where the tones are')), plot.el, chips.el),
+      h('div', { class: 'panel' }, h('h3', null, `Two tones in ${N} samples`), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the first tone alone'), h('span', { class: 'k-far' }, 'both tones'), h('span', { class: 'k-near' }, '● where the tones are'), h('span', { class: 'fr-k' }, '0 dB = the first tone')), plot.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         windowSelect(() => kind, (k) => { kind = k; paint(); }),
         slider('Separation, bins', 0.5, 12, 0.05, sep, (v) => num(v, 2), (v) => { sep = v; paint(); }).el,
@@ -136,7 +136,7 @@ export const padDip = (N: number, kind: WinKind) => dipIn(amplitudeSpectrum(padT
 export function minSamples(kind: WinKind): number { for (let N = 16; N < 400; N++) if (padDip(N, kind).resolved) return N; return Infinity; }
 export function padWidget(): Widget {
   let N = 32, pi = 0, kind: WinKind = 'hann';
-  const plot = plotOf({ W: 640, H: 220, x: [0, 0.5], y: [0, 2.2], yTicks: [0, 1, 2], xLabel: 'cycles a sample', yLabel: 'amplitude', aria: 'The spectrum of two close tones, the points the transform computes', xFmt: (v) => num(v, 2) });
+  const plot = plotOf({ W: 640, H: 220, x: [0, 0.5], y: [0, 2.2], yTicks: [0, 1, 2], xLabel: 'cycles a sample', yLabel: '', aria: 'The spectrum of two close tones, the points the transform computes', xFmt: (v) => num(v, 2) });
   const chips = mkChips(4);
   const paint = () => {
     const sepBins = PAD_GAP * N, pad = PADS[pi], P = paddedLength(N, pad);
@@ -149,7 +149,7 @@ export function padWidget(): Widget {
     chips.set(0, `${num(sepBins, 2)} bins`, `the tones are ${PAD_GAP} cycles a sample apart; one bin is 1 / ${N} of the rate`);
     chips.set(1, String(P), 'points in the transform: samples plus zeros');
     chips.set(2, `${num(d.dipDb, 1)} dB`, 'dip between the tones');
-    chips.set(3, d.resolved ? 'resolved' : 'one lump', `needs a dip of ${DIP_NEEDED} dB`, d.resolved ? '' : 'bad');
+    chips.set(3, d.resolved ? 'resolved' : d.dipDb >= 0.5 ? 'a shallow dip' : 'one lump', d.resolved ? `a dip of ${DIP_NEEDED} dB or more` : d.dipDb >= 0.5 ? `a dip shows, but ${DIP_NEEDED} dB is the rule` : `needs a dip of ${DIP_NEEDED} dB`, d.resolved ? '' : 'bad');
   };
   paint();
   return {
@@ -174,7 +174,7 @@ export function spectrogramWidget(): Widget {
   let fi = 2, hopDiv = 2, kind: WinKind = 'hann';
   const x = spectrogramSignal(), W = 640, H = 256;
   const canvas = h('canvas', { width: W, height: H, class: 'dsp-sg', role: 'img', 'aria-label': 'Spectrogram: time across, frequency up, level as colour' }) as HTMLCanvasElement;
-  const chips = mkChips(4);
+  const chips = mkChips(4), gap = h('p', { class: 'sub dsp-sgnote' });
   const paint = () => {
     const N = SG_FRAMES[fi], hop = Math.max(1, N / hopDiv), g = spectrogram(x, N, hop, kind), bins = N / 2 + 1, c = canvas.getContext('2d');
     const f = windowFigures(kind, 128);
@@ -187,14 +187,16 @@ export function spectrogramWidget(): Widget {
     chips.set(1, `${num((N / DTMF_FS) * 1000, 1)} ms`, `a frame of ${N} samples: the time detail`);
     chips.set(2, String(g.length), `frames, one every ${hop} samples (${num((hop / DTMF_FS) * 1000, 1)} ms)`);
     chips.set(3, `${num((g.length * N) / x.length, 1)} ×`, 'samples computed per sample of signal: the cost of overlap');
+    gap.textContent = `Each frame is drawn at its middle: the first and last ${N / 2} samples have no whole frame centred on them, so they stay blank.`;
   };
   paint();
   const clip = clipButton('Play the signal', () => ({ samples: x, rate: DTMF_FS, source: 'model', note: 'chirp, steady tone and two bursts, 8 kHz' }));
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, `${x.length} samples at ${DTMF_FS / 1000} kHz: a rising chirp, a steady tone, two short bursts`),
-        h('div', { class: 'dsp-sgbox' }, h('div', { class: 'dsp-sgy' }, h('span', null, '4 kHz'), h('span', null, '0')), canvas),
-        h('div', { class: 'dsp-sgx' }, h('span', null, '0'), h('span', null, `${num((x.length / DTMF_FS) * 1000, 0)} ms`)), chips.el),
+        h('div', { class: 'dsp-sgbox' }, h('div', { class: 'dsp-sgy' }, ...['4 kHz', '3 kHz', '2 kHz', '1 kHz', '0'].map((t) => h('span', null, t))), canvas),
+        h('div', { class: 'dsp-sgx' }, h('span', null, '0'), h('span', null, `${num((x.length / DTMF_FS) * 1000, 0)} ms`)),
+        h('div', { class: 'dsp-sgkey' }, h('span', null, '−70 dB'), h('i', { style: `background:linear-gradient(90deg,${RAMP.map((c, i) => `rgb(${c.join(',')}) ${(i / (RAMP.length - 1)) * 100}%`).join(',')})` }), h('span', null, '0 dB, a tone of amplitude 1')), gap, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         slider('Frame length', 0, SG_FRAMES.length - 1, 1, fi, (v) => `${SG_FRAMES[v]} samples`, (v) => { fi = v; paint(); }).el,
         slider('Overlap', 0, 3, 1, Math.log2(hopDiv), (v) => (v === 0 ? 'none' : `${(1 - 1 / 2 ** v) * 100} %`), (v) => { hopDiv = 2 ** v; paint(); }).el,
@@ -209,7 +211,7 @@ export const olsSignal = (): number[] => Array.from({ length: OLS_LEN }, (_, i) 
 export function olsWidget(): Widget {
   let M = 33, Nexp = 7;
   const x = olsSignal();
-  const plot = plotOf({ W: 640, H: 170, x: [0, 300], y: [-2, 2], yTicks: [-1, 0, 1], xLabel: 'sample n', yLabel: 'output', aria: 'The filtered signal by blocks, and the direct form over it' });
+  const plot = plotOf({ W: 640, H: 170, x: [0, 300], y: [-2, 2], yTicks: [-1, 0, 1], xLabel: 'sample n', yLabel: '', aria: 'The filtered signal by blocks, and the direct form over it' });
   const strip = s('svg', { viewBox: '0 0 640 54', class: 'dsp-blocks', role: 'img', 'aria-label': 'The blocks laid over the input' }) as SVGSVGElement;
   const chips = mkChips(5);
   const paint = () => {
@@ -231,7 +233,7 @@ export function olsWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'A long filter by blocks'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'direct form'), h('span', { class: 'k-far' }, 'by blocks')), plot.el,
+      h('div', { class: 'panel' }, h('h3', null, 'A long filter by blocks'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'output:'), h('span', { class: 'fr-k' }, 'direct form'), h('span', { class: 'k-far' }, 'by blocks')), plot.el,
         h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'three blocks of the input; the shaded start of each is the part thrown away')), strip, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         slider('Taps', 8, 60, 1, M, (v) => String(v), (v) => { M = v; paint(); }).el,
@@ -244,8 +246,8 @@ export const olsBest = (M: number): number => bestBlock(M);
 
 export function goertzelWidget(): Widget {
   let tone_ = 1000, target = 1000, N = 205;
-  const states = plotOf({ W: 640, H: 170, x: [0, 256], y: [-1, 1], yTicks: [0], xLabel: 'sample n', yLabel: 's[n], 1 = a matching tone', aria: 'The Goertzel state against the sample number' });
-  const sweep = plotOf({ W: 640, H: 190, x: [0, DTMF_FS / 2], y: [-80, 6], yTicks: [0, -20, -40, -60], xLabel: 'Hz, the frequency Goertzel is set to', yLabel: 'dB', aria: 'The power Goertzel reports as its frequency is swept', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 0) });
+  const states = plotOf({ W: 640, H: 170, x: [0, 256], y: [-1, 1], yTicks: [0], xLabel: 'sample n', yLabel: '', aria: 'The Goertzel state against the sample number' });
+  const sweep = plotOf({ W: 640, H: 190, x: [0, DTMF_FS / 2], y: [-80, 6], yTicks: [0, -20, -40, -60], xLabel: 'Hz, the frequency Goertzel is set to', yLabel: '', aria: 'The power Goertzel reports as its frequency is swept', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 0) });
   const chips = mkChips(4);
   const paint = () => {
     const x = tone(N, tone_ / DTMF_FS), c = goertzelCoef(target / DTMF_FS), r = goertzelRun(x, c), p = goertzelPower(r.s1, r.s2, c), ref = (N / 2) ** 2;
@@ -255,7 +257,7 @@ export function goertzelWidget(): Widget {
     line(states, range(N), r.states.map((v) => v / top), 'real');
     chips.set(0, `${num(dbOf(Math.sqrt(p / ref)), 1)} dB`, `power at ${hz(target)}, against a tone landing exactly on it`);
     chips.set(1, `${num(p / dftPowerAt(x, target / DTMF_FS), 9)}`, 'divided by the direct sum of N complex products: the same number');
-    chips.set(2, `${N} against ${3}`, 'multiplications in the loop, and for the power at the end');
+    chips.set(2, `${N} against 3`, 'multiplications in the loop, and for the power at the end once factored as s1² + s2 (s2 − c s1); four as written');
     const n2 = 2 ** Math.ceil(Math.log2(N));
     chips.set(3, `${fftRealMults(n2)}`, `real multiplications for every bin of a ${n2}-point FFT: cheaper than Goertzel from ${num(binsBreakEven(n2), 0)} bins`);
     sweep.clear();
@@ -267,8 +269,8 @@ export function goertzelWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'The loop s[n] = x[n] + c s[n−1] − s[n−2]'), states.el),
-      h('div', { class: 'panel' }, h('h3', null, 'Power against the frequency Goertzel is set to'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'any frequency'), h('span', { class: 'k-near' }, '● the bins an FFT of this length has'), h('span', { class: 'fr-k' }, '| set to')), sweep.el, chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'The loop s[n] = x[n] + c s[n−1] − s[n−2]'), h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'state, scaled: 1 is the most a matching tone reaches')), states.el),
+      h('div', { class: 'panel' }, h('h3', null, 'Power against the frequency Goertzel is set to'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'any frequency'), h('span', { class: 'k-near' }, '● the bins an FFT of this length has'), h('span', { class: 'fr-k' }, '| set to'), h('span', { class: 'fr-k' }, 'dB, 0 = a tone landing exactly on the setting')), sweep.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         slider('Tone', 300, 3500, 1, tone_, (v) => hz(v), (v) => { tone_ = v; paint(); }).el,
         slider('Goertzel set to', 300, 3500, 1, target, (v) => hz(v), (v) => { target = v; paint(); }).el,
@@ -309,7 +311,7 @@ const dtmfPanel: ScenePanel = (stage: Stage): Widget => {
   const paint = () => {
     const top = Math.max(1, ...pw);
     bars.replaceChildren(...fr.map((f, i) => h('div', { class: `dsp-bar${ran && (i === read.row || i === 4 + read.col) ? ' on' : ''}` },
-      h('i', { style: `height:${ran ? Math.max(1, (pw[i] / top) * 100).toFixed(1) : 0}%` }), h('b', null, `${f}`), h('span', null, ran ? `${num(dbOf(Math.sqrt(pw[i] / ((DTMF_N / 2) ** 2)), -90), 1)} dB` : ''))));
+      h('i', { style: `height:${ran ? Math.max(1, (pw[i] / top) * 100).toFixed(1) : 0}%` }), h('b', null, `${f}`), h('span', null, ran ? num(dbOf(Math.sqrt(pw[i] / ((DTMF_N / 2) ** 2)), -90), 1) : ''))));
     status.replaceChildren(h('span', null, 'key pressed ', h('b', null, key)), h('span', null, 'read back ', h('b', null, ran ? (read.key ?? 'none') : '—')), h('span', null, 'clocks ', h('b', null, String(clocks))));
     note.textContent = !ran ? 'Pick a key: its block goes through the one cell eight times, once for each tone, and the model runs beside the gates.'
       : `${ok ? 'Every state word of the gates matched the model at every clock.' : 'The gates and the model disagreed.'} Read as: ${read.why}.`;
@@ -326,7 +328,7 @@ const dtmfPanel: ScenePanel = (stage: Stage): Widget => {
   sel.addEventListener('change', () => { noise = NOISES[Number(sel.value)].amp; if (ran) run(); });
   const clip = clipButton('Play this key', () => ({ samples: dtmfClip(key, 1600, 0), rate: DTMF_FS, source: 'model', note: `${DTMF_ROWS[keyAt(key).row]} Hz and ${DTMF_COLS[keyAt(key).col]} Hz` }));
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'A keypad through the gates'),
-    keys, h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Noise'), sel), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power at each of the eight tones, Hz')), bars, status, note, clip.el);
+    keys, h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Noise'), sel), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power at each tone, Hz; under it dB against a tone of 1')), bars, status, note, clip.el);
   stage.resetHooks.add(() => { ran = false; clocks = 0; pw = []; paint(); });
   paint();
   return { el, update: () => {} };
