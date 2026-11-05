@@ -60,11 +60,8 @@ const BOOK = [
   'serial',
   'glass',
   'errors',
-<<<<<<< HEAD
   'codes',
-=======
   'pcie',
->>>>>>> origin/feat/comms-pcie
   'ethernet',
   'switch',
   'network',
@@ -73,13 +70,10 @@ const BOOK = [
   'queues',
   'secret',
   'path',
-<<<<<<< HEAD
-  'datacentre',
-=======
   'radio',
   'wifi',
   'cellular',
->>>>>>> origin/feat/comms-cellular
+  'datacentre',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
