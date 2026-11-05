@@ -5,7 +5,9 @@ import { gfInvChain, rsLatency, rsRtlDecode } from '../src/comm/rsrtl';
 import { RS_PHASE, RS_PHASE_NAMES, RsRtl } from '../src/comm/rsrtl';
 import { gfInvGates, gfMulGates, gfSquare, rsBuffer, rsDecoder, rsDelta, rsForney } from '../src/lib';
 import { simulate } from '../src/sim/harness';
-import { logicDepth, stats } from '../src/sim/stats';
+import { flatten } from '../src/sim/flatten';
+import { stats } from '../src/sim/stats';
+import { analyzeTiming } from '../src/sim/timing';
 import { checkSpec, lcg, out, set, tick } from './util';
 import { tick as yieldTick } from './yieldtick';
 
@@ -66,7 +68,7 @@ function compare(sim: Sim, m: RsRtl, at: string, en: number) {
   m.lam.forEach((v, j) => eq([`l${j}`], 'l', v, `λ${j}`));
   m.b.forEach((v, j) => eq([`l${j}`], 'b', v, `b${j}`));
   m.om.forEach((v, i) => eq([`o${i}`], 'q', v, `Ω${i}`));
-  eq(['gam'], 'q', m.gamma, 'γ'); eq(['kk'], 'k', m.k, 'k'); eq(['kk'], 'over', m.over, 'over');
+  eq(['gam'], 'q', m.gamma, 'γ'); eq(['kk'], 'k', m.k, 'k');
   eq(['mk'], 'q', m.mask.reduce((a, b, i) => a + b * 2 ** i, 0), 'mask');
   const c = m.comb(en);
   eq(['dl'], 'y', c.delta, 'δ'); eq(['kk'], 'swap', c.swap ? 1 : 0, 'swap'); eq(['fr'], 'root', c.root ? 1 : 0, 'root'); eq(['fr'], 'e', c.e, 'e');
@@ -137,6 +139,10 @@ describe('the gates', () => {
     const n = stats(rsDecoder(10, 26)).nands, parts = 22 * stats(gfMulGates()).nands;
     expect(n).toBeGreaterThan(parts);
     expect(n).toBeLessThan(40000);
-    console.log(`RS(26, 16) decoder: ${n} NANDs, ${parts} in general multipliers, ${stats(rsBuffer(26)).nands} in the buffer, depth ${logicDepth(rsDecoder(10, 26))}`);
+    expect(n).toBe(20644);
+    expect(stats(rsBuffer(26)).nands).toBe(3120);
+    expect(analyzeTiming(flatten(rsDecoder(10, 26)))?.period).toBe(68);
+    // the deep-space size, for the prose: never simulated here
+    expect(stats(rsDecoder(32, 255)).nands).toBe(78578);
   });
 });

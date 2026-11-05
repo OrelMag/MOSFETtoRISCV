@@ -44,7 +44,7 @@ export function gfSquare(times: number): ComponentDef {
     const pow = (x: number) => { let y = x; for (let i = 0; i < times; i++) y = gfMul(y, y); return y; };
     const rows: bigint[] = new Array<bigint>(8).fill(0n);
     for (let j = 0; j < 8; j++) { const v = pow(1 << j); for (let i = 0; i < 8; i++) if ((v >> i) & 1) rows[i] |= 1n << BigInt(j); }
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(16, 18, 4);
     b.pins('a');
     const sp = b.op(splitter(ones(8)), ['a']);
     const outs = xorColumns(b, xorPlan(rows, 8, true), Array.from({ length: 8 }, (_, i) => `${sp}.o${i}`));
@@ -62,7 +62,7 @@ export function gfSquare(times: number): ComponentDef {
 /** a⁻¹ = a^254: exponents 2^i - 1 by the addition chain 1, 2, 3, 6, 7, then one squaring. Four general multipliers. */
 export function gfInvGates(): ComponentDef {
   return memo('gfinv', () => {
-    const M = gfMulGates(), b = new Builder(8, 10, 2);
+    const M = gfMulGates(), b = new Builder(16, 18, 4);
     b.pins('a');
     const s1 = b.op1(gfSquare(1), ['a']); b.next();
     const b2 = b.op1(M, [s1, 'a'], 'a³'); b.next();
@@ -86,7 +86,7 @@ export function gfInvGates(): ComponentDef {
 /** A byte register whose clear means 1: the stored value is the byte with bit 0 inverted, so λ₀, b₀ and γ reset to 1 with the same clear as the rest. */
 export function rsRegOne(): ComponentDef {
   return memo('rsreg1', () => {
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(16, 18, 4);
     b.pins('d', 'en', 'clr', 'clk');
     const sd = b.op(splitter(ones(8), 2), ['d']); b.next();
     const nd = b.op1(NOT, [`${sd}.o0`]); b.next();
@@ -113,7 +113,7 @@ const startOf = (n: number, j: number): number => gfPow(-(n - 1) * j);
 /** One syndrome in the ring: Horner on the way in, a rotation afterwards. */
 export function rsRingStage(k: number): ComponentDef {
   return memo(`rsring${k}`, () => {
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(16, 18, 4);
     b.pins('d', 'next', 'rx', 'rot', 'rst', 'clk');
     const h = times(b, 'reg.q', gfPow(k)); b.next();
     const sum = b.op1(bitwise('xor', 8), [h, 'd'], 'Horner'); b.next();
@@ -134,7 +134,7 @@ export function rsRingStage(k: number): ComponentDef {
 /** The discrepancy: δ = λ₀ w₀ + Σ mask[j] λ_j w_j, a general multiplier a term. */
 export function rsDelta(t: number): ComponentDef {
   return memo(`rsdelta${t}`, () => {
-    const b = new Builder(8, 10, 2), M = gfMulGates(), X = bitwise('xor', 8), A = bitwise('and', 8), F = fanout(8);
+    const b = new Builder(16, 18, 4), M = gfMulGates(), X = bitwise('xor', 8), A = bitwise('and', 8), F = fanout(8);
     const inNames = [...Array.from({ length: t + 1 }, (_, j) => `l${j}`), ...Array.from({ length: t + 1 }, (_, j) => `w${j}`), 'm'];
     b.pins(...inNames);
     const sm = b.op(splitter(ones(t), 2), ['m']); b.next();
@@ -167,7 +167,7 @@ export function rsDelta(t: number): ComponentDef {
 /** One coefficient of the locator: λ_j and b_j with what updates them. Berlekamp-Massey, then the jump to the first byte, then a Chien step a clock. */
 export function rsLamSlice(j: number, n: number): ComponentDef {
   return memo(`rslam${j}_${n}`, () => {
-    const b = new Builder(8, 10, 2), M = gfMulGates(), Mx = busMux2(8), R = j === 0 ? rsRegOne() : clearableRegister(8);
+    const b = new Builder(16, 18, 4), M = gfMulGates(), Mx = busMux2(8), R = j === 0 ? rsRegOne() : clearableRegister(8);
     const ins = j ? ['bin', 'gamma', 'delta', 'bm', 'swap', 'ini', 'ch', 'rst', 'clk'] : ['gamma', 'bm', 'swap', 'ini', 'ch', 'rst', 'clk'];
     b.pins(...ins);
     b.name('lam.q', 'l', true); b.name('bb.q', 'b', true);
@@ -200,7 +200,7 @@ export function rsLamSlice(j: number, n: number): ComponentDef {
 /** One coefficient of Ω: shifted in, then stepped with the locator's constants. */
 export function rsOmSlice(i: number, n: number): ComponentDef {
   return memo(`rsom${i}_${n}`, () => {
-    const b = new Builder(8, 10, 2), Mx = busMux2(8);
+    const b = new Builder(16, 18, 4), Mx = busMux2(8);
     const ins = ['in', 'om', 'ini', 'ch', 'rst', 'clk'];
     b.pins(...ins);
     b.name('reg.q', 'q', true);
@@ -225,7 +225,7 @@ export function rsOmSlice(i: number, n: number): ComponentDef {
 /** Chien and Forney at one position: root when the locator's terms sum to 0, e = (Σ Ω terms) / (Σ odd locator terms). */
 export function rsForney(t: number): ComponentDef {
   return memo(`rsforney${t}`, () => {
-    const b = new Builder(8, 10, 2), X = bitwise('xor', 8);
+    const b = new Builder(16, 18, 4), X = bitwise('xor', 8);
     const inNames = [...Array.from({ length: t + 1 }, (_, j) => `l${j}`), ...Array.from({ length: t }, (_, j) => `o${j}`)];
     b.pins(...inNames);
     const chain = (xs: string[]) => { let s = xs[0]; for (let i = 1; i < xs.length; i++) s = b.op1(X, [s, xs[i]]); return s; };
@@ -257,7 +257,7 @@ export function rsForney(t: number): ComponentDef {
 /** The phases and the counter that ends each. */
 export function rsControl(nsym: number, n: number): ComponentDef {
   return memo(`rsctl${nsym}_${n}`, () => {
-    const t = nsym / 2, cw = rsCntWidth(nsym, n), b = new Builder(8, 10, 2), E = equal(cw);
+    const t = nsym / 2, cw = rsCntWidth(nsym, n), b = new Builder(16, 18, 4), E = equal(cw);
     const ins = ['en', 'rst', 'clk'], outs = ['rx', 'bm', 'om', 'ini', 'ch', 'done', 'bmlast', 'ph', 'cnt'];
     b.pins(...ins);
     b.name('phr.q', 'ph', true); b.name('cntr.q', 'cnt', true);
@@ -295,8 +295,8 @@ export function rsControl(nsym: number, n: number): ComponentDef {
 /** k = r - 2L and the verdict: swap when δ ≠ 0 and 2L ≤ r, and at the end every root must have been found. */
 export function rsKUnit(nsym: number): ComponentDef {
   return memo(`rsk${nsym}`, () => {
-    const w = rsKWidth(nsym), b = new Builder(8, 10, 2), Mx = busMux2(w);
-    const ins = ['dz', 'bm', 'ini', 'ch', 'root', 'done', 'rst', 'clk'];
+    const w = rsKWidth(nsym), b = new Builder(16, 18, 4), Mx = busMux2(w);
+    const ins = ['dz', 'bm', 'ch', 'root', 'done', 'rst', 'clk'];
     b.pins(...ins);
     b.name('kr.q', 'k', true);
     const sp = b.op(splitter(ones(w), 2), ['kr.q']), neg = `${sp}.o${w - 1}`;
@@ -316,21 +316,19 @@ export function rsKUnit(nsym: number): ComponentDef {
     const load = b.op1(OR, ['bm', chroot]);
     b.next();
     b.op(clearableRegister(w), [next, load, 'rst', 'clk'], 'k', 'kr');
-    b.op(clearableRegister(1), [neg, 'ini', 'rst', 'clk'], 'L > t', 'ov');
     b.next();
     const full = b.op1(equal(w), ['kr.q', b.op1(constWord(w, nsym), [])], 'k = 2t');
     b.next();
     const nf = b.op1(NOT, [full]);
-    const bad = b.op1(OR, ['ov.q', nf]);
     b.next();
-    b.wire(b.op1(AND, [bad, 'done']), 'fail');
-    b.wire(swap, 'swap'); b.wire('kr.q', 'k'); b.name('ov.q', 'over', true); b.wire('ov.q', 'over');
+    b.wire(b.op1(AND, [nf, 'done']), 'fail');
+    b.wire(swap, 'swap'); b.wire('kr.q', 'k');
     return define({
       id: `rsk${nsym}`, name: `RS decoder length and verdict, ${nsym} syndromes`, category: 'sequential',
-      summary: 'Berlekamp-Massey asks whether 2L ≤ r. Holding k = r - 2L makes that its sign bit, and a swap sends k to -k - 1, which is just inverting every bit. Each root found adds 2: k reaches 2t exactly when the locator had all its roots.',
-      ports: [bit('dz', 'in'), bit('bm', 'in'), bit('ini', 'in'), bit('ch', 'in'), bit('root', 'in'), bit('done', 'in'), bit('rst', 'in'), clk(), bit('swap', 'out'), bus('k', w, 'out'), bit('over', 'out'), bit('fail', 'out')],
+      summary: 'Berlekamp-Massey asks whether 2L ≤ r. Holding k = r - 2L makes that its sign bit, and a swap sends k to -k - 1, which is just inverting every bit. Each root found adds 2: k reaches 2t exactly when the locator had all its roots, which a locator too long for its registers never does.',
+      ports: [bit('dz', 'in'), bit('bm', 'in'), bit('ch', 'in'), bit('root', 'in'), bit('done', 'in'), bit('rst', 'in'), clk(), bit('swap', 'out'), bus('k', w, 'out'), bit('fail', 'out')],
       symbol: { kind: 'box', label: 'k' },
-      netlist: () => ({ pins: pinsOf(ins, ['swap', 'k', 'over', 'fail'], b.right), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: pinsOf(ins, ['swap', 'k', 'fail'], b.right), instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -338,7 +336,7 @@ export function rsKUnit(nsym: number): ComponentDef {
 /** mask[j] = 1 once j ≤ the phase's step: a shift register of 1s. */
 export function rsMask(t: number): ComponentDef {
   return memo(`rsmask${t}`, () => {
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(16, 18, 4);
     const ins = ['en', 'clr', 'clk'];
     b.pins(...ins);
     b.name('reg.q', 'q', true);
@@ -362,11 +360,10 @@ export function rsMask(t: number): ComponentDef {
 export function rsBuffer(n: number): ComponentDef {
   return memo(`rsbuf${n}`, () => {
     const b = new Builder(8, 8, 2), R = register(8);
-    b.maxH = 40;
     const ins = ['d', 'en', 'clk'];
     b.pins(...ins);
     let prev = 'd';
-    for (let i = 0; i < n; i++) { const nm = `r${i}`; b.op(R, [prev, 'en', 'clk'], undefined, nm); prev = `${nm}.q`; b.name(prev, `q${i}`, true); }
+    for (let i = 0; i < n; i++) { const nm = `r${i}`; b.op(R, [prev, 'en', 'clk'], undefined, nm); prev = `${nm}.q`; b.next(); }
     b.next();
     b.wire(prev, 'q');
     return define({
@@ -386,7 +383,7 @@ export function rsDecoder(nsym = 10, n = 26): ComponentDef {
   return memo(`rsdec${nsym}_${n}`, () => {
     const t = nsym / 2;
     if (nsym % 2 || t < 2 || n <= nsym || n > 255) throw new Error(`rsDecoder: no RS(${n}, ${n - nsym}) here (t ≥ 2)`);
-    const b = new Builder(10, 14, 3), Ring = Array.from({ length: nsym }, (_, k) => rsRingStage(k));
+    const b = new Builder(12, 24, 4), Ring = Array.from({ length: nsym }, (_, k) => rsRingStage(k));
     b.pins('d', 'en', 'rst', 'clk');
     // every driver a label: parts are placed in reading order, not by what they drive
     const tag = (drv: string, name: string) => b.name(drv, name, true);
@@ -399,7 +396,7 @@ export function rsDecoder(nsym = 10, n = 26): ComponentDef {
     b.op(OR, ['ctl.bm', 'ctl.om'], undefined, 'rot');
     b.op(OR, ['rst', 'ctl.bmlast'], undefined, 'mc');
     b.op(rsMask(t), ['rot.y', 'mc.y', 'clk'], undefined, 'mk');
-    b.op(rsKUnit(nsym), ['dz.z', 'ctl.bm', 'ctl.ini', 'ctl.ch', 'fr.root', 'ctl.done', 'rst', 'clk'], 'length, verdict', 'kk');
+    b.op(rsKUnit(nsym), ['dz.z', 'ctl.bm', 'ctl.ch', 'fr.root', 'ctl.done', 'rst', 'clk'], 'length, verdict', 'kk');
     b.next();
     for (let k = 0; k < nsym; k++) {
       if (k === Math.ceil(nsym / 2)) b.next();

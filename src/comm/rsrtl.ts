@@ -11,12 +11,12 @@
 //   Holding k and not L saves a subtractor and a comparator; L = (2t - k) / 2 afterwards. All λ_j are t + 1 bytes: once L > t the word is refused anyway, whatever falls off.
 // - OM, t clocks. The ring keeps rotating, from S₀ again, and the same δ is now Ω_i = Σ_(j ≤ i) λ_j S_(i - j): the mask is what stops the window wrapping round to the
 //   ring's far end. om[i] ← om[i + 1], om[t - 1] ← δ, so after t clocks om[i] = Ω_i.
-// - INI, one clock. Position p counts from the word's end; the first byte sent is p = n - 1, so λ_j and om_j are multiplied by α^(-(n - 1) j), a constant. over ← k < 0: L > t.
+// - INI, one clock. Position p counts from the word's end; the first byte sent is p = n - 1, so λ_j and om_j are multiplied by α^(-(n - 1) j), a constant.
 // - CH, n clocks, one byte each. Registers now hold λ_j X^(-j) and Ω_j X^(-j) for X = α^p. Each edge multiplies by α^j (p falls by one). The sums: even, odd over λ's
 //   terms; root = even + odd = 0 (Chien). Forney with first root 0 is e = X Ω(X⁻¹) / Λ'(X⁻¹), and Λ'(X⁻¹) = X · odd, so X cancels: e = Ω(X⁻¹) · odd⁻¹, the inverse
 //   a^254 from 4 general multipliers (0⁻¹ = 0: a root with odd = 0 is a repeated root, and the count below catches it). out = buffer's end + (root ? e : 0), valid = 1.
 //   Buffer shifts every clock. At a root k ← k + 2.
-// - DONE, until rst. fail = over or k ≠ 2t: roots found ≠ L, since k + 2 L = 2t. out is not meaningful here. Bytes already sent cannot be taken back: fail is the verdict.
+// - DONE, until rst. fail = k ≠ 2t: roots found ≠ L, since k + 2L = 2t. That covers L > t as well, since λ holds at most t roots. out is not meaningful here. Bytes already sent cannot be taken back: fail is the verdict.
 
 import { gfMul, gfPow } from './rs';
 
@@ -44,7 +44,7 @@ export class RsRtl {
   readonly t: number;
   readonly kw: number;
   readonly cw: number;
-  phase = 0; cnt = 0; k = 0; gamma = 0; over = 0;
+  phase = 0; cnt = 0; k = 0; gamma = 0;
   ring: number[]; lam: number[]; b: number[]; om: number[]; buf: number[];
   /** mask[j], j = 1 … t, at index j - 1. */
   mask: number[];
@@ -66,13 +66,13 @@ export class RsRtl {
     const root = (even ^ odd) === 0, inv = gfInvChain(odd), e = gfMul(value, inv), out = this.buf[n - 1] ^ (root ? e : 0);
     const P = RS_PHASE;
     const last = phase === P.RX ? en === 1 && this.cnt === n - 1 : phase === P.BM ? this.cnt === nsym - 1 : phase === P.OM ? this.cnt === t - 1 : phase === P.INI ? true : phase === P.CH ? this.cnt === n - 1 : false;
-    return { delta, swap, even, odd, root, inv, e, out, valid: phase === P.CH, done: phase === P.DONE, fail: phase === P.DONE && (this.over === 1 || this.k !== nsym), last };
+    return { delta, swap, even, odd, root, inv, e, out, valid: phase === P.CH, done: phase === P.DONE, fail: phase === P.DONE && this.k !== nsym, last };
   }
   /** One rising edge. */
   step(d: number, en: number, rst: number): void {
     const { t, nsym, n, kw, phase } = this, P = RS_PHASE, K = 2 ** kw;
     if (rst) {
-      this.phase = 0; this.cnt = 0; this.k = 0; this.gamma = 1; this.over = 0;
+      this.phase = 0; this.cnt = 0; this.k = 0; this.gamma = 1;
       this.ring.fill(0); this.om.fill(0); this.mask.fill(0); this.lam.fill(0); this.b.fill(0);
       this.lam[0] = 1; this.b[0] = 1;
       return; // the buffer keeps its contents: nothing reads it until it has been refilled
@@ -94,7 +94,6 @@ export class RsRtl {
     }
     if (omp) { for (let i = 0; i + 1 < t; i++) om[i] = om[i + 1]; om[t - 1] = c.delta; }
     if (ini) {
-      this.over = this.kNeg ? 1 : 0;
       for (let j = 0; j <= t; j++) lam[j] = gfMul(lam[j], gfPow(-(n - 1) * j));
       for (let j = 0; j < t; j++) om[j] = gfMul(om[j], gfPow(-(n - 1) * j));
     }
