@@ -438,6 +438,8 @@ export interface HostOptions {
   newAddr?: number;
   /** Clocks of idle before the first thing. */
   lead?: number;
+  /** Corrupt the packet the host sends as its n-th (counting from 0): the fault sweeps. */
+  corruptSend?: number;
 }
 export type Pump<T> = Generator<HostOut, T, Bus>;
 interface Rx { seen: Seen; p: Parsed; good: boolean }
@@ -460,6 +462,9 @@ export class UsbHost {
   /** The next packet the host sends has a bit flipped (its CRC or PID check then fails). */
   corruptNext = false;
   corrupted = 0;
+  /** Every packet the host sent: its PID and the enumeration step it belonged to. */
+  sendLog: { pid: number; stage: string }[] = [];
+  stage = '';
   /** What enumeration read. */
   dev8: number[] = []; dev18: number[] = []; cfg9: number[] = []; cfg25: number[] = [];
   addr = 0; configured = false;
@@ -485,6 +490,8 @@ export class UsbHost {
   /** A packet from its wire bytes; a pending corruption flips the low bit of the second byte (a handshake: of the PID byte). */
   *send(wire: number[]): Pump<void> {
     let w = wire;
+    if (this.sendLog.length === this.opt.corruptSend) this.corruptNext = true;
+    this.sendLog.push({ pid: wire[0] & 15, stage: this.stage });
     if (this.corruptNext) { w = [...wire]; w[w.length > 1 ? 1 : 0] ^= 1; this.corruptNext = false; this.corrupted++; }
     const syms = packetSymbols(w);
     yield* this.play(symbolClocks(syms, this.opt.jitter ? jitterWidths(syms.length, this.opt.jitter) : undefined));
@@ -611,26 +618,34 @@ export class UsbHost {
   /** The enumeration a host performs (Windows and Linux differ in details; this is the textbook order). */
   *enumerate(): Pump<void> {
     yield* this.quiet(this.opt.lead ?? 40);
+    this.stage = 'reset';
     yield* this.busReset();
+    this.stage = 'device 8';
     const get = (type: number, len: number) => setupData(0x80, REQ.GET_DESCRIPTOR, type << 8, 0, len);
     const d8 = yield* this.controlRead(0, get(1, 8));
     if (!Array.isArray(d8)) { this.fail('GET_DESCRIPTOR(device, 8) at address 0'); return; }
     this.dev8 = d8;
+    this.stage = 'reset again';
     yield* this.busReset();
+    this.stage = 'set address';
     const a = this.opt.newAddr ?? 5;
     if (!(yield* this.controlNoData(0, setupData(0x00, REQ.SET_ADDRESS, a, 0, 0)))) { this.fail('SET_ADDRESS'); return; }
     this.addr = a;
     yield* this.quiet(40); // SET_ADDRESS recovery interval (USB 2.0 9.2.6.3: 2 ms)
+    this.stage = 'device 18';
     const d18 = yield* this.controlRead(a, get(1, 18));
     if (!Array.isArray(d18)) { this.fail('GET_DESCRIPTOR(device, 18)'); return; }
     this.dev18 = d18;
+    this.stage = 'configuration 9';
     const c9 = yield* this.controlRead(a, get(2, 9));
     if (!Array.isArray(c9)) { this.fail('GET_DESCRIPTOR(configuration, 9)'); return; }
     this.cfg9 = c9;
+    this.stage = 'configuration 25';
     const total = c9[2] | (c9[3] << 8);
     const c25 = yield* this.controlRead(a, get(2, total));
     if (!Array.isArray(c25)) { this.fail('GET_DESCRIPTOR(configuration, total)'); return; }
     this.cfg25 = c25;
+    this.stage = 'set configuration';
     if (!(yield* this.controlNoData(a, setupData(0x00, REQ.SET_CONFIGURATION, c9[5], 0, 0)))) { this.fail('SET_CONFIGURATION'); return; }
     this.configured = true;
     this.say('done', `configured: address ${a}, configuration ${c9[5]}`);
