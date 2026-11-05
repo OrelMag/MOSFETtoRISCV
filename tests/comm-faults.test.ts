@@ -107,6 +107,10 @@ describe('the radio cases', () => {
 });
 
 describe('the chapter\'s typed claims', () => {
+  it('its links land on the steps it names', () => {
+    expect(chRadio.steps[RADIO_BUDGET_STEP].title).toBe('The link budget');
+    expect(chWifi.steps[WIFI_HIDDEN_STEP].title).toBe('The station you cannot hear');
+  });
   it('at the quiz\'s clock error U fails and the other character survives, in the model', () => {
     expect(receive(UART_8N1, SHOWN_FAILS, { err: UART_ERR }).word).not.toBe(SHOWN_FAILS);
     expect(receive(UART_8N1, SHOWN_SURVIVES, { err: UART_ERR }).word).toBe(SHOWN_SURVIVES);
