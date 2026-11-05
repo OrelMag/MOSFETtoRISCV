@@ -491,7 +491,7 @@ export function stacksWidget(): Widget {
     }));
     const [a, b, c] = runs;
     read.textContent = loss
-      ? `One packet lost, half way through the page's bytes. On HTTP/2, ${b.heldPackets} packets arrive and wait for it, from ${b.stalled} of ${objects} objects, because TCP hands over nothing past the gap. On HTTP/3, ${c.heldPackets} wait, from ${c.stalled}. HTTP/1.1 holds up ${a.stalled}: that object and any requested after it.`
+      ? `One packet lost, half way through the page's bytes. On HTTP/2, ${b.heldPackets} packets arrive and wait for it, from ${b.stalled} of ${objects} objects, because TCP hands over nothing past the gap. On HTTP/3, ${c.heldPackets} wait, from ${c.stalled}. HTTP/1.1 holds up ${a.stalled}: that object and any requested after it. The last byte of an interleaved page may hardly move; the cost is what could have been shown in the meantime.`
       : `Round trip ${ms2(rttMs)} ms, narrowest link ${n0(bottleneckMbps)} Mb/s free. HTTP/2 saves ${ms2(a.totalMs - b.totalMs)} ms over HTTP/1.1 by not asking one object at a time, and QUIC ${ms2(b.totalMs - c.totalMs)} ms more: its round trip less before the first request.`;
   };
   const so = slider('Objects', 1, 40, 1, objects, (v) => String(v), (v) => { objects = v; paint(); });
