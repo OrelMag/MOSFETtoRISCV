@@ -609,7 +609,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
-  { id: "secret", num: 53, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a real TLS 1.3 handshake, run by our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":6}, steps: [
+  { id: "secret", num: 53, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["tcp"], recap: {"checks":6}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },
@@ -632,7 +632,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A TLS 1.3 handshake" },
     { title: "What it all costs" },
   ] },
-  { id: "path", num: 54, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
+  { id: "path", num: 54, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
     { title: "A name, then an address", challenge: "quiz" },
@@ -640,6 +640,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same bytes, on gates", challenge: "reach" },
     { title: "One packet, all the way", challenge: "quiz" },
     { title: "A page" },
+    { title: "Many objects: HTTP/2 and QUIC" },
   ] },
   { id: "appendix-6502", num: 55, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
