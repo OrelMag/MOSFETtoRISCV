@@ -163,3 +163,12 @@ before relying on them. Add to this as chapters land.
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
   are the numbers beside each clip, and the sentence in "Wrap or saturate" about what you will hear has not been confirmed by ear.
 
+
+## A DSP core
+
+- The ISA (DSP24), its assembler, golden model, gates and benchmarks are our own, not a real DSP's. No vendor manual was read to design them. The ideas named (X and Y memories read in one clock, post-modify addressing, circular and bit-reversed modes, zero-overhead loops, a pipelined clock with delay slots in a real DSP) are textbook DSP-architecture general knowledge, **unread** here as sources: from memory, and the chapter attributes no figure to any product.
+- The benchmark answers: scipy `signal.firwin`, `butter(output='sos')`, `lfilter`, `sosfilt` and `numpy.fft.fft`, **ran** (`scripts/dsp/oracle.py`, `tests/dsp/vectors/dspcore.json`). The exact integer answers are computed in the generator with the core's own rounding rule and held bit for bit by the gates; scipy's floating-point answers agree within 1 LSB (FIRs), 16 LSB (the biquad cascade, rounding noise of a recursive filter, tolerance 24) and 3 LSB (the FFT, tolerance 8).
+- The gates equal the golden model at every clock on the five benchmarks, on random programs (valid and raw words) and a hand-made ALU corner program; eleven deliberately wrong models are each reported as a mismatch. This is verification against our own model, not against an independent implementation of DSP24.
+- The cost figures are measured from the gates (`scripts/dsp/dspcore-bench.ts`); the cycle figures come from the model the gates equal. The RV32 columns are `src/dsp/macbench.json`, the MAC chapter's.
+- Comparison caveats: the DSP core's clocks per product include its loop set-up, rounding and output instructions; the RV32 kernels exclude set-up. Block lengths differ, hence per product. The FFT has no RV32 counterpart.
+- Not listened to, not read: nothing of sound. Secondary: none.

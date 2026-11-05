@@ -1,4 +1,4 @@
-// Examples ▸ DSP core: the DSP core of chapter 75 as a sandbox chip. The core without its memories (lib/dsp24core.ts, the
+// Examples ▸ DSP core: the DSP core of the DSP core chapter as a sandbox chip. The core without its memories (lib/dsp24core.ts, the
 // placed part dsp24_core), a 256-word program ROM in DSP24 assembly (a benchmark of dsp/programs24.ts), the X and Y memories
 // as two RAM parts of 256 × 16 whose initial contents are the benchmark's images, a register that keeps the last word `out`
 // sent (loaded when outv is 1) on a hex display, and a halt part. Wires first; the pointers carry the clock and the
@@ -9,7 +9,7 @@ import { dsp24Core } from '../lib/dsp24core';
 import type { ChipDoc, PartRef } from './model';
 import { Sheet } from './example6502';
 
-export const DSP_NOTES = 'The DSP core of chapter 75 with its memories outside, one instruction per clock. The ROM holds the benchmark in DSP24 assembly (Edit program… for the listing and the other benchmarks); '
+export const DSP_NOTES = 'The DSP core of the "A DSP core" chapter with its memories outside, one instruction per clock. The ROM holds the benchmark in DSP24 assembly (Edit program… for the listing and the other benchmarks); '
   + 'X and Y are two RAM parts of 256 × 16 that start with the benchmark\'s samples and coefficients (their properties hold the initial contents). '
   + 'A store puts a word on wdata with xwe or ywe; `out` sends one word with outv = 1, and the register keeps the last one on the hex display; halt stops Run. '
   + 'Run, or Run to halt in the CPU drawer, which checks the PC, r0–r7, the pointers, the address generators, the hardware loop and the 40-bit accumulator against the golden model after every clock, and every store in X and Y. '

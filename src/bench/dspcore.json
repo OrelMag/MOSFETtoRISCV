@@ -1,6 +1,6 @@
 {
  "nands": {
-  "core": 21956,
+  "core": 21974,
   "decode": 407,
   "regs": 2867,
   "alu": 2663,
@@ -8,12 +8,12 @@
   "aguStep": 639,
   "seq": 1232,
   "loop": 886,
-  "mac": 10211,
-  "macUnit": 10063,
+  "mac": 10229,
+  "macUnit": 10081,
   "secondMultiplier": 3572,
   "rom": 24480,
   "ram": 80874,
-  "computer": 208184
+  "computer": 208202
  },
  "period": 195,
  "cycles": {

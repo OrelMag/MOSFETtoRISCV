@@ -452,7 +452,7 @@ export const EXAMPLES: Example[] = [
     id: i === 0 ? 'dsp-core' : `dsp-core-${b.id}`, group: 'computers', drawer: true,
     short: i === 0 ? 'A small DSP core: two memories, a MAC, a hardware loop.' : `The DSP core running ${b.name}.`,
     name: i === 0 ? 'DSP core (FIR filter)' : `DSP core: ${b.name}`,
-    blurb: `The DSP core of chapter 75 (16-bit data, 24-bit instructions, X and Y memories read in the same clock, a MAC, a hardware loop) with a ROM in DSP24 assembly and the memories loaded with ${b.name}'s samples and coefficients. Run: ${b.outs} output words; Run to halt in the CPU drawer checks every register against the golden model.`,
+    blurb: `The DSP core of the "A DSP core" chapter (16-bit data, 24-bit instructions, X and Y memories read in the same clock, a MAC, a hardware loop) with a ROM in DSP24 assembly and the memories loaded with ${b.name}'s samples and coefficients. Run: ${b.outs} output words; Run to halt in the CPU drawer checks every register against the golden model.`,
     build: (id, n) => dspChip(id, n, b),
     hz: 2000,
   })),

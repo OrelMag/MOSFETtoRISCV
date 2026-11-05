@@ -848,7 +848,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Pairs, unrolling, and the alignment trap", challenge: "quiz" },
     { title: "The measured table", challenge: "quiz" },
   ] },
-  { id: "converters", num: 75, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "dspcore", num: 75, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","fixed","firdesign"], recap: {"checks":3}, steps: [
+    { title: "What a loop costs", challenge: "quiz" },
+    { title: "Two memories, two buses", challenge: "reach" },
+    { title: "Address generators", challenge: "quiz" },
+    { title: "A loop with no branch", challenge: "quiz" },
+    { title: "27 instructions", challenge: "quiz" },
+    { title: "A filter, a tap a clock", challenge: "reach" },
+    { title: "The FFT", challenge: "quiz" },
+    { title: "Against the RV32 machines", challenge: "quiz" },
+  ] },
+  { id: "converters", num: 76, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz" },
     { title: "The way back: a ladder", challenge: "quiz" },
@@ -857,7 +867,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The loop in gates, and its CIC", challenge: "reach" },
     { title: "Many bits from one", challenge: "quiz" },
   ] },
-  { id: "adaptive", num: 76, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv"], recap: {"checks":3}, steps: [
+  { id: "adaptive", num: 77, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv"], recap: {"checks":3}, steps: [
     { title: "An echo nobody can measure", challenge: "quiz" },
     { title: "The best a filter can do", challenge: "quiz" },
     { title: "One step downhill, per sample", challenge: "quiz" },
@@ -865,7 +875,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz" },
     { title: "A tap in gates", challenge: "reach" },
   ] },
-  { id: "pictures", num: 77, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "pictures", num: 78, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "A picture is a signal", challenge: "quiz" },
     { title: "Filters in two dimensions", challenge: "quiz" },
     { title: "Smaller and larger", challenge: "quiz" },
@@ -875,7 +885,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
     { title: "A file another program opens", challenge: "quiz" },
   ] },
-  { id: "appendix-6502", num: 78, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 79, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -885,14 +895,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 79, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 80, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 80, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 81, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -905,7 +915,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 81, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 82, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },
