@@ -42,3 +42,72 @@
 .dsp-conv .lab { text-align: left; color: var(--muted); padding-right: 8px; white-space: nowrap; }
 .dsp-conv .hit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .dsp-eq { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12.5px; overflow-x: auto; white-space: nowrap; padding: 4px 0; }
+
+/* measuring a spectrum */
+.dsp-wgrid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 10px; align-items: start; }
+@media (max-width: 720px) { .dsp-wgrid { grid-template-columns: minmax(0, 1fr); } }
+.dsp-table tr.on td { background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+.dsp-sgbox { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: stretch; }
+.dsp-sg { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: 4px; image-rendering: pixelated; background: #0c0e1e; }
+.dsp-sgy { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: var(--muted); text-align: right; }
+.dsp-sgx { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 2px 0 6px 38px; }
+.dsp-blocks { width: 100%; height: auto; display: block; margin: 4px 0 8px; }
+.dsp-blk { fill: color-mix(in srgb, var(--accent) 22%, var(--surface)); stroke: var(--accent); stroke-width: 1; }
+.dsp-blk.drop { fill: color-mix(in srgb, var(--warn) 38%, var(--surface)); stroke: var(--warn); }
+.dsp-keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 6px 0; }
+.dsp-bars { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; align-items: end; height: 140px; margin: 6px 0; }
+.dsp-bar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; font-size: 10.5px; color: var(--muted); }
+.dsp-bar i { display: block; width: 70%; background: var(--border-strong, var(--border)); border-radius: 3px 3px 0 0; min-height: 1px; }
+.dsp-bar.on i { background: var(--accent); }
+.dsp-bar b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.dsp-bar span { min-height: 1.2em; font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) { .dsp-keys .btn { min-height: 40px; } }
+
+.dsp-sgkey { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11px; color: var(--muted); margin: 0 0 4px 38px; }
+.dsp-sgkey span { white-space: nowrap; }
+.dsp-sgkey i { flex: 0 0 90px; height: 8px; border-radius: 4px; border: 1px solid var(--border); }
+.dsp-sgnote { margin: 2px 0 6px 38px; font-size: 11px; }
+.dsp-bar span { white-space: nowrap; }
+/* FIR design */
+.fir-forbid { fill: color-mix(in srgb, var(--bad) 14%, transparent); stroke: none; }
+.fir-edge { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.fir-ext { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.fir-key { color: var(--bad); }
+.fir-key::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 5px; background: color-mix(in srgb, var(--bad) 22%, transparent); border: 1px solid var(--bad); }
+.fir-ext-key { color: var(--accent); }
+.fir-plane .zero.off { stroke: var(--accent); }
+.fir-scroll { overflow-x: auto; }
+.fir-diagram-box { overflow-x: auto; }
+.fir-diagram { display: block; width: 100%; min-width: 520px; max-width: 640px; height: auto; margin: 4px auto; }
+.fir-diagram text { fill: var(--text); font-size: 11px; }
+.fir-diagram .fd-wire { stroke: var(--muted); stroke-width: 1.4; }
+.fir-diagram .fd-dot { fill: var(--muted); }
+.fir-diagram .fd-node { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.fir-diagram .fd-box { fill: var(--surface); stroke: var(--warn); stroke-width: 1.6; }
+.fir-table { margin-top: 8px; }
+.fir-stem { stroke: var(--accent); stroke-width: 2; }
+/* IIR and stability */
+.dsp-plane.dsp-mini { max-width: 300px; cursor: default; touch-action: auto; }
+.dsp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 8px; }
+.dsp-pair figure { margin: 0; min-width: 0; } .dsp-pair figcaption { font-size: 12px; color: var(--muted); margin-top: 3px; text-align: center; }
+.dsp-pair figcaption b.bad { color: var(--bad); }
+@media (max-width: 560px) { .dsp-pair { grid-template-columns: minmax(0, 1fr); } }
+.dsp-mask { fill: color-mix(in srgb, var(--good) 14%, transparent); stroke: var(--good); stroke-width: 1; stroke-dasharray: 3 3; }
+.dsp-designs tbody tr { cursor: pointer; } .dsp-designs tbody tr.sel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dsp-designs .dsp-barcell { display: table-cell; min-width: 120px; }
+.dsp-designs .dsp-barcell span { display: block; font-variant-numeric: tabular-nums; font-size: 12px; margin-top: 2px; }
+.dsp-orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 3px 10px; margin: 6px 0; }
+.dsp-order { display: grid; grid-template-columns: 4.2em minmax(0, 1fr) 3.4em; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.dsp-order i { display: block; height: 8px; border-radius: 0 3px 3px 0; background: var(--muted); }
+.dsp-order b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.dsp-order .n { font-variant-numeric: tabular-nums; color: var(--muted); letter-spacing: 0.06em; }
+.dsp-order.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } .dsp-order.sel i { background: var(--accent); }
+.dsp-sweep { margin-top: 6px; }
+.dsp-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.dsp-check input { flex: none; }
+/* a table wider than a phone scrolls inside its own box, not the page */
+.dsp-scroll { overflow-x: auto; max-width: 100%; }
+.dsp-scroll .dsp-table { min-width: 520px; }
+/* a labelled select above its caption's width: stacked, so neither is cut off in a narrow scene panel */
+.dsp-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.dsp-field select { width: 100%; min-width: 0; box-sizing: border-box; }
