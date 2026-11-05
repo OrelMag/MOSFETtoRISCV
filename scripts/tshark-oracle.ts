@@ -14,7 +14,7 @@ import { BROADCAST, frameBody } from '../src/comm/ethframe';
 import { arpFrame, icmpEchoFrame, udpFrame } from '../src/comm/netframes';
 import { LINKTYPE_USB_2_0, pcapFile, type Captured } from '../src/comm/pcap';
 import { CLOCK_NS, dataBytes, handshakeBytes, PID, REQ, setupData, sofBytes, tokenBytes, UsbBench, UsbMonitor, type BenchOptions, type Pump, type UsbHost } from '../src/comm/usb';
-import { GateDev, readSweep } from '../tests/usbkit';
+import { GateDev } from '../tests/usbkit';
 import { stackProgram } from '../src/comm/stack';
 import { DEFAULT_STACK } from '../src/comm/stack/all';
 import { HOSTS, hostApp, pingApp, udpClientApp, udpEchoApp } from '../src/comm/stack/apps';
@@ -199,6 +199,15 @@ function usbCapture(opt: BenchOptions): Captured[] {
   for (const s of mon.seen) if (!s.syncOk || s.stuffError || !s.byteAligned) throw new Error(`a packet at clock ${s.start} is not whole`);
   return mon.seen.map((s) => ({ us: (s.start * CLOCK_NS) / 1000, bytes: s.wire }));
 }
+/** Reads that end where a descriptor ends (or at its first 8 bytes), at several wLength: packets of every size the device sends. */
+function* usbReads(h: UsbHost): Pump<void> {
+  yield* h.quiet(40);
+  yield* h.busReset();
+  const get = (type: number, len: number) => setupData(0x80, REQ.GET_DESCRIPTOR, type << 8, 0, len);
+  for (const len of [8, 18, 19, 30, 64]) yield* h.controlRead(0, get(1, len));
+  for (const len of [9, 25, 26, 64]) yield* h.controlRead(0, get(2, len));
+  yield* h.controlRead(0, setupData(0x80, REQ.GET_STATUS, 0, 0, 2));
+}
 /** Enumeration, then the things a clean enumeration does not show: STALL, the interrupt endpoint's NAK, a zero-length status, GET_STATUS. */
 function* usbOdds(h: UsbHost): Pump<void> {
   yield* h.enumerate();
@@ -215,8 +224,9 @@ const CASES: Case[] = [
   { name: 'usb-built', usb: true, frames: usbBuilt },
   ...(gates ? [
     { name: 'usb-enumeration', usb: true, frames: () => usbCapture({}), must: (f: Captured[]) => (f.length > 60 ? null : 'an enumeration is more than 60 packets') },
-    // the usb dissector reads the descriptors inside a control transfer, and calls one cut short malformed: so reads that end mid-descriptor are checked with it off
-    { name: 'usb-every-read', usb: true, extra: ['--disable-protocol', 'usb'], frames: () => usbCapture({ script: readSweep([]) }), must: (f: Captured[]) => (f.length > 400 ? null : 'the read sweep is more than 400 packets') },
+    // not every read length: the usb dissector reads the descriptors inside a control transfer and calls one cut short mid-descriptor
+    // malformed (found by the first run of the full sweep: tests/comm-usb-gates.test.ts keeps those), so these are the ones a host asks for
+    { name: 'usb-complete-reads', usb: true, frames: () => usbCapture({ script: usbReads }), must: (f: Captured[]) => (f.length > 100 ? null : 'the reads are more than 100 packets') },
     { name: 'usb-stall-nak', usb: true, frames: () => usbCapture({ script: usbOdds, nak: (c) => (c > 2800 && c < 3100 ? 1 : 0) }),
       must: (f: Captured[]) => (new Set(f.map((x) => (x.bytes as number[])[0])).has(0x5a) && new Set(f.map((x) => (x.bytes as number[])[0])).has(0x1e) ? null : 'NAK (5A) and STALL (1E) must both appear') },
   ] : []),
