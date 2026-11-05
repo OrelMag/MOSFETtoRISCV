@@ -16,24 +16,24 @@ the same 16 bins past 10.5, real cosine  −29.6 dB (the mirror image adds its s
     },
     mistakes: [
       'Treating the skirt as measurement noise and averaging it away. It is deterministic, identical on every block of the same tone, and averaging more blocks does not lower it.',
-      'Reading a tone\'s amplitude from the largest bin. A tone half a bin off a centre reads about 3.8 dB low under the rectangle; only a window with a flat lobe, or interpolation, recovers it.',
+      'Reading a tone\'s amplitude from the largest bin. A tone half a bin off a centre reads about 3.9 dB low under the rectangle (3.8 for a real cosine, whose mirror image adds a little); only a window with a flat lobe, or interpolation, recovers it.',
       'Expecting a clean line because the tone is "pure". Cleanliness needs a whole number of cycles in the block, 10 yes and 10.5 no, and a real source is not locked to your sample clock.',
       'Calling a tone buried under another\'s skirt absent. It may be 40 dB down and still be there; the window decides whether you can see it.',
     ],
     chapters: [{ chapter: 'spectrum', step: 0, label: 'A tone that is not a line' }, { chapter: 'spectrum', step: 2, label: 'What the skirt hides' }],
   },
   windowfn: {
-    idea: `A window multiplies the block by a taper that falls to zero at the edges, so the cut is gentle and the skirt falls faster. The price is paid in the main lobe: tapering throws away samples near the ends, the block counts as shorter, and the lobe gets wider. The cosine-family windows are sums of shifted copies of the rectangle's transform whose sidelobes cancel, and that cancellation is the whole trade: the lobe widens by one bin for each term added.<br><br>Three figures decide a window when you measure. The highest sidelobe says how weak a tone can be beside a strong one and still show. The main lobe says how close two tones can be and still resolve. The noise bandwidth, the width of the rectangle that would pass the same white noise, says how much the noise floor rises, and the loss for a tone half a bin off a centre says how far a peak can read low. The spectra can be scaled by half the window's sum so that a tone on a bin reads its true amplitude whatever the window. There is no best window, only a choice of what you expect to find; Kaiser's has a knob, β, that moves along the same trade.`,
+    idea: `A window multiplies the block by a taper that falls to zero at the edges, so the cut is gentle and the skirt falls faster. The price is paid in the main lobe: tapering throws away samples near the ends, the block counts as shorter, and the lobe gets wider. The cosine-family windows are sums of shifted copies of the rectangle's transform whose sidelobes cancel, and that cancellation is the whole trade: the lobe widens by two bins (one each side) for each term added.<br><br>Three figures decide a window when you measure. The highest sidelobe says how weak a tone can be beside a strong one and still show. The main lobe says how close two tones can be and still resolve. The noise bandwidth, the width of the rectangle that would pass the same white noise, says how much the noise floor rises, and the loss for a tone half a bin off a centre says how far a peak can read low. The spectra can be scaled by half the window's sum so that a tone on a bin reads its true amplitude whatever the window. There is no best window, only a choice of what you expect to find; Kaiser's has a knob, β, that moves along the same trade.`,
     example: {
       title: 'Four windows, same trade',
-      body: `<pre>window            main lobe  highest sidelobe  noise bw   half-bin loss   skirt at 10 bins
-rectangle          2 bins     −13.3 dB          1.00 bins  3.92 dB         −29.2 dB
-Hann               4          −31.5             1.50       1.42            −68.5
-Blackman           6          −58.1             1.73       1.10            −76.5
-Blackman–Harris    8          −92.0             2.00       0.83</pre>Hann's noise floor reads 10 log<sub>10</sub> 1.5 = 1.8 dB above the rectangle's for the same noise. A tone 40 dB below another and 10 bins away hides under the rectangle's skirt and shows under Hann's.`,
+      body: `<pre>window           lobe  sidelobe   noise bw  half-bin loss  skirt, 10 bins
+rectangle         2    −13.3 dB   1.00      3.92 dB        −29.2 dB
+Hann              4    −31.5      1.50      1.42           −68.5
+Blackman          6    −58.1      1.73      1.10           −76.5
+Blackman–Harris   8    −92.0      2.00      0.83           −96.6</pre>lobe in bins, null to null; resolving two equal tones takes 1.55, 2.45, 2.8 and 3.25 bins. Hann's noise floor reads 10 log<sub>10</sub> 1.5 = 1.8 dB above the rectangle's for the same noise. A tone 40 dB below another and 10 bins away hides under the rectangle's skirt and shows under Hann's.`,
     },
     mistakes: [
-      'Choosing the window with the lowest sidelobes by default. Blackman–Harris resolves tones only 8 bins apart; two close equal tones merge into one lump.',
+      'Choosing the window with the lowest sidelobes by default. Blackman–Harris needs about 3.3 bins between equal tones (its lobe is 8 bins wide, null to null); two close tones merge into one lump.',
       'Comparing noise floors across windows as if the bins were equal. A Hann spectrum of the same noise reads 1.8 dB higher than the rectangle\'s, because each bin is 1.5 bins wide.',
       'Using the symmetric form for analysis. Blocks that follow one another want the periodic form, which repeats without a seam; the symmetric form is for filter taps.',
       'Forgetting that a window changes amplitude. Without dividing by half its sum a tone on a bin reads 0.5 under Hann.',
@@ -148,10 +148,12 @@ break-even against an FFT: 16 bins for 256 samples, 12 for 64</pre>Eight cells w
       title: 'Meeting 60 dB across a transition of 0.025 cycles a sample',
       body: `<pre>mask: pass to 0.100, stop from 0.125, 0.1 dB ripple (1 ± 0.00576), 60 dB (0.001)
 rectangle   −23.6 dB at 101 taps, −41.8 at 1,001: falls 6 dB a doubling
-Hamming     −16.6, −29.7, −56.9, −58.4 dB at 61, 101, 201, 301 taps; first −60 dB at 489 (odd)
-Hann        269 taps (268 either parity)
-Blackman    201 taps
-Kaiser      β = 5.65, 147 taps odd (146 either parity); passband error 0.0011 against 0.0058 allowed</pre>The odd-length figures matter when the hardware wants a symmetric filter with a middle tap; Parks–McClellan meets the same mask with 114.`,
+Hamming   −16.6, −29.7, −56.9, −58.4 dB at 61, 101, 201, 301 taps
+          first −60 dB at 489 taps odd (488 if either parity is allowed)
+Hann      269 taps odd (268 if either parity is allowed)
+Blackman  201 taps
+Kaiser    β = 5.65, 147 taps odd (146 if either parity is allowed)
+          passband error 0.0011 against 0.0058 allowed</pre>The odd-length figures matter when the hardware wants a symmetric filter with a middle tap; Parks–McClellan meets the same mask with 114.`,
     },
     mistakes: [
       'Choosing the window by its sidelobes alone. The nearest sidelobes sit inside the mask\'s transition until the filter is long, so a window can plateau a few tenths of a dB short for hundreds of taps.',
@@ -169,7 +171,7 @@ Kaiser      β = 5.65, 147 taps odd (146 either parity); passband error 0.0011 a
 113 taps  passband error 0.00592, stopband −59.7 dB                     misses both
 Remez exchange: 8 passes
 Kaiser's window: 146 taps = 32 more, 28 % more multiplications a sample
-Kaiser's length formula: 109, 5 short of 114
+Kaiser's equiripple length estimate: 109, 5 short of 114
 odd lengths only: 115 (Kaiser 147)
 rounded to 16-bit words with 17 fraction bits, 114 taps miss by 0.22 dB; 115 meet it</pre>The window is simpler to compute and to explain; the exchange is what you use when taps cost money.`,
     },
@@ -187,13 +189,13 @@ rounded to 16-bit words with 17 fraction bits, 114 taps miss by 0.22 dB; 115 mee
       title: 'The 115-tap filter without a multiplier',
       body: `<pre>13,304 = −2³ + 2¹⁰ − 2¹² + 2¹⁴      4 signed digits, 9 ones in binary, 3 adders
 58 distinct taps (the rest are mirrors)
-binary: 296 non-zero digits      signed digits: 227      173 adders
+binary: 296 non-zero digits   signed digits: 227   173 adders
+(227 − 58 + 4: four taps of negative digits only need one more)
 58 constant multipliers: 43,853 NANDs
-58 general 16 × 16 multipliers (3,572 each): 207,176
-the whole folded filter: 285,871 → 99,048 NANDs, no multiplier left in it</pre>Every constant from 1 to 4,095 recoded this way has no two non-zero digits side by side, and none needs more than 7.`,
+58 general 16 × 16 multipliers (3,572 each): 207,176</pre>The whole folded filter goes from 285,871 to 99,048 NANDs, with no multiplier left; the drop is larger than 207,176 − 43,853 because the folded form's multipliers are 17 × 17, one bit wider for the pre-adder. Every constant from 1 to 4,095 recoded this way has no two non-zero digits side by side, and none needs more than 7.`,
     },
     mistakes: [
-      'Counting the ones of the binary form as the cost. A run of ones is one subtraction in signed digits: 0111 1111 is 2⁸ − 1.',
+      'Counting the ones of the binary form as the cost. A run of ones is one subtraction in signed digits: 0111 1111 (127) is 2⁷ − 1.',
       'Forgetting the sign bits in the widths. Each shifted copy is wider, and the sum needs the bits the largest partial result asks for, not the input\'s.',
       'Using shifts for taps that adapt. A changed tap is a different circuit; adaptive filters keep the general multiplier.',
       'Believing the fewest digits is the cheapest hardware in every case. Shared sub-expressions between taps can beat a per-tap recoding, and a tap with one digit is just wiring.',
@@ -201,14 +203,15 @@ the whole folded filter: 285,871 → 99,048 NANDs, no multiplier left in it</pre
     chapters: [{ chapter: 'firdesign', step: 5, label: 'A constant is a few shifts' }],
   },
   transposed: {
-    idea: `The direct form delays the input and sums the products at the end, so the adder is a tree or a chain behind the last tap. Reverse every arrow and swap adders for forks, and the same transfer function results: the input reaches all the multipliers at once, and the registers hold partial sums that move toward the output, one adder and one register per tap. Nothing waits behind a long adder chain, so the longest path is one multiplier and one adder, and every product is ready the moment a sample arrives.<br><br>The price is in the registers, which hold sums and not samples, so each is as wide as the accumulator. A linear-phase filter folds in this form differently: x[n] h[k] is the product that two mirrored taps both need, so computing it once is the saving, where the direct form adds the pair before multiplying. None of the three forms changes what the filter does. They move cost between multipliers, adders, registers and the longest path, and which wins depends on the technology; in gates, where a multiplier is the expensive part, folding is the first thing to do to a linear-phase filter.`,
+    idea: `The direct form delays the input and sums the products at the end, so the adder is a tree or a chain behind the last tap. Reverse every arrow and swap adders and forks, and the same transfer function results: the input reaches all the multipliers at once, and the registers hold partial sums that move toward the output, one adder and one register per tap. Nothing waits behind a long adder chain, so the longest path is one multiplier and one adder, and every product is ready the moment a sample arrives.<br><br>The price is in the registers, which hold sums and not samples, so each is as wide as the accumulator. A linear-phase filter folds in this form differently: x[n] h[k] is the product that two mirrored taps both need, so computing it once is the saving, where the direct form adds the pair before multiplying. None of the three forms changes what the filter does. They move cost between multipliers, adders, registers and the longest path, and which wins depends on the technology; in gates, where a multiplier is the expensive part, folding is the first thing to do to a linear-phase filter.`,
     example: {
       title: '115 taps, 16-bit words, counted from the gates',
-      body: `<pre>direct, all parallel                  473,024 NANDs   115 multiplications   adder tree of 7 levels
-folded: add the pair, then multiply     285,871          58
-transposed, mirror taps sharing         300,200          58
+      body: `<pre>                                          NANDs     multiplications
+direct, all parallel                    473,024     115 (adder tree of 7 levels)
+folded: add the pair, then multiply     285,871      58
+transposed, mirror taps sharing         300,200      58
 
-accumulator and transposed registers: 2 × 16 + 2 = 34 bits, against 16 for a sample register</pre>Here the wide registers cost more than the folded form's pre-adders save; the transposed form's case is the short path, not the area.`,
+accumulator, transposed registers: 2 × 16 + 2 = 34 bits; a sample register 16</pre>Here the wide registers cost more than the folded form's pre-adders save; the transposed form's case is the short path, not the area.`,
     },
     mistakes: [
       'Expecting a different response. The transposed form is exactly the same filter in exact arithmetic; only the cost, the path and the rounding noise differ.',
@@ -225,8 +228,8 @@ accumulator and transposed registers: 2 × 16 + 2 = 34 bits, against 16 for a sa
       body: `<pre>115 taps, 16-bit words: 37,057 NANDs, 115 clocks a sample
 all parallel:            473,024 NANDs, one sample a clock   (13 times more)
 accumulator: 2 × 16 + 2 guard = 34 bits (Σ|tap| = 1.94; log₂ 115 would give 7)
-48 kHz × 115 = 5.52 MHz clock needed; gates reach about 315 MHz (period 127 NAND delays)
-→ at most 315 / 115 = 2.7 million samples a second
+48 kHz × 115 = 5.52 MHz clock needed; period 127 NAND delays, which at an
+illustrative 25 ps a delay is about 315 MHz → at most 315 / 115 = 2.7 million a second
 
 the drawing: 16 taps, 9,336 NANDs, multiplier 3,572, accumulator 33 bits
 passband tone 0.04: gain 1.001; stopband tone 0.35: 0.024</pre>The model and the gates are compared after every clock edge: the output, the tap number and the accumulator.`,
@@ -234,7 +237,7 @@ passband tone 0.04: gain 1.001; stopband tone 0.35: 0.024</pre>The model and the
     mistakes: [
       'Sizing the accumulator at log<sub>2</sub> N guard bits. That is right only if every tap could be full scale; for these taps 2 bits suffice, and every bit costs in every adder and register.',
       'Rounding or clamping at every addition. The sum is kept wide and rounded once, at the end; clamping early changes the answer for no reason.',
-      'Forgetting that the sample rate is the clock over the tap count. A 315 MHz clock with 115 taps is 2.7 million samples a second, not 315.',
+      'Forgetting that the sample rate is the clock over the tap count. An illustrative 315 MHz clock (127 NAND delays at 25 ps) with 115 taps is 2.7 million samples a second, not 315.',
       'Letting the ring hold stale data. The new sample must load only in the last cycle; loading earlier shifts the taps against the samples.',
     ],
     chapters: [{ chapter: 'firdesign', step: 6, label: 'One multiplier, N clocks' }, { chapter: 'firdesign', step: 3, label: 'Taps are words' }],
