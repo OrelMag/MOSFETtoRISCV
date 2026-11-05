@@ -84,6 +84,7 @@ export * from './rs';
 export * from './rsdec';
 export * from './fft';
 export * from './fixedpt';
+export * from './firmac';
 export * from './ethswitch';
 export * from './enigmagates';
 export * from './aes';

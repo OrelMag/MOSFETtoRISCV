@@ -318,8 +318,8 @@ export function csdOf(c: number): CsdTerm[] {
 export const csdValue = (t: readonly CsdTerm[]): number => t.reduce((s, d) => s + (d.neg ? -1 : 1) * 2 ** d.pos, 0);
 /** x · c as the shift-and-add the gates do. */
 export const csdMul = (c: number, x: number): number => csdOf(c).reduce((s, d) => s + (d.neg ? -1 : 1) * x * 2 ** d.pos, 0);
-/** Adders a constant multiplier needs: one fewer than its non-zero digits (a lone digit is a shift; a lone negative digit needs a negation, counted as one). */
-export const csdAdders = (c: number): number => { const t = csdOf(c); return t.length === 0 ? 0 : t.length === 1 && t[0].neg ? 1 : t.length - 1; };
+/** Adders a constant multiplier needs: one fewer than its non-zero digits when one is positive to start from (a lone positive digit is a shift); a sum of negative digits only starts from 0 − term. */
+export const csdAdders = (c: number): number => { const t = csdOf(c); return t.length === 0 ? 0 : t.length - (t.some((d) => !d.neg) ? 1 : 0); };
 /** Binary has digits too: the ones of |c|. */
 export const binaryDigits = (c: number): number => { let v = Math.abs(c), n = 0; while (v) { n += v & 1; v = Math.floor(v / 2); } return n; };
 
@@ -377,3 +377,17 @@ export const guardForN = (n: number): number => Math.ceil(Math.log2(n));
 
 /** Clamp bounds as a convenience for tests. */
 export const outRange = (w: number): [number, number] => [wordMin(w), wordMax(w)];
+
+// ---- the filter drawn in gates ----------------------------------------------------------------------------------------------------------
+
+/** What the gate-level scene filters with: 16 taps, equal weights, pass to 0.10 and stop from 0.20 cycles a sample. A looser mask than the chapter's: sixteen taps cannot reach 60 dB. */
+export const SCENE_MASK: Mask = { pass: 0.1, stop: 0.2, rippleDb: 1, stopDb: 40 };
+export const SCENE_TAPS = 16;
+let sceneMemo: { design: RemezResult; words: number[]; cfg: MacConfig; report: MaskReport } | null = null;
+export function sceneMac(): { design: RemezResult; words: number[]; cfg: MacConfig; report: MaskReport } {
+  if (!sceneMemo) {
+    const design = remez(SCENE_TAPS, [0, SCENE_MASK.pass, SCENE_MASK.stop, 0.5], [1, 0]), w = 16, frac = widestFrac(design.taps, w), words = tapWords(design.taps, frac, w);
+    sceneMemo = { design, words, cfg: { taps: words, w, frac, guard: guardFor(words, w) }, report: maskReport(tapValues(words, frac), SCENE_MASK) };
+  }
+  return sceneMemo;
+}
