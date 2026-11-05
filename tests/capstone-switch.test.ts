@@ -1,13 +1,15 @@
 // The switch capstone: the bench holds the reference to the sheet, and refuses switches that break a rule.
 
 import { describe, expect, it } from 'vitest';
+import { refOf } from '../src/campaign/buildcomm';
 import { capstoneChallenge, capstoneRule } from '../src/campaign/capstone';
 import { runSwitchSpec } from '../src/campaign/capcomm';
 import { checkChallenge } from '../src/editor/challenges';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace } from '../src/editor/model';
 import { Builder } from '../src/lib/builder';
-import { define, merger, ones, splitter } from '../src/lib/define';
+import { define, merger, ones, registry, splitter } from '../src/lib/define';
+import { otherSwitch, otherSwitchParts } from './fixtures/otherswitch';
 import { DFF, register } from '../src/lib/sequential';
 import { TIE0, TIE1 } from '../src/lib/transistors';
 import { tick } from './yieldtick';
@@ -82,10 +84,21 @@ describe('the switch capstone', () => {
     await tick();
     expect(runSwitchSpec(ethSwitch({ cellK: 8, tableK: 2 }), 'gate').failures.length).toBeGreaterThan(0);
   }, 300_000);
+  it('a switch of quite another design passes, drawn as chips and held to the same rule', () => {
+    const ch = capstoneChallenge('cap_switch')!;
+    const chips = refOf('other_switch', otherSwitch, 'Another switch', () => otherSwitchParts().map((d) => [d, d.name] as [ComponentDef, string]))();
+    const ws = { ...emptyWorkspace(), chips: Object.fromEntries(chips.map((d) => [d.id, d])) };
+    const r = checkChallenge(ch, new UserLibrary(ws).compiled(chips[chips.length - 1].id));
+    expect(r.restrictionViolations).toEqual([]);
+    expect(r.failures ?? []).toEqual([]);
+    expect(r.ok).toBe(true);
+  }, 300_000);
   it('the machines are the learner\'s: none of them is a part', () => {
     const lib = (capstoneRule('cap_switch') as { lib: string[] }).lib;
-    for (const banned of ['eth_in_8fs_rx', 'eth_in_8fs_tx', 'mac_table7_4_look', 'mac_table7_4_age', 'eth_in_8fs', 'mac_table7_4', 'eth_xbar']) expect(lib, banned).not.toContain(banned);
-    for (const given of ['eth_in_8fs_mem', 'mac_table7_4_ram', 'eth_in_8fs_count']) expect(lib, given).toContain(given);
+    expect(lib.filter((id) => /^(eth_|mac_table|rv16_)/.test(id))).toEqual([]);
+    for (const given of ['ram*', 'pmem*', 'reg*', 'counter*', 'eq*', 'fifo*', 'arbrr4']) expect(lib, given).toContain(given);
+    // nothing on offer has a pin only a generator could name
+    for (const id of lib) if (!id.endsWith('*')) expect((registry.get(id)?.ports ?? []).filter((p) => /^n\d+$|_\d{2,}$/.test(p.name)), id).toEqual([]);
   });
   it('the reference passes, drawn as chips and checked as a learner\'s would be, within its allowed parts', () => {
     const ch = capstoneChallenge('cap_switch')!, chips = ch.answer();

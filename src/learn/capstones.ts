@@ -29,7 +29,7 @@ export type AnyCapstone = Capstone | CommCapstone;
 export const COMM_CAPSTONES: CommCapstone[] = [
   { id: 'cap_console', title: 'A serial console', brief: 'A UART with its FIFOs and flags from its register sheet, working with a far end 3.5 % off in clock. Graded at its pins, by what the far end sees.', route: '#/campaign/play/cap_console' },
   { id: 'cap_link', title: 'A link that closes', brief: 'Choose modulation, coding and equalization for two stated channels, for the highest rate any choice can reach within the error target. Measured on the chapters\' code and channel models.', route: '#/campaign/play/cap_link' },
-  { id: 'cap_switch', title: 'A switch from its spec', brief: 'A four-port learning switch from its rules, with RAMs, counters and tables as parts. Real frames, compared whole at every port, with a stated throughput at full load.', route: '#/campaign/play/cap_switch' },
+  { id: 'cap_switch', title: 'A switch from its spec', brief: 'A four-port learning switch from its rules, with memories, registers and counters as parts. Real frames, compared whole at every port, with a stated throughput at full load.', route: '#/campaign/play/cap_switch' },
   { id: 'cap_fault', title: 'Find the fault', brief: 'Eight broken networks, each with a real fault in one of the book\'s models. Name each cause from its evidence, with no hints: seven right passes.', route: '#/campaign/play/cap_fault' },
 ];
 

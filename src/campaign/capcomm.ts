@@ -341,9 +341,9 @@ export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?:
     const known = table.get(key(dst));
     const want = o.err ? [] : isGroup(dst) || known === undefined ? [0, 1, 2, 3].filter((i) => i !== port) : known === port ? [] : [known];
     if (!o.err) { table.set(key(src), port); heard.set(key(src), p.cycles); }
+    tested++;
     if (!p.send({ port, bytes, err: o.err, name: what })) { quiet(what, `rxReady on port ${port} stayed low on a switch with nothing to do`); return; }
     const out = p.take();
-    tested++;
     const got = [0, 1, 2, 3].filter((i) => out[i].length > 0);
     if (got.join() !== want.join()) quiet(what, `came out of port${got.length === 1 ? '' : 's'} [${got.join(', ')}], and belongs on [${want.join(', ')}]`);
     for (const i of got) {
