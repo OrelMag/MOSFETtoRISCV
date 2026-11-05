@@ -21,9 +21,10 @@ import { mosCostWidget } from '../widgets/moscost';
 import { mosfetWidget } from '../widgets/mosfet';
 import { mosRegionsWidget } from '../widgets/mosregions';
 import { bench, type Chapter } from './types';
+import { numOf } from './order';
 
 export const chMap: Chapter = {
-  id: 'map', num: 0, title: 'The map', level: 'Overview',
+  id: 'map', num: numOf('map'), title: 'The map', level: 'Overview',
   blurb: 'Where we are going, and how to look inside anything.',
   steps: [
     {
@@ -120,7 +121,7 @@ export const chMap: Chapter = {
 };
 
 export const chMosfet: Chapter = {
-  id: 'mosfet', num: 1, title: 'The MOSFET', level: 'Transistors',
+  id: 'mosfet', num: numOf('mosfet'), title: 'The MOSFET', level: 'Transistors',
   blurb: 'A switch with no moving parts, controlled by a voltage: its three regions, and what one switch costs in time and energy.',
   goals: [
     'say how a gate voltage past the threshold Vt (0.45 V here) turns a depletion layer into a conducting channel',
@@ -377,7 +378,7 @@ const RING_N = 5;
 const fmtFrac = (g: number) => (Number.isInteger(g) ? String(g) : `${Math.round(g * 3)}/3`);
 
 export const chInverter: Chapter = {
-  id: 'inverter', num: 2, title: 'The CMOS inverter', level: 'Transistors',
+  id: 'inverter', num: numOf('inverter'), title: 'The CMOS inverter', level: 'Transistors',
   blurb: 'Two complementary transistors: the first logic gate.',
   goals: [
     'build an inverter from one PMOS pull-up and one NMOS pull-down sharing a gate, and say why it draws almost no current while its input holds still',
@@ -689,7 +690,7 @@ export const chInverter: Chapter = {
 const RCA32_DEPTH = logicDepth(rca(32))!;
 
 export const chNand: Chapter = {
-  id: 'nand', num: 3, title: 'The NAND gate', level: 'Transistors → gates',
+  id: 'nand', num: numOf('nand'), title: 'The NAND gate', level: 'Transistors → gates',
   blurb: 'Four transistors, and the only brick we will ever need.',
   goals: [
     'build a two-input gate from a pull-up network of PMOS and its dual pull-down of NMOS',

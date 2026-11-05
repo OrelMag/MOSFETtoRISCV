@@ -15,6 +15,7 @@ import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 import { aluSteps, BRANCH_WRONG, CTL_PARTS } from './alu/steps';
 import { RF_NUMBERS, rfSteps } from './rf/steps';
+import { numOf } from './order';
 
 const { control: CONTROL_NANDS, and5: AND5_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
@@ -44,7 +45,7 @@ function reg(st: Stage, i: number): number {
 }
 
 export const chAlu: Chapter = {
-  id: 'alu', num: 11, title: 'The ALU', level: 'Computing',
+  id: 'alu', num: numOf('alu'), title: 'The ALU', level: 'Computing',
   blurb: 'Every RV32I integer operation in one block, selected by the instruction\'s own bits.',
   goals: [
     'say why bitwise operations cost n gates and constant depth at any width',
@@ -276,7 +277,7 @@ export const chAlu: Chapter = {
 };
 
 export const chRegfile: Chapter = {
-  id: 'regfile', num: 12, title: 'The register file', level: 'Computing',
+  id: 'regfile', num: numOf('regfile'), title: 'The register file', level: 'Computing',
   blurb: '32 registers, two read ports, one write port, and x0 wired to zero.',
   goals: [
     'say why an R-type instruction needs two read ports and one write port, and what each port costs',
@@ -408,7 +409,7 @@ export const chRegfile: Chapter = {
 };
 
 export const chIsa: Chapter = {
-  id: 'isa', num: 13, title: 'Instructions & assembly', level: 'ISA',
+  id: 'isa', num: numOf('isa'), title: 'Instructions & assembly', level: 'ISA',
   blurb: 'RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.',
   goals: [
     'follow a program through fetch, decode and execute, one instruction at a time, and say where PC goes next',
@@ -658,7 +659,7 @@ const MEMOPS = `# loads and stores
 halt:   j    halt`;
 
 export const chSingleCycle: Chapter = {
-  id: 'cpu', num: 14, title: 'A single-cycle CPU', level: 'Processor',
+  id: 'cpu', num: numOf('cpu'), title: 'A single-cycle CPU', level: 'Processor',
   blurb: 'Every block from the previous chapters, wired into a complete RV32I processor.',
   goals: [
     'trace one instruction through fetch, decode, execute, memory and write-back on the gate-level datapath',

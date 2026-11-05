@@ -13,6 +13,7 @@ import { withModel } from '../widgets/modelhost';
 import { aesExplorerWidget, avalancheWidget, modesWidget, shaWidget } from '../widgets/secretaes';
 import { aesCoreScene, aesRoundScene, sboxScene, shaCoreScene, shaRoundScene } from '../widgets/secretscenes';
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
+import { numOf } from './order';
 import type { Chapter } from './types';
 
 const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
@@ -32,8 +33,8 @@ const m4Scene = () => ({
 });
 
 export const chSecret: Chapter = {
-  id: 'secret', num: 52.5, title: 'Keeping it secret', level: 'Communication',
-  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates. Coming to this chapter: key exchange and a TLS 1.3 handshake on our CPU.',
+  id: 'secret', num: numOf('secret'), title: 'Keeping it secret', level: 'Communication',
+  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.',
   goals: [
     'describe the Enigma as a permutation that changes with every key press, and say what its wiring forces it to do',
     'use a crib and the machine\'s flaw to rule out settings, and explain how the Bombe discards the plugboard from the search',

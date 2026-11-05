@@ -35,11 +35,10 @@ describe('chapter 47 typed numbers', () => {
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeGreaterThan(3.5);
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeLessThan(4.5);
   });
-  it('is chapter 47, fourteen steps, after what it builds on, with the appendices after every numbered chapter', () => {
-    expect(chErrors.num).toBe(47);
+  it('fourteen steps, after what it builds on, with the appendices after every numbered chapter', () => {
     expect(chErrors.steps).toHaveLength(14);
     expect(chapterById('errors')).toBe(chErrors);
-    for (const id of chErrors.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(47);
+    for (const id of chErrors.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chErrors.num);
     const last = Math.max(...chapters.filter((c) => !c.appendix).map((c) => c.num));
     for (const c of chapters.filter((x) => x.appendix)) expect(c.num).toBeGreaterThan(last);
     expect(chErrors.steps.every((s) => !!s.scene !== !!s.widget && s.challenge)).toBe(true);

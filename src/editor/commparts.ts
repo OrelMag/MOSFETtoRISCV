@@ -14,6 +14,7 @@ import type { SwitchOpts } from '../comm/ethswitch';
 import type { HierNode } from '../sim/flatten';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import type { PartRef } from './model';
+import { numOf } from '../chapters/order';
 
 export interface CommPart {
   id: string;
@@ -59,19 +60,19 @@ export const COMM_PARTS: CommPart[] = [
   },
   {
     id: 'nic', name: 'NIC', tag: 'bus', ref: { lib: 'nic_b' }, owns: (r) => isLib(r, (id) => id === 'nic_b' || id === 'nic'),
-    title: "Chapter 50's network interface card, both its bus links packed: as a slave eight registers at +0 … +28 (control, status, interrupt enable, receive and transmit ring bases, MAC address low and high, doorbell), as a master (put it on a master port of the interconnect) the descriptor and frame DMA. rxd and crs come in from the cable, txd and txen go out; the MACs are inside",
+    title: `Chapter ${numOf('network')}'s network interface card, both its bus links packed: as a slave eight registers at +0 … +28 (control, status, interrupt enable, receive and transmit ring bases, MAC address low and high, doorbell), as a master (put it on a master port of the interconnect) the descriptor and frame DMA. rxd and crs come in from the cable, txd and txen go out; the MACs are inside`,
   },
   {
     id: 'mac_rx', name: 'MAC RX', ref: { lib: 'eth_mac_rx' }, owns: (r) => isLib(r, (id) => id === 'eth_mac_rx'),
-    title: "Chapter 48's Ethernet receiver: the bit pair rxd / crs of a cable in, the frame's bytes out (data, valid, last, err), filtered by the address on addr. One end of a switch port: the switch takes the byte stream",
+    title: `Chapter ${numOf('ethernet')}'s Ethernet receiver: the bit pair rxd / crs of a cable in, the frame's bytes out (data, valid, last, err), filtered by the address on addr. One end of a switch port: the switch takes the byte stream`,
   },
   {
     id: 'mac_tx', name: 'MAC TX', ref: { lib: 'eth_mac_tx' }, owns: (r) => isLib(r, (id) => id === 'eth_mac_tx'),
-    title: "Chapter 48's Ethernet transmitter: a frame's bytes in (data, valid, last, ready), preamble, padding and FCS added, one bit every four clocks out on txd / txen. The other end of a switch port",
+    title: `Chapter ${numOf('ethernet')}'s Ethernet transmitter: a frame's bytes in (data, valid, last, ready), preamble, padding and FCS added, one bit every four clocks out on txd / txen. The other end of a switch port`,
   },
   {
     id: 'switch', name: 'Switch', ref: { lib: switchId(SANDBOX_SWITCH) }, owns: (r) => isLib(r, (id) => switchOptsOf(id) !== null),
-    title: "Chapter 49's four-port learning switch: each port is a byte stream in and out (data, valid, last, err; ready for the transmit side), so join each port to a MAC RX and a MAC TX. It learns source addresses in a hashed table, forwards to the learned port and floods the rest. Cell size, cells and the forwarding style are in the properties",
+    title: `Chapter ${numOf('switch')}'s four-port learning switch: each port is a byte stream in and out (data, valid, last, err; ready for the transmit side), so join each port to a MAC RX and a MAC TX. It learns source addresses in a hashed table, forwards to the learned port and floods the rest. Cell size, cells and the forwarding style are in the properties`,
   },
   {
     id: 'spi', name: 'SPI controller', tag: 'bus', ref: { lib: 'axi_spi_b' }, owns: (r) => isLib(r, (id) => id === 'axi_spi_b' || id === 'axi_spi'),

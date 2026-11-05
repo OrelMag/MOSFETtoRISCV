@@ -10,6 +10,7 @@ import { clockApi, fifoScene, grayBusWidget, metastableWidget, noisyEdgeWidget, 
 import { VDD, VT } from '../widgets/mosphys';
 import { MS_TIMING } from './seq/timing';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
 const mv = (x: number) => `${Math.round(x * 1000)} mV`;
@@ -20,7 +21,7 @@ const TH = thresholds(KEEPER);
 const years = (stages: number, fclk: number, fdata = 100e6, logic = 8) => fmtLog10(log10Mtbf({ stages, fclk, fdata, logic }));
 
 export const chClocks: Chapter = {
-  id: 'clocks', num: 42, title: 'Crossing clocks', level: 'Communication',
+  id: 'clocks', num: numOf('clocks'), title: 'Crossing clocks', level: 'Communication',
   blurb: 'When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.',
   goals: [
     'read a receiver\'s noise margins off its transfer curve, and say how a Schmitt trigger buys hysteresis with a weak feedback keeper',

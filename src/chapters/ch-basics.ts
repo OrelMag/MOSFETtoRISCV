@@ -4,12 +4,13 @@
 import { rca } from '../lib';
 import { LOOP, loopAmps, misreads, NOISE, TOY, lampCountWidget, loopWidget, noiseWidget, switchTableWidget, toyMachineWidget } from '../widgets/basics';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const amps = loopAmps(1), amps2 = loopAmps(2);
 const two = misreads(2, NOISE.start), ten = misreads(10, NOISE.start);
 
 export const chBasics: Chapter = {
-  id: 'basics', num: 0, label: 'Start', title: 'Before the switch', level: 'Basics',
+  id: 'basics', num: numOf('basics'), label: 'Start', title: 'Before the switch', level: 'Basics',
   blurb: 'Voltage and current, two levels, binary, a truth table, a program: what the first switch needs.',
   goals: [
     'say why a lamp lights only on a closed loop, and what voltage and current measure',

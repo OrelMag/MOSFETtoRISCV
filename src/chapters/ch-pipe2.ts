@@ -6,6 +6,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { perfTable } from '../widgets/perf';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 const fmt = groupDigits;
@@ -28,7 +29,7 @@ function predicted(st: Stage): boolean {
 }
 
 export const chPipePay: Chapter = {
-  id: 'pipepay', num: 18, title: 'Making the pipeline pay', level: 'Processor',
+  id: 'pipepay', num: numOf('pipepay'), title: 'Making the pipeline pay', level: 'Processor',
   blurb: 'Balance the stages, then predict branches: measured, step by step.',
   goals: [
     'move the forwarding decision one stage earlier and say what it takes off the critical path',

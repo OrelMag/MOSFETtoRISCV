@@ -1241,7 +1241,10 @@ chapter.
 
 Ladder: 39 Two machines, one wire · 40 The telephone exchange · 41 A wire is not a wire · 42 Crossing clocks · 43 A UART · 44 SPI and I²C ·
 45 Modems · 46 Fast serial links · 47 When bits go wrong · 48 Ethernet · 49 A switch · 50 Computers on a network · 51 A router · 52 TCP ·
-53 The internet path.
+53 The internet path. All live 2026-11-05.
+
+Extension approved 2026-11-05 (mockup: https://claude.ai/artifact/We1YKPGFXtDVjpRDVsHvWN; what moves: E:/mockups/comms/reconciliation.md): an
+on-ramp, 13 chapters, 4 capstones, 29 chapters in all. Numbers now follow `chapters/order.ts`, so those above shift as chapters land.
 
 Decisions: (1) scope and placement as above. (2) Analog boundary: `src/phys/line.ts` holds the line, channel and noise (like relay.ts,
 triode.ts), tested against closed forms; drivers and receivers are MOSFETs at switch level, the voltage between them comes from the

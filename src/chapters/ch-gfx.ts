@@ -8,6 +8,7 @@ import { warpCoreScene } from '../widgets/warps';
 import { CLEAR_CYCLES, Z_WALK_START } from '../gfx/raster';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const fmt = groupDigits;
 const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
@@ -32,7 +33,7 @@ function halted(st: Stage): boolean {
 }
 
 export const chPixels: Chapter = {
-  id: 'pixels', num: 33, title: 'Pixels and triangles', level: 'Throughput',
+  id: 'pixels', num: numOf('pixels'), title: 'Pixels and triangles', level: 'Throughput',
   blurb: 'A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.',
   goals: [
     'lay out a double-buffered frame in memory, and say why the flip waits for vsync',
@@ -298,7 +299,7 @@ export const chPixels: Chapter = {
 };
 
 export const chGfxPipeline: Chapter = {
-  id: 'graphics', num: 34, title: 'The graphics pipeline', level: 'Throughput',
+  id: 'graphics', num: numOf('graphics'), title: 'The graphics pipeline', level: 'Throughput',
   blurb: 'A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.',
   goals: [
     'write the vertex transform as a kernel in 16.16 fixed point, and say why the vertex count is padded to a multiple of the lane count',

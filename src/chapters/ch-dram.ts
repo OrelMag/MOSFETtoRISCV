@@ -8,6 +8,7 @@ import { dramActions, dramScene, dramState, SAFE_CYCLES } from '../widgets/dram'
 import { dram3d } from '../widgets/dram3d';
 import { rowBufferWidget, timingWidget } from '../widgets/dramtiming';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** Level (fraction of VDD) of cell (r, c) of the scene's array. */
 function cellLevel(st: Stage, r: number, c: number): number {
@@ -47,7 +48,7 @@ const DV2 = 0.5 * CELL_C / (CELL_C + 2 * BITLINE_C);
 const OFFSET_MV = Math.round(SENSE_OFFSET * VDD_VOLTS * 1000);
 
 export const chDram: Chapter = {
-  id: 'dram', num: 35, title: 'Inside a DRAM', level: 'Memory in depth',
+  id: 'dram', num: numOf('dram'), title: 'Inside a DRAM', level: 'Memory in depth',
   blurb: 'A 1T1C array at transistor level: bit lines at VDD/2, charge sharing measured in millivolts, the sense amplifier that restores a destroyed row, leakage and refresh, the row buffer and DDR4 timings in cycles.',
   goals: [
     'compute the bit-line swing of a 1T1C read from the cell and bit-line capacitances',

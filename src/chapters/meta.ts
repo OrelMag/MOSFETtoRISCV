@@ -6,7 +6,7 @@
 /** What every place that lists a chapter needs. */
 export interface ChapterHead {
   id: string;
-  /** Order on the map; an appendix chapter continues the count but is shown by its letter. */
+  /** numOf(id) (chapters/order.ts places the chapter); an appendix chapter continues the count but is shown by its letter. */
   num: number;
   appendix?: string;
   prologue?: string;

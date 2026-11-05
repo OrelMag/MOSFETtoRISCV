@@ -10,6 +10,7 @@ import type { Stage } from '../view/stage';
 import { fgate3d } from '../widgets/fgate3d';
 import { flashActions, flashScene, ftlWidget, wearWidget } from '../widgets/flash';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** The rows the NOR scenes start with (bit c = bit line c; a 0 is a programmed cell). */
 const PATTERN = [0b0011, 0b1010, 0b1111, 0b0101];
@@ -40,7 +41,7 @@ const READ_REAL = Math.round((FLASH_REAL_US.read * 1000) / CLOCK_NS);
 const SCALE = 10 * Math.round(READ_REAL / FLASH_TIMES.read / 10);
 
 export const chFlash: Chapter = {
-  id: 'flash', num: 37, title: 'Flash', level: 'Memory in depth',
+  id: 'flash', num: numOf('flash'), title: 'Flash', level: 'Memory in depth',
   blurb: 'The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.',
   goals: [
     'say how charge on a floating gate shifts a cell\'s threshold, and so what it reads',
