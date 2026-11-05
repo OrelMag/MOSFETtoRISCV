@@ -556,8 +556,8 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   // 24 units between the blocks: both facing sides carry labels
   if (wired) {
     place('sys', SYSD, [44, 114]);
-    place('trap', TRAP_UNIT, [110, 114]);
-    place('csr', CSRU, [138, 114]);
+    place('trap', TRAP_UNIT, [130, 114]);
+    place('csr', CSRU, [158, 114]);
   } else {
     place('sys', SYSD, [4, yS + 4]);
     place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
@@ -575,9 +575,9 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   let gi = 0;
   const gridAt = (): [number, number] => { const i = gi++; return [gridX0 + 24 * (i % 4), gridY0 + 14 * Math.floor(i / 4)]; };
   const GLUE: Record<string, [number, number]> = {
-    rw: [66, 87], rwq: [72, 87], ntrap: [126, 120], nio: [140, 45], memWq: [146, 41], ioWq: [156, 73], mretq: [73, 128], tsel: [16, 50],
-    rsrc: [224, 62], addr2: [140, 58], size: [140, 64], ldMis: [94, 132], stMis: [94, 138], isLoad: [86, 130], nres1: [80, 134], taken: [80, 140],
-    tgt1: [90, 141], fMis: [94, 126], psplit: [74, 140], rssplit: [80, 128], z32: [214, 64], isIO: [152, 66],
+    rw: [72, 87], rwq: [84, 87], ntrap: [146, 146], nio: [148, 45], memWq: [154, 41], ioWq: [156, 73], mretq: [74, 127], tsel: [16, 50],
+    rsrc: [224, 62], addr2: [140, 58], size: [140, 64], ldMis: [112, 132], stMis: [112, 138], isLoad: [98, 127], nres1: [94, 132], taken: [84, 139],
+    tgt1: [98, 142], fMis: [112, 126], psplit: [78, 139], rssplit: [92, 127], z32: [204, 72], isIO: [152, 66],
   };
   for (const [n, d] of glue) place(n, d, wired ? GLUE[n] : gridAt());
 
@@ -686,7 +686,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   ];
   // CSR writes happen only if the instruction does not trap
   nets.splice(nets.findIndex((n) => n.name === 'csrWriteRaw'), 1);
-  instances.push({ name: 'csrWq', def: AND, at: wired ? [73, 134] : gridAt() });
+  instances.push({ name: 'csrWq', def: AND, at: wired ? [74, 133] : gridAt() });
   defs.set('csrWq', AND);
   nets.push({ name: 'csrWriteRaw', ends: ['sys.csrWrite', 'csrWq.a'], tags: true });
   nets.find((n) => n.name === 'NoTrap')!.ends.push('csrWq.b');
@@ -718,12 +718,13 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     route('JalrTarget', { 'pcmux.d2': [[cO[0] + 1, cO[1]], [cO[0] + 1, 69.5], [L2, 69.5], [L2, P('pcmux', 'd2')[1]]] });
     route('PCSrc', { 'pcmux.s': [[nS[0] + 1.5, nS[1]], [nS[0] + 1.5, 71], [P('pcmux', 's')[0], 71]] }, ['psplit.in']);
     // the trap path: PC to mepc's input, mtvec / mepc back into the mux in front of the PC, along the bottom
+    const csrX = at.get('csr')![0], trX = at.get('trap')![0];
     const lanePC = pcq[0] + 3, yPC = 151, yEpc = 153, yTv = 155, yTg = 157;
     route('PC', {
       'srcA.b': [[lanePC, pcq[1]], [lanePC, 30.5], [rfR + 5, 30.5], [rfR + 5, P('srcA', 'b')[1]]],
       'target.a': [[lanePC, pcq[1]], [lanePC, 30.5], [rfR + 5, 30.5], [rfR + 5, P('target', 'a')[1]]],
       pcOut: [[lanePC, pcq[1]], [lanePC, 30.5]],
-      'csr.trapPC': [[lanePC, pcq[1]], [lanePC, yPC], [135, yPC], [135, P('csr', 'trapPC')[1]]],
+      'csr.trapPC': [[lanePC, pcq[1]], [lanePC, yPC], [csrX - 3, yPC], [csrX - 3, P('csr', 'trapPC')[1]]],
     });
     const mo = P('csr', 'mepcOut'), tv = P('csr', 'mtvecOut');
     route('mepc', { 'trapmux.d1': [[mo[0] + 2, mo[1]], [mo[0] + 2, yEpc], [xt - 2, yEpc], [xt - 2, P('trapmux', 'd1')[1]]] });
@@ -731,17 +732,17 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
       'trapmux.d2': [[tv[0] + 3.5, tv[1]], [tv[0] + 3.5, yTv], [xt - 1, yTv], [xt - 1, P('trapmux', 'd2')[1]]],
       'trapmux.d3': [[tv[0] + 3.5, tv[1]], [tv[0] + 3.5, yTv], [xt - 1, yTv], [xt - 1, P('trapmux', 'd3')[1]]],
     });
-    route('PCNormal', { 'trap.target': [[xt - 3, P('pcmux', 'y')[1]], [xt - 3, yTg], [107.5, yTg], [107.5, P('trap', 'target')[1]]] }, ['tgt1.in']);
+    route('PCNormal', { 'trap.target': [[xt - 3, P('pcmux', 'y')[1]], [xt - 3, yTg], [trX - 2.5, yTg], [trX - 2.5, P('trap', 'target')[1]]] }, ['tgt1.in']);
     // the trap unit's answer into the CSRs
-    ([['Trap', 'trap', 'trap', 132], ['TrapCause', 'cause', 'trapCause', 130.5], ['TrapVal', 'tval', 'trapVal', 129]] as const).forEach(([name, o, i, x]) => {
+    ([['Trap', 'trap', 'trap', csrX - 6], ['TrapCause', 'cause', 'trapCause', csrX - 7.5], ['TrapVal', 'tval', 'trapVal', csrX - 9]] as const).forEach(([name, o, i, x]) => {
       const a = P('trap', o), b = P('csr', i);
       route(name, { [`csr.${i}`]: [[x, a[1]], [x, b[1]]] }, name === 'Trap' ? ['ntrap.a', 'tsel.i1'] : undefined);
     });
     // the sys decode's three exceptions into the trap unit, nested; the gates' answers beside them
     const sy = (o: string) => P('sys', o), tr = (i: string) => P('trap', i);
-    route('illegal', { 'trap.illegal': [[107, sy('illegal')[1]], [107, tr('illegal')[1]]] });
-    route('ecall', { 'trap.ecall': [[105.5, sy('ecall')[1]], [105.5, tr('ecall')[1]]] });
-    route('ebreak', { 'trap.ebreak': [[104, sy('ebreak')[1]], [104, tr('ebreak')[1]]] });
+    route('illegal', { 'trap.illegal': [[trX - 3, sy('illegal')[1]], [trX - 3, tr('illegal')[1]]] });
+    route('ecall', { 'trap.ecall': [[trX - 4.5, sy('ecall')[1]], [trX - 4.5, tr('ecall')[1]]] });
+    route('ebreak', { 'trap.ebreak': [[trX - 6, sy('ebreak')[1]], [trX - 6, tr('ebreak')[1]]] });
     route('tookBranch', { 'fMis.a': [[P('taken', 'y')[0] + 2, P('taken', 'y')[1]], [P('taken', 'y')[0] + 2, P('fMis', 'a')[1] ]] });
     route('fetchMis', { 'trap.fetchMis': [[P('fMis', 'y')[0] + 2, P('fMis', 'y')[1]], [P('fMis', 'y')[0] + 2, tr('fetchMis')[1]]] });
     route('loadMis', { 'trap.loadMis': [[P('ldMis', 'y')[0] + 3.5, P('ldMis', 'y')[1]], [P('ldMis', 'y')[0] + 3.5, tr('loadMis')[1]]] });
@@ -756,7 +757,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
       'addr2.in': [[XA, ay], [XA, P('addr2', 'in')[1]]],
       'isIO.in': [[XA, ay], [XA, P('isIO', 'in')[1]]],
       'io.addr': [[XA, ay], [XA, P('io', 'addr')[1]]],
-      'trap.addr': [[XA, ay], [XA, 108.5], [69, 108.5], [69, 149], [106, 149], [106, P('trap', 'addr')[1]]],
+      'trap.addr': [[XA, ay], [XA, 108.5], [68.5, 108.5], [68.5, 149], [trX - 4, 149], [trX - 4, P('trap', 'addr')[1]]],
     });
     // the store path: lanes between the store aligner and the memory
     const sw = P('st', 'wdata'), sb = P('st', 'be');
@@ -795,7 +796,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const pins: Record<string, [number, number]> = { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] };
   if (wired) {
     const xR = P('res', 'y')[0] + 20;
-    Object.assign(pins, { clk: [0, 100], switches: [166, 78], irq: [124, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
+    Object.assign(pins, { clk: [0, 100], switches: [166, 78], irq: [146, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
     }
   if (ports) {
     // ---- a core with ports: the ROM and the data memory outside, only the timer's registers inside
