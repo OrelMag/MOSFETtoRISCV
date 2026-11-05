@@ -46,12 +46,15 @@ const BOOK = [
   'memctrl',
   'flash',
   'bus',
+  'message',
   'telegraph',
   'exchange',
   'wire',
   'clocks',
   'uart',
   'spi',
+  'signals',
+  'noise',
   'modem',
   'serial',
   'errors',
@@ -70,7 +73,7 @@ const BOOK = [
 export type ChapterId = (typeof BOOK)[number];
 
 /** Number 0: shown by a label (Start, P1 …), or as 00 (the map), and left out of the count. */
-const UNNUMBERED: ReadonlySet<ChapterId> = new Set<ChapterId>(['basics', 'map', 'relays', 'tubes', 'cards']);
+const UNNUMBERED: ReadonlySet<ChapterId> = new Set<ChapterId>(['basics', 'map', 'relays', 'tubes', 'cards', 'message']);
 
 const NUMBERS = new Map<ChapterId, number>();
 let count = 0;

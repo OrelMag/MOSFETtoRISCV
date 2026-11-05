@@ -48,7 +48,7 @@ describe('chapter 39 content', () => {
   });
 
   it('the ladder agrees with the chapters that exist, and the first two are these', () => {
-    const bySuffix = new Map(chapters.filter((c) => c.num >= 39 && c.num <= 53 && c.level === 'Communication').map((c) => [c.num, c.title]));
+    const bySuffix = new Map(chapters.filter((c) => c.num > 0 && c.level === 'Communication').map((c) => [c.num, c.title]));
     expect(bySuffix.get(39)).toBe('Two machines, one wire');
     expect(bySuffix.get(40)).toBe('The telephone exchange');
     const step = chTelegraph.steps.at(-1)!.body;

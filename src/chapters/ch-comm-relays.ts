@@ -46,12 +46,12 @@ const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
-  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [44, 'SPI and I²C'], [numOf('signals'), 'Signals and spectrum'], [numOf('noise'), 'Noise and detection'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
   [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('path'), 'The internet path'],
 ];
 /** The five questions, with the chapters of the track that answer each. */
 const QUESTIONS: [string, string, ChapterId[]][] = [
-  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'modem', 'serial']],
+  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'signals', 'modem', 'serial']],
   ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'serial']],
   ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'ethernet']],
   ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'tcp']],
