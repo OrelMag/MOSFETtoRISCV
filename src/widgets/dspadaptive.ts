@@ -15,7 +15,7 @@ import '../styles/fourier.css';
 import '../styles/signals.css';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const minus = (t: string) => t.replace('-', '−');
+const minus = (t: string) => t.replace(/-/g, '−');
 const dbs = (x: number, d = 1) => `${minus(x.toFixed(d))} dB`;
 const smooth = (x: readonly number[], n: number): number[] => { let s = 0; const out: number[] = []; x.forEach((v, i) => { s += v * v; if (i >= n) s -= x[i - n] * x[i - n]; out.push(10 * Math.log10(Math.max(s / Math.min(i + 1, n), 1e-10))); }); return out; };
 const every = <T,>(x: readonly T[], k: number): T[] => x.filter((_, i) => i % k === 0);
@@ -49,8 +49,8 @@ export function bowlWidget(): Widget {
     const clip = (v: number) => Math.max(-RC, Math.min(RC, v));
     line(plot, cs.map((v) => RC + clip(v)), ds.map(clip), 'ln-s real');
     const off = Math.hypot(f.w[0] - best[0], f.w[1] - best[1]);
-    chips.set(0, `${num(best[0], 3)}, ${num(best[1], 3)}`, 'the Wiener solution, solved from the correlations');
-    chips.set(1, Number.isFinite(off) && off < 100 ? `${num(f.w[0], 3)}, ${num(f.w[1], 3)}` : 'it left', 'where LMS ended, knowing none of that');
+    chips.set(0, minus(`${num(best[0], 3)}, ${minus(num(best[1], 3))}`), 'the Wiener solution, solved from the correlations');
+    chips.set(1, Number.isFinite(off) && off < 100 ? minus(`${num(f.w[0], 3)}, ${minus(num(f.w[1], 3))}`) : 'it left', 'where LMS ended, knowing none of that');
     chips.set(2, num(Math.sqrt((1 + tint) / (1 - tint)), 1), 'how much longer the bowl is than wide: the root of the eigenvalues\' ratio');
   };
   const sm = slider('Step μ', -3.3, 0, 0.1, lm, (x) => num(10 ** x, 4), (x) => { lm = x; paint(); });
@@ -111,8 +111,8 @@ export function eqWidget(): Widget {
     plot.clear();
     const xs = range(r.y.length).filter((i) => i % 3 === 0);
     plot.layer.append(...xs.map((i) => { const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', String(plot.X(i))); c.setAttribute('cy', String(plot.Y(Math.max(-1.8, Math.min(1.8, r.y[i]))))); c.setAttribute('r', '0.8'); c.style.fill = 'var(--accent)'; return c; }));
-    chips.set(0, num(r.openingBefore, 2), 'the eye on the line, as a gap between + and − (below 0: shut)');
-    chips.set(1, num(r.opening, 2), 'after it, once training is over');
+    chips.set(0, minus(num(r.openingBefore, 2)), 'the eye on the line, as a gap between + and − (below 0: shut)');
+    chips.set(1, minus(num(r.opening, 2)), 'after it, once training is over');
     chips.set(2, String(r.wrongAfter), 'symbols wrong, on its own decisions');
   };
   const sel = h('select', { 'aria-label': 'Channel' }, ...CHANNELS.map((c, i) => h('option', { value: String(i), selected: i === pick }, c.name))) as HTMLSelectElement;
@@ -126,8 +126,8 @@ export function eqWidget(): Widget {
 
 export const LMS_SPEC: LmsSpec = { n: 4, wx: 8, w: 12, f: 8, s: 7 };
 export const LMS_TARGET = [0.75, -0.5, 0.25, 0.125];
-/** A full input converges in a few dozen clocks, a quiet one takes thousands and stops in the dead zone. */
-export const LMS_RUNS = { loud: { clocks: 200, amp: 64, every: 1 }, quiet: { clocks: 4000, amp: 8, every: 8 } };
+/** A full input converges in a few dozen clocks. A quiet one crawls for thousands, and stops in the dead zone. */
+export const LMS_RUNS = { loud: { clocks: 200, amp: 64, every: 1 }, quiet: { clocks: 8000, amp: 8, every: 16 } };
 export const lmsApi = new WeakMap<Stage, { agrees: () => boolean; clocks: () => number; errorDb: () => number; run: () => void }>();
 const pulse = (st: Stage) => { st.sim!.setInput('clk', 1); st.sim!.settle(); st.sim!.setInput('clk', 0); st.sim!.settle(); };
 
@@ -139,8 +139,8 @@ const lmsPanel: ScenePanel = (stage: Stage): Widget => {
     plot.clear();
     LMS_TARGET.forEach((t) => line(plot, [0, mode.clocks], [t, t], 'ln-s lump'));
     tr.forEach((c) => line(plot, c.map((_, i) => i * mode.every), c, 'ln-s real'));
-    read.replaceChildren(h('span', null, 'clocks ', h('b', null, String(ran))), h('span', null, 'output against d ', h('b', null, ran ? dbs(last) : '—')), h('span', null, 'target ', h('b', null, LMS_TARGET.join(' '))), h('span', null, 'now ', h('b', null, ran ? tr.map((c) => num(c[c.length - 1], 2)).join(' ') : '—')));
-    note.textContent = !ran ? 'The filter never sees the target. It gets x, and d, which is x through an unknown filter.' : !ok ? 'The gates and the model disagreed.' : `At every clock the gates' coefficients and output matched the integer model.${mode === LMS_RUNS.quiet ? ` With x this small, e × x seldom gets past ±${2 ** (S.s - 1)}, so the updates round to nothing and the coefficients stop short of the target.` : ''}`;
+    read.replaceChildren(h('span', null, 'clocks ', h('b', null, String(ran))), h('span', null, 'output against d ', h('b', null, ran ? dbs(last) : '—')), h('span', null, 'target ', h('b', null, minus(LMS_TARGET.join(' ')))), h('span', null, 'now ', h('b', null, ran ? minus(tr.map((c) => num(c[c.length - 1], 2)).join(' ')) : '—')));
+    note.textContent = !ran ? 'The filter never sees the target. It gets x, and d, which is x through an unknown filter.' : !ok ? 'The gates and the model disagreed.' : `At every clock the gates' coefficients and output matched the integer model.${mode === LMS_RUNS.quiet ? ` With x this small, e × x seldom gets past ±${2 ** (S.s - 1)}, so most updates round to nothing: the coefficients crawl, and stop short of the target.` : ''}`;
   };
   const run = (m0: typeof mode = LMS_RUNS.loud) => {
     stage.checkpoint();

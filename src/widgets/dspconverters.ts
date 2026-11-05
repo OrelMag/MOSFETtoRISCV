@@ -80,7 +80,7 @@ export function jitterWidget(): Widget {
 
 // ---- the loop's spectrum ----------------------------------------------------------------------------------------------------------------------------------
 
-const SD_N = 1 << 14;
+const SD_N = 1 << 15;
 /** Decades on the spectrum's axis: 10⁻⁴ … about 0.5. Plots run from 0 on x, so it is drawn as log₁₀ f + 4. */
 const LOG_SPAN = 3.7;
 export function sdWidget(): Widget {

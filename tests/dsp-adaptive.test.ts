@@ -125,6 +125,16 @@ describe('the integer filter', () => {
     expect(Math.max(...end.map((c, k) => Math.abs(c - T[k])))).toBeLessThan(0.1);
     end.forEach((c, k) => expect(Math.abs(c - t[19999][k])).toBeLessThan(0.02));
   });
+  it('too large a step wraps a word, and the filter falls apart', () => {
+    const O: LmsSpec = { ...SPEC, s: 3 }, m = new LmsFixed(O), u = rng(21), hist = [0, 0, 0, 0];
+    let a = 0, b = 0;
+    for (let i = 0; i < 2000; i++) {
+      const x = Math.max(-128, Math.min(127, Math.round(64 * gaussian(u)))), d = Math.max(-128, Math.min(127, Math.round(T.reduce((v, t, k) => v + t * hist[k], 0))));
+      if (i > 1000) { const e = m.e(d); a += d * d; b += e * e; }
+      m.edge(x, d); hist.pop(); hist.unshift(x);
+    }
+    expect(b).toBeGreaterThan(a);
+  });
   it('plain truncation on the same input slides away', () => {
     const end = run(8, 20000, true)[19999];
     expect(Math.max(...end.map((c, k) => Math.abs(c - T[k])))).toBeGreaterThan(0.5);

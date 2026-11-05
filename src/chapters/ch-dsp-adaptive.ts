@@ -11,7 +11,7 @@ import type { Chapter } from './types';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
-const minus = (t: string) => t.replace('-', '−');
+const minus = (t: string) => t.replace(/-/g, '−');
 const echo = (o: { taps?: number; talk?: boolean; freeze?: boolean } = {}) => runEcho({ n: ECHO_N, seed: 3, taps: o.taps ?? ECHO_TAPS, mu: 0.5, normalized: true, ...(o.talk ? { talkFrom: 18000, talkTo: 25000, freeze: o.freeze } : {}) });
 
 export const chAdaptive: Chapter = {
@@ -149,7 +149,7 @@ wₖ ← wₖ + μ e xₖ</pre>
         return `
         <p>Here is what learning costs. A tap holds a sample and a coefficient, and has a multiplier for its share of the output. Learning adds a second multiplier, for e × x, and an adder. So one LMS tap is ${n0(nands(t))} NANDs at ${LMS_SPEC.w} bits, of which ${n0(2 * mul)} are multipliers. Four of them with the sums come to ${n0(nands(f))}. A fixed filter would have half the multipliers, so a learning filter is about twice the price, and this is why a design often learns on a few taps or takes turns.</p>
         <p>The words have their own effects. Each update is e × x moved down ${LMS_SPEC.s} places and rounded half up, the bit below the cut going in as the adder's carry, at no cost in gates. Plain truncation would be worse than it sounds: it takes one off any small negative product, so the coefficients slide away with nothing to stop them. Rounded, an update inside ±2^${LMS_SPEC.s - 1} is zero and the coefficient stays put. That is a <em>dead zone</em>: a quiet input leaves the filter short of its target, and it is why an adaptive filter's coefficients need more bits than its samples. The output has the same care: the products are summed with all their bits, which is why the sums are ${2 * LMS_SPEC.w} bits wide, and rounded once at the end. Too large a step wraps a word instead of saturating it, and the filter falls apart at once, as nothing in the design catches it. It is compared with an integer model at every clock.</p>
-        <div class="try">Learn. Four coefficients walk from zero to ${LMS_TARGET.join(', ')}, a filter the design was never told about, in a few dozen clocks. Then learn from a quiet input, and see where the dead zone leaves them.</div>`;
+        <div class="try">Learn. Four coefficients walk from zero to ${minus(LMS_TARGET.join(', '))}, a filter the design was never told about, in a few dozen clocks. Then learn from a quiet input, and see where the dead zone leaves them.</div>`;
       },
       scene: lmsScene,
       lit: '',
