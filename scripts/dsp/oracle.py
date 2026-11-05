@@ -221,7 +221,22 @@ def speech():
     }
 
 
-GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures, 'speech': speech}
+def music():
+    """The MDCT of windowed frames of the nocturne, through scipy's DCT-IV and the folding identity: (a, b, c, d) -> (-c_r - d, a - b_r), then DCT-IV, halved (scipy's has a 2)."""
+    from scipy import fft
+    rate, x = wav16(Path(__file__).resolve().parents[2] / 'public' / 'dsp' / 'nocturne-16k.wav')
+    M = 256
+    w = np.sin(np.pi * (np.arange(2 * M) + 0.5) / (2 * M))
+    rows = []
+    for start in (4000, 30000, 90000):
+        f = np.array(x[start:start + 2 * M], float) / 32768 * w
+        a, b, c, d = f[:M // 2], f[M // 2:M], f[M:3 * M // 2], f[3 * M // 2:]
+        u = np.concatenate([-c[::-1] - d, a - b[::-1]])
+        rows.append({'start': start, 'X': r(fft.dct(u, type=4) / 2)})
+    return {'rate': rate, 'M': M, 'frames': rows}
+
+
+GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures, 'speech': speech, 'music': music}
 
 
 def stamp(data):

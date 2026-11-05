@@ -1,6 +1,5 @@
 // Speech: μ-law against G.711's tables and against audioop on every 14-bit sample, IMA ADPCM against audioop on the real voice and on a clipping square wave, LPC against solve_toeplitz.
 
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { adpcmDecode, adpcmEncode, autocorr, durbin, lpc, packNibbles, quantK, stepUp, vocBitRate, vocBitsPerFrame, vocode, ulawDecision, ulawDecode, ulawEncode, ulawQuantized, sineSnr, uniform } from '../src/dsp/speech';
 import { adpcmOnRv } from '../src/dsp/adpcmrv';
@@ -10,12 +9,7 @@ import { flatten } from '../src/sim/flatten';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import V from './dsp/vectors/speech.json';
-
-/** A 16-bit mono WAV's samples, as the site's loader reads them. */
-export function wavSamples(path: string): { rate: number; x: number[] } {
-  const b = readFileSync(path);
-  return { rate: b.readUInt32LE(24), x: Array.from({ length: (b.length - 44) / 2 }, (_, i) => b.readInt16LE(44 + 2 * i)) };
-}
+import { wavSamples } from './dsp/wav';
 
 describe('μ-law, G.711', () => {
   it('the decision and quantized values Tables 2a and 2b print', () => {
