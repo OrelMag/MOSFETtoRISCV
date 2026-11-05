@@ -416,6 +416,7 @@ export interface ConcatOpts {
   n?: number; k?: number;
   spec?: ConvSpec;
   /** Levels per channel bit in bits (3: as the Viterbi steps), survivor depth. */ q?: number; vitDepth?: number;
+  /** When given, collects each wrong byte's place over the frames as sent, for a picture of the bursts. */ errs?: number[];
 }
 
 export interface ConcatRun {
@@ -451,7 +452,7 @@ export function concatTrial(ebn0Db: number, o: ConcatOpts = {}): ConcatRun {
     for (let i = 0; i < stream.length; i++) {
       let b = 0;
       for (let j = 0; j < 8; j++) { b = (b << 1) | got[8 * i + j]; if (got[8 * i + j] !== bits[8 * i + j]) r.innerBitErrors++; }
-      if (b !== stream[i]) r.byteErrors++;
+      if (b !== stream[i]) { r.byteErrors++; o.errs?.push(f * stream.length + i); }
       rxBytes.push(b);
     }
     r.innerBits += bits.length; r.bytes += stream.length;
