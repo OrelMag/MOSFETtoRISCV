@@ -1,18 +1,16 @@
 // Chapter 46, Fast serial links (level Communication): what a receiver does when no clock travels with the data. Line codes
 // (comm/linecode.ts), a SerDes and a bang-bang clock recovery in gates (lib/serdes.ts, comm/serdes.ts), then the analog side as the
-// channel model (phys/line.ts): a pattern as harmonics (comm/fourier.ts), the eye, equalization, PAM4, and one step on fibre. Every number below is computed or pinned
+// channel model (phys/line.ts): the eye, equalization, PAM4, and one step on fibre. Every number below is computed or pinned
 // by tests/comm-linecode, comm-serdes and phys-line-eq. The gate-level link runs at 4 cycles a bit (63 Mb/s at 3.95 ns a cycle);
 // the multi-gigabit figures are the channel model's, and the prose says which is which.
 
 import { decode8b10b, disparityOf, encode8b10b, K_CODES, MAX_RUN_8B10B, overhead, POLY_7, type Rd } from '../comm/linecode';
 import { CYCLES_PER_BIT, FILTER_LIMIT, GATE_BIT_NS, GATE_MBPS, LINK_PATTERNS, lockRange, NCO_BITS, NOMINAL_INC, patternDensity, theoryRange } from '../comm/serdes';
 import { DEC8B10B, DESER10, ENC8B10B, MANCH_ENC, CDR, SER_RX, SER_TX, SERDES_LINK, scrambler } from '../lib/serdes';
-import { gibbsOvershoot, PATTERNS, poleGain, powerShare, smallestSample, swing1010, tauOf, toDb } from '../comm/fourier';
 import { ctleNoiseGain, eye, berOf, PAM4_PENALTY_DB, prbs } from '../phys/line';
 import { stats } from '../sim/stats';
 import { eyeWidget, disparityWidget, manchesterWidget, mediaWidget, mediaReach, pam4Widget, scramblerWidget } from '../widgets/serial';
 import { serdesApi, serdesScene } from '../widgets/serdes';
-import { harmonicsWidget } from '../widgets/fourier';
 import type { Chapter } from './types';
 import { numOf } from './order';
 
@@ -51,19 +49,19 @@ const eq = (ch: Parameters<typeof eye>[1]) => {
 };
 const E_NONE = eq({ rate: R8, bandwidth: B1 }), E_DE = eq({ rate: R8, bandwidth: B1, de: 0.3 }), E_CTLE = eq({ rate: R8, bandwidth: B1, ctle: 2 }), E_DFE = eq({ rate: R8, bandwidth: B1, dfe: 1 });
 const sci = (b: number) => (b < 1e-30 ? '< 10⁻³⁰' : b.toExponential(0).replace('e-', ' × 10⁻').replace('e+', ' × 10'));
-const A8 = Math.exp((-2 * Math.PI * B1) / R8), HALF8 = 1 - 2 * A8;
+const A8 = Math.exp((-2 * Math.PI * B1) / R8);
 const reach = mediaReach(10), reach56 = mediaReach(56);
 
 export const chSerial: Chapter = {
   id: 'serial', num: numOf('serial'), title: 'Fast serial links', level: 'Communication',
-  blurb: 'No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then a wave as harmonics, the eye, equalization, PAM4 and fibre.',
+  blurb: 'No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.',
   goals: [
     'say what a line code buys (transitions for the receiver, balance for the wire) and what it costs in bandwidth and gates, for Manchester, 8b/10b and a scrambler',
     'follow a byte through an 8b/10b encoder with its running disparity, and say why a flipped bit is caught as a code or a disparity error',
     'build the sender, serializer, receiver and clock recovery of a SerDes in gates, and compute the frequency offset the recovery loop tolerates',
-    'read a bit pattern as harmonics through the channel\'s gain, an eye diagram and its BER from the channel model, and compare feed-forward, CTLE and decision-feedback equalization and PAM4 by what each costs',
+    'read an eye diagram and its BER from the channel model, and compare feed-forward, CTLE and decision-feedback equalization and PAM4 by what each costs',
   ],
-  builds: ['clocks', 'wire'],
+  builds: ['clocks', 'wire', 'signals'],
   recap: {
     keep: [
       `A receiver with no clock of its own recovers one from the transitions in the data. A line code exists to guarantee them (a bounded run of equal bits) and to keep the average level at the middle (DC balance) so a transformer or an AC-coupled receiver passes it.`,
@@ -71,7 +69,7 @@ export const chSerial: Chapter = {
       `A self-synchronizing scrambler (1 + x³⁹ + x⁵⁸ for 64b/66b) costs ${nf(overhead['64b/66b'] * 100, 1)} % and ${N.scr} NANDs for the short one here, bounds nothing (a payload equal to its own sequence stays a run), and turns every wrong bit on the line into three.`,
       `The gate-level link runs at ${CYCLES_PER_BIT} cycles a bit, ${nf(GATE_MBPS, 0)} Mb/s at ${nf(GATE_BIT_NS / CYCLES_PER_BIT, 2)} ns a cycle. Sender ${N.tx} NANDs (a ${NCO_BITS}-bit bit-clock accumulator and a serializer), receiver ${N.rx} (clock recovery ${N.cdr}, deserializer ${N.des}), encoder ${N.enc}, decoder ${N.dec}; the whole link ${N.link}.`,
       `An Alexander detector votes early or late from three samples; ${FILTER_LIMIT} votes the same way move the bit strobe by one of four samples. The loop follows a sender whose rate is off by at most (transitions per bit) ÷ (4 × ${FILTER_LIMIT}): the code's guarantee of one edge in five bits puts the formula's floor at ${pc(theoryRange(0.2), 2)}.`,
-      `A pattern is a sum of sines, and a linear channel scales and turns each one: 1010's fundamental sits at Nyquist, R / 2, a long run at DC. ISI is that unequal gain seen in time: 1010 swings (1 − a) / (1 + a), a lone bit after a long run reaches 1 − 2a, with a = e^(−2πB/R).`,
+      `From <a href="#/c/signals/0">Signals and spectrum</a>: a pattern is a sum of sines, and a linear channel scales and turns each one: 1010's fundamental sits at Nyquist, R / 2, a long run at DC. ISI is that unequal gain seen in time: 1010 swings (1 − a) / (1 + a), a lone bit after a long run reaches 1 − 2a, with a = e^(−2πB/R).`,
       `The eye is the channel model's: a single pole of bandwidth B shuts the NRZ eye at 2π · B / ln 2 = ${nf(CLOSE, 2)} × B bits a second. CTLE moves the pole and amplifies noise, a DFE removes post-cursors without noise gain and needs a decision inside one bit, PAM4 trades ${nf(PAM4_PENALTY_DB, 2)} dB of eye for half the symbol rate. Past a few tens of centimetres of copper at multi-gigabit rates, fibre.`,
     ],
     check: [
@@ -203,34 +201,9 @@ export const chSerial: Chapter = {
       },
     },
     {
-      title: 'A wave is a sum of sines',
-      get body() {
-        const f4 = poleGain(R8 / 2, B1), f12 = poleGain((3 * R8) / 2, B1), swing = swing1010(A8);
-        return `
-        <p>A linear channel does one simple thing to a sine: it scales it and shifts it, and a sine of the same frequency comes out. So split any signal into sines, treat each on its own and add the results. That is <strong>Fourier analysis</strong>, and it is why a channel is specified by a gain against frequency. A ±1 square wave of frequency f is</p>
-        <p style="text-align:center"><strong>x(t) = (4 / π) Σ<sub>k odd</sub> sin(2π k f t) / k</strong></p>
-        <p>The fundamental alone holds ${pc(powerShare(1), 0)} of the power and the first three odd harmonics ${pc(powerShare(3), 0)}, but the edges live in the rest. Cut the sum short and it overshoots by ${pc(gibbsOvershoot(1000), 2)} of the step next to each edge however many harmonics you keep (Gibbs): more of them narrow the ripple and do not lower it.</p>
-        <p>At bit rate R the pattern 1010 is the fastest square wave the data can make, with its fundamental at <strong>R / 2, the Nyquist frequency</strong>. Other patterns add lower tones, and a long run reaches down to DC. Take the ${B1} GHz pole of <a href="#/c/wire/0">A wire is not a wire</a>, whose gain is 1 / √(1 + (f / B)²), at ${R8} Gb/s. DC passes at 0 dB, the fundamental of 1010 at ${R8 / 2} GHz at ${nf(toDb(f4), 1).replace('-', '−')} dB, and its third harmonic at ${(3 * R8) / 2} GHz at ${nf(toDb(f12), 1).replace('-', '−')} dB. Gain falling smoothly with frequency, with a phase lag of up to 90°, turns the square into rounded edges: the 10–90 % rise is ln 9 · τ = ${nf(Math.log(9) * tauOf(B1) * 1000, 0)} ps, against a bit of ${nf(1000 / R8, 0)} ps.</p>
-        <p>The same pole in time keeps a = e<sup>−2πB/R</sup> = ${nf(A8, 3)} of the last level after each bit, and the two views agree exactly: the harmonics scaled and turned one by one sum to the closed-form response (tests/comm-fourier.test.ts). Together they say what intersymbol interference is: <em>unequal gain is a dependence on the pattern.</em> A long run settles at full swing because its energy is low in frequency; 1010 swings only (1 − a) / (1 + a) = ±${nf(swing, 3)}, because its energy is at Nyquist. The worst case is a lone bit after a long run, whose sample reaches 1 − 2a = ${nf(HALF8, 3)}. A channel with the same gain and delay at every frequency would treat all patterns alike and leave none. The next step folds a random stream on itself and reads that spread as an eye, and equalization then works by flattening the gain.</p>
-        <div class="try">At ${R8} Gb/s on ${B1} GHz choose <strong>One 1 in eight</strong>: its smallest sample is the eye's worst case. Then 1010, and raise the bandwidth until the fundamental is under the pole. Finally push <strong>Harmonics</strong> from 3 to 25 on 1010 and watch the overshoot stay.</div>`;
-      },
-      widget: harmonicsWidget,
-      more: {
-        derive: `<p>For a repeating pattern of n bits the coefficient of harmonic k is the DFT of the bits times the spectrum of one rectangular bit, sinc(k / n). The second factor is zero at every multiple of the bit rate, so NRZ has no energy at R itself; random data has the same envelope, sinc²(f / R) in power, with most of its power below R / 2. That is why a channel about as wide as Nyquist carries NRZ at all.</p>`,
-        pitfall: `<p>Taking the 3 dB bandwidth as the limit on the bit rate. At R = 2B, with the fundamental at the corner, this pole's eye is nearly ideal (a = ${nf(Math.exp(-Math.PI), 3)}); it shuts only at ${nf(CLOSE, 1)} × B. A real trace falls faster than one pole, so its limit comes sooner, but the whole shape sets it and not the corner.</p>`,
-      },
-      challenge: {
-        kind: 'quiz', question: `A ${B1} GHz single pole carries ${R8} Gb/s. Which pattern comes out with the smallest sample at the end of a bit?`,
-        options: ['One 1 after a long run of 0s', '1010, its energy all at Nyquist', 'A long run of 1s', '1100, its harmonics the most spread'],
-        answer: 0,
-        explain: `The sample is what a bit reached from where the last ones left the line. After a long run the line sits at the far rail, so a lone opposite bit reaches only 1 − 2a = ${nf(HALF8, 3)}. In 1010 each bit starts part of the way there, and reaches (1 − a) / (1 + a) = ${nf(swing1010(A8), 3)}.`,
-        why: ['', `Its fundamental is heavily attenuated, but the line never settles at a rail between bits, so each bit starts closer: ±${nf(swing1010(A8), 3)}, more than the lone bit's ${nf(HALF8, 3)}.`, 'A long run has its energy at DC, gain 1: it reaches full swing, the largest sample of all.', `Two bits at a level do give the line longer to travel than a lone bit, so 1100 beats the lone bit's ${nf(HALF8, 3)}. But it also sits at a rail for two bit times, so its smallest sample is ${nf(smallestSample(PATTERNS[1].bits, R8, B1), 3)}, below 1010's ${nf(swing1010(A8), 3)}.`],
-      },
-    },
-    {
       title: 'The eye diagram',
       body: `
-        <p>The channel between the sender's driver and the receiver's slicer is the model of <a href="#/c/wire/0">A wire is not a wire</a>: here a single pole, <code>B</code> = ${B1} GHz. A bit is not a square pulse at the far end; it is a rounded one whose tail runs into the next bits. Fold a long random pattern on itself one bit period at a time and the traces form an <strong>eye</strong>. The slicer samples in the gap that is left. The opening is the margin against noise, the width is the margin against the sampling instant, and when the tails of earlier bits fill the gap there is <strong>intersymbol interference</strong> (ISI).</p>
+        <p><a href="#/c/signals/0">Signals and spectrum</a> showed that unequal gain makes each bit depend on the ones before it. Here is how that looks on a live link. The channel between the sender's driver and the receiver's slicer is the model of <a href="#/c/wire/0">A wire is not a wire</a>: here a single pole, <code>B</code> = ${B1} GHz. A bit is not a square pulse at the far end; it is a rounded one whose tail runs into the next bits. Fold a long random pattern on itself one bit period at a time and the traces form an <strong>eye</strong>. The slicer samples in the gap that is left. The opening is the margin against noise, the width is the margin against the sampling instant, and when the tails of earlier bits fill the gap there is <strong>intersymbol interference</strong> (ISI).</p>
         <p>For one pole the numbers are closed forms. Each bit period the pole retains a = e<sup>−2π·B/R</sup> of the last level. At the end of the bit the sampled value is (1 − a) times the new bit plus a geometric tail of the earlier ones, and the worst-case ISI is the sum of the tail, a; the opening is <code>2 (1 − 2a)</code> of the ±1 swing. It closes at a = ½, that is at <strong>R = 2π · B / ln 2 = ${nf(CLOSE, 2)} × B</strong>: ${nf(CLOSE, 1)} Gb/s for ${B1} GHz, with Nyquist at 4.5 GHz. The model checks these forms (tests/phys-line-eq).</p>
         <p>The BER follows the opening. With Gaussian noise of rms σ at the slicer, a bit is wrong when the noise exceeds half the opening: <code>BER = Q(opening ⁄ 2σ)</code>, with Q the Gaussian tail; 10⁻¹² needs half the opening to be 7.03 σ. At 6 Gb/s here a = ${nf(Math.exp((-2 * Math.PI * B1) / 6), 3)}, the eye is ${pc(open({ rate: 6, bandwidth: B1 }) / 2, 0)} open, and with σ = 40 mV the BER is ${sci(berOf(open({ rate: 6, bandwidth: B1 }) / 2, 0.04))}. Raise the rate and watch it fall apart long before the pole; raise the noise and the same eye is a coin toss.</p>
         <p>Past the slicer it is gates again: the recovered bits drive the SerDes of the last two steps, which is where the two models meet. Everything on this plot is the channel model, labelled as such; nothing in it runs at the link's 4 cycles a bit.</p>`,
