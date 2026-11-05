@@ -788,7 +788,37 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Inside the circle", challenge: "quiz" },
     { title: "Same gain, different delay", challenge: "quiz" },
   ] },
-  { id: "multirate", num: 69, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","carriers","muldiv"], recap: {"checks":3}, steps: [
+  { id: "spectrum", num: 69, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane"], recap: {"checks":3}, steps: [
+    { title: "A tone that is not a line", challenge: "quiz" },
+    { title: "A window is a choice of skirt", challenge: "quiz" },
+    { title: "What the skirt hides", challenge: "quiz" },
+    { title: "More points are not more resolution", challenge: "quiz" },
+    { title: "Time and frequency at once", challenge: "quiz" },
+    { title: "Filtering by blocks", challenge: "quiz" },
+    { title: "One bin, cheaply: Goertzel", challenge: "quiz" },
+    { title: "A keypad in gates", challenge: "quiz" },
+  ] },
+  { id: "firdesign", num: 70, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","muldiv"], recap: {"checks":3}, steps: [
+    { title: "A mask, and mirror-image taps", challenge: "quiz" },
+    { title: "The window method", challenge: "quiz" },
+    { title: "Parks–McClellan", challenge: "quiz" },
+    { title: "Taps are words", challenge: "quiz" },
+    { title: "Folding, and the transposed form", challenge: "quiz" },
+    { title: "A constant is a few shifts", challenge: "reach" },
+    { title: "One multiplier, N clocks", challenge: "reach" },
+    { title: "One mask, four ways to build it", challenge: "quiz" },
+  ] },
+  { id: "iir", num: 71, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","fixed","muldiv"], recap: {"checks":3}, steps: [
+    { title: "What feedback buys", challenge: "quiz" },
+    { title: "From an analog filter to a digital one", challenge: "quiz" },
+    { title: "Where a pole is allowed to sit", challenge: "quiz" },
+    { title: "One polynomial or small sections", challenge: "quiz" },
+    { title: "A biquad in gates", challenge: "quiz" },
+    { title: "A limit cycle on the gates", challenge: "quiz" },
+    { title: "What removes a limit cycle", challenge: "quiz" },
+    { title: "Sections in a cascade", challenge: "quiz" },
+  ] },
+  { id: "multirate", num: 72, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","carriers","muldiv"], recap: {"checks":3}, steps: [
     { title: "Most of the samples are not needed", challenge: "quiz" },
     { title: "Throwing samples away", challenge: "quiz" },
     { title: "Why compute what you throw away?", challenge: "quiz" },
@@ -799,7 +829,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A CIC in gates", challenge: "reach" },
     { title: "The whole job, priced", challenge: "quiz" },
   ] },
-  { id: "cordic", num: 70, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals"], recap: {"checks":3}, steps: [
+  { id: "cordic", num: 73, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals"], recap: {"checks":3}, steps: [
     { title: "A rotation is four multiplications", challenge: "quiz" },
     { title: "One way or the other", challenge: "quiz" },
     { title: "The gain nobody can avoid", challenge: "quiz" },
@@ -808,7 +838,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the words buy", challenge: "quiz" },
     { title: "Against a table", challenge: "quiz" },
   ] },
-  { id: "converters", num: 71, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "converters", num: 74, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz" },
     { title: "The way back: a ladder", challenge: "quiz" },
@@ -817,7 +847,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The loop in gates, and its CIC", challenge: "reach" },
     { title: "Many bits from one", challenge: "quiz" },
   ] },
-  { id: "adaptive", num: 72, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv"], recap: {"checks":3}, steps: [
+  { id: "adaptive", num: 75, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv"], recap: {"checks":3}, steps: [
     { title: "An echo nobody can measure", challenge: "quiz" },
     { title: "The best a filter can do", challenge: "quiz" },
     { title: "One step downhill, per sample", challenge: "quiz" },
@@ -825,7 +855,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz" },
     { title: "A tap in gates", challenge: "reach" },
   ] },
-  { id: "appendix-6502", num: 73, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "pictures", num: 76, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
+    { title: "A picture is a signal", challenge: "quiz" },
+    { title: "Filters in two dimensions", challenge: "quiz" },
+    { title: "Smaller and larger", challenge: "quiz" },
+    { title: "Cosines in 8 × 8", challenge: "quiz" },
+    { title: "The DCT in gates", challenge: "reach" },
+    { title: "Quantization is the only loss", challenge: "quiz" },
+    { title: "Zig-zag, runs and codes", challenge: "quiz" },
+    { title: "A file another program opens", challenge: "quiz" },
+  ] },
+  { id: "appendix-6502", num: 77, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -835,14 +875,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 74, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 78, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 75, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 79, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -855,7 +895,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 76, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 80, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },

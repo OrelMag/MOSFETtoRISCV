@@ -3,12 +3,13 @@
 import { addOverflows, fracMul as fracMulModel, satAdd, satTo, wrapTo } from '../dsp/fixed';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
-import { busMux2, rca } from './combinational';
-import { define } from './define';
+import { andN, busMux2, rca } from './combinational';
+import { define, ones, splitter } from './define';
 import { cut, placed, roundUp } from './fft';
-import { NOT, XOR } from './gates';
+import { AND, NOT, XOR } from './gates';
 import { treeMul } from './muldiv';
 import { TIE0 } from './transistors';
+import { orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -22,7 +23,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** Wiring: the limit a word clamps to. From the sign s and its inverse: s on top, ¬s below, so 100…0 or 011…1. */
-function limitWord(w: number): ComponentDef {
+export function limitWord(w: number): ComponentDef {
   return memo(`fxlimit${w}`, () => define({
     id: `fxlimit${w}`, name: `Wiring: the ${w}-bit limit`, category: 'plumbing',
     summary: 'The largest word of this sign: the sign on top, its inverse in every bit below. Only wires.',
@@ -31,8 +32,10 @@ function limitWord(w: number): ComponentDef {
   }));
 }
 
-/** w + 1 bits down to w: the two top bits differ exactly when the value does not fit, and then the top one is its true sign. */
-export function clampWord(w: number): ComponentDef {
+/** w + 1 bits down to w: the two top bits differ exactly when the value does not fit, and then the top one is its true sign.
+ *  `from` > w + 1 takes a wider word (a filter's rounded sum): the value fits exactly when its top from − w + 1 bits all agree. The default is unchanged. */
+export function clampWord(w: number, from = w + 1): ComponentDef {
+  if (from !== w + 1) return clampFrom(from, w);
   return memo(`fxclamp${w}`, () => {
     const b = new Builder(6, 10, 4);
     b.pins('x');
@@ -56,6 +59,44 @@ export function clampWord(w: number): ComponentDef {
       ports: [bus('x', w + 1, 'in'), bus('y', w, 'out'), bit('sat', 'out')],
       symbol: { kind: 'box', label: 'CLAMP', w: 8 },
       spec: ([x]) => { const v = wrapTo(x, w + 1), y = satTo(v, w); return [uns(y, w), y === v ? 0 : 1]; },
+      netlist: () => ({ pins: { x: [0, 8], y: [R, 6], sat: [R, 18] }, instances: b.instances, nets: b.nets() }),
+    });
+  });
+}
+
+/** The wider clamp: n bits down to w. The top n − w + 1 bits all agree exactly when the value fits; if not, the top bit is its sign. */
+function clampFrom(n: number, w: number): ComponentDef {
+  return memo(`fxclamp${w}_${n}`, () => {
+    const k = n - w + 1;
+    const b = new Builder(6, 10, 4);
+    b.pins('x');
+    const sign = b.op1(cut(n, n - 1, 1), ['x'], 'true sign', 'sign');
+    const top = b.op1(cut(n, w - 1, k), ['x'], `top ${k} bits`, 'top');
+    const low = b.op1(cut(n, 0, w), ['x'], 'the word', 'low');
+    b.next();
+    const nt = b.op1(NOT, [sign], undefined, 'inv');
+    const sp = b.op(splitter(ones(k), 4), [top], undefined, 'bits');
+    b.next();
+    const any = b.op(orN(k), [], 'any bit set?', 'any');
+    const all = b.op(andN(k), [], 'all bits set?', 'all');
+    for (let i = 0; i < k; i++) { b.wire(`${sp}.o${i}`, `${any}.i${i}`); b.wire(`${sp}.o${i}`, `${all}.i${i}`); }
+    b.next();
+    const nall = b.op1(NOT, [`${all}.y`], undefined, 'nall');
+    b.next();
+    const over = b.op1(AND, [`${any}.y`, nall], 'do not agree?', 'over');
+    const lim = b.op1(limitWord(w), [sign, nt], undefined, 'lim');
+    b.next();
+    const mux = b.op1(busMux2(w), [low, lim, over], 'keep or clamp', 'pick');
+    b.next();
+    b.wire(mux, 'y');
+    b.wire(over, 'sat');
+    const R = b.right;
+    return define({
+      id: `fxclamp${w}_${n}`, name: `${n} → ${w}-bit clamp`, category: 'arithmetic',
+      summary: `Takes ${n} bits to ${w}. If the top ${k} bits do not all agree the value does not fit, and the output is the largest word of its sign.`,
+      ports: [bus('x', n, 'in'), bus('y', w, 'out'), bit('sat', 'out')],
+      symbol: { kind: 'box', label: 'CLAMP', w: 8 },
+      spec: ([x]) => { const v = wrapTo(x, n), y = satTo(v, w); return [uns(y, w), y === v ? 0 : 1]; },
       netlist: () => ({ pins: { x: [0, 8], y: [R, 6], sat: [R, 18] }, instances: b.instances, nets: b.nets() }),
     });
   });
