@@ -70,6 +70,9 @@ const rnd32 = (r: (n: number) => number) => ((r(65536) << 16) | r(65536)) >>> 0;
 const pulse = (sim: Sim) => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
 
 describe('parts match their specs', () => {
+  it('the rotations are wiring: zero NANDs', () => {
+    for (const k of [2, 13, 22, 6, 11, 25, 7, 18, 17, 19]) expect(stats(rotr(k)).nands, `ROTR ${k}`).toBe(0);
+  });
   it('rotations, sigma functions, Ch, Maj, the schedule step', () => {
     for (const k of [2, 13, 22, 6, 11, 25, 7, 18, 17, 19]) checkSpec(rotr(k), 40);
     for (const d of [bigSig0(), bigSig1(), smallSig0(), smallSig1()]) checkSpec(d, 200);
@@ -115,6 +118,7 @@ describe('compression core', () => {
     for (let i = 0; i < 64; i++) {
       pulse(sim);
       expect(reg(sim, 'V'), `${label}: a..h after round ${i}`).toEqual(t.rounds[i].vars);
+      expect(get(sim, 'out'), `${label}: out (h + a..h) after round ${i}`).toEqual(h.map((x, j) => (x + t.rounds[i].vars[j]) >>> 0));
       if (table) expect(reg(sim, 'V'), `${label}: NIST table t=${i}`).toEqual(table[i]);
       expect(sim.getBits(sim.design.root.ports.done)[0], `${label}: done after round ${i}`).toBe(i === 63 ? 1 : 0);
       if (i % 8 === 7) await yieldTick();

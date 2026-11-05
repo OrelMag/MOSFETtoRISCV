@@ -95,6 +95,7 @@ const get = (sim: Sim, port: string): Bytes => {
   expect(Array.from(bits).every((x) => x === 0 || x === 1), `${port} has X`).toBe(true);
   return fromBits(bits);
 };
+const pulse = (sim: Sim) => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
 const child = (sim: Sim, ...path: string[]) => { let n = sim.design.root; for (const p of path) n = n.children!.get(p)!; return n; };
 const reg = (sim: Sim, name: string): Bytes => fromBits(sim.getBits(child(sim, name).ports.q));
 
@@ -109,6 +110,9 @@ describe('parts match their specs', () => {
       expect(Array.from(sim.getBits(sim.design.root.ports.y)).reduce((a: number, b, i) => a + b * 2 ** i, 0), `S(${x})`).toBe(SBOX[x]);
     }
     checkSpec(d);
+  });
+  it('ShiftRows is wiring: zero NANDs', () => {
+    expect(stats(shiftRowsWire()).nands).toBe(0);
   });
   it('xtime, MixColumns (one column), the 4-byte XOR', () => {
     checkSpec(xtimeGate());
@@ -172,7 +176,12 @@ describe('iterative core', () => {
     expect(await run(sim, V.fips197.key, V.fips197.input, 'App B')).toEqual(V.fips197.output);
     for (let i = 0; i < 4; i++) expect(await run(sim, V.ecb.key, V.ecb.plaintext[i], `F.1.1 #${i + 1}`)).toEqual(V.ecb.ciphertext[i]);
     for (let i = 0; i < 3; i++) await run(sim, rnd(900 + i, 16), rnd(950 + i, 16), `random ${i}`);
-    // a start in the middle of a run restarts it; rst drops busy and done
+    // a start in the middle of a run (three rounds in) restarts it: run() raises start again and checks every register of the new block
+    put(sim, 'key', rnd(60, 16)); put(sim, 'in', rnd(61, 16)); sim.setInput('start', 1); sim.settle(); pulse(sim); sim.setInput('start', 0); sim.settle();
+    for (let i = 0; i < 3; i++) pulse(sim);
+    expect(sim.getBits(sim.design.root.ports.done)[0]).toBe(0);
+    await run(sim, rnd(62, 16), rnd(63, 16), 'restart at round 3');
+    // rst drops busy and done
     put(sim, 'key', V.ecb.key); put(sim, 'in', V.ecb.plaintext[0]); sim.setInput('start', 1); sim.settle(); sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.setInput('start', 0); sim.settle();
     for (let i = 0; i < 3; i++) { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); }
     sim.setInput('rst', 1); sim.settle(); sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.setInput('rst', 0); sim.settle();
