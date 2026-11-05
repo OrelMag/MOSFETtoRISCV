@@ -142,6 +142,8 @@ export class PolyModel {
   acc = 0;
   y = 0;
   valid = false;
+  /** False until something has loaded: the first clock has no branch to finish. */
+  private run = false;
   constructor(public s: PolySpec) { this.lines = Array.from({ length: s.R }, () => new Array<number>(s.M).fill(0)); }
   /** The branch the last edge loaded. */
   private last(): number { const { R } = this.s; return R - 1 - ((this.cnt + R - 1) % R); }
@@ -151,8 +153,9 @@ export class PolyModel {
     for (let k = 0; k < M; k++) term += taps[p + R * k] * this.lines[p][k];
     const sum = (p === R - 1 ? 0 : this.acc) + term;
     this.acc = sum;
-    this.valid = p === 0;
+    this.valid = p === 0 && this.run;
     if (this.valid) this.y = sum;
+    this.run = true;
     const q = R - 1 - this.cnt;
     this.lines[q] = [x, ...this.lines[q].slice(0, M - 1)];
     this.cnt = (this.cnt + 1) % R;

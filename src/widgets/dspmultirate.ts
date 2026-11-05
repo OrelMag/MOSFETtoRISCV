@@ -74,9 +74,9 @@ export function branchWidget(): Widget {
   const paint = () => {
     const n = taps - (taps % R), M = n / R;
     const table = h('table', { class: 'mini' }, h('tr', null, h('th', null, 'Branch'), h('th', null, 'Taps it holds'), h('th', null, 'Samples it sees'), h('th', null, 'Runs')),
-      ...range(R).map((p) => h('tr', null, h('td', null, String(p)), h('td', null, range(Math.min(M, 5)).map((j) => `h${p + R * j}`).join(' ') + (M > 5 ? ' …' : '')), h('td', null, range(Math.min(M, 3)).map((j) => `x[t−${p + R * j}]`).join(' ') + (M > 3 ? ' …' : '')), h('td', null, 'once in every R'))));
+      ...range(R).map((p) => h('tr', null, h('td', null, String(p)), h('td', null, range(Math.min(M, 5)).map((j) => `h${p + R * j}`).join(' ') + (M > 5 ? ' …' : '')), h('td', null, range(Math.min(M, 3)).map((j) => `x[t−${p + R * j}]`).join(' ') + (M > 3 ? ' …' : '')), h('td', null, `once in every ${R}`))));
     host.replaceChildren(table);
-    chips.set(0, String(directCost(n)), 'multiplications an input sample, direct');
+    chips.set(0, String(directCost(n)), `multiplications an input sample, direct, for ${n} taps`);
     chips.set(1, num(polyphaseCost(n, R), 2), 'the same, by branches');
     chips.set(2, String(M), 'multipliers enough if one branch runs a clock');
   };
@@ -121,7 +121,7 @@ export function cicWidget(): Widget {
     for (let k = 1; k <= R / 2; k++) plot.layer.append(s('line', { x1: plot.X(k / R), x2: plot.X(k / R), y1: plot.Y(-120), y2: plot.Y(5), class: 'ln-s lump' }));
     chips.set(0, `${cicGrowth(N, R)} bits`, 'the registers grow by N log₂ R');
     chips.set(1, spaced(cicDcGain(N, R)), 'gain at DC, R^N');
-    chips.set(2, `${num(db(cicResponse(N, R, 0.25 / R)), 2)} dB`, 'droop at a quarter of the new band');
+    chips.set(2, `${num(db(cicResponse(N, R, 0.25 / R)), 2)} dB`, 'droop at a quarter of the new rate');
     chips.set(3, `${num(cicAliasDb(N, R, 0.125), 0)} dB`, 'the worst alias, onto an eighth of the new rate');
   };
   const sn = slider('Order N', 1, 5, 1, N, (v) => String(v), (v) => { N = v; paint(); });
@@ -167,16 +167,20 @@ export function growthWidget(): Widget {
 // ---- the whole cascade -------------------------------------------------------------------------------------------------------------------------
 
 export const CASCADE_R = 64;
+/** The order that fits the job: order 2 lets too much alias through, and order 4 droops past the band's limit (tests/dsp-chapters-c.test.ts). */
+export const CIC_ORDER = 3;
 export interface CascadeRow { name: string; mults: number; note: string }
 /** ÷ 64: keep to 0.4 of the new rate, hold back 50 dB from 0.6. The taps come from the chapter's windowed design, so they are measured, not estimated. */
 export function cascade(): CascadeRow[] {
   const pass = 0.4 / CASCADE_R, stop = 0.6 / CASCADE_R, direct = tapsFor(pass, stop, 50).n, last = tapsFor(0.4 / 4, 0.6 / 4, 50).n;
-  const halfN = tapsFor(0.2, 0.3, 50).n, halves = (nonZero(halfBand(halfN)) - 1) / 2 + 1;
+  // each halving folds onto the kept band only from its own far edge, so the early ones have room: 0.4 / 64 of the input's rate, doubling as the rate falls
+  const halving = [1, 2, 3, 4, 5, 6].map((i) => { const p = (0.4 / CASCADE_R) * 2 ** (i - 1), t = tapsFor(p, 0.5 - p, 50).n; return { taps: t, mults: ((nonZero(halfBand(t)) - 1) / 2 + 1) / 2 ** i }; });
+  const alias = cicAliasDb(CIC_ORDER, 16, 0.1), droop = db(cicResponse(CIC_ORDER, 16, 0.4 / CASCADE_R));
   return [
     { name: 'One filter, at the input\'s rate', mults: directCost(direct), note: `${direct} taps` },
     { name: 'The same filter, by branches', mults: polyphaseCost(direct, CASCADE_R), note: `${direct} taps, one output in ${CASCADE_R}` },
-    { name: 'Halving six times', mults: halves * (1 + 1 / 2 + 1 / 4 + 1 / 8 + 1 / 16 + 1 / 32) / 2, note: `${halfN} taps at each, ${halves} after folding and the zeros` },
-    { name: `CIC ÷ 16, then a filter ÷ 4`, mults: polyphaseCost(last, 4) / 16, note: `the CIC multiplies nothing; ${last} taps at a sixteenth of the rate` },
+    { name: 'Halving six times', mults: halving.reduce((a, b) => a + b.mults, 0), note: `${halving[0].taps} taps at the first, ${halving[5].taps} at the last, each folded with its zeros left out` },
+    { name: `CIC of order ${CIC_ORDER} ÷ 16, then a filter ÷ 4`, mults: polyphaseCost(last, 4) / 16, note: `the CIC multiplies nothing (aliases ${num(Math.abs(alias), 0)} dB down, droop ${num(Math.abs(droop), 2)} dB, inside the mask); ${last} taps at a sixteenth of the rate` },
   ];
 }
 

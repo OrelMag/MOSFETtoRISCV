@@ -78,8 +78,7 @@ def multirate():
             'upfirdn': r(signal.upfirdn(h, x, up, down)),
             'resample_poly': r(signal.resample_poly(x, up, down, window=h)),
         })
-    # Hogenauer 1981 gives the growth as N log2(R M) bits; computed here, not read from the paper.
-    return {'cases': rows, 'hogenauer': {'N': 4, 'R': 16, 'bits': int(np.ceil(4 * np.log2(16)))}}
+    return {'cases': rows}
 
 
 GENERATORS = {'zplane': zplane, 'multirate': multirate}

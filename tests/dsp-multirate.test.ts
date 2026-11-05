@@ -20,6 +20,10 @@ describe('polyphase', () => {
   it('a decimator gives exactly what filtering and throwing away gives', () => {
     for (const R of [2, 3, 4, 8]) close(polyphaseDecimate(h, R, x), decimateDirect(h, R, x), 1e-12);
   });
+  it('in integers, as in the gates, it is the same to the bit', () => {
+    const xi = words(257, 8, 5), hi = polyTaps(4, 4, 8);
+    for (const R of [2, 4]) expect(polyphaseDecimate(hi, R, xi)).toEqual(decimateDirect(hi, R, xi));
+  });
   it('an interpolator gives exactly what stuffing zeros and filtering gives', () => {
     for (const L of [2, 3, 5]) close(polyphaseInterpolate(h, L, x), firFilter(h, upsample(x, L)), 1e-12);
   });
@@ -54,7 +58,12 @@ describe('polyphase', () => {
 describe('the CIC', () => {
   it('its growth is Hogenauer\'s: 16 bits at order 4, ÷ 16', () => {
     expect(cicGrowth(4, 16)).toBe(16);
-    expect(V.hogenauer).toEqual({ N: 4, R: 16, bits: 16 });
+    // measured: the narrowest word that gets the worst input right is the formula's
+    for (const [N, R] of [[1, 4], [2, 8], [3, 8], [4, 16]]) {
+      const worst = -128, right = (w: number) => { const m = new CicModel(N, R, w); let y = 0; for (let i = 0; i < 64 * R; i++) { m.edge(worst); if (m.valid) y = m.y; } return y === worst * cicDcGain(N, R); };
+      let w = 8; while (!right(w)) w++;
+      expect(w).toBe(cicWidth(N, R, 8));
+    }
     expect(cicDcGain(4, 16)).toBe(2 ** 16);
   });
   it('filters exactly as its boxcars do, with a delay of one per integrator, and wrap does no harm', () => {
@@ -82,6 +91,15 @@ describe('the CIC', () => {
     let wraps = 0, last = 0;
     for (let i = 0; i < 300; i++) { m.edge(worst); const v = m.ints[N - 1]; if (Math.abs(v - last) > 2 ** (w - 1)) wraps++; last = v; }
     expect(wraps).toBeGreaterThan(3);
+  });
+  it('the alias figure is the worst over the FIR\'s own response', () => {
+    for (const [N, R, edge] of [[3, 16, 0.1], [4, 16, 0.25], [2, 8, 0.125]]) {
+      const t = cicTaps(N, R), f = edge / R, base = firGain(t, f);
+      let worst = 0;
+      for (let k = 1; k <= Math.floor(R / 2); k++) worst = Math.max(worst, firGain(t, k / R - f), firGain(t, k / R + f));
+      expect(Math.abs(cicAliasDb(N, R, edge) - 20 * Math.log10(worst / base))).toBeLessThan(6);
+      expect(cicAliasDb(N, R, edge)).toBeLessThanOrEqual(20 * Math.log10(worst / base) + 1e-9);
+    }
   });
   it('a higher order holds aliases further down', () => {
     expect(cicAliasDb(4, 16, 0.1)).toBeLessThan(cicAliasDb(2, 16, 0.1) - 30);
@@ -114,9 +132,9 @@ describe('the gates', () => {
       if (got[0] !== m.y || got[1] !== (m.valid ? 1 : 0)) expect(got).toEqual([m.y, m.valid ? 1 : 0]);
       if (m.valid) out.push(m.y);
     }
-    // a branch is read the clock after it loads, so each output comes a group late: from there on, plain FIR decimation
+    // from the first group on, plain FIR decimation, however late the design reads it
     const fir = firFilter(taps, x), want = downsample(fir, R, R - 1);
-    expect(out.slice(1, 200)).toEqual(want.slice(0, 199));
+    expect(out.slice(0, 200)).toEqual(want.slice(0, 200));
     expect(taps.length).toBe(R * M);
   }, 60_000);
   it('the taps are a low-pass that passes the band and holds back what would alias', () => {

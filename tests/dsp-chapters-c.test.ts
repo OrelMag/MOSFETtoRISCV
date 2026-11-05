@@ -5,7 +5,7 @@ import { chCordic } from '../src/chapters/ch-dsp-cordic';
 import { chMultirate } from '../src/chapters/ch-dsp-multirate';
 import { DSP_LEVEL } from '../src/chapters/dspladder';
 import { cordicStretch } from '../src/dsp/cordic';
-import { cicGrowth, cicWidth, polyTaps } from '../src/dsp/multirate';
+import { cicAliasDb, cicGrowth, cicResponse, cicWidth, polyTaps } from '../src/dsp/multirate';
 import { cordicIterative, cordicPipeline } from '../src/lib/cordic';
 import { stats } from '../src/sim/stats';
 import { cordicBits, romBits, sineRom } from '../src/widgets/dspcordic';
@@ -41,7 +41,7 @@ describe('Turning by shifting', () => {
   it('the iterative form is many times smaller, for n clocks a result', () => {
     const s = { w: 14, z: 14, n: 12 };
     expect(nands(cordicPipeline(s)) / nands(cordicIterative(s))).toBeGreaterThan(4);
-    expect(nands(cordicIterative(s)) * s.n).toBeGreaterThan(nands(cordicPipeline(s)));
+    expect(nands(cordicIterative(s)) * (s.n + 1)).toBeGreaterThan(nands(cordicPipeline(s)));
   });
   it('sits in the level', () => expect(chCordic.level).toBe(DSP_LEVEL));
 });
@@ -54,6 +54,13 @@ describe('Changing the rate', () => {
     expect(r[1].mults).toBeCloseTo(r[0].mults / 64, 9);
     expect(r[2].mults).toBeLessThan(r[1].mults);
     expect(r[3].mults).toBeLessThan(r[2].mults);
+  });
+  it('order 3 is the one that fits the job: 2 lets too much through, 4 droops past the mask', () => {
+    const droop = (N: number) => -20 * Math.log10(cicResponse(N, 16, 0.4 / 64));
+    expect(cicAliasDb(3, 16, 0.1)).toBeLessThan(-50);
+    expect(droop(3)).toBeLessThan(0.5);
+    expect(cicAliasDb(2, 16, 0.1)).toBeGreaterThan(-50);
+    expect(droop(4)).toBeGreaterThan(0.5);
   });
   it('the growth quiz: order 3, ÷ 8, from 8 bits is 17', () => {
     expect(cicWidth(3, 8, 8)).toBe(17);

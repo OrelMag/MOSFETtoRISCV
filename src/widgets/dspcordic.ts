@@ -40,7 +40,7 @@ export function rotateWidget(): Widget {
   const paint = () => {
     const z = Math.round((deg / 360) * 2 ** VIEW.z);
     const start = fromK ? cordicStart(VIEW, ONE) : ONE;
-    const path = cordicPath({ x: start, y: 0, z }, VIEW, 'rotate').slice(0, k + 1);
+    const whole = cordicPath({ x: start, y: 0, z }, VIEW, 'rotate'), path = whole.slice(0, k + 1 + whole.length - (VIEW.n + 1)); // a half-turn is one point more, and no stage
     drawPath(plot, path.map((v) => ({ x: v.x / ONE, y: v.y / ONE })));
     const end = path[path.length - 1], left = (end.z / 2 ** VIEW.z) * 360;
     chips.set(0, `${num(left, 3)}°`, 'of the angle left');
@@ -90,7 +90,7 @@ export function wordsWidget(): Widget {
     note.textContent = `Worst at turn ${num(e.at / 2 ** z, 4)}. The result's own word is ${w - 1} bits with its sign, so the last ${num(Math.max(0, w - 1 - Math.log2(scale / e.worst)), 1)} bits are not worth keeping.`;
   };
   const sw = slider('x and y bits', 8, 18, 1, w, (v) => String(v), (v) => { w = v; paint(); });
-  const sz = slider('Angle bits', 8, 16, 1, z, (v) => String(v), (v) => { z = v; paint(); });
+  const sz = slider('Angle bits', 8, 14, 1, z, (v) => String(v), (v) => { z = v; paint(); });
   const sn = slider('Stages', 4, 16, 1, n, (v) => String(v), (v) => { n = v; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Measured at every angle'), chips.el, note), h('div', { class: 'panel mos-ctl' }, sw.el, sz.el, sn.el)) };
@@ -104,7 +104,10 @@ export const sineRom = (k: number) => {
   return lookupRom(`rom_sine_${k}_${v}`, `ROM: one sine period, ${N} words`, k, v, Array.from({ length: N }, (_, i) => Math.round(((Math.sin((2 * Math.PI * i) / N) + 1) / 2) * (2 ** v - 1))), 'A table of sine samples: its size doubles with every address bit.');
 };
 /** Worst error of a table with no interpolation: the angle truncated to 2^k steps, the word's rounding on top. In bits of accuracy. */
+const romMemo = new Map<number, number>();
 export const romBits = (k: number): number => {
+  const hit = romMemo.get(k);
+  if (hit !== undefined) return hit;
   const v = k + 2, N = 2 ** k;
   let worst = 0;
   for (let u = 0; u < N * 16; u++) {
@@ -112,18 +115,32 @@ export const romBits = (k: number): number => {
     const got = (Math.round(((Math.sin((2 * Math.PI * i) / N) + 1) / 2) * (2 ** v - 1)) / (2 ** v - 1)) * 2 - 1;
     worst = Math.max(worst, Math.abs(got - want));
   }
-  return Math.log2(1 / worst);
+  const bits = Math.log2(1 / worst);
+  romMemo.set(k, bits);
+  return bits;
 };
-export const cordicBits = (spec: CordicSpec): number => { const scale = 2 ** (spec.w - 2); return Math.log2(scale / cordicError(spec, scale).worst); };
+const bitsMemo = new Map<string, number>();
+export const cordicBits = (spec: CordicSpec): number => {
+  const key = `${spec.w}_${spec.z}_${spec.n}`;
+  let v = bitsMemo.get(key);
+  if (v === undefined) { const scale = 2 ** (spec.w - 2); v = Math.log2(scale / cordicError(spec, scale).worst); bitsMemo.set(key, v); }
+  return v;
+};
 
 export function costWidget(): Widget {
+  // every angle of an 18-bit word takes about a second, so the page comes first
+  const host = h('div', null, h('p', { class: 'sub' }, 'Measuring every angle…'));
+  const fill = () => {
   const groups: { name: string; rows: [string, number, number, string][] }[] = [
     { name: 'A table', rows: [6, 8, 10, 12].map((k) => [`${2 ** k} words`, romBits(k), stats(sineRom(k)).nands, 'every clock']) },
     { name: 'CORDIC, pipelined', rows: [{ w: 10, z: 10, n: 8 }, { w: 14, z: 14, n: 12 }, { w: 18, z: 18, n: 16 }].map((sp) => [`${sp.w} bits, ${sp.n} stages`, cordicBits(sp), stats(cordicPipeline(sp)).nands, 'every clock']) },
   ];
   const table = h('table', { class: 'mini' }, h('tr', null, h('th', null, 'Design'), h('th', null, 'Size'), h('th', null, 'Bits of accuracy'), h('th', null, 'NANDs'), h('th', null, 'A sine')),
     ...groups.flatMap((g) => g.rows.map((r) => h('tr', null, h('td', null, g.name), h('td', null, r[0]), h('td', null, num(r[1], 1)), h('td', null, r[2].toLocaleString('en').replace(/,/g, ' ')), h('td', null, r[3])))));
-  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The same sine, two ways'), table)) };
+  host.replaceChildren(table);
+  };
+  setTimeout(fill, 60);
+  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The same sine, two ways'), host)) };
 }
 
 // ---- the pipeline in gates -----------------------------------------------------------------------------------------------------------------

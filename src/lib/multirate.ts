@@ -160,7 +160,10 @@ export function polyDecimator(s: PolySpec): ComponentDef {
     b.next();
     const add = b.op(rca(W), [kept, sum, `${gnd}.y`], 'sum + this branch', 'add');
     b.wire(`${add}.s`, `${acc}.d`); b.wire(`${one}.y`, `${acc}.en`); b.wire('clk', `${acc}.clk`);
-    const yr = b.op(register(W), [`${add}.s`, isLast, 'clk'], 'output', 'yr'), vr = b.op(register(1), [isLast, `${one}.y`, 'clk'], 'valid', 'vr');
+    // nothing has loaded on the first clock, so that one is not an output
+    const run = b.op(register(1), [`${one}.y`, `${one}.y`, 'clk'], 'running', 'run');
+    const take = b.op1(AND, [isLast, `${run}.q`], 'take it', 'take');
+    const yr = b.op(register(W), [`${add}.s`, take, 'clk'], 'output', 'yr'), vr = b.op(register(1), [take, `${one}.y`, 'clk'], 'valid', 'vr');
     b.next();
     b.wire(`${yr}.q`, 'y'); b.wire(`${vr}.q`, 'valid');
     const ports = [bus('x', w, 'in'), clkPort, bus('y', W, 'out'), bit('valid', 'out')];
