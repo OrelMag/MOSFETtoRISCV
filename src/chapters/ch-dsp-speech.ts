@@ -35,14 +35,14 @@ export const chSpeech: Chapter = {
     check: [
       {
         question: 'Why does μ-law beat 8 uniform bits by so much on a quiet voice, and so little on a loud one?',
-        options: ['Its steps are small near zero and large near full scale', 'It uses more bits for quiet samples', 'It filters out the noise', 'It only works on speech'],
+        options: ['Its steps grow with the level', 'It uses more bits for quiet samples', 'It filters out the noise', 'It only works on speech'],
         answer: 0,
         explain: 'A quiet voice lives in the small steps near zero, where μ-law\'s are finer than uniform 8-bit steps. A loud one uses the large steps, which are coarser.',
         why: ['', 'Every sample takes 8 bits either way.', 'It is a quantizer, and filters nothing.', 'It would treat any signal of the same level the same way.'],
       },
       {
         question: 'An ADPCM decoder never receives the step size. How does it know it?',
-        options: ['It updates it from each code, as the encoder did', 'It reads it from a header every frame', 'It measures the decoded signal\'s level', 'It uses one fixed step throughout'],
+        options: ['It updates it from each code', 'It reads it from a header every frame', 'It measures the decoded signal\'s level', 'It uses one fixed step throughout'],
         answer: 0,
         explain: 'The step index moves by the same table from the same codes on both sides, so the two stay in step for as long as no code is lost.',
         why: ['', 'IMA ADPCM has no such header in its stream of codes.', 'That would lag, and the encoder would not know what it had measured.', 'The step adapts: that is the A in ADPCM.'],
@@ -131,7 +131,7 @@ export const chSpeech: Chapter = {
       widget: adpcmWidget,
       challenge: {
         kind: 'quiz', question: 'Why does ADPCM send no step size?',
-        options: ['Both sides compute it from the codes', 'It is fixed by the standard', 'It is sent once at the start', 'The decoder does not need one'],
+        options: ['Both sides compute it from the codes', 'It is fixed by the standard for every sample', 'It is sent once at the start of the call', 'The decoder does not need one'],
         answer: 0,
         explain: 'The step moves by the same table from the same codes at both ends, so it never has to travel.',
         why: ['', 'It changes at every sample, by the table.', 'One value would not adapt.', 'It needs one at every sample to scale the code.'],
@@ -145,7 +145,7 @@ export const chSpeech: Chapter = {
       widget: adpcmRvWidget,
       challenge: {
         kind: 'quiz', question: 'Which costs the program most instructions per sample?',
-        options: ['The branches that decide each bit', 'A multiplication', 'Reading the input', 'Writing the output'],
+        options: ['The branches that decide each bit', 'A multiplication for every sample', 'Reading the input sample from memory', 'Writing each code back to memory'],
         answer: 0,
         explain: 'Three compare-and-branch steps, each with a subtract and an add on one side, and the clamps after them. There is no multiply at all.',
         why: ['', 'The algorithm only shifts, adds and compares.', 'It is one load.', 'It is one store.'],
@@ -160,7 +160,7 @@ export const chSpeech: Chapter = {
       widget: lpcWidget,
       challenge: {
         kind: 'quiz', question: 'What does the LPC filter\'s response trace in a voiced frame?',
-        options: ['The envelope over the harmonics', 'Each harmonic exactly', 'The pitch of the voice', 'The noise floor alone'],
+        options: ['The envelope over the harmonics', 'Each of the harmonics, exactly', 'The pitch of the speaker\'s voice', 'The noise floor alone, nothing more'],
         answer: 0,
         explain: 'A short all-pole filter can draw a smooth shape, the formants. The harmonics are the source, and ten coefficients cannot follow them all.',
         why: ['', 'It would need far more coefficients than ten.', 'Pitch is in the residual, not the envelope.', 'The envelope rises above the floor at each formant.'],
@@ -176,7 +176,7 @@ export const chSpeech: Chapter = {
       widget: vocoderWidget,
       challenge: {
         kind: 'quiz', question: 'Why is SNR no measure of a vocoder?',
-        options: ['It does not try to match the waveform', 'Its noise is always zero', 'Its rate is too low to measure', 'SNR only applies to music'],
+        options: ['It does not try to match the waveform', 'Its noise is always exactly zero', 'Its rate is too low for SNR to be measured', 'SNR only applies to music'],
         answer: 0,
         explain: 'It makes a new waveform with the same envelope and pitch. Sample by sample it differs completely, however good it sounds.',
         why: ['', 'Its output differs from the input almost everywhere.', 'SNR does not depend on the rate.', 'It applies to any waveform coder.'],

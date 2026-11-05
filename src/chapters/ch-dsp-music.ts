@@ -26,14 +26,14 @@ export const chMusic: Chapter = {
     check: [
       {
         question: 'An MDCT frame alone, transformed and back, has aliasing. What removes it?',
-        options: ['Adding the next frame\'s overlapping half', 'A longer transform', 'A low-pass filter after it', 'Quantizing more finely'],
+        options: ['Adding the next frame\'s overlapping half', 'A longer transform with more coefficients', 'A low-pass filter after it', 'Quantizing more finely'],
         answer: 0,
         explain: 'The aliasing in the second half of one frame is the opposite of the aliasing in the first half of the next. Overlap-added, it cancels: time-domain aliasing cancellation.',
         why: ['', 'A longer frame has the same problem at its own edges.', 'The aliasing is in time, and in the same band as the music.', 'It is there with no quantization at all.'],
       },
       {
         question: 'Why does a masking model let a codec spend fewer bits?',
-        options: ['Noise under the mask is not heard', 'Masked bands are louder', 'The mask removes the noise', 'It lowers the sample rate'],
+        options: ['Noise under the mask is not heard', 'Masked bands are louder', 'The mask removes the noise', 'It lowers the sample rate of each band'],
         answer: 0,
         explain: 'The codec only has to keep each band\'s quantization noise below what nearby sounds hide. Bands far below the mask need no bits at all.',
         why: ['', 'A masked band is the quiet one, near a louder one.', 'The noise is still there; the ear just cannot pick it out.', 'The rate is unchanged: only the bits per coefficient change.'],
@@ -58,7 +58,7 @@ export const chMusic: Chapter = {
       widget: musicWidget,
       challenge: {
         kind: 'quiz', question: 'Why start from a lossless recording here?',
-        options: ['An MP3 has already thrown away what the ear misses', 'Lossless files are smaller', 'MP3 cannot be resampled', 'It makes no difference'],
+        options: ['An MP3 already dropped what the ear misses', 'Lossless files are always the smaller of the two', 'MP3 cannot be resampled', 'It makes no difference'],
         answer: 0,
         explain: 'A perceptual codec has already removed what its own model said was masked. Measuring masking on its output would mostly find its own decisions.',
         why: ['', 'They are larger.', 'Any decoded audio can be resampled.', 'It changes what is left to find.'],
@@ -90,7 +90,7 @@ export const chMusic: Chapter = {
       widget: maskWidget,
       challenge: {
         kind: 'quiz', question: 'A loud tone at 1 kHz. Which is better hidden: a faint tone at 1.2 kHz or at 0.8 kHz?',
-        options: ['1.2 kHz, above it', '0.8 kHz, below it', 'Both the same', 'Neither'],
+        options: ['1.2 kHz, above it', '0.8 kHz, the one below it', 'Both the same', 'Neither'],
         answer: 0,
         explain: 'Masking spreads further upward in frequency than downward, so the tone above is the better hidden.',
         why: ['', 'Below, the mask falls off faster.', 'The spread is not symmetric.', 'Both are near enough to be masked to some extent.'],
@@ -107,7 +107,7 @@ export const chMusic: Chapter = {
       widget: codecWidget,
       challenge: {
         kind: 'quiz', question: 'Why does giving bits by the mask leave less SNR but sound better?',
-        options: ['Its noise is where it is masked', 'It uses more bits', 'It removes the noise', 'SNR measures it wrongly'],
+        options: ['Its noise is where it is masked', 'It uses more bits than the other', 'It removes the noise', 'SNR measures it wrongly'],
         answer: 0,
         explain: 'It leaves more noise overall, but puts it under the mask in every band. Bits by signal leave less noise in total, some of it in bands where it is heard.',
         why: ['', 'It uses fewer at 64 kb/s.', 'Quantization always adds noise.', 'SNR measures the noise correctly: it just weighs every band alike.'],
