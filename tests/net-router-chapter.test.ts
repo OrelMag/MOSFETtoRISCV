@@ -2,10 +2,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { chRouter } from '../src/chapters/ch-comm-router';
+import { numOf } from '../src/chapters/order';
 import { engineCycles, portsServed, wireCycles } from '../src/widgets/router';
 
 describe('chapter 51 typed numbers', () => {
-  it('is chapter 51', () => { expect(chRouter.num).toBe(51); });
+  it('comes after the chapter on computers on a network', () => { expect(chRouter.num).toBe(numOf('network') + 1); });
   it('a minimum frame at 400 Gb/s, with preamble and gap, every 1.68 ns', () => {
     expect(((60 + 4 + 8 + 12) * 8) / 400).toBeCloseTo(1.68, 2);
   });

@@ -16,6 +16,7 @@ import { SANDBOX_SWITCH } from './commparts';
 import type { ChipDoc, PartRef } from './model';
 import { Sheet, chipBox } from './example6502';
 import { isError, partDef } from './parts';
+import { numOf } from '../chapters/order';
 
 /** How many times A says ping. */
 export const LAN_ROUNDS = 3;
@@ -140,10 +141,10 @@ ${sendCode(LAN_MAC.A, LAN_MAC.B, 'pong')}
         j    again
 ${SUBS}`;
 
-export const LAN_NOTES = 'Two computers and a switch, as chapter 50 ends. Each computer (double-click to open it) is an RV32I bus core with a boot ROM, a 16 KB RAM and a NIC at 0x7000_0000 '
-  + '(chapter 50\'s: eight registers, two rings of descriptors in RAM, DMA as the interconnect\'s second master, a MAC inside), on a bus of its own. A is 02:00:00:00:00:0a and B :0b. '
+export const LAN_NOTES = `Two computers and a switch, as chapter ${numOf('network')} ends. Each computer (double-click to open it) is an RV32I bus core with a boot ROM, a 16 KB RAM and a NIC at 0x7000_0000 `
+  + `(chapter ${numOf('network')}'s: eight registers, two rings of descriptors in RAM, DMA as the interconnect's second master, a MAC inside), on a bus of its own. A is 02:00:00:00:00:0a and B :0b. `
   + `A sends B a raw 60-byte Ethernet frame saying ping and prints B's pong, ${LAN_ROUNDS} times; B prints each frame it receives and answers. `
-  + 'Open the switch (double-click): a MAC RX and a MAC TX a port join the computers\' serial pairs (one bit every four clocks) to the byte streams of chapter 49\'s four-port learning switch; ports 2 and 3 are unplugged. '
+  + `Open the switch (double-click): a MAC RX and a MAC TX a port join the computers' serial pairs (one bit every four clocks) to the byte streams of chapter ${numOf('switch')}'s four-port learning switch; ports 2 and 3 are unplugged. `
   + 'Select the switch part inside to read its learned table and per-port counters live. The first ping is flooded (the switch has not met B yet), the pong goes to port 0 alone, and A\'s later pings go to port 1 alone: learned 2, flooded 1. '
   + 'A frame crosses the wire in about 2 300 clocks and the switch stores it before forwarding, so a ping and its pong take about 10 000: Run at the maximum clock rate and wait. '
   + 'The CPU drawer does not follow these cores (their memory is behind a bus): watch the consoles, or select a NIC and read its registers.';
@@ -252,7 +253,7 @@ export function lanSwitchChip(id: string, name: string): ChipDoc {
     s.pin(c, 'out', [xs + sw + 60, py], 16); s.tap(`sw.${c}`, c); s.tap(`pin:${c}`, c); py += 6;
   }
   return s.doc(id, name, {
-    notes: 'Chapter 49\'s switch with two of its four ports plugged in. Each plugged port is a MAC receiver (the bits of the computer\'s transmitter become the byte stream the switch takes) and a MAC transmitter (the switch\'s byte stream becomes bits for the computer\'s receiver); the receivers accept every destination (promiscuous), as a switch port must. Ports 2 and 3 are unplugged: nothing arrives, and their transmit sides are always ready, so a flooded frame leaves. Select the switch to read its learned table and counters.',
+    notes: `Chapter ${numOf('switch')}'s switch with two of its four ports plugged in. Each plugged port is a MAC receiver (the bits of the computer's transmitter become the byte stream the switch takes) and a MAC transmitter (the switch's byte stream becomes bits for the computer's receiver); the receivers accept every destination (promiscuous), as a switch port must. Ports 2 and 3 are unplugged: nothing arrives, and their transmit sides are always ready, so a flooded frame leaves. Select the switch to read its learned table and counters.`,
   });
 }
 

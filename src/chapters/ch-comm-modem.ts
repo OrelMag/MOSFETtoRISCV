@@ -16,6 +16,7 @@ import { analyzeTiming, PS_PER_NAND } from '../sim/timing';
 import { ofdmWidget } from '../widgets/fourier';
 import { adslWidget, constellationWidget, fskWidget, iqWidget, linkScene, milestonesWidget, ncoScene, passbandWidget } from '../widgets/modem';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
 const n0 = (x: number) => x.toLocaleString('en');
@@ -38,7 +39,7 @@ const fftMults = fftCost(ADSL.tones * 2);
 const ADSL_CP = 32, ADSL_DATA = 68;
 
 export const chModem: Chapter = {
-  id: 'modem', num: 45, title: 'Modems', level: 'Communication',
+  id: 'modem', num: numOf('modem'), title: 'Modems', level: 'Communication',
   blurb: 'How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon\'s limit; ADSL\'s many carriers.',
   goals: [
     'say what a voice-band channel passes (300 – 3400 Hz) and why bits have to ride on a carrier to cross it',
@@ -188,7 +189,7 @@ export const chModem: Chapter = {
         <p style="text-align:center"><strong>P<sub>axis</sub> = 2 (1 − 1/L) · Q(√(3 · Es/N0 / (M − 1))),&nbsp;&nbsp;P<sub>symbol</sub> = 1 − (1 − P<sub>axis</sub>)²</strong></p>
         <p>with Q the Gaussian tail of chapter 41. The "M − 1" is the story: four times the points (two bits) needs four times the SNR, 6 dB, to keep the rate of error. At one wrong symbol in a million, QPSK needs ${db(needDb(4))}, 16-QAM ${db(needDb(16))}, 64-QAM ${db(needDb(64))}, 256-QAM ${db(needDb(256))} and 1024-QAM ${db(needDb(1024))}. On a ${snrLine} dB line the largest that clears the bar is ${4 ** maxBits}-QAM, ${2 * maxBits} bits a symbol, ${fmtRate(2 * maxBits * mdm('v34').baud)} at V.34's ${n0(mdm('v34').baud)} baud: the ${fmtRate(v34.rate)} of V.34 came from the other ${nf(v34.rate / mdm('v34').baud - 2 * maxBits, 1)} bits a symbol, which uncoded QAM cannot hold at this SNR.</p>
         <p>The closed form is exact for squares; for PSK beyond four points it is the usual two-neighbour approximation. Both are checked in the tests against a seeded Monte Carlo: at 18 dB the closed form for 16-QAM says ${cf.toExponential(2)} a symbol and 40 000 random symbols through Gaussian noise gave ${mc.ser.toExponential(2)}. The widget makes the same comparison live, 20 000 symbols at a time.</p>
-        <p><strong>Where the rest went.</strong> Uncoded 256-QAM sits ${db(gapToShannonDb(256, 1e-6))} above Shannon's floor of ${db(ratioToDb(snrNeeded(8)))} at 10⁻⁶; the large-constellation formula for the gap, (Q⁻¹(P/4))² / 3, gives ${db(gapDb(1e-6))}. Closing it is what trellis coding (V.32 on) and signal shaping do, by spending a bit of redundancy to get the coded points further apart than the raw ones. <a href="#/c/errors/13">Chapter 47</a> puts the codes themselves on one axis against this limit.</p>`;
+        <p><strong>Where the rest went.</strong> Uncoded 256-QAM sits ${db(gapToShannonDb(256, 1e-6))} above Shannon's floor of ${db(ratioToDb(snrNeeded(8)))} at 10⁻⁶; the large-constellation formula for the gap, (Q⁻¹(P/4))² / 3, gives ${db(gapDb(1e-6))}. Closing it is what trellis coding (V.32 on) and signal shaping do, by spending a bit of redundancy to get the coded points further apart than the raw ones. <a href="#/c/errors/13">Chapter ${numOf('errors')}</a> puts the codes themselves on one axis against this limit.</p>`;
       },
       widget: constellationWidget,
       challenge: {

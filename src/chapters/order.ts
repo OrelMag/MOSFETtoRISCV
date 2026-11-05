@@ -1,0 +1,82 @@
+// The book's order and the numbers it gives (no imports: chapter modules, the first-load path and any text may read it). A chapter
+// is placed here and nowhere else: its number follows from its place, so inserting one renumbers the rest with no gap and no edit.
+// Text says `chapter ${numOf('modem')}`, never a typed number (tests/chapter-numbers.test.ts); index.ts lists the same chapters.
+
+const BOOK = [
+  'basics',
+  'map',
+  'relays',
+  'tubes',
+  'cards',
+  'mosfet',
+  'inverter',
+  'nand',
+  'gates',
+  'binary',
+  'adders',
+  'routing',
+  'latches',
+  'registers',
+  'memory',
+  'alu',
+  'regfile',
+  'isa',
+  'cpu',
+  'python',
+  'fastadd',
+  'pipeline',
+  'pipepay',
+  'io',
+  'traps',
+  'muldiv',
+  'cache',
+  'multicycle',
+  'float',
+  'widths',
+  'ooo',
+  'multicore',
+  'silicon',
+  'lanes',
+  'simt',
+  'warps',
+  'feed',
+  'pixels',
+  'graphics',
+  'dram',
+  'memctrl',
+  'flash',
+  'bus',
+  'telegraph',
+  'exchange',
+  'wire',
+  'clocks',
+  'uart',
+  'spi',
+  'modem',
+  'serial',
+  'errors',
+  'ethernet',
+  'switch',
+  'network',
+  'router',
+  'tcp',
+  'path',
+  'appendix-6502',
+  'appendix-doom',
+  'appendix-sap',
+  'appendix-runner',
+] as const;
+
+export type ChapterId = (typeof BOOK)[number];
+
+/** Number 0: shown by a label (Start, P1 …), or as 00 (the map), and left out of the count. */
+const UNNUMBERED: ReadonlySet<ChapterId> = new Set<ChapterId>(['basics', 'map', 'relays', 'tubes', 'cards']);
+
+const NUMBERS = new Map<ChapterId, number>();
+let count = 0;
+for (const id of BOOK) NUMBERS.set(id, UNNUMBERED.has(id) ? 0 : ++count);
+
+export const BOOK_ORDER: readonly ChapterId[] = BOOK;
+
+/** A chapter's number; an appendix continues the count, though it is shown by its letter. */
+export const numOf = (id: ChapterId): number => NUMBERS.get(id)!;

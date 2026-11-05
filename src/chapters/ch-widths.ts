@@ -9,6 +9,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { codeSizeWidget, cExplorer, RVC_COSTS } from '../widgets/rvc';
 import { WIDTH_COSTS, widthCostWidget } from '../widgets/rv64';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** A 32-bit instruction that starts mid-word (0x002) and ends in the next word. */
 const STRADDLE = `        .option rvc
@@ -33,7 +34,7 @@ const SHORT_PARCELS = 3 * 2 ** 14;
 const ratio = (a: number, b: number, d = 2) => (a / b).toFixed(d);
 
 export const chWidths: Chapter = {
-  id: 'widths', num: 25, title: 'Sixteen bits and sixty-four', level: 'Processor',
+  id: 'widths', num: numOf('widths'), title: 'Sixteen bits and sixty-four', level: 'Processor',
   blurb: 'The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.',
   goals: [
     'measure how much of a program has a 16-bit form, and say what the saving buys (ROM, cache lines, fetch bandwidth)',

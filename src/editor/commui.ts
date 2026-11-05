@@ -14,6 +14,7 @@ import type { PartDoc, PartRef } from './model';
 import { setRef } from './ops';
 import { registerPaletteGroup } from './palette';
 import { registerPropsSection } from './props';
+import { numOf } from '../chapters/order';
 
 registerPaletteGroup({
   id: 'comm', title: 'Communication', order: 57, collapsed: true,
@@ -209,8 +210,8 @@ function nicProps(ed: Editor, p: PartDoc): HTMLElement {
 function macProps(isRx: boolean): HTMLElement {
   return h('section', { class: 'sb-sec-props sb-io-props' }, h('h3', null, isRx ? 'MAC receiver' : 'MAC transmitter'),
     h('p', { class: 'sb-sum' }, isRx
-      ? 'Chapter 48\'s receiver: it hunts the preamble and SFD in the bit stream (rxd, with crs high while a frame is on the cable), delivers the frame as bytes without preamble and FCS, checks the FCS and the length, and filters by destination (addr, or promisc = 1). err on the last byte tells the consumer to discard the frame. A switch port takes these bytes: join data, valid, last and err to its rxData, rxValid, rxLast, rxErr of the same port, and tie ready to 1 (a wire cannot be stopped).'
-      : 'Chapter 48\'s transmitter: it takes a frame\'s bytes from a stream (data, valid, last; it raises ready when it wants the next byte), sends the preamble and SFD, pads to 64 bytes, appends the FCS from a CRC-32 unit, then leaves the gap: one bit every four clocks on txd, with txen (carrier) beside it. Tie crs and col low for the full-duplex link a switch gives. A switch port feeds it: join txData, txValid, txLast to data, valid, last, and ready back to the switch\'s txReady.'));
+      ? `Chapter ${numOf('ethernet')}'s receiver: it hunts the preamble and SFD in the bit stream (rxd, with crs high while a frame is on the cable), delivers the frame as bytes without preamble and FCS, checks the FCS and the length, and filters by destination (addr, or promisc = 1). err on the last byte tells the consumer to discard the frame. A switch port takes these bytes: join data, valid, last and err to its rxData, rxValid, rxLast, rxErr of the same port, and tie ready to 1 (a wire cannot be stopped).`
+      : `Chapter ${numOf('ethernet')}'s transmitter: it takes a frame's bytes from a stream (data, valid, last; it raises ready when it wants the next byte), sends the preamble and SFD, pads to 64 bytes, appends the FCS from a CRC-32 unit, then leaves the gap: one bit every four clocks on txd, with txen (carrier) beside it. Tie crs and col low for the full-duplex link a switch gives. A switch port feeds it: join txData, txValid, txLast to data, valid, last, and ready back to the switch's txReady.`));
 }
 
 // ---- the switch --------------------------------------------------------------------------------------------------------

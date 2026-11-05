@@ -5,6 +5,7 @@ import { accessWidget, tilingWidget } from '../widgets/feed';
 import { occupancyWidget, warpCoreScene } from '../widgets/warps';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** The warp core's `halted` output: every warp has run to its end (0 from power-on). */
 function halted(st: Stage): boolean {
@@ -20,7 +21,7 @@ const SAXPY_CYCLES = SAXPY.instrs - SAXPY.mem + SAXPY.mem * SAXPY.lanes;
 const WARP1 = { instrs: 154, cycles: 266, latency: 8 };
 
 export const chLanes: Chapter = {
-  id: 'lanes', num: 29, title: 'Lanes', level: 'Throughput',
+  id: 'lanes', num: numOf('lanes'), title: 'Lanes', level: 'Throughput',
   blurb: 'One fetch and decode feeding four ALUs, each with its own registers: a lane core, measured against four cores.',
   goals: [
     'say what a lane core has once (PC, fetch, decode, control) and what it copies per lane (registers, ALU, result multiplexer)',
@@ -235,7 +236,7 @@ export const chLanes: Chapter = {
 };
 
 export const chSimt: Chapter = {
-  id: 'simt', num: 30, title: 'Threads in lock-step', level: 'Throughput',
+  id: 'simt', num: numOf('simt'), title: 'Threads in lock-step', level: 'Throughput',
   blurb: 'The active mask, divergent branches, split / join and the reconvergence stack, predication, and what divergence costs.',
   goals: [
     'say what the active mask switches off in a lane, and what it leaves running',
@@ -495,7 +496,7 @@ export const chSimt: Chapter = {
 };
 
 export const chWarps: Chapter = {
-  id: 'warps', num: 31, title: 'Hiding latency', level: 'Throughput',
+  id: 'warps', num: numOf('warps'), title: 'Hiding latency', level: 'Throughput',
   blurb: 'A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.',
   goals: [
     'say why a GPU hides the memory latency its caches leave with more warps, and what the caches are for',
@@ -723,7 +724,7 @@ export const chWarps: Chapter = {
 };
 
 export const chFeed: Chapter = {
-  id: 'feed', num: 32, title: 'Feeding the lanes', level: 'Throughput',
+  id: 'feed', num: numOf('feed'), title: 'Feeding the lanes', level: 'Throughput',
   blurb: 'One memory port a line wide: coalescing, a banked shared memory and bank conflicts, a barrier, atomics; a reduction, a histogram and a tiled matrix multiply.',
   goals: [
     'count the accesses a warp\'s load takes on a line-wide port, from its lanes\' addresses',

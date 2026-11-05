@@ -19,6 +19,7 @@ import { arqWidget, crcApi, crcExplorerWidget, crcScene, fecWidget, framingWidge
 import type { Scene } from '../view/stage';
 import { codeSteps } from './ch-comm-codes';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
 const sci = (x: number, d = 1) => x.toExponential(d).replace('e-', ' × 10<sup>−').replace('e+', ' × 10<sup>') + '</sup>';
@@ -45,7 +46,7 @@ const a = aOf(10e-3, FRAME_BYTES * 8, RATE);
 const A8 = weightDistribution(16, CRC8), SHARE8 = undetected(A8, 1e-4) / (1 - (1 - 1e-4) ** 24), SHARE_PAR = parityUndetected(17, 1e-4) / (1 - (1 - 1e-4) ** 17);
 
 export const chErrors: Chapter = {
-  id: 'errors', num: 47, title: 'When bits go wrong', level: 'Communication',
+  id: 'errors', num: numOf('errors'), title: 'When bits go wrong', level: 'Communication',
   blurb: 'Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.',
   goals: [
     'say what a code of Hamming distance d detects and corrects, and what one parity bit and SEC-DED cost in NANDs and levels',

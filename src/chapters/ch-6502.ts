@@ -9,6 +9,7 @@ import { opcodeMatrix } from '../widgets/m6502isa';
 import { ledger } from '../widgets/m6502ledger';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /**
  * The clock stops for a while: every node held only by its charge (a latch's gate while its pass
@@ -58,7 +59,7 @@ export const LEDGER = {
 const k = groupDigits;
 
 export const chAppendix6502: Chapter = {
-  id: 'appendix-6502', num: 54, appendix: 'A', title: '1975: the 6502', level: 'NMOS',
+  id: 'appendix-6502', num: numOf('appendix-6502'), appendix: 'A', title: '1975: the 6502', level: 'NMOS',
   blurb: 'NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.',
   goals: [
     'count the transistors of an NMOS ratioed gate against its CMOS twin (n + 1 against 2n) and say what the saving costs in power',

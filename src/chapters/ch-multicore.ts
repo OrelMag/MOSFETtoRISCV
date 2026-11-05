@@ -5,6 +5,7 @@ import type { Stage } from '../view/stage';
 import { coherenceWidget, dualCoreScene } from '../widgets/multicore';
 import { COH_STEPS } from './ch-multicore-coh';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const mc = (id: string) => MC_PROGRAMS.find((p) => p.id === id)!.source;
 
@@ -37,7 +38,7 @@ function sbSc(): { runs: number; outcomes: string[] } {
 const SB = sbSc();
 
 export const chMulticore: Chapter = {
-  id: 'multicore', num: 27, title: 'Many cores', level: 'Systems',
+  id: 'multicore', num: numOf('multicore'), title: 'Many cores', level: 'Systems',
   blurb: 'Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and private caches kept coherent by snooping, in gates.',
   goals: [
     'say why the end of Dennard scaling turned extra transistors into extra cores, from dynamic power C·V²·f',

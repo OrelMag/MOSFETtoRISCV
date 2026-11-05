@@ -9,6 +9,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import type { Stage } from '../view/stage';
 import { IO_MORE, TRAPS_MORE } from './ch-system-more';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
 const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
@@ -40,7 +41,7 @@ function csrq(st: Stage, inst: string): number {
 }
 
 export const chIO: Chapter = {
-  id: 'io', num: 19, title: 'Bytes and the outside world', level: 'System',
+  id: 'io', num: numOf('io'), title: 'Bytes and the outside world', level: 'System',
   blurb: 'Byte and halfword memory access, and memory-mapped I/O: a console, LEDs, switches and a timer.',
   goals: [
     'store a byte or halfword into a word memory with replicated data and byte enables',
@@ -260,7 +261,7 @@ export const chIO: Chapter = {
 };
 
 export const chTraps: Chapter = {
-  id: 'traps', num: 20, title: 'Traps and interrupts', level: 'Privileged ISA',
+  id: 'traps', num: numOf('traps'), title: 'Traps and interrupts', level: 'Privileged ISA',
   blurb: 'CSRs, exceptions, ecall, timer and external interrupts: how hardware hands control to software.',
   goals: [
     'read and write CSRs with csrrw, csrrs and csrrc, and name the machine-mode registers a trap uses',
