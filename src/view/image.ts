@@ -7,7 +7,8 @@
 import { fileBase } from '../editor/files';
 import { h } from '../ui/dom';
 import type { ViewBox } from './camera';
-import type { SchematicView } from './schematic';
+import type { ViewCtx } from './context';
+import { SchematicView } from './schematic';
 
 /** Presentation properties the editor's CSS sets (computed values are already resolved). */
 const PROPS = [
@@ -111,6 +112,26 @@ function backgroundOf(el: Element | null): string {
     if (c && c !== 'transparent' && !/^rgba\(.*,\s*0\)$/.test(c)) return c;
   }
   return 'white';
+}
+
+/** A part's inside, drawn off screen with its live values, in the look of `like` (the view it was asked from). */
+export async function exportInside(ctx: ViewCtx, like: Element, kind: 'svg' | 'png'): Promise<void> {
+  const host = h('div', { 'aria-hidden': 'true', style: 'position:fixed;left:-100000px;top:0;width:1200px;height:800px' });
+  document.body.append(host);
+  const view = new SchematicView(host, { open: () => {}, select: () => {}, editInput: () => {}, toggleInput: () => {} });
+  // as the learner arranged it, like an image of the level on screen
+  view.arrange = true;
+  try {
+    view.show(ctx, false);
+    view.update();
+    const text = svgImage(view.el, view.contentBox(), backgroundOf(like));
+    const base = fileBase(ctx.def.name, 'circuit');
+    if (kind === 'svg') saveFile(`${base}.svg`, text, 'image/svg+xml');
+    else saveFile(`${base}.png`, await pngImage(text));
+  } finally {
+    view.clear();
+    host.remove();
+  }
 }
 
 /** The level a stage shows, whole (not just the part in view), as an SVG or PNG download. */

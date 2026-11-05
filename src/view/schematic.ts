@@ -19,6 +19,9 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
+import type { ViewFocus } from '../ui/viewlink';
+import { factsOf, type NetEnd } from './netfacts';
+import { partHeader, wireHeader, wireRows } from './tracemenu';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
@@ -38,6 +41,14 @@ export interface SchematicEvents {
   editInput(port: string, anchor: DOMRect): void;
   /** A click on a wire; return true to consume it (probe mode). */
   netClick?(net: number): boolean;
+  /** The menu's Why this value? on a net. */
+  why?(net: number): void;
+  /** The menu's Inspect on a part. */
+  inspect?(child: string): void;
+  /** Up one level, for the menu's jump to a port of this level. */
+  up?(): void;
+  /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen. */
+  elsewhere?(target: ViewFocus | null): MenuEntry[];
   /** The probe on a net of the current view, if any. */
   probeOf?(net: number): { color: number; label: string } | null;
   /** The learner moved a part or a wire, or unravelled a pointer (the level was redrawn). */
@@ -183,6 +194,7 @@ export class SchematicView {
     // A held finger is the right-click (the browser's own contextmenu for it is not reliable): the same menu.
     this.holdQuiet = installHold(this.el, {
       onHold: (x, y, e) => {
+        if (this.traceMenu(e.target as Element, x, y)) return;
         const items = this.menuItems(e.target as Element);
         if (!items.length) return false;
         this.openMenu(items, x, y);
@@ -1283,6 +1295,7 @@ export class SchematicView {
     if (this.holdQuiet()) return void e.preventDefault();
     // Shift: the browser's own menu, the way out of this one
     if (e.shiftKey) return;
+    if (this.traceMenu(e.target as Element, e.clientX, e.clientY)) return void e.preventDefault();
     const items = this.menuItems(e.target as Element);
     if (!items.length) return;
     e.preventDefault();
@@ -1292,11 +1305,135 @@ export class SchematicView {
   /** A host whose canvas takes the focus sets this: the level's menu then offers the picker, a keyboard's way to any target. */
   pickable = false;
 
+  /** A host that wants Trace on its circuit (stage, look inside, a codex figure) sets this. */
+  trace = false;
+
   /** What the menu holds for what is under the pointer: on empty ground, a way to everything else first. */
   private menuItems(target: Element | null): MenuItem[] {
     const items = this.layoutItems(target);
     if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
-    return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...items];
+    const more = this.events.elsewhere?.(null).filter((x): x is MenuItem => !!x) ?? [];
+    return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...more, ...items];
+  }
+
+  /** A wire's or a part's full menu: its header, what a surface offers, then the layout rows. */
+  private traceMenu(target: Element, x: number, y: number): boolean {
+    const ctx = this.ctx;
+    if (!this.trace || !ctx) return false;
+    const into = h('div', {});
+    const layout = this.layoutItems(target);
+    const ni = target.closest('[data-net]')?.getAttribute('data-net');
+    if (ni != null) {
+      const idx = Number(ni), f = factsOf(ctx.def, idx);
+      if (!f) return false;
+      if (idx !== this.selectedNet) {
+        this.select(null);
+        this.events.select(null);
+        this.selectNet(idx);
+      }
+      wireHeader(into, f, () => ctx.netBits(idx), () => this.netNote(ctx, idx));
+      const sw = ctx.sim instanceof SwitchSim || ctx.sim instanceof NmosSim;
+      const rows = wireRows(f, {
+        highlight: () => { this.select(null); this.selectNet(idx); },
+        jump: (e) => this.jumpTo(e),
+        upLevel: (e) => e.inst === null && !!ctx.parent,
+        ...(this.events.why ? { why: () => this.events.why!(idx) } : { whyOff: 'The Why? card is on stages and in Look inside.' }),
+        design: () => ctx.sim.design,
+        flat: () => ctx.node.nets?.[idx] ?? [],
+        transistors: sw,
+        more: this.events.elsewhere?.({ net: idx }) ?? [],
+      });
+      showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for wire ${f.name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
+      return true;
+    }
+    const name = target.closest('[data-inst]')?.getAttribute('data-inst');
+    const node = name ? ctx.node.children?.get(name) : undefined;
+    if (!name || !node) return false;
+    if (!this.group.has(name)) {
+      this.setGroup([]);
+      this.select(name);
+      this.events.select(name);
+    }
+    partHeader(into, name, node.def);
+    const rows: MenuItem[] = [
+      { label: 'Look inside', key: 'double-click', run: () => this.events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
+      ...(this.events.inspect ? [{ label: 'Inspect', run: () => this.events.inspect!(name) }] : []),
+      ...(this.events.elsewhere?.({ inst: name }).filter((x): x is MenuItem => !!x) ?? []),
+    ];
+    showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for part ${name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
+    return true;
+  }
+
+  /** Under the value: what a switch-level net's bit does not say (a short, a weak level). */
+  private netNote(ctx: ViewCtx, idx: number): string {
+    if (!(ctx.sim instanceof SwitchSim)) return '';
+    const flat = ctx.node.nets?.[idx] ?? [];
+    if (flat.some((n) => (ctx.sim as SwitchSim).shorted?.[n])) return 'Shorted: sure paths to both a 1 and a 0.';
+    const wk = flat.length === 1 ? ctx.sim.weakOf(flat[0]) : 0;
+    return wk ? `Weak level: ${weakTag(wk)}` : '';
+  }
+
+  /** The menu's jump: lights the end, moving the view only when it is off screen. A port of a level goes up to its parent. */
+  private jumpTo(e: NetEnd): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (e.inst !== null) {
+      this.select(e.inst);
+      this.events.select(e.inst);
+      this.bring(this.insts.get(e.inst));
+      return;
+    }
+    if (ctx.parent && this.events.up) {
+      const from = ctx.path[ctx.path.length - 1];
+      this.events.up();
+      const end = `${from}.${e.port}`;
+      // the parent is on screen now: light the net this port sits on
+      const i = netlistOf(this.ctx?.def ?? ctx.parent.def)?.nets.findIndex((n) => n.ends.includes(end)) ?? -1;
+      if (i >= 0 && this.ctx === ctx.parent) {
+        this.select(null);
+        this.selectNet(i);
+        this.bring(this.el.querySelector(`[data-net="${i}"]`));
+      }
+      return;
+    }
+    this.bring(this.pins.find((p) => p.pin.name === e.port)?.g);
+  }
+
+  /** What a link points at: selected, into view, flashed. False: nothing by that name or number at this level. */
+  showTarget(t: ViewFocus): boolean {
+    const nl = this.base;
+    if (!nl) return false;
+    if ('inst' in t) {
+      if (!this.insts.has(t.inst)) return false;
+      this.select(t.inst);
+      this.events.select(t.inst);
+      this.bring(this.insts.get(t.inst));
+      return true;
+    }
+    if (!nl.nets[t.net]) return false;
+    this.select(null);
+    this.selectNet(t.net);
+    this.bring(this.el.querySelector(`[data-net="${t.net}"]`));
+    return true;
+  }
+
+  /** Into view if it is not (at this zoom), then a short flash so the eye finds it. */
+  private bring(el: Element | null | undefined): void {
+    if (!el) return;
+    const r = el.getBoundingClientRect(), v = this.host.getBoundingClientRect();
+    // not drawn right now (a pin hidden by the view): nothing to go to
+    if (!r.width && !r.height) return;
+    if (r.left < v.left || r.right > v.right || r.top < v.top || r.bottom > v.bottom) {
+      const g = el as SVGGraphicsElement, b = g.getBBox(), m = g.getCTM(), root = this.el.getCTM();
+      if (m && root) {
+        const k = root.inverse().multiply(m);
+        this.centerOn([k.a * (b.x + b.width / 2) + k.c * (b.y + b.height / 2) + k.e, k.b * (b.x + b.width / 2) + k.d * (b.y + b.height / 2) + k.f]);
+      }
+    }
+    el.classList.remove('jump-ping');
+    void (el as SVGElement).getBoundingClientRect();
+    el.classList.add('jump-ping');
+    setTimeout(() => el.classList.remove('jump-ping'), 1400);
   }
 
   /** The menu key: for the selected wire or part, at its place; with nothing selected, the level's. */
@@ -1306,6 +1443,7 @@ export class SchematicView {
     const el = from?.closest('[data-inst], [data-net]') ?? (this.selectedNet >= 0 ? this.el.querySelector(`[data-net="${this.selectedNet}"]`)
       : this.selected ? this.el.querySelector(`[data-inst="${CSS.escape(this.selected)}"]`) : null);
     const { x, y } = anchorPoint(el?.getBoundingClientRect() ?? null, this.host.getBoundingClientRect());
+    if (el && this.traceMenu(el, x, y)) return;
     this.openMenu(this.menuItems(el), x, y);
   }
 
