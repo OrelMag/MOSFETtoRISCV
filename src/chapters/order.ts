@@ -65,6 +65,7 @@ const BOOK = [
   'tcp',
   'secret',
   'path',
+  'bench',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

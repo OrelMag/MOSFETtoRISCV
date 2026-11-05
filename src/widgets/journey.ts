@@ -20,7 +20,7 @@ const MADE_OF: Record<string, string> = {
   ooo: 'renaming, a reorder buffer', multicore: 'arbiter, atomics, coherence', silicon: 'standard cells, routing, masks',
   lanes: 'one decode, four ALUs', simt: 'masks, split / join', warps: 'scoreboards, warps', feed: 'coalescing, banks', pixels: 'a rasterizer, frame buffers', graphics: 'kernels, a command unit',
   dram: 'capacitors, sense amplifiers', memctrl: 'commands, timing rules', flash: 'floating gates', bus: 'valid / ready, masters',
-  message: 'bits, delay, packets, decibels', signals: 'sines, FIR filters, sampling', noise: 'Gaussian tails, spheres', telegraph: 'relays, a line', exchange: 'relays, circuits', wire: 'RC, repeaters', clocks: 'synchronizers', uart: 'a baud divider, shifters', spi: 'a shared clock, two wires', modem: 'FSK', serial: '8b/10b', errors: 'parity, CRC',
+  bench: 'captures, eyes, counters, traces', message: 'bits, delay, packets, decibels', signals: 'sines, FIR filters, sampling', noise: 'Gaussian tails, spheres', telegraph: 'relays, a line', exchange: 'relays, circuits', wire: 'RC, repeaters', clocks: 'synchronizers', uart: 'a baud divider, shifters', spi: 'a shared clock, two wires', modem: 'FSK', serial: '8b/10b', errors: 'parity, CRC',
   'appendix-6502': 'NMOS, a PLA', 'appendix-doom': 'C, RV32IM', 'appendix-sap': '74xx TTL', 'appendix-runner': 'counters, gates',
 };
 

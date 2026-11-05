@@ -3,6 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { ATTEMPT_CASES, attemptCases, FAULT_CASES, PASS_MARK } from '../src/comm/faults';
+import { SURVIVOR, UART_ERR } from '../src/chapters/ch-comm-bench';
+import { receive, UART_8N1 } from '../src/comm/startstop';
 import { tick } from './yieldtick';
 
 const SEEDS = [1, 2, 3, 4];
@@ -77,6 +79,14 @@ describe('every case has its fault in it', () => {
     expect(a.hopsNow).toBeLessThan(a.hopsBefore);
     expect(b.reached).toBe(1);
   }));
+});
+
+describe('the chapter\'s typed claims', () => {
+  it('at the quiz\'s clock error U fails and the other character survives, in the model', () => {
+    expect(SURVIVOR).toBeGreaterThanOrEqual(0);
+    expect(receive(UART_8N1, 0x55, { err: UART_ERR }).ok).toBe(false);
+    expect(receive(UART_8N1, SURVIVOR, { err: UART_ERR }).ok).toBe(true);
+  });
 });
 
 describe('the cases as questions', () => {
