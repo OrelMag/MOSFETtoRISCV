@@ -80,6 +80,8 @@ const BOOK = [
   'spectrum',
   'firdesign',
   'iir',
+  'multirate',
+  'cordic',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

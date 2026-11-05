@@ -5,6 +5,7 @@
 
 import type { Vec } from '../sim/geometry';
 import { h } from '../ui/dom';
+import { closeMenu, type MenuEntry, showMenu, showPicker } from '../ui/menu';
 import { type Editor, registerEditorPlugin } from './editor';
 import { canTurn } from './face';
 import { canLookInside, lookInside } from './inside';
@@ -16,40 +17,17 @@ import { canPaste } from './tools';
 import { canUnravel, pointersOf } from './unravel';
 import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
+import { netMembers, netOfSelection } from './netsel';
+import { factsOf, type NetEnd } from '../view/netfacts';
+import { ViewCtx } from '../view/context';
+import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
+import { exportImage, shareDialog } from './fileui';
+import { copyAsChip, handout } from './levelgate';
+import type { WireDoc } from './model';
 
-export interface MenuItem { label: string; key?: string; run(): void; disabled?: boolean; checked?: boolean }
-type Item = MenuItem;
-export type MenuEntry = Item | null;
+export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
 type Entry = MenuEntry;
-
-let menu: HTMLElement | null = null;
-/** What had the focus when the menu opened: Esc gives it back. */
-let opener: HTMLElement | SVGElement | null = null;
-const onOutside = (e: PointerEvent) => { if (menu && !menu.contains(e.target as Node)) closeContextMenu(); };
-const onKey = (e: KeyboardEvent) => {
-  if (!menu) return;
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    const back = opener;
-    closeContextMenu();
-    if (back?.isConnected) back.focus({ preventScroll: true });
-    return;
-  }
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  e.preventDefault();
-  e.stopPropagation();
-  const items = [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-  const i = items.indexOf(document.activeElement as HTMLButtonElement);
-  items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
-};
-
-export function closeContextMenu(): void {
-  menu?.remove();
-  menu = null;
-  document.removeEventListener('pointerdown', onOutside, true);
-  document.removeEventListener('keydown', onKey, true);
-}
+type Item = NonNullable<MenuEntry>;
 
 /** The actions for the current selection (after a right-click selected what was under it). */
 function entries(ed: Editor, at: Vec): Entry[] {
@@ -64,6 +42,8 @@ function entries(ed: Editor, at: Vec): Entry[] {
   ];
   if (!n) {
     return [
+      ...(pickEntries(ed).length ? [{ label: 'Pick a part or wire…', run: () => pickTarget(ed) }, null] : []),
+      ...elsewhereOf(ed), ...(ed.doc.parts.length ? [null] : []),
       { label: 'Paste here', key: 'Ctrl+V', run: () => t.paste(), disabled: !canPaste() },
       null,
       { label: 'Add a comment here', key: 'T', run: () => t.placeAt({ id: 'comment', name: 'Comment', place: { comment: true } }, at) },
@@ -112,6 +92,8 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
+      ...elsewhereOf(ed, p.id),
+      null,
       flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
     ];
   }
@@ -159,53 +141,108 @@ function entries(ed: Editor, at: Vec): Entry[] {
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];
 }
 
+const shareRow = (ed: Editor): NonNullable<MenuEntry> => ({ label: 'Share link…', hint: 'A copy of this chip, packed into a URL', run: () => void shareDialog(ed) });
+
+/** Take it elsewhere for a part (or, with none, the chip). On a level only the learner's own may go. */
+function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
+  const say = (m: string, e?: boolean) => ed.toast(m, e ? 'err' : 'info');
+  if (partId === undefined) {
+    const may = handout({ chipId: ed.chipId, level: !!ed.level, own: true });
+    return elsewhereGroup(elsewhereRows({ def: ed.compiled.def, say, verilog: may.verilog, ...(may.image ? { image: (kind: 'svg' | 'png') => exportImage(ed, kind) } : {}), ...(may.link ? { link: shareRow(ed) } : {}) }));
+  }
+  const p = ed.doc.parts.find((q) => q.id === partId);
+  const def = p && ed.defOf(p);
+  const sim = ed.sim.sim;
+  if (!p || !def) return [];
+  const may = handout({ chipId: ed.chipId, level: !!ed.level, own: 'chip' in p.ref });
+  if (may.none) return [];
+  const node = sim?.design.root.children?.get(partId);
+  const inside = () => (sim && node ? new ViewCtx(sim, sim.design.root).child(partId) : null);
+  return elsewhereGroup(elsewhereRows({
+    def, say,
+    ...(may.sandbox ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(ed, def) } } : {}),
+    verilog: may.verilog,
+    ...(may.image ? { image: node && def.netlist ? (kind: 'svg' | 'png') => {
+      const ctx = inside();
+      return ctx ? import('../view/image').then((m) => m.exportInside(ctx, ed.view.svg, kind)) : say('It has no inside to draw', true);
+    } : 'It has no inside to draw.' } : {}),
+    ...(may.link ? { link: shareRow(ed) } : {}),
+  }));
+}
+
+/** Trace's rows for that net; the header goes into `into`. */
+function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
+  // read through the editor each time: a rebuild replaces the simulator while the menu is open
+  const flat = () => ed.sim.sim?.design.root.nets?.[idx] ?? [];
+  const f = factsOf(ed.compiled.def, idx);
+  if (!f || !ed.sim.sim) return [];
+  wireHeader(into, f, () => ed.sim.sim?.getBits(flat()) ?? []);
+  const jump = (e: NetEnd) => {
+    const part = e.inst === null ? null : ed.doc.parts.find((p) => p.id === e.inst);
+    const pin = e.inst === null ? ed.doc.pins.find((p) => p.name === e.port) : null;
+    if (!part && !pin) return;
+    ed.select(part ? { parts: [part.id] } : { pins: [pin!.id] });
+    ed.view.centerOn(part ? part.at : pin!.at);
+  };
+  return [...wireRows(f, {
+    // the net's every wire and pointer selected: lit, and ready to colour or delete together
+    highlight: () => ed.select(netMembers(ed.compiled, idx)),
+    jump,
+    whyOff: 'The Why? card is in Look inside and on stages: open this chip’s part, or the chip from a level above.',
+    design: () => ed.sim.sim?.design ?? null,
+    flat,
+    transistors: ed.compiled.mode === 'switch',
+    more: handout({ chipId: ed.chipId, level: !!ed.level, own: true }).link ? elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })) : [],
+  }), null];
+}
+
+/** What the chip holds, for a keyboard: parts, pins, pointers and wires have no focus of their own. */
+function pickEntries(ed: Editor): { label: string; note: string; run(): void }[] {
+  const go = (sel: Parameters<Editor['select']>[0]) => () => {
+    ed.select(sel);
+    ed.tools.keyMenu();
+  };
+  const d = ed.doc;
+  const pinName = (id: string) => d.pins.find((p) => p.id === id)?.name ?? id;
+  const end = (e: WireDoc['a']) => ('pin' in e ? pinName(e.pin) : 'part' in e ? `${e.part}.${e.port}` : 'label' in e ? e.label : '·');
+  return [
+    ...d.parts.map((p) => ({ label: p.id, note: ed.defOf(p)?.name ?? 'part', run: go({ parts: [p.id] }) })),
+    ...d.pins.map((p) => ({ label: p.name, note: `${p.dir === 'in' ? 'input' : p.dir === 'out' ? 'output' : 'inout'} pin`, run: go({ pins: [p.id] }) })),
+    ...d.labels.map((l) => ({ label: l.name, note: 'pointer', run: go({ labels: [l.id] }) })),
+    ...d.wires.map((w) => ({ label: w.name ?? `${end(w.a)} – ${end(w.b)}`, note: 'wire', run: go({ wires: [w.id] }) })),
+  ];
+}
+
+function pickTarget(ed: Editor): void {
+  showPicker('Pick a part or wire', pickEntries(ed), ed.view.svg);
+}
+
 /** Open the menu at a screen point for the current selection (empty: the canvas's actions at `at`). */
 export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void {
-  closeContextMenu();
-  const m = h('div', { class: 'sb-ctx', role: 'menu', 'aria-label': 'Actions' });
+  closeMenu();
+  const m = h('div', {});
   // Wires and pointers: their nets' colour first (wirehue.ts), one undo step.
   const wires = ed.sel.wires ?? [], labels = ed.sel.labels ?? [];
+  const net = netOfSelection(ed.compiled, ed.sel);
+  const part = ed.selCount === 1 && ed.sel.parts?.length ? ed.doc.parts.find((p) => p.id === ed.sel.parts![0]) : undefined;
+  const partDef = part && ed.defOf(part);
   if (wires.length || labels.length) {
     const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
     m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
       hueSwatches(cur, (hue) => {
-        closeContextMenu();
+        closeMenu();
         ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
       }, 'menuitemradio')), h('hr'));
   }
-  showMenu(x, y, entries(ed, at), m, ed.view.svg);
-}
-
-/** A menu of these entries at a screen point (null: a separator); `into` an element already holding a header. */
-export function showMenu(x: number, y: number, list: MenuEntry[], into?: HTMLElement, back?: HTMLElement | SVGElement): void {
-  if (!into) closeContextMenu();
-  const m = into ?? h('div', { class: 'sb-ctx', role: 'menu', 'aria-label': 'Actions' });
-  for (const it of list) {
-    if (!it) { if (m.lastElementChild && m.lastElementChild.tagName !== 'HR') m.append(h('hr')); continue; }
-    const check = it.checked !== undefined;
-    m.append(h('button', {
-      role: check ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': check ? String(it.checked) : null, disabled: it.disabled ? true : null,
-      onclick: () => { closeContextMenu(); it.run(); },
-    }, h('span', null, check ? `${it.checked ? '✓' : ' '} ${it.label}` : it.label), it.key ? h('kbd', null, it.key) : null));
-  }
-  if (m.lastElementChild?.tagName === 'HR') m.lastElementChild.remove();
-  menu = m;
-  document.body.append(m);
-  // Keep it on screen: open up / left of the cursor when it would overflow.
-  const w = m.offsetWidth, hh = m.offsetHeight;
-  m.style.left = `${Math.max(8, x + w > innerWidth - 8 ? x - w : x)}px`;
-  m.style.top = `${Math.max(8, y + hh > innerHeight - 8 ? y - hh : y)}px`;
-  // Esc gives the focus back to what had it, else to the canvas (a press on it leaves the focus on the page)
-  opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : back ?? null;
-  document.addEventListener('pointerdown', onOutside, true);
-  document.addEventListener('keydown', onKey, true);
-  m.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  if (part && partDef) partHeader(m, part.id, partDef);
+  const trace = net >= 0 ? traceOf(ed, net, m) : [];
+  showMenu(x, y, [...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
 }
 
 registerEditorPlugin((ed) => {
   ed.tools.onContext = (x, y, at) => openContextMenu(ed, x, y, at);
   return () => {
     ed.tools.onContext = null;
-    closeContextMenu();
+    closeMenu();
   };
 });

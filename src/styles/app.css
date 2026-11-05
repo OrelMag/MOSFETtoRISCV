@@ -1106,9 +1106,50 @@ svg.schematic .inst.dragging .hit { fill: color-mix(in srgb, var(--sel) 10%, tra
 svg.schematic .inst.grouped .hit { fill: color-mix(in srgb, var(--sel) 20%, transparent); stroke: var(--sel); stroke-width: 0.16; }
 svg.schematic.reshaping, svg.schematic.reshaping .wire-hit { cursor: grabbing !important; }
 svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent); stroke: var(--sel); stroke-width: 0.08; stroke-dasharray: 0.4 0.3; pointer-events: none; }
-.pal-menu.sch-menu { position: fixed; right: auto; top: 0; min-width: 260px; }
-.pal-menu.sch-menu small { display: block; color: var(--muted); font-size: 12px; }
-.sch-menu-note { margin: 4px 8px; max-width: 260px; font-size: 13px; color: var(--muted); }
+/* the right-click menu (ui/menu.ts) */
+.ctx-menu {
+  position: fixed; z-index: 70; min-width: 210px; max-width: min(360px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
+  display: grid; gap: 1px; padding: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); outline: none;
+}
+.ctx-menu.fly { z-index: 71; }
+.ctx-menu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 0; background: transparent; width: 100%;
+  color: var(--text); padding: 5px 9px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; text-align: left;
+}
+.ctx-menu button:hover:not(:disabled, [aria-disabled='true']), .ctx-menu button:focus-visible, .ctx-menu button[aria-expanded='true'] { background: var(--surface-2); outline: none; }
+.ctx-menu button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.ctx-menu button:disabled, .ctx-menu button[aria-disabled='true'] { color: var(--muted); cursor: default; }
+.ctx-menu kbd { font: 11px var(--font-mono); color: var(--muted); background: none; border: 0; padding: 0; }
+.ctx-menu hr { border: 0; border-top: 1px solid var(--border); margin: 3px 4px; width: auto; }
+.ctx-l { min-width: 0; }
+.ctx-l small { display: block; color: var(--muted); font-size: 12px; }
+.ctx-ar { color: var(--muted); }
+.ctx-note { margin: 4px 8px; max-width: 260px; font-size: 13px; color: var(--muted); }
+.ctx-head { display: grid; gap: 1px; padding: 5px 9px 6px; min-width: 0; }
+.ctx-head b { font: 600 13px var(--font-mono); overflow-wrap: anywhere; }
+.ctx-head span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ctx-menu button.ctx-val { justify-content: flex-start; gap: 10px; padding-block: 2px; font: 12px var(--font-mono); }
+.ctx-menu button.ctx-val[hidden] { display: none; }
+.ctx-val i { flex: none; width: 24px; font: 600 10px var(--font-ui); font-style: normal; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.ctx-num { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ctx-num.unknown { color: var(--wx); }
+.ctx-copy { flex: none; font: 10px var(--font-ui); color: var(--muted); opacity: 0; }
+.ctx-val:hover .ctx-copy, .ctx-val:focus-visible .ctx-copy { opacity: 1; }
+.jump-ping { animation: ping 0.3s ease-in-out 3; }
+.ctx-nest { display: grid; gap: 1px; margin: 0 0 3px 9px; padding-left: 8px; border-left: 2px solid var(--border); }
+.ctx-pick {
+  position: fixed; z-index: 72; top: max(64px, 12dvh); left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: calc(100dvh - 80px);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-lg);
+}
+.ctx-pick h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.ctx-pick input { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; }
+.ctx-pick ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.ctx-pick li button {
+  display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.ctx-pick li button:hover, .ctx-pick li button:focus-visible { background: var(--surface-2); outline: none; }
+.ctx-pick li button:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.ctx-pick small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; text-align: right; }
 .canvas.routing { cursor: progress; }
 .canvas.noting::after { content: attr(data-note); }
 .canvas.routing::after { content: 'Routing wires…'; }
@@ -2873,6 +2914,16 @@ html[data-busy]::before {
   .narrative-head .btn, .tour-go { display: none !important; }
 }
 @media (pointer: coarse) { .asm-try, .bm-back { min-height: 40px; } }
+/* a touch screen: the menu is a bottom sheet (ui/menu.ts adds .sheet), groups open in place */
+@media (pointer: coarse) {
+  .ctx-menu button, .ctx-pick li button, .ctx-pick input { min-height: 40px; }
+  .ctx-menu kbd { display: none; } /* shortcuts mean nothing to a finger */
+  .ctx-copy { opacity: 1; }
+  .ctx-menu.sheet {
+    left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 76dvh; border-radius: 14px 14px 0 0;
+    padding: 8px max(8px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  }
+}
 
 /* press and hold on a touch screen (ui/holdpress.ts): a ring grows under the finger until the menu opens */
 .hold-ring {

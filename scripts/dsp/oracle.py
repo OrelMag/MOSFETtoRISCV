@@ -299,7 +299,22 @@ def iir():
 
 FS = [0, 0.01, 0.03, 0.05, 0.08, 0.1, 0.11, 0.125, 0.15, 0.2, 0.3, 0.4, 0.47]
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir}
+
+def multirate():
+    x = noise(97, 777)
+    rows = []
+    for up, down, n, cut in [(1, 2, 21, 0.45), (1, 4, 33, 0.22), (3, 2, 31, 0.3), (2, 3, 25, 0.3), (5, 1, 41, 0.18)]:
+        h = signal.firwin(n, cut)
+        rows.append({
+            'up': up, 'down': down, 'h': r(h), 'x': r(x),
+            'upfirdn': r(signal.upfirdn(h, x, up, down)),
+            'resample_poly': r(signal.resample_poly(x, up, down, window=h)),
+        })
+    return {'cases': rows}
+
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate}
 
 
 def stamp(data):

@@ -12,6 +12,7 @@
 import { type ExitDir, orientExit, type Rot, type Vec } from '../sim/geometry';
 import { installPanZoom } from '../view/camera';
 import { installHold } from '../ui/holdpress';
+import { anchorPoint, isMenuKey } from '../ui/menu';
 import { closePopover, editNumber } from '../view/popover';
 import { drawPinGlyph } from '../view/symbols';
 import { coarsePointer, s } from '../ui/dom';
@@ -453,6 +454,8 @@ export class Tools {
 
   /** Right-click: cancel what is in progress, else the actions for what is under the cursor. */
   private context(e: MouseEvent): void {
+    // Shift: the browser's own menu, the way out of this one
+    if (e.shiftKey) return;
     e.preventDefault();
     if (this.holdQuiet()) return;
     if (this.state.k === 'wire' || this.state.k === 'place' || (this.state.k === 'reshape' && this.state.hover)) return this.cancel();
@@ -460,6 +463,18 @@ export class Tools {
     const p = this.world(e);
     this.cursor = p;
     this.menuFor(nameHit(e.target) ?? this.hit(p), e.clientX, e.clientY, p);
+  }
+
+  /** The menu key: for the selection, at its place on the canvas; with nothing selected, the canvas's own. */
+  keyMenu(): void {
+    const ed = this.ed, s = ed.sel, svg = ed.view.svg;
+    const q = s.parts?.length ? `[data-part="${CSS.escape(s.parts[0])}"]` : s.pins?.length ? `[data-pin-id="${CSS.escape(s.pins[0])}"]`
+      : s.wires?.length ? `[data-wire="${CSS.escape(s.wires[0])}"]` : s.labels?.length ? `[data-label="${CSS.escape(s.labels[0])}"]` : '';
+    const box = q ? svg.querySelector(q)?.getBoundingClientRect() ?? null : null;
+    const { x, y } = anchorPoint(box, svg.getBoundingClientRect());
+    const p = this.world({ clientX: x, clientY: y });
+    this.cursor = p;
+    this.onContext?.(x, y, p);
   }
 
   /** Select what the menu is for (what was under the press), then open it at a screen point. */
@@ -869,6 +884,11 @@ export class Tools {
     const k = e.key;
     const done = () => e.preventDefault();
 
+    if (isMenuKey(e) && (!control(e.target) || ed.view.svg.contains(e.target as Node))) {
+      done();
+      if (st.k === 'idle') this.keyMenu();
+      return;
+    }
     // A bend being carried: any key but a modifier drops the edit (Esc included).
     if (st.k === 'reshape' && st.hover && !['Control', 'Shift', 'Alt', 'Meta'].includes(k)) { done(); this.cancel(); return; }
     if (st.k === 'wire') {
