@@ -18,7 +18,7 @@ const ONE = 2 ** 14;
 const VIEW: CordicSpec = { w: 18, z: 16, n: 14 };
 
 /** A circle has to look like one, so this plot keeps its own width rather than the panel's. */
-const squarePlot = (aria: string) => { const p = plotOf({ W: 340, H: 340, x: [-1.8, 1.8], y: [-1.8, 1.8], yTicks: [-1, 0, 1], xLabel: 'x', yLabel: 'y', aria }); (p.el as HTMLElement).style.maxWidth = '380px'; return p; };
+const squarePlot = (aria: string) => { const p = plotOf({ W: 340, H: 340, x: [-1.8, 1.8], y: [-1.8, 1.8], yTicks: [-1, 0, 1], xLabel: 'x', yLabel: 'y', aria }); p.el.style.maxWidth = '380px'; return p; };
 
 /** The unit circle, the axes, and a path of vectors from the origin, the last one bold. */
 function drawPath(p: ReturnType<typeof plotOf>, pts: { x: number; y: number }[]) {
