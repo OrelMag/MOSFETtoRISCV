@@ -26,3 +26,10 @@
 @media (pointer: coarse) {
   .rd-box { min-height: 40px; }
 }
+.rd-w, .rd-w .mos-row { min-width: 0; max-width: 100%; }
+.rd-w .mos-sl { min-width: 0; }
+.rd-w .mos-sl input { min-width: 0; flex: 1 1 0; }
+@media (max-width: 600px) {
+  .rd-w .mos-sl span { width: 84px; }
+  .rd-w .mos-sl output { width: 66px; font-size: 11px; }
+}
