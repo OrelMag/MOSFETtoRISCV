@@ -31,3 +31,5 @@
 /* on a phone the delay columns, the table's point, must not sit a whole Link column off screen */
 @media (max-width: 560px) { .in-table .in-link { white-space: normal; min-width: 104px; max-width: 120px; } }
 @media (pointer: coarse) { .in-step { min-height: 40px; } .in-table tbody tr[tabindex] td { height: 40px; } }
+.in-stack { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.in-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }

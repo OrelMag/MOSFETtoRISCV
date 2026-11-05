@@ -10,7 +10,7 @@ import { slider } from './mosparts';
 import { CAUSE_NAMES, C_FORWARD, FastPathModel, S_RX, type FpIn } from '../net/fastpath';
 import { AS_FERN, AS_QUIL, AS_SABLE, ASES, asPrefix, hostFrame, hostId, hostIp, HOSTS, Internet, linkKey, LINKS, linksOf, loadWrites, probeFrame, RELATIONS, routerIp, ROUTERS, routersOf, TCP_ACK, TCP_PSH, tcpSegment, traceroute, type Journey, type TraceRow } from '../net/internet';
 import { BgpNet, CLS_NAMES, keyOf, type BgpOptions } from '../net/internetbgp';
-import { fetchMs, fetchPhases, journeyDelays, LAN, type LinkQueue, oneWayMs, propMs, sampledMs, serMs, queueMs } from '../net/internetdelay';
+import { fetchMs, fetchPhases, journeyDelays, LAN, type LinkQueue, oneWayMs, pageOver, propMs, sampledMs, serMs, type StackName, queueMs } from '../net/internetdelay';
 import { decodeDns, RCODE_NXDOMAIN, Resolver, SITE, TTL_A, type Resolution } from '../net/internetdns';
 import { ipText, parseIp, PROTO_TCP, PROTO_UDP } from '../net/ipv4';
 import { routeMatches, TRIE_NODES, walkTrie } from '../net/trie';
@@ -465,3 +465,43 @@ export function fetchWidget(): Widget {
   };
 }
 
+const STACKS: [StackName, string, string][] = [
+  ['h1', 'HTTP/1.1', 'TCP + TLS, one object at a time'],
+  ['h2', 'HTTP/2', 'TCP + TLS, every object on one connection'],
+  ['h3', 'HTTP/3', 'QUIC over UDP, every object on one connection'],
+];
+/** The same page and the same network through three stacks, the handshakes included. */
+export function stacksWidget(): Widget {
+  const net = new Internet(), f = probeFrame(LAPTOP, hostIp(WWW), 64), go = net.send(LAPTOP, f);
+  const back = net.send(WWW, hostFrame(WWW, hostIp(LAPTOP), 64, PROTO_UDP, new Array<number>(26).fill(0)));
+  const rttMs = oneWayMs(go, f.length) + oneWayMs(back, f.length), bottleneckMbps = Math.min(...linksOf(go).map((i) => LINKS[i].mbps * (1 - LINKS[i].load)));
+  let objects = 8, kb = 30, loss = false;
+  const rows = h('div', { class: 'rt-table' }), read = h('div', { class: 'err-verdict ok' });
+  const paint = () => {
+    const spec = { objects, objectBytes: kb * 1000, rttMs, bottleneckMbps, loss };
+    const runs = STACKS.map(([k]) => pageOver(k, spec)), max = Math.max(...runs.map((r) => r.totalMs));
+    rows.replaceChildren(...STACKS.map(([, name, how], i) => {
+      const r = runs[i], late = loss ? ` ${r.stalled} of ${objects} held up.` : '';
+      return h('div', { class: 'in-stack' },
+        h('div', { class: 'rt-route' }, h('code', null, name), h('span', null, how), h('em', null, `${ms2(r.totalMs)} ms`)),
+        h('div', { class: 'in-bar', role: 'img', style: `width:${(r.totalMs / max) * 100}%`, 'aria-label': `${name}: first request after ${ms2(r.setupMs)} ms, first byte at ${ms2(r.firstByteMs)} ms, all of it at ${ms2(r.totalMs)} ms.${late}` },
+          h('span', { class: 'in-seg in-seg0', style: `flex-grow:${r.setupMs}`, title: `Handshakes: ${ms2(r.setupMs)} ms` }),
+          h('span', { class: 'in-seg in-seg1', style: `flex-grow:${r.firstByteMs - r.setupMs}`, title: `Request, to first byte: ${ms2(r.firstByteMs - r.setupMs)} ms` }),
+          h('span', { class: 'in-seg in-seg2', style: `flex-grow:${r.totalMs - r.firstByteMs}`, title: `The objects, with any further requests: ${ms2(r.totalMs - r.firstByteMs)} ms` })));
+    }));
+    const [a, b, c] = runs;
+    read.textContent = loss
+      ? `One packet of the middle object lost. On HTTP/2, ${b.heldPackets} packets arrive and wait for it, from ${b.stalled} of ${objects} objects, because TCP hands over nothing past the gap. On HTTP/3 only that object is held up, with ${c.heldPackets} packets waiting. HTTP/1.1 holds up ${a.stalled}: that object and any requested after it. The last byte of an interleaved page may hardly move; the cost is what could have been shown in the meantime.`
+      : `Round trip ${ms2(rttMs)} ms, narrowest link ${n0(bottleneckMbps)} Mb/s free. HTTP/2 saves ${ms2(a.totalMs - b.totalMs)} ms over HTTP/1.1 by not asking one object at a time, and QUIC ${ms2(b.totalMs - c.totalMs)} ms more: its round trip less before the first request.`;
+  };
+  const so = slider('Objects', 1, 40, 1, objects, (v) => String(v), (v) => { objects = v; paint(); });
+  const sk = slider('Each', 1, 200, 1, kb, (v) => `${v} kB`, (v) => { kb = v; paint(); });
+  paint();
+  return {
+    el: h('div', { class: 'widget rt-w' }, so.el, sk.el,
+      h('div', { class: 'ln-presets' }, check('Lose one packet', loss, (v) => { loss = v; paint(); })),
+      h('p', { class: 'sub in-keys' }, h('i', { class: 'in-dot in-seg0' }), 'Handshakes ', h('i', { class: 'in-dot in-seg1' }), 'Request, to first byte ', h('i', { class: 'in-dot in-seg2' }), 'The objects, with any further requests'),
+      rows, read,
+      h('p', { class: 'sub' }, 'From the first packet of the connection, the name already known. A model, with the same packets for all three: not a measurement of any browser.')),
+  };
+}

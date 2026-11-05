@@ -1,0 +1,66 @@
+{
+  "note": "NAND counts and transistors from sim/stats.ts; depth in NAND delays from logicDepth; period = clk-to-q + logic + setup of the critical register-to-register path (sim/timing.ts, NAND delays); cycles = clocks from the start edge to done, counted on a GateSim. Regenerate: npx vite-node scripts/secret-costs.ts --write",
+  "parts": {
+    "aes_gf256_inverse": {
+      "nands": 476,
+      "transistors": 1904,
+      "depth": 53
+    },
+    "aes_sbox": {
+      "nands": 584,
+      "transistors": 2336,
+      "depth": 74
+    },
+    "aes_mixcolumn": {
+      "nands": 464,
+      "transistors": 1856,
+      "depth": 12
+    },
+    "aes_subbytes": {
+      "nands": 9344,
+      "transistors": 37376,
+      "depth": 74
+    },
+    "aes_round": {
+      "nands": 12224,
+      "transistors": 48896,
+      "depth": 91
+    },
+    "aes_key_step": {
+      "nands": 2880,
+      "transistors": 11520,
+      "depth": 89
+    },
+    "sha_k_rom": {
+      "nands": 3337,
+      "transistors": 13348,
+      "depth": 18
+    },
+    "sha_schedule": {
+      "nands": 11104,
+      "transistors": 44416,
+      "depth": null
+    },
+    "sha_round": {
+      "nands": 2848,
+      "transistors": 11392,
+      "depth": 98
+    }
+  },
+  "cores": {
+    "aes_core": {
+      "nands": 20782,
+      "transistors": 83128,
+      "depth": null,
+      "cycles": 11,
+      "period": 102
+    },
+    "sha_core": {
+      "nands": 28487,
+      "transistors": 113948,
+      "depth": null,
+      "cycles": 65,
+      "period": 108
+    }
+  }
+}

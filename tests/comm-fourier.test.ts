@@ -7,6 +7,7 @@ import {
   tauOf, throughPole, toneGains, toneOverlap, withPrefix,
 } from '../src/comm/fourier';
 import { eye, prbs, rng } from '../src/phys/line';
+import { chCarriers } from '../src/chapters/ch-comm-carriers';
 import { chModem } from '../src/chapters/ch-comm-modem';
 import { chSerial } from '../src/chapters/ch-comm-serial';
 import { chSignals } from '../src/chapters/ch-comm-signals';
@@ -165,13 +166,13 @@ describe('a block of tones', () => {
 });
 
 describe('the steps the chapters add', () => {
-  it('the signals chapter opens on the harmonics, the modem chapter has the FFT just before ADSL, each a widget with a challenge', () => {
-    const stS = chSignals.steps[0], iM = chModem.steps.findIndex((s) => s.title === 'Many tones, one FFT');
+  it('the signals chapter opens on the harmonics, Many carriers on the FFT, each a widget with a challenge', () => {
+    const stS = chSignals.steps[0], iM = chCarriers.steps.findIndex((s) => s.title === 'Many tones, one FFT');
     expect(stS.title).toBe('A wave is a sum of sines');
-    expect(chModem.steps[iM + 1].title).toBe('ADSL: many carriers');
+    expect(chCarriers.steps[5].title).toBe('ADSL: many carriers');
     expect(chSerial.steps).toHaveLength(9);
-    expect(chModem.steps).toHaveLength(9);
-    for (const st of [stS, chModem.steps[iM]]) expect(!!st.widget && !!st.challenge).toBe(true);
+    expect(chModem.steps).toHaveLength(7);
+    for (const st of [stS, chCarriers.steps[iM]]) expect(!!st.widget && !!st.challenge).toBe(true);
   });
   it('ADSL\'s spacing, a prefix of 32 in 544 samples and one sync block in 69 give exactly 4000 symbols a second', () => {
     expect((ADSL.spacingHz * 512) / 544 * (68 / 69)).toBeCloseTo(ADSL.symbolRate, 6);

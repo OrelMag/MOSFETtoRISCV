@@ -35,8 +35,8 @@ describe('chapter 47 typed numbers', () => {
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeGreaterThan(3.5);
     expect(ebn0For((d) => convSoftBound(CONV_K7, d), 1e-5) - shannonBinaryDb(0.5)).toBeLessThan(4.5);
   });
-  it('fourteen steps, after what it builds on, with the appendices after every numbered chapter', () => {
-    expect(chErrors.steps).toHaveLength(14);
+  it('nine steps, after what it builds on, with the appendices after every numbered chapter', () => {
+    expect(chErrors.steps).toHaveLength(9);
     expect(chapterById('errors')).toBe(chErrors);
     for (const id of chErrors.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chErrors.num);
     const last = Math.max(...chapters.filter((c) => !c.appendix).map((c) => c.num));

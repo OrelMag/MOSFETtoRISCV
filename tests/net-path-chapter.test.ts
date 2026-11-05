@@ -14,7 +14,7 @@ import { traceCapture } from '../src/widgets/internet';
 const text = chPath.steps.map((s) => s.body).join(' ');
 
 describe('chapter 53 typed numbers', () => {
-  it('has seven steps', () => { expect(chPath.steps.length).toBe(7); });
+  it('has eight steps', () => { expect(chPath.steps.length).toBe(8); });
   it('the map the prose describes', () => {
     expect(ASES.length).toBe(8);
     expect(ROUTERS.length).toBe(16);
