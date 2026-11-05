@@ -11,6 +11,7 @@
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
+import { isMenuKey } from '../ui/menu';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
@@ -117,6 +118,11 @@ class InsideView {
       this.canvas);
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      if (isMenuKey(e) && e.target === this.el) {
+        e.preventDefault();
+        this.view.keyMenu();
+        return;
+      }
       // the wires moved here (view/layout.ts), not the chip's own undo
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
@@ -144,6 +150,8 @@ class InsideView {
       netClick: (i) => this.why.netClick(i),
     });
     this.view.radix = ed.view.radix;
+    this.view.pickable = true;
+    this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
   }
 

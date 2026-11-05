@@ -922,7 +922,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  specOf (the FsmSpec: diagram, readFsm read-back with `implicit` stay arcs; stateBits s<i>.q; an arc's bend /
                  loop / dx / dy drawn by hand over the automatic ones);
                  fsmchipui.ts: plugin, the machine pane (view/fsmdiagram.ts drawn on: Select / + State / Arc tools, states
-                 dragged on a 10-unit grid, arcs from a state's rim (fsm-rim), right-click menus (ctxmenu.ts showMenu),
+                 dragged on a 10-unit grid, arcs from a state's rim (fsm-rim), right-click menus (ui/menu.ts showMenu),
                  rename in place, keys N A F2 Delete Esc arrows; double-clicks detected by the last tap (lastTap: a press
                  redraws the diagram); the selection's properties, encodings with their cost, the read-back verdict, the
                  live state from paintHooks; resize grip, Expand), banner, New chip ▾ State machine / + datapath
@@ -1086,7 +1086,7 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  in place: F2 / a click on a selected name / editInline); a finger gets a larger port radius and its
                  press on a pin's port presses the pin (tap toggles, drag wires); a second tap on a wire's start lets
                  it go. On a touch screen Fit and the empty canvas use at least camera.ts TOUCH_PX per unit (touchZoom)
-  ctxmenu.ts     plugin: the right-click menu (selection actions with their shortcuts, or the canvas's own);
+  ctxmenu.ts     plugin: the right-click menu's rows, on ui/menu.ts (selection actions with their shortcuts, or the canvas's own, with a picker: the menu key, tools.ts keyMenu);
                  pointerui.ts: its unravel / collapse actions and their dialogs
   iobar.ts       plugin: the chip's pins as a bar above the run bar (the workbench's switches and lamps, I/O toggle);
                  each control acts as a click on the pin; then the switch banks and keys inside placed chips, by path
@@ -1380,7 +1380,7 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  checks both); measure.ts; grade.ts stars against the reference points (★★ none both cheaper and
                  faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
                  replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
-src/ui/        app shell, router, theme, settings, progress; pages/print.ts (PrintPage, its own chunk, #/c/<id>/print: the whole chapter as a book
+src/ui/        app shell, router, theme, settings, progress; menu.ts: the right-click menu's shell for every surface (MenuItem: label, key, hint, why = off for this reason in the row, the arrows stop on it, checked, sub = a group, a function when its code loads on demand; one menu at a time, every plain key while open, focus given back; flyouts, a bottom sheet with groups in place on a coarse pointer; showPicker, isMenuKey: the menu key and Shift+F10; editor/ctxmenu.ts and view/schematic.ts fill it); pages/print.ts (PrintPage, its own chunk, #/c/<id>/print: the whole chapter as a book
                flow: goals, each step's title, address and prose (data-show / data-ahead dropped, details open, links absolute to SITE_URL), its figure with a
                numbered caption and a truth table, layers and analogies as asides (an analogy with a live figure: a note), questions with options and
                the answers at the end, reach challenges with a link; a progress bar, Cancel (what is not drawn becomes a link line), window.print()
