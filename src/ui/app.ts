@@ -420,6 +420,15 @@ export function startApp(root: HTMLElement): void {
       const lv = page as (Page & { kind?: string; nodeId?: string }) | null;
       if ((lv?.kind === 'level' || lv?.kind === 'capstone' || lv?.kind === 'verilog') && lv.nodeId === parts[2]) return;
       // A tier capstone (learn/capstones.ts) has the level screen's layout and a page of its own
+      // The communication capstones made of choices have a page of their own, without the editor
+      if (parts[2] === 'cap_fault' || parts[2] === 'cap_link') {
+        import('./pages/commcap').then((m) => {
+          if (seq === routeSeq) mount(new m.CommCapstonePage(parts[2]));
+        }, (e) => {
+          if (seq === routeSeq) view.replaceChildren(loadFailed('capstone', e));
+        });
+        return;
+      }
       if (parts[2]?.startsWith('cap_')) {
         import('./pages/capstone').then((m) => {
           if (seq === routeSeq) mount(new m.CapstonePage(parts[2]));

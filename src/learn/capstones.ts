@@ -21,6 +21,14 @@ export const CAPSTONES: Capstone[] = [
   { tier: 4, id: 'cap_t4', title: 'The cheapest core that runs the benchmarks', brief: 'A design brief: any RV16 core that runs a fixed workload to the golden model’s results, placed on a cost / speed chart against three reference cores and graded by where it lands.', route: '#/campaign/play/cap_t4' },
 ];
 
+/** The communication track's capstones: a group of their own on My path, outside the four tiers, whose passes they do not touch. */
+export interface CommCapstone { id: string; title: string; brief: string; route: string | null }
+
+export const COMM_CAPSTONES: CommCapstone[] = [
+  { id: 'cap_link', title: 'A link that closes', brief: 'Choose modulation, coding and equalization for two stated channels, for the highest rate that meets the error target. Measured on the chapters\' code and channel models.', route: '#/campaign/play/cap_link' },
+  { id: 'cap_fault', title: 'Find the fault', brief: 'Eight broken networks, each with a real fault in one of the book\'s models. Name each cause from its evidence, with no hints: seven right passes.', route: '#/campaign/play/cap_fault' },
+];
+
 export type CapstoneStatus = 'none' | 'started' | 'passed';
 
 /** A capstone's status from the campaign progress's node records (the capstone screens record there under its id). */

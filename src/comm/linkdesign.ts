@@ -4,17 +4,19 @@
 // same eye and noise model the serial chapter uses (phys/line). Nothing here is a formula made for the capstone.
 
 import { berOf, ctleNoiseGain, eye, eyePam, gaussian, pam4Ber, pam4Symbols, PAM4_LEVELS, prbs, rng, type ChannelSpec } from '../phys/line';
+import { quantize } from './ber';
 import { CONV_K3, CONV_K7, convEncode, viterbiDecode, type ConvSpec } from './conv';
 import { dbToRatio } from './limits';
-import { constellation, decide } from './modem';
+import { constellation, decide, type Constellation } from './modem';
 
 // ---- a carrier link -------------------------------------------------------------------------------------------------------------------
 
 export const MODULATIONS = [{ name: 'QPSK', M: 4 }, { name: '16-QAM', M: 16 }, { name: '64-QAM', M: 64 }, { name: '256-QAM', M: 256 }] as const;
-export const CODES: readonly { name: string; spec: ConvSpec | null; rate: number }[] = [
-  { name: 'No code', spec: null, rate: 1 },
-  { name: 'Convolutional, K = 3, rate ½', spec: CONV_K3, rate: 0.5 },
-  { name: 'Convolutional, K = 7, rate ½', spec: CONV_K7, rate: 0.5 },
+export const CODES: readonly { name: string; spec: ConvSpec | null; rate: number; q: number }[] = [
+  { name: 'No code', spec: null, rate: 1, q: 1 },
+  { name: 'Convolutional, K = 3, rate ½, hard decisions', spec: CONV_K3, rate: 0.5, q: 1 },
+  { name: 'Convolutional, K = 7, rate ½, hard decisions', spec: CONV_K7, rate: 0.5, q: 1 },
+  { name: 'Convolutional, K = 7, rate ½, soft decisions', spec: CONV_K7, rate: 0.5, q: 3 },
 ];
 
 export interface CarrierChannel { name: string; hz: number; snrDb: number; target: number }
@@ -26,6 +28,19 @@ const DEPTH = 64;
 
 /** Bits a second: a pass band of B holds B complex symbols a second (the modem chapter). */
 export const carrierRate = (ch: CarrierChannel, c: CarrierChoice): number => ch.hz * Math.log2(MODULATIONS[c.mod].M) * CODES[c.code].rate;
+
+/**
+ * How sure one received point is of one label bit: the nearest point with that bit 0 against the nearest with it 1, as a distance along the
+ * line between them, scaled so a point at the nearest neighbour's distance reads ±1, then the Viterbi decoder's own quantizer.
+ */
+function softBit(con: Constellation, x: number, y: number, bit: number, q: number): number {
+  let d0 = Infinity, d1 = Infinity;
+  for (let l = 0; l < con.M; l++) {
+    const dx = con.pts[l][0] - x, dy = con.pts[l][1] - y, d = dx * dx + dy * dy;
+    if ((l >> bit) & 1) { if (d < d1) d1 = d; } else if (d < d0) d0 = d;
+  }
+  return quantize((d0 - d1) / (4 * con.dmin * con.dmin), q);
+}
 
 /** The link run: `bits` random data bits, counted after the decoder. */
 export function runCarrier(ch: CarrierChannel, c: CarrierChoice, bits: number, seed = 1): LinkResult {
@@ -41,13 +56,18 @@ export function runCarrier(ch: CarrierChannel, c: CarrierChoice, bits: number, s
   for (let i = 0; i < coded.length; i += b) {
     let label = 0;
     for (let j = 0; j < b; j++) label = (label << 1) | (i + j < coded.length ? coded[order[i + j]] : 0);
-    const [x, y] = con.pts[label], got = decide(con, x + sigma * gaussian(u), y + sigma * gaussian(u));
-    for (let j = 0; j < b; j++) if (i + j < coded.length) heard[order[i + j]] = (got >> (b - 1 - j)) & 1;
+    const [x, y] = con.pts[label], rx = x + sigma * gaussian(u), ry = y + sigma * gaussian(u);
+    if (code.q === 1) {
+      const got = decide(con, rx, ry);
+      for (let j = 0; j < b; j++) if (i + j < coded.length) heard[order[i + j]] = (got >> (b - 1 - j)) & 1;
+    } else {
+      for (let j = 0; j < b; j++) if (i + j < coded.length) heard[order[i + j]] = softBit(con, rx, ry, b - 1 - j, code.q);
+    }
   }
   let out: ArrayLike<number> = heard, skip = 0, last = bits;
   if (code.spec) {
     const depth = code.spec.K * 10;
-    out = viterbiDecode(code.spec, heard, { q: 1, depth });
+    out = viterbiDecode(code.spec, heard, { q: code.q, depth });
     skip = depth;  // the decoder's first outputs are its reset's, and each output is `depth − 1` bits old
     last = out.length;
   }
@@ -89,9 +109,11 @@ export function runSerial(ch: SerialChannel, c: SerialChoice): LinkResult & { op
 
 // ---- the briefs -------------------------------------------------------------------------------------------------------------------------
 
-export const CARRIER_BRIEF: CarrierChannel = { name: 'A radio channel of 20 MHz at 18 dB SNR', hz: 20e6, snrDb: 18, target: 1e-3 };
+export const CARRIER_BRIEF: CarrierChannel = { name: 'A channel of 20 MHz at 15 dB SNR', hz: 20e6, snrDb: 15, target: 1e-3 };
 export const SERIAL_BRIEF: SerialChannel = { name: 'A board trace with a 4 GHz pole and 40 mV of noise', bandwidth: 4, sigma: 0.04, target: 1e-12 };
 export const CARRIER_BITS = 60000;
+/** The best rate each brief can reach, held to bestCarrier and bestSerial by tests/comm-linkdesign.test.ts, and what a pass must come near. */
+export const CARRIER_REFERENCE_RATE = 60e6, SERIAL_REFERENCE_RATE = 25, PASS_SHARE = 0.75;
 
 /** The best rate any choice reaches on the carrier brief: every choice tried. */
 export function bestCarrier(ch = CARRIER_BRIEF, bits = CARRIER_BITS): { choice: CarrierChoice; rate: number } {

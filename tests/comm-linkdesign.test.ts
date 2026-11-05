@@ -1,7 +1,7 @@
 // Capstone 2's verdicts: the carrier link against the chapters' own results, and the briefs' reference designs.
 
 import { describe, expect, it } from 'vitest';
-import { bestCarrier, bestSerial, CARRIER_BITS, CARRIER_BRIEF, CODES, MODULATIONS, runCarrier, runSerial, SERIAL_BRIEF } from '../src/comm/linkdesign';
+import { bestCarrier, bestSerial, CARRIER_BITS, CARRIER_BRIEF, CARRIER_REFERENCE_RATE, CODES, MODULATIONS, runCarrier, runSerial, SERIAL_BRIEF, SERIAL_REFERENCE_RATE } from '../src/comm/linkdesign';
 import { dbToRatio } from '../src/comm/limits';
 import { monteCarlo, constellation } from '../src/comm/modem';
 import { berOf, eye, prbs } from '../src/phys/line';
@@ -35,6 +35,9 @@ describe('the carrier link', () => {
     expect(k3).toBeLessThan(none);
     expect(k7).toBeLessThan(k3);
   });
+  it('soft decisions buy real gain over hard ones on the same code', () => {
+    expect(runCarrier(ch(15), { mod: 2, code: 3 }, 60000, 5).ber).toBeLessThan(runCarrier(ch(15), { mod: 2, code: 2 }, 60000, 5).ber / 5);
+  });
 });
 
 describe('the serial link', () => {
@@ -57,15 +60,23 @@ describe('the serial link', () => {
 describe('the briefs', () => {
   it('each has a design that closes, and not every choice does', async () => {
     const c = bestCarrier();
-    expect(c.rate).toBeGreaterThan(0);
+    expect(c.rate).toBe(CARRIER_REFERENCE_RATE);
+    // the point of the brief: only soft decisions make the larger constellation close
+    expect(CODES[c.choice.code].q).toBe(3);
+    expect(MODULATIONS[c.choice.mod].M).toBe(64);
+    for (const seed of [1, 2, 3]) {
+      expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 2 }, CARRIER_BITS, seed).closes).toBe(false);
+      expect(runCarrier(CARRIER_BRIEF, { mod: 1, code: 0 }, CARRIER_BITS, seed).closes).toBe(false);
+      expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 3 }, CARRIER_BITS, seed).closes).toBe(true);
+    }
     expect(runCarrier(CARRIER_BRIEF, c.choice, CARRIER_BITS).closes).toBe(true);
     expect(runCarrier(CARRIER_BRIEF, { mod: 3, code: 0 }, CARRIER_BITS).closes).toBe(false);
+    expect(runCarrier(CARRIER_BRIEF, { mod: 1, code: 0 }, CARRIER_BITS).closes).toBe(false);
     await tick();
     const s = bestSerial();
-    expect(s.rate).toBeGreaterThan(4);
+    expect(s.rate).toBe(SERIAL_REFERENCE_RATE);
     expect(runSerial(SERIAL_BRIEF, s.choice).closes).toBe(true);
     expect(runSerial(SERIAL_BRIEF, { line: 0, eq: 0, rate: 5 }).closes).toBe(false);
-    expect(dbToRatio(CARRIER_BRIEF.snrDb)).toBeCloseTo(63.1, 1);
-    console.log('reference', MODULATIONS[c.choice.mod].name, CODES[c.choice.code].name, c.rate / 1e6, 'serial', s.choice, s.rate);
+    expect(dbToRatio(CARRIER_BRIEF.snrDb)).toBeCloseTo(31.6, 1);
   });
 });
