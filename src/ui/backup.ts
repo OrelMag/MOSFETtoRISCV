@@ -8,6 +8,7 @@
 // listed in `notes`.
 
 import { mergeCampaign, sanitizeCampaign, CAMPAIGN_KEY, CAMPAIGN_FORMAT } from '../campaign/progress';
+import { moveProgress, movedOf, STEP_MOVES } from '../chapters/stepmoves';
 import { mergeFolders } from '../editor/folders';
 import type { Workspace } from '../editor/model';
 import { adoptProject, projectKey, readProjects, MAIN_PROJECT, PROJECTS_KEY } from '../editor/projects';
@@ -229,8 +230,9 @@ export function mergeBackup(file: BackupFile, kv: ListKV): MergeResult {
   if (theirs.getItem(SETTINGS_KEY) !== null) {
     const inc = parse(theirs.getItem(SETTINGS_KEY));
     if (!isObj(inc)) unreadable(SETTINGS_KEY, 'The settings and chapter progress');
-    else if (stage.getItem(SETTINGS_KEY) === null) stage.setItem(SETTINGS_KEY, theirs.getItem(SETTINGS_KEY)!);
-    else put(SETTINGS_KEY, mergeSettings(parse(stage.getItem(SETTINGS_KEY)), inc));
+    else if (stage.getItem(SETTINGS_KEY) === null) stage.setItem(SETTINGS_KEY, movedOf(inc) < STEP_MOVES.length ? JSON.stringify(moveProgress(inc)) : theirs.getItem(SETTINGS_KEY)!);
+    // an old file, or a store not saved since a move: each up to date first, or a step would count twice under two names
+    else put(SETTINGS_KEY, mergeSettings(moveProgress(parse(stage.getItem(SETTINGS_KEY))), moveProgress(inc)));
   }
   // campaign
   if (theirs.getItem(CAMPAIGN_KEY) !== null) {
