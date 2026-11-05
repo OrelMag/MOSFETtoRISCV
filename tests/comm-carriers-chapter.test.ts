@@ -5,7 +5,7 @@ import { chModem } from '../src/chapters/ch-comm-modem';
 import { numOf } from '../src/chapters/order';
 import { moveStep } from '../src/chapters/stepmoves';
 import { flatPower, waterFill } from '../src/comm/carriers';
-import { bitRev, FftStream, packFx, unpackFx } from '../src/comm/fftfix';
+import { FftStream, packFx, streamLatency, unpackFx } from '../src/comm/fftfix';
 import { fftNet, fxButterfly } from '../src/lib/fft';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { BF_K, BF_N, block8, nearZero, polar, STREAM_N } from '../src/widgets/carriers';
@@ -46,7 +46,11 @@ describe('what the challenges say', () => {
   it('the stream: tone 5 arrives eleventh, and has the largest bar', () => {
     const N = STREAM_N, x = Array.from({ length: N }, (_, n) => polar(0.8, (360 * 5 * n) / N)), t = FftStream.transform(x, W), mags = t.map((c) => Math.hypot(c.re, c.im));
     expect(mags.indexOf(Math.max(...mags))).toBe(5);
-    expect(bitRev(10, 4)).toBe(5);
+    // in the order they leave the pipeline: index 10, the eleventh
+    const f = new FftStream(N, W), lat = streamLatency(N), seen: number[] = [];
+    f.step({ re: 0, im: 0 }, false, true);
+    for (let i = 0; i < lat + N; i++) { f.step(i < N ? x[i] : { re: 0, im: 0 }, true, false); if (i >= lat - 1 && seen.length < N) seen.push(Math.hypot(f.q.re, f.q.im)); }
+    expect(seen.indexOf(Math.max(...seen))).toBe(10);
   });
   it('the water-filling quiz', () => {
     const p = waterFill([1, 2], 3);
