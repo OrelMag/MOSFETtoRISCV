@@ -1,8 +1,9 @@
 // PCIe's golden model against independent statements of the formats, and the link's behaviour end to end.
 import { describe, expect, it } from 'vitest';
 import { crc32 as zcrc32 } from 'node:zlib';
-import { COMPLETER_ID, creditOk, CRC32_RESIDUE, dataCredits, dlWrap, DL_UP, dllpCrc, dllpBody, dllpSymbols, DLLP_ACK, DLLP_RESIDUE, fcWord, LINK_IN0, LT_L0, parseTlp, PcieLink, tlpBytes, type LinkIn } from '../src/comm/pcie';
+import { K_COM, K_EDB, K_END, K_PAD, K_SDP, K_STP, TS1_ID, TS2_ID, TS_LEN, tsSymbol, COMPLETER_ID, creditOk, CRC32_RESIDUE, dataCredits, dlWrap, DL_UP, dllpCrc, dllpBody, dllpSymbols, DLLP_ACK, DLLP_RESIDUE, fcWord, LINK_IN0, LT_L0, parseTlp, PcieLink, tlpBytes, type LinkIn } from '../src/comm/pcie';
 import { fcsBytes, stepBits } from '../src/comm/crc';
+import { isKCode, nameOf } from '../src/comm/linecode';
 
 /** cocotbext-pcie's dllp.py, as written there (MIT, Alex Forencich; read 2026-11-05): LSB first, poly 0xD008, init 0xFFFF. */
 function cocotbCrc16(data: number[]): number {
@@ -60,6 +61,13 @@ describe('formats', () => {
     expect(cw(8) >>> 16).toBe(0x0100); expect((cw(8) >>> 8) & 255).toBe(9); expect(cw(8) & 0x7f).toBe(0x44);
     const f = parseTlp(wr);
     expect(f).toMatchObject({ kind: 'MWr', len: 2, tag: 7, requester: 0x0100, addr: 0x12345678, firstBe: 15, lastBe: 15 });
+  });
+  it('the framing symbols are the K codes the text names, and 8b/10b carries them', () => {
+    expect([nameOf(K_STP, true), nameOf(K_SDP, true), nameOf(K_END, true), nameOf(K_EDB, true), nameOf(K_COM, true), nameOf(K_PAD, true)]).toEqual(['K27.7', 'K28.2', 'K29.7', 'K30.7', 'K28.5', 'K23.7']);
+    for (const k of [K_STP, K_SDP, K_END, K_EDB, K_COM, K_PAD]) expect(isKCode(k)).toBe(true);
+    expect(nameOf(TS1_ID, false)).toBe('D10.2'); expect(nameOf(TS2_ID, false)).toBe('D5.2');
+    expect(tsSymbol(0, false)).toEqual({ d: K_COM, k: 1 });
+    expect(Array.from({ length: TS_LEN }, (_, i) => tsSymbol(i, true).d).slice(6)).toEqual(Array(10).fill(TS2_ID));
   });
   it('the credit gate: modular, and half the field is the farthest ahead the limit can be', () => {
     expect(creditOk(4, 0, 4, 8)).toBe(true);

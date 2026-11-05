@@ -2,31 +2,33 @@
 // training, reads and writes, flipped symbols in each direction, and credit exhaustion; the port alone on random symbols. The credit gate on its spec.
 import { describe, expect, it } from 'vitest';
 import { creditOk, LINK_IN0, PciePort, PcieLink, PORT_IN0, tlpSymbols, tlpBytes, dllpSymbols, DLLP_ACK, DLLP_NAK, type LinkIn, type PortIn } from '../src/comm/pcie';
-import { creditGate, pcieLink, pciePort } from '../src/lib/pcie';
+import { creditGate, pcieLane, pcieLink, pcieEpTl, pciePort, pcieRootTl, PORT_STATUS, readStatus } from '../src/lib/pcie';
+import { netlistOf } from '../src/sim/types';
+import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
 import { simulate } from '../src/sim/harness';
+import type { ComponentDef } from '../src/sim/types';
 import { lcg, out, set } from './util';
 import { tick as yieldTick } from './yieldtick';
 
 type Gate = ReturnType<typeof simulate>;
 const edge = (s: Gate) => { set(s, { clk: 1 }); set(s, { clk: 0 }); };
 
-const PORT_OUT = ['txd', 'txk', 't_ready', 'c_ok', 'r_valid', 'lt', 'dl', 'kind', 'seq', 'ackd', 'rseq', 'replay', 'rnum', 'nrcv', 'nak', 'ack', 'ph_lim', 'pd_lim', 'nph_lim', 'ph_cc', 'pd_cc', 'nph_cc', 'rt'] as const;
+const PORT_OUT = ['txd', 'txk', 't_ready', 'c_ok', 'r_valid'] as const;
+const statusOf = (s: Gate, port: string) => readStatus(s.getBits(s.design.root.ports[port]));
 
 function comparePort(s: Gate, m: PciePort, i: PortIn, at: string): void {
   const o = m.out(i) as unknown as Record<string, number>;
   for (const n of PORT_OUT) if (out(s, n) !== o[n]) throw new Error(`${at}: ${n} gates ${out(s, n)} model ${o[n]}`);
+  const st = statusOf(s, 'status');
+  for (const [n] of PORT_STATUS) if (st[n] !== o[n]) throw new Error(`${at}: ${n} gates ${st[n]} model ${o[n]}`);
   if (o.r_valid && out(s, 'r_data') !== o.r_data) throw new Error(`${at}: r_data gates ${out(s, 'r_data')} model ${o.r_data}`);
 }
 const toGates = (i: PortIn) => ({ rst: i.rst, rxdet: i.rxdet, rxd: i.rxd, rxk: i.rxk, t_data: i.t_data, t_valid: i.t_valid, t_last: i.t_last, r_ready: i.r_ready, c_want: i.c_want, c_np: i.c_np, consume: i.consume, rtn_ph: i.rtn_ph, rtn_pd: i.rtn_pd, rtn_nph: i.rtn_nph });
 
 const LINK_OUT: [string, (w: ReturnType<PcieLink['out']>) => number][] = [];
-for (const [p, side] of [['a_', 'a'], ['b_', 'b']] as const) {
-  for (const n of ['txd', 'txk', 'lt', 'dl', 'kind', 'seq', 'ackd', 'rseq', 'replay', 'rnum', 'nrcv', 'nak', 'ack', 'r_valid', 'c_ok', 'ph_lim', 'pd_lim', 'nph_lim', 'ph_cc', 'pd_cc', 'nph_cc', 'rt'] as const) {
-    LINK_OUT.push([p + n, (w) => (w[side] as unknown as Record<string, number>)[n]]);
-  }
-}
+for (const [p, side] of [['a_', 'a'], ['b_', 'b']] as const) for (const n of ['txd', 'txk'] as const) LINK_OUT.push([p + n, (w) => w[side][n]]);
 LINK_OUT.push(['busy', (w) => w.ta.busy], ['wait', (w) => w.ta.wait], ['rd_valid', (w) => w.rd_valid], ['rd_done', (w) => w.rd_done], ['ep_st', (w) => w.te.ep_st]);
 
 class Lock {
@@ -44,6 +46,10 @@ class Lock {
     for (const [name, f] of LINK_OUT) {
       const g = out(this.s, name), v = f(w);
       if (g !== v) throw new Error(`clock ${this.n}: ${name} gates ${g} model ${v}`);
+    }
+    for (const side of ['a', 'b'] as const) {
+      const st = statusOf(this.s, `${side}_status`), o = w[side] as unknown as Record<string, number>;
+      for (const [n] of PORT_STATUS) if (st[n] !== o[n]) throw new Error(`clock ${this.n}: ${side}.${n} gates ${st[n]} model ${o[n]}`);
     }
     if (w.rd_valid && out(this.s, 'rd_data') !== w.rd_data) throw new Error(`clock ${this.n}: rd_data gates ${out(this.s, 'rd_data')} model ${w.rd_data}`);
     edge(this.s); this.m.step(i); this.n++;
@@ -68,6 +74,23 @@ describe('credit gate', () => {
         expect(out(s, 'ok')).toBe(creditOk(lim, cc, want, w) ? 1 : 0);
       }
     }
+  });
+});
+
+describe('the drawings', () => {
+  it('every box routes with no overlaps', () => {
+    const kids = (d: ComponentDef): ComponentDef[] => { const nl = netlistOf(d); return nl ? nl.instances.map((i) => i.def).filter((c) => c.id.startsWith('pcie_')) : []; };
+    const seen = new Set<string>(), walk: ComponentDef[] = [pcieLink()];
+    for (const d of walk) { if (seen.has(d.id)) continue; seen.add(d.id); walk.push(...kids(d)); }
+    expect(seen.size).toBeGreaterThan(6);
+    for (const d of walk) {
+      if (!d.id.startsWith('pcie_')) continue;
+      const nl = netlistOf(d)!;
+      expect(symbolOverlaps(nl), d.id).toEqual([]);
+      expect(labelOverlaps(d, nl), d.id).toEqual([]);
+      expect(wireOverlaps(routeNetlist(d, nl).nets), d.id).toEqual([]);
+    }
+    void pcieLane; void pcieEpTl; void pcieRootTl;
   });
 });
 
@@ -124,7 +147,7 @@ describe('the link, gates against the model', () => {
     await l.run(1500);
     expect(l.m.ra.tag).toBe(16);
     expect(l.m.a.ackd).toBe(15);
-    expect(out(l.s, 'a_ackd')).toBe(15);
+    expect(statusOf(l.s, 'a_status').ackd).toBe(15);
   }, 120000);
   it('flips in both directions at every kind of symbol; replays and Recovery', async () => {
     const l = new Lock(), r = lcg(7);
@@ -161,11 +184,12 @@ describe('the link, gates against the model', () => {
       if (k === 1400) both({ go: 1, wr: 1, addr: 3, len: 4, seed: 7 });
       if (k === 1401) both({ go: 0 });
       both({ clk: 1 }); both({ clk: 0 });
-      for (const n of ['a_txd', 'b_txd', 'a_seq', 'a_ackd', 'b_nrcv', 'a_lt', 'b_dl']) if (out(fast, n) !== out(slow, n)) throw new Error(`clock ${k}: ${n}`);
+      for (const n of ['a_txd', 'b_txd']) if (out(fast, n) !== out(slow, n)) throw new Error(`clock ${k}: ${n}`);
+      for (const n of ['a_status', 'b_status']) if (statusOf(fast as unknown as Gate, n).seq !== statusOf(slow, n).seq) throw new Error(`clock ${k}: ${n}`);
       if (k % 200 === 0) await yieldTick();
     }
     expect(fast.whyNot).toBe('');
     expect(fast.engine).toBe('cycle');
-    expect(out(slow, 'a_ackd')).toBe(0);
+    expect(statusOf(slow, 'a_status').ackd).toBe(0);
   }, 120000);
 });

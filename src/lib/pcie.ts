@@ -5,10 +5,29 @@
 
 import { ADV_NPH, ADV_PD, ADV_PH, BUF_BITS, CRC32_RESIDUE, DLLP_POLY, DLLP_RESIDUE, EP_MEM_BITS, K_COM, K_END, K_PAD, K_SDP, K_STP, LINE_DELAY, MAX_RX_TLP, N_FTS, REPLAY_LIMIT, REPLAY_SLOTS, TS1_ID, TS2_ID, TS_RATE, FC_PERIOD_BITS, TRAIN_TIMEOUT_BITS } from '../comm/pcie';
 import { CRC32_REFLECTED } from '../comm/crc';
-import type { ComponentDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import { symbolGeom } from '../sim/geometry';
+import { constWord } from './alu';
 import { bigRamWithInit } from './bigmem';
 import { crcUnit } from './crc';
+import { define } from './define';
+import { NOT, OR } from './gates';
 import { Rtl, type Sig } from './rtl';
+import { TIE0, TIE1 } from './transistors';
+
+/** What a port shows on its status bus, in order, for the panel and the tests: name and width. */
+export const PORT_STATUS: [string, number][] = [['lt', 3], ['dl', 2], ['kind', 2], ['seq', 12], ['ackd', 12], ['rseq', 12], ['replay', 1], ['rnum', 2], ['nrcv', 12], ['nak', 1], ['ack', 1], ['ph_lim', 8], ['pd_lim', 12], ['nph_lim', 8], ['ph_cc', 8], ['pd_cc', 12], ['nph_cc', 8], ['rt', 9]];
+/** The status bus's bits as named values (X reads as −1). */
+export function readStatus(bits: ArrayLike<number>): Record<string, number> {
+  const o: Record<string, number> = {};
+  let at = 0;
+  for (const [n, w] of PORT_STATUS) {
+    let v = 0;
+    for (let i = 0; i < w; i++) { const b = bits[at + i]; if (b !== 0 && b !== 1) v = -1; else if (v >= 0) v += b * 2 ** i; }
+    o[n] = v; at += w;
+  }
+  return o;
+}
 
 const regs = (m: Rtl, clk: Sig, name: string, n: number): Sig[] => Array.from({ length: n }, (_, i) => m.reg(clk, n === 1 ? name : `${name}${i}`));
 const cbits = (m: Rtl, v: number, n: number): Sig[] => Array.from({ length: n }, (_, i) => m.const(((v / 2 ** i) & 1) as 0 | 1));
@@ -63,7 +82,7 @@ let portDef: ComponentDef | undefined;
 export function pciePort(): ComponentDef {
   if (portDef) return portDef;
   const m = new Rtl({
-    id: 'pcie_port', name: 'PCIe port (one lane)', category: 'sequential', label: 'PCIe port', columnHeight: 60,
+    id: 'pcie_port', name: 'PCIe port (one lane)', category: 'sequential', label: 'PCIe port',
     summary: 'A PCI Express port at the symbol level: the link training state machine, flow control (the credit gate, InitFC, UpdateFC), and the data link layer (sequence numbers, LCRC, a replay buffer, Ack and Nak, the replay timer, REPLAY_NUM). Bytes and a K flag on the lane side, as a real MAC hands them to its PHY; a TLP byte stream and a credit check on the transaction layer\'s side.',
   });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), rxdet = m.input('rxdet');
@@ -76,7 +95,7 @@ export function pciePort(): ComponentDef {
   // ---- registers, in the boxes they live in ----------
   const LT: [string, string] = ['ltssm', 'link training'], OS: [string, string] = ['ospar', 'ordered sets in'], DC: [string, string] = ['dlc', 'FC init'], FC: [string, string] = ['fc', 'flow control'];
   const TX: [string, string] = ['tx', 'packet engine'], RT: [string, string] = ['retry', 'replay'], RX: [string, string] = ['rx', 'receiver'];
-  const inS = <T>(h: [string, string], f: () => T): T => m.scope(h[0], h[1], f);
+  const inS = <T>(h: [string, string], f: () => T): T => m.rootScope(h[0], h[1], f);
   const lt = inS(LT, () => regs(m, clk, 'lt', 3)), opos = inS(LT, () => regs(m, clk, 'opos', 4)), txc = inS(LT, () => regs(m, clk, 'txc', 5)), wantRec = inS(LT, () => m.reg(clk, 'want_rec')), tmo = inS(LT, () => regs(m, clk, 'tmo', TRAIN_TIMEOUT_BITS));
   const op = inS(OS, () => regs(m, clk, 'op', 4)), ok = inS(OS, () => m.reg(clk, 'os_ok')), o2 = inS(OS, () => m.reg(clk, 'is_ts2')), tsc = inS(OS, () => regs(m, clk, 'tsc', 4)), ts2c = inS(OS, () => regs(m, clk, 'tstwo', 4)), idc = inS(OS, () => regs(m, clk, 'idc', 4));
   const dl = inS(DC, () => regs(m, clk, 'dl', 2)), fit = inS(DC, () => regs(m, clk, 'fit', 2)), got = inS(DC, () => regs(m, clk, 'got', 3)), gotTwo = inS(DC, () => m.reg(clk, 'got_two'));
@@ -98,6 +117,7 @@ export function pciePort(): ComponentDef {
   const rollF = m.fwd('roll_f');
 
   // ---- states as signals ----------
+  m.within('ctl', 'what next');
   const ltIs = (v: number) => m.eqConst(lt, v);
   const l0 = m.name(ltIs(4), 'l0'), t1 = m.or(ltIs(1), ltIs(5)), t2 = m.or(ltIs(2), ltIs(6)), idleSt = m.or(ltIs(3), ltIs(7));
   const ts = m.or(t1, t2);
@@ -129,6 +149,7 @@ export function pciePort(): ComponentDef {
   const dout = inS(RT, () => m.unbus(rawDout, 9));
 
   // ---- the transmitter's byte ----------
+  m.within('txsym', 'symbol out');
   const qt = inS(TX, () => {
     const b = pick(m, [[pAt(1), zext(m, seqNow.slice(8), 8)], [pAt(2), seqNow.slice(0, 8)], [m.and(pAt(3), live), t_data], [m.and(pAt(3), m.not(live)), dout.slice(0, 8)]]);
     const en = m.and(kindT, m.orN([pAt(1), pAt(2), m.and(pAt(3), m.or(m.not(live), t_valid))]));
@@ -158,6 +179,7 @@ export function pciePort(): ComponentDef {
   m.output('t_ready', m.and(at3, live));
 
   // ---- the packet engine's own registers ----------
+  m.within(TX[0], TX[1]);
   const lastOut = m.or(m.andN([live, t_valid, t_last]), m.and(m.not(live), dout[8]));
   const clrPos = m.or(m.and(kindT, pAt(8)), m.and(kindD, pAt(7)));
   const advPos = m.orN([m.and(kindT, m.not(pAt(3))), m.and(at3, lastOut), kindD]);
@@ -181,6 +203,7 @@ export function pciePort(): ComponentDef {
   });
 
   // ---- the receiver ----------
+  m.within('rxdec', 'symbol in');
   const rxIs = (v: number) => m.and(rxk, m.eqConst(rxd, v));
   const isStp = rxIs(K_STP), isSdp = rxIs(K_SDP), isEnd = rxIs(K_END);
   const rIdle = m.nor(rkT, rkD);
@@ -233,6 +256,7 @@ export function pciePort(): ComponentDef {
   });
 
   // ---- the DLLP just received ----------
+  m.within('dllpin', 'DLLP in');
   const dty = rb[0].slice(4, 8);
   const cls = dty.slice(0, 2), notThree = m.not(m.and(cls[0], cls[1]));
   const dSeq = [...rb[3], ...rb[2].slice(0, 4)], dHdr = [...rb[2].slice(6, 8), ...rb[1].slice(0, 6)], dData = dSeq;
@@ -240,6 +264,7 @@ export function pciePort(): ComponentDef {
   const isFc1 = m.andN([dllpGood, m.not(dty[3]), dty[2], notThree]), isFc2 = m.andN([dllpGood, dty[3], dty[2], notThree]), isUpd = m.andN([dllpGood, dty[3], m.not(dty[2]), notThree]);
 
   // ---- Ack and Nak, the replay timer ----------
+  m.within(RX[0], RX[1]);
   const ackHit = m.and(ackPend, m.andN(ackt));
   inS(RX, () => {
     setR(m, [ackPend], [m.or(commit, m.and(ackPend, m.not(ackHit)))], reset);
@@ -281,6 +306,7 @@ export function pciePort(): ComponentDef {
   });
 
   // ---- FC init and flow control ----------
+  m.within(DC[0], DC[1]);
   inS(DC, () => {
     const lastF = m.eqConst(fit, 2);
     setR(m, fit, gateN(m, m.not(m.and(dInit, lastF)), muxN(m, dInit, fit, m.inc(fit))), reset);
@@ -319,6 +345,7 @@ export function pciePort(): ComponentDef {
   m.output('c_ok', fcv.ok);
 
   // ---- ordered sets in, the LTSSM ----------
+  m.within(LT[0], LT[1]);
   const recEntry = m.name(m.andN([l0, wantRec, kIdle]), 'rec_entry');
   const trainTo = m.name(m.andN([m.orN(lt), m.not(l0), m.andN(tmo)]), 'train_to');
   const clrCounts = m.or(recEntry, trainTo);
@@ -364,9 +391,8 @@ export function pciePort(): ComponentDef {
   });
 
   // ---- what the panels and the tests read ----------
-  m.outputBus('lt', lt); m.outputBus('dl', dl); m.outputBus('kind', [kindT, kindD]); m.outputBus('seq', nextSeq); m.outputBus('ackd', ackd); m.outputBus('rseq', rseq);
-  m.output('replay', replay); m.outputBus('rnum', rnum); m.outputBus('nrcv', nextRcv); m.output('nak', nakReq); m.output('ack', ackReq);
-  m.outputBus('ph_lim', phLim); m.outputBus('pd_lim', pdLim); m.outputBus('nph_lim', nphLim); m.outputBus('ph_cc', phCc); m.outputBus('pd_cc', pdCc); m.outputBus('nph_cc', nphCc); m.outputBus('rt', rt);
+  const fields: Record<string, Sig[]> = { lt, dl, kind: [kindT, kindD], seq: nextSeq, ackd, rseq, replay: [replay], rnum, nrcv: nextRcv, nak: [nakReq], ack: [ackReq], ph_lim: phLim, pd_lim: pdLim, nph_lim: nphLim, ph_cc: phCc, pd_cc: pdCc, nph_cc: nphCc, rt };
+  m.outputBus('status', PORT_STATUS.flatMap(([n]) => fields[n]));
   portDef = m.build();
   return portDef;
 }
@@ -380,7 +406,7 @@ function dcred(m: Rtl, len: Sig[]): Sig[] {
 let rootDef: ComponentDef | undefined;
 export function pcieRootTl(): ComponentDef {
   if (rootDef) return rootDef;
-  const m = new Rtl({ id: 'pcie_root_tl', name: 'PCIe requester', category: 'sequential', label: 'Requester', columnHeight: 50, summary: 'The transaction layer of the root port: takes a command, waits for the credit gate, then writes a memory write or read TLP, byte by byte, into the data link layer. Completions come back with their tag.' });
+  const m = new Rtl({ id: 'pcie_root_tl', name: 'PCIe requester', category: 'sequential', label: 'Requester', summary: 'The transaction layer of the root port: takes a command, waits for the credit gate, then writes a memory write or read TLP, byte by byte, into the data link layer. Completions come back with their tag.' });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), go = m.input('go'), wr = m.input('wr');
   const addr = m.inputBus('addr', 8), len = m.inputBus('len', 5), seed = m.inputBus('seed', 8);
   const t_ready = m.input('t_ready'), c_ok = m.input('c_ok'), r_valid = m.input('r_valid'), r_data = m.inputBus('r_data', 8);
@@ -450,7 +476,7 @@ export function pcieRootTl(): ComponentDef {
 let epDef: ComponentDef | undefined;
 export function pcieEpTl(): ComponentDef {
   if (epDef) return epDef;
-  const m = new Rtl({ id: 'pcie_ep_tl', name: 'PCIe completer', category: 'sequential', label: 'Completer', columnHeight: 50, summary: 'The transaction layer of the endpoint, with a kilobyte of memory behind it: writes are stored and their credits returned; a read is answered with one completion. Completions cost no credits: an endpoint has to advertise them as infinite, so that a read it was willing to issue can always come back.' });
+  const m = new Rtl({ id: 'pcie_ep_tl', name: 'PCIe completer', category: 'sequential', label: 'Completer', summary: 'The transaction layer of the endpoint, with a kilobyte of memory behind it: writes are stored and their credits returned; a read is answered with one completion. Completions cost no credits: an endpoint has to advertise them as infinite, so that a read it was willing to issue can always come back.' });
   const clk = m.input('clk', { clock: true }), rst = m.input('rst'), t_ready = m.input('t_ready'), r_valid = m.input('r_valid'), r_data = m.inputBus('r_data', 8);
   const rstn = m.not(rst);
   const st = regs(m, clk, 'st', 2), i = regs(m, clk, 'i', 7), hw = m.reg(clk, 'hw'), hlen = regs(m, clk, 'hlen', 5), htag = regs(m, clk, 'htag', 5), haddr = regs(m, clk, 'haddr', 8);
@@ -494,52 +520,66 @@ export function pcieEpTl(): ComponentDef {
 }
 
 // ---- the link ------------------------------------------------------------------------------------------------------------
+let laneDef: ComponentDef | undefined;
+/** One direction of a lane: a delay in symbols and an optional flipped bit. A model of the wire and both SerDes, labelled as one. */
+export function pcieLane(): ComponentDef {
+  if (laneDef) return laneDef;
+  const m = new Rtl({ id: 'pcie_lane', name: 'PCIe lane, one direction', category: 'sequential', label: 'Lane', columnHeight: 30, summary: `${LINE_DELAY} symbols of delay and an optional flipped bit: what stands for the scrambler, the 8b/10b encoder, the SerDes, the wire and the far side's clock recovery. A model, labelled as one; the fast serial links chapter opens all of those in gates.` });
+  const clk = m.input('clk', { clock: true }), d = m.inputBus('d', 8), k = m.input('k'), flip = m.input('flip');
+  let cur = [m.xor(d[0], flip), ...d.slice(1), k];
+  for (let s = 0; s < LINE_DELAY; s++) cur = cur.map((x, i) => { const q = m.reg(clk, `s${s}_${i}`); m.setD(q, x); return q; });
+  m.outputBus('q', cur.slice(0, 8)); m.output('qk', cur[8]);
+  laneDef = m.build();
+  return laneDef;
+}
+
 let linkDef: ComponentDef | undefined;
 /** Root port and endpoint, a lane in each direction. Built on demand: too large to register at import. */
 export function pcieLink(): ComponentDef {
   if (linkDef) return linkDef;
-  const m = new Rtl({
-    id: 'pcie_link', name: 'PCIe link', category: 'sequential', label: 'PCIe link', columnHeight: 40,
+  const P = pciePort(), R = pcieRootTl(), E = pcieEpTl(), L = pcieLane(), Z5 = constWord(5, 0);
+  const gr = symbolGeom(R), gp = symbolGeom(P), gl = symbolGeom(L), ge = symbolGeom(E);
+  const xr = 18, xa = xr + gr.w + 24, xl = xa + gp.w + 24, xb = xl + gl.w + 24, xe = xb + gp.w + 24, R0 = xe + ge.w + 18, y0 = 6;
+  const yl2 = y0 + gl.h + 8;
+  const instances: InstanceDef[] = [
+    { name: 'root', def: R, at: [xr, y0], label: 'Requester' }, { name: 'a', def: P, at: [xa, y0], label: 'Port A (root)' },
+    { name: 'ab', def: L, at: [xl, y0], label: 'Lane A→B' }, { name: 'ba', def: L, at: [xl, yl2], label: 'Lane B→A' },
+    { name: 'b', def: P, at: [xb, y0], label: 'Port B (endpoint)' }, { name: 'ep', def: E, at: [xe, y0], label: 'Completer' },
+    { name: 'z5a', def: Z5, at: [xl, yl2 + gl.h + 6] }, { name: 'lo', def: TIE0, at: [xl + 12, yl2 + gl.h + 6] }, { name: 'hi', def: TIE1, at: [xl + 20, yl2 + gl.h + 6] },
+    { name: 'tl', def: OR, at: [16, y0 + gr.h + 6], label: 'link down' }, { name: 'np', def: NOT, at: [4, y0 + gr.h + 12] },
+  ];
+  const tag = (name: string, ends: string[]): NetDef => ({ name, ends, tags: true });
+  const nets: NetDef[] = [
+    tag('clk', ['clk', 'root.clk', 'a.clk', 'ab.clk', 'ba.clk', 'b.clk', 'ep.clk']),
+    tag('rst', ['rst', 'a.rst', 'b.rst', 'tl.a']), tag('plug', ['plug', 'a.rxdet', 'b.rxdet', 'np.a']), { name: 'unplugged', ends: ['np.y', 'tl.b'] },
+    tag('tl_rst', ['tl.y', 'root.rst', 'ep.rst']),
+    { name: 'go', ends: ['go', 'root.go'] }, { name: 'wr', ends: ['wr', 'root.wr'] }, { name: 'addr', ends: ['addr', 'root.addr'] }, { name: 'len', ends: ['len', 'root.len'] }, { name: 'seed', ends: ['seed', 'root.seed'] },
+    tag('a_t_data', ['root.t_data', 'a.t_data']), tag('a_t_valid', ['root.t_valid', 'a.t_valid']), tag('a_t_last', ['root.t_last', 'a.t_last']), tag('a_c_want', ['root.c_want', 'a.c_want']), tag('a_c_np', ['root.c_np', 'a.c_np']), tag('a_consume', ['root.consume', 'a.consume']),
+    tag('a_t_ready', ['a.t_ready', 'root.t_ready']), tag('a_c_ok', ['a.c_ok', 'root.c_ok']), tag('a_r_valid', ['a.r_valid', 'root.r_valid']), tag('a_r_data', ['a.r_data', 'root.r_data']),
+    tag('a_txd', ['a.txd', 'ab.d', 'a_txd']), tag('a_txk', ['a.txk', 'ab.k', 'a_txk']), tag('flip_ab', ['flip_ab', 'ab.flip']),
+    tag('b_rxd', ['ab.q', 'b.rxd']), tag('b_rxk', ['ab.qk', 'b.rxk']),
+    tag('b_txd', ['b.txd', 'ba.d', 'b_txd']), tag('b_txk', ['b.txk', 'ba.k', 'b_txk']), tag('flip_ba', ['flip_ba', 'ba.flip']),
+    tag('a_rxd', ['ba.q', 'a.rxd']), tag('a_rxk', ['ba.qk', 'a.rxk']),
+    tag('b_t_data', ['ep.t_data', 'b.t_data']), tag('b_t_valid', ['ep.t_valid', 'b.t_valid']), tag('b_t_last', ['ep.t_last', 'b.t_last']), tag('b_r_ready', ['ep.r_ready', 'b.r_ready']),
+    tag('b_rtn_ph', ['ep.rtn_ph', 'b.rtn_ph']), tag('b_rtn_pd', ['ep.rtn_pd', 'b.rtn_pd']), tag('b_rtn_nph', ['ep.rtn_nph', 'b.rtn_nph']),
+    tag('b_t_ready', ['b.t_ready', 'ep.t_ready']), tag('b_r_valid', ['b.r_valid', 'ep.r_valid']), tag('b_r_data', ['b.r_data', 'ep.r_data']),
+    tag('zero5', ['z5a.y', 'a.rtn_pd', 'b.c_want']), tag('zero', ['lo.y', 'a.rtn_ph', 'a.rtn_nph', 'b.c_np', 'b.consume']), tag('one', ['hi.y', 'a.r_ready']),
+    tag('a_status', ['a.status', 'a_status']), tag('b_status', ['b.status', 'b_status']),
+    tag('busy', ['root.busy', 'busy']), tag('wait', ['root.wait', 'wait']), tag('rd_valid', ['root.rd_valid', 'rd_valid']), tag('rd_done', ['root.rd_done', 'rd_done']), tag('rd_data', ['root.rd_data', 'rd_data']), tag('rtag', ['root.rtag', 'rtag']), tag('ep_st', ['ep.ep_st', 'ep_st']),
+  ];
+  const statusW = PORT_STATUS.reduce((w, [, n]) => w + n, 0);
+  const inY = (i: number) => y0 + 2 + 3 * i, outY = (i: number) => y0 + 2 + 3 * i;
+  const outs: [string, number][] = [['a_txd', 8], ['a_txk', 1], ['b_txd', 8], ['b_txk', 1], ['busy', 1], ['wait', 1], ['rd_valid', 1], ['rd_done', 1], ['rd_data', 8], ['rtag', 5], ['ep_st', 2], ['a_status', statusW], ['b_status', statusW]];
+  const ins: [string, number, boolean?][] = [['rst', 1], ['plug', 1], ['go', 1], ['wr', 1], ['addr', 8], ['len', 5], ['seed', 8], ['flip_ab', 1], ['flip_ba', 1]];
+  linkDef = define({
+    id: 'pcie_link', name: 'PCIe link', category: 'sequential',
     summary: 'A root port and an endpoint on one lane. On the left the requester and its port; on the right the port and its completer with a kilobyte of memory; between them the two directions of the lane, each a delay and an optional flipped bit (a model, labelled as one).',
+    ports: [...ins.map(([name, width]): PortDef => ({ name, width, dir: 'in' })), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, ...outs.map(([name, width]): PortDef => ({ name, width, dir: 'out' }))],
+    symbol: { kind: 'box', label: 'PCIe link' },
+    netlist: () => ({
+      pins: { ...Object.fromEntries(ins.map(([n], i) => [n, [0, inY(i)] as [number, number]])), clk: [0, inY(ins.length) + 2] as [number, number], ...Object.fromEntries(outs.map(([n], i) => [n, [R0, outY(i)] as [number, number]])) },
+      instances, nets,
+    }),
   });
-  const clk = m.input('clk', { clock: true }), rst = m.input('rst'), plug = m.input('plug'), go = m.input('go'), wr = m.input('wr');
-  const addr = m.inputBus('addr', 8), len = m.inputBus('len', 5), seed = m.inputBus('seed', 8), flipAb = m.input('flip_ab'), flipBa = m.input('flip_ba');
-  const P = pciePort(), R = pcieRootTl(), E = pcieEpTl();
-  const fw = (n: string, w: number) => (w === 1 ? [m.fwd(n)] : Array.from({ length: w }, (_, i) => m.fwd(`${n}${i}`)));
-  const lane = (name: string, label: string, d: Sig[], k: Sig, flip: Sig) => m.scope(name, label, () => {
-    let cur = [m.xor(d[0], flip), ...d.slice(1), k];
-    for (let s = 0; s < LINE_DELAY; s++) {
-      cur = cur.map((x, i) => { const q = m.reg(clk, `${name}_d${s}_${i}`); m.setD(q, x); return q; });
-    }
-    return cur;
-  });
-  const aTxd = fw('a_txd', 8), aTxk = fw('a_txk', 1)[0], bTxd = fw('b_txd', 8), bTxk = fw('b_txk', 1)[0];
-  const ab = lane('ab', 'lane A→B', aTxd, aTxk, flipAb), ba = lane('ba', 'lane B→A', bTxd, bTxk, flipBa);
-
-  const aReady = fw('a_tready', 1)[0], aOk = fw('a_cok', 1)[0], aRv = fw('a_rv', 1)[0], aRd = fw('a_rd', 8);
-  const tlRst = m.name(m.or(rst, m.not(plug)), 'tl_rst');   // link down: the transaction layer's state goes with it
-  const ro = m.part(R, [clk, tlRst, go, wr, m.bus(addr), m.bus(len), m.bus(seed), aReady, aOk, aRv, m.bus(aRd)], 'Requester', 'root');
-  const oN = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'out').map((p) => p.name);
-  const rOut = (n: string) => ro[oN(R).indexOf(n)];
-  const pIns = (rxd: Sig[], rxk: Sig, td: Sig, tv: Sig, tl: Sig, rr: Sig, cw: Sig, cn: Sig, cons: Sig, rph: Sig, rpd: Sig, rnp: Sig) => [clk, rst, plug, m.bus(rxd), rxk, td, tv, tl, rr, cw, cn, cons, rph, rpd, rnp];
-  const a = m.part(P, pIns(ba.slice(0, 8), ba[8], rOut('t_data'), rOut('t_valid'), rOut('t_last'), m.const(1), rOut('c_want'), rOut('c_np'), rOut('consume'), m.const(0), m.bus(cbits(m, 0, 5)), m.const(0)), 'Port A (root)', 'a');
-  const pOut = (x: Sig[], n: string) => x[oN(P).indexOf(n)];
-  const bReady = fw('b_tready', 1)[0], bRv = fw('b_rv', 1)[0], bRd = fw('b_rd', 8);
-  const eo = m.part(E, [clk, tlRst, bReady, bRv, m.bus(bRd)], 'Completer', 'ep');
-  const eOut = (n: string) => eo[oN(E).indexOf(n)];
-  const b = m.part(P, pIns(ab.slice(0, 8), ab[8], eOut('t_data'), eOut('t_valid'), eOut('t_last'), eOut('r_ready'), m.bus(cbits(m, 0, 5)), m.const(0), m.const(0), eOut('rtn_ph'), eOut('rtn_pd'), eOut('rtn_nph')), 'Port B (endpoint)', 'b');
-  const wire = (f: Sig[], s: Sig) => { const bits = m.unbus(s, f.length); f.forEach((x, i) => m.drive(x, bits[i])); };
-  wire(aTxd, pOut(a, 'txd')); m.drive(aTxk, pOut(a, 'txk')); wire(bTxd, pOut(b, 'txd')); m.drive(bTxk, pOut(b, 'txk'));
-  m.drive(aReady, pOut(a, 't_ready')); m.drive(aOk, pOut(a, 'c_ok')); m.drive(aRv, pOut(a, 'r_valid')); wire(aRd, pOut(a, 'r_data'));
-  m.drive(bReady, pOut(b, 't_ready')); m.drive(bRv, pOut(b, 'r_valid')); wire(bRd, pOut(b, 'r_data'));
-  const bits = (x: Sig, w: number) => m.unbus(x, w);
-  for (const [n, w] of [['txd', 8], ['lt', 3], ['dl', 2], ['kind', 2], ['seq', 12], ['ackd', 12], ['rseq', 12], ['rnum', 2], ['nrcv', 12], ['ph_lim', 8], ['pd_lim', 12], ['nph_lim', 8], ['ph_cc', 8], ['pd_cc', 12], ['nph_cc', 8], ['rt', 9]] as const) {
-    m.outputBus(`a_${n}`, bits(pOut(a, n), w));
-    m.outputBus(`b_${n}`, bits(pOut(b, n), w));
-  }
-  for (const n of ['txk', 'replay', 'nak', 'ack', 'r_valid', 'c_ok']) { m.output(`a_${n}`, pOut(a, n)); m.output(`b_${n}`, pOut(b, n)); }
-  m.output('busy', rOut('busy')); m.output('wait', rOut('wait')); m.output('rd_valid', rOut('rd_valid')); m.output('rd_done', rOut('rd_done'));
-  m.outputBus('rd_data', bits(rOut('rd_data'), 8)); m.outputBus('rtag', bits(rOut('rtag'), 5)); m.outputBus('ep_st', bits(eOut('ep_st'), 2));
-  linkDef = m.build();
   return linkDef;
 }

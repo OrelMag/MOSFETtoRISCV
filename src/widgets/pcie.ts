@@ -2,14 +2,16 @@
 // runs comm/pcie.ts's PcieLink beside the gates, reads what arrives on each lane as a bus analyser would (LaneLog: framing, CRCs), and says whether the two agree.
 
 import { crc32, fcsBytes } from '../comm/crc';
-import { dataCredits, dlWrap, dllpCrc, dllpName, DL_NAMES, K_COM, K_EDB, K_END, K_SDP, K_STP, LINK_IN0, LT_NAMES, MAX_DW, parseTlp, PcieLink, tlpBytes, type LinkIn, type TlpKind } from '../comm/pcie';
-import { creditGate, pcieEpTl, pcieLink, pcieRootTl, pciePort } from '../lib/pcie';
+import { BUF_BITS, dataCredits, dlWrap, dllpCrc, dllpName, DL_NAMES, K_COM, K_EDB, K_END, K_SDP, K_STP, LINK_IN0, LT_NAMES, MAX_DW, parseTlp, PcieLink, tlpBytes, type LinkIn, type TlpKind } from '../comm/pcie';
+import { creditGate, pcieEpTl, pcieLink, pcieRootTl, pciePort, PORT_STATUS, readStatus } from '../lib/pcie';
+import { bigRamWithInit } from '../lib/bigmem';
 import { stats } from '../sim/stats';
 import { h } from '../ui/dom';
 import { bench } from '../chapters/types';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
 import { frameRun } from './slowctl';
+import '../styles/serial.css';
 import '../styles/pcie.css';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title, type: 'button' }, label); b.addEventListener('click', f); return b; };
@@ -146,7 +148,7 @@ export class LaneLog {
 // ---- the link's panel --------------------------------------------------------------------------------------------------------
 export interface PcieStatus {
   up: boolean; ltA: number; ltB: number; dlA: number; dlB: number; clocks: number; agreed: boolean; wrong: string;
-  nextSeq: number; ackd: number; nrcv: number; replays: number; naks: number; recoveries: number; delivered: number; waited: number; bad: number; ram: Uint8Array; lastRead: number[];
+  nextSeq: number; ackd: number; nrcv: number; replays: number; naks: number; recoveries: number; waited: number; bad: number; ram: Uint8Array; lastRead: number[];
 }
 export interface PcieApi {
   status(): PcieStatus;
@@ -158,10 +160,7 @@ export interface PcieApi {
 export const pcieApi = new WeakMap<Stage, PcieApi>();
 
 const INPUTS = ['rst', 'plug', 'go', 'wr', 'addr', 'len', 'seed', 'flip_ab', 'flip_ba'];
-const OUTPUTS: string[] = [];
-for (const p of ['a', 'b']) for (const n of ['txd', 'txk', 'lt', 'dl', 'kind', 'seq', 'ackd', 'rseq', 'replay', 'rnum', 'nrcv', 'nak', 'ack', 'r_valid', 'c_ok', 'ph_lim', 'pd_lim', 'nph_lim', 'ph_cc', 'pd_cc', 'nph_cc', 'rt']) OUTPUTS.push(`${p}_${n}`);
-OUTPUTS.push('busy', 'wait', 'rd_valid', 'rd_done', 'rd_data', 'rtag', 'ep_st');
-const CHECKED = ['a_txd', 'a_txk', 'b_txd', 'b_txk', 'a_lt', 'b_lt', 'a_dl', 'b_dl', 'a_seq', 'a_ackd', 'b_nrcv', 'a_rnum', 'a_ph_cc'] as const;
+const OUTPUTS = ['a_txd', 'a_txk', 'b_txd', 'b_txk', 'busy', 'wait', 'rd_valid', 'rd_done', 'rd_data', 'rtag', 'ep_st', 'a_status', 'b_status'];
 
 export function pcieScene(view: 'link' | 'train'): Scene {
   return {
@@ -175,13 +174,14 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
   return (stage: Stage): Widget => {
     let model = new PcieLink(), started = false, clocks = 0, agreed = true, wrong = '', stopRun: (() => void) | null = null, raf = 0;
     let logA = new LaneLog('a'), logB = new LaneLog('b'), items: LogItem[] = [], armTlp = false, armAck = false, blocked = false, flipNow = [0, 0];
-    let replays = 0, naks = 0, recov = 0, delivered = 0, waited = 0, bad = 0, lastRead: number[] = [], reading: number[] = [], prevReplay = 0, prevLt = 0, tsA: string[] = [], tsB: string[] = [];
+    let replays = 0, naks = 0, recov = 0, waited = 0, bad = 0, lastRead: number[] = [], reading: number[] = [], prevReplay = 0, prevLt = 0, tsA: string[] = [], tsB: string[] = [];
     let cmdAddr = 8, cmdLen = 4, cmdSeed = 0x11, nRead = 0;
     const clearState = () => {
       model = new PcieLink(); clocks = 0; agreed = true; wrong = ''; logA = new LaneLog('a'); logB = new LaneLog('b'); items = [];
-      armTlp = armAck = blocked = false; replays = naks = recov = delivered = waited = bad = 0; lastRead = []; reading = []; prevReplay = 0; prevLt = 0; tsA = []; tsB = [];
+      armTlp = armAck = blocked = false; replays = naks = recov = waited = bad = 0; lastRead = []; reading = []; prevReplay = 0; prevLt = 0; tsA = []; tsB = [];
     };
     const inp = (n: string) => stage.sim!.getInput(n);
+    const st = (port: string) => readStatus(stage.sim!.getBits(stage.sim!.design.root.ports[port]));
     const linkIn = (): LinkIn => ({ rst: inp('rst'), plug: inp('plug'), go: inp('go'), wr: inp('wr'), addr: inp('addr'), len: inp('len'), seed: inp('seed'), flip_ab: inp('flip_ab'), flip_ba: inp('flip_ba') });
     const push = (x: LogItem) => { items.push(x); if (x.bad) bad++; if (x.cls === 'nak' && !x.bad) naks++; if (items.length > 400) items.splice(0, 200); };
     const sym = (d: number, k: number) => (k ? ({ [K_COM]: 'COM', [K_STP]: 'STP', [K_SDP]: 'SDP', [K_END]: 'END', [K_EDB]: 'EDB' } as Record<number, string>)[d] ?? 'K' : hex2(d));
@@ -196,10 +196,10 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
         if (tsA.length > 24) { tsA.shift(); tsB.shift(); }
         if (stage.value('rd_valid')) { reading.push(stage.value('rd_data')); if (stage.value('rd_done')) { lastRead = reading; reading = []; nRead++; } }
         if (stage.value('wait')) waited++;
-        const rp = stage.value('a_replay');
+        const sa = st('a_status'), rp = sa.replay;
         if (rp && !prevReplay) replays++;
         prevReplay = rp;
-        const lt = stage.value('a_lt');
+        const lt = sa.lt;
         if (lt === 5 && prevLt !== 5) recov++;
         prevLt = lt;
       },
@@ -207,11 +207,13 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
         if (!started) return;
         clocks++;
         const w = model.out(linkIn());
-        const expect: Record<string, number> = { a_txd: w.a.txd, a_txk: w.a.txk, b_txd: w.b.txd, b_txk: w.b.txk, a_lt: w.a.lt, b_lt: w.b.lt, a_dl: w.a.dl, b_dl: w.b.dl, a_seq: w.a.seq, a_ackd: w.a.ackd, b_nrcv: w.b.nrcv, a_rnum: w.a.rnum, a_ph_cc: w.a.ph_cc };
-        if (agreed) for (const n of CHECKED) if (stage.value(n) !== expect[n]) { agreed = false; wrong = `clock ${clocks}: ${n} gates ${stage.value(n)} model ${expect[n]}`; break; }
+        const sa = st('a_status'), sb = st('b_status');
+        const check = (n: string, g: number, v: number) => { if (agreed && g !== v) { agreed = false; wrong = `clock ${clocks}: ${n} gates ${g} model ${v}`; } };
+        check('A txd', stage.value('a_txd'), w.a.txd); check('B txd', stage.value('b_txd'), w.b.txd); check('A txk', stage.value('a_txk'), w.a.txk); check('B txk', stage.value('b_txk'), w.b.txk);
+        for (const [n] of PORT_STATUS) { const ma = w.a as unknown as Record<string, number>, mb = w.b as unknown as Record<string, number>; check(`A ${n}`, sa[n], ma[n]); check(`B ${n}`, sb[n], mb[n]); }
         // the flips are set for the clock after this edge; go and the rest are pulses
         const sim = stage.sim!;
-        const kA = stage.value('a_kind'), kB = stage.value('b_kind');
+        const kA = sa.kind, kB = sb.kind;
         const fa = blocked || (armTlp && kA === 1 && !stage.value('a_txk')) ? 1 : 0, fb = armAck && kB === 2 && !stage.value('b_txk') && model.b.dt === 0 ? 1 : 0;
         if (fa && armTlp) armTlp = false;
         if (fb) armAck = false;
@@ -232,19 +234,19 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
       stage.setInputs({ rst: 0 });
       model.step({ ...LINK_IN0, rst: 1, plug: pl });
       started = true;
-      if (view === 'link') stage.runCycles(4000, () => stage.value('a_dl') === 3 && stage.value('b_dl') === 3, 0, true);
+      if (view === 'link') stage.runCycles(4000, () => st('a_status').dl === 3 && st('b_status').dl === 3, 0, true);
       stage.refresh(); schedule();
     };
     stage.resetHooks.add(() => { stopRun?.(); started = false; requestAnimationFrame(init); });
     const snapModel = () => ({ a: structuredClone({ ...model.a }), b: structuredClone({ ...model.b }), ra: { ...model.ra }, eb: structuredClone({ ...model.eb }), ab: [...model.ab], ba: [...model.ba] });
-    const snap = () => ({ m: snapModel(), clocks, agreed, wrong, items: [...items], replays, naks, recov, delivered, waited, bad, lastRead: [...lastRead], reading: [...reading], prevReplay, prevLt, tsA: [...tsA], tsB: [...tsB], armTlp, armAck, blocked, flipNow: [...flipNow], la: JSON.stringify({ c: logA.cur, m: logA.mode, t: logA.ts }), lb: JSON.stringify({ c: logB.cur, m: logB.mode, t: logB.ts }) });
+    const snap = () => ({ m: snapModel(), clocks, agreed, wrong, items: [...items], replays, naks, recov, waited, bad, lastRead: [...lastRead], reading: [...reading], prevReplay, prevLt, tsA: [...tsA], tsB: [...tsB], armTlp, armAck, blocked, flipNow: [...flipNow], la: JSON.stringify({ c: logA.cur, m: logA.mode, t: logA.ts }), lb: JSON.stringify({ c: logB.cur, m: logB.mode, t: logB.ts }) });
     stage.historyHooks.add({
       save: snap,
       restore: (v) => {
         const x = v as ReturnType<typeof snap>;
         Object.assign(model.a, structuredClone(x.m.a)); Object.assign(model.b, structuredClone(x.m.b)); Object.assign(model.ra, x.m.ra); Object.assign(model.eb, structuredClone(x.m.eb));
         model.ab = [...x.m.ab]; model.ba = [...x.m.ba];
-        ({ clocks, agreed, wrong, replays, naks, recov, delivered, waited, bad, prevReplay, prevLt, armTlp, armAck, blocked } = x);
+        ({ clocks, agreed, wrong, replays, naks, recov, waited, bad, prevReplay, prevLt, armTlp, armAck, blocked } = x);
         items = [...x.items]; lastRead = [...x.lastRead]; reading = [...x.reading]; tsA = [...x.tsA]; tsB = [...x.tsB]; flipNow = [...x.flipNow];
         const la = JSON.parse(x.la), lb = JSON.parse(x.lb);
         logA.cur = la.c; logA.mode = la.m; logA.ts = la.t; logB.cur = lb.c; logB.mode = lb.m; logB.ts = lb.t;
@@ -270,23 +272,23 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
     const status = h('div', { class: 'mc-status' }), ladder = h('div', { class: 'pc-ladder' }), credits = h('div', { class: 'pc-credits' }), strip = h('div', { class: 'pc-strip' }), log = h('div', { class: 'pc-log', role: 'log' }), verdict = h('div', { class: 'sr-lock' }), memo = h('div', { class: 'pc-mem' });
     const update = () => {
       if (!stage.sim) return;
-      const v = (n: string) => stage.value(n);
-      const up = v('a_dl') === 3 && v('b_dl') === 3;
+      const sa = st('a_status'), sb = st('b_status');
+      const up = sa.dl === 3 && sb.dl === 3;
       const ladderOf = (name: string, lt: number, dl: number) => h('div', { class: 'pc-lad' }, h('b', null, name),
         h('div', { class: 'pc-steps' }, ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => h('span', { class: `pc-st${i === lt ? ' on' : ''}`, title: LT_NAMES[i] }, LT_NAMES[i].replace('Polling.', 'Poll.').replace('Recovery.', 'Rec.').replace('Config.Idle', 'Cfg.Idle').replace('Polling', 'Poll')))),
         h('span', { class: `pc-dl${dl === 3 ? ' on' : ''}` }, DL_NAMES[dl]));
-      ladder.replaceChildren(ladderOf('Port A', v('a_lt'), v('a_dl')), ladderOf('Port B', v('b_lt'), v('b_dl')));
+      ladder.replaceChildren(ladderOf('Port A', sa.lt, sa.dl), ladderOf('Port B', sb.lt, sb.dl));
       status.replaceChildren(
         h('span', null, 'clocks ', h('b', null, String(clocks))),
-        h('span', null, 'next seq ', h('b', null, String(v('a_seq')))), h('span', null, 'acked ', h('b', null, v('a_ackd') === 0xfff ? 'none' : String(v('a_ackd')))), h('span', null, 'B expects ', h('b', null, String(v('b_nrcv')))),
-        h('span', null, 'REPLAY_NUM ', h('b', { class: v('a_rnum') ? 'bad' : '' }, String(v('a_rnum')))), h('span', null, 'replay timer ', h('b', null, String(v('a_rt')))),
+        h('span', null, 'next seq ', h('b', null, String(sa.seq))), h('span', null, 'acked ', h('b', null, sa.ackd === 0xfff ? 'none' : String(sa.ackd))), h('span', null, 'B expects ', h('b', null, String(sb.nrcv))),
+        h('span', null, 'REPLAY_NUM ', h('b', { class: sa.rnum ? 'bad' : '' }, String(sa.rnum))), h('span', null, 'replay timer ', h('b', null, String(sa.rt))),
         h('span', null, 'replays ', h('b', null, String(replays))), h('span', null, 'Naks ', h('b', null, String(naks))), h('span', null, 'Recoveries ', h('b', null, String(recov))), h('span', null, 'waits for credit ', h('b', null, `${waited} clocks`)),
       );
       const bar = (name: string, used: number, lim: number, w: number) => {
         const left = (lim - used + 2 ** w) % 2 ** w;
         return h('div', { class: 'pc-cr' }, h('span', null, name), h('b', { class: left ? '' : 'bad' }, `${left} left`), h('small', null, `limit ${lim}, used ${used}`));
       };
-      credits.replaceChildren(bar('Posted hdr', v('a_ph_cc'), v('a_ph_lim'), 8), bar('Posted data', v('a_pd_cc'), v('a_pd_lim'), 12), bar('Non-posted hdr', v('a_nph_cc'), v('a_nph_lim'), 8));
+      credits.replaceChildren(bar('Posted hdr', sa.ph_cc, sa.ph_lim, 8), bar('Posted data', sa.pd_cc, sa.pd_lim, 12), bar('Non-posted hdr', sa.nph_cc, sa.nph_lim, 8));
       const line = (nm: string, s: string[]) => h('div', { class: 'pc-sym' }, h('b', null, nm), ...s.map((t) => h('span', { class: t.length > 2 ? 'k' : t === '00' ? 'z' : '' }, t)));
       strip.replaceChildren(line('A→B', tsA), line('B→A', tsB));
       log.replaceChildren(...items.slice(-9).reverse().map((x) => h('div', { class: `pc-row ${x.cls}${x.bad ? ' bad' : ''}` }, h('small', null, String(x.clock)), h('span', null, x.dir === 'a' ? 'A→B' : 'B→A'), h('span', null, x.text))));
@@ -297,7 +299,7 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; update(); }); };
     const plugBtn = btn(view === 'train' ? 'Plug in' : 'Unplug', 'Connect or pull the cable: pulling it is a reset of both ports', () => act(() => {
-      const on = stage.value('a_lt') === 0 && inp('plug') === 0 ? 1 : inp('plug') ? 0 : 1;
+      const on = inp('plug') ? 0 : 1;
       stage.setInput('plug', on);
       plugBtn.textContent = on ? 'Unplug' : 'Plug in';
     }));
@@ -315,10 +317,10 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
     update();
     requestAnimationFrame(() => { if (stage.sim && !started) init(); });
     pcieApi.set(stage, {
-      status: () => ({
-        up: stage.value('a_dl') === 3 && stage.value('b_dl') === 3, ltA: stage.value('a_lt'), ltB: stage.value('b_lt'), dlA: stage.value('a_dl'), dlB: stage.value('b_dl'), clocks, agreed, wrong,
-        nextSeq: stage.value('a_seq'), ackd: stage.value('a_ackd'), nrcv: stage.value('b_nrcv'), replays, naks, recoveries: recov, delivered, waited, bad, ram: model.eb.ram, lastRead,
-      }),
+      status: () => {
+        const sa = st('a_status'), sb = st('b_status');
+        return { up: sa.dl === 3 && sb.dl === 3, ltA: sa.lt, ltB: sb.lt, dlA: sa.dl, dlB: sb.dl, clocks, agreed, wrong, nextSeq: sa.seq, ackd: sa.ackd, nrcv: sb.nrcv, replays, naks, recoveries: recov, waited, bad, ram: model.eb.ram, lastRead };
+      },
       write: (a, n, s) => act(() => send(1, a, n, s)), read: (a, n) => act(() => send(0, a, n, 0)),
       flipTlp: () => { armTlp = true; }, flipAck: () => { armAck = true; },
       block: (on) => { blocked = on; if (!on) { stage.setInput('flip_ab', 0); flipNow[0] = 0; } },
@@ -330,5 +332,6 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
 }
 
 // ---- what it costs ---------------------------------------------------------------------------------------------------------
-export const pcieCosts = () => ({ port: stats(pciePort()).nands, root: stats(pcieRootTl()).nands, ep: stats(pcieEpTl()).nands, link: stats(pcieLink()).nands, gate8: stats(creditGate(8)).nands, gate12: stats(creditGate(12)).nands });
+const bufs = () => stats(bigRamWithInit(BUF_BITS, 9, new Uint32Array(1 << BUF_BITS))).nands + stats(bigRamWithInit(BUF_BITS, 8, new Uint32Array(1 << BUF_BITS))).nands;
+export const pcieCosts = () => ({ port: stats(pciePort()).nands, buffers: bufs(), root: stats(pcieRootTl()).nands, ep: stats(pcieEpTl()).nands, link: stats(pcieLink()).nands, gate8: stats(creditGate(8)).nands, gate12: stats(creditGate(12)).nands });
 export { hex3 };
