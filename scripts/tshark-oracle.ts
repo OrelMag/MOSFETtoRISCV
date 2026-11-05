@@ -38,7 +38,7 @@ const opt = (k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : undef
 const out = resolve(opt('--out') ?? 'tshark-report'), tshark = opt('--tshark') ?? 'tshark', only = opt('--only');
 const dump = args.includes('--dump'), gates = !args.includes('--no-gates');
 
-interface Case { name: string; usb?: boolean; frames: () => Captured[] | Promise<Captured[]>; claims?: (frames: Captured[]) => Claim[]; allow?: RegExp; must?: (frames: Captured[]) => string | null }
+interface Case { name: string; usb?: boolean; /** More tshark options for this capture. */ extra?: string[]; frames: () => Captured[] | Promise<Captured[]>; claims?: (frames: Captured[]) => Claim[]; allow?: RegExp; must?: (frames: Captured[]) => string | null }
 
 // ---- hand-built: each protocol's frame by itself ----------------------------------------------------------------------------------
 const A = HOSTS.A, B = HOSTS.B;
@@ -215,7 +215,8 @@ const CASES: Case[] = [
   { name: 'usb-built', usb: true, frames: usbBuilt },
   ...(gates ? [
     { name: 'usb-enumeration', usb: true, frames: () => usbCapture({}), must: (f: Captured[]) => (f.length > 60 ? null : 'an enumeration is more than 60 packets') },
-    { name: 'usb-every-read', usb: true, frames: () => usbCapture({ script: readSweep([]) }), must: (f: Captured[]) => (f.length > 400 ? null : 'the read sweep is more than 400 packets') },
+    // the usb dissector reads the descriptors inside a control transfer, and calls one cut short malformed: so reads that end mid-descriptor are checked with it off
+    { name: 'usb-every-read', usb: true, extra: ['--disable-protocol', 'usb'], frames: () => usbCapture({ script: readSweep([]) }), must: (f: Captured[]) => (f.length > 400 ? null : 'the read sweep is more than 400 packets') },
     { name: 'usb-stall-nak', usb: true, frames: () => usbCapture({ script: usbOdds, nak: (c) => (c > 2800 && c < 3100 ? 1 : 0) }),
       must: (f: Captured[]) => (new Set(f.map((x) => (x.bytes as number[])[0])).has(0x5a) && new Set(f.map((x) => (x.bytes as number[])[0])).has(0x1e) ? null : 'NAK (5A) and STALL (1E) must both appear') },
   ] : []),
@@ -267,19 +268,19 @@ const BROKEN: Broken[] = [
   { name: 'file-cut-short', frames: [{ us: 0, bytes: good() }, { us: 1, bytes: good() }], cut: 20, want: /cut short/ },
 ];
 
-const runTshark = (file: string, usb = false): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
+const runTshark = (file: string, usb = false, extra: string[] = []): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
   const pipe = 'f=$1; t=$2; shift 2; cat "$f" | "$t" "$@"';
-  execFile('sh', ['-c', pipe, 'sh', file, tshark, ...tsharkArgs(usb ? USB_FIELDS : FIELDS)], { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
+  execFile('sh', ['-c', pipe, 'sh', file, tshark, ...tsharkArgs(usb ? USB_FIELDS : FIELDS, extra)], { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
 });
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'fields.txt'), FIELDS.join('\n'));
 
-async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0, allow?: RegExp, usb = false): Promise<string[]> {
+async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0, allow?: RegExp, usb = false, extra: string[] = []): Promise<string[]> {
   const file = join(out, `${name}.pcap`), whole = pcapFile(frames, usb ? LINKTYPE_USB_2_0 : undefined), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
   writeFileSync(file, bytes);
   if (dump) return [];
-  const r = await runTshark(file, usb);
+  const r = await runTshark(file, usb, extra);
   writeFileSync(join(out, `${name}.tsv`), r.text);
   const problems = compareCapture(frames, parseRows(r.text, usb ? USB_FIELDS : FIELDS), claims ?? (usb ? frames.map((f) => usbClaimOf(f.bytes, Math.max(0, Math.round(f.us)))) : undefined), allow);
   if (r.code !== 0 || r.err.trim()) problems.unshift(`tshark exit ${r.code}: ${r.err.trim().slice(0, 300)}`);
@@ -293,7 +294,7 @@ let failed = 0;
 for (const c of CASES) {
   if (only && !c.name.includes(only)) continue;
   const t0 = Date.now();
-  const frames = await c.frames(), problems = await check(c.name, frames, c.claims?.(frames), 0, c.allow, c.usb);
+  const frames = await c.frames(), problems = await check(c.name, frames, c.claims?.(frames), 0, c.allow, c.usb, c.extra);
   const short = c.must?.(frames);
   if (short) problems.unshift(short);
   if (c.name !== 'built' && !c.usb) for (const f of frames) seen.add(claimOf(f.bytes, 0).chain);
