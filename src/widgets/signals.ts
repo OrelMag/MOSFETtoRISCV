@@ -24,14 +24,14 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 export function spectrumWidget(): Widget {
   let pick = 2;
   const time = plotOf({ W: 640, H: 170, x: [0, BLOCK], y: [-1.4, 1.4], yTicks: [-1, 0, 1], xLabel: 'samples', yLabel: 'level', aria: 'The chosen signal over one block of samples' });
-  const spec = plotOf({ W: 640, H: 170, x: [0, 64], y: [0, 1.4], yTicks: [0, 1], xLabel: 'cycles per block', yLabel: 'amplitude', aria: 'The same signal as the amplitude of each frequency' });
+  const spec = plotOf({ W: 640, H: 170, x: [0, BLOCK / 2], y: [0, 1.4], yTicks: [0, 1], xLabel: 'cycles per block', yLabel: 'amplitude', aria: 'The same signal as the amplitude of each frequency' });
   const sel = h('select', { 'aria-label': 'Signal' }, ...SIGNALS.map((x, i) => h('option', { value: String(i), selected: i === pick }, x.name))) as HTMLSelectElement;
   sel.addEventListener('change', () => { pick = Number(sel.value); paint(); });
   const chips = mkChips(2);
   function paint() {
     const x = samplesOf(SIGNALS[pick]), a = amplitudes(x);
     time.clear(); line(time, range(BLOCK), x, 'ln-s real');
-    spec.clear(); stems(spec, range(65), a.slice(0, 65));
+    spec.clear(); stems(spec, range(a.length), a);
     chips.set(0, String(bandHolding(x, 0.9)), 'cycles per block hold 90 % of the power');
     chips.set(1, String(bandHolding(x, 0.99)), 'hold 99 %');
   }
@@ -64,7 +64,7 @@ export function bandwidthWidget(): Widget {
     line(time, range(128), y.slice(0, 128), 'ln-s real');
     const band = bandHolding(x, 0.9);
     chips.set(0, String(band), 'cycles per block hold 90 % of the pulse\'s power');
-    chips.set(1, num((band * width) / BLOCK, 2), 'band × width: about the same for any pulse');
+    chips.set(1, num((band * width) / BLOCK, 2), 'band × width: it changes little as the pulse does');
     chips.set(2, y.some((v) => v > 0.5) ? 'yes' : 'no', 'still crosses the half-way level after the filter', y.some((v) => v > 0.5) ? '' : 'bad');
   }
   paint();
@@ -184,11 +184,11 @@ export function aliasWidget(): Widget {
     line(plot, ts, ts.map((t) => Math.cos(2 * Math.PI * f * t)), 'ln-s lump');
     line(plot, ts, ts.map((t) => Math.cos(2 * Math.PI * al * t)), 'ln-s real');
     for (let k = 0; k <= WIN * fs; k++) plot.layer.append(s('circle', { cx: plot.X(k / fs), cy: plot.Y(Math.cos(2 * Math.PI * f * (k / fs))), r: 4, class: 'sg-pt' }));
-    const under = f <= fs / 2;
+    const under = f < fs / 2;
     chips.set(0, `${num(f, 1)} Hz`, 'the tone');
     chips.set(1, `${num(fs / 2, 1)} Hz`, 'half the sample rate');
     chips.set(2, `${num(al, 1)} Hz`, 'what the samples say', under ? '' : 'bad');
-    note.textContent = under ? 'Under half the rate: the samples fit one tone in this band, and it is the right one.' : `Over half the rate: the same samples fit a ${num(al, 1)} Hz tone exactly, and nothing after the sampler can tell them apart.`;
+    note.textContent = under ? 'Under half the rate: the samples fit one tone in this band, and it is the right one.' : f === fs / 2 ? 'Exactly half the rate: what the samples read depends on the phase, so this frequency is not safe either.' : `Over half the rate: the same samples fit a ${num(al, 1)} Hz tone exactly, and nothing after the sampler can tell them apart.`;
   }
   paint();
   return {

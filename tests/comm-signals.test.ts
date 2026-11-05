@@ -4,9 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   aliasOf, amplitudes, bandHolding, binomialGain, BLOCK, FIR_TAPS, firFilter, firGain, FirModel, measuredSqnrDb, mixed, mixedBySum, movingAverage, quantize, samplesOf, signedOf, SIGNALS, sqnrDb, windowedSinc, wordOf,
 } from '../src/comm/signals';
-import { FIR5, arrayMul } from '../src/lib';
+import { FIR5, FIR_SETTLE } from '../src/lib';
+import { flatten } from '../src/sim/flatten';
+import { GateSim } from '../src/sim/gatesim';
 import { simulate } from '../src/sim/harness';
-import { stats } from '../src/sim/stats';
 import { out, set, tick as clock } from './util';
 
 const sig = (id: string) => SIGNALS.find((s) => s.id === id)!;
@@ -79,10 +80,22 @@ describe('the filter in gates', () => {
     }
     expect(Math.max(...ys.slice(8)) / 100).toBeCloseTo(binomialGain(f), 2);
   });
-  it('what it costs against five general multipliers', () => {
-    const fir = stats(FIR5).nands, mul = stats(arrayMul(8)).nands;
-    expect(fir).toBeLessThan(5 * mul);
-    expect(fir).toBeGreaterThan(1000);
+  it('its output settles within the delay the chapter quotes, which is what limits the sample rate', () => {
+    const sim = new GateSim(flatten(FIR5));
+    sim.watch(sim.design.root.ports.y);
+    let last = 0, worst = 0, seed = 7;
+    sim.onTrace = (_n, _b, t) => { last = t; };
+    sim.setInput('x', 0); sim.setInput('clk', 0); sim.reset('zero'); sim.settle();
+    for (let i = 0; i < 4000; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      sim.setInput('x', (seed >> 8) & 255); sim.settle();
+      sim.setInput('clk', 0); sim.settle();
+      const t0 = sim.time;
+      last = t0;
+      sim.setInput('clk', 1); sim.settle();
+      worst = Math.max(worst, last - t0);
+    }
+    expect(worst).toBe(FIR_SETTLE);
   });
 });
 

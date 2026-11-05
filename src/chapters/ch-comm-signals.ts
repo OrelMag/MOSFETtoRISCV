@@ -4,7 +4,7 @@
 
 import { gibbsOvershoot, PATTERNS, poleGain, powerShare, smallestSample, swing1010, tauOf, toDb } from '../comm/fourier';
 import { aliasOf, binomialGain, firGain, FIR_TAPS, movingAverage, sqnrDb, windowedSinc } from '../comm/signals';
-import { arrayMul, FIR5 } from '../lib';
+import { arrayMul, FIR5, FIR_SETTLE, register } from '../lib';
 import { flatten } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';
@@ -16,7 +16,7 @@ import type { Chapter } from './types';
 const nf = (x: number, d = 2) => x.toFixed(d);
 const pc = (x: number, d = 1) => `${(100 * x).toFixed(d)} %`;
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
-const FIR_NANDS = nands(FIR5), MUL8 = nands(arrayMul(8));
+const FIR_NANDS = nands(FIR5), MUL8 = nands(arrayMul(8)), REG8 = nands(register(8));
 const FIR_PERIOD = () => analyzeTiming(flatten(FIR5))?.period ?? 0;
 const B1 = 1, R8 = 8;
 const A8 = Math.exp((-2 * Math.PI * B1) / R8), HALF8 = 1 - 2 * A8, CLOSE = (2 * Math.PI * B1) / Math.LN2;
@@ -35,10 +35,10 @@ export const chSignals: Chapter = {
   builds: ['wire', 'telegraph', 'adders', 'registers'],
   recap: {
     keep: [
-      `A linear channel scales and shifts each sine and adds nothing new, so any signal can be split into sines, treated one by one and added back. A ±1 square wave is (4 / π) Σ sin(2π k f t) / k over odd k; its fundamental holds ${pc(powerShare(1), 0)} of the power, and a cut sum overshoots by ${pc(gibbsOvershoot(1000), 2)} however many terms it keeps.`,
+      `A linear, time-invariant channel scales and shifts each sine and adds nothing new, so any signal can be split into sines, treated one by one and added back. A ±1 square wave is (4 / π) Σ sin(2π k f t) / k over odd k; its fundamental holds ${pc(powerShare(1), 0)} of the power, and a cut sum overshoots by ${pc(gibbsOvershoot(1000), 2)} however many terms it keeps.`,
       `N samples and N / 2 + 1 frequencies are the same numbers read two ways. A shorter pulse takes a proportionally wider band: band × width is about constant.`,
       `An FIR filter is a weighted sum of delayed samples, one multiplication a tap a sample. A moving average of n has zeros at multiples of 1 / n. A sharper edge needs more taps, about 3.3 / n cycles a sample of transition with a Hamming window.`,
-      `The taps 1 4 6 4 1 are shifts, so the filter is ${FIR_NANDS} NANDs where five 8 × 8 multipliers alone would be ${5 * MUL8}: its gain is cos⁴(π f), 16 at DC, 0 at half the sample rate. Symmetric taps delay every frequency alike.`,
+      `The taps 1 4 6 4 1 are shifts, so the filter is ${FIR_NANDS} NANDs, ${5 * REG8} of them registers; programmable taps would add three 8 × 8 multipliers, ${3 * MUL8} more. Its gain is cos⁴(π f) relative to DC, 0 at half the sample rate. Symmetric taps delay every frequency alike.`,
       `Sampling at fs folds every tone into 0 … fs / 2: a tone at f and one at fs − f give the same samples, and nothing afterwards can separate them, so the filter goes before the sampler.`,
       `Rounding to b bits leaves a signal-to-error ratio of 6.02 b + 1.76 dB on a full-scale sine: 6 dB a bit.`,
       'Multiplying by a carrier moves a band to carrier ± f; multiplying by the same carrier again brings it back, with a copy at twice the carrier for a filter to remove.',
@@ -73,12 +73,12 @@ export const chSignals: Chapter = {
       get body() {
         const f4 = poleGain(R8 / 2, B1), f12 = poleGain((3 * R8) / 2, B1), swing = swing1010(A8);
         return `
-        <p>A linear channel does one simple thing to a sine: it scales it and shifts it, and a sine of the same frequency comes out. So split any signal into sines, treat each on its own and add the results. That is <strong>Fourier analysis</strong>, and it is why a channel is specified by a gain against frequency. A ±1 square wave of frequency f is</p>
+        <p>A linear, time-invariant channel does one simple thing to a sine: it scales it and shifts it, and a sine of the same frequency comes out. So split any signal into sines, treat each on its own and add the results. That is <strong>Fourier analysis</strong>, and it is why a channel is specified by a gain against frequency. A ±1 square wave of frequency f is</p>
         <p style="text-align:center"><strong>x(t) = (4 / π) Σ<sub>k odd</sub> sin(2π k f t) / k</strong></p>
         <p>The fundamental alone holds ${pc(powerShare(1), 0)} of the power and the first three odd harmonics ${pc(powerShare(3), 0)}, but the edges live in the rest. Cut the sum short and it overshoots by ${pc(gibbsOvershoot(1000), 2)} of the step next to each edge however many harmonics you keep (Gibbs): more of them narrow the ripple and do not lower it.</p>
-        <p>At bit rate R the pattern 1010 is the fastest square wave the data can make, with its fundamental at <strong>R / 2, the Nyquist frequency</strong>. Other patterns add lower tones, and a long run reaches down to DC. Take the ${B1} GHz pole of <a href="#/c/wire/0">A wire is not a wire</a>, whose gain is 1 / √(1 + (f / B)²), at ${R8} Gb/s. DC passes at 0 dB, the fundamental of 1010 at ${R8 / 2} GHz at ${nf(toDb(f4), 1).replace('-', '−')} dB, and its third harmonic at ${(3 * R8) / 2} GHz at ${nf(toDb(f12), 1).replace('-', '−')} dB. Gain falling smoothly with frequency, with a phase lag of up to 90°, turns the square into rounded edges: the 10–90 % rise is ln 9 · τ = ${nf(Math.log(9) * tauOf(B1) * 1000, 0)} ps, against a bit of ${nf(1000 / R8, 0)} ps.</p>
-        <p>The same pole in time keeps a = e<sup>−2πB/R</sup> = ${nf(A8, 3)} of the last level after each bit, and the two views agree exactly: the harmonics scaled and turned one by one sum to the closed-form response (tests/comm-fourier.test.ts). Together they say what intersymbol interference is: <em>unequal gain is a dependence on the pattern.</em> A long run settles at full swing because its energy is low in frequency; 1010 swings only (1 − a) / (1 + a) = ±${nf(swing, 3)}, because its energy is at Nyquist. The worst case is a lone bit after a long run, whose sample reaches 1 − 2a = ${nf(HALF8, 3)}. A channel with the same gain and delay at every frequency would treat all patterns alike and leave none. <a href="#/c/serial/0">Fast serial links</a> folds a random stream on itself and reads that spread as an eye, and equalization works by flattening the gain.</p>
-        <div class="try">At ${R8} Gb/s on ${B1} GHz choose <strong>One 1 in eight</strong>: its smallest sample is the lowest of any pattern. Then 1010, and raise the bandwidth until the fundamental is under the pole. Finally push <strong>Harmonics</strong> from 3 to 25 on 1010 and watch the overshoot stay.</div>`;
+        <p>At bit rate R the pattern 1010 is the fastest square wave the data can make, with its fundamental at <strong>R / 2, the Nyquist frequency</strong>. Other patterns add lower tones, and a long run reaches down to DC. Take a single pole, the channel of <a href="#/c/wire/0">A wire is not a wire</a>, at ${B1} GHz: its gain is 1 / √(1 + (f / B)²). Send ${R8} Gb/s through it. DC passes at 0 dB, the fundamental of 1010 at ${R8 / 2} GHz at ${nf(toDb(f4), 1).replace('-', '−')} dB, and its third harmonic at ${(3 * R8) / 2} GHz at ${nf(toDb(f12), 1).replace('-', '−')} dB. Gain falling smoothly with frequency, with a phase lag of up to 90°, turns the square into rounded edges: the 10–90 % rise is ln 9 · τ = ${nf(Math.log(9) * tauOf(B1) * 1000, 0)} ps, against a bit of ${nf(1000 / R8, 0)} ps.</p>
+        <p>The same pole in time keeps a = e<sup>−2πB/R</sup> = ${nf(A8, 3)} of the last level after each bit, and the two views agree exactly: the harmonics scaled and turned one by one sum to the closed-form response, and a test holds them equal. Together they say what intersymbol interference is: <em>unequal gain is a dependence on the pattern.</em> A long run settles at full swing because its energy is low in frequency; 1010 swings only (1 − a) / (1 + a) = ±${nf(swing, 3)}, because its energy is at Nyquist. The worst case is a lone bit after a long run, whose sample reaches 1 − 2a = ${nf(HALF8, 3)}. A channel with the same gain and delay at every frequency would treat all patterns alike and leave none. <a href="#/c/serial/0">Fast serial links</a> folds a random stream on itself and reads that spread as an eye, and equalization works by flattening the gain.</p>
+        <div class="try">At ${R8} Gb/s on ${B1} GHz choose <strong>One 1 in eight</strong>: its smallest sample is the lowest of any pattern. Then 1010, at 6 Gb/s, and raise the bandwidth until the fundamental is under the pole. Finally push <strong>Harmonics</strong> from 3 to 25 on 1010 and watch the overshoot stay.</div>`;
       },
       widget: harmonicsWidget,
       more: {
@@ -146,7 +146,7 @@ export const chSignals: Chapter = {
       get body() {
         return `
         <p>Here is one built from what you already have. The taps are ${FIR_TAPS.join(' ')}: small, symmetric, and made of powers of two. Five <span data-show="x0 x1 x2 x3 x4">registers</span> hold the last samples. Multiplying by 4 or 2 is wiring, shown as the boxes marked ×, and costs nothing. Six is <span data-show="six">4 + 2</span>. The symmetric pairs share adders, <span data-show="sum04 sum13">x0 + x4 and 4 (x1 + x3)</span>, and <span data-show="sumA sumB">two more</span> add it up.</p>
-        <p>That is ${FIR_NANDS} NANDs in all, at a period of ${FIR_PERIOD()} gate delays, about the price of two 8 × 8 array multipliers (${MUL8} each). General programmable taps would need five of them and the same adders. Chosen taps are a large saving, and it is how the fixed filters in real radios and modems stay small.</p>
+        <p>That is ${FIR_NANDS} NANDs in all, ${5 * REG8} of them the registers. Programmable taps would replace the shifts with multipliers: three, since the symmetric pairs share one, at ${MUL8} NANDs each for 8 × 8, which more than doubles it. Chosen taps are a large saving, and it is how the fixed filters in real radios and modems stay small. The registers shift in ${FIR_PERIOD()} gate delays, but the sample rate is set by the adders: after a clock edge the output keeps changing for up to ${FIR_SETTLE} delays through the ripple carries, so that is the period if anything registers y.</p>
         <p>The input is 8-bit two's complement. Twelve bits at the output is exactly enough, since the taps sum to 16 and −128 × 16 = −2048 fits. The gain is cos⁴(π f), by the factors (1 + z⁻¹)⁴: 1 at DC, ${nf(binomialGain(0.25), 3)} at a quarter of the sample rate, and an exact 0 at half of it, because + − + − cancels in 1 − 4 + 6 − 4 + 1. The panel beside the circuit runs a tone through the gates with the model alongside.</p>
         <div class="try">Run the slow tone and read the peak. Run the quarter-rate tone and compare it with ${nf(binomialGain(0.25), 3)}. Then the fastest.</div>`;
       },
@@ -190,13 +190,13 @@ export const chSignals: Chapter = {
         options: ['About 7 or 8: more bits only record the noise more exactly', '42: one per dB', '3: log₂ of 42 dB', '16: always use the most available'],
         answer: 0,
         explain: '(42 − 1.76) / 6.02 is 6.7 bits; a bit or so of margin keeps the rounding well under the analog noise.',
-        why: ['', 'Each bit is worth 6 dB, not 1.', 'Bits and dB are related by 6.02, not a logarithm.', 'That spends power and pins on a record of the noise.'],
+        why: ['', 'Each bit is worth 6 dB, not 1.', 'A decibel is already a logarithm, and one bit is worth 6.02 dB: divide, do not take a log of it.', 'That spends power and pins on a record of the noise.'],
       },
     },
     {
       title: 'A mixer moves a band',
       body: `
-        <p>A cable or an antenna passes a band somewhere up the spectrum, and a voice or a stream of bits sits near zero. A <strong>mixer</strong> moves one to the other, and it is only a multiplication: cos a · cos b = ½ cos(a − b) + ½ cos(a + b). A tone at f times a carrier at fc gives two tones, at fc − f and fc + f. A whole band moves the same way, doubled into two sidebands.</p>
+        <p>A cable or an antenna passes a band somewhere up the spectrum, and a voice or a stream of bits sits near zero. A <strong>mixer</strong> moves one to the other, and it is only a multiplication: cos a · cos b = ½ cos(a − b) + ½ cos(a + b). A tone at f times a carrier at fc gives two tones, at fc − f and fc + f. A whole band moves the same way, doubled into two sidebands. New frequencies appear because a mixer is linear but changes with time, so the first step's rule, sine in and the same sine out, does not bind it.</p>
         <p>The receiver multiplies by the same carrier again. The band lands back at zero, with a copy near 2fc that a low-pass filter removes. That is the whole of a basic radio or modem. The hard part is the phase: if the receiver's carrier is out by φ, the result falls by cos φ, and at 90° it vanishes. <a href="#/c/modem/0">Modems</a> turns that from a problem into a resource, with one signal on the cosine and a second on the sine.</p>
         <div class="try">Set the tone and the carrier and predict the two lines. Then tick the second multiplication and find the tone back where it started.</div>`,
       widget: mixerWidget,

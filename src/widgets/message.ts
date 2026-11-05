@@ -41,8 +41,8 @@ export function fmtRate(r: number): string {
 }
 
 const RATES = [300, 56e3, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 4e11, 8e11, 1.6e12];
-const SIZES = [100, 500, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10];
-const DISTS: [number, string][] = [[10, '10 m'], [1e3, '1 km'], [5e5, '500 km'], [5.6e6, '5600 km'], [2e7, '20 000 km']];
+const SIZES = [100, 500, 1e3, 1e4, 1e5, 1e6, 5e6, 1e7, 1e8, 1e9, 1e10];
+const DISTS: [number, string][] = [[10, '10 m'], [1e3, '1 km'], [5e5, '500 km'], [3e6, '3000 km'], [5.6e6, '5600 km'], [2e7, '20 000 km']];
 
 // ---- a message as bits ------------------------------------------------------------------------------------------------------------
 
@@ -95,7 +95,7 @@ function splitBar(aLabel: string, bLabel: string) {
 }
 
 export function delayWidget(): Widget {
-  let size = 2, rate = 5, dist = 3;
+  let size = 2, rate = 5, dist = 4;
   const bar = splitBar('pushing onto the line', 'travelling'), chips = mkChips(3);
   function paint() {
     const b = SIZES[size], r = RATES[rate], m = DISTS[dist][0];
@@ -121,7 +121,7 @@ export function delayWidget(): Widget {
 export const VAN_KMH = 80;
 
 export function pipeWidget(): Widget {
-  let rate = 6, dist = 3, tb = 100, km = 500;
+  let rate = 6, dist = 4, tb = 100, km = 500;
   const chips = mkChips(2), race = mkChips(2);
   function paint() {
     const r = RATES[rate], m = DISTS[dist][0], link = (tb * 1e12 * 8) / RATES[6], van = km / VAN_KMH * 3600;
@@ -163,7 +163,8 @@ export function packetWidget(): Widget {
     chips.set(0, String(packetCount(plan)), 'packets');
     chips.set(1, fmtTime(storeAndForward(plan)), `to deliver 1 MB over ${hops} links at ${fmtRate(rate)}`);
     chips.set(2, `${(100 * cleanChance(payload + HEADER, 10 ** ber)).toFixed(1)} %`, `of packets arrive with no bit wrong, one bit in ${pow10(-ber)} flipped`);
-    chips.set(3, fmtBytes(bytesWithLoss(plan, 10 ** ber)), 'sent in all, wrong ones sent again');
+    const sent = bytesWithLoss(plan, 10 ** ber);
+    chips.set(3, sent < 1e15 ? fmtBytes(sent) : 'never finishes', 'sent in all, wrong ones sent again');
     note.textContent = `The curve's top is ${fmtTime(top)}. Small packets lose to their ${HEADER}-byte headers; large ones wait, whole, at every link.`;
   }
   paint();

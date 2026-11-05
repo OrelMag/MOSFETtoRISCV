@@ -13,6 +13,11 @@ export const T0 = 290;
 export const noiseDensityDbm = (kelvin = T0): number => 10 * Math.log10(BOLTZMANN * kelvin * 1000);
 /** The noise floor in a bandwidth: density + 10 log B + the receiver's noise figure. */
 export const noiseFloorDbm = (hz: number, nfDb = 0, kelvin = T0): number => noiseDensityDbm(kelvin) + 10 * Math.log10(hz) + nfDb;
+/**
+ * The floor with a source at `kelvin` and a receiver of this noise figure. A noise figure is quoted against a 290 K source: the receiver adds
+ * (F − 1) · 290 K of its own whatever the source's temperature, so cooling only the source soon stops helping.
+ */
+export const receiverFloorDbm = (hz: number, nfDb: number, kelvin = T0): number => 10 * Math.log10(BOLTZMANN * (kelvin + (dbToRatio(nfDb) - 1) * T0) * hz * 1000);
 /** The open-circuit RMS noise voltage of a resistor, √(4 k T R B) (Johnson, Nyquist 1928). */
 export const johnsonVolts = (ohms: number, hz: number, kelvin = T0): number => Math.sqrt(4 * BOLTZMANN * kelvin * ohms * hz);
 

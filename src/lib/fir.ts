@@ -36,6 +36,9 @@ const FIR_SCALE = (s: number): ComponentDef => {
 
 const SCALE1 = FIR_SCALE(0), SCALE2 = FIR_SCALE(1), SCALE4 = FIR_SCALE(2);
 
+/** Gate delays from a clock edge to the output's last change, worst over random samples: the ripple carries, pinned by the test. */
+export const FIR_SETTLE = 40;
+
 /** y = x0 + 4 x1 + 6 x2 + 4 x3 + x4, with the pairs that share a tap summed first. */
 export const FIR5: ComponentDef = define({
   id: 'fir5', name: 'FIR filter (1 4 6 4 1)', category: 'arithmetic',

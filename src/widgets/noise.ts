@@ -4,9 +4,10 @@
 import { shannonBinaryDb, uncodedBer } from '../comm/ber';
 import { EBN0_MIN, ratioToDb } from '../comm/limits';
 import {
-  capacityAt, capacityCeiling, cascadeNfDb, decisionError, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, randomCodeError, RECEIVERS, snrAfter, type ChainStage,
+  capacityAt, capacityCeiling, cascadeNfDb, decisionError, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, receiverFloorDbm, randomCodeError, RECEIVERS, snrAfter, type ChainStage,
 } from '../comm/noise';
 import { gaussian, rng } from '../phys/line';
+import { groupDigits } from '../sim/numfmt';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { line, mkChips, num, plotOf, sci } from './line';
@@ -19,6 +20,8 @@ import '../styles/signals.css';
 const hz = (v: number) => fmtRate(v).replace('b/s', 'Hz');
 const volts = (v: number) => (v >= 1e-3 ? `${(v * 1e3).toPrecision(3)} mV` : v >= 1e-6 ? `${(v * 1e6).toPrecision(3)} µV` : `${(v * 1e9).toPrecision(3)} nV`);
 const dbm = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)} dBm`;
+/** A share counted in n trials: a count of none says only that, never a figure smaller than the trials can show. */
+const counted = (b: number, n: number) => (b > 0 ? sci(b) : `none in ${groupDigits(n)}`);
 const db = (v: number, d = 1) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)} dB`;
 
 export function thermalWidget(): Widget {
@@ -26,9 +29,9 @@ export function thermalWidget(): Widget {
   const chips = mkChips(4);
   function paint() {
     const B = 10 ** exp;
-    chips.set(0, dbm(noiseDensityDbm(kelvin)).replace('dBm', 'dBm/Hz'), `kT at ${kelvin} K`);
-    chips.set(1, dbm(noiseFloorDbm(B, 0, kelvin)), `in ${hz(B)}`);
-    chips.set(2, dbm(noiseFloorDbm(B, nf, kelvin)), `with a receiver of ${nf} dB noise figure`);
+    chips.set(0, dbm(noiseDensityDbm(kelvin)).replace('dBm', 'dBm/Hz'), `kT, a source at ${kelvin} K`);
+    chips.set(1, dbm(noiseFloorDbm(B, 0, kelvin)), `the source alone, in ${hz(B)}`);
+    chips.set(2, dbm(receiverFloorDbm(B, nf, kelvin)), `with a receiver of ${nf} dB noise figure, which adds ${Math.round((10 ** (nf / 10) - 1) * 290)} K of its own`);
     chips.set(3, volts(johnsonVolts(50, B, kelvin)), 'across an open 50 Ω resistor');
   }
   paint();
@@ -36,8 +39,8 @@ export function thermalWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'The floor nothing goes below'), chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
-        slider('Bandwidth', 3, 10, 0.5, exp, (v) => hz(10 ** v), (v) => { exp = v; paint(); }).el,
-        slider('Temperature', 4, 400, 1, kelvin, (v) => `${v} K`, (v) => { kelvin = v; paint(); }).el,
+        slider('Bandwidth', 3, 10, 0.1, exp, (v) => hz(10 ** v), (v) => { exp = v; paint(); }).el,
+        slider('Source at', 4, 400, 1, kelvin, (v) => `${v} K`, (v) => { kelvin = v; paint(); }).el,
         slider('Noise figure', 0, 12, 1, nf, (v) => `${v} dB`, (v) => { nf = v; paint(); }).el))),
   };
 }
@@ -62,7 +65,7 @@ export function decisionWidget(): Widget {
     plot.layer.append(s('line', { x1: plot.X(SPAN), x2: plot.X(SPAN), y1: plot.Y(1), y2: plot.Y(0), class: 'sg-th' }));
     chips.set(0, db(20 * Math.log10(1 / sigma)), 'SNR: level² ÷ σ²');
     chips.set(1, sci(decisionError(1, sigma)), 'the Gaussian tail, Q(1 / σ)');
-    chips.set(2, sci(measuredDecision(sigma, 200000, 9)), 'the share wrong in 200 000 counted');
+    chips.set(2, counted(measuredDecision(sigma, 200000, 9), 200000), 'the share wrong in 200 000 counted');
   }
   paint();
   return {
@@ -91,7 +94,7 @@ export function matchedWidget(): Widget {
     chips.set(0, db(10 * Math.log10(snr)), 'SNR of the decision');
     chips.set(1, db(10 * Math.log10(best / snr)), 'below the best any weights can do', best / snr > 1.001 ? 'bad' : 'good');
     chips.set(2, sci(errorAfter(snr)), 'errors, closed form');
-    chips.set(3, sci(measuredReceiver(p, w, sigma, 40000, 13)), 'errors in 40 000 counted');
+    chips.set(3, counted(measuredReceiver(p, w, sigma, 40000, 13), 40000), 'errors in 40 000 counted');
   }
   paint();
   return {
@@ -107,27 +110,27 @@ const DB0 = 4;
 
 export function berCurveWidget(): Widget {
   let at = 7;
-  const plot = plotOf({ W: 640, H: 260, x: [0, 16], y: [-7, 0], yTicks: [0, -2, -4, -6], xLabel: 'Eb/N0, dB', yLabel: 'bit errors', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
+  const plot = plotOf({ W: 640, H: 260, x: [0, 18], y: [-10, 0], yTicks: [0, -2, -4, -6, -8, -10], xLabel: 'Eb/N0, dB', yLabel: 'bit errors', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
   const chips = mkChips(3);
   const dots: [number, number][] = [];
   for (const d of [0, 2, 4, 6, 7, 8]) { const b = measuredBer(d, 400000, 41 + d); if (b > 0) dots.push([d, b]); }
   function paint() {
-    const xs = Array.from({ length: 81 }, (_, i) => -DB0 + (i / 80) * 16);
+    const xs = Array.from({ length: 91 }, (_, i) => -DB0 + (i / 90) * 18);
     plot.clear();
-    line(plot, xs.map((d) => d + DB0), xs.map((d) => Math.max(-7, Math.log10(uncodedBer(d)))), 'ln-s real');
+    line(plot, xs.map((d) => d + DB0), xs.map((d) => Math.max(-10, Math.log10(uncodedBer(d)))), 'ln-s real');
     for (const [d, b] of dots) plot.layer.append(s('circle', { cx: plot.X(d + DB0), cy: plot.Y(Math.log10(b)), r: 4, class: 'sg-pt' }));
     const wall = ratioToDb(EBN0_MIN);
-    plot.layer.append(s('line', { x1: plot.X(wall + DB0), x2: plot.X(wall + DB0), y1: plot.Y(0), y2: plot.Y(-7), class: 'sg-limit' }), s('text', { x: plot.X(wall + DB0) + 5, y: plot.Y(-6.6), class: 'sg-limit-t' }, 'no code passes this'));
-    plot.layer.append(s('circle', { cx: plot.X(at + DB0), cy: plot.Y(Math.max(-7, Math.log10(uncodedBer(at)))), r: 5, class: 'sg-dot' }));
+    plot.layer.append(s('line', { x1: plot.X(wall + DB0), x2: plot.X(wall + DB0), y1: plot.Y(0), y2: plot.Y(-10), class: 'sg-limit' }), s('text', { x: plot.X(wall + DB0) + 5, y: plot.Y(-9.5), class: 'sg-limit-t' }, 'no code passes this'));
+    plot.layer.append(s('circle', { cx: plot.X(at + DB0), cy: plot.Y(Math.max(-10, Math.log10(uncodedBer(at)))), r: 5, class: 'sg-dot' }));
     chips.set(0, sci(uncodedBer(at)), `uncoded, at ${db(at)}`);
     chips.set(1, db(at - wall), 'above the limit for any code');
-    chips.set(2, num(uncodedBer(at) * 1e9, 0), 'wrong bits a second at 1 Gb/s');
+    chips.set(2, groupDigits(Math.round(uncodedBer(at) * 1e9)), 'wrong bits a second at 1 Gb/s');
   }
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'The curve every link is judged on'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'closed form'), h('span', { class: 'k-near' }, 'counted (400 000 bits)')), plot.el, chips.el),
-      h('div', { class: 'panel mos-ctl' }, slider('Eb/N0', -3, 12, 0.5, at, (v) => db(v), (v) => { at = v; paint(); }).el)),
+      h('div', { class: 'panel mos-ctl' }, slider('Eb/N0', -3, 14, 0.5, at, (v) => db(v), (v) => { at = v; paint(); }).el)),
   };
 }
 
@@ -214,7 +217,8 @@ export function chainWidget(): Widget {
       ...chain.map((c) => h('div', { class: 'sg-dbrow' }, h('span', null, c.name), h('span', null, db(c.gainDb, 0)), h('span', null, db(c.nfDb, 0)), h('span', null, ''))));
     chips.set(0, db(total, 2), 'noise figure of the chain', total > 3 ? 'bad' : 'good');
     chips.set(1, dbm(noiseFloorDbm(20e6, total)), 'noise floor in 20 MHz');
-    chips.set(2, db(cascadeNfDb([cable, lna]) - cascadeNfDb([lna, cable]), 1), 'what the other order costs');
+    const other = cascadeNfDb(first ? [cable, lna] : [lna, cable]) - total;
+    chips.set(2, db(Math.abs(other), 1), other > 0 ? 'what the other order would cost' : 'what the other order would save');
   }
   paint();
   return {

@@ -3,7 +3,7 @@
 // held to seeded counts in tests/comm-noise.test.ts; the telegraph chapter states the limit, the codes chapter approaches it.
 
 import { ebn0For, shannonBinaryDb, uncodedBer } from '../comm/ber';
-import { EBN0_MIN, ratioToDb } from '../comm/limits';
+import { dbToRatio, EBN0_MIN, ratioToDb } from '../comm/limits';
 import { capacityAt, capacityCeiling, cascadeNfDb, decisionError, johnsonVolts, noiseDensityDbm, noiseFloorDbm, PULSES, RECEIVERS, snrAfter, T0 } from '../comm/noise';
 import { berCurveWidget, capacityWidget, chainWidget, decisionWidget, matchedWidget, randomCodeWidget, thermalWidget } from '../widgets/noise';
 import { numOf } from './order';
@@ -39,7 +39,7 @@ export const chNoise: Chapter = {
       `A level d from a threshold, in Gaussian noise of σ, is read wrong with probability Q(d / σ). Going from 1e-3 to 1e-9 takes about ${db(20 * Math.log10(6 / 3.09), 0)}: the tail falls fast.`,
       'The best weights for a known pulse in white noise are the pulse itself: the SNR after them is E / σ², the energy over the noise, whatever the shape. Averaging is that filter for a rectangle.',
       `Eb/N0 is energy per bit over noise density: SNR = (Eb/N0) (R / B). Uncoded ±1 signalling gives Q(√(2 Eb/N0)), ${db(FOR_1E5)} at 10⁻⁵ and ${db(FOR_1E9)} at 10⁻⁹.`,
-      `C = B log₂(1 + P / (N0 B)). More band at fixed power flattens out at P / (N0 ln 2), so no code runs below ${db(WALL, 2)}. Short of power, spend band; short of band, spending power buys a bit a symbol for each 3 dB.`,
+      `C = B log₂(1 + P / (N0 B)). More band at fixed power flattens out at P / (N0 ln 2), so no code runs below ${db(WALL, 2)}. Short of power, spend band; short of band, each extra bit a second per hertz costs 3 dB.`,
       'Shannon\'s proof picks a code at random. It works, with no structure at all, and needs 2^(nR) comparisons to decode: real codes exist to make decoding possible.',
       'In a chain each stage\'s excess noise counts divided by the gain before it (Friis), so the first amplifier sets the figure, and loss before it adds in full.',
     ],
@@ -73,8 +73,8 @@ export const chNoise: Chapter = {
       body: `
         <p>Electrons in a resistor move with heat, and their motion is a voltage. John Johnson measured it in 1926 and Harry Nyquist derived it in 1928: an open resistor has an RMS noise voltage of √(4 k T R B), ${NV(johnsonVolts(1000, 1))} nV in 1 kΩ over 1 Hz at room temperature. No design removes it, because it comes with being warm and being connected.</p>
         <p>The power it can deliver does not depend on the resistor: <strong>kT per hertz</strong>, which at the reference temperature of ${T0} K is ${dbm(FLOOR)}/Hz. That is the most-used number in radio engineering. A band of B collects kTB, so the floor in dBm is ${nf(FLOOR, 0).replace('-', '−')} + 10 log₁₀ B. The density is flat far past any radio band, and noise that is flat is called <strong>white</strong>.</p>
-        <p>A receiver adds its own on top, stated as its <strong>noise figure</strong>: how many dB it degrades the SNR. So a Wi-Fi receiver with 20 MHz and 6 dB of figure has a floor of ${dbm(noiseFloorDbm(20e6, 6))}, and a signal must clear that by whatever its modulation needs. The ground stations that listen to deep-space probes cool their receivers because a floor set by 4 K is ${db(10 * Math.log10(290 / 4), 0)} lower.</p>
-        <div class="try">Widen the band by ten and read the floor. Cool the receiver to 4 K. Which helps more: halving the band, or cooling from 290 K to 145 K?</div>`,
+        <p>A receiver adds its own on top, stated as its <strong>noise figure</strong>: how many dB it degrades the SNR. So a Wi-Fi receiver with 20 MHz and 6 dB of figure has a floor of ${dbm(noiseFloorDbm(20e6, 6))}, and a signal must clear that by whatever its modulation needs. A noise figure is quoted against a ${T0} K source, so that receiver adds about ${Math.round((dbToRatio(6) - 1) * T0)} K of its own, whatever it listens to. Cooling only the source then gains little. Stations that listen to deep-space probes look at a cold sky through cooled amplifiers: with everything near 4 K the floor is ${db(10 * Math.log10(T0 / 4), 0)} lower.</p>
+        <div class="try">Widen the band by ten and read the floor. Set the noise figure to 0 and compare halving the band with cooling the source from 290 K to 145 K: each is 3 dB. Then set the figure to 6 dB and try cooling again.</div>`,
       widget: thermalWidget,
       challenge: {
         kind: 'quiz', question: 'A channel is narrowed from 100 MHz to 1 MHz. What happens to the thermal noise in it?',
@@ -127,15 +127,15 @@ export const chNoise: Chapter = {
       body: `
         <p>To compare a 300 b/s modem with a 400 Gb/s fibre, take out the rate. <strong>E<sub>b</sub></strong> is the energy per bit, signal power divided by bit rate. <strong>N<sub>0</sub></strong> is the noise density. Their ratio is dimensionless, and SNR = (E<sub>b</sub> / N<sub>0</sub>) (R / B): what a bit gets, scaled by how many bits share each hertz.</p>
         <p>With ±√E<sub>b</sub> and a matched filter, the noise on the decision has variance N<sub>0</sub> / 2, so the error rate is <strong>Q(√(2 E<sub>b</sub> / N<sub>0</sub>))</strong>. That needs ${db(FOR_1E5)} for one bit in 10⁵ and ${db(FOR_1E9)} for one in 10⁹. These figures are the reference for every link: the gain of a code is how far left of this curve it runs.</p>
-        <p>The dashed line at ${db(WALL, 2)} is the limit for any code at all, derived two steps on. Between it and the curve lie ${db(FOR_1E5 - WALL)} at 10⁻⁵. That gap, a factor of ${(10 ** ((FOR_1E5 - WALL) / 10)).toFixed(0)} in power, is what <a href="#/c/errors/9">the stronger codes</a> are for. <a href="#/c/modem/5">Modems</a> reads the same curve for larger constellations.</p>
+        <p>The dashed line at ${db(WALL, 2)} is the limit for any code at all, derived in the next step. Between it and the curve lie ${db(FOR_1E5 - WALL)} at 10⁻⁵. That gap, a factor of ${(10 ** ((FOR_1E5 - WALL) / 10)).toFixed(0)} in power, is what <a href="#/c/errors/9">the stronger codes</a> are for. <a href="#/c/modem/5">Modems</a> reads the same curve for larger constellations.</p>
         <div class="try">Find the Eb/N0 for one wrong bit a second at 1 Gb/s. Then read how far above the limit that is.</div>`,
       widget: berCurveWidget,
       challenge: {
-        kind: 'quiz', question: `Two uncoded links run at ${db(FOR_1E5, 0)} Eb/N0, one at 1 kb/s and one at 1 Gb/s, with matched filters. How do their error rates compare?`,
-        options: ['The same: the error rate depends on Eb/N0 alone. The fast link needs a million times the power', 'The fast one has a million times the errors', 'The slow one has more errors, being narrower', 'They cannot be compared'],
+        kind: 'quiz', question: `Two uncoded links run at ${db(FOR_1E5, 0)} Eb/N0, one at 1 kb/s and one at 1 Gb/s, with matched filters. What share of their bits is wrong?`,
+        options: ['The same share: it depends on Eb/N0 alone. The fast link needs a million times the power', 'A million times the share on the fast one', 'The slow one has more errors, being narrower', 'They cannot be compared'],
         answer: 0,
         explain: 'That is the point of the axis. Power = Eb × R, so at the same Eb/N0 the 1 Gb/s link spends 60 dB more power.',
-        why: ['', 'It has a million times as many errors per second only if the rates are counted per second. Per bit they are equal.', 'A narrower band collects less noise, and each bit also gets its energy in less band. It cancels.', 'Taking the rate out is exactly what makes them comparable.'],
+        why: ['', 'It makes a million times as many errors each second, and sends a million times as many bits. The share is equal.', 'A narrower band collects less noise, and each bit also gets its energy in less band. It cancels.', 'Taking the rate out is exactly what makes them comparable.'],
       },
     },
     {
@@ -161,7 +161,7 @@ export const chNoise: Chapter = {
       body: `
         <p>Send a block of n values, each of power P, through noise of power N. The received vector lies, with near certainty as n grows, inside a ball of radius √(n(P + N)). Around each transmitted vector, the noise puts it on a small ball of radius √(nN). If those small balls do not overlap, the receiver can always tell which was sent. So the most codewords that can fit is the ratio of the volumes: (√(n(P + N)) / √(nN))<sup>n</sup> = (1 + P / N)<sup>n/2</sup>.</p>
         <p>That is ½ log₂(1 + P / N) bits per value. At 2B values a second it is exactly <strong>C = B log₂(1 + SNR)</strong>. The bound comes from nothing but counting and geometry. The other half of the theorem is stranger: pick the codewords <em>at random</em>, with no design at all, and as n grows the error rate falls to zero at any rate below that.</p>
-        <p>The plot runs that code. Every point draws fresh random codewords at rate ½ and decodes by comparing with all of them, the best any receiver can do. Below the limit of ${db(shannonBinaryDb(0.5), 2)} for ±1 signals at this rate, a longer code does worse. Well above it, a longer code does better. The curves pivot not far from the limit, and steepen as n grows, which is the theorem appearing. Twenty bits is still far from the limit's sharp edge: the curve only becomes a cliff with very large n.</p>
+        <p>The plot runs that code. Every point draws fresh random codewords at rate ½ and decodes by comparing with all of them, the best any receiver can do. Below the limit of ${db(shannonBinaryDb(0.5), 2)} for ±1 signals at this rate, a longer code does worse. Well above it, a longer code does better. The curves pivot about a dB above the limit, and steepen as n grows, which is the theorem appearing. Twenty bits is still far from the limit's sharp edge: the curve only becomes a cliff with very large n.</p>
         <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/errors/9">a code with memory</a> is the first of them.</p>
         <div class="try">Run it. Compare the three lengths at 6 dB, then at −3 dB, and find where they cross.</div>`,
       widget: randomCodeWidget,
@@ -188,7 +188,7 @@ export const chNoise: Chapter = {
         options: ['About 3 dB: the loss before the first amplifier adds in full', 'Nothing: the same parts are in the chain', 'About 1 dB: it is shared with the amplifier', 'About 0.3 dB: a tenth of the loss'],
         answer: 0,
         explain: 'Before: 3 + 2 = 5 dB. After, with enough gain: about 2 dB, because the cable is now divided by the amplifier\'s gain.',
-        why: ['', 'Order is the whole point: noise is added at different signal levels.', 'Loss before any gain cannot be shared: it reduces the signal against the noise at full weight.', 'That would be true only behind about 10 dB of gain, which is exactly the change being made.'],
+        why: ['', 'Order is the whole point: noise is added at different signal levels.', 'Loss before any gain cannot be shared: it reduces the signal against the noise at full weight.', 'A loss ahead of the first gain adds in full, not in part: the amplifier then comes after the signal has already fallen against the noise.'],
       },
     },
   ],

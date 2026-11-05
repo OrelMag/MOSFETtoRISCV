@@ -4,13 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { shannonBinaryDb, uncodedBer } from '../src/comm/ber';
 import { dbToRatio, EBN0_MIN, ratioToDb } from '../src/comm/limits';
 import {
-  capacityAt, capacityCeiling, cascadeNfDb, decisionError, energyOf, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, randomCodeError, RECEIVERS, snrAfter,
+  capacityAt, capacityCeiling, receiverFloorDbm, cascadeNfDb, decisionError, energyOf, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, randomCodeError, RECEIVERS, snrAfter,
 } from '../src/comm/noise';
 
 describe('thermal noise', () => {
   it('is the −174 dBm / Hz every link budget uses', () => {
     expect(noiseDensityDbm()).toBeCloseTo(-173.98, 1);
     expect(noiseFloorDbm(20e6, 6)).toBeCloseTo(-173.98 + 73.01 + 6, 1);
+  });
+  it('a noise figure is against a 290 K source: at 290 K the two forms agree, and cooling only the source then gains little', () => {
+    expect(receiverFloorDbm(20e6, 6)).toBeCloseTo(noiseFloorDbm(20e6, 6), 9);
+    expect(receiverFloorDbm(20e6, 6) - receiverFloorDbm(20e6, 6, 4)).toBeCloseTo(1.2, 1);
+    expect(receiverFloorDbm(20e6, 0) - receiverFloorDbm(20e6, 0, 4)).toBeCloseTo(18.6, 1);
   });
   it('a 1 kΩ resistor over 1 Hz is about 4 nV', () => {
     expect(johnsonVolts(1000, 1) * 1e9).toBeCloseTo(4.0, 0);
@@ -89,5 +94,10 @@ describe('Shannon', () => {
     expect(at(20, 6)).toBeLessThan(at(8, 6));
     // far below it a longer code is worse, not better
     expect(at(20, -3)).toBeGreaterThan(at(8, -3));
+  });
+  it('the curves cross about a dB above the limit, as the chapter says', () => {
+    const at = (n: number, db: number) => randomCodeError(n, n / 2, db, 3000, n * 31 + Math.round(db * 10) + 5);
+    expect(at(20, 0)).toBeGreaterThan(at(8, 0));
+    expect(at(20, 2)).toBeLessThan(at(8, 2));
   });
 });
