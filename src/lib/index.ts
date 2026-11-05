@@ -83,6 +83,7 @@ export * from './viterbi';
 export * from './rs';
 export * from './rsdec';
 export * from './fft';
+export * from './fixedpt';
 export * from './ethswitch';
 export * from './enigmagates';
 export * from './aes';
