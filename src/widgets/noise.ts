@@ -22,6 +22,11 @@ const volts = (v: number) => (v >= 1e-3 ? `${(v * 1e3).toPrecision(3)} mV` : v >
 const dbm = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)} dBm`;
 /** A share counted in n trials: a count of none says only that, never a figure smaller than the trials can show. */
 const counted = (b: number, n: number) => (b > 0 ? sci(b) : `none in ${groupDigits(n)}`);
+/** A slow count remembered per setting, so a dragged slider recounts each value once. */
+function remembered<K, V>(f: (k: K) => V): (k: K) => V {
+  const seen = new Map<K, V>();
+  return (k) => { if (!seen.has(k)) seen.set(k, f(k)); return seen.get(k)!; };
+}
 const db = (v: number, d = 1) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)} dB`;
 
 export function thermalWidget(): Widget {
@@ -45,6 +50,8 @@ export function thermalWidget(): Widget {
   };
 }
 
+const countedDecision = remembered((sigma: number) => measuredDecision(sigma, 200000, 9));
+
 export function decisionWidget(): Widget {
   let sigma = 0.4;
   const BINS = 80, SPAN = 3.2, N = 20000;
@@ -65,7 +72,7 @@ export function decisionWidget(): Widget {
     plot.layer.append(s('line', { x1: plot.X(SPAN), x2: plot.X(SPAN), y1: plot.Y(1), y2: plot.Y(0), class: 'sg-th' }));
     chips.set(0, db(20 * Math.log10(1 / sigma)), 'SNR: level² ÷ σ²');
     chips.set(1, sci(decisionError(1, sigma)), 'the Gaussian tail, Q(1 / σ)');
-    chips.set(2, counted(measuredDecision(sigma, 200000, 9), 200000), 'the share wrong in 200 000 counted');
+    chips.set(2, counted(countedDecision(sigma), 200000), 'the share wrong in 200 000 counted');
   }
   paint();
   return {
@@ -74,6 +81,11 @@ export function decisionWidget(): Widget {
       h('div', { class: 'panel mos-ctl' }, slider('Noise σ', 0.1, 1.5, 0.02, sigma, (v) => num(v, 2), (v) => { sigma = v; paint(); }).el)),
   };
 }
+
+const countedReceiver = remembered((key: string) => {
+  const [pi, ri, sg] = key.split('/').map(Number), p = PULSES[pi].shape;
+  return measuredReceiver(p, RECEIVERS[ri].weights(p), sg, 40000, 13);
+});
 
 export function matchedWidget(): Widget {
   let pulse = 1, recv = 0, sigma = 2;
@@ -94,7 +106,7 @@ export function matchedWidget(): Widget {
     chips.set(0, db(10 * Math.log10(snr)), 'SNR of the decision');
     chips.set(1, db(10 * Math.log10(best / snr)), 'below the best any weights can do', best / snr > 1.001 ? 'bad' : 'good');
     chips.set(2, sci(errorAfter(snr)), 'errors, closed form');
-    chips.set(3, counted(measuredReceiver(p, w, sigma, 40000, 13), 40000), 'errors in 40 000 counted');
+    chips.set(3, counted(countedReceiver(`${pulse}/${recv}/${sigma}`), 40000), 'errors in 40 000 counted');
   }
   paint();
   return {
