@@ -40,7 +40,7 @@ export interface IncastRun { ms: number; goodputGbps: number; share: number; dro
 
 /**
  * One barrier-synchronized read, as in Phanishayee et al. (2008): every server sends its block through one port with a shallow buffer, and the next read waits for the last packet of all of them. Time is packet slots on that port. Each sender has cumulative
- * ACKs, slow start then one packet a round trip, a fast retransmit on three duplicate ACKs (halving), NewReno partial ACKs for further holes, and otherwise a retransmission timer that restarts from the first unacknowledged packet with a window of one.
+ * ACKs, slow start then one packet a round trip, a fast retransmit on three duplicate ACKs (halving), NewReno partial ACKs for further holes, and otherwise a retransmission timer that restarts from the first unacknowledged packet with a window of one. The timer is a fixed value: no RTT estimator and no backoff, unlike a real TCP, where the minimum is a floor under srtt + 4 rttvar.
  */
 export function incast(s: IncastSpec): IncastRun {
   const pkt = s.pktBytes ?? 1500, gbps = s.gbps ?? 1, slotUs = (pkt * 8) / (gbps * 1e3), rtt = Math.max(1, Math.round((s.rttUs ?? 100) / slotUs)), rto = Math.round((s.rtoMs * 1000) / slotUs), total = Math.ceil(s.blockBytes / pkt), N = s.senders;
@@ -91,25 +91,25 @@ export function incast(s: IncastSpec): IncastRun {
 
 // ---- losing a packet at a high rate ---------------------------------------------------------------------------------------------
 
-/** Go-back-N: a loss throws away the W packets in flight behind it. Expected transmissions per good packet: 1 + W p / (1 − p). */
+/** Go-back-N: a loss wastes the pipe, W sends with itself. Expected sends per good packet: 1 + W p / (1 − p). */
 export const gbnGoodput = (p: number, W: number): number => (1 - p) / (1 - p + W * p);
 /** Selective repeat: each packet is sent until it arrives. */
 export const srGoodput = (p: number): number => 1 - p;
-/** The same, a packet at a time: per transmission, a good packet advances; a lost one costs the pipe, W sends in all. */
+/** The same, a packet at a time: a good packet advances; a lost one costs the pipe, W sends in all, itself and the W − 1 behind it. */
 export function arqRun(p: number, W: number, scheme: 'gbn' | 'sr', n: number, seed: number): number {
   const u = rng(seed);
   let good = 0, sent = 0;
   while (good < n) {
     sent++;
     if (u() >= p) good++;
-    else if (scheme === 'gbn') sent += W;
+    else if (scheme === 'gbn') sent += W - 1;
   }
   return good / sent;
 }
 
 // ---- priority flow control ----------------------------------------------------------------------------------------------------
 
-/** What must fit above XOFF: while the pause travels, and while the sender finishes what it has started: 2 × one-way delay of packets, plus one being sent at each end. */
+/** What must fit above XOFF: while the pause travels, and while the sender finishes what it has started: 2 × one-way delay of packets, plus one being sent at each end. A safe bound: it counts nothing draining meanwhile. */
 export const pfcHeadroom = (oneWay: number): number => 2 * oneWay + 2;
 
 export interface PfcSpec { /** All the traffic to the slow port: the worst case for the headroom. */ oneFlow?: boolean; lossless: boolean; /** The slower receiver's rate, of the link. */ r1: number; buffer: number; headroom: number; oneWay: number; slots: number; seed?: number }
@@ -168,8 +168,9 @@ export function ringRun(n: number, hops: number, buffer: number, slots: number, 
       if (left <= 1) { q[i].shift(); delivered[flowOf[i].shift()!]++; moved++; }
       else if (nq[next] < buffer) { q[i].shift(); const f = flowOf[i].shift()!; q[next].push(left - 1); flowOf[next].push(f); nq[next]++; moved++; }
     }
-    for (let i = 0; i < n; i++) if (q[i].length < buffer && u() < offered) { q[i].push(hops); flowOf[i].push(i); moved++; }
-    if (moved === 0 && stoppedAt === null) { stoppedAt = t; break; }
+    // nothing moved with packets queued: every head is blocked by a full queue whose head is blocked too, all the way round, and arrivals cannot free a place
+    if (moved === 0 && q.some((x) => x.length > 0)) { stoppedAt = t; break; }
+    for (let i = 0; i < n; i++) if (q[i].length < buffer && u() < offered) { q[i].push(hops); flowOf[i].push(i); }
   }
   flowOf = [];
   return { delivered, stoppedAt };

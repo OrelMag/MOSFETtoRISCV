@@ -63,7 +63,7 @@ describe('incast', () => {
 describe('losing a packet at a high rate', () => {
   it('go-back-N and selective repeat keep their closed forms', () => {
     for (const [p, W] of [[1e-3, 100], [1e-2, 50], [1e-4, 1000]] as const) {
-      near(arqRun(p, W, 'gbn', 300000, 3), gbnGoodput(p, W), 0.03, `gbn p ${p} W ${W}`);
+      near(arqRun(p, W, 'gbn', 2000000, 3), gbnGoodput(p, W), 0.01, `gbn p ${p} W ${W}`);
       near(arqRun(p, W, 'sr', 300000, 4), srGoodput(p), 0.01, `sr p ${p}`);
     }
   });
@@ -101,10 +101,17 @@ describe('deadlock', () => {
     expect(one.stoppedAt).toBeNull();
     expect(one.delivered.reduce((a, b) => a + b, 0)).toBeGreaterThan(50000);
   });
-  it('light traffic only postpones it', () => {
-    const r = ringRun(4, 3, 4, 2000000, 0.5);
-    expect(r.stoppedAt).not.toBeNull();
-    expect(r.stoppedAt!).toBeGreaterThan(0);
+  it('a stop is a real one: packets queued and none can move, and an empty slot is not a stop', () => {
+    const hi = ringRun(4, 2, 4, 200000, 1), lo = ringRun(4, 2, 4, 2000000, 0.5);
+    expect(hi.stoppedAt).not.toBeNull();
+    expect(lo.stoppedAt).not.toBeNull();
+    expect(lo.stoppedAt!).toBeGreaterThan(hi.stoppedAt!);
+    expect(ringRun(4, 2, 4, 200000, 0.05).stoppedAt).toBeNull();
+  });
+  it('the text's figures: a million slots at load 0.3, none in three million at 0.2', () => {
+    const a = ringRun(4, 2, 4, 3000000, 0.3).stoppedAt!;
+    expect(a).toBeGreaterThan(5e5); expect(a).toBeLessThan(2e6);
+    expect(ringRun(4, 2, 4, 3000000, 0.2).stoppedAt).toBeNull();
   });
 });
 

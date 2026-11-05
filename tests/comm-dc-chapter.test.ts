@@ -28,7 +28,7 @@ describe('what the text says', () => {
   });
   it('the quizzes\' arithmetic', () => {
     expect(gbnGoodput(1e-3, 1000)).toBeCloseTo(0.5, 2);
-    expect(pfcHeadroom(12.5)).toBe(27);
+    expect(pfcHeadroom(6.25)).toBeCloseTo(14.5, 9);
     expect(fanoutSlow(50, 0.0002)).toBeCloseTo(0.01, 3);
     expect(fanoutSlow(50, 0.01)).toBeGreaterThan(0.39);
     expect(fanoutSlow(50, 1 / 50)).toBeCloseTo(0.636, 2);

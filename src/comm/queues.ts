@@ -170,7 +170,7 @@ class Sender {
     const s = this.spec.cc;
     if (s === 'bbr') { this.bbrAck(p, t); return; }
     if (s === 'dctcp') {
-      // Alizadeh et al., 2010: over each window of data, α ← (1 − g) α + g F, F the share marked; a marked window cuts by α / 2 once
+      // Alizadeh et al., 2010: over each window of data, α ← (1 − g) α + g F, F the share marked; a marked window cuts by α / 2 once, at its first mark with the α it has then (as Linux does, and not at the window's end)
       this.ackedW++; if (p.ce) this.markedW++;
       if (p.ce && t > this.recoverUntil) { this.recoverUntil = t + this.rtt; this.cwnd = Math.max(2, this.cwnd * (1 - this.alpha / 2)); this.ssthresh = this.cwnd; }
       if (this.delivered >= this.windowEnd) { this.alpha = (1 - DCTCP_G) * this.alpha + DCTCP_G * (this.markedW / Math.max(1, this.ackedW)); this.ackedW = 0; this.markedW = 0; this.windowEnd = this.delivered + this.cwnd; }

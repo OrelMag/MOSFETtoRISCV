@@ -45,12 +45,12 @@ export function fabricWidget(): Widget {
     svg.replaceChildren(...parts);
   };
   const paint = () => {
-    const f = fatTree(k), cross = (f.hosts * f.hosts) ;
+    const f = fatTree(k);
     chips.set(0, n0(f.hosts), `hosts, on ${k}-port switches`);
     chips.set(1, n0(f.switches), 'switches');
     chips.set(2, n0(f.core), 'paths between two pods');
-    chips.set(3, n0(cross / (f.switches * k * k)), 'times the crosspoints, for one big crossbar');
-    note.textContent = `The drawing is k = 4. Every switch is the same cheap ${k}-port part, and every host has the full bandwidth of its port to any other: the exchange's Clos network, folded, in Ethernet.`;
+    chips.set(3, (f.hosts / f.switches).toFixed(1), 'hosts a switch');
+    note.textContent = `The drawing is k = 4. Every switch is the same cheap ${k}-port part, and the links up equal the hosts down, so every host could have its port's full rate to any other if the traffic spreads evenly: the exchange's Clos network, folded, in Ethernet.`;
     draw();
   };
   paint();
@@ -74,7 +74,7 @@ export function ecmpWidget(): Widget {
       return [s('rect', { x, y: 100 - H, width: Math.max(1, W - 2), height: Math.max(H, 0.5), class: c > 1 ? 'dc-bar hot' : c ? 'dc-bar' : 'dc-bar idle' }), ...(m <= 32 ? [s('text', { x: x + W / 2 - 1, y: 114, 'text-anchor': 'middle', class: 'dc-lab' }, String(c))] : [])];
     }));
     chips.set(0, `${(100 * ecmpCarried(b) / Math.min(n, m)).toFixed(0)} %`, 'of the flows\' possible rate, in this draw');
-    chips.set(1, `${(100 * ecmpExpected(n, m) / Math.min(1, n / m)).toFixed(0)} %`, 'expected over all draws, 1 − (1 − 1 / m)ⁿ');
+    chips.set(1, `${(100 * ecmpExpected(n, m) / Math.min(1, n / m)).toFixed(0)} %`, 'expected over all draws');
     chips.set(2, String(Math.max(...b)), 'the most flows on one path');
     note.textContent = 'Each flow fills a path if it is alone on it. A hash cannot look at load, so collisions sit on one path while another is idle. Every packet of a flow goes the same way, to stay in order.';
   };
@@ -204,7 +204,7 @@ export function ringWidget(): Widget {
     chips.set(0, stuck ? `slot ${n0(r.stoppedAt!)}` : 'never', 'when everything stopped', stuck ? 'bad' : 'ok');
     chips.set(1, n0(sum), 'packets delivered, of 200 000 slots');
     chips.set(2, hops >= 2 ? 'yes' : 'no', 'cycle of buffer dependencies');
-    note.textContent = stuck ? `Each queue's head needs room in the next queue, all the way round. No drop is allowed, so no room ever appears: delivered stops at ${n0(sum)} for good, and no amount of waiting helps.` : 'Every packet leaves after one link, so no queue ever waits on another. Whatever the load, it keeps moving.';
+    note.textContent = stuck ? `Each queue's head needs room in the next queue, all the way round. No drop is allowed, so no room ever appears: delivered stops at ${n0(sum)} for good, and no amount of waiting helps.` : hops >= 2 ? 'The dependency is there, but in this run the queues never all filled at once.' : 'Every packet leaves after one link, so no queue ever waits on another. Whatever the load, it keeps moving.';
   };
   paint();
   return { el: h('div', { class: 'widget mos sr-w' },
