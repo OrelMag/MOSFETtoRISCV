@@ -114,7 +114,7 @@ export const chRadio: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'Doubling transmit power and doubling the bandwidth. For a link at low SNR, which is worth more?',
-        options: ['Power: at low SNR capacity is nearly proportional to P / N₀ and hardly depends on B', 'They are about equal', 'Bandwidth, always', 'Neither helps at low SNR'],
+        options: ['Doubling the power', 'They are about equal', 'Doubling the bandwidth', 'Neither helps at low SNR'],
         answer: 0,
         explain: 'At low SNR, log₂(1 + x) ≈ x / ln 2, so C ≈ B · (P / N₀B) / ln 2 = P / (N₀ ln 2): B cancels. Doubling the power doubles capacity and doubling the bandwidth does very little more. At high SNR, the reverse: bandwidth is linear and power only logarithmic.',
         why: ['', 'B cancels at low SNR, so doubling it adds very little while doubling P doubles capacity.', 'Only at high SNR, where capacity is linear in B and logarithmic in P.', 'Power certainly helps at low SNR.'],
