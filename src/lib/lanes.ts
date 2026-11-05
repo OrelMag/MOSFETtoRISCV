@@ -20,6 +20,7 @@ import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4_FAST, rom } from './cpu';
 import { define, merger, ones, splitter } from './define';
 import { fanout, koggeStone } from './fastadd';
 import { AND, NOT, OR } from './gates';
+import { laneWiredLayout, wireLaneCore } from './lanewires';
 import { sharedMemory } from './multicore';
 import { regfile } from './regfile';
 import { register } from './sequential';
@@ -454,14 +455,16 @@ export function laneCore(program: number[], n = 4, opts: LaneCoreOptions = {}): 
     b.name(`${dm}.rd`, 'ReadData', true);
     lanes.forEach((l) => b.wire(`${dm}.rd`, `${l}.readData`));
     b.wire(`${pc}.q`, 'pcOut'); b.wire(nst, 'retire'); b.wire(mask, 'maskOut');
-    const { at, right } = laneCoreLayout(n);
+    const lay = n === 4 ? laneWiredLayout(n) : undefined;
+    const { at, right } = lay ? { at: lay.at, right: lay.back + 8 } : laneCoreLayout(n);
     for (const i of b.instances) {
       const p = at.get(i.name);
       if (!p) throw new Error(`laneCore: no place for ${i.name}`);
       i.at = p;
     }
-    const pins: Record<string, [number, number]> = { clk: [2, 50], pcOut: [right, 2], retire: [right, 5], maskOut: [right, 8] };
+    const pins: Record<string, [number, number]> = lay?.pins ?? { clk: [2, 50], pcOut: [right, 2], retire: [right, 5], maskOut: [right, 8] };
     const nets = laneCoreNets(b);
+    if (lay) wireLaneCore(n, b.instances, nets, lay);
     return {
       id: `lanecore${n}_${IM.id}_d${dmemK}`, name: `Lane core (${n} lanes)`, category: 'cpu',
       summary: `One fetch, decode and control unit for ${n} lanes. Each lane has its own registers and ALU; the active mask says which lanes write. The leader (lowest active lane) steers branches; loads and stores take one cycle per active lane; split / join run the two sides of an if one after the other.`,

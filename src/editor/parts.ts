@@ -42,7 +42,7 @@ export const MAX_WIDTH = 1024;
  */
 export const MAX_RAM_K = 16;
 /** Widest splitter / merger pin spacing (the library's tall fans and multiplier rows use up to 18). */
-export const MAX_PITCH = 32;
+export const MAX_PITCH = 64;
 /** Largest ROM: 2^16 words (simulated as a lookup; its mux trees are built when opened, banks of 2^8 beyond that). */
 export const MAX_ROM_K = 16;
 
