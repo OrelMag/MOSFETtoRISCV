@@ -56,7 +56,7 @@ export const chFlash: Chapter = {
       `Charge on the floating gate raises the threshold. Erased, Vt = ${vtOf(0)} V: the cell conducts at the ${V_READ} V read voltage and reads 1. Programmed, Vt ≥ ${V_READ} V: it reads 0. Here a pulse adds ${(5 * FG_STEP).toFixed(1)} V, so a program takes ${pulses} pulses, each followed by a verify.`,
       'Programming only clears bits (1 → 0); here a row at a time, each bit line programming or inhibiting its cell (NAND programs a page at once by tunnelling; real NOR a few bytes at a time by hot electrons). Only a block erase sets bits back to 1: <strong>flash cannot overwrite</strong>.',
       `Real SLC: a page read ${FLASH_REAL_US.read} µs, a program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. The model scales them down about ${SCALE}× (ratios kept): ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles. Unscaled, a read alone is ${fmtN(READ_REAL)} of our cycles.`,
-      'Several bits a cell (MLC 2, TLC 3, QLC 4: 4 to 16 threshold levels) trade margin for density: slower programs, fewer erases, stronger ECC (BCH, then LDPC). 3D NAND stands the strings up, hundreds of layers high.',
+      'Several bits a cell (MLC 2, TLC 3, QLC 4: 4 to 16 threshold levels) trade margin for density: slower programs, fewer erases, stronger ECC, a stronger code each generation. 3D NAND stands the strings up, hundreds of layers high.',
       'NOR: every cell on its bit line, about 10 F², random reads in tens of nanoseconds (boot code, execute in place). NAND: cells in series, about 4 F², a pass voltage on the other rows, pages in tens of microseconds (files, SSDs).',
       'The translation layer writes each version to a fresh page and maps logical to physical pages. Stale pages wait for garbage collection. Write amplification = page programs / host writes; spare space lowers it, wear levelling spreads the erases.',
       `Raw bit errors (RBER 10<sup>-6</sup> fresh, 10<sup>-3</sup> worn TLC) are corrected by a BCH code per 1 KiB codeword: t errors cost 14 · t parity bits, and t = ${ECC_ROWS[2].t} keeps UBER below 10<sup>-15</sup> only up to RBER ${sci(ECC_ROWS[2].max)}.`,
@@ -306,7 +306,7 @@ export const chFlash: Chapter = {
           ${[1, 2, 4].map((wa) => `${(1e12 * 3000 / wa / 1e15).toFixed(2)} PB`).join(', ')}. Halving WA doubles the life, which is why over-provisioning, TRIM and sequential-friendly layouts are worth real money.</p>`,
         real: `<p>Here every cell reads exactly what was programmed. Real cells do not: charge leaks over months (faster in worn
           blocks), neighbours couple, and each level is a spread of thresholds that grows with wear. Every page carries spare bytes of
-          <strong>ECC</strong>: BCH codes correcting tens of bits per kilobyte in SLC and early MLC, then LDPC codes in TLC and QLC,
+          <strong>ECC</strong>: BCH codes correcting tens of bits per kilobyte in SLC and early MLC, then <span data-ahead="ldpc">LDPC codes (parity checks so sparse that a decoder can pass soft beliefs along them; a later chapter decodes one)</span> in TLC and QLC,
           which use soft reads (the same page sensed at several read voltages) to decide the doubtful bits. When the corrected-bit count
           climbs, the controller moves the data and retires the block.</p>
           <p><strong>Read disturb</strong>: a NAND read puts the pass voltage on every other row of the block, a weak program pulse for
@@ -345,7 +345,7 @@ export const chFlash: Chapter = {
         <table class="mini"><tr><th>code</th><th>parity bits</th><th>fails at RBER 10<sup>-5</sup></th><th>fails at 10<sup>-3</sup></th><th>keeps UBER &lt; 10<sup>-15</sup> up to RBER</th></tr>
           ${ECC_ROWS.map((r) => `<tr><td>t = ${r.t}</td><td>${r.parity}</td><td>${sci(r.f5)}</td><td>${sci(r.f3)}</td><td>${sci(r.max)}</td></tr>`).join('')}</table>
         <p>The strength is a wear budget. Fresh flash at RBER 10<sup>-5</sup> needs t = 6 (t = 8 leaves a margin) for a 10<sup>-15</sup> UBER; worn TLC at 10<sup>-3</sup> needs t ≈ 40, five times the parity, and past that the controller
-        retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC replace BCH with LDPC and soft reads:
+        retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC replace BCH with <span data-ahead="ldpc">LDPC (parity checks so sparse that a decoder can pass soft beliefs along them; a later chapter decodes one)</span> and soft reads:
         the same page sensed at several read voltages gives each bit a confidence, which corrects well beyond the hard-decision limit at the cost of several reads.</p>
         <div class="try">Set the data, then flip one stored bit (flip = 1), then two (flip = 3): single, then double.</div>`,
       scene: () => ({ root: eccChannel(8), inputs: { d: 0x5a, flip: 0 }, highlight: ['enc', 'dec'] }),

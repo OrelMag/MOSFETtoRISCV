@@ -179,7 +179,7 @@ export const chTcp: Chapter = {
         options: ['About 0.8 s: 8 Mb at 10 Mb/s', 'About 8 ms: 1 MB at 1 Gb/s', 'Nothing: packets of other flows go first', 'About 80 s: 800 Mb at 10 Mb/s'],
         answer: 0,
         explain: 'TCP fills the queue, since nothing is lost until it is full, and each packet then waits behind the whole of it. 8 Mb at 10 Mb/s is 0.8 s, added to every round trip, including your video call\'s.',
-        why: ['', 'The bottleneck is the uplink, not the home network\'s faster side.', 'Not in a plain first-in, first-out queue. Fair queueing is what would give this, and is the cure.', '1 MB is 8 Mb, not 800.'],
+        why: ['', 'The bottleneck is the uplink, not the home network\'s faster side.', 'Not in a plain first-in, first-out queue. A queue for each flow is what would give this, and is the cure.', '1 MB is 8 Mb, not 800.'],
       },
       more: {
         real: `<p>The cure is in the router, since the sender cannot tell a full queue from a long path. Active queue management such as CoDel (RFC 8289) drops or marks packets when they have waited too long, keeping the queue short before TCP would fill it. Fair queueing gives each flow its own, so one upload cannot delay another's packets. Chapter ${numOf('switch')}'s head-of-line blocking is another way for one flow to delay another.</p>`,
