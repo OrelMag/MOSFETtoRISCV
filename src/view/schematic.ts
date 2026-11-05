@@ -43,8 +43,12 @@ export interface SchematicEvents {
   netClick?(net: number): boolean;
   /** The menu's Why this value? on a net. */
   why?(net: number): void;
-  /** The menu's Inspect on a part. */
-  inspect?(child: string): void;
+  /** The menu's Inspect on a part, or (null) the level on screen. */
+  inspect?(child: string | null): void;
+  /** May the menu offer Inspect now (a level's look inside: its drawer has a Verilog tab)? Absent: yes, if there is an inspect. */
+  canInspect?(): boolean;
+  /** The menu's Explain for a part or (null) the level on screen. */
+  explain?(child: string | null): MenuEntry[];
   /** Up one level, for the menu's jump to a port of this level. */
   up?(): void;
   /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen. */
@@ -1312,7 +1316,11 @@ export class SchematicView {
   private menuItems(target: Element | null): MenuItem[] {
     const items = this.layoutItems(target);
     if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
-    const more = this.events.elsewhere?.(null).filter((x): x is MenuItem => !!x) ?? [];
+    const more = [
+      ...(this.events.inspect && this.events.canInspect?.() !== false ? [{ label: 'Inspect', run: () => this.events.inspect!(null) }] : []),
+      ...(this.events.explain?.(null) ?? []),
+      ...(this.events.elsewhere?.(null) ?? []),
+    ].filter((x): x is MenuItem => !!x);
     return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...more, ...items];
   }
 
@@ -1357,7 +1365,8 @@ export class SchematicView {
     partHeader(into, name, node.def);
     const rows: MenuItem[] = [
       { label: 'Look inside', key: 'double-click', run: () => this.events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
-      ...(this.events.inspect ? [{ label: 'Inspect', run: () => this.events.inspect!(name) }] : []),
+      ...(this.events.inspect && this.events.canInspect?.() !== false ? [{ label: 'Inspect', hint: 'Its datasheet and cost', run: () => this.events.inspect!(name) }] : []),
+      ...(this.events.explain?.(name).filter((x): x is MenuItem => !!x) ?? []),
       ...(this.events.elsewhere?.({ inst: name }).filter((x): x is MenuItem => !!x) ?? []),
     ];
     showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for part ${name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });

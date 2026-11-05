@@ -168,6 +168,7 @@ export class LevelPage implements Page {
       this.readCodex(a.getAttribute('href')!.slice('#/campaign/codex/'.length));
     });
     setCodexOpener((id) => this.readCodex(id));
+    this.editor.openCodex = (id) => this.readCodex(id);
     this.renderBar();
     this.renderSide();
   }
