@@ -72,7 +72,66 @@ def zplane():
     return {'fs': fs, 'x': r(x), 'filters': rows, 'convolve': {'x': u, 'h': v, 'y': r(np.convolve(u, v))}}
 
 
-GENERATORS = {'zplane': zplane}
+def firdesign():
+    """FIR design: scipy's remez / firwin / kaiserord / freqz / lfilter on the chapter's mask (pass to 0.10 cycles a sample with 0.1 dB peak to peak,
+    stop from 0.125 with 60 dB) and on small cases. The grid for every mask check is freqz(worN=8192, fs=1), the same as the TypeScript's."""
+    fp, fst = 0.10, 0.125
+    g = 10 ** (0.1 / 20)
+    dp, ds = (g - 1) / (g + 1), 1e-3
+
+    def check(h):
+        w, H = signal.freqz(h, worN=8192, fs=1)
+        a = np.abs(H)
+        return {'passDev': float(np.max(np.abs(a[w <= fp] - 1))), 'stopPeak': float(np.max(a[w >= fst]))}
+
+    def ok(h):
+        c = check(h)
+        return c['passDev'] <= dp and c['stopPeak'] <= ds
+
+    def pm(n):
+        return signal.remez(n, [0, fp, fst, 0.5], [1, 0], weight=[1 / dp, 1 / ds], fs=1, maxiter=200)
+
+    cases = [
+        ('type I low-pass, 21 taps', 21, [0, 0.1, 0.2, 0.5], [1, 0], [1, 10]),
+        ('type II low-pass, 24 taps', 24, [0, 0.1, 0.2, 0.5], [1, 0], [1, 10]),
+        ('type I band-pass, 41 taps', 41, [0, 0.05, 0.1, 0.2, 0.25, 0.5], [0, 1, 0], [10, 1, 10]),
+        ('type II band-pass, 32 taps', 32, [0, 0.08, 0.13, 0.3, 0.36, 0.5], [0, 1, 0], [1, 1, 1]),
+        ('type I low-pass, 63 taps, narrow', 63, [0, 0.12, 0.14, 0.5], [1, 0], [1, 1]),
+    ]
+    remez_rows = []
+    for name, n, edges, des, wt in cases:
+        h = signal.remez(n, edges, des, weight=wt, fs=1, maxiter=200)
+        remez_rows.append({'name': name, 'numtaps': n, 'edges': edges, 'desired': des, 'weight': wt, 'taps': r(h)})
+    fewest_pm = next(n for n in range(60, 200) if ok(pm(n)))
+    nt, beta = signal.kaiserord(60, (fst - fp) / 0.5)
+    fewest_k = next(n for n in range(60, 300, 1) if ok(signal.firwin(n, (fp + fst) / 2, window=('kaiser', beta), fs=1)))
+    kai = signal.firwin(nt, (fp + fst) / 2, window=('kaiser', beta), fs=1)
+    wins = []
+    for nm, win in (('rectangular', 'boxcar'), ('hann', 'hann'), ('hamming', 'hamming'), ('blackman', 'blackman'), ('kaiser', ('kaiser', 6.0))):
+        wins.append({'kind': nm, 'beta': 6.0, 'taps': r(signal.firwin(31, 0.2, window=win, fs=1))})
+    h115, h114 = pm(115), pm(114)
+    fs_pts = [0, 0.03, 0.08, 0.1, 0.11, 0.125, 0.2, 0.3, 0.45]
+    _, G = signal.freqz(h115, worN=np.array(fs_pts), fs=1)
+    q = {}
+    for frac in (15, 16, 17, 18):
+        hq = np.floor(h115 * 2**frac + 0.5) / 2**frac
+        q[str(frac)] = check(hq)
+    fewest_frac = next(f for f in range(4, 31) if ok(np.floor(h115 * 2**f + 0.5) / 2**f))
+    ints = np.floor(h115 * 2**17 + 0.5)
+    x = [int(np.floor(v * 2**15)) for v in noise(200, 777)]
+    y = signal.lfilter(ints, [1.0], np.array(x, dtype=float))
+    return {
+        'mask': {'pass': fp, 'stop': fst, 'rippleDb': 0.1, 'stopDb': 60, 'deltaPass': dp, 'deltaStop': ds},
+        'remez': remez_rows,
+        'fewest': {'remez': fewest_pm, 'remezOneFewer': check(pm(fewest_pm - 1)), 'kaiser': fewest_k, 'kaiserord': nt, 'beta': beta, 'fewestFrac': fewest_frac},
+        'mask114': {'taps': r(h114), **check(h114)}, 'mask115': {'taps': r(h115), **check(h115)},
+        'kaiser': {'taps': r(kai), **check(kai)}, 'windows': wins,
+        'freqz': {'f': fs_pts, 'gain115': r(np.abs(G))}, 'quantized115': q,
+        'lfilter': {'taps': r(ints), 'x': x, 'y': r(y)},
+    }
+
+
+GENERATORS = {'zplane': zplane, 'firdesign': firdesign}
 
 
 def stamp(data):
