@@ -19,7 +19,7 @@ const line = (x1: number, y1: number, x2: number, y2: number, cls: string) => s(
 
 interface Axes { w: number; h: number; x: (v: number) => number; y: (v: number) => number; g: SVGElement[] }
 function axes(xr: [number, number], yr: [number, number], xt: number[], yt: number[], fmtX: (v: number) => string, fmtY: (v: number) => string, xl: string, yl: string, log = false, W = 560, H = 230): Axes {
-  const L = 44, R = 10, T = 12, B = 34;
+  const L = 44, R = 10, T = 24, B = 34;
   const x = (v: number) => L + ((v - xr[0]) / (xr[1] - xr[0])) * (W - L - R);
   const ly = (v: number) => (log ? Math.log10(v) : v);
   const y = (v: number) => T + (1 - (ly(v) - ly(yr[0])) / (ly(yr[1]) - ly(yr[0]))) * (H - T - B);
@@ -42,8 +42,8 @@ export function lossWidget(): Widget {
       for (let u = 0.7; u <= 1.75; u += 0.004) { const v = f(u); if (v >= 0.05 && v <= 10) pts.push([a.x(u), a.y(v)]); }
       return poly(pts, cls);
     };
-    const marks = WINDOWS.flatMap((w) => [line(a.x(w.nm / 1000), 12, a.x(w.nm / 1000), a.h - 34, 'gl-win'), txt(a.x(w.nm / 1000) + 3, 24, w.name, 'gl-t')]);
-    plot.replaceChildren(svgOf(a, `Fibre loss against wavelength; at ${nf(um * 1000, 0)} nm it is ${nf(lossDb(um, peak), 2)} dB per km`, ...a.g, ...marks, curve(rayleighDb, 'gl-l2'), curve(infraredDb, 'gl-l3'), curve((u) => lossDb(u, peak), 'gl-l1'), line(a.x(um), 12, a.x(um), a.h - 34, 'gl-cur'),
+    const marks = WINDOWS.flatMap((w) => [line(a.x(w.nm / 1000), 24, a.x(w.nm / 1000), a.h - 34, 'gl-win'), txt(a.x(w.nm / 1000) + 3, 22, w.name, 'gl-t')]);
+    plot.replaceChildren(svgOf(a, `Fibre loss against wavelength; at ${nf(um * 1000, 0)} nm it is ${nf(lossDb(um, peak), 2)} dB per km`, ...a.g, ...marks, curve(rayleighDb, 'gl-l2'), curve(infraredDb, 'gl-l3'), curve((u) => lossDb(u, peak), 'gl-l1'), line(a.x(um), 24, a.x(um), a.h - 34, 'gl-cur'),
       txt(a.x(0.78), a.y(2.4) - 2, 'scattering', 'gl-t gl-c2'), txt(a.x(1.62), a.y(1.3), 'infrared', 'gl-t gl-c3')));
     const db = lossDb(um, peak) * km, left = 10 ** (-db / 10);
     out.replaceChildren(stat('Loss', `${nf(lossDb(um, peak), 2)} dB/km`), stat(`After ${km} km`, `${nf(db, 1)} dB`), stat('Left', left >= 1e-3 ? `${nf(left * 100, left < 0.01 ? 3 : 1)} %` : `1 part in ${left > 1e-30 ? (1 / left).toExponential(0) : '10³⁰⁺'}`), stat('Water line alone', `${nf(waterDb(um, peak), 2)} dB/km`));
@@ -76,7 +76,7 @@ export function rayWidget(): Widget {
       x = nx; y = ny; dir = -dir;
     }
     plot.replaceChildren(s('svg', { class: 'gl-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': r.guided ? 'The ray bounces along the core' : 'The ray leaves through the cladding' },
-      s('rect', { x: x0, y: T - 22, width: W - x0 - 10, height: B - T + 44, class: 'gl-clad' }), core, txt(x0 + 6, T - 8, `cladding, n = ${nf(n2, 4)}`), txt(x0 + 6, T + 14, `core, n = ${n1}`), poly(pts, r.guided ? 'gl-ray' : 'gl-ray bad')));
+      s('rect', { x: x0, y: T - 22, width: W - x0 - 10, height: B - T + 44, class: 'gl-clad' }), core, txt(x0 + 6, T - 8, `cladding, n = ${nf(n2, 4)}`), txt(W - 90, B - 6, `core, n = ${n1}`), poly(pts, r.guided ? 'gl-ray' : 'gl-ray bad')));
     const delay = (r.stretch - 1) * n1 * 1e12 / 299792.458;
     out.replaceChildren(stat('Critical angle', `${nf(criticalDeg(n1, n2), 2)}°`), stat('NA', nf(na, 3)), stat('Accepted from air', `±${nf(acceptanceDeg(na), 1)}°`), stat('This ray', r.guided ? 'stays in' : 'leaks out', r.guided ? 'good' : 'bad'), r.guided ? stat('Longer path', `${nf((r.stretch - 1) * 100, 3)} %`) : h('span'), r.guided ? stat('Arrives late by', `${nf(delay / 1000, 1)} ns/km`) : h('span'));
   };
@@ -209,7 +209,7 @@ export function oceanWidget(): Widget {
   const gbd = 32;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const spans = Math.ceil(km / kmSpan), spanDb = kmSpan * 0.2, need = requiredSnrDb(QAMS[q]), best = bestPower(spans, nfdb, spanDb, gbd), s0 = snrWithNli(p, spans, nfdb, spanDb, gbd);
+    const spans = Math.ceil(km / kmSpan), spanDb = kmSpan * 0.2 + 4, need = requiredSnrDb(QAMS[q]), best = bestPower(spans, nfdb, spanDb, gbd), s0 = snrWithNli(p, spans, nfdb, spanDb, gbd);
     const a = axes([-12, 12], [0, 30], [-10, -5, 0, 5, 10], [0, 10, 20, 30], (v) => String(v), (v) => String(v), 'launch power per channel, dBm', 'SNR, dB');
     const curve: [number, number][] = [], linear: [number, number][] = [];
     for (let x = -12; x <= 12; x += 0.2) {
@@ -231,5 +231,5 @@ export function oceanWidget(): Widget {
   const c = slider('Launch power', -10, 10, 0.5, p, (v) => `${v} dBm`, (v) => { p = v; paint(); });
   const d = slider('Noise figure', 3, 8, 0.5, nfdb, (v) => `${v} dB`, (v) => { nfdb = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'dram-ops' }, sel), h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'mos-row' }, d.el), plot, out, h('p', { class: 'sub' }, 'The Gaussian-noise model with an illustrative fibre coefficient: thin line for amplifier noise alone, bold for the Kerr effect too. The small dot is your launch power, the green one the best.')) };
+  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'dram-ops' }, sel), h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'mos-row' }, d.el), plot, out, h('p', { class: 'sub' }, 'Each span is 0.2 dB/km plus 4 dB for splices and margin. The Gaussian-noise model with an illustrative fibre coefficient: thin line for amplifier noise alone, bold for the Kerr effect too. The small dot is your launch power, the green one the best.')) };
 }

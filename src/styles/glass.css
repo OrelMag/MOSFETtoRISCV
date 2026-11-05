@@ -1,5 +1,8 @@
 /* ---------- Light in glass (src/widgets/glass.ts). Colours from the theme tokens, so both themes follow. ---------- */
 .gl-w { gap: 8px; }
+.gl-w .mos-sl { flex-basis: 100%; }
+.gl-w .mos-sl span { width: 112px; flex: none; }
+.gl-w .mos-sl output { width: 96px; flex: none; white-space: nowrap; }
 .gl-out { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .gl-svg { display: block; width: 100%; max-width: 640px; height: auto; }
 .gl-svg.sq { max-width: 300px; }
