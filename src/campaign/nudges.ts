@@ -140,6 +140,7 @@ export const NUDGES: Record<string, string> = {
   // sp_biquad: below
 
   // sp_goertzel: below
+  sp_goertzel: 'Two registers, one remembering the other; the new value is x plus the product of c and the newer, less the older, and a clear that beats all of it.',
 
   // sp_cic: below
 

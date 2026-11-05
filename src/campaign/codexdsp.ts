@@ -21,6 +21,7 @@ const LISTED = new Set([
   // sp_biquad
 
   // sp_goertzel
+  'goertzel', 'qformat', 'headroom',
 
   // sp_cic
 

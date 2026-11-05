@@ -14,6 +14,12 @@ export const CASESS: Record<string, LevelCase> = {
   // ---- sp_biquad (its entry goes below this line)
 
   // ---- sp_goertzel
+  sp_goertzel: {
+    problem: 'A keypad key is two tones out of eight, and the decoder wants to know which. An FFT of the block computes 129 bins and the decoder keeps two. A resonator tuned to one frequency computes just that bin: it rings up on a matching tone and stays small on the rest, and after the block its last two values give the power there. The same resonator, with another coefficient, serves the other seven.',
+    without: 'Without the clear the second tone starts from the first one\'s ringing, and every power after it is wrong by an amount that depends on the key before. Without the half-up rounding each product loses half a step on average, and a resonator with its poles on the unit circle never forgets it.',
+    cost: 'The cell is 4 389 NANDs (4 419 in the chapter, whose clear uses the 64-NAND library bus mux; this one shares the inverter), 3 427 of them the 16 × 16 multiplier; the recurrence around it (two 16-bit registers, two adders, the rounder, a clear) is 962. One cell does a key in 8 × 206 = 1 648 clocks, so at 8 kHz samples it needs a clock of at least 64 kHz and a store for the block. Eight cells at the sample rate are 35 112 NANDs; a 256-point streaming FFT is 167 844.',
+    alts: [{ name: 'Goertzel resonator, 16-bit state (library)', lib: 'goertzel16' }],
+  },
 
   // ---- sp_cic
 

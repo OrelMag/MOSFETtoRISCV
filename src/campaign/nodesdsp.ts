@@ -4,6 +4,7 @@
 
 import type { CampaignNode } from './types';
 import { BUILDDSP, satGives } from './builddsp';
+import { gzGives } from './builddsp';
 
 export const NODES_DSP: CampaignNode[] = [
   {
@@ -33,9 +34,15 @@ export const NODES_DSP: CampaignNode[] = [
     tips: [], codex: [],
   },
   {
-    id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
-    why: 'One resonator, one multiplier, two registers: the energy at one frequency, enough to hear which key of a keypad is pressed.',
-    tips: [], codex: [],
+    id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_goertzel, givesOf: gzGives,
+    unlocks: ['goertzel16_rv16'], par: { nand: 4389, period: 104 },
+    why: 'A keypad key is two tones out of eight, and an FFT would compute 129 bins to keep two. One resonator, s = x + c·s1 − s2, rings up on the one frequency its coefficient names and stays small on the others; after a block its last two values give the power there. One multiplier, two adders and two registers, and the same cell serves all eight tones one after another: only c changes.',
+    tips: [
+      'The registers hold s1 and s2, and s2 loads the old s1. s1 loads the new s: the product c·s1 (c is a pin, in Q2.14), brought down by 14 bits and rounded, plus x, minus s2.',
+      'The product is 30 bits wide for a 16-bit state and a 16-bit coefficient. Keep bits 29…14 and add bit 13 back, which is the half-up rounding; the other bits are wiring and cost nothing. Sign-extend x to 16 bits first.',
+      'Subtract s2 by inverting it and carrying a 1 into the adder. Put a mux in front of each register that loads 0 when clr is 1: it replaces the update, whatever x is, and s2 must clear too, or the next tone starts from the last one\'s state.',
+    ],
+    codex: ['goertzel', 'qformat', 'headroom'], chapters: [{ chapter: 'spectrum', step: 6, label: 'One bin, cheaply: Goertzel' }, { chapter: 'spectrum', step: 7, label: 'A keypad in gates' }],
   },
   {
     id: 'sp_cic', act: 13, title: 'CIC decimator', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
