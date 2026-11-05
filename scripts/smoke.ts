@@ -330,6 +330,13 @@ const MENU_DRIVE = `(async () => {
     if (menu().length) bad.push('a jump left the menu open');
     if (jump && !document.querySelector('svg.schematic .selected, svg.schematic .net-sel')) bad.push('a jump selected nothing');
   }
+  // the sandbox: a pin's menu reads its net (compile.ts keys its maps by id)
+  const pinEl = !stage && document.querySelector('svg.ed-svg [data-pin-id]');
+  if (pinEl) {
+    pinEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: pinEl.getBoundingClientRect().left + 2, clientY: pinEl.getBoundingClientRect().top + 2 })); await wait(80);
+    if (!menu()[0]?.querySelector('.ctx-val')) bad.push('a pin menu has no value');
+    key(document.activeElement, 'Escape'); await wait(60);
+  }
   // Shift leaves it to the browser; F5 stays the browser's; a command or a press outside closes it
   const svg = document.querySelector('svg.schematic, svg.ed-svg');
   const box = svg.getBoundingClientRect();

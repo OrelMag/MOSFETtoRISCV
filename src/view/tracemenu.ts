@@ -15,7 +15,7 @@ import { crossings, fanText, type NetEnd, type NetFacts, valueRows } from './net
 const LIVE_MS = 100;
 
 /** A value row: a click copies what it holds. Marked so the menu does not start its focus here. */
-function valueButton(): { el: HTMLElement; set(k: string, text: string, copy: string, unknown: boolean): void } {
+function valueButton(): { el: HTMLElement; set(k: string, text: string, copy: string, unknown: boolean, hidden?: boolean): void } {
   const key = h('i', null), num = h('span', { class: 'ctx-num' }), mark = h('span', { class: 'ctx-copy' }, 'copy');
   let copy = '', k = '';
   const el = h('button', { class: 'ctx-val', role: 'menuitem', onclick: () => {
@@ -24,7 +24,8 @@ function valueButton(): { el: HTMLElement; set(k: string, text: string, copy: st
       setTimeout(() => closeMenu(), 450);
     });
   } }, key, num, mark);
-  return { el, set: (kk, text, c, unknown) => {
+  return { el, set: (kk, text, c, unknown, hidden) => {
+    el.hidden = !!hidden;
     if (kk !== k) key.textContent = k = kk;
     if (num.textContent !== text) num.textContent = text;
     num.classList.toggle('unknown', unknown);
@@ -43,7 +44,7 @@ export function wireHeader(into: HTMLElement, f: NetFacts, bits: () => readonly 
   into.append(h('div', { class: 'ctx-head' }, h('b', null, name), sub));
   const rows = valueRows(now).map((r) => {
     const b = valueButton();
-    b.set(r.k, r.text, r.copy, r.unknown);
+    b.set(r.k, r.text, r.copy, r.unknown, r.hidden);
     into.append(b.el);
     return b;
   });
@@ -54,7 +55,7 @@ export function wireHeader(into: HTMLElement, f: NetFacts, bits: () => readonly 
   if (!rows.length) return;
   const t = setInterval(() => {
     if (!into.isConnected) return void clearInterval(t);
-    valueRows(bits()).forEach((r, i) => rows[i]?.set(r.k, r.text, r.copy, r.unknown));
+    valueRows(bits()).forEach((r, i) => rows[i]?.set(r.k, r.text, r.copy, r.unknown, r.hidden));
     if (extra && note) {
       const s = note();
       if (s !== extra.textContent) extra.textContent = s;

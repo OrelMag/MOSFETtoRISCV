@@ -2,9 +2,8 @@
 // netlist's ends), and its value in each radix, exact at any width. Derived, so it cannot drift from the drawing.
 
 import { B0, B1, BZ, type Bit, type ComponentDef, netlistOf, parseEnd } from '../sim/types';
-import { formatBits } from '../sim/values';
+import { formatBits, packBig } from '../sim/values';
 import { groupDigits } from '../sim/numfmt';
-import { packBig } from '../sim/values';
 
 export interface NetEnd {
   /** The instance at this level (null: a port of the level itself). */
@@ -44,20 +43,22 @@ export const crossings = (f: NetFacts): string[] => [...f.sinks, ...f.both].filt
 
 export interface ValueRow {
   /** The radix's short name. */
-  k: 'val' | 'hex' | 'dec' | 'bin';
+  k: 'val' | 'hex' | 'dec' | 'sgn' | 'bin';
   /** As shown (a wide word folded). */
   text: string;
   /** What Copy takes: the whole value, no separators. */
   copy: string;
   /** A bit that is neither 0 nor 1 (or a nibble holding one): the view marks it. */
   unknown: boolean;
+  /** Nothing to show now (the signed reading of a word with its top bit clear): the row stays, for a value that changes while it is open. */
+  hidden?: boolean;
 }
 
 /** Past this a word folds to its two ends. */
 const FOLD_BITS = 64;
-const fold = (s: string, n: number) => (s.length <= 2 * n + 1 ? s : `${s.slice(0, n)} … ${s.slice(-n)}`);
+const fold = (s: string, n: number) => (s.length <= 2 * n ? s : `${s.slice(0, n)} … ${s.slice(-n)}`);
 
-/** One row for a bit, else hex, decimal and binary. X and Z are per bit in binary, per nibble in hex. */
+/** One row for a bit, else hex, decimal, the signed reading and binary. X and Z are per bit in binary, per nibble in hex. */
 export function valueRows(bits: ArrayLike<Bit | number>): ValueRow[] {
   const w = bits.length;
   if (!w) return [];
@@ -79,9 +80,24 @@ export function valueRows(bits: ArrayLike<Bit | number>): ValueRow[] {
   const rows: ValueRow[] = [
     { k: 'hex', text: big ? `0x${fold(hexPlain.slice(2), 8)}` : hexText, copy: hexPlain, unknown },
     { k: 'dec', ...decimal(bits, x, z), unknown },
+    signed(bits, x + z > 0),
     { k: 'bin', text: big ? fold(binPlain, 32).replace(/(?<=[01xz]{4})(?=(?:[01xz]{4})+(?:\s|$))/g, ' ') : bin.replace(/_/g, ' '), copy: binPlain, unknown },
   ];
   return rows;
+}
+
+/** Long digits fold; grouping only what is shown whole, so a fold never cuts a group. */
+const digits = (v: bigint): string => {
+  const s = String(v < 0n ? -v : v), sign = v < 0n ? '−' : '';
+  return s.length <= 2 * 16 ? sign + groupDigits(s.length > 15 ? BigInt(s) : Number(s)) : `${sign}${fold(s, 16)}`;
+};
+
+/** The two's complement reading: a row only when the top bit is set, and then it differs from the plain one. */
+function signed(bits: ArrayLike<Bit | number>, unknown: boolean): ValueRow {
+  const w = bits.length;
+  if (unknown || bits[w - 1] !== B1) return { k: 'sgn', text: '', copy: '', unknown: false, hidden: true };
+  const v = packBig(bits as ArrayLike<number>)! - (1n << BigInt(w));
+  return { k: 'sgn', text: digits(v), copy: String(v), unknown: false };
 }
 
 function decimal(bits: ArrayLike<Bit | number>, x: number, z: number): { text: string; copy: string } {
@@ -92,9 +108,7 @@ function decimal(bits: ArrayLike<Bit | number>, x: number, z: number): { text: s
     return { text: t, copy: t };
   }
   const u = packBig(bits as ArrayLike<number>)!;
-  const uText = groupDigits(u);
-  const full = bits[w - 1] === B1 ? `${uText} or ${groupDigits(u - (1n << BigInt(w))).replace('-', '−')}` : uText;
-  return { text: fold(full, 24), copy: bits[w - 1] === B1 ? `${u} ${u - (1n << BigInt(w))}` : String(u) };
+  return { text: digits(u), copy: String(u) };
 }
 
 /** The menu's fan-out line: ends at this level, and inputs reading the net once flattened (every bit of a bus). */

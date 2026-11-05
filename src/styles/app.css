@@ -1129,6 +1129,7 @@ svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent);
 .ctx-head b { font: 600 13px var(--font-mono); overflow-wrap: anywhere; }
 .ctx-head span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .ctx-menu button.ctx-val { justify-content: flex-start; gap: 10px; padding-block: 2px; font: 12px var(--font-mono); }
+.ctx-menu button.ctx-val[hidden] { display: none; }
 .ctx-val i { flex: none; width: 24px; font: 600 10px var(--font-ui); font-style: normal; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .ctx-num { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .ctx-num.unknown { color: var(--wx); }

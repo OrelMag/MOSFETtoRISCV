@@ -1397,6 +1397,8 @@ export class SchematicView {
   private bring(el: Element | null | undefined): void {
     if (!el) return;
     const r = el.getBoundingClientRect(), v = this.host.getBoundingClientRect();
+    // not drawn right now (a pin hidden by the view): nothing to go to
+    if (!r.width && !r.height) return;
     if (r.left < v.left || r.right > v.right || r.top < v.top || r.bottom > v.bottom) {
       const g = el as SVGGraphicsElement, b = g.getBBox(), m = g.getCTM(), root = this.el.getCTM();
       if (m && root) {
