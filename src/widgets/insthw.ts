@@ -6,7 +6,7 @@
 import { CLASSES } from '../lib/cpu';
 import { fieldAt, fieldRole, fieldsOf, SLICES, type FieldKey, type FieldRole } from '../riscv/fields';
 import { slotOpcode, uses, type CustomRow } from '../riscv/custom';
-import { decode, OPCODES } from '../riscv/isa';
+import { decode, MAC_OPCODE, OPCODES } from '../riscv/isa';
 import { netlistOf, type ComponentDef } from '../sim/types';
 
 export interface InstrUse {
@@ -31,7 +31,13 @@ function customUse(r: CustomRow): InstrUse {
   return { units, path: `${r.name}: ${path.join(' → ') || 'no data path work'}` };
 }
 
-export function instrUse(word: number, custom?: readonly CustomRow[]): InstrUse {
+export function instrUse(word: number, custom?: readonly CustomRow[], mac = false): InstrUse {
+  if (mac && (word & 0x7f) === MAC_OPCODE && decode(word, custom, 32, true).spec?.mac) {
+    const name = decode(word, custom, 32, true).name;
+    return name === 'racc' ? { units: [...FETCH, 'rf', 'shamt', 'macu', 'res'], path: 'rs1[5:0] = the shift; accumulator → shift, round, clamp (MAC unit) → result mux (input 4) → rd' }
+      : name === 'clracc' ? { units: [...FETCH, 'macu'], path: 'the accumulator is cleared at the clock edge' }
+      : { units: [...FETCH, 'rf', 'f3op', 'macu'], path: name === 'mac' ? 'rs1[15:0] × rs2[15:0] (signed) → added to the accumulator, no register written' : 'rs1[15:0] × rs2[15:0] + rs1[31:16] × rs2[31:16] → added to the accumulator, no register written' };
+  }
   const row = custom?.find((r) => slotOpcode(r.slot) === (word & 0x7f));
   if (row) return customUse(row);
   const op = word & 0x7f, funct7 = word >>> 25;

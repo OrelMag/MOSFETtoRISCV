@@ -32,8 +32,8 @@ export interface RomImage extends BuiltProgram {
 }
 
 /** Build a ROM's program and check it against the ROM's size and word width. */
-export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa' | 'custom'> & Partial<Pick<RomRef, 'c' | 'xlen'>>): RomImage {
-  const p = buildProgram(r.lang, r.src, r.isa, r.k, r.custom, r.xlen === 64 ? 64 : 32);
+export function romImage(r: Pick<RomRef, 'k' | 'w' | 'lang' | 'src' | 'isa' | 'custom'> & Partial<Pick<RomRef, 'c' | 'xlen' | 'mac'>>): RomImage {
+  const p = buildProgram(r.lang, r.src, r.isa, r.k, r.custom, r.xlen === 64 ? 64 : 32, !!r.mac);
   const capacity = 2 ** r.k;
   const problems: ProgramError[] = [...p.errors];
   let error = p.errors.length ? `ROM program: line ${p.errors[0].line}: ${p.errors[0].message}` : null;

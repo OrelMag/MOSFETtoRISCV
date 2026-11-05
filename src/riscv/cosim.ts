@@ -7,7 +7,7 @@ import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 
 /** Read the CPU's architectural state from a simulation of singleCycleCpu(). */
-export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim, 'leafState'>>, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number } {
+export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim, 'leafState'>>, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number; acc?: bigint } {
   const rf = root.children!.get('rf')!;
   const x = [0];
   for (let i = 1; i < 32; i++) x.push(pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
@@ -19,7 +19,10 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim
   const dmem = dm ? dmemWords(sim, dm) : [];
   const pcPort = root.ports.pcOut ?? root.ports.pcF;
   const pc = pcPort ? pack(sim.getBits(pcPort)) >>> 0 : 0;
-  return { pc, x, dmem, f, fcsr };
+  // the MAC core's accumulator (its unit's register, 40 bits, signed), compared with the golden model's like any register
+  const accPort = root.ports.accOut;
+  const acc = accPort ? BigInt.asIntN(40, bitsBig(sim.getBits(accPort))) : undefined;
+  return { pc, x, dmem, f, fcsr, ...(acc !== undefined ? { acc } : {}) };
 }
 
 /** The words of a data memory `dm` (plain, byte-banked, or main memory behind a cache) as a program reads them. */

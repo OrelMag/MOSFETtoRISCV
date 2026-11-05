@@ -308,6 +308,8 @@ export type PartRef =
       isa?: IsaDoc;
       /** lang 'asm': the CPU's custom instructions (riscv/custom.ts), a copy of its core's rows, so the program assembles. */
       custom?: CustomRow[];
+      /** lang 'asm' / 'hex': the MAC core's mac, mac2, clracc and racc assemble and disassemble (riscv/isa.ts MAC_INSTRS). */
+      mac?: true;
       /** lang 'asm' (or hex), byte addressed: the C extension. The ROM answers at any even address with the 32 bits starting there (lib/rvc.ts cWindowRom); `.option rvc` needs it. */
       c?: boolean;
       /** lang 'asm': assembled for RV64 (ld, sd, the W instructions, li of any 64-bit constant); the words stay 32-bit instructions. */

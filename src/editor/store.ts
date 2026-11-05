@@ -89,7 +89,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
     const c = r.rom.c === true && addr === 'rv32' && w === 32 && (lang === 'asm' || lang === 'hex');
     const xlen = r.rom.xlen === 64 && lang === 'asm' && !c;
-    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
   }
   if (isObj(r.ucode)) {
     const p = sanitizeProgram(r.ucode);

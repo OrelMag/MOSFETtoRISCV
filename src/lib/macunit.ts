@@ -18,6 +18,7 @@ import { define, ones, splitter } from './define';
 import { cut, placed, roundUp } from './fft';
 import { clampWord } from './fixedpt';
 import { AND, NOT } from './gates';
+import { macSlot } from './macslot';
 import { treeMul } from './muldiv';
 import { register } from './sequential';
 import { TIE0 } from './transistors';
@@ -154,3 +155,6 @@ export function macUnit(): ComponentDef {
   });
 }
 
+
+macSlot.unit = macUnit;
+macSlot.cut = cut;

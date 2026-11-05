@@ -24,6 +24,7 @@ import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { C_EXPAND, cFetch, PLUS2OR4 } from './rvc';
+import { macParts } from './macslot';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -237,14 +238,17 @@ export const OPCODE_DECODER: ComponentDef = opcodeDecoder();
 
 /** Control unit: opcode classes → datapath control signals (OR gates), plus the ALU decoder. `custom`: custom
  *  instructions (riscv/custom.ts), each one more opcode class and an OR input on every signal its row asserts. */
-export function control(custom: readonly CustomRow[] = []): ComponentDef {
-  return memo(custom.length ? `control_cx${rowsKey(custom)}` : 'control', () => buildControl(custom));
+export function control(custom: readonly CustomRow[] = [], mac = false): ComponentDef {
+  return memo(`${custom.length ? `control_cx${rowsKey(custom)}` : 'control'}${mac ? '_mac' : ''}`, () => buildControl(custom, mac));
 }
 
-function buildControl(custom: readonly CustomRow[]): ComponentDef {
+/** mac: the MAC core's custom-2 class (chapter "A MAC on the RV32"): racc writes a register and picks result input 4, and `macEn` lets the unit's accumulator change. */
+function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
+  if (mac && custom.some((r) => r.slot === 2)) throw new Error('control: custom-2 belongs to the MAC');
   const cx = custom.map((r) => ({ row: r, cls: `cx_${r.name.replace(/[^\w]/g, '_')}`, sigs: new Set(signalsOf(r)) }));
-  const D = opcodeDecoder(cx.map((c) => [c.cls, SLOT_CODE[c.row.slot]]));
-  const classes: [string, number][] = [...CLASSES, ...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]])];
+  const macClass: [string, number][] = mac ? [['MAC', SLOT_CODE[2]]] : [];
+  const D = opcodeDecoder([...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass]);
+  const classes: [string, number][] = [...CLASSES, ...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass];
   const dg = symbolGeom(D);
   const rail = (k: number) => dg.w + 4 + 2 * k; // vertical rail per class
   const classIdx = new Map(classes.map(([n], i) => [n, i]));
@@ -252,7 +256,7 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
   const by = (sig: string) => cx.filter((c) => c.sigs.has(sig)).map((c) => c.cls);
   type Sig = { name: string; from: string[] };
   const sigs: Sig[] = [
-    { name: 'regWrite', from: ['R', 'I', 'LOAD', 'JAL', 'JALR', 'LUI', 'AUIPC', ...by('regWrite')] },
+    { name: 'regWrite', from: ['R', 'I', 'LOAD', 'JAL', 'JALR', 'LUI', 'AUIPC', ...by('regWrite'), ...(mac ? ['macRd'] : [])] },
     { name: 'aluSrcB', from: ['I', 'LOAD', 'STORE', 'JALR', 'AUIPC', ...by('aluSrcB')] },
     { name: 'resSrc0', from: ['LOAD', 'LUI', ...by('resSrc0')] },
     { name: 'resSrc1', from: ['JAL', 'JALR', 'LUI', ...by('resSrc1')] },
@@ -273,6 +277,7 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
   const instances: InstanceDef[] = [{ name: 'dec', def: D, at: [4, 0] }];
   const nets: NetDef[] = [{ name: 'op', ends: ['op', 'dec.op'] }];
   const classEnds = new Map<string, string[]>(classes.map(([n]) => [n, [`dec.${n}`]]));
+  if (mac) classEnds.set('macRd', ['mrd.y', 'mres.i2']); // racc: not a class of its own, the MAC class and funct3 = 011
   let y = 2;
   const gateOut = new Map<string, string>();
   for (const s of sigs) {
@@ -301,19 +306,41 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
     { name: 'alt', def: ALT, at: [XO + 32, ya + 17 - altH / 2] },
     { name: 'mctl', def: merger([1, 1, 1, 1]), at: [XO + 40, ya] },
     { name: 'mimm', def: merger([1, 1, 1]), at: [XO + 40, 22] },
-    { name: 'mres', def: merger([1, 1]), at: [XO + 40, 9] },
+    { name: 'mres', def: merger(mac ? [1, 1, 1] : [1, 1]), at: [XO + 40, 9] },
   );
+  if (mac) {
+    // custom-2 is a MAC instruction only with funct7 = 0 and funct3 < 4 (anything else does nothing, as the golden model): macEn, and racc = funct3 11
+    const ym = ya + 26;
+    instances.push(
+      { name: 'mf7', def: splitter([1, 1, 1, 1, 1, 1, 1]), at: [XO - 10, ym] },
+      { name: 'mor', def: orN(7), at: [XO, ym] },
+      { name: 'mbad', def: OR, at: [XO + 8, ym + 2] },
+      { name: 'mok', def: NOT, at: [XO + 14, ym + 3] },
+      { name: 'mv', def: AND, at: [XO + 19, ym + 2] },
+      { name: 'misr', def: AND, at: [XO + 19, ym + 8] },
+      { name: 'mrd', def: AND, at: [XO + 27, ym + 4] },
+    );
+    classEnds.get('MAC')!.push('mv.a');
+    nets.push(
+      { name: 'mbad', ends: ['mor.y', 'mbad.a'] },
+      { name: 'mnz', ends: ['mbad.y', 'mok.a'] },
+      { name: 'mok', ends: ['mok.y', 'mv.b'] },
+      { name: 'macEn', ends: ['mv.y', 'mrd.a', 'macEn'] },
+      { name: 'mis3', ends: ['misr.y', 'mrd.b'] },
+    );
+    for (let i = 0; i < 7; i++) nets.push({ ends: [`mf7.o${i}`, `mor.i${i}`] });
+  }
   for (const [c, ends] of classEnds) {
     const sub = subs.indexOf(c);
-    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], trunk: rail(classIdx.get(c)!) });
+    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], ...(classIdx.has(c) ? { trunk: rail(classIdx.get(c)!) } : {}) });
   }
   nets.push(
     { name: 'f3', ends: ['funct3', 'sf3.in'] },
-    { name: 'f7', ends: ['funct7', 'sf7.in'] },
+    { name: 'f7', ends: ['funct7', 'sf7.in', ...(mac ? ['mf7.in'] : [])] },
     { name: 'aluOp', ends: [gateOut.get('aluOp')!, 'a0.a', 'a1.a', 'a2.a', 'alt1.i0'], trunk: XO + 5 },
-    { name: 'f3_0', ends: ['sf3.o0', 'a0.b', 'is101.i0'] },
-    { name: 'f3_1', ends: ['sf3.o1', 'a1.b', 'nf1.a'] },
-    { name: 'f3_2', ends: ['sf3.o2', 'a2.b', 'is101.i2'] },
+    { name: 'f3_0', ends: ['sf3.o0', 'a0.b', 'is101.i0', ...(mac ? ['misr.a'] : [])] },
+    { name: 'f3_1', ends: ['sf3.o1', 'a1.b', 'nf1.a', ...(mac ? ['misr.b'] : [])] },
+    { name: 'f3_2', ends: ['sf3.o2', 'a2.b', 'is101.i2', ...(mac ? ['mbad.b'] : [])] },
     { name: 'nf3_1', ends: ['nf1.y', 'is101.i1'] },
     { name: 'f7b5', ends: ['sf7.o1', 'alt1.i1'] },
     { name: 'is101', ends: ['is101.y', 'shR.b'] },
@@ -348,7 +375,7 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
     byDriver.set(k, n);
     merged.push(n);
   }
-  const outs = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl'];
+  const outs = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', ...(mac ? ['macEn'] : [])];
   const OX = XO + 50;
   const pins: Record<string, [number, number]> = { op: [0, 4], funct3: [XO - 14, ya + 1.5], funct7: [XO - 14, ya + 11] };
   outs.forEach((o, i) => (pins[o] = [OX, 2 + 4 * i]));
@@ -357,14 +384,14 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
     return `<tr><td>${r.name} (custom-${r.slot})</td><td>${r.regWrite ? 1 : 0}</td><td>${r.fmt}</td><td>${r.srcA === 'pc' ? 'PC' : 'rs1'}</td><td>${r.srcB}</td><td>${r.memWrite ? 1 : 0}</td><td>${res}</td></tr>`;
   }).join('');
   return define({
-    id: custom.length ? `control_cx${rowsKey(custom)}` : 'control',
-    name: custom.length ? `Control unit (+ ${custom.map((r) => r.name).join(', ')})` : 'Control unit', category: 'cpu',
-    summary: `Turns the instruction's opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.${custom.length ? ` With ${custom.map((r) => r.name).join(', ')}: one more opcode class each, ORed into the signals its row asserts.` : ''}`,
+    id: `${custom.length ? `control_cx${rowsKey(custom)}` : 'control'}${mac ? '_mac' : ''}`,
+    name: custom.length || mac ? `Control unit (+ ${[...custom.map((r) => r.name), ...(mac ? ['MAC'] : [])].join(', ')})` : 'Control unit', category: 'cpu',
+    summary: `Turns the instruction's opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.${custom.length ? ` With ${custom.map((r) => r.name).join(', ')}: one more opcode class each, ORed into the signals its row asserts.` : ''}${mac ? ' With the MAC: custom-2 is one more class; racc writes a register and takes the result mux\'s fifth input, and macEn lets mac, mac2 and clracc change the accumulator.' : ''}`,
     ports: [
       bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'),
       bit('regWrite', 'out'), bus('immSrc', 3, 'out'), bit('aluSrcA', 'out'), bit('aluSrcB', 'out'),
-      bit('memWrite', 'out'), bus('resultSrc', 2, 'out'), bit('branch', 'out'), bit('jump', 'out'),
-      bit('jalr', 'out'), bus('aluCtl', 4, 'out'),
+      bit('memWrite', 'out'), bus('resultSrc', mac ? 3 : 2, 'out'), bit('branch', 'out'), bit('jump', 'out'),
+      bit('jalr', 'out'), bus('aluCtl', 4, 'out'), ...(mac ? [bit('macEn', 'out')] : []),
     ],
     symbol: { kind: 'box', label: 'CONTROL' },
     netlist: () => ({ pins, instances, nets: merged }),
@@ -377,7 +404,7 @@ function buildControl(custom: readonly CustomRow[]): ComponentDef {
       <tr><td>JAL</td><td>1</td><td>J</td><td>–</td><td>–</td><td>0</td><td>PC+4</td></tr>
       <tr><td>JALR</td><td>1</td><td>I</td><td>rs1</td><td>imm</td><td>0</td><td>PC+4</td></tr>
       <tr><td>LUI</td><td>1</td><td>U</td><td>–</td><td>–</td><td>0</td><td>imm</td></tr>
-      <tr><td>AUIPC</td><td>1</td><td>U</td><td>PC</td><td>imm</td><td>0</td><td>ALU</td></tr>${customRows}</table>`,
+      <tr><td>AUIPC</td><td>1</td><td>U</td><td>PC</td><td>imm</td><td>0</td><td>ALU</td></tr>${customRows}${mac ? '<tr><td>racc (custom-2)</td><td>1</td><td>R</td><td>rs1</td><td>–</td><td>0</td><td>MAC</td></tr><tr><td>mac, mac2, clracc</td><td>0</td><td>R</td><td>rs1</td><td>rs2</td><td>0</td><td>–</td></tr>' : ''}</table>`,
   });
 }
 
@@ -507,6 +534,12 @@ export interface CpuOptions {
    * (lib/rvc.ts cFetch), PC + 2 after a 16-bit instruction. Not with the caches, the FPU or a shared memory.
    */
   c?: boolean;
+  /**
+   * The MAC (chapter "A MAC on the RV32"): mac, mac2, clracc and racc on custom-2 (riscv/isa.ts MAC_INSTRS), the unit of lib/macunit.ts beside the ALU
+   * with its accumulator, the result mux's fifth input, and `accOut`. Not with the caches, the FPU, a shared memory or the C extension; custom rows
+   * keep custom-1 and custom-3 (custom-2 is the MAC's).
+   */
+  mac?: boolean;
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -543,17 +576,19 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = opts.c ? cFetch(program, opts.imemK ?? 6) : rom(program, opts.imemK ?? 6);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}${opts.mac ? '_mac' : ''}`;
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c, !!opts.mac));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false): ComponentDef {
+  if (mac && (c || dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: mac with a cache, the FPU, a shared memory or the C extension is not supported');
+  if (mac && custom.some((r) => r.slot === 2)) throw new Error('singleCycleCpu: custom-2 is the MAC\'s: a custom row may use custom-1 or custom-3');
   if (c && (dcache || icache || fpu || (shared && !imemPort))) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
-  const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
+  const M2 = busMux2(32), M4 = muxTree(2, 32), RES = mac ? muxTree(3, 32) : M4, ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = c ? PLUS2OR4 : adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
@@ -589,13 +624,20 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const wired = !(icache && dcache) && !fpu && !(imemPort && c);
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
-  alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
+  alignY('res', RES, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
   place('plus4', P4, [27, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 24);
   place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 18);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
-  place('ctl', custom.length ? control(custom) : CONTROL, wired ? [30, 78] : [8, 0]);
+  place('ctl', custom.length || mac ? control(custom, mac) : CONTROL, wired ? [30, 78] : [8, 0]);
+  if (mac) {
+    // below the ALU, clear of the control rows: fed by both read ports, its result is the mux's fifth input
+    const mp = macParts();
+    place('macu', mp.unit, [rfR + 18, 104]);
+    place('shamt', mp.cut(32, 0, 6), [rfR + 8, 100]);
+    place('f3op', mp.cut(3, 0, 2), [rfR + 8, 110]);
+  }
   place('npc', NEXT_PC, wired ? [dmX + 8, 44] : [62, 0]);
 
   const labels: Record<string, string> = { pcmux: 'next PC', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm' };
@@ -622,14 +664,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 43 + dx, tags: ['instrOut'] },
     { name: 'op', ends: ['si.o0', 'ctl.op'], tags: true },
     { name: 'rd', ends: ['si.o1', 'rf.wa'] },
-    { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3'], tags: true },
+    { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3', ...(mac ? ['f3op.a'] : [])], tags: true },
     { name: 'rs1', ends: ['si.o3', 'rf.ra1'], trunk: 55 + dx },
     { name: 'rs2', ends: ['si.o4', 'rf.ra2'], trunk: 56.5 + dx },
     { name: 'funct7', ends: ['si.o5', 'ctl.funct7'], tags: true },
     { name: 'ImmExt', ends: ['imm.imm', 'srcB.b', 'target.b', 'res.d3'], trunk: immY[0] + 3, tags: ['res.d3'] },
     // execute
-    { name: 'rd1', ends: ['rf.rd1', 'srcA.a'] },
-    { name: 'WriteData', ends: ['rf.rd2', 'srcB.a', 'dm.wd'], trunk: rfR + 2.5, tags: ['dm.wd'] },
+    { name: 'rd1', ends: ['rf.rd1', 'srcA.a', ...(mac ? ['macu.a', 'shamt.a'] : [])] },
+    { name: 'WriteData', ends: ['rf.rd2', 'srcB.a', 'dm.wd', ...(mac ? ['macu.b'] : [])], trunk: rfR + 2.5, tags: ['dm.wd'] },
     { name: 'SrcA', ends: ['srcA.y', 'alu.a'] },
     { name: 'SrcB', ends: ['srcB.y', 'alu.b'] },
     {
@@ -643,7 +685,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     },
     { name: 'gndT', ends: ['gndT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0], P('gndT', 'y')[1]]] } },
     { name: 'gndJ', ends: ['gndJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gndJ', 'y')[1]]] } },
-    { name: 'clk', ends: ['clk', 'pc.clk', 'rf.clk', 'dm.clk'], via: clkVia },
+    { name: 'clk', ends: ['clk', 'pc.clk', 'rf.clk', 'dm.clk', ...(mac ? ['macu.clk'] : [])], via: clkVia },
+    ...(mac ? [
+      { name: 'shift', ends: ['shamt.y', 'macu.sh'] },
+      { name: 'macOp', ends: ['f3op.y', 'macu.op'] },
+      { name: 'MacEn', ends: ['ctl.macEn', 'macu.en'], tags: true as const },
+      { name: 'MacOut', ends: ['macu.y', 'res.d4', 'res.d5', 'res.d6', 'res.d7'] },
+      { name: 'accOut', ends: ['macu.acc', 'accOut'], tags: true as const },
+    ] : []),
     // control, as net labels
     { name: 'RegWrite', ends: ['ctl.regWrite', 'rf.we'], tags: true },
     { name: 'ImmSrc', ends: ['ctl.immSrc', 'imm.src'], tags: true },
@@ -726,7 +775,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       rows(name, { [`npc.${port}`]: [[x, P('alu', port)[1]], [x, P('npc', port)[1]]] }); });
   }
 
-  const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] };
+  const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2], ...(mac ? { accOut: [resY[0] + 22, bottom + 1] } : {}) };
   if (dcache || icache) {
     // a load (ResultSrc = 01) or, with an I-cache, a fetch that misses stalls the PC and the register
     // write until the line arrives. The extra gates sit in a strip below the datapath, lined up so that
@@ -1043,13 +1092,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   }
   for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
-    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(dcache || icache ? [bit('retire', 'out')] : []), ...(dcache ? [bit('dhit', 'out')] : []), ...(icache ? [bit('ihit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
+    ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(mac ? [bus('accOut', 40, 'out')] : []), ...(dcache || icache ? [bit('retire', 'out')] : []), ...(dcache ? [bit('dhit', 'out')] : []), ...(icache ? [bit('ihit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
     symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
