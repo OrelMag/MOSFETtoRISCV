@@ -3,18 +3,21 @@
 // a segment of four stations on one shared wire. comm/mac.ts's Station and Segment are the models the tests compare them with.
 
 import { LFSR_BITS, RX_BITS, SRC_BITS } from '../comm/mac';
-import { symbolGeom } from '../sim/geometry';
+import { instPort, orientGeom, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { bigRam } from './bigmem';
 import { decoder } from './combinational';
 import { define, merger, ones, splitter } from './define';
-import { ETH_SEG_POSITIONS, macRx, macTx, sharedWire } from './ethernet';
+import { ETH_SEG, ETH_SEG_POSITIONS, macRx, macTx, sharedWire } from './ethernet';
 import { AND, NOT, OR } from './gates';
 import { Rtl, type Sig } from './rtl';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
+// the segment's drawing (ethernet.ts ETH_SEG): a station's bus-tap pins on its bottom to the cable, its counters on top
+const top = (name: string, width: number): PortDef => ({ name, width, dir: 'out', side: 'top' });
+const TOP_X = { ev: 3, stat: 9.5, counts: 16, rd: 22.5, cp: 29 };
 const regs = (m: Rtl, clk: Sig, name: string, n: number): Sig[] => Array.from({ length: n }, (_, i) => m.reg(clk, `${name}${i}`));
 
 // ---- the frame source and the receive buffer ---------------------------------------------------------------------------
@@ -160,9 +163,9 @@ export function ethStation(i = 0): ComponentDef {
   ];
   const ports: PortDef[] = [
     bit('clk', 'in', 'bottom', true), bit('rst', 'in'), bit('me', 'in'), bit('promisc', 'in'), bus('wa', SRC_BITS, 'in'), bus('wd', 8, 'in'), bit('we', 'in'), bus('len', SRC_BITS, 'in'), bit('go', 'in'),
-    bus('ra', RX_BITS, 'in'), bit('hrd', 'in'), bit('rxd', 'in'), bit('crs', 'in'),
-    bit('txd', 'out'), bit('txen', 'out'), bit('busy', 'out'), bus('ev', 8, 'out'), bus('rxbyte', 8, 'out'), bus('why', 5, 'out'), bus('rd', 8, 'out'), bus('counts', 24, 'out'),
-    bus('cp', RX_BITS, 'out'), bus('wp', RX_BITS, 'out'), bus('stat', 9, 'out'), bus('backoff', 10, 'out'), bus('gap', 9, 'out'),
+    bus('ra', RX_BITS, 'in'), bit('hrd', 'in'), bit('rxd', 'in', 'bottom'), bit('crs', 'in', 'bottom'),
+    bit('txd', 'out', 'bottom'), bit('txen', 'out', 'bottom'), bit('busy', 'out'), top('ev', 8), bus('rxbyte', 8, 'out'), bus('why', 5, 'out'), top('rd', 8), top('counts', 24),
+    top('cp', RX_BITS), bus('wp', RX_BITS, 'out'), top('stat', 9), bus('backoff', 10, 'out'), bus('gap', 9, 'out'),
   ];
   const pins: Record<string, [number, number]> = {};
   let yl = 4, yo = 4;
@@ -173,7 +176,7 @@ export function ethStation(i = 0): ComponentDef {
   const d = define({
     id: `eth_station${i}`, name: `Ethernet station ${i + 1}`, category: 'sequential',
     summary: `A MAC transmitter with a frame source and a MAC receiver with a receive buffer, at address 02:00:00:00:00:0${i + 1}. The host writes a frame and pulses go; frames that arrive with a good FCS for this address (or any, with promisc) are kept in the receive buffer. txd / txen leave for the wire, rxd / crs come from it (what the others send). ev, stat and counts pack the events, states and counters.`,
-    ports, symbol: { kind: 'box', label: `STATION ${i + 1}` },
+    ports, symbol: { kind: 'box', label: `STATION ${i + 1}`, w: ETH_SEG.STATION_W, portPos: { ...TOP_X, rxd: ETH_SEG.RXD, crs: ETH_SEG.CRS, txd: ETH_SEG.TXD, txen: ETH_SEG.TXEN, clk: ETH_SEG.CLK } },
     netlist: () => ({ pins, pinDirs: { clk: 'up' }, instances, nets }),
   });
   stations.set(i, d);
@@ -192,49 +195,72 @@ export function ethSegment(n = 4): ComponentDef {
   const hit = segs.get(n);
   if (hit) return hit;
   const x = ETH_SEG_POSITIONS.slice(0, n), W = sharedWire(x), ST = Array.from({ length: n }, (_, i) => ethStation(i));
-  const DEC = decoder(2), SP = splitter(ones(n)), MG = merger(ones(n));
-  const gst = symbolGeom(ST[0]), gd = symbolGeom(DEC);
-  const xs = (i: number) => 16 + i * (gst.w + 24);
-  const yw = 6 + gst.h + 18;
-  const instances: InstanceDef[] = [
-    { name: 'dec', def: DEC, at: [2, yw + 2], label: 'station select' }, { name: 'spp', def: SP, at: [2, yw + gd.h + 10] },
-    ...ST.map((d, i): InstanceDef => ({ name: `st${i}`, def: d, at: [xs(i), 6], label: `station ${i + 1}` })),
-    { name: 'mgd', def: MG, at: [xs(1), yw + 2] }, { name: 'mge', def: MG, at: [xs(1), yw + 14] }, { name: 'mgb', def: MG, at: [xs(1), yw + 26] },
-    { name: 'wire', def: W, at: [xs(1) + 12, yw + 2], label: 'shared wire' },
-    { name: 'spr', def: SP, at: [xs(2) + 16, yw + 2] }, { name: 'spc', def: SP, at: [xs(2) + 16, yw + 14] },
+  const P = ETH_SEG.PITCH, X0 = 46, Y0 = 16;
+  const DEC = decoder(2), SPP = splitter(ones(n)), MGB = merger(ones(n));
+  // the four buses under the stations: a bar per signal, its taps a station pitch apart, so each station drops straight onto it
+  const MG = merger(ones(n), P), SPL = splitter(ones(n), P);
+  const gst = symbolGeom(ST[0]), gd = symbolGeom(DEC), gw = symbolGeom(W);
+  const stAt = (k: number): [number, number] => [X0 + k * P, Y0];
+  const tapX = (off: number) => X0 + off;                         // station 0's pin of that tap
+  const yBar = (d: number) => Y0 + gst.h + 6 + 4 * d;
+  const yw = yBar(3) + 8;
+  const bars: { name: string; def: ComponentDef; rot: 1 | 3; flip?: boolean; off: number; d: number; first: string }[] = [
+    { name: 'mgd', def: MG, rot: 3, flip: true, off: ETH_SEG.TXD, d: 0, first: 'i0' }, { name: 'mge', def: MG, rot: 3, flip: true, off: ETH_SEG.TXEN, d: 1, first: 'i0' },
+    { name: 'spc', def: SPL, rot: 3, off: ETH_SEG.CRS, d: 2, first: 'o0' }, { name: 'spr', def: SPL, rot: 3, off: ETH_SEG.RXD, d: 3, first: 'o0' },
   ];
-  const T = (name: string, ends: string[]): NetDef => ({ name, ends, tags: true });
+  const barInst = bars.map((b): InstanceDef => {
+    const g = orientGeom(b.def, b.flip, b.rot).ports[b.first].pos;
+    return { name: b.name, def: b.def, at: [tapX(b.off) - g[0], yBar(b.d) - g[1]], flip: b.flip, rot: b.rot };
+  });
+  const yDec = 46, ySp = yDec + gd.h + 6, XR = X0 + (n - 1) * P + ETH_SEG.STATION_W + 24;
+  const instances: InstanceDef[] = [
+    ...ST.map((d, i): InstanceDef => ({ name: `st${i}`, def: d, at: stAt(i), label: `station ${i + 1}` })),
+    ...barInst,
+    { name: 'wire', def: W, at: [X0, yw], label: 'shared wire' },
+    { name: 'dec', def: DEC, at: [8, yDec], label: 'station select' }, { name: 'spp', def: SPP, at: [8, ySp] },
+    { name: 'mgb', def: MGB, at: [XR, Y0 + 8] },
+  ];
+  const T = (name: string, ends: string[], tags: NetDef['tags'] = true): NetDef => ({ name, ends, tags });
+  const W_ = (name: string, ends: string[]): NetDef => ({ name, ends });
   const nets: NetDef[] = [
     T('clk', ['clk', 'wire.clk', ...ST.map((_, i) => `st${i}.clk`)]), T('rst', ['rst', ...ST.map((_, i) => `st${i}.rst`)]),
     ...['wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'].map((p) => T(p, [p, ...ST.map((_, i) => `st${i}.${p}`)])),
-    T('sel', ['sel', 'dec.a']), T('promisc', ['promisc', 'spp.in']),
+    W_('sel', ['sel', 'dec.a']), W_('promisc', ['promisc', 'spp.in']),
   ];
   ST.forEach((_, i) => {
-    nets.push(T(`me${i}`, [`dec.y${i}`, `st${i}.me`]), T(`promisc${i}`, [`spp.o${i}`, `st${i}.promisc`]), T(`txd${i}`, [`st${i}.txd`, `mgd.i${i}`]), T(`txen${i}`, [`st${i}.txen`, `mge.i${i}`]), T(`busy${i}`, [`st${i}.busy`, `mgb.i${i}`]),
-      T(`rxd${i}`, [`spr.o${i}`, `st${i}.rxd`]), T(`crs${i}`, [`spc.o${i}`, `st${i}.crs`]));
-    for (const p of ['ev', 'stat', 'counts', 'rd', 'cp']) nets.push(T(`${p}${i}`, [`st${i}.${p}`, `${p}${i}`]));
+    nets.push(T(`me${i}`, [`dec.y${i}`, `st${i}.me`]), T(`promisc${i}`, [`spp.o${i}`, `st${i}.promisc`]), W_(`txd${i}`, [`st${i}.txd`, `mgd.i${i}`]), W_(`txen${i}`, [`st${i}.txen`, `mge.i${i}`]), T(`busy${i}`, [`st${i}.busy`, `mgb.i${i}`]),
+      W_(`rxd${i}`, [`spr.o${i}`, `st${i}.rxd`]), W_(`crs${i}`, [`spc.o${i}`, `st${i}.crs`]));
+    for (const p of ['ev', 'stat', 'counts', 'rd', 'cp']) nets.push(W_(`${p}${i}`, [`st${i}.${p}`, `${p}${i}`]));
   });
-  nets.push(T('txds', ['mgd.out', 'wire.txd']), T('txens', ['mge.out', 'wire.txen', 'txen']), T('busys', ['mgb.out', 'busy']), T('rxds', ['wire.rxd', 'spr.in']), T('crss', ['wire.crs', 'spc.in']), T('clash', ['wire.clash', 'clash']));
+  nets.push(W_('txds', ['mgd.out', 'wire.txd']), T('txens', ['mge.out', 'wire.txen', 'txen'], ['txen']), W_('busys', ['mgb.out', 'busy']), W_('rxds', ['wire.rxd', 'spr.in']), W_('crss', ['wire.crs', 'spc.in']), W_('clash', ['wire.clash', 'clash']));
   const ports: PortDef[] = [
     bit('clk', 'in', 'bottom', true), bit('rst', 'in'), bus('sel', 2, 'in'), bus('wa', SRC_BITS, 'in'), bus('wd', 8, 'in'), bit('we', 'in'), bus('len', SRC_BITS, 'in'), bit('go', 'in'),
     bus('ra', RX_BITS, 'in'), bit('hrd', 'in'), bus('promisc', n, 'in'),
     bus('txen', n, 'out'), bus('busy', n, 'out'), bit('clash', 'out'),
     ...ST.flatMap((_, i): PortDef[] => [bus(`ev${i}`, 8, 'out'), bus(`stat${i}`, 9, 'out'), bus(`counts${i}`, 24, 'out'), bus(`rd${i}`, 8, 'out'), bus(`cp${i}`, RX_BITS, 'out')]),
   ];
-  const Wd = xs(n - 1) + gst.w + 22, H = yw + 42;
+  const H = yw + gw.h + 10;
   const pins: Record<string, [number, number]> = {};
-  let yl = 4, yr = 4;
+  const pinDirs: Record<string, 'up' | 'down'> = { clk: 'up' };
+  const decA = instPort(DEC, [8, yDec], undefined, 'a').pos, sppIn = instPort(SPP, [8, ySp], undefined, 'in').pos;
+  let yl = 4;
   for (const p of ports) {
-    if (p.name === 'clk') pins.clk = [xs(0) + 4, H];
-    else if (p.dir === 'in') { pins[p.name] = [0, yl]; yl += 3; } else { pins[p.name] = [Wd, yr]; yr += 3; }
+    if (p.name === 'clk') pins.clk = [X0 + 4, H];
+    else if (p.name === 'sel') pins.sel = [0, decA[1]];
+    else if (p.name === 'promisc') pins.promisc = [0, sppIn[1]];
+    else if (p.name === 'busy') pins.busy = [XR + 8, instPort(MGB, [XR, Y0 + 8], undefined, 'out').pos[1]];
+    else if (p.name === 'clash') pins.clash = [XR + 8, yw + 3];
+    else if (p.name === 'txen') pins.txen = [XR + 8, yw - 4];
+    else if (p.dir === 'in') { pins[p.name] = [0, yl]; yl += 3; }
   }
+  const TOPX: Record<string, number> = TOP_X;
+  ST.forEach((_, i) => { for (const p of ['ev', 'stat', 'counts', 'rd', 'cp']) { pins[`${p}${i}`] = [X0 + i * P + TOPX[p], Y0 - 10]; pinDirs[`${p}${i}`] = 'down'; } });
   const d = define({
-    id: n === 4 ? 'eth_segment' : `eth_segment${n}`, name: `Ethernet segment (${n} stations)`, category: 'sequential',
+    id: n === 4 ? 'eth_segment' : `eth_segment${n}`, name: `Ethernet segment (${n} stations)`, category: 'routing',
     summary: `${n} Ethernet stations on one shared cable. The host port reaches one station at a time (sel); every station sends, defers, collides, backs off and receives by itself, in gates.`,
     ports, symbol: { kind: 'box', label: 'SEGMENT' },
-    netlist: () => ({ pins, pinDirs: { clk: 'up' }, instances, nets }),
+    netlist: () => ({ pins, pinDirs, instances, nets }),
   });
   segs.set(n, d);
   return d;
 }
-
