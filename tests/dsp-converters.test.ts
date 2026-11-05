@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
-import { enob, flashComparators, flashConvert, idealSqnrDb, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, sarConvert, SD_GUARD, SD_OVERLOAD, sdBitstream, sdLinearModelDb, SdLoop, sdMeasuredDb, sndrDb } from '../src/dsp/converters';
+import { enob, flashComparators, flashConvert, idealSqnrDb, jitterHolds, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, sarConvert, SD_GUARD, SD_LIMIT, sdBitstream, sdErrorPower, sdLinearModelDb, SdLoop, sdMeasuredDb, sdPeak, sndrDb } from '../src/dsp/converters';
 import { CicModel, cicWidth } from '../src/dsp/multirate';
 import { sdConverter, sdModulator } from '../src/lib/sigmadelta';
 import { chainEnob } from '../src/widgets/dspconverters';
@@ -43,18 +43,28 @@ describe('flash, SAR and a ladder', () => {
     for (let c = 0; c < 256; c++) expect(ladderOutput(c, 8)).toBeCloseTo(c / 256, 12);
     expect(linearity(Array.from({ length: 256 }, (_, c) => ladderOutput(c, 8))).worstDnl).toBeLessThan(1e-9);
   });
-  it('an imperfect ladder is worst at the MSB step, and tolerances set when it stops being monotonic', () => {
-    const lv = (s: number) => linearity(Array.from({ length: 256 }, (_, c) => ladderOutput(c, 8, ladderErrors(8, s, 5))));
+  it('an imperfect ladder is usually worst at the MSB step, some 2 LSBs at 1 %, and tolerances set when it stops being monotonic', () => {
+    const lv = (s: number, seed = 5) => linearity(Array.from({ length: 256 }, (_, c) => ladderOutput(c, 8, ladderErrors(8, s, seed))));
     expect(lv(0.001).monotonic).toBe(true);
     expect(lv(0.03).monotonic).toBe(false);
-    const t = lv(0.01), at = t.dnl.reduce((m, v, i) => (Math.abs(v) > Math.abs(t.dnl[m]) ? i : m), 0);
-    expect(at).toBe(127);
+    let atMiddle = 0; const worst: number[] = [];
+    for (let seed = 1; seed <= 200; seed++) { const t = lv(0.01, seed); if (t.dnl.reduce((m, v, i) => (Math.abs(v) > Math.abs(t.dnl[m]) ? i : m), 0) === 127) atMiddle++; worst.push(Math.abs(t.dnl[127])); }
+    expect(atMiddle).toBeGreaterThan(100);
+    const median = worst.sort((a, b) => a - b)[100];
+    expect(median).toBeGreaterThan(1.2); expect(median).toBeLessThan(2.8);
   });
 });
 
 describe('jitter', () => {
   it('the measured limit follows −20 log(2π f σ) for any bits', () => {
     for (const [f, s] of [[1e6, 1e-9], [10e6, 1e-10], [70e6, 1e-12]] as const) expect(Math.abs(jitterMeasuredDb(f, 3.3 * f, s, 3, 16384) - jitterLimitDb(f, s))).toBeLessThan(0.5);
+  });
+  it('the formula holds as far as the widget quotes it, and not where it refuses', () => {
+    const atEdge = 10 ** (-10 / 20) / (2 * Math.PI * 1e7);
+    expect(jitterHolds(1e7, atEdge * 0.99)).toBe(true);
+    expect(Math.abs(jitterMeasuredDb(1e7, 3.3e7, atEdge * 0.99, 3, 16384) - 10)).toBeLessThan(1);
+    expect(jitterHolds(1e9, 1e-8)).toBe(false);
+    expect(jitterLimitDb(1e9, 1e-8) - jitterMeasuredDb(1e9, 3.3e9, 1e-8, 3, 16384)).toBeLessThan(-20);
   });
 });
 
@@ -81,27 +91,32 @@ describe('the loop', () => {
     for (let i = 0; i < 8192; i++) { m.edge(Math.round(0.3 * m.fs)); sum += m.bit ? 1 : -1; }
     expect(sum / 8192).toBeCloseTo(0.3, 2);
   });
-  it('each doubling of the rate gives about 9 dB at order 1 and 15 at order 2', () => {
-    const gain = (o: 1 | 2) => (sdMeasuredDb(o, 128, 0.5) - sdMeasuredDb(o, 16, 0.5)) / 3;
-    expect(gain(1)).toBeGreaterThan(7.5); expect(gain(1)).toBeLessThan(10.5);
-    expect(gain(2)).toBeGreaterThan(13.5); expect(gain(2)).toBeLessThan(16.5);
+  it('each doubling of the rate gives what the chapter says: order 2 from 13 to 16 dB, order 1 from 6 to 11', () => {
+    const rates = [16, 32, 64, 128, 256], steps = (o: 1 | 2) => rates.slice(1).map((r, i) => sdMeasuredDb(o, r, 0.5) - sdMeasuredDb(o, rates[i], 0.5));
+    for (const g of steps(2)) { expect(g).toBeGreaterThan(12.5); expect(g).toBeLessThan(16.5); }
+    for (const g of steps(1)) { expect(g).toBeGreaterThan(5.5); expect(g).toBeLessThan(11); }
   });
-  it('the linear model has the slope and misses the level: the stated gap', () => {
+  it('the linear model has the slope, and the measured error power closes most of its gap', () => {
+    expect(sdLinearModelDb(2, 64, 0.5)).toBeCloseTo(1.76 + 20 * Math.log10(0.5) - 10 * Math.log10(Math.PI ** 4 / 5) + 50 * Math.log10(64), 2);
+    const pw = sdErrorPower(2, 0.5);
+    expect(pw).toBeGreaterThan(0.45); expect(pw).toBeLessThan(0.65);
+    expect(Math.abs(sdErrorPower(1, 0.5) - 1 / 3)).toBeLessThan(0.03);
     for (const osr of [32, 64, 128]) {
-      const gap = sdLinearModelDb(2, osr, 0.5) - sdMeasuredDb(2, osr, 0.5);
-      expect(gap).toBeGreaterThan(6); expect(gap).toBeLessThan(12);
-      const gap1 = sdLinearModelDb(1, osr, 0.5) - sdMeasuredDb(1, osr, 0.5);
-      expect(Math.abs(gap1)).toBeLessThan(5);
+      const got = sdMeasuredDb(2, osr, 0.5), gap = sdLinearModelDb(2, osr, 0.5) - got, left = sdLinearModelDb(2, osr, 0.5, pw) - got;
+      expect(gap).toBeGreaterThan(1.5); expect(gap).toBeLessThan(6);
+      expect(Math.abs(left)).toBeLessThan(Math.abs(gap));
+      expect(Math.abs(left)).toBeLessThan(3);
     }
   });
-  it('the guard bits hold up to the overload, and past it the loop falls apart', () => {
-    for (const level of [0.1, 0.5, SD_OVERLOAD]) {
-      const m = new SdLoop(2, 16); let peak = 0;
-      for (let i = 0; i < 60000; i++) { m.edge(Math.round(level * m.fs * Math.sin((i * 2 * Math.PI) / 1024))); peak = Math.max(peak, Math.abs(m.y1), Math.abs(m.y2)); }
-      expect(peak).toBeLessThan(2 ** (m.word - 1));
-    }
-    expect(sdMeasuredDb(2, 64, SD_OVERLOAD)).toBeGreaterThan(60);
-    expect(sdMeasuredDb(2, 64, 0.95)).toBeLessThan(25);
+  it('the guard bits hold the peak up to the limit, tones and a steady input alike, and three would not', () => {
+    for (const level of [0.5, 0.8, SD_LIMIT]) expect(sdPeak(2, level)).toBeLessThan(2 ** SD_GUARD);
+    expect(sdPeak(2, 0.8)).toBeGreaterThan(8);
+    expect(sdPeak(2, SD_LIMIT)).toBeGreaterThan(16);
+    for (const osr of [64, 256]) expect(sdMeasuredDb(2, osr, 0.8)).toBeGreaterThan(55);
+  });
+  it('the measure falls near the top, and nothing wraps to cause it', () => {
+    expect(sdMeasuredDb(2, 64, SD_LIMIT)).toBeLessThan(sdMeasuredDb(2, 64, 0.5) - 10);
+    expect(sdMeasuredDb(2, 64, SD_LIMIT)).toBeGreaterThan(40);
   });
 });
 
@@ -110,7 +125,7 @@ describe('the gates', () => {
     for (const order of [1, 2] as const) {
       const w = 12, def = sdModulator(order, w), sim = new BitSim(flatten(def)), m = new SdLoop(order, w), W = w + SD_GUARD;
       for (let i = 0; i < 6000; i++) {
-        const u = Math.round(0.7 * m.fs * Math.sin(i * 0.0213) * (i % 700 < 350 ? 1 : 0.4));
+        const u = Math.round(SD_LIMIT * m.fs * Math.sin(i * 0.0213) * (i % 700 < 350 ? 1 : 0.4));
         sim.setInput('u', [wordOf(u, w)]);
         sim.cycle();
         m.edge(u);

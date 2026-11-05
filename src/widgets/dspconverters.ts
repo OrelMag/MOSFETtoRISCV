@@ -2,7 +2,7 @@
 
 import { signedOf, wordOf } from '../comm/signals';
 import { prepareClip, type Clip } from '../dsp/clip';
-import { enob, flashComparators, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, powerSpectrum, sarConvert, sdBand, sdBitstream, sdLinearModelDb, SdLoop, sdMeasuredDb, sndrDb } from '../dsp/converters';
+import { enob, flashComparators, jitterHolds, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, powerSpectrum, sarConvert, sdBand, sdBitstream, SD_LIMIT, sdLinearModelDb, SdLoop, sdMeasuredDb, sndrDb } from '../dsp/converters';
 import { CicModel, cicWidth } from '../dsp/multirate';
 import { sdConverter } from '../lib/sigmadelta';
 import { h } from '../ui/dom';
@@ -26,7 +26,7 @@ export function sarWidget(): Widget {
   const paint = () => {
     const w = sigma ? mismatchedWeights(bits, sigma, 5) : undefined, r = sarConvert(v, bits, w), ideal = Math.min(2 ** bits - 1, Math.floor(((v + 1) / 2) * 2 ** bits));
     host.replaceChildren(h('table', { class: 'mini' }, h('tr', null, h('th', null, 'Clock'), h('th', null, 'Bit tried'), h('th', null, 'DAC says'), h('th', null, 'Input above it?')),
-      ...r.steps.slice(0, 8).map((s, i) => h('tr', null, h('td', null, String(i + 1)), h('td', null, String(s.bit)), h('td', null, num(s.tried, 4)), h('td', null, s.keep ? 'yes: keep it' : 'no: clear it')))));
+      ...r.steps.map((s, i) => h('tr', null, h('td', null, String(i + 1)), h('td', null, String(s.bit)), h('td', null, num(s.tried, 4)), h('td', null, s.keep ? 'yes: keep it' : 'no: clear it')))));
     chips.set(0, String(r.code), `the code${sigma ? `, against ${ideal} if the capacitors were right` : ''}`);
     chips.set(1, String(bits), 'comparisons, one a clock, on one comparator');
     chips.set(2, String(flashComparators(bits)), 'comparators a flash would need, deciding in one clock');
@@ -67,9 +67,10 @@ export function jitterWidget(): Widget {
   const chips = mkChips(3);
   const paint = () => {
     const f = 10 ** lf, sig = 10 ** ls, lim = jitterLimitDb(f, sig), got = jitterMeasuredDb(f, 3.3 * f, sig, 7, 16384);
-    chips.set(0, dbs(lim), '−20 log₁₀(2π f σ)');
+    const holds = jitterHolds(f, sig);
+    chips.set(0, holds ? dbs(lim) : 'no limit', holds ? '−20 log₁₀(2π f σ)' : '−20 log₁₀(2π f σ) is a small-error sum, and this jitter is a good share of the wave\'s period');
     chips.set(1, dbs(got), 'measured, on a full-scale sine');
-    chips.set(2, num(enob(lim), 1), 'effective bits that leaves, however many the converter has');
+    chips.set(2, holds ? num(enob(lim), 1) : 'none', 'effective bits that leaves, however many the converter has');
   };
   const sf = slider('Input frequency', 3, 9, 0.1, lf, (x) => { const v = 10 ** x; return v >= 1e6 ? `${num(v / 1e6, 1)} MHz` : `${num(v / 1e3, 0)} kHz`; }, (x) => { lf = x; paint(); });
   const ss = slider('Clock jitter, RMS', -13, -8, 0.1, ls, (x) => { const v = 10 ** x; return v < 1e-9 ? `${num(v * 1e12, 1)} ps` : `${num(v * 1e9, 1)} ns`; }, (x) => { ls = x; paint(); });
@@ -96,14 +97,14 @@ export function sdWidget(): Widget {
     const edge = Math.log10(sdBand(osr)) + 4;
     line(plot, [edge, edge], [-120, 0], 'ln-s lump');
     const got = sndrDb(x, k, sdBand(osr)), model = sdLinearModelDb(order, osr, level), next = sdMeasuredDb(order, osr * 2 > 256 ? osr : osr * 2, level, SD_N);
-    chips.set(0, dbs(got), `measured, in the band, ${num(enob(got), 1)} effective bits`);
+    chips.set(0, dbs(got), `measured, in the band: ${num(enob(got), 1)} effective bits at this level, more against a full-scale tone`);
     chips.set(1, dbs(model), 'the textbook\'s linear model');
     chips.set(2, dbs(model - got), 'how far the model is out');
     chips.set(3, osr * 2 > 256 ? '—' : dbs(next - got), 'gained by doubling the rate, at this setting');
   };
   const so = slider('Order', 1, 2, 1, order, (x) => String(x), (x) => { order = x as 1 | 2; paint(); });
-  const sr = slider('Oversampling', 4, 8, 1, osrLog, (x) => String(2 ** x), (x) => { osrLog = x; paint(); });
-  const sl = slider('Input level', 0.05, 0.95, 0.05, level, (x) => num(x, 2), (x) => { level = x; paint(); });
+  const sr = slider('Rate ×', 4, 8, 1, osrLog, (x) => String(2 ** x), (x) => { osrLog = x; paint(); });
+  const sl = slider('Input level', 0.05, SD_LIMIT, 0.05, level, (x) => num(x, 2), (x) => { level = x; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One bit, at a high rate'), plot.el, chips.el), h('div', { class: 'panel mos-ctl' }, so.el, sr.el, sl.el)) };
 }

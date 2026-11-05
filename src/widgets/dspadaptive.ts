@@ -2,7 +2,7 @@
 
 import { signedOf, wordOf } from '../comm/signals';
 import { prepareClip, type Clip } from '../dsp/clip';
-import { correlate, ECHO_RATE, farEnd, levinson, Lms, LmsFixed, runEcho, runEqualizer, type LmsSpec } from '../dsp/adaptive';
+import { correlate, ECHO_RATE, farEnd, levinson, Lms, LmsFixed, peakEnergy, runEcho, runEqualizer, type LmsSpec } from '../dsp/adaptive';
 import { lmsFilter } from '../lib/sigmadelta';
 import { gaussian, rng } from '../phys/line';
 import { h } from '../ui/dom';
@@ -51,7 +51,7 @@ export function bowlWidget(): Widget {
     const off = Math.hypot(f.w[0] - best[0], f.w[1] - best[1]);
     chips.set(0, `${num(best[0], 3)}, ${num(best[1], 3)}`, 'the Wiener solution, solved from the correlations');
     chips.set(1, Number.isFinite(off) && off < 100 ? `${num(f.w[0], 3)}, ${num(f.w[1], 3)}` : 'it left', 'where LMS ended, knowing none of that');
-    chips.set(2, num((1 + tint) / (1 - tint), 1), 'how much longer the bowl is than wide');
+    chips.set(2, num(Math.sqrt((1 + tint) / (1 - tint)), 1), 'how much longer the bowl is than wide: the root of the eigenvalues\' ratio');
   };
   const sm = slider('Step μ', -3.3, 0, 0.1, lm, (x) => num(10 ** x, 4), (x) => { lm = x; paint(); });
   const st = slider('Input colour', 0, 0.95, 0.05, tint, (x) => num(x, 2), (x) => { tint = x; paint(); });
@@ -62,6 +62,8 @@ export function bowlWidget(): Widget {
 // ---- an echo canceller --------------------------------------------------------------------------------------------------------------------------------
 
 export const ECHO_N = 32000, ECHO_TAPS = 128;
+/** The plain form's μ is this much of the slider's, so the slider reaches past its limit (peakEnergy). */
+const PLAIN = 0.15;
 export function echoClip(which: 'mic' | 'after'): Clip {
   const r = runEcho({ n: ECHO_N, seed: 3, taps: ECHO_TAPS, mu: 0.5, normalized: true });
   const raw = which === 'mic' ? r.d : r.e, peak = r.d.reduce((m, v) => Math.max(m, Math.abs(v)), 1e-9);
@@ -69,29 +71,30 @@ export function echoClip(which: 'mic' | 'after'): Clip {
 }
 export function echoWidget(): Widget {
   let lm = -0.3, taps = ECHO_TAPS, normalized = true, talk = false, freeze = false, loud = 1;
+  const mu = (l = lm) => (normalized ? 10 ** l : PLAIN * 10 ** l);
   const plot = plotOf({ W: 640, H: 200, x: [0, ECHO_N / ECHO_RATE], y: [-80, 0], yTicks: [-80, -60, -40, -20, 0], xLabel: 'seconds', yLabel: 'dB', aria: 'The microphone\'s level and what is left after the canceller, over time' });
   const chips = mkChips(3);
   const paint = () => {
     const x = farEnd(ECHO_N, 3).map((v) => v * loud);
-    const r = runEcho({ n: ECHO_N, seed: 3, taps, mu: normalized ? 10 ** lm : (10 ** lm) * 0.01, normalized, x, ...(talk ? { talkFrom: 18000, talkTo: 25000, freeze } : {}) });
+    const r = runEcho({ n: ECHO_N, seed: 3, taps, mu: mu(), normalized, x, ...(talk ? { talkFrom: 18000, talkTo: 25000, freeze } : {}) });
     plot.clear();
     const t = every(range(ECHO_N), 40).map((i) => i / ECHO_RATE), cl = (a: number[]) => every(a, 40).map((v) => Math.max(-80, Math.min(0, Number.isFinite(v) ? v : 0)));
     line(plot, t, cl(smooth(r.d, 240)), 'ln-s lump');
     line(plot, t, cl(smooth(r.e, 240)), 'ln-s real');
     const diverged = !Number.isFinite(r.erle) || r.erle < -3;
     chips.set(0, diverged ? 'it diverged' : dbs(r.erle), 'echo return loss enhancement, last quarter');
-    chips.set(1, String(taps), `taps, of a path ${128} long`);
+    chips.set(1, normalized ? 'none here' : num(2 / peakEnergy(x, taps), 3), normalized ? 'step limit from loudness: NLMS has divided it out' : `plain μ\'s limit at this loudness, 2 / (the loudest ${taps} samples\' energy)`);
     chips.set(2, `${taps * 2}`, 'multiplications a sample');
   };
-  const sm = slider('Step', -2, 0.2, 0.1, lm, (x) => num(10 ** x, 3), (x) => { lm = x; paint(); });
+  const sm = slider('Step μ', -2, 0.2, 0.1, lm, (x) => num(mu(x), 3), (x) => { lm = x; paint(); });
   const st = slider('Taps', 8, 128, 8, taps, (x) => String(x), (x) => { taps = x; paint(); });
-  const sv = slider('Far end\'s loudness', 0.1, 1, 0.1, loud, (x) => num(x, 1), (x) => { loud = x; paint(); });
+  const sv = slider('Far end\'s loudness', 0.1, 2, 0.1, loud, (x) => num(x, 1), (x) => { loud = x; paint(); });
   const cb = (label: string, on: boolean, set: (v: boolean) => void) => h('label', { class: 'cd-check' }, h('input', { type: 'checkbox', checked: on, onchange: (e: Event) => { set((e.target as HTMLInputElement).checked); paint(); } }), ` ${label}`);
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'An echo you cannot measure'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'at the microphone'), h('span', { class: 'k-far' }, 'after the canceller')), chips.el),
-      h('div', { class: 'panel mos-ctl' }, sm.el, st.el, sv.el, cb('Normalized (NLMS)', normalized, (v) => { normalized = v; }), cb('Someone talks at the near end', talk, (v) => { talk = v; }), cb('Stop learning while they talk', freeze, (v) => { freeze = v; }),
+      h('div', { class: 'panel mos-ctl' }, sm.el, st.el, sv.el, cb('Normalized (NLMS)', normalized, (v) => { normalized = v; sm.set(lm); }), cb('Someone talks at the near end', talk, (v) => { talk = v; }), cb('Stop learning while they talk', freeze, (v) => { freeze = v; }),
         clipButton('Hear the microphone', () => echoClip('mic')).el, clipButton('Hear what is left', () => echoClip('after')).el)),
   };
 }
@@ -107,7 +110,7 @@ export function eqWidget(): Widget {
     const r = runEqualizer({ channel: CHANNELS[pick].h, taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train });
     plot.clear();
     const xs = range(r.y.length).filter((i) => i % 3 === 0);
-    plot.layer.append(...xs.map((i) => { const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', String(plot.X(i))); c.setAttribute('cy', String(plot.Y(Math.max(-1.8, Math.min(1.8, r.y[i]))))); c.setAttribute('r', '0.8'); c.setAttribute('class', 'dsp-dot'); return c; }));
+    plot.layer.append(...xs.map((i) => { const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', String(plot.X(i))); c.setAttribute('cy', String(plot.Y(Math.max(-1.8, Math.min(1.8, r.y[i]))))); c.setAttribute('r', '0.8'); c.style.fill = 'var(--accent)'; return c; }));
     chips.set(0, num(r.openingBefore, 2), 'the eye on the line, as a gap between + and − (below 0: shut)');
     chips.set(1, num(r.opening, 2), 'after it, once training is over');
     chips.set(2, String(r.wrongAfter), 'symbols wrong, on its own decisions');
@@ -123,45 +126,47 @@ export function eqWidget(): Widget {
 
 export const LMS_SPEC: LmsSpec = { n: 4, wx: 8, w: 12, f: 8, s: 7 };
 export const LMS_TARGET = [0.75, -0.5, 0.25, 0.125];
+/** A full input converges in a few dozen clocks, a quiet one takes thousands and stops in the dead zone. */
+export const LMS_RUNS = { loud: { clocks: 200, amp: 64, every: 1 }, quiet: { clocks: 4000, amp: 8, every: 8 } };
 export const lmsApi = new WeakMap<Stage, { agrees: () => boolean; clocks: () => number; errorDb: () => number; run: () => void }>();
 const pulse = (st: Stage) => { st.sim!.setInput('clk', 1); st.sim!.settle(); st.sim!.setInput('clk', 0); st.sim!.settle(); };
 
 const lmsPanel: ScenePanel = (stage: Stage): Widget => {
-  const CLOCKS = 1600, S = LMS_SPEC;
-  let tr: number[][] = [], ok = true, ran = 0, last = 0;
-  const plot = plotOf({ W: 380, H: 180, x: [0, CLOCKS], y: [-1, 1], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: 'coefficient', aria: 'Four coefficients walking from zero to the target' });
-  const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
+  const S = LMS_SPEC, makePlot = (clocks: number) => plotOf({ W: 380, H: 180, x: [0, clocks], y: [-1, 1], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: 'coefficient', aria: 'Four coefficients walking from zero toward the target, drawn beside it' });
+  let tr: number[][] = [], ok = true, ran = 0, last = 0, mode = LMS_RUNS.loud, plot = makePlot(mode.clocks);
+  const host = h('div', null, plot.el), read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
   const paint = () => {
     plot.clear();
-    tr.forEach((c) => line(plot, c.map((_, i) => i), c, 'ln-s real'));
-    read.replaceChildren(h('span', null, 'clocks ', h('b', null, String(ran))), h('span', null, 'output against d ', h('b', null, ran ? dbs(last) : '—')), h('span', null, 'target ', h('b', null, LMS_TARGET.join(' '))));
-    note.textContent = ran ? (ok ? 'At every clock the gates\' coefficients and output matched the integer model.' : 'The gates and the model disagreed.') : 'The filter never sees the target. It gets x, and d, which is x through an unknown filter.';
+    LMS_TARGET.forEach((t) => line(plot, [0, mode.clocks], [t, t], 'ln-s lump'));
+    tr.forEach((c) => line(plot, c.map((_, i) => i * mode.every), c, 'ln-s real'));
+    read.replaceChildren(h('span', null, 'clocks ', h('b', null, String(ran))), h('span', null, 'output against d ', h('b', null, ran ? dbs(last) : '—')), h('span', null, 'target ', h('b', null, LMS_TARGET.join(' '))), h('span', null, 'now ', h('b', null, ran ? tr.map((c) => num(c[c.length - 1], 2)).join(' ') : '—')));
+    note.textContent = !ran ? 'The filter never sees the target. It gets x, and d, which is x through an unknown filter.' : !ok ? 'The gates and the model disagreed.' : `At every clock the gates' coefficients and output matched the integer model.${mode === LMS_RUNS.quiet ? ` With x this small, e × x seldom gets past ±${2 ** (S.s - 1)}, so the updates round to nothing and the coefficients stop short of the target.` : ''}`;
   };
-  const run = () => {
+  const run = (m0: typeof mode = LMS_RUNS.loud) => {
     stage.checkpoint();
-    const sim = stage.sim!, m = new LmsFixed(S), u = rng(21), hist = [0, 0, 0, 0];
+    if (m0 !== mode) { mode = m0; plot = makePlot(mode.clocks); host.replaceChildren(plot.el); }
+    const sim = stage.sim!, m = new LmsFixed(S), u = rng(21), hist = [0, 0, 0, 0], { clocks, amp, every: k0 } = mode;
     sim.reset('zero'); sim.setInput('clk', 0); sim.settle();
     tr = LMS_TARGET.map(() => []); ok = true; ran = 0;
     let a = 0, b = 0;
-    for (let i = 0; i < CLOCKS; i++) {
-      const x = Math.max(-128, Math.min(127, Math.round(64 * gaussian(u)))), d = Math.max(-128, Math.min(127, Math.round(LMS_TARGET.reduce((s, t, k) => s + t * hist[k], 0))));
-      if (i > CLOCKS - 400) { const e = m.e(d); a += d * d; b += e * e; }
+    for (let i = 0; i < clocks; i++) {
+      const x = Math.max(-128, Math.min(127, Math.round(amp * gaussian(u)))), d = Math.max(-128, Math.min(127, Math.round(LMS_TARGET.reduce((s, t, k) => s + t * hist[k], 0))));
+      if (i > (3 * clocks) / 4) { const e = m.e(d); a += d * d; b += e * e; }
       sim.setInput('x', wordOf(x, S.wx)); sim.setInput('d', wordOf(d, S.wx)); sim.settle();
       pulse(stage);
       m.edge(x, d);
       hist.pop(); hist.unshift(x);
-      for (let k = 0; k < S.n; k++) { const c = signedOf(stage.value(`c${k}`), S.w); if (c !== m.c[k]) ok = false; if (i % 8 === 0) tr[k].push(c / 2 ** S.f); }
+      for (let k = 0; k < S.n; k++) { const c = signedOf(stage.value(`c${k}`), S.w); if (c !== m.c[k]) ok = false; if (i % k0 === 0) tr[k].push(c / 2 ** S.f); }
       if (signedOf(stage.value('y'), S.w) !== m.y) ok = false;
       ran++;
     }
     last = 10 * Math.log10(b / Math.max(a, 1e-9));
-    tr = tr.map((c) => c.flatMap((v) => new Array<number>(8).fill(v)));
     stage.refresh();
     paint();
   };
-  lmsApi.set(stage, { agrees: () => ok && ran > 0, clocks: () => ran, errorDb: () => last, run });
+  lmsApi.set(stage, { agrees: () => ok && ran > 0, clocks: () => ran, errorDb: () => last, run: () => run() });
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Learning a filter'),
-    h('div', { class: 'dram-ops' }, h('button', { type: 'button', class: 'btn sm', onclick: run }, 'Learn')), plot.el, read, note);
+    h('div', { class: 'dram-ops' }, h('button', { type: 'button', class: 'btn sm', onclick: () => run(LMS_RUNS.loud) }, 'Learn'), h('button', { type: 'button', class: 'btn sm', onclick: () => run(LMS_RUNS.quiet) }, 'Learn from a quiet input')), host, read, note);
   stage.resetHooks.add(() => { tr = []; ran = 0; paint(); });
   paint();
   return { el, update: () => {} };

@@ -10,6 +10,7 @@ import { addSub, rca } from './combinational';
 import { define } from './define';
 import { cut, placed } from './fft';
 import { NOT } from './gates';
+import { incCin } from './rvc';
 import { cicDecimator } from './multirate';
 import { treeMul } from './muldiv';
 import { register } from './sequential';
@@ -118,13 +119,13 @@ export function sdConverter(order: 1 | 2, w: number, N: number, R: number): Comp
 
 // ---- LMS -----------------------------------------------------------------------------------------------------------------------------------------
 
-/** One tap: the sample it holds, its coefficient, one multiplier to use it and one to learn. */
+/** One tap: the sample it holds, its coefficient, one multiplier to use it and one to learn. Its share of the output leaves with all its bits; the update is rounded half up, the bit below the cut going in as the adder's carry. */
 export function lmsTap(o: LmsSpec): ComponentDef {
-  const { wx, w, f, s } = o;
-  return memo(`lms_tap${wx}_${w}_${f}_${s}`, () => {
+  const { wx, w, s } = o;
+  return memo(`lms_tap${wx}_${w}_${s}`, () => {
     const b = new Builder(10, 12, 6);
     b.pins('xin', 'e', 'clk');
-    const gnd = b.op(TIE0, [], undefined, 'gnd'), one = b.op(TIE1, [], undefined, 'one');
+    const one = b.op(TIE1, [], undefined, 'one');
     const c = b.add(register(w), 'coefficient', 'c');
     const rx = b.op(register(wx), ['xin', `${one}.y`, 'clk'], 'sample', 'rx');
     b.next();
@@ -132,24 +133,24 @@ export function lmsTap(o: LmsSpec): ComponentDef {
     const y = b.op1(treeMul(w, true), [`${c}.q`, xw], 'c × x', 'muly');
     const g = b.op1(treeMul(w, true), ['e', xw], 'e × x', 'mulg');
     b.next();
-    const yo = b.op1(cut(2 * w, f, w), [y], `≫ ${f}`, 'yc'), step = b.op1(cut(2 * w, s, w), [g], `≫ ${s}`, 'gc');
+    const step = b.op1(cut(2 * w, s, w), [g], `≫ ${s}`, 'gc'), half = b.op1(cut(2 * w, s - 1, 1), [g], 'round', 'gr');
     b.next();
-    const nc = b.op(rca(w), [`${c}.q`, step, `${gnd}.y`], 'c + step', 'addc');
+    const nc = b.op(rca(w), [`${c}.q`, step, half], 'c + step', 'addc');
     b.wire(`${nc}.s`, `${c}.d`); b.wire(`${one}.y`, `${c}.en`); b.wire('clk', `${c}.clk`);
     b.next();
-    b.wire(yo, 'y'); b.wire(`${c}.q`, 'c'); b.wire(`${rx}.q`, 'xout');
-    const ports = [bus('xin', wx, 'in'), bus('e', w, 'in'), clkPort, bus('y', w, 'out'), bus('c', w, 'out'), bus('xout', wx, 'out')];
+    b.wire(y, 'y'); b.wire(`${c}.q`, 'c'); b.wire(`${rx}.q`, 'xout');
+    const ports = [bus('xin', wx, 'in'), bus('e', w, 'in'), clkPort, bus('y', 2 * w, 'out'), bus('c', w, 'out'), bus('xout', wx, 'out')];
     return define({
-      id: `lms_tap${wx}_${w}_${f}_${s}`, name: 'LMS tap', category: 'arithmetic',
+      id: `lms_tap${wx}_${w}_${s}`, name: 'LMS tap', category: 'arithmetic',
       summary: 'A sample and a coefficient. One multiplier gives this tap\'s share of the output, and one works out how far the error says to move the coefficient. Two multipliers a tap: learning costs as much again as filtering.',
       ports, symbol: { kind: 'box', label: 'TAP', w: 8 }, netlist: () => built(b, ports),
     });
   });
 }
 
-/** n taps in a row, their outputs summed, and the error fed back to all of them. */
+/** n taps in a row, their products summed with all their bits and that sum rounded once, and the error fed back to all of them. */
 export function lmsFilter(o: LmsSpec): ComponentDef {
-  const { n, wx, w } = o;
+  const { n, wx, w, f } = o;
   return memo(`lms${n}_${wx}_${w}_${o.f}_${o.s}`, () => {
     const b = new Builder(10, 12, 4);
     b.pins('x', 'd', 'clk');
@@ -161,12 +162,16 @@ export function lmsFilter(o: LmsSpec): ComponentDef {
     for (let k = 0; k < n; k++) { const t = b.add(tap, `tap ${k}`, `t${k}`); names.push(t); b.wire(feed, `${t}.xin`); b.wire('clk', `${t}.clk`); feed = `${t}.xout`; }
     b.next();
     let sum = `${names[0]}.y`;
-    for (let k = 1; k < n; k++) sum = `${b.op(rca(w), [sum, `${names[k]}.y`, `${gnd}.y`], undefined, `s${k}`)}.s`;
+    for (let k = 1; k < n; k++) sum = `${b.op(rca(2 * w), [sum, `${names[k]}.y`, `${gnd}.y`], undefined, `s${k}`)}.s`;
     b.next();
-    const err = b.op(addSub(w), [dw, sum, `${one}.y`], 'e = d − y', 'err');
+    const whole = b.op1(cut(2 * w, f, w), [sum], `≫ ${f}`, 'yc'), half = b.op1(cut(2 * w, f - 1, 1), [sum], 'round', 'yr');
+    b.next();
+    const yr = b.op1(incCin(w), [whole, half], 'round half up', 'yi');
+    b.next();
+    const err = b.op(addSub(w), [dw, yr, `${one}.y`], 'e = d − y', 'err');
     for (let k = 0; k < n; k++) b.wire(`${err}.s`, `${names[k]}.e`);
     b.next();
-    b.wire(sum, 'y'); b.wire(`${err}.s`, 'e');
+    b.wire(yr, 'y'); b.wire(`${err}.s`, 'e');
     for (let k = 0; k < n; k++) b.wire(`${names[k]}.c`, `c${k}`);
     const ports = [bus('x', wx, 'in'), bus('d', wx, 'in'), clkPort, bus('y', w, 'out'), bus('e', w, 'out'), ...Array.from({ length: n }, (_, k) => bus(`c${k}`, w, 'out'))];
     return define({

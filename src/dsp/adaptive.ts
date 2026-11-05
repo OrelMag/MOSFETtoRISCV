@@ -49,6 +49,13 @@ export class Lms {
   }
 }
 
+/** The most energy the filter's n samples ever hold. Plain LMS shrinks its error at every step only while μ is below 2 / this: the loudest stretch sets the limit, not the average. */
+export function peakEnergy(x: readonly number[], n: number): number {
+  let win = 0, top = 0;
+  x.forEach((v, i) => { win += v * v; if (i >= n) win -= x[i - n] * x[i - n]; top = Math.max(top, win); });
+  return top;
+}
+
 /** Echo return loss enhancement: how far the canceller brought the echo down, in dB, over a stretch. */
 export function erleDb(d: readonly number[], e: readonly number[], from = 0, to = d.length): number {
   let a = 0, b = 0;
@@ -153,8 +160,8 @@ export interface LmsSpec {
 }
 
 /**
- * The gates' behaviour. Every word wraps at w bits; products keep their bits and are cut by wiring, so they truncate toward −∞.
- * y = Σ c[k] x[k] ≫ f, e = d − y, and at each edge c[k] += (e x[k]) ≫ s, then the new sample shifts in. That truncation is a dead zone: once e x is below 2^s, c stops moving.
+ * The gates' behaviour. Every word wraps at w bits. The products keep all their bits, are summed, and that sum is rounded half up once; each update is rounded half up too, with the bit below the cut as a carry-in.
+ * y = (Σ c[k] x[k] + 2^(f−1)) ≫ f, e = d − y, and at each edge c[k] += (e x[k] + 2^(s−1)) ≫ s, then the new sample shifts in. That rounding is a dead zone: while e x stays within ±2^(s−1), c does not move.
  */
 export class LmsFixed {
   c: number[];
@@ -163,11 +170,11 @@ export class LmsFixed {
     this.c = new Array<number>(o.n).fill(0);
     this.x = new Array<number>(o.n).fill(0);
   }
-  get y(): number { let s = 0; for (let k = 0; k < this.o.n; k++) s += wrapTo(Math.floor((this.c[k] * this.x[k]) / 2 ** this.o.f), this.o.w); return wrapTo(s, this.o.w); }
+  get y(): number { let s = 2 ** (this.o.f - 1); for (let k = 0; k < this.o.n; k++) s += this.c[k] * this.x[k]; return wrapTo(Math.floor(s / 2 ** this.o.f), this.o.w); }
   e(d: number): number { return wrapTo(d - this.y, this.o.w); }
   edge(x: number, d: number): void {
     const e = this.e(d);
-    this.c = this.c.map((c, k) => wrapTo(c + Math.floor((e * this.x[k]) / 2 ** this.o.s), this.o.w));
+    this.c = this.c.map((c, k) => wrapTo(c + Math.floor((e * this.x[k] + 2 ** (this.o.s - 1)) / 2 ** this.o.s), this.o.w));
     this.x = [x, ...this.x.slice(0, this.o.n - 1)];
   }
 }

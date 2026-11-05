@@ -46,6 +46,20 @@ before relying on them. Add to this as chapters land.
 - 0.607253, the angles' sum and every error figure: computed, and held by `tests/dsp-cordic.test.ts` against Math at every angle a word holds.
 - ROM and CORDIC costs: measured from the gates. That a quarter-wave table saves about a factor of four, and that interpolation does better: **unread**, from memory, and not measured here.
 
+## Converters (`converters`)
+
+- 6.02 b + 1.76 dB, the R-2R ladder, DNL and INL, flash and SAR: standard results, **unread**, from memory; each is held numerically by `tests/dsp-converters.test.ts` where the chapter gives a number.
+- The jitter limit, −20 log₁₀(2π f σ): **unread**, from memory, and measured here against a sampled sine.
+- The linear model of a sigma-delta loop, π^(2L) / (2L + 1) and (20 L + 10) log₁₀ OSR: **unread**, from memory, and derived in `src/dsp/converters.ts`. The loop's measured error power and its gap from the model are ours. The statement that an analogue integrator clips sooner is general, and no part's figures are quoted.
+- V = z⁻¹U + (1 − z⁻¹)²E, every effective-bit figure, the integrators' peaks and the guard bits: computed, and held by the tests against the gates every clock.
+
+## Filters that learn (`adaptive`)
+
+- B. Widrow, M. E. Hoff, "Adaptive switching circuits", IRE WESCON Convention Record, 1960: **secondary**. The year and the names are from comments in the Linux kernel's `drivers/misc/echo/echo.h`, seen through search results; the paper was not opened. The chapter says only that they took the one-sample gradient seriously in 1960.
+- ITU-T G.168: **secondary**, an IEEE topic page seen through search results says it specifies test methods and requirements for digital network echo cancellers. The Recommendation was not opened, and the chapter claims no compliance.
+- Levinson's recursion: **ran**, against scipy's `solve_toeplitz` (`scripts/dsp/oracle.py`, `tests/dsp/vectors/adaptive.json`).
+- LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and the divergence just above it is measured here on this far end. The far-end sound and the echo paths are generated models, not recordings or measured paths.
+
 ## Sound
 
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text

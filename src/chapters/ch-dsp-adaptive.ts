@@ -1,7 +1,7 @@
 // Filters that learn (level Signal processing): how do you cancel an echo you cannot measure? The Wiener solution against scipy's solve_toeplitz, LMS and NLMS, an echo canceller and an equalizer on labelled models, and an LMS filter in gates
 // (lib/sigmadelta.ts) compared with dsp/adaptive.ts every clock. The far-end sound is generated, not recorded. No G.168 compliance is claimed.
 
-import { runEcho, runEqualizer } from '../dsp/adaptive';
+import { farEnd, peakEnergy, runEcho, runEqualizer } from '../dsp/adaptive';
 import { lmsFilter, lmsTap } from '../lib/sigmadelta';
 import { treeMul } from '../lib/muldiv';
 import { stats } from '../sim/stats';
@@ -11,6 +11,7 @@ import type { Chapter } from './types';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+const minus = (t: string) => t.replace('-', '−');
 const echo = (o: { taps?: number; talk?: boolean; freeze?: boolean } = {}) => runEcho({ n: ECHO_N, seed: 3, taps: o.taps ?? ECHO_TAPS, mu: 0.5, normalized: true, ...(o.talk ? { talkFrom: 18000, talkTo: 25000, freeze: o.freeze } : {}) });
 
 export const chAdaptive: Chapter = {
@@ -27,7 +28,7 @@ export const chAdaptive: Chapter = {
     keep: [
       'The best FIR in the mean-square sense depends only on the input\'s autocorrelation and its correlation with what you want: R w = p. Toeplitz, so n² work by Levinson.',
       'LMS needs neither. It moves each tap by μ e x, and its average is a walk down the same bowl. It costs two multipliers a tap where a fixed filter needs one.',
-      'The step has a limit near 2 / (N σ²), so a loud input can break a filter that was stable. NLMS divides by the input\'s power, and so does not care.',
+      'The step has a limit of 2 over the energy in the filter\'s samples, 2 / (N σ²) for a steady input and set by the loudest stretch for speech, so a loud input can break a filter that was stable. NLMS divides by the input\'s power, and so does not care.',
       'An echo canceller works because the far-end signal is known and the path is linear. Near-end talk looks like huge error, so a practical one stops learning while someone is talking there.',
       'An equalizer learns from a known preamble, and then from its own decisions. It cannot invert a channel with a zero on the unit circle.',
     ],
@@ -41,14 +42,14 @@ export const chAdaptive: Chapter = {
       },
       {
         question: 'A plain LMS canceller is stable, then the far end talks ten times louder and it diverges. What does that say?',
-        options: ['The step limit depends on input power', 'Its filter is too short', 'The echo path has changed', 'It needs more bits'],
+        options: ['Its step limit depends on power', 'Its filter is too short for the path', 'The echo path has changed', 'It needs more bits'],
         answer: 0,
-        explain: 'The limit is near 2 / (N σ²). Ten times the amplitude is a hundred times the power, so a step that was safe no longer is. NLMS fixes this by dividing the step by the input\'s power.',
+        explain: 'The limit goes as 2 / (N σ²). Ten times the amplitude is a hundred times the power, so a step that was safe no longer is. NLMS fixes this by dividing the step by the input\'s power.',
         why: ['', 'A short filter leaves echo, and it stays stable.', 'Nothing here says it has, and a change would only send it learning.', 'Bits are what the fixed-point version wants, and this is in real numbers.'],
       },
       {
         question: 'Why does an echo canceller stop learning when someone talks at the near end?',
-        options: ['Their voice looks like echo left to cancel', 'Their voice raises the far end\'s power', 'The microphone turns off', 'It saves multiplications'],
+        options: ['Their voice lands in the error', 'Their voice raises the far end\'s power', 'The microphone turns off', 'It saves multiplications'],
         answer: 0,
         explain: 'Near-end speech lands in the error. It has nothing to do with the far-end signal, so the update pushes the filter away from the answer. Holding the filter still while it lasts protects what has been learned.',
         why: ['', 'The far end\'s signal is not changed by anything said at the near end.', 'It stays on, because the near-end voice is what the call is for.', 'It does, but that is not the reason.'],
@@ -60,11 +61,11 @@ export const chAdaptive: Chapter = {
       title: 'An echo nobody can measure',
       body: `
         <p>A speaker at your end plays what the far end said. It comes back through the room and into your microphone, and the far end hears itself a moment later. The room is a filter, and if you knew its impulse response you could run the same signal through a copy, subtract it, and be done. You know the far-end signal exactly. What you do not know is the filter. It changes when someone moves, and you cannot stop the call to measure it.</p>
-        <p>So a filter has to find its own coefficients from the signals going past. The same need turns up elsewhere: <a href="#/c/serial/6">a fast serial link's equalizer</a> fixes a channel, and a chapter ago that filter was set by hand. This chapter takes the same structure and lets it learn.</p>
+        <p>So a filter has to find its own coefficients from the signals going past. The same need turns up elsewhere: <a href="#/c/serial/6">a fast serial link's equalizer</a> fixes a channel, and there that filter was set by hand. This chapter takes the same structure and lets it learn.</p>
         <p>This chapter's far-end sound is generated, not a recording: bursts of falling pitch through two resonances, with pauses, so that it is coloured and starts and stops the way a voice does. The echo path is a seeded model, too. Every claim here has its number on the screen. The figures are for this sound on these paths.</p>`,
       challenge: {
         kind: 'quiz', question: 'Which of these does the canceller have, and which must it find?',
-        options: ['It has the far-end signal, and must find the path', 'It has the path, and must find the signal', 'It has both from the start', 'It must find both'],
+        options: ['It has the far-end signal, and must find the path', 'It has the path, and must find the signal', 'It has both from the start, so nothing is left to find', 'It must find both'],
         answer: 0,
         explain: 'The signal it is about to play is known to the bit. The room is what nobody has measured.',
         why: ['', 'The path is what changes, and nobody has it.', 'If it had both, a fixed filter would do.', 'It is sending that signal, so it knows it.'],
@@ -79,7 +80,7 @@ export const chAdaptive: Chapter = {
         <p>So the question has an answer, for a known input and a fixed path. Two things are wrong with it in a call: the statistics have to be estimated first, and by then the path has changed. It is the target, and also what proves a learning filter has got there.</p>`,
       challenge: {
         kind: 'quiz', question: 'What does the Wiener solution depend on?',
-        options: ['Only the two correlations', 'How d was produced', 'The phase of each sample', 'The word length'],
+        options: ['Only the two correlations', 'How d was produced', 'The phase of every single sample', 'The word length'],
         answer: 0,
         explain: 'Only R and p. Any way of making d that gives the same correlations gives the same best filter.',
         why: ['', 'It needs no model of that, and that is its power.', 'The correlations average that away.', 'The solution is in real numbers. Word length is a question for its implementation.'],
@@ -97,7 +98,7 @@ wₖ ← wₖ + μ e xₖ</pre>
       widget: bowlWidget,
       challenge: {
         kind: 'quiz', question: 'Why does a coloured input make LMS slow?',
-        options: ['The bowl is long, and one speed must suit it all', 'It has fewer samples each second', 'It costs more multiplications', 'Colour changes the Wiener solution'],
+        options: ['One step size must suit a long bowl', 'It has fewer samples each second', 'It costs more multiplications', 'Colour changes the Wiener solution it seeks'],
         answer: 0,
         explain: 'Each direction converges at a rate set by its own curvature. The step is limited by the steepest, so the flattest crawls. The ratio is the spread of the correlation matrix\'s eigenvalues.',
         why: ['', 'Sample rate has nothing to do with colour.', 'Each step costs the same.', 'It may move the solution, but that does not slow the walk to it.'],
@@ -106,17 +107,17 @@ wₖ ← wₖ + μ e xₖ</pre>
     {
       title: 'An echo canceller',
       get body() {
-        const a = echo(), s = echo({ taps: 32 }), t = echo({ talk: true }), f = echo({ talk: true, freeze: true });
+        const fe = farEnd(ECHO_N, 3), sig = fe.reduce((m, v) => m + v * v, 0) / ECHO_N, top = peakEnergy(fe, ECHO_TAPS), a = echo(), s = echo({ taps: 32 }), t = echo({ talk: true }), f = echo({ talk: true, freeze: true });
         return `
         <p>Now the real case, with the far end's sound through the hidden path: ${ECHO_TAPS} taps, ${ECHO_TAPS * 2} multiplications a sample. The figure of merit is <strong>echo return loss enhancement</strong>, how far the echo has come down, and it reaches ${a.erle.toFixed(0)} dB here over the last quarter of the run. Standards such as ITU-T G.168 set tests for this. This is a teaching model, and it does not claim to meet them.</p>
-        <p>The plain form has a problem you can provoke: its step limit is near 2 / (N σ²), and σ² is how loud the far end happens to be. <strong>NLMS</strong> divides the step by the power in the filter, and so behaves the same at any loudness. Its μ can then be between 0 and 2.</p>
+        <p>The plain form has a problem you can provoke. A step shrinks the error only while μ is below 2 over the energy in the filter's samples, which is 2 / (N σ²) for a steady input. This far end is not steady. Its average power would allow ${(2 / (ECHO_TAPS * sig)).toFixed(2)}, its loudest ${ECHO_TAPS} samples allow only ${(2 / top).toFixed(3)}, and the loudest stretch is what counts: the run here diverges just above that. So the limit is set by how loud the far end happens to be at its worst. <strong>NLMS</strong> divides the step by the power in the filter, and so behaves the same at any loudness. Its μ can then be between 0 and 2.</p>
         <p>Too short a filter leaves what it cannot reach: ${s.erle.toFixed(0)} dB with 32 taps. And then someone at your end talks. To the filter, that voice is a huge error it should fix, so it wrecks what it has learned: ${t.erle.toFixed(0)} dB with learning left on, against ${f.erle.toFixed(0)} when it stops. This model tells the filter exactly when someone talks. A real one has to detect it, and that is where most of the hard work in a real canceller is.</p>
-        <div class="try">Turn off Normalized, then lower the far end's loudness, and see that a step that suits one level does not suit another. Then add talk at the near end, and try stopping the learning.</div>`;
+        <div class="try">Turn off Normalized, then raise the far end's loudness to 1.5, and see that a step that suits one level does not suit another. Turn Normalized back on, and the same loudness does nothing. Then add talk at the near end, and try stopping the learning.</div>`;
       },
       widget: echoWidget,
       challenge: {
         kind: 'quiz', question: 'A canceller has 32 taps on a 128-tap path, and has fully converged. What limits it?',
-        options: ['The tail it has no taps for', 'Its step size', 'The far end\'s colour', 'NLMS being too slow'],
+        options: ['The tail it has no taps for', 'Its step size', 'The far end\'s colour and its pauses', 'NLMS being too slow'],
         answer: 0,
         explain: 'Echo after the 32nd sample cannot be subtracted by any setting of those taps. It stays there as the floor, however long the filter runs.',
         why: ['', 'A smaller step gets closer to the same floor, and no further.', 'Colour sets how fast it gets there, not where the floor is.', 'It has already converged, so speed is no longer the question.'],
@@ -128,14 +129,14 @@ wₖ ← wₖ + μ e xₖ</pre>
         const g = runEqualizer({ channel: CHANNELS[0].h, taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train: 4000 }), z = runEqualizer({ channel: CHANNELS[2].h, taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train: 4000 });
         return `
         <p>Turn it round: rather than copying a path to subtract it, learn the path's inverse. Send known symbols, and let d be those symbols, delayed. This is the training sequence you meet at the start of a Wi-Fi frame or a modem's call, and the equalizer is the filter from <a href="#/c/serial/6">Fast serial links</a>, now finding its own taps.</p>
-        <p>After training it can go on learning from its own decisions, on the bet that they are nearly all right. That tracks a slowly changing line with no more training. On this channel a gap of ${g.openingBefore.toFixed(2)} on the line (shut, since it is below 0) becomes ${g.opening.toFixed(2)} after it, with no symbols wrong.</p>
-        <p>There is a limit: a filter cannot bring back what the channel removed. The channel 0.5 + z⁻¹ + 0.5 z⁻² has a double zero at half the rate, on the unit circle, and no stable filter has a pole there to cancel it. It gets ${z.wrongAfter} symbols wrong here, and leaves a gap of ${z.opening.toFixed(2)}.</p>
+        <p>After training it can go on learning from its own decisions, on the bet that they are nearly all right. That tracks a slowly changing line with no more training. On this channel a gap of ${minus(g.openingBefore.toFixed(2))} on the line (shut, since it is below 0) becomes ${g.opening.toFixed(2)} after it, with no symbols wrong.</p>
+        <p>There is a limit: a filter cannot bring back what the channel removed. The channel 0.5 + z⁻¹ + 0.5 z⁻² has a double zero at half the rate, on the unit circle, and no stable filter has a pole there to cancel it. It gets ${z.wrongAfter} symbols wrong here, and leaves a gap of ${minus(z.opening.toFixed(2))}.</p>
         <div class="try">Try all three channels. Then cut the training short on the first one and find where it stops being enough.</div>`;
       },
       widget: eqWidget,
       challenge: {
         kind: 'quiz', question: 'Why can a linear equalizer not fix a channel with a zero on the unit circle?',
-        options: ['Its inverse would need a pole on the circle', 'It needs more training symbols', 'The channel has too few taps', 'Zeros only arise in noise'],
+        options: ['Its inverse needs a pole on the circle', 'It needs a longer run of training symbols', 'The channel has too few taps', 'Zeros only arise in noise'],
         answer: 0,
         explain: 'A pole on the circle is not stable, and that frequency has gone from the signal in any case. An FIR can only approximate the inverse, and it amplifies whatever is left near there.',
         why: ['', 'No length of training brings back a frequency that never arrived.', 'It is the channel\'s shape that counts, and this one has three.', 'They arise from the channel\'s taps, with no noise needed.'],
@@ -147,8 +148,8 @@ wₖ ← wₖ + μ e xₖ</pre>
         const t = lmsTap(LMS_SPEC), f = lmsFilter(LMS_SPEC), mul = nands(treeMul(LMS_SPEC.w, true));
         return `
         <p>Here is what learning costs. A tap holds a sample and a coefficient, and has a multiplier for its share of the output. Learning adds a second multiplier, for e × x, and an adder. So one LMS tap is ${n0(nands(t))} NANDs at ${LMS_SPEC.w} bits, of which ${n0(2 * mul)} are multipliers. Four of them with the sums come to ${n0(nands(f))}. A fixed filter would have half the multipliers, so a learning filter is about twice the price, and this is why a design often learns on a few taps or takes turns.</p>
-        <p>The words have their own effects. Each update is e × x moved down ${LMS_SPEC.s} places, by wiring, so it is truncated, and once that product is below 2^${LMS_SPEC.s} a coefficient stops moving entirely. This <em>dead zone</em> is why an adaptive filter's coefficients need more bits than its samples. Too large a step wraps a word instead of saturating it, and the filter falls apart at once, as nothing in the design catches it. It is compared with an integer model at every clock.</p>
-        <div class="try">Learn. Four coefficients walk from zero toward ${LMS_TARGET.join(', ')}, a filter the design was never told about.</div>`;
+        <p>The words have their own effects. Each update is e × x moved down ${LMS_SPEC.s} places and rounded half up, the bit below the cut going in as the adder's carry, at no cost in gates. Plain truncation would be worse than it sounds: it takes one off any small negative product, so the coefficients slide away with nothing to stop them. Rounded, an update inside ±2^${LMS_SPEC.s - 1} is zero and the coefficient stays put. That is a <em>dead zone</em>: a quiet input leaves the filter short of its target, and it is why an adaptive filter's coefficients need more bits than its samples. The output has the same care: the products are summed with all their bits, which is why the sums are ${2 * LMS_SPEC.w} bits wide, and rounded once at the end. Too large a step wraps a word instead of saturating it, and the filter falls apart at once, as nothing in the design catches it. It is compared with an integer model at every clock.</p>
+        <div class="try">Learn. Four coefficients walk from zero to ${LMS_TARGET.join(', ')}, a filter the design was never told about, in a few dozen clocks. Then learn from a quiet input, and see where the dead zone leaves them.</div>`;
       },
       scene: lmsScene,
       lit: '',
@@ -156,7 +157,7 @@ wₖ ← wₖ + μ e xₖ</pre>
         kind: 'reach', goal: 'Let the gates learn the filter, with every clock agreeing with the model and the output within 10 dB of d.',
         check: (st) => { const a = lmsApi.get(st); return !!a && a.clocks() > 0 && a.agrees() && a.errorDb() < -10; },
         hints: ['The panel beside the circuit has one button.'],
-        answer: 'x goes through an unknown filter to make d. The error between d and the filter\'s output moves each coefficient a little at every clock. After about a thousand clocks the coefficients are close to the target, as far as the dead zone lets them come.',
+        answer: 'x goes through an unknown filter to make d. The error between d and the filter\'s output moves each coefficient a little at every clock. After a few dozen clocks the coefficients are close to the target, as far as the dead zone lets them come.',
         solve: (st) => { lmsApi.get(st)?.run(); },
       },
     },

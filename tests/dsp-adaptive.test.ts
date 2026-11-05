@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
-import { correlate, echoPath, erleDb, farEnd, levinson, Lms, LmsFixed, runEcho, runEqualizer, type LmsSpec } from '../src/dsp/adaptive';
+import { correlate, echoPath, erleDb, farEnd, levinson, Lms, LmsFixed, peakEnergy, runEcho, runEqualizer, type LmsSpec } from '../src/dsp/adaptive';
 import { lmsFilter } from '../src/lib/sigmadelta';
 import { rng, gaussian } from '../src/phys/line';
 import { BitSim } from '../src/sim/bitsim';
@@ -56,6 +56,18 @@ describe('an echo canceller', () => {
     const none = runEcho({ n: N, seed: 3, taps, mu: 0, normalized: true });
     expect(Math.abs(none.erle)).toBeLessThan(0.01);
   });
+  it('plain LMS holds below 2 over the loudest stretch\'s energy, diverges just above it, and the average says nothing', () => {
+    const x = farEnd(N, 3), top = 2 / peakEnergy(x, taps), mean = x.reduce((a, v) => a + v * v, 0) / N;
+    expect(2 / (taps * mean)).toBeGreaterThan(5 * top);
+    expect(runEcho({ n: N, seed: 3, taps, mu: 0.95 * top, normalized: false }).erle).toBeGreaterThan(20);
+    const over = runEcho({ n: N, seed: 3, taps, mu: 1.3 * top, normalized: false }).erle;
+    expect(Number.isFinite(over) ? over : -Infinity).toBeLessThan(-3);
+    // the widget's default plain step, at the loudness its text names
+    expect(runEcho({ n: N, seed: 3, taps, mu: 0.15 * 10 ** -0.3, normalized: false, x }).erle).toBeGreaterThan(20);
+    const loud = runEcho({ n: N, seed: 3, taps, mu: 0.15 * 10 ** -0.3, normalized: false, x: x.map((v) => v * 1.5) }).erle;
+    expect(Number.isFinite(loud) ? loud : -Infinity).toBeLessThan(-3);
+    expect(runEcho({ n: N, seed: 3, taps, mu: 0.5, normalized: true, x: x.map((v) => v * 1.5) }).erle).toBeGreaterThan(25);
+  });
   it('a filter shorter than the path leaves what it cannot reach', () => {
     const shortOne = runEcho({ n: N, seed: 3, taps: 12, mu: 0.5, normalized: true }), full = runEcho({ n: N, seed: 3, taps, mu: 0.5, normalized: true });
     expect(shortOne.erle).toBeLessThan(full.erle - 8);
@@ -88,6 +100,34 @@ describe('an equalizer', () => {
     const r = runEqualizer({ channel: [0.5, 1, 0.5], taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train: 4000 });
     expect(r.opening).toBeLessThan(0.2);
     expect(r.wrongAfter).toBeGreaterThan(0);
+  });
+});
+
+describe('the integer filter', () => {
+  const T = [0.75, -0.5, 0.25, 0.125];
+  const run = (amp: number, clocks: number, truncate = false): number[][] => {
+    const m = new LmsFixed(SPEC), u = rng(21), hist = [0, 0, 0, 0], trace: number[][] = [];
+    for (let i = 0; i < clocks; i++) {
+      const x = Math.max(-128, Math.min(127, Math.round(amp * gaussian(u)))), d = Math.max(-128, Math.min(127, Math.round(T.reduce((a, t, k) => a + t * hist[k], 0))));
+      const e = m.e(d);
+      if (truncate) { m.c = m.c.map((c, k) => c + Math.floor((e * m.x[k]) / 2 ** SPEC.s)); m.x = [x, ...m.x.slice(0, SPEC.n - 1)]; } else m.edge(x, d);
+      hist.pop(); hist.unshift(x);
+      trace.push(m.c.map((c) => c / 2 ** SPEC.f));
+    }
+    return trace;
+  };
+  it('a full input is on target within a few dozen clocks', () => {
+    run(64, 40)[39].forEach((c, k) => expect(Math.abs(c - T[k])).toBeLessThan(0.1));
+  });
+  it('a quiet input stops short in the dead zone, and stays', () => {
+    const t = run(8, 40000), end = t[39999];
+    expect(Math.max(...end.map((c, k) => Math.abs(c - T[k])))).toBeGreaterThan(0.01);
+    expect(Math.max(...end.map((c, k) => Math.abs(c - T[k])))).toBeLessThan(0.1);
+    end.forEach((c, k) => expect(Math.abs(c - t[19999][k])).toBeLessThan(0.02));
+  });
+  it('plain truncation on the same input slides away', () => {
+    const end = run(8, 20000, true)[19999];
+    expect(Math.max(...end.map((c, k) => Math.abs(c - T[k])))).toBeGreaterThan(0.5);
   });
 });
 

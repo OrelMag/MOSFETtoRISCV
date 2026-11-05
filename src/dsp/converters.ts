@@ -93,8 +93,9 @@ export function linearity(levels: readonly number[]): { dnl: number[]; inl: numb
 
 // ---- jitter ------------------------------------------------------------------------------------------------------------------------------------
 
-/** The limit a clock's RMS jitter sets on a sine at f: −20 log₁₀(2π f σ), whatever the bits. f in Hz, σ in seconds. */
+/** The limit a clock's RMS jitter sets on a sine at f: −20 log₁₀(2π f σ), whatever the bits. f in Hz, σ in seconds. A small-error sum: it stops meaning anything once σ is a good share of the period (jitterHolds). */
 export const jitterLimitDb = (f: number, sigma: number): number => -20 * Math.log10(2 * Math.PI * f * sigma);
+export const jitterHolds = (f: number, sigma: number): boolean => jitterLimitDb(f, sigma) >= 10;
 /** Measured: a full-scale sine sampled at instants off by Gaussian jitter, against the same sine sampled exactly. */
 export function jitterMeasuredDb(f: number, fs: number, sigma: number, seed: number, n = 4096): number {
   const u = rng(seed);
@@ -108,15 +109,15 @@ export function jitterMeasuredDb(f: number, fs: number, sigma: number, seed: num
 
 // ---- sigma-delta ---------------------------------------------------------------------------------------------------------------------------------
 
-/** Bits above the input's word that the integrators hold: enough for the sizes the sheet allows, up to OVERLOAD of full scale, by measurement (tests/dsp-converters.test.ts). */
-export const SD_GUARD = 3;
-/** Past this share of full scale a second-order loop with a one-bit quantizer goes unstable. */
-export const SD_OVERLOAD = 0.8;
+/** Bits above the input's word that the integrators hold: 2^SD_GUARD full scales. Second order's peak grows as the input nears full scale; at SD_LIMIT it is about 20 full scales, by measurement (sdPeak, tests/dsp-converters.test.ts). */
+export const SD_GUARD = 5;
+/** The largest input share these words hold. Past it the loop's peak outgrows them and they wrap: the limit is the word's, since at a steady full scale the peak has no bound at all. */
+export const SD_LIMIT = 0.95;
 
 /**
  * The digital loop, clock by clock, order 1 or 2. u is a signed w-bit word; the output is ±2^(w−1) as a word, so 1 → +, 0 → −. It decides from the last integrator before the edge, then:
  *   y₁ += u − v, and for order 2, y₂ += y₁ (the new one) − v.
- * That gives V = z⁻¹U + (1 − z⁻¹)^N E exactly, where E is what the quantizer added. Registers wrap at w + SD_GUARD and are sized never to.
+ * That gives V = z⁻¹U + (1 − z⁻¹)^N E exactly, where E is what the quantizer added. Registers wrap at w + SD_GUARD and are sized not to, up to SD_LIMIT.
  */
 export class SdLoop {
   y1 = 0;
@@ -150,10 +151,28 @@ export function sdBitstream(order: 1 | 2, n: number, k: number, level: number, w
 /** The band a loop keeps at an oversampling ratio: [0, 1 / (2 OSR)) of its rate. */
 export const sdBand = (osr: number): number => 1 / (2 * osr);
 
-/** The textbook linear model of a one-bit loop's SQNR: the quantizer as white noise with step 2, the noise shaped by (1 − z⁻¹)^L. Right in its slope, only roughly in its level. */
-export function sdLinearModelDb(order: number, osr: number, level: number): number {
+/** The textbook linear model of a one-bit loop's SQNR: the quantizer as white noise of step Δ = 2 and power Δ² / 12 = 1 / 3, on a tone of power level² / 2, shaped by (1 − z⁻¹)^L. Right in its slope; `power` puts in another error power, in full scales squared. */
+export function sdLinearModelDb(order: number, osr: number, level: number, power = 1 / 3): number {
   const L = order;
-  return 6.02 + 1.76 + 20 * Math.log10(level) - 10 * Math.log10(Math.PI ** (2 * L) / (2 * L + 1)) + (20 * L + 10) * Math.log10(osr);
+  return 10 * Math.log10((level * level) / 2 / power) - 10 * Math.log10(Math.PI ** (2 * L) / (2 * L + 1)) + (20 * L + 10) * Math.log10(osr);
+}
+
+/** What the quantizer added, as measured: mean e², in full scales squared, on a tone. The linear model assumes 1 / 3. */
+export function sdErrorPower(order: 1 | 2, level: number, n = 1 << 15, w = 16): number {
+  const m = new SdLoop(order, w), k = 65;
+  let p = 0;
+  for (let i = 0; i < n; i++) { m.edge(Math.round(level * m.fs * Math.sin((2 * Math.PI * k * i) / n))); p += (m.e / m.fs) ** 2; }
+  return p / n;
+}
+
+/** The largest either integrator gets, in full scales, on the worst of a steady input and a slow and a fast sine at this level. */
+export function sdPeak(order: 1 | 2, level: number, n = 100000, w = 16): number {
+  let peak = 0;
+  for (const f of [0, 0.001, 0.05]) {
+    const m = new SdLoop(order, w);
+    for (let i = 0; i < n; i++) { m.edge(Math.round(level * m.fs * (f ? Math.sin(i * f) : 1))); peak = Math.max(peak, Math.abs(m.y1), Math.abs(m.y2)); }
+  }
+  return peak / 2 ** (w - 1);
 }
 
 /** SQNR in the kept band, measured from the loop's own bitstream. */
