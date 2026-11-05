@@ -65,7 +65,7 @@ function rsDecPanel(): ScenePanel {
     const toEnd = () => { start(); while (model.phase !== RS_PHASE.DONE) clockOne(); };
     const reg = (name: string, port: string) => { const nd = stage.sim!.design.root.children!.get(name)!; return Array.from(stage.sim!.getBits(nd.ports[port])).reduce<number>((a, b, k) => a + Number(b) * 2 ** k, 0); };
     const phases = h('div', { class: 'cn-phases' }), lamEl = h('div', { class: 'cd-bytes' }), omEl = h('div', { class: 'cd-bytes' }), outEl = h('div', { class: 'cd-bytes cd-word' }), status = h('div', { class: 'cd-bytes cn-read' }), verdict = h('p', { class: 'err-verdict' });
-    const damage = slider('Bytes hit', 0, 9, 1, hits, (v) => String(v), (v) => { hits = v; update(); });
+    const damage = slider('Bytes hit', 0, 9, 1, hits, (v) => String(v), (v) => { hits = v; run = 0; update(); });
     const update = () => {
       if (!stage.sim) return;
       const ok = model.lam.every((v, j) => reg(`l${j}`, 'l') === v) && model.om.every((v, j) => reg(`o${j}`, 'q') === v) && model.ring.every((v, k) => reg(`s${k}`, 'q') === v) && Number(stage.value('done')) === (model.phase === RS_PHASE.DONE ? 1 : 0);
@@ -135,7 +135,7 @@ export function concatWidget(): Widget {
   };
   const sel = h('select', { 'aria-label': 'Interleaver depth' }, ...[1, 2, 8].map((v) => h('option', { value: String(v), selected: v === depth ? true : undefined }, `Depth ${v}`))) as HTMLSelectElement;
   sel.addEventListener('change', () => { depth = Number(sel.value); });
-  note.textContent = 'Press Send a frame: about 16 000 data bits through the real encoder, noise and decoder, so it takes a moment.';
+  note.textContent = 'Press Send a frame: about 14 000 data bits through the real encoder, noise and decoder, so it takes a moment.';
   return { el: h('div', { class: 'widget mos sr-w' },
     h('div', { class: 'panel' }, h('h3', null, 'What Viterbi leaves'), map),
     h('div', { class: 'panel' }, h('h3', null, 'What each Reed-Solomon word sees'), words),
@@ -148,7 +148,7 @@ export function concatWidget(): Widget {
 /** A (3, 6) code of 12 bits, six checks (comm/ldpc.ts regularCode, this seed). So few bits cannot avoid short cycles: pairs of checks share 2.4 bits on average. */
 export const GOSSIP_SEED = 7;
 const GOSSIP_CONF = 2.5, GOSSIP_WRONG = -1, GOSSIP_UNSURE = 0.3;
-/** Two wrong bits the code can correct, from the steady start (tests/comm-ldpc-chapter.test.ts). */
+/** Two wrong bits the code can correct, from the steady start (tests/comm-codes-chapter.test.ts). */
 export const GOSSIP_PAIR = [0, 7];
 
 export function gossipWidget(): Widget {
@@ -243,7 +243,7 @@ export interface FallPoint { db: number; ber: number; errors: number; bits: numb
 
 /** Message updates a data bit against Viterbi's add-compares, as the rate and the mean iterations move. */
 export function costWidget(): Widget {
-  let dv = 3, it = 18;
+  let dv = 3, it = 11;
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const dc = 2 * dv, msgs = (2 * dv) / 0.5;

@@ -5,7 +5,7 @@ import { chErrors } from '../src/chapters/ch-comm-errors';
 import { numOf } from '../src/chapters/order';
 import { moveStep } from '../src/chapters/stepmoves';
 import { rsDecode } from '../src/comm/rs';
-import { Bp, concatTrial, deAwgn, ldpcTrial, regularCode, syndromeOk } from '../src/comm/ldpc';
+import { Bp, concatTrial, deAwgn, ldpcTrial, regularCode, rsWordFailure, syndromeOk } from '../src/comm/ldpc';
 import { convSoftBound } from '../src/comm/ber';
 import { CONV_K7 } from '../src/comm/conv';
 import { rsLatency, rsRtlDecode } from '../src/comm/rsrtl';
@@ -19,7 +19,7 @@ const CW = [...RS_MESSAGE, ...RS_CHECK];
 describe('the chapter', () => {
   it('holds the moved steps at the places the table says, and follows When bits go wrong', () => {
     for (const [i, t] of [[9, 'A code with memory'], [10, 'The Viterbi decoder'], [11, 'Reed-Solomon: errors in bytes'], [12, 'Bursts: interleaving'], [13, 'How far from Shannon']] as const) {
-      const at = moveStep('errors', i, 1);
+      const at = moveStep('errors', i);
       expect(at.chapter).toBe('codes');
       expect(chCodes.steps[at.step].title).toBe(t);
     }
@@ -59,7 +59,7 @@ describe('what the LDPC steps say', () => {
     expect(deAwgn(AWGN_SIGMA[1], 3, 6, { rounds: 3000 }).converged).toBe(false);
   });
   it('the concatenated link: the words the step quotes, at each depth', async () => {
-    const run = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0, wrong = 0, bits = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; wrong += r.dataBitErrors; bits += r.dataBits; await tick(); } return [failed, words, wrong / bits]; };
+    const run = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0, wrong = 0, bits = 0, wb = 0, tb = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; wrong += r.dataBitErrors; bits += r.dataBits; wb += r.byteErrors; tb += r.bytes; await tick(); } return [failed, words, wrong / bits, wb / tb]; };
     const got = [await run(1, 8), await run(2, 4), await run(8, 1)];
     // eslint-disable-next-line no-console
     console.log('concat at 2.3 dB', got);
@@ -71,6 +71,8 @@ describe('what the LDPC steps say', () => {
     expect(at22[0]).toBe(CONCAT_FAILED_22);
     expect(at22[2]).toBeCloseTo(CONCAT_POINTS[0][1], 8);
     expect(got[2][2]).toBeCloseTo(CONCAT_POINTS[1][1], 8);
+    // the step: the words fail as the binomial tail of their bytes says, within a factor of two
+    for (const r of [at22, got[2]]) { const p = rsWordFailure(255, 16, r[3]), m = r[0] / r[1]; expect(m / p).toBeGreaterThan(0.5); expect(m / p).toBeLessThan(2); }
   }, 300000);
   it('the waterfall\'s text: 504 bits beat K = 7 at 2.4 dB, and 8064 bits at 1.6 dB beat 504', () => {
     const short = regularCode(504, 3, 6, 5), long = regularCode(8064, 3, 6, 5), frames = (n: number) => Math.ceil(200000 / n);

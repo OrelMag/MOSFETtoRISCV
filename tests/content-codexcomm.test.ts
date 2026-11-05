@@ -280,7 +280,7 @@ describe('the Communication codex entries', () => {
     expect([nands(convEncoder(CONV_K3)), nands(convEncoder(CONV_K7))]).toEqual([42, 122]);
     quotes('viterbi', '42 NANDs', '122', '3,118', '101,094', '110,578', '1,579', '160', '5.4 dB', '3.1 dB', '9.59 dB', '2.4 dB');
     says('codes', 0, '42 NANDs'); says('codes', 0, '122 NANDs'); says('codes', 1, '3,118 NANDs'); says('codes', 1, '101,094'); says('codes', 1, '110,578'); says('codes', 1, '1,579'); says('codes', 1, '160');
-    says('codes', 7, '9.59 dB'); says('codes', 7, '5.4 dB'); says('codes', 7, '3.1 dB'); says('codes', 7, '3.4 dB');
+    says('codes', 6, '9.59 dB'); says('codes', 6, '5.4 dB'); says('codes', 6, '3.1 dB'); says('codes', 6, '3.4 dB');
     const enc10 = nands(rsEncoder(10)), enc32 = nands(rsEncoder(32)), syn10 = nands(rsSyndrome(10)), mul = nands(gfMulGates());
     expect([enc10, enc32, syn10, mul]).toEqual([2356, 7452, 2366, 416]);
     quotes('reedsolomon', c(enc10), c(enc32), c(syn10), '416 NANDs', '121 bits', '3.4 dB', 'x8 + x4 + x3 + x2 + 1');

@@ -192,7 +192,7 @@ at 10⁻⁵, uncoded BPSK needs 9.59 dB E_b/N_0; K = 7 gains 3.1 dB hard, 5.4 dB
     chapters: [
       { chapter: 'codes', step: 0, label: 'A code with memory' },
       { chapter: 'codes', step: 1, label: 'The Viterbi decoder' },
-      { chapter: 'codes', step: 7, label: 'How far from Shannon' },
+      { chapter: 'codes', step: 6, label: 'How far from Shannon' },
     ],
   },
   reedsolomon: {
@@ -213,7 +213,7 @@ RS coding gain at 10⁻⁵ (hard decisions) 3.4 dB</pre>The encoder's output on 
     chapters: [
       { chapter: 'codes', step: 2, label: 'Reed-Solomon: errors in bytes' },
       { chapter: 'codes', step: 5, label: 'Bursts: interleaving' },
-      { chapter: 'codes', step: 7, label: 'How far from Shannon' },
+      { chapter: 'codes', step: 6, label: 'How far from Shannon' },
     ],
   },
   interleave: {

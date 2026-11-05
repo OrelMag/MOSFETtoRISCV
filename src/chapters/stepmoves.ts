@@ -22,7 +22,7 @@ export const STEP_MOVES: readonly (readonly StepMove[])[] = [
     { from: 'errors', step: 10, to: 'codes', toStep: 1, title: 'The Viterbi decoder' },
     { from: 'errors', step: 11, to: 'codes', toStep: 2, title: 'Reed-Solomon: errors in bytes' },
     { from: 'errors', step: 12, to: 'codes', toStep: 5, title: 'Bursts: interleaving' },
-    { from: 'errors', step: 13, to: 'codes', toStep: 7, title: 'How far from Shannon' },
+    { from: 'errors', step: 13, to: 'codes', toStep: 6, title: 'How far from Shannon' },
   ],
 ];
 
