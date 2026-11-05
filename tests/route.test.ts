@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONV_K3, CONV_K7 } from '../src/comm/conv';
-import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
+import { brentKung, cachedMemory, coherentDualCore, convEncoder, dualCore, gfMulGates, multicycleCpu, pipelinedCpu, rsDecoder, rsEncoder, rsSyndrome, singleCycleCpu, sklansky, systemCpu, viterbi } from '../src/lib';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { define } from '../src/lib/define';
 import { reachableDefs } from '../src/lib/resolve';
@@ -34,6 +34,7 @@ for (const n of [4, 5, 8, 12, 16, 32]) { brentKung(n); sklansky(n); }
 // Chapter 47's codes: the scenes' sizes and the K = 7 decoder's top level.
 for (const s of [CONV_K3, CONV_K7]) { convEncoder(s); viterbi(s); }
 viterbi(CONV_K3, { depth: 15 }); viterbi(CONV_K7, { q: 3 }); rsEncoder(10); rsEncoder(32); rsSyndrome(10); gfMulGates();
+rsDecoder(10, 26); rsDecoder(4, 15);
 
 /** Every component reachable from the registry, plus the top-level CPUs (not registered) and their parts. */
 function allDefs(): ComponentDef[] {

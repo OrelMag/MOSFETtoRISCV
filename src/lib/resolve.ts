@@ -26,6 +26,7 @@ import { bankedMemory } from './lsu';
 import { clearableRegister, hazardUnit, pipelinedCpu } from './pipeline';
 import { boothMul, pipeMul, seqMul } from './multiply';
 import { bcdAdder, carrySelect, carrySkip } from './adders';
+import { fftNet, fftStream } from './fft';
 import { cam, fifo, pla, regfileMP, romArray, stack } from './storage';
 import { sramArray, sramColumn } from './arrays';
 import { wbCache } from './cache2';
@@ -185,6 +186,8 @@ const float = (id: string, name: string, make: (f: FpFormat) => ComponentDef): F
   ({ id, name, category: 'arithmetic', params: [format], key: (p) => `${id}${fmt(p).E}_${fmt(p).M}`, make: (p) => make(fmt(p)) });
 
 export const families: Family[] = [
+  { id: 'fftnet', name: 'FFT, unrolled', category: 'arithmetic', params: [count('points', [4, 8], 8)], key: (p) => `fftnet${p.points}_10`, make: (p) => fftNet(p.points, 10) },
+  { id: 'fftstream', name: 'FFT, streaming', category: 'sequential', params: [count('points', [8, 16], 8)], key: (p) => `fftstream${p.points}_10`, make: (p) => fftStream(p.points, 10) },
   // arithmetic
   nBit('rca', 'Ripple-carry adder', 'arithmetic', [1, 2, 4, 8, 16], 4, (n) => `rca${n}`, rca),
   nBit('addsub', 'Adder / subtractor', 'arithmetic', [2, 4, 8, 16], 8, (n) => `addsub${n}`, addSub),

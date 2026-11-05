@@ -108,7 +108,7 @@ describe('deadlock', () => {
     expect(lo.stoppedAt!).toBeGreaterThan(hi.stoppedAt!);
     expect(ringRun(4, 2, 4, 200000, 0.05).stoppedAt).toBeNull();
   });
-  it('the text's figures: a million slots at load 0.3, none in three million at 0.2', () => {
+  it('the figures in the text: a million slots at load 0.3, none in three million at 0.2', () => {
     const a = ringRun(4, 2, 4, 3000000, 0.3).stoppedAt!;
     expect(a).toBeGreaterThan(5e5); expect(a).toBeLessThan(2e6);
     expect(ringRun(4, 2, 4, 3000000, 0.2).stoppedAt).toBeNull();

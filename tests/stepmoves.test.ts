@@ -51,15 +51,15 @@ describe('moving progress', () => {
     { from: 'serial', step: 6, to: 'serial', toStep: 5, title: 'eye' },
     { from: 'errors', step: 9, to: 'codes', toStep: 0, title: 'memory' },
   ];
-  const table = STEP_MOVES as StepMove[][];
+  const table = STEP_MOVES as StepMove[][], shipped = table.length;
   beforeEach(() => { table.push(rows); });
-  afterEach(() => { table.length = 0; });
+  afterEach(() => { table.length = shipped; });
 
   it('a step goes to its row, a batch at a time, and a shift does not chain within a batch', () => {
     expect(moveStep('serial', 6)).toEqual({ chapter: 'serial', step: 5 });
     expect(moveStep('serial', 5)).toEqual({ chapter: 'signals', step: 0 });
     expect(moveStep('serial', 4)).toEqual({ chapter: 'serial', step: 4 });
-    expect(moveStep('serial', 6, 1)).toEqual({ chapter: 'serial', step: 6 });
+    expect(moveStep('serial', 6, shipped + 1)).toEqual({ chapter: 'serial', step: 6 });
   });
   it('keys follow their step; a recap, a codex entry and a chapter with no row stay', () => {
     expect(moveKey('serial:6')).toBe('serial:5');
@@ -86,11 +86,11 @@ describe('moving progress', () => {
     expect(Object.keys(sanitizeReview(JSON.parse(JSON.stringify(rv))).memos).sort()).toEqual(['codex:crc:0', 'serial:5']);
   });
   it('a merge of two stores counts as up to date', () => {
-    expect(mergeNotes(sanitizeNotes({ items: {} }), sanitizeNotes({ items: {} })).moved).toBe(1);
-    expect(mergeReview(sanitizeReview({ memos: {} }), sanitizeReview({ memos: {} })).moved).toBe(1);
+    expect(mergeNotes(sanitizeNotes({ items: {} }), sanitizeNotes({ items: {} })).moved).toBe(shipped + 1);
+    expect(mergeReview(sanitizeReview({ memos: {} }), sanitizeReview({ memos: {} })).moved).toBe(shipped + 1);
   });
   it('an old backup file is brought up to date before it merges with what is here', () => {
-    const here = new MapKV([[SETTINGS_KEY, JSON.stringify({ visited: { serial: [5] }, solved: {}, moved: 1 })]]);
+    const here = new MapKV([[SETTINGS_KEY, JSON.stringify({ visited: { serial: [5] }, solved: {}, moved: shipped + 1 })]]);
     const old = { format: BACKUP_FORMAT as typeof BACKUP_FORMAT, schema: 1, keys: { [SETTINGS_KEY]: JSON.stringify({ visited: { serial: [6] }, solved: { 'serial:6': true } }) } };
     const st = JSON.parse(mergeBackup(old, here).writes[SETTINGS_KEY]);
     expect(st.visited.serial).toEqual([5]);
