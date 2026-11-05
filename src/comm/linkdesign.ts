@@ -109,7 +109,7 @@ export function runSerial(ch: SerialChannel, c: SerialChoice): LinkResult & { op
 
 // ---- the briefs -------------------------------------------------------------------------------------------------------------------------
 
-export const CARRIER_BRIEF: CarrierChannel = { name: 'A channel of 20 MHz at 15 dB SNR', hz: 20e6, snrDb: 15, target: 1e-3 };
+export const CARRIER_BRIEF: CarrierChannel = { name: 'A channel of 20 MHz at 16 dB SNR', hz: 20e6, snrDb: 16, target: 1e-3 };
 export const SERIAL_BRIEF: SerialChannel = { name: 'A board trace with a 4 GHz pole and 40 mV of noise', bandwidth: 4, sigma: 0.04, target: 1e-12 };
 export const CARRIER_BITS = 60000;
 /** The best rate each brief can reach, held to bestCarrier and bestSerial by tests/comm-linkdesign.test.ts, and what a pass must come near. */

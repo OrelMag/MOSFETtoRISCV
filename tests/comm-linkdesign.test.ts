@@ -64,7 +64,7 @@ describe('the briefs', () => {
     // the point of the brief: only soft decisions make the larger constellation close
     expect(CODES[c.choice.code].q).toBe(3);
     expect(MODULATIONS[c.choice.mod].M).toBe(64);
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
       expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 2 }, CARRIER_BITS, seed).closes).toBe(false);
       expect(runCarrier(CARRIER_BRIEF, { mod: 1, code: 0 }, CARRIER_BITS, seed).closes).toBe(false);
       expect(runCarrier(CARRIER_BRIEF, { mod: 2, code: 3 }, CARRIER_BITS, seed).closes).toBe(true);
@@ -77,6 +77,6 @@ describe('the briefs', () => {
     expect(s.rate).toBe(SERIAL_REFERENCE_RATE);
     expect(runSerial(SERIAL_BRIEF, s.choice).closes).toBe(true);
     expect(runSerial(SERIAL_BRIEF, { line: 0, eq: 0, rate: 5 }).closes).toBe(false);
-    expect(dbToRatio(CARRIER_BRIEF.snrDb)).toBeCloseTo(31.6, 1);
+    expect(dbToRatio(CARRIER_BRIEF.snrDb)).toBeCloseTo(39.8, 1);
   });
 });
