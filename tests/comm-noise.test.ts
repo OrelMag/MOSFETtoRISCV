@@ -95,7 +95,7 @@ describe('Shannon', () => {
     // far below it a longer code is worse, not better
     expect(at(20, -3)).toBeGreaterThan(at(8, -3));
   });
-  it('the curves cross about a dB above the limit, as the chapter says', () => {
+  it('the curves cross within about a dB of the limit, as the chapter says', () => {
     const at = (n: number, db: number) => randomCodeError(n, n / 2, db, 3000, n * 31 + Math.round(db * 10) + 5);
     expect(at(20, 0)).toBeGreaterThan(at(8, 0));
     expect(at(20, 2)).toBeLessThan(at(8, 2));
