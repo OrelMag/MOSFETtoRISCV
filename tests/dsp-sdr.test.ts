@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
-  ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, demodulate, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
+  ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
   synthBand, keyingRatio, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';

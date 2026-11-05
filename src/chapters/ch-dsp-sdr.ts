@@ -1,0 +1,243 @@
+// A software radio (level Signal processing): can you receive a station with what you have built? A synthesized band of four FM stations at 960 kHz; a complex mixer and a CIC in gates (lib/sdr.ts, equal to
+// dsp/sdr.ts every clock), the channel filter, discriminator, audio filter and de-emphasis in floating point (the DSP core's part, not built yet), and sound out: a full second from the model, a short clip
+// from the gates, checked equal to the model. Every number on this page is measured or computed (tests/dsp-sdr.test.ts).
+
+import { cicAliasDb, cicResponse } from '../dsp/multirate';
+import {
+  ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
+  workPerSecond,
+} from '../dsp/sdr';
+import { CLIP_CLOCKS } from '../dsp/sdrclip';
+import { cicDecimator } from '../lib/multirate';
+import { stats } from '../sim/stats';
+import { audioWidget, band, bandWidget, carsonWidget, channelWidget, dialWidget, frontScene, FRONT_CLOCKS, mixerScene, MIXER_CLOCKS, nandsOf, sdrApi, tableSweep, tableWidget, tuneWidget } from '../widgets/dspsdr';
+import { numOf } from './order';
+import type { Chapter } from './types';
+
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const d1 = (x: number) => x.toFixed(1);
+const khzf = (hz: number) => `${n0(hz / 1000)} kHz`;
+const memo = <T>(f: () => T): (() => T) => { let v: T | undefined; return () => (v ??= f()); };
+const nands = memo(nandsOf);
+const tone = memo(() => [-40, -25, -10].map((nd) => ({ nd, snr: toneSnr(receive(band(), STATIONS[0].f, nd).chain.audio), cn: carrierToNoise(1, nd, carson(DEV, TEST_TONE_HZ)) })));
+const weak = memo(() => [-40, -25, -15].map((nd) => ({ nd, key: keyingRatio(receive(band(), STATIONS[3].f, nd).chain.audio), cn: carrierToNoise(STATIONS[3].a, nd, carson(DEV, 700)) })));
+const measuredBw = memo(() => ({ tone: occupied(toneFm(DEV, TEST_TONE_HZ), 0.98), wide: occupied(toneFm(DEV, 15_000), 0.98) }));
+/** The closest two stations are this far apart. */
+const closest = () => Math.min(...STATIONS.map((s) => s.f).sort((a, b) => a - b).map((f, i, a) => (i ? f - a[i - 1] : Infinity)));
+const ratioDb = (a: number, b: number) => 20 * Math.log10(a / b);
+
+export const chSdr: Chapter = {
+  id: 'sdr', num: numOf('sdr'), title: 'A software radio', level: 'Signal processing',
+  blurb: 'Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.',
+  goals: [
+    'say what an FM station occupies and how Carson\'s rule finds it, and check the rule on a spectrum',
+    'tune a station to zero with a complex mixer, and say what each bit of its oscillator table buys',
+    'follow one band down 960 kHz → 240 kHz → 24 kHz and say what each stage costs and where it runs',
+    'hear a station received by your own gates, and say what noise does to FM',
+  ],
+  builds: ['signals', 'radio', 'fixed', 'firdesign', 'multirate', 'cordic'],
+  recap: {
+    keep: [
+      'An FM station is a carrier whose frequency follows the sound. Its width is not the audio\'s: Carson\'s rule, 2 (deviation + highest audio frequency), holds nearly all the power, and the stations are spaced wider than that.',
+      'Multiplying a complex band by e^(−jθ), with θ turning at the tuning word, slides every frequency down by that amount. The station you want is then at zero, and the rest of the receiver never moves.',
+      'The oscillator\'s table costs gates by the bit and buys 6 dB of spur-free range by the bit. The FM test tone did not care; a weak station beside a loud one did.',
+      'A CIC is the right first filter after the mixer: adders only, at the full rate, dropping it by 4. Everything with multipliers then runs at a quarter, or a fortieth, of the rate.',
+      'The discriminator is the phase step between neighbouring samples. FM turns carrier-to-noise ratio into audio signal-to-noise ratio generously until a threshold, below which it breaks up.',
+    ],
+    check: [
+      {
+        question: 'The mixer multiplies each complex sample by e^(−jθ), and θ advances by the tuning word every clock. What does that do to a station at +100 kHz when the word stands for +100 kHz?',
+        options: ['Moves it to 0 Hz', 'Moves it to 200 kHz', 'Filters out everything else', 'Doubles its deviation'],
+        answer: 0,
+        explain: 'The multiplication subtracts the oscillator\'s frequency from every frequency in the band: 100 − 100 = 0. A station at −300 kHz moves to −400 kHz, and the filters that follow take it out.',
+        why: ['', 'Mixing with e^(−jθ) subtracts. A real mixer would also make the sum, which is why this one is complex.', 'A mixer is a multiplier and changes no amplitudes. The filters after it remove the others.', 'It shifts the whole spectrum; the deviation, which is a width, does not change.'],
+      },
+      {
+        question: 'Why did the oscillator\'s table size matter little to the test tone, and a good deal to the weak station?',
+        options: ['The weak station sits where a loud neighbour\'s spurs fall', 'The weak station uses a different table', 'The test tone is mixed first', 'Spurs only exist in the weak station\'s band'],
+        answer: 0,
+        explain: 'A coarse table puts a spur some tens of dB below every strong signal in the band. It does harm only where something weaker sits. The test tone has no louder neighbour; the weak station has one.',
+        why: ['', 'There is one table, for all of them.', 'Mixing is one multiplication for the whole band, not station by station.', 'They are in every station\'s, in proportion to its neighbours.'],
+      },
+      {
+        question: 'Why does the CIC come before the 41-tap channel filter?',
+        options: ['It takes the rate down 4× with no multipliers, so the filter runs at a quarter', 'It filters more sharply than any ordinary filter', 'It flattens the channel before it is cut', 'A channel filter cannot take 11-bit words'],
+        answer: 0,
+        explain: 'The channel filter\'s price is taps × rate. Put after a ÷ 4 stage it is 41 × 240 000 a second for each of I and Q instead of four times that. The CIC droops across the channel and rejects only near its nulls; the 41 taps finish the job.',
+        why: ['', 'It rejects well near its nulls and droops across the band. That is why a short ordinary filter follows.', 'It does the opposite: it droops across the band.', 'A filter works on words of any width the designer gives it.'],
+      },
+    ],
+  },
+  steps: [
+    {
+      title: 'Four stations in one band',
+      get body() {
+        const b = nands();
+        return `
+        <p>Every earlier chapter of this level had a part in a receiver; this one assembles it. A radio front end hands you a stream of <em>complex</em> samples, I and Q, from two converters, at a rate that covers a whole slice of the spectrum at once. Here that is ${n0(FS)} of them a second, ${W_IN} bits each of I and Q, and the slice holds four FM stations: a test tone at 1 kHz, an arpeggio, a sweep, and a weak one that sends Morse. The stations are synthesized by the code on this page, so everything here is the same for every reader. (<a href="#/c/radio/0">Chapter ${numOf('radio')}</a> had the antenna and the path.)</p>
+        <p>Their levels differ by ${d1(ratioDb(STATIONS[0].a, STATIONS[3].a))} dB, which is what makes a receiver hard: the weak station sits ${khzf(Math.abs(STATIONS[3].f - STATIONS[2].f))} from a loud one, and whatever the receiver does wrong to the loud one lands on the weak one at that offset. The peak deviation is ±${n0(DEV / 1000)} kHz, narrower than broadcast's ±75, to keep the band small.</p>
+        <p>The receiver has five stages and the first two are in gates: <strong>mix</strong> the chosen station to zero (${n0(b.mixer)} NANDs), <strong>decimate</strong> by ${CIC_R} with a CIC (two of them, ${n0(2 * stats(cicDecimator(CIC_N, CIC_R, W_MIX)).nands)} NANDs), <strong>filter</strong> the channel, <strong>discriminate</strong>, and <strong>filter</strong> the audio down to ${n0(AUD / 1000)} kHz.</p>
+        <div class="try">Raise the noise to the right. The floor lifts under the weak station first, and at the far end the ADC clips: the readout counts the samples at full scale.</div>`;
+      },
+      widget: bandWidget,
+      challenge: {
+        kind: 'quiz', question: 'Which of these does the ADC\'s word size decide?',
+        options: ['How far a weak station sits above rounding noise next to a loud one', 'How many stations fit in the band', 'The width of each station', 'The rate the audio comes out at'],
+        answer: 0,
+        explain: `Rounding to ${W_IN} bits adds noise spread over the whole band, at a level fixed by the word. A station at ${STATIONS[3].a} of the loudest has only ${d1(STATIONS[3].a * ADC_SCALE)} steps of amplitude to stand on.`,
+        why: ['', 'That is the sample rate, and the stations\' spacing.', 'That is the deviation and the audio.', 'That is the decimation, chosen by the filters.'],
+      },
+    },
+    {
+      title: 'How wide is a station?',
+      get body() {
+        const m = measuredBw();
+        return `
+        <p>Frequency modulation moves the carrier by an amount proportional to the sound: ±${n0(DEV / 1000)} kHz at the loudest. That is <em>deviation</em>, and it is not the width. A tone of frequency f<sub>m</sub> puts sidebands every f<sub>m</sub> either side of the carrier, with amplitudes set by Bessel functions, and the larger the swing against f<sub>m</sub> (the <em>modulation index</em> β = Δf / f<sub>m</sub>) the farther out they reach. <strong>Carson's rule</strong> is the engineer's shortcut: the band that holds nearly all the power is 2 (Δf + f<sub>m</sub>).</p>
+        <p>The widget measures it. It synthesizes one station, takes an FFT, and finds the narrowest band centred on the carrier that holds 98 % of the power. For the 1 kHz test tone at ±${n0(DEV / 1000)} kHz the rule says ${d1(carson(DEV, TEST_TONE_HZ) / 1000)} kHz and the spectrum says ${d1(m.tone / 1000)} kHz. With a 15 kHz tone the rule says ${d1(carson(DEV, 15000) / 1000)} and the spectrum ${d1(m.wide / 1000)}. Where β drops toward 1 the rule starts to over-count.</p>
+        <p>This sets the channel the receiver must keep. The closest two stations here are ${khzf(closest())} apart, the widest station ${khzf(carson(DEV, 15000))}, so a ±${khzf(CHAN_EDGE)} filter, ${khzf(2 * CHAN_EDGE)} wide, has room.</p>
+        <div class="try">Slide the audio tone up to 15 kHz and watch the sidebands run out to the shaded edges. Then shrink the deviation to 5 kHz: the band collapses to a few audio tones' width.</div>`;
+      },
+      widget: carsonWidget,
+      challenge: {
+        kind: 'quiz', question: `A station deviates ±${n0(DEV / 1000)} kHz and carries audio up to 15 kHz. Stations are ${khzf(closest())} apart at the closest. Do they overlap?`,
+        options: [`No: Carson's band is ${khzf(carson(DEV, 15000))}`, 'Yes: the deviation alone is wider', 'Yes: 15 kHz audio needs 15 kHz either side', 'It depends on the noise'],
+        answer: 0,
+        explain: `2 (${n0(DEV / 1000)} + 15) = ${n0(carson(DEV, 15000) / 1000)} kHz, under the ${khzf(closest())} spacing, with ${khzf(closest() - carson(DEV, 15000))} to spare for the filter's skirt.`,
+        why: ['', `The deviation is ±${n0(DEV / 1000)}, a ${n0((2 * DEV) / 1000)} kHz swing; Carson's rule adds the audio's reach to it.`, 'The audio is carried by the sidebands, but they reach out Δf + f<sub>m</sub> in all, not f<sub>m</sub>.', 'Noise changes the quality, not the width of a station.'],
+      },
+    },
+    {
+      title: 'Moving a station to zero',
+      get body() {
+        return `
+        <p>A filter that picks one station out of a band at ${n0(FS / 1000)} kHz would need a very long impulse response. It is much cheaper to move the station and keep the filter fixed. Multiply every sample by e^(−jθ<sub>n</sub>), where θ turns by a fixed step each clock, and every frequency in the band drops by the rate that step stands for. The station you tuned to ends up at zero, and the others land at their distance from it.</p>
+        <p>Because the samples are complex, this is one rotation and nothing is lost: (x<sub>r</sub> + j x<sub>i</sub>)(cos θ − j sin θ) = (x<sub>r</sub> cos θ + x<sub>i</sub> sin θ) + j (x<sub>i</sub> cos θ − x<sub>r</sub> sin θ). A real mixer, one multiplication, would make the sum and the difference of every pair of frequencies at once and fold the mirror image onto the station. The step is a ${NCO_BITS}-bit <em>tuning word</em>, so the oscillator tunes in ${d1(FS / 2 ** NCO_BITS)} Hz steps.</p>
+        <div class="try">Drag the tuning across a station. The channel it lands in is the shaded one, the only part the later stages keep.</div>`;
+      },
+      widget: tuneWidget,
+      challenge: {
+        kind: 'quiz', question: `The oscillator is tuned to ${n0(STATIONS[0].f / 1000)} kHz. Where does the station at +${n0(STATIONS[2].f / 1000)} kHz end up?`,
+        options: [`+${n0((STATIONS[2].f - STATIONS[0].f) / 1000)} kHz`, `${n0((STATIONS[0].f + STATIONS[2].f) / 1000)} kHz`, '0 Hz', `+${n0(STATIONS[2].f / 1000)} kHz`],
+        answer: 0,
+        explain: `The mixer subtracts the tuned frequency: ${n0(STATIONS[2].f / 1000)} − (${n0(STATIONS[0].f / 1000)}) = +${n0((STATIONS[2].f - STATIONS[0].f) / 1000)} kHz, inside the band's ±${n0(FS / 2000)} kHz but far outside any channel the next filter keeps.`,
+        why: ['', 'That would be adding the two; the mixer takes the oscillator away.', 'Only the station at the tuned frequency lands there.', 'Everything moves.'],
+      },
+    },
+    {
+      title: 'The mixer in gates',
+      get body() {
+        const b = nands();
+        return `
+        <p>Here it is, drawn from parts you have: a ${NCO_BITS}-bit register that adds the tuning word at every clock, two tables addressed by its top ${NCO_K} bits, four ${W_IN}-bit multipliers and two adders. The register is the <em>numerically controlled oscillator</em> of <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a>, with a cosine table beside the sine one. The whole mixer is ${n0(b.mixer)} NANDs, of which the oscillator is ${n0(b.nco)} and the multipliers and adders the rest.</p>
+        <p>The tables hold ±127, and a product leaves bits to drop: the mixer keeps ${W_MIX} bits of the sum from bit 7 up, a floor, since a rotated sample can be √2 as large as it was. Nothing rounds, saturates or stores a coefficient. The integer model in the tests equals these gates on every clock, at several tunings and several table sizes.</p>
+        <p>One sample goes in at every clock, so a second of the band is ${n0(FS)} clocks, too many to run a gate simulator through live. The page keeps that in mind: sound for a full second comes from the model, which does these gates' arithmetic on typed arrays, and a short clip comes from the gates themselves.</p>
+        <div class="try">Pick a station and run ${MIXER_CLOCKS} clocks. The tuned one settles near zero, and the others beat across it at their distance from it.</div>`;
+      },
+      scene: mixerScene,
+      lit: '',
+      challenge: {
+        kind: 'reach', goal: 'Tune to the test tone, run the gates, and see every output equal the model\'s.',
+        check: (st) => { const a = sdrApi.get(st); return !!a && a.agrees() && a.tuned() === STATIONS[0].f; },
+        hints: ['The first button of the panel is the test tone.'],
+        answer: `Run the first station. The panel compares both outputs of the mixer with the integer model at every one of the ${MIXER_CLOCKS} clocks.`,
+        solve: (st) => { sdrApi.get(st)?.run(STATIONS[0].f); },
+      },
+    },
+    {
+      title: 'How fine does the table have to be?',
+      get body() {
+        const rows = tableSweep(), r = (k: number) => rows.find((q) => q.k === k)!, t = tone();
+        return `
+        <p>A table of 2<sup>k</sup> steps turns the phase into a staircase, and the staircase has an error: a spur in the mixer's output for every strong signal that passes through, about 6 dB lower for each bit of k. Measured on a steady carrier, a ${r(4).k}-bit table leaves its largest spur ${d1(r(4).sfdr)} dB below it, ${r(6).k} bits ${d1(r(6).sfdr)} dB, ${r(8).k} bits ${d1(r(8).sfdr)} dB. By ${r(9).k} bits the 8-bit words of the table take over and it stops improving: ${d1(r(9).sfdr)} dB.</p>
+        <p>The price is ${n0(r(4).nands)} NANDs for the oscillator at ${r(4).k} bits and ${n0(r(8).nands)} at ${r(8).k}: a table doubles for every bit. And the surprise is what it buys. The FM test tone's audio is the same ${d1(t[0].snr)} dB above everything else at ${r(4).k} bits and at ${r(9).k}: FM listens to the <em>phase</em> of a strong signal, which a spur barely moves. The weak station, ${d1(ratioDb(STATIONS[2].a, STATIONS[3].a))} dB under its neighbour, is another matter. Its Morse key down is ${d1(r(4).keying)} dB over key up at ${r(4).k} bits, ${d1(r(6).keying)} at ${r(6).k} and ${d1(r(8).keying)} at ${r(8).k}: the loud stations' spurs fall on it, and each bit of table moves them down 6 dB.</p>
+        <p>The chapter's mixer uses ${NCO_K} bits: ${d1(r(NCO_K).sfdr)} dB of spur-free range for ${n0(r(NCO_K).nands)} NANDs in the oscillator, against ${n0(r(9).nands)} at ${r(9).k}.</p>
+        <div class="try">Play the weak station at 4 bits, then at 8, and read the key-down / key-up figure beside it.</div>`;
+      },
+      widget: tableWidget,
+      challenge: {
+        kind: 'quiz', question: 'What sets the table size a receiver needs?',
+        options: ['How much louder its strongest neighbour is than the weakest wanted station', 'The audio\'s highest frequency', 'The deviation of the stations', 'The number of stations'],
+        answer: 0,
+        explain: 'A spur is a copy of a strong signal at a fixed distance below it. It does no harm unless something weaker sits there. The test tone is unharmed by a table of 16 steps; the weak station is not.',
+        why: ['', 'That sets the audio filter.', 'That sets the channel width.', 'Spurs scale with levels, not with how many signals there are.'],
+      },
+    },
+    {
+      title: 'Dropping to a quarter of the rate',
+      get body() {
+        const b = nands(), cic = stats(cicDecimator(CIC_N, CIC_R, W_MIX)).nands;
+        const alias = cicAliasDb(CIC_N, CIC_R, CHAN_EDGE / FS_CIC), droop = 20 * Math.log10(cicResponse(CIC_N, CIC_R, CHAN_EDGE / FS));
+        return `
+        <p>The channel is ±${khzf(CHAN_EDGE)} wide in a band of ±${n0(FS / 2000)}, so most of the samples are not needed, and <a href="#/c/multirate/0">the rate chapter</a> said what to do about that: a CIC, which is adders and registers with no multiplier. Behind each of I and Q goes an order-${CIC_N} CIC, ÷ ${CIC_R}, from ${W_MIX}-bit words. Its registers grow by N log₂ R = ${CIC_N * Math.log2(CIC_R)} bits to ${W_CIC}, and the gain at zero is ${n0(CIC_GAIN)}. One CIC is ${n0(cic)} NANDs; the whole front end, mixer and two CICs, is ${n0(b.front)}.</p>
+        <p>At ${n0(FS_CIC / 1000)} kHz what folds onto the channel's edge is ${d1(-alias)} dB down, and the droop at the channel's edge is ${d1(-droop)} dB. Neither is a clean cut, and neither needs to be: a short filter at the low rate finishes the job, next step.</p>
+        <div class="try">Run the tuned test tone: ${FRONT_CLOCKS} clocks in, ${FRONT_CLOCKS / CIC_R} points out. An FM station has a constant amplitude, so the points trace an arc of a circle; the sound is how fast they move round it.</div>`;
+      },
+      scene: frontScene,
+      lit: '',
+      challenge: {
+        kind: 'reach', goal: 'Tune to the weak station, run the front end, and see every word equal the model\'s.',
+        check: (st) => { const a = sdrApi.get(st); return !!a && a.agrees() && a.tuned() === STATIONS[3].f; },
+        hints: ['The weak station is the last button.'],
+        answer: `Run the fourth station. The panel compares both CIC outputs and the strobe with the model at each of the ${FRONT_CLOCKS} clocks.`,
+        solve: (st) => { sdrApi.get(st)?.run(STATIONS[3].f); },
+      },
+    },
+    {
+      title: 'The channel filter and the discriminator',
+      get body() {
+        const w = workPerSecond;
+        return `
+        <p>From here on the arithmetic is the kind a processor does well. This page does it in floating point on the model, and says so. A ${CHAN_TAPS}-tap low-pass at ${n0(FS_CIC / 1000)} kHz cuts the channel to ±${khzf(CHAN_EDGE)}: ${n0(w.channel)} real multiplications a second for I and Q together, against ${n0(w.mixer)} for the mixer's four multipliers at the full rate. The other stations are under the filter's skirt.</p>
+        <p>Then the part that makes it FM. A sample is z<sub>n</sub> = I + jQ, and the angle of z<sub>n</sub> · conj(z<sub>n−1</sub>) is how far the phase turned in one sample. That is the instantaneous frequency, in radians a sample, and with the deviation's scale it <em>is</em> the audio: a full-scale tone swings it ±1 deviation. No local oscillator tracks the carrier, and the answer ignores amplitude. It costs one arctangent a sample, which <a href="#/c/cordic/0">the CORDIC chapter</a> built.</p>
+        <p>Putting the channel filter and the discriminator on the DSP core waits for that core. Until it exists the model stands in for it, and the steps after this one depend on nothing but its numbers.</p>
+        <div class="try">Pick the weak station. The discriminator's swing is as large as the loud one's, and the noise riding on it is not: the angle ignores amplitude, not noise.</div>`;
+      },
+      widget: channelWidget,
+      challenge: {
+        kind: 'quiz', question: 'Why does the discriminator work on the product z[n] · conj(z[n−1]) instead of subtracting the two angles?',
+        options: ['The angle of the product is the difference, with no wrap to undo', 'It is cheaper than subtracting angles', 'It removes the noise', 'Angles cannot be computed for complex samples'],
+        answer: 0,
+        explain: 'Subtracting two angles that each wrap at ±π gives an answer off by 2π whenever one has just wrapped. The product\'s angle is already the small difference.',
+        why: ['', 'It costs a complex multiplication; a subtraction is cheaper. That is not the point.', 'It does not touch the noise.', 'atan2 does exactly that.'],
+      },
+    },
+    {
+      title: 'Audio, and the treble that was boosted',
+      get body() {
+        return `
+        <p>The discriminator's output is at ${n0(FS_CIC / 1000)} kHz, and audio is under 10. An ${AUDIO_TAPS}-tap filter with its edge at 10 kHz computes only every ${AUDIO_R}th output, so it costs ${n0(workPerSecond.audio)} multiplications a second, not ${AUDIO_R} times that: <a href="#/c/multirate/2">polyphase</a>, again. It leaves ${n0(AUD)} samples a second.</p>
+        <p>Last is a trick of the broadcaster's. FM's noise is worst at high audio frequencies, so the transmitter boosts the treble before modulating and the receiver cuts it back, and the same cut takes the noise down with it. Here that is a first-order filter with a time constant of ${n0(TAU * 1e6)} µs; its corner is ${d1(1 / (2 * Math.PI * TAU) / 1000)} kHz, and the receiver's is the exact inverse of the transmitter's, so the two cancel on the sound and not on the hiss.</p>
+        <div class="try">Play the arpeggio without the de-emphasis, then with it. The first is the transmitter's boost with nothing to undo it.</div>`;
+      },
+      widget: audioWidget,
+      challenge: {
+        kind: 'quiz', question: 'If the receiver skipped de-emphasis, what would the listener get?',
+        options: ['Too much treble, and the hiss with it', 'Nothing: de-emphasis is only for noise', 'The audio at half speed', 'Only the bass'],
+        answer: 0,
+        explain: 'Pre-emphasis boosted the treble by the same curve de-emphasis cuts. Without the cut the treble is too strong, and the high-frequency noise comes through at full strength.',
+        why: ['', 'It changes the sound as well as the noise: the two curves are inverses.', 'Rate and pitch are unaffected.', 'The boost is on the treble.'],
+      },
+    },
+    {
+      title: 'Turn the dial',
+      get body() {
+        const t = tone(), w = weak();
+        return `
+        <p>Everything at once, on a second of the band: sample, mix, CIC, channel filter, discriminator, audio filter, de-emphasis. Tune across the four stations. Between them the readout names nothing and the output is noise.</p>
+        <p>Then raise the noise. FM trades bandwidth for noise: the test tone is ${d1(t[0].snr)} dB above everything else in its audio at ${t[0].nd} dB of noise (${d1(t[0].cn)} dB carrier to noise in its band), ${d1(t[1].snr)} dB at ${t[1].nd} (${d1(t[1].cn)}) and ${d1(t[2].snr)} dB at ${t[2].nd} (${d1(t[2].cn)}). It degrades gently, and then not: textbooks put FM's threshold near 10 dB carrier to noise, below which the discriminator picks up whole turns of phase that were never there and the audio breaks into clicks. The weak station reaches it first. Its key-down to key-up ratio is ${d1(w[0].key)} dB at ${w[0].nd} dB of noise (${d1(w[0].cn)} dB carrier to noise), ${d1(w[1].key)} at ${w[1].nd} (${d1(w[1].cn)}), and ${d1(w[2].key)} at ${w[2].nd} (${d1(w[2].cn)}).</p>
+        <p>Sound is never the only proof here. The full second plays from the model. The second button renders the first ${n0((CLIP_CLOCKS / FS) * 1000)} ms of the band through the gates of this chapter, one clock at a time, and compares every sample of the result with the model's. It takes seconds: ${n0(CLIP_CLOCKS)} clocks of a ${n0(nands().front)}-NAND circuit. The page says which source you hear.</p>
+        <div class="try">Tune to ${n0(STATIONS[0].f / 1000)} kHz and play both. Then tune to +${n0(STATIONS[3].f / 1000)} kHz, raise the noise, and watch the carrier-to-noise readout against how the Morse looks in the waveform.</div>`;
+      },
+      widget: dialWidget,
+      challenge: {
+        kind: 'quiz', question: 'The receiver is tuned to the weak station and the noise is raised. Which station breaks up first?',
+        options: ['The weak one: its carrier-to-noise ratio is lowest', 'The test tone: it is loudest', 'All at once: the noise is the same for all', 'None: FM rejects noise completely'],
+        answer: 0,
+        explain: 'Noise is the same everywhere in the band, so the quietest carrier has the least above it. FM improves the audio\'s signal-to-noise ratio generously at good carrier-to-noise ratios and loses it below a threshold.',
+        why: ['', 'The loud one has the most carrier above the same noise.', 'The audio quality depends on each station\'s own carrier-to-noise ratio.', 'Below the threshold it breaks up badly.'],
+      },
+    },
+  ],
+  soon: ['The channel filter and the discriminator on the DSP core'],
+};

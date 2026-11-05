@@ -111,3 +111,8 @@
 /* a labelled select above its caption's width: stacked, so neither is cut off in a narrow scene panel */
 .dsp-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
 .dsp-field select { width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* a software radio: the channel a filter keeps and the band a station occupies, drawn under a spectrum */
+.sdr-chan { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: none; }
+.sdr-occ { fill: color-mix(in srgb, var(--warn) 16%, transparent); stroke: none; }
+.mini tr.sel td { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); font-weight: 600; }

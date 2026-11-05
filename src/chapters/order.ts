@@ -85,6 +85,7 @@ const BOOK = [
   'converters',
   'adaptive',
   'pictures',
+  'sdr',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
