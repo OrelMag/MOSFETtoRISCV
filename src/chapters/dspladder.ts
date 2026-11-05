@@ -17,7 +17,7 @@ export const DSP_LADDER: readonly { id: string; title: string; asks: string }[] 
   { id: 'dspcore', title: 'A DSP core', asks: 'What does a processor look like when the loop is the point?' },
   { id: 'converters', title: 'Converters', asks: 'How does one bit make 16?' },
   { id: 'adaptive', title: 'Filters that learn', asks: 'How do you cancel an echo you cannot measure?' },
-  { id: 'speech', title: 'Speech', asks: 'How does a voice fit in 2 kb/s?' },
+  { id: 'speech', title: 'Speech', asks: 'How does a voice fit in 2.4 kb/s?' },
   { id: 'music', title: 'Music', asks: 'What can a codec safely throw away?' },
   { id: 'pictures', title: 'Pictures', asks: 'Why does a JPEG look blocky?' },
   { id: 'sdr', title: 'A software radio', asks: 'Can you receive a station with what you have built?' },
