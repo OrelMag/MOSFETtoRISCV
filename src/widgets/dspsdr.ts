@@ -25,6 +25,7 @@ import '../styles/dsp.css';
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const khz = (hz: number) => `${hz >= 0 ? '+' : '−'}${Math.abs(hz / 1000)} kHz`;
 const sp = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const z0 = (v: number) => (Math.abs(v) < 0.05 ? 0 : v);
 const dbOf = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 let theBand: Band | undefined;
 /** One second of the band, made on first use and kept: every explorer reads the same samples. */
@@ -117,7 +118,7 @@ export function tuneWidget(): Widget {
     const st = stationAt(f);
     chips.set(2, st ? st.short : 'none', st ? 'a station is inside the channel' : 'nothing within 25 kHz');
   };
-  const sf = slider('Tune, kHz', -440, 440, 5, f / 1000, (v) => `${v > 0 ? '+' : ''}${v}`, (v) => { f = v * 1000; paint(); });
+  const sf = slider('Tune', -440, 440, 5, f / 1000, (v) => `${v > 0 ? '+' : ''}${v} kHz`, (v) => { f = v * 1000; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Before the mixer'), before.el), h('div', { class: 'panel' }, h('h3', null, 'After it: the station you chose is at zero'), after.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'shaded: the channel the next filter keeps, ± 75 kHz')), chips.el), h('div', { class: 'panel mos-ctl' }, sf.el)) };
 }
@@ -208,11 +209,11 @@ export function tableWidget(): Widget {
   const body = h('tbody');
   const paint = () => {
     const r = rows.find((q) => q.k === k)!;
-    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, `${num(q.keying, 1)} dB`))));
+    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, `${num(z0(q.keying), 1)} dB`))));
     chips.set(0, sp(2 ** k), 'steps in a turn');
     chips.set(1, sp(r.nands), 'NANDs in the oscillator');
     chips.set(2, `${num(r.sfdr, 0)} dB`, 'the largest spur under the carrier');
-    chips.set(3, `${num(r.keying, 0)} dB`, 'weak station: key down over key up');
+    chips.set(3, `${num(z0(r.keying), 0)} dB`, 'weak station: key down over key up');
   };
   const sk = slider('Table bits', 3, 9, 1, k, (v) => String(v), (v) => { k = v; paint(); play.reset(); });
   const play = clipButton('Hear the weak station', () => ({ samples: receive(band(), STATIONS[3].f, -40, FS, k).chain.audio, rate: AUD, source: 'model', note: `${2 ** k}-step table, one second` } satisfies Clip));
@@ -315,7 +316,7 @@ export function dialWidget(): Widget {
     working.textContent = '';
   };
   const queue = () => { working.textContent = 'Working…'; window.clearTimeout(timer); timer = window.setTimeout(paint, 120); };
-  const sf = slider('Tune, kHz', -440, 440, 5, f / 1000, (v) => `${v > 0 ? '+' : ''}${v}`, (v) => { f = v * 1000; playModel.reset(); playGates.reset(); queue(); });
+  const sf = slider('Tune', -440, 440, 5, f / 1000, (v) => `${v > 0 ? '+' : ''}${v} kHz`, (v) => { f = v * 1000; playModel.reset(); playGates.reset(); queue(); });
   const sn = slider('Noise', -60, 0, 1, noise, (v) => `${v} dB`, (v) => { noise = v; playModel.reset(); playGates.reset(); queue(); });
   const playModel = clipButton('Play one second (model)', () => (last ? { samples: last, rate: AUD, source: 'model', note: 'a second of the band, the whole chain in the model' } : null));
   // the gates take seconds: a click starts them, the button shows how far they are, and the sound plays when they are done
