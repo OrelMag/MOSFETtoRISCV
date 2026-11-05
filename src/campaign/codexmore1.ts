@@ -1411,7 +1411,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Logical shifts: a negative coordinate turns into a large positive one.',
       'Rounding to whole pixels every step: the errors accumulate; keep the fraction and round only when drawing.',
     ],
-    chapters: [{ chapter: 'graphics', step: 0, label: 'Vertices are a kernel' }],
+    chapters: [{ chapter: 'graphics', step: 0, label: 'Vertices are a kernel' }, { chapter: 'cordic', step: 0, label: 'A rotation is four multiplications' }, { chapter: 'cordic', step: 2, label: 'The gain nobody can avoid' }],
   },
   // ---- act 10: memory
   memwall: {

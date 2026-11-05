@@ -132,6 +132,7 @@ rounding to b bits: 6.02 b + 1.76 dB   8 bits 49.9 dB   16 bits 98.1 dB</pre>An 
     chapters: [
       { chapter: 'signals', step: 5, label: 'Sampling, and what folds' },
       { chapter: 'signals', step: 6, label: 'Rounding to a number' },
+      { chapter: 'multirate', step: 1, label: 'Throwing samples away' },
     ],
   },
   mixer: {
