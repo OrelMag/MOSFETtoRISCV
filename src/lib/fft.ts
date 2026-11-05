@@ -112,7 +112,7 @@ export function csdDigits(c: number): { pos: number; neg: boolean }[] {
 export function fxRoot(W: number): ComponentDef {
   return memo(`fxroot${W}`, () => {
     const P = 2 * W - 1, digits = csdDigits(rootHalf(W)).reverse();
-    const b = new Builder(6, 8, 3);
+    const b = new Builder(6, 16, 5);
     b.pins('x');
     b.name('x', 'x', true);
     const z = b.name(b.op1(TIE0, []), 'z', true);
@@ -321,7 +321,7 @@ export function fxMinusJ(W: number): ComponentDef {
 /** Counter that loads its starting value on rst: each stage's own place in the block. */
 function stageCounter(bits: number, start: number): ComponentDef {
   return memo(`fftctr${bits}_${start}`, () => {
-    const g = new Builder(6, 10, 4);
+    const g = new Builder(16, 16, 5);
     for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
     const fb = 'r.q';
     g.name(fb, 'count', true);
@@ -346,7 +346,7 @@ function stageCounter(bits: number, start: number): ComponentDef {
 /** A delay line of L complex samples. */
 export function fftDelay(L: number, W: number): ComponentDef {
   return memo(`fftdel${L}_${W}`, () => {
-    const R = register(2 * W), g = new Builder(6, 6, 3);
+    const R = register(2 * W), g = new Builder(16, 12, 4);
     g.maxH = 40;
     for (const p of ['en', 'clk']) g.name(p, p, true);
     let d = 'd';
@@ -366,7 +366,7 @@ export function fftDelay(L: number, W: number): ComponentDef {
 /** One stage of the pipeline. */
 export function fftStage(N: number, W: number, s: number, start: number): ComponentDef {
   return memo(`fftst${N}_${W}_${s}`, () => {
-    const M = N / 2 ** s, L = M / 2, kb = Math.log2(L), bits = kb + 1, g = new Builder(6, 12, 4);
+    const M = N / 2 ** s, L = M / 2, kb = Math.log2(L), bits = kb + 1, g = new Builder(16, 18, 5);
     for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
     g.name('x', 'x', true);
     const ctr = g.op1(stageCounter(bits, start), ['en', 'rst', 'clk'], undefined, 'ctr');
@@ -405,7 +405,7 @@ export function fftStage(N: number, W: number, s: number, start: number): Compon
 /** The streaming FFT: a sample in per clock, a tone out per clock, in bit-reversed order. */
 export function fftStream(N: number, W: number): ComponentDef {
   return memo(`fftstream${N}_${W}`, () => {
-    const f = new FftStream(N, W), m = f.m, g = new Builder(6, 10, 4);
+    const f = new FftStream(N, W), m = f.m, g = new Builder(16, 18, 4);
     for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
     let d = 'd';
     for (let s = 0; s < m; s++) { d = g.op1(fftStage(N, W, s, f.startCount(s)), [d, 'en', 'rst', 'clk'], undefined, `s${s}`); g.next(); }
