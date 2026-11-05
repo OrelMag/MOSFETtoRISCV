@@ -586,7 +586,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !(icache && dcache) && !fpu && !shared && !imemPort;
+  const wired = !(icache && dcache) && !fpu && !(imemPort && c);
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -917,22 +917,22 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     const dmAt = at.get('dm')!;
     instances.splice(instances.findIndex((i) => i.name === 'dm'), 1);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
-    add('mpd', MP_DECODE, [8, bottom + 10]);
+    add('mpd', MP_DECODE, wired ? [8, 104] : [8, bottom + 10]);
     add('amux', M2, [dmAt[0], dmAt[1]], 'address: ALU / rs1');
-    add('amoadd', ADD, [dmAt[0] + 14, bottom + 10], 'old + rs2');
-    add('gndA', TIE0, [dmAt[0] + 8, bottom + 6]);
-    add('wmux', M2, [dmAt[0] + 14, dmAt[1] + 22], 'store / amoadd');
-    add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
-    add('nr1', NOT, [aluR + 8, bottom - 10]);
-    add('isLoad', AND, [aluR + 13, bottom - 12]);
-    add('req', OR, [aluR + 20, bottom - 12]);
-    add('weo', OR, [aluR + 20, bottom - 6]);
-    add('weg', AND, [aluR + 26, bottom - 6]);
-    add('ngr', NOT, [aluR + 20, bottom]);
-    add('stl', AND, [aluR + 26, bottom]);
-    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
-    add('rwg', AND, [52, bottom - 8]);
-    add('rwh', OR, [56, bottom - 2]);
+    add('amoadd', ADD, wired ? [dmAt[0] + 24, 106] : [dmAt[0] + 14, bottom + 10], 'old + rs2');
+    add('gndA', TIE0, wired ? [dmAt[0] + 19, 114] : [dmAt[0] + 8, bottom + 6]);
+    add('wmux', M2, wired ? [dmAt[0] + 24, 118] : [dmAt[0] + 14, dmAt[1] + 22], 'store / amoadd');
+    add('rsplit', splitter([1, 1]), wired ? [aluR + 4, 104] : [aluR + 4, bottom - 12]);
+    add('nr1', NOT, wired ? [aluR + 8, 106] : [aluR + 8, bottom - 10]);
+    add('isLoad', AND, wired ? [aluR + 13, 104] : [aluR + 13, bottom - 12]);
+    add('req', OR, wired ? [aluR + 30, 104] : [aluR + 20, bottom - 12]);
+    add('weo', OR, wired ? [aluR + 20, 110] : [aluR + 20, bottom - 6]);
+    add('weg', AND, wired ? [aluR + 30, 110] : [aluR + 26, bottom - 6]);
+    add('ngr', NOT, wired ? [aluR + 20, 118] : [aluR + 20, bottom]);
+    add('stl', AND, wired ? [aluR + 30, 118] : [aluR + 26, bottom]);
+    add('nstall', NOT, wired ? [4, 46] : [8, P('pc', 'en')[1] - 1]);
+    add('rwg', AND, wired ? [54, 75] : [52, bottom - 8]);
+    add('rwh', OR, wired ? [68, 75] : [56, bottom - 2]);
     add('hmux', M2, [resY[0] + 6, resY[1] - 6], 'result / hart id');
     const net = (name: string) => nets.find((n) => n.name === name)!;
     const drop = (n: NetDef, e: string) => { n.ends = n.ends.filter((x) => x !== e); if (Array.isArray(n.tags)) n.tags = n.tags.filter((x) => x !== e); };
@@ -980,6 +980,30 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'hartid', ends: ['hartid', 'hmux.b'], tags: true },
       { name: 'XResult', ends: ['hmux.y', 'rf.wd'], tags: true },
     );
+    if (wired) {
+      // the core's own wires stay wires; what the multi-core adds (decode, arbitration, the memory port) keeps its pointers
+      const some = (name: string, tagged: string[], via?: string[]) => {
+        const n = net(name);
+        n.tags = tagged;
+        if (n.via) for (const k of via ?? []) delete n.via[k];
+      };
+      net('op').tags = true;
+      some('funct3', ['mpd.funct3']);
+      some('funct7', ['mpd.funct7']);
+      some('rs1', ['mpd.rs1']);
+      some('rs2', ['mpd.rs2']);
+      some('rd1', ['amux.b']);
+      some('WriteData', ['wmux.a', 'amoadd.b']);
+      some('ResultSrc', ['rsplit.in']);
+      net('ReadData').tags = true;
+      net('MemWrite').tags = true;
+      net('gndA').via = { 'amoadd.cin': [[dmAt[0] + 22.5, 115], [dmAt[0] + 22.5, 112]] };
+      const rw = net('RegWrite');
+      rw.via = { 'rwg.a': [[52, P('ctl', 'regWrite')[1]], [52, 76]] };
+      delete rw.tags;
+      net('retire').tags = ['rwg.b', 'retire'];
+      net('retire').via = { 'pc.en': [[10, 47], [10, P('pc', 'en')[1]]] };
+    }
     const ox = resY[0] + 22;
     Object.assign(pins, { hartid: [0, bottom + 6], memRData: [0, bottom + 9], grant: [0, bottom + 12], memAddr: [ox, bottom + 1], memWData: [ox, bottom + 4], memWE: [ox, bottom + 7], memReq: [ox, bottom + 10], retire: [ox, bottom + 13] });
     if (imemPort) {
@@ -988,7 +1012,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       drop(net('PC'), 'imem.addr');
       const ins = net('Instr');
       ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
-      pins.instr = [0, bottom + 15];
+      pins.instr = wired ? [40, P('imem', 'data')[1]] : [0, bottom + 15];
       extraPorts.push(bus('instr', 32, 'in'));
       if (c) {
         // C: the port carries the 32-bit window at pc (a window ROM, editor/parts.ts); the expander is inside the core
@@ -1005,6 +1029,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     extraPorts.push(bus('hartid', 32, 'in'), bus('memRData', 32, 'in'), bit('grant', 'in'),
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
+  for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
     id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
