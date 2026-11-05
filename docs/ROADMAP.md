@@ -1277,6 +1277,7 @@ switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaig
 - ✅ g (levels 3): l_fwd (lib/ethlevels.ts fwdPath, campaign/fwdcheck.ts: four routes matched at once, against a model that sums each header again), l_host (campaign/hostbench.ts: ARP and an ICMP echo in assembly, against a model of a router and a far host), codex entries lpm, fastpath, routing, tcp, aimd, bufferbloat, bgp, internetpath.
 - ✅ Extension, `radio` Radio: phys/radio.ts (antennas and arrays, Friis, link budget, a mixer's spectrum, a software radio, multipath, Clarke's fading, MRC), models only, tested against closed forms and simulation; widgets/radio.ts.
 - ✅ Extension, `wifi` Wi-Fi: comm/wifi.ts + lib/wifi.ts (DCF at 1 clock = 1 µs: DIFS, backoff, SIFS, ACK, RTS / CTS, NAV, every output every clock), an air model of who hears whom, Bianchi's closed form as the oracle; rates, airtime and MIMO are models; the traces are modelled and the chapter says so.
+- ✅ Extension, `cellular` Cellular: phys/cellular.ts (hexagonal reuse on a real grid, the resource grid and numerology, schedulers, handover, zero-forcing, mmWave budget), models only, against closed forms and simulation; the chapter says plainly that nothing is measured on a real network.
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
