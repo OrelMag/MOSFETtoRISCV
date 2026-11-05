@@ -4,7 +4,7 @@ import { netlistOf, type ComponentDef, type Netlist } from '../src/sim/types';
 import { reachableDefs } from '../src/lib/resolve';
 import { partnerLines } from '../src/view/partners';
 import { labelOverlaps, routeNetlist, wireOverlaps, type NetTag } from '../src/view/route';
-import { drawnNetlist, MAX_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings } from '../src/view/wirefirst';
+import { drawnNetlist, MAX_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings, wiresThroughParts } from '../src/view/wirefirst';
 import { tick } from './yieldtick';
 
 const hasTags = (nl: Netlist) => nl.nets.some((n) => n.tags === true || (n.tags?.length ?? 0) > 0);
@@ -44,6 +44,33 @@ describe('wires first', () => {
     }
     expect(bad).toEqual([]);
   }, 600_000);
+});
+
+describe('wires first and the parts', () => {
+  // A wire is drawn under a part's body: run through one, it seems to vanish and come back somewhere else.
+  it('never adds a wire through a part', async () => {
+    const bad: string[] = [];
+    for (const def of reachableDefs()) {
+      const nl = netlistOf(def);
+      if (!nl || !hasTags(nl)) continue;
+      const dn = drawnNetlist(def, nl);
+      await tick();
+      if (dn === nl) continue;
+      const hit = wiresThroughParts(dn, routeNetlist(def, dn).nets);
+      const authored = wiresThroughParts(nl, routeNetlist(def, nl).nets);
+      const added = [...hit].filter((i) => !authored.has(i));
+      if (added.length) bad.push(`${def.id}: ${added.map((i) => nl.nets[i].name ?? nl.nets[i].ends[0]).join(', ')}`);
+    }
+    expect(bad).toEqual([]);
+  }, 600_000);
+
+  it('finds a wire through a part, not one that ends on its edge', () => {
+    const nl = netlistOf(DFF_EDGE6)!;
+    const i = nl.instances[0], [x, y] = i.at!;
+    const net = (paths: [number, number][][]) => ({ index: 0, width: 1, tags: [], paths, ends: [], dots: [], label: null, labelRoom: 0 });
+    expect(wiresThroughParts(nl, [net([[[x - 5, y + 1], [x + 20, y + 1]]])]).size).toBe(1);
+    expect(wiresThroughParts(nl, [net([[[x - 5, y + 1], [x, y + 1]]])]).size).toBe(0);
+  });
 });
 
 describe('partner lines', () => {
