@@ -41,9 +41,9 @@ export function sirAt(cells: readonly Cell[], x: number, y: number, n: number): 
   for (const c of cells) if (c !== serving && c.colour === serving.colour) inter += Math.max(Math.hypot(x - c.x, y - c.y), 1e-3) ** -n;
   return { sir: Math.max(best, 1e-3) ** -n / inter, serving };
 }
-/** Mean rate per cell's user at that SIR, by Shannon, and the spectral efficiency once the band is shared among K. */
+/** Mean rate per cell's user at that SIR, by Shannon with no noise and every cell at full load, and the spectral efficiency once the band is shared among K. */
 export function reuseSweep(k: number, n: number, samples = 2000, seed = 1): { sirDb: number[]; edgeDb: number; medianDb: number; perCell: number } {
-  const cells = hexGrid(6, k), centre = cells.find((c) => c.q === 0 && c.r === 0)!, u = rng(seed), sirDb: number[] = [];
+  const cells = hexGrid(8, k), centre = cells.find((c) => c.q === 0 && c.r === 0)!, u = rng(seed), sirDb: number[] = [];
   let sum = 0;
   while (sirDb.length < samples) {
     const x = centre.x + (u() * 2 - 1), y = centre.y + (u() * 2 - 1);
@@ -91,6 +91,7 @@ export function schedule(policy: Policy, meanDb: number[], slots: number, seed: 
 export const harmonic = (n: number): number => { let s = 0; for (let i = 1; i <= n; i++) s += 1 / i; return s; };
 
 // ---- handover ---------------------------------------------------------------------------------------------------------------------
+export const PING_PONG_S = 5;
 export interface HoOpts { sites: number[]; speedMs: number; n: number; shadowDb: number; corrM: number; hystDb: number; tttMs: number; seed: number; lengthM: number; refDbm: number }
 export interface HoResult { rsrp: number[][]; serving: number[]; events: { m: number; to: number }[]; pingPongs: number; outageM: number }
 /** A user driving along a line past base stations: each one's level by log-distance + shadowing correlated over a distance (one filter per site); a handover when a neighbour is hystDb better for tttMs. */
@@ -110,7 +111,9 @@ export function handover(o: HoOpts, stepM = 5): HoResult {
     if (best !== cand) { cand = best; since = 0; } else if (cand >= 0) since += stepM;
     if (cand >= 0 && since >= tttM) {
       const last = events[events.length - 1];
-      if (last && m - last.m < 200 && events.length >= 2 && events[events.length - 2].to === cand) pingPongs++;
+      // back to the cell it had just left, within this long: the last handover's origin is the one before it, or the first cell
+      const before = events.length >= 2 ? events[events.length - 2].to : 0;
+      if (last && (m - last.m) / o.speedMs < PING_PONG_S && before === cand) pingPongs++;
       events.push({ m, to: cand });
       cur = cand; cand = -1; since = 0;
     }

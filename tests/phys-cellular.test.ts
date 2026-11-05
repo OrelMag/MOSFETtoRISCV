@@ -13,8 +13,8 @@ describe('reuse', () => {
     expect(made.has(2)).toBe(false); expect(made.has(5)).toBe(false);
   });
   it('the colouring is real: nearest co-channel cells are exactly √(3K) away, six of them', () => {
-    for (const k of [3, 4, 7, 12]) {
-      const cells = hexGrid(8, k), c0 = cells.find((c) => c.q === 0 && c.r === 0)!;
+    for (const k of CLUSTERS.filter((c) => c > 1)) {
+      const cells = hexGrid(14, k), c0 = cells.find((c) => c.q === 0 && c.r === 0)!;
       const same = cells.filter((c) => c !== c0 && c.colour === c0.colour).map((c) => Math.hypot(c.x, c.y)).sort((a, b) => a - b);
       expect(same[0]).toBeCloseTo(reuseRatio(k), 6);
       expect(same[5]).toBeCloseTo(reuseRatio(k), 6);
@@ -25,7 +25,8 @@ describe('reuse', () => {
   it('at a cell corner the SIR on the grid is near the closed form', () => {
     for (const [k, n] of [[7, 4], [3, 3.5], [12, 4]] as const) {
       const cells = hexGrid(10, k), s = sirAt(cells, 0.0001, 0.9999, n), db = 10 * Math.log10(s.sir), want = sirClosedDb(k, n);
-      expect(Math.abs(db - want)).toBeLessThan(4);
+      expect(db).toBeLessThan(want);
+      expect(want - db).toBeLessThan(3);
     }
   });
   it('K = 7, n = 4 is the textbook 18.7 dB', () => {
@@ -53,6 +54,9 @@ describe('the resource grid', () => {
     expect(slotMs(0)).toBe(1); expect(slotMs(3)).toBe(0.125);
     expect(cpUs(1)).toBeCloseTo(cpUs(0) / 2, 6);
     expect(rbKhz(3)).toBe(1440);
+    // a quarter of the blocks at µ = 2 and four times the symbols a ms: the same elements
+    expect(elementsPerMs(100, 0)).toBe(elementsPerMs(25, 2));
+    expect(gridMbps(100, 4.5, 0.25, 0)).toBeCloseTo(gridMbps(25, 4.5, 0.25, 2), 9);
   });
 });
 
@@ -100,7 +104,22 @@ describe('handover', () => {
     expect(count(0, 0)).toBeGreaterThan(count(3, 0));
     expect(count(3, 0)).toBeGreaterThan(count(6, 0));
     expect(count(0, 0)).toBeGreaterThan(count(0, 640));
+    // at least one handover a road crossing two boundaries, once it can trigger at all
     expect(count(6, 320)).toBeGreaterThanOrEqual(40);
+  });
+  it('the ping-pong count: 0 → 1 → 0 within the window counts; a straight road does not', () => {
+    const r = handover({ ...o, shadowDb: 0, tttMs: 0, hystDb: 3 });
+    expect(r.pingPongs).toBe(0);
+    let tot = 0;
+    for (let s = 0; s < 20; s++) {
+      const q = handover({ ...o, hystDb: 0, tttMs: 0, shadowDb: 6, seed: s });
+      let want = 0, prev = 0;
+      q.events.forEach((e, i) => { const from = i ? q.events[i - 1] : null, back = i >= 2 ? q.events[i - 2].to : 0; if (from && (e.m - from.m) / o.speedMs < 5 && back === e.to) want++; prev = e.to; });
+      void prev;
+      expect(q.pingPongs).toBe(want);
+      tot += want;
+    }
+    expect(tot).toBeGreaterThan(20);
   });
 });
 
@@ -127,7 +146,8 @@ describe('many antennas', () => {
   });
   it('channels turn orthogonal as √M grows', () => {
     const a = channelOverlap(16, 4000, 1), b = channelOverlap(256, 2000, 2);
-    expect(a).toBeCloseTo(Math.sqrt(Math.PI) / (2 * Math.sqrt(16)), 1);
+    expect(a / (Math.sqrt(Math.PI) / (2 * Math.sqrt(16)))).toBeGreaterThan(0.95);
+    expect(a / (Math.sqrt(Math.PI) / (2 * Math.sqrt(16)))).toBeLessThan(1.05);
     expect(a / b).toBeGreaterThan(3.5); expect(a / b).toBeLessThan(4.5);
   });
   it('reach: 20 dB more budget is ten times the distance; matches the dB form', () => {

@@ -37,18 +37,18 @@ export function reuseWidget(): Widget {
   let k = 7, n = 4;
   const map = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const cells = hexGrid(5, k), W = 420, H = 340, sc = 24, cx = W / 2, cy = H / 2;
+    const cells = hexGrid(9, k), W = 420, H = 340, sc = k > 9 ? 14 : 24, cx = W / 2, cy = H / 2;
     const c0 = cells.find((c) => c.q === 0 && c.r === 0)!;
     const hex = (x: number, y: number) => Array.from({ length: 6 }, (_, i) => { const a = (Math.PI / 3) * i + Math.PI / 6; return `${(cx + (x + Math.cos(a)) * sc).toFixed(1)},${(cy + (y + Math.sin(a)) * sc).toFixed(1)}`; }).join(' ');
-    const kids: SVGElement[] = cells.filter((c) => Math.abs(c.x * sc) < W / 2 + sc && Math.abs(c.y * sc) < H / 2 + sc).map((c) => s('polygon', { points: hex(c.x, c.y), class: `cl-hex${c.colour === c0.colour ? ' same' : ''}${c === c0 ? ' mine' : ''}`, style: `--h:${(c.colour * 360) / k}` }));
+    const kids: SVGElement[] = cells.filter((c) => Math.abs(c.x * sc) < W / 2 + sc && Math.abs(c.y * sc) < H / 2 + sc).map((c) => s('polygon', { points: hex(c.x, c.y), class: `cl-hex${c.colour === c0.colour ? ' same' : ''}${c === c0 ? ' mine' : ''}`, style: `--h:${(c.colour * 137) % 360}` }));
     map.replaceChildren(s('svg', { class: 'cl-svg map', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Cells on a hexagonal grid, cluster size ${k}` }, ...kids));
     const r = reuseSweep(k, n, 1000), edge = sirAt(hexGrid(8, k), 0.0001, 0.9999, n).sir;
-    out.replaceChildren(stat('Reuse distance', `${nf(reuseRatio(k), 2)} × R`), stat('Rule at the edge', `${nf(sirClosedDb(k, n), 1)} dB`), stat('Grid at a corner', `${nf(10 * Math.log10(edge), 1)} dB`), stat('Median SIR', `${nf(r.medianDb, 1)} dB`), stat('Worst 5 %', `${nf(r.edgeDb, 1)} dB`), stat('Mean b/s/Hz a cell', nf(r.perCell, 2), 'good'));
+    out.replaceChildren(stat('Reuse distance', `${nf(reuseRatio(k), 2)} × R`), stat('Rule, at the edge', `${nf(sirClosedDb(k, n), 1)} dB`), stat('Grid at a corner', `${nf(10 * Math.log10(edge), 1)} dB`), stat('Median SIR', `${nf(r.medianDb, 1)} dB`), stat('5th percentile', `${nf(r.edgeDb, 1)} dB`), stat('Mean b/s/Hz a cell', nf(r.perCell, 2), 'good'));
   };
   const a = selectOf('Cluster size', CLUSTERS.map((c) => [String(c), `K = ${c}`]), String(k), (v) => { k = Number(v); paint(); });
   const b = slider('Path-loss exponent', 2.5, 5, 0.1, n, (v) => nf(v, 1), (v) => { n = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos cl-w' }, h('div', { class: 'dram-ops' }, a), row(b.el), map, out, h('p', { class: 'sub' }, 'Equal base stations on a regular grid, all co-channel ones transmitting, no noise, no shadowing. SIR at points through the middle cell; rate by Shannon, the band shared across K cells.')) };
+  return { el: h('div', { class: 'widget mos cl-w' }, h('div', { class: 'dram-ops' }, a), row(b.el), map, out, h('p', { class: 'sub' }, 'Equal base stations on a regular grid, all co-channel ones transmitting, no noise, no shadowing. SIR at points through the middle cell; rate by ideal Shannon, the band shared across K cells.')) };
 }
 
 // ---- the grid ----------------------------------------------------------------------------------------------------------------------------
@@ -56,19 +56,19 @@ export function gridWidget(): Widget {
   let mhzI = 3, bits = 4.5, layers = 2, mu = 0;
   const grid = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const rbs = LTE_RBS[mhzI][1], W = 560, H = 150, cols = 14, rows = 12, cw = 26, ch = 9, x0 = 44, y0 = 8;
+    const rbs = mu === 0 ? LTE_RBS[mhzI][1] : Math.floor((LTE_RBS[mhzI][0] * 900) / rbKhz(mu)), W = 560, H = 150, cols = 14, rows = 12, cw = 26, ch = 9, x0 = 44, y0 = 8;
     const kids: SVGElement[] = [];
     for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) kids.push(s('rect', { x: x0 + c * cw, y: y0 + r * ch, width: cw - 1, height: ch - 1, class: c < 2 ? 'cl-re ctl' : (c === 4 || c === 7 || c === 11) && r % 6 === (c % 2 ? 1 : 4) ? 'cl-re ref' : 'cl-re' }));
     kids.push(txt(4, y0 + 56, '1 block', 'cl-t'), txt(x0, y0 + rows * ch + 14, `${nf(slotMs(mu), 3)} ms: 14 symbols of ${nf(66.7 / 2 ** mu, 1)} µs`, 'cl-t'));
-    grid.replaceChildren(s('svg', { class: 'cl-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'One resource block for one slot: control at the start, reference signals scattered, data the rest' }, ...kids));
-    out.replaceChildren(stat('Blocks', String(rbs)), stat('Block width', `${rbKhz(mu)} kHz`), stat('Slot', `${nf(slotMs(mu), 3)} ms`), stat('Cyclic prefix', `${nf(cpUs(mu), 2)} µs`), stat('Peak of this carrier', `${nf(gridMbps(rbs, bits, 0.25, 0, layers), 0)} Mb/s`, 'good'));
+    grid.replaceChildren(s('svg', { class: 'cl-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'One block for 14 symbols, LTE-style and schematic: control at the start, reference signals scattered, data the rest' }, ...kids));
+    out.replaceChildren(stat('Blocks', String(rbs)), stat('Block width', `${rbKhz(mu)} kHz`), stat('Slot', `${nf(slotMs(mu), 3)} ms`), stat('Cyclic prefix', `${nf(cpUs(mu), 2)} µs`), stat('Peak of this carrier', `${nf(gridMbps(rbs, bits, 0.25, mu, layers), 0)} Mb/s`, 'good'));
   };
   const a = selectOf('Channel', LTE_RBS.map(([m], i) => [String(i), `${m} MHz`]), String(mhzI), (v) => { mhzI = Number(v); paint(); });
   const c = selectOf('Modulation and code', [['1', 'QPSK ½'], ['2.67', '16-QAM ⅔'], ['4.5', '64-QAM ¾'], ['6', '256-QAM ¾']], '4.5', (v) => { bits = Number(v); paint(); });
   const d = selectOf('Layers', [['1', '1 stream'], ['2', '2 streams'], ['4', '4 streams']], '2', (v) => { layers = Number(v); paint(); });
   const e = slider('Numerology µ', 0, 3, 1, mu, (v) => `${15 * 2 ** v} kHz`, (v) => { mu = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos cl-w' }, h('div', { class: 'dram-ops' }, a, c, d), row(e.el), grid, out, h('p', { class: 'sub' }, 'LTE\'s channels by their published block counts; peak = elements a millisecond × bits × layers, 25 % taken for control and reference signals (labelled constant). Wider subcarriers take the same share of symbols in less time, for the same rate per hertz.')) };
+  return { el: h('div', { class: 'widget mos cl-w' }, h('div', { class: 'dram-ops' }, a, c, d), row(e.el), grid, out, h('p', { class: 'sub' }, 'A block for 14 symbols, LTE-style and schematic: LTE\'s channels by their published block counts (above µ = 0, what fits in 90 % of the channel); peak = elements a millisecond × bits × layers, 25 % taken for control and reference signals (labelled constant). Wider subcarriers mean fewer blocks and shorter symbols, for about the same rate per hertz.')) };
 }
 
 // ---- schedulers -----------------------------------------------------------------------------------------------------------------------------
@@ -87,12 +87,12 @@ export function schedulerWidget(): Widget {
     means.forEach((m, i) => bars.push(txt(a.x(i + 0.5), a.bottom + 14, `${nf(m, 0)} dB`, 'cl-t', 'middle')));
     plot.replaceChildren(svgOf(a, 'Each user\'s rate under three schedulers', ...a.g, ...bars), h('div', { class: 'cl-key' }, ...['Round robin', 'Proportional fair', 'Max rate'].map((n, j) => h('span', null, h('i', { class: `cl-sw b${j}` }), n))));
     const [rr, pf, mx] = res;
-    out.replaceChildren(stat('Cell, round robin', `${nf(rr.total, 2)} b/s/Hz`), stat('Proportional fair', `${nf(pf.total, 2)}`, 'good'), stat('Max rate', nf(mx.total, 2)), stat('Fairness (Jain)', `${nf(rr.jain, 2)} · ${nf(pf.jain, 2)} · ${nf(mx.jain, 2)}`), stat(`H_${users}`, nf(harmonic(users), 2)));
+    out.replaceChildren(stat('Cell, round robin', `${nf(rr.total, 2)} b/s/Hz`), stat('Proportional fair', `${nf(pf.total, 2)}`, 'good'), stat('Max rate', nf(mx.total, 2)), stat('Rate fairness (Jain)', `${nf(rr.jain, 2)} · ${nf(pf.jain, 2)} · ${nf(mx.jain, 2)}`), far === 0 ? stat(`H_${users}`, nf(harmonic(users), 2)) : h('span'));
   };
   const a = slider('Users', 2, 16, 1, users, (v) => String(v), (v) => { users = v; paint(); });
   const b = slider('Nearest to farthest', 0, 30, 1, far, (v) => `${v} dB`, (v) => { far = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos cl-w' }, row(a.el), row(b.el), plot, out, h('p', { class: 'sub' }, 'Simulated slots, one user served in each; independent Rayleigh fades drawn fresh every slot; rate by Shannon. A model, not a measured cell.')) };
+  return { el: h('div', { class: 'widget mos cl-w' }, row(a.el), row(b.el), plot, out, h('p', { class: 'sub' }, 'Simulated slots, one user served in each; independent Rayleigh fades drawn fresh every slot and known to the scheduler at once; rate by Shannon. An ideal model, not a measured cell.')) };
 }
 
 // ---- handover --------------------------------------------------------------------------------------------------------------------------------
@@ -128,8 +128,9 @@ export function massiveWidget(): Widget {
     for (let d = -90; d <= 90; d += 0.25) { const a = (d * Math.PI) / 180, v = arrayFactor(n, 0.5, steer, d); pts.push([c + R * v * Math.sin(a), c - R * v * Math.cos(a)]); }
     kids.push(poly(pts, 'cl-beam'));
     pattern.replaceChildren(s('svg', { class: 'cl-svg sq', viewBox: `0 0 ${W} ${W}`, role: 'img', 'aria-label': `Beam of ${n} elements at ${steer} degrees` }, ...kids));
-    const z = zfRates(K, Math.max(M, K), rho, 200, 3), ov = channelOverlap(M, 200, 3);
-    out.replaceChildren(stat('Array gain', `${nf(10 * Math.log10(M), 1)} dB`), stat('Each user\'s SNR (closed form)', `${nf(10 * Math.log10(zfMeanSnr(K, Math.max(M, K), rho)), 1)} dB`), stat('Simulated', `${nf(10 * Math.log10(z.meanSnr), 1)} dB`), stat('Cell', `${nf(z.sumRate, 1)} b/s/Hz`, 'good'), stat('Two channels overlap', nf(ov, 3)));
+    if (K > M) { out.replaceChildren(stat('Users', `${K} streams need at least ${K} antennas`, 'bad')); return; }
+    const z = zfRates(K, M, rho, 200, 3), ov = channelOverlap(M, 200, 3);
+    out.replaceChildren(stat('Array gain', `${nf(10 * Math.log10(M), 1)} dB`), stat('Each user\'s SNR (closed form)', `${nf(10 * Math.log10(zfMeanSnr(K, M, rho)), 1)} dB`), stat('Simulated', `${nf(10 * Math.log10(z.meanSnr), 1)} dB`), stat('Cell', `${nf(z.sumRate, 1)} b/s/Hz`, 'good'), stat('Two channels overlap', nf(ov, 2)));
   };
   const a = slider('Antennas', 2, 128, 2, M, (v) => String(v), (v) => { M = v; paint(); });
   const b = slider('Users at once', 1, 8, 1, K, (v) => String(v), (v) => { K = v; paint(); });
@@ -141,7 +142,7 @@ export function massiveWidget(): Widget {
 
 // ---- millimetre waves ------------------------------------------------------------------------------------------------------------------------
 export function mmwaveWidget(): Widget {
-  let eirp = 50, sens = -100, elements = 64;
+  let eirp = 50, sens = -75, elements = 64;
   const body = h('tbody');
   const paint = () => {
     const budget = eirp - sens;
