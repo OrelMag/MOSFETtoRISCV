@@ -38,7 +38,7 @@ import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
-import { elsewhereGroup, elsewhereRows } from './tracemenu';
+import { elsewhereGroup, elsewhereRows, explainGroup } from './tracemenu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -440,7 +440,9 @@ export class Stage {
       inspect: (c) => {
         this.select(c);
         this.showInspector();
+        this.inspector.openAt('info');
       },
+      explain: (c) => this.explain(c),
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
     });
@@ -1106,6 +1108,26 @@ export class Stage {
     this.pins.el.remove();
     this.pins = null;
     if (docked) this.layoutDock();
+  }
+
+  /** The right-click menu's Explain for a part or (null) this level. */
+  private explain(c: string | null): MenuEntry[] {
+    const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
+    if (!def) return [];
+    const at = (section: 'truth' | 'used') => () => {
+      this.select(c);
+      this.showInspector();
+      this.inspector.openAt(section);
+    };
+    const go = (href: string) => {
+      markJump();
+      location.hash = href;
+    };
+    return explainGroup(def, {
+      truth: at('truth'), used: at('used'),
+      openCodex: (id) => go(`#/campaign/codex/${id}`),
+      openChapter: go,
+    });
   }
 
   /** The right-click menu's Take it elsewhere for a part, a wire or (null) this level. */

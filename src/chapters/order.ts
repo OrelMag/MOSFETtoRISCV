@@ -82,6 +82,8 @@ const BOOK = [
   'iir',
   'multirate',
   'cordic',
+  'converters',
+  'adaptive',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

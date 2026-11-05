@@ -314,7 +314,17 @@ def multirate():
 
 
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate}
+
+def adaptive():
+    from scipy.linalg import solve_toeplitz
+    rows = []
+    for r0, p0 in [([1, 0.5, 0.25], [1, 0, 0]), ([2, 0.9, 0.3, 0.1], [0.5, 0.2, -0.1, 0.05]), ([1, 0.8, 0.64, 0.512, 0.4096, 0.32768], [0.9, 0.7, 0.5, 0.3, 0.1, 0.05])]:
+        rows.append({'r': r(r0), 'p': r(p0), 'w': r(solve_toeplitz(r0, p0))})
+    return {'cases': rows}
+
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate, 'adaptive': adaptive}
 
 
 def stamp(data):

@@ -13,6 +13,7 @@ import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
 import type { Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
+import { hasUsage, TRUTH_MAX_BITS } from './truthrule';
 import { techTable } from './techtable';
 
 export interface InspectTarget {
@@ -25,6 +26,8 @@ export interface InspectTarget {
   onOpen?: () => void;
   /** The running scene's switching activity for this part (null: not on the scene's own gate-level simulation). */
   power?: () => LivePower | null;
+  /** Leave "Where it is used" out (a campaign level's parts). */
+  noUsage?: boolean;
 }
 
 type Tab = 'info' | 'truth' | 'hdl';
@@ -97,6 +100,17 @@ export class Inspector {
     this.setFolded(f, false);
     try { localStorage.setItem(FOLD_KEY, f ? 'folded' : 'open'); } catch { /* private window */ }
     (f ? this.rail : this.el.querySelector<HTMLElement>('.insp-fold'))?.focus();
+  }
+
+  /** Open at this section, for the right-click menu: unfolded (the learner's own fold stands next time), scrolled to. "Where it is used" stays open across parts, as when opened by hand. */
+  openAt(section: 'info' | 'truth' | 'used'): void {
+    if (this.folded) this.setFolded(false, false);
+    if (section === 'used') this.usedOpen = true;
+    this.setTab(section === 'truth' ? 'truth' : 'info');
+    if (section === 'used') {
+      const det = [...this.body.querySelectorAll<HTMLElement>('details.insp-used')].find((d) => d.querySelector('summary')?.textContent === 'Where it is used');
+      if (det) peek(det);
+    }
   }
 
   setTab(t: Tab): void {
@@ -194,8 +208,8 @@ export class Inspector {
     if (d.notes) b.append(h('div', { class: 'insp-notes', html: d.notes }));
     if (!d.prim || (d.prim === 'nand' && t.power)) b.append(this.powerSection(t));
     if ((!d.prim || d.prim === 'nand') && d.category !== 'plumbing') b.append(this.techSection(d));
-    // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts).
-    if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd' && d.category !== 'custom') b.append(this.usedSection(d));
+    // Library parts only: a user chip has the sandbox's own "used by" (editor/chips.ts). On a level it would say what the target is made of.
+    if (hasUsage(d) && !t.noUsage) b.append(this.usedSection(d));
   }
 
   /** What the part spends switching: live on the running scene, else on random inputs (measured on first open). */
@@ -308,7 +322,7 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, 'Its signal ports are bidirectional (a switch between two nodes): there is no input → output function to tabulate. Drive one side and watch the other.'));
       return;
     }
-    if (n > 8) {
+    if (n > TRUTH_MAX_BITS) {
       this.body.append(h('p', { class: 'empty' }, `${n} input bits → ${groupDigits(2 ** n)} rows. Too many to list. That is why we describe big circuits with arithmetic, not tables.`));
       return;
     }
