@@ -32,8 +32,8 @@ import { ruleFor, unlockedPartCount } from './graph';
 
 export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.find((c) => c.id === id) ?? COMM_CAPSTONES.find((c) => c.id === id);
 
-/** What the console may place beyond the two levels: the blocks it is not about. */
-const CONSOLE_GIVEN = ['fifo16x8', 'baud12'];
+/** What the console may place: the blocks one level inside the reference, so a learner works from them and cannot place the finished UART. */
+const consoleGiven = (): string[] => (UART_CORE.netlist?.().instances ?? []).map((i) => i.def.id);
 
 export const capstoneChipId = (id: string): string => `u_ch_${id}`;
 
@@ -69,7 +69,7 @@ export function capstoneRule(id: string): LibRule | undefined {
     // tier 4: everything the core levels of acts 5–6 unlocked (the multicycle and predicting cores too), not the finished cores
     else if (id === 'cap_t4') r = tierRule(['pi_core3', 'o_mc', 'o_bpred'], ['rv16_cpu', 'rv16_mc']);
     // the serial console: the transmitter and receiver levels' parts, and the FIFO and the baud generator as given blocks
-    else if (id === 'cap_console') { const t = tierRule(['l_uarttx', 'l_uartrx'], ['uart_full']); r = { ...t, lib: [...new Set([...t.lib, ...CONSOLE_GIVEN])].sort() }; }
+    else if (id === 'cap_console') { const t = tierRule(['l_uarttx', 'l_uartrx'], ['uart_full']); r = { ...t, lib: [...new Set([...t.lib, ...consoleGiven()])].sort() }; }
     if (r) rules.set(id, r);
   }
   return r;
