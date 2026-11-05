@@ -141,6 +141,7 @@ export const NUDGES: Record<string, string> = {
   sp_biquad: 'y needs the x of this clock, so b₀ multiplies the pin; the sum is rounded once, and what circulates is the rounded, clamped word.',
 
   // sp_goertzel: below
+  sp_goertzel: 'Two registers, one remembering the other; the new value is x plus the product of c and the newer, less the older, and a clear that beats all of it.',
 
   // sp_cic: below
   sp_cic: 'Let the sums run past the word and wrap; make every register as wide as the final result needs.',

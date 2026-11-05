@@ -22,6 +22,7 @@ const LISTED = new Set([
   'biquad', 'limitcycle',
 
   // sp_goertzel
+  'goertzel', 'qformat', 'headroom',
 
   // sp_cic
   'cic', 'decimation',
