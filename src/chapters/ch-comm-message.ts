@@ -125,16 +125,16 @@ export const chMessage: Chapter = {
       title: 'Layers',
       body: `
         <p>Nobody writes one program that knows about voltages, routes across the world and which browser tab wants the data. The job is split into <strong>layers</strong>, each using the one below as a service and adding a header of its own: an envelope inside an envelope.</p>
-        <p><span data-ahead="tcp">TCP</span>, in the program's computer, numbers the bytes so nothing is lost or out of order. IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel untouched.</p>
+        <p><span data-ahead="tcp">TCP, in the program's computer, numbers the bytes so nothing is lost or out of order.</span> IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel untouched.</p>
         <p>The layers can change independently, which is the whole point: the same web page crosses Wi-Fi, then fibre, then copper. The price is ${WIRE_OVERHEAD + 40} bytes on every packet, and a frame too short is padded to Ethernet's minimum. On a full frame that is ${(100 * (1 - full.share)).toFixed(1)} %; on a one-byte message it is nearly all of it.</p>
         <div class="try">Slide the data down to 1 byte and read what share of the wire is your data.</div>`,
       widget: layersWidget,
       challenge: {
         kind: 'quiz', question: 'A packet goes from a laptop through a router, the box that joins one network to the next, to a server. Which envelope does the router open and replace?',
-        options: ['The outermost, Ethernet: it belongs to one cable and ends at the router', 'The innermost, the data', '<span data-ahead="tcp">TCP</span>, to check the bytes', 'None: routers only copy bits'],
+        options: ['The outermost, Ethernet: it belongs to one cable and ends at the router', 'The innermost, the data', 'The innermost header, to check the bytes', 'None: routers only copy bits'],
         answer: 0,
-        explain: 'Ethernet names the next machine on this cable, so each hop needs a new one. IP stays, because it names the far end. A router has no reason to read <span data-ahead="tcp">TCP</span>.',
-        why: ['', 'The data is for the program at the far end.', '<span data-ahead="tcp">TCP</span> is between the two end machines; the router in the middle leaves it alone.', 'A router has to read IP to choose the next hop, and writes a new Ethernet header to reach it.'],
+        explain: 'Ethernet names the next machine on this cable, so each hop needs a new one. IP stays, because it names the far end. A router has no reason to read the header inside that.',
+        why: ['', 'The data is for the program at the far end.', 'That one is between the two end machines; the router in the middle leaves it alone.', 'A router has to read IP to choose the next hop, and writes a new Ethernet header to reach it.'],
       },
     },
     {
@@ -158,7 +158,7 @@ export const chMessage: Chapter = {
       body: `
         <p>Put them together for a real case: a ${PHOTO / 1e6} MB photo to a server ${FAR / 1e6 * 1000} km away on a 100 Mb/s line. Pushing: ${fmtTime(pushTime(PHOTO, HOME))}. Travelling: ${fmtTime(travelTime(FAR))}. The whole: ${fmtTime(delayOf(PHOTO, HOME, FAR))}, nearly all of it pushing, so a faster line would help this one.</p>
         <p>Layers add ${(100 * (1 - full.share)).toFixed(0)} %. On the line at once: ${fmtBytes(onTheLine(HOME, FAR))}. Real transfers are slower than the sum: the reply must come back before the sender may send more, and other people are using the same links. Those are the subjects of the chapters on <a href="#/c/tcp/0">TCP</a> and <a href="#/c/path/0">the internet path</a>.</p>
-        <p>From here, the chapters are denser and written for engineers. They start with a telegraph line (chapter ${numOf('telegraph')}) and climb: what a wire really does, clocks that disagree, a UART, the spectrum, modems, codes, Ethernet, a router, <span data-ahead="tcp">TCP</span>.</p>
+        <p>From here, the chapters are denser and written for engineers. They start with a telegraph line (chapter ${numOf('telegraph')}) and climb: what a wire really does, clocks that disagree, a UART, the spectrum, modems, codes, Ethernet, a router, <span data-ahead="tcp">TCP, a reliable stream over packets</span>.</p>
         <div class="try">Set 5 MB at 100 Mb/s and 3000 km, then at 10 Gb/s. Which part did the upgrade remove?</div>`,
       widget: delayWidget,
       challenge: {
