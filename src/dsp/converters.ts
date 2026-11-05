@@ -111,13 +111,13 @@ export function jitterMeasuredDb(f: number, fs: number, sigma: number, seed: num
 
 /** Bits above the input's word that the integrators hold: 2^SD_GUARD full scales. Second order's peak grows as the input nears full scale; at SD_LIMIT it is about 20 full scales, by measurement (sdPeak, tests/dsp-converters.test.ts). */
 export const SD_GUARD = 5;
-/** The largest input share these words hold. Past it the loop's peak outgrows them and they wrap: the limit is the word's, since at a steady full scale the peak has no bound at all. */
+/** The largest tone or steady input these words hold. Past it the loop's peak outgrows them and they wrap: the limit is the word's, since at a steady full scale the peak has no bound at all. A hard step does worse: a square wave of ±0.85 can reach the wrap already, ±0.8 stays under it. */
 export const SD_LIMIT = 0.95;
 
 /**
  * The digital loop, clock by clock, order 1 or 2. u is a signed w-bit word; the output is ±2^(w−1) as a word, so 1 → +, 0 → −. It decides from the last integrator before the edge, then:
  *   y₁ += u − v, and for order 2, y₂ += y₁ (the new one) − v.
- * That gives V = z⁻¹U + (1 − z⁻¹)^N E exactly, where E is what the quantizer added. Registers wrap at w + SD_GUARD and are sized not to, up to SD_LIMIT.
+ * That gives V = z⁻¹U + (1 − z⁻¹)^N E exactly, where E is what the quantizer added. Registers wrap at w + SD_GUARD and are sized not to, for a tone or a steady input up to SD_LIMIT.
  */
 export class SdLoop {
   y1 = 0;

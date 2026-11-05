@@ -114,6 +114,12 @@ describe('the loop', () => {
     expect(sdPeak(2, SD_LIMIT)).toBeGreaterThan(16);
     for (const osr of [64, 256]) expect(sdMeasuredDb(2, osr, 0.8)).toBeGreaterThan(55);
   });
+  it('a hard step is worse than a tone: the square wave the chapter names reaches the wrap', () => {
+    class Wide extends SdLoop { override get word() { return 44; } }
+    const peak = (level: number, per = 1500) => { const m = new Wide(2, 16); let p = 0; for (let i = 0; i < 120000; i++) { m.edge(Math.round(level * m.fs * (i % per < per / 2 ? 1 : -1))); p = Math.max(p, Math.abs(m.y1), Math.abs(m.y2)); } return p / m.fs; };
+    for (const per of [100, 300, 1000, 1500, 3000, 10000]) expect(peak(0.8, per)).toBeLessThan(2 ** SD_GUARD);
+    expect(peak(0.85, 3000)).toBeGreaterThan(2 ** SD_GUARD);
+  });
   it('the measure falls near the top, and nothing wraps to cause it', () => {
     expect(sdMeasuredDb(2, 64, SD_LIMIT)).toBeLessThan(sdMeasuredDb(2, 64, 0.5) - 10);
     expect(sdMeasuredDb(2, 64, SD_LIMIT)).toBeGreaterThan(40);

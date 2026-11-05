@@ -77,6 +77,12 @@ describe('an echo canceller', () => {
     const on = runEcho({ n: N, seed: 3, taps, mu: 0.5, normalized: true, ...talk }), held = runEcho({ n: N, seed: 3, taps, mu: 0.5, normalized: true, ...talk, freeze: true });
     expect(held.erle).toBeGreaterThan(on.erle + 5);
   });
+  it('the figures the chapter gives for talk, on its own run', () => {
+    const talk = { n: 32000, seed: 3, taps, mu: 0.5, normalized: true, talkFrom: 18000, talkTo: 25000 };
+    const on = runEcho(talk), held = runEcho({ ...talk, freeze: true });
+    expect(on.erle).toBeLessThan(12);
+    expect(held.erle).toBeGreaterThan(25);
+  });
   it('the far end is coloured, starts and stops, and the path dies away', () => {
     const x = farEnd(16000, 3);
     expect(x.filter((v) => v === 0).length).toBeGreaterThan(500);
@@ -95,6 +101,11 @@ describe('an equalizer', () => {
     expect(r.openingBefore).toBeLessThan(0);
     expect(r.opening).toBeGreaterThan(1.5);
     expect(r.wrongAfter).toBe(0);
+  });
+  it('training cut short fails on the milder channel, as the Try box says', () => {
+    const run = (train: number) => runEqualizer({ channel: [0.25, 1, 0.45, -0.15], taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train });
+    expect(run(500).wrongAfter).toBeGreaterThan(0);
+    expect(run(1000).wrongAfter).toBe(0);
   });
   it('cannot invert a channel with a zero on the circle', () => {
     const r = runEqualizer({ channel: [0.5, 1, 0.5], taps: 15, delay: 8, mu: 0.05, n: 12000, seed: 5, train: 4000 });

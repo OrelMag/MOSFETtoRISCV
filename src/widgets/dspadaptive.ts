@@ -111,8 +111,8 @@ export function eqWidget(): Widget {
     plot.clear();
     const xs = range(r.y.length).filter((i) => i % 3 === 0);
     plot.layer.append(...xs.map((i) => { const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('cx', String(plot.X(i))); c.setAttribute('cy', String(plot.Y(Math.max(-1.8, Math.min(1.8, r.y[i]))))); c.setAttribute('r', '0.8'); c.style.fill = 'var(--accent)'; return c; }));
-    chips.set(0, minus(num(r.openingBefore, 2)), 'the eye on the line, as a gap between + and − (below 0: shut)');
-    chips.set(1, minus(num(r.opening, 2)), 'after it, once training is over');
+    chips.set(0, minus(r.openingBefore.toFixed(2)), 'the eye on the line, as a gap between + and − (below 0: shut)');
+    chips.set(1, minus(r.opening.toFixed(2)), 'after it, once training is over');
     chips.set(2, String(r.wrongAfter), 'symbols wrong, on its own decisions');
   };
   const sel = h('select', { 'aria-label': 'Channel' }, ...CHANNELS.map((c, i) => h('option', { value: String(i), selected: i === pick }, c.name))) as HTMLSelectElement;

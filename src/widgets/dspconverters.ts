@@ -44,11 +44,11 @@ export function sarWidget(): Widget {
 export function ladderWidget(): Widget {
   const BITS = 8;
   let sigma = 0.01, seed = 5;
-  const plot = plotOf({ W: 640, H: 200, x: [0, 2 ** BITS], y: [-6, 6], yTicks: [-4, -2, 0, 2, 4], xLabel: 'code', yLabel: 'LSB off the line', aria: 'How far each code\'s output sits from the straight line between the ends' });
+  const plot = plotOf({ W: 640, H: 200, x: [0, 2 ** BITS], y: [-8, 8], yTicks: [-8, -4, 0, 4, 8], xLabel: 'code', yLabel: 'LSB off the line', aria: 'How far each code\'s output sits from the straight line between the ends' });
   const chips = mkChips(4);
   const paint = () => {
     const levels = range(2 ** BITS).map((c) => ladderOutput(c, BITS, ladderErrors(BITS, sigma, seed))), q = linearity(levels);
-    plot.clear(); line(plot, range(levels.length), q.inl.map((v) => Math.max(-6, Math.min(6, v))), 'ln-s real');
+    plot.clear(); line(plot, range(levels.length), q.inl.map((v) => Math.max(-8, Math.min(8, v))), 'ln-s real');
     chips.set(0, `${num(q.worstDnl, 2)} LSB`, 'worst single step, against 1 LSB');
     chips.set(1, `${num(q.worstInl, 2)} LSB`, 'worst distance from the line');
     chips.set(2, q.monotonic ? 'yes' : 'no', 'monotonic: does it only ever go up?');
@@ -85,7 +85,7 @@ const SD_N = 1 << 15;
 const LOG_SPAN = 3.7;
 export function sdWidget(): Widget {
   let order: 1 | 2 = 2, osrLog = 6, level = 0.5;
-  const plot = plotOf({ W: 640, H: 220, x: [0, LOG_SPAN], y: [-120, 0], yTicks: [-120, -80, -40, 0], xLabel: 'frequency, cycles a sample', yLabel: 'dB', xFmt: (v) => (v === 0 ? '10⁻⁴' : v === 1 ? '10⁻³' : v === 2 ? '10⁻²' : v === 3 ? '10⁻¹' : ''), aria: 'The spectrum of the one-bit output: a tone, and noise rising with frequency' });
+  const plot = plotOf({ W: 640, H: 220, x: [0, LOG_SPAN], y: [-120, 0], yTicks: [-120, -80, -40, 0], xLabel: 'frequency, cycles a sample', yLabel: 'dB', xFmt: (v) => (v === 1 ? '10⁻³' : v === 2 ? '10⁻²' : v === 3 ? '10⁻¹' : ''), aria: 'The spectrum of the one-bit output: a tone, and noise rising with frequency' });
   const chips = mkChips(4);
   const paint = () => {
     const osr = 2 ** osrLog, k = Math.max(3, Math.round(SD_N / osr / 8)) | 1, x = sdBitstream(order, SD_N, k, level), p = powerSpectrum(x);

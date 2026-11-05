@@ -50,8 +50,8 @@ before relying on them. Add to this as chapters land.
 
 - 6.02 b + 1.76 dB, the R-2R ladder, DNL and INL, flash and SAR: standard results, **unread**, from memory; each is held numerically by `tests/dsp-converters.test.ts` where the chapter gives a number.
 - The jitter limit, −20 log₁₀(2π f σ): **unread**, from memory, and measured here against a sampled sine.
-- The linear model of a sigma-delta loop, π^(2L) / (2L + 1) and (20 L + 10) log₁₀ OSR: **unread**, from memory, and derived in `src/dsp/converters.ts`. The loop's measured error power and its gap from the model are ours. The statement that an analogue integrator clips sooner is general, and no part's figures are quoted.
-- V = z⁻¹U + (1 − z⁻¹)²E, every effective-bit figure, the integrators' peaks and the guard bits: computed, and held by the tests against the gates every clock.
+- The linear model of a sigma-delta loop, π^(2L) / (2L + 1) and (20 L + 10) log₁₀ OSR: **unread**, from memory, and stated in `src/dsp/converters.ts`, not derived there. The loop's measured error power and its gap from the model are ours. The statement that an analogue integrator clips sooner is general, and no part's figures are quoted.
+- V = z⁻¹U + (1 − z⁻¹)²E, every effective-bit figure, the integrators' peaks and the guard bits: computed on the model, and held by the tests there (tones, a steady input and square waves); the gates equal the model every clock at 12 bits on one input shape.
 
 ## Filters that learn (`adaptive`)
 
@@ -63,4 +63,4 @@ before relying on them. Add to this as chapters land.
 ## Sound
 
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
-  are the numbers beside each clip, and the sentence in "Wrap or saturate" about what you will hear has not been confirmed by ear.
+  are the numbers beside each clip, and the sentences in "Wrap or saturate" and in `converters`'s "Many bits from one" (every 64th bit against the CIC) about what you will hear have not been confirmed by ear.
