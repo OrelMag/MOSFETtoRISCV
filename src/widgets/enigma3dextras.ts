@@ -190,7 +190,7 @@ export function printerParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void
   out.push(disk(118, 150, 6, P.black, 8), disk(18, 208, 5, P.black, 7), disk(100, 214, 3.4, P.steel, 6));
   for (const [x, ch] of [[20, '+'], [46, '-']] as const) {
     out.push(box(P.zinc, x - 8, x + 8, 228, 236, fz, fz + 0.6, 0.3));
-    strokeText(out, ch === '-' ? '-' : '.', [x, 232, fz + 0.65], [1, 0, 0], [0, 1, 0], { size: 3.4, color: P.black, weight: 0.8 });
+    strokeText(out, ch, [x, 232, fz + 0.65], [1, 0, 0], [0, 1, 0], { size: 3.4, color: P.black, weight: 0.8 });
   }
   // The paper: down from the reel, past the print wheel, out over the plate with the day's traffic on it.
   const paper = (pts: Vec3[]) => { for (let i = 0; i + 1 < pts.length; i++) { const [a0, b0] = [pts[i], pts[i + 1]]; out.push(rod(P.paper, a0, b0, 0.8)); } };

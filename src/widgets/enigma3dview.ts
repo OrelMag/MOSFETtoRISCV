@@ -190,8 +190,6 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     return b;
   });
 
-  stage.resetBtn.addEventListener('click', () => stage.setView(view.camera));
-
   // ------------------------------------------------------------ settings
   const pick = <T extends string>(label: string, opts: readonly T[], val: T, on: (v: T) => void) => {
     const sel = h('select', { 'aria-label': label }, ...opts.map((o) => h('option', { value: o }, o))) as HTMLSelectElement;

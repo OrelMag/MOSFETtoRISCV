@@ -609,6 +609,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
+  { id: "secret", num: 52.5, title: "Keeping it secret", blurb: "How can strangers share a secret in public? The Enigma M4 in brass and in gates, why it broke and what that taught; then AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
+    { title: "A secret kept in wires" },
+    { title: "A permutation you can read" },
+    { title: "The same machine in gates" },
+    { title: "Why it broke: the flaw in the wiring" },
+    { title: "The Bombe: going round the plugboard" },
+    { title: "What the breaking taught" },
+    { title: "From the Bombe to the stored program" },
+  ] },
   { id: "path", num: 53, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
