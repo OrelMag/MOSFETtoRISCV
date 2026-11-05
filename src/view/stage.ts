@@ -432,9 +432,19 @@ export class Stage {
       editInput: (p, r) => this.editInput(p, r),
       netClick: (i) => this.netClick(i),
       probeOf: (i) => this.probeOf(i),
+      why: (i) => {
+        this.why.setOn(true);
+        this.why.netClick(i);
+      },
+      inspect: (c) => {
+        this.select(c);
+        this.showInspector();
+      },
+      up: () => this.up(),
     });
     this.view.arrange = true;
     this.view.pickable = true;
+    this.view.trace = true;
     this.view.badge = () => {
       const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
       return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;

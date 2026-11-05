@@ -332,7 +332,8 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('contextmenu', onContext, true);
   addEventListener('hashchange', onRoute);
-  (itemsOf(m)[0] ?? m).focus({ preventScroll: true });
+  const rows = itemsOf(m);
+  (rows.find((b) => !b.classList.contains('ctx-val')) ?? rows[0] ?? m).focus({ preventScroll: true });
 }
 
 // ---- the picker: a keyboard's way to a part or a wire, which have no focus of their own --------------------------

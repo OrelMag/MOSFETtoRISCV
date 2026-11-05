@@ -1125,6 +1125,16 @@ svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent);
 .ctx-l small { display: block; color: var(--muted); font-size: 12px; }
 .ctx-ar { color: var(--muted); }
 .ctx-note { margin: 4px 8px; max-width: 260px; font-size: 13px; color: var(--muted); }
+.ctx-head { display: grid; gap: 1px; padding: 5px 9px 6px; min-width: 0; }
+.ctx-head b { font: 600 13px var(--font-mono); overflow-wrap: anywhere; }
+.ctx-head span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ctx-menu button.ctx-val { justify-content: flex-start; gap: 10px; padding-block: 2px; font: 12px var(--font-mono); }
+.ctx-val i { flex: none; width: 24px; font: 600 10px var(--font-ui); font-style: normal; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.ctx-num { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ctx-num.unknown { color: var(--wx); }
+.ctx-copy { flex: none; font: 10px var(--font-ui); color: var(--muted); opacity: 0; }
+.ctx-val:hover .ctx-copy, .ctx-val:focus-visible .ctx-copy { opacity: 1; }
+.jump-ping { animation: ping 0.3s ease-in-out 3; }
 .ctx-nest { display: grid; gap: 1px; margin: 0 0 3px 9px; padding-left: 8px; border-left: 2px solid var(--border); }
 .ctx-pick {
   position: fixed; z-index: 72; top: max(64px, 12dvh); left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: calc(100dvh - 80px);
@@ -2907,6 +2917,7 @@ html[data-busy]::before {
 @media (pointer: coarse) {
   .ctx-menu button, .ctx-pick li button, .ctx-pick input { min-height: 40px; }
   .ctx-menu kbd { display: none; } /* shortcuts mean nothing to a finger */
+  .ctx-copy { opacity: 1; }
   .ctx-menu.sheet {
     left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 76dvh; border-radius: 14px 14px 0 0;
     padding: 8px max(8px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));

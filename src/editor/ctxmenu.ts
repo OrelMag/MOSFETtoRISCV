@@ -17,6 +17,8 @@ import { canPaste } from './tools';
 import { canUnravel, pointersOf } from './unravel';
 import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
+import { factsOf, type NetEnd } from '../view/netfacts';
+import { partHeader, wireHeader, wireRows } from '../view/tracemenu';
 import type { WireDoc } from './model';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
@@ -132,6 +134,47 @@ function entries(ed: Editor, at: Vec): Entry[] {
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];
 }
 
+/** The one chip-level net the selection is (wires, pointers or a pin, all of it on that net: Highlight selects a whole net), or -1. */
+function selectedNet(ed: Editor): number {
+  const s = ed.sel, c = ed.compiled;
+  if (s.parts?.length || s.comments?.length || (s.pins?.length ?? 0) > 1) return -1;
+  const nets = new Set<number | undefined>([
+    ...(s.wires ?? []).map((id) => c.netOfWire.get(id)),
+    ...(s.labels ?? []).map((id) => c.netOfLabel.get(ed.doc.labels.find((l) => l.id === id)?.name ?? '')),
+    ...(s.pins ?? []).map((id) => c.netOfEnd.get(ed.doc.pins.find((p) => p.id === id)?.name ?? '')),
+  ]);
+  const [n] = nets;
+  return nets.size === 1 && n !== undefined ? n : -1;
+}
+
+/** Trace's rows for that net; the header goes into `into`. */
+function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
+  const sim = ed.sim.sim;
+  const flat = () => sim?.design.root.nets?.[idx] ?? [];
+  const f = factsOf(ed.compiled.def, idx);
+  if (!f || !sim) return [];
+  wireHeader(into, f, () => sim.getBits(flat()));
+  const jump = (e: NetEnd) => {
+    const part = e.inst === null ? null : ed.doc.parts.find((p) => p.id === e.inst);
+    const pin = e.inst === null ? ed.doc.pins.find((p) => p.name === e.port) : null;
+    if (!part && !pin) return;
+    ed.select(part ? { parts: [part.id] } : { pins: [pin!.id] });
+    ed.view.centerOn(part ? part.at : pin!.at);
+  };
+  return [...wireRows(f, {
+    // the net's every wire and pointer selected: lit, and ready to colour or delete together
+    highlight: () => ed.select({
+      wires: [...ed.compiled.netOfWire].filter(([, n]) => n === idx).map(([w]) => w),
+      labels: ed.doc.labels.filter((l) => ed.compiled.netOfLabel.get(l.name) === idx).map((l) => l.id),
+    }),
+    jump,
+    whyOff: 'The Why? card is in Look inside and on stages: open this chip’s part, or the chip from a level above.',
+    design: () => sim.design,
+    flat,
+    transistors: ed.compiled.mode === 'switch',
+  }), null];
+}
+
 /** What the chip holds, for a keyboard: parts, pins, pointers and wires have no focus of their own. */
 function pickEntries(ed: Editor): { label: string; note: string; run(): void }[] {
   const go = (sel: Parameters<Editor['select']>[0]) => () => {
@@ -159,6 +202,9 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   const m = h('div', {});
   // Wires and pointers: their nets' colour first (wirehue.ts), one undo step.
   const wires = ed.sel.wires ?? [], labels = ed.sel.labels ?? [];
+  const net = selectedNet(ed);
+  const part = ed.selCount === 1 && ed.sel.parts?.length ? ed.doc.parts.find((p) => p.id === ed.sel.parts![0]) : undefined;
+  const partDef = part && ed.defOf(part);
   if (wires.length || labels.length) {
     const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
     m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
@@ -167,7 +213,9 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
         ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
       }, 'menuitemradio')), h('hr'));
   }
-  showMenu(x, y, entries(ed, at), { into: m, back: ed.view.svg });
+  if (part && partDef) partHeader(m, part.id, partDef);
+  const trace = net >= 0 ? traceOf(ed, net, m) : [];
+  showMenu(x, y, [...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
 }
 
 registerEditorPlugin((ed) => {

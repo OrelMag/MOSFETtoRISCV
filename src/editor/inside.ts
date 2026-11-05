@@ -148,9 +148,15 @@ class InsideView {
       editInput: () => {},
       layoutChanged: () => this.decorate(),
       netClick: (i) => this.why.netClick(i),
+      why: (i) => {
+        this.why.setOn(true);
+        this.why.netClick(i);
+      },
+      up: () => this.up(),
     });
     this.view.radix = ed.view.radix;
     this.view.pickable = true;
+    this.view.trace = true;
     this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
   }
