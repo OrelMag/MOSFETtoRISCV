@@ -32,6 +32,10 @@ export interface ModelStage {
   rgb(token: string): [number, number, number];
   rgba(token: string, alpha: number): RGBA;
   paint(parts: readonly Part[], anchors: readonly Anchor[]): void;
+  /** No WebGL2: the flat fallback is showing (a model may draw fewer facets). */
+  isFlat(): boolean;
+  /** Move the camera (a model's preset views). */
+  setView(v: OrbitView): void;
   destroy(): void;
 }
 
@@ -133,6 +137,14 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
 
   return {
     el, hint, chips, resetBtn, paint,
+    isFlat: () => mode === 'flat',
+    setView(v) {
+      o.camera = v;
+      const c = renderer?.camera;
+      if (!c) { if (mode === 'flat') o.draw(); return; }
+      c.target = [...v.target]; c.yaw = v.yaw; c.pitch = v.pitch; c.dist = v.dist;
+      renderer?.invalidate();
+    },
     rgb: (t) => colors.rgb(t),
     rgba: (t, alpha) => { const [r, g, b] = colors.rgb(t); return [r, g, b, alpha]; },
     destroy() {
