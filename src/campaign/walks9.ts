@@ -37,5 +37,28 @@ export const WALKS9: Record<string, WalkScript> = {
   // ---- sp_cordic
 
   // ---- sp_sd
+  sp_sd: [
+    {
+      title: 'One bit back, as a word',
+      text: 'dec reads the sign of y2 and inverts it: a 1 means y2 is not negative. fb is wiring: +full scale and −full scale differ only in their top bits, which are one and the inverse of the decision. ux widens the input to the sum words.',
+      parts: ['sign', 'dec', 'nb', 'fb', 'ux', 'rb'], codex: ['sigmadelta'],
+      why: 'The one-bit DAC of a digital loop is free: the feedback word is the bit placed in the top bits of a word.',
+      whyNot: { text: 'The decision could come from the sum after the update. That is a different loop, with a delay-free path from the decision into itself through the adders; the one in the chapter decides before the edge so that every output comes from a register.' },
+    },
+    {
+      title: 'Two sums, the same feedback',
+      text: 'a1 adds the input into y1 and s1 takes v away; the result is the next y1. a2 adds the new y1 into y2 and s2 takes the same v away. Both sums are 5 bits wider than the input, so they do not wrap for any tone up to 0.95 of full scale.',
+      parts: ['r1', 'a1', 's1', 'r2', 'a2', 's2'], codex: ['noiseshaping'],
+      ask: {
+        question: 'The input is 0 and y1 = y2 = 0 at power-on. What does the loop do at the first clock?',
+        options: ['It decides 1 (0 counts as not negative), y1 becomes −full scale and y2 becomes −2 full scales', 'Nothing: with u = 0 the sums stay at 0 and the bit is 0', 'It decides 0, since there is nothing to the sum to say 1', 'y1 becomes +full scale: a 1 is added'],
+        answer: 0,
+        explain: 'The decision uses the sign before the edge: 0 is not negative, so the bit is 1 and v = +full scale is taken away from both sums, including the new y1 going into y2.',
+        why: ['', 'The feedback is v, never 0: the loop always takes one full scale away, and gives it back by deciding the other way later.', 'A zero sum is not negative, and the loop counts it as such.', 'A 1 takes full scale away; it does not add it.'],
+      },
+      why: 'Each sum integrates the error between the input and the bit. Two of them make the error twice as small at low frequencies, for twice the adders.',
+      whyNot: { text: 'A single sum is the first-order loop, half the cost and about 20 dB less noise rejection at 64 clocks per sample.' },
+    },
+  ],
 
 };

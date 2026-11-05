@@ -27,6 +27,7 @@ const LISTED = new Set([
   // sp_cordic
 
   // sp_sd
+  'sigmadelta', 'noiseshaping',
 
 ]);
 export const DSP_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_DSP.map((e) => e.id).filter((id) => !LISTED.has(id)));

@@ -146,6 +146,7 @@ export const NUDGES: Record<string, string> = {
   // sp_cordic: below
 
   // sp_sd: below
+  sp_sd: 'The bit is the sign of the last sum before the edge; whatever it says is taken away from both sums at once, as +full scale or −full scale.',
 
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
