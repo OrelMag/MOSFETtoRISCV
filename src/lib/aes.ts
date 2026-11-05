@@ -292,7 +292,7 @@ export function xorBytes(n: number): ComponentDef {
 /** n bytes, two buses, one select: y = s ? b : a. */
 export function byteMux(n: number): ComponentDef {
   return memo(`aes_muxb${n}`, () => {
-    const M = busMux2(8), b = new Builder(8, 10, 2);
+    const M = busMux2(8), b = new Builder(8, 10, 10);
     b.maxH = 300;
     b.pins('a', 'b', 's');
     const w = new Array<number>(n).fill(8);
@@ -398,7 +398,7 @@ export function keyStep(): ComponentDef {
  */
 export function aesCore(): ComponentDef {
   return memo('aes_core', () => {
-    const b = new Builder(8, 16, 6);
+    const b = new Builder(26, 16, 6);
     b.pins('clk', 'rst', 'start', 'key', 'in');
     const ark0 = b.op1(xorBytes(16), ['in', 'key'], 'initial AddRoundKey', 'ark0');
     b.next();
@@ -438,7 +438,7 @@ export function aesCore(): ComponentDef {
       summary: 'One AES round a clock: a 128-bit state register, a round-key register stepped by the key schedule, a round-constant register that doubles each round, a 4-bit round counter. 11 clocks from start to done: one to load block ⊕ key, ten rounds.',
       ports: [clk(), bit('rst', 'in'), bit('start', 'in'), bus('key', 128, 'in'), bus('in', 128, 'in'), bus('out', 128, 'out'), bit('done', 'out')],
       symbol: { kind: 'box', label: 'AES-128' },
-      netlist: () => ({ pins: { clk: [0, 6], rst: [0, 12], start: [0, 18], key: [0, 24], in: [0, 30], out: [b.right, 12], done: [b.right, 24] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { clk: [0, 6], rst: [0, 18], start: [0, 30], key: [0, 42], in: [0, 54], out: [b.right, 12], done: [b.right, 30] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }

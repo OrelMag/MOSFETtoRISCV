@@ -68,12 +68,14 @@ export const smallSig1 = (): ComponentDef => sigma('sha_ssig1', 'σ1', 'σ1(x) =
 /** Ch(e, f, g) = e ? f : g, bit by bit: a 2:1 multiplexer per bit selected by e. */
 export function shaCh(): ComponentDef {
   return memo('sha_ch', () => {
-    const b = new Builder(8, 12, 2);
+    const b = new Builder(8, 12, 8);
     b.maxH = 220;
     b.pins('e', 'f', 'g');
     const se = b.op(splitter(W32), ['e']), sf = b.op(splitter(W32), ['f']), sg = b.op(splitter(W32), ['g']);
     b.next();
+    for (const [sp, nm] of [[se, 'e'], [sf, 'f'], [sg, 'g']] as const) for (let i = 0; i < 32; i++) b.name(`${sp}.o${i}`, `${nm}${i}`, true);
     const o = Array.from({ length: 32 }, (_, i) => b.op1(MUX2, [`${sg}.o${i}`, `${sf}.o${i}`, `${se}.o${i}`]));
+    o.forEach((d, i) => b.name(d, `y${i}`, true));
     b.next();
     b.wire(b.op1(merger(W32), o), 'y');
     return define({
@@ -109,7 +111,9 @@ export function shaMaj(): ComponentDef {
     b.pins('a', 'b', 'c');
     const sa = b.op(splitter(W32), ['a']), sb = b.op(splitter(W32), ['b']), sc = b.op(splitter(W32), ['c']);
     b.next();
+    for (const [sp, nm] of [[sa, 'a'], [sb, 'b'], [sc, 'c']] as const) for (let i = 0; i < 32; i++) b.name(`${sp}.o${i}`, `${nm}${i}`, true);
     const o = Array.from({ length: 32 }, (_, i) => b.op1(maj1(), [`${sa}.o${i}`, `${sb}.o${i}`, `${sc}.o${i}`]));
+    o.forEach((d, i) => b.name(d, `y${i}`, true));
     b.next();
     b.wire(b.op1(merger(W32), o), 'y');
     return define({
@@ -180,7 +184,7 @@ export function shaWnext(): ComponentDef {
 /** n 32-bit lanes, two buses, one select. */
 export function wordMux(n: number): ComponentDef {
   return memo(`sha_muxw${n}`, () => {
-    const M = busMux2(32), b = new Builder(8, 10, 2);
+    const M = busMux2(32), b = new Builder(8, 10, 10);
     b.pins('a', 'b', 's');
     const sa = b.op(splitter(words(n)), ['a']), sb = b.op(splitter(words(n)), ['b']);
     b.next();
@@ -267,7 +271,7 @@ export function shaK(): ComponentDef {
  */
 export function shaCore(): ComponentDef {
   return memo('sha_core', () => {
-    const b = new Builder(8, 16, 6);
+    const b = new Builder(26, 16, 6);
     b.pins('clk', 'rst', 'start', 'h', 'blk');
     const cs = b.op(splitter(ones(6)), ['CNT.q'], '', 'cs');
     const last = b.op1(andN(6), outOf(cs, 6), 'round 63', 'last');
@@ -306,7 +310,7 @@ export function shaCore(): ComponentDef {
       summary: 'One SHA-256 round a clock: the working variables a..h, the chaining value, the 16-word schedule register, a 6-bit round counter and the constants in gates. 65 clocks from start to done; out = h + a..h.',
       ports: [clk(), bit('rst', 'in'), bit('start', 'in'), bus('h', 256, 'in'), bus('blk', 512, 'in'), bus('out', 256, 'out'), bit('done', 'out')],
       symbol: { kind: 'box', label: 'SHA-256' },
-      netlist: () => ({ pins: { clk: [0, 6], rst: [0, 12], start: [0, 18], h: [0, 24], blk: [0, 30], out: [b.right, 12], done: [b.right, 24] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { clk: [0, 6], rst: [0, 18], start: [0, 30], h: [0, 42], blk: [0, 54], out: [b.right, 12], done: [b.right, 30] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
