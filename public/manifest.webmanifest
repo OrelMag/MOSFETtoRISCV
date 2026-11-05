@@ -1,7 +1,7 @@
 {
-  "name": "MOSFET → RISC-V",
-  "short_name": "MOSFET→RISC-V",
-  "description": "An interactive journey from a single transistor to a RISC-V processor.",
+  "name": "From Switch to RISC-V and Beyond",
+  "short_name": "Switch to RISC-V",
+  "description": "An interactive journey from a single MOSFET to a RISC-V processor and beyond.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

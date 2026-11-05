@@ -1,6 +1,6 @@
-# MOSFET → RISC-V
+# From Switch to RISC-V and Beyond
 
-An interactive journey from a single transistor to a multi-core RISC-V processor laid out on
+An interactive journey from a single MOSFET to a multi-core RISC-V processor laid out on
 silicon, and on to a GPU, a memory system, how computers talk from the telegraph to the data centre,
 Doom and a breadboard computer, as a static website.
 **[Open it →](https://orelmag.github.io/MOSFETtoRISCV/)**

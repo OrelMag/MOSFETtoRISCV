@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- The link preview, public/og.png (1200 × 630). To make it again:
+     chrome --headless=new --hide-scrollbars --window-size=1200,630 --virtual-time-budget=5000 \
+       --force-device-scale-factor=1 --screenshot=public/og.png scripts/og.html -->
+<html lang="en"><head><meta charset="utf-8"><title>Link preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; background: #0f1117; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: space-between; padding: 0 64px; box-sizing: border-box; font-family: Inter, sans-serif; color: #f1f3f9; }
+  .eyebrow { font: 500 19px 'JetBrains Mono', monospace; letter-spacing: .14em; color: #9d8cff; text-transform: uppercase; margin-bottom: 18px; }
+  h1 { font-size: 66px; font-weight: 800; line-height: 1.07; letter-spacing: -.03em; margin: 0 0 22px; width: 650px; }
+  .g { background: linear-gradient(90deg, #7c6bff, #f0691f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p { font-size: 28px; line-height: 1.36; color: #aab2c5; margin: 0; width: 650px; }
+  .ladder { display: flex; flex-direction: column; gap: 11px; width: 360px; flex: none; }
+  .r { display: flex; justify-content: space-between; align-items: center; height: 50px; padding: 0 16px; box-sizing: border-box; border: 1px solid #2a2f3e; border-radius: 12px; background: #171a24; font-size: 21px; font-weight: 600; white-space: nowrap; }
+  .r small { font: 400 15px 'JetBrains Mono', monospace; color: #8a93a8; }
+  .r.on { background: #271f52; border-color: #6d5cf0; }
+  .r.on-2 { background: #2a1e1a; border-color: #b4562a; }
+</style></head><body>
+  <div>
+    <div class="eyebrow">An interactive journey</div>
+    <h1>From a <span class="g">switch</span> to <span class="g">RISC-V</span> and beyond.</h1>
+    <p>Every box on screen opens. Keep going down until you reach silicon.</p>
+  </div>
+  <div class="ladder">
+    <div class="r on-2">Networks, Wi-Fi, TLS <small>beyond</small></div>
+    <div class="r on-2">A GPU, DRAM, Doom <small>beyond</small></div>
+    <div class="r">Multi-core on silicon <small>CPUs</small></div>
+    <div class="r">Pipelined CPU <small>hazards</small></div>
+    <div class="r">Single-cycle CPU <small>ALU</small></div>
+    <div class="r">Registers, adders <small>flip-flops</small></div>
+    <div class="r">Logic gates <small>NAND</small></div>
+    <div class="r on">MOSFET <small>a switch</small></div>
+  </div>
+</body></html>
