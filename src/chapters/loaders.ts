@@ -61,7 +61,11 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "serial": () => import('./ch-comm-serial').then((m) => m.chSerial),
   "glass": () => import('./ch-comm-glass').then((m) => m.chGlass),
   "errors": () => import('./ch-comm-errors').then((m) => m.chErrors),
+<<<<<<< HEAD
   "codes": () => import('./ch-comm-codes').then((m) => m.chCodes),
+=======
+  "pcie": () => import('./ch-comm-pcie').then((m) => m.chPcie),
+>>>>>>> origin/feat/comms-pcie
   "ethernet": () => import('./ch-comm-ethernet').then((m) => m.chEthernet),
   "switch": () => import('./ch-comm-switch').then((m) => m.chSwitch),
   "network": () => import('./ch-comm-net').then((m) => m.chNetwork),

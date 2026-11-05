@@ -60,7 +60,11 @@ const BOOK = [
   'serial',
   'glass',
   'errors',
+<<<<<<< HEAD
   'codes',
+=======
+  'pcie',
+>>>>>>> origin/feat/comms-pcie
   'ethernet',
   'switch',
   'network',
