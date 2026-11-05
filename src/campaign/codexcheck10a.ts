@@ -38,10 +38,10 @@ export const CHECK10A: Record<string, Quiz[]> = {
   decibel: [
     {
       question: 'A cable leaves one part in a million of the power. What is its loss?',
-      options: ['60 dB: 10 log₁₀ of a million', '6 dB: the base-ten log of a million', '600 dB: ten times the number of zeros', '1000 dB: a million divided by a thousand'],
+      options: ['60 dB: 10 log₁₀ of a million', '6 dB: the base-ten log of a million', '120 dB: 20 log₁₀ of a million', '30 dB: 3 dB for every factor of ten'],
       answer: 0,
       explain: 'log₁₀ 10⁶ is 6, and the decibel takes ten times that. A chain of such losses and gains then adds.',
-      why: ['', 'That omits the factor of 10; a decibel is a tenth of a bel, so ten times the logarithm.', 'The logarithm already counts the zeros; multiplying by their number again has no meaning.', 'A decibel is a logarithm of a ratio, so no arithmetic on the ratio itself gives it.'],
+      why: ['', 'That omits the factor of 10; a decibel is a tenth of a bel, so ten times the logarithm.', 'The factor of 20 is for a ratio of amplitudes; this is a ratio of powers.', '3 dB is a doubling; a factor of ten is 10 dB.'],
     },
     {
       question: 'Two independent signals of 0 dBm each are combined. What is the total power?',
@@ -134,10 +134,10 @@ export const CHECK10A: Record<string, Quiz[]> = {
   matchedfilter: [
     {
       question: 'A rectangular pulse of 64 samples is read by averaging all of them instead of by looking at one. How much SNR does that gain?',
-      options: ['About 18 dB: 10 log₁₀ 64, signal in step and noise in power', 'About 36 dB: 20 log₁₀ 64, as for an amplitude ratio', 'About 3 dB: no more than a doubling can be had', 'None, since the pulse is the same height as before'],
+      options: ['About 18 dB: 10 log₁₀ 64, signal in step and noise in power', 'About 36 dB: 20 log₁₀ 64, as for an amplitude ratio', 'About 9 dB: 10 log₁₀ 8, the noise falling by √64', 'None, since the pulse is the same height as before'],
       answer: 0,
       explain: 'The signal grows 64 times, the independent noise only 8 times, so the SNR rises 64 times in power. For a rectangle averaging is the matched filter.',
-      why: ['', 'That treats the noise as adding in step as well; it adds as the square root of the count.', 'There is no such ceiling; the gain grows with the energy collected.', 'The height is unchanged, but the noise on the average is much smaller.'],
+      why: ['', 'The factor of 20 is for a ratio of amplitudes; an SNR is a ratio of powers.', 'A fall of 8 in the noise\'s amplitude is a fall of 64 in its power, and the SNR is a ratio of powers.', 'The height is unchanged, but the noise on the average is much smaller.'],
     },
     {
       question: 'Which weights give the best SNR for a known pulse in white noise?',

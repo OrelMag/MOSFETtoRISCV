@@ -55,10 +55,10 @@ export const CHECK10B: Record<string, Quiz[]> = {
   coherent: [
     {
       question: 'Why do the linewidths of the two lasers matter to a coherent receiver?',
-      options: ['Their phase random walk turns the constellation into a ring until a tracker follows it', 'They set how many polarizations the fibre carries', 'They set the sample rate the ADCs need', 'A wider line raises the photodiodes\' loss'],
+      options: ['Their phase random walk turns the constellation into a ring until a tracker follows it', 'They set how many polarizations the fibre carries', 'They set the sample rate the ADCs need', 'A wider line needs more photodiode bandwidth to pass it'],
       answer: 0,
       explain: 'The transmit and local lasers wander in phase relative to each other. Raising each QPSK symbol to the fourth power removes its data and leaves four times the phase, which the tracker follows.',
-      why: ['', 'There are two polarizations whatever the laser; the receiver reads I and Q in both.', 'The sample rate follows the symbol rate (64 GS/s for 32 GBd), not the linewidth.', 'Photodiode loss has nothing to do with the line; the effect is on phase.'],
+      why: ['', 'There are two polarizations whatever the laser; the receiver reads I and Q in both.', 'The sample rate follows the symbol rate (64 GS/s for 32 GBd), not the linewidth.', 'Linewidths of MHz are tiny beside the GHz a photodiode passes; the harm is to the phase.'],
     },
     {
       question: 'How many photodiodes read the I and Q of both polarizations in the chapter\'s coherent receiver?',
@@ -110,7 +110,7 @@ export const CHECK10B: Record<string, Quiz[]> = {
     },
     {
       question: 'Two receive antennas with maximal-ratio combining need 11.1 dB for a BER of 10⁻³ in Rayleigh fading, one needs 24.0 dB. What changed?',
-      options: ['The slope: an error now needs both branches in a fade together', 'The noise floor fell by 13 dB', 'The array gain of two antennas, 3 dB', 'The fading disappeared'],
+      options: ['The slope: an error now needs both branches in a fade together', 'The noise floor fell by 13 dB, the second antenna cancelling noise', 'The array gain of two antennas, which collect twice the energy', 'The fading was averaged away, leaving a channel with no fades'],
       answer: 0,
       explain: 'With L independent branches the BER falls as 1 / SNR<sup>L</sup>, so the curve is steeper and the first extra antenna is worth 13 dB, more than an amplifier you could afford.',
       why: ['', 'Noise is the same at each antenna; combining changes how the fades add up.', 'Array gain is only 3 dB; the diversity gain is the slope, and it is far larger.', 'Each branch still fades; they are just unlikely to fade together.'],
@@ -119,14 +119,14 @@ export const CHECK10B: Record<string, Quiz[]> = {
   csmaca: [
     {
       question: 'SIFS is 16 µs and DIFS 34 µs. Why is SIFS shorter?',
-      options: ['An ACK takes the air before anyone can start a frame', 'It makes the ACK faster at low data rates', 'It equals the slot time', 'It lets the random backoff finish first'],
+      options: ['An ACK takes the air before anyone can start a frame', 'It makes the ACK faster at low data rates', 'A receiver decodes an ACK more quickly than a data frame', 'It lets the random backoff finish first'],
       answer: 0,
       explain: 'Wi-Fi frames carry no priorities; priority is time. DIFS = SIFS + 2 slots, so a station waiting for DIFS always loses to the ACK a receiver sends after SIFS.',
-      why: ['', 'The ACK lasts as long as it lasts at its rate; SIFS is a gap before it.', 'The slot is 9 µs; DIFS is SIFS plus two of them.', 'The backoff counts down after DIFS, so it follows the gap rather than precedes it.'],
+      why: ['', 'The ACK lasts as long as it lasts at its rate; SIFS is a gap before it.', 'The gap comes before the ACK and is the same for any frame; it sets priority.', 'The backoff counts down after DIFS, so it follows the gap rather than precedes it.'],
     },
     {
       question: 'Why does a Wi-Fi sender learn about a collision only from a missing ACK?',
-      options: ['Its own transmission swamps its receiver, so it cannot listen while sending', 'The standard forbids listening while sending', 'The collision ends before carrier sense can run', 'The access point jams the channel on a collision'],
+      options: ['Its own transmission swamps its receiver', 'The standard forbids listening while sending', 'The collision ends before carrier sense can run', 'The access point jams the channel on a collision'],
       answer: 0,
       explain: 'At 20 dBm its own signal is far above anything arriving; a neighbour 20 m away at 5.5 GHz is some 73 dB lower in free space. The ACK is the only feedback.',
       why: ['', 'Nothing forbids it; full-duplex radio is researched, and hard.', 'The sender cannot hear anything while it sends, whatever the timing.', 'Nothing jams; no ACK arrives, and that absence is the signal.'],
@@ -141,11 +141,11 @@ export const CHECK10B: Record<string, Quiz[]> = {
       why: ['', 'Two RTSs can still overlap; only the cost of the collision shrinks.', 'The access point hears nothing it can decode when two RTSs overlap, and sends no CTS.', 'The data frame follows only a successful RTS and CTS, so a failed RTS wastes only itself.'],
     },
     {
-      question: 'Which stations set their NAV in a hidden-terminal cell, and how does the hidden one hear what it needs?',
-      options: ['The hidden station, from the access point\'s CTS', 'The sender\'s neighbours, from its RTS only', 'Every station in the building, from a broadcast', 'The access point, to ignore later frames'],
+      question: 'How does a hidden station learn that an exchange is under way, so that it can set its NAV?',
+      options: ['From the access point\'s CTS', 'From the sender\'s RTS', 'From a beacon the access point sends to every station', 'From carrier sense on the sender\'s frame'],
       answer: 0,
       explain: 'The hidden station cannot hear the sender\'s RTS, but both stations are in range of the access point, so it decodes the CTS, whose duration field covers the exchange.',
-      why: ['', 'The hidden station is by definition out of the sender\'s range, so the RTS does not reach it.', 'Only stations that decode an RTS or a CTS set it; nothing is broadcast to everyone.', 'The NAV is a timer in the stations that must stay quiet; the access point is the receiver.'],
+      why: ['', 'The hidden station is by definition out of the sender\'s range, so the RTS does not reach it.', 'Beacons announce the network, not each exchange.', 'Carrier sense cannot hear the sender: that is what hidden means.'],
     },
   ],
   rateadapt: [
@@ -174,10 +174,10 @@ export const CHECK10B: Record<string, Quiz[]> = {
     },
     {
       question: 'On the chapter\'s model reuse 1 carries 2.67 b/s/Hz a cell and K = 7 only 1.09, though their median SIR is 4 dB against 21. What explains it?',
-      options: ['K = 7 gives each cell a seventh of the band, and rate is only logarithmic in SIR', 'Reuse 1 has interference-free cell edges', 'The model leaves bandwidth out of the rate', 'Seven cells share one cell\'s transmit power'],
+      options: ['K = 7 gives each cell a seventh of the band, and rate is only logarithmic in SIR', 'Reuse 1 gives each user a larger share of the cell\'s time', 'The model leaves bandwidth out of the rate', 'Seven cells share one cell\'s transmit power'],
       answer: 0,
       explain: 'Rate is bandwidth times log(1 + SIR). A seventh of the band costs more than the extra SIR gains, and strong coding lives with low SIR; edge users are then helped by scheduling.',
-      why: ['', 'Reuse 1 has the worst edge SIR of all; it wins anyway.', 'Bandwidth is the point: each cell gets 1 / K of the band in the model.', 'Power is per transmitter and unrelated to the pattern.'],
+      why: ['', 'Time is shared alike in both; the difference is the band.', 'Bandwidth is the point: each cell gets 1 / K of the band in the model.', 'Power is per transmitter and unrelated to the pattern.'],
     },
   ],
   handover: [
@@ -190,9 +190,9 @@ export const CHECK10B: Record<string, Quiz[]> = {
     },
     {
       question: 'The time to trigger is fixed at 320 ms and the phone goes faster. What changes?',
-      options: ['It covers more road before the trigger fires, so fast users get shorter timers', 'It covers the same road, since the trigger counts time', 'It covers less road, since the signal changes faster', 'Nothing: the trigger affects the rate only'],
+      options: ['It covers more road before the trigger fires', 'It covers the same road, since the trigger counts time', 'It covers less road, since the signal changes faster', 'Nothing: the trigger affects the rate only'],
       answer: 0,
-      explain: 'A time is a distance times speed: the same 320 ms is twice the road at twice the speed, so the phone sits longer on a cell that is getting weaker. Networks shrink both timers for fast users.',
+      explain: 'A distance is a time times a speed: the same 320 ms is twice the road at twice the speed, so the phone sits longer on a cell that is getting weaker. Networks shrink both timers for fast users.',
       why: ['', 'The time is the same and the road it covers is not.', 'The signal\'s change per metre is the same; the phone simply moves further in the time.', 'The trigger decides when to hand over, which decides the cell the phone is on.'],
     },
   ],

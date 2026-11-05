@@ -246,6 +246,7 @@ describe('group C codex entries: secret', () => {
     const { client_hello, key_agreement, certificate_verify, ...rest } = hs.phases;
     expect(Object.keys(rest)).toHaveLength(5);
     expect(Object.values(rest).reduce((s, v) => s + v, 0)).toBe(1251248);
+    expect(hs.cycles - client_hello - key_agreement - certificate_verify - 1251248).toBe(96);
     expect(TLS.primitives['rsa-pss-sha256 verify, 1024-bit key (RFC 8448)']).toBe(10310080);
     expect(TLS.primitives['rsa-pss-sha256 verify, 2048-bit key']).toBe(40767022);
     expect(TLS.lines.total.python).toBe(1314);

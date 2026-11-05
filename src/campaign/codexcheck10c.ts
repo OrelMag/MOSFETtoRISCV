@@ -54,10 +54,10 @@ export const CHECK10C: Record<string, Quiz[]> = {
   linktraining: [
     {
       question: 'Why must a port see eight TS1s or TS2s in a row, not just one?',
-      options: ['A single one could be a noise burst that happens to look like an ordered set', 'The receiver needs eight symbols in a row to recover the lane\'s clock', 'Each ordered set carries only one bit of the lane number, so eight are needed', 'A link has at most eight lanes, and each lane sends one set'],
+      options: ['A single one could be a noise burst that happens to look like an ordered set', 'The receiver needs eight symbols in a row to recover the lane\'s clock', 'Each ordered set carries only one bit of the lane number, so eight are needed', 'Eight sets let the ports average out the skew between lanes'],
       answer: 0,
       explain: 'Requiring a run of them is the filter: a noise burst is unlikely to repeat as eight valid ordered sets. Clock and symbol boundaries come from the line code and the comma, not from this count.',
-      why: ['', 'Clock recovery works from the data\'s edges, as in a SerDes, long before this count.', 'Ordered sets are 16 symbols with fixed fields; the count is a confidence test, not a way to send a number.', 'Links are ×1, ×4, ×16 and so on; the eight is a guard, not a lane count.'],
+      why: ['', 'Clock recovery works from the data\'s edges, as in a SerDes, long before this count.', 'Ordered sets are 16 symbols with fixed fields; the count is a confidence test, not a way to send a number.', 'Deskew uses the markers within a set; the eight is a guard against noise.'],
     },
     {
       question: 'Both ports have reached L0. What has not happened yet?',
@@ -70,10 +70,10 @@ export const CHECK10C: Record<string, Quiz[]> = {
   usbenum: [
     {
       question: 'Why does the host read only 8 bytes of the device descriptor first?',
-      options: ['It does not know the packet size yet, and the first 8 bytes carry it', 'A device at address 0 can send no more than 8 bytes at a time', 'The descriptor is only 8 bytes long and the rest is padding', 'Eight bytes is the most the packet\'s CRC can protect'],
+      options: ['It does not know the packet size yet, and the first 8 bytes carry it', 'A device at address 0 can send no more than 8 bytes at a time', 'Those 8 bytes are all it needs to give the device an address', 'Eight bytes is the most the packet\'s CRC can protect'],
       answer: 0,
       explain: 'Packet size is a property of the device, so the host asks for the one thing it needs, the maximum packet size, at address 0, resets, and asks for the full 18 bytes after SET_ADDRESS in packets of that size.',
-      why: ['', 'It is the device\'s own maximum packet size that limits it, and the host does not yet know it.', 'The device descriptor is 18 bytes.', 'CRC16 on data packets is not what limits this.'],
+      why: ['', 'It is the device\'s own maximum packet size that limits it, and the host does not yet know it.', 'It gives an address whatever it read; what it needs here is the packet size. The whole descriptor is 18 bytes.', 'CRC16 on data packets is not what limits this.'],
     },
     {
       question: 'The host\'s last ACK of SET_ADDRESS is lost. What follows?',
@@ -86,33 +86,33 @@ export const CHECK10C: Record<string, Quiz[]> = {
   aes: [
     {
       question: 'What would an attacker gain if the key were not XORed in before round 1?',
-      options: ['The first round\'s steps are keyless, so they could be undone without the key', 'The first round would run with the last round key, so the order could be reversed', 'The state would be one column short, so the first block would be wasted', 'MixColumns would skip its first column, so a leak would appear there'],
+      options: ['The first round\'s steps are keyless, so they could be undone without the key', 'The first round would run with the last round key, so the order could be reversed', 'Only the last round key would then count, so a shorter search would find it', 'The key schedule would start a round late, so the round keys would be related'],
       answer: 0,
       explain: 'SubBytes, ShiftRows and MixColumns use no key. Without an initial AddRoundKey, an attacker who knew the output of round 1 could simply run those steps backwards and the round would add no strength.',
-      why: ['', 'Round keys come from the schedule in order; nothing swaps them.', 'The state is always 16 bytes; the key XOR does not change its size.', 'MixColumns treats all four columns alike.'],
+      why: ['', 'Round keys come from the schedule in order; nothing swaps them.', 'Every later round key is still used; what is lost is the protection of the first steps.', 'The schedule runs the same either way; the weakness is the keyless steps.'],
     },
     {
       question: 'Why does the S-box in the chapter\'s gates need no ROM?',
-      options: ['It is the inverse in GF(2⁸) plus an affine map, built as a tower of smaller fields', 'Its 256 entries are produced by a counter feeding a tree of XOR gates', 'ShiftRows already contains the substitution, so SubBytes is only wires', 'It is replaced by a MixColumns block of 464 NANDs repeated sixteen times'],
+      options: ['It is the inverse in GF(2⁸) plus an affine map, built as a tower of smaller fields', 'Its 256 entries are produced by a counter feeding a tree of XOR gates', 'ShiftRows already contains the substitution, so SubBytes is only wires', 'It is a linear map over GF(2), which XOR gates alone can compute'],
       answer: 0,
       explain: 'The S-box is not arbitrary: splitting GF(256) into GF(16) and GF(4) turns the inverse into a few multiplications and an inverse in a smaller field, down to NANDs. The whole S-box is 584 NANDs and reads no memory.',
-      why: ['', 'There is no counter; the output is computed from the input byte.', 'ShiftRows is wires only and moves bytes; it substitutes nothing.', 'MixColumns is linear; SubBytes is the non-linear step and is where most of the cost goes.'],
+      why: ['', 'There is no counter; the output is computed from the input byte.', 'ShiftRows is wires only and moves bytes; it substitutes nothing.', 'A linear S-box would make the whole cipher linear and easy to solve; the inverse is what breaks that.'],
     },
   ],
   sha256: [
     {
       question: 'Why can anyone recompute SHA-256\'s starting values and round constants?',
-      options: ['They are fractional bits of square and cube roots of primes, so nothing is hidden', 'They are derived from the digest of the message being hashed, so each run has its own', 'They are random bits that the standard publishes and nobody can check', 'They are the shared key that sender and receiver agreed on beforehand'],
+      options: ['They are fractional bits of square and cube roots of primes, so nothing is hidden', 'They are derived from the digest of the message being hashed, so each run has its own', 'They are random bits that the standard publishes and nobody can check', 'They come from a fixed seed in a random generator the standard names'],
       answer: 0,
       explain: 'Constants taken from roots of primes leave no room for a designer to hide a weakness in them, which is what nothing-up-my-sleeve means. A hash has no key, and the constants are the same for every message.',
-      why: ['', 'They are fixed in the standard; they do not depend on the input.', 'Because they are derived, anyone can check them, and the chapter\'s code does.', 'A hash has no key at all; anyone can compute it.'],
+      why: ['', 'They are fixed in the standard; they do not depend on the input.', 'Because they are derived, anyone can check them, and the chapter\'s code does.', 'No generator is involved: they are roots of primes, which is the point of the choice.'],
     },
     {
       question: 'One bit of the input is flipped. About how many of the 256 digest bits change?',
-      options: ['About 128, as many as differ between two unrelated digests', 'Exactly one, the digest bit that corresponds to the flipped input bit', 'About 8, one for each byte of the padded block that was touched', 'None, because the padding absorbs a change of one bit'],
+      options: ['About 128, as many as differ between two unrelated digests', 'Exactly one, the digest bit that corresponds to the flipped input bit', 'About 32, a few bits in each of the eight state words', 'All 256, since any change flips the whole digest'],
       answer: 0,
       explain: 'Addition carries and the mixing rounds spread a change over the whole state, so about half the bits move. "abc" against "abb" differs in 124 of 256, and nearness of the inputs tells nothing about the digests.',
-      why: ['', 'That would make a digest predictable from the input and a search for collisions easy.', 'There is no such per-byte link; every input bit reaches every part of the state.', 'Padding is appended after the message and does not hide any of its bits.'],
+      why: ['', 'That would make a digest predictable from the input and a search for collisions easy.', 'After 64 rounds of mixing each digest bit flips with chance one half, so half of the 256.', 'A digest flipped entirely would be the old one\'s complement, as predictable as no change.'],
     },
   ],
   blockmode: [
@@ -157,10 +157,10 @@ export const CHECK10C: Record<string, Quiz[]> = {
     },
     {
       question: 'A year later the server\'s long-term signing key is stolen. What does that open?',
-      options: ['Nothing recorded earlier, since the session keys came only from the exchange and were discarded', 'Every recorded session, because the key signed the handshake of each', 'Only the sessions that used the same certificate as the stolen key', 'The ClientHello of earlier sessions, which was sent encrypted under it'],
+      options: ['Nothing recorded earlier, since the session keys came only from the exchange and were discarded', 'Every recorded session, because the key signed the handshake of each', 'Only the sessions that used the same certificate as the stolen key', 'The certificates of earlier sessions, the one thing encrypted under it'],
       answer: 0,
       explain: 'The signing key proves who the server is; it never derives a session key. With fresh keys per session this is forward secrecy, unlike a captured key list that opened everything sent under it.',
-      why: ['', 'A signature authenticates; it is not a key that decrypts the traffic.', 'The certificate only names the key; the traffic was not encrypted under it.', 'The ClientHello goes in the clear, and nothing in it depends on the signing key.'],
+      why: ['', 'A signature authenticates; it is not a key that decrypts the traffic.', 'The certificate only names the key; the traffic was not encrypted under it.', 'Certificates go under keys from the exchange; a signing key encrypts nothing.'],
     },
   ],
 };

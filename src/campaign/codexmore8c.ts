@@ -235,7 +235,7 @@ AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre
       body: `<pre>cycles on the RV32IM model (1 per instruction):
 client_hello (X25519 share)   34,598,182     key_agreement (X25519)  35,089,754
 certificate_verify (RSA-PSS)  10,338,413     the other five phases    1,251,248
-total 81,277,693, of which the two X25519 runs 69,139,884 (85 %)
+total 81,277,693 (96 outside any phase), of which the two X25519 runs 69,139,884 (85 %)
 RSA verify: 10,310,080 cycles with RFC 8448's 1024-bit key, 40,767,022 with a 2048-bit key
 the client: 1,314 lines of Python, 7,428 words of RV32IM
 bytes: ClientHello 201, sent 259, received 774</pre>RFC 8448's 1024-bit RSA is far too short to trust today; real servers use ECDSA, Ed25519 or RSA of 2048 bits or more.`,
