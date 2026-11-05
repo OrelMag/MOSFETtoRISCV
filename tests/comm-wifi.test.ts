@@ -1,6 +1,8 @@
 // The DCF against what can be said of it without it: airtimes by the formula, Bianchi's closed form on throughput, a hidden pair colliding and RTS / CTS curing it; then the gates against the model, every output every clock.
 import { describe, expect, it } from 'vitest';
-import { ACK_US, Air, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, DcfStation, KIND_ACK, lfsrNext, measureThroughput, RESP_TIMEOUT, RTS_US, SIFS_US, SLOT_US, STA_IN0, type AirOpts, type StaIn, W_BO, W_TX, W_WAIT } from '../src/comm/wifi';
+import { Clarke } from '../src/phys/radio';
+import { rng } from '../src/phys/line';
+import { aggregateMbps, capacity2x2, eigen2x2, goodputMbps, RATES, rateRun, ACK_US, Air, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, DcfStation, KIND_ACK, lfsrNext, measureThroughput, RESP_TIMEOUT, RTS_US, SIFS_US, SLOT_US, STA_IN0, type AirOpts, type StaIn, W_BO, W_TX, W_WAIT } from '../src/comm/wifi';
 import { dcfStation, wifiCell } from '../src/lib/wifi';
 import { simulate } from '../src/sim/harness';
 import { netlistOf } from '../src/sim/types';
@@ -134,6 +136,38 @@ describe('the air', () => {
   }, 120000);
   it('RESP_TIMEOUT leaves room for the SIFS and the ACK', () => {
     expect(RESP_TIMEOUT).toBeGreaterThan(SIFS_US + ACK_US);
+  });
+});
+
+describe('rates, airtime, MIMO', () => {
+  it('a 1500-byte exchange at 54 Mb/s has a goodput far under 54, and aggregation recovers it', () => {
+    const r = RATES[7], g = goodputMbps(1500, r);
+    expect(g).toBeGreaterThan(25); expect(g).toBeLessThan(35);
+    expect(aggregateMbps(1500, 32, r)).toBeGreaterThan(45);
+    expect(aggregateMbps(1500, 1, r)).toBeLessThan(g * 1.05);
+  });
+  it('rate adaptation: better than the wrong static rate, worse than an oracle', () => {
+    const g = new Clarke(20, 3), rnd = rng(5), snr = (us: number) => { const c = g.at(us * 1e-6); return 22 + 20 * Math.log10(Math.max(1e-3, Math.hypot(c.re, c.im))); };
+    const T = 5e6, arf = rateRun('arf', snr, rnd, 1500, T).mbps, oracle = rateRun('oracle', snr, rnd, 1500, T).mbps, stat = RATES.map((_, i) => rateRun(i, snr, rnd, 1500, T).mbps);
+    expect(oracle).toBeGreaterThan(arf);
+    expect(arf).toBeGreaterThan(stat[0]);
+    expect(arf).toBeGreaterThan(stat[7]);
+    expect(oracle).toBeGreaterThan(Math.max(...stat));
+  });
+  it('MIMO: eigenvalues of known channels; two streams at high SNR, one on a rank-1 channel', () => {
+    const I: [number, number][] = [[1, 0], [0, 0], [0, 0], [1, 0]], one: [number, number][] = [[1, 0], [1, 0], [1, 0], [1, 0]];
+    expect(eigen2x2(I)).toEqual([1, 1]);
+    expect(eigen2x2(one)[0]).toBeCloseTo(4, 9); expect(eigen2x2(one)[1]).toBeCloseTo(0, 9);
+    expect(capacity2x2(I, 100)).toBeCloseTo(2 * Math.log2(1 + 50), 9);
+    expect(capacity2x2(one, 100)).toBeCloseTo(Math.log2(1 + 200), 9);
+    expect(capacity2x2(I, 2000) - capacity2x2(I, 1000)).toBeCloseTo(2, 2);
+    expect(capacity2x2(one, 2000) - capacity2x2(one, 1000)).toBeCloseTo(1, 2);
+    // a random H against a direct determinant: log₂ det(I + (SNR/2) H Hᴴ)
+    const h: [number, number][] = [[0.3, 0.1], [-0.7, 0.4], [1.1, -0.2], [0.2, 0.9]], k = 5;
+    const n = (z: [number, number]) => z[0] * z[0] + z[1] * z[1];
+    const p11 = 1 + k * (n(h[0]) + n(h[1])), p22 = 1 + k * (n(h[2]) + n(h[3]));
+    const xr = h[0][0] * h[2][0] + h[0][1] * h[2][1] + h[1][0] * h[3][0] + h[1][1] * h[3][1], xi = h[0][1] * h[2][0] - h[0][0] * h[2][1] + h[1][1] * h[3][0] - h[1][0] * h[3][1];
+    expect(capacity2x2(h, 2 * k)).toBeCloseTo(Math.log2(p11 * p22 - k * k * (xr * xr + xi * xi)), 8);
   });
 });
 

@@ -217,6 +217,15 @@ export class Air {
     this.sta.forEach((x, i) => x.step(ins[i]));
   }
   queue(i: number): void { this.pending[i] = 1; }
+  /** For Back: everything that changes. */
+  save() {
+    return { sta: this.sta.map((x) => ({ ...x })), inputs: this.inputs.map((x) => ({ ...x })), prevTx: [...this.prevTx], rx: this.rx.map((r) => (r ? { ...r } : null)), stats: structuredClone(this.stats), pending: [...this.pending], lastKind: [...this.lastKind], lastFrom: [...this.lastFrom] };
+  }
+  load(v: ReturnType<Air['save']>): void {
+    v.sta.forEach((x, i) => Object.assign(this.sta[i], x));
+    this.inputs = v.inputs.map((x) => ({ ...x })); this.prevTx = [...v.prevTx]; this.rx = v.rx.map((r) => (r ? { ...r } : null)); this.stats = structuredClone(v.stats);
+    this.pending = [...v.pending]; this.lastKind = [...v.lastKind]; this.lastFrom = [...v.lastFrom];
+  }
 }
 /** The duration a heard RTS or CTS carries: what is left of the exchange after it. */
 export const navOf = (kind: number, lenUs: number): number => (kind === KIND_RTS ? 3 * SIFS_US + CTS_US + lenUs + ACK_US : kind === KIND_CTS ? 2 * SIFS_US + lenUs + ACK_US : 0);
@@ -244,3 +253,52 @@ export function measureThroughput(n: number, lenUs: number, clocks: number, useR
   for (let c = 0; c < clocks; c++) air.step();
   return { share: air.stats.successUs / clocks, collisions: air.stats.collisions, delivered: air.stats.delivered.reduce((a, b) => a + b, 0) };
 }
+
+// ---- rates and airtime -------------------------------------------------------------------------------------------------------
+/** 802.11a's eight rates, bits per OFDM symbol, and the SNR each wants: typical receiver figures, labelled constants (the standard sets sensitivities, not these). */
+export interface Rate { mbps: number; ndbps: number; modulation: string; snrDb: number }
+export const RATES: Rate[] = [
+  { mbps: 6, ndbps: 24, modulation: 'BPSK ½', snrDb: 5 }, { mbps: 9, ndbps: 36, modulation: 'BPSK ¾', snrDb: 7 }, { mbps: 12, ndbps: 48, modulation: 'QPSK ½', snrDb: 8 }, { mbps: 18, ndbps: 72, modulation: 'QPSK ¾', snrDb: 10 },
+  { mbps: 24, ndbps: 96, modulation: '16-QAM ½', snrDb: 13 }, { mbps: 36, ndbps: 144, modulation: '16-QAM ¾', snrDb: 17 }, { mbps: 48, ndbps: 192, modulation: '64-QAM ⅔', snrDb: 21 }, { mbps: 54, ndbps: 216, modulation: '64-QAM ¾', snrDb: 23 },
+];
+/** A frame's chance of arriving: a steep edge around the rate's SNR. A shape, not a measurement. */
+export const frameOk = (snrDb: number, r: Rate): number => 1 / (1 + Math.exp(-(snrDb - r.snrDb) * 2));
+/** One frame's exchange on a free channel, with the average backoff: µs of air for `bytes` delivered. */
+export const exchangeUs = (bytes: number, r: Rate, backoffSlots = CW_MIN / 2): number => DIFS_US + backoffSlots * SLOT_US + airtimeUs(bytes + 28, r.ndbps) + SIFS_US + ACK_US;
+export const goodputMbps = (bytes: number, r: Rate): number => (8 * bytes) / exchangeUs(bytes, r);
+/** n MPDUs aggregated into one frame under one block ACK (with a 4-byte delimiter each): the airtime pays for the preamble once. */
+export const aggregateMbps = (bytes: number, n: number, r: Rate): number => (8 * bytes * n) / (DIFS_US + (CW_MIN / 2) * SLOT_US + airtimeUs(n * (bytes + 32), r.ndbps) + SIFS_US + ACK_US);
+
+export interface RateRun { policy: string; mbps: number; lost: number; frames: number; history: { us: number; mbps: number; ok: boolean; snr: number }[] }
+/** Frames of `bytes` over a fading SNR: snr(us) in dB, uniform(): a seeded draw; a static rate, ARF (up after 10 good frames, down after 2 lost), or an oracle told the SNR. */
+export function rateRun(policy: 'arf' | 'oracle' | number, snr: (us: number) => number, uniform: () => number, bytes: number, totalUs: number): RateRun {
+  let t = 0, at = typeof policy === 'number' ? policy : 3, good = 0, bad = 0, bits = 0, lost = 0, frames = 0;
+  const history: RateRun['history'] = [];
+  while (t < totalUs) {
+    const v = snr(t);
+    if (policy === 'oracle') { let best = 0, val = 0; RATES.forEach((r, i) => { const e = frameOk(v, r) * goodputMbps(bytes, r); if (e > val) { val = e; best = i; } }); at = best; }
+    const r = RATES[at], ok = uniform() < frameOk(v, r), us = ok ? exchangeUs(bytes, r) : exchangeUs(bytes, r) + 7 * SLOT_US;
+    frames++;
+    if (ok) { bits += 8 * bytes; good++; bad = 0; } else { lost++; bad++; good = 0; }
+    if (history.length < 4000) history.push({ us: t, mbps: r.mbps, ok, snr: v });
+    t += us;
+    if (policy === 'arf') {
+      if (good >= 10 && at < RATES.length - 1) { at++; good = 0; }
+      if (bad >= 2 && at > 0) { at--; bad = 0; }
+    }
+  }
+  return { policy: String(policy), mbps: bits / t, lost, frames, history };
+}
+
+// ---- MIMO ----------------------------------------------------------------------------------------------------------------------------
+/** A 2 × 2 channel's two eigenvalues of H Hᴴ. H as [h11, h12, h21, h22], each [re, im]. */
+export function eigen2x2(h: [number, number][]): [number, number] {
+  const [a, b, c, d] = h, n = (z: [number, number]) => z[0] * z[0] + z[1] * z[1];
+  const trace = n(a) + n(b) + n(c) + n(d);
+  // det(H) = ad − bc, and λ₁λ₂ = |det H|²
+  const dr = a[0] * d[0] - a[1] * d[1] - (b[0] * c[0] - b[1] * c[1]), di = a[0] * d[1] + a[1] * d[0] - (b[0] * c[1] + b[1] * c[0]), det2 = dr * dr + di * di;
+  const root = Math.sqrt(Math.max(0, trace * trace - 4 * det2));
+  return [(trace + root) / 2, (trace - root) / 2];
+}
+/** Capacity with power split evenly over two transmit antennas: Σ log₂(1 + (SNR / 2) λ). */
+export const capacity2x2 = (h: [number, number][], snr: number): number => eigen2x2(h).reduce((s, l) => s + Math.log2(1 + (snr / 2) * l), 0);

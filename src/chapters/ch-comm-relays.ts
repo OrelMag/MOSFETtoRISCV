@@ -47,7 +47,7 @@ const TONE = { B: 3100, db: 30 };
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
   [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
-  [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('secret'), 'Keeping it secret'], [numOf('path'), 'The internet path'], [numOf('radio'), 'Radio'],
+  [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('secret'), 'Keeping it secret'], [numOf('path'), 'The internet path'], [numOf('radio'), 'Radio'], [numOf('wifi'), 'Wi-Fi'],
 ];
 /** The five questions, with the chapters of the track that answer each. */
 const QUESTIONS: [string, string, ChapterId[]][] = [
@@ -55,7 +55,7 @@ const QUESTIONS: [string, string, ChapterId[]][] = [
   ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'serial']],
   ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'ethernet']],
   ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'tcp']],
-  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', ['exchange', 'spi', 'ethernet', 'switch', 'router']],
+  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', ['exchange', 'spi', 'ethernet', 'switch', 'wifi', 'router']],
 ];
 
 export const chTelegraph: Chapter = {

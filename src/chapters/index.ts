@@ -43,6 +43,7 @@ import { chTcp } from './ch-comm-tcp';
 import { chSecret } from './ch-secret';
 import { chPath } from './ch-comm-path';
 import { chRadio } from './ch-comm-radio';
+import { chWifi } from './ch-comm-wifi';
 import { chRelays } from './ch-relays';
 import { chTubes } from './ch-tubes';
 import { chCards } from './ch-cards';
@@ -55,7 +56,7 @@ export const chapters: Chapter[] = [
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
-  chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chModem, chSerial, chErrors, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chSecret, chPath, chRadio,
+  chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chModem, chSerial, chErrors, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chSecret, chPath, chRadio, chWifi,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];
