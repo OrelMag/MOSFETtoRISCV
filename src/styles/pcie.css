@@ -25,6 +25,7 @@
 .pc-byte.f8, .pc-swatch.f8 { background: color-mix(in srgb, var(--warn) 26%, var(--surface)); }
 
 .pc-panel { min-width: 0; }
+.pc-panel .btn.pc-armed { border-color: var(--warn); color: var(--warn); }
 .pc-panel .mc-status span b.bad, .pc-cr b.bad { color: var(--bad); }
 .pc-ladder { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
 .pc-lad { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; font-size: 12px; }

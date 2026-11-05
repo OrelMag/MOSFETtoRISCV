@@ -38,7 +38,7 @@ describe('formats', () => {
     expect(fcWord(4, 16)).toBe((4 << 14) | 16);
     expect(dllpBody(0x40, fcWord(4, 16))).toEqual([0x40, 0x01, 0x00, 0x10]);
   });
-  it('the LCRC is the Ethernet register over 4 reserved bits, the sequence number and the TLP (zlib)', () => {
+  it('dlWrap computes the Ethernet register (zlib) over 4 reserved bits, the sequence number and the TLP; not held to a real PCIe trace', () => {
     const tlp = tlpBytes({ kind: 'MRd', len: 1, tag: 3, addr: 0x40 }), w = dlWrap(0xabc, tlp);
     expect(w.slice(0, 2)).toEqual([0x0a, 0xbc]);
     expect(w.slice(-4)).toEqual(fcsBytes(zcrc32(Uint8Array.from(w.slice(0, -4)))));

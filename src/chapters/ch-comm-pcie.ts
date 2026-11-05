@@ -88,9 +88,9 @@ export const chPcie: Chapter = {
     {
       title: 'From a bus to a lane',
       body: `
-        <p>The bus chapter put a memory behind wires: an address, data, a handshake, one transaction at a time. PCI did this between chips for two decades: 32 data and address lines, one shared clock at 33 MHz, 133 MB/s for everybody on the bus. PCI-X pushed it to 64 bits at 533 MT/s and that was the end of the road, for a reason you can compute.</p>
+        <p>The bus chapter put a memory behind wires: an address, data, a handshake, one transaction at a time. PCI did this between chips for two decades: 32 data and address lines, one shared clock at 33 MHz, 133 MB/s for everybody on the bus. PCI-X reached 64 bits at 533 MT/s, by then with source-synchronous strobes to get round the common clock, and that was the end of the road. The common-clock limit is one you can compute; strobes only postpone it, since the lines in a group must still agree to within a bit.</p>
         <p>Every line of a parallel bus has to be valid at the same clock edge. Lines are not the same length, nor are their loads, so they arrive spread over some <strong>skew</strong>, and the receiver can only sample where all of them have settled. With a nanosecond of skew and half a period kept for setting up and sampling, the clock stops at ${nf(parallelMHz(SK), 0)} MHz: at ${W64} bits that is ${nf(parallelGBs(SK, W64), 1)} GB/s, in one direction at a time, for every device on the bus, on ${W64} signal pins plus controls. More width makes the skew worse, not better.</p>
-        <p><strong>PCI Express</strong> (2003) kept PCI's software model (configuration space, memory reads and writes, base address registers) and threw away the wires. A <strong>lane</strong> is one differential pair each way, point to point, with the clock recovered from the data as in the fast serial links chapter. One lane has no skew to speak of, and a ×16 link has 16 lanes which the receiver deskews on its own, each with its own recovered clock. The cost moves from pins to logic: the receiver now needs a clock recovery, a line code, and a protocol that frames, checks and retransmits.</p>
+        <p><strong>PCI Express</strong> (specified in 2002) kept PCI's software model (configuration space, memory reads and writes, base address registers) and threw away the wires. A <strong>lane</strong> is one differential pair each way, point to point, with the clock recovered from the data as in the fast serial links chapter. One lane has no skew to speak of, and a ×16 link has 16 lanes which the receiver deskews on its own, each with its own recovered clock. The cost moves from pins to logic: the receiver now needs a clock recovery, a line code, and a protocol that frames, checks and retransmits.</p>
         <p>The table shows real PCIe, a transfer rate per lane and the line code it spends bandwidth on. ${G5.name} at ×16 carries ${nf(laneGBs(G5, 16), 0)} GB/s each way on ${16 * 4} signal pins. Our gates below run one lane at a symbol a clock; that is a teaching rate, and they say so.</p>`,
       widget: busWidget,
       challenge: {
@@ -110,7 +110,7 @@ export const chPcie: Chapter = {
       title: 'A packet, byte by byte',
       body: `
         <p>A memory write across a link is a <strong>TLP</strong>, a transaction layer packet, and this one is real: these are PCIe's bytes. Choose a kind and read the fields. The transaction layer makes the three-dword header: <code>Fmt</code> and <code>Type</code> say what it is (<code>0x40</code> a memory write, <code>0x00</code> a read, <code>0x4A</code> a completion with data), <code>Length</code> counts dwords, the <code>Tag</code> names one of the requester's reads so that the answer can find its way back, the byte enables say which bytes of the end dwords count, and the address goes last.</p>
-        <p>The data link layer wraps it: 4 reserved bits and a 12-bit <strong>sequence number</strong> in front, a 32-bit <strong>LCRC</strong> behind. The LCRC is the polynomial and bit order of Ethernet's FCS, computed over the sequence number and the TLP: the CRC unit from the errors chapter does it, a byte a clock. The physical layer then frames it between two control symbols, <code>STP</code> (K27.7) and <code>END</code> (K29.7), which cannot appear in data: the line code's K symbols are why framing costs no escaping and no length search.</p>
+        <p>The data link layer wraps it: 4 reserved bits and a 12-bit <strong>sequence number</strong> in front, a 32-bit <strong>LCRC</strong> behind. The LCRC is the polynomial of Ethernet's FCS, computed over the sequence number and the TLP: the CRC unit from the errors chapter does it, a byte a clock. At 2.5 and 5 GT/s the physical layer then frames it between two control symbols, <code>STP</code> (K27.7) and <code>END</code> (K29.7), which cannot appear in data: the line code's K symbols are why framing costs no escaping and no length search. (From 8 GT/s the 128b/130b code has no K symbols, and a framing token carrying the packet's length takes their place.)</p>
         <p>Link management goes in smaller packets the transaction layer never sees: a <strong>DLLP</strong> is 6 bytes (type, 3 bytes, a CRC-16) between <code>SDP</code> and <code>END</code>. Ack, Nak and flow-control updates are all DLLPs.</p>
         <p>The cost: ${2 + 12 + 4 + 2} bytes of framing and headers around every write and every read. A 4-byte write is ${nf((100 * 4) / 24, 0)} % efficient, a 256-byte one ${nf((100 * 256) / 276, 0)} %, and that is before the line code. The maximum payload size a system negotiates is a trade between this and how long one TLP may hold up the lane.</p>
         <p>Click a byte to flip one of its bits. The receiver cannot tell where the hit landed, and it does not try: a wrong LCRC condemns the whole packet.</p>`,
@@ -125,7 +125,7 @@ export const chPcie: Chapter = {
       },
       more: {
         pitfall: '<p>Data link integrity is per hop, so a switch that corrupts a TLP in its own memory passes a fresh, correct LCRC along. That is what the optional end-to-end <strong>ECRC</strong> is for. Our link has no switch and leaves ECRC out.</p>',
-        numbers: '<p>Bytes and offsets are checked against an independent packer (cocotbext-pcie\'s tlp.py and dllp.py) and the LCRC against zlib\'s CRC-32. The PCI-SIG base specification itself sits behind a membership; we did not read it for these tests, and the header of comm/pcie.ts names what we left out.</p>',
+        numbers: '<p>Field positions and the DLLP\'s CRC-16 follow another open model\'s code (cocotbext-pcie\'s tlp.py and dllp.py, copied into the tests). The LCRC is computed as Ethernet\'s register, as described in open sources, and checked against zlib\'s CRC-32; its wire order has not been held to a real trace. The PCI-SIG base specification itself sits behind a membership: we did not read it for these tests. The header of comm/pcie.ts names what we left out.</p>',
       },
     },
     {
@@ -148,7 +148,7 @@ export const chPcie: Chapter = {
           return s.getInput('limit') === 2 && s.getInput('consumed') === 254 && s.getInput('want') === 5 && st.value('ok') === 0;
         },
         hints: ['2 − 254 modulo 256 is 4: four credits left.', 'One more than what is left.'],
-        answer: `want = 5. (2 − (254 + 5)) mod 256 = 255, above 128, so the answer is no; at want = 4 it is 0, and the answer is yes (${creditOk(2, 254, 4, 8)}).`,
+        answer: `want = 5. (2 − (254 + 5)) mod 256 = 255, above 128, so the answer is no; at want = 4 it is 0, and the answer is ${creditOk(2, 254, 4, 8) ? 'yes' : 'no'}.`,
         solve: (st) => st.setInputs({ limit: 2, consumed: 254, want: 5 }),
       },
       more: {
@@ -159,7 +159,7 @@ export const chPcie: Chapter = {
     {
       title: 'Ack, Nak and the replay buffer',
       body: `
-        <p>Here is the whole link in gates: on the left a <span data-show="root">requester</span> and <span data-show="a">port A</span>, on the right <span data-show="b">port B</span> and a <span data-show="ep">completer</span> with a kilobyte of memory, and between them <span data-show="ab">one lane</span> <span data-show="ba">each way</span>. The port is ${n0(C().port - C().buffers)} NANDs of logic and ${n0(C().buffers)} more for its two 1024-byte buffers, drawn as flip-flops, and the whole link ${n0(C().link)}; a golden model runs beside the gates and the panel says whether the two still agree. The panel's packet list reads what arrives on the lanes and recomputes each CRC, as a bus analyser would.</p>
+        <p>Here is the whole link in gates: on the left a <span data-show="root">requester</span> and <span data-show="a">port A</span>, on the right <span data-show="b">port B</span> and a <span data-show="ep">completer</span> with a kilobyte of memory, and between them <span data-show="ab">one lane</span> <span data-show="ba">each way</span>. The port is ${n0(C().port - C().buffers)} NANDs of logic and ${n0(C().buffers)} more for its two 1024-entry buffers, drawn as flip-flops, and the whole link ${n0(C().link)}; a golden model runs beside the gates and the panel says whether the two still agree. The panel's packet list reads what arrives on the lanes and recomputes each CRC, as a bus analyser would.</p>
         <p>Press <em>Write</em>. The TLP goes out with sequence 0 and the receiver answers with an Ack about ${F.wrAck} clocks later: the lane's ${LINE_DELAY} clocks each way, the ${ACK_LIMIT} clocks a receiver may gather Acks before sending one, and the time on the wire.</p>
         <p>The transmitter writes every TLP to the <span data-show="a">replay buffer</span> as it goes out, and keeps it. An Ack carrying sequence s means "everything up to s has arrived": it frees those and moves <code>ACKD_SEQ</code>. One Ack covers many TLPs, which is why a receiver batches them.</p>
         <p><strong>Flip next TLP byte</strong>, then <em>Write</em>. The receiver's LCRC check fails, it throws away what it had stored (the buffer's write pointer goes back to the last committed TLP) and sends a Nak with the last good sequence number. The transmitter reads the rest out of its replay buffer, in order, and the write lands once. It costs the time of the packet and a round trip, and nobody above the data link layer ever knew. That is why PCIe can be treated as a reliable memory bus.</p>
@@ -182,8 +182,8 @@ export const chPcie: Chapter = {
       title: 'When the Ack is lost, or nothing gets through',
       body: `
         <p>A Nak needs a receiver that noticed. What if the Ack itself is hit? The sender's <strong>replay timer</strong> runs while anything is unacknowledged, restarting on progress. When it runs out (${REPLAY_LIMIT} clocks here; in the standard about three times the longest Ack delay for the payload and width) the sender replays everything unacknowledged.</p>
-        <p>Press <strong>Lose next Ack</strong>, then <em>Write</em>, and run. The Ack's CRC fails and is dropped. The replay timer counts in the status row, reaches its limit, and the same TLP goes out again. The receiver sees a good LCRC but an <em>old</em> sequence number: it drops the packet, because delivering it would write twice, and sends an Ack at once. Check the memory: one write.</p>
-        <p>Every replay, by Nak or by timer, increments a 2-bit counter, <code>REPLAY_NUM</code>; any forward progress clears it. If it wraps, four replays have achieved nothing and the link itself is suspect: the data link layer asks for <strong>Recovery</strong>. Press <strong>Block A→B</strong>, then <em>Write</em>, and run. Every symbol is hit, so nothing arrives, timers run out, REPLAY_NUM climbs and the port stops at the next packet boundary and sends TS1s. On the far side, port B sees them and follows. Unblock the lane and both go through Recovery and return to L0.</p>
+        <p>Press <strong>Lose next Ack</strong>, then <em>Write</em>, and run. The Ack's CRC fails and is dropped. The replay timer counts in the status row, reaches its limit, and the same TLP goes out again. The receiver sees a good LCRC but an <em>old</em> sequence number: it drops the packet, because delivering it would write twice, and sends an Ack at once. "B expects" moved by one, not two: one delivery.</p>
+        <p>Every replay, by Nak or by timer, increments a 2-bit counter, <code>REPLAY_NUM</code>; any forward progress clears it. If it wraps, four replays have achieved nothing and the link itself is suspect: the data link layer asks for <strong>Recovery</strong>. Press <strong>Block A→B</strong>, then <em>Write</em>, and run. Every symbol is hit, so nothing arrives, timers run out, REPLAY_NUM climbs and port A stops at the next packet boundary and sends TS1s. Port B cannot see them while the lane is blocked, and stays in L0. Unblock the lane: B sees the TS1s, follows into Recovery, and both return to L0.</p>
         <p>Nothing was lost. The replay buffer has kept the TLP throughout, and the first thing after L0 is the replay. This layered recovery is what lets a real link retrain on the fly (a marginal lane drops to a lower speed) with software seeing a pause rather than an error.</p>`,
       scene: () => pcieScene('link'),
       challenge: {
@@ -191,7 +191,7 @@ export const chPcie: Chapter = {
         goal: 'Block the lane with a write in flight, watch the port go through Recovery, unblock it, and see the write acknowledged.',
         check: (st) => { const s = pcieApi.get(st)?.status(); return !!s && s.recoveries >= 1 && s.up && s.ltA === 4 && s.ltB === 4 && s.nrcv >= 1 && ((s.ackd + 1) & 0xfff) === s.nextSeq; },
         hints: ['Block A→B first, then Write, then Run for a few thousand clocks.', 'After REPLAY_NUM wraps the ladder shows Rec.Lock. Then unblock and Run.'],
-        answer: `Block, Write, Run about ${REPLAY_LIMIT * 5} clocks: four replays, then Recovery. Unblock and Run: TS1, TS2, idle, L0, then the replay and its Ack.`,
+        answer: `Block, Write, Run a little over ${REPLAY_LIMIT * 4} clocks: four timer expiries, then Recovery. Unblock and Run: TS1, TS2, idle, L0, then the replay and its Ack.`,
         solve: (st) => { const a = pcieApi.get(st); a?.block(true); a?.write(4, 2, 0x55); a?.run(REPLAY_LIMIT * 6); a?.block(false); a?.run(3000); },
       },
       more: {
@@ -224,7 +224,7 @@ export const chPcie: Chapter = {
       title: 'What is below, and what it costs',
       body: `
         <p>Our link stops where a real MAC hands off to its PHY, the industry's <strong>PIPE</strong> interface: bytes with a K flag at a symbol clock. Everything below is the fast serial links chapter. At 2.5 and 5 GT/s each byte goes through a scrambler (so that a repeating pattern does not concentrate its energy in one tone) and 8b/10b. From 8 GT/s the line code is 128b/130b: scrambling carries the transitions, and a 2-bit sync header says whether a 16-byte block is data or ordered sets.</p>
-        <p>What we left out, then. <strong>SKP ordered sets</strong>: both ends run on clocks allowed to differ by ±300 ppm, so every 1180 to 1538 symbols the sender inserts a marker and a receiver's elastic buffer adds or drops a SKP symbol: a clock-crossing FIFO (the crossing clocks chapter) with a rule to keep it from under- or overflowing. <strong>Lane striping</strong>: a ×16 link deals its bytes out across lanes, and the receiver lines the lanes up again using a COM on each. <strong>Switches</strong>: a port per link and a crossbar, like the Ethernet switch, routing by address.</p>
+        <p>What we left out, then. <strong>SKP ordered sets</strong>: each end's clock is allowed ±300 ppm, so at the 8b/10b rates every 1180 to 1538 symbols the sender inserts a marker and a receiver's elastic buffer adds or drops a SKP symbol: a clock-crossing FIFO (the crossing clocks chapter) with a rule to keep it from under- or overflowing. <strong>Lane striping</strong>: a ×16 link deals its bytes out across lanes, and the receiver lines the lanes up again using a COM on each. <strong>Switches</strong>: a port per link and a crossbar, like the Ethernet switch, routing by address.</p>
         <p>The cost, in our gates: ${n0(C().port - C().buffers)} NANDs of logic for a port plus ${n0(C().buffers)} for its two buffers as flip-flops (a real one is a compiled SRAM), and ${n0(C().link)} for the link with the completer's kilobyte. The requester is ${n0(C().root)}. That is one lane's protocol. The bus chapter's AXI port is far cheaper, and it is why short on-chip buses are still parallel wires: they have no skew to fight and no errors to retry.</p>`,
       widget: busWidget,
       challenge: {
@@ -250,7 +250,7 @@ export const chPcie: Chapter = {
         question: 'Why does USB stuff a 0 after six 1s, when SYNC already lets the receiver find the clock?',
         options: ['In NRZI a 1 makes no transition, so a long run of 1s leaves the receiver with nothing to resynchronize on', 'To balance the voltage on the line', 'To mark the end of a byte', 'To make room for the CRC'],
         answer: 0,
-        explain: 'SYNC gets the phase once; the two ends\' clocks then drift. Six 1s is the longest allowed gap between edges, so that a 0.25 % clock tolerance can never slip a bit.',
+        explain: 'SYNC gets the phase once; the two ends\' clocks then drift. Six 1s and the stuffed 0 make seven bit times at most between edges, so that a 0.25 % clock tolerance can never slip a bit.',
         why: ['', 'That is what 8b/10b\'s disparity does. USB\'s stuffing does not balance anything.', 'A byte has no marker on the wire: position is counted from SYNC.', 'The CRC is ordinary data.'],
       },
       more: {
@@ -261,7 +261,7 @@ export const chPcie: Chapter = {
       title: 'Enumeration: a stranger introduces itself',
       body: `
         <p>Here is a USB device in gates: ${n0(UC().total)} NANDs. <span data-show="rx">Bit recovery, NRZI and stuffing</span>, <span data-show="pkt">packet fields</span>, <span data-show="crc">the two CRCs</span>, <span data-show="tx">a transmitter with its descriptor ROM</span> and <span data-show="ctl">the control endpoint</span>. A host model drives its wires, and a device model runs beside the gates, compared at every clock.</p>
-        <p>A device plugged in knows nothing and has address 0. The host resets the bus (SE0 held long) and walks it through a fixed dialogue on endpoint 0, the <strong>control pipe</strong>. Each request is an 8-byte SETUP packet, then a data stage, then a status stage in the opposite direction:</p>
+        <p>A device plugged in knows nothing and has address 0. The host resets the bus (SE0 held long) and walks it through a dialogue on endpoint 0, here in the textbook order (real hosts differ in the details), the <strong>control pipe</strong>. Each request is an 8-byte SETUP packet, then a data stage, then a status stage in the opposite direction:</p>
         <ol>
           <li><code>GET_DESCRIPTOR(device, 8)</code> at address 0: the first 8 bytes, to learn the packet size (${DEVICE_DESCRIPTOR[7]} here). Another reset.</li>
           <li><code>SET_ADDRESS(5)</code>: from now on this device, not "whoever just arrived".</li>
@@ -270,7 +270,7 @@ export const chPcie: Chapter = {
           <li><code>SET_CONFIGURATION(1)</code>: the device is live.</li>
         </ol>
         <p><strong>The trap.</strong> SET_ADDRESS is a control transfer, so it ends with a status stage, and the status stage is addressed to the <em>old</em> address, 0. A device that moves on acknowledging the SETUP never hears the IN token of its own status stage. Ours moves when the host acknowledges the status packet. <em>Step transaction</em> through it and watch the log: the token before says addr 0, the token after says addr 5.</p>
-        <p>Press <em>Corrupt next packet</em> first: the device ignores what fails its CRC, the host times out and repeats, and after three errors in a row a real host gives up on the transaction. The whole dialogue takes ${n0(USB_CLOCKS)} clocks here (${BIT_CLOCKS} clocks a bit, a gate-level rate near 63 Mb/s; real full speed is 12 Mb/s, and a real host waits milliseconds between steps).</p>`,
+        <p>Press <em>Corrupt next packet</em> first: the device ignores what fails its CRC, and the host times out and repeats (if it was the host's own ACK that was hit, the device sends its data again and the host drops the repeat, by the toggle). After three errors in a row a real host gives up on the transaction. The whole dialogue takes ${n0(USB_CLOCKS)} clocks here (${BIT_CLOCKS} clocks a bit, a gate-level rate near 63 Mb/s; real full speed is 12 Mb/s, and a real host waits milliseconds between steps).</p>`,
       scene: usbScene,
       challenge: {
         kind: 'reach',

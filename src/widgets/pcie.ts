@@ -23,7 +23,7 @@ const nf = (x: number, d = 1) => x.toFixed(d);
 export interface LaneGen { name: string; gts: number; coding: string; eff: number; year: number }
 /** Per lane, one direction. Flit mode (6.0) spends 14 of 256 bytes on CRC and FEC. */
 export const PCIE_GENS: LaneGen[] = [
-  { name: '1.0', gts: 2.5, coding: '8b/10b', eff: 0.8, year: 2003 }, { name: '2.0', gts: 5, coding: '8b/10b', eff: 0.8, year: 2007 },
+  { name: '1.0', gts: 2.5, coding: '8b/10b', eff: 0.8, year: 2002 }, { name: '2.0', gts: 5, coding: '8b/10b', eff: 0.8, year: 2007 },
   { name: '3.0', gts: 8, coding: '128b/130b', eff: 128 / 130, year: 2010 }, { name: '4.0', gts: 16, coding: '128b/130b', eff: 128 / 130, year: 2017 },
   { name: '5.0', gts: 32, coding: '128b/130b', eff: 128 / 130, year: 2019 }, { name: '6.0', gts: 64, coding: 'PAM4, flits', eff: 242 / 256, year: 2022 },
 ];
@@ -86,7 +86,7 @@ export function tlpWidget(): Widget {
     const fields = fieldsOf(kind, clean), fieldAt = (i: number) => fields.find((f) => i >= f.from && i < f.to);
     const chip = (i: number, b: number) => {
       const f = fieldAt(i)!;
-      const c = h('button', { class: `pc-byte ${f.cls}${i === flip ? ' flipped' : ''}`, type: 'button', title: `${f.name}: click to flip a bit` }, hex2(b));
+      const c = h('button', { class: `pc-byte ${f.cls}${i === flip ? ' flipped' : ''}`, type: 'button', title: `${f.name}: click to flip a bit`, 'aria-label': `${f.name}, byte ${i}, ${hex2(b)}: flip a bit` }, hex2(b));
       c.addEventListener('click', () => { if (flip === i) { flipBit = (flipBit + 1) % 8; } else { flip = i; flipBit = 0; } draw(); });
       return c;
     };
@@ -176,9 +176,13 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
     let logA = new LaneLog('a'), logB = new LaneLog('b'), items: LogItem[] = [], armTlp = false, armAck = false, blocked = false, flipNow = [0, 0];
     let replays = 0, naks = 0, recov = 0, waited = 0, bad = 0, lastRead: number[] = [], reading: number[] = [], prevReplay = 0, prevLt = 0, tsA: string[] = [], tsB: string[] = [];
     let cmdAddr = 8, cmdLen = 4, cmdSeed = 0x11, nRead = 0;
+    /** The buttons that arm something show that they have. */
+    const syncArms = () => {
+      for (const [b, on] of [[flipBtn, armTlp], [ackBtn, armAck], [blockBtn, blocked]] as const) { b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.classList.toggle('pc-armed', on); }
+    };
     const clearState = () => {
       model = new PcieLink(); clocks = 0; agreed = true; wrong = ''; logA = new LaneLog('a'); logB = new LaneLog('b'); items = [];
-      armTlp = armAck = blocked = false; replays = naks = recov = waited = bad = 0; lastRead = []; reading = []; prevReplay = 0; prevLt = 0; tsA = []; tsB = [];
+      armTlp = armAck = blocked = false; replays = naks = recov = waited = bad = nRead = 0; lastRead = []; reading = []; prevReplay = 0; prevLt = 0; tsA = []; tsB = [];
     };
     const inp = (n: string) => stage.sim!.getInput(n);
     const st = (port: string) => readStatus(stage.sim!.getBits(stage.sim!.design.root.ports[port]));
@@ -189,13 +193,13 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
       before: () => {
         if (!started) return;
         const i = linkIn();
+        if (stage.value('wait') && !model.out(i).a.c_ok) waited++;
         model.step(i);
         const adat = stage.value('a_txd') ^ flipNow[0], bdat = stage.value('b_txd') ^ flipNow[1], ak = stage.value('a_txk'), bk = stage.value('b_txk');
         logA.feed(adat, ak, clocks, push); logB.feed(bdat, bk, clocks, push);
         tsA.push(sym(adat, ak)); tsB.push(sym(bdat, bk));
         if (tsA.length > 24) { tsA.shift(); tsB.shift(); }
         if (stage.value('rd_valid')) { reading.push(stage.value('rd_data')); if (stage.value('rd_done')) { lastRead = reading; reading = []; nRead++; } }
-        if (stage.value('wait')) waited++;
         const sa = st('a_status'), rp = sa.replay;
         if (rp && !prevReplay) replays++;
         prevReplay = rp;
@@ -217,6 +221,7 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
         const fa = blocked || (armTlp && kA === 1 && !stage.value('a_txk')) ? 1 : 0, fb = armAck && kB === 2 && !stage.value('b_txk') && model.b.dt === 0 ? 1 : 0;
         if (fa && armTlp) armTlp = false;
         if (fb) armAck = false;
+        if (flipBtn.classList.contains('pc-armed') !== armTlp || ackBtn.classList.contains('pc-armed') !== armAck) syncArms();
         flipNow = [fa, fb];
         if (inp('flip_ab') !== fa) sim.setInput('flip_ab', fa);
         if (inp('flip_ba') !== fb) sim.setInput('flip_ba', fb);
@@ -230,6 +235,8 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
       clearState();
       const pl = view === 'link' ? 1 : 0;
       stage.setInputs({ rst: 1, plug: pl, go: 0, flip_ab: 0, flip_ba: 0 });
+      plugBtn.textContent = pl ? 'Unplug' : 'Plug in';
+      syncArms();
       stage.runCycles(1, undefined, 0, true);
       stage.setInputs({ rst: 0 });
       model.step({ ...LINK_IN0, rst: 1, plug: pl });
@@ -239,17 +246,18 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
     };
     stage.resetHooks.add(() => { stopRun?.(); started = false; requestAnimationFrame(init); });
     const snapModel = () => ({ a: structuredClone({ ...model.a }), b: structuredClone({ ...model.b }), ra: { ...model.ra }, eb: structuredClone({ ...model.eb }), ab: [...model.ab], ba: [...model.ba] });
-    const snap = () => ({ m: snapModel(), clocks, agreed, wrong, items: [...items], replays, naks, recov, waited, bad, lastRead: [...lastRead], reading: [...reading], prevReplay, prevLt, tsA: [...tsA], tsB: [...tsB], armTlp, armAck, blocked, flipNow: [...flipNow], la: JSON.stringify({ c: logA.cur, m: logA.mode, t: logA.ts }), lb: JSON.stringify({ c: logB.cur, m: logB.mode, t: logB.ts }) });
+    const snap = () => ({ m: snapModel(), clocks, agreed, wrong, items: [...items], replays, naks, recov, waited, bad, nRead, lastRead: [...lastRead], reading: [...reading], prevReplay, prevLt, tsA: [...tsA], tsB: [...tsB], armTlp, armAck, blocked, flipNow: [...flipNow], la: JSON.stringify({ c: logA.cur, m: logA.mode, t: logA.ts }), lb: JSON.stringify({ c: logB.cur, m: logB.mode, t: logB.ts }) });
     stage.historyHooks.add({
       save: snap,
       restore: (v) => {
         const x = v as ReturnType<typeof snap>;
         Object.assign(model.a, structuredClone(x.m.a)); Object.assign(model.b, structuredClone(x.m.b)); Object.assign(model.ra, x.m.ra); Object.assign(model.eb, structuredClone(x.m.eb));
         model.ab = [...x.m.ab]; model.ba = [...x.m.ba];
-        ({ clocks, agreed, wrong, replays, naks, recov, waited, bad, prevReplay, prevLt, armTlp, armAck, blocked } = x);
+        ({ clocks, agreed, wrong, nRead, replays, naks, recov, waited, bad, prevReplay, prevLt, armTlp, armAck, blocked } = x);
         items = [...x.items]; lastRead = [...x.lastRead]; reading = [...x.reading]; tsA = [...x.tsA]; tsB = [...x.tsB]; flipNow = [...x.flipNow];
         const la = JSON.parse(x.la), lb = JSON.parse(x.lb);
         logA.cur = la.c; logA.mode = la.m; logA.ts = la.t; logB.cur = lb.c; logB.mode = lb.m; logB.ts = lb.t;
+        syncArms();
         schedule();
       },
     });
@@ -302,7 +310,13 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
       const on = inp('plug') ? 0 : 1;
       stage.setInput('plug', on);
       plugBtn.textContent = on ? 'Unplug' : 'Plug in';
+      armTlp = armAck = blocked = false; flipNow = [0, 0];
+      stage.setInputs({ flip_ab: 0, flip_ba: 0 });
+      syncArms();
     }));
+    const flipBtn = btn('Flip next TLP byte', 'The next data symbol going A→B has a bit flipped', () => { armTlp = !armTlp; syncArms(); schedule(); });
+    const ackBtn = btn('Lose next Ack', 'The next Ack going B→A has a bit flipped: its CRC fails and it is thrown away', () => { armAck = !armAck; syncArms(); schedule(); });
+    const blockBtn = btn('Block A→B', 'Every symbol going A→B has a bit flipped: nothing gets through', () => { blocked = !blocked; if (!blocked) { stage.setInput('flip_ab', 0); flipNow[0] = 0; } syncArms(); schedule(); });
     const write = () => act(() => send(1, cmdAddr, cmdLen, (cmdSeed = (cmdSeed + 0x11) & 255)));
     const read = () => act(() => send(0, cmdAddr, cmdLen, 0));
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel pc-panel', 'data-dock': 'right', 'data-phone': 'flow' },
@@ -310,8 +324,7 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
       h('div', { class: 'dram-ops' }, plugBtn, btn('Cycle', 'One clock', () => act(() => stage.runCycles(1))), btn('×40', '40 clocks', () => act(() => stage.runCycles(40))), runBtn),
       ladder, view === 'link' ? h('div', { class: 'mc-row' }, addrS.el) : null, view === 'link' ? h('div', { class: 'mc-row' }, lenS.el) : null,
       view === 'link' ? h('div', { class: 'dram-ops' }, btn('Write', 'A memory write of counting bytes to this address', write, 'btn sm primary'), btn('Read', 'A memory read: the completion comes back with its tag', read),
-        btn('Flip next TLP byte', 'The next data symbol going A→B has a bit flipped', () => { armTlp = true; schedule(); }), btn('Lose next Ack', 'The next Ack going B→A has a bit flipped: its CRC fails and it is thrown away', () => { armAck = true; schedule(); }),
-        btn('Block A→B', 'Every symbol going A→B has a bit flipped: nothing gets through', () => { blocked = !blocked; if (!blocked) { stage.setInput('flip_ab', 0); flipNow[0] = 0; } schedule(); })) : null,
+        flipBtn, ackBtn, blockBtn) : null,
       status, view === 'link' ? credits : null, strip, h('div', { class: 'cpu-sec' }, 'Packets on the lanes'), log, memo, verdict,
       h('p', { class: 'sub' }, 'A symbol a clock: PIPE\'s shape, one lane. The flips and the delay on the lane are a model, labelled as one; everything else is gates.'));
     update();
@@ -322,8 +335,8 @@ function pciePanel(view: 'link' | 'train'): ScenePanel {
         return { up: sa.dl === 3 && sb.dl === 3, ltA: sa.lt, ltB: sb.lt, dlA: sa.dl, dlB: sb.dl, clocks, agreed, wrong, nextSeq: sa.seq, ackd: sa.ackd, nrcv: sb.nrcv, replays, naks, recoveries: recov, waited, bad, ram: model.eb.ram, lastRead };
       },
       write: (a, n, s) => act(() => send(1, a, n, s)), read: (a, n) => act(() => send(0, a, n, 0)),
-      flipTlp: () => { armTlp = true; }, flipAck: () => { armAck = true; },
-      block: (on) => { blocked = on; if (!on) { stage.setInput('flip_ab', 0); flipNow[0] = 0; } },
+      flipTlp: () => { armTlp = true; syncArms(); }, flipAck: () => { armAck = true; syncArms(); },
+      block: (on) => { blocked = on; if (!on) { stage.setInput('flip_ab', 0); flipNow[0] = 0; } syncArms(); },
       plug: (on) => act(() => { stage.setInput('plug', on ? 1 : 0); plugBtn.textContent = on ? 'Unplug' : 'Plug in'; }),
       run: (n) => act(() => { stage.runCycles(n, undefined, 0, true); }),
     });
