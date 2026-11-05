@@ -16,7 +16,7 @@ import { withModel } from '../widgets/modelhost';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
 import type { Chapter } from './types';
-import { numOf } from './order';
+import { numOf, type ChapterId } from './order';
 
 const thin = (n: number) => groupDigits(Math.round(n));
 const f1 = (x: number) => x.toFixed(1);
@@ -49,13 +49,13 @@ const LADDER: [number, string][] = [
   [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
   [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('path'), 'The internet path'],
 ];
-/** The five questions, with where the track answers each (chapter numbers). */
-const QUESTIONS: [string, string, number[]][] = [
-  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', [41, numOf('modem'), numOf('serial')]],
-  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', [40, 42, 43, numOf('serial')]],
-  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', [40, 43, numOf('ethernet')]],
-  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', [numOf('errors'), numOf('tcp')]],
-  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', [40, 44, numOf('ethernet'), numOf('switch'), numOf('router')]],
+/** The five questions, with the chapters of the track that answer each. */
+const QUESTIONS: [string, string, ChapterId[]][] = [
+  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'modem', 'serial']],
+  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'serial']],
+  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'ethernet']],
+  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'tcp']],
+  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', ['exchange', 'spi', 'ethernet', 'switch', 'router']],
 ];
 
 export const chTelegraph: Chapter = {
@@ -111,7 +111,7 @@ export const chTelegraph: Chapter = {
         reason to be frugal, but it fixes the scale of the problem. Computing is local: the bit already is a voltage next to the gate that reads it. A
         message has to become something that survives a distance, and the other end must find it, recognize where it starts, and trust it.</p>
         <p>Every link in this track answers five questions, whatever it is made of:</p>
-        <ol class="five">${QUESTIONS.map((q) => `<li><strong>${q[0]}</strong> ${q[1]}. <span class="where">Chapter ${q[2].join(', ')}.</span></li>`).join('')}</ol>
+        <ol class="five">${QUESTIONS.map((q) => `<li><strong>${q[0]}</strong> ${q[1]}. <span class="where">Chapter ${q[2].map(numOf).join(', ')}.</span></li>`).join('')}</ol>
         <p>The track starts where the problem started: a key, a battery and a wire, then the relay that was devised to repeat a weak signal, then the
         two limits that cap any such line. It ends with one packet crossing a network of routers, each of which you can open down to a MOSFET. Each chapter uses only what is
         below it.</p>`,
@@ -279,7 +279,7 @@ export const chTelegraph: Chapter = {
         the ones below it, up to <span data-ahead="tcp">TCP, a reliable stream over packets that may not arrive</span>, and <span data-ahead="internetpath">the internet path, one packet's whole journey across networks</span>:</p>
         <table class="mini ladder"><tr><th>Chapter</th><th>Title</th></tr>${LADDER.map(([n, t]) => `<tr><td>${n}</td><td>${t}</td></tr>`).join('')}</table>
         <p>And the questions, with where each is answered:</p>
-        <table class="mini ladder"><tr><th>Question</th><th>Chapters</th></tr>${QUESTIONS.map((q) => `<tr><td>${q[0]}</td><td>${q[2].join(', ')}</td></tr>`).join('')}</table>
+        <table class="mini ladder"><tr><th>Question</th><th>Chapters</th></tr>${QUESTIONS.map((q) => `<tr><td>${q[0]}</td><td>${q[2].map(numOf).join(', ')}</td></tr>`).join('')}</table>
         <p>The next chapter takes the relay from a repeater to a telephone exchange, where a question comes up that a point-to-point line never has: many senders, many receivers, and a switch that makes the path.</p>`,
       challenge: {
         kind: 'quiz', question: 'A stop unit after each character is the answer to which of the five questions?',
