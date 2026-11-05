@@ -31,6 +31,7 @@
 .dsp-plane .pole.out { stroke: var(--bad); }
 .dsp-plane .asked { fill: none; stroke: var(--accent); stroke-width: 1.4; }
 .dsp-plane .lattice { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; opacity: 0.55; fill: none; }
+.dsp-plane .count { fill: var(--text); font-size: 12px; font-weight: 600; }
 .dsp-plane .probe { fill: var(--good); }
 .dsp-plane .reach { stroke: var(--good); stroke-width: 1; opacity: 0.6; }
 .dsp-zgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 10px; align-items: start; }

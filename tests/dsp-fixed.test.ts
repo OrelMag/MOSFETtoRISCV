@@ -1,6 +1,6 @@
 // dsp/fixed.ts against exact integers, and lib/fixedpt.ts against dsp/fixed.ts on every input of a small word and random ones of a large one.
 import { describe, expect, it } from 'vitest';
-import { addOverflows, fit, fracMul, fromFixed, guardBits, qName, satAdd, satTo, shiftRound, toFixed, wordMax, wordMin, wrapTo } from '../src/dsp/fixed';
+import { addOverflows, bitsToHold, fit, fracMul, fromFixed, guardBits, qName, roundingNoise, satAdd, satTo, shiftRound, toFixed, wordMax, wordMin, wrapTo } from '../src/dsp/fixed';
 import { clampWord, fracMultiplier, satAdder } from '../src/lib/fixedpt';
 import { evalOnce, simulate } from '../src/sim/harness';
 
@@ -28,6 +28,31 @@ describe('words', () => {
     expect(toFixed(1, { w: 16, f: 15 }, 'wrap')).toBe(-32768);
     expect(guardBits(256)).toBe(8);
     expect(guardBits(257)).toBe(9);
+  });
+});
+
+describe('into a word', () => {
+  it('each rule of toFixed, on a tie and off one, wrapping or saturating', () => {
+    const q = { w: 8, f: 0 };
+    for (const [x, t, u, c] of [[2.5, 2, 3, 2], [3.5, 3, 4, 4], [-2.5, -3, -2, -2], [2.25, 2, 2, 2], [2.75, 2, 3, 3]]) {
+      expect(toFixed(x, q, 'sat', 'trunc'), `trunc ${x}`).toBe(t);
+      expect(toFixed(x, q, 'sat', 'half-up'), `half-up ${x}`).toBe(u);
+      expect(toFixed(x, q, 'sat', 'convergent'), `convergent ${x}`).toBe(c);
+    }
+    expect(toFixed(200, q, 'wrap', 'trunc')).toBe(-56);
+    expect(toFixed(200, q, 'sat', 'trunc')).toBe(127);
+  });
+  it('the bits a value needs', () => {
+    for (let v = -600; v <= 600; v++) { const b = bitsToHold(v); expect(satTo(v, b), `${v}`).toBe(v); if (b > 1) expect(satTo(v, b - 1), `${v}`).not.toBe(v); }
+  });
+  it('rounding noise is q² / 12, and the measured variance agrees', () => {
+    expect(roundingNoise(8)).toBeCloseTo(64 / 12, 12);
+    // the remainders of a 3-bit drop, every one once: (q² − 1) / 12 in integers
+    let m = 0, v = 0;
+    for (let i = 0; i < 8; i++) m += shiftRound(i, 3, 'trunc') * 8 - i;
+    m /= 8;
+    for (let i = 0; i < 8; i++) v += (shiftRound(i, 3, 'trunc') * 8 - i - m) ** 2;
+    expect(v / 8).toBeCloseTo((64 - 1) / 12, 12);
   });
 });
 

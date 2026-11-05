@@ -33,7 +33,7 @@ export const chZplane: Chapter = {
       'z⁻¹ is one sample of delay, so a filter is a ratio of two polynomials in it, B(z) / A(z). Its response at f is that ratio at z = e^(j2πf), on the unit circle.',
       'Roots of B are zeros and roots of A are poles. Gain at f is the product of distances to the zeros over the product of distances to the poles. A zero on the circle removes that frequency; a pole close to it makes a peak there.',
       `A pole of radius r decays as rⁿ: every pole must be inside the circle for stability, and about ${settleSamples(0.97)} samples to fall to 1 % at r = 0.97. FIR filters have no poles to worry about.`,
-      'A zero and its mirror image across the circle have the same gain shape and different delay. Pairing every zero with its mirror gives symmetric taps and linear phase: one delay for every frequency, half the filter\'s length.',
+      'A zero and its mirror image across the circle have the same gain shape and different delay. Pairing every zero with its mirror gives symmetric taps and linear phase: one delay for every frequency, (N − 1) / 2 samples for N taps.',
     ],
     check: [
       {
@@ -64,7 +64,7 @@ export const chZplane: Chapter = {
       title: 'An equation with a memory',
       get body() {
         return `
-        <p>In <a href="#/c/signals/3">chapter ${numOf('signals')}</a> a filter was a weighted sum of delayed samples. Add one idea, the filter's own past outputs among the terms, and you have every linear filter there is:</p>
+        <p>In <a href="#/c/signals/3">chapter ${numOf('signals')}</a> a filter was a weighted sum of delayed samples. Add one idea, the filter's own past outputs among the terms, and you have every linear, time-invariant filter with a finite number of coefficients:</p>
         <p style="text-align:center"><strong>y[n] = b₀x[n] + b₁x[n−1] + … − a₁y[n−1] − a₂y[n−2] − …</strong></p>
         <p>This is the <strong>difference equation</strong>. If every a is zero it uses only inputs: it has a finite memory, and an input stops mattering after a fixed number of samples, so it is <strong>FIR</strong>. With feedback, a sample is in the output for ever, fading if the filter is well made, and it is <strong>IIR</strong>, infinite impulse response.</p>
         <p>What it costs can be read straight off the equation: one multiplication for each coefficient, one addition for each term after the first, and one word of memory for each delay. Everything else in this chapter is about what these coefficients do.</p>
@@ -86,7 +86,7 @@ export const chZplane: Chapter = {
         <p>Feed in a single 1, and what comes out is the filter's <strong>impulse response</strong> h[n]. Any input is a list of scaled, delayed impulses, and a linear, time-invariant filter treats each in the same way, so the output is the same list of scaled, delayed copies of h, added together. That is <strong>convolution</strong>:</p>
         <p style="text-align:center"><strong>y[n] = Σ h[k] x[n−k]</strong></p>
         <p>For an FIR filter, the taps are the impulse response and this formula is the filter. A block of ${CONV_X.length} samples through ${CONV_H.length} taps gives ${CONV_Y.length} samples. Convolution of N samples with M taps costs N × M multiplications when done this way.</p>
-        <p>In frequency the same operation is a plain multiplication: Y(f) = H(f) X(f). This is why <a href="#/c/signals/1">the spectrum view</a> made filters look simple. That is why a long filter can run faster through an FFT.</p>
+        <p>In frequency the same operation is a plain multiplication: Y(f) = H(f) X(f). This is why <a href="#/c/signals/1">the spectrum view</a> made filters look simple, and it is also how a long filter can run faster through an FFT.</p>
         <div class="try">Slide n from 0 to the end, and check the sum of products by hand at n = 4. When do all three taps overlap the input, and when does only part of them?</div>`;
       },
       widget: convolutionWidget,
@@ -106,8 +106,8 @@ export const chZplane: Chapter = {
         <p>Writing out sums is awkward. So give the delay a symbol. Let z⁻¹ mean "one sample later". A filter's taps then become a polynomial: 1 + 4z⁻¹ + 6z⁻² + 4z⁻³ + z⁻⁴ is <a href="#/c/signals/4">FIR5</a> written in one line. This is the <strong>z-transform</strong> of its impulse response, and connecting two filters in a row multiplies their polynomials. That convolution of the taps is just polynomial multiplication, as you can check by hand.</p>
         <p>What about a feedback filter? Move the y terms to the left and divide: H(z) = B(z) / A(z), a ratio of two polynomials. Every filter of this kind is such a ratio, and only that ratio matters: the coefficients are all there is.</p>
         <p>A sine at frequency f gets multiplied by e<sup>−j2πf</sup> by each delay. So substitute z = e<sup>j2πf</sup> and H(z) gives you the gain and phase at f. As f goes from 0 to half the sample rate, z walks around the top half of the <strong>unit circle</strong>. That one substitution is the bridge from the algebra to the spectrum. On FIR5 at f = ${f}, it gives ${nf(gainAt([...b], [1], f) / 16)} of the DC gain, which is cos⁴(π f) = ${nf(binomialGain(f))}, the figure quoted in its chapter.</p>
-        <p>Factor the polynomial and its roots are points on this picture: <strong>zeros</strong>, where B(z) = 0, and <strong>poles</strong>, where A(z) = 0. FIR5's polynomial is (1 + z⁻¹)⁴, so its zeros are four, all at z = −1, and you can see them below. z = −1 is half the sample rate, where the filter gave you exactly zero in gates.</p>
-        <div class="try">Walk the point around the circle, and read the gain at f = 0 and at f = 0.5. Now move one zero pair away from −1 and watch the taps change: they stop being whole numbers.</div>`;
+        <p>Factor the polynomial and its roots are points on this picture: <strong>zeros</strong>, where B(z) = 0, and <strong>poles</strong>, where A(z) = 0. FIR5's polynomial is (1 + z⁻¹)⁴, so its zeros are four, all at z = −1, marked ×4 below. z = −1 is half the sample rate, where the filter gave you exactly zero in gates.</p>
+        <div class="try">Walk the point around the circle, and read the gain at f = 0 and at f = 0.5. Now move Zero 1 away from −1 and watch the taps change: they stop being whole numbers.</div>`;
       },
       widget: () => planeWidget({ zeros: FIR5_ZEROS, poles: [], probe: true, taps: true }),
       challenge: {
@@ -150,7 +150,7 @@ export const chZplane: Chapter = {
         <p>A pole works the other way round. Gain at the point on the circle is divided by its distance to each pole, so the point passing close to one makes a peak, higher the closer it comes. And poles come from feedback, so there is a price in time: y[n] = x[n] + 2r cos θ y[n−1] − r² y[n−2] rings at the pole's angle and fades as rⁿ.</p>
         <p>Two views of one fact: a sharp peak in frequency, and a long ring in time. At r = ${RES.r} it takes ${settleSamples(RES.r)} samples to fall to 1 %. At 0.99, it is ${settleSamples(0.99)}. A pole pair uses only two multiplications and two delays, and gets a sharpness an FIR filter would need hundreds of taps for. That is what feedback buys, and it is not free: the next steps show what it risks.</p>
         <p>A pole and a zero at the same angle make a <strong>notch</strong>: the null from the zero, and just beside it, the pole's distance has almost the same value as the zero's, so their ratio goes back to about 1. The closer the pole is to the zero, the narrower the notch.</p>
-        <div class="try">Start with the resonator and play noise through it: you should hear a pitch. Take the radius up to 0.995 and down to 0.8. Then press <em>Notch</em>, and compare how wide it is at radius 0.8 and at 0.98.</div>`;
+        <div class="try">Start with the resonator and play noise through it, and listen for a pitch. Take the pole radius up to 0.995 and down to 0.8. Then press <em>Notch</em>, and compare how wide it is at pole radius 0.8 and at 0.98.</div>`;
       },
       widget: () => planeWidget({
         zeros: [{ r: 1, t: Math.PI }], poles: [{ ...RES }], probe: true, taps: true, sound: true,
@@ -175,10 +175,10 @@ export const chZplane: Chapter = {
       title: 'Inside the circle',
       get body() {
         return `
-        <p>A pole of radius r gives a term rⁿ in the impulse response. Below 1 it fades, at 1 it holds for ever, and above 1 it grows until the word overflows. So the rule is simple: <strong>a filter is stable when every pole is inside the unit circle</strong>. FIR filters have no poles, apart from those at the origin, so they cannot go unstable.</p>
+        <p>A pole of radius r gives a term rⁿ in the impulse response. Below 1 it fades, at 1 it never fades, and above 1 it grows until the word overflows. So the rule is simple: <strong>a filter is stable when every pole is inside the unit circle</strong>. FIR filters have no poles, apart from those at the origin, so they cannot go unstable.</p>
         <p>"Stable" here has a precise meaning: every bounded input gives a bounded output, which comes down to the sum of |h[n]| being finite. That sum is the same one you used to scale a chain, <a href="#/c/fixed/6">last chapter</a>, and it is why a pole close to the circle needs so much headroom.</p>
         <p>This matters in fixed point. A pole on the circle would be an oscillator, and that has its uses. A pole just inside can be pushed outside by nothing more than rounding its coefficients. That is why real IIR filters are built out of small sections.</p>
-        <div class="try">Drag a pole across the circle. Watch the impulse response turn from a fading ring into a growing one, and watch the player refuse to play it.</div>`;
+        <div class="try">Drag a pole across the circle. Watch the impulse response turn from a fading ring into a growing one. Press Play out there, and the player refuses.</div>`;
       },
       widget: () => planeWidget({
         zeros: [{ r: 1, t: Math.PI }], poles: [{ r: 0.9, t: 0.08 * TAU }], taps: true, sound: true,
@@ -193,7 +193,7 @@ export const chZplane: Chapter = {
         options: ['Yes: its poles are a pair of radius √0.7, about 0.84', 'No: 1.5 is greater than 1', 'No: every feedback filter eventually diverges', 'It depends on the input'],
         answer: 0,
         explain: `The product of a conjugate pair is r², so r² = 0.7. Solving: ${polyRoots([1, -1.5, 0.7]).map((z) => `${nf(z.re, 2)} ${z.im < 0 ? '−' : '+'} ${nf(Math.abs(z.im), 2)}j`).join(' and ')}.`,
-        why: ['', 'A coefficient may exceed 1. It is the roots that count.', 'Filters with poles inside the circle settle down, for any bounded input.', 'Stability is a property of the filter.'],
+        why: ['', 'A coefficient may exceed 1. It is the roots that count.', 'With every pole inside the circle, any bounded input gives a bounded output.', 'Stability is a property of the filter.'],
       },
     },
     {
@@ -201,11 +201,11 @@ export const chZplane: Chapter = {
       get body() {
         const r = 0.7, t = 1, a = inner(r, t), b = outer(r, t), both = convolve(a, b);
         return `
-        <p>Gain is only half of H. Each frequency also gets a phase, and the slope of the phase against frequency is the <strong>group delay</strong>: how long that frequency takes to come through. When it varies, a pulse's parts arrive at different times and the pulse changes shape, though its spectrum's size has not changed at all.</p>
-        <p>Take a zero and move it to its mirror image across the circle: from radius r to 1 / r at the same angle. The distance from any point on the circle changes only by a constant factor. So the gain keeps its shape everywhere, and with the taps simply reversed, ${a.map((v) => nf(v, 2)).join(', ')} becoming ${b.map((v) => nf(v, 2)).join(', ')}, it is exactly the same. The delay is what differs. Zeros inside the circle give the least delay a given gain can have, and this is called <strong>minimum phase</strong>.</p>
-        <p>Multiply the two and you get taps ${both.map((v) => nf(v, 2)).join(', ')}: symmetric, and the delay is now the same at every frequency, half the filter's length. That is <strong>linear phase</strong>: no shape change, only a shift. It explains the symmetric taps of <a href="#/c/signals/3">the windowed sinc</a>, and why FIR5's delay is exactly 2 samples.</p>
-        <p>A pole cannot do this. Its mirror image would be outside the circle, and unstable. That is the real choice between FIR and IIR: linear phase with long filters, or short filters with a phase you have to live with.</p>
-        <div class="try">Bring the zero radius close to 1 and find the delay's peak near its angle. Then read the third line, the two together: flat, whatever you do with the sliders.</div>`;
+        <p>Gain is only half of H. Each frequency also gets a phase, and the slope of the phase against frequency, with its sign changed, is the <strong>group delay</strong>: how long that frequency takes to come through. When it varies, a pulse's parts arrive at different times and the pulse changes shape, though its spectrum's size has not changed at all.</p>
+        <p>Take a zero and move it to its mirror image across the circle: from radius r to 1 / r at the same angle. The distance from any point on the circle changes only by a constant factor. So the gain keeps its shape everywhere, and with the taps simply reversed, ${a.map((v) => nf(v, 2)).join(', ')} becoming ${b.map((v) => nf(v, 2)).join(', ')}, it is exactly the same. The delay is what differs. Zeros inside the circle give the least delay a given gain can have, and this is called <strong>minimum phase</strong>. Near the zero's angle that delay even goes negative. Nothing arrives early: the zero is taking out the middle of a narrow band, and what is left has its envelope moved forward.</p>
+        <p>Multiply the two and you get taps ${both.map((v) => nf(v, 2)).join(', ')}: symmetric, and the delay is now the same at every frequency: (N − 1) / 2 samples for N taps. That is <strong>linear phase</strong>: no shape change, only a shift. It explains the symmetric taps of <a href="#/c/signals/3">the windowed sinc</a>, and why FIR5's delay is exactly 2 samples.</p>
+        <p>A pole cannot do this. Its mirror image would be outside the circle, and unstable. So the usual choice between FIR and IIR is linear phase with long filters, or short filters with a phase you have to live with.</p>
+        <div class="try">Bring the zero radius close to 1. Near its angle the line for zeros outside peaks, and the line for zeros inside dips by as much. Then read the line for both together: flat, whatever you do with the sliders.</div>`;
       },
       widget: delayWidget,
       more: {

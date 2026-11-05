@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { chFixed } from '../src/chapters/ch-dsp-fixed';
 import { chainSnr, overflowRun, roundingRun, runningSum } from '../src/dsp/fixeddemos';
-import { wrapTo } from '../src/dsp/fixed';
+import { bitsToHold, wrapTo } from '../src/dsp/fixed';
 import { SAT_W, SUM_SETS } from '../src/widgets/dspfixed';
 import { fracMultiplier, satAdder } from '../src/lib/fixedpt';
 import { evalOnce, simulate } from '../src/sim/harness';
@@ -16,6 +16,12 @@ describe('wrap or saturate', () => {
   it('below full scale wrap and saturate are the same', () => {
     const a = overflowRun(-6, 16, 'wrap'), b = overflowRun(-6, 16, 'sat');
     expect(a.overShare).toBe(0); expect(a.snrDb).toBeCloseTo(b.snrDb, 9);
+  });
+  it('the try box: at 6 bits scaling starts to beat saturating at +2 dB', () => {
+    expect(overflowRun(1, 6, 'sat').snrDb).toBeGreaterThan(overflowRun(1, 6, 'scale').snrDb);
+    expect(overflowRun(2, 6, 'scale').snrDb).toBeGreaterThan(overflowRun(2, 6, 'sat').snrDb);
+    expect(overflowRun(0, 6, 'scale').shift).toBe(0);
+    expect(overflowRun(1, 6, 'scale').shift).toBe(1);
   });
   it('a shorter word scaled down loses to rounding: each bit about 6 dB', () => {
     const d = overflowRun(0, 12, 'scale').snrDb - overflowRun(0, 8, 'scale').snrDb;
@@ -40,6 +46,13 @@ describe('the challenges', () => {
 });
 
 describe('rounding', () => {
+  it('over the whole slider, ties to even stays nearest zero', () => {
+    for (let s = 1; s <= 6; s++) {
+      const t = Math.abs(roundingRun('trunc', s).mean), c = Math.abs(roundingRun('convergent', s).mean);
+      expect(c, `${s} bits`).toBeLessThan(t);
+      expect(c, `${s} bits`).toBeLessThan(1);
+    }
+  });
   it('truncation drifts; ties to even barely; the variance hardly moves', () => {
     const t = roundingRun('trunc', 3), u = roundingRun('half-up', 3), c = roundingRun('convergent', 3);
     expect(t.mean).toBeLessThan(-3); expect(Math.abs(u.mean)).toBeLessThan(1); expect(Math.abs(c.mean)).toBeLessThan(0.3);
@@ -62,6 +75,8 @@ describe('a running sum', () => {
     const s = SUM_SETS[2].xs, t = runningSum(s, 8).truth.at(-1)!;
     expect(t).toBeGreaterThan(127);
     expect(runningSum(s, 8).wrapped.at(-1)).not.toBe(t);
+    expect(bitsToHold(t)).toBe(10);
+    expect(runningSum(s, 10).wrapped.at(-1)).toBe(t);
     const r = runningSum(s, 11);
     expect(r.wrapped.at(-1)).toBe(t); expect(r.clamped.at(-1)).toBe(t);
   });
@@ -73,8 +88,10 @@ describe('where the gain goes', () => {
     expect(up).toBeCloseTo(alone, 6);
     expect(alone - down).toBeGreaterThan(15); expect(alone - down).toBeLessThan(21);
   });
-  it('the try box: up first does fall below down first by the top of the slider', () => {
-    expect(chainSnr(1, 3, 16, 'up first')).toBeLessThan(chainSnr(1, 3, 16, 'down first'));
+  it('the try box: up first falls below down first where the peak passes full scale, at −18 dBFS with a 3-bit shift', () => {
+    const at = (db: number, o: 'up first' | 'down first') => chainSnr(10 ** (db / 20), 3, 16, o);
+    expect(at(-19, 'up first')).toBeGreaterThan(at(-19, 'down first'));
+    expect(at(-18, 'up first')).toBeLessThan(at(-18, 'down first'));
   });
 });
 

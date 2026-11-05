@@ -86,6 +86,25 @@ export interface Pair { r: number; t: number }
 /** The polynomial in z⁻¹ of these pairs (for no pairs, 1). */
 export const pairsPoly = (pairs: readonly Pair[]): number[] => pairs.reduce<number[]>((c, p) => convolve(c, pairCoeffs(p.r, p.t)), [1]);
 
+/** A pair at angle 0 or π is a double real root: on the circle it grows like n, and inside it decays like n rⁿ. */
+const isReal = (p: Pair): boolean => Math.abs(Math.sin(p.t)) < 1e-9;
+export type PoleState = 'none' | 'stable' | 'on the circle' | 'unstable';
+/** From the pairs themselves, not from a root finder: a double root on the circle is exactly where rounding would decide it. */
+export function stateOfPoles(poles: readonly Pair[]): PoleState {
+  if (!poles.length) return 'none';
+  if (poles.some((p) => p.r > 1 + 1e-12 || (p.r >= 1 - 1e-12 && isReal(p)))) return 'unstable';
+  return poles.some((p) => p.r >= 1 - 1e-12) ? 'on the circle' : 'stable';
+}
+/** Samples for a pole pair's envelope to fall to 1 % and stay there: rⁿ, or (n + 1) rⁿ for a double real root. */
+export function settleOfPair(p: Pair): number {
+  if (p.r >= 1) return Infinity;
+  if (p.r <= 0) return 1;
+  if (!isReal(p)) return Math.ceil(Math.log(0.01) / Math.log(p.r));
+  let n = 1;
+  while ((n + 1) * p.r ** n > 0.01) n++;
+  return n;
+}
+
 /** |H| read off the plane: the distances from the point on the circle to each zero, over those to each pole. Equal to gainAt of the polynomials. */
 export function gainByDistances(zeros: readonly Pair[], poles: readonly Pair[], f: number): number {
   const x = Math.cos(2 * Math.PI * f), y = Math.sin(2 * Math.PI * f);

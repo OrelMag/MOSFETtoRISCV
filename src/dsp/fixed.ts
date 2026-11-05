@@ -47,9 +47,11 @@ export const addOverflows = (a: number, b: number, w: number): boolean => a + b 
 /** Q1.(w−1) × Q1.(w−1): the product has two sign bits, so it comes down by w − 1, rounded half up and clamped. Only −1 × −1 can overflow. */
 export const fracMul = (a: number, b: number, w: number): number => satTo(shiftRound(a * b, w - 1, 'half-up'), w);
 
+/** The fewest two's complement bits that hold v. */
+export const bitsToHold = (v: number): number => (v >= 0 ? Math.ceil(Math.log2(v + 1)) : Math.ceil(Math.log2(-v))) + 1;
+
 /** An n-word sum's worst case needs this many guard bits above a word. */
 export const guardBits = (n: number): number => Math.ceil(Math.log2(n));
 
-/** Noise power of rounding to a step q: q² / 12, whichever rounding, for a busy signal; truncation adds a mean of −q / 2 as well. */
+/** Variance of rounding to a step q: q² / 12, whichever rule, for a busy signal; truncation has a mean of −q / 2 besides. */
 export const roundingNoise = (q: number): number => (q * q) / 12;
-export const truncationBias = (q: number): number => -q / 2;

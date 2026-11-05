@@ -1,7 +1,7 @@
 // "Numbers that fit": a word and its point, a sum past full scale with sound, rounding's drift, a running sum by each rule, where the gain goes, and
 // what fixed and floating cost. Every number is dsp/fixed.ts's or dsp/fixeddemos.ts's, and every cost is counted from the gates.
 
-import { qName, wordMax, wordMin, type Rounding } from '../dsp/fixed';
+import { bitsToHold, qName, wordMax, wordMin, type Rounding } from '../dsp/fixed';
 import { chainSnr, overflowRun, roundingRun, runningSum, TONES_RATE, type PastFull } from '../dsp/fixeddemos';
 import { fracMultiplier, satAdder } from '../lib/fixedpt';
 import { rca } from '../lib/combinational';
@@ -35,8 +35,8 @@ export function qWidget(): Widget {
       return h('div', { class: `dsp-bit${on ? ' on' : ''}${k === w - 1 ? ' sign' : ''}${k === f ? ' before-point' : ''}` }, h('b', null, on ? '1' : '0'), h('span', null, `${k === w - 1 ? '−' : ''}2^${k - f}`));
     }));
     chips.set(0, qName({ w, f }), 'the format');
-    chips.set(1, num(raw / 2 ** f, Math.min(f, 6)), 'this word means');
-    chips.set(2, `${num(wordMin(w) / 2 ** f, 3)} to ${num(wordMax(w) / 2 ** f, Math.min(f, 6))}`, 'the range');
+    chips.set(1, num(raw / 2 ** f, f), 'this word means');
+    chips.set(2, `${num(wordMin(w) / 2 ** f, 0)} to ${num(wordMax(w) / 2 ** f, f)}`, 'the range');
     chips.set(3, f ? `2^−${f}` : '1', 'the step');
     wordIn.el.querySelector('input')!.setAttribute('min', String(wordMin(w)));
     wordIn.el.querySelector('input')!.setAttribute('max', String(wordMax(w)));
@@ -71,7 +71,7 @@ export function overflowWidget(): Widget {
     line(plot, ms, ms.map((_, i) => run.out[i]), 'real');
     chips.set(0, db(run.snrDb), 'signal to error', run.snrDb < 20 ? 'bad' : '');
     chips.set(1, `${(100 * run.overShare).toFixed(1)} %`, 'of the samples would not fit');
-    chips.set(2, mode === 'scale' ? `${run.shift}` : `${(6.02 * b + 1.76).toFixed(1)} dB`, mode === 'scale' ? 'bits spent shifting down' : 'all rounding would allow, at full scale');
+    chips.set(2, mode === 'scale' ? `${run.shift}` : `${(6.02 * b + 1.76).toFixed(1)} dB`, mode === 'scale' ? 'bits spent shifting down' : 'the ceiling for a full-scale sine at this width');
   };
   paint();
   const clip = clipButton('Play', () => ({ samples: run.out, rate: TONES_RATE, source: 'model', note: `${mode === 'wrap' ? 'wrapped' : mode === 'sat' ? 'saturated' : 'scaled'}, ${b} bits` }));
@@ -108,7 +108,7 @@ export function roundingWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'What a dropped bit leaves behind'), h('div', { class: 'ln-key' }, ...MODES.map(([, name, c]) => h('span', { class: c === 'near' ? 'k-near' : c === 'real' ? 'k-far' : 'dsp-k3' }, name))), plot.el,
         h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Rule'), h('th', { class: 'num' }, 'Mean error'), h('th', { class: 'num' }, 'Its variance'))), rows), want),
-      h('div', { class: 'panel mos-ctl' }, slider('Bits dropped', 1, 8, 1, s, (v) => String(v), (v) => { s = v; paint(); }).el)),
+      h('div', { class: 'panel mos-ctl' }, slider('Bits dropped', 1, 6, 1, s, (v) => String(v), (v) => { s = v; paint(); }).el)),
   };
 }
 
@@ -137,7 +137,7 @@ export function wrapOrderWidget(): Widget {
     chips.set(0, String(t), 'the true sum');
     chips.set(1, String(last(r.wrapped)), 'wrapping', last(r.wrapped) === t ? '' : 'bad');
     chips.set(2, String(last(r.clamped)), 'saturating at each step', last(r.clamped) === t ? '' : 'bad');
-    note.textContent = fits ? 'The true sum fits, so wrapping ends exactly right however far it strayed. Saturating threw away what it clipped and never gets it back.' : `The true sum needs more than ${w} bits, so neither can hold it. Saturating at least ends at the right end of the range. ${w + 1} or ${w + 2} bits would hold it: guard bits.`;
+    note.textContent = fits ? 'The true sum fits, so wrapping ends exactly right however far it strayed. Saturating threw away what it clipped and never gets it back.' : `The true sum needs more than ${w} bits, so neither can hold it. Saturating at least ends at the right end of the range. ${bitsToHold(t)} bits would hold it: guard bits.`;
   };
   paint();
   return {
@@ -160,7 +160,7 @@ export function chainWidget(): Widget {
     chips.set(1, db(down), `÷ ${2 ** s} first, then × ${2 ** s}`, down < alone - 3 ? 'bad' : '');
     chips.set(2, db(up), `× ${2 ** s} first, then ÷ ${2 ** s}`, up < alone - 3 ? 'bad' : '');
     const clip = level * 2 ** s > 1;
-    note.textContent = clip ? `At this level × ${2 ** s} would pass full scale, so going up first clips, and a clip costs far more than a rounding. The headroom ran out.` : `Going up first loses nothing while the peak stays under full scale: ${num(level * 2 ** s, 2)} of it here. Going down first spends ${s} bits, about ${(6.02 * s).toFixed(0)} dB, for nothing, if the signal was already using the word.`;
+    note.textContent = clip ? `At this level × ${2 ** s} would pass full scale, so going up first clips, and a clip costs far more than a rounding. The headroom ran out.` : `Going up first loses nothing while the peak stays under full scale: ${num(level * 2 ** s, 2)} of it here. Going down first costs ${s} bits, about ${(6.02 * s).toFixed(0)} dB of signal to noise, at any level, and buys headroom this signal does not need.`;
   };
   paint();
   return {
@@ -179,9 +179,11 @@ export const FLOAT32 = { E: 8, M: 23 };
 export const costRows = (): [string, number][] => [
   ['16-bit adder that wraps', stats(rca(16)).nands],
   ['16-bit saturating adder', stats(satAdder(16)).nands],
+  ['24-bit saturating adder', stats(satAdder(24)).nands],
   ['float32 adder', stats(fpAdd(FLOAT32)).nands],
   ['16 × 16 signed multiplier', stats(treeMul(16, true)).nands],
   ['Q1.15 multiplier: rounded and clamped', stats(fracMultiplier(16)).nands],
+  ['Q1.23 multiplier: rounded and clamped', stats(fracMultiplier(24)).nands],
   ['float32 multiplier', stats(fpMul(FLOAT32)).nands],
 ];
 

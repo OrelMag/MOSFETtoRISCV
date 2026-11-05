@@ -1,7 +1,7 @@
 // "The z-plane": a difference equation stepped by hand, convolution sliding, the plane itself with its roots to drag (pointer, or the sliders below it),
 // and two filters with one gain and different delays. Every number is dsp/zplane.ts's, which tests/dsp-zplane.test.ts holds to scipy.
 
-import { convolve, filter, gainAt, gainByDistances, groupDelay, impulse, isStable, pairCoeffs, pairsPoly, poleRadius, type Pair } from '../dsp/zplane';
+import { convolve, filter, gainAt, gainByDistances, groupDelay, impulse, pairCoeffs, pairsPoly, settleOfPair, stateOfPoles, type Pair } from '../dsp/zplane';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { clipButton } from './clip';
@@ -54,8 +54,9 @@ export function equationWidget(): Widget {
     plot.clear();
     stems(plot, x.slice(0, now + 1), 'out');
     line(plot, range(now + 1), y.slice(0, now + 1), 'real');
-    const past = a.slice(1).map((v, k) => `${coeff(-v)} × ${coeff(y[now - k - 1] ?? 0)}`), input = b.map((v, k) => `${coeff(v)} × ${coeff(x[now - k] ?? 0)}`);
-    eq.textContent = `y[${now}] = ${[...input, ...past].join(' + ')} = ${coeff(y[now])}`;
+    const term = (v: number, w: number) => ({ v, t: `${coeff(Math.abs(v))} × ${coeff(w)}` });
+    const terms = [...b.map((v, k) => term(v, x[now - k] ?? 0)), ...a.slice(1).map((v, k) => term(-v, y[now - k - 1] ?? 0))];
+    eq.textContent = `y[${now}] = ${terms.map((u, i) => `${i ? (u.v < 0 ? ' − ' : ' + ') : u.v < 0 ? '−' : ''}${u.t}`).join('')} = ${coeff(y[now])}`;
     chips.set(0, String(b.length + a.length - 1), 'multiplications a sample, at most');
     chips.set(1, String(b.length - 1 + a.length - 1), 'old values it has to remember');
   };
@@ -124,7 +125,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   const coeffs = () => ({ b: pairsPoly(zeros), a: pairsPoly(poles) });
   const sliders: { set(v: number): void; read: () => number }[] = [];
   const paint = () => {
-    const { b, a } = coeffs(), ok = isStable(a), rad = poleRadius(a);
+    const { b, a } = coeffs(), state = stateOfPoles(poles), ok = state === 'stable' || state === 'none', rad = Math.max(0, ...poles.map((p) => p.r));
     const nodes: SVGElement[] = [
       s('line', { x1: 8, x2: SIZE - 8, y1: C, y2: C, class: 'axis' }), s('line', { x1: C, x2: C, y1: 8, y2: SIZE - 8, class: 'axis' }),
       s('circle', { cx: C, cy: C, r: U, class: 'circle' }), s('text', { x: SIZE - 6, y: C - 5, 'text-anchor': 'end' }, '1'), s('text', { x: 6, y: C - 5 }, '−1'),
@@ -135,25 +136,34 @@ export function planeWidget(o: PlaneOpts): Widget {
       nodes.push(s('circle', { cx: PX(x), cy: PY(y), r: 5, class: 'probe' }));
     }
     for (const z of zeros) for (const g of [1, -1]) nodes.push(s('circle', { cx: PX(z.r * Math.cos(z.t)), cy: PY(g * z.r * Math.sin(z.t)), r: 6, class: 'zero' }));
+    // roots on one spot show how many: FIR5's four at −1 would otherwise read as one
+    const spots = new Map<string, { x: number; y: number; n: number }>();
+    for (const p of [...zeros, ...poles]) for (const g of [1, -1]) {
+      const x = PX(p.r * Math.cos(p.t)), y = PY(g * p.r * Math.sin(p.t)), k = `${Math.round(x)},${Math.round(y)}`, e = spots.get(k);
+      if (e) e.n++; else spots.set(k, { x, y, n: 1 });
+    }
+    for (const e of spots.values()) if (e.n > 1) nodes.push(s('text', { x: e.x + 9, y: e.y - 8, class: 'count' }, `×${e.n}`));
     for (const p of poles) for (const g of [1, -1]) {
       const X = PX(p.r * Math.cos(p.t)), Y = PY(g * p.r * Math.sin(p.t)), m = 6;
       nodes.push(s('path', { d: `M${X - m} ${Y - m}L${X + m} ${Y + m}M${X - m} ${Y + m}L${X + m} ${Y - m}`, class: `pole${p.r >= 1 ? ' out' : ''}` }));
     }
     plane.replaceChildren(...nodes);
-    const fs = range(241).map((i) => (i / 240) * 0.5), gs = fs.map((x) => gainAt(b, a, x)), top = Math.max(...gs.filter(Number.isFinite), 1e-12);
+    // a pole on the circle at a point of this grid is a gain with no finite value: the top of the plot
+    const fs = range(961).map((i) => (i / 960) * 0.5), gs = fs.map((x) => gainAt(b, a, x)), top = Math.max(...gs.filter(Number.isFinite), 1e-12);
     gain.clear();
-    line(gain, fs, gs.map((g) => Math.max(DB_FLOOR, 20 * Math.log10(Math.max(Math.min(g, top) / top, 1e-9)))), 'real');
-    if (o.probe) gain.layer.append(s('circle', { cx: gain.X(f), cy: gain.Y(Math.max(DB_FLOOR, 20 * Math.log10(Math.max(gainAt(b, a, f) / top, 1e-9)))), r: 4, class: 'sg-pt' }));
+    line(gain, fs, gs.map((g) => Math.max(DB_FLOOR, 20 * Math.log10(Math.max((Number.isFinite(g) ? Math.min(g, top) : top) / top, 1e-9)))), 'real');
+    if (o.probe) { const g = gainAt(b, a, f); gain.layer.append(s('circle', { cx: gain.X(f), cy: gain.Y(Math.max(DB_FLOOR, 20 * Math.log10(Math.max((Number.isFinite(g) ? Math.min(g, top) : top) / top, 1e-9)))), r: 4, class: 'sg-pt' })); }
     const ir = impulse(b, a, 41), big = Math.max(1e-9, ...ir.map(Math.abs));
     imp.clear(); stems(imp, ir.map((v) => v / big), ok ? '' : 'out');
-    chips.set(0, ok ? 'stable' : rad > 1 + 1e-9 ? 'unstable: it grows' : 'on the circle: it never dies', poles.length ? 'largest pole radius ' + num(rad, 3) : 'no feedback, so always stable', ok ? '' : 'bad');
+    chips.set(0, ok ? 'stable' : state === 'unstable' ? 'unstable: it grows' : 'on the circle: it never dies', poles.length ? 'largest pole radius ' + num(rad, 3) : 'no feedback, so always stable', ok ? '' : 'bad');
     chips.set(1, num(Math.max(0, ...poles.map((p) => p.t / (2 * Math.PI))), 3), poles.length ? 'pole\'s angle, in cycles a sample' : 'no poles');
-    chips.set(2, ok ? String(settleSamples(rad)) : 'never', 'samples to fall to 1 %');
+    chips.set(2, ok ? String(Math.max(0, ...poles.map(settleOfPair))) : 'never', 'samples to fall to 1 %');
     if (!poles.length) chips.set(2, String(b.length - 1), 'samples of memory');
     if (o.probe) {
       const g = gainByDistances(zeros, poles, f);
-      chips.set(3, num(g, 3), `|H| at ${num(f, 3)}: distances to the zeros over those to the poles`);
+      chips.set(3, Number.isFinite(g) ? num(g, 3) : '∞', `|H| at ${num(f, 3)}: distances to the zeros over those to the poles`);
     }
+    clip?.reset();
     if (o.taps) taps.textContent = `b = ${b.map((v) => num(v, 3)).join('  ')}${poles.length ? `    a = ${a.map((v) => num(v, 3)).join('  ')}` : ''}`;
   };
   // roots: nearest in the upper half-plane
@@ -179,7 +189,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   plane.addEventListener('pointerup', end); plane.addEventListener('pointercancel', end);
   const rootCtl = (p: Pair, name: string, pole: boolean) => {
     const R = slider(`${name} radius`, 0, pole ? 1.1 : 1.5, 0.005, p.r, (v) => num(v, 3), (v) => { p.r = v; paint(); });
-    const T = slider(`${name} angle`, 0, 0.5, 0.0025, p.t / (2 * Math.PI), (v) => `${num(v, 3)} cycles`, (v) => { p.t = v * 2 * Math.PI; paint(); });
+    const T = slider(`${name} angle, cycles`, 0, 0.5, 0.0025, p.t / (2 * Math.PI), (v) => num(v, 3), (v) => { p.t = v * 2 * Math.PI; paint(); });
     sliders.push({ set: (v) => R.set(v), read: () => p.r }, { set: (v) => T.set(v), read: () => p.t / (2 * Math.PI) });
     return [R.el, T.el];
   };
@@ -192,13 +202,13 @@ export function planeWidget(o: PlaneOpts): Widget {
   } }, pr.name));
   const clip = o.sound ? clipButton('Play noise through it', () => {
     const { b, a } = coeffs();
-    return isStable(a) ? { samples: filter(b, a, noiseBlock(24000)), rate: 16000, source: 'model' as const, note: 'noise at 16 kHz through this filter' } : null;
+    return stateOfPoles(poles) === 'stable' || !poles.length ? { samples: filter(b, a, noiseBlock(24000)), rate: 16000, source: 'model' as const, note: 'noise at 16 kHz through this filter' } : null;
   }, 'Refused: this filter would not stop growing') : null;
-  if (o.probe) ctl.unshift(slider('Point on the circle', 0, 0.5, 0.0025, f, (v) => `${num(v, 3)} cycles a sample`, (v) => { f = v; paint(); }).el);
+  if (o.probe) ctl.unshift(slider('Point on the circle', 0, 0.5, 0.0025, f, (v) => num(v, 3), (v) => { f = v; paint(); }).el);
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane), h('div', null, gain.el, imp.el)),
+      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'))), h('div', null, gain.el, imp.el)),
       h('div', { class: 'panel' }, chips.el, o.taps ? taps : ''),
       h('div', { class: 'panel mos-ctl' }, presets.length ? h('div', { class: 'dram-ops' }, ...presets) : '', h('div', { class: 'mos-row' }, ...ctl), clip ? clip.el : '')),
   };
@@ -224,10 +234,11 @@ export function delayWidget(): Widget {
     stems(imp, a);
     b.forEach((v, i) => imp.layer.append(s('circle', { cx: imp.X(i + 0.15), cy: imp.Y(v), r: 4, class: 'sg-pt' })));
     del.clear();
-    const clampY = (v: number) => Math.max(-2, Math.min(6, v));
-    line(del, xs, xs.map((f) => clampY(groupDelay(a, [1], f))), 'real');
-    line(del, xs, xs.map((f) => clampY(groupDelay(b, [1], f))), 'near');
-    line(del, xs, xs.map((f) => clampY(groupDelay(both, [1], f))), 'lump');
+    const da = xs.map((f) => groupDelay(a, [1], f)), db = xs.map((f) => groupDelay(b, [1], f));
+    del.setY(Math.min(-2, ...da) * 1.05, Math.max(4, ...db) * 1.05);
+    line(del, xs, da, 'real');
+    line(del, xs, db, 'near');
+    line(del, xs, xs.map((f) => groupDelay(both, [1], f)), 'lump');
     const f0 = t / (2 * Math.PI);
     chips.set(0, `${num(gainAt(a, [1], f0 * 0.5), 3)} and ${num(gainAt(b, [1], f0 * 0.5), 3)}`, `gain of each at ${num(f0 * 0.5, 3)} cycles a sample: the same, as at every frequency`);
     chips.set(1, both.map((v) => num(v, 2)).join('  '), 'the product\'s taps: symmetric');
@@ -239,6 +250,6 @@ export function delayWidget(): Widget {
       h('div', { class: 'panel' }, h('h3', null, 'The same size, mirrored'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'zeros inside'), h('span', { class: 'k-near' }, 'zeros outside'), h('span', { class: 'fr-k' }, 'both together')), imp.el, del.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
         slider('Zero radius', 0.3, 0.95, 0.01, r, (v) => num(v, 2), (v) => { r = v; paint(); }).el,
-        slider('Zero angle', 0.3, 2.8, 0.01, t, (v) => `${num(v / (2 * Math.PI), 3)} cycles`, (v) => { t = v; paint(); }).el))),
+        slider('Zero angle, cycles', 0.3, 2.8, 0.01, t, (v) => num(v / (2 * Math.PI), 3), (v) => { t = v; paint(); }).el))),
   };
 }

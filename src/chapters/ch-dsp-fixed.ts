@@ -35,7 +35,7 @@ export const chFixed: Chapter = {
       'Qm.f is the same two\'s complement word with a point in a chosen place: range and step are fixed when the design is. A DSP word is usually a fraction, Q1.(w−1), from −1 to just below +1, because a product of two fractions stays one.',
       `Past full scale an adder wraps, which is free and sounds broken. A saturating adder is an adder one bit wider, a test on the top two bits, and a mux: ${n0(row('16-bit saturating'))} NANDs against ${n0(row('16-bit adder'))} at 16 bits.`,
       'A product of two Q1.(w−1) words has two sign bits, so it comes down by w − 1, not w. Keep every bit, round once at the end. Only −1 × −1 overflows.',
-      'Truncation is biased by about half a step and a long sum shows it as a steady drift; half-up on ties a little; ties-to-even not at all. Each rounding adds noise of q² / 12 whichever rule is used.',
+      'Truncation is biased by about half a step and a long sum shows it as a steady drift; half-up on ties a little; ties-to-even not at all. Each rounding adds noise of variance q² / 12 whichever rule is used.',
       `While a sum's final value fits, wrapping along the way cannot hurt, and saturating along the way can. An accumulator of n products needs log₂ n guard bits: ${guardBits(256)} for ${256}.`,
       'A gain of 1 made from a shift down and a shift up keeps its bits only if the up comes first, and that needs headroom. Scale late and keep the word full.',
     ],
@@ -59,7 +59,7 @@ export const chFixed: Chapter = {
         options: ['Up first, then down: nothing is lost, and the peak stays in range', 'Down first, to leave headroom', 'Either: the overall gain is 1', 'Neither: it needs a floating-point word'],
         answer: 0,
         explain: 'A tenth of full scale times 8 still fits, so going up first drops nothing. Going down first throws three bits away and the later gain cannot bring them back.',
-        why: ['', 'There is plenty of headroom already, and those three bits are about 18 dB.', 'The overall gain is the same, and the rounding noise is not.', 'A word this wide holds it with room to spare.'],
+        why: ['', 'There is plenty of headroom already, and those three bits are about 18 dB.', 'The overall gain is the same, and the rounding noise is not.', 'Fixed point holds it with room to spare.'],
       },
     ],
   },
@@ -77,7 +77,7 @@ export const chFixed: Chapter = {
       widget: qWidget,
       challenge: {
         kind: 'quiz', question: 'What is the largest value in Q1.15, and what is its step?',
-        options: ['1 − 2⁻¹⁵, in steps of 2⁻¹⁵', '1, in steps of 2⁻¹⁵', '2 − 2⁻¹⁵, in steps of 2⁻¹⁴', '32 767, in steps of 1'],
+        options: ['1 − 2⁻¹⁵, in steps of 2⁻¹⁵', '1, in steps of 2⁻¹⁵', '2 − 2⁻¹⁴, in steps of 2⁻¹⁴', '32 767, in steps of 1'],
         answer: 0,
         explain: 'The largest word is 0111…1, 32 767, meaning 32 767 / 32 768. −1 fits and +1 does not: two\'s complement has one more negative value than positive.',
         why: ['', 'There is no word for +1, which is the reason this chapter exists.', 'That is the range of Q2.14.', 'That is the same word read as an integer. The point moves the meaning.'],
@@ -89,8 +89,8 @@ export const chFixed: Chapter = {
         return `
         <p>An adder's natural behaviour past full scale is to <strong>wrap</strong>: the largest positive word plus one gives the most negative. You met this as the overflow flag in <a href="#/c/binary/0">chapter ${numOf('binary')}</a>, where the program has to notice. In a signal it arrives as a jump from one rail to the other, about as violent an error as a word can make.</p>
         <p>A <strong>saturating</strong> word stops at the rail instead. It is still wrong, and it is much less wrong: a clipped peak in place of a full-scale step. A third way is to shift down first, by as many bits as the worst peak needs. That never overflows, and it spends bits that a short word cannot spare.</p>
-        <p>Here are two tones with gain, stored in a word. At +6 dB and 16 bits, wrapping leaves a signal-to-error ratio of ${db(WRAP6)}, saturating ${db(SAT6)}, and shifting down one bit ${db(SCALE6)}. Play them. The figures say which is further from the signal, and your ears will say the same about wrap and saturate, though the sound of each is something a number does not give you.</p>
-        <div class="try">At +6 dB and 16 bits compare Wrap with Saturate, then Scale down first. Then take the word down to 6 bits with Scale down first, and find the gain below which shifting stops mattering.</div>`;
+        <p>Here are two tones with gain, stored in a word. At +6 dB and 16 bits, wrapping leaves a signal-to-error ratio of ${db(WRAP6)}, saturating ${db(SAT6)}, and shifting down one bit ${db(SCALE6)}. Play them and hear whether your ears agree with the figures.</p>
+        <div class="try">At +6 dB and 16 bits compare Wrap with Saturate, then Scale down first. Then take the word down to 6 bits and find the gain at which Scale down first starts to beat Saturate.</div>`;
       },
       widget: overflowWidget,
       more: {
@@ -130,8 +130,8 @@ export const chFixed: Chapter = {
       get body() {
         const m = nands(treeMul(8, true)), all = nands(fracMultiplier(8));
         return `
-        <p>Multiply two Q1.7 words and <span data-show="mul">the multiplier</span> gives 16 bits, Q2.14. A fraction times a fraction is a fraction, so the upper integer bit almost always repeats the sign. To get back to Q1.7, the product comes down by 7 places, one fewer than half the word. Forget that and every answer is half what it should be, which is the best-known bug in fixed-point code. A shift by a constant is <span data-show="hi lo">wires</span>.</p>
-        <p>Dropped bits are not simply gone. <span data-show="round">The rounder</span> adds the first dropped bit back, which is round half up, and it does so once, at the end. Rounding the terms of a sum one by one would add noise for each. The FFT's butterflies in <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> follow the same rule.</p>
+        <p>Multiply two Q1.7 words and <span data-show="mul">the multiplier</span> gives 16 bits, Q2.14. A fraction times a fraction is a fraction, so the upper integer bit almost always repeats the sign. To get back to Q1.7, the product comes down by 7 places, one fewer than half the word. Forget that and every answer is half what it should be, which is a classic bug in fixed-point code. A shift by a constant is <span data-show="hi lo">wires</span>.</p>
+        <p>Dropped bits are not simply gone. <span data-show="round">The rounder</span> adds the first dropped bit back, which is round half up, and it does so once, at the end. Rounding the terms of a sum one by one would add noise for each. Inside each butterfly, the FFT of <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> follows the same rule.</p>
         <p>The upper sign bit earns its place in one case. −1 × −1 = +1, and +1 does not exist in this format. <span data-show="clamp">The clamp</span> is there for that one input pair out of 65 536. Leave it out and −1 × −1 gives −1, so a filter with a coefficient of −1 can flip the sign of a full-scale sample. That bug tends to stay hidden until a test finally drives the rail.</p>
         <p>In all ${n0(all)} NANDs, of which the signed multiplier is ${n0(m)}. Multipliers are the expensive thing in this level. The later chapters on machines are about sharing one.</p>
         <div class="try">Set 96 × 64 (0.75 × 0.5) and read 48 (0.375). Then find the pair that lights <code>sat</code>.</div>`;
@@ -210,8 +210,8 @@ export const chFixed: Chapter = {
       title: 'Fixed or floating',
       get body() {
         return `
-        <p>Floating point moves the point for you, so why all of this? Compare the parts, counted from their gates. A float32 adder is ${n0(row('float32 adder'))} NANDs against ${n0(row('16-bit saturating'))} for a 16-bit saturating adder. A float32 multiplier is ${n0(row('float32 multiplier'))} against ${n0(row('Q1.15'))} for the Q1.15 one. A filter does little else but add and multiply, so that ratio is the filter's price, and a float's alignment and normalization add delay as well.</p>
-        <p>What you get for it is range: <a href="#/c/float/0">chapter ${numOf('float')}</a>'s moving point means that nobody has to do the last two steps' arithmetic. Which you choose follows from who is paying. An earbud's processor, sold by the million and running from a tiny battery, counts its bits. A development board running one unit, or a large core with a floating-point unit already paid for, does not.</p>
+        <p>Floating point moves the point for you, so why all of this? Compare the parts, counted from their gates. A float32 number has 24 bits of precision, so a fair comparison is 24 bits of fixed point. A float32 adder is ${n0(row('float32 adder'))} NANDs against ${n0(row('24-bit saturating'))} for a 24-bit saturating adder. A float32 multiplier is ${n0(row('float32 multiplier'))} against ${n0(row('Q1.23'))} for Q1.23, and most of that is the multiplier both must have. A filter does little else but add and multiply, so the adder's ratio matters a great deal, and a float's alignment and normalization add delay as well.</p>
+        <p>What you get for it is range: with the moving point of <a href="#/c/float/0">chapter ${numOf('float')}</a>, the exponent does the scaling the last two steps did by hand. Which you choose follows from who is paying. A part sold by the million and running from a tiny battery counts its bits. A large core with a floating-point unit already paid for does not.</p>
         <p>This level works in fixed point because that is where the design decisions are, and where a learner can see them. The same filters run in floats too, and the widgets' models mostly do: they exist to give a reference to compare the words with.</p>`;
       },
       widget: costWidget,
