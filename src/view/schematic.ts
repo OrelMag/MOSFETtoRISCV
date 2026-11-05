@@ -113,6 +113,26 @@ export function busClass(bits: Bit[]): string {
   return bits.some((b) => b === B1) ? 'bus bus1' : 'bus bus0';
 }
 
+let menuFetched = false;
+let pickFetched = false;
+
+/** The menu's rows (view/circuitmenu.ts) fetched once the page is loaded and idle, so the first right-click
+ *  does not wait on the network. Data saver and a 2G link skip it (they pay on the click, as before); a page
+ *  busy with a simulation simply never goes idle until it is not. */
+function prefetchMenu(pick: boolean): void {
+  if (menuFetched && (pickFetched || !pick)) return;
+  const net = (navigator as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  if (net?.saveData || /2g/.test(net?.effectiveType ?? '') || typeof requestIdleCallback !== 'function') return;
+  const fetch = (): void => {
+    requestIdleCallback(() => {
+      if (!menuFetched) { menuFetched = true; void import('./circuitmenu').catch(() => { menuFetched = false; }); }
+      if (pick && !pickFetched) { pickFetched = true; void import('../ui/menupick').catch(() => { pickFetched = false; }); }
+    });
+  };
+  if (document.readyState === 'complete') fetch();
+  else addEventListener('load', fetch, { once: true });
+}
+
 export class SchematicView {
   readonly el: SVGSVGElement;
   private ctx: ViewCtx | null = null;
@@ -252,6 +272,7 @@ export class SchematicView {
   /** Draw the inside of ctx. `interactive` makes the root input pins clickable. */
   show(ctx: ViewCtx, interactive: boolean, keepView = false): void {
     this.ctx = ctx;
+    if (this.trace) prefetchMenu(this.pickable);
     this.interactive = interactive;
     this.radixOverride.clear();
     this.selected = null;
