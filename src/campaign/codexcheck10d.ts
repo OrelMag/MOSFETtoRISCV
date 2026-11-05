@@ -13,7 +13,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
     },
     {
       question: 'Why does a streaming FFT cost less than the unrolled network of the same size?',
-      options: ['Each butterfly has its own clock cycle, so a few units serve them all, in exchange for memory', 'It computes fewer butterflies per block, by skipping those with small twiddles', 'It works at a lower word length, since its samples arrive one at a time', 'It leaves out the bit reversal, which is most of the network\'s wiring'],
+      options: ['A few units take turns at all the butterflies, in exchange for memory', 'It computes fewer butterflies per block, by skipping those with small twiddles', 'It works at a lower word length, since its samples arrive one at a time', 'It leaves out the bit reversal, which is most of the network\'s wiring'],
       answer: 0,
       explain: 'Every butterfly of the network still happens, one at a time. The price is N − 1 samples of memory, latency, and one sample a clock in place of N.',
       why: ['', 'The arithmetic per block is the same.', 'Both can be built at any word length, and the comparison here is at the same one.', 'Its tones still leave in bit-reversed order, and wiring costs no gates anyway.'],
@@ -29,7 +29,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
     },
     {
       question: 'Water-filling leaves a tone dry. What does that say about the tone?',
-      options: ['Its first watt would earn less than the marginal rate on the tones in use', 'It has failed in some way and needs to be repaired', 'It already carries as many bits as its constellation can', 'Its gain over noise is exactly 1, which is the cut-off'],
+      options: ['A first watt there would earn less than on the tones in use', 'The line has failed at that frequency and the tone can carry nothing', 'It already carries as many bits as its constellation can', 'Its gain over noise has fallen below 1, the cut-off for any tone'],
       answer: 0,
       explain: 'At the optimum all tones in use have the same marginal rate, 1 / μ. A floor above the water means that even a first watt earns less, and a larger budget can raise the level over it.',
       why: ['', 'It may be a perfectly good tone that the budget does not stretch to.', 'A tone carrying many bits has a low floor, and so plenty of water.', 'The value of the gain only matters against the level.'],
@@ -38,14 +38,14 @@ export const CHECK10D: Record<string, Quiz[]> = {
   ldpc: [
     {
       question: 'A bit\'s message to a check leaves out what that check told it. What goes wrong if it does not?',
-      options: ['The check hears its own opinion back as independent evidence', 'The sum grows larger, which is harmless', 'It needs more memory but gives the same answer', 'The check\'s parity stops holding'],
+      options: ['The check hears its own opinion back as independent evidence', 'The beliefs grow larger, but their signs and the decisions stay the same', 'It needs more memory for the messages, but reaches the same answer', 'The check\'s parity equation no longer holds for the decoded word'],
       answer: 0,
       explain: 'Each message is meant to be new evidence for its receiver. Echoing counts it twice, and an error then reinforces itself.',
       why: ['', 'Large beliefs that are wrong are the failure: they stop the decoder changing its mind.', 'It changes the answer, not only the storage.', 'Parity is computed over the hard decisions at the end, not over messages.'],
     },
     {
       question: 'What does a density-evolution threshold of 0.4294 promise for a (3, 6) code on the erasure channel?',
-      options: ['Below it a typical long code decodes nearly everything, and above it no length helps', 'Every code with these degrees corrects exactly this share of erasures', 'A word of any length corrects erasures up to this share', 'It is the capacity of the channel at this code\'s rate'],
+      options: ['Below it typical long codes decode nearly everything; above it length does not help', 'Every code with these degrees corrects exactly this share of erasures', 'A word of any length, even a short one, corrects erasures up to this share', 'It is the capacity of the erasure channel at this code\'s rate of one half'],
       answer: 0,
       explain: 'It belongs to the ensemble and the decoder, in the limit of long blocks. Capacity at rate ½ on this channel is 0.5, higher than this.',
       why: ['', 'A particular unlucky code may do worse: the claim is about typical ones.', 'Short words stall below it, since their graphs have short cycles.', 'Capacity at rate ½ is 0.5: the threshold falls short of it.'],
@@ -53,7 +53,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
   ],
   littleslaw: [
     {
-      question: 'A link at 80 % load has random packet sizes. What is the mean wait, and what load would halve it?',
+      question: 'A link at 80 % load has random arrivals and exponentially distributed packet sizes. What is the mean wait, and what load would halve it?',
       options: ['4 packet times; two thirds', '4 packet times; 40 %', '0.8 packet times; 40 %', '5 packet times; 70 %'],
       answer: 0,
       explain: 'ρ / (1 − ρ) at 0.8 is 4, and solving for 2 gives ρ = 2 / 3. Halving the traffic overshoots a long way, to a wait of two thirds of a packet.',
@@ -70,7 +70,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
   cubic: [
     {
       question: 'What changes between Reno and CUBIC in how the window grows?',
-      options: ['A curve in real time, flat near the last maximum, in place of a packet a round trip', 'It grows on the marks a router sets and not on ACKs', 'It never falls after a loss, only stops growing for a while', 'It sends at a measured delivery rate, with no window at all'],
+      options: ['A curve in real time, flat near the last maximum, in place of a packet a round trip', 'It grows on the marks a router sets and not on ACKs, so it sees a queue early', 'It never falls after a loss, and only stops growing until the queue has drained', 'It sends at a measured delivery rate and has no window left to grow at all'],
       answer: 0,
       explain: 'W(t) = C (t − K)³ + W_max is a function of time since the last cut, so a long round trip no longer slows the climb.',
       why: ['', 'Both grow on ACKs, and both can read marks.', 'It falls by 30 %, a smaller cut than Reno\'s half.', 'That is BBR. CUBIC still reads loss.'],
@@ -86,7 +86,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
   aqm: [
     {
       question: 'Why does CoDel measure how long a packet waited and not how long the queue is?',
-      options: ['A wait means the same at any rate, where a length has to be divided by the rate', 'It needs no memory for packets when it works that way', 'It then never has to drop a packet at all', 'It makes the link itself carry more per second'],
+      options: ['A wait means the same at any link rate, and a length does not', 'It needs no memory for packets when it works that way', 'It then never has to drop a packet at all', 'It makes the link itself carry more per second'],
       answer: 0,
       explain: 'A wait is what the application experiences. 50 packets is 60 ms at one rate and 6 ms at ten times it, and radio links change rate all the time.',
       why: ['', 'It still needs a buffer: it only keeps it from staying full.', 'It drops, or marks, as soon as a standing queue lasts an interval.', 'It changes the delay, and costs a little of the rate.'],
@@ -118,14 +118,14 @@ export const CHECK10D: Record<string, Quiz[]> = {
   ecn: [
     {
       question: 'A router marks a packet Congestion Experienced. Who slows down, and how do they find out?',
-      options: ['The sender, from the receiver\'s echo in its ACKs', 'The router, which lowers its link rate', 'The receiver, which delays its ACKs', 'Nobody until a packet is lost'],
+      options: ['The sender, from the receiver\'s echo in its ACKs', 'The router, which lowers its link rate until the queue drains', 'The receiver, which delays its ACKs and so holds the sender back', 'Nobody: a mark only counts once a packet is also lost'],
       answer: 0,
       explain: 'The window is the sender\'s, so the signal has to reach the sender, and the way back is the ACK. It takes a round trip, as a loss would, but loses no data.',
       why: ['', 'A router keeps sending as fast as it can. It only signals.', 'The receiver only reports. It does not choose the window.', 'Saving that loss is the purpose of the mark.'],
     },
     {
       question: 'What does ECN save compared with a drop at the same moment?',
-      options: ['The data: nothing has to be sent again', 'The round trip the signal takes', 'The window cut', 'The buffer'],
+      options: ['The data: nothing has to be sent again', 'The round trip the signal needs to reach the sender', 'The window cut: the sender keeps its rate', 'The buffer: the router can do without one'],
       answer: 0,
       explain: 'The cut and the delay of the signal are the same. In the model CoDel with marks loses no packets, at the same throughput.',
       why: ['', 'A mark still has to go to the receiver and back.', 'The sender cuts just as it would for a loss.', 'The queue still needs its buffer. The discipline is what changed.'],
@@ -140,8 +140,8 @@ export const CHECK10D: Record<string, Quiz[]> = {
       why: ['', 'Sending faster can only raise the RTT. That estimate is refreshed in the low-window phase.', 'A fuller buffer raises the delay.', 'This version of BBR does not read loss at all.'],
     },
     {
-      question: 'On a shallow tail-drop buffer BBR takes nearly all of the link from CUBIC. What is the mechanism?',
-      options: ['Only CUBIC reacts to the drops, so BBR\'s rate grows into the room', 'BBR is sent at a higher priority by the queue', 'CUBIC\'s packets are larger, so more of them are lost', 'BBR marks CUBIC\'s packets as it passes them'],
+      question: 'On a shallow tail-drop buffer BBR can take most of the link from CUBIC. What is the mechanism?',
+      options: ['Only CUBIC reacts to the drops, so BBR\'s rate grows into the room', 'The queue serves BBR\'s paced packets ahead of CUBIC\'s bursts', 'CUBIC\'s packets are larger, so it loses more bytes at each drop', 'BBR\'s probes mark CUBIC\'s packets as they pass them in the queue'],
       answer: 0,
       explain: 'The queue favours nobody. One sender treats a drop as an instruction and the other does not. A queue per flow removes the argument.',
       why: ['', 'Nothing on the link tells the two apart: a tail-drop queue has no priorities.', 'Both send the same size of packet in the model.', 'A sender cannot mark another\'s packets, and marks are for routers.'],
@@ -173,7 +173,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
     },
     {
       question: 'Why does ECMP send all of a flow\'s packets along one path?',
-      options: ['Over different paths they would reorder, and TCP reads that as loss', 'Switches can hold only one route per flow', 'It saves bits in the packet\'s header', 'The paths have different bandwidths'],
+      options: ['Over different paths they would reorder, and TCP reads that as loss', 'Switches can hold only one route per flow', 'It saves bits in the packet\'s header', 'It would otherwise overload the slowest of the paths'],
       answer: 0,
       explain: 'Paths have equal capacity but not equal queues, so packets overtake each other, and three out-of-order arrivals make a sender halve for nothing.',
       why: ['', 'A hash holds no per-flow route at all: it is recomputed from the header each time.', 'It adds nothing to the header either way.', 'ECMP assumes equal cost, and in a fat tree the paths are equal.'],
@@ -182,17 +182,17 @@ export const CHECK10D: Record<string, Quiz[]> = {
   incast: [
     {
       question: 'Why does a loss at the end of a burst cost so much more than one in the middle?',
-      options: ['No later packet arrives to raise duplicate ACKs, so only the timer is left', 'Later packets matter more to the application than early ones', 'The switch always drops the retransmission of that packet too', 'The receiver gives up on the flow when its end goes missing'],
+      options: ['No later packet raises duplicate ACKs, so only the timer is left', 'Later packets matter more to the application than early ones', 'The switch always drops the retransmission of that packet too', 'The receiver gives up on the flow when its end goes missing'],
       answer: 0,
       explain: 'A fast retransmit needs three packets behind the gap. Without them the only clue is a timer set for a far longer path than this one.',
       why: ['', 'All the bytes matter equally: the read waits for all of them.', 'A retransmission meets an empty port by then. It is the waiting that takes the time.', 'It is still waiting, and receives it when it comes.'],
     },
     {
       question: 'Why does a stock 200 ms timer hurt here more than it hurts a web user?',
-      options: ['The round trip is 100 µs, so it is thousands of round trips of idle link', 'Data centre links are slower than a home connection', 'The web has no such timers to wait for', 'Web pages cannot tolerate any delay at all'],
+      options: ['The round trip is 100 µs, so it is thousands of round trips of idle link', 'More bytes are lost at data-centre rates, so the repair takes longer', 'The web has no such timers to wait for', 'Web pages cannot tolerate any delay at all'],
       answer: 0,
       explain: 'On the internet a 200 ms timer is a few round trips. Here it is thousands, spent idle with data waiting, and the whole read waits for it.',
-      why: ['', 'They are far faster, and that is what makes the ratio so large.', 'It has the same timers, on far longer round trips.', 'A web user waits far longer than this without noticing.'],
+      why: ['', 'The repair is one burst on a fast idle link. The time goes in the wait before it.', 'It has the same timers, on far longer round trips.', 'A web user waits far longer than this without noticing.'],
     },
   ],
   dctcp: [
@@ -205,7 +205,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
     },
     {
       question: 'Why does DCTCP stay inside one data centre?',
-      options: ['Against Reno on a mark it is far too aggressive', 'It needs a 100 µs round trip to compute α', 'It cannot cross a router', 'It uses a private header'],
+      options: ['Against Reno on a mark it is far too aggressive', 'Its α only converges at data-centre round trips', 'It cannot cross a router', 'It uses a private header'],
       answer: 0,
       explain: 'A small cut where Reno halves takes a share Reno cannot hold. One operator can move every sender and switch together. L4S tries to solve that for the internet.',
       why: ['', 'α is a running share marked, at any round trip.', 'It runs over ordinary IP routers that mark.', 'It uses the same two ECN bits.'],
@@ -253,10 +253,10 @@ export const CHECK10D: Record<string, Quiz[]> = {
     },
     {
       question: 'Which way of re-sending a request cuts the tail for only a few percent more load?',
-      options: ['To a second replica, once the first is already late', 'To two replicas, every time', 'To the same server, at once', 'To every replica, once a second'],
+      options: ['To a second replica, once the first is already late', 'To two replicas, every time', 'To the same server, at once', 'To every replica, as soon as the first is late'],
       answer: 0,
       explain: 'Waiting until about the 95th percentile means only the slowest few requests are sent twice. The first answer is kept.',
-      why: ['', 'That doubles the load.', 'The same server is the one being slow.', 'That is far more load, on a timer that has nothing to do with the request.'],
+      why: ['', 'That doubles the load.', 'The same server is the one being slow.', 'That is far more load than one extra copy, which does nearly as well.'],
     },
   ],
 };

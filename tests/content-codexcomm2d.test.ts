@@ -7,9 +7,9 @@ import { CHECKS } from '../src/campaign/codexcheck';
 import { moreOf } from '../src/campaign/codexmore';
 import { flatBest, flatPower, loadBits, waterFill } from '../src/comm/carriers';
 import { ecmpExpected, ecmpNoCollision, fanoutSlow, fatTree, gbnGoodput, incast, oversubscription, pfcHeadroom, pfcRun } from '../src/comm/dc';
-import { twiddleCount } from '../src/comm/fftfix';
+import { streamLatency, twiddleCount } from '../src/comm/fftfix';
 import { fftMults } from '../src/comm/fourier';
-import { becThreshold, ebn0OfSigma, AWGN_SIGMA } from '../src/comm/ldpc';
+import { becThreshold, ebn0OfSigma, AWGN_SIGMA, ldpcTrial, regularCode } from '../src/comm/ldpc';
 import { DOWN_TONES, gapDb, toneSnrDb, ADSL } from '../src/comm/modem';
 import { bottleneck, cubicK, cubicWindow, dctcpAlpha, dctcpAmplitude, dctcpMinK, mm1Quantile, mm1Wait, renoWindow } from '../src/comm/queues';
 import { shannonBinaryDb, convSoftBound } from '../src/comm/ber';
@@ -32,6 +32,7 @@ const c = (x: number) => Math.round(x).toLocaleString('en-US');
 describe('many carriers', () => {
   it('fft: the costs measured, the twiddles counted', () => {
     expect([n(fxCore(10, false)), n(fxRot45(10)), n(fxCmul(10)), n(fftNet(8, 10)), n(fftNet(16, 10)), n(fftStream(16, 10)), n(fftStream(64, 10))]).toEqual([416, 1752, 6884, 8496, 51360, 22591, 54598]);
+    expect(streamLatency(16)).toBe(19);
     quotes('fft', '416', '1,752', '6,884', '8,496', '51,360', '22,591', '54,598', '19 edges');
     const t = twiddleCount(8);
     expect([t.one, t.minusj, t.root1 + t.root3, t.general, fftMults(8)]).toEqual([7, 3, 2, 0, 12]);
@@ -55,7 +56,10 @@ describe('codes near the limit', () => {
   it('ldpc: the threshold, the bracket, the limit', () => {
     expect(becThreshold().toFixed(4)).toBe('0.4294');
     expect([ebn0OfSigma(AWGN_SIGMA[1]).toFixed(2), ebn0OfSigma(AWGN_SIGMA[0]).toFixed(2), shannonBinaryDb(0.5).toFixed(2)]).toEqual(['1.01', '1.16', '0.19']);
-    expect(convSoftBound(CONV_K7, 2.4)).toBeGreaterThan(5e-3);
+    expect(Math.round(convSoftBound(CONV_K7, 2.4) * 1000)).toBe(6);
+    const run = ldpcTrial(regularCode(2016, 3, 6, 5), 2, 40, { seed: 2, maxIter: 60 }); // the chapter's own run
+    expect(Math.abs(run.meanIter - 10.8)).toBeLessThan(0.1);
+    expect(Math.round(12 * run.meanIter)).toBe(130);
     quotes('ldpc', '0.4294', '1.01 and 1.16', '0.19 dB', '10.8', '130');
   });
 });
@@ -119,6 +123,7 @@ describe('inside the data centre', () => {
     const read = (s: number, rto = 200, b = 32) => incast({ senders: s, blockBytes: 256 * 1024, bufferPkts: b, rtoMs: rto });
     expect(read(2).timeouts).toBe(0);
     expect(read(40).timeouts).toBeGreaterThan(0);
+    expect(read(40).share).toBeLessThan(0.5);
     expect(read(40, 1).share).toBeGreaterThan(0.9);
     expect(read(40, 200, 512).share).toBeGreaterThan(0.9);
     expect(read(40, 1, 512).share).toBeLessThan(0.5);
@@ -133,6 +138,7 @@ describe('inside the data centre', () => {
     const W = Math.round((100e9 * 10e-6) / (1024 * 8));
     expect(W).toBe(122);
     expect([(100 * gbnGoodput(1e-5, W)).toFixed(2), Math.round(100 * gbnGoodput(1e-3, W))]).toEqual(['99.88', 89]);
+    expect(Math.round((1024 * 8) / 100 / 10) * 10).toBe(80);
     quotes('rdma', 'W = 122', '99.88 %', '89 %', '99.9 %', '80 ns');
   });
   it('PFC: the victim and the headroom', () => {

@@ -62,7 +62,7 @@ on the Gaussian channel: threshold between 1.01 and 1.16 dB, limit 0.19 dB
 
 operations at 2 dB on a 2,016-bit word
 12 messages a round per data bit × 10.8 rounds ≈ 130 updates
-K = 7 Viterbi: 128 add-compares a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1,000.`,
+K = 7 Viterbi: 128 branch additions (64 add-compare-selects) a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1,000.`,
     },
     mistakes: [
       'Echoing a check\'s own message back to it: the beliefs then grow with no new information, and a wrong one stops the decoder changing its mind.',
@@ -106,7 +106,7 @@ CUBIC: K = ∛(8,333 × 0.3 / 0.4) ≈ 18.4 s
 at one loss in 10 000, 100 ms: Reno 122 packets, CUBIC 187</pre>CUBIC's average is (C (3 + β) / (4 (1 − β)))^¼ (RTT / p)^¾, 1.054 (RTT / p)^¾ at C = 0.4, β = 0.7.`,
     },
     mistakes: [
-      'Expecting a window to settle quickly at the closed form: the curve is flat near its old maximum, so a window that overshot in slow start comes down by about a packet a cycle.',
+      'Reading t as round trips: it is time since the last cut, so two flows with different round trips climb alike in seconds, which is what ends Reno\'s penalty on long paths.',
       'Calling it unfair to Reno everywhere: on small windows and short round trips its Reno-friendly region holds it at about Reno\'s rate.',
       'Thinking it fixes bufferbloat: it still reads only loss, so it still fills a tail-drop buffer, and on a bloated one it adds half a second of delay like Reno.',
     ],
@@ -250,11 +250,10 @@ halving on the same marks: 76 % of the link</pre>The paper's safe bound on K is 
     ],
     chapters: [
       { chapter: 'datacentre', step: 3, label: 'DCTCP: the queue near zero' },
-      { chapter: 'queues', step: 6, label: 'A mark in place of a drop' },
     ],
   },
   rdma: {
-    idea: `At 100 Gb/s a 1 KB packet takes 80 ns, far less than a TCP stack's thousands of instructions per packet plus a copy and an interrupt. RDMA moves the whole transport into the NIC: an application registers memory and posts a request directly to the hardware, with no system call, and the NIC on the far side writes the data into memory with no interrupt and no CPU on either end. It came from InfiniBand, and RoCEv2 runs it over ordinary UDP and IP.<br><br>The catch is in the repair. To stay simple enough to build in a NIC, classic RDMA delivers in order and retransmits with go-back-N, so a loss throws away the whole pipe behind it. That is why data centres set out to build a network that almost never loses. Newer NICs do selective repair and tolerate reordering, which weakens the argument.`,
+    idea: `At 100 Gb/s a 1 KB packet takes about 80 ns, far less than a TCP stack's thousands of instructions per packet plus a copy and an interrupt. RDMA moves the whole transport into the NIC: an application registers memory and posts a request directly to the hardware, with no system call, and the NIC on the far side writes the data into memory with no interrupt and no CPU on either end. It came from InfiniBand, and RoCEv2 runs it over ordinary UDP and IP.<br><br>The catch is in the repair. To stay simple enough to build in a NIC, classic RDMA delivers in order and retransmits with go-back-N, so a loss throws away the whole pipe behind it. That is why data centres set out to build a network that almost never loses. Newer NICs do selective repair and tolerate reordering, which weakens the argument.`,
     example: {
       title: 'What a loss costs, 100 Gb/s across 10 µs',
       body: `<pre>the pipe: W = 122 packets of 1 KB
