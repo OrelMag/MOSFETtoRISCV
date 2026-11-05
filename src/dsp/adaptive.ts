@@ -1,5 +1,5 @@
 // Filters that learn (DOM-free): the Wiener solution, LMS and NLMS, an echo canceller and an equalizer on labelled models, and the exact integer LMS that lib/lms.ts is compared with every clock.
-// The far-end "speech" is generated, not recorded, and says so wherever it is shown. Everything is seeded.
+// The chapter's far end is a recording (dsp/echofigs.ts); farEnd here is a generated stand-in the tests also use. Everything is seeded.
 
 import { gaussian, rng } from '../phys/line';
 import { wrapTo } from './fixed';
