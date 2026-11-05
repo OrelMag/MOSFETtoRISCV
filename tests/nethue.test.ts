@@ -56,13 +56,14 @@ describe('net hues', () => {
       const nl = netlistOf(def)!;
       const routed = routeNetlist(def, nl).nets;
       const hues = spreadHues(routed.map((n) => ({ key: netKey(nl.nets[n.index]), polys: n.paths })));
-      // Neighbours: a point of one within a unit of the other's polyline (axis-aligned segments).
-      const near = (p: readonly number[], q: HueNet['polys']) => q.some((poly) => poly.some((v, i) => i > 0 &&
-        p[0] >= Math.min(v[0], poly[i - 1][0]) - 1 && p[0] <= Math.max(v[0], poly[i - 1][0]) + 1 &&
-        p[1] >= Math.min(v[1], poly[i - 1][1]) - 1 && p[1] <= Math.max(v[1], poly[i - 1][1]) + 1));
+      // Neighbours: wires running side by side within a unit. Two that only cross are told apart by the hop.
+      const segs = (q: HueNet['polys']) => q.flatMap((poly) => poly.slice(1).map((v, k) => [poly[k], v] as const));
+      const along = (s: readonly (readonly number[])[], axis: number) => s[0][1 - axis] === s[1][1 - axis] && s[0][axis] !== s[1][axis];
+      const sideBySide = (p: HueNet['polys'], q: HueNet['polys']) => segs(p).some((s) => segs(q).some((u) => [0, 1].some((axis) =>
+        along(s, axis) && along(u, axis) && Math.abs(s[0][1 - axis] - u[0][1 - axis]) <= 1
+        && Math.min(s[0][axis], s[1][axis]) < Math.max(u[0][axis], u[1][axis]) && Math.min(u[0][axis], u[1][axis]) < Math.max(s[0][axis], s[1][axis]))));
       for (let i = 0; i < routed.length; i++) for (let j = i + 1; j < routed.length; j++) {
-        const pts = routed[i].paths.flatMap((p) => p.flatMap((v, k) => k ? [v, [(v[0] + p[k - 1][0]) / 2, (v[1] + p[k - 1][1]) / 2]] : [v]));
-        if (pts.some((p) => near(p, routed[j].paths))) expect(dist(hues[i], hues[j]), `${def.id}: ${netKey(nl.nets[routed[i].index])} / ${netKey(nl.nets[routed[j].index])}`).toBeGreaterThanOrEqual(20);
+        if (sideBySide(routed[i].paths, routed[j].paths)) expect(dist(hues[i], hues[j]), `${def.id}: ${netKey(nl.nets[routed[i].index])} / ${netKey(nl.nets[routed[j].index])}`).toBeGreaterThanOrEqual(20);
       }
     }
   });
