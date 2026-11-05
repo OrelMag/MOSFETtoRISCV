@@ -64,6 +64,13 @@ describe('wires first and the parts', () => {
     expect(bad).toEqual([]);
   }, 600_000);
 
+  it('keeps the crossing itself a wire when only another branch of its net would run through a part', () => {
+    const def = reachableDefs().find((d) => d.id === 'sync_bench')!;
+    const net = routeNetlist(def, drawnNetlist(def, netlistOf(def)!)).nets.find((n) => netlistOf(def)!.nets[n.index].name === 'a')!;
+    expect(net.tags.map((t) => t.end)).not.toContain('sync.d');
+    expect(net.ends?.filter((e) => e?.endsWith('.d')).length).toBe(1);
+  });
+
   it('finds a wire through a part, not one that ends on its edge', () => {
     const nl = netlistOf(DFF_EDGE6)!;
     const i = nl.instances[0], [x, y] = i.at!;

@@ -7,7 +7,7 @@
 // spans, wide fan-out. A clock or reset reaching many parts stays a pointer anywhere, as on a real schematic.
 import { instPort, type Vec } from '../sim/geometry';
 import { parseEnd, type ComponentDef, type NetDef, type Netlist } from '../sim/types';
-import { routeNetlist, symbolRects, wireOverlaps, type RoutedNet } from './route';
+import { routeNetlist, symbolRects, wireOverlaps, type Rect, type RoutedNet } from './route';
 
 /** A level of up to this many nets is tried wired whole. */
 export const WHOLE_NETS = 30;
@@ -70,27 +70,53 @@ function isLocal(nl: Netlist, n: NetDef): boolean {
   });
 }
 
-/** The nets (their index in `nl`) with a wire running through a part's body. */
-export function wiresThroughParts(nl: Netlist, nets: readonly RoutedNet[]): Set<number> {
-  const bodies = symbolRects(nl).filter((b) => b.what.startsWith('instance ')).map((b) => b.r);
-  const hit = new Set<number>();
-  for (const net of nets) for (const p of net.paths) for (let i = 0; i + 1 < p.length; i++) {
+const crosses = (bodies: readonly Rect[], p: readonly Vec[]) => {
+  for (let i = 0; i + 1 < p.length; i++) {
     const x0 = Math.min(p[i][0], p[i + 1][0]), x1 = Math.max(p[i][0], p[i + 1][0]);
     const y0 = Math.min(p[i][1], p[i + 1][1]), y1 = Math.max(p[i][1], p[i + 1][1]);
     // strictly inside: a wire may end on a part's edge, where its pins are
-    if (bodies.some((r) => x0 < r.x + r.w - EDGE && x1 > r.x + EDGE && y0 < r.y + r.h - EDGE && y1 > r.y + EDGE)) hit.add(net.index);
+    if (bodies.some((r) => x0 < r.x + r.w - EDGE && x1 > r.x + EDGE && y0 < r.y + r.h - EDGE && y1 > r.y + EDGE)) return true;
   }
-  return hit;
+  return false;
+};
+const bodiesOf = (nl: Netlist) => symbolRects(nl).filter((b) => b.what.startsWith('instance ')).map((b) => b.r);
+
+/** The nets (their index in `nl`) with a wire running through a part's body. */
+export function wiresThroughParts(nl: Netlist, nets: readonly RoutedNet[]): Set<number> {
+  const bodies = bodiesOf(nl);
+  return new Set(nets.filter((n) => n.paths.some((p) => crosses(bodies, p))).map((n) => n.index));
 }
 
-/** The nets `wire` picks, as wires; those that would run through a part stay pointers. */
+/** The sinks of a net whose wire runs through a part's body. */
+function sinksThroughParts(nl: Netlist, net: RoutedNet): string[] {
+  const bodies = bodiesOf(nl);
+  return net.paths.flatMap((p, i) => { const end = net.ends?.[i]; return end && crosses(bodies, p) ? [end] : []; });
+}
+
+/** The nets `wire` picks, as wires; a sink whose wire would run through a part stays a pointer, the others are wired. */
 function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean): Netlist {
-  const keep = new Set<NetDef>();
+  const keep = new Map<NetDef, Set<string>>();
+  const draft = () => {
+    const c = withWires(nl, wire);
+    return { ...c, nets: c.nets.map((n, i) => {
+      const k = keep.get(nl.nets[i]);
+      return k ? { ...n, tags: [...k] } : n;
+    }) };
+  };
   for (let pass = 0; pass < CLEAR_PASSES; pass++) {
-    const c = withWires(nl, (x) => wire(x) && !keep.has(x));
-    const hit = [...wiresThroughParts(c, routeNetlist(def, c).nets)].map((i) => nl.nets[i]).filter((x) => tagged(x) && !keep.has(x));
-    if (!hit.length) return c;
-    for (const x of hit) keep.add(x);
+    const c = draft();
+    let more = false;
+    for (const net of routeNetlist(def, c).nets) {
+      const orig = nl.nets[net.index];
+      if (!tagged(orig) || !wire(orig)) continue;
+      const hit = sinksThroughParts(c, net);
+      if (!hit.length) continue;
+      const k = keep.get(orig) ?? new Set<string>();
+      for (const end of hit) k.add(end);
+      keep.set(orig, k);
+      more = true;
+    }
+    if (!more) return c;
   }
   return nl;
 }
