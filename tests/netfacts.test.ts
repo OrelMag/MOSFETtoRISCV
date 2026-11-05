@@ -6,6 +6,10 @@ import { B0, B1, BX, BZ, type Bit, netlistOf } from '../src/sim/types';
 import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import type { ChipDoc } from '../src/editor/model';
+import { chapterHref, chapterOfEntry, entryOfPart, explainPart } from '../src/campaign/partindex';
+import { codexById } from '../src/campaign/codex';
+import { chapters } from '../src/chapters';
+import { truthOff } from '../src/view/truthrule';
 import { handout, isLevelChipId } from '../src/editor/levelgate';
 import { netMembers, netOfSelection } from '../src/editor/netsel';
 import { levelChipId } from '../src/campaign/levels';
@@ -157,6 +161,85 @@ describe('the rows of Take it elsewhere', () => {
     const rows = elsewhereRows({ def: nmos, say: () => {}, sandbox: { label: 'Open in Sandbox', run }, verilog: true, image: 'It has no inside to draw.' });
     expect(rows.map((r) => r.label)).toEqual(['Copy Verilog', 'Save an image']);
     expect(rows.every((r) => !!r.why)).toBe(true);
+  });
+});
+
+describe('what teaches a part', () => {
+  it('finds a part, a generated size, and nothing for a chip of the learner', () => {
+    expect(entryOfPart('nand')?.id).toBeTruthy();
+    expect(entryOfPart('xor')?.id).toBe('xor');
+    expect(entryOfPart('nmos')).toBeTruthy();
+    expect(entryOfPart(resolveComponent('alu8')!.id)).toBeTruthy();
+    expect(entryOfPart('u_my_chip')).toBeUndefined();
+  });
+
+  it('every entry and chapter it names exists, and most of the library is covered', () => {
+    const known = new Set(chapters.map((c) => c.id));
+    let parts = 0, found = 0, taught = 0;
+    for (const def of registry.values()) {
+      parts++;
+      const e = entryOfPart(def.id);
+      if (!e) continue;
+      found++;
+      expect(codexById(e.id)).toBe(e);
+      const ch = chapterOfEntry(e.id);
+      if (!ch) continue;
+      taught++;
+      expect(known.has(ch.chapter), ch.chapter).toBe(true);
+      expect(chapterHref(ch)).toMatch(/^#\/c\/[\w-]+(\/\d+)?$/);
+      expect(ch.label).toBeTruthy();
+    }
+    console.log(`part index: ${found} of ${parts} registered parts have a codex entry, ${taught} a chapter`);
+    expect(found).toBeGreaterThan(40);
+    expect(taught).toBeGreaterThan(30);
+  });
+
+  const some = entryOfPart('nand')!;
+
+  it('says everything with no level', () => {
+    const x = explainPart('nand', null);
+    expect(x.codex).toMatchObject({ id: some.id, locked: false });
+    expect(x.used).toBe(true);
+    expect(explainPart('u_my_chip', null)).toEqual({ used: true });
+  });
+
+  it('on an open level: a locked entry says so, no chapter, nothing on where it is used', () => {
+    const x = explainPart('nand', { unlocked: new Set(), done: false });
+    expect(x.codex).toMatchObject({ id: some.id, locked: true });
+    expect(x.codex!.unlock).toBeTruthy();
+    expect(x.chapter).toBeUndefined();
+    expect(x.used).toBe(false);
+  });
+
+  it('an unlocked entry opens, with its chapter; where it is used waits for the level', () => {
+    const x = explainPart('nand', { unlocked: new Set([some.id]), done: false });
+    expect(x.codex!.locked).toBe(false);
+    expect(x.codex!.unlock).toBeUndefined();
+    expect(x.used).toBe(false);
+    expect(explainPart('nand', { unlocked: new Set([some.id]), done: true }).used).toBe(true);
+  });
+
+  it('no level hands over a locked entry through its own unlocked parts', () => {
+    // for every level, what it may place: a row that names a locked entry stays locked, with no chapter to read instead
+    for (const n of NODES) {
+      if (!n.unlocks) continue;
+      for (const u of n.unlocks.filter((x) => !x.endsWith('*'))) {
+        const x = explainPart(u, { unlocked: new Set(), done: false });
+        expect(x.chapter, `${n.id}: ${u}`).toBeUndefined();
+        expect(x.used, `${n.id}: ${u}`).toBe(false);
+        if (x.codex) expect(x.codex.locked, `${n.id}: ${u}`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('why a part has no truth table', () => {
+  it('matches the Inspector’s limits', () => {
+    expect(truthOff(resolveComponent('xor')!)).toBeNull();
+    expect(truthOff(resolveComponent('nand')!)).toBeNull();
+    expect(truthOff(resolveComponent('nmos')!)).toMatch(/device/);
+    expect(truthOff(resolveComponent('sr_latch') ?? resolveComponent('dff')!)).toMatch(/feedback/);
+    expect(truthOff(resolveComponent('alu8')!)).toMatch(/input bits/);
   });
 });
 

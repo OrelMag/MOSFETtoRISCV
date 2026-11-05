@@ -13,6 +13,7 @@ import { structuralVerilog } from '../sim/verilog';
 import { h, icon } from '../ui/dom';
 import type { Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
+import { TRUTH_MAX_BITS } from './truthrule';
 import { techTable } from './techtable';
 
 export interface InspectTarget {
@@ -97,6 +98,17 @@ export class Inspector {
     this.setFolded(f, false);
     try { localStorage.setItem(FOLD_KEY, f ? 'folded' : 'open'); } catch { /* private window */ }
     (f ? this.rail : this.el.querySelector<HTMLElement>('.insp-fold'))?.focus();
+  }
+
+  /** Open at this section, for the right-click menu: unfolded (not remembered: the learner's own fold stands next time), scrolled to. */
+  openAt(section: 'info' | 'truth' | 'used'): void {
+    if (this.folded) this.setFolded(false, false);
+    if (section === 'used') this.usedOpen = true;
+    this.setTab(section === 'truth' ? 'truth' : 'info');
+    if (section === 'used') {
+      const det = [...this.body.querySelectorAll<HTMLElement>('details.insp-used')].find((d) => d.querySelector('summary')?.textContent === 'Where it is used');
+      if (det) peek(det);
+    }
   }
 
   setTab(t: Tab): void {
@@ -308,7 +320,7 @@ export class Inspector {
       this.body.append(h('p', { class: 'empty' }, 'Its signal ports are bidirectional (a switch between two nodes): there is no input → output function to tabulate. Drive one side and watch the other.'));
       return;
     }
-    if (n > 8) {
+    if (n > TRUTH_MAX_BITS) {
       this.body.append(h('p', { class: 'empty' }, `${n} input bits → ${groupDigits(2 ** n)} rows. Too many to list. That is why we describe big circuits with arithmetic, not tables.`));
       return;
     }

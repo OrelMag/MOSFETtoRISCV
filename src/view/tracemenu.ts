@@ -116,6 +116,34 @@ export function elsewhereRows(o: ElsewhereHost): NonNullable<MenuEntry>[] {
 /** The group, or nothing when a surface offers none of it. */
 export const elsewhereGroup = (rows: NonNullable<MenuEntry>[]): MenuEntry[] => (rows.length ? [{ label: 'Take it elsewhere', sub: rows }] : []);
 
+export interface ExplainHost {
+  truth?(): void;
+  used?(): void;
+  openCodex(id: string): void;
+  openChapter(href: string): void;
+  /** A level's chip: its id, for the gate (absent: no level). */
+  chip?: { id: string; level: boolean };
+}
+
+/** Explain for a part or a level: the codex, its progress and the library's usage load when the group opens. */
+export function explainGroup(def: ComponentDef, host: ExplainHost): MenuEntry[] {
+  return [{ label: 'Explain', sub: async () => {
+    const [{ explainPart, gateOf }, { truthOff }] = await Promise.all([import('../campaign/partindex'), import('./truthrule')]);
+    const gate = host.chip ? await gateOf(host.chip.id, host.chip.level) : null;
+    const x = explainPart(def.id, gate);
+    const off = truthOff(def);
+    const rows: MenuEntry[] = [];
+    if (host.truth) rows.push(off ? { label: 'Truth table', why: off } : { label: 'Truth table', run: () => host.truth!() });
+    if (x.codex) {
+      const c = x.codex;
+      rows.push({ label: `Codex: ${c.title}`, ...(c.locked ? { hint: c.unlock ? `Unlocks when you pass ${c.unlock}` : 'Not unlocked yet' } : {}), run: () => host.openCodex(c.id) });
+    }
+    if (x.chapter) rows.push({ label: `Chapter: ${x.chapter.label}`, run: () => host.openChapter(x.chapter!.href) });
+    if (x.used && host.used) rows.push({ label: 'Where it is used', hint: 'The first time reads the whole library', run: () => host.used!() });
+    return rows.length ? rows : [{ label: 'Nothing more on this one', why: 'It has no truth table or codex entry to show.' }];
+  } }];
+}
+
 export interface TraceHost {
   /** Light the net: every wire, label and tag of it. */
   highlight(): void;

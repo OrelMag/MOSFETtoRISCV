@@ -12,16 +12,27 @@ import { type Editor, registerToolbarAction } from './editor';
 
 const drawers = new WeakMap<Editor, InspectDrawer>();
 
-/** Inspect a part of the current chip (by instance name), or the chip itself. */
-export function inspect(ed: Editor, part?: string): void {
+/** Inspect a part of the current chip (by instance name), or the chip itself; `at`: open at this section. */
+export function inspect(ed: Editor, part?: string, at?: InspectSection): void {
   drawers.get(ed)?.close();
   const d = new InspectDrawer(ed, part);
   drawers.set(ed, d);
+  if (at) d.inspector.openAt(at);
 }
+
+/** Inspect a part deeper than the chip's own (look inside): no live values, it stays until closed. */
+export function inspectDef(ed: Editor, def: ComponentDef, label: string, at?: InspectSection): void {
+  drawers.get(ed)?.close();
+  const d = new InspectDrawer(ed, undefined, { def, label });
+  drawers.set(ed, d);
+  if (at) d.inspector.openAt(at);
+}
+
+export type InspectSection = Parameters<Inspector['openAt']>[0];
 
 class InspectDrawer {
   readonly el: HTMLElement;
-  private inspector = new Inspector();
+  readonly inspector = new Inspector();
   private title: HTMLElement;
   private def: ComponentDef | null = null;
   private valKey = '';
@@ -29,7 +40,7 @@ class InspectDrawer {
   private readonly chip: string;
   private readonly hook = () => this.tick();
 
-  constructor(private ed: Editor, private part?: string) {
+  constructor(private ed: Editor, private part?: string, private fixed?: { def: ComponentDef; label: string }) {
     this.chip = ed.chipId;
     this.title = h('h3', null);
     this.el = h('aside', { class: 'sb-drawer', 'aria-label': 'Inspector' },
@@ -56,6 +67,13 @@ class InspectDrawer {
   private tick(force = false): void {
     const ed = this.ed;
     if (ed.chipId !== this.chip) return this.close();
+    if (this.fixed) {
+      if (this.def === this.fixed.def) return;
+      this.def = this.fixed.def;
+      this.title.textContent = this.fixed.label;
+      this.inspector.show({ def: this.fixed.def });
+      return;
+    }
     const pd = this.part ? ed.doc.parts.find((p) => p.id === this.part) : undefined;
     if (this.part && !pd) return this.close();
     const def = pd ? ed.defOf(pd) : ed.compiled?.def;

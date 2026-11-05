@@ -14,7 +14,7 @@ import { h, hintBadge, icon, s } from '../ui/dom';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ViewFocus } from '../ui/viewlink';
 import { elsewhereGroup, elsewhereRows } from '../view/tracemenu';
-import { copyAsChip, handout } from './levelgate';
+import { copyAsChip, explainOn, handout } from './levelgate';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
@@ -157,12 +157,25 @@ class InsideView {
       },
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
+      inspect: (c) => this.inspectPart(c),
+      explain: (c) => {
+        const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
+        return def ? explainOn(this.ed, def, (at) => this.inspectPart(c, at)) : [];
+      },
     });
     this.view.radix = ed.view.radix;
     this.view.pickable = true;
     this.view.trace = true;
     this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
+  }
+
+  /** The Inspector's drawer on a part of the level on screen (or on the level). */
+  private inspectPart(c: string | null, at?: 'truth' | 'used'): void {
+    const ctx = this.ctx;
+    const def = c ? ctx?.node.children?.get(c)?.def : ctx?.def;
+    // on demand: inspect.ts registers a toolbar action, and editor.ts imports this file before it can take one
+    if (def) void import('./inspect').then((m) => m.inspectDef(this.ed, def, c ? `${c} · ${def.name}` : def.name, at));
   }
 
   /** The right-click menu's Take it elsewhere: a level's parts stay on the level. */
