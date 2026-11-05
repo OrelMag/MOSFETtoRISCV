@@ -56,9 +56,10 @@ export type ChallengeCheck =
   | { kind: 'sequence'; init?: Record<string, number>; steps: SeqStep[] }
   /**
    * A test bench of its own (the campaign's CPU cores: programs run against a golden model). It gets
-   * the compiled circuit and reports like the built-in kinds; `describe` names what it runs.
+   * the compiled circuit and reports like the built-in kinds; `describe` names what it runs, `unit` what it counts (default a test).
+   * `slow`: holds the page for many seconds, so Check says so first.
    */
-  | { kind: 'custom'; describe: string; run: (def: ComponentDef, mode: 'gate' | 'switch') => CustomRun };
+  | { kind: 'custom'; describe: string; run: (def: ComponentDef, mode: 'gate' | 'switch') => CustomRun; unit?: string; slow?: boolean };
 
 /** What a custom test bench found: failures (empty: pass), how much it ran, extra metrics. */
 export interface CustomRun {

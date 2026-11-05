@@ -14,6 +14,8 @@ import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
+import { partnerLines } from './partners';
+import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
@@ -120,6 +122,7 @@ export class SchematicView {
   private probeG: SVGGElement | null = null;
   private flowG: SVGGElement | null = null;
   private labelG: SVGGElement | null = null;
+  private partnerG: SVGGElement | null = null;
   private tokens: FlowTokens | null = null;
   radix: Radix = 'hex';
   /** When > 0, value changes travel along the wires as fronts lasting this many ms. */
@@ -241,7 +244,8 @@ export class SchematicView {
     this.netMarks = new Map();
     this.closeMenu();
     if (!keepView) { this.group = new Set(); this.heatMap = null; }
-    const base = this.base = netlistOf(ctx.def) ?? null;
+    const authored = netlistOf(ctx.def);
+    const base = this.base = authored ? drawnNetlist(ctx.def, authored) : null;
     this.el.replaceChildren();
     this.wires = [];
     this.pins = [];
@@ -284,7 +288,9 @@ export class SchematicView {
     // the fixed-size block names (legible.ts) have a layer of their own, last: nothing is painted over them
     const nameG = s('g', { class: 'lg-names', 'aria-hidden': 'true' });
     this.nameOf.clear();
-    this.el.append(gridRect, grid5Rect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.probeG, nameG);
+    this.partnerG = s('g', { class: 'partner-lines' });
+    this.hovered = -1;
+    this.el.append(gridRect, grid5Rect, wiresG, this.flowG, tokG, hitG, instG, pinG, labelG, this.partnerG, this.probeG, nameG);
 
     // Bounding box of everything drawn.
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -302,12 +308,13 @@ export class SchematicView {
       const hue = hues[ni];
       w.hue = hue;
       for (const t of net.tags) {
-        const { stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
+        const { tip, stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
         const g = s('g', { class: 'net-tag', 'data-net': net.index });
         setNetHue(g, hue);
         // A hand-placed tag's stub is one of the net's paths (drawn below with the wires).
         const stub = s('path', { d: sp.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' '), class: cls });
-        g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }),
+        // The dot stands in for the box when the name is too small to read (styles/app.css lg-h-tag).
+        g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }), s('circle', { class: 'tag-end', cx: tip[0], cy: tip[1], r: 0.5 }),
           s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
         w.tags.push(g);
         labelG.append(g);
@@ -690,6 +697,7 @@ export class SchematicView {
       const dash = `${L} ${L + 1}`;
       anims.push(p.animate([{ strokeDasharray: dash, strokeDashoffset: 0 }, { strokeDasharray: dash, strokeDashoffset: -L }], timing));
     }
+    this.flowPartners(w);
     w.flowEls = els;
     w.flow = anims;
     anims[0].finished.then(() => {
@@ -783,6 +791,39 @@ export class SchematicView {
     for (const w of this.wires) if (w.shown !== undefined && !w.flow) this.paintWire(w, w.shown);
     this.el.querySelectorAll('.net-sel').forEach((e) => e.classList.remove('net-sel'));
     if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-sel'));
+    this.showPartners();
+  }
+
+  /** The lines from a net's driver to its pointers (view/partners.ts), as `class` elements in the net's colour. */
+  private partnerEls(w: WireEls, cls: string): SVGLineElement[] {
+    const nl = this.base;
+    if (!nl || !this.partnerG) return [];
+    const def = nl.nets[w.net.index];
+    return partnerLines(w.net, def.name ?? `n${w.net.index}`, def.ends[0]).map(([a, b]) => {
+      const l = s('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: `${cls}${w.net.width > 1 ? ' bus' : ''}` });
+      setNetHue(l, w.hue);
+      this.partnerG!.append(l);
+      return l;
+    });
+  }
+
+  /** Lines for the hovered net, else the selected one: a touch screen has no hover. */
+  private showPartners(): void {
+    this.partnerG?.querySelectorAll('.partner-line').forEach((e) => e.remove());
+    const idx = this.hovered >= 0 ? this.hovered : this.selectedNet;
+    const w = idx >= 0 ? this.wires.find((x) => x.net.index === idx) : undefined;
+    if (w?.tags.length) this.partnerEls(w, 'partner-line');
+  }
+
+  /** In slow motion a value crosses the gap between pointers too, as the front does on a wire. */
+  private flowPartners(w: WireEls): void {
+    if (!w.tags.length) return;
+    for (const l of this.partnerEls(w, 'partner-flow')) {
+      const L = Math.hypot(+l.getAttribute('x2')! - +l.getAttribute('x1')!, +l.getAttribute('y2')! - +l.getAttribute('y1')!);
+      l.style.strokeDasharray = `${L} ${L + 1}`;
+      const a = l.animate([{ strokeDashoffset: L, opacity: 0.9 }, { strokeDashoffset: 0, opacity: 0.9 }, { strokeDashoffset: 0, opacity: 0 }], { duration: this.flowMs * 1.5, easing: 'linear' });
+      a.finished.then(() => l.remove(), () => l.remove());
+    }
   }
 
   /** Clicking a net selects it; clicking one of its tags again pans to the net's next tag. */
@@ -1336,6 +1377,7 @@ export class SchematicView {
     this.el.querySelectorAll('.net-hover').forEach((e) => e.classList.remove('net-hover'));
     this.hovered = idx;
     if (idx >= 0) this.el.querySelectorAll(`[data-net="${idx}"]`).forEach((e) => e.classList.add('net-hover'));
+    this.showPartners();
   }
 
   private hoverTip(e: PointerEvent): void {
