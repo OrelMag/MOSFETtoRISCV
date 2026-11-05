@@ -174,7 +174,54 @@ def pictures():
     }
 
 
-GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures}
+def wav16(path):
+    """A mono 16-bit WAV's samples, as ints: the plain 44-byte header the site's clips have."""
+    import struct
+    b = path.read_bytes()
+    assert b[:4] == b'RIFF' and b[8:12] == b'WAVE' and b[36:40] == b'data'
+    rate = struct.unpack('<I', b[24:28])[0]
+    return rate, list(struct.unpack(f'<{(len(b) - 44) // 2}h', b[44:]))
+
+
+def speech():
+    """G.711 mu-law and IMA ADPCM through audioop (Python 3.12: it is gone from 3.13), and LPC on the voice through solve_toeplitz."""
+    import struct
+    import warnings
+    from scipy.linalg import solve_toeplitz
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        import audioop
+    # every 14-bit sample, as audioop's 16-bit input (times 4), and every code back
+    lin = struct.pack(f'<{16384}h', *[4 * x for x in range(-8192, 8192)])
+    ulaw = list(audioop.lin2ulaw(lin, 2))
+    back = [v // 4 for v in struct.unpack('<256h', audioop.ulaw2lin(bytes(range(256)), 2))]
+    # ADPCM on the voice in two halves, the state carried across, then decoded in two halves
+    rate, voice = wav16(Path(__file__).resolve().parents[2] / 'public' / 'dsp' / 'voice-8k.wav')
+    x = voice[:4000]
+    pcm = struct.pack(f'<{len(x)}h', *x)
+    a, st = audioop.lin2adpcm(pcm[:4000], 2, None)
+    b, st2 = audioop.lin2adpcm(pcm[4000:], 2, st)
+    d1, dst = audioop.adpcm2lin(a + b, 2, None)
+    # a loud square wave: clipping of the prediction and the index's ceiling
+    sq = [32767 if (i // 37) % 2 else -32768 for i in range(600)]
+    c, cst = audioop.lin2adpcm(struct.pack(f'<{len(sq)}h', *sq), 2, None)
+    dq, _ = audioop.adpcm2lin(c, 2, None)
+    # LPC of order 10 on Hamming-windowed frames of the voice
+    frames = []
+    w = np.hamming(240)
+    for start in (2000, 9000, 17000, 30000):
+        f = np.array(voice[start:start + 240], float) * w
+        rr = np.array([np.dot(f[k:], f[:len(f) - k]) for k in range(11)])
+        frames.append({'start': start, 'r': r(rr), 'a': r(solve_toeplitz(rr[:10], rr[1:11]))})
+    return {
+        'rate': rate, 'ulaw': ulaw, 'ulaw2lin': back,
+        'adpcm': {'x': x, 'bytes': list(a + b), 'state_mid': list(st), 'state_end': list(st2), 'decoded': list(struct.unpack(f'<{len(x)}h', d1)), 'decoder_state': list(dst)},
+        'square': {'x': sq, 'bytes': list(c), 'state': list(cst), 'decoded': list(struct.unpack(f'<{len(sq)}h', dq))},
+        'lpc': frames,
+    }
+
+
+GENERATORS = {'zplane': zplane, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures, 'speech': speech}
 
 
 def stamp(data):
