@@ -314,7 +314,97 @@ def multirate():
 
 
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate}
+
+def lcg_ints(n, seed, amp):
+    """Integers in [-amp, amp] from the tests' LCG."""
+    s, out = seed, []
+    for _ in range(n):
+        s = (s * 1664525 + 1013904223) % 2**32
+        out.append(int(s / 2**32 * (2 * amp + 1)) - amp)
+    return out
+
+
+def q15(v, scale=32768):
+    return [int(max(-scale, min(scale - 1, round(c * scale)))) for c in v]
+
+
+def rshift_round(acc, s):
+    """The core's rounding: add half, arithmetic shift (floor)."""
+    return (int(acc) + (1 << (s - 1) if s else 0)) >> s
+
+
+def sat16(v):
+    return max(-32768, min(32767, int(v)))
+
+
+def fir_fixed(h, x):
+    """What the core computes: the exact sum of products, rounded once, saturated once. Zeros before the first sample."""
+    out = []
+    for n in range(len(x)):
+        acc = sum(h[k] * x[n - k] for k in range(len(h)) if n - k >= 0)
+        out.append(sat16(rshift_round(acc, 15)))
+    return out
+
+
+def dspcore():
+    """The DSP core's benchmark set: inputs, quantized coefficients, the exact integer answers (what the gates must give,
+    bit for bit) and scipy's floating-point answers (the outside check, within a few LSB)."""
+    def tone(n, a, f, ph=0.0):
+        return [a * np.sin(2 * np.pi * f * i + ph) for i in range(n)]
+
+    res = {}
+    for name, taps, cut, n in [('fir16', 16, 0.25, 32), ('fir64', 64, 0.2, 64)]:
+        h = q15(signal.firwin(taps, cut, window='hamming'))
+        x = [int(round(a + b)) + e for a, b, e in zip(tone(n, 6000, 0.04), tone(n, 3000, 0.35), lcg_ints(n, 99 + taps, 400))]
+        res[name] = {'taps': taps, 'h': h, 'x': x, 'y': fir_fixed(h, x),
+                     'scipy': r(signal.lfilter(np.array(h) / 32768, 1, np.array(x, float)))}
+    # biquad cascade: 4th-order Butterworth low-pass as two sections, coefficients in Q3.13, direct form I
+    sos = signal.butter(4, 0.2, output='sos')
+    secs = []
+    for s in sos:
+        b0, b1, b2, a0, a1, a2 = s
+        secs.append([int(round(c * 8192)) for c in (b0, b1, b2)] + [int(round(c * 8192)) for c in (a1, a2)])
+    xs = [int(round(a + b)) + e for a, b, e in zip(tone(64, 7000, 0.03), tone(64, 2500, 0.3), lcg_ints(64, 4242, 300))]
+    cur = list(xs)
+    for b0, b1, b2, a1, a2 in secs:
+        y = []
+        for n in range(len(cur)):
+            g = lambda arr, k: arr[n - k] if n - k >= 0 else 0
+            acc = b0 * cur[n] + b1 * g(cur, 1) + b2 * g(cur, 2) - a1 * g(y, 1) - a2 * g(y, 2)
+            y.append(sat16(rshift_round(acc, 13)))
+        cur = y
+    sosq = np.array([[s[0], s[1], s[2], 8192, s[3], s[4]] for s in secs], float) / 8192
+    res['biquad'] = {'sections': secs, 'x': xs, 'y': cur, 'scipy': r(signal.sosfilt(sosq, np.array(xs, float)))}
+    # dot product
+    dx = lcg_ints(128, 7, 2500)
+    dy = [a // 2 + e for a, e in zip(dx, lcg_ints(128, 8, 300))]
+    acc = int(np.dot(np.array(dx, np.int64), np.array(dy, np.int64)))
+    res['dot'] = {'x': dx, 'y': dy, 'acc': acc, 'out15': sat16(rshift_round(acc, 15)), 'out13': sat16(rshift_round(acc, 13)),
+                  'scipy': float(np.dot(np.array(dx, float), np.array(dy, float)))}
+    # 64-point FFT, decimation in time, Q15 twiddles, a rounding at each product pair, no per-stage scaling
+    N = 64
+    wr = q15([np.cos(2 * np.pi * k / N) for k in range(N // 2)], 32767)
+    wi = q15([-np.sin(2 * np.pi * k / N) for k in range(N // 2)], 32767)
+    re = [int(round(a + b)) + e for a, b, e in zip(tone(N, 380, 5 / N), tone(N, 120, 17 / N), lcg_ints(N, 31, 25))]
+    im = [int(round(a)) + e for a, e in zip(tone(N, 200, 9 / N), lcg_ints(N, 32, 25))]
+    rev = [int(format(k, '06b')[::-1], 2) for k in range(N)]
+    ar, ai = [re[rev[k]] for k in range(N)], [im[rev[k]] for k in range(N)]
+    half = 1
+    while half < N:
+        for base in range(0, N, 2 * half):
+            for j in range(half):
+                a, b = base + j, base + j + half
+                k = j * (N // 2 // half)
+                tr = sat16(rshift_round(ar[b] * wr[k] - ai[b] * wi[k], 15))
+                ti = sat16(rshift_round(ar[b] * wi[k] + ai[b] * wr[k], 15))
+                ar[a], ar[b], ai[a], ai[b] = ar[a] + tr, ar[a] - tr, ai[a] + ti, ai[a] - ti
+        half *= 2
+    z = np.fft.fft(np.array(re, float) + 1j * np.array(im, float))
+    res['fft'] = {'n': N, 're': re, 'im': im, 'wr': wr, 'wi': wi, 'yre': ar, 'yim': ai, 'scipyRe': r(z.real), 'scipyIm': r(z.imag)}
+    return res
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate, 'dspcore': dspcore}
 
 
 def stamp(data):
