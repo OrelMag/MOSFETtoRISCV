@@ -14,6 +14,7 @@ import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
 import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
+import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
@@ -241,7 +242,8 @@ export class SchematicView {
     this.netMarks = new Map();
     this.closeMenu();
     if (!keepView) { this.group = new Set(); this.heatMap = null; }
-    const base = this.base = netlistOf(ctx.def) ?? null;
+    const authored = netlistOf(ctx.def);
+    const base = this.base = authored ? drawnNetlist(ctx.def, authored) : null;
     this.el.replaceChildren();
     this.wires = [];
     this.pins = [];

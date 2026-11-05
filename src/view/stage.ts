@@ -32,6 +32,7 @@ import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
+import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
@@ -1092,8 +1093,8 @@ export class Stage {
     const shown = this.ctx?.def;
     if (!shown) return;
     // as the learner arranged it: moved parts, unravelled pointers drawn as wires
-    const lay = layoutOf(shown.id), nl = netlistOf(shown);
-    const def: ComponentDef = lay && nl ? { ...shown, netlist: () => applyLayout(nl, lay) } : shown;
+    const lay = layoutOf(shown.id), authored = netlistOf(shown), nl = authored && drawnNetlist(shown, authored);
+    const def: ComponentDef = nl ? { ...shown, netlist: () => applyLayout(nl, lay) } : shown;
     import('../editor/remix').then((m) => {
       const r = m.remixIntoStorage(def);
       if ('error' in r) this.setStatus(h('span', { class: 'pulse warn' }), `Cannot open in the sandbox: ${r.error}`);
