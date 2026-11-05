@@ -50,20 +50,19 @@ def rsa_dbl(x, s):
         store32(x + 4 * j, load32(src + 4 * j))
     return 0
 
-# r = a * b / 256^s mod n (Montgomery, n0 = -1/n mod 256). T has s + 1 limbs and stays below 2n; one trial subtraction at the end. r may be a or b.
-# While loops with pointers: the compiler keeps a function's variables in registers, 20 at most in a leaf, and a for loop costs two of them
-def mont_mul(r, a, b, s):
+# T = (a * b) / 256^s mod 2n (Montgomery, n0 = -1/n mod 256), s + 1 limbs. While loops with pointers: the compiler keeps a function's variables in registers (12 in a
+# function that calls the multiply routine, as on plain RV32I, 20 in a leaf), and a for loop costs two of them: this one has exactly 12
+def mont_core(a, b, s):
     i = 0
     while i <= s:
         store32(${MEM.rsaT} + 4 * i, 0)
         i += 1
-    np0 = load32(${MEM.rsaN})
     i = 0
     while i < s:
         bi = load32(b + 4 * i)
         v = load32(${MEM.rsaT}) + load32(a) * bi
         m = ((v & 255) * rsa_n0) & 255
-        c = (v + m * np0) >> 8
+        c = (v + m * load32(${MEM.rsaN})) >> 8
         pt = ${MEM.rsaT} + 4
         pa = a + 4
         pn = ${MEM.rsaN} + 4
@@ -79,6 +78,10 @@ def mont_mul(r, a, b, s):
         store32(pe - 4, v & 255)
         store32(pe, v >> 8)
         i += 1
+    return 0
+
+# r = T mod n: T < 2n, one trial subtraction. r may be a or b of the product
+def mont_fix(r, s):
     m = load32(${MEM.rsaT} + 4 * s)
     if m == 0:
         i = s - 1
@@ -104,6 +107,12 @@ def mont_mul(r, a, b, s):
         while i < s:
             store32(r + 4 * i, load32(${MEM.rsaT} + 4 * i))
             i += 1
+    return 0
+
+# r = a * b / 256^s mod n; r may be a or b
+def mont_mul(r, a, b, s):
+    mont_core(a, b, s)
+    mont_fix(r, s)
     return 0
 
 # x = x * 256^s mod n: 8s doublings

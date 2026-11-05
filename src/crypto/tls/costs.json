@@ -14,8 +14,8 @@
    "withComments": 180
   },
   "rsa": {
-   "python": 198,
-   "withComments": 227
+   "python": 203,
+   "withComments": 236
   },
   "x509": {
    "python": 94,
@@ -26,22 +26,23 @@
    "withComments": 551
   },
   "total": {
-   "python": 1309,
-   "withComments": 1471
+   "python": 1314,
+   "withComments": 1480
   }
  },
  "words": {
   "frame and runtime": 3,
-  "rsa": 779,
+  "rsa": 802,
   "x509": 339,
   "tls": 2025,
   "app": 1519,
   "sha": 876,
   "aes": 969,
   "x25519": 895,
-  "total": 7405
+  "total": 7428
  },
  "ram": {
+  "pythonData": 88,
   "dataAndStack": 4096,
   "buffers": 152656,
   "handshakeBuffer": 24576,
@@ -68,20 +69,20 @@
   "aes-128-gcm per 16-byte block": 14621,
   "aes-128-gcm open 1024 bytes + 13 bytes AAD (key setup included)": 967594,
   "x25519": 34569985,
-  "rsa-pss-sha256 verify, 1024-bit key (RFC 8448)": 10302808,
-  "rsa-pss-sha256 verify, 2048-bit key": 40747674
+  "rsa-pss-sha256 verify, 1024-bit key (RFC 8448)": 10310080,
+  "rsa-pss-sha256 verify, 2048-bit key": 40767022
  },
  "handshake": {
   "rfc8448 (1024-bit RSA, three cipher suites offered)": {
    "rsaBits": 1024,
-   "cycles": 81270421,
+   "cycles": 81277693,
    "phases": {
     "client_hello": 34598182,
     "server_hello": 20537,
     "key_agreement": 35089754,
     "encrypted_extensions": 648729,
     "certificate": 71228,
-    "certificate_verify": 10331141,
+    "certificate_verify": 10338413,
     "server_finished": 48261,
     "client_finished": 462493
    },
@@ -100,7 +101,7 @@
     },
     "rsa_pss": {
      "calls": 1,
-     "cycles": 10302757
+     "cycles": 10310029
     },
     "hmac": {
      "calls": 2,
@@ -117,16 +118,16 @@
   },
   "default offer, 2048-bit RSA (test fixture certificate)": {
    "rsaBits": 2048,
-   "cycles": 112287808,
+   "cycles": 112304767,
    "phases": {
     "client_hello": 34588879,
     "server_hello": 20555,
     "key_agreement": 35089754,
     "encrypted_extensions": 36215,
     "certificate": 909225,
-    "certificate_verify": 41066850,
-    "server_finished": 122458,
-    "client_finished": 453776
+    "certificate_verify": 41083721,
+    "server_finished": 122406,
+    "client_finished": 453916
    },
    "prims": {
     "x25519": {
@@ -139,11 +140,11 @@
     },
     "gcm_open": {
      "calls": 4,
-     "cycles": 1151103
+     "cycles": 1151167
     },
     "rsa_pss": {
      "calls": 1,
-     "cycles": 40750138
+     "cycles": 40766893
     },
     "hmac": {
      "calls": 2,
@@ -151,7 +152,7 @@
     },
     "gcm_seal": {
      "calls": 1,
-     "cycles": 64387
+     "cycles": 64527
     }
    },
    "clientHelloBytes": 135,
@@ -160,14 +161,58 @@
   }
  },
  "rv32i": {
-  "words": 4307,
-  "note": "sha, aes, x25519 and the command loop (no rsa, x509, tls). The RSA verifier does not compile for plain RV32I as written: its Montgomery inner loop keeps 14 variables in registers and the compiler allows 12 in a function that calls the multiply routine.",
+  "words": 7590,
+  "note": "The same sources compiled by the same compiler with M off: every * is a call to the shift-and-add routine, the machine traps on any M instruction, and RFC 8448 completes on it.",
   "primitives": {
    "sha256 of 1000 bytes": 134708,
    "hmac-sha256 (32-byte key, 32-byte message)": 37928,
    "aes-128 block (key expansion included)": 15900,
    "aes-128-gcm seal 1024 bytes + 13 bytes AAD (key setup included)": 1311696,
-   "x25519": 172490702
+   "x25519": 172490703,
+   "rsa-pss-sha256 verify, 1024-bit key (RFC 8448)": 36372992
+  },
+  "handshake": {
+   "rsaBits": 1024,
+   "cycles": 382932069,
+   "phases": {
+    "client_hello": 172085588,
+    "server_hello": 20537,
+    "key_agreement": 172932161,
+    "encrypted_extensions": 872802,
+    "certificate": 71228,
+    "certificate_verify": 36401376,
+    "server_finished": 48261,
+    "client_finished": 500020
+   },
+   "prims": {
+    "x25519": {
+     "calls": 2,
+     "cycles": 344464136
+    },
+    "hkdf": {
+     "calls": 2,
+     "cycles": 779480
+    },
+    "gcm_open": {
+     "calls": 1,
+     "cycles": 858926
+    },
+    "rsa_pss": {
+     "calls": 1,
+     "cycles": 36372992
+    },
+    "hmac": {
+     "calls": 2,
+     "cycles": 75793
+    },
+    "gcm_seal": {
+     "calls": 1,
+     "cycles": 85427
+    }
+   },
+   "clientHelloBytes": 201,
+   "bytesSent": 259,
+   "bytesReceived": 774
   }
  }
 }

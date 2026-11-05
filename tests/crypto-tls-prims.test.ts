@@ -5,7 +5,8 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, constants, sign, X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { fullBuild } from '../src/crypto/tls/build';
+import { fullBuild, globalAddr } from '../src/crypto/tls/build';
+import { STR } from '../src/crypto/tls/strings';
 import { CMD, MEM } from '../src/crypto/tls/layout';
 import { SHA256_K } from '../src/crypto/tls/sha';
 import { ISS } from '../src/riscv/iss';
@@ -27,6 +28,18 @@ function hmac(key: Uint8Array, msg: Uint8Array): string {
   m.call(CMD.hmac, [k, key.length, d, msg.length, o]);
   return tohex(m.bytes(o, 32));
 }
+
+describe('the program', () => {
+  it('the HelloRetryRequest random in the program is the one RFC 8446 section 4.1.3 prints', () => {
+    expect(tohex(STR.hrr.bytes)).toBe(V.hrrRandom);
+    expect(V.hrrRandom).toBe(createHash('sha256').update('HelloRetryRequest').digest('hex'));
+  });
+  it('the RV32I build holds no M-extension instruction, the RV32IM build does', () => {
+    const isM = (w: number) => (w & 0x7f) === 0x33 && (w >>> 25) === 1;
+    expect(fullBuild(false).compiled.words.filter((w) => isM(w >>> 0))).toHaveLength(0);
+    expect(fullBuild(true).compiled.words.filter((w) => isM(w >>> 0)).length).toBeGreaterThan(10);
+  });
+});
 
 describe('SHA-256 (FIPS 180-4)', () => {
   it('the round constants are the first 32 bits of the fractional parts of the cube roots of the first 64 primes (section 4.2.2)', () => {
@@ -264,6 +277,21 @@ describe('RSASSA-PSS-SHA-256 verification and the certificate reader', () => {
     expect(verify(n, v15, msg)).toBe(0);
     await tick();
   });
+  it("RFC 8448's own CertificateVerify (rsa_pss_rsae_sha256, a 1024-bit key) verifies over the transcript hash of the trace's messages, and not over another", () => {
+    const msg = (a: string, f: string) => trace(a, f);
+    const cert = msg('construct a Certificate handshake message', 'Certificate');
+    const der = cert.subarray(11, 11 + ((cert[8] << 16) | (cert[9] << 8) | cert[10]));
+    const n = new Uint8Array(Buffer.from(new X509Certificate(Buffer.from(der)).publicKey.export({ format: 'jwk' }).n as string, 'base64url'));
+    const th = createHash('sha256').update(Buffer.concat([msg('construct a ClientHello handshake message', 'ClientHello'), msg('construct a ServerHello handshake message', 'ServerHello'), msg('construct an EncryptedExtensions handshake message', 'EncryptedExtensions'), cert])).digest();
+    const content = new Uint8Array(130); content.fill(0x20, 0, 64); content.set(ascii('TLS 1.3, server CertificateVerify'), 64); content.set(th, 98);
+    const cv = msg('construct a CertificateVerify handshake message', 'CertificateVerify'); // 0f 000084 0804 0080 <128-byte signature>
+    expect(cv[4] << 8 | cv[5]).toBe(0x0804);
+    const sig = cv.subarray(8);
+    expect(sig).toHaveLength(128);
+    expect(verify(n, sig, content)).toBe(1);
+    content[130 - 1] ^= 1;
+    expect(verify(n, sig, content)).toBe(0);
+  });
   it('the X.509 reader finds the modulus and exponent of RFC 8448 and of the interop fixture, and the SPKI hash a pin compares', () => {
     const m = machine();
     const cert = trace('construct a Certificate handshake message', 'Certificate');
@@ -282,6 +310,12 @@ describe('RSASSA-PSS-SHA-256 verification and the certificate reader', () => {
     expect(m.call(CMD.x509, [fp, fx.raw.length])).toBe(0);
     const fn = new Uint8Array(Buffer.from(fx.publicKey.export({ format: 'jwk' }).n as string, 'base64url'));
     expect(tohex(m.bytes(MEM.certN, fn.length))).toBe(tohex(fn));
+    // the SPKI that a pin hashes: the bytes the reader located are the certificate's SubjectPublicKeyInfo
+    const b = fullBuild();
+    const at = m.word(globalAddr(b, 'x_spki')), ln = m.word(globalAddr(b, 'x_spkilen'));
+    expect(ln).toBeGreaterThan(200);
+    expect(tohex(m.bytes(at, ln))).toBe(tohex(new Uint8Array(fx.publicKey.export({ type: 'spki', format: 'der' }))));
+    expect(sha(m.bytes(at, ln))).toBe(createHash('sha256').update(fx.publicKey.export({ type: 'spki', format: 'der' })).digest('hex'));
     // garbage and truncations are refused
     for (const cut of [10, 100, fx.raw.length - 1]) {
       const [tp] = place(m, BIG, new Uint8Array(fx.raw).subarray(0, cut));

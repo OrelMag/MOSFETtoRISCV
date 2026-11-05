@@ -4,6 +4,7 @@
 
 import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, constants, diffieHellman, sign, type KeyObject } from 'node:crypto';
 import type { Transport } from '../src/crypto/tls/run';
+import { V } from './crypto-tls-kit';
 
 export type Fault =
   | 'none'
@@ -149,7 +150,7 @@ export class MockServer implements Transport {
     if (!share) throw new Error('mock server: no key_share');
     const pub = fault === 'lowOrderShare' ? new Uint8Array(32) : x25519Pub(s.ecdhPriv);
     const shared = new Uint8Array(diffieHellman({ privateKey: x25519Private(s.ecdhPriv), publicKey: x25519Public(share) }));
-    const random = fault === 'hrr' ? Uint8Array.from(Buffer.from('cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c', 'hex')) : s.random;
+    const random = fault === 'hrr' ? Uint8Array.from(Buffer.from(V.hrrRandom, 'hex')) : s.random;
     const exts = cat(
       Uint8Array.of(0, 0x2b, 0, 2, 3, fault === 'tls12' ? 3 : 4),
       fault === 'wrongGroup' ? cat(u16(0x33), u16(36), u16(23), u16(32), pub) : cat(u16(0x33), u16(36), u16(29), u16(32), pub),

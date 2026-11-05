@@ -14,8 +14,9 @@ export class TlsMachine extends FastISS {
   /** Markers written since the last drain (id, cycle count, instructions retired at the write). */
   marks: Mark[] = [];
 
-  constructor(words: ArrayLike<number>) {
-    super(words, { system: true, m: true, dmemWords: TLS_RAM_WORDS, imemWords: 2 ** Math.ceil(Math.log2(words.length + 1)) });
+  /** m: false makes every M instruction illegal (a trap to address 0): a run to the end is proof that the program is plain RV32I. */
+  constructor(words: ArrayLike<number>, opts: { m?: boolean } = {}) {
+    super(words, { system: true, m: opts.m ?? true, dmemWords: TLS_RAM_WORDS, imemWords: 2 ** Math.ceil(Math.log2(words.length + 1)) });
     this.region[IO.base >>> 28] = DEV;
   }
 

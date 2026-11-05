@@ -64,14 +64,15 @@ const secretsOfTrace = (): Record<SecretName, string> => {
 };
 
 describe('RFC 8448 section 3 replayed through the client on the golden model', () => {
-  it('sends the trace\'s bytes, derives the trace\'s secrets, and exchanges the trace\'s application data and alerts', async () => {
+  // the same replay twice: the RV32IM build, and the plain RV32I build (no M instruction in it) on a machine where any M instruction would trap
+  it.each(['rv32im', 'rv32i'] as const)("%s: sends the trace's bytes, derives the trace's secrets, and exchanges the trace's application data and alerts", async (isa) => {
     const chRecord = client('send handshake record', 'complete record', 0);
     const hello = client('construct a ClientHello handshake message', 'ClientHello');
     const tr = replay(serverRecords());
     const payload = unhex(V.rfc8448.find((i) => i.who === 'client' && i.action === 'send application_data record' && i.field === 'payload')!.hex);
     expect(payload).toHaveLength(50);
     const { events, result } = await collectTls({
-      config: { random: hello.subarray(6, 38), privateKey: client('create an ephemeral x25519 key pair', 'private key'), offer: rfc8448Offer() },
+      isa, config: { random: hello.subarray(6, 38), privateKey: client('create an ephemeral x25519 key pair', 'private key'), offer: rfc8448Offer() },
       transport: tr,
       app: [{ send: payload }, { recv: 50 }, { close: true }, { recvUntilClose: true }],
     });
@@ -107,12 +108,12 @@ describe('RFC 8448 section 3 replayed through the client on the golden model', (
     expect(events.at(-1)).toMatchObject({ kind: 'done', ok: true, error: 'none' });
     expect(result.received.map((r) => r.length)).toEqual([95, 679, 227, 72, 24]);
     // costs were measured, not typed
-    expect(result.handshake.cycles).toBeGreaterThan(1e7);
+    expect(result.handshake.cycles).toBeGreaterThan(isa === 'rv32i' ? 3e8 : 7e7);
     expect(result.prims.x25519?.calls).toBe(2);
     expect(result.prims.rsa_pss?.calls).toBe(1);
     // the phases tile the handshake but for the few instructions before the first marker and after the last
     expect(result.handshake.cycles - result.phases.reduce((n, p) => n + p.cycles, 0)).toBeLessThan(500);
-  }, 120_000);
+  }, 300_000);
 
   it('with the pin of the trace\'s certificate the same handshake completes; with another pin it stops at the pin, before CertificateVerify', async () => {
     const cert = trace('server construct a Certificate handshake message', 'Certificate');

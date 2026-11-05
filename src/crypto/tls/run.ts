@@ -35,6 +35,8 @@ export interface Tamper {
 }
 
 export interface RunOptions {
+  /** 'rv32i': the program compiled without the M extension, run on a machine where M instructions are illegal. Default 'rv32im'. */
+  isa?: 'rv32im' | 'rv32i';
   config: TlsConfig;
   transport: Transport;
   app?: readonly AppStep[];
@@ -140,8 +142,8 @@ class Wire {
 }
 
 export async function* runTlsClient(o: RunOptions): AsyncGenerator<TlsEvent, TlsResult> {
-  const b = fullBuild();
-  const m = new TlsMachine(b.compiled.words);
+  const b = fullBuild(o.isa !== 'rv32i');
+  const m = new TlsMachine(b.compiled.words, { m: o.isa !== 'rv32i' });
   const slice = o.slice ?? 4_000_000, budget = o.budget ?? 4_000_000_000;
   const transport = o.tamper?.mitm ?? o.transport;
   const wire = new Wire(transport, o.tamper);

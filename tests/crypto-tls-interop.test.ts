@@ -114,7 +114,10 @@ describe('against Node\'s TLS 1.3 server (OpenSSL)', () => {
     expect(seen.flatMap((s) => s.received)).toEqual([]);
   }, 120_000);
 
-  it('a server that is not there, or sends garbage, ends the run with an error and no data', async () => {
+  it('a connection closed at once, or a server that answers with garbage, ends the run with an error and no data', async () => {
+    const closed = await collectTls({ config: { random: randomBytes(32), privateKey: randomBytes(32), offer: defaultOffer() }, transport: { send: () => {}, recv: () => new Uint8Array(0) }, app: [{ send: text('x') }] });
+    expect(closed.result.error).toBe('io');
+    expect(closed.result.appData).toHaveLength(0);
     // a plain TCP server that answers the ClientHello with bytes that are not TLS
     const { createServer: net } = await import('node:net');
     const srv = net((s) => { s.once('data', () => { s.write(Buffer.from('HTTP/1.1 400 Bad Request\r\n\r\n')); s.end(); }); });

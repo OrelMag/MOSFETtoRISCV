@@ -6,11 +6,7 @@
 import { createPrivateKey, createPublicKey, constants, randomBytes, sign, X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fullBuild } from '../src/crypto/tls/build';
-import { appSource, TLS_MODULES } from '../src/crypto/tls/app';
-import { tlsProgram } from '../src/crypto/tls';
-import { SHA } from '../src/crypto/tls/sha';
-import { AES } from '../src/crypto/tls/aes';
-import { X25519 } from '../src/crypto/tls/x25519';
+import { TLS_MODULES } from '../src/crypto/tls/app';
 import { defaultOffer, rfc8448Offer } from '../src/crypto/tls/hello';
 import { CMD, MEM } from '../src/crypto/tls/layout';
 import { TlsMachine } from '../src/crypto/tls/machine';
@@ -35,11 +31,11 @@ export interface Costs {
   model: string;
   lines: Record<string, { python: number; withComments: number }>;
   words: Record<string, number>;
-  ram: { dataAndStack: number; buffers: number; handshakeBuffer: number; rsaArrays: number; fieldElements: number };
+  ram: { pythonData: number; dataAndStack: number; buffers: number; handshakeBuffer: number; rsaArrays: number; fieldElements: number };
   primitives: Record<string, number>;
   handshake: Record<string, HandshakeCost>;
-  /** The same sources compiled for plain RV32I (no multiply instruction: `*` calls the shift-and-add routine). RSA does not compile that way (see the note). */
-  rv32i: { words: number; note: string; primitives: Record<string, number> };
+  /** The same sources compiled for plain RV32I (no multiply instruction: `*` calls the shift-and-add routine). */
+  rv32i: { words: number; note: string; primitives: Record<string, number>; handshake: HandshakeCost };
 }
 export interface HandshakeCost { rsaBits: number; cycles: number; phases: Record<string, number>; prims: Record<string, { calls: number; cycles: number }>; clientHelloBytes: number; bytesReceived: number; bytesSent: number }
 
@@ -63,7 +59,7 @@ export async function measureCosts(): Promise<Costs> {
   for (let pc = 0; pc < b.compiled.words.length * 4; pc += 4) { const k = b.moduleOfPc(pc) ?? 'frame and runtime'; words[k] = (words[k] ?? 0) + 1; }
   words.total = b.compiled.words.length;
   const ram = {
-    dataAndStack: 4 * 1024, buffers: MEM.end - 0x1000, handshakeBuffer: MEM.recBuf - MEM.hsBuf, rsaArrays: MEM.rsaEm - MEM.rsaN, fieldElements: MEM.scalar - MEM.fe,
+    pythonData: b.compiled.layout!.outBase, dataAndStack: b.compiled.layout!.stackTop, buffers: MEM.end - 0x1000, handshakeBuffer: MEM.recBuf - MEM.hsBuf, rsaArrays: MEM.rsaEm - MEM.rsaN, fieldElements: MEM.scalar - MEM.fe,
   };
 
   // ---- primitives ----
@@ -135,10 +131,10 @@ export async function measureCosts(): Promise<Costs> {
     if (!result.ok) throw new Error(`2048-bit handshake: ${result.error}`);
     handshake['default offer, 2048-bit RSA (test fixture certificate)'] = handshakeCost(result, 2048);
   }
-  // ---- plain RV32I: the compiler without M, for the modules that fit its register budget ----
-  const b32 = tlsProgram([SHA, AES, X25519], appSource(false, false), { m: false });
-  if (b32.compiled.error) throw new Error(b32.compiled.error.message);
-  const m32 = new TlsMachine(b32.compiled.words);
+  let handshake32: HandshakeCost | null = null;
+  // ---- plain RV32I: the whole client compiled without M, run on a machine where M instructions are illegal ----
+  const b32 = fullBuild(false);
+  const m32 = new TlsMachine(b32.compiled.words, { m: false });
   for (;;) { const r0 = m32.runToRequest(5_000_000); if (r0.kind === 'idle') break; }
   const c32 = (cmd: number, args: number[]): number => { const c0 = m32.cycles; m32.call(cmd, args); return m32.cycles - c0; };
   const p32: Record<string, number> = {};
@@ -152,10 +148,23 @@ export async function measureCosts(): Promise<Costs> {
   m32.put(A, unhex('a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4')); m32.put(A + 32, unhex('e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c'));
   p32['x25519'] = c32(CMD.x25519, [B, A, A + 32]);
   if (tohex(m32.bytes(B, 32)) !== 'c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552') throw new Error('RV32I x25519 differs');
+  {
+    const hello = trace('client construct a ClientHello handshake message', 'ClientHello');
+    const rec = (a2: string, nth = 0) => trace(`server ${a2}`, 'complete record', nth);
+    let q = Uint8Array.from(Buffer.concat([rec('send handshake record', 0), rec('send handshake record', 1), rec('send handshake record', 2)]));
+    const { result } = await collectTls({
+      isa: 'rv32i', config: { random: hello.subarray(6, 38), privateKey: trace('client create an ephemeral x25519 key pair', 'private key'), offer: rfc8448Offer() },
+      transport: { send: () => {}, recv: (n) => { const k = Math.min(n, q.length); const o = q.slice(0, k); q = q.slice(k); return o; } },
+    });
+    if (!result.ok) throw new Error(`RV32I RFC 8448 handshake: ${result.error}`);
+    p32['rsa-pss-sha256 verify, 1024-bit key (RFC 8448)'] = result.prims.rsa_pss!.cycles;
+    handshake32 = handshakeCost(result, 1024);
+  }
   const rv32i = {
     words: b32.compiled.words.length,
-    note: 'sha, aes, x25519 and the command loop (no rsa, x509, tls). The RSA verifier does not compile for plain RV32I as written: its Montgomery inner loop keeps 14 variables in registers and the compiler allows 12 in a function that calls the multiply routine.',
+    note: 'The same sources compiled by the same compiler with M off: every * is a call to the shift-and-add routine, the machine traps on any M instruction, and RFC 8448 completes on it.',
     primitives: p32,
+    handshake: handshake32!,
   };
   void randomBytes;
   return { model: COST_MODEL, lines, words, ram, primitives: prim, handshake, rv32i };

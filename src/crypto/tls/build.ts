@@ -4,6 +4,7 @@ import { tlsProgram, type TlsBuild } from './index';
 import { appSource, PRIMITIVE_MODULES, TLS_MODULES } from './app';
 
 let full: TlsBuild | null = null;
+let full32: TlsBuild | null = null;
 let prim: TlsBuild | null = null;
 
 const checked = (b: TlsBuild): TlsBuild => {
@@ -12,8 +13,8 @@ const checked = (b: TlsBuild): TlsBuild => {
   return b;
 };
 
-/** The whole client (and every primitive's command). */
-export const fullBuild = (): TlsBuild => (full ??= checked(tlsProgram(TLS_MODULES, appSource(true))));
+/** The whole client (and every primitive's command), for RV32IM; `m: false` for plain RV32I (`*` calls the shift-and-add routine). */
+export const fullBuild = (m = true): TlsBuild => (m ? (full ??= checked(tlsProgram(TLS_MODULES, appSource(true)))) : (full32 ??= checked(tlsProgram(TLS_MODULES, appSource(true), { m: false }))));
 /** The primitives alone, without the TLS client, for the cost of each. */
 export const primitiveBuild = (): TlsBuild => (prim ??= checked(tlsProgram(PRIMITIVE_MODULES, appSource(false))));
 
