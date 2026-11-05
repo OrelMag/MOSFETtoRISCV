@@ -3,7 +3,7 @@
 // around them. Everything is NAND gates, the library's flip-flops and bigRam buffers in boxes of their own (lib/rtl.ts).
 // The model's step() is the specification: its assignments and this file's setD lines follow each other.
 
-import { ADV_NPH, ADV_PD, ADV_PH, BUF_BITS, CRC32_RESIDUE, DLLP_POLY, DLLP_RESIDUE, EP_MEM_BITS, K_COM, K_END, K_PAD, K_SDP, K_STP, LINE_DELAY, MAX_RX_TLP, N_FTS, REPLAY_LIMIT, REPLAY_SLOTS, TS1_ID, TS2_ID, TS_RATE, FC_PERIOD_BITS } from '../comm/pcie';
+import { ADV_NPH, ADV_PD, ADV_PH, BUF_BITS, CRC32_RESIDUE, DLLP_POLY, DLLP_RESIDUE, EP_MEM_BITS, K_COM, K_END, K_PAD, K_SDP, K_STP, LINE_DELAY, MAX_RX_TLP, N_FTS, REPLAY_LIMIT, REPLAY_SLOTS, TS1_ID, TS2_ID, TS_RATE, FC_PERIOD_BITS, TRAIN_TIMEOUT_BITS } from '../comm/pcie';
 import { CRC32_REFLECTED } from '../comm/crc';
 import type { ComponentDef } from '../sim/types';
 import { bigRamWithInit } from './bigmem';
@@ -77,7 +77,7 @@ export function pciePort(): ComponentDef {
   const LT: [string, string] = ['ltssm', 'link training'], OS: [string, string] = ['ospar', 'ordered sets in'], DC: [string, string] = ['dlc', 'FC init'], FC: [string, string] = ['fc', 'flow control'];
   const TX: [string, string] = ['tx', 'packet engine'], RT: [string, string] = ['retry', 'replay'], RX: [string, string] = ['rx', 'receiver'];
   const inS = <T>(h: [string, string], f: () => T): T => m.scope(h[0], h[1], f);
-  const lt = inS(LT, () => regs(m, clk, 'lt', 3)), opos = inS(LT, () => regs(m, clk, 'opos', 4)), txc = inS(LT, () => regs(m, clk, 'txc', 5)), wantRec = inS(LT, () => m.reg(clk, 'want_rec'));
+  const lt = inS(LT, () => regs(m, clk, 'lt', 3)), opos = inS(LT, () => regs(m, clk, 'opos', 4)), txc = inS(LT, () => regs(m, clk, 'txc', 5)), wantRec = inS(LT, () => m.reg(clk, 'want_rec')), tmo = inS(LT, () => regs(m, clk, 'tmo', TRAIN_TIMEOUT_BITS));
   const op = inS(OS, () => regs(m, clk, 'op', 4)), ok = inS(OS, () => m.reg(clk, 'os_ok')), o2 = inS(OS, () => m.reg(clk, 'is_ts2')), tsc = inS(OS, () => regs(m, clk, 'tsc', 4)), ts2c = inS(OS, () => regs(m, clk, 'tstwo', 4)), idc = inS(OS, () => regs(m, clk, 'idc', 4));
   const dl = inS(DC, () => regs(m, clk, 'dl', 2)), fit = inS(DC, () => regs(m, clk, 'fit', 2)), got = inS(DC, () => regs(m, clk, 'got', 3)), gotTwo = inS(DC, () => m.reg(clk, 'got_two'));
   const phLim = inS(FC, () => regs(m, clk, 'ph_lim', 8)), pdLim = inS(FC, () => regs(m, clk, 'pd_lim', 12)), nphLim = inS(FC, () => regs(m, clk, 'nph_lim', 8));
@@ -320,6 +320,8 @@ export function pciePort(): ComponentDef {
 
   // ---- ordered sets in, the LTSSM ----------
   const recEntry = m.name(m.andN([l0, wantRec, kIdle]), 'rec_entry');
+  const trainTo = m.name(m.andN([m.orN(lt), m.not(l0), m.andN(tmo)]), 'train_to');
+  const clrCounts = m.or(recEntry, trainTo);
   const osv = inS(OS, () => {
     const isCom = rxIs(K_COM), inOs = m.orN(op);
     const p = (v: number) => m.eqConst(op, v);
@@ -336,11 +338,11 @@ export function pciePort(): ComponentDef {
     setR(m, [o2], [m.mux(m.and(through, p6), o2, idTwo)], reset);
     const tsSat = tsc[3], twoSat = ts2c[3];
     const tscN = pick(m, [[m.and(goodEnd, m.not(tsSat)), m.inc(tsc)], [tsSat, tsc], [m.nor(goodEnd, m.or(bad, tsSat)), tsc]]);
-    setR(m, tsc, gateN(m, m.not(recEntry), tscN), reset);
+    setR(m, tsc, gateN(m, m.not(clrCounts), tscN), reset);
     const goodTwo = m.and(goodEnd, o2);
     const clrTwo = m.andN([m.or(bad, goodEnd), m.not(goodTwo), m.not(twoSat)]);
     const twoN = pick(m, [[m.and(goodTwo, m.not(twoSat)), m.inc(ts2c)], [twoSat, ts2c], [m.nor(m.and(goodTwo, m.not(twoSat)), m.or(twoSat, clrTwo)), ts2c]]);
-    setR(m, ts2c, gateN(m, m.not(recEntry), twoN), reset);
+    setR(m, ts2c, gateN(m, m.not(clrCounts), twoN), reset);
     const idleSym = m.and(nk, m.not(m.orN(rxd)));
     setR(m, idc, gateN(m, idleSt, pick(m, [[idc[3], idc], [m.and(idleSym, m.not(idc[3])), m.inc(idc)]])), reset);
     return { goodEnd };
@@ -348,9 +350,13 @@ export function pciePort(): ComponentDef {
   inS(LT, () => {
     const end = m.andN(opos), enough = txc[4];
     const adv1 = m.andN([t1, end, enough, tsc[3]]), adv2 = m.andN([t2, end, enough, ts2c[3]]), adv3 = m.andN([idleSt, enough, idc[3]]), l00 = ltIs(0);
-    const up1 = m.orN([l00, adv1, adv2]);
-    const changed = m.orN([up1, adv3, recEntry]);
-    setR(m, lt, pick(m, [[up1, m.inc(lt)], [adv3, cbits(m, 4, 3)], [recEntry, cbits(m, 5, 3)], [m.not(changed), lt]]), reset);
+    const up1 = m.and(m.orN([l00, adv1, adv2]), m.not(trainTo)), to4 = m.and(adv3, m.not(trainTo));
+    const first = m.and(trainTo, m.not(lt[2])), firstRec = m.and(trainTo, lt[2]);
+    const stay = m.nor(m.or(up1, to4), m.or(recEntry, trainTo));
+    const nxt = pick(m, [[up1, m.inc(lt)], [to4, cbits(m, 4, 3)], [m.or(recEntry, firstRec), cbits(m, 5, 3)], [first, cbits(m, 1, 3)], [stay, lt]]);
+    setR(m, lt, nxt, reset);
+    const changed = m.not(m.eq(nxt, lt));
+    setR(m, tmo, gateN(m, m.andN([m.not(changed), m.orN(lt), m.not(l0)]), m.inc(tmo)), reset);
     const countsTx = m.and(m.mux(ts, idleSt, end), m.not(enough));
     setR(m, txc, gateN(m, m.not(changed), muxN(m, countsTx, txc, m.inc(txc))), reset);
     setR(m, opos, gateN(m, m.and(m.not(changed), ts), m.inc(opos)), reset);

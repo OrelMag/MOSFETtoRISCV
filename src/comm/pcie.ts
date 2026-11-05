@@ -10,8 +10,8 @@
 //   one virtual channel; posted and non-posted header and posted data credits, with completions and non-posted data infinite
 //     (an endpoint must advertise infinite completion credits; non-posted data is only used by writes to config space and IO);
 //   memory requests with 32-bit addresses only, whole dwords, up to MAX_DW dwords; no ECRC; no poisoned TLPs;
-//   the LTSSM's Polling, Configuration and Recovery reduced to TS1, then TS2, then idle (no link or lane numbers, no timeouts,
-//     no speed change, no low-power states), with TS_TX ordered sets sent where the standard asks for 1024 in Polling.Active;
+//   the LTSSM's Polling, Configuration and Recovery reduced to TS1, then TS2, then idle (no link or lane numbers,
+//     no speed change, no low-power states; a timeout goes back to the first TS1 of the sequence, not to Detect), with TS_TX ordered sets sent where the standard asks for 1024 in Polling.Active;
 //   timers in clocks, far shorter than the standard's table (its replay limit depends on the payload size and the width).
 
 import { CRC32_REFLECTED, CRC32_RESIDUE, crc32, fcsBytes, stepBits } from './crc';
@@ -115,7 +115,7 @@ export const LT_NAMES = ['Detect', 'Polling.Active', 'Polling.Config', 'Config.I
 export const LT_DETECT = 0, LT_L0 = 4, LT_REC = 5;
 export const DL_NAMES = ['DL_Down', 'FC_Init1', 'FC_Init2', 'DL_Up'] as const;
 export const DL_DOWN = 0, DL_F1 = 1, DL_F2 = 2, DL_UP = 3;
-export const TS_RX = 8;
+export const TS_RX = 8, TRAIN_TIMEOUT_BITS = 11;
 /** The port's fixed numbers. */
 export const TS_TX = 16, REPLAY_SLOTS = 8, REPLAY_LIMIT = 512, ACK_LIMIT = 32, FC_PERIOD_BITS = 11, MAX_RX_TLP = 88, BUF_BITS = 10;
 export const ADV_PH = 4, ADV_PD = 16, ADV_NPH = 4;
@@ -139,7 +139,7 @@ const fwd = (a: number, b: number) => (a - b) & S12;
 export class PciePort {
   txmem = new Uint16Array(1 << BUF_BITS); rxmem = new Uint8Array(1 << BUF_BITS);
   // LTSSM
-  lt = 0; opos = 0; txc = 0; op = 0; ok = 0; o2 = 0; tsc = 0; ts2c = 0; idc = 0; wantRec = 0;
+  lt = 0; opos = 0; txc = 0; tmo = 0; op = 0; ok = 0; o2 = 0; tsc = 0; ts2c = 0; idc = 0; wantRec = 0;
   // data link control
   dl = 0; fit = 0; got = 0; got2 = 0;
   // credits
@@ -233,9 +233,10 @@ export class PciePort {
       if (p === 15) { op = 0; goodEnd = ok; bad = ok ? 0 : 1; } else op = p + 1;
     } else bad = 1;
     const recEntry = this.lt === LT_L0 && this.wantRec && this.kind === 0;
+    const trainTo = this.lt !== LT_DETECT && this.lt !== LT_L0 && this.tmo === (1 << TRAIN_TIMEOUT_BITS) - 1;
     const tsSat = this.tsc >= TS_RX, ts2Sat = this.ts2c >= TS_RX;
     let tsc = this.tsc, ts2c = this.ts2c;
-    if (recEntry) { tsc = 0; ts2c = 0; }
+    if (recEntry || trainTo) { tsc = 0; ts2c = 0; }
     else {
       if (goodEnd) { if (!tsSat) tsc++; } else if (bad && !tsSat) tsc = 0;
       if (goodEnd && o2) { if (!ts2Sat) ts2c++; } else if ((bad || goodEnd) && !ts2Sat) ts2c = 0;
@@ -395,7 +396,9 @@ export class PciePort {
       case 3: case 7: if (enough && idSat) lt = LT_L0; break;
       case LT_L0: if (recEntry) lt = LT_REC; break;
     }
+    if (trainTo) lt = this.lt < LT_L0 ? 1 : LT_REC;
     const changed = lt !== this.lt;
+    this.tmo = changed || this.lt === LT_DETECT || this.lt === LT_L0 ? 0 : (this.tmo + 1) & ((1 << TRAIN_TIMEOUT_BITS) - 1);
     this.txc = changed ? 0 : (ts ? end : idleSt) && !enough ? this.txc + 1 : this.txc;
     this.opos = changed || !ts ? 0 : (this.opos + 1) & 15;
     this.wantRec = recEntry ? 0 : this.wantRec || roll || (this.lt === LT_L0 && goodEnd) ? 1 : 0;
