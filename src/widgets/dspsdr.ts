@@ -5,7 +5,7 @@
 import { signedOf, wordOf } from '../comm/signals';
 import type { Clip } from '../dsp/clip';
 import {
-  ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, stationBand, carson, CIC_GAIN, CIC_R, FrontModel, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, mixBlock, MixModel,
+  CIC_N, ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, stationBand, carson, CIC_GAIN, CIC_R, FrontModel, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, mixBlock, chanWorstDb, audioGainDb, audioHalfPointHz, preLiftDb, analogueLiftDb, stationOccupied, toneSnrOff, MixModel,
   mixerSfdr, modIndex, NCO_K, occupied, receive, sample, STATIONS, stationAt, synthBand, TAU, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, workPerSecond, type Band,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS, gateClip, modelClip } from '../dsp/sdrclip';
@@ -54,20 +54,20 @@ export function bandWidget(): Widget {
   let noise = -40;
   const plot = specPlot('The spectrum of the band as the ADC saw it: four stations as raised humps on a noise floor'), chips = mkChips(4);
   const paint = () => {
-    const b = band(), smp = sample(b, noise, 0, 1 << 16), sp2 = bandSpectrum(smp.xr, smp.xi);
+    const b = band(), smp = sample(b, noise), sp2 = bandSpectrum(smp.xr, smp.xi);
     plot.clear();
     drawSpectrum(plot, sp2, FS);
     STATIONS.forEach((st) => { band2(plot, (st.f - stationBand(st) / 2) / 1000, (st.f + stationBand(st) / 2) / 1000, 'sdr-occ'); label(plot, st.f / 1000, plot.Y(9), st.short); });
     chips.set(0, `${sp(FS)} /s`, 'complex samples a second, I and Q');
     chips.set(1, `${W_IN} bits`, `each of I and Q; ±${2 ** (W_IN - 1)} steps`);
     chips.set(2, `${num(20 * Math.log10(STATIONS[0].a / STATIONS[3].a), 0)} dB`, 'loudest station over the weakest');
-    chips.set(3, String(smp.clipped), noise > -20 ? 'samples at full scale: the ADC clips' : 'samples at full scale');
+    chips.set(3, String(smp.clipped), smp.clipped > 0 ? 'samples of the second at full scale: the ADC clips' : 'samples of the second at full scale');
   };
   const sn = slider('Noise', -60, 0, 1, noise, (v) => `${v} dB`, (v) => { noise = v; paint(); });
-  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'))),
-    ...STATIONS.map((st) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(stationBand(st) / 1000, 0)} kHz`))));
+  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'), h('th', { class: 'num' }, 'Measured, 98 %'))),
+    ...STATIONS.map((st, k) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(stationBand(st) / 1000, 0)} kHz`), h('td', { class: 'num' }, `${num(stationOccupied(k) / 1000, 0)} kHz`))));
   paint();
-  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: the band each station occupies, by Carson\'s rule')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: Carson\'s rule, an upper bound; the table also lists the band each station measures')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
 }
 
 // ---- how wide a station is -----------------------------------------------------------------------------------------------------------------------
@@ -97,9 +97,9 @@ export function carsonWidget(): Widget {
     chips.set(3, `${num(all / 1000, 0)} kHz`, 'measured, holding 99.9 %');
   };
   const sd = slider('Deviation', 5_000, 75_000, 5_000, dev, (v) => `${v / 1000} kHz`, (v) => { dev = v; paint(); });
-  const sf = slider('Audio tone', 1_000, 15_000, 1_000, fm, (v) => `${v / 1000} kHz`, (v) => { fm = v; paint(); });
+  const sf = slider('Audio', 1_000, 15_000, 1_000, fm, (v) => `${v / 1000} kHz`, (v) => { fm = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One station, modulated by a single tone'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'spectrum'), h('span', { class: 'fr-k' }, 'shaded: Carson\'s band · dashed: measured 98 %')), chips.el), h('div', { class: 'panel mos-ctl' }, sd.el, sf.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One station, modulated by a single tone'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'spectrum'), h('span', { class: 'k-near' }, 'shaded: Carson\'s band · solid lines: the measured band holding 98 %')), chips.el), h('div', { class: 'panel mos-ctl' }, sd.el, sf.el)) };
 }
 
 // ---- moving a station to zero --------------------------------------------------------------------------------------------------------------------
@@ -135,8 +135,8 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
     let f = STATIONS[0].f, ok = true, ran = false, outs = 0;
     let ia: number[] = [], qa: number[] = [];
     const plot = o.front
-      ? plotOf({ W: 300, H: 280, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC, Q against I, scaled to the largest: a tuned FM station stays on a circle', xFmt: (v) => num(v, 1) })
-      : plotOf({ W: 380, H: 190, x: [0, o.clocks], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: '', aria: 'The mixer\'s I and Q outputs, as a share of the ADC\'s full scale' });
+      ? plotOf({ W: 300, H: 280, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC after the first four, Q against I, scaled to the largest', xFmt: (v) => num(v, 1) })
+      : plotOf({ W: 380, H: 190, x: [0, o.clocks], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: '', aria: 'The mixer\'s I and Q outputs, the sum of all four stations after mixing, as a share of the ADC\'s full scale of 512 steps' });
     const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
     const paint = () => {
       plot.clear();
@@ -144,7 +144,8 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
         if (o.front) line(plot, ia, qa, 'ln-s real');
         else { line(plot, ia.map((_, i) => i), ia, 'ln-s real'); line(plot, qa.map((_, i) => i), qa, 'ln-s near'); }
       }
-      read.replaceChildren(h('span', null, 'tuned to ', h('b', null, khz(f))), h('span', null, o.front ? 'outputs ' : 'clocks ', h('b', null, String(o.front ? outs : ia.length))));
+      const rad = ia.map((v, i) => Math.hypot(v, qa[i])), mean = rad.reduce((a, b) => a + b, 0) / (rad.length || 1), sd = Math.sqrt(rad.reduce((a, b) => a + (b - mean) ** 2, 0) / (rad.length || 1));
+      read.replaceChildren(h('span', null, 'tuned to ', h('b', null, khz(f))), h('span', null, o.front ? 'outputs ' : 'clocks ', h('b', null, String(o.front ? outs : ia.length))), ...(o.front && rad.length ? [h('span', null, 'radius spread ', h('b', null, `${num((100 * sd) / mean, 0)} %`), ' of the mean')] : []));
       note.textContent = ran ? (ok ? 'Every output of the gates matched the model at every clock.' : 'The gates and the model disagreed.') : o.intro;
     };
     const run = (fr: number) => {
@@ -154,7 +155,7 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
       const mix = new MixModel(ftw), front = new FrontModel(ftw);
       sim.reset('zero');
       sim.setInput('clk', 0); sim.setInput('ftw', ftw); sim.settle();
-      const unit = o.front ? CIC_GAIN * ADC_SCALE : ADC_SCALE;
+      const unit = o.front ? CIC_GAIN * ADC_SCALE : 2 ** (W_IN - 1);
       for (let i = 0; i < o.clocks; i++) {
         sim.setInput('xr', wordOf(xr[i], W_IN)); sim.setInput('xi', wordOf(xi[i], W_IN)); sim.settle();
         if (!o.front) {
@@ -167,7 +168,7 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
           front.edge(xr[i], xi[i]);
           const yr = signedOf(stage.value('yr'), W_CIC), yi = signedOf(stage.value('yi'), W_CIC), v = stage.value('valid');
           if (yr !== front.yr || yi !== front.yi || v !== (front.valid ? 1 : 0)) ok = false;
-          if (front.valid) { outs++; ia.push(yr / unit); qa.push(yi / unit); }
+          if (front.valid) { outs++; if (outs > CIC_N) { ia.push(yr / unit); qa.push(yi / unit); } }
         }
       }
       if (o.front && ia.length) { const m = Math.max(1e-9, ...ia.map((v, i) => Math.hypot(v, qa[i]))); ia = ia.map((v) => v / m); qa = qa.map((v) => v / m); }
@@ -186,21 +187,23 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
 export const MIXER_CLOCKS = 240;
 export const FRONT_CLOCKS = 800;
 export function mixerScene(): Scene {
-  return { root: complexMixer(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'Four stations through the mixer', clocks: MIXER_CLOCKS, front: false, intro: `Pick a station. The ADC's samples go in at every clock, ${MIXER_CLOCKS} of them. The tuned station now turns slowly, within its own deviation; the others spin across it at their distance.` })] };
+  return { root: complexMixer(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'Four stations through the mixer', clocks: MIXER_CLOCKS, front: false, intro: `Pick a station. The ADC's samples go in at every clock, ${MIXER_CLOCKS} of them. I and Q here are the sum of all four stations after mixing: the tuned one is now at zero frequency, the others turn at their distance from it, wrapped at ±480 kHz.` })] };
 }
 export function frontScene(): Scene {
-  return { root: sdrFront(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'A station through the front end', clocks: FRONT_CLOCKS, front: true, intro: `Pick a station. ${FRONT_CLOCKS} clocks go in and ${FRONT_CLOCKS / CIC_R} words of I and Q come out, each drawn as a point in the plane and joined to the last.` })] };
+  return { root: sdrFront(), inputs: { xr: 0, xi: 0, ftw: 0, clk: 0 }, clock: 'clk', autoClock: false, powerOn: 'zero', engine: 'cycle', hiddenInputs: ['xr', 'xi', 'ftw'], panels: [gatePanel({ title: 'A station through the front end', clocks: FRONT_CLOCKS, front: true, intro: `Pick a station. ${FRONT_CLOCKS} clocks go in and ${FRONT_CLOCKS / CIC_R} words of I and Q come out, each drawn as a point in the plane and joined to the last, the first four left out while the CIC fills.` })] };
 }
 export const nandsOf = () => ({ mixer: stats(complexMixer()).nands, nco: stats(sdrNco()).nands, front: stats(sdrFront()).nands });
 
 // ---- how fine a table ------------------------------------------------------------------------------------------------------------------------------
 
+/** How far off its frequency the test tone is tuned for the honest column of the table. */
+export const TONE_OFF_HZ = 100;
 export const TABLE_KS = [3, 4, 5, 6, 7, 8, 9] as const;
-export interface TableRow { k: number; nands: number; sfdr: number; keying: number }
+export interface TableRow { k: number; nands: number; sfdr: number; keying: number; toneOff: number; toneOn: number }
 let tableRows: TableRow[] | undefined;
 /** Each table size's cost in gates (the NCO alone) and the two things it buys. The weak station is received from the same second of band as everywhere else. */
 export function tableSweep(): TableRow[] {
-  return (tableRows ??= TABLE_KS.map((k) => ({ k, nands: stats(sdrNco(k)).nands, sfdr: mixerSfdr(k), keying: keyingRatio(receive(band(), STATIONS[3].f, -40, FS, k).chain.audio) })));
+  return (tableRows ??= TABLE_KS.map((k) => ({ k, nands: stats(sdrNco(k)).nands, sfdr: mixerSfdr(k), keying: keyingRatio(receive(band(), STATIONS[3].f, -40, FS, k).chain.audio), toneOff: toneSnrOff(k, TONE_OFF_HZ), toneOn: toneSnrOff(k, 0) })));
 }
 export function tableWidget(): Widget {
   let k = NCO_K;
@@ -208,7 +211,7 @@ export function tableWidget(): Widget {
   const body = h('tbody');
   const paint = () => {
     const r = rows.find((q) => q.k === k)!;
-    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, (q.keying < KEYING_LOST_DB ? 'lost' : `${num(q.keying, 1)} dB`)))));
+    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, `${num(q.toneOn, 0)} / ${num(q.toneOff, 0)} dB`), h('td', { class: 'num' }, (q.keying < KEYING_LOST_DB ? 'lost' : `${num(q.keying, 1)} dB`)))));
     chips.set(0, sp(2 ** k), 'steps in a turn');
     chips.set(1, sp(r.nands), 'NANDs in the oscillator');
     chips.set(2, `${num(r.sfdr, 0)} dB`, 'the largest spur under the carrier');
@@ -216,7 +219,7 @@ export function tableWidget(): Widget {
   };
   const sk = slider('Table bits', 3, 9, 1, k, (v) => String(v), (v) => { k = v; paint(); play.reset(); });
   const play = clipButton('Hear the weak station', () => ({ samples: receive(band(), STATIONS[3].f, -40, FS, k).chain.audio, rate: AUD, source: 'model', note: `${2 ** k}-step table, one second` } satisfies Clip));
-  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', { class: 'num' }, 'Bits'), h('th', { class: 'num' }, 'Steps'), h('th', { class: 'num' }, 'NANDs'), h('th', { class: 'num' }, 'Spur-free'), h('th', { class: 'num' }, 'Key down / up'))), body);
+  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', { class: 'num' }, 'Bits'), h('th', { class: 'num' }, 'Steps'), h('th', { class: 'num' }, 'NANDs'), h('th', { class: 'num' }, 'Spur-free'), h('th', { class: 'num' }, `Tone SNR, on / ${TONE_OFF_HZ} Hz off`), h('th', { class: 'num' }, 'Key down / up'))), body);
   paint();
   return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The oscillator\'s table, bit by bit'), h('div', { class: 'dsp-scroll' }, table), chips.el), h('div', { class: 'panel mos-ctl' }, sk.el, play.el)) };
 }
@@ -243,7 +246,7 @@ export function channelWidget(): Widget {
     const m = Math.floor((5e-3 * FS_CIC)), start = 3000, d = r.chain.disc;
     line(sp2, range(m).map((i) => (i / FS_CIC) * 1000), range(m).map((i) => d[start + i]), 'real');
     chips.set(0, `${CHAN_TAPS} taps`, `${sp(workPerSecond.channel)} multiplications a second, I and Q`);
-    chips.set(1, `${num(-dbOf(f240(CHAN, 100_000)), 0)} dB`, 'the channel filter\'s attenuation 100 kHz from the tuned station');
+    chips.set(1, `${num(-chanWorstDb(90_000, 120_000), 0)} dB`, 'worst stopband gain, 90 to 120 kHz from the tuned station');
     chips.set(2, `${num(Math.max(...range(m).map((i) => Math.abs(d[start + i]))), 2)}`, 'largest discriminator output, in deviations');
     chips.set(3, `${r.clipped}`, 'ADC samples at full scale');
     picks.forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
@@ -270,9 +273,9 @@ export function audioWidget(): Widget {
   line(sp2, range(241).map((i) => i * 0.05), range(241).map((i) => dbOf(pre(i * 50))), 'ln-s near');
   line(sp2, range(241).map((i) => i * 0.05), range(241).map((i) => -dbOf(pre(i * 50))), 'real');
   chips.set(0, `${AUDIO_TAPS} taps`, `${sp(workPerSecond.audio)} multiplications a second: only every ${AUDIO_R}th output is computed`);
-  chips.set(1, `${num(dbOf(resp(AUDIO, 12_000, FS_CIC)), 0)} dB`, 'at 12 kHz, where what folds onto the audio begins');
+  chips.set(1, `${num(-audioGainDb(12_000), 0)} to ${num(-audioGainDb(14_000), 0)} dB`, `down at 12 and 14 kHz, which fold onto 12 and 10 kHz; the filter is 6 dB down at ${num(audioHalfPointHz() / 1000, 1)} kHz`);
   chips.set(2, `${num(1 / (2 * Math.PI * TAU) / 1000, 2)} kHz`, `corner of a ${TAU * 1e6} µs time constant`);
-  chips.set(3, `${num(dbOf(pre(10_000)) - dbOf(pre(0)), 1)} dB`, 'the transmitter lifts 10 kHz over the bass by this much; the receiver takes it back');
+  chips.set(3, `${num(preLiftDb(10_000), 1)} dB`, `the digital pre-emphasis lifts 10 kHz over the bass by this; an analogue 75 µs network lifts ${num(analogueLiftDb(10_000), 1)} dB`);
   const ar = receive(band(), STATIONS[1].f, -40);
   const raw = Float32Array.from({ length: ar.chain.audio.length }, () => 0);
   // without de-emphasis: the filtered discriminator itself
@@ -292,7 +295,7 @@ export function dialWidget(): Widget {
   const read = h('div', { class: 'mc-status' }), working = h('p', { class: 'sub' });
   let last: Float32Array | null = null;
   const paint = () => {
-    const b = band(), r = receive(b, f, noise), smp = sample(b, noise, 0, 1 << 16), a = r.chain.audio;
+    const b = band(), r = receive(b, f, noise), smp = sample(b, noise), a = r.chain.audio;
     last = a;
     spec.clear();
     band2(spec, (f - CHAN_EDGE) / 1000, (f + CHAN_EDGE) / 1000);
@@ -306,10 +309,10 @@ export function dialWidget(): Widget {
     const st = stationAt(f), bw = st ? stationBand(st) : 0;
     const bits: (Node | string)[] = [];
     const tag = (label: string, value: string, cls = '') => h('span', null, `${label} `, h('b', { class: cls }, value));
-    bits.push(tag('Tuned to', st ? st.name : 'nothing that was put there'));
-    if (st) bits.push(tag('Carrier to noise in the channel', `${num(carrierToNoise(st.a, noise, bw), 1)} dB`));
+    bits.push(tag('Centred on', st ? st.name : 'nothing that was put there'));
+    if (st) bits.push(tag('Carrier to noise in its Carson band', `${num(carrierToNoise(st.a, noise, bw), 1)} dB`));
     if (st === STATIONS[0]) { const snr = toneSnr(a); bits.push(tag('Tone against everything else', `${num(snr, 1)} dB`, snr < 15 ? 'fail' : '')); }
-    if (r.clipped) bits.push(tag('ADC samples clipped', sp(r.clipped), 'fail'));
+    if (r.clipped) bits.push(tag('ADC samples clipped, of the second', sp(r.clipped), 'fail'));
     bits.push(tag('Band to audio', `${sp(FS)} → ${sp(AUD)} /s`));
     read.replaceChildren(...bits);
     working.textContent = '';

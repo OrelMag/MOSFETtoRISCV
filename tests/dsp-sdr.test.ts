@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
   ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
-  synthBand, TEST_TONE_HZ, keyingRatio, KEYING_LOST_DB, morseUnits, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
+  synthBand, TEST_TONE_HZ, trailingZeros, toneSnrOff, interferenceDb, ringSpread, chanWorstDb, preLiftDb, analogueLiftDb, firstClipNoiseDb, keyingRatio, KEYING_LOST_DB, morseUnits, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';
 import { complexMixer, sdrFront } from '../src/lib/sdr';
@@ -213,6 +213,37 @@ describe('the weak station with a coarse table', () => {
     expect(r[0]).toBeGreaterThan(10);
     expect(r[1] - r[0]).toBeGreaterThan(15);
     expect(r[2] - r[1]).toBeGreaterThan(4);
+  });
+});
+
+describe('what the audit found, pinned', () => {
+  it('the test tone hides the table: its tuning word lands on table points on frequency, and not 100 Hz off', () => {
+    expect(trailingZeros(tuningWord(STATIONS[0].f))).toBe(12);
+    expect(toneSnrOff(4, 0)).toBeGreaterThan(75);
+    const off = [3, 4, 5, 6, 8].map((k) => toneSnrOff(k, 100));
+    expect(off[1]).toBeLessThan(55);
+    for (let i = 1; i < off.length; i++) expect(off[i]).toBeGreaterThan(off[i - 1]);
+    expect(off[4]).toBeGreaterThan(70);
+  });
+  it('the CIC folds the sweep into the weak station\'s channel, and a finer table does not remove it', () => {
+    const six = interferenceDb(3, 6), twelve = interferenceDb(3, 12), alone = interferenceDb(3, 12, [2]);
+    expect(six).toBeGreaterThan(twelve + 4);
+    expect(Math.abs(twelve - alone)).toBeLessThan(2);
+    expect(alone).toBeGreaterThan(-20);
+  });
+  it('the tone\'s CIC output stays on a circle, the weak station\'s does not', () => {
+    expect(ringSpread(STATIONS[0].f, 800)).toBeLessThan(0.15);
+    expect(ringSpread(STATIONS[3].f, 800)).toBeGreaterThan(0.25);
+  });
+  it('the channel filter\'s stopband, and the digital pre-emphasis against the analogue one', () => {
+    expect(chanWorstDb(90_000, 120_000)).toBeLessThan(-50);
+    expect(chanWorstDb(90_000, 120_000)).toBeGreaterThan(-60);
+    expect(preLiftDb(10_000)).toBeCloseTo(11.1, 0);
+    expect(analogueLiftDb(10_000)).toBeCloseTo(13.7, 0);
+  });
+  it('the ADC starts clipping at -12 dB of noise, and the stations\' highest audio frequencies come from their programmes', () => {
+    expect(firstClipNoiseDb()).toBe(-12);
+    expect(STATIONS.map((s) => s.fm)).toEqual([1000, 1046, 3000, 700]);
   });
 });
 

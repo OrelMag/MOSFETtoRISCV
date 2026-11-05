@@ -128,16 +128,20 @@ export function frontBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: nu
 
 /** `fm`: the highest audio frequency the station sends, for Carson's rule. */
 export interface Station { f: number; a: number; name: string; short: string; fm: number }
-export const STATIONS: readonly Station[] = [
-  { f: -300_000, a: 1, name: 'Test tone, 1 kHz', short: 'tone', fm: 1000 },
-  { f: -60_000, a: 0.5, name: 'Arpeggio', short: 'arpeggio', fm: 1046 },
-  { f: 140_000, a: 0.7, name: 'Sweep', short: 'sweep', fm: 3000 },
-  { f: 340_000, a: 0.04, name: 'Weak station, sending Morse', short: 'weak', fm: 700 },
-];
 export const TEST_TONE_HZ = 1000;
+const NOTES = [262, 330, 392, 523, 392, 330];
+/** The arpeggio's notes carry a second harmonic at 0.3, so its highest frequency is twice its highest note. */
+const ARPEGGIO_TOP_HZ = 2 * Math.max(...NOTES);
+const SWEEP_FROM_HZ = 300, SWEEP_SPAN_HZ = 2700;
+const MORSE_HZ = 700;
+export const STATIONS: readonly Station[] = [
+  { f: -300_000, a: 1, name: 'Test tone, 1 kHz', short: 'tone', fm: TEST_TONE_HZ },
+  { f: -60_000, a: 0.5, name: 'Arpeggio', short: 'arpeggio', fm: ARPEGGIO_TOP_HZ },
+  { f: 140_000, a: 0.7, name: 'Sweep', short: 'sweep', fm: SWEEP_FROM_HZ + SWEEP_SPAN_HZ },
+  { f: 340_000, a: 0.04, name: 'Weak station, sending Morse', short: 'weak', fm: MORSE_HZ },
+];
 /** Carson's band of one of the four stations, from its own deviation and highest audio frequency. */
 export const stationBand = (st: Station): number => 2 * (DEV + st.fm);
-const NOTES = [262, 330, 392, 523, 392, 330];
 // D S P in Morse: -.. ... .--. , one unit a character of this string
 const MORSE = '1110101' + '000' + '10101' + '000' + '10111011101';
 
@@ -146,8 +150,8 @@ export function program(k: number, n: number): Float64Array {
   const m = new Float64Array(n);
   if (k === 0) for (let i = 0; i < n; i++) m[i] = Math.sin((2 * Math.PI * TEST_TONE_HZ * i) / AUD);
   if (k === 1) for (let i = 0; i < n; i++) { const t = i / AUD, st = Math.floor(t * 6), ph = t * 6 - st, f = NOTES[st % 6]; m[i] = Math.exp(-3 * ph) * (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)) * 0.8; }
-  if (k === 2) { let ph = 0; for (let i = 0; i < n; i++) { const t = i / AUD; ph += (2 * Math.PI * (300 + 2700 * t)) / AUD; m[i] = 0.8 * Math.sin(ph); } }
-  if (k === 3) { const unit = n / AUD / MORSE.length; for (let i = 0; i < n; i++) { const t = i / AUD; m[i] = MORSE[Math.min(MORSE.length - 1, Math.floor(t / unit))] === '1' ? 0.8 * Math.sin(2 * Math.PI * 700 * t) : 0; } }
+  if (k === 2) { let ph = 0; for (let i = 0; i < n; i++) { const t = i / AUD; ph += (2 * Math.PI * (SWEEP_FROM_HZ + SWEEP_SPAN_HZ * t)) / AUD; m[i] = 0.8 * Math.sin(ph); } }
+  if (k === 3) { const unit = n / AUD / MORSE.length; for (let i = 0; i < n; i++) { const t = i / AUD; m[i] = MORSE[Math.min(MORSE.length - 1, Math.floor(t / unit))] === '1' ? 0.8 * Math.sin(2 * Math.PI * MORSE_HZ * t) : 0; } }
   return m;
 }
 
@@ -186,14 +190,15 @@ export function programPeak(k: number): number {
 }
 
 export interface Band { n: number; re: Float32Array; im: Float32Array; noiseRe: Float32Array; noiseIm: Float32Array }
-const bands = new Map<number, Band>();
+const bands = new Map<string, Band>();
 /** The four stations, n samples long, and a fixed stream of unit complex Gaussian noise to scale (so the same slider position is the same sound everywhere). */
-export function synthBand(n: number = FS): Band {
-  const hit = bands.get(n);
+export function synthBand(n: number = FS, only?: readonly number[]): Band {
+  const key = `${n}:${only ? only.join(',') : 'all'}`, hit = bands.get(key);
   if (hit) return hit;
   const re = new Float32Array(n), im = new Float32Array(n), nre = new Float32Array(n), nim = new Float32Array(n), na = Math.ceil(n / (FS / AUD)) + 2;
   // each station's pre-emphasised programme is scaled so its loudest moment of a second is the peak deviation: a station modulates to its limit, whatever it sends
   STATIONS.forEach((st, k) => {
+    if (only && !only.includes(k)) return;
     const e = preEmphasis(program(k, na)), top = programPeak(k);
     for (let i = 0; i < e.length; i++) e[i] /= top;
     addFm(re, im, st.f, st.a, e, DEV);
@@ -202,7 +207,7 @@ export function synthBand(n: number = FS): Band {
   const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return (s + 0.5) / 4294967296; };
   for (let i = 0; i < n; i++) { const r = Math.sqrt(-2 * Math.log(rnd())), a = 2 * Math.PI * rnd(); nre[i] = r * Math.cos(a) * Math.SQRT1_2; nim[i] = r * Math.sin(a) * Math.SQRT1_2; }
   const b = { n, re, im, noiseRe: nre, noiseIm: nim };
-  bands.set(n, b);
+  bands.set(key, b);
   return b;
 }
 
@@ -363,3 +368,66 @@ export function keyingRatio(aud: ArrayLike<number>): number {
 
 /** Below this a keying ratio means the keying is lost: key up is as loud as key down, and the figure is only the ratio of two unrelated stretches of garbage (it scatters around 0 dB, either side). */
 export const KEYING_LOST_DB = 3;
+
+// ---- what the audit asked to be measured, not asserted --------------------------------------------------------------------------------------------
+
+export const trailingZeros = (n: number): number => { let z = 0; while (n && !(n & 1)) { n >>= 1; z++; } return z; };
+
+/** A response of an FIR at frequency f hertz, given the rate it runs at. */
+export function firGainAt(h: ArrayLike<number>, f: number, fs: number): number {
+  let re = 0, im = 0;
+  for (let i = 0; i < h.length; i++) { const w = (-2 * Math.PI * f * i) / fs; re += h[i] * Math.cos(w); im += h[i] * Math.sin(w); }
+  return Math.hypot(re, im);
+}
+const db20 = (x: number) => 20 * Math.log10(Math.max(x, 1e-12));
+/** The channel filter's worst gain between two frequencies, dB: a stopband figure, not a point that happens to be a null. */
+export function chanWorstDb(f0: number, f1: number): number {
+  let w = -Infinity;
+  for (let f = f0; f <= f1; f += 500) w = Math.max(w, db20(firGainAt(CHAN, f, FS_CIC)));
+  return w;
+}
+/** The audio filter's gain at f, dB. */
+export const audioGainDb = (f: number): number => db20(firGainAt(AUDIO, f, FS_CIC));
+/** The first frequency, from 0, at which the audio filter is 6 dB down. */
+export function audioHalfPointHz(): number { for (let f = 0; f < FS_CIC / 2; f += 50) if (audioGainDb(f) < -6.02) return f; return FS_CIC / 2; }
+/** The digital pre-emphasis lift at f over its gain at DC, dB, and what an analogue network with the same time constant lifts. */
+export const preLiftDb = (f: number): number => { const g = (w: number) => Math.hypot(1 - ALPHA * Math.cos(w), ALPHA * Math.sin(w)); return db20(g((2 * Math.PI * f) / AUD) / g(0)); };
+export const analogueLiftDb = (f: number): number => 10 * Math.log10(1 + (2 * Math.PI * f * TAU) ** 2);
+
+/** The tone's audio SNR when tuned df hertz off its frequency, with the oscillator's table of 2^k steps. On the frequency the tuning word has trailing zeros, so the phase lands on a few table points. */
+export function toneSnrOff(k: number, dfHz: number, noiseDb = -40): number {
+  return toneSnr(receive(synthBand(FS), STATIONS[0].f + dfHz, noiseDb, FS, k).chain.audio);
+}
+
+/**
+ * Everything the other stations put into the wanted station's channel, against the wanted station alone, dB: noise off, so the figure is the mixer's spurs and the CIC's aliases.
+ * Computed on half a second of the band, from after the filters have filled.
+ */
+export function interferenceDb(wanted: number, k: number = NCO_K, others?: readonly number[]): number {
+  const n = FS / 2, f = STATIONS[wanted].f, rest = others ?? STATIONS.map((_, i) => i).filter((i) => i !== wanted);
+  const power = (b: Band) => { const c = receive(b, f, -200, n, k).chain; let p = 0; for (let i = 2000; i < c.fr.length; i++) p += c.fr[i] ** 2 + c.fi[i] ** 2; return p / (c.fr.length - 2000); };
+  return 10 * Math.log10(power(synthBand(n, rest)) / power(synthBand(n, [wanted])));
+}
+
+/** Spread of the CIC output's radius (standard deviation over mean) for the tuned station, from the fifth output on: the first four are the CIC filling. */
+export function ringSpread(f: number, clocks: number): number {
+  const { xr, xi } = sample(synthBand(FS), -40, 0, clocks), { yr, yi } = frontBlock(xr, xi, tuningWord(f)), r: number[] = [];
+  for (let i = CIC_N; i < yr.length; i++) r.push(Math.hypot(yr[i], yi[i]));
+  const m = r.reduce((a, b) => a + b, 0) / r.length;
+  return Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / r.length) / m;
+}
+
+/** The band one station occupies on its own, measured: the narrowest span around its carrier holding `share` of its power, from the first 2^18 samples (0.27 s) of its programme. */
+export function stationOccupied(k: number, share = 0.98): number {
+  const n = 1 << 18, re = new Float32Array(n), im = new Float32Array(n), e = preEmphasis(program(k, AUD + 2)), top = programPeak(k);
+  for (let i = 0; i < e.length; i++) e[i] /= top;
+  addFm(re, im, 0, 1, e, DEV);
+  return occupied({ re: Float64Array.from(re), im: Float64Array.from(im) }, share);
+}
+
+/** The first noise level, in whole dB from −40 up, at which the ADC clips a sample of the second of band; null if none to 0 dB. */
+export function firstClipNoiseDb(): number | null {
+  const b = synthBand(FS);
+  for (let nd = -40; nd <= 0; nd++) if (sample(b, nd).clipped > 0) return nd;
+  return null;
+}
