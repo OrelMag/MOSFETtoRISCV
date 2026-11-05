@@ -569,15 +569,16 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
   const Y = 36; // main datapath row
+  const dx = c && !shared ? 6 : 0; // the C fetch unit's wider box pushes the decode columns right
   alignY('pcmux', M4, 2, 'y', Y);
   alignY('pc', PC, 12, 'd', Y);
   place('one', TIE1, [8, P('pc', 'en')[1] - 1]);
   const pcY = P('pc', 'q')[1];
   alignY('imem', IMEM, 27, 'addr', pcY);
   const instrY = P('imem', 'data')[1];
-  alignY('si', SI, 45, 'in', instrY);
-  alignY('rf', RF, 62, 'wa', P('si', 'o1')[1]);
-  alignY('imm', IMM_GEN, 60, 'instr', Y + 18);
+  alignY('si', SI, 45 + dx, 'in', instrY);
+  alignY('rf', RF, 62 + dx, 'wa', P('si', 'o1')[1]);
+  alignY('imm', IMM_GEN, 60 + dx, 'instr', Y + 18);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
   alignY('srcB', M2, rfR + 8, 'a', P('rf', 'rd2')[1] + 9);
@@ -585,7 +586,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !dcache && !icache && !fpu && !shared && !imemPort && !custom.length && !c;
+  const wired = !(icache && dcache) && !fpu && !(imemPort && c);
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -618,12 +619,12 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     { name: 'JalrTarget', ends: ['clr0.out', 'pcmux.d2'], tags: true },
     { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], tags: true },
     // decode
-    { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 43, tags: ['instrOut'] },
+    { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 43 + dx, tags: ['instrOut'] },
     { name: 'op', ends: ['si.o0', 'ctl.op'], tags: true },
     { name: 'rd', ends: ['si.o1', 'rf.wa'] },
     { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3'], tags: true },
-    { name: 'rs1', ends: ['si.o3', 'rf.ra1'], trunk: 55 },
-    { name: 'rs2', ends: ['si.o4', 'rf.ra2'], trunk: 56.5 },
+    { name: 'rs1', ends: ['si.o3', 'rf.ra1'], trunk: 55 + dx },
+    { name: 'rs2', ends: ['si.o4', 'rf.ra2'], trunk: 56.5 + dx },
     { name: 'funct7', ends: ['si.o5', 'ctl.funct7'], tags: true },
     { name: 'ImmExt', ends: ['imm.imm', 'srcB.b', 'target.b', 'res.d3'], trunk: immY[0] + 3, tags: ['res.d3'] },
     // execute
@@ -638,7 +639,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     { name: 'ReadData', ends: ['dm.rd', 'res.d1'] },
     {
       name: 'Result', ends: ['res.y', 'rf.wd'],
-      via: { 'rf.wd': [[resY[0] + 3, resY[1]], [resY[0] + 3, bottom - 4], [58, bottom - 4], [58, P('rf', 'wd')[1]]] },
+      via: { 'rf.wd': [[resY[0] + 3, resY[1]], [resY[0] + 3, bottom - 4], [58 + dx, bottom - 4], [58 + dx, P('rf', 'wd')[1]]] },
     },
     { name: 'gndT', ends: ['gndT.y', 'target.cin'], via: { 'target.cin': [[P('target', 'cin')[0], P('gndT', 'y')[1]]] } },
     { name: 'gndJ', ends: ['gndJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gndJ', 'y')[1]]] } },
@@ -688,14 +689,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // the instruction's fields to control, down past the datapath and in from the left
     const lane = (o: string, x: number, row: number, into: string, left: number) =>
       [[x, P('si', o)[1]], [x, row], [left, row], [left, P('ctl', into)[1]]] as [number, number][];
-    rows('op', { 'ctl.op': lane('o0', 48, 75.5, 'op', 28) });
+    rows('op', { 'ctl.op': lane('o0', 48 + dx, 75.5, 'op', 28) });
     rows('funct3', {
-      'ctl.funct3': lane('o2', 49.5, 76.5, 'funct3', 27),
-      'npc.funct3': [[49.5, P('si', 'o2')[1]], [49.5, 76.5], [P('npc', 'funct3')[0] - 7, 76.5], [P('npc', 'funct3')[0] - 7, P('npc', 'funct3')[1]]],
+      'ctl.funct3': lane('o2', 49.5 + dx, 76.5, 'funct3', 27),
+      'npc.funct3': [[49.5 + dx, P('si', 'o2')[1]], [49.5 + dx, 76.5], [P('npc', 'funct3')[0] - 7, 76.5], [P('npc', 'funct3')[0] - 7, P('npc', 'funct3')[1]]],
     });
-    rows('funct7', { 'ctl.funct7': lane('o5', 51, 77.5, 'funct7', 26) });
+    rows('funct7', { 'ctl.funct7': lane('o5', 51 + dx, 77.5, 'funct7', 26) });
     // control: each signal straight out of its port, then up to its unit
-    up('RegWrite', 'regWrite', 'rf.we', 59.5, [59.5, P('rf', 'we')[1]]);
+    up('RegWrite', 'regWrite', 'rf.we', 59.5 + dx, [59.5 + dx, P('rf', 'we')[1]]);
     up('ImmSrc', 'immSrc', 'imm.src', P('imm', 'src')[0]);
     up('ALUSrcA', 'aluSrcA', 'srcA.s', rfR + 6.5, [rfR + 6.5, P('srcA', 's')[1] + 2.5], [P('srcA', 's')[0], P('srcA', 's')[1] + 2.5]);
     up('ALUSrcB', 'aluSrcB', 'srcB.s', P('srcB', 's')[0]);
@@ -705,11 +706,12 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     up('Jump', 'jump', 'npc.jump', P('npc', 'jump')[0] - 5, [P('npc', 'jump')[0] - 5, P('npc', 'jump')[1]]);
     up('Jalr', 'jalr', 'npc.jalr', P('npc', 'jalr')[0] - 4, [P('npc', 'jalr')[0] - 4, P('npc', 'jalr')[1]]);
     up('ALUControl', 'aluCtl', 'alu.ctl', P('target', 'a')[0] - 1.5, [P('target', 'a')[0] - 1.5, P('alu', 'ctl')[1] + 2], [P('alu', 'ctl')[0], P('alu', 'ctl')[1] + 2]);
-    for (const n of nets) if (['RegWrite', 'ImmSrc', 'ALUSrcA', 'ALUSrcB', 'MemWrite', 'ResultSrc', 'Branch', 'Jump', 'Jalr', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'op', 'funct3', 'funct7'].includes(n.name!)) n.quiet = true;
+    for (const n of nets) if (['RegWrite', 'ImmSrc', 'ALUSrcA', 'ALUSrcB', 'MemWrite', 'ResultSrc', 'Branch', 'Jump', 'Jalr', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'C', 'op', 'funct3', 'funct7'].includes(n.name!)) n.quiet = true;
     delete nets.find((n) => n.name === 'gndT')!.via; // in line with its pin
+    if (c) rows('C', { 'plus4.c': [[P('imem', 'c')[0] + 1, P('imem', 'c')[1]], [P('imem', 'c')[0] + 1, 31.5], [P('plus4', 'c')[0], 31.5]] });
     // the ALU's flags, nested so that they do not cross each other
-    ([['Zero', 'zero', 108.5], ['Neg', 'neg', 107], ['Ovf', 'ovf', 105.5], ['Carry', 'carry', 104]] as const).forEach(([name, port, x]) =>
-      rows(name, { [`npc.${port}`]: [[x, P('alu', port)[1]], [x, P('npc', port)[1]]] }));
+    ([['Zero', 'zero', 108.5], ['Neg', 'neg', 107], ['Ovf', 'ovf', 105.5], ['Carry', 'carry', 104]] as const).forEach(([name, port, x0]) => { const x = x0 + dx;
+      rows(name, { [`npc.${port}`]: [[x, P('alu', port)[1]], [x, P('npc', port)[1]]] }); });
   }
 
   const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [resY[0] + 22, bottom - 8], instrOut: [resY[0] + 22, bottom - 5], aluOut: [resY[0] + 22, bottom - 2] };
@@ -718,21 +720,21 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // write until the line arrives. The extra gates sit in a strip below the datapath, lined up so that
     // neighbours connect with straight wires.
     const add = (name: string, def: ComponentDef, xy: [number, number]) => instances.push({ name, def, at: xy });
-    const xs = aluR - 12, y0 = bottom + 10;
+    const xs = aluR - 12, y0 = wired ? 102 : bottom + 10;
     if (dcache) {
       add('rsplit', splitter([1, 1]), [xs, y0]);
       add('nr1', NOT, [xs + 5, y0 + 2]);
       add('isLoad', AND, [xs + 12, y0]);
     }
-    add('rwg', AND, [52, bottom - 8]);
+    add('rwg', AND, wired ? [54, 75] : [52, bottom - 8]);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
     net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
     if (icache) {
       // while the fetch misses, the instruction is not valid: hold back its data-memory request too
-      add('ivalid', NOT, [xs + 12, y0 + 10]);
-      add('weg', AND, [xs + 20, y0 + 10]);
+      add('ivalid', NOT, wired ? [xs + 2, y0] : [xs + 12, y0 + 10]);
+      add('weg', AND, wired ? [xs + 10, y0] : [xs + 20, y0 + 10]);
       net('MemWrite').ends = ['ctl.memWrite', 'weg.b'];
       net('clk').ends.push('imem.clk');
       nets.push(
@@ -746,7 +748,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // stall = the data cache's, the instruction cache's, or either
     const both = dcache && icache;
     if (both) add('anyStall', OR, [xs + 12, y0 + 18]);
-    add('nstall', NOT, both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
+    add('nstall', NOT, wired ? (dcache ? [dmX + 21, 37] : [xs + 2, y0 + 6]) : both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
     if (both) {
       nets.push(
         { name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true },
@@ -773,6 +775,57 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true },
     );
     pins.retire = [resY[0] + 22, bottom + 1];
+    if (wired) {
+      // the strip sits under the control rows; the stall chain is drawn with wires: the stall beside the cache, retire
+      // along the bottom to the PC's enable, the register write gate under the control block's first row
+      const net = (name: string) => nets.find((n) => n.name === name)!;
+      const Q = (inst: string, port: string): [number, number] => {
+        const i = instances.find((x) => x.name === inst)!;
+        const p = g(i.def).ports[port].pos;
+        return [i.at![0] + p[0], i.at![1] + p[1]];
+      };
+      const wire = (name: string, via: NonNullable<NetDef['via']>) => { const n = net(name); n.via = { ...n.via, ...via }; delete n.tags; n.quiet = true; };
+      const ctlY = (port: string) => P('ctl', port)[1];
+      const hx = dmX + 23, rx = dmX + 25.5;
+      delete net('RegWrite').via?.['rf.we'];
+      wire('RegWrite', { 'rwg.a': [[52, ctlY('regWrite')], [52, Q('rwg', 'a')[1]]] });
+      wire('RegWriteQ', { 'rf.we': [[59.5, Q('rwg', 'y')[1]], [59.5, P('rf', 'we')[1]]] });
+      if (dcache) {
+        wire('retire', {
+          'pc.en': [[rx, Q('nstall', 'y')[1]], [rx, 73], [10, 73], [10, P('pc', 'en')[1]]],
+          'rwg.b': [[rx, Q('nstall', 'y')[1]], [rx, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
+          retire: [[rx, pins.retire[1]]],
+        });
+      } else {
+        // the instruction cache's gates sit in the strip; its stall comes down the left channel and retire goes back up it
+        const ny = Q('nstall', 'y'), under = y0 + 9.5, left = 24;
+        pins.retire = [resY[0] + 22, under];
+        pins.ihit = [resY[0] + 22, under + 2.5];
+        wire('istall', {
+          'nstall.a': [[Q('imem', 'stall')[0], 56], [left, 56], [left, Q('nstall', 'a')[1]]],
+          'ivalid.a': [[Q('imem', 'stall')[0], 56], [left, 56], [left, Q('nstall', 'a')[1]], [xs, Q('nstall', 'a')[1]], [xs, Q('ivalid', 'a')[1]]],
+        });
+        wire('instrValid', {});
+        wire('MemWriteQ', { 'dm.we': [[dmX - 4, Q('weg', 'y')[1]], [dmX - 4, P('dm', 'we')[1]]] });
+        delete net('MemWrite').via?.['dm.we'];
+        wire('MemWrite', { 'weg.b': [[xs + 8, ctlY('memWrite')], [xs + 8, Q('weg', 'b')[1]]] });
+        wire('ihit', { ihit: [[Q('imem', 'hit')[0], 57], [left - 1.5, 57], [left - 1.5, pins.ihit[1]]] });
+        net('clk').via = { ...net('clk').via, 'imem.clk': [[Q('imem', 'clk')[0], bottom]] };
+        wire('retire', {
+          'pc.en': [[ny[0] + 2, ny[1]], [ny[0] + 2, under], [10, under], [10, P('pc', 'en')[1]]],
+          'rwg.b': [[ny[0] + 2, ny[1]], [ny[0] + 2, under], [10, under], [10, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
+          retire: [[ny[0] + 2, pins.retire[1]]],
+        });
+      }
+      if (dcache) {
+        wire('stall', {});
+        wire('dhit', { dhit: [[hx, P('dm', 'hit')[1]], [hx, pins.dhit[1]]] });
+        wire('ResultSrc', { 'rsplit.in': [[xs - 2, ctlY('resultSrc')], [xs - 2, Q('rsplit', 'in')[1]]] });
+        wire('MemRead', { 'dm.re': [[dmX - 2, Q('isLoad', 'y')[1]], [dmX - 2, P('dm', 're')[1]]] });
+        for (const n of ['rs0', 'rs1', '¬rs1']) wire(n, {});
+        // the strip's pins: the stall chain's outputs on the right edge
+      }
+    }
   }
   if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
@@ -864,22 +917,22 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     const dmAt = at.get('dm')!;
     instances.splice(instances.findIndex((i) => i.name === 'dm'), 1);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
-    add('mpd', MP_DECODE, [8, bottom + 10]);
+    add('mpd', MP_DECODE, wired ? [8, 104] : [8, bottom + 10]);
     add('amux', M2, [dmAt[0], dmAt[1]], 'address: ALU / rs1');
-    add('amoadd', ADD, [dmAt[0] + 14, bottom + 10], 'old + rs2');
-    add('gndA', TIE0, [dmAt[0] + 8, bottom + 6]);
-    add('wmux', M2, [dmAt[0] + 14, dmAt[1] + 22], 'store / amoadd');
-    add('rsplit', splitter([1, 1]), [aluR + 4, bottom - 12]);
-    add('nr1', NOT, [aluR + 8, bottom - 10]);
-    add('isLoad', AND, [aluR + 13, bottom - 12]);
-    add('req', OR, [aluR + 20, bottom - 12]);
-    add('weo', OR, [aluR + 20, bottom - 6]);
-    add('weg', AND, [aluR + 26, bottom - 6]);
-    add('ngr', NOT, [aluR + 20, bottom]);
-    add('stl', AND, [aluR + 26, bottom]);
-    add('nstall', NOT, [8, P('pc', 'en')[1] - 1]);
-    add('rwg', AND, [52, bottom - 8]);
-    add('rwh', OR, [56, bottom - 2]);
+    add('amoadd', ADD, wired ? [dmAt[0] + 24, 106] : [dmAt[0] + 14, bottom + 10], 'old + rs2');
+    add('gndA', TIE0, wired ? [dmAt[0] + 19, 114] : [dmAt[0] + 8, bottom + 6]);
+    add('wmux', M2, wired ? [dmAt[0] + 24, 118] : [dmAt[0] + 14, dmAt[1] + 22], 'store / amoadd');
+    add('rsplit', splitter([1, 1]), wired ? [aluR + 4, 104] : [aluR + 4, bottom - 12]);
+    add('nr1', NOT, wired ? [aluR + 8, 106] : [aluR + 8, bottom - 10]);
+    add('isLoad', AND, wired ? [aluR + 13, 104] : [aluR + 13, bottom - 12]);
+    add('req', OR, wired ? [aluR + 30, 104] : [aluR + 20, bottom - 12]);
+    add('weo', OR, wired ? [aluR + 20, 110] : [aluR + 20, bottom - 6]);
+    add('weg', AND, wired ? [aluR + 30, 110] : [aluR + 26, bottom - 6]);
+    add('ngr', NOT, wired ? [aluR + 20, 118] : [aluR + 20, bottom]);
+    add('stl', AND, wired ? [aluR + 30, 118] : [aluR + 26, bottom]);
+    add('nstall', NOT, wired ? [4, 46] : [8, P('pc', 'en')[1] - 1]);
+    add('rwg', AND, wired ? [54, 75] : [52, bottom - 8]);
+    add('rwh', OR, wired ? [68, 75] : [56, bottom - 2]);
     add('hmux', M2, [resY[0] + 6, resY[1] - 6], 'result / hart id');
     const net = (name: string) => nets.find((n) => n.name === name)!;
     const drop = (n: NetDef, e: string) => { n.ends = n.ends.filter((x) => x !== e); if (Array.isArray(n.tags)) n.tags = n.tags.filter((x) => x !== e); };
@@ -927,6 +980,30 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'hartid', ends: ['hartid', 'hmux.b'], tags: true },
       { name: 'XResult', ends: ['hmux.y', 'rf.wd'], tags: true },
     );
+    if (wired) {
+      // the core's own wires stay wires; what the multi-core adds (decode, arbitration, the memory port) keeps its pointers
+      const some = (name: string, tagged: string[], via?: string[]) => {
+        const n = net(name);
+        n.tags = tagged;
+        if (n.via) for (const k of via ?? []) delete n.via[k];
+      };
+      net('op').tags = true;
+      some('funct3', ['mpd.funct3']);
+      some('funct7', ['mpd.funct7']);
+      some('rs1', ['mpd.rs1']);
+      some('rs2', ['mpd.rs2']);
+      some('rd1', ['amux.b']);
+      some('WriteData', ['wmux.a', 'amoadd.b']);
+      some('ResultSrc', ['rsplit.in']);
+      net('ReadData').tags = true;
+      net('MemWrite').tags = true;
+      net('gndA').via = { 'amoadd.cin': [[dmAt[0] + 22.5, 115], [dmAt[0] + 22.5, 112]] };
+      const rw = net('RegWrite');
+      rw.via = { 'rwg.a': [[52, P('ctl', 'regWrite')[1]], [52, 76]] };
+      delete rw.tags;
+      net('retire').tags = ['rwg.b', 'retire'];
+      net('retire').via = { 'pc.en': [[10, 47], [10, P('pc', 'en')[1]]] };
+    }
     const ox = resY[0] + 22;
     Object.assign(pins, { hartid: [0, bottom + 6], memRData: [0, bottom + 9], grant: [0, bottom + 12], memAddr: [ox, bottom + 1], memWData: [ox, bottom + 4], memWE: [ox, bottom + 7], memReq: [ox, bottom + 10], retire: [ox, bottom + 13] });
     if (imemPort) {
@@ -935,7 +1012,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       drop(net('PC'), 'imem.addr');
       const ins = net('Instr');
       ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
-      pins.instr = [0, bottom + 15];
+      pins.instr = wired ? [40, P('imem', 'data')[1]] : [0, bottom + 15];
       extraPorts.push(bus('instr', 32, 'in'));
       if (c) {
         // C: the port carries the 32-bit window at pc (a window ROM, editor/parts.ts); the expander is inside the core
@@ -952,6 +1029,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     extraPorts.push(bus('hartid', 32, 'in'), bus('memRData', 32, 'in'), bit('grant', 'in'),
       bus('memAddr', 32, 'out'), bus('memWData', 32, 'out'), bit('memWE', 'out'), bit('memReq', 'out'), bit('retire', 'out'));
   }
+  for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
     id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
