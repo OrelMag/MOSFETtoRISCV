@@ -396,7 +396,7 @@ export function rsDecoder(nsym = 10, n = 26): ComponentDef {
     b.op(OR, ['ctl.bm', 'ctl.om'], undefined, 'rot');
     b.op(OR, ['rst', 'ctl.bmlast'], undefined, 'mc');
     b.op(rsMask(t), ['rot.y', 'mc.y', 'clk'], undefined, 'mk');
-    b.op(rsKUnit(nsym), ['dz.z', 'ctl.bm', 'ctl.ch', 'fr.root', 'ctl.done', 'rst', 'clk'], 'length, verdict', 'kk');
+    b.op(rsKUnit(nsym), ['dz.z', 'ctl.bm', 'ctl.ch', 'fr.root', 'ctl.done', 'rst', 'clk'], 'verdict', 'kk');
     b.next();
     for (let k = 0; k < nsym; k++) {
       if (k === Math.ceil(nsym / 2)) b.next();

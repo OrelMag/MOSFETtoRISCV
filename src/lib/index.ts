@@ -83,3 +83,4 @@ export * from './rs';
 export * from './rsdec';
 export * from './fft';
 export * from './ethswitch';
+export * from './enigmagates';
