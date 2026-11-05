@@ -21,7 +21,7 @@ import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import type { ViewFocus } from '../ui/viewlink';
 import { factsOf, type NetEnd } from './netfacts';
-import { partHeader, wireHeader, wireRows } from './tracemenu';
+import { type MeasureHost, partHeader, partMeasure, wireHeader, wireRows } from './tracemenu';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
@@ -49,6 +49,8 @@ export interface SchematicEvents {
   canInspect?(): boolean;
   /** The menu's Explain for a part or (null) the level on screen. */
   explain?(child: string | null): MenuEntry[];
+  /** The menu's Measure: probes, timing and power for a net or a part of this level. */
+  measure?(target: ViewFocus): MeasureHost;
   /** Up one level, for the menu's jump to a port of this level. */
   up?(): void;
   /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen. */
@@ -1350,6 +1352,7 @@ export class SchematicView {
         flat: () => ctx.node.nets?.[idx] ?? [],
         transistors: sw,
         more: this.events.elsewhere?.({ net: idx }) ?? [],
+        ...(this.events.measure ? { measure: this.events.measure({ net: idx }) } : {}),
       });
       showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for wire ${f.name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
       return true;
@@ -1366,6 +1369,7 @@ export class SchematicView {
     const rows: MenuItem[] = [
       { label: 'Look inside', key: 'double-click', run: () => this.events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
       ...(this.events.inspect && this.events.canInspect?.() !== false ? [{ label: 'Inspect', hint: 'Its datasheet and cost', run: () => this.events.inspect!(name) }] : []),
+      ...(this.events.measure ? partMeasure(name, this.events.measure({ inst: name })).filter((x): x is MenuItem => !!x) : []),
       ...(this.events.explain?.(name).filter((x): x is MenuItem => !!x) ?? []),
       ...(this.events.elsewhere?.({ inst: name }).filter((x): x is MenuItem => !!x) ?? []),
     ];
@@ -1406,6 +1410,15 @@ export class SchematicView {
       return;
     }
     this.bring(this.pins.find((p) => p.pin.name === e.port)?.g);
+  }
+
+  /** Light the parts of this level these hierarchical paths go through (a path lit from a menu); the count lit. */
+  lightPaths(paths: string[][]): number {
+    const at = this.ctx?.path ?? [];
+    const names = new Set<string>();
+    for (const p of paths) if (p.length > at.length && at.every((x, i) => p[i] === x) && this.insts.has(p[at.length])) names.add(p[at.length]);
+    this.highlight([...names], true);
+    return names.size;
   }
 
   /** What a link points at: selected, into view, flashed. False: nothing by that name or number at this level. */

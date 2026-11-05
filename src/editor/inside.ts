@@ -13,8 +13,11 @@ import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ViewFocus } from '../ui/viewlink';
-import { elsewhereGroup, elsewhereRows } from '../view/tracemenu';
+import { elsewhereGroup, elsewhereRows, type MeasureHost } from '../view/tracemenu';
 import { copyAsChip, explainOn, handout } from './levelgate';
+import { probeRow } from './probehook';
+import { SwitchSim } from '../sim/switchsim';
+import { NmosSim } from '../sim/nmossim';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
@@ -121,6 +124,12 @@ class InsideView {
       this.canvas);
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      if (e.key === 'Escape' && this.pathLit) {
+        e.preventDefault();
+        this.pathLit = false;
+        this.view.highlight([]);
+        return;
+      }
       if (isMenuKey(e) && (e.target === this.el || this.view.el.contains(e.target as Node))) {
         e.preventDefault();
         this.view.keyMenu(e.target === this.el ? null : e.target as Element);
@@ -159,6 +168,7 @@ class InsideView {
       elsewhere: (t) => this.elsewhere(t),
       inspect: (c) => this.inspectPart(c),
       canInspect: () => !this.gated(),
+      measure: (t) => this.measure(t),
       explain: (c) => {
         const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
         return def ? explainOn(this.ed, def, this.gated() ? null : (at) => this.inspectPart(c, at)) : [];
@@ -171,13 +181,33 @@ class InsideView {
     ed.paintHooks.add(this.hook);
   }
 
+  /** A path lit from the menu: Esc puts the view back before it goes up a level. */
+  private pathLit = false;
+
+  /** The right-click menu's Measure, over the editor's own simulation. */
+  private measure(t: ViewFocus): MeasureHost {
+    const ctx = this.ctx!, sim = this.ed.sim.sim;
+    const sub = !sim || ctx.sim !== sim;
+    const sw = sim instanceof SwitchSim || sim instanceof NmosSim;
+    const timing = sw ? 'Switch level has no gate delay.' : sub ? 'Timing covers the chip’s own design, and this leaf has a simulation of its own.' : { design: sim!.design, at: ctx.path };
+    const light = (paths: string[][]) => {
+      this.pathLit = this.view.lightPaths(paths) > 0;
+      if (!this.pathLit) this.ed.toast('Its slowest path runs through no other part of this level');
+    };
+    if ('inst' in t) {
+      return { timing, light, ...(this.gated() ? {} : { power: () => this.inspectPart(t.inst, 'power') }) };
+    }
+    const probe = sub ? 'A separate lock-step simulation. Probe its ports from the level above.' : probeRow(this.ed, { path: ctx.path, net: t.net });
+    return { probe, timing, light, toggles: sw ? 'Power is counted from gate toggles, and this level has none.' : () => null };
+  }
+
   /** A level's or a walkthrough's chip: what is inside its parts stays there. */
   private gated(): boolean {
     return handout({ chipId: this.ed.chipId, level: !!this.ed.level, own: false }).none;
   }
 
   /** The Inspector's drawer on a part of the level on screen (or on the level). */
-  private inspectPart(c: string | null, at?: 'truth' | 'used'): void {
+  private inspectPart(c: string | null, at?: 'truth' | 'used' | 'power'): void {
     const ctx = this.ctx;
     const def = c ? ctx?.node.children?.get(c)?.def : ctx?.def;
     // on demand: inspect.ts registers a toolbar action, and editor.ts imports this file before it can take one

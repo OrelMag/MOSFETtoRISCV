@@ -4,7 +4,7 @@
 // first), a pin, or a pointer name, and is resolved again against each new build. A probe whose
 // wires are all gone, or whose net was dropped, disappears with them.
 
-import type { FlatDesign } from '../sim/flatten';
+import { type FlatDesign, findNode } from '../sim/flatten';
 import { netlistOf } from '../sim/types';
 import type { Compiled } from './compile';
 import type { ChipDoc } from './model';
@@ -12,7 +12,9 @@ import type { ChipDoc } from './model';
 export type ProbeTarget =
   | { wires: string[] }
   | { pin: string }
-  | { pointer: string };
+  | { pointer: string }
+  /** A net inside a part (look inside): the instance path from the chip, and the net's index at that level. */
+  | { path: string[]; net: number };
 
 export interface ResolvedProbe {
   /** Flat nets in the simulation, LSB first. */
@@ -34,6 +36,7 @@ export function netOfTarget(t: ProbeTarget, doc: ChipDoc, built: Compiled): numb
     }
     return -1;
   }
+  if ('path' in t) return -1;
   if ('pointer' in t) {
     for (const l of doc.labels) {
       if (l.name !== t.pointer) continue;
@@ -50,6 +53,14 @@ export function netOfTarget(t: ProbeTarget, doc: ChipDoc, built: Compiled): numb
  * built.def). Null when the target no longer exists or is not on a working net.
  */
 export function resolveProbe(t: ProbeTarget, doc: ChipDoc, built: Compiled, design: FlatDesign): ResolvedProbe | null {
+  if ('path' in t) {
+    // a part opened onto its own simulation (a primitive's inside) has no nets in this one
+    const node = findNode(design.root, t.path);
+    const flat = node?.nets?.[t.net];
+    const nd = node && netlistOf(node.def)?.nets[t.net];
+    if (!flat || !nd) return null;
+    return { nets: [...flat], label: [...t.path, nd.name ?? nd.ends[0] ?? `net${t.net}`].join('.'), target: t, net: -1 };
+  }
   if ('pin' in t) {
     const pin = doc.pins.find((p) => p.id === t.pin);
     const nets = pin && design.root.ports[pin.name];
@@ -70,6 +81,7 @@ export function resolveProbe(t: ProbeTarget, doc: ChipDoc, built: Compiled, desi
 
 /** Same lane? (A click on a probed wire removes its probe instead of adding a second one.) */
 export function sameTarget(a: ProbeTarget, b: ProbeTarget, doc: ChipDoc, built: Compiled): boolean {
+  if ('path' in a || 'path' in b) return 'path' in a && 'path' in b && a.net === b.net && a.path.join('/') === b.path.join('/');
   if ('pin' in a || 'pin' in b) return 'pin' in a && 'pin' in b && a.pin === b.pin;
   const na = netOfTarget(a, doc, built);
   return na >= 0 && na === netOfTarget(b, doc, built);

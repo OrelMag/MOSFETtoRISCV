@@ -38,7 +38,7 @@ import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { isMenuKey, type MenuEntry } from '../ui/menu';
-import { elsewhereGroup, elsewhereRows, explainGroup } from './tracemenu';
+import { elsewhereGroup, elsewhereRows, explainGroup, type MeasureHost } from './tracemenu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -443,6 +443,7 @@ export class Stage {
         this.inspector.openAt('info');
       },
       explain: (c) => this.explain(c),
+      measure: (t) => this.measure(t),
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
     });
@@ -473,6 +474,11 @@ export class Stage {
         return;
       }
       if (e.key === 'Escape' && this.view.dropGroup()) return;
+      if (e.key === 'Escape' && this.pathLit) {
+        this.pathLit = false;
+        this.view.highlight(this.scene?.highlight ?? []);
+        return;
+      }
       if (matches(e, 'stage.probe') && shortcutAllowed(e)) this.setProbeMode(!this.probeMode);
       if (matches(e, 'stage.why') && shortcutAllowed(e) && !this.boardOn) this.why.setOn(!this.why.on);
       if (e.key === 'Escape' && this.why.on) {
@@ -1108,6 +1114,49 @@ export class Stage {
     this.pins.el.remove();
     this.pins = null;
     if (docked) this.layoutDock();
+  }
+
+  /** A path lit from the menu: Esc puts the scene's own highlight back first. */
+  private pathLit = false;
+
+  /** The right-click menu's Measure for a net or a part of the level on screen. */
+  private measure(t: ViewFocus): MeasureHost {
+    const ctx = this.ctx!, sim = this.sim;
+    const sub = ctx.sim !== sim;
+    const sw = !sim || sim.kind !== 'gate';
+    const cycle = sim instanceof DualSim;
+    const timing = sw ? 'Switch level has no gate delay. A relay scene counts relay steps instead.'
+      : sub ? 'Timing covers the scene’s own design, and this leaf is outside it. Look from the level above.'
+        : { design: sim!.design, at: ctx.path };
+    const light = (paths: string[][]) => {
+      const n = this.view.lightPaths(paths);
+      this.pathLit = n > 0;
+      this.flashNow(n ? `The slowest path through it: ${n} part${n === 1 ? '' : 's'} lit here (Esc puts the scene back)` : 'Its slowest path runs through no other part of this level');
+    };
+    if ('inst' in t) {
+      const power = cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
+        : sw ? 'Power is counted from gate toggles, and this level has none.'
+          : sub ? 'Power is counted on the scene’s GateSim, and this leaf has its own simulation.'
+            : () => { this.select(t.inst); this.showInspector(); this.inspector.openAt('power'); };
+      return { timing, light, power };
+    }
+    const nets = this.flatNets(t.net);
+    const probe = cycle ? 'Cycle engine: values at clock edges only, so there is no gate time to plot.'
+      : sw ? 'Switch level has no gate time: the solver returns settled values.'
+        : !nets ? 'A separate lock-step simulation. Probe its ports from the level above.'
+          : (() => {
+            const hit = this.analyzer.probeFor(netKey(nets));
+            return hit ? { label: 'Remove its probe', run: () => this.analyzer.remove(hit.id) }
+              : { label: 'Add a probe and timing lane', run: () => { this.addProbe(ctx, t.net, nets); this.showAnalyzer(true); } };
+          })();
+    const toggles = cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
+      : sw ? 'Power is counted from gate toggles, and this level has none.'
+        : !nets ? 'Power is counted on the scene’s GateSim, and this leaf has its own simulation.'
+          : () => {
+            const tg = (sim as GateSim).toggles;
+            return tg ? nets.reduce((a, n) => a + (tg[n] ?? 0), 0) : null;
+          };
+    return { probe, timing, light, toggles };
   }
 
   /** The right-click menu's Explain for a part or (null) this level. */

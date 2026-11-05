@@ -20,7 +20,9 @@ import { colourNets, hueOfNets } from './wirehue';
 import { netMembers, netOfSelection } from './netsel';
 import { factsOf, type NetEnd } from '../view/netfacts';
 import { ViewCtx } from '../view/context';
-import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
+import { elsewhereGroup, elsewhereRows, type MeasureHost, partHeader, partMeasure, wireHeader, wireRows } from '../view/tracemenu';
+import { probeRow } from './probehook';
+import type { ProbeTarget } from './probes';
 import { exportImage, shareDialog } from './fileui';
 import { copyAsChip, explainOn, handout } from './levelgate';
 import type { WireDoc } from './model';
@@ -92,6 +94,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
+      ...measureOf(ed, p.id),
       ...explainOf(ed, p.id),
       ...elsewhereOf(ed, p.id),
       null,
@@ -171,6 +174,31 @@ function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
   }));
 }
 
+/** What a probe of the selection names: a wire's net by its wires, a pointer by its name (a pin has a lane from the start). */
+function probeTargetOf(ed: Editor): ProbeTarget | null {
+  const s = ed.sel;
+  if (s.wires?.length) return { wires: [...s.wires] };
+  const l = s.labels?.length ? ed.doc.labels.find((x) => x.id === s.labels![0]) : undefined;
+  return l ? { pointer: l.name } : null;
+}
+
+const timingOf = (ed: Editor): MeasureHost['timing'] => {
+  const sim = ed.sim.sim;
+  if (ed.compiled.mode === 'switch') return 'Switch level has no gate delay.';
+  return sim ? { design: sim.design, at: [] } : 'Not simulated yet: finish the wiring (see the diagnostics).';
+};
+
+/** A path lit from the menu, as the chip's parts on it selected (the canvas's own way to light parts). */
+function lightParts(ed: Editor, paths: string[][]): void {
+  const ids = new Set(paths.map((p) => p[0]).filter((id) => id && ed.doc.parts.some((q) => q.id === id)));
+  ed.select({ parts: [...ids] });
+  ed.toast(ids.size ? `The slowest path through it: ${ids.size} part${ids.size === 1 ? '' : 's'} selected` : 'Its slowest path runs through no part of this chip');
+}
+
+function measureOf(ed: Editor, partId: string): MenuEntry[] {
+  return partMeasure(partId, { timing: timingOf(ed), light: (paths) => lightParts(ed, paths), power: () => inspect(ed, partId, 'power') });
+}
+
 /** Explain for a part of this chip (a chip of the learner's has no entry to read: its own properties say the rest). */
 function explainOf(ed: Editor, partId: string): MenuEntry[] {
   const p = ed.doc.parts.find((q) => q.id === partId);
@@ -200,6 +228,12 @@ function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
     design: () => ed.sim.sim?.design ?? null,
     flat,
     transistors: ed.compiled.mode === 'switch',
+    measure: {
+      ...(probeTargetOf(ed) ? { probe: probeRow(ed, probeTargetOf(ed)!) } : {}),
+      timing: timingOf(ed),
+      light: (paths) => lightParts(ed, paths),
+      toggles: ed.compiled.mode === 'switch' ? 'Power is counted from gate toggles, and this chip has none.' : () => null,
+    },
     more: handout({ chipId: ed.chipId, level: !!ed.level, own: true }).link ? elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })) : [],
   }), null];
 }
