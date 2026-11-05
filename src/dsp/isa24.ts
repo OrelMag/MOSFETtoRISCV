@@ -165,10 +165,10 @@ export function fields24(w: number): { name: string; bits: number; value: number
     case 'rrr': return [op, n('rd', 3, d.rd, 'reg'), n('ra', 3, d.ra, 'reg'), n('rb', 3, d.rb, 'reg'), n('—', 10, 0, 'none')];
     case 'rri': return [op, n('rd', 3, d.rd, 'reg'), n('ra', 3, d.ra, 'reg'), n('—', 5, 0, 'none'), n('imm8', 8, d.imm8, 'imm')];
     case 'ri': return [op, n('rd', 3, d.rd, 'reg'), n('—', 8, 0, 'none'), n('imm8', 8, d.imm8, 'imm')];
-    case 'mem2': return [op, n('—', 5, 0, 'none'), n('x mode', 3, d.xmode, 'mem'), n('x ptr', 2, d.xp, 'mem'), n('y mode', 3, d.ymode, 'mem'), n('y ptr', 2, d.yp, 'mem'), n('—', 3, 0, 'none')];
+    case 'mem2': return [op, n('—', 6, 0, 'none'), n('xmode', 3, d.xmode, 'mem'), n('xp', 2, d.xp, 'mem'), n('ymode', 3, d.ymode, 'mem'), n('yp', 2, d.yp, 'mem'), n('—', 3, 0, 'none')];
     case 'loop': return [op, n('reg?', 1, d.loopReg, 'op'), n('count', 10, d.cnt, 'imm'), n('end', 8, d.addr, 'imm')];
     case 'ldi': return [op, n('dst lo', 3, d.dst & 7, 'reg'), n('dst hi', 2, d.dst >> 3, 'reg'), n('imm14', 14, d.imm14, 'imm')];
-    case 'a': return [op, n('—', 16, 0, 'none'), n('addr', 8, d.addr, 'imm')];
+    case 'a': return [op, n('—', 11, 0, 'none'), n('addr', 8, d.addr, 'imm')];
     default: return [op, n('operands', 19, w & 0x7ffff, 'none')];
   }
 }

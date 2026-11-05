@@ -10,6 +10,8 @@ import { assemble16, DIRECTIVES16, PSEUDO16 } from '../riscv/rv16/asm16';
 import { BY_NAME16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { assemble4, DIRECTIVES4 } from '../isa4/asm4';
 import { BY_NAME4, disasm4, fields4, JCN_NAMES } from '../isa4/isa4';
+import { assemble24, DIRECTIVES24 } from '../dsp/asm24';
+import { BY_NAME24, disasm24, fields24, REGNAMES24 } from '../dsp/isa24';
 import { type IsaDoc, tableOf, type WordField } from './table';
 
 export interface IsaAsm {
@@ -24,7 +26,7 @@ export interface Isa {
   /** The ROM language: 'asm' (RV32), 'rv16', 'cpu4', or 'isa:<id>' for a table. */
   id: string;
   name: string;
-  wordBits: 8 | 16 | 32;
+  wordBits: 8 | 16 | 24 | 32;
   /** 'byte': the PC counts bytes (RV32); 'word': it counts words. */
   addressing: 'byte' | 'word';
   assemble(src: string): IsaAsm;
@@ -69,6 +71,19 @@ const CPU4: Isa = {
   },
 };
 
+// DSP24 is not a Custom ISA table: its memory operands (x(p0)+c) are a pointer and an update mode in one token, and mov
+// splits its register numbers over two fields, which a pattern of letters cannot express. Hence its own assembler (dsp/asm24.ts).
+const DSP24: Isa = {
+  id: 'dsp24', name: 'DSP24 (DSP core)', wordBits: 24, addressing: 'word',
+  assemble: (src) => assemble24(src),
+  disasm: (w) => disasm24(w),
+  fields: (w) => fields24(w).map((f) => ({ ...f, kind: f.kind === 'mem' ? 'cond' : f.kind })),
+  words: {
+    mnemonics: [...BY_NAME24.keys()], registers: REGNAMES24.filter((r): r is string => !!r),
+    keywords: ['x', 'y'], directives: [...DIRECTIVES24],
+  },
+};
+
 const TABLE_DIRECTIVES = ['.word', '.org'];
 
 const tableIsas = new WeakMap<IsaDoc, Isa>();
@@ -89,7 +104,7 @@ export function tableIsa(doc: IsaDoc): Isa {
 }
 
 /** The built-in ISAs by ROM language. */
-export const BUILTIN_ISAS: Record<string, Isa> = { asm: RV32, rv16: RV16, cpu4: CPU4 };
+export const BUILTIN_ISAS: Record<string, Isa> = { asm: RV32, rv16: RV16, cpu4: CPU4, dsp24: DSP24 };
 
 /** The ISA of a ROM language ('asm', 'rv16', 'cpu4'; 'isa' with its table), or null ('hex', unknown). */
 export function isaOf(lang: string, table?: IsaDoc): Isa | null {
