@@ -586,7 +586,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !icache && !fpu && !shared && !imemPort;
+  const wired = !(icache && dcache) && !fpu && !shared && !imemPort;
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -733,8 +733,8 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     net('RegWrite').ends = ['ctl.regWrite', 'rwg.a'];
     if (icache) {
       // while the fetch misses, the instruction is not valid: hold back its data-memory request too
-      add('ivalid', NOT, [xs + 12, y0 + 10]);
-      add('weg', AND, [xs + 20, y0 + 10]);
+      add('ivalid', NOT, wired ? [xs + 2, y0] : [xs + 12, y0 + 10]);
+      add('weg', AND, wired ? [xs + 10, y0] : [xs + 20, y0 + 10]);
       net('MemWrite').ends = ['ctl.memWrite', 'weg.b'];
       net('clk').ends.push('imem.clk');
       nets.push(
@@ -748,7 +748,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // stall = the data cache's, the instruction cache's, or either
     const both = dcache && icache;
     if (both) add('anyStall', OR, [xs + 12, y0 + 18]);
-    add('nstall', NOT, wired ? [dmX + 21, 37] : both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
+    add('nstall', NOT, wired ? (dcache ? [dmX + 21, 37] : [xs + 2, y0 + 6]) : both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
     if (both) {
       nets.push(
         { name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true },
@@ -790,11 +790,33 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       delete net('RegWrite').via?.['rf.we'];
       wire('RegWrite', { 'rwg.a': [[52, ctlY('regWrite')], [52, Q('rwg', 'a')[1]]] });
       wire('RegWriteQ', { 'rf.we': [[59.5, Q('rwg', 'y')[1]], [59.5, P('rf', 'we')[1]]] });
-      wire('retire', {
-        'pc.en': [[rx, Q('nstall', 'y')[1]], [rx, 73], [10, 73], [10, P('pc', 'en')[1]]],
-        'rwg.b': [[rx, Q('nstall', 'y')[1]], [rx, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
-        retire: [[rx, pins.retire[1]]],
-      });
+      if (dcache) {
+        wire('retire', {
+          'pc.en': [[rx, Q('nstall', 'y')[1]], [rx, 73], [10, 73], [10, P('pc', 'en')[1]]],
+          'rwg.b': [[rx, Q('nstall', 'y')[1]], [rx, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
+          retire: [[rx, pins.retire[1]]],
+        });
+      } else {
+        // the instruction cache's gates sit in the strip; its stall comes down the left channel and retire goes back up it
+        const ny = Q('nstall', 'y'), under = y0 + 9.5, left = 24;
+        pins.retire = [resY[0] + 22, under];
+        pins.ihit = [resY[0] + 22, under + 2.5];
+        wire('istall', {
+          'nstall.a': [[Q('imem', 'stall')[0], 56], [left, 56], [left, Q('nstall', 'a')[1]]],
+          'ivalid.a': [[Q('imem', 'stall')[0], 56], [left, 56], [left, Q('nstall', 'a')[1]], [xs, Q('nstall', 'a')[1]], [xs, Q('ivalid', 'a')[1]]],
+        });
+        wire('instrValid', {});
+        wire('MemWriteQ', { 'dm.we': [[dmX - 4, Q('weg', 'y')[1]], [dmX - 4, P('dm', 'we')[1]]] });
+        delete net('MemWrite').via?.['dm.we'];
+        wire('MemWrite', { 'weg.b': [[xs + 8, ctlY('memWrite')], [xs + 8, Q('weg', 'b')[1]]] });
+        wire('ihit', { ihit: [[Q('imem', 'hit')[0], 57], [left - 1.5, 57], [left - 1.5, pins.ihit[1]]] });
+        net('clk').via = { ...net('clk').via, 'imem.clk': [[Q('imem', 'clk')[0], bottom]] };
+        wire('retire', {
+          'pc.en': [[ny[0] + 2, ny[1]], [ny[0] + 2, under], [10, under], [10, P('pc', 'en')[1]]],
+          'rwg.b': [[ny[0] + 2, ny[1]], [ny[0] + 2, under], [10, under], [10, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
+          retire: [[ny[0] + 2, pins.retire[1]]],
+        });
+      }
       if (dcache) {
         wire('stall', {});
         wire('dhit', { dhit: [[hx, P('dm', 'hit')[1]], [hx, pins.dhit[1]]] });
