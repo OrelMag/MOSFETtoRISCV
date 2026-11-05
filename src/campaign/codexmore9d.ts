@@ -12,7 +12,7 @@ export const MORE9D: Record<string, CodexMore> = {
 14-bit part, SNDR 62 dB:           10.0 effective bits
 1 ps jitter, 1 MHz tone:           104.0 dB → 17.0 bits
 1 ps jitter, 100 MHz tone:          64.0 dB → 10.3 bits, however many are delivered
-sigma-delta chain, ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits on a half-scale tone</pre>The chain's figures are measured on words at the low rate and, being judged on a half-scale tone, read about a bit lower than the same noise would against full scale.`,
+chain at ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits (half-scale tone)</pre>The chain's figures are measured on words at the low rate and, being judged on a half-scale tone, read about a bit lower than the same noise would against full scale.`,
     },
     mistakes: [
       'Taking the bits on the front page as the accuracy. A part that delivers 14 bits and measures 62 dB of SNDR has 10 effective bits; four of its bits are below the noise.',
@@ -33,9 +33,10 @@ sigma-delta chain, ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits on a half-scale
       title: 'An input of 0.3 on a ±1 scale, 8 bits',
       body: `<pre>trial level  0       0.5     0.25    0.375   0.3125  0.28125 0.296875 0.3046875
 input above?  yes     no      yes     no      no      yes     yes      no
-bit kept      1       0       1       0       0       1       1        0   → 10100110 = 166
+bit kept     1       0       1       0       0       1       1        0   → 10100110 = 166
 the top capacitor 1 % too big:   same input → 10100101 = 165
-flash, 8 bits: 255 comparators in one clock;  12 bits: 4,095;  SAR: 8 clocks, then 12, one comparator</pre>The code 166 is the right one, the input's place among 256 steps. A capacitor error moves the levels tried, and the code with them.`,
+flash: 255 comparators at 8 bits, 4,095 at 12, one clock
+SAR: one comparator, 8 clocks, then 12</pre>The code 166 is the right one, the input's place among 256 steps. A capacitor error moves the levels tried, and the code with them.`,
     },
     mistakes: [
       'Assuming the comparator sets the accuracy. Every trial compares the input with a level the DAC makes, so the DAC\'s errors are errors in the result: with the top capacitor 1 % off, the same input reads 165 and not 166.',
@@ -50,7 +51,7 @@ flash, 8 bits: 255 comparators in one clock;  12 bits: 4,095;  SAR: 8 clocks, th
     ],
   },
   r2r: {
-    idea: `Going from a word to a voltage has an elegant answer in a ladder of just two resistor values. Each bit switches a 2R between 0 and the reference, and series R's join the nodes. At the far end the terminating 2R and the last bit's 2R in parallel make R, the series R in front makes 2R again, and the same repeats at every node: looking back from any node the rest of the ladder is 2R. So each stage splits the voltage in half, and each bit counts half as much as the one before. A ladder of n bits has n 2R legs, n − 1 series R's and one terminating 2R: 16 resistors for 8 bits, of two values.<br><br>What the ladder cannot do is match itself for free. Judge a staircase by <b>DNL</b>, how far each step is from one LSB (at −1 or below it went backwards), and <b>INL</b>, how far each output is from the straight line between the ends. The worst step is usually in the middle of the range: from 0111 1111 to 1000 0000 the MSB turns on and every other bit turns off, so that step is the difference of all their errors. Matching is a matter of area, and that is the price of a converter's bits.`,
+    idea: `Going from a word to a voltage has an elegant answer in a ladder of just two resistor values. Each bit switches a 2R between 0 and the reference, and series R's join the nodes. At the far end the terminating 2R and the last bit's 2R in parallel make R, the series R in front makes 2R again, and the same repeats at every node: looking back from any node the rest of the ladder is 2R. So each stage splits the voltage in half, and each bit counts half as much as the one before. A ladder of n bits has n 2R legs, n − 1 series R's and one terminating 2R: 16 resistors for 8 bits, of two values.<br><br>What the ladder cannot do is match itself for free. Judge a staircase by <b>DNL</b>, how far each step is from one LSB (below −1 it went backwards), and <b>INL</b>, how far each output is from the straight line between the ends. The worst step is usually in the middle of the range: from 0111 1111 to 1000 0000 the MSB turns on and every other bit turns off, so that step is the difference of all their errors. Matching is a matter of area, and that is the price of a converter's bits.`,
     example: {
       title: 'An 8-bit ladder, ideal and 1 % out',
       body: `<pre>ideal outputs, as a share of the reference:
@@ -58,7 +59,7 @@ flash, 8 bits: 255 comparators in one clock;  12 bits: 4,095;  SAR: 8 clocks, th
 resistors 1 % out, 200 seeded ladders:
   the worst step is the 127 → 128 one in 130 of them
   its median size is 1.2 LSB; the chapter's ladder 5 has 1.9
-resistors 3 % out, ladder 1: worst |DNL| 2.2 LSB, not monotonic</pre>A DNL of −1 or below means one code puts out less than the one before.`,
+3 % errors, ladder 1: worst |DNL| 2.2 LSB, not monotonic</pre>A DNL below −1 means one code puts out less than the one before (at exactly −1 the two are equal).`,
     },
     mistakes: [
       'Mixing DNL and INL. DNL is one step against one LSB; INL is the distance from the line through the ends, so a ladder can have a small DNL everywhere and a large INL from errors that add up.',
@@ -72,14 +73,14 @@ resistors 3 % out, ladder 1: worst |DNL| 2.2 LSB, not monotonic</pre>A DNL of �
     ],
   },
   jitter: {
-    idea: `Every sample is taken at an instant, and no clock is perfectly on time. If the instant is σ seconds off, the sample reads the signal's value there, and the error is the signal's slope times σ. A full-scale sine at f has a largest slope of 2π f, so its mean square error is half of (2π f σ)² against a power of one half: the signal to noise ratio is <b>−20 log<sub>10</sub>(2π f σ) dB</b>. It has no number of bits in it and no sample rate; it goes with the <em>signal's</em> frequency, and so does the damage.<br><br>The limit is unforgiving at the top of the range. A radio's band sampled directly at 100 MHz with a clock of 1 ps RMS jitter is limited to 64.0 dB, 10.3 effective bits, whatever the converter delivers; a low rate does not help, because the slope belongs to the input. The sum assumes a small error, and stops meaning anything once σ is a good share of a period. The cure is the clock, not the arithmetic, which is why a converter at high frequency costs more in its oscillator than in its gates.`,
+    idea: `Every sample is taken at an instant, and no clock is perfectly on time. If the instant is σ seconds off, the sample reads the signal's value there, and the error is the signal's slope times σ. A full-scale sine at f has a largest slope of 2π f, so its mean square error is half of (2π f σ)² against a power of one half: the signal to noise ratio is <b>−20 log<sub>10</sub>(2π f σ) dB</b>. It has no number of bits in it and no sample rate; it goes with the <em>signal's</em> frequency, and so does the damage.<br><br>The limit is unforgiving at the top of the range. A 100 MHz signal sampled by a clock of 1 ps RMS jitter is limited to 64.0 dB, 10.3 effective bits, whatever the converter delivers; a low rate does not help, because the slope belongs to the input. The sum assumes a small error, and stops meaning anything once σ is a good share of a period. The cure is the clock, not the arithmetic, which is why a converter at high frequency costs more in its oscillator than in its gates.`,
     example: {
       title: 'The limit, and the same limit measured',
       body: `<pre>1 ps of jitter:  1 MHz → 104.0 dB (17.0 bits)    100 MHz → 64.0 dB (10.3 bits)
 10 ps:            1 MHz → 84.0 dB   10 MHz → 64.0 dB   100 MHz → 44.0 dB
 measured on a sine sampled at 1 GHz with seeded Gaussian errors, 10 ps:
                   1 MHz → 83.9      10 MHz → 63.9      100 MHz → 43.9
-the same clock on 70 MHz and on 7 MHz: 20.0 dB apart</pre>Each ten times the frequency is ten times the slope, which is 20 dB, a little over three bits.`,
+one clock, 70 MHz against 7 MHz: 20.0 dB apart</pre>Each ten times the frequency is ten times the slope, which is 20 dB, a little over three bits.`,
     },
     mistakes: [
       'Reading jitter as a sample-rate problem. The formula has the signal\'s frequency in it and no sample rate at all.',
@@ -100,13 +101,14 @@ the same clock on 70 MHz and on 7 MHz: 20.0 dB apart</pre>Each ten times the fre
 order 2         39.9  55.7  69.9  83.8   96.6
 order 1         30.3  40.5  49.8  56.1   63.6
 at ×64:  measured 69.9    model 73.2    model with the measured error power 71.0
-gates: loop 12 bits 1,283 NANDs; 16 bits 1,579; loop + CIC (N = 3) at ÷64: 5,181
-effective bits of the chain at ÷64 / ÷128 / ÷256:  12.1 / 14.7 / 17.2</pre>The one-bit DAC costs nothing in gates: the words for + and − full scale differ only in their top bits, so it is the decision, inverted, on some wires.`,
+gates: loop 12 bits 1,283 NANDs; 16 bits 1,579;
+loop + CIC (N = 3) at ÷ 64: 5,181
+chain's effective bits, ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2</pre>The one-bit DAC costs nothing in gates: the words for + and − full scale differ only in their top bits, so it is the decision, inverted, on some wires.`,
     },
     mistakes: [
       'Thinking the loop removes the quantization error. It moves it: the identity holds to the bit on the error the loop recorded, and the total error power at order 2 goes up six-fold.',
       'Keeping every 64th bit instead of filtering. All the noise sits above the band, and decimation without a filter folds it down over the tone.',
-      'Trusting the white-noise model for the level. It has the slope and is 3.2 dB out here, because the error is not white nor independent of the input; order 1 is worse, its error falling into patterns tied to the input.',
+      'Trusting the white-noise model for the level. It has the slope and is about 3 dB out here, because the error is not white nor independent of the input; order 1 is worse, its error falling into patterns tied to the input.',
       'Driving it to full scale. The integrators grow as the input nears it, and past 0.95 the words of this design wrap; the usable range of a real part is a design question of its own.',
     ],
     chapters: [
@@ -123,7 +125,7 @@ effective bits of the chain at ÷64 / ÷128 / ÷256:  12.1 / 14.7 / 17.2</pre>Th
 |NTF| at half the rate:                      +12.0 dB
 total error power gain: order 2  1² + 2² + 1² = 6 (7.8 dB);  order 1  1² + 1² = 2 (3.0 dB)
 theory per doubling of the rate:  order 1  9.0 dB   order 2  15.1 dB
-measured at order 2, 16 → 32 → 64 → 128 → 256:  15.8, 14.2, 13.9, 12.7 dB</pre>The gain per doubling is a little under the theory at high ratios, and falls further as the input nears full scale.`,
+measured, order 2, rate 16 → 256:  15.8, 14.2, 13.9, 12.7 dB</pre>The gain per doubling is a little under the theory at high ratios, and falls further as the input nears full scale.`,
     },
     mistakes: [
       'Believing shaping lowers the noise. In total it raises it, six-fold at order 2; it is the band that gets quieter.',
@@ -143,13 +145,14 @@ measured at order 2, 16 → 32 → 64 → 128 → 256:  15.8, 14.2, 13.9, 12.7 d
       body: `<pre>r = [1, 0.5]  (R = [[1, 0.5], [0.5, 1]])      p = [0.8, 0.1]
 w = R⁻¹ p = [1.0, −0.4]
 with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
-128 taps:  Levinson 128² = 16,384 operations;  general solver 128³ = 2,097,152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the chapter it agrees with scipy's solve_toeplitz to 8 places.`,
+128 taps:  Levinson 128² = 16,384 operations
+           general solver 128³ = 2,097,152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the chapter it agrees with scipy's solve_toeplitz to 8 places.`,
     },
     mistakes: [
       'Thinking it needs a model of how d is produced. Only R and p enter; the echo path itself is never needed to find the best filter.',
       'Treating it as a real-time method. By the time the statistics are estimated the path has moved, which is the reason for walking down the bowl instead.',
       'Solving a Toeplitz system as a general matrix. Levinson is n² where Gaussian elimination is n³, which at 128 taps is a factor of 128.',
-      'Expecting zero error. The solution is the best a filter of that length can do: a 32-tap canceller on a 128-tap path leaves the tail it has no taps for, and reaches 10.3 dB in the chapter\'s run.',
+      'Expecting zero error. The solution is the best a filter of that length can do: a 32-tap canceller on a 128-tap path leaves the tail it has no taps for, and the chapter\'s NLMS run reaches 10.3 dB.',
     ],
     chapters: [
       { chapter: 'adaptive', step: 1, label: 'The best a filter can do' },
@@ -166,7 +169,7 @@ with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
   NLMS: μ in (0, 2), whatever the loudness
 LMS tap, 12-bit words:   4,580 NANDs, 4,172 of them the two multipliers
 four taps with their sums: 19,188 NANDs
-update e × x shifted down 7 places, rounded half up: an update inside ±64 is zero (the dead zone)</pre>The limit is set by the loudest stretch, not the average: 1.27 would have let the run diverge.`,
+update e × x shifted down 7, rounded half up: inside ±64 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: 1.27 would have let the run diverge.`,
     },
     mistakes: [
       'Taking the step limit from the average power. For speech it is set by the loudest stretch of N samples, here 0.135 against 1.27.',
@@ -188,7 +191,8 @@ update e × x shifted down 7 places, rounded half up: an update inside ±64 is z
 32 taps, the tail has none:                   ERLE 10.3 dB
 near-end talk, learning left on:               7.6 dB once the voice has ended
 near-end talk, learning frozen while it lasts: 29.7 dB
-cost: 128 taps × 2 multiplications = 256 a sample;  × 8,000 = 2,048,000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is 22 dB.`,
+cost: 128 taps × 2 multiplications = 256 a sample
+      × 8,000 = 2,048,000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is 22 dB.`,
     },
     mistakes: [
       'Leaving learning on in double talk. The voice lands in the error and the filter walks away from the path: 7.6 dB against 29.7 with it frozen.',
@@ -206,10 +210,11 @@ cost: 128 taps × 2 multiplications = 256 a sample;  × 8,000 = 2,048,000 a seco
     example: {
       title: 'Blur two ways',
       body: `<pre>[1 2 1]ᵀ × [1 2 1] = [[1 2 1],[2 4 2],[1 2 1]]  (÷ 16 for unit gain)
-multiplications a sample:   3 × 3:  9 → 6      15 × 15:  225 → 30   (7.5×)      9 × 9: 81 → 18
+multiplications a sample:  3 × 3: 9 → 6   15 × 15: 225 → 30 (7.5×)   9 × 9: 81 → 18
 the scene blurred whole, and as two passes: largest difference 0
-8 × 8 DCT, one block:  direct sum 64 × 64 = 4,096 products;  rows then columns, 16 passes of 64 = 1,024;
-                       with 22 products a pass: 16 × 22 = 352</pre>The chapter's tests hold the two-pass blur equal to the whole kernel to rounding.`,
+8 × 8 DCT, one block:  direct sum 64 × 64 = 4,096 products
+   rows then columns, 16 passes of 64 = 1,024
+   with 22 products a pass: 16 × 22 = 352</pre>The chapter's tests hold the two-pass blur equal to the whole kernel to rounding.`,
     },
     mistakes: [
       'Assuming any symmetric kernel is separable. The sharpening kernel is symmetric and is not a product of a row and a column.',
@@ -227,10 +232,13 @@ the scene blurred whole, and as two passes: largest difference 0
     idea: `Shrinking a picture m times keeps one sample in m along each axis, and what the multirate chapter said about sound holds on both: anything above 1/(2m) cycles a sample cannot be held by what is kept, and it does not vanish, it folds to a lower frequency and draws itself there. On a zone plate, whose rings reach half a cycle a sample at the edge, kept one in three they come back as false rings around other centres. The cure is the same: a low-pass first, a windowed sinc cut at 1/(2m) with 8m + 1 taps, done as a row pass and a column pass. The fine rings are then simply gone, which is the right answer, since no small picture can hold them.<br><br>Growing has the opposite problem. Repeating each sample makes blocks. Drawing straight lines between neighbours, bilinear interpolation, is smoother, and still cannot bring back detail the small picture lost; it only draws a plausible path between the samples there are. Both zone-plate numbers below are low for that reason. What differs is whether the shrunk picture draws rings that were never there.`,
     example: {
       title: 'Down by 3 and back up',
-      body: `<pre>cutoff 1/(2m):  m = 2 → 0.25     m = 3 → 0.167     m = 4 → 0.125     taps 8m + 1 = 25 at m = 3
-zone plate 192 × 192 → 64 × 64, grown back by repeating:   unfiltered 7.8 dB    filtered 10.4 dB
-the scene, filtered shrink by 3, grown back:               repeated 17.1 dB    bilinear 18.0 dB
-cost of the two passes of 25 taps:  50 multiplications a sample, against 625 for the whole kernel</pre>PSNR is against the original; the zone plate's rings are finer than 64 samples can hold, so both its figures stay low.`,
+      body: `<pre>cutoff 1/(2m):  m = 2 → 0.25   m = 3 → 0.167   m = 4 → 0.125
+taps 8m + 1 = 25 at m = 3
+zone plate 192 × 192 → 64 × 64, grown back by repeating:
+   unfiltered 7.8 dB    filtered 10.4 dB
+the scene, filtered shrink by 3, grown back:
+   repeated 17.1 dB    bilinear 18.0 dB
+two passes of 25 taps: 50 multiplications a sample, 625 for the whole kernel</pre>PSNR is against the original; the zone plate's rings are finer than 64 samples can hold, so both its figures stay low.`,
     },
     mistakes: [
       'Resizing by dropping samples. With no low-pass first, everything above 1/(2m) folds into false patterns, the zone plate\'s false rings.',
@@ -253,8 +261,9 @@ stripes                5         81.7 %
 checks                28         17.7 %
 rings                 46         48.3 %
 sun's edge            53         45.2 %
-products a block:  direct 64 × 64 = 4,096;  rows then columns 16 × 64 = 1,024;  16 stages × 22 = 352
-one 8-point stage in gates: 24,721 NANDs;  sixteen side by side 395,536</pre>The constant 1703 is 5 adders in signed digits, 784 is 2.`,
+products a block: direct 64 × 64 = 4,096; rows then columns 16 × 64 = 1,024
+   16 stages × 22 = 352
+one 8-point stage in gates: 24,721 NANDs; sixteen side by side 395,536</pre>The constant 1703 is 5 adders in signed digits, 784 is 2.`,
     },
     mistakes: [
       'Saying the DCT compresses. It rearranges: the 64 coefficients carry exactly the energy of the 64 samples, and nothing is smaller until quantization rounds it away.',
@@ -271,12 +280,13 @@ one 8-point stage in gates: 24,721 NANDs;  sixteen side by side 395,536</pre>The
     idea: `The DCT loses nothing; <b>quantization</b> is where JPEG throws information away. Each of the 64 coefficients is divided by the entry of a table at its place and rounded to the nearest whole number; the decoder multiplies back. The error in each coefficient is at most half its table entry, and any coefficient smaller than half of it becomes zero. The table is large where the eye forgives (high frequencies) and small where it does not: T.81's Table K.1 runs from 16 at DC to 99 at the highest frequency, given in the standard as an example "used with good results", not a requirement. The file carries the table it used.<br><br>The <em>quality</em> setting is not in T.81 at all; it is libjpeg's, and the chapter holds its tables to those Pillow writes at nine qualities from 1 to 100. Below 50 the table is scaled by 5000 / q percent, above by 200 − 2q, each entry rounded and kept between 1 and 255; at 50 it is K.1 itself. At low quality each block keeps little more than its mean and the next block's mean differs, so the grid shows first in smooth areas such as the sky.`,
     example: {
       title: 'The scale, and what it does to a picture',
-      body: `<pre>quality   scale     DC step   last entry    bytes (scene 192 × 192)   PSNR   zero levels
-   10     500 %       80        255 (99 × 5 clamped)     1,920                 24.5 dB   94.9 %
-   50     100 %       16         99                      3,932                 31.0 dB   88.0 %
-   90      20 %        3         20                     10,250                 39.3 dB   65.5 %
+      body: `<pre>quality   scale     DC step   last entry    bytes (scene)   PSNR   zero levels
+   10     500 %       80        255 (clamped)         1,920                24.5 dB  94.9 %
+   50     100 %       16         99                  3,932                31.0 dB  88.0 %
+   90      20 %        3         20                 10,250                39.3 dB  65.5 %
 raw: 36,864 bytes
-a coefficient of 37 at a step of 16: 37 / 16 = 2.3 → 2 → decoder gets 32  (off by 5, at most 8)</pre>The sizes are of the real files, headers included.`,
+a coefficient of 37 at a step of 16: 37 / 16 = 2.3 → 2 → decoder gets 32
+   (off by 5, at most 8)</pre>The sizes are of the real files, headers included.`,
     },
     mistakes: [
       'Reading quality as a share of the information kept. It is a scale on a table: 5000 / q percent below 50, 200 − 2q above.',
@@ -317,7 +327,8 @@ total 20 bits for 63 coefficients</pre>The code lengths are those of T.81's Tabl
 HUFFVAL begins:  0x01 0x02 0x03 0x00 0x04 0x11 …
 0x01 → 00     0x02 → 01     0x03 → 100     EOB 0x00 → 1010     0x04 → 1011     0x11 → 1100
 ZRL 0xF0: 11 bits     125 codes of 16 bits     longest = 16
-sum of 2^−length over all codes = 0.99998 = 1 − 2^−16: one code, all ones, left unused</pre>For the symbol 0x03 and the value 5 the bits sent are the code 100 and then the magnitude 101: 6 bits.`,
+sum of 2^−length over all codes = 0.99998 = 1 − 2^−16
+   (one code, all ones, is left unused)</pre>For the symbol 0x03 and the value 5 the bits sent are the code 100 and then the magnitude 101: 6 bits.`,
     },
     mistakes: [
       'Thinking the file stores the code words. It stores BITS and HUFFVAL, and the codes are rebuilt by counting.',
@@ -331,18 +342,19 @@ sum of 2^−length over all codes = 0.99998 = 1 − 2^−16: one code, all ones,
     ],
   },
   jpeg: {
-    idea: `A baseline JPEG is five steps on blocks of 8 × 8 samples: shift by 128, the DCT, quantization by a table, zig-zag with run lengths, Huffman codes. Only the third loses information; the others are exact to rounding, and the transform's own rounding and the final rounding to 8 bits are far smaller than what quantization takes. The decoder runs the steps backwards, and the file in between is a list of marker segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data and end of image.<br><br>Because it is only a format, any program can write and read it. The chapter writes every byte of a file; libjpeg through Pillow reads it, and so does the browser, and every pixel is within one level of our own reconstruction. They differ by a level or so on a few pixels since T.81 sets how exact an inverse DCT must be, not how to compute it, and fast decoders use integer ones. The one parameter most people see, quality, is not in the standard but libjpeg's scaling of its example table.`,
+    idea: `A baseline JPEG is five steps on blocks of 8 × 8 samples: shift by 128, the DCT, quantization by a table, zig-zag with run lengths, Huffman codes. Only the third loses information; the others are exact to rounding, and the transform's own rounding and the final rounding to 8 bits are far smaller than what quantization takes. The decoder runs the steps backwards, and the file in between is a list of marker segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data and end of image.<br><br>Because it is only a format, any program can write and read it. The chapter writes every byte of a file. In the tests libjpeg through Pillow reads the 96 × 96 scene at qualities 10 and 75 to within one level of our own reconstruction, and the browser opens the same bytes of the page's file. Decoders can differ by a level or so on a few pixels since T.81 sets how exact an inverse DCT must be, not how to compute it, and fast decoders use integer ones. The one parameter most people see, quality, is not in the standard but libjpeg's scaling of its example table.`,
     example: {
       title: 'The same grey picture at three qualities',
       body: `<pre>raw: 192 × 192 samples = 36,864 bytes
 quality 10:   1,920 bytes   19.2 to 1   24.5 dB
-quality 50:   3,932 bytes    9.4 to 1   31.0 dB      Huffman codes 2,465 + extra bits 1,094 + markers and tables 326
+quality 50:   3,932 bytes    9.4 to 1   31.0 dB
+   Huffman codes 2,465 + extra bits 1,094 + markers and tables 326
 quality 90:  10,250 bytes    3.6 to 1   39.3 dB</pre>These are real file sizes with headers. At quality 50 the markers and tables are about 8 % of the file.`,
     },
     mistakes: [
       'Thinking every step of the pipeline loses something. The DCT, zig-zag and Huffman coding are exact; only the division and rounding by the table loses.',
       'Treating quality as part of the format. The standard defines tables; the 5000 / q and 200 − 2q scaling belongs to libjpeg, and a file carries the table it ended up with.',
-      'Expecting two decoders to agree to the last bit. T.81 does not fix how exact the inverse DCT is; a level of difference on a few pixels is no fault.',
+      'Expecting two decoders to agree to the last bit. T.81 bounds the inverse DCT\'s error but does not fix how it is computed; a level of difference on a few pixels is no fault.',
       'Reading PSNR as appearance. At quality 10 the figure is 24.5 dB and the picture shows a grid of eight-sample blocks, first in the smooth sky.',
     ],
     chapters: [

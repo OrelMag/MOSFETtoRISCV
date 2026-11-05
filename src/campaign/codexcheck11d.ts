@@ -102,10 +102,10 @@ export const CHECK11D: Record<string, Quiz[]> = {
   wiener: [
     {
       question: 'Roughly how many operations does Levinson\'s recursion need for a 128-tap Wiener filter?',
-      options: ['About 16 thousand: 128², Toeplitz', 'About 2 million: 128³, as for any matrix', 'About 128: one step for each tap', 'About 4 million: 128³ done twice'],
+      options: ['About 16 thousand: 128², Toeplitz', 'About 2 million: 128³, as for any matrix', 'About 128: one step for each tap', 'About 4,096: 128 steps of 32 operations each'],
       answer: 0,
       explain: 'A stationary input makes R Toeplitz, a constant along each diagonal, and Levinson exploits that: n² = 16,384 operations where a general solver does n³ = 2,097,152.',
-      why: ['', 'That is the cost of a general solver, which ignores the structure of R.', 'Each step of the recursion does work in proportion to the taps so far, not one operation.', 'Nothing in the problem needs a second pass.'],
+      why: ['', 'That is the cost of a general solver, which ignores the structure of R.', 'Each step of the recursion does work in proportion to the taps so far, not one operation.', 'The recursion grows its solution one tap at a time, doing work in proportion to the taps so far.'],
     },
     {
       question: 'Two different input signals have the same autocorrelation and the same cross-correlation with d. What follows for their best filters?',
@@ -169,7 +169,7 @@ export const CHECK11D: Record<string, Quiz[]> = {
       options: ['0.125: 1/(2m) with m = 4', '0.25: 1/m', '0.5: half the original rate', '0.0625: 1/(4m)'],
       answer: 0,
       explain: 'Keeping one sample in four leaves a rate of a quarter, whose Nyquist frequency is an eighth of the original: 1/(2m).',
-      why: ['', 'That is the new sample rate, not its Nyquist limit.', 'That is the original Nyquist frequency, which would filter nothing.', 'That cuts twice as far as the new rate needs, and blurs more than necessary.'],
+      why: ['', 'That is the new sample rate, not its Nyquist limit.', 'That is the original Nyquist frequency, which would filter nothing.', 'That cuts at half the frequency the new rate needs, and blurs more than necessary.'],
     },
     {
       question: 'Why can bilinear growing not bring back detail the small picture lost?',
@@ -246,10 +246,10 @@ export const CHECK11D: Record<string, Quiz[]> = {
   jpeg: [
     {
       question: 'The chapter\'s 36,864-byte picture is a 3,932-byte file at quality 50. What is the ratio?',
-      options: ['9.4 to 1: raw bytes over file bytes', '0.11 to 1: file bytes over raw bytes', '4.7 to 1: half the file taken up by headers', '36.9 to 1: raw size over a hundred'],
+      options: ['9.4 to 1: raw bytes over file bytes', '0.11 to 1: file bytes over raw bytes', '4.7 to 1: half the file taken up by headers', '36.9 to 1: raw size over a thousand'],
       answer: 0,
       explain: '36,864 / 3,932 = 9.4. Headers and tables are about 8 % of that file, so the coded data are most of it.',
-      why: ['', 'That is the inverse, a fraction of the raw size.', 'Headers are about 8 % of the file, not half.', 'There is no such division in the arithmetic.'],
+      why: ['', 'That is the inverse, a fraction of the raw size.', 'Headers are about 8 % of the file, not half.', 'That divides the raw size by a thousand, which is no part of the arithmetic.'],
     },
     {
       question: 'Why is a coded byte of 0xFF followed by a 0 in a JPEG file?',
