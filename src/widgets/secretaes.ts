@@ -99,9 +99,8 @@ export function avalancheWidget(): Widget {
       svg.append(g);
       svg.append(s('text', { x: x + w / 2, y: H - 9, 'text-anchor': 'middle', class: 'se-tick' }, i === 0 ? 'in' : String(i)));
     });
-    svg.append(s('text', { x: W - 6, y: Y(64) - 5, 'text-anchor': 'end', class: 'se-tick' }, 'half: what chance alone gives'));
     const at = v.findIndex((n) => n >= 40);
-    read.textContent = `Flipped input bit ${bit}. It starts as 1 bit of difference; ${at > 0 ? `by round ${at} it is ${v[at]}` : `it reaches ${Math.max(...v)}`}; after round 10, ${v[10]} of 128.`;
+    read.textContent = `Flipped input bit ${bit}. It starts as 1 bit of difference; ${at > 0 ? `by round ${at} it is ${v[at]}` : `it reaches ${Math.max(...v)}`}; after round 10, ${v[10]} of 128. The dashed line is half, 64: what two unrelated blocks would show.`;
     tbl.replaceChildren(h('summary', null, 'The numbers'), h('p', { class: 'se-read' }, v.map((n, i) => `${i === 0 ? 'in' : i}: ${n}`).join(' · ')));
   }
   const slider = h('input', { type: 'range', min: 0, max: 127, step: 1, value: 0, 'aria-label': 'Which input bit to flip' }) as HTMLInputElement;

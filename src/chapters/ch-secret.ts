@@ -182,7 +182,7 @@ export const chSecret: Chapter = {
       title: 'The core runs the standard',
       body: `
         <p>This is the core on FIPS 197's example, with the key and block wired in, as a stage input holds only 53 exact bits. It takes ${COSTS.cores.aes_core.cycles} clocks: one to load and one per round. The test suite compares its state and round key with the standard's table after every clock, and with Node's crypto on other blocks.</p>
-        <p class="try"><b>Try:</b> set <em>start</em> to 1 and press Pulse once. Set <em>start</em> to 0 and press Pulse ten times. <em>done</em> rises and <em>out</em> reads the standard's ciphertext, 3925841d 02dc09fb dc118597 196a0b32. Its bytes run from the top of the word down, so read the hex as the bench prints it.</p>`,
+        <p class="try"><b>Try:</b> set <em>start</em> to 1 and press Pulse once. Set <em>start</em> to 0 and press Pulse ten times. <em>done</em> rises and <em>out</em> reads 0x320B6A19_978511DC_FB09DC02_1D842539. That is the standard's ciphertext, 39 25 84 1d … 0b 32, backwards: the first byte is the low end of this bus, and hex prints the high end first.</p>`,
       scene: () => ({ ...aesCoreScene(), engine: 'cycle' as const }),
     },
     {
@@ -215,7 +215,7 @@ export const chSecret: Chapter = {
     {
       title: 'SHA-256 in gates',
       body: `
-        <p>A round is below: two of the Σ functions, Ch, Maj and five 32-bit adders. Rotations are wires, so Σ costs only its XORs. This is all adders and logic, with no S-box, and a different kind of mixing: addition carries across bits, which XOR does not, and the two together are hard to invert. One round costs ${n0(COSTS.parts.sha_round.nands)} NANDs, about a quarter of an AES round.</p>
+        <p>A round is below: two of the Σ functions, Ch, Maj and seven 32-bit adders. Rotations are wires, so Σ costs only its XORs. This is all adders and logic, with no S-box, and a different kind of mixing: addition carries across bits, which XOR does not, and the two together are hard to invert. One round costs ${n0(COSTS.parts.sha_round.nands)} NANDs, about a quarter of an AES round.</p>
         <p>The core adds a message schedule of ${n0(COSTS.parts.sha_schedule.nands)} NANDs, because it stores 16 words, and a table of constants of ${n0(COSTS.parts.sha_k_rom.nands)}. In all <b>${n0(COSTS.cores.sha_core.nands)} NANDs</b> and ${COSTS.cores.sha_core.cycles} clocks per 64 bytes, against AES's ${COSTS.cores.aes_core.cycles} clocks per 16. Per byte that is ${(COSTS.cores.sha_core.cycles / 64).toFixed(2)} clocks against AES's ${(COSTS.cores.aes_core.cycles / 16).toFixed(2)}, at a period of ${COSTS.cores.sha_core.period} gate delays against ${COSTS.cores.aes_core.period}.</p>
         <p class="try"><b>Try:</b> open the block to see the round on the first round of "abc", as NIST's worked example has it. Open Σ0 and find that its rotations cost nothing.</p>`,
       scene: shaRoundScene,
@@ -224,7 +224,7 @@ export const chSecret: Chapter = {
       title: 'The SHA-256 core runs "abc"',
       body: `
         <p>The whole compression, on the block that holds "abc" and its padding. The test suite compares a to h after every clock with NIST's table of 64 rounds, then the digest of longer messages with Node's crypto.</p>
-        <p class="try"><b>Try:</b> set <em>start</em> to 1, Pulse once, set <em>start</em> to 0, then Run until <em>done</em> lights. <em>out</em> is ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad.</p>`,
+        <p class="try"><b>Try:</b> set <em>start</em> to 1, Pulse once, set <em>start</em> to 0, then Run until <em>done</em> lights. <em>out</em> reads 0xF20015AD_B410FF61_96177A9C_B00361A3_5DAE2223_414140DE_8F01CFEA_BA7816BF. That is the standard's digest of "abc", ba7816bf 8f01cfea … f20015ad, with its first word at the low end of the bus.</p>`,
       scene: () => ({ ...shaCoreScene(), engine: 'cycle' as const }),
     },
   ],

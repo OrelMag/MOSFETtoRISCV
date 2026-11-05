@@ -86,3 +86,27 @@ describe('measured costs', () => {
     expect(gateCosts.cores.sha_core.cycles).toBe(65);
   });
 });
+
+// The chapter's Try text quotes these as the stage prints them, high end first, and the SHA step says to press Run.
+describe('what the chapter says the stage shows', () => {
+  const shown = (sim: Sim): string => {
+    const bits = Array.from(sim.getBits(sim.design.root.ports.out), Number), parts: string[] = [];
+    for (let w = bits.length - 32; w >= 0; w -= 32) { let v = 0; for (let i = 31; i >= 0; i--) v = v * 2 + bits[w + i]; parts.push(v.toString(16).toUpperCase().padStart(8, '0')); }
+    return `0x${parts.join('_')}`;
+  };
+  const run = (sim: Sim, n: number) => { sim.setInput('start', 1); sim.settle(); pulse(sim); sim.setInput('start', 0); sim.settle(); for (let i = 0; i < n; i++) pulse(sim); };
+  it('AES', () => {
+    const sim = scene(aesCoreScene());
+    run(sim, 10);
+    expect(shown(sim)).toBe('0x320B6A19_978511DC_FB09DC02_1D842539');
+  });
+  it('SHA-256, and out holds once done is up, so Run cannot overshoot it', () => {
+    const sim = scene(shaCoreScene());
+    run(sim, 64);
+    const want = '0xF20015AD_B410FF61_96177A9C_B00361A3_5DAE2223_414140DE_8F01CFEA_BA7816BF';
+    expect(shown(sim)).toBe(want);
+    for (let i = 0; i < 5; i++) pulse(sim);
+    expect(shown(sim)).toBe(want);
+    expect(sim.getBits(sim.design.root.ports.done)[0]).toBe(1);
+  });
+});
