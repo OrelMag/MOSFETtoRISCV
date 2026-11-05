@@ -3,8 +3,8 @@
 
 import { signedOf, wordOf } from '../comm/signals';
 import {
-  amplitudeSpectrum, bestBlock, blockErrors, binsBreakEven, centred, coefWord, crossoverTaps, dbOf, dftPowerAt, DIP_NEEDED, dipOf, directMults, DTMF_COLS, DTMF_FS, DTMF_KEYS, DTMF_ROWS, dtmfBlock, dtmfClip, dtmfDecode,
-  dtmfFreqs, fftRealMults, frameCount, goertzelCoef, goertzelFx, goertzelPower, goertzelRun, keyAt, olsMults, overlapSave, paddedLength, pairOf, seenAt, skirtAt, spectrogram, spectrogramSignal, tone,
+  amplitudeSpectrum, bestBlock, blockErrors, binsBreakEven, centred, coefWord, crossoverTaps, dbOf, dftPowerAt, DIP_NEEDED, dipIn, dipOf, directMults, DTMF_COLS, DTMF_FS, DTMF_KEYS, DTMF_ROWS, dtmfBlock, dtmfClip, dtmfDecode,
+  dtmfFreqs, fftRealMults, goertzelCoef, goertzelFx, goertzelPower, goertzelRun, keyAt, olsMults, overlapSave, paddedLength, pairOf, seenAt, skirtAt, spectrogram, spectrogramSignal, tone,
   windowFigures, windowName, windowOf, windowTransform, WINDOWS, type WinKind, SEEN_BY,
 } from '../dsp/spectrum';
 import { windowedSinc } from '../comm/signals';
@@ -23,7 +23,7 @@ import '../styles/dsp.css';
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const FLOOR = -120;
 const dbl = (m: number) => Math.max(FLOOR, dbOf(m, FLOOR));
-const hz = (v: number) => (v >= 1000 ? `${num(v / 1000, 2)} kHz` : `${num(v, 0)} Hz`);
+const hz = (v: number) => (v >= 1000 ? `${num(v / 1000, 2)} kHz` : `${num(v, v < 100 ? 1 : 0)} Hz`);
 
 const windowSelect = (get: () => WinKind, set: (k: WinKind) => void, kinds: readonly WinKind[] = WINDOWS.map((w) => w.id)) => {
   const sel = h('select', { 'aria-label': 'Window' }, ...kinds.map((k) => h('option', { value: k, selected: k === get() }, windowName(k)))) as HTMLSelectElement;
@@ -97,18 +97,18 @@ export const RES_N = 64;
 export function resolveWidget(): Widget {
   let kind: WinKind = 'rect', sep = 6, rel = -40;
   const N = RES_N, PAD = 16;
-  const plot = plotOf({ W: 640, H: 240, x: [0, 24], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins', yLabel: 'dB, the first tone reads 0', aria: 'The spectrum of two tones', yFmt: (v) => num(v, 0) });
+  const plot = plotOf({ W: 640, H: 240, x: [0, 32], y: [FLOOR, 6], yTicks: [0, -20, -40, -60, -80, -100], xLabel: 'bins', yLabel: 'dB, the first tone reads 0', aria: 'The spectrum of two tones', yFmt: (v) => num(v, 0) });
   const chips = mkChips(4);
   const paint = () => {
     const p = pairOf(N, sep, rel), x = centred(N, p.f1 / N).map((v, n) => v + centred(N, (p.f1 + sep) / N, 10 ** (rel / 20))[n]);
     const S = amplitudeSpectrum(x, kind, PAD), alone = amplitudeSpectrum(centred(N, p.f1 / N), kind, PAD);
-    plot.setX(24);
+    plot.setX(32);
     plot.clear();
     line(plot, alone.map((_, i) => i / PAD), alone.map(dbl), 'lump');
     line(plot, S.map((_, i) => i / PAD), S.map(dbl), 'real');
     for (const [nu, y] of [[p.f1, 0], [p.f1 + sep, rel]] as [number, number][]) plot.layer.append(s('circle', { cx: plot.X(nu), cy: plot.Y(Math.max(FLOOR, y)), r: 5, class: 'sg-pt' }));
     const d = dipOf(N, sep, kind), seen = seenAt(N, sep, rel, kind);
-    chips.set(0, `${num(d.dipDb, 1)} dB`, `dip between two equal tones ${num(sep, 2)} bins apart`, d.resolved ? '' : 'bad');
+    chips.set(0, `${num(d.dipDb, 1)} dB`, `dip if the two tones were equal, ${num(sep, 2)} bins apart`, d.resolved ? '' : 'bad');
     chips.set(1, d.resolved ? 'resolved' : 'one lump', `needs a dip of ${DIP_NEEDED} dB`, d.resolved ? '' : 'bad');
     chips.set(2, `${num(skirtAt(kind, sep, N), 1)} dB`, `this window's skirt ${num(sep, 2)} bins from a tone`);
     chips.set(3, seen.seen ? 'seen' : 'hidden', `the weak tone moves its own frequency by ${num(seen.byDb, 1)} dB; ${SEEN_BY} dB counts`, seen.seen ? '' : 'bad');
@@ -129,19 +129,23 @@ export function resolveWidget(): Widget {
 export const PAD_F1 = 0.2;
 export const PAD_GAP = 0.02;
 export const PADS = [1, 2, 4, 8, 16];
+export const padTones = (N: number): number[] => centred(N, PAD_F1).map((v, n) => v + centred(N, PAD_F1 + PAD_GAP)[n]);
+/** The dip between the two tones of this step, read off the underlying curve (a ×16 pad) of the very block drawn. */
+export const padDip = (N: number, kind: WinKind) => dipIn(amplitudeSpectrum(padTones(N), kind, 16), paddedLength(N, 16) / N, PAD_F1 * N, (PAD_F1 + PAD_GAP) * N);
+/** The fewest samples (any number) at which the two tones show a dip. */
+export function minSamples(kind: WinKind): number { for (let N = 16; N < 400; N++) if (padDip(N, kind).resolved) return N; return Infinity; }
 export function padWidget(): Widget {
   let N = 32, pi = 0, kind: WinKind = 'hann';
   const plot = plotOf({ W: 640, H: 220, x: [0, 0.5], y: [0, 2.2], yTicks: [0, 1, 2], xLabel: 'cycles a sample', yLabel: 'amplitude', aria: 'The spectrum of two close tones, the points the transform computes', xFmt: (v) => num(v, 2) });
   const chips = mkChips(4);
   const paint = () => {
     const sepBins = PAD_GAP * N, pad = PADS[pi], P = paddedLength(N, pad);
-    const x = centred(N, PAD_F1).map((v, n) => v + centred(N, PAD_F1 + PAD_GAP)[n]);
-    const S = amplitudeSpectrum(x, kind, pad);
+    const S = amplitudeSpectrum(padTones(N), kind, pad);
     plot.clear();
     line(plot, S.map((_, i) => i / P), S, 'real');
     if (P / 2 <= 140) S.forEach((m, i) => plot.layer.append(s('circle', { cx: plot.X(i / P), cy: plot.Y(m), r: 2.6, class: 'sg-pt' })));
     plot.layer.append(...[PAD_F1, PAD_F1 + PAD_GAP].map((f) => s('line', { x1: plot.X(f), x2: plot.X(f), y1: plot.Y(0), y2: plot.Y(2.2), class: 'ln-h th' })));
-    const d = dipOf(N, sepBins, kind);
+    const d = padDip(N, kind);
     chips.set(0, `${num(sepBins, 2)} bins`, `the tones are ${PAD_GAP} cycles a sample apart; one bin is 1 / ${N} of the rate`);
     chips.set(1, String(P), 'points in the transform: samples plus zeros');
     chips.set(2, `${num(d.dipDb, 1)} dB`, 'dip between the tones');
@@ -182,7 +186,7 @@ export function spectrogramWidget(): Widget {
     chips.set(0, hz((f.mainLobeBins * DTMF_FS) / N), `main lobe, ${num(f.mainLobeBins, 0)} bins of ${hz(DTMF_FS / N)}: the frequency detail`);
     chips.set(1, `${num((N / DTMF_FS) * 1000, 1)} ms`, `a frame of ${N} samples: the time detail`);
     chips.set(2, String(g.length), `frames, one every ${hop} samples (${num((hop / DTMF_FS) * 1000, 1)} ms)`);
-    chips.set(3, `${num(frameCount(x.length, N, hop) * hop / N, 1)} ×`, 'samples computed per sample of signal: the cost of overlap');
+    chips.set(3, `${num((g.length * N) / x.length, 1)} ×`, 'samples computed per sample of signal: the cost of overlap');
   };
   paint();
   const clip = clipButton('Play the signal', () => ({ samples: x, rate: DTMF_FS, source: 'model', note: 'chirp, steady tone and two bursts, 8 kHz' }));
@@ -221,7 +225,7 @@ export function olsWidget(): Widget {
     chips.set(0, `${L}`, `new samples a block: ${N} − ${M} + 1; the first ${M - 1} outputs are thrown away`);
     chips.set(1, `${run.blocks}`, 'blocks for this signal');
     chips.set(2, err < 1e-9 ? '< 1e-9' : num(err, 12), 'largest difference from the direct form, the first M − 1 of each block thrown away');
-    chips.set(4, `${num(be.wrapped, 2)} and ${num(be.kept, 12)}`, 'largest error of a block kept whole: in its first M − 1 samples, and in the rest', 'bad');
+    chips.set(4, `${num(be.wrapped, 2)} and ${be.kept < 1e-9 ? '< 1e-9' : num(be.kept, 12)}`, 'largest error of a block kept whole: in its first M − 1 samples, and in the rest', 'bad');
     chips.set(3, `${num(directMults(M), 0)} against ${num(olsMults(M, N), 1)}`, `real multiplications a sample, direct form and blocks (blocks win from ${crossoverTaps()} taps, with the best block)`, olsMults(M, N) < M ? '' : 'bad');
   };
   paint();
@@ -240,12 +244,12 @@ export const olsBest = (M: number): number => bestBlock(M);
 
 export function goertzelWidget(): Widget {
   let tone_ = 1000, target = 1000, N = 205;
-  const states = plotOf({ W: 640, H: 170, x: [0, 256], y: [-1, 1], yTicks: [0], xLabel: 'sample n', yLabel: 's[n], scaled', aria: 'The Goertzel state against the sample number' });
+  const states = plotOf({ W: 640, H: 170, x: [0, 256], y: [-1, 1], yTicks: [0], xLabel: 'sample n', yLabel: 's[n], 1 = a matching tone', aria: 'The Goertzel state against the sample number' });
   const sweep = plotOf({ W: 640, H: 190, x: [0, DTMF_FS / 2], y: [-80, 6], yTicks: [0, -20, -40, -60], xLabel: 'Hz, the frequency Goertzel is set to', yLabel: 'dB', aria: 'The power Goertzel reports as its frequency is swept', xFmt: (v) => num(v, 0), yFmt: (v) => num(v, 0) });
   const chips = mkChips(4);
   const paint = () => {
     const x = tone(N, tone_ / DTMF_FS), c = goertzelCoef(target / DTMF_FS), r = goertzelRun(x, c), p = goertzelPower(r.s1, r.s2, c), ref = (N / 2) ** 2;
-    const top = Math.max(1, ...r.states.map(Math.abs));
+    const top = N / (2 * Math.max(0.05, Math.abs(Math.sin((2 * Math.PI * target) / DTMF_FS))));
     states.setX(256); states.setY(-1, 1);
     states.clear();
     line(states, range(N), r.states.map((v) => v / top), 'real');
@@ -255,7 +259,7 @@ export function goertzelWidget(): Widget {
     const n2 = 2 ** Math.ceil(Math.log2(N));
     chips.set(3, `${fftRealMults(n2)}`, `real multiplications for every bin of a ${n2}-point FFT: cheaper than Goertzel from ${num(binsBreakEven(n2), 0)} bins`);
     sweep.clear();
-    const fs_ = range(257).map((i) => (i / 256) * (DTMF_FS / 2));
+    const fs_ = range(1025).map((i) => (i / 1024) * (DTMF_FS / 2));
     line(sweep, fs_, fs_.map((f) => { const cc = goertzelCoef(f / DTMF_FS), g = goertzelRun(x, cc); return Math.max(-80, dbOf(Math.sqrt(goertzelPower(g.s1, g.s2, cc) / ref), -80)); }), 'real');
     range(Math.floor(N / 2) + 1).forEach((k) => { const f = (k * DTMF_FS) / N, cc = goertzelCoef(f / DTMF_FS), g = goertzelRun(x, cc); sweep.layer.append(s('circle', { cx: sweep.X(f), cy: sweep.Y(Math.max(-80, dbOf(Math.sqrt(goertzelPower(g.s1, g.s2, cc) / ref), -80))), r: 2.4, class: 'sg-pt' })); });
     sweep.layer.append(s('line', { x1: sweep.X(target), x2: sweep.X(target), y1: sweep.Y(-80), y2: sweep.Y(6), class: 'ln-h th' }));

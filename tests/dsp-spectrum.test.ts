@@ -134,7 +134,7 @@ describe('time and frequency', () => {
     // the chirp is the strongest thing below the steady tone's bin (0.25 × 128 = 32)
     const track = g.map((fr) => peak(fr, 3, 30));
     expect(track[g.length - 2]).toBeGreaterThan(track[1]);
-    const burst = (fr: number[]) => fr[Math.round(0.12 * 128)];
+    const burst = (fr: number[]) => fr[Math.round(0.06 * 128)];
     expect(burst(g[8])).toBeGreaterThan(3 * burst(g[3]));
   });
   it('a chirp is the formula', () => { expect(chirp(8, 0.1, 0.2)[1]).toBeCloseTo(Math.sin(2 * Math.PI * (0.1 + 0.1 / 16)), 12); });

@@ -115,7 +115,8 @@ def spectrum():
     L = 2048
     n = np.arange(L)
     sig = 0.5 * np.sin(2 * np.pi * (0.03 * n + (0.4 - 0.03) * n * n / (2 * L))) + 0.3 * np.cos(2 * np.pi * 0.25 * n)
-    sig = sig + np.where(((n >= 512) & (n < 640)) | ((n >= 1280) & (n < 1408)), 0.5 * np.sin(2 * np.pi * 0.12 * n), 0)
+    for s0 in (512, 1280):
+        sig = sig + np.where((n >= s0) & (n < s0 + 128), 0.5 * np.sin(np.pi * (n - s0) / 128) ** 2 * np.sin(2 * np.pi * 0.06 * n), 0)
     _, _, Z = signal.stft(sig, window='hann', nperseg=64, noverlap=32, boundary=None, padded=False, detrend=False, return_onesided=True)
     # fast convolution
     x = np.array(noise(500, 777))

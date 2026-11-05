@@ -108,13 +108,17 @@ const PAD = 16;
 export interface Dip { /** dB between the lower of the two tones' levels and the lowest point between them (0 when the spectrum never dips). */ dipDb: number; resolved: boolean }
 export const DIP_NEEDED = 3;
 /** Two equal tones are resolved when the spectrum between them falls DIP_NEEDED dB under both. */
-export function dipOf(N: number, sep: number, kind: WinKind): Dip {
-  const p = pairOf(N, sep), S = amplitudeSpectrum(twoTones(p), kind, PAD), at = (nu: number) => S[Math.round(nu * PAD)];
-  const a = Math.round(p.f1 * PAD), b = Math.round((p.f1 + sep) * PAD);
+/** `perBin` points of the padded transform to each bin of the block: paddedLength(N, pad) / N. */
+export function dipIn(S: readonly number[], perBin: number, nuA: number, nuB: number): Dip {
+  const a = Math.round(nuA * perBin), b = Math.round(nuB * perBin);
   let lo = Infinity;
   for (let i = a; i <= b; i++) lo = Math.min(lo, S[i]);
-  const dip = Math.max(0, dbOf(Math.min(at(p.f1), at(p.f1 + sep))) - dbOf(lo));
+  const dip = Math.max(0, dbOf(Math.min(S[a], S[b])) - dbOf(lo));
   return { dipDb: dip, resolved: dip >= DIP_NEEDED };
+}
+export function dipOf(N: number, sep: number, kind: WinKind): Dip {
+  const p = pairOf(N, sep);
+  return dipIn(amplitudeSpectrum(twoTones(p), kind, PAD), paddedLength(N, PAD) / N, p.f1, p.f1 + sep);
 }
 /** The smallest separation (steps of 0.05 bin) at which equal tones are resolved. */
 export function resolvingSep(N: number, kind: WinKind): number {
@@ -126,7 +130,7 @@ export const SEEN_BY = 6;
 /** Is the second tone seen? Its frequency reads at least SEEN_BY dB away (up, or down where it cancels the first tone's skirt) from what the first tone alone puts there. */
 export function seenAt(N: number, sep: number, relDb: number, kind: WinKind): { seen: boolean; byDb: number } {
   const p = pairOf(N, sep, relDb), both = amplitudeSpectrum(twoTones(p), kind, PAD), alone = amplitudeSpectrum(centred(N, p.f1 / N), kind, PAD);
-  const i = Math.round((p.f1 + sep) * PAD), by = dbOf(both[i]) - dbOf(alone[i]);
+  const i = Math.round((p.f1 + sep) * (paddedLength(N, PAD) / N)), by = dbOf(both[i]) - dbOf(alone[i]);
   return { seen: Math.abs(by) >= SEEN_BY, byDb: by };
 }
 /** The weakest level (dB under the first tone, in steps of 1) still seen, counting down from 0 while every level above it is seen too. */
@@ -141,10 +145,11 @@ export function weakestSeen(N: number, sep: number, kind: WinKind, floor = -140)
 /** A linear chirp: cycles a sample from f0 to f1 over n samples. */
 export const chirp = (n: number, f0: number, f1: number, A = 1): number[] => Array.from({ length: n }, (_, i) => A * Math.sin(2 * Math.PI * (f0 * i + ((f1 - f0) * i * i) / (2 * n))));
 export const SG_LEN = 2048;
-/** The spectrogram's signal: a rising chirp, a steady tone, and two short bursts of another tone. */
+/** The spectrogram's signal: a rising chirp, a steady tone, and two short bursts of another tone, each under a raised-cosine envelope so that it is a tone and not a click. */
+const burst = (i: number, s: number): number => (i >= s && i < s + 128 ? 0.5 * Math.sin((Math.PI * (i - s)) / 128) ** 2 * Math.sin(2 * Math.PI * 0.06 * i) : 0);
 export function spectrogramSignal(n = SG_LEN): number[] {
   const c = chirp(n, 0.03, 0.4, 0.5), t = tone(n, 0.25, 0.3);
-  return c.map((v, i) => v + t[i] + ((i >= 512 && i < 640) || (i >= 1280 && i < 1408) ? 0.5 * Math.sin(2 * Math.PI * 0.12 * i) : 0));
+  return c.map((v, i) => v + t[i] + burst(i, 512) + burst(i, 1280));
 }
 /** Frames of amplitude spectra (bins 0 … N/2), a frame every `hop` samples while a whole frame fits. */
 export function spectrogram(x: readonly number[], N: number, hop: number, kind: WinKind): number[][] {

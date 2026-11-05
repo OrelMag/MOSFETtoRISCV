@@ -6,11 +6,11 @@ import { chSpectrum, spectrumFacts } from '../src/chapters/ch-dsp-spectrum';
 import { numOf } from '../src/chapters/order';
 import { DSP_LADDER } from '../src/chapters/dspladder';
 import {
-  amplitudeSpectrum, bestBlock, bestBlockFor, binsBreakEven, blockErrors, centred, crossoverTaps, dbOf, dftPowerAt, dipOf, dtmfFreqs, fftRealMults, goertzelCoef, goertzelPower, goertzelRun, olsMults,
+  amplitudeSpectrum, bestBlock, bestBlockFor, binsBreakEven, blockErrors, crossoverTaps, dbOf, dftPowerAt, dipOf, dtmfFreqs, fftRealMults, goertzelCoef, goertzelPower, goertzelRun, olsMults,
   resolvingSep, seenAt, skirtAt, spectrogramSignal, stateGain, tone, weakestSeen, windowFigures, windowOf, WINDOWS, type WinKind,
 } from '../src/dsp/spectrum';
 import {
-  DTMF_N, dtmfCoefs, leakStats, misreads, NOISES, olsSignal, PAD_GAP, PADS, runKey, SG_FRAMES,
+  DTMF_N, dtmfCoefs, leakStats, misreads, NOISES, olsSignal, padDip, padTones, PADS, runKey, SG_FRAMES,
 } from '../src/widgets/dspspectrum';
 import { goertzelCell, GZ_STATE } from '../src/lib';
 import { windowedSinc } from '../src/comm/signals';
@@ -84,15 +84,15 @@ describe('step 3, what the skirt hides', () => {
 });
 
 describe('step 4, zero padding', () => {
-  const twoTones = (N: number) => centred(N, 0.2).map((v, n) => v + centred(N, 0.2 + PAD_GAP)[n]);
+  const twoTones = padTones;
   it('Hann at 32 samples is one lump at every padding', () => {
     for (const pad of PADS) expect(peaks(amplitudeSpectrum(twoTones(32), 'hann', pad)), `×${pad}`).toBe(1);
   });
   it('the samples the text names: rectangle 80, Hann 128; one step of 8 fewer is not enough; both are on the slider', () => {
     const f = spectrumFacts();
-    expect(f.minRect).toBe(78); expect(f.minHann).toBe(123);
-    expect(dipOf(80, 80 * PAD_GAP, 'rect').resolved).toBe(true); expect(dipOf(72, 72 * PAD_GAP, 'rect').resolved).toBe(false);
-    expect(dipOf(128, 128 * PAD_GAP, 'hann').resolved).toBe(true); expect(dipOf(120, 120 * PAD_GAP, 'hann').resolved).toBe(false);
+    expect(f.minRect).toBe(77); expect(f.minHann).toBe(122);
+    expect(padDip(80, 'rect').resolved).toBe(true); expect(padDip(72, 'rect').resolved).toBe(false);
+    expect(padDip(128, 'hann').resolved).toBe(true); expect(padDip(120, 'hann').resolved).toBe(false);
     expect(peaks(amplitudeSpectrum(twoTones(128), 'hann', 16), 0.3)).toBe(2); expect(peaks(amplitudeSpectrum(twoTones(80), 'rect', 16), 0.3)).toBe(2);
     for (const n of [80, 128]) expect((n - 16) % 8).toBe(0);
   });
@@ -181,7 +181,7 @@ describe('step 8, the keypad in gates', () => {
     const bad = misreads(200);
     expect(bad.length).toBeGreaterThan(0); expect(spectrumFacts().mis200).toEqual(bad);
     const body = chSpectrum.steps[7].body;
-    expect(body).toContain(`keys ${bad.join(' ')} misread`);
+    expect(body).toContain(`keys ${bad.join(' ')} do not read back`);
   });
   it('the panel\'s run on the real gates: every state word equals the model, and the key reads back', () => {
     const sim = simulate(goertzelCell());

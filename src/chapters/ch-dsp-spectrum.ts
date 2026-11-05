@@ -7,7 +7,7 @@ import { goertzelCell } from '../lib/goertzel';
 import { fftStream } from '../lib/fft';
 import { treeMul } from '../lib/muldiv';
 import { stats } from '../sim/stats';
-import { dtmfCoefs, dtmfScene, DTMF_N, goertzelWidget, leakStats, leakageWidget, misreads, olsWidget, padWidget, PAD_GAP, resolveWidget, spectrogramWidget, windowsWidget } from '../widgets/dspspectrum';
+import { dtmfCoefs, dtmfScene, DTMF_N, goertzelWidget, leakStats, leakageWidget, misreads, olsWidget, padWidget, minSamples, PAD_GAP, resolveWidget, spectrogramWidget, windowsWidget } from '../widgets/dspspectrum';
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -26,7 +26,7 @@ export function spectrumFacts() {
     skirt10: { rect: skirtAt('rect', 10, 64), hann: skirtAt('hann', 10, 64), blackman: skirtAt('blackman', 10, 64) },
     weak6: { rect: weakestSeen(64, 6, 'rect'), hann: weakestSeen(64, 6, 'hann'), blackman: weakestSeen(64, 6, 'blackman') },
     leak10: leakStats(10, 'rect'), leak105: leakStats(10.5, 'rect'), leak125: leakStats(12.5, 'rect'),
-    minRect: Math.ceil(resolvingSep(64, 'rect') / PAD_GAP), minHann: Math.ceil(resolvingSep(64, 'hann') / PAD_GAP),
+    minRect: minSamples('rect'), minHann: minSamples('hann'),
     cross: crossoverTaps(),
     cell: nands(goertzelCell()), mul: nands(treeMul(16, true)), fft256: nands(fftStream(256, 12)),
     gain, bits: stateBits(Cs, DTMF_N), best, perKey: dtmfFreqs().length * (DTMF_N + 1),
@@ -169,9 +169,9 @@ export const chSpectrum: Chapter = {
       get body() {
         return `
         <p>A spectrum of the whole signal says what is in it and not when. A <strong>spectrogram</strong> cuts the signal into frames, windows each, takes the spectrum of each and stacks them: time across, frequency up, level as colour. The frames overlap, because a window is small at its edges and an event there would be under-weighted. This one is a rising chirp, a steady tone and two short bursts.</p>
-        <p>One choice, the frame length N, sets both details. In frequency, Hann's main lobe is 4 bins of 8 000 / N Hz: ${n0(4 * 8000 / 32)} Hz wide at 32 samples and ${nf(4 * 8000 / 512, 1)} Hz at 512. In time a frame is N / 8 000 s long: 4 ms and 64 ms. The two are tied by the product of the length and the width, and no choice makes both small. A signal that changes during a frame is smeared: the chirp sweeps ${nf(0.37 * 32 * 32 / 2048, 1)} bin within one 32-sample frame and ${nf(0.37 * 512 * 512 / 2048, 0)} bins within one of 512, and it is a thin line at the first and a wide band at the second. The steady tone does the opposite: sharp at 512, a thick band at 32.</p>
+        <p>One choice, the frame length N, sets both details. In frequency, Hann's main lobe is 4 bins of 8 000 / N Hz: ${n0(4 * 8000 / 32)} Hz wide at 32 samples and ${nf(4 * 8000 / 512, 1)} Hz at 512. In time a frame is N / 8 000 s long: 4 ms and 64 ms. The two are tied by the product of the length and the width, and no choice makes both small. A signal that changes during a frame is smeared: the chirp sweeps ${nf(0.37 * 32 * 32 / 2048, 1)} bin within one 32-sample frame and ${nf(0.37 * 512 * 512 / 2048, 0)} bins within one of 512, so at 32 it does not move during a frame and is still a broad diagonal band, wide because the lobe is 1 kHz, while at 512 each frame shows it as a band 47 bins tall and the line becomes a staircase. The steady tone does the opposite: a sharp line at 512, a thick band at 32.</p>
         <p>Overlap costs. At a hop of N / 2 every sample is in two frames, so the signal costs twice the transforms; at 7/8 overlap, eight times. With Hann at 50 % the frames add back to a constant, which is why that pairing is the usual one. Sound: the clip plays the signal from the model.</p>
-        <div class="try">Go from a frame of 32 samples to 512 and watch the steady tone sharpen while the chirp turns into a band. Then pick the frame that shows both the bursts and the tone least badly.</div>`;
+        <div class="try">Go from a frame of 32 samples to 512 and watch the steady tone sharpen while the chirp turns into a staircase. Then pick the frame that shows both the bursts and the tone least badly.</div>`;
       },
       widget: spectrogramWidget,
       challenge: {
@@ -233,7 +233,7 @@ export const chSpectrum: Chapter = {
         <p>The cell is <span data-show="mul">one multiplier</span> by the coefficient, <span data-show="rnd">a rounder</span> that brings the Q2.14 product back to the word, <span data-show="a1 a2">two adders</span> making s[n] = x + c s₁ − s₂, <span data-show="r1 r2">two registers</span> and <span data-show="m1 m2">a clear</span>. The coefficient is an input, so the same ${n0(f.cell)} NANDs serve all eight tones: ${n0(f.mul)} of those are the 16 × 16 multiplier. Opened, it is the recurrence drawn as gates.</p>
         <p>The state word comes from <a href="#/c/fixed/0">chapter ${numOf('fixed')}</a>'s rule, guard bits by the worst case. The state is the input times the filter's impulse response, so its largest value is 128.5 times the sum of the response's sizes over the block. The worst tone sums to ${nf(f.gain, 1)}, so ${nf(128.5 * f.gain, 0)} must fit: ${f.bits} bits, and the 16-bit word holds it with ${nf(100 * (1 - (128.5 * f.gain) / 32768), 1)} % to spare. A 15-bit word overflows on the worst input. Eight bits of input became sixteen of state. The sum may wrap along the way (the same two's complement argument as in the chapter on words), and the model and the gates agree at every clock for the extremes.</p>
         <p>One cell does the eight tones one after another. A key's block of ${DTMF_N} samples is replayed eight times, each with a clear and a coefficient: ${n0(f.perKey)} clocks per key. At 8 kHz the block lasts ${nf(DTMF_N / 8, 1)} ms, so the clock must run at least ${nf(f.perKey / (DTMF_N / 8000) / 1000, 1)} kHz, and the block must be stored. Eight cells would do it at the sample rate for ${n0(8 * f.cell)} NANDs. A 256-point streaming FFT, counted in the step on filtering by blocks, is ${n0(f.fft256)}.</p>
-        <p>The panel runs the real gates through all eight tones and compares the state words with the model at every clock. The three multiplications of the final power are done by the panel from the gates' words, not in gates. The decision is our own rule, not a standard's: the strongest tone in each group must be 4 times the runner-up in power and above the power of an amplitude-10 tone. With noise ±60 every key reads right; at ±200, clipped to a byte, the keys ${f.mis200.join(' ')} misread.</p>
+        <p>The panel runs the real gates through all eight tones and compares the state words with the model at every clock. The three multiplications of the final power are done by the panel from the gates' words, not in gates. The decision is our own rule, not a standard's: the strongest tone in each group must be 4 times the runner-up in power and above the power of an amplitude-10 tone. With noise ±60 every key reads right; at ±200, clipped to a byte, the keys ${f.mis200.join(' ')} do not read back.</p>
         <div class="try">Press 5, then each of the other keys, and read the bars. Then take the noise to ±200 and find a key that misreads. Play a key and listen for its two tones.</div>`;
       },
       scene: dtmfScene,
