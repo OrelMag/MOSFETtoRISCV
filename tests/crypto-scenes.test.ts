@@ -37,7 +37,7 @@ describe('vectors', () => {
 describe('scenes', () => {
   it('S-box: 0x53 in, SBOX[0x53] out', () => {
     const sim = scene(sboxScene());
-    expect(sim.getBits(sim.design.root.ports.y).reduce((a, b, i) => a + b * 2 ** i, 0)).toBe(SBOX[0x53]);
+    expect(Array.from(sim.getBits(sim.design.root.ports.y)).reduce((a: number, b, i) => a + b * 2 ** i, 0)).toBe(SBOX[0x53]);
   });
   it('AES round 1 of Appendix B: out is the start of round 2; last = 1 skips MixColumns', () => {
     const t = encryptTrace(APPENDIX_B.input, APPENDIX_B.key), sim = scene(aesRoundScene());

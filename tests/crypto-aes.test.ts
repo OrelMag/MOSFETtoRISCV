@@ -71,7 +71,7 @@ describe('golden model', () => {
   });
   it('the key schedule: nextKey chains into expandKey', () => {
     const ks = expandKey(V.fips197.key);
-    expect(ks.slice(1).map((k, i) => nextKey(ks[i], RCON[i]))).toEqual(ks.slice(1));
+    expect(ks.slice(1).map((_, i) => nextKey(ks[i], RCON[i]))).toEqual(ks.slice(1));
     V.fips197.rounds.forEach((f, i) => { if (f.key) expect(ks[i + 1]).toEqual(f.key); });
   });
 });
@@ -106,7 +106,7 @@ describe('parts match their specs', () => {
     const d = aesSbox(), sim = simulate(d);
     for (let x = 0; x < 256; x++) {
       sim.setInput('x', x); sim.settle();
-      expect(sim.getBits(sim.design.root.ports.y).reduce((a, b, i) => a + b * 2 ** i, 0), `S(${x})`).toBe(SBOX[x]);
+      expect(Array.from(sim.getBits(sim.design.root.ports.y)).reduce((a: number, b, i) => a + b * 2 ** i, 0), `S(${x})`).toBe(SBOX[x]);
     }
     checkSpec(d);
   });

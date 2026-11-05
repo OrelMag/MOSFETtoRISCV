@@ -150,7 +150,7 @@ describe('compression core', () => {
     expect(h).toEqual(sha256Words(msg));
     expect(hex8(h)).toBe(createHash('sha256').update(Buffer.from(msg)).digest('hex'));
     // rst stops a run
-    put(sim, 'h', H0); put(sim, 'blk', blocksOf(utf8('abc'))[0]); sim.setInput('start', 1); sim.settle(); pulse(sim); sim.setInput('start', 0); sim.settle(); pulse(sim); pulse(sim);
+    put(sim, 'h', [...H0]); put(sim, 'blk', blocksOf(utf8('abc'))[0]); sim.setInput('start', 1); sim.settle(); pulse(sim); sim.setInput('start', 0); sim.settle(); pulse(sim); pulse(sim);
     sim.setInput('rst', 1); sim.settle(); pulse(sim); sim.setInput('rst', 0); sim.settle();
     const frozen = reg(sim, 'V'); pulse(sim);
     expect(reg(sim, 'V'), 'rst stops the rounds').toEqual(frozen);
