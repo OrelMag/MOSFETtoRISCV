@@ -936,7 +936,7 @@ class Tab {
     const mounted = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('#view .route-loading')) { clearInterval(t); r(); } }, 50); })`;
     await Promise.race([
       this.send('Runtime.evaluate', { expression: mounted, awaitPromise: true }),
-      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('the page never left its loading skeleton'); }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error(`the page never left its loading skeleton (${this.inflight.size} requests pending${this.inflight.size ? `: ${[...this.inflight.values()][0]}` : ''})`); }),
     ]);
     await this.quiet(t0);
     // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
@@ -993,7 +993,10 @@ async function startPreview(): Promise<{ url: string; close(): Promise<void> }> 
 
 // ---- main ------------------------------------------------------------------------------------
 
-const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed/;
+// A load stuck on its skeleton is a timeout like the others: seen about once in 4 000 routes on a loaded runner, never in hundreds of tries on
+// one route, and a whole deploy's smoke fails on it. The page reloading itself under a check (vite:preloadError) is the machine too.
+// The log says which routes needed the second visit; a page really stuck stays stuck.
+const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed|^the page never left its loading skeleton|^Runtime.evaluate: Inspected target navigated/;
 const MAX_RETRIES = 20;
 
 async function main(): Promise<number> {
