@@ -262,7 +262,7 @@ function ukwdParts(out: Part[], sx: (x: number) => number, lift: number, p: Enig
   const mid = RIM_X[0], winZ = RIM_R * Math.sin(WINDOW_PHI), yt = RIM_R * Math.cos(WINDOW_PHI) + 0.1;
   out.push(box(P.ivory, mid + (x0 - sx(-108)) - 5, mid + (x0 - sx(-108)) + 5, yt - 0.3, yt, winZ - 5.2, winZ + 5.2));
   strokeText(out, 'D', [mid + (x0 - sx(-108)), yt + 0.02, winZ], [1, 0, 0], [0, 0, -1], { size: 6.4, color: P.red, weight: 1.1 });
-  strokeText(out, 'OBEN', [x0 + 17, RIM_R, -8], [1, 0, 0], [0, 0, -1], { size: 4, color: P.ivory, weight: 0.7 });
+  strokeText(out, 'Oben', [x0 + 17, RIM_R, -8], [1, 0, 0], [0, 0, -1], { size: 4, color: P.ivory, weight: 0.7 });
   shift(out, s0, [0, AX_Y + lift, AX_Z]);
   if (p.out < 0.5) return;
   // The core, out of its shell: a black ring of 24 letters, sockets on the rim's near side, plugs into them.
@@ -331,8 +331,8 @@ export function coverParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   out.push(box(P.black, -132 + 8, -100, y1, y1 + 0.6, -143, -97, 0.05), box(P.panel, -121, -103, y1 + 0.6, y1 + 1.1, -139, -101, 0.05));
   // The plate over the 4 V socket, the socket's opening, and the wheel cover's lock.
   out.push(box(P.zinc, 39, 82, y1, y1 + 0.5, -152, -119, 0.25));
-  for (const [i, t] of ['ZUM BETRIEB', 'MIT EINGEBAUTER', 'BATTERIE', 'STECKER HERAUS.'].entries()) strokeText(out, t, [60.5, y1 + 0.55, -148 + i * 5], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.3 });
-  strokeText(out, '4 VOLT', [60.5, y1 + 0.55, -124], [1, 0, 0], [0, 0, -1], { size: 4, color: P.black, weight: 0.6 });
+  for (const [i, t] of ['Zum Betrieb', 'mit eingebauter', 'Batterie', 'Stecker heraus.'].entries()) strokeText(out, t, [60.5, y1 + 0.55, -148 + i * 5], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.3 });
+  strokeText(out, '4 Volt', [60.5, y1 + 0.55, -124], [1, 0, 0], [0, 0, -1], { size: 4, color: P.black, weight: 0.6 });
   // Lock.
   out.push(cyl(P.steel, 44, -55, y1, y1 + 2.8, 7, 0.4), box(P.black, 43.4, 44.6, y1 + 2.8, y1 + 2.9, -59, -52));
   for (const [x, z] of [[52, -60], [52, -50], [86, -55], [120, -55]] as const) screw(out, P.brass, x, y1, z);
@@ -421,8 +421,8 @@ export function keyboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): voi
   // The serial plate: M, the naval part number, serial / maker / year (M16913/aye/44 survives, Crypto Museum's own).
   out.push(box(P.zinc, -26, 26, 50, 50.4, 112, 124, 0.3));
   strokeText(out, 'M', [0, 50.45, 115], [1, 0, 0], [0, 0, -1], { size: 3.2, color: P.black, weight: 0.6 });
-  strokeText(out, 'NA 220 900', [0, 50.45, 118.6], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.35 });
-  strokeText(out, 'M 16913/AYE/44', [0, 50.45, 122], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.35 });
+  strokeText(out, 'Na 220 900', [0, 50.45, 118.6], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.35 });
+  strokeText(out, 'M 16913/aye/44', [0, 50.45, 122], [1, 0, 0], [0, 0, -1], { size: 2.2, color: P.black, weight: 0.35 });
 }
 
 // ---------------------------------------------------------------- the plugboard
@@ -496,8 +496,8 @@ export function caseParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const f0 = out.length, fw = w - 0.5, fy = 6, fh = WALL_H - fy;
   out.push(box(P.wood, -fw, fw, fy, fy + fh, d - 14, d, 0.05));
   grain(out, soft(P), (t, a, b) => box(P.wood, -fw + a * CASE_W, -fw + b * CASE_W, fy + 2 + t * (fh - 4), fy + 2 + t * (fh - 4) + 0.5, d, d + 0.05), 24, 33);
-  strokeText(out, 'KLAPPE', [0, fy + fh / 2 - 6, d - 14.03], [1, 0, 0], [0, -1, 0], { size: 6, color: P.woodDark, weight: 1.1 });
-  strokeText(out, 'SCHLIESSEN', [0, fy + fh / 2 + 5, d - 14.03], [1, 0, 0], [0, -1, 0], { size: 6, color: P.woodDark, weight: 1.1 });
+  strokeText(out, 'Klappe', [0, fy + fh / 2 - 6, d - 14.03], [1, 0, 0], [0, -1, 0], { size: 6, color: P.woodDark, weight: 1.1 });
+  strokeText(out, 'schließen', [0, fy + fh / 2 + 5, d - 14.03], [1, 0, 0], [0, -1, 0], { size: 6, color: P.woodDark, weight: 1.1 });
   for (const s of [-1, 1]) out.push(box(P.zinc, s * 118 - 7, s * 118 + 7, fy + fh - 8, fy + fh - 2, d - 14.8, d - 14, 0.3));
   out.push(box(P.zinc, -10, 10, fy + fh - 8, fy + fh, d, d + 0.8, 0.3));
   turn(out, f0, [0, 7.8, d - 7], quatAxisAngle(AXIS_X, p.flap * (Math.PI / 2)));

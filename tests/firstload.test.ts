@@ -56,7 +56,7 @@ const chain = (seen: Map<string, string | null>, f: string) => {
 /** What the first page may hold. Everything else is loaded by a route, on a click or on a keystroke. */
 const ALLOWED = [
   /^main\.ts$/, /^styles\//, /^ui\//, /^learn\/store\.ts$/, /^widgets\/journey\.ts$/, /^campaign\/twinids\.ts$/,
-  /^chapters\/(meta|outline|manifest|load|loaders|checks|firstuse|sections)\.ts$/,
+  /^chapters\/(meta|outline|manifest|load|loaders|checks|firstuse|sections|stepmoves)\.ts$/,
 ];
 // ui/ is allowed as a directory, but not its pages or helpers that bring the heavy parts: those are reached by import() only
 const BANNED_UI = [/^ui\/pages\/(chapter|workbench|level|sandbox|campaign|path|start|notes|capstone|verilog|hwstats|benchmarks|ooolab)\.ts$/, /^ui\/(reviewqs|review)\.ts$/];
