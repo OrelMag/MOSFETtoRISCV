@@ -162,9 +162,9 @@ describe('every playable level', () => {
       const chips = levelChallenge(n)!.answer();
       const main = chips[chips.length - 1];
       const top = new UserLibrary(workspace(main, ...chips.slice(0, -1))).compiled(main.id)!.def;
-      const seen = new Set<ComponentDef>();
+      const seen = new Set<ComponentDef>(), gave = new Set([...(n.gives ?? []), ...(n.givesOf?.() ?? [])]); // a part handed over is the library's, whatever it holds
       const walk = (d: ComponentDef): void => {
-        if (seen.has(d) || MEMORY.test(d.id)) return;
+        if (seen.has(d) || MEMORY.test(d.id) || gave.has(d.id)) return;
         seen.add(d);
         if (LIB16.test(d.id)) found.add(n.id);
         else if (d.netlist && !d.prim) for (const i of d.netlist().instances) walk(i.def);
