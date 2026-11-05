@@ -37,8 +37,14 @@ function tickStep(max: number, n = 4): number {
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
 }
 
+/** Widest a plot is drawn on a phone (units): a 640-wide plot scaled to 320 px was 85 px tall, its text half size. */
+export const NARROW_PLOT_W = 380;
+const narrowScreen = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
+
 export function plotOf(o: PlotOpts): Plot {
-  const W = o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
+  // On a phone the same plot is drawn narrower, not scaled down: it keeps its height and its text stays readable.
+  const narrow = narrowScreen();
+  const W = narrow ? Math.min(o.W ?? 460, NARROW_PLOT_W) : o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
   let xMax = o.x[1], yLo = o.y[0], yHi = o.y[1];
   const X = (v: number) => m.l + (v / xMax) * (W - m.l - m.r);
   const Y = (v: number) => H - m.b - ((v - yLo) / (yHi - yLo)) * (H - m.t - m.b);
@@ -60,7 +66,7 @@ export function plotOf(o: PlotOpts): Plot {
     el: svg, X, Y, layer, clear: () => layer.replaceChildren(), xMax, x0: m.l, x1: W - m.r,
     setX(max) {
       xMax = max; p.xMax = max;
-      const st = tickStep(max), d = st < 1 ? 1 : 0, kids: SVGElement[] = [];
+      const st = tickStep(max, narrow ? 3 : 4), d = st < 1 ? 1 : 0, kids: SVGElement[] = [];
       for (let v = 0; v <= max * 1.0001; v += st) kids.push(s('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: X(v), y: H - m.b + 14, 'text-anchor': 'middle', class: 'tick' }, xf ? xf(v) : num(v, d + (st < 0.1 ? 2 : st < 1 ? 1 : 0))));
       gx.replaceChildren(...kids);
     },
