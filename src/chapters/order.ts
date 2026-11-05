@@ -79,6 +79,8 @@ const BOOK = [
   'zplane',
   'multirate',
   'cordic',
+  'converters',
+  'adaptive',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
