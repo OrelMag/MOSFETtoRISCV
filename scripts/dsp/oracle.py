@@ -72,7 +72,81 @@ def zplane():
     return {'fs': fs, 'x': r(x), 'filters': rows, 'convolve': {'x': u, 'h': v, 'y': r(np.convolve(u, v))}}
 
 
-GENERATORS = {'zplane': zplane}
+
+def win_kinds(n):
+    from scipy.signal import windows as W
+    return {'rect': W.boxcar(n, sym=False), 'hann': W.hann(n, sym=False), 'hamming': W.hamming(n, sym=False), 'blackman': W.blackman(n, sym=False),
+            'blackmanharris': W.blackmanharris(n, sym=False), 'kaiser': W.kaiser(n, 8, sym=False)}
+
+
+def win_figures(w):
+    """The same figures src/dsp/spectrum.ts windowFigures reads off a window: enbw, and the transform on a 1/32-bin grid for the first minimum, the sidelobe and the half-bin loss."""
+    n = len(w)
+    t = np.abs(np.fft.fft(w, n * 32))
+    t = t[: min(48, n // 2 - 1) * 32 + 1] / t[0]
+    i = 1
+    while i < len(t) - 1 and not (t[i] <= t[i - 1] and t[i] <= t[i + 1]):
+        i += 1
+    return {'coherent': float(w.sum() / n), 'enbw': float(n * (w * w).sum() / w.sum() ** 2), 'firstMin': i / 32, 'sidelobeDb': float(20 * np.log10(t[i:].max())), 'scallopDb': float(-20 * np.log10(t[16]))}
+
+
+def dtmf_block(row, col, n, amp=50):
+    out = []
+    for k in range(n):
+        v = amp * (np.cos(2 * np.pi * row * k / 8000) + np.cos(2 * np.pi * col * k / 8000))
+        out.append(int(max(-128, min(127, np.floor(v + 0.5)))))
+    return out
+
+
+def shift_round(v, s):
+    return (v + (1 << (s - 1))) >> s
+
+
+def spectrum():
+    N = 64
+    kinds = win_kinds(N)
+    f = 10.5 / N
+    xt = np.cos(2 * np.pi * f * np.arange(N))
+    tones = {}
+    for k, w in win_kinds(N).items():
+        padded = np.fft.rfft(xt * w, N * 4)
+        tones[k] = r(2 * np.abs(padded) / w.sum())
+    # a spectrogram of the chapter's signal
+    L = 2048
+    n = np.arange(L)
+    sig = 0.5 * np.sin(2 * np.pi * (0.03 * n + (0.4 - 0.03) * n * n / (2 * L))) + 0.3 * np.cos(2 * np.pi * 0.25 * n)
+    for s0 in (512, 1280):
+        sig = sig + np.where((n >= s0) & (n < s0 + 128), 0.5 * np.sin(np.pi * (n - s0) / 128) ** 2 * np.sin(2 * np.pi * 0.06 * n), 0)
+    _, _, Z = signal.stft(sig, window='hann', nperseg=64, noverlap=32, boundary=None, padded=False, detrend=False, return_onesided=True)
+    # fast convolution
+    x = np.array(noise(500, 777))
+    h = signal.firwin(33, 0.3)
+    full = signal.oaconvolve(x, h)
+    # Goertzel on a keypad block, in floating point and in integers
+    freqs = [697, 770, 852, 941, 1209, 1336, 1477, 1633]
+    xb = dtmf_block(770, 1477, 205)
+    gz = []
+    for fq in freqs:
+        c = 2 * np.cos(2 * np.pi * fq / 8000)
+        s = signal.lfilter([1.0], [1.0, -c, 1.0], np.array(xb, float))
+        s1, s2 = s[-1], s[-2]
+        w = 2 * np.pi * fq / 8000
+        X = np.sum(np.array(xb) * np.exp(-1j * w * np.arange(205)))
+        C = int(max(-32768, min(32767, np.floor(c * 2**14 + 0.5))))
+        a1 = a2 = 0
+        for v in xb:
+            a1, a2 = v + shift_round(C * a1, 14) - a2, a1
+        gz.append({'f': fq, 's1': float(s1), 's2': float(s2), 'power': float(abs(X) ** 2), 'C': C, 'fx1': a1, 'fx2': a2})
+    return {
+        'windows': {'n': N, 'values': {k: r(w) for k, w in kinds.items()}, 'figures': {k: win_figures(w) for k, w in win_kinds(128).items()}},
+        'tone': {'n': N, 'bin': 10.5, 'pad': 4, 'amplitude': tones},
+        'spectrogram': {'x': r(sig), 'n': 64, 'hop': 32, 'frames': Z.shape[1], 'amplitude': r(2 * np.abs(Z.T))},
+        'overlapSave': {'x': r(x), 'h': r(h), 'block': 128, 'y': r(full)},
+        'goertzel': {'x': xb, 'n': 205, 'bins': gz},
+    }
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum}
 
 
 def stamp(data):
