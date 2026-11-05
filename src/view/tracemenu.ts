@@ -72,6 +72,50 @@ export function partHeader(into: HTMLElement, name: string, def: ComponentDef): 
   into.append(h('div', { class: 'ctx-head' }, h('b', null, name), h('span', null, [def.name, cost].filter(Boolean).join(' · '))), h('hr'));
 }
 
+/** A block this large takes a while to rebuild as a chip: the row says so before it starts. */
+const SLOW_REMIX_NANDS = 20_000;
+
+export interface ElsewhereHost {
+  /** The part or level asked about (null: a wire, which has only the link). */
+  def: ComponentDef | null;
+  say(msg: string, err?: boolean): void;
+  /** A copy as a chip of the sandbox; absent: not offered here. */
+  sandbox?: { label: string; run(): void };
+  /** Copy its Verilog. Off on a level for what is not the learner's own. */
+  verilog?: boolean;
+  /** Its drawing as a file; absent: not offered; a string: off for this reason. */
+  image?: ((kind: 'svg' | 'png') => void | Promise<void>) | string;
+  /** A row for the link; absent: not offered. */
+  link?: NonNullable<MenuEntry>;
+}
+
+/** The rows of Take it elsewhere. Each row's code loads when it is clicked. */
+export function elsewhereRows(o: ElsewhereHost): NonNullable<MenuEntry>[] {
+  const rows: NonNullable<MenuEntry>[] = [];
+  const def = o.def;
+  // a primitive (a transistor, a rail) is no circuit to edit
+  if (o.sandbox && def?.netlist) rows.push({ label: o.sandbox.label, ...(stats(def).nands > SLOW_REMIX_NANDS ? { hint: 'A large block: this can take minutes' } : {}), run: () => o.sandbox!.run() });
+  if (o.verilog && def) {
+    rows.push(def.netlist ? { label: 'Copy Verilog', run: () => void import('../sim/verilog').then(async ({ structuralVerilog }) => {
+      const text = structuralVerilog(def);
+      if (!text) return o.say(`${def.name} has no structure to write as Verilog`, true);
+      const done = await copyText(text);
+      o.say(done ? `Copied the Verilog of ${def.name}` : 'The browser would not give access to the clipboard', !done);
+    }, () => o.say('Could not load: reload the page', true)) } : { label: 'Copy Verilog', why: 'A primitive of the simulator: it has no structure to write out.' });
+  }
+  if (typeof o.image === 'string') rows.push({ label: 'Save an image', why: o.image });
+  else if (o.image) {
+    const img = o.image;
+    const save = (kind: 'svg' | 'png') => () => void Promise.resolve(img(kind)).catch((e) => o.say(`Could not save the image: ${String(e)}`, true));
+    rows.push({ label: 'Save an image as SVG', run: save('svg') }, { label: 'Save an image as PNG', hint: 'At 2× resolution', run: save('png') });
+  }
+  if (o.link) rows.push(o.link);
+  return rows;
+}
+
+/** The group, or nothing when a surface offers none of it. */
+export const elsewhereGroup = (rows: NonNullable<MenuEntry>[]): MenuEntry[] => (rows.length ? [{ label: 'Take it elsewhere', sub: rows }] : []);
+
 export interface TraceHost {
   /** Light the net: every wire, label and tag of it. */
   highlight(): void;
@@ -85,6 +129,8 @@ export interface TraceHost {
   /** The net's flat nets in that design. */
   flat(): readonly number[];
   transistors: boolean;
+  /** Further groups, after Explain. */
+  more?: MenuEntry[];
 }
 
 /** Trace's rows, then the groups: the same order on every surface. */
@@ -112,6 +158,6 @@ export function wireRows(f: NetFacts, host: TraceHost): MenuEntry[] {
       for (const net of host.flat()) n += readers[net] ?? 0;
       return [{ label: `Fan-out: ${fanText(f, n, host.transistors)}`, hint: 'What this wire has to drive' }];
     } },
-    { label: 'Explain', sub: [host.why ? { label: 'Why this value?', key: 'W', run: () => host.why!() } : { label: 'Why this value?', why: host.whyOff ?? 'Not available here.' }] });
+    { label: 'Explain', sub: [host.why ? { label: 'Why this value?', key: 'W', run: () => host.why!() } : { label: 'Why this value?', why: host.whyOff ?? 'Not available here.' }] }, ...(host.more ?? []));
   return out;
 }

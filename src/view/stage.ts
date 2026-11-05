@@ -23,7 +23,7 @@ import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
 import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
-import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewState } from '../ui/viewlink';
+import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector, inspectorChoice } from './inspector';
@@ -37,7 +37,8 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
-import { isMenuKey } from '../ui/menu';
+import { isMenuKey, type MenuEntry } from '../ui/menu';
+import { elsewhereGroup, elsewhereRows } from './tracemenu';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -441,6 +442,7 @@ export class Stage {
         this.showInspector();
       },
       up: () => this.up(),
+      elsewhere: (t) => this.elsewhere(t),
     });
     this.view.arrange = true;
     this.view.pickable = true;
@@ -585,6 +587,8 @@ export class Stage {
 
   /** Replace the schematic with a bespoke widget (null returns to schematic mode). */
   showWidget(w: Widget | null): void {
+    // a widget in the canvas's place (a page's "unknown component"): nothing for the Why? card to explain
+    if (w) this.why.setOn(false);
     if (w && this.pending) {
       // a widget step came before the big scene was built: it wins
       this.loadSeq++;
@@ -1104,9 +1108,28 @@ export class Stage {
     if (docked) this.layoutDock();
   }
 
-  /** The level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
-  private remix(): void {
-    const shown = this.ctx?.def;
+  /** The right-click menu's Take it elsewhere for a part, a wire or (null) this level. */
+  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+    const ctx = this.ctx;
+    if (!ctx) return [];
+    const inst = t && 'inst' in t ? t.inst : null;
+    const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
+    const child = inst && ctx.canOpen(inst) ? ctx.child(inst) : null;
+    const say = (msg: string) => this.flashNow(msg);
+    return elsewhereGroup(elsewhereRows({
+      def, say,
+      ...(this.scene?.noRemix ? {} : { sandbox: { label: 'Open in Sandbox', run: () => this.remix(def ?? undefined) } }),
+      verilog: true,
+      ...(def ? { image: inst
+        ? (child ? (kind: 'svg' | 'png') => import('./image').then((m) => m.exportInside(child, this.view.el, kind)) : 'It has no inside to draw.')
+        : (kind: 'svg' | 'png') => this.exportImage(kind) } : {}),
+      link: { label: 'Copy a link to this view', hint: t ? 'Opens here, with this one picked out' : 'Step, part, inputs, probes, clock cycles', run: () => void this.copyViewLink(t ?? undefined) },
+    }));
+  }
+
+  /** A part or the level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
+  private remix(what?: ComponentDef): void {
+    const shown = what ?? this.ctx?.def;
     if (!shown) return;
     // as the learner arranged it: moved parts, unravelled pointers drawn as wires
     const lay = layoutOf(shown.id), authored = netlistOf(shown), nl = authored && drawnNetlist(shown, authored);
@@ -1501,11 +1524,12 @@ export class Stage {
     return !!this.sim && this.el.isConnected;
   }
 
-  /** Copy the link to this view; the status line says what it holds. */
-  async copyViewLink(): Promise<void> {
-    const url = linkTo(this.viewHash());
+  /** Copy the link to this view (`focus`: picking this part or wire out); the status line says what it holds. */
+  async copyViewLink(focus?: ViewFocus): Promise<void> {
     const v = this.viewState();
-    const what = isEmptyView(v) ? 'this view' : [Object.keys(v.inputs).length ? 'inputs' : '', v.probes.length ? 'probes' : '', v.cycles ? `${v.cycles} cycle${v.cycles === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+    if (focus) v.focus = focus;
+    const url = linkTo(splitView(location.hash).route + encodeView(v));
+    const what = focus ? 'this part or wire picked out' : isEmptyView(v) ? 'this view' : [Object.keys(v.inputs).length ? 'inputs' : '', v.probes.length ? 'probes' : '', v.cycles ? `${v.cycles} cycle${v.cycles === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
     if (await copyText(url)) this.flashNow(`Link copied (${what})`);
     else window.prompt('Copy this link (Ctrl+C):', url);
   }
@@ -1550,6 +1574,8 @@ export class Stage {
     if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     this.history = [];
     this.refresh();
+    if (v.focus && !this.view.showTarget(v.focus)) skipped++;
+    if (skipped && !note) note = `Link opened; ${skipped} item${skipped === 1 ? '' : 's'} in it no longer match this circuit`;
     if (note) this.flashNow(note);
   }
 

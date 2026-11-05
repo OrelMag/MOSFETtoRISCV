@@ -19,6 +19,7 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
+import type { ViewFocus } from '../ui/viewlink';
 import { factsOf, type NetEnd } from './netfacts';
 import { partHeader, wireHeader, wireRows } from './tracemenu';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
@@ -46,6 +47,8 @@ export interface SchematicEvents {
   inspect?(child: string): void;
   /** Up one level, for the menu's jump to a port of this level. */
   up?(): void;
+  /** The menu's Take it elsewhere, for a part, a wire or (null) the level on screen. */
+  elsewhere?(target: ViewFocus | null): MenuEntry[];
   /** The probe on a net of the current view, if any. */
   probeOf?(net: number): { color: number; label: string } | null;
   /** The learner moved a part or a wire, or unravelled a pointer (the level was redrawn). */
@@ -1309,7 +1312,8 @@ export class SchematicView {
   private menuItems(target: Element | null): MenuItem[] {
     const items = this.layoutItems(target);
     if (!this.pickable || !this.ctx || target?.closest('[data-net], [data-inst]')) return items;
-    return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...items];
+    const more = this.events.elsewhere?.(null).filter((x): x is MenuItem => !!x) ?? [];
+    return [{ label: 'Pick a part or wire…', run: () => this.pickTarget() }, ...more, ...items];
   }
 
   /** A wire's or a part's full menu: its header, what a surface offers, then the layout rows. */
@@ -1337,6 +1341,7 @@ export class SchematicView {
         design: () => ctx.sim.design,
         flat: () => ctx.node.nets?.[idx] ?? [],
         transistors: sw,
+        more: this.events.elsewhere?.({ net: idx }) ?? [],
       });
       showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for wire ${f.name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
       return true;
@@ -1353,6 +1358,7 @@ export class SchematicView {
     const rows: MenuItem[] = [
       { label: 'Look inside', key: 'double-click', run: () => this.events.open(name), ...(ctx.canOpen(name) ? {} : { why: 'A primitive of the simulator: it has no inside.' }) },
       ...(this.events.inspect ? [{ label: 'Inspect', run: () => this.events.inspect!(name) }] : []),
+      ...(this.events.elsewhere?.({ inst: name }).filter((x): x is MenuItem => !!x) ?? []),
     ];
     showMenu(x, y, layout.length ? [...rows, null, ...layout] : rows, { owner: this, into, label: `Actions for part ${name}`, ...(this.menuBack ? { back: this.menuBack } : {}) });
     return true;
@@ -1391,6 +1397,24 @@ export class SchematicView {
       return;
     }
     this.bring(this.pins.find((p) => p.pin.name === e.port)?.g);
+  }
+
+  /** What a link points at: selected, into view, flashed. False: nothing by that name or number at this level. */
+  showTarget(t: ViewFocus): boolean {
+    const nl = this.base;
+    if (!nl) return false;
+    if ('inst' in t) {
+      if (!this.insts.has(t.inst)) return false;
+      this.select(t.inst);
+      this.events.select(t.inst);
+      this.bring(this.insts.get(t.inst));
+      return true;
+    }
+    if (!nl.nets[t.net]) return false;
+    this.select(null);
+    this.selectNet(t.net);
+    this.bring(this.el.querySelector(`[data-net="${t.net}"]`));
+    return true;
   }
 
   /** Into view if it is not (at this zoom), then a short flash so the eye finds it. */

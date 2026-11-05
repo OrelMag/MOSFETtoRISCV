@@ -19,7 +19,10 @@ import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
 import { netMembers, netOfSelection } from './netsel';
 import { factsOf, type NetEnd } from '../view/netfacts';
-import { partHeader, wireHeader, wireRows } from '../view/tracemenu';
+import { ViewCtx } from '../view/context';
+import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
+import { exportImage, shareDialog } from './fileui';
+import { copyAsChip, isLevelChip } from './levelgate';
 import type { WireDoc } from './model';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
@@ -40,6 +43,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
   if (!n) {
     return [
       ...(pickEntries(ed).length ? [{ label: 'Pick a part or wire…', run: () => pickTarget(ed) }, null] : []),
+      ...elsewhereOf(ed), ...(ed.doc.parts.length ? [null] : []),
       { label: 'Paste here', key: 'Ctrl+V', run: () => t.paste(), disabled: !canPaste() },
       null,
       { label: 'Add a comment here', key: 'T', run: () => t.placeAt({ id: 'comment', name: 'Comment', place: { comment: true } }, at) },
@@ -88,6 +92,8 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
+      ...elsewhereOf(ed, p.id),
+      null,
       flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
     ];
   }
@@ -135,6 +141,35 @@ function entries(ed: Editor, at: Vec): Entry[] {
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];
 }
 
+const shareRow = (ed: Editor): NonNullable<MenuEntry> => ({ label: 'Share link…', hint: 'A copy of this chip, packed into a URL', run: () => void shareDialog(ed) });
+
+/** Take it elsewhere for a part (or, with none, the chip). On a level only the learner's own may go. */
+function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
+  const say = (m: string, e?: boolean) => ed.toast(m, e ? 'err' : 'info');
+  const level = isLevelChip(ed);
+  if (partId === undefined) {
+    return elsewhereGroup(elsewhereRows({ def: ed.compiled.def, say, verilog: true, image: (kind) => exportImage(ed, kind), ...(level ? {} : { link: shareRow(ed) }) }));
+  }
+  const p = ed.doc.parts.find((q) => q.id === partId);
+  const def = p && ed.defOf(p);
+  const sim = ed.sim.sim;
+  if (!p || !def) return [];
+  const own = 'chip' in p.ref;
+  if (level && !own) return [];
+  const node = sim?.design.root.children?.get(partId);
+  const inside = () => (sim && node ? new ViewCtx(sim, sim.design.root).child(partId) : null);
+  return elsewhereGroup(elsewhereRows({
+    def, say,
+    ...(own || level ? {} : { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(ed, def) } }),
+    verilog: true,
+    image: node && def.netlist ? (kind) => {
+      const ctx = inside();
+      return ctx ? import('../view/image').then((m) => m.exportInside(ctx, ed.view.svg, kind)) : say('It has no inside to draw', true);
+    } : 'It has no inside to draw.',
+    ...(level ? {} : { link: shareRow(ed) }),
+  }));
+}
+
 /** Trace's rows for that net; the header goes into `into`. */
 function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
   // read through the editor each time: a rebuild replaces the simulator while the menu is open
@@ -157,6 +192,7 @@ function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
     design: () => ed.sim.sim?.design ?? null,
     flat,
     transistors: ed.compiled.mode === 'switch',
+    more: isLevelChip(ed) ? [] : elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })),
   }), null];
 }
 

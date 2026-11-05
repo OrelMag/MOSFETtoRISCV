@@ -11,7 +11,10 @@
 import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
-import { isMenuKey } from '../ui/menu';
+import { isMenuKey, type MenuEntry } from '../ui/menu';
+import type { ViewFocus } from '../ui/viewlink';
+import { elsewhereGroup, elsewhereRows } from '../view/tracemenu';
+import { copyAsChip, isLevelChip } from './levelgate';
 import { ViewCtx } from '../view/context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from '../view/crumbvals';
 import { SchematicView } from '../view/schematic';
@@ -153,12 +156,30 @@ class InsideView {
         this.why.netClick(i);
       },
       up: () => this.up(),
+      elsewhere: (t) => this.elsewhere(t),
     });
     this.view.radix = ed.view.radix;
     this.view.pickable = true;
     this.view.trace = true;
     this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
+  }
+
+  /** The right-click menu's Take it elsewhere: a level's parts stay on the level. */
+  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+    const ctx = this.ctx;
+    if (!ctx || isLevelChip(this.ed)) return [];
+    const inst = t && 'inst' in t ? t.inst : null;
+    const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
+    const child = inst && ctx.canOpen(inst) ? ctx.child(inst) : inst ? null : ctx;
+    return elsewhereGroup(elsewhereRows({
+      def,
+      say: (msg, err) => this.ed.toast(msg, err ? 'err' : 'info'),
+      ...(def ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(this.ed, def) } } : {}),
+      verilog: true,
+      ...(def ? { image: child ? (kind: 'svg' | 'png') => import('../view/image').then((m) => m.exportInside(child, this.view.el, kind)) : 'It has no inside to draw.' } : {}),
+      link: { label: 'Copy a link to this view', why: 'Look inside has no address of its own. Use Share link on the Sandbox’s chip.' },
+    }));
   }
 
   /** (Re)attach to the editor's current simulator. */

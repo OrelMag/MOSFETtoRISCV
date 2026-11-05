@@ -4,6 +4,7 @@
 //   #/c/adders/3/fa0?i=a~5,b~ff&p=dp/alu~7&n=12
 //     i  input values (hex) that differ from the scene's own          n  clock cycles run since the scene loaded
 //     p  probed nets: the instance path (/ between names) ~ net index in that level
+//     f  what the link is about, at the route's level: i~<instance> or n~<net index>; it is selected and flashed on load
 //
 // A link without the suffix opens exactly as before. DOM-free apart from the clipboard helper; the stage reads and applies it.
 
@@ -23,10 +24,14 @@ export interface ViewState {
   probes: ProbeRef[];
   /** Clock cycles run since the scene loaded. */
   cycles: number;
+  /** The part or wire the link points at, at the level the route opens. */
+  focus?: ViewFocus;
 }
 
+export type ViewFocus = { inst: string } | { net: number };
+
 export const emptyView = (): ViewState => ({ inputs: {}, probes: [], cycles: 0 });
-export const isEmptyView = (v: ViewState): boolean => !Object.keys(v.inputs).length && !v.probes.length && !v.cycles;
+export const isEmptyView = (v: ViewState): boolean => !Object.keys(v.inputs).length && !v.probes.length && !v.cycles && !v.focus;
 
 /** Limits on what a link may ask for (a link is untrusted input). */
 export const MAX_INPUTS = 64;
@@ -46,6 +51,7 @@ export function encodeView(v: ViewState): string {
   if (inputs.length) parts.push(`i=${inputs.map(([k, x]) => `${enc(k)}~${x.toString(16)}`).join(',')}`);
   if (v.probes.length) parts.push(`p=${v.probes.map((p) => `${p.path.map(enc).join('/')}~${p.net}`).join(',')}`);
   if (v.cycles > 0) parts.push(`n=${Math.floor(v.cycles)}`);
+  if (v.focus) parts.push(`f=${'inst' in v.focus ? `i~${enc(v.focus.inst)}` : `n~${v.focus.net}`}`);
   return parts.length ? `?${parts.join('&')}` : '';
 }
 
@@ -83,6 +89,12 @@ export function decodeView(query: string): ViewState | null {
     } else if (key === 'n') {
       const n = Number(val);
       if (Number.isInteger(n) && n > 0) v.cycles = Math.min(n, MAX_CYCLES);
+    } else if (key === 'f') {
+      const [kind, what] = val.split('~');
+      if (kind === 'i' && what) {
+        const inst = dec(what);
+        if (inst) v.focus = { inst };
+      } else if (kind === 'n' && /^\d{1,7}$/.test(what ?? '')) v.focus = { net: Number(what) };
     }
   }
   return isEmptyView(v) ? null : v;

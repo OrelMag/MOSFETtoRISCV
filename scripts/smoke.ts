@@ -325,6 +325,14 @@ const MENU_DRIVE = `(async () => {
       key(document.activeElement, 'ArrowLeft'); await wait(60);
       if (menu().length !== 1) bad.push('the arrow did not close the group');
     }
+    const away = row('Take it elsewhere');
+    if (!away) bad.push('no Take it elsewhere on a wire');
+    else {
+      away.focus();
+      key(away, 'ArrowRight'); await wait(80);
+      if (!/^Copy a link/.test(document.activeElement?.textContent ?? '')) bad.push('a wire has no link: ' + document.activeElement?.textContent);
+      key(document.activeElement, 'ArrowLeft'); await wait(60);
+    }
     const jump = row('Jump to the sink') ?? row('Jump to the driver');
     if (jump && !jump.disabled) { jump.click(); await wait(80); }
     if (menu().length) bad.push('a jump left the menu open');
