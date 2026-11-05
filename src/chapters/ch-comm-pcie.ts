@@ -131,7 +131,7 @@ export const chPcie: Chapter = {
     {
       title: 'Credits: never send what will not fit',
       body: `
-        <p>An Ethernet switch that runs out of room drops the frame and lets TCP sort it out. A memory write cannot be dropped: nothing above PCIe would notice. So the sender is not allowed to send a TLP until the receiver has promised room for it.</p>
+        <p>An Ethernet switch that runs out of room drops the frame and leaves recovery to software further up. A memory write cannot be dropped: nothing above PCIe would notice. So the sender is not allowed to send a TLP until the receiver has promised room for it.</p>
         <p>The receiver tells the sender its buffer sizes when the link comes up (<code>InitFC</code> DLLPs), in <strong>credits</strong>: one header credit is one TLP header, one data credit is 4 dwords of payload. There are three classes, kept apart: <strong>posted</strong> (memory writes, no answer expected), <strong>non-posted</strong> (reads: an answer owed) and <strong>completions</strong>. As it frees buffers it sends the running total as an <code>UpdateFC</code> DLLP.</p>
         <p>The sender keeps two counters per kind: <code>CREDIT_LIMIT</code> (what the receiver has allowed since the start) and <code>CREDITS_CONSUMED</code> (what it has used). Both only go up, and wrap: 8 bits for headers, 12 for data. So a comparison of the two would be wrong just after one of them wraps. The standard's test is a subtraction:</p>
         <p><code>(LIMIT − (CONSUMED + want)) mod 2<sup>w</sup> ≤ 2<sup>w−1</sup></code></p>
@@ -302,7 +302,7 @@ export const chPcie: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'A USB device is out of buffer. What happens, compared with a PCIe receiver out of buffer?',
-        options: ['USB: the host sends, the device NAKs, and it costs bus time. PCIe: the sender never sends, because it has no credit', 'Both drop the packet', 'USB stalls the whole bus; PCIe drops the packet', 'Both raise an interrupt'],
+        options: ['USB tries and is refused; PCIe never sends', 'Both drop the packet', 'USB stalls the whole bus; PCIe drops the packet', 'Both raise an interrupt'],
         answer: 0,
         explain: 'USB finds out by trying: a NAK burns a token and possibly a data packet. Credits move the knowledge to the sender before the bytes go out, at the cost of counters at both ends and DLLPs to carry updates.',
         why: ['', 'Neither drops: USB refuses and retries, PCIe waits.', 'STALL means an unsupported request; a NAK delays one endpoint and the others carry on.', 'A USB device cannot interrupt anything: it speaks only when asked.'],
