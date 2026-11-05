@@ -6,6 +6,8 @@ import type { CustomRun } from '../editor/challenges';
 import { IE_RX, IE_TX, OVERSAMPLE, ST_FRAMING, ST_OVERRUN, ST_RXNE, ST_TXFULL, ST_TXIDLE } from '../comm/uart';
 import type { ComponentDef } from '../sim/types';
 import type { BitSim } from '../sim/bitsim';
+import { BROADCAST, ETHERTYPE_LOCAL, frameBody, isGroup } from '../comm/ethframe';
+import { hostMac } from '../comm/ethswitch';
 import { finish, hex, simOf } from './commcheck';
 
 /** How far the far end's clock may be from ours, fast or slow. */
@@ -195,6 +197,165 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
     check(!!p.irq, 'irq is low with the receive enable on and a byte waiting');
     drain();
     check(!p.irq, 'irq stayed high after the byte was read');
+  }
+  return finish(fails, tested, def, { cycles: p.cycles });
+}
+
+// ---- a switch from its spec -----------------------------------------------------------------------------------------------------------------
+//
+// Frames in, frames out, compared whole. The bench knows the rules (the learning table's, as a table of its own) and nothing about how the
+// design buffers or schedules, so it compares what comes out of each port, not the cycle it comes out in.
+
+const PORTS_N = 4;
+export const SW_MAX_FRAME = 128;
+/** Share of the line a permutation at full load must carry, on frames of SW_THROUGHPUT_BYTES. */
+export const SW_THROUGHPUT = 0.8, SW_THROUGHPUT_BYTES = 64;
+const MAC = (h: number) => hostMac(h);
+const key = (m: readonly number[]) => m.join(':');
+/** How long the bench lets a host stay quiet before relying on the table remembering it: well under the sheet's 1000 cycles. */
+const AGE_MARGIN = 500;
+
+interface SwFrame { port: number; bytes: number[]; err?: boolean; name: string }
+
+class SwitchPins {
+  /** The frames each output delivered, whole. */
+  out: number[][][] = [[], [], [], []];
+  private cur: number[][] = [[], [], [], []];
+  ready = [1, 1, 1, 1];
+  cycles = 0;
+  errors: string[] = [];
+  constructor(private sim: BitSim) {
+    for (let i = 0; i < PORTS_N; i++) { for (const p of ['rxData', 'rxValid', 'rxLast', 'rxErr']) sim.setInput(`${p}${i}`, [0]); sim.setInput(`txReady${i}`, [1]); }
+  }
+  /** One clock: `feed` per port is the byte to present, or none. A byte counts when its port's rxReady was 1 at the frame's first byte. */
+  step(feed: ({ data: number; last: boolean; err: boolean } | null)[]): void {
+    const s = this.sim;
+    // a byte moves on the edge where valid and ready were both high before it
+    for (let i = 0; i < PORTS_N; i++) {
+      if (s.get(`txValid${i}`, 1)[0] && this.ready[i]) {
+        this.cur[i].push(s.get(`txData${i}`, 1)[0]);
+        if (s.get(`txLast${i}`, 1)[0]) { this.out[i].push(this.cur[i]); this.cur[i] = []; }
+      }
+    }
+    for (let i = 0; i < PORTS_N; i++) {
+      const f = feed[i];
+      s.setInput(`rxValid${i}`, [f ? 1 : 0]); s.setInput(`rxData${i}`, [f?.data ?? 0]); s.setInput(`rxLast${i}`, [f?.last ? 1 : 0]); s.setInput(`rxErr${i}`, [f?.err ? 1 : 0]);
+      s.setInput(`txReady${i}`, [this.ready[i]]);
+    }
+    s.cycle();
+    this.cycles++;
+  }
+  rxReady(i: number): number { return this.sim.get(`rxReady${i}`, 1)[0]; }
+  idle(n: number): void { for (let k = 0; k < n; k++) this.step([null, null, null, null]); }
+  /** One frame presented on its port, waiting for rxReady first, and the switch given time to finish with it. */
+  send(f: SwFrame, settle = 200): void {
+    for (let k = 0; k < 2000 && !this.rxReady(f.port); k++) this.idle(1);
+    f.bytes.forEach((b, k) => {
+      const feed: ({ data: number; last: boolean; err: boolean } | null)[] = [null, null, null, null];
+      const last = k === f.bytes.length - 1;
+      feed[f.port] = { data: b, last, err: !!f.err && last };
+      this.step(feed);
+    });
+    this.idle(settle);
+  }
+  take(): number[][][] { const o = this.out; this.out = [[], [], [], []]; return o; }
+}
+
+const frameOf = (src: readonly number[], dst: readonly number[], id: number, bytes = 64): number[] => frameBody({
+  dst, src, type: ETHERTYPE_LOCAL, payload: Array.from({ length: Math.max(4, bytes - 14) }, (_, k) => (k < 2 ? (id >> (8 * k)) & 255 : (id * 3 + k) & 255)),
+});
+
+/** `keep` sees each frame the design delivered, for a capture (scripts/tshark-oracle.ts reads the reference's). */
+export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?: (f: number[]) => void): CustomRun {
+  if (mode === 'switch') return { failures: ['switch level: the switch is gates'], tested: 0 };
+  const names = [0, 1, 2, 3].flatMap((i) => [`rxData${i}`, `rxValid${i}`, `rxLast${i}`, `rxErr${i}`, `txReady${i}`, `rxReady${i}`, `txData${i}`, `txValid${i}`, `txLast${i}`]);
+  const sim = simOf(def, ['clk', ...names]);
+  if (typeof sim === 'string') return { failures: [sim], tested: 0 };
+  const p = new SwitchPins(sim), fails: string[] = [], table = new Map<string, number>(), heard = new Map<string, number>();
+  let tested = 0, id = 1;
+  const quiet = (what: string, m: string) => { if (fails.length < 12) fails.push(`${what}: ${m}`); };
+  /** Sends one frame, and holds what comes out to the rule. */
+  const expect1 = (what: string, port: number, src: readonly number[], dst: readonly number[], o: { err?: boolean; bytes?: number } = {}) => {
+    // the sheet lets a table forget after 1000 cycles, so a host about to be relied on speaks up first, as a live one would
+    const old = table.get(key(dst));
+    if (old !== undefined && !isGroup(dst) && p.cycles - (heard.get(key(dst)) ?? 0) > AGE_MARGIN) expect1(`${what}: its destination announcing itself`, old, dst, BROADCAST);
+    const bytes = frameOf(src, dst, id++, o.bytes);
+    const known = table.get(key(dst));
+    const want = o.err ? [] : isGroup(dst) || known === undefined ? [0, 1, 2, 3].filter((i) => i !== port) : known === port ? [] : [known];
+    if (!o.err) { table.set(key(src), port); heard.set(key(src), p.cycles); }
+    p.send({ port, bytes, err: o.err, name: what });
+    const out = p.take();
+    tested++;
+    const got = [0, 1, 2, 3].filter((i) => out[i].length > 0);
+    if (got.join() !== want.join()) quiet(what, `came out of port${got.length === 1 ? '' : 's'} [${got.join(', ')}], and belongs on [${want.join(', ')}]`);
+    for (const i of got) {
+      if (out[i].length > 1) quiet(what, `port ${i} sent it ${out[i].length} times`);
+      if (out[i][0].join() !== bytes.join()) quiet(what, `port ${i} changed the frame: ${out[i][0].length} bytes out for ${bytes.length} in`);
+      keep?.(out[i][0]);
+    }
+  };
+
+  p.idle(8);
+  // ---- learning: nobody is known, then everybody is
+  for (let h = 0; h < PORTS_N; h++) expect1(`host ${h}'s first frame, a broadcast`, h, MAC(h), BROADCAST);
+  for (let a = 0; a < PORTS_N; a++) for (let b = 0; b < PORTS_N; b++) if (a !== b) expect1(`host ${a} to host ${b}, both known`, a, MAC(a), MAC(b));
+  // ---- flooding to a stranger, then learning from its answer
+  expect1('a frame to a host never heard', 0, MAC(0), MAC(9));
+  expect1('that host\'s reply, from port 2', 2, MAC(9), MAC(0));
+  expect1('a frame back to it, now known', 1, MAC(1), MAC(9));
+  // ---- two hosts behind one port
+  expect1('a second host on port 3', 3, MAC(5), BROADCAST);
+  expect1('host 3 to its neighbour on the same port', 3, MAC(3), MAC(5));
+  // ---- a host that moves
+  expect1('host 1 moves to port 0', 0, MAC(1), BROADCAST);
+  expect1('a frame to host 1 after it moved', 2, MAC(2), MAC(1));
+  // ---- a damaged frame goes nowhere (whether its source teaches the table is the design's choice, so nothing relies on that host after)
+  expect1('a frame the MAC found damaged', 2, MAC(7), MAC(0), { err: true });
+  // ---- the longest frame
+  expect1(`a frame of ${SW_MAX_FRAME} bytes`, 2, MAC(2), MAC(0), { bytes: SW_MAX_FRAME });
+
+  // ---- a busy output holds its frames, and loses none
+  {
+    expect1('host 0 announcing itself before the wait', table.get(key(MAC(0)))!, MAC(0), BROADCAST);
+    const dst = table.get(key(MAC(0)))!, from = (dst + 1) % PORTS_N, bytes = [frameOf(MAC(2), MAC(0), id++), frameOf(MAC(2), MAC(0), id++)];
+    table.set(key(MAC(2)), from);
+    p.ready[dst] = 0;
+    for (const b of bytes) p.send({ port: from, bytes: b, name: 'held' }, 100);
+    const early = p.take();
+    tested++;
+    if (early[dst].length) quiet('an output with txReady low', `delivered ${early[dst].length} frames while it was not ready`);
+    p.ready[dst] = 1;
+    p.idle(600);
+    const out = p.take()[dst];
+    if (out.map((f) => f.join()).join('|') !== bytes.map((f) => f.join()).join('|')) quiet('an output that was held, then released', `delivered ${out.length} frames of the 2 sent, or in another order`);
+  }
+
+  // ---- teach again: the table may forget what it has not heard for 1000 cycles
+  table.clear();
+  p.idle(2000);
+  p.take();
+  for (let h = 0; h < PORTS_N; h++) expect1(`host ${h} announcing itself again`, h, MAC(h), BROADCAST);
+
+  // ---- throughput: every port at full load, each to the next
+  {
+    const cycles = 4000, sending = [0, 0, 0, 0];
+    const st = [0, 1, 2, 3].map((i) => ({ bytes: frameOf(MAC(i), MAC((i + 1) % PORTS_N), id++, SW_THROUGHPUT_BYTES), k: -1, gap: 0 }));
+    let delivered = 0;
+    for (let c = 0; c < cycles; c++) {
+      const feed = st.map((s, i) => {
+        if (s.k < 0) { if (s.gap > 0) { s.gap--; return null; } if (!p.rxReady(i)) return null; s.k = 0; s.bytes = frameOf(MAC(i), MAC((i + 1) % PORTS_N), id++, SW_THROUGHPUT_BYTES); sending[i]++; }
+        const data = s.bytes[s.k], last = s.k === s.bytes.length - 1;
+        if (last) { s.k = -1; s.gap = 12; } else s.k++;
+        return { data, last, err: false };
+      });
+      p.step(feed);
+    }
+    const out = p.take();
+    for (let j = 0; j < PORTS_N; j++) for (const f of out[j]) { delivered += f.length; if (key(f.slice(0, 6)) !== key(MAC(j))) quiet('at full load', `port ${j} delivered a frame for another host`); }
+    // a line carries a byte a cycle, less the 12-byte gap the bench leaves
+    const carried = delivered / (cycles * PORTS_N) / (SW_THROUGHPUT_BYTES / (SW_THROUGHPUT_BYTES + 12));
+    tested++;
+    if (carried < SW_THROUGHPUT) quiet('at full load', `the outputs carried ${(100 * carried).toFixed(0)} % of what the inputs offered; the sheet asks for ${(100 * SW_THROUGHPUT).toFixed(0)} %`);
   }
   return finish(fails, tested, def, { cycles: p.cycles });
 }

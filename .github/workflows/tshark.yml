@@ -11,6 +11,7 @@ on:
       - 'src/comm/ethframe.ts'
       - 'src/comm/mac.ts'
       - 'src/comm/ethswitch.ts'
+      - 'src/campaign/capcomm.ts'
       - 'src/comm/stack/**'
       - 'src/net/**'
       - 'src/lib/router.ts'

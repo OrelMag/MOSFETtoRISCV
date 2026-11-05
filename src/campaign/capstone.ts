@@ -21,8 +21,9 @@ import { PONG16 } from '../riscv/rv16/pong16';
 import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { UART_CORE } from '../lib/uart';
-import { pinsOf } from './buildcomm';
-import { CONSOLE_ERR, runConsole } from './capcomm';
+import { pinsOf, refOf as refOfSubs } from './buildcomm';
+import { ethSwitch } from '../lib/ethswitch';
+import { CONSOLE_ERR, runConsole, runSwitchSpec, SW_MAX_FRAME, SW_THROUGHPUT } from './capcomm';
 import { CORE_BRIEF, CORE_PINS } from './build5';
 import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
@@ -34,6 +35,11 @@ export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.f
 
 /** What the console may place: the blocks one level inside the reference, so a learner works from them and cannot place the finished UART. */
 const consoleGiven = (): string[] => (UART_CORE.netlist?.().instances ?? []).map((i) => i.def.id);
+/** The reference switch: buffers cut to the capstone's frames, so that it can be opened and run. */
+const SWITCH_REF = () => ethSwitch({ cellK: 8 });
+/** What the switch may place: the blocks one level inside its units (RAMs, counters, table rows), not the units themselves. */
+const switchUnits = (): ComponentDef[] => [...new Set((SWITCH_REF().netlist?.().instances ?? []).map((i) => i.def))].filter((d) => !!d.netlist && !/^(split|merge)/.test(d.id));
+const switchGiven = (): string[] => switchUnits().flatMap((u) => (u.netlist?.().instances ?? []).map((i) => i.def.id));
 
 export const capstoneChipId = (id: string): string => `u_ch_${id}`;
 
@@ -69,6 +75,7 @@ export function capstoneRule(id: string): LibRule | undefined {
     // tier 4: everything the core levels of acts 5–6 unlocked (the multicycle and predicting cores too), not the finished cores
     else if (id === 'cap_t4') r = tierRule(['pi_core3', 'o_mc', 'o_bpred'], ['rv16_cpu', 'rv16_mc']);
     // the serial console: the transmitter and receiver levels' parts, and the FIFO and the baud generator as given blocks
+    else if (id === 'cap_switch') { const t = tierRule(['l_switch', 'l_mac'], []); r = { ...t, lib: [...new Set([...t.lib, ...switchGiven()])].sort() }; }
     else if (id === 'cap_console') { const t = tierRule(['l_uarttx', 'l_uartrx'], ['uart_full']); r = { ...t, lib: [...new Set([...t.lib, ...consoleGiven()])].sort() }; }
     if (r) rules.set(id, r);
   }
@@ -261,6 +268,17 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
       ports: pinsOf(UART_CORE).filter((p) => !['div', 'ie', 'tickOut'].includes(p.name)),
       check: { kind: 'custom', describe: 'Bytes sent at two divisors and read by a far end off in clock both ways, the transmit FIFO filled, frames received from a sender off both ways, overrun, a framing error and its recovery, and the interrupt rules.', run: runConsole },
       answer: refOf('cap_console', () => UART_CORE, 'UART core'),
+    };
+  }
+  else if (id === 'cap_switch') {
+    c = {
+      ...base, level: 'sequential',
+      brief: `A four-port learning switch. Each port is a byte stream in (<code>rxData</code>, <code>rxValid</code>, <code>rxLast</code>, and <code>rxErr</code> with the last byte if the MAC found the frame damaged; a frame starts only while <code>rxReady</code> is 1 and then runs to its end) and out (<code>txData</code>, <code>txValid</code>, <code>txLast</code>, moving only while <code>txReady</code> is 1). Frames are up to ${SW_MAX_FRAME} bytes.`
+        + ' The rules: a frame goes to the port its destination was last heard on; to every port but its own if the destination is a group address or has never been heard; to none if the destination is on its own port. A frame teaches the table where its source is. A damaged frame goes nowhere. An address not heard for 1000 cycles may be forgotten.'
+        + ` Every byte out must equal the byte in. With every port at full load, each sending to the next, the outputs must carry at least ${(SW_THROUGHPUT * 100).toFixed(0)} % of what is offered. RAMs, counters and table rows are given; the structure is yours. The bench compares frames whole at the ports and never looks inside.`,
+      ports: pinsOf(SWITCH_REF()).filter((p) => !/^(drops|bad|frames|learned|evicted|flooded|filtered)/.test(p.name)),
+      check: { kind: 'custom', describe: 'Learning, broadcasts, every pair of hosts, flooding to a stranger, two hosts behind one port, a host that moves, a damaged frame, the longest frame, a held output, and throughput at full load.', run: runSwitchSpec },
+      answer: refOfSubs('cap_switch', SWITCH_REF, 'Four-port switch', () => switchUnits().map((d, i) => [d, `Switch unit ${i + 1}`] as [ComponentDef, string])),
     };
   }
   if (c) cache.set(id, c);
