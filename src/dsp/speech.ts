@@ -118,3 +118,101 @@ export function lpcEnvelopeDb(a: readonly number[], f: number, g = 1): number {
   for (let k = 0; k < a.length; k++) { re -= a[k] * Math.cos(2 * Math.PI * f * (k + 1)); im += a[k] * Math.sin(2 * Math.PI * f * (k + 1)); }
   return 20 * Math.log10(g / Math.hypot(re, im));
 }
+
+// ---- a vocoder (ours) ------------------------------------------------------------------------------------------------------------------------
+
+/** Levinson–Durbin on r[0 … p]: the predictor a[1 … p], the reflection coefficients k[1 … p] (|k| < 1 for any real signal) and the error left. */
+export function durbin(r: readonly number[], p: number): { a: number[]; k: number[]; err: number } {
+  let a: number[] = [], err = r[0];
+  const k: number[] = [];
+  for (let i = 0; i < p; i++) {
+    if (!(err > 0)) { k.push(0); a = [...a, 0]; continue; }
+    let acc = r[i + 1];
+    for (let j = 0; j < i; j++) acc -= a[j] * r[i - j];
+    const ki = acc / err, next = a.map((v, j) => v - ki * a[i - 1 - j]);
+    next.push(ki);
+    a = next; k.push(ki); err *= 1 - ki * ki;
+  }
+  return { a, k, err };
+}
+/** Reflection coefficients back to a predictor (the step-up recursion). */
+export function stepUp(k: readonly number[]): number[] {
+  let a: number[] = [];
+  for (let i = 0; i < k.length; i++) { const n = a.map((v, j) => v - k[i] * a[i - 1 - j]); n.push(k[i]); a = n; }
+  return a;
+}
+
+/** The frame: 180 samples (22.5 ms at 8 kHz), analysed over a 240-sample window around it. */
+export const VOC = { hop: 180, win: 240, order: 10, minLag: 20, maxLag: 146 };
+/** Bits for each reflection coefficient (as a log-area ratio), the pitch and voicing word, the gain and a sync bit: 54 a frame. */
+export const VOC_BITS = { k: [5, 5, 5, 5, 4, 4, 4, 4, 3, 2], pitch: 7, gain: 5, sync: 1 };
+export const vocBitsPerFrame = (): number => VOC_BITS.k.reduce((a, b) => a + b, 0) + VOC_BITS.pitch + VOC_BITS.gain + VOC_BITS.sync;
+export const vocBitRate = (rate = 8000): number => (vocBitsPerFrame() * rate) / VOC.hop;
+
+/** A log-area ratio, log((1 + k) / (1 − k)), rounded to `bits` over ±LAR_RANGE: the low coefficients shape the spectrum most and get the most bits. */
+const LAR_RANGE = 3.5;
+export function quantK(k: number, bits: number): number {
+  const lar = Math.log((1 + k) / (1 - k)), L = 2 ** bits, step = (2 * LAR_RANGE) / L;
+  const q = Math.max(0, Math.min(L - 1, Math.floor((lar + LAR_RANGE) / step)));
+  const back = -LAR_RANGE + (q + 0.5) * step;
+  return Math.tanh(back / 2);
+}
+
+export interface VocFrame { k: number[]; lag: number; voiced: boolean; gain: number; r: number }
+/** Pre-emphasis: 1 − 0.9375 z⁻¹ before analysis lifts the high frequencies a voice has little of, so the predictor is not spent on its low end; synthesis undoes it. */
+export const PRE = 0.9375;
+/**
+ * One frame's parameters: LPC by autocorrelation of the pre-emphasized frame; pitch from the low-passed speech, centre-clipped at 60 % of its peak so that only the pitch pulses' tops
+ * are left (Sondhi's trick, from memory), the lag with the largest normalized autocorrelation; voiced above VOICED and not too quiet; the frame's own RMS as gain.
+ */
+export function analyse(x: readonly number[], at: number, floor: number, lp: readonly number[] = x): VocFrame {
+  const { win, order, minLag, maxLag } = VOC, start = at - (win - VOC.hop) / 2, f = Array.from({ length: win }, (_, i) => x[start + i] ?? 0);
+  const { k } = durbin(autocorr(f, order), order);
+  const raw = Array.from({ length: win }, (_, i) => lp[start + i] ?? 0), top = raw.reduce((m, v) => Math.max(m, Math.abs(v)), 0), cl = 0.6 * top;
+  const q = raw.map((v) => (v > cl ? v - cl : v < -cl ? v + cl : 0));
+  let best = 0, lag = minLag;
+  for (let L = minLag; L <= maxLag; L++) {
+    let c = 0, n = 0, m = 0;
+    for (let i = L; i < win; i++) { c += q[i] * q[i - L]; n += q[i - L] * q[i - L]; m += q[i] * q[i]; }
+    const r = c / Math.sqrt(Math.max(n * m, 1e-12));
+    if (r > best) { best = r; lag = L; }
+  }
+  // octave errors: a lag twice the pitch correlates too, so prefer half the lag when it does nearly as well
+  const rAt = (L: number) => { let c = 0, n = 0, m = 0; for (let i = L; i < win; i++) { c += q[i] * q[i - L]; n += q[i - L] * q[i - L]; m += q[i] * q[i]; } return c / Math.sqrt(Math.max(n * m, 1e-12)); };
+  const half = Math.round(lag / 2);
+  if (half >= minLag && rAt(half) > 0.85 * best) lag = half;
+  const level = Math.sqrt(f.reduce((s, v) => s + v * v, 0) / win);
+  return { k, lag, voiced: best > VOICED && level > floor, gain: level, r: best };
+}
+/** The centre-clipped autocorrelation at the pitch lag must reach this for a frame to count as voiced. */
+export const VOICED = 0.35;
+/** Gain to 5 bits, 2 dB steps from 1. */
+const quantGain = (g: number) => (g < 1 ? 0 : 10 ** (Math.min(31, Math.round((20 * Math.log10(g)) / 2)) * 2 / 20));
+
+/** A low-pass at about 900 Hz for the pitch search: a 31-tap windowed sinc. */
+function lowpass(x: readonly number[]): number[] {
+  const n = 31, m = 15, fc = 900 / 8000, h = Array.from({ length: n }, (_, i) => { const t = i - m, s = t ? Math.sin(2 * Math.PI * fc * t) / (Math.PI * t) : 2 * fc; return s * (0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (n - 1))); });
+  return x.map((_, i) => { let s = 0; for (let k = 0; k < n; k++) s += h[k] * (x[i - k + m] ?? 0); return s; });
+}
+/** The whole vocoder: analysis every frame, the parameters quantized to 54 bits, and speech made again from them: pulses at the pitch, or noise, through 1/A(z). */
+export function vocode(x0: readonly number[], seed = 1): { y: number[]; frames: VocFrame[]; voiced: number } {
+  const x = x0.map((v, i) => v - PRE * (x0[i - 1] ?? 0)), lp = lowpass(x0), peak = x.reduce((m, v) => Math.max(m, Math.abs(v)), 1), floor = peak / 100, frames: VocFrame[] = [], y: number[] = [];
+  let mem = new Array<number>(VOC.order).fill(0), phase = 0, s = seed, voiced = 0, de = 0;
+  const noise = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 31 - 1; };
+  for (let at = 0; at < x.length; at += VOC.hop) {
+    const fr = analyse(x, at, floor, lp), kq = fr.k.map((k, i) => quantK(k, VOC_BITS.k[i])), a = stepUp(kq), g = quantGain(fr.gain);
+    frames.push({ ...fr, k: kq, gain: g });
+    if (fr.voiced) voiced++;
+    // the excitation at unit power, and the filter's output from it, then the whole frame scaled to the level that was sent
+    const n = Math.min(VOC.hop, x.length - at), ex: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (fr.voiced) { ex.push(phase === 0 ? Math.sqrt(fr.lag) : 0); phase = (phase + 1) % fr.lag; } else { ex.push(Math.sqrt(3) * noise()); phase = 0; }
+    }
+    const run = (scale: number, m0: number[]) => { let m = m0.slice(); const out: number[] = []; for (const e of ex) { let v = scale * e; for (let j = 0; j < VOC.order; j++) v += a[j] * m[j]; m = [v, ...m.slice(0, VOC.order - 1)]; out.push(v); } return { out, m }; };
+    const free = run(1, new Array<number>(VOC.order).fill(0)).out, rms = Math.sqrt(free.reduce((s2, v) => s2 + v * v, 0) / Math.max(1, n));
+    const { out, m } = run(rms > 0 ? g / rms : 0, mem);
+    mem = m;
+    for (const v of out) { de = v + PRE * de; y.push(Math.max(-32768, Math.min(32767, de))); }
+  }
+  return { y, frames, voiced };
+}

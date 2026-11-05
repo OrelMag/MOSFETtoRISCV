@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { adpcmDecode, adpcmEncode, lpc, packNibbles, ulawDecision, ulawDecode, ulawEncode, ulawQuantized, sineSnr, uniform } from '../src/dsp/speech';
+import { adpcmDecode, adpcmEncode, autocorr, durbin, lpc, packNibbles, quantK, stepUp, vocBitRate, vocBitsPerFrame, vocode, ulawDecision, ulawDecode, ulawEncode, ulawQuantized, sineSnr, uniform } from '../src/dsp/speech';
 import { adpcmOnRv } from '../src/dsp/adpcmrv';
 import { ulawDecoder, ulawEncoder, ulawLine } from '../src/lib/ulaw';
 import { BitSim } from '../src/sim/bitsim';
@@ -118,5 +118,28 @@ describe('ADPCM on the RV32', () => {
   it('costs about 40 instructions a sample', () => {
     const r = adpcmOnRv(wavSamples('public/dsp/voice-8k.wav').x.slice(0, 4000));
     expect(r.perSample).toBeGreaterThan(30); expect(r.perSample).toBeLessThan(50);
+  });
+});
+
+describe('the vocoder', () => {
+  const w = wavSamples('public/dsp/voice-8k.wav');
+  it('Durbin\'s predictor is Levinson\'s, and stepping its reflection coefficients up gives it back', () => {
+    const f = w.x.slice(9000, 9240), d = durbin(autocorr(f, 10), 10);
+    lpc(f, 10).forEach((v, i) => expect(d.a[i]).toBeCloseTo(v, 9));
+    stepUp(d.k).forEach((v, i) => expect(v).toBeCloseTo(d.a[i], 9));
+    for (const k of d.k) expect(Math.abs(k)).toBeLessThan(1);
+  });
+  it('sends 54 bits a 22.5 ms frame, 2 400 b/s', () => {
+    expect(vocBitsPerFrame()).toBe(54);
+    expect(vocBitRate()).toBe(2400);
+  });
+  it('finds this voice voiced most of the time, at a pitch near 130 Hz, and makes speech that never clips', () => {
+    const v = vocode(w.x), lags = v.frames.filter((f) => f.voiced).map((f) => f.lag).sort((a, b) => a - b), median = lags[lags.length >> 1];
+    expect(v.voiced / v.frames.length).toBeGreaterThan(0.4); expect(v.voiced / v.frames.length).toBeLessThan(0.8);
+    expect(8000 / median).toBeGreaterThan(110); expect(8000 / median).toBeLessThan(150);
+    expect(v.y.filter((s) => Math.abs(s) >= 32767).length).toBe(0);
+  });
+  it('quantized reflection coefficients stay inside the unit circle, so the filter is stable', () => {
+    for (const k of [-0.999, -0.9, -0.3, 0, 0.4, 0.95, 0.999]) for (const b of [2, 3, 5]) expect(Math.abs(quantK(k, b))).toBeLessThan(1);
   });
 });
