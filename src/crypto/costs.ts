@@ -1,6 +1,6 @@
 // What the cipher hardware costs, measured from the circuits (never typed): NAND counts from sim/stats.ts, logic depth by the unit-delay model,
 // the clock period of the cores from static timing, and the clocks from start to done counted on the simulator.
-// scripts/secret-costs.ts --write saves it as gatecosts.json; tests/crypto-costs.test.ts holds the file equal to a fresh measurement.
+// scripts/secret-costs.ts --write saves it as gatecosts.json; tests/crypto-scenes.test.ts holds the file equal to a fresh measurement.
 
 import { aesCore, aesRound, aesSbox, gf256Inv, keyStep, mixColumn, subBytes } from '../lib/aes';
 import { shaCore, shaK, shaRound, shaSchedule } from '../lib/sha256';

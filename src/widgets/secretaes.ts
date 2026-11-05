@@ -40,7 +40,7 @@ export function aesExplorerWidget(): Widget {
     SubBytes: 'Every byte through the S-box. This is the only step that is not linear, and it is why the cipher cannot be solved as a system of XORs.',
     ShiftRows: 'Row r turns by r bytes: pure wiring, no gates. Each column now holds bytes from four different columns.',
     MixColumns: 'Each column is multiplied by a fixed matrix in GF(2⁸): every output byte depends on all four input bytes.',
-    AddRoundKey: 'XOR with this round\'s key. Nothing before this step depended on the key.',
+    AddRoundKey: 'XOR with this round\'s key: the only step that uses it. SubBytes, ShiftRows and MixColumns use no key of their own; what they work on already depends on the earlier round keys.',
   };
   const buttons = STAGES.map((st) => {
     const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, st) as HTMLButtonElement;
@@ -52,7 +52,7 @@ export function aesExplorerWidget(): Widget {
     const before = i === 0 ? null : stateAt(round, STAGES[i - 1]);
     left.replaceChildren(h('div', { class: 'se-label' }, stage === 'Start' ? `Round ${round}: start` : `After ${stage}`), stateGrid(now, before ? now.map((b, k) => b !== before[k]) : null));
     key.replaceChildren(h('div', { class: 'se-label' }, `Round key ${round}`), stateGrid(r().roundKey, null));
-    say.textContent = noMix ? 'The last round has no MixColumns: it would add nothing an attacker could not undo, and leaving it out makes decryption line up.' : words[stage];
+    say.textContent = noMix ? 'The last round has no MixColumns. It is linear and would sit just before the key XOR, so it could be moved through that XOR and adds no strength; leaving it out makes decryption line up.' : words[stage];
     out.textContent = String(round);
     buttons.forEach((b, k) => b.setAttribute('aria-pressed', k === i ? 'true' : 'false'));
   }
@@ -172,14 +172,17 @@ export function modesWidget(): Widget {
 
 /** A digest, and how much of it one changed character moves. */
 export function shaWidget(): Widget {
-  let prev = sha256(utf8('abc'));
+  let prev = sha256(utf8('abc')), said = 0;
   const input = h('input', { type: 'text', value: 'abc', class: 'se-text', 'aria-label': 'Text to hash', maxlength: 200 }) as HTMLInputElement;
-  const digest = h('div', { class: 'se-digest' }), read = h('p', { class: 'se-read', 'aria-live': 'polite' });
+  const digest = h('div', { class: 'se-digest' }), read = h('p', { class: 'se-read' }), spoken = h('p', { class: 'sr-only', 'aria-live': 'polite' });
   function draw(first = false): void {
     const d = sha256(utf8(input.value));
     digest.replaceChildren(...[...d].map((c, i) => h('span', { class: !first && c !== prev[i] ? 'new' : '' }, c)));
     const n = bitsDiffer(fromHex(d), fromHex(prev));
     read.textContent = first ? 'The digest of "abc", the standard\'s first example. Change one character.' : `${n} of 256 bits differ from the previous digest. Chance alone would give about 128.`;
+    // Spoken once the typing pauses, not at every key.
+    clearTimeout(said);
+    if (!first) said = window.setTimeout(() => { spoken.textContent = read.textContent; }, 700);
     prev = d;
   }
   input.addEventListener('input', () => draw());
@@ -187,7 +190,8 @@ export function shaWidget(): Widget {
   return {
     el: h('div', { class: 'panel se' },
       h('h3', { class: 'm3-title' }, 'SHA-256 of what you type'),
-      input, digest, read),
+      input, digest, read, spoken),
+    destroy() { clearTimeout(said); },
   };
 }
 

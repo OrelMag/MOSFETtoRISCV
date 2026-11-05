@@ -35,6 +35,21 @@ describe('golden model', () => {
     });
     expect(t.output).toEqual(V.fips197.output);
   });
+  it('every key bit reaches every output bit by round 2 (the lessons table says within a few rounds)', () => {
+    let x = 0x12345678;
+    const rnd = () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return x >>> 0; }, bytes = () => Array.from({ length: 16 }, () => rnd() & 255);
+    const reached = new Uint8Array(128 * 128);
+    for (let n = 0; n < 16; n++) {
+      const p = bytes(), k = bytes(), base = encryptTrace(p, k).rounds[1].out;
+      for (let kb = 0; kb < 128; kb++) {
+        const k2 = [...k];
+        k2[kb >> 3] ^= 0x80 >> (kb & 7);
+        const out = encryptTrace(p, k2).rounds[1].out;
+        for (let ob = 0; ob < 128; ob++) if (((out[ob >> 3] ^ base[ob >> 3]) >> (7 - (ob & 7))) & 1) reached[kb * 128 + ob] = 1;
+      }
+    }
+    expect(reached.reduce((a, b) => a + b, 0)).toBe(128 * 128);
+  });
   it('NIST AES_Core128 (SP 800-38A F.1.1, block 1): the initial AddRoundKey and each round', () => {
     const t = encryptTrace(V.ecb.plaintext[0], V.core.key);
     expect(t.afterInitial).toEqual(V.core.initial);

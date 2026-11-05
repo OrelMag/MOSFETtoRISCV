@@ -27,9 +27,10 @@ export function dhWidget(): Widget {
   const slider = (label: string, v: bigint, on: (x: bigint) => void) => {
     const i = h('input', { type: 'range', min: 2, max: 9999999, step: 1, value: Number(v), 'aria-label': label }) as HTMLInputElement;
     i.addEventListener('input', () => on(BigInt(i.value)));
+    sliders.push(i);
     return i;
   };
-  const out = h('div', { class: 'se-dh' }), eve = h('p', { class: 'se-read', 'aria-live': 'polite' });
+  const out = h('div', { class: 'se-dh' }), eve = h('p', { class: 'se-read', 'aria-live': 'polite' }), sliders: HTMLInputElement[] = [];
   function draw(): void {
     const r = dh(a, b), row = (who: string, t: string, v: bigint) => [h('span', { class: 'se-label' }, who), h('span', null, t), h('code', null, n0(v))];
     out.replaceChildren(
@@ -41,14 +42,15 @@ export function dhWidget(): Widget {
   const go = h('button', { type: 'button', class: 'btn sm' }, 'Eve searches from A') as HTMLButtonElement;
   go.addEventListener('click', () => {
     const r = dh(a, b), e = eveSearch(r.A), t0 = performance.now();
-    go.disabled = true;
+    // The sliders wait: the result names the secret on screen.
+    go.disabled = true; sliders.forEach((x) => { x.disabled = true; });
     const frame = () => {
       const t1 = performance.now();
       let found: bigint | null = null;
       while (performance.now() - t1 < 12 && found === null) found = e.step(4000);
       if (found === null) { eve.textContent = `Eve has tried ${n0(e.tried())} exponents…`; raf = requestAnimationFrame(frame); return; }
-      go.disabled = false;
-      eve.textContent = `Eve found Alice's secret in ${n0(e.tried())} tries and ${n0(Math.round(performance.now() - t0))} ms, by multiplying by ${DH_G} until A came up. That works here because p has 31 bits. Each extra bit of the secret doubles her work, so 255 bits are out of reach of this method.`;
+      go.disabled = false; sliders.forEach((x) => { x.disabled = false; }); go.focus({ preventScroll: true });
+      eve.textContent = `Eve found Alice's secret in ${n0(e.tried())} tries and ${n0(Math.round(performance.now() - t0))} ms, by multiplying by ${DH_G} until A came up. That works here because the secret is below 10 million. Each extra bit of the secret doubles the work, so 255 bits are out of reach of this method.`;
     };
     raf = requestAnimationFrame(frame);
   });
@@ -82,9 +84,9 @@ export function mitmWidget(): Widget {
       return;
     }
     const left = dh(a, m1), right = dh(m2, b);
-    out.replaceChildren(...row('Alice gets', 'key she thinks is Bob’s', left.sharedA), ...row('Mallory holds', 'the same key', left.sharedB), ...row('Bob gets', 'key he thinks is Alice’s', right.sharedB), ...row('Mallory holds', 'that one too', right.sharedA));
+    out.replaceChildren(...row('Alice gets', 'key Alice takes for Bob’s', left.sharedA), ...row('Mallory holds', 'the same key', left.sharedB), ...row('Bob gets', 'key Bob takes for Alice’s', right.sharedB), ...row('Mallory holds', 'that one too', right.sharedA));
     verdict.replaceChildren(signed
-      ? h('span', { class: 'se-okt' }, 'Refused. Bob signs what he saw, and it contains Mallory’s number, not Alice’s. Mallory cannot sign what Alice saw without Bob’s private key.')
+      ? h('span', { class: 'se-okt' }, 'Refused. Bob signs the transcript as Bob saw it, and it contains Mallory’s number, not Alice’s. Mallory cannot sign what Alice saw without Bob’s private key.')
       : h('span', { class: 'se-badt' }, 'Both exchanges succeed. Alice and Bob each hold a good key, and Mallory reads and rewrites everything between them. Nothing about the encryption can reveal it.'));
   }
   draw();
@@ -112,28 +114,36 @@ export function curveWidget(): Widget {
   const rows = h('div', { class: 'se-dh' }), read = h('p', { class: 'se-read', 'aria-live': 'polite' }, 'Press Run: the compiled Python runs on the golden model, in this page.');
   const go = h('button', { type: 'button', class: 'btn sm' }, 'Run the four scalar multiplications') as HTMLButtonElement;
   const row = (who: string, what: string, v: string, ok: boolean) => [h('span', { class: 'se-label' }, who), h('span', null, what), h('code', { class: ok ? 'se-okc' : 'se-badc' }, short(v))];
+  let dead = false;
+  const pause = () => new Promise<void>((r) => { setTimeout(r, 20); });
   go.addEventListener('click', () => {
+    const had = document.activeElement === go;
     go.disabled = true; read.textContent = 'Running…';
-    later(() => {
-      const t0 = performance.now(), m = bootMachine(), x = (k: Uint8Array, u: Uint8Array): { out: string; cycles: number } => {
+    void (async () => {
+      await pause();
+      const t0 = performance.now(), m = bootMachine(), x = async (k: Uint8Array, u: Uint8Array, n: number): Promise<{ out: string; cycles: number }> => {
+        if (dead) throw new Error('gone');
+        read.textContent = `Running multiplication ${n} of 4…`;
+        await pause();
         const o = MEM.scratch + 256, kp = MEM.scratch, up = MEM.scratch + 64;
         m.put(kp, k); m.put(up, u);
         const c0 = m.cycles;
         m.call(CMD.x25519, [o, kp, up]);
         return { out: hexOf(m.bytes(o, 32)), cycles: m.cycles - c0 };
       };
-      const A = x(unhex(d.alicePriv), BASE), B = x(unhex(d.bobPriv), BASE), sa = x(unhex(d.alicePriv), unhex(B.out)), sb = x(unhex(d.bobPriv), unhex(A.out));
+      const A = await x(unhex(d.alicePriv), BASE, 1), B = await x(unhex(d.bobPriv), BASE, 2), sa = await x(unhex(d.alicePriv), unhex(B.out), 3), sb = await x(unhex(d.bobPriv), unhex(A.out), 4);
       rows.replaceChildren(
-        ...row('Alice sends', 'her key × base point', A.out, A.out === d.alicePub),
-        ...row('Bob sends', 'his key × base point', B.out, B.out === d.bobPub),
-        ...row('Alice computes', 'her key × B', sa.out, sa.out === d.shared),
-        ...row('Bob computes', 'his key × A', sb.out, sb.out === d.shared));
+        ...row('Alice sends', 'Alice’s key × base point', A.out, A.out === d.alicePub),
+        ...row('Bob sends', 'Bob’s key × base point', B.out, B.out === d.bobPub),
+        ...row('Alice computes', 'Alice’s key × B', sa.out, sa.out === d.shared),
+        ...row('Bob computes', 'Bob’s key × A', sb.out, sb.out === d.shared));
       const fine = A.out === d.alicePub && B.out === d.bobPub && sa.out === d.shared && sb.out === d.shared;
       read.textContent = `${fine ? 'All four equal RFC 7748’s values.' : 'A value differs from RFC 7748.'} One multiplication took ${n0(A.cycles)} cycles on our CPU, ${n0(Math.round(performance.now() - t0))} ms for all four in this browser.`;
       go.disabled = false;
-    });
+      if (had) go.focus({ preventScroll: true });
+    })().catch((e: unknown) => { if (!dead) throw e; });
   });
-  return { el: h('div', { class: 'panel se' }, h('h3', { class: 'm3-title' }, 'X25519, run by our CPU on RFC 7748’s keys'), h('div', { class: 'se-row' }, go), rows, read) };
+  return { el: h('div', { class: 'panel se' }, h('h3', { class: 'm3-title' }, 'X25519, run by our CPU on RFC 7748’s keys'), h('div', { class: 'se-row' }, go), rows, read), destroy() { dead = true; } };
 }
 
 /** RFC 8448's recorded server: what it sends, whatever the client does. */
@@ -178,18 +188,21 @@ export function handshakeWidget(): Widget {
   const pinOk = unhex(FLIGHT.pin), pinOther = pinOk.map((b) => b ^ 0x5a);
   const CASES: { label: string; pin?: Uint8Array; tamper?: Tamper; say: string }[] = [
     { label: 'As recorded', pin: pinOk, say: 'RFC 8448’s server, unchanged, with the client trusting its key.' },
-    { label: 'Flip a bit of the Certificate', pin: pinOk, tamper: { flip: { record: 1, byte: 20, mask: 1 } }, say: 'One bit changed in flight in the encrypted flight. Nothing is decrypted past it.' },
+    { label: 'Flip a bit of the encrypted flight', pin: pinOk, tamper: { flip: { record: 1, byte: 20, mask: 1 } }, say: 'One bit changed on the way. One GCM tag covers EncryptedExtensions, Certificate, CertificateVerify and Finished together, so none of them is used.' },
     { label: 'Flip a bit of ServerHello', pin: pinOk, tamper: { flip: { record: 0, byte: 20, mask: 1 } }, say: 'The server’s hello is sent in the clear. A changed bit there is not noticed at once, and changes the keys, so the next tag fails.' },
-    { label: 'A key you do not trust', pin: pinOther, say: 'The client holds the pin of some other key, as if a stranger had answered. The signature would verify: the stranger signed with his own key.' },
+    { label: 'A key you do not trust', pin: pinOther, say: 'The client holds the pin of some other key, as if a stranger had answered. The signature would verify: the stranger signed with their own key.' },
     { label: 'Trust no one', say: 'No pin. The handshake completes and the channel is encrypted, to whoever answered. This is what certificates exist to prevent.' },
   ];
+  let dead = false;
   const go = (c: (typeof CASES)[number], b: HTMLButtonElement) => {
+    const had = document.activeElement === b;
     btns.forEach((x) => { x.disabled = true; x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
     say.textContent = c.say; verdict.textContent = 'Running the client…';
-    later(() => void runHandshake(c.pin, c.tamper).then(({ result: r, ms }) => {
+    later(() => { if (dead) return; void runHandshake(c.pin, c.tamper).then(({ result: r, ms }) => {
       btns.forEach((x) => { x.disabled = false; });
+      if (had && !dead) b.focus({ preventScroll: true });
       show(r, ms, !c.tamper && !!c.pin && c.pin === pinOk);
-    }));
+    }); });
   };
   const say = h('p', { class: 'se-read' }), verdict = h('p', { class: 'se-read', 'aria-live': 'polite' }), body = h('div');
   const btns = CASES.map((c) => { const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, c.label) as HTMLButtonElement; b.addEventListener('click', () => go(c, b)); return b; });
@@ -215,6 +228,7 @@ export function handshakeWidget(): Widget {
     el: h('div', { class: 'panel se' },
       h('h3', { class: 'm3-title' }, 'A TLS 1.3 handshake, run by our CPU against RFC 8448’s server'),
       h('div', { class: 'se-row' }, ...btns), say, verdict, body),
+    destroy() { dead = true; },
   };
 }
 
@@ -234,7 +248,7 @@ export function costsWidget(): Widget {
           row('RSA-1024 signature check', `${n0(rsa)} cycles`, 'not built'),
           row('The whole handshake (RFC 8448)', `${n0(COSTS.handshake['rfc8448 (1024-bit RSA, three cipher suites offered)'].cycles)} cycles`, '')))),
       h('p', { class: 'se-read' }, `One X25519 costs as many cycles as ${n0(Math.round(x / aesCy))} AES blocks in the same software, which is ${n0(Math.round((x / aesCy) * 16 / 1024))} KB of data. So a session does the expensive public-key work once, and everything after it runs on AES.`),
-      h('p', { class: 'se-read' }, `And the client is small: ${n0(COSTS.lines.total.python)} lines of Python and ${n0(COSTS.words.total)} words of code.`)),
+      h('p', { class: 'se-read' }, `And the client is small: ${n0(COSTS.lines.total.python)} lines of Python and ${n0(COSTS.words.total)} words of code, ${n0(COSTS.words.app)} of them start-up tables and the command loop.`)),
   };
 }
 

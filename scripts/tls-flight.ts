@@ -1,5 +1,5 @@
 // What src/crypto/tls/rfc8448.json holds: what the chapter's handshake needs in the browser, taken from the RFC's own text (tests/fixtures/tls/vectors.json): the client's
-// entropy, the server's records, what the client must answer, and the pin of the trace's certificate. tests/crypto-tls-flight.test.ts checks it is current.
+// entropy, the server's records, what the client must answer, and the pin of the trace's certificate. tests/secret-tls-steps.test.ts checks it is current.
 //   vite-node scripts/tls-flight-write.ts
 
 import { createHash, X509Certificate } from 'node:crypto';

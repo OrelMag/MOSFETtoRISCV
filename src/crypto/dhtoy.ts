@@ -1,6 +1,6 @@
 // Diffie-Hellman with numbers small enough to read (DOM-free): the idea X25519 runs on a curve, and how big a search stops being one.
 
-/** 2^31 − 1, a Mersenne prime, and a generator of its whole multiplicative group (tests/secret-dh.test.ts proves that). */
+/** 2^31 − 1, a Mersenne prime, and a generator of its whole multiplicative group (tests/secret-tls-steps.test.ts proves that). */
 export const DH_P = 2147483647n, DH_G = 16807n;
 
 export function modpow(b: bigint, e: bigint, m: bigint): bigint {

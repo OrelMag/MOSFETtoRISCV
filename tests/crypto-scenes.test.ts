@@ -1,6 +1,6 @@
 // The chapter's scenes (widgets/secretscenes.ts), the vectors they carry, and the measured costs file.
 import { describe, expect, it } from 'vitest';
-import { SBOX, encryptBlock, encryptTrace } from '../src/crypto/aes';
+import { SBOX, encryptBlock, encryptTrace, round } from '../src/crypto/aes';
 import gateCosts from '../src/crypto/gatecosts.json';
 import { measureSecretCosts } from '../src/crypto/costs';
 import { H0, K, blocksOf, compressTrace, roundStep, sha256, utf8 } from '../src/crypto/sha256';
@@ -43,7 +43,7 @@ describe('scenes', () => {
     const t = encryptTrace(APPENDIX_B.input, APPENDIX_B.key), sim = scene(aesRoundScene());
     expect(bytes(sim, 'y')).toEqual(t.rounds[1].start);
     sim.setInput('last', 1); sim.settle();
-    expect(bytes(sim, 'y')).not.toEqual(t.rounds[1].start);
+    expect(bytes(sim, 'y')).toEqual(round(t.rounds[0].start, t.rounds[0].roundKey, true));
   });
   it('AES core: start, eleven pulses, done, and the ciphertext of Appendix B', () => {
     const sim = scene(aesCoreScene());
