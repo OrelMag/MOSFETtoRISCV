@@ -27,7 +27,10 @@ import { chDram } from './ch-dram';
 import { chMemCtrl } from './ch-memctrl';
 import { chFlash } from './ch-flash';
 import { chBus } from './ch-bus';
+import { chMessage } from './ch-comm-message';
 import { chExchange, chTelegraph } from './ch-comm-relays';
+import { chSignals } from './ch-comm-signals';
+import { chNoise } from './ch-comm-noise';
 import { chWire } from './ch-comm-wire';
 import { chClocks } from './ch-comm-clocks';
 import { chUart } from './ch-comm-uart';
@@ -58,7 +61,7 @@ export const chapters: Chapter[] = [
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
   chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
-  chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chModem, chCarriers, chSerial, chErrors, chCodes, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chDatacentre,
+  chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chErrors, chCodes, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chDatacentre,
   // the appendix: after the journey, lettered
   chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
 ];

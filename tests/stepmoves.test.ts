@@ -51,9 +51,10 @@ describe('moving progress', () => {
     { from: 'serial', step: 6, to: 'serial', toStep: 5, title: 'eye' },
     { from: 'errors', step: 9, to: 'codes', toStep: 0, title: 'memory' },
   ];
-  const table = STEP_MOVES as StepMove[][], shipped = table.length;
-  beforeEach(() => { table.push(rows); });
-  afterEach(() => { table.length = shipped; });
+  // the real table set aside: these rows stand alone
+  const table = STEP_MOVES as StepMove[][], real = [...table], shipped = 0;
+  beforeEach(() => { table.length = 0; table.push(rows); });
+  afterEach(() => { table.length = 0; table.push(...real); });
 
   it('a step goes to its row, a batch at a time, and a shift does not chain within a batch', () => {
     expect(moveStep('serial', 6)).toEqual({ chapter: 'serial', step: 5 });

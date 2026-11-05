@@ -10,6 +10,7 @@ import { eye, prbs, rng } from '../src/phys/line';
 import { chCarriers } from '../src/chapters/ch-comm-carriers';
 import { chModem } from '../src/chapters/ch-comm-modem';
 import { chSerial } from '../src/chapters/ch-comm-serial';
+import { chSignals } from '../src/chapters/ch-comm-signals';
 
 const close = (a: number, b: number, e = 1e-9) => expect(Math.abs(a - b), `${a} vs ${b}`).toBeLessThan(e);
 const symbols = randomQpsk;
@@ -165,13 +166,13 @@ describe('a block of tones', () => {
 });
 
 describe('the steps the chapters add', () => {
-  it('Fast serial links has the harmonics just before the eye, Many carriers the FFT first, each a widget with a challenge', () => {
-    const iS = chSerial.steps.findIndex((s) => s.title === 'A wave is a sum of sines'), iM = chCarriers.steps.findIndex((s) => s.title === 'Many tones, one FFT');
-    expect(chSerial.steps[iS + 1].title).toBe('The eye diagram');
+  it('the signals chapter opens on the harmonics, Many carriers on the FFT, each a widget with a challenge', () => {
+    const stS = chSignals.steps[0], iM = chCarriers.steps.findIndex((s) => s.title === 'Many tones, one FFT');
+    expect(stS.title).toBe('A wave is a sum of sines');
     expect(chCarriers.steps[5].title).toBe('ADSL: many carriers');
-    expect(chSerial.steps).toHaveLength(10);
+    expect(chSerial.steps).toHaveLength(9);
     expect(chModem.steps).toHaveLength(7);
-    for (const st of [chSerial.steps[iS], chCarriers.steps[iM]]) expect(!!st.widget && !!st.challenge).toBe(true);
+    for (const st of [stS, chCarriers.steps[iM]]) expect(!!st.widget && !!st.challenge).toBe(true);
   });
   it('ADSL\'s spacing, a prefix of 32 in 544 samples and one sync block in 69 give exactly 4000 symbols a second', () => {
     expect((ADSL.spacingHz * 512) / 544 * (68 / 69)).toBeCloseTo(ADSL.symbolRate, 6);

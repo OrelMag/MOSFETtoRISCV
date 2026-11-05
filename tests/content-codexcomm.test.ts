@@ -248,10 +248,10 @@ describe('the Communication codex entries', () => {
     expect(Math.round(100 * (1 - a(8) - a(8) ** 2))).toBe(34);
     expect((2 * Math.PI / Math.LN2).toFixed(2)).toBe('9.06');
     quotes('eye', '0.351', '0.456', '30 %', '9 %', '9.06', '7.03 σ');
-    says('serial', 6, 'a = 0.351'); says('serial', 6, '9.06 × B'); says('serial', 6, '7.03 σ'); says('serial', 6, 'the eye is 30 % open'); says('serial', 6, '4 × 10⁻14');
+    says('serial', 5, 'a = 0.351'); says('serial', 5, '9.06 × B'); says('serial', 5, '7.03 σ'); says('serial', 5, 'the eye is 30 % open'); says('serial', 5, '4 × 10⁻14');
     quotes('equalization', '9 %', '23 %', '58 %', '34 %', '1.84', '74 mV', '125 ps', '9.54 dB');
-    says('serial', 7, 'a = 0.456'); says('serial', 7, '23 %'); says('serial', 7, '58 %'); says('serial', 7, '1.84'); says('serial', 7, '74 mV'); says('serial', 7, '34 %'); says('serial', 7, '125 ps');
-    says('serial', 8, '9.54 dB');
+    says('serial', 6, 'a = 0.456'); says('serial', 6, '23 %'); says('serial', 6, '58 %'); says('serial', 6, '1.84'); says('serial', 6, '74 mV'); says('serial', 6, '34 %'); says('serial', 6, '125 ps');
+    says('serial', 7, '9.54 dB');
   });
 
   it('quote the codes as built and as computed', () => {

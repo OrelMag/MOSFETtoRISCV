@@ -106,8 +106,8 @@ closes at a = ½:  R = 2π · 1 GHz / ln 2 = 9.06 Gb/s</pre>The BER falls apart 
       'Treating noise and ISI as the same budget: ISI is deterministic and known, so it can be cancelled (equalization), while σ cannot.',
     ],
     chapters: [
-      { chapter: 'serial', step: 5, label: 'A wave is a sum of sines' },
-      { chapter: 'serial', step: 6, label: 'The eye diagram' },
+      { chapter: 'signals', step: 0, label: 'A wave is a sum of sines' },
+      { chapter: 'serial', step: 5, label: 'The eye diagram' },
     ],
   },
   equalization: {
@@ -126,9 +126,9 @@ DFE                         34 %    2 × 10⁻¹⁷   (noise unchanged, 40 mV)</
       'Equalizing to flat at any cost: all three trade something (swing, noise, timing), and past a point the channel needs less loss (shorter reach, fibre) rather than a stronger equalizer.',
     ],
     chapters: [
-      { chapter: 'serial', step: 7, label: 'Equalization' },
-      { chapter: 'serial', step: 6, label: 'The eye diagram' },
-      { chapter: 'serial', step: 8, label: 'PAM4' },
+      { chapter: 'serial', step: 6, label: 'Equalization' },
+      { chapter: 'serial', step: 5, label: 'The eye diagram' },
+      { chapter: 'serial', step: 7, label: 'PAM4' },
     ],
   },
   crc: {

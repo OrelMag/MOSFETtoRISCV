@@ -13,6 +13,14 @@ export interface StepMove {
 }
 
 export const STEP_MOVES: readonly (readonly StepMove[])[] = [
+  // Fourier goes to the new signals chapter
+  [
+    { from: 'serial', step: 5, to: 'signals', toStep: 0, title: 'A wave is a sum of sines' },
+    { from: 'serial', step: 6, to: 'serial', toStep: 5, title: 'The eye diagram' },
+    { from: 'serial', step: 7, to: 'serial', toStep: 6, title: 'Equalization' },
+    { from: 'serial', step: 8, to: 'serial', toStep: 7, title: 'PAM4' },
+    { from: 'serial', step: 9, to: 'serial', toStep: 8, title: 'Fibre' },
+  ],
   [
     { from: 'modem', step: 7, to: 'carriers', toStep: 0, title: 'Many tones, one FFT' },
     { from: 'modem', step: 8, to: 'carriers', toStep: 5, title: 'ADSL: many carriers' },
