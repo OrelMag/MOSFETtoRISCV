@@ -593,7 +593,7 @@ export class SchematicView {
   /** Selection / hover classes a net's elements keep across repaints. */
   private marks(idx: number): string {
     const mark = this.netMarks.get(idx);
-    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.faded.has(idx) ? ' faded' : ''}${mark ? ` ${mark}` : ''}`;
+    return `${idx === this.selectedNet ? ' net-sel' : ''}${idx === this.hovered ? ' net-hover' : ''}${this.base?.nets[idx]?.quiet ? ' quiet' : ''}${this.faded.has(idx) ? ' faded' : ''}${mark ? ` ${mark}` : ''}`;
   }
 
   /** Colour nets by role (net index → classes, e.g. `fld fld-rd`); replaces the previous marks. */

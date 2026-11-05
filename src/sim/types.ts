@@ -93,6 +93,8 @@ export interface NetDef {
   trunk?: number;
   /** Explicit corner points per sink endpoint, overriding the default route. */
   via?: { [end: string]: [number, number][] | undefined };
+  /** A control signal: drawn thin and faint while idle (0), so the data path stands out; a view hint only. */
+  quiet?: boolean;
   /** Draw the bus value label for this net (default: true for buses, false for bits). */
   showValue?: boolean;
   /**
