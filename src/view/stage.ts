@@ -30,7 +30,7 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
@@ -109,6 +109,8 @@ const LEVEL_NAME: Record<string, string> = {
 };
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
+/** A phone's stage (hugPhone): the least canvas it keeps, the badge's room above the drawing, and the tallest cover it shrinks under. */
+const HUG_MIN_PX = 260, HUG_TOP_PX = 48, HUG_COVER_PX = 90;
 const HISTORY_MAX = 100;
 /** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
 const REPLAY_MS = 1500;
@@ -518,6 +520,7 @@ export class Stage {
       this.view.resized();
       this.fitBar();
       this.fitControls();
+      this.hugPhone();
     }).observe(this.canvas);
     // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
     // caption and top follow it (boardCover)
@@ -795,6 +798,7 @@ export class Stage {
     this.inset = this.rightInset();
     this.layoutDock(false);
     this.view.fit();
+    this.hugPhone();
     this.inspPending = true;
     this.autoInspector();
     this.refresh();
@@ -2474,6 +2478,31 @@ export class Stage {
 
   /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit
    *  keeps clear. */
+  /**
+   * A phone: the stage only as tall as its circuit needs. A wide circuit fitted to a 390 px width was a strip of drawing
+   * in a 72vh box of empty canvas. Computed from the width alone (the fit's scale), so the resize it causes changes
+   * nothing; between HUG_MIN_PX of canvas and the stage's own height. Off for a widget, the boards, a drilled level,
+   * panels in the phone's flow and panels over the canvas (they need the room).
+   */
+  private hugPhone(): void {
+    const narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+    const covers = narrow ? this.covers() : [];
+    const off = !narrow || this.el.classList.contains('widget-mode') || this.boardOn || !!this.drill
+      || !!this.canvas.querySelector("[data-phone='flow']:not(.collapsed)") || covers.some((r) => r.h > HUG_COVER_PX);
+    if (off) {
+      if (this.el.style.height) this.el.style.height = '';
+      return;
+    }
+    const b = this.view.contentBox(), W = this.canvas.clientWidth;
+    if (!(b.w > 0 && b.h > 0 && W > 0)) return;
+    const drawing = (b.h * W) / Math.max(b.w, fitMinW(34, W));
+    // what the fit keeps clear (the how-to line, a challenge note) and the level badge above
+    const need = Math.max(HUG_MIN_PX, drawing + covers.reduce((t, r) => t + r.h + 2 * COVER_GAP, 0) + HUG_TOP_PX);
+    this.el.style.height = '';
+    const full = this.el.clientHeight, canvasH = this.canvas.clientHeight;
+    if (need < canvasH - 2) this.el.style.height = `${Math.round(full - canvasH + need)}px`;
+  }
+
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, chooseFolds, COVER_GAP, FOLD_BESIDE_PX, KEEP_SCALE, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, chooseFolds, COVER_GAP, fitMinW, NARROW_MIN_W, FOLD_BESIDE_PX, KEEP_SCALE, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -242,5 +242,18 @@ describe('a tall drawing beside a hint line', () => {
     const r = freeArea(1486, 886, cover, 60, 340)!;
     expect(r.w).toBeGreaterThan(1000);
     expect(r.x + r.w / 2).toBeLessThan(900);
+  });
+});
+
+describe('a small circuit on a phone', () => {
+  // A two-gate circuit padded to 34 units on a 390 px canvas was drawn a third smaller than the width allows.
+  const and = { x: 0, y: 0, w: 20, h: 6 };
+  it('is widened to NARROW_MIN_W units, not 34, on a narrow canvas', () => {
+    expect(fitMinW(34, 390)).toBe(NARROW_MIN_W);
+    expect(fitBox(and, 390, 300).w).toBeCloseTo(NARROW_MIN_W);
+  });
+  it('keeps the desktop minimum on a wide canvas', () => {
+    expect(fitMinW(34, 800)).toBe(34);
+    expect(fitBox(and, 800, 600).w).toBe(34);
   });
 });
