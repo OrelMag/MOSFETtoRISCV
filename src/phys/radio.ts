@@ -29,6 +29,11 @@ export function directivityOf(power: (thetaRad: number) => number, steps = 4000)
 export const DIPOLE_DBI = 2.15;
 /** An antenna's effective area from its gain: A = G λ² / (4π). */
 export const apertureM2 = (gainDbi: number, ghz: number): number => (dbToRatio(gainDbi) * wavelengthM(ghz) ** 2) / (4 * Math.PI);
+/** The plotted pattern's directivity: n half-wave dipoles in a line along their axis, spaced λ/2, steered (dBi). */
+export const arrayDbi = (n: number, steerDeg: number): number => 10 * Math.log10(directivityOf((t) => {
+  const el = n === 1 ? dipoleField(t) : arrayFactor(n, 0.5, steerDeg, (t * 180) / Math.PI - 90) * Math.abs(Math.sin(t));
+  return el * el;
+}));
 /** A uniform linear array of n isotropic elements at d wavelengths, steered to `steerDeg` from broadside: field against the angle. */
 export function arrayFactor(n: number, dWl: number, steerDeg: number, deg: number): number {
   const psi = 2 * Math.PI * dWl * (Math.sin((deg * Math.PI) / 180) - Math.sin((steerDeg * Math.PI) / 180));
@@ -92,9 +97,9 @@ export function sdrReceive(stations: SdrStation[], tune: number, o: { symbols: n
       re[i] += st.amp * sym * Math.cos(ph); im[i] += st.amp * sym * Math.sin(ph);
     }
   });
-  // SNR per symbol of the tuned station, after averaging os samples: the noise is white across the band
+  // SNR per symbol of a unit-amplitude station, after averaging os samples: the noise is white across the band and does not depend on what is tuned
   const tuned = stations.reduce((best, st) => (Math.abs(st.offset - tune) < Math.abs(best.offset - tune) ? st : best), stations[0]);
-  const sigma = (tuned.amp * Math.sqrt(os)) / Math.sqrt(2 * dbToRatio(o.snrDb));
+  const sigma = Math.sqrt(os) / Math.sqrt(2 * dbToRatio(o.snrDb));
   for (let i = 0; i < n; i++) { re[i] += sigma * gaussian(u); im[i] += sigma * gaussian(u); }
   const N = 2 ** Math.floor(Math.log2(n));
   const X = fft(cx(re.subarray(0, N), im.subarray(0, N)));
@@ -159,7 +164,7 @@ export class Clarke {
 export const levelCrossing = (rho: number, fdHz: number): number => Math.sqrt(2 * Math.PI) * fdHz * rho * Math.exp(-rho * rho);
 /** Mean time under that level: (e^(ρ²) − 1) / (ρ f_d √(2π)). */
 export const fadeDuration = (rho: number, fdHz: number): number => (Math.exp(rho * rho) - 1) / (rho * fdHz * Math.sqrt(2 * Math.PI));
-/** The usual rule: a channel keeps its value for about 0.423 / f_d (50 % correlation). */
+/** A common rule of thumb, the geometric mean of two definitions: 0.423 / f_d. Clarke's correlation J₀(2π f_d τ) is a half at 0.242 / f_d. */
 export const coherenceTime = (fdHz: number): number => 0.423 / fdHz;
 
 export const bpskAwgn = (snr: number): number => qFunc(Math.sqrt(2 * snr));
