@@ -43,7 +43,7 @@ export const chSecret: Chapter = {
     'say what separates a stored-program computer from the machines built to break these ciphers',
   ],
   builds: ['tcp'],
-  parts: [['The Enigma', 7], ['AES', 6], ['SHA-256', 3]],
+  parts: [['The Enigma', 3], ['How it broke', 4], ['AES', 6], ['SHA-256', 3]],
   recap: {
     keep: [
       'A key press steps the wheels, then the current runs from the key through plugs, entry wheel, four wheels, the reflector and back. Each position is one fixed permutation of 26 letters, made of 13 swaps: the same setting deciphers what it enciphered, and no letter ever lights itself.',
