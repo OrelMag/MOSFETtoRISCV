@@ -3,13 +3,13 @@
 // (tests/dsp-iir-gates.test.ts); the design half is held to scipy (tests/dsp-iir.test.ts); what the text claims is tests/dsp-iir-chapter.test.ts.
 
 import {
-  BQ, burstThenSilence, coefWord, cycleSweep, deadBand, findCycle, LIMIT_CYCLE, MASK, runBiquad, SWEEP_RUNS, SWEEP_VARIANTS, warpedAt, prewarp, type Words,
+  BQ, burstThenSilence, coefWord, cycleSweep, deadBand, findCycle, LIMIT_CYCLE, MASK, runBiquad, SWEEP_RUNS, SWEEP_VARIANTS, warpedAt, prewarp,
 } from '../dsp/iir';
 import { biquad } from '../lib/biquad';
 import { stats } from '../sim/stats';
 import { treeMul } from '../lib/muldiv';
 import {
-  biquadCost, biquadScene, cycleScene, dbfs, designRows, bilinearWidget, firstStableWidth, limitCycleWidget, maskWidget, mulNands, narrowFilter, NARROW, orderData, orderWidget,
+  biquadCost, NEAR_CIRCLE, NEAR_INPUT, biquadScene, cycleScene, dbfs, designRows, bilinearWidget, firstStableWidth, limitCycleWidget, maskWidget, mulNands, narrowFilter, NARROW, orderData, orderWidget,
   sensitivityWidget,
 } from '../widgets/dspiir';
 import { heldPair, planeWidget } from '../widgets/dspzplane';
@@ -22,7 +22,7 @@ import type { Chapter } from './types';
 const TAU = 2 * Math.PI;
 const g = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const nf = (v: number, d = 3) => v.toFixed(d);
-const sig = (v: number) => v.toExponential(0).replace('e+', ' × 10^');
+const sig = (v: number) => v.toExponential(0).replace(/e\+?(-?\d+)/, ' × 10<sup>$1</sup>');
 
 /** The pole of step 3's centre: radius 0.97 at 0.04 cycles a sample, and a narrow one. */
 export const RES = { r: 0.97, f: 0.04 };
@@ -42,9 +42,7 @@ export function sensitivity(): { direct: number; sections: number } {
   return { direct, sections };
 }
 
-/** The words of the second Try of step 7: toward zero near the circle. */
-export const NEAR_CIRCLE: Words = { b0: 1024, b1: 0, b2: 0, a1: -28873, a2: 16328 };
-export const NEAR_INPUT = { amp: 2972, burst: 2 };
+export { NEAR_CIRCLE, NEAR_INPUT };
 
 export const chIir: Chapter = {
   id: 'iir', num: numOf('iir'), title: 'IIR and stability', level: DSP_LEVEL,
@@ -101,7 +99,7 @@ export const chIir: Chapter = {
         <p>The last step of <a href="#/c/zplane/0">the z-plane</a> ended on a promise: a pole pair costs two multiplications and gives a sharpness that an FIR filter would need hundreds of taps for. Here it is worked on one specification.</p>
         <p>The mask: pass to <strong>${MASK.fp}</strong> cycles a sample with at most ${MASK.rp} dB of loss, stop from <strong>${MASK.fs}</strong> with at least ${MASK.rs} dB. Tools such as scipy quote edges as fractions of Nyquist, half the sample rate, so this is 0.2 and 0.25 there. The transition band is ${nf(MASK.fs - MASK.fp)} of the sample rate wide.</p>
         <p>A symmetric FIR filter that meets it needs ${pm.size} (the smallest length a search found, using scipy's equiripple design) or ${ka.size} by the window estimate. Folded, so that tap pairs share a multiplier, that is ${pm.mults} and ${ka.mults} multiplications a sample. The three classical IIR designs need an order of ${bu.size.match(/\d+/)![0]} (Butterworth), ${ch.size.match(/\d+/)![0]} (Chebyshev I) and ${el.size.match(/\d+/)![0]} (elliptic), built as ${bu.size.split(', ')[1]}, ${ch.size.split(', ')[1]} and ${el.size.split(', ')[1]}, at five multiplications each. The elliptic filter needs <strong>${el.mults}</strong>: ${nf(pm.mults / el.mults, 1)} times fewer than the shortest FIR filter.</p>
-        <p>Counted in gates, with a <span data-show="">16 × 16 signed multiplier</span> at ${g(mul)} NANDs for each multiplication, that is ${g(el.mults * mul)} against ${g(pm.mults * mul)}. This counts multipliers alone, one for each multiplication, which nobody would build for a filter this slow: adders, registers and sharing one multiplier over time are not here. The ratio is what matters.</p>
+        <p>Counted in gates, with a 16 × 16 signed multiplier at ${g(mul)} NANDs for each multiplication, that is ${g(el.mults * mul)} against ${g(pm.mults * mul)}. This counts multipliers alone, one for each multiplication, which nobody would build for a filter this slow: adders, registers and sharing one multiplier over time are not here. The ratio is what matters.</p>
         <p>The price is three-fold. The phase is not linear, which the z-plane chapter explained. The filter has a state that feeds back, so the word that is stored changes the answer. And the poles must stay inside the unit circle with only the coefficients a word can hold. The next steps take the last two in turn, after a way of finding the coefficients.</p>
         <div class="try">Click each IIR row. The Butterworth design touches the pass-band floor exactly; the other two spend their ripple. Compare the number of sections, then the NANDs column.</div>`;
       },
@@ -139,7 +137,7 @@ export const chIir: Chapter = {
       get body() {
         const k6 = held(RES, 6), k5 = held(RES, 5), k4 = held(RES, 4), nar = stableFrom(NARROW_POLE)!, S = 2 ** -4, r = RES.r, th = RES.f * TAU;
         return `
-        <p>A second-order section is y[n] = b₀x[n] + b₁x[n−1] + b₂x[n−2] − a₁y[n−1] − a₂y[n−2]. A pole pair at radius r and angle θ means a₁ = −2r cos θ and a₂ = r². In a register those two are not real numbers: they are multiples of a step. The coefficient format used from here on is <strong>Q2.(b−2)</strong>, a word of b bits whose step is 2<sup>−(b−2)</sup> and whose range is −2 up to 2 minus a step. So <strong>the poles a section can have are the roots for the coefficient pairs on this lattice</strong>, and nothing else. The dots below are those poles, for words of up to 6 bits.</p>
+        <p>A second-order section is y[n] = b₀x[n] + b₁x[n−1] + b₂x[n−2] − a₁y[n−1] − a₂y[n−2]. A pole pair at radius r and angle θ means a₁ = −2r cos θ and a₂ = r². In a register those two are not real numbers: they are multiples of a step. The coefficient format used from here on is <strong>Q2.(b−2)</strong>, a word of b bits whose step is 2<sup>−(b−2)</sup> and whose range is −2 up to 2 minus a step. So <strong>the poles a section can have are the roots for the coefficient pairs on this lattice</strong>, and nothing else. The dots in the picture are those poles, for words of up to 6 bits.</p>
         <p>Look at where they thin out. A step in a₂ moves the radius by about step / 2r, wherever the pole is. A step in a₁ moves the angle by about step / (2r sin θ), which grows as θ falls: the lattice is sparsest near z = 1, which is exactly where a narrow low-pass filter needs its poles. For the pole asked for below, r = ${r} at ${RES.f} cycles a sample, a 6-bit word has neighbouring poles ${nf(S / (2 * r), 3)} apart in radius and ${nf(S / (2 * r * Math.sin(th)) / TAU, 3)} cycles in angle: half of the angle asked for.</p>
         <p>The register takes the nearest values of a₁ and a₂, not the nearest pole. At 6 bits that holds radius ${nf(k6.radius, 3)} for the ${r} asked. At 5 bits, a₂ = ${nf(k6.asked.a2)} rounds to ${nf(k5.a2)}: the pole is <strong>on the circle</strong>, radius ${nf(k5.radius)}, and never stops ringing. At 4 bits, a₁ rounds to ${nf(k4.a1)} too and both roots sit at z = 1, ${k4.state === 'unstable' ? 'a double pole whose response grows' : ''}. The filter whose designer asked for a fast decay now has an oscillator.</p>
         <p>The test for a section is exact and needs no root finder: it is stable when |a₂| < 1 and |a₁| < 1 + a₂, a triangle in the coefficient plane, which a lattice of whole steps either is inside or not. The filter in this chapter's gates is built from sections like this for just that reason: rounding a section's two words can put a pole on the circle, as here, but it cannot throw one far outside.</p>
@@ -191,8 +189,8 @@ export const chIir: Chapter = {
         const c = biquadCost(), mul = c.mul;
         return `
         <p>Here is one section, built to the format of step 3. It is <strong>direct form I</strong>: the four delay registers hold the last two inputs x[n−1] and x[n−2] and the last two <em>outputs</em> y[n−1] and y[n−2]. The data are Q1.15 words and the coefficients, which are input pins here, Q2.14.</p>
-        <p>The sum of products goes through <span data-show="mb0 mb1 mb2 ma1 ma2">five signed multipliers</span>, ${g(mul)} NANDs each, the <span data-show="mul">16 × 16 tree multiplier</span> of the multiplication chapter, giving 32-bit Q3.29 products. Five of them are summed in <span data-show="sum01 sumA sum012 acc">four 35-bit ripple adders</span>: the 32 bits of a product and ${BQ.accW - BQ.prod} guard bits, the log₂ 5 of <a href="#/c/fixed/4">the guard-bit rule</a>. The feedback terms are subtracted by inverting their sum and adding a one, so the word −2, a legal a₁, works. Every bit of every product is kept.</p>
-        <p>There is one rounding, <span data-show="round">after the sum</span>: the fourteen low bits come off and the first one dropped is added back, round half up. And there is one clamp, <span data-show="clamp">the saturating clamp</span> of <a href="#/c/fixed/2">the first chapter of this level</a>, widened to look at the top six bits instead of two. A filter whose poles are on the circle can drive the sum off the end, so the clamp stays, and its <code>sat</code> output says when it has acted.</p>
+        <p>The sum of products goes through <span data-show="mb0 mb1 mb2 ma1 ma2">five signed multipliers</span>, ${g(mul)} NANDs each, the 16 × 16 tree multiplier of the multiplication chapter, giving 32-bit Q3.29 products. Five of them are summed in <span data-show="sum01 sumA sum012 acc">four 35-bit ripple adders</span>: the 32 bits of a product and ${BQ.accW - BQ.prod} guard bits, the log₂ 5 of <a href="#/c/fixed/4">the guard-bit rule</a>. The feedback terms are subtracted by inverting their sum and adding a one, so the word −2, a legal a₁, works. Every bit of every product is kept.</p>
+        <p>There is one rounding, <span data-show="round">after the sum</span>: the fourteen low bits come off and the first one dropped is added back, round half up. And there is one clamp, <span data-show="clamp">the saturating clamp</span> of <a href="#/c/fixed/1">the first chapter of this level</a>, widened to look at the top six bits instead of two. A filter whose poles are on the circle can drive the sum off the end, so the clamp stays, and its <code>sat</code> output says when it has acted.</p>
         <p>The whole block is ${g(c.nands)} NANDs, of which ${g(5 * mul)} are multipliers. Static timing gives ${c.depth} NAND delays from one clock edge to the next: the multiplier and three adders in a row. Below, an input goes into the gates and into the model, and every output of the gates is compared with the model's at every clock.</p>
         <div class="try">Choose the resonator and press <em>An impulse</em>: it rings at 0.1 cycles a sample and fades. Then the notch with <em>A tone at 0.2</em>: the output falls to nothing. In both, the status line says the gates matched.</div>`;
       },
@@ -213,17 +211,18 @@ export const chIir: Chapter = {
         return `
         <p>Now put in a single word and then nothing. A stable filter with no input should die away. Set up the gates as a resonator at a quarter of the sample rate (a₁ = 0), radius 0.95, so a₂ = ${w.a2} / 2¹⁴ = ${nf(a2, 4)}, and send one word of ${LIMIT_CYCLE.amp}. The output rings, fades and, from about clock ${cy.start} on, <strong>repeats ${cy.seq.join(', ')} for ever</strong>: ${cy.peak} least significant bits, ${nf(dbfs(cy.peak), 1)} dBFS. This is a <strong>limit cycle</strong>.</p>
         <p>It comes from rounding. With a₁ = 0 the recurrence is y[n] = round(−a₂ y[n−2]). The product of ${cy.peak} with ${nf(a2, 4)} is ${nf(cy.peak * a2, 3)}, which rounds to ${Math.round(cy.peak * a2)} again: the sign flips and the size is kept. The loop would shrink any larger number to the next, but not a number within <strong>½ / (1 − a₂) = ${nf(db, 2)}</strong> of zero, the dead band: every y from 1 to ${Math.floor(db)} maps back onto itself. It is a rounding nonlinearity inside a feedback loop, which an exact computation would not have, and the pole radius is not what keeps the output alive: the radius is 0.95, well inside.</p>
-        <p>Rounding is applied to the output <em>and</em> what goes into y[n−1], y[n−2]. Direct form I rounds once, but the rounded value is what circulates. A model beside the gates (dashed) rounds toward zero instead, so the product ${nf(cy.peak * a2, 3)} becomes ${Math.trunc(cy.peak * a2)} and the output falls to zero. The input is the same; only the rounding rule differs.</p>
+        <p>Rounding is applied to the output <em>and</em> what goes into y[n−1], y[n−2]. Direct form I rounds once, but the rounded value is what circulates. A model beside the gates (orange) rounds toward zero instead, so the product ${nf(cy.peak * a2, 3)} becomes ${Math.trunc(cy.peak * a2)} and the output falls to zero. The input is the same; only the rounding rule differs.</p>
         <p>The gates and the model agree at every clock, including the cycle. That is checked by the test, not only by the panel: the test runs the same ${LIMIT_CYCLE.cycles} clocks, and also the gate variant that rounds toward zero (${g(stats(biquad('zero')).nands)} NANDs, ${stats(biquad('zero')).nands - stats(biquad()).nands} more), which does die away.</p>
-        <div class="try">Press the button. Watch the output decay from ${ys[0]}, then look at the last forty clocks, enlarged: ${cy.seq.join(' ')}. The dashed line, the model that rounds toward zero, lies on zero.</div>`;
+        <div class="try">Press the button. Watch the output decay from ${ys[0]}, then look at the last forty clocks, enlarged: ${cy.seq.join(' ')}. The orange line, the model that rounds toward zero, lies on zero.</div>`;
       },
       scene: cycleScene,
       lit: '',
       challenge: {
-        kind: 'reach', goal: 'Run the limit cycle: send the word, then silence.',
-        check: (st) => st.value('y') !== undefined && Math.abs(st.value('y') > 32767 ? st.value('y') - 65536 : st.value('y')) <= 5 && st.sim!.time > 0,
-        hints: ['Press the button in the panel.', 'It runs 140 clocks and the output ends on the pattern.'],
-        answer: 'Press the button: the output falls from 500 to a few units, and then repeats 5, 0, −5, 0 for ever.',
+        kind: 'quiz', question: 'After the input stops, the output repeats 5, 0, −5, 0. What is the pole radius doing, and what keeps the output alive?',
+        options: ['The radius is 0.95, inside the circle; the rounding of the fed-back output keeps it alive', 'The radius has reached 1 through rounding of a₂', 'A bug: the gates disagree with the model', 'The input did not really stop'],
+        answer: 0,
+        explain: 'The coefficients are the same exact words throughout, a₂ = 14 787 / 2¹⁴ = 0.9025 = r². The cycle is the rounding nonlinearity inside the loop, and the model reproduces it exactly.',
+        why: ['', 'The words do not change while the filter runs: a₂ is what it was.', 'Gates and model agree at every clock, including the cycle.', 'The input was one word and then zeros.'],
       },
     },
     {
@@ -234,7 +233,7 @@ export const chIir: Chapter = {
         return `
         <p>Not the accumulator. It is already exact: every bit of every product is added, and the one rounding comes after the sum. A wider accumulator would hold a longer number and then round it just the same. What sustains the cycle is that the <em>rounded</em> output is what the filter feeds back.</p>
         <p>The model can try the alternatives, run for run on the same inputs. The search below has ${SWEEP_RUNS} cases: pole radius 0.90 to 0.97 and eleven angles, two sizes of input word and two lengths, then silence. How many end in a repeating non-zero output, with ${SWEEP_VARIANTS.map((v, i) => `${v.name}: <strong>${row(i)}</strong>`).join('; ')}.</p>
-        <p>So rounding toward zero removes the cycle for all of these, because it never rounds a value away from zero: the loop cannot hold a number up. Keeping extra bits in y[n−1] and y[n−2] helps a great deal and removes nothing by itself; it is also a different structure from the gates, with wider registers and a second rounding, so it is a labelled model here and not built. Floor, which is just dropping the bits and is the cheapest rounding there is, helps a little.</p>
+        <p>So rounding toward zero removes the cycle for all of these, because it never rounds a value away from zero: the loop cannot hold a number up. Keeping extra bits in y[n−1] and y[n−2] helps a great deal and still leaves ${sw.cycling[3]} of ${sw.runs} cycling; it is also a different structure from the gates, with wider registers and a second rounding, so it is a labelled model here and not built. Floor, which is just dropping the bits and is the cheapest rounding there is, helps a little.</p>
         <p>Toward zero is not a cure. Move the pole very close to the circle, radius 0.998, with a₁ = ${NEAR_CIRCLE.a1} and a₂ = ${NEAR_CIRCLE.a2} in the words, and give it one input of ${NEAR_INPUT.amp}: toward zero then sustains a cycle of period ${nearCycle.period} and ${nearCycle.peak} LSB. The decay per sample is so slow that a pole this close needs the output to fall nearly to nothing before it stops, and rounding toward zero loses too little each time to get there. Everything here is a sweep of the model on the pole positions listed: it does not prove that other pole positions are free of a cycle.</p>
         <p>Listen for it. The button plays the cycle alone, from the model, scaled up to the player's level, so what you hear is far louder than ${nf(dbfs(deadBand(LIMIT_CYCLE.words.a2) | 0), 0)} dBFS. The level is on the screen beside it.</p>
         <div class="try">With the defaults (radius 0.95, angle 0.25, half up) read the cycle. Switch to Toward zero: it dies. Switch back, raise the extra bits to 4: it dies, and at 2 it lives, at 1 LSB. Then press <em>Near the circle</em> and switch to toward zero: it sustains.</div>`;

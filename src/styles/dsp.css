@@ -59,3 +59,5 @@
 .dsp-order .n { font-variant-numeric: tabular-nums; color: var(--muted); letter-spacing: 0.06em; }
 .dsp-order.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } .dsp-order.sel i { background: var(--accent); }
 .dsp-sweep { margin-top: 6px; }
+.dsp-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.dsp-check input { flex: none; }

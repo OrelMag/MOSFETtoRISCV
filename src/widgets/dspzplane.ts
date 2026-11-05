@@ -265,7 +265,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'))), h('div', null, gain.el, imp.el)),
+      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'), word ? h('span', { class: 'fr-k' }, '◯ pole asked for · × pole held' + (bits <= LATTICE_MAX_BITS ? ' · dots: every pole a word can hold' : '')) : '')), h('div', null, gain.el, imp.el)),
       h('div', { class: 'panel' }, chips.el, o.taps ? taps : ''),
       h('div', { class: 'panel mos-ctl' }, presets.length ? h('div', { class: 'dram-ops' }, ...presets) : '', h('div', { class: 'mos-row' }, ...ctl), clip ? clip.el : '')),
   };

@@ -794,7 +794,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where a pole is allowed to sit", challenge: "quiz" },
     { title: "One polynomial or small sections", challenge: "quiz" },
     { title: "A biquad in gates", challenge: "quiz" },
-    { title: "A limit cycle on the gates", challenge: "reach" },
+    { title: "A limit cycle on the gates", challenge: "quiz" },
     { title: "What removes a limit cycle", challenge: "quiz" },
     { title: "Sections in a cascade", challenge: "quiz" },
   ] },

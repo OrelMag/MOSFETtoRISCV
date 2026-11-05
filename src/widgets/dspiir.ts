@@ -97,8 +97,8 @@ export function maskWidget(): Widget {
 
 // ---- the bilinear transform ------------------------------------------------------------------------------------------------------------------
 
-function planeSvg(poles: readonly Cx[], zeros: readonly Cx[], win: { x0: number; x1: number; y0: number; y1: number }, unit: boolean, aria: string, W = 300): SVGSVGElement {
-  const Hh = (W * (win.y1 - win.y0)) / (win.x1 - win.x0), X = (v: number) => ((v - win.x0) / (win.x1 - win.x0)) * W, Y = (v: number) => ((win.y1 - v) / (win.y1 - win.y0)) * Hh;
+function planeSvg(poles: readonly Cx[], zeros: readonly Cx[], win: { x0: number; x1: number; y0: number; y1: number }, unit: boolean, aria: string, W = 300, fixedH = 0): SVGSVGElement {
+  const Hh = fixedH || (W * (win.y1 - win.y0)) / (win.x1 - win.x0), X = (v: number) => ((v - win.x0) / (win.x1 - win.x0)) * W, Y = (v: number) => ((win.y1 - v) / (win.y1 - win.y0)) * Hh;
   const svg = s('svg', { viewBox: `0 0 ${W} ${Hh.toFixed(0)}`, class: 'dsp-plane dsp-mini', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   svg.append(s('line', { x1: 0, x2: W, y1: Y(0), y2: Y(0), class: 'axis' }), s('line', { x1: X(0), x2: X(0), y1: 0, y2: Hh, class: 'axis' }));
   if (unit) {
@@ -144,7 +144,7 @@ export function bilinearWidget(): Widget {
         h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Family'), sel),
         slider('Order', 2, 12, 1, n, (v) => String(v), (v) => { n = v; paint(); }).el,
         slider('Edge, cycles a sample', 0.02, 0.45, 0.005, f, (v) => num(v, 3), (v) => { f = v; paint(); }).el),
-        h('label', { class: 'mos-sl' }, box, h('span', null, 'Prewarp the analog edge (ω = 2 tan πf); off: ω = 2πf')))),
+        h('label', { class: 'dsp-check' }, box, h('span', null, 'Prewarp the analog edge (ω = 2 tan πf); off: ω = 2πf')))),
   };
 }
 
@@ -167,25 +167,24 @@ export const sectionsStableFrom = (to = 8): boolean => { const n = narrowFilter(
 export function sensitivityWidget(): Widget {
   let bits = 14;
   const F = narrowFilter(), plot = gainPlot('The gain of the narrow filter in direct form and in sections, each with its coefficients rounded', 640, 200), chips = mkChips(4), planes = h('div', { class: 'dsp-pair' });
-  const win = { x0: 0.7, x1: 1.1, y0: -0.4, y1: 0.4 };
+  const win = { x0: 0.8, x1: 1.04, y0: -0.3, y1: 0.3 }, PH = 200;
   const paint = () => {
     const heldA = directHeld(F.a, bits), dfOk = directStable(F.a, bits), roots = polyRoots(heldA), secOk = sosStable(F.sos, bits);
     const heldSec = F.sos.map((q) => { const [A1, A2] = sectionWords(q.a[1], q.a[2], bits), S = 2 ** (bits - 2); return { a1: A1 / S, a2: A2 / S, q }; });
     const secRoots: Cx[] = heldSec.flatMap(({ a1, a2 }) => { const d = a1 * a1 - 4 * a2; return d < 0 ? [{ re: -a1 / 2, im: Math.sqrt(-d) / 2 }, { re: -a1 / 2, im: -Math.sqrt(-d) / 2 }] : [{ re: (-a1 + Math.sqrt(d)) / 2, im: 0 }, { re: (-a1 - Math.sqrt(d)) / 2, im: 0 }]; });
     const ideal = polyRoots(F.a);
     const overlay = (svg: SVGSVGElement, held: Cx[]) => {
-      const W = 300, Hh = (W * (win.y1 - win.y0)) / (win.x1 - win.x0), X = (v: number) => ((v - win.x0) / (win.x1 - win.x0)) * W, Y = (v: number) => ((win.y1 - v) / (win.y1 - win.y0)) * Hh;
+      const W = 300, Hh = PH, X = (v: number) => ((v - win.x0) / (win.x1 - win.x0)) * W, Y = (v: number) => ((win.y1 - v) / (win.y1 - win.y0)) * Hh;
       for (const q of ideal) svg.append(s('circle', { cx: X(q.re), cy: Y(q.im), r: 6, class: 'asked' }));
       for (const q of held) if (q.re >= win.x0 && q.re <= win.x1 && Math.abs(q.im) <= win.y1) { const x = X(q.re), y = Y(q.im), m = 5; svg.append(s('path', { d: `M${x - m} ${y - m}L${x + m} ${y + m}M${x - m} ${y + m}L${x + m} ${y - m}`, class: `pole${cabs(q) >= 1 ? ' out' : ''}` })); }
     };
-    const a = planeSvg([], [], win, true, 'Direct form: the poles held, zoomed to z = 1'), b = planeSvg([], [], win, true, 'Sections: the poles held, zoomed to z = 1');
+    const a = planeSvg([], [], win, true, 'Direct form: the poles held, zoomed to z = 1', 300, PH), b = planeSvg([], [], win, true, 'Sections: the poles held, zoomed to z = 1', 300, PH);
     overlay(a, roots); overlay(b, secRoots);
     const outside = roots.filter((q) => q.re < win.x0 || q.re > win.x1 || Math.abs(q.im) > win.y1).length;
     planes.replaceChildren(
       h('figure', null, a, h('figcaption', null, h('b', { class: dfOk ? '' : 'bad' }, dfOk ? 'Direct form: stable' : 'Direct form: unstable'), ` (roots found numerically${outside ? `; ${outside} outside this view` : ''})`)),
       h('figure', null, b, h('figcaption', null, h('b', { class: secOk.every(Boolean) ? '' : 'bad' }, secOk.every(Boolean) ? 'Three sections: stable' : 'A section is unstable'), ' (each pair from its own two words)')));
     plot.clear();
-    drawMask(plot);
     line(plot, freqGrid, freqGrid.map((x) => Math.max(-100, dB(sosGain(F.sos, x)))), 'lump');
     if (dfOk) line(plot, freqGrid, freqGrid.map((x) => Math.max(-100, dB(gainAt(F.b, heldA, x)))), 'near');
     if (secOk.every(Boolean)) line(plot, freqGrid, freqGrid.map((x) => Math.max(-100, dB(heldSec.reduce((g, { a1, a2, q }) => g * gainAt(q.b, [1, a1, a2], x), 1)))), 'real');
@@ -259,12 +258,12 @@ export const biquadCost = () => (costMemo ??= costRead());
 
 const tourPanel: ScenePanel = (stage: Stage): Widget => {
   let f = 0, inp = 0, xs: number[] = [], ys: number[] = [], ym: number[] = [], same = true;
-  const N = 96, plot = plotOf({ W: 380, H: 170, x: [0, N], y: [-1.1, 1.1], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: '', aria: 'The input and the biquad\'s output, gates and model' });
+  const N = 96, plot = plotOf({ W: 380, H: 170, x: [0, N], y: [-1.1, 1.1], yTicks: [-0.2, 0, 0.2], xLabel: 'clock', yLabel: '', aria: 'The input and the biquad\'s output, gates and model' });
   const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
   const paint = () => {
     plot.clear();
     if (xs.length) {
-      const top = Math.max(1, ...ys.map((v) => Math.abs(v) / 32768)) * 1.1;
+      const top = Math.max(0.05, ...ys.map((v) => Math.abs(v) / 32768)) * 1.25;
       plot.setY(-top, top);
       line(plot, range(xs.length), xs.map((v) => v / 32768), 'ln-s lump');
       line(plot, range(ym.length), ym.map((v) => v / 32768), 'ln-s near');
@@ -305,8 +304,8 @@ const cyclePanel: ScenePanel = (stage: Stage): Widget => {
     if (ys.length) {
       line(full, range(ys.length), ys, 'ln-s real');
       const last = ys.slice(-40);
-      stems(tail, last, 'out');
-      stems(tail, toward.slice(-40), 'near');
+      stems(tail, last);
+      line(tail, range(40), toward.slice(-40), 'ln-s near');
       tail.layer.append(s('line', { x1: tail.x0, x2: tail.x1, y1: tail.Y(0), y2: tail.Y(0), class: 'ln-h th' }));
     }
     const cy = ys.length ? findCycle(ys, 16) : null;
@@ -347,21 +346,26 @@ export function cycleScene(): Scene {
 const ROUNDS: { id: string; name: string; round: 'half-up' | 'trunc' | 'zero' }[] = [{ id: 'half-up', name: 'Round half up (as built)', round: 'half-up' }, { id: 'trunc', name: 'Floor: drop the bits', round: 'trunc' }, { id: 'zero', name: 'Toward zero', round: 'zero' }];
 export const CYCLE_RATE = 8000;
 
+/** Toward zero is not a cure near the circle: radius 0.998, one input of 2972 twice. */
+export const NEAR_CIRCLE: Words = { b0: 1024, b1: 0, b2: 0, a1: -28873, a2: 16328 };
+export const NEAR_INPUT = { amp: 2972, burst: 2 };
+
 export function limitCycleWidget(): Widget {
   let r = 0.95, f = 0.25, ri = 0, extra = 0, found: { runs: number; cycling: number[] } | null = null;
+  let custom: Words | null = null, amp: number = LIMIT_CYCLE.amp, burst: number = LIMIT_CYCLE.burst;
   const full = plotOf({ W: 640, H: 150, x: [0, 800], y: [-520, 520], yTicks: [-500, 0, 500], xLabel: 'clock', yLabel: 'LSB', aria: 'The output after one input word, then silence' });
   const tail = plotOf({ W: 640, H: 120, x: [0, 48], y: [-8, 8], yTicks: [-5, 0, 5], xLabel: 'the last 48 clocks', yLabel: 'LSB', aria: 'The last forty-eight outputs, enlarged' });
   const chips = mkChips(4), sweep = h('div', { class: 'dsp-sweep' });
   let ys: number[] = [];
-  const words = (): Words => ({ b0: 1024, b1: 0, b2: 0, a1: coefWord(-2 * r * Math.cos(TAU * f)), a2: coefWord(r * r) });
+  const words = (): Words => custom ?? ({ b0: 1024, b1: 0, b2: 0, a1: coefWord(-2 * r * Math.cos(TAU * f)), a2: coefWord(r * r) });
   const paint = () => {
     const w = words();
-    ys = runBiquad(w, burstThenSilence(LIMIT_CYCLE.amp, LIMIT_CYCLE.burst, 4000), { round: ROUNDS[ri].round, extra });
+    ys = runBiquad(w, burstThenSilence(amp, burst, 4000), { round: ROUNDS[ri].round, extra });
     const cy = findCycle(ys, 32), top = Math.max(1, ...ys.slice(0, 800).map(Math.abs)) * 1.1;
     full.setY(-top, top); full.clear(); line(full, range(800), ys.slice(0, 800), 'real');
     tail.clear(); tail.layer.append(s('line', { x1: tail.x0, x2: tail.x1, y1: tail.Y(0), y2: tail.Y(0), class: 'ln-h th' }));
     const lastPk = Math.max(1, ...ys.slice(-48).map(Math.abs));
-    tail.setY(-lastPk * 1.4, lastPk * 1.4); stems(tail, ys.slice(-48), 'out');
+    tail.setY(-lastPk * 1.4, lastPk * 1.4); stems(tail, ys.slice(-48));
     chips.set(0, cy ? `period ${cy.period}, peak ${cy.peak} LSB` : 'dies away', cy ? `from clock ${cy.start} on, never stops` : 'the output ends at zero', cy ? 'bad' : '');
     chips.set(1, cy ? `${num(dbfs(cy.peak), 1)} dBFS` : '—', 'level of the cycle against full scale');
     chips.set(2, num(deadBand(w.a2), 2), `½ / (1 − a₂): the dead band, a₂ = ${w.a2} / 2^14 = ${num(w.a2 / 2 ** BQ.cf, 4)}`);
@@ -370,12 +374,15 @@ export function limitCycleWidget(): Widget {
   };
   const sel = h('select', { 'aria-label': 'Rounding' }, ...ROUNDS.map((x, i) => h('option', { value: String(i) }, x.name))) as HTMLSelectElement;
   sel.addEventListener('change', () => { ri = Number(sel.value); paint(); });
+  const rSl = slider('Pole radius', 0.8, 0.999, 0.001, r, (v) => num(v, 3), (v) => { r = v; custom = null; paint(); });
+  const fSl = slider('Pole angle, cycles', 0, 0.5, 0.005, f, (v) => num(v, 3), (v) => { f = v; custom = null; paint(); });
+  const exSl = slider('Extra bits kept in y[n−1], y[n−2]', 0, 8, 1, extra, (v) => String(v), (v) => { extra = v; paint(); });
   const showSweep = () => {
     sweep.replaceChildren(h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Variant'), h('th', { class: 'num' }, `Runs ending in a cycle, of ${found!.runs}`))),
       h('tbody', null, ...SWEEP_VARIANTS.map((v, i) => h('tr', null, h('td', null, v.name), h('td', { class: 'num' }, String(found!.cycling[i])))))));
   };
   const clip = clipButton('Listen to the cycle', () => {
-    const y = runBiquad(words(), burstThenSilence(LIMIT_CYCLE.amp, LIMIT_CYCLE.burst, CYCLE_RATE * 2), { round: ROUNDS[ri].round, extra }), cy = findCycle(y, 32);
+    const y = runBiquad(words(), burstThenSilence(amp, burst, CYCLE_RATE * 2), { round: ROUNDS[ri].round, extra }), cy = findCycle(y, 32);
     return cy ? { samples: y.slice(-CYCLE_RATE), rate: CYCLE_RATE, source: 'model' as const, note: `the cycle alone, ${cy.peak} LSB = ${num(dbfs(cy.peak), 1)} dBFS, raised to the player's level` } : null;
   }, 'No cycle to play: it dies away');
   paint();
@@ -383,11 +390,14 @@ export function limitCycleWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'Silence in, and what comes out'), full.el, tail.el, chips.el, clip.el),
       h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
-        slider('Pole radius', 0.8, 0.999, 0.001, r, (v) => num(v, 3), (v) => { r = v; paint(); }).el,
-        slider('Pole angle, cycles', 0, 0.5, 0.005, f, (v) => num(v, 3), (v) => { f = v; paint(); }).el,
+        rSl.el,
+        fSl.el,
         h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Rounding'), sel),
-        slider('Extra bits kept in y[n−1], y[n−2]', 0, 8, 1, extra, (v) => String(v), (v) => { extra = v; paint(); }).el),
-        h('div', { class: 'dram-ops' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { found ??= cycleSweep(); showSweep(); } }, `Search ${SWEEP_RUNS} pole positions`)), sweep)),
+        exSl.el),
+        h('div', { class: 'dram-ops' },
+          h('button', { type: 'button', class: 'btn sm', onclick: () => { found ??= cycleSweep(); showSweep(); } }, `Search ${SWEEP_RUNS} pole positions`),
+          h('button', { type: 'button', class: 'btn sm', onclick: () => { custom = NEAR_CIRCLE; amp = NEAR_INPUT.amp; burst = NEAR_INPUT.burst; ri = 2; extra = 0; exSl.set(0); sel.value = '2'; rSl.set(0.998); fSl.set(0.078); paint(); } }, 'Near the circle'),
+          h('button', { type: 'button', class: 'btn sm', onclick: () => { custom = null; amp = LIMIT_CYCLE.amp; burst = LIMIT_CYCLE.burst; r = 0.95; f = 0.25; ri = 0; extra = 0; sel.value = '0'; rSl.set(r); fSl.set(f); exSl.set(0); paint(); } }, "The gates' cycle")), sweep)),
   };
 }
 
@@ -428,6 +438,6 @@ export function orderWidget(): Widget {
       h('div', { class: 'panel' }, h('h3', null, `All ${D.rows.length} orders of the ${D.base.length} sections of the mask's elliptic filter`),
         h('p', { class: 'sub mos-note' }, 'Each bar is signal to rounding noise, dB, for the largest sine that overflows no section. The digits name the sections by the closeness of their poles to the circle: 1 is the nearest. The left digit comes first.'),
         list, chips.el),
-      h('div', { class: 'panel mos-ctl' }, h('label', { class: 'mos-sl' }, box, h('span', null, 'Scale each section so a full-scale sine reaches every output at gain 1')))),
+      h('div', { class: 'panel mos-ctl' }, h('label', { class: 'dsp-check' }, box, h('span', null, 'Scale each section so a full-scale sine reaches every output at gain 1')))),
   };
 }
