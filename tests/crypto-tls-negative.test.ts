@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { defaultOffer } from '../src/crypto/tls/hello';
 import { collectTls, type AppStep, type Tamper } from '../src/crypto/tls/run';
-import { MockServer, x25519Pub, type Fault } from './crypto-tls-server';
+import { MockServer, type Fault } from './crypto-tls-server';
 import { tohex } from './crypto-tls-kit';
 
 const fx = (n: string) => readFileSync(new URL(`./fixtures/tls/${n}`, import.meta.url));
@@ -115,5 +115,34 @@ describe('the man in the middle', () => {
     const r = await run({ mitm: true, pin: false });
     expect(r.result.error).toBe('none');
     expect(tohex(r.result.appData)).toBe(tohex(WORLD));
+  }, 60_000);
+});
+
+describe('the harness reports which check caught a tamper', () => {
+  const state = async (c: Case) => (await run(c)).result;
+  it('names the check, and the ones before it as passed, the ones after it as never reached', async () => {
+    const sig = await state({ fault: 'badSignature' });
+    expect(sig.checks).toEqual({ record_tags: 'pass', pin: 'pass', certificate_verify: 'fail', server_finished: 'not_reached' });
+    const fin = await state({ fault: 'badFinished' });
+    expect(fin.checks).toEqual({ record_tags: 'pass', pin: 'pass', certificate_verify: 'pass', server_finished: 'fail' });
+    const pin = await state({ mitm: true });
+    expect(pin.checks).toEqual({ record_tags: 'pass', pin: 'fail', certificate_verify: 'not_reached', server_finished: 'not_reached' });
+    const tag = await state({ tamper: { flip: { record: 2, byte: 6 } } });
+    expect(tag.checks).toEqual({ record_tags: 'fail', pin: 'not_reached', certificate_verify: 'not_reached', server_finished: 'not_reached' });
+    expect(tag.caughtBy).toBe('mac');
+    const ok = await state({});
+    expect(ok.checks).toEqual({ record_tags: 'pass', pin: 'pass', certificate_verify: 'pass', server_finished: 'pass' });
+    expect(ok.caughtBy).toBeNull();
+    expect((await state({ pin: false })).checks.pin).toBe('not_configured');
+  }, 120_000);
+  it('tamper.mitm swaps the server for the attacker: the real server never hears from the client, and the pin catches him', async () => {
+    const legit = new MockServer({ certDer: new Uint8Array(LEGIT.cert.raw), signKey: LEGIT.key, ecdhPriv: randomBytes(32), random: randomBytes(32) });
+    const attacker = new MockServer({ certDer: new Uint8Array(ATTACKER.cert.raw), signKey: ATTACKER.key, ecdhPriv: randomBytes(32), random: randomBytes(32) });
+    const { result } = await collectTls({
+      config: { random: randomBytes(32), privateKey: randomBytes(32), pin: pinOf(LEGIT.cert), offer: defaultOffer('localhost') }, transport: legit, tamper: { mitm: attacker },
+    });
+    expect(result.caughtBy).toBe('pin');
+    expect(legit.clientRecords).toHaveLength(0);
+    expect(attacker.clientRecords).toHaveLength(1);
   }, 60_000);
 });

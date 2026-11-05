@@ -25,6 +25,8 @@ describe('the checked-in costs are the measured ones', () => {
       for (const [p, c] of Object.entries(h.phases)) expect(close(c, f.phases[p], 0.02), `${k} / ${p}`).toBe(true);
       expect({ a: h.clientHelloBytes, b: h.bytesSent, c: h.bytesReceived }).toEqual({ a: f.clientHelloBytes, b: f.bytesSent, c: f.bytesReceived });
     }
+    expect(now.rv32i.words).toBe(file.rv32i.words);
+    for (const [k, v] of Object.entries(now.rv32i.primitives)) expect(close(v, file.rv32i.primitives[k]), `rv32i ${k}`).toBe(true);
     // the replay of RFC 8448 has no randomness at all: its cycle count is exact
     const rfc = 'rfc8448 (1024-bit RSA, three cipher suites offered)';
     expect(now.handshake[rfc].cycles).toBe(file.handshake[rfc].cycles);

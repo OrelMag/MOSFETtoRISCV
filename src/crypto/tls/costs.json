@@ -69,7 +69,7 @@
   "aes-128-gcm open 1024 bytes + 13 bytes AAD (key setup included)": 967594,
   "x25519": 34569985,
   "rsa-pss-sha256 verify, 1024-bit key (RFC 8448)": 10302808,
-  "rsa-pss-sha256 verify, 2048-bit key": 40747655
+  "rsa-pss-sha256 verify, 2048-bit key": 40747674
  },
  "handshake": {
   "rfc8448 (1024-bit RSA, three cipher suites offered)": {
@@ -117,16 +117,16 @@
   },
   "default offer, 2048-bit RSA (test fixture certificate)": {
    "rsaBits": 2048,
-   "cycles": 112292977,
+   "cycles": 112287808,
    "phases": {
     "client_hello": 34588879,
     "server_hello": 20555,
     "key_agreement": 35089754,
     "encrypted_extensions": 36215,
     "certificate": 909225,
-    "certificate_verify": 41071971,
-    "server_finished": 122418,
-    "client_finished": 453864
+    "certificate_verify": 41066850,
+    "server_finished": 122458,
+    "client_finished": 453776
    },
    "prims": {
     "x25519": {
@@ -139,11 +139,11 @@
     },
     "gcm_open": {
      "calls": 4,
-     "cycles": 1151019
+     "cycles": 1151103
     },
     "rsa_pss": {
      "calls": 1,
-     "cycles": 40755303
+     "cycles": 40750138
     },
     "hmac": {
      "calls": 2,
@@ -151,12 +151,23 @@
     },
     "gcm_seal": {
      "calls": 1,
-     "cycles": 64475
+     "cycles": 64387
     }
    },
    "clientHelloBytes": 135,
    "bytesSent": 193,
    "bytesReceived": 1307
+  }
+ },
+ "rv32i": {
+  "words": 4307,
+  "note": "sha, aes, x25519 and the command loop (no rsa, x509, tls). The RSA verifier does not compile for plain RV32I as written: its Montgomery inner loop keeps 14 variables in registers and the compiler allows 12 in a function that calls the multiply routine.",
+  "primitives": {
+   "sha256 of 1000 bytes": 134708,
+   "hmac-sha256 (32-byte key, 32-byte message)": 37928,
+   "aes-128 block (key expansion included)": 15900,
+   "aes-128-gcm seal 1024 bytes + 13 bytes AAD (key setup included)": 1311696,
+   "x25519": 172490702
   }
  }
 }

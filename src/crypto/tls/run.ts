@@ -28,6 +28,8 @@ export interface TlsConfig {
 export type AppStep = { send: Uint8Array } | { recv: number } | { recvUntilClose: true } | { close: true };
 
 export interface Tamper {
+  /** A man in the middle: the client talks to this transport instead of the real one (his own key, his own certificate). The result says which check caught him. */
+  mitm?: Transport;
   /** Flip bits of byte `byte` (of the whole record, header included; 5 is the first body byte) of the server's record number `record` (0 is the first record the server sent). */
   flip?: { record: number; byte: number; mask?: number };
 }
@@ -54,7 +56,12 @@ export type TlsEvent =
   | { kind: 'secret'; name: SecretName; value: Uint8Array; cycles: number }
   | { kind: 'prim'; name: PrimName; start: number; cycles: number; phase: PhaseName | 'app' }
   | { kind: 'app'; step: AppStep; data?: Uint8Array; cycles: number }
+  | { kind: 'checks'; checks: TlsChecks; cycles: number }
   | { kind: 'done'; ok: boolean; error: ErrName | `unknown(${number})`; code: number; alert: number; cycles: number };
+
+/** The checks that guard the handshake and how each ended: passed, failed (it stopped the handshake), or never reached. */
+export type CheckState = 'pass' | 'fail' | 'not_reached' | 'not_configured';
+export interface TlsChecks { record_tags: CheckState; pin: CheckState; certificate_verify: CheckState; server_finished: CheckState }
 
 export interface TlsResult {
   ok: boolean;
@@ -70,6 +77,9 @@ export interface TlsResult {
   secrets: Partial<Record<SecretName, Uint8Array>>;
   sent: Uint8Array[];
   received: Uint8Array[];
+  checks: TlsChecks;
+  /** With a tamper: the check that caught it (the error), or null when nothing did. */
+  caughtBy: ErrName | `unknown(${number})` | null;
   /** Application data received, in order. */
   appData: Uint8Array;
   /** Instructions per cycle accounting for the application phase. */
@@ -133,7 +143,8 @@ export async function* runTlsClient(o: RunOptions): AsyncGenerator<TlsEvent, Tls
   const b = fullBuild();
   const m = new TlsMachine(b.compiled.words);
   const slice = o.slice ?? 4_000_000, budget = o.budget ?? 4_000_000_000;
-  const wire = new Wire(o.transport, o.tamper);
+  const transport = o.tamper?.mitm ?? o.transport;
+  const wire = new Wire(transport, o.tamper);
   const alertAt = globalAddr(b, 'tls_alert');
   const phaseOf = (id: number): PhaseName | null => (id >= MARK.phClientHello && id <= MARK.phClientFinished ? PHASES[id - 1] : null);
 
@@ -215,7 +226,7 @@ export async function* runTlsClient(o: RunOptions): AsyncGenerator<TlsEvent, Tls
         const bytes = m.bytes(r.addr, r.len);
         sent.push(bytes);
         yield { kind: 'send', bytes, cycles: m.cycles, phase };
-        await o.transport.send(bytes);
+        await transport.send(bytes);
       } else if (r.kind === 'recv') {
         const got = await wire.take(r.len);
         m.put(r.addr, got);
@@ -266,9 +277,18 @@ export async function* runTlsClient(o: RunOptions): AsyncGenerator<TlsEvent, Tls
       }
     }
   }
+  const reached = (n: PhaseName) => starts.some((p) => p.name === n);
+  const err = errName(errCode);
+  const checks: TlsChecks = {
+    record_tags: err === 'mac' ? 'fail' : reached('encrypted_extensions') ? 'pass' : 'not_reached',
+    pin: !c.pin ? 'not_configured' : err === 'pin' ? 'fail' : reached('certificate_verify') ? 'pass' : 'not_reached',
+    certificate_verify: err === 'sig' ? 'fail' : reached('server_finished') ? 'pass' : 'not_reached',
+    server_finished: err === 'finished' ? 'fail' : reached('client_finished') ? 'pass' : 'not_reached',
+  };
+  yield { kind: 'checks', checks, cycles: m.cycles };
   const res: TlsResult = {
     ok, error: errName(errCode), code: errCode, alert: errCode === ERR.alert ? alert : 0,
-    handshake: hs, phases, prims, secrets, sent, received, appData: cat(appChunks), totalCycles: m.cycles, totalInstrs: m.retiredNow,
+    checks, caughtBy: o.tamper && !ok ? err : null, handshake: hs, phases, prims, secrets, sent, received, appData: cat(appChunks), totalCycles: m.cycles, totalInstrs: m.retiredNow,
   };
   yield { kind: 'done', ok, error: res.error, code: errCode, alert: res.alert, cycles: m.cycles };
   return res;

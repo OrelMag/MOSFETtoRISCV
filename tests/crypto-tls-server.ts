@@ -90,7 +90,7 @@ export class MockServer implements Transport {
   readonly clientRecords: Uint8Array[] = [];
   /** Whether the client's Finished verified (null: never got that far). */
   clientFinishedOk: boolean | null = null;
-  private out = new Uint8Array(0);
+  private out: Uint8Array = new Uint8Array(0);
   private started = false;
   private cHs: Protect | null = null;
   private finKey: Uint8Array | null = null;

@@ -28,7 +28,7 @@ ${Object.values(STR).map((s) => s.bytes.map((v, i) => `    store8(${s.addr + i},
 `;
 
 /** `withTls`: the handshake and the application-data commands too (tls.ts must be among the modules). */
-export function appSource(withTls: boolean): string {
+export function appSource(withTls: boolean, withRsa = true): string {
   const tls = withTls ? `    elif c == ${CMD.handshake}:
         store32(${MEM.cmd + 64}, tls_handshake())
     elif c == ${CMD.appSend}:
@@ -68,9 +68,9 @@ ${Array.from({ length: 7 }, (_, i) => `    p${i} = load32(${MEM.cmd + 4 + 4 * i}
         store32(${MEM.cmd + 64}, gcm_open(${MEM.gcmCtxScratch}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)}, ${arg(6)}))
     elif c == ${CMD.x25519}:
         x25519(${arg(0)}, ${arg(1)}, ${arg(2)})
-    elif c == ${CMD.rsaPss}:
+${withRsa ? `    elif c == ${CMD.rsaPss}:
         store32(${MEM.cmd + 64}, ${call('rsa_pss_verify', 6)})
-${withTls ? `    elif c == ${CMD.x509}:
+` : ''}${withTls ? `    elif c == ${CMD.x509}:
         store32(${MEM.cmd + 64}, x509_key(${arg(0)}, ${arg(1)}))
 ` : ''}${tls}    store32(${MEM.cmd}, 0)
     store32(${IO.idle}, 1)
