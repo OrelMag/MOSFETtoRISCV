@@ -308,6 +308,7 @@ export const SWEEP_VARIANTS: SweepRow[] = [
 ];
 /** Pole positions on the Q2.14 lattice (radius 0.90 … 0.97, angle 0.02 … 0.45 cycles, from the table below), a burst of two sizes and two lengths, then silence:
  *  how many of the runs end in a repeating non-zero output. Every run is a real run of the model. */
+export const SWEEP_RUNS = 4 * 11 * 2 * 2;
 export function cycleSweep(variants: readonly SweepRow[] = SWEEP_VARIANTS, len = 800): { runs: number; cycling: number[] } {
   const rs = [0.9, 0.93, 0.95, 0.97], ts = [0.02, 0.05, 0.08, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45], cycling = variants.map(() => 0);
   let runs = 0;
@@ -323,30 +324,44 @@ export function cycleSweep(variants: readonly SweepRow[] = SWEEP_VARIANTS, len =
 
 const GRID = 1024;
 const freqs = Array.from({ length: GRID + 1 }, (_, i) => (i / GRID) * 0.5);
+// a section's gain and the gain of 1 / A on the grid, once: the 24 orders of four sections reuse them
+const respCache = new WeakMap<Sos, { h: number[]; invA: number[] }>();
+function resp(q: Sos): { h: number[]; invA: number[] } {
+  let r = respCache.get(q);
+  if (!r) respCache.set(q, (r = { h: freqs.map((f) => gainAt(q.b, q.a, f)), invA: freqs.map((f) => 1 / gainAt(q.a, [1], f)) }));
+  return r;
+}
 /** The gain of the first i sections at each frequency, for i = 1 … n. */
 function prefixes(s: readonly Sos[]): number[][] {
   const g = new Array<number>(freqs.length).fill(1);
-  return s.map((q) => freqs.map((f, k) => (g[k] *= gainAt(q.b, q.a, f))).slice());
+  return s.map((q) => { const h = resp(q).h; return freqs.map((_, k) => (g[k] *= h[k])).slice(); });
 }
 /** Peak gain from the input to each section's output: the largest sine that can enter before that section's word overflows is its reciprocal. */
 export const prefixPeaks = (s: readonly Sos[]): number[] => prefixes(s).map((g) => Math.max(...g));
 /** Scales each section's numerator so that the peak gain to every section's output is 1 (L∞ scaling): no sine at full scale overflows any word on the way. */
 export function scaleSos(s: readonly Sos[]): Sos[] {
-  const out: Sos[] = [];
-  const g = new Array<number>(freqs.length).fill(1);
+  const out: Sos[] = [], g = new Array<number>(freqs.length).fill(1);
   for (const q of s) {
-    const h = freqs.map((f, k) => g[k] * gainAt(q.b, q.a, f)), c = 1 / Math.max(...h);
-    out.push({ a: q.a, b: q.b.map((v) => v * c) as [number, number, number] });
+    const r = resp(q), h = freqs.map((_, k) => g[k] * r.h[k]), c = 1 / Math.max(...h);
+    const scaled: Sos = { a: q.a, b: q.b.map((v) => v * c) as [number, number, number] };
+    respCache.set(scaled, { h: r.h.map((v) => v * c), invA: r.invA });
+    out.push(scaled);
     freqs.forEach((_, k) => (g[k] = h[k] * c));
   }
   return out;
 }
-/** Output noise from rounding once at each section's output, in LSB² (one rounding is 1 / 12): section i's noise passes through the sections after it. */
+/** Output noise from rounding once at each section's output, in LSB² (one rounding is 1 / 12). The rounded output is what the section feeds back, so its error
+ *  passes through the section's own 1 / A and then through every section after it. */
 export function noiseGain(s: readonly Sos[]): number {
-  let total = 1;
-  for (let i = 0; i < s.length - 1; i++) {
+  const rs = s.map(resp);
+  let total = 0;
+  for (let i = 0; i < s.length; i++) {
     let acc = 0;
-    for (let k = 0; k <= GRID; k++) { let g = 1; for (let j = i + 1; j < s.length; j++) g *= gainAt(s[j].b, s[j].a, freqs[k]); acc += (k === 0 || k === GRID ? 0.5 : 1) * g * g; }
+    for (let k = 0; k <= GRID; k++) {
+      let g = rs[i].invA[k];
+      for (let j = i + 1; j < s.length; j++) g *= rs[j].h[k];
+      acc += (k === 0 || k === GRID ? 0.5 : 1) * g * g;
+    }
     total += acc / GRID;
   }
   return total;

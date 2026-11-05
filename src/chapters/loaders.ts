@@ -78,6 +78,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "bench": () => import('./ch-comm-bench').then((m) => m.chBench),
   "fixed": () => import('./ch-dsp-fixed').then((m) => m.chFixed),
   "zplane": () => import('./ch-dsp-zplane').then((m) => m.chZplane),
+  "iir": () => import('./ch-dsp-iir').then((m) => m.chIir),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),

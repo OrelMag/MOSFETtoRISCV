@@ -41,3 +41,21 @@
 .dsp-conv .lab { text-align: left; color: var(--muted); padding-right: 8px; white-space: nowrap; }
 .dsp-conv .hit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .dsp-eq { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12.5px; overflow-x: auto; white-space: nowrap; padding: 4px 0; }
+
+/* IIR and stability */
+.dsp-plane.dsp-mini { max-width: 300px; cursor: default; touch-action: auto; }
+.dsp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 8px; }
+.dsp-pair figure { margin: 0; min-width: 0; } .dsp-pair figcaption { font-size: 12px; color: var(--muted); margin-top: 3px; text-align: center; }
+.dsp-pair figcaption b.bad { color: var(--bad); }
+@media (max-width: 560px) { .dsp-pair { grid-template-columns: minmax(0, 1fr); } }
+.dsp-mask { fill: color-mix(in srgb, var(--good) 14%, transparent); stroke: var(--good); stroke-width: 1; stroke-dasharray: 3 3; }
+.dsp-designs tbody tr { cursor: pointer; } .dsp-designs tbody tr.sel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dsp-designs .dsp-barcell { display: table-cell; min-width: 120px; }
+.dsp-designs .dsp-barcell span { display: block; font-variant-numeric: tabular-nums; font-size: 12px; margin-top: 2px; }
+.dsp-orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 3px 10px; margin: 6px 0; }
+.dsp-order { display: grid; grid-template-columns: 4.2em minmax(0, 1fr) 3.4em; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.dsp-order i { display: block; height: 8px; border-radius: 0 3px 3px 0; background: var(--muted); }
+.dsp-order b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.dsp-order .n { font-variant-numeric: tabular-nums; color: var(--muted); letter-spacing: 0.06em; }
+.dsp-order.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } .dsp-order.sel i { background: var(--accent); }
+.dsp-sweep { margin-top: 6px; }

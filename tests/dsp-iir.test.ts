@@ -5,7 +5,7 @@ import {
   analogPrototype, bilinearZpk, butterEdge, butterOrder, cabs, cheby1Order, directStable, ellipOrder, ellipdeg, ellipj, ellipk, ellipkm1, kaiserTaps, lowpass, MASK,
   maskDesign, quantDirect, sectionStable, sosGain, sosStable, sosToTf, sosfilt, stableExact, warpedAt, prewarp, zpkToSos, type Family, type Zpk,
 } from '../src/dsp/iir';
-import { filter, gainAt, polyRoots } from '../src/dsp/zplane';
+import { filter, polyRoots } from '../src/dsp/zplane';
 
 type Pair = [number, number];
 const toCx = (v: Pair[]) => v.map(([re, im]) => ({ re, im }));
