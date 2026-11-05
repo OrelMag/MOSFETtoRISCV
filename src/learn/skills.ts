@@ -43,7 +43,8 @@ const optional = (c: Chapter) => !!(c.prologue || c.appendix);
 /** The tier a journey chapter belongs to; null for the prologue and the appendices. */
 export function tierOfChapter(c: Chapter): Tier | null {
   if (optional(c)) return null;
-  return c.num === 0 ? 0 : c.num <= numOf('memory') ? 1 : c.num <= numOf('python') ? 2 : c.num <= numOf('widths') ? 3 : 4;
+  // the communication on-ramp has no number, but it comes late in the book and is not part of the floor
+  return c.id === 'message' ? 4 : c.num === 0 ? 0 : c.num <= numOf('memory') ? 1 : c.num <= numOf('python') ? 2 : c.num <= numOf('widths') ? 3 : 4;
 }
 
 /** The journey chapters of a tier, in order. */
