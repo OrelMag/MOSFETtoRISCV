@@ -118,9 +118,9 @@ class InsideView {
       this.canvas);
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (isMenuKey(e) && e.target === this.el) {
+      if (isMenuKey(e) && (e.target === this.el || this.view.el.contains(e.target as Node))) {
         e.preventDefault();
-        this.view.keyMenu();
+        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
         return;
       }
       // the wires moved here (view/layout.ts), not the chip's own undo

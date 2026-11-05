@@ -884,7 +884,7 @@ export class Tools {
     const k = e.key;
     const done = () => e.preventDefault();
 
-    if (isMenuKey(e) && !control(e.target)) {
+    if (isMenuKey(e) && (!control(e.target) || ed.view.svg.contains(e.target as Node))) {
       done();
       if (st.k === 'idle') this.keyMenu();
       return;

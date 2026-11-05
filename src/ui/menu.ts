@@ -74,7 +74,8 @@ export function typeAhead(labels: readonly string[], at: number, ch: string): nu
   const c = ch.toLowerCase();
   for (let n = 1; n <= labels.length; n++) {
     const i = (at + n + labels.length) % labels.length;
-    if (labels[i].toLowerCase().startsWith(c)) return i;
+    // a tick is not the row's first letter
+    if (labels[i].replace(/^[✓\s]+/, '').toLowerCase().startsWith(c)) return i;
   }
   return -1;
 }
@@ -114,6 +115,24 @@ const onContext = (e: Event) => {
   const t = e.target as Node;
   if (cur.el.contains(t) || cur.fly?.el.contains(t)) e.preventDefault();
 };
+/** The menu key closed the menu: the event still coming for that key must not open one again where the focus went back to. */
+function swallowNextContext(): void {
+  const eat = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    off();
+  };
+  const off = () => {
+    document.removeEventListener('contextmenu', eat, true);
+    clearTimeout(t);
+  };
+  const t = setTimeout(off, 1000);
+  document.addEventListener('contextmenu', eat, true);
+}
+const onRoute = () => {
+  closeMenu();
+  closePicker();
+};
 
 function closeFly(): void {
   if (!cur?.fly) return;
@@ -132,6 +151,7 @@ export function closeMenu(owner?: object): void {
   document.removeEventListener('pointerdown', onOutside, true);
   document.removeEventListener('keydown', onKey, true);
   document.removeEventListener('contextmenu', onContext, true);
+  if (!picker) removeEventListener('hashchange', onRoute);
 }
 
 export const menuOpenFor = (owner: object): boolean => cur?.owner === owner;
@@ -142,12 +162,19 @@ function closeBack(): void {
   if (back?.isConnected) back.focus({ preventScroll: true });
 }
 
+/** Keys the menu answers beyond a printable character. The rest (F5, F12, a volume key) stay the browser's. */
+const MENU_KEYS = new Set(['Escape', 'Tab', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
 function onKey(e: KeyboardEvent): void {
-  if (!cur || e.ctrlKey || e.metaKey || e.altKey || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
-  // While it is open the menu takes every key: a letter must not reach a page's single-key shortcuts behind it.
+  if (!cur || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+  // A command (Ctrl+Z) changes what the menu was opened on: it goes through, and the menu goes.
+  if (e.ctrlKey || e.metaKey || e.altKey) return closeMenu();
+  const k = e.key;
+  if (!isMenuKey(e) && k.length !== 1 && !MENU_KEYS.has(k)) return;
+  // A letter must not reach a page's single-key shortcuts behind the menu.
   e.preventDefault();
   e.stopPropagation();
-  const k = e.key;
+  if (isMenuKey(e)) swallowNextContext();
   if (isMenuKey(e) || k === 'Tab') return closeBack();
   const active = document.activeElement as HTMLElement | null;
   const panel = cur.fly?.el.contains(active) ? cur.fly.el : cur.el;
@@ -304,21 +331,24 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('contextmenu', onContext, true);
+  addEventListener('hashchange', onRoute);
   (itemsOf(m)[0] ?? m).focus({ preventScroll: true });
 }
 
 // ---- the picker: a keyboard's way to a part or a wire, which have no focus of their own --------------------------
 
-let picker: { el: HTMLElement; off(): void } | null = null;
+let picker: { el: HTMLElement; off(): void; owner?: object } | null = null;
 
-export function closePicker(): void {
+/** Close the picker (`owner`: only if it opened it). */
+export function closePicker(owner?: object): void {
+  if (owner && picker?.owner !== owner) return;
   picker?.off();
   picker?.el.remove();
   picker = null;
 }
 
 /** A filter box over a list; a pick closes it and runs the row. Esc gives the focus back to `back`. */
-export function showPicker(title: string, all: readonly PickEntry[], back?: HTMLElement | SVGElement | null): void {
+export function showPicker(title: string, all: readonly PickEntry[], back?: HTMLElement | SVGElement | null, owner?: object): void {
   closeMenu();
   closePicker();
   const input = h('input', { type: 'text', 'aria-label': `${title}: filter`, placeholder: 'Type to filter' }) as HTMLInputElement;
@@ -360,7 +390,11 @@ export function showPicker(title: string, all: readonly PickEntry[], back?: HTML
   });
   const outside = (e: PointerEvent) => { if (!el.contains(e.target as Node)) closePicker(); };
   document.addEventListener('pointerdown', outside, true);
-  picker = { el, off: () => document.removeEventListener('pointerdown', outside, true) };
+  addEventListener('hashchange', onRoute);
+  picker = { el, ...(owner ? { owner } : {}), off: () => {
+    document.removeEventListener('pointerdown', outside, true);
+    if (!cur) removeEventListener('hashchange', onRoute);
+  } };
   draw();
   document.body.append(el);
   input.focus();

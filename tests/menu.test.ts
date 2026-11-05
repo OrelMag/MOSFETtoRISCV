@@ -41,6 +41,9 @@ describe('the menu shell', () => {
     expect(typeAhead(rows, -1, 'f')).toBe(0);
     expect(typeAhead(rows, 0, 'z')).toBe(-1);
     expect(typeAhead([], 0, 'a')).toBe(-1);
+    // a tick or its space is not the first letter
+    expect(typeAhead(['Fit', '✓ Tick', '  Other'], 0, 't')).toBe(1);
+    expect(typeAhead(['Fit', '✓ Tick', '  Other'], 0, 'o')).toBe(2);
   });
 
   it('filters the picker by name or kind, names that start with it first', () => {

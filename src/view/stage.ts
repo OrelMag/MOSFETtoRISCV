@@ -446,10 +446,10 @@ export class Stage {
     this.el.addEventListener('keydown', (e) => {
       if (this.pending) return;
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
-      // on the circuit itself: a button or a panel with the focus keeps the browser's own menu
-      if (isMenuKey(e) && e.target === this.el && !this.boardOn) {
+      // on the circuit, or a control of its drawing: a button or a panel with the focus keeps the browser's own menu
+      if (isMenuKey(e) && !this.boardOn && (e.target === this.el || this.view.el.contains(e.target as Node))) {
         e.preventDefault();
-        this.view.keyMenu();
+        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
         return;
       }
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level

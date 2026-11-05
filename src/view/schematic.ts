@@ -19,7 +19,7 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
-import { anchorPoint, closeMenu, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
+import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu, showPicker } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
 
@@ -1300,9 +1300,11 @@ export class SchematicView {
   }
 
   /** The menu key: for the selected wire or part, at its place; with nothing selected, the level's. */
-  keyMenu(): void {
-    const el = this.selectedNet >= 0 ? this.el.querySelector(`[data-net="${this.selectedNet}"]`)
-      : this.selected ? this.el.querySelector(`[data-inst="${CSS.escape(this.selected)}"]`) : null;
+  keyMenu(from?: Element | null): void {
+    if (!this.ctx) return;
+    // a control of the drawing with the focus (a pin, a part) goes first
+    const el = from?.closest('[data-inst], [data-net]') ?? (this.selectedNet >= 0 ? this.el.querySelector(`[data-net="${this.selectedNet}"]`)
+      : this.selected ? this.el.querySelector(`[data-inst="${CSS.escape(this.selected)}"]`) : null);
     const { x, y } = anchorPoint(el?.getBoundingClientRect() ?? null, this.host.getBoundingClientRect());
     this.openMenu(this.menuItems(el), x, y);
   }
@@ -1314,14 +1316,16 @@ export class SchematicView {
     showPicker('Pick a part or wire', [
       ...nl.instances.map((i) => ({ label: i.name, note: i.def.name, run: () => {
         this.select(i.name);
+        this.events.select(i.name);
         this.keyMenu();
       } })),
       ...nl.nets.map((n, i) => ({ label: n.name ?? n.ends[0] ?? `net ${i}`, note: 'wire', run: () => {
         this.select(null);
+        this.events.select(null);
         this.selectNet(i);
         this.keyMenu();
       } })),
-    ], back);
+    ], back, this);
   }
 
   /** The level's layout actions as a menu at a point on the screen (the stage's Layout button, `toggle`). */
@@ -1343,6 +1347,7 @@ export class SchematicView {
 
   closeMenu(): void {
     closeMenu(this);
+    closePicker(this);
   }
 
   // ---- pan & zoom ---------------------------------------------------------------------

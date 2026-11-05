@@ -305,6 +305,31 @@ const MENU_DRIVE = `(async () => {
   if (menu().length) bad.push('Esc did not close the menu');
   if (stage && document.activeElement !== stage) bad.push('Esc did not give the focus back');
   if (location.hash !== route) bad.push('Esc left the route: ' + location.hash);
+  // Shift leaves it to the browser; F5 stays the browser's; a command or a press outside closes it
+  const svg = document.querySelector('svg.schematic, svg.ed-svg');
+  const box = svg.getBoundingClientRect();
+  const right = (extra = {}) => svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, buttons: 2, clientX: box.left + 8, clientY: box.top + 8, ...extra }));
+  if (right({ shiftKey: true }) === false) bad.push('Shift + right-click did not leave it to the browser');
+  if (menu().length) bad.push('Shift + right-click opened the menu');
+  if (right() !== false) bad.push('a right-click left the browser its menu');
+  await wait(60);
+  if (menu().length !== 1) return [...bad, 'a right-click opened no menu'];
+  const f5 = new KeyboardEvent('keydown', { key: 'F5', bubbles: true, cancelable: true });
+  document.activeElement.dispatchEvent(f5);
+  if (f5.defaultPrevented) bad.push('the menu took F5');
+  key(document.activeElement, 'y', { ctrlKey: true }); await wait(60);
+  if (menu().length) bad.push('a command left the menu open');
+  right(); await wait(60);
+  document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); await wait(60);
+  if (menu().length) bad.push('a press outside left the menu open');
+  // the Layout button toggles
+  const lb = stage && [...stage.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Layout' && b.offsetParent);
+  if (lb) {
+    lb.click(); await wait(60);
+    if (menu().length !== 1) bad.push('the Layout button opened no menu');
+    lb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); lb.click(); await wait(60);
+    if (menu().length) bad.push('the Layout button did not close its menu');
+  }
   return bad;
 })()`;
 
