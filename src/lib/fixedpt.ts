@@ -22,7 +22,7 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 
 /** Wiring: the limit a word clamps to. From the sign s and its inverse: s on top, ¬s below, so 100…0 or 011…1. */
-function limitWord(w: number): ComponentDef {
+export function limitWord(w: number): ComponentDef {
   return memo(`fxlimit${w}`, () => define({
     id: `fxlimit${w}`, name: `Wiring: the ${w}-bit limit`, category: 'plumbing',
     summary: 'The largest word of this sign: the sign on top, its inverse in every bit below. Only wires.',
