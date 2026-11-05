@@ -47,7 +47,7 @@ parallel 50 Ω: no echo; the high level falls to 1.50 V and the line draws 45 mW
     chapters: [
       { chapter: 'wire', step: 4, label: 'Reflections' },
       { chapter: 'wire', step: 5, label: 'Termination' },
-      { chapter: 'serial', step: 6, label: 'The eye diagram' },
+      { chapter: 'serial', step: 5, label: 'The eye diagram' },
     ],
   },
   cdc: {

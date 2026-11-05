@@ -16,7 +16,10 @@ export const SECTIONS: readonly { name: string; first: string }[] = [
   { name: 'Beyond one core', first: 'ooo' },
   { name: 'A GPU', first: 'lanes' },
   { name: 'Memory in depth', first: 'dram' },
-  { name: 'Communication', first: 'telegraph' },
+  { name: 'Communication: wires and clocks', first: 'message' },
+  { name: 'Communication: the channel', first: 'signals' },
+  { name: 'Communication: getting it right', first: 'errors' },
+  { name: 'Communication: networks', first: 'ethernet' },
   { name: 'Appendix', first: 'appendix-6502' },
 ];
 
