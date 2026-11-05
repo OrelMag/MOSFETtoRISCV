@@ -47,3 +47,7 @@ before relying on them. Add to this as chapters land.
 - Linear phase, type I / II zero at z = −1, folding, transposed form: standard results stated from memory, and checked by test: exact equality of the three structures' outputs
   on integers against `lfilter`.
 - Costs are counted from our gates with `stats()`; no outside area figure is used. No clip in this chapter has been listened to.
+- Audit fixes: the passband verdict is the deviation from 1 against the mask's ±δp (0.1 dB peak to peak, centred on 1). Even and odd lengths are labelled: Kaiser 146 even / 147 odd,
+  Hann 268 / 269, Hamming 488 / 489 (our search); meeting the mask is not monotone in length (Kaiser misses from 149 to 153 after meeting at 146 to 148).
+- Fastest clocks: the one-multiplier filter by `analyzeTiming` of its flattened gates; the parallel builds by a sum of parts from `logicDepth` of the multiplier, adder and constant-multiplier
+  gates with the adder tree's levels counted in series (a conservative bound, ripple carries overlap), at the site's illustrative 25 ps a NAND delay. The parallel builds are not drawn or timed whole.

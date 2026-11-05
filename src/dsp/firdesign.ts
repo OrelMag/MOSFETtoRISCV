@@ -344,6 +344,8 @@ export const macAccWidth = (c: MacConfig): number => 2 * c.w + c.guard;
  */
 export class MacModel {
   ring: number[]; k = 0; acc = 0; y = 0; sat = 0;
+  /** The sum without wrapping, for the tests: what the accumulator would hold with unlimited guard bits. */
+  exact = 0;
   readonly N: number; readonly A: number;
   constructor(readonly cfg: MacConfig) { this.N = cfg.taps.length; this.A = macAccWidth(cfg); this.ring = new Array<number>(this.N).fill(0); }
   get first(): boolean { return this.k === 0; }
@@ -359,6 +361,7 @@ export class MacModel {
   edge(x: number): void {
     const c = this.cfg, p = this.ring[0] * c.taps[this.k];
     const accN = wrapTo((this.first ? 0 : this.acc) + p, this.A);
+    this.exact = (this.first ? 0 : this.exact) + p;
     if (this.first) { const r = this.result; this.y = r.y; this.sat = r.sat; }
     if (this.last) this.ring[0] = x;
     else this.ring = [...this.ring.slice(1), this.ring[0]];
@@ -368,9 +371,9 @@ export class MacModel {
 }
 
 /** Guard bits that make the accumulator unable to overflow for any samples: the sum of |tap| times the largest sample, in bits above the product. */
-export function guardFor(taps: readonly number[], w: number): number {
+export function guardFor(taps: readonly number[], w: number, tapBits = w): number {
   const worst = taps.reduce((s, c) => s + Math.abs(c), 0) * 2 ** (w - 1);
-  return Math.max(0, Math.ceil(Math.log2(worst + 1)) + 1 - 2 * w);
+  return Math.max(0, Math.ceil(Math.log2(worst + 1)) + 1 - (w + tapBits));
 }
 /** The worst case when every tap's product can be as large as the largest word: log2 N guard bits, whatever the taps. */
 export const guardForN = (n: number): number => Math.ceil(Math.log2(n));
@@ -393,6 +396,12 @@ export function sceneMac(): { design: RemezResult; words: number[]; cfg: MacConf
 }
 
 // ---- searching and listening ----------------------------------------------------------------------------------------------------------
+
+/** The smallest length in [odd − span, odd], either parity, that meets the mask: `odd` is the fewest odd length, and an even one just below it may meet the mask too. */
+export function fewestNear(design: (n: number) => number[], mask: Mask, odd: number, span = 30): number {
+  for (let n = odd - span; n < odd; n++) if (maskReport(design(n), mask).ok) return n;
+  return odd;
+}
 
 /** |H| at one frequency (cycles a sample). */
 export function gainOf(taps: readonly number[], f: number): number {

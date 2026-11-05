@@ -5,7 +5,8 @@
 import { binaryDigits, csdAdders, csdOf, deltaPass, deltaStop, dB, fewestFrac, foldedMults, gainOf, guardFor, guardForN, kaiserLengthEstimate, linearDelay, MASK, maskReport, remezLowpass, sceneMac, SCENE_MASK, tapValues, tapWords } from '../dsp/firdesign';
 import { firCosts, firMac } from '../lib/firmac';
 import { stats } from '../sim/stats';
-import { chapterDesign, csdApi, csdScene, csdTap, csdTotals, designRows, designsWidget, macApi, macOf, macScene, MAC_TONES, pmTaps, remezWidget, structureWidget, symmetryWidget, windowDesign, windowTable, windowWidget, wordsWidget } from '../widgets/dspfir';
+import { windowDesign } from '../widgets/dspfir';
+import { chapterDesign, csdApi, csdScene, csdTap, csdTotals, designRows, designsWidget, macApi, macOf, macScene, MAC_TONES, pmTaps, remezWidget, structureWidget, symmetryWidget, windowTable, windowWidget, wordsWidget } from '../widgets/dspfir';
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -17,10 +18,20 @@ const dbs = (v: number) => `${v.toFixed(1)} dB`;
 /** Every number the text quotes, computed once when a step first reads it (nothing at import: the designs and the gate counts take a moment). */
 let memo: ReturnType<typeof compute> | null = null;
 export const figures = () => (memo ??= compute());
+/** Where the Kaiser design meets the mask and where it does not, from its first meeting length up: runs of lengths. */
+function kaiserRuns(beta: number): { from: number; to: number; ok: boolean }[] {
+  const runs: { from: number; to: number; ok: boolean }[] = [];
+  const first = windowTable().find((r) => r.kind === 'kaiser')!.any!;
+  for (let n = first; n <= first + 10; n++) {
+    const ok = maskReport(windowDesign('kaiser', n, beta)).ok, last = runs[runs.length - 1];
+    if (last && last.ok === ok) last.to = n; else runs.push({ from: n, to: n, ok });
+  }
+  return runs;
+}
 function compute() {
   const ch = chapterDesign(), dp = deltaPass(MASK), ds = deltaStop(MASK), width = MASK.stop - MASK.pass;
   const pm = (n: number) => maskReport(pmTaps(n));
-  const win = windowTable(), at = (k: string) => win.find((r) => r.kind === k)!.n;
+  const win = windowTable(), at = (k: string) => win.find((r) => r.kind === k)!.n, any = (k: string) => win.find((r) => r.kind === k)!.any;
   const stop = (k: 'hamming' | 'rectangular', n: number) => maskReport(windowDesign(k, n, 0)).stopDb;
   const ham = [61, 101, 201, 301].map((n) => stop('hamming', n)), rect = [101, 1001].map((n) => stop('rectangular', n));
   const hw = macOf(ch.hwTaps), hwq = maskReport(tapValues(hw.taps, hw.frac)), c114 = macOf(ch.taps), c114q = maskReport(tapValues(c114.taps, c114.frac));
@@ -31,13 +42,15 @@ function compute() {
   const gains = Object.fromEntries(MAC_TONES.map(([, f]) => [f, gainOf(tapValues(scene.cfg.taps, scene.cfg.frac), f)])) as Record<number, number>;
   return {
     dp, ds, width, ch, pm113: pm(113), pm114: pm(114), pm115: pm(115), kaiser: ch.kaiser, kaiserRep: maskReport(ch.kaiser.taps),
-    est: kaiserLengthEstimate(dp, ds, width), win, hann: at('hann'), blackman: at('blackman'), kaiserOdd: at('kaiser'), hamming: at('hamming'), ham, rect,
+    est: kaiserLengthEstimate(dp, ds, width), win, hann: at('hann'), blackman: at('blackman'), kaiserOdd: at('kaiser'), hamming: at('hamming'), hannAny: any('hann'), blackmanAny: any('blackman'), kaiserAny: any('kaiser')!, hammingAny: any('hamming'), ham, rect, runs: kaiserRuns(ch.kaiser.beta), tone2: dB(gainOf(ch.taps, 0.2)),
     hw, hwq, c114, c114q, q15, ff, big, spare: Math.floor(Math.log2(1 / big)), sumAbs: hw.taps.reduce((a, c) => a + Math.abs(c), 0) / 2 ** hw.frac,
     guardSum: guardFor(hw.taps, 16), guardN: guardForN(ch.hwN),
     costs, direct: byName('Direct'), folded: byName('Folded:'), foldedCsd: byName('Folded, taps'), transposed: byName('Transposed'), shared: byName('One multiplier'),
     csd: csdTotals(), scene, sceneNands, sceneCosts, gains, accBits: 2 * scene.cfg.w + scene.cfg.guard,
     iters: remezLowpass(ch.n).iterations,
-    rows, pmKaiserDirect: 1 - rows[0].nands / rows.find((r) => r.design === 'Kaiser window' && r.structure.startsWith('Direct'))!.nands,
+    rows, tDirect: rows.find((r) => r.design !== 'Kaiser window' && r.structure.startsWith('Direct'))!, tFolded: rows.find((r) => r.design !== 'Kaiser window' && r.structure.startsWith('Folded:'))!,
+    tCsd: rows.find((r) => r.design !== 'Kaiser window' && r.structure.startsWith('Folded, taps'))!, tShared: rows.find((r) => r.design !== 'Kaiser window' && r.cycles > 1)!,
+    pmKaiserDirect: 1 - rows[0].nands / rows.find((r) => r.design === 'Kaiser window' && r.structure.startsWith('Direct'))!.nands,
     pmKaiserShared: 1 - rows.find((r) => r.design !== 'Kaiser window' && r.cycles > 1)!.nands / rows.find((r) => r.design === 'Kaiser window' && r.cycles > 1)!.nands,
   };
 }
@@ -59,10 +72,10 @@ export const chFirDesign: Chapter = {
       keep: [
         `A mask is a passband edge, a stopband edge and two ripples. Frequency here is cycles a sample, so 0.20 of Nyquist is ${nf(MASK.pass, 2)} and 0.25 of it is ${nf(MASK.stop, 3)}. The mask of this chapter, 0.1 dB of ripple and 60 dB of rejection, allows 1 ± ${nf(F.dp, 5)} and ${nf(F.ds, 3)}.`,
         'Symmetric taps give linear phase: (N − 1) / 2 samples of delay at every frequency. The amplitude is then a cosine polynomial with about N / 2 free numbers, which is also why folding halves the multiplications.',
-        `A window designs both bands to the same ripple, so it spends passband accuracy the mask never asked for. Kaiser's needs ${F.kaiser.numtaps} taps for this mask; Parks–McClellan, which weights the bands as the mask does, needs ${F.ch.n}.`,
+        `A window designs both bands to the same ripple, so it spends passband accuracy the mask never asked for. Kaiser's needs ${F.kaiserAny} (${F.kaiserOdd} if the length must be odd); Parks–McClellan, which weights the bands as the mask does, needs ${F.ch.n}.`,
         `Taps are integers. Rounding them adds ripple of its own: the ${F.ch.n}-tap design misses the mask by ${nf(F.c114q.stopDb + 60, 2)} dB in 16-bit words, and ${F.ch.hwN} taps meet it. An accumulator needs the guard bits Σ|tap| asks for (${F.guardSum} here), not the ${F.guardN} that log₂ N would give.`,
         `The same filter can be built folded (${foldedMults(F.ch.hwN)} multipliers instead of ${F.ch.hwN}), transposed (no long adder chain, wide registers), with taps as shifts and adders (no multiplier at all), or on one multiplier in ${F.ch.hwN} clocks a sample: ${n0(F.shared.nands)} NANDs against ${n0(F.direct.nands)}.`,
-        'Choose by the ratio of clock to sample rate. When the clock is N times the sample rate or more, share the multiplier; otherwise buy parallelism.',
+        `Choose by the samples a second you need. A parallel build makes a sample a clock, at the clock its longest path allows (${nf(F.tDirect.maxMhz, 0)} MHz for the direct form, a sum of parts); one multiplier takes N clocks and runs at ${nf(F.tShared.maxMhz, 0)} MHz, so ${nf(F.tShared.maxMhz / F.ch.hwN, 1)} million samples a second at most.`,
       ],
       check: [
         {
@@ -83,7 +96,7 @@ export const chFirDesign: Chapter = {
           question: 'A 115-tap filter must produce 48 000 samples a second on one multiplier. What is the slowest clock that works?',
           options: [`${nf((F.ch.hwN * 48000) / 1e6, 2)} MHz`, '48 kHz', `${nf((F.ch.hwN * 48000) / 50 / 1000, 0)} kHz`, `${nf((F.ch.hwN * 24000) / 1e6, 2)} MHz`],
           answer: 0,
-          explain: `One multiplication a clock and ${F.ch.hwN} of them a sample: ${F.ch.hwN} × 48 000 = ${nf((F.ch.hwN * 48000) / 1e6, 2)} million a second. Folding would halve it, at the price of a pre-adder and a second read of the ring, and the gates in this chapter do not fold.`,
+          explain: `One multiplication a clock and ${F.ch.hwN} of them a sample: ${F.ch.hwN} × 48 000 = ${nf((F.ch.hwN * 48000) / 1e6, 2)} million a second, well under the ${nf(F.tShared.maxMhz, 0)} MHz the gates can run at. Folding would halve it, at the price of a pre-adder and a second read of the ring, and the gates in this chapter do not fold.`,
           why: ['', 'That is one multiplication a sample.', 'That is about two clocks a sample, far too few for this many taps.', 'That assumes folding, which this design does not do.'],
         },
       ],
@@ -95,9 +108,9 @@ export const chFirDesign: Chapter = {
       get body() {
         const F = figures();
         return `
-        <p>A filter is specified by a <strong>mask</strong>, not by a formula: a passband where the gain must stay within a ripple of 1, a stopband where it must stay under a ceiling, and a transition between them where nothing is promised. Ours: pass to 0.20 of Nyquist, stop from 0.25 of it, 0.1 dB of ripple, 60 dB of rejection. This site counts frequency in cycles a sample, so Nyquist is 0.5 and the edges are ${nf(MASK.pass, 2)} and ${nf(MASK.stop, 3)}: a transition ${nf(F.width, 3)} wide, ${nf(100 * F.width / 0.5, 0)} % of Nyquist. Ripple of 0.1 dB peak to peak is a gain within 1 ± ${nf(F.dp, 5)}; 60 dB is a gain under ${nf(F.ds, 3)}.</p>
+        <p>A filter is specified by a <strong>mask</strong>, not by a formula: a passband where the gain must stay within a ripple of 1, a stopband where it must stay under a ceiling, and a transition between them where nothing is promised. Ours: pass to 0.20 of Nyquist, stop from 0.25 of it, 0.1 dB of ripple, 60 dB of rejection. This site counts frequency in cycles a sample, so Nyquist is 0.5 and the edges are ${nf(MASK.pass, 2)} and ${nf(MASK.stop, 3)}: a transition ${nf(F.width, 3)} wide, ${nf(100 * F.width / 0.5, 0)} % of Nyquist. Ripple of 0.1 dB peak to peak is a gain within 1 ± ${nf(F.dp, 5)}, and it is centred on 1: a passband that wandered between 0.99 and 0.9914 would have a smaller ripple and fail this mask, and every design below is held to ± ${nf(F.dp, 5)} around 1. 60 dB is a gain under ${nf(F.ds, 3)}.</p>
         <p>Every tap costs a multiplication for every output sample, so the question is how few taps meet the mask. Part of the answer is free. A filter whose taps are mirror images, h[k] = h[N − 1 − k], has <strong>linear phase</strong>: every frequency is delayed by the same (N − 1) / 2 samples, and a pulse comes out the shape it went in, only later. A ${F.ch.n}-tap filter delays by ${nf(linearDelay(F.ch.n), 1)} samples. <a href="#/c/zplane/6">The z-plane chapter</a> showed why: each zero comes with its mirror image across the circle.</p>
-        <p>The mirror image also halves the unknowns. The gain of a symmetric filter is a polynomial in cos 2πf with only ⌈N / 2⌉ coefficients, so designing ${F.ch.n} taps is choosing ${Math.ceil(F.ch.n / 2)} numbers. Look at the zeros below: the ones on the circle are the stopband, where the gain crosses zero between ripples, and the others come in pairs r and 1 / r, which shape the passband and the transition. An even length has half a sample of delay and a zero at z = −1 always, so it can never pass half the sample rate.</p>
+        <p>The mirror image also halves the unknowns. The gain of a symmetric filter is a polynomial in cos 2πf with only ⌈N / 2⌉ coefficients, so designing ${F.ch.n} taps is choosing ${Math.ceil(F.ch.n / 2)} numbers. Look at the zeros below: the ones on the circle are the stopband, where the gain crosses zero between ripples, and the others come in sets, r and 1 / r on the real axis or four together at r e^±jθ and e^±jθ / r, which shape the passband and the transition. An even length has a delay of a whole number and a half, and a zero at z = −1 always, so it can never pass half the sample rate.</p>
         <div class="try">Slide the taps from 7 to 31 and count the zeros on the circle: each one is a place the stopband touches zero. Then step to an even length and find the zero at −1.</div>`;
       },
       widget: symmetryWidget,
@@ -116,8 +129,8 @@ export const chFirDesign: Chapter = {
         return `
         <p>The ideal low-pass has taps sin(2π fc k) / (π k), forever. Cut them to N taps and you have multiplied by a rectangle, and the response is the ideal one smeared by the rectangle's spectrum: a transition that narrows in proportion to 1 / N, and a stopband peak that falls only slowly with N: ${dbs(F.rect[0])} at 101 taps, ${dbs(F.rect[1])} at 1 001. Taper the ends instead and the ripples fall, at the price of a wider transition. That is the <strong>window method</strong>: the window decides how far the stopband falls, and N decides how narrow the transition is.</p>
         <p>One consequence matters here. The window's sidelobes set the passband ripple and the stopband ceiling together, so both bands come out at the same size. This mask allows ${nf(F.dp, 4)} in the passband and ${nf(F.ds, 3)} in the stopband, and a window that meets the second delivers about ${nf(F.kaiserRep.passDev, 4)} in the first: ${nf(F.dp / F.kaiserRep.passDev, 1)} times better than anyone asked for.</p>
-        <p>Each fixed window has sidelobes of its own height, and the mask's stopband starts only ${nf(F.width / 2, 4)} beyond the middle of the transition, so the nearest sidelobes sit inside it until N is long. A Hamming window gives ${F.ham.map((v) => dbs(v)).join(', ')} at 61, 101, 201 and 301 taps: it plateaus near −58 dB for a long stretch, and first reaches 60 dB at ${F.hamming} taps. Hann needs ${F.hann} and Blackman ${F.blackman}. The rectangle is at ${dbs(F.rect[1])} even at 1 001 taps, and falls about 6 dB for each doubling. Kaiser's window has a knob, β, that trades sidelobe height against transition width directly. Kaiser's formula gives β = ${nf(F.kaiser.beta, 3)} and ${F.kaiser.numtaps} taps for this mask, and searching odd lengths from below finds ${F.kaiserOdd} to be the first that meets it; scipy's <code>kaiserord</code> and <code>firwin</code> agree with our code to 10⁻¹¹ on every window.</p>
-        <div class="try">Pick Hamming and slide the taps up from 61 to 489: the transition narrows and the stopband peak falls and then sits on a plateau, before it crosses −60 dB. Switch to Kaiser, leave β where it is, find the shortest length that turns the verdict green, and press the button for the table.</div>`;
+        <p>Each fixed window has sidelobes of its own height, and the mask's stopband starts only ${nf(F.width / 2, 4)} beyond the middle of the transition, so the nearest sidelobes sit inside it until N is long. A Hamming window gives ${F.ham.map((v) => dbs(v)).join(', ')} at 61, 101, 201 and 301 taps: it plateaus near −58 dB for a long stretch, and first reaches −60 dB at ${F.hamming} taps if the length is odd (${F.hammingAny} with either parity). Hann needs ${F.hann} taps if the length is odd (${F.hannAny} with either parity) and Blackman ${F.blackman} (${F.blackmanAny}). The rectangle is at ${dbs(F.rect[1])} even at 1 001 taps, and falls about 6 dB for each doubling. Kaiser's window has a knob, β, that trades sidelobe height against transition width directly. Kaiser's formula gives β = ${nf(F.kaiser.beta, 3)} and ${F.kaiser.numtaps} taps for this mask, and the first odd length that meets it is ${F.kaiserOdd}, the first of either parity ${F.kaiserAny}; scipy's <code>kaiserord</code> and <code>firwin</code> agree with our code to 10⁻¹¹ on every window. Meeting the mask is not quite monotone in length, even for one window: Kaiser's ${F.runs.map((r) => `${r.ok ? 'meets it' : 'misses it'} from ${r.from}${r.to > r.from ? ` to ${r.to}` : ''}`).join(', then ')}.</p>
+        <div class="try">Pick Hamming and slide the taps up from 61 to 489: the transition narrows and the stopband peak falls and then sits on a plateau, before it crosses −60 dB. Switch to Kaiser, leave β where it is, and slide the taps down from 201 until the verdict first goes red: it can go green again below that, so press the button for the table to find the first length that meets the mask.</div>`;
       },
       widget: windowWidget,
       challenge: {
@@ -134,16 +147,16 @@ export const chFirDesign: Chapter = {
         const F = figures();
         return `
         <p>Instead of a recipe, make it an optimisation: choose the taps that minimise the largest weighted error over the bands, with weights 1 / δp and 1 / δs. A result of 1 or less means both bands fit the mask. The optimum has a striking shape. Its error touches the same size at every one of at least ⌈N / 2⌉ + 1 frequencies, with alternating signs: <strong>equiripple</strong>. The alternation theorem says that is both necessary and sufficient, and the <strong>Remez exchange</strong> finds it: guess that many frequencies, solve for the cosine polynomial that alternates ±δ exactly there, look at where its error really peaks, move the guesses to the peaks, repeat. Here it takes ${F.iters} passes.</p>
-        <p>The mask is met by <strong>${F.ch.n} taps</strong>. At ${F.ch.n - 1} it is not: the stopband peaks at ${dbs(F.pm113.stopDb)} and the passband ripple is ${nf(F.pm113.passRippleDb, 3)} dB, both a little over, and no weighting makes both fit, because the error is already the best that any taps can do. The fewest odd length is ${F.ch.fewestOddPm}. Kaiser's window needs ${F.kaiser.numtaps} for the same mask: ${F.kaiser.numtaps - F.ch.n} taps more, ${nf(100 * (F.kaiser.numtaps / F.ch.n - 1), 0)} % more multiplications on every sample. Kaiser's length formula, N ≈ (−20 log₁₀ √(δpδs) − 13) / (14.6 Δf) + 1, says ${F.est}: a fair estimate, ${F.ch.n - F.est} short.</p>
-        <p>This is our own exchange, written to scipy's grid so that the two compare tap for tap: the five test cases agree with <code>scipy.signal.remez</code> to better than 10⁻⁹ of the largest tap, and every design is checked against its mask on the 8 192-point grid that <code>freqz</code> uses. The reference for the algorithm is Parks and McClellan's 1972 paper and McClellan, Parks and Rabiner's program; I have not read either paper (the sources file says so), and the tests are the check.</p>
-        <div class="try">Press Find the fewest taps and read ${F.ch.n}, then drop to ${F.ch.n - 1} and see which bands miss. At ${F.ch.n - 1} try the stopband weight: whichever band you favour, the other fails. Play the clip and listen for the second tone.</div>`;
+        <p>The mask is met by <strong>${F.ch.n} taps</strong>. At ${F.ch.n - 1} it is not: the stopband peaks at ${dbs(F.pm113.stopDb)} and the passband gain is off 1 by up to ${nf(F.pm113.passDev, 5)} against the ${nf(F.dp, 5)} allowed, both a little over, and no weighting makes both fit, because the error is already the best that any taps can do. The fewest odd length is ${F.ch.fewestOddPm}. Kaiser's window needs ${F.kaiserAny} for the same mask with either parity (${F.kaiserOdd} if odd): ${F.kaiserAny - F.ch.n} taps more than ${F.ch.n}, ${nf(100 * (F.kaiserAny / F.ch.n - 1), 0)} % more multiplications on every sample. Kaiser's length formula, N ≈ (−20 log₁₀ √(δpδs) − 13) / (14.6 Δf) + 1, says ${F.est}: a fair estimate, ${F.ch.n - F.est} short.</p>
+        <p>This is our own exchange, written to scipy's grid so that the two compare tap for tap: the five test cases agree with <code>scipy.signal.remez</code> to better than 10⁻⁹ of the largest tap, and every design is checked against its mask on the 8 192-point grid that <code>freqz</code> uses. It is the algorithm of Parks and McClellan (1972), and ours is checked against scipy's and, for every result, against its mask.</p>
+        <div class="try">Press Find the fewest taps and read ${F.ch.n}, then drop to ${F.ch.n - 1} and see which bands miss. At ${F.ch.n - 1} try the stopband weight: whichever band you favour, the other fails. Play the clip: at ${F.ch.n} taps the second tone, at 0.2 cycles a sample, comes out ${dbs(F.tone2)} down, and the level is on screen beside the button. Listen for its absence.</div>`;
       },
       widget: remezWidget,
       challenge: {
         kind: 'quiz', question: `With the mask's own weights, ${figures().ch.n - 1} taps are tried. What does the result show?`,
         options: ['Both bands miss the mask by a few per cent', 'The passband meets it and the stopband misses', 'The stopband meets it and the passband misses', 'The design meets the mask'],
         answer: 0,
-        explain: `The weighted error at ${figures().ch.n - 1} taps is above 1, so neither band fits: passband ripple ${nf(figures().pm113.passRippleDb, 3)} dB against 0.1, stopband ${dbs(figures().pm113.stopDb)} against −60.`,
+        explain: `The weighted error at ${figures().ch.n - 1} taps is above 1, so neither band fits: the passband gain is off 1 by up to ${nf(figures().pm113.passDev, 5)} against ${nf(figures().dp, 5)}, and the stopband peaks at ${dbs(figures().pm113.stopDb)} against −60.`,
         why: ['', 'The two bands are traded through the weights, and at this length even the best trade misses both.', 'Same: an error above 1 is above 1 in both bands, at the mask\'s weights.', 'It would have to for 114 taps, not one fewer.'],
       },
     },
@@ -171,10 +184,10 @@ export const chFirDesign: Chapter = {
       get body() {
         const F = figures(), n = F.ch.hwN;
         return `
-        <p>Mirror-image taps mean the direct form multiplies x[n − k] by h[k] and x[n − (N − 1 − k)] by the same number. <strong>Fold</strong> the filter: add the pair first, then multiply once. ${n} taps need ${foldedMults(n)} multiplications instead of ${n}. The adder in front is one bit wider, so the multiplier is 17 × 16 rather than 16 × 16, and counted from the gates the folded filter is ${n0(F.folded.nands)} NANDs against ${n0(F.direct.nands)} for the direct form. It is exact: the output is identical, sample for sample, as the widget checks.</p>
+        <p>Mirror-image taps mean the direct form multiplies x[n − k] by h[k] and x[n − (N − 1 − k)] by the same number. <strong>Fold</strong> the filter: add the pair first, then multiply once. ${n} taps need ${foldedMults(n)} multiplications instead of ${n}. The adder in front is one bit wider, so the multiplier is 17 × 17 rather than 16 × 16 (our tree multiplier is square), and counted from the gates the folded filter is ${n0(F.folded.nands)} NANDs against ${n0(F.direct.nands)} for the direct form. It is exact: the output is identical, sample for sample, as the widget checks.</p>
         <p>The <strong>transposed form</strong> reverses every arrow of the direct form. The input reaches all the multipliers at once, and the registers hold partial sums that move toward the output, one adder and one register per tap. Nothing waits behind a long adder chain, so the longest path is one multiplier and one adder, and every product is ready the moment the sample arrives. Its price is in the registers, which hold sums and not samples, so each is as wide as the accumulator. It folds differently: x[n] h[k] is the product that two mirrored taps both need, so computing it once is the saving. Counted that way it is ${n0(F.transposed.nands)} NANDs at ${n} taps, ${F.transposed.nands < F.folded.nands ? 'under' : 'over'} the folded form's ${n0(F.folded.nands)}: ${F.transposed.nands < F.folded.nands ? 'sharing the product is cheaper than adding the pair, even with wide registers' : 'the wide registers cost more than the pre-adders save'}.</p>
         <p>None of these three changes what the filter does. They move cost between multipliers, adders, registers and the longest path, and which one wins depends on the technology. In gates, where a multiplier is the expensive part, folding is the first thing to do to a linear-phase filter.</p>
-        <div class="try">Switch to Folded and read the multiplications halve while the output stays identical. Switch to Transposed and read the width of its registers. Slide the taps up to ${n} and watch the NANDs.</div>`;
+        <div class="try">Switch to Folded and read the multiplications halve while the output stays identical. Switch to Transposed and read the width of its registers. Slide the taps down to 16 and back up to ${n}, and watch the NANDs; the diagram stays at 6 taps.</div>`;
       },
       widget: structureWidget,
       challenge: {
@@ -231,17 +244,18 @@ export const chFirDesign: Chapter = {
         const F = figures(), n = F.ch.hwN, k = F.kaiser.numtaps;
         return `
         <p>The table counts every design and structure from the gates, with 16-bit words. The Parks–McClellan filter is the ${n}-tap one that meets the mask once rounded; the Kaiser one has ${k} taps. Read it two ways. Across a column, the structures: parallel direct is ${n0(F.direct.nands)} NANDs, folding takes it to ${n0(F.folded.nands)}, signed digits to ${n0(F.foldedCsd.nands)}, and one multiplier to ${n0(F.shared.nands)}. Down a column, the designs: Parks–McClellan is smaller than Kaiser in every row, by ${nf(100 * F.pmKaiserDirect, 0)} % in a parallel build and ${nf(100 * F.pmKaiserShared, 0)} % in a shared one.</p>
-        <p>What decides is the ratio of clock to sample rate. A parallel filter does ${n} multiplications in the time of one clock, and a shared one does one. At 48 kHz and ${n} taps, one multiplier needs ${nf((n * 48000) / 1e6, 2)} MHz: any modern clock. At 100 MHz it sustains ${nf(1e5 / n, 0)} kHz samples. A radio's channel filter at several MHz of samples needs parallel hardware, and then folding and constants in signed digits matter most. The cost column counts NANDs and leaves out the wires between them.</p>
-        <p>One caution about the numbers. Every filter on this page was found by designing for the mask, rounding, and checking, in that order, and the rounding step moved the answer by a tap. A design that is checked only in floating point can be a fraction of a decibel from meeting its mask in the hardware that has to run it.</p>
-        <div class="try">Move the clock from 10 to 500 MHz and read the sample rate each build sustains. Find the cheapest row that reaches 1 MHz at 100 MHz.</div>`;
+        <p>What decides is how fast each build can be clocked, and how many clocks a sample takes. The fastest clocks are in the table, at an illustrative 25 ps a NAND delay. The one-multiplier filter is timed by the static timing of its gates: ${n0(F.tShared.period)} NAND delays, ${nf(F.tShared.maxMhz, 0)} MHz. The parallel builds are not drawn, so theirs is a sum of parts counted from the gates, ${nf(F.tDirect.maxMhz, 0)} MHz for the direct form with its adder tree and ${nf(F.tCsd.maxMhz, 0)} for the folded one with constants. It is a conservative sum, since ripple carries overlap between the tree's levels, and it shows why a parallel build is not simply "one sample a clock at any clock": its longest path is a multiplier and then a tree of ${Math.ceil(Math.log2(F.ch.hwN))} wide adders.</p>
+        <p>So a parallel build delivers up to ${nf(F.tDirect.maxMhz, 0)} million samples a second, and one multiplier, which takes ${F.ch.hwN} clocks a sample, up to ${nf(F.tShared.maxMhz / F.ch.hwN, 1)} million. At 48 kHz one multiplier needs a ${nf((F.ch.hwN * 48000) / 1e6, 2)} MHz clock, far under the ${nf(F.tShared.maxMhz, 0)} it can run at. A radio's channel filter at several million samples a second is past what one multiplier can do, and needs parallel hardware: folding and constants in signed digits matter most there. The cost column counts NANDs and leaves out the wires between them.</p>
+        <p>One caution about the numbers. The Parks–McClellan row is the ${F.ch.hwN}-tap odd design and the Kaiser row the ${F.kaiser.numtaps}-tap odd one, so that both use the same word and the same check; the fair comparison with ${F.ch.n} taps is Kaiser's ${F.kaiserAny}. Every filter on this page was found by designing for the mask, rounding, and checking, in that order, and the rounding step moved the answer by a tap. A design that is checked only in floating point can be a fraction of a decibel from meeting its mask in the hardware that has to run it.</p>
+        <div class="try">Move the clock from 10 to 500 MHz and read the sample rate each build sustains: the parallel builds stop gaining where their fastest clock is, and the daggers mark it. Find the cheapest build that reaches 10 million samples a second.</div>`;
       },
       widget: designsWidget,
       challenge: {
-        kind: 'quiz', question: `The Parks–McClellan filter must deliver 1 million samples a second from a 100 MHz clock. Which builds can do it?`,
-        options: ['Any of the parallel builds, but not one multiplier', 'Only the folded one with constants in signed digits', 'One multiplier, since 100 MHz is plenty', 'None: it needs 115 multipliers'],
+        kind: 'quiz', question: `The ${figures().ch.hwN}-tap filter must deliver 10 million samples a second, with any clock the gates can take. Which builds can?`,
+        options: ['The parallel builds, but not one multiplier', 'Any build, with a fast enough clock', 'Only one multiplier', 'None of them'],
         answer: 0,
-        explain: `One multiplier delivers 100 MHz / ${figures().ch.hwN} = ${nf(1e5 / figures().ch.hwN, 0)} kHz, under a million. The parallel builds make a sample every clock, so each delivers 100 MHz.`,
-        why: ['', 'Every parallel build gets a sample a clock, far more than a million a second, and the others do too.', `That gives ${nf(1e5 / figures().ch.hwN, 0)} kHz, short of a million.`, 'The folded build needs half as many, and the constant build needs none.'],
+        explain: `One multiplier takes ${figures().ch.hwN} clocks a sample and its gates can run at ${nf(figures().tShared.maxMhz, 0)} MHz, so it delivers up to ${nf(figures().tShared.maxMhz / figures().ch.hwN, 1)} million a second. A parallel build makes a sample every clock and can run at up to ${nf(figures().tFolded.maxMhz, 0)} to ${nf(figures().tDirect.maxMhz, 0)} MHz, by the sum of parts.`,
+        why: ['', 'A clock cannot go past what the longest path allows, so some builds have a ceiling below this.', `One multiplier tops out at ${nf(figures().tShared.maxMhz / figures().ch.hwN, 1)} million.`, 'The parallel builds reach it, in the sum of parts counted here.'],
       },
     },
   ],

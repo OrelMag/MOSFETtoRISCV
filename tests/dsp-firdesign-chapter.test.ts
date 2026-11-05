@@ -1,9 +1,13 @@
-// What "FIR design" claims: each number in the text and each Try box, against the widgets' own sliders.
+// What "FIR design" claims: each number in the text and each Try box. The slider ranges are the widgets' own (RANGES), so a Try box is checked against what its slider can reach.
 import { describe, expect, it } from 'vitest';
 import { chFirDesign, figures } from '../src/chapters/ch-dsp-firdesign';
 import { numOf } from '../src/chapters/order';
-import { csdAdders, csdOf, foldedMults, linearDelay, MacModel, maskReport, MASK, sceneMac, binaryDigits, deltaPass } from '../src/dsp/firdesign';
-import { chapterDesign, csdTap, csdTotals, designRows, macOf, macTone, MAC_TONES, pmTaps, windowDesign } from '../src/widgets/dspfir';
+import { bitsToHold } from '../src/dsp/fixed';
+import { csdAdders, csdOf, foldedMults, linearDelay, MacModel, maskReport, MASK, sceneMac, binaryDigits, deltaPass, type MacConfig } from '../src/dsp/firdesign';
+import { chapterDesign, csdTap, csdTotals, designRows, macOf, macTone, MAC_TONES, RANGES, windowDesign } from '../src/widgets/dspfir';
+import { guardFor, tapWords } from '../src/dsp/firdesign';
+import { flatten } from '../src/sim/flatten';
+import { analyzeTiming } from '../src/sim/timing';
 import { firCosts, firMac } from '../src/lib/firmac';
 import { stats } from '../src/sim/stats';
 
@@ -28,7 +32,8 @@ describe('the numbers in the text', () => {
     expect(linearDelay(114)).toBe(56.5);
   });
   it('the Try box on the Parks–McClellan step: 113 is inside the slider (60 … 130) and a weight cannot repair it', () => {
-    expect(113).toBeGreaterThanOrEqual(60); expect(114).toBeLessThanOrEqual(130);
+    expect(RANGES.remezTaps[0]).toBeLessThanOrEqual(113); expect(RANGES.remezTaps[1]).toBeGreaterThanOrEqual(114);
+    expect(RANGES.weight[0]).toBeLessThan(0); expect(RANGES.weight[1]).toBeGreaterThan(0);
     for (const k of [-1, -0.5, 0.5, 1]) {
       const r = maskReport(pmTapsWeighted(113, k));
       expect(r.ok, `weight ${k}`).toBe(false);
@@ -37,7 +42,12 @@ describe('the numbers in the text', () => {
   it('windows: Hann 269, Blackman 201, Kaiser 147, Hamming 489, the rectangle none; the slider reaches them (11 … 501)', () => {
     expect(F.hann).toBe(269); expect(F.blackman).toBe(201); expect(F.kaiserOdd).toBe(147); expect(F.hamming).toBe(489);
     expect(F.win.find((r) => r.kind === 'rectangular')!.n).toBeNull();
-    for (const n of [F.hann, F.blackman, F.hamming]) expect(n).toBeLessThanOrEqual(501);
+    for (const n of [F.hann, F.blackman, F.hamming, 61, 201]) { expect(n).toBeLessThanOrEqual(RANGES.windowTaps[1]); expect(n).toBeGreaterThanOrEqual(RANGES.windowTaps[0]); }
+    expect(F.hannAny).toBe(268); expect(F.hammingAny).toBe(488); expect(F.blackmanAny).toBe(201); expect(F.kaiserAny).toBe(146);
+    // not monotone: Kaiser meets, then misses a run of lengths, then meets again
+    expect(F.runs.map((r) => r.ok)).toEqual([true, false, true]);
+    expect(F.runs[0].from).toBe(146);
+    expect(maskReport(windowDesign('kaiser', 147, F.kaiser.beta)).ok).toBe(true); expect(maskReport(windowDesign('kaiser', 151, F.kaiser.beta)).ok).toBe(false);
     expect(F.ham[3]).toBeLessThan(-57); expect(F.ham[3]).toBeGreaterThan(-60); expect(F.rect[1]).toBeGreaterThan(-60);
   });
   it('the window leaves the passband five times better than asked', () => {
@@ -52,7 +62,12 @@ describe('the numbers in the text', () => {
     expect(F.q15.stopOk).toBe(false); expect(F.c114.frac).toBe(17); expect(F.c114q.stopOk).toBe(false); expect(F.c114q.stopDb + 60).toBeCloseTo(0.22, 2);
     expect(F.ff.frac).toBe(18); expect(F.ff.bits).toBe(17); expect(F.ch.hwN).toBe(115); expect(F.hwq.ok).toBe(true); expect(F.hw.frac).toBe(17);
     expect(F.spare).toBe(2); expect(F.guardSum).toBe(2); expect(F.guardN).toBe(7);
-    for (const f of [15, 17, 18]) { expect(f).toBeGreaterThanOrEqual(8); expect(f).toBeLessThanOrEqual(20); }
+    for (const f of [15, 17, 18]) { expect(f).toBeGreaterThanOrEqual(RANGES.frac[0]); expect(f).toBeLessThanOrEqual(RANGES.frac[1]); }
+    // the guard chip is against the actual product width: 2 at every fraction width of the slider
+    for (let f = RANGES.frac[0]; f <= RANGES.frac[1]; f++) {
+      const words = tapWords(F.ch.taps, f, 40), bits = bitsToHold(Math.max(...words.map(Math.abs)));
+      expect(guardFor(words, 16, bits), `${f} bits after the point`).toBe(2);
+    }
   });
   it('folding: 58 for 115 taps, 57 for 114; the folded and shared builds are cheaper than the direct; constants cheaper again', () => {
     expect(foldedMults(115)).toBe(58); expect(foldedMults(114)).toBe(57);
@@ -86,17 +101,36 @@ describe('the numbers in the text', () => {
     expect(1e5 / 115).toBeLessThan(1000);
     expect((115 * 48000) / 1e6).toBeCloseTo(5.52, 2);
   });
-  it('the model of the one-multiplier filter stays inside its accumulator for the worst input, with the guard bits the taps ask for', () => {
-    const cfg = macOf(chapterDesign().hwTaps), m = new MacModel(cfg);
-    const worst = [...Array(cfg.taps.length * 2)].map((_, i) => 0 + (i < cfg.taps.length ? 0 : 0));
-    void worst;
-    const N = cfg.taps.length;
-    // input +full scale where the tap is positive, −full scale where negative, so every product adds
-    const xs = cfg.taps.map((c) => (c >= 0 ? 32767 : -32768)).reverse();
-    for (let f = 0; f < xs.length + 1; f++) for (let c = 0; c < N; c++) m.edge(c === N - 1 ? (xs[f] ?? 0) : 0);
-    const peak = Math.max(...cfg.taps.map(Math.abs));
-    expect(peak).toBeGreaterThan(0);
-    expect(Math.abs(m.acc)).toBeLessThan(2 ** (2 * 16 + cfg.guard - 1));
+  it('the guard bits the taps ask for are enough for the worst input, and one fewer is not', () => {
+    const cfg = macOf(chapterDesign().hwTaps), N = cfg.taps.length;
+    // the worst input: full scale with the sign of each tap, so that every product adds (−32768 on a negative tap makes a positive product)
+    const worst = (c: MacConfig) => {
+      const m = new MacModel(c);
+      const xs = c.taps.map((t) => (t >= 0 ? 32767 : -32768)).reverse();
+      for (let f = 0; f < xs.length + 1; f++) for (let k = 0; k < N; k++) m.edge(k === N - 1 ? (xs[f] ?? 0) : 0);
+      return m;
+    };
+    expect(cfg.guard).toBe(2);
+    const m = worst(cfg);
+    // the unwrapped sum, against the limit of the accumulator the gates have
+    expect(Math.abs(m.exact)).toBeLessThan(2 ** (2 * 16 + cfg.guard - 1));
+    expect(Math.abs(m.exact)).toBeGreaterThanOrEqual(2 ** (2 * 16 + cfg.guard - 2));
+    // one guard bit fewer would wrap: the model's own accumulator then disagrees with the exact sum
+    const tight = worst({ ...cfg, guard: cfg.guard - 1 });
+    expect(Math.abs(tight.exact)).toBeGreaterThanOrEqual(2 ** (2 * 16 + cfg.guard - 2));
+    expect(tight.acc).not.toBe(tight.exact);
+    expect(m.acc).toBe(m.exact);
+  });
+  it('the fastest clocks: the parallel builds well under the clocks the slider offers at its top, the one multiplier timed from its gates', () => {
+    const rows = designRows(), shared = rows.find((r) => r.design !== 'Kaiser window' && r.cycles > 1)!;
+    expect(shared.basis).toBe('analysed');
+    expect(shared.period).toBe(analyzeTiming(flatten(firMac(macOf(chapterDesign().hwTaps)), { mode: 'gate' }))!.period);
+    for (const r of rows.filter((r) => r.cycles === 1)) { expect(r.basis).toBe('sum of parts'); expect(r.maxMhz, r.structure).toBeLessThan(RANGES.clock[1] / 2); }
+    expect(shared.maxMhz).toBeGreaterThan(100);
+    // the quiz: 10 million samples a second is within the parallel builds and beyond one multiplier
+    expect(Math.min(...rows.filter((r) => r.cycles === 1).map((r) => r.maxMhz))).toBeGreaterThan(10);
+    expect(shared.maxMhz / shared.cycles).toBeLessThan(10);
+    expect(F.tShared.maxMhz / F.ch.hwN).toBeLessThan(10);
   });
 });
 
@@ -105,4 +139,4 @@ import { remez, deltaStop } from '../src/dsp/firdesign';
 function pmTapsWeighted(n: number, k: number): number[] {
   return remez(n, [0, MASK.pass, MASK.stop, 0.5], [1, 0], [1 / deltaPass(MASK), 10 ** k / deltaStop(MASK)]).taps;
 }
-void pmTaps; void firCosts;
+void firCosts;
