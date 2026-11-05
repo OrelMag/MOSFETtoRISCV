@@ -223,8 +223,9 @@ export function ethSegment(n = 4): ComponentDef {
   const T = (name: string, ends: string[], tags: NetDef['tags'] = true): NetDef => ({ name, ends, tags });
   const W_ = (name: string, ends: string[]): NetDef => ({ name, ends });
   const nets: NetDef[] = [
-    T('clk', ['clk', 'wire.clk', ...ST.map((_, i) => `st${i}.clk`)]), T('rst', ['rst', ...ST.map((_, i) => `st${i}.rst`)]),
-    ...['wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'].map((p) => T(p, [p, ...ST.map((_, i) => `st${i}.${p}`)])),
+    T('clk', ['clk', 'wire.clk', ...ST.map((_, i) => `st${i}.clk`)]),
+    // the host port: a wire to the first station (the pin stands on its row), the same name where it reaches the others
+    ...['rst', 'wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'].map((p) => T(p, [p, ...ST.map((_, i) => `st${i}.${p}`)], ST.slice(1).map((_, i) => `st${i + 1}.${p}`))),
     W_('sel', ['sel', 'dec.a']), W_('promisc', ['promisc', 'spp.in']),
   ];
   ST.forEach((_, i) => {
@@ -244,6 +245,7 @@ export function ethSegment(n = 4): ComponentDef {
   const pinDirs: Record<string, 'up' | 'down'> = { clk: 'up' };
   const decA = instPort(DEC, [8, yDec], undefined, 'a').pos, sppIn = instPort(SPP, [8, ySp], undefined, 'in').pos;
   let yl = 4;
+  const HOST = ['rst', 'wa', 'wd', 'we', 'len', 'go', 'ra', 'hrd'];
   for (const p of ports) {
     if (p.name === 'clk') pins.clk = [X0 + 4, H];
     else if (p.name === 'sel') pins.sel = [0, decA[1]];
@@ -251,6 +253,7 @@ export function ethSegment(n = 4): ComponentDef {
     else if (p.name === 'busy') pins.busy = [XR + 8, instPort(MGB, [XR, Y0 + 8], undefined, 'out').pos[1]];
     else if (p.name === 'clash') pins.clash = [XR + 8, yw + 3];
     else if (p.name === 'txen') pins.txen = [XR + 8, yw - 4];
+    else if (HOST.includes(p.name)) pins[p.name] = [0, instPort(ST[0], stAt(0), undefined, p.name).pos[1]];
     else if (p.dir === 'in') { pins[p.name] = [0, yl]; yl += 3; }
   }
   const TOPX: Record<string, number> = TOP_X;

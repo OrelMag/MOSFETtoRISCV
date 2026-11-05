@@ -7,7 +7,7 @@
 // (the MAC saw a bad FCS). A receive stream is always ready: a wire cannot be stopped, so a frame that finds no free cell is dropped.
 
 import { Arbiter, COUNT_BITS, PORTS, STAMP_BITS, withDefaults, type SwitchOpts } from '../comm/ethswitch';
-import { symbolGeom } from '../sim/geometry';
+import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { arbiterN } from './mpdecode';
 import { define, merger, ones, splitter } from './define';
@@ -18,6 +18,21 @@ import { Rtl, type Sig } from './rtl';
 void Arbiter;
 const cache = new Map<string, ComponentDef>();
 const memo = (key: string, make: () => ComponentDef): ComponentDef => { let d = cache.get(key); if (!d) { d = make(); cache.set(key, d); } return d; };
+
+/** A part as the switch draws it: pins on the side the fabric is on, each on its own row, so the wires between boxes run straight (view only). */
+function shaped(d: ComponentDef, h: number, sides: Record<string, 'left' | 'right'>, rowOf: (name: string) => number | undefined): ComponentDef {
+  const portPos: Record<string, number> = { ...d.symbol.portPos };
+  for (const p of d.ports) {
+    const side = sides[p.name] ?? sides[baseName(p.name)] ?? (p.dir === 'out' ? 'right' : 'left'), r = rowOf(p.name);
+    if (r === undefined) continue;
+    if (side !== (p.dir === 'out' ? 'right' : 'left')) p.side = side;
+    portPos[p.name] = r;
+  }
+  d.symbol = { ...d.symbol, h, portPos };
+  return d;
+}
+const baseName = (n: string) => n.replace(/[0-9]+$/, "");
+const idxOf = (n: string) => +(n.match(/([0-9]+)$/)?.[1] ?? 0);
 
 const log2 = (n: number): number => Math.ceil(Math.log2(n));
 
@@ -306,7 +321,7 @@ export function inputBuffer(opts: Partial<SwitchOpts> = {}): ComponentDef {
     void tx; void selSlotF;
     m.output('req', rx.req); m.outputBus('dst', rx.dstBits); m.outputBus('src', rx.srcBits); m.outputBus('sel', selF);
     m.outputBus('txData', word.w.slice(0, 8)); m.output('txLast', word.w[8]); m.output('txValid', tx.valid); m.output('rxReady', m.const(1));
-    return m.build();
+    return shaped(m.build(), 26, { rxReady: 'left', drops: 'left', bad: 'left', adv: 'right', gnt: 'right' }, (n) => IN_ROWS.left[n] ?? IN_ROWS.right[n]);
   });
 }
 
@@ -328,7 +343,7 @@ export function outputPort(): ComponentDef {
     m.setD(src[1], m.mux(any, src[1], m.or(g[2], g[3])));
     const frames = m.scope('count', 'frames sent', () => counter(m, clk, end, 'frames'));
     m.outputBus('g', g); m.output('busy', busy); m.outputBus('src', src); m.outputBus('frames', frames);
-    return m.build();
+    return shaped(m.build(), 10, { busy: 'left', src: 'left' }, (n) => OUT_ROWS.left[n] ?? OUT_ROWS.right[n]);
   });
 }
 
@@ -354,7 +369,12 @@ export function crossbar(): ComponentDef {
     [0, 1, 2, 3].forEach((i) => m.scope(`a${i}`, `advance of input ${i}`, () => {
       m.output(`adv${i}`, m.orN([0, 1, 2, 3].map((j) => m.and(m.and(B[j], R[j]), m.eqConst(S[j], i)))));
     }));
-    return m.build();
+    return shaped(m.build(), 3 * SWF.RH + 24, { adv: 'left', src: 'right', busy: 'right', ready: 'right' }, (n) => {
+      const b = baseName(n), k = idxOf(n);
+      if (b in XB_ROWS.left) return SWF.RH * k + XB_ROWS.left[b];
+      if (b in XB_ROWS.right) return SWF.RH * k + XB_ROWS.right[b];
+      return undefined;
+    });
   });
 }
 
@@ -396,73 +416,132 @@ export function switchOptsOf(id: string): SwitchOpts | null {
   return ok && switchId(o) === id ? o : null;
 }
 
-/** The four-port switch, hand placed: input buffers on the left, the table's port and the table, the crossbar, the output ports on the right. */
+/** The switch's drawing (ethSwitch): the rows each box's pins stand on, so that the wires between boxes run straight. */
+export const SWF = { Y0: 8, RH: 32, XI: 40, XB_X: 80, XO: 130, XS: 75, XR: 113, G0: 64, S0: 68, T0: 79 };
+const IN_ROWS = {
+  left: { rxData: 2, rxValid: 4, rxLast: 6, rxErr: 8, rxReady: 10, drops: 12, bad: 14, lgrant: 18, tmask: 20, outBusy: 22 } as Record<string, number>,
+  right: { req: 2, dst: 4, src: 6, sel: 10, txData: 14, txLast: 16, txValid: 18, adv: 20, gnt: 22 } as Record<string, number>,
+};
+const OUT_ROWS = { left: { r: 2, end: 4, src: 6, busy: 8 } as Record<string, number>, right: { g: 2, frames: 8 } as Record<string, number> };
+const XB_ROWS = {
+  left: { txData: 14, txLast: 16, txValid: 18, adv: 20 } as Record<string, number>,
+  right: { data: 4, last: 6, valid: 8, ready: 10, end: 16, src: 18, busy: 20 } as Record<string, number>,
+};
+/** The column of each request (and, mirrored, grant) wire in its 4 × 4 matrix: the order with the fewest crossings. */
+const LANES = [3, 14, 11, 4, 5, 15, 9, 2, 6, 7, 1, 0, 10, 12, 13, 8];
+
+/**
+ * The four-port switch, drawn as a fabric: input buffers down the left, the crossbar beside them (each input's byte, last and
+ * valid straight into its multiplexer rows, `adv` straight back), the output ports' arbiters to its right, and below them the two
+ * 4 × 4 matrices that decide who goes: requests (an input's `sel` split into one wire per output, merged again per output) and
+ * grants (an output's `g` split per input, merged per input), each a transposition drawn as rows and columns. The table's port,
+ * the table, and the signals that fan out to every input (clk, the table's answers) stay pointers.
+ */
 export function ethSwitch(opts: Partial<SwitchOpts> = {}): ComponentDef {
   const o = withDefaults(opts);
   const id = switchId(o);
   return memo(id, () => {
     const IN = inputBuffer(o), OUT = outputPort(), XB = crossbar(), TP = tablePort(), TB = macTable(o.tableK, o.tickLog2);
-    const gi = symbolGeom(IN), go = symbolGeom(OUT), gx = symbolGeom(XB), gt = symbolGeom(TP), gb = symbolGeom(TB);
-    const sp4 = splitter(ones(4)), mg4 = merger(ones(4)), gs = symbolGeom(sp4), gm = symbolGeom(mg4);
-    const gap = 24, rowH = gi.h + 8;
-    const xi = 30, xt = xi + gi.w + gap, xx = xt + Math.max(gt.w, gb.w) + gap, xo = xx + gx.w + gap;
-    const y0 = 4, R = xo + go.w + 30;
+    const gt = symbolGeom(TP);
+    const sp4 = splitter(ones(4)), mg4 = merger(ones(4));
+    const { Y0, RH, XI, XB_X, XO, XS, XR, G0, S0, T0 } = SWF;
+    const YB = Y0 + 3 * RH + 26 + 12, YB2 = YB + 10 * 4 + 6;
+    const R = XO + 12 + 34, XT = R + 52, YT = Y0 + 4;
     const instances: InstanceDef[] = [];
-    I4.forEach((i) => instances.push({ name: `in${i}`, def: IN, at: [xi, y0 + i * rowH], label: `Port ${i} input` }));
-    instances.push({ name: 'tp', def: TP, at: [xt, y0], label: 'Table port' });
-    instances.push({ name: 'tb', def: TB, at: [xt, y0 + gt.h + 10], label: 'MAC table' });
-    instances.push({ name: 'xb', def: XB, at: [xx, y0], label: 'Crossbar' });
-    const oy = (j: number) => y0 + j * (go.h + 8);
-    I4.forEach((j) => instances.push({ name: `out${j}`, def: OUT, at: [xo, oy(j)], label: `Port ${j} output` }));
-    // plumbing strip below the tallest column: splitters and mergers between buses and single wires
-    const yb = Math.max(y0 + 4 * rowH, y0 + gt.h + 10 + gb.h) + 6;
-    const cell = Math.max(gs.h, gm.h) + 4, sx = (k: number) => xt - 4 + k * (gs.w + gm.w + 12);
-    let k = 0;
-    const place = (name: string, def: ComponentDef, row: number, col: number) => instances.push({ name, def, at: [sx(col), yb + row * cell] });
-    I4.forEach((i) => { place(`ss${i}`, sp4, 0, k); place(`rq${i}`, mg4, 1, k); place(`sg${i}`, sp4, 2, k); place(`gm${i}`, mg4, 3, k); k++; });
-    place('bz', mg4, 0, k); place('rqt', mg4, 1, k); place('sl', sp4, 2, k);
-    const nets: NetDef[] = [];
-    const tag = (name: string, ends: string[]) => nets.push({ name, ends, tags: true });
-    tag('clk', ['clk', ...I4.flatMap((i) => [`in${i}.clk`, `out${i}.clk`]), 'tp.clk', 'tb.clk']);
+    I4.forEach((i) => instances.push({ name: `in${i}`, def: IN, at: [XI, Y0 + i * RH], label: `Port ${i} input` }));
+    instances.push({ name: 'xb', def: XB, at: [XB_X, Y0], label: 'Crossbar' });
+    I4.forEach((j) => instances.push({ name: `out${j}`, def: OUT, at: [XO, Y0 + j * RH + 12], label: `Port ${j} output` }));
+    // the matrices: requests (ss → rq) above, grants (sg → gm) below; splitters / mergers whose bits are the rows
     I4.forEach((i) => {
-      for (const p of ['rxData', 'rxValid', 'rxLast', 'rxErr']) tag(`${p}${i}`, [`${p}${i}`, `in${i}.${p}`]);
-      tag(`rxReady${i}`, [`in${i}.rxReady`, `rxReady${i}`]);
-      tag(`txData${i}`, [`xb.data${i}`, `txData${i}`]); tag(`txValid${i}`, [`xb.valid${i}`, `txValid${i}`]); tag(`txLast${i}`, [`xb.last${i}`, `txLast${i}`]);
-      tag(`txReady${i}`, [`txReady${i}`, `xb.ready${i}`]);
-      tag(`drops${i}`, [`in${i}.drops`, `drops${i}`]); tag(`bad${i}`, [`in${i}.bad`, `bad${i}`]); tag(`frames${i}`, [`out${i}.frames`, `frames${i}`]);
-      tag(`d${i}`, [`in${i}.txData`, `xb.txData${i}`]); tag(`l${i}`, [`in${i}.txLast`, `xb.txLast${i}`]); tag(`v${i}`, [`in${i}.txValid`, `xb.txValid${i}`]);
-      tag(`adv${i}`, [`xb.adv${i}`, `in${i}.adv`]);
-      tag(`src${i}`, [`out${i}.src`, `xb.src${i}`]); tag(`busy${i}`, [`out${i}.busy`, `xb.busy${i}`, `bz.i${i}`]); tag(`end${i}`, [`xb.end${i}`, `out${i}.end`]);
-      tag(`sel${i}`, [`in${i}.sel`, `ss${i}.in`]);
-      tag(`r${i}`, [`rq${i}.out`, `out${i}.r`]);
-      tag(`g${i}`, [`out${i}.g`, `sg${i}.in`]);
-      tag(`gnt${i}`, [`gm${i}.out`, `in${i}.gnt`]);
-      for (const j of I4) {
-        tag(`sel${i}to${j}`, [`ss${i}.o${j}`, `rq${j}.i${i}`]);
-        tag(`g${i}for${j}`, [`sg${i}.o${j}`, `gm${j}.i${i}`]);
-      }
-      tag(`req${i}`, [`in${i}.req`, `rqt.i${i}`]); tag(`dst${i}`, [`in${i}.dst`, `tp.dst${i}`]); tag(`tsrc${i}`, [`in${i}.src`, `tp.src${i}`]);
-      tag(`lgrant${i}`, [`sl.o${i}`, `in${i}.lgrant`]);
-      tag(`tmask${i}`, ['tb.mask', `in${i}.tmask`]);
-      tag(`outBusy${i}`, ['bz.out', `in${i}.outBusy`]);
+      instances.push({ name: `ss${i}`, def: sp4, at: [XS, YB + 10 * i] }, { name: `rq${i}`, def: mg4, at: [XR, YB + 10 * i + 1] });
+      instances.push({ name: `sg${i}`, def: sp4, at: [XR, YB2 + 10 * i], flip: true }, { name: `gm${i}`, def: mg4, at: [XS, YB2 + 10 * i + 1], flip: true });
     });
-    tag('reqs', ['rqt.out', 'tp.req']);
-    tag('lgrants', ['tp.lgrant', 'sl.in']);
-    tag('op', ['tp.op', 'tb.op']); tag('tdst', ['tp.dst', 'tb.dst']); tag('tsrc', ['tp.src', 'tb.src']); tag('sport', ['tp.sport', 'tb.sport']);
-    for (const c of ['learned', 'evicted', 'flooded', 'filtered']) tag(c, [`tb.${c}`, c]);
+    // the table's side, below: pointers carry what it exchanges with the ports
+    const xtp = XT;
+    instances.push({ name: 'rqt', def: mg4, at: [xtp - 14, YT - 2] });
+    instances.push({ name: 'tp', def: TP, at: [xtp, YT], label: 'Table port' });
+    instances.push({ name: 'sl', def: sp4, at: [xtp + gt.w + 8, YT + 24] });
+    instances.push({ name: 'tb', def: TB, at: [xtp + gt.w + 28, YT + 4], label: 'MAC table' });
+    instances.push({ name: 'bz', def: mg4, at: [xtp + gt.w + 8, YT + 38] });
+    const nets: NetDef[] = [];
+    const net = (name: string, ends: string[], extra: Partial<NetDef> = {}) => nets.push({ name, ends, ...extra });
+    const tag = (name: string, ends: string[], tags: NetDef['tags'] = true, extra: Partial<NetDef> = {}) => nets.push({ name, ends, tags, ...extra });
+    const at = new Map(instances.map((i) => [i.name, i]));
+    const P = (end: string): [number, number] => {
+      const [inst, port] = end.split('.');
+      const i = at.get(inst)!;
+      return instPort(i.def, i.at!, i.flip, port, i.rot).pos;
+    };
+    // a lane: leave the driver, run to x, then to the sink's row
+    const lane = (n: NetDef, sink: string, x: number, ...more: [number, number][]) => { n.via = { ...n.via, [sink]: [[x, P(sink)[1]], ...more] }; };
+    // rx, counters and readiness at the left edge, the table's counters beside it; txReady / tx at the right
+    tag('clk', ['clk', ...I4.flatMap((i) => [`in${i}.clk`, `out${i}.clk`]), 'tp.clk', 'tb.clk']);
+    const sx = (i: number) => S0 + 3 - i;   // select lanes: input 3 leftmost (nothing crosses the request rows it passes)
+    const gx = (i: number) => G0 + 3 - i;   // grant lanes left of the select lanes
+    I4.forEach((i) => {
+      for (const p of ['rxData', 'rxValid', 'rxLast', 'rxErr']) net(`${p}${i}`, [`${p}${i}`, `in${i}.${p}`]);
+      net(`rxReady${i}`, [`in${i}.rxReady`, `rxReady${i}`]);
+      net(`drops${i}`, [`in${i}.drops`, `drops${i}`]); net(`bad${i}`, [`in${i}.bad`, `bad${i}`]);
+      net(`frames${i}`, [`out${i}.frames`, `frames${i}`]);
+      // the output side: the crossbar's three rows to the edge, the readiness back
+      net(`txData${i}`, [`xb.data${i}`, `txData${i}`]); net(`txValid${i}`, [`xb.valid${i}`, `txValid${i}`]); net(`txLast${i}`, [`xb.last${i}`, `txLast${i}`]);
+      net(`txReady${i}`, [`txReady${i}`, `xb.ready${i}`]);
+      // the input's byte, last and valid straight into the crossbar, its advance straight back
+      net(`d${i}`, [`in${i}.txData`, `xb.txData${i}`]); net(`l${i}`, [`in${i}.txLast`, `xb.txLast${i}`]); net(`v${i}`, [`in${i}.txValid`, `xb.txValid${i}`]);
+      net(`adv${i}`, [`xb.adv${i}`, `in${i}.adv`], { quiet: true });
+      // output ports: who drives (src), busy, the end of a frame, straight between the crossbar and the arbiter
+      net(`src${i}`, [`out${i}.src`, `xb.src${i}`], { quiet: true });
+      tag(`busy${i}`, [`out${i}.busy`, `xb.busy${i}`, `bz.i${i}`], [`bz.i${i}`], { quiet: true });
+      net(`end${i}`, [`xb.end${i}`, `out${i}.end`], { quiet: true });
+      // requests: the input's select, split one wire per output
+      const sel = { name: `sel${i}`, ends: [`in${i}.sel`, `ss${i}.in`], quiet: true } as NetDef;
+      nets.push(sel); lane(sel, `ss${i}.in`, sx(i));
+      const r = { name: `r${i}`, ends: [`rq${i}.out`, `out${i}.r`], quiet: true } as NetDef;
+      nets.push(r); lane(r, `out${i}.r`, XR + 5 + 2 * i);
+      const g = { name: `g${i}`, ends: [`out${i}.g`, `sg${i}.in`], quiet: true } as NetDef;
+      nets.push(g); lane(g, `sg${i}.in`, XO + 12 + 4 + 2 * i);
+      const gnt = { name: `gnt${i}`, ends: [`gm${i}.out`, `in${i}.gnt`], quiet: true } as NetDef;
+      nets.push(gnt); lane(gnt, `in${i}.gnt`, gx(i));
+      // what the table exchanges with the ports
+      tag(`req${i}`, [`in${i}.req`, `rqt.i${i}`], true, { quiet: true }); tag(`dst${i}`, [`in${i}.dst`, `tp.dst${i}`]); tag(`tsrc${i}`, [`in${i}.src`, `tp.src${i}`]);
+      tag(`lgrant${i}`, [`sl.o${i}`, `in${i}.lgrant`], true, { quiet: true });
+      tag(`tmask${i}`, ['tb.mask', `in${i}.tmask`], true, { quiet: true });
+      tag(`outBusy${i}`, ['bz.out', `in${i}.outBusy`], true, { quiet: true });
+    });
+    // the two matrices, wire (i, j) on its own column (lane): the order is the one with the fewest crossings (scripts/ethlanes)
+    I4.forEach((i) => I4.forEach((j) => {
+      const k = 4 * i + j, ln = LANES[k];
+      const rq = { name: `sel${i}to${j}`, ends: [`ss${i}.o${j}`, `rq${j}.i${i}`], quiet: true } as NetDef;
+      nets.push(rq); lane(rq, `rq${j}.i${i}`, T0 + 2 * ln);
+      const gr = { name: `g${i}for${j}`, ends: [`sg${i}.o${j}`, `gm${j}.i${i}`], quiet: true } as NetDef;
+      nets.push(gr); lane(gr, `gm${j}.i${i}`, T0 + 2 * (15 - ln));
+    }));
+    net('reqs', ['rqt.out', 'tp.req'], { quiet: true });
+    net('lgrants', ['tp.lgrant', 'sl.in'], { quiet: true });
+    net('op', ['tp.op', 'tb.op']); net('tdst', ['tp.dst', 'tb.dst']); net('tsrc', ['tp.src', 'tb.src']); net('sport', ['tp.sport', 'tb.sport']);
+    for (const c of ['learned', 'evicted', 'flooded', 'filtered']) net(c, [`tb.${c}`, c]);
     const ports: PortDef[] = [bit('clk', 'in', 'bottom', true),
       ...I4.flatMap((i) => [bus(`rxData${i}`, 8, 'in'), bit(`rxValid${i}`, 'in'), bit(`rxLast${i}`, 'in'), bit(`rxErr${i}`, 'in'), bit(`txReady${i}`, 'in')]),
       ...I4.flatMap((i) => [bit(`rxReady${i}`, 'out'), bus(`txData${i}`, 8, 'out'), bit(`txValid${i}`, 'out'), bit(`txLast${i}`, 'out'), bus(`drops${i}`, COUNT_BITS, 'out'), bus(`bad${i}`, COUNT_BITS, 'out'), bus(`frames${i}`, COUNT_BITS, 'out')]),
       ...['learned', 'evicted', 'flooded', 'filtered'].map((c) => bus(c, COUNT_BITS, 'out'))];
     const pins: Record<string, [number, number]> = {};
-    let yi = 2, yo = 2;
-    for (const p of ports) { if (p.dir === 'in') { pins[p.name] = [0, yi]; yi += 3; } else { pins[p.name] = [R, yo]; yo += 3; } }
+    const pinDirs: Record<string, 'up' | 'down' | 'left' | 'right'> = { clk: 'up' };
+    const inRow = (i: number, name: string) => Y0 + i * RH + IN_ROWS.left[name];
+    I4.forEach((i) => {
+      for (const p of ['rxData', 'rxValid', 'rxLast', 'rxErr', 'rxReady', 'drops', 'bad']) { pins[`${p}${i}`] = [0, inRow(i, p)]; pinDirs[`${p}${i}`] = 'right'; }
+      const cy = (k: string) => Y0 + RH * i + XB_ROWS.right[k];
+      pins[`txData${i}`] = [R, cy('data')]; pins[`txLast${i}`] = [R, cy('last')]; pins[`txValid${i}`] = [R, cy('valid')];
+      pins[`txReady${i}`] = [R, cy('ready')]; pinDirs[`txReady${i}`] = 'left';
+      pins[`frames${i}`] = [XO + 12 + 16, Y0 + RH * i + 12 + OUT_ROWS.right.frames]; pinDirs[`frames${i}`] = 'left';
+    });
+    pins.clk = [XI + 7, YB2 + 52];
+    ['learned', 'evicted', 'flooded', 'filtered'].forEach((c, k) => { pins[c] = [xtp + gt.w + 28 + 14 + 8, YT + 4 + 4 + 2 * k]; pinDirs[c] = 'left'; });
     return define({
       id, name: `4-port switch (${o.voq ? 'VOQ' : 'FIFO'}, ${o.cut ? 'cut-through' : 'store-and-forward'}, ${2 ** o.tableK}-entry table)`, category: 'routing',
       summary: 'Four ports, each a byte stream in and out. Every input buffers its frames in cells and asks the learning table once a frame; each output has a round-robin arbiter over the inputs that want it, and the crossbar of multiplexers carries the bytes. '
         + `${o.cut ? 'Cut-through: an output starts as soon as the table has answered.' : 'Store-and-forward: a frame is sent after its last byte has arrived.'} ${o.voq ? 'Each input keeps one queue per output.' : 'Each input keeps one FIFO.'}`,
       ports, symbol: { kind: 'box', label: 'SWITCH' },
-      netlist: () => ({ pins, instances, nets }),
+      netlist: () => ({ pins, pinDirs, instances, nets }),
       notes: 'Open any box to see how it is built. The cells and the table are RAM behaviours (their banks open down to flip-flops); everything else is NAND gates and the library flip-flops.',
     });
   });
