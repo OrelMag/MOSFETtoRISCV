@@ -179,8 +179,9 @@ export const MC_FSM: ComponentDef = (() => {
   // Each gap leaves room for a tag pointing right out of one column and one pointing left into the next.
   const tagLen = (s: string) => 2.8 + 0.5 * s.length;
   const longest = (xs: string[]) => Math.max(...xs.map(tagLen));
-  const stateTag = longest(MC_STATES.map((s) => s.name)), condTag = longest(MC_DISPATCH.map(([c]) => `is${c}`));
-  const xR = 8, xO = 8, xD = Math.ceil(xO + og.w + condTag + 1), yO = rg.h + 14;
+  const stateTag = longest(MC_STATES.map((s) => s.name));
+  // The opcode decoder sits below the state decoder: both feed the AND column, whose rows start level with Decode's wire.
+  const xR = 8, xD = 26, xO = xD, yO = 2 + dg.h + 3;
   instances.push(
     { name: 'st', def: REG, at: [xR, 2], label: 'state' },
     { name: 'one', def: TIE1, at: [xR - 8, 2 + rg.ports.en.pos[1] - 1] },
@@ -190,8 +191,8 @@ export const MC_FSM: ComponentDef = (() => {
   nets.push({ ends: ['one.y', 'st.en'] }, { name: 'state', ends: ['st.q', 'dec.a', 'state'], tags: ['state'] }, { name: 'op', ends: ['op', 'opd.op'] }, { name: 'clk', ends: ['clk', 'st.clk'] });
   const S = (i: number) => `dec.y${i}`;
   const trans = mcTransitions().map(([s, cls, t]): [number, string | null, number] => [s, cls && `opd.${cls}`, t]);
-  const xT = Math.ceil(xD + dg.w + stateTag + Math.max(stateTag, condTag) + 1);
-  let yT = 2, nT = 0;
+  const xT = xD + dg.w + 16;
+  let yT = 6, nT = 0;
   const termOf = trans.map(([s, cond], k) => {
     if (!cond) return S(s);
     const nm = `t${k}`;
@@ -202,7 +203,7 @@ export const MC_FSM: ComponentDef = (() => {
     sink(cond, `${nm}.b`);
     return `${nm}.y`;
   });
-  const xN = Math.ceil(xT + 4 + tagLen('t'.repeat(nT)) + stateTag + 1);
+  const xN = xT + 4 + 22;
   // The next-state ORs stacked; n0 wired straight into the merger, the others by tag.
   let yN = 2, yNx = 0;
   for (let b = 0; b < 4; b++) {
@@ -266,12 +267,91 @@ export const MC_FSM: ComponentDef = (() => {
     // State and condition wires fan out across the sheet by tag; an output OR is wired to its pin.
     nets.push({ name, ends: [drv, ...ss], tags: /^(o_|z)/.test(drv) ? undefined : true });
   }
+  // ---- drawn with wires: the state register's loop over the top, the opcode classes into the AND column, the AND column
+  // into the next-state ORs, the output ORs to their pins. Only the state wires that fan out to the next-state and output
+  // ORs stay pointers (their AND-column ends are wired: one trunk per state).
+  const inst = (n: string) => instances.find((i) => i.name === n)!;
+  const pos = (n: string, port: string): [number, number] => {
+    const i = inst(n), p = symbolGeom(i.def).ports[port].pos;
+    return [i.at![0] + p[0], i.at![1] + p[1]];
+  };
+  const byName = (n: string) => nets.find((x) => x.name === n)!;
+  const via = (n: string, end: string, pts: [number, number][]) => { const x = byName(n); x.via = { ...x.via, [end]: pts }; };
+  const wired = (n: string) => { delete byName(n).tags; };
+  const [qx, qy] = pos('st', 'q'), day = pos('dec', 'a')[1];
+  wired('state');
+  via('state', 'dec.a', [[qx + 3, qy], [qx + 3, day]]);
+  via('state', 'state', [[qx + 3, qy]]);
+  pins.state = [qx + 3, -3];
+  via('clk', 'st.clk', [[pos('st', 'clk')[0], pins.clk[1]]]);
+  const [nox, noy] = pos('nx', 'out');
+  wired('next');
+  via('next', 'st.d', [[nox + 3, noy], [nox + 3, -6], [xR - 4, -6], [xR - 4, pos('st', 'd')[1]]]);
+  for (let b = 1; b < 4; b++) wired(`next${b}`);
+  // opcode classes: a lane each, nested, between the opcode decoder and the AND trunks
+  const lane0 = xD + dg.w + 1;
+  MC_DISPATCH.forEach(([c], i) => {
+    const name = `is${c}`;
+    wired(name);
+    const n = byName(name), [sx, sy] = pos('opd', c);
+    const order = ['R', 'I', 'LOAD', 'STORE', 'BRANCH', 'JAL', 'JALR', 'LUI', 'AUIPC'].indexOf(c);
+    for (const e of n.ends.slice(1)) {
+      const [ex, ey] = pos(e.split('.')[0], e.split('.')[1]);
+      void ex;
+      n.via = { ...n.via, [e]: [[lane0 + order * 0.5, sy], [lane0 + order * 0.5, ey]] };
+    }
+    void sx; void i;
+  });
+  // state wires into the AND column: Decode's trunk, then MemAdr's to the two rows at the bottom
+  const trunk = (name: string, x: number) => {
+    const n = byName(name), [, sy] = pos('dec', 'y' + MC_STATES.findIndex((s) => s.name === name));
+    const ands = n.ends.filter((e) => /^t\d+\.a$/.test(e));
+    n.tags = n.ends.filter((e) => !/^t\d+\.a$/.test(e));
+    ands.forEach((e, k) => { const [, ey] = pos(e.split('.')[0], 'a'); if (k > 0 || ey !== sy) n.via = { ...n.via, [e]: [[x, sy], [x, ey]] }; });
+  };
+  trunk('Decode', xD + dg.w + 8);
+  trunk('MemAdr', xD + dg.w + 6);
+  // the AND terms into the next-state ORs: one lane each between the columns, ordered by a small search for the fewest crossings
+  const terms = nets.filter((n) => /^t[0-9]+$/.test(n.name ?? ''));
+  for (const n of terms) delete n.tags;
+  const tpath = (n: NetDef, x: number) => {
+    const [x0, y0] = pos(n.ends[0].split('.')[0], 'y');
+    return n.ends.slice(1).map((e) => { const [ex, ey] = pos(e.split('.')[0], e.split('.')[1]); return [[x0, y0], [x, y0], [x, ey], [ex, ey]] as [number, number][]; });
+  };
+  const crossings = (lanes: number[]) => {
+    const segs = terms.flatMap((n, i) => tpath(n, lanes[i]).flatMap((p) => p.slice(1).map((b, j) => ({ n: i, a: p[j], b }))));
+    let c = 0;
+    for (const u of segs) for (const v of segs) {
+      if (u.n === v.n || u.a[1] !== u.b[1] || v.a[0] !== v.b[0]) continue;
+      const lo = Math.min(u.a[0], u.b[0]), hi = Math.max(u.a[0], u.b[0]), vlo = Math.min(v.a[1], v.b[1]), vhi = Math.max(v.a[1], v.b[1]);
+      if (v.a[0] > lo && v.a[0] < hi && u.a[1] > vlo && u.a[1] < vhi) c++;
+    }
+    // two nets on one line is never allowed: priced far above a crossing
+    for (const u of segs) for (const v of segs) {
+      if (u.n >= v.n || u.a[1] !== u.b[1] || v.a[1] !== v.b[1] || u.a[1] !== v.a[1]) continue;
+      if (Math.min(Math.max(u.a[0], u.b[0]), Math.max(v.a[0], v.b[0])) > Math.max(Math.min(u.a[0], u.b[0]), Math.min(v.a[0], v.b[0]))) c += 100;
+    }
+    return c;
+  };
+  const laneBase = pos('t1', 'y')[0] + 3, order = terms.map((_, i) => i);
+  const xs = () => { const l = terms.map(() => 0); order.forEach((t, k) => { l[t] = laneBase + k; }); return l; };
+  for (let improved = true; improved;) {
+    improved = false;
+    for (let i = 0; i < order.length; i++) for (let j = i + 1; j < order.length; j++) {
+      const before = crossings(xs());
+      [order[i], order[j]] = [order[j], order[i]];
+      if (crossings(xs()) < before) improved = true; else [order[i], order[j]] = [order[j], order[i]];
+    }
+  }
+  const laneOf = xs();
+  terms.forEach((n, i) => tpath(n, laneOf[i]).forEach((p, k) => { n.via = { ...n.via, [n.ends[k + 1]]: [[laneOf[i], p[1][1]], [laneOf[i], p[2][1]]] }; }));
+  const pinDirs: Netlist['pinDirs'] = { state: 'down' };
   return define({
     id: 'mc_fsm', name: 'Hardwired multicycle controller', category: 'cpu',
     summary: `A finite-state machine: ${MC_STATES.length} states in a 4-bit register, a decoder giving one wire per state, AND gates for the opcode-dependent transitions, and OR gates for the next state and for every control signal.`,
     ports: ctrlPorts(),
     symbol: { kind: 'box', label: 'FSM CONTROL' },
-    netlist: () => ({ pins, instances, nets }),
+    netlist: () => ({ pins, pinDirs, instances, nets }),
     hdl: { verilog: fsmVerilog() },
   });
 })();
