@@ -11,7 +11,7 @@ import { caseView } from '../../widgets/faultbench';
 import { fmtRate } from '../../widgets/message';
 import '../../styles/signals.css';
 
-const ber = (b: number) => (b === 0 ? 'none counted' : b > 0.01 ? b.toFixed(2) : b.toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d+)/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`));
+const ber = (b: number) => (b === 0 ? 'none counted' : b > 0.01 ? b.toFixed(2) : b.toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d+)/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`).replace(/^1\.0 × /, ''));
 
 interface Picked { c: FaultCase; pick: number | null }
 

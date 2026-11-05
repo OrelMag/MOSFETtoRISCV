@@ -11,25 +11,25 @@ import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
 
-/** A round upper end for an axis: 1, 2 or 5 times a power of ten, at or above v. */
+/** A round upper end for an axis, at or above v. */
 function niceTop(v: number): number {
   const p = 10 ** Math.floor(Math.log10(Math.max(v, 1e-9)));
-  for (const m of [1, 2, 5, 10]) if (m * p >= v) return m * p;
+  for (const m of [1, 1.5, 2, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
   return 10 * p;
 }
 const axis = (v: number): string => (Math.abs(v) >= 1e6 ? `${+(v / 1e6).toPrecision(3)} M` : Math.abs(v) >= 1e3 ? `${+(v / 1e3).toPrecision(3)} k` : `${+v.toPrecision(3)}`);
 
 function drawEvidence(e: Evidence): HTMLElement {
-  const box = h('div', { class: 'fb-ev' }, h('h3', null, e.title));
+  const box = h('div', { class: 'fb-ev' }, h('h3', null, e.kind === 'series' ? `${e.title}, ${e.yLabel}` : e.title));
   if (e.kind === 'lines') box.append(h('pre', { class: 'fb-lines', tabindex: 0 }, e.lines.join('\n')));
   else if (e.kind === 'counters') box.append(h('div', { class: 'fb-rows' }, ...e.rows.map(([k, v]) => h('div', null, h('span', null, k), h('b', null, v)))));
   else if (e.kind === 'series') {
     const xMax = niceTop(Math.max(1, ...e.lines.flatMap((l) => l.xs))), yMax = niceTop(Math.max(1, ...e.lines.flatMap((l) => l.ys)));
-    const p = plotOf({ W: 640, H: 170, x: [0, xMax], y: [0, yMax * 1.05], yTicks: [0, yMax / 2, yMax], xLabel: e.xLabel, yLabel: e.yLabel, aria: e.title, xFmt: axis, yFmt: axis });
+    const p = plotOf({ W: 640, H: 170, x: [0, xMax], y: [0, yMax * 1.05], yTicks: [0, yMax / 2, yMax], xLabel: e.xLabel, yLabel: '', aria: e.title, xFmt: axis, yFmt: axis });
     for (const l of e.lines) line(p, l.xs, l.ys, 'ln-s real');
     box.append(p.el);
   } else {
-    const p = plotOf({ W: 640, H: 230, x: [0, 2], y: [-1.4, 1.4], yTicks: [-1, 0, 1], xLabel: 'bit periods', yLabel: 'of the swing', aria: `${e.title}: many bits drawn on top of one another` });
+    const p = plotOf({ W: 640, H: 230, x: [0, 2], y: [-1.4, 1.4], yTicks: [-1, 0, 1], xLabel: 'bit periods', yLabel: '', aria: `${e.title}: many bits drawn on top of one another` });
     const u = rng(77), g = p.layer.appendChild(s('g', { class: 'ln-eye' })), S = e.spu;
     for (let i = 24; i + 3 < e.wave.length / S && i < 190; i++) {
       let d = '';
