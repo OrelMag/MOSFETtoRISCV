@@ -11,9 +11,10 @@ export const MORE9C: Record<string, CodexMore> = {
 FIR, equiripple        115 taps                     58 multiplications (folded)
 Butterworth            order 37, 19 sections        93
 Chebyshev I            order 14, 7 sections         35
-elliptic               order 8, 4 sections          20   (16 if the symmetric numerators fold)
+elliptic               order 8, 4 sections          20   (16 if numerators fold)
 
-y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0  →  z = 0.75 ± 0.371j,  r = √0.7 = 0.837 &lt; 1: stable</pre>The elliptic design spends its ripple in both bands on steepness, which is why it needs the lowest order: 58 / 20 = 2.9 times fewer multiplications than the shortest FIR filter. The coefficient 1.5 is larger than 1 and harmless; it is the roots that count.`,
+y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0
+  →  z = 0.75 ± 0.371j,  r = √0.7 = 0.837 &lt; 1: stable</pre>The elliptic design spends its ripple in both bands on steepness, which is why it needs the lowest order: 58 / 20 = 2.9 times fewer multiplications than the shortest FIR filter. The coefficient 1.5 is larger than 1 and harmless; it is the roots that count.`,
     },
     mistakes: [
       'Calling a filter stable because its coefficients are small. A coefficient above 1 can be harmless and one below 1 can sit beside a pole outside the circle; the test is the roots, or for a section the triangle |a₂| &lt; 1, |a₁| &lt; 1 + a₂.',
@@ -32,10 +33,12 @@ y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0  →  z = 0
     idea: `Analog filter design is old and well tabulated, and the <b>bilinear transform</b> carries a design from the s-plane to the z-plane by the substitution z = (2 + s) / (2 − s) for one sample a second. The imaginary axis, where an analog filter's frequency response lives, becomes the unit circle; the left half-plane, where stable poles live, becomes the inside of the circle. So the map keeps stability, always, and every pole and zero of the analog design is mapped one by one. The zeros an analog low-pass has at infinity come to rest at z = −1, half the sample rate.<br><br>The map is not linear in frequency. All of ω from 0 to infinity lands on half a turn, f = atan(ω / 2) / π cycles a sample, close to ω / 2π while ω is small and squeezed hard as it grows. An edge placed by 2π f therefore lands too low, so the prototype is <b>prewarped</b>: scaled to 2 tan(π f), which the map sends back to exactly f. The edges are then right and the shape between them is the analog filter's, compressed.`,
     example: {
       title: 'Where an edge lands, with and without prewarping',
-      body: `<pre>s = −2 → z = 0       s = −1 → z = 1/3       s = 0 → z = 1       s = j2 → z = (2 + 2j) / (2 − 2j) = j   (|z| = 1)
+      body: `<pre>s = −2 → z = 0      s = −1 → z = 1/3      s = 0 → z = 1
+s = j2 → z = (2 + 2j) / (2 − 2j) = j   (|z| = 1)
 edge asked 0.1, scaled by 2π × 0.1 = 0.628:   lands at atan(0.628 / 2) / π = 0.0969
 edge asked 0.4, scaled by 2π × 0.4 = 2.513:   lands at 0.286
-edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2;   unwarped 2π × 0.2 = 1.257 → lands at 0.179</pre>Prewarping is a change of the prototype's scale only: nothing is added to the hardware.`,
+edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2
+   unwarped: 2π × 0.2 = 1.257 → lands at 0.179</pre>Prewarping is a change of the prototype's scale only: nothing is added to the hardware.`,
     },
     mistakes: [
       'Scaling the prototype by 2π f and expecting the edge at f. The error is small near 0.1 and large near 0.4, where it lands at 0.286; prewarp with 2 tan(π f).',
@@ -51,7 +54,7 @@ edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2;   unwarped 2π
       title: 'What the chapter\'s section costs',
       body: `<pre>5 multipliers (16 × 16 tree) × 3,572 NANDs     = 17,860
 everything else: adders, rounder, clamp, registers     =  2,453
-the whole section                                 = 20,313 NANDs, 135 NAND delays clock to clock
+the whole section                                 = 20,313 NANDs, 135 delays
 accumulator: 32-bit products + 3 guard bits       = 35 bits
 radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14,787</pre>Multipliers are 88 % of the section. Four such sections are the elliptic filter of the mask: 4 × 5 = 20 multiplications a sample.`,
     },
@@ -68,7 +71,7 @@ radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14,787
     ],
   },
   coefsens: {
-    idea: `In a register a coefficient is a multiple of a step, so the poles a section can have are the roots for coefficient pairs on a <b>lattice</b>, and nothing else. In Q2.(b − 2) the step is 2^−(b − 2). A step in a₂ moves the radius by about step / 2r wherever the pole is; a step in a₁ moves the angle by about step / (2r sin θ), which grows as θ falls. The lattice is sparsest near z = 1, which is exactly where a narrow low-pass filter needs its poles. The register takes the nearest values of a₁ and a₂, not the nearest pole, so a radius of 0.97 can become 1.<br><br>For a high-order polynomial the damage is worse. To first order a change δ in one coefficient moves a pole by δ times 1 / ∏|pᵢ − pⱼ|, the distances to the other poles, and poles in a tight cluster have small distances. The narrow elliptic filter has its poles clustered near z = 1, so one unit in the last place moves the worst of them by thousands of units; in a section the factor depends on the pair's own spacing, 1 / (2 Im p), alone. That is the argument for sections, and stability is only the floor: a stable filter can still be far from its mask.`,
+    idea: `In a register a coefficient is a multiple of a step, so the poles a section can have are the roots for coefficient pairs on a <b>lattice</b>, and nothing else. In Q2.(b − 2) the step is 2<sup>−(b − 2)</sup>. A step in a₂ moves the radius by about step / 2r wherever the pole is; a step in a₁ moves the angle by about step / (2r sin θ), which grows as θ falls. The lattice is sparsest near z = 1, which is exactly where a narrow low-pass filter needs its poles. The register takes the nearest values of a₁ and a₂, not the nearest pole, so a radius of 0.97 can become 1.<br><br>For a high-order polynomial the damage is worse. To first order a change δ in one coefficient moves a pole by δ times 1 / ∏|pᵢ − pⱼ|, the distances to the other poles, and poles in a tight cluster have small distances. The narrow elliptic filter has its poles clustered near z = 1, so one unit in the last place moves the worst of them by thousands of units; in a section the factor depends on the pair's own spacing, 1 / (2 Im p), alone. That is the argument for sections, and stability is only the floor: a stable filter can still be far from its mask.`,
     example: {
       title: 'A pole at radius 0.97 and 0.04 cycles a sample, and the narrow filter',
       body: `<pre>bits  step    a₁ held   a₂ held   result
@@ -79,7 +82,8 @@ radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14,787
 narrow elliptic filter (order 6), coefficients rounded:
   one polynomial: unstable at every width 8 … 19 bits, stable from 20
   three sections: stable at every width from 8 bits
-  worst-pole sensitivity: 3,021 per unit as a polynomial, 6.5 in a section (about 470 times less)</pre>The asked a₂ = r² = 0.9409 rounds to 1.000 at a step of 1/8; the filter whose designer asked for a fast decay now has an oscillator.`,
+  worst-pole sensitivity: 3,021 per unit as a polynomial, 6.5 in a section
+  (about 470 times less)</pre>The asked a₂ = r² = 0.9409 rounds to 1.000 at a step of 1/8; the filter whose designer asked for a fast decay now has an oscillator.`,
     },
     mistakes: [
       'Rounding to the nearest pole instead of the nearest coefficients. The register holds a₁ and a₂ rounded independently, and the pole it makes can be a long way from the one asked for.',
@@ -97,12 +101,15 @@ narrow elliptic filter (order 6), coefficients rounded:
     example: {
       title: 'The chapter\'s resonator: radius 0.95, a quarter of the rate',
       body: `<pre>a₂ = 14,787 / 2¹⁴ = 0.9025    one input word of 8,000, then silence
-y = 5:   −0.9025 × 5 = −4.51  → rounds to −5      y = −5: +4.51 → 5      the output repeats 5, 0, −5, 0
-dead band ½ / (1 − 0.9025) = 5.13: y = 1 … 5 each map to themselves; y = 6 → 5.4 → 5 shrinks
+y = 5:   −0.9025 × 5 = −4.51  → rounds to −5      y = −5: +4.51 → 5
+so the output repeats 5, 0, −5, 0
+dead band ½ / (1 − 0.9025) = 5.13: y = 1 … 5 each map to themselves;
+y = 6 → 5.4 → 5 shrinks
 rounded toward zero: 4.51 → 4, then −3.61 → −3 …   falls to 0
 
 sweep, 176 runs (radius 0.90 … 0.97, 11 angles, 2 inputs, 2 bursts):
-  half up 176    floor 59    toward zero 0    half up + 4 extra bits 22    toward zero + 4 extra bits 0</pre>The cycle sets in at about clock 87 and is 5 least significant bits, −76 dBFS. A finer sweep to radius 0.995 (294 runs each) found 2 cycling at 0.98, 1 at 0.99 and 1 at 0.995 with toward zero alone.`,
+  half up 176    floor 59    toward zero 0
+  half up + 4 extra bits 22    toward zero + 4 extra bits 0</pre>The cycle sets in at about clock 87 and is 5 least significant bits, −76 dBFS. A finer sweep to radius 0.995 (294 runs each) found 2 cycling at 0.98, 1 at 0.99 and 1 at 0.995 with toward zero alone.`,
     },
     mistakes: [
       'Blaming the pole radius. The radius is 0.95 and the coefficients do not change while it runs; the cycle is the rounding nonlinearity inside the loop.',
@@ -119,8 +126,9 @@ sweep, 176 runs (radius 0.90 … 0.97, 11 angles, 2 inputs, 2 bursts):
     idea: `<b>Decimation</b> keeps every R-th sample and drops the rest, which is cheap and has the problem sampling always has. The new rate has a new half-rate, and whatever lay above it folds into the band, as a tone that cannot be told apart from one that belonged there, and nothing later can remove it. A frequency f of the old rate becomes R f cycles a sample, and the new frequency is the distance from R f to the nearest whole number: 0.3 decimated by 4 is 1.2 and lands at 0.2. So the filter must come first, and it must run at the old rate, where it is at its most expensive.<br><br>Everything about changing the rate is about paying less for that one filter. A filter's price is taps × rate, so lowering the rate early makes everything after it R times cheaper; polyphase branches skip the outputs that would be dropped; half-band stages halve the rate with half their taps zero; and a CIC makes the first large drop with adders alone. The mixer that brings one station to zero is what makes the rest of the sampled band a waste, which is why a software radio decimates straight after it.`,
     example: {
       title: 'Two tones that become one, and the price of the job',
-      body: `<pre>÷ 4:  0.30 × 4 = 1.2 cycles a sample → 0.2        0.45 × 4 = 1.8 → 0.2        both samples: cos 2π(0.2)k
-a tone at 0.3 of the input rate, no filter: it lands at 0.2 of the new rate and stays there
+      body: `<pre>÷ 4:  0.30 × 4 = 1.2 cycles a sample → 0.2      0.45 × 4 = 1.8 → 0.2
+both look like cos 2π(0.2)k once sampled
+a tone at 0.3 of the input rate, no filter: it lands at 0.2 of the new rate for good
 
 the job: ÷ 64, keep 40 % of the new rate, 50 dB down from 60 %
   one filter at the input rate               1,037 taps    1,037 multiplications a sample
@@ -163,20 +171,22 @@ a low-pass at 0.125 of the new rate keeps 0.025 and removes the three images</pr
     ],
   },
   polyphase: {
-    idea: `A filter followed by a decimator by R computes R outputs and keeps one. Write down one output that survives, y[Rk] = Σ h[j] x[Rk − j], and sort its terms by j mod R. Taps 0, R, 2R, … only meet samples at positions divisible by R; taps 1, R + 1, … only meet those one before that. So each group of taps becomes a <b>branch</b> that receives every R-th input sample and runs at the low rate, and together the branches compute the same sum, each once per output.<br><br>Nothing is approximated: the same products are added in another order. In integers, as in the gates, the two forms agree to every bit; in floating point they differ in the last place. What changes is the count. N taps cost N multiplications an input sample done directly and N / R by branches, and in hardware the saving is in the multipliers: one multiplier per tap of a branch, sharing the branches through multiplexers and a coefficient ROM. The saving grows with R, which is why it is the first thing done to a large rate change, and why the same split serves the interpolator, with its zeros instead of its dropped outputs.`,
+    idea: `A filter followed by a decimator by R computes R outputs and keeps one. Write down one output that survives, y[Rk] = Σ h[j] x[Rk − j], and sort its terms by j mod R. Taps 0, R, 2R, … only meet samples at positions divisible by R; taps 1, R + 1, … only meet those one before that. So each group of taps becomes a <b>branch</b> that receives every R-th input sample, and together the branches compute the same sum, each once per output.<br><br>Nothing is approximated: the same products are added in another order. In integers, as in the gates, the two forms agree to every bit; in floating point they differ in the last place. What changes is the count. N taps cost N multiplications an input sample done directly and N / R by branches, and in hardware the saving is in the multipliers: one multiplier per tap of a branch, sharing the branches through multiplexers and a coefficient ROM. The saving grows with R, which is why it is the first thing done to a large rate change, and why the same split serves the interpolator, with its zeros instead of its dropped outputs.`,
     example: {
       title: 'The chapter\'s polyphase decimator, 8-bit samples, ÷ 4 over 16 taps',
       body: `<pre>64 taps, ÷ 8:   direct 64 multiplications an input sample      branches 64 / 8 = 8
 gates, R = 4, M = 4 (16 taps):
-  4 multipliers × 972 NANDs = 3,888       a direct filter on this clock would need 16 × 972 = 15,552
-  the whole decimator: 7,809 NANDs        (storage is the same either way: every sample is held somewhere)
+  4 multipliers × 972 NANDs = 3,888
+  a direct filter on this clock would need 16 × 972 = 15,552
+  the whole decimator: 7,809 NANDs
+  (storage is the same either way: every sample is held somewhere)
   sum held in full: 2 × 8 + log₂ 16 = 20 bits, no rounding, no saturation</pre>The multiplier saving is the factor R; the registers and the adder are common to both forms.`,
     },
     mistakes: [
       'Thinking polyphase approximates the filter. It computes exactly the surviving outputs of the same filter; only the dropped results are skipped.',
       'Saving taps instead of multiplications. All N taps are still stored; what falls by R is the products an input sample, and so the multipliers.',
       'Splitting the taps by blocks (the first M, the next M) instead of by index mod R. The branches must hold every R-th tap, so that each meets samples at one fixed offset.',
-      'Expecting the branches to need a different input rate. Each runs at the output rate, fed every R-th input sample; the commutator is a counter and a multiplexer.',
+      'Expecting the branches to need a different input rate. Each branch sees only every R-th input sample; the commutator is a counter and a multiplexer.',
     ],
     chapters: [
       { chapter: 'multirate', step: 2, label: 'Why compute what you throw away?' },
@@ -206,11 +216,12 @@ symmetric pairs share one:      centre + 6 pairs         → 7 multipliers (23 �
     ],
   },
   cic: {
-    idea: `The cheapest low-pass there is, a moving average of R samples, has every tap equal to 1, and its sum can be kept running: y[n] = y[n − 1] + x[n] − x[n − R], an <em>integrator</em> and then a <em>comb</em> that subtracts a delayed copy. Put the integrator before the rate change and the comb after it, and the comb's R-sample delay at the high rate becomes a one-sample delay at the low rate: no line of R samples any more. Stack N of each and you have N moving averages in a row, a <b>cascaded integrator-comb</b> (Hogenauer, 1981): N adders at the high rate, N subtractors at the low rate, no multiplier and no sample memory.<br><br>Its response is the moving average's to the Nth power, (sin(π R f) / (R sin(π f)))^N. Every multiple of the new rate is a null, and those are exactly the frequencies that would fold onto DC, so what is about to alias is what it stops best. But it droops across the kept band, and between the nulls it rejects much less. The integrators overflow constantly and it does not matter: only differences of them reach the output, and two's complement differences are right modulo the word. The only sizing is the output's, N log₂ R bits more than the input. It does the large rate change at the rate where multipliers cost most, and a short ordinary filter after it, at the low rate, flattens the droop.`,
+    idea: `The cheapest low-pass there is, a moving average of R samples, has every tap equal to 1, and its sum can be kept running: y[n] = y[n − 1] + x[n] − x[n − R], an <em>integrator</em> and then a <em>comb</em> that subtracts a delayed copy. Put the integrator before the rate change and the comb after it, and the comb's R-sample delay at the high rate becomes a one-sample delay at the low rate: no line of R samples any more. Stack N of each and you have N moving averages in a row, a <b>cascaded integrator-comb</b> (Hogenauer, 1981): N adders at the high rate, N subtractors at the low rate, no multiplier and no sample memory.<br><br>Its response is the moving average's to the Nth power, (sin(π R f) / (R sin(π f)))<sup>N</sup>. Every multiple of the new rate is a null, and those are exactly the frequencies that would fold onto DC, so what is about to alias is what it stops best. But it droops across the kept band, and between the nulls it rejects much less. The integrators overflow constantly and it does not matter: only differences of them reach the output, and two's complement differences are right modulo the word. The only sizing is the output's, N log₂ R bits more than the input. It does the large rate change at the rate where multipliers cost most, and a short ordinary filter after it, at the low rate, flattens the droop.`,
     example: {
       title: 'Order 3, ÷ 8, from 8-bit samples (the chapter\'s gates)',
-      body: `<pre>DC gain R^N = 8³ = 512 = 2⁹   →   8 + 3 log₂ 8 = 17 bits
-worst input: the most negative word, held:  −128 × 512 = −65,536 = −2¹⁶, which just fills 17 bits
+      body: `<pre>DC gain R<sup>N</sup> = 8³ = 512 = 2⁹   →   8 + 3 log₂ 8 = 17 bits
+worst input, the most negative word held: −128 × 512 = −65,536 = −2¹⁶
+which just fills 17 bits
 impulse response: 3 boxcars of 8 convolved = 22 taps summing to 512
 a tone at 1/8 of the input rate (one whole cycle in 8 samples): response 0, a null
 at the new Nyquist (f = 1/16): 0.263 of DC, −11.6 dB: the droop
@@ -218,7 +229,7 @@ gates: 3,010 NANDs, no multiplier</pre>Order 4 and ÷ 16 would need 4 × 4 = 16 
     },
     mistakes: [
       'Saturating the integrators to stop them overflowing. The comb needs the wrapped number: a clamped register has lost the value whose difference is wanted.',
-      'Sizing the registers by the input\'s width. They must grow by N log₂ R bits (Hogenauer\'s (R M)^N gain with M = 1), and every stage needs the top bit.',
+      'Sizing the registers by the input\'s width. They must grow by N log₂ R bits (Hogenauer\'s (R M)<sup>N</sup> gain with M = 1), and every stage needs the top bit.',
       'Expecting a flat band and a sharp edge. The response droops and falls only slowly between nulls, so it is a first stage, not a whole decimator.',
       'Counting it as free. It has no multipliers, but its adders run at the input\'s full rate and set the clock; multiplications are all the cascade table counts.',
     ],
@@ -234,12 +245,13 @@ gates: 3,010 NANDs, no multiplier</pre>Order 4 and ÷ 16 would need 4 × 4 = 16 
     example: {
       title: 'Rotating by 30°, then pricing the stages',
       body: `<pre>start x = 0.607253, y = 0, z = 30°        angle left after each stage (turn d = ±1):
- stage 0  z ≥ 0: turn +45°     → −15.000°        stage 3  z &lt; 0: turn −7.125°  →  4.654°
+ stage 0  z ≥ 0: turn +45°     → −15.000°      stage 3  z &lt; 0: turn −7.125°  →  4.654°
  stage 1  z &lt; 0: turn −26.57° →  11.565°        stage 4  z ≥ 0: turn +3.58°   →  1.077°
  stage 2  z ≥ 0: turn +14.04° →  −2.471°        stage 5  z ≥ 0                 → −0.712°
 after 12 stages: cos 0.86591, sin 0.50020  (true 0.86603, 0.5), length 1.000
 a stage, 14-bit (stage 3): 564 NANDs        pipeline of 12: 15,537 NANDs, 9.0 good bits
-iterative: 2,551 NANDs, 13 clocks            four 16 × 16 multipliers: 4 × 3,572 = 14,288 before the sine is found</pre>Vectoring (3, 4): x ends at 8.2338 = 5 × 1.6468, z at 53.11° against the true 53.13°.`,
+iterative: 2,551 NANDs, 13 clocks
+four 16 × 16 multipliers: 4 × 3,572 = 14,288, before the sine is found</pre>Vectoring (3, 4): x ends at 8.2338 = 5 × 1.6468, z at 53.11° against the true 53.13°.`,
     },
     mistakes: [
       'Skipping a stage when the angle left is already small. Every stage must run so that the gain is one fixed number; skip some and each angle gets its own gain.',
@@ -255,10 +267,10 @@ iterative: 2,551 NANDs, 13 clocks            four 16 × 16 multipliers: 4 × 3,5
     ],
   },
   cordicgain: {
-    idea: `Each CORDIC stage dropped a cos θ, so it lengthens the vector by 1 / cos(atan 2^−i) = √(1 + 2^−2i): 1.414 at stage 0, 1.118 at stage 1, rapidly nearer 1. Over many stages the product settles at 1.6468, and its inverse, 0.607253, is the constant to start from. The reason it can be paid in advance is that every stage runs whatever the angle, either way, and cos(−θ) = cos θ: the gain never depends on what was asked for. Begin at x = 0.607253, y = 0 and the output is cosine and sine with no multiplier at the end.<br><br>The consequences are for the word. The vector grows along the way: an input with both coordinates at full scale is √2 long and stretched becomes 2.33 times the range of either, so x and y need two more bits at the top, and nothing saturates because the sizing keeps it from having to. Vectoring returns a length that is still stretched by 1.6468 in x; a design that wants the true magnitude multiplies once at the end, or scales the result. And a design that skips stages loses the property, because each skipped combination has its own gain.`,
+    idea: `Each CORDIC stage dropped a cos θ, so it lengthens the vector by 1 / cos(atan 2<sup>−i</sup>) = √(1 + 2<sup>−2i</sup>): 1.414 at stage 0, 1.118 at stage 1, rapidly nearer 1. Over many stages the product settles at 1.6468, and its inverse, 0.607253, is the constant to start from. The reason it can be paid in advance is that every stage runs whatever the angle, either way, and cos(−θ) = cos θ: the gain never depends on what was asked for. Begin at x = 0.607253, y = 0 and the output is cosine and sine with no multiplier at the end.<br><br>The consequences are for the word. The vector grows along the way: an input with both coordinates at full scale is √2 long and stretched becomes 2.33 times the range of either, so x and y need two more bits at the top, and nothing saturates because the sizing keeps it from having to. Vectoring returns a length that is still stretched by 1.6468 in x; a design that wants the true magnitude multiplies once at the end, or scales the result. And a design that skips stages loses the property, because each skipped combination has its own gain.`,
     example: {
       title: 'The gain, stage by stage, and what the start value does',
-      body: `<pre>stage factor √(1 + 2^−2i):  1.4142  1.1180  1.0308  1.0078  …
+      body: `<pre>stage factor √(1 + 2<sup>−2i</sup>):  1.4142  1.1180  1.0308  1.0078  …
 cumulative after 1, 2, 3 stages:  1.4142   1.5811   1.6298     after 24 stages: 1.6468
 1 / 1.6468 = 0.607253
 rotate (1, 0) by 30°, 12 stages, no prescale:   length 1.6468
@@ -266,7 +278,7 @@ rotate (0.607253, 0) by 30°, 12 stages:         length 1.0000
 a vector √2 long: √2 × 1.6468 = 2.33 times the range of one coordinate → 2 more bits</pre>The gain depends on the number of stages only: 12 or 24, not on the angle.`,
     },
     mistakes: [
-      'Thinking each stage turns by a different amount of length. The gain per stage depends only on i; the sign of the turn does not matter, so the total is a constant.',
+      'Thinking the gain depends on the angle asked for. Each stage\'s factor depends only on i; the sign of the turn does not matter.',
       'Dividing by 1.6468 at the end. The start value 0.607253 does it before the first stage, at no cost at all.',
       'Sizing x and y by the input\'s range. The stretched vector needs two more bits at the top; a word with none overflows at full scale.',
       'Forgetting the gain in vectoring mode. The magnitude comes out as 1.6468 times the length, and the angle is unaffected.',

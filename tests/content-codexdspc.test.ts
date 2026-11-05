@@ -108,6 +108,7 @@ describe('group C: iir', () => {
     expect([k4.a1, k4.a2, k4.state]).toEqual([-2, 1, 'unstable']);
     expect(k5.asked.a2.toFixed(4)).toBe('0.9409');
     expect(k5.step).toBe(1 / 8);
+    expect((Math.atan2(k5.roots[0].im, k5.roots[0].re) / TAU).toFixed(3)).toBe('0.057');
     expect(k4.step).toBe(1 / 4);
     const un = directUnstable();
     expect([un[0], un[un.length - 1], un.length]).toEqual([8, 19, 12]);
@@ -118,7 +119,7 @@ describe('group C: iir', () => {
     expect(s.sections.toFixed(1)).toBe('6.5');
     expect(Math.round(s.direct / s.sections / 10) * 10).toBe(470);
     expect(3 * 5 - 13).toBe(2);
-    quotes('coefsens', '0.968', '−1.875', '0.9375', '0.9409', '3,021', '6.5', '470', '8 … 19', 'from 20', '0.97', '0.04', '1/16', '1/8', '1/4');
+    quotes('coefsens', '0.057', '0.968', '−1.875', '0.9375', '0.9409', '3,021', '6.5', '470', '8 … 19', 'from 20', '0.97', '0.04', '1/16', '1/8', '1/4');
     says('iir', 2, `radius ${k5.radius.toFixed(3)}`);
     says('iir', 3, `${un[0]} to ${un[un.length - 1]} bits`);
   });
