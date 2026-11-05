@@ -53,6 +53,7 @@ const BOOK = [
   'uart',
   'spi',
   'modem',
+  'carriers',
   'serial',
   'errors',
   'ethernet',

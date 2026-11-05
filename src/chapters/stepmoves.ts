@@ -12,7 +12,12 @@ export interface StepMove {
   title: string;
 }
 
-export const STEP_MOVES: readonly (readonly StepMove[])[] = [];
+export const STEP_MOVES: readonly (readonly StepMove[])[] = [
+  [
+    { from: 'modem', step: 7, to: 'carriers', toStep: 0, title: 'Many tones, one FFT' },
+    { from: 'modem', step: 8, to: 'carriers', toStep: 5, title: 'ADSL: many carriers' },
+  ],
+];
 
 export interface StepPlace { chapter: string; step: number }
 

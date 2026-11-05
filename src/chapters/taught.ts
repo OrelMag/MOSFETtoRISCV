@@ -179,7 +179,7 @@ export const TAUGHT: Record<string, string> = {
   spi: 'spi',
   i2c: 'spi',
   qam: 'modem',
-  ofdm: 'modem',
+  ofdm: 'carriers',
   linecode: 'serial',
   cdr: 'serial',
   eye: 'serial',

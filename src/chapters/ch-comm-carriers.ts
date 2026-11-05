@@ -1,16 +1,20 @@
 // Many carriers (level Communication): why split a channel into thousands of tones, and what that takes. The FFT in gates is lib/fft.ts, the butterfly, an 8-point network and a streaming pipeline,
 // compared with the integer model comm/fftfix.ts on every register every clock (tests/comm-fft.test.ts). Water-filling, loading, the peak and the carrier offset are comm/carriers.ts, closed forms held
-// to searches and to runs of the real transform (tests/comm-carriers.test.ts). The tones and the prefix are comm/fourier.ts; ADSL's loop is comm/modem.ts's illustrative model.
+// to searches and to runs of the real transform (tests/comm-carriers.test.ts). The tones and the prefix are comm/fourier.ts; ADSL's loop is comm/modem.ts's illustrative model. Tones and ADSL came from Modems.
 
 import { blockTime, dataShare, equalizerTaps, flatBest, flatPower, loadBits, offsetSirDb, SYSTEMS, waterFill } from '../comm/carriers';
 import { fftSnrDb, streamLatency, twiddleCount } from '../comm/fftfix';
-import { fftMults } from '../comm/fourier';
-import { ADSL, DOWN_TONES, gapDb, snrForSer, toneSnrDb } from '../comm/modem';
+import { fftMults, ofdmLink, randomQpsk } from '../comm/fourier';
+import { ADSL, bitLoad, DOWN_TONES, gapDb, snrForSer, toneSnrDb } from '../comm/modem';
+import { arrayMul } from '../lib/muldiv';
 import { fftDelay, fftNet, fftStream, fxCmul, fxCore, fxRoot, fxRot45 } from '../lib/fft';
 import { flatten } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import { analyzeTiming, PS_PER_NAND } from '../sim/timing';
 import { BF_K, BF_N, bfApi, breakWidget, butterflyScene, nearZero, net8Scene, netApi, paprDbAt, STREAM_N, streamApi, streamScene, waterWidget, wordWidget } from '../widgets/carriers';
+import { adslWidget } from '../widgets/modem';
+import { ofdmWidget } from '../widgets/fourier';
+import { numOf } from './order';
 import type { Chapter, Step } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -18,6 +22,12 @@ const n0 = (x: number) => Math.round(x).toLocaleString('en');
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 const us = (x: number) => `${nf(x * 1e6, x < 1e-5 ? 2 : 1)} µs`;
 const W = 10;
+const db = (x: number, d = 1) => `${nf(x, d)} dB`;
+const fmtRate = (x: number) => (x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} Mb/s` : x >= 1e3 ? `${+(x / 1e3).toPrecision(3)} kb/s` : `${+x.toPrecision(3)} b/s`);
+const adsl3 = bitLoad(3, -120, gapDb(1e-7)), adsl5 = bitLoad(5, -120, gapDb(1e-7));
+const adslMults = fftMults(ADSL.tones * 2);
+// G.992.1's cyclic prefix in samples, and data blocks to one sync block: 4312.5 × 512 / 544 × 68 / 69 = 4000 exactly
+const ADSL_CP = 32, ADSL_DATA = 68;
 
 /** The illustrative loop of comm/modem.ts as gains, with the flat power of the modem chapter as the budget. */
 const loopGains = (km: number) => DOWN_TONES.map((k) => 10 ** (toneSnrDb(k, km, -120) / 10));
@@ -26,7 +36,50 @@ const GAP = 10 ** (gapDb(1e-7) / 10);
 const unpack = (v: number) => ({ re: ((v % 1024) + 512) % 1024 - 512, im: ((Math.floor(v / 1024) % 1024) + 512) % 1024 - 512 });
 const mag = (v: number) => { const c = unpack(v); return Math.hypot(c.re, c.im) / 512; };
 
-export const carrierNewSteps: Step[] = [
+/** Moved from Modems (chapters/stepmoves.ts). */
+const tonesStep: Step =   {
+    title: 'Many tones, one FFT',
+    get body() {
+      const N = ADSL.tones * 2, sy = randomQpsk(31, 1), pv = randomQpsk(31, 1001), taps = [1, 0, 0, 0, 0, 0.6], none = ofdmLink(sy, pv, 64, 0, taps);
+      return `
+      <p>Over the megahertz it can pass, a copper pair is far from flat, and one fast carrier meets all of it. The alternative is many slow carriers, each too narrow to see the slope. Run them at once and the receiver must pull them apart, which looks like a bank of filters. It is not. Choose the tones to fit a whole number of cycles in a block of N samples, and any two have zero overlap over that block: Σ e<sup>j2π(k−m)n/N</sup> = 0 unless k = m. They are <strong>orthogonal</strong>, though their spectra overlap heavily, so a tone can be read by correlating with it, and no guard band is spent.</p>
+      <p>Correlating with every tone is the <strong>discrete Fourier transform</strong>, X[k] = Σ x[n] e<sup>−j2πkn/N</sup>, and summing every tone with its QAM point as the amplitude is its inverse. The modem is therefore two transforms and no oscillators: bits to a point per tone, an inverse transform to a block of samples, and at the far end a transform back. By its definition that takes N² complex multiplications. The <strong>FFT</strong> splits a transform of N into two of N / 2 on the even and odd samples, joined by one multiplication per pair (a butterfly), and recursion leaves N / 2 · log₂ N. For ADSL's ${n0(N)} points that is ${n0(adslMults)} a symbol against ${n0(N * N)}, ${nf(N * N / adslMults, 0)} times fewer. Giving tone N − k the conjugate of tone k makes the block real, which is how ${n0(N)} points carry ${ADSL.tones - 1} tones on one wire (G.992.1 numbers the tones 0 … ${ADSL.tones - 1}; tone 0 is DC and stays empty, and the tone at N / 2 does not exist). At ${n0(ADSL.symbolRate)} symbols a second that is ${nf(adslMults * ADSL.symbolRate / 1e6, 1)} million complex multiplications a second each way, and a complex multiplication is four real ones (${n0(nands(arrayMul(16)))} NANDs each as a 16-bit array), if you build it, and the next steps do.</p>
+      <p>What it buys is the channel's whole equalizer. A channel is a convolution, and the transform turns <em>circular</em> convolution into one multiplication per tone: Y[k] = H[k] X[k]. A real channel convolves linearly, so the sender copies the block's last samples in front of it, the <strong>cyclic prefix</strong>. If the prefix is at least as long as the echo, the receiver cuts it off and what remains is exactly circular, so each tone needs one complex division. In the widget an echo of 5 samples leaves an error vector of ${nf(100 * none.evm, 1)} % with no prefix and none with 5. ADSL's numbers show the price: ${n0(N)} × ${n0(ADSL.spacingHz)} Hz is ${nf(N * ADSL.spacingHz / 1e6, 3)} MHz of samples, a prefix of ${ADSL_CP} takes that from ${n0(ADSL.spacingHz)} to ${nf(N * ADSL.spacingHz / (N + ADSL_CP), 1)} blocks a second, and one sync block in ${ADSL_DATA + 1} takes it to the ${n0(ADSL.symbolRate)} the standard quotes. Later steps load those tones.</p>
+      <div class="try">With an echo at 5 samples, raise <strong>Prefix</strong> from 0: the cloud tightens and collapses on the points at exactly 5. Then set <strong>Echo</strong> to 0.95 and read the weakest tone's gain. Nothing is wrong yet, but with noise on the line a tone at that gain would carry almost nothing.</div>`;
+    },
+    widget: ofdmWidget,
+    more: {
+      derive: `<p>With the prefix, the received samples of the block are y[n] = Σ h[m] x[(n − m) mod N], since every x[n − m] that reaches back before the block is a copy of the block's own tail. Substitute x[n] = (1 / N) Σ X[k] e<sup>j2πkn/N</sup> and each tone comes out multiplied by Σ h[m] e<sup>−j2πkm/N</sup> = H[k]. tests/comm-fourier.test.ts checks the FFT's output against H[k] X[k] on an FIR channel, with the block before it in the stream.</p>`,
+      real: `<p>Wi-Fi from 802.11a on (802.11b is not OFDM), DVB, LTE and 5G all run this scheme and call it OFDM (LTE's uplink, and 5G's when coverage is short, a DFT-spread form of it, which lowers the peak-to-average ratio). Its known weaknesses are in the arithmetic: the sum of many tones has a high peak-to-average ratio, which strains the line driver, and a frequency offset at the receiver breaks the orthogonality.</p>`,
+    },
+    challenge: {
+      kind: 'quiz', question: 'An echo arrives 40 samples after the direct path, and a block of tones has a cyclic prefix of 32. What does the receiver see after its FFT?',
+      options: ['Every tone carries interference from the others, which a division per tone cannot remove', 'Only the highest tones are affected', 'Nothing changes: the FFT has already separated the tones', 'The echo is discarded with the prefix, so the signal is cleaner'],
+      answer: 0,
+      explain: 'Eight samples of the previous block leak in and eight wrap around lost, so the channel is no longer a circular convolution over the block. Orthogonality fails, and each output is a mix of tones. A prefix covers an echo only up to its own length.',
+      why: ['', 'The disturbance in time spreads over the whole block, and so over all tones, not only a band.', 'The FFT separates tones only when the block is an exact circular convolution of them.', 'Only what falls inside the prefix is discarded, and this echo reaches past it.'],
+    },
+  };
+
+const adslStep: Step =   {
+    title: 'ADSL: many carriers',
+    get body() {
+      return `
+      <p>The voice band is a property of the exchange's filters, not of the copper. The twisted pair itself passes more than a megahertz, with an attenuation that grows as the square root of frequency and in proportion to length, and with crosstalk from neighbours that grows with frequency too. So the SNR of the pair is large at low frequencies and falls steeply: a single carrier either wastes the good part or runs into the bad part. <strong>ADSL</strong> (ITU-T G.992.1) gives each frequency what it can take. It cuts the band into <strong>${ADSL.tones} tone slots, ${n0(ADSL.spacingHz)} Hz apart</strong>, numbered 0 … ${ADSL.tones - 1} (up to ${nf((ADSL.tones * ADSL.spacingHz) / 1e6, 3)} MHz) and loads each with its own QAM: at ${n0(ADSL.symbolRate)} symbols a second per tone, that is a symbol every 250 µs on every tone at once.</p>
+      <p>Training measures the SNR on every tone and assigns <strong>b<sub>k</sub> = ⌊log₂(1 + SNR<sub>k</sub> / Γ)⌋</strong> bits, from 0 to at most ${ADSL.maxBits}. Γ, the gap between uncoded QAM and Shannon\'s limit, is ${db(gapDb(1e-7))} uncoded at an error rate of 10⁻⁷ (it falls with coding). The widget uses an illustrative loop, 20 dB/km at 1 MHz and growing with √f, and a noise floor that you move: at 3 km and −120 dBm/Hz it loads ${adsl3.total} bits a symbol for ${fmtRate(adsl3.rate)}, at 5 km ${adsl5.total} bits and ${fmtRate(adsl5.rate)}. The rate follows the line, tone by tone; this is a negotiated rate, not a standard one.</p>
+      <p>The tones are this chapter's inverse FFT, ${n0(adslMults)} complex multiplications a symbol for ${ADSL.tones * 2} points. The idea and the trade are what matter here: a single wide carrier needs one equalizer for a distorted channel, while many narrow ones each see a nearly flat one and take as many bits as that stretch of spectrum holds.</p>`;
+    },
+    widget: adslWidget,
+    challenge: {
+      kind: 'quiz', question: 'The same ADSL line gets 10 dB noisier at every frequency. Which statement is closest to what the bit loading does?',
+      options: ['Every tone loses about 10/3 ≈ 3 bits, until the weak ones reach 0 and drop out; the highest tones go first', 'All tones lose one bit', 'The modem lowers the symbol rate', 'Only the lowest tones change'],
+      answer: 0,
+      explain: 'The bits on a tone are log₂(1 + SNR/Γ); 10 dB is a factor of 10, which is about 3.3 bits. Tones already near 1 or 2 bits cannot give 3: they carry nothing, and the highest tones, which start lowest, reach zero first.',
+      why: ['', 'One bit is 3 dB; 10 dB is about three.', 'The symbol rate stays at 4000 a second; the bits per tone adapt.', 'Every tone sees the added noise. The ones with least SNR to start with lose their last bits first.'],
+    },
+  };
+
+const carrierNewSteps: Step[] = [
   {
     title: 'The butterfly',
     get body() {
@@ -115,7 +168,7 @@ export const carrierNewSteps: Step[] = [
       return `
       <p>Each tone is a small channel of its own, with its own gain over noise g<sub>k</sub>, and the transmitter has one power budget. How should it spend? The bits a tone carries are log₂(1 + g p / Γ), a curve that flattens: the first watt on a good tone buys far more than the hundredth. Maximizing the sum with Σ p fixed gives an answer with a picture: <strong>p<sub>k</sub> = μ − Γ / g<sub>k</sub></strong> where that is positive, zero elsewhere. Draw a floor of height Γ / g over each tone and pour the budget in: the water finds one level μ, deep over the good tones, and the bad ones stay dry. With floors of 1 and 10 and a budget of 2, the level reaches ${nf(lw.level, 0)}, all of it on the first tone: giving the second any power is a loss, however little.</p>
       <p>This is Shannon's capacity for parallel channels, the real upper bound, and it tells how much a real scheme gives up. Hardware needs whole bits, and <strong>greedy loading</strong> (Hughes-Hartogs) gets them: add one bit at a time to the tone where it costs least, Γ 2<sup>b</sup> / g. The costs on each tone rise, so greedy is optimal, and tests/comm-carriers.test.ts checks it against every allocation on small cases. Whole bits never lose more than a bit a tone.</p>
-      <p>Then a surprise. On the modem chapter's illustrative 3 km loop, at a gap of ${nf(gapDb(1e-7))} dB, water-filling carries ${n0(wf.total)} bits a block, flat power over all the tones ${n0(fl.total)}, and flat over the best ${fb.used} of them ${n0(fb.total)}. Moving power gains ${nf(wf.total - fb.total, 1)} bits of ${n0(wf.total)}, and greedy whole bits give ${n0(lo.total)}. At 5 km, water-filling's ${n0(wf5.total)} bits use ${wf5.used} tones, against ${n0(fb5.total)} with flat power on the best ${fb5.used}. Choosing the tones is nearly everything, and the widget's harder channels show where water-filling starts to earn more. That is lucky, since <strong>ADSL cannot water-fill much</strong>: a spectral mask caps the power on each tone so as not to disturb neighbouring pairs in the same cable. Its bits follow the SNR, as the next step shows, with its power nearly flat.</p>
+      <p>Then a surprise. On the last step's illustrative 3 km loop, at a gap of ${nf(gapDb(1e-7))} dB, water-filling carries ${n0(wf.total)} bits a block, flat power over all the tones ${n0(fl.total)}, and flat over the best ${fb.used} of them ${n0(fb.total)}. Moving power gains ${nf(wf.total - fb.total, 1)} bits of ${n0(wf.total)}, and greedy whole bits give ${n0(lo.total)}. At 5 km, water-filling's ${n0(wf5.total)} bits use ${wf5.used} tones, against ${n0(fb5.total)} with flat power on the best ${fb5.used}. Choosing the tones is nearly everything, and the widget's harder channels show where water-filling starts to earn more. That is lucky, since <strong>ADSL cannot water-fill much</strong>: a spectral mask caps the power on each tone so as not to disturb neighbouring pairs in the same cable. Its bits follow the SNR, as the last step showed, with its power nearly flat.</p>
       <div class="try">Drop <strong>Signal</strong> to 10 dB with the tap on, and read the gain over flat. Then raise it to 60 dB. Then turn up <strong>Gap Γ</strong>.</div>`;
     },
     widget: waterWidget,
@@ -163,7 +216,7 @@ export const carrierNewSteps: Step[] = [
       <p>Each system below chooses the same three numbers. <strong>The prefix</strong> is set by the longest echo it must absorb, and light goes 300 m in a microsecond, so a building needs far less than a city. <strong>The tone spacing</strong> is set by the speed of what disturbs the block: a block must be short against a fading channel, but long against its own prefix, to keep the loss low. <strong>N</strong> is then the bandwidth over the spacing.</p>
       <table class="tbl"><thead><tr><th>System</th><th class="num">FFT</th><th class="num">Used tones</th><th class="num">Spacing, kHz</th><th class="num">Block</th><th class="num">Prefix</th><th class="num">Data</th></tr></thead><tbody>${SYSTEMS.map(row).join('')}</tbody></table>
       <p class="sub">${SYSTEMS.map((s) => `${s.name}: ${s.note}`).join(' ')}</p>
-      <p>Wi-Fi's top 802.11a rate falls straight out of the table: 48 data tones, 6 bits on each with 64-QAM, a rate ¾ K = 7 convolutional code, every ${us(blockTime(wifi))}, is ${nf(rate / 1e6, 0)} Mb/s. Unlike ADSL, a fast radio channel cannot be measured and loaded tone by tone, so these systems put one rate on many tones and spread the bits across them with a code. A fade on some tones then costs a few coded bits, not a word. The code does the work ADSL's loading does, and <a href="#/c/codes/0">Codes near the limit</a> is about that.</p>
+      <p>Wi-Fi's top 802.11a rate falls straight out of the table: 48 data tones, 6 bits on each with 64-QAM, a rate ¾ K = 7 convolutional code, every ${us(blockTime(wifi))}, is ${nf(rate / 1e6, 0)} Mb/s. Unlike ADSL, a fast radio channel cannot be measured and loaded tone by tone, so these systems put one rate on many tones and spread the bits across them with a code. A fade on some tones then costs a few coded bits, not a word. The code does the work ADSL's loading does, a question for the chapters on codes.</p>
       <p>And the channel is no longer one wire, so tones are shared: LTE and 5G hand out blocks of 12 tones a slot at a time, a question for a later chapter. The arithmetic stays the one butterfly above, at ${nf((4096 * 30000) / 1e6, 2)} million samples a second.</p>`;
     },
     challenge: {
@@ -178,7 +231,7 @@ export const carrierNewSteps: Step[] = [
 ];
 
 export const chCarriers: Chapter = {
-  id: 'carriers', num: 46, title: 'Many carriers', level: 'Communication',
+  id: 'carriers', num: numOf('carriers'), title: 'Many carriers', level: 'Communication',
   blurb: 'Why split a channel into thousands of tones: FFT butterflies and a streaming pipeline in gates, the cyclic prefix, water-filling, and what ADSL, Wi-Fi and 5G each chose.',
   goals: [
     'build an FFT from one butterfly, and say which twiddles are wires, which are shift-and-add, and which need a multiplier',
@@ -189,9 +242,11 @@ export const chCarriers: Chapter = {
   builds: ['modem', 'adders', 'registers', 'fastadd'],
   recap: {
     keep: [
+      `Tones with a whole number of cycles in a block are orthogonal, so an inverse FFT sends them and an FFT reads them: N / 2 · log₂ N butterflies against N² multiplications. A cyclic prefix at least as long as the echo makes the channel circular, so each tone needs one complex division.`,
       `A butterfly is y0 = (a + W b) / 2, y1 = (a − W b) / 2: four adders, ${nands(fxCore(W, false))} NANDs at ${W} bits. W = 1 and −j are wires, the 45° twiddle two constant multipliers (${nands(fxRot45(W))}), any other a complex multiplier (${n0(nands(fxCmul(W)))}). Both adders' carry-ins are tied high: the sum rounds up and the difference down, and together they lose nothing.`,
       `Unrolled, N points are log₂ N columns of N / 2 butterflies with the inputs bit-reversed. Streaming, each stage has one butterfly and a delay line of half the rest, a sample a clock, tones in bit-reversed order: ${n0(nands(fftStream(16, W)))} against ${n0(nands(fftNet(16, W)))} NANDs at 16 points. Swapping re and im in and out inverts it with no new gates.`,
       'Rounding is about one unit per butterfly; a noise-like block\'s tones are about 1 / √N of its samples. So each bit gains 6 dB and each doubling of N costs about 3 dB, and the block\'s peak needs room too.',
+      `ADSL splits the pair into ${ADSL.tones} tones ${n0(ADSL.spacingHz)} Hz apart, each its own QAM of ⌊log₂(1 + SNR/Γ)⌋ bits (at most ${ADSL.maxBits}), ${n0(ADSL.symbolRate)} symbols a second. Γ is ${db(gapDb(1e-7))} uncoded at 10⁻⁷. The loop's SNR falls with frequency and length, so the bits go where the channel is good.`,
       'Water-filling: p = μ − Γ / g where positive. It is the capacity of parallel channels. Greedy whole-bit loading is optimal for whole bits. Choosing the tones matters far more than moving power among them, which is why ADSL\'s masked, nearly flat power loses little.',
       'A block peaks with chance 1 − (1 − e^(−x))^N. A carrier offset ε leaks every tone into every other, so it sets a ceiling no signal strength can lift. An echo past the prefix breaks the block, and a single carrier would pay for the same echo with a long filter.',
     ],
@@ -219,5 +274,5 @@ export const chCarriers: Chapter = {
       },
     ],
   },
-  steps: carrierNewSteps,
+  steps: [tonesStep, ...carrierNewSteps.slice(0, 4), adslStep, ...carrierNewSteps.slice(4)],
 };
