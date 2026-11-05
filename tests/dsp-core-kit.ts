@@ -19,7 +19,6 @@ export class DspRig {
   readonly mismatches: string[] = [];
   cycles = 0;
   private readonly node = new Map<string, HierNode>();
-  private halted = false;
 
   constructor(readonly def: ComponentDef, program: number[], x: number[], y: number[], opts: { gate?: boolean; iss?: Iss24 } = {}) {
     this.design = flatten(def);

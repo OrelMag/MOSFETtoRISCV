@@ -6,24 +6,16 @@
 // memories (their pins out), which is the sandbox's part.
 
 import { type Decoded24, decode24 } from '../dsp/isa24';
-import { aguStep } from '../dsp/iss24';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { symbolGeom } from '../sim/geometry';
-import { constWord, isZero, reverseWire, shifter } from './alu';
-import { bigRam, bigRamWithInit, wordsHash } from './bigmem';
+import type { ComponentDef, PortDef } from '../sim/types';
+import { constWord, shifter } from './alu';
 import { Builder } from './builder';
-import { andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
+import { busMux2, decoder, muxTree, rca } from './combinational';
 import { define, merger, ones, splitter } from './define';
-import { cut, placed } from './fft';
-import { clampWord } from './fixedpt';
+import { cut } from './fft';
 import { AND, NOT, OR, XOR } from './gates';
-import { macUnit } from './macunit';
-import { register } from './sequential';
-import { DFFE } from './sequential';
 import { TIE0 } from './transistors';
 import { bitwise, orN } from './wide';
 
-const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, ...(clock ? { clock, side: 'bottom' as const } : {}) });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> =>
   Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));

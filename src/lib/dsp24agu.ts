@@ -5,7 +5,7 @@ import { aguStep } from '../dsp/iss24';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, reverseWire } from './alu';
 import { Builder } from './builder';
-import { andN, busMux2, decoder, equal, muxTree, rca } from './combinational';
+import { busMux2, decoder, equal, muxTree, rca } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, OR } from './gates';
 import { register } from './sequential';

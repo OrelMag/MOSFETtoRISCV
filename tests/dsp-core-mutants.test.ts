@@ -17,37 +17,37 @@ type Ctor = new (p: ArrayLike<number>, x: ArrayLike<number>, y: ArrayLike<number
 class Honest extends Iss24 {}
 /** The circular window one word too long. */
 class WrapLate extends Iss24 {
-  protected stepPtr(p: number, mode: number, base: number, len: number, m: number) { return aguStep(p, mode, base, mode === 4 || mode === 5 ? len + 1 : len, m); }
+  protected override stepPtr(p: number, mode: number, base: number, len: number, m: number) { return aguStep(p, mode, base, mode === 4 || mode === 5 ? len + 1 : len, m); }
 }
 /** The circular window one word too short. */
 class WrapEarly extends Iss24 {
-  protected stepPtr(p: number, mode: number, base: number, len: number, m: number) { return aguStep(p, mode, base, mode === 4 || mode === 5 ? len - 1 : len, m); }
+  protected override stepPtr(p: number, mode: number, base: number, len: number, m: number) { return aguStep(p, mode, base, mode === 4 || mode === 5 ? len - 1 : len, m); }
 }
 /** Bit-reversed order one step off. */
 class RevOff extends Iss24 {
-  protected stepPtr(p: number, mode: number, base: number, len: number, m: number) { return mode === 6 ? (aguStep(p, 6, base, len, m) + 1) & 255 : aguStep(p, mode, base, len, m); }
+  protected override stepPtr(p: number, mode: number, base: number, len: number, m: number) { return mode === 6 ? (aguStep(p, 6, base, len, m) + 1) & 255 : aguStep(p, mode, base, len, m); }
 }
 /** Bit-reversed order, but the modifier is added as it is, not reversed. */
 class RevPlain extends Iss24 {
-  protected stepPtr(p: number, mode: number, base: number, len: number, m: number) {
+  protected override stepPtr(p: number, mode: number, base: number, len: number, m: number) {
     return mode === 6 ? rev8((rev8(p) + m) & 255) : aguStep(p, mode, base, len, m);
   }
 }
 /** The loop leaves one pass early. */
 class LoopEarly extends Iss24 {
-  protected lastPass(lc: number) { return lc <= 2; }
+  protected override lastPass(lc: number) { return lc <= 2; }
 }
 /** The loop runs one pass too many. */
 class LoopLate extends Iss24 {
-  protected lastPass(lc: number) { return lc === 0; }
+  protected override lastPass(lc: number) { return lc === 0; }
 }
 /** The read truncates instead of rounding. */
 class NoRound extends Iss24 {
-  protected readAcc(acc: bigint, sh: number) { return sat16(Number(acc >> BigInt(sh))); }
+  protected override readAcc(acc: bigint, sh: number) { return sat16(Number(acc >> BigInt(sh))); }
 }
 /** The read rounds half to even. */
 class RoundEven extends Iss24 {
-  protected readAcc(acc: bigint, sh: number) {
+  protected override readAcc(acc: bigint, sh: number) {
     if (sh === 0) return rndOf(acc, sh);
     const q = acc >> BigInt(sh), rem = acc - (q << BigInt(sh)), half = 1n << BigInt(sh - 1);
     return sat16(Number(rem > half || (rem === half && (q & 1n) === 1n) ? q + 1n : q));
@@ -55,15 +55,15 @@ class RoundEven extends Iss24 {
 }
 /** The accumulator treats the coefficient as unsigned. */
 class UnsignedY extends Iss24 {
-  protected macAcc(acc: bigint, x: number, y: number) { return accAfter(acc, MAC_F3.mac, x, y & 0x7fff); }
+  protected override macAcc(acc: bigint, x: number, y: number) { return accAfter(acc, MAC_F3.mac, x, y & 0x7fff); }
 }
 /** The accumulator is 32 bits, not 40. */
 class Acc32 extends Iss24 {
-  protected macAcc(acc: bigint, x: number, y: number) { return BigInt.asIntN(32, accAfter(acc, MAC_F3.mac, x, y)); }
+  protected override macAcc(acc: bigint, x: number, y: number) { return BigInt.asIntN(32, accAfter(acc, MAC_F3.mac, x, y)); }
 }
 /** The saturating add wraps. */
 class WrapAdds extends Iss24 {
-  protected satAdd(v: number) { return s16(v); }
+  protected override satAdd(v: number) { return s16(v); }
 }
 
 const bench = (id: string) => BENCH24.find((b) => b.id === id)!;

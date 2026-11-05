@@ -2,14 +2,13 @@
 // dsp24Computer(program, x, y), the core with its ROM and its two 256-word memories. dsp24Core has the three outside (pins), for the
 // sandbox. The blocks are in dsp24.ts (decode, ALU), dsp24agu.ts and dsp24seq.ts.
 
-import { assemble24 } from '../dsp/asm24';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { symbolGeom } from '../sim/geometry';
 import { constWord } from './alu';
 import { bigRam, bigRamWithInit } from './bigmem';
 import { Builder } from './builder';
 import { busMux2, decoder, muxTree } from './combinational';
-import { define, merger, ones } from './define';
+import { define, merger } from './define';
 import { DSP24_ALU, DSP24_DECODE } from './dsp24';
 import { DSP24_AGU } from './dsp24agu';
 import { DSP24_SEQ } from './dsp24seq';
@@ -17,7 +16,6 @@ import { cut, placed } from './fft';
 import { clampWord } from './fixedpt';
 import { macUnit } from './macunit';
 import { register } from './sequential';
-import { TIE0 } from './transistors';
 
 const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, ...(clock ? { clock, side: 'bottom' as const } : {}) });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -250,5 +248,3 @@ export const DSP24_STATE = {
   acc: 'mac.unit.acc', ls: 'seq.loop.ls', le: 'seq.loop.le', lc: 'seq.loop.lc', la: 'seq.loop.la',
   xram: 'xram', yram: 'yram',
 } as const;
-
-void TIE0; void ones; void assemble24;
