@@ -59,3 +59,4 @@
 .fir-diagram .fd-node { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
 .fir-diagram .fd-box { fill: var(--surface); stroke: var(--warn); stroke-width: 1.6; }
 .fir-table { margin-top: 8px; }
+.fir-stem { stroke: var(--accent); stroke-width: 2; }

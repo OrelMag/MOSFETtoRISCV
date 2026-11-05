@@ -24,7 +24,7 @@ import '../styles/dsp.css';
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const sp = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const stems = (p: Plot, ys: readonly number[], cls = '') => {
-  ys.forEach((y, i) => p.layer.append(s('line', { x1: p.X(i), x2: p.X(i), y1: p.Y(0), y2: p.Y(y), class: `sg-stem ${cls}` })));
+  ys.forEach((y, i) => p.layer.append(s('line', { x1: p.X(i), x2: p.X(i), y1: p.Y(0), y2: p.Y(y), class: `fir-stem ${cls}` })));
 };
 
 // ---- the designs the chapter keeps coming back to ------------------------------------------------------------------------------------------
@@ -392,7 +392,7 @@ export function macTone(cfg: MacConfig, f: number, hooks: { clock(x: number): vo
 
 function macPanel(stage: Stage): Widget {
   const { cfg } = sceneMac(), N = cfg.taps.length, A = 2 * cfg.w + cfg.guard, FRAMES = MAC_FRAMES;
-  let f = MAC_TONES[0][1], ok = true, cycles = 0, gain = 0, xs: number[] = [], ys: number[] = [];
+  let bad = '', f = MAC_TONES[0][1], ok = true, cycles = 0, gain = 0, xs: number[] = [], ys: number[] = [];
   const plot = plotOf({ W: 380, H: 170, x: [0, FRAMES], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'sample', yLabel: '', aria: 'The input samples and the filter\'s output, divided by the input amplitude' });
   const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
   const paint = () => {
@@ -400,16 +400,20 @@ function macPanel(stage: Stage): Widget {
     if (xs.length) { line(plot, range(xs.length), xs, 'ln-s lump'); line(plot, range(ys.length), ys, 'ln-s real'); }
     read.replaceChildren(h('span', null, 'tone ', h('b', null, `${num(f, 2)} cycles a sample`)), h('span', null, 'output ÷ input ', h('b', null, xs.length ? num(gain, 3) : '–')),
       h('span', null, 'the taps say ', h('b', null, num(gainOf(cfg.taps.map((v) => v / 2 ** cfg.frac), f), 3))));
-    note.textContent = xs.length ? (ok ? `${cycles} clocks: y, the tap number and the accumulator matched the model at every one.` : 'The gates and the model disagreed.') : `Pick a tone: ${FRAMES} samples go in, ${N} clocks each, and the model runs beside the gates.`;
+    note.textContent = xs.length ? (ok ? `${cycles} clocks: y, the tap number and the accumulator matched the model at every one.`   : `The gates and the model disagreed at ${bad}.`) : `Pick a tone: ${FRAMES} samples go in, ${N} clocks each, and the model runs beside the gates.`;
   };
   const run = () => {
     stage.checkpoint();
     const sim = stage.sim!;
-    ok = true;
-    sim.setInput('x', 0); sim.settle();
+    ok = true; bad = ''; let n = 0;
+    // from power-on, so that the gates' ring, counter and accumulator start where the model's do
+    sim.setInput('x', 0); sim.setInput('clk', 0); sim.reset('zero'); sim.settle();
     const r = macTone(cfg, f, {
       clock: (x) => { sim.setInput('x', wordOf(x, cfg.w)); sim.settle(); pulseClock(stage); },
-      check: (m) => { if (signedOf(stage.value('y'), cfg.w) !== m.y || stage.value('k') !== m.k || signedOf(stage.value('acc'), A) !== m.acc) ok = false; },
+      check: (m) => {
+        const got = { y: signedOf(stage.value('y'), cfg.w), k: stage.value('k'), acc: signedOf(stage.value('acc'), A) };
+        if (ok && (got.y !== m.y || got.k !== m.k || got.acc !== m.acc)) { ok = false; bad = `clock ${n++}: gates y ${got.y}, k ${got.k}, acc ${got.acc}; model y ${m.y}, k ${m.k}, acc ${m.acc}`; } else n++;
+      },
     });
     xs = r.xs; ys = r.ys; gain = r.gain; cycles = r.cycles;
     stage.refresh();
@@ -441,6 +445,8 @@ export function designRows(): DesignRow[] {
   return (rowsMemo = out);
 }
 
+const rate = (khz: number) => (khz >= 1000 ? `${num(khz / 1000, 1)} MHz` : `${num(khz, 0)} kHz`);
+
 export function designsWidget(): Widget {
   let mhz = 100;
   const body = h('tbody'), note = h('p', { class: 'sub mos-note' });
@@ -448,7 +454,7 @@ export function designsWidget(): Widget {
     const rows = designRows(), maxN = Math.max(...rows.map((r) => r.nands));
     body.replaceChildren(...rows.map((r) => h('tr', null,
       h('td', null, r.design), h('td', null, r.structure), h('td', { class: 'num' }, String(r.taps)), h('td', { class: 'num' }, r.mults ? String(r.mults) : 'none'), h('td', { class: 'num' }, sp(r.nands)),
-      h('td', { class: 'dsp-barcell' }, h('i', { style: `width:${Math.max(1, (r.nands / maxN) * 100).toFixed(1)}%` })), h('td', { class: 'num' }, `${num((mhz * 1000) / r.cycles, 0)} kHz`))));
+      h('td', { class: 'dsp-barcell' }, h('i', { style: `width:${Math.max(1, (r.nands / maxN) * 100).toFixed(1)}%` })), h('td', { class: 'num' }, rate((mhz * 1000) / r.cycles)))));
     const k = rows.find((r) => r.design === 'Kaiser window')!;
     note.textContent = `Words of 16 bits: the Parks–McClellan taps ${rows[0].ok ? 'meet' : 'miss'} the mask, and the Kaiser taps ${k.ok ? 'meet' : 'miss'} it.`;
   };
