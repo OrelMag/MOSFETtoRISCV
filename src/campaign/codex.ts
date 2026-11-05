@@ -7,6 +7,7 @@ import { CODEX_NEW } from './codexnew';
 import { CODEX_NEW3 } from './codexnew3';
 import { CODEX_COMM } from './codexcomm';
 import { CODEX_COMM2 } from './codexcomm2';
+import { CODEX_DSP } from './codexdsp';
 
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
 
@@ -197,6 +198,7 @@ export const CODEX: CodexEntry[] = [
   // the Communication level (codexcomm.ts)
   ...CODEX_COMM,
   ...CODEX_COMM2,
+  ...CODEX_DSP,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);
