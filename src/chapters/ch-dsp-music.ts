@@ -21,7 +21,7 @@ export const chMusic: Chapter = {
       'The MDCT turns 2M samples into M coefficients, and each frame alone comes back aliased. With a window whose halves meet w[n]² + w[n + M]² = 1, overlapped frames cancel each other\'s aliasing exactly.',
       'A loud sound hides quieter ones near it in frequency, more above it than below. A perceptual codec computes that mask every frame and lets the noise sit under it.',
       'Bits given by the mask can leave less SNR and less audible noise than bits given by the signal. SNR counts all noise alike; the ear does not.',
-      'Starved of bits, no allocation saves a codec: the mask only helps while there are enough bits to reach it.',
+      'Starved of bits, nothing saves a codec: at 16 kb/s half the band-frames are audible either way, though the mask still does better.',
     ],
     check: [
       {
@@ -39,7 +39,7 @@ export const chMusic: Chapter = {
         why: ['', 'A masked band is the quiet one, near a louder one.', 'The noise is still there; the ear just cannot pick it out.', 'The rate is unchanged: only the bits per coefficient change.'],
       },
       {
-        question: 'Bits by signal give 7 dB more SNR than bits by mask, from the same budget. Which sounds better, by the model?',
+        question: 'From the same 64 kb/s budget, bits by signal give 28 dB more SNR than bits by mask. Which sounds better, by the model?',
         options: ['Bits by mask', 'Bits by signal', 'Both the same', 'Neither: SNR says nothing'],
         answer: 0,
         explain: 'Bits by signal pile into the loudest bands, where noise is masked anyway, and leave quiet bands with audible noise. SNR does not see the difference.',
@@ -52,7 +52,7 @@ export const chMusic: Chapter = {
       title: 'What a codec may throw away',
       body: `
         <p>Speech had a model of its source: a throat and a pitch. Music has no such model, so a music codec keeps the waveform and asks a different question: which parts of it would nobody hear if they were wrong?</p>
-        <p>The recording is ten seconds of Chopin's Nocturne in E minor, Op. 72 No. 1, from Musopen's Chopin collection, which is marked CC0, public domain. The pianist is not named. It was decoded from Apple Lossless and resampled to 16 kHz mono by this site's own filter, so nothing in it has been through a perceptual codec before this chapter. At 16 bits that is 256 kb/s.</p>
+        <p>The recording is ten seconds of Chopin's Nocturne in E minor, Op. 72 No. 1, from Musopen's Chopin collection, which is marked CC0, public domain. The pianist is not named. It was decoded from Apple Lossless and resampled to 16 kHz mono by this site's own filter, and this site added no perceptual coding of its own: the source is lossless. At 16 bits that is 256 kb/s.</p>
         <p>A piano is a hard case for this: clear tones, long decays and quiet passages, where any added noise has little to hide behind.</p>
         <div class="try">Play it, and look at where the energy is.</div>`,
       widget: musicWidget,
@@ -99,9 +99,9 @@ export const chMusic: Chapter = {
     {
       title: 'Bits where they are heard',
       body: `
-        <p>Now give out bits. Each bit a coefficient takes lowers its band's noise by 6 dB, so bits go one at a time to the band whose noise is furthest above its target. By the <em>signal</em>, the target is just less noise everywhere: the loudest bands get the most, which is what plain SNR rewards. By the <em>mask</em>, the target is the mask, and a band already under it gets nothing. A 4-bit count per band and a 6-bit scale factor for each band that has bits are side information, counted in every rate here.</p>
+        <p>Now give out bits. Each bit a coefficient takes lowers its band's noise by 6 dB, and bits go one at a time to the band where the next one buys most for what it costs. By the <em>signal</em>, a bit buys noise power wherever it is: the loudest bands get the most, which is what plain SNR rewards. By the <em>mask</em>, a bit buys the dB it takes off noise that is above the mask, and a band well under it gets nothing. It is the same loop with two measures of what a bit is worth. A 4-bit count per band and a 6-bit scale factor for each band that has bits are side information, counted in every rate here.</p>
         <p>Given 64 kb/s, bits by mask stop at ${F.mask64Rate} kb/s, because the model says nothing more would be heard: ${F.mask64Audible} % of band-frames have noise above their mask. Bits by signal spend ${F.signal64Rate} kb/s for an SNR of ${F.signal64Snr} dB against ${F.mask64Snr}, and leave ${F.signal64Audible} % of band-frames audible by the same model. More SNR, worse sound.</p>
-        <p>Starved, it changes. At 32 kb/s the mask still does better, ${F.mask32Audible} % against ${F.signal32Audible} %. At 16 kb/s neither works, and the mask's choices leave more bands audible, ${F.mask16Audible} % against ${F.signal16Audible} %: once every band is short, chasing the mask is no help. That is what a codec's lowest rates sound like.</p>
+        <p>Starved, it holds, but neither is good. At 32 kb/s the mask leaves ${F.mask32Audible} % audible against ${F.signal32Audible} %, and at 16 kb/s ${F.mask16Audible} % against ${F.signal16Audible} %: once every band is short, about half of them are heard either way. That is what a codec's lowest rates sound like.</p>
         <p>This codec is ours, to show the idea. It follows no format, is not compatible with anything, and has none of a real codec's refinements: entropy coding, window switching for sharp attacks, or joint stereo. Its numbers are for this recording and this model.</p>
         <div class="try">Hear both at 64 kb/s, then lower the budget to 16 and hear both fail. Compare the bars for a quiet frame and a loud one.</div>`,
       widget: codecWidget,

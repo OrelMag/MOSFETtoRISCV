@@ -68,7 +68,7 @@ before relying on them. Add to this as chapters land.
   - The tests check the table's printed decision and output values at every segment end, and every interior sample.
 - Python 3.12's `audioop` (the C module, removed in 3.13; CI pins 3.12): **ran** (`scripts/dsp/oracle.py`).
   - `lin2ulaw` and `ulaw2lin` on all 16 384 samples and 256 codes.
-  - `lin2adpcm` and `adpcm2lin` on the voice, in two halves with the state carried, and on a full-scale square wave.
+  - `lin2adpcm` and `adpcm2lin` on the first 4 000 samples of the voice, in two halves with the state carried, and on a full-scale square wave. LPC against `solve_toeplitz` on 4 frames of it.
   - Our nibble order is audioop's (first sample in the high half). Microsoft's IMA ADPCM WAV format differs, **unread**, from memory.
 - IMA's ADPCM recommendation (1992): **unread**, not freely available. The step and index tables are written from memory and checked against audioop above.
 - LPC: the autocorrelation method and Levinson–Durbin, standard. Checked against scipy's `solve_toeplitz` on the voice's frames.

@@ -47,12 +47,15 @@ describe('the codec (ours)', () => {
     expect(m.bitRate).toBeLessThan(56000);
     expect(s.bitRate).toBeGreaterThan(60000);
     expect(audibleShare(m.frames)).toBeLessThan(0.02);
-    expect(audibleShare(s.frames)).toBeGreaterThan(0.2);
+    expect(audibleShare(s.frames)).toBeGreaterThan(5 * audibleShare(m.frames));
     expect(snrDb(x, s.y)).toBeGreaterThan(snrDb(x, m.y) + 6);
     expect(meanNmrDb(m.frames)).toBeLessThan(0);
   });
-  it('at 32 kb/s the mask still leaves fewer bands audible than the signal does', () => {
-    const m = encodeMusic(x, { fs: 16000, bitsPerFrame: budget(32), by: 'mask' }), s = encodeMusic(x, { fs: 16000, bitsPerFrame: budget(32), by: 'signal' });
-    expect(audibleShare(m.frames)).toBeLessThan(audibleShare(s.frames));
+  it('bits by signal really follow the signal: the loudest band of a frame gets at least as many bits as the quietest that gets any', () => {
+    const s = encodeMusic(x, { fs: 16000, bitsPerFrame: budget(64), by: 'signal' });
+    for (const f of s.frames.slice(10, 60)) { const got = f.bits.map((b, i) => [b, f.levels[i]]).filter(([b]) => b > 0); if (got.length < 2) continue; const loud = got.reduce((a, c) => (c[1] > a[1] ? c : a)), quiet = got.reduce((a, c) => (c[1] < a[1] ? c : a)); expect(loud[0]).toBeGreaterThanOrEqual(quiet[0]); }
+  });
+  it('at 32 and 16 kb/s the mask still leaves fewer bands audible than the signal does', () => {
+    for (const k of [32, 16]) { const m = encodeMusic(x, { fs: 16000, bitsPerFrame: budget(k), by: 'mask' }), s = encodeMusic(x, { fs: 16000, bitsPerFrame: budget(k), by: 'signal' }); expect(audibleShare(m.frames)).toBeLessThan(audibleShare(s.frames)); }
   });
 });

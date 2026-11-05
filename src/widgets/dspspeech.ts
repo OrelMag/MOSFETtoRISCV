@@ -150,13 +150,14 @@ export function adpcmWidget(): Widget {
   return withVoice('Sending the difference', (v, panel, ctl) => {
     // open just before the first loud onset, where the step has to grow
     let at = Math.max(0, v.x.findIndex((t) => Math.abs(t) > 0.4 * 32768) - 120);
-    const n = 400, plot = plotOf({ W: 640, H: 190, x: [0, n], y: [-1, 1], yTicks: [-1, 0, 1], xLabel: 'sample', yLabel: '', aria: 'Input, ADPCM output and its step size, 50 ms' });
+    const n = 160, plot = plotOf({ W: 640, H: 210, x: [0, n], y: [-1, 1], yTicks: [-1, 0, 1], xLabel: 'sample (20 ms)', yLabel: '', aria: 'Input, ADPCM output, its error ten times larger, and its step size' });
     const codes = adpcmEncode(v.x), back = adpcmDecode(codes), steps: number[] = [];
     { const s = { pred: 0, index: 0 }; for (const x of v.x) { steps.push(s.index); adpcmEncode([x], s); } }
     const paint = () => {
       plot.clear();
       line(plot, range(n), v.x.slice(at, at + n).map((t) => t / 32768), 'ln-s lump');
       line(plot, range(n), back.slice(at, at + n).map((t) => t / 32768), 'ln-s real');
+      line(plot, range(n), range(n).map((i) => Math.max(-1, Math.min(1, (10 * (v.x[at + i] - back[at + i])) / 32768))), 'ln-s wire');
       line(plot, range(n), steps.slice(at, at + n).map((i) => i / 88 - 1), 'ln-s near');
     };
     const mu = v.x.map((t) => 4 * ulawDecode(ulawEncode(t >> 2)));
@@ -168,7 +169,7 @@ export function adpcmWidget(): Widget {
     ctl.append(slider('Where', 0, v.x.length - n, 40, at, (t) => `${num(t / v.rate, 2)} s`, (t) => { at = t; paint(); }).el,
       clipButton('Hear ADPCM, 32 kb/s', () => clip(back, v.rate, 'IMA ADPCM, 4 bits')).el, clipButton('Hear μ-law, 64 kb/s', () => clip(mu, v.rate, 'G.711 μ-law')).el);
     paint();
-    panel.append(plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the voice'), h('span', { class: 'k-far' }, 'ADPCM back'), h('span', { class: 'k-near' }, 'step index, scaled')), chips.el);
+    panel.append(plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'the voice'), h('span', { class: 'k-far' }, 'ADPCM back'), h('span', { class: 'k-wire' }, 'error × 10'), h('span', { class: 'k-near' }, 'step index, scaled')), chips.el);
   });
 }
 
@@ -187,7 +188,8 @@ export function adpcmRvWidget(): Widget {
 
 export function lpcWidget(): Widget {
   return withVoice('A spectrum from ten numbers', (v, panel, ctl) => {
-    let frame = 50, order = 10;
+    // open on a voiced frame of the reader's
+    let frame = 100, order = 10;
     const plot = plotOf({ W: 640, H: 220, x: [0, v.rate / 2], y: [-90, 10], yTicks: [-80, -60, -40, -20, 0], xLabel: 'Hz', yLabel: 'dB', aria: 'One frame\'s spectrum and the envelope its predictor draws' });
     const chips = mkChips(3);
     const paint = () => {
@@ -215,8 +217,8 @@ export function vocoderWidget(): Widget {
   return withVoice('All of them, side by side', (v, panel, ctl) => {
     const voc = vocode(v.x), lags = voc.frames.filter((f) => f.voiced).map((f) => f.lag).sort((a, b) => a - b);
     const mu = v.x.map((t) => 4 * ulawDecode(ulawEncode(t >> 2))), ad = adpcmDecode(adpcmEncode(v.x));
-    const rows: [string, number, string][] = [['The recording, 16 bits', v.rate * 16, '—'], ['μ-law (G.711), in gates', v.rate * 8, dbs(snrDb(v.x, mu))], ['IMA ADPCM, on the RV32', v.rate * 4, dbs(snrDb(v.x, ad))], ['Our vocoder, a model', vocBitRate(v.rate), 'not a waveform coder']];
-    panel.append(h('table', { class: 'mini' }, h('tr', null, h('th', null, 'Coder'), h('th', null, 'Rate'), h('th', null, 'SNR')), ...rows.map(([n, b, s]) => h('tr', null, h('td', null, n), h('td', null, kbs(b)), h('td', null, s)))));
+    const rows: [string, number, string][] = [['The recording, 16 bits', v.rate * 16, '—'], ['μ-law (G.711), the model the gates equal', v.rate * 8, dbs(snrDb(v.x, mu))], ['IMA ADPCM, the model the RV32 program equals', v.rate * 4, dbs(snrDb(v.x, ad))], ['Our vocoder, a model', vocBitRate(v.rate), 'not a waveform coder']];
+    panel.append(h('table', { class: 'dsp-table' }, h('tr', null, h('th', null, 'Coder'), h('th', null, 'Rate'), h('th', null, 'SNR')), ...rows.map(([n, b, s]) => h('tr', null, h('td', null, n), h('td', null, kbs(b)), h('td', null, s)))));
     const chips = mkChips(4);
     chips.set(0, `${vocBitsPerFrame()} bits`, `a 22.5 ms frame: ${VOC_BITS.k.reduce((a, b) => a + b, 0)} for ten reflection coefficients, ${VOC_BITS.pitch} pitch and voicing, ${VOC_BITS.gain} gain, ${VOC_BITS.sync} sync`);
     chips.set(1, `${num((100 * voc.voiced) / voc.frames.length, 0)} %`, 'of frames found voiced');

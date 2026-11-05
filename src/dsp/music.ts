@@ -96,38 +96,45 @@ export interface CodecFrame { bits: number[]; levels: number[]; mask: number[]; 
 export const sideBits = (bits: readonly number[]): number => 4 * bits.length + 6 * bits.filter((b) => b > 0).length;
 
 /**
- * A frame's bits, band by band: each extra bit a coefficient takes lowers that band's noise by 6 dB, so bits go one at a time to the band whose noise is furthest above its target.
- * By mask, the target is the mask; by signal, it is the band's own level (most bits to the loudest bands, as plain SNR would want).
+ * A frame's bits, band by band: each extra bit a coefficient takes lowers that band's noise by 6 dB, and bits go one at a time to the band where the next one buys most for what
+ * it costs (a band's coefficients, and its scale factor the first time). By mask, a bit buys the dB it takes off the noise above the mask, and nothing once the noise is well under it.
+ * By signal, it buys noise power, wherever it is: the loudest bands first, which is what the best SNR asks for. Same loop, two measures of what a bit is worth.
  */
-export function allocate(levels: readonly number[], target: readonly number[], bs: readonly Band[], budget: number): number[] {
+export function allocate(levels: readonly number[], target: readonly number[] | 'signal', bs: readonly Band[], budget: number): number[] {
   const bits = bs.map(() => 0), width = bs.map((b) => b.hi - b.lo);
   // a band's first bit also pays for its scale factor
   const cost = (i: number) => width[i] + (bits[i] ? 0 : 6);
   // a band with no bits leaves all its signal as noise
   const noise = (i: number) => (bits[i] ? levels[i] + 1.76 - 6.02 * bits[i] : levels[i]);
+  // what the next bit buys, per bit it costs: by mask, dB taken off the noise above the mask (none once it is 6 dB under); by signal, noise power removed (a bit takes 3/4 of it)
+  const gain = (i: number) => {
+    if (target === 'signal') return (10 ** (noise(i) / 10) * 0.75) / cost(i);
+    const over = noise(i) - target[i];
+    return over <= -6 ? 0 : Math.min(over + 6, 6.02) / cost(i);
+  };
   let left = budget - 4 * bs.length;
   for (;;) {
-    let best = -1, worst = -Infinity;
-    for (let i = 0; i < bs.length; i++) { if (bits[i] >= 15 || cost(i) > left) continue; const over = noise(i) - target[i]; if (over > worst) { worst = over; best = i; } }
-    if (best < 0 || worst <= -6) break;
+    let best = -1, top = 0;
+    for (let i = 0; i < bs.length; i++) { if (bits[i] >= 15 || cost(i) > left) continue; const g = gain(i); if (g > top) { top = g; best = i; } }
+    if (best < 0) break;
     left -= cost(best); bits[best]++;
   }
   return bits;
 }
-/** Uniform quantization of a band's coefficients to `b` bits under its own peak (the scale factor), rounded, for a mid-tread quantizer. */
+/** Uniform quantization of a band's coefficients to `b` bits under its own peak (the scale factor): 2^b levels between ±peak, mid-rise, so even one bit has a level each side of zero. */
 export function quantBand(X: Float64Array, lo: number, hi: number, b: number): void {
   let peak = 0;
   for (let k = lo; k < hi; k++) peak = Math.max(peak, Math.abs(X[k]));
   if (!b || !peak) { for (let k = lo; k < hi; k++) X[k] = 0; return; }
-  const levels = 2 ** b - 1, step = (2 * peak) / levels;
-  for (let k = lo; k < hi; k++) X[k] = step * Math.round(X[k] / step);
+  const L = 2 ** b, step = (2 * peak) / L;
+  for (let k = lo; k < hi; k++) X[k] = step * (Math.min(L - 1, Math.max(0, Math.floor(X[k] / step + L / 2))) - L / 2 + 0.5);
 }
 /** The codec over a whole signal: each frame's bands measured, a mask computed, bits given out, coefficients quantized, then the signal rebuilt. */
 export function encodeMusic(x: readonly number[], o: CodecOpts): { y: number[]; frames: CodecFrame[]; bitRate: number } {
   const M = o.M ?? MDCT_M, bs = bands(o.fs, M), frames: CodecFrame[] = [];
   const y = mdctRoundTrip(x, (X0) => {
     const X = Float64Array.from(X0), levels = bandPowersDb(X, bs, M), mask = maskDb(levels, bs, o.fs, M);
-    const bits = allocate(levels, o.by === 'mask' ? mask : levels.map(() => -Infinity), bs, o.bitsPerFrame);
+    const bits = allocate(levels, o.by === 'mask' ? mask : 'signal', bs, o.bitsPerFrame);
     const before = Float64Array.from(X);
     bs.forEach((b, i) => quantBand(X, b.lo, b.hi, bits[i]));
     const noise = bs.map((b) => { let p = 0; for (let k = b.lo; k < b.hi; k++) p += (X[k] - before[k]) ** 2; return toDb(p / ((M * M) / 4)); });

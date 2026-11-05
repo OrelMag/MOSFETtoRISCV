@@ -16,10 +16,10 @@ export const SPEECH_FIGS = {
 
 /** The teaching codec on the nocturne, at budgets of 64, 32 and 16 kb/s, bits by mask or by signal: kb/s actually spent, % of band-frames whose noise is above the mask, SNR and mean NMR in dB. */
 export const MUSIC_FIGS = {
-  mask64Rate: 49.4, mask64Audible: 0.1, mask64Snr: 21.1, mask64Nmr: -7.3,
-  signal64Rate: 63.5, signal64Audible: 30.7, signal64Snr: 28.2, signal64Nmr: -41.5,
-  mask32Rate: 31.9, mask32Audible: 45.3, mask32Snr: 13.2, mask32Nmr: -0.2,
-  signal32Rate: 32, signal32Audible: 51.8, signal32Snr: 12.8, signal32Nmr: -19.4,
-  mask16Rate: 15.9, mask16Audible: 87.6, mask16Snr: 2.4, mask16Nmr: 8,
-  signal16Rate: 15.9, signal16Audible: 72.1, signal16Snr: 2, signal16Nmr: -2.8,
+  mask64Rate: 49.4, mask64Audible: 1, mask64Snr: 21.4, mask64Nmr: -7.9,
+  signal64Rate: 63.9, signal64Audible: 11.3, signal64Snr: 49.4, signal64Nmr: -29.1,
+  mask32Rate: 31.7, mask32Audible: 17.3, mask32Snr: 21.3, mask32Nmr: -4.9,
+  signal32Rate: 31.9, signal32Audible: 28.4, signal32Snr: 35, signal32Nmr: -11,
+  mask16Rate: 15.9, mask16Audible: 49.3, mask16Snr: 13, mask16Nmr: 0.8,
+  signal16Rate: 15.9, signal16Audible: 58.4, signal16Snr: 17.5, signal16Nmr: 1.7,
 };

@@ -111,10 +111,12 @@ export function codecWidget(): Widget {
       chips.set(2, `${dbs(snrDb(short, res.mask.y))} and ${dbs(snrDb(short, res.signal.y))}`, 'SNR, by mask and by signal');
       chips.set(3, `${dbs(meanNmrDb(res.mask.frames))} and ${dbs(meanNmrDb(res.signal.frames))}`, 'mean noise-to-mask ratio: below 0, unheard by the model');
     };
-    const recompute = () => { res = { mask: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'mask' }), signal: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'signal' }) }; paint(); };
+    let timer = 0;
+    const recompute = () => { window.clearTimeout(timer); timer = window.setTimeout(encode, 150); };
+    const encode = () => { res = { mask: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'mask' }), signal: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'signal' }) }; paint(); };
     ctl.append(slider('Budget', 16, 96, 16, rate, (t) => `${t} kb/s`, (t) => { rate = t; recompute(); }).el, slider('Frame', 0, res.mask.frames.length - 1, 1, f, (t) => `${num((t * MDCT_M) / v.rate, 2)} s`, (t) => { f = t; paint(); }).el,
       clipButton('Hear: bits by mask', () => clip(res.mask.y, v.rate, `ours, ${rate} kb/s budget, by mask`)).el, clipButton('Hear: bits by signal', () => clip(res.signal.y, v.rate, `ours, ${rate} kb/s budget, by signal`)).el, clipButton('Hear the original', () => clip(short, v.rate, '16-bit')).el);
     paint();
-    panel.append(bars, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'bits by mask'), h('span', { class: 'k-near' }, 'bits by signal')), chips.el);
+    panel.append(h('div', { class: 'pic-caption' }, 'Bits per coefficient in each of the 20 bands, low to high, the tallest bar 15 or fewer:'), bars, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'bits by mask'), h('span', { class: 'k-near' }, 'bits by signal')), chips.el);
   });
 }

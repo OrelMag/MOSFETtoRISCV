@@ -5,7 +5,7 @@ import { ulawDecision, VOC_BITS, vocBitRate, vocBitsPerFrame } from '../dsp/spee
 import { SPEECH_FIGS as F } from '../dsp/soundfigs';
 import { adpcmProgramLength } from '../dsp/adpcmrv';
 import { ulawDecoder, ulawEncoder } from '../lib/ulaw';
-import { stats } from '../sim/stats';
+import { logicDepth, stats } from '../sim/stats';
 import { adpcmRvWidget, adpcmWidget, companderWidget, lpcWidget, ulawApi, ulawScene, ulawWidget, vocoderWidget, voiceWidget } from '../widgets/dspspeech';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -28,7 +28,7 @@ export const chSpeech: Chapter = {
     keep: [
       'μ-law gives each sample 8 bits whose steps grow with the level: segments double in width, so the noise is a roughly constant share of the signal over some 40 dB of level.',
       'G.711 defines μ-law by a table of decision and output values on 14-bit samples. The code is the sign, a 3-bit segment and a 4-bit step, sent inverted.',
-      'ADPCM sends 4 bits of difference from a prediction, and adapts its step: three small codes shrink it, the rest grow it. Encoder and decoder run the same arithmetic, so they agree without sending the step.',
+      'ADPCM sends 4 bits of difference from a prediction, and adapts its step: the four smallest codes shrink it, the rest grow it. Encoder and decoder run the same arithmetic, so they agree without sending the step.',
       'Linear prediction fits a short all-pole filter to each frame: the coefficients carry the spectrum\'s envelope, which is the shape of the vocal tract.',
       'A vocoder sends that filter and a description of the source (pitch or noise, and a level) instead of the waveform: 54 bits every 22.5 ms here. It keeps the words and loses the voice\'s character.',
     ],
@@ -61,7 +61,7 @@ export const chSpeech: Chapter = {
       title: 'A voice on a wire',
       body: `
         <p>The telephone network samples a voice 8 000 times a second, enough for the band from 300 Hz to 3.4 kHz that carries what is said. At 8 bits a sample that is 64 kb/s, a channel's worth, and this chapter is about how far below that a voice can go and what each step down costs.</p>
-        <p>The voice here is a real one: six seconds of a LibriVox reading of the Gettysburg Address, which LibriVox has dedicated to the public domain. It was decoded from LibriVox's MP3, cleared of a DC offset the recording carries, and resampled to 8 kHz by this site's own windowed-sinc filter. It is stored at 16 bits, so it starts at twice the telephone's rate.</p>
+        <p>The voice here is a real one: six seconds of a LibriVox reading of the Gettysburg Address, which LibriVox has dedicated to the public domain. It was decoded from LibriVox's 64 kb/s MP3, itself a lossy copy, cleared of a DC offset the recording carries, and resampled to 8 kHz by this site's own windowed-sinc filter. It is stored at 16 bits, so it starts at twice the telephone's rate.</p>
         <p>Its spectrum shows where the energy is: most of it below 1 kHz, where the voice's pitch and first formants sit, falling away towards 4 kHz.</p>
         <div class="try">Play it, and look at how much of the spectrum is below 1 kHz.</div>`,
       widget: voiceWidget,
@@ -78,7 +78,7 @@ export const chSpeech: Chapter = {
       body: `
         <p>A uniform quantizer has the same step everywhere, so its noise is the same whether someone shouts or whispers. A whisper then has a poor signal to noise ratio, and the bits spent on steps a whisper never reaches are wasted.</p>
         <p>The fix is steps that grow with the level, so the noise grows with the signal. Logarithmic steps keep the ratio about constant. The plot shows it for a sine at every level: 8 bits of μ-law stay near the same SNR over some 40 dB, where 8 uniform bits fall off a cliff. On quiet speech μ-law matches what 12 uniform bits would give.</p>
-        <p>On this recording, normalized to 1 dB below full scale, μ-law gets ${F.muSnr} dB and 8 uniform bits ${F.uniform8Snr}: the loud case, where uniform does well. Turned down by 30 dB, μ-law still gets ${F.quietMuSnr} dB and 8 uniform bits only ${F.quietUniform8Snr}.</p>`,
+        <p>On this recording, normalized to 1 dB below full scale, μ-law gets ${F.muSnr} dB and 8 uniform bits ${F.uniform8Snr}: a loud voice keeps uniform close. Turned down by 30 dB, μ-law still gets ${F.quietMuSnr} dB and 8 uniform bits only ${F.quietUniform8Snr}.</p>`,
       widget: companderWidget,
       challenge: {
         kind: 'quiz', question: 'A uniform 8-bit coder loses about how much SNR when the signal drops by 20 dB?',
@@ -100,7 +100,7 @@ export const chSpeech: Chapter = {
         options: ['256', '1', '16', '2 048'],
         answer: 0,
         explain: 'Each segment doubles the step: 2, 4, 8 … and the eighth is 256 wide. Its 16 steps cover 4 096 values.',
-        why: ['', 'That is the first step of the first segment.', 'That is how many steps a segment has.', 'That would be wider than half a segment.'],
+        why: ['', 'That is the first step of the first segment.', 'That is how many steps a segment has.', 'That is half of the top segment\'s 4 096, all of its 16 steps in two.'],
       },
     },
     {
@@ -108,7 +108,7 @@ export const chSpeech: Chapter = {
       get body() {
         return `
         <p>The encoder takes the magnitude, adds 33, finds the top set bit with a priority encoder, picks the four bits below it with a multiplexer, and inverts. A sample at the clip or beyond takes the top code. The decoder is the sum backwards: the step and two 1s make 33 + 2m, a shift by the segment, 33 taken off, and the sign put back.</p>
-        <p>The encoder is ${n0(nands(ulawEncoder()))} NANDs and the decoder ${n0(nands(ulawDecoder()))}, with no clock: each is a few gate delays of logic, fast enough for thousands of channels sharing one by turns. The tests compare the encoder with the model on all 16 384 samples and the decoder on all 256 codes.</p>
+        <p>The encoder is ${n0(nands(ulawEncoder()))} NANDs and the decoder ${n0(nands(ulawDecoder()))}, with no clock. Their longest paths are ${logicDepth(ulawEncoder())} and ${logicDepth(ulawDecoder())} NAND delays, mostly the ripple adders: slow beside a fast adder, and still a fraction of the 125 µs between samples. The tests compare the encoder with the model on all 16 384 samples and the decoder on all 256 codes.</p>
         <div class="try">Send 50 ms of the voice. The panel feeds each sample to the gates, reads the code and the sample back, and checks both.</div>`;
       },
       scene: ulawScene,
@@ -125,9 +125,9 @@ export const chSpeech: Chapter = {
       title: 'Send the difference',
       body: `
         <p>Neighbouring samples of a voice are close, so the difference from a prediction is smaller than the sample. <strong>ADPCM</strong> sends that difference in 4 bits and adapts its step: a small code shrinks the step for next time, a large one grows it, by IMA's table of 89 steps about 10 % apart.</p>
-        <p>The encoder runs the decoder's own arithmetic, so it predicts exactly what the far end will have, and the step never needs to be sent. That is 32 kb/s, half of μ-law. On this voice it reaches ${F.adpcmSnr} dB against μ-law's ${F.muSnr}. It follows a loud onset a few samples late while the step grows, and that is where its error is.</p>
+        <p>The encoder runs the decoder's own arithmetic, so it predicts exactly what the far end will have, and the step never needs to be sent. That is 32 kb/s, half of μ-law. On this voice it reaches ${F.adpcmSnr} dB against μ-law's ${F.muSnr}. Its error is largest just after a loud onset, while the step is still growing: the plot shows the error separately, scaled up.</p>
         <p>The tests hold this model equal to Python's audioop on the voice and on a full-scale square wave, codes, state and the order audioop packs two codes into a byte, with the first in the high half. Microsoft's IMA ADPCM in WAV files puts it in the low half, and adds block headers, so these codes are not a WAV file's.</p>
-        <div class="try">Move along the voice and find an onset: the step index climbs, and for a few samples the output lags.</div>`,
+        <div class="try">The plot opens at the first loud onset. Watch the step index climb and the error shrink as it does, then move along to quieter speech.</div>`,
       widget: adpcmWidget,
       challenge: {
         kind: 'quiz', question: 'Why does ADPCM send no step size?',
@@ -144,19 +144,19 @@ export const chSpeech: Chapter = {
         <p>On the golden model it takes ${F.rvPerSample} instructions a sample, so keeping up with a voice at 8 kHz needs about ${(F.rvPerSample * 8000 / 1e6).toFixed(2)} million instructions a second, at one instruction a cycle as on this site's single-cycle core. Its codes equal the model's on the voice, block by block with the state carried over, and on the clipping square wave.</p>`,
       widget: adpcmRvWidget,
       challenge: {
-        kind: 'quiz', question: 'Which costs the program most instructions per sample?',
-        options: ['The branches that decide each bit', 'A multiplication for every sample', 'Reading the input sample from memory', 'Writing each code back to memory'],
+        kind: 'quiz', question: 'Which operation does the program never use?',
+        options: ['A multiply', 'A branch on a comparison', 'A shift right', 'A halfword load from memory'],
         answer: 0,
-        explain: 'Three compare-and-branch steps, each with a subtract and an add on one side, and the clamps after them. There is no multiply at all.',
-        why: ['', 'The algorithm only shifts, adds and compares.', 'It is one load.', 'It is one store.'],
+        explain: 'Each bit of the code is a compare, a subtract and an add of a halved step. Shifts halve the step, and the tables are loaded: nothing needs a multiply.',
+        why: ['', 'Every code bit is decided by one.', 'Halving the step is a shift.', 'The step table is read a halfword at a time.'],
       },
     },
     {
       title: 'Predict the next sample',
       body: `
-        <p>A better prediction leaves less to send. <strong>Linear prediction</strong> fits each frame of 30 ms with the best weighted sum of its last ten samples, the same Wiener problem <a href="#/c/adaptive/1">Filters that learn</a> solved with Levinson's recursion, here on the frame's autocorrelation. A first difference, 1 − 0.9375 z⁻¹, is applied first so the low end does not take all of the predictor's effort.</p>
+        <p>A better prediction leaves less to send. <strong>Linear prediction</strong> fits each frame of 30 ms with the best weighted sum of its last ten samples, the same Wiener problem <a href="#/c/adaptive/1">Filters that learn</a> solved with Levinson's recursion, here on the frame's autocorrelation. Pre-emphasis, 1 − 0.9375 z⁻¹, is applied first so the low end does not take all of the predictor's effort.</p>
         <p>The ten coefficients are a filter, 1 / A(z), and its response is the envelope of the frame's spectrum: the resonances of the throat and mouth. On the loud frames of this voice, order 10 makes the error ${F.predGain} dB smaller than the pre-emphasized frame. The Levinson recursion also gives reflection coefficients, each inside ±1 for any real signal, which is what makes them safe to quantize.</p>
-        <div class="try">Step through frames, and raise the order from 2 to 20: the envelope learns the formants first, then starts to follow single harmonics.</div>`,
+        <div class="try">On a voiced frame, raise the order from 2 to 20: the envelope finds the formants by about 10, and more coefficients add only small bumps, never the harmonics. Then try an unvoiced frame.</div>`,
       widget: lpcWidget,
       challenge: {
         kind: 'quiz', question: 'What does the LPC filter\'s response trace in a voiced frame?',
