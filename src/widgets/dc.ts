@@ -15,7 +15,7 @@ const selectOf = (aria: string, opts: readonly (readonly [string, string])[], va
   return e;
 };
 const btn = (label: string, title: string, f: () => void): HTMLButtonElement => { const b = h('button', { class: 'btn sm', type: 'button', title }, label) as HTMLButtonElement; b.addEventListener('click', f); return b; };
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en');
 
 // ---- the fabric ------------------------------------------------------------------------------------------------------------------
 
