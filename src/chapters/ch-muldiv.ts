@@ -16,6 +16,7 @@ import { boothWidget, mulComparison } from '../widgets/muldiv';
 import { mulStyles } from '../widgets/multiply';
 import { kNands, sysNands } from './ch-system';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const msrc = (id: string) => M_PROGRAMS.find((p) => p.id === id)!.source;
 const pct = (a: number, b: number) => Math.round((a / b - 1) * 100);
@@ -44,7 +45,7 @@ const DIV_LINE = 9;
 const SPEEDUPS = [{ id: 'gcd', x: 2409 / 225 }, { id: 'digits', x: 3922 / 422 }, { id: 'isprime', x: 12359 / 1106 }, { id: 'matmul', x: 1682 / 890 }];
 
 export const chMulDiv: Chapter = {
-  id: 'muldiv', num: 21, title: 'Multiply & divide', level: 'Arithmetic',
+  id: 'muldiv', num: numOf('muldiv'), title: 'Multiply & divide', level: 'Arithmetic',
   blurb: 'Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.',
   goals: [
     'reduce a column of partial products with 3:2 carry-save rows and say why the tree\'s depth grows with log n, the array\'s with n',

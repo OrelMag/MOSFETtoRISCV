@@ -15,10 +15,9 @@ import { tick } from './yieldtick';
 
 describe('chapter 52', () => {
   it('sits between the router and the appendices', () => {
-    expect(chTcp.num).toBe(52);
     expect(chapterById('tcp')).toBe(chTcp);
-    expect(chapterById('router')!.num).toBe(51);
-    for (const c of chapters.filter((x) => x.appendix)) expect(c.num).toBeGreaterThan(53);
+    expect(chapterById('router')!.num).toBe(chTcp.num - 1);
+    for (const c of chapters.filter((x) => x.appendix)) expect(c.num).toBeGreaterThan(chTcp.num);
   });
   it('the figures in tcpcosts.json are the bench\'s: the wire-speed run', async () => {
     const m = await measureBench(COSTS.fast.bytes, COSTS.fast.o, tick);

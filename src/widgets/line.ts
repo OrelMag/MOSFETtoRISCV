@@ -14,6 +14,7 @@ import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';
 import '../styles/line.css';
+import { numOf } from '../chapters/order';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // A small plot: fixed axes, a layer that is redrawn
@@ -415,7 +416,7 @@ export function noiseWidget(): Widget {
       h('div', { class: 'mos-row' }, sl('Pads', 1, 32, 1, n, (v) => String(v), (v) => { n = v; paintGb(); }), sl('L', 0.5, 10, 0.5, lnh, (v) => `${v} nH`, (v) => { lnh = v; paintGb(); }), sl('Edge', 0.1, 4, 0.1, gbr, ns, (v) => { gbr = v; paintGb(); })), gbChips.el),
     sec('A differential pair', 'The same noise on both legs; the receiver subtracts them.',
       dfBars, h('div', { class: 'mos-row' }, sl('Common', 0, 1, 0.05, cm, (v) => `${v.toFixed(2)} V`, (v) => { cm = v; paintDf(); }), sl('CMRR', 20, 80, 5, cmrr, (v) => `${v} dB`, (v) => { cmrr = v; paintDf(); }), sl('Mismatch', 0, 20, 1, mis, (v) => `${v} %`, (v) => { mis = v; paintDf(); })), dfChips.el),
-    sec('What noise does to a bit', 'A pseudo-random pattern through a single-pole channel; chapter 46 reads this picture in depth.',
+    sec('What noise does to a bit', `A pseudo-random pattern through a single-pole channel; chapter ${numOf('serial')} reads this picture in depth.`,
       eyePlot.el, h('div', { class: 'mos-row' }, sl('Rate', 0.2, 4, 0.1, rate, (v) => `${v.toFixed(1)} Gb/s`, (v) => { rate = v; paintEye(); }), sl('Bandwidth', 0.1, 4, 0.05, bw, (v) => `${v.toFixed(2)} GHz`, (v) => { bw = v; paintEye(); }), sl('Noise', 0, 200, 5, sig, (v) => `${v} mV`, (v) => { sig = v; paintEye(); })), eyeChips.el));
   paintXt(); paintGb(); paintDf(); paintEye();
   return { el };

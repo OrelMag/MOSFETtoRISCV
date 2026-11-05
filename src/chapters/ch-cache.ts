@@ -12,6 +12,7 @@ import type { Stage } from '../view/stage';
 import { cacheExplorer, dramWidget, hierarchyWidget } from '../widgets/cache';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** Value of a named net inside an instance (switch-level scenes). */
 function netAt(st: Stage, path: string[], net: string): number {
@@ -63,7 +64,7 @@ function amat(levels: [number, number][], mem: number): number {
 }
 
 export const chCache: Chapter = {
-  id: 'cache', num: 22, title: 'Caches & the memory hierarchy', level: 'Memory',
+  id: 'cache', num: numOf('cache'), title: 'Caches & the memory hierarchy', level: 'Memory',
   blurb: 'SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.',
   goals: [
     'read and write a 6T SRAM cell, and say why transistor sizing replaces the clock and the enable gate',

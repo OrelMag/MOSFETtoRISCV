@@ -23,6 +23,7 @@ import type { Scene, Stage, Widget } from '../view/stage';
 import { dmaRx, dmaTx, MIN_FRAME_TIME, PING_FRAME, PING_FRAME_TIME, wireBytes, wireClocks } from '../comm/stack/netfacts';
 import { slider } from './mosparts';
 import { btn, outAt, outp, pulse, select, waveSvg } from './uart';
+import { numOf } from '../chapters/order';
 
 /**
  * Like uart.ts's Loop, but each tick simulates for a time budget instead of a fixed number of steps: a computer pair on the cycle engine runs at a few
@@ -362,7 +363,7 @@ export function lanScene(): Scene {
         h('div', { class: 'mc-row' }, run, save), read,
         h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'Frames at the switch'), list, detail,
-        h('p', { class: 'sub' }, 'Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter 49\'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.'));
+        h('p', { class: 'sub' }, `Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter ${numOf('switch')}'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.`));
       return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); } };
     }],
   };
