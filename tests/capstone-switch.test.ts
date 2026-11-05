@@ -10,6 +10,7 @@ import { Builder } from '../src/lib/builder';
 import { define, merger, ones, splitter } from '../src/lib/define';
 import { DFF, register } from '../src/lib/sequential';
 import { TIE0, TIE1 } from '../src/lib/transistors';
+import { tick } from './yieldtick';
 import { ethSwitch } from '../src/lib/ethswitch';
 import type { ComponentDef } from '../src/sim/types';
 
@@ -39,7 +40,7 @@ describe('the switch capstone', () => {
     expect(r.failures).toEqual([]);
     expect(r.tested).toBeGreaterThan(20);
   }, 300_000);
-  it('a wrong design fails, and the bench says what was wrong', () => {
+  it('a wrong design fails, and the bench says what was wrong', async () => {
     const cases: [string, Parameters<typeof mutant>[1], RegExp][] = [
       // port 1's output wired to port 2's and the other way round: frames reach the wrong port
       ['swap', (_, w) => { for (const s of ['txData', 'txValid', 'txLast']) { w(`core.${s}1`, `${s}2`); w(`core.${s}2`, `${s}1`); } return ['txData1', 'txValid1', 'txLast1', 'txData2', 'txValid2', 'txLast2']; }, /belongs on/],
@@ -50,7 +51,10 @@ describe('the switch capstone', () => {
       // a port that never accepts anything
       ['deaf', (b, w) => { const z = b.op(TIE0, [], undefined, 'z'); w(`${z}.y`, 'txValid2'); return ['txValid2']; }, /belongs on/],
     ];
-    for (const [name, change, want] of cases) expect(runSwitchSpec(mutant(name, change), 'gate').failures.join(' | '), name).toMatch(want);
+    for (const [name, change, want] of cases) {
+      await tick();
+      expect(runSwitchSpec(mutant(name, change), 'gate').failures.join(' | '), name).toMatch(want);
+    }
   }, 300_000);
   it('a right design that takes longer passes: nothing in the sheet fixes the latency', () => {
     const late = define({
@@ -73,8 +77,9 @@ describe('the switch capstone', () => {
     });
     expect(runSwitchSpec(late, 'gate').failures).toEqual([]);
   }, 300_000);
-  it('the table the sheet asks for is enough, and half of it is not', () => {
+  it('the table the sheet asks for is enough, and half of it is not', async () => {
     expect(runSwitchSpec(ethSwitch({ cellK: 8, tableK: 3 }), 'gate').failures).toEqual([]);
+    await tick();
     expect(runSwitchSpec(ethSwitch({ cellK: 8, tableK: 2 }), 'gate').failures.length).toBeGreaterThan(0);
   }, 300_000);
   it('the machines are the learner\'s: none of them is a part', () => {

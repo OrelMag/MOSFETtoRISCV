@@ -11,6 +11,7 @@ import { define, merger, ones, splitter } from '../src/lib/define';
 import { NOT, OR } from '../src/lib/gates';
 import { DFF, DFFE, register } from '../src/lib/sequential';
 import { TIE0, TIE1 } from '../src/lib/transistors';
+import { tick } from './yieldtick';
 import { UART_DIV_BITS } from '../src/comm/uart';
 import { UART_CORE } from '../src/lib/uart';
 import type { ComponentDef } from '../src/sim/types';
@@ -54,7 +55,7 @@ describe('the console capstone', () => {
   it('the library core passes the bench directly', () => {
     expect(runConsole(UART_CORE, 'gate').failures).toEqual([]);
   }, 60_000);
-  it('a wrong design fails, and the bench says what was wrong', () => {
+  it('a wrong design fails, and the bench says what was wrong', async () => {
     const cases: [string, (b: Builder) => void, RegExp][] = [
       ['txinv', (b) => { straight(b, ['tx']); b.wire(b.op1(NOT, ['core.tx']), 'tx'); }, /far end|idle|stop/],
       ['noirq', (b) => { straight(b, ['irq']); const z = b.op(TIE0, [], undefined, 'zero'); b.wire(`${z}.y`, 'irq'); }, /irq is low/],
@@ -67,6 +68,7 @@ describe('the console capstone', () => {
       ['irqtx', (b) => { straight(b, ['irq']); const sp = b.op(splitter(ones(UART_DIV_BITS)), ['wval'], undefined, 'sp'), en = b.op1(DFFE, [`${sp}.o1`, 'ieWe', 'clk']); b.wire(b.op1(OR, ['core.irq', en]), 'irq'); }, /bytes in the FIFO/],
     ];
     for (const [name, change, want] of cases) {
+      await tick();
       const r = runConsole(mutant(name, change), 'gate');
       expect(r.failures.join(' | '), name).toMatch(want);
     }
@@ -79,9 +81,10 @@ describe('the console capstone', () => {
     }, ['wval']);
     expect(runConsole(anyClear, 'gate').failures.join(' | ')).toMatch(/clear with no bit set/);
   }, 60_000);
-  it('a right design with its flags and its push a cycle late passes: the sheet does not fix those cycles', () => {
+  it('a right design with its flags and its push a cycle late passes: the sheet does not fix those cycles', async () => {
     const lateStatus = mutant('late_status', (b) => { straight(b, ['status']); b.wire(b.op1(register(8), ['core.status', 'one.y', 'clk']), 'status'); }, [], true);
     expect(runConsole(lateStatus, 'gate').failures).toEqual([]);
+    await tick();
     const latePush = mutant('late_push', (b) => {
       straight(b, []);
       b.wire(b.op1(DFF, ['push', 'clk']), 'core.push');
