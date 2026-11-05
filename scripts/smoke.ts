@@ -980,7 +980,9 @@ async function startPreview(): Promise<{ url: string; close(): Promise<void> }> 
 
 // ---- main ------------------------------------------------------------------------------------
 
-const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed/;
+// An empty page is here too: the print route (one fresh load in dozens, runner and laptop alike) was seen with nothing mounted yet
+// when checked. A page that is really empty stays empty on the second visit.
+const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed|^page: the main view is empty$|^drive: no print view$/;
 const MAX_RETRIES = 20;
 
 async function main(): Promise<number> {
