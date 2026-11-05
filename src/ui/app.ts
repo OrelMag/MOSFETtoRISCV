@@ -294,7 +294,7 @@ export function startApp(root: HTMLElement): void {
   // The way back after a jump into another section (returnto.ts): installed before the router's hashchange listener.
   const ret = installReturn(view);
   const topbar = h('header', { class: 'topbar' },
-    h('a', { class: 'brand', href: '#/', 'aria-label': 'MOSFET → RISC-V: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, 'MOSFET → RISC-V'), h('small', null, 'a journey through abstraction')),
+    h('a', { class: 'brand', href: '#/', 'aria-label': 'From Switch to RISC-V and Beyond: home' }, h('span', { class: 'brand-mark' }, icon('chip', 18)), h('span', { class: 'brand-name' }, h('span', { class: 'brand-long' }, 'From '), 'Switch to RISC-V', h('span', { class: 'brand-long' }, ' and Beyond')), h('small', null, 'a journey through abstraction')),
     nav, ret.el, h('div', { class: 'spacer' }), h('div', { class: 'tools' }, searchBtn, radix, animate, palWrap, themeBtn));
   view.tabIndex = -1;
   // replaces index.html's loading shell in one step (same classes, same bar height)

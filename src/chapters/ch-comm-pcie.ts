@@ -282,7 +282,7 @@ export const chPcie: Chapter = {
       },
       more: {
         numbers: `<p>Device ${n0(UC().total)} NANDs: ${Object.entries(UC().blocks).filter(([k]) => !k.includes('.')).map(([k, v]) => `${k} ${n0(v)}`).join(', ')}. The vendor and product ids are pid.codes' test id, 0x1209 and 0x0001.</p>`,
-        pitfall: '<p>Left out, and named in comm/usb.ts: start-of-frame timing, suspend, low and high speed, hubs, attach detection. If the host\'s last ACK of SET_ADDRESS is lost, the host believes the address changed and the device has not: the next transaction goes unanswered, and that is real behaviour a host recovers from with a reset.</p>',
+        pitfall: '<p>Left out, and named in comm/usb.ts: start-of-frame timing, suspend, low and high speed, hubs, attach detection. If the host\'s last ACK of SET_ADDRESS is lost, the host believes the address changed and our device has not: the next transaction goes unanswered, and the host has to recover, a reset being the sure way. Real controllers differ in the moment they move, some on sending the status packet.</p>',
       },
     },
     {

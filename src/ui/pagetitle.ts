@@ -3,7 +3,7 @@
 
 import type { StepMeta } from '../chapters/meta';
 
-export const SITE_TITLE = 'MOSFET → RISC-V';
+export const SITE_TITLE = 'From Switch to RISC-V and Beyond';
 
 /** What the address alone can name: most specific first. `chapter`: the chapter a `c` route opens, if it exists. */
 export function routeTitle(parts: string[], chapter?: { title: string; steps: StepMeta[] }): string[] {
@@ -26,7 +26,7 @@ export function routeTitle(parts: string[], chapter?: { title: string; steps: St
   }
 }
 
-/** "Most specific · … · MOSFET → RISC-V". */
+/** "Most specific · … · From Switch to RISC-V and Beyond". */
 export const titleText = (names: string[]): string => [...names.filter(Boolean), SITE_TITLE].join(' · ');
 
 export function setPageTitle(...names: string[]): void {

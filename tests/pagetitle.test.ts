@@ -18,7 +18,7 @@ describe('page titles', () => {
     expect(routeTitle(['c', 'nope'])).toEqual(['No such chapter']);
   });
   it('joins the names with the site last, the home page alone', () => {
-    expect(titleText(['OR', 'Gates from NAND'])).toBe('OR · Gates from NAND · MOSFET → RISC-V');
-    expect(titleText(routeTitle([]))).toBe('MOSFET → RISC-V');
+    expect(titleText(['OR', 'Gates from NAND'])).toBe('OR · Gates from NAND · From Switch to RISC-V and Beyond');
+    expect(titleText(routeTitle([]))).toBe('From Switch to RISC-V and Beyond');
   });
 });

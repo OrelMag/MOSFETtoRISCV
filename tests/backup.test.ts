@@ -134,7 +134,7 @@ describe('backup', () => {
     const err = (t: string) => { const r = readBackup(t); return 'error' in r ? r.error : ''; };
     expect(err('nope')).toMatch(/not a JSON/);
     expect(err('[1]')).toMatch(/not a backup/);
-    expect(err('{"format":"x"}')).toMatch(/not a MOSFET/);
+    expect(err('{"format":"x"}')).toMatch(/not a From Switch/);
     expect(err(JSON.stringify({ format: CAMPAIGN_FORMAT }))).toMatch(/campaign page/);
     expect(err(JSON.stringify({ format: FORMAT }))).toMatch(/sandbox/);
     expect(err(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 99, keys: {} }))).toMatch(/newer/);
