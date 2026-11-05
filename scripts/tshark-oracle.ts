@@ -13,7 +13,8 @@ import { Resolver, SITE, TYPE_A, TYPE_NS, type DnsMessage } from '../src/net/int
 import { BROADCAST, frameBody } from '../src/comm/ethframe';
 import { arpFrame, icmpEchoFrame, udpFrame } from '../src/comm/netframes';
 import { LINKTYPE_USB_2_0, pcapFile, type Captured } from '../src/comm/pcap';
-import { dataBytes, handshakeBytes, PID, sofBytes, tokenBytes } from '../src/comm/usb';
+import { CLOCK_NS, dataBytes, handshakeBytes, PID, REQ, setupData, sofBytes, tokenBytes, UsbBench, UsbMonitor, type BenchOptions, type Pump, type UsbHost } from '../src/comm/usb';
+import { GateDev, readSweep } from '../tests/usbkit';
 import { stackProgram } from '../src/comm/stack';
 import { DEFAULT_STACK } from '../src/comm/stack/all';
 import { HOSTS, hostApp, pingApp, udpClientApp, udpEchoApp } from '../src/comm/stack/apps';
@@ -188,9 +189,36 @@ const usbBuilt = (): Captured[] => [
   tokenBytes(PID.IN, 5, 1), handshakeBytes(PID.NAK), tokenBytes(PID.IN, 127, 15), handshakeBytes(PID.STALL), sofBytes(1429),
 ].map((bytes, i) => ({ us: i * 1_000, bytes }));
 
+/** The gate-level device and the host model on the bus, every packet of the line read by the independent decoder (comm/usb.ts UsbMonitor): a capture as the chapter's Save capture writes it. */
+function usbCapture(opt: BenchOptions): Captured[] {
+  const b = new UsbBench(new GateDev(), opt);
+  b.run(600_000);
+  if (b.host.failed) throw new Error(`the host gave up: ${b.host.failed}`);
+  const mon = new UsbMonitor();
+  for (const [dp, dm] of b.line) mon.push(dp, dm);
+  for (const s of mon.seen) if (!s.syncOk || s.stuffError || !s.byteAligned) throw new Error(`a packet at clock ${s.start} is not whole`);
+  return mon.seen.map((s) => ({ us: (s.start * CLOCK_NS) / 1000, bytes: s.wire }));
+}
+/** Enumeration, then the things a clean enumeration does not show: STALL, the interrupt endpoint's NAK, a zero-length status, GET_STATUS. */
+function* usbOdds(h: UsbHost): Pump<void> {
+  yield* h.enumerate();
+  const get = (type: number, req: number, value: number, len: number) => setupData(type, req, value, 0, len);
+  yield* h.controlRead(5, get(0x80, REQ.GET_DESCRIPTOR, 0x0300, 8)); // a string descriptor: STALL
+  yield* h.controlRead(5, get(0x80, REQ.GET_STATUS, 0, 2));
+  yield* h.controlRead(5, get(0x80, 0x42, 0, 4)); // an unknown request: STALL
+  yield* h.send(tokenBytes(PID.IN, 5, 1)); yield* h.recv(); yield* h.gap(40); // endpoint 1: NAK
+  yield* h.controlRead(5, get(0x80, REQ.GET_DESCRIPTOR, 0x0100, 64));
+}
+
 const CASES: Case[] = [
   { name: 'built', frames: built },
   { name: 'usb-built', usb: true, frames: usbBuilt },
+  ...(gates ? [
+    { name: 'usb-enumeration', usb: true, frames: () => usbCapture({}), must: (f: Captured[]) => (f.length > 60 ? null : 'an enumeration is more than 60 packets') },
+    { name: 'usb-every-read', usb: true, frames: () => usbCapture({ script: readSweep([]) }), must: (f: Captured[]) => (f.length > 400 ? null : 'the read sweep is more than 400 packets') },
+    { name: 'usb-stall-nak', usb: true, frames: () => usbCapture({ script: usbOdds, nak: (c) => (c > 2800 && c < 3100 ? 1 : 0) }),
+      must: (f: Captured[]) => (new Set(f.map((x) => (x.bytes as number[])[0])).has(0x5a) && new Set(f.map((x) => (x.bytes as number[])[0])).has(0x1e) ? null : 'NAK (5A) and STALL (1E) must both appear') },
+  ] : []),
   ...(gates ? [
     { name: 'ch48-segment', frames: segmentCapture },
     { name: 'ch49-switch', frames: switchCapture },

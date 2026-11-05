@@ -5,7 +5,8 @@ import { icmpEchoFrame, tcpFrame, udpFrame } from '../src/comm/netframes';
 import { HOSTS } from '../src/comm/stack/apps';
 import { checksum } from '../src/net/ipv4';
 import { FP_FRAMES } from '../src/widgets/router';
-import { claimOf, compareCapture, compareRow, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, type Row } from '../scripts/tshark-lib';
+import { crc5Token, dataBytes, handshakeBytes, PID, sofBytes, tokenBytes } from '../src/comm/usb';
+import { claimOf, compareCapture, compareRow, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, USB_FIELDS, usbClaimOf, type Row } from '../scripts/tshark-lib';
 
 const A = HOSTS.A, B = HOSTS.B, hdr = { srcMac: A.mac, dstMac: B.mac, src: A.ip, dst: B.ip, id: 9 };
 const ping = icmpEchoFrame({ ...hdr, ident: 0x1234, seq: 1, data: [1, 2, 3, 4] }).bytes;
@@ -143,5 +144,35 @@ describe('chapter 51\'s frames', () => {
       expect((f[t + 4] << 8) | f[t + 5]).toBe(ipLen - (t - 14));
       expect(checksum(f.slice(14, t))).toBe(0);
     }
+  });
+});
+
+describe('USB captures', () => {
+  const tok = tokenBytes(PID.SETUP, 5, 0), dat = dataBytes(PID.DATA0, [0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x40, 0x00]);
+  /** A packet as a healthy tshark reads it. */
+  const row = (b: number[], us = 0): Row => {
+    const c = usbClaimOf(b, us), r: Row = { 'frame.protocols': 'usbll' };
+    for (const [k, v] of Object.entries(c.fields)) r[k] = k === 'frame.time_epoch' ? (Number(v) / 1e6).toFixed(9) : k === 'usbll.data' ? String(v) : k.startsWith('usbll.') ? hex(v) : String(v);
+    for (const g of c.good) r[g] = '1';
+    return r;
+  };
+  it('the fields of a token and of a data packet, by the spec\'s layout', () => {
+    expect(usbClaimOf(tok, 7).fields).toMatchObject({ 'frame.len': 3, 'usbll.pid': 0x2d, 'usbll.device_addr': 5, 'usbll.endp': 0, 'usbll.crc5': crc5Token(5, 0) });
+    expect(usbClaimOf(dat, 0).fields).toMatchObject({ 'usbll.pid': 0xc3, 'usbll.data': '8006000100004000', 'usbll.crc16': 0x94dd });
+    expect(usbClaimOf(handshakeBytes(PID.ACK), 0).fields).toEqual({ 'frame.len': 1, 'frame.time_epoch': 0, 'usbll.pid': 0xd2 });
+  });
+  it('a healthy row agrees; a bad CRC status, a wrong field and an expert warning are reported', () => {
+    for (const b of [tok, dat, handshakeBytes(PID.NAK), sofBytes(3)]) expect(compareRow(usbClaimOf(b, 0), row(b))).toEqual([]);
+    expect(compareRow(usbClaimOf(tok, 0), { ...row(tok), 'usbll.crc5.status': '0' }).join()).toMatch(/usbll\.crc5\.status/);
+    expect(compareRow(usbClaimOf(dat, 0), { ...row(dat), 'usbll.crc16.status': 'bad' }).join()).toMatch(/usbll\.crc16\.status/);
+    expect(compareRow(usbClaimOf(tok, 0), { ...row(tok), 'usbll.device_addr': '0x6' }).join()).toMatch(/usbll\.device_addr/);
+    expect(compareRow(usbClaimOf(tok, 0), { ...row(tok), '_ws.expert.severity': 'Warning', '_ws.expert.message': 'Invalid PID Sequence' }).join()).toMatch(/expert/);
+  });
+  it('the USB field list is its own: asking for it changes nothing in the Ethernet command line', () => {
+    expect(tsharkArgs().join(' ')).not.toContain('usbll');
+    const u = tsharkArgs(USB_FIELDS);
+    expect(u.filter((x) => x === '-e')).toHaveLength(USB_FIELDS.length);
+    expect(u).toContain('usbll.crc16.status');
+    expect(parseRows(`${USB_FIELDS.map((f) => (f === 'usbll.pid' ? '0x2d' : '')).join('\t')}\n`, USB_FIELDS)).toEqual([{ 'usbll.pid': '0x2d' }]);
   });
 });
