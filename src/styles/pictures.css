@@ -1,0 +1,16 @@
+/* "Pictures": grey pictures drawn a sample a pixel, the DCT's grids and patterns. */
+.pic { image-rendering: pixelated; border: 1px solid var(--border); background: var(--surface-2); display: block; max-width: 100%; height: auto; }
+.pic-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; margin: 4px 0 10px; }
+.pic-fig { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pic-fig figcaption, .pic-caption { font-size: 12px; color: var(--muted); }
+.pic-wrap { position: relative; display: inline-block; margin-bottom: 8px; }
+.pic-mark { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--accent); pointer-events: none; }
+.pic-kernel table.mini td { text-align: right; font-variant-numeric: tabular-nums; }
+.dct-grid { border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.dct-grid td { width: 30px; height: 22px; text-align: right; padding: 0 4px; border: 1px solid var(--border); color: var(--text); background: color-mix(in srgb, var(--accent) var(--w, 0%), var(--surface)); }
+.dct-bases { display: grid; grid-template-columns: repeat(8, 24px); gap: 2px; }
+.dct-bases .pic { width: 24px; }
+.pic-seq { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 10px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.pic-seq span { min-width: 26px; text-align: center; padding: 2px 0; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); }
+.pic-seq span.nz { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+@media (max-width: 520px) { .dct-grid td { width: 22px; padding: 0 2px; font-size: 9.5px; } .dct-bases { grid-template-columns: repeat(8, 18px); } .dct-bases .pic { width: 18px; } }

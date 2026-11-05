@@ -22,7 +22,7 @@ import { factsOf, type NetEnd } from '../view/netfacts';
 import { ViewCtx } from '../view/context';
 import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
 import { exportImage, shareDialog } from './fileui';
-import { copyAsChip, handout } from './levelgate';
+import { copyAsChip, explainOn, handout } from './levelgate';
 import type { WireDoc } from './model';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
@@ -92,6 +92,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
+      ...explainOf(ed, p.id),
       ...elsewhereOf(ed, p.id),
       null,
       flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
@@ -168,6 +169,13 @@ function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
     } : 'It has no inside to draw.' } : {}),
     ...(may.link ? { link: shareRow(ed) } : {}),
   }));
+}
+
+/** Explain for a part of this chip (a chip of the learner's has no entry to read: its own properties say the rest). */
+function explainOf(ed: Editor, partId: string): MenuEntry[] {
+  const p = ed.doc.parts.find((q) => q.id === partId);
+  const def = p && ed.defOf(p);
+  return def ? explainOn(ed, def, (at) => inspect(ed, partId, at)) : [];
 }
 
 /** Trace's rows for that net; the header goes into `into`. */
