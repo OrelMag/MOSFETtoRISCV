@@ -502,7 +502,8 @@ export class PcieLink {
     ain.consume = consume;
     const bPre: PortIn = { ...PORT_IN0, rst: i.rst, rxdet: i.plug, rxd: rxb & 255, rxk: rxb >> 8 };
     const b0 = this.b.out(bPre);
-    const einp: EpIn = { rst: i.rst, t_ready: b0.t_ready, r_valid: b0.r_valid, r_data: b0.r_data };
+    const tlRst = i.rst || !i.plug ? 1 : 0;   // link down: the transaction layer's state goes with it
+    const einp: EpIn = { rst: tlRst, t_ready: b0.t_ready, r_valid: b0.r_valid, r_data: b0.r_data };
     const te = this.eb.out(einp);
     const bin: PortIn = { ...bPre, t_data: te.t_data, t_valid: te.t_valid, t_last: te.t_last, r_ready: te.r_ready, rtn_ph: te.rtn_ph, rtn_pd: te.rtn_pd, rtn_nph: te.rtn_nph };
     const bo = this.b.out(bin);
@@ -514,7 +515,7 @@ export class PcieLink {
     const w = this.wires(i);
     this.ab.push((w.a.txk << 8 | w.a.txd) ^ i.flip_ab); this.ab.shift();
     this.ba.push((w.b.txk << 8 | w.b.txd) ^ i.flip_ba); this.ba.shift();
-    const rin: RootIn = { rst: i.rst, go: i.go, wr: i.wr, addr: i.addr, len: i.len, seed: i.seed, t_ready: w.a.t_ready, c_ok: w.a.c_ok, r_valid: w.a.r_valid, r_data: w.a.r_data };
+    const rin: RootIn = { rst: i.rst || !i.plug ? 1 : 0, go: i.go, wr: i.wr, addr: i.addr, len: i.len, seed: i.seed, t_ready: w.a.t_ready, c_ok: w.a.c_ok, r_valid: w.a.r_valid, r_data: w.a.r_data };
     this.a.step(w.ain); this.b.step(w.bin); this.ra.step(rin); this.eb.step(w.einp);
   }
   /** Run until the link is up (a bound for a test). */
