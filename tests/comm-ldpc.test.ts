@@ -147,7 +147,7 @@ describe('the concatenated code', () => {
     for (let f = 0; f < 10; f++) { const r = concatTrial(2.2, { depth: 8, frames: 1, seed: 100 + f }); words += r.words; failed += r.failed; bytes += r.bytes; byteErrors += r.byteErrors; await tick(); }
     const P = byteErrors / bytes, pred = rsWordFailure(255, 16, P);
     expect(P).toBeGreaterThan(0.02);
-    expect(Math.abs(failed / words - pred), `failed ${failed} of ${words}, P ${P}, closed form ${pred}`).toBeLessThan(0.2);
+    expect(Math.abs(failed / words - pred), `failed ${failed} of ${words}, P ${P}, closed form ${pred}`).toBeLessThan(0.1);
   }, 60000);
   it('the closed form is the binomial tail', () => {
     expect(rsWordFailure(3, 0, 0.5)).toBeCloseTo(7 / 8, 12);
@@ -155,13 +155,14 @@ describe('the concatenated code', () => {
     expect(rsWordFailure(255, 16, 0)).toBe(0);
   });
   it('without interleaving, a run past the inner decoder costs a word more often', async () => {
+    // the inner decoder'''s errors come in runs, so bytes wrong together reach t more often in the same word
     let plain = 0, spread = 0, words = 0;
     for (let f = 0; f < 8; f++) {
-      const a = concatTrial(2.5, { depth: 1, frames: 8, seed: 300 + f }), b = concatTrial(2.5, { depth: 8, frames: 1, seed: 300 + f });
+      const a = concatTrial(2.3, { depth: 1, frames: 16, seed: 300 + f }), b = concatTrial(2.3, { depth: 8, frames: 2, seed: 300 + f });
       plain += a.failed; spread += b.failed; words += a.words;
       await tick();
     }
-    expect(words).toBe(64);
-    expect(plain, `${plain} against ${spread}`).toBeGreaterThan(spread);
+    expect(words).toBe(128);
+    expect(plain, `${plain} against ${spread}`).toBeGreaterThan(2 * spread + 4);
   }, 60000);
 });
