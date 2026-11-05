@@ -246,7 +246,7 @@ function summaryDialog(ed: Editor, title: string, sum: ImportSummary): void {
 // ---------------------------------------------------------------------------------------------
 // Share links
 
-async function shareDialog(ed: Editor): Promise<void> {
+export async function shareDialog(ed: Editor): Promise<void> {
   const chips = closure(ed.ws, [ed.chipId]);
   const name = ed.doc.name;
   let url: string;
@@ -335,7 +335,7 @@ async function exportFpga(ed: Editor): Promise<void> {
   ]);
 }
 
-async function exportImage(ed: Editor, kind: 'svg' | 'png'): Promise<void> {
+export async function exportImage(ed: Editor, kind: 'svg' | 'png'): Promise<void> {
   const box = ed.view.contentBox(ed.defOf);
   if (!box) return void ed.toast('Nothing to export: the chip is empty', 'err');
   const center = ed.view.svg.closest('.sb-center') ?? document.body;

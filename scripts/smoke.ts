@@ -305,6 +305,46 @@ const MENU_DRIVE = `(async () => {
   if (menu().length) bad.push('Esc did not close the menu');
   if (stage && document.activeElement !== stage) bad.push('Esc did not give the focus back');
   if (location.hash !== route) bad.push('Esc left the route: ' + location.hash);
+  // Trace on a wire of a stage: the value in the header, a group from the keyboard, a jump that selects
+  const wire = stage && [...document.querySelectorAll('svg.schematic [data-net]')].find((e) => e.getBoundingClientRect().width > 20);
+  if (wire) {
+    const b = wire.getBoundingClientRect();
+    wire.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: b.left + 4, clientY: b.top + 4 })); await wait(80);
+    const m = menu()[0];
+    if (!m?.querySelector('.ctx-head')) bad.push('a wire menu has no header');
+    if (!m?.querySelector('.ctx-val')) bad.push('a wire menu has no value');
+    if (document.activeElement?.classList.contains('ctx-val')) bad.push('the wire menu starts on a value row');
+    const row = (t) => [...(menu()[0]?.querySelectorAll('button') ?? [])].find((x) => x.textContent.startsWith(t));
+    const group = row('Measure');
+    if (!group) bad.push('no Measure group');
+    else {
+      group.focus();
+      key(group, 'ArrowRight'); await wait(80);
+      if (menu().length !== 2) bad.push('the arrow did not open a group beside the menu');
+      if (!/^Fan-out: [0-9]/.test(document.activeElement?.textContent ?? '')) bad.push('no fan-out in Measure: ' + document.activeElement?.textContent);
+      key(document.activeElement, 'ArrowLeft'); await wait(60);
+      if (menu().length !== 1) bad.push('the arrow did not close the group');
+    }
+    const away = row('Take it elsewhere');
+    if (!away) bad.push('no Take it elsewhere on a wire');
+    else {
+      away.focus();
+      key(away, 'ArrowRight'); await wait(80);
+      if (!/^Copy a link/.test(document.activeElement?.textContent ?? '')) bad.push('a wire has no link: ' + document.activeElement?.textContent);
+      key(document.activeElement, 'ArrowLeft'); await wait(60);
+    }
+    const jump = row('Jump to the sink') ?? row('Jump to the driver');
+    if (jump && !jump.disabled) { jump.click(); await wait(80); }
+    if (menu().length) bad.push('a jump left the menu open');
+    if (jump && !document.querySelector('svg.schematic .selected, svg.schematic .net-sel')) bad.push('a jump selected nothing');
+  }
+  // the sandbox: a pin's menu reads its net (compile.ts keys its maps by id)
+  const pinEl = !stage && document.querySelector('svg.ed-svg [data-pin-id]');
+  if (pinEl) {
+    pinEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: pinEl.getBoundingClientRect().left + 2, clientY: pinEl.getBoundingClientRect().top + 2 })); await wait(80);
+    if (!menu()[0]?.querySelector('.ctx-val')) bad.push('a pin menu has no value');
+    key(document.activeElement, 'Escape'); await wait(60);
+  }
   // Shift leaves it to the browser; F5 stays the browser's; a command or a press outside closes it
   const svg = document.querySelector('svg.schematic, svg.ed-svg');
   const box = svg.getBoundingClientRect();

@@ -19,6 +19,15 @@ describe('view links', () => {
   it('drops malformed or hostile pieces and caps cycles', () => {
     expect(decodeView('?i=a~zz,b~%E0%A4%A,~5&p=x~-1,y~q&n=-3')).toBeNull();
     expect(decodeView('?n=99999999999')!.cycles).toBe(1_000_000);
+    // what the link points at: a part or a wire, anything else left out
+    for (const focus of [{ inst: 'alu' }, { inst: 'a~b/c d' }, { net: 12 }, { net: 0 }]) {
+      const q = encodeView({ ...emptyView(), focus });
+      expect(q).not.toBe('');
+      expect(decodeView(q)!.focus).toEqual(focus);
+    }
+    for (const bad of ['?f=', '?f=i', '?f=i~', '?f=n~x', '?f=n~-1', '?f=n~99999999', '?f=z~1', '?f=i~%E0%A4%A']) expect(decodeView(bad)).toBeNull();
+    // with the rest of a view, and an unknown key ignored as before
+    expect(decodeView('?n=3&f=n~2&zz=1')).toEqual({ ...emptyView(), cycles: 3, focus: { net: 2 } });
     expect(decodeView('?i=a~ff&junk&p=')!.inputs).toEqual({ a: 255n });
   });
   it('points the desktop program at the public site', () => {

@@ -17,6 +17,12 @@ import { canPaste } from './tools';
 import { canUnravel, pointersOf } from './unravel';
 import { hueSwatches } from './hueswatch';
 import { colourNets, hueOfNets } from './wirehue';
+import { netMembers, netOfSelection } from './netsel';
+import { factsOf, type NetEnd } from '../view/netfacts';
+import { ViewCtx } from '../view/context';
+import { elsewhereGroup, elsewhereRows, partHeader, wireHeader, wireRows } from '../view/tracemenu';
+import { exportImage, shareDialog } from './fileui';
+import { copyAsChip, handout } from './levelgate';
 import type { WireDoc } from './model';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
@@ -37,6 +43,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
   if (!n) {
     return [
       ...(pickEntries(ed).length ? [{ label: 'Pick a part or wire…', run: () => pickTarget(ed) }, null] : []),
+      ...elsewhereOf(ed), ...(ed.doc.parts.length ? [null] : []),
       { label: 'Paste here', key: 'Ctrl+V', run: () => t.paste(), disabled: !canPaste() },
       null,
       { label: 'Add a comment here', key: 'T', run: () => t.placeAt({ id: 'comment', name: 'Comment', place: { comment: true } }, at) },
@@ -85,6 +92,8 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ? { label: 'Edit chip', key: 'double-click', run: () => ed.editChip(chip) }
         : { label: 'Look inside', key: 'double-click', run: () => lookInside(ed, [p.id]), disabled: !canLookInside(ed, p.id) },
       { label: 'Inspect', run: () => inspect(ed, p.id) },
+      ...elsewhereOf(ed, p.id),
+      null,
       flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
     ];
   }
@@ -132,6 +141,61 @@ function entries(ed: Editor, at: Vec): Entry[] {
   return [{ label: 'Delete', key: 'Del', run: () => t.del() }];
 }
 
+const shareRow = (ed: Editor): NonNullable<MenuEntry> => ({ label: 'Share link…', hint: 'A copy of this chip, packed into a URL', run: () => void shareDialog(ed) });
+
+/** Take it elsewhere for a part (or, with none, the chip). On a level only the learner's own may go. */
+function elsewhereOf(ed: Editor, partId?: string): MenuEntry[] {
+  const say = (m: string, e?: boolean) => ed.toast(m, e ? 'err' : 'info');
+  if (partId === undefined) {
+    const may = handout({ chipId: ed.chipId, level: !!ed.level, own: true });
+    return elsewhereGroup(elsewhereRows({ def: ed.compiled.def, say, verilog: may.verilog, ...(may.image ? { image: (kind: 'svg' | 'png') => exportImage(ed, kind) } : {}), ...(may.link ? { link: shareRow(ed) } : {}) }));
+  }
+  const p = ed.doc.parts.find((q) => q.id === partId);
+  const def = p && ed.defOf(p);
+  const sim = ed.sim.sim;
+  if (!p || !def) return [];
+  const may = handout({ chipId: ed.chipId, level: !!ed.level, own: 'chip' in p.ref });
+  if (may.none) return [];
+  const node = sim?.design.root.children?.get(partId);
+  const inside = () => (sim && node ? new ViewCtx(sim, sim.design.root).child(partId) : null);
+  return elsewhereGroup(elsewhereRows({
+    def, say,
+    ...(may.sandbox ? { sandbox: { label: 'Copy into a new chip', run: () => copyAsChip(ed, def) } } : {}),
+    verilog: may.verilog,
+    ...(may.image ? { image: node && def.netlist ? (kind: 'svg' | 'png') => {
+      const ctx = inside();
+      return ctx ? import('../view/image').then((m) => m.exportInside(ctx, ed.view.svg, kind)) : say('It has no inside to draw', true);
+    } : 'It has no inside to draw.' } : {}),
+    ...(may.link ? { link: shareRow(ed) } : {}),
+  }));
+}
+
+/** Trace's rows for that net; the header goes into `into`. */
+function traceOf(ed: Editor, idx: number, into: HTMLElement): MenuEntry[] {
+  // read through the editor each time: a rebuild replaces the simulator while the menu is open
+  const flat = () => ed.sim.sim?.design.root.nets?.[idx] ?? [];
+  const f = factsOf(ed.compiled.def, idx);
+  if (!f || !ed.sim.sim) return [];
+  wireHeader(into, f, () => ed.sim.sim?.getBits(flat()) ?? []);
+  const jump = (e: NetEnd) => {
+    const part = e.inst === null ? null : ed.doc.parts.find((p) => p.id === e.inst);
+    const pin = e.inst === null ? ed.doc.pins.find((p) => p.name === e.port) : null;
+    if (!part && !pin) return;
+    ed.select(part ? { parts: [part.id] } : { pins: [pin!.id] });
+    ed.view.centerOn(part ? part.at : pin!.at);
+  };
+  return [...wireRows(f, {
+    // the net's every wire and pointer selected: lit, and ready to colour or delete together
+    highlight: () => ed.select(netMembers(ed.compiled, idx)),
+    jump,
+    whyOff: 'The Why? card is in Look inside and on stages: open this chip’s part, or the chip from a level above.',
+    design: () => ed.sim.sim?.design ?? null,
+    flat,
+    transistors: ed.compiled.mode === 'switch',
+    more: handout({ chipId: ed.chipId, level: !!ed.level, own: true }).link ? elsewhereGroup(elsewhereRows({ def: null, say: (m, e) => ed.toast(m, e ? 'err' : 'info'), link: shareRow(ed) })) : [],
+  }), null];
+}
+
 /** What the chip holds, for a keyboard: parts, pins, pointers and wires have no focus of their own. */
 function pickEntries(ed: Editor): { label: string; note: string; run(): void }[] {
   const go = (sel: Parameters<Editor['select']>[0]) => () => {
@@ -159,6 +223,9 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   const m = h('div', {});
   // Wires and pointers: their nets' colour first (wirehue.ts), one undo step.
   const wires = ed.sel.wires ?? [], labels = ed.sel.labels ?? [];
+  const net = netOfSelection(ed.compiled, ed.sel);
+  const part = ed.selCount === 1 && ed.sel.parts?.length ? ed.doc.parts.find((p) => p.id === ed.sel.parts![0]) : undefined;
+  const partDef = part && ed.defOf(part);
   if (wires.length || labels.length) {
     const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
     m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
@@ -167,7 +234,9 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
         ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
       }, 'menuitemradio')), h('hr'));
   }
-  showMenu(x, y, entries(ed, at), { into: m, back: ed.view.svg });
+  if (part && partDef) partHeader(m, part.id, partDef);
+  const trace = net >= 0 ? traceOf(ed, net, m) : [];
+  showMenu(x, y, [...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
 }
 
 registerEditorPlugin((ed) => {
