@@ -103,7 +103,7 @@ export function macRead(): ComponentDef {
 /** The MAC unit. See the header for the interface. */
 export function macUnit(): ComponentDef {
   return memo('macunit', () => {
-    const b = new Builder(10, 10, 4);
+    const b = new Builder(10, 10, 8);
     b.pins('a', 'b', 'op', 'en', 'sh', 'clk');
     const sop = b.op(splitter(ones(2), 4), ['op'], undefined, 'sop');
     const alo = b.op1(cut(32, 0, 16), ['a'], 'rs1[15:0]', 'alo');

@@ -31,7 +31,7 @@ export interface Raccd { y: number; sat: boolean; exact: bigint }
 
 /**
  * racc: round(acc / 2^sh) half up (the first dropped bit added back, none when sh = 0), then clamped to a signed 32-bit word. sh is the low six bits
- * of rs1: 0 .. 63, so a shift past the accumulator's width leaves only the sign (and its rounding).
+ * of rs1: 0 .. 63, so a shift of 39 leaves only the sign and the rounding bit (−2^39 gives −1, 2^39 − 1 gives 1), and at 40 or more the result is always 0.
  */
 export function raccOf(acc: bigint, shift: number): Raccd {
   const sh = BigInt(shift & 63);
