@@ -19,7 +19,7 @@ const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLB
 };
 const W_SCENE = 10;
 const FS = 2 ** (W_SCENE - 1);
-const polar = (r: number, deg: number): Fx => ({ re: Math.trunc(r * Math.cos((deg * Math.PI) / 180) * FS), im: Math.trunc(r * Math.sin((deg * Math.PI) / 180) * FS) });
+export const polar = (r: number, deg: number): Fx => ({ re: Math.trunc(r * Math.cos((deg * Math.PI) / 180) * FS), im: Math.trunc(r * Math.sin((deg * Math.PI) / 180) * FS) });
 const hexW = (c: Fx) => `${num(c.re / FS, 3)} ${c.im < 0 ? '−' : '+'} ${num(Math.abs(c.im) / FS, 3)}j`;
 
 // ---- one butterfly ------------------------------------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ function net8Panel(): ScenePanel {
     sel.addEventListener('change', () => { kind = sel.value as Block8; push(); });
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel fc-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'Eight samples in, eight tones out', h('span', { class: 'fold-hint' })), h('div', { class: 'dram-ops' }, sel, btn('New samples', 'Another random block', () => { seed++; kind = 'noise'; sel.value = 'noise'; push(); })),
-      slider('Tone', 0, 7, 1, k, (v) => String(v), (v) => { k = v; push(); }).el, bars, verdict, note);
+      slider('Tone', 0, 7, 1, k, (v) => String(v), (v) => { k = v; if (kind !== 'two') { kind = 'tone'; sel.value = 'tone'; } push(); }).el, bars, verdict, note);
     push();
     netApi.set(stage, { tone: (t) => { stage.checkpoint(); k = t; kind = 'tone'; sel.value = 'tone'; push(); } });
     return { el, update, destroy: () => { netApi.delete(stage); } };
@@ -277,9 +277,9 @@ export function waterWidget(): Widget {
 
 export function breakWidget(): Widget {
   let N = 512, eps = 0.05;
-  const pk = plotOf({ W: 640, H: 220, x: [0, 14], y: [-4, 0], yTicks: [-4, -3, -2, -1, 0], xLabel: 'peak over mean, dB', yLabel: 'chance above', aria: 'The chance that a block peaks above each level: the closed form and measured blocks', xFmt: (v) => String(v), yFmt: (v) => (v === 0 ? '1' : `10^${v}`.replace('-', '−')) });
+  const pk = plotOf({ W: 640, H: 220, x: [0, 14], y: [-4, 0], yTicks: [-4, -3, -2, -1, 0], xLabel: 'peak over mean, dB', yLabel: 'chance above', aria: 'The chance that a block peaks above each level: the closed form and measured blocks', xFmt: (v) => String(v), yFmt: (v) => ['10⁻⁴', '10⁻³', '0.01', '0.1', '1'][v + 4] });
   pk.setX(14);
-  const lk = s('svg', { viewBox: '0 0 300 110', class: 'mos-plot fc-bars', role: 'img', 'aria-label': 'What one tone leaks onto its neighbours when the carrier is off' }) as SVGSVGElement;
+  const lk = s('svg', { viewBox: '0 0 640 150', class: 'mos-plot fc-bars', role: 'img', 'aria-label': 'What one tone leaks onto its neighbours when the carrier is off' }) as SVGSVGElement;
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   const measured = new Map<number, [number, number][]>();
   const dots = (n: number) => {
@@ -294,8 +294,8 @@ export function breakWidget(): Widget {
     for (const [x, p] of dots(N)) if (p > 0) pk.layer.append(s('circle', { cx: pk.X(x), cy: pk.Y(Math.log10(p)), r: 3.5, class: 'fc-dot a' }));
     const rows = Array.from({ length: 9 }, (_, i) => i - 4);
     lk.replaceChildren(...rows.flatMap((d, i) => {
-      const v = leak(d, eps, 64), H = 80 * v, x0 = 12 + i * 31;
-      return [s('rect', { x: x0, y: 92 - H, width: 24, height: Math.max(0.5, H), class: d ? 'fc-bar leak' : 'fc-bar' }), s('text', { x: x0 + 12, y: 105, 'text-anchor': 'middle', class: 'fc-lab' }, d > 0 ? `+${d}` : String(d).replace('-', '−')), s('text', { x: x0 + 12, y: 88 - H, 'text-anchor': 'middle', class: 'fc-lab' }, v.toFixed(2))];
+      const v = leak(d, eps, 64), H = 110 * v, x0 = 30 + i * 66;
+      return [s('rect', { x: x0, y: 128 - H, width: 52, height: Math.max(0.5, H), class: d ? 'fc-bar leak' : 'fc-bar' }), s('text', { x: x0 + 26, y: 144, 'text-anchor': 'middle', class: 'fc-lab big' }, d > 0 ? `+${d}` : String(d).replace('-', '−')), s('text', { x: x0 + 26, y: 123 - H, 'text-anchor': 'middle', class: 'fc-lab big' }, v.toFixed(2))];
     }));
     const sir = offsetSirDb(eps, 64);
     chips.set(0, `${paprDbAt(1e-3, N).toFixed(1)} dB`, `peak passed once in 1000 blocks of ${N}`);

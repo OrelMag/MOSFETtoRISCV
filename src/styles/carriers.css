@@ -11,6 +11,7 @@
 .fc-arrow.y1, .fc-dot.y1 { stroke: var(--warn, #a85f07); fill: var(--warn, #a85f07); }
 .fc-dot.now { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
 .fc-lab { font-size: 10px; fill: var(--text-2); }
+.fc-lab.big { font-size: 13px; }
 .fc-lab.off { fill: var(--muted); }
 .fc-lab.on { fill: var(--text); font-size: 9px; }
 .fc-bar { fill: var(--accent); }
