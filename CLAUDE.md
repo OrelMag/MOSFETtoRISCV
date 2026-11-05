@@ -4,7 +4,7 @@ Guidance for Claude Code (and humans) working in this repository.
 
 ## What this is
 
-**MOSFET → RISC-V**: an educational static website that walks a learner from a single
+**From Switch to RISC-V and Beyond** (the repository and site address keep the old name, MOSFETtoRISCV): an educational static website that walks a learner from a single
 transistor to a multi-core RISC-V processor laid out on silicon. Each level is built only
 from the levels below it, and every component on screen is a **transparent box**: the
 learner can open any instance and keep drilling down to MOSFETs.
