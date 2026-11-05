@@ -62,6 +62,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "router": () => import('./ch-comm-router').then((m) => m.chRouter),
   "tcp": () => import('./ch-comm-tcp').then((m) => m.chTcp),
   "path": () => import('./ch-comm-path').then((m) => m.chPath),
+  "radio": () => import('./ch-comm-radio').then((m) => m.chRadio),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),

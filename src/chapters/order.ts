@@ -61,6 +61,7 @@ const BOOK = [
   'router',
   'tcp',
   'path',
+  'radio',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
