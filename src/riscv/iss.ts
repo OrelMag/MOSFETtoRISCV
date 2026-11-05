@@ -42,6 +42,8 @@ export interface IssOptions {
   custom?: readonly CustomRow[];
   /** The MAC core (dsp/mac.ts, chapter "A MAC on the RV32"): mac, mac2, clracc and racc on custom-2, one 40-bit accumulator. */
   mac?: boolean;
+  /** Tests only (tests/dsp-mac-mutants.test.ts): the MAC's arithmetic replaced by a deliberately wrong one, to show that the lock-step comparison notices. */
+  macMutant?: { accAfter?: typeof accAfter; raccOf?: typeof raccOf };
   /** The C extension (riscv/rvc.ts): instructions are fetched as 16-bit parcels at any even address. */
   c?: boolean;
 }
@@ -119,6 +121,8 @@ export class ISS {
   /** The MAC core's instructions are legal (IssOptions.mac), and the accumulator they share (40 bits, signed). */
   readonly mac: boolean;
   acc = 0n;
+  /** (not enumerable: save() and structuredClone see fields only) */
+  private readonly macFns!: { accAfter: typeof accAfter; raccOf: typeof raccOf };
   readonly fext: boolean;
   /** The C extension: 16-bit instructions, PC + 2 after one, jumps to any even address. */
   readonly c: boolean;
@@ -167,6 +171,7 @@ export class ISS {
     this.m = !!opts.m;
     this.custom = opts.custom ?? [];
     this.mac = !!opts.mac;
+    Object.defineProperty(this, 'macFns', { value: { accAfter, raccOf, ...opts.macMutant }, enumerable: false });
     this.fext = !!opts.f;
     this.c = !!opts.c;
     this.hartid = opts.hartid ?? 0;
@@ -360,8 +365,8 @@ export class ISS {
     if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
     else if (d.spec?.mac) {
       // The MAC core (dsp/mac.ts): racc reads the accumulator, the others change it; rs1 is racc's shift, rs2 mac's second operand
-      if (d.funct3 === MAC_F3.racc) write(raccOf(this.acc, ua).y);
-      else this.acc = accAfter(this.acc, d.funct3, ua, ub);
+      if (d.funct3 === MAC_F3.racc) write(this.macFns.raccOf(this.acc, ua).y);
+      else this.acc = this.macFns.accAfter(this.acc, d.funct3, ua, ub);
     } else if (d.spec?.custom) {
       // A custom instruction: its control row, as the single-cycle CPU's data path runs it (riscv/custom.ts).
       const r = d.spec.custom;

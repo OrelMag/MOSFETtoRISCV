@@ -314,7 +314,84 @@ def multirate():
 
 
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate}
+# ---- chapter "A MAC on the RV32": the benchmark set's data and its exact outputs --------------------------------------------------------------------
+# src/dsp/macbench.ts regenerates the same integers (an LCG, a taps recipe that needs no trigonometry); tests/dsp-mac-bench.test.ts holds the two equal.
+# The outputs are exact integers (round half up, then a clamp to 32 bits); scipy's float filters are the outside cross-check.
+
+
+def lcg_stream(seed):
+    s = seed & 0xFFFFFFFF
+    while True:
+        s = (s * 1664525 + 1013904223) & 0xFFFFFFFF
+        yield (s >> 16) & 0xFFFF
+
+
+def box_taps(T):
+    """ones(k) convolved with itself three times (length 3k - 2 = T), scaled to a sum of 32768 (Q15), rounded half up."""
+    k = (T + 2) // 3
+    h = np.convolve(np.convolve(np.ones(k, dtype=np.int64), np.ones(k, dtype=np.int64)), np.ones(k, dtype=np.int64))
+    S = int(h.sum())
+    assert len(h) == T
+    return [(2 * int(v) * 32768 + S) // (2 * S) for v in h]
+
+
+def racc_exact(acc, sh):
+    """acc / 2^sh rounded half up (the first dropped bit added back), then clamped to 32 bits: dsp/mac.ts raccOf."""
+    v = (acc + ((1 << (sh - 1)) if sh > 0 else 0)) >> sh
+    return max(-(2**31), min(2**31 - 1, v))
+
+
+def mac_fir(T, M, seed):
+    L = M + T - 1
+    g = lcg_stream(seed)
+    xs = [next(g) - 32768 for _ in range(L)]
+    xs[3], xs[5] = -32768, 32767
+    h = box_taps(T)
+    y = [racc_exact(sum(h[k] * xs[n + T - 1 - k] for k in range(T)), 15) for n in range(M)]
+    ref = signal.lfilter(np.array(h, dtype=float), [1.0], np.array(xs, dtype=float))[T - 1:]
+    assert [int(v) for v in np.floor((ref + 16384) / 32768)] == y  # scipy's float filter is exact on these integers
+    return {'T': T, 'M': M, 'seed': seed, 'h': h, 'x': xs, 'y': y, 'sum_abs_h': sum(abs(v) for v in h)}
+
+
+def mac_biquad(N, amp, seed):
+    sos = signal.butter(8, 0.2, output='sos')
+    # scipy puts the whole gain in the first section (its b are ~1e-6, 0 in Q13): give every section unit gain at DC, b = (1 + a1 + a2) / 4 * [1, 2, 1]
+    q = []
+    for s in sos:
+        g = int(round(float(1 + s[4] + s[5]) / 4 * 8192))
+        q.append([g, 2 * g, g, int(round(float(-s[4]) * 8192)), int(round(float(-s[5]) * 8192))])
+    g = lcg_stream(seed)
+    x = [next(g) % (2 * amp + 1) - amp for _ in range(N)]
+    cur, peak = list(x), 0
+    for b0, b1, b2, na1, na2 in q:
+        x1 = x2 = y1 = y2 = 0
+        out = []
+        for v in cur:
+            y = racc_exact(b0 * v + b1 * x1 + b2 * x2 + na1 * y1 + na2 * y2, 13)
+            assert -32768 <= y <= 32767
+            peak = max(peak, abs(y))
+            out.append(y)
+            x2, x1, y2, y1 = x1, v, y1, y
+        cur = out
+    sosq = np.array([[b0 / 8192, b1 / 8192, b2 / 8192, 1.0, -na1 / 8192, -na2 / 8192] for b0, b1, b2, na1, na2 in q])
+    ref = signal.sosfilt(sosq, np.array(x, dtype=float))
+    return {'N': N, 'amp': amp, 'seed': seed, 'sos_q13': q, 'x': x, 'y': cur, 'peak': peak, 'vs_sosfilt_max': float(f'{float(np.max(np.abs(ref - np.array(cur)))):.12g}')}
+
+
+def mac_dot(N, seed):
+    g = lcg_stream(seed)
+    a = [next(g) % 8191 - 4095 for _ in range(N)]
+    b = [next(g) % 8191 - 4095 for _ in range(N)]
+    s = sum(p * q for p, q in zip(a, b))
+    assert abs(s) < 2**31
+    return {'N': N, 'seed': seed, 'a': a, 'b': b, 'sum': s, 'y': racc_exact(s, 15), 'numpy': int(np.dot(np.array(a, dtype=np.int64), np.array(b, dtype=np.int64)))}
+
+
+def mac():
+    return {'fir16': mac_fir(16, 16, 16), 'fir64': mac_fir(64, 8, 64), 'biquad': mac_biquad(16, 12000, 8), 'dot': mac_dot(64, 99)}
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate, 'mac': mac}
 
 
 def stamp(data):

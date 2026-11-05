@@ -1,0 +1,162 @@
+{
+ "imemK": 10,
+ "dmemK": 8,
+ "benches": [
+  "fir16",
+  "fir64",
+  "biquad",
+  "dot"
+ ],
+ "machines": {
+  "rv32i": {
+   "nands": 48434,
+   "period": 155,
+   "benches": {
+    "fir16": {
+     "cycles": 27765,
+     "setupCycles": 129,
+     "kernel": 27636,
+     "products": 256
+    },
+    "fir64": {
+     "cycles": 54809,
+     "setupCycles": 333,
+     "kernel": 54476,
+     "products": 512
+    },
+    "biquad": {
+     "cycles": 34018,
+     "setupCycles": 95,
+     "kernel": 33923,
+     "products": 320
+    },
+    "dot": {
+     "cycles": 7358,
+     "setupCycles": 325,
+     "kernel": 7033,
+     "products": 64
+    }
+   }
+  },
+  "rv32im": {
+   "nands": 73384,
+   "period": 124,
+   "benches": {
+    "fir16": {
+     "cycles": 2101,
+     "setupCycles": 129,
+     "kernel": 1972,
+     "products": 256
+    },
+    "fir64": {
+     "cycles": 4009,
+     "setupCycles": 333,
+     "kernel": 3676,
+     "products": 512
+    },
+    "biquad": {
+     "cycles": 1558,
+     "setupCycles": 95,
+     "kernel": 1463,
+     "products": 320
+    },
+    "dot": {
+     "cycles": 781,
+     "setupCycles": 325,
+     "kernel": 456,
+     "products": 64
+    }
+   }
+  },
+  "mac": {
+   "nands": 59048,
+   "period": 159,
+   "benches": {
+    "fir16": {
+     "cycles": 1813,
+     "setupCycles": 129,
+     "kernel": 1684,
+     "products": 256
+    },
+    "fir64": {
+     "cycles": 3481,
+     "setupCycles": 333,
+     "kernel": 3148,
+     "products": 512
+    },
+    "biquad": {
+     "cycles": 1110,
+     "setupCycles": 95,
+     "kernel": 1015,
+     "products": 320
+    },
+    "dot": {
+     "cycles": 716,
+     "setupCycles": 325,
+     "kernel": 391,
+     "products": 64
+    }
+   }
+  },
+  "mac2": {
+   "nands": 59048,
+   "period": 159,
+   "benches": {
+    "fir16": {
+     "cycles": 1035,
+     "setupCycles": 95,
+     "kernel": 940,
+     "products": 256
+    },
+    "fir64": {
+     "cycles": 1925,
+     "setupCycles": 301,
+     "kernel": 1624,
+     "products": 512
+    },
+    "biquad": {
+     "cycles": 1206,
+     "setupCycles": 79,
+     "kernel": 1127,
+     "products": 320
+    },
+    "dot": {
+     "cycles": 391,
+     "setupCycles": 192,
+     "kernel": 199,
+     "products": 64
+    }
+   }
+  },
+  "mac2u": {
+   "nands": 59048,
+   "period": 159,
+   "benches": {
+    "fir16": {
+     "cycles": 739,
+     "setupCycles": 95,
+     "kernel": 644,
+     "products": 256
+    },
+    "fir64": {
+     "cycles": 1345,
+     "setupCycles": 301,
+     "kernel": 1044,
+     "products": 512
+    },
+    "biquad": {
+     "cycles": 1142,
+     "setupCycles": 79,
+     "kernel": 1063,
+     "products": 320
+    },
+    "dot": {
+     "cycles": 319,
+     "setupCycles": 192,
+     "kernel": 127,
+     "products": 64
+    }
+   }
+  }
+ }
+}
