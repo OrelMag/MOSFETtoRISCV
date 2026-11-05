@@ -60,6 +60,51 @@ before relying on them. Add to this as chapters land.
 - Levinson's recursion: **ran**, against scipy's `solve_toeplitz` (`scripts/dsp/oracle.py`, `tests/dsp/vectors/adaptive.json`).
 - LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and the divergence just above it is measured here on this far end. The far-end sound and the echo paths are generated models, not recordings or measured paths.
 
+## Speech (`speech`)
+
+- ITU-T G.711 (1988), the ITU's free PDF: **read**, Tables 2a and 2b (μ-law, both signs), §§ 1–5 and their notes.
+  - § 3.2's all-zero suppression is mentioned in its text, and not implemented here.
+  - § 3.6 leaves the encoding of a sample exactly on a decision value to the equipment. Ours takes the interval above it, as Python's audioop does.
+  - The tests check the table's printed decision and output values at every segment end, and every interior sample.
+- Python 3.12's `audioop` (the C module, removed in 3.13; CI pins 3.12): **ran** (`scripts/dsp/oracle.py`).
+  - `lin2ulaw` and `ulaw2lin` on all 16 384 samples and 256 codes.
+  - `lin2adpcm` and `adpcm2lin` on the voice, in two halves with the state carried, and on a full-scale square wave.
+  - Our nibble order is audioop's (first sample in the high half). Microsoft's IMA ADPCM WAV format differs, **unread**, from memory.
+- IMA's ADPCM recommendation (1992): **unread**, not freely available. The step and index tables are written from memory and checked against audioop above.
+- LPC: the autocorrelation method and Levinson–Durbin, standard. Checked against scipy's `solve_toeplitz` on the voice's frames.
+  - Pre-emphasis 0.9375, log-area ratios, centre clipping for pitch (Sondhi): **unread**, from memory.
+  - FS-1015 / LPC-10 (54 bits every 22.5 ms, 2.4 kb/s, 1984): **unread**, from memory. The vocoder is ours and only laid out like it.
+- The voice: LibriVox, "The Gettysburg Address" (Abraham Lincoln), read by Shurtagal. **read**:
+  - catalog page https://librivox.org/the-gettysburg-address-by-abraham-lincoln/, whose footer says "LibriVox recordings are Public Domain in the USA. If you are not in the USA, please verify the copyright status of these works in your own country";
+  - LibriVox's page https://librivox.org/pages/public-domain/: "all our recordings are public domain";
+  - archive.org item `gettysburg_shurtagal_librivox`, `licenseurl` http://creativecommons.org/licenses/publicdomain/.
+  - File: https://archive.org/download/gettysburg_shurtagal_librivox/Gettysburg_Address_Lincoln_64kb.mp3, 803 444 bytes. Its sha1 ed8e8827… matches archive.org's metadata; sha256 d9f40f96….
+  - Processing:
+    1. Decoded in headless Chrome 156 (`decodeAudioData`, 44.1 kHz mono).
+    2. Cut at 0:25–0:31.
+    3. Resampled 80/441 by this site's windowed sinc (`comm/signals.ts windowedSinc`, the polyphase sum checked equal to `dsp/multirate.ts upfirdn`).
+    4. The recording's DC offset of −0.125 of full scale removed (mean, then a 6 Hz DC blocker).
+    5. Peak at −1 dBFS, 10 ms fades, 16-bit.
+  - `public/dsp/voice-8k.wav`, 96 044 bytes. Nobody has listened to it to check the excerpt's words.
+
+## Music (`music`)
+
+- The MDCT and TDAC (Princen–Bradley, 1986): standard, **unread**, from memory. Checked numerically: the MDCT equals scipy's DCT-IV of the folded frame (`oracle.py`), and the overlap-add reconstruction is within 10⁻¹².
+- The masking model is **simplified and ours**: one-Bark bands, a 25 / 10 dB a Bark spreading triangle and a 14 dB offset.
+  - Zwicker's Bark formula and Terhardt's threshold in quiet: **unread**, from memory.
+  - The chapter and the widget both say this. No psychoacoustic standard (MPEG-1 Layer III's models, for instance) was read or followed.
+- The codec is ours. It claims no format and no compatibility. Its figures are on this recording and by this model, pinned in `src/dsp/soundfigs.ts`.
+- The music: Musopen, "The Complete Chopin Collection", Chopin's Nocturne in E minor, Op. 72 No. 1. **read**:
+  - archive.org item https://archive.org/details/musopen-chopin, `licenseurl` http://creativecommons.org/publicdomain/zero/1.0/ (CC0 1.0), creator Aaron Dunn, uploader aaron@musopen.org.
+  - The pianist is not named there, and musopen.org's own page could not be read (403).
+  - File: https://archive.org/download/musopen-chopin/NocturneOp.72No.1InEMinor.m4a, Apple Lossless, 13 733 639 bytes. Its sha1 5f595333… matches archive.org's; sha256 c7cffd88….
+  - Processing:
+    1. Decoded losslessly with PyAV 19.0.2 (FFmpeg libavcodec 63; Chrome cannot decode ALAC).
+    2. Mixed to mono and cut at 0:05–0:15.
+    3. Resampled 160/441 by the same windowed sinc.
+    4. Peak at −1 dBFS, 16-bit.
+  - `public/dsp/nocturne-16k.wav`, 320 044 bytes.
+
 ## Pictures (`pictures`)
 
 - ITU-T T.81 (CCITT Rec. T.81, 1992), the copy at w3.org/Graphics/JPEG/itu-t81.pdf: **read**, these parts only:

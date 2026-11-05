@@ -100,7 +100,7 @@ export function maskWidget(): Widget {
 export function codecWidget(): Widget {
   return withMusic('Where the bits go', (v, x, panel, ctl) => {
     let rate = 64, f = 200;
-    const short = x.slice(0, 48000), bs = bands(v.rate);
+    const short = x, bs = bands(v.rate);
     const bars = h('div', { class: 'dsp-bars', role: 'img', 'aria-label': 'Bits per coefficient in each band, by mask and by signal' }), chips = mkChips(4);
     let res = { mask: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'mask' }), signal: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'signal' }) };
     const paint = () => {
@@ -112,7 +112,7 @@ export function codecWidget(): Widget {
       chips.set(3, `${dbs(meanNmrDb(res.mask.frames))} and ${dbs(meanNmrDb(res.signal.frames))}`, 'mean noise-to-mask ratio: below 0, unheard by the model');
     };
     const recompute = () => { res = { mask: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'mask' }), signal: encodeMusic(short, { fs: v.rate, bitsPerFrame: kbps(rate), by: 'signal' }) }; paint(); };
-    ctl.append(slider('Budget', 16, 96, 16, rate, (t) => `${t} kb/s`, (t) => { rate = t; recompute(); }).el, slider('Frame', 0, 180, 1, f, (t) => `${num((t * MDCT_M) / v.rate, 2)} s`, (t) => { f = t; paint(); }).el,
+    ctl.append(slider('Budget', 16, 96, 16, rate, (t) => `${t} kb/s`, (t) => { rate = t; recompute(); }).el, slider('Frame', 0, res.mask.frames.length - 1, 1, f, (t) => `${num((t * MDCT_M) / v.rate, 2)} s`, (t) => { f = t; paint(); }).el,
       clipButton('Hear: bits by mask', () => clip(res.mask.y, v.rate, `ours, ${rate} kb/s budget, by mask`)).el, clipButton('Hear: bits by signal', () => clip(res.signal.y, v.rate, `ours, ${rate} kb/s budget, by signal`)).el, clipButton('Hear the original', () => clip(short, v.rate, '16-bit')).el);
     paint();
     panel.append(bars, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'bits by mask'), h('span', { class: 'k-near' }, 'bits by signal')), chips.el);

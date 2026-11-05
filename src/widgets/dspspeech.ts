@@ -148,7 +148,8 @@ export function ulawScene(): Scene {
 
 export function adpcmWidget(): Widget {
   return withVoice('Sending the difference', (v, panel, ctl) => {
-    let at = 9000;
+    // open just before the first loud onset, where the step has to grow
+    let at = Math.max(0, v.x.findIndex((t) => Math.abs(t) > 0.4 * 32768) - 120);
     const n = 400, plot = plotOf({ W: 640, H: 190, x: [0, n], y: [-1, 1], yTicks: [-1, 0, 1], xLabel: 'sample', yLabel: '', aria: 'Input, ADPCM output and its step size, 50 ms' });
     const codes = adpcmEncode(v.x), back = adpcmDecode(codes), steps: number[] = [];
     { const s = { pred: 0, index: 0 }; for (const x of v.x) { steps.push(s.index); adpcmEncode([x], s); } }
