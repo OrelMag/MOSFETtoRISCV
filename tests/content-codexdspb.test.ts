@@ -257,3 +257,56 @@ describe('group B: FIR design', () => {
     says('firdesign', 7, nf((n * 48000) / 1e6, 2));
   });
 });
+
+describe('group B: audit corrections', () => {
+  const ids = ['leakage', 'windowfn', 'zeropad', 'spectrogram', 'overlapsave', 'goertzel', 'linearphase', 'windowdesign', 'parksmcclellan', 'csd', 'transposed', 'multacc'];
+  it('Blackman-Harris resolves at 3.25 bins and its lobe is 8 wide; its skirt at 10 bins is quoted', () => {
+    const f = spectrumFacts();
+    expect(resolvingSep(64, 'blackmanharris')).toBe(3.25);
+    expect(f.bh.mainLobeBins).toBe(8);
+    expect([f.rect.mainLobeBins, f.hann.mainLobeBins, f.blackman.mainLobeBins, f.bh.mainLobeBins]).toEqual([2, 4, 6, 8]);
+    quotes('windowfn', 3.3, '3.25', minus(skirtAt('blackmanharris', 10, 64), 1), 'two bins');
+    expect(nf(f.sepBlackman, 2)).toBe('2.80');
+    expect(nf(windowFigures('rect', 128).scallopDb, 1)).toBe('3.9');
+    quotes('leakage', '3.9 dB', '3.8');
+  });
+  it('127 is 2^7 - 1', () => {
+    expect(2 ** 7 - 1).toBe(127);
+    quotes('csd', '127', '2⁷ − 1');
+  });
+  it('the gate-clock figures are marked illustrative: 127 delays at 25 ps', () => {
+    const F = figures();
+    expect(F.tShared.period).toBe(127);
+    expect(1e6 / (F.tShared.period * 25)).toBeCloseTo(F.tShared.maxMhz, 6);
+    for (const t of [codexById('multacc')!.body, moreOf('multacc')!.example!.body, moreOf('multacc')!.mistakes![2]]) expect(t).toContain('illustrative');
+    expect(moreOf('multacc')!.example!.body).toContain('25 ps');
+  });
+  it('csd: 173 adders = 227 - 58 + 4, and the folded multipliers are 17 x 17', () => {
+    const F = figures();
+    let negOnly = 0;
+    for (const t of tapsDistinct(F.hw.taps)) if (csdOf(t).every((d) => d.neg)) negOnly++;
+    expect(F.csd.csd - F.csd.distinct + negOnly).toBe(F.csd.adders);
+    expect(negOnly).toBe(4);
+    expect(F.folded.nands - F.foldedCsd.nands).toBeGreaterThan(F.csd.nandsTree - F.csd.nandsCsd);
+    expect(F.folded.nands - F.csd.nandsTree + F.csd.nandsCsd).toBe(122548);
+    quotes('csd', '227 − 58 + 4', '17 × 17', 285871, 99048);
+    says('firdesign', 4, '17 × 17');
+  });
+  it('example lines are at most 90 characters', () => {
+    for (const id of ids) for (const m of (moreOf(id)!.example!.body.match(/<pre>[\s\S]*?<\/pre>/g) ?? [])) for (const l of m.replace(/<\/?pre>/g, '').split('\n')) expect([...l].length, `${id}: ${l}`).toBeLessThanOrEqual(90);
+  });
+  it('the right option is never the longest', () => {
+    for (const id of ids) for (const q of CHECKS[id]) expect(q.options[0].length, `${id}: ${q.question}`).toBeLessThan(Math.max(...q.options.map((o) => o.length)));
+  });
+  it('wording fixes', () => {
+    quotes('windowdesign', '269 taps odd', '268 if either parity is allowed', '147', '146 if either parity');
+    quotes('parksmcclellan', "equiripple length estimate: 109");
+    quotes('transposed', 'adders and forks');
+    quotes('linearphase', 'Linear phase means every zero is paired', 'antisymmetric');
+  });
+});
+
+/** The distinct taps of a mirrored design, as the chapter counts them (the rest are mirrors). */
+function tapsDistinct(words: readonly number[]): number[] {
+  return words.slice(0, Math.ceil(words.length / 2)).map((w) => w);
+}

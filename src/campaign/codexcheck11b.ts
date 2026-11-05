@@ -6,7 +6,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   leakage: [
     {
       question: 'A tone holds exactly 10 cycles in a 64-sample block under a rectangular window, and its spectrum is one clean bin. Why?',
-      options: ['Every other bin falls on a zero of the rectangle\'s transform', 'The window removes its skirt when the cycles are whole', 'The FFT only finds tones that sit on a bin', 'A real cosine has no image at negative frequency'],
+      options: ['Every other bin falls on a zero of the rectangle\'s transform', 'The window removes its skirt whenever the cycles are whole', 'The FFT only finds tones that sit on a bin', 'A real cosine has no image at negative frequency'],
       answer: 0,
       explain: 'The skirt is always there, as the transform of the rectangle. With whole cycles the bins sample it at its zeros; at 10.5 cycles they sample it between, and 33 bins read above −60 dB.',
       why: ['', 'The window is unchanged. The skirt is still drawn; the bins simply miss it.', 'The transform reads the whole curve at its bins, and a tone off a bin shows in several of them.', 'A real cosine always has an image; it adds to the skirt but is not why the line is clean.'],
@@ -109,7 +109,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'Why can a causal filter with poles not be exactly linear phase?',
-      options: ['Pairing each singularity with its mirror puts a pole\'s mirror outside the circle, unstable', 'IIR filters have fewer taps than an FIR of the same sharpness', 'Poles always delay the signal by a whole number of samples', 'Feedback reverses the signal in time before the output'],
+      options: ['A pole\'s mirror image lies outside the circle: unstable', 'IIR filters have fewer taps than an FIR of the same sharpness', 'Poles always delay the signal by a whole number of samples', 'Feedback reverses the signal in time before the output'],
       answer: 0,
       explain: 'Linear phase needs every zero paired with its mirror across the unit circle. A pole cannot be, because the mirror of a stable pole is an unstable one.',
       why: ['', 'The count of taps has no bearing; it is the position of the singularities that matters.', 'A pole\'s delay varies with frequency, which is the opposite of linear phase.', 'Feedback does not reverse time; it makes the response run on after the input.'],
@@ -118,7 +118,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   windowdesign: [
     {
       question: 'A Kaiser design that just meets a 0.001 stopband has a passband error near 0.0011, though 0.0058 was allowed. Why?',
-      options: ['The window gives both bands the same ripple, set by the tighter one', 'Windows always leave the passband flat, whatever the length', 'Only the stopband is windowed, so the passband is free', 'Rounding the taps to words tightened the passband'],
+      options: ['Both bands get one ripple, set by the tighter one', 'Windows always leave the passband flat, whatever the length', 'Only the stopband is windowed, so the passband is free', 'Rounding the taps to words tightened the passband'],
       answer: 0,
       explain: 'The sidelobes set the passband ripple and the stopband ceiling together. The passband is then 5 times better than the mask asked, which is the accuracy Parks–McClellan spends on a narrower transition.',
       why: ['', 'The passband ripples as much as the stopband does; the ripple is the same size in both.', 'The window multiplies all the taps, whatever band they serve.', 'Rounding adds ripple, it does not remove it.'],
@@ -134,7 +134,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   parksmcclellan: [
     {
       question: 'What does it mean that a Parks–McClellan design is equiripple?',
-      options: ['The weighted error touches one size at no fewer than ⌈N / 2⌉ + 1 frequencies, alternating in sign', 'The passband and the stopband ripple are the same size', 'The ripple falls 6 dB for each doubling of the length', 'All the taps in the filter have one and the same value'],
+      options: ['The error peaks at one size, alternating in sign, at ⌈N / 2⌉ + 1 points', 'The passband and the stopband ripple are exactly the same size', 'The ripple falls 6 dB for each doubling of the length of taps', 'All the taps in the filter have one and the same value'],
       answer: 0,
       explain: 'The alternation theorem: that many alternating extremes of equal size is both necessary and sufficient for the best weighted fit, and the Remez exchange finds them.',
       why: ['', 'The weights make the two bands\' errors equal after weighting, not before: they follow the mask.', 'That describes the rectangular window\'s stopband peak, not an equiripple design.', 'Taps are mirror images, not equal.'],
