@@ -60,6 +60,7 @@ const BOOK = [
   'network',
   'router',
   'tcp',
+  'queues',
   'secret',
   'path',
   'appendix-6502',

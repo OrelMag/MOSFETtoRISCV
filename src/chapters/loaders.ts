@@ -61,6 +61,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "network": () => import('./ch-comm-net').then((m) => m.chNetwork),
   "router": () => import('./ch-comm-router').then((m) => m.chRouter),
   "tcp": () => import('./ch-comm-tcp').then((m) => m.chTcp),
+  "queues": () => import('./ch-comm-queues').then((m) => m.chQueues),
   "secret": () => import('./ch-secret').then((m) => m.chSecret),
   "path": () => import('./ch-comm-path').then((m) => m.chPath),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
