@@ -596,7 +596,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Asking again", challenge: "quiz" },
     { title: "Correcting instead of asking", challenge: "quiz" },
   ] },
-  { id: "codes", num: 52, title: "Codes near the limit", blurb: "How close to Shannon can we get: Viterbi and a whole Reed-Solomon decoder in gates, interleaving, two codes together, and LDPC decoded in the page against its computed threshold.", level: "Communication", builds: ["errors","modem","carriers"], recap: {"checks":3}, steps: [
+  { id: "codes", num: 52, title: "Codes near the limit", blurb: "How close to Shannon can we get: Viterbi and a whole Reed-Solomon decoder in gates, interleaving, two codes together, and LDPC decoded in the page against its computed threshold.", level: "Communication", builds: ["noise","errors","modem","carriers"], recap: {"checks":3}, steps: [
     { title: "A code with memory", challenge: "reach" },
     { title: "The Viterbi decoder", challenge: "reach" },
     { title: "Reed-Solomon: errors in bytes", challenge: "reach" },
