@@ -5,7 +5,7 @@ import { ACK_US, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, goodputMbps, aggre
 import { fsplDb, noiseFloorDbm } from '../phys/radio';
 import { dcfStation } from '../lib/wifi';
 import { stats } from '../sim/stats';
-import { airtimeWidget, contentionWidget, mimoCurves, mimoWidget, rateWidget, wifiApi, wifiScene } from '../widgets/wifi';
+import { airtimeWidget, contentionWidget, hiddenCompare, HIDDEN_LEN_US, mimoCurves, mimoWidget, rateWidget, wifiApi, wifiScene } from '../widgets/wifi';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -16,6 +16,8 @@ const RX = 20 - fsplDb(0.02, 5.5), SELF = 20 - RX;
 const M0 = mimoCurves(0);
 let nands = 0;
 const N = () => (nands ||= stats(dcfStation()).nands);
+let hid: ReturnType<typeof hiddenCompare> | null = null;
+const H = () => (hid ??= hiddenCompare());
 
 export const chWifi: Chapter = {
   id: 'wifi', num: numOf('wifi'), title: 'Wi-Fi', level: 'Communication',
@@ -79,7 +81,7 @@ export const chWifi: Chapter = {
         why: ['', 'Nothing forbids it. Full-duplex radio is researched, and hard.', 'They can: the trouble is that one swamps the other.', 'Ethernet detects them; the difficulty is in the radio power.'],
       },
       more: {
-        numbers: `<p>Station ${N()} NANDs. A frame here lasts 300 µs. Own-signal figure: 20 dBm against free-space loss over 20 m at 5.5 GHz with no antenna gains, from the radio chapter's formula (chapter ${numOf('radio')}).</p>`,
+        numbers: `<p>Station ${N()} NANDs. A frame in this scene lasts 300 µs. Own-signal figure: 20 dBm against free-space loss over 20 m at 5.5 GHz with no antenna gains, from the radio chapter's formula (chapter ${numOf('radio')}).</p>`,
       },
     },
     {
@@ -128,20 +130,20 @@ export const chWifi: Chapter = {
     },
     {
       title: 'The station you cannot hear',
-      body: `
+      get body() { return `
         <p>Carrier sense asks "is anyone talking <em>near me</em>?" The collision happens <em>near the receiver</em>. If A and B are on opposite sides of an access point, in range of it but not of each other, then each hears silence and sends. The access point hears both at once and gets neither. That is the <strong>hidden terminal</strong>.</p>
         <p>This scene has A and B out of each other's range. Run: the frames in rows A and B overlap all the time, CW climbs, tries are wasted, and frames are dropped after ${RETRY_LIMIT} tries. Carrier sense helps nothing, as it says "clear".</p>
         <p><strong>RTS / CTS</strong> uses the receiver's own voice. Before a long frame the sender sends a short <em>Request To Send</em> (${RTS_US} µs). The receiver answers, after SIFS, with <em>Clear To Send</em>. Both carry the duration of the rest of the exchange. Every station that hears either sets its <strong>NAV</strong> (network allocation vector), a timer of virtual carrier sense: it treats the medium as busy until that runs out, whether or not it hears anything. B can't hear A's RTS but can hear the access point's CTS.</p>
-        <p>Tick RTS / CTS and run. Two RTSs can still collide, but that wastes only ${RTS_US} µs, not ${nf(300, 0)}. Delivered frames jump. Compare a real network, which sets a threshold: only frames above some length get RTS / CTS, since a short frame costs little more than the RTS.</p>
-        <p>The opposite problem is the <strong>exposed terminal</strong>: a station which hears a sender nearby and holds off, though its own receiver could have heard it fine. Carrier sense has no way to tell. Neither problem has a complete cure in a scheme with no coordinator, and that is what the next generations' scheduling goes after.</p>`,
+        <p>Tick RTS / CTS and run. Two RTSs can still collide, and since A and B cannot hear each other, any overlap at all counts: not one slot but anything within ${RTS_US} µs. But that wastes only ${RTS_US} µs of air, not ${HIDDEN_LEN_US}. Over ${400} ms of these ${HIDDEN_LEN_US} µs frames the model stations deliver ${H().plain} frames without it (dropping ${H().plainDropped}) and ${H().rts} with it. Watch the counts, though: in a short run one station can run far ahead (${H().a} against ${H().b} over this run). A collision doubles the window of whoever loses, a success resets the winner's, so the last winner tends to win again, and fairness only comes over a long run. A real network sets a threshold: only frames above some length get RTS / CTS, since a short frame costs little more than the RTS.</p>
+        <p>The opposite problem is the <strong>exposed terminal</strong>: a station which hears a sender nearby and holds off, though its own receiver could have heard it fine. Carrier sense has no way to tell. Neither problem has a complete cure in a scheme with no coordinator, and that is what the next generations' scheduling goes after.</p>`; },
       scene: () => wifiScene('hidden'),
       challenge: {
         kind: 'reach',
         goal: 'With A and B hidden from each other, turn on RTS / CTS and deliver 40 frames with no drop.',
         check: (st) => { const a = wifiApi.get(st)?.status(); return !!a && a.hidden && a.rts && a.agreed && a.delivered[0] + a.delivered[2] >= 40 && a.dropped[0] + a.dropped[2] === 0; },
-        hints: ['Tick RTS / CTS, which restarts the cell, then Run.', 'About 40 ms of air.'],
+        hints: ['Tick RTS / CTS, which restarts the cell, then Run.', 'About 60 ms of air.'],
         answer: 'Tick RTS / CTS and Run. A CTS from the access point sets the NAV of the station that cannot hear the sender.',
-        solve: (st) => { const a = wifiApi.get(st); a?.setRts(true); a?.run(42000); },
+        solve: (st) => { const a = wifiApi.get(st); a?.setRts(true); a?.run(70000); },
       },
       more: {
         pitfall: '<p>The NAV works only for stations that decode the CTS, and a CTS at a low rate reaches further than the data. Stations nearly out of range can still step on a frame. Ordinary Wi-Fi in a home has hidden stations quite often, and in practice many networks leave RTS / CTS off below 2 000 bytes or so, which accepts this.</p>',

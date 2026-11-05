@@ -4,6 +4,7 @@ import { Clarke } from '../src/phys/radio';
 import { rng } from '../src/phys/line';
 import { aggregateMbps, capacity2x2, eigen2x2, goodputMbps, RATES, rateRun, ACK_US, Air, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, DcfStation, KIND_ACK, lfsrNext, measureThroughput, RESP_TIMEOUT, RTS_US, SIFS_US, SLOT_US, STA_IN0, type AirOpts, type StaIn, W_BO, W_TX, W_WAIT } from '../src/comm/wifi';
 import { dcfStation, wifiCell } from '../src/lib/wifi';
+import { hiddenCompare } from '../src/widgets/wifi';
 import { simulate } from '../src/sim/harness';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
@@ -134,6 +135,11 @@ describe('the air', () => {
     const fair = Math.min(b.stats.delivered[0], b.stats.delivered[2]) / Math.max(b.stats.delivered[0], b.stats.delivered[2]);
     expect(fair).toBeGreaterThan(0.5);
   }, 120000);
+  it('the chapter\'s comparison: RTS / CTS delivers far more for the hidden pair', () => {
+    const h = hiddenCompare();
+    expect(h.rts).toBeGreaterThan(2 * h.plain);
+    expect(h.plainDropped).toBeGreaterThan(0);
+  });
   it('RESP_TIMEOUT leaves room for the SIFS and the ACK', () => {
     expect(RESP_TIMEOUT).toBeGreaterThan(SIFS_US + ACK_US);
   });

@@ -32,7 +32,18 @@ const svgOf = (a: { w: number; h: number }, label: string, ...kids: SVGElement[]
 
 // ---- the cell in gates --------------------------------------------------------------------------------------------------------
 export const CELL_N = 3, AP = 1, A = 0, B = 2;
-export const CELL_LEN_US = 300, CELL_SEEDS = [101, 3, 300];
+export const CELL_LEN_US = 300, HIDDEN_LEN_US = 1000, CELL_SEEDS = [101, 3, 300];
+const lenOf = (view: 'open' | 'hidden'): number => (view === 'hidden' ? HIDDEN_LEN_US : CELL_LEN_US);
+/** The hidden pair on the model stations, with and without RTS / CTS, over `clocks`: frames delivered. */
+export function hiddenCompare(clocks = 400000): { plain: number; rts: number; plainDropped: number; a: number; b: number } {
+  const go = (useRts: boolean) => {
+    const air = new Air({ n: CELL_N, lenUs: HIDDEN_LEN_US, useRts, dest: () => AP, saturated: [true, false, true], seeds: CELL_SEEDS, hears: (i, j) => !((i === A && j === B) || (i === B && j === A)) });
+    for (let c = 0; c < clocks; c++) air.step();
+    return air.stats;
+  };
+  const p = go(false), r = go(true);
+  return { plain: p.delivered[A] + p.delivered[B], plainDropped: p.dropped[A] + p.dropped[B], rts: r.delivered[A] + r.delivered[B], a: r.delivered[A], b: r.delivered[B] };
+}
 export interface WifiStatus { clocks: number; delivered: number[]; dropped: number[]; sent: number[]; collisions: number; hidden: boolean; rts: boolean; agreed: boolean; wrong: string; retries: number }
 export interface WifiApi { status(): WifiStatus; setHidden(on: boolean): void; setRts(on: boolean): void; run(n: number): void }
 export const wifiApi = new WeakMap<Stage, WifiApi>();
@@ -40,7 +51,7 @@ const OUTS = ['tx', 'kind', 'st', 'cw', 'bo', 'retry', 'nav', 'cnt', 'done', 'dr
 
 export function wifiScene(view: 'open' | 'hidden'): Scene {
   const hide: string[] = ['rst', 'len', 'use_rts'], outs: string[] = [];
-  const inp: Record<string, number> = { rst: 1, len: CELL_LEN_US, use_rts: 0 };
+  const inp: Record<string, number> = { rst: 1, len: lenOf(view), use_rts: 0 };
   for (let i = 0; i < CELL_N; i++) {
     for (const p of ['seed', 'pending', 'busy', 'rx_data', 'rx_ack', 'rx_rts', 'rx_cts', 'nav_load', 'nav_val']) { hide.push(`${p}${i}`); inp[`${p}${i}`] = p === 'seed' ? CELL_SEEDS[i] : 0; }
     for (const p of OUTS) outs.push(`${p}${i}`);
@@ -52,7 +63,8 @@ interface Span { from: number; to: number; kind: number; bad?: boolean }
 function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
   return (stage: Stage): Widget => {
     let hidden = view === 'hidden', rts = false, started = false, agreed = true, wrong = '', stopRun: (() => void) | null = null, raf = 0;
-    const optsOf = (): AirOpts => ({ n: CELL_N, lenUs: CELL_LEN_US, useRts: rts, dest: () => AP, saturated: [true, false, true], seeds: CELL_SEEDS, hears: (i, j) => !hidden || !((i === A && j === B) || (i === B && j === A)) });
+    const LEN = lenOf(view);
+    const optsOf = (): AirOpts => ({ n: CELL_N, lenUs: LEN, useRts: rts, dest: () => AP, saturated: [true, false, true], seeds: CELL_SEEDS, hears: (i, j) => !hidden || !((i === A && j === B) || (i === B && j === A)) });
     let air = new Air(optsOf()), ref = new Air(optsOf()), spans: Span[][] = [[], [], []];
     const v = (n: string) => stage.value(n);
     const outsNow = () => [0, 1, 2].map((i) => ({ tx: v(`tx${i}`), kind: v(`kind${i}`) }));
@@ -90,7 +102,7 @@ function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
     stage.edgeHooks.add(hook);
     const init = () => {
       air = new Air(optsOf()); ref = new Air(optsOf()); spans = [[], [], []]; agreed = true; wrong = '';
-      stage.setInputs({ rst: 1, use_rts: rts ? 1 : 0, len: CELL_LEN_US });
+      stage.setInputs({ rst: 1, use_rts: rts ? 1 : 0, len: LEN });
       started = false;
       stage.runCycles(1, undefined, 0, true);
       stage.setInputs({ rst: 0 });
@@ -138,7 +150,7 @@ function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
       h('h4', null, 'A cell', h('span', { class: 'fold-hint' })),
       h('div', { class: 'dram-ops' }, btn('1 µs', 'One clock', () => act(() => stage.runCycles(1))), btn('100 µs', '100 clocks', () => act(() => stage.runCycles(100))), runBtn),
       h('div', { class: 'wf-boxes' }, hb.el, rb.el), tl, status, states, verdict,
-      h('p', { class: 'sub' }, `A clock is a microsecond, so these are the standard's own timings. Frames of ${CELL_LEN_US} µs, A and B always sending to the access point. Stations are gates; the air, who hears whom, is a model, and this trace is modelled, not captured.`));
+      h('p', { class: 'sub' }, `A clock is a microsecond, so these are the standard's own timings. Frames of ${LEN} µs, A and B always sending to the access point. Stations are gates; the air, who hears whom, is a model, and this trace is modelled, not captured.`));
     update();
     requestAnimationFrame(() => { if (stage.sim && !started) init(); });
     wifiApi.set(stage, {
