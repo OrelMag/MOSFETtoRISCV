@@ -217,9 +217,9 @@ export function tableWidget(): Widget {
   };
   const sk = slider('Table bits', 3, 9, 1, k, (v) => String(v), (v) => { k = v; paint(); play.reset(); });
   const play = clipButton('Hear the weak station', () => ({ samples: receive(band(), STATIONS[3].f, -40, FS, k).chain.audio, rate: AUD, source: 'model', note: `${2 ** k}-step table, one second` } satisfies Clip));
-  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', { class: 'num' }, 'Bits'), h('th', { class: 'num' }, 'Steps'), h('th', { class: 'num' }, 'NANDs, oscillator'), h('th', { class: 'num' }, 'Spur-free range'), h('th', { class: 'num' }, 'Key down / up'))), body);
+  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', { class: 'num' }, 'Bits'), h('th', { class: 'num' }, 'Steps'), h('th', { class: 'num' }, 'NANDs'), h('th', { class: 'num' }, 'Spur-free'), h('th', { class: 'num' }, 'Key down / up'))), body);
   paint();
-  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The oscillator\'s table, bit by bit'), table, chips.el), h('div', { class: 'panel mos-ctl' }, sk.el, play.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The oscillator\'s table, bit by bit'), h('div', { class: 'dsp-scroll' }, table), chips.el), h('div', { class: 'panel mos-ctl' }, sk.el, play.el)) };
 }
 
 // ---- the channel filter and the discriminator (the DSP core's job) ---------------------------------------------------------------------------------
