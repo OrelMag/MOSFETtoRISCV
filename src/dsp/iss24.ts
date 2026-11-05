@@ -99,8 +99,15 @@ export class Iss24 {
 
   private upd(bus: 0 | 1, i: number, mode: number): void {
     const k = bus * 4 + i;
-    this.p[k] = aguStep(this.p[k], mode, bus ? this.yb : this.xb, bus ? this.yl : this.xl, bus ? this.ym : this.xm);
+    this.p[k] = this.stepPtr(this.p[k], mode, bus ? this.yb : this.xb, bus ? this.yl : this.xl, bus ? this.ym : this.xm);
   }
+
+  // The places tests break on purpose (tests/dsp-core-mutants.test.ts): a subclass overrides one, and the lock-step with the gates must notice.
+  protected stepPtr(p: number, mode: number, base: number, len: number, m: number): number { return aguStep(p, mode, base, len, m); }
+  protected readAcc(acc: bigint, sh: number): number { return rndOf(acc, sh); }
+  protected lastPass(lc: number): boolean { return lc === 1; }
+  protected macAcc(acc: bigint, x: number, y: number): bigint { return accAfter(acc, MAC_F3.mac, x, y); }
+  protected satAdd(v: number): number { return sat16(v); }
 
   step(): Step24 {
     const pc = this.pc, w = this.rom[pc];
@@ -118,12 +125,12 @@ export class Iss24 {
       case 'halt': this.halted = true; this.steps++; return st;
       case 'mov': this.setReg(d.dst, this.getReg(d.src)); break;
       case 'ldi': this.setReg(d.dst, d.imm14 & 0x2000 ? d.imm14 - 0x4000 : d.imm14); break;
-      case 'ldh': r[d.rd] = (d.imm8 << 8) | (r[d.rd] & 255); break;
+      case 'ldh': r[d.rd] = (d.imm8 << 8) | (a & 255); break;
       case 'addi': alu(a + s8(d.imm8)); break;
       case 'add': alu(a + b); break;
       case 'sub': alu(a - b); break;
-      case 'adds': alu(sat16(s16(a) + s16(b))); break;
-      case 'subs': alu(sat16(s16(a) - s16(b))); break;
+      case 'adds': alu(this.satAdd(s16(a) + s16(b))); break;
+      case 'subs': alu(this.satAdd(s16(a) - s16(b))); break;
       case 'and': alu(a & b); break;
       case 'or': alu(a | b); break;
       case 'xor': alu(a ^ b); break;
@@ -145,12 +152,12 @@ export class Iss24 {
       }
       case 'clr': this.acc = 0n; break;
       case 'mac':
-        this.acc = accAfter(this.acc, MAC_F3.mac, this.x[xa], this.y[ya]);
+        this.acc = this.macAcc(this.acc, this.x[xa], this.y[ya]);
         this.upd(0, d.xp, d.xmode);
         this.upd(1, d.yp, d.ymode);
         break;
       case 'rnd': case 'rndc':
-        r[d.rd] = rndOf(this.acc, d.sh) & 0xffff;
+        r[d.rd] = this.readAcc(this.acc, d.sh) & 0xffff;
         if (d.name === 'rndc') this.acc = 0n;
         break;
       case 'out': this.out.push(a); st.out = a; break;
@@ -167,7 +174,7 @@ export class Iss24 {
     }
     if (jump !== null) next = jump;
     if (!isLoop && this.la && pc === this.le) {
-      if (this.lc !== 1) { next = this.ls; st.looped = true; } else this.la = 0;
+      if (!this.lastPass(this.lc)) { next = this.ls; st.looped = true; } else this.la = 0;
       this.lc = (this.lc - 1) & 0xffff;
     }
     if (!this.halted) this.pc = next;

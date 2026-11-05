@@ -22,7 +22,7 @@ export const INSTRS24: Instr24[] = [
   { name: 'halt', op: 1, shape: '', summary: 'stop: the PC stays on this instruction' },
   { name: 'mov', op: 2, shape: 'mov', summary: 'dst ← src, any of r0–r7, p0–p7, xb xl xm yb yl ym (pointers keep the low 8 bits)' },
   { name: 'ldi', op: 3, shape: 'ldi', summary: 'dst ← signed 14-bit constant' },
-  { name: 'ldh', op: 4, shape: 'ri', summary: 'rd[15:8] ← constant, rd[7:0] kept (the encoding names rd twice: it is read and written)' },
+  { name: 'ldh', op: 4, shape: 'ri', summary: 'rd ← constant in the high byte, the low byte of ra (the assembler names rd for both: rd[7:0] is kept)' },
   { name: 'addi', op: 5, shape: 'rri', summary: 'rd ← ra + signed 8-bit constant' },
   { name: 'add', op: 6, shape: 'rrr', summary: 'rd ← ra + rb (wraps)' },
   { name: 'sub', op: 7, shape: 'rrr', summary: 'rd ← ra − rb (wraps)' },
