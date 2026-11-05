@@ -100,11 +100,11 @@ export function handoverWidget(): Widget {
   let hyst = 3, ttt = 320, shadow = 6, speed = 20, seed = 3;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const sites = [0, 1000, 2000], r = handover({ sites, speedMs: speed, n: 3.5, shadowDb: shadow, corrM: 50, hystDb: hyst, tttMs: ttt, seed, lengthM: 2000, refDbm: -30 });
-    const a = axes([0, 2000], [-140, -40], [0, 500, 1000, 1500, 2000], [-120, -100, -80, -60], (v) => String(v), (v) => String(v), 'metres along the road', 'dBm');
-    const curve = (i: number) => poly(r.rsrp[i].map((v, k) => [a.x(k * 5), a.y(clamp(v, -140, -40))] as [number, number]), `cl-site s${i}`);
+    const sites = [0, 1000, 2000], r = handover({ sites, speedMs: speed, n: 3.5, shadowDb: shadow, corrM: 50, hystDb: hyst, tttMs: ttt, seed, lengthM: 2000, refDbm: -5 });
+    const a = axes([0, 2000], [-130, -30], [0, 500, 1000, 1500, 2000], [-120, -100, -80, -60, -40], (v) => String(v), (v) => String(v), 'metres along the road', 'dBm');
+    const curve = (i: number) => poly(r.rsrp[i].map((v, k) => [a.x(k * 5), a.y(clamp(v, -130, -30))] as [number, number]), `cl-site s${i}`);
     const marks = r.events.map((e) => line(a.x(e.m), a.top, a.x(e.m), a.bottom, 'cl-ho'));
-    const servedPts = r.serving.map((sv, k) => [a.x(k * 5), a.y(clamp(r.rsrp[sv][k], -140, -40))] as [number, number]);
+    const servedPts = r.serving.map((sv, k) => [a.x(k * 5), a.y(clamp(r.rsrp[sv][k], -130, -30))] as [number, number]);
     plot.replaceChildren(svgOf(a, `Signal from three sites along a road; ${r.events.length} handovers`, ...a.g, curve(0), curve(1), curve(2), ...marks, poly(servedPts, 'cl-served')));
     out.replaceChildren(stat('Handovers', String(r.events.length), r.events.length > 2 ? 'bad' : 'good'), stat('Back and forth', String(r.pingPongs), r.pingPongs ? 'bad' : ''), stat('Below −110 dBm', `${r.outageM} m`, r.outageM ? 'bad' : ''), stat('Trigger takes', `${nf((ttt / 1000) * speed, 0)} m at this speed`));
   };
