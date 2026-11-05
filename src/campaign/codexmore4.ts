@@ -3,10 +3,11 @@
 // to the models and to the chapter steps that print them). No DOM.
 
 import type { CodexMore } from './codexmore';
+import { numOf } from '../chapters/order';
 
 export const MORE4: Record<string, CodexMore> = {
   shannon: {
-    idea: `Two theorems bound every link in this track. <b>Nyquist</b> (1928): a channel of bandwidth B cannot carry more than 2B independent symbols a second; faster and the symbols run into each other. The bit rate is baud × log<sub>2</sub> M for M distinct levels, so more levels raise the rate with no more bandwidth, as long as the receiver can tell them apart. <b>Shannon</b> (1948) puts the noise in: with signal-to-noise power ratio SNR the channel carries at most C = B · log<sub>2</sub>(1 + SNR) bit/s with an error rate as low as you like, given a good enough code, and no more with any code. Setting 2B · log<sub>2</sub> M = C gives M = √(1 + SNR), the number of levels the noise leaves distinguishable.<br><br>The theorem is an existence proof. The distance between a real link and C is the SNR it needs beyond the minimum, and each later chapter spends part of it: QAM adds points until the SNR is used up, coding spends the rest (chapter 47). The ultimate floor, for any rate, is E<sub>b</sub>/N<sub>0</sub> = ln 2, −1.59 dB.`,
+    idea: `Two theorems bound every link in this track. <b>Nyquist</b> (1928): a channel of bandwidth B cannot carry more than 2B independent symbols a second; faster and the symbols run into each other. The bit rate is baud × log<sub>2</sub> M for M distinct levels, so more levels raise the rate with no more bandwidth, as long as the receiver can tell them apart. <b>Shannon</b> (1948) puts the noise in: with signal-to-noise power ratio SNR the channel carries at most C = B · log<sub>2</sub>(1 + SNR) bit/s with an error rate as low as you like, given a good enough code, and no more with any code. Setting 2B · log<sub>2</sub> M = C gives M = √(1 + SNR), the number of levels the noise leaves distinguishable.<br><br>The theorem is an existence proof. The distance between a real link and C is the SNR it needs beyond the minimum, and each later chapter spends part of it: QAM adds points until the SNR is used up, coding spends the rest (chapter ${numOf('errors')}). The ultimate floor, for any rate, is E<sub>b</sub>/N<sub>0</sub> = ln 2, −1.59 dB.`,
     example: {
       title: 'A 3100 Hz telephone channel',
       body: `<pre>Nyquist, 2 levels    2B = 6200 symbols/s × 1 bit   =  6.2 kb/s
@@ -15,7 +16,7 @@ Shannon at 30 dB     C = 3100 · log2(1 + 1000)     = 30.9 kb/s
 levels the noise leaves   √(1 + 1000)              = 31.6</pre>Sixteen levels need an SNR of 16<sup>2</sup> − 1 = 255 (24.1 dB) before the noise leaves them all distinguishable; below that, Shannon is the lower of the two.`,
     },
     mistakes: [
-      'Reading C as the rate of a particular modem: it is a bound, reached only with codes of unbounded length, and an uncoded 256-QAM link sits 9.2 dB above it (chapter 45).',
+      `Reading C as the rate of a particular modem: it is a bound, reached only with codes of unbounded length, and an uncoded 256-QAM link sits 9.2 dB above it (chapter ${numOf('modem')}).`,
       'Raising the symbol rate past 2B "with a better receiver": Nyquist is about independent symbols; with a flat noiseless channel you may add levels, not baud.',
       'Quoting SNR in decibels inside the formula: 30 dB is a power ratio of 1000, and log<sub>2</sub>(1 + SNR) uses the ratio.',
     ],

@@ -18,6 +18,7 @@ import { twoComputersChip, uartComputerChip } from './examplecomms';
 import { lanComputerChip, lanSwitchChip, lanTopChip } from './examplenet';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
 import { PONG_HZ, pongChip } from '../campaign/bench';
+import { numOf } from '../chapters/order';
 
 const pin = (id: string, dir: PinDoc['dir'], at: Vec, width = 1, extra: Partial<PinDoc> = {}): PinDoc => ({ id, name: id, dir, width, at, ...extra });
 const part = (id: string, ref: PartRef, at: Vec, extra: Partial<PartDoc> = {}): PartDoc => ({ id, ref, at, ...extra });
@@ -479,7 +480,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'twocomputers-switch', group: 'computers', short: 'Two computers with NICs and a learning switch.', name: 'Two computers on a switch',
-    blurb: 'The last scene of chapter 50: two RV32I bus cores, each with a boot ROM, RAM and a NIC (descriptor rings, DMA, a MAC), joined by a four-port learning switch. A sends B a frame and B answers it, three times; open the switch and select it to watch it learn. Slow: about 10 000 clocks a round trip.',
+    blurb: `The last scene of chapter ${numOf('network')}: two RV32I bus cores, each with a boot ROM, RAM and a NIC (descriptor rings, DMA, a MAC), joined by a four-port learning switch. A sends B a frame and B answers it, three times; open the switch and select it to watch it learn. Slow: about 10 000 clocks a round trip.`,
     build: (id, n, _sub, docs) => lanTopChip(id, n, { a: docs.a, b: docs.b, sw: docs.sw }),
     subchips: {
       a: { name: 'Computer A', build: (id, n) => lanComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => lanComputerChip(id, n, 'B') },

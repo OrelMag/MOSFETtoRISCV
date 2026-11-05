@@ -7,6 +7,7 @@ import COSTS from '../net/tcpcosts.json';
 import { TCP_K } from '../net/tcp';
 import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const K = TCP_K, MSS = K.MSS;
@@ -19,7 +20,7 @@ const WINDOW_SEGS = K.RCV / MSS;
 const us = (c: number) => (c * CLOCK_NS) / 1000;
 
 export const chTcp: Chapter = {
-  id: 'tcp', num: 52, title: 'TCP', level: 'Communication',
+  id: 'tcp', num: numOf('tcp'), title: 'TCP', level: 'Communication',
   blurb: 'A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD\'s sawtooth, and queues that fill, in Python compiled for our CPU.',
   goals: [
     'read a TCP header and follow sequence and acknowledgment numbers through a handshake, a transfer and a loss',
@@ -63,10 +64,7 @@ export const chTcp: Chapter = {
   steps: [
     {
       title: 'A stream over datagrams',
-      body: `
-        <p>IP delivers packets, sometimes. Chapter 51's router drops them when a queue is full, TTL or checksum fail, and two packets may swap places on two paths or arrive twice after a link retry. Applications want something else: bytes, all of them, in order, as if down a wire. <strong>TCP</strong> (RFC 9293) builds that at the two ends alone, and asks the network for nothing.</p>
-        <p>This is the ARQ of <a href="#/c/errors">chapter 47</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next steps take these in turn.</p>
-        <p>Each segment carries the twenty bytes below after the IP header, with ports to name the two applications. Sequence numbers count <em>bytes</em>, not segments, and the checksum covers a pseudo-header of the two addresses as well, so a segment delivered to the wrong machine fails it. <span class="try">Pick each of the three segments and find its flags and its two numbers.</span></p>`,
+      body: `\n        <p>IP delivers packets, sometimes. Chapter ${numOf('router')}'s router drops them when a queue is full, TTL or checksum fail, and two packets may swap places on two paths or arrive twice after a link retry. Applications want something else: bytes, all of them, in order, as if down a wire. <strong>TCP</strong> (RFC 9293) builds that at the two ends alone, and asks the network for nothing.</p>\n        <p>This is the ARQ of <a href="#/c/errors">chapter ${numOf('errors')}</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next steps take these in turn.</p>\n        <p>Each segment carries the twenty bytes below after the IP header, with ports to name the two applications. Sequence numbers count <em>bytes</em>, not segments, and the checksum covers a pseudo-header of the two addresses as well, so a segment delivered to the wrong machine fails it. <span class="try">Pick each of the three segments and find its flags and its two numbers.</span></p>`,
       widget: () => ladderWidget({ bytes: 0, lose: false }),
       more: {
         numbers: `<p>Forty bytes of headers on every segment, TCP's twenty and IP's twenty, plus Ethernet's fourteen, FCS, preamble and gap. Our segments carry ${MSS} bytes of data in ${ON_WIRE} bytes of wire time, which is why ${WIRE_DATA_MBPS.toFixed(1)} of the link's ${LINK_MBPS.toFixed(1)} Mb/s is the most data they can carry. A real MSS of 1460 keeps 95 % of the wire.</p>`,
@@ -90,7 +88,7 @@ export const chTcp: Chapter = {
       },
       more: {
         real: `<p>Our initial numbers come from a counter. RFC 6528 asks for a clock plus a keyed hash of the addresses and ports, because predictable numbers once let an attacker forge a whole connection from the outside. A listening server that keeps state for every SYN can be exhausted by a flood of them; SYN cookies encode that state in the sequence number instead.</p>`,
-        numbers: `<p>The handshake costs one round trip before the first byte of data. That is the price QUIC and TCP Fast Open go after, and it is why a fetch over a long path feels slow at the start, however fast the link is. Chapter 53 adds up what this costs on a real path.</p>`,
+        numbers: `<p>The handshake costs one round trip before the first byte of data. That is the price QUIC and TCP Fast Open go after, and it is why a fetch over a long path feels slow at the start, however fast the link is. Chapter ${numOf('path')} adds up what this costs on a real path.</p>`,
       },
     },
     {
@@ -117,7 +115,7 @@ export const chTcp: Chapter = {
       title: 'The window: room at the far end',
       body: `
         <p>The receiver's application may be slower than the network, and bytes must wait somewhere. So every segment announces a <strong>window</strong>: how many more bytes this end can take. The sender keeps its unacknowledged bytes within it, and the buffer can never overflow, whatever the speeds. Ours has ${K.RCV} bytes, ${WINDOW_SEGS} segments.</p>
-        <p>This is flow control, the same idea as <code>ready</code> on chapter 48's byte stream, stretched over a round trip. When the window reaches zero the sender stops, and now there is a trap: the update that reopens it is an ACK with no data, and if that is lost, no one will ever send anything again. So a stopped sender sends a one-byte <strong>probe</strong> on a timer, doubling each time. A refused probe is no loss, so nothing is cut and it never gives up.</p>
+        <p>This is flow control, the same idea as <code>ready</code> on chapter ${numOf('ethernet')}'s byte stream, stretched over a round trip. When the window reaches zero the sender stops, and now there is a trap: the update that reopens it is an ACK with no data, and if that is lost, no one will ever send anything again. So a stopped sender sends a one-byte <strong>probe</strong> on a timer, doubling each time. A refused probe is no loss, so nothing is cut and it never gives up.</p>
         <p><span class="try">Slow the reader until the window shuts, and find where the probes begin.</span> Getting this right is harder than it looks: an early version of this chapter's code treated the second probe as a loss and cut the window, and carried on one byte past a refused probe. Holding the window shut for longer than the retry limit in a test is what found both.</p>`,
       widget: windowWidget,
       challenge: {
@@ -184,20 +182,20 @@ export const chTcp: Chapter = {
         why: ['', 'The bottleneck is the uplink, not the home network\'s faster side.', 'Not in a plain first-in, first-out queue. Fair queueing is what would give this, and is the cure.', '1 MB is 8 Mb, not 800.'],
       },
       more: {
-        real: `<p>The cure is in the router, since the sender cannot tell a full queue from a long path. Active queue management such as CoDel (RFC 8289) drops or marks packets when they have waited too long, keeping the queue short before TCP would fill it. Fair queueing gives each flow its own, so one upload cannot delay another's packets. Chapter 49's head-of-line blocking is another way for one flow to delay another.</p>`,
+        real: `<p>The cure is in the router, since the sender cannot tell a full queue from a long path. Active queue management such as CoDel (RFC 8289) drops or marks packets when they have waited too long, keeping the queue short before TCP would fill it. Fair queueing gives each flow its own, so one upload cannot delay another's packets. Chapter ${numOf('switch')}'s head-of-line blocking is another way for one flow to delay another.</p>`,
       },
     },
     {
       title: 'The same rules, on our CPU',
       body: `
-        <p>Everything so far ran on the reference rules. This is the stack itself: chapter 50's layers with <code>tcp.ts</code> added, ${n0(COSTS.lines)} lines of Python, compiled to ${n0(COSTS.words.a)} words of RV32I on each computer with its application. It runs on the golden model, with the NIC and the MACs modelled clock by clock, and a router as a queue between them. A test holds this Python to the reference after every pass of its main loop: every frame it sends, byte for byte, against a builder written separately, and every state variable.</p>
+        <p>Everything so far ran on the reference rules. This is the stack itself: chapter ${numOf('network')}'s layers with <code>tcp.ts</code> added, ${n0(COSTS.lines)} lines of Python, compiled to ${n0(COSTS.words.a)} words of RV32I on each computer with its application. It runs on the golden model, with the NIC and the MACs modelled clock by clock, and a router as a queue between them. A test holds this Python to the reference after every pass of its main loop: every frame it sends, byte for byte, against a builder written separately, and every state variable.</p>
         <p>Run one. The console lines come from the program, and the plot is read straight out of A's RAM. The receiver checks each byte against a known pattern, and says so at the end. Save the capture, and any tool that reads a .pcap will follow the stream.</p>
         <p>The wire-speed run shows where the time goes: ${n0(COSTS.fast.bytes)} bytes in ${n0(COSTS.fast.clocks)} cycles, ${n0(CYCLES_PER_BYTE)} cycles a byte, ${MEASURED_MBPS.toFixed(1)} Mb/s. Segments this small could carry ${WIRE_DATA_MBPS.toFixed(1)} Mb/s of data, so here the CPU is the limit, not the network. <span class="try">Run "A slow link" and find the moments the window falls.</span></p>`,
       widget: realStackWidget,
       more: {
-        numbers: `<p>This bench is the golden model, not gates: a load or store costs one clock more, and the bus contention between the CPU and the NIC's DMA is not modelled. Against chapter 50's gate-level ping that leaves it 5 clocks in ${n0(14689)} off. It runs about a hundred times faster than the gates, which is what makes a transfer of thousands of bytes possible here at all.</p>`,
+        numbers: `<p>This bench is the golden model, not gates: a load or store costs one clock more, and the bus contention between the CPU and the NIC's DMA is not modelled. Against chapter ${numOf('network')}'s gate-level ping that leaves it 5 clocks in ${n0(14689)} off. It runs about a hundred times faster than the gates, which is what makes a transfer of thousands of bytes possible here at all.</p>`,
         real: `<p>A real stack avoids most of this work in hardware: the NIC computes checksums, splits large sends into segments and coalesces received ones (TSO, GRO), and DMA goes straight to the application's memory, so that a modern server reaches hundreds of gigabits on a few cores.</p>`,
-        pitfall: `<p>Writing this TCP turned up a fault in chapter 48's receiver: its shift register kept the last frame's final byte, and if that byte was 0xAA or 0xAB the next preamble looked like a start-of-frame, so about one frame in 128 was lost on a clean link. The model and the gates agreed with each other all along, so lock step could not see it. The cue was duplicate ACKs with no drop anywhere. A test that checks against the frame as built now catches it.</p>`,
+        pitfall: `<p>Writing this TCP turned up a fault in chapter ${numOf('ethernet')}'s receiver: its shift register kept the last frame's final byte, and if that byte was 0xAA or 0xAB the next preamble looked like a start-of-frame, so about one frame in 128 was lost on a clean link. The model and the gates agreed with each other all along, so lock step could not see it. The cue was duplicate ACKs with no drop anywhere. A test that checks against the frame as built now catches it.</p>`,
       },
     },
     {

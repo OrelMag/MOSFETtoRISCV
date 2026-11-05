@@ -88,6 +88,25 @@ describe('the map', () => {
     expect(of('Start').range).toBe('');
   });
 
+  it('copes with the communication ladder cut into groups, with a labelled on-ramp in front', () => {
+    const ch = (id: string, num: number, label?: string) => ({ id, num, ...(label ? { label } : {}) });
+    const book = [ch('bus', 38), ch('onramp', 0, 'C0'), ch('telegraph', 39), ch('spi', 44), ch('signals', 45), ch('light', 50), ch('errors', 51), ch('pcie', 53), ch('ethernet', 54), ch('path', 61), ch('radio', 62), ch('bench', 66), { id: 'a', num: 67, appendix: 'A' }];
+    const secs = sectionsOf(book, [
+      { name: 'Memory in depth', first: 'bus' },
+      { name: 'Communication: wires and clocks', first: 'onramp' },
+      { name: 'Communication: the channel', first: 'signals' },
+      { name: 'Communication: getting it right', first: 'errors' },
+      { name: 'Communication: networks', first: 'ethernet' },
+      { name: 'Communication: without a wire, and at scale', first: 'radio' },
+      { name: 'Appendix', first: 'a' },
+    ]);
+    expect(secs.map((s) => s.range)).toEqual(['38', '39–44', '45–50', '51–53', '54–61', '62–66', 'A']);
+    expect(secs.map((s) => s.tone)).toEqual(['journey', 'journey', 'journey', 'journey', 'journey', 'journey', 'appendix']);
+    expect(secs[1].chapters.map((c) => c.id)).toEqual(['onramp', 'telegraph', 'spi']);
+    // a section of nothing but a labelled chapter has no range to show
+    expect(sectionsOf([ch('onramp', 0, 'C0')], [{ name: 'On-ramp', first: 'onramp' }])[0].range).toBe('');
+  });
+
   it('opens at the MOSFET for a new visitor or one still in Start, else at the chapter being read or the last one opened', () => {
     expect(ladderFocus(() => false)).toBe('mosfet');
     expect(ladderFocus((id) => id === 'basics', 'map')).toBe('mosfet');

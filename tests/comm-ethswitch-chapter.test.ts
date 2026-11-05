@@ -5,8 +5,7 @@ import { holSaturation, runTraffic, sharedCapacity, singleFrame } from '../src/c
 import { sharedEfficiency } from '../src/widgets/ethswitchtools';
 
 describe('chapter 49 typed numbers', () => {
-  it('is chapter 49, eight steps, three recap checks', () => {
-    expect(chSwitch.num).toBe(49);
+  it('eight steps, three recap checks', () => {
     expect(chSwitch.steps.length).toBe(8);
     expect(chSwitch.recap!.check!.length).toBe(3);
   });

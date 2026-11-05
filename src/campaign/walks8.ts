@@ -2,6 +2,7 @@
 // for the conventions. No DOM.
 
 import type { WalkScript } from './walk';
+import { numOf } from '../chapters/order';
 
 export const WALKS8: Record<string, WalkScript> = {
   l_sync: [
@@ -377,7 +378,7 @@ export const WALKS8: Record<string, WalkScript> = {
       title: 'Carrier sense and collisions: tied off',
       text: 'The transmitter\'s crs and col inputs, its backoff seed and the receiver\'s ready, promisc and address are constants here: a full-duplex link has no carrier to wait for and no collision, and every address is accepted.',
       parts: ['g0', 'g1', 'g2', 'g3', 'g5', 'g7'], codex: ['csmacd'],
-      why: 'The same two blocks serve a shared cable (chapter 48) and a point-to-point link; what changes is what is wired to the pins.',
+      why: `The same two blocks serve a shared cable (chapter ${numOf('ethernet')}) and a point-to-point link; what changes is what is wired to the pins.`,
       whyNot: { text: 'Building a separate full-duplex MAC would copy the datapath and drop the backoff logic, a third of the transmitter\'s gates.' },
     },
   ],

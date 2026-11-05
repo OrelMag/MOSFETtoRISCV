@@ -32,16 +32,17 @@ export interface ChapterSection<C> {
 }
 
 /** `chapters` (in book order) cut into sections. */
-export function sectionsOf<C extends Sectioned>(chapters: readonly C[]): ChapterSection<C>[] {
+export function sectionsOf<C extends Sectioned>(chapters: readonly C[], sections: readonly { name: string; first: string }[] = SECTIONS): ChapterSection<C>[] {
   const out: ChapterSection<C>[] = [];
   for (const c of chapters) {
-    const s = SECTIONS.find((x) => x.first === c.id);
-    if (s || !out.length) out.push({ name: s?.name ?? SECTIONS[0].name, chapters: [], tone: c.appendix ? 'appendix' : c.prologue ? 'prologue' : 'journey', range: '' });
+    const s = sections.find((x) => x.first === c.id);
+    if (s || !out.length) out.push({ name: s?.name ?? sections[0].name, chapters: [], tone: c.appendix ? 'appendix' : c.prologue ? 'prologue' : 'journey', range: '' });
     out[out.length - 1].chapters.push(c);
   }
   for (const s of out) {
-    const nos = s.chapters.map(chapterNo);
-    s.range = s.chapters.some((c) => c.label) ? '' : nos.length > 1 ? `${nos[0]}–${nos[nos.length - 1]}` : nos[0];
+    // a chapter shown by its label, or with no number, sits in its section without counting for the range (an on-ramp, Start's)
+    const nos = s.chapters.filter((c) => !c.label && (c.num || c.prologue)).map(chapterNo);
+    s.range = nos.length > 1 ? `${nos[0]}–${nos[nos.length - 1]}` : nos[0] ?? '';
   }
   return out;
 }

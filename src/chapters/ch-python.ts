@@ -3,6 +3,7 @@ import { cpuState } from '../riscv/cosim';
 import { pyCompile, pyCost, pyLinked, pyProfile, pyScene } from '../widgets/python';
 import { PY_PROGRAMS } from '../lang/pyprograms';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 // Every number in the prose is recomputed by tests/python-chapter.test.ts from the compiler (src/lang), the golden
 // model and the gate-level CPU the scenes build (singleCycleCpu with PY_IMEM_K / PY_DMEM_K).
@@ -20,7 +21,7 @@ const primesBelow = (n: number) => { let k = 0; for (let i = 2; i < n; i++) { le
 const fibCalls = (n: number): number => (n < 2 ? 1 : 1 + fibCalls(n - 1) + fibCalls(n - 2));
 
 export const chPython: Chapter = {
-  id: 'python', num: 15, title: 'From Python to gates', level: 'Software',
+  id: 'python', num: numOf('python'), title: 'From Python to gates', level: 'Software',
   blurb: 'A Python program compiled to RV32I by the site\'s own compiler and run on the gate-level CPU, line by line down to the toggles.',
   goals: [
     'follow a Python line to its RV32I instructions, their machine words and the fields the decoder reads',
