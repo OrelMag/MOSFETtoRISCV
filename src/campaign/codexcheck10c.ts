@@ -76,8 +76,8 @@ export const CHECK10C: Record<string, Quiz[]> = {
       why: ['', 'It is the device\'s own maximum packet size that limits it, and the host does not yet know it.', 'It gives an address whatever it read; what it needs here is the packet size. The whole descriptor is 18 bytes.', 'CRC16 on data packets is not what limits this.'],
     },
     {
-      question: 'The host\'s last ACK of SET_ADDRESS is lost. What follows?',
-      options: ['They disagree on the address, and the next transaction goes unanswered until a reset', 'The device keeps answering to both addresses until the host picks one', 'The host repeats the ACK until the device answers to the new address', 'The device moves to the new address anyway once a timeout passes'],
+      question: 'A device moves to its new address only on seeing the host\'s last ACK of SET_ADDRESS, as the chapter\'s does, and that ACK is lost. What follows?',
+      options: ['They disagree on the address, and the next transaction goes unanswered', 'The device keeps answering to both addresses until the host picks one', 'The host repeats the ACK until the device answers to the new address', 'The device moves to the new address anyway once a timeout passes'],
       answer: 0,
       explain: 'The device moves only when the host acknowledges the status packet. If that ACK is lost the host believes the address changed and the device has not. A real host recovers with a reset.',
       why: ['', 'A device answers to one address at a time.', 'An ACK is a handshake in answer to a packet; the host cannot send one on its own.', 'The device\'s state changes on that acknowledgement, not on a timer.'],

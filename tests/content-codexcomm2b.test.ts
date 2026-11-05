@@ -170,8 +170,7 @@ describe('the group B codex entries', () => {
     quotes('fading', '185 Hz', '2.3 ms', '1.1 ms', '4 MHz', '200 kHz', '78 kHz', '4 × 10⁻⁶', '2 × 10⁻²', '20 dB', '6.8 dB', '24.0 dB', '0.42 / f');
     says('radio', 6, `${nf(fd, 0)} Hz at 100 km/h at 2 GHz`);
     says('radio', 6, `${nf(coherenceTime(fd) * 1000)} ms`);
-    // the chapter's own sci() leaves the digit of the exponent unraised
-    says('radio', 6, 'At 10 dB, 4 × 10⁻6 without fading and 2 × 10⁻2 with it');
+        says('radio', 6, 'At 10 dB, 4 × 10⁻⁶ without fading and 2 × 10⁻² with it');
     says('radio', 6, `fade margin of ${nf(fadeMarginDb(0.01), 0)} dB`);
     says('radio', 6, '0.42 / f');
     says('radio', 5, 'about 1 / (5 τ)');
@@ -241,13 +240,13 @@ describe('the group B codex entries', () => {
     expect(nf(gp(7) / gp(0))).toBe('5.7');
     expect(54 / 6).toBe(9);
     expect(nf(at(0) / at(7))).toBe('8.3');
-    quotes('rateadapt', '6 Mb/s', '54 Mb/s', '2064 µs', '532 µs', '248 µs', '5.4 Mb/s', '17.7 Mb/s', '30.5 Mb/s', '5.7 times', '10 good frames', '2 lost in a row', '5 dB', '23 dB', '13 dB', '30 dB', '1997', '34', '68', '16', '28');
+    quotes('rateadapt', '6 Mb/s', '54 Mb/s', '2064 µs', '532 µs', '248 µs', '5.4 Mb/s', '17.7 Mb/s', '30.5 Mb/s', '5.7 times', '10 good frames', '2 lost in a row', '5 dB', '23 dB', '13 dB', '1997', '34', '68', '16', '28');
     says('wifi', 4, 'after 10 good frames go up a rate; after 2 lost in a row come down');
     says('wifi', 4, 'Auto Rate Fallback (1997)');
     says('wifi', 4, '6 Mb/s');
     says('wifi', 4, '54 Mb/s');
     says('wifi', 4, 'Minstrel');
-    says('wifi', 4, 'by 30 dB in seconds');
+    says('wifi', 4, 'by tens of dB in a fraction of a second');
     says('wifi', 5, `lasts ${at(7)} µs`);
     says('wifi', 5, 'preamble 20 µs');
   });
