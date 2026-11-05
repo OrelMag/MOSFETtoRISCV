@@ -14,7 +14,7 @@ import { fsmDiagram } from '../view/fsmdiagram';
 import { readbackOk, readFsm, fsmStateOf } from '../sim/fsmread';
 import { simulate } from '../sim/harness';
 import { h, s, undoKey } from '../ui/dom';
-import { type MenuEntry, showMenu } from './ctxmenu';
+import { type MenuEntry, showMenu } from '../ui/menu';
 import { type Editor, registerEditorPlugin, registerNewChipKind } from './editor';
 import type { FsmDoc } from './model';
 import {
