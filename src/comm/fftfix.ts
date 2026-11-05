@@ -105,3 +105,63 @@ export function twiddleCount(N: number): Record<TwKind, number> {
   for (const st of flowGraph(N)) for (const { k } of st) n[twKind(k, N)]++;
   return n;
 }
+
+// ---- the streaming FFT: one complex sample a clock -----------------------------------------------------------------------------
+//
+// A single-path delay-feedback pipeline, decimation in frequency, log₂ N stages. Stage s has a delay line of L = N / 2^(s + 1) samples, a counter and a register at its output.
+// While the counter's top bit is 0 the input goes into the line and what comes out of the line (the last block's differences) leaves through the twiddle;
+// while it is 1 the butterfly runs: (oldest + input) / 2 leaves, (oldest - input) / 2 goes into the line. The twiddle is W^(j 2^s), j the counter's low bits, and only on the
+// differences: k = 0 passes, k = N / 4 is (im, -re), any other k the general multiplier (-j through the multiplier gives the same word, so the model need not say which).
+// A stage's counter starts at minus the samples ahead of it, so its first sample meets count 0. The tones leave in bit-reversed order, the first N - 1 + log₂ N edges after the block's first sample.
+
+/** A stage's twiddle on one sample, with `k` the table's index. */
+export const twiddleFx = (x: Fx, k: number, N: number, W: number): Fx =>
+  k === 0 ? x : 4 * k === N ? { re: x.im, im: wrap(-x.re, W) } : cmulFx(x, twiddle(k, N, W), W);
+
+/** Samples ahead of stage s: the delays and output registers before it. */
+export function streamLag(N: number, s: number): number {
+  let t = 0;
+  for (let i = 0; i < s; i++) t += N / 2 ** (i + 1) + 1;
+  return t;
+}
+export const streamLatency = (N: number): number => streamLag(N, Math.log2(N));
+
+export interface StreamStage { count: number; line: Fx[]; out: Fx }
+
+export class FftStream {
+  readonly m: number;
+  stages: StreamStage[];
+  constructor(readonly N: number, readonly W: number) {
+    this.m = Math.log2(N);
+    this.stages = Array.from({ length: this.m }, (_, s) => ({ count: 0, line: Array.from({ length: N / 2 ** (s + 1) }, () => ({ re: 0, im: 0 })), out: { re: 0, im: 0 } }));
+  }
+  /** The counter's reset value at stage s, in its N / 2^s counts. */
+  startCount(s: number): number { const M = this.N / 2 ** s; return (M - (streamLag(this.N, s) % M)) % M; }
+  get q(): Fx { return this.stages[this.m - 1].out; }
+  /** One rising edge. */
+  step(d: Fx, en: boolean, rst: boolean): void {
+    const { N, W } = this, ins = this.stages.map((_, s) => (s ? this.stages[s - 1].out : d));
+    this.stages.forEach((st, s) => {
+      const M = N / 2 ** s, L = M / 2;
+      const c = st.count;
+      // reset only loads the counter: the data keeps moving while en = 1, as the registers do
+      st.count = rst ? this.startCount(s) : en ? (c + 1) % M : c;
+      if (!en) return;
+      const sel = c >= L, j = c % L, x = ins[s], old = st.line[L - 1];
+      const y0 = { re: addH(old.re, x.re, W), im: addH(old.im, x.im, W) }, y1 = { re: subH(old.re, x.re, W), im: subH(old.im, x.im, W) };
+      st.out = sel ? y0 : twiddleFx(old, j * 2 ** s, N, W);
+      st.line = [sel ? y1 : x, ...st.line.slice(0, L - 1)];
+    });
+  }
+  /** Run a block in (zeros after it, to flush it through), returning its tones in natural order: X[k] / N. */
+  static transform(x: readonly Fx[], W: number): Fx[] {
+    const N = x.length, f = new FftStream(N, W), bits = Math.log2(N), out = new Array<Fx>(N);
+    f.step({ re: 0, im: 0 }, false, true);
+    const lat = streamLatency(N);
+    for (let t = 0; t < lat + N; t++) {
+      f.step(t < N ? x[t] : { re: 0, im: 0 }, true, false);
+      if (t >= lat - 1 && t - lat + 1 < N) out[bitRev(t - lat + 1, bits)] = f.q;
+    }
+    return out;
+  }
+}

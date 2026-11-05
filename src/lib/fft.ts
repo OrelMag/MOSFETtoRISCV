@@ -1,13 +1,17 @@
 // Many carriers' FFT in gates. The rules are comm/fftfix.ts's header, and every part's spec is that model. A butterfly is four adders that halve; a twiddle of
 // 1, or of -j, is wires; 1/√2 is shift-and-add; only the others need the general complex multiplier, four Booth multipliers. tests/comm-fft.test.ts compares them.
 
-import { addH, butterflyFx, cmulFx, fftFx, flowGraph, bitRev, mulRoot, packFx, rootHalf, subH, twiddle, twKind, unpackFx, wrap } from '../comm/fftfix';
+import { addH, bitRev, butterflyFx, cmulFx, FftStream, fftFx, flowGraph, mulRoot, packFx, rootHalf, subH, twiddle, twKind, unpackFx, wrap } from '../comm/fftfix';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
-import { HALF_ADDER, rca } from './combinational';
+import { busMux2, HALF_ADDER, incrementer, rca } from './combinational';
 import { define, merger, ones, splitter } from './define';
+import { AND, NOT, OR } from './gates';
+import { lookupRom } from './modem';
 import { boothMul } from './multiply';
+import { nonZero } from './pipeline';
+import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { notBus } from './viterbi';
 
@@ -284,3 +288,134 @@ export function fftNet(N: number, W: number): ComponentDef {
 
 /** The inverse with no new gates: swap each sample's parts going in and coming out. */
 export const swapParts = (v: number, W: number): number => (v % 2 ** W) * 2 ** W + Math.floor(v / 2 ** W);
+
+// ---- the streaming FFT: comm/fftfix.ts FftStream ------------------------------------------------------------------------------------
+
+/** One stage's twiddles, table index j: W^(j 2^s), a word each. Not on the trivial stages. */
+function twiddleRom(N: number, s: number, W: number): ComponentDef {
+  const L = N / 2 ** (s + 1), k = Math.log2(L);
+  return lookupRom(`fftrom${N}_${s}_${W}`, `Twiddles of an ${N}-point FFT, stage ${s}`, k, 2 * W, Array.from({ length: L }, (_, j) => packFx(twiddle(j * 2 ** s, N, W), W)), `${L} words: W^(j·${2 ** s}) of the ${N}th roots of unity, ${W} bits a part, im above re.`);
+}
+
+/** x · (-j): (im, -re). A negation is an inverter per bit and a carry. */
+export function fxMinusJ(W: number): ComponentDef {
+  return memo(`fxmj${W}`, () => {
+    const g = new Builder(6, 8, 3);
+    g.pins('a');
+    const sp = g.op(splitFx(W), ['a']), nr = g.op1(notBus(W), [`${sp}.o0`]);
+    g.next();
+    const neg = g.op1(roundUp(W), [nr, g.op1(TIE1, [])], '−re');
+    g.next();
+    g.wire(g.op1(mergeFx(W), [`${sp}.o1`, neg]), 'y');
+    const R = g.right;
+    return define({
+      id: `fxmj${W}`, name: `× (−j), ${W} bits`, category: 'arithmetic',
+      summary: 'A quarter turn: the parts swap and one changes sign. No multiplier, only the negation\'s inverters and half adders.',
+      ports: [bus('a', 2 * W, 'in'), bus('y', 2 * W, 'out')], symbol: { kind: 'box', label: '×(−j)' },
+      spec: ([x]) => { const c = unpackFx(x, W); return [packFx({ re: c.im, im: wrap(-c.re, W) }, W)]; },
+      netlist: () => ({ pins: { a: [0, 4], y: [R, 6] }, instances: g.instances, nets: g.nets() }),
+    });
+  });
+}
+
+/** Counter that loads its starting value on rst: each stage's own place in the block. */
+function stageCounter(bits: number, start: number): ComponentDef {
+  return memo(`fftctr${bits}_${start}`, () => {
+    const g = new Builder(6, 10, 4);
+    for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
+    const fb = 'r.q';
+    g.name(fb, 'count', true);
+    const inc = g.op(incrementer(bits), [fb]);
+    g.next();
+    const load = g.op1(busMux2(bits), [`${inc}.y`, g.op1(constWord(bits, start), []), 'rst'], 'reset value');
+    g.next();
+    const anyE = g.op1(OR, ['en', 'rst']);
+    g.next();
+    g.op(register(bits), [load, anyE, 'clk'], undefined, 'r');
+    g.wire(fb, 'q');
+    const R = g.right;
+    return define({
+      id: `fftctr${bits}_${start}`, name: `Stage counter, ${bits} bits from ${start}`, category: 'sequential',
+      summary: `Counts the samples of this stage's block. Its reset value is minus the samples ahead of this stage, so each stage's first sample meets count 0.`,
+      ports: [bit('en', 'in'), bit('rst', 'in'), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, bus('q', bits, 'out')], symbol: { kind: 'box', label: 'COUNT' },
+      netlist: () => ({ pins: { en: [0, 2], rst: [0, 6], clk: [0, 10], q: [R, 4] }, instances: g.instances, nets: g.nets() }),
+    });
+  });
+}
+
+/** A delay line of L complex samples. */
+export function fftDelay(L: number, W: number): ComponentDef {
+  return memo(`fftdel${L}_${W}`, () => {
+    const R = register(2 * W), g = new Builder(6, 6, 3);
+    g.maxH = 40;
+    for (const p of ['en', 'clk']) g.name(p, p, true);
+    let d = 'd';
+    for (let i = 0; i < L; i++) d = g.op1(R, [d, 'en', 'clk'], undefined, `w${i}`);
+    g.next();
+    g.wire(d, 'q');
+    const Rt = g.right;
+    return define({
+      id: `fftdel${L}_${W}`, name: `Delay line, ${L} × ${2 * W} bits`, category: 'sequential',
+      summary: `${L} complex samples in flip-flops: half a block's memory. In a large FFT this is a RAM and a pointer.`,
+      ports: [bus('d', 2 * W, 'in'), bit('en', 'in'), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, bus('q', 2 * W, 'out')], symbol: { kind: 'box', label: `z⁻${L}` },
+      netlist: () => ({ pins: { d: [0, 2], en: [0, 6], clk: [0, 10], q: [Rt, 4] }, instances: g.instances, nets: g.nets() }),
+    });
+  });
+}
+
+/** One stage of the pipeline. */
+export function fftStage(N: number, W: number, s: number, start: number): ComponentDef {
+  return memo(`fftst${N}_${W}_${s}`, () => {
+    const M = N / 2 ** s, L = M / 2, kb = Math.log2(L), bits = kb + 1, g = new Builder(6, 12, 4);
+    for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
+    g.name('x', 'x', true);
+    const ctr = g.op1(stageCounter(bits, start), ['en', 'rst', 'clk'], undefined, 'ctr');
+    const cs = g.op(splitter(kb ? [kb, 1] : [1]), [ctr]);
+    const low = kb ? `${cs}.o0` : '', sel = g.name(`${cs}.o${kb ? 1 : 0}`, 'sel', true);
+    const old = g.name('line.q', 'old', true);
+    if (low) g.name(low, 'j', true);
+    g.next();
+    const core = g.op(fxCore(W, false), [old, 'x'], 'butterfly');
+    g.next();
+    const into = g.op1(busMux2(2 * W), ['x', `${core}.y1`, sel], 'into the line');
+    const passed = g.op1(busMux2(2 * W), [old, `${core}.y0`, sel], 'out');
+    g.next();
+    g.op(fftDelay(L, W), [into, 'en', 'clk'], undefined, 'line');
+    // the twiddle: only on what comes out of the line (sel = 0), and only when j is not 0
+    let tw = passed;
+    if (kb) {
+      const turned = L === 2 ? g.op1(fxMinusJ(W), [passed]) : g.op1(fxCmul(W), [passed, g.op1(twiddleRom(N, s, W), [low], 'twiddles')], 'twiddle');
+      g.next();
+      const nz = kb === 1 ? low : g.op1(nonZero(kb), [low], 'j ≠ 0'), use = g.op1(AND, [nz, g.op1(NOT, [sel])]);
+      g.next();
+      tw = g.op1(busMux2(2 * W), [passed, turned, use]);
+    }
+    g.next();
+    g.wire(g.op1(register(2 * W), [tw, 'en', 'clk'], undefined, 'out'), 'q');
+    const R = g.right;
+    return define({
+      id: `fftst${N}_${W}_${s}`, name: `FFT${N} stage ${s}`, category: 'sequential',
+      summary: `Half a block (${L} samples) waits in the line; then each new sample meets its partner, the sum goes on and the difference goes back into the line, to leave through the twiddle during the next ${L}.`,
+      ports: [bus('x', 2 * W, 'in'), bit('en', 'in'), bit('rst', 'in'), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, bus('q', 2 * W, 'out')], symbol: { kind: 'box', label: `÷2 z⁻${L}` },
+      netlist: () => ({ pins: { x: [0, 2], en: [0, 6], rst: [0, 10], clk: [0, 14], q: [R, 8] }, instances: g.instances, nets: g.nets() }),
+    });
+  });
+}
+
+/** The streaming FFT: a sample in per clock, a tone out per clock, in bit-reversed order. */
+export function fftStream(N: number, W: number): ComponentDef {
+  return memo(`fftstream${N}_${W}`, () => {
+    const f = new FftStream(N, W), m = f.m, g = new Builder(6, 10, 4);
+    for (const p of ['en', 'rst', 'clk']) g.name(p, p, true);
+    let d = 'd';
+    for (let s = 0; s < m; s++) { d = g.op1(fftStage(N, W, s, f.startCount(s)), [d, 'en', 'rst', 'clk'], undefined, `s${s}`); g.next(); }
+    g.wire(d, 'q');
+    const R = g.right;
+    return define({
+      id: `fftstream${N}_${W}`, name: `Streaming ${N}-point FFT, ${W} bits`, category: 'sequential',
+      summary: `${m} stages in a row, one sample a clock: ${N - 1} samples of delay and a few multipliers do the work of ${(N / 2) * m} butterflies, since each butterfly has its own clock. Tones leave in bit-reversed order.`,
+      ports: [bus('d', 2 * W, 'in'), bit('en', 'in'), bit('rst', 'in'), { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, bus('q', 2 * W, 'out')], symbol: { kind: 'box', label: `FFT${N}` },
+      netlist: () => ({ pins: { d: [0, 2], en: [0, 6], rst: [0, 10], clk: [0, 14], q: [R, 6] }, instances: g.instances, nets: g.nets() }),
+    });
+  });
+}

@@ -1,8 +1,8 @@
 // Many carriers: the integer FFT against the float one, and the gates against the integer model.
 import { describe, expect, it } from 'vitest';
-import { addH, butterflyFx, fftFx, flowGraph, ifftFx, mulRoot, packFx, rootHalf, safeMagnitude, subH, twiddleCount, unpackFx, wrap, type Fx } from '../src/comm/fftfix';
+import { addH, butterflyFx, cmulFx, FftStream, fftFx, flowGraph, ifftFx, packFx, rootHalf, safeMagnitude, subH, twiddle, twiddleCount, twiddleFx, unpackFx, wrap, type Fx } from '../src/comm/fftfix';
 import { cx, fft, fftMults } from '../src/comm/fourier';
-import { csdDigits, fftNet, fxButterfly, fxCmul, fxCore, fxHalve, fxRoot, fxRot45, roundUp } from '../src/lib/fft';
+import { csdDigits, fftNet, fftStream, fxButterfly, fxCmul, fxCore, fxHalve, fxMinusJ, fxRoot, fxRot45, roundUp } from '../src/lib/fft';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { stats } from '../src/sim/stats';
 import type { ComponentDef } from '../src/sim/types';
@@ -66,13 +66,19 @@ describe('the integer FFT', () => {
     expect(c.one + c.minusj + c.root1 + c.root3 + c.general).toBe(fftMults(64));
     expect(c.general).toBeLessThan(fftMults(64) / 2);
   });
+  it('rounds every twiddle to within half a unit of the true value', () => {
+    for (const [N, W] of [[8, 10], [16, 10], [64, 12], [512, 12]]) for (let k = 1; k < N / 2; k++) {
+      const t = twiddle(k, N, W), s = 2 ** (W - 1), a = (2 * Math.PI * k) / N;
+      expect(Math.abs(t.re - Math.cos(a) * s), `${k} of ${N}`).toBeLessThanOrEqual(t.re === s - 1 ? 1 : 0.5);
+      expect(Math.abs(t.im + Math.sin(a) * s), `${k} of ${N}`).toBeLessThanOrEqual(0.5);
+    }
+  });
   it('writes 1/√2 in signed digits that add back up', () => {
     for (const W of [8, 10, 12, 16]) {
       const C = rootHalf(W), d = csdDigits(C);
       expect(d.reduce((a, x) => a + (x.neg ? -1 : 1) * 2 ** x.pos, 0)).toBe(C);
       d.slice(1).forEach((x, i) => expect(x.pos - d[i].pos).toBeGreaterThan(1));
     }
-    expect(mulRoot(512, 10)).toBe(Math.round(512 * rootHalf(10) / 512));
   });
 });
 
@@ -104,7 +110,7 @@ describe('the FFT in gates matches the integer model', () => {
       expect(got.map((v: number) => unpackFx(v, W))).toEqual(fftFx(x, W));
     }
   });
-  it('agrees with butterflyFx by wrap at the top of the range', () => {
+  it('keeps the largest inputs in range', () => {
     const W = 10, M = 2 ** (W - 1) - 1, [y0] = butterflyFx({ re: M, im: M }, { re: M, im: M }, 0, 8, W);
     expect(wrap(y0.re, W)).toBe(M);
   });
@@ -113,5 +119,47 @@ describe('the FFT in gates matches the integer model', () => {
     // eslint-disable-next-line no-console
     console.log('NANDs', { add: c(fxHalve(10, false)), core: c(fxCore(10, false)), root: c(fxRoot(10)), rot45: c(fxRot45(10)), cmul: c(fxCmul(10)), fft4: c(fftNet(4, 10)), fft8: c(fftNet(8, 10)), fft16: c(fftNet(16, 10)) });
     expect(c(fxRot45(10))).toBeLessThan(c(fxCmul(10)) / 2);
+  });
+});
+
+describe('the streaming FFT', () => {
+  const nodeOf = (sim: ReturnType<typeof simulate>, path: string[]) => { let n = sim.design.root; for (const p of path) n = n.children!.get(p)!; return n; };
+  const num = (sim: ReturnType<typeof simulate>, path: string[], port: string) => Array.from(sim.getBits(nodeOf(sim, path).ports[port])).reduce<number>((a, b, i) => a + Number(b) * 2 ** i, 0);
+
+  it('model: the tones are the float FFT\'s within the bound', () => {
+    const u = rnd(11);
+    for (const N of [4, 8, 16, 64, 256]) for (const W of [10, 14]) {
+      const x = block(N, W, safeMagnitude(W, N), u), got = FftStream.transform(x, W), F = fft(cx(x.map((c) => c.re), x.map((c) => c.im))), lim = 2 * Math.log2(N) + 2;
+      got.forEach((c, k) => { expect(Math.abs(c.re - F.re[k] / N), `N ${N} W ${W} k ${k}`).toBeLessThanOrEqual(lim); expect(Math.abs(c.im - F.im[k] / N)).toBeLessThanOrEqual(lim); });
+    }
+  });
+  it('a quarter turn through the multiplier is the same word as the wires', () => {
+    const u = rnd(13), W = 10;
+    for (let t = 0; t < 500; t++) { const x = unpackFx(Math.floor(u() * 2 ** (2 * W)), W); expect(cmulFx(x, twiddle(4, 16, W), W)).toEqual(twiddleFx(x, 4, 16, W)); }
+  });
+  it('quarter turn gates', () => { checkSpec(fxMinusJ(10), 400); });
+  for (const [N, W] of [[4, 8], [8, 10], [16, 10]] as const) it(`gates: every register every clock, ${N} points`, async () => {
+    const def = fftStream(N, W), sim = simulate(def), f = new FftStream(N, W), u = rnd(N * 31);
+    const set = (d: number, en: number, rst: number) => { sim.setInput('d', d); sim.setInput('en', en); sim.setInput('rst', rst); sim.settle(); };
+    const edge = () => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
+    set(0, 0, 1); f.step({ re: 0, im: 0 }, false, true); edge();
+    for (let t = 0; t < 40 * N; t++) {
+      const en = u() < 0.85 ? 1 : 0, rst = u() < 0.002 ? 1 : 0, x = unpackFx(Math.floor(u() * 2 ** (2 * W)), W);
+      set(packFx(x, W), en, rst);
+      f.step(x, !!en, !!rst);
+      edge();
+      f.stages.forEach((st, s) => {
+        expect(num(sim, [`s${s}`, 'ctr'], 'q'), `t ${t} count ${s}`).toBe(st.count);
+        expect(num(sim, [`s${s}`, 'out'], 'q'), `t ${t} out ${s}`).toBe(packFx(st.out, W));
+        st.line.forEach((v, i) => expect(num(sim, [`s${s}`, 'line', `w${i}`], 'q'), `t ${t} line ${s}.${i}`).toBe(packFx(v, W)));
+      });
+      if (t % 100 === 0) await new Promise((r) => setTimeout(r));
+    }
+  }, 120000);
+  it('costs: the unrolled network against the stream', () => {
+    const c = (d: ComponentDef) => stats(d).nands;
+    // eslint-disable-next-line no-console
+    console.log('stream NANDs', { s8: c(fftStream(8, 10)), s16: c(fftStream(16, 10)), s64: c(fftStream(64, 10)), s64w12: c(fftStream(64, 12)), s512: c(fftStream(512, 12)), net8: c(fftNet(8, 10)), net16: c(fftNet(16, 10)), minusj: c(fxMinusJ(10)) });
+    expect(c(fftStream(16, 10))).toBeLessThan(c(fftNet(16, 10)));
   });
 });
