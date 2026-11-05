@@ -586,7 +586,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !dcache && !icache && !fpu && !shared && !imemPort;
+  const wired = !icache && !fpu && !shared && !imemPort;
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', M4, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -720,13 +720,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // write until the line arrives. The extra gates sit in a strip below the datapath, lined up so that
     // neighbours connect with straight wires.
     const add = (name: string, def: ComponentDef, xy: [number, number]) => instances.push({ name, def, at: xy });
-    const xs = aluR - 12, y0 = bottom + 10;
+    const xs = aluR - 12, y0 = wired ? 102 : bottom + 10;
     if (dcache) {
       add('rsplit', splitter([1, 1]), [xs, y0]);
       add('nr1', NOT, [xs + 5, y0 + 2]);
       add('isLoad', AND, [xs + 12, y0]);
     }
-    add('rwg', AND, [52, bottom - 8]);
+    add('rwg', AND, wired ? [54, 75] : [52, bottom - 8]);
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
@@ -748,7 +748,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // stall = the data cache's, the instruction cache's, or either
     const both = dcache && icache;
     if (both) add('anyStall', OR, [xs + 12, y0 + 18]);
-    add('nstall', NOT, both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
+    add('nstall', NOT, wired ? [dmX + 21, 37] : both ? [xs + 20, y0 + 19] : [xs + 20, y0 + 18]);
     if (both) {
       nets.push(
         { name: 'dstall', ends: ['dm.stall', 'anyStall.a'], tags: true },
@@ -775,6 +775,35 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true },
     );
     pins.retire = [resY[0] + 22, bottom + 1];
+    if (wired) {
+      // the strip sits under the control rows; the stall chain is drawn with wires: the stall beside the cache, retire
+      // along the bottom to the PC's enable, the register write gate under the control block's first row
+      const net = (name: string) => nets.find((n) => n.name === name)!;
+      const Q = (inst: string, port: string): [number, number] => {
+        const i = instances.find((x) => x.name === inst)!;
+        const p = g(i.def).ports[port].pos;
+        return [i.at![0] + p[0], i.at![1] + p[1]];
+      };
+      const wire = (name: string, via: NonNullable<NetDef['via']>) => { const n = net(name); n.via = { ...n.via, ...via }; delete n.tags; n.quiet = true; };
+      const ctlY = (port: string) => P('ctl', port)[1];
+      const hx = dmX + 23, rx = dmX + 25.5;
+      delete net('RegWrite').via?.['rf.we'];
+      wire('RegWrite', { 'rwg.a': [[52, ctlY('regWrite')], [52, Q('rwg', 'a')[1]]] });
+      wire('RegWriteQ', { 'rf.we': [[59.5, Q('rwg', 'y')[1]], [59.5, P('rf', 'we')[1]]] });
+      wire('retire', {
+        'pc.en': [[rx, Q('nstall', 'y')[1]], [rx, 73], [10, 73], [10, P('pc', 'en')[1]]],
+        'rwg.b': [[rx, Q('nstall', 'y')[1]], [rx, 73], [52.5, 73], [52.5, Q('rwg', 'b')[1]]],
+        retire: [[rx, pins.retire[1]]],
+      });
+      if (dcache) {
+        wire('stall', {});
+        wire('dhit', { dhit: [[hx, P('dm', 'hit')[1]], [hx, pins.dhit[1]]] });
+        wire('ResultSrc', { 'rsplit.in': [[xs - 2, ctlY('resultSrc')], [xs - 2, Q('rsplit', 'in')[1]]] });
+        wire('MemRead', { 'dm.re': [[dmX - 2, Q('isLoad', 'y')[1]], [dmX - 2, P('dm', 're')[1]]] });
+        for (const n of ['rs0', 'rs1', '¬rs1']) wire(n, {});
+        // the strip's pins: the stall chain's outputs on the right edge
+      }
+    }
   }
   if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
