@@ -216,6 +216,7 @@ class CpuPanel {
         h('span', { class: 'sb-cpu-secbtns' }, this.customBtn, this.ucodeBtn,
           h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…'))),
       this.listing, this.use,
+      this.dsp, // the DSP core's loop, accumulator, windows and outputs (hidden for the other CPUs)
       this.fieldsSec, this.fields,
       this.pipeSec, this.pipe,
       this.oooSec, this.oooV.el,
@@ -223,7 +224,6 @@ class CpuPanel {
       this.regsSec, this.regs,
       this.fregsSec, this.fregs,
       this.memSec, this.mem,
-      this.dsp,
       this.narrSec, this.narr,
       this.traceSec, this.trace);
     this.el = h('aside', { class: 'sb-drawer sb-cpu', 'aria-label': 'CPU' },
@@ -1202,17 +1202,17 @@ class CpuPanel {
     });
     this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
     this.fregsSec.hidden = this.fregs.hidden = this.memSec.hidden = this.mem.hidden = true;
-    // Registers: the PC and r0–r7.
-    const names = ['PC', ...Array.from({ length: 8 }, (_, i) => `r${i}`)];
-    const digits = [2, ...Array<number>(8).fill(4)];
-    const x = r ? [r.pc, ...r.r] : null;
+    // Registers r0–r7 (the PC is the current line above).
+    const names = Array.from({ length: 8 }, (_, i) => `r${i}`);
+    const digits = Array<number>(8).fill(4);
+    const x = r ? [...r.r] : null;
     this.trackChanges(mon, [x]);
     const chg = this.changed[0] ?? new Set<number>();
     this.regsSec.textContent = 'Registers';
     this.regs.classList.remove('sb-cpu-mregs');
     if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, 'Not found: the dsp24_core part keeps them at seq.pc and regs.r0–r7, aguX.p0–p3, aguY.p0–p3, mac.unit.acc.')]);
     else {
-      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${names[i]} = ${v < 0 ? 'unknown' : v}${i && v >= 0 ? ` (${(v ^ 0x8000) - 0x8000} signed)` : ''}` },
+      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${names[i]} = ${v < 0 ? 'unknown' : v}${v >= 0 ? ` (${(v ^ 0x8000) - 0x8000} signed)` : ''}` },
         h('span', { class: 'n' }, names[i]), h('span', { class: 'v' }, v < 0 ? '?'.repeat(digits[i]) : `0x${v.toString(16).toUpperCase().padStart(digits[i], '0')}`))));
     }
     this.renderDspBlock(mon, r);
@@ -1251,7 +1251,7 @@ class CpuPanel {
             const a = (start + i) & 255, v = words ? words[a] : -1;
             const here = ptrs.map((p, k) => (p === a ? `p${bus * 4 + k}` : '')).filter(Boolean);
             return h('span', { class: `c${here.length ? ' p' : ''}`, title: `${name}[0x${U(a, 2)}] = ${v < 0 ? '?' : `0x${U(v, 4)} (${s16(v)})`}${here.length ? ` ← ${here.join(', ')}` : ''}` },
-              h('i', null, here.join(' ')), h('b', null, v < 0 ? '????' : U(v, 4)));
+              h('i', null, here.length > 1 ? `${here[0]}+${here.length - 1}` : here.join('')), h('b', null, v < 0 ? '????' : U(v, 4)));
           })));
         out.push(h('div', { class: 'sb-dsp-ptrs' }, ptrs.map((p, k) => {
           const inside = windowed && p >= 0 && ((p - base) & 255) < len;

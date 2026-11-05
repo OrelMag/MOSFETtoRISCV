@@ -271,7 +271,8 @@ export class Dsp24Monitor {
       if (st.store) effects.push(`${st.store.bus ? 'Y' : 'X'}[${st.store.addr}] ← ${hx(st.store.value, 4)}`);
       if (st.out !== undefined) effects.push(`out ← ${hx(st.out, 4)}`);
       if (st.looped) effects.push('loop back');
-      if (iss.pc !== ((st.pc + 1) & 255) && !st.looped) effects.push(`PC → ${hx(iss.pc)}`);
+      if (st.name === 'halt') effects.push('halted');
+      else if (iss.pc !== ((st.pc + 1) & 255) && !st.looped) effects.push(`PC → ${hx(iss.pc)}`);
       this.log.push({ cycle, pc: st.pc, text, effect: effects.join(', ') });
       if (this.log.length > Dsp24Monitor.LOG) this.log.shift();
     }

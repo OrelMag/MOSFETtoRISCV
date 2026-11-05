@@ -373,7 +373,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   const body = h('div', { class: 'sb-rom-dlg-body' }, srcBox, listBox);
   // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
   // program as tiles (a view of the text: a click builds a line, a drag moves it).
-  const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502';
+  const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502' && applied.lang !== 'dsp24'; // DSP24 has no instruction builder (see isa/isa.ts)
   const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom, { c: applied.c, xlen: applied.xlen }));
   // RV32: the CPU's own instructions (editor/owninstr.ts), from the footer or a free custom slot in the builder;
   // the program editor closes for it and reopens after
