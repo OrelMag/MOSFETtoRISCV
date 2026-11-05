@@ -28,6 +28,7 @@ import { stats } from '../src/sim/stats';
 import { DRIVER_REF, DRIVER_STARTER } from '../src/campaign/nicbench';
 import { PUZZLES, runPuzzle } from '../src/campaign/puzzles';
 import { macRx, macTx } from '../src/lib/ethernet';
+import { tick } from './yieldtick';
 
 const compiled = (def: ComponentDef, mode: 'gate' | 'switch'): Compiled =>
   ({ def, diags: [], mode, netOfWire: new Map(), netOfEnd: new Map(), netOfLabel: new Map() }) as unknown as Compiled;
@@ -134,33 +135,50 @@ const inside = (def: ComponentDef, path: string[], edit: (d: ComponentDef) => Co
 /** The end that drives the net `name` of a definition (a builder's nets list the driver first). */
 const driver = (def: ComponentDef, name: string): string => netlistOf(def)!.nets.find((n) => n.name === name)!.ends[0];
 
+// Each mutant runs a whole bench on gates, some 10 s apiece on CI's runner: a macrotask between them (tests/yieldtick.ts).
+const MUTANTS_MS = 240_000;
+
 describe('act 12 Ethernet benches reject wrong circuits, each with a named rule', () => {
   const mac = ethMacFd(), sw = swBrain();
-  it('l_mac sending', () => {
+  it('l_mac sending', async () => {
     const txctl = inside(mac, ['tx', 'ctl'], (d) => d);
     void txctl;
     expect(bad('l_mac', inside(mac, ['tx', 'crc'], (d) => swap(d, 'crc', crcUnit(32, 0x82f63b78, 8))))).toMatch(/FCS byte 1 is 0x[0-9a-f]{2}, expected/);
+    await tick();
     expect(bad('l_mac', inside(mac, ['tx', 'ctl'], (d) => force(d, driver(d, 'nb2'), 1)))).toMatch(/pad byte [0-9]+ is 0x[0-9a-f]{2}, expected 0x00/);
+    await tick();
     expect(bad('l_mac', inside(mac, ['tx', 'ctl'], (d) => force(d, driver(d, 'pc7'), 1)))).toMatch(/preamble byte 2 is 0x[0-9a-f]{2}, expected 0x55/);
+    await tick();
     expect(bad('l_mac', hold(mac, 'valid', 0))).toMatch(/0 of the [0-9]+ frames came out/);
-  });
-  it('l_mac receiving', () => {
+    await tick();
+  }, MUTANTS_MS);
+  it('l_mac receiving', async () => {
     expect(bad('l_mac', inside(mac, ['rx'], (d) => force(d, 'pipe.crc_ok', 1)))).toMatch(/damaged but rerr = 0/);
+    await tick();
     expect(bad('l_mac', inside(mac, ['rx', 'pipe'], (d) => swap(d, 'crc', crcUnit(32, 0x82f63b78, 8))))).toMatch(/good frame but rerr = 1/);
+    await tick();
     expect(bad('l_mac', inside(mac, ['rx'], (d) => force(d, 'pipe.crc_ok', 0)))).toMatch(/good frame but rerr = 1/);
+    await tick();
     // the receiver before the shift register was cleared between frames: a frame after one whose FCS ended in 0xAA or 0xAB is read a bit off
     const stale = swap(mac, 'rx', macRx(true));
     expect(bad('l_mac', stale)).toMatch(/receiving frames after one whose FCS ends in 0xAA and 0xAB: .*good frame but rerr = 1.*start every frame clean/);
+    await tick();
     void macTx;
-  });
-  it('l_switch', () => {
+  }, MUTANTS_MS);
+  it('l_switch', async () => {
     expect(bad('l_switch', force(sw, 'look.flood', 1))).toMatch(/destination is known: send the frame out of its port alone/);
+    await tick();
     expect(bad('l_switch', tie(sw, 'learn.go', 0))).toMatch(/destination is unknown|heard only|mask = /);
+    await tick();
     expect(bad('l_switch', tie(tie(sw, 'mask.inport0', 0), 'mask.inport1', 0))).toMatch(/back out of port [0-9], the one it came in on/);
+    await tick();
     expect(bad('l_switch', tie(sw, 'mask.bad', 0))).toMatch(/bad FCS goes nowhere/);
+    await tick();
     expect(bad('l_switch', tie(sw, 'learn.bad', 0))).toMatch(/heard only in a damaged frame/);
+    await tick();
     expect(bad('l_switch', force(sw, 'look.flood', 0))).toMatch(/destination is unknown/);
-  });
+    await tick();
+  }, MUTANTS_MS);
 });
 
 describe('l_driver: the far end of the cable names the rule a driver breaks', () => {
