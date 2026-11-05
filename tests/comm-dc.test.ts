@@ -38,7 +38,7 @@ describe('ECMP', () => {
 
 describe('incast', () => {
   const read = (senders: number, rtoMs = 200, bufferPkts = 32) => incast({ senders, blockBytes: 256 * 1024, bufferPkts, rtoMs });
-  it('few senders: slow start may overflow it, fast retransmit mends that, and the block crosses at nearly the link\'s rate', () => {
+  it('few senders: slow start may overflow it, and fast retransmit mends that with no timeout', () => {
     const r = read(2);
     expect(r.timeouts).toBe(0);
     expect(r.share).toBeGreaterThan(0.7);

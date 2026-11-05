@@ -27,9 +27,9 @@ export function fabricWidget(): Widget {
   const draw = () => {
     const X = (i: number, n: number) => 20 + (i + 0.5) * ((640 - 40) / n), Y = [24, 88, 152, 214], parts: SVGElement[] = [];
     const core = 4, pods = 4;
-    const lit = new Set<string>(), up = flow % 2, cr = flow % 4;
+    const lit = new Set<string>(), up = flow % 2, cr = (flow >> 1) % 2;
     const src = { pod: 0, edge: 0 }, dst = { pod: 3, edge: 1 };
-    const aggA = up === 0 ? 0 : 1, c = aggA * 2 + (cr % 2);
+    const aggA = up, c = aggA * 2 + cr;
     lit.add(`e${src.pod}${src.edge}-a${src.pod}${aggA}`); lit.add(`a${src.pod}${aggA}-c${c}`); lit.add(`a${dst.pod}${aggA}-c${c}`); lit.add(`e${dst.pod}${dst.edge}-a${dst.pod}${aggA}`);
     const seg = (x1: number, y1: number, x2: number, y2: number, id: string) => parts.push(s('line', { x1, y1, x2, y2, class: lit.has(id) ? 'dc-link on' : 'dc-link' }));
     for (let p = 0; p < pods; p++) for (let a = 0; a < 2; a++) {
@@ -119,7 +119,7 @@ export function dctcpWidget(): Widget {
   const plot = plotOf({ W: 640, H: 240, x: [0, 8], y: [0, 100], yTicks: [0], xLabel: 'ms', yLabel: 'queue, packets', aria: 'The queue over a few milliseconds, with DCTCP and with a sender that halves on a mark' });
   plot.setX(8);
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
-  const run = (cc: 'dctcp' | 'reno') => bottleneck({ mbps: 10000, bufferPkts: 400, aqm: 'step', markK: K }, Array.from({ length: flows }, () => ({ cc, rttMs: 0.1, ecn: true })), 0.6, 0.3);
+  const run = (cc: 'dctcp' | 'reno') => bottleneck({ mbps: 10000, bufferPkts: 400, aqm: 'step', markK: K, trace: { from: 0.3, every: 32 } }, Array.from({ length: flows }, () => ({ cc, rttMs: 0.1, ecn: true })), 0.6, 0.3);
   const paint = () => {
     const d = run('dctcp'), r = run('reno'), tail = (x: typeof d) => x.samples.filter((v) => v.t >= 0.3 && v.t < 0.308);
     const a = tail(d), b = tail(r), ts = a.map((v) => (v.t - 0.3) * 1000), qa = a.map((v) => v.queue), qb = b.map((v) => v.queue), top = Math.max(K * 1.6, 10, ...qa, ...qb);
@@ -197,9 +197,9 @@ export function ringWidget(): Widget {
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' }), svg = s('svg', { viewBox: '0 0 320 200', class: 'mos-plot dc-ring', role: 'img', 'aria-label': 'Four switches in a ring, each queue waiting on the next' }) as SVGSVGElement;
   const paint = () => {
     const r = ringRun(4, hops, 4, 200000, offered), sum = r.delivered.reduce((a, b) => a + b, 0), stuck = r.stoppedAt !== null, pts = [[160, 30], [270, 100], [160, 170], [50, 100]];
-    svg.replaceChildren(...pts.flatMap(([x, y], i) => {
+    svg.replaceChildren(...pts.map(([x, y], i) => { const [nx, ny] = pts[(i + 1) % 4]; return s('line', { x1: x, y1: y, x2: nx, y2: ny, class: stuck ? 'dc-link stuck' : 'dc-link on' }); }), ...pts.flatMap(([x, y], i) => {
       const [nx, ny] = pts[(i + 1) % 4], mx = (x + nx) / 2, my = (y + ny) / 2;
-      return [s('line', { x1: x, y1: y, x2: nx, y2: ny, class: stuck ? 'dc-link stuck' : 'dc-link on' }), s('rect', { x: x - 16, y: y - 11, width: 32, height: 22, rx: 3, class: 'dc-sw' }), s('text', { x: mx, y: my - 4, 'text-anchor': 'middle', class: 'dc-lab' }, stuck ? 'full' : 'moving')];
+      return [s('rect', { x: x - 16, y: y - 11, width: 32, height: 22, rx: 3, class: 'dc-sw' }), s('text', { x: mx + (mx > 160 ? 6 : -6), y: my - 6, 'text-anchor': mx > 160 ? 'start' : 'end', class: 'dc-lab' }, stuck ? 'full' : 'moving')];
     }));
     chips.set(0, stuck ? `slot ${n0(r.stoppedAt!)}` : 'never', 'when everything stopped', stuck ? 'bad' : 'ok');
     chips.set(1, n0(sum), 'packets delivered, of 200 000 slots');
