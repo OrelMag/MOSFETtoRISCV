@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { pipelinedCpu } from '../src/lib';
+import { OWN_ANSWER } from '../src/widgets/owninstr';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import { wireCrossings } from '../src/view/wirefirst';
 
-// The plain pipeline (ripple adders, no predictor / cache / M / ports / custom rows) is drawn with wires: control below the
+// The plain pipeline (ripple adders, no predictor / cache / M / ports) is drawn with wires: control below the
 // datapath, feedback over the top and under the hazard unit, the hazard unit flipped below the decode stage.
 describe('the pipelined CPU drawn with wires', () => {
   const words = [0x13];
-  for (const opts of [{}, { imemK: 8, dmemK: 6 }, { imemK: 5, dmemK: 4 }]) {
+  for (const opts of [{}, { imemK: 8, dmemK: 6 }, { imemK: 5, dmemK: 4 }, { custom: [OWN_ANSWER] }]) {
     it(`keeps pointers to a handful and never draws two nets on one line ${JSON.stringify(opts)}`, () => {
       const d = pipelinedCpu(words, opts);
       const nl = netlistOf(d)!;

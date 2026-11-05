@@ -643,7 +643,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
   const HZ = hazardUnit(bal);
   // The plain pipeline is drawn with wires, its bands readable as stages (see the wired block below); variants keep their pointers.
-  const wired = !pred && !bal && !dcache && !m && !o.ports && !o.custom.length && adder === 'rca';
+  const wired = !pred && !bal && !dcache && !m && !o.ports && adder === 'rca';
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();

@@ -298,7 +298,7 @@ src/lib/       the component library (registered in `registry` via define())
                  hazardUnit(lookAhead), BRANCH_CMP, BTB (16 × 62-bit), SAT_COUNTER, MISPREDICT,
                  pipelinedCpu(program, { adder, balanced, predictor, dcache, m, custom }) (a cache miss in M freezes every stage;
                  m: multiply split E/M, behaving like a load for hazards; divide stalls F/D/E); btbOf(1 | 2): the BTB with
-                 one or two fetch read ports (BTB = btbOf(1), unchanged). The plain pipeline (ripple adders, none of balanced / predictor / dcache / m / ports / custom: `wired`) is drawn with wires: the datapath
+                 one or two fetch read ports (BTB = btbOf(1), unchanged). The plain pipeline (ripple adders, none of balanced / predictor / dcache / m / ports; custom rows keep the control box's pins: `wired`) is drawn with wires: the datapath
                  above the pipeline registers' control rows (y 44 and below, which run on across a stage), ResultW / FwdM / the register file's write port and the next-PC feedback over the top, the hazard unit flipped
                  below decode (inputs facing the later stages), control `quiet`; pointers left: pcF, hz.rs1D / rs2D / rdE / validE / resultSrcE, rf.clk, dm.clk (tests/pipewires.test.ts); the variants keep theirs. ports: the sandbox's rv32i_pipe_core (lib/resolve.ts, `rv32i_pipe_cx<key>_core` with rows): no imem / dm, pins
                  instr in, pcOut, memAddr / memWData / memWE out of M, memRData in, retire (= validW), pcW; the memory port keeps dataMemory's timing (read from the
