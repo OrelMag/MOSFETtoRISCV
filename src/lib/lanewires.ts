@@ -1,7 +1,7 @@
 // The lane core drawn with wires (lib/lanes.ts laneCore). One decoder, n lanes: the point of the GPU chapters is that
 // every lane receives the same signals, so they are wires. The decode blocks sit above the lanes; each broadcast signal
 // leaves its port along a row and drops down a trunk of its own beside the lanes, with a stub into every lane's pin.
-// Trunks are ordered by the height of their rows (the highest row on the outermost trunk), so no row crosses a trunk on
+// Trunks are ordered by the height of their rows (the highest row on the trunk nearest the lanes), so no row crosses a trunk on
 // the way; the lanes' outputs reach the one-hot multiplexers in columns ordered to cross as little as they can. Control
 // is quiet. Only placement and routing hints are set here: instances, nets and ends are the generator's.
 
@@ -11,7 +11,7 @@ import type { ComponentDef, NetDef } from '../sim/types';
 export type Pt = [number, number];
 interface Inst { name: string; def: ComponentDef; at?: Pt }
 
-/** Broadcast signals in trunk order, outermost trunk first: [the net's driver, the lanes' port]. */
+/** Broadcast signals in trunk order, the trunk nearest the lanes first: [the net's driver, the lanes' port]. */
 const BROADCAST: [string, string][] = [
   ['ctl.aluSrcA', 'aluSrcA'], ['ctl.aluSrcB', 'aluSrcB'], ['ctl.resultSrc', 'resultSrc'], ['ctl.aluCtl', 'aluCtl'],
   ['sdec.isCsr', 'isCsr'], ['sdec.csrSel', 'csrSel'], ['sdec.csrS', 'csrS'],
@@ -19,7 +19,7 @@ const BROADCAST: [string, string][] = [
 ];
 /** The multiplexers that gather the lanes' outputs, top to bottom. */
 const GATHER = ['lA', 'lB', 'mWd', 'lAlu', 'mAd', 'lF'];
-const QUIET = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', 'isCsr', 'csrSel', 'csrS', 'op', 'funct3', 'funct7', 'isTmc', 'isSplit', 'isJoin', 'isPred'];
+const QUIET = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', 'isCsr', 'csrSel', 'op', 'funct3', 'funct7', 'isTmc', 'isSplit', 'isJoin', 'isPred'];
 
 export interface LaneLayout { at: Map<string, Pt>; pins: Record<string, Pt>; lx: number; ly: (k: number) => number; pcRow: number; back: number; bottom: number }
 
