@@ -135,7 +135,7 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
     let f = STATIONS[0].f, ok = true, ran = false, outs = 0;
     let ia: number[] = [], qa: number[] = [];
     const plot = o.front
-      ? plotOf({ W: 300, H: 280, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC, Q against I, as a share of full scale: a station that is tuned traces an arc of a circle', xFmt: (v) => num(v, 1) })
+      ? plotOf({ W: 300, H: 280, x: [-1.2, 1.2], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'I', yLabel: 'Q', aria: 'The words leaving the CIC, Q against I, scaled to the largest: a tuned FM station stays on a circle', xFmt: (v) => num(v, 1) })
       : plotOf({ W: 380, H: 190, x: [0, o.clocks], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'clock', yLabel: '', aria: 'The mixer\'s I and Q outputs, as a share of the ADC\'s full scale' });
     const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
     const paint = () => {
@@ -170,6 +170,7 @@ function gatePanel(o: { title: string; clocks: number; intro: string; front: boo
           if (front.valid) { outs++; ia.push(yr / unit); qa.push(yi / unit); }
         }
       }
+      if (o.front && ia.length) { const m = Math.max(1e-9, ...ia.map((v, i) => Math.hypot(v, qa[i]))); ia = ia.map((v) => v / m); qa = qa.map((v) => v / m); }
       stage.refresh();
       paint();
     };
