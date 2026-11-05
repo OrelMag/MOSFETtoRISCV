@@ -124,9 +124,9 @@ export function dctWidget(): Widget {
     paintPicture(big, pictureOf(8, 8, (x, y) => blk[y * 8 + x] + 128));
     const top = Math.max(...Array.from(S, Math.abs));
     coef.replaceChildren(grid(S, (v) => minus(v.toFixed(0)), (v) => Math.abs(v) / top));
-    const e = Array.from(S, (v) => v * v).sort((a, b) => b - a), all = e.reduce((a, b) => a + b, 0);
-    chips.set(0, `${num((100 * (e[0] + e[1] + e[2] + e[3] + e[4] + e[5])) / Math.max(all, 1e-9), 1)} %`, 'of the block\'s energy, less its mean, in its six largest coefficients');
-    chips.set(1, String(Array.from(S).filter((v) => Math.abs(v) >= 1).length), 'coefficients of 1 or more, of 64');
+    const e = Array.from(S, (v) => v * v).slice(1).sort((a, b) => b - a), all = e.reduce((a, b) => a + b, 0);
+    chips.set(0, `${num((100 * (e[0] + e[1] + e[2] + e[3] + e[4])) / Math.max(all, 1e-9), 1)} %`, 'of the energy apart from the mean, in the five largest other coefficients');
+    chips.set(1, String(Array.from(S).filter((v) => Math.abs(v) >= 10).length), 'coefficients of 10 or more, of 64: about what quality 50\'s smallest divisors let through');
     chips.set(2, minus(S[0].toFixed(1)), 'S(0, 0): 8 times the block\'s mean, less 128');
   };
   paint();

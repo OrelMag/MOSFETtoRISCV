@@ -81,20 +81,20 @@ export function jitterWidget(): Widget {
 // ---- the loop's spectrum ----------------------------------------------------------------------------------------------------------------------------------
 
 const SD_N = 1 << 15;
-/** Decades on the spectrum's axis: 10⁻⁴ … about 0.5. Plots run from 0 on x, so it is drawn as log₁₀ f + 4. */
-const LOG_SPAN = 3.7;
+/** The spectrum's axis, as log₁₀ of cycles a sample: from the lowest bin drawn to half the rate. */
+const LOG_LO = Math.log10(2 / SD_N), LOG_HI = Math.log10(0.5);
 export function sdWidget(): Widget {
   let order: 1 | 2 = 2, osrLog = 6, level = 0.5;
-  const plot = plotOf({ W: 640, H: 220, x: [0, LOG_SPAN], y: [-120, 0], yTicks: [-120, -80, -40, 0], xLabel: 'frequency, cycles a sample', yLabel: 'dB', xFmt: (v) => (v === 1 ? '10⁻³' : v === 2 ? '10⁻²' : v === 3 ? '10⁻¹' : ''), aria: 'The spectrum of the one-bit output: a tone, and noise rising with frequency' });
+  const plot = plotOf({ W: 640, H: 220, x: [LOG_LO, LOG_HI], y: [-120, 0], yTicks: [-120, -80, -40, 0], xLabel: 'frequency, cycles a sample', yLabel: 'dB', xFmt: (v) => (v === -3 ? '10⁻³' : v === -2 ? '10⁻²' : v === -1 ? '10⁻¹' : ''), aria: 'The spectrum of the one-bit output: a tone, and noise rising with frequency' });
   const chips = mkChips(4);
   const paint = () => {
     const osr = 2 ** osrLog, k = Math.max(3, Math.round(SD_N / osr / 8)) | 1, x = sdBitstream(order, SD_N, k, level), p = powerSpectrum(x);
     // bins grouped more widely as they go up, the largest of each, so a log axis reads as a curve
     const fs: number[] = [], ys: number[] = [];
-    for (let i = 2; i < p.length; i = Math.max(i + 1, Math.floor(i * 1.04))) { const e = Math.min(p.length, Math.max(i + 1, Math.floor(i * 1.04))); let s = 0; for (let j = i; j < e; j++) s = Math.max(s, p[j]); fs.push(Math.log10(i / SD_N) + 4); ys.push(Math.max(-120, 10 * Math.log10(s + 1e-14))); }
+    for (let i = 2; i < p.length; i = Math.max(i + 1, Math.floor(i * 1.04))) { const e = Math.min(p.length, Math.max(i + 1, Math.floor(i * 1.04))); let s = 0; for (let j = i; j < e; j++) s = Math.max(s, p[j]); fs.push(Math.log10(i / SD_N)); ys.push(Math.max(-120, 10 * Math.log10(s + 1e-14))); }
     plot.clear();
     line(plot, fs, ys, 'ln-s real');
-    const edge = Math.log10(sdBand(osr)) + 4;
+    const edge = Math.log10(sdBand(osr));
     line(plot, [edge, edge], [-120, 0], 'ln-s lump');
     const got = sndrDb(x, k, sdBand(osr)), model = sdLinearModelDb(order, osr, level), next = sdMeasuredDb(order, osr * 2 > 256 ? osr : osr * 2, level, SD_N);
     chips.set(0, dbs(got), `measured, in the band: ${num(enob(got), 1)} effective bits at this level, more against a full-scale tone`);

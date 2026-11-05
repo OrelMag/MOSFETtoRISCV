@@ -100,7 +100,7 @@ export const chPictures: Chapter = {
         return `
         <p>Shrinking a picture three times keeps one sample in three along each axis, and <a href="#/c/multirate/1">the rate chapter</a> said what that does: anything above a sixth of a cycle a sample folds down and shows as a pattern that was never there. The zone plate makes it plain. Its rings reach half a cycle a sample at the edge, and kept one in three they come back as false rings around other centres.</p>
         <p>The cure is the same as for sound: a low-pass first, here a windowed sinc cut at 1/(2m) of the rate, done as a row pass and a column pass. The fine rings are then simply gone, which is the right answer, as no small picture can hold them. Kept one in three, the plate has ${raw.w} × ${raw.h} samples whichever way it is done.</p>
-        <p>Growing a picture back has the opposite problem. Repeating each sample makes blocks. Drawing straight lines between neighbours, bilinear, is smoother, and still cannot bring back detail the small picture lost. Grown back by repeating samples, the unfiltered version measures ${psnr(z, grow(raw, 3, 'nearest')).toFixed(1)} dB against the original and the filtered one ${psnr(z, grow(f, 3, 'nearest')).toFixed(1)}: the number is close, and the false rings are what the eye notices.</p>
+        <p>Growing a picture back has the opposite problem. Repeating each sample makes blocks. Drawing straight lines between neighbours, bilinear, is smoother, and still cannot bring back detail the small picture lost. Grown back by repeating samples, the unfiltered version measures ${psnr(z, grow(raw, 3, 'nearest')).toFixed(1)} dB against the original and the filtered one ${psnr(z, grow(f, 3, 'nearest')).toFixed(1)}. Both are low, since neither can hold the fine rings, but only one of them draws rings that were never there.</p>
         <div class="try">Keep 1 in 2, then 3, then 4, with and without the low-pass. Then grow back with straight lines and compare the edges.</div>`;
       },
       widget: resizeWidget,
@@ -116,10 +116,13 @@ export const chPictures: Chapter = {
       title: 'Cosines in 8 × 8',
       body: `
         <p>JPEG cuts the picture into 8 × 8 blocks and writes each one as a sum of 64 fixed patterns, cosines across times cosines down. The amounts are the block's <strong>DCT</strong> (the discrete cosine transform). T.81 defines it in A.3.3:</p>
-        <pre>S(v, u) = ¼ C(u) C(v) Σx Σy s(y, x) cos((2x + 1)uπ/16) cos((2y + 1)vπ/16)      C(0) = 1/√2, else 1</pre>
+        <pre>S(v, u) = ¼ C(u) C(v) Σx Σy s(y, x)
+   × cos((2x + 1)uπ/16)
+   × cos((2y + 1)vπ/16)
+C(0) = 1/√2, otherwise 1</pre>
         <p>The samples are shifted down by 128 first, so a mid-grey block is all zeros. S(0, 0) is then eight times the block's mean, and the rest are how much of each pattern it holds. The tests hold this equal to scipy's orthonormal DCT on both axes, to 9 places, and its inverse gives the block back to 13: nothing is lost here.</p>
         <p>What the transform does is move energy. A smooth block has nearly all of its energy in a handful of low-frequency coefficients, and the rest are close to zero. A block of fine detail spreads wider. It is separable, so it can be done as an 8-point transform on each row and then on each column.</p>
-        <div class="try">Pick the sky, then the sun's edge, then the checks. Count how many coefficients the sky really needs.</div>`,
+        <div class="try">Pick the sky, then the sun's edge, then the checks. See how many coefficients of 10 or more each needs: the sky gets by on two.</div>`,
       widget: dctWidget,
       challenge: {
         kind: 'quiz', question: 'What does the DCT of a smooth block look like?',
