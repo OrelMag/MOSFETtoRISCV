@@ -142,6 +142,7 @@ export const NUDGES: Record<string, string> = {
   // sp_goertzel: below
 
   // sp_cic: below
+  sp_cic: 'Let the sums run past the word and wrap; make every register as wide as the final result needs.',
 
   // sp_cordic: below
 

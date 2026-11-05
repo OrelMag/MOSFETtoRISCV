@@ -39,7 +39,7 @@ function built(b: Builder, ports: PortDef[]) {
 }
 
 /** The word's next value is itself plus what comes in, at every clock of the high rate. An adder and a register. */
-function integrator(w: number): ComponentDef {
+export function integrator(w: number): ComponentDef {
   return memo(`cic_int${w}`, () => {
     const b = new Builder(8, 12, 4);
     b.pins('a', 'clk');
@@ -56,7 +56,7 @@ function integrator(w: number): ComponentDef {
 }
 
 /** The difference from the last sample at the low rate: a subtractor, and a register that only loads on the strobe. */
-function comb(w: number): ComponentDef {
+export function comb(w: number): ComponentDef {
   return memo(`cic_comb${w}`, () => {
     const b = new Builder(8, 12, 4);
     b.pins('a', 'en', 'clk');
@@ -72,7 +72,7 @@ function comb(w: number): ComponentDef {
 }
 
 /** A count of R clocks, and a strobe on the last: the only thing the rate change costs. */
-function rateCount(k: number): ComponentDef {
+export function rateCount(k: number): ComponentDef {
   return memo(`cic_cnt${k}`, () => {
     const b = new Builder(8, 12, 4);
     b.pins('clk');

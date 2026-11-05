@@ -16,6 +16,12 @@ export const CASESS: Record<string, LevelCase> = {
   // ---- sp_goertzel
 
   // ---- sp_cic
+  sp_cic: {
+    problem: 'A sample stream at a high rate has to reach a slower consumer, and keeping every fourth sample alone folds everything between the new rates onto the band you want. A filter has to come first, and a good one needs multipliers at the high rate, where there is no time for them. Moving averages need none, and a moving average computed as a running sum needs no memory of the samples either.',
+    without: 'Sample-and-drop passes noise from the rest of the spectrum straight into the band. A saturating integrator, the careful-looking choice, fails differently: it clamps a sum the combs need exactly, and the output is wrong for as long as the input stays loud.',
+    cost: 'Order 2, ÷ 4, 6-bit samples: 1 263 NANDs and a period of 41 delays. Each of the two integrators is 240 NANDs (a 10-bit adder and a register), each comb 284, the counter 50, the output register 150 and valid 15. The adders run once per input clock and the combs once per group; nothing multiplies.',
+    alts: [{ name: 'CIC decimator, order 2, ÷ 4 (library)', lib: 'cic2_4_6' }],
+  },
 
   // ---- sp_cordic
 

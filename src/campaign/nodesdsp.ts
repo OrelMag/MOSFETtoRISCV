@@ -3,7 +3,7 @@
 // the levels not built yet are on the map as "coming soon" in the order they will play. No DOM.
 
 import type { CampaignNode } from './types';
-import { BUILDDSP, satGives } from './builddsp';
+import { BUILDDSP, cicGives, satGives } from './builddsp';
 
 export const NODES_DSP: CampaignNode[] = [
   {
@@ -38,9 +38,15 @@ export const NODES_DSP: CampaignNode[] = [
     tips: [], codex: [],
   },
   {
-    id: 'sp_cic', act: 13, title: 'CIC decimator', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
-    why: 'Integrators at the high rate, combs at the low rate, no multiplier: a filter that throws away most of the samples for the price of adders.',
-    tips: [], codex: [],
+    id: 'sp_cic', act: 13, title: 'CIC decimator', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_cic, givesOf: cicGives,
+    unlocks: ['cic2_4_6'], par: { nand: 1263, period: 41 },
+    why: 'Integrators at the high rate, combs at the low rate, no multiplier: a filter that throws away most of the samples for the price of adders. The integrators wrap all the time and that is correct: only differences of them reach the output, and two\'s complement differences survive a wrap. A register that saturates, the habit the saturating adder just taught, breaks it.',
+    tips: [
+      'An integrator is a register and an adder: next = value + input, every clock, wrapping. A comb is a register that loads only on the strobe and a subtractor: output = input minus the last loaded input.',
+      'The registers need N × log2 R more bits than the samples, and every stage needs all of them: sign-extend x to the full width first, and make every integrator and comb that wide.',
+      'The strobe is the last count of a group of R: a counter of log2 R bits, all ones. The combs and the output register load on it, and valid is the strobe in a register, so it rises with y.',
+    ],
+    codex: ['cic', 'decimation'], chapters: [{ chapter: 'multirate', step: 5, label: 'A moving average, rearranged' }, { chapter: 'multirate', step: 6, label: 'Sums that wrap' }, { chapter: 'multirate', step: 7, label: 'A CIC in gates' }],
   },
   {
     id: 'sp_cordic', act: 13, title: 'A CORDIC stage', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],

@@ -33,6 +33,35 @@ export const WALKS9: Record<string, WalkScript> = {
   // ---- sp_goertzel
 
   // ---- sp_cic
+  sp_cic: [
+    {
+      title: 'Sums at the high rate',
+      text: 'sx sign-extends each sample to the full 10 bits. int0 and int1 are registers that add their input to themselves at every clock. Nothing is clamped: they run far past the word on any loud signal and wrap, and the word they wrap in is wide enough for the final difference.',
+      parts: ['sx', 'int0', 'int1'], codex: ['cic'],
+      why: 'Two running sums in a row do the summing of two moving averages without keeping a single past sample.',
+      whyNot: { text: 'Saturating the sums, as the previous level did, throws away exactly what the combs later subtract: a clamped register forgets how far past full scale it went.' },
+    },
+    {
+      title: 'A count, and the strobe',
+      text: 'cnt counts 4 clocks and raises strobe when all its bits are one, the last clock of a group. Everything after the integrators loads only on that strobe: that is the whole rate change.',
+      parts: ['cnt'], codex: ['decimation'],
+      why: 'Dropping samples costs a counter and an enable; nothing is computed at the high rate only to be thrown away.',
+    },
+    {
+      title: 'Differences at the low rate',
+      text: 'comb0 and comb1 each subtract what their input was at the previous strobe. yr takes the result on the strobe and vr, valid, is the strobe registered the same way, so y and valid arrive together.',
+      parts: ['comb0', 'comb1', 'yr', 'vr'], codex: ['cic'],
+      ask: {
+        question: 'An integrator wrapped five times between two strobes. Is the comb\'s difference wrong?',
+        options: ['No: the difference is right modulo the word, and the word holds the true result', 'Yes: the wraps add 5 × 1024 to it', 'Only if the first sample after the wrap is negative', 'Yes, unless the comb is wider than the integrator'],
+        answer: 0,
+        explain: 'Two\'s complement arithmetic is arithmetic modulo 2^10. Each wrap takes a multiple of 1024 off a value, and the difference is the same number modulo 1024. If the true result fits in 10 bits it is exactly that.',
+        why: ['', 'The extra multiples of 1024 sit in both values and cancel in the difference.', 'The sign of a sample does not matter to modular arithmetic.', 'Making the comb wider than the integrator changes nothing; the true result only has to fit.'],
+      },
+      why: 'Registers sized for the result, not for the sums, are the whole trick.',
+      whyNot: { text: 'The combs could be narrower than the integrators with low bits dropped, as Hogenauer prunes them; this design keeps every bit to stay exact.' },
+    },
+  ],
 
   // ---- sp_cordic
 

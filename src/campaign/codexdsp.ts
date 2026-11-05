@@ -23,6 +23,7 @@ const LISTED = new Set([
   // sp_goertzel
 
   // sp_cic
+  'cic', 'decimation',
 
   // sp_cordic
 
