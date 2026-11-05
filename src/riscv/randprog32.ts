@@ -239,7 +239,7 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       else if (v < 0.93) {
         // a small shift often, so that the result is a number and the clamp acts now and then
         if (r() < 0.6) { emit(`li ${ADDR}, ${int(0, 20)}`); emit(`racc ${dst()}, ${ADDR}`); } else emit(`racc ${dst()}, ${src()}`);
-      } else emit(`.word 0x${(((int(0, 31) << 7) | (int(0, 7) << 12) | (int(0, 31) << 15) | (int(0, 31) << 20) | ((r() < 0.5 ? int(1, 127) : 0) << 25) | 0x5b) >>> 0).toString(16).padStart(8, '0')}`);
+      } else emit(`.word 0x${(((int(0, 7) << 12) | (int(0, 31) << 15) | (int(0, 31) << 20) | ((r() < 0.5 ? int(1, 127) : 0) << 25) | 0x5b) >>> 0).toString(16).padStart(8, '0')}`);
       continue;
     }
     const u = r();

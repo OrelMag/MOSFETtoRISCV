@@ -106,3 +106,31 @@ describe('the MAC core in gates, against the golden model', () => {
     expect(iss.acc).toBe(35n);
   }, 120000);
 });
+
+describe('seeded random programs mixing the MAC with RV32I, gates against the model after every instruction', () => {
+  it('60 seeds', async () => {
+    const { randomProgram32 } = await import('../src/riscv/randprog32');
+    const { firstMismatch } = await import('./verify/maclock');
+    let macOps = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const src = randomProgram32(seed, { mac: true, n: 50 });
+      const a = assemble(src, [], { mac: true });
+      expect(a.errors, `seed ${seed}`).toEqual([]);
+      const r = await firstMismatch(a.words, {}, { imemK: 8, limit: 1500 });
+      expect(r.mismatch?.text, `seed ${seed}`).toBeUndefined();
+      expect(r.iss.halted, `seed ${seed} halts`).toBe(true);
+      macOps += (src.match(/^\s+(mac|mac2|racc|clracc)\b/gm) ?? []).length;
+    }
+    expect(macOps).toBeGreaterThan(300);
+  }, 280000);
+  it('the benchmarks that are short enough, on GateSim with the large memories', async () => {
+    const { macPlan } = await import('../src/dsp/macbench');
+    const { firstMismatch } = await import('./verify/maclock');
+    for (const [b, m] of [['dot', 'mac2u'], ['dot', 'mac'], ['fir16', 'mac2u']] as const) {
+      const p = macPlan(b, m), a = assemble(p.source, [], { mac: true });
+      const r = await firstMismatch(a.words, {}, { imemK: 10, dmemK: 8, limit: 2000 });
+      expect(r.mismatch?.text, `${b} ${m}`).toBeUndefined();
+      for (const [w, v] of p.expect) expect(r.iss.dmem[w] >>> 0, `${b} ${m} word ${w}`).toBe(v);
+    }
+  }, 280000);
+});
