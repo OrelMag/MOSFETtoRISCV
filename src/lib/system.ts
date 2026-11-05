@@ -308,14 +308,109 @@ export function csrUnit(m = false): ComponentDef {
   net('mtvec', 'vTvec.out', 'mtvecOut');
   net('mepc', 'vEpc.out', 'mepcOut');
   const merged = mergeByDriver(nets);
-  // 14 between columns: an output label pointing right and an input label pointing left share the gap
-  const instances = columns(chunk(ins, 12), 14, 0, 14, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
-  const inNames = ['addr', 'funct3', 'rs1v', 'zimm5', 'csrWrite', 'trap', 'trapCause', 'trapPC', 'trapVal', 'mret', 'mtime', 'mtip', 'meip', 'clk'];
-  const outNames = ['rdata', 'known', 'mtvecOut', 'mepcOut', 'irqTake', 'irqCause'];
-  const pins: Record<string, [number, number]> = {};
-  inNames.forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
-  outNames.forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // Drawn with wires: the address decode on the left, the registers in rows (each with the gates that load it) feeding the
+  // read multiplexer, the read-modify-write chain and the interrupt gating on the right; `new` goes back over the top.
+  for (const [d, nm] of [['z3.y', 'z3'], ['z7.y', 'z7'], ['z20.y', 'z20'], ['z2.y', 'z2'], ['csrWrite', 'csrWrite']] as const) merged.find((n) => n.ends[0] === d)!.name = nm;
+  const POS: Record<string, [number, number]> = {
+    known: [50, 2], enc0: [50, 40], enc1: [50, 60], enc2: [50, 80], enc3: [50, 100], idx: [62, 60],
+    nv: [58, 6], gnd: [60, 14], vdd: [60, 30], tm: [60, 22],
+    mMIE: [64, 2], mMPIE: [64, 17], enS: [64, 31], rMIE: [76, 5], rMPIE: [76, 20],
+    z3: [88, 2], mpp: [88, 12], z19: [88, 14], vStatus: [98, 2], w_mstatus: [56, 36],
+    mieNew: [68, 40], w_mie: [68, 46], rMIEN: [76, 40], sMie: [88, 40], z7: [90, 37], z20: [90, 47], vMie: [98, 38],
+    tvHi: [60, 56], w_mtvec: [68, 58], rTvec: [76, 54], z2: [90, 51], vTvec: [98, 54],
+    w_mscratch: [68, 68], rScratch: [76, 68],
+    tpc: [60, 84], dEpc: [68, 80], enE: [68, 88], w_mepc: [60, 92], rEpc: [76, 80], vEpc: [98, 80],
+    dCause: [68, 100], enC: [68, 108], w_mcause: [60, 112], rCause: [76, 100],
+    dTval: [68, 118], enT: [68, 126], w_mtval: [60, 130], rTval: [76, 118],
+    vMip: [98, 126], rsel: [108, 52], misa: [96, 62], zero32: [96, 94],
+    zimm: [124, 43], z27: [112, 38], srcSel: [130, 40], nsrc: [144, 44], ones: [136, 50], orOld: [144, 56], andOld: [144, 70], opSel: [160, 52], sf3: [150, 84],
+    ei: [122, 100], ti: [122, 108], any: [132, 104], take: [142, 104], icause: [132, 114], kT: [122, 120], kE: [122, 126],
+  };
+  for (const k of Object.keys(POS)) if (!/^(known|enc[0-3]|idx)$/.test(k)) POS[k] = [POS[k][0] + 16, POS[k][1]];
+  Object.assign(POS, {
+    nv: [68, 6], gnd: [74, 9], tm: [74, 22], vdd: [73, 16], misa: [92, 170], sMie: [102, 40], z7: [98, 36], z20: [98, 47],
+    tvHi: [76, 52], w_mtvec: [84, 60], w_mscratch: [84, 74], tpc: [76, 84], dEpc: [84, 80], rEpc: [92, 80], enE: [84, 92], w_mepc: [76, 96],
+    dCause: [84, 104], rCause: [92, 104], enC: [84, 116], w_mcause: [76, 120], dTval: [84, 128], rTval: [92, 128], enT: [84, 140], w_mtval: [76, 144],
+    vMip: [114, 138], zero32: [104, 90],
+  });
+  CSR_ORDER.forEach(([n], i) => {
+    POS[`k_${n}`] = [6, 5 + 7 * i];
+    POS[`is_${n}`] = [14, 2 + 7 * i];
+  });
+  const instances: InstanceDef[] = ins.map(([name, def, label]) => ({ name, def, at: POS[name], label }));
+  const XR = 192;
+  const pins: Record<string, [number, number]> = {
+    addr: [0, 1], trapPC: [0, 156], trapCause: [0, 159], trapVal: [0, 162],
+    funct3: [0, 166], rs1v: [0, 169], zimm5: [0, 172], csrWrite: [0, 175], trap: [0, 178], mret: [0, 181], mtime: [0, 184], mtip: [0, 187], meip: [0, 190], clk: [0, 193],
+    rdata: [XR, 69], known: [XR, -2], mtvecOut: [XR, -4], mepcOut: [XR, -6], irqTake: [XR, 105], irqCause: [XR, 115],
+  };
+  {
+    const at = (n: string) => POS[n];
+    const portAt = (inst: string, port: string): [number, number] => {
+      const i = ins.find((x) => x[0] === inst)!;
+      const g = symbolGeom(i[1]).ports[port].pos;
+      return [POS[inst][0] + g[0], POS[inst][1] + g[1]];
+    };
+    void at;
+    const byDrv = (d: string) => merged.find((n) => n.ends[0] === d)!;
+    // a net drawn as wires, with corner points on the way to some of its ends and pointers at others
+    const wire = (n: NetDef, via: NonNullable<NetDef['via']> = {}, tags?: string[]) => {
+      n.via = { ...n.via, ...via };
+      if (tags) n.tags = tags;
+      else delete n.tags;
+    };
+    // the select signals fan out into a crossbar (known, the index encoders, the write gates): pointers at the sinks
+    for (const [n] of CSR_ORDER) {
+      const net = byDrv(sel[n]);
+      net.name = `is_${n}`;
+      wire(net, {}, net.ends.slice(1));
+    }
+    // the address: a lane down each column of comparators, in from the left
+    const addr = merged.find((n) => n.name === undefined && n.ends[0] === 'addr')!;
+    addr.name = 'addr';
+    const aVia: NonNullable<NetDef['via']> = {};
+    CSR_ORDER.forEach(([n], i) => { aVia[`is_${n}.a`] = [[3, 1], [3, 4 + 7 * i]]; });
+    wire(addr, aVia);
+    // trap, clock, write enable and a few signals that reach many gates stay pointers
+    for (const n of merged) if (n.name !== undefined && ['mepc', 'mtvec'].includes(n.name)) delete n.tags;
+    // everything else is a wire
+    const keepTags = new Set(['z3.y', 'z7.y', 'z20.y', 'z2.y']);
+    const ptr = new Set(['clk', 'trap', 'csrWrite', 'mretQ', 'mtip', 'meip', 'mtime', 'funct3', 'rs1v', 'zimm5', 'index']);
+    for (const n of merged) if (n.tags === true && !(n.name && ptr.has(n.name))) delete n.tags;
+    for (const n of merged) if (n.name === 'new' || n.name === 'zero') delete n.tags;
+    void keepTags;
+    // the new value goes back over the top and down a lane beside the rows; the zero word fans out to the multiplexer's last inputs
+    const nw = merged.find((n) => n.name === 'new')!, nwo = portAt('opSel', 'y');
+    wire(nw, Object.fromEntries(nw.ends.slice(1).map((e) => [e, [[nwo[0] + 2, nwo[1]], [nwo[0] + 2, -9], [64.5, -9], [64.5, portAt(e.split('.')[0], e.split('.')[1])[1]]] as [number, number][]])));
+    const zr = merged.find((n) => n.name === 'zero')!, zo = portAt('zero32', 'y'), zx = POS.rsel[0] - 3;
+    wire(zr, Object.fromEntries(zr.ends.slice(1).map((e) => [e, [[zo[0] + 2, zo[1]], [zx, zo[1]], [zx, portAt('rsel', e.split('.')[1])[1]]] as [number, number][]])));
+    wire(merged.find((n) => n.name === 'MIE')!, {}, ['take.b']);
+    wire(merged.find((n) => n.name === 'MTIE')!, {}, ['ti.a']);
+    wire(merged.find((n) => n.name === 'MEIE')!, {}, ['ei.a']);
+    const nv3 = portAt('nv', 'o1');
+    wire(merged.find((n) => n.name === 'new[3]')!, { 'mMIE.d0': [[72.5, nv3[1]], [72.5, portAt('mMIE', 'd0')[1]]] });
+    // the trap's values come in along the bottom and up a lane beside the rows
+    const lane = (name: string, x: number, end: string) => { const n = merged.find((m2) => m2.name === name)!; wire(n, { [end]: [[x, pins[name][1]], [x, portAt(end.split('.')[0], end.split('.')[1])[1]]] }); };
+    lane('trapPC', 66, 'tpc.in');
+    lane('trapCause', 67.5, 'dCause.b');
+    lane('trapVal', 69, 'dTval.b');
+    const nvO = portAt('nv', 'o3');
+    wire(merged.find((n) => n.name === 'new[7]')!, { 'mMPIE.d0': [[71, nvO[1]], [71, portAt('mMPIE', 'd0')[1]]], 'mieNew.i0': [[71, nvO[1]], [71, portAt('mieNew', 'i0')[1]]] });
+    const nv5 = portAt('nv', 'o5');
+    wire(merged.find((n) => n.name === 'new[11]')!, { 'mieNew.i1': [[70, nv5[1]], [70, portAt('mieNew', 'i1')[1]]] });
+    const tmo = portAt('tm', 'out');
+    wire(merged.find((n) => n.name === 'statusSel')!, { 'mMIE.s': [[tmo[0] + 2, tmo[1]], [tmo[0] + 2, portAt('mMIE', 's')[1] + 2.5], [portAt('mMIE', 's')[0], portAt('mMIE', 's')[1] + 2.5]], 'mMPIE.s': [[tmo[0] + 2, tmo[1]], [tmo[0] + 2, portAt('mMPIE', 's')[1] + 2.5], [portAt('mMPIE', 's')[0], portAt('mMPIE', 's')[1] + 2.5]] });
+    // constants shared by several rows: wired where they sit, a pointer for the far rows
+        wire(byDrv('z3.y'), {}, ['vMie.i2', 'vMip.i2']);
+    wire(byDrv('z7.y'), {}, ['vMip.i0']);
+    wire(byDrv('z20.y'), {}, ['vMip.i4']);
+    wire(byDrv('z2.y'), {}, ['vEpc.i0']);
+    wire(merged.find((n) => n.name === 'misa')!, {}, ['rsel.d1']);
+    // rails over the top for the three outputs that leave from the middle of the unit
+    wire(merged.find((n) => n.name === 'known')!, { known: [[portAt('known', 'y')[0] + 1.5, portAt('known', 'y')[1]], [portAt('known', 'y')[0] + 1.5, -2]] });
+    wire(merged.find((n) => n.name === 'mtvec')!, { mtvecOut: [[portAt('vTvec', 'out')[0] + 3, portAt('vTvec', 'out')[1]], [portAt('vTvec', 'out')[0] + 3, -4]] });
+    wire(merged.find((n) => n.name === 'mepc')!, { mepcOut: [[portAt('vEpc', 'out')[0] + 4.5, portAt('vEpc', 'out')[1]], [portAt('vEpc', 'out')[0] + 4.5, -6]] });
+  }
   return define({
     id: `csrunit${m ? '_m' : ''}`, name: 'CSR unit', category: 'cpu',
     summary: 'The machine-mode control and status registers: address decode, a read multiplexer, read-modify-write for csrrw/csrrs/csrrc, and the hardware updates on a trap (mepc, mcause, mtval, MIE→MPIE) or an mret. Also decides whether an interrupt is taken.',
