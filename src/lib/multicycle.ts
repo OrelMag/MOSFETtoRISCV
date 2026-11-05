@@ -3,8 +3,8 @@
 // carry values between cycles. The sequencing lives in a controller, built two ways from the same
 // state table: a hardwired finite-state machine and a microprogrammed one.
 
-import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import { orientGeom, symbolGeom } from '../sim/geometry';
+import type { ComponentDef, InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { busMux2, decoder, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, OPCODE_DECODER, dataMemory, rom } from './cpu';
@@ -420,9 +420,10 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
-  const place = (name: string, def: ComponentDef, xy: [number, number]) => { at.set(name, xy); defs.set(name, def); };
+  const turn = new Map<string, 1 | 2 | 3>();
+  const place = (name: string, def: ComponentDef, xy: [number, number], rot?: 1 | 2 | 3) => { at.set(name, xy); defs.set(name, def); if (rot) turn.set(name, rot); };
   const P = (inst: string, port: string): [number, number] => {
-    const a = at.get(inst)!, p = g(defs.get(inst)!).ports[port].pos;
+    const a = at.get(inst)!, p = orientGeom(defs.get(inst)!, undefined, turn.get(inst)).ports[port].pos;
     return [a[0] + p[0], a[1] + p[1]];
   };
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
@@ -432,16 +433,16 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   alignY('pc', R32, 12, 'q', Y);
   alignY('adr', M2, right('pc') + 8, 'a', Y);
   alignY('imem', IM, right('adr') + 10, 'addr', P('adr', 'y')[1]);
-  alignY('dm', DM, right('adr') + 10, 'addr', P('adr', 'y')[1] + 26);
+  alignY('dm', DM, right('adr') + 10, 'addr', P('adr', 'y')[1] - 26); // above the instruction ROM: the memory's wires stay clear of the control below
   alignY('memsel', M2, right('imem') + 10, 'a', P('imem', 'data')[1]);
   alignY('ir', R32, right('memsel') + 10, 'd', P('memsel', 'y')[1] - 24);
-  alignY('data', R32, right('memsel') + 10, 'd', P('memsel', 'y')[1] + 24);
+  alignY('data', R32, right('memsel') + 10, 'd', P('memsel', 'y')[1] + 12);
   alignY('oldpc', R32, right('memsel') + 10, 'd', P('ir', 'd')[1] - 26);
   alignY('si', SI, right('ir') + 8, 'in', P('ir', 'q')[1]);
   alignY('rf', RF, right('si') + 16, 'wa', P('si', 'o1')[1]);
-  alignY('imm', IMM_GEN, right('si') + 10, 'instr', P('rf', 'rd2')[1] + 22);
-  alignY('ra', R32, right('rf') + 8, 'd', P('rf', 'rd1')[1]);
-  alignY('rb', R32, right('rf') + 8, 'd', P('rf', 'rd2')[1] + 8);
+  alignY('imm', IMM_GEN, right('si') + 17, 'instr', P('rf', 'rd2')[1] + 22);
+  alignY('ra', R32, right('rf') + 14, 'd', P('rf', 'rd1')[1]);
+  alignY('rb', R32, right('rf') + 14, 'd', P('rf', 'rd2')[1] + 8);
   // 16 units after A / B: the constant inputs of the source multiplexers sit in between
   alignY('srcA', M4, right('ra') + 16, 'd2', P('ra', 'q')[1]);
   alignY('srcB', M4, right('ra') + 16, 'd0', P('rb', 'q')[1] + 6);
@@ -456,19 +457,22 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   place('actl', busMux2(4), [P('alu', 'ctl')[0] - 10, at.get('alu')![1] + g(ALU).h + 20]);
   place('z4', constWord(4, 0), [P('actl', 'a')[0] - 14, P('actl', 'a')[1] - 1]);
   place('ctl', CONTROL, [right('si') + 10, 2]);
-  place('npc', NEXT_PC, [right('alu') + 6, 2]);
-  place('ctrl', CTRL, [12, 2]);
-  place('one', TIE1, [right('ra') + 2, P('ra', 'en')[1] + 6]);
-  place('gnd', TIE0, [P('npc', 'jump')[0] - 6, P('npc', 'jump')[1] + 4]);
+  place('npc', NEXT_PC, [right('alu') + 17, 2]);
+  // The controller is turned so its outputs face up, and sits below the datapath: muxes and registers take their control
+  // from below. Rows of the channel between them, one per signal, leftmost port highest, so no two rows cross.
+  const rowD = at.get('data')![1] + g(R32).h + 3, rowR = rowD + 1.5, ch0 = rowR + 3, cy = Math.ceil(ch0 + MC_FIELDS.length + 3);
+  place('ctrl', CTRL, [-30, cy], 3);
+  place('one', TIE1, [right('rf') + 7, P('ra', 'en')[1] + 2]);
+  place('gnd', TIE0, [P('npc', 'jump')[0] - 6, P('npc', 'jump')[1] - 1]);
   place('ps', splitter([1, 1]), [right('npc') + 4, P('npc', 'pcSrc')[1] - 2]);
   place('pcw', OR, [4, P('pc', 'en')[1] + 4]);
-  place('fz', isZero(4), [right('ctrl') + 14, 2 + g(CTRL).h - 8]);
+  place('fz', isZero(4), [right('res') + 12, ch0 - 6]);
 
   const labels: Record<string, string> = {
     pc: 'PC', adr: 'Adr', memsel: 'one memory port', ir: 'IR', data: 'Data', oldpc: 'OldPC', ra: 'A', rb: 'B', srcA: 'SrcA', srcB: 'SrcB',
     aluout: 'ALUOut', res: 'Result', ctrl: control === 'fsm' ? 'hardwired FSM' : 'microcode', ctl: 'decoder (immSrc, ALU op)', actl: 'add / funct',
   };
-  const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
+  const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), rot: turn.get(name), label: labels[name] }));
   const cf = (f: string) => `ctrl.${f}`;
   const nets: NetDef[] = [
     { name: 'PCNext', ends: ['clr0.out', 'pc.d'] },
@@ -525,7 +529,120 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
     { name: 'state', ends: [cf('state'), 'fz.a', 'state'], tags: true },
     { name: 'fetch', ends: ['fz.z', 'fetch'], tags: true },
   ];
-  const resY = P('res', 'y');
+  // ---- drawn with wires (every net but the clock, the constant 1 and the controller's opcode) ----
+  const net = (name: string) => nets.find((n) => n.name === name)!;
+  const wire = (name: string, via: Record<string, [number, number][]>, tags?: string[]) => {
+    const n = net(name);
+    n.via = { ...n.via, ...via };
+    delete n.trunk;
+    if (tags) n.tags = tags; else delete n.tags;
+  };
+  const pt = P;
+  const [pqx] = pt('pc', 'q'), lx = pqx + 4;
+  const yPC = 4, yTaken = -8, yRes = -10, yAluOut = -4, yF3 = 0.5;
+  const sx = at.get('srcA')![0], rx = at.get('res')![0], rr = right('res'), nx = at.get('npc')![0];
+  // the PC: up along its own lane, over the top to OldPC and to SrcA, out to its pin
+  wire('PC', {
+    'oldpc.d': [[lx, yPC], [pt('oldpc', 'd')[0] - 4, yPC], [pt('oldpc', 'd')[0] - 4, pt('oldpc', 'd')[1]]],
+    'srcA.d0': [[lx, yPC], [sx - 4, yPC], [sx - 4, pt('srcA', 'd0')[1]]],
+    pcOut: [[lx, 2]],
+  });
+  wire('OldPC', { 'srcA.d1': [[pt('oldpc', 'q')[0] + 2, pt('oldpc', 'q')[1]], [pt('oldpc', 'q')[0] + 2, 27], [sx - 6, 27], [sx - 6, pt('srcA', 'd1')[1]]] });
+  wire('Data', { 'res.d1': [[pt('data', 'q')[0] + 2, rowD], [rx - 8, rowD], [rx - 8, pt('res', 'd1')[1]]] });
+  wire('ALUResult', { 'res.d2': [[pt('alu', 'y')[0] + 8, pt('alu', 'y')[1]], [pt('alu', 'y')[0] + 8, 48], [rx - 6, 48], [rx - 6, pt('res', 'd2')[1]]] });
+  wire('ALUOut', { 'adr.b': [[pt('aluout', 'q')[0] + 1, pt('aluout', 'q')[1]], [pt('aluout', 'q')[0] + 1, 31], [rr + 1.5, 31], [rr + 1.5, yAluOut], [pt('adr', 'b')[0] - 2, yAluOut], [pt('adr', 'b')[0] - 2, pt('adr', 'b')[1]]] });
+  wire('Adr', { 'dm.addr': [[pt('adr', 'y')[0] + 5, pt('adr', 'y')[1]], [pt('adr', 'y')[0] + 5, pt('dm', 'addr')[1]]] });
+  wire('MemData', { 'memsel.b': [[pt('dm', 'rd')[0] + 4, pt('dm', 'rd')[1]], [pt('dm', 'rd')[0] + 4, pt('memsel', 'b')[1]]] });
+  const rdx = pt('memsel', 'y')[0] + 5;
+  wire('ReadData', { 'ir.d': [[rdx, pt('memsel', 'y')[1]], [rdx, pt('ir', 'd')[1]]], 'data.d': [[rdx, pt('memsel', 'y')[1]], [rdx, pt('data', 'd')[1]]] });
+  const irx = pt('ir', 'q')[0] + 4;
+  wire('IR', { 'imm.instr': [[irx, pt('ir', 'q')[1]], [irx, pt('imm', 'instr')[1]]] });
+  const sox = right('si') + 2;
+  wire('op', { 'ctl.op': [[sox, pt('si', 'o0')[1]], [sox, pt('ctl', 'op')[1]]] }, ['ctrl.op']);
+  wire('funct3', {
+    'ctl.funct3': [[sox + 1, pt('si', 'o2')[1]], [sox + 1, pt('ctl', 'funct3')[1]]],
+    'npc.funct3': [[sox + 1, pt('si', 'o2')[1]], [sox + 1, yF3], [nx - 10, yF3], [nx - 10, pt('npc', 'funct3')[1]]],
+  });
+  wire('funct7', { 'ctl.funct7': [[sox + 2, pt('si', 'o5')[1]], [sox + 2, pt('ctl', 'funct7')[1]]] });
+  const rfx = at.get('rf')![0];
+  wire('rs1', { 'rf.ra1': [[rfx - 8, pt('si', 'o3')[1]], [rfx - 8, pt('rf', 'ra1')[1]]] });
+  wire('rs2', { 'rf.ra2': [[rfx - 6, pt('si', 'o4')[1]], [rfx - 6, pt('rf', 'ra2')[1]]] });
+  wire('rd2', { 'rb.d': [[right('rf') + 4, pt('rf', 'rd2')[1]], [right('rf') + 4, pt('rb', 'd')[1]]] });
+  wire('B', {
+    'srcB.d0': [[sx - 2, pt('rb', 'q')[1]], [sx - 2, pt('srcB', 'd0')[1]]],
+    'dm.wd': [[pt('rb', 'q')[0] + 2, pt('rb', 'q')[1]], [pt('rb', 'q')[0] + 2, 31], [pt('dm', 'wd')[0] - 2, 31], [pt('dm', 'wd')[0] - 2, pt('dm', 'wd')[1]]],
+  });
+  wire('ImmExt', {
+    'srcB.d1': [[sx - 4, pt('imm', 'imm')[1]], [sx - 4, pt('srcB', 'd1')[1]]],
+    'res.d3': [[rx - 4, pt('imm', 'imm')[1]], [rx - 4, pt('res', 'd3')[1]]],
+  });
+  wire('zeroB', { 'srcB.d3': [[sx - 6, pt('z32b', 'y')[1]], [sx - 6, pt('srcB', 'd3')[1]]] });
+  wire('SrcB', { 'alu.b': [[pt('srcB', 'y')[0] + 5, pt('srcB', 'y')[1]], [pt('srcB', 'y')[0] + 5, pt('alu', 'b')[1]]] });
+  wire('ALUControl', { 'alu.ctl': [[pt('alu', 'ctl')[0], pt('actl', 'y')[1]], [pt('alu', 'ctl')[0], pt('alu', 'ctl')[1] + 2]] });
+  // the decoder's two outputs, down past the register file's right edge
+  const lanes = right('rf') + 1;
+  wire('ImmSrc', { 'imm.src': [[lanes, pt('ctl', 'immSrc')[1]], [lanes, pt('imm', 'src')[1] + 2], [pt('imm', 'src')[0], pt('imm', 'src')[1] + 2]] });
+  wire('instrOp', { 'actl.b': [[lanes + 1.5, pt('ctl', 'aluCtl')[1]], [lanes + 1.5, pt('actl', 'b')[1]]] });
+  // the ALU's flags, nested into the next-PC unit; branch / funct3 / jump / jalr arrive from the left
+  ([['Zero', 'zero'], ['Neg', 'neg'], ['Ovf', 'ovf'], ['Carry', 'carry']] as const).forEach(([name, port], k) =>
+    wire(name, { [`npc.${port}`]: [[right('alu') + 1.5 + k, pt('alu', port)[1]], [right('alu') + 1.5 + k, pt('npc', port)[1]]] }));
+  wire('gnd', { 'npc.jalr': [[pt('npc', 'jump')[0] - 2, pt('gnd', 'y')[1]], [pt('npc', 'jump')[0] - 2, pt('npc', 'jalr')[1]]] });
+  // taken and the result over the top, to the PC's write enable and the PC's input
+  const psx = right('ps') + 2;
+  wire('taken', { 'pcw.b': [[psx, pt('ps', 'o0')[1]], [psx, yTaken], [-6, yTaken], [-6, pt('pcw', 'b')[1]]] });
+  wire('Result', {
+    'clr0.in': [[rr + 7, pt('res', 'y')[1]], [rr + 7, yRes], [-8, yRes], [-8, pt('clr0', 'in')[1]]],
+    'rf.wd': [[rr + 7, pt('res', 'y')[1]], [rr + 7, rowR], [pt('rf', 'wd')[0] - 5, rowR], [pt('rf', 'wd')[0] - 5, pt('rf', 'wd')[1]]],
+  });
+  wire('PCWrite', {});
+  // the constant 1 enabling A, B (wired) and ALUOut, Data (pointers); the clock down a rail above the control channel
+  const [ox, oy] = pt('one', 'y'), ot = ox + 2;
+  wire('en', { 'ra.en': [[ot, oy], [ot, pt('ra', 'en')[1]]], 'rb.en': [[ot, oy], [ot, pt('rb', 'en')[1]]] }, ['aluout.en', 'data.en']);
+  const rail = rowR + 1.5;
+  const ck = (inst: string, ...rest: [number, number][]) => ({ [inst + '.clk']: rest });
+  const [pcx] = pt('pc', 'clk'), [dmx, dmy] = pt('dm', 'clk'), [dax] = pt('data', 'clk'), [irx2, iry] = pt('ir', 'clk'), [opx, opy] = pt('oldpc', 'clk');
+  const [rfcx, rfcy] = pt('rf', 'clk'), [rax, ray] = pt('ra', 'clk'), [rbx] = pt('rb', 'clk'), [aox] = pt('aluout', 'clk');
+  const lx2 = pt('si', 'in')[0] - 5;
+  wire('clk', {
+    ...ck('pc', [pcx, rail]),
+    ...ck('dm', [dmx - 14, rail], [dmx - 14, dmy + 2], [dmx, dmy + 2]),
+    ...ck('data', [dax, rail]),
+    ...ck('ir', [lx2 + 0, rail], [lx2, iry + 2], [irx2, iry + 2]),
+    ...ck('oldpc', [lx2, rail], [lx2, opy + 2], [opx, opy + 2]),
+    ...ck('rf', [rfcx + 6, rail], [rfcx + 6, rfcy + 2], [rfcx, rfcy + 2]),
+    ...ck('ra', [right('rb') + 1, rail], [right('rb') + 1, ray + 2], [rax, ray + 2]),
+    ...ck('rb', [rbx, rail]),
+    ...ck('aluout', [aox, rail]),
+  }, ['ctrl.clk']);
+  // control: out of the controller's top edge, one row per signal in the channel, then up its own lane
+  const rowOf = (f: string) => ch0 + (f === 'state' ? MC_FIELDS.length : MC_FIELDS.findIndex(([n]) => n === f));
+  const ctlTo = (f: string, name: string, end: string, ...rest: [number, number][]) => {
+    const [px] = pt('ctrl', f), row = rowOf(f);
+    wire(name, { [end]: [[px, row], ...rest] });
+    net(name).quiet = true;
+  };
+  const top = (f: string, name: string, end: string, x: number, y?: number) => ctlTo(f, name, end, [x, rowOf(f)], ...(y === undefined ? [] : [[x, y] as [number, number]]));
+  top('pcUpdate', 'PCUpdate', 'pcw.a', 2, pt('pcw', 'a')[1]);
+  top('branch', 'Branch', 'npc.branch', nx - 8, pt('npc', 'branch')[1]);
+  top('irWrite', 'IRWrite', 'ir.en', pt('ir', 'en')[0] - 2, pt('ir', 'en')[1]);
+  top('irWrite', 'IRWrite', 'oldpc.en', pt('oldpc', 'en')[0] - 2, pt('oldpc', 'en')[1]);
+  top('regWrite', 'RegWrite', 'rf.we', pt('rf', 'we')[0] - 3, pt('rf', 'we')[1]);
+  top('memWrite', 'MemWrite', 'dm.we', pt('dm', 'we')[0] - 3, pt('dm', 'we')[1]);
+  top('adrSrc', 'AdrSrc', 'adr.s', pt('adr', 's')[0]);
+  top('adrSrc', 'AdrSrc', 'memsel.s', pt('memsel', 's')[0]);
+  top('resultSrc', 'ResultSrc', 'res.s', pt('res', 's')[0]);
+  ctlTo('aluSrcA', 'ALUSrcA', 'srcA.s', [sx + 6, rowOf('aluSrcA')], [sx + 6, pt('srcA', 's')[1] + 2], [pt('srcA', 's')[0], pt('srcA', 's')[1] + 2]);
+  top('aluSrcB', 'ALUSrcB', 'srcB.s', pt('srcB', 's')[0]);
+  top('aluFunct', 'ALUFunct', 'actl.s', pt('actl', 's')[0]);
+  for (const n of ['ImmSrc', 'instrOp', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'op', 'funct3', 'funct7', 'gnd', 'taken', 'PCWrite', 'en', 'clk']) net(n).quiet = true;
+  const pinX = rr + 24, pinRetire = rowOf('retire') - 3, pinState = rowOf('state');
+  ctlTo('retire', 'retire', 'retire', [pinX - 6, rowOf('retire')], [pinX - 6, pinRetire]);
+  ctlTo('state', 'state', 'fz.a', [pt('fz', 'a')[0] - 3, rowOf('state')], [pt('fz', 'a')[0] - 3, pt('fz', 'a')[1]]);
+  ctlTo('state', 'state', 'state', [pinX - 2, rowOf('state')]);
+  net('retire').quiet = net('state').quiet = false;
+  delete net('fetch').tags;
+  const pins: Record<string, [number, number]> = { clk: [6, rail], pcOut: [lx, 1], retire: [pinX, pinRetire], fetch: [pinX, pt('fz', 'z')[1]], state: [pinX, pinState] };
+  const pinDirs: Netlist['pinDirs'] = { pcOut: 'down' };
   return {
     id: `mc_${IM.id.replace(/^rom_/, '')}_${control}${CT.id === 'mc_micro' || CT.id === 'mc_fsm' ? '' : CT.id.replace(/^mc_micro/, '')}${adder === 'ks' ? '' : '_rca'}${dmemK === 5 ? '' : `_d${dmemK}`}`,
     name: `Multicycle RV32I CPU (${control === 'fsm' ? 'hardwired' : 'microprogrammed'} control)`, category: 'cpu',
@@ -533,7 +650,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bit('retire', 'out'), bit('fetch', 'out'), bus('state', 4, 'out')],
     symbol: { kind: 'box', label: 'RV32I MULTICYCLE' },
     netlist: () => ({
-      pins: { clk: [0, Y + 40], pcOut: [resY[0] + 16, resY[1] + 10], retire: [resY[0] + 16, resY[1] + 14], fetch: [resY[0] + 16, resY[1] + 18], state: [resY[0] + 16, resY[1] + 22] },
+      pins, pinDirs,
       instances, nets,
     }),
   };
