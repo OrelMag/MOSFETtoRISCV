@@ -7,7 +7,7 @@
 // spans, wide fan-out. A clock or reset reaching many parts stays a pointer anywhere, as on a real schematic.
 import { instPort, type Vec } from '../sim/geometry';
 import { parseEnd, type ComponentDef, type NetDef, type Netlist } from '../sim/types';
-import { routeNetlist, wireOverlaps } from './route';
+import { routeNetlist, symbolRects, wireOverlaps, type Rect, type RoutedNet } from './route';
 
 /** A level of up to this many nets is tried wired whole. */
 export const WHOLE_NETS = 30;
@@ -19,6 +19,9 @@ export const LOCAL_NETS = 120;
 const FAR = 45, FAN = 5;
 /** A clock or reset with this many sinks stays a pointer. */
 const CLOCK_FAN = 3;
+/** Rerouting moves wires, so a net kept as a pointer can send another through a part: a few passes settle it. */
+const CLEAR_PASSES = 4;
+const EDGE = 0.01;
 const CLOCK = /^(clk|clock|rst|reset|rst_n|phi\d)$/i;
 
 const tagged = (n: NetDef) => n.tags === true || (n.tags?.length ?? 0) > 0;
@@ -67,6 +70,57 @@ function isLocal(nl: Netlist, n: NetDef): boolean {
   });
 }
 
+const crosses = (bodies: readonly Rect[], p: readonly Vec[]) => {
+  for (let i = 0; i + 1 < p.length; i++) {
+    const x0 = Math.min(p[i][0], p[i + 1][0]), x1 = Math.max(p[i][0], p[i + 1][0]);
+    const y0 = Math.min(p[i][1], p[i + 1][1]), y1 = Math.max(p[i][1], p[i + 1][1]);
+    // strictly inside: a wire may end on a part's edge, where its pins are
+    if (bodies.some((r) => x0 < r.x + r.w - EDGE && x1 > r.x + EDGE && y0 < r.y + r.h - EDGE && y1 > r.y + EDGE)) return true;
+  }
+  return false;
+};
+const bodiesOf = (nl: Netlist) => symbolRects(nl).filter((b) => b.what.startsWith('instance ')).map((b) => b.r);
+
+/** The nets (their index in `nl`) with a wire running through a part's body. */
+export function wiresThroughParts(nl: Netlist, nets: readonly RoutedNet[]): Set<number> {
+  const bodies = bodiesOf(nl);
+  return new Set(nets.filter((n) => n.paths.some((p) => crosses(bodies, p))).map((n) => n.index));
+}
+
+/** The sinks of a net whose wire runs through a part's body. */
+function sinksThroughParts(nl: Netlist, net: RoutedNet): string[] {
+  const bodies = bodiesOf(nl);
+  return net.paths.flatMap((p, i) => { const end = net.ends?.[i]; return end && crosses(bodies, p) ? [end] : []; });
+}
+
+/** The nets `wire` picks, as wires; a sink whose wire would run through a part stays a pointer, the others are wired. */
+function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean): Netlist {
+  const keep = new Map<NetDef, Set<string>>();
+  const draft = () => {
+    const c = withWires(nl, wire);
+    return { ...c, nets: c.nets.map((n, i) => {
+      const k = keep.get(nl.nets[i]);
+      return k ? { ...n, tags: [...k] } : n;
+    }) };
+  };
+  for (let pass = 0; pass < CLEAR_PASSES; pass++) {
+    const c = draft();
+    let more = false;
+    for (const net of routeNetlist(def, c).nets) {
+      const orig = nl.nets[net.index];
+      if (!tagged(orig) || !wire(orig)) continue;
+      const hit = sinksThroughParts(c, net);
+      if (!hit.length) continue;
+      const k = keep.get(orig) ?? new Set<string>();
+      for (const end of hit) k.add(end);
+      keep.set(orig, k);
+      more = true;
+    }
+    if (!more) return c;
+  }
+  return nl;
+}
+
 const cache = new WeakMap<Netlist, Netlist>();
 
 /** The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. */
@@ -80,8 +134,8 @@ export function drawnNetlist(def: ComponentDef, nl: Netlist): Netlist {
       const r = routeNetlist(def, c).nets;
       return wireOverlaps(r).length === 0 && wireCrossings(r) <= limit;
     };
-    const whole = n <= WHOLE_NETS ? withWires(nl, (x) => !manyClock(x)) : null;
-    const local = withWires(nl, (x) => isLocal(nl, x));
+    const whole = n <= WHOLE_NETS ? wiredClear(def, nl, (x) => !manyClock(x)) : null;
+    const local = wiredClear(def, nl, (x) => isLocal(nl, x));
     if (whole && fits(whole, MAX_CROSSINGS_PER_NET * n)) out = whole;
     else if (fits(local, Infinity)) out = local;
   }

@@ -642,7 +642,7 @@ export const overlaps = (a: Rect, b: Rect) =>
   a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS;
 
 /** Every instance body, plus the name drawn above each box (schematic.ts, .inst-name). */
-function symbolRects(nl: Netlist): { what: string; r: Rect; inst: string }[] {
+export function symbolRects(nl: Netlist): { what: string; r: Rect; inst: string }[] {
   const out: { what: string; r: Rect; inst: string }[] = [];
   for (const i of nl.instances) {
     const at = i.at ?? [0, 0], g = orientGeom(i.def, i.flip, i.rot);
