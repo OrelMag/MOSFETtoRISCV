@@ -12,7 +12,9 @@ import { hostIp, Internet, traceroute } from '../src/net/internet';
 import { Resolver, SITE, TYPE_A, TYPE_NS, type DnsMessage } from '../src/net/internetdns';
 import { BROADCAST, frameBody } from '../src/comm/ethframe';
 import { arpFrame, icmpEchoFrame, udpFrame } from '../src/comm/netframes';
-import { pcapFile, type Captured } from '../src/comm/pcap';
+import { LINKTYPE_USB_2_0, pcapFile, type Captured } from '../src/comm/pcap';
+import { CLOCK_NS, dataBytes, handshakeBytes, PID, REQ, setupData, sofBytes, tokenBytes, UsbBench, UsbMonitor, type BenchOptions, type Pump, type UsbHost } from '../src/comm/usb';
+import { GateDev } from '../tests/usbkit';
 import { stackProgram } from '../src/comm/stack';
 import { DEFAULT_STACK } from '../src/comm/stack/all';
 import { HOSTS, hostApp, pingApp, udpClientApp, udpEchoApp } from '../src/comm/stack/apps';
@@ -30,14 +32,14 @@ import { segmentFrame } from '../src/widgets/ethernet2';
 import { Rig } from '../src/widgets/ethswitch';
 import { LAPTOP, traceCapture, WWW } from '../src/widgets/internet';
 import { CH_ADJ, CH_TRIE, FP_FRAMES, FP_INPUTS, ROUTER_SCENE_DEF } from '../src/widgets/router';
-import { claimOf, compareCapture, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, type Claim } from './tshark-lib';
+import { claimOf, compareCapture, FIELDS, parseRows, TCP_LOSS_WARNINGS, tsharkArgs, USB_FIELDS, usbClaimOf, type Claim } from './tshark-lib';
 
 const args = process.argv.slice(2);
 const opt = (k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : undefined);
 const out = resolve(opt('--out') ?? 'tshark-report'), tshark = opt('--tshark') ?? 'tshark', only = opt('--only');
 const dump = args.includes('--dump'), gates = !args.includes('--no-gates');
 
-interface Case { name: string; frames: () => Captured[] | Promise<Captured[]>; claims?: (frames: Captured[]) => Claim[]; allow?: RegExp; must?: (frames: Captured[]) => string | null }
+interface Case { name: string; usb?: boolean; /** More tshark options for this capture. */ extra?: string[]; frames: () => Captured[] | Promise<Captured[]>; claims?: (frames: Captured[]) => Claim[]; allow?: RegExp; must?: (frames: Captured[]) => string | null }
 
 // ---- hand-built: each protocol's frame by itself ----------------------------------------------------------------------------------
 const A = HOSTS.A, B = HOSTS.B;
@@ -187,8 +189,56 @@ function tcpCapture(bytes = 1000, o?: BenchOptions): Captured[] {
   return t.router.log.map((l) => ({ us: Math.round(l.t * CLOCK_NS / 1000), bytes: l.bytes }));
 }
 
+// ---- USB: every kind of packet by itself, then a transaction: the bytes the chapter's models and gates put on the bus ----------------------------------------
+const GET_DEV8 = [0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x08, 0x00];
+const usbBuilt = (): Captured[] => [
+  tokenBytes(PID.SETUP, 0, 0), dataBytes(PID.DATA0, GET_DEV8), handshakeBytes(PID.ACK),
+  tokenBytes(PID.IN, 0, 0), dataBytes(PID.DATA1, [0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x08]), handshakeBytes(PID.ACK),
+  tokenBytes(PID.OUT, 0, 0), dataBytes(PID.DATA1, []), handshakeBytes(PID.ACK),
+  tokenBytes(PID.IN, 5, 1), handshakeBytes(PID.NAK), tokenBytes(PID.IN, 127, 15), handshakeBytes(PID.STALL), sofBytes(1429),
+].map((bytes, i) => ({ us: i * 1_000, bytes }));
+
+/** The gate-level device and the host model on the bus, every packet of the line read by the independent decoder (comm/usb.ts UsbMonitor): a capture as the chapter's Save capture writes it. */
+function usbCapture(opt: BenchOptions): Captured[] {
+  const b = new UsbBench(new GateDev(), opt);
+  b.run(600_000);
+  if (b.host.failed) throw new Error(`the host gave up: ${b.host.failed}`);
+  const mon = new UsbMonitor();
+  for (const [dp, dm] of b.line) mon.push(dp, dm);
+  for (const s of mon.seen) if (!s.syncOk || s.stuffError || !s.byteAligned) throw new Error(`a packet at clock ${s.start} is not whole`);
+  return mon.seen.map((s) => ({ us: (s.start * CLOCK_NS) / 1000, bytes: s.wire }));
+}
+/** Reads that end where a descriptor ends (or at its first 8 bytes), at several wLength: packets of every size the device sends. */
+function* usbReads(h: UsbHost): Pump<void> {
+  yield* h.quiet(40);
+  yield* h.busReset();
+  const get = (type: number, len: number) => setupData(0x80, REQ.GET_DESCRIPTOR, type << 8, 0, len);
+  for (const len of [8, 18, 19, 30, 64]) yield* h.controlRead(0, get(1, len));
+  for (const len of [9, 25, 26, 64]) yield* h.controlRead(0, get(2, len));
+  yield* h.controlRead(0, setupData(0x80, REQ.GET_STATUS, 0, 0, 2));
+}
+/** Enumeration, then the things a clean enumeration does not show: STALL, the interrupt endpoint's NAK, a zero-length status, GET_STATUS. */
+function* usbOdds(h: UsbHost): Pump<void> {
+  yield* h.enumerate();
+  const get = (type: number, req: number, value: number, len: number) => setupData(type, req, value, 0, len);
+  yield* h.controlRead(5, get(0x80, REQ.GET_DESCRIPTOR, 0x0300, 8)); // a string descriptor: STALL
+  yield* h.controlRead(5, get(0x80, REQ.GET_STATUS, 0, 2));
+  yield* h.controlRead(5, get(0x80, 0x42, 0, 4)); // an unknown request: STALL
+  yield* h.send(tokenBytes(PID.IN, 5, 1)); yield* h.recv(); yield* h.gap(40); // endpoint 1: NAK
+  yield* h.controlRead(5, get(0x80, REQ.GET_DESCRIPTOR, 0x0100, 64));
+}
+
 const CASES: Case[] = [
   { name: 'built', frames: built },
+  { name: 'usb-built', usb: true, frames: usbBuilt },
+  ...(gates ? [
+    { name: 'usb-enumeration', usb: true, frames: () => usbCapture({}), must: (f: Captured[]) => (f.length > 60 ? null : 'an enumeration is more than 60 packets') },
+    // not every read length: the usb dissector reads the descriptors inside a control transfer and calls one cut short mid-descriptor
+    // malformed (found by the first run of the full sweep: tests/comm-usb-gates.test.ts keeps those), so these are the ones a host asks for
+    { name: 'usb-complete-reads', usb: true, frames: () => usbCapture({ script: usbReads }), must: (f: Captured[]) => (f.length > 100 ? null : 'the reads are more than 100 packets') },
+    { name: 'usb-stall-nak', usb: true, frames: () => usbCapture({ script: usbOdds, nak: (c) => (c > 2800 && c < 3100 ? 1 : 0) }),
+      must: (f: Captured[]) => (new Set(f.map((x) => (x.bytes as number[])[0])).has(0x5a) && new Set(f.map((x) => (x.bytes as number[])[0])).has(0x1e) ? null : 'NAK (5A) and STALL (1E) must both appear') },
+  ] : []),
   ...(gates ? [
     { name: 'ch48-segment', frames: segmentCapture },
     { name: 'ch49-switch', frames: switchCapture },
@@ -217,9 +267,14 @@ function dnsLoop(): number[] {
   return f;
 }
 const flip = (b: number[], i: number) => { const c = [...b]; c[i] ^= 0x10; return c; };
-interface Broken { name: string; frames: Captured[]; claims?: Claim[]; cut?: number; want: RegExp }
+interface Broken { name: string; usb?: boolean; frames: Captured[]; claims?: Claim[]; cut?: number; want: RegExp }
 const dnsGood = () => dnsSteps()[3];
+const usbFlip = (b: number[], i: number, m = 0x10) => { const c = [...b]; c[i] ^= m; return c; };
 const BROKEN: Broken[] = [
+  { name: 'usb-bad-crc5', usb: true, frames: [{ us: 0, bytes: usbFlip(tokenBytes(PID.SETUP, 3, 0), 1, 0x01) }], claims: [usbClaimOf(tokenBytes(PID.SETUP, 3, 0), 0)], want: /usbll.(crc5|device_addr)/ },
+  { name: 'usb-bad-crc16', usb: true, frames: [{ us: 0, bytes: usbFlip(dataBytes(PID.DATA0, GET_DEV8), 3) }], want: /usbll.crc16/ },
+  { name: 'usb-wrong-claim', usb: true, frames: [{ us: 0, bytes: tokenBytes(PID.IN, 5, 0) }], claims: [usbClaimOf(tokenBytes(PID.IN, 6, 0), 0)], want: /usbll.device_addr/ },
+  { name: 'usb-bad-pid-check', usb: true, frames: [{ us: 0, bytes: [0xd1] }], want: /expert|usbll.pid|protocols|malformed/ },
   { name: 'dns-wrong-record', frames: [{ us: 0, bytes: dnsGood().frame }], claims: [dnsClaim({ ...dnsGood().msg, qname: 'www.other.example' }, claimOf(dnsGood().frame, 0))], want: /dns\.qry\.name/ },
   { name: 'dns-pointer-to-itself', frames: [{ us: 0, bytes: dnsLoop() }], claims: [dnsClaim(dnsSteps()[0].msg, claimOf(dnsLoop(), 0))], want: /dns\.qry\.name/ },
   { name: 'router-ttl-not-updated', frames: [{ us: 0, bytes: staleChecksum() }], want: /ip\.checksum\.status/ },
@@ -233,21 +288,21 @@ const BROKEN: Broken[] = [
   { name: 'file-cut-short', frames: [{ us: 0, bytes: good() }, { us: 1, bytes: good() }], cut: 20, want: /cut short/ },
 ];
 
-const runTshark = (file: string): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
+const runTshark = (file: string, usb = false, extra: string[] = []): Promise<{ text: string; err: string; code: number }> => new Promise((ok) => {
   const pipe = 'f=$1; t=$2; shift 2; cat "$f" | "$t" "$@"';
-  execFile('sh', ['-c', pipe, 'sh', file, tshark, ...tsharkArgs()], { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
+  execFile('sh', ['-c', pipe, 'sh', file, tshark, ...tsharkArgs(usb ? USB_FIELDS : FIELDS, extra)], { maxBuffer: 1 << 26, timeout: 120_000 }, (e, so, se) => ok({ text: so, err: se, code: e ? (typeof e.code === 'number' ? e.code : 1) : 0 }));
 });
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'fields.txt'), FIELDS.join('\n'));
 
-async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0, allow?: RegExp): Promise<string[]> {
-  const file = join(out, `${name}.pcap`), whole = pcapFile(frames), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
+async function check(name: string, frames: Captured[], claims?: Claim[], cut = 0, allow?: RegExp, usb = false, extra: string[] = []): Promise<string[]> {
+  const file = join(out, `${name}.pcap`), whole = pcapFile(frames, usb ? LINKTYPE_USB_2_0 : undefined), bytes = cut ? whole.slice(0, whole.length - cut) : whole;
   writeFileSync(file, bytes);
   if (dump) return [];
-  const r = await runTshark(file);
+  const r = await runTshark(file, usb, extra);
   writeFileSync(join(out, `${name}.tsv`), r.text);
-  const problems = compareCapture(frames, parseRows(r.text), claims, allow);
+  const problems = compareCapture(frames, parseRows(r.text, usb ? USB_FIELDS : FIELDS), claims ?? (usb ? frames.map((f) => usbClaimOf(f.bytes, Math.max(0, Math.round(f.us)))) : undefined), allow);
   if (r.code !== 0 || r.err.trim()) problems.unshift(`tshark exit ${r.code}: ${r.err.trim().slice(0, 300)}`);
   return problems;
 }
@@ -259,11 +314,11 @@ let failed = 0;
 for (const c of CASES) {
   if (only && !c.name.includes(only)) continue;
   const t0 = Date.now();
-  const frames = await c.frames(), problems = await check(c.name, frames, c.claims?.(frames), 0, c.allow);
+  const frames = await c.frames(), problems = await check(c.name, frames, c.claims?.(frames), 0, c.allow, c.usb, c.extra);
   const short = c.must?.(frames);
   if (short) problems.unshift(short);
-  if (c.name !== 'built') for (const f of frames) seen.add(claimOf(f.bytes, 0).chain);
-  summary[c.name] = { frames: frames.length, kinds: [...new Set(frames.map((f) => claimOf(f.bytes, 0).chain))], problems };
+  if (c.name !== 'built' && !c.usb) for (const f of frames) seen.add(claimOf(f.bytes, 0).chain);
+  summary[c.name] = { frames: frames.length, kinds: c.usb ? ['usbll'] : [...new Set(frames.map((f) => claimOf(f.bytes, 0).chain))], problems };
   console.log(`${problems.length ? 'FAIL' : 'ok  '} ${c.name}: ${frames.length} frames, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   for (const p of problems.slice(0, 40)) console.log(`     ${p}`);
   if (frames.length === 0) { console.log('     no frames: nothing was checked'); failed++; }
@@ -271,7 +326,7 @@ for (const c of CASES) {
 }
 for (const b of BROKEN) {
   if (dump || (only && !b.name.includes(only))) continue;
-  const problems = await check(`broken-${b.name}`, b.frames, b.claims, b.cut), caught = problems.some((p) => b.want.test(p));
+  const problems = await check(`broken-${b.name}`, b.frames, b.claims, b.cut, undefined, b.usb), caught = problems.some((p) => b.want.test(p));
   summary[`broken-${b.name}`] = { caught, problems };
   console.log(`${caught ? 'ok  ' : 'FAIL'} broken ${b.name}: ${caught ? 'caught' : `NOT caught, reported ${JSON.stringify(problems)}`}`);
   if (!caught) failed++;

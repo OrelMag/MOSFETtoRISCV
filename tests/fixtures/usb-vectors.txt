@@ -1,0 +1,16 @@
+# Vectors the USB tests pin. "fetched" = read from the URL in this session; "memory" = typed from memory, then checked by computation.
+
+fetched  https://valentyusb.readthedocs.io/en/tri-fifo/usbcore.utils.html  (usbcore.utils.packet doctests)
+  crc5_token(0,0)=0x2  crc5_token(92,0)=0x1c  crc5_token(3,0)=0xa  crc5_token(56,4)=0xb
+  crc5_sof(1429)=0x1   crc5_sof(1013)=0x5
+  nrzi("11 00000001", 1) = 'JJ KJKJKJKK'      (initial state J; one symbol per bit; spaces ignored)
+  nrzi("1111111111", 1)  = 'JJJJJJKKKKK'      (a 0 is stuffed after six 1s)
+  wrap_packet(handshake_packet(PID.ACK), cycles=1) = 'KJKJKJKKJJKJJKKK__J'   (SYNC, ACK = D2, EOP)
+
+fetched  https://e2e.ti.com/cfs-filesystemfile/__key/communityserver-discussions-components-files/138/Descriptors_5F00_TI.txt  (a bus listing found by search; only the request line was seen)
+  c3 80 06 00 01 00 00 40 00 DD 94   DATA0, GET_DESCRIPTOR(device, wLength 64), CRC16 DD 94
+
+fetched  https://gitlab.com/wireshark/wireshark/-/raw/release-4.2/epan/dissectors/packet-usbll.c  (field names)
+  usbll.pid usbll.device_addr usbll.endp usbll.frame_num usbll.crc5 usbll.crc5.status usbll.data usbll.crc16 usbll.crc16.status
+
+memory   SETUP addr 0 ep 0 token 2D 00 10;  IN 69 00 10;  zero-length DATA1 4B 00 00;  CRC-16/USB check of "123456789" = 0xB4C8 (reveng catalogue)

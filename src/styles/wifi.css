@@ -1,0 +1,38 @@
+/* ---------- Wi-Fi (src/widgets/wifi.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.wf-w, .wf-w .mos-row { min-width: 0; max-width: 100%; }
+.wf-w { gap: 8px; }
+.wf-w .mos-sl { flex-basis: 100%; min-width: 0; }
+.wf-w .mos-sl span { width: 118px; flex: none; }
+.wf-w .mos-sl input { min-width: 0; flex: 1 1 0; }
+.wf-w .mos-sl output { width: 84px; flex: none; white-space: nowrap; }
+.wf-svg { display: block; width: 100%; max-width: 640px; height: auto; }
+.wf-t { font: 11px var(--font-mono); fill: var(--text-2); }
+.wf-t.wf-strong { fill: var(--text); font-weight: 600; }
+.wf-c2 { fill: var(--probe-1); }
+.wf-grid { stroke: var(--border); stroke-width: 1; }
+.wf-l1 { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.wf-l2 { fill: none; stroke: var(--probe-1); stroke-width: 1.5; stroke-linejoin: round; }
+.wf-dot { fill: var(--good); stroke: var(--surface); stroke-width: 1.5; }
+.wf-frame.k1, .wf-sw.k1 { fill: var(--accent); background: var(--accent); }
+.wf-frame.k2, .wf-sw.k2 { fill: var(--good); background: var(--good); }
+.wf-frame.k3, .wf-sw.k3 { fill: var(--warn); background: var(--warn); }
+.wf-frame.k4, .wf-sw.k4 { fill: var(--probe-2); background: var(--probe-2); }
+.wf-key { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text-2); margin: 2px 0 4px; }
+.wf-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.wf-box { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; }
+.wf-boxes { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0; }
+.wf-states { font: 500 11.5px var(--font-mono); margin: 4px 0; }
+.wf-scroll { overflow-x: auto; max-width: 100%; }
+.wf-table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.wf-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 8px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.wf-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+.wf-table td.num { font: 600 12px var(--font-mono); text-align: right; white-space: nowrap; }
+.wf-w .mc-status b.bad, .wf-panel .mc-status b.bad { color: var(--bad); }
+.wf-panel { min-width: 0; }
+@media (max-width: 600px) {
+  .wf-w .mos-sl span { width: 84px; }
+  .wf-w .mos-sl output { width: 66px; font-size: 11px; }
+}
+@media (pointer: coarse) {
+  .wf-box { min-height: 40px; }
+}

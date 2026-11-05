@@ -1,14 +1,16 @@
 // The classic libpcap file format, DOM-free: what "Save capture" writes and Wireshark or tcpdump opens. Little-endian,
-// microsecond timestamps, link type 1 (Ethernet). A capture normally has no FCS, so `frames` are given without one
+// microsecond timestamps, link type 1 (Ethernet) unless a caller names another (USB: 288). A capture normally has no FCS, so `frames` are given without one
 // (comm/ethframe.ts frameBody).
 
 export const PCAP_MAGIC = 0xa1b2c3d4;
 export const LINKTYPE_ETHERNET = 1;
+/** USB 2.0 / 1.1 / 1.0 packets as they go over the cable: PID byte first, no SYNC, no EOP, CRCs included, one packet a record (Wireshark: usbll). */
+export const LINKTYPE_USB_2_0 = 288;
 const SNAPLEN = 65535;
 
 export interface Captured { /** Time of the frame's first byte, in microseconds from the start of the capture. */ us: number; bytes: ArrayLike<number> }
 
-export function pcapFile(frames: readonly Captured[]): Uint8Array {
+export function pcapFile(frames: readonly Captured[], linkType = LINKTYPE_ETHERNET): Uint8Array {
   const size = 24 + frames.reduce((n, f) => n + 16 + f.bytes.length, 0);
   const out = new Uint8Array(size), v = new DataView(out.buffer);
   v.setUint32(0, PCAP_MAGIC, true);
@@ -16,7 +18,7 @@ export function pcapFile(frames: readonly Captured[]): Uint8Array {
   v.setUint16(6, 4, true);
   // thiszone and sigfigs stay 0
   v.setUint32(16, SNAPLEN, true);
-  v.setUint32(20, LINKTYPE_ETHERNET, true);
+  v.setUint32(20, linkType, true);
   let at = 24;
   for (const f of frames) {
     const us = Math.max(0, Math.round(f.us));

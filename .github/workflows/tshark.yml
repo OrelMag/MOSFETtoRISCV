@@ -10,6 +10,9 @@ on:
       - 'src/comm/netframes.ts'
       - 'src/comm/ethframe.ts'
       - 'src/comm/mac.ts'
+      - 'src/comm/usb.ts'
+      - 'src/lib/usb.ts'
+      - 'src/widgets/usb.ts'
       - 'src/comm/ethswitch.ts'
       - 'src/campaign/capcomm.ts'
       - 'src/comm/stack/**'
@@ -31,6 +34,7 @@ on:
       - 'scripts/tshark-oracle.ts'
       - 'scripts/tshark-lib.ts'
       - 'tests/tshark-oracle.test.ts'
+      - 'tests/usbkit.ts'
       - '.github/workflows/tshark.yml'
   workflow_dispatch:
 
