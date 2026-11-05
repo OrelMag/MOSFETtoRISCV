@@ -4,9 +4,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   CONFIG_DESCRIPTOR, DEVICE_DESCRIPTOR, PID, PID_NAME, REQ, RESET_CLOCKS, RESET_HOLD, UsbBench, UsbDevice, UsbHost, UsbMonitor, dataBytes, handshakeBytes, parsePacket,
-  setupData, tokenBytes, type BenchOptions, type Pump,
+  setupData, stuffedBits, tokenBytes, type BenchOptions, type Pump,
 } from '../src/comm/usb';
 import { lcg } from './util';
+import { readSweep } from './usbkit';
 
 export function enumerate(opt: BenchOptions = {}, dev = new UsbDevice(), max = 60000): UsbBench {
   const b = new UsbBench(dev, opt);
@@ -257,5 +258,51 @@ describe('faults on every packet of the enumeration (model)', () => {
     expect(b.host.failed).toContain('GET_DESCRIPTOR(device, 8)');
     expect(b.host.errors).toBe(3);
     void dataBytes; void REQ;
+  });
+});
+
+describe('every read length', () => {
+  it('both descriptors at every wLength 1 to 30 and GET_STATUS: the bytes are the ROM\'s prefix; the device sent packets that needed stuffing, mid-packet and at the end', () => {
+    const out: { type: string; len: number; got: unknown }[] = [];
+    const b = enumerate({ script: readSweep(out) }, new UsbDevice(), 400000);
+    expect(b.host.failed).toBeNull();
+    for (const r of out) {
+      const rom = r.type === 'device' ? DEVICE_DESCRIPTOR : r.type === 'configuration' ? CONFIG_DESCRIPTOR : [0, 0];
+      expect(r.got, `${r.type} ${r.len}`).toEqual(rom.slice(0, r.len));
+    }
+    const mon = new UsbMonitor();
+    for (const [dp, dm] of b.line) mon.push(dp, dm);
+    let mid = 0, trailing = 0;
+    mon.seen.forEach((s, i) => {
+      const p = parsePacket(s.wire), prev = mon.seen[i - 1] ? parsePacket(mon.seen[i - 1].wire) : null;
+      if (p.kind !== 'data' || prev?.pid !== PID.IN) return;
+      const bits = stuffedBits(s.wire), plain = 8 + 8 * s.wire.length;
+      if (bits.length > plain) { mid++; if (bits.slice(-7).join('') === '1111110') trailing++; }
+    });
+    expect(mid).toBeGreaterThan(3);
+    expect(trailing).toBeGreaterThan(0);
+  });
+});
+
+describe('stuffing across the PID', () => {
+  it('the run of 1s counts from SYNC through the PID into the data: an OUT of 0x3f, 0xff, ... after a valid SETUP is understood (and stalled, being a data stage)', () => {
+    const answers: string[] = [];
+    function* script(h: UsbHost): Pump<void> {
+      yield* h.quiet(40);
+      yield* h.busReset();
+      yield* h.setupStage(0, setupData(0x80, REQ.GET_DESCRIPTOR, 0x0100, 0, 8));
+      for (const first of [0x1f, 0x3f, 0x7f, 0xff, 0xfe, 0xe7, 0x0f]) {
+        for (const pid of [PID.DATA0, PID.DATA1]) {
+          yield* h.send(tokenBytes(PID.OUT, 0, 0));
+          yield* h.gap();
+          yield* h.send(dataBytes(pid, [first, 0xff]));
+          const r = yield* h.recv();
+          answers.push(r ? PID_NAME[r.p.pid] : 'silence');
+          yield* h.gap(40);
+        }
+      }
+    }
+    enumerate({ script });
+    expect(answers).toEqual(Array(14).fill('STALL'));
   });
 });

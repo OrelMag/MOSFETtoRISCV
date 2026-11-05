@@ -55,6 +55,8 @@ export class Pair implements DeviceIO {
   gates: GateDev;
   clock = 0;
   mismatch: string | null = null;
+  /** Values the outputs took over the run: the garbage must have reached the states it is meant to. */
+  seen = { state: new Set<number>(), stall: new Set<number>(), armed: new Set<number>(), addr: new Set<number>() };
   constructor(gates?: GateDev, public strict = true) { this.gates = gates ?? new GateDev(); }
   get oe(): number { return this.model.oe; }
   get odp(): number { return this.model.odp; }
@@ -63,6 +65,7 @@ export class Pair implements DeviceIO {
     this.model.step(i);
     this.gates.step(i);
     const w = modelOut(this.model), g = this.gates.o;
+    this.seen.state.add(g.state); this.seen.stall.add(g.stall); this.seen.armed.add(g.armed); this.seen.addr.add(g.addr);
     for (const k of USB_OUT) {
       if (w[k] !== g[k] && !this.mismatch) {
         this.mismatch = `clock ${this.clock}: ${k} gates ${g[k]}, model ${w[k]}`;
@@ -71,4 +74,20 @@ export class Pair implements DeviceIO {
     }
     this.clock++;
   }
+}
+
+import { REQ, setupData, type Pump, type UsbHost } from '../src/comm/usb';
+
+/** Every read length of both descriptors and GET_STATUS in one script, so that the device sends packets of every size and CRC (some need stuffed bits). Results land in `out`. */
+export function readSweep(out: { type: string; len: number; got: unknown }[]): (h: UsbHost) => Pump<void> {
+  return function* (h: UsbHost): Pump<void> {
+    yield* h.quiet(40);
+    yield* h.busReset();
+    for (let len = 1; len <= 30; len++) {
+      for (const [type, name] of [[1, 'device'], [2, 'configuration']] as const) {
+        out.push({ type: name, len, got: yield* h.controlRead(0, setupData(0x80, REQ.GET_DESCRIPTOR, type << 8, 0, len)) });
+      }
+    }
+    for (let len = 1; len <= 3; len++) out.push({ type: 'status', len, got: yield* h.controlRead(0, setupData(0x80, REQ.GET_STATUS, 0, 0, len)) });
+  };
 }
