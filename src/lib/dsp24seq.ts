@@ -33,27 +33,27 @@ export const DSP24_LOOP: ComponentDef = (() => {
   const S = new Sheet();
   const R8 = register(8), R16 = register(16);
   const D = 8; // the registers' column (the enable gates sit to its left)
-  S.place('u0', equal(8), D + 30, 19, 'PC = end?');
+  S.place('u0', equal(8), D + 30, 20, 'PC = end?');
   S.place('u1', constWord(16, 1), D + 22, 43, '1');
   S.place('u2', constWord(16, 0xffff), D + 22, 34, '−1');
   S.place('u3', TIE0, D + 32, 28);
   S.place('u4', rca(16), D + 30, 31, 'count − 1');
-  S.place('u5', NOT, D + 44, 25);
-  S.place('u6', NOT, D + 44, 29);
-  S.place('u7', andN(4), D + 52, 19, 'at the end of an active loop');
+  S.place('u5', NOT, D + 44, 26);
+  S.place('u6', NOT, D + 44, 30);
+  S.place('u7', andN(4), D + 52, 20, 'at the end of an active loop');
   S.place('u8', equal(16), D + 30, 40, 'count = 1?');
-  S.place('u9', AND, D + 62, 22, 'last pass');
+  S.place('u9', AND, D + 62, 23, 'last pass');
   S.place('u10', NOT, D + 60, 36);
   S.place('u11', AND, D + 66, 32, 'go back');
   S.place('u12', busMux2(16), D + 50, 32, 'count: new or − 1');
   S.place('ls', R8, D + 12, 0, 'start');
-  S.place('le', R8, D + 12, 20, 'end');
+  S.place('le', R8, D + 12, 21, 'end');
   S.place('u13', OR, 10, 32);
   S.place('lc', R16, D + 12, 30, 'count');
   S.place('u14', OR, 10, 12);
   S.place('la', DFFE, D + 12, 10, 'active');
   const nets: NetDef[] = [
-    { name: 'pc', ends: ['pc', 'u0.a'], via: { 'u0.a': [[D + 26, 18], [D + 26, 21]] } },
+    { name: 'pc', ends: ['pc', 'u0.a'], via: { 'u0.a': [[D + 26, 19], [D + 26, 22]] } },
     { ends: ['u2.y', 'u4.b'] },
     { ends: ['u3.y', 'u4.cin'] },
     { name: 'isloop', ends: ['isloop', 'u5.a', 'u12.s', 'ls.en', 'le.en', 'u13.a', 'u14.a', 'la.d'], tags: true },
@@ -66,7 +66,7 @@ export const DSP24_LOOP: ComponentDef = (() => {
     { ends: ['u8.eq', 'u9.b', 'u10.a'] },
     { ends: ['u10.y', 'u11.b'] },
     { ends: ['u4.s', 'u12.a'] },
-    { name: 'cnt', ends: ['cnt', 'u12.b'], via: { 'u12.b': [[D + 48, 38], [D + 48, 36]] } },
+    { name: 'cnt', ends: ['cnt', 'u12.b'], via: { 'u12.b': [[D + 48, 39], [D + 48, 36]] } },
     { name: 'pc1', ends: ['pc1', 'ls.d'] },
     { name: 'clk', ends: ['clk', 'ls.clk', 'le.clk', 'lc.clk', 'la.clk'], tags: true },
     { name: 'lend', ends: ['lend', 'le.d'] },
@@ -76,7 +76,7 @@ export const DSP24_LOOP: ComponentDef = (() => {
     { ends: ['u14.y', 'la.en'] },
     { name: 'le', ends: ['le.q', 'u0.b'] },
     { name: 'lc', ends: ['lc.q', 'u4.a', 'u8.a'], trunk: D + 21 },
-    { name: 'la', ends: ['la.q', 'u7.i0'], via: { 'u7.i0': [[D + 40, 13], [D + 40, 20]] } },
+    { name: 'la', ends: ['la.q', 'u7.i0'], via: { 'u7.i0': [[D + 40, 13], [D + 40, 21]] } },
     { name: 'ls', ends: ['ls.q', 'ls'] },
     { ends: ['u11.y', 'back'] },
   ];
@@ -86,7 +86,7 @@ export const DSP24_LOOP: ComponentDef = (() => {
     ports: LOOP_PORTS,
     symbol: { kind: 'box', label: 'LOOP' },
     netlist: () => ({
-      pins: { pc1: [0, 2], isloop: [0, 5], halt: [0, 8], pc: [0, 18], lend: [0, 22], cnt: [0, 38], clk: [0, 48], back: [D + 84, 35], ls: [D + 84, 3] },
+      pins: { pc1: [0, 2], isloop: [0, 5], halt: [0, 8], pc: [0, 19], lend: [0, 23], cnt: [0, 39], clk: [0, 48], back: [D + 84, 35], ls: [D + 84, 3] },
       instances: S.instances(), nets,
     }),
   });
