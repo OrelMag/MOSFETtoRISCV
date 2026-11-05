@@ -67,6 +67,20 @@ export class Rtl {
     try { return fn(); } finally { this.cur = was; }
   }
 
+  /** scope() in the root, wherever the design is now. */
+  rootScope<T>(name: string, label: string, fn: () => T): T {
+    const was = this.cur;
+    this.cur = 0;
+    try { return this.scope(name, label, fn); } finally { this.cur = was; }
+  }
+  /** What follows goes in this box of the root, until the next within(): a long sequence of signals that would otherwise need passing out of a callback. */
+  within(name: string, label: string): void {
+    this.cur = 0;
+    this.scope(name, label, () => { this.cur = this.scopes[this.cur].id; this.stay = this.cur; });
+    this.cur = this.stay;
+  }
+  private stay = 0;
+
   // ---- signals -----------------------------------------------------------------------------------------------------
 
   private fresh(inst: string, port: string, name?: string): Sig {

@@ -1,0 +1,40 @@
+/* ---------- Cellular (src/widgets/cellular.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.cl-w, .cl-w .mos-row { min-width: 0; max-width: 100%; }
+.cl-w { gap: 8px; }
+.cl-w .mos-sl { flex-basis: 100%; min-width: 0; }
+.cl-w .mos-sl span { width: 118px; flex: none; }
+.cl-w .mos-sl input { min-width: 0; flex: 1 1 0; }
+.cl-w .mos-sl output { width: 76px; flex: none; white-space: nowrap; }
+.cl-svg { display: block; width: 100%; max-width: 640px; height: auto; }
+.cl-svg.map { max-width: 460px; }
+.cl-svg.sq { max-width: 300px; }
+.cl-t { font: 11px var(--font-mono); fill: var(--text-2); }
+.cl-grid { stroke: var(--border); stroke-width: 1; }
+.cl-ring { fill: none; stroke: var(--border); stroke-width: 1; }
+.cl-hex { fill: color-mix(in hsl, hsl(calc(var(--h) * 1deg) 55% 55%) 18%, var(--surface)); stroke: var(--border-strong); stroke-width: 1; }
+.cl-hex.same { fill: color-mix(in srgb, var(--accent) 45%, var(--surface)); stroke: var(--accent); }
+.cl-hex.mine { fill: var(--accent); }
+.cl-re { fill: var(--surface-2); stroke: var(--border); stroke-width: 0.5; }
+.cl-re.ctl { fill: color-mix(in srgb, var(--warn) 40%, var(--surface)); }
+.cl-re.ref { fill: var(--accent); }
+.cl-bar.b0, .cl-sw.b0 { fill: var(--muted); background: var(--muted); }
+.cl-bar.b1, .cl-sw.b1 { fill: var(--accent); background: var(--accent); }
+.cl-bar.b2, .cl-sw.b2 { fill: var(--warn); background: var(--warn); }
+.cl-key { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text-2); }
+.cl-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.cl-site { fill: none; stroke-width: 1.2; }
+.cl-site.s0 { stroke: var(--probe-1); } .cl-site.s1 { stroke: var(--probe-2); } .cl-site.s2 { stroke: var(--probe-3); }
+.cl-served { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+.cl-ho { stroke: var(--bad); stroke-width: 1; stroke-dasharray: 3 3; }
+.cl-beam { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.cl-scroll { overflow-x: auto; max-width: 100%; }
+.cl-table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.cl-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 8px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.cl-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+.cl-table td.num { font: 600 12px var(--font-mono); text-align: right; white-space: nowrap; }
+.cl-w .mc-status b.bad { color: var(--bad); }
+.cl-w .mc-status b.good { color: var(--good); }
+@media (max-width: 600px) {
+  .cl-w .mos-sl span { width: 84px; }
+  .cl-w .mos-sl output { width: 62px; font-size: 11px; }
+}
