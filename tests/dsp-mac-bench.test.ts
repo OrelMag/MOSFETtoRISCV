@@ -27,7 +27,7 @@ describe('the data and the exact outputs are the oracle\'s', () => {
 });
 
 type Fig = { cycles: number; setupCycles: number; kernel: number; products: number };
-const fig = (m: MacMachine, b: MacBench) => (figures.machines as unknown as Record<string, { nands: number; period: number; benches: Record<string, Fig> }>)[m];
+const fig = (m: MacMachine, _b: MacBench) => (figures.machines as unknown as Record<string, { nands: number; period: number; benches: Record<string, Fig> }>)[m];
 
 describe('the figures in macbench.json, re-measured', () => {
   for (const m of MAC_MACHINES) {
