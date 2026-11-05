@@ -56,6 +56,12 @@ describe('chapter numbers', () => {
     expect(typedInSource('t.ts', src)).toEqual([`chapter ${FLOOR}`, `Chapter ${FLOOR}`, `ch ${FLOOR}`]);
   });
 
+  it('a table of chapters shows each with its own number (the telegraph chapter\'s ladder has them bare, where the detector cannot see)', () => {
+    const rows = [...chapters.find((c) => c.id === 'telegraph')!.steps.map((s) => s.body).join('').matchAll(/<tr><td>(\d+)<\/td><td>([^<]+)<\/td><\/tr>/g)];
+    expect(rows.length).toBeGreaterThan(10);
+    for (const [, n, title] of rows) expect(chapters.find((c) => c.num === +n)?.title, n).toBe(title);
+  });
+
   it('no text types a number that can move', () => {
     const bad: string[] = [];
     for (const f of readdirSync('src', { recursive: true }) as string[]) {

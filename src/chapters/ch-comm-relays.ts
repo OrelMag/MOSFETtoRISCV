@@ -46,16 +46,16 @@ const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
-  [44, 'SPI and I²C'], [45, 'Modems'], [46, 'Fast serial links'], [47, 'When bits go wrong'], [48, 'Ethernet'], [49, 'A switch'],
-  [50, 'Computers on a network'], [51, 'A router'], [52, 'TCP'], [53, 'The internet path'],
+  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('path'), 'The internet path'],
 ];
 /** The five questions, with where the track answers each (chapter numbers). */
 const QUESTIONS: [string, string, number[]][] = [
-  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', [41, 45, 46]],
-  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', [40, 42, 43, 46]],
-  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', [40, 43, 48]],
-  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', [47, 52]],
-  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', [40, 44, 48, 49, 51]],
+  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', [41, numOf('modem'), numOf('serial')]],
+  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', [40, 42, 43, numOf('serial')]],
+  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', [40, 43, numOf('ethernet')]],
+  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', [numOf('errors'), numOf('tcp')]],
+  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', [40, 44, numOf('ethernet'), numOf('switch'), numOf('router')]],
 ];
 
 export const chTelegraph: Chapter = {
