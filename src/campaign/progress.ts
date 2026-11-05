@@ -338,7 +338,7 @@ export class Progress {
 
 /** The campaign as a file: progress plus the level chips and every chip they use. */
 export function exportCampaign(st: CampaignState, ws: Workspace): string {
-  const ids = [...NODES.map(levelChipId), ...CAPSTONES.map((c) => `u_ch_${c.id}`)].filter((id) => ws.chips[id]);
+  const ids = [...NODES.map(levelChipId), ...[...CAPSTONES, ...COMM_CAPSTONES].map((c) => `u_ch_${c.id}`)].filter((id) => ws.chips[id]);
   return JSON.stringify({ format: CAMPAIGN_FORMAT, schema: SCHEMA, progress: st, chips: closure(ws, ids) }, null, 2);
 }
 

@@ -5,7 +5,7 @@
 // ui/pages/capstone.ts (#/campaign/play/<id>). No DOM.
 
 import { groupDigits } from '../sim/numfmt';
-import { CAPSTONES, type Capstone, type CapstoneStatus, capstoneStatus } from '../learn/capstones';
+import { type AnyCapstone, CAPSTONES, COMM_CAPSTONES, type Capstone, type CapstoneStatus, capstoneStatus } from '../learn/capstones';
 import { type BuildChallenge, type ChallengeCheck, type CheckResult, checkChallenge, type LibRule, type PinSpec, type SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import { UserLibrary } from '../editor/library';
@@ -20,6 +20,9 @@ import { rv16Pipe } from '../lib/rv16/pipe';
 import { PONG16 } from '../riscv/rv16/pong16';
 import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
+import { UART_CORE } from '../lib/uart';
+import { pinsOf } from './buildcomm';
+import { CONSOLE_ERR, runConsole } from './capcomm';
 import { CORE_BRIEF, CORE_PINS } from './build5';
 import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
@@ -27,11 +30,14 @@ import { coreTests, pipeTests } from './coretests';
 import { rng } from './drills';
 import { ruleFor, unlockedPartCount } from './graph';
 
-export const capstoneById = (id: string): Capstone | undefined => CAPSTONES.find((c) => c.id === id);
+export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.find((c) => c.id === id) ?? COMM_CAPSTONES.find((c) => c.id === id);
+
+/** What the console may place beyond the two levels: the blocks it is not about. */
+const CONSOLE_GIVEN = ['fifo16x8', 'baud12'];
 
 export const capstoneChipId = (id: string): string => `u_ch_${id}`;
 
-export const capstoneOfChip = (chipId: string): Capstone | undefined => CAPSTONES.find((c) => capstoneChipId(c.id) === chipId);
+export const capstoneOfChip = (chipId: string): AnyCapstone | undefined => [...CAPSTONES, ...COMM_CAPSTONES].find((c) => capstoneChipId(c.id) === chipId);
 
 /** True once the capstone is passed: only then do its reference answer and "Do it for me" open. */
 export const solutionsOpen = (id: string, nodes: Record<string, { status?: string } | undefined>): boolean => capstoneStatus(id, nodes) === ('passed' satisfies CapstoneStatus);
@@ -62,6 +68,8 @@ export function capstoneRule(id: string): LibRule | undefined {
     else if (id === 'cap_t3') r = tierRule(['pi_core3'], ['rv16_cpu']);
     // tier 4: everything the core levels of acts 5–6 unlocked (the multicycle and predicting cores too), not the finished cores
     else if (id === 'cap_t4') r = tierRule(['pi_core3', 'o_mc', 'o_bpred'], ['rv16_cpu', 'rv16_mc']);
+    // the serial console: the transmitter and receiver levels' parts, and the FIFO and the baud generator as given blocks
+    else if (id === 'cap_console') { const t = tierRule(['l_uarttx', 'l_uartrx'], ['uart_full']); r = { ...t, lib: [...new Set([...t.lib, ...CONSOLE_GIVEN])].sort() }; }
     if (r) rules.set(id, r);
   }
   return r;
@@ -240,6 +248,19 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
       ports: CORE_PINS,
       check: coreCheck(briefSpec(), `${briefTests().length} programs against the golden model, every register write and store in order, within ${BRIEF_BUDGET.cpi} cycles per instruction; measured for NANDs, clock period and cycles.`),
       answer: refOf('cap_t4', () => rv16Core(true), 'Single-cycle RV16 core'),
+    };
+  }
+  else if (id === 'cap_console') {
+    c = {
+      ...base, level: 'sequential',
+      brief: 'A serial console: a UART with a sixteen-byte FIFO each way. Frames are 8N1, each bit 16 ticks, a tick being <b>div</b> clocks (<code>divWe</code> loads div from <code>wval</code>; a divisor of 1 ticks every clock).'
+        + ' <code>push</code> queues <code>data</code> to send. <code>rxData</code> shows the oldest byte received, and <code>pop</code> takes it.'
+        + ' <code>status</code>: bit 0 data waiting, 1 transmit FIFO full, 2 transmitter idle (FIFO empty and nothing on the line), 3 framing error, 4 overrun. A frame with a bad stop bit sets 3 and stores nothing; a byte arriving with the FIFO full is dropped and sets 4; both stay until <code>clrWe</code> with a 1 in that bit of <code>wval</code>.'
+        + ' <code>ieWe</code> loads the two interrupt enables from <code>wval</code>: <code>irq</code> is (bit 0 and data waiting) or (bit 1 and the transmit FIFO empty).'
+        + ` Your frames must read correctly by a far end ${(CONSOLE_ERR * 100).toFixed(1)} % off in clock, either way, and you must read its frames. No walkthrough, no hints: the bench looks only at your pins.`,
+      ports: pinsOf(UART_CORE).filter((p) => !['div', 'ie', 'tickOut'].includes(p.name)),
+      check: { kind: 'custom', describe: 'Bytes sent at two divisors and read by a far end off in clock both ways, the transmit FIFO filled, frames received from a sender off both ways, overrun, a framing error and its recovery, and the interrupt rules.', run: runConsole },
+      answer: refOf('cap_console', () => UART_CORE, 'UART core'),
     };
   }
   if (c) cache.set(id, c);
