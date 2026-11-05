@@ -388,7 +388,7 @@ function buildMicro(P: Microprogram, id: string, shared: boolean): ComponentDef 
     { name: 'd1s', def: splitter([4, 28]), at: [xS, 56] },
     { name: 'd2s', def: splitter([4, 28]), at: [xS, 78] },
     { name: 'z2', def: constWord(2, 0), at: [18, 28] }, { name: 'z26', def: constWord(26, 0), at: [18, 32] },
-    { name: 'z25', def: constWord(25, 0), at: [6, 66] }, { name: 'z29', def: constWord(29, 0), at: [6, 76] },
+    { name: 'z25', def: constWord(25, 0), at: [6, 53] }, { name: 'z29', def: constWord(29, 0), at: [6, 76] },
     { name: 'z4', def: constWord(4, 0), at: [-6, 30] },
   ];
   void mg;
@@ -409,7 +409,7 @@ function buildMicro(P: Microprogram, id: string, shared: boolean): ComponentDef 
     { name: 'dispatch1', ends: ['d1s.o0', 'mx.d1'], via: { 'mx.d1': [[63, 57], [63, 49], [-10, 49], [-10, 24]] } },
     { name: 'dispatch2', ends: ['d2s.o0', 'mx.d2'], via: { 'mx.d2': [[62, 79], [62, 48], [-8, 48], [-8, 26]] } },
     { ends: ['z4.y', 'mx.d3'] },
-    { name: 'µnext', ends: ['mx.y', 'upc.d'] },
+    { name: 'µnext', ends: ['mx.y', 'upc.d'], via: { 'upc.d': [[9, 25], [9, 20]] } },
   ];
   const nf = MC_FIELDS.length;
   MC_FIELDS.forEach(([f], i) => nets.push({ name: f, ends: [`sw.o${i}`, f] }));
@@ -622,7 +622,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   };
   const pt = P;
   const [pqx] = pt('pc', 'q'), lx = pqx + 4;
-  const yPC = 4, yTaken = -8, yRes = -10, yAluOut = -4, yF3 = 0.5;
+  const yPC = -2, yTaken = -8, yRes = -10, yAluOut = -4, yF3 = 0.5;
   const sx = at.get('srcA')![0], rx = at.get('res')![0], rr = right('res'), nx = at.get('npc')![0];
   // the PC: up along its own lane, over the top to OldPC and to SrcA, out to its pin
   wire('PC', {
@@ -657,7 +657,7 @@ function buildMulticycle(IM: ComponentDef, control: 'fsm' | 'micro', adder: 'rca
   });
   wire('ImmExt', {
     'srcB.d1': [[sx - 4, pt('imm', 'imm')[1]], [sx - 4, pt('srcB', 'd1')[1]]],
-    'res.d3': [[rx - 4, pt('imm', 'imm')[1]], [rx - 4, pt('res', 'd3')[1]]],
+    'res.d3': [[sx - 4, pt('imm', 'imm')[1]], [sx - 4, 65], [rx - 4, 65], [rx - 4, pt('res', 'd3')[1]]],
   });
   wire('zeroB', { 'srcB.d3': [[sx - 6, pt('z32b', 'y')[1]], [sx - 6, pt('srcB', 'd3')[1]]] });
   wire('SrcB', { 'alu.b': [[pt('srcB', 'y')[0] + 5, pt('srcB', 'y')[1]], [pt('srcB', 'y')[0] + 5, pt('alu', 'b')[1]]] });
