@@ -190,8 +190,6 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     return b;
   });
 
-  stage.resetBtn.addEventListener('click', () => stage.setView(view.camera));
-
   // ------------------------------------------------------------ settings
   const pick = <T extends string>(label: string, opts: readonly T[], val: T, on: (v: T) => void) => {
     const sel = h('select', { 'aria-label': label }, ...opts.map((o) => h('option', { value: o }, o))) as HTMLSelectElement;
@@ -248,7 +246,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   reset.addEventListener('click', () => restart(settings));
   const nudge = h('button', { type: 'button', class: 'btn sm' }, 'Show a double step') as HTMLButtonElement;
   nudge.addEventListener('click', () => {
-    // The middle wheel one short of its turnover, the right wheel two: the third press moves all three.
+    // The middle wheel one short of its turnover, the right wheel one short of its own: the third press moves all three.
     const mid = chr(idx(ROTORS[settings.rotors[1]].turnover[0]) - 1), right = chr(idx(ROTORS[settings.rotors[2]].turnover[0]) - 1);
     restart({ ...settings, start: `${settings.start[0]}${settings.start[1]}${mid}${right}` });
   });

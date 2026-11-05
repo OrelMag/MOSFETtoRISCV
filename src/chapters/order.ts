@@ -63,6 +63,7 @@ const BOOK = [
   'network',
   'router',
   'tcp',
+  'secret',
   'path',
   'appendix-6502',
   'appendix-doom',

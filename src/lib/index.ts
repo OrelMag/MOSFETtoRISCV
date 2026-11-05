@@ -82,3 +82,4 @@ export * from './fir';
 export * from './viterbi';
 export * from './rs';
 export * from './ethswitch';
+export * from './enigmagates';
