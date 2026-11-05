@@ -52,8 +52,8 @@ export function dcfStation(): ComponentDef {
   const difsEnd = m.andN([sDifs, nHit, m.not(vb), at(DIFS_US - 1)]);
   const boBusy = m.andN([sBo, nHit, vb]), boZero = m.not(m.orN(bo)), boGo = m.andN([sBo, nHit, m.not(vb), boZero]);
   const slotEnd = m.andN([sBo, nHit, m.not(vb), m.not(boZero), at(SLOT_US - 1)]);
-  const rtsEnd = m.and(sRts, at(RTS_US - 1)), ctsOk = m.and(sWc, rxCts), dsEnd = m.and(sDs, at(SIFS_US - 1));
-  const lenEq = m.eq(m.inc(cnt), len), txEnd = m.and(sTx, lenEq), rsEnd = m.and(sRs, at(SIFS_US - 1)), respEnd = m.and(sResp, at(ACK_US - 1));
+  const rtsEnd = m.and(sRts, at(RTS_US - 1)), ctsOk = m.and(sWc, rxCts), dsEnd = m.and(sDs, at(SIFS_US - 2));
+  const lenEq = m.eq(m.inc(cnt), len), txEnd = m.and(sTx, lenEq), rsEnd = m.and(sRs, at(SIFS_US - 2)), respEnd = m.and(sResp, at(ACK_US - 1));
   const toIdle = m.orN([done, drop, m.and(respEnd, m.not(drawn))]);
   const toDifs = m.orN([draw, boBusy, retryOn, m.and(respEnd, drawn)]);
   const toBo = difsEnd;

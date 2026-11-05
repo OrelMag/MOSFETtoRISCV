@@ -1,7 +1,7 @@
 // Wi-Fi (level Communication): who talks when nobody can hear everybody. The MAC's timing is gates (lib/wifi.ts, comm/wifi.ts, at 1 clock = 1 µs); the air, the rates and MIMO are models, labelled as models, and the traces are modelled.
 // Model numbers are computed; dates and rate figures of the generations are typed.
 
-import { ACK_US, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, goodputMbps, aggregateMbps, RATES, RESP_TIMEOUT, RETRY_LIMIT, RTS_US, SIFS_US, SLOT_US } from '../comm/wifi';
+import { ACK_US, aggregateCap, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, exchangeUs, goodputMbps, aggregateMbps, RATES, RESP_TIMEOUT, RETRY_LIMIT, RTS_US, SIFS_US, SLOT_US } from '../comm/wifi';
 import { fsplDb, noiseFloorDbm } from '../phys/radio';
 import { dcfStation } from '../lib/wifi';
 import { stats } from '../sim/stats';
@@ -69,8 +69,8 @@ export const chWifi: Chapter = {
       body: `
         <p>Ethernet stations listen while they send. A collision shows on the cable at once, and both stop. A radio can't do that: its own transmitter, at 20 dBm, drowns the receiver sharing its antenna. A neighbour 20 m away at 5.5 GHz arrives at about ${nf(RX, 0)} dBm in free space, ${nf(SELF, 0)} dB under what you are sending, and the noise floor of a 20 MHz channel is ${nf(noiseFloorDbm(20, 6), 0)} dBm. So a Wi-Fi transmitter finds out about a collision only afterwards: the receiver sends back an <strong>ACK</strong>, and no ACK means try again.</p>
         <p>The other half of Ethernet's method, listening before you talk, still works. The scheme is <strong>CSMA/CA</strong>, carrier sense with collision <em>avoidance</em>: since a collision costs a whole frame, each station goes to some trouble not to have one. The rule set is called the <strong>distributed coordination function</strong>, DCF.</p>
-        <p>On the stage are three stations in gates, ${N()} NANDs each: A and B always have frames for the access point in the middle. A clock is one microsecond, so what you see in the timeline is 802.11a's real timing. Between them is a model of the air: who hears whom, and what arrives whole. A model station runs beside each one, and the panel says whether they agree.</p>
-        <p>Press Run. Blue frames, a green ACK after each. Sometimes both blue bars start together: that is a collision, and neither gets an ACK.</p>`,
+        <p>On the stage are three stations in gates, ${N()} NANDs each: A and B always have frames for the access point in the middle. A clock is one microsecond, so what you see in the timeline is 802.11a's timing: SIFS exact, a station's other waits within 1 to 3 µs of it. Between them is a model of the air: who hears whom, and what arrives whole. A model station runs beside each one, and the panel says whether they agree.</p>
+        <p>Press Run. Data frames, an ACK after each. Sometimes both data bars start together: that is a collision, and neither gets an ACK.</p>`,
       scene: () => wifiScene('open'),
       challenge: {
         kind: 'quiz',
@@ -89,12 +89,12 @@ export const chWifi: Chapter = {
       body: `
         <p>A station with a frame:</p>
         <ol>
-          <li>Picks a random <strong>backoff</strong> between 0 and the contention window CW, in slots of ${SLOT_US} µs.</li>
+          <li>Picks a random <strong>backoff</strong> between 0 and the contention window CW, in slots of ${SLOT_US} µs. (A real station with a medium long idle may skip this; here every frame draws one.)</li>
           <li>Waits until the medium has been idle for <strong>DIFS</strong> (${DIFS_US} µs).</li>
           <li>Counts down one per idle slot. If the medium goes busy it freezes the count, and starts again after the next DIFS with what is left.</li>
           <li>At zero, sends.</li>
           <li>The receiver waits <strong>SIFS</strong> (${SIFS_US} µs) and answers with an ACK (${ACK_US} µs here).</li>
-          <li>The sender waits a little longer than that, ${RESP_TIMEOUT} µs in all. No ACK: CW doubles (from ${CW_MIN} up to ${CW_MAX}) and it tries again, ${RETRY_LIMIT} tries in all, and then the frame is dropped. An ACK resets CW.</li>
+          <li>The sender waits a little longer than that, ${RESP_TIMEOUT} µs in all. No ACK: CW doubles (from ${CW_MIN} up to ${CW_MAX}) and it tries again, ${RETRY_LIMIT} tries in all (the standard's limit for short frames; 4 for frames sent with RTS), and then the frame is dropped. An ACK resets CW.</li>
         </ol>
         <p>Notice that there are no priorities in any frame. <strong>Priority is time</strong>: SIFS is shorter than DIFS, so an ACK always gets the air before anyone can start something new. DIFS = SIFS + 2 slots.</p>
         <p>The slot itself is physics: long enough that a station starting in one slot is heard by everyone by the next, which covers receive-to-transmit turnaround, carrier sense and propagation. A random count is enough to spread stations out in time without any of them knowing how many others there are.</p>
@@ -105,7 +105,7 @@ export const chWifi: Chapter = {
         goal: 'Run until 20 frames have been delivered between A and B, with the gates agreeing with the model.',
         check: (st) => { const a = wifiApi.get(st)?.status(); return !!a && a.delivered[0] + a.delivered[2] >= 20 && a.agreed; },
         hints: ['Run: each exchange takes about half a millisecond.', 'Compare the two delivered counts as they rise: over time they stay close.'],
-        answer: 'Run for about 12 ms. Both stations get a fair share, and any collision shows as two blue bars starting together and no green.',
+        answer: 'Run for about 9 ms. Both stations get a fair share, and any collision shows as two blue bars starting together and no green.',
         solve: (st) => wifiApi.get(st)?.run(14000),
       },
     },
@@ -115,7 +115,7 @@ export const chWifi: Chapter = {
         <p>Every extra station means more chance that two pick the same slot. How bad does that get? Giuseppe Bianchi's 2000 paper gives a closed form. Treat each station as attempting in a slot with probability τ, independently, and a try as colliding with probability p. Then:</p>
         <p><code>p = 1 − (1 − τ)<sup>n−1</sup></code>, and <code>τ = 2(1 − 2p) / ((1 − 2p)(W + 1) + pW(1 − (2p)<sup>m</sup>))</code></p>
         <p>Solve the two together, and the throughput is the payload's share of an average slot, whichever kind it turned out to be: idle, success or collision. With 1500-byte frames at 54 Mb/s (${L1500} µs each), 2 stations get ${nf(B2.throughput * 100, 0)} % of the air and 20 get ${nf(B20.throughput * 100, 0)} %, with ${nf(B20.p * 100, 0)} % of tries colliding.</p>
-        <p>The line in the plot is that formula, and the dots are this chapter's station model, run live at each size. They are two different things that should agree, and tests hold them within 10 %. That is a strong check: a mistake in slot counting moves the dots, not the line.</p>
+        <p>The line in the plot is that formula, and the dots are this chapter's station model, run live at each size. They are two different things that should agree, and tests hold them within 10 % for 2 to 20 stations at this frame size. That is a strong check: a mistake in slot counting moves the dots, not the line.</p>
         <p>The shape is the lesson. Doubling CW on a collision is how a station learns about load with no information: a crowded channel pushes everyone's window up. The share falls slowly with stations, not as a cliff. For short frames the cost of idle slots dominates, and throughput is small however few stations there are; that is the next step.</p>
         <p>Tick RTS / CTS. With long frames and many stations it gains, because a collision costs ${RTS_US} µs rather than a whole frame. With few stations or short frames it only loses.</p>`,
       widget: contentionWidget,
@@ -132,7 +132,7 @@ export const chWifi: Chapter = {
       title: 'The station you cannot hear',
       get body() { return `
         <p>Carrier sense asks "is anyone talking <em>near me</em>?" The collision happens <em>near the receiver</em>. If A and B are on opposite sides of an access point, in range of it but not of each other, then each hears silence and sends. The access point hears both at once and gets neither. That is the <strong>hidden terminal</strong>.</p>
-        <p>This scene has A and B out of each other's range. Run: the frames in rows A and B overlap all the time, CW climbs, tries are wasted, and frames are dropped after ${RETRY_LIMIT} tries. Carrier sense helps nothing, as it says "clear".</p>
+        <p>This scene has A and B out of each other's range. Run: the frames in rows A and B often overlap, CW climbs, tries are wasted, and frames are dropped after ${RETRY_LIMIT} tries. Carrier sense helps nothing, as it says "clear".</p>
         <p><strong>RTS / CTS</strong> uses the receiver's own voice. Before a long frame the sender sends a short <em>Request To Send</em> (${RTS_US} µs). The receiver answers, after SIFS, with <em>Clear To Send</em>. Both carry the duration of the rest of the exchange. Every station that hears either sets its <strong>NAV</strong> (network allocation vector), a timer of virtual carrier sense: it treats the medium as busy until that runs out, whether or not it hears anything. B can't hear A's RTS but can hear the access point's CTS.</p>
         <p>Tick RTS / CTS and run. Two RTSs can still collide, and since A and B cannot hear each other, any overlap at all counts: not one slot but anything within ${RTS_US} µs. But that wastes only ${RTS_US} µs of air, not ${HIDDEN_LEN_US}. Over ${400} ms of these ${HIDDEN_LEN_US} µs frames the model stations deliver ${H().plain} frames without it (dropping ${H().plainDropped}) and ${H().rts} with it. Watch the counts, though: in a short run one station can run far ahead (${H().a} against ${H().b} over this run). A collision doubles the window of whoever loses, a success resets the winner's, so the last winner tends to win again, and fairness only comes over a long run. A real network sets a threshold: only frames above some length get RTS / CTS, since a short frame costs little more than the RTS.</p>
         <p>The opposite problem is the <strong>exposed terminal</strong>: a station which hears a sender nearby and holds off, though its own receiver could have heard it fine. Carrier sense has no way to tell. Neither problem has a complete cure in a scheme with no coordinator, and that is what the next generations' scheduling goes after.</p>`; },
@@ -146,22 +146,22 @@ export const chWifi: Chapter = {
         solve: (st) => { const a = wifiApi.get(st); a?.setRts(true); a?.run(70000); },
       },
       more: {
-        pitfall: '<p>The NAV works only for stations that decode the CTS, and a CTS at a low rate reaches further than the data. Stations nearly out of range can still step on a frame. Ordinary Wi-Fi in a home has hidden stations quite often, and in practice many networks leave RTS / CTS off below 2 000 bytes or so, which accepts this.</p>',
+        pitfall: '<p>The NAV works only for stations that decode the CTS, and a CTS at a low rate reaches further than the data. Stations nearly out of range can still step on a frame. Ordinary Wi-Fi in a home has hidden stations quite often, and in practice most networks leave RTS / CTS off by default, which accepts this.</p>',
       },
     },
     {
       title: 'How fast to send',
       body: `
         <p>802.11a's eight rates range from BPSK ½ at 6 Mb/s to 64-QAM ¾ at 54 Mb/s, by the modem chapter's reasoning: more points need more SNR. There is no way to ask the channel what its SNR is; it changes by 30 dB in seconds, per the radio chapter. The transmitter has to guess, and its only signal is whether an ACK comes.</p>
-        <p><strong>ARF</strong>, Auto Rate Fallback (1997), is the simplest possible: after 10 good frames go up a rate; after 2 lost in a row come down. It's a tiny state machine. It also has a known fault, since it can't tell collisions from fading: on a busy channel it falls to low rates, and low rates take longer, raising the collisions further. Modern drivers (Minstrel in Linux) keep statistics per rate and probe the others, and newer standards have the receiver send back measured SNR and steering.</p>
-        <p>The plot is a modelled trace, not a captured radio: fading from the radio chapter's model, each frame's fate drawn from a steep curve around its rate's SNR requirement. The thick line is the rate ARF chose, the thin one the SNR. Walk faster and its 10-frame rule falls behind the channel. Compare it with the best single fixed rate and with a transmitter told the SNR each frame. Lower the mean SNR and watch a fixed 54 Mb/s lose nearly everything.</p>`,
+        <p><strong>ARF</strong>, Auto Rate Fallback (1997), is the simplest possible; simplified further here: after 10 good frames go up a rate; after 2 lost in a row come down. It's a tiny state machine. It also has a known fault, since it can't tell collisions from fading: on a busy channel it falls to low rates, and low rates take longer, raising the collisions further. Modern drivers (Minstrel in Linux) keep statistics per rate and probe the others, and newer standards have the receiver send back measured SNR and steering.</p>
+        <p>The plot is a modelled trace, not a captured radio: fading from the radio chapter's model, each frame's fate drawn from a steep curve around its rate's SNR requirement. The thick line is the rate ARF chose, the thin one the SNR. Walk faster and its 10-frame rule falls behind the channel. Compare it with the best single fixed rate and with a greedy transmitter told the SNR each frame (not a bound: it picks frame by frame). Lower the mean SNR and watch a fixed 54 Mb/s lose nearly everything.</p>`,
       widget: rateWidget,
       challenge: {
         kind: 'quiz',
         question: 'A busy network has many collisions. What does a simple rate-adaptation rule do, and what is wrong with that?',
         options: ['It reads lost frames as a weak channel and lowers the rate; frames then take longer, which makes things worse', 'It raises the rate to clear the queue', 'Nothing: rate adaptation sees only SNR', 'It stops transmitting'],
         answer: 0,
-        explain: 'A missing ACK looks the same whatever caused it. At a lower rate each frame holds the air longer, every station\'s turn gets longer, and throughput falls. This "rate anomaly" is why slow stations hurt fast ones on the same channel.',
+        explain: 'A missing ACK looks the same whatever caused it. At a lower rate each frame holds the air longer, every station\'s turn gets longer, and throughput falls. A related effect has no collisions in it at all: DCF gives each station equal chances per frame, so one slow station takes most of the airtime and holds everybody near its rate, the "rate anomaly".',
         why: ['', 'It has no reason to raise it on lost frames.', 'Simple schemes have no SNR at all, just ACKs.', 'It keeps trying until the retries run out.'],
       },
     },
@@ -169,15 +169,15 @@ export const chWifi: Chapter = {
       title: 'Where the airtime goes',
       body: `
         <p>Everything around the data costs a fixed time, and a faster data rate shrinks only the data. A 1500-byte frame at 54 Mb/s lasts ${L1500} µs. Around it come DIFS (${DIFS_US}), the average backoff (${nf((CW_MIN / 2) * SLOT_US, 0)}), SIFS (${SIFS_US}) and an ACK (${ACK_US}). The goodput is ${nf(goodputMbps(1500, R54), 0)} Mb/s of 54. The table computes this for each rate, by the standard's formula: preamble 20 µs, then 4 µs a symbol.</p>
-        <p>Shrink the payload to 100 bytes, as for voice or a TCP ACK, and it's a disaster: efficiency in single figures. Faster rates can't fix it, because the time isn't data at all. <strong>Aggregation</strong> does: 802.11n (2009) sends many MPDUs behind one preamble with one block ACK, and if one is hit only it is resent. At 32 frames, ${nf(aggregateMbps(1500, 32, R54), 0)} Mb/s from the same 54. It's the same trick as PCIe's Ack coalescing, and TCP's: one acknowledgement can cover a lot.</p>
+        <p>Shrink the payload to 100 bytes, as for voice or a TCP ACK, and it's a disaster: efficiency in single figures. Faster rates can't fix it, because the time isn't data at all. <strong>Aggregation</strong> does: 802.11n (2009) sends many MPDUs behind one preamble with a block ACK (from 802.11e), and if one is hit only it is resent. At the limit of an aggregate, 64 KB or 5.5 ms (${aggregateCap(1500, R54)} frames here), ${nf(aggregateMbps(1500, 32, R54), 0)} Mb/s from the same 54: an ideal, since real aggregates use 802.11n's rates. It's the same trick as PCIe's Ack coalescing, and TCP's: one acknowledgement can cover a lot.</p>
         <p>Later generations mostly widened the pipe. Typed figures, from public sources: 802.11n (2009), 40 MHz, 4 streams, 600 Mb/s. 802.11ac (2013), 160 MHz, 256-QAM, multi-user downlink, up to 6.9 Gb/s. 802.11ax (Wi-Fi 6, 2021), 1024-QAM and OFDMA, which splits a channel's subcarriers among users so that short frames don't each need a whole channel: a scheduled step away from pure contention. 802.11be (Wi-Fi 7, 2024), 320 MHz, 4096-QAM, multi-link.</p>`,
       widget: airtimeWidget,
       challenge: {
         kind: 'quiz',
         question: 'A link upgrades from 54 Mb/s to 540 Mb/s of raw rate with no other change, for 100-byte frames. What happens?',
-        options: ['Little: the frame shrinks, but DIFS, backoff, SIFS, preamble and ACK dominate, and do not', 'Ten times the throughput', 'Less throughput, because of more errors', 'Twice the throughput'],
+        options: ['Little: the frame shrinks, but DIFS, backoff, SIFS, preamble and ACK dominate, and they do not shrink', 'Ten times the throughput', 'Less throughput, because of more errors', 'Twice the throughput'],
         answer: 0,
-        explain: 'At 54 Mb/s a 100-byte frame is about 15 symbols of data: already a small part of about 200 µs of overhead. A ten-fold rate saves only part of that. This is why aggregation matters more than rate, for small frames.',
+        explain: `At 54 Mb/s a 100-byte frame with its header is 5 symbols of data, 20 µs: already small beside about ${nf(exchangeUs(100, R54) - 20, 0)} µs of everything else. A ten-fold rate saves at most those 20 µs. This is why aggregation matters more than rate, for small frames.`,
         why: ['', 'Only for payload-dominated exchanges.', 'Error rates are not part of this question.', 'It is less than that.'],
       },
     },
