@@ -138,5 +138,5 @@ export const errName = (code: number): ErrName | `unknown(${number})` => ((Objec
 /** Commands of the mailbox. */
 export const CMD = {
   sha256: 1, hmac: 2, hkdfExtract: 3, hkdfExpand: 4, hkdfLabel: 5, aesEncrypt: 6, gcmSeal: 7, gcmOpen: 8, x25519: 9, rsaPss: 10, x509: 11,
-  handshake: 12, appSend: 13, appRecv: 14, close: 15,
+  handshake: 12, appSend: 13, appRecv: 14, close: 15, aesExpand: 16, ghashMul: 17,
 } as const;

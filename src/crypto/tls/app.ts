@@ -56,6 +56,10 @@ ${Array.from({ length: 7 }, (_, i) => `    p${i} = load32(${MEM.cmd + 4 + 4 * i}
     elif c == ${CMD.aesEncrypt}:
         aes_expand(${arg(0)}, ${MEM.gcmCtxScratch})
         aes_encrypt(${MEM.gcmCtxScratch}, ${arg(1)}, ${arg(2)})
+    elif c == ${CMD.aesExpand}:
+        aes_expand(${arg(0)}, ${MEM.gcmCtxScratch})
+    elif c == ${CMD.ghashMul}:
+        ghash_mul(${arg(0)}, ${arg(1)})
     elif c == ${CMD.gcmSeal}:
         gcm_setkey(${MEM.gcmCtxScratch}, ${arg(0)})
         gcm_seal(${MEM.gcmCtxScratch}, ${arg(1)}, ${arg(2)}, ${arg(3)}, ${arg(4)}, ${arg(5)}, ${arg(6)})

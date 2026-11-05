@@ -1,0 +1,162 @@
+{
+ "model": "cycles = instructions retired on the site's system CPU model (FastISS, RV32IM): 1 per instruction, a 1-cycle multiplier, 34 per divide (none used); memory 1 cycle",
+ "lines": {
+  "sha": {
+   "python": 190,
+   "withComments": 214
+  },
+  "aes": {
+   "python": 172,
+   "withComments": 194
+  },
+  "x25519": {
+   "python": 158,
+   "withComments": 180
+  },
+  "rsa": {
+   "python": 198,
+   "withComments": 227
+  },
+  "x509": {
+   "python": 94,
+   "withComments": 105
+  },
+  "tls": {
+   "python": 497,
+   "withComments": 551
+  },
+  "total": {
+   "python": 1309,
+   "withComments": 1471
+  }
+ },
+ "words": {
+  "frame and runtime": 3,
+  "rsa": 779,
+  "x509": 339,
+  "tls": 2025,
+  "app": 1519,
+  "sha": 876,
+  "aes": 969,
+  "x25519": 895,
+  "total": 7405
+ },
+ "ram": {
+  "dataAndStack": 4096,
+  "buffers": 152656,
+  "handshakeBuffer": 24576,
+  "rsaArrays": 12320,
+  "fieldElements": 3200
+ },
+ "primitives": {
+  "sha256 of 0 bytes": 9253,
+  "sha256 of 55 bytes": 9308,
+  "sha256 of 64 bytes": 17614,
+  "sha256 of 1000 bytes": 134708,
+  "sha256 per 64-byte block": 8364,
+  "hmac-sha256 (32-byte key, 32-byte message)": 37928,
+  "hkdf-extract": 37958,
+  "hkdf-expand, 32 bytes": 38377,
+  "hkdf-expand-label, 32 bytes, 32-byte context": 39041,
+  "aes-128 key expansion": 2282,
+  "aes-128 block (key expansion included)": 10339,
+  "aes-128 block": 8057,
+  "ghash multiplication (one block)": 6202,
+  "aes-128-gcm seal 0 bytes + 13 bytes AAD (key setup included)": 31714,
+  "aes-128-gcm seal 16 bytes + 13 bytes AAD (key setup included)": 46297,
+  "aes-128-gcm seal 1024 bytes + 13 bytes AAD (key setup included)": 967420,
+  "aes-128-gcm per 16-byte block": 14621,
+  "aes-128-gcm open 1024 bytes + 13 bytes AAD (key setup included)": 967594,
+  "x25519": 34569985,
+  "rsa-pss-sha256 verify, 1024-bit key (RFC 8448)": 10302808,
+  "rsa-pss-sha256 verify, 2048-bit key": 40747655
+ },
+ "handshake": {
+  "rfc8448 (1024-bit RSA, three cipher suites offered)": {
+   "rsaBits": 1024,
+   "cycles": 81270421,
+   "phases": {
+    "client_hello": 34598182,
+    "server_hello": 20537,
+    "key_agreement": 35089754,
+    "encrypted_extensions": 648729,
+    "certificate": 71228,
+    "certificate_verify": 10331141,
+    "server_finished": 48261,
+    "client_finished": 462493
+   },
+   "prims": {
+    "x25519": {
+     "calls": 2,
+     "cycles": 69139884
+    },
+    "hkdf": {
+     "calls": 2,
+     "cycles": 779480
+    },
+    "gcm_open": {
+     "calls": 1,
+     "cycles": 634853
+    },
+    "rsa_pss": {
+     "calls": 1,
+     "cycles": 10302757
+    },
+    "hmac": {
+     "calls": 2,
+     "cycles": 75793
+    },
+    "gcm_seal": {
+     "calls": 1,
+     "cycles": 64583
+    }
+   },
+   "clientHelloBytes": 201,
+   "bytesSent": 259,
+   "bytesReceived": 774
+  },
+  "default offer, 2048-bit RSA (test fixture certificate)": {
+   "rsaBits": 2048,
+   "cycles": 112292977,
+   "phases": {
+    "client_hello": 34588879,
+    "server_hello": 20555,
+    "key_agreement": 35089754,
+    "encrypted_extensions": 36215,
+    "certificate": 909225,
+    "certificate_verify": 41071971,
+    "server_finished": 122418,
+    "client_finished": 453864
+   },
+   "prims": {
+    "x25519": {
+     "calls": 2,
+     "cycles": 69139884
+    },
+    "hkdf": {
+     "calls": 2,
+     "cycles": 779480
+    },
+    "gcm_open": {
+     "calls": 4,
+     "cycles": 1151019
+    },
+    "rsa_pss": {
+     "calls": 1,
+     "cycles": 40755303
+    },
+    "hmac": {
+     "calls": 2,
+     "cycles": 75793
+    },
+    "gcm_seal": {
+     "calls": 1,
+     "cycles": 64475
+    }
+   },
+   "clientHelloBytes": 135,
+   "bytesSent": 193,
+   "bytesReceived": 1307
+  }
+ }
+}
