@@ -5,13 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
   ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, demodulate, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
-  synthBand, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
+  synthBand, keyingRatio, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';
 import { complexMixer, sdrFront } from '../src/lib/sdr';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
+import { CLIP_CLOCKS, CLIP_SKIP, gateClip, modelClip } from '../src/dsp/sdrclip';
 import { tick } from './yieldtick';
 
 const lcg = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; }; };
@@ -139,24 +140,38 @@ describe('Carson\'s rule', () => {
 });
 
 describe('a clip rendered by the gates', () => {
-  it('equals the model bit for bit, and so does the sound that comes of it', async () => {
-    const f = STATIONS[0].f, n = 2400, { xr, xi } = sample(band(), -40, 0, n), ftw = tuningWord(f);
-    const sim = new BitSim(flatten(sdrFront())), gr: number[] = [], gi: number[] = [];
-    sim.setInput('ftw', [ftw]);
-    for (let i = 0; i < n; i++) {
-      sim.setInput('xr', [wordOf(xr[i], W_IN)]); sim.setInput('xi', [wordOf(xi[i], W_IN)]);
-      sim.cycle();
-      if (sim.get('valid', 1)[0]) { gr.push(signedOf(sim.get('yr', 1)[0], W_CIC)); gi.push(signedOf(sim.get('yi', 1)[0], W_CIC)); }
-      if (i % 600 === 0) await tick();
+  it('equals the model bit for bit: the words leaving the CIC, and so the sound', async () => {
+    for (const f of [STATIONS[0].f, STATIONS[3].f]) {
+      const run = await gateClip(band(), f, -40, { pause: tick }), { xr, xi } = sample(band(), -40, 0, CLIP_CLOCKS), m = frontBlock(xr, xi, tuningWord(f));
+      expect(run.clocks).toBe(CLIP_CLOCKS);
+      expect(run.yr).toEqual(Array.from(m.yr));
+      expect(run.yi).toEqual(Array.from(m.yi));
+      const model = modelClip(band(), f, -40);
+      expect(Array.from(run.clip.samples)).toEqual(Array.from(model.samples));
+      expect(run.clip.source).toBe('gates');
+      expect(model.source).toBe('model');
     }
-    const m = frontBlock(xr, xi, ftw);
-    expect(gr).toEqual(Array.from(m.yr));
-    expect(gi).toEqual(Array.from(m.yi));
-    expect(Array.from(demodulate(gr, gi).audio)).toEqual(Array.from(demodulate(m.yr, m.yi).audio));
-  }, 120_000);
+  }, 240_000);
+  it('is long enough to hold sixteen cycles of the test tone, and that tone is what comes out', async () => {
+    const run = await gateClip(band(), STATIONS[0].f, -40, { pause: tick }), a = run.clip.samples;
+    expect(a.length).toBe(CLIP_CLOCKS / 40 - CLIP_SKIP);
+    // zero crossings of a 1 kHz tone at 24 kHz: two a millisecond
+    let z = 0;
+    for (let i = 1; i < a.length; i++) if (a[i - 1] < 0 !== a[i] < 0) z++;
+    expect(Math.abs(z - 2 * (a.length / 24))).toBeLessThanOrEqual(3);
+  }, 240_000);
 });
 
 function band() { return synthBand(FS / 4); }
+
+describe('how fine a table', () => {
+  it('each bit of table is about 6 dB of spurious-free range, and the weak station beside a loud one feels it', () => {
+    const s = [4, 5, 6, 7, 8].map((k) => mixerSfdr(k));
+    for (let i = 1; i < s.length; i++) expect(s[i] - s[i - 1]).toBeGreaterThan(4.5);
+    const weak = [5, 6, 7, 8].map((k) => keyingRatio(receive(synthBand(FS), STATIONS[3].f, -40, FS, k).chain.audio));
+    for (let i = 1; i < weak.length; i++) expect(weak[i]).toBeGreaterThan(weak[i - 1] + 3);
+  });
+});
 
 describe('what it costs', () => {
   it('the NANDs of the pieces are measured, and the CIC pair is the larger', () => {

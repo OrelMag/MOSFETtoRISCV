@@ -20,7 +20,7 @@ function start(c: Clip, ended: () => void): boolean {
     ctx ??= new AC();
     if (!listening) { listening = true; window.addEventListener('hashchange', stopClip); }
     void ctx.resume();
-    const data = prepareClip(c.samples), buf = ctx.createBuffer(1, data.length, c.rate), src = ctx.createBufferSource();
+    const data = prepareClip(c.samples, { fade: c.fade }), buf = ctx.createBuffer(1, data.length, c.rate), src = ctx.createBufferSource();
     buf.getChannelData(0).set(data);
     src.buffer = buf; src.connect(ctx.destination);
     src.onended = () => { if (voice === src) { voice = null; onStop = null; ended(); } };

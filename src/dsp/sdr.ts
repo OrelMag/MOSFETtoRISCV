@@ -103,8 +103,8 @@ export function cicBlock(x: ArrayLike<number>): Int32Array {
   return out;
 }
 
-/** Mixer and CIC over a block, from zeros: the two CIC words per output group. Equal to FrontModel clock by clock. */
-export function frontBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: number, k: number = NCO_K): { yr: Int32Array; yi: Int32Array } {
+/** The mixer over a block, from phase 0: the two words it hands the CIC at every clock. Equal to MixModel clock by clock. */
+export function mixBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: number, k: number = NCO_K): { mr: Int32Array; mi: Int32Array } {
   const n = xr.length, mr = new Int32Array(n), mi = new Int32Array(n), c = new Int32Array(2 ** k), s = new Int32Array(2 ** k), t = oscTables(k);
   c.set(t.cos); s.set(t.sin);
   const top = NCO_BITS - k, mask = 2 ** NCO_BITS - 1;
@@ -115,6 +115,12 @@ export function frontBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: nu
     mi[i] = (xi[i] * cc - xr[i] * ss) >> NCO_SHIFT;
     acc = (acc + ftw) & mask;
   }
+  return { mr, mi };
+}
+
+/** Mixer and CIC over a block, from zeros: the two CIC words per output group. Equal to FrontModel clock by clock. */
+export function frontBlock(xr: ArrayLike<number>, xi: ArrayLike<number>, ftw: number, k: number = NCO_K): { yr: Int32Array; yi: Int32Array } {
+  const { mr, mi } = mixBlock(xr, xi, ftw, k);
   return { yr: cicBlock(mr), yi: cicBlock(mi) };
 }
 
@@ -305,3 +311,36 @@ export const workPerSecond = {
   channel: 2 * CHAN_TAPS * FS_CIC,
   audio: AUDIO_TAPS * AUD,
 };
+
+// ---- how fine a table -------------------------------------------------------------------------------------------------------------------------
+
+/** Spurious-free range of the mixer, dB: a steady carrier at 137 kHz mixed by an oscillator 300 Hz away, the largest line of the output outside the carrier's own bins against the carrier's. */
+export function mixerSfdr(k: number = NCO_K): number {
+  const n = 1 << 14, xr = new Int16Array(n), xi = new Int16Array(n), fin = 137_000;
+  for (let i = 0; i < n; i++) { xr[i] = Math.round(400 * Math.cos((2 * Math.PI * fin * i) / FS)); xi[i] = Math.round(400 * Math.sin((2 * Math.PI * fin * i) / FS)); }
+  const { mr, mi } = mixBlock(xr, xi, tuningWord(fin + 300), k), re = new Float64Array(n), im = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n); re[i] = mr[i] * w; im[i] = mi[i] * w; }
+  const X = fft({ re, im }), p = Array.from({ length: n }, (_, i) => X.re[i] ** 2 + X.im[i] ** 2);
+  let peak = 0, at = 0;
+  p.forEach((v, i) => { if (v > peak) { peak = v; at = i; } });
+  let spur = 0;
+  p.forEach((v, i) => { if (Math.min(Math.abs(i - at), n - Math.abs(i - at)) > 4 && v > spur) spur = v; });
+  return 10 * Math.log10(peak / spur);
+}
+
+/** The weak station's keying: units on and off of the Morse the transmitter sent. */
+export const morseUnits = (): string => MORSE;
+/** Power while the key is down against power while it is up, dB, over the audio of the weak station (one second): what the receiver can tell apart. The 'up' units are the noise and the spurs of the loud stations beside it. */
+export function keyingRatio(aud: ArrayLike<number>): number {
+  const n = aud.length, unit = n / MORSE.length;
+  let on = 0, off = 0, non = 0, noff = 0;
+  for (let u = 1; u < MORSE.length - 1; u++) {
+    if (MORSE[u] !== MORSE[u - 1] || MORSE[u] !== MORSE[u + 1]) continue;
+    const a = Math.floor(u * unit + unit * 0.25), b = Math.floor((u + 1) * unit - unit * 0.25);
+    let q = 0;
+    for (let i = a; i < b; i++) q += aud[i] * aud[i];
+    q /= b - a;
+    if (MORSE[u] === '1') { on += q; non++; } else { off += q; noff++; }
+  }
+  return 10 * Math.log10(on / non / (off / noff));
+}
