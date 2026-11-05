@@ -28,9 +28,9 @@ function geC(m: Rtl, bits: Sig[], c: number): Sig {
 const mux = (m: Rtl, s: Sig, a: Sig[], b: Sig[]): Sig[] => a.map((x, i) => m.mux(s, x, b[i]));
 const cbit = (m: Rtl, v: number, i: number): Sig => m.const(((v >> i) & 1) as 0 | 1);
 
-const RX: [string, string] = ['rx', 'bit recovery, NRZI, destuffing, SYNC'];
-const PK: [string, string] = ['pkt', 'PID, bytes, EOP, token fields'];
-const CT: [string, string] = ['ctl', 'control endpoint, device state'];
+const RX: [string, string] = ['rx', 'bits, NRZI, SYNC'];
+const PK: [string, string] = ['pkt', 'PID, bytes, EOP'];
+const CT: [string, string] = ['ctl', 'control, state'];
 const TX: [string, string] = ['tx', 'transmitter'];
 
 let cache: ComponentDef | undefined;
@@ -274,7 +274,7 @@ export function usbDevice(): ComponentDef {
   });
 
   // ---- the check registers ---------------------------------------------------------------------------------------------------------
-  m.scope('crc', 'CRC5 and CRC16 registers', () => {
+  m.scope('crc', 'CRC5, CRC16', () => {
     const txsel = m.or(tdata, tcrc);
     const d16 = m.mux(txsel, f.dbit, m.mux(tcrc, tsh[0], q16[0]));
     const en16 = m.mux(txsel, m.and(rbody, f.dd), t.adv);
@@ -297,6 +297,11 @@ export function usbDevice(): ComponentDef {
 export function usbCosts(): { total: number; blocks: Record<string, number> } {
   const dev = usbDevice();
   const blocks: Record<string, number> = {};
-  for (const inst of dev.netlist!().instances) blocks[inst.name] = stats(inst.def).nands;
+  for (const inst of dev.netlist!().instances) {
+    if (!inst.def.id.startsWith('usb_')) continue;
+    blocks[inst.name] = stats(inst.def).nands;
+    // the ROM sits inside the transmitter, the two CRC units inside crc
+    for (const sub of inst.def.netlist!().instances) if (sub.def.id.startsWith('usb_') || sub.def.id.startsWith('unitcrc')) blocks[`${inst.name}.${sub.name}`] = stats(sub.def).nands;
+  }
   return { total: stats(dev).nands, blocks };
 }
