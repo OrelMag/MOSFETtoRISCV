@@ -23,7 +23,7 @@ import type { ComponentDef } from '../sim/types';
 import { UART_CORE } from '../lib/uart';
 import { pinsOf, refOf as refOfSubs } from './buildcomm';
 import { ethSwitch } from '../lib/ethswitch';
-import { CONSOLE_ERR, runConsole, runSwitchSpec, SW_MAX_FRAME, SW_THROUGHPUT } from './capcomm';
+import { CONSOLE_ERR, runConsole, AGE_MARGIN, runSwitchSpec, SW_MAX_FRAME, SW_QUIET, SW_THROUGHPUT, SW_THROUGHPUT_BYTES, SW_THROUGHPUT_GAP } from './capcomm';
 import { CORE_BRIEF, CORE_PINS } from './build5';
 import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
@@ -37,9 +37,16 @@ export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.f
 const consoleGiven = (): string[] => (UART_CORE.netlist?.().instances ?? []).map((i) => i.def.id);
 /** The reference switch: buffers cut to the capstone's frames, so that it can be opened and run. */
 const SWITCH_REF = () => ethSwitch({ cellK: 8 });
-/** What the switch may place: the blocks one level inside its units (RAMs, counters, table rows), not the units themselves. */
-const switchUnits = (): ComponentDef[] => [...new Set((SWITCH_REF().netlist?.().instances ?? []).map((i) => i.def))].filter((d) => !!d.netlist && !/^(split|merge)/.test(d.id));
-const switchGiven = (): string[] => switchUnits().flatMap((u) => (u.netlist?.().instances ?? []).map((i) => i.def.id));
+const kidsOf = (d: ComponentDef): ComponentDef[] => [...new Set((d.netlist?.().instances ?? []).map((i) => i.def))];
+/** The switch's own blocks, drawn as chips in the reference. */
+const switchUnits = (): ComponentDef[] => kidsOf(SWITCH_REF()).filter((d) => !!d.netlist && !/^(split|merge)/.test(d.id));
+/** Inside those, the parts the sheet promises (RAMs, counters, table rows) stay parts. The machines that decide what happens are the learner's to design, and the reference draws them too. */
+const SWITCH_PARTS = /_(mem|queue|count|ram)$/;
+const switchMachines = (): ComponentDef[] => switchUnits().flatMap(kidsOf).filter((d, i, all) => /^(eth_|mac_table)/.test(d.id) && !SWITCH_PARTS.test(d.id) && all.indexOf(d) === i);
+const switchGiven = (): string[] => {
+  const machines = new Set(switchMachines());
+  return [...switchUnits().flatMap(kidsOf).filter((d) => !machines.has(d)), ...[...machines].flatMap(kidsOf)].map((d) => d.id);
+};
 
 export const capstoneChipId = (id: string): string => `u_ch_${id}`;
 
@@ -260,25 +267,25 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
   else if (id === 'cap_console') {
     c = {
       ...base, level: 'sequential',
-      brief: 'A serial console: a UART with a sixteen-byte FIFO each way. Frames are 8N1, each bit 16 ticks, a tick being <b>div</b> clocks (<code>divWe</code> loads div from <code>wval</code>; a divisor of 1 ticks every clock).'
-        + ' <code>push</code> queues <code>data</code> to send. <code>rxData</code> shows the oldest byte received, and <code>pop</code> takes it.'
+      brief: 'A serial console: a UART with a sixteen-byte FIFO each way. There is no reset pin: every flip-flop powers up 0, and <code>tx</code> must idle at 1. Frames are 8N1, each bit 16 ticks, a tick being <b>div</b> clocks (<code>divWe</code> loads div from <code>wval</code>; a divisor of 1 ticks every clock).'
+        + ' <code>push</code> queues <code>data</code> to send; software looks at bit 1 of status first, so what a push into a full FIFO does is yours. <code>rxData</code> shows the oldest byte received, and <code>pop</code> takes it.'
         + ' <code>status</code>: bit 0 data waiting, 1 transmit FIFO full, 2 transmitter idle (FIFO empty and nothing on the line), 3 framing error, 4 overrun. A frame with a bad stop bit sets 3 and stores nothing; a byte arriving with the FIFO full is dropped and sets 4; both stay until <code>clrWe</code> with a 1 in that bit of <code>wval</code>.'
         + ' <code>ieWe</code> loads the two interrupt enables from <code>wval</code>: <code>irq</code> is (bit 0 and data waiting) or (bit 1 and the transmit FIFO empty).'
-        + ` Your frames must read correctly by a far end ${(CONSOLE_ERR * 100).toFixed(1)} % off in clock, either way, and you must read its frames. No walkthrough, no hints: the bench looks only at your pins.`,
+        + ` Your frames must read correctly by a far end ${(CONSOLE_ERR * 100).toFixed(1)} % off in clock, either way, and you must read its frames. The transmitter, receiver, baud ticker and FIFO you built on the way are given as parts: the registers, flags and how they meet are yours. No walkthrough, no hints: the bench looks only at your pins.`,
       ports: pinsOf(UART_CORE).filter((p) => !['div', 'ie', 'tickOut'].includes(p.name)),
-      check: { kind: 'custom', describe: 'Bytes sent at two divisors and read by a far end off in clock both ways, the transmit FIFO filled, frames received from a sender off both ways, overrun, a framing error and its recovery, and the interrupt rules.', run: runConsole },
+      check: { kind: 'custom', describe: 'Bytes sent and received at two divisors with a far end off in clock both ways, the transmit FIFO filled, overrun, a framing error and its recovery, each flag cleared on its own, and the interrupt rules with bytes queued.', run: runConsole },
       answer: refOf('cap_console', () => UART_CORE, 'UART core'),
     };
   }
   else if (id === 'cap_switch') {
     c = {
       ...base, level: 'sequential',
-      brief: `A four-port learning switch. Each port is a byte stream in (<code>rxData</code>, <code>rxValid</code>, <code>rxLast</code>, and <code>rxErr</code> with the last byte if the MAC found the frame damaged; a frame starts only while <code>rxReady</code> is 1 and then runs to its end) and out (<code>txData</code>, <code>txValid</code>, <code>txLast</code>, moving only while <code>txReady</code> is 1). Frames are up to ${SW_MAX_FRAME} bytes.`
-        + ' The rules: a frame goes to the port its destination was last heard on; to every port but its own if the destination is a group address or has never been heard; to none if the destination is on its own port. A frame teaches the table where its source is. A damaged frame goes nowhere. An address not heard for 1000 cycles may be forgotten.'
-        + ` Every byte out must equal the byte in. With every port at full load, each sending to the next, the outputs must carry at least ${(SW_THROUGHPUT * 100).toFixed(0)} % of what is offered. RAMs, counters and table rows are given; the structure is yours. The bench compares frames whole at the ports and never looks inside.`,
+      brief: `A four-port learning switch. Each port is a byte stream in (<code>rxData</code>, <code>rxValid</code>, <code>rxLast</code>, and <code>rxErr</code> with the last byte if the MAC found the frame damaged; a frame starts only while <code>rxReady</code> is 1 and then runs to its end) and out (<code>txData</code>, <code>txValid</code>, <code>txLast</code>, moving only while <code>txReady</code> is 1). There is no reset pin: every flip-flop powers up 0. Frames are ${SW_THROUGHPUT_BYTES} to ${SW_MAX_FRAME} bytes.`
+        + ` The rules: a frame goes to the port its destination was last heard on; to every port but its own if the destination is a group address (the low bit of its first byte is 1) or has never been heard; to none if the destination is on its own port. A frame teaches the table where its source is, and the table holds eight addresses at once. A damaged frame goes nowhere, and <code>rxErr</code> only comes with the last byte, so a frame leaves after it has all arrived. An address not heard for 1000 cycles may be forgotten; the bench relies on none it has not heard for ${AGE_MARGIN}.`
+        + ` Every byte out must equal the byte in. With every port at full load, each sending to the next on ${SW_THROUGHPUT_BYTES}-byte frames with ${SW_THROUGHPUT_GAP} idle cycles between them, the outputs must carry at least ${(SW_THROUGHPUT * 100).toFixed(0)} % of that line rate. RAMs, counters and table rows are given; the receive, lookup, ageing and transmit machines and the structure are yours. The bench compares frames whole at the ports and never looks inside: however long a frame takes, a switch with no byte moving for ${SW_QUIET} cycles has finished with it.`,
       ports: pinsOf(SWITCH_REF()).filter((p) => !/^(drops|bad|frames|learned|evicted|flooded|filtered)/.test(p.name)),
-      check: { kind: 'custom', describe: 'Learning, broadcasts, every pair of hosts, flooding to a stranger, two hosts behind one port, a host that moves, a damaged frame, the longest frame, a held output, and throughput at full load.', run: runSwitchSpec },
-      answer: refOfSubs('cap_switch', SWITCH_REF, 'Four-port switch', () => switchUnits().map((d, i) => [d, `Switch unit ${i + 1}`] as [ComponentDef, string])),
+      check: { kind: 'custom', describe: 'Learning, broadcasts and a group address, every pair of hosts, flooding to a stranger, two hosts behind one port, a host that moves, a damaged frame, the longest frame, a held output and one pausing inside a frame, three inputs at once to one output, and throughput at full load.', run: runSwitchSpec },
+      answer: refOfSubs('cap_switch', SWITCH_REF, 'Four-port switch', () => [...switchMachines(), ...switchUnits()].map((d) => [d, d.name] as [ComponentDef, string])),
     };
   }
   if (c) cache.set(id, c);

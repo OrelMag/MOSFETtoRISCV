@@ -1,14 +1,15 @@
 // The switch capstone: the bench holds the reference to the sheet, and refuses switches that break a rule.
 
 import { describe, expect, it } from 'vitest';
-import { capstoneChallenge } from '../src/campaign/capstone';
+import { capstoneChallenge, capstoneRule } from '../src/campaign/capstone';
 import { runSwitchSpec } from '../src/campaign/capcomm';
 import { checkChallenge } from '../src/editor/challenges';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace } from '../src/editor/model';
 import { Builder } from '../src/lib/builder';
 import { define, merger, ones, splitter } from '../src/lib/define';
-import { TIE0 } from '../src/lib/transistors';
+import { DFF, register } from '../src/lib/sequential';
+import { TIE0, TIE1 } from '../src/lib/transistors';
 import { ethSwitch } from '../src/lib/ethswitch';
 import type { ComponentDef } from '../src/sim/types';
 
@@ -51,6 +52,36 @@ describe('the switch capstone', () => {
     ];
     for (const [name, change, want] of cases) expect(runSwitchSpec(mutant(name, change), 'gate').failures.join(' | '), name).toMatch(want);
   }, 300_000);
+  it('a right design that takes longer passes: nothing in the sheet fixes the latency', () => {
+    const late = define({
+      id: 'switch_late_inputs', name: 'late', category: 'routing', summary: '', symbol: { kind: 'box', label: 'L' },
+      ports: REF().ports.filter((p) => p.dir === 'in' || OUTS.includes(p.name)),
+      netlist: () => {
+        const b = new Builder(10, 12), ports = late.ports, ins = ports.filter((p) => p.dir === 'in').map((p) => p.name);
+        b.pins(...ins);
+        b.add(REF(), 'core', 'core');
+        b.add(TIE1, 'tie', 'one');
+        for (const p of ins) {
+          if (!/^rx/.test(p)) { b.wire(p, `core.${p}`); continue; }
+          let at = p;
+          for (let k = 0; k < 16; k++) at = /^rxData/.test(p) ? b.op1(register(8), [at, 'one.y', 'clk']) : b.op1(DFF, [at, 'clk']);
+          b.wire(at, `core.${p}`);
+        }
+        for (const o of OUTS) b.wire(`core.${o}`, o);
+        return { pins: Object.fromEntries(ports.map((p, i) => [p.name, [p.dir === 'in' ? 0 : b.right, i * 2]])) as Record<string, [number, number]>, instances: b.instances, nets: b.nets() };
+      },
+    });
+    expect(runSwitchSpec(late, 'gate').failures).toEqual([]);
+  }, 300_000);
+  it('the table the sheet asks for is enough, and half of it is not', () => {
+    expect(runSwitchSpec(ethSwitch({ cellK: 8, tableK: 3 }), 'gate').failures).toEqual([]);
+    expect(runSwitchSpec(ethSwitch({ cellK: 8, tableK: 2 }), 'gate').failures.length).toBeGreaterThan(0);
+  }, 300_000);
+  it('the machines are the learner\'s: none of them is a part', () => {
+    const lib = (capstoneRule('cap_switch') as { lib: string[] }).lib;
+    for (const banned of ['eth_in_8fs_rx', 'eth_in_8fs_tx', 'mac_table7_4_look', 'mac_table7_4_age', 'eth_in_8fs', 'mac_table7_4', 'eth_xbar']) expect(lib, banned).not.toContain(banned);
+    for (const given of ['eth_in_8fs_mem', 'mac_table7_4_ram', 'eth_in_8fs_count']) expect(lib, given).toContain(given);
+  });
   it('the reference passes, drawn as chips and checked as a learner\'s would be, within its allowed parts', () => {
     const ch = capstoneChallenge('cap_switch')!, chips = ch.answer();
     const ws = { ...emptyWorkspace(), chips: Object.fromEntries(chips.map((d) => [d.id, d])) };

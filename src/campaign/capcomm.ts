@@ -87,7 +87,7 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
   /** Every byte waiting in the receive FIFO, oldest first. */
   const drain = (): number[] => {
     const out: number[] = [];
-    for (let k = 0; k < CONSOLE_DEPTH + 4 && p.status & ST_RXNE; k++) { out.push(p.rxData); p.step({ pop: 1 }); p.step(); }
+    for (let k = 0; k < CONSOLE_DEPTH + 4 && p.status & ST_RXNE; k++) { out.push(p.rxData); p.step({ pop: 1 }); p.run(3); }
     return out;
   };
   const untilIdle = (limit: number) => { for (let k = 0; k < limit && !(p.status & ST_TXIDLE); k++) p.step(); };
@@ -119,6 +119,7 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
       const b = (k * 37 + 11) & 255;
       sent.push(b);
       p.step({ push: 1, data: b });
+      p.run(2); // the sheet says what full means, not on which cycle it shows: software looks before each push
     }
     check(full, `the transmit FIFO never reported full after ${sent.length} bytes in a row`);
     check(sent.length >= CONSOLE_DEPTH, `full came after only ${sent.length} bytes: the FIFO holds ${CONSOLE_DEPTH}`);
@@ -129,18 +130,19 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
   }
 
   // ---- receiving from a far end off in either direction, back to back
-  setDiv(1);
-  p.run(2);
-  for (const err of [0, CONSOLE_ERR, -CONSOLE_ERR]) {
-    const bytes = [0x41, 0xc3, 0x00, 0xff, 0x5a, 0xa5, 0x0f, 0xf0], unit = OVERSAMPLE * (1 + err), from = p.cycles + 3;
-    p.line = sender(bytes, unit, from);
-    p.run(Math.ceil(unit * 10 * bytes.length) + 3 + OVERSAMPLE * 2);
-    p.line = () => 1;
-    const got = drain();
-    check(same(got, bytes), `a sender ${(err * 100).toFixed(1)} % off sent [${list(bytes)}], the FIFO gave [${list(got)}]`);
-    check(!(p.status & (ST_FRAMING | ST_OVERRUN)), `a sender ${(err * 100).toFixed(1)} % off left error flags set: status ${hex(p.status)}`);
-    check(!(p.status & ST_RXNE), 'status says data waiting after the FIFO was emptied');
-    p.step({ clrWe: 1, wval: ST_FRAMING | ST_OVERRUN });
+  for (const div of [3, 1]) {
+    setDiv(div);
+    p.run(2);
+    for (const err of [0, CONSOLE_ERR, -CONSOLE_ERR]) {
+      const bytes = [0x41, 0xc3, 0x00, 0xff, 0x5a, 0xa5, 0x0f, 0xf0], unit = OVERSAMPLE * div * (1 + err), from = p.cycles + 3;
+      p.line = sender(bytes, unit, from);
+      p.run(Math.ceil(unit * 10 * bytes.length) + 3 + OVERSAMPLE * 2 * div);
+      p.line = () => 1;
+      const got = drain();
+      check(same(got, bytes), `divisor ${div}: a sender ${(err * 100).toFixed(1)} % off sent [${list(bytes)}], the FIFO gave [${list(got)}]`);
+      check(!(p.status & (ST_FRAMING | ST_OVERRUN)), `divisor ${div}: a sender ${(err * 100).toFixed(1)} % off left error flags set: status ${hex(p.status)}`);
+      check(!(p.status & ST_RXNE), 'status says data waiting after the FIFO was emptied');
+    }
   }
 
   // ---- overrun: more than it holds, and nothing read
@@ -153,9 +155,22 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
     const got = drain();
     check(same(got, bytes.slice(0, CONSOLE_DEPTH)), `after an overrun the FIFO gave [${list(got)}]: it keeps the first ${CONSOLE_DEPTH}`);
     check(!!(p.status & ST_OVERRUN), 'overrun cleared itself: it stays until a write of 1');
+    // both flags up: each clears only by a 1 in its own bit
+    const at = p.cycles + 3;
+    p.line = sender([0x77], OVERSAMPLE, at, 0);
+    p.run(OVERSAMPLE * 12 + 3);
+    p.line = () => 1;
+    p.run(OVERSAMPLE * 2);
+    check((p.status & (ST_FRAMING | ST_OVERRUN)) === (ST_FRAMING | ST_OVERRUN), `overrun and a framing error both happened, and status reads ${hex(p.status)}`);
+    p.step({ clrWe: 1, wval: 0 });
+    p.step();
+    check((p.status & (ST_FRAMING | ST_OVERRUN)) === (ST_FRAMING | ST_OVERRUN), 'a clear with no bit set in wval cleared a flag');
     p.step({ clrWe: 1, wval: ST_OVERRUN });
     p.step();
     check(!(p.status & ST_OVERRUN), 'a write of 1 to its status bit did not clear overrun');
+    check(!!(p.status & ST_FRAMING), 'clearing overrun cleared the framing error too');
+    p.step({ clrWe: 1, wval: ST_FRAMING });
+    p.step();
   }
 
   // ---- a bad stop bit: an error, no byte
@@ -167,16 +182,17 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
     p.run(OVERSAMPLE * 2);
     check(!!(p.status & ST_FRAMING), 'a frame with a stop bit of 0 did not set the framing error');
     check(!(p.status & ST_RXNE), 'a frame with a bad stop bit went into the FIFO');
-    p.step({ clrWe: 1, wval: ST_FRAMING });
-    p.step();
-    check(!(p.status & ST_FRAMING), 'a write of 1 to its status bit did not clear the framing error');
-    // and it can still receive
+    // and it can still receive, with the flag staying up through the good byte and its pop
     const after = p.cycles + 3;
     p.line = sender([0x3c], unit, after);
     p.run(unit * 10 + 3 + OVERSAMPLE * 2);
     p.line = () => 1;
     const got = drain();
     check(same(got, [0x3c]), `after a framing error the next good byte gave [${list(got)}]`);
+    check(!!(p.status & ST_FRAMING), 'the framing error cleared itself: it stays until a write of 1');
+    p.step({ clrWe: 1, wval: ST_FRAMING });
+    p.step();
+    check(!(p.status & ST_FRAMING), 'a write of 1 to its status bit did not clear the framing error');
   }
 
   // ---- interrupts
@@ -198,6 +214,31 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
     drain();
     check(!p.irq, 'irq stayed high after the byte was read');
   }
+  {
+    // the transmit enable with bytes queued: low while the FIFO holds any, high once it is empty, with the last byte still on the line
+    const queued = [0x21, 0x22, 0x23];
+    p.step({ ieWe: 1, wval: IE_TX });
+    p.step();
+    for (const b of queued) { p.step({ push: 1, data: b }); p.run(2); }
+    check(!p.irq, 'irq is high on the transmit enable with bytes in the FIFO');
+    for (let k = 0; k < OVERSAMPLE * 10 * queued.length && !p.irq; k++) p.step();
+    check(!!p.irq, 'irq never rose on the transmit enable after the FIFO emptied');
+    check(!(p.status & ST_TXIDLE), 'irq on the transmit enable waited for the line: it means the FIFO is empty, with the last byte still going out');
+    // both enables: either cause raises it
+    p.step({ ieWe: 1, wval: IE_TX | IE_RX });
+    p.step();
+    for (const b of queued) { p.step({ push: 1, data: b }); p.run(2); }
+    check(!p.irq, 'irq is high with both enables, nothing received and bytes in the FIFO');
+    const at = p.cycles + 3;
+    p.line = sender([0x34], OVERSAMPLE, at);
+    p.run(OVERSAMPLE * 12 + 3);
+    p.line = () => 1;
+    check(!!p.irq, 'irq is low with both enables and a byte waiting');
+    drain();
+    untilIdle(OVERSAMPLE * 10 * (queued.length + 2));
+    p.step({ ieWe: 1, wval: 0 });
+    p.step();
+  }
   return finish(fails, tested, def, { cycles: p.cycles });
 }
 
@@ -209,11 +250,15 @@ export function runConsole(def: ComponentDef, mode: 'gate' | 'switch'): CustomRu
 const PORTS_N = 4;
 export const SW_MAX_FRAME = 128;
 /** Share of the line a permutation at full load must carry, on frames of SW_THROUGHPUT_BYTES. */
-export const SW_THROUGHPUT = 0.8, SW_THROUGHPUT_BYTES = 64;
+export const SW_THROUGHPUT = 0.8, SW_THROUGHPUT_BYTES = 64, SW_THROUGHPUT_GAP = 12;
 const MAC = (h: number) => hostMac(h);
 const key = (m: readonly number[]) => m.join(':');
 /** How long the bench lets a host stay quiet before relying on the table remembering it: well under the sheet's 1000 cycles. */
-const AGE_MARGIN = 500;
+export const AGE_MARGIN = 500;
+const MULTICAST = [0x01, 0x00, 0x5e, 0x00, 0x00, 0x01];
+/** No byte out for this long means the switch has finished with what it was given (the sheet's promise). */
+export const SW_QUIET = 100;
+const SW_SETTLE_MAX = 4000;
 
 interface SwFrame { port: number; bytes: number[]; err?: boolean; name: string }
 
@@ -222,17 +267,22 @@ class SwitchPins {
   out: number[][][] = [[], [], [], []];
   private cur: number[][] = [[], [], [], []];
   ready = [1, 1, 1, 1];
+  /** Set, each output's ready follows this cycle by cycle. */
+  wobble: ((cycle: number, port: number) => number) | null = null;
+  /** When a byte last moved at an output. */
+  private moved = 0;
   cycles = 0;
-  errors: string[] = [];
   constructor(private sim: BitSim) {
     for (let i = 0; i < PORTS_N; i++) { for (const p of ['rxData', 'rxValid', 'rxLast', 'rxErr']) sim.setInput(`${p}${i}`, [0]); sim.setInput(`txReady${i}`, [1]); }
   }
   /** One clock: `feed` per port is the byte to present, or none. A byte counts when its port's rxReady was 1 at the frame's first byte. */
   step(feed: ({ data: number; last: boolean; err: boolean } | null)[]): void {
     const s = this.sim;
+    if (this.wobble) this.ready = this.ready.map((_, i) => this.wobble!(this.cycles, i));
     // a byte moves on the edge where valid and ready were both high before it
     for (let i = 0; i < PORTS_N; i++) {
       if (s.get(`txValid${i}`, 1)[0] && this.ready[i]) {
+        this.moved = this.cycles;
         this.cur[i].push(s.get(`txData${i}`, 1)[0]);
         if (s.get(`txLast${i}`, 1)[0]) { this.out[i].push(this.cur[i]); this.cur[i] = []; }
       }
@@ -247,16 +297,24 @@ class SwitchPins {
   }
   rxReady(i: number): number { return this.sim.get(`rxReady${i}`, 1)[0]; }
   idle(n: number): void { for (let k = 0; k < n; k++) this.step([null, null, null, null]); }
-  /** One frame presented on its port, waiting for rxReady first, and the switch given time to finish with it. */
-  send(f: SwFrame, settle = 200): void {
-    for (let k = 0; k < 2000 && !this.rxReady(f.port); k++) this.idle(1);
+  /** Idle until no byte has moved at any output for SW_QUIET cycles: however long the design took, its frame is over. */
+  settle(): void {
+    const start = this.cycles;
+    this.moved = this.cycles;
+    while (this.cycles - this.moved < SW_QUIET && this.cycles - start < SW_SETTLE_MAX) this.idle(1);
+  }
+  /** One frame presented on its port once rxReady lets it start, and the switch given time to finish with it. False: rxReady refused it. */
+  send(f: SwFrame, wait = 2000): boolean {
+    for (let k = 0; k < wait && !this.rxReady(f.port); k++) this.idle(1);
+    if (!this.rxReady(f.port)) return false;
     f.bytes.forEach((b, k) => {
       const feed: ({ data: number; last: boolean; err: boolean } | null)[] = [null, null, null, null];
       const last = k === f.bytes.length - 1;
       feed[f.port] = { data: b, last, err: !!f.err && last };
       this.step(feed);
     });
-    this.idle(settle);
+    this.settle();
+    return true;
   }
   take(): number[][][] { const o = this.out; this.out = [[], [], [], []]; return o; }
 }
@@ -283,7 +341,7 @@ export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?:
     const known = table.get(key(dst));
     const want = o.err ? [] : isGroup(dst) || known === undefined ? [0, 1, 2, 3].filter((i) => i !== port) : known === port ? [] : [known];
     if (!o.err) { table.set(key(src), port); heard.set(key(src), p.cycles); }
-    p.send({ port, bytes, err: o.err, name: what });
+    if (!p.send({ port, bytes, err: o.err, name: what })) { quiet(what, `rxReady on port ${port} stayed low on a switch with nothing to do`); return; }
     const out = p.take();
     tested++;
     const got = [0, 1, 2, 3].filter((i) => out[i].length > 0);
@@ -299,6 +357,8 @@ export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?:
   // ---- learning: nobody is known, then everybody is
   for (let h = 0; h < PORTS_N; h++) expect1(`host ${h}'s first frame, a broadcast`, h, MAC(h), BROADCAST);
   for (let a = 0; a < PORTS_N; a++) for (let b = 0; b < PORTS_N; b++) if (a !== b) expect1(`host ${a} to host ${b}, both known`, a, MAC(a), MAC(b));
+  // ---- a group address that is not the broadcast one
+  expect1('a frame to a group address', 1, MAC(1), MULTICAST);
   // ---- flooding to a stranger, then learning from its answer
   expect1('a frame to a host never heard', 0, MAC(0), MAC(9));
   expect1('that host\'s reply, from port 2', 2, MAC(9), MAC(0));
@@ -320,14 +380,29 @@ export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?:
     const dst = table.get(key(MAC(0)))!, from = (dst + 1) % PORTS_N, bytes = [frameOf(MAC(2), MAC(0), id++), frameOf(MAC(2), MAC(0), id++)];
     table.set(key(MAC(2)), from);
     p.ready[dst] = 0;
-    for (const b of bytes) p.send({ port: from, bytes: b, name: 'held' }, 100);
-    const early = p.take();
-    tested++;
-    if (early[dst].length) quiet('an output with txReady low', `delivered ${early[dst].length} frames while it was not ready`);
+    // a design may lower rxReady once it has nowhere to put a frame: only what it took is owed
+    const taken = bytes.filter((b) => p.send({ port: from, bytes: b, name: 'held' }, 300));
+    p.take();
     p.ready[dst] = 1;
-    p.idle(600);
+    p.settle();
     const out = p.take()[dst];
-    if (out.map((f) => f.join()).join('|') !== bytes.map((f) => f.join()).join('|')) quiet('an output that was held, then released', `delivered ${out.length} frames of the 2 sent, or in another order`);
+    tested++;
+    if (!taken.length) quiet('an output that was held', 'its input refused the first frame, with nothing waiting');
+    if (out.map((f) => f.join()).join('|') !== taken.map((f) => f.join()).join('|')) quiet('an output that was held, then released', `delivered ${out.length} frames of the ${taken.length} taken, or in another order`);
+  }
+
+  // ---- an output that keeps pausing inside the frame
+  {
+    expect1('host 0 announcing itself before the pauses', table.get(key(MAC(0)))!, MAC(0), BROADCAST);
+    const dst = table.get(key(MAC(0)))!, from = (dst + 1) % PORTS_N, bytes = frameOf(MAC(2), MAC(0), id++);
+    table.set(key(MAC(2)), from);
+    p.wobble = (c, i) => (i === dst && c % 3 === 0 ? 0 : 1);
+    p.send({ port: from, bytes, name: 'paused' });
+    p.wobble = null;
+    p.ready = [1, 1, 1, 1];
+    const out = p.take();
+    tested++;
+    if (out[dst][0]?.join() !== bytes.join() || out[dst].length !== 1) quiet('an output whose txReady pauses inside the frame', `gave ${out[dst].length} frames, the first ${out[dst][0]?.length ?? 0} bytes long and ${out[dst][0]?.join() === bytes.join() ? 'right' : 'changed'}`);
   }
 
   // ---- teach again: the table may forget what it has not heard for 1000 cycles
@@ -336,26 +411,43 @@ export function runSwitchSpec(def: ComponentDef, mode: 'gate' | 'switch', keep?:
   p.take();
   for (let h = 0; h < PORTS_N; h++) expect1(`host ${h} announcing itself again`, h, MAC(h), BROADCAST);
 
+  // ---- three inputs at once, all for one output: each frame comes out whole
+  {
+    expect1('host 0 announcing itself before the rush', 0, MAC(0), BROADCAST);
+    for (const h of [1, 2, 3]) table.set(key(MAC(h)), h);
+    const rush = [1, 2, 3].map((h) => frameOf(MAC(h), MAC(0), id++));
+    for (let k = 0; k < 2000 && ![1, 2, 3].every((h) => p.rxReady(h)); k++) p.idle(1);
+    for (let k = 0; k < rush[0].length; k++) p.step([null, ...rush.map((f) => ({ data: f[k], last: k === f.length - 1, err: false }))]);
+    p.settle();
+    const out = p.take();
+    tested++;
+    const had = out[0].map((f) => f.join()), lost = rush.filter((f) => !had.includes(f.join())).length;
+    if (lost || out[0].length !== rush.length) quiet('three inputs at once to one output', `${out[0].length} frames came out for ${rush.length} sent, ${lost} of them missing or changed`);
+    if (out[1].length + out[2].length + out[3].length) quiet('three inputs at once to one output', 'a frame came out of a port other than the destination\'s');
+  }
+
   // ---- throughput: every port at full load, each to the next
   {
-    const cycles = 4000, sending = [0, 0, 0, 0];
+    const warm = 1000, cycles = 4000;
     const st = [0, 1, 2, 3].map((i) => ({ bytes: frameOf(MAC(i), MAC((i + 1) % PORTS_N), id++, SW_THROUGHPUT_BYTES), k: -1, gap: 0 }));
     let delivered = 0;
-    for (let c = 0; c < cycles; c++) {
+    // the first frames tell the table where every host is, whatever it forgot while it stood idle; only what follows counts
+    for (let c = -warm; c < cycles; c++) {
+      if (c === 0) p.take();
       const feed = st.map((s, i) => {
-        if (s.k < 0) { if (s.gap > 0) { s.gap--; return null; } if (!p.rxReady(i)) return null; s.k = 0; s.bytes = frameOf(MAC(i), MAC((i + 1) % PORTS_N), id++, SW_THROUGHPUT_BYTES); sending[i]++; }
+        if (s.k < 0) { if (s.gap > 0) { s.gap--; return null; } if (!p.rxReady(i)) return null; s.k = 0; s.bytes = frameOf(MAC(i), MAC((i + 1) % PORTS_N), id++, SW_THROUGHPUT_BYTES); }
         const data = s.bytes[s.k], last = s.k === s.bytes.length - 1;
-        if (last) { s.k = -1; s.gap = 12; } else s.k++;
+        if (last) { s.k = -1; s.gap = SW_THROUGHPUT_GAP; } else s.k++;
         return { data, last, err: false };
       });
       p.step(feed);
     }
     const out = p.take();
-    for (let j = 0; j < PORTS_N; j++) for (const f of out[j]) { delivered += f.length; if (key(f.slice(0, 6)) !== key(MAC(j))) quiet('at full load', `port ${j} delivered a frame for another host`); }
-    // a line carries a byte a cycle, less the 12-byte gap the bench leaves
-    const carried = delivered / (cycles * PORTS_N) / (SW_THROUGHPUT_BYTES / (SW_THROUGHPUT_BYTES + 12));
+    for (let j = 0; j < PORTS_N; j++) for (const f of out[j]) { delivered += f.length; if (key(f.slice(0, 6)) !== key(MAC(j))) quiet('at full load', `port ${j} delivered a frame for another host: flooded, so its table had lost the address`); }
+    // a line carries a byte a cycle, less the idle cycles the bench leaves between frames
+    const carried = delivered / (cycles * PORTS_N) / (SW_THROUGHPUT_BYTES / (SW_THROUGHPUT_BYTES + SW_THROUGHPUT_GAP));
     tested++;
-    if (carried < SW_THROUGHPUT) quiet('at full load', `the outputs carried ${(100 * carried).toFixed(0)} % of what the inputs offered; the sheet asks for ${(100 * SW_THROUGHPUT).toFixed(0)} %`);
+    if (carried < SW_THROUGHPUT) quiet('at full load', `the outputs carried ${(100 * carried).toFixed(0)} % of the line rate; the sheet asks for ${(100 * SW_THROUGHPUT).toFixed(0)} %`);
   }
   return finish(fails, tested, def, { cycles: p.cycles });
 }

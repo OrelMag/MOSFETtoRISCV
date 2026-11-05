@@ -16,7 +16,7 @@ import { pcapFile, type Captured } from '../src/comm/pcap';
 import { stackProgram } from '../src/comm/stack';
 import { DEFAULT_STACK } from '../src/comm/stack/all';
 import { HOSTS, hostApp, pingApp, udpClientApp, udpEchoApp } from '../src/comm/stack/apps';
-import { runSwitchSpec } from '../src/campaign/capcomm';
+import { runSwitchSpec, SW_MAX_FRAME } from '../src/campaign/capcomm';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { ethSegment, ethStationMac } from '../src/lib/ethstation';
 import { lanComputers } from '../src/lib/lan';
@@ -192,7 +192,7 @@ const CASES: Case[] = [
   ...(gates ? [
     { name: 'ch48-segment', frames: segmentCapture },
     { name: 'ch49-switch', frames: switchCapture },
-    { name: 'capstone-switch', frames: capstoneSwitchCapture },
+    { name: 'capstone-switch', frames: capstoneSwitchCapture, must: (f) => (f.some((x) => (x.bytes as number[]).length === SW_MAX_FRAME) && f.some((x) => (x.bytes as number[])[0] === 0x01) ? null : `the bench must deliver a ${SW_MAX_FRAME}-byte frame and a group frame`) },
     { name: 'ch50-ping', frames: () => lanCapture(pingApp(1, 32), hostApp(), 'done', 90_000) },
     { name: 'ch50-udp', frames: () => lanCapture(udpClientApp(3, 16), udpEchoApp(), 'done', 120_000) },
     { name: 'ch51-router', frames: routerCapture, must: (f) => (f.filter((x) => (x.bytes as number[])[22] === 63).length === 3 ? null : 'three frames must leave the gates with TTL 63') },
