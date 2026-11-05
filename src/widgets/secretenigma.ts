@@ -158,3 +158,30 @@ export function bombeWidget(): Widget {
       h('div', { class: 'se-col' }, menuSvg(BOMBE_PLAIN, cipher))));
   return { el, destroy() { cancelAnimationFrame(raf); run = null; } };
 }
+
+const table = (head: string[], rows: string[][]) => h('div', { class: 'se-scroll' }, h('table', { class: 'se-table' },
+  h('thead', null, h('tr', null, ...head.map((t) => h('th', null, t)))),
+  h('tbody', null, ...rows.map((r) => h('tr', null, ...r.map((t) => h('td', null, t)))))));
+
+/** What each failure of the machine became as a rule. */
+export function lessonsWidget(): Widget {
+  return { el: h('div', { class: 'panel se' }, h('h3', { class: 'm3-title' }, 'The failures, and the rules they became'), table(['Enigma', 'The rule it taught', 'AES-128 and modern practice'], [
+    ['No letter enciphers to itself: a tell that needs no key.', 'No structural property may hold across keys.', 'Designed so that no such relation is known. A block can map to itself, as it should for a random permutation.'],
+    ['Its strength is mostly the plugboard, and a method goes round it.', 'A key must not split into parts attacked one at a time. Count what an attack does, not the settings.', 'Every output bit depends on every key bit within a few rounds. 128 bits, with no known shortcut of practical size.'],
+    ['Wheels and procedure were kept secret, then captured or worked out.', 'Only the key is secret (Kerckhoffs, 1883).', 'The design and its test vectors are published. You will check gates against them.'],
+    ['Message keys sent twice; stereotyped openings gave cribs.', 'Assume the attacker knows or chooses the plaintext.', 'Security is defined against chosen plaintext. Fresh nonces, never reused.'],
+    ['The same day\'s key for a whole network, printed on paper.', 'Key distribution is the hard problem.', 'Key exchange in public, so no sheet is printed: the end of this chapter.'],
+  ])) };
+}
+
+/** Where each machine's function lives: the line from the wiring to the stored program. */
+export function machinesWidget(): Widget {
+  return { el: h('div', { class: 'panel se' }, h('h3', { class: 'm3-title' }, 'Where the function lives'), table(['Machine', 'Year', 'Made of', 'Its function is set by', 'A stored program?'], [
+    ['Enigma', '1920s–45', 'Rotors, contacts, bulbs', 'Its wiring, and a daily key', 'No: it does one thing'],
+    ['Bombe (Turing, Welchman)', '1940', 'Drums and relays', 'A menu, wired up for each job', 'No'],
+    ['Colossus (Flowers), against Lorenz, not Enigma', '1943–44', '1 600, then 2 400 valves', 'Switches and plug panels', 'No'],
+    ['Turing\'s universal machine', '1936', 'On paper', 'A description of another machine, on its own tape', 'The idea of one'],
+    ['Manchester Baby', '1948', 'Valves and a CRT memory', 'Words in read-write memory', 'Yes: first run 21 June 1948'],
+    ['The CPU you built in this book', 'Here', 'NANDs', 'Words in memory', 'Yes'],
+  ])) };
+}

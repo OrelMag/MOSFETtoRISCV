@@ -117,7 +117,7 @@ export function wheelStage(id: string, name: string, table: readonly number[]): 
     return define({
       id: `ws_${id}`, name: `${name}, turned`, category: 'routing',
       summary: 'One pass through a wheel standing `off` letters on from the frame: the wires do not move, the letters do, so the offset goes on before the table and comes off after it.',
-      ports: [bus('a', 5, 'in'), bus('off', 5, 'in'), bus('y', 5, 'out')], symbol: { kind: 'box', label: id.split('_')[0] },
+      ports: [bus('a', 5, 'in'), bus('off', 5, 'in'), bus('y', 5, 'out')], symbol: { kind: 'box', label: ((n) => (id.endsWith('_b') ? `← ${n}` : `${n} →`))(/^[IVX]+_/.test(id) ? `wheel ${id.split('_')[0]}` : id.split('_')[0]) },
       spec: ([x, o]) => { const i = addF(x, o); return [subF(i < 26 ? table[i] : 0, o)]; },
       netlist: () => ({ pins: { a: [0, 3], off: [0, 9], y: [b.right, 7] }, instances: b.instances, nets: b.nets() }),
     });

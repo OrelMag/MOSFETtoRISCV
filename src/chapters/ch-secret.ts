@@ -9,7 +9,7 @@ import { stats } from '../sim/stats';
 import { idx, ROTORS, U264 } from '../crypto/enigma';
 import { enigma3d } from '../widgets/enigma3d';
 import { withModel } from '../widgets/modelhost';
-import { bombeWidget, cribWidget, permutationWidget } from '../widgets/secretenigma';
+import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
 import type { Chapter } from './types';
 
 const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
@@ -95,7 +95,7 @@ export const chSecret: Chapter = {
         <p>You could build this from what you already have. A wheel's 26 wires become a table: a decoder and an OR per output bit. Its turning becomes two adders mod 26, one on the way in and one on the way out, because the wires stay put while the letters shift. Stepping is registers and comparators: each pawl's condition is a test for a turnover letter.</p>
         <p>That is what is below, for U-264's key, and the costs are computed from it. One wheel, one pass: ${n0(WHEEL)} NANDs, built from <span data-show="w0_f">an add-26 and a subtract-26</span> of ${n0(stats(add26()).nands)} and ${n0(stats(sub26()).nands)}. The whole machine: <b>${n0(GATES)} NANDs</b>. The real one spends no active device at all on a letter's way through: a battery, a bulb and brass. It pays instead in moving parts and in only doing this one thing.</p>
         <p>It really is the machine: the test suite compares it with the cipher on every press and deciphers U-264's message through these gates. Note what it would take to change a wheel here. On the brass machine you lift a wheel out. Here the wiring is built into the gates, so a different key means a different circuit, which is why the next machine you meet keeps its key in a register.</p>
-        <p class="try"><b>Try:</b> with <em>load</em> at 1, pulse once: the windows take J, N, A. Set <em>load</em> to 0, keep <em>key</em> at 13 (N) and pulse. <em>lamp</em> reads 21, a V, the message's first letter. Open any block to see what it is made of.</p>`,
+        <p class="try"><b>Try:</b> with <em>load</em> at 1, pulse once: the windows take J, N, A. Set <em>load</em> to 0, keep <em>key</em> at 13 (0x0D, an N) and pulse. <em>lamp</em> reads 21 (0x15 in hex), a V, the message's first letter. Open any block to see what it is made of.</p>`,
       scene: m4Scene,
     },
     {
@@ -122,18 +122,9 @@ export const chSecret: Chapter = {
     {
       title: 'What the breaking taught',
       body: `
-        <p>Modern cipher design reads like a list of what went wrong here. Each row below is a rule still in force; AES, which you will build next, follows all of them.</p>
-        <div class="se-scroll"><table class="se-table">
-          <thead><tr><th>Enigma</th><th>The rule it taught</th><th>AES-128 and modern practice</th></tr></thead>
-          <tbody>
-            <tr><td>No letter enciphers to itself: a tell with no key.</td><td>No structural property may hold across keys.</td><td>Designed so no such relation is known. A block can map to itself, as it should for a random permutation.</td></tr>
-            <tr><td>Its strength is mostly the plugboard, and a method goes round it.</td><td>A key must not split into parts attacked one at a time. Count what an attack does, not the settings.</td><td>Every key bit affects every output bit within two rounds. 128 bits, with no known shortcut of practical size.</td></tr>
-            <tr><td>Wheels and procedure were secret, then captured and worked out.</td><td>Only the key is secret (Kerckhoffs, 1883).</td><td>The design and its test vectors are published. You can check your gates against them.</td></tr>
-            <tr><td>Message keys sent twice; stereotyped openings gave cribs.</td><td>Assume the attacker knows or chooses plaintext.</td><td>Security is defined against chosen plaintext. Fresh nonces, never reused.</td></tr>
-            <tr><td>The same day's key for a whole network, carried on paper.</td><td>Key distribution is the hard problem.</td><td>Key exchange in public, so no sheet is printed: the end of this chapter.</td></tr>
-          </tbody>
-        </table></div>
+        <p>Modern cipher design reads like a list of what went wrong here. Each row here is a rule still in force; AES, which you will build next, follows all of them.</p>
         <p>Key sizes are worth a sum. If a machine could try one key per clock at 1 GHz, the M4's ${sci(KS.withoutPlugs)} wheel-and-ring settings take under ${n0(Math.ceil(Number(KS.withoutPlugs) / 1e9 / 60))} minutes: that part alone is nothing today. AES-128 has 2<sup>128</sup> keys. Nothing you can build gets near that, and the design's job is to make sure nothing cleverer does either.</p>`,
+      widget: lessonsWidget,
     },
     {
       title: 'From the Bombe to the stored program',
@@ -143,7 +134,8 @@ export const chSecret: Chapter = {
         <p><b>1940: the Bombe</b> is electromechanical and built for one job. Its "program" is a menu wired up on the back. It decides nothing beyond stop or carry on. Turing designed it, but it does not embody his universal machine.</p>
         <p><b>1943–44: Colossus</b>, Tommy Flowers's machine at Bletchley, is electronic, with 1 600 and later 2 400 valves. It did not attack Enigma: it attacked the Lorenz teleprinter cipher, and Turing did not design it, though both are often said. It was programmable by switches and plugs, and is regarded as the first programmable electronic digital computer. It was not a stored-program machine, and its secrecy limited its influence: EDVAC's design was the one that spread.</p>
         <p><b>1948: the Manchester Baby.</b> Max Newman, who had worked on Colossus at Bletchley, led the Manchester project, and Colossus parts went there. On 21 June 1948 the Baby ran a program held in read-write electronic memory. Turing wrote the third program it ran. Compare the three on this site's terms: the Bombe's function is its wiring, as with a chapter's gates; Colossus's is set by switches; the Baby's is words in memory, as in the CPU you built with its instruction memory and fetch.</p>
-        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://en.wikipedia.org/wiki/Colossus_computer" target="_blank" rel="noopener">Colossus computer</a> (the Lorenz target, valve counts, not stored-program, little direct influence), <a href="https://en.wikipedia.org/wiki/Manchester_Baby" target="_blank" rel="noopener">Manchester Baby</a> (the date, Newman, the surplus parts, Turing's program), <a href="https://en.wikipedia.org/wiki/Universal_Turing_machine" target="_blank" rel="noopener">Universal Turing machine</a> (Davis on the action table in the same memory as the data), <a href="https://en.wikipedia.org/wiki/Bombe" target="_blank" rel="noopener">Bombe</a>. All Wikipedia, read for their citations: treat "first" with care, as those articles do. The Zuse Z3 of 1941 is the first programmable electromechanical one, and which machine counts as first depends on the definition.</p></details>`,
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://en.wikipedia.org/wiki/Colossus_computer" target="_blank" rel="noopener">Colossus computer</a> (the Lorenz target, valve counts, not stored-program, little direct influence), <a href="https://en.wikipedia.org/wiki/Manchester_Baby" target="_blank" rel="noopener">Manchester Baby</a> (the date, Newman, the surplus parts, Turing's program), <a href="https://en.wikipedia.org/wiki/Universal_Turing_machine" target="_blank" rel="noopener">Universal Turing machine</a> (Davis on the action table in the same memory as the data), <a href="https://en.wikipedia.org/wiki/Bombe" target="_blank" rel="noopener">Bombe</a>, and <a href="https://en.wikipedia.org/wiki/Kerckhoffs%27s_principle" target="_blank" rel="noopener">Kerckhoffs's principle</a> for the previous step. All Wikipedia, read for their citations: treat "first" with care, as those articles do. The Zuse Z3 of 1941 is the first programmable electromechanical one, and which machine counts as first depends on the definition.</p></details>`,
+      widget: machinesWidget,
     },
   ],
   soon: ['AES: four steps and a key', 'The S-box and a round, in gates', 'Modes: blocks are not enough', 'SHA-256 in gates', 'Sharing a secret in public', 'X25519 on our CPU', 'Who is at the other end', 'A TLS 1.3 handshake', 'What it all costs'],
