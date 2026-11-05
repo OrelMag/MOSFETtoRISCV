@@ -15,4 +15,6 @@ export const ALIASES_DSP: Record<string, string[]> = { ...ALIASES_A, ...ALIASES_
  * `codex`, and each id leaves this set when its level lands (tests/content-codexdsp.test.ts checks the set holds only
  * untaught ids).
  */
-export const DSP_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_DSP.map((e) => e.id));
+/** Ids Act 13's levels list in `codex` (nodesdsp.ts). */
+const LISTED = new Set(['saturate', 'guardbits']);
+export const DSP_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_DSP.map((e) => e.id).filter((id) => !LISTED.has(id)));

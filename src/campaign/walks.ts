@@ -11,6 +11,7 @@ import { WALKS5 } from './walks5';
 import { WALKS6 } from './walks6';
 import { WALKS7 } from './walks7';
 import { WALKS8 } from './walks8';
+import { WALKS9 } from './walks9';
 
 const WALKS0: Record<string, WalkScript> = {
   g_not: [
@@ -279,4 +280,4 @@ const WALKS0: Record<string, WalkScript> = {
 };
 
 /** Every authored walkthrough: the first levels here, acts 0–3 in walks1.ts, acts 5–7 in walks2.ts. */
-export const WALKS: Record<string, WalkScript> = { ...WALKS0, ...WALKS1, ...WALKS2, ...WALKS3, ...WALKS4, ...WALKS5, ...WALKS6, ...WALKS7, ...WALKS8 };
+export const WALKS: Record<string, WalkScript> = { ...WALKS0, ...WALKS1, ...WALKS2, ...WALKS3, ...WALKS4, ...WALKS5, ...WALKS6, ...WALKS7, ...WALKS8, ...WALKS9 };

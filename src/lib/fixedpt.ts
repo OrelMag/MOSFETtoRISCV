@@ -156,3 +156,6 @@ export function fracMultiplier(w: number): ComponentDef {
     });
   });
 }
+
+/** The 8-bit saturating adder: registered at load, for Act 13's level (the part it unlocks) and its alternatives. */
+export const SATADD8: ComponentDef = satAdder(8);

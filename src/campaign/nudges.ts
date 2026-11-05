@@ -134,6 +134,8 @@ export const NUDGES: Record<string, string> = {
   m_bus: 'Decide who owns the wires, and make sure nobody loses them in the middle of a transfer.',
   m_dma: 'It is a loop of a read and a write, run by hardware, that has to know when it is done without being told twice.',
   m_flash: 'You can never write in place: write somewhere new each time, remember where, and win the space back before it runs out.',
+  // act 13: signals
+  sp_sat: 'The sum needs one bit more than the word; whether it fits is written in that bit and the one below it.',
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
   l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',
