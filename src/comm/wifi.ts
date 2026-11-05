@@ -1,10 +1,10 @@
-// Wi-Fi's MAC, DOM-free: 802.11's distributed coordination function (DCF) clock by clock at 1 clock = 1 µs, so its numbers are the standard's own: the golden model lib/wifi.ts is compared with after
+// Wi-Fi's MAC, DOM-free: 802.11's distributed coordination function (DCF) clock by clock at 1 clock = 1 µs, so its constants are the standard's (SIFS exact, a station's other waits within 1 to 3 µs of it): the golden model lib/wifi.ts is compared with after
 // every clock. The air is a model of who hears whom (Air), and so are the rates, airtimes against SNR and MIMO: the traces of this chapter are modelled, not captured, and it says so.
 //
 // Timing is 802.11a's OFDM PHY: slot 9 µs, SIFS 16 µs, DIFS 34 µs, CW 15 … 1023. Frames are airtime only: the medium decides what a receiver heard.
 // Named simplifications: a backoff is drawn for every frame, including the first on an idle medium; no EIFS after a bad frame; no fragmentation, no QoS classes (EDCA), no beacons or association, one
 // access category; a backoff slot in which the medium turns busy is lost, not resumed; NAV comes from a value the air model reads off a heard RTS or CTS; a frame is fully lost if any other transmitter is
-// heard during it (no capture, no partial survival); ACK and CTS have fixed lengths.
+// heard during it (no capture, no partial survival); ACK and CTS have fixed lengths; one retry limit for all frames (the standard has 7 short, 4 long); a station waiting for a response ignores frames for itself, and answers an RTS even with its NAV set; no NAV reset when a CTS never follows.
 
 export const SLOT_US = 9, SIFS_US = 16, DIFS_US = SIFS_US + 2 * SLOT_US, CW_MIN = 15, CW_MAX = 1023, RETRY_LIMIT = 7;
 /** Airtime of a frame of `bytes` at an OFDM rate of `ndbps` data bits a 4 µs symbol: preamble and SIGNAL 20 µs, SERVICE 16 + tail 6 bits. */
@@ -83,7 +83,8 @@ export class DcfStation {
         }
         break;
       case W_DSIFS:
-        if (this.cnt === SIFS_US - 1) { st = W_TX; cnt = 0; }
+        // the clock on which the frame's end was seen is the gap's first
+        if (this.cnt === SIFS_US - 2) { st = W_TX; cnt = 0; }
         break;
       case W_TX:
         if (this.cnt === i.len - 1) { st = W_WAIT; cnt = 0; }
@@ -97,7 +98,7 @@ export class DcfStation {
         }
         break;
       case W_RSIFS:
-        if (this.cnt === SIFS_US - 1) { st = W_RESP; cnt = 0; }
+        if (this.cnt === SIFS_US - 2) { st = W_RESP; cnt = 0; }
         break;
       case W_RESP:
         if (this.cnt === ACK_US - 1) { st = drawn ? W_DIFS : W_IDLE; cnt = 0; }
@@ -111,7 +112,7 @@ export class DcfStation {
 
 // ---- the air ----------------------------------------------------------------------------------------------------------------
 export interface AirOpts { n: number; hears: (i: number, j: number) => boolean; lenUs: number; useRts: boolean; dest: (i: number) => number; saturated: boolean[]; seeds?: number[] }
-export interface AirStats { sent: number[]; delivered: number[]; dropped: number[]; collisions: number; busyUs: number; successUs: number; clock: number }
+export interface AirStats { sent: number[]; tries: number[]; delivered: number[]; dropped: number[]; overlapUs: number; busyUs: number; successUs: number; clock: number }
 export interface AirEvent { clock: number; from: number; kind: number; to: number; ok: boolean; len: number }
 interface Rx { from: number; kind: number; bad: boolean; to: number }
 
@@ -132,7 +133,7 @@ export class Air {
     this.prevTx = Array<number>(o.n).fill(0);
     this.rx = Array<Rx | null>(o.n).fill(null);
     this.sendTo = Array.from({ length: o.n }, (_, i) => o.dest(i));
-    this.stats = { sent: Array<number>(o.n).fill(0), delivered: Array<number>(o.n).fill(0), dropped: Array<number>(o.n).fill(0), collisions: 0, busyUs: 0, successUs: 0, clock: 0 };
+    this.stats = { sent: Array<number>(o.n).fill(0), tries: Array<number>(o.n).fill(0), delivered: Array<number>(o.n).fill(0), dropped: Array<number>(o.n).fill(0), overlapUs: 0, busyUs: 0, successUs: 0, clock: 0 };
     this.pending = o.saturated.map((s) => (s ? 1 : 0));
     this.sta.forEach((s, i) => s.step(this.inputs[i]));
     this.inputs = this.inputs.map((x) => ({ ...x, rst: 0 }));
@@ -196,10 +197,11 @@ export class Air {
     let talkers = 0;
     for (let i = 0; i < n; i++) if (outs[i].tx) talkers++;
     if (talkers) s.busyUs++;
-    if (talkers > 1) s.collisions++;
+    if (talkers > 1) s.overlapUs++;
     for (let i = 0; i < n; i++) {
       if (outs[i].tx && (!this.prevTx[i] || this.lastKind[i] !== outs[i].kind)) {
         if (outs[i].kind === KIND_DATA) s.sent[i]++;
+        if (outs[i].kind === KIND_RTS || (outs[i].kind === KIND_DATA && !this.o.useRts)) s.tries[i]++;
         if (this.keepEvents) this.events.push({ clock: s.clock, from: i, kind: outs[i].kind, to: this.toOf(i, outs[i].kind), ok: true, len: 0 });
       }
       if (pulses[i].done) { s.delivered[i]++; s.successUs += this.o.lenUs; this.pending[i] = this.o.saturated[i] ? 1 : 0; }
@@ -248,10 +250,10 @@ export function bianchi(n: number, lenUs: number, useRts = false, W = CW_MIN + 1
   return { tau, p, throughput: (ps * ptr * lenUs) / slot, slotUs: slot };
 }
 /** Hears-everybody, all saturated, sending to station 0's peers in a ring: a shared-air throughput measured over `clocks`. */
-export function measureThroughput(n: number, lenUs: number, clocks: number, useRts = false, seed = 1): { share: number; collisions: number; delivered: number } {
+export function measureThroughput(n: number, lenUs: number, clocks: number, useRts = false, seed = 1): { share: number; overlapUs: number; delivered: number } {
   const air = new Air({ n: n + 1, hears: () => true, lenUs, useRts, dest: (i) => (i === n ? 0 : n), saturated: Array.from({ length: n + 1 }, (_, i) => i < n), seeds: Array.from({ length: n + 1 }, (_, i) => (seed * 131 + i * 977) % 1023 + 1) });
   for (let c = 0; c < clocks; c++) air.step();
-  return { share: air.stats.successUs / clocks, collisions: air.stats.collisions, delivered: air.stats.delivered.reduce((a, b) => a + b, 0) };
+  return { share: air.stats.successUs / clocks, overlapUs: air.stats.overlapUs, delivered: air.stats.delivered.reduce((a, b) => a + b, 0) };
 }
 
 // ---- rates and airtime -------------------------------------------------------------------------------------------------------
@@ -264,13 +266,21 @@ export const RATES: Rate[] = [
 /** A frame's chance of arriving: a steep edge around the rate's SNR. A shape, not a measurement. */
 export const frameOk = (snrDb: number, r: Rate): number => 1 / (1 + Math.exp(-(snrDb - r.snrDb) * 2));
 /** One frame's exchange on a free channel, with the average backoff: µs of air for `bytes` delivered. */
-export const exchangeUs = (bytes: number, r: Rate, backoffSlots = CW_MIN / 2): number => DIFS_US + backoffSlots * SLOT_US + airtimeUs(bytes + 28, r.ndbps) + SIFS_US + ACK_US;
+export const exchangeUs = (bytes: number, r: Rate, backoffSlots = CW_MIN / 2): number => DIFS_US + backoffSlots * SLOT_US + airtimeUs(bytes + 28, r.ndbps) + SIFS_US + ackUs(r);
+/** An ACK goes at the highest mandatory rate (6, 12, 24 Mb/s) not above the data's. */
+export const ackUs = (r: Rate): number => airtimeUs(14, r.mbps >= 24 ? 96 : r.mbps >= 12 ? 48 : 24);
+/** 802.11n's limits on an aggregate: 65 535 bytes, and 5.484 ms in the air. */
+export const AGG_BYTES = 65535, AGG_US = 5484;
+export const aggregateCap = (bytes: number, r: Rate): number => Math.max(1, Math.floor(Math.min(AGG_BYTES, ((AGG_US - 20) / 4) * (r.ndbps / 8)) / (bytes + 32)));
 export const goodputMbps = (bytes: number, r: Rate): number => (8 * bytes) / exchangeUs(bytes, r);
-/** n MPDUs aggregated into one frame under one block ACK (with a 4-byte delimiter each): the airtime pays for the preamble once. */
-export const aggregateMbps = (bytes: number, n: number, r: Rate): number => (8 * bytes * n) / (DIFS_US + (CW_MIN / 2) * SLOT_US + airtimeUs(n * (bytes + 32), r.ndbps) + SIFS_US + ACK_US);
+/** n MPDUs aggregated into one frame under one 32-byte block ACK (a 4-byte delimiter each), up to the limits: the airtime pays for the preamble once. An ideal: real aggregates use 802.11n's own rates. */
+export const aggregateMbps = (bytes: number, n: number, r: Rate): number => {
+  const m = Math.min(n, aggregateCap(bytes, r));
+  return (8 * bytes * m) / (DIFS_US + (CW_MIN / 2) * SLOT_US + airtimeUs(m * (bytes + 32), r.ndbps) + SIFS_US + airtimeUs(32, r.mbps >= 24 ? 96 : r.mbps >= 12 ? 48 : 24));
+};
 
 export interface RateRun { policy: string; mbps: number; lost: number; frames: number; history: { us: number; mbps: number; ok: boolean; snr: number }[] }
-/** Frames of `bytes` over a fading SNR: snr(us) in dB, uniform(): a seeded draw; a static rate, ARF (up after 10 good frames, down after 2 lost), or an oracle told the SNR. */
+/** Frames of `bytes` over a fading SNR: snr(us) in dB, uniform(): a seeded draw; a static rate, ARF simplified (up after 10 good frames, down after 2 lost; no timer, no drop straight back after a failed first try), or a greedy oracle told the SNR, picking the best expected goodput frame by frame. */
 export function rateRun(policy: 'arf' | 'oracle' | number, snr: (us: number) => number, uniform: () => number, bytes: number, totalUs: number): RateRun {
   let t = 0, at = typeof policy === 'number' ? policy : 3, good = 0, bad = 0, bits = 0, lost = 0, frames = 0;
   const history: RateRun['history'] = [];

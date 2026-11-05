@@ -1,7 +1,7 @@
 // The Wi-Fi chapter's panels: a cell of DCF stations in gates on a model of the air (a timeline of what each sends, the model stations beside the gates), and the explorers over comm/wifi.ts: contention, rates, airtime, MIMO.
 // The air, the rates and the channels are models, labelled as such: nothing here is a capture of a real radio.
 
-import { Air, bianchi, aggregateMbps, airtimeUs, capacity2x2, goodputMbps, KIND_ACK, KIND_CTS, KIND_DATA, KIND_NAMES, KIND_RTS, measureThroughput, RATES, rateRun, type AirOpts, W_NAMES } from '../comm/wifi';
+import { Air, bianchi, aggregateCap, aggregateMbps, airtimeUs, capacity2x2, goodputMbps, KIND_ACK, KIND_CTS, KIND_DATA, KIND_NAMES, KIND_RTS, measureThroughput, RATES, rateRun, type AirOpts, W_NAMES } from '../comm/wifi';
 import { dbToRatio } from '../comm/limits';
 import { wifiCell } from '../lib/wifi';
 import { gaussian, rng } from '../phys/line';
@@ -44,7 +44,7 @@ export function hiddenCompare(clocks = 400000): { plain: number; rts: number; pl
   const p = go(false), r = go(true);
   return { plain: p.delivered[A] + p.delivered[B], plainDropped: p.dropped[A] + p.dropped[B], rts: r.delivered[A] + r.delivered[B], a: r.delivered[A], b: r.delivered[B] };
 }
-export interface WifiStatus { clocks: number; delivered: number[]; dropped: number[]; sent: number[]; collisions: number; hidden: boolean; rts: boolean; agreed: boolean; wrong: string; retries: number }
+export interface WifiStatus { clocks: number; delivered: number[]; dropped: number[]; sent: number[]; overlapUs: number; hidden: boolean; rts: boolean; agreed: boolean; wrong: string; retries: number }
 export interface WifiApi { status(): WifiStatus; setHidden(on: boolean): void; setRts(on: boolean): void; run(n: number): void }
 export const wifiApi = new WeakMap<Stage, WifiApi>();
 const OUTS = ['tx', 'kind', 'st', 'cw', 'bo', 'retry', 'nav', 'cnt', 'done', 'drop'];
@@ -140,7 +140,7 @@ function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
       tl.replaceChildren(s('svg', { class: 'wf-svg', viewBox: `0 0 ${W} ${8 + 3 * rowH}`, role: 'img', 'aria-label': `The last ${WIN} µs on the air` }, ...kids),
         h('div', { class: 'wf-key' }, ...[KIND_DATA, KIND_ACK, KIND_RTS, KIND_CTS].map((k) => h('span', null, h('i', { class: `wf-sw k${k}` }), KIND_NAMES[k]))));
       const st = air.stats;
-      status.replaceChildren(stat('Time', `${(t / 1000).toFixed(1)} ms`), stat('A delivered', String(st.delivered[A])), stat('B delivered', String(st.delivered[B])), stat('Tries', String(st.sent[A] + st.sent[B])), stat('Dropped after 7', String(st.dropped[A] + st.dropped[B]), st.dropped[A] + st.dropped[B] ? 'bad' : ''), stat('Payload share of the air', t ? `${nf((100 * st.successUs) / t, 0)} %` : '–'));
+      status.replaceChildren(stat('Time', `${(t / 1000).toFixed(1)} ms`), stat('A delivered', String(st.delivered[A])), stat('B delivered', String(st.delivered[B])), stat('Tries', String(st.tries[A] + st.tries[B])), stat('Dropped after 7', String(st.dropped[A] + st.dropped[B]), st.dropped[A] + st.dropped[B] ? 'bad' : ''), stat('Payload share of the air', t ? `${nf((100 * st.successUs) / t, 0)} %` : '–'));
       states.replaceChildren(...[A, B].map((i) => h('div', null, h('b', null, i === A ? 'A ' : 'B '), `${W_NAMES[v(`st${i}`)] ?? '?'}, backoff ${v(`bo${i}`)}, CW ${v(`cw${i}`)}, retry ${v(`retry${i}`)}${v(`nav${i}`) ? `, NAV ${v(`nav${i}`)} µs` : ''}`)));
       verdict.className = `sr-lock ${agreed ? 'ok' : 'bad'}`;
       verdict.textContent = agreed ? 'Gates and model stations agree on every clock so far.' : `Disagreement: ${wrong}`;
@@ -154,7 +154,7 @@ function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
     update();
     requestAnimationFrame(() => { if (stage.sim && !started) init(); });
     wifiApi.set(stage, {
-      status: () => ({ clocks: air.stats.clock, delivered: [...air.stats.delivered], dropped: [...air.stats.dropped], sent: [...air.stats.sent], collisions: air.stats.collisions, hidden, rts, agreed, wrong, retries: air.stats.sent[A] + air.stats.sent[B] - air.stats.delivered[A] - air.stats.delivered[B] }),
+      status: () => ({ clocks: air.stats.clock, delivered: [...air.stats.delivered], dropped: [...air.stats.dropped], sent: [...air.stats.sent], overlapUs: air.stats.overlapUs, hidden, rts, agreed, wrong, retries: air.stats.tries[A] + air.stats.tries[B] - air.stats.delivered[A] - air.stats.delivered[B] }),
       setHidden: (on) => { hidden = on; hb.i.checked = on; setMode(); },
       setRts: (on) => { rts = on; rb.i.checked = on; setMode(); },
       run: (n) => act(() => { stage.runCycles(n, undefined, 0, true); }),
@@ -165,15 +165,27 @@ function wifiPanel(view: 'open' | 'hidden'): ScenePanel {
 
 // ---- contention ----------------------------------------------------------------------------------------------------------------------
 export function contentionWidget(): Widget {
-  let bytes = 1500, rate = 7, rts = false;
+  let bytes = 1500, rate = 7, rts = false, gen = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  const DOT_CLOCKS = 60000;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const len = airtimeUs(bytes + 28, RATES[rate].ndbps), ns = [1, 2, 3, 5, 8, 12, 20, 30, 50];
-    const a = axes([0, 50], [0, 1], [1, 10, 20, 30, 40, 50], [0, 0.25, 0.5, 0.75, 1], (v) => String(v), (v) => `${v * 100} %`, 'stations always sending', 'air carrying payload');
-    const pts: [number, number][] = [], meas: SVGElement[] = [];
-    for (let n = 1; n <= 50; n++) pts.push([a.x(n), a.y(bianchi(Math.max(n, 2), len, rts).throughput)]);
-    for (const n of ns) if (n >= 2) { const m = measureThroughput(n, len, 150000, rts); meas.push(s('circle', { cx: a.x(n), cy: a.y(Math.min(1, m.share)), r: 3.5, class: 'wf-dot' })); }
-    plot.replaceChildren(svgOf(a, 'Share of air carrying payload against stations', ...a.g, poly(pts, 'wf-l1'), ...meas));
+    const len = airtimeUs(bytes + 28, RATES[rate].ndbps), ns = [2, 3, 5, 8, 12, 20, 30, 50];
+    const a = axes([0, 50], [0, 1], [2, 10, 20, 30, 40, 50], [0, 0.25, 0.5, 0.75, 1], (v) => String(v), (v) => `${v * 100} %`, 'stations always sending', 'air carrying payload');
+    const pts: [number, number][] = [];
+    for (let n = 2; n <= 50; n++) pts.push([a.x(n), a.y(bianchi(n, len, rts).throughput)]);
+    const svg = svgOf(a, 'Share of air carrying payload against stations', ...a.g, poly(pts, 'wf-l1'));
+    plot.replaceChildren(svg);
+    // the line at once; the dots one at a time, when the slider has come to rest: each is a simulation
+    const mine = ++gen;
+    clearTimeout(timer);
+    let i = 0;
+    const next = () => {
+      if (mine !== gen || i >= ns.length) return;
+      const n = ns[i++], m = measureThroughput(n, len, DOT_CLOCKS, rts);
+      svg.append(s('circle', { cx: a.x(n), cy: a.y(Math.min(1, m.share)), r: 3.5, class: 'wf-dot' }));
+      timer = setTimeout(next, 0);
+    };
+    timer = setTimeout(next, 200);
     const b5 = bianchi(5, len, rts), b30 = bianchi(30, len, rts);
     out.replaceChildren(stat('Frame', `${len} µs`), stat('5 stations', `${nf(b5.throughput * 100, 0)} %, a try collides ${nf(b5.p * 100, 0)} %`), stat('30 stations', `${nf(b30.throughput * 100, 0)} %, a try collides ${nf(b30.p * 100, 0)} %`), stat('Rate × share at 5', `${nf(RATES[rate].mbps * b5.throughput, 1)} Mb/s`));
   };
@@ -184,7 +196,7 @@ export function contentionWidget(): Widget {
   const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
   box.addEventListener('change', () => { rts = box.checked; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos wf-w' }, h('div', { class: 'dram-ops' }, sel, h('label', { class: 'wf-box' }, box, ' RTS / CTS')), row(a.el), plot, out, h('p', { class: 'sub' }, 'The line is Bianchi\'s 2000 closed form. The dots are the station model in this page, run for 150 ms of air each. Both are models.')) };
+  return { el: h('div', { class: 'widget mos wf-w' }, h('div', { class: 'dram-ops' }, sel, h('label', { class: 'wf-box' }, box, ' RTS / CTS')), row(a.el), plot, out, h('p', { class: 'sub' }, `The line is Bianchi's 2000 closed form. The dots appear as the station model in this page runs, ${DOT_CLOCKS / 1000} ms of air each, so they scatter a little. Both are models.`)), destroy: () => { gen++; clearTimeout(timer); } };
 }
 
 // ---- rate adaptation ---------------------------------------------------------------------------------------------------------------
@@ -201,12 +213,12 @@ export function rateWidget(): Widget {
     for (let u = 0; u <= T; u += 1000) { const v = Math.max(0, Math.min(60, snr(u))); snrp.push([a.x(u / 1000), a.y(v)]); }
     plot.replaceChildren(svgOf(a, 'The rate ARF chose over time, and the SNR', ...a.g, poly(snrp, 'wf-l2'), poly(pts, 'wf-l1'), txt(52, 34, 'thin: SNR, dB', 'wf-t wf-c2')));
     const best = stats.reduce((x, y) => (y.mbps > x.mbps ? y : x)), bi = stats.indexOf(best);
-    out.replaceChildren(stat('ARF', `${nf(arf.mbps, 1)} Mb/s, ${nf((100 * arf.lost) / Math.max(1, arf.frames), 0)} % lost`), stat('Told the SNR', `${nf(oracle.mbps, 1)} Mb/s`), stat(`Best fixed (${RATES[bi].mbps})`, `${nf(best.mbps, 1)} Mb/s`), stat('Fixed at 54', `${nf(stats[7].mbps, 1)} Mb/s`, stats[7].mbps < arf.mbps ? 'bad' : ''));
+    out.replaceChildren(stat('ARF', `${nf(arf.mbps, 1)} Mb/s, ${nf((100 * arf.lost) / Math.max(1, arf.frames), 0)} % lost`), stat('Greedy, told the SNR', `${nf(oracle.mbps, 1)} Mb/s`), stat(`Best fixed (${RATES[bi].mbps})`, `${nf(best.mbps, 1)} Mb/s`), stat('Fixed at 54', `${nf(stats[7].mbps, 1)} Mb/s`, stats[7].mbps < arf.mbps ? 'bad' : ''));
   };
   const a = slider('Mean SNR', 3, 35, 1, mean, (v) => `${v} dB`, (v) => { mean = v; paint(); });
-  const b = slider('Walking speed', 0, 30, 1, kmh, (v) => `${v} km/h`, (v) => { kmh = v; paint(); });
+  const b = slider('Speed', 0, 30, 1, kmh, (v) => `${v} km/h`, (v) => { kmh = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos wf-w' }, row(a.el), row(b.el), plot, out, h('p', { class: 'sub' }, 'A modelled trace on Clarke\'s fading at 5.5 GHz: each frame\'s fate drawn from a steep function of its SNR, not a captured radio. ARF: up after 10 good frames, down after 2 lost.')) };
+  return { el: h('div', { class: 'widget mos wf-w' }, row(a.el), row(b.el), plot, out, h('p', { class: 'sub' }, 'A modelled trace on Clarke\'s fading at 5.5 GHz: each frame\'s fate drawn from a steep function of its SNR, not a captured radio. ARF simplified: up after 10 good frames, down after 2 lost. At 0 km/h the fade is frozen at one value of the model, a little off the mean.')) };
 }
 
 // ---- airtime -----------------------------------------------------------------------------------------------------------------------------
@@ -216,12 +228,12 @@ export function airtimeWidget(): Widget {
   const paint = () => {
     body.replaceChildren(...RATES.map((r) => h('tr', null, h('td', null, r.modulation), h('td', { class: 'num' }, `${r.mbps}`), h('td', { class: 'num' }, `${airtimeUs(bytes + 28, r.ndbps)} µs`), h('td', { class: 'num' }, nf(goodputMbps(bytes, r), 1)), h('td', { class: 'num' }, nf(aggregateMbps(bytes, n, r), 1)))));
     const r = RATES[7];
-    out.replaceChildren(stat('Efficiency at 54, one frame', `${nf(goodputMbps(bytes, r) / 0.54, 0)} %`), stat(`${n} aggregated`, `${nf(aggregateMbps(bytes, n, r) / 0.54, 0)} %`));
+    out.replaceChildren(stat('Efficiency at 54, one frame', `${nf(goodputMbps(bytes, r) / 0.54, 0)} %`), stat(`${Math.min(n, aggregateCap(bytes, r))} aggregated`, `${nf(aggregateMbps(bytes, n, r) / 0.54, 0)} %`), n > aggregateCap(bytes, r) ? stat('Limit', `${aggregateCap(bytes, r)} frames at 54 Mb/s: 64 KB or 5.5 ms`) : h('span'));
   };
   const a = slider('Payload', 40, 2300, 20, bytes, (v) => `${v} B`, (v) => { bytes = v; paint(); });
   const b = slider('Frames aggregated', 1, 64, 1, n, (v) => String(v), (v) => { n = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos wf-w' }, row(a.el), row(b.el), h('div', { class: 'wf-scroll' }, h('table', { class: 'wf-table' }, h('thead', null, h('tr', null, ...['Code', 'Rate, Mb/s', 'Frame on air', 'Goodput, Mb/s', 'Aggregated, Mb/s'].map((t) => h('th', null, t)))), body)), out, h('p', { class: 'sub' }, 'One sender and an idle channel. No collisions, no fading: the ceiling, by the standard\'s formula for OFDM frame length.')) };
+  return { el: h('div', { class: 'widget mos wf-w' }, row(a.el), row(b.el), h('div', { class: 'wf-scroll' }, h('table', { class: 'wf-table' }, h('thead', null, h('tr', null, ...['Code', 'Rate, Mb/s', 'Frame on air', 'Goodput, Mb/s', 'Aggregated, Mb/s'].map((t) => h('th', null, t)))), body)), out, h('p', { class: 'sub' }, 'One sender and an idle channel, no collisions, no fading: a ceiling, by the formula for OFDM frame length. The aggregated column is an ideal: real aggregates use 802.11n\'s rates, not these.')) };
 }
 
 // ---- MIMO --------------------------------------------------------------------------------------------------------------------------------
