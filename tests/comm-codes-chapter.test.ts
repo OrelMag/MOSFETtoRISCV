@@ -10,7 +10,7 @@ import { convSoftBound } from '../src/comm/ber';
 import { CONV_K7 } from '../src/comm/conv';
 import { rsLatency, rsRtlDecode } from '../src/comm/rsrtl';
 import { AWGN_SIGMA } from '../src/comm/ldpc';
-import { CONCAT_MEASURED, CONCAT_POINTS, CONCAT_WORDS, GOSSIP_PAIR, GOSSIP_SEED, rsWordHit } from '../src/widgets/codes2';
+import { CONCAT_FAILED_22, CONCAT_MEASURED, CONCAT_POINTS, CONCAT_WORDS, GOSSIP_PAIR, GOSSIP_SEED, rsWordHit } from '../src/widgets/codes2';
 import { RS_CHECK, RS_MESSAGE } from '../src/widgets/codes';
 import { tick } from './yieldtick';
 
@@ -59,14 +59,18 @@ describe('what the LDPC steps say', () => {
     expect(deAwgn(AWGN_SIGMA[1], 3, 6, { rounds: 3000 }).converged).toBe(false);
   });
   it('the concatenated link: the words the step quotes, at each depth', async () => {
-    const run = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; await tick(); } return [failed, words]; };
+    const run = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0, wrong = 0, bits = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; wrong += r.dataBitErrors; bits += r.dataBits; await tick(); } return [failed, words, wrong / bits]; };
     const got = [await run(1, 8), await run(2, 4), await run(8, 1)];
     // eslint-disable-next-line no-console
     console.log('concat at 2.3 dB', got);
     expect(got.map((x) => x[1])).toEqual([CONCAT_WORDS, CONCAT_WORDS, CONCAT_WORDS]);
     expect(got.map((x) => x[0])).toEqual(CONCAT_MEASURED);
-    expect((await run(8, 1, 2.2))[0] / CONCAT_WORDS).toBe(CONCAT_POINTS[0][1]);
-    expect(got[2][0] / CONCAT_WORDS).toBe(CONCAT_POINTS[1][1]);
+    const at22 = await run(8, 1, 2.2);
+    // eslint-disable-next-line no-console
+    console.log('ber', at22[2], got[2][2]);
+    expect(at22[0]).toBe(CONCAT_FAILED_22);
+    expect(at22[2]).toBeCloseTo(CONCAT_POINTS[0][1], 8);
+    expect(got[2][2]).toBeCloseTo(CONCAT_POINTS[1][1], 8);
   }, 300000);
   it('the waterfall\'s text: 504 bits beat K = 7 at 2.4 dB, and 8064 bits at 1.6 dB beat 504', () => {
     const short = regularCode(504, 3, 6, 5), long = regularCode(8064, 3, 6, 5), frames = (n: number) => Math.ceil(200000 / n);

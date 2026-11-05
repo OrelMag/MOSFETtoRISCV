@@ -79,7 +79,7 @@ function rsDecPanel(): ScenePanel {
         return h('span', { class: `err-bit cd-b${cls}`, title: `byte ${i}` }, hex2(v));
       }));
       const c = model.comb(0);
-      status.replaceChildren(h('span', null, `clock ${t} of ${LAT}`), h('span', null, `δ ${hex2(c.delta)}`), h('span', null, `roots found ${roots}`), h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model'));
+      status.replaceChildren(h('span', null, `clock ${t} of ${LAT}`), h('span', null, `δ ${hex2(c.delta)}`), h('span', null, `roots found ${roots}`), run ? h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model') : '');
       if (model.phase !== RS_PHASE.DONE || !run) { verdict.className = 'err-verdict'; verdict.textContent = model.phase === RS_PHASE.RX ? `Press Decode to clock the word through, or a phase at a time. ${hits} byte${hits === 1 ? '' : 's'} hit.` : `In ${RS_PHASE_NAMES[model.phase]}.`; return; }
       const fail = Number(stage.value('fail')) === 1, right = out.every((v, i) => v === CW[i]), soft = rsDecode(rsWordHit(run - 1), NSYM);
       verdict.className = `err-verdict ${!fail && right ? 'ok' : 'bad'}`;
@@ -233,8 +233,10 @@ export function tunnelWidget(): Widget {
 
 // ---- the waterfall ------------------------------------------------------------------------------------------------------------
 
-/** Points already measured with comm/ldpc.ts's concatTrial and pinned in tests/comm-codes-chapter.test.ts: Eb/N0, words failed of 384 at depth 8. */
-export const CONCAT_POINTS: [number, number][] = [[2.2, 29 / 384], [2.3, 5 / 384]];
+/** Data bits wrong after both codes, at 2.2 and 2.3 dB, depth 8, over the runs below; and depth 8's failed words at 2.2 dB. */
+export const CONCAT_BER = [0.0019998365, 0.00034595711883408074], CONCAT_FAILED_22 = 29;
+/** Points already measured with comm/ldpc.ts's concatTrial and pinned in tests/comm-codes-chapter.test.ts: Eb/N0, bit error rate at depth 8. */
+export const CONCAT_POINTS: [number, number][] = [[2.2, CONCAT_BER[0]], [2.3, CONCAT_BER[1]]];
 /** Words failed of CONCAT_WORDS at 2.3 dB at depths 1, 2 and 8: tests/comm-codes-chapter.test.ts runs exactly these. */
 export const CONCAT_MEASURED = [52, 25, 5], CONCAT_WORDS = 384;
 
@@ -272,6 +274,7 @@ export function waterfallWidget(): Widget {
     curve((d) => rsCurve(d, 255, 223), 'ln-s cn-rs', 3.5);
     vmark(shannonBinaryDb(0.5), 'lim', 'limit at rate ½', -6.7);
     vmark(ebn0OfSigma(0.8825), 'th', '(3, 6) threshold', -5.9);
+    for (const [x, y, t] of [[6.3, -1.6, 'uncoded'], [5.6, -3.2, 'RS(255, 223)'], [4.3, -5.4, 'K = 7 soft']] as const) plot.layer.append(s('text', { x: plot.X(x), y: plot.Y(y), class: 'cn-lab' }, t));
     for (const [d, p] of CONCAT_POINTS) plot.layer.append(s('rect', { x: plot.X(d) - 3.5, y: plot.Y(Math.log10(p)) - 3.5, width: 7, height: 7, class: 'cn-sq' }));
     for (const p of pts) plot.layer.append(s('circle', { cx: plot.X(p.db), cy: plot.Y(log(p.errors ? p.ber : 1 / p.bits)), r: 4, class: `${p.errors ? 'cn-pt' : 'cn-pt hollow'} n${p.n}` }));
     const last = pts[pts.length - 1];
