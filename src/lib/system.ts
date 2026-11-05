@@ -308,14 +308,109 @@ export function csrUnit(m = false): ComponentDef {
   net('mtvec', 'vTvec.out', 'mtvecOut');
   net('mepc', 'vEpc.out', 'mepcOut');
   const merged = mergeByDriver(nets);
-  // 14 between columns: an output label pointing right and an input label pointing left share the gap
-  const instances = columns(chunk(ins, 12), 14, 0, 14, 2);
-  const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
-  const inNames = ['addr', 'funct3', 'rs1v', 'zimm5', 'csrWrite', 'trap', 'trapCause', 'trapPC', 'trapVal', 'mret', 'mtime', 'mtip', 'meip', 'clk'];
-  const outNames = ['rdata', 'known', 'mtvecOut', 'mepcOut', 'irqTake', 'irqCause'];
-  const pins: Record<string, [number, number]> = {};
-  inNames.forEach((n, i) => (pins[n] = [0, 2 + 3 * i]));
-  outNames.forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  // Drawn with wires: the address decode on the left, the registers in rows (each with the gates that load it) feeding the
+  // read multiplexer, the read-modify-write chain and the interrupt gating on the right; `new` goes back over the top.
+  for (const [d, nm] of [['z3.y', 'z3'], ['z7.y', 'z7'], ['z20.y', 'z20'], ['z2.y', 'z2'], ['csrWrite', 'csrWrite']] as const) merged.find((n) => n.ends[0] === d)!.name = nm;
+  const POS: Record<string, [number, number]> = {
+    known: [50, 2], enc0: [50, 40], enc1: [50, 60], enc2: [50, 80], enc3: [50, 100], idx: [62, 60],
+    nv: [58, 6], gnd: [60, 14], vdd: [60, 30], tm: [60, 22],
+    mMIE: [64, 2], mMPIE: [64, 17], enS: [64, 31], rMIE: [76, 5], rMPIE: [76, 20],
+    z3: [88, 2], mpp: [88, 12], z19: [88, 14], vStatus: [98, 2], w_mstatus: [56, 36],
+    mieNew: [68, 40], w_mie: [68, 46], rMIEN: [76, 40], sMie: [88, 40], z7: [90, 37], z20: [90, 47], vMie: [98, 38],
+    tvHi: [60, 56], w_mtvec: [68, 58], rTvec: [76, 54], z2: [90, 51], vTvec: [98, 54],
+    w_mscratch: [68, 68], rScratch: [76, 68],
+    tpc: [60, 84], dEpc: [68, 80], enE: [68, 88], w_mepc: [60, 92], rEpc: [76, 80], vEpc: [98, 80],
+    dCause: [68, 100], enC: [68, 108], w_mcause: [60, 112], rCause: [76, 100],
+    dTval: [68, 118], enT: [68, 126], w_mtval: [60, 130], rTval: [76, 118],
+    vMip: [98, 126], rsel: [108, 52], misa: [96, 62], zero32: [96, 94],
+    zimm: [124, 43], z27: [112, 38], srcSel: [130, 40], nsrc: [144, 44], ones: [136, 50], orOld: [144, 56], andOld: [144, 70], opSel: [160, 52], sf3: [150, 84],
+    ei: [122, 100], ti: [122, 108], any: [132, 104], take: [142, 104], icause: [132, 114], kT: [122, 120], kE: [122, 126],
+  };
+  for (const k of Object.keys(POS)) if (!/^(known|enc[0-3]|idx)$/.test(k)) POS[k] = [POS[k][0] + 16, POS[k][1]];
+  Object.assign(POS, {
+    nv: [68, 6], gnd: [74, 9], tm: [74, 22], vdd: [73, 16], misa: [92, 170], sMie: [102, 40], z7: [98, 36], z20: [98, 47],
+    tvHi: [76, 52], w_mtvec: [84, 60], w_mscratch: [84, 74], tpc: [76, 84], dEpc: [84, 80], rEpc: [92, 80], enE: [84, 92], w_mepc: [76, 96],
+    dCause: [84, 104], rCause: [92, 104], enC: [84, 116], w_mcause: [76, 120], dTval: [84, 128], rTval: [92, 128], enT: [84, 140], w_mtval: [76, 144],
+    vMip: [114, 138], zero32: [104, 90],
+  });
+  CSR_ORDER.forEach(([n], i) => {
+    POS[`k_${n}`] = [6, 5 + 7 * i];
+    POS[`is_${n}`] = [14, 2 + 7 * i];
+  });
+  const instances: InstanceDef[] = ins.map(([name, def, label]) => ({ name, def, at: POS[name], label }));
+  const XR = 192;
+  const pins: Record<string, [number, number]> = {
+    addr: [0, 1], trapPC: [0, 156], trapCause: [0, 159], trapVal: [0, 162],
+    funct3: [0, 166], rs1v: [0, 169], zimm5: [0, 172], csrWrite: [0, 175], trap: [0, 178], mret: [0, 181], mtime: [0, 184], mtip: [0, 187], meip: [0, 190], clk: [0, 193],
+    rdata: [XR, 69], known: [XR, -2], mtvecOut: [XR, -4], mepcOut: [XR, -6], irqTake: [XR, 105], irqCause: [XR, 115],
+  };
+  {
+    const at = (n: string) => POS[n];
+    const portAt = (inst: string, port: string): [number, number] => {
+      const i = ins.find((x) => x[0] === inst)!;
+      const g = symbolGeom(i[1]).ports[port].pos;
+      return [POS[inst][0] + g[0], POS[inst][1] + g[1]];
+    };
+    void at;
+    const byDrv = (d: string) => merged.find((n) => n.ends[0] === d)!;
+    // a net drawn as wires, with corner points on the way to some of its ends and pointers at others
+    const wire = (n: NetDef, via: NonNullable<NetDef['via']> = {}, tags?: string[]) => {
+      n.via = { ...n.via, ...via };
+      if (tags) n.tags = tags;
+      else delete n.tags;
+    };
+    // the select signals fan out into a crossbar (known, the index encoders, the write gates): pointers at the sinks
+    for (const [n] of CSR_ORDER) {
+      const net = byDrv(sel[n]);
+      net.name = `is_${n}`;
+      wire(net, {}, net.ends.slice(1));
+    }
+    // the address: a lane down each column of comparators, in from the left
+    const addr = merged.find((n) => n.name === undefined && n.ends[0] === 'addr')!;
+    addr.name = 'addr';
+    const aVia: NonNullable<NetDef['via']> = {};
+    CSR_ORDER.forEach(([n], i) => { aVia[`is_${n}.a`] = [[3, 1], [3, 4 + 7 * i]]; });
+    wire(addr, aVia);
+    // trap, clock, write enable and a few signals that reach many gates stay pointers
+    for (const n of merged) if (n.name !== undefined && ['mepc', 'mtvec'].includes(n.name)) delete n.tags;
+    // everything else is a wire
+    const keepTags = new Set(['z3.y', 'z7.y', 'z20.y', 'z2.y']);
+    const ptr = new Set(['clk', 'trap', 'csrWrite', 'mretQ', 'mtip', 'meip', 'mtime', 'funct3', 'rs1v', 'zimm5', 'index']);
+    for (const n of merged) if (n.tags === true && !(n.name && ptr.has(n.name))) delete n.tags;
+    for (const n of merged) if (n.name === 'new' || n.name === 'zero') delete n.tags;
+    void keepTags;
+    // the new value goes back over the top and down a lane beside the rows; the zero word fans out to the multiplexer's last inputs
+    const nw = merged.find((n) => n.name === 'new')!, nwo = portAt('opSel', 'y');
+    wire(nw, Object.fromEntries(nw.ends.slice(1).map((e) => [e, [[nwo[0] + 2, nwo[1]], [nwo[0] + 2, -9], [64.5, -9], [64.5, portAt(e.split('.')[0], e.split('.')[1])[1]]] as [number, number][]])));
+    const zr = merged.find((n) => n.name === 'zero')!, zo = portAt('zero32', 'y'), zx = POS.rsel[0] - 3;
+    wire(zr, Object.fromEntries(zr.ends.slice(1).map((e) => [e, [[zo[0] + 2, zo[1]], [zx, zo[1]], [zx, portAt('rsel', e.split('.')[1])[1]]] as [number, number][]])));
+    wire(merged.find((n) => n.name === 'MIE')!, {}, ['take.b']);
+    wire(merged.find((n) => n.name === 'MTIE')!, {}, ['ti.a']);
+    wire(merged.find((n) => n.name === 'MEIE')!, {}, ['ei.a']);
+    const nv3 = portAt('nv', 'o1');
+    wire(merged.find((n) => n.name === 'new[3]')!, { 'mMIE.d0': [[72.5, nv3[1]], [72.5, portAt('mMIE', 'd0')[1]]] });
+    // the trap's values come in along the bottom and up a lane beside the rows
+    const lane = (name: string, x: number, end: string) => { const n = merged.find((m2) => m2.name === name)!; wire(n, { [end]: [[x, pins[name][1]], [x, portAt(end.split('.')[0], end.split('.')[1])[1]]] }); };
+    lane('trapPC', 66, 'tpc.in');
+    lane('trapCause', 67.5, 'dCause.b');
+    lane('trapVal', 69, 'dTval.b');
+    const nvO = portAt('nv', 'o3');
+    wire(merged.find((n) => n.name === 'new[7]')!, { 'mMPIE.d0': [[71, nvO[1]], [71, portAt('mMPIE', 'd0')[1]]], 'mieNew.i0': [[71, nvO[1]], [71, portAt('mieNew', 'i0')[1]]] });
+    const nv5 = portAt('nv', 'o5');
+    wire(merged.find((n) => n.name === 'new[11]')!, { 'mieNew.i1': [[70, nv5[1]], [70, portAt('mieNew', 'i1')[1]]] });
+    const tmo = portAt('tm', 'out');
+    wire(merged.find((n) => n.name === 'statusSel')!, { 'mMIE.s': [[tmo[0] + 2, tmo[1]], [tmo[0] + 2, portAt('mMIE', 's')[1] + 2.5], [portAt('mMIE', 's')[0], portAt('mMIE', 's')[1] + 2.5]], 'mMPIE.s': [[tmo[0] + 2, tmo[1]], [tmo[0] + 2, portAt('mMPIE', 's')[1] + 2.5], [portAt('mMPIE', 's')[0], portAt('mMPIE', 's')[1] + 2.5]] });
+    // constants shared by several rows: wired where they sit, a pointer for the far rows
+        wire(byDrv('z3.y'), {}, ['vMie.i2', 'vMip.i2']);
+    wire(byDrv('z7.y'), {}, ['vMip.i0']);
+    wire(byDrv('z20.y'), {}, ['vMip.i4']);
+    wire(byDrv('z2.y'), {}, ['vEpc.i0']);
+    wire(merged.find((n) => n.name === 'misa')!, {}, ['rsel.d1']);
+    // rails over the top for the three outputs that leave from the middle of the unit
+    wire(merged.find((n) => n.name === 'known')!, { known: [[portAt('known', 'y')[0] + 1.5, portAt('known', 'y')[1]], [portAt('known', 'y')[0] + 1.5, -2]] });
+    wire(merged.find((n) => n.name === 'mtvec')!, { mtvecOut: [[portAt('vTvec', 'out')[0] + 3, portAt('vTvec', 'out')[1]], [portAt('vTvec', 'out')[0] + 3, -4]] });
+    wire(merged.find((n) => n.name === 'mepc')!, { mepcOut: [[portAt('vEpc', 'out')[0] + 4.5, portAt('vEpc', 'out')[1]], [portAt('vEpc', 'out')[0] + 4.5, -6]] });
+  }
   return define({
     id: `csrunit${m ? '_m' : ''}`, name: 'CSR unit', category: 'cpu',
     summary: 'The machine-mode control and status registers: address decode, a read multiplexer, read-modify-write for csrrw/csrrs/csrrc, and the hardware updates on a trap (mepc, mcause, mtval, MIE→MPIE) or an mret. Also decides whether an interrupt is taken.',
@@ -515,9 +610,12 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   };
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
+  // The plain system is drawn with wires (see the block after the nets); the core with ports, the M extension and the
+  // bus keep the author's pointers and their original placement.
+  const wired = !ports && !m && !busK;
   const Y = 36;
-  alignY('pcmux', M4, 0, 'y', Y);
-  alignY('trapmux', M4, 10, 'd0', Y);
+  alignY('pcmux', M4, wired ? 5 : 0, 'y', Y);
+  alignY('trapmux', M4, wired ? 13 : 10, 'd0', Y);
   alignY('pc', PC, 22, 'd', P('trapmux', 'y')[1]);
   place('one', TIE1, [17, P('pc', 'en')[1] - 1]);
   // the core with ports lays out as if the ROM were there (its instr pin where the ROM's data was)
@@ -526,34 +624,40 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   if (IM) alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
   alignY('si', SI, 56 + (busK ? 4 : 0), 'in', romData[1]);
   alignY('rf', RF, 74 + (busK ? 4 : 0), 'wa', P('si', 'o1')[1]);
-  alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
+  if (wired) place('imm', IMM_GEN, [82, 62]); else alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
   alignY('srcB', M2, rfR + 8, 'a', P('rf', 'rd2')[1] + 9);
   alignY('alu', ALU, rfR + 18, 'a', P('srcA', 'y')[1]);
   const aluR = at.get('alu')![0] + g(ALU).w;
-  alignY('st', STORE_ALIGN, aluR + 12, 'wd', Y + 18);
+  alignY('st', STORE_ALIGN, wired ? 148 : aluR + 12, 'wd', wired ? Y + 18 : Y + 18);
   // the bus's memory unit is a tall box: room for the labels between it and the store alignment
-  const dmX = aluR + 30 + (busK ? 16 : 0);
+  const dmX = wired ? 172 : aluR + 30 + (busK ? 16 : 0);
   if (!ports) alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
-  alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
-  alignY('ldsel', M2, dmX + g(DM).w + 8, 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
+  if (wired) place('io', IO_UNIT, [174, 68]); else alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
+  alignY('ldsel', M2, dmX + g(DM).w + (wired ? 10 : 8), 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
   alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 26);
-  place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
-  alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
+  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
+  if (wired) place('clr0', CLEAR_BIT0, [141, 75]); else alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
-  place('ctl', CONTROL, [26, 0]);
-  place('npc', NEXT_PC, [96, 0]);
+  place('ctl', CONTROL, wired ? [44, 86] : [26, 0]);
+  place('npc', NEXT_PC, wired ? [122, 40] : [96, 0]);
   // system blocks along the bottom
   const yS = Y + 60;
-  place('imm12', IMM12, [52, yS - 6]);
-  place('sys', SYSD, [4, yS + 4]);
+  place('imm12', IMM12, wired ? [55, 56] : [52, yS - 6]);
   // 24 units between the blocks: both facing sides carry labels
-  place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
-  place('trap', TRAP_UNIT, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
+  if (wired) {
+    place('sys', SYSD, [44, 114]);
+    place('trap', TRAP_UNIT, [130, 114]);
+    place('csr', CSRU, [158, 114]);
+  } else {
+    place('sys', SYSD, [4, yS + 4]);
+    place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
+    place('trap', TRAP_UNIT, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
+  }
   // glue logic
   const glue: [string, ComponentDef][] = [
     ['ntrap', NOT], ['rw', OR], ['rwq', AND], ['isIO', splitter([31, 1])], ['nio', NOT], ['memWq', andN(3)], ['ioWq', andN(3)],
@@ -565,7 +669,12 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const gridX0 = 4 + g(SYSD).w + 24 + g(CSRU).w + 24, gridY0 = yS + 4 + Math.max(g(CSRU).h, g(SYSD).h, g(IO_UNIT).h) + 14;
   let gi = 0;
   const gridAt = (): [number, number] => { const i = gi++; return [gridX0 + 24 * (i % 4), gridY0 + 14 * Math.floor(i / 4)]; };
-  for (const [n, d] of glue) place(n, d, gridAt());
+  const GLUE: Record<string, [number, number]> = {
+    rw: [72, 87], rwq: [84, 87], ntrap: [146, 146], nio: [148, 45], memWq: [154, 41], ioWq: [156, 73], mretq: [74, 127], tsel: [16, 50],
+    rsrc: [224, 62], addr2: [140, 58], size: [140, 64], ldMis: [112, 132], stMis: [112, 138], isLoad: [98, 127], nres1: [94, 132], taken: [84, 139],
+    tgt1: [98, 142], fMis: [112, 126], psplit: [78, 139], rssplit: [92, 127], z32: [204, 72], isIO: [152, 66],
+  };
+  for (const [n, d] of glue) place(n, d, wired ? GLUE[n] : gridAt());
 
   const labels: Record<string, string> = { pcmux: 'next PC', trapmux: 'trap / mret', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm', ldsel: 'mem / I/O', sys: 'system decode', csr: 'CSRs', trap: 'trap unit', io: 'I/O' };
   const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
@@ -672,16 +781,118 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   ];
   // CSR writes happen only if the instruction does not trap
   nets.splice(nets.findIndex((n) => n.name === 'csrWriteRaw'), 1);
-  instances.push({ name: 'csrWq', def: AND, at: gridAt() });
+  instances.push({ name: 'csrWq', def: AND, at: wired ? [74, 133] : gridAt() });
   defs.set('csrWq', AND);
   nets.push({ name: 'csrWriteRaw', ends: ['sys.csrWrite', 'csrWq.a'], tags: true });
   nets.find((n) => n.name === 'NoTrap')!.ends.push('csrWq.b');
   nets.push({ name: 'csrWrite', ends: ['csrWq.y', 'csr.csrWrite'], tags: true });
+  if (wired) {
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    /** Corner points on the way to each end of a net (a via is never moved by the router); `tags`: the ends still drawn as pointers. */
+    const route = (name: string, via: NonNullable<NetDef['via']>, tags?: string[]) => {
+      const n = net(name);
+      n.via = { ...n.via, ...via };
+      delete n.trunk;
+      if (tags) n.tags = tags;
+      else delete n.tags;
+    };
+    const pointers = new Set<string>();
+    const pt = (...names: string[]) => names.forEach((n) => pointers.add(n));
+    type Pt = [number, number];
+    // feedback over the top and along the bottom, into the next-PC mux's left side
+    const [px, py] = P('plus4', 'y');
+    const xm = at.get('pcmux')![0], xt = at.get('trapmux')![0];
+    const L0 = xm - 4.5, L1 = L0 + 1.5, L2 = L1 + 1.5;
+    route('PCPlus4', {
+      'pcmux.d0': [[px + 2, py], [px + 2, 24], [L0, 24], [L0, P('pcmux', 'd0')[1]]],
+      'pcmux.d3': [[px + 2, py], [px + 2, 24], [L0, 24], [L0, P('pcmux', 'd3')[1]]],
+      'res.d2': [[px + 2, py], [px + 2, 24], [P('res', 'd2')[0] - 4.5, 24], [P('res', 'd2')[0] - 4.5, P('res', 'd2')[1]]],
+    });
+    const tS = P('target', 's'), cO = P('clr0', 'out'), nS = P('npc', 'pcSrc');
+    route('PCTarget', { 'pcmux.d1': [[tS[0] + 1, tS[1]], [tS[0] + 1, 68], [L1, 68], [L1, P('pcmux', 'd1')[1]]] });
+    route('JalrTarget', { 'pcmux.d2': [[cO[0] + 1, cO[1]], [cO[0] + 1, 69.5], [L2, 69.5], [L2, P('pcmux', 'd2')[1]]] });
+    route('PCSrc', { 'pcmux.s': [[nS[0] + 1.5, nS[1]], [nS[0] + 1.5, 71], [P('pcmux', 's')[0], 71]] }, ['psplit.in']);
+    // the trap path: PC to mepc's input, mtvec / mepc back into the mux in front of the PC, along the bottom
+    const csrX = at.get('csr')![0], trX = at.get('trap')![0];
+    const lanePC = pcq[0] + 3, yPC = 151, yEpc = 153, yTv = 155, yTg = 157;
+    route('PC', {
+      'srcA.b': [[lanePC, pcq[1]], [lanePC, 30.5], [rfR + 5, 30.5], [rfR + 5, P('srcA', 'b')[1]]],
+      'target.a': [[lanePC, pcq[1]], [lanePC, 30.5], [rfR + 5, 30.5], [rfR + 5, P('target', 'a')[1]]],
+      pcOut: [[lanePC, pcq[1]], [lanePC, 30.5]],
+      'csr.trapPC': [[lanePC, pcq[1]], [lanePC, yPC], [csrX - 3, yPC], [csrX - 3, P('csr', 'trapPC')[1]]],
+    });
+    const mo = P('csr', 'mepcOut'), tv = P('csr', 'mtvecOut');
+    route('mepc', { 'trapmux.d1': [[mo[0] + 2, mo[1]], [mo[0] + 2, yEpc], [xt - 2, yEpc], [xt - 2, P('trapmux', 'd1')[1]]] });
+    route('mtvec', {
+      'trapmux.d2': [[tv[0] + 3.5, tv[1]], [tv[0] + 3.5, yTv], [xt - 1, yTv], [xt - 1, P('trapmux', 'd2')[1]]],
+      'trapmux.d3': [[tv[0] + 3.5, tv[1]], [tv[0] + 3.5, yTv], [xt - 1, yTv], [xt - 1, P('trapmux', 'd3')[1]]],
+    });
+    route('PCNormal', { 'trap.target': [[xt - 3, P('pcmux', 'y')[1]], [xt - 3, yTg], [trX - 2.5, yTg], [trX - 2.5, P('trap', 'target')[1]]] }, ['tgt1.in']);
+    // the trap unit's answer into the CSRs
+    ([['Trap', 'trap', 'trap', csrX - 6], ['TrapCause', 'cause', 'trapCause', csrX - 7.5], ['TrapVal', 'tval', 'trapVal', csrX - 9]] as const).forEach(([name, o, i, x]) => {
+      const a = P('trap', o), b = P('csr', i);
+      route(name, { [`csr.${i}`]: [[x, a[1]], [x, b[1]]] }, name === 'Trap' ? ['ntrap.a', 'tsel.i1'] : undefined);
+    });
+    // the sys decode's three exceptions into the trap unit, nested; the gates' answers beside them
+    const sy = (o: string) => P('sys', o), tr = (i: string) => P('trap', i);
+    route('illegal', { 'trap.illegal': [[trX - 3, sy('illegal')[1]], [trX - 3, tr('illegal')[1]]] });
+    route('ecall', { 'trap.ecall': [[trX - 4.5, sy('ecall')[1]], [trX - 4.5, tr('ecall')[1]]] });
+    route('ebreak', { 'trap.ebreak': [[trX - 6, sy('ebreak')[1]], [trX - 6, tr('ebreak')[1]]] });
+    route('tookBranch', { 'fMis.a': [[P('taken', 'y')[0] + 2, P('taken', 'y')[1]], [P('taken', 'y')[0] + 2, P('fMis', 'a')[1] ]] });
+    route('fetchMis', { 'trap.fetchMis': [[P('fMis', 'y')[0] + 2, P('fMis', 'y')[1]], [P('fMis', 'y')[0] + 2, tr('fetchMis')[1]]] });
+    route('loadMis', { 'trap.loadMis': [[P('ldMis', 'y')[0] + 3.5, P('ldMis', 'y')[1]], [P('ldMis', 'y')[0] + 3.5, tr('loadMis')[1]]] });
+    route('storeMis', { 'trap.storeMis': [[P('stMis', 'y')[0] + 5, P('stMis', 'y')[1]], [P('stMis', 'y')[0] + 5, tr('storeMis')[1]]] });
+    // the instruction word and its fields: lanes right of the splitter, down past the datapath and in from the left
+    route('Instr', { 'imm12.in': [[53, 40], [53, P('imm12', 'in')[1]]], 'imm.instr': [[53, 40], [53, P('imm', 'instr')[1]]] });
+    // ALUResult: along the row to the memory, a lane down at 138 for the rest, over the top to the result mux
+    const XA = 138, ay = P('alu', 'y')[1];
+    route('ALUResult', {
+      'res.d0': [[XA, ay], [XA, 33], [222.5, 33], [222.5, P('res', 'd0')[1]]],
+      'clr0.in': [[XA, ay], [XA, P('clr0', 'in')[1]]],
+      'addr2.in': [[XA, ay], [XA, P('addr2', 'in')[1]]],
+      'isIO.in': [[XA, ay], [XA, P('isIO', 'in')[1]]],
+      'io.addr': [[XA, ay], [XA, P('io', 'addr')[1]]],
+      'trap.addr': [[XA, ay], [XA, 108.5], [68.5, 108.5], [68.5, 149], [trX - 4, 149], [trX - 4, P('trap', 'addr')[1]]],
+    });
+    // the store path: lanes between the store aligner and the memory
+    const sw = P('st', 'wdata'), sb = P('st', 'be');
+    route('StoreData', {
+      'dm.wdata': [[sw[0] + 2.5, sw[1]], [sw[0] + 2.5, P('dm', 'wdata')[1]]],
+      'io.wdata': [[sw[0] + 2.5, sw[1]], [sw[0] + 2.5, P('io', 'wdata')[1]]],
+    });
+    route('ByteEn', { 'dm.be': [[sb[0] + 4, sb[1]], [sb[0] + 4, P('dm', 'be')[1]]] });
+    // the read side: the I/O devices' word and the memory's meet in a mux, whose select comes up from below
+    const ir = P('io', 'rdata');
+    route('IORead', { 'ldsel.b': [[ir[0] + 2, ir[1]], [ir[0] + 2, P('ldsel', 'b')[1]]] });
+    const cr = P('csr', 'rdata'), rd4 = P('res', 'd4');
+    route('CSRRead', { 'res.d4': [[cr[0] + 1.5, cr[1]], [cr[0] + 1.5, 126], [rd4[0] - 2.5, 126], [rd4[0] - 2.5, rd4[1]]] });
+    // control: each signal straight out of its port, then up to its unit
+    const up = (name: string, port: string, end: string, ...more: Pt[]) => route(name, { [end]: [[P('ctl', port)[0] + 2, P('ctl', port)[1]], ...more] });
+    up('ImmSrc', 'immSrc', 'imm.src', [64, P('ctl', 'immSrc')[1]], [64, 73], [P('imm', 'src')[0], 73]);
+    up('ALUSrcA', 'aluSrcA', 'srcA.s', [94.5, P('ctl', 'aluSrcA')[1]], [94.5, P('srcA', 's')[1] + 2.5], [P('srcA', 's')[0], P('srcA', 's')[1] + 2.5]);
+    up('ALUSrcB', 'aluSrcB', 'srcB.s', [P('srcB', 's')[0], P('ctl', 'aluSrcB')[1]]);
+    up('ALUControl', 'aluCtl', 'alu.ctl', [104.5, P('ctl', 'aluCtl')[1]], [104.5, P('alu', 'ctl')[1] + 2], [P('alu', 'ctl')[0], P('alu', 'ctl')[1] + 2]);
+    const nb = P('npc', 'branch')[0];
+    up('Branch', 'branch', 'npc.branch', [nb - 3, P('ctl', 'branch')[1]], [nb - 3, P('npc', 'branch')[1]]);
+    up('Jump', 'jump', 'npc.jump', [nb - 2, P('ctl', 'jump')[1]], [nb - 2, P('npc', 'jump')[1]]);
+    up('Jalr', 'jalr', 'npc.jalr', [nb - 1, P('ctl', 'jalr')[1]], [nb - 1, P('npc', 'jalr')[1]]);
+    // the ALU's flags, nested so that they do not cross each other
+    ([['Zero', 'zero', 0], ['Neg', 'neg', 1], ['Ovf', 'ovf', 2], ['Carry', 'carry', 3]] as const).forEach(([name, port, k]) =>
+      route(name, { [`npc.${port}`]: [[P('alu', port)[0] + 6 - 1.5 * k, P('alu', port)[1]], [P('alu', port)[0] + 6 - 1.5 * k, P('npc', port)[1]]] }));
+    for (const n of ['RegWriteCtl', 'ImmSrc', 'ALUSrcA', 'ALUSrcB', 'Branch', 'Jump', 'Jalr', 'ALUControl', 'Zero', 'Neg', 'Ovf', 'Carry', 'PCSrc', 'op', 'funct3', 'funct7']) net(n).quiet = true;
+    // pointers stay where a wire would tangle: a signal that fans out to many gates, and the CSR unit's field inputs
+    pt('NoTrap', 'csrOp', 'MemWriteCtl', 'ResultSrc2', 'mret', 'csrWrite', 'misaligned', 'irqTake', 'irqCause', 'csrKnown', 'mtime', 'mtip', 'isIO', 'funct3', 'rs1', 'imm12', 'rd1', 'clk', 'target[1]');
+    for (const n of nets) if (!n.via && !pointers.has(n.name!) && n.tags === true) delete n.tags;
+  }
   // the fetch-misaligned target bit comes from the normal next PC
   nets.splice(nets.findIndex((n) => n.name === 'PCTargetChk'), 1);
   void bottom;
   void fanout;
   const pins: Record<string, [number, number]> = { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] };
+  if (wired) {
+    const xR = P('res', 'y')[0] + 20;
+    Object.assign(pins, { clk: [0, 100], switches: [166, 78], irq: [146, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
+    }
   if (ports) {
     // ---- a core with ports: the ROM and the data memory outside, only the timer's registers inside
     const net = (name: string) => nets.find((n) => n.name === name)!;
