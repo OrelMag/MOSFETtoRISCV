@@ -61,7 +61,7 @@ export const chSpeech: Chapter = {
       title: 'A voice on a wire',
       body: `
         <p>The telephone network samples a voice 8 000 times a second, enough for the band from 300 Hz to 3.4 kHz that carries what is said. At 8 bits a sample that is 64 kb/s, a channel's worth, and this chapter is about how far below that a voice can go and what each step down costs.</p>
-        <p>The voice here is a real one: six seconds of a LibriVox reading of the Gettysburg Address, which LibriVox has dedicated to the public domain. It was decoded from LibriVox's 64 kb/s MP3, itself a lossy copy, cleared of a DC offset the recording carries, and resampled to 8 kHz by this site's own windowed-sinc filter. It is stored at 16 bits, so it starts at twice the telephone's rate.</p>
+        <p>The voice here is a real one: six seconds of a LibriVox reading of the Gettysburg Address, whose recordings LibriVox releases into the public domain. It was decoded from LibriVox's 64 kb/s MP3, itself a lossy copy, cleared of a DC offset the recording carries, and resampled to 8 kHz by this site's own windowed-sinc filter. It is stored at 16 bits, so it starts at twice the telephone's rate.</p>
         <p>Its spectrum shows where the energy is: most of it below 1 kHz, where the voice's pitch and first formants sit, falling away towards 4 kHz.</p>
         <div class="try">Play it, and look at how much of the spectrum is below 1 kHz.</div>`,
       widget: voiceWidget,
