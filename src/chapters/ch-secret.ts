@@ -1,14 +1,17 @@
 // Keeping it secret: how strangers share a secret in public. It opens on the Enigma M4 (crypto/enigma.ts, widgets/enigma3d.ts), a
-// permutation of wired switches that was broken for reasons that are still the rules. AES, SHA-256 and a TLS 1.3 handshake follow
-// (Chapter.soon until they are built). History here is checked against the sources in the "Where this comes from" asides.
+// permutation of wired switches that was broken for reasons that are still the rules. Then AES and SHA-256 in gates (lib/aes.ts,
+// lib/sha256.ts, checked against NIST vectors and node:crypto); key exchange and TLS 1.3 follow (Chapter.soon until they are built). History here is checked against the sources in the "Where this comes from" asides.
 
 import { periodOf, involutions26, m4KeySpace, plugCount } from '../crypto/bombe';
 import '../lib';
 import { add26, m4Gates, sub26, wheelStage } from '../lib/enigmagates';
+import COSTS from '../crypto/gatecosts.json';
 import { stats } from '../sim/stats';
 import { idx, ROTORS, U264 } from '../crypto/enigma';
 import { enigma3d } from '../widgets/enigma3d';
 import { withModel } from '../widgets/modelhost';
+import { aesExplorerWidget, avalancheWidget, modesWidget, shaWidget } from '../widgets/secretaes';
+import { aesCoreScene, aesRoundScene, sboxScene, shaCoreScene, shaRoundScene } from '../widgets/secretscenes';
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
 import type { Chapter } from './types';
 
@@ -30,20 +33,25 @@ const m4Scene = () => ({
 
 export const chSecret: Chapter = {
   id: 'secret', num: 52.5, title: 'Keeping it secret', level: 'Communication',
-  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.',
+  blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates. Coming to this chapter: key exchange and a TLS 1.3 handshake on our CPU.',
   goals: [
     'describe the Enigma as a permutation that changes with every key press, and say what its wiring forces it to do',
     'use a crib and the machine\'s flaw to rule out settings, and explain how the Bombe discards the plugboard from the search',
-    'state the design rules that Enigma\'s failures gave modern ciphers',
+    'state the design rules that Enigma\'s failures gave modern ciphers, and see them in AES and SHA-256 built from gates',
+    'say what a mode of operation adds to a block cipher, and what goes wrong without one',
     'say what separates a stored-program computer from the machines built to break these ciphers',
   ],
   builds: ['tcp'],
+  parts: [['The Enigma', 7], ['AES', 6], ['SHA-256', 3]],
   recap: {
     keep: [
       'A key press steps the wheels, then the current runs from the key through plugs, entry wheel, four wheels, the reflector and back. Each position is one fixed permutation of 26 letters, made of 13 swaps: the same setting deciphers what it enciphered, and no letter ever lights itself.',
       `The M4's key has ${sci(KS.total)} settings, about 2<sup>${KS.bits.toFixed(1)}</sup>, of which the plugboard is ${sci(KS.plugs)}. Without the plugs there are only ${sci(KS.withoutPlugs)}, and an attack that gets round the plugboard has only those to try.`,
       'A crib is plaintext you can guess. Because no letter enciphers to itself, a crib can only stand where no letter falls on itself. From a crib the Bombe follows a guess about one plug through the scrambler, whose wiring is known; a contradiction rules out that wheel position whatever the other plugs are.',
       'The lessons became rules: the design is public and only the key is secret (Kerckhoffs); a cipher must not have a structural tell; key bits must not be separable into parts attacked one at a time; and a key must not be reused or sent twice.',
+      `AES-128 is ten rounds of SubBytes, ShiftRows, MixColumns and AddRoundKey over a 16-byte state. In gates here: an S-box of ${n0(COSTS.parts.aes_sbox.nands)} NANDs, a round of ${n0(COSTS.parts.aes_round.nands)}, a core of ${n0(COSTS.cores.aes_core.nands)} taking ${COSTS.cores.aes_core.cycles} clocks a block, with the key in a register.`,
+      'A block cipher alone only enciphers 16 bytes. ECB shows repeats; CTR hides them but dies if a counter is reused and does not notice changes; GCM adds a tag, so a changed message is refused.',
+      `SHA-256 turns any message into 256 bits so that changing one bit changes about half of them: a core of ${n0(COSTS.cores.sha_core.nands)} NANDs and ${COSTS.cores.sha_core.cycles} clocks per 64-byte block. It has no key: anyone can compute it.`,
     ],
     check: [
       {
@@ -59,6 +67,13 @@ export const chSecret: Chapter = {
         answer: 0,
         explain: 'The reasoning needs only that a plug is a swap. It discards a wheel position without enumerating pluggings: the huge factor in the key space never enters the search.',
         why: ['', 'At a million plug settings a second, that alone takes about five years for each wheel position, and there are 17 576 positions per wheel order. No machine tried them.', 'Captured material helped at times, but the Bombe\'s method needed no plug settings.', 'It multiplied the key space enormously. The point is that the method goes round it, not that it is absent.'],
+      },
+      {
+        question: 'A picture is enciphered with AES in ECB mode, and its outline is still visible. Why?',
+        options: ['Equal 16-byte blocks of input give equal blocks of output', 'AES is too weak to hide images', 'The key was too short', 'ECB leaves the first round out'],
+        answer: 0,
+        explain: 'Each block is enciphered alone with the same key, so a flat area of the picture turns into one repeated block. The cipher is doing its job on each block; the mode gives the pattern away.',
+        why: ['', 'AES is fine: the same cipher in CTR mode hides the picture completely.', 'A longer key changes which block each block turns into, not that equal blocks stay equal.', 'ECB runs all the rounds. The problem is what happens between blocks: nothing.'],
       },
       {
         question: 'Which of these machines stored its program in the memory it worked on?',
@@ -122,7 +137,7 @@ export const chSecret: Chapter = {
     {
       title: 'What the breaking taught',
       body: `
-        <p>Modern cipher design reads like a list of what went wrong here. Each row here is a rule still in force, and AES, which is among the steps still to come in this chapter, follows all of them.</p>
+        <p>Modern cipher design reads like a list of what went wrong here. Each row here is a rule still in force, and AES, built later in this chapter, follows all of them.</p>
         <p>Key sizes are worth a sum. If a machine could try one key per clock at 1 GHz, the M4's ${sci(KS.withoutPlugs)} wheel-and-ring settings take under ${n0(Math.ceil(Number(KS.withoutPlugs) / 1e9 / 60))} minutes: that part alone is nothing today. AES-128 has 2<sup>128</sup> keys. Nothing you can build gets near that, and the design's job is to make sure nothing cleverer does either.</p>`,
       widget: lessonsWidget,
     },
@@ -137,6 +152,80 @@ export const chSecret: Chapter = {
         <details class="deeper"><summary>Where this comes from</summary><p><a href="https://en.wikipedia.org/wiki/Colossus_computer" target="_blank" rel="noopener">Colossus computer</a> (the Lorenz target, valve counts, not stored-program, little direct influence), <a href="https://en.wikipedia.org/wiki/Manchester_Baby" target="_blank" rel="noopener">Manchester Baby</a> (the date, Newman, the surplus parts, Turing's program), <a href="https://en.wikipedia.org/wiki/Universal_Turing_machine" target="_blank" rel="noopener">Universal Turing machine</a> (Davis on the action table in the same memory as the data), <a href="https://en.wikipedia.org/wiki/Bombe" target="_blank" rel="noopener">Bombe</a>, and <a href="https://en.wikipedia.org/wiki/Kerckhoffs%27s_principle" target="_blank" rel="noopener">Kerckhoffs's principle</a> for the previous step. All Wikipedia, read for their citations: treat "first" with care, as those articles do. The Zuse Z3 of 1941 is the first programmable electromechanical one, and which machine counts as first depends on the definition.</p></details>`,
       widget: machinesWidget,
     },
+    {
+      title: 'AES: four steps and a key',
+      body: `
+        <p>Now the design that followed those rules. AES-128 works on 16 bytes, written as four columns of four, and repeats a round ten times. A round is four steps, and each has one job: <b>SubBytes</b> breaks linearity, a byte at a time; <b>ShiftRows</b> and <b>MixColumns</b> spread each byte across the block; <b>AddRoundKey</b> brings in the key. Before round 1 the key is XORed in once, because without that an attacker could undo the first round's steps with no key at all.</p>
+        <p>The round keys come from the 128-bit key by a small schedule, one new key a round, using the S-box and a constant. Compare the wheel: there the "key" is which wires and where they stand, and it is a fixed part of a machine. Here it is sixteen bytes in a register, and the structure never changes.</p>
+        <p class="try"><b>Try:</b> step through round 1 with the buttons. In orange: what that step changed. Then take the round slider to 10 and find the MixColumns that is not there.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p>The values are <a href="https://csrc.nist.gov/pubs/fips/197/final" target="_blank" rel="noopener">FIPS 197</a>'s Appendix B, which the test suite compares with every state of every round, then with SP 800-38A's vectors and 300 random blocks against Node's own crypto.</p></details>`,
+      widget: aesExplorerWidget,
+    },
+    {
+      title: 'The S-box, in gates',
+      body: `
+        <p>Most descriptions show the S-box as a table of 256 numbers, and in software it often is one. It is not arbitrary: it is the inverse in GF(2⁸), then an affine map. The inverse has very low correlation between input and output, which is what the known attacks on such a table need, and the affine map removes its fixed points at 0 and 1. So here there is no ROM at all.</p>
+        <p>Inverting directly in GF(2⁸) would be large, so this splits the field into a tower, GF(4) inside GF(16) inside GF(256): a byte becomes two half-sized numbers, and the inverse needs a few multiplications and one inverse in the smaller field, and so on down. The whole S-box is <b>${n0(COSTS.parts.aes_sbox.nands)} NANDs</b>, of which the inverse is ${n0(COSTS.parts.aes_gf256_inverse.nands)}, with a depth of ${COSTS.parts.aes_sbox.depth} gate delays. In software the same table lives in memory, and its access time depends on what was recently read, which is how table-based AES has leaked keys through caches. Gates like these take the same time for every input.</p>
+        <p class="try"><b>Try:</b> set <em>x</em> to 0x53. FIPS 197's example gives 0xED. Open the blocks and keep going: every level is a smaller field, down to NANDs.</p>`,
+      scene: sboxScene,
+    },
+    {
+      title: 'A round, and the core',
+      body: `
+        <p>Open the box and a round is what the explorer showed: sixteen S-boxes side by side, then ShiftRows, which is <b>no gates at all</b>, only wires going elsewhere, then four MixColumn blocks of ${n0(COSTS.parts.aes_mixcolumn.nands)} NANDs each, built from XORs, then an XOR with the key. The total is ${n0(COSTS.parts.aes_round.nands)} NANDs, and ${n0(COSTS.parts.aes_subbytes.nands)} of them are the S-boxes: the non-linear step is where the cost goes. Set <em>last</em> to 1 and the round bypasses MixColumns.</p>
+        <p>The whole core uses that one round again and again: a state register, a round-key register, a key-schedule step of ${n0(COSTS.parts.aes_key_step.nands)} NANDs and a counter. That is <b>${n0(COSTS.cores.aes_core.nands)} NANDs</b> and ${COSTS.cores.aes_core.cycles} clocks a block, at a period of ${COSTS.cores.aes_core.period} gate delays. The Enigma in gates took ${n0(GATES)}. For under three times the gates you get a key you can change by writing a register, and a key space no search will finish.</p>
+        <p class="try"><b>Try:</b> toggle <em>last</em> and watch the round's output <em>y</em> change. The next step runs the whole core.</p>`,
+      scene: () => ({ ...aesRoundScene(), path: ['round'] }),
+    },
+    {
+      title: 'The core runs the standard',
+      body: `
+        <p>This is the core on FIPS 197's example, with the key and block wired in, as a stage input holds only 53 exact bits. It takes ${COSTS.cores.aes_core.cycles} clocks: one to load and one per round. The test suite compares its state and round key with the standard's table after every clock, and with Node's crypto on other blocks.</p>
+        <p class="try"><b>Try:</b> set <em>start</em> to 1 and press Pulse once. Set <em>start</em> to 0 and press Pulse ten times. <em>done</em> rises and <em>out</em> reads the standard's ciphertext, 3925841d 02dc09fb dc118597 196a0b32. Its bytes run from the top of the word down, so read the hex as the bench prints it.</p>`,
+      scene: () => ({ ...aesCoreScene(), engine: 'cycle' as const }),
+    },
+    {
+      title: 'One bit changes everything',
+      body: `
+        <p>Here is the Enigma's other weakness, measured. Flip one bit of input and follow the difference through the rounds. MixColumns spreads each changed byte to four, ShiftRows sends those to four columns, and the S-box makes the change unpredictable: within two or three rounds about half the state differs, which is what two unrelated random blocks would show.</p>
+        <p>This is <b>diffusion</b>, and it is what a crib cannot get a grip on: a guess about part of a block tells you nothing about the rest. An Enigma never mixes one letter with another. Each letter meets the machine alone, which is why the Bombe could reason along a crib one place at a time.</p>
+        <p class="try"><b>Try:</b> move the slider to flip other bits. The first bars depend on which bit. The last ones hardly do, and they sit around 64.</p>`,
+      widget: avalancheWidget,
+    },
+    {
+      title: 'Modes: blocks are not enough',
+      body: `
+        <p>A block cipher turns 16 bytes into 16 bytes. Messages are longer, and how you chain the blocks matters as much as the cipher. Enciphering each block alone, <b>ECB</b>, leaks every repeat. <b>CTR</b> enciphers a counter and XORs the result in, which turns AES into a stream and hides repeats. It needs only the encrypt direction, so these gates do both jobs.</p>
+        <p>CTR has one absolute rule. Use a counter value twice under one key and the keystream cancels, with no key needed. That is the Enigma operators' reused settings again, and exactly what real systems still get wrong. It also has no idea whether anyone changed the message: flip a ciphertext bit, and that plaintext bit flips, and nothing notices.</p>
+        <p><b>GCM</b> adds a tag: a keyed polynomial over the ciphertext, computed in GF(2¹²⁸). A changed bit anywhere makes the tag fail, and the message is refused. TLS 1.3 only allows modes of this kind. Enigma had nothing like it: anyone could inject a message that looked right if they had the machine and the key sheet.</p>
+        <p class="try"><b>Try:</b> look at ECB, then CTR, then what the same nonce twice gives. No key was used in that last picture.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://csrc.nist.gov/pubs/sp/800/38/a/final" target="_blank" rel="noopener">SP 800-38A</a> for ECB and CTR, <a href="https://csrc.nist.gov/pubs/sp/800/38/d/final" target="_blank" rel="noopener">SP 800-38D</a> for GCM. CTR and GCM here are checked against Node's crypto and GCM's published test cases.</p></details>`,
+      widget: modesWidget,
+    },
+    {
+      title: 'A fingerprint: SHA-256',
+      body: `
+        <p>A hash has no key. It turns any message into 256 bits so that nobody can find a message for a given digest, or two messages with one digest. So it is a fingerprint: publish the digest, and anyone can check the file. Everything later in this chapter leans on it, because keys are derived with it and handshakes are bound together by it.</p>
+        <p>A message is padded and cut into 64-byte blocks. Each block is expanded to 64 words and stirred through 64 rounds into eight 32-bit registers, whose starting values and round constants are the fractional bits of square and cube roots of primes. That is deliberately nothing-up-my-sleeve: anyone can recompute them, and here the code does.</p>
+        <p class="try"><b>Try:</b> change one letter. About half the digest's bits move, as with AES, and for the same reason.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://csrc.nist.gov/pubs/fips/180-4/upd1/final" target="_blank" rel="noopener">FIPS 180-4</a>. The test suite compares the constants with the standard, every round of NIST's worked examples, and random messages with Node's crypto.</p></details>`,
+      widget: shaWidget,
+    },
+    {
+      title: 'SHA-256 in gates',
+      body: `
+        <p>A round is below: two of the Σ functions, Ch, Maj and five 32-bit adders. Rotations are wires, so Σ costs only its XORs. This is all adders and logic, with no S-box, and a different kind of mixing: addition carries across bits, which XOR does not, and the two together are hard to invert. One round costs ${n0(COSTS.parts.sha_round.nands)} NANDs, about a quarter of an AES round.</p>
+        <p>The core adds a message schedule of ${n0(COSTS.parts.sha_schedule.nands)} NANDs, because it stores 16 words, and a table of constants of ${n0(COSTS.parts.sha_k_rom.nands)}. In all <b>${n0(COSTS.cores.sha_core.nands)} NANDs</b> and ${COSTS.cores.sha_core.cycles} clocks per 64 bytes, against AES's ${COSTS.cores.aes_core.cycles} clocks per 16. Per byte that is ${(COSTS.cores.sha_core.cycles / 64).toFixed(2)} clocks against AES's ${(COSTS.cores.aes_core.cycles / 16).toFixed(2)}, at a period of ${COSTS.cores.sha_core.period} gate delays against ${COSTS.cores.aes_core.period}.</p>
+        <p class="try"><b>Try:</b> open the block to see the round on the first round of "abc", as NIST's worked example has it. Open Σ0 and find that its rotations cost nothing.</p>`,
+      scene: shaRoundScene,
+    },
+    {
+      title: 'The SHA-256 core runs "abc"',
+      body: `
+        <p>The whole compression, on the block that holds "abc" and its padding. The test suite compares a to h after every clock with NIST's table of 64 rounds, then the digest of longer messages with Node's crypto.</p>
+        <p class="try"><b>Try:</b> set <em>start</em> to 1, Pulse once, set <em>start</em> to 0, then Run until <em>done</em> lights. <em>out</em> is ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad.</p>`,
+      scene: () => ({ ...shaCoreScene(), engine: 'cycle' as const }),
+    },
   ],
-  soon: ['AES: four steps and a key', 'The S-box and a round, in gates', 'Modes: blocks are not enough', 'SHA-256 in gates', 'Sharing a secret in public', 'X25519 on our CPU', 'Who is at the other end', 'A TLS 1.3 handshake', 'What it all costs'],
+  soon: ['Sharing a secret in public', 'X25519 on our CPU', 'Who is at the other end', 'A TLS 1.3 handshake', 'What it all costs'],
 };

@@ -609,7 +609,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
-  { id: "secret", num: 52.5, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
+  { id: "secret", num: 52.5, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates. Coming to this chapter: key exchange and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":4}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },
@@ -617,6 +617,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The Bombe: going round the plugboard" },
     { title: "What the breaking taught" },
     { title: "From the Bombe to the stored program" },
+    { title: "AES: four steps and a key" },
+    { title: "The S-box, in gates" },
+    { title: "A round, and the core" },
+    { title: "The core runs the standard" },
+    { title: "One bit changes everything" },
+    { title: "Modes: blocks are not enough" },
+    { title: "A fingerprint: SHA-256" },
+    { title: "SHA-256 in gates" },
+    { title: "The SHA-256 core runs \"abc\"" },
   ] },
   { id: "path", num: 53, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
     { title: "A network of networks" },
