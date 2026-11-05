@@ -121,6 +121,7 @@ export interface LinkSpec {
   /** Deterministic loss: every this many packets on the wire. */ lossEvery?: number;
   /** A small packet every this many ms measures the delay a video call would see. */ pingMs?: number;
   /** CoDel's target and interval, ms (RFC 8289: 5 and 100). */ target?: number; interval?: number;
+  /** Sample the queue and windows this often in slots, from this many seconds in, in place of 400 over the run. */ trace?: { from: number; every: number };
   /** The 'step' queue: mark every packet that arrives with at least this many queued (a data-centre switch). */ markK?: number;
   seed?: number;
 }
@@ -274,7 +275,7 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
   const minTh = link.bufferPkts * 0.2, maxTh = link.bufferPkts * 0.6, maxP = 0.1, wq = 0.002;
   let drops = 0, marks = 0, wireLost = 0, wirePkts = 0, out = 0, sumQ = 0, maxQ = 0, minQ = Infinity, sumDelay = 0, nDelay = 0, pingLost = 0;
   const pingDelays: number[] = [], samples: Sample[] = [], acked0 = new Array<number>(N).fill(0);
-  const every = Math.max(1, Math.round(T / 400)), rateMark = new Array<number>(N).fill(0);
+  const every = link.trace?.every ?? Math.max(1, Math.round(T / 400)), traceFrom = Math.round((link.trace?.from ?? 0) / slotS), rateMark = new Array<number>(N).fill(0);
   const pingEvery = link.pingMs ? link.pingMs / slotMs : 0;
   let nextPing = pingEvery, lastDelay = 0;
 
@@ -381,7 +382,7 @@ export function bottleneck(link: LinkSpec, flows: readonly FlowSpec[], seconds: 
         if (lost) { wireLost++; notifyLost(p, t); } else cal[(t + senders[p.flow].rtt) % maxRtt].push({ p, lost: false });
       }
     }
-    if (t % every === 0) {
+    if (t % every === 0 && t >= traceFrom) {
       const dt = every * slotS;
       samples.push({ t: t * slotS, cwnd: senders.map((s) => (s.spec.cc === 'bbr' ? s.limit() : s.cwnd)), queue: total, delayMs: lastDelay, rate: senders.map((s, i) => { const v = ((s.acked - rateMark[i]) * pktBytes * 8) / dt / 1e6; rateMark[i] = s.acked; return v; }) });
     }
