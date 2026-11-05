@@ -135,6 +135,49 @@ describe('an independent monitor on the lane', () => {
     expect(m.l.a.dl).toBe(3);
     expect(m.l.eb.ram[4]).toBe(1);
   });
+  it('credits: the last UpdateFC totals equal what was advertised plus what was delivered', () => {
+    const cmds = workload(3, 40), m = drive(3, 0, cmds);
+    const writes = cmds.filter((c) => c.wr), reads = cmds.length - writes.length;
+    const data = writes.reduce((s, c) => s + ((c.len + 3) >> 2), 0);
+    const last = (hi: number) => [...m.mBA.pkts].reverse().find((p) => p.kind === 'dllp' && p.good && p.type >> 4 === hi) as { word: number };
+    const p = last(8), np = last(9);
+    expect((p.word >> 14) & 255).toBe(4 + writes.length);
+    expect(p.word & 0xfff).toBe(16 + data);
+    expect((np.word >> 14) & 255).toBe(4 + reads);
+  });
+  it('with no credit returned, exactly the advertised TLPs go out, then the requester waits', () => {
+    for (const [wr, len, allowed] of [[1, 1, 4], [1, 16, 4], [0, 1, 4]] as const) {
+      const l = new PcieLink(), mon = new Monitor();
+      l.bringUp();
+      // the completer takes nothing and returns nothing
+      l.eb.out = () => ({ r_ready: 0, t_valid: 0, t_data: 0, t_last: 0, rtn_ph: 0, rtn_pd: 0, rtn_nph: 0, ep_st: 0 });
+      l.eb.step = () => {};
+      const step = (c: Partial<LinkIn> = {}) => { mon.feed(l.ab[0] & 255, l.ab[0] >> 8); l.step({ ...LINK_IN0, ...c }); };
+      let sent = 0;
+      for (let t = 0; t < allowed + 2; t++) {
+        let g = 0;
+        while (l.ra.st !== 0 && g++ < 3000) step();
+        if (l.ra.st === 0) { step({ go: 1, wr, addr: t, len, seed: t }); sent++; }
+      }
+      for (let k = 0; k < 3000; k++) step();
+      expect(mon.pkts.filter((p) => p.kind === 'tlp' && p.good).length).toBe(allowed);
+      expect(l.ra.st).toBe(1);   // waiting at the gate
+      expect(sent).toBe(allowed + 1);
+    }
+  });
+  it('data credits run out before header credits when writes are long', () => {
+    const l = new PcieLink(), mon = new Monitor();
+    l.bringUp();
+    l.eb.out = () => ({ r_ready: 0, t_valid: 0, t_data: 0, t_last: 0, rtn_ph: 0, rtn_pd: 0, rtn_nph: 0, ep_st: 0 });
+    l.eb.step = () => {};
+    // a receiver that only ever offered 7 data credits: one 16-dword write takes 4, and the next wants 4 of the 3 left
+    l.a.pdLim = 7; l.b.caPd = 7;
+    const step = (c: Partial<LinkIn> = {}) => { mon.feed(l.ab[0] & 255, l.ab[0] >> 8); l.step({ ...LINK_IN0, ...c }); };
+    for (let t = 0; t < 3; t++) { let g = 0; while (l.ra.st !== 0 && g++ < 3000) step(); if (l.ra.st === 0) step({ go: 1, wr: 1, addr: t, len: 16, seed: t }); }
+    for (let k = 0; k < 2000; k++) step();
+    expect(mon.pkts.filter((p) => p.kind === 'tlp' && p.good).length).toBe(1);   // 4 credits used, 3 left, 4 wanted
+    expect(l.ra.st).toBe(1);
+  });
   it('training puts COM on the lane, and TS1 before TS2 before anything else', () => {
     const l = new PcieLink(), seen: number[] = [];
     let last = -1;

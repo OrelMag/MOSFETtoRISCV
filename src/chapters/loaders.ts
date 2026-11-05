@@ -56,6 +56,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "modem": () => import('./ch-comm-modem').then((m) => m.chModem),
   "serial": () => import('./ch-comm-serial').then((m) => m.chSerial),
   "errors": () => import('./ch-comm-errors').then((m) => m.chErrors),
+  "pcie": () => import('./ch-comm-pcie').then((m) => m.chPcie),
   "ethernet": () => import('./ch-comm-ethernet').then((m) => m.chEthernet),
   "switch": () => import('./ch-comm-switch').then((m) => m.chSwitch),
   "network": () => import('./ch-comm-net').then((m) => m.chNetwork),

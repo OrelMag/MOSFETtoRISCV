@@ -555,6 +555,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Bursts: interleaving", challenge: "quiz" },
     { title: "How far from Shannon", challenge: "quiz" },
   ] },
+  { id: "pcie", num: 47.5, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","errors","bus"], recap: {"checks":3}, steps: [
+    { title: "From a bus to a lane", challenge: "quiz" },
+    { title: "A packet, byte by byte", challenge: "quiz" },
+    { title: "Credits: never send what will not fit", challenge: "reach" },
+    { title: "Ack, Nak and the replay buffer", challenge: "reach" },
+    { title: "When the Ack is lost, or nothing gets through", challenge: "reach" },
+    { title: "Link training", challenge: "reach" },
+    { title: "What is below, and what it costs", challenge: "quiz" },
+  ] },
   { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz" },
     { title: "The transmitter", challenge: "quiz" },
