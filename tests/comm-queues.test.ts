@@ -1,7 +1,7 @@
 // Queues and congestion: the model against what can be worked out without it.
 import { describe, expect, it } from 'vitest';
 import type { FlowSpec } from '../src/comm/queues';
-import { bottleneck, chiuJain, codelNext, cubicCurve, cubicK, cubicWindow, jain, md1Wait, mg1Wait, mm1kBlock, mm1Quantile, mm1Tail, mm1Wait, queueRun, redBase, renoUtilization, renoWindow } from '../src/comm/queues';
+import { bottleneck, chiuJain, CoDel, codelNext, cubicCurve, cubicK, cubicWindow, jain, md1Wait, mg1Wait, mm1kBlock, mm1Quantile, mm1Tail, mm1Wait, queueRun, redBase, renoUtilization, renoWindow } from '../src/comm/queues';
 
 const near = (a: number, b: number, frac: number, msg?: string) => { expect(Math.abs(a - b) / Math.max(Math.abs(b), 1e-12), `${msg ?? ''} ${a} against ${b}`).toBeLessThan(frac); };
 
@@ -58,6 +58,22 @@ describe('the disciplines\' rules', () => {
     expect(codelNext(0, 100, 1)).toBe(100);
     expect(codelNext(0, 100, 4)).toBe(50);
   });
+  it('CoDel\'s dequeue, RFC 8289: nothing for an interval, a drop, then 100, 100 / √2, 100 / √3 later; below the target it stops; soon after, it resumes from the drops of the last spell', () => {
+    const c = new CoDel(5, 100), drops: number[] = [];
+    for (let t = 1; t <= 400; t++) if (c.verdict(10, t, 50)) drops.push(t);
+    expect(drops[0]).toBe(101);
+    expect(drops[1]).toBeCloseTo(201, -1);
+    expect(drops[2] - drops[1]).toBeCloseTo(100 / Math.SQRT2, -1);
+    expect(drops[3] - drops[2]).toBeCloseTo(100 / Math.sqrt(3), -1);
+    expect(c.verdict(1, 401, 50)).toBe(false);
+    expect(c.dropping).toBe(false);
+    const n = c.count, last = c.lastCount;
+    for (let t = 402; t <= 520; t++) c.verdict(10, t, 50);
+    expect(c.dropping).toBe(true);
+    expect(c.count).toBeGreaterThanOrEqual(n - last > 1 ? n - last : 1);
+    expect(c.count).toBeLessThan(n + 3);
+    expect(new CoDel(5, 100).verdict(10, 1, 1)).toBe(false);
+  });
 });
 
 describe('the sawtooth', () => {
@@ -89,6 +105,15 @@ describe('windows under loss', () => {
   it('the cubic curve returns to its old maximum at K', () => {
     expect(cubicCurve(cubicK(100), 100)).toBeCloseTo(100, 9);
     expect(cubicCurve(0, 100)).toBeCloseTo(70, 9);
+  });
+});
+
+describe('CUBIC beyond its pure curve', () => {
+  it('its Reno-friendly region holds it at or above the pure curve on a small window, and fast convergence gives way to a newcomer', () => {
+    const go = (pureCubic: boolean) => bottleneck({ mbps: 100, bufferPkts: 100000, lossEvery: 100 }, [{ cc: 'cubic', rttMs: 10, pureCubic }], 300, 200).meanCwnd[0];
+    expect(go(false)).toBeGreaterThan(go(true) * 1.05);
+    const two = bottleneck({ mbps: 20, bufferPkts: 170 }, [{ cc: 'cubic', rttMs: 50 }, { cc: 'cubic', rttMs: 50, startS: 20 }], 600, 300);
+    expect(two.jain).toBeGreaterThan(0.95);
   });
 });
 
@@ -133,6 +158,7 @@ describe('ECN', () => {
     expect(b.drops).toBe(0);
     expect(b.marks).toBeGreaterThan(0);
     near(b.utilization, a.utilization, 0.1);
+    expect(Math.abs(b.pingMeanMs - a.pingMeanMs)).toBeLessThan(3);
   });
 });
 

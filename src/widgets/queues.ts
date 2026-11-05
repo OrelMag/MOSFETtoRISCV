@@ -23,17 +23,17 @@ const selectOf = (aria: string, opts: readonly (readonly [string, string])[], va
 
 export function delayWidget(): Widget {
   let rho = 0.7, mbps = 100;
-  const plot = plotOf({ W: 640, H: 260, x: [0, 1], y: [0, 20], yTicks: [0, 5, 10, 15, 20], xLabel: 'load ρ', yLabel: 'wait, packet times', aria: 'Mean wait against load, for random and for fixed packet sizes, with measured points' });
+  const plot = plotOf({ W: 640, H: 260, x: [0, 1], y: [0, 25], yTicks: [0, 5, 10, 15, 20, 25], xLabel: 'load ρ', yLabel: 'wait, packet times', aria: 'Mean wait against load, for random and for fixed packet sizes, with measured points' });
   plot.setX(1);
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
-  const measured = [0.3, 0.5, 0.7, 0.8, 0.9, 0.95].map((r) => [r, queueRun(r, 60000, { seed: 3 }).meanWait, queueRun(r, 60000, { service: 'fixed', seed: 4 }).meanWait]);
+  const measured = [0.3, 0.5, 0.7, 0.8, 0.9, 0.95].map((r) => [r, queueRun(r, 400000, { seed: 3 }).meanWait, queueRun(r, 400000, { service: 'fixed', seed: 4 }).meanWait]);
   const paint = () => {
     plot.clear();
     const xs = Array.from({ length: 96 }, (_, i) => i / 100);
-    line(plot, xs, xs.map((x) => Math.min(25, mm1Wait(x))), 'ln-s real');
-    line(plot, xs, xs.map((x) => Math.min(25, md1Wait(x))), 'ln-s near');
+    line(plot, xs, xs.map((x) => mm1Wait(x)), 'ln-s real');
+    line(plot, xs, xs.map((x) => md1Wait(x)), 'ln-s near');
     for (const [r, a, b] of measured) { plot.layer.append(s('circle', { cx: plot.X(r), cy: plot.Y(a), r: 3.5, class: 'qu-dot a' }), s('circle', { cx: plot.X(r), cy: plot.Y(b), r: 3.5, class: 'qu-dot b' })); }
-    plot.layer.append(s('line', { x1: plot.X(rho), x2: plot.X(rho), y1: plot.Y(0), y2: plot.Y(20), class: 'qu-mark' }));
+    plot.layer.append(s('line', { x1: plot.X(rho), x2: plot.X(rho), y1: plot.Y(0), y2: plot.Y(25), class: 'qu-mark' }));
     const pkt = (1500 * 8) / (mbps * 1e6) * 1000, w = mm1Wait(rho), q = mm1Quantile(rho, 0.01);
     chips.set(0, w.toFixed(1), 'packets ahead, on average');
     chips.set(1, `${(w * pkt).toFixed(2)} ms`, `mean wait at ${mbps} Mb/s, 1500 bytes`);
@@ -85,7 +85,7 @@ export function chiuWidget(): Widget {
 
 export function lossWidget(): Widget {
   let rtt = 0.1;
-  const plot = plotOf({ W: 640, H: 260, x: [0, 9], y: [0, 6], yTicks: [0, 1, 2, 3, 4, 5, 6], xLabel: 'one loss in 10^x packets', yLabel: 'window, packets', aria: 'Average window against the loss rate, for Reno and CUBIC', xFmt: (v) => String(v), yFmt: (v) => `10^${v}` });
+  const plot = plotOf({ W: 640, H: 260, x: [0, 9], y: [0, 7], yTicks: [0, 1, 2, 3, 4, 5, 6, 7], xLabel: 'one loss in 10^x packets', yLabel: 'window, packets', aria: 'Average window against the loss rate, for Reno and CUBIC', xFmt: (v) => String(v), yFmt: (v) => `10^${v}` });
   plot.setX(9);
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
   const cubicIn = (x: number) => Math.max(cubicWindow(10 ** -x, rtt), renoWindow(10 ** -x));
@@ -133,7 +133,7 @@ export function labWidget(start: LabPreset): Widget {
     line(dly, ts, qs, 'ln-s real');
     chips.set(0, r.goodputMbps.length > 1 ? r.goodputMbps.map((g) => g.toFixed(1)).join(' + ') + ' Mb/s' : `${r.goodputMbps[0].toFixed(1)} Mb/s`, `of ${20}, ${ccs.map((c) => CC_NAME[c]).join(' + ')}`);
     chips.set(1, `${r.pingMeanMs.toFixed(0)} ms`, `a video call's added delay; 1 in 20 over ${r.pingP95Ms.toFixed(0)} ms`, r.pingMeanMs > 100 ? 'bad' : 'ok');
-    chips.set(2, ecn ? String(r.marks) : String(r.drops), `${ecn ? 'packets marked' : 'packets dropped'} in the last 45 s`);
+    chips.set(2, `${r.drops} / ${r.marks}`, 'packets dropped / marked, in the last 45 s');
     chips.set(3, `${(r.bdpPkts).toFixed(0)} packets`, 'the pipe, one BDP');
     note.textContent = start.note ?? 'A labelled model: one link, one packet time a slot, senders with their published rules. Change one thing at a time.';
   };
