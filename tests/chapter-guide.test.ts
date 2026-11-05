@@ -33,6 +33,8 @@ describe('chapter guide', () => {
           const s = m[2].trim(), n = s.match(/^(?:[Cc]hapters? )?(\d+)$/) ?? s.match(/[Cc]hapters? (\d+)/);
           // (a number past 99 is a name: "6502")
           if (n && +n[1] < 100 && chapterById(m[1])?.num !== +n[1]) bad.push(`${dir}/${f}: #/c/${m[1]} is chapter ${chapterById(m[1])?.num}, the text says "${s}"`);
+          // a number from numOf: the link and the number name the same chapter
+          for (const o of s.matchAll(/numOf\('([\w-]+)'\)/g)) if (o[1] !== m[1]) bad.push(`${dir}/${f}: #/c/${m[1]}, the text says numOf('${o[1]}')`);
         }
       }
     expect(bad).toEqual([]);

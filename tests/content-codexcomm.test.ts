@@ -216,8 +216,8 @@ describe('the Communication codex entries', () => {
     expect(gapDb(1e-7).toFixed(1)).toBe('10.0');
     expect(bitsForTone(100, 10.0)).toBe(15);
     quotes('ofdm', '2,304', '262,144', '114', '4,312.5 Hz', '1.104 MHz', '4 058.8', '19.2 %', '15');
-    says('modem', 7, '2,304'); says('modem', 7, '262,144'); says('modem', 7, '114 times'); says('modem', 7, '19.2 %'); says('modem', 7, '4058.8');
-    says('modem', 8, '1682'); says('modem', 8, '6.73 Mb/s'); says('modem', 8, '370 bits'); says('modem', 8, '1.48 Mb/s');
+    says('carriers', 0, '2,304'); says('carriers', 0, '262,144'); says('carriers', 0, '114 times'); says('carriers', 0, '19.2 %'); says('carriers', 0, '4058.8');
+    says('carriers', 5, '1682'); says('carriers', 5, '6.73 Mb/s'); says('carriers', 5, '370 bits'); says('carriers', 5, '1.48 Mb/s');
     expect([l3.total, l5.total]).toEqual([1682, 370]);
     quotes('ofdm', '1682', '6.73 Mb/s', '370 bits', '1.48 Mb/s');
   });

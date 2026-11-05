@@ -2,6 +2,7 @@
 
 import { outline, outlineOf } from '../chapters/outline';
 import { loadChapter } from '../chapters/load';
+import { movedAddress } from '../chapters/stepmoves';
 import { h, icon, s } from './dom';
 import { installErrorReporting, loadFailed } from './errors';
 import type { ChapterPage, Page } from './pages/chapter';
@@ -342,6 +343,9 @@ export function startApp(root: HTMLElement): void {
     } else if (key === 'c') {
       const ch = outlineOf(parts[1] ?? '') ?? outline[0];
       const step = Number(parts[2] ?? 0) || 0;
+      // an address kept from before a step moved to another chapter
+      const moved = movedAddress(ch.id, step, ch.steps.length - (ch.recap ? 0 : 1));
+      if (moved) { location.replace(`#/c/${moved.chapter}/${moved.step}`); return; }
       // after the step, the part opened on its stage (ui/drillpath.ts)
       const path = parseDrill(parts.slice(3));
       const cp = page as ChapterPage | null;

@@ -13,8 +13,8 @@ import type { Stage } from '../view/stage';
 import { sapAluScene, sapAregScene, sapClockScene, sapPcScene, sapScene, tristateScene } from '../widgets/sap';
 import { CTRL } from '../sap/isa';
 import { microTable, sapHw, sapRam } from '../widgets/sapmon';
-import { chAppendixDoom } from './ch-doom';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /**
  * What the SAP-1 costs (lib/sap.ts sapCost; tests/sap-appendix.test.ts holds these to it): chips simulated (the boards
@@ -87,7 +87,7 @@ y:      .byte 36`;
 
 export const chAppendixSap: Chapter = {
   // after Appendix B, whatever the journey's length
-  id: 'appendix-sap', num: chAppendixDoom.num + 1, appendix: 'C', title: 'The breadboard computer (SAP-1)', level: '74xx TTL',
+  id: 'appendix-sap', num: numOf('appendix-sap'), appendix: 'C', title: 'The breadboard computer (SAP-1)', level: '74xx TTL',
   blurb: 'Ben Eater\'s 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.',
   goals: [
     'trace an instruction through five clock steps: which board drives the bus and which loads it at each',

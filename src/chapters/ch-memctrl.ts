@@ -11,6 +11,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { memCtrlRequest, memCtrlScene, memCtrlState } from '../widgets/dramctrl';
 import { ctrlExplorer, reorderWidget } from '../widgets/dramwork';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** The CPUs' DRAM: their 64 words in 2 banks of 2 rows of 16 words (tests/verify/cpus.ts DRAM_OPEN). */
 const CFG: DramConfig = { k: 6, banks: 2, rowWords: 16, policy: 'open' };
@@ -26,7 +27,7 @@ const fmt = groupDigits;
 const slower = (a: string, b: string, bench: string) => `${(((run(a, bench) / run(b, bench)) - 1) * 100).toFixed(1)} %`;
 
 export const chMemCtrl: Chapter = {
-  id: 'memctrl', num: 36, title: 'A memory controller', level: 'Memory in depth',
+  id: 'memctrl', num: numOf('memctrl'), title: 'A memory controller', level: 'Memory in depth',
   blurb: 'Commands and their timing rules in gates: a controller that opens and closes rows, refreshes on time and serves the cache; open against closed page, address mapping and FR-FCFS, measured on the benchmarks.',
   goals: [
     'list the DRAM commands and the timing rule that guards each',

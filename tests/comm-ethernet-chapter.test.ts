@@ -1,14 +1,15 @@
 // Chapter 48's typed numbers (the computed ones come from the code and need no pin), its shape, and the experiments behind the widgets.
 import { describe, expect, it } from 'vitest';
 import { chEthernet } from '../src/chapters/ch-comm-ethernet';
+import { chapterById } from '../src/chapters';
 import { frameBitTimes, GAP_CLOCKS, LINK_MBPS, maxCableMetres, SLOT_CLOCKS } from '../src/comm/mac';
 import { addrOf, maxThroughput, runLoad, runPair, seedsFor } from '../src/comm/macexp';
 import { lfsrNext } from '../src/comm/mac';
 import { MIN_FRAME } from '../src/comm/ethframe';
 
 describe('chapter 48 typed numbers', () => {
-  it('is chapter 48, nine steps, building on the UART and error chapters, with three recap questions', () => {
-    expect(chEthernet.num).toBe(48);
+  it('nine steps, building on the UART and error chapters, with three recap questions', () => {
+    expect(chEthernet.num).toBeGreaterThan(chapterById('uart')!.num);
     expect(chEthernet.steps.length).toBe(9);
     expect(chEthernet.builds).toEqual(['uart', 'errors']);
     expect(chEthernet.recap!.check!.length).toBe(3);

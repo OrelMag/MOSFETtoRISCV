@@ -43,8 +43,8 @@ echo of 5 samples: error vector 19.2 % with no prefix, none with a prefix of 5</
       'Loading every tone with the same constellation: the SNR varies steeply across a copper pair, and a tone loaded above its SNR carries errors, not bits.',
     ],
     chapters: [
-      { chapter: 'modem', step: 7, label: 'Many tones, one FFT' },
-      { chapter: 'modem', step: 8, label: 'ADSL: many carriers' },
+      { chapter: 'carriers', step: 0, label: 'Many tones, one FFT' },
+      { chapter: 'carriers', step: 5, label: 'ADSL: many carriers' },
     ],
   },
   linecode: {

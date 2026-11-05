@@ -9,12 +9,11 @@ import { stats } from '../src/sim/stats';
 import { linkScene, ncoScene } from '../src/widgets/modem';
 
 describe('chapter 45 typed numbers', () => {
-  it('is chapter 45, nine steps, builds on earlier chapters, and has both kinds of explainer', () => {
-    expect(chModem.num).toBe(45);
-    expect(chModem.steps).toHaveLength(9);
+  it('seven steps, builds on earlier chapters, and has both kinds of explainer', () => {
+    expect(chModem.steps).toHaveLength(7);
     expect(chapterById('modem')).toBe(chModem);
-    for (const id of chModem.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(45);
-    expect(chapterById('appendix-6502')!.num).toBeGreaterThan(45);
+    for (const id of chModem.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chModem.num);
+    expect(chapterById('appendix-6502')!.num).toBeGreaterThan(chModem.num);
     for (const s of chModem.steps) expect(!!s.scene !== !!s.widget).toBe(true);
     expect(chModem.recap!.check).toHaveLength(3);
   });

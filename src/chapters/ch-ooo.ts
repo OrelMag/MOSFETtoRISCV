@@ -10,6 +10,7 @@ import { dataflowWidget, measuredWidget, orderWidget, robWidget, scoreboardWidge
 import { cpuState } from '../riscv/cosim';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 // Every number in the prose comes from riscv/ooomodel.ts, riscv/ilp.ts and riscv/scoreboard.ts on the programs
 // named; tests/ooo-chapter.test.ts recomputes them. The dual-issue pipeline's (step 2) come from the gate-level CPU
@@ -114,7 +115,7 @@ const period = (id: string) => RESULTS.cpus.find((c) => c.id === id)!.period;
 const cpi = (id: string, bench: string) => { const r = RESULTS.cpus.find((c) => c.id === id)!.runs.find((x) => x.bench === bench)!; return (r.cycles / r.instructions).toFixed(2); };
 
 export const chOoo: Chapter = {
-  id: 'ooo', num: 26, title: 'Out of order', level: 'Processor',
+  id: 'ooo', num: numOf('ooo'), title: 'Out of order', level: 'Processor',
   blurb: 'More than one instruction per cycle: dependences, renaming, a reorder buffer and speculation, priced on real programs.',
   goals: [
     'measure how much parallelism a program holds (its dataflow limit) and what width, window and prediction take from it',

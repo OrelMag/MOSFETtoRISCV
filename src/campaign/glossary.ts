@@ -6,6 +6,7 @@
 // codex summary. No DOM: glossaryui.ts marks the text.
 
 import { CODEX, type CodexEntry } from './codex';
+import { numOf } from '../chapters/order';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -56,9 +57,9 @@ const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'roundin
 /** Entries whose names mean something else before the GPU chapters: a loom's warp, a byte lane, an energy barrier. */
 const GPU_ONLY = ['warp', 'lane', 'barrier'];
 
-/** Entries not to mark in a chapter (markTerms' skip set): the GPU act's terms before chapter 29 and in the prologue (number 0). */
+/** Entries not to mark in a chapter (markTerms' skip set): the GPU act's terms before its first chapter and in the prologue (number 0). */
 export function chapterSkip(c: { num: number }): Set<string> {
-  return new Set(c.num < 29 ? GPU_ONLY : []);
+  return new Set(c.num < numOf('lanes') ? GPU_ONLY : []);
 }
 
 /** Phrases that use a term's word for something else: found, so no shorter term claims them, and never marked. */

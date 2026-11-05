@@ -7,6 +7,8 @@
 // The queue lists, among questions due: those last answered wrong, then the flagged ones, then the rest by how long
 // since they were seen (never seen first). Questions come only from chapters the learner has visited (the codex's: once met).
 
+import { moveKey, movedOf, STEP_MOVES } from '../chapters/stepmoves';
+
 export const REVIEW_KEY = 'mosfet2riscv:review:v1';
 const SCHEMA = 1;
 export const DAY = 24 * 3600 * 1000;
@@ -32,13 +34,15 @@ export interface Memo {
 }
 
 export interface ReviewState {
+  /** Batches of chapters/stepmoves.ts already applied to the keys. */
+  moved?: number;
   schema: number;
   memos: Record<string, Memo>;
 }
 
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
 
-export const emptyReview = (): ReviewState => ({ schema: SCHEMA, memos: {} });
+export const emptyReview = (): ReviewState => ({ schema: SCHEMA, moved: STEP_MOVES.length, memos: {} });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
@@ -46,13 +50,14 @@ const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinit
 export function sanitizeReview(raw: unknown): ReviewState {
   const st = emptyReview();
   if (!isObj(raw) || !isObj(raw.memos)) return st;
+  const since = movedOf(raw);
   for (const [k, v] of Object.entries(raw.memos).slice(0, 5000)) {
     if (k.length > 120 || !isObj(v) || !num(v.n) || !num(v.last) || !num(v.due) || !num(v.streak)) continue;
     const m: Memo = { n: Math.floor(v.n), last: v.last, streak: Math.floor(Math.min(v.streak, 1000)), due: v.due };
     if (v.miss === true) m.miss = true;
     if (num(v.missed)) m.missed = v.missed;
     if (v.soon === true) m.soon = true;
-    st.memos[k] = m;
+    st.memos[moveKey(k, since)] = m;
   }
   return st;
 }
