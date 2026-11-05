@@ -6,7 +6,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   leakage: [
     {
       question: 'A tone holds exactly 10 cycles in a 64-sample block under a rectangular window, and its spectrum is one clean bin. Why?',
-      options: ['Every other bin falls on a zero of the rectangle\'s transform', 'The window removes its skirt whenever the cycles are whole', 'The FFT only finds tones that sit on a bin', 'A real cosine has no image at negative frequency'],
+      options: ['Every other bin falls on a zero of the rectangle\'s transform', 'The window removes its skirt whenever the cycles are whole', 'The FFT only finds tones that sit on a bin', 'A real cosine has no image at negative frequency to add a skirt'],
       answer: 0,
       explain: 'The skirt is always there, as the transform of the rectangle. With whole cycles the bins sample it at its zeros; at 10.5 cycles they sample it between, and 33 bins read above −60 dB.',
       why: ['', 'The window is unchanged. The skirt is still drawn; the bins simply miss it.', 'The transform reads the whole curve at its bins, and a tone off a bin shows in several of them.', 'A real cosine always has an image; it adds to the skirt but is not why the line is clean.'],
