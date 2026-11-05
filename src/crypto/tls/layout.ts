@@ -86,7 +86,15 @@ export const MEM = {
   hsBuf: take(24576),
   recBuf: take(16640 + 16),
   sendBuf: take(16640 + 16),
-  certDer: take(0),
+  chBuf: take(1536),
+  certN: take(520),
+  nonce: take(16),
+  basePoint: take(32),
+  finBuf: take(64),
+  wrCtx: take(192),
+  rdCtx: take(192),
+  wrIv: take(16),
+  rdIv: take(16),
   scratch: take(2048),
   app: take(65536),
   end: 0,
@@ -115,7 +123,7 @@ export const CFG = {
 export const SECRET_SLOTS = [
   'shared', 'early', 'derived1', 'handshake', 'c_hs', 's_hs', 'derived2', 'master', 'c_ap', 's_ap', 'exp_master', 'res_master',
   'c_hs_key', 'c_hs_iv', 's_hs_key', 's_hs_iv', 'c_ap_key', 'c_ap_iv', 's_ap_key', 's_ap_iv', 'c_fin_key', 's_fin_key',
-  'h_hello', 'h_cert', 'h_cv', 'h_fin', 'h_cfin', 'client_pub', 'server_pub', 'c_verify', 's_verify',
+  'h_hello', 'h_cert', 'h_cv', 'h_fin', 'h_cfin', 'client_pub', 'server_pub', 'c_verify', 's_verify', 'h_empty',
 ] as const;
 export type SecretName = (typeof SECRET_SLOTS)[number];
 export const secretAddr = (n: SecretName): number => MEM.secrets + 32 * SECRET_SLOTS.indexOf(n);

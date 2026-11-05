@@ -2,13 +2,14 @@
 // writes (MEM.cmd: the command, arguments in words 1..8, the result in word 16) and tell the harness when idle. The TLS client's commands call tls.ts.
 
 import type { CryptoModule } from './index';
-import { putString } from './index';
 import { CMD, IO, MEM } from './layout';
 import { SHA, SHA256_K } from './sha';
 import { AES } from './aes';
 import { X25519 } from './x25519';
 import { RSA } from './rsa';
 import { STR } from './strings';
+import { X509 } from './x509';
+import { TLS } from './tls';
 
 // arguments are read into p0..p6 first: seven call arguments in expression temporaries would not fit the compiler's seven
 const arg = (i: number): string => `p${i}`;
@@ -16,10 +17,12 @@ const call = (name: string, n: number): string => `${name}(${Array.from({ length
 
 /** Primitives only: the modules without the TLS client. */
 export const PRIMITIVE_MODULES: readonly CryptoModule[] = [SHA, AES, X25519, RSA];
+/** Everything: the primitives, the certificate reader and the client. */
+export const TLS_MODULES: readonly CryptoModule[] = [SHA, AES, X25519, RSA, X509, TLS];
 
 const init = (): string => `def crypto_init():
 ${SHA256_K.map((v, i) => `    store32(${MEM.shaK + 4 * i}, ${v})`).join('\n')}
-${Object.values(STR).map((s) => putString(s.addr, s.text)).join('\n')}
+${Object.values(STR).map((s) => s.bytes.map((v, i) => `    store8(${s.addr + i}, ${v})`).join('\n')).join('\n')}
     aes_init()
     return 0
 `;
