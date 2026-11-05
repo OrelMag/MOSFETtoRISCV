@@ -18,6 +18,12 @@ export const CASESS: Record<string, LevelCase> = {
   // ---- sp_cic
 
   // ---- sp_cordic
+  sp_cordic: {
+    problem: 'Turning a vector by an angle is four multiplications and two sums. A CORDIC does it with a fixed ladder of angles, atan 1, atan ½, atan ¼ …: each stage turns by its own angle one way or the other, and the choice of way is the only decision. A stage is that step: x and y each take a shifted copy of the other, z takes off the angle.',
+    without: 'Without the stage, a rotation by an arbitrary angle needs a multiplier per product. With it the shift is a set of wires and the angle a constant, so the stage has no multiplier and no shifter, only adders.',
+    cost: 'Three 5-bit add / subtracts are 69 NANDs each, 207 together; the direction logic (two inverters and a mux) adds 6: 213 NANDs and 21 delays for the whole stage. A 4-bit array multiplier alone is 140 NANDs and 30 delays, and a rotation by any angle needs four of them.',
+    alts: [{ name: '5-bit add / subtract (library)', lib: 'addsub5' }, { name: '4-bit array multiplier (library)', lib: 'amul4' }],
+  },
 
   // ---- sp_sd
 

@@ -25,6 +25,7 @@ const LISTED = new Set([
   // sp_cic
 
   // sp_cordic
+  'cordic',
 
   // sp_sd
 
