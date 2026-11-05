@@ -13,7 +13,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'A tone of amplitude 1 reads 0.65 at its largest bin under a rectangular window. What most likely happened?',
-      options: ['It sits between two bins, and the bin reads the lobe\'s shoulder', 'The source is 3.8 dB weaker than its setting', 'Averaging more blocks would raise the reading to 1', 'Noise has been subtracted from the peak'],
+      options: ['It sits between two bins, and the bin reads the lobe\'s shoulder', 'The source is really 3.8 dB weaker than the setting on the generator', 'Averaging more blocks would raise the reading to 1', 'Noise has been subtracted from the peak'],
       answer: 0,
       explain: 'Halfway between bins the rectangle\'s transform reads 0.64 to 0.65, which is 3.8 dB low: the scalloping loss.',
       why: ['', 'The source is not weaker; the same tone reads 1 when its cycles fit the block.', 'The skirt is deterministic: every block of the same tone shows the same reading.', 'Noise adds power to a bin and does not subtract from a peak.'],
@@ -29,7 +29,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'The noise floor of a Hann spectrum reads 1.8 dB above the rectangle\'s for the same white noise. Why?',
-      options: ['Each bin passes 1.5 bins of noise: its noise bandwidth', 'Hann amplifies noise by a factor of 1.8', 'The taper lowers the signal by 1.8 dB', 'Hann adds rounding noise of its own'],
+      options: ['Each bin passes 1.5 bins of noise: its noise bandwidth', 'Hann amplifies the noise itself by a factor of about 1.8 overall', 'The taper lowers the signal by 1.8 dB', 'Hann adds rounding noise of its own'],
       answer: 0,
       explain: 'The noise bandwidth of Hann is 1.5 bins, and 10 log<sub>10</sub> 1.5 = 1.8 dB. The same widening is why Hann does not resolve as close as the rectangle.',
       why: ['', 'The window does not amplify; it weights samples, and the sum of weights is what sets the reading.', 'A tone on a bin is scaled back to its true amplitude by dividing by half the window\'s sum.', 'The window is a fixed set of numbers; it adds no noise of its own.'],
@@ -38,7 +38,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   zeropad: [
     {
       question: '64 samples at 8 kHz under a Hann window, padded to 4,096 points. Two tones 150 Hz apart: are they resolved?',
-      options: ['No: that is 1.2 bins of 125 Hz, and Hann needs 2.45', 'Yes: the padded bins are 1.95 Hz apart', 'Yes: padding multiplies the resolution by 64', 'No: Hann cannot resolve tones under 1 kHz'],
+      options: ['No: that is 1.2 bins of 125 Hz, and Hann needs 2.45', 'Yes: the padded bins are 1.95 Hz apart', 'Yes: padding multiplies the resolution by 64', 'No: Hann cannot resolve any tones closer than 1 kHz apart'],
       answer: 0,
       explain: 'The bin that counts is the unpadded one, 8,000 / 64 = 125 Hz. Hann needs about 2.45 of them, 306 Hz, and padding does not change that.',
       why: ['', 'The padded dots are close together, but they lie on a curve whose lobe is still 4 unpadded bins wide.', 'Padding reads the same curve at more points; it narrows nothing.', 'There is no such limit; 306 Hz is the figure for this block, and a longer block would do better.'],
@@ -54,7 +54,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   spectrogram: [
     {
       question: 'At 8 kHz you go from a frame of 512 samples to one of 32. What happens to a Hann frame\'s main lobe and duration?',
-      options: ['The lobe goes from 62.5 Hz to 1,000 Hz; the frame from 64 ms to 4 ms', 'The lobe narrows to 4 Hz and the frame lasts 4 ms', 'The lobe stays 62.5 Hz and the frame shortens', 'The lobe widens to 1,000 Hz and the frame lasts 64 ms'],
+      options: ['Lobe 62.5 Hz to 1,000 Hz; frame 64 ms to 4 ms', 'The lobe narrows to 4 Hz and the frame lasts 4 ms', 'The lobe stays 62.5 Hz and the frame shortens', 'The lobe widens to 1,000 Hz and the frame lasts 64 ms'],
       answer: 0,
       explain: 'The lobe is 4 bins of fs / N and the frame lasts N / fs, so shortening N sixteen-fold widens the lobe sixteen-fold and shortens the frame the same.',
       why: ['', 'A shorter frame has fewer samples, which widens the lobe; it cannot narrow it.', 'The lobe\'s width in hertz is 4 fs / N, so it follows N.', 'The frame lasts N / fs, so it follows N as well.'],
@@ -77,7 +77,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'Does fast convolution by blocks beat the direct form for a 33-tap filter?',
-      options: ['No: the best block costs 41.1 multiplications a sample against 33', 'Yes: an FFT always wins', 'Yes, with a block of exactly 33 points', 'No: the first outputs of a block are wrong, so it never wins'],
+      options: ['No: the best block costs 41.1 multiplications, against 33', 'Yes: an FFT always wins', 'Yes, with a block of exactly 33 points', 'No: the first outputs of a block are wrong, so it never wins'],
       answer: 0,
       explain: 'Blocks win from 44 taps; at 33 the best block, 256, still costs more multiplications than the direct form\'s 33.',
       why: ['', 'An FFT pays two transforms and a product per block; for short filters that costs more than it saves.', 'A block of the filter\'s length leaves L = 1 sample per block and costs far more.', 'Discarding wrong outputs is part of the cost, and for long filters the method wins anyway.'],
@@ -93,7 +93,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'A frequency falls between an FFT\'s bins. Can a Goertzel cell find it?',
-      options: ['Yes: c = 2 cos(2πf) takes any f, though off a bin centre it leaks', 'No: it only finds frequencies that fall exactly on a bin', 'Yes, and without any leakage, being a recurrence', 'No: it needs a whole number of cycles in the block'],
+      options: ['Yes: c = 2 cos(2πf) takes any f; off a centre it leaks', 'No: it only finds frequencies that fall exactly on a bin', 'Yes, and without any leakage, being a recurrence', 'No: it needs a whole number of cycles in the block'],
       answer: 0,
       explain: 'The coefficient is set by the frequency alone. Off a bin centre the block does not hold whole cycles and the result leaks, like any transform, so the block length is worth choosing.',
       why: ['', 'Only the leakage depends on where f sits relative to the bins; the recurrence works at any f.', 'A block cut off mid-cycle leaks whatever method reads it.', 'The recurrence needs no whole cycles; the result is exact for the block as it is, leakage included.'],
@@ -125,7 +125,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'A Hamming design of 301 taps reaches only −58.4 dB, and the mask asks −60 dB. What next?',
-      options: ['Lengthen it: Hamming first reaches −60 dB at 489 taps, odd', 'Raise β until it passes', 'Nothing: −58 dB is its limit', 'Switch to a rectangle, which falls faster'],
+      options: ['Lengthen it: Hamming first reaches −60 dB at 489 taps, odd', 'Raise β until it passes', 'Nothing: −58 dB is its limit', 'Switch to a rectangle window, which has a faster-falling skirt'],
       answer: 0,
       explain: 'Hamming plateaus near −58 dB while its nearest sidelobes sit inside the transition, and falls on again as the filter lengthens, reaching −60 dB at 489 taps.',
       why: ['', 'Hamming has no β; Kaiser\'s window has one.', 'Its sidelobe level is fixed, but the response in the stopband still improves as N grows.', 'The rectangle\'s stopband is at −41.8 dB even at 1,001 taps.'],
@@ -134,7 +134,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   parksmcclellan: [
     {
       question: 'What does it mean that a Parks–McClellan design is equiripple?',
-      options: ['The error peaks at one size, alternating in sign, at ⌈N / 2⌉ + 1 points', 'The passband and the stopband ripple are exactly the same size', 'The ripple falls 6 dB for each doubling of the length of taps', 'All the taps in the filter have one and the same value'],
+      options: ['Equal error peaks of alternating sign, ⌈N / 2⌉ + 1 or more', 'The passband and the stopband ripple are exactly the same size', 'The ripple falls 6 dB for each doubling of the length of taps', 'All the taps in the filter have one and the same value'],
       answer: 0,
       explain: 'The alternation theorem: that many alternating extremes of equal size is both necessary and sufficient for the best weighted fit, and the Remez exchange finds them.',
       why: ['', 'The weights make the two bands\' errors equal after weighting, not before: they follow the mask.', 'That describes the rectangular window\'s stopband peak, not an equiripple design.', 'Taps are mirror images, not equal.'],
@@ -150,14 +150,14 @@ export const CHECK11B: Record<string, Quiz[]> = {
   csd: [
     {
       question: 'The tap 13,304 is −2³ + 2¹⁰ − 2¹² + 2¹⁴. How many adders does it need, with no multiplier?',
-      options: ['3: four terms are added or subtracted in three steps', '4: one adder for each of the four terms', '9: one for each one in its binary form', '1: shifts are free, so a single sum does it'],
+      options: ['3: four terms need three adders', '4: one adder for each of the four terms', '9: one for each one in the binary form of the tap', '1: shifts are free, so a single sum does it'],
       answer: 0,
       explain: 'A shift is wiring; combining four shifted copies takes three adders or subtractors. Binary would have nine ones.',
       why: ['', 'The first term needs no adder: the sum starts with it, so n terms take n − 1.', 'That is the cost of the binary form; signed digits cut the nine ones to four terms.', 'One adder combines two copies; four terms need three.'],
     },
     {
       question: 'Why is 7 = 8 − 1 cheaper than 4 + 2 + 1?',
-      options: ['Two non-zero digits against three: one adder against two', 'Subtraction is faster than addition', '8 − 1 needs no shifted copy', 'It uses a smaller multiplier'],
+      options: ['Two non-zero digits against three: one adder against two', 'Subtraction is faster than addition in a ripple-carry adder', '8 − 1 needs no shifted copy', 'It uses a smaller multiplier'],
       answer: 0,
       explain: 'Each extra non-zero digit costs an adder. Canonical signed digits never put two non-zero digits side by side and use the fewest possible.',
       why: ['', 'A subtractor is an adder with an inverted copy and a carry in, and is no faster.', 'Both need the shifted copy of the input; 8 is a shift by 3.', 'No multiplier is used in either case; that is the point of the form.'],
@@ -173,7 +173,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'Why are the transposed form\'s registers wider than the direct form\'s?',
-      options: ['They hold partial sums, so they are as wide as the accumulator', 'Each one holds two samples side by side', 'They store the taps along with the data', 'They need extra bits to carry the clock'],
+      options: ['They hold partial sums, so they are as wide as the accumulator', 'Each one holds two whole samples side by side, so twice as wide', 'They store the taps along with the data', 'They need extra bits to carry the clock'],
       answer: 0,
       explain: 'A direct-form register holds a sample, 16 bits; a transposed one holds a running sum of products, 34 bits for these taps.',
       why: ['', 'Each holds one value; it is the value that is wider, being a sum of products.', 'The taps are constants in the multipliers, not in the registers.', 'The clock is a single wire to every register and needs no data bits.'],
@@ -189,7 +189,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
     },
     {
       question: 'The 115-tap accumulator has 2 guard bits where log<sub>2</sub> 115 would suggest 7. Why is 2 enough?',
-      options: ['Σ|tap| = 1.94 bounds the output, where log<sub>2</sub> N assumes full-scale taps', 'Rounding at the end removes the extra bits again', 'The clamp at the end catches any overflow before it', 'The ring holds fewer samples than there are taps'],
+      options: ['Σ|tap| = 1.94 bounds the output, not log<sub>2</sub> N', 'Rounding at the end removes the extra bits again', 'The clamp at the end catches any overflow that the sum could have', 'The ring holds fewer samples than there are taps'],
       answer: 0,
       explain: 'The output cannot exceed Σ|tap| times the largest input, so the bits above the product are those Σ|tap| asks for. Guard bits are paid for in every adder and register.',
       why: ['', 'Rounding happens once at the end and does not reduce the sum\'s range.', 'Clamping at the end would hide an overflow in the middle of the sum, giving a wrong value.', 'The ring holds one sample per tap, N of them.'],
