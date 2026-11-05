@@ -3,7 +3,7 @@
 
 import { dbToRatio } from '../comm/limits';
 import {
-  apertureM2, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, dipoleField, dopplerHz, fadeDuration, fsplDb, imageOf, levelCrossing, linkBudget, logDistanceDb, mixed, mixSpectrum, sdrReceive, wavelengthM, widebandLimitMbps, type Ray,
+  apertureM2, arrayDbi, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, dipoleField, dopplerHz, fadeDuration, fsplDb, imageOf, levelCrossing, linkBudget, logDistanceDb, mixed, mixSpectrum, sdrReceive, wavelengthM, widebandLimitMbps, type Ray,
 } from '../phys/radio';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
@@ -53,8 +53,8 @@ export function antennaWidget(): Widget {
     }
     kids.push(poly(pts, 'rd-l1'));
     plot.replaceChildren(s('svg', { class: 'rd-svg sq', viewBox: `0 0 ${W} ${W}`, role: 'img', 'aria-label': `Radiation pattern of ${n} element${n > 1 ? 's' : ''}` }, ...kids));
-    const gainArr = 10 * Math.log10(n) + 2.15, lam = wavelengthM(ghz);
-    out.replaceChildren(stat('Wavelength', `${nf(lam * 100, 1)} cm`), stat('Half-wave dipole', `${nf(lam * 50, 1)} cm long`), stat('Gain', `${nf(gainArr, 1)} dBi`), stat('Effective aperture', `${nf(apertureM2(gainArr, ghz) * 1e4, 0)} cm²`), n > 1 ? stat('Beam', `about ±${nf(((Math.asin(Math.min(1, 1 / n)) * 180) / Math.PI), 0)}° to the first null`) : stat('Beam', 'all round the axis'));
+    const gainArr = arrayDbi(n, steer), lam = wavelengthM(ghz);
+    out.replaceChildren(stat('Wavelength', `${nf(lam * 100, 1)} cm`), stat('Half-wave dipole', `${nf(lam * 50, 1)} cm long`), stat('Gain', `${nf(gainArr, 1)} dBi`), stat('Effective aperture', `${nf(apertureM2(gainArr, ghz) * 1e4, 0)} cm²`), n > 1 && steer === 0 ? stat('First null at broadside', `±${nf((Math.asin(Math.min(1, 2 / n)) * 180) / Math.PI, 0)}°`) : n > 1 ? stat('Beam', `steered to ${steer}°`) : stat('Beam', 'all round the axis'));
   };
   const a = slider('Elements', 1, 16, 1, n, (v) => String(v), (v) => { n = v; paint(); });
   const b = slider('Steering', -60, 60, 5, steer, (v) => `${v}°`, (v) => { steer = v; paint(); });
@@ -125,7 +125,7 @@ export function mixerWidget(): Widget {
     const marks = [line(a.x(lo), a.top, a.x(lo), a.bottom, 'rd-need'), txt(a.x(lo) + 3, a.top + 12, 'LO', 'rd-t'), line(a.x(f), a.top, a.x(f), a.bottom, 'rd-mark'), txt(a.x(f) + 3, a.top + 24, 'signal', 'rd-t')];
     plot.replaceChildren(svgOf(a, 'Output spectrum of the mixer', ...a.g, ...marks, ...bars));
     const [d, su] = mixed(f, lo), im = imageOf(f, lo);
-    out.replaceChildren(stat('Difference, the IF', String(d)), stat('Sum', su > 512 ? `${su}, aliases in this sampling` : String(su)), stat('Image', String(im), image ? 'bad' : ''), image ? stat('Both land on', String(d), 'bad') : h('span'));
+    out.replaceChildren(stat('Difference, the IF', String(d)), stat('Sum', su > 512 ? `${su}, aliases in this sampling` : String(su)), stat('Image', im > 0 ? String(im) : 'none in range', image ? 'bad' : ''), image ? stat('Both land on', String(d), 'bad') : h('span'));
   };
   const a = slider('Signal', 100, 480, 4, f, (v) => String(v), (v) => { f = v; paint(); });
   const b = slider('Local oscillator', 100, 480, 4, lo, (v) => String(v), (v) => { lo = v; paint(); });
@@ -142,7 +142,7 @@ export function sdrWidget(): Widget {
   const plot = h('div'), iq = h('div', { class: 'rd-sq' }), out = h('div', { class: 'mc-status' });
   const paint = () => {
     const r = sdrReceive(SDR_STATIONS, tune, { symbols: 512, decim: 8, sps: 2, snrDb: snr, seed: 4 });
-    const N = r.spectrum.length, a = axes([-8, 8], [0, 3.5], [-8, -4, 0, 4, 8], [0, 1, 2, 3], (v) => String(v), (v) => String(v), 'cycles a symbol', 'band');
+    const N = r.spectrum.length, a = axes([-8, 8], [0, 3.5], [-8, -4, 0, 4, 8], [0, 1, 2, 3], (v) => String(v), (v) => String(v), 'cycles a symbol', 'relative level');
     const pts = r.spectrum.map((v, k) => [a.x(((k - N / 2) / N) * 16), a.y(Math.min(3.5, v * 14))] as [number, number]);
     plot.replaceChildren(svgOf(a, 'The band the ADC sees, four stations', ...a.g, poly(pts, 'rd-l1'), line(a.x(tune), a.top, a.x(tune), a.bottom, 'rd-need'), txt(a.x(tune) + 3, a.top + 12, 'tuned', 'rd-t')));
     const W = 220, c = W / 2, g = W / 2 - 14, dots: SVGElement[] = [line(c, 6, c, W - 6, 'rd-grid'), line(6, c, W - 6, c, 'rd-grid')];
@@ -152,7 +152,7 @@ export function sdrWidget(): Widget {
     out.replaceChildren(stat('Tuned to', `${tune > 0 ? '+' : ''}${tune}`, hit ? 'good' : 'bad'), stat('Wrong', `${r.errors} of ${r.bits}`, r.ber > 0.1 ? 'bad' : ''), stat('Decimated', `${r.decim * 2} samples to 1`));
   };
   const a = slider('Tune', -8, 8, 0.5, tune, (v) => String(v), (v) => { tune = v; paint(); });
-  const b = slider('SNR after the filter', 0, 25, 1, snr, (v) => `${v} dB`, (v) => { snr = v; paint(); });
+  const b = slider('SNR of a unit station', 0, 25, 1, snr, (v) => `${v} dB`, (v) => { snr = v; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos rd-w' }, row(a.el), row(b.el), plot, iq, out, h('p', { class: 'sub' }, 'BPSK stations, one ADC. Everything after the ADC is arithmetic: multiply, average, slice.')) };
 }
@@ -174,7 +174,7 @@ export function multipathWidget(): Widget {
     const band = s('rect', { x: a.x(-bwMhz / 2), y: a.top, width: a.x(bwMhz / 2) - a.x(-bwMhz / 2), height: a.bottom - a.top, class: 'rd-band' });
     plot.replaceChildren(svgOf(a, 'The channel\'s gain against frequency', band, ...a.g, poly(pts, 'rd-l1')));
     const tau = delaySpread(r), bc = coherenceMHz(tau), sym = 1000 / bwMhz;
-    out.replaceChildren(stat('Delay spread', `${nf(tau, 0)} ns`), stat('Coherence bandwidth', `${nf(bc, 1)} MHz`), stat('Across the channel', `${nf(best - worst, 1)} dB`, best - worst > 10 ? 'bad' : ''), stat('Symbol time', `${nf(sym, 0)} ns`), stat('Echo reaches', `${nf(Math.max(d1, d2) / sym, 1)} symbols`, Math.max(d1, d2) > sym ? 'bad' : ''));
+    out.replaceChildren(stat('Delay spread', `${nf(tau, 0)} ns`), stat('Coherence bandwidth', tau > 0 ? `${nf(bc, 1)} MHz` : 'no echoes'), stat('Across the channel', `${nf(best - worst, 1)} dB`, best - worst > 10 ? 'bad' : ''), stat('Symbol time', `${nf(sym, 0)} ns`), stat('Echo reaches', `${nf(Math.max(d1, d2) / sym, 1)} symbols`, Math.max(d1, d2) > sym ? 'bad' : ''));
   };
   const s1 = slider('Echo 1 delay', 0, 500, 5, d1, (v) => `${v} ns`, (v) => { d1 = v; paint(); });
   const s2 = slider('Echo 1 gain', 0, 1, 0.05, a1, (v) => nf(v, 2), (v) => { a1 = v; paint(); });
@@ -190,8 +190,8 @@ export function fadingWidget(): Widget {
   let kmh = 50, ghz = 2.4;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const fd = Math.max(0.5, dopplerHz(kmh, ghz)), g = new Clarke(fd, 9), Tms = 1000;
-    const a = axes([0, Tms], [-40, 10], [0, 250, 500, 750, 1000], [-40, -30, -20, -10, 0, 10], (v) => String(v), (v) => String(v), 'ms', 'dB');
+    const fd = dopplerHz(kmh, ghz), g = new Clarke(fd, 9), Tms = fd > 0 ? Math.min(1000, Math.round(20000 / fd)) : 1000, rho = Math.sqrt(0.1);
+    const a = axes([0, Tms], [-40, 10], [0, 0.25, 0.5, 0.75, 1].map((f) => f * Tms), [-40, -30, -20, -10, 0, 10], (v) => nf(v, Tms < 20 ? 1 : 0), (v) => String(v), 'ms', 'dB');
     const pts: [number, number][] = [];
     const steps = 800;
     for (let i = 0; i <= steps; i++) {
@@ -199,7 +199,7 @@ export function fadingWidget(): Widget {
       pts.push([a.x((i / steps) * Tms), a.y(clampY(db, -40, 10))]);
     }
     plot.replaceChildren(svgOf(a, `A faded signal at ${kmh} km/h`, ...a.g, poly(pts, 'rd-l1')));
-    out.replaceChildren(stat('Doppler', `${nf(dopplerHz(kmh, ghz), 0)} Hz`), stat('Coherence time', kmh > 0 ? `${nf(coherenceTime(fd) * 1000, 1)} ms` : 'very long'), stat('Fades below −10 dB', `${nf(levelCrossing(Math.SQRT1_2 / Math.sqrt(5), fd), 1)} a second`), stat('Lasting', `${nf(fadeDuration(Math.SQRT1_2 / Math.sqrt(5), fd) * 1000, 1)} ms`));
+    out.replaceChildren(stat('Doppler', `${nf(dopplerHz(kmh, ghz), 0)} Hz`), ...(fd > 0 ? [stat('Coherence time', `${nf(coherenceTime(fd) * 1000, 1)} ms`), stat('Fades below −10 dB', `${nf(levelCrossing(rho, fd), 1)} a second`), stat('Lasting', `${nf(fadeDuration(rho, fd) * 1000, 1)} ms`)] : [stat('Standing still', 'no fading in time', 'good')]));
   };
   const a = slider('Speed', 0, 300, 5, kmh, (v) => `${v} km/h`, (v) => { kmh = v; paint(); });
   const b = slider('Carrier', 0.7, 28, 0.1, ghz, (v) => `${nf(v, 1)} GHz`, (v) => { ghz = v; paint(); });

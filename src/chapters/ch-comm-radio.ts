@@ -2,7 +2,7 @@
 // next chapters' business; here the channel: antennas, path loss, a budget in dB, the mixer, software radio, multipath, fading, diversity.
 
 import { dbToRatio } from '../comm/limits';
-import { apertureM2, bpskAwgn, bpskMrc, bpskRayleigh, coherenceMHz, coherenceTime, dopplerHz, fadeMarginDb, fsplDb, linkBudget, noiseFloorDbm, wavelengthM } from '../phys/radio';
+import { apertureM2, bpskAwgn, bpskMrc, bpskRayleigh, coherenceMHz, coherenceTime, dopplerHz, fadeMarginDb, fsplDb, levelCrossing, linkBudget, noiseFloorDbm, wavelengthM } from '../phys/radio';
 import { antennaWidget, budgetWidget, BUDGET_DEFAULT, diversityWidget, fadingWidget, mixerWidget, multipathWidget, pathWidget, sdrWidget, WALL_DB } from '../widgets/radio';
 import { numOf } from './order';
 import type { Chapter } from './types';
@@ -39,13 +39,13 @@ export const chRadio: Chapter = {
       'The path formula 20 log d + 20 log f + 92.45 dB is really about the receiving antenna: the same gain at a shorter wavelength has a smaller aperture. Fix the aperture instead and higher frequencies win.',
       `A budget is additions in dB: transmit power, antenna gains, path, walls, against a noise floor of −174 dBm/Hz + 10 log B + NF. Shannon then turns the SNR into a limit, and widening the channel at fixed power soon stops helping.`,
       'A mixer multiplies, and gives you the sum and the difference, so that a whole band can be moved down to where ADCs live. The price is an image, which I/Q (a complex mix) removes in arithmetic. A software radio is an ADC and arithmetic.',
-      `Multipath makes the channel a filter: frequencies closer than about 1 / (5 τ) fade together. Speed makes it change: it keeps its value for about 0.42 / f_d. Wide channels see notches, fast ones see change, and every design from here on is about these two numbers.`,
-      `In Rayleigh fading BER falls as 1 / SNR, not exponentially. At a BER of 10⁻³ that costs ${nf(needAwgn(1e-3) === 0 ? 0 : needRay(1e-3) - needAwgn(1e-3), 0)} dB against no fading. Two antennas fading independently make it 1 / SNR², which is why diversity is worth more than power.`,
+      `Multipath makes the channel a filter: frequencies closer than about 1 / (5 τ) fade together. Speed makes it change, over a time of order 0.42 / f_d. Wide channels see notches, fast ones see change, and every design from here on is about these two numbers.`,
+      `In Rayleigh fading BER falls as 1 / SNR, not exponentially. At a BER of 10⁻³ that costs ${nf(needRay(1e-3) - needAwgn(1e-3), 0)} dB against no fading. Two antennas fading independently make it 1 / SNR², which is why diversity is worth more than power.`,
     ],
     check: [
       {
-        question: 'A link budget gives 2 dB of margin at 50 m. What range does it give at 6 dB more path loss in free space?',
-        options: ['Half the range, since each doubling costs 6 dB', 'A quarter of the range', 'The same range, since 6 dB is small', 'A third of the range'],
+        question: 'A link in free space works out to 60 m. Somewhere you lose 6 dB more. How far does it work now?',
+        options: ['30 m: each doubling of distance costs 6 dB', '15 m', '60 m: 6 dB is small', '20 m'],
         answer: 0,
         explain: '20 log d: a factor of 2 in distance is 6 dB. A 6 dB shortfall halves the range, in free space. Through walls and with an exponent of 3 to 4, 6 dB buys less distance than that.',
         why: ['', 'That is the factor for 12 dB.', 'Six dB is a factor of four in power.', 'There is no such rule: the exponent is 2 in free space.'],
@@ -74,7 +74,7 @@ export const chRadio: Chapter = {
         <p>Everything so far ran down a wire or a fibre. A radio has only two antennas and the space between them. This chapter is models, tested against closed forms; the radio chapters say so, and they say when a trace is modelled rather than captured. The gates come back in the next chapter, for the part of Wi-Fi that is logic.</p>
         <p>An antenna turns current into a travelling field and, by reciprocity, back. A wire half a wavelength long is resonant: a <strong>half-wave dipole</strong>, ${nf(wavelengthM(2.4) * 50, 1)} cm at 2.4 GHz. It radiates most broadside, nothing along its own axis. Integrating the pattern over the sphere gives its <strong>gain</strong> over an imaginary isotropic antenna: 1.64, or 2.15 dBi. An antenna does not create power, it aims it. So the gain is the concentration and "more dBi" is "narrower".</p>
         <p>Every antenna also has an <strong>effective aperture</strong>, the area of passing wave it collects: A = G λ² / 4π. A 0 dBi antenna at 2.4 GHz collects ${nf(apertureM2(0, 2.4) * 1e4, 0)} cm², at 28 GHz only ${nf(apertureM2(0, 28) * 1e4, 2)} cm². Remember this. It is the whole explanation of the next step.</p>
-        <p>Put elements in a line, half a wavelength apart, and feed each with a phase step: their fields add in one direction and cancel in others. That is a <strong>phased array</strong>: n elements give 10 log n dB of gain and a beam you steer electronically, with no moving parts. Move the sliders. At 28 GHz, half a wavelength is ${nf(wavelengthM(28) * 500, 1)} mm, and a 64-element array fits in a phone's corner. The cellular chapter returns to this.</p>`,
+        <p>Put elements in a line, half a wavelength apart, and feed each with a phase step: their fields add in one direction and cancel in others. That is a <strong>phased array</strong>: isotropic elements would give 10 log n dB of gain (dipoles in a line a little less, since their own pattern already narrows the same way; the panel integrates the plotted pattern), and a beam you steer electronically, with no moving parts. Move the sliders. At 28 GHz, half a wavelength is ${nf(wavelengthM(28) * 500, 1)} mm, and a 64-element array fits in a phone's corner. The cellular chapter returns to this.</p>`,
       widget: antennaWidget,
       challenge: {
         kind: 'quiz',
@@ -90,7 +90,7 @@ export const chRadio: Chapter = {
       body: `
         <p>A transmitter's power spreads over a sphere, 4πd². At distance d the power density is P / 4πd². Multiply by the receiving antenna's aperture λ² / 4π for a 0 dBi antenna and you have Friis's law:</p>
         <p><code>P<sub>r</sub> / P<sub>t</sub> = G<sub>t</sub> G<sub>r</sub> (λ / 4πd)²</code></p>
-        <p>In dB, with d in km and f in GHz, that is the formula every budget uses: <code>20 log d + 20 log f + 92.45</code>. Doubling the distance costs 6 dB. So does doubling the frequency, and now you can say why: nothing about free space depends on frequency. Nothing is absorbed. The aperture is smaller. So a dish of a fixed size has more gain at a higher frequency, four times the power per octave at each end, and a <em>point-to-point</em> link gets better with frequency, not worse.</p>
+        <p>In dB, with d in km and f in GHz, that is the formula every budget uses: <code>20 log d + 20 log f + 92.45</code>. Doubling the distance costs 6 dB. So does doubling the frequency, and now you can say why: nothing about free space depends on frequency. Nothing is absorbed. The aperture is smaller. So a dish of a fixed size has more gain at a higher frequency: four times per octave at each end, sixteen for both, against four times the path loss. A <em>point-to-point</em> link gets better with frequency, not worse.</p>
         <p>Real paths aren't free space. Indoors and in cities the average falls by an exponent n: 10 n log d, with n between 2 and 4 or so. (Over a flat ground the direct and reflected rays cancel and n tends to 4.) The thin line is free space. Set n to 3.5 and see how quickly a building eats a budget.</p>`,
       widget: pathWidget,
       challenge: {
@@ -107,17 +107,17 @@ export const chRadio: Chapter = {
       body: `
         <p>Radio engineers add and subtract in dB because the losses multiply. Start from the transmitter, add the antenna, subtract the path and the walls, add the far antenna. What arrives must stand above a <strong>noise floor</strong> set by temperature and bandwidth:</p>
         <p><code>N = −174 dBm/Hz + 10 log B + NF</code></p>
-        <p>−174 dBm/Hz is kT at 290 K, the noise of the universe at room temperature, whichever receiver you buy. A 20 MHz channel adds ${nf(10 * Math.log10(20e6), 0)} dB of it, and a ${D.nf} dB noise figure makes ${nf(noiseFloorDbm(20, D.nf), 0)} dBm.</p>
+        <p>−174 dBm/Hz is kT at 290 K, thermal noise at room temperature: the floor no receiver goes below, and each adds its noise figure on top. A 20 MHz channel adds ${nf(10 * Math.log10(20e6), 0)} dB of it, and a ${D.nf} dB noise figure makes ${nf(noiseFloorDbm(20, D.nf), 0)} dBm.</p>
         <p>At the defaults (${D.tx} dBm, ${D.ga} dBi each end, ${D.m} m, ${D.walls} walls, ${D.ghz} GHz), the path is ${nf(B0.path, 1)} dB, ${nf(B0.rx, 1)} dBm arrives, the SNR is ${nf(B0.snr, 1)} dB, and Shannon says ${nf(B0.capacityMbps, 0)} Mb/s.</p>
         <p>Move to 5.5 GHz at the same range and widen the channel to 80 MHz. That is ${nf(fsplDb(D.m / 1000, 5.5) - fsplDb(D.m / 1000, D.ghz), 1)} dB more path, ${nf((WALL_DB(5.5) - WALL_DB(2.4)) * D.walls, 0)} dB more walls and 6 dB more noise, leaving ${nf(B5.snr, 1)} dB, for ${nf(B5.capacityMbps, 0)} Mb/s. Capacity is a contest between SNR and bandwidth, and wider doesn't always win. With power fixed, capacity tends to a limit, P / (N₀ ln 2), as the channel widens, and the panel shows it. At that point, more spectrum buys nothing: you need more power, or less distance.</p>`,
       widget: budgetWidget,
       challenge: {
         kind: 'quiz',
         question: 'Doubling transmit power and doubling the bandwidth. For a link at low SNR, which is worth more?',
-        options: ['They are about equal: at low SNR capacity depends on P / N₀, not on B', 'Bandwidth, always', 'Power, always', 'Neither helps at low SNR'],
+        options: ['Power: at low SNR capacity is nearly proportional to P / N₀ and hardly depends on B', 'They are about equal', 'Bandwidth, always', 'Neither helps at low SNR'],
         answer: 0,
         explain: 'At low SNR, log₂(1 + x) ≈ x / ln 2, so C ≈ B · (P / N₀B) / ln 2 = P / (N₀ ln 2): B cancels. Doubling the power doubles capacity and doubling the bandwidth does very little more. At high SNR, the reverse: bandwidth is linear and power only logarithmic.',
-        why: ['', 'Only at high SNR, where capacity is linear in B and logarithmic in P.', 'Not at high SNR.', 'Both are capacity, and power certainly helps at low SNR.'],
+        why: ['', 'B cancels at low SNR, so doubling it adds very little while doubling P doubles capacity.', 'Only at high SNR, where capacity is linear in B and logarithmic in P.', 'Power certainly helps at low SNR.'],
       },
     },
     {
@@ -125,9 +125,9 @@ export const chRadio: Chapter = {
       body: `
         <p>A signal at 2.4 GHz and an ADC at 100 MS/s don't meet. The device that brings them together is a <strong>mixer</strong>: multiply the signal by a local oscillator, and the identity</p>
         <p><code>cos a · cos b = ½ cos(a − b) + ½ cos(a + b)</code></p>
-        <p>gives two copies, at the difference and the sum. Filter away the sum and the band has moved, its information intact, to where a filter and an ADC can deal with it. The transmitter runs the same trick the other way. A real mixer is a pair of switches, CMOS transistors turned fully on and off by the oscillator: a chopper.</p>
+        <p>gives two copies, at the difference and the sum. Filter away the sum and the band has moved, its information intact, to where a filter and an ADC can deal with it. The transmitter runs the same trick the other way. A real mixer is a pair of switches, CMOS transistors turned fully on and off by the oscillator: a chopper (so it mixes at the oscillator's odd harmonics too, for the filter in front to deal with).</p>
         <p>Move the sliders. Notice the problem: the absolute value in the difference means that a signal the same distance on the <em>other side</em> of the oscillator lands on the same place. That other frequency is the <strong>image</strong>. Tick the box: two stations, one output, forever mixed. The classic radio (Armstrong's <strong>superheterodyne</strong>, 1918) filters the image away at RF first, which is why it mixes to a fairly high intermediate frequency, to push the image far enough off for a filter to separate it.</p>
-        <p>Modern chips mix straight to zero (direct conversion) with two mixers, one driven by cos and one by sin, 90° apart. The modem chapter's I and Q. With both, the mix is a complex multiplication, by e<sup>−jωt</sup>, which shifts in one direction only. There is no image, if the two arms match. Any mismatch leaks one in, so a chip calibrates its I/Q balance: a few parts in a thousand of error is a −50 dB image.</p>`,
+        <p>Modern chips mix straight to zero (direct conversion) with two mixers, one driven by cos and one by sin, 90° apart. The modem chapter's I and Q. With both, the mix is a complex multiplication, by e<sup>−jωt</sup>, which shifts in one direction only. There is no image, if the two arms match. Any mismatch leaks one in, so a chip calibrates its I/Q balance: about half a percent of gain error, or a third of a degree of phase, is a −50 dB image.</p>`,
       widget: mixerWidget,
       challenge: {
         kind: 'quiz',
@@ -142,7 +142,7 @@ export const chRadio: Chapter = {
       title: 'A radio in arithmetic',
       body: `
         <p>Once a band is digitized, everything else is arithmetic. A <strong>software radio</strong> has an antenna, a filter, a mixer down to near zero, a fast ADC, and then a program: multiply by a numerically controlled oscillator (the same NCO as the modem chapter's), filter and <strong>decimate</strong> to the channel's rate, demodulate. Ten stations are ten sets of arithmetic, on one ADC.</p>
-        <p>This explorer does exactly that, sample by sample. Four BPSK stations of different power share a band. Drag <em>Tune</em> onto one. The received symbols sit in two clusters, on the real axis: a clean BPSK. Between stations you get mush. The moving average that decimates is the cheapest low-pass filter there is (three of them in a row is a CIC filter, the usual first stage of a real digital down-converter, built from adders and registers alone), and over a whole symbol it has a null at exactly every other integer offset, so a strong neighbour on such an offset disappears, even at 9 times your power.</p>
+        <p>This explorer does exactly that, sample by sample. Four BPSK stations of different power share a band. Drag <em>Tune</em> onto one. The received symbols sit in two clusters, on the real axis: a clean BPSK. Between stations you get mush. The moving average that decimates is the cheapest low-pass filter there is (several of them in a row, usually three to five, make a CIC filter, the usual first stage of a real digital down-converter, built from adders and registers alone), and over a whole symbol it has a null at every non-zero whole number of cycles per symbol. These stations share one symbol clock and sit on whole offsets, so a strong neighbour disappears here, even at 9 times your power; a real neighbour on its own clock leaves sidelobes for more filtering to deal with.</p>
         <p>Then the price: ADC power goes up with sampling rate and with resolution, and a strong station beside a weak one needs bits. Every 6 dB of dynamic range is a bit. Hence the analog filter before the ADC. A phone keeps as much of the band out as it can, and makes the rest digital. The boundary keeps moving with each process node.</p>`,
       widget: sdrWidget,
       challenge: {
@@ -165,7 +165,7 @@ export const chRadio: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'You split a 20 MHz channel with a 1 µs delay spread into 256 subcarriers. What does each one see?',
-        options: ['A flat channel: each is 78 kHz wide, far below the coherence bandwidth of about 200 kHz', 'The same 1 µs echoes in each, unchanged', 'No fading at all', 'A channel twice as noisy'],
+        options: ['A nearly flat channel: each is 78 kHz wide, below the coherence bandwidth of about 200 kHz', 'The same 1 µs echoes in each, unchanged', 'No fading at all', 'A channel twice as noisy'],
         answer: 0,
         explain: 'Each subcarrier is 20 MHz / 256 ≈ 78 kHz, and a symbol is 12.8 µs. The echo is a small fraction of it, and a guard interval swallows it. Each subcarrier then fades as a single complex number.',
         why: ['', 'Same echoes, but relative to a much longer symbol they do little harm.', 'It still fades, but flat: one complex gain for each.', 'Noise per Hz is the same; each carrier has less of both.'],
@@ -175,7 +175,7 @@ export const chRadio: Chapter = {
       title: 'Fading',
       body: `
         <p>Now move. As you travel a wavelength the phases of all those rays change, so the sum wanders: <strong>fast fading</strong>. Each ray arrives shifted by <strong>Doppler</strong>, up to f<sub>d</sub> = v f / c: ${nf(FD, 0)} Hz at 100 km/h at 2 GHz. With many rays from all around, their sum has Gaussian real and imaginary parts: its amplitude has a <strong>Rayleigh</strong> distribution, and its power is exponential.</p>
-        <p>The plot is Clarke's model: 64 rays with random arrival angles. Deep fades happen about every half a wavelength. How often, and for how long, have closed forms, and the tests hold this simulation to them: the rate of downward crossings of level ρ is √(2π) f<sub>d</sub> ρ e<sup>−ρ²</sup>. The channel keeps its value for a <strong>coherence time</strong> of about 0.42 / f<sub>d</sub>, here ${nf(coherenceTime(FD) * 1000, 1)} ms: the time that rate adaptation and pilot symbols have to work with.</p>
+        <p>The plot is Clarke's model: 64 rays with random arrival angles. The pattern's scale is a wavelength: a fade 10 dB down comes about every ${nf(1 / (levelCrossing(Math.sqrt(0.1), 1)), 1)} wavelengths travelled. How often, and for how long, have closed forms, and the tests hold this simulation to them: the rate of downward crossings of level ρ is √(2π) f<sub>d</sub> ρ e<sup>−ρ²</sup>. A common rule of thumb for how long the channel can be treated as unchanged, its <strong>coherence time</strong>, is 0.42 / f<sub>d</sub> (Clarke's correlation has already fallen to a half at 0.24 / f<sub>d</sub>), here ${nf(coherenceTime(FD) * 1000, 1)} ms: the time that rate adaptation and pilot symbols have to work with.</p>
         <p>The cost in BER is enormous. Without fading BPSK falls off a cliff: exponentially in SNR. With it the error rate is dominated by the moments when you're in a fade, and it falls only as 1 / SNR: ½(1 − √(γ / (1 + γ))). At 10 dB, ${sci(bpskAwgn(dbToRatio(10)))} without fading and ${sci(bpskRayleigh(dbToRatio(10)))} with it. A budget holding outage to 1 % needs a fade margin of ${nf(fadeMarginDb(0.01), 0)} dB.</p>`,
       widget: fadingWidget,
       challenge: {
@@ -197,10 +197,10 @@ export const chRadio: Chapter = {
       widget: diversityWidget,
       challenge: {
         kind: 'quiz',
-        question: 'You have 4 dB of budget left. Which buys more in a slowly fading channel at BER 10⁻⁴: 4 dB of transmit power or a second receive antenna?',
+        question: 'You are at 24 dB, a BER near 10⁻³, in a slowly fading channel. Which buys more: 4 dB of transmit power or a second receive antenna?',
         options: ['The second antenna, by a long way: it changes the slope of the curve', '4 dB of power: more signal always wins', 'The same: both raise SNR by about 3 to 4 dB', 'Neither: a slow fade cannot be helped'],
         answer: 0,
-        explain: `With one antenna 4 dB lowers BER by a factor of about 2.5. Going from one antenna to two takes it from ${sci(bpskRayleigh(dbToRatio(24)))} to ${sci(bpskMrc(dbToRatio(24), 2))} at 24 dB: a factor of about 100, even before counting the extra 3 dB of array gain.`,
+        explain: `With one antenna 4 dB lowers BER by a factor of ${nf(bpskRayleigh(dbToRatio(24)) / bpskRayleigh(dbToRatio(28)), 1)}. Going from one antenna to two takes it from ${sci(bpskRayleigh(dbToRatio(24)))} to ${sci(bpskMrc(dbToRatio(24), 2))}: a factor of about ${nf(bpskRayleigh(dbToRatio(24)) / bpskMrc(dbToRatio(24), 2), 0)}, and that is with the SNR per branch held the same.`,
         why: ['', 'Against a 1 / SNR slope, 4 dB does little.', 'Array gain is 3 dB, but the diversity gain is the slope, and it is far larger.', 'Space diversity helps most exactly when it fades slowly, when time diversity cannot.'],
       },
     },
