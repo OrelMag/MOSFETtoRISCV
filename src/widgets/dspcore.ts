@@ -62,7 +62,7 @@ export function dspPanel(id: string): ScenePanel {
       },
     });
     stage.historyHooks.add({ save: () => ({ s: iss.save(), bad }), restore: (v) => { const o = v as { s: ReturnType<Iss24['save']>; bad: string | null }; iss.restore(o.s); bad = o.bad; } });
-    const listing = h('div', { class: 'dsp-list' }), regs = h('div', { class: 'cpu-mem' }), ptrs = h('div', { class: 'dsp-ptrs' }), state = h('div', { class: 'dsp-state' }), verdict = h('div', { class: 'dsp-verdict' });
+    const listing = h('div', { class: 'dsp-list' }), regs = h('div', { class: 'cpu-mem' }), ptrs = h('div', { class: 'cpu-mem dsp-ptrs' }), state = h('div', { class: 'cpu-mem dsp-state' }), verdict = h('div', { class: 'dsp-verdict' });
     const runBtn = h('button', { class: 'btn sm primary', onclick: () => api.run() }, 'Run to halt');
     const title = h('h4', null, 'DSP core', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel dsp-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
