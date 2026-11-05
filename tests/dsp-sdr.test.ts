@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
   ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
-  synthBand, TEST_TONE_HZ, keyingRatio, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
+  synthBand, TEST_TONE_HZ, keyingRatio, KEYING_LOST_DB, morseUnits, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';
 import { complexMixer, sdrFront } from '../src/lib/sdr';
@@ -183,6 +183,36 @@ describe('how fine a table', () => {
     for (let i = 1; i < s.length; i++) expect(s[i] - s[i - 1]).toBeGreaterThan(4.5);
     const weak = [5, 6, 7, 8].map((k) => keyingRatio(receive(synthBand(FS), STATIONS[3].f, -40, FS, k).chain.audio));
     for (let i = 1; i < weak.length; i++) expect(weak[i]).toBeGreaterThan(weak[i - 1] + 3);
+  });
+});
+
+describe('the weak station with a coarse table', () => {
+  // key up is as loud as key down: the discriminator follows a loud neighbour's spur, so the ratio is the ratio of two stretches of garbage, near 0 dB either side (not a floor or clamp)
+  const unitPowers = (a: ArrayLike<number>) => {
+    const M = morseUnits(), u = a.length / M.length, on: number[] = [], off: number[] = [];
+    for (let k = 1; k < M.length - 1; k++) {
+      if (M[k] !== M[k - 1] || M[k] !== M[k + 1]) continue;
+      const s0 = Math.floor(k * u + u / 4), e0 = Math.floor((k + 1) * u - u / 4);
+      let q = 0;
+      for (let i = s0; i < e0; i++) q += a[i] * a[i];
+      (M[k] === '1' ? on : off).push(q / (e0 - s0));
+    }
+    return { on, off };
+  };
+  it('at 3 and 4 bits the keying is lost: both ratios are within the scatter around 0 dB, key up is loud, and the ratio can fall below 0', () => {
+    for (const k of [3, 4]) {
+      const a = receive(synthBand(FS), STATIONS[3].f, -40, FS, k).chain.audio, r = keyingRatio(a), { on, off } = unitPowers(a);
+      expect(Math.abs(r)).toBeLessThan(KEYING_LOST_DB);
+      expect(Math.min(...off)).toBeGreaterThan(0.2 * Math.max(...on));
+    }
+    // 0.8 dB at 3 bits and -0.0 at 4 are the same finding, not a trend: the sign is not pinned, the size is
+    expect(keyingRatio(receive(synthBand(FS), STATIONS[3].f, -60, FS, 4).chain.audio)).toBeLessThan(0.5);
+  });
+  it('from 5 bits the key-up audio falls away: well over the lost threshold, and rising 6 dB a bit', () => {
+    const r = [5, 6, 7].map((k) => keyingRatio(receive(synthBand(FS), STATIONS[3].f, -40, FS, k).chain.audio));
+    expect(r[0]).toBeGreaterThan(10);
+    expect(r[1] - r[0]).toBeGreaterThan(15);
+    expect(r[2] - r[1]).toBeGreaterThan(4);
   });
 });
 

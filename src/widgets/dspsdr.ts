@@ -5,7 +5,7 @@
 import { signedOf, wordOf } from '../comm/signals';
 import type { Clip } from '../dsp/clip';
 import {
-  ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, stationBand, carson, CIC_GAIN, CIC_R, FrontModel, FS, FS_CIC, keyingRatio, mixBlock, MixModel,
+  ADC_SCALE, ALPHA, AUD, AUDIO, AUDIO_R, AUDIO_TAPS, bandSpectrum, CHAN, CHAN_EDGE, CHAN_TAPS, carrierToNoise, stationBand, carson, CIC_GAIN, CIC_R, FrontModel, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, mixBlock, MixModel,
   mixerSfdr, modIndex, NCO_K, occupied, receive, sample, STATIONS, stationAt, synthBand, TAU, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, workPerSecond, type Band,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS, gateClip, modelClip } from '../dsp/sdrclip';
@@ -25,7 +25,6 @@ import '../styles/dsp.css';
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const khz = (hz: number) => `${hz >= 0 ? '+' : '−'}${Math.abs(hz / 1000)} kHz`;
 const sp = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
-const z0 = (v: number) => (Math.abs(v) < 0.05 ? 0 : v);
 const dbOf = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 let theBand: Band | undefined;
 /** One second of the band, made on first use and kept: every explorer reads the same samples. */
@@ -209,11 +208,11 @@ export function tableWidget(): Widget {
   const body = h('tbody');
   const paint = () => {
     const r = rows.find((q) => q.k === k)!;
-    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, `${num(z0(q.keying), 1)} dB`))));
+    body.replaceChildren(...rows.map((q) => h('tr', { class: q.k === k ? 'sel' : '' }, h('td', { class: 'num' }, `${q.k}`), h('td', { class: 'num' }, sp(2 ** q.k)), h('td', { class: 'num' }, sp(q.nands)), h('td', { class: 'num' }, `${num(q.sfdr, 1)} dB`), h('td', { class: 'num' }, (q.keying < KEYING_LOST_DB ? 'lost' : `${num(q.keying, 1)} dB`)))));
     chips.set(0, sp(2 ** k), 'steps in a turn');
     chips.set(1, sp(r.nands), 'NANDs in the oscillator');
     chips.set(2, `${num(r.sfdr, 0)} dB`, 'the largest spur under the carrier');
-    chips.set(3, `${num(z0(r.keying), 0)} dB`, 'weak station: key down over key up');
+    chips.set(3, r.keying < KEYING_LOST_DB ? 'lost' : `${num(r.keying, 0)} dB`, 'weak station: key down over key up');
   };
   const sk = slider('Table bits', 3, 9, 1, k, (v) => String(v), (v) => { k = v; paint(); play.reset(); });
   const play = clipButton('Hear the weak station', () => ({ samples: receive(band(), STATIONS[3].f, -40, FS, k).chain.audio, rate: AUD, source: 'model', note: `${2 ** k}-step table, one second` } satisfies Clip));

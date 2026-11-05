@@ -360,3 +360,6 @@ export function keyingRatio(aud: ArrayLike<number>): number {
   }
   return 10 * Math.log10(on / non / (off / noff));
 }
+
+/** Below this a keying ratio means the keying is lost: key up is as loud as key down, and the figure is only the ratio of two unrelated stretches of garbage (it scatters around 0 dB, either side). */
+export const KEYING_LOST_DB = 3;

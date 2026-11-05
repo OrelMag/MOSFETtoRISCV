@@ -4,7 +4,7 @@
 
 import { cicAliasDb, cicResponse } from '../dsp/multirate';
 import {
-  ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, stationBand, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
+  ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, stationBand, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
   workPerSecond,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS } from '../dsp/sdrclip';
@@ -150,7 +150,7 @@ export const chSdr: Chapter = {
         const rows = tableSweep(), r = (k: number) => rows.find((q) => q.k === k)!, t = tone();
         return `
         <p>A table of 2<sup>k</sup> steps turns the phase into a staircase, and the staircase has an error: a spur in the mixer's output for every strong signal that passes through, about 6 dB lower for each bit of k. Measured on a steady carrier, a ${r(4).k}-bit table leaves its largest spur ${d1(r(4).sfdr)} dB below it, ${r(6).k} bits ${d1(r(6).sfdr)} dB, ${r(8).k} bits ${d1(r(8).sfdr)} dB. By ${r(9).k} bits the 8-bit words of the table take over and it stops improving: ${d1(r(9).sfdr)} dB.</p>
-        <p>The price is ${n0(r(4).nands)} NANDs for the oscillator at ${r(4).k} bits and ${n0(r(8).nands)} at ${r(8).k}: a table doubles for every bit. And the surprise is what it buys. The FM test tone's audio is the same ${d1(t[0].snr)} dB above everything else at ${r(4).k} bits and at ${r(9).k}: FM listens to the <em>phase</em> of a strong signal, which a spur barely moves. The weak station, ${d1(ratioDb(STATIONS[2].a, STATIONS[3].a))} dB under its neighbour, is another matter. Its Morse key down is ${d1(r(4).keying)} dB over key up at ${r(4).k} bits, ${d1(r(6).keying)} at ${r(6).k} and ${d1(r(8).keying)} at ${r(8).k}: the loud stations' spurs fall on it, and each bit of table moves them down 6 dB.</p>
+        <p>The price is ${n0(r(4).nands)} NANDs for the oscillator at ${r(4).k} bits and ${n0(r(8).nands)} at ${r(8).k}: a table doubles for every bit. And the surprise is what it buys. The FM test tone's audio is the same ${d1(t[0].snr)} dB above everything else at ${r(4).k} bits and at ${r(9).k}: FM listens to the <em>phase</em> of a strong signal, which a spur barely moves. The weak station, ${d1(ratioDb(STATIONS[2].a, STATIONS[3].a))} dB under its neighbour, is another matter. Its Morse key down is ${d1(r(5).keying)} dB over key up at ${r(5).k} bits, ${d1(r(6).keying)} at ${r(6).k} and ${d1(r(8).keying)} at ${r(8).k}: the loud stations' spurs fall on it, and each bit of table moves them down 6 dB. At ${r(4).k} bits and below the table shows <em>lost</em>, not a figure: the spurs are louder than the weak station, the discriminator follows them, and the audio is as loud with the key up as with it down. The ratio of two stretches of the same garbage is near 0 dB, a little either side (${d1(r(3).keying)} at ${r(3).k} bits, ${d1(r(4).keying)} at ${r(4).k}), and means nothing; ${d1(KEYING_LOST_DB)} dB is where the table stops quoting it.</p>
         <p>The chapter's mixer uses ${NCO_K} bits: ${d1(r(NCO_K).sfdr)} dB of spur-free range for ${n0(r(NCO_K).nands)} NANDs in the oscillator, against ${n0(r(9).nands)} at ${r(9).k}.</p>
         <div class="try">Play the weak station at 4 bits, then at 8, and read the key-down / key-up figure beside it.</div>`;
       },
