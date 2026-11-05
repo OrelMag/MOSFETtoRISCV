@@ -8,6 +8,7 @@ Python never runs in npm test or in the page. A chapter that needs a reference a
 Numbers are rounded to 12 significant digits, so a change of platform does not rewrite the files. Versions are recorded in each file."""
 import json
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -57,11 +58,14 @@ def zplane():
         b, a = np.asarray(b, float), np.asarray(a, float)
         z, p, _ = signal.tf2zpk(b, a)
         _, h = signal.freqz(b, a, worN=np.array(fs), fs=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')  # singular at a zero on the circle: such a point has no delay, and the test skips it
+            _, gd = signal.group_delay((b, a), w=np.array(fs), fs=1)
         imp = np.zeros(32)
         imp[0] = 1
         rows.append({
             'name': name, 'b': r(b), 'a': r(a), 'zeros': cx(z), 'poles': cx(p),
-            'gain': r(np.abs(h)), 'phase': r(np.angle(h)),
+            'gain': r(np.abs(h)), 'phase': r(np.angle(h)), 'delay': r(gd),
             'impulse': r(signal.lfilter(b, a, imp)), 'lfilter': r(signal.lfilter(b, a, x)),
         })
     u, v = [1, 2, 3, -1], [0.5, -0.25, 2]

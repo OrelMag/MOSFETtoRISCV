@@ -101,6 +101,15 @@ describe('the CIC', () => {
       expect(cicAliasDb(N, R, edge)).toBeLessThanOrEqual(20 * Math.log10(worst / base) + 1e-9);
     }
   });
+  it('agrees with Hogenauer\'s Tables I and II, read from the paper, for a large R', () => {
+    const R = 4096, down = (N: number, f: number) => -20 * Math.log10(cicResponse(N, R, f / R));
+    // Table I: passband attenuation in dB at the band's edge, for stages 1 to 6
+    const table1: [number, number[]][] = [[1 / 16, [0.06, 0.11, 0.17, 0.22, 0.28, 0.34]], [1 / 8, [0.22, 0.43, 0.67, 0.90, 1.12, 1.35]], [1 / 4, [0.91, 1.82, 2.74, 3.65, 4.56, 5.47]]];
+    for (const [fc, row] of table1) row.forEach((v, i) => expect(down(i + 1, fc)).toBeCloseTo(v, 1));
+    // Table II, one stage, M = 1: the worst alias, at the first band's lower edge 1 − fc (his equation 8), against the response at DC
+    const table2: [number, number][] = [[1 / 128, 42.1], [1 / 64, 36.0], [1 / 32, 29.8], [1 / 16, 23.6], [1 / 8, 17.1], [1 / 4, 10.5]];
+    for (const [fc, v] of table2) expect(down(1, 1 - fc)).toBeCloseTo(v, 1);
+  });
   it('a higher order holds aliases further down', () => {
     expect(cicAliasDb(4, 16, 0.1)).toBeLessThan(cicAliasDb(2, 16, 0.1) - 30);
     expect(cicAliasDb(4, 16, 0.1)).toBeLessThan(-60);

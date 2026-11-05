@@ -49,5 +49,5 @@ export function clipButton(label: string, make: () => Clip | null, refused = 'No
     b.textContent = 'Stop'; b.setAttribute('aria-pressed', 'true');
     what.textContent = `${SOURCE[c.source]}${c.note ? `: ${c.note}` : ''}`;
   });
-  return { el: h('span', { class: 'clip' }, b, what), button: b };
+  return { el: h('span', { class: 'clip' }, b, what), button: b, /** What is on the slider has changed: drop a stale refusal. */ reset: () => { if (!playing) what.textContent = ''; } };
 }
