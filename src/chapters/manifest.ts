@@ -769,7 +769,27 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Reading a specification", challenge: "quiz" },
     { title: "On your own", challenge: "quiz" },
   ] },
-  { id: "appendix-6502", num: 67, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "multirate", num: 67, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","carriers","muldiv"], recap: {"checks":3}, steps: [
+    { title: "Most of the samples are not needed", challenge: "quiz" },
+    { title: "Throwing samples away", challenge: "quiz" },
+    { title: "Why compute what you throw away?", challenge: "quiz" },
+    { title: "Branches in gates", challenge: "reach" },
+    { title: "Going up, and halving", challenge: "quiz" },
+    { title: "A moving average, rearranged", challenge: "quiz" },
+    { title: "Sums that wrap", challenge: "quiz" },
+    { title: "A CIC in gates", challenge: "reach" },
+    { title: "The whole job, priced", challenge: "quiz" },
+  ] },
+  { id: "cordic", num: 68, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals"], recap: {"checks":3}, steps: [
+    { title: "A rotation is four multiplications", challenge: "quiz" },
+    { title: "One way or the other", challenge: "quiz" },
+    { title: "The gain nobody can avoid", challenge: "quiz" },
+    { title: "A stage is three adders", challenge: "reach" },
+    { title: "Run it backwards", challenge: "quiz" },
+    { title: "What the words buy", challenge: "quiz" },
+    { title: "Against a table", challenge: "quiz" },
+  ] },
+  { id: "appendix-6502", num: 69, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -779,14 +799,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 68, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 70, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 69, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 71, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -799,7 +819,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 70, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 72, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },

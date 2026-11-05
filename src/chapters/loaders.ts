@@ -76,6 +76,8 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "cellular": () => import('./ch-comm-cellular').then((m) => m.chCellular),
   "datacentre": () => import('./ch-comm-dc').then((m) => m.chDatacentre),
   "bench": () => import('./ch-comm-bench').then((m) => m.chBench),
+  "multirate": () => import('./ch-dsp-multirate').then((m) => m.chMultirate),
+  "cordic": () => import('./ch-dsp-cordic').then((m) => m.chCordic),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),

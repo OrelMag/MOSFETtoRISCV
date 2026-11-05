@@ -75,6 +75,8 @@ const BOOK = [
   'cellular',
   'datacentre',
   'bench',
+  'multirate',
+  'cordic',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

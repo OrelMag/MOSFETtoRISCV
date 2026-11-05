@@ -68,7 +68,21 @@ def zplane():
     return {'fs': fs, 'x': r(x), 'filters': rows, 'convolve': {'x': u, 'h': v, 'y': r(np.convolve(u, v))}}
 
 
-GENERATORS = {'zplane': zplane}
+def multirate():
+    x = noise(97, 777)
+    rows = []
+    for up, down, n, cut in [(1, 2, 21, 0.45), (1, 4, 33, 0.22), (3, 2, 31, 0.3), (2, 3, 25, 0.3), (5, 1, 41, 0.18)]:
+        h = signal.firwin(n, cut)
+        rows.append({
+            'up': up, 'down': down, 'h': r(h), 'x': r(x),
+            'upfirdn': r(signal.upfirdn(h, x, up, down)),
+            'resample_poly': r(signal.resample_poly(x, up, down, window=h)),
+        })
+    # Hogenauer 1981 gives the growth as N log2(R M) bits; computed here, not read from the paper.
+    return {'cases': rows, 'hogenauer': {'N': 4, 'R': 16, 'bits': int(np.ceil(4 * np.log2(16)))}}
+
+
+GENERATORS = {'zplane': zplane, 'multirate': multirate}
 
 
 def stamp(data):
