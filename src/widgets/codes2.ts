@@ -5,7 +5,6 @@ import { codingGain, convSoftBound, shannonBinaryDb, shannonDb, uncodedBer, rsCu
 import { CONV_K7 } from '../comm/conv';
 import { becThreshold, Bp, concatRate, concatTrial, deBecStep, ebn0OfSigma, erasures, ldpcTrial, peel, regularCode, type BpKind, type Tanner } from '../comm/ldpc';
 import { RS_PHASE, RS_PHASE_NAMES, RsRtl, rsLatency } from '../comm/rsrtl';
-import { rsDecode } from '../comm/rs';
 import { rsDecoder } from '../lib/rsdec';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -81,11 +80,11 @@ function rsDecPanel(): ScenePanel {
       const c = model.comb(0);
       status.replaceChildren(h('span', null, `clock ${t} of ${LAT}`), h('span', null, `δ ${hex2(c.delta)}`), h('span', null, `roots found ${roots}`), run ? h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model') : '');
       if (model.phase !== RS_PHASE.DONE || !run) { verdict.className = 'err-verdict'; verdict.textContent = model.phase === RS_PHASE.RX ? `Press Decode to clock the word through, or a phase at a time. ${hits} byte${hits === 1 ? '' : 's'} hit.` : `In ${RS_PHASE_NAMES[model.phase]}.`; return; }
-      const fail = Number(stage.value('fail')) === 1, right = out.every((v, i) => v === CW[i]), soft = rsDecode(rsWordHit(run - 1), NSYM);
+      const fail = Number(stage.value('fail')) === 1, right = out.every((v, i) => v === CW[i]);
       verdict.className = `err-verdict ${!fail && right ? 'ok' : 'bad'}`;
       verdict.textContent = fail
-        ? `${run - 1} bytes hit, more than t = 5. The locator's roots do not number its degree, so the decoder raises fail. The bytes have already gone out, as they were: a stream cannot be recalled, which is why fail matters. The software decoder agrees${soft.word === null ? '' : ' not'}: it also refuses.`
-        : right ? `${run - 1} byte${run === 2 ? '' : 's'} hit, whatever the bits in them. All corrected in ${LAT} clocks, with no flag raised.`
+        ? `${run - 1} bytes hit, more than t = 5. The locator's roots do not number its degree, so the decoder raises fail. The bytes have already gone out, as they were: a stream cannot be recalled, which is why fail matters.`
+        : run === 1 ? `A clean word: every syndrome is 0, the locator stays 1, and the bytes pass untouched, ${LAT} clocks later.` : right ? `${run - 1} byte${run === 2 ? '' : 's'} hit, whatever the bits in them. All corrected in ${LAT} clocks, with no flag raised.`
           : `${run - 1} bytes hit, and the decoder landed on a different code word without raising fail: a miscorrection, the case only a CRC above it can catch.`;
     };
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel cd-rs', 'data-dock': 'right', 'data-phone': 'flow' },
