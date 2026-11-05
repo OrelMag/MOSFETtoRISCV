@@ -202,7 +202,6 @@ export function coherentWidget(): Widget {
   paint();
   return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'dram-ops' }, box('Undo the dispersion', comp, (v) => { comp = v; }), box('Track the carrier phase', track, (v) => { track = v; })), plot, out, h('p', { class: 'sub' }, 'QPSK at 32 GBd, one polarization, simulated sample by sample at 2 samples a symbol. A model: no optics, an already known clock.')) };
 }
-export const coherentApi = 'coherent';
 
 // ---- the ocean --------------------------------------------------------------------------------------------------------------------------
 export function oceanWidget(): Widget {
@@ -232,5 +231,5 @@ export function oceanWidget(): Widget {
   const c = slider('Launch power', -10, 10, 0.5, p, (v) => `${v} dBm`, (v) => { p = v; paint(); });
   const d = slider('Noise figure', 3, 8, 0.5, nfdb, (v) => `${v} dB`, (v) => { nfdb = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'dram-ops' }, sel), h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'mos-row' }, d.el), plot, out, h('p', { class: 'sub' }, 'The Gaussian-noise model with an illustrative fibre coefficient: dashed-free line for amplifier noise alone, bold for the Kerr effect too. The dot is your launch power, the ring the best.')) };
+  return { el: h('div', { class: 'widget mos gl-w' }, h('div', { class: 'dram-ops' }, sel), h('div', { class: 'mos-row' }, a.el), h('div', { class: 'mos-row' }, b.el), h('div', { class: 'mos-row' }, c.el), h('div', { class: 'mos-row' }, d.el), plot, out, h('p', { class: 'sub' }, 'The Gaussian-noise model with an illustrative fibre coefficient: thin line for amplifier noise alone, bold for the Kerr effect too. The small dot is your launch power, the green one the best.')) };
 }
