@@ -17,6 +17,9 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const ONE = 2 ** 14;
 const VIEW: CordicSpec = { w: 18, z: 16, n: 14 };
 
+/** A circle has to look like one, so this plot keeps its own width rather than the panel's. */
+const squarePlot = (aria: string) => { const p = plotOf({ W: 340, H: 340, x: [-1.8, 1.8], y: [-1.8, 1.8], yTicks: [-1, 0, 1], xLabel: 'x', yLabel: 'y', aria }); (p.el as HTMLElement).style.maxWidth = '380px'; return p; };
+
 /** The unit circle, the axes, and a path of vectors from the origin, the last one bold. */
 function drawPath(p: ReturnType<typeof plotOf>, pts: { x: number; y: number }[]) {
   p.clear();
@@ -32,7 +35,7 @@ function drawPath(p: ReturnType<typeof plotOf>, pts: { x: number; y: number }[])
 
 export function rotateWidget(): Widget {
   let deg = 37, k = 4, fromK = true;
-  const plot = plotOf({ W: 340, H: 340, x: [-1.8, 1.8], y: [-1.8, 1.8], yTicks: [-1, 0, 1], xLabel: 'x', yLabel: 'y', aria: 'A vector being turned toward an angle, one stage at a time, on the unit circle' });
+  const plot = squarePlot('A vector being turned toward an angle, one stage at a time, on the unit circle');
   const chips = mkChips(4);
   const paint = () => {
     const z = Math.round((deg / 360) * 2 ** VIEW.z);
@@ -56,7 +59,7 @@ export function rotateWidget(): Widget {
 
 export function vectorWidget(): Widget {
   let px = -0.5, py = 0.45;
-  const plot = plotOf({ W: 340, H: 340, x: [-1.8, 1.8], y: [-1.8, 1.8], yTicks: [-1, 0, 1], xLabel: 'x', yLabel: 'y', aria: 'A vector being turned onto the x axis, with its angle added up on the way' });
+  const plot = squarePlot('A vector being turned onto the x axis, with its angle added up on the way');
   const chips = mkChips(4);
   const paint = () => {
     const x = Math.round(px * ONE), y = Math.round(py * ONE), path = cordicPath({ x, y, z: 0 }, VIEW, 'vector'), end = path[path.length - 1];
