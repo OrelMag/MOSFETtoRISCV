@@ -930,6 +930,30 @@ class Tab {
 
   /** Loaded, no request for 500 ms, then two frames and `dwell` ms for work scheduled after them. */
   private async settle(t0: number): Promise<void> {
+    await this.quiet(t0);
+    // The route still loading: its skeleton (index.html's shell, app.ts loadingPanel) has no text, and no request need be open while its
+    // chunks are being taken up. Wait it out, then for what the page asks for once it is mounted. One stuck for good still fails, by name.
+    const mounted = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('#view .route-loading')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: mounted, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('the page never left its loading skeleton'); }),
+    ]);
+    await this.quiet(t0);
+    // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
+    const built = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.stage[aria-busy]')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
+    ]);
+    const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: idle, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the page never became idle'); }),
+    ]);
+  }
+
+  /** The load event, and no request open for 500 ms. */
+  private async quiet(t0: number): Promise<void> {
     let checked = 0;
     while (!this.loaded || this.inflight.size || Date.now() - this.lastNet < 500) {
       // A request the page has finished (a Resource Timing entry with a response end exists only once it is done) that CDP never
@@ -942,17 +966,6 @@ class Tab {
       if (Date.now() - t0 > routeTimeout) throw new Error(`timeout: ${this.loaded ? `${this.inflight.size} requests pending (${[...this.inflight.values()][0]})` : 'no load event'}${await this.diagnose()}`);
       await sleep(50);
     }
-    // a big scene is built in slices now (Stage.load: aria-busy on its stage): wait for it as the one-piece build was
-    const built = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.stage[aria-busy]')) { clearInterval(t); r(); } }, 50); })`;
-    await Promise.race([
-      this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
-      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
-    ]);
-    const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
-    await Promise.race([
-      this.send('Runtime.evaluate', { expression: idle, awaitPromise: true }),
-      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the page never became idle'); }),
-    ]);
   }
 }
 
@@ -980,9 +993,7 @@ async function startPreview(): Promise<{ url: string; close(): Promise<void> }> 
 
 // ---- main ------------------------------------------------------------------------------------
 
-// An empty page is here too: the print route (one fresh load in dozens, runner and laptop alike) was seen with nothing mounted yet
-// when checked. A page that is really empty stays empty on the second visit.
-const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed|^page: the main view is empty$|^drive: no print view$/;
+const TRANSIENT = /Failed to fetch dynamically imported module|^timeout: |^request failed/;
 const MAX_RETRIES = 20;
 
 async function main(): Promise<number> {
