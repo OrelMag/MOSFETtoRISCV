@@ -17,7 +17,10 @@
   --en-forward: light-dark(#d8560f, #ff8a3c);
   --en-back: light-dark(#0e7fbf, #4fbcf2);
   --en-cable: light-dark(#141317, #1a191d);
-  --en-cotton: light-dark(#a58a52, #a58a52);
+  --en-cotton: light-dark(#8a4b2a, #94512e);
+  --en-loom: light-dark(#b0653a, #c47748);
+  --en-wire-key: light-dark(#6e7f3a, #93a650);
+  --en-wire-lamp: light-dark(#7a6a9a, #a290c8);
 }
 .en .r3 { grid-template-columns: minmax(0, 1fr); }
 .en .r3-stage { aspect-ratio: 16 / 11; max-height: 640px; }

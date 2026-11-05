@@ -2,7 +2,7 @@
 // Project in 2006, and in the boat's war diary), and the three-rotor machine the M4 had to stay compatible with.
 import { describe, expect, it } from 'vitest';
 import {
-  chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, letterOf, NOTCH_OFFSET, plugMap, REFLECTORS, ROTORS, SOCKET_ROWS, socketOf, stepPeriod, U264, WIDE_REFLECTORS,
+  chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, letterOf, NOTCH_OFFSET, plugMap, REFLECTORS, ROTORS, SOCKET_ROWS, socketOf, stepPeriod, U264, UKWD_RING, UKWD_SAMPLE, ukwdWiring, WIDE_REFLECTORS,
   type EnigmaSettings, type RotorName,
 } from '../src/crypto/enigma';
 
@@ -70,6 +70,38 @@ describe('compatibility with the three-rotor machine', () => {
     const m = (greek: 'beta' | 'gamma', reflector: 'b' | 'c') => new Enigma({ ...DEFAULT_SETTINGS, greek, reflector }).run('AAAAAAAAAA');
     expect(m('beta', 'c')).not.toBe(m('beta', 'b'));
     expect(m('gamma', 'b')).not.toBe(m('gamma', 'c'));
+  });
+});
+
+describe('UKW-D', () => {
+  it('its ring has 24 letters, no J and no Y, and the two gaps are B and O', () => {
+    expect(UKWD_RING.replace(/-/g, '').length).toBe(24);
+    expect(UKWD_RING).not.toMatch(/[JY]/);
+    expect([...UKWD_RING].map((c, i) => (c === '-' ? chr(i) : '')).join('')).toBe('BO');
+  });
+  it('twelve pairs and the fixed one make a reflector', () => {
+    const w = ukwdWiring(UKWD_SAMPLE);
+    [...w].forEach((c, i) => { expect(idx(c)).not.toBe(i); expect(idx(w[idx(c)])).toBe(i); });
+    expect(w[idx('B')]).toBe('O');
+  });
+  it('reads the German letters through the ring: German Z is Bletchley C, German B is Bletchley Z', () => {
+    expect(ukwdWiring(UKWD_SAMPLE)[idx('A')]).toBe('C'); // the sample's first pair is A–Z
+    expect(ukwdWiring('BA CZ DX EV FU GT HS IR KQ LO MN PW')[idx('Z')]).toBe('A');
+  });
+  it('turns the M4 into the three-wheel machine: it fills the Greek wheel’s place', () => {
+    const r = rng(3);
+    for (let n = 0; n < 60; n++) {
+      const c = randomCase(r);
+      const m4 = new Enigma({ reflector: 'D', dPairs: UKWD_SAMPLE, greek: 'beta', rotors: c.rotors, rings: `A${c.rings}`, start: `Q${c.start}`, plugs: c.plugs });
+      expect(m4.run(c.text)).toBe(wide(ukwdWiring(UKWD_SAMPLE), c.rotors, c.rings, c.start, c.plugs, c.text));
+      expect(m4.windows()[0]).toBe('D');
+    }
+  });
+  it('refuses a J, a Y, a socket used twice and a short list', () => {
+    expect(() => ukwdWiring('JA CZ DX EV FU GT HS IR KQ LO MN PW')).toThrow();
+    expect(() => ukwdWiring('YA CZ DX EV FU GT HS IR KQ LO MN PW')).toThrow();
+    expect(() => ukwdWiring('AB AC DX EV FU GT HS IR KQ LO MN PW')).toThrow();
+    expect(() => ukwdWiring('AB')).toThrow();
   });
 });
 

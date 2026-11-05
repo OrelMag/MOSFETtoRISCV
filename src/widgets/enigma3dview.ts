@@ -6,14 +6,15 @@ import '../styles/enigma3d.css';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import { chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, plugMap, REFLECTORS, ROTORS, socketOf, U264, type EnigmaSettings, type GreekName, type Moved, type ReflectorName, type RotorName, type Trace } from '../crypto/enigma';
+import { chr, DEFAULT_SETTINGS, Enigma, GREEK, idx, KEY_ROWS, plugMap, REFLECTORS, ROTORS, socketOf, U264, UKWD_SAMPLE, ukwdWiring, type EnigmaSettings, type GreekName, type Moved, type ReflectorName, type RotorName, type Trace } from '../crypto/enigma';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
-import { enigmaAnchors, enigmaParts, type EnigmaPalette, type EnigmaPose } from './enigma3dparts';
+import type { EnigmaPalette, EnigmaPose } from './enigma3dparts';
+import { enigmaAnchors, enigmaParts } from './enigma3dmachine';
 
 type Openness = Pick<EnigmaPose, 'lid' | 'cover' | 'flap' | 'lamps' | 'out'>;
-interface View { id: string; label: string; pose: Openness; camera: OrbitView; ghost?: boolean }
+interface View { id: string; label: string; pose: Openness; camera: OrbitView; ghost?: boolean; inside?: boolean; bare?: boolean; box?: boolean; printer?: boolean }
 
 const VIEWS: View[] = [
   { id: 'shut', label: 'Case shut', pose: { lid: 0, cover: 0, flap: 0, lamps: 0, out: 0 }, camera: { target: [0, 70, 0], yaw: 0.6, pitch: 0.46, dist: 1050 } },
@@ -22,7 +23,10 @@ const VIEWS: View[] = [
   { id: 'wheels', label: 'Wheels', pose: { lid: 1, cover: 1, flap: 0, lamps: 0, out: 0 }, camera: { target: [-20, 80, -70], yaw: 0.1, pitch: 1.12, dist: 500 } },
   { id: 'lamps', label: 'Bulbs', pose: { lid: 1, cover: 1, flap: 0, lamps: 1, out: 0 }, camera: { target: [50, 80, -20], yaw: 0.4, pitch: 0.85, dist: 760 } },
   { id: 'out', label: 'Stack out', pose: { lid: 1, cover: 1, flap: 0, lamps: 0, out: 1 }, camera: { target: [-15, 180, -84], yaw: 0.3, pitch: 0.3, dist: 680 } },
-  { id: 'path', label: 'The current', pose: { lid: 1, cover: 1, flap: 1, lamps: 0, out: 0 }, camera: { target: [-20, 60, -55], yaw: 0.08, pitch: 1.38, dist: 480 }, ghost: true },
+  { id: 'inside', label: 'Inside', pose: { lid: 1, cover: 1, flap: 1, lamps: 1, out: 0 }, camera: { target: [20, 40, 20], yaw: 1.0, pitch: 0.42, dist: 640 }, inside: true, bare: true },
+  { id: 'path', label: 'The current', pose: { lid: 1, cover: 1, flap: 1, lamps: 0, out: 0 }, camera: { target: [0, 45, -10], yaw: 0.72, pitch: 0.62, dist: 680 }, ghost: true, inside: true, bare: true },
+  { id: 'box', label: 'Spare wheels', pose: { lid: 1, cover: 0, flap: 0, lamps: 0, out: 0 }, camera: { target: [-200, 90, 20], yaw: -0.25, pitch: 0.62, dist: 900 }, box: true },
+  { id: 'printer', label: 'Schreibmax', pose: { lid: 0, cover: 0, flap: 1, lamps: 0, out: 0 }, camera: { target: [20, 120, 0], yaw: -0.6, pitch: 0.46, dist: 1050 }, printer: true },
 ];
 
 const STROKE_MS = 170, HOLD_MS = 330, OPEN_RATE = 1.6;
@@ -52,7 +56,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     aria: 'The German navy’s four-wheel Enigma M4 in 3D: wooden case, keyboard, lamps, plugboard and rotor stack',
     camera: opts.camera ?? view.camera,
     limits: { minDist: 90, maxDist: 2600 },
-    note: 'Proportions measured from photographs. The wires below the deck and the stepping link are schematic; the current’s contacts on the wheels are computed (out in orange, back in blue).',
+    note: 'Proportions measured from photographs; sizes of the switches, box and printer estimated from theirs. The wires’ courses are drawn, their connections are the machine’s (out in orange, back in blue).',
     draw: () => paint(),
   });
 
@@ -61,9 +65,10 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
     steel: stage.rgb('--en-steel'), brass: stage.rgb('--en-brass'), bakelite: stage.rgb('--en-bakelite'), ivory: stage.rgb('--en-ivory'), red: stage.rgb('--en-red'),
     paper: stage.rgb('--en-paper'), glass: stage.rgb('--en-glass'), lampOn: stage.rgb('--en-lamp'), lampLetter: stage.rgb('--en-letter'), forward: stage.rgb('--en-forward'),
     back: stage.rgb('--en-back'), cable: stage.rgb('--en-cable'), cotton: stage.rgb('--en-cotton'),
+    loom: stage.rgb('--en-loom'), wireKey: stage.rgb('--en-wire-key'), wireLamp: stage.rgb('--en-wire-lamp'),
   });
   const pose = (): EnigmaPose => ({
-    settings, pos: shown, ...open, ghost: !!view.ghost, key, lit, stroke, pawls: machine.pawls(), trace: view.ghost ? trace : null, lite: stage.isFlat(),
+    settings, pos: shown, ...open, ghost: !!view.ghost, inside: !!view.inside, bare: !!view.bare, box: !!view.box, printer: !!view.printer, tape: lamps, key, lit, stroke, pawls: machine.pawls(), trace: view.ghost ? trace : null, lite: stage.isFlat(),
   });
   function paint(): void { const p = pose(); stage.paint(enigmaParts(p, palette()), enigmaAnchors(p)); }
 
@@ -72,14 +77,14 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   stage.chips.append(chip);
   function readout(): void {
     const w = machine.windows(), m: Moved = machine.nextMoves();
-    chip.textContent = lit ? `${key} lights ${lit}` : `Windows ${w}`;
+    chip.textContent = lit ? (view.printer ? `${key} prints ${lit}` : `${key} lights ${lit}`) : `Windows ${w}`;
     chip.className = `r3-chip ${lit ? 'good' : ''}`;
     const will = m[0] ? 'left, middle and right' : m[1] ? 'middle and right' : 'right only';
     const rows: [string, string][] = [
       ['Windows', w],
       ['Rings', settings.rings],
-      ['Wheels', `${settings.greek === 'beta' ? 'β' : 'γ'} ${settings.rotors.join(' ')}`],
-      ['Reflector', `thin ${settings.reflector}`],
+      ['Wheels', `${settings.reflector === 'D' ? '' : settings.greek === 'beta' ? 'β ' : 'γ '}${settings.rotors.join(' ')}`],
+      ['Reflector', settings.reflector === 'D' ? 'UKW-D, rewirable' : `thin ${settings.reflector}`],
       ['Next press moves', will],
       ['Plugs, by socket number', settings.plugs ? settings.plugs.split(/\s+/).map((p) => `${socketOf(p[0])}/${socketOf(p[1])}`).join(' ') : 'none'],
     ];
@@ -196,7 +201,7 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   };
   const ALL = Object.keys(ROTORS) as RotorName[];
   const sets: Record<'reflector' | 'greek' | 'w0' | 'w1' | 'w2', HTMLSelectElement> = {
-    reflector: pick('Reflector', Object.keys(REFLECTORS) as ReflectorName[], settings.reflector, () => apply()),
+    reflector: pick('Reflector', [...Object.keys(REFLECTORS), 'D'] as ReflectorName[], settings.reflector, () => apply()),
     greek: pick('Greek wheel', Object.keys(GREEK) as GreekName[], settings.greek, () => apply()),
     w0: pick('Left wheel', ALL, settings.rotors[0], () => apply()),
     w1: pick('Middle wheel', ALL, settings.rotors[1], () => apply()),
@@ -205,26 +210,31 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
   const ringIn = h('input', { type: 'text', maxlength: 4, 'aria-label': 'Ring settings, Greek wheel first', value: settings.rings }) as HTMLInputElement;
   const startIn = h('input', { type: 'text', maxlength: 4, 'aria-label': 'Window letters, Greek wheel first', value: settings.start }) as HTMLInputElement;
   const plugIn = h('input', { type: 'text', 'aria-label': 'Plug pairs', value: settings.plugs }) as HTMLInputElement;
+  const dIn = h('input', { type: 'text', 'aria-label': 'UKW-D’s twelve pairs, in its own letters', value: settings.dPairs ?? UKWD_SAMPLE }) as HTMLInputElement;
+  const dRow = [h('span', null, 'UKW-D pairs'), dIn];
   const err = h('p', { class: 'en-err' });
-  for (const i of [ringIn, startIn, plugIn]) i.addEventListener('change', () => apply());
+  for (const i of [ringIn, startIn, plugIn, dIn]) i.addEventListener('change', () => apply());
 
   function restart(s: EnigmaSettings, keepFeed = false): void {
     settings = s; machine = new Enigma(s); shown = [...machine.pos]; trace = null; key = null; lit = null; typed = ''; lamps = ''; stroke = 0; strokeDir = 0; hold = 0;
     if (!keepFeed) { feed = ''; fed = 0; autoplay = 0; }
     sets.reflector.value = s.reflector; sets.greek.value = s.greek; sets.w0.value = s.rotors[0]; sets.w1.value = s.rotors[1]; sets.w2.value = s.rotors[2];
-    ringIn.value = s.rings; startIn.value = s.start; plugIn.value = s.plugs;
+    ringIn.value = s.rings; startIn.value = s.start; plugIn.value = s.plugs; dIn.value = s.dPairs ?? UKWD_SAMPLE;
+    const d = s.reflector === 'D';
+    sets.greek.disabled = d;
+    dRow.forEach((e) => { e.hidden = !d; });
     readout(); paint();
   }
   function apply(): void {
     const s: EnigmaSettings = {
       reflector: sets.reflector.value as ReflectorName, greek: sets.greek.value as GreekName,
       rotors: [sets.w0.value as RotorName, sets.w1.value as RotorName, sets.w2.value as RotorName],
-      rings: ringIn.value.toUpperCase(), start: startIn.value.toUpperCase(), plugs: plugIn.value.toUpperCase().trim(),
+      rings: ringIn.value.toUpperCase(), start: startIn.value.toUpperCase(), plugs: plugIn.value.toUpperCase().trim(), dPairs: dIn.value.toUpperCase().trim(),
     };
     err.textContent = '';
     if (new Set(s.rotors).size !== 3) { err.textContent = 'A wheel can only be fitted once.'; return; }
     if (!/^[A-Z]{4}$/.test(s.rings) || !/^[A-Z]{4}$/.test(s.start)) { err.textContent = 'Rings and windows are four letters each, Greek wheel first.'; return; }
-    try { plugMap(s.plugs); } catch (e) { err.textContent = (e as Error).message; return; }
+    try { plugMap(s.plugs); if (s.reflector === 'D') ukwdWiring(s.dPairs ?? ''); } catch (e) { err.textContent = (e as Error).message; return; }
     restart(s);
   }
 
@@ -259,10 +269,11 @@ export function enigmaView(opts: EnigmaViewOptions = {}): Widget {
           h('span', null, 'Wheels'), h('div', { class: 'en-wheels' }, sets.w0, sets.w1, sets.w2),
           h('span', null, 'Rings'), ringIn,
           h('span', null, 'Windows'), startIn,
-          h('span', null, 'Plugs'), plugIn),
+          h('span', null, 'Plugs'), plugIn, ...dRow),
         err,
         h('div', { class: 'r3-btns' }, u264, next, play),
         h('div', { class: 'r3-btns', style: 'margin-top:6px' }, reset, nudge))));
+  dRow.forEach((e) => { e.hidden = settings.reflector !== 'D'; });
   readout();
   paint();
   return { el: panel, destroy() { loop.stop(); stage.destroy(); } };

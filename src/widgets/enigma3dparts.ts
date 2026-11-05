@@ -9,8 +9,8 @@
 
 import type { RGB, RGBA } from '../gl/instances';
 import { quatAxisAngle, quatMul, quatRotate, QUAT_ID, type Quat, type Vec3 } from '../gl/math';
-import { box, cyl, rod, wire, type Anchor, type Part } from '../gl/parts';
-import { KEY_ROWS, NOTCH_OFFSET, plugMap, ROTORS, SOCKET_ROWS, idx, chr, type EnigmaSettings, type Moved, type Trace } from '../crypto/enigma';
+import { box, cyl, rod, wire, type Part } from '../gl/parts';
+import { UKWD_RING, UKWD_SAMPLE, KEY_ROWS, NOTCH_OFFSET, plugMap, ROTORS, SOCKET_ROWS, idx, chr, type EnigmaSettings, type Moved, type Trace } from '../crypto/enigma';
 import { quatFromAxes, strokeText } from './strokefont';
 
 export const CASE_W = 280, CASE_D = 340, CASE_H = 150;
@@ -31,12 +31,16 @@ export const UKW_FACE = -92, ETW_FACE = 19;
 
 const PANEL_FRONT = -40, PANEL_BACK = -158, HINGE_Z = -158;
 const LAMP_Z = [-18, 4, 27], KEY_Z = [58, 80, 102], ROW_X = [-95, -86, -102], KEY_PITCH = 24.25;
-const KEY_TOP = [84, 78, 72], DECK_Y = [62, 56, 50];
-const FACE_Z = 127, SOCKET_Y = [47, 30, 13], SOCKET_X = [-96, -84, -96];
+const KEY_TOP = [84, 78, 72];
+export const DECK_Y = [62, 56, 50];
+export const FACE_Z = 127;
+const SOCKET_Y = [47, 30, 13], SOCKET_X = [-96, -84, -96];
 
 export interface EnigmaPalette {
   wood: RGB; woodDark: RGB; black: RGB; panel: RGB; zinc: RGB; steel: RGB; brass: RGB; bakelite: RGB; ivory: RGB; red: RGB; paper: RGB;
   glass: RGB; lampOn: RGB; lampLetter: RGB; forward: RGB; back: RGB; cable: RGB; cotton: RGB;
+  /** The wires by what they join: socket to entry wheel, key to socket, key to lamp. */
+  loom: RGB; wireKey: RGB; wireLamp: RGB;
 }
 
 export interface EnigmaPose {
@@ -47,7 +51,17 @@ export interface EnigmaPose {
   lid: number; cover: number; flap: number; lamps: number;
   /** Wheels lifted out on the spindle and spread. */
   out: number;
-  /** Wheels made clear with the current through them, lid and rotor cover off (both lift away on the real machine). */
+  /** Lid and rotor cover off (both lift away on the real machine). */
+  bare: boolean;
+  /** The deck off: key switches and wires showing. */
+  inside: boolean;
+  /** The box of spare wheels on the table beside the machine. */
+  box: boolean;
+  /** The Schreibmax on, in place of the lamps and the lid. */
+  printer: boolean;
+  /** What the printer has printed. */
+  tape: string;
+  /** Wheels and lamp cover made clear, with the current through them. */
   ghost: boolean;
   /** The key held, the lamp lit. */
   key: string | null; lit: string | null;
@@ -63,19 +77,19 @@ export interface EnigmaPose {
 const AXIS_X: Vec3 = [1, 0, 0];
 
 /** Turn parts about an axis through `pivot`, in place. */
-function turn(parts: Part[], from: number, pivot: Vec3, q: Quat): void {
+export function turn(parts: Part[], from: number, pivot: Vec3, q: Quat): void {
   for (let i = from; i < parts.length; i++) {
     const p = parts[i], d = quatRotate(q, [p.pos[0] - pivot[0], p.pos[1] - pivot[1], p.pos[2] - pivot[2]]);
     p.pos = [pivot[0] + d[0], pivot[1] + d[1], pivot[2] + d[2]];
     p.rot = quatMul(q, p.rot ?? QUAT_ID);
   }
 }
-function shift(parts: Part[], from: number, by: Vec3): void {
+export function shift(parts: Part[], from: number, by: Vec3): void {
   for (let i = from; i < parts.length; i++) { const p = parts[i]; p.pos = [p.pos[0] + by[0], p.pos[1] + by[1], p.pos[2] + by[2]]; }
 }
 
 /** A disc on the wheels' axle, its local origin the axle's height and depth. */
-const disc = (c: RGB | RGBA, x0: number, x1: number, r: number, spec = 0, y = 0, z = 0): Part => rod(c, [x0, y, z], [x1, y, z], r, spec);
+export const disc = (c: RGB | RGBA, x0: number, x1: number, r: number, spec = 0, y = 0, z = 0): Part => rod(c, [x0, y, z], [x1, y, z], r, spec);
 /** A point at radius r, angle φ round the axle (local). */
 const round = (x: number, r: number, phi: number): Vec3 => [x, r * Math.cos(phi), r * Math.sin(phi)];
 /** A box standing on the axle's radius at φ: dx along the axle, dr radially, dt along the rim. */
@@ -85,7 +99,7 @@ function radial(c: RGB, x: number, r: number, phi: number, dxs: number, dr: numb
 }
 type Hole = [number, number, number, number]; // x0, x1, z0, z1
 /** A flat plate with rectangular holes, as strips between them. */
-function holedPlate(out: Part[], c: RGB, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, holes: readonly Hole[]): void {
+export function holedPlate(out: Part[], c: RGB, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, holes: readonly Hole[]): void {
   const xs = [...new Set([x0, x1, ...holes.flatMap((h) => [h[0], h[1]])])].sort((p, q) => p - q);
   for (let i = 0; i + 1 < xs.length; i++) {
     const a = xs[i], b = xs[i + 1], cuts = holes.filter((h) => h[0] < b && h[1] > a).sort((p, q) => p[2] - q[2]);
@@ -97,7 +111,7 @@ function holedPlate(out: Part[], c: RGB, x0: number, x1: number, y0: number, y1:
 const screw = (out: Part[], c: RGB, x: number, y: number, z: number, r = 1.8) => { out.push(cyl(c, x, z, y, y + 0.5, r, 0.4)); };
 
 /** Grain on a wooden face: thin darker streaks, fixed, proud of the face by a hair. */
-function grain(out: Part[], c: RGB, fn: (t: number, a: number, b: number) => Part, n: number, seed: number): void {
+export function grain(out: Part[], c: RGB, fn: (t: number, a: number, b: number) => Part, n: number, seed: number): void {
   let x = seed;
   const r = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return (x >>> 8) / 16777216; };
   for (let i = 0; i < n; i++) { const a = r() * 0.55, part = fn((i + r()) / n, a, a + 0.15 + r() * 0.3); part.color = c; part.scale = part.scale!.map((v) => (v === 0.5 || v === 0.6 ? v * 3 : v)) as Vec3; out.push(part); }
@@ -159,7 +173,7 @@ function coreParts(out: Part[], kind: 'wheel' | 'greek', name: string, P: Enigma
 }
 
 /** A wheel's rim and core around their own axle, at a window position; returns nothing, appends. */
-function wheelParts(out: Part[], slot: 0 | 1 | 2 | 3, at: Vec3, pos: number, ring: number, name: string, notches: string, P: EnigmaPalette, lite: boolean): void {
+export function wheelParts(out: Part[], slot: 0 | 1 | 2 | 3, at: Vec3, pos: number, ring: number, name: string, notches: string, P: EnigmaPalette, lite: boolean): void {
   const kind = slot === 0 ? 'greek' : 'wheel', c0 = out.length;
   coreParts(out, kind, name, P, lite);
   turn(out, c0, [0, 0, 0], quatAxisAngle(AXIS_X, (pos - ring) * PITCH));
@@ -185,24 +199,28 @@ export const notchPhi = (letter: string, window: number): number => WINDOW_PHI +
 export const samePhi = (a: number, b: number): boolean => { const d = (a - b) / (2 * Math.PI); return Math.abs(d - Math.round(d)) < 1e-9; };
 
 /** See through what was just drawn: the current runs inside it. */
-function clear(parts: Part[], from: number, alpha: number): void {
+export function clear(parts: Part[], from: number, alpha: number): void {
   for (let i = from; i < parts.length; i++) { const c = parts[i].color; parts[i].color = [c[0], c[1], c[2], Math.min((c as RGBA)[3] ?? 1, alpha)]; }
 }
 
-function stackParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function stackParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const s0 = out.length;
   const lift = stackLift(p.out), sx = (x: number) => stackX(x, p.out), s = p.settings, lite = !!p.lite;
   const rings = [...s.rings.toUpperCase()].map(idx);
   const names = [s.greek, ...s.rotors];
+  const d = s.reflector === 'D';
   for (const i of [0, 1, 2, 3] as const) {
+    if (d && i === 0) continue;
     const notches = i === 0 ? '' : ROTORS[s.rotors[i - 1]].notch;
     const label = i === 0 ? GREEK_GLYPH[s.greek] : NUMERAL[names[i]];
     wheelParts(out, i, [sx(RIM_X[i]), AX_Y + lift, AX_Z], p.pos[i], rings[i], label, notches, P, lite);
   }
+  // UKW-D: a zinc-plated brass shell filling the place of both, 'Oben' and a red D on top where the leftmost window reads it.
+  if (d) ukwdParts(out, sx, lift, p, P);
   // The thin reflector: reddish-brown bakelite with a lug, an index pin and flat contacts; it never turns.
   const u0 = out.length, ux = sx(-98), ukw = P.bakelite;
-  out.push(disc(ukw, -6, 6, 36.5, 0.25));
-  {
+  if (!d) {
+    out.push(disc(ukw, -6, 6, 36.5, 0.25));
     out.push(disc(P.black, 6, 6.2, 34, 0.1));
     if (!lite) for (let j = 0; j < 26; j++) out.push(rod(P.brass, round(6.2, CONTACT_R, -j * PITCH), round(6.4, CONTACT_R, -j * PITCH), 1.9, 0.5));
     out.push(box(ukw, -6, 6, 26, 36.8, -16, 8, 0.25), box(P.black, -7.2, 7.2, -41, -32, -5, 5, 0.1));
@@ -227,18 +245,49 @@ function stackParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   }
   out.push(cyl(P.steel, -114, AX_Z - 36, 62, 92, 2.2, 0.4), cyl(P.steel, -114, AX_Z - 36, 92, 97, 4.2, 0.4));
   out.push(rod(P.steel, [-114, 76, AX_Z - 36], [-110, 70, AX_Z - 8], 2.4, 0.3));
-  // The entry wheel's loom.
-  out.push(...wire(P.cotton, [[30, AX_Y - 34, AX_Z + 20], [30, 12, AX_Z + 42], [30, 9, -10]], 3.4));
+  // The entry wheel's loom, until the deck comes off and shows where it goes.
+  if (!p.inside && !p.lamps) out.push(...wire(P.cotton, [[30, AX_Y - 34, AX_Z + 20], [30, 12, AX_Z + 42], [30, 9, -10]], 3.4));
 }
 
 // ---------------------------------------------------------------- pawls
 
 /** The pawl of slot 1..3 sits where its wheel's ratchet meets the next wheel's lip. */
+/** UKW-D's body, its core drawn out of the shell when the stack is lifted: the 24 lettered sockets and the day's cables. */
+function ukwdParts(out: Part[], sx: (x: number) => number, lift: number, p: EnigmaPose, P: EnigmaPalette): void {
+  const x0 = sx(-108), x1 = sx(-64), s0 = out.length, shell: RGB = P.steel;
+  out.push(rod(shell, [x0, 0, 0], [x1 - 3, 0, 0], RIM_R - 0.5, 0.2), rod(P.brass, [x1 - 3, 0, 0], [x1 - 1, 0, 0], RIM_R - 0.2, 0.5), rod(P.black, [x1 - 1, 0, 0], [x1, 0, 0], 33, 0.15));
+  out.push(box(shell, x0, x0 + 12, -RIM_R - 3, -RIM_R + 8, -12, 12, 0.2), rod(P.brass, [x0 + 36, 0, RIM_R - 8], [x0 + 38, 0, RIM_R - 8], 0));
+  for (let j = 0; j < 26; j++) out.push(rod(P.brass, round(x1, CONTACT_R, -j * PITCH), round(x1 + 0.4, CONTACT_R, -j * PITCH), 1.9, 0.5));
+  // Read in the leftmost window, right under the plate.
+  const mid = RIM_X[0], winZ = RIM_R * Math.sin(WINDOW_PHI), yt = RIM_R * Math.cos(WINDOW_PHI) + 0.1;
+  out.push(box(P.ivory, mid + (x0 - sx(-108)) - 5, mid + (x0 - sx(-108)) + 5, yt - 0.3, yt, winZ - 5.2, winZ + 5.2));
+  strokeText(out, 'D', [mid + (x0 - sx(-108)), yt + 0.02, winZ], [1, 0, 0], [0, 0, -1], { size: 6.4, color: P.red, weight: 1.1 });
+  strokeText(out, 'OBEN', [x0 + 17, RIM_R, -8], [1, 0, 0], [0, 0, -1], { size: 4, color: P.ivory, weight: 0.7 });
+  shift(out, s0, [0, AX_Y + lift, AX_Z]);
+  if (p.out < 0.5) return;
+  // The core, out of its shell: a black ring of 24 letters, sockets on the rim's near side, plugs into them.
+  const c0 = out.length, core = sx(-108) - 60;
+  out.push(rod(P.black, [-10, 0, 0], [10, 0, 0], 33, 0.2));
+  [...UKWD_RING].forEach((g, j) => {
+    const phi = WINDOW_PHI - j * PITCH, n: Vec3 = [0, Math.cos(phi), Math.sin(phi)], b: Vec3 = [0, Math.sin(phi), -Math.cos(phi)];
+    if (g !== '-') strokeText(out, g, [2, n[1] * 33.1, n[2] * 33.1], [1, 0, 0], b, { size: 5, color: P.ivory, weight: 0.8 });
+    if (g !== '-') out.push(rod(P.brass, round(-10, 27, phi), round(-16, 27, phi), 1.8, 0.5));
+  });
+  const pairs = ((p.settings.dPairs ?? UKWD_SAMPLE).toUpperCase().split(/\s+/)).filter(Boolean);
+  for (const q of pairs) {
+    const A = UKWD_RING.indexOf(q[0]), B = UKWD_RING.indexOf(q[1]);
+    if (A < 0 || B < 0) continue;
+    const a = WINDOW_PHI - A * PITCH, b = WINDOW_PHI - B * PITCH;
+    out.push(...wire(P.cable, [round(-16, 27, a), round(-22, 14, a), round(-22, 14, b), round(-16, 27, b)], 0.5));
+  }
+  shift(out, c0, [core, AX_Y + lift, AX_Z]);
+}
+
 export const pawlX = (slot: 1 | 2 | 3): number => RIM_X[slot] + RATCHET_DX + 1.5;
 /** How far a pawl's tip stands from the axle: down in the teeth, or held out by the next wheel's lip. */
 export const pawlTipR = (down: boolean): number => (down ? RATCHET_R - 1 : LIP_R + 0.9);
 
-function pawlParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function pawlParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   if (p.out > 0.02) return;
   const shaftZ = AX_Z - 52, shaftY = AX_Y + 3;
   out.push(rod(P.steel, [-66, shaftY, shaftZ], [36, shaftY, shaftZ], 2.2, 0.4));
@@ -258,7 +307,7 @@ function pawlParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
 
 // ---------------------------------------------------------------- the top panel and rotor cover
 
-function coverParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function coverParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const c0 = out.length, y0 = PANEL_Y - 1.5, y1 = PANEL_Y, x0 = -128, x1 = 128, z0 = PANEL_BACK, z1 = PANEL_FRONT;
   // Thumbwheel slots, the windows onto the rims and the socket's opening are real holes: the panel is cut around them.
   const slotZ0 = AX_Z - 33.5, slotZ1 = AX_Z + 33.5, hw = 2.6, winZ = AX_Z + RIM_R * Math.sin(WINDOW_PHI), win = 4.75, winL = 5.5;
@@ -290,32 +339,33 @@ function coverParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   out.push(box(P.panel, x0, x1, 86, y0, z1 - 1.5, z1, 0.08));
   // Bottom edge roll.
   out.push(rod(P.panel, [x0, y0 + 0.5, z1], [x1, y0 + 0.5, z1], 1.6, 0.1));
-  if (p.ghost) out.length = c0;
+  if (p.bare) out.length = c0;
   turn(out, c0, [0, PANEL_Y, HINGE_Z], quatAxisAngle(AXIS_X, -p.cover * 1.45));
-  out.push(rod(P.steel, [-128, PANEL_Y, HINGE_Z], [128, PANEL_Y, HINGE_Z], 1.6, 0.5));
+  if (!p.bare) out.push(rod(P.steel, [-128, PANEL_Y, HINGE_Z], [128, PANEL_Y, HINGE_Z], 1.6, 0.5));
   // What stays under the cover at the right: the battery box and the socket's metal frame.
   out.push(box(P.panel, 70, 124, 6, 92, -150, -60, 0.08), box(P.steel, 64, 68, 8, 88, -150, -80, 0.3));
   out.push(box(P.steel, 42, 66, 40, 88, -150, -146, 0.3), box(P.steel, 42, 66, 40, 88, -84, -80, 0.3), box(P.steel, 42, 46, 40, 88, -150, -80, 0.3));
   out.push(box(P.black, 70, 124, 92, 92.6, -150, -60, 0.08), box(P.steel, 88, 96, 92.6, 93.6, -64, -60, 0.3));
   // The 4 V socket's two pins, seen through the panel's opening.
   out.push(rod(P.brass, [55, 86, -107], [65, 86, -107], 2, 0.4), rod(P.brass, [55, 86, -92], [65, 86, -92], 2, 0.4));
-  // The black chassis the stack sits in.
-  out.push(box(P.black, -128, 128, 6, 6.6, -158, 46, 0.1), box(P.black, -128, -125, 6, 96, -158, 46, 0.1), box(P.black, 125, 128, 6, 96, -158, 46, 0.1), box(P.black, -128, 128, 6, 96, -158, -156, 0.1), box(P.black, -128, 128, 6, 62, 44, 46, 0.1));
+  // The black well the stack sits in: the sides belong to the case, and are gone with it (the opened machine has none).
+  out.push(box(P.black, -128, 128, 6, 6.6, -158, 46, 0.1));
+  if (!p.inside) out.push(box(P.black, -128, -125, 6, 96, -158, 46, 0.1), box(P.black, 125, 128, 6, 96, -158, 46, 0.1), box(P.black, -128, 128, 6, 96, -158, -156, 0.1), box(P.black, -128, 128, 6, 62, 44, 46, 0.1));
 }
 
 // ---------------------------------------------------------------- the lamps
 
-function lampParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function lampParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const row = (fn: (letter: string, x: number, z: number) => void) => KEY_ROWS.forEach((r, i) => [...r].forEach((ch, j) => fn(ch, ROW_X[i] + j * KEY_PITCH, LAMP_Z[i])));
   // Bulb plate: stays in the machine when the cover comes off.
   out.push(box(P.zinc, -116, 116, 78, 80, -38, 44, 0.45));
   row((ch, x, z) => {
     const on = p.lit === ch;
     out.push(cyl(P.brass, x, z, 80, 83, 3.6, 0.5));
-    const bulb: Part = cyl(on ? P.lampOn : P.glass, x, z, 83, 89, 4.2, 0.6);
-    if (on) bulb.emissive = P.lampOn;
-    out.push(bulb, cyl(on ? P.lampOn : P.glass, x, z, 89, 91, 2.8, 0.6));
-    if (on) out[out.length - 1].emissive = P.lampOn;
+    // A clear globe with its filament; lit, it is the brightest thing on the machine and lights the plate around it.
+    const g: RGB = on ? P.lampOn : P.glass, globe = (y0: number, y1: number, r: number) => { const q = cyl(g, x, z, y0, y1, r, 0.6); if (on) q.emissive = P.lampOn; out.push(q); };
+    globe(83, 84.4, 3.9); globe(84.4, 87.4, 4.4); globe(87.4, 89.2, 3.8); globe(89.2, 90.4, 2.6);
+    if (on) for (const [r, a] of [[9, 0.34], [13, 0.2], [18, 0.1]] as const) { const pool = cyl([P.lampOn[0], P.lampOn[1], P.lampOn[2], a], x, z, 80, 80.1, r); pool.emissive = [P.lampOn[0] * a, P.lampOn[1] * a, P.lampOn[2] * a * 0.7]; out.push(pool); }
   });
   for (const x of [-112, 110]) out.push(cyl(P.red, x, 4, 80, 80.4, 6), cyl(P.black, x, 4, 80, 80.8, 3.8));
   // The cover: black crackle, 26 windows of letter film, two knurled bolts; lifts off and sets down to the right.
@@ -330,11 +380,15 @@ function lampParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
     if (on) { face.color = [P.lampOn[0] * 0.5, P.lampOn[1] * 0.42, P.lampOn[2] * 0.2]; face.emissive = [P.lampOn[0] * 0.28, P.lampOn[1] * 0.22, P.lampOn[2] * 0.08]; }
     out.push(face);
     strokeText(out, ch, [x, yTop + 0.56, z], [1, 0, 0], [0, 0, -1], { size: 7.2, color: on ? P.lampOn : P.lampLetter, emissive: on ? P.lampOn : undefined, weight: 1.2 });
+    // The bloom through the letter film, spilling past the window's rim.
+    if (on) for (const [r, a] of [[9.5, 0.3], [13, 0.16], [18, 0.07]] as const) { const halo = cyl([P.lampOn[0], P.lampOn[1], P.lampOn[2], a], x, z, yTop + 0.7, yTop + 0.8, r); halo.emissive = [P.lampOn[0] * a, P.lampOn[1] * a, P.lampOn[2] * a * 0.7]; out.push(halo); }
   });
   for (const x of [-122, 122]) {
     out.push(cyl(P.steel, x, 27, yTop, yTop + 2, 5.4, 0.5), cyl(P.red, x, 27, yTop + 2, yTop + 2.3, 3.4), cyl(P.zinc, x, 27, yTop + 2.3, yTop + 2.6, 1.8, 0.4));
     screw(out, P.brass, x, yTop, -30, 1.6);
   }
+  if (p.ghost) { const glow = (q: Part) => q.emissive !== undefined; for (let i = c0; i < out.length; i++) if (!glow(out[i]) && out[i].kind === 'box' && (out[i].scale?.[2] ?? 1) > 1) { const c = out[i].color; out[i].color = [c[0], c[1], c[2], 0.14]; } else if (!glow(out[i]) && out[i].kind === 'cyl') { const c = out[i].color; out[i].color = [c[0], c[1], c[2], 0.32]; } }
+  if (p.inside && !p.ghost) { out.length = c0; return; }
   shift(out, c0, [p.lamps > 0.5 ? (p.lamps - 0.5) * 2 * 290 : 0, Math.min(1, p.lamps * 2) * 70 - Math.max(0, p.lamps - 0.5) * 2 * (70 + 62), 0]); // down on the table beside the machine
 }
 
@@ -346,21 +400,24 @@ export const keyAt = (letter: string): { x: number; z: number; row: number } => 
 };
 export const lampAt = (letter: string): { x: number; z: number } => { const k = keyAt(letter); return { x: k.x, z: LAMP_Z[k.row] }; };
 
-function keyboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function keyboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   // The cast deck, a terrace per row with a rolled front edge: the corrugation of the real one.
   const zs = [46, 69, 91, FACE_Z];
-  DECK_Y.forEach((y, i) => {
+  if (!p.inside) DECK_Y.forEach((y, i) => {
     out.push(box(P.panel, -128, 128, 8, y, zs[i], zs[i + 1], 0.1));
     out.push(rod(P.panel, [-128, y, zs[i + 1] - 3], [128, y, zs[i + 1] - 3], 3.4, 0.14));
   });
-  out.push(box(P.panel, -128, 128, 42, 50, 110, FACE_Z, 0.1));
-  for (const [x, z] of [[-112, 60], [-112, 94], [112, 60], [112, 94], [0, 50], [40, 116]] as const) screw(out, P.brass, x, DECK_Y[z < 69 ? 0 : z < 91 ? 1 : 2], z, 2);
+  if (!p.inside) {
+    out.push(box(P.panel, -128, 128, 42, 50, 110, FACE_Z, 0.1));
+    for (const [x, z] of [[-112, 60], [-112, 94], [112, 60], [112, 94], [0, 50], [40, 116]] as const) screw(out, P.brass, x, DECK_Y[z < 69 ? 0 : z < 91 ? 1 : 2], z, 2);
+  }
   for (const r of KEY_ROWS) for (const ch of r) {
     const k = keyAt(ch), travel = p.key === ch ? p.stroke * 9 : 0, top = KEY_TOP[k.row] - travel;
-    out.push(cyl(P.steel, k.x, k.z, DECK_Y[k.row], top - 4, 2.4, 0.5));
+    out.push(cyl(P.steel, k.x, k.z, 37 - travel / 3, top - 4, 2.4, 0.5));
     out.push(cyl(P.black, k.x, k.z, top - 4, top, 7, 0.5), cyl(P.black, k.x, k.z, top - 4.6, top - 4, 5.6, 0.3));
     strokeText(out, ch, [k.x, top + 0.02, k.z], [1, 0, 0], [0, 0, -1], { size: 7.2, color: P.lampLetter, weight: 1.1 });
   }
+  if (p.inside) return;
   // The serial plate: M, the naval part number, serial / maker / year (M16913/aye/44 survives, Crypto Museum's own).
   out.push(box(P.zinc, -26, 26, 50, 50.4, 112, 124, 0.3));
   strokeText(out, 'M', [0, 50.45, 115], [1, 0, 0], [0, 0, -1], { size: 3.2, color: P.black, weight: 0.6 });
@@ -377,7 +434,7 @@ export function socketAt(n: number): { x: number; y: number; row: number } {
   throw new Error(`No socket ${n}`);
 }
 
-function plugboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function plugboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   out.push(box(P.black, -128, 128, 6, 56, FACE_Z - 2, FACE_Z, 0.18));
   const pairs = plugMap(p.settings.plugs);
   for (let n = 1; n <= 26; n++) {
@@ -413,15 +470,14 @@ function plugboardParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   }
 }
 
-/** A socket's plug, for the current's path: the point on the board. */
-const socketPoint = (n: number): Vec3 => { const s = socketAt(n); return [s.x, s.y, FACE_Z + 1]; };
-
 // ---------------------------------------------------------------- the case
 
-const soft = (P: EnigmaPalette): RGB => [(P.wood[0] + P.woodDark[0]) / 2, (P.wood[1] + P.woodDark[1]) / 2, (P.wood[2] + P.woodDark[2]) / 2];
+export const soft = (P: EnigmaPalette): RGB => [(P.wood[0] + P.woodDark[0]) / 2, (P.wood[1] + P.woodDark[1]) / 2, (P.wood[2] + P.woodDark[2]) / 2];
 
-function caseParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function caseParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const w = CASE_W / 2, d = CASE_D / 2, side = (x0: number, x1: number) => box(P.wood, x0, x1, 0, WALL_H, -d, d - 14, 0.05);
+  // The chassis lifted out of its case stands on its own base plate.
+  if (p.inside) { out.push(box(P.black, -130, 130, 0, 6, -160, FACE_Z + 1, 0.12)); return; }
   out.push(box(P.wood, -w, w, 0, 6, -d, d, 0.05), side(-w, -w + WOOD), side(w - WOOD, w), box(P.wood, -w, w, 0, WALL_H, -d, -d + WOOD, 0.05));
   grain(out, soft(P), (t, a, b) => box(P.wood, w, w + 0.05, 5 + t * (WALL_H - 10), 5 + t * (WALL_H - 10) + 0.5, -d + a * CASE_D, -d + b * CASE_D), 32, 3);
   grain(out, soft(P), (t, a, b) => box(P.wood, -w - 0.05, -w, 5 + t * (WALL_H - 10), 5 + t * (WALL_H - 10) + 0.5, -d + a * CASE_D, -d + b * CASE_D), 32, 9);
@@ -448,7 +504,7 @@ function caseParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   out.push(box(P.zinc, -w + 6, w - 6, 5.5, 6.2, d - 26, d - 14, 0.4));
 }
 
-function lidParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
+export function lidParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   const l0 = out.length, w = CASE_W / 2, d = CASE_D / 2, y0 = WALL_H, y1 = CASE_H;
   out.push(box(P.wood, -w, w, y1 - 7, y1, -d, d, 0.05));
   grain(out, soft(P), (t, a, b) => box(P.wood, -w + 3 + t * (CASE_W - 6), -w + 3 + t * (CASE_W - 6) + 0.6, y1, y1 + 0.05, -d + a * CASE_D, -d + b * CASE_D), 52, 57);
@@ -484,9 +540,9 @@ function lidParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   }
 }
 
-// ---------------------------------------------------------------- the current
+// ---------------------------------------------------------------- the current on the wheels
 
-/** The current's way through the machine, as polylines in frame numbering: wheel to wheel on the true contacts. */
+/** The current's way through the wheels, as polylines in frame numbering: wheel to wheel on the true contacts. */
 export function pathPoints(t: Trace): { forward: Vec3[]; back: Vec3[] } {
   const rights = [RIM_X[3] + 19.5, RIM_X[2] + 19.5, RIM_X[1] + 19.5, RIM_X[0] + 16.8];
   const lefts = [RIM_X[3] - 7.6, RIM_X[2] - 7.6, RIM_X[1] - 7.6, RIM_X[0] - 9.2];
@@ -500,58 +556,3 @@ export function pathPoints(t: Trace): { forward: Vec3[]; back: Vec3[] } {
   back.push(contactPoint(ETW_FACE, k));
   return { forward, back };
 }
-
-function currentParts(out: Part[], t: Trace, p: EnigmaPose, P: EnigmaPalette): void {
-  const { forward, back } = pathPoints(t), pl = plugMap(p.settings.plugs);
-  const hot = (c: RGB, r: number, pts: Vec3[]) => { for (const q of wire(c, pts, r)) { q.emissive = [c[0] * 0.55, c[1] * 0.55, c[2] * 0.55]; out.push(q); } };
-  hot(P.forward, 0.7, forward);
-  hot(P.back, 0.7, back);
-  // Key to plugboard to entry wheel, and entry wheel to plugboard to lamp, through the machine's belly (schematic).
-  const key = keyAt(t.input), lamp = lampAt(t.output);
-  const inA = socketPoint(idx(t.input) + 1), inB = socketPoint(pl[idx(t.input)] + 1);
-  const outA = socketPoint(t.exit + 1), outB = socketPoint(idx(t.output) + 1);
-  hot(P.forward, 0.7, [[key.x, DECK_Y[key.row], key.z], [key.x, 34, key.z], [key.x, 34, FACE_Z - 6], [inA[0], inA[1], FACE_Z - 6], inA]);
-  if (inA[0] !== inB[0] || inA[1] !== inB[1]) hot(P.forward, 0.7, [inA, [inA[0], inA[1], FACE_Z + 18], [inB[0], inB[1], FACE_Z + 18], inB]);
-  const start = forward[0], end = back[back.length - 1];
-  hot(P.forward, 0.7, [inB, [inB[0], inB[1], FACE_Z - 6], [inB[0], 10, FACE_Z - 6], [24, 10, AX_Z + 42], [24, start[1], start[2]], start]);
-  hot(P.back, 0.7, [end, [33, end[1], end[2]], [33, 12, AX_Z + 42], [outA[0], 12, FACE_Z - 8], [outA[0], outA[1], FACE_Z - 8], outA]);
-  if (outA[0] !== outB[0] || outA[1] !== outB[1]) hot(P.back, 0.7, [outA, [outA[0], outA[1], FACE_Z + 20], [outB[0], outB[1], FACE_Z + 20], outB]);
-  hot(P.back, 0.7, [outB, [outB[0], outB[1], FACE_Z - 10], [lamp.x, 40, FACE_Z - 10], [lamp.x, 40, lamp.z], [lamp.x, 80, lamp.z]]);
-}
-
-// ---------------------------------------------------------------- the whole machine
-
-export function enigmaParts(p: EnigmaPose, P: EnigmaPalette): Part[] {
-  const out: Part[] = [];
-  caseParts(out, p, P);
-  keyboardParts(out, p, P);
-  plugboardParts(out, p, P);
-  lampParts(out, p, P);
-  coverParts(out, p, P);
-  stackParts(out, p, P);
-  pawlParts(out, p, P);
-  if (!p.ghost) lidParts(out, p, P);
-  if (p.trace && p.out < 0.02) currentParts(out, p.trace, p, P);
-  return out.filter((q) => (q.scale ?? [1, 1, 1]).every((v) => v > 0));
-}
-
-export function enigmaAnchors(p: EnigmaPose): Anchor[] {
-  const up: Vec3 = [0, 1, 0], lift = stackLift(p.out), sx = (x: number) => stackX(x, p.out), a: Anchor[] = [];
-  if (p.lid > 0.5) {
-    a.push({ text: 'Lamps', p: [-130, 94, 5], side: 'l', n: up }, { text: 'Keyboard', p: [131, 62, 80], side: 'r', n: up });
-    if (p.flap > 0.5) a.push({ text: 'Plugboard: sockets by number', p: [132, 30, FACE_Z], side: 'r', n: [0, 0, 1] });
-  }
-  if (p.cover > 0.5) {
-    const y = AX_Y + lift + RIM_R;
-    const back = AX_Z - 44;
-    a.push({ text: 'Reflector', p: [sx(-98), y - 6, AX_Z], side: 'l', n: up });
-    a.push({ text: 'Greek', p: [sx(RIM_X[0]), y, back], side: 't', n: up }, { text: 'Left', p: [sx(RIM_X[1]), y, back], side: 't', n: up }, { text: 'Middle', p: [sx(RIM_X[2]), y, back], side: 't', n: up }, { text: 'Right', p: [sx(RIM_X[3]), y, back], side: 't', n: up });
-    a.push({ text: 'Entry wheel', p: [ETW_FACE + 14, AX_Y + RIM_R - 12, AX_Z + 16], side: 'r', n: up, minor: true });
-    if (p.out < 0.1) a.push({ text: 'Pawls', p: [36, AX_Y + 3, AX_Z - 52], side: 'r', n: up, minor: true });
-    a.push({ text: 'Battery', p: [97, 93, -105], side: 'r', n: up, minor: true });
-  } else if (p.lid > 0.5) {
-    a.push({ text: 'Windows: the four wheels', p: [RIM_X[1], PANEL_Y + 2, AX_Z - 25], side: 't', n: up });
-  }
-  return a;
-}
-

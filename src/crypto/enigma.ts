@@ -9,7 +9,9 @@ const mod26 = (i: number): number => ((i % 26) + 26) % 26;
 
 export type RotorName = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI' | 'VII' | 'VIII';
 export type GreekName = 'beta' | 'gamma';
-export type ReflectorName = 'b' | 'c';
+export type ThinReflector = 'b' | 'c';
+/** 'D' is the field-rewirable reflector: it fills the space of a thin reflector and its Greek wheel. */
+export type ReflectorName = ThinReflector | 'D';
 
 export interface RotorSpec {
   wiring: string;
@@ -34,9 +36,37 @@ export const ROTORS: Record<RotorName, RotorSpec> = {
 };
 export const GREEK: Record<GreekName, string> = { beta: 'LEYJVCNIXWPBQMDRTAKZGFUHOS', gamma: 'FSOKANUERHMBTIYCWLQPZXVGJD' };
 /** The thin reflectors the M4 carries. */
-export const REFLECTORS: Record<ReflectorName, string> = { b: 'ENKQAUYWJICOPBLMDXZVFTHRGS', c: 'RDOBJNTKVEHMLFCWZAXGYIPSUQ' };
+export const REFLECTORS: Record<ThinReflector, string> = { b: 'ENKQAUYWJICOPBLMDXZVFTHRGS', c: 'RDOBJNTKVEHMLFCWZAXGYIPSUQ' };
 /** The Enigma I / M3's wide reflectors: what a thin one and its Greek wheel at A amount to. */
 export const WIDE_REFLECTORS = { B: 'YRUHQSLDPXNGOKMIEBFZCWVJAT', C: 'FVPJIAOYEDRZXWGCTKUQSBNMHL' } as const;
+
+/** UKW-D's index ring, engraved in German notation, against the Bletchley Park letters the wiring tables use: 24 letters
+ *  (no J, no Y), the two gaps its mounting screws take. Crypto Museum's table. */
+export const UKWD_RING = 'A-ZXWVUTSRQPON-MLKIHGFEDCB';
+/** Those two gaps are wired together for good: a key sheet sets the other twelve pairs. */
+export const UKWD_FIXED = 'BO';
+/** A wiring to start from (made up, like any day's: real ones were on the key sheet, "an der Umkehrwalze"). */
+export const UKWD_SAMPLE = 'AZ BP CX DV EU FT GS HR IQ KO LN MW';
+
+/** The reflector a day's twelve pairs make, German letters in, as a wiring in Bletchley Park letters. */
+export function ukwdWiring(pairs: string): string {
+  const m = Array.from({ length: 26 }, (_, i) => i), list = pairs.toUpperCase().split(/\s+/).filter(Boolean);
+  if (list.length !== 12) throw new Error('UKW-D takes twelve pairs');
+  const at = (g: string): number => {
+    const i = UKWD_RING.indexOf(g);
+    if (g === '-' || i < 0) throw new Error(`UKW-D has no socket ${g}`);
+    return i;
+  };
+  for (const p of list) {
+    if (!/^[A-Z][A-Z]$/.test(p) || p[0] === p[1]) throw new Error(`Not a pair: ${p}`);
+    const a = at(p[0]), b = at(p[1]);
+    if (m[a] !== a || m[b] !== b) throw new Error(`A socket is used twice: ${p}`);
+    m[a] = b; m[b] = a;
+  }
+  const x = idx(UKWD_FIXED[0]), y = idx(UKWD_FIXED[1]);
+  m[x] = y; m[y] = x;
+  return m.map(chr).join('');
+}
 
 /** Keys and lamps share these rows. */
 export const KEY_ROWS = ['QWERTZUIO', 'ASDFGHJK', 'PYXCVBNML'] as const;
@@ -56,6 +86,8 @@ export interface EnigmaSettings {
   start: string;
   /** Plug pairs as letters, 'AT BL …'. */
   plugs: string;
+  /** With reflector D: its twelve pairs, in the German letters on its ring. */
+  dPairs?: string;
 }
 
 export const DEFAULT_SETTINGS: EnigmaSettings = { reflector: 'b', greek: 'beta', rotors: ['I', 'II', 'III'], rings: 'AAAA', start: 'AAAA', plugs: '' };
@@ -110,10 +142,13 @@ export class Enigma {
     this.pos = [...s.start.toUpperCase()].map(idx);
     this.rings = [...s.rings.toUpperCase()].map(idx);
     this.plug = plugMap(s.plugs);
-    const wheels = [ROTORS[s.rotors[2]].wiring, ROTORS[s.rotors[1]].wiring, ROTORS[s.rotors[0]].wiring, GREEK[s.greek]];
+    const d = s.reflector === 'D';
+    // D's body fills the Greek wheel's place: the current passes straight through it, and its red D shows in the window.
+    if (d) { this.pos[0] = idx('D'); this.rings[0] = idx('D'); }
+    const wheels = [ROTORS[s.rotors[2]].wiring, ROTORS[s.rotors[1]].wiring, ROTORS[s.rotors[0]].wiring, d ? ALPHABET : GREEK[s.greek]];
     this.fwd = wheels.map(forward);
     this.inv = this.fwd.map(inverse);
-    this.refl = forward(REFLECTORS[s.reflector]);
+    this.refl = forward(s.reflector === 'D' ? ukwdWiring(s.dPairs ?? UKWD_SAMPLE) : REFLECTORS[s.reflector]);
     this.turn = s.rotors.map((r) => ROTORS[r].turnover);
   }
 
