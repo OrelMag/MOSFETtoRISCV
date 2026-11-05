@@ -60,6 +60,27 @@ before relying on them. Add to this as chapters land.
 - Levinson's recursion: **ran**, against scipy's `solve_toeplitz` (`scripts/dsp/oracle.py`, `tests/dsp/vectors/adaptive.json`).
 - LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and the divergence just above it is measured here on this far end. The far-end sound and the echo paths are generated models, not recordings or measured paths.
 
+## Pictures (`pictures`)
+
+- ITU-T T.81 (CCITT Rec. T.81, 1992), the copy at w3.org/Graphics/JPEG/itu-t81.pdf: **read**, these parts only:
+  - A.3.1 and A.3.3: the level shift and the FDCT / IDCT formulas, and the note that accuracy is set in Part 2, not by one method of computing;
+  - A.3.4–A.3.6: quantization (round to nearest), DC differences and the zig-zag text;
+  - Table K.1 and its paragraph ("used with good results");
+  - Table K.3;
+  - sheet 1 of Table K.5's 4 sheets.
+  Figure A.6 itself, sheets 2–4 of K.5, Annex B (file syntax), Annex C (codes from the lists) and F.1.2 (coding, byte stuffing, padding) were **not opened**: they are written from memory, and checked by the runs below.
+- Pillow 13.0.0, which bundles libjpeg-turbo 3.2.0 behind the libjpeg 8.0 API: **ran** (`scripts/dsp/oracle.py`).
+  - It wrote the quantization tables at nine qualities from 1 to 100, which are libjpeg's quality scaling, and the Huffman lists. jcparam.c was not opened.
+  - Its DQT bytes are in zig-zag order, so mapping them back to K.1's layout also checks our zig-zag order.
+  - Our AC codes match the 9 rows of K.5's sheet 1 that were compared, and our DC codes match K.3.
+  - It decodes this chapter's own files to within one level of our reconstruction at every pixel.
+- scipy 1.16.3 `fft.dctn` (type 2, orthonormal) and `ndimage.correlate` / `correlate1d` (mode 'nearest'): **ran**, the same oracle.
+- The browser's decode: measured in headless Chrome by smoke and by hand, with the largest difference from our reconstruction 1 level at quality 75. Other browsers were not tried.
+- BT.601's luminance weights (0.299, 0.587, 0.114) for a learner's own picture: **unread**, from memory.
+- IEEE 1180: not used. There is no inverse DCT in gates, so its test does not apply.
+- The DCT stage's cost and accuracy: measured from the gates and held by `tests/dsp-pictures.test.ts`. The cost of a 64-word transpose store is quoted as plain registers. That store is not built.
+- Pictures: generated scenes. The public-domain photograph the plan mentions is **owed**, not added.
+
 ## Sound
 
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
