@@ -6,6 +6,8 @@ import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { symbolGeom } from '../sim/geometry';
 import { constWord } from './alu';
 import { bigRam, bigRamWithInit } from './bigmem';
+import { assemble24 } from '../dsp/asm24';
+import { BENCH24 } from '../dsp/programs24';
 import { Builder } from './builder';
 import { busMux2, decoder, muxTree } from './combinational';
 import { define, merger } from './define';
@@ -248,3 +250,7 @@ export const DSP24_STATE = {
   acc: 'mac.unit.acc', ls: 'seq.loop.ls', le: 'seq.loop.le', lc: 'seq.loop.lc', la: 'seq.loop.la',
   xram: 'xram', yram: 'yram',
 } as const;
+
+// Built at load (the FIR 16 benchmark), so the layout and routing checks cover the whole computer.
+const FIR16 = BENCH24[0];
+export const DSP24_FIR16 = dsp24Computer(assemble24(FIR16.src).words, FIR16.x, FIR16.y);
