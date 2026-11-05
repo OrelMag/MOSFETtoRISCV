@@ -149,3 +149,11 @@ export interface OfdmSystem { name: string; spacingHz: number; fft: number; used
 export const dataShare = (s: OfdmSystem): number => s.fft / (s.fft + s.cp);
 /** The symbol's length with its prefix, seconds. */
 export const blockTime = (s: OfdmSystem): number => (s.fft + s.cp) / (s.fft * s.spacingHz);
+
+/** G.992.1, 802.11a, LTE at 20 MHz and 5G NR at 100 MHz with 30 kHz tones: the FFT each usually runs and the normal prefix. */
+export const SYSTEMS: OfdmSystem[] = [
+  { name: 'ADSL', spacingHz: 4312.5, fft: 512, used: 255, cp: 32, note: 'a real block on one wire, so 512 points carry 255 tones.' },
+  { name: 'Wi-Fi, 802.11a', spacingHz: 312500, fft: 64, used: 52, cp: 16, note: '48 data tones and 4 pilots.' },
+  { name: 'LTE, 20 MHz', spacingHz: 15000, fft: 2048, used: 1200, cp: 144, note: '100 blocks of 12; the first symbol of each slot has a slightly longer prefix.' },
+  { name: '5G NR, 100 MHz', spacingHz: 30000, fft: 4096, used: 3276, cp: 288, note: '273 blocks of 12.' },
+];

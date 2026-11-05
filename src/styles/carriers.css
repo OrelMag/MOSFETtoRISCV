@@ -1,0 +1,31 @@
+/* Many carriers: the butterfly's plane, tone bars, the stream's stages and the water. Colours are the site's tokens, so both themes follow. */
+.fc-panel .mos-plot { width: 100%; height: auto; display: block; }
+.fc-read { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 12px var(--font-mono, monospace); color: var(--text); align-items: center; }
+.fc-unit { fill: none; stroke: var(--border-strong, var(--border)); }
+.fc-axis { stroke: var(--border); }
+.fc-arrow { stroke-width: 1.6; }
+.fc-arrow.a, .fc-dot.a { stroke: var(--accent); fill: var(--accent); }
+.fc-arrow.b, .fc-dot.b { stroke: var(--muted); fill: var(--muted); }
+.fc-arrow.t, .fc-dot.t { stroke: var(--text-2); fill: var(--text-2); stroke-dasharray: 3 3; }
+.fc-arrow.y0, .fc-dot.y0 { stroke: var(--good, #0b8259); fill: var(--good, #0b8259); }
+.fc-arrow.y1, .fc-dot.y1 { stroke: var(--warn, #a85f07); fill: var(--warn, #a85f07); }
+.fc-dot.now { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.fc-lab { font-size: 10px; fill: var(--text-2); }
+.fc-lab.off { fill: var(--muted); }
+.fc-lab.on { fill: var(--text); font-size: 9px; }
+.fc-bar { fill: var(--accent); }
+.fc-bar.leak { fill: var(--warn, #a85f07); }
+.fc-floor { fill: var(--surface-3, var(--surface-2)); stroke: var(--border); stroke-width: .5; }
+.fc-water { fill: color-mix(in srgb, var(--accent) 45%, transparent); }
+.fc-flat { stroke: var(--text-2); stroke-dasharray: 5 4; }
+.fc-kf::before, .fc-kw::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.fc-kf::before { background: var(--surface-3, var(--surface-2)); border: 1px solid var(--border); }
+.fc-kw::before { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.fc-check { display: inline-flex; gap: 5px; align-items: center; font-size: 12.5px; color: var(--text-2); }
+.fc-stages { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin: 6px 0; }
+.fc-stage { display: grid; grid-template-columns: 52px 1fr 1fr 1fr; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-2); }
+.fc-stage b { color: var(--text); font-weight: 600; }
+.fc-stage em { font-style: normal; color: var(--muted); }
+.fc-stage.run { background: var(--surface-2); }
+.fc-stage.run em { color: var(--good, #0b8259); }
+@media (pointer: coarse) { .fc-check input { width: 24px; height: 24px; } }

@@ -12,6 +12,8 @@
 //     then wires for 3N / 8. Any other k: a general complex multiplier with W-bit factors (+1 is out of range, the table clamps to 2^(W-1) - 1).
 // - A product keeps all its bits, then the first dropped bit is added back: round half up, once per real output, never per product.
 
+import { fft } from './fourier';
+
 export interface Fx { re: number; im: number }
 
 /** The value of the low W bits, signed. */
@@ -164,4 +166,16 @@ export class FftStream {
     }
     return out;
   }
+}
+
+/** Tone power over rounding noise (dB), measured on seeded random blocks with |x| up to `m`: what the integer transform leaves of a noise-like block. */
+export function fftSnrDb(N: number, W: number, blocks: number, seed: number, m = 0.9): number {
+  let v = seed >>> 0, sig = 0, err = 0;
+  const u = () => (v = (Math.imul(v, 1103515245) + 12345) >>> 0) / 2 ** 32, FS = 2 ** (W - 1);
+  for (let t = 0; t < blocks; t++) {
+    const x = Array.from({ length: N }, () => { const r = m * Math.sqrt(u()), a = 2 * Math.PI * u(); return { re: Math.trunc(r * Math.cos(a) * FS), im: Math.trunc(r * Math.sin(a) * FS) }; });
+    const F = fft({ re: Float64Array.from(x, (c) => c.re), im: Float64Array.from(x, (c) => c.im) });
+    fftFx(x, W).forEach((c, k) => { const fr = F.re[k] / N, fi = F.im[k] / N; sig += fr * fr + fi * fi; err += (c.re - fr) ** 2 + (c.im - fi) ** 2; });
+  }
+  return 10 * Math.log10(sig / err);
 }

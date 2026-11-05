@@ -238,10 +238,10 @@ export function fxButterfly(W: number, k: number, N: number): ComponentDef {
     const swap = kind === 'minusj' || kind === 'root3', g = new Builder(6, 10, 3);
     g.pins('a', 'b');
     let t = 'b';
-    if (kind === 'root1' || kind === 'root3') t = g.op1(fxRot45(W), ['b'], 'turn');
-    if (kind === 'general') { const c = twiddle(k, N, W); t = g.op1(fxCmul(W), ['b', g.op1(constWord(2 * W, packFx(c, W)), [])], `W${k}`); }
+    if (kind === 'root1' || kind === 'root3') t = g.op1(fxRot45(W), ['b'], 'turn', 'turn');
+    if (kind === 'general') { const c = twiddle(k, N, W); t = g.op1(fxCmul(W), ['b', g.op1(constWord(2 * W, packFx(c, W)), [])], `W${k}`, 'mul'); }
     g.next();
-    const core = g.op(fxCore(W, swap), ['a', t]);
+    const core = g.op(fxCore(W, swap), ['a', t], undefined, 'core');
     g.next();
     g.wire(`${core}.y0`, 'y0'); g.wire(`${core}.y1`, 'y1');
     const R = g.right, label = kind === 'one' ? 'W⁰' : kind === 'minusj' ? '−j' : kind === 'root1' ? 'W₈¹' : kind === 'root3' ? 'W₈³' : `W${k}/${N}`;
