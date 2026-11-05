@@ -81,3 +81,4 @@ export * from './router';
 export * from './viterbi';
 export * from './rs';
 export * from './ethswitch';
+export * from './aes';
