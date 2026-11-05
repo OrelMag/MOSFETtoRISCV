@@ -2897,3 +2897,9 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .partner-line, .partner-flow { fill: none; stroke: var(--w1); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 .partner-line.bus, .partner-flow.bus { stroke: var(--bus1); }
 .partner-line { stroke-dasharray: 5 4; opacity: 0.75; }
+
+/* A control signal at rest (NetDef.quiet): thin and faint, so the data path stands out. A 1, an X or a pointed-at net shows in full. */
+.wire.quiet { opacity: 0.4; stroke-width: calc(var(--wire-w0) * var(--wire-k, 1) * 0.7); }
+.wire.quiet.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 0.45); }
+.wire.quiet.v1, .wire.quiet.bus1, .wire.quiet.vx, .wire.quiet.short { opacity: 1; }
+.wire.quiet.v1 { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); }

@@ -79,7 +79,11 @@ const crosses = (bodies: readonly Rect[], p: readonly Vec[]) => {
   }
   return false;
 };
-const bodiesOf = (nl: Netlist) => symbolRects(nl).filter((b) => b.what.startsWith('instance ')).map((b) => b.r);
+/** What hides a wire: a splitter's or merger's thin bar does not. */
+const bodiesOf = (nl: Netlist) => {
+  const bars = new Set(nl.instances.filter((i) => i.def.prim === 'alias').map((i) => i.name));
+  return symbolRects(nl).filter((b) => b.what.startsWith('instance ') && !bars.has(b.inst)).map((b) => b.r);
+};
 
 /** The nets (their index in `nl`) with a wire running through a part's body. */
 export function wiresThroughParts(nl: Netlist, nets: readonly RoutedNet[]): Set<number> {

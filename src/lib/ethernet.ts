@@ -302,8 +302,9 @@ export function sharedWire(x: readonly number[]): ComponentDef {
   const d = define({
     id: `eth_wire_${key}`, name: `Shared wire (${n} stations)`, category: 'memory',
     summary: `One cable with ${n} stations at ${x.join(', ')} clocks along it. Each station hears the OR of the others' signals (txd while txen), delayed by the distance, and a carrier (crs) while any other is sending. A station's own signal is not here: it is at its own end of the wire at once. clash is 1 while two drivers are on at the same instant. A transmission line is not a circuit, so this one box does not open into transistors.`,
-    ports: [bus('txd', n, 'in'), bus('txen', n, 'in'), bit('clk', 'in', 'bottom', true), bus('rxd', n, 'out'), bus('crs', n, 'out'), bit('clash', 'out')],
-    symbol: { kind: 'box', label: 'WIRE' },
+    ports: [{ ...bus('txd', n, 'in'), side: 'top' }, { ...bus('txen', n, 'in'), side: 'top' }, bit('clk', 'in', 'bottom', true), { ...bus('rxd', n, 'out'), side: 'top' }, { ...bus('crs', n, 'out'), side: 'top' }, bit('clash', 'out')],
+    // drawn as the cable itself: as long as the stations along it (the segment's layout, ETH_SEG), its four buses meeting the stations' taps from above
+    symbol: { kind: 'box', label: 'SHARED WIRE', w: ETH_SEG.span(n), h: 6, portPos: { txd: ETH_SEG.mid(n, ETH_SEG.TXD), txen: ETH_SEG.mid(n, ETH_SEG.TXEN), rxd: ETH_SEG.mid(n, ETH_SEG.RXD), crs: ETH_SEG.mid(n, ETH_SEG.CRS), clk: ETH_SEG.span(n) - 6, clash: 3 } },
     behavior: {
       delay: 1,
       seq: { clk: 'clk', comb: [] },
@@ -324,6 +325,13 @@ export function sharedWire(x: readonly number[]): ComponentDef {
   return d;
 }
 
+
+/** The segment's drawing: stations a pitch apart, the taps on their bottoms (x from a station's left edge), the cable as long as the row. */
+export const ETH_SEG = {
+  PITCH: 56, STATION_W: 34, RXD: 5, CRS: 8, TXD: 15, TXEN: 18, CLK: 27,
+  span: (n: number) => (n - 1) * 56 + 34,
+  mid: (n: number, off: number) => off + ((n - 1) * 56) / 2,
+};
 
 /** Positions of the segment's four stations along the cable, in clocks of propagation. (The parts are built on first use, not at import: a drawing of a few hundred labels makes the sandbox round-trip tests take minutes.) */
 export const ETH_SEG_POSITIONS = [0, 6, 14, 26];

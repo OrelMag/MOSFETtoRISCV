@@ -160,7 +160,7 @@ describe('Open in Sandbox (remix)', () => {
     const r = remixDef(emptyWorkspace(), cpu);
     if ('error' in r) throw new Error(r.error);
     const doc = r.ws.chips[r.id];
-    expect(doc.labels.length).toBeGreaterThan(10);
+    expect(doc.labels.length).toBeGreaterThan(0); // the plain core is drawn with wires: its few pointers come through
     const rom = doc.parts.find((p) => 'rom' in p.ref);
     expect(rom && 'rom' in rom.ref && rom.ref.rom.addr).toBe('rv32');
     // every library reference resolves on a fresh load; the rest came along as chips
