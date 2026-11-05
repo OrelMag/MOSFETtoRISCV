@@ -145,7 +145,7 @@ function encodeStmt(s: Stmt, labels: Map<string, number>): number[] {
       return [enc24.ld2(o, gp(args[0]), gp(args[1]), x.mode, x.p, y.mode, y.p)];
     }
     case 'r': want(1); return [enc24.r(o, gp(args[0]))];
-    case 'rsh': want(2); return [enc24.rsh(o, gp(args[0]), num(args[1], 0, 31, 'shift'))];
+    case 'rsh': want(2); return [enc24.rsh(o, gp(args[0]), num(args[1], 0, 63, 'shift'))];
     case 'loop': {
       want(2);
       const e = addr(args[1]);

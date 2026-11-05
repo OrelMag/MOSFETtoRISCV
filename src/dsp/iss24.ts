@@ -12,6 +12,12 @@ export const s16 = (v: number): number => ((v & 0xffff) ^ 0x8000) - 0x8000;
 export const s8 = (v: number): number => ((v & 0xff) ^ 0x80) - 0x80;
 export const sat16 = (v: number): number => Math.max(-32768, Math.min(32767, v));
 
+/** The accumulator to 16 bits: shift right by sh with the first dropped bit added back (round half up), then saturate. */
+export function rndOf(acc: number, sh: number): number {
+  const v = (BigInt(acc) + (sh > 0 ? 1n << BigInt(sh - 1) : 0n)) >> BigInt(sh);
+  return v > 32767n ? 32767 : v < -32768n ? -32768 : Number(v);
+}
+
 export function rev8(v: number): number {
   let r = 0;
   for (let i = 0; i < 8; i++) if (v & (1 << i)) r |= 0x80 >> i;
@@ -148,14 +154,16 @@ export class Iss24 {
         break;
       }
       case 'clr': this.acc = 0; break;
-      case 'mpy': case 'mac': case 'mas': {
-        const prod = s16(this.x[xa]) * s16(this.y[ya]);
-        this.acc = wrap40(d.name === 'mpy' ? prod : d.name === 'mac' ? this.acc + prod : this.acc - prod);
+      case 'mac': {
+        this.acc = wrap40(this.acc + s16(this.x[xa]) * s16(this.y[ya]));
         this.upd(0, d.xp, d.xmode);
         this.upd(1, d.yp, d.ymode);
         break;
       }
-      case 'rnd': r[d.rd] = sat16(Math.floor((this.acc + (d.sh > 0 ? 2 ** (d.sh - 1) : 0)) / 2 ** d.sh)) & 0xffff; break;
+      case 'rnd': case 'rndc':
+        r[d.rd] = rndOf(this.acc, d.sh) & 0xffff;
+        if (d.name === 'rndc') this.acc = 0;
+        break;
       case 'out': this.out.push(a); st.out = a; break;
       case 'loop':
         isLoop = true;

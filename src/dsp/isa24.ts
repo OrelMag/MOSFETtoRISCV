@@ -1,5 +1,5 @@
 // DSP24, the DSP core's own instruction set (chapter "A DSP core"): 16-bit data, 24-bit instructions, one instruction per
-// clock, 29 instructions. Not a real DSP's ISA. What makes it a DSP: one instruction reads a sample from X memory and a
+// clock, 28 instructions. Not a real DSP's ISA. What makes it a DSP: one instruction reads a sample from X memory and a
 // coefficient from Y memory and multiply-accumulates them, each address register stepping as it is used (plus 1, minus 1,
 // by a modifier, round a circular window, or in bit-reversed order), and a loop instruction repeats the instructions up to
 // an end address with no branch. Words the table does not name execute as NOP, in the golden model and the hardware.
@@ -38,15 +38,14 @@ export const INSTRS24: Instr24[] = [
   { name: 'st', op: 17, shape: 'memst', summary: 'X[p] or Y[p] ← ra; the pointer steps' },
   { name: 'ld2', op: 18, shape: 'ld2', summary: 'rd ← X[p], re ← Y[q] in one cycle; both pointers step' },
   { name: 'clr', op: 19, shape: '', summary: 'acc ← 0' },
-  { name: 'mpy', op: 20, shape: 'mem2', summary: 'acc ← X[p] × Y[q] (no add); both pointers step' },
-  { name: 'mac', op: 21, shape: 'mem2', summary: 'acc ← acc + X[p] × Y[q]; both pointers step' },
-  { name: 'mas', op: 22, shape: 'mem2', summary: 'acc ← acc − X[p] × Y[q]; both pointers step' },
-  { name: 'rnd', op: 23, shape: 'rsh', summary: 'rd ← clamp16(round(acc >> sh)): rounded once, saturated once' },
-  { name: 'out', op: 24, shape: 'r', summary: 'output port ← ra (one word of the result stream)' },
-  { name: 'loop', op: 25, shape: 'loop', summary: 'repeat the instructions after this one, up to and including `end`, count times (a register: 0 means 65 536)' },
-  { name: 'jmp', op: 26, shape: 'a', summary: 'PC ← address' },
-  { name: 'jz', op: 27, shape: 'ra', summary: 'if ra = 0: PC ← address' },
-  { name: 'jnz', op: 28, shape: 'ra', summary: 'if ra ≠ 0: PC ← address' },
+  { name: 'mac', op: 20, shape: 'mem2', summary: 'acc ← acc + X[p] × Y[q] (signed 16 × 16 into 40 bits); both pointers step' },
+  { name: 'rnd', op: 21, shape: 'rsh', summary: 'rd ← clamp16(round(acc >> sh)): rounded half up once, saturated once; acc kept' },
+  { name: 'rndc', op: 22, shape: 'rsh', summary: 'as rnd, and acc ← 0 at the same clock edge (read and clear)' },
+  { name: 'out', op: 23, shape: 'r', summary: 'output port ← ra (one word of the result stream)' },
+  { name: 'loop', op: 24, shape: 'loop', summary: 'repeat the instructions after this one, up to and including `end`, count times (a register: 0 means 65 536)' },
+  { name: 'jmp', op: 25, shape: 'a', summary: 'PC ← address' },
+  { name: 'jz', op: 26, shape: 'ra', summary: 'if ra = 0: PC ← address' },
+  { name: 'jnz', op: 27, shape: 'ra', summary: 'if ra ≠ 0: PC ← address' },
 ];
 
 export const BY_NAME24 = new Map(INSTRS24.map((i) => [i.name, i]));
@@ -107,7 +106,7 @@ export function decode24(w: number): Decoded24 {
     xmode: f(12, 10), xp: f(9, 8), ymode: f(7, 5), yp: f(4, 3), bus: f(2, 2),
     dst: f(18, 16) | (ins?.name === 'ldi' ? f(15, 14) << 3 : f(12, 11) << 3),
     src: f(15, 13) | (f(10, 9) << 3),
-    imm8: f(7, 0), imm14: f(13, 0), sh: f(4, 0),
+    imm8: f(7, 0), imm14: f(13, 0), sh: f(5, 0),
     loopReg: f(18, 18), cnt: f(17, 8), addr: f(7, 0),
   };
 }
@@ -125,7 +124,7 @@ export const enc24 = {
   st: (op: number, ra: number, mode: number, p: number, bus: number) => (op << 19) | (ra << 13) | (mode << 10) | (p << 8) | (bus << 2),
   ld2: (op: number, rd: number, re: number, xm: number, xp: number, ym: number, yp: number) => (op << 19) | (rd << 16) | (re << 13) | (xm << 10) | (xp << 8) | (ym << 5) | (yp << 3),
   r: (op: number, ra: number) => (op << 19) | (ra << 13),
-  rsh: (op: number, rd: number, sh: number) => (op << 19) | (rd << 16) | (sh & 31),
+  rsh: (op: number, rd: number, sh: number) => (op << 19) | (rd << 16) | (sh & 63),
   loop: (op: number, reg: number, cnt: number, end: number) => (op << 19) | (reg ? (1 << 18) | (cnt << 13) : (cnt & 0x3ff) << 8) | (end & 255),
   a: (op: number, addr: number) => (op << 19) | (addr & 255),
   ra: (op: number, ra: number, addr: number) => (op << 19) | (ra << 13) | (addr & 255),
