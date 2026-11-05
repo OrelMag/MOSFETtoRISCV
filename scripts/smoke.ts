@@ -321,7 +321,7 @@ const MENU_DRIVE = `(async () => {
       group.focus();
       key(group, 'ArrowRight'); await wait(80);
       if (menu().length !== 2) bad.push('the arrow did not open a group beside the menu');
-      if (!/^Fan-out: \d/.test(document.activeElement?.textContent ?? '')) bad.push('no fan-out in Measure: ' + document.activeElement?.textContent);
+      if (!/^Fan-out: [0-9]/.test(document.activeElement?.textContent ?? '')) bad.push('no fan-out in Measure: ' + document.activeElement?.textContent);
       key(document.activeElement, 'ArrowLeft'); await wait(60);
       if (menu().length !== 1) bad.push('the arrow did not close the group');
     }
