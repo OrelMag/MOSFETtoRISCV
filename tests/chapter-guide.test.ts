@@ -103,6 +103,17 @@ describe('chapter guide', () => {
     }
   });
 
+  it('a link to a step lands on a step: past the last one it would open the recap, or nothing (a step moved away leaves this behind)', () => {
+    const bad: string[] = [];
+    for (const c of chapters) c.steps.forEach((s, i) => {
+      for (const m of s.body.matchAll(/href="#\/c\/([^/"]+)\/(\d+)/g)) {
+        const to = chapterById(m[1]);
+        if (to && +m[2] >= to.steps.length) bad.push(`${c.id}:${i} links to ${m[1]}/${m[2]}, which has ${to.steps.length} steps`);
+      }
+    });
+    expect(bad).toEqual([]);
+  });
+
   describe('parts', () => {
     it('a chapter of PARTS_MIN steps or more has parts, a shorter one has none', () => {
       for (const c of chapters) {
