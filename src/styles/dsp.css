@@ -116,3 +116,4 @@
 .sdr-chan { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: none; }
 .sdr-occ { fill: color-mix(in srgb, var(--warn) 16%, transparent); stroke: none; }
 .mini tr.sel td { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); font-weight: 600; }
+.sdr-pick .btn[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
