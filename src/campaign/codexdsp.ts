@@ -19,6 +19,7 @@ export const ALIASES_DSP: Record<string, string[]> = { ...ALIASES_A, ...ALIASES_
 const LISTED = new Set([
   'saturate', 'guardbits', // sp_sat
   // sp_biquad
+  'biquad', 'limitcycle',
 
   // sp_goertzel
 

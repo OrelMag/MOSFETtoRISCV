@@ -138,6 +138,7 @@ export const NUDGES: Record<string, string> = {
   sp_sat: 'The sum needs one bit more than the word; whether it fits is written in that bit and the one below it.',
 
   // sp_biquad: below
+  sp_biquad: 'y needs the x of this clock, so b₀ multiplies the pin; the sum is rounded once, and what circulates is the rounded, clamped word.',
 
   // sp_goertzel: below
 

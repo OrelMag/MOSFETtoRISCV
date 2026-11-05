@@ -12,6 +12,12 @@ export const CASESS: Record<string, LevelCase> = {
   },
 
   // ---- sp_biquad (its entry goes below this line)
+  sp_biquad: {
+    problem: 'A recursive filter reaches a narrow band with five coefficients where an FIR filter needs hundreds of taps, because each output is built from earlier outputs. That feedback is the whole difficulty in hardware: the previous two outputs are inputs of this one, so whatever the arithmetic throws away on one clock is part of the next sum.',
+    without: 'Round each product, or let each sum wrap, and the error enters the loop five times a clock instead of once and sits at full scale when it wraps. Round once, at the end, and clamp once: the loop adds one half step of error a clock. Even so, a rounding inside a loop can hold an output up after the input has stopped: a resonator hit by one word keeps ringing at ±5 steps for ever (a limit cycle), where a filter that rounds toward zero dies away.',
+    cost: 'Five 16 × 16 signed multipliers are 3 572 NANDs each, 17 860 of the 20 313; the four registers 960, four 35-bit adders 1 260 and an inversion, the rounder 105, the clamp 93. One clock is 135 NAND delays: a multiplier, three adders in a row, the rounder and the clamp. Rounding toward zero instead of half up costs 41 NANDs more.',
+    alts: [{ name: 'Biquad, rounds half up (library)', lib: 'biquad16' }, { name: 'Biquad, rounds toward zero', nand: 20354, note: 'the second gate-level variant of the chapter, counted there (biquad16z)' }],
+  },
 
   // ---- sp_goertzel
 

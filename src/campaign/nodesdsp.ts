@@ -3,7 +3,7 @@
 // the levels not built yet are on the map as "coming soon" in the order they will play. No DOM.
 
 import type { CampaignNode } from './types';
-import { BUILDDSP, cicGives, cordicGives, satGives } from './builddsp';
+import { BUILDDSP, biquadGives, cicGives, cordicGives, satGives } from './builddsp';
 import { sdGives } from './sdcheck';
 
 export const NODES_DSP: CampaignNode[] = [
@@ -29,9 +29,15 @@ export const NODES_DSP: CampaignNode[] = [
     tips: [], codex: [],
   },
   {
-    id: 'sp_biquad', act: 13, title: 'A biquad', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
-    why: 'Five products and two sums in feedback: the section every IIR filter is built from, graded on NANDs and period.',
-    tips: [], codex: [],
+    id: 'sp_biquad', act: 13, title: 'A biquad', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_biquad, givesOf: biquadGives,
+    unlocks: ['biquad16'], par: { nand: 20313, period: 135 },
+    why: 'A second-order IIR section: five products and two sums, two of them in a loop. Every output is built from earlier outputs, so whatever is rounded away goes round again: one rounding and one clamp, after a sum wide enough to hold every product bit, and the registers must hold the rounded words, not the exact ones. Five multipliers are 88% of the NANDs.',
+    tips: [
+      'Direct form I: four 16-bit registers, two chained from x and two chained from y. y[n] needs x[n] at once, so b₀ multiplies the input pin, not a register.',
+      'A product of two 16-bit words is 32 bits; five of them need three guard bits, a 35-bit sum. Sign-extend every product to 35 bits before adding. The feedback terms are subtracted: add the inverse of their sum and a carry-in of 1, which also works for a₁ = −2.',
+      '35-bit sum to Q1.15 word: keep bits 14 and up, add the first dropped bit (bit 13) back (round half up), then clamp once from 21 bits to 16. The clamped y is what goes in y[n−1], not the exact sum.',
+    ],
+    codex: ['biquad', 'limitcycle', 'guardbits'], chapters: [{ chapter: 'iir', step: 4, label: 'A biquad in gates' }, { chapter: 'iir', step: 5, label: 'A limit cycle on the gates' }],
   },
   {
     id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
