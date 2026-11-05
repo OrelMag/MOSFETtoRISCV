@@ -34,7 +34,7 @@ smallest word 1000 0000 = −128 → −128 / 128 = −1
 16 bits           144          222      78
 24 bits           216          326     110
 
-two tones, +6 dB past full scale, 16 bits, error against the ideal:
+6 dB of gain on the tones (peak 1.8 × full scale), 16 bits, against the ideal:
   wrap  −2.1 dB    saturate  11.1 dB    shift down first  94.4 dB</pre>Saturating is far less wrong than wrapping. Shifting down first costs a bit of resolution and is nearly exact here, because 16 bits have room for it.`,
     },
     mistakes: [
@@ -68,7 +68,6 @@ guard bits:   256 terms → 8     1 024 terms → 10, so 32 + 10 = 42 bits for Q
     ],
     chapters: [
       { chapter: 'fixed', step: 5, label: 'Wrapping can be right' },
-      { chapter: 'fixed', step: 7, label: 'Fixed or floating' },
     ],
   },
   headroom: {
@@ -129,7 +128,7 @@ cost: 6 × 3 = 18 multiplications
 (1 + z⁻¹)(1 − z⁻¹) = 1 − z⁻²       taps 1, 1 then 1, −1  →  1, 0, −1</pre>Only at n = 2 … 5 do all three taps overlap the input; at the ends the sum has fewer terms.`,
     },
     mistakes: [
-      'Forgetting that h is reversed. The sum pairs x[n−k] with h[k]: the newest sample meets the first tap, which is why it is drawn sliding backwards.',
+      'Forgetting that h is reversed. The sum pairs x[n−k] with h[k]: the newest sample meets the first tap, so h is reversed as it slides along x.',
       'Expecting the output to be as long as the input. A block of N through M taps gives N + M − 1; the extra M − 1 samples are the filter\'s tail.',
       'Adding two lists of taps to cascade two filters. Cascading convolves them; adding is two filters in parallel.',
       'Using the sliding sum on a long filter without counting. N × M grows fast: 1 000 samples through 101 taps is 101 000 multiplications, which is when an FFT pays.',
@@ -153,7 +152,7 @@ at f = 0.5:     gain 0, the fastest tone, removed</pre>Dividing by the gain at D
       'Reading z as a frequency. z is a point in the plane; frequency is the angle at which a point on the unit circle sits: f cycles a sample is an angle of 2πf.',
       'Treating z⁻¹ as a gain that shrinks with frequency. It is a delay: unit magnitude on the circle, and a phase of −2πf that grows with f.',
       'Cascading filters by adding polynomials. Series filters multiply; adding is parallel.',
-      'Forgetting that only the ratio matters. Multiplying B and A by the same factor, a pole and a zero at the same point, changes nothing about the filter and wastes a multiplier.',
+      'Forgetting that only the ratio matters. Multiplying B and A by the same polynomial, which is a pole and a zero at the same point, changes nothing about the filter and costs a multiplier.',
     ],
     chapters: [
       { chapter: 'zplane', step: 2, label: 'A delay is z⁻¹' },
@@ -208,7 +207,6 @@ linear phase, 101 taps at 48 kHz: 50 samples, 1.04 ms     115 taps: 57 samples</
     ],
     chapters: [
       { chapter: 'zplane', step: 6, label: 'Same gain, different delay' },
-      { chapter: 'zplane', step: 3, label: 'Zeros remove a frequency' },
     ],
   },
 };

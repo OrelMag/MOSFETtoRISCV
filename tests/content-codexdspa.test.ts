@@ -60,7 +60,8 @@ describe('group A: numbers that fit', () => {
     expect(nands(rca(9)) + nands(clampWord(8))).toBe(nands(satAdder(8)));
     quotes('saturate', nands(rca(9)), nands(clampWord(8)));
     const w = overflowRun(6, 16, 'wrap').snrDb, s = overflowRun(6, 16, 'sat').snrDb, d = overflowRun(6, 16, 'scale').snrDb;
-    quotes('saturate', minus(w, 1), f1(s), f1(d));
+    quotes('saturate', minus(w, 1), f1(s), f1(d), '1.8 × full scale');
+    expect((0.9 * 10 ** (6 / 20)).toFixed(1)).toBe('1.8');
     says('fixed', 1, `${f1(s)} dB`);
     says('fixed', 2, `${nands(satAdder(8))} NANDs`);
   });

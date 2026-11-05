@@ -29,7 +29,7 @@ export const CHECK11A: Record<string, Quiz[]> = {
     },
     {
       question: 'How does a saturating adder know the sum does not fit in w bits?',
-      options: ['It adds with one more bit and finds the top two bits differ', 'The carry out of the top bit is 1', 'The sum is zero', 'Either input is negative'],
+      options: ['The top two bits of the wider sum differ', 'The carry out of the top bit is set to 1', 'The result of the addition is exactly zero', 'Either of the two inputs is a negative one'],
       answer: 0,
       explain: 'A (w + 1)-bit sum cannot overflow. If its top two bits agree it fits; if not, the top bit is the true sign and picks the limit.',
       why: ['', 'The carry out tells unsigned overflow; a signed sum can overflow with no carry out.', 'A zero sum always fits.', 'Two negatives can fit, and so can a negative and a positive.'],
@@ -45,7 +45,7 @@ export const CHECK11A: Record<string, Quiz[]> = {
     },
     {
       question: 'An accumulator wraps part way through a sum whose final value is known to fit. What is the result?',
-      options: ['Correct: the arithmetic is modulo 2^w', 'Off by the amount that wrapped', 'Saturated at the rail', 'Wrong in its sign only'],
+      options: ['Correct, modulo 2^w', 'Off by the amount that wrapped', 'Saturated at the rail', 'Wrong in its sign only'],
       answer: 0,
       explain: 'Every step is right modulo 2^w. A value that fits is fixed by its residue, so the excursion leaves no trace; a clamp would have lost it.',
       why: ['', 'A wrap removes exactly 2^w, which a later wrap or the true sum fitting puts back.', 'A wrapping adder never clamps; that is the saturating one.', 'If the final value fits, the top bit is its true sign.'],
@@ -70,7 +70,7 @@ export const CHECK11A: Record<string, Quiz[]> = {
   diffeq: [
     {
       question: 'y[n] = x[n] + 0.5 y[n−1], starting from rest, receives an impulse of 1 at n = 0. What is y[2]?',
-      options: ['0.25', '0.5', '1', '0'],
+      options: ['0.25', '0.50', '1.00', '0.00'],
       answer: 0,
       explain: 'y[0] = 1, y[1] = 0.5 × 1, y[2] = 0.5 × 0.5. Each output is half the last.',
       why: ['', 'That is y[1].', 'That is y[0], the first output.', 'An FIR filter would be finished by now; this one has feedback.'],
@@ -102,14 +102,14 @@ export const CHECK11A: Record<string, Quiz[]> = {
   ztransform: [
     {
       question: 'A filter has taps 1, 2, 1. What is its gain at half the sample rate?',
-      options: ['0: a double zero at z = −1', '4: the sum of the taps', '2: the middle tap alone', '1: the first tap alone'],
+      options: ['0: a double zero at z = −1', '4: the sum of all the taps', '2: the middle tap on its own', '1: the first tap on its own'],
       answer: 0,
       explain: 'Half the sample rate is z = −1, and 1 − 2 + 1 = 0. The gain at DC is 4.',
       why: ['', 'That is the gain at DC, where z = 1, not at z = −1.', 'At z = −1 the taps alternate in sign and cancel the middle one.', 'The first tap is only one of three terms of the sum.'],
     },
     {
       question: 'Which point on the unit circle is a frequency of a quarter of the sample rate?',
-      options: ['z = j, an angle of 90°', 'z = 1', 'z = −1', 'z = 0.25'],
+      options: ['z = j, an angle of 90°', 'z = 1, an angle of 0°', 'z = −1, an angle of 180°', 'z = 0.25, a quarter of the way'],
       answer: 0,
       explain: 'z = e^(j2πf) with f = 0.25 is e^(jπ/2) = j. Each delay turns a tone at this frequency by a quarter turn.',
       why: ['', 'That is DC, an angle of 0.', 'That is half the sample rate, an angle of 180°.', 'That is a point on the real axis inside the circle, and no frequency has it.'],
@@ -118,14 +118,14 @@ export const CHECK11A: Record<string, Quiz[]> = {
   polezero: [
     {
       question: 'A zero on the circle and a pole just inside it, both at 0.2 cycles a sample. What does the filter do near that frequency?',
-      options: ['A notch: a null with full gain beside it', 'A peak at 0.2, as a pole makes', 'Nothing at all: pole and zero cancel', 'It becomes unstable at 0.2'],
+      options: ['A notch: a null, full gain beside it', 'A sharp peak at 0.2, as a pole alone makes', 'Nothing at all: the pole and zero cancel out', 'It becomes unstable as the pole nears the circle'],
       answer: 0,
       explain: 'The zero gives the null; just beside it the pole\'s distance is nearly the zero\'s, so the ratio returns to about 1.',
       why: ['', 'That needs a pole with no zero beside it.', 'They cancel only exactly at the same point; one is on the circle and one inside.', 'A pole inside the circle is stable, however close.'],
     },
     {
       question: 'y[n] = x[n] + 1.2 y[n−1] − 0.5 y[n−2]. Is it stable?',
-      options: ['Yes: poles of radius √0.5, about 0.71', 'No: the 1.2 is greater than 1', 'No: feedback filters all diverge', 'It depends on the input signal'],
+      options: ['Yes: poles of radius √0.5, about 0.71', 'No: the coefficient 1.2 is greater than 1', 'No: all feedback filters diverge in the end', 'It depends entirely on the input signal fed in'],
       answer: 0,
       explain: 'The product of a conjugate pair is r², so r² = 0.5. Both poles are inside the circle.',
       why: ['', 'A coefficient may exceed 1; the roots decide.', 'A pole inside the circle dies away.', 'Stability is a property of the filter, not of what is fed in.'],
@@ -141,7 +141,7 @@ export const CHECK11A: Record<string, Quiz[]> = {
     },
     {
       question: 'Two filters have a zero at the same angle, one at radius 0.5 and one at radius 2. How do they compare?',
-      options: ['Same gain shape; the inner one has less delay', 'Same delay, but different gain shapes', 'The outer one has the smaller delay', 'Identical in every respect'],
+      options: ['Same gain; the inner has less delay', 'Same delay, but different gain shapes', 'The outer one has the smaller delay', 'Identical in every respect'],
       answer: 0,
       explain: 'A zero and its mirror image across the circle differ in gain only by a constant factor and in delay by a lot. Inside gives the least delay a gain can have.',
       why: ['', 'The gain shape is what stays the same; the phase differs.', 'The zero outside adds delay.', 'The taps are reversed, so the delay is not the same.'],
