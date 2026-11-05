@@ -148,6 +148,7 @@ export const NUDGES: Record<string, string> = {
   sp_cordic: 'One signal picks the direction for all three adders: the sign of z when rotating, the sign of y when vectoring. The shifts and the angle cost no gates.',
 
   // sp_sd: below
+  sp_sd: 'The bit is the sign of the last sum before the edge; whatever it says is taken away from both sums at once, as +full scale or −full scale.',
 
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',

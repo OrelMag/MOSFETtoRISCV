@@ -32,5 +32,11 @@ export const CASESS: Record<string, LevelCase> = {
   },
 
   // ---- sp_sd
+  sp_sd: {
+    problem: 'A converter with one comparator and one bit can only say above or below, and a comparator is cheap and exact. Fed back through a running sum, it says it fast enough that the average of its bits is the input, and its error (the quantizer error) is pushed to high frequencies, where a digital filter removes it.',
+    without: 'A one-bit quantizer alone has an error as large as the signal. In the loop the error is shaped by (1 − z⁻¹) per order: with 64 clocks per output sample a first-order loop reaches about 50 dB and a second-order one about 70 dB on a half-scale tone, from the same single bit.',
+    cost: 'First order is 502 NANDs, second order 987: a second adder, subtractor and register of 13 bits. The 8 input bits become a bit each clock, and the loop has no multiplier. The 16-bit loop of the chapter is 1 579 NANDs; the filter after it (the CIC level) costs more than the loop.',
+    alts: [{ name: 'First-order loop (one sum)', nand: 502, note: 'sdModulator(1, 8), counted by the simulator' }, { name: 'Second-order loop (two sums)', nand: 987, note: 'sdModulator(2, 8), counted by the simulator' }],
+  },
 
 };

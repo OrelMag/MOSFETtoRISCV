@@ -4,6 +4,7 @@
 
 import type { CampaignNode } from './types';
 import { BUILDDSP, cicGives, cordicGives, satGives } from './builddsp';
+import { sdGives } from './sdcheck';
 
 export const NODES_DSP: CampaignNode[] = [
   {
@@ -60,8 +61,14 @@ export const NODES_DSP: CampaignNode[] = [
     codex: ['cordic'], chapters: [{ chapter: 'cordic', step: 1, label: 'One way or the other' }, { chapter: 'cordic', step: 3, label: 'A stage is three adders' }],
   },
   {
-    id: 'sp_sd', act: 13, title: 'Sigma-delta loop', kind: 'build', optional: true, soon: true, requires: ['sp_cic'],
+    id: 'sp_sd', act: 13, title: 'Sigma-delta loop', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_sd, givesOf: sdGives,
+    unlocks: [], par: { nand: 987 },
     why: 'An integrator, a comparator and feedback: one bit a clock whose average is the input, and noise pushed to where a filter removes it.',
-    tips: [], codex: [],
+    tips: [
+      'Two registers hold running sums. Each clock adds the input into y1 and y1 into y2, and takes away v, the one-bit DAC: +full scale after a 1, −full scale after a 0.',
+      'v is wiring: the word for +full scale and the word for −full scale differ only in their top bits, and those are the bit and its inverse. Subtract it with the adders you have.',
+      'The decision is the sign of y2, read before the edge and stored in a flip-flop; the sums are wider than the input so they do not wrap. Check names the first clock at which your bit, y1 or y2 leaves the model.',
+    ],
+    codex: ['sigmadelta', 'noiseshaping'], chapters: [{ chapter: 'converters', step: 4, label: 'One bit, and feedback' }, { chapter: 'converters', step: 5, label: 'The loop in gates, and its CIC' }],
   },
 ];
