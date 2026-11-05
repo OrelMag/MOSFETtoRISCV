@@ -38,6 +38,7 @@ const LANGS: Record<ProgramLang, { name: string; code: CodeLang; shape: Partial<
   asm: { name: 'RISC-V assembly', code: 'rvasm', shape: { w: 32 } },
   rv16: { name: 'RV16 assembly', code: 'rv16asm', shape: { w: 16, addr: 'word' } },
   cpu4: { name: '4-bit CPU assembly', code: 'cpu4asm', shape: { w: 16, addr: 'word' } },
+  dsp24: { name: 'DSP24 assembly', code: 'dsp24asm', shape: { w: 24, addr: 'word' } },
   '6502': { name: '6502 assembly', code: 'm6502asm', shape: { w: 8, addr: 'word' } },
   hex: { name: 'hex words', code: 'hex', shape: {} },
   isa: { name: 'custom instruction set', code: 'hex', shape: { addr: 'word' } },
@@ -50,6 +51,7 @@ const langName = (r: Pick<RomRef, 'lang' | 'isa'>) => (r.lang === 'isa' && r.isa
 // ---- palette -------------------------------------------------------------------------------
 
 const FIB = ROM_SAMPLES.find((s) => s.id === 'fib')!.src;
+const DSP_FIR = ROM_SAMPLES.find((s) => s.id === 'dsp24_fir16')!.src;
 const WALK = '# one hex word per entry; @n moves to word n\n01 02 04 08 10 20 40 80';
 
 registerPaletteGroup({
@@ -75,6 +77,8 @@ registerPaletteGroup({
     { id: 'core_rv32c', name: 'RV32IC core', title: 'RV32I with the C extension: 16-bit instructions expanded inside, PC + 2. Its Program ROM needs the C extension ticked: it answers at any even address.', place: { part: { lib: 'rv32ic_core' } } },
     { id: 'core_rv64', name: 'RV64I core', title: 'The 64-bit core: 64-bit PC, registers and ALU, W instructions, data memory of 64 doublewords inside (Properties: 16 to 256). Program ROM: tick RV64. The CPU drawer shows all 64 bits.', place: { part: { lib: 'rv64i_core' } } },
     { id: 'core_rv64m', name: 'RV64IM core', title: 'The 64-bit core with the M extension (multiply, divide: retire = 0 while a divide runs). Program ROM: tick RV64.', place: { part: { lib: 'rv64im_core' } } },
+    { id: 'core_dsp24', name: 'DSP core', title: 'The DSP core without its memories: instr in (from a Program ROM in DSP24 assembly), pc out; X and Y read on xaddr / xdata and yaddr / ydata, a store puts a word on wdata with xwe or ywe; out / outv send results, halt stops. Two RAM parts of 256 × 16 are its X and Y memories. The CPU drawer follows it.', place: { part: { lib: 'dsp24_core' } } },
+    { id: 'prog_rom_dsp24', name: 'Program ROM (DSP24)', title: '256 words of 24 bits, word addressed, holding a DSP24 program (the FIR filter to start from; the benchmarks are in Edit program… ▸ samples)', place: { part: { rom: { k: 8, w: 24, addr: 'word', lang: 'dsp24', src: DSP_FIR } } } },
     { id: 'prog_rom_c', name: 'Program ROM (RV32C)', title: 'A Program ROM with the C extension ticked: reads at any even address, assembles .option rvc and c.* mnemonics', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RVC_SOURCE, c: true } } } },
     { id: 'prog_rom_64', name: 'Program ROM (RV64)', title: 'A Program ROM assembled for RV64: ld, sd, the W instructions, li of any 64-bit constant', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RV64_SOURCE, xlen: 64 } } } },
   ],
@@ -232,7 +236,7 @@ registerPropsSection({
       now.replaceChildren(i === null
         ? h('span', null, 'Address unknown (not connected or X)')
         : h('span', null, 'Reading ', h('b', null, r.addr === 'rv32' ? `0x${(r.c && l ? l.addr : 4 * i).toString(16).padStart(4, '0')}` : rows[i]?.addr ?? `[${i}]`), ' → ',
-          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' || (r.lang === '6502' && l.text) ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
+          h('code', null, !l ? (r.addr === 'rv32' ? 'nop (fill)' : '0 (fill)') : r.w === 32 || r.lang === 'cpu4' || r.lang === 'dsp24' || r.lang === 'isa' || (r.lang === '6502' && l.text) ? l.text : `0x${(l.word >>> 0).toString(16).padStart(r.w / 4, '0')}`)));
     });
     return out;
   },
@@ -243,7 +247,7 @@ function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Part
   const cur = r.lang === 'isa' && r.isa ? `isa:${r.isa.id}` : r.lang;
   const isas = isaList(ed.ws);
   const sel = h('select', { 'aria-label': 'Language' },
-    (['asm', 'rv16', 'cpu4', '6502', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
+    (['asm', 'rv16', 'cpu4', 'dsp24', '6502', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
     isas.length ? h('optgroup', { label: 'Instruction sets' }, isas.map((d) => h('option', { value: `isa:${d.id}`, selected: cur === `isa:${d.id}` }, d.name))) : null,
     h('optgroup', { label: 'Custom ISA' },
       r.lang === 'isa' && r.isa ? h('option', { value: '__edit' }, `Edit ${r.isa.name}…`) : null,

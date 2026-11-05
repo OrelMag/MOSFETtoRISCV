@@ -9,6 +9,8 @@ import { scanHexLine } from '../editor/program';
 import { DIRECTIVES16, PSEUDO16 } from '../riscv/rv16/asm16';
 import { BY_NAME16, CSRS16, reg16 } from '../riscv/rv16/isa16';
 import { DIRECTIVES4 } from '../isa4/asm4';
+import { BY_NAME24, regNumber24 } from '../dsp/isa24';
+import { DIRECTIVES24 } from '../dsp/asm24';
 import { BY_NAME4, JCN_NAMES, pair4, reg4 } from '../isa4/isa4';
 import { type IsaDoc, tableOf } from '../isa/table';
 import { MNEMONICS as M65 } from '../m6502/isa';
@@ -17,7 +19,7 @@ import { SAP_BY_NAME } from '../sap/isa';
 
 /** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); sapasm: the
  *  SAP-1's (Appendix C); hex: words; py: the Python subset of chapter 15. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
+export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'dsp24asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -80,6 +82,21 @@ const CPU4: AsmWords = {
     if (reg4(w) !== null || pair4(w) !== null) return 'reg';
     if (CONDS_4.has(w.toLowerCase())) return 'kw';
     return 'sym';
+  },
+};
+
+// DSP24 (dsp/asm24.ts): r0–r7, p0–p7, xb xl xm yb yl ym; a memory operand is x(p0)+c: the letter, the pointer, the update
+// (the update's letter, m c r, after a + or -, reads as a keyword).
+const DIRS_24 = new Set(DIRECTIVES24);
+const DSP24: AsmWords = {
+  mnemonic(w) {
+    if (w.startsWith('.')) return DIRS_24.has(w.toLowerCase()) ? 'dir' : 'bad';
+    return BY_NAME24.has(w.toLowerCase()) ? 'op' : 'bad';
+  },
+  operand(w) {
+    const t = w.toLowerCase();
+    if (regNumber24(t) !== null) return 'reg';
+    return t === 'x' || t === 'y' || t === 'c' || t === 'm' || t === 'r' ? 'kw' : 'sym';
   },
 };
 
@@ -229,5 +246,5 @@ export function tokenize(line: string, lang: CodeLang): Tok[] {
   if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
   if (lang === 'm6502asm') return m6502asm(line);
   if (lang === 'py') return py(line);
-  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'sapasm' ? SAP : RV32);
+  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'dsp24asm' ? DSP24 : lang === 'sapasm' ? SAP : RV32);
 }

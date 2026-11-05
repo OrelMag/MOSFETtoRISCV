@@ -9,13 +9,15 @@ import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import { assemble4 } from '../isa4/asm4';
 import { disasm4 } from '../isa4/isa4';
+import { assemble24 } from '../dsp/asm24';
+import { disasm24 } from '../dsp/isa24';
 import { type IsaDoc, tableOf } from '../isa/table';
 import { assemble as assemble6502 } from '../m6502/asm';
 import { disasm as disasm6502 } from '../m6502/isa';
 
 /** asm: RV32 assembly; rv16: the campaign's RV16 assembly (16-bit, word addressed); cpu4: the 4-bit
  *  CPU's assembly (16-bit words, word addressed); 6502: the 6502's assembly (bytes, Appendix A); hex: words. */
-export type ProgramLang = 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa' | '6502';
+export type ProgramLang = 'asm' | 'hex' | 'rv16' | 'cpu4' | 'dsp24' | 'isa' | '6502';
 
 export interface ProgramLine {
   /** Byte address of the word. */
@@ -174,6 +176,10 @@ export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 1
     // Word addressed: line addr stays 4 × the word index, like the other languages' listings.
     const r = assemble16(src);
     return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm16(l.word, l.addr), srcLine: l.srcLine })) };
+  }
+  if (lang === 'dsp24') {
+    const r = assemble24(src);
+    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm24(l.word), srcLine: l.srcLine })) };
   }
   if (lang === 'cpu4') {
     const r = assemble4(src);
