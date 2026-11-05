@@ -73,7 +73,13 @@ const BOOK = [
   'queues',
   'secret',
   'path',
+<<<<<<< HEAD
   'datacentre',
+=======
+  'radio',
+  'wifi',
+  'cellular',
+>>>>>>> origin/feat/comms-cellular
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',

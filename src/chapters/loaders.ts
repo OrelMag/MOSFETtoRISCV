@@ -74,7 +74,13 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "queues": () => import('./ch-comm-queues').then((m) => m.chQueues),
   "secret": () => import('./ch-secret').then((m) => m.chSecret),
   "path": () => import('./ch-comm-path').then((m) => m.chPath),
+<<<<<<< HEAD
   "datacentre": () => import('./ch-comm-dc').then((m) => m.chDatacentre),
+=======
+  "radio": () => import('./ch-comm-radio').then((m) => m.chRadio),
+  "wifi": () => import('./ch-comm-wifi').then((m) => m.chWifi),
+  "cellular": () => import('./ch-comm-cellular').then((m) => m.chCellular),
+>>>>>>> origin/feat/comms-cellular
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),
