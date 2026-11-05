@@ -454,6 +454,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Booting from cards", challenge: "reach" },
     { title: "Everything on one bus", challenge: "reach" },
   ] },
+  { id: "message", num: 0, title: "Sending a message", blurb: "What it takes to send anything: bits on a wire, the two parts of a delay, what fits on a line, why messages are cut into packets and wrapped in layers, and decibels.", level: "Communication", label: "C0", builds: ["basics"], recap: {"checks":3}, steps: [
+    { title: "Bits on a wire", challenge: "quiz" },
+    { title: "How long does it take?", challenge: "quiz" },
+    { title: "What fits on the line", challenge: "quiz" },
+    { title: "Why messages are cut up", challenge: "quiz" },
+    { title: "Layers", challenge: "quiz" },
+    { title: "Decibels", challenge: "quiz" },
+    { title: "An estimate on one page", challenge: "quiz" },
+  ] },
   { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["relays","bus"], recap: {"checks":3}, steps: [
     { title: "Moving a bit", challenge: "quiz" },
     { title: "A line that fades", challenge: "quiz" },
@@ -516,7 +525,26 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Arbitration: two controllers at once", challenge: "quiz" },
     { title: "Three ways to move a byte", challenge: "quiz" },
   ] },
-  { id: "modem", num: 45, title: "Modems", blurb: "How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon's limit; ADSL's many carriers.", level: "Communication", builds: ["telegraph","adders","registers","wire"], recap: {"checks":3}, steps: [
+  { id: "signals", num: 45, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
+    { title: "A wave is a sum of sines", challenge: "quiz" },
+    { title: "The same numbers in frequency", challenge: "quiz" },
+    { title: "Narrow in time, wide in frequency", challenge: "quiz" },
+    { title: "A filter is a sum of delayed samples", challenge: "quiz" },
+    { title: "A filter in gates", challenge: "reach" },
+    { title: "Sampling, and what folds", challenge: "quiz" },
+    { title: "Rounding to a number", challenge: "quiz" },
+    { title: "A mixer moves a band", challenge: "quiz" },
+  ] },
+  { id: "noise", num: 46, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["signals","telegraph"], recap: {"checks":3}, steps: [
+    { title: "The floor", challenge: "quiz" },
+    { title: "A decision", challenge: "quiz" },
+    { title: "The matched filter", challenge: "quiz" },
+    { title: "One axis for every link", challenge: "quiz" },
+    { title: "Power or band", challenge: "quiz" },
+    { title: "Shannon's argument, and his code", challenge: "quiz" },
+    { title: "A chain: who pays", challenge: "quiz" },
+  ] },
+  { id: "modem", num: 47, title: "Modems", blurb: "How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon's limit; ADSL's many carriers.", level: "Communication", builds: ["telegraph","adders","registers","wire","signals","noise"], recap: {"checks":3}, steps: [
     { title: "A channel built for voices", challenge: "quiz" },
     { title: "Tones: FSK", challenge: "quiz" },
     { title: "An oscillator from an adder", challenge: "quiz" },
@@ -527,19 +555,18 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Many tones, one FFT", challenge: "quiz" },
     { title: "ADSL: many carriers", challenge: "quiz" },
   ] },
-  { id: "serial", num: 46, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then a wave as harmonics, the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 48, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire","signals"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz" },
     { title: "8b/10b and running disparity", challenge: "quiz" },
     { title: "Scrambling instead", challenge: "quiz" },
     { title: "A SerDes in gates", challenge: "reach" },
     { title: "Finding the clock in the data", challenge: "reach" },
-    { title: "A wave is a sum of sines", challenge: "quiz" },
     { title: "The eye diagram", challenge: "quiz" },
     { title: "Equalization", challenge: "quiz" },
     { title: "PAM4", challenge: "quiz" },
     { title: "Fibre", challenge: "quiz" },
   ] },
-  { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
+  { id: "errors", num: 49, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
     { title: "One extra bit", challenge: "quiz" },
     { title: "Locating the error", challenge: "reach" },
     { title: "A remainder as a check", challenge: "quiz" },
@@ -555,7 +582,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Bursts: interleaving", challenge: "quiz" },
     { title: "How far from Shannon", challenge: "quiz" },
   ] },
-  { id: "ethernet", num: 48, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
+  { id: "ethernet", num: 50, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz" },
     { title: "The transmitter", challenge: "quiz" },
     { title: "The receiver", challenge: "quiz" },
@@ -566,7 +593,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A segment", challenge: "reach" },
     { title: "Where this went" },
   ] },
-  { id: "switch", num: 49, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange","multicore"], recap: {"checks":3}, steps: [
+  { id: "switch", num: 51, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange","multicore"], recap: {"checks":3}, steps: [
     { title: "Everyone at once", challenge: "quiz" },
     { title: "Learning", challenge: "reach" },
     { title: "The table's price", challenge: "quiz" },
@@ -576,7 +603,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A switch on a bench", challenge: "quiz" },
     { title: "What full duplex changed", challenge: "quiz" },
   ] },
-  { id: "network", num: 50, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
+  { id: "network", num: 52, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
     { title: "How software reaches the wire" },
     { title: "Registers and rings", challenge: "quiz" },
     { title: "The NIC in gates", challenge: "reach" },
@@ -588,7 +615,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Ping across the wire", challenge: "reach" },
     { title: "The cost of a packet" },
   ] },
-  { id: "router", num: 51, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch"], recap: {"checks":3}, steps: [
+  { id: "router", num: 53, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch"], recap: {"checks":3}, steps: [
     { title: "An address with a shape" },
     { title: "Longest prefix wins", challenge: "quiz" },
     { title: "The fast path in gates", challenge: "reach" },
@@ -598,7 +625,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Link state: everyone holds the map" },
     { title: "What one engine can carry" },
   ] },
-  { id: "tcp", num: 52, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router"], recap: {"checks":3}, steps: [
+  { id: "tcp", num: 54, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router"], recap: {"checks":3}, steps: [
     { title: "A stream over datagrams" },
     { title: "Three segments to begin", challenge: "quiz" },
     { title: "Numbers that count bytes", challenge: "quiz" },
@@ -609,7 +636,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU" },
     { title: "A window into the gates", challenge: "reach" },
   ] },
-  { id: "secret", num: 53, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
+  { id: "secret", num: 55, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.", level: "Communication", builds: ["tcp"], recap: {"checks":3}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },
@@ -618,7 +645,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the breaking taught" },
     { title: "From the Bombe to the stored program" },
   ] },
-  { id: "path", num: 54, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
+  { id: "path", num: 56, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","router","network","ethernet"], recap: {"checks":3}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
     { title: "A name, then an address", challenge: "quiz" },
@@ -655,6 +682,8 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What 5G changed", challenge: "quiz" },
   ] },
   { id: "appendix-6502", num: 58, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 56, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 57, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -665,6 +694,8 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The transistor ledger" },
   ] },
   { id: "appendix-doom", num: 59, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 57, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 58, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
@@ -672,6 +703,8 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Hand it to the gates" },
   ] },
   { id: "appendix-sap", num: 60, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 58, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 59, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -685,6 +718,8 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Programs", challenge: "reach" },
   ] },
   { id: "appendix-runner", num: 61, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 59, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 60, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },
