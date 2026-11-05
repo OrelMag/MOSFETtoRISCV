@@ -145,6 +145,7 @@ export const NUDGES: Record<string, string> = {
   sp_cic: 'Let the sums run past the word and wrap; make every register as wide as the final result needs.',
 
   // sp_cordic: below
+  sp_cordic: 'One signal picks the direction for all three adders: the sign of z when rotating, the sign of y when vectoring. The shifts and the angle cost no gates.',
 
   // sp_sd: below
 

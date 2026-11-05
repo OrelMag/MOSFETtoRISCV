@@ -64,6 +64,35 @@ export const WALKS9: Record<string, WalkScript> = {
   ],
 
   // ---- sp_cordic
+  sp_cordic: [
+    {
+      title: 'The shifts are wires, the angle a constant',
+      text: 'xsc / xs and ysc / ys move x and y down one place: the low bit is dropped and the sign is copied into the top, an arithmetic shift made only of wires. atan is the angle of this stage, atan ½ as a share of a turn, a word tied to the rails.',
+      parts: ['xsc', 'xs', 'ysc', 'ys', 'atan'], codex: ['cordic'],
+      why: 'The stage index is fixed in the drawing, so nothing has to shift at run time: the cost of ≫ 1 is zero gates.',
+      whyNot: { text: 'A barrel shifter with a count input is what an iterative CORDIC needs, one stage over and over. A pipelined stage never changes its shift.' },
+    },
+    {
+      title: 'Which way',
+      text: 'zsgn and nz give z ≥ 0. ysgn is y < 0. The mux d picks one by rotate: rotating, steer z to 0; vectoring, steer y to 0. nd is its opposite.',
+      parts: ['zsgn', 'nz', 'ysgn', 'd', 'nd'], codex: ['cordic'],
+      ask: {
+        question: 'Rotating with z < 0 (the target angle is behind us), which way does the stage turn?',
+        options: ['Against: d = 0, z grows by atan, x grows by y ≫ 1', 'With: d = 1, z shrinks by atan', 'It holds: the stage is skipped', 'It depends on the sign of y'],
+        answer: 0,
+        explain: 'z < 0 means the angle left to turn is negative, so the vector turns the negative way: z takes the angle back by adding it, and z moves toward 0. A stage is never skipped, so the gain stays constant.',
+        why: ['', 'z would move away from 0, further from the target.', 'Skipping would make the gain depend on the angle.', 'When vectoring y decides; when rotating z does.'],
+      },
+      why: 'One bit of decision per stage, shared by all three adders.',
+      whyNot: { text: 'Choosing from the sign of the new z after the subtraction would put the adder in the path of the decision: the stage would be twice as slow.' },
+    },
+    {
+      title: 'Three adders',
+      text: 'ax computes x ∓ (y ≫ 1), ay computes y ± (x ≫ 1) and az z ∓ atan. ax and az subtract when d = 1; ay adds then, so it takes nd.',
+      parts: ['ax', 'ay', 'az'], codex: ['cordic'],
+      why: 'These are the stage: x and y never see a multiplier, and the vector grows by a constant factor that no angle can change.',
+    },
+  ],
 
   // ---- sp_sd
 

@@ -26,6 +26,7 @@ const LISTED = new Set([
   'cic', 'decimation',
 
   // sp_cordic
+  'cordic',
 
   // sp_sd
 

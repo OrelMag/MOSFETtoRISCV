@@ -4,6 +4,10 @@
 // MAC unit and the DSP core. No DOM.
 
 import type { BuildChallenge } from '../editor/challenges';
+import { cordicStage as cordicModel, type CordicSpec } from '../dsp/cordic';
+import { atanTable } from '../dsp/cordic';
+import { wrapTo } from '../dsp/fixed';
+import { cordicStage } from '../lib/cordic';
 import { clampWord, satAdder } from '../lib/fixedpt';
 import type { ComponentDef } from '../sim/types';
 import { leafGives, pinsOf, refOf } from './buildcomm';
@@ -20,6 +24,20 @@ export const satGives = leafGives(SAT_REF, () => [SAT_CLAMP()]);
 const CIC_K = Math.round(Math.log2(CIC_LV.R));
 /** The decimator's parts, its integrator, comb and counter excluded: those are what the level builds. */
 export const cicGives = leafGives(CIC_REF, () => [integrator(CIC_W), comb(CIC_W), rateCount(CIC_K)]);
+
+/** The CORDIC stage level: 5-bit x and y, a 5-bit angle (32 steps a turn), the stage that moves by 1 place: 5 + 5 + 5 + 1 = 16 inputs, so Check runs all 65 536. */
+export const CORDIC_SPEC: CordicSpec = { w: 5, z: 5, n: 4 };
+export const CORDIC_I = 1;
+export const CORDIC_REF = (): ComponentDef => cordicStage(CORDIC_SPEC, CORDIC_I);
+/** The stage's parts (adders, wiring, the angle constant): the stage itself is what the level builds. */
+export const cordicGives = leafGives(CORDIC_REF, () => []);
+/** The chapter's model on packed words: x, y, z as unsigned bit patterns, rotate 1 steers z to 0, 0 steers y to 0. */
+export function cordicSpec([x, y, z, rot]: number[]): number[] {
+  const s = CORDIC_SPEC, sg = (v: number, w: number) => wrapTo(v, w);
+  const r = cordicModel({ x: sg(x, s.w), y: sg(y, s.w), z: sg(z, s.z) }, CORDIC_I, atanTable(s)[CORDIC_I], s, rot ? 'rotate' : 'vector');
+  const u = (v: number, w: number) => ((v % 2 ** w) + 2 ** w) % 2 ** w;
+  return [u(r.x, s.w), u(r.y, s.w), u(r.z, s.z)];
+}
 
 export const BUILDDSP: Record<string, () => BuildChallenge> = {
   sp_sat: () => ({
@@ -46,6 +64,15 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
   }),
 
   // ---- sp_cordic
+  sp_cordic: () => ({
+    id: 'sp_cordic', title: 'A CORDIC stage', level: 'gates', allowed: 'nand',
+    brief: `One stage of a CORDIC rotator, the one that moves by 1 place (angle atan ½): <b>x</b>, <b>y</b> are ${CORDIC_SPEC.w}-bit two's complement, <b>z</b> a ${CORDIC_SPEC.z}-bit angle in which ${2 ** CORDIC_SPEC.z} steps are a full turn (atan ½ is ${atanTable(CORDIC_SPEC)[CORDIC_I]} of them). `
+      + 'Turn the vector by that angle one way or the other: <b>xo</b> = x ∓ (y ≫ 1), <b>yo</b> = y ± (x ≫ 1), <b>zo</b> = z ∓ atan ½, where ≫ drops bits toward −∞. '
+      + 'With <b>rotate</b> = 1 the upper sign is taken when z ≥ 0, driving z toward 0; with rotate = 0 it is taken when y &lt; 0, driving y toward 0. Check runs every input (65 536) against the model of the chapter.',
+    ports: pinsOf(CORDIC_REF()),
+    check: { kind: 'table', spec: cordicSpec },
+    answer: refOf('sp_cordic', CORDIC_REF, 'CORDIC stage'),
+  }),
 
   // ---- sp_sd
 
