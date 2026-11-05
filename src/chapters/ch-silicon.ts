@@ -12,6 +12,7 @@ import { ENIAC, ENIAC_PANEL } from '../phys/triode';
 import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
 import type { Chapter, Step } from './types';
+import { numOf } from './order';
 
 const num = (n: number) => groupDigits(Math.round(n));
 const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
@@ -99,7 +100,7 @@ function hallStep(): Step {
 }
 
 export const chSilicon: Chapter = {
-  id: 'silicon', num: 28, title: 'From netlist to silicon', level: 'Physical design',
+  id: 'silicon', num: numOf('silicon'), title: 'From netlist to silicon', level: 'Physical design',
   blurb: 'Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.',
   goals: [
     'read a standard cell\'s layout: transistors where polysilicon crosses diffusion, PMOS in the n-well, NMOS below',

@@ -6,6 +6,7 @@ import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { relayCloseup } from '../widgets/relay3d';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const ADD4 = relayAdder(4);
 const PULL = relayStatic();
@@ -21,7 +22,7 @@ const RELEASE_MS = 3.4;
 const CONTACT_LIFE = 1e7;
 
 export const chRelays: Chapter = {
-  id: 'relays', num: 0, prologue: 'P1', title: 'Relays', level: 'Electromechanical',
+  id: 'relays', num: numOf('relays'), prologue: 'P1', title: 'Relays', level: 'Electromechanical',
   blurb: 'A switch moved by a magnet: logic, an adder whose carry needs no time, memory and a clock, from 1937 hardware.',
   goals: [
     `read a relay's pull-in and drop-out voltages and its ${ms(RELAY_STEP_MS)} ms step off its physical model`,

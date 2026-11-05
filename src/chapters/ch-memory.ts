@@ -11,6 +11,7 @@ import { memSizePanel } from '../widgets/memsize';
 import { portCost } from '../widgets/storage';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 
@@ -21,7 +22,7 @@ function word(st: Stage, i: number): number {
 }
 
 export const chLatches: Chapter = {
-  id: 'latches', num: 8, title: 'Memory from feedback', level: 'Sequential logic',
+  id: 'latches', num: numOf('latches'), title: 'Memory from feedback', level: 'Sequential logic',
   blurb: 'Loop a gate\'s output back to its input and it starts to remember.',
   goals: [
     'store a bit in two cross-coupled NANDs, and say what the forbidden input does to them',
@@ -306,7 +307,7 @@ export const chLatches: Chapter = {
 };
 
 export const chRegisters: Chapter = {
-  id: 'registers', num: 9, title: 'Registers & counters', level: 'Sequential blocks',
+  id: 'registers', num: numOf('registers'), title: 'Registers & counters', level: 'Sequential blocks',
   blurb: 'Store a whole word on every clock edge; count, shift, reset, and divide a clock.',
   goals: [
     `build a register from enable flip-flops, and price a stored bit (${nands(DFFE)} NANDs, ${stats(DFFE).transistors} transistors)`,
@@ -821,7 +822,7 @@ export const chRegisters: Chapter = {
 };
 
 export const chMemory: Chapter = {
-  id: 'memory', num: 10, title: 'Memory arrays', level: 'Memory',
+  id: 'memory', num: numOf('memory'), title: 'Memory arrays', level: 'Memory',
   blurb: 'Many registers, one address: decoders write, multiplexers read. Then ROM, PLA, FIFO, stack, CAM and extra ports.',
   goals: [
     'build a RAM from registers, a decoder with enable to write and a multiplexer tree to read',

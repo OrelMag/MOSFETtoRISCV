@@ -6,6 +6,7 @@ import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
 import { encodingsWidget, fixedWidget, overflowWidget } from '../widgets/numsys';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nd = (d: ComponentDef): number => stats(d).nands;
 const tr = (d: ComponentDef): number => stats(d).transistors;
@@ -34,7 +35,7 @@ export function pathDepth(def: ComponentDef, from: string, to: string): number {
 }
 
 export const chGates: Chapter = {
-  id: 'gates', num: 4, title: 'Gates from NAND', level: 'Gates',
+  id: 'gates', num: numOf('gates'), title: 'Gates from NAND', level: 'Gates',
   blurb: 'NOT, AND, OR, XOR and the multiplexer, each built from NANDs.',
   goals: [
     'build NOT, AND, OR, NOR, XOR, XNOR and the 2:1 multiplexer from NANDs alone, and give each one\'s NAND count',
@@ -303,7 +304,7 @@ export const chGates: Chapter = {
 };
 
 export const chBinary: Chapter = {
-  id: 'binary', num: 5, title: 'Binary numbers', level: 'Numbers',
+  id: 'binary', num: numOf('binary'), title: 'Binary numbers', level: 'Numbers',
   blurb: 'Bits as numbers: unsigned, hex, two\'s complement, overflow, extension, shifts and fixed point.',
   goals: [
     'convert between binary, hexadecimal and decimal, and read one bit pattern as unsigned or two\'s complement',

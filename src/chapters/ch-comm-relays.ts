@@ -16,6 +16,7 @@ import { withModel } from '../widgets/modelhost';
 import { codesWidget, limitsWidget, telegraphLineWidget } from '../widgets/comm';
 import { erlangWidget, meshWidget, networkCostWidget, startStopWidget } from '../widgets/exchange';
 import type { Chapter } from './types';
+import { numOf, type ChapterId } from './order';
 
 const thin = (n: number) => groupDigits(Math.round(n));
 const f1 = (x: number) => x.toFixed(1);
@@ -45,20 +46,20 @@ const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
   [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
-  [44, 'SPI and I²C'], [45, 'Modems'], [46, 'Fast serial links'], [47, 'When bits go wrong'], [48, 'Ethernet'], [49, 'A switch'],
-  [50, 'Computers on a network'], [51, 'A router'], [52, 'TCP'], [53, 'The internet path'],
+  [44, 'SPI and I²C'], [numOf('modem'), 'Modems'], [numOf('serial'), 'Fast serial links'], [numOf('errors'), 'When bits go wrong'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('path'), 'The internet path'],
 ];
-/** The five questions, with where the track answers each (chapter numbers). */
-const QUESTIONS: [string, string, number[]][] = [
-  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', [41, 45, 46]],
-  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', [40, 42, 43, 46]],
-  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', [40, 43, 48]],
-  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', [47, 52]],
-  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', [40, 44, 48, 49, 51]],
+/** The five questions, with the chapters of the track that answer each. */
+const QUESTIONS: [string, string, ChapterId[]][] = [
+  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'modem', 'serial']],
+  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'serial']],
+  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'ethernet']],
+  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'tcp']],
+  ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', ['exchange', 'spi', 'ethernet', 'switch', 'router']],
 ];
 
 export const chTelegraph: Chapter = {
-  id: 'telegraph', num: 39, title: 'Two machines, one wire', level: 'Communication',
+  id: 'telegraph', num: numOf('telegraph'), title: 'Two machines, one wire', level: 'Communication',
   blurb: 'Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.',
   goals: [
     'say why a long line needs a repeater, and compute its reach from battery, wire and coil',
@@ -110,7 +111,7 @@ export const chTelegraph: Chapter = {
         reason to be frugal, but it fixes the scale of the problem. Computing is local: the bit already is a voltage next to the gate that reads it. A
         message has to become something that survives a distance, and the other end must find it, recognize where it starts, and trust it.</p>
         <p>Every link in this track answers five questions, whatever it is made of:</p>
-        <ol class="five">${QUESTIONS.map((q) => `<li><strong>${q[0]}</strong> ${q[1]}. <span class="where">Chapter ${q[2].join(', ')}.</span></li>`).join('')}</ol>
+        <ol class="five">${QUESTIONS.map((q) => `<li><strong>${q[0]}</strong> ${q[1]}. <span class="where">Chapter ${q[2].map(numOf).join(', ')}.</span></li>`).join('')}</ol>
         <p>The track starts where the problem started: a key, a battery and a wire, then the relay that was devised to repeat a weak signal, then the
         two limits that cap any such line. It ends with one packet crossing a network of routers, each of which you can open down to a MOSFET. Each chapter uses only what is
         below it.</p>`,
@@ -252,7 +253,7 @@ export const chTelegraph: Chapter = {
         the number of levels the noise leaves distinguishable. On ${groupDigits(TONE.B)} Hz at ${TONE.db} dB (${f0(dbToRatio(TONE.db))} ×) that is ${levelsSupported(dbToRatio(TONE.db)).toFixed(1)} levels and
         ${f1(shannon(TONE.B, dbToRatio(TONE.db)) / 1e3)} kb/s.</p>
         <p>The marked lines are systems with published rates. The V.34 voice modem, ${(V34.rate / 1e3).toFixed(1)} kb/s on about ${f1(V34.B / 1e3)} kHz of telephone channel, is ${V34_ETA.toFixed(1)} bit/s per hertz, so by Shannon's theorem that line had at least
-        ${f0(ratioToDb(snrNeeded(V34_ETA)))} dB of SNR (assuming that bandwidth). The theorem says a code exists and not what it is: closing the gap to the limit took the error-correcting codes of chapter 47 and
+        ${f0(ratioToDb(snrNeeded(V34_ETA)))} dB of SNR (assuming that bandwidth). The theorem says a code exists and not what it is: closing the gap to the limit took the error-correcting codes of chapter ${numOf('errors')} and
         decades of work.</p>
         <div class="try">Hold the bandwidth, raise the levels and find the SNR at which they fit. Then drop the SNR by 10 dB.</div>`,
       widget: () => limitsWidget(true),
@@ -278,7 +279,7 @@ export const chTelegraph: Chapter = {
         the ones below it, up to <span data-ahead="tcp">TCP, a reliable stream over packets that may not arrive</span>, and <span data-ahead="internetpath">the internet path, one packet's whole journey across networks</span>:</p>
         <table class="mini ladder"><tr><th>Chapter</th><th>Title</th></tr>${LADDER.map(([n, t]) => `<tr><td>${n}</td><td>${t}</td></tr>`).join('')}</table>
         <p>And the questions, with where each is answered:</p>
-        <table class="mini ladder"><tr><th>Question</th><th>Chapters</th></tr>${QUESTIONS.map((q) => `<tr><td>${q[0]}</td><td>${q[2].join(', ')}</td></tr>`).join('')}</table>
+        <table class="mini ladder"><tr><th>Question</th><th>Chapters</th></tr>${QUESTIONS.map((q) => `<tr><td>${q[0]}</td><td>${q[2].map(numOf).join(', ')}</td></tr>`).join('')}</table>
         <p>The next chapter takes the relay from a repeater to a telephone exchange, where a question comes up that a point-to-point line never has: many senders, many receivers, and a switch that makes the path.</p>`,
       challenge: {
         kind: 'quiz', question: 'A stop unit after each character is the answer to which of the five questions?',
@@ -303,7 +304,7 @@ const E10 = erlangB(10, 10);
 const ERL = { E: offered(1000, 2, 3) };
 
 export const chExchange: Chapter = {
-  id: 'exchange', num: 40, title: 'The telephone exchange', level: 'Communication',
+  id: 'exchange', num: numOf('exchange'), title: 'The telephone exchange', level: 'Communication',
   blurb: 'How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.',
   goals: [
     'count what a full mesh, a crossbar and a Clos network cost in wires and crosspoints',
@@ -314,7 +315,7 @@ export const chExchange: Chapter = {
   builds: ['relays', 'telegraph'],
   recap: {
     keep: [
-      `n telephones joined pairwise need n(n − 1) / 2 wires (${thin(meshWires(1000))} for 1 000); an exchange needs n and a switch. A <strong>circuit-switched</strong> call owns a path end to end for its whole duration, speaking or not. Chapter 49 and the chapters after it return to the other way: packets, which share links.`,
+      `n telephones joined pairwise need n(n − 1) / 2 wires (${thin(meshWires(1000))} for 1 000); an exchange needs n and a switch. A <strong>circuit-switched</strong> call owns a path end to end for its whole duration, speaking or not. Chapter ${numOf('switch')} and the chapters after it return to the other way: packets, which share links.`,
       `A relay pulse counter toggles on the falling edge of each pulse however long it lasts (m' = p ? ¬s : m, s' = p ? s : m): ${CTR.relays} relays for 3 bits. A contact tree on the same relays makes it a selector, ${SEL.relays} relays, 1 of 8, with no extra step.`,
       `A crossbar crosspoint is a relay that joins a row to a column and holds itself. N lines cost N² crosspoints; a three-stage Clos network needs m ≥ 2n − 1 middle switches never to block (${thin(BEST.crosspoints)} against ${thin(crossbarCrosspoints(1024))} crosspoints at 1 024 lines).`,
       `Erlang B gives the chance a call finds every trunk busy: ${f0(100 * E10)} % at 10 Erlangs on 10 trunks, 1 % with ${trunksFor(10, 0.01)}. Big trunk groups carry more per trunk.`,
@@ -351,7 +352,7 @@ export const chExchange: Chapter = {
         <p>Telephones need a way to find each other. The direct way is a wire between every pair: n phones need n(n − 1) / 2 wires and n − 1 jacks on each. Ten phones are ${meshWires(10)} wires; a thousand are ${thin(meshWires(1000))}. The other way is one
         wire from each phone to a central place and a <strong>switch</strong> there that connects two of them for the length of a call. The wires grow as n, and the cost moves into the switch.</p>
         <p>That is <strong>circuit switching</strong>: setting up a call reserves a path from one end to the other, and it carries that conversation, silence included, until a hang-up releases it. Nothing else can use the path.
-        Chapter 49 and the chapters after it build the alternative, packets that share links; this chapter builds the reservation. The rest of the chapter makes a small exchange out of the relay contacts of the prologue: a counter for dialled digits, a selector, a crossbar, and the sums for sizing one.</p>
+        Chapter ${numOf('switch')} and the chapters after it build the alternative, packets that share links; this chapter builds the reservation. The rest of the chapter makes a small exchange out of the relay contacts of the prologue: a counter for dialled digits, a selector, a crossbar, and the sums for sizing one.</p>
         <div class="try">Slide the number of phones up to 16 and compare the two drawings.</div>`,
       widget: () => meshWidget(),
       challenge: {
@@ -467,7 +468,7 @@ export const chExchange: Chapter = {
         derive: `<p>Crosspoint (r, c) operates when rs<sub>r</sub> and cs<sub>c</sub> are both up and the column is not busy: the row relay feeds the row line, the column relay's pole r passes it to the crosspoint's coil, and the busy relay's break contact sits in the column relay's own coil path. It then holds through
           H<sub>r</sub>, VDD through the break contact of row r's hang-up relay. ${XB.relays} relays = 9 + 3 + 3 + 3 + 3.</p>`,
         pitfall: `<p>Selecting two callers into the same column in the same instant. Both crosspoints would get a feed before either busy relay moved. A real crossbar exchange had one marker that served one request at a time, which is what makes the busy test sound.</p>`,
-        real: `<p>Crossbar exchanges replaced the stepping switches from the middle of the last century. The grid of crosspoints is the same idea as the crossbar a switch chip builds between its ports (chapter 49).</p>`,
+        real: `<p>Crossbar exchanges replaced the stepping switches from the middle of the last century. The grid of crosspoints is the same idea as the crossbar a switch chip builds between its ports (chapter ${numOf('switch')}).</p>`,
       },
       challenge: {
         kind: 'reach', goal: 'Set up two calls at once (two columns busy), with the selects back at 0.',
@@ -536,7 +537,7 @@ export const chExchange: Chapter = {
       more: {
         derive: `<p>The receiver detects the start edge, then samples data bit i at (i + 1 + p) bits of its own clock, p = ½ for mid-bit. With its clock fast by e it reaches that instant after (i + 1 + p) / (1 + e) transmitter units. The bit read is the unit that instant falls in. The first failure on the fast side is the stop sample at K + p, which must stay at or after K:
           e ≤ p / K. On the slow side, the last data sample at K − 1 + p must stay before K: e ≥ −(1 − p) / K. K = 1 + data + parity: ${K_ITA2} for ITA2, 9 for 8N1.</p>`,
-        pitfall: `<p>Comparing it with a clock that must hold over a long stream. A synchronous link cannot resynchronize at every character, so its clocks must agree within a fraction of a bit over the whole message, or one of them has to be recovered from the data (chapter 46). Start-stop spends a start and a stop unit to avoid that.</p>`,
+        pitfall: `<p>Comparing it with a clock that must hold over a long stream. A synchronous link cannot resynchronize at every character, so its clocks must agree within a fraction of a bit over the whole message, or one of them has to be recovered from the data (chapter ${numOf('serial')}). Start-stop spends a start and a stop unit to avoid that.</p>`,
       },
       challenge: {
         kind: 'quiz', question: `The teleprinter's receiver motor runs ${f1(100 * SS.ita2.fast + 3)} % fast (sampling mid-unit, a continuous clock). A character ending in a 0 bit:`,

@@ -7,6 +7,7 @@ import { cardEditorWidget, censusWidget, deckWidget, loomWidget, readerPanel, sa
 import { withModel } from '../widgets/modelhost';
 import { press3d } from '../widgets/press3d';
 import { bench, type Chapter } from './types';
+import { numOf } from './order';
 
 const SUM = assemble(PROGRAMS.find((p) => p.id === 'sum')!.source);
 const SUM_DECK = programDeck('sum.s', SUM.lines.map((l) => ({ word: l.word, source: l.text })));
@@ -27,7 +28,7 @@ const hex = (w: number) => `0x${(w >>> 0).toString(16).padStart(8, '0')}`;
 const wordOf = (k: number) => SUM.lines[k].word >>> 0;
 
 export const chCards: Chapter = {
-  id: 'cards', num: 0, prologue: 'P3', title: 'Punch cards', level: 'Input',
+  id: 'cards', num: numOf('cards'), prologue: 'P3', title: 'Punch cards', level: 'Input',
   blurb: 'Holes in cards: a loom\'s pattern, a nation counted, a program a card at a time, and the reader that feeds it in.',
   goals: [
     'count combinations on a tabulator: relay contacts in series for AND, in parallel for OR',

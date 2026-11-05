@@ -4,6 +4,8 @@
 // sanitized on load, never part of a share link. A deleted item stays as a tombstone for a while, so that merging a
 // backup file (mergeNotes: union by id, the newest edit wins) does not bring it back.
 
+import { moveStep, movedOf, STEP_MOVES } from '../chapters/stepmoves';
+
 export const NOTES_KEY = 'mosfet2riscv:notes:v1';
 const SCHEMA = 1;
 const TOMB_MS = 90 * 24 * 3600 * 1000;
@@ -38,13 +40,15 @@ export interface NoteItem {
 }
 
 export interface NotesState {
+  /** Batches of chapters/stepmoves.ts already applied to the places. */
+  moved?: number;
   schema: number;
   items: Record<string, NoteItem>;
 }
 
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
 
-export const emptyNotes = (): NotesState => ({ schema: SCHEMA, items: {} });
+export const emptyNotes = (): NotesState => ({ schema: SCHEMA, moved: STEP_MOVES.length, items: {} });
 
 export function placeKey(p: Place): string {
   return p.kind === 'step' ? `c:${p.chapter}:${p.step}` : p.kind === 'bench' ? `w:${p.id}` : `s:${p.id}`;
@@ -109,8 +113,10 @@ function sanitizeItem(id: string, v: unknown): NoteItem | null {
 export function sanitizeNotes(raw: unknown): NotesState {
   const st = emptyNotes();
   if (!isObj(raw) || !isObj(raw.items)) return st;
+  const since = movedOf(raw);
   for (const [id, v] of Object.entries(raw.items).slice(0, MAX_ITEMS)) {
     const it = sanitizeItem(id.slice(0, 80), v);
+    if (it?.place.kind === 'step') it.place = { kind: 'step', ...moveStep(it.place.chapter, it.place.step, since) };
     if (it) st.items[it.id] = it;
   }
   return st;

@@ -16,6 +16,7 @@ import { ipText, parseIp, PROTO_TCP, PROTO_UDP } from '../net/ipv4';
 import { routeMatches, TRIE_NODES, walkTrie } from '../net/trie';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { numOf } from '../chapters/order';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title, type: 'button' }, label); b.addEventListener('click', f); return b; };
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
@@ -460,7 +461,7 @@ export function fetchWidget(): Widget {
     el: h('div', { class: 'widget rt-w' }, sk.el,
       h('div', { class: 'ln-presets' }, check('Name already in the resolver\'s cache', dnsCached, (v) => { dnsCached = v; paint(); }), check('A copy of the site at the access provider', near, (v) => { near = v; paint(); }), check('TLS', tls, (v) => { tls = v; paint(); })),
       bar, rows, read,
-      h('p', { class: 'sub' }, 'No loss, one connection, one object. A real page is many objects, and ', h('a', { href: '#/c/tcp' }, 'chapter 52'), ' is what happens when a segment is lost.')),
+      h('p', { class: 'sub' }, 'No loss, one connection, one object. A real page is many objects, and ', h('a', { href: '#/c/tcp' }, `chapter ${numOf('tcp')}`), ' is what happens when a segment is lost.')),
   };
 }
 

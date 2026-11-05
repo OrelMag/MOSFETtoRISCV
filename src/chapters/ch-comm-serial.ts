@@ -14,6 +14,7 @@ import { eyeWidget, disparityWidget, manchesterWidget, mediaWidget, mediaReach, 
 import { serdesApi, serdesScene } from '../widgets/serdes';
 import { harmonicsWidget } from '../widgets/fourier';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
@@ -54,7 +55,7 @@ const A8 = Math.exp((-2 * Math.PI * B1) / R8), HALF8 = 1 - 2 * A8;
 const reach = mediaReach(10), reach56 = mediaReach(56);
 
 export const chSerial: Chapter = {
-  id: 'serial', num: 46, title: 'Fast serial links', level: 'Communication',
+  id: 'serial', num: numOf('serial'), title: 'Fast serial links', level: 'Communication',
   blurb: 'No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then a wave as harmonics, the eye, equalization, PAM4 and fibre.',
   goals: [
     'say what a line code buys (transitions for the receiver, balance for the wire) and what it costs in bandwidth and gates, for Manchester, 8b/10b and a scrambler',

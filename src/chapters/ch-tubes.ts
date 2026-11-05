@@ -10,6 +10,7 @@ import { PS_PER_NAND } from '../sim/timing';
 import { triodeCloseup } from '../widgets/triode3d';
 import { tubeDividerWidget } from '../widgets/tubedivider';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const SEC = sectionPower(), BRICK = nandBrickPower(), L1 = gateLevels(1), L2 = gateLevels(2);
 const WARM = (() => {
@@ -25,7 +26,7 @@ const CPU4_NANDS = 3357;
 const VS_CMOS = thin(Math.round((TUBE_STEP_US * 1e6) / PS_PER_NAND / 1e4) * 1e4);
 
 export const chTubes: Chapter = {
-  id: 'tubes', num: 0, prologue: 'P2', title: 'Vacuum tubes', level: 'Thermionic',
+  id: 'tubes', num: numOf('tubes'), prologue: 'P2', title: 'Vacuum tubes', level: 'Thermionic',
   blurb: 'A switch with no moving parts: the triode, its awkward voltages, NOR as its natural gate, a flip-flop in one bulb, and ENIAC\'s bill.',
   goals: [
     'say why a triode needs a hot cathode and conducts one way only',

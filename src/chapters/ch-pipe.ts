@@ -15,6 +15,7 @@ import { pyScene } from '../widgets/python';
 import { groupDigits } from '../sim/numfmt';
 import { OWN_ANSWER, OWN_COST, OWN_SOURCE } from '../widgets/owninstr';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const { control: CONTROL_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
@@ -105,7 +106,7 @@ export const PREFIX = { cycles: 219, instr: 166, stall: 15, flush: 36, fill: 2 }
 export const GCD_I = { cycles: 2409, instr: 1545, flush: 860 };
 
 export const chPipeline: Chapter = {
-  id: 'pipeline', num: 17, title: 'Pipelining', level: 'Processor',
+  id: 'pipeline', num: numOf('pipeline'), title: 'Pipelining', level: 'Processor',
   blurb: 'Five stages working on five instructions at once, and the hazards that come with it.',
   goals: [
     'explain why five stages raise throughput but not the latency of one instruction',

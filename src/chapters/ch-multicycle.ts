@@ -8,6 +8,7 @@ import { h } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { controllerPanel, cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 
@@ -75,7 +76,7 @@ function openPainter(stage: Stage): void {
 }
 
 export const chMulticycle: Chapter = {
-  id: 'multicycle', num: 23, title: 'Multicycle & microcode', level: 'Processor',
+  id: 'multicycle', num: numOf('multicycle'), title: 'Multicycle & microcode', level: 'Processor',
   blurb: 'One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.',
   goals: [
     'split instructions into steps that share one ALU and one memory port, with registers across the step boundaries',

@@ -12,6 +12,7 @@ import type { Chapter, Layers } from './types';
 import { newtonSteps } from './float/newton';
 import { errorSteps } from './float/error';
 import { nearFarSteps } from './float/nearfar';
+import { numOf } from './order';
 
 const E4M3 = { E: 4, M: 3 };
 const F6: FpFormat = { E: 3, M: 2 };
@@ -79,7 +80,7 @@ const costRow = (name: string, make: (f: FpFormat) => ComponentDef, depth = true
 const costTable = (rows: string, depth = true) => `<table class="mini"><tr><th>${depth ? 'NANDs / depth' : 'NANDs'}</th>${FORMATS.map(([n]) => `<th>${n}</th>`).join('')}</tr>${rows}</table>`;
 
 export const chFloat: Chapter = {
-  id: 'float', num: 24, title: 'Floating point', level: 'Arithmetic',
+  id: 'float', num: numOf('float'), title: 'Floating point', level: 'Arithmetic',
   blurb: 'IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.',
   goals: [
     'decode a float from its sign, biased exponent and fraction, subnormals, infinities and NaNs included',
