@@ -146,6 +146,18 @@ before relying on them. Add to this as chapters land.
 - The DCT stage's cost and accuracy: measured from the gates and held by `tests/dsp-pictures.test.ts`. The cost of a 64-word transpose store is quoted as plain registers. That store is not built.
 - Pictures: generated scenes. The public-domain photograph the plan mentions is **owed**, not added.
 
+## A software radio (`sdr`)
+
+- The band is synthesized (`src/dsp/sdr.ts`: four FM stations, complex baseband, 960 kHz, seeded Gaussian noise). No recording is used, so there is nothing to license and nothing outside to compare it with.
+- Mixer and CIC: **the gates equal our integer model on every clock** (`tests/dsp-sdr.test.ts`: the mixer at three table sizes and tunings, the front end's I, Q and strobe, the typed-array model equal to the clock-by-clock one). The CIC's growth and wrap are Hogenauer's, already checked under `multirate`.
+- The clip: the first 15 360 clocks of the band through the gates in a BitSim, then the same floating-point filters as the model. The test compares every word leaving the CIC and every audio sample. The browser renders it on a click (about 10 s measured in headless Chrome).
+- Carson's rule, 2 (Δf + f<sub>m</sub>): **unread**, from memory. The chapter does not rest on it: the occupied band is measured from an FFT of one station (98 % of the power, `occupied()`), and `tests/dsp-sdr.test.ts` holds the rule to that within 10 % for modulation indices above 1 (102.0 against 102.0 kHz at 50 kHz and 1 kHz; 120.0 against 130 at 15 kHz).
+- 75 µs pre-emphasis time constant (North American broadcast) and FM's threshold "near 10 dB carrier to noise": **unread**, from memory. ITU-R BS.450 is not cited. The pre-emphasis here is a first-order digital filter and its exact inverse; it is not the analogue network's response. The threshold sentence is attributed to textbooks, and the weak station's measured keying ratio is shown beside the carrier-to-noise figure it comes with.
+- The table-size findings (6 dB of spur-free range a bit, the weak station beside a loud one feeling it, the FM test tone not) are measured here (`mixerSfdr`, `keyingRatio`; `tests/dsp-sdr.test.ts`), not quoted.
+- Test-tone SNR: a sine and cosine at 1 kHz fitted by least squares and subtracted from the audio; the rest is everything else. Measured at 66.8 dB with the noise at −40 dB (the chapter prints the figures it computes).
+- The channel filter, the discriminator, the audio filter and the de-emphasis are floating point in the model. Their DSP-core version is **not built**: it is listed in `Chapter.soon`.
+- Nobody has listened to these clips either.
+
 ## Sound
 
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
