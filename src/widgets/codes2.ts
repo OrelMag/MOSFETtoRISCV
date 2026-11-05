@@ -241,14 +241,14 @@ export const CONCAT_MEASURED = [52, 25, 5], CONCAT_WORDS = 384;
 
 export interface FallPoint { db: number; ber: number; errors: number; bits: number; meanIter: number; n: number }
 
-/** Message updates a data bit against Viterbi's add-compares, as the rate and the mean iterations move. */
+/** Message updates a data bit against Viterbi's branch additions, as the rate and the mean iterations move. */
 export function costWidget(): Widget {
   let dv = 3, it = 11;
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
   const paint = () => {
     const dc = 2 * dv, msgs = (2 * dv) / 0.5;
     chips.set(0, String(msgs * it), `message updates a data bit, (${dv}, ${dc}) at rate ½`);
-    chips.set(1, '128', 'add-compares a data bit, K = 7 Viterbi');
+    chips.set(1, '128', 'branch additions a data bit, K = 7 Viterbi');
     chips.set(2, `${(msgs * it / 128).toFixed(1)} ×`, 'LDPC against Viterbi, in operations');
     note.textContent = 'Operations are not the bottleneck. Every edge needs its message in memory, and a bit may reach any check in the block: that is what the silicon pays for.';
   };
