@@ -132,9 +132,87 @@ export function fetchPhases(f: FetchSpec): FetchPhase[] {
   const out: FetchPhase[] = [];
   if (f.dnsMs > 0) out.push({ name: 'DNS', ms: f.dnsMs, what: 'name to address' });
   out.push({ name: 'TCP handshake', ms: f.rttMs, what: 'SYN, SYN-ACK: one round trip before any data' });
-  if (f.tls) out.push({ name: 'TLS', ms: f.rttMs, what: 'one more round trip for keys (TLS 1.3); not built in this book' });
+  if (f.tls) out.push({ name: 'TLS', ms: f.rttMs, what: 'one more round trip for keys (TLS 1.3): the handshake of Keeping it secret' });
   out.push({ name: 'Request, to first byte', ms: f.rttMs + think, what: `one round trip and ${think} ms of the server's own (assumed)` });
   out.push({ name: `Response: ${segs} segment${segs === 1 ? '' : 's'}`, ms: responseMs(f.pageBytes, f.rttMs, f.bottleneckMbps), what: `${rounds} window${rounds === 1 ? '' : 's'} from ${INIT_WINDOW}, doubling; ${onWire.toFixed(1)} ms of bits at the narrowest link${rounds > 1 ? ', some of them inside those round trips' : ''}` });
   return out;
 }
 export const fetchMs = (f: FetchSpec): number => fetchPhases(f).reduce((a, p) => a + p.ms, 0);
+
+// ---- a page of many objects: three ways to carry them ---------------------------------------------------------------------------------
+
+export type StackName = 'h1' | 'h2' | 'h3';
+export interface StackSpec { objects: number; objectBytes: number; rttMs: number; bottleneckMbps: number; loss: boolean; thinkMs?: number }
+export interface StackRun {
+  /** Round trips before the first request can go: TCP then TLS, or QUIC's one. */
+  setupMs: number;
+  firstByteMs: number;
+  /** When each object has all its bytes, in order, from the start of the connection. */
+  doneMs: number[];
+  totalMs: number;
+  /** Objects a lost packet held up: with a packet that arrived and had to wait behind the gap, or finished later for it. */
+  stalled: number;
+  /** Packets that reached the client and then waited for the lost one. Interleaved objects all end near the end, so their finish times hide this. */
+  heldPackets: number;
+}
+
+/** Packets through the FIFO at the bottleneck, in windows that double, window k leaving k round trips in: responseMs one packet at a time. */
+function flight(sizes: number[], rtt: number, mbps: number, w0: number): { at: number[]; w: number } {
+  let free = 0, k = 0, w = w0, inWindow = 0;
+  const at = sizes.map((b) => {
+    if (inWindow === w) { k++; w *= 2; inWindow = 0; }
+    inWindow++;
+    free = Math.max(free, k * rtt) + ((b + SEG_EXTRA) * 8) / (mbps * 1000);
+    return free;
+  });
+  return { at, w: w * 2 };
+}
+const objectPackets = (bytes: number): number[] => {
+  const n = Math.max(1, Math.ceil(bytes / MSS));
+  return Array.from({ length: n }, (_, i) => (i < n - 1 ? MSS : bytes - MSS * (n - 1)));
+};
+
+function carry(stack: StackName, c: StackSpec): StackRun {
+  const think = c.thinkMs ?? THINK_MS, setupMs = (stack === 'h3' ? 1 : 2) * c.rttMs, firstByteMs = setupMs + c.rttMs + think, pk = objectPackets(c.objectBytes);
+  // The packet half way through the page's bytes is the one lost, and comes again one round trip later. The window is not cut: a comparison of what waits, not of congestion control.
+  const lost = c.loss ? Math.floor((c.objects * pk.length) / 2) : -1, doneMs: number[] = [];
+  let heldPackets = 0;
+  const held = new Set<number>();
+  if (stack === 'h1') {
+    // One object at a time: each request a round trip after the last object's end.
+    let t = setupMs, w = INIT_WINDOW;
+    for (let o = 0; o < c.objects; o++) {
+      const start = t + c.rttMs + think, r = flight(pk, c.rttMs, c.bottleneckMbps, w), i = lost - o * pk.length;
+      let end = start + r.at[r.at.length - 1];
+      if (i >= 0 && i < pk.length) {
+        end = Math.max(end, start + r.at[i] + c.rttMs);
+        held.add(o);
+        for (let j = i + 1; j < pk.length; j++) if (r.at[j] < r.at[i] + c.rttMs) heldPackets++;
+      }
+      doneMs.push(end);
+      t = end; w = r.w;
+    }
+  } else {
+    // Every object's frames interleaved, a packet each in turn, on one connection.
+    const sizes: number[] = [], owner: number[] = [];
+    for (let i = 0; i < pk.length; i++) for (let o = 0; o < c.objects; o++) { sizes.push(pk[i]); owner.push(o); }
+    const { at } = flight(sizes, c.rttMs, c.bottleneckMbps, INIT_WINDOW), retry = lost >= 0 ? at[lost] + c.rttMs : 0;
+    for (let o = 0; o < c.objects; o++) doneMs.push(0);
+    at.forEach((a, i) => {
+      // TCP hands bytes over in order, whatever object they are; QUIC in order within a stream.
+      const behind = lost >= 0 && i >= lost && (stack === 'h2' || owner[i] === owner[lost]);
+      if (behind && (i === lost || a < retry)) { held.add(owner[i]); if (i !== lost) heldPackets++; }
+      doneMs[owner[i]] = Math.max(doneMs[owner[i]], firstByteMs + (behind ? Math.max(a, retry) : a));
+    });
+  }
+  return { setupMs, firstByteMs, doneMs, totalMs: Math.max(...doneMs), stalled: held.size, heldPackets };
+}
+
+/** One page over HTTP/1.1 on one TCP + TLS connection, HTTP/2 on one, or HTTP/3 on QUIC, from the first packet of the connection. Same packets for all three, for a fair comparison. */
+export function pageOver(stack: StackName, c: StackSpec): StackRun {
+  const r = carry(stack, c);
+  if (!c.loss) return r;
+  const clean = carry(stack, { ...c, loss: false });
+  // One at a time, a late object makes every later one late too.
+  return stack === 'h1' ? { ...r, stalled: Math.max(r.stalled, r.doneMs.filter((d, i) => d > clean.doneMs[i] + 1e-9).length) } : r;
+}

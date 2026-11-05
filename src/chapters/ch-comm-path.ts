@@ -4,9 +4,10 @@
 import { CLOCK_NS } from '../dram/timing';
 import { ASES, AS_BRACK, AS_FERN, AS_QUIL, asPrefix, HOSTS, hostIp, Internet, linkBetween, linksOf, LINKS, probeFrame, R, ROUTERS, traceroute } from '../net/internet';
 import { keyOf } from '../net/internetbgp';
-import { engineMs, fetchMs, oneWayMs, propMs, queueMs, serMs, THINK_MS } from '../net/internetdelay';
+import { engineMs, fetchMs, oneWayMs, pageOver, propMs, queueMs, serMs, THINK_MS } from '../net/internetdelay';
 import { Resolver, SITE, TTL_A } from '../net/internetdns';
-import { bgpWidget, dnsWidget, fetchWidget, LAPTOP, networkWidget, onePacketWidget, PATH_FRAMES, pathApi, pathScene, tracerouteWidget, WWW } from '../widgets/internet';
+import { bgpWidget, dnsWidget, fetchWidget, LAPTOP, networkWidget, onePacketWidget, PATH_FRAMES, pathApi, pathScene, stacksWidget, tracerouteWidget, WWW } from '../widgets/internet';
+import TLS_COSTS from '../crypto/tls/costs.json';
 import type { Chapter } from './types';
 import { numOf } from './order';
 
@@ -37,6 +38,10 @@ const NO_POLICY = new Internet({ policy: false }).bgp.best(AS_FERN, keyOf(asPref
 const RTT = ONE_WAY * 2;
 const PAGE = { dnsMs: DNS.ms, rttMs: RTT, pageBytes: 100_000, bottleneckMbps: ACCESS.mbps * (1 - ACCESS.load), tls: true };
 const PAGE_MS = fetchMs(PAGE);
+/** The client's whole share of the handshake in the chapter before, at this book's single-cycle clock. */
+const TLS_CYCLES = TLS_COSTS.handshake['rfc8448 (1024-bit RSA, three cipher suites offered)'].cycles, TLS_SECONDS = (TLS_CYCLES * CLOCK_NS) / 1e9;
+const MANY = { objects: 8, objectBytes: 30_000, rttMs: RTT, bottleneckMbps: PAGE.bottleneckMbps, loss: false };
+const H1 = pageOver('h1', MANY), H2 = pageOver('h2', MANY), H3 = pageOver('h3', MANY), H2L = pageOver('h2', { ...MANY, loss: true }), H3L = pageOver('h3', { ...MANY, loss: true });
 const SER_FULL = serMs(ACCESS, BIG_FRAME), Q50 = queueMs(ACCESS, 0.5), Q95 = queueMs(ACCESS, 0.95);
 
 export const chPath: Chapter = {
@@ -48,7 +53,7 @@ export const chPath: Chapter = {
     'read a traceroute, and say what each line proves and what it does not',
     'add up one packet\'s delay from light, bits, queues and the engine, and say which one matters where',
   ],
-  builds: ['tcp', 'router', 'network', 'ethernet'],
+  builds: ['tcp', 'secret', 'router', 'network', 'ethernet'],
   recap: {
     keep: [
       `A network of networks: link state inside each, BGP between them. A router here holds ${ROUTE_COUNT} or so routes and at most ${NODES} trie nodes, because a /16 stands for a whole network.`,
@@ -58,6 +63,7 @@ export const chPath: Chapter = {
       `Traceroute is the TTL from chapter ${numOf('router')} used on purpose: each router in turn reports the packet it had to kill. Each line is a separate packet, and its time includes a way back that may be a different path.`,
       `One way here takes ${ms1(ONE_WAY)} ms and ${ms1(LIGHT)} of it is light: no engineering shortens that but a shorter route or a nearer copy. At the edge bits and queues matter: ${(SER_FULL * 1000).toFixed(0)} µs for a full frame on the ${ACCESS.mbps} Mb/s line, and a queue that goes from ${(Q50 * 1000).toFixed(0)} µs at half load to ${ms1(Q95)} ms at 95 %.`,
       `A page of 100 kB takes about ${ms1(PAGE_MS)} ms from cold, and most of it is round trips, so faster links stop helping long before a nearer server does.`,
+      `Many objects: HTTP/2 puts them on one connection, but TCP's in-order delivery holds them all up behind one lost packet. QUIC has streams of its own over UDP, so a loss holds up one stream, and one combined handshake saves a round trip. Here ${MANY.objects} objects take ${ms1(H1.totalMs)}, ${ms1(H2.totalMs)} and ${ms1(H3.totalMs)} ms.`,
     ],
     check: [
       {
@@ -80,6 +86,13 @@ export const chPath: Chapter = {
         answer: 0,
         explain: `Light is ${ms1(LIGHT)} of the ${ms1(ONE_WAY)} ms one way. Only moving the far end changes that.`,
         why: ['', `A small frame already takes well under a microsecond on a 100 Gb/s link.`, `Each engine takes about ${ENGINE_NS.toFixed(0)} ns; even all of them together are a small part.`, 'A window affects how much data flows per round trip, not how long the round trip is.'],
+      },
+      {
+        question: 'A page comes over HTTP/2 and one TCP segment is lost. What waits for the retransmission?',
+        options: ['Everything later on that connection, whichever object it belongs to', 'Only the object that segment belonged to', 'Nothing: HTTP/2 retransmits frames itself', 'The whole page is requested again'],
+        answer: 0,
+        explain: 'TCP delivers one ordered stream of bytes and knows nothing of HTTP/2\'s streams, so bytes past the gap stay in its buffer. RFC 9113 says this blocking is not addressed. QUIC moves streams into the transport, which is what limits a loss to one.',
+        why: ['', 'That is QUIC. HTTP/2\'s streams exist only above TCP.', 'Frames have no retransmission of their own: HTTP/2 relies on TCP for that.', 'Only the lost segment is sent again.'],
       },
     ],
   },
@@ -189,12 +202,26 @@ export const chPath: Chapter = {
     {
       title: 'A page',
       body: `
-        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and with TLS 1.3 a second for keys. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is <a href="#/c/tcp">chapter ${numOf('tcp')}</a>'s slow start with no loss, from RFC 6928's ten segments of 1460 bytes (an Experimental RFC); chapter ${numOf('tcp')}'s small TCP starts from two of 64.</p>
-        <p>From cold, 100 kB takes about <strong>${ms1(PAGE_MS)} ms</strong>, and the round trip of ${ms1(RTT)} ms sets nearly all of it. Move the size and see how little the page itself matters until it gets large: once a window holds more than a round trip of the narrowest link, here ${((RTT * PAGE.bottleneckMbps) / 8).toFixed(0)} kB, the link sets the time and not the round trips. Below that, a link ten times faster changes only the serialization. What helps is fewer round trips or shorter ones: a cached name, and a copy of the site nearby, which is what a content delivery network sells.</p><div class="try">Put a copy of the site at the access provider.</div><div class="try">Make the page 2000 kB, and see when bandwidth begins to matter.</div>
-        <p>Open any of it and you can keep going down. The page is bytes in <a href="#/c/ethernet">an Ethernet frame</a>, the frame a stream through <a href="#/c/router">a router's</a> gates, the gates are NANDs from <a href="#/c/nand">chapter 3</a>, and a NAND is four of <a href="#/c/mosfet">chapter 1's</a> transistors. Except for the model of the line, and the invented map, it has all been built here.</p>`,
+        <p>So type <code>${SITE}</code> and press Enter. First the name: ${ms1(DNS.ms)} ms from cold. Then TCP's handshake, one round trip before any data can flow, and a second for keys: the TLS 1.3 handshake of <a href="#/c/secret">Keeping it secret</a>. Then the request, the frame you carried through the gates, one round trip and the server's ${THINK_MS} ms (assumed). Then the response, in slow start: ten segments, then twenty, then forty, each window a round trip after the last. That is <a href="#/c/tcp">chapter ${numOf('tcp')}</a>'s slow start with no loss, from RFC 6928's ten segments of 1460 bytes (an Experimental RFC); chapter ${numOf('tcp')}'s small TCP starts from two of 64.</p>
+        <p>From cold, 100 kB takes about <strong>${ms1(PAGE_MS)} ms</strong>, and the round trip of ${ms1(RTT)} ms sets nearly all of it. Move the size and see how little the page itself matters until it gets large: once a window holds more than a round trip of the narrowest link, here ${((RTT * PAGE.bottleneckMbps) / 8).toFixed(0)} kB, the link sets the time and not the round trips. Below that, a link ten times faster changes only the serialization. What helps is fewer round trips or shorter ones: a cached name, and a copy of the site nearby, which is what a content delivery network sells.</p>
+        <p>Those keys cost computing as well as a round trip, and this sum leaves it out. The client you ran spends ${km(TLS_CYCLES)} cycles on its handshake. At this book's single-cycle clock of ${CLOCK_NS.toFixed(1)} ns that is ${TLS_SECONDS.toFixed(1)} s, far more than the whole wait on the network. A real client has a faster clock, native code and instructions for the job, and so it hardly shows.</p><div class="try">Put a copy of the site at the access provider.</div><div class="try">Make the page 2000 kB, and see when bandwidth begins to matter.</div>`,
       widget: fetchWidget,
       more: {
-        real: `<p>A real page is many objects from several hosts, and modern browsers reuse connections, resolve names ahead of time, and use QUIC to fold transport and TLS into one round trip. TLS itself, HTTP's meaning, routers' own failures, carrier NAT, Wi-Fi and the radio network are all outside this book. The doubling assumes an ACK for every segment: with delayed ACKs, one for two, and RFC 5681's growth of at most one segment per ACK, a window grows about 1.5 times a round trip. Loss changes the transfer too: <a href="#/c/tcp">chapter ${numOf('tcp')}</a> follows it.</p>`,
+        real: `<p>A real page is many objects from several hosts, and modern browsers reuse connections and resolve names ahead of time. The next step takes the objects. HTTP's meaning, routers' own failures, carrier NAT, Wi-Fi and the radio network are all outside this book. The doubling assumes an ACK for every segment: with delayed ACKs, one for two, and RFC 5681's growth of at most one segment per ACK, a window grows about 1.5 times a round trip. Loss changes the transfer too: <a href="#/c/tcp">chapter ${numOf('tcp')}</a> follows it.</p>`,
+      },
+    },
+    {
+      title: 'Many objects: HTTP/2 and QUIC',
+      body: `
+        <p>That page was one object. A real one is dozens, and what carries them decides how many round trips they cost. HTTP/1.1 on one connection asks for one object at a time, a round trip each. <b>HTTP/2</b> keeps TCP and TLS and splits the connection into streams: every object's frames interleaved, all the requests in one round trip. Which of them to speak is agreed inside the TLS handshake, in its ALPN extension, as <code>h2</code>. Here ${MANY.objects} objects of ${MANY.objectBytes / 1000} kB fall from ${ms1(H1.totalMs)} ms to ${ms1(H2.totalMs)} ms.</p>
+        <p>The trouble is underneath. TCP delivers one ordered stream of bytes and has never heard of HTTP/2's streams, so bytes past a lost segment wait in its buffer, whichever object they belong to. The standard says so outright: "TCP head-of-line blocking is not addressed by this protocol". Lose one packet here and ${H2L.heldPackets} packets that did arrive sit waiting for it, from ${H2L.stalled} of the ${MANY.objects} objects.</p>
+        <p><b>QUIC</b> moves the streams down into the transport. It runs in UDP datagrams and does its own reliability per stream, so the same loss holds back ${H3L.heldPackets} packets, from ${H3L.stalled} object. And it folds the transport's handshake and TLS 1.3's into one, so the first request goes a round trip sooner: ${ms1(H3.totalMs)} ms. HTTP/3 is HTTP's meaning carried on it. The keys, the signature and the checks are the ones you ran; only where they travel has changed.</p>
+        <div class="try">Set one object: HTTP/1.1 and HTTP/2 come out equal, as nothing is left to interleave.</div><div class="try">Lose a packet and compare how many objects each one holds up.</div>
+        <p>Open any of it and you can keep going down. The page is bytes in <a href="#/c/ethernet">an Ethernet frame</a>, the frame a stream through <a href="#/c/router">a router's</a> gates, the gates are NANDs from <a href="#/c/nand">chapter 3</a>, and a NAND is four of <a href="#/c/mosfet">chapter 1's</a> transistors. Except for the model of the line, and the invented map, it has all been built here.</p>
+        <details class="deeper"><summary>Where this comes from</summary><p><a href="https://www.rfc-editor.org/rfc/rfc9113" target="_blank" rel="noopener">RFC 9113</a> (HTTP/2: streams, ALPN's h2, the sentence quoted), <a href="https://www.rfc-editor.org/rfc/rfc9000" target="_blank" rel="noopener">RFC 9000</a> (QUIC: UDP datagrams, the combined handshake, streams) and <a href="https://www.rfc-editor.org/rfc/rfc9114" target="_blank" rel="noopener">RFC 9114</a> (HTTP/3, and a lost packet stalling every transaction on HTTP/2 over TCP). The times are this chapter's model, not a measurement of any browser.</p></details>`,
+      widget: stacksWidget,
+      more: {
+        real: `<p>Browsers open several HTTP/1.1 connections to a host, which narrows its gap, and a server may push some streams ahead of others. A returning QUIC client can send data at once (0-RTT), which this leaves out, and connection identifiers let a connection move to a new network path. In the model every packet is the same size on all three, the lost one comes again one round trip later, and the window is not cut after the loss: it compares what waits, not congestion control, which is the subject of the chapter on TCP.</p>`,
       },
     },
   ],
