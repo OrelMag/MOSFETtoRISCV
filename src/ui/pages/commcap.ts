@@ -3,7 +3,7 @@
 // is recorded under the capstone's id in the campaign progress, as a tier capstone's is.
 
 import { attemptCases, ATTEMPT_CASES, FAULT_CASES, PASS_MARK, type FaultCase } from '../../comm/faults';
-import { CARRIER_BITS, CARRIER_BRIEF, CARRIER_REFERENCE_RATE, carrierRate, CODES, EQUALIZERS, LINE_CODES, MODULATIONS, PASS_SHARE, runCarrier, runSerial, SERIAL_BRIEF, SERIAL_RATES, SERIAL_REFERENCE_RATE, type LinkResult } from '../../comm/linkdesign';
+import { CARRIER_BITS, CARRIER_BRIEF, CARRIER_REFERENCE_RATE, carrierRate, CODES, EQUALIZERS, LINE_CODES, MODULATIONS, runCarrier, runSerial, SERIAL_BRIEF, SERIAL_RATES, SERIAL_REFERENCE_RATE, type LinkResult } from '../../comm/linkdesign';
 import { COMM_CAPSTONES } from '../../learn/capstones';
 import { progress } from '../../campaign/progress';
 import { h } from '../dom';
@@ -53,7 +53,7 @@ export class CommCapstonePage {
     };
     const finish = (cases: Picked[], seed: number) => {
       const right = cases.filter((x) => x.pick === 0).length, passed = right >= PASS_MARK;
-      if (passed) progress().solveCapstone('cap_fault', {}, () => [-right]);
+      if (passed) progress().solveCapstone('cap_fault');
       host.replaceChildren(
         h('h2', null, passed ? `Passed: ${right} of ${cases.length}` : `${right} of ${cases.length}: ${PASS_MARK} passes`),
         ...cases.map((x, i) => h('details', { class: 'cc-review', open: x.pick !== 0 },
@@ -80,9 +80,9 @@ export class CommCapstonePage {
       h('span', null, 'Rate ', h('b', null, unit(r.rate))), h('span', null, 'Error rate ', h('b', null, ber(r.ber))), h('span', null, 'Target ', h('b', null, ber(target))),
       h('b', { class: r.closes ? 'good' : 'bad' }, r.closes ? (r.rate >= ref ? 'Closes, at the best rate there is' : `Closes, at ${Math.round((100 * r.rate) / ref)} % of the best`) : 'Does not close'));
     const judge = () => {
-      const c = carrier?.closes && carrier.rate >= PASS_SHARE * CARRIER_REFERENCE_RATE, s = serial?.closes && serial.rate >= PASS_SHARE * SERIAL_REFERENCE_RATE;
-      if (c && s) { progress().solveCapstone('cap_link', {}, () => [-(carrier!.rate / CARRIER_REFERENCE_RATE + serial!.rate / SERIAL_REFERENCE_RATE)]); verdict.textContent = 'Both links close, near enough to the best: passed.'; }
-      else verdict.textContent = `To pass, both links must close at ${Math.round(PASS_SHARE * 100)} % of the best rate or more.`;
+      const c = carrier?.closes && carrier.rate >= CARRIER_REFERENCE_RATE, s = serial?.closes && serial.rate >= SERIAL_REFERENCE_RATE;
+      if (c && s) { progress().solveCapstone('cap_link'); verdict.textContent = 'Both links close at the best rate there is: passed.'; }
+      else verdict.textContent = 'To pass, each link must close at the highest rate any choice can reach.';
     };
     const measureC = h('button', { type: 'button', class: 'btn primary', onclick: () => {
       const c = { mod: Number(mod.value), code: Number(code.value) };
@@ -90,7 +90,9 @@ export class CommCapstonePage {
       this.timer = window.setTimeout(() => { carrier = runCarrier(CARRIER_BRIEF, c, CARRIER_BITS); say(cOut, carrier, CARRIER_REFERENCE_RATE, fmtRate, CARRIER_BRIEF.target); judge(); }, 30);
     } }, 'Measure');
     const measureS = h('button', { type: 'button', class: 'btn primary', onclick: () => {
-      serial = runSerial(SERIAL_BRIEF, { line: Number(line.value) as 0 | 1, eq: Number(eq.value), rate: Number(rate.value) });
+      const run = runSerial(SERIAL_BRIEF, { line: Number(line.value) as 0 | 1, eq: Number(eq.value), rate: Number(rate.value) });
+      if (run.unmodelled) { serial = null; sOut.textContent = 'This book\'s model has no decision feedback for PAM4, though real links use it. Pick another equalizer.'; judge(); return; }
+      serial = run;
       say(sOut, serial, SERIAL_REFERENCE_RATE, (v) => `${v} Gb/s`, SERIAL_BRIEF.target);
       judge();
     } }, 'Measure');

@@ -2,14 +2,12 @@
 // held to a healthy control by tests/comm-faults.test.ts); the chapter is the method for reading what comes out. Capstone 4 is the same view without the help.
 
 import { ATTEMPT_CASES, PASS_MARK } from '../comm/faults';
-import { receive, UART_8N1 } from '../comm/startstop';
 import { benchWidget } from '../widgets/faultbench';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-/** The console quiz: a clock error, and the first character it leaves untouched; U does not survive it. */
-export const UART_ERR = 0.06;
-export const SURVIVOR = (() => { for (const c of [0xff, 0x00, 0x0f, 0xf0]) if (receive(UART_8N1, c, { err: UART_ERR }).ok) return c; return -1; })();
+/** The console quiz: a clock error that moves only the last sample, and two characters it treats differently (tests/comm-faults.test.ts). */
+export const UART_ERR = 0.065, SHOWN_FAILS = 0x55, SHOWN_SURVIVES = 0x31;
 
 export const chBench: Chapter = {
   id: 'bench', num: numOf('bench'), title: 'The expert\'s bench', level: 'Communication',
@@ -24,10 +22,10 @@ export const chBench: Chapter = {
   recap: {
     keep: [
       'Start from what is known and ask what would differ between the candidate causes. Look at the piece of evidence that separates them. Change one thing at a time.',
-      'A slow transfer: retransmissions with a flat round trip are loss; zero windows are a slow reader; a climbing round trip with nothing lost is a bloated queue; retransmissions with the queue\'s drop counter climbing are a queue too small.',
+      'A slow transfer: retransmissions with the line\'s error counter climbing are loss; with the queue\'s drop counter climbing, a queue too small; zero windows are a slow reader; a climbing round trip with nothing lost is a bloated queue.',
       'A clean, thin eye that does not reach the rails has too little band. A wide open waveform with a fuzzy spread around it has noise.',
       'On a UART, errors that fall on a character\'s last bits, and depend on the character, are clock error, not noise.',
-      'Collisions need a shared segment. Bad checks are the physical path. Unicast frames going to every port are a table that has forgotten.',
+      'Collisions need a shared segment. Bad checks on a full-duplex link are the physical path (a duplex mismatch produces them too, so rule that out first). Frames for one machine going to every port are a table that has forgotten.',
       'A trace that ends in the wrong network is a routing lie. One that stops with no route is a route withdrawn.',
     ],
     check: [
@@ -81,7 +79,7 @@ export const chBench: Chapter = {
         <div class="try">For each case, say what you expect to see in each of the three places before you look at the options.</div>`,
       widget: benchWidget(['tcp_reader', 'tcp_bloat', 'tcp_tiny', 'tcp_loss'], ['Case A', 'Case B', 'Case C', 'Case D']),
       challenge: {
-        kind: 'quiz', question: 'A capture shows retransmissions and a flat round trip. Which further number tells line loss from a queue that is too small?',
+        kind: 'quiz', question: 'A capture shows retransmissions. Which further number tells line loss from a queue that is too small?',
         options: ['The drop counter on the queue, against the error counter on the line', 'The receiver\'s window', 'The size of the file', 'The time of day'],
         answer: 0,
         explain: 'Both lose packets, and a capture at the sender cannot see where. The devices on the path count their own drops and errors.',
@@ -106,16 +104,16 @@ export const chBench: Chapter = {
     {
       title: 'Reading a console',
       body: `
-        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right and the last ones are wrong, and how wrong depends on the data, since a sample that lands in the next bit is only an error if that bit differs.</p>
-        <p>That is why a clock error looks odd: some characters come through perfectly. Noise would hit bits at random and spare no character on principle.</p>
-        <div class="try">Find which characters survive, and write out the bits of one that did not. Which sample went wrong?</div>`,
+        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right, and the samples at the end go first. Whether a data bit reads wrong depends on the data, since a sample that lands in a neighbouring bit is only an error if that bit differs. So some bytes read right and some do not, usually with framing errors around them.</p>
+        <p>That is why a clock error looks odd: some characters come through with the right value. Noise would hit bits at random and spare no character on principle.</p>
+        <div class="try">Find which characters survive. Compare the bits of one that did with one that did not: what do the survivors have in common?</div>`,
       widget: benchWidget(['uart_clock'], ['The console']),
       challenge: {
-        kind: 'quiz', question: `At ${UART_ERR * 100} % clock error, the character U (0x55, alternating bits) comes out wrong, while 0x${SURVIVOR.toString(16)} comes out right. Why?`,
-        options: ['A late sample that lands in the next bit only reads wrong if that bit differs, and in U every bit differs from the next', 'U is sent more slowly than other characters', 'U has no stop bit', 'Alternating bits carry more noise'],
+        kind: 'quiz', question: `A receiver runs ${UART_ERR * 100} % fast. The letter U (${SHOWN_FAILS.toString(2).padStart(8, '0')}) reads as the wrong byte, and the digit 1 (${SHOWN_SURVIVES.toString(2).padStart(8, '0')}) reads as the right one. Why?`,
+        options: ['The sample of the last bit lands in the bit before it, and only U\'s top two bits differ', 'U is sent more slowly than other characters', 'U has no stop bit', 'Alternating bits pick up more noise'],
         answer: 0,
-        explain: 'The drift is the same for every character. What differs is whether the bit it lands in has another value. So a test with one pattern proves little: send several, and U is the hardest.',
-        why: ['', 'Every character takes the same time.', 'Every 8N1 character has a stop bit.', 'Noise does not depend on the data, and this case has none.'],
+        explain: 'The drift is the same for every character. What differs is whether the bit it lands in has another value. So one test pattern proves little: send several.',
+        why: ['', 'Every character takes the same time.', 'Every 8N1 character has a stop bit.', 'This case has no noise in it, and noise does not depend on the data.'],
       },
     },
     {
@@ -136,7 +134,7 @@ export const chBench: Chapter = {
     {
       title: 'Reading a trace',
       body: `
-        <p><a href="#/c/path/0">Traceroute</a> shows where packets go, and two comparisons make it useful: with last week's trace, and with what the addresses ought to be. A trace that <em>ends in the wrong network</em> means a route is lying. A trace that <em>stops, with no route</em>, means a route has gone.</p>
+        <p><a href="#/c/path/3">Traceroute</a> shows where packets go, and two comparisons make it useful: with last week's trace, and with what the addresses ought to be. A trace that <em>ends in the wrong network</em> means a route is lying. A trace that <em>stops, with no route</em>, means a route has gone.</p>
         <p>The failed link here is not rerouted, which may surprise you. Networks carry traffic only as their business relationships allow, so a working link nearby may not be offered to you. That is the model's policy from <a href="#/c/path/1">BGP</a> at work, and it is also why real networks buy a second provider.</p>
         <div class="try">Read the two traces side by side. Whose network does each end in?</div>`,
       widget: benchWidget(['route_hijack', 'route_down'], ['Case A', 'Case B']),
@@ -153,7 +151,7 @@ export const chBench: Chapter = {
       body: `
         <p>The other half of the expert's trade is the document that says what should have happened. Standards are written to be exact, not to teach, and they reward a particular way of reading. Keep a question in hand and look it up, as you would a dictionary. Learn the <em>shall</em> convention (RFC 2119's <em>MUST</em>, <em>SHOULD</em> and <em>MAY</em>): it separates what you can rely on from what some implementations happen to do. Read the state tables and the frame formats before the prose.</p>
         <p>A surprising share of real faults sit in the gap between <em>must</em> and <em>should</em>, where two correct implementations disagree. When a capture shows something odd, the question is rarely "what does this mean?" and usually "which side is allowed to do this?". A fault that survives every other test often ends at a sentence in a specification and a choice someone made.</p>
-        <p>Below is one more case. Before you pick, ask what the specification for the part in question would let you rule out.</p>`,
+        <p>Below is a case to read that way. The Ethernet standard says a receiver discards a frame whose check fails, which is why nothing above the port ever hears of these frames and only its counter shows them. Knowing that tells you where to look.</p>`,
       widget: benchWidget(['eth_badframe'], ['The port']),
       challenge: {
         kind: 'quiz', question: 'A standard says a receiver SHOULD accept an unusual option, and your device rejects it. A capture shows the link failing with one vendor. Is your device wrong?',
@@ -166,7 +164,7 @@ export const chBench: Chapter = {
     {
       title: 'On your own',
       body: `
-        <p>That is the method, with help beside it. The test of it is <a href="#/campaign/play/cap_fault">Find the fault</a>: ${ATTEMPT_CASES} cases drawn at random from all of the above, with new numbers each time, and nothing said about any answer until the end. ${PASS_MARK} right passes. A wrong answer shows what the evidence meant once the attempt is over, and a new attempt draws new cases, so reading the answers does not help you next time.</p>
+        <p>That is the method, with help beside it. The test of it is <a href="#/campaign/play/cap_fault">Find the fault</a>: ${ATTEMPT_CASES} cases drawn at random from all of the above, with new numbers each time, and nothing said about any answer until the end. ${PASS_MARK} right passes. A wrong answer shows what the evidence meant once the attempt is over. The set is small enough to learn, and learning what each fault looks like is the point: the reports are worded alike, so it is the evidence that tells them apart.</p>
         <p>The cases draw only on faults the book's models can really produce. Real networks have many more: firmware bugs, a mismatched duplex, a misconfigured load balancer, hardware that fails only when warm. The method is what carries over to them.</p>
         <p>When a case surprises you, go back to the chapter it came from: <a href="#/c/tcp/0">TCP</a>, <a href="#/c/serial/0">Fast serial links</a>, <a href="#/c/uart/0">A UART</a>, <a href="#/c/ethernet/0">Ethernet</a>, <a href="#/c/switch/0">A switch</a>, <a href="#/c/path/0">The internet path</a>.</p>
         <div class="try">Try one more before the test, and explain your answer aloud before you choose.</div>`,

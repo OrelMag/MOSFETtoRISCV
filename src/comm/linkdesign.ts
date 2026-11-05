@@ -97,9 +97,9 @@ export interface SerialChannel { name: string; bandwidth: number; sigma: number;
 export interface SerialChoice { line: 0 | 1; eq: number; rate: number }
 
 /** The eye and the error rate at this choice, as the serial chapter reads them. A PAM4 symbol is two bits, so its symbol rate is half. */
-export function runSerial(ch: SerialChannel, c: SerialChoice): LinkResult & { opening: number } {
+export function runSerial(ch: SerialChannel, c: SerialChoice): LinkResult & { opening: number; unmodelled?: boolean } {
   const bits = prbs(9, 1022), eq = EQUALIZERS[c.eq], rate = SERIAL_RATES[c.rate];
-  if (c.line === 1 && !eq.pam4) return { rate, ber: 0.5, errors: 0, bits: 0, closes: false, opening: 0 };
+  if (c.line === 1 && !eq.pam4) return { rate, ber: 0.5, errors: 0, bits: 0, closes: false, opening: 0, unmodelled: true };
   const spec: ChannelSpec = { rate: c.line ? rate / 2 : rate, bandwidth: ch.bandwidth, ...eq.spec };
   const sg = ch.sigma * ctleNoiseGain(spec);
   const opening = c.line ? eyePam(pam4Symbols(bits), PAM4_LEVELS, spec).opening : eye(bits, spec).opening;
@@ -112,8 +112,8 @@ export function runSerial(ch: SerialChannel, c: SerialChoice): LinkResult & { op
 export const CARRIER_BRIEF: CarrierChannel = { name: 'A channel of 20 MHz at 16 dB SNR', hz: 20e6, snrDb: 16, target: 1e-3 };
 export const SERIAL_BRIEF: SerialChannel = { name: 'A board trace with a 4 GHz pole and 40 mV of noise', bandwidth: 4, sigma: 0.04, target: 1e-12 };
 export const CARRIER_BITS = 60000;
-/** The best rate each brief can reach, held to bestCarrier and bestSerial by tests/comm-linkdesign.test.ts, and what a pass must come near. */
-export const CARRIER_REFERENCE_RATE = 60e6, SERIAL_REFERENCE_RATE = 25, PASS_SHARE = 0.75;
+/** The best rate each brief can reach, held to bestCarrier and bestSerial by tests/comm-linkdesign.test.ts: a pass reaches both. */
+export const CARRIER_REFERENCE_RATE = 60e6, SERIAL_REFERENCE_RATE = 25;
 
 /** The best rate any choice reaches on the carrier brief: every choice tried. */
 export function bestCarrier(ch = CARRIER_BRIEF, bits = CARRIER_BITS): { choice: CarrierChoice; rate: number } {

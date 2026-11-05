@@ -53,7 +53,9 @@ describe('the serial link', () => {
     expect(pam.opening).toBeLessThan(0.7);
   });
   it('decision feedback is not offered to PAM4', () => {
-    expect(runSerial(SERIAL_BRIEF, { line: 1, eq: 3, rate: 0 }).closes).toBe(false);
+    const r = runSerial(SERIAL_BRIEF, { line: 1, eq: 3, rate: 0 });
+    expect(r.closes).toBe(false);
+    expect(r.unmodelled).toBe(true);
   });
 });
 

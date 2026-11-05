@@ -25,7 +25,7 @@ export const CAPSTONES: Capstone[] = [
 export interface CommCapstone { id: string; title: string; brief: string; route: string | null }
 
 export const COMM_CAPSTONES: CommCapstone[] = [
-  { id: 'cap_link', title: 'A link that closes', brief: 'Choose modulation, coding and equalization for two stated channels, for the highest rate that meets the error target. Measured on the chapters\' code and channel models.', route: '#/campaign/play/cap_link' },
+  { id: 'cap_link', title: 'A link that closes', brief: 'Choose modulation, coding and equalization for two stated channels, for the highest rate any choice can reach within the error target. Measured on the chapters\' code and channel models.', route: '#/campaign/play/cap_link' },
   { id: 'cap_fault', title: 'Find the fault', brief: 'Eight broken networks, each with a real fault in one of the book\'s models. Name each cause from its evidence, with no hints: seven right passes.', route: '#/campaign/play/cap_fault' },
 ];
 

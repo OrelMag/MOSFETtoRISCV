@@ -3,7 +3,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { ATTEMPT_CASES, attemptCases, FAULT_CASES, PASS_MARK } from '../src/comm/faults';
-import { SURVIVOR, UART_ERR } from '../src/chapters/ch-comm-bench';
+import { SHOWN_FAILS, SHOWN_SURVIVES, UART_ERR } from '../src/chapters/ch-comm-bench';
+import { emptyCampaign, sanitizeCampaign } from '../src/campaign/progress';
+import { COMM_CAPSTONES } from '../src/learn/capstones';
 import { receive, UART_8N1 } from '../src/comm/startstop';
 import { tick } from './yieldtick';
 
@@ -49,8 +51,9 @@ describe('every case has its fault in it', () => {
     expect(a.ber).toBeGreaterThan(1e-4);
     expect(b.ber).toBeLessThan(1e-12);
   }));
-  it('clock error: characters come out wrong; none at 1 %', () => each('uart_clock', (a, b) => {
-    expect(a.wrong + a.framing).toBeGreaterThan(0);
+  it('clock error: some characters wrong, some intact, as the report says; none wrong at 1 %', () => each('uart_clock', (a, b) => {
+    expect(a.wrong).toBeGreaterThan(0);
+    expect(a.wrong).toBeLessThan(a.chars);
     expect([b.wrong, b.framing]).toEqual([0, 0]);
   }));
   it('a saturated segment: collisions, and less carried than asked; hardly any under a light load', () => each('eth_collide', (a, b) => {
@@ -73,19 +76,29 @@ describe('every case has its fault in it', () => {
     expect(b.sable).toBe(0);
     expect(b.sameEnd).toBe(1);
   }));
-  it('a failed link: the trace stops with no route, part way; it reaches the site without', () => each('route_down', (a, b) => {
+  it('a failed link: the trace stops with no route, part way, and another network still gets through; all reach it without', () => each('route_down', (a, b) => {
     expect(a.noroute).toBe(1);
     expect(a.reached).toBe(0);
-    expect(a.hopsNow).toBeLessThan(a.hopsBefore);
+    expect(a.otherReached).toBe(1);
     expect(b.reached).toBe(1);
+    expect(b.otherReached).toBe(1);
   }));
 });
 
 describe('the chapter\'s typed claims', () => {
   it('at the quiz\'s clock error U fails and the other character survives, in the model', () => {
-    expect(SURVIVOR).toBeGreaterThanOrEqual(0);
-    expect(receive(UART_8N1, 0x55, { err: UART_ERR }).ok).toBe(false);
-    expect(receive(UART_8N1, SURVIVOR, { err: UART_ERR }).ok).toBe(true);
+    expect(receive(UART_8N1, SHOWN_FAILS, { err: UART_ERR }).word).not.toBe(SHOWN_FAILS);
+    expect(receive(UART_8N1, SHOWN_SURVIVES, { err: UART_ERR }).word).toBe(SHOWN_SURVIVES);
+  });
+});
+
+describe('the capstones\' records', () => {
+  it('a pass survives the reload: the sanitizer keeps these ids', () => {
+    for (const c of COMM_CAPSTONES) {
+      const st = emptyCampaign();
+      st.nodes[c.id] = { status: 'solved', at: 1 };
+      expect(sanitizeCampaign(JSON.parse(JSON.stringify(st))).nodes[c.id]?.status, c.id).toBe('solved');
+    }
   });
 });
 
@@ -100,6 +113,17 @@ describe('the cases as questions', () => {
       expect(x.evidence.length, c.id).toBeGreaterThan(0);
       await tick();
     }
+  });
+  it('the wording does not give the answer: the right cause is no longer than the others, and reports repeat across causes', () => {
+    for (const c of FAULT_CASES) {
+      const x = c.build(1), others = x.options.slice(1).map((o) => o.length);
+      expect(x.options[0].length, c.id).toBeLessThanOrEqual(1.25 * Math.max(...others));
+    }
+    const reports = (fam: string) => new Set(FAULT_CASES.filter((c) => c.family === fam).map((c) => c.build(1).symptom)).size;
+    for (const fam of ['tcp', 'line', 'routing']) expect(reports(fam), fam).toBe(1);
+  });
+  it('every case but the fixed ones changes with its seed', () => {
+    for (const c of FAULT_CASES) expect(JSON.stringify(c.build(1).evidence) === JSON.stringify(c.build(2).evidence) && JSON.stringify(c.build(1).evidence) === JSON.stringify(c.build(3).evidence), c.id).toBe(false);
   });
   it('a case is the same from the same seed', () => {
     for (const c of FAULT_CASES) expect(JSON.stringify(c.build(3).evidence), c.id).toBe(JSON.stringify(c.build(3).evidence));
