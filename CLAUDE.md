@@ -1512,8 +1512,8 @@ tests/verify/  CPU verification (docs/VERIFICATION.md): cpus.ts (every RV32 CPU 
   `labelOverlaps` over every registered netlist and the CPU tops; `boxTextOverlaps` over every registered box:
   view/boxtext.ts places a box's port names and label, lifting the label clear of a bottom clock's name).
 - Prefer hierarchy (a box of boxes) over flat netlists: it is the whole point of the site.
-- Large top-level schematics: draw the main data path, and use **net labels** (`tags` on a
-  NetDef) for control signals and long feedback paths, like a real schematic. Place
+- A learner should see signals travel: prefer wires, and place parts so they fit. Large top-level schematics: draw the
+  main data path, and use **net labels** (`tags` on a NetDef) only for what a wire would tangle, like a real schematic. Place
   instances so that ports line up (see `alignY` in cpu.ts) and data wires stay straight.
 - Hand-written SystemVerilog goes in `hdl.verilog` (behavioural or structural, matching the
   primer's style). Structural Verilog is also generated automatically.
@@ -1555,6 +1555,11 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 
 ### Viewing aids (all derived, none stored in the netlists)
 
+- Wires first (view/wirefirst.ts drawnNetlist): what a level draws as wires although its generator labelled it. Up to
+  WHOLE_NETS (30) nets wired whole under MAX_CROSSINGS_PER_NET, else its local nets (forward, short, few sinks); a clock with
+  many sinks stays a pointer. tests/wirefirst.test.ts; scripts/wire-audit.ts measures it per chapter.
+- A pointer whose name is too small to read shows a dot (`.tag-end`, under `lg-h-tag`); hovering or selecting its net, or
+  a slow-motion value change, draws lines to its other pointers (view/partners.ts).
 - Wire palettes: `data-palette` on `<html>` (styles/palettes.css, `light-dark()` tokens). Use
   `--w0 --w1 --wx --wz --bus --bus1` and the shape tokens (`--wire-w0` …), never raw colours.
   Probe colours are `--probe-0..7` (class `p0..p7` sets `--pc`).
