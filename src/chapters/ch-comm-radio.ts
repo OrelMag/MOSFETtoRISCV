@@ -8,7 +8,8 @@ import { numOf } from './order';
 import type { Chapter } from './types';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
-const sci = (x: number) => x.toExponential(0).replace('e-', ' × 10⁻').replace('e+', ' × 10');
+const sup = (e: string) => [...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('');
+const sci = (x: number) => x.toExponential(0).replace(/e-(\d+)/, (_, e: string) => ` × 10⁻${sup(e)}`);
 
 const D = BUDGET_DEFAULT;
 const B0 = linkBudget({ txDbm: D.tx, gtDbi: D.ga, grDbi: D.ga, km: D.m / 1000, ghz: D.ghz, extraDb: D.walls * WALL_DB(D.ghz), mhz: D.mhz, nfDb: D.nf });
@@ -193,7 +194,7 @@ export const chRadio: Chapter = {
         <p>If one antenna is in a fade, another half a wavelength away probably isn't. Combine them according to their strengths (<strong>maximal ratio combining</strong>) and an error needs both to be in a fade together. With L independent branches the error rate falls as 1 / SNR<sup>L</sup>: the <strong>diversity order</strong> is the slope of the curve.</p>
         <p>At a BER of 10⁻³, BPSK needs ${nf(needAwgn(1e-3), 1)} dB with no fading and ${nf(needRay(1e-3), 1)} dB in Rayleigh fading with one antenna. Two antennas: ${nf(needFor(2), 1)} dB. Four: ${nf(needFor(4), 1)}. The first extra antenna is worth ${nf(needRay(1e-3) - needFor(2), 0)} dB, more than any amplifier you could afford, for the price of a wire and some arithmetic. That gain is a statistical one, and a real one. A simple rule: don't fight a fade; average over it.</p>
         <p>Diversity comes in other forms too, all of them the same idea. Frequency: spread over more bandwidth than the coherence bandwidth, as the many-carriers system does, with a code across its subcarriers. Time: interleave beyond a coherence time, the errors chapter's interleaver. Space: more antennas at either end, which, used differently, also buys several streams at once. That is MIMO, in the next chapter.</p>
-        <p>This is where the wireless engineer's budget differs from the optical one. Fibre has no fading and a known noise. A radio's SNR changes by 30 dB in a fraction of a second, so a radio has to measure and adapt continually. The next two chapters are about who talks, how fast, and how they share.</p>`,
+        <p>This is where the wireless engineer's budget differs from the optical one. Fibre has no fading and a known noise. A radio's SNR can change by tens of dB in a fraction of a second, so a radio has to measure and adapt continually. The next two chapters are about who talks, how fast, and how they share.</p>`,
       widget: diversityWidget,
       challenge: {
         kind: 'quiz',

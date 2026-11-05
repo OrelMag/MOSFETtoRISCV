@@ -238,7 +238,7 @@ describe('group C codex entries: secret', () => {
     expect(hs.cycles).toBe(81277693);
     expect(hs.prims.x25519.calls).toBe(2);
     expect(hs.prims.x25519.cycles).toBe(69139884);
-    expect(2 * TLS.primitives.x25519).toBeGreaterThan(hs.prims.x25519.cycles - 1e5);
+    expect((2 * TLS.primitives.x25519 - hs.prims.x25519.cycles) / 2).toBe(43); // the command loop around the measurement alone
     expect(Math.round((100 * hs.prims.x25519.cycles) / hs.cycles)).toBe(85);
     expect(hs.phases.client_hello).toBe(34598182);
     expect(hs.phases.key_agreement).toBe(35089754);

@@ -125,7 +125,7 @@ export function concatWidget(): Widget {
     const Y = (v: number) => 112 - Math.min(v, 32) * 3;
     words.replaceChildren(s('line', { x1: 0, x2: 640, y1: Y(16), y2: Y(16), class: 'cn-limit' }), s('text', { x: 636, y: Y(16) - 3, 'text-anchor': 'end', class: 'cn-lab' }, 't = 16'),
       ...perWord.flatMap((v, i) => [s('rect', { x: 12 + i * 78, y: Y(v), width: 60, height: 112 - Y(v), class: v > 16 ? 'cn-bar bad' : 'cn-bar' }), s('text', { x: 42 + i * 78, y: Y(v) - 3, 'text-anchor': 'middle', class: 'cn-lab' }, String(v)), s('text', { x: 42 + i * 78, y: 126, 'text-anchor': 'middle', class: 'cn-lab' }, `word ${i}`)]));
-    chips.set(0, `${(r.innerBitErrors / r.innerBits).toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d)$/, (_, d) => `⁻${'⁰¹²³⁴⁵⁶⁷⁸⁹'[+d]}`)}`, 'bit error rate after Viterbi');
+    chips.set(0, `${(r.innerBitErrors / r.innerBits).toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d+)$/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`)}`, 'bit error rate after Viterbi');
     chips.set(1, `${r.byteErrors}`, 'wrong bytes in the frame');
     chips.set(2, `${r.failed} of ${r.words}`, 'Reed-Solomon words lost', r.failed ? 'bad' : 'ok');
     chips.set(3, (100 * concatRate()).toFixed(1) + ' %', 'of the channel carries data');

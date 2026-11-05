@@ -62,6 +62,7 @@ describe('chapter numbers', () => {
     for (const [, n, title] of rows) expect(chapters.find((c) => c.num === +n)?.title, n).toBe(title);
   });
 
+  // reads every source file: past 30 s on a loaded machine
   it('no text types a number that can move', () => {
     const bad: string[] = [];
     for (const f of readdirSync('src', { recursive: true }) as string[]) {
@@ -71,5 +72,5 @@ describe('chapter numbers', () => {
       for (const r of typedInSource(path, src)) bad.push(`${path}: "${r}"`);
     }
     expect(bad, `say \`chapter \${numOf('id')}\` instead (chapters/order.ts)`).toEqual([]);
-  });
+  }, 120_000);
 });

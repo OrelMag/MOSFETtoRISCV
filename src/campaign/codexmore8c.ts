@@ -123,7 +123,7 @@ device: 4,571 NANDs;  the dialogue: 12,702 clocks at 4 clocks a bit (real full s
       'Moving to the new address when the SETUP of SET_ADDRESS is acknowledged: the status stage still goes to address 0, the device never hears it and the host gives up on it.',
       'Asking for the whole device descriptor first: the host does not know the packet size yet, so it reads 8 bytes at address 0 to learn it.',
       'Expecting a device to interrupt: it cannot; a "USB interrupt" is the host polling on a schedule, and a device with nothing to say answers NAK.',
-      'Treating a NAK as an error: it means "not now, ask again", while STALL means "no"; and if the host\'s last ACK of SET_ADDRESS is lost, host and device disagree on the address until a reset.',
+      'Treating a NAK as an error: it means "not now, ask again", while STALL means "no"; and if a device waits for the host\'s last ACK of SET_ADDRESS and it is lost, the two disagree on the address until the host recovers.',
     ],
     chapters: [
       { chapter: 'pcie', step: 8, label: 'Enumeration: a stranger introduces itself' },
@@ -236,6 +236,7 @@ AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre
 client_hello (X25519 share)   34,598,182     key_agreement (X25519)  35,089,754
 certificate_verify (RSA-PSS)  10,338,413     the other five phases    1,251,248
 total 81,277,693 (96 outside any phase), of which the two X25519 runs 69,139,884 (85 %)
+one X25519 measured alone is 34,569,985: 43 more each, the command loop around that measurement
 RSA verify: 10,310,080 cycles with RFC 8448's 1024-bit key, 40,767,022 with a 2048-bit key
 the client: 1,314 lines of Python, 7,428 words of RV32IM
 bytes: ClientHello 201, sent 259, received 774</pre>RFC 8448's 1024-bit RSA is far too short to trust today; real servers use ECDSA, Ed25519 or RSA of 2048 bits or more.`,
