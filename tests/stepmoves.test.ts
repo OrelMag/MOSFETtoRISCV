@@ -86,11 +86,11 @@ describe('moving progress', () => {
     expect(Object.keys(sanitizeReview(JSON.parse(JSON.stringify(rv))).memos).sort()).toEqual(['codex:crc:0', 'serial:5']);
   });
   it('a merge of two stores counts as up to date', () => {
-    expect(mergeNotes(sanitizeNotes({ items: {} }), sanitizeNotes({ items: {} })).moved).toBe(1);
-    expect(mergeReview(sanitizeReview({ memos: {} }), sanitizeReview({ memos: {} })).moved).toBe(1);
+    expect(mergeNotes(sanitizeNotes({ items: {} }), sanitizeNotes({ items: {} })).moved).toBe(shipped + 1);
+    expect(mergeReview(sanitizeReview({ memos: {} }), sanitizeReview({ memos: {} })).moved).toBe(shipped + 1);
   });
   it('an old backup file is brought up to date before it merges with what is here', () => {
-    const here = new MapKV([[SETTINGS_KEY, JSON.stringify({ visited: { serial: [5] }, solved: {}, moved: 1 })]]);
+    const here = new MapKV([[SETTINGS_KEY, JSON.stringify({ visited: { serial: [5] }, solved: {}, moved: shipped + 1 })]]);
     const old = { format: BACKUP_FORMAT as typeof BACKUP_FORMAT, schema: 1, keys: { [SETTINGS_KEY]: JSON.stringify({ visited: { serial: [6] }, solved: { 'serial:6': true } }) } };
     const st = JSON.parse(mergeBackup(old, here).writes[SETTINGS_KEY]);
     expect(st.visited.serial).toEqual([5]);
