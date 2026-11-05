@@ -35,18 +35,18 @@ export const rsDecApi = new WeakMap<Stage, RsDecApi>();
 
 function rsDecPanel(): ScenePanel {
   return (stage: Stage): Widget => {
-    let hits = 0, model = new RsRtl(NSYM, CW.length), t = 0, out: number[] = [], run = 0;
+    let hits = 0, model = new RsRtl(NSYM, CW.length), t = 0, out: number[] = [], run = 0, roots = 0;
     const hook = { before: () => {
       if (!stage.sim) return;
       const en = Number(stage.value('en')), rst = Number(stage.value('rst')), d = Number(stage.value('d'));
       const c = model.comb(en);
-      if (!rst && c.valid) out = [...out, c.out];
+      if (!rst && c.valid) { out = [...out, c.out]; if (c.root) roots++; }
       model.step(d, en, rst);
-      if (rst) { t = 0; out = []; } else t++;
+      if (rst) { t = 0; out = []; roots = 0; } else t++;
     } };
     stage.edgeHooks.add(hook);
-    stage.historyHooks.add({ save: () => ({ m: structuredClone({ ...model }), t, out, hits, run }), restore: (v) => { const o = v as { m: RsRtl; t: number; out: number[]; hits: number; run: number }; Object.assign(model, structuredClone(o.m)); t = o.t; out = o.out; hits = o.hits; run = o.run; update(); } });
-    stage.resetHooks.add(() => { model = new RsRtl(NSYM, CW.length); t = 0; out = []; run = 0; update(); });
+    stage.historyHooks.add({ save: () => ({ m: structuredClone({ ...model }), t, out, hits, run, roots }), restore: (v) => { const o = v as { m: RsRtl; t: number; out: number[]; hits: number; run: number; roots: number }; Object.assign(model, structuredClone(o.m)); t = o.t; out = o.out; hits = o.hits; run = o.run; roots = o.roots; update(); } });
+    stage.resetHooks.add(() => { model = new RsRtl(NSYM, CW.length); t = 0; out = []; run = 0; roots = 0; update(); });
     const edge = (d: number, en: number, rst: number) => {
       const sim = stage.sim!;
       sim.setInput('d', d); sim.setInput('en', en); sim.setInput('rst', rst); sim.settle();
@@ -79,7 +79,7 @@ function rsDecPanel(): ScenePanel {
         return h('span', { class: `err-bit cd-b${cls}`, title: `byte ${i}` }, hex2(v));
       }));
       const c = model.comb(0);
-      status.replaceChildren(h('span', null, `clock ${t} of ${LAT}`), h('span', null, `δ ${hex2(c.delta)}`), h('span', null, `roots found ${model.phase >= RS_PHASE.CH ? Math.max(0, (((model.k + 16) % 32) - 16 - (NSYM - 2 * rootsDeg(model))) / 2) : 0}`), h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model'));
+      status.replaceChildren(h('span', null, `clock ${t} of ${LAT}`), h('span', null, `δ ${hex2(c.delta)}`), h('span', null, `roots found ${roots}`), h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model'));
       if (model.phase !== RS_PHASE.DONE || !run) { verdict.className = 'err-verdict'; verdict.textContent = model.phase === RS_PHASE.RX ? `Press Decode to clock the word through, or a phase at a time. ${hits} byte${hits === 1 ? '' : 's'} hit.` : `In ${RS_PHASE_NAMES[model.phase]}.`; return; }
       const fail = Number(stage.value('fail')) === 1, right = out.every((v, i) => v === CW[i]), soft = rsDecode(rsWordHit(run - 1), NSYM);
       verdict.className = `err-verdict ${!fail && right ? 'ok' : 'bad'}`;
@@ -100,9 +100,6 @@ function rsDecPanel(): ScenePanel {
     return { el, update, destroy: () => { stage.edgeHooks.delete(hook); rsDecApi.delete(stage); } };
   };
 }
-
-/** L, the locator's degree, from k = r - 2L at the end of Berlekamp-Massey: only for the panel's count. */
-function rootsDeg(m: RsRtl): number { let d = 0; m.lam.forEach((v, j) => { if (v) d = j; }); return d; }
 
 export function rsDecScene(): Scene {
   return { root: rsDecoder(NSYM, CW.length), inputs: { d: 0, en: 0, rst: 0, clk: 0 }, clock: 'clk', autoClock: false, hiddenInputs: ['d', 'en', 'rst'], panels: [rsDecPanel()] };
@@ -149,15 +146,11 @@ export function concatWidget(): Widget {
 
 // ---- belief propagation, small enough to read ---------------------------------------------------------------------------------
 
-/** A (3, 6) code of 12 bits: six checks, none sharing two bits with another (comm/ldpc.ts regularCode, this seed). */
+/** A (3, 6) code of 12 bits, six checks (comm/ldpc.ts regularCode, this seed). So few bits cannot avoid short cycles: pairs of checks share 2.4 bits on average. */
 export const GOSSIP_SEED = 7;
 const GOSSIP_CONF = 2.5, GOSSIP_WRONG = -1, GOSSIP_UNSURE = 0.3;
 /** Two wrong bits the code can correct, from the steady start (tests/comm-ldpc-chapter.test.ts). */
 export const GOSSIP_PAIR = [0, 7];
-
-export interface GossipApi { wrongAtStart(): number; wrongNow(): number; iterations(): number; solve(): void }
-export const gossipApi = new WeakMap<HTMLElement, GossipApi>();
-export const gossipState: { api: GossipApi | null } = { api: null };
 
 export function gossipWidget(): Widget {
   const t: Tanner = regularCode(12, 3, 6, GOSSIP_SEED);
@@ -169,7 +162,6 @@ export function gossipWidget(): Widget {
   const reset = () => { bp = new Bp(t, ch); paint(); };
   const cycle = (v: number) => { ch[v] = ch[v] === GOSSIP_CONF ? GOSSIP_UNSURE : ch[v] === GOSSIP_UNSURE ? GOSSIP_WRONG : GOSSIP_CONF; reset(); };
   const wrongNow = () => bp.hard.reduce((a, b) => a + b, 0);
-  const wrongAtStart = () => ch.reduce((a, v) => a + (v < 0 ? 1 : 0), 0);
   function paint() {
     const parts: SVGElement[] = [];
     for (let e = 0; e < t.edgeVar.length; e++) {
@@ -198,15 +190,13 @@ export function gossipWidget(): Widget {
       : bp.ok && wrongNow() === 0 ? `All checks hold and every bit is right, after ${bp.iterations} round${bp.iterations === 1 ? '' : 's'}. Green lines say "you are a 0", red "you are a 1", width how sure.`
         : bp.ok ? 'All checks hold, on a different code word: this decoder has no way to know.' : 'A check tells each bit what the others imply, and how sure the least sure of them is. Keep stepping.';
   }
-  const api: GossipApi = { wrongAtStart, wrongNow, iterations: () => bp.iterations, solve: () => { ch = new Float64Array(12).fill(GOSSIP_CONF); GOSSIP_PAIR.forEach((v) => { ch[v] = GOSSIP_WRONG; }); bp = new Bp(t, ch); for (let i = 0; i < 12 && !bp.ok; i++) bp.iterate(); paint(); } };
-  gossipState.api = api;
   paint();
   return { el: h('div', { class: 'widget mos sr-w' },
     h('div', { class: 'panel' }, h('h3', null, 'Twelve bits, six checks of six, three checks a bit'), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'dram-ops' },
       btn('Iterate', 'Every bit speaks, then every check answers', () => { bp.iterate(); paint(); }), btn('Start over', 'Back to what the channel said', reset),
       btn('Clean channel', 'Every bit sure and right', () => { ch = new Float64Array(12).fill(GOSSIP_CONF); reset(); })), chips.el, note)),
-    destroy: () => { if (gossipState.api === api) gossipState.api = null; } };
+ };
 }
 
 // ---- density evolution's tunnel -----------------------------------------------------------------------------------------------
@@ -243,10 +233,29 @@ export function tunnelWidget(): Widget {
 
 // ---- the waterfall ------------------------------------------------------------------------------------------------------------
 
-/** Points already measured with comm/ldpc.ts's concatTrial and pinned in tests/comm-ldpc.test.ts: Eb/N0, words failed of 384 at depth 8. */
-export const CONCAT_POINTS: [number, number][] = [[2.2, 36 / 384], [2.3, 4 / 384]];
+/** Points already measured with comm/ldpc.ts's concatTrial and pinned in tests/comm-codes-chapter.test.ts: Eb/N0, words failed of 384 at depth 8. */
+export const CONCAT_POINTS: [number, number][] = [[2.2, 29 / 384], [2.3, 5 / 384]];
+/** Words failed of CONCAT_WORDS at 2.3 dB at depths 1, 2 and 8: tests/comm-codes-chapter.test.ts runs exactly these. */
+export const CONCAT_MEASURED = [52, 25, 5], CONCAT_WORDS = 384;
 
 export interface FallPoint { db: number; ber: number; errors: number; bits: number; meanIter: number; n: number }
+
+/** Message updates a data bit against Viterbi's add-compares, as the rate and the mean iterations move. */
+export function costWidget(): Widget {
+  let dv = 3, it = 18;
+  const chips = mkChips(3), note = h('p', { class: 'sub mos-note' });
+  const paint = () => {
+    const dc = 2 * dv, msgs = (2 * dv) / 0.5;
+    chips.set(0, String(msgs * it), `message updates a data bit, (${dv}, ${dc}) at rate ½`);
+    chips.set(1, '128', 'add-compares a data bit, K = 7 Viterbi');
+    chips.set(2, `${(msgs * it / 128).toFixed(1)} ×`, 'LDPC against Viterbi, in operations');
+    note.textContent = 'Operations are not the bottleneck. Every edge needs its message in memory, and a bit may reach any check in the block: that is what the silicon pays for.';
+  };
+  paint();
+  return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row fr-ctl' },
+    slider('Bit degree', 2, 6, 1, dv, (v) => String(v), (v) => { dv = v; paint(); }).el,
+    slider('Iterations', 2, 60, 1, it, (v) => String(v), (v) => { it = v; paint(); }).el), chips.el, note)) };
+}
 
 export function waterfallWidget(): Widget {
   let n = 2016, kind: BpKind = 'sum-product', running = 0, raf = 0;

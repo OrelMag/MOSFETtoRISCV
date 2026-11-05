@@ -24,7 +24,7 @@ levels the noise leaves   √(1 + 1000)              = 31.6</pre>Sixteen levels 
       { chapter: 'telegraph', step: 4, label: 'Nyquist: symbols a second' },
       { chapter: 'telegraph', step: 5, label: 'Shannon: what noise leaves' },
       { chapter: 'modem', step: 5, label: 'Noise decides how many points' },
-      { chapter: 'errors', step: 13, label: 'How far from Shannon' },
+      { chapter: 'codes', step: 7, label: 'How far from Shannon' },
     ],
   },
   reflection: {

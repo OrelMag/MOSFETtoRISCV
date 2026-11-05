@@ -406,6 +406,8 @@ export function awgnThreshold(lo = 0.8, hi = 1, dv = 3, dc = 6, o: { step?: numb
 }
 
 /** What the channel's σ means on the Eb/N0 axis at a rate: Eb/N0 = 1 / (2 R σ²), in dB. */
+/** (3, 6)'s threshold on the Gaussian channel lies between these: tests/comm-ldpc.test.ts converges at the first and not at the second. */
+export const AWGN_SIGMA = [0.875, 0.89] as const;
 export const ebn0OfSigma = (sigma: number, rate = 0.5): number => 10 * Math.log10(1 / (2 * rate * sigma * sigma));
 
 // ---- the concatenated code --------------------------------------------------------------------------------------------------

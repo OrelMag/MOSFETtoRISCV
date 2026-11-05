@@ -190,9 +190,9 @@ at 10⁻⁵, uncoded BPSK needs 9.59 dB E_b/N_0; K = 7 gains 3.1 dB hard, 5.4 dB
       'Using the code on a bursty channel: a Viterbi decoder fails badly when errors arrive together, whatever the average rate; interleave in front of it.',
     ],
     chapters: [
-      { chapter: 'errors', step: 9, label: 'A code with memory' },
-      { chapter: 'errors', step: 10, label: 'The Viterbi decoder' },
-      { chapter: 'errors', step: 13, label: 'How far from Shannon' },
+      { chapter: 'codes', step: 0, label: 'A code with memory' },
+      { chapter: 'codes', step: 1, label: 'The Viterbi decoder' },
+      { chapter: 'codes', step: 7, label: 'How far from Shannon' },
     ],
   },
   reedsolomon: {
@@ -211,9 +211,9 @@ RS coding gain at 10⁻⁵ (hard decisions) 3.4 dB</pre>The encoder's output on 
       'Expecting the decoder to be as small as the encoder: encoding and the syndromes need only constant multipliers (XOR networks), correcting needs general GF(256) multipliers, 416 NANDs each, and a fast decoder has dozens working at once.',
     ],
     chapters: [
-      { chapter: 'errors', step: 11, label: 'Reed-Solomon: errors in bytes' },
-      { chapter: 'errors', step: 12, label: 'Bursts: interleaving' },
-      { chapter: 'errors', step: 13, label: 'How far from Shannon' },
+      { chapter: 'codes', step: 2, label: 'Reed-Solomon: errors in bytes' },
+      { chapter: 'codes', step: 5, label: 'Bursts: interleaving' },
+      { chapter: 'codes', step: 7, label: 'How far from Shannon' },
     ],
   },
   interleave: {
@@ -231,7 +231,7 @@ depth 1: a burst of 6 costs a word;  raise the depth until it costs none</pre>`,
       'Confusing it with DRAM bank interleaving: that spreads consecutive addresses over banks for parallelism; this spreads consecutive channel bits over code words to shorten a burst.',
     ],
     chapters: [
-      { chapter: 'errors', step: 12, label: 'Bursts: interleaving' },
+      { chapter: 'codes', step: 5, label: 'Bursts: interleaving' },
     ],
   },
 };

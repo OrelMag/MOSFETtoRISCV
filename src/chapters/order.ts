@@ -56,6 +56,7 @@ const BOOK = [
   'carriers',
   'serial',
   'errors',
+  'codes',
   'ethernet',
   'switch',
   'network',
