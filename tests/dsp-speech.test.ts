@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { adpcmDecode, adpcmEncode, lpc, packNibbles, ulawDecision, ulawDecode, ulawEncode, ulawQuantized, sineSnr, uniform } from '../src/dsp/speech';
+import { adpcmOnRv } from '../src/dsp/adpcmrv';
 import { ulawDecoder, ulawEncoder, ulawLine } from '../src/lib/ulaw';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
@@ -99,5 +100,23 @@ describe('μ-law in gates', () => {
       expect([d.id, labelOverlaps(d, nl)]).toEqual([d.id, []]);
       expect([d.id, symbolOverlaps(nl)]).toEqual([d.id, []]);
     }
+  });
+});
+
+describe('ADPCM on the RV32', () => {
+  it('the program\'s codes and state equal the model\'s on the voice and on a clipping square wave', () => {
+    const x = wavSamples('public/dsp/voice-8k.wav').x.slice(0, 6000), s = { pred: 0, index: 0 }, r = adpcmOnRv(x), m = adpcmEncode(x, s);
+    expect(r.codes).toEqual(m);
+    expect(r.state).toEqual(s);
+    const sq = Array.from({ length: 600 }, (_, i) => (Math.floor(i / 37) % 2 ? 32767 : -32768));
+    expect(adpcmOnRv(sq).codes).toEqual(adpcmEncode(sq));
+  });
+  it('carries its state from one block to the next', () => {
+    const x = wavSamples('public/dsp/voice-8k.wav').x.slice(0, 3000), a = adpcmOnRv(x.slice(0, 1000)), b = adpcmOnRv(x.slice(1000), a.state);
+    expect([...a.codes, ...b.codes]).toEqual(adpcmEncode(x));
+  });
+  it('costs about 40 instructions a sample', () => {
+    const r = adpcmOnRv(wavSamples('public/dsp/voice-8k.wav').x.slice(0, 4000));
+    expect(r.perSample).toBeGreaterThan(30); expect(r.perSample).toBeLessThan(50);
   });
 });
