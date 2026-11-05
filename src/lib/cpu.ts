@@ -569,7 +569,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
   const Y = 36; // main datapath row
-  const dx = c ? 6 : 0; // the C fetch unit's wider box pushes the decode columns right
+  const dx = c && !shared ? 6 : 0; // the C fetch unit's wider box pushes the decode columns right
   alignY('pcmux', M4, 2, 'y', Y);
   alignY('pc', PC, 12, 'd', Y);
   place('one', TIE1, [8, P('pc', 'en')[1] - 1]);
