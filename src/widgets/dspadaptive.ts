@@ -24,11 +24,11 @@ const every = <T,>(x: readonly T[], k: number): T[] => x.filter((_, i) => i % k 
 
 /** Two taps to find: an unknown 2-tap filter, a white input, and the path LMS takes across the plane of its coefficients. */
 export const BOWL_TARGET = [0.7, -0.4];
-/** Plots run from 0 on x, so this plane is drawn shifted by this much, and its ticks labelled back. */
+/** The plane's half width. */
 const RC = 2;
 export function bowlWidget(): Widget {
   let lm = -2, tint = 0.6;
-  const plot = plotOf({ W: 340, H: 340, x: [0, 2 * RC], y: [-RC, RC], yTicks: [-1, 0, 1], xLabel: 'c₀', yLabel: 'c₁', xFmt: (v) => num(v - RC, 0), aria: 'The path of two coefficients from zero to the best filter, over rings of equal error' });
+  const plot = plotOf({ W: 340, H: 340, x: [-RC, RC], y: [-RC, RC], yTicks: [-1, 0, 1], xLabel: 'c₀', yLabel: 'c₁', aria: 'The path of two coefficients from zero to the best filter, over rings of equal error' });
   plot.el.style.maxWidth = '380px';
   const chips = mkChips(3);
   const paint = () => {
@@ -44,10 +44,10 @@ export function bowlWidget(): Widget {
     for (const e of [0.05, 0.2, 0.5]) {
       const th = range(65).map((i) => (2 * Math.PI * i) / 64), lam1 = 1 + tint, lam2 = 1 - tint;
       const a = Math.sqrt(e / lam1), b = Math.sqrt(e / lam2), q = Math.SQRT1_2;
-      line(plot, th.map((t) => RC + best[0] + q * (a * Math.cos(t) + b * Math.sin(t))), th.map((t) => best[1] + q * (a * Math.cos(t) - b * Math.sin(t))), 'ln-s lump');
+      line(plot, th.map((t) => best[0] + q * (a * Math.cos(t) + b * Math.sin(t))), th.map((t) => best[1] + q * (a * Math.cos(t) - b * Math.sin(t))), 'ln-s lump');
     }
     const clip = (v: number) => Math.max(-RC, Math.min(RC, v));
-    line(plot, cs.map((v) => RC + clip(v)), ds.map(clip), 'ln-s real');
+    line(plot, cs.map(clip), ds.map(clip), 'ln-s real');
     const off = Math.hypot(f.w[0] - best[0], f.w[1] - best[1]);
     chips.set(0, minus(`${num(best[0], 3)}, ${minus(num(best[1], 3))}`), 'the Wiener solution, solved from the correlations');
     chips.set(1, Number.isFinite(off) && off < 100 ? minus(`${num(f.w[0], 3)}, ${minus(num(f.w[1], 3))}`) : 'it left', 'where LMS ended, knowing none of that');

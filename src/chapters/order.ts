@@ -84,6 +84,7 @@ const BOOK = [
   'cordic',
   'converters',
   'adaptive',
+  'pictures',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
