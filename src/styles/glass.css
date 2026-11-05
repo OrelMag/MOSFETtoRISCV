@@ -1,0 +1,32 @@
+/* ---------- Light in glass (src/widgets/glass.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.gl-w { gap: 8px; }
+.gl-out { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gl-svg { display: block; width: 100%; max-width: 640px; height: auto; }
+.gl-svg.sq { max-width: 300px; }
+.gl-t { font: 11px var(--font-mono); fill: var(--text-2); }
+.gl-c2 { fill: var(--probe-1); } .gl-c3 { fill: var(--probe-2); }
+.gl-grid { stroke: var(--border); stroke-width: 1; }
+.gl-win { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+.gl-cur { stroke: var(--accent); stroke-width: 1.5; }
+.gl-l1 { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.gl-l2 { fill: none; stroke: var(--probe-1); stroke-width: 1.5; stroke-linejoin: round; }
+.gl-l3 { fill: none; stroke: var(--probe-2); stroke-width: 1.5; stroke-linejoin: round; }
+.gl-need { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gl-amp { fill: var(--good); stroke: var(--surface); stroke-width: 1.5; }
+.gl-cur-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.gl-core { fill: color-mix(in srgb, var(--accent) 12%, var(--surface)); stroke: var(--border-strong); }
+.gl-clad { fill: var(--surface-2); stroke: var(--border); }
+.gl-ray { fill: none; stroke: var(--good); stroke-width: 1.8; stroke-linejoin: round; }
+.gl-ray.bad { stroke: var(--bad); }
+.gl-modes { display: flex; flex-wrap: wrap; gap: 4px; }
+.gl-mode { padding: 2px 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border-strong); font: 600 11.5px var(--font-mono); }
+.gl-band { fill: color-mix(in srgb, var(--accent) 10%, var(--surface)); stroke: var(--border-strong); }
+.gl-chan { stroke: var(--accent); stroke-width: 1; }
+.gl-dot { fill: var(--accent); }
+.gl-dot.bad { fill: var(--bad); }
+.gl-box { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; }
+.gl-w .mc-status b.bad { color: var(--bad); }
+.gl-w .mc-status b.good { color: var(--good); }
+@media (pointer: coarse) {
+  .gl-box { min-height: 40px; }
+}

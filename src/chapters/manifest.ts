@@ -539,6 +539,16 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "PAM4", challenge: "quiz" },
     { title: "Fibre", challenge: "quiz" },
   ] },
+  { id: "glass", num: 46.5, title: "Light in glass", blurb: "How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.", level: "Communication", builds: ["serial","modem"], recap: {"checks":3}, steps: [
+    { title: "Why glass", challenge: "quiz" },
+    { title: "What keeps the light in", challenge: "quiz" },
+    { title: "Modes", challenge: "quiz" },
+    { title: "Colours at different speeds", challenge: "quiz" },
+    { title: "Many colours, one fibre", challenge: "quiz" },
+    { title: "Amplifying light", challenge: "quiz" },
+    { title: "A receiver that sees the field", challenge: "quiz" },
+    { title: "Budgeting an ocean", challenge: "quiz" },
+  ] },
   { id: "errors", num: 47, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, forward error correction as a trade against retransmission, a Viterbi decoder and Reed-Solomon in gates, interleaving, and every code against Shannon.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
     { title: "One extra bit", challenge: "quiz" },
     { title: "Locating the error", challenge: "reach" },
