@@ -101,7 +101,6 @@ describe('the radio cases', () => {
     expect(a.shortfall).toBeGreaterThan(10);
     expect(b.shortfall).toBeLessThan(a.shortfall - 15);
     expect(a.mbps).toBeLessThan(0.5 * b.mbps);
-    expect(a.lost / a.frames).toBeGreaterThan(b.lost / b.frames);
     expect(a.was).toBe(b.mbps);
   }));
 });

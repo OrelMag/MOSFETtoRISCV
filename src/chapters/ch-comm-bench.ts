@@ -30,7 +30,7 @@ export const chBench: Chapter = {
       'On a UART, errors that fall on a character\'s last bits, and depend on the character, are clock error, not noise.',
       'Collisions need a shared segment. Bad checks on a full-duplex link are the physical path (a duplex mismatch produces them too, so rule that out first). Frames for one machine going to every port are a table that has forgotten.',
       'A trace that ends in the wrong network is a routing lie. One that stops with no route is a route withdrawn.',
-      'Retries on Wi-Fi with plenty of SNR, and frames overlapping at the access point, are stations hidden from each other. Retries with an SNR short of the rate, and one station sending, are a budget that no longer adds up.',
+      'Retries on Wi-Fi with plenty of SNR, and frames overlapping at the access point, are stations hidden from each other. Retries with an SNR well below what it was and what the rate needs, and one station sending, are a budget that no longer adds up.',
     ],
     check: [
       {
@@ -154,7 +154,7 @@ export const chBench: Chapter = {
       title: 'Reading the air',
       body: `
         <p>A radio link has one complaint and many causes, because every one of them ends in retries. Two pieces of evidence separate most of them: the <a href="#/c/radio/${RADIO_BUDGET_STEP}">link budget</a>, which says what arrives, and a sniffer beside the receiver, which says who else was talking.</p>
-        <p>Do the sum first. It takes a minute and needs no equipment: if the SNR falls short of what the rate asks, nothing above the radio can make it up. If the SNR is ample and frames still die, the signal is not the problem, and the question becomes what else was in the air at the receiver. That is the <a href="#/c/wifi/${WIFI_HIDDEN_STEP}">hidden terminal</a>: carrier sense asks about the air at the sender, and the collision happens at the receiver.</p>
+        <p>Do the sum first. It takes a minute and needs no equipment: if the SNR falls short of what the rate asks, nothing above the radio can make it up, and all it can do is settle for a lower rate. If the SNR is ample and frames still die, the signal is not the problem, and the question becomes what else was in the air at the receiver. That is the <a href="#/c/wifi/${WIFI_HIDDEN_STEP}">hidden terminal</a>: carrier sense asks about the air at the sender, and the collision happens at the receiver. A station notices a frame down to about −82 dBm on a 20 MHz channel, the level 802.11 asks of its preamble detection, so a wall can put two stations below that and leave both well above what the access point needs.</p>
         <p>Both cases below have the same report, from the same refit. A wall can do either, depending on what it stands between.</p>
         <div class="try">Read each budget before anything else. Does it explain the retries by itself?</div>`,
       widget: benchWidget(['wifi_hidden', 'link_wall'], ['Case A', 'Case B']),
@@ -163,7 +163,7 @@ export const chBench: Chapter = {
         options: ['Who else the access point hears: a station out of the laptop\'s range can talk over it there', 'A higher-gain antenna on the laptop', 'A lower transmit rate', 'The laptop\'s transmit power'],
         answer: 0,
         explain: 'With that much SNR the budget is not the limit. Frames are being lost for some other reason, and carrier sense cannot show the laptop what is happening at the far end. Only the receiver hears both.',
-        why: ['', 'More gain adds to an SNR that is already ample.', 'Lower rates need less SNR, and SNR is not what is short. A longer frame would be in the air longer, and collide more.', 'Power adds to the same ample SNR, and does not make the other station hear this one unless it reaches that far.'],
+        why: ['', 'It might happen to help, if it lets the other station hear this one, but it says nothing about what is wrong. The SNR is already ample, so first find out why frames die.', 'Lower rates need less SNR, and SNR is not what is short. A longer frame would be in the air longer, and collide more.', 'As with the antenna: it might mask the fault, and it would not tell you what the fault is.'],
       },
     },
     {
