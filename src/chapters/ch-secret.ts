@@ -10,6 +10,7 @@ import { idx, ROTORS, U264 } from '../crypto/enigma';
 import { enigma3d } from '../widgets/enigma3d';
 import { withModel } from '../widgets/modelhost';
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
+import { numOf } from './order';
 import type { Chapter } from './types';
 
 const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
@@ -29,7 +30,7 @@ const m4Scene = () => ({
 });
 
 export const chSecret: Chapter = {
-  id: 'secret', num: 52.5, title: 'Keeping it secret', level: 'Communication',
+  id: 'secret', num: numOf('secret'), title: 'Keeping it secret', level: 'Communication',
   blurb: 'The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Coming to this chapter: AES and SHA-256 in gates, and a TLS 1.3 handshake on our CPU.',
   goals: [
     'describe the Enigma as a permutation that changes with every key press, and say what its wiring forces it to do',
