@@ -3,6 +3,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { adpcmDecode, adpcmEncode, lpc, packNibbles, ulawDecision, ulawDecode, ulawEncode, ulawQuantized, sineSnr, uniform } from '../src/dsp/speech';
+import { ulawDecoder, ulawEncoder, ulawLine } from '../src/lib/ulaw';
+import { BitSim } from '../src/sim/bitsim';
+import { flatten } from '../src/sim/flatten';
+import { netlistOf } from '../src/sim/types';
+import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
 import V from './dsp/vectors/speech.json';
 
 /** A 16-bit mono WAV's samples, as the site's loader reads them. */
@@ -69,5 +74,30 @@ describe('linear prediction', () => {
   it('Levinson on the voice\'s frames equals solve_toeplitz', () => {
     const w = wavSamples('public/dsp/voice-8k.wav');
     for (const f of V.lpc) lpc(w.x.slice(f.start, f.start + 240), 10).forEach((v, i) => expect(v).toBeCloseTo(f.a[i], 5));
+  });
+});
+
+describe('μ-law in gates', () => {
+  it('the encoder equals the model on all 16 384 samples, and the decoder on all 256 codes', () => {
+    const se = new BitSim(flatten(ulawEncoder()));
+    for (let x0 = -8192; x0 < 8192; x0 += 32) {
+      se.setInput('x', Array.from({ length: 32 }, (_, l) => (x0 + l + 16384) % 16384)); se.settle();
+      const g = se.get('code');
+      for (let l = 0; l < 32; l++) if (g[l] !== ulawEncode(x0 + l)) expect([x0 + l, g[l]]).toEqual([x0 + l, ulawEncode(x0 + l)]);
+    }
+    const sd = new BitSim(flatten(ulawDecoder()));
+    for (let c0 = 0; c0 < 256; c0 += 32) {
+      sd.setInput('code', Array.from({ length: 32 }, (_, l) => c0 + l)); sd.settle();
+      const g = sd.get('y');
+      for (let l = 0; l < 32; l++) { const y = g[l] >= 8192 ? g[l] - 16384 : g[l]; if (y !== ulawDecode(c0 + l)) expect([c0 + l, y]).toEqual([c0 + l, ulawDecode(c0 + l)]); }
+    }
+  });
+  it('draws with no wire on another, no symbol on another, no label over a part', () => {
+    for (const d of [ulawLine(), ulawEncoder(), ulawDecoder(), ...netlistOf(ulawEncoder())!.instances.map((i) => i.def).filter((d) => d.id === 'ulaw_mag')]) {
+      const nl = netlistOf(d)!;
+      expect([d.id, wireOverlaps(routeNetlist(d, nl).nets)]).toEqual([d.id, []]);
+      expect([d.id, labelOverlaps(d, nl)]).toEqual([d.id, []]);
+      expect([d.id, symbolOverlaps(nl)]).toEqual([d.id, []]);
+    }
   });
 });
