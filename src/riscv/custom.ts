@@ -58,9 +58,10 @@ export function uses(r: CustomRow) {
   };
 }
 
-/** Why a row cannot be built (bad), or what to know about it. names: mnemonics already taken. */
-export function problemsOf(r: CustomRow, taken: Set<string> = new Set()): Problem[] {
+/** Why a row cannot be built (bad), or what to know about it. names: mnemonics already taken. mac: the core has the MAC, which owns custom-2. */
+export function problemsOf(r: CustomRow, taken: Set<string> = new Set(), mac = false): Problem[] {
   const p: Problem[] = [];
+  if (mac && r.slot === 2) p.push({ level: 'bad', text: 'custom-2 belongs to the MAC here (mac, mac2, clracc, racc). Use custom-1 or custom-3.' });
   const f = FMT_FIELDS[r.fmt], u = uses(r);
   if (!/^[a-z][a-z0-9_.]*$/.test(r.name)) p.push({ level: 'bad', text: 'A mnemonic is lower-case letters, digits, _ or .' });
   else if (taken.has(r.name)) p.push({ level: 'bad', text: `${r.name} is already an instruction or pseudo-instruction.` });
@@ -78,7 +79,7 @@ export function problemsOf(r: CustomRow, taken: Set<string> = new Set()): Proble
   return p;
 }
 
-export const buildable = (r: CustomRow, taken?: Set<string>) => !problemsOf(r, taken).some((x) => x.level === 'bad');
+export const buildable = (r: CustomRow, taken?: Set<string>, mac = false) => !problemsOf(r, taken, mac).some((x) => x.level === 'bad');
 
 /** The row as an instruction spec for decode / disasm / the assembler (funct7 0 for R). */
 export function specOf(r: CustomRow): InstrSpec & { custom: CustomRow } {

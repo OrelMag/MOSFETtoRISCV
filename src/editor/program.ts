@@ -92,7 +92,7 @@ export function scanHexLine(line: string): HexTok[] {
   return out;
 }
 
-function buildHex(src: string): BuiltProgram {
+function buildHex(src: string, mac = false): BuiltProgram {
   const words: number[] = [];
   const from: number[] = []; // srcLine per word index
   const errors: ProgramError[] = [];
@@ -113,7 +113,7 @@ function buildHex(src: string): BuiltProgram {
       }
     }
   });
-  const lines = words.map((w, i) => ({ addr: 4 * i, word: w, text: disasm(w, 4 * i), srcLine: Math.abs(from[i]) }));
+  const lines = words.map((w, i) => ({ addr: 4 * i, word: w, text: disasm(w, 4 * i, undefined, 32, mac), srcLine: Math.abs(from[i]) }));
   return { words, errors, lines };
 }
 
@@ -163,8 +163,8 @@ function build6502(src: string, k: number): BuiltProgram {
 
 /** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token; 6502: bytes for a ROM of 2^k. */
 /** custom: an RV32 program's custom instructions (riscv/custom.ts). */
-export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = [], xlen: 32 | 64 = 32): BuiltProgram {
-  if (lang === 'hex') return buildHex(src);
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = [], xlen: 32 | 64 = 32, mac = false): BuiltProgram {
+  if (lang === 'hex') return buildHex(src, mac);
   if (lang === '6502') return build6502(src, k);
   if (lang === 'isa') {
     // A custom instruction set (the ROM's own copy of the table): word addressed like RV16.
@@ -185,10 +185,10 @@ export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 1
     const r = assemble4(src);
     return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm4(l.word), srcLine: l.srcLine })) };
   }
-  const r = assemble(src, custom, xlen === 64 ? { xlen } : {});
+  const r = assemble(src, custom, { ...(xlen === 64 ? { xlen } : {}), ...(mac ? { mac } : {}) });
   return {
     words: r.words,
     errors: r.errors,
-    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: l.size === 2 ? disasmC(l.word, l.addr) : disasm(l.word, l.addr, custom, xlen), srcLine: l.srcLine, ...(l.size === 2 ? { size: 2 as const } : {}) })),
+    lines: r.lines.map((l) => ({ addr: l.addr, word: l.word, text: l.size === 2 ? disasmC(l.word, l.addr) : disasm(l.word, l.addr, custom, xlen, mac), srcLine: l.srcLine, ...(l.size === 2 ? { size: 2 as const } : {}) })),
   };
 }

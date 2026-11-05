@@ -16,8 +16,9 @@ import { Builder } from './builder';
 import { busMux2, rca } from './combinational';
 import { define, ones, splitter } from './define';
 import { cut, placed, roundUp } from './fft';
-import { clampWord } from './fixedpt';
+import { clampWide } from './firmac';
 import { AND, NOT } from './gates';
+import { macSlot } from './macslot';
 import { treeMul } from './muldiv';
 import { register } from './sequential';
 import { TIE0 } from './transistors';
@@ -83,7 +84,7 @@ export function macRead(): ComponentDef {
     b.next();
     const r = b.op1(roundUp(R), [ext, rnd], 'round half up', 'round');
     b.next();
-    const cl = b.op(clampWord(32, R), [r], 'clamp once', 'clamp');
+    const cl = b.op(clampWide(R, 32), [r], 'clamp once', 'clamp');
     b.next();
     b.wire(`${cl}.y`, 'y');
     b.wire(`${cl}.sat`, 'sat');
@@ -154,3 +155,6 @@ export function macUnit(): ComponentDef {
   });
 }
 
+
+macSlot.unit = macUnit;
+macSlot.cut = cut;
