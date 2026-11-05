@@ -158,9 +158,10 @@ class InsideView {
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
       inspect: (c) => this.inspectPart(c),
+      canInspect: () => !this.gated(),
       explain: (c) => {
         const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
-        return def ? explainOn(this.ed, def, (at) => this.inspectPart(c, at)) : [];
+        return def ? explainOn(this.ed, def, this.gated() ? null : (at) => this.inspectPart(c, at)) : [];
       },
     });
     this.view.radix = ed.view.radix;
@@ -168,6 +169,11 @@ class InsideView {
     this.view.trace = true;
     this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
+  }
+
+  /** A level's or a walkthrough's chip: what is inside its parts stays there. */
+  private gated(): boolean {
+    return handout({ chipId: this.ed.chipId, level: !!this.ed.level, own: false }).none;
   }
 
   /** The Inspector's drawer on a part of the level on screen (or on the level). */

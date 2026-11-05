@@ -8,6 +8,7 @@ import { h, icon } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { Inspector } from '../view/inspector';
 import { dockPane, undockPane } from './dock';
+import { isLevelChipId } from './levelgate';
 import { type Editor, registerToolbarAction } from './editor';
 
 const drawers = new WeakMap<Editor, InspectDrawer>();
@@ -38,10 +39,13 @@ class InspectDrawer {
   private valKey = '';
   private last = 0;
   private readonly chip: string;
+  /** A campaign level's chip. */
+  private readonly noUsage: boolean;
   private readonly hook = () => this.tick();
 
   constructor(private ed: Editor, private part?: string, private fixed?: { def: ComponentDef; label: string }) {
     this.chip = ed.chipId;
+    this.noUsage = !!ed.level || isLevelChipId(ed.chipId);
     this.title = h('h3', null);
     this.el = h('aside', { class: 'sb-drawer', 'aria-label': 'Inspector' },
       h('div', { class: 'sb-drawer-head' }, icon('table', 15), this.title,
@@ -71,7 +75,7 @@ class InspectDrawer {
       if (this.def === this.fixed.def) return;
       this.def = this.fixed.def;
       this.title.textContent = this.fixed.label;
-      this.inspector.show({ def: this.fixed.def });
+      this.inspector.show({ def: this.fixed.def, ...(this.noUsage ? { noUsage: true } : {}) });
       return;
     }
     const pd = this.part ? ed.doc.parts.find((p) => p.id === this.part) : undefined;
@@ -82,7 +86,7 @@ class InspectDrawer {
     if (def !== this.def) {
       this.def = def;
       this.title.textContent = this.part ? `${this.part} · ${def.name}` : def.name;
-      this.inspector.show({ def, portBits: this.portBits, ...(this.part ? { instance: this.part } : {}) });
+      this.inspector.show({ def, portBits: this.portBits, ...(this.part ? { instance: this.part } : {}), ...(this.noUsage ? { noUsage: true } : {}) });
       return;
     }
     const now = performance.now();

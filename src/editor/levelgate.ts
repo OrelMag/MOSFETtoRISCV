@@ -18,17 +18,17 @@ export function handout(o: { chipId: string; level: boolean; own: boolean }): { 
 }
 
 /** Explain on the sandbox's surfaces: a level's codex entries read in its side pane, since leaving would tear down its editor. */
-export function explainOn(ed: Editor, def: ComponentDef, inspectAt: (at: 'truth' | 'used') => void): MenuEntry[] {
+export function explainOn(ed: Editor, def: ComponentDef, inspectAt: ((at: 'truth' | 'used') => void) | null): MenuEntry[] {
   const away = (href: string) => {
-    // a level keeps its screen: the chapter opens beside it
-    if (ed.level) return void window.open(href, '_blank', 'noopener');
+    // a level keeps its screen: the chapter opens beside it (the desktop program opens no second window of its own pages)
+    if (ed.level && /^https?:/.test(location.href)) return void window.open(href, '_blank', 'noopener');
     markJump();
     location.hash = href;
   };
   return explainGroup(def, {
-    truth: () => inspectAt('truth'),
-    used: () => inspectAt('used'),
+    ...(inspectAt ? { truth: () => inspectAt('truth'), used: () => inspectAt('used') } : {}),
     openCodex: (id) => (ed.openCodex ? ed.openCodex(id) : away(`#/campaign/codex/${id}`)),
+    ...(ed.openCodex ? { readsLocked: true } : {}),
     openChapter: away,
     chip: { id: ed.level?.chipId ?? ed.chipId, level: !!ed.level },
   });

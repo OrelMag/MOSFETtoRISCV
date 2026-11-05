@@ -1,55 +1,49 @@
-// From a library part to what teaches it (DOM-free, loaded when the menu's Explain opens): the codex entry whose figure it
-// is (CodexMore.lib), else one of the level that unlocks it, a generated size through its family; then that entry's
-// chapter. On a campaign level the answer goes through a gate: the level's own target must not be given away.
+// From a library part to what teaches it (DOM-free, loaded when the menu's Explain opens): the codex entry about it, a
+// generated size through its family; then that entry's chapter. On a campaign level the answer goes through a gate: the
+// level's own target must not be given away.
 
 import { familyOf } from '../lib/resolve';
 import { codexById, type CodexEntry } from './codex';
 import { moreIds, moreOf } from './codexmore';
-import { teachingLevels } from './codexlinks';
-import { NODES, nodeById } from './nodes';
+import { firstTeacher, teachingLevels } from './codexlinks';
+import { nodeById } from './nodes';
 import type { ChapterLink } from './types';
 
-interface Index { exact: Map<string, string>; family: Map<string, string>; prefix: [string, string][] }
-let index: Index | null = null;
+// A wrong link is worse than none: only an entry that is about the part counts, never one that merely draws it or that the
+// level unlocking it happens to teach. Families of parts the ids do not name are written out.
+const PART_ENTRY: [RegExp, string][] = [
+  [/^[np]mos(_switch)?$/, 'mosfet'],
+  [/^inv_/, 'inverter'],
+  [/^(mux|busmux)/, 'mux'],
+  [/^dec[1-6]e?(_p\d+)?$/, 'decoder'],
+  [/^eq\d+$/, 'comparator'],
+  [/^(rca|rv16_add)\d*$/, 'ripple'],
+  [/^inc\d+$/, 'incrementer'],
+  [/^shift\d+$/, 'shifter'],
+  [/^(rv16_)?alu\d*/, 'alu'],
+  [/^sr_latch$/, 'latch'],
+  [/^d_latch/, 'dlatch'],
+  [/^dff/, 'dff'],
+  [/^reg(ister)?\d+/, 'register'],
+  [/^counter\d+/, 'counter'],
+  [/^ram\d/, 'ram'],
+  [/^rom_/, 'rom'],
+  [/^regfile/, 'regfile'],
+  [/^relay/, 'relay'],
+  [/^(tube_|triode$)/, 'triode'],
+  [/^nor_cmos$/, 'nor'],
+];
 
-function build(): Index {
-  const exact = new Map<string, string>(), family = new Map<string, string>(), prefix: [string, string][] = [];
-  const fam = (id: string) => familyOf(id)?.fam.id;
-  // an entry's own figure first: it is about that part
-  for (const c of moreIds()) {
-    const lib = moreOf(c)?.lib;
-    if (!lib || !codexById(c)) continue;
-    if (!exact.has(lib)) exact.set(lib, c);
-    const f = fam(lib);
-    if (f && !family.has(f)) family.set(f, c);
-  }
-  // then the level that unlocks it, by the entry that level teaches first
-  for (const n of NODES) {
-    const c = n.codex.find((x) => codexById(x));
-    if (!c) continue;
-    for (const u of n.unlocks ?? []) {
-      if (u.endsWith('*')) prefix.push([u.slice(0, -1), c]);
-      else {
-        if (!exact.has(u)) exact.set(u, c);
-        const f = fam(u);
-        if (f && !family.has(f)) family.set(f, c);
-      }
-    }
-  }
-  // the bare transistors are what their switch entry is about
-  for (const [a, b] of [['nmos', 'nmos_switch'], ['pmos', 'nmos_switch']]) if (!exact.has(a) && exact.has(b)) exact.set(a, exact.get(b)!);
-  return { exact, family, prefix };
-}
-
-/** The codex entry that teaches a library part (undefined: none does, or a user chip). */
+/** The codex entry that teaches a library part (undefined: none is about it, or a user chip). */
 export function entryOfPart(id: string): CodexEntry | undefined {
-  const ix = (index ??= build());
-  const f = familyOf(id)?.fam.id;
-  // an entry named after the part (or its family) is about it; another that only draws it comes after
-  const own = codexById(id) ?? (f ? codexById(f) : undefined);
+  if (id.startsWith('u_')) return undefined;
+  const flat = id.replace(/_/g, '');
+  const own = codexById(id) ?? codexById(flat);
   if (own) return own;
-  const c = ix.exact.get(id) ?? (f ? ix.family.get(f) : undefined) ?? ix.prefix.find(([p]) => id.startsWith(p))?.[1];
-  return c ? codexById(c) : undefined;
+  const hit = PART_ENTRY.find(([re]) => re.test(id));
+  if (hit) return codexById(hit[1]);
+  const f = familyOf(id)?.fam.id;
+  return (f ? codexById(f) : undefined) ?? moreIds().map((c) => (moreOf(c)?.lib === id && codexById(c)?.kind === 'component' ? codexById(c) : undefined)).find(Boolean);
 }
 
 /** The chapter that teaches an entry: the first its fuller text links, else the one its first level links. */
@@ -75,7 +69,8 @@ export function explainPart(id: string, gate: LevelGate | null): PartExplain {
   const used = !gate || gate.done;
   if (!e) return { used };
   const locked = !!gate && !gate.unlocked.has(e.id);
-  const where = locked ? teachingLevels(e.id).map((n) => n.title).join(' or ') : '';
+  // the level that teaches it first: a list would name levels further on
+  const where = locked ? firstTeacher(e.id)?.title ?? '' : '';
   const ch = locked ? undefined : chapterOfEntry(e.id);
   return {
     codex: { id: e.id, title: e.title, locked, ...(where ? { unlock: where } : {}) },
@@ -85,14 +80,14 @@ export function explainPart(id: string, gate: LevelGate | null): PartExplain {
 }
 
 /** The node a level's or walkthrough's chip belongs to. */
-const nodeOf = (chipId: string) => nodeById(chipId.replace(/^u_(ch_cp_|walk_)/, ''));
+export const nodeOfChipId = (chipId: string) => nodeById(chipId.replace(/^u_(ch_cp_|walk_)/, ''));
 
 /** The gate for a chip (null: not a level's). Progress is read now: it changes as the learner passes levels. */
 export async function gateOf(chipId: string, level: boolean): Promise<LevelGate | null> {
   if (!level && !/^u_(ch_cp|walk)_/.test(chipId)) return null;
   const [{ progress }, { isDone }] = await Promise.all([import('./progress'), import('./graph')]);
   const p = progress();
-  const n = nodeOf(chipId);
+  const n = nodeOfChipId(chipId);
   // a walkthrough is the reference answer, read on purpose: still gated like its level
   return { unlocked: p.codexUnlocked(), done: !!n && isDone(p.view(n.id)) };
 }

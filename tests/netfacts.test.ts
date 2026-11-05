@@ -6,14 +6,16 @@ import { B0, B1, BX, BZ, type Bit, netlistOf } from '../src/sim/types';
 import { compileChip } from '../src/editor/compile';
 import { docFromDef } from '../src/editor/fromdef';
 import type { ChipDoc } from '../src/editor/model';
-import { chapterHref, chapterOfEntry, entryOfPart, explainPart } from '../src/campaign/partindex';
+import { chapterHref, chapterOfEntry, entryOfPart, explainPart, nodeOfChipId } from '../src/campaign/partindex';
+import { firstTeacher } from '../src/campaign/codexlinks';
+import { ancestors, ruleFor } from '../src/campaign/graph';
 import { codexById } from '../src/campaign/codex';
 import { chapters } from '../src/chapters';
-import { truthOff } from '../src/view/truthrule';
+import { hasUsage, truthOff } from '../src/view/truthrule';
 import { handout, isLevelChipId } from '../src/editor/levelgate';
 import { netMembers, netOfSelection } from '../src/editor/netsel';
 import { levelChipId } from '../src/campaign/levels';
-import { NODES } from '../src/campaign/nodes';
+import { NODES, nodeById } from '../src/campaign/nodes';
 import { elsewhereGroup, type ElsewhereHost, elsewhereRows } from '../src/view/tracemenu';
 import { partDef } from '../src/editor/parts';
 import { flatten } from '../src/sim/flatten';
@@ -165,12 +167,21 @@ describe('the rows of Take it elsewhere', () => {
 });
 
 describe('what teaches a part', () => {
-  it('finds a part, a generated size, and nothing for a chip of the learner', () => {
-    expect(entryOfPart('nand')?.id).toBeTruthy();
-    expect(entryOfPart('xor')?.id).toBe('xor');
-    expect(entryOfPart('nmos')).toBeTruthy();
-    expect(entryOfPart(resolveComponent('alu8')!.id)).toBeTruthy();
+  it('finds what is about a part, a generated size too, and nothing for a chip of the learner', () => {
+    const want: Record<string, string> = {
+      nand: 'nand', xor: 'xor', not: 'not', nmos: 'mosfet', pmos: 'mosfet', inv_cmos: 'inverter', nor_cmos: 'nor', full_adder: 'fulladder', half_adder: 'halfadder',
+      mux2: 'mux', mux2x4: 'mux', mux2x3: 'mux', dff: 'dff', dffe: 'dff', sr_latch: 'latch', d_latch: 'dlatch', alu8: 'alu', rv16_alu16: 'alu', rca8: 'ripple', relay_not: 'relay', tube_inv: 'triode',
+      ram16x4l: 'ram', ram1024x8: 'ram', register8: 'register',
+    };
+    for (const [part, entry] of Object.entries(want)) expect(entryOfPart(part)?.id, part).toBe(entry);
     expect(entryOfPart('u_my_chip')).toBeUndefined();
+    expect(entryOfPart('u_nand')).toBeUndefined();
+  });
+
+  it('gives no answer rather than an entry that only draws the part', () => {
+    // each of these once led to the entry named here, by a prefix or the level that unlocks it
+    const wrong: Record<string, string> = { dec8b10b: 'decoder', dec56: 'decoder', ks16: 'cla', zeroN: 'fanin' };
+    for (const [part, entry] of Object.entries(wrong)) expect(entryOfPart(part)?.id, part).not.toBe(entry);
   });
 
   it('every entry and chapter it names exists, and most of the library is covered', () => {
@@ -190,8 +201,8 @@ describe('what teaches a part', () => {
       expect(ch.label).toBeTruthy();
     }
     console.log(`part index: ${found} of ${parts} registered parts have a codex entry, ${taught} a chapter`);
-    expect(found).toBeGreaterThan(40);
-    expect(taught).toBeGreaterThan(30);
+    expect(found).toBeGreaterThan(100);
+    expect(taught).toBeGreaterThan(100);
   });
 
   const some = entryOfPart('nand')!;
@@ -219,17 +230,36 @@ describe('what teaches a part', () => {
     expect(explainPart('nand', { unlocked: new Set([some.id]), done: true }).used).toBe(true);
   });
 
-  it('no level hands over a locked entry through its own unlocked parts', () => {
-    // for every level, what it may place: a row that names a locked entry stays locked, with no chapter to read instead
+  it('on every level, as far as the learner really got: what it teaches stays locked, with no chapter', () => {
+    let levels = 0, heldBack = 0;
     for (const n of NODES) {
-      if (!n.unlocks) continue;
-      for (const u of n.unlocks.filter((x) => !x.endsWith('*'))) {
-        const x = explainPart(u, { unlocked: new Set(), done: false });
-        expect(x.chapter, `${n.id}: ${u}`).toBeUndefined();
-        expect(x.used, `${n.id}: ${u}`).toBe(false);
-        if (x.codex) expect(x.codex.locked, `${n.id}: ${u}`).toBe(true);
+      // everything before this level passed, this level not: what progress gives on reaching it
+      const unlocked = new Set([...ancestors(n.id)].flatMap((id) => nodeById(id)?.codex ?? []));
+      const gate = { unlocked, done: false };
+      levels++;
+      // whatever it may place, and its own unlocks, the parts its answer is built from
+      for (const part of [...n.unlocks ?? [], ...(ruleFor(n.id).lib ?? [])].filter((x) => !x.endsWith('*'))) {
+        const x = explainPart(part, gate);
+        expect(x.used, `${n.id}: ${part}`).toBe(false);
+        if (!x.codex) continue;
+        expect(x.codex.locked, `${n.id}: ${part}`).toBe(!unlocked.has(x.codex.id));
+        if (x.codex.locked) {
+          heldBack++;
+          expect(x.chapter, `${n.id}: ${part}`).toBeUndefined();
+          expect(x.codex.unlock, `${n.id}: ${part}`).toBe(firstTeacher(x.codex.id)?.title);
+        }
       }
     }
+    expect(levels).toBeGreaterThan(50);
+    // it would pass emptily if the gate never held anything back
+    expect(heldBack).toBeGreaterThan(10);
+  });
+
+  it('a chip knows its level, whichever way it was opened', () => {
+    const n = NODES.find((x) => x.id === 'g_or')!;
+    expect(nodeOfChipId(levelChipId(n))).toBe(n);
+    expect(nodeOfChipId(`u_walk_${n.id}`)).toBe(n);
+    expect(nodeOfChipId('u_my_chip')).toBeUndefined();
   });
 });
 
@@ -240,6 +270,12 @@ describe('why a part has no truth table', () => {
     expect(truthOff(resolveComponent('nmos')!)).toMatch(/device/);
     expect(truthOff(resolveComponent('sr_latch') ?? resolveComponent('dff')!)).toMatch(/feedback/);
     expect(truthOff(resolveComponent('alu8')!)).toMatch(/input bits/);
+  });
+
+  it('knows who has a usage section', () => {
+    expect(hasUsage(resolveComponent('xor')!)).toBe(true);
+    expect(hasUsage({ ...resolveComponent('xor')!, category: 'custom' })).toBe(false);
+    expect(hasUsage(resolveComponent('vdd')!)).toBe(false);
   });
 });
 
