@@ -16,5 +16,17 @@ export const ALIASES_DSP: Record<string, string[]> = { ...ALIASES_A, ...ALIASES_
  * untaught ids).
  */
 /** Ids Act 13's levels list in `codex` (nodesdsp.ts). */
-const LISTED = new Set(['saturate', 'guardbits']);
+const LISTED = new Set([
+  'saturate', 'guardbits', // sp_sat
+  // sp_biquad
+
+  // sp_goertzel
+
+  // sp_cic
+
+  // sp_cordic
+
+  // sp_sd
+
+]);
 export const DSP_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_DSP.map((e) => e.id).filter((id) => !LISTED.has(id)));

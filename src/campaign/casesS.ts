@@ -10,4 +10,15 @@ export const CASESS: Record<string, LevelCase> = {
     cost: 'The 9-bit ripple adder is 81 NANDs and 22 delays; the clamp that reads its top two bits is 37 NANDs and 6 delays: 118 against 72 for the 8-bit adder that wraps. Every result of a filter pays it once, and an accumulator with guard bits pays it only at the end.',
     alts: [{ name: '8-bit adder that wraps (library)', lib: 'rca8' }, { name: '8-bit saturating adder (library)', lib: 'satadd8' }],
   },
+
+  // ---- sp_biquad (its entry goes below this line)
+
+  // ---- sp_goertzel
+
+  // ---- sp_cic
+
+  // ---- sp_cordic
+
+  // ---- sp_sd
+
 };

@@ -27,4 +27,15 @@ export const WALKS9: Record<string, WalkScript> = {
       whyNot: { text: 'Clamping only on the carry out of bit 7 catches positive and negative overflow alike but cannot tell them apart: the sign of the clamp needs bit 8.' },
     },
   ],
+
+  // ---- sp_biquad (its entry goes below this line)
+
+  // ---- sp_goertzel
+
+  // ---- sp_cic
+
+  // ---- sp_cordic
+
+  // ---- sp_sd
+
 };

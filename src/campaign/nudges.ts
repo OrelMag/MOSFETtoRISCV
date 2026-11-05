@@ -136,6 +136,17 @@ export const NUDGES: Record<string, string> = {
   m_flash: 'You can never write in place: write somewhere new each time, remember where, and win the space back before it runs out.',
   // act 13: signals
   sp_sat: 'The sum needs one bit more than the word; whether it fits is written in that bit and the one below it.',
+
+  // sp_biquad: below
+
+  // sp_goertzel: below
+
+  // sp_cic: below
+
+  // sp_cordic: below
+
+  // sp_sd: below
+
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
   l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',

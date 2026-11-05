@@ -24,4 +24,15 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
     check: { kind: 'table', spec: (ins) => SAT_REF().spec!(ins) },
     answer: refOf('sp_sat', SAT_REF, 'Saturating adder', () => [[SAT_CLAMP(), 'Clamp']]),
   }),
+
+  // ---- sp_biquad (its entry goes below this line)
+
+  // ---- sp_goertzel
+
+  // ---- sp_cic
+
+  // ---- sp_cordic
+
+  // ---- sp_sd
+
 };
