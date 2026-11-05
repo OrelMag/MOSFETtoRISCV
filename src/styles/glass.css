@@ -33,3 +33,10 @@
 @media (pointer: coarse) {
   .gl-box { min-height: 40px; }
 }
+.gl-w, .gl-w .mos-row { min-width: 0; max-width: 100%; }
+.gl-w .mos-sl { min-width: 0; }
+.gl-w .mos-sl input { min-width: 0; flex: 1 1 0; }
+@media (max-width: 600px) {
+  .gl-w .mos-sl span { width: 84px; }
+  .gl-w .mos-sl output { width: 66px; font-size: 11px; }
+}
