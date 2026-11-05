@@ -3,7 +3,7 @@
 
 import { dbToRatio } from '../comm/limits';
 import {
-  apertureM2, arrayDbi, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, dipoleField, dopplerHz, fadeDuration, fsplDb, imageOf, levelCrossing, linkBudget, logDistanceDb, mixed, mixSpectrum, sdrReceive, wavelengthM, widebandLimitMbps, type Ray,
+  WALL_DB, apertureM2, arrayDbi, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, dipoleField, dopplerHz, fadeDuration, fsplDb, imageOf, levelCrossing, linkBudget, logDistanceDb, mixed, mixSpectrum, sdrReceive, wavelengthM, widebandLimitMbps, type Ray,
 } from '../phys/radio';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
@@ -86,8 +86,7 @@ export function pathWidget(): Widget {
 }
 
 // ---- the link budget ---------------------------------------------------------------------------------------------------------------
-/** Wall loss per wall: illustrative, more at the higher band. */
-export const WALL_DB = (ghz: number): number => (ghz > 3 ? 16 : 12);
+export { WALL_DB };
 export const BUDGET_DEFAULT = { tx: 20, ga: 2, nf: 6, m: 50, walls: 2, ghz: 2.4, mhz: 20 };
 export function budgetWidget(): Widget {
   let { tx, ga, m, walls, ghz, mhz } = BUDGET_DEFAULT;

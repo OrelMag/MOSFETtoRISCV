@@ -8,6 +8,8 @@ import type { Chapter } from './types';
 
 /** The console quiz: a clock error that moves only the last sample, and two characters it treats differently (tests/comm-faults.test.ts). */
 export const UART_ERR = 0.065, SHOWN_FAILS = 0x55, SHOWN_SURVIVES = 0x31;
+/** Steps this chapter points at (tests/chapter-guide.test.ts holds a link to a real step; the titles are checked in tests/comm-faults.test.ts). */
+export const RADIO_BUDGET_STEP = 2, WIFI_HIDDEN_STEP = 3;
 
 export const chBench: Chapter = {
   id: 'bench', num: numOf('bench'), title: 'The expert\'s bench', level: 'Communication',
@@ -17,8 +19,9 @@ export const chBench: Chapter = {
     'tell loss, a slow reader, a bloated queue and a small queue apart from a capture and two plots',
     'read an eye for band against noise, and a garbled console for clock error',
     'use Ethernet counters and a traceroute to place a fault in one network and on one link',
+    'add up a radio link and tell a weak signal from two stations that cannot hear each other',
   ],
-  builds: ['tcp', 'path', 'switch', 'serial', 'uart', 'noise'],
+  builds: ['tcp', 'path', 'switch', 'serial', 'uart', 'noise', 'radio', 'wifi'],
   recap: {
     keep: [
       'Start from what is known and ask what would differ between the candidate causes. Look at the piece of evidence that separates them. Change one thing at a time.',
@@ -27,6 +30,7 @@ export const chBench: Chapter = {
       'On a UART, errors that fall on a character\'s last bits, and depend on the character, are clock error, not noise.',
       'Collisions need a shared segment. Bad checks on a full-duplex link are the physical path (a duplex mismatch produces them too, so rule that out first). Frames for one machine going to every port are a table that has forgotten.',
       'A trace that ends in the wrong network is a routing lie. One that stops with no route is a route withdrawn.',
+      'Retries on Wi-Fi with plenty of SNR, and frames overlapping at the access point, are stations hidden from each other. Retries with an SNR short of the rate, and one station sending, are a budget that no longer adds up.',
     ],
     check: [
       {
@@ -147,6 +151,22 @@ export const chBench: Chapter = {
       },
     },
     {
+      title: 'Reading the air',
+      body: `
+        <p>A radio link has one complaint and many causes, because every one of them ends in retries. Two pieces of evidence separate most of them: the <a href="#/c/radio/${RADIO_BUDGET_STEP}">link budget</a>, which says what arrives, and a sniffer beside the receiver, which says who else was talking.</p>
+        <p>Do the sum first. It takes a minute and needs no equipment: if the SNR falls short of what the rate asks, nothing above the radio can make it up. If the SNR is ample and frames still die, the signal is not the problem, and the question becomes what else was in the air at the receiver. That is the <a href="#/c/wifi/${WIFI_HIDDEN_STEP}">hidden terminal</a>: carrier sense asks about the air at the sender, and the collision happens at the receiver.</p>
+        <p>Both cases below have the same report, from the same refit. A wall can do either, depending on what it stands between.</p>
+        <div class="try">Read each budget before anything else. Does it explain the retries by itself?</div>`,
+      widget: benchWidget(['wifi_hidden', 'link_wall'], ['Case A', 'Case B']),
+      challenge: {
+        kind: 'quiz', question: 'A laptop reaches its access point at 35 dB of SNR and still retries one frame in three. Nobody else is close to it. What do you look at next?',
+        options: ['Who else the access point hears: a station out of the laptop\'s range can talk over it there', 'A higher-gain antenna on the laptop', 'A lower transmit rate', 'The laptop\'s transmit power'],
+        answer: 0,
+        explain: 'With that much SNR the budget is not the limit. Frames are being lost for some other reason, and carrier sense cannot show the laptop what is happening at the far end. Only the receiver hears both.',
+        why: ['', 'More gain adds to an SNR that is already ample.', 'Lower rates need less SNR, and SNR is not what is short. A longer frame would be in the air longer, and collide more.', 'Power adds to the same ample SNR, and does not make the other station hear this one unless it reaches that far.'],
+      },
+    },
+    {
       title: 'Reading a specification',
       body: `
         <p>The other half of the expert's trade is the document that says what should have happened. Standards are written to be exact, not to teach, and they reward a particular way of reading. Keep a question in hand and look it up, as you would a dictionary. Learn the <em>shall</em> convention (RFC 2119's <em>MUST</em>, <em>SHOULD</em> and <em>MAY</em>): it separates what you can rely on from what some implementations happen to do. Read the state tables and the frame formats before the prose.</p>
@@ -166,7 +186,7 @@ export const chBench: Chapter = {
       body: `
         <p>That is the method, with help beside it. The test of it is <a href="#/campaign/play/cap_fault">Find the fault</a>: ${ATTEMPT_CASES} cases drawn at random from all of the above, with new numbers each time, and nothing said about any answer until the end. ${PASS_MARK} right passes. A wrong answer shows what the evidence meant once the attempt is over. The set is small enough to learn, and learning what each fault looks like is the point: the reports are worded alike, so it is the evidence that tells them apart.</p>
         <p>The cases draw only on faults the book's models can really produce. Real networks have many more: firmware bugs, a mismatched duplex, a misconfigured load balancer, hardware that fails only when warm. The method is what carries over to them.</p>
-        <p>When a case surprises you, go back to the chapter it came from: <a href="#/c/tcp/0">TCP</a>, <a href="#/c/serial/0">Fast serial links</a>, <a href="#/c/uart/0">A UART</a>, <a href="#/c/ethernet/0">Ethernet</a>, <a href="#/c/switch/0">A switch</a>, <a href="#/c/path/0">The internet path</a>.</p>
+        <p>When a case surprises you, go back to the chapter it came from: <a href="#/c/tcp/0">TCP</a>, <a href="#/c/serial/0">Fast serial links</a>, <a href="#/c/uart/0">A UART</a>, <a href="#/c/ethernet/0">Ethernet</a>, <a href="#/c/switch/0">A switch</a>, <a href="#/c/path/0">The internet path</a>, <a href="#/c/radio/0">Radio</a>, <a href="#/c/wifi/0">Wi-Fi</a>.</p>
         <div class="try">Try one more before the test, and explain your answer aloud before you choose.</div>`,
       widget: benchWidget(['tcp_tiny', 'line_noise', 'route_down'], ['Case A', 'Case B', 'Case C']),
       challenge: {

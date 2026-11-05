@@ -3,7 +3,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { ATTEMPT_CASES, attemptCases, FAULT_CASES, PASS_MARK } from '../src/comm/faults';
-import { SHOWN_FAILS, SHOWN_SURVIVES, UART_ERR } from '../src/chapters/ch-comm-bench';
+import { RADIO_BUDGET_STEP, SHOWN_FAILS, SHOWN_SURVIVES, UART_ERR, WIFI_HIDDEN_STEP } from '../src/chapters/ch-comm-bench';
+import { chRadio } from '../src/chapters/ch-comm-radio';
+import { chWifi } from '../src/chapters/ch-comm-wifi';
 import { emptyCampaign, sanitizeCampaign } from '../src/campaign/progress';
 import { COMM_CAPSTONES } from '../src/learn/capstones';
 import { receive, UART_8N1 } from '../src/comm/startstop';
@@ -85,6 +87,25 @@ describe('every case has its fault in it', () => {
   }));
 });
 
+describe('the radio cases', () => {
+  it('a new wall between two laptops: the budget stops them hearing each other, frames overlap at the access point; none of it without the wall', () => each('wifi_hidden', (a, b) => {
+    expect(a.hears).toBe(0);
+    expect(b.hears).toBe(1);
+    expect(a.snr).toBeGreaterThan(23); // the report's retries are not a weak signal
+    expect(a.overlap).toBeGreaterThan(5 * b.overlap);
+    expect(a.delivered).toBeLessThan(0.6 * b.delivered);
+    expect(a.tries).toBeGreaterThan(1.5 * a.delivered);
+    expect(a.before).toBe(b.delivered);
+  }));
+  it('a link budget short by a wall: the SNR falls below the top rate, rate adaptation falls with it; all well without', () => each('link_wall', (a, b) => {
+    expect(a.shortfall).toBeGreaterThan(10);
+    expect(b.shortfall).toBeLessThan(a.shortfall - 15);
+    expect(a.mbps).toBeLessThan(0.5 * b.mbps);
+    expect(a.lost / a.frames).toBeGreaterThan(b.lost / b.frames);
+    expect(a.was).toBe(b.mbps);
+  }));
+});
+
 describe('the chapter\'s typed claims', () => {
   it('at the quiz\'s clock error U fails and the other character survives, in the model', () => {
     expect(receive(UART_8N1, SHOWN_FAILS, { err: UART_ERR }).word).not.toBe(SHOWN_FAILS);
@@ -120,7 +141,7 @@ describe('the cases as questions', () => {
       expect(x.options[0].length, c.id).toBeLessThanOrEqual(1.25 * Math.max(...others));
     }
     const reports = (fam: string) => new Set(FAULT_CASES.filter((c) => c.family === fam).map((c) => c.build(1).symptom)).size;
-    for (const fam of ['tcp', 'line', 'routing']) expect(reports(fam), fam).toBe(1);
+    for (const fam of ['tcp', 'line', 'routing', 'radio']) expect(reports(fam), fam).toBe(1);
   });
   it('every case but the fixed ones changes with its seed', () => {
     for (const c of FAULT_CASES) expect(JSON.stringify(c.build(1).evidence) === JSON.stringify(c.build(2).evidence) && JSON.stringify(c.build(1).evidence) === JSON.stringify(c.build(3).evidence), c.id).toBe(false);

@@ -1,5 +1,5 @@
 // The expert's bench (DOM-free): networks with a fault really in them, and the evidence an engineer would have. Every case runs one of the
-// book's models with the fault switched on (net/tcpsim, phys/line, comm/startstop, comm/macexp, comm/ethframe, comm/ethswitch, net/internet)
+// book's models with the fault switched on (net/tcpsim, phys/line, comm/startstop, comm/macexp, comm/ethframe, comm/ethswitch, net/internet, phys/radio, comm/wifi)
 // and reads what comes out; nothing here is drawn or typed. `healthy` runs the same case with the fault off, and tests/comm-faults.test.ts
 // holds that the symptom comes with the fault and goes without it.
 
@@ -7,10 +7,12 @@ import { ACK, FIN, SYN } from '../net/tcp';
 import { runTcp, type SimOptions, type SimResult } from '../net/tcpsim';
 import { hostFrame, hostId, HOSTS, Internet, ROUTERS, ASES, LINKS, linkKey, linkBetween, AS_SABLE, hostIp, type Journey } from '../net/internet';
 import { berOf, eye, prbs, rng } from '../phys/line';
+import { fsplDb, linkBudget, logDistanceDb, WALL_DB, type BudgetResult } from '../phys/radio';
 import { frameBytes, parseFrame } from './ethframe';
 import { MacTable } from './ethswitch';
 import { addrOf, runLoad } from './macexp';
 import { receive, UART_8N1 } from './startstop';
+import { Air, KIND_DATA, KIND_NAMES, RATES, rateRun } from './wifi';
 
 export type Evidence =
   | { kind: 'series'; title: string; xLabel: string; yLabel: string; lines: { name: string; xs: number[]; ys: number[] }[] }
@@ -19,7 +21,7 @@ export type Evidence =
   /** A noiseless waveform folded on the bit period, with the noise the receiver sees on it. */
   | { kind: 'eye'; title: string; wave: number[]; spu: number; sigma: number };
 
-export type FaultFamily = 'tcp' | 'line' | 'serial' | 'ethernet' | 'routing';
+export type FaultFamily = 'tcp' | 'line' | 'serial' | 'ethernet' | 'routing' | 'radio';
 
 export interface FaultCase {
   id: string;
@@ -282,6 +284,72 @@ function routeDown(seed: number, healthy: boolean): FaultCase {
   };
 }
 
+// ---- radio --------------------------------------------------------------------------------------------------------------------------------
+
+const RADIO_OPTIONS = ['Two stations cannot hear each other', 'Too little signal reaches the receiver', 'Too many stations on the channel', 'The channel is too wide for the signal'];
+const AIR_SLOW = 'Wi-Fi in the far office has crawled since the refit put up new walls, and the access point reports a lot of retries.';
+const AIR = { ghz: 5.5, tx: 20, ga: 2, nf: 6, mhz: 20, n: 3 };
+/** 802.11's threshold for a station to notice another's frame on a 20 MHz channel: below it, the air sounds free. */
+const CARRIER_SENSE_DBM = -82;
+/** A budget indoors: the book's sum, with the path's exponent and the walls as its extra loss. */
+function airBudget(m: number, walls: number): BudgetResult {
+  const extra = logDistanceDb(m, AIR.ghz, AIR.n) - fsplDb(m / 1000, AIR.ghz) + walls * WALL_DB(AIR.ghz);
+  return linkBudget({ txDbm: AIR.tx, gtDbi: AIR.ga, grDbi: AIR.ga, km: m / 1000, ghz: AIR.ghz, extraDb: extra, mhz: AIR.mhz, nfDb: AIR.nf });
+}
+const minus = (t: string) => t.replace('-', '−');
+const dbm = (x: number) => `${minus(x.toFixed(1))} dBm`, db = (x: number) => `${minus(x.toFixed(1))} dB`;
+
+const HIDDEN_FRAME_US = 1000, HIDDEN_CLOCKS = 200_000;
+const A_STA = 0, AP_STA = 1, B_STA = 2, STA_NAME = ['A', 'AP', 'B'];
+/** Two laptops with frames for the access point between them, on the Wi-Fi chapter's stations: who hears whom comes from the budget. */
+function hiddenAir(seed: number, canHear: boolean): Air {
+  const air = new Air({ n: 3, lenUs: HIDDEN_FRAME_US, useRts: false, dest: () => AP_STA, saturated: [true, false, true], seeds: [(101 + 37 * seed) % 1023 + 1, 3, (300 + 59 * seed) % 1023 + 1], hears: (i, j) => canHear || !((i === A_STA && j === B_STA) || (i === B_STA && j === A_STA)) });
+  air.keepEvents = true;
+  for (let c = 0; c < HIDDEN_CLOCKS; c++) air.step();
+  return air;
+}
+/** A sniffer's list around the first two data frames in the air at once, or from the start if there are none. */
+function airCapture(air: Air): string[] {
+  const data = air.events.filter((e) => e.kind === KIND_DATA);
+  const clash = data.findIndex((e, i) => i > 0 && e.from !== data[i - 1].from && e.clock - data[i - 1].clock < HIDDEN_FRAME_US);
+  const from = clash > 0 ? Math.max(0, air.events.indexOf(data[clash - 1]) - 1) : 0;
+  return air.events.slice(from, from + 8).map((e) => `${String(e.clock).padStart(8)} µs  ${STA_NAME[e.from].padEnd(2)}  ${KIND_NAMES[e.kind].padEnd(4)}${e.kind === KIND_DATA ? `  ${HIDDEN_FRAME_US} µs long` : ''}`);
+}
+
+function wifiHidden(seed: number, healthy: boolean): FaultCase {
+  const m = 14 + pick(seed, 12, 4), toAp = airBudget(m, 0), across = airBudget(2 * m, healthy ? 0 : 1), hear = across.rx >= CARRIER_SENSE_DBM;
+  const air = hiddenAir(seed, hear), s = air.stats, lastWeek = hiddenAir(seed, true).stats;
+  const got = s.delivered[A_STA] + s.delivered[B_STA], tries = s.tries[A_STA] + s.tries[B_STA], before = lastWeek.delivered[A_STA] + lastWeek.delivered[B_STA];
+  return {
+    id: 'wifi_hidden', family: 'radio', symptom: AIR_SLOW, options: [RADIO_OPTIONS[0], ...RADIO_OPTIONS.slice(1)],
+    why: `Each laptop reaches the access point at ${db(toAp.snr)} of SNR, far more than the top rate asks. But they now hear each other at ${dbm(across.rx)}, under the ${dbm(CARRIER_SENSE_DBM)} at which a station notices a frame, so each finds the air free while the other is sending. The frames overlap at the access point, which is the one place that hears both. RTS / CTS would let its answer silence the other laptop.`,
+    against: ['Both reach the access point with far more SNR than the top rate needs.', `Two is not many: the same two laptops delivered ${before} frames over the same time last week.`, 'The channel is as wide as it was last week, with plenty of SNR in it.'],
+    evidence: [
+      { kind: 'counters', title: 'The budget, 20 MHz at 5.5 GHz', rows: [['Each laptop to the access point', `${m} m, ${dbm(toAp.rx)}, SNR ${db(toAp.snr)}`], ['Laptop to laptop', `${2 * m} m${healthy ? '' : ', through the new wall'}, ${dbm(across.rx)}`], ['A station notices a frame from', dbm(CARRIER_SENSE_DBM)], ['SNR the top rate needs', db(RATES[RATES.length - 1].snrDb)]] },
+      { kind: 'counters', title: `The access point, over ${HIDDEN_CLOCKS / 1000} ms`, rows: [['Frames tried', String(tries)], ['Frames delivered', String(got)], ['Delivered in the same time last week', String(before)], ['Frames given up on', String(s.dropped[A_STA] + s.dropped[B_STA])], ['Time with two stations sending', `${(100 * s.overlapUs / HIDDEN_CLOCKS).toFixed(1)} %`]] },
+      { kind: 'lines', title: 'A sniffer beside the access point: each frame as it starts', lines: airCapture(air) },
+    ],
+    metrics: { delivered: got, tries, before, overlap: s.overlapUs / HIDDEN_CLOCKS, hears: hear ? 1 : 0, snr: toAp.snr },
+  };
+}
+
+function linkWall(seed: number, healthy: boolean): FaultCase {
+  const m = 11 + pick(seed, 13, 4), top = RATES[RATES.length - 1], b = airBudget(m, healthy ? 1 : 2), last = airBudget(m, 1), bytes = 1500, totalUs = 2_000_000;
+  const r = rateRun('arf', () => b.snr, rng(seed + 31), bytes, totalUs), was = rateRun('arf', () => last.snr, rng(seed + 31), bytes, totalUs);
+  const stride = Math.max(1, Math.floor(r.history.length / 200)), pts = r.history.filter((_, i) => i % stride === 0);
+  return {
+    id: 'link_wall', family: 'radio', symptom: AIR_SLOW, options: [RADIO_OPTIONS[1], RADIO_OPTIONS[0], ...RADIO_OPTIONS.slice(2)],
+    why: `The budget tells it: ${db(b.snr)} of SNR where the top rate needs ${db(top.snrDb)}. The sum came out at ${db(last.snr)} last week, and the ${db(WALL_DB(AIR.ghz))} of the new wall is the whole difference. The laptop's rate adaptation steps down to what the SNR can carry, and still loses frames trying to climb back. No setting recovers that: an access point on this side of the wall does.`,
+    against: ['Only one laptop is sending: there is nobody to be hidden from.', 'Only one laptop is sending, so nothing is competing for the air.', `The channel is as narrow as this radio goes, and halving a channel buys only 3 dB of the ${db(WALL_DB(AIR.ghz))} the wall took.`],
+    evidence: [
+      { kind: 'counters', title: 'The budget, 20 MHz at 5.5 GHz', rows: [['Transmitter and both antennas', `${AIR.tx + 2 * AIR.ga} dBm`], [`Path, ${m} m indoors`, db(logDistanceDb(m, AIR.ghz, AIR.n))], ['Walls', `${healthy ? 1 : 2}, ${db((healthy ? 1 : 2) * WALL_DB(AIR.ghz))}`], ['Arriving', dbm(b.rx)], ['Noise floor', dbm(b.noise)], ['SNR', db(b.snr)], ['SNR the top rate needs', db(top.snrDb)]] },
+      { kind: 'counters', title: `The access point, over ${totalUs / 1e6} s, with this one laptop sending`, rows: [['Frames tried', String(r.frames)], ['Frames lost', String(r.lost)], ['Carried', `${r.mbps.toFixed(1)} Mb/s`], ['Carried last week', `${was.mbps.toFixed(1)} Mb/s`], ['Time with two stations sending', '0.0 %']] },
+      { kind: 'series', title: 'The rate the laptop picks', xLabel: 'µs', yLabel: 'Mb/s', lines: [{ name: 'rate', xs: pts.map((p) => p.us), ys: pts.map((p) => p.mbps) }] },
+    ],
+    metrics: { snr: b.snr, mbps: r.mbps, lost: r.lost, frames: r.frames, was: was.mbps, shortfall: top.snrDb - b.snr },
+  };
+}
+
 // ---- the set ------------------------------------------------------------------------------------------------------------------------------
 
 export const FAULT_CASES: { id: string; family: FaultFamily; build: (seed: number, healthy?: boolean) => FaultCase }[] = [
@@ -297,6 +365,8 @@ export const FAULT_CASES: { id: string; family: FaultFamily; build: (seed: numbe
   { id: 'sw_flood', family: 'ethernet', build: (s, h = false) => switchFlood(s, h) },
   { id: 'route_hijack', family: 'routing', build: (s, h = false) => routeHijack(s, h) },
   { id: 'route_down', family: 'routing', build: (s, h = false) => routeDown(s, h) },
+  { id: 'wifi_hidden', family: 'radio', build: (s, h = false) => wifiHidden(s, h) },
+  { id: 'link_wall', family: 'radio', build: (s, h = false) => linkWall(s, h) },
 ];
 
 /** How many cases make an attempt, and how many it takes to pass. */

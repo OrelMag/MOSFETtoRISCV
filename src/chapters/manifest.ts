@@ -758,13 +758,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "When lossless stops", challenge: "quiz" },
     { title: "The tail at scale", challenge: "quiz" },
   ] },
-  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","switch","serial","uart","noise"], recap: {"checks":3}, steps: [
+  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","switch","serial","uart","noise","radio","wifi"], recap: {"checks":3}, steps: [
     { title: "A method", challenge: "quiz" },
     { title: "Four transfers that crawl", challenge: "quiz" },
     { title: "Reading an eye", challenge: "quiz" },
     { title: "Reading a console", challenge: "quiz" },
     { title: "Ethernet's counters", challenge: "quiz" },
     { title: "Reading a trace", challenge: "quiz" },
+    { title: "Reading the air", challenge: "quiz" },
     { title: "Reading a specification", challenge: "quiz" },
     { title: "On your own", challenge: "quiz" },
   ] },
