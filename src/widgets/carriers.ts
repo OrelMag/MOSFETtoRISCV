@@ -56,14 +56,13 @@ function butterflyPanel(): ScenePanel {
         ...arrow(a, 'a', 'a'), ...arrow(b, 'b', 'b'), ...arrow(t, 't', 'W·b'), ...arrow(y0, 'y0', 'y0'), ...arrow(y1, 'y1', 'y1'));
       out.replaceChildren(h('span', null, `y0 = ${hexW(y0)}`), h('span', null, `y1 = ${hexW(y1)}`), h('span', { class: `cd-tag ${ok ? 'good' : 'bad'}` }, ok ? 'gates = model ✓' : 'gates ≠ model'));
     };
+    const sra = slider('|a|', 0, 0.95, 0.05, ra, (v) => v.toFixed(2), (v) => { ra = v; push(); }), saa = slider('angle of a', -180, 180, 15, aa, (v) => `${v}°`, (v) => { aa = v; push(); });
+    const srb = slider('|b|', 0, 0.95, 0.05, rb, (v) => v.toFixed(2), (v) => { rb = v; push(); }), sab = slider('angle of b', -180, 180, 15, ab, (v) => `${v}°`, (v) => { ab = v; push(); });
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel fc-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'One butterfly, W₈¹', h('span', { class: 'fold-hint' })), svg, out,
-      slider('|a|', 0, 0.95, 0.05, ra, (v) => v.toFixed(2), (v) => { ra = v; push(); }).el,
-      slider('angle of a', -180, 180, 15, aa, (v) => `${v}°`, (v) => { aa = v; push(); }).el,
-      slider('|b|', 0, 0.95, 0.05, rb, (v) => v.toFixed(2), (v) => { rb = v; push(); }).el,
-      slider('angle of b', -180, 180, 15, ab, (v) => `${v}°`, (v) => { ab = v; push(); }).el);
+      sra.el, saa.el, srb.el, sab.el);
     push();
-    bfApi.set(stage, { solve: () => { const sim = stage.sim!; stage.checkpoint(); sim.setInput('a', packFx(polar(0.6, 0), W_SCENE)); sim.setInput('b', packFx(polar(0.6, 45), W_SCENE)); sim.settle(); stage.refresh(); update(); } });
+    bfApi.set(stage, { solve: () => { stage.checkpoint(); ra = 0.6; aa = 0; rb = 0.6; ab = 45; sra.set(ra); saa.set(aa); srb.set(rb); sab.set(ab); push(); } });
     return { el, update, destroy: () => { bfApi.delete(stage); } };
   };
 }
@@ -120,11 +119,12 @@ function net8Panel(): ScenePanel {
     };
     const sel = h('select', { 'aria-label': 'Input block' }, ...([['impulse', 'One impulse'], ['tone', 'One tone'], ['two', 'Two tones'], ['dc', 'A constant'], ['noise', 'Random samples']] as const).map(([v, t]) => h('option', { value: v }, t))) as HTMLSelectElement;
     sel.addEventListener('change', () => { kind = sel.value as Block8; push(); });
+    const tn = slider('Tone', 0, 7, 1, k, (v) => String(v), (v) => { k = v; if (kind !== 'two') { kind = 'tone'; sel.value = 'tone'; } push(); });
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel fc-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'Eight samples in, eight tones out', h('span', { class: 'fold-hint' })), h('div', { class: 'dram-ops' }, sel, btn('New samples', 'Another random block', () => { seed++; kind = 'noise'; sel.value = 'noise'; push(); })),
-      slider('Tone', 0, 7, 1, k, (v) => String(v), (v) => { k = v; if (kind !== 'two') { kind = 'tone'; sel.value = 'tone'; } push(); }).el, bars, verdict, note);
+      tn.el, bars, verdict, note);
     push();
-    netApi.set(stage, { tone: (t) => { stage.checkpoint(); k = t; kind = 'tone'; sel.value = 'tone'; push(); } });
+    netApi.set(stage, { tone: (t) => { stage.checkpoint(); k = t; tn.set(t); kind = 'tone'; sel.value = 'tone'; push(); } });
     return { el, update, destroy: () => { netApi.delete(stage); } };
   };
 }
@@ -187,12 +187,13 @@ function streamPanel(): ScenePanel {
         : got === 0 ? `Samples go in one a clock. The first tone needs ${lat} edges: the delay lines hold ${N - 1} samples and each of the ${bits} stages has an output register.`
           : got < N ? 'Tones arrive one a clock in bit-reversed order: watch which bar each new one fills.' : `The whole block in ${t} edges, and a next block could already be following it: ${N} samples in, ${N} tones out, every ${N} clocks.`;
     };
+    const tn = slider('Tone', 0, N - 1, 1, tone, (v) => String(v), (v) => { tone = v; });
     const el = h('div', { class: 'mem-panel cpu-panel mc-panel err-panel fc-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, `A sample a clock, ${N} points`, h('span', { class: 'fold-hint' })),
       h('div', { class: 'dram-ops' }, btn('Step', 'One sample, one clock edge', () => act(stepOne)), btn('Run a block', 'Reset, the whole block, and the flush', () => act(run))),
-      slider('Tone', 0, N - 1, 1, tone, (v) => String(v), (v) => { tone = v; }).el, status, rows, out, note);
+      tn.el, status, rows, out, note);
     update();
-    streamApi.set(stage, { run: (k) => { if (k !== undefined) tone = k; act(run); }, tonesOut: () => tones.filter(Boolean).length, peak: () => { let b = -1, m = -1; tones.forEach((c, i) => { const v = c ? Math.hypot(c.re, c.im) : -1; if (v > m) { m = v; b = i; } }); return b; } });
+    streamApi.set(stage, { run: (k) => { if (k !== undefined) { tone = k; tn.set(k); } act(run); }, tonesOut: () => tones.filter(Boolean).length, peak: () => { let b = -1, m = -1; tones.forEach((c, i) => { const v = c ? Math.hypot(c.re, c.im) : -1; if (v > m) { m = v; b = i; } }); return b; } });
     return { el, update, destroy: () => { stage.edgeHooks.delete(hook); streamApi.delete(stage); } };
   };
 }
@@ -210,7 +211,7 @@ export function wordWidget(): Widget {
   const chips = mkChips(3), note = h('p', { class: 'sub mos-note' }), gap = gapDb(1e-7);
   const bitsAt = (snr: number) => Math.max(0, Math.floor(Math.log2(1 + 10 ** ((snr - gap) / 10))));
   const paint = () => {
-    const pts = WS.map((w) => fftSnrDb(N, w, 12, 1, 0.9 * 10 ** (-backoff / 20))), now = fftSnrDb(N, W, 12, 1, 0.9 * 10 ** (-backoff / 20));
+    const m = (w: number) => Math.min(safeMagnitude(w, N), 0.9 * 10 ** (-backoff / 20)), pts = WS.map((w) => fftSnrDb(N, w, 12, 1, m(w))), now = fftSnrDb(N, W, 12, 1, m(W));
     plot.clear();
     line(plot, WS, pts, 'ln-s real');
     WS.forEach((w, i) => plot.layer.append(s('circle', { cx: plot.X(w), cy: plot.Y(pts[i]), r: w === W ? 6 : 3.5, class: w === W ? 'fc-dot now' : 'fc-dot a' })));
