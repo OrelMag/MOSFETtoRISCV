@@ -3,8 +3,8 @@
 
 import { signedOf, wordOf } from '../comm/signals';
 import {
-  analogPrototype, Biquad, BQ, burstThenSilence, cabs, cascadeSnr, coefWord, cycleSweep, deadBand, directHeld, directStable, FAMILIES, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK,
-  maskDesign, measuredSnr, noiseGain, permutations, prefixPeaks, prewarp, runBiquad, scaleSos, sectionWords, sosGain, sosMults, sosStable, sosToTf, SWEEP_VARIANTS,
+  analogPrototype, Biquad, endOf, BQ, burstThenSilence, cabs, cascadeSnr, coefWord, cycleSweep, deadBandOf, directHeld, directStable, FAMILIES, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK,
+  maskDesign, measuredSnr, noiseGain, snrAt, permutations, prefixPeaks, prewarp, runBiquad, scaleSos, sectionWords, sosGain, sosMults, sosMultsFolded, sosStable, sosToTf, SWEEP_VARIANTS,
   SWEEP_RUNS, warpedAt, wordsOf, zpkToSos, type Family, type Sos, type Words, type Zpk,
 } from '../dsp/iir';
 import { gainAt, polyRoots, type Cx } from '../dsp/zplane';
@@ -52,16 +52,17 @@ const gainPlot = (aria: string, W = 640, H = 220) => plotOf({ W, H, x: [0, 0.5],
 
 // ---- one specification, five designs ----------------------------------------------------------------------------------------------------------
 
-/** The smallest Parks–McClellan length that meets the mask on an 8 192-point response, found by scipy's remez (scripts/dsp/oracle.py), held equal in tests/dsp-iir.test.ts. */
-export const PM_TAPS = 105;
-export interface DesignRow { id: string; name: string; size: string; mults: number; phase: string; family?: Family; sections?: Sos[] }
+/** The smallest odd Parks–McClellan length that meets the mask (gain within 1 ± 0.00576, so 0.1 dB peak to peak; 60 dB) on an 8 192-point response, found by scipy's remez
+ *  (scripts/dsp/oracle.py), held equal in tests/dsp-iir.test.ts. The smallest of any length is 114, an even one; the odd one has a tap in the middle and folds to 58. */
+export const PM_TAPS = 115;
+export interface DesignRow { id: string; name: string; size: string; mults: number; folded?: number; phase: string; family?: Family; sections?: Sos[] }
 let rowsMemo: DesignRow[] | null = null;
 export function designRows(): DesignRow[] {
   if (rowsMemo) return rowsMemo;
   const fir = (id: string, name: string, n: number): DesignRow => ({ id, name, size: `${n} taps`, mults: Math.ceil(n / 2), phase: 'Linear' });
   const iir = (f: Family): DesignRow => {
     const d = maskDesign(f), sec = zpkToSos(d.zpk);
-    return { id: f, name: `${FAMILIES.find((x) => x.id === f)!.name} IIR`, size: `order ${d.order}, ${sec.length} sections`, mults: sosMults(sec), phase: 'Not linear', family: f, sections: sec };
+    return { id: f, name: `${FAMILIES.find((x) => x.id === f)!.name} IIR`, size: `order ${d.order}, ${sec.length} sections`, mults: sosMults(sec), folded: sosMultsFolded(sec), phase: 'Not linear', family: f, sections: sec };
   };
   return (rowsMemo = [fir('pm', 'Parks–McClellan FIR', PM_TAPS), fir('kaiser', 'Kaiser window FIR', kaiserTaps()), iir('butter'), iir('cheby1'), iir('ellip')]);
 }
@@ -81,7 +82,7 @@ export function maskWidget(): Widget {
     drawMask(plot);
     line(plot, freqGrid, freqGrid.map((f) => Math.max(-100, dB(sosGain(sec, f)))), 'real');
     const pass = Math.min(...freqGrid.filter((f) => f <= MASK.fp).map((f) => dB(sosGain(sec, f)))), stop = Math.max(...freqGrid.filter((f) => f >= MASK.fs).map((f) => dB(sosGain(sec, f))));
-    chips.set(0, `${num(pass, 3)} dB`, `lowest gain in the pass band (the mask allows −${MASK.rp})`, pass < -MASK.rp - 1e-6 ? 'bad' : '');
+    chips.set(0, `${num(pass, 3)} dB`, `lowest gain in the pass band (the mask allows −${MASK.rp}; the top is 0)`, pass < -MASK.rp - 1e-6 ? 'bad' : '');
     chips.set(1, `${num(stop, 1)} dB`, `highest gain in the stop band (the mask asks −${MASK.rs} or less)`, stop > -MASK.rs + 1e-6 ? 'bad' : '');
     chips.set(2, `${r.mults} × ${grouped(mul)}`, 'multiplications × NANDs in a 16-bit signed multiplier, if all are built');
   };
@@ -89,15 +90,15 @@ export function maskWidget(): Widget {
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, `Pass to ${num(MASK.fp, 3)}, stop from ${num(MASK.fs, 3)} cycles a sample, ${MASK.rp} dB and ${MASK.rs} dB`),
-        h('table', { class: 'dsp-table dsp-designs' }, h('thead', null, h('tr', null, h('th', null, 'Design'), h('th', null, 'Size'), h('th', { class: 'num' }, 'Mults a sample'), h('th', null, 'Phase'), h('th', null, 'NANDs in multipliers'))), tbody),
-        h('p', { class: 'sub mos-note' }, 'Click an IIR row to draw it. A symmetric FIR folds its taps, so it multiplies half as often as it has taps.'),
+        h('div', { class: 'dsp-scroll' }, h('table', { class: 'dsp-table dsp-designs' }, h('thead', null, h('tr', null, h('th', null, 'Design'), h('th', null, 'Size'), h('th', { class: 'num' }, 'Mults a sample'), h('th', null, 'Phase'), h('th', null, 'NANDs in multipliers'))), tbody)),
+        h('p', { class: 'sub mos-note' }, 'Click an IIR row to draw it. A symmetric FIR folds its taps, so it multiplies half as often as it has taps; an IIR section is counted as built, five multipliers (a section with b₀ = b₂ could fold to four). Ripple is peak to peak.'),
         plot.el, chips.el)),
   };
 }
 
 // ---- the bilinear transform ------------------------------------------------------------------------------------------------------------------
 
-function planeSvg(poles: readonly Cx[], zeros: readonly Cx[], win: { x0: number; x1: number; y0: number; y1: number }, unit: boolean, aria: string, W = 300, fixedH = 0): SVGSVGElement {
+function planeSvg(poles: readonly Cx[], zeros: readonly Cx[], win: { x0: number; x1: number; y0: number; y1: number }, unit: boolean, aria: string, W = 300, fixedH = 0, splane = false): SVGSVGElement {
   const Hh = fixedH || (W * (win.y1 - win.y0)) / (win.x1 - win.x0), X = (v: number) => ((v - win.x0) / (win.x1 - win.x0)) * W, Y = (v: number) => ((win.y1 - v) / (win.y1 - win.y0)) * Hh;
   const svg = s('svg', { viewBox: `0 0 ${W} ${Hh.toFixed(0)}`, class: 'dsp-plane dsp-mini', role: 'img', 'aria-label': aria }) as SVGSVGElement;
   svg.append(s('line', { x1: 0, x2: W, y1: Y(0), y2: Y(0), class: 'axis' }), s('line', { x1: X(0), x2: X(0), y1: 0, y2: Hh, class: 'axis' }));
@@ -106,8 +107,16 @@ function planeSvg(poles: readonly Cx[], zeros: readonly Cx[], win: { x0: number;
     for (let i = 0; i <= 200; i++) { const t = (i / 200) * TAU; d += `${i ? 'L' : 'M'}${X(Math.cos(t)).toFixed(1)},${Y(Math.sin(t)).toFixed(1)}`; }
     svg.append(s('path', { d, class: 'circle', fill: 'none' }));
   }
-  for (const z of zeros) svg.append(s('circle', { cx: X(z.re), cy: Y(z.im), r: 4, class: 'zero' }));
-  for (const p of poles) { const x = X(p.re), y = Y(p.im), m = 5; svg.append(s('path', { d: `M${x - m} ${y - m}L${x + m} ${y + m}M${x - m} ${y + m}L${x + m} ${y - m}`, class: `pole${cabs(p) >= 1 ? ' out' : ''}` })); }
+  // roots on one spot show how many: a Butterworth design has all its zeros at z = −1
+  const spots = new Map<string, { x: number; y: number; n: number }>();
+  for (const z of zeros) {
+    svg.append(s('circle', { cx: X(z.re), cy: Y(z.im), r: 4, class: 'zero' }));
+    const x = X(z.re), y = Y(z.im), k = `${Math.round(x)},${Math.round(y)}`, e = spots.get(k);
+    if (e) e.n++; else spots.set(k, { x, y, n: 1 });
+  }
+  // a pole is a fault where it leaves the stable region: the unit circle in the z-plane, the right half of the s-plane
+  for (const p of poles) { const x = X(p.re), y = Y(p.im), m = 5; svg.append(s('path', { d: `M${x - m} ${y - m}L${x + m} ${y + m}M${x - m} ${y + m}L${x + m} ${y - m}`, class: `pole${(splane ? p.re >= 0 : cabs(p) >= 1) ? ' out' : ''}` })); }
+  for (const e of spots.values()) if (e.n > 1) svg.append(s('text', { x: e.x + 7, y: e.y - 7, class: 'count' }, `×${e.n}`));
   return svg;
 }
 
@@ -124,10 +133,9 @@ export function bilinearWidget(): Widget {
     // the same transform lowpass() does, with the analog edge chosen here; the edge it lands at is warpedAt(w)
     const dig = lowpass(kind, n, warpedAt(w), 0.1, 60);
     planes.replaceChildren(
-      h('figure', null, planeSvg(analog.p, analog.z, { x0: -w * 1.6, x1: w * 0.4, y0: -w * 1.6, y1: w * 1.6 }, false, 'The analog poles in the s-plane'), h('figcaption', null, 'analog poles, s-plane, edge ', h('b', null, `${num(w, 3)} rad/s`))),
+      h('figure', null, planeSvg(analog.p, analog.z, { x0: -w * 1.6, x1: w * 0.4, y0: -w * 1.6, y1: w * 1.6 }, false, 'The analog poles in the s-plane', 300, 0, true), h('figcaption', null, 'analog poles, s-plane (stable: left of the axis), edge ', h('b', null, `${num(w, 3)} rad/s`))),
       h('figure', null, planeSvg(dig.p, dig.z, { x0: -1.3, x1: 1.3, y0: -1.3, y1: 1.3 }, true, 'The digital poles and zeros in the z-plane'), h('figcaption', null, 'digital, z-plane, after s → (2 + s) / (2 − s)')));
     plot.clear();
-    drawMask(plot);
     plot.layer.append(s('line', { x1: plot.X(f), x2: plot.X(f), y1: plot.Y(5), y2: plot.Y(-100), class: 'ln-h th' }));
     line(plot, freqGrid, freqGrid.map((x) => Math.max(-100, dB(zpkGain(dig, x)))), 'real');
     const landed = warpedAt(w);
@@ -258,14 +266,15 @@ export const biquadCost = () => (costMemo ??= costRead());
 
 const tourPanel: ScenePanel = (stage: Stage): Widget => {
   let f = 0, inp = 0, xs: number[] = [], ys: number[] = [], ym: number[] = [], same = true;
-  const N = 96, plot = plotOf({ W: 380, H: 170, x: [0, N], y: [-1.1, 1.1], yTicks: [-0.2, 0, 0.2], xLabel: 'clock', yLabel: '', aria: 'The input and the biquad\'s output, gates and model' });
+  const N = 96, plot = plotOf({ W: 380, H: 120, x: [0, N], y: [-1.1, 1.1], yTicks: [-0.2, 0, 0.2], xLabel: 'clock', yLabel: 'out', aria: 'The biquad\'s output, gates and model' });
+  const inPlot = plotOf({ W: 380, H: 120, x: [0, N], y: [-1.1, 1.1], yTicks: [-0.5, 0, 0.5], xLabel: '', yLabel: 'in', aria: 'The input' });
   const read = h('div', { class: 'mc-status' }), note = h('p', { class: 'sub' });
   const paint = () => {
-    plot.clear();
+    plot.clear(); inPlot.clear();
     if (xs.length) {
-      const top = Math.max(0.05, ...ys.map((v) => Math.abs(v) / 32768)) * 1.25;
-      plot.setY(-top, top);
-      line(plot, range(xs.length), xs.map((v) => v / 32768), 'ln-s lump');
+      const top = Math.max(0.05, ...ys.map((v) => Math.abs(v) / 32768)) * 1.25, topIn = Math.max(0.05, ...xs.map((v) => Math.abs(v) / 32768)) * 1.25;
+      plot.setY(-top, top); inPlot.setY(-topIn, topIn);
+      stems(inPlot, xs.map((v) => v / 32768));
       line(plot, range(ym.length), ym.map((v) => v / 32768), 'ln-s near');
       line(plot, range(ys.length), ys.map((v) => v / 32768), 'ln-s real');
     }
@@ -283,9 +292,9 @@ const tourPanel: ScenePanel = (stage: Stage): Widget => {
   const sel = h('select', { 'aria-label': 'Filter' }, ...BIQUAD_FILTERS.map((x, i) => h('option', { value: String(i) }, x.name))) as HTMLSelectElement;
   sel.addEventListener('change', () => { f = Number(sel.value); });
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel mdm-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'An input through the gates'),
-    h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Coefficients'), sel),
+    h('label', { class: 'dsp-field' }, h('span', null, 'Coefficients'), sel),
     h('div', { class: 'dram-ops' }, ...BQ_INPUTS.map((x, i) => h('button', { type: 'button', class: 'btn sm', onclick: () => { inp = i; run(); } }, x.name))),
-    plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'input'), h('span', { class: 'k-far' }, 'gates'), h('span', { class: 'k-near' }, 'model')), read, note);
+    h('div', { class: 'ln-key' }, h('span', { class: 'fr-k' }, 'input (own scale)')), inPlot.el, plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'gates'), h('span', { class: 'k-near' }, 'model (on the gates)')), read, note);
   stage.resetHooks.add(() => { xs = []; ys = []; ym = []; paint(); });
   paint();
   return { el, update: () => {} };
@@ -361,14 +370,15 @@ export function limitCycleWidget(): Widget {
   const paint = () => {
     const w = words();
     ys = runBiquad(w, burstThenSilence(amp, burst, 4000), { round: ROUNDS[ri].round, extra });
-    const cy = findCycle(ys, 32), top = Math.max(1, ...ys.slice(0, 800).map(Math.abs)) * 1.1;
+    const end = endOf(ys, 32), cy = typeof end === 'string' ? null : end, top = Math.max(1, ...ys.slice(0, 800).map(Math.abs)) * 1.1;
     full.setY(-top, top); full.clear(); line(full, range(800), ys.slice(0, 800), 'real');
     tail.clear(); tail.layer.append(s('line', { x1: tail.x0, x2: tail.x1, y1: tail.Y(0), y2: tail.Y(0), class: 'ln-h th' }));
     const lastPk = Math.max(1, ...ys.slice(-48).map(Math.abs));
     tail.setY(-lastPk * 1.4, lastPk * 1.4); stems(tail, ys.slice(-48));
-    chips.set(0, cy ? `period ${cy.period}, peak ${cy.peak} LSB` : 'dies away', cy ? `from clock ${cy.start} on, never stops` : 'the output ends at zero', cy ? 'bad' : '');
+    chips.set(0, cy ? `period ${cy.period}, peak ${cy.peak} LSB` : end === 'dead' ? 'dies away' : 'no short cycle', cy ? `from clock ${cy.start} on, never stops${cy.start > 800 ? ' (past the plot, which ends at 800)' : ''}` : end === 'dead' ? 'the output ends at zero' : 'still moving after 4 000 clocks, or a period over 32', cy ? 'bad' : '');
     chips.set(1, cy ? `${num(dbfs(cy.peak), 1)} dBFS` : '—', 'level of the cycle against full scale');
-    chips.set(2, num(deadBand(w.a2), 2), `½ / (1 − a₂): the dead band, a₂ = ${w.a2} / 2^14 = ${num(w.a2 / 2 ** BQ.cf, 4)}`);
+    const db = deadBandOf(w);
+    chips.set(2, db === null ? 'only for a₁ = 0' : num(db, 2), db === null ? '½ / (1 − a₂) holds when a₁ = 0; here a₁ ≠ 0 and the cycle can be far larger' : `½ / (1 − a₂): the dead band, a₂ = ${w.a2} / 2^14 = ${num(w.a2 / 2 ** BQ.cf, 4)}`);
     chips.set(3, `radius ${num(Math.sqrt(w.a2 / 2 ** BQ.cf), 4)}`, `a₁ = ${num(w.a1 / 2 ** BQ.cf, 4)}, angle ${num(Math.acos(Math.max(-1, Math.min(1, -w.a1 / 2 ** BQ.cf / (2 * Math.sqrt(w.a2 / 2 ** BQ.cf))))) / TAU, 3)} cycles`);
     clip.reset();
   };
@@ -384,7 +394,7 @@ export function limitCycleWidget(): Widget {
   const clip = clipButton('Listen to the cycle', () => {
     const y = runBiquad(words(), burstThenSilence(amp, burst, CYCLE_RATE * 2), { round: ROUNDS[ri].round, extra }), cy = findCycle(y, 32);
     return cy ? { samples: y.slice(-CYCLE_RATE), rate: CYCLE_RATE, source: 'model' as const, note: `the cycle alone, ${cy.peak} LSB = ${num(dbfs(cy.peak), 1)} dBFS, raised to the player's level` } : null;
-  }, 'No cycle to play: it dies away');
+  }, 'No cycle to play: nothing repeats');
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
@@ -428,7 +438,7 @@ export function orderWidget(): Widget {
     chips.set(0, peaks.map((v) => num(v, 2)).join('  '), 'peak gain from the input to each section\'s output, in this order (above 1 overflows a full-scale sine)', Math.max(...peaks) > 1.0001 ? 'bad' : '');
     chips.set(1, `${num(amp, 2)}`, 'the largest sine (fraction of full scale, at most 0.9) that overflows no section');
     chips.set(2, `${num(10 * Math.log10(noiseGain(sec)), 1)} dB`, 'rounding noise at the output, in units of one rounding (1 / 12 LSB²): predicted');
-    chips.set(3, `${num(m.snr, 1)} dB`, `signal to rounding noise, measured on the model's words (predicted ${num(scaled ? r.snrScaled : r.snrRaw, 1)}, at its own largest sine)`, m.overflows ? 'bad' : '');
+    chips.set(3, `${num(m.snr, 1)} dB`, `signal to rounding noise, measured on the model's words (predicted ${num(snrAt(sec, amp), 1)} at this amplitude)`, m.overflows ? 'bad' : '');
   };
   const box = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Scale the sections' }) as HTMLInputElement;
   box.addEventListener('change', () => { scaled = box.checked; paint(); });

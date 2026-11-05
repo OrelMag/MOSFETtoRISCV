@@ -168,6 +168,8 @@ export function planeWidget(o: PlaneOpts): Widget {
   const chips = mkChips((o.probe ? 4 : 3) + (word ? 1 : 0)), taps = h('p', { class: 'sub mos-note' });
   const coeffs = () => { const k = held(); return { b: pairsPoly(zeros), a: k ? [1, k.a1, k.a2] : pairsPoly(poles) }; };
   const sliders: { set(v: number): void; read: () => number }[] = [];
+  // the word's legend names the dots only while there are dots: rebuilt in paint
+  const wordKey = h('span', { class: 'fr-k' });
   const paint = () => {
     const { b, a } = coeffs(), k = held(), state = k ? k.state : stateOfPoles(poles), ok = state === 'stable' || state === 'none', rad = k ? k.radius : Math.max(0, ...poles.map((p) => p.r));
     const nodes: SVGElement[] = [
@@ -192,6 +194,11 @@ export function planeWidget(o: PlaneOpts): Widget {
       if (bits <= LATTICE_MAX_BITS) nodes.splice(5, 0, s('path', { d: latticeDots(bits).map((q) => `M${PX(q.re).toFixed(1)} ${PY(q.im).toFixed(1)}h.01M${PX(q.re).toFixed(1)} ${PY(-q.im).toFixed(1)}h.01`).join(''), class: 'lattice' }));
       for (const g of [1, -1]) nodes.push(s('circle', { cx: PX(poles[0].r * Math.cos(poles[0].t)), cy: PY(g * poles[0].r * Math.sin(poles[0].t)), r: 8, class: 'asked' }));
       for (const q of k.roots) nodes.push(cross(q.re, q.im, Math.hypot(q.re, q.im) >= 1 - 1e-12));
+      // a double root held on one spot (4 bits: both at z = 1) shows how many
+      const spotsHeld = new Map<string, { x: number; y: number; n: number }>();
+      for (const q of k.roots) { const x = PX(q.re), y = PY(q.im), key = `${Math.round(x)},${Math.round(y)}`, e = spotsHeld.get(key); if (e) e.n++; else spotsHeld.set(key, { x, y, n: 1 }); }
+      for (const e of spotsHeld.values()) if (e.n > 1) nodes.push(s('text', { x: e.x + 9, y: e.y - 8, class: 'count' }, `×${e.n}`));
+      wordKey.textContent = `◯ pole asked for · × pole held${bits <= LATTICE_MAX_BITS ? ' · dots: every pole a word can hold' : ` · no dots above ${LATTICE_MAX_BITS} bits: too many to draw`}`;
     } else {
       for (const p of poles) for (const g of [1, -1]) nodes.push(cross(p.r * Math.cos(p.t), g * p.r * Math.sin(p.t), p.r >= 1));
     }
@@ -265,7 +272,7 @@ export function planeWidget(o: PlaneOpts): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'), word ? h('span', { class: 'fr-k' }, '◯ pole asked for · × pole held' + (bits <= LATTICE_MAX_BITS ? ' · dots: every pole a word can hold' : '')) : '')), h('div', null, gain.el, imp.el)),
+      h('div', { class: 'panel dsp-zgrid' }, h('div', null, plane, h('div', { class: 'ln-key' }, h('span', { class: 'k-near' }, '○ zero'), h('span', { class: 'k-far' }, '× pole'), h('span', { class: 'fr-k' }, 'each with its mirror image below the axis'), word ? wordKey : '')), h('div', null, gain.el, imp.el)),
       h('div', { class: 'panel' }, chips.el, o.taps ? taps : ''),
       h('div', { class: 'panel mos-ctl' }, presets.length ? h('div', { class: 'dram-ops' }, ...presets) : '', h('div', { class: 'mos-row' }, ...ctl), clip ? clip.el : '')),
   };

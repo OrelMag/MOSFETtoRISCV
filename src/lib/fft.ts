@@ -77,8 +77,9 @@ export function fxHalve(W: number, sub: boolean): ComponentDef {
 }
 
 /** y = a + c, half adders in a chain: the rounding step, the first dropped bit added back. */
-export function roundUp(W: number): ComponentDef {
-  return memo(`fxrnd${W}`, () => {
+export function roundUp(W: number, label = '+c'): ComponentDef {
+  const id = label === '+c' ? `fxrnd${W}` : `fxrnd${W}_${label.toLowerCase()}`;
+  return memo(id, () => {
     const P = 8, X = 10;
     const instances: InstanceDef[] = [{ name: 'sa', def: splitter(ones(W), P), at: [5, 0] }, { name: 'my', def: merger(ones(W), P), at: [20, 0] }];
     const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'y', ends: ['my.out', 'y'] }, { name: 'c', ends: ['c', 'ha0.b'] }];
@@ -88,9 +89,9 @@ export function roundUp(W: number): ComponentDef {
       if (i + 1 < W) nets.push({ name: `c${i + 1}`, ends: [`ha${i}.c`, `ha${i + 1}.b`] });
     }
     return define({
-      id: `fxrnd${W}`, name: `${W}-bit rounder`, category: 'arithmetic',
+      id, name: `${W}-bit rounder`, category: 'arithmetic',
       summary: 'Adds one bit to a word with half adders: rounding is the first bit dropped, added back.',
-      ports: [bus('a', W, 'in'), bit('c', 'in', 'bottom'), bus('y', W, 'out')], symbol: { kind: 'box', label: '+c' },
+      ports: [bus('a', W, 'in'), bit('c', 'in', 'bottom'), bus('y', W, 'out')], symbol: { kind: 'box', label },
       spec: ([a, c]) => [(a + c) % 2 ** W],
       netlist: () => ({ pins: { a: [1, (P * W) / 2], c: [X + 3, -2], y: [25, (P * W) / 2] }, pinDirs: { c: 'down' }, instances, nets }),
     });

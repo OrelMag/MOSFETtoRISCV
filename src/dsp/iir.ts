@@ -173,7 +173,8 @@ export function lowpass(kind: Family, n: number, f: number, rp = 0.1, rs = 60): 
   return bilinearZpk({ z: a.z.map((q) => cx(q.re * w, q.im * w)), p: a.p.map((q) => cx(q.re * w, q.im * w)), k: a.k * w ** (a.p.length - a.z.length) });
 }
 
-/** A mask: pass to fp with ripple rp dB, stop from fs with at least rs dB, in cycles a sample. */
+/** A mask: pass to fp with ripple rp dB, stop from fs with at least rs dB, in cycles a sample. The ripple is peak to peak, as scipy's cheby1 / ellip `rp` is: the IIR
+ *  designs have their passband top at 1 and floor at −rp dB; an FIR filter's gain stays within 1 ± δp, centred, with (1 + δp) / (1 − δp) = 10^(rp / 20). */
 export interface Mask { fp: number; fs: number; rp: number; rs: number }
 /** The mockup's: pass to 0.20 of Nyquist = 0.10 cycles a sample, stop from 0.25 of Nyquist = 0.125. */
 export const MASK: Mask = { fp: 0.1, fs: 0.125, rp: 0.1, rs: 60 };
@@ -196,9 +197,11 @@ export function maskDesign(kind: Family, m: Mask = MASK): { order: number; zpk: 
   const order = maskOrder(kind, m);
   return { order, zpk: lowpass(kind, order, kind === 'butter' ? butterEdge(m) : m.fp, m.rp, m.rs) };
 }
+/** The FIR passband deviation δp of a mask: the gain stays within 1 ± δp, centred, so that the peak-to-peak ripple is rp dB. */
+export const deltaPass = (m: Mask = MASK): number => { const g = 10 ** (m.rp / 20); return (g - 1) / (g + 1); };
 /** Kaiser's estimate of a window FIR's length for the same mask (scipy's kaiserord): the larger attenuation the ripples ask for, and the transition width. */
 export function kaiserTaps(m: Mask = MASK): number {
-  const a = Math.max(m.rs, -20 * Math.log10(10 ** (m.rp / 20) - 1));
+  const a = Math.max(m.rs, -20 * Math.log10(deltaPass(m)));
   return Math.ceil((a - 7.95) / 2.285 / (2 * Math.PI * (m.fs - m.fp)) + 1);
 }
 
@@ -246,6 +249,11 @@ export function sosToTf(s: readonly Sos[]): { b: number[]; a: number[] } {
 export const sosfilt = (s: readonly Sos[], x: readonly number[]): number[] => s.reduce<number[]>((v, q) => filter(q.b, q.a, v), [...x]);
 /** Multiplications a sample: five for a biquad, three for a first-order section. */
 export const sosMults = (s: readonly Sos[]): number => s.reduce((n, q) => n + (q.a[2] === 0 && q.b[2] === 0 ? 3 : 5), 0);
+/** The same with a symmetric numerator folded as an FIR filter folds its taps: b₀ = b₂ shares a multiplier (four a section), b₀ = b₁ in a first-order section (two). */
+export const sosMultsFolded = (s: readonly Sos[]): number => s.reduce((n, q) => {
+  const first = q.a[2] === 0 && q.b[2] === 0, same = (x: number, y: number) => Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x));
+  return n + (first ? (same(q.b[0], q.b[1]) ? 2 : 3) : same(q.b[0], q.b[2]) ? 4 : 5);
+}, 0);
 export const sosPeak = (s: readonly Sos[], n = 4000): number => { let m = 0; for (let i = 0; i <= n; i++) m = Math.max(m, sosGain(s, (i / n) * 0.5)); return m; };
 
 // ---- coefficient sensitivity ------------------------------------------------------------------------------------------------------------------
@@ -295,8 +303,16 @@ export const LIMIT_CYCLE = {
   words: { b0: 1024, b1: 0, b2: 0, a1: 0, a2: coefWord(0.95 * 0.95) } as Words,
   amp: 8000, burst: 1, cycles: 140,
 };
-/** The largest output that rounding can hold up: |y| · a₂ rounds back to |y| while |y| ≤ ½ / (1 − a₂), for a pole pair at a quarter of the rate. */
+/** The largest output that rounding can hold up, for a₁ = 0 only (a pole pair at a quarter of the rate): the recurrence is then y[n] = round(−a₂ y[n−2]), and |y| · a₂ rounds
+ *  back to |y| while |y| ≤ ½ / (1 − a₂). With a₁ ≠ 0 the rounding error is fed through a₁ as well and the cycle can be far larger (tests/dsp-iir-chapter.test.ts). */
 export const deadBand = (a2: number): number => 0.5 / (1 - a2 / 2 ** BQ.cf);
+/** The dead band of a set of words: ½ / (1 − a₂) when a₁ = 0, else null, because the formula does not hold. */
+export const deadBandOf = (w: Words): number | null => (w.a1 === 0 ? deadBand(w.a2) : null);
+/** How a zero-input run ended: 'dead' (the tail is all zeros), a repeating pattern, or 'moving' (still changing, or a period beyond maxPeriod). */
+export function endOf(ys: readonly number[], maxPeriod = 32): 'dead' | 'moving' | Cycle {
+  if (ys.slice(ys.length - 4 * maxPeriod).every((v) => v === 0)) return 'dead';
+  return findCycle(ys, maxPeriod) ?? 'moving';
+}
 
 export interface SweepRow { name: string; round: BqRound; extra: number }
 export const SWEEP_VARIANTS: SweepRow[] = [
@@ -318,6 +334,22 @@ export function cycleSweep(variants: readonly SweepRow[] = SWEEP_VARIANTS, len =
     variants.forEach((v, i) => { if (findCycle(runBiquad(c, burstThenSilence(amp, burst, len), v), 16)) cycling[i]++; });
   }
   return { runs, cycling };
+}
+
+/** The finer sweep for the rounding toward zero: radii 0.90 … 0.995, forty-nine angles (0.01 … 0.49 cycles a sample), three input words, two burst lengths, 4 000 samples each
+ *  (a pole at 0.995 rings for hundreds of samples). Per radius: runs, runs ending in a cycle, runs still moving at the end (neither dead nor a short cycle). */
+export const ZERO_SWEEP_RADII = [0.9, 0.93, 0.95, 0.97, 0.975, 0.98, 0.985, 0.99, 0.995];
+export function zeroSweep(radii: readonly number[] = ZERO_SWEEP_RADII): { r: number; runs: number; cycling: number; moving: number }[] {
+  return radii.map((r) => {
+    let runs = 0, cycling = 0, moving = 0;
+    for (let k = 1; k <= 49; k++) for (const amp of [1000, 8000, 30000]) for (const burst of [1, 3]) {
+      const c: Words = { b0: 1024, b1: 0, b2: 0, a1: coefWord(-2 * r * Math.cos(2 * Math.PI * (k / 100))), a2: coefWord(r * r) };
+      runs++;
+      const e = endOf(runBiquad(c, burstThenSilence(amp, burst, 4000), { round: 'zero', extra: 0 }), 32);
+      if (e === 'moving') moving++; else if (e !== 'dead') cycling++;
+    }
+    return { r, runs, cycling, moving };
+  });
 }
 
 // ---- section order and scaling -----------------------------------------------------------------------------------------------------------------
@@ -388,3 +420,6 @@ export function measuredSnr(s: readonly Sos[], amp: number, f = 0.013, n = 6000)
   return { snr: 10 * Math.log10(p / e), overflows };
 }
 const wordMax16 = 2 ** (BQ.w - 1) - 1;
+
+/** Predicted signal to rounding noise, dB, of a cascade driven by a sine of this amplitude (a fraction of full scale): the same noise as cascadeSnr, at that amplitude. */
+export const snrAt = (s: readonly Sos[], amp: number): number => 10 * Math.log10((amp * amp) / 2 / ((noiseGain(s) / 12) * 2 ** (-2 * BQ.f)));

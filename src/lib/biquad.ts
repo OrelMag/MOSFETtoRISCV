@@ -68,7 +68,7 @@ export function biquad(round: Extract<BqRound, 'half-up' | 'zero'> = 'half-up'):
     c = b.op1(AND, [sign, `${any}.y`], 'negative with a remainder: one up', 'up');
   } else c = b.op1(cut(accW, drop - 1, 1), [`${acc}.s`], 'first dropped bit', 'lo');
   b.next();
-  const r = b.op1(roundUp(hiW), [hi, c], round === 'zero' ? 'toward zero' : 'round half up', 'round');
+  const r = b.op1(roundUp(hiW, 'ROUND'), [hi, c], round === 'zero' ? 'toward zero' : 'round half up', 'round');
   b.next();
   const cl = b.op(clampWord(w, hiW), [r], 'the one clamp', 'clamp');
   b.next();

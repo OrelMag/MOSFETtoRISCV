@@ -125,16 +125,20 @@ def iir():
     za, pa, ka = signal.ellipap(4, 1, 50)
     zb, pb, kb = signal.bilinear_zpk(0.9 * za, 0.9 * pa, ka * 0.9**0, 1.0)
     # the mask: how many taps the FIR designs need
-    dp, ds = 10 ** (rp / 20) - 1, 10 ** (-rs / 20)
+    # 0.1 dB of ripple is peak to peak, the way scipy's cheby1 / ellip rp is: for an FIR the gain stays within 1 +- dp with (1 + dp) / (1 - dp) = 10^(rp/20)
+    g = 10 ** (rp / 20)
+    dp, ds = (g - 1) / (g + 1), 10 ** (-rs / 20)
     kaiser = int(signal.kaiserord(rs, (ws - wp) / 1.0 * 1.0 / 1.0)[0])
-    pm = None
+    pm = pm_odd = None
     for n in range(40, 300):
         h = signal.remez(n, [0, wp / 2, ws / 2, 0.5], [1, 0], weight=[1 / dp, 1 / ds], fs=1, maxiter=200, grid_density=32)
         w, hh = signal.freqz(h, worN=8192, fs=1)
         a = np.abs(hh)
         if np.max(np.abs(a[w <= wp / 2] - 1)) <= dp and np.max(a[w >= ws / 2]) <= ds:
-            pm = n
-            break
+            pm = pm or n
+            if n % 2 == 1:
+                pm_odd = n
+                break
     # the narrow elliptic low-pass of the sensitivity step: edge 0.04 cycles a sample, order 6, 0.1 dB, 60 dB
     zn, pn, kn = signal.ellip(6, 0.1, 60, 0.08, output='zpk')
     sosn = signal.zpk2sos(zn, pn, kn)
@@ -152,7 +156,7 @@ def iir():
     return {
         'fs': FS, 'mask': {'wp': wp, 'ws': ws, 'rp': rp, 'rs': rs}, 'designs': des, 'extra': extra, 'analog': ap,
         'bilinear': {'z': cx(zb), 'p': cx(pb), 'k': float(f'{kb:.12g}'), 'in': {'z': cx(0.9 * za), 'p': cx(0.9 * pa), 'k': float(f'{ka:.12g}')}},
-        'fir': {'kaiser': kaiser, 'pm': pm},
+        'fir': {'kaiser': kaiser, 'pm': pm, 'pm_odd': pm_odd, 'dp': float(f'{dp:.12g}'), 'ds': float(f'{ds:.12g}')},
         'narrow': {'z': cx(zn), 'p': cx(pn), 'k': float(f'{kn:.12g}'), 'sos': r(sosn), 'b': r(bn), 'a': r(an), 'sens': sens,
                    'rule': 'direct form: every a[k], k >= 1, one word of `bits` bits, integer part (with sign) = floor(log2 max|a|) + 2, rounded half up; sections: a1, a2 in Q2.(bits-2), rounded half up, clamped',
                    'x': r(x), 'sosfilt': r(sx), 'lfilter': r(sy)},
