@@ -110,7 +110,7 @@ const DB0 = 4;
 
 export function berCurveWidget(): Widget {
   let at = 7;
-  const plot = plotOf({ W: 640, H: 260, x: [0, 18], y: [-10, 0], yTicks: [0, -2, -4, -6, -8, -10], xLabel: 'Eb/N0, dB', yLabel: 'bit errors', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
+  const plot = plotOf({ W: 640, H: 260, x: [0, 18], y: [-10, 0], yTicks: [0, -2, -4, -6, -8, -10], xLabel: 'Eb/N0, dB', yLabel: '', aria: 'Bit error rate of uncoded signalling against Eb over N0: the closed form, counted points, and the limit for any code', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
   const chips = mkChips(3);
   const dots: [number, number][] = [];
   for (const d of [0, 2, 4, 6, 7, 8]) { const b = measuredBer(d, 400000, 41 + d); if (b > 0) dots.push([d, b]); }
@@ -129,7 +129,7 @@ export function berCurveWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'The curve every link is judged on'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'closed form'), h('span', { class: 'k-near' }, 'counted (400 000 bits)')), plot.el, chips.el),
+      h('div', { class: 'panel' }, h('h3', null, 'Bit errors: the curve every link is judged on'), h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'closed form'), h('span', { class: 'k-near' }, 'counted (400 000 bits)')), plot.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, slider('Eb/N0', -3, 14, 0.5, at, (v) => db(v), (v) => { at = v; paint(); }).el)),
   };
 }
@@ -163,7 +163,7 @@ const CODE_TRIALS = 600;
 const CODE_CLASS = ['ln-s lump', 'ln-s near', 'ln-s real'];
 
 export function randomCodeWidget(): Widget {
-  const plot = plotOf({ W: 640, H: 240, x: [0, 10], y: [-3, 0], yTicks: [0, -1, -2, -3], xLabel: 'Eb/N0, dB', yLabel: 'wrong', aria: 'Word error rate of random codes of rate one half at three lengths, against the limit for that rate', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
+  const plot = plotOf({ W: 640, H: 240, x: [0, 10], y: [-3, 0], yTicks: [0, -1, -2, -3], xLabel: 'Eb/N0, dB', yLabel: '', aria: 'Word error rate of random codes of rate one half at three lengths, against the limit for that rate', xFmt: (v) => num(v - DB0, 0), yFmt: pow10 });
   const results = CODE_LENGTHS.map(() => new Array<number>(CODE_DBS.length).fill(NaN));
   const note = h('p', { class: 'sub mos-note' }), chips = mkChips(2);
   let timer = 0, running = false;
