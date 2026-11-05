@@ -88,7 +88,7 @@ export function echoWidget(): Widget {
   };
   const sm = slider('Step μ', -2, 0.2, 0.1, lm, (x) => num(mu(x), 3), (x) => { lm = x; paint(); });
   const st = slider('Taps', 8, 128, 8, taps, (x) => String(x), (x) => { taps = x; paint(); });
-  const sv = slider('Far end\'s loudness', 0.1, 2, 0.1, loud, (x) => num(x, 1), (x) => { loud = x; paint(); });
+  const sv = slider('Loudness', 0.1, 2, 0.1, loud, (x) => num(x, 1), (x) => { loud = x; paint(); });
   const cb = (label: string, on: boolean, set: (v: boolean) => void) => h('label', { class: 'cd-check' }, h('input', { type: 'checkbox', checked: on, onchange: (e: Event) => { set((e.target as HTMLInputElement).checked); paint(); } }), ` ${label}`);
   paint();
   return {
