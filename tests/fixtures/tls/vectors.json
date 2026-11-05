@@ -1,0 +1,929 @@
+{
+ "sources": {
+  "rfc4231": "https://www.rfc-editor.org/rfc/rfc4231.txt",
+  "rfc5869": "https://www.rfc-editor.org/rfc/rfc5869.txt",
+  "rfc7748": "https://www.rfc-editor.org/rfc/rfc7748.txt",
+  "rfc8446": "https://www.rfc-editor.org/rfc/rfc8446.txt",
+  "rfc8448": "https://www.rfc-editor.org/rfc/rfc8448.txt",
+  "fips180": "https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/SHA256.pdf",
+  "fips197": "https://csrc.nist.gov/files/pubs/fips/197/final/docs/fips-197.pdf (2001, appendix C) and the 2023 update (appendix A.1)",
+  "gcm": "McGrew and Viega, The Galois/Counter Mode of Operation (GCM), appendix B test cases 1-4"
+ },
+ "sha256": [
+  {
+   "message": "abc",
+   "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  },
+  {
+   "message": "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+   "digest": "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+  }
+ ],
+ "hmac": [
+  {
+   "n": 1,
+   "key": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+   "data": "4869205468657265",
+   "mac": "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+  },
+  {
+   "n": 2,
+   "key": "4a656665",
+   "data": "7768617420646f2079612077616e7420666f72206e6f7468696e673f",
+   "mac": "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+  },
+  {
+   "n": 3,
+   "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "data": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+   "mac": "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"
+  },
+  {
+   "n": 4,
+   "key": "0102030405060708090a0b0c0d0e0f10111213141516171819",
+   "data": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+   "mac": "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b"
+  },
+  {
+   "n": 6,
+   "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "data": "54657374205573696e67204c6172676572205468616e20426c6f636b2d53697a65204b6579202d2048617368204b6579204669727374",
+   "mac": "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
+  },
+  {
+   "n": 7,
+   "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "data": "5468697320697320612074657374207573696e672061206c6172676572207468616e20626c6f636b2d73697a65206b657920616e642061206c6172676572207468616e20626c6f636b2d73697a6520646174612e20546865206b6579206e6565647320746f20626520686173686564206265666f7265206265696e6720757365642062792074686520484d414320616c676f726974686d2e",
+   "mac": "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"
+  }
+ ],
+ "hkdf": [
+  {
+   "n": 1,
+   "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+   "salt": "000102030405060708090a0b0c",
+   "info": "f0f1f2f3f4f5f6f7f8f9",
+   "l": 42,
+   "prk": "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5",
+   "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
+  },
+  {
+   "n": 2,
+   "ikm": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+   "salt": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+   "info": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+   "l": 82,
+   "prk": "06a6b88c5853361a06104c9ceb35b45cef760014904671014a193f40c15fc244",
+   "okm": "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
+  },
+  {
+   "n": 3,
+   "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+   "salt": "",
+   "info": "",
+   "l": 42,
+   "prk": "19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c293ccb04",
+   "okm": "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d"
+  }
+ ],
+ "aes": {
+  "c1": {
+   "plaintext": "00112233445566778899aabbccddeeff",
+   "key": "000102030405060708090a0b0c0d0e0f",
+   "ciphertext": "69c4e0d86a7b0430d8cdb78070b4c55a",
+   "lastRoundKey": "13111d7fe3944a17f307a78b4d2b30c5"
+  },
+  "a1": {
+   "key": "2b7e151628aed2a6abf7158809cf4f3c",
+   "lastRoundKey": "d014f9a8c9ee2589e13f0cc8b6630ca6"
+  }
+ },
+ "gcm": [
+  {
+   "n": "1",
+   "K": "00000000000000000000000000000000",
+   "P": "",
+   "IV": "000000000000000000000000",
+   "H": "66e94bd4ef8a2c3b884cfa59ca342b2e",
+   "A": "",
+   "C": "",
+   "T": "58e2fccefa7e3061367f1d57a4e7455a"
+  },
+  {
+   "n": "2",
+   "K": "00000000000000000000000000000000",
+   "P": "00000000000000000000000000000000",
+   "IV": "000000000000000000000000",
+   "H": "66e94bd4ef8a2c3b884cfa59ca342b2e",
+   "A": "",
+   "C": "0388dace60b6a392f328c2b971b2fe78",
+   "T": "ab6e47d42cec13bdf53a67b21257bddf"
+  },
+  {
+   "n": "3",
+   "K": "feffe9928665731c6d6a8f9467308308",
+   "P": "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255",
+   "IV": "cafebabefacedbaddecaf888",
+   "H": "b83b533708bf535d0aa6e52980d53b78",
+   "A": "",
+   "C": "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985",
+   "T": "4d5c2af327cd64a62cf35abd2ba6fab4"
+  },
+  {
+   "n": "4",
+   "K": "feffe9928665731c6d6a8f9467308308",
+   "P": "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b39",
+   "A": "feedfacedeadbeeffeedfacedeadbeefabaddad2",
+   "IV": "cafebabefacedbaddecaf888",
+   "H": "b83b533708bf535d0aa6e52980d53b78",
+   "C": "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091",
+   "T": "5bc94fbc3221a5db94fae95ae7121a47"
+  }
+ ],
+ "x25519": {
+  "pairs": [
+   {
+    "scalar": "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4",
+    "u": "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c",
+    "out": "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"
+   },
+   {
+    "scalar": "4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d",
+    "u": "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493",
+    "out": "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957"
+   }
+  ],
+  "iterated": {
+   "start": "0900000000000000000000000000000000000000000000000000000000000000",
+   "one": "422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079",
+   "thousand": "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51",
+   "million": "7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424"
+  },
+  "dh": {
+   "alicePriv": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+   "alicePub": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+   "bobPriv": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb",
+   "bobPub": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+   "shared": "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
+  }
+ },
+ "hrrRandom": "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c",
+ "rfc8448": [
+  {
+   "who": "client",
+   "action": "create an ephemeral x25519 key pair",
+   "field": "private key",
+   "octets": 32,
+   "hex": "49af42ba7f7994852d713ef2784bcbcaa7911de26adc5642cb634540e7ea5005"
+  },
+  {
+   "who": "client",
+   "action": "create an ephemeral x25519 key pair",
+   "field": "public key",
+   "octets": 32,
+   "hex": "99381de560e4bd43d23d8e435a7dbafeb3c06e51c13cae4d5413691e529aaf2c"
+  },
+  {
+   "who": "client",
+   "action": "construct a ClientHello handshake message",
+   "field": "ClientHello",
+   "octets": 196,
+   "hex": "010000c00303cb34ecb1e78163ba1c38c6dacb196a6dffa21a8d9912ec18a2ef6283024dece7000006130113031302010000910000000b0009000006736572766572ff01000100000a00140012001d0017001800190100010101020103010400230000003300260024001d002099381de560e4bd43d23d8e435a7dbafeb3c06e51c13cae4d5413691e529aaf2c002b0003020304000d0020001e040305030603020308040805080604010501060102010402050206020202002d00020101001c00024001"
+  },
+  {
+   "who": "client",
+   "action": "send handshake record",
+   "field": "payload",
+   "octets": 196,
+   "hex": "010000c00303cb34ecb1e78163ba1c38c6dacb196a6dffa21a8d9912ec18a2ef6283024dece7000006130113031302010000910000000b0009000006736572766572ff01000100000a00140012001d0017001800190100010101020103010400230000003300260024001d002099381de560e4bd43d23d8e435a7dbafeb3c06e51c13cae4d5413691e529aaf2c002b0003020304000d0020001e040305030603020308040805080604010501060102010402050206020202002d00020101001c00024001"
+  },
+  {
+   "who": "client",
+   "action": "send handshake record",
+   "field": "complete record",
+   "octets": 201,
+   "hex": "16030100c4010000c00303cb34ecb1e78163ba1c38c6dacb196a6dffa21a8d9912ec18a2ef6283024dece7000006130113031302010000910000000b0009000006736572766572ff01000100000a00140012001d0017001800190100010101020103010400230000003300260024001d002099381de560e4bd43d23d8e435a7dbafeb3c06e51c13cae4d5413691e529aaf2c002b0003020304000d0020001e040305030603020308040805080604010501060102010402050206020202002d00020101001c00024001"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"early\"",
+   "field": "IKM",
+   "octets": 32,
+   "hex": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"early\"",
+   "field": "secret",
+   "octets": 32,
+   "hex": "33ad0a1c607ec03b09e6cd9893680ce210adf300aa1f2660e1b22e10f170f92a"
+  },
+  {
+   "who": "server",
+   "action": "create an ephemeral x25519 key pair",
+   "field": "private key",
+   "octets": 32,
+   "hex": "b1580eeadf6dd589b8ef4f2d5652578cc810e9980191ec8d058308cea216a21e"
+  },
+  {
+   "who": "server",
+   "action": "create an ephemeral x25519 key pair",
+   "field": "public key",
+   "octets": 32,
+   "hex": "c9828876112095fe66762bdbf7c672e156d6cc253b833df1dd69b1b04e751f0f"
+  },
+  {
+   "who": "server",
+   "action": "construct a ServerHello handshake message",
+   "field": "ServerHello",
+   "octets": 90,
+   "hex": "020000560303a6af06a4121860dc5e6e60249cd34c95930c8ac5cb1434dac155772ed3e2692800130100002e00330024001d0020c9828876112095fe66762bdbf7c672e156d6cc253b833df1dd69b1b04e751f0f002b00020304"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "33ad0a1c607ec03b09e6cd9893680ce210adf300aa1f2660e1b22e10f170f92a"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "info",
+   "octets": 49,
+   "hex": "00200d746c733133206465726976656420e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "6f2615a108c702c5678f54fc9dbab69716c076189c48250cebeac3576c3611ba"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"handshake\"",
+   "field": "salt",
+   "octets": 32,
+   "hex": "6f2615a108c702c5678f54fc9dbab69716c076189c48250cebeac3576c3611ba"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"handshake\"",
+   "field": "IKM",
+   "octets": 32,
+   "hex": "8bd4054fb55b9d63fdfbacf9f04b9f0d35e6d63f537563efd46272900f89492d"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"handshake\"",
+   "field": "secret",
+   "octets": 32,
+   "hex": "1dc826e93606aa6fdc0aadc12f741b01046aa6b99f691ed221a9f0ca043fbeac"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c hs traffic\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "1dc826e93606aa6fdc0aadc12f741b01046aa6b99f691ed221a9f0ca043fbeac"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c hs traffic\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "860c06edc07858ee8e78f0e7428c58edd6b43f2ca3e6e95f02ed063cf0e1cad8"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c hs traffic\"",
+   "field": "info",
+   "octets": 54,
+   "hex": "002012746c7331332063206873207472616666696320860c06edc07858ee8e78f0e7428c58edd6b43f2ca3e6e95f02ed063cf0e1cad8"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c hs traffic\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "b3eddb126e067f35a780b3abf45e2d8f3b1a950738f52e9600746a0e27a55a21"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s hs traffic\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "1dc826e93606aa6fdc0aadc12f741b01046aa6b99f691ed221a9f0ca043fbeac"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s hs traffic\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "860c06edc07858ee8e78f0e7428c58edd6b43f2ca3e6e95f02ed063cf0e1cad8"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s hs traffic\"",
+   "field": "info",
+   "octets": 54,
+   "hex": "002012746c7331332073206873207472616666696320860c06edc07858ee8e78f0e7428c58edd6b43f2ca3e6e95f02ed063cf0e1cad8"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s hs traffic\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "b67b7d690cc16c4e75e54213cb2d37b4e9c912bcded9105d42befd59d391ad38"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for master \"tls13 derived\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "1dc826e93606aa6fdc0aadc12f741b01046aa6b99f691ed221a9f0ca043fbeac"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for master \"tls13 derived\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for master \"tls13 derived\"",
+   "field": "info",
+   "octets": 49,
+   "hex": "00200d746c733133206465726976656420e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "server",
+   "action": "derive secret for master \"tls13 derived\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "43de77e0c77713859a944db9db2590b53190a65b3ee2e4f12dd7a0bb7ce254b4"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"master\"",
+   "field": "salt",
+   "octets": 32,
+   "hex": "43de77e0c77713859a944db9db2590b53190a65b3ee2e4f12dd7a0bb7ce254b4"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"master\"",
+   "field": "IKM",
+   "octets": 32,
+   "hex": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+   "who": "server",
+   "action": "extract secret \"master\"",
+   "field": "secret",
+   "octets": 32,
+   "hex": "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "payload",
+   "octets": 90,
+   "hex": "020000560303a6af06a4121860dc5e6e60249cd34c95930c8ac5cb1434dac155772ed3e2692800130100002e00330024001d0020c9828876112095fe66762bdbf7c672e156d6cc253b833df1dd69b1b04e751f0f002b00020304"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "complete record",
+   "octets": 95,
+   "hex": "160303005a020000560303a6af06a4121860dc5e6e60249cd34c95930c8ac5cb1434dac155772ed3e2692800130100002e00330024001d0020c9828876112095fe66762bdbf7c672e156d6cc253b833df1dd69b1b04e751f0f002b00020304"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for handshake data",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "b67b7d690cc16c4e75e54213cb2d37b4e9c912bcded9105d42befd59d391ad38"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for handshake data",
+   "field": "key info",
+   "octets": 13,
+   "hex": "001009746c733133206b657900"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for handshake data",
+   "field": "key expanded",
+   "octets": 16,
+   "hex": "3fce516009c21727d0f2e4e86ee403bc"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for handshake data",
+   "field": "iv info",
+   "octets": 12,
+   "hex": "000c08746c73313320697600"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for handshake data",
+   "field": "iv expanded",
+   "octets": 12,
+   "hex": "5d313eb2671276ee13000b30"
+  },
+  {
+   "who": "server",
+   "action": "construct an EncryptedExtensions handshake message",
+   "field": "EncryptedExtensions",
+   "octets": 40,
+   "hex": "080000240022000a00140012001d00170018001901000101010201030104001c0002400100000000"
+  },
+  {
+   "who": "server",
+   "action": "construct a Certificate handshake message",
+   "field": "Certificate",
+   "octets": 445,
+   "hex": "0b0001b9000001b50001b0308201ac30820115a003020102020102300d06092a864886f70d01010b0500300e310c300a06035504031303727361301e170d3136303733303031323335395a170d3236303733303031323335395a300e310c300a0603550403130372736130819f300d06092a864886f70d010101050003818d0030818902818100b4bb498f8279303d980836399b36c6988c0c68de55e1bdb826d3901a2461eafd2de49a91d015abbc9a95137ace6c1af19eaa6af98c7ced43120998e187a80ee0ccb0524b1b018c3e0b63264d449a6d38e22a5fda430846748030530ef0461c8ca9d9efbfae8ea6d1d03e2bd193eff0ab9a8002c47428a6d35a8d88d79f7f1e3f0203010001a31a301830090603551d1304023000300b0603551d0f0404030205a0300d06092a864886f70d01010b05000381810085aad2a0e5b9276b908c65f73a7267170618a54c5f8a7b337d2df7a594365417f2eae8f8a58c8f8172f9319cf36b7fd6c55b80f21a03015156726096fd335e5e67f2dbf102702e608ccae6bec1fc63a42a99be5c3eb7107c3c54e9b9eb2bd5203b1c3b84e0a8b2f759409ba3eac9d91d402dcc0cc8f8961229ac9187b42b4de10000"
+  },
+  {
+   "who": "server",
+   "action": "construct a CertificateVerify handshake message",
+   "field": "CertificateVerify",
+   "octets": 136,
+   "hex": "0f000084080400805a747c5d88fa9bd2e55ab085a61015b7211f824cd484145ab3ff52f1fda8477b0b7abc90db78e2d33a5c141a078653fa6bef780c5ea248eeaaa785c4f394cab6d30bbe8d4859ee511f602957b15411ac027671459e46445c9ea58c181e818e95b8c3fb0bf3278409d3be152a3da5043e063dda65cdf5aea20d53dfacd42f74f3"
+  },
+  {
+   "who": "server",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "b67b7d690cc16c4e75e54213cb2d37b4e9c912bcded9105d42befd59d391ad38"
+  },
+  {
+   "who": "server",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "hash",
+   "octets": 0,
+   "hex": ""
+  },
+  {
+   "who": "server",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "info",
+   "octets": 18,
+   "hex": "00200e746c7331332066696e697368656400"
+  },
+  {
+   "who": "server",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "008d3b66f816ea559f96b537e885c31fc068bf492c652f01f288a1d8cdc19fc8"
+  },
+  {
+   "who": "server",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "finished",
+   "octets": 32,
+   "hex": "9b9b141d906337fbd2cbdce71df4deda4ab42c309572cb7fffee5454b78f0718"
+  },
+  {
+   "who": "server",
+   "action": "construct a Finished handshake message",
+   "field": "Finished",
+   "octets": 36,
+   "hex": "140000209b9b141d906337fbd2cbdce71df4deda4ab42c309572cb7fffee5454b78f0718"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "payload",
+   "octets": 657,
+   "hex": "080000240022000a00140012001d00170018001901000101010201030104001c00024001000000000b0001b9000001b50001b0308201ac30820115a003020102020102300d06092a864886f70d01010b0500300e310c300a06035504031303727361301e170d3136303733303031323335395a170d3236303733303031323335395a300e310c300a0603550403130372736130819f300d06092a864886f70d010101050003818d0030818902818100b4bb498f8279303d980836399b36c6988c0c68de55e1bdb826d3901a2461eafd2de49a91d015abbc9a95137ace6c1af19eaa6af98c7ced43120998e187a80ee0ccb0524b1b018c3e0b63264d449a6d38e22a5fda430846748030530ef0461c8ca9d9efbfae8ea6d1d03e2bd193eff0ab9a8002c47428a6d35a8d88d79f7f1e3f0203010001a31a301830090603551d1304023000300b0603551d0f0404030205a0300d06092a864886f70d01010b05000381810085aad2a0e5b9276b908c65f73a7267170618a54c5f8a7b337d2df7a594365417f2eae8f8a58c8f8172f9319cf36b7fd6c55b80f21a03015156726096fd335e5e67f2dbf102702e608ccae6bec1fc63a42a99be5c3eb7107c3c54e9b9eb2bd5203b1c3b84e0a8b2f759409ba3eac9d91d402dcc0cc8f8961229ac9187b42b4de100000f000084080400805a747c5d88fa9bd2e55ab085a61015b7211f824cd484145ab3ff52f1fda8477b0b7abc90db78e2d33a5c141a078653fa6bef780c5ea248eeaaa785c4f394cab6d30bbe8d4859ee511f602957b15411ac027671459e46445c9ea58c181e818e95b8c3fb0bf3278409d3be152a3da5043e063dda65cdf5aea20d53dfacd42f74f3140000209b9b141d906337fbd2cbdce71df4deda4ab42c309572cb7fffee5454b78f0718"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "complete record",
+   "octets": 679,
+   "hex": "17030302a2d1ff334a56f5bff6594a07cc87b580233f500f45e489e7f33af35edf7869fcf40aa40aa2b8ea73f848a7ca07612ef9f945cb960b4068905123ea78b111b429ba9191cd05d2a389280f526134aadc7fc78c4b729df828b5ecf7b13bd9aefb0e57f271585b8ea9bb355c7c79020716cfb9b1183ef3ab20e37d57a6b9d7477609aee6e122a4cf51427325250c7d0e509289444c9b3a648f1d71035d2ed65b0e3cdd0cbae8bf2d0b227812cbb360987255cc744110c453baa4fcd610928d809810e4b7ed1a8fd991f06aa6248204797e36a6a73b70a2559c09ead686945ba246ab66e5edd8044b4c6de3fcf2a89441ac66272fd8fb330ef8190579b3684596c960bd596eea520a56a8d650f563aad27409960dca63d3e688611ea5e22f4415cf9538d51a200c27034272968a264ed6540c84838d89f72c24461aad6d26f59ecaba9acbbb317b66d902f4f292a36ac1b639c637ce343117b659622245317b49eeda0c6258f100d7d961ffb138647e92ea330faeea6dfa31c7a84dc3bd7e1b7a6c7178af36879018e3f252107f243d243dc7339d5684c8b0378bf30244da8c87c843f5e56eb4c5e8280a2b48052cf93b16499a66db7cca71e4599426f7d461e66f99882bd89fc50800becca62d6c74116dbd2972fda1fa80f85df881edbe5a37668936b335583b599186dc5c6918a396fa48a181d6b6fa4f9d62d513afbb992f2b992f67f8afe67f76913fa388cb5630c8ca01e0c65d11c66a1e2ac4c85977b7c7a6999bbf10dc35ae69f5515614636c0b9b68c19ed2e31c0b3b66763038ebba42f3b38edc0399f3a9f23faa63978c317fc9fa66a73f60f0504de93b5b845e275592c12335ee340bbc4fddd502784016e4b3be7ef04dda49f4b440a30cb5d2af939828fd4ae3794e44f94df5a631ede42c1719bfdabf0253fe5175be898e750edc53370d2b"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c ap traffic\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c ap traffic\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "9608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c ap traffic\"",
+   "field": "info",
+   "octets": 54,
+   "hex": "002012746c73313320632061702074726166666963209608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 c ap traffic\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "9e40646ce79a7f9dc05af8889bce6552875afa0b06df0087f792ebb7c17504a5"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s ap traffic\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s ap traffic\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "9608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s ap traffic\"",
+   "field": "info",
+   "octets": 54,
+   "hex": "002012746c73313320732061702074726166666963209608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 s ap traffic\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "a11af9f05531f856ad47116b45a950328204b4f44bfb6b3a4b4f1f3fcb631643"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 exp master\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 exp master\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "9608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 exp master\"",
+   "field": "info",
+   "octets": 52,
+   "hex": "002010746c73313320657870206d6173746572209608102a0f1ccc6db6250b7b7e417b1a000eaada3daae4777a7686c9ff83df13"
+  },
+  {
+   "who": "server",
+   "action": "derive secret \"tls13 exp master\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "fe22f881176eda18eb8f44529e6792c50c9a3f89452f68d8ae311b4309d3cf50"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for application data",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "a11af9f05531f856ad47116b45a950328204b4f44bfb6b3a4b4f1f3fcb631643"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for application data",
+   "field": "key info",
+   "octets": 13,
+   "hex": "001009746c733133206b657900"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for application data",
+   "field": "key expanded",
+   "octets": 16,
+   "hex": "9f02283b6c9c07efc26bb9f2ac92e356"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for application data",
+   "field": "iv info",
+   "octets": 12,
+   "hex": "000c08746c73313320697600"
+  },
+  {
+   "who": "server",
+   "action": "derive write traffic keys for application data",
+   "field": "iv expanded",
+   "octets": 12,
+   "hex": "cf782b88dd83549aadf1e984"
+  },
+  {
+   "who": "server",
+   "action": "derive read traffic keys for handshake data",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "b3eddb126e067f35a780b3abf45e2d8f3b1a950738f52e9600746a0e27a55a21"
+  },
+  {
+   "who": "server",
+   "action": "derive read traffic keys for handshake data",
+   "field": "key info",
+   "octets": 13,
+   "hex": "001009746c733133206b657900"
+  },
+  {
+   "who": "server",
+   "action": "derive read traffic keys for handshake data",
+   "field": "key expanded",
+   "octets": 16,
+   "hex": "dbfaa693d1762c5b666af5d950258d01"
+  },
+  {
+   "who": "server",
+   "action": "derive read traffic keys for handshake data",
+   "field": "iv info",
+   "octets": 12,
+   "hex": "000c08746c73313320697600"
+  },
+  {
+   "who": "server",
+   "action": "derive read traffic keys for handshake data",
+   "field": "iv expanded",
+   "octets": 12,
+   "hex": "5bd3c71b836e0b76bb73265f"
+  },
+  {
+   "who": "client",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "33ad0a1c607ec03b09e6cd9893680ce210adf300aa1f2660e1b22e10f170f92a"
+  },
+  {
+   "who": "client",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "client",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "info",
+   "octets": 49,
+   "hex": "00200d746c733133206465726976656420e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "who": "client",
+   "action": "derive secret for handshake \"tls13 derived\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "6f2615a108c702c5678f54fc9dbab69716c076189c48250cebeac3576c3611ba"
+  },
+  {
+   "who": "client",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "b3eddb126e067f35a780b3abf45e2d8f3b1a950738f52e9600746a0e27a55a21"
+  },
+  {
+   "who": "client",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "hash",
+   "octets": 0,
+   "hex": ""
+  },
+  {
+   "who": "client",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "info",
+   "octets": 18,
+   "hex": "00200e746c7331332066696e697368656400"
+  },
+  {
+   "who": "client",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "b80ad01015fb2f0bd65ff7d4da5d6bf83f84821d1f87fdc7d3c75b5a7b42d9c4"
+  },
+  {
+   "who": "client",
+   "action": "calculate finished \"tls13 finished\"",
+   "field": "finished",
+   "octets": 32,
+   "hex": "a8ec436d677634ae525ac1fcebe11a039ec17694fac6e98527b642f2edd5ce61"
+  },
+  {
+   "who": "client",
+   "action": "construct a Finished handshake message",
+   "field": "Finished",
+   "octets": 36,
+   "hex": "14000020a8ec436d677634ae525ac1fcebe11a039ec17694fac6e98527b642f2edd5ce61"
+  },
+  {
+   "who": "client",
+   "action": "send handshake record",
+   "field": "payload",
+   "octets": 36,
+   "hex": "14000020a8ec436d677634ae525ac1fcebe11a039ec17694fac6e98527b642f2edd5ce61"
+  },
+  {
+   "who": "client",
+   "action": "send handshake record",
+   "field": "complete record",
+   "octets": 58,
+   "hex": "170303003575ec4dc238cce60b298044a71e219c56cc77b0517fe9b93c7a4bfc44d87f38f80338ac98fc46deb384bd1caeacab6867d726c40546"
+  },
+  {
+   "who": "client",
+   "action": "derive write traffic keys for application data",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "9e40646ce79a7f9dc05af8889bce6552875afa0b06df0087f792ebb7c17504a5"
+  },
+  {
+   "who": "client",
+   "action": "derive write traffic keys for application data",
+   "field": "key info",
+   "octets": 13,
+   "hex": "001009746c733133206b657900"
+  },
+  {
+   "who": "client",
+   "action": "derive write traffic keys for application data",
+   "field": "key expanded",
+   "octets": 16,
+   "hex": "17422dda596ed5d9acd890e3c63f5051"
+  },
+  {
+   "who": "client",
+   "action": "derive write traffic keys for application data",
+   "field": "iv info",
+   "octets": 12,
+   "hex": "000c08746c73313320697600"
+  },
+  {
+   "who": "client",
+   "action": "derive write traffic keys for application data",
+   "field": "iv expanded",
+   "octets": 12,
+   "hex": "5b78923dee08579033e523d9"
+  },
+  {
+   "who": "client",
+   "action": "derive secret \"tls13 res master\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919"
+  },
+  {
+   "who": "client",
+   "action": "derive secret \"tls13 res master\"",
+   "field": "hash",
+   "octets": 32,
+   "hex": "209145a96ee8e2a122ff810047cc952684658d6049e86429426db87c54ad143d"
+  },
+  {
+   "who": "client",
+   "action": "derive secret \"tls13 res master\"",
+   "field": "info",
+   "octets": 52,
+   "hex": "002010746c73313320726573206d617374657220209145a96ee8e2a122ff810047cc952684658d6049e86429426db87c54ad143d"
+  },
+  {
+   "who": "client",
+   "action": "derive secret \"tls13 res master\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "7df235f2031d2a051287d02b0241b0bfdaf86cc856231f2d5aba46c434ec196c"
+  },
+  {
+   "who": "server",
+   "action": "generate resumption secret \"tls13 resumption\"",
+   "field": "PRK",
+   "octets": 32,
+   "hex": "7df235f2031d2a051287d02b0241b0bfdaf86cc856231f2d5aba46c434ec196c"
+  },
+  {
+   "who": "server",
+   "action": "generate resumption secret \"tls13 resumption\"",
+   "field": "hash",
+   "octets": 2,
+   "hex": "0000"
+  },
+  {
+   "who": "server",
+   "action": "generate resumption secret \"tls13 resumption\"",
+   "field": "info",
+   "octets": 22,
+   "hex": "002010746c73313320726573756d7074696f6e020000"
+  },
+  {
+   "who": "server",
+   "action": "generate resumption secret \"tls13 resumption\"",
+   "field": "expanded",
+   "octets": 32,
+   "hex": "4ecd0eb6ec3b4d87f5d6028f922ca4c5851a277fd41311c9e62d2c9492e1c4f3"
+  },
+  {
+   "who": "server",
+   "action": "construct a NewSessionTicket handshake message",
+   "field": "NewSessionTicket",
+   "octets": 205,
+   "hex": "040000c90000001efad6aac502000000b22c035d829359ee5ff7af4ec900000000262a6494dc486d2c8a34cb33fa90bf1b0070ad3c498883c9367c09a2be785abc55cd226097a3a982117283f82a03a143efd3ff5dd36d64e861be7fd61d2827db279cce145077d454a3664d4e6da4d29ee03725a6a4dafcd0fc67d2aea70529513e3da2677fa5906c5b3f7d8f92f228bda40dda721470f9fbf297b5aea617646fac5c03272e970727c621a79141ef5f7de6505e5bfbc388e93343694093934ae4d3570008002a000400000400"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "payload",
+   "octets": 205,
+   "hex": "040000c90000001efad6aac502000000b22c035d829359ee5ff7af4ec900000000262a6494dc486d2c8a34cb33fa90bf1b0070ad3c498883c9367c09a2be785abc55cd226097a3a982117283f82a03a143efd3ff5dd36d64e861be7fd61d2827db279cce145077d454a3664d4e6da4d29ee03725a6a4dafcd0fc67d2aea70529513e3da2677fa5906c5b3f7d8f92f228bda40dda721470f9fbf297b5aea617646fac5c03272e970727c621a79141ef5f7de6505e5bfbc388e93343694093934ae4d3570008002a000400000400"
+  },
+  {
+   "who": "server",
+   "action": "send handshake record",
+   "field": "complete record",
+   "octets": 227,
+   "hex": "17030300de3a6b8f90414a97d6959c3487680de5134a2b240e6cffac116e95d41d6af8f6b580dcf3d11d63c758db289a015940252f55713e061dc13e078891a38efbcf5753ad8ef170ad3c7353d16d9da773b9ca7f2b9fa1b6c0d4a3d03f75e09c30ba1e62972ac46f75f7b981be63439b2999ce13064615139891d5e4c5b406f16e3fc181a77ca475840025db2f0a77f81b5ab05b94c01346755f69232c86519d86cbeeac87aac347d143f9605d64f650db4d023e70e952ca49fe5137121c74bc2697687e248746d6df353005f3bce18696129c8153556b3b6c6779b37bf15985684f"
+  },
+  {
+   "who": "client",
+   "action": "send application_data record",
+   "field": "payload",
+   "octets": 50,
+   "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031"
+  },
+  {
+   "who": "client",
+   "action": "send application_data record",
+   "field": "complete record",
+   "octets": 72,
+   "hex": "1703030043a23f7054b62c94d0affafe8228ba55cbefacea42f914aa66bcab3f2b9819a8a5b46b395bd54a9a20441e2b62974e1f5a6292a2977014bd1e3deae63aeebb21694915e4"
+  },
+  {
+   "who": "server",
+   "action": "send application_data record",
+   "field": "payload",
+   "octets": 50,
+   "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031"
+  },
+  {
+   "who": "server",
+   "action": "send application_data record",
+   "field": "complete record",
+   "octets": 72,
+   "hex": "17030300432e937e11ef4ac740e538ad36005fc4a46932fc3225d05f82aa1b36e30efaf97d90e6dffc602dcb501a59a8fcc49c4bf2e5f0a21c0047c2abf332540dd032e167c2955d"
+  },
+  {
+   "who": "client",
+   "action": "send alert record",
+   "field": "payload",
+   "octets": 2,
+   "hex": "0100"
+  },
+  {
+   "who": "client",
+   "action": "send alert record",
+   "field": "complete record",
+   "octets": 24,
+   "hex": "1703030013c9872760655666b74d7ff1153efd6db6d0b0e3"
+  },
+  {
+   "who": "server",
+   "action": "send alert record",
+   "field": "payload",
+   "octets": 2,
+   "hex": "0100"
+  },
+  {
+   "who": "server",
+   "action": "send alert record",
+   "field": "complete record",
+   "octets": 24,
+   "hex": "1703030013b58fd67166ebf599d24720cfbe7efa7a8864a9"
+  }
+ ]
+}
