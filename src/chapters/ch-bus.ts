@@ -14,6 +14,7 @@ import { netlistOf } from '../sim/types';
 import type { Stage } from '../view/stage';
 import { BENCH_IMAGE, busBenchActions, busBenchScene, busBenchState, busComputerActions, busComputerScene, busComputerState, cardComputerScene, systemComputerScene } from '../widgets/bus';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]) => groupDigits(stats(d).nands);
 
@@ -38,7 +39,7 @@ function ramWord(st: Stage, a: number): number {
 }
 
 export const chBus: Chapter = {
-  id: 'bus', num: 38, title: 'Buses and DMA', level: 'Memory in depth',
+  id: 'bus', num: numOf('bus'), title: 'Buses and DMA', level: 'Memory in depth',
   blurb: 'A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.',
   goals: [
     'say on which edge a valid / ready transfer happens, and why the sender may not wait for ready',

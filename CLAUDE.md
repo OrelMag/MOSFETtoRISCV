@@ -1646,6 +1646,10 @@ restarted on Reset and Back; the sandbox only in gate mode, the cycle engine cou
 
 ### Writing chapters
 
+A chapter is placed in `chapters/order.ts` and nowhere else: its `num` is `numOf(id)`, so inserting one renumbers the rest with no gap.
+Text says `chapter ${numOf('modem')}`, never a typed number from 45 up (tests/chapter-numbers.test.ts; it needs the word "chapter", so a
+bare number in a table is on the author).
+
 A chapter is a list of steps. Each step has narrative HTML and either a `scene` (a root
 component, initial inputs, optional drill path, highlights, probes) or a `widget`, plus an
 optional `challenge`. Write the explanation in full (what it is, why it works, what it costs), concrete and honest;

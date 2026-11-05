@@ -11,6 +11,7 @@ import type { ComponentDef } from '../sim/types';
 import { bundled } from './axi';
 import { macRx, macTx } from './ethernet';
 import { Rtl, type Sig } from './rtl';
+import { numOf } from '../chapters/order';
 
 let cached: ComponentDef | undefined;
 
@@ -29,7 +30,7 @@ export function nic(): ComponentDef {
   const m = new Rtl({
     id: 'nic', name: 'Network interface card', category: 'memory', label: 'NIC', columnHeight: 64,
     summary: 'A bus slave with eight registers (control, status, interrupt enable, the two ring bases, the MAC address, a transmit doorbell) and a bus master that walks two rings of descriptors in RAM: it reads a frame out of its buffer for the MAC transmitter, and writes a received frame into a buffer before the MAC has judged its FCS, committing the descriptor only if the frame was good. Full duplex, 16-bit addresses.',
-    notes: 'regs: the registers and the bus slave. dma: the master, one transaction at a time. rx: the descriptor and the packing of bytes into words. tx: the descriptor, the words, the write-back. The two MACs are the ones of chapter 48.',
+    notes: `regs: the registers and the bus slave. dma: the master, one transaction at a time. rx: the descriptor and the packing of bytes into words. tx: the descriptor, the words, the write-back. The two MACs are the ones of chapter ${numOf('ethernet')}.`,
   });
   const clk = m.input('clk', { clock: true });
   const awvalid = m.input('awvalid'), awaddr = m.inputBus('awaddr', 32), wvalid = m.input('wvalid'), wdata = m.inputBus('wdata', 32);

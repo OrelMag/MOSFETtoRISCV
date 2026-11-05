@@ -7,8 +7,9 @@ import { RB_CLOCKS, RB_FRAME, RB_LINE, RB_PLAYER_LOAD, RB_WALL_LOAD, RB_WALL_PER
 import { groupDigits } from '../sim/numfmt';
 import type { Stage } from '../view/stage';
 import { runnerScene } from '../widgets/runner';
-import { chAppendixSap, SAP_COST } from './ch-sap';
+import { SAP_COST } from './ch-sap';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const k = groupDigits;
 
@@ -36,7 +37,7 @@ function startGame(st: Stage): void {
 
 export const chAppendixRunner: Chapter = {
   // after Appendix C, whatever the journey's length
-  id: 'appendix-runner', num: chAppendixSap.num + 1, appendix: 'D', title: 'A game with no program', level: '74xx TTL',
+  id: 'appendix-runner', num: numOf('appendix-runner'), appendix: 'D', title: 'A game with no program', level: '74xx TTL',
   blurb: 'Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.',
   goals: [
     'derive a raster from two counters, and any shape on screen as a comparison against them',

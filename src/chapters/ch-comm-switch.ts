@@ -5,6 +5,7 @@ import { stats } from '../sim/stats';
 import { BENCH_OPTS, benchScene, crossbarScene, learnScene, rigOf } from '../widgets/ethswitch';
 import { duplexWidget, holWidget, latencyWidget, muxWidget, sharedEfficiency, tableWidget } from '../widgets/ethswitchtools';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
@@ -24,7 +25,7 @@ const HOL4 = holSaturation(4, false, 400000, 3), HOL4_NOSELF = holSaturation(4, 
 const EFF64 = sharedEfficiency(4, (64 + 8 + 12) * 8), EFF1518 = sharedEfficiency(4, (1518 + 8 + 12) * 8);
 
 export const chSwitch: Chapter = {
-  id: 'switch', num: 49, title: 'A switch', level: 'Communication',
+  id: 'switch', num: numOf('switch'), title: 'A switch', level: 'Communication',
   blurb: 'Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.',
   goals: [
     'say what statistical multiplexing buys over a reserved circuit and what it costs in queues',
@@ -77,7 +78,7 @@ export const chSwitch: Chapter = {
         <p>The gain is statistical. If n sources each send with probability p, the number sending at once is binomial. A circuit must reserve n peaks. A shared link needs only enough for the tail of the distribution, and a queue absorbs what the tail leaves.
         With n = 20 and p = 10 % the mean demand is 2 units; keeping the overflow below one in a million takes ${SHARE} units on a shared link against 20 reserved, a gain of ${(20 / SHARE).toFixed(1)}. The widget lets you move n, p and the target.</p>
         <p>The price comes in two parts. A packet link must <strong>queue</strong> when several packets want the same output, so latency now varies with load, and when the queue is full it must <strong>drop</strong>: where chapter 40's Erlang B counted blocked calls, a packet switch counts delayed and lost packets. And each packet carries its own address, which the switch must read and look up at wire speed.
-        This chapter builds that switch from the Ethernet frames of <a href="#/c/ethernet/0">chapter 48</a>: four ports, a table that learns where hosts are, a crossbar that moves bytes between ports, and the buffers and arbiters that decide who goes first.</p>`,
+        This chapter builds that switch from the Ethernet frames of <a href="#/c/ethernet/0">chapter ${numOf('ethernet')}</a>: four ports, a table that learns where hosts are, a crossbar that moves bytes between ports, and the buffers and arbiters that decide who goes first.</p>`,
       widget: muxWidget,
       more: { numbers: `<p>The tail is exact: for X ~ Binomial(20, 0.1), P(X &gt; ${SHARE}) = ${TAIL.toExponential(1)}. Real traffic is burstier than independent sources, which is why real links keep more headroom and larger buffers than this model asks for.</p>` },
       challenge: {
@@ -205,7 +206,7 @@ export const chSwitch: Chapter = {
         <p>This is the whole switch at gate level: ${n0(BENCH)} NANDs for this build, with 128-byte cells (a bench build that holds any frame up to 128 bytes), eight cells per input and one queue per output; the same switch with the 2048-byte cells that hold any legal frame is ${n0(BENCH11)}, nearly all of it packet buffer, which a real switch builds as SRAM. It runs on the cycle engine at thousands of cycles a second, and the golden model of <code>comm/ethswitch.ts</code>
         runs beside it, comparing every output at every edge: the line under the counters says how many cycles agreed. </p>
         <p>Four hosts send frames at the offered load you set, to destinations chosen by the pattern: <strong>uniform</strong> (any other host), <strong>permutation</strong> (A to B, B to C, C to D, D to A, so no output is contested and the switch should carry nearly the full rate) or <strong>hot spot</strong> (half of everything for host A, whose output saturates; its queues then fill and frames drop). The counters show frames out per port, frames dropped for want of a free cell, and the table's learned, flooded, filtered and evicted counts.</p>
-        <p>The sources start by teaching the table, then send. <em>Save capture</em> writes a <code>.pcap</code> for a port: every frame that came in or went out on it, in time order, without FCS, timestamped at the first byte (3.95 ns a cycle, rounded to microseconds). Open it in Wireshark or tcpdump and the frames are what chapter 48 builds: real Ethernet II headers, with the payload bytes the hosts chose.
+        <p>The sources start by teaching the table, then send. <em>Save capture</em> writes a <code>.pcap</code> for a port: every frame that came in or went out on it, in time order, without FCS, timestamped at the first byte (3.95 ns a cycle, rounded to microseconds). Open it in Wireshark or tcpdump and the frames are what chapter ${numOf('ethernet')} builds: real Ethernet II headers, with the payload bytes the hosts chose.
         Stop the sources, let the queues drain, and the frames-out counters add up to the frames sent, less the frames dropped and the frames filtered, plus two extra copies for every frame that was flooded (it leaves on three ports). The capture of a port leaves out the frames that port dropped for want of a cell.</p>`,
       scene: benchScene,
       challenge: {
@@ -220,11 +221,11 @@ export const chSwitch: Chapter = {
     {
       title: 'What full duplex changed',
       body: `
-        <p>The first Ethernet was one coaxial cable that every station tapped. A station listened before it sent (carrier sense) and, if two began together, both heard the collision, stopped and waited a random time (CSMA/CD with binary exponential backoff, chapter 48). Throughput on such a wire is shared and degrades with load: in the idealised slotted model of the widget below, four always-busy stations get ${pct(EFF64, 0)} of the link with 64-byte frames and ${pct(EFF1518, 0)} with 1518-byte frames.</p>
+        <p>The first Ethernet was one coaxial cable that every station tapped. A station listened before it sent (carrier sense) and, if two began together, both heard the collision, stopped and waited a random time (CSMA/CD with binary exponential backoff, chapter ${numOf('ethernet')}). Throughput on such a wire is shared and degrades with load: in the idealised slotted model of the widget below, four always-busy stations get ${pct(EFF64, 0)} of the link with 64-byte frames and ${pct(EFF1518, 0)} with 1518-byte frames.</p>
         <p>Twisted pair (10BASE-T, 1990) put each station on its own cable to a hub, and a hub is still one collision domain: it repeats everything everywhere. A <strong>switch</strong> replaces the repeater with the machinery of this chapter. Each port is then a point-to-point link with a pair of wires for each direction, so there is nothing to collide with and a port can send and receive at once. The standard added full-duplex operation in 1997 (IEEE 802.3x), and
         10 Gb/s Ethernet (2002) dropped half duplex altogether. CSMA/CD survives as a negotiated fallback to older equipment.</p>
         <p>The cost moved. The wire no longer limits throughput; the switch's <em>fabric</em>, <em>buffers</em> and <em>table</em> do, so the head-of-line figure, the cell count and the table size are now the numbers to design. A real switch differs from this one in scale and in broad shape, not in kind: ports at 1 to 100 Gb/s, buffers of megabytes in SRAM or DRAM, tables of tens of thousands of addresses or more, fabric and lookups in an ASIC, and queueing disciplines well beyond a round-robin arbiter (priorities, per-class queues, shaping). Specific figures vary by product and are not claimed here.</p>
-        <p>What a switch does <em>not</em> do is cross networks. It floods what it cannot place, and a flood reaches every host on the network: a broadcast must reach everyone, so the size of one switched network is bounded by how much broadcast its hosts can stand and by how many addresses a table can hold. Hosts on other networks are reached by a <em>router</em>, which looks inside the frame at an address that has structure; chapter 51 builds one. Before that, chapter 50 puts computers on the other end of these ports.</p>`,
+        <p>What a switch does <em>not</em> do is cross networks. It floods what it cannot place, and a flood reaches every host on the network: a broadcast must reach everyone, so the size of one switched network is bounded by how much broadcast its hosts can stand and by how many addresses a table can hold. Hosts on other networks are reached by a <em>router</em>, which looks inside the frame at an address that has structure; chapter ${numOf('router')} builds one. Before that, chapter ${numOf('network')} puts computers on the other end of these ports.</p>`,
       widget: duplexWidget,
       challenge: {
         kind: 'quiz',

@@ -14,6 +14,7 @@ import { h, s } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { pack } from '../sim/values';
 import { slider } from './mosparts';
+import { numOf } from '../chapters/order';
 
 export const hex2 = (v: number): string => v.toString(16).padStart(2, '0');
 export const FIELD_CLS = ['pre', 'dst', 'src', 'type', 'data', 'pad', 'fcs'] as const;
@@ -90,7 +91,7 @@ export function frameWidget(): Widget {
     el: h('div', { class: 'widget mos clk-w comm' }, h('div', { class: 'panel' }, h('h3', null, 'A frame, byte by byte'),
       inp, h('div', { class: 'mc-row' }, h('label', { class: 'mos-sl' }, h('span', null, 'To'), toSel), h('label', { class: 'mos-sl' }, h('span', null, 'Type'), tSel)),
       out, read,
-      h('p', { class: 'sub' }, 'Sent from station 1. Bytes go out left to right, each least significant bit first. The FCS is the CRC-32 of chapter 47 over everything from the destination to the pad; the preamble and SFD are not covered.'))),
+      h('p', { class: 'sub' }, `Sent from station 1. Bytes go out left to right, each least significant bit first. The FCS is the CRC-32 of chapter ${numOf('errors')} over everything from the destination to the pad; the preamble and SFD are not covered.`))),
   };
 }
 

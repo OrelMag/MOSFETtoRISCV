@@ -131,7 +131,7 @@ export interface Step {
 
 export interface Chapter {
   id: string;
-  /** Order on the map; an appendix chapter continues the count but is shown by its letter. */
+  /** numOf(id) (chapters/order.ts places the chapter); an appendix chapter continues the count but is shown by its letter. */
   num: number;
   /** The letter of an appendix chapter (shown instead of the number, after the main journey). */
   appendix?: string;

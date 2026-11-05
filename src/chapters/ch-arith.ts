@@ -4,6 +4,7 @@ import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { AND, MUX2 } from '../lib/gates';
 import type { Chapter } from './types';
+import { numOf } from './order';
 
 /** NAND delays to one output port (logicDepth reports the deepest output; the subtractor's is v, not the carry). */
 function portDepth(def: ComponentDef, port: string): number {
@@ -50,7 +51,7 @@ const CMP32 = logicDepth(magComparator(32, false));
 const BORROW32 = portDepth(addSub(32), 'cout');
 
 export const chAdders: Chapter = {
-  id: 'adders', num: 6, title: 'Adders', level: 'Arithmetic',
+  id: 'adders', num: numOf('adders'), title: 'Adders', level: 'Arithmetic',
   blurb: 'From adding two bits to adding two numbers, and why carries are slow.',
   goals: [
     `build a half adder (${stats(HALF_ADDER).nands} NANDs) and a full adder (${stats(FULL_ADDER).nands} NANDs), and say which gates the ${stats(FULL_ADDER).nands}-NAND version saves`,
@@ -460,7 +461,7 @@ export const chAdders: Chapter = {
 };
 
 export const chRouting: Chapter = {
-  id: 'routing', num: 7, title: 'Choosing & routing', level: 'Combinational blocks',
+  id: 'routing', num: numOf('routing'), title: 'Choosing & routing', level: 'Combinational blocks',
   blurb: 'Decoders turn numbers into choices; multiplexers make the choice.',
   goals: [
     'decode an n-bit number into one of 2ⁿ one-hot lines, with and without an enable',
