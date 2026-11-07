@@ -67,7 +67,7 @@ export const chTelegraph: Chapter = {
     'tell symbol rate from bit rate, and apply Nyquist and Shannon to a channel of given bandwidth and noise',
     'name the five questions every link answers, and where this track answers each',
   ],
-  builds: ['relays', 'bus'],
+  builds: ['message', 'relays', 'bus'],
   recap: {
     keep: [
       `A telegraph loop is a battery, a wire and a coil in series: the coil pulls in when V / (R<sub>line</sub> + R<sub>coil</sub>) reaches its pull-in current (${mA(PULL_I)} mA for our relay). On 4 mm iron wire (${f1(ohmsPerKm('iron'))} Ω/km) a 24 V battery reaches ${f0(reachKm(24, 'iron'))} km; copper (${f1(ohmsPerKm('copper'))} Ω/km) reaches ${f0(reachKm(24, 'copper'))} km.`,
@@ -104,7 +104,8 @@ export const chTelegraph: Chapter = {
     {
       title: 'Moving a bit',
       body: `
-        <p>Chapters 1 to 38 move a bit a few hundred micrometres, in a few gate delays. A NAND output that flips
+        <p>The last chapter gave the vocabulary: a rate, the two parts of a delay, packets, decibels. This one builds the simplest link that uses it, and finds the two limits every later link lives under.</p>
+        <p>Chapters 1 to ${numOf('bus')} move a bit a few hundred micrometres, in a few gate delays. A NAND output that flips
         its fan-out charges about ${NAND_C.toFixed(1)} fF to ${VDD} V: ½ C V² = ${NAND_FJ.toFixed(2)} fJ, in ${PS_PER_NAND} ps. The same bit as one ${f0(TG_MS)} ms dot on a
         ${TG.km} km telegraph line, with the key closed for the whole dot, takes ${TG.V} V × ${mA(TG_I)} mA × ${f0(TG_MS)} ms = ${f0(TG_J * 1e3)} mJ: some
         10<sup>${TG_EXP}</sup> times the energy, and ${thin(TG_SLOW / 1e6)} million times as long. The comparison is unfair to the telegraph, which has no
@@ -148,7 +149,7 @@ export const chTelegraph: Chapter = {
         pitfall: `<p>Treating the battery voltage as the signal. The relay does not read a voltage; it needs ${mA(PULL_I)} mA, and a longer line only changes how much of the battery is left over for the coil. Real telegraph relays
           were wound for far smaller currents than our telephone relay, so the real reach was longer than the one drawn here: the curve is a model, not a museum label.</p>`,
         real: `<p>Practical lines also lost current by leakage across insulators in wet weather, a loss that grows with the length of the line and is not in this model. The line's resistance and capacitance round the
-          pulses too, which limits speed as the series resistance limits reach; chapter 41 comes back to a wire's RC.</p>`,
+          pulses too, which limits speed as the series resistance limits reach; chapter ${numOf('wire')} comes back to a wire's RC.</p>`,
       },
       challenge: {
         kind: 'quiz', question: `${QZ.km} km of iron wire, a ${QZ.V} V battery and one relay at the far end. The sounder:`,
@@ -165,7 +166,7 @@ export const chTelegraph: Chapter = {
         circuit of its own: a local battery onto the next line. The sounder, or the next station, sees a full-strength copy. Relays were on telegraph lines in the telegraph's early decades; Joseph Henry's electromagnets and Edward Davy's relay are the names usually attached to the idea.</p>
         <p>This is the first <strong>regenerator</strong>: the output has no memory of how weak or noisy the input was, only of whether it crossed the threshold.
         It is what a gate does to a level (<a href="#/c/inverter/0">chapter 2</a>), done with an armature. Here a chain of ${stats(telegraphChain(3)).relays} stations: <span data-show="st0 st1 st2">key to sounder</span> through
-        three relays, each on a battery of its own. The cost is time: the signal crosses one relay step per station, ${RELAY_STEP_MS} ms with our relay, so the sounder follows the key 3
+        three relays, each on a battery of its own. The cost is time: the signal crosses one <em>relay step</em> per station (the time for every armature to move once, as in <a href="#/c/relays/0">the relay prologue</a>), ${RELAY_STEP_MS} ms with our relay, so the sounder follows the key 3
         steps later, the status line's <em>settled in 3 relay steps</em>.</p>
         <div class="try">Press the key and count steps to the sounder. Then release it.</div>`,
       scene: () => ({ root: telegraphChain(3), inputs: { key: 0 }, animate: true }),
@@ -217,7 +218,7 @@ export const chTelegraph: Chapter = {
       },
       challenge: {
         kind: 'quiz', question: `How long do PARIS and a space take in ITA2, in units, against the ${PARIS_UNITS} of Morse?`,
-        options: [`${ita2Encode('PARIS ').units}: six characters of ${ITA2_UNITS} units`, `${5 * 6}: five bits a character`, `${ita2Encode('PARIS ').units + 15}: a shift before every letter`],
+        options: [`${ita2Encode('PARIS ').units}: six characters of ${ITA2_UNITS} units`, `${5 * 6}: five bits a character`, `${ita2Encode('PARIS ').units + 5 * ITA2_UNITS}: a shift before every letter`],
         answer: 0,
         explain: `Letters, a space and no figures: no shift code is sent. Six frames of start, five bits and stop 1.5 are ${ita2Encode('PARIS ').units} units, a little under Morse's ${PARIS_UNITS}.`,
         why: ['', 'That counts the data bits only. The start and stop units are on the line too: 7.5 units a character.', 'A shift is sent only when the case changes, and PARIS is all letters.'],
@@ -407,7 +408,7 @@ export const chExchange: Chapter = {
         <p>The counter knows how many pulses came. A <strong>selector</strong> uses the count to connect the caller's line to one of eight outgoing lines. The same three stages carry a <em>contact tree</em> on their slave relays: bit 0's changeover sends the line to
         one of two wires, bit 1's two changeovers pass each on to one of two, bit 2's four to one of eight. The line goes through <em>three</em> contacts in series and out of exactly one of eight outputs, y<sub>n</sub> after n pulses. The tree is only extra poles on relays that exist anyway:
         the selector is ${SEL.relays} relays like the counter, and <strong>selecting costs no time of its own</strong>: no relay step is added, because the contacts the line crosses were already in place when the count settled.</p>
-        <p>The real <em>Strowger</em> switch (patented 1891) worked quite differently. One magnet stepped a shaft of contacts up, one level for each pulse of the first digit; a second mechanism then turned the contacts along that level for the next digit's pulses.
+        <p>The real <em>Strowger</em> switch (patented 1891) worked quite differently. One magnet stepped a shaft of contacts up, one level for each pulse of the first digit; a second mechanism then turned the contacts along that level: in a final selector by the next digit's pulses, in a group selector by itself, hunting for a free line (the next step builds that one).
         The position of the mechanism was the count: no relay held a bit. A hang-up released it. Ours counts in binary with relays and routes with contacts; the idea of letting the dialled digits drive the switch directly is the same.</p>
         <div class="try">Set <code>line</code> to 1 and dial three.</div>`,
       scene: () => ({ root: DIAL_SELECTOR, inputs: { line: 1, pulse: 0, hangup: 0 }, animate: true }),
@@ -440,7 +441,7 @@ export const chExchange: Chapter = {
       title: 'The machine itself',
       body: `
         <p>The relay selector above is a chain of latches that decodes a count. The Strowger switch has no count to decode: its <strong>position is the state</strong>, and it moves in two directions. Each pulse of the first digit steps a shaft up one level of a bank of ten; the shaft's height is the digit. Then the shaft turns instead of rising: the rotary magnet steps the wipers along that level of ten lines by itself, without further pulses, until a line is free.</p>
-        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (a test holds the model to the ${SEL.relays}-relay selector for 0 to 7 pulses), but a busy line is skipped by the wiper, and a level busy to the end gives the busy tone. Hanging up releases the shaft and it drops to rest.</p>
+        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (for 0 to 7 pulses the model and the ${SEL.relays}-relay selector agree), but a busy line is skipped by the wiper, and a level busy to the end gives the busy tone, the signal a caller hears when no path is free. Hanging up releases the shaft and it drops to rest.</p>
         <div class="try">Dial 4, mark lines on level 4 busy, and dial again. Fill a whole level with its L button and watch the wiper run off the end.</div>`,
       widget: () => strowger3d(),
     },
@@ -452,6 +453,7 @@ export const chExchange: Chapter = {
         <p>To set up a call, raise a row select and a column select together. <span data-show="sel0 sel1 sel2">The row relay</span> puts a feed on its row; <span data-show="sc0 sc1 sc2">the column relay</span> passes it to the one crosspoint at the intersection, which pulls in and holds itself, so both selects
         can drop. The column select passes <span data-show="bz0 bz1 bz2">a busy relay's</span> break contact first: while any crosspoint of the column is held, selecting it does nothing, and the busy line says so, the busy tone's origin. <span data-show="hr0 hr1 hr2">A hang-up</span> cuts a row's hold rail and releases only that caller.</p>
         <p>Two calls up at once is two crosspoints held; a third call into a column already in use is refused. It needs ${XB.relays} relays: nine crosspoints and twelve to control them, which is the crossbar's price: the grid is the cheap part, the selection logic grows with the lines too.</p>
+        <p>The inputs rs and cs are one-hot: bit r of rs selects row r and bit c of cs column c, so row 0 to column 1 is rs = 1, cs = 2.</p>
         <div class="try">Call from row 0 to column 1, then from row 2 to column 0, and try row 1 into column 1.</div>`,
       scene: () => ({ root: CROSSBAR_EXCHANGE, path: ['xb'], inputs: { rs: 0, cs: 0, hang: 0, talk: 0 }, animate: true }),
       tour: {
@@ -526,12 +528,12 @@ export const chExchange: Chapter = {
     {
       title: 'Start-stop',
       body: `
-        <p>The teleprinter carried the same questions to a machine. A motor turns all the time at about the right speed, and a character is five bits in a <em>frame</em> (start unit 0, five data units, stop 1.5 units of 1). The idle line is 1; the falling start
+        <p>The telephone network's first big data customer was the teleprinter (telex), and it needed the one thing a call does not: a receiver that finds the start of each character by itself, with a clock of its own. The teleprinter carried the same questions to a machine. A motor turns all the time at about the right speed, and a character is five bits in a <em>frame</em> (start unit 0, five data units, stop 1.5 units of 1). The idle line is 1; the falling start
         edge releases a clutch and the receiver's shaft turns one revolution, with cams that look at the line at fixed offsets from the start: the middle of each unit. At the end of the revolution the stop unit's 1 re-latches the clutch. The two motors have to agree only
         for the length of one character, ${frameUnits(ITA2_START_STOP)} units, since every start edge re-synchronizes the receiver.</p>
         <p>How far can they differ? A receiver that is e too fast reaches its stop sample, ${K_ITA2} + ½ units after the start edge, early by about ${K_ITA2} e units, and the sample must stay at or after the stop unit's beginning. The closed form is ±½ / K for the K = ${K_ITA2} units before the stop:
         ±${(100 * SS.ita2.fast).toFixed(2)} % for the teleprinter, ±${(100 * SS.uart.fast).toFixed(2)} % for eight data bits and one stop bit (K = 9), both for an isolated character. With characters back to back the slow side of 8N1 tightens to −${(100 * SS.uartB2B.slow).toFixed(2)} %, because the stop sample at 9.5 / (1 + e) must come before the next start edge at 10; the teleprinter's 1.5 stop units leave it unaffected. The widget searches every code to find where the first one fails (a code ending in 0 goes first: a sample that
-        lands in a neighbour of the same level reads right). The frame is general: chapter 43's UART reuses it with another length, and a clock that counts sixteen ticks a bit loses part of the margin.</p>
+        lands in a neighbour of the same level reads right). The frame is general: chapter ${numOf('uart')}'s UART reuses it with another length, and a clock that counts sixteen ticks a bit loses part of the margin. Everything so far took for granted that a level sent is a level received; chapter ${numOf('wire')} asks what the wire does to it.</p>
         <div class="try">Move the receiver's speed until a sample crosses a boundary. Then pick the 8-bit frame, and search every code.</div>`,
       widget: () => startStopWidget(),
       more: {
