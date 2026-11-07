@@ -636,10 +636,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @keyframes stage-toast-in { from { opacity: 0; transform: translateY(-4px); } }
 .challenge.solved:not(.how-open) :is(.hints, .challenge-actions, .explain) { display: none; }
 .challenge-how { margin-top: 6px; }
-/* phone: a pill that takes the learner down to the circuit under the text (ui/pages/chapter.ts showCircuitButton) */
+/* phone: a button beside Save that takes the learner down to the circuit under the text (ui/pages/chapter.ts showCircuitButton) */
 .show-circuit { display: none; }
 @media (max-width: 760px) {
-  .show-circuit { display: inline-flex; position: fixed; z-index: 25; right: 14px; bottom: 14px; box-shadow: var(--shadow-lg); border-radius: 99px; }
+  .show-circuit { display: inline-flex; }
   .show-circuit[hidden] { display: none; }
 }
 /* under the level badge (whatever its width or the stage bar's height) */

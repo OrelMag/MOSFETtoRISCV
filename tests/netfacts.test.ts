@@ -18,6 +18,7 @@ import { levelChipId } from '../src/campaign/levels';
 import { NODES, nodeById } from '../src/campaign/nodes';
 import { elsewhereGroup, type ElsewhereHost, elsewhereRows } from '../src/view/tracemenu';
 import { partDef } from '../src/editor/parts';
+import { netEnds, resolveProbe, sameTarget } from '../src/editor/probes';
 import { flatten } from '../src/sim/flatten';
 import { readersOf } from '../src/sim/netcap';
 import { crossings, factsOf, fanText, valueRows } from '../src/view/netfacts';
@@ -121,6 +122,40 @@ describe('a sandbox selection as a net', () => {
     expect(netOfSelection(c, { parts: [doc.parts[0].id] })).toBe(-1);
     expect(netOfSelection(c, { pins: doc.pins.map((p) => p.id) })).toBe(-1);
     expect(netOfSelection(c, { wires: ['no such wire'] })).toBe(-1);
+  });
+});
+
+describe('a probe of a net inside a part', () => {
+  const doc = docFromDef(resolveComponent('xor')!) as ChipDoc;
+  const c = compileChip(doc, (ref) => partDef(ref, () => undefined));
+  const design = flatten(c.def, { mode: 'gate' });
+  const part = doc.parts[0].id;
+
+  it('resolves by path to the flat nets there, named by the path', () => {
+    const node = design.root.children!.get(part)!;
+    const r = resolveProbe({ path: [part], net: 0 }, doc, c, design);
+    if (!node.nets) {
+      // a NAND is a primitive at gate level: nothing inside to probe in this simulation
+      expect(r).toBeNull();
+      return;
+    }
+    expect(r!.nets).toEqual([...node.nets[0]]);
+    expect(r!.label.startsWith(part + '.')).toBe(true);
+  });
+
+  it('drops a net whose index now joins other ends (an edit inside the chip)', () => {
+    const node = design.root.children!.get(part)!;
+    if (!node.nets) return;
+    const nd = netlistOf(node.def)!.nets[0];
+    expect(resolveProbe({ path: [part], net: 0, ends: netEnds(nd) }, doc, c, design)).not.toBeNull();
+    expect(resolveProbe({ path: [part], net: 0, ends: 'someone else' }, doc, c, design)).toBeNull();
+  });
+
+  it('is gone with its part, and the same only as itself', () => {
+    expect(resolveProbe({ path: ['no_such_part'], net: 0 }, doc, c, design)).toBeNull();
+    expect(sameTarget({ path: ['a', 'b'], net: 2 }, { path: ['a', 'b'], net: 2 }, doc, c)).toBe(true);
+    expect(sameTarget({ path: ['a', 'b'], net: 2 }, { path: ['a', 'b'], net: 3 }, doc, c)).toBe(false);
+    expect(sameTarget({ path: ['a'], net: 2 }, { wires: [] }, doc, c)).toBe(false);
   });
 });
 

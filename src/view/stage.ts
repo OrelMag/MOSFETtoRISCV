@@ -30,15 +30,16 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
-import { isMenuKey, type MenuEntry } from '../ui/menu';
-import { elsewhereGroup, elsewhereRows, explainGroup } from './tracemenu';
+import { isMenuKey } from '../ui/menu';
+import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
+import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
@@ -108,6 +109,8 @@ const LEVEL_NAME: Record<string, string> = {
 };
 
 /** Steps Back can undo (each a full copy of the simulation's state). */
+/** A phone's stage (hugPhone): the least canvas it keeps, the badge's room above the drawing, and the tallest cover it shrinks under. */
+const HUG_MIN_PX = 260, HUG_TOP_PX = 48, HUG_COVER_PX = 90;
 const HISTORY_MAX = 100;
 /** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
 const REPLAY_MS = 1500;
@@ -443,6 +446,7 @@ export class Stage {
         this.inspector.openAt('info');
       },
       explain: (c) => this.explain(c),
+      measure: (t) => this.measure(t),
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
     });
@@ -473,6 +477,12 @@ export class Stage {
         return;
       }
       if (e.key === 'Escape' && this.view.dropGroup()) return;
+      if (e.key === 'Escape' && this.pathLit) {
+        this.pathLit = false;
+        // the scene's own highlight belongs to its top level, as Why? puts it back
+        this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : []);
+        return;
+      }
       if (matches(e, 'stage.probe') && shortcutAllowed(e)) this.setProbeMode(!this.probeMode);
       if (matches(e, 'stage.why') && shortcutAllowed(e) && !this.boardOn) this.why.setOn(!this.why.on);
       if (e.key === 'Escape' && this.why.on) {
@@ -510,6 +520,7 @@ export class Stage {
       this.view.resized();
       this.fitBar();
       this.fitControls();
+      this.hugPhone();
     }).observe(this.canvas);
     // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
     // caption and top follow it (boardCover)
@@ -787,6 +798,7 @@ export class Stage {
     this.inset = this.rightInset();
     this.layoutDock(false);
     this.view.fit();
+    this.hugPhone();
     this.inspPending = true;
     this.autoInspector();
     this.refresh();
@@ -838,6 +850,8 @@ export class Stage {
 
   /** Navigate to a path of instance names from the root. */
   goTo(path: string[], notify = true, gates = false): void {
+    // another level: a path lit on this one is gone with it
+    this.pathLit = false;
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
@@ -1110,10 +1124,57 @@ export class Stage {
     if (docked) this.layoutDock();
   }
 
+  /** A path lit from the menu: Esc puts the scene's own highlight back first. */
+  private pathLit = false;
+
+  /** The right-click menu's Measure for a net or a part of the level on screen. */
+  private measure(t: ViewFocus): MeasureHost {
+    const ctx = this.ctx!, sim = this.sim;
+    const sub = ctx.sim !== sim;
+    const sw = !sim || sim.kind !== 'gate';
+    const cycle = sim instanceof DualSim;
+    const timing = sw ? 'Switch level has no gate delay. A relay scene counts relay steps instead.'
+      : sub ? 'Timing covers the scene’s own design, and this leaf is outside it. Look from the level above.'
+        : { design: sim!.design, at: ctx.path };
+    const light = (paths: string[][]) => {
+      const n = this.view.lightPaths(paths);
+      this.pathLit = n > 0;
+      this.flashNow(n ? `Slowest path: ${n} part${n === 1 ? '' : 's'} lit · Esc clears` : 'Its slowest path stays inside it');
+    };
+    if ('inst' in t) {
+      const off = powerOff(ctx.node.children?.get(t.inst)?.def, !sub && !sw && !cycle);
+      const power = off ? off : cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
+        : sw ? 'Power is counted from gate toggles, and this level has none.'
+          : sub ? 'Power is counted on the scene’s GateSim, and this leaf has its own simulation.'
+            : () => { this.select(t.inst); this.showInspector(); this.inspector.openAt('power'); };
+      return { timing, light, power };
+    }
+    const nets = this.flatNets(t.net);
+    const probe = cycle ? 'Cycle engine: values at clock edges only, so there is no gate time to plot.'
+      : sw ? 'Switch level has no gate time: the solver returns settled values.'
+        : !nets ? 'A separate lock-step simulation. Probe its ports from the level above.'
+          : (() => {
+            const hit = this.analyzer.probeFor(netKey(nets));
+            // a port's own lane is already this net
+        const port = this.analyzer.lanes.find((l) => !l.probe && netKey(l.nets) === netKey(nets));
+        if (port && !hit) return `Its lane is already in the Timing panel: ${port.label}.`;
+        return hit ? { label: 'Remove its probe', run: () => this.analyzer.remove(hit.id) }
+              : { label: 'Add a probe and timing lane', run: () => { this.addProbe(ctx, t.net, nets); this.showAnalyzer(true); } };
+          })();
+    const toggles = cycle ? 'The cycle engine counts no toggles, so there is no power to read.'
+      : sw ? 'Power is counted from gate toggles, and this level has none.'
+        : !nets ? 'Power is counted on the scene’s GateSim, and this leaf has its own simulation.'
+          : () => {
+            const tg = (sim as GateSim).toggles;
+            return tg ? nets.reduce((a, n) => a + (tg[n] ?? 0), 0) : null;
+          };
+    return { probe, timing, light, toggles };
+  }
+
   /** The right-click menu's Explain for a part or (null) this level. */
-  private explain(c: string | null): MenuEntry[] {
+  private explain(c: string | null): { def: ComponentDef; host: ExplainHost } | null {
     const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
-    if (!def) return [];
+    if (!def) return null;
     const at = (section: 'truth' | 'used') => () => {
       this.select(c);
       this.showInspector();
@@ -1123,21 +1184,21 @@ export class Stage {
       markJump();
       location.hash = href;
     };
-    return explainGroup(def, {
+    return { def, host: {
       truth: at('truth'), used: at('used'),
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
-    });
+    } };
   }
 
   /** The right-click menu's Take it elsewhere for a part, a wire or (null) this level. */
-  private elsewhere(t: ViewFocus | null): MenuEntry[] {
+  private elsewhere(t: ViewFocus | null): ElsewhereHost | null {
     const ctx = this.ctx;
-    if (!ctx) return [];
+    if (!ctx) return null;
     const inst = t && 'inst' in t ? t.inst : null;
     const def = t && 'net' in t ? null : inst ? ctx.node.children?.get(inst)?.def ?? null : ctx.def;
     const say = (msg: string) => this.flashNow(msg);
-    return elsewhereGroup(elsewhereRows({
+    return {
       def, say,
       ...(this.scene?.noRemix ? {} : { sandbox: { label: 'Open in Sandbox', run: () => this.remix(def ?? undefined) } }),
       verilog: true,
@@ -1149,7 +1210,7 @@ export class Stage {
         } : 'It has no inside to draw.')
         : (kind: 'svg' | 'png') => this.exportImage(kind) } : {}),
       link: { label: 'Copy a link to this view', hint: t ? 'Opens here, with this one picked out' : 'Step, part, inputs, probes, clock cycles', run: () => void this.copyViewLink(t ?? undefined) },
-    }));
+    };
   }
 
   /** A part or the level on screen as a new sandbox chip (remix.ts is loaded on demand), then go there. */
@@ -2417,6 +2478,31 @@ export class Stage {
 
   /** Where the scene's panels and the how-to line sit on the canvas (px from its top-left corner): what the fit
    *  keeps clear. */
+  /**
+   * A phone: the stage only as tall as its circuit needs. A wide circuit fitted to a 390 px width was a strip of drawing
+   * in a 72vh box of empty canvas. Computed from the width alone (the fit's scale), so the resize it causes changes
+   * nothing; between HUG_MIN_PX of canvas and the stage's own height. Off for a widget, the boards, a drilled level,
+   * panels in the phone's flow and panels over the canvas (they need the room).
+   */
+  private hugPhone(): void {
+    const narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+    const covers = narrow ? this.covers() : [];
+    const off = !narrow || this.el.classList.contains('widget-mode') || this.boardOn || !!this.drill
+      || !!this.canvas.querySelector("[data-phone='flow']:not(.collapsed)") || covers.some((r) => r.h > HUG_COVER_PX);
+    if (off) {
+      if (this.el.style.height) this.el.style.height = '';
+      return;
+    }
+    const b = this.view.contentBox(), W = this.canvas.clientWidth;
+    if (!(b.w > 0 && b.h > 0 && W > 0)) return;
+    const drawing = (b.h * W) / Math.max(b.w, fitMinW(34, W));
+    // what the fit keeps clear (the how-to line, a challenge note) and the level badge above
+    const need = Math.max(HUG_MIN_PX, drawing + covers.reduce((t, r) => t + r.h + 2 * COVER_GAP, 0) + HUG_TOP_PX);
+    this.el.style.height = '';
+    const full = this.el.clientHeight, canvasH = this.canvas.clientHeight;
+    if (need < canvasH - 2) this.el.style.height = `${Math.round(full - canvasH + need)}px`;
+  }
+
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];

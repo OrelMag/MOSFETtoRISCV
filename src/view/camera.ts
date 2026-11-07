@@ -114,8 +114,13 @@ export function freeArea(width: number, height: number, cover: Rect[], bw: numbe
  */
 export function roomBeside(bbox: ViewBox, width: number, height: number, cover: Rect[], minW = 34): boolean {
   if (!(width > 0 && height > 0)) return true;
-  return freeArea(width, height, cover, Math.max(bbox.w, minW), bbox.h) !== null;
+  return freeArea(width, height, cover, Math.max(bbox.w, fitMinW(minW, width)), bbox.h) !== null;
 }
+
+/** Under this host width (px) a small circuit is widened to NARROW_MIN_W units, not minW: a two-gate circuit padded to 34
+ *  units on a 390 px phone was drawn at a third less than the width allows. */
+export const NARROW_HOST_PX = 520, NARROW_MIN_W = 22;
+export const fitMinW = (minW: number, width: number): number => (width > 0 && width < NARROW_HOST_PX ? Math.min(minW, NARROW_MIN_W) : minW);
 
 /** A right overlay `insetRight` px wide (gap included) as a cover of a `width` × `height` host. */
 const insetCover = (width: number, height: number, insetRight: number): Rect[] =>
@@ -128,7 +133,8 @@ const insetCover = (width: number, height: number, insetRight: number): Rect[] =
  */
 export function fitBox(bbox: ViewBox, width: number, height: number, cover: Rect[] | number = 0, minW = 34): ViewBox {
   let { x, y, w, h } = bbox;
-  if (w < minW) { x -= (minW - w) / 2; w = minW; }
+  const mw = fitMinW(minW, width);
+  if (w < mw) { x -= (mw - w) / 2; w = mw; }
   if (!(width > 0 && height > 0)) {
     // Not laid out yet: any box of a sensible aspect (the stage refits once it has a size).
     const aspect = 16 / 10;
