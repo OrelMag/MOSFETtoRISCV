@@ -3,7 +3,7 @@
 // the levels not built yet are on the map as "coming soon" in the order they will play. No DOM.
 
 import type { CampaignNode } from './types';
-import { BUILDDSP, biquadGives, cicGives, cordicGives, gzGives, satGives } from './builddsp';
+import { BUILDDSP, biquadGives, cicGives, cordicGives, gzGives, macGives, satGives } from './builddsp';
 import { sdGives } from './sdcheck';
 
 export const NODES_DSP: CampaignNode[] = [
@@ -19,9 +19,15 @@ export const NODES_DSP: CampaignNode[] = [
     codex: ['saturate', 'guardbits'], chapters: [{ chapter: 'fixed', step: 2, label: 'A saturating adder' }],
   },
   {
-    id: 'sp_mac', act: 13, title: 'MAC with guard bits', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
-    why: 'Coming with the MAC unit: a product added into an accumulator wide enough that a worst-case dot product never wraps, and one clamp at the end.',
-    tips: [], codex: [],
+    id: 'sp_mac', act: 13, title: 'MAC with guard bits', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_mac, givesOf: macGives,
+    unlocks: ['macunit'], par: { nand: 10081, period: 127 },
+    why: 'A dot product adds many products, and the partial sums wander: they can run far past what a result word holds and come back. Clamp each sum as it is added and the excursion is lost for good; keep 8 guard bits above the 32-bit product and 255 mac2 (511 mac) of full-scale operands still fit, so the sum stays exact and the clamp happens once, at the read. A 64-tap Q1.15 filter needs 6 of the 8 bits, three to spare. Past 40 bits the register wraps as two\'s complement, with no flag: the guard bits are a budget, not a promise.',
+    tips: [
+      'Sign-extend the sum of the two products (mac2 adds both, mac only the low pair: a mux sends 0 for the high product) to 40 bits and add it to the register. The register loads when en is 1 and op is not racc; clracc loads 0 instead. Nothing here is clamped.',
+      'The word is 40 bits because a product is 32: 255 × 2^31 (mac2 of −32768 × −32768 pairs) is just under 2^39, the largest a signed 40-bit word holds. A 39-bit register wraps long before; the 256th full-scale mac2 wraps even a 40-bit one, to −2^39, and that is the model\'s answer too.',
+      'Read once: put one zero below the 40 bits, shift right by sh (arithmetic, six stages of 1, 2, 4 … 32), and the bit that falls out first is the rounding bit. Add it back with half adders into a 41-bit word, then clamp once from 41 to 32 bits: the top 10 bits must agree. y follows the register at all times; racc only names the moment you look.',
+    ],
+    codex: ['multacc', 'guardbits', 'saturate'], chapters: [{ chapter: 'mac', step: 1, label: 'The MAC unit, in gates' }, { chapter: 'mac', step: 3, label: 'The accumulator and its read' }],
   },
   {
     id: 'sp_circ', act: 13, title: 'Circular address', kind: 'build', optional: true, soon: true, requires: ['c_computer'],

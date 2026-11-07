@@ -153,6 +153,7 @@ export const NUDGES: Record<string, string> = {
   sp_sd: 'The bit is the sign of the last sum before the edge; whatever it says is taken away from both sums at once, as +full scale or −full scale.',
 
   // sp_mac: below
+  sp_mac: 'Add the finished pair of products to a register 8 bits wider than a product and never clamp there; shift, round and clamp only in the read, once.',
 
   // sp_circ: below
 
