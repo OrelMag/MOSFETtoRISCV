@@ -417,12 +417,20 @@ export function ringSpread(f: number, clocks: number): number {
   return Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / r.length) / m;
 }
 
-/** The band one station occupies on its own, measured: the narrowest span around its carrier holding `share` of its power, from the first 2^18 samples (0.27 s) of its programme. */
+/** The band one station occupies on its own, measured: the narrowest span around its carrier holding `share` of its power, from the power spectrum averaged over 14 blocks of 2^16 samples, 0.96 s of its programme (the first second less the last 0.04 s). */
 export function stationOccupied(k: number, share = 0.98): number {
-  const n = 1 << 18, re = new Float32Array(n), im = new Float32Array(n), e = preEmphasis(program(k, AUD + 2)), top = programPeak(k);
+  const B = 1 << 16, blocks = 14, n = B * blocks, re = new Float32Array(n), im = new Float32Array(n), e = preEmphasis(program(k, AUD + 2)), top = programPeak(k);
   for (let i = 0; i < e.length; i++) e[i] /= top;
   addFm(re, im, 0, 1, e, DEV);
-  return occupied({ re: Float64Array.from(re), im: Float64Array.from(im) }, share);
+  const p = new Float64Array(B);
+  let total = 0;
+  for (let b = 0; b < blocks; b++) {
+    const X = fft({ re: Float64Array.from(re.subarray(b * B, (b + 1) * B)), im: Float64Array.from(im.subarray(b * B, (b + 1) * B)) });
+    for (let j = 0; j < B; j++) { const q = X.re[j] ** 2 + X.im[j] ** 2; p[j] += q; total += q; }
+  }
+  let held = p[0];
+  for (let half = 1; half < B / 2; half++) { held += p[half] + p[B - half]; if (held >= share * total) return ((2 * half + 1) * FS) / B; }
+  return FS;
 }
 
 /** The first noise level, in whole dB from −40 up, at which the ADC clips a sample of the second of band; null if none to 0 dB. */

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
 import {
   ADC_SCALE, AUD, carson, carrierToNoise, CIC_N, CIC_R, cicBlock, FrontModel, frontBlock, FS, MixModel, modIndex, NCO_BITS, NCO_K, occupied, receive, sample, SDR_COS, SDR_SIN, STATIONS, stationAt,
-  synthBand, TEST_TONE_HZ, trailingZeros, toneSnrOff, interferenceDb, ringSpread, chanWorstDb, preLiftDb, analogueLiftDb, firstClipNoiseDb, keyingRatio, KEYING_LOST_DB, morseUnits, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
+  synthBand, stationOccupied, TEST_TONE_HZ, trailingZeros, toneSnrOff, interferenceDb, ringSpread, chanWorstDb, preLiftDb, analogueLiftDb, firstClipNoiseDb, keyingRatio, KEYING_LOST_DB, morseUnits, mixerSfdr, toneFm, toneSnr, tuningWord, W_CIC, W_IN, W_MIX, wordHz, bandSpectrum, DEV,
 } from '../src/dsp/sdr';
 import { CicModel } from '../src/dsp/multirate';
 import { complexMixer, sdrFront } from '../src/lib/sdr';
@@ -244,6 +244,22 @@ describe('what the audit found, pinned', () => {
   it('the ADC starts clipping at -12 dB of noise, and the stations\' highest audio frequencies come from their programmes', () => {
     expect(firstClipNoiseDb()).toBe(-12);
     expect(STATIONS.map((s) => s.fm)).toEqual([1000, 1046, 3000, 700]);
+  });
+});
+
+describe('the keying floor and the measured bands', () => {
+  const key = (b: ReturnType<typeof synthBand>, nd: number) => keyingRatio(receive(b, STATIONS[3].f, nd, FS, 12).chain.audio);
+  it('at -40 dB of noise the weak station keys the same alone as among its neighbours: the noise sets the floor', () => {
+    expect(Math.abs(key(synthBand(FS), -40) - key(synthBand(FS, [3]), -40))).toBeLessThan(2);
+  });
+  it('with the noise off the neighbours (the CIC alias) cost the weak station more than 5 dB of keying', () => {
+    expect(key(synthBand(FS, [3]), -200) - key(synthBand(FS), -200)).toBeGreaterThan(5);
+  });
+  it('a station measured over about a second: the sweep, which grows, is wider than in its first quarter second, and none exceeds Carson by much', () => {
+    const o = STATIONS.map((_, k) => stationOccupied(k));
+    expect(o[2]).toBeGreaterThan(80_000);
+    expect(o[0]).toBeCloseTo(102_000, -3);
+    o.forEach((v, k) => expect(v).toBeLessThan(2 * (50_000 + STATIONS[k].fm) * 1.05));
   });
 });
 
