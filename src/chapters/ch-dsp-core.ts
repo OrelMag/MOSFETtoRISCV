@@ -137,13 +137,13 @@ export const chDspCore: Chapter = {
         <p>The instruction word is 24 bits: 5 for the operation, then fields placed where the decoder wants them. A multiply-accumulate names an X operand and a Y operand, each a pointer and a mode: <code>mac x(p0)+c, y(p4)+c</code>. The core's instruction set is ours, not any real DSP's. It has ${INSTRS24.length} instructions, and the decoder behind them is only ${n0(FIG.nands.decode)} NANDs.</p>
         <p>It would not fit the Custom ISA tables of the sandbox, which name an operand and a bit pattern: here an operand is a pointer and a mode in one token, and <code>mov</code> splits its register numbers across two fields. So the core has an assembler of its own, which the sandbox's ROM editor knows.</p>
         <p>The fields, most significant bit first:</p>
-        <table class="dsp-table"><thead><tr><th>form</th><th>23–19</th><th>18–16</th><th>15–13</th><th>12–10</th><th>9–8</th><th>7–5</th><th>4–3</th><th>2</th><th>1–0</th></tr></thead><tbody>
+        <div class="dsp-scroll"><table class="dsp-table"><thead><tr><th>form</th><th>23–19</th><th>18–16</th><th>15–13</th><th>12–10</th><th>9–8</th><th>7–5</th><th>4–3</th><th>2</th><th>1–0</th></tr></thead><tbody>
         <tr><td><code>add</code> and the ALU</td><td>op</td><td>rd</td><td>ra</td><td>rb</td><td colspan="5">0</td></tr>
         <tr><td><code>mac</code></td><td>op</td><td colspan="2">0</td><td>X mode</td><td>X ptr</td><td>Y mode</td><td>Y ptr</td><td colspan="2">0</td></tr>
         <tr><td><code>ld</code>, <code>st</code></td><td>op</td><td>rd</td><td>ra (st)</td><td>mode</td><td>ptr</td><td colspan="2">0</td><td>X / Y</td><td>0</td></tr>
         <tr><td><code>ldi</code></td><td>op</td><td>dst low</td><td colspan="7">dst high in 15–14, the 14-bit constant in 13–0</td></tr>
         <tr><td><code>loop</code></td><td>op</td><td colspan="8">bit 18: a register (in 15–13) or a constant count in 17–8; the end address in 7–0</td></tr>
-        </tbody></table>
+        </tbody></table></div>
         ${instrTable()}
         <p>The accumulator is read by <code>rnd</code>, which shifts, rounds half up once and clamps to 16 bits, and by <code>rndc</code>, which also clears it in the same clock: the next output's first <code>mac</code> then needs no <code>clr</code>.</p>`;
       },

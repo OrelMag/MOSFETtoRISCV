@@ -1350,6 +1350,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  every data access through load / store, none outside the 16 KB RAM or the port); echoPaths(seed) (4 hidden paths: short / 2 medium / 96-tap long, speech or noise),
                  runPath / gradeEcho (ERLE of ŷ against the true echo over the last 4 000 of 16 000 samples, ≥ 25 dB, ≤ 2 400 cycles a sample), whyNot (what the curve shows),
                  echoReference(opts) (NLMS, the mutants' knobs); page ui/pages/dspcap.ts (route own block in ui/app.ts); tests/capstone-echo.test.ts
+                 Three machines, one bar (EchoMachineId: rv32im, mac = FastISS({ mac: true }): mac / mac2 / clracc / racc with dsp/mac.ts's semantics, 40-bit accumulator an exact double,
+                 dsp = DSP24 on Iss24, capechodsp.ts: x in X[254], d in Y[255] written only after the `out` that ends a sample, cycles = steps between outs); each has a starter, a reference
+                 (echoReference / macReference / dspReference), assembler errors on lines, and probeEcho / diagnose run on the machine the program was graded on; tests/capstone-echo-machines.test.ts,
+                 tests/fastiss-mac.test.ts (FastISS against ISS({ mac: true }) in lock step)
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an

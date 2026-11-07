@@ -314,6 +314,12 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   m.setAttribute('aria-label', o.label ?? 'Actions');
   m.tabIndex = -1;
   fill(m, list);
+  // A press and hold opens the menu while the finger is still down; the click the browser sends when it lifts lands on
+  // whatever row the sheet put under it (a value copied, a colour picked) and the menu is gone. A pointer click counts
+  // only if its press was in the menu too; Enter's click (detail 0) is the keyboard's.
+  let pressed = false;
+  m.addEventListener('pointerdown', () => { pressed = true; }, true);
+  m.addEventListener('click', (e) => { if (!pressed && e.detail > 0) { e.preventDefault(); e.stopPropagation(); } }, true);
   document.body.append(m);
   const sheet = coarse();
   m.classList.toggle('sheet', sheet);
@@ -329,7 +335,8 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   document.addEventListener('contextmenu', onContext, true);
   addEventListener('hashchange', onRoute);
   const rows = itemsOf(m);
-  (rows.find((b) => !b.classList.contains('ctx-val')) ?? rows[0] ?? m).focus({ preventScroll: true });
+  // the first action, past the header's value rows and colour swatches: Enter straight after opening must not recolour a net
+  (rows.find((b) => !b.classList.contains('ctx-val') && !b.classList.contains('sb-hue-sw')) ?? rows[0] ?? m).focus({ preventScroll: true });
 }
 
 // ---- the picker (ui/menupick.ts, loaded on demand) closes with the menu and on a route change ----------------------
