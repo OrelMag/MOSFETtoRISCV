@@ -1,9 +1,8 @@
 // Act 13, Signals: optional levels from the Signal processing chapters. Each block is a small build checked against the
-// chapter's model (builddsp.ts). The MAC with guard bits and the circular address come with the MAC unit and the DSP core;
-// the levels not built yet are on the map as "coming soon" in the order they will play. No DOM.
+// chapter's model (builddsp.ts). No DOM.
 
 import type { CampaignNode } from './types';
-import { BUILDDSP, biquadGives, cicGives, cordicGives, gzGives, macGives, satGives } from './builddsp';
+import { BUILDDSP, biquadGives, cicGives, circGives, cordicGives, gzGives, macGives, satGives } from './builddsp';
 import { sdGives } from './sdcheck';
 
 export const NODES_DSP: CampaignNode[] = [
@@ -30,9 +29,15 @@ export const NODES_DSP: CampaignNode[] = [
     codex: ['multacc', 'guardbits', 'saturate'], chapters: [{ chapter: 'mac', step: 1, label: 'The MAC unit, in gates' }, { chapter: 'mac', step: 3, label: 'The accumulator and its read' }],
   },
   {
-    id: 'sp_circ', act: 13, title: 'Circular address', kind: 'build', optional: true, soon: true, requires: ['c_computer'],
-    why: 'Coming with the DSP core: a pointer that steps through a buffer and wraps to its start with no instruction spent on it.',
-    tips: [], codex: [],
+    id: 'sp_circ', act: 13, title: 'Circular address', kind: 'build', optional: true, requires: ['c_computer'], base: BUILDDSP.sp_circ, givesOf: circGives,
+    unlocks: [], par: { nand: 639, depth: 53 },
+    why: 'A filter keeps its last N samples, and shifting them costs N moves a sample. Leave them still and move the pointer: it steps by one and, at the end of its window, goes back to the start by itself, with no instruction spent. The level is the DSP core\'s whole address step, eight modes, because one adder serves them all: a plus or minus 1 or m, the same step wrapped at the window\'s end, and a bit-reversed one for an FFT. Its subtlety is the end: base + length is an 8-bit sum that wraps, and a window may cross 255.',
+    tips: [
+      'One adder does p ± 1 and p ± m: pick 1 or m with a mux, invert it for a minus and carry a 1 in. Modes 4 and 5 start from the same sum, so the circular modes cost a comparison and a mux, not another adder.',
+      'The window end is base + len in 8 bits, so it wraps when the window crosses 255. Mode 4 wraps when the next address (the adder\'s output) equals the end; mode 5 when p equals the base, and it goes to end − 1, which is one more 8-bit add of 255. Compare with equality, never with greater-than: a pointer outside the window must just step.',
+      'Bit-reversed needs no adder of its own beyond one: reversing is wiring. Reverse p, reverse m, add, reverse the sum. Mode 0 is the last mux in line, and it must beat the others: a read without a step leaves p alone.',
+    ],
+    codex: ['counter', 'comparator', 'ripple', 'nicring'], chapters: [{ chapter: 'dspcore', step: 2, label: 'Address generators' }],
   },
   {
     id: 'sp_biquad', act: 13, title: 'A biquad', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_biquad, givesOf: biquadGives,
