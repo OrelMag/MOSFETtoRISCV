@@ -19,6 +19,8 @@ import { runSd, SD_REF, SD_W, SD_WORD } from './sdcheck';
 import { biquad } from '../lib/biquad';
 import { BQ_CYCLES, BQ_LANES, runBiquadBench } from './dspcheck';
 import { GZ_BLOCK, GZ_NOISE, runGoertzel } from './goertzelcheck';
+import { DSP24_AGU_STEP } from '../lib/dsp24agu';
+import { CIRC_TRIPLES, CIRC_VECTORS, runCirc } from './circcheck';
 
 /** The word of the saturating adder level: 8 bits, so Check runs every pair (65 536). */
 export const SAT_W = 8;
@@ -51,6 +53,10 @@ export const biquadGives = leafGives(BIQUAD_REF, () => []);
 export const GZ_REF = (): ComponentDef => goertzelCell(GZ_STATE, RV16_MUX2);
 /** The multiplier is given with every other leaf: the recurrence around it is what the level builds. */
 export const gzGives = leafGives(GZ_REF, () => []);
+
+/** The circular address level's reference: the DSP core's address step, all eight modes. Its parts are all given. */
+export const CIRC_REF = (): ComponentDef => DSP24_AGU_STEP;
+export const circGives = leafGives(CIRC_REF, () => []);
 
 export const BUILDDSP: Record<string, () => BuildChallenge> = {
   sp_sat: () => ({
@@ -121,5 +127,15 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
   // ---- sp_mac
 
   // ---- sp_circ
+  sp_circ: () => ({
+    id: 'sp_circ', title: 'Circular address', level: 'gates', allowed: 'nand',
+    brief: 'The next value of a pointer after an access, the DSP core\'s address step, all eight modes: <b>p</b> is the 8-bit pointer, <b>mode</b> says how it moves, <b>base</b> and <b>len</b> are a window (its end is base + len, modulo 256) and <b>m</b> a modifier; <b>y</b> is the pointer\'s next value. '
+      + 'Mode 0 stays; 1 is p + 1; 2 is p − 1; 3 is p + m; 7 is p − m (all modulo 256). Mode 4, <i>circular up</i>, is p + 1, except that when p + 1 equals the window end the pointer goes to the base. Mode 5, <i>circular down</i>, is p − 1, except that when p equals the base it goes to end − 1, the last address of the window. '
+      + 'Mode 6, <i>bit-reversed</i>: reverse the bits of p, add m with its bits reversed, and reverse the sum back. The circular modes are the point of the level, but all eight are checked. '
+      + `Check runs every pointer (256) in every mode on ${CIRC_TRIPLES.length} windows (${CIRC_VECTORS.toLocaleString('en')} vectors): windows that cross 255, a length of 0, 1 and 255, a base of 0 and 255, modifiers of 0, 1, 32, 128 and 255, pointers outside the window. It names the first wrong vector of each mode.`,
+    ports: pinsOf(CIRC_REF()),
+    check: { kind: 'custom', describe: `${CIRC_VECTORS.toLocaleString('en')} vectors: every p in every mode on ${CIRC_TRIPLES.length} (base, len, m) windows, the corners of 8-bit wrap included, against the DSP core's model.`, run: runCirc, unit: 'vector' },
+    answer: refOf('sp_circ', CIRC_REF, 'Address step'),
+  }),
 
 };

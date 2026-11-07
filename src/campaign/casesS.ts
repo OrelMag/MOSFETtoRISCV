@@ -54,5 +54,11 @@ export const CASESS: Record<string, LevelCase> = {
   // ---- sp_mac
 
   // ---- sp_circ
+  sp_circ: {
+    problem: 'A filter keeps its last N samples, and every new sample pushes the others one place along. Done in memory that is N loads and N stores a sample. Leave the samples where they are, write the new one over the oldest, and let the pointer walk the buffer and go back to its start at the end: the address step has to do the wrap, because an instruction spent on it is a clock lost on every tap.',
+    without: 'A plain pointer runs off the end of the buffer into whatever follows it, and the program repairs it with a compare and a branch each tap. In the core that costs a clock a tap, doubling a one-clock loop body. The same adder also has to serve a step of m for a strided walk and a bit-reversed order for an FFT, or each of those takes a program of its own.',
+    cost: 'The whole step is 639 NANDs and 53 delays: four 8-bit adders of 72 NANDs each (the pointer step, the window end, the end minus 1 and the reverse-carry add), two equality comparators of 54, five 8-bit muxes of 32, the mode decoder of 35, the step inverter of 32 and 16 gates of glue. The reversals are wiring and cost nothing. The circular modes cost 323 of that: two comparators, two adders for the end, two muxes and the gates that join them.',
+    alts: [{ name: '8-bit adder (library)', lib: 'rca8' }, { name: 'Address step, all eight modes (library)', lib: 'dsp24_agu_step' }],
+  },
 
 };

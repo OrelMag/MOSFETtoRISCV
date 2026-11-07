@@ -155,6 +155,7 @@ export const NUDGES: Record<string, string> = {
   // sp_mac: below
 
   // sp_circ: below
+  sp_circ: 'One adder steps the pointer; the window end is another 8-bit sum that may wrap; wrap only on an equal, then let mode 0 and the bit-reversed mode override at the end.',
 
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
