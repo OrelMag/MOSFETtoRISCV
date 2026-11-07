@@ -21,7 +21,7 @@ export const chBench: Chapter = {
     'use Ethernet counters and a traceroute to place a fault in one network and on one link',
     'add up a radio link and tell a weak signal from two stations that cannot hear each other',
   ],
-  builds: ['tcp', 'path', 'switch', 'serial', 'uart', 'noise', 'radio', 'wifi'],
+  builds: ['tcp', 'path', 'ethernet', 'switch', 'serial', 'uart', 'noise', 'radio', 'wifi'],
   recap: {
     keep: [
       'Start from what is known and ask what would differ between the candidate causes. Look at the piece of evidence that separates them. Change one thing at a time.',
@@ -78,9 +78,9 @@ export const chBench: Chapter = {
     {
       title: 'Four transfers that crawl',
       body: `
-        <p>Here is the separation worked out for the commonest complaint. Four faults slow a transfer, and each leaves a different mark in three places: the capture, the round-trip time and the counters.</p>
-        <p>The sender's <strong>bytes in flight</strong> say whether it is held back at all. The <strong>round trip</strong> says whether data is waiting anywhere. <strong>Retransmissions</strong> say whether anything went missing, and the counters say where. <strong>Win 0</strong> in an acknowledgement is the receiver asking for time. All of this comes from <a href="#/c/tcp/0">TCP</a>'s own rules, running with the fault in place.</p>
-        <div class="try">For each case, say what you expect to see in each of the three places before you look at the options.</div>`,
+        <p>Here is the separation worked out for the commonest complaint. Four faults slow a transfer, and each leaves a different mark in the capture, in two plots (bytes in flight and the round-trip time) and in the counters.</p>
+        <p>The sender's <strong>bytes in flight</strong> say whether it is held back at all. The <strong>round trip</strong> says whether data is waiting anywhere. <strong>Retransmissions</strong> say whether anything went missing, and the counters say where. <strong>Win 0</strong> in an acknowledgement is a window of zero, as in <a href="#/c/tcp/3">the window</a>: the receiver has no room and is asking for time. All of this comes from <a href="#/c/tcp/0">TCP</a>'s own rules, running with the fault in place.</p>
+        <div class="try">For each case, say what you expect to see in the plots, the capture and the counters before you look at the options.</div>`,
       widget: benchWidget(['tcp_reader', 'tcp_bloat', 'tcp_tiny', 'tcp_loss'], ['Case A', 'Case B', 'Case C', 'Case D']),
       challenge: {
         kind: 'quiz', question: 'A capture shows retransmissions. Which further number tells line loss from a queue that is too small?',
@@ -123,7 +123,7 @@ export const chBench: Chapter = {
     {
       title: 'Ethernet\'s counters',
       body: `
-        <p>An Ethernet port counts what happens to it, and each counter points somewhere. <strong>Collisions</strong> need a shared segment, so they have nothing to say on a switched port. <strong>Frames failing the check</strong> were changed on the way, so the fault is physical: cable, connector, or interference. <strong>Flooding</strong>, unicast frames sent to every port, is the switch saying it does not know where the address is.</p>
+        <p>An Ethernet port counts what happens to it, and each counter points somewhere. <strong>Collisions</strong> need a shared segment, so on a properly negotiated switched port they read zero; a count there means a duplex mismatch (see the question). <strong>Frames failing the check</strong> were changed on the way, so the fault is physical: cable, connector, or interference. <strong>Flooding</strong>, unicast frames sent to every port, is the switch saying it does not know where the address is.</p>
         <p>These are the <a href="#/c/ethernet/0">MAC</a> and the <a href="#/c/switch/0">switch</a> you have built, with the fault switched on: a heavy load on a shared segment, bits flipped on the wire and checked by the real CRC, and a table too small for its hosts.</p>
         <div class="try">Say which counter you would read first for each symptom, before you see the numbers.</div>`,
       widget: benchWidget(['eth_collide', 'eth_badframe', 'sw_flood'], ['Case A', 'Case B', 'Case C']),
@@ -139,7 +139,7 @@ export const chBench: Chapter = {
       title: 'Reading a trace',
       body: `
         <p><a href="#/c/path/3">Traceroute</a> shows where packets go, and two comparisons make it useful: with last week's trace, and with what the addresses ought to be. A trace that <em>ends in the wrong network</em> means a route is lying. A trace that <em>stops, with no route</em>, means a route has gone.</p>
-        <p>The failed link here is not rerouted, which may surprise you. Networks carry traffic only as their business relationships allow, so a working link nearby may not be offered to you. That is the model's policy from <a href="#/c/path/1">BGP</a> at work, and it is also why real networks buy a second provider.</p>
+        <p>In Case B the failed link is not rerouted, which may surprise you. Networks carry traffic only as their business relationships allow, so a working link nearby may not be offered to you. That is the model's policy from <a href="#/c/path/1">BGP</a> at work, and it is also why real networks buy a second provider.</p>
         <div class="try">Read the two traces side by side. Whose network does each end in?</div>`,
       widget: benchWidget(['route_hijack', 'route_down'], ['Case A', 'Case B']),
       challenge: {
@@ -155,7 +155,7 @@ export const chBench: Chapter = {
       body: `
         <p>A radio link has one complaint and many causes, because every one of them ends in retries. Two pieces of evidence separate most of them: the <a href="#/c/radio/${RADIO_BUDGET_STEP}">link budget</a>, which says what arrives, and a sniffer beside the receiver, which says who else was talking.</p>
         <p>Do the sum first. It takes a minute and needs no equipment: if the SNR falls short of what the rate asks, nothing above the radio can make it up, and all it can do is settle for a lower rate. If the SNR is ample and frames still die, the signal is not the problem, and the question becomes what else was in the air at the receiver. That is the <a href="#/c/wifi/${WIFI_HIDDEN_STEP}">hidden terminal</a>: carrier sense asks about the air at the sender, and the collision happens at the receiver. A station notices a frame down to about −82 dBm on a 20 MHz channel, the level 802.11 asks of its preamble detection, so a wall can put two stations below that and leave both well above what the access point needs.</p>
-        <p>Both cases below have the same report, from the same refit. A wall can do either, depending on what it stands between.</p>
+        <p>Both cases below have the same report: a refit put up new walls in the far office. A wall can do either, depending on what it stands between.</p>
         <div class="try">Read each budget before anything else. Does it explain the retries by itself?</div>`,
       widget: benchWidget(['wifi_hidden', 'link_wall'], ['Case A', 'Case B']),
       challenge: {
@@ -169,9 +169,9 @@ export const chBench: Chapter = {
     {
       title: 'Reading a specification',
       body: `
-        <p>The other half of the expert's trade is the document that says what should have happened. Standards are written to be exact, not to teach, and they reward a particular way of reading. Keep a question in hand and look it up, as you would a dictionary. Learn the <em>shall</em> convention (RFC 2119's <em>MUST</em>, <em>SHOULD</em> and <em>MAY</em>): it separates what you can rely on from what some implementations happen to do. Read the state tables and the frame formats before the prose.</p>
+        <p>The other half of the expert's trade is the document that says what should have happened. Standards are written to be exact, not to teach, and they reward a particular way of reading. Keep a question in hand and look it up, as you would a dictionary. Learn the convention for requirement words (RFC 2119's <em>MUST</em>, <em>SHOULD</em> and <em>MAY</em>; IEEE standards say <em>shall</em>, <em>should</em> and <em>may</em>): it separates what you can rely on from what some implementations happen to do. Read the state tables and the frame formats before the prose.</p>
         <p>A surprising share of real faults sit in the gap between <em>must</em> and <em>should</em>, where two correct implementations disagree. When a capture shows something odd, the question is rarely "what does this mean?" and usually "which side is allowed to do this?". A fault that survives every other test often ends at a sentence in a specification and a choice someone made.</p>
-        <p>Below is a case to read that way. The Ethernet standard says a receiver discards a frame whose check fails, which is why nothing above the port ever hears of these frames and only its counter shows them. Knowing that tells you where to look.</p>`,
+        <p>Below is a case where one sentence of a specification is the whole clue. The Ethernet standard says a receiver discards a frame whose check fails, which is why nothing above the port ever hears of these frames and only its counter shows them. Knowing that tells you to read the counter and not the capture.</p>`,
       widget: benchWidget(['eth_badframe'], ['The port']),
       challenge: {
         kind: 'quiz', question: 'A standard says a receiver SHOULD accept an unusual option, and your device rejects it. A capture shows the link failing with one vendor. Is your device wrong?',
@@ -185,8 +185,9 @@ export const chBench: Chapter = {
       title: 'On your own',
       body: `
         <p>That is the method, with help beside it. The test of it is <a href="#/campaign/play/cap_fault">Find the fault</a>: ${ATTEMPT_CASES} cases drawn at random from all of the above, with new numbers each time, and nothing said about any answer until the end. ${PASS_MARK} right passes. A wrong answer shows what the evidence meant once the attempt is over. The set is small enough to learn, and learning what each fault looks like is the point: the reports are worded alike, so it is the evidence that tells them apart.</p>
-        <p>The cases draw only on faults the book's models can really produce. Real networks have many more: firmware bugs, a mismatched duplex, a misconfigured load balancer, hardware that fails only when warm. The method is what carries over to them.</p>
+        <p>The cases draw only on faults the book's models can really produce. Real networks have many more: firmware bugs, other duplex and negotiation faults, a misconfigured load balancer, hardware that fails only when warm, and the faults of the last two chapters: handover ping-pong (<a href="#/c/cellular/3">Handing over</a>), a read that collapses into <a href="#/c/datacentre/2">incast</a>, a lossless network that <a href="#/c/datacentre/6">deadlocks</a>. The method is what carries over to them.</p>
         <p>When a case surprises you, go back to the chapter it came from: <a href="#/c/tcp/0">TCP</a>, <a href="#/c/serial/0">Fast serial links</a>, <a href="#/c/uart/0">A UART</a>, <a href="#/c/ethernet/0">Ethernet</a>, <a href="#/c/switch/0">A switch</a>, <a href="#/c/path/0">The internet path</a>, <a href="#/c/radio/0">Radio</a>, <a href="#/c/wifi/0">Wi-Fi</a>.</p>
+        <p>That closes the Communication level. Every number in it came from a model computed in ordinary arithmetic. The next level asks what happens when the arithmetic itself is the thing that goes wrong: a sum that does not fit in its word, a rounding that drifts, and the machines that do it in gates.</p>
         <div class="try">Try one more before the test, and explain your answer aloud before you choose.</div>`,
       widget: benchWidget(['tcp_tiny', 'line_noise', 'route_down'], ['Case A', 'Case B', 'Case C']),
       challenge: {
