@@ -1,8 +1,8 @@
 // Speech (level Signal processing): how does a voice fit in 2.4 kb/s? G.711 μ-law in gates (lib/ulaw.ts, every sample and code against dsp/speech.ts and against audioop), IMA ADPCM as
 // an RV32I program on the golden model, linear prediction, and a vocoder of ours on a model. The voice is a public-domain LibriVox reading; sources in docs/DSP-SOURCES.md.
 
-import { ulawDecision, VOC_BITS, vocBitRate, vocBitsPerFrame } from '../dsp/speech';
-import { SPEECH_FIGS as F } from '../dsp/soundfigs';
+import { ulawDecision, VOC, VOC_BITS, vocBitRate, vocBitsPerFrame } from '../dsp/speech';
+import { LPC_OPEN_FRAME, SPEECH_FIGS as F } from '../dsp/soundfigs';
 import { adpcmProgramLength } from '../dsp/adpcmrv';
 import { ulawDecoder, ulawEncoder } from '../lib/ulaw';
 import { logicDepth, stats } from '../sim/stats';
@@ -155,7 +155,7 @@ export const chSpeech: Chapter = {
       title: 'Predict the next sample',
       body: `
         <p>A better prediction leaves less to send. <strong>Linear prediction</strong> fits each 30 ms stretch with the best weighted sum of its last ten samples, the same Wiener problem <a href="#/c/adaptive/1">Filters that learn</a> solved with Levinson's recursion, here on the frame's autocorrelation. Pre-emphasis, 1 − 0.9375 z⁻¹, is applied first so the low end does not take all of the predictor's effort.</p>
-        <p>What the prediction misses is the <strong>residual</strong>, and the filter that makes it from the frame is A(z) = 1 − Σ aₖ z⁻ᵏ. Running the residual back through 1 / A(z) makes the frame again, so 1 / A(z) is the voice's own filter: its response is the envelope of the frame's spectrum, the formants. A <em>voiced</em> sound, a vowel or an m, is driven by the vocal cords' pulses at the pitch, and an <em>unvoiced</em> one, an s or an f, by turbulent noise. On the loud frames of this voice, order 10 makes the error ${F.predGain} dB smaller than the pre-emphasized frame. The Levinson recursion also gives reflection coefficients, each inside ±1 for any real signal, which is what makes them safe to quantize.</p>
+        <p>What the prediction misses is the <strong>residual</strong>, and the filter that makes it from the frame is A(z) = 1 − Σ aₖ z⁻ᵏ. Running the residual back through 1 / A(z) makes the frame again, so 1 / A(z) is the voice's own filter: its response is the envelope of the frame's spectrum, the formants. A <em>voiced</em> sound, a vowel or an m, is driven by the vocal cords' pulses at the pitch, and an <em>unvoiced</em> one, an s or an f, by turbulent noise. Over the loud frames of this voice, order 10 makes the error ${F.predGain} dB smaller than the pre-emphasized frame on average; on the voiced frame the widget opens on, at ${(LPC_OPEN_FRAME * VOC.hop / 8000).toFixed(2)} s, it is ${F.openGain} dB. The Levinson recursion also gives reflection coefficients, each inside ±1 for any real signal, which is what makes them safe to quantize.</p>
         <div class="try">On a voiced frame, raise the order from 2 to 20: the envelope finds the formants by about 10, and more coefficients add only small bumps, never the harmonics. Then try an unvoiced frame.</div>`,
       widget: lpcWidget,
       challenge: {
@@ -171,7 +171,7 @@ export const chSpeech: Chapter = {
       body: `
         <p>Now send the filter instead of the waveform. Every 22.5 ms (each frame analysed over a 30 ms window around it, so the windows overlap) the <strong>vocoder</strong> sends ten reflection coefficients, each k as a log-area ratio, ln((1 + k) / (1 − k)), which spreads out the values near ±1 where the sound is most sensitive, on ${VOC_BITS.k.reduce((a, b) => a + b, 0)} bits, more for the first ones, which shape the spectrum most. Then a voiced or unvoiced decision with a pitch period, on ${VOC_BITS.pitch} bits, a level on ${VOC_BITS.gain}, and a sync bit: ${vocBitsPerFrame()} bits a frame, ${kb(vocBitRate())}. The far end makes a pulse train at the pitch, or noise, and runs it through the filter.</p>
         <p>This vocoder is ours, a model, laid out like the US government's LPC-10 (Federal Standard 1015, 1984), which also sends 54 bits every 22.5 ms. On this reading it finds ${F.voicedPct} % of frames voiced and a median pitch of ${F.pitchHz} Hz. Its pitch tracking is simple, with centre clipping and a check for octave errors, and it makes mistakes a real one would avoid.</p>
-        <p>The comparison is the point. μ-law at 64 kb/s and ADPCM at 32 keep the waveform. The vocoder at ${kb(vocBitRate())} keeps the words and loses the person: what comes out is intelligible and sounds like a machine. An SNR means nothing for it, because it never tries to match the samples.</p>
+        <p>The comparison is the point. μ-law at 64 kb/s and ADPCM at 32 keep the waveform. The vocoder at ${kb(vocBitRate())} keeps the words and loses the person: what comes out is intelligible and sounds like a machine. An SNR means nothing for it, because it never tries to match the samples. <a href="#/c/music/0">The next chapter</a> asks what can be thrown away from music, which has no such model to send.</p>
         <div class="try">Play all four, in order of rate.</div>`,
       widget: vocoderWidget,
       challenge: {
