@@ -2,10 +2,19 @@
 
 import { describe, expect, it } from 'vitest';
 import { chSdr } from '../src/chapters/ch-dsp-sdr';
+import { FS, receive, STATIONS, synthBand } from '../src/dsp/sdr';
 import { BOOK_ORDER } from '../src/chapters/order';
 import { dspRows } from '../src/chapters/dspladder';
 
 describe('chapter "A software radio"', () => {
+  it('keeps its receptions while the learner moves between steps and lets them go when the chapter is left', () => {
+    const b = synthBand(FS), n = 4800;
+    const r = receive(b, STATIONS[0].f, -20, n);
+    expect(receive(b, STATIONS[0].f, -20, n)).toBe(r);
+    chSdr.leave?.();
+    expect(receive(b, STATIONS[0].f, -20, n)).not.toBe(r);
+  });
+
   it('sits after Pictures, last of the level, and the ladder shows it', () => {
     const i = BOOK_ORDER.indexOf('sdr');
     expect(BOOK_ORDER[i - 1]).toBe('pictures');

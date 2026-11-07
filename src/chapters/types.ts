@@ -158,6 +158,8 @@ export interface Chapter {
    * (no step moves, so addresses and saved progress keep their numbers). The counts add up to the steps.
    */
   parts?: [name: string, steps: number][];
+  /** Called when the learner leaves the chapter (its page is destroyed; moving between its steps keeps it): release what its steps cached. */
+  leave?: () => void;
   steps: Step[];
   /** Titles of steps not built yet: dashed dots after the steps, not clickable. */
   soon?: string[];
