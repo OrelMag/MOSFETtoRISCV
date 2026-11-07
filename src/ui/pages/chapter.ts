@@ -1,6 +1,7 @@
 // A chapter: narrative on the left, the live stage in the middle, the inspector on the right.
 
 import { outline, outlineIndex, outlineOf } from '../../chapters/outline';
+import { lazyBody, settleLazy, wordsOf } from '../lazy';
 import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { notes, type Place } from '../notes';
@@ -267,7 +268,8 @@ export class ChapterPage implements Page {
   private gloss(el: HTMLElement): void {
     if (!settings.glossary) return;
     const c = this.chapter;
-    const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => c.steps[k].body);
+    // only the terms matter here: wordsOf leaves the costly numbers out, which a returning learner would otherwise pay for every earlier step
+    const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => wordsOf(() => c.steps[k].body));
     Promise.all([import('../../campaign/ui/glossaryui'), import('../../chapters/firstuse')]).then(([m, f]) => {
       if (!el.isConnected) return;
       const skip = m.chapterSkip(c);
@@ -280,10 +282,11 @@ export class ChapterPage implements Page {
   private renderBody(st: Step): void {
     const b = this.body;
     const c = this.chapter;
-    const prose = h('div', { class: 'prose', html: st.body });
+    const prose = h('div', { class: 'prose', html: lazyBody(() => st.body) });
     b.replaceChildren();
     if (this.step === 0 && (c.goals?.length || c.builds?.length)) b.append(this.goalsCard());
     b.append(h('h2', { class: 'step-title' }, st.title), prose);
+    settleLazy(prose);
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
     if (lit) b.append(lit);
@@ -561,5 +564,6 @@ export class ChapterPage implements Page {
     this.unlisten.forEach((f) => f());
     this.pillOff?.();
     this.stage.destroy();
+    this.chapter.leave?.();
   }
 }

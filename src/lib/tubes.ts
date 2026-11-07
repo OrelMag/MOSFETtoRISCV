@@ -148,9 +148,9 @@ export const TUBE_INV: ComponentDef = define({
       instances: [...d.instances, ...plateRes('rl', 12, 3), ...triodeAt('v1', 11, 8)],
       nets: [
         ...d.nets, supply('rl'), cathode('v1'),
-        { name: 'a', ends: ['a', 'r1.a'] },
-        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'] },
-        { name: 'y', ends: ['rl.b', 'v1.p', 'y'] },
+        { name: 'a', ends: ['a', 'r1.a'], via: { 'r1.a': [[5, 6]] } },
+        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'], via: { 'v1.g': [[5, 10]] } },
+        { name: 'y', ends: ['rl.b', 'v1.p', 'y'], via: { y: [[13, 7]] } },
       ],
     };
   },
@@ -172,11 +172,11 @@ export const TUBE_BUF: ComponentDef = define({
       instances: [...d1.instances, ...plateRes('rl', 12, 3), ...triodeAt('v1', 11, 8), ...d2.instances, ...plateRes('sl', 28, 3), ...triodeAt('v2', 27, 8)],
       nets: [
         ...d1.nets, ...d2.nets, supply('rl'), supply('sl'), cathode('v1'), cathode('v2'),
-        { name: 'a', ends: ['a', 'r1.a'] },
-        { name: 'grid 1', ends: ['r1.b', 'r2.a', 'v1.g'] },
+        { name: 'a', ends: ['a', 'r1.a'], via: { 'r1.a': [[5, 6]] } },
+        { name: 'grid 1', ends: ['r1.b', 'r2.a', 'v1.g'], via: { 'v1.g': [[5, 10]] } },
         { name: 'na', ends: ['rl.b', 'v1.p', 's1.a', 'na'], trunk: 2 },
-        { name: 'grid 2', ends: ['s1.b', 's2.a', 'v2.g'] },
-        { name: 'y', ends: ['sl.b', 'v2.p', 'y'] },
+        { name: 'grid 2', ends: ['s1.b', 's2.a', 'v2.g'], via: { 'v2.g': [[21, 10]] } },
+        { name: 'y', ends: ['sl.b', 'v2.p', 'y'], via: { y: [[29, 7]] } },
       ],
     };
   },
@@ -197,10 +197,10 @@ export const TUBE_NOR: ComponentDef = define({
       instances: [...da.instances, ...db.instances, ...plateRes('rl', 12, 3), ...triodeAt('va', 11, 8), ...triodeAt('vb', 11, 22)],
       nets: [
         ...da.nets, ...db.nets, supply('rl'), cathode('va'), cathode('vb'),
-        { name: 'a', ends: ['a', 'ra1.a'] }, { name: 'b', ends: ['b', 'rb1.a'] },
-        { name: 'grid a', ends: ['ra1.b', 'ra2.a', 'va.g'] },
-        { name: 'grid b', ends: ['rb1.b', 'rb2.a', 'vb.g'] },
-        { name: 'y', ends: ['rl.b', 'va.p', 'vb.p', 'y'], via: { 'vb.p': [[13, 7], [17, 7], [17, 20], [13, 20]] } },
+        { name: 'a', ends: ['a', 'ra1.a'], via: { 'ra1.a': [[5, 6]] } }, { name: 'b', ends: ['b', 'rb1.a'], via: { 'rb1.a': [[5, 20]] } },
+        { name: 'grid a', ends: ['ra1.b', 'ra2.a', 'va.g'], via: { 'va.g': [[5, 10]] } },
+        { name: 'grid b', ends: ['rb1.b', 'rb2.a', 'vb.g'], via: { 'vb.g': [[5, 24]] } },
+        { name: 'y', ends: ['rl.b', 'va.p', 'vb.p', 'y'], via: { 'vb.p': [[13, 7], [17, 7], [17, 20], [13, 20]], y: [[13, 7]] } },
       ],
     };
   },
@@ -230,8 +230,8 @@ export const TUBE_NAND: ComponentDef = define({
         ...d.nets, supply('rl'), cathode('v1'), { name: 'rj B+', ends: ['rjv.p', 'rj.a'] },
         { name: 'a', ends: ['a', 'da.k'] }, { name: 'b', ends: ['b', 'db.k'] },
         { name: 'and', ends: ['rj.b', 'r1.a', 'da.a', 'db.a'] },
-        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'] },
-        { name: 'y', ends: ['rl.b', 'v1.p', 'y'] },
+        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'], via: { 'v1.g': [[15, 11]] } },
+        { name: 'y', ends: ['rl.b', 'v1.p', 'y'], via: { y: [[21, 7]] } },
       ],
     };
   },
@@ -259,8 +259,8 @@ export const CATHODE_FOLLOWER: ComponentDef = define({
       ],
       nets: [
         ...d.nets,
-        { name: 'a', ends: ['a', 'r1.a'] },
-        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'] },
+        { name: 'a', ends: ['a', 'r1.a'], via: { 'r1.a': [[5, 6]] } },
+        { name: 'grid', ends: ['r1.b', 'r2.a', 'v1.g'], via: { 'v1.g': [[5, 10]] } },
         { name: 'B+', ends: ['v1v.p', 'v1.p'] },
         { name: 'y', ends: ['v1.k', 'rk.a', 'y'] },
         { name: 'rk bias', ends: ['rk.b', 'rkn.p'] },
@@ -279,25 +279,29 @@ export const ECCLES_JORDAN: ComponentDef = define({
   summary: 'Two cross-coupled triodes (one 6SN7) and two steering diodes: a bit that holds itself, set and reset by a 1 on either grid.',
   ports: [bit('set', 'in', 'top'), bit('reset', 'in', 'top'), bit('q', 'out'), bit('nq', 'out')],
   symbol: { kind: 'box', label: 'E–J', w: 8, h: 4 },
+  // Mirror-symmetric, outside in: steering diode, divider, plate resistor over its triode. Each grid is one straight line
+  // (diode, divider middle, grid) at the grids' height; set / reset come down onto the diodes and q / nq leave at the top
+  // over their dividers, so the only crossings are the two the cross-coupling needs (each plate's line over the other).
   netlist: () => {
-    const X = 2;
-    const db = divider('rb', X + 1, 11), da = divider('ra', X + 33, 11);
+    const db = divider('rb', 5, 10), da = divider('ra', 35, 10);
     return {
       level: 'switch',
-      pins: { set: [X + 30, 0], reset: [X + 8, 0], q: [X + 39, 10], nq: [0, 8] },
-      pinDirs: { set: 'down', reset: 'down', nq: 'right' },
+      pins: { reset: [0, 0], nq: [6, 0], q: [36, 0], set: [44, 0] },
+      pinDirs: { set: 'down', reset: 'down', q: 'down', nq: 'down' },
       instances: [
-        ...db.instances, ...da.instances,
-        ...plateRes('rla', X + 11, 3), ...plateRes('rlb', X + 25, 3),
-        ...triodeAt('va', X + 10, 12), ...triodeAt('vb', X + 24, 12, true),
-        { name: 'dr', def: DIODE, at: [X + 6, 2], label: 'D1' }, { name: 'ds', def: DIODE, at: [X + 28, 2], label: 'D2' },
+        { name: 'dr', def: DIODE, at: [-2, 10], label: 'D1' }, ...db.instances,
+        ...plateRes('rla', 13, 3), ...triodeAt('va', 12, 12),
+        ...plateRes('rlb', 27, 3), ...triodeAt('vb', 26, 12, true),
+        ...da.instances, { name: 'ds', def: DIODE, at: [42, 10], label: 'D2' },
       ],
       nets: [
         ...db.nets, ...da.nets, supply('rla'), supply('rlb'), cathode('va'), cathode('vb'),
-        { name: 'q', ends: ['va.p', 'rla.b', 'ra1.a', 'q'], via: { 'ra1.a': [[X + 12, 10], [X + 34, 10]] } },
-        { name: 'nq', ends: ['vb.p', 'rlb.b', 'rb1.a', 'nq'], via: { 'rb1.a': [[X + 26, 8], [X + 2, 8]] } },
-        { name: 'grid a', ends: ['va.g', 'rb1.b', 'rb2.a', 'dr.k'], trunk: X + 8 },
-        { name: 'grid b', ends: ['vb.g', 'ra1.b', 'ra2.a', 'ds.k'], trunk: X + 30 },
+        // q (the left plate) to the right divider at y = 10, nq (the right plate) to the left one at y = 8
+        { name: 'q', ends: ['va.p', 'rla.b', 'ra1.a', 'q'], via: { 'ra1.a': [[14, 10], [36, 10]], q: [[14, 10], [36, 10]] } },
+        { name: 'nq', ends: ['vb.p', 'rlb.b', 'rb1.a', 'nq'], via: { 'rb1.a': [[28, 8], [6, 8]], nq: [[28, 8], [6, 8]] } },
+        // straight along y = 14: the divider's middle and the diode's cathode are on the grid's line
+        { name: 'grid a', ends: ['va.g', 'rb1.b', 'rb2.a', 'dr.k'], via: { 'rb1.b': [[6, 14]], 'rb2.a': [[6, 14]], 'dr.k': [[0, 14]] } },
+        { name: 'grid b', ends: ['vb.g', 'ra1.b', 'ra2.a', 'ds.k'], via: { 'ra1.b': [[36, 14]], 'ra2.a': [[36, 14]], 'ds.k': [[44, 14]] } },
         { name: 'set', ends: ['set', 'ds.a'] }, { name: 'reset', ends: ['reset', 'dr.a'] },
       ],
     };

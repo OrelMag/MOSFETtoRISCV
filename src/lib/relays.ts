@@ -78,19 +78,21 @@ export const RELAY_NAND: ComponentDef = define({
   ports: [bit('a', 'in'), bit('b', 'in'), bit('y', 'out')],
   symbol: { kind: 'nand' },
   spec: ([a, b]) => [a & b ? 0 : 1],
+  // b drives the left relay straight in; a comes over the top to the right one, so neither input crosses the output,
+  // which runs under both grounds
   netlist: () => ({
     level: 'switch',
-    pins: { a: [2, 5], b: [2, 14], y: [26, 11] },
+    pins: { a: [2, 0], b: [2, 7], y: [26, 14] },
     instances: [
-      { name: 'ra', def: RELAY, at: [6, 4] }, { name: 'ga', def: GND, at: [6, 9] }, { name: 'va', def: VDD, at: [9, 1] },
-      { name: 'rb', def: RELAY, at: [15, 4] }, { name: 'gb', def: GND, at: [15, 9] }, { name: 'vb', def: VDD, at: [18, 1] },
-      load('ld', [22, 11]),
+      { name: 'rb', def: RELAY, at: [6, 6] }, { name: 'gb', def: GND, at: [6, 11] }, { name: 'vb', def: VDD, at: [9, 3] },
+      { name: 'ra', def: RELAY, at: [15, 6] }, { name: 'ga', def: GND, at: [15, 11] }, { name: 'va', def: VDD, at: [18, 3] },
+      load('ld', [22, 14]),
     ],
     nets: [
-      { name: 'a', ends: ['a', 'ra.a'] }, { name: 'b', ends: ['b', 'rb.a'], trunk: 13 },
+      { name: 'a', ends: ['a', 'ra.a'], via: { 'ra.a': [[13, 0], [13, 7]] } }, { name: 'b', ends: ['b', 'rb.a'] },
       { name: 'gnd a', ends: ['ra.b', 'ga.p'] }, { name: 'gnd b', ends: ['rb.b', 'gb.p'] },
       { name: 'vdd a', ends: ['va.p', 'ra.c'] }, { name: 'vdd b', ends: ['vb.p', 'rb.c'] },
-      { name: 'y', ends: ['ra.nc', 'rb.nc', 'ld.y', 'y'], trunk: 11 },
+      { name: 'y', ends: ['rb.nc', 'ra.nc', 'ld.y', 'y'], trunk: 14 },
     ],
   }),
 });
@@ -223,18 +225,20 @@ export const RELAY_LATCH: ComponentDef = define({
   symbol: { kind: 'box', label: 'RLATCH', w: 7, h: 4 },
   netlist: () => ({
     level: 'switch',
+    // k sits below reset's contacts, so the holding path runs down into its common contact instead of round under it
     pins: { set: [2, 5], reset: [2, 15], q: [32, 11] },
     instances: [
       { name: 'rs', def: RELAY, at: [6, 4] }, { name: 'gs', def: GND, at: [6, 9] }, { name: 'vs', def: VDD, at: [9, 1] },
       { name: 'rr', def: RELAY, at: [6, 14] }, { name: 'gr', def: GND, at: [6, 19] }, { name: 'vr', def: VDD, at: [9, 11] },
-      { name: 'k', def: RELAY, at: [20, 14] }, { name: 'gk', def: GND, at: [20, 19] },
+      { name: 'k', def: RELAY, at: [20, 21] }, { name: 'gk', def: GND, at: [20, 26] },
     ],
     nets: [
       { name: 'set', ends: ['set', 'rs.a'] }, { name: 'reset', ends: ['reset', 'rr.a'] },
       { name: 'gnd s', ends: ['rs.b', 'gs.p'] }, { name: 'gnd r', ends: ['rr.b', 'gr.p'] }, { name: 'gnd k', ends: ['k.b', 'gk.p'] },
       { name: 'vdd s', ends: ['vs.p', 'rs.c'] }, { name: 'vdd r', ends: ['vr.p', 'rr.c'] },
-      { name: 'hold', ends: ['rr.nc', 'k.c'], trunk: 22 },
-      { name: 'q', ends: ['rs.no', 'k.no', 'k.a', 'q'], trunk: 11 },
+      { name: 'hold', ends: ['rr.nc', 'k.c'], via: { 'k.c': [[9, 19], [24, 19]] } },
+      // k's make contact faces down: its branch leaves downwards and comes up on the right, with no hook back into it
+      { name: 'q', ends: ['rs.no', 'k.no', 'k.a', 'q'], trunk: 11, via: { 'k.no': [[11, 11], [27, 11], [27, 26]] } },
     ],
   }),
   notes: `Zuse's Z3 kept its 64 words of 22 bits this way, one relay per bit: 1 408 of its 2 600 relays were memory.`,
@@ -251,16 +255,17 @@ export const RELAY_BUZZER: ComponentDef = define({
   symbol: { kind: 'box', label: 'BUZZ', w: 6, h: 4 },
   netlist: () => ({
     level: 'switch',
-    pins: { en: [2, 5], y: [28, 11] },
+    // k sits below en's contacts, so en's make contact feeds k's common contact downwards, with no hook back up
+    pins: { en: [2, 5], y: [28, 18] },
     instances: [
       { name: 're', def: RELAY, at: [6, 4] }, { name: 'ge', def: GND, at: [6, 9] }, { name: 've', def: VDD, at: [9, 1] },
-      { name: 'k', def: RELAY, at: [18, 4] }, { name: 'gk', def: GND, at: [18, 9] },
+      { name: 'k', def: RELAY, at: [18, 11] }, { name: 'gk', def: GND, at: [18, 16] },
     ],
     nets: [
       { name: 'en', ends: ['en', 're.a'] }, { name: 'gnd e', ends: ['re.b', 'ge.p'] }, { name: 'gnd k', ends: ['k.b', 'gk.p'] },
       { name: 'vdd', ends: ['ve.p', 're.c'] },
-      { name: 'feed', ends: ['re.no', 'k.c'], trunk: 2 },
-      { name: 'y', ends: ['k.nc', 'k.a', 'y'], trunk: 11 },
+      { name: 'feed', ends: ['re.no', 'k.c'], via: { 'k.c': [[11, 9], [22, 9]] } },
+      { name: 'y', ends: ['k.nc', 'k.a', 'y'], trunk: 18 },
     ],
   }),
 });
