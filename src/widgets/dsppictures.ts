@@ -12,7 +12,7 @@ import '../styles/line.css';
 import '../styles/signals.css';
 import '../styles/pictures.css';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const minus = (t: string) => t.replace(/-/g, '−');
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 

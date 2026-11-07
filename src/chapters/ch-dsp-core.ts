@@ -7,7 +7,7 @@ import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
 const f2 = (x: number) => x.toFixed(2);
 
 export const chDspCore: Chapter = {

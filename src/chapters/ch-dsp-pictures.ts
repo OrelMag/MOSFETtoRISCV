@@ -12,7 +12,7 @@ import { PICTURE_BLOCKS } from '../widgets/dsppictures';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 let memo: ReturnType<typeof encodeJpeg>[] | undefined;
 /** The scene at the qualities the prose names. */

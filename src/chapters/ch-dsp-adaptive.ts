@@ -10,7 +10,7 @@ import { bowlWidget, CHANNELS, echoWidget, eqWidget, ECHO_TAPS, LMS_SPEC, LMS_TA
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const minus = (t: string) => t.replace(/-/g, '−');
 

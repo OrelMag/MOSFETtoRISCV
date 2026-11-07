@@ -11,7 +11,7 @@ import type { Chapter } from './types';
 import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 
 const BITS_MIN = frameBitTimes(MIN_FRAME);
 const US_BIT = 1 / LINK_MBPS;

@@ -18,7 +18,7 @@ import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidg
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
 /** 6.26 × 10^25 from an exact count. */
 const sci = (x: bigint) => { const [m, e] = Number(x).toExponential(2).split('e+'); return `${m} × 10<sup>${e}</sup>`; };
 const KS = m4KeySpace();

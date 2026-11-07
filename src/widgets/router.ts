@@ -130,7 +130,7 @@ export function engineWidget(): Widget {
   const paint = () => {
     const reads = len + 1, e = engineCycles(n, reads), w = wireCycles(n);
     chips.set(0, String(e), `engine cycles: ${n} in, 1, ${reads} reads, 1, ${n} out`);
-    chips.set(1, w.toLocaleString('en-US').replace(/,/g, '\u2009'), `cycles on one link, at ${BYTE_CYCLES} a byte`);
+    chips.set(1, w.toLocaleString('en-US').replace(/,/g, '\u202f'), `cycles on one link, at ${BYTE_CYCLES} a byte`);
     chips.set(2, String(portsServed(n, reads)), 'ports one engine keeps up with');
     chips.set(3, `${(100 * e / w).toFixed(1)} %`, 'of one port\'s time the engine is busy');
   };

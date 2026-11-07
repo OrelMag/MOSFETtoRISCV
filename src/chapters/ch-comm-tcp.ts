@@ -9,7 +9,7 @@ import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowSce
 import type { Chapter } from './types';
 import { numOf } from './order';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const K = TCP_K, MSS = K.MSS;
 const FRAME = MSS + 54, ON_WIRE = FRAME + 4 + 8 + 12;
 /** The most data the link can carry in segments this small: preamble, headers, FCS and gap are all wire time. */
