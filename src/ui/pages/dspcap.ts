@@ -26,7 +26,7 @@ function erleChart(results: readonly PathResult[]): SVGElement {
   const wx = L + ((W - L - R) * ECHO_SPEC.window) / ECHO_SPEC.samples;
   svg.append(s('rect', { x: wx, y: T, width: W - R - wx, height: H - T - B, class: 'ec-win' }));
   for (const v of [-10, 0, 10, 20, 30, 40, 50]) svg.append(s('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: v === 0 ? 'ec-zero' : 'ec-grid' }), s('text', { x: L - 4, y: Y(v) + 4, class: 'ec-tick', 'text-anchor': 'end' }, `${v}`));
-  svg.append(s('line', { x1: L, x2: W - R, y1: Y(ECHO_SPEC.erleDb), y2: Y(ECHO_SPEC.erleDb), class: 'ec-need' }), s('text', { x: L + 4, y: Y(ECHO_SPEC.erleDb) - 4, class: 'ec-needt' }, `${ECHO_SPEC.erleDb} dB needed`));
+  svg.append(s('line', { x1: L, x2: W - R, y1: Y(ECHO_SPEC.erleDb), y2: Y(ECHO_SPEC.erleDb), class: 'ec-need' }), s('text', { x: W - R - 4, y: Y(ECHO_SPEC.erleDb) - 4, class: 'ec-needt', 'text-anchor': 'end' }, `${ECHO_SPEC.erleDb} dB needed`));
   svg.append(s('text', { x: wx + 4, y: H - B - 4, class: 'ec-tick' }, 'graded'), s('text', { x: (L + W) / 2, y: H - 8, class: 'ec-tick', 'text-anchor': 'middle' }, `time (samples, 0 to ${groupDigits(ECHO_SPEC.samples)}), ERLE in dB`));
   results.forEach((r, i) => {
     let d = '';
@@ -90,7 +90,7 @@ export class DspCapstonePage {
         h('ul', null,
           h('li', null, `${S.paths} echo paths per check, drawn from a seed you never see and new at every check: one short tail (16–32 taps), two medium (48–64) and one long of 96 taps, in a mixed order. A tap is 125 µs; the longest is 12 ms.`),
           h('li', null, 'A delay of 5–14 samples before the first echo, reflections that die away, and an echo return loss of 6–16 dB, different on every path.'),
-          h('li', null, `The far end is generated: speech-like sound with line noise under it on two paths, white noise on two (about −26 dBFS rms either way). Speech comes in bursts with pauses, so the energy under your filter swings by tens of dB; the noise is steady. Whatever step you use has to suit both. Microphone noise ${S.noiseLsb} LSB rms.`),
+          h('li', null, `The far end is generated: speech-like sound with line noise under it on two paths (about −27 to −30 dBFS rms, peaks near −13), white noise on two (−26 dBFS rms). Speech comes in bursts with pauses, so the energy under your filter swings by tens of dB; the noise is steady. Whatever step you use has to suit both. Microphone noise ${S.noiseLsb} LSB rms.`),
           h('li', null, 'A program that outputs ŷ = 0 scores 0 dB, one that reads d before writing ŷ is refused, and a failed check says which path, what was reached against what was needed, and why.'))));
   }
 
@@ -122,7 +122,7 @@ export class DspCapstonePage {
       }
       this.busy = false;
       this.run.disabled = false;
-      this.verdict(summarize(seed, results));
+      this.verdict(summarize(seed, results, a.words));
     };
     this.timer = window.setTimeout(step, 20);
   }
@@ -141,6 +141,7 @@ export class DspCapstonePage {
       h('p', { class: 'cc-hint' }, `Needed: ERLE of ${S.erleDb} dB or more, and at most ${groupDigits(S.budget)} cycles for any sample.`),
       v.ok ? h('p', null, `Worst sample ${groupDigits(v.worstCycles)} cycles, mean ${groupDigits(Math.round(v.meanCycles))}; lowest ERLE ${v.minErle.toFixed(1)} dB. The next check draws other paths.`) : null,
       v.reasons.length ? h('ul', { class: 'ec-why' }, v.reasons.map((r) => h('li', null, r))) : null,
+      v.diagnosis ? h('p', { class: 'ec-diag' }, h('b', null, 'Diagnosis. '), v.diagnosis) : null,
       v.results.some((r) => r.blocks.some((b) => b !== null)) ? erleChart(v.results) : null,
       v.results.some((r) => r.blocks.some((b) => b !== null)) ? legend(v.results) : null,
       h('p', { class: 'cc-hint' }, `ERLE of each ${BLOCK}-sample block, per path, against the pass line; the shaded part is graded. A block in a pause of the speech has no echo to cancel and is left out.`)].filter((x): x is Exclude<typeof x, null> => !!x));

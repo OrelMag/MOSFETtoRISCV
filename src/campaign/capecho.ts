@@ -84,19 +84,23 @@ export function echoPaths(seed: number, n: number = ECHO_SPEC.samples): EchoPath
   for (let i = sources.length - 1; i > 0; i--) { const j = Math.floor(u() * (i + 1)); [sources[i], sources[j]] = [sources[j], sources[i]]; }
   return classes.map((cls, index) => {
     const [lo, hi] = CLASS_OF[cls], taps = lo + Math.floor(u() * (hi - lo + 1)), erlDb = 6 + u() * 10, ps = Math.floor(u() * 1e9);
-    const { h, delay } = echoImpulse(ps, taps, erlDb);
-    const source = sources[index];
-    const xf = source === 'speech' ? (() => { const g = rng(ps + 3), sp = farEnd(n, ps + 1); return sp.map((v) => 0.25 * v + SPEECH_FLOOR * gaussian(g)); })() : (() => { const g = rng(ps + 1); return Array.from({ length: n }, () => Math.max(-0.4, Math.min(0.4, 0.05 * gaussian(g)))); })();
-    const x = Int32Array.from(xf, (v) => Math.round(v * 32767));
-    const echo = new Int32Array(n), d = new Int32Array(n), nz = rng(ps + 2);
-    for (let i = 0; i < n; i++) {
-      let s = 0;
-      for (let k = delay; k < taps && k <= i; k++) s += h[k] * x[i - k];
-      echo[i] = Math.round(s);
-      d[i] = echo[i] + Math.round(ECHO_SPEC.noiseLsb * gaussian(nz));
-    }
-    return { index, taps, cls, source, delay, erlDb, x, echo, d };
+    return makePath(index, cls, taps, erlDb, sources[index], ps, n);
   });
+}
+
+/** One path: the far end (speech over line noise, or white noise; `level` scales it), the room and the microphone with `noise` LSB rms. */
+export function makePath(index: number, cls: TailClass, taps: number, erlDb: number, source: 'speech' | 'noise', ps: number, n: number, level = 1, noise: number = ECHO_SPEC.noiseLsb): EchoPath {
+  const { h, delay } = echoImpulse(ps, taps, erlDb);
+  const xf = source === 'speech' ? (() => { const g = rng(ps + 3), sp = farEnd(n, ps + 1); return sp.map((v) => 0.25 * v + SPEECH_FLOOR * gaussian(g)); })() : (() => { const g = rng(ps + 1); return Array.from({ length: n }, () => Math.max(-0.4, Math.min(0.4, 0.05 * gaussian(g)))); })();
+  const x = Int32Array.from(xf, (v) => Math.round(v * 32767 * level));
+  const echo = new Int32Array(n), d = new Int32Array(n), nz = rng(ps + 2);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let k = delay; k < taps && k <= i; k++) s += h[k] * x[i - k];
+    echo[i] = Math.round(s);
+    d[i] = echo[i] + Math.round(noise * gaussian(nz));
+  }
+  return { index, taps, cls, source, delay, erlDb, x, echo, d };
 }
 
 // ---- the machine --------------------------------------------------------------------------------------
@@ -230,7 +234,7 @@ export function runPath(words: number[], path: EchoPath, budget: number = ECHO_S
   return res;
 }
 
-/** The reason a path failed, from what the bench saw (the values written, the ERLE curve), or ''. It says what the curve shows and lists the causes that fit it: the bench cannot see inside the program. */
+/** The reason a path failed, from what the bench saw (the values written, the ERLE curve), or ''. It says only what the curve shows: the cause is found by experiment (diagnose), not guessed from a curve that several faults share. */
 export function whyNot(r: PathResult): string {
   const p = r.path, tag = `path ${p.index + 1} (${tailWord(p.cls)}, ${p.source})`;
   if (r.fault) return `${tag}: ${r.fault.message}`;
@@ -249,8 +253,42 @@ export function whyNot(r: PathResult): string {
       ? "It ran away, the error growing far past the echo: the update's sign is wrong or the step is too large for the signal."
       : "It was wrong from the start and stayed so: ŷ is not an estimate of the echo (a constant, an old sample, a wrong scale), or the update's sign is wrong."}`;
   }
-  if (last - first > 1.2) return `${tag}: ${reached}. Not converged: it was still creeping up (${f(first)} over the first blocks of the graded stretch, ${f(last)} over the last), so it learns too slowly: the step is too small, or the update is not normalized by the signal's energy.`;
-  return `${tag}: ${reached}. The curve has plateaued below the target${sd > 2 ? `, wandering ${sd.toFixed(1)} dB from block to block` : ''}. Causes that fit: too few taps for this tail, a step too large for the signal${sd > 2 ? ' (the jitter points here)' : ''}, a step so small that it has not finished, or a biased update (one that truncates instead of rounding lets the weights drift).`;
+  if (last - first > 1.2) return `${tag}: ${reached}. It was still rising: ${f(first)} over the first blocks of the graded stretch, ${f(last)} over the last.`;
+  return `${tag}: ${reached}. It had levelled off there, within ${sd.toFixed(1)} dB from block to block.`;
+}
+
+// ---- the diagnosis, by experiment ---------------------------------------------------------------------
+
+/** The two paths the bench controls for diagnosis: a 16-tap tail with steady white noise at the usual level, and the same with the far end 20 dB quieter (the microphone noise too, so the signal-to-noise ratio is the same). */
+export const PROBE = { taps: 16, erlDb: 10, seed: 4242, quietDb: 20 } as const;
+export interface Probe { loud: number; quiet: number }
+
+/** Run the program on both probe paths (about a second): the ERLE it reaches on each. */
+export function probeEcho(words: number[]): Probe {
+  const n = ECHO_SPEC.samples, q = 10 ** (-PROBE.quietDb / 20);
+  const run = (level: number, noise: number) => runPath(words, makePath(0, 'short', PROBE.taps, PROBE.erlDb, 'noise', PROBE.seed, n, level, noise)).erle;
+  return { loud: run(1, ECHO_SPEC.noiseLsb), quiet: run(q, ECHO_SPEC.noiseLsb * q) };
+}
+
+/**
+ * Why the failing paths fail, as facts from the probes: when no path faulted and some ended up near or above the echo's own level, the program is run again on the probe paths.
+ * ``Works on the probe'' puts the fault in what the failing paths add (their tail, their far end); ``falls short'' puts it in the update itself, and the quieter probe says whether
+ * the step scales with the signal's level. '' when there is nothing to diagnose.
+ */
+export function diagnose(words: number[], results: readonly PathResult[]): string {
+  // paths that ran away, were wrong from the start or never wrote a ŷ have their own words; the probe is for the ones that only fell short
+  const failing = results.filter((r) => !r.pass && !r.fault && r.erle >= -3 && r.nonzero > 0);
+  if (!failing.length || results.some((r) => r.fault)) return '';
+  const { loud, quiet } = probeEcho(words), need = ECHO_SPEC.erleDb, f = (v: number) => `${v.toFixed(1)} dB`;
+  const head = `Run on a 16-tap tail with steady white noise, your program reaches ${f(loud)} at the usual far-end level and ${f(quiet)} with the far end 20 dB quieter (${f(need)} needed).`;
+  if (loud >= need) {
+    const reach = Math.max(...failing.map((r) => CLASS_OF[r.path.cls][1])), speech = failing.some((r) => r.path.source === 'speech');
+    return `${head} So the update works there. What the failing path${failing.length > 1 ? 's add' : ' adds'} is a tail up to ${reach} taps (a filter shorter than the tail cannot cancel it)${speech ? ', and speech\'s bursts and colour (a step that suits steady noise may not suit them)' : ''}.`;
+  }
+  const where = 'not the tail length';
+  if (quiet > loud + 10) return `${head} It falls short even there, so the fault is in the update, ${where}, and it does better when the signal is quieter: the step is too large at the usual level.`;
+  if (quiet < loud - 10) return `${head} It falls short even there, so the fault is in the update, ${where}, and it does much worse when the signal is quieter: the step does not scale with the signal's level (the update is not normalized by its energy).`;
+  return `${head} It falls short even there, so the fault is in what the program computes from x and d, ${where}: the step size, the rounding (a truncating update biases the weights), or a ŷ that is not the filter's output.`;
 }
 
 // ---- the grade ----------------------------------------------------------------------------------------
@@ -267,6 +305,8 @@ export interface EchoVerdict {
   worstCycles: number;
   meanCycles: number;
   minErle: number;
+  /** What the probe paths say about the failure (diagnose), or ''. */
+  diagnosis: string;
 }
 
 /** Assemble the learner's program (or say what is wrong with it). */
@@ -280,17 +320,17 @@ export function assembleEcho(src: string): { words: number[]; errors: { line: nu
 /** Grade a program on a seed's paths. `paths` may be given (the page runs them one at a time). */
 export function gradeEcho(src: string, seed: number, opts: { paths?: EchoPath[]; budget?: number } = {}): EchoVerdict {
   const a = assembleEcho(src);
-  const empty: EchoVerdict = { seed, ok: false, errors: a.errors, results: [], reasons: [], worstCycles: 0, meanCycles: 0, minErle: 0 };
+  const empty: EchoVerdict = { seed, ok: false, errors: a.errors, results: [], reasons: [], worstCycles: 0, meanCycles: 0, minErle: 0, diagnosis: '' };
   if (a.errors.length) return empty;
   const results = (opts.paths ?? echoPaths(seed)).map((p) => runPath(a.words, p, opts.budget));
-  return summarize(seed, results);
+  return summarize(seed, results, a.words);
 }
 
-export function summarize(seed: number, results: PathResult[]): EchoVerdict {
+export function summarize(seed: number, results: PathResult[], words?: number[]): EchoVerdict {
   return {
     seed, ok: results.length === ECHO_SPEC.paths && results.every((r) => r.pass), errors: [], results, reasons: results.filter((r) => !r.pass).map((r) => r.why),
     worstCycles: Math.max(0, ...results.map((r) => r.worstCycles)), meanCycles: results.reduce((s, r) => s + r.meanCycles, 0) / Math.max(1, results.length),
-    minErle: Math.min(...results.map((r) => r.erle)),
+    minErle: Math.min(...results.map((r) => r.erle)), diagnosis: words ? diagnose(words, results) : '',
   };
 }
 

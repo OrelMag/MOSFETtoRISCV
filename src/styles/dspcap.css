@@ -29,3 +29,4 @@
 .ec-t th { text-align: left; font: 600 11px var(--font-ui); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 5px 10px 5px 0; border-bottom: 1px solid var(--border); }
 .ec-t td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
 .ec-t td:first-child { font-family: var(--font-mono); white-space: nowrap; }
+.ec-diag { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 6px 6px 0; }

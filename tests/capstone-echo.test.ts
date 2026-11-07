@@ -3,7 +3,7 @@
 // reason it should (and says so). The 60-seed sweeps behind the edges are in the commit message; these tests pin them on a few seeds each.
 
 import { describe, expect, it } from 'vitest';
-import { assembleEcho, BLOCK, ECHO_MACHINES, ECHO_SPEC, ECHO_STARTER, echoPaths, echoReference, gradeEcho, REF_Q, REF_TAPS, referenceCycles, type RefOpts } from '../src/campaign/capecho';
+import { assembleEcho, probeEcho, BLOCK, ECHO_MACHINES, ECHO_SPEC, ECHO_STARTER, echoPaths, echoReference, gradeEcho, REF_Q, REF_TAPS, referenceCycles, type RefOpts } from '../src/campaign/capecho';
 import { capstoneById } from '../src/campaign/capstone';
 import { erleDb, Lms } from '../src/dsp/adaptive';
 import { DSP_CAPSTONES } from '../src/learn/capstones';
@@ -217,34 +217,116 @@ describe('the echo capstone', () => {
     }
   }, 120_000);
 
-  it('mutant: μ too large (4) → runaway on every path; μ of 2 fails every path with a plateau and lists the step among the causes', async () => {
+  it('mutant: μ too large (4) → runaway on every path', async () => {
     for (const { seed, v } of verdicts({ muShift: 21 })) {
       await tick();
       expect(v.ok, `seed ${seed}`).toBe(false);
       for (const r of v.results) expect(r.why, `seed ${seed}`).toMatch(/It ran away.*the update's sign is wrong or the step is too large/);
-    }
-    for (const { seed, v } of verdicts({ muShift: 20 }, [1, 2])) {
-      expect(v.ok, `seed ${seed}`).toBe(false);
-      for (const r of v.results) { expect(r.pass).toBe(false); expect(r.erle).toBeLessThan(ECHO_SPEC.erleDb - 8); if (/plateaued/.test(r.why)) expect(r.why).toMatch(/a step too large for the signal/); }
+      expect(v.diagnosis).toBe('');
     }
   }, 120_000);
 
-  it('mutant: μ too small (1/32) → mostly "still creeping up" with the graded figure first; the rest list a step too small among the causes', async () => {
-    for (const { seed, v } of verdicts({ muShift: 14 })) {
+  // The curve alone cannot tell these faults apart, so a message never guesses: the path's line says what the curve shows, and the diagnosis is the result of
+  // running the program again on two paths the bench controls (a 16-tap tail, steady noise, the usual level and 20 dB quieter).
+  const curve = /ERLE [-\d.]+ dB over the last 4.?000 samples, 25.0 dB needed\. (It was still rising: [-\d.]+ dB over the first blocks of the graded stretch, [-\d.]+ dB over the last\.|It had levelled off there, within [\d.]+ dB from block to block\.)$/;
+
+  it('the path lines say only what the curve shows: no cause, no "step too small", no jitter hint', async () => {
+    for (const o of [{ muShift: 20 }, { muShift: 14 }, { truncate: true }, { taps: 64 }] as RefOpts[]) for (const { seed, v } of verdicts(o, [1, 2])) {
       await tick();
-      expect(v.ok, `seed ${seed}`).toBe(false);
-      for (const r of v.results.filter((x) => !x.pass)) { expect(r.fault).toBeNull(); expect(r.why).toMatch(/ERLE [-\d.]+ dB over the last 4.?000 samples, 25.0 dB needed\. (Not converged: it was still creeping up|The curve has plateaued.*a step so small that it has not finished)/); }
-      expect(v.results.filter((r) => /Not converged/.test(r.why)).length, `seed ${seed}`).toBeGreaterThanOrEqual(2);
+      for (const r of v.results.filter((x) => !x.pass && x.erle >= -3)) { expect(r.why, `${JSON.stringify(o)} seed ${seed}`).toMatch(curve); expect(r.why).not.toMatch(/too small|too large|jitter|rounds away|truncat|too few taps/); }
     }
   }, 120_000);
 
-  it('mutant: a truncating update (no rounding term) → fails every seed on a plateau that names the biased update', async () => {
-    for (const { seed, v } of verdicts({ truncate: true })) {
+  it('the probes: the reference reaches 35 dB or more on both, and a verdict that passes has no diagnosis', () => {
+    const w = assembleEcho(ref).words, p = probeEcho(w);
+    expect(p.loud).toBeGreaterThan(35);
+    expect(p.quiet).toBeGreaterThan(30);
+    expect(gradeEcho(ref, 2).diagnosis).toBe('');
+  });
+
+  it('diagnosis: μ of 2 → falls short on the probe, and better when quieter: "the step is too large at the usual level"', async () => {
+    for (const { seed, v } of verdicts({ muShift: 20 }, [1, 2, 3])) {
       await tick();
-      expect(v.ok, `seed ${seed}`).toBe(false);
-      for (const r of v.results) { expect(r.pass).toBe(false); expect(r.erle).toBeLessThan(ECHO_SPEC.erleDb - 5); expect(r.why).not.toMatch(/rounds away/); if (/plateaued/.test(r.why)) expect(r.why).toMatch(/a biased update \(one that truncates/); }
+      expect(v.ok).toBe(false);
+      expect(v.diagnosis, `seed ${seed}`).toMatch(/falls short even there.*does better when the signal is quieter: the step is too large at the usual level/);
     }
   }, 120_000);
+
+  it('diagnosis: μ of 1/32 and a truncating update → the fault is in the update, not the tail, and neither is named for what the probe cannot show', async () => {
+    for (const o of [{ muShift: 14 }, { truncate: true }] as RefOpts[]) for (const { seed, v } of verdicts(o, [1, 2])) {
+      await tick();
+      expect(v.diagnosis, `${JSON.stringify(o)} seed ${seed}`).toMatch(/falls short even there, so the fault is in what the program computes from x and d, not the tail length: the step size, the rounding \(a truncating update biases the weights\), or a ŷ that is not the filter's output/);
+      expect(v.diagnosis).not.toMatch(/normalized|too large|a tail up to/);
+    }
+  }, 120_000);
+
+  it('diagnosis: too few taps (80, 64) → the update works on the probe, and the tail is named as what the path adds', async () => {
+    for (const taps of [80, 64]) for (const { seed, v } of verdicts({ taps }, [1, 2, 3])) {
+      await tick();
+      expect(v.ok).toBe(false);
+      expect(v.diagnosis, `${taps} taps seed ${seed}`).toMatch(/So the update works there\. What the failing paths? adds? is a tail up to \d+ taps/);
+      expect(v.diagnosis).not.toMatch(/falls short/);
+    }
+  }, 120_000);
+
+  /** Plain LMS (no normalization): the step is a fixed shift, so it scales with the signal's energy. */
+  const plainLms = (shift: number) => `lui s0, 0x10000
+loop: lw t0, 0(s0)
+li t1, 380
+sh: lw t3, 0x3fc(t1)
+sw t3, 0x400(t1)
+addi t1, t1, -4
+bgtz t1, sh
+sw t0, 0x400(zero)
+li t1, 0
+li a2, 0
+li t2, 384
+fir: lw a4, 0(t1)
+lw a5, 0x400(t1)
+mul a4, a4, a5
+add a2, a2, a4
+addi t1, t1, 4
+blt t1, t2, fir
+srai a2, a2, 15
+sw a2, 4(s0)
+lw t0, 8(s0)
+sub t0, t0, a2
+li t1, 0
+upd: lw a5, 0x400(t1)
+mul a5, a5, t0
+srai a5, a5, ${shift}
+lw a4, 0(t1)
+add a4, a4, a5
+sw a4, 0(t1)
+addi t1, t1, 4
+blt t1, t2, upd
+j loop
+`;
+
+  it('diagnosis: plain LMS (fixed step, no normalization) → much worse when quieter: "the step does not scale with the signal\'s level"', async () => {
+    for (const { seed, v } of [1, 2].map((seed) => ({ seed, v: gradeEcho(plainLms(16), seed) }))) {
+      await tick();
+      expect(v.ok).toBe(false);
+      expect(v.diagnosis, `seed ${seed}`).toMatch(/does much worse when the signal is quieter: the step does not scale with the signal's level \(the update is not normalized by its energy\)/);
+    }
+  }, 120_000);
+
+  it('a ŷ that is last sample\'s d is never blamed on the tail or on normalization', () => {
+    const v = gradeEcho('lui s0, 0x10000\nli s1, 0\nl: lw t0, 0(s0)\nsw s1, 4(s0)\nlw s1, 8(s0)\nj l\n', 2);
+    expect(v.ok).toBe(false);
+    expect(v.diagnosis).not.toMatch(/a tail up to|normalized|too large/);
+    for (const r of v.results) expect(r.why).not.toMatch(/too small|too large|jitter|too few taps/);
+  });
+
+  it('the page\'s level claim holds: speech about −27 to −30 dBFS rms with peaks near −13, white noise −26 dBFS rms', () => {
+    const db = (x: Int32Array) => 20 * Math.log10(Math.sqrt(x.reduce((a, v) => a + v * v, 0) / x.length) / 32768);
+    for (const seed of [1, 2, 3, 77, 5, 9]) for (const p of echoPaths(seed)) {
+      const peak = 20 * Math.log10(p.x.reduce((m, v) => Math.max(m, Math.abs(v)), 0) / 32768);
+      if (p.source === 'speech') { expect(db(p.x)).toBeGreaterThan(-30.5); expect(db(p.x)).toBeLessThan(-26.5); } else { expect(db(p.x)).toBeGreaterThan(-26.5); expect(db(p.x)).toBeLessThan(-25.5); }
+      expect(peak).toBeGreaterThan(-15);
+      expect(peak).toBeLessThan(-12);
+    }
+  });
 
   it('mutant: over the cycle budget → every path stops on the budget with its overshoot, before any ERLE counts', () => {
     for (const { seed, v } of verdicts({ busy: 300 }, [1, 2, 3])) {
