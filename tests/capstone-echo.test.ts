@@ -22,8 +22,8 @@ describe('the echo capstone', () => {
     expect(capstoneById('cap_echo')?.title).toBe('An echo canceller');
   });
 
-  it('offers RV32IM, and the MAC and DSP machines only as coming soon', () => {
-    expect(ECHO_MACHINES.map((m) => [m.id, m.ready])).toEqual([['rv32im', true], ['mac', false], ['dsp', false]]);
+  it('offers RV32IM, RV32 + MAC and the DSP core, all graded (tests/capstone-echo-machines.test.ts)', () => {
+    expect(ECHO_MACHINES.map((m) => [m.id, m.ready])).toEqual([['rv32im', true], ['mac', true], ['dsp', true]]);
   });
 
   it('draws four paths from the seed: one short, two medium, one long (96 taps) tail, of different gains, and different ones for other seeds', () => {
