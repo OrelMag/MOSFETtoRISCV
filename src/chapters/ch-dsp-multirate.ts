@@ -23,7 +23,7 @@ export const chMultirate: Chapter = {
     'derive a CIC from a moving average, and size its registers from N log₂ R',
     'price a large rate change as one filter, as branches, and as a cascade',
   ],
-  builds: ['signals', 'carriers', 'muldiv'],
+  builds: ['signals', 'fixed', 'firdesign', 'muldiv'],
   recap: {
     keep: [
       'Keeping every R-th sample folds everything above the new half-rate into the band, for good. So the filter comes first, and it runs at the high rate.',
@@ -62,7 +62,7 @@ export const chMultirate: Chapter = {
       get body() {
         const r = cascade();
         return `
-        <p>A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
+        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
         <p>Filtering is multiplications a second, so the price is taps × rate. Lower the rate by R, and everything after it costs R times less. The chapter's goal is one job: drop the rate by ${CASCADE_R}, keep 40 % of the new rate and hold back what would fold by 50 dB. Done as a single filter at the input's rate, that takes ${n0(r[0].mults)} multiplications for each input sample. By the end it will take ${r[3].mults.toFixed(2)}, about a thousandth of that, with the same mask.</p>`;
       },
       challenge: {
@@ -130,7 +130,7 @@ export const chMultirate: Chapter = {
         const hb = halfBand(23);
         return `
         <p>Going up by L is the mirror image. Put L − 1 zeros between samples, and the spectrum stays the same but now repeats: the zeros made <strong>images</strong>. A low-pass filter at the new rate removes them, and in doing so fills in the zeros. Most of its inputs are zeros, and multiplying by those is a waste, so again the taps split into branches, and each output needs only every L-th tap. Any rational rate change works this way: up by L, filter, down by M, with one filter doing both jobs. Compared with scipy's <code>resample_poly</code> at 3 / 2, 2 / 3 and 5, the model here agrees to rounding.</p>
-        <p>Dropping by exactly two has a special filter. Put the cut-off at a quarter of the rate, and a windowed sinc has a zero at every even distance from its middle. So a ${hb.length}-tap <strong>half-band</strong> filter has only ${nonZero(hb)} that are not zero, and the symmetric ones share a multiplier, so its price is ${(nonZero(hb) - 1) / 2 + 1} multipliers, under a third of its length. Its edge is broad, centred on a quarter of the rate, which is why it suits a stage with plenty of room left. It takes several in a row to go far.</p>
+        <p>Dropping by exactly two has a special filter. Put the cut-off at a quarter of the rate, and a windowed sinc has a zero at every even distance from its middle. So a ${hb.length}-tap <strong>half-band</strong> filter has only ${nonZero(hb)} that are not zero, and the symmetric ones share a multiplier, so its price is ${(nonZero(hb) - 1) / 2} multipliers and a shift for the middle tap, which is exactly ½: under a third of its length. Its edge is broad, centred on a quarter of the rate, which is why it suits a stage with plenty of room left. It takes several in a row to go far.</p>
         <div class="try">Move the tone and watch its images. Then see how little of them gets past the filter.</div>`;
       },
       widget: upWidget,
@@ -146,7 +146,7 @@ export const chMultirate: Chapter = {
       title: 'A moving average, rearranged',
       body: `
         <p>What if the filter needed no multipliers? The cheapest low-pass there is, a moving average of R samples, has every tap equal to 1. Its sum can be kept running: add the new sample, take off the oldest. That is y[n] = y[n−1] + x[n] − x[n−R]: an <em>integrator</em>, then a <em>comb</em> that subtracts a delayed copy.</p>
-        <p>Now put the integrator before the rate change and the comb after it. The comb's R-sample delay at the high rate becomes a single-sample delay at the low rate, so there is no line of R samples anymore. Stack N of each and you have N moving averages in a row: a <strong>cascaded integrator-comb</strong>, or CIC, as Eugene Hogenauer set it out in 1981. It is N adders running at the high rate, then N subtractors at the low rate, and no multiplier at all.</p>
+        <p>Now put the integrator before the rate change and the comb after it. The comb's R-sample delay at the high rate becomes a single-sample delay at the low rate, so there is no line of R samples anymore. Stack N of each and you have N moving averages in a row: a <strong>cascaded integrator-comb</strong>, or CIC, as Eugene Hogenauer set it out in 1981 (<a href="#/c/radio/4">chapter ${numOf('radio')}</a> named it in passing). It is N adders running at the high rate, then N subtractors at the low rate, and no multiplier at all.</p>
         <p>Its response is the moving average's to the power N, (sin(πRf) / (R sin(πf)))^N. Each multiple of the new rate has a null, and those are exactly the frequencies that would fold onto DC. So what is about to alias is what it stops best. But it droops across the band, and between nulls it rejects much less.</p>
         <div class="try">Raise N and watch the sidelobes fall. Read the droop too: it gets worse as N goes up.</div>`,
       widget: cicWidget,
@@ -163,7 +163,7 @@ export const chMultirate: Chapter = {
       get body() {
         const g = cicGrowth(4, 16), w = cicWidth(CIC_N, CIC_R, CIC_IN);
         return `
-        <p>A running sum of a constant grows for ever, so it overflows, and it will. That seems fatal, and it does no harm at all. The output is only ever a difference of those sums, and two's complement differences are right modulo the word. If the true result fits, every wrap on the way cancels exactly. It would be wrong to saturate here, since a clamped register has lost the very number that the comb needs.</p>
+        <p>A running sum of a constant grows for ever, so it overflows, and it will. That seems fatal, and it does no harm at all. The output is only ever a difference of those sums, and two's complement differences are right modulo the word, as <a href="#/c/fixed/5">Wrapping can be right</a> showed. If the true result fits, every wrap on the way cancels exactly. It would be wrong to saturate here, since a clamped register has lost the very number that the comb needs.</p>
         <p>So the only sizing that matters is the output's. Hogenauer's paper gives the gain as (RM)^N, where M is the comb's delay, 1 here, so the registers grow by <strong>N log₂ R</strong> bits: ${g} bits at order 4 and ÷ 16. It also shows that every stage needs that top bit, integrators and combs alike. Here the gain is a power of two, so the output word is exactly full at the worst input, and the widget runs that input: the most negative word, held. The paper goes on to work out how many low bits each later stage can drop, and this design does not attempt it. All ${w} bits run all the way through.</p>
         <div class="try">Take a bit off and watch the output go wrong, while the integrator wraps just the same at the right width.</div>`;
       },
@@ -199,9 +199,9 @@ export const chMultirate: Chapter = {
       get body() {
         const r = cascade();
         return `
-        <p>Back to the job from the start: ÷ ${CASCADE_R}, keep 40 % of the new rate, hold back 50 dB from 60 %. The taps below are not estimated. Each is the fewest that meet that mask, found by designing a filter of each length and measuring it, with the windowed design from <a href="#/c/signals/3">the signals chapter</a>. Better design methods would shorten every row, and the ratios would change little.</p>
+        <p>Back to the job from the start: ÷ ${CASCADE_R}, keep 40 % of the new rate, hold back 50 dB from 60 %. The taps below are not estimated. Each is the fewest that meet that mask, found by designing a filter of each length and measuring it, with the windowed design from <a href="#/c/signals/3">the signals chapter</a>. Better design methods, such as <a href="#/c/firdesign/2">Parks–McClellan</a>, would shorten every row, and the ratios would change little.</p>
         <p>A single filter takes ${n0(r[0].mults)} multiplications for each input. Cut into branches, ${r[1].mults.toFixed(1)}. Halving six times comes to ${r[2].mults.toFixed(1)}, since the early stages have plenty of room and need few taps. A CIC taking the first ÷ 16 for nothing leaves only a ÷ 4 filter at a sixteenth of the rate, at ${r[3].mults.toFixed(2)}. That is about a thousandth of the first row, from reordering the work rather than from a cleverer filter.</p>
-        <p>This flatters the CIC in one way, and it has to be said: multiplications are all the table counts, so its adders go free, and they run at the input's full rate. The order matters too. Order ${CIC_ORDER} is the one that fits this mask: order 2 lets too much alias through, and order 4 droops past the half decibel the mask allows. A tighter band than this would need a small inverse of the droop in the last filter. Still, this is why a software radio's front end looks the way it does. A later chapter builds one.</p>`;
+        <p>This flatters the CIC in one way, and it has to be said: multiplications are all the table counts, so its adders go free, and they run at the input's full rate. The order matters too. Order ${CIC_ORDER} is the one that fits this mask: order 2 lets too much alias through, and order 4 droops past the half decibel the mask allows. A tighter band than this would need a small inverse of the droop in the last filter. Still, this is why a software radio's front end looks the way it does. <a href="#/c/sdr/0">Chapter ${numOf('sdr')}</a> builds one.</p>`;
       },
       widget: cascadeWidget,
       challenge: {

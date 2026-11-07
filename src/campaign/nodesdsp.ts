@@ -78,10 +78,10 @@ export const NODES_DSP: CampaignNode[] = [
     why: 'Three adders and two shifts turn a vector by a fixed angle one way or the other: one step of a rotation with no multiplier. The shifts are wiring and the angle a constant, so the only decision is which way: the sign of z (or of y) picks add or subtract in all three adders at once.',
     tips: [
       'x and y each move toward the other: xo = x ∓ (y ≫ 1), yo = y ± (x ≫ 1). A shift right by 1 is wiring: bit k of the result is bit k+1 of the input, and the top bit is copied.',
-      'One signal d (1 = turn by +atan) drives all the adders: the z adder and the x adder subtract when d is 1, the y adder adds. the y adder takes the opposite of d.',
+      'One signal d (1 = turn by +atan) drives all the adders: the z adder and the x adder subtract when d is 1, and the y adder adds: it takes the opposite of d.',
       'd comes from z ≥ 0 (the inverse of the top bit of z) when rotate is 1, and from y < 0 (the top bit of y) when rotate is 0: a 2:1 mux on rotate. The angle constant is atan ½ as a 5-bit word.',
     ],
-    codex: ['cordic'], chapters: [{ chapter: 'cordic', step: 1, label: 'One way or the other' }, { chapter: 'cordic', step: 3, label: 'A stage is three adders' }],
+    codex: ['cordic'], chapters: [{ chapter: 'cordic', step: 1, label: 'One way or the other' }, { chapter: 'cordic', step: 3, label: 'A stage is three adders' }, { chapter: 'cordic', step: 4, label: 'Run it backwards' }],
   },
   {
     id: 'sp_sd', act: 13, title: 'Sigma-delta loop', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_sd, givesOf: sdGives,
