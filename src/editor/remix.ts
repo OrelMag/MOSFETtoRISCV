@@ -10,12 +10,14 @@
 // reload, so they come along as sandbox parts (ROM, constant, card reader) or as chips of their own.
 
 import { listed } from '../lib/catalog';
+import { dsp24ComputerOf } from '../lib/dsp24core';
 import { registry } from '../lib/define';
 import { microprogramOf } from '../lib/multicycle';
 import { regenerable } from '../lib/resolve';
 import { disasm } from '../riscv/isa';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { readerRefOf } from './cardparts';
+import { dspChip, dspSource } from './exampledsp';
 import { docFromDef } from './fromdef';
 import { same } from './history';
 import { type ChipDoc, type PartRef, slug, uniqueName, type Workspace } from './model';
@@ -104,6 +106,12 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
   let doc: ChipDoc | { error: string };
   const own = userChip(ws, def) ? ws.chips[def.id] : undefined;
   if (own) doc = { ...structuredClone(own), id, name };
+  // the DSP core's computer as Examples ▸ DSP core draws it (the core one part, the ROM in DSP24 assembly, X and Y as RAM parts),
+  // so the CPU drawer finds it and checks it against the golden model
+  else if (dsp24ComputerOf(def)) {
+    const c = dsp24ComputerOf(def)!;
+    doc = dspChip(id, name, { name: def.name, about: 'opened from the chapter', src: dspSource(c.program), x: c.x, y: c.y });
+  }
   else doc = docFromDef(def, { id, name, refOf });
   if ('error' in doc) return { error: doc.error };
   // Input values are the learner's own state, not part of the circuit.
