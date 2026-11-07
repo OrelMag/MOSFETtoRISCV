@@ -2976,3 +2976,6 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .wire.quiet.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 0.45); }
 .wire.quiet.v1, .wire.quiet.bus1, .wire.quiet.vx, .wire.quiet.short { opacity: 1; }
 .wire.quiet.v1 { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); }
+
+/* the LEVEL tag under a panel that would cover it (Stage.yieldBadge) */
+.level-badge.yield { visibility: hidden; }
