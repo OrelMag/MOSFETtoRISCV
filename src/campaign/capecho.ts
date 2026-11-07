@@ -193,6 +193,10 @@ export interface PathResult {
   worstCycles: number;
   /** Samples whose ŷ was not 0, from the values the program wrote. */
   nonzero: number;
+  /** The accumulator was used (mac, mac2) but cleared in fewer than half the samples (clracc; on the DSP clr or rndc): its text, or ''. */
+  noClear: string;
+  /** What clears the accumulator on the machine that made the run. */
+  clearWith: string;
   /** One line saying why it failed, in the learner's terms (empty on a pass). */
   why: string;
 }
@@ -220,7 +224,7 @@ export function runPath(words: number[], path: EchoPath, budget: number = ECHO_S
     if (++guard > 200000) break;
   }
   if (!m.fault && m.done && m.phase === 1) m.fault = { kind: 'protocol', message: `sample ${m.at}: no ŷ written` };
-  return scorePath(path, { y: m.y, fault: m.fault, worst: m.worst, total: m.total });
+  return scorePath(path, { y: m.y, fault: m.fault, worst: m.worst, total: m.total, clears: m.clrCount, accumulations: m.macCount, clearWith: 'clracc clears it' });
 }
 
 /** The graded numbers of a run, whichever machine made it. */
@@ -238,7 +242,7 @@ export function scorePath(path: EchoPath, run: RawRun): PathResult {
   const e = erleDb(echoW, resW), erle = Number.isFinite(e) ? Math.min(80, e) : 80;
   const mean = answered > 1 ? m.total / Math.max(1, answered - 1) : 0;
   const nonzero = m.y.reduce((s, v) => s + (v !== 0 ? 1 : 0), 0);
-  const res: PathResult = { path, erle, blocks, pass: false, fault: m.fault, answered, meanCycles: mean, worstCycles: m.worst, nonzero, why: '' };
+  const res: PathResult = { path, erle, blocks, pass: false, fault: m.fault, answered, meanCycles: mean, worstCycles: m.worst, nonzero, noClear: (run.accumulations ?? 0) > 0 && (run.clears ?? 0) < answered / 2 ? `${run.clears ? `cleared in only ${groupDigits(run.clears)} of ${groupDigits(answered)} samples` : 'never cleared'}` : '', clearWith: run.clearWith ?? '', why: '' };
   res.why = whyNot(res);
   res.pass = res.why === '';
   return res;
@@ -263,6 +267,7 @@ export function whyNot(r: PathResult): string {
   const first = mean(tail.slice(0, 4)), last = mean(tail.slice(-4));
   const sd = Math.sqrt(mean(tail.map((b) => (b - mean(tail)) ** 2)));
   if (r.answered > 0 && r.nonzero === 0) return `${tag}: ${reached}. ŷ was 0 on every one of the ${groupDigits(r.answered)} samples: nothing is subtracted, so the weights never move or the filter's output is never what is written.`;
+  if (r.noClear) return `${tag}: ${reached}. The accumulator is ${r.noClear}: each sample's sum adds onto the last one's (${r.clearWith}).`;
   if (r.erle < -3) {
     // a constant, an old sample or a wrong scale is wrong by about the echo's own size, steadily; an error far past that has run away; one that was right at times and far off at others is unstable
     const all = r.blocks.filter((b): b is number => b !== null), hi = Math.max(...all), lo = Math.min(...all);
@@ -281,13 +286,13 @@ export function whyNot(r: PathResult): string {
 
 /** The two paths the bench controls for diagnosis: a 16-tap tail with steady white noise at the usual level, and the same with the far end 20 dB quieter (the microphone noise too, so the signal-to-noise ratio is the same). */
 export const PROBE = { taps: 16, erlDb: 10, seed: 4242, quietDb: 20 } as const;
-export interface Probe { loud: number; quiet: number }
+export interface Probe { loud: number; quiet: number; /** 6 dB above the usual level: a step that scales with the signal's level changes the answer, a normalized one hardly does. */ louder: number }
 
 /** Run the program on both probe paths (about a second): the ERLE it reaches on each. */
 export function probeEcho(words: number[], machine: EchoMachineId = 'rv32im'): Probe {
   const n = ECHO_SPEC.samples, q = 10 ** (-PROBE.quietDb / 20);
   const run = (level: number, noise: number) => runPath(words, makePath(0, 'short', PROBE.taps, PROBE.erlDb, 'noise', PROBE.seed, n, level, noise), ECHO_SPEC.budget, machine).erle;
-  return { loud: run(1, ECHO_SPEC.noiseLsb), quiet: run(q, ECHO_SPEC.noiseLsb * q) };
+  return { loud: run(1, ECHO_SPEC.noiseLsb), quiet: run(q, ECHO_SPEC.noiseLsb * q), louder: run(2, 2 * ECHO_SPEC.noiseLsb) };
 }
 
 /**
@@ -299,8 +304,8 @@ export function diagnose(words: number[], results: readonly PathResult[], machin
   // paths that ran away, were wrong from the start or never wrote a ŷ have their own words; the probe is for the ones that only fell short
   const failing = results.filter((r) => !r.pass && !r.fault && r.erle >= -3 && r.nonzero > 0);
   if (!failing.length || results.some((r) => r.fault)) return '';
-  const { loud, quiet } = probeEcho(words, machine), need = ECHO_SPEC.erleDb, f = (v: number) => `${v.toFixed(1)} dB`;
-  const head = `Run on a 16-tap tail with steady white noise, your program reaches ${f(loud)} at the usual far-end level and ${f(quiet)} with the far end 20 dB quieter (${f(need)} needed).`;
+  const { loud, quiet, louder } = probeEcho(words, machine), need = ECHO_SPEC.erleDb, f = (v: number) => `${v.toFixed(1)} dB`;
+  const head = `Run on a 16-tap tail with steady white noise, your program reaches ${f(loud)} at the usual far-end level, ${f(quiet)} with the far end 20 dB quieter and ${f(louder)} with it 6 dB louder (${f(need)} needed).`;
   if (loud >= need) {
     const reach = Math.max(...failing.map((r) => CLASS_OF[r.path.cls][1])), speech = failing.some((r) => r.path.source === 'speech');
     // another path ended worse than no filter at all: on bursts the update is unstable, which is not the slow step the sentence below would suggest raising
@@ -310,7 +315,10 @@ export function diagnose(words: number[], results: readonly PathResult[], machin
   }
   const where = 'not the tail length';
   if (quiet > loud + 10) return `${head} It falls short even there, so the fault is in the update, ${where}, and it does better when the signal is quieter: the step is too large at the usual level.`;
-  if (quiet < loud - 10) return `${head} It falls short even there, so the fault is in the update, ${where}, and it does much worse when the signal is quieter: the step does not scale with the signal's level (the update is not normalized by its energy).`;
+  // louder changes the answer a lot while the update is not a normalized one: the step scales with the signal's level (plain LMS)
+  if (Math.abs(louder - loud) > 5) return `${head} It falls short even there, so the fault is in the update, ${where}, and the answer changes with the level (${f(quiet)} quieter, ${f(louder)} louder): the step does not scale with the signal's level (the update is not normalized by its energy).`;
+  // quieter is much worse but louder is about the same: normalized, and so small that at a low level it stalls (rounding to the word length, or an energy floor above a quiet signal's energy)
+  if (quiet < loud - 10) return `${head} It falls short even there, so the fault is in the update, ${where}. It does much worse when the signal is quieter but about the same when it is louder: the step does scale with the level, but it is so small that at a low level it stalls (rounding to the word length, or an energy floor larger than a quiet signal's energy). Raise the step.`;
   return `${head} It falls short even there, so the fault is in what the program computes from x and d, ${where}: the step size, the rounding (a truncating update biases the weights), or a ŷ that is not the filter's output.`;
 }
 
@@ -397,12 +405,26 @@ export interface RefOpts {
 
 /** The reference's shape, for the page (the tests pin them to the program: tests/capstone-echo.test.ts). */
 export const REF_TAPS = 96, REF_Q = 14;
+/** The muShift values at which the RV32IM and RV32 + MAC references pass (μ = 1/16 … 1; the tests pin both ends and the failing neighbours). */
+export const RV_PASSING_SHIFTS = [15, 19] as const;
 
 /** Cycles a sample of the reference takes, measured: the worst over a short run (the program has no data-dependent path). */
 const refCycles = new Map<EchoMachineId, number>();
+/** A full-scale square wave in, the echo path silent: it drives every data-dependent loop (the DSP reference's bit-length loop) to its longest. */
+function squarePath(n: number): EchoPath {
+  const x = Int32Array.from({ length: n }, (_, i) => (i % 2 ? 30000 : -30000));
+  return { index: 0, taps: 0, cls: 'short', source: 'noise', delay: 0, erlDb: 0, x, echo: new Int32Array(n), d: new Int32Array(n) };
+}
+/**
+ * The worst sample of the machine's reference, measured: the larger of a typical path's and the square wave's, 600 samples each (the ring wraps every 96).
+ * No graded run is slower: tests/capstone-echo-machines.test.ts holds every graded run's worst at or below it.
+ */
 export function referenceCycles(machine: EchoMachineId = 'rv32im'): number {
   let c = refCycles.get(machine);
-  if (c === undefined) refCycles.set(machine, (c = runPath(assembleEcho(referenceFor(machine), machine).words, echoPaths(1, 600)[0], ECHO_SPEC.budget, machine).worstCycles));
+  if (c === undefined) {
+    const w = assembleEcho(referenceFor(machine), machine).words;
+    refCycles.set(machine, (c = Math.max(...[echoPaths(1, 600)[0], squarePath(600)].map((p) => runPath(w, p, ECHO_SPEC.budget, machine).worstCycles))));
+  }
   return c;
 }
 

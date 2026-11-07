@@ -7,13 +7,14 @@
 import { groupDigits } from '../sim/numfmt';
 import { assemble24 } from '../dsp/asm24';
 import { Iss24, s16 } from '../dsp/iss24';
-import { ROM24_WORDS } from '../dsp/isa24';
+import { decode24, ROM24_WORDS } from '../dsp/isa24';
 import type { EchoPath, PathFault } from './capecho';
 
 /** The bench's words (a program that writes them is overwritten at the next out). */
 export const DSP_IO = { x: 254, d: 255 } as const;
 
-export interface RawRun { y: number[]; fault: PathFault | null; worst: number; total: number }
+/** What a run leaves for scoring. clears / accumulations: how often the accumulator was cleared and used, for the diagnosis "never cleared". */
+export interface RawRun { y: number[]; fault: PathFault | null; worst: number; total: number; clears?: number; accumulations?: number; /** What clears the accumulator on this machine, for the message. */ clearWith?: string }
 
 const g = groupDigits;
 
@@ -28,12 +29,23 @@ export function assembleDsp(src: string): { words: number[]; errors: { line: num
 export function runDsp(words: number[], path: EchoPath, budget: number, setup: number): RawRun {
   const m = new Iss24(words), n = path.x.length;
   const y: number[] = [];
-  let fault: PathFault | null = null, last = -1, worst = 0, total = 0;
+  let fault: PathFault | null = null, last = -1, worst = 0, total = 0, readX = false, clears = 0, accumulations = 0;
+  // which instructions read X (an ld from X, a mac) and through which pointer, found once per ROM word
+  const xp = new Int8Array(words.length || 1).fill(-1), isClear = new Uint8Array(words.length || 1), isMac = new Uint8Array(words.length || 1);
+  words.forEach((w, i) => { const d = decode24(w); if (d.name === 'mac' || (d.name === 'ld' && !d.bus)) xp[i] = d.xp; isMac[i] = d.name === 'mac' ? 1 : 0; isClear[i] = d.name === 'clr' || d.name === 'rndc' ? 1 : 0; });
   m.x[DSP_IO.x] = path.x[0] & 0xffff;
   while (y.length < n && !fault) {
+    const pc = m.pc;
+    if (pc < xp.length) {
+      if (xp[pc] >= 0 && m.p[xp[pc]] === DSP_IO.x) readX = true;
+      accumulations += isMac[pc];
+      clears += isClear[pc];
+    }
     const st = m.step();
     if (st.out !== undefined) {
       const k = y.length;
+      if (!readX) { fault = { kind: 'protocol', message: k === 0 ? `the first out came before any read of X[${DSP_IO.x}]: ŷ must follow the x of its sample` : `sample ${k}: two outs with no read of x between them (X[${DSP_IO.x}]): one out per x` }; break; }
+      readX = false;
       y.push(s16(st.out));
       if (last >= 0) {
         const took = m.steps - last;
@@ -45,12 +57,12 @@ export function runDsp(words: number[], path: EchoPath, budget: number, setup: n
       m.y[DSP_IO.d] = path.d[k] & 0xffff;
       if (k + 1 < n) m.x[DSP_IO.x] = path.x[k + 1] & 0xffff;
     } else if (m.halted) {
-      fault = { kind: 'protocol', message: `the program halted after sample ${Math.max(y.length - 1, 0)} of ${g(n)}: it must keep answering until the last` };
+      fault = { kind: 'protocol', message: y.length ? `the program halted after sample ${y.length - 1} of ${g(n)}: it must keep answering until the last` : 'the program halted before answering any sample' };
     } else if (m.steps - Math.max(last, 0) > budget + setup) {
       fault = y.length ? { kind: 'budget', message: `sample ${y.length - 1} never reached its out: ${g(m.steps - last)} cycles and counting, over the budget of ${g(budget)}` } : { kind: 'setup', message: `no out in ${g(m.steps)} cycles (set-up allows ${g(setup)})` };
     }
   }
-  return { y, fault, worst, total };
+  return { y, fault, worst, total, clears, accumulations, clearWith: 'clr clears it, and so does rndc' };
 }
 
 // ---- the starter and the reference --------------------------------------------------------------------
@@ -83,14 +95,20 @@ export interface DspRefOpts {
   twice?: boolean;
   /** Idle loop iterations (two cycles each) at the end of every sample. */
   busy?: number;
+  /** Never clear the accumulator: rnd in place of rndc, and no clr. */
+  noClr?: boolean;
+  /** No normalization: the step's power of two is this constant whatever the signal's level (plain LMS). */
+  plain?: number;
 }
 
 export const DSP_REF_SHIFT = 9;
+/** The rndc shifts at which the reference passes (tests/capstone-echo-machines.test.ts pins both ends, and that the next shift on either side fails): a window of 8 in the step. */
+export const DSP_PASSING_SHIFTS = [8, 11] as const;
 
 /** The reference canceller: NLMS on 96 taps with 16-bit Q15 weights, and no divide: the step is a power of two read off the bit length of a leaky mean of x². */
 export function dspReference(o: DspRefOpts = {}): string {
   const N = o.taps ?? 96, G = o.gshift ?? DSP_REF_SHIFT, up = o.update ?? true, op = o.sign === -1 ? 'sub' : 'add';
-  return `; NLMS echo canceller on the DSP core: ${N} taps, weights in Y (Q15), the x history in X, both circular windows of ${N}.
+  const text = `; NLMS echo canceller on the DSP core: ${N} taps, weights in Y (Q15), the x history in X, both circular windows of ${N}.
 ; x is read from X[254], d from Y[255]; the normalization has no divide: the step is a power of two found from the bit length of a leaky mean of x².
         ldi   xl, ${N}          ; circular windows
         ldi   yl, ${N}
@@ -145,4 +163,11 @@ idle:   addi  r6, r6, -1
         jnz   r6, idle
 ` : ''}        jmp   loop
 `;
+  const lines = text.split('\n');
+  if (o.noClr) return lines.filter((l) => !/^ {8}clr$/.test(l)).join('\n').replace(/rndc/g, 'rnd ');
+  if (o.plain !== undefined) {
+    const from = lines.findIndex((l) => l.includes('; x² through the accumulator')), to = lines.findIndex((l) => l.includes('; P = 2^(16 - bit length)'));
+    lines.splice(from, to - from + 1, `        ldi   r7, ${o.plain}            ; plain LMS: the step is a constant, whatever the level`);
+  }
+  return lines.join('\n');
 }

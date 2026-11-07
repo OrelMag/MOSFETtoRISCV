@@ -70,6 +70,9 @@ export class FastISS {
   /** The MAC core's four instructions are legal (IssOptions.mac): the golden model's semantics, dsp/mac.ts, with the 40-bit accumulator as an exact double (never past 2^53). */
   readonly macOn: boolean;
   accN = 0;
+  /** How many clracc and mac / mac2 have run (the echo bench asks whether the accumulator is ever cleared between samples). */
+  clrCount = 0;
+  macCount = 0;
   readonly hartid: number;
   halted = false;
   steps = 0;
@@ -410,6 +413,7 @@ export class FastISS {
         case K.OR: x[rd] = x[frs1[i]] | x[frs2[i]]; break;
         case K.AND: x[rd] = x[frs1[i]] & x[frs2[i]]; break;
         case K.MAC: case K.MAC2: {
+          this.macCount++;
           // the 40-bit accumulator wraps, as dsp/mac.ts wrapAcc: two products of signed 16-bit halves, exact in a double
           const a = x[frs1[i]], b = x[frs2[i]];
           let p = ((a << 16) >> 16) * ((b << 16) >> 16);
@@ -419,7 +423,7 @@ export class FastISS {
           this.accN = v;
           break;
         }
-        case K.CLRACC: this.accN = 0; break;
+        case K.CLRACC: this.accN = 0; this.clrCount++; break;
         case K.RACC: {
           const sh = x[frs1[i]] & 63, e = Math.floor((this.accN + (sh > 0 ? 2 ** (sh - 1) : 0)) / 2 ** sh);
           if (rd) x[rd] = e > 2147483647 ? 2147483647 : e < -2147483648 ? -2147483648 : e;

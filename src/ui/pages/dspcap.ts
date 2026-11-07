@@ -2,8 +2,8 @@
 // a page with the brief, the machine to choose, the sample port, an assembly editor and a bench that runs the program on the golden model against
 // echo paths drawn from a seed the learner never sees. A pass is recorded under the capstone's id in the campaign progress.
 
-import { assembleEcho, BLOCK, ECHO_IO, ECHO_MACHINES, ECHO_SPEC, ECHO_STARTERS, echoPaths, type EchoMachineId, freshSeed, machineName, REF_Q, REF_TAPS, referenceCycles, referenceFor, runPath, summarize, tailWord, type EchoVerdict, type PathResult } from '../../campaign/capecho';
-import { DSP_IO } from '../../campaign/capechodsp';
+import { assembleEcho, BLOCK, ECHO_IO, ECHO_MACHINES, ECHO_SPEC, ECHO_STARTERS, echoPaths, type EchoMachineId, freshSeed, machineName, REF_Q, REF_TAPS, RV_PASSING_SHIFTS, referenceCycles, referenceFor, runPath, summarize, tailWord, type EchoVerdict, type PathResult } from '../../campaign/capecho';
+import { DSP_IO, DSP_PASSING_SHIFTS } from '../../campaign/capechodsp';
 import { MEM24_WORDS, ROM24_WORDS } from '../../dsp/isa24';
 import { progress } from '../../campaign/progress';
 import { DSP_CAPSTONES } from '../../learn/capstones';
@@ -58,6 +58,7 @@ export class DspCapstonePage {
   private ed?: CodeEditor;
   private switcher = h('div', { class: 'ec-machines', role: 'radiogroup', 'aria-label': 'The machine' });
   private port = h('section', { class: 'cc-brief' });
+  private hold = h('section', { class: 'cc-brief' });
   private edSec = h('section', { class: 'cc-brief' });
   private out = h('div', { class: 'ec-out', 'aria-live': 'polite' });
   private run = h('button', { type: 'button', class: 'btn primary' }) as HTMLButtonElement;
@@ -73,7 +74,7 @@ export class DspCapstonePage {
     progress().open(nodeId, true);
     this.run.addEventListener('click', () => this.check());
     this.job();
-    this.body.append(h('section', { class: 'cc-brief' }, h('h2', null, 'The machine'), this.switcher), this.port, this.holdBack(), this.edSec, this.out, this.extra);
+    this.body.append(h('section', { class: 'cc-brief' }, h('h2', null, 'The machine'), this.switcher), this.port, this.hold, this.edSec, this.out, this.extra);
     this.paintMachine();
     this.showReference();
   }
@@ -124,6 +125,7 @@ export class DspCapstonePage {
     const m = this.machine, name = machineName(m);
     this.paintSwitcher();
     this.paintPort();
+    this.paintHold();
     this.ed?.destroy();
     this.ed = codeEditor({ value: load(m), lang: LANG[m], rows: 26, onChange: (v) => { save(this.machine, v); this.ed?.setDiagnostics([]); } });
     const reset = h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (this.ed) { this.ed.replaceAll(ECHO_STARTERS[this.machine]); save(this.machine, ECHO_STARTERS[this.machine]); } } }, 'Back to the starter');
@@ -145,7 +147,7 @@ export class DspCapstonePage {
           ['out ra', 'out', 'ŷ: your estimate of the echo, 16-bit signed, same scale. It ends the sample: cycles are counted from one out to the next. It may use x up to now and every earlier d, not this sample\'s d.'],
           [`Y[${DSP_IO.d}]`, 'ld', 'd: the microphone, echo + noise, written by the bench only after the out. A read before the out gives the last sample\'s d (allowed: past d is the learning signal).'],
         ], ['where', 'instruction', 'meaning']),
-        h('p', { class: 'cc-hint' }, `X[${DSP_IO.x}] and Y[${DSP_IO.d}] are the bench's: a program that writes them is overwritten at the next out, so keep your circular windows clear of them. The program must not halt before the last sample. Every path starts from power-on: memories and registers are zero.`));
+        h('p', { class: 'cc-hint' }, `X[${DSP_IO.x}] and Y[${DSP_IO.d}] are the bench's: a program that writes them is overwritten at the next out, so keep your circular windows clear of them. The program must not halt before the last sample. Every path starts from power-on: memories and registers are zero. The reference's step passes for rndc shifts ${DSP_PASSING_SHIFTS[0]} to ${DSP_PASSING_SHIFTS[1]}, a window of ${2 ** (DSP_PASSING_SHIFTS[1] - DSP_PASSING_SHIFTS[0])} in the step; the RV32 references pass a window of ${2 ** (RV_PASSING_SHIFTS[1] - RV_PASSING_SHIFTS[0])}. With 16-bit weights on this core a step that is too small stalls on rounding, and one that is too large is unstable on the speech.`));
       return;
     }
     this.port.replaceChildren(h('h2', null, 'The sample port'),
@@ -158,14 +160,14 @@ export class DspCapstonePage {
       h('p', { class: 'cc-hint' }, 'The number format is yours to choose. Every path starts from power-on, so a weight is zero until you move it. The program must not stop before the last sample.'));
   }
 
-  private holdBack(): HTMLElement {
-    const S = ECHO_SPEC;
-    return h('section', { class: 'cc-brief' }, h('h2', null, 'What the bench holds back'),
+  private paintHold(): void {
+    const S = ECHO_SPEC, dsp = this.machine === 'dsp';
+    this.hold.replaceChildren(h('h2', null, 'What the bench holds back'),
       h('ul', null,
         h('li', null, `${S.paths} echo paths per check, drawn from a seed you never see and new at every check: one short tail (16–32 taps), two medium (48–64) and one long of 96 taps, in a mixed order. A tap is 125 µs; the longest is 12 ms.`),
         h('li', null, 'A delay of 5–14 samples before the first echo, reflections that die away, and an echo return loss of 6–16 dB, different on every path.'),
-        h('li', null, `The far end is generated: speech-like sound with line noise under it on two paths (about −27 to −30 dBFS rms, peaks near −13), white noise on two (−26 dBFS rms). Speech comes in bursts with pauses, so the energy under your filter swings by tens of dB; the noise is steady. Whatever step you use has to suit both. Microphone noise ${S.noiseLsb} LSB rms.`),
-        h('li', null, 'A program that outputs ŷ = 0 scores 0 dB, one that reads d before writing ŷ is refused, and a failed check says which path, what was reached against what was needed, and why.')));
+        h('li', null, `The far end is generated: speech-like sound with line noise under it on two paths (about −27 to −30 dBFS rms), white noise on two (−26 dBFS rms). Speech comes in bursts with pauses, so the energy under your filter swings by tens of dB; the noise is steady. Whatever step you use has to suit both. Microphone noise ${S.noiseLsb} LSB rms.`),
+        h('li', null, `A program that outputs ŷ = 0 scores 0 dB, ${dsp ? `one that executes two outs for one x is refused, a read of Y[${DSP_IO.d}] before the out gives only the last sample's d,` : 'one that reads d before writing ŷ is refused,'} and a failed check says which path, what was reached against what was needed, and why.`)));
   }
 
   private check(): void {
@@ -197,7 +199,7 @@ export class DspCapstonePage {
   private verdict(v: EchoVerdict, machine: EchoMachineId): void {
     const S = ECHO_SPEC;
     if (v.ok) {
-      progress().solveCapstone(this.nodeId, { cycles: Math.round(v.worstCycles) }, (m) => [m.cycles ?? Infinity]);
+      progress().solveCapstone(this.nodeId); // the status only: each machine's own figure is kept apart (loadPassed), so one machine's never stands for another's
       const p = loadPassed();
       p[machine] = Math.min(p[machine] ?? Infinity, v.worstCycles);
       savePassed(p);

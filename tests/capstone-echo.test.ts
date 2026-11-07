@@ -319,7 +319,7 @@ j loop
     for (const { seed, v } of [1, 2].map((seed) => ({ seed, v: gradeEcho(plainLms(16), seed) }))) {
       await tick();
       expect(v.ok).toBe(false);
-      expect(v.diagnosis, `seed ${seed}`).toMatch(/does much worse when the signal is quieter: the step does not scale with the signal's level \(the update is not normalized by its energy\)/);
+      expect(v.diagnosis, `seed ${seed}`).toMatch(/and the answer changes with the level \(-?[\d.]+ dB quieter, -?[\d.]+ dB louder\): the step does not scale with the signal's level \(the update is not normalized by its energy\)/);
     }
   }, 120_000);
 
