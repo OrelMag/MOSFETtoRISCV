@@ -8,6 +8,7 @@ import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
 import { skewPair } from '../src/lib/seqdeep';
 import { clockDivider } from '../src/lib/seqparts';
+import { bcdAdder } from '../src/lib/adders';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { routeNetlist } from '../src/view/route';
@@ -38,6 +39,8 @@ const levels: [string, () => ComponentDef][] = [
   ['clock skew pair, 2 buffers', () => skewPair(2)],
   ['ripple clock divider ÷8', () => clockDivider(3)],
   ['ripple clock divider ÷16', () => clockDivider(4)],
+  ['BCD adder, 2 digits', () => bcdAdder(2)],
+  ['BCD adder, 4 digits', () => bcdAdder(4)],
 ];
 
 describe('hand-drawn levels', () => {
