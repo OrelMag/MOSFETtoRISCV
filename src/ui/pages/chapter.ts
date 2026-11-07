@@ -1,7 +1,7 @@
 // A chapter: narrative on the left, the live stage in the middle, the inspector on the right.
 
 import { outline, outlineIndex, outlineOf } from '../../chapters/outline';
-import { lazyBody, settleLazy } from '../lazy';
+import { lazyBody, settleLazy, wordsOf } from '../lazy';
 import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { notes, type Place } from '../notes';
@@ -268,7 +268,8 @@ export class ChapterPage implements Page {
   private gloss(el: HTMLElement): void {
     if (!settings.glossary) return;
     const c = this.chapter;
-    const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => c.steps[k].body);
+    // only the terms matter here: wordsOf leaves the costly numbers out, which a returning learner would otherwise pay for every earlier step
+    const met = settings.visited(c.id).filter((k) => k < this.step && k < c.steps.length).map((k) => wordsOf(() => c.steps[k].body));
     Promise.all([import('../../campaign/ui/glossaryui'), import('../../chapters/firstuse')]).then(([m, f]) => {
       if (!el.isConnected) return;
       const skip = m.chapterSkip(c);

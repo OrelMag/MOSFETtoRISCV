@@ -22,7 +22,7 @@ export function enqueue(run: () => void, alive: () => boolean = () => true): voi
 }
 
 const inBrowser = typeof document !== 'undefined';
-let seq = 0, placing = false;
+let seq = 0, placing = false, skipping = false;
 const fills = new Map<string, () => string>();
 
 /** A step's body as the chapter page shows it: numbers that cost time are placeholders here. Everywhere else (print, search, first-use checks, hover cards) `lz` computes the text on the spot. */
@@ -32,8 +32,16 @@ export function lazyBody(body: () => string): string {
   try { return body(); } finally { placing = was; }
 }
 
-/** Text for a number that costs real time: inside `lazyBody` a placeholder in the page, filled in later (see `settleLazy`); the value itself anywhere else. */
+/** A step's words without its costly numbers ("…" in their place, nothing queued): for readers that only look for terms, such as the glossary's "met in an earlier step". */
+export function wordsOf(body: () => string): string {
+  const was = skipping;
+  skipping = true;
+  try { return body(); } finally { skipping = was; }
+}
+
+/** Text for a number that costs real time: inside `lazyBody` a placeholder in the page, filled in later (see `settleLazy`); inside `wordsOf` "…"; the value itself anywhere else. */
 export function lz(f: () => string): string {
+  if (skipping) return '…';
   if (!placing) return f();
   const id = String(++seq);
   if (fills.size > 400) fills.clear();
