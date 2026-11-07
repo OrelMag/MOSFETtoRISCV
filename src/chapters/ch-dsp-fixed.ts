@@ -14,7 +14,9 @@ import type { Chapter } from './types';
 
 const n0 = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
-const db = (v: number) => `${v.toFixed(1)} dB`;
+/** A number as the page writes it: a true minus, not a hyphen. */
+const fx = (v: number, d: number) => v.toFixed(d).replace('-', '−');
+const db = (v: number) => `${fx(v, 1)} dB`;
 const WRAP6 = overflowRun(6, 16, 'wrap').snrDb, SAT6 = overflowRun(6, 16, 'sat').snrDb, SCALE6 = overflowRun(6, 16, 'scale').snrDb;
 const row = (name: string) => costRows().find((r) => r[0].startsWith(name))![1];
 const ladder = () => `<table class="dsp-ladder"><tr><th>Chapter</th><th>Title</th><th>The question</th></tr>${dspRows().map((r) => `<tr><td class="n">${r.num}</td><td><a href="#/c/${r.id}/0">${r.title}</a></td><td>${r.asks}</td></tr>`).join('')}</table>`;
@@ -70,7 +72,7 @@ export const chFixed: Chapter = {
         return `
         <p>This level takes the signals of the Communication chapters and asks how to compute with them for real: in words of a fixed size, at a price, with sound and pictures you can check. <a href="#/c/signals/0">Chapter ${numOf('signals')}</a> gave you a sample, a spectrum and a filter. <a href="#/c/noise/0">Chapter ${numOf('noise')}</a> gave you noise, and <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> the FFT in gates. Nothing is repeated here. What each chapter asks:</p>
         ${ladder()}
-        <p><a href="#/c/binary/0">Chapter ${numOf('binary')}</a> introduced fixed point: an integer that means x / 2ᶠ. Signal processing uses one form of it above all, the <strong>fraction</strong>. Q1.15 has 16 bits, one before the point and that one is the sign, so its range is −1 to just under +1 in steps of 2⁻¹⁵. The notation counts the sign among the integer bits.</p>
+        <p><a href="#/c/binary/0">Chapter ${numOf('binary')}</a> introduced fixed point: an integer that means x / 2ᶠ. Signal processing uses one form of it above all, the <strong>fraction</strong>. Q1.15 has 16 bits, one before the point and that one is the sign, so its range is −1 to just under +1 in steps of 2⁻¹⁵. Here every Qm.f is two's complement and its m bits include the sign: chapter ${numOf('binary')}'s Q4.4 was the same 8-bit word, read unsigned up to 15.9375 or signed, and in this chapter's notation the signed one is still Q4.4, with a range of −8 to just under +8.</p>
         <p>Why fractions? Because two of them multiply to something that is still less than 1, so a product can always be brought back to the same format. Integers do the reverse: products grow out of the word. The hardware does not know about any of this. The same adder serves every format, and the format is a promise the designer keeps.</p>
         <div class="try">Set 8 bits with 7 after the point, and find the word for −1, and the largest word. Then give the format 4 bits after the point, and read what the same word now means.</div>`;
       },
@@ -130,7 +132,7 @@ export const chFixed: Chapter = {
       get body() {
         const m = nands(treeMul(8, true)), all = nands(fracMultiplier(8));
         return `
-        <p>Multiply two Q1.7 words and <span data-show="mul">the multiplier</span> gives 16 bits, Q2.14. A fraction times a fraction is a fraction, so the upper integer bit almost always repeats the sign. To get back to Q1.7, the product comes down by 7 places, one fewer than half the word. Forget that and every answer is half what it should be, which is a classic bug in fixed-point code. A shift by a constant is <span data-show="hi lo">wires</span>.</p>
+        <p>Multiply two Q1.7 words and <span data-show="mul">the multiplier</span> gives 16 bits, Q2.14. A fraction times a fraction is a fraction, so the upper integer bit almost always repeats the sign. To get back to Q1.7, the product comes down by 7 places: one fewer than the 8 bits of an operand (w − 1 for w-bit operands). Forget that and every answer is half what it should be, which is a classic bug in fixed-point code. A shift by a constant is <span data-show="hi lo">wires</span>.</p>
         <p>Dropped bits are not simply gone. <span data-show="round">The rounder</span> adds the first dropped bit back, which is round half up, and it does so once, at the end. Rounding the terms of a sum one by one would add noise for each. Inside each butterfly, the FFT of <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> follows the same rule.</p>
         <p>The upper sign bit earns its place in one case. −1 × −1 = +1, and +1 does not exist in this format. <span data-show="clamp">The clamp</span> is there for that one input pair out of 65 536. Leave it out and −1 × −1 gives −1, so a filter with a coefficient of −1 can flip the sign of a full-scale sample. That bug tends to stay hidden until a test finally drives the rail.</p>
         <p>In all ${n0(all)} NANDs, of which the signed multiplier is ${n0(m)}. Multipliers are the expensive thing in this level. The later chapters on machines are about sharing one.</p>
@@ -153,7 +155,7 @@ export const chFixed: Chapter = {
         return `
         <p>Dropping bits is the cheapest rounding there is, and it always goes down, so its error has a mean of about half a step. That looks harmless. Now run a long sum: a filter's output, an integrator, a level meter. A small constant error adds up in a straight line, and the plot below shows it.</p>
         <p>Adding the first dropped bit back, <strong>round half up</strong>, centres the error, except on exact ties, which always go up: half an input step, much smaller than truncation's once a few bits are dropped. Sending ties to the even neighbour, <strong>convergent rounding</strong>, removes that as well, for the price of one more test on the bits.</p>
-        <p>With 3 bits dropped from this signal, the mean error is ${t.mean.toFixed(2)} input steps for truncation, ${u.mean.toFixed(2)} for half up and ${c.mean.toFixed(2)} for ties to even. Notice that the variance hardly moves, ${t.variance.toFixed(2)} against ${c.variance.toFixed(2)}: each rule adds about the noise power you met in <a href="#/c/signals/6">the rounding step</a>, q² / 12, here ${roundingNoise(8).toFixed(2)}. The rule only changes where the mean sits.</p>
+        <p>With 3 bits dropped from this signal, the mean error is ${fx(t.mean, 2)} input steps for truncation, ${fx(u.mean, 2)} for half up and ${fx(c.mean, 2)} for ties to even. Notice that the variance hardly moves, ${fx(t.variance, 2)} against ${fx(c.variance, 2)}: each rule adds about the noise power you met in <a href="#/c/signals/6">the rounding step</a>, q² / 12, here ${roundingNoise(8).toFixed(2)}. The rule only changes where the mean sits.</p>
         <div class="try">Raise the bits dropped and watch truncation's drift grow with the step. Which line stays nearest zero?</div>`;
       },
       widget: roundingWidget,
@@ -195,7 +197,7 @@ export const chFixed: Chapter = {
         <p>Every shift down throws bits away, and each throw adds rounding noise at that point in the chain. Later gain raises that noise along with the signal. So the place to attenuate is late, and the place to amplify is early, as long as the signal still fits.</p>
         <p>Take a tone peaking at a tenth of full scale in a 16-bit word, and a gain of 1 made from a shift of ${s} bits down and ${s} up. Down first leaves ${db(d)}. Up first leaves ${db(u)}, the most this word could give at that level. Push the peak higher and up first starts to clip, and a clip costs far more than a rounding. That trade is what <strong>scaling a chain</strong> means: keep the word as full as you can without ever passing the top.</p>
         <p>How do you know the top? Three ways, from strictest down. The sum of the absolute values of the impulse response bounds the peak for any input at all. A bound on gain at any one frequency covers tones. A measured or assumed peak covers what you expect, and that is what most audio equipment does. Each is a bet about the input, and each later chapter that builds a filter makes one of them.</p>
-        <div class="try">At −20 dBFS and a 3-bit shift read both orders. Raise the signal until up first falls below down first.</div>`;
+        <div class="try">At −20 dBFS (20 dB below full scale) and a 3-bit shift read both orders. Raise the signal until up first falls below down first.</div>`;
       },
       widget: chainWidget,
       challenge: {
@@ -210,7 +212,7 @@ export const chFixed: Chapter = {
       title: 'Fixed or floating',
       get body() {
         return `
-        <p>Floating point moves the point for you, so why all of this? Compare the parts, counted from their gates. A float32 number has 24 bits of precision, so a fair comparison is 24 bits of fixed point. A float32 adder is ${n0(row('float32 adder'))} NANDs against ${n0(row('24-bit saturating'))} for a 24-bit saturating adder. A float32 multiplier is ${n0(row('float32 multiplier'))} against ${n0(row('Q1.23'))} for Q1.23, and most of that is the multiplier both must have. A filter does little else but add and multiply, so the adder's ratio matters a great deal, and a float's alignment and normalization add delay as well.</p>
+        <p>Floating point moves the point for you, so why all of this? Compare the parts, counted from their gates. A float32 number has 24 bits of precision, so a fair comparison is 24 bits of fixed point. A float32 adder is ${n0(row('float32 adder'))} NANDs against ${n0(row('24-bit saturating'))} for a 24-bit saturating adder. A float32 multiplier is ${n0(row('float32 multiplier'))} against ${n0(row('Q1.23'))} for Q1.23, and most of that is the 24 × 24 mantissa multiplier that both must have. A filter does little else but add and multiply, so the adder's ratio matters a great deal, and a float's alignment and normalization add delay as well.</p>
         <p>What you get for it is range: with the moving point of <a href="#/c/float/0">chapter ${numOf('float')}</a>, the exponent does the scaling the last two steps did by hand. Which you choose follows from who is paying. A part sold by the million and running from a tiny battery counts its bits. A large core with a floating-point unit already paid for does not.</p>
         <p>This level works in fixed point because that is where the design decisions are, and where a learner can see them. The same filters run in floats too, and the widgets' models mostly do: they exist to give a reference to compare the words with.</p>`;
       },

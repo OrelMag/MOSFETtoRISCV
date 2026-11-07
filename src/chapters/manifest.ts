@@ -798,7 +798,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One bin, cheaply: Goertzel", challenge: "quiz" },
     { title: "A keypad in gates", challenge: "quiz" },
   ] },
-  { id: "firdesign", num: 70, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","muldiv"], recap: {"checks":3}, steps: [
+  { id: "firdesign", num: 70, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","spectrum","muldiv"], recap: {"checks":3}, steps: [
     { title: "A mask, and mirror-image taps", challenge: "quiz" },
     { title: "The window method", challenge: "quiz" },
     { title: "Parks–McClellan", challenge: "quiz" },

@@ -12,8 +12,8 @@ import { numOf } from './order';
 import type { Chapter } from './types';
 
 const n0 = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const nf = (v: number, d = 2) => v.toFixed(d);
-const dbs = (v: number) => `${v.toFixed(1)} dB`;
+const nf = (v: number, d = 2) => v.toFixed(d).replace('-', '−');
+const dbs = (v: number) => `${nf(v, 1)} dB`;
 
 /** Every number the text quotes, computed once when a step first reads it (nothing at import: the designs and the gate counts take a moment). */
 let memo: ReturnType<typeof compute> | null = null;
@@ -65,7 +65,7 @@ export const chFirDesign: Chapter = {
     'fold, transpose and time-share a filter, and price each from its gates',
     'replace a fixed tap by shifts and adders, and say when that pays',
   ],
-  builds: ['signals', 'zplane', 'fixed', 'muldiv'],
+  builds: ['signals', 'zplane', 'fixed', 'spectrum', 'muldiv'],
   get recap() {
     const F = figures();
     return {
@@ -127,12 +127,19 @@ export const chFirDesign: Chapter = {
       get body() {
         const F = figures();
         return `
-        <p>The ideal low-pass has taps sin(2π fc k) / (π k), forever. Cut them to N taps and you have multiplied by a rectangle, and the response is the ideal one smeared by the rectangle's spectrum: a transition that narrows in proportion to 1 / N, and a stopband peak that falls only slowly with N: ${dbs(F.rect[0])} at 101 taps, ${dbs(F.rect[1])} at 1 001. Taper the ends instead and the ripples fall, at the price of a wider transition. That is the <strong>window method</strong>: the window decides how far the stopband falls, and N decides how narrow the transition is.</p>
+        <p>The ideal low-pass has taps sin(2π fc k) / (π k), forever. Cut them to N taps and you have multiplied by a rectangle, and the response is the ideal one smeared by the rectangle's spectrum: a transition that narrows in proportion to 1 / N, and a stopband peak that falls only slowly with N: ${dbs(F.rect[0])} at 101 taps, ${dbs(F.rect[1])} at 1 001. Taper the ends instead, with one of the windows of <a href="#/c/spectrum/1">chapter ${numOf('spectrum')}</a>, and the ripples fall, at the price of a wider transition: the same trade a window made there between sidelobe height and main-lobe width. That is the <strong>window method</strong>: the window decides how far the stopband falls, and N decides how narrow the transition is.</p>
         <p>One consequence matters here. The window's sidelobes set the passband ripple and the stopband ceiling together, so both bands come out at the same size. This mask allows ${nf(F.dp, 4)} in the passband and ${nf(F.ds, 3)} in the stopband, and a window that meets the second delivers about ${nf(F.kaiserRep.passDev, 4)} in the first: ${nf(F.dp / F.kaiserRep.passDev, 1)} times better than anyone asked for.</p>
-        <p>Each fixed window has sidelobes of its own height, and the mask's stopband starts only ${nf(F.width / 2, 4)} beyond the middle of the transition, so the nearest sidelobes sit inside it until N is long. A Hamming window gives ${F.ham.map((v) => dbs(v)).join(', ')} at 61, 101, 201 and 301 taps: it plateaus near −58 dB for a long stretch, and first reaches −60 dB at ${F.hamming} taps if the length is odd (${F.hammingAny} with either parity). Hann needs ${F.hann} taps if the length is odd (${F.hannAny} with either parity) and Blackman ${F.blackman} (${F.blackmanAny}). The rectangle is at ${dbs(F.rect[1])} even at 1 001 taps, and falls about 6 dB for each doubling. Kaiser's window has a knob, β, that trades sidelobe height against transition width directly. Kaiser's formula gives β = ${nf(F.kaiser.beta, 3)} and ${F.kaiser.numtaps} taps for this mask, and the first odd length that meets it is ${F.kaiserOdd}, the first of either parity ${F.kaiserAny}; scipy's <code>kaiserord</code> and <code>firwin</code> agree with our code to 10⁻¹¹ on every window. Meeting the mask is not quite monotone in length, even for one window: Kaiser's ${F.runs.map((r) => `${r.ok ? 'meets it' : 'misses it'} from ${r.from}${r.to > r.from ? ` to ${r.to}` : ''}`).join(', then ')}.</p>
+        <p>Each fixed window has sidelobes of its own height, and the mask's stopband starts only ${nf(F.width / 2, 4)} beyond the middle of the transition, so the nearest sidelobes sit inside it until N is long. A Hamming window gives ${F.ham.map((v) => dbs(v)).join(', ')} at 61, 101, 201 and 301 taps: it plateaus near −58 dB for a long stretch, and first reaches −60 dB at ${F.hamming} taps if the length is odd (${F.hammingAny} with either parity). Hann needs ${F.hann} taps if the length is odd (${F.hannAny} with either parity) and Blackman ${F.blackman} (${F.blackmanAny}). The rectangle is at ${dbs(F.rect[1])} even at 1 001 taps, and falls about 6 dB for each doubling. </p>
+        <p>Kaiser's window has a knob, β, that trades sidelobe height against transition width directly. Kaiser's design rule for his window gives β = ${nf(F.kaiser.beta, 3)} and ${F.kaiser.numtaps} taps for this mask, and the first odd length that meets it is ${F.kaiserOdd}, the first of either parity ${F.kaiserAny}.</p>
         <div class="try">Pick Hamming and slide the taps up from 61 to 489: the transition narrows and the stopband peak falls and then sits on a plateau, before it crosses −60 dB. Switch to Kaiser, leave β where it is, and slide the taps down from 201 until the verdict first goes red: it can go green again below that, so press the button for the table to find the first length that meets the mask.</div>`;
       },
       widget: windowWidget,
+      more: {
+        get derive() {
+          const F = figures();
+          return `<p>Every window here is checked against scipy: its <code>kaiserord</code> and <code>firwin</code> agree with our code to 10⁻¹¹. Meeting the mask is not quite monotone in length, even for one window: Kaiser's ${F.runs.map((r) => `${r.ok ? 'meets it' : 'misses it'} from ${r.from}${r.to > r.from ? ` to ${r.to}` : ''}`).join(', then ')}, because each extra tap moves the sidelobes as well as narrowing the transition.</p>`;
+        },
+      },
       challenge: {
         kind: 'quiz', question: 'A window-method filter is made twice as long with the same window. What changes?',
         options: ['The transition band halves; the sidelobes keep their height relative to it', 'The stopband ripple halves and the transition stays', 'The passband ripple doubles', 'Only the delay changes'],
@@ -147,7 +154,7 @@ export const chFirDesign: Chapter = {
         const F = figures();
         return `
         <p>Instead of a recipe, make it an optimisation: choose the taps that minimise the largest weighted error over the bands, with weights 1 / δp and 1 / δs. A result of 1 or less means both bands fit the mask. The optimum has a striking shape. Its error touches the same size at every one of at least ⌈N / 2⌉ + 1 frequencies, with alternating signs: <strong>equiripple</strong>. The alternation theorem says that is both necessary and sufficient, and the <strong>Remez exchange</strong> finds it: guess that many frequencies, solve for the cosine polynomial that alternates ±δ exactly there, look at where its error really peaks, move the guesses to the peaks, repeat. Here it takes ${F.iters} passes.</p>
-        <p>The mask is met by <strong>${F.ch.n} taps</strong>. At ${F.ch.n - 1} it is not: the stopband peaks at ${dbs(F.pm113.stopDb)} and the passband gain is off 1 by up to ${nf(F.pm113.passDev, 5)} against the ${nf(F.dp, 5)} allowed, both a little over, and no weighting makes both fit, because the error is already the best that any taps can do. The fewest odd length is ${F.ch.fewestOddPm}. Kaiser's window needs ${F.kaiserAny} for the same mask with either parity (${F.kaiserOdd} if odd): ${F.kaiserAny - F.ch.n} taps more than ${F.ch.n}, ${nf(100 * (F.kaiserAny / F.ch.n - 1), 0)} % more multiplications on every sample. Kaiser's length formula, N ≈ (−20 log₁₀ √(δpδs) − 13) / (14.6 Δf) + 1, says ${F.est}: a fair estimate, ${F.ch.n - F.est} short.</p>
+        <p>The mask is met by <strong>${F.ch.n} taps</strong>. At ${F.ch.n - 1} it is not: the stopband peaks at ${dbs(F.pm113.stopDb)} and the passband gain is off 1 by up to ${nf(F.pm113.passDev, 5)} against the ${nf(F.dp, 5)} allowed, both a little over, and no weighting makes both fit, because the error is already the best that any taps can do. The fewest odd length is ${F.ch.fewestOddPm}. Kaiser's window needs ${F.kaiserAny} for the same mask with either parity (${F.kaiserOdd} if odd): ${F.kaiserAny - F.ch.n} taps more than ${F.ch.n}, ${nf(100 * (F.kaiserAny / F.ch.n - 1), 0)} % more multiplications on every sample. Kaiser also gave an estimate for equiripple filters like this one (not the window rule of the step before): N ≈ (−20 log₁₀ √(δpδs) − 13) / (14.6 Δf) + 1, which says ${F.est}: a fair estimate, ${F.ch.n - F.est} short.</p>
         <p>This is our own exchange, written to scipy's grid so that the two compare tap for tap: the five test cases agree with <code>scipy.signal.remez</code> to better than 10⁻⁹ of the largest tap, and every design is checked against its mask on the 8 192-point grid that <code>freqz</code> uses. It is the algorithm of Parks and McClellan (1972), and ours is checked against scipy's and, for every result, against its mask.</p>
         <div class="try">Press Find the fewest taps and read ${F.ch.n}, then drop to ${F.ch.n - 1} and see which bands miss. At ${F.ch.n - 1} try the stopband weight: whichever band you favour, the other fails. Play the clip: at ${F.ch.n} taps the second tone, at 0.2 cycles a sample, comes out ${dbs(F.tone2)} down, and the level is on screen beside the button. Listen for its absence.</div>`;
       },

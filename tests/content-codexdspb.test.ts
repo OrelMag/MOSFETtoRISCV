@@ -168,7 +168,7 @@ describe('group B: FIR design', () => {
     expect(F.dp / F.kaiserRep.passDev).toBeLessThan(5.3);
     expect(F.ham[3]).toBeGreaterThan(-60);
     expect(F.rect[1] - F.rect[0]).toBeLessThan(-17);
-    says('firdesign', 1, `${F.rect[0].toFixed(1)} dB`);
+    says('firdesign', 1, `${F.rect[0].toFixed(1).replace('-', '−')} dB`);
     says('firdesign', 1, `${F.hamming} taps`);
     says('firdesign', 1, `Blackman ${F.blackman}`);
     says('firdesign', 1, nf(F.kaiser.beta, 3));
@@ -189,7 +189,7 @@ describe('group B: FIR design', () => {
     expect(F.hw.taps.length).toBe(115);
     expect(F.iters).toBe(8);
     says('firdesign', 2, `${F.iters} passes`);
-    says('firdesign', 2, F.pm113.stopDb.toFixed(1));
+    says('firdesign', 2, F.pm113.stopDb.toFixed(1).replace('-', '−'));
     says('firdesign', 2, nf(F.pm113.passDev, 5));
     says('firdesign', 2, `${Math.round(100 * (F.kaiserAny / F.ch.n - 1))} %`);
     says('firdesign', 3, nf(F.c114q.stopDb + 60, 2));
