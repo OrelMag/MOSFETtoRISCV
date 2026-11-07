@@ -350,6 +350,8 @@ export function findStation(spec: Float64Array, marginDb: number): Found {
 export interface Run {
   tunedHz: number | null;
   found?: Found;
+  /** What leaves the gates (the mixer and the CICs), in units of a station of amplitude 1, and its rate. */
+  gatesRe: Float64Array; gatesIm: Float64Array; gatesRate: number;
   /** The complex signal the discriminator is given, and its rate. */
   chanRe: Float64Array; chanIm: Float64Array; chanRate: number;
   /** The rate of each stage of the complex signal between the CICs' last output and the discriminator, for the fold check. */
@@ -375,6 +377,7 @@ export function runChain(c: Chain, b: TuneBand, o: RunOpts = {}): Run {
     ir = cicRun(ir, k.N, k.R, wo); ii = cicRun(ii, k.N, k.R, wo); w = wo; gain *= k.R ** k.N;
   }
   let re: Float64Array = Float64Array.from(ir, (v) => v / gain / ADC_SCALE), im: Float64Array = Float64Array.from(ii, (v) => v / gain / ADC_SCALE), rate = rates[i - 1].outRate;
+  const gatesRe = re, gatesIm = im, gatesRate = rate;
   for (; i < c.length && STAGE[c[i].kind] === 2; i++) {
     const k = c[i];
     const h = k.kind === 'halfband' ? halfBandTaps(k.taps) : k.kind === 'poly' ? polyTapsFor(k.taps, k.R) : Array.from(lowpass((k as { taps: number }).taps, (k as { cutoff: number }).cutoff / rate));
@@ -391,7 +394,7 @@ export function runChain(c: Chain, b: TuneBand, o: RunOpts = {}): Run {
   }
   const m = c[c.length - 1] as Extract<Block, { kind: 'morse' }>;
   const decoded = o.skipDecode ? emptyDecode : decodeMorse(a, rate, m.threshold);
-  return { tunedHz: tuned, found, chanRe, chanIm, chanRate, audio: a, audioRate: rate, decoded };
+  return { tunedHz: tuned, found, gatesRe, gatesIm, gatesRate, chanRe, chanIm, chanRate, audio: a, audioRate: rate, decoded };
 }
 
 // ---- the decoder (given) ----------------------------------------------------------------------------------------------------------------------
@@ -591,21 +594,23 @@ export function keyRatio(b: TuneBand, d: Decoded, lagS: number): number {
 }
 
 
-/** Grade one band, and if it failed, measure why. */
-export function gradeBand(c: Chain, b: TuneBand): BandResult {
+/** Grade one band, and if it failed, measure why: a step at a time (each yield is one run of the chain, so a page can stay responsive), saying what it measures. */
+export function* gradeSteps(c: Chain, b: TuneBand): Generator<string, BandResult> {
+  yield 'Running your chain on the band';
   const input = sampleBand(b), run = runChain(c, b, { input }), ok = run.decoded.text === b.message;
   if (ok) return { band: b, run, ok };
   const weak = b.stations[b.weak], mx = c[0] as Extract<Block, { kind: 'mixer' }>, { slips: sl, lag } = slips(b, run.decoded);
   const fail = (cause: Cause, measures?: Measures): BandResult => ({ band: b, run, ok, cause, measures, slips: sl });
   if (run.tunedHz === null) return fail({ kind: 'tune-none', marginDb: mx.tune.mode === 'find' ? mx.tune.marginDb : 0 });
-  const offKhz = (run.tunedHz - weak.f) / 1000;
-  if (Math.abs(offKhz) > 3) return fail(mx.tune.mode === 'fixed' ? { kind: 'tune-fixed', hz: run.tunedHz } : { kind: 'tune-wrong', hz: run.tunedHz, offKhz });
+  const tuned = run.tunedHz, offKhz = (tuned - weak.f) / 1000;
+  if (Math.abs(offKhz) > 3) return fail(mx.tune.mode === 'fixed' ? { kind: 'tune-fixed', hz: tuned } : { kind: 'tune-wrong', hz: tuned, offKhz });
   // the chain on the wanted station alone, with no noise: does the chain itself spoil it?
-  const alone = runChain(c, b, { part: { stations: [b.weak], noise: false }, tuneHz: run.tunedHz! });
+  yield 'Your chain on the station alone';
+  const alone = runChain(c, b, { part: { stations: [b.weak], noise: false }, tuneHz: tuned });
   // the learner's complex filters at the station's peak deviation: more than 6 dB down there, they cut the station's own swing
   const narrow = -chanGainDb(c, DEV);
   const audioBlocks = c.filter((k): k is Extract<Block, { kind: 'audio' }> => k.kind === 'audio');
-  const toneLoss = -audioBlocks.reduce((s, k) => s + db(gainAt(lowpass(k.taps, k.cutoff / rateOf(c, k)), b.toneHz, rateOf(c, k)) ** 2), 0);
+  const toneLoss = -audioBlocks.reduce((sum, k) => sum + db(gainAt(lowpass(k.taps, k.cutoff / rateOf(c, k)), b.toneHz, rateOf(c, k)) ** 2), 0);
   if (alone.decoded.text !== b.message) {
     if (toneLoss > 6) return fail({ kind: 'tone-cut', lossDb: toneLoss });
     const d = c.find((k) => k.kind === 'disc') as Extract<Block, { kind: 'disc' }>;
@@ -617,23 +622,31 @@ export function gradeBand(c: Chain, b: TuneBand): BandResult {
   // a chain whose filters cut the station's own swing is named for it even where the station alone gets through: what tips it over is then the rest
   if (narrow > 6) return fail({ kind: 'too-narrow', lossDb: narrow });
   // the parts: wanted, each other station, the noise
-  const pw = power(alone.chanRe, alone.chanIm, alone.chanRate);
-  const contributions = b.stations.map((st, k) => {
-    if (k === b.weak) return null;
-    const r = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: run.tunedHz!, skipDecode: true }), p = power(r.chanRe, r.chanIm, r.chanRate);
-    const ideal = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: run.tunedHz!, bitsOver: 10, skipDecode: true }), pi = power(ideal.chanRe, ideal.chanIm, ideal.chanRate);
-    return { station: k, offKhz: (st.f - run.tunedHz!) / 1000, db: db(p) - db(pw), ...foldPath(c, st.f - run.tunedHz!), spurDb: db(p) - db(pi), breaks: false };
-  }).filter((x): x is NonNullable<typeof x> => x !== null);
-  const nz = runChain(c, b, { part: { stations: [], noise: true }, tuneHz: run.tunedHz!, skipDecode: true });
-  const ci = -db(contributions.reduce((s, x) => s + 10 ** (x.db / 10), 0)), cn = db(pw) - db(power(nz.chanRe, nz.chanIm, nz.chanRate));
+  const pw = power(alone.chanRe, alone.chanIm, alone.chanRate), contributions: Contribution[] = [];
+  for (let k = 0; k < b.stations.length; k++) {
+    if (k === b.weak) continue;
+    yield `Your chain on station ${contributions.length + 1} of the others alone`;
+    const st = b.stations[k], r = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: tuned, skipDecode: true }), p = power(r.chanRe, r.chanIm, r.chanRate);
+    const ideal = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: tuned, bitsOver: 10, skipDecode: true }), pi = power(ideal.chanRe, ideal.chanIm, ideal.chanRate);
+    contributions.push({ station: k, offKhz: (st.f - tuned) / 1000, db: db(p) - db(pw), ...foldPath(c, st.f - tuned), spurDb: db(p) - db(pi), breaks: false });
+  }
+  yield 'Your chain on the noise alone';
+  const nz = runChain(c, b, { part: { stations: [], noise: true }, tuneHz: tuned, skipDecode: true });
+  const ci = -db(contributions.reduce((sum, x) => sum + 10 ** (x.db / 10), 0)), cn = db(pw) - db(power(nz.chanRe, nz.chanIm, nz.chanRate));
   const measures: Measures = { ciDb: ci, cnDb: cn, keyRatioDb: keyRatio(b, run.decoded, lag), contributions };
   // which part, added to the wanted station on its own, breaks the message: measured by decoding each pair, never judged from a threshold
-  const breaks = (part: Part) => runChain(c, b, { part, tuneHz: run.tunedHz! }).decoded.text !== b.message;
+  const breaks = (part: Part) => runChain(c, b, { part, tuneHz: tuned }).decoded.text !== b.message;
+  yield 'The station with the noise';
   const noiseBreaks = breaks({ stations: [b.weak], noise: true });
-  for (const x of contributions) x.breaks = breaks({ stations: [b.weak, x.station], noise: false });
+  for (const x of contributions) { yield 'The station with one other'; x.breaks = breaks({ stations: [b.weak, x.station], noise: false }); }
   const byPower = [...contributions].sort((x, y) => y.db - x.db), culprit = byPower.find((x) => x.breaks);
   if (noiseBreaks && (!culprit || -culprit.db > cn)) return fail({ kind: 'noise', cnDb: cn }, measures);
   return fail({ kind: 'interference', ciDb: ci, worst: culprit ?? byPower[0], together: !culprit && !noiseBreaks }, measures);
+}
+/** The same, all at once. */
+export function gradeBand(c: Chain, b: TuneBand): BandResult {
+  const g = gradeSteps(c, b);
+  for (;;) { const r = g.next(); if (r.done) return r.value; }
 }
 function gainAt(h: ArrayLike<number>, f: number, fs: number): number {
   let re = 0, im = 0;
