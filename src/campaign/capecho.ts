@@ -10,14 +10,15 @@
 import { erleDb, farEnd } from '../dsp/adaptive';
 import { gaussian, rng } from '../phys/line';
 import { assemble } from '../riscv/asm';
+import { groupDigits } from '../sim/numfmt';
 import { FastISS } from '../riscv/fastiss';
 
 // ---- the sheet ----------------------------------------------------------------------------------------
 
 export const ECHO_SPEC = {
   /** Samples per path, and the first `window` of them are the learner's to converge in. */
-  samples: 8000,
-  window: 4000,
+  samples: 16000,
+  window: 12000,
   /** ERLE the program must reach, over samples window … samples − 1, on every path. */
   erleDb: 25,
   /** Longest echo tail, in taps at 8 kHz (12 ms), and the mic noise (LSB rms). */
@@ -62,12 +63,12 @@ export interface EchoPath {
   d: Int32Array;
 }
 
-const CLASS_OF: Record<TailClass, [number, number]> = { short: [16, 32], medium: [48, 64], long: [88, 96] };
-export const tailWord = (c: TailClass): string => `${c} tail (up to ${CLASS_OF[c][1]} taps)`;
+const CLASS_OF: Record<TailClass, [number, number]> = { short: [16, 32], medium: [48, 64], long: [96, 96] };
+export const tailWord = (c: TailClass): string => `${c} tail (${CLASS_OF[c][0] === CLASS_OF[c][1] ? '' : 'up to '}${CLASS_OF[c][1]} taps)`;
 
-/** A room or a hybrid of `taps` taps: a delay, sparse reflections dying to −30 dB at the far end of the tail, scaled to an echo return loss. */
+/** A room or a hybrid of `taps` taps: a delay, sparse reflections dying to about −10 dB at the far end of the tail (so a 96-tap tail needs its 96 taps), scaled to an echo return loss. */
 export function echoImpulse(seed: number, taps: number, erlDb: number): { h: number[]; delay: number } {
-  const u = rng(seed), h = new Array<number>(taps).fill(0), delay = 5 + Math.floor(u() * 10), tau = (taps - delay) / 2.5;
+  const u = rng(seed), h = new Array<number>(taps).fill(0), delay = 5 + Math.floor(u() * 10), tau = (taps - delay) / 1.2;
   for (let i = delay; i < taps; i++) if (u() < 0.45 || i === delay) h[i] = gaussian(u) * Math.exp(-(i - delay) / tau);
   const e = h.reduce((a, b) => a + b * b, 0);
   const g = 10 ** (-erlDb / 20) / Math.sqrt(e);
@@ -102,14 +103,17 @@ export function echoPaths(seed: number, n: number = ECHO_SPEC.samples): EchoPath
 
 /** What went wrong with one path's run, if anything. */
 export interface PathFault {
-  kind: 'protocol' | 'budget' | 'silent' | 'setup';
+  kind: 'protocol' | 'budget' | 'setup' | 'memory';
   /** In the learner's words. */
   message: string;
 }
 
-/** The golden model with the sample port at 0x1000_0000 (+0 x, +4 y, +8 d): the bench's side of the protocol. */
+const hex = (a: number): string => `0x${(a >>> 0).toString(16)}`;
+/** RAM is bytes 0 … RAM_BYTES − 1: a data access anywhere else (and not on the port) is a fault, not a wrap-around into the weights. */
+export const RAM_BYTES = ECHO_SPEC.ramWords * 4;
+
+/** The golden model with the sample port at 0x1000_0000 (+0 x, +4 y, +8 d): the bench's side of the protocol. Every data access goes through load / store here, so none can alias. */
 class EchoMachine extends FastISS {
-  n = 0;
   /** Sample index in progress; −1 before the first x. */
   at = -1;
   /** 0: waiting for x, 1: x taken, y due, 2: y written, d may be read. */
@@ -119,56 +123,60 @@ class EchoMachine extends FastISS {
   done = false;
   lastX = 0;
   worst = 0;
-  worstAt = 0;
   total = 0;
   readonly nSamples: number;
   constructor(words: number[], readonly path: EchoPath, readonly budget: number) {
     super(words, { dmemWords: ECHO_SPEC.ramWords, imemWords: ECHO_SPEC.codeWords, m: true });
     this.nSamples = path.x.length;
-    this.region[1] = 1;
+    this.region.fill(1);
   }
   private stop(f: PathFault): void { if (!this.fault) this.fault = f; this.yieldNow = true; }
+  private memFault(what: string, addr: number): number {
+    this.stop({ kind: 'memory', message: `${what} at ${hex(addr)}${this.at >= 0 ? ` (sample ${this.at})` : ''}: outside the RAM (0 … ${hex(RAM_BYTES - 1)}) and the sample port. RAM does not wrap or alias` });
+    return 0;
+  }
   protected override load(addr: number, f3: number): number {
-    if (addr >>> 28 !== 1) return super.load(addr, f3);
+    addr >>>= 0;
+    if (addr < RAM_BYTES) return super.load(addr, f3);
     const reg = addr - ECHO_IO.x, now = this.retiredNow, i = this.at;
+    if (reg !== 0 && reg !== 8) return this.memFault('load', addr);
+    if (f3 !== 2) { this.stop({ kind: 'memory', message: `${f3 === 0 || f3 === 4 ? 'lb' : 'lh'} from the sample port at ${hex(addr)}: the port takes whole words (lw, sw)` }); return 0; }
     if (reg === 0) {
       if (this.phase === 1) { this.stop({ kind: 'protocol', message: `sample ${i}: the next x was read but no ŷ was written for this one (one ŷ per x)` }); return 0; }
       if (i >= 0) {
         const took = now - this.lastX;
         this.total += took;
-        if (took > this.worst) { this.worst = took; this.worstAt = i; }
-        if (took > this.budget) { this.stop({ kind: 'budget', message: `sample ${i} took ${took.toLocaleString('en')} cycles, ${(took - this.budget).toLocaleString('en')} over the budget of ${this.budget.toLocaleString('en')}` }); return 0; }
-      } else if (now > ECHO_SPEC.setup) { this.stop({ kind: 'setup', message: `${now.toLocaleString('en')} cycles of set-up before the first sample, over the ${ECHO_SPEC.setup.toLocaleString('en')} allowed` }); return 0; }
+        if (took > this.worst) this.worst = took;
+        if (took > this.budget) { this.stop({ kind: 'budget', message: `sample ${i} took ${groupDigits(took)} cycles, ${groupDigits(took - this.budget)} over the budget of ${groupDigits(this.budget)}` }); return 0; }
+      } else if (now > ECHO_SPEC.setup) { this.stop({ kind: 'setup', message: `${groupDigits(now)} cycles of set-up before the first sample, over the ${groupDigits(ECHO_SPEC.setup)} allowed` }); return 0; }
       this.lastX = now;
       if (i + 1 >= this.nSamples) { this.done = true; this.yieldNow = true; return 0; }
       this.at = i + 1; this.phase = 1;
       return this.path.x[this.at] | 0;
     }
-    if (reg === 8) {
-      if (this.phase === 0) { this.stop({ kind: 'protocol', message: `sample ${i}: d read before the next x (the microphone belongs to the sample you have already answered)` }); return 0; }
-      if (this.phase === 1) { this.stop({ kind: 'protocol', message: `sample ${i}: the microphone was read before ŷ was written. ŷ may not use the sample it is trying to cancel` }); return 0; }
-      return this.path.d[this.at] | 0;
-    }
-    return 0;
+    if (this.phase === 0) { this.stop({ kind: 'protocol', message: i < 0 ? 'd read before any x: read x, write ŷ, then d' : `sample ${i}: d read again, or before the next x (the microphone belongs to the sample you have already answered)` }); return 0; }
+    if (this.phase === 1) { this.stop({ kind: 'protocol', message: `sample ${i}: the microphone was read before ŷ was written. ŷ may not use the sample it is trying to cancel` }); return 0; }
+    return this.path.d[this.at] | 0;
   }
   protected override store(addr: number, f3: number, v: number): void {
-    if (addr >>> 28 !== 1) { super.store(addr, f3, v); return; }
-    if (addr - ECHO_IO.x !== 4) return;
+    addr >>>= 0;
+    if (addr < RAM_BYTES) { super.store(addr, f3, v); return; }
+    if (addr - ECHO_IO.x !== 4) { this.memFault('store', addr); return; }
+    if (f3 !== 2) { this.stop({ kind: 'memory', message: `${f3 === 0 ? 'sb' : 'sh'} to ŷ: the port takes whole words (lw, sw)` }); return; }
     if (this.phase !== 1) {
-      this.stop({ kind: 'protocol', message: this.phase === 0 ? `ŷ written before any x was read (it must follow the x of its sample)` : `sample ${this.at}: ŷ written twice (one ŷ per x)` });
+      this.stop({ kind: 'protocol', message: this.phase === 0 ? 'ŷ written before any x was read (it must follow the x of its sample)' : `sample ${this.at}: ŷ written twice (one ŷ per x)` });
       return;
     }
     this.y[this.at] = v | 0;
     this.phase = 2;
   }
-  /** The x read after a completed sample ends it; an unanswered one is caught at the next x. */
 }
 
 export interface PathResult {
   path: EchoPath;
-  /** ERLE over the graded stretch (dB), −Infinity … 80. */
+  /** ERLE over the graded stretch (dB), at most 80. */
   erle: number;
-  /** ERLE of each block of `BLOCK` samples, for the picture. */
+  /** ERLE of each block of `BLOCK` samples, for the picture (null: no echo to cancel in it). */
   blocks: (number | null)[];
   pass: boolean;
   fault: PathFault | null;
@@ -176,6 +184,8 @@ export interface PathResult {
   answered: number;
   meanCycles: number;
   worstCycles: number;
+  /** Samples whose ŷ was not 0, from the values the program wrote. */
+  nonzero: number;
   /** One line saying why it failed, in the learner's terms (empty on a pass). */
   why: string;
 }
@@ -190,12 +200,14 @@ export function runPath(words: number[], path: EchoPath, budget: number = ECHO_S
   while (!m.done && !m.fault) {
     const before = m.retiredNow;
     m.run(CHUNK);
-    // a program that stops reading x is caught here: no x within the budget of the last one
     if (!m.done && !m.fault) {
       const since = m.retired - (m.at >= 0 ? m.lastX : 0);
-      if (m.at >= 0 && since > budget + CHUNK) m.fault = { kind: 'budget', message: `sample ${m.at} never reached the next x: ${since.toLocaleString('en')} cycles and counting, over the budget of ${budget.toLocaleString('en')}` };
-      else if (m.at < 0 && m.retired > ECHO_SPEC.setup + CHUNK) m.fault = { kind: 'setup', message: `no x read in ${m.retired.toLocaleString('en')} cycles (set-up allows ${ECHO_SPEC.setup.toLocaleString('en')})` };
-      else if (m.halted || m.retired === before) m.fault = { kind: 'protocol', message: `the program stopped (a jump to itself) at sample ${Math.max(m.at, 0)}: it must keep answering` };
+      // a program that answered the last sample and then stops (a jump to itself) is finished
+      if (m.at === n - 1 && m.phase === 2 && (m.halted || m.retired === before)) m.done = true;
+      // one that stops reading x is caught here: no x within the budget of the last one
+      else if (m.at >= 0 && since > budget + CHUNK) m.fault = { kind: 'budget', message: `sample ${m.at} never reached the next x: ${groupDigits(since)} cycles and counting, over the budget of ${groupDigits(budget)}` };
+      else if (m.at < 0 && m.retired > ECHO_SPEC.setup + CHUNK) m.fault = { kind: 'setup', message: `no x read in ${groupDigits(m.retired)} cycles (set-up allows ${groupDigits(ECHO_SPEC.setup)})` };
+      else if (m.halted || m.retired === before) m.fault = { kind: 'protocol', message: `the program stopped (a jump to itself) after sample ${Math.max(m.at, 0)} of ${groupDigits(n)}: it must keep answering until the last` };
     }
     if (++guard > 200000) break;
   }
@@ -203,33 +215,42 @@ export function runPath(words: number[], path: EchoPath, budget: number = ECHO_S
   if (!m.fault && m.done && m.phase === 1) m.fault = { kind: 'protocol', message: `sample ${m.at}: no ŷ written` };
   const blocks: (number | null)[] = [];
   const y = Float64Array.from({ length: n }, (_, i) => (m.y[i] ?? 0));
-  const resid = (i: number) => path.echo[i] - y[i];
   for (let b = 0; b + BLOCK <= n; b += BLOCK) {
     let a = 0, r = 0;
-    for (let i = b; i < b + BLOCK; i++) { a += path.echo[i] ** 2; const e = resid(i); r += e * e; }
+    for (let i = b; i < b + BLOCK; i++) { a += path.echo[i] ** 2; const e = path.echo[i] - y[i]; r += e * e; }
     blocks.push(a < 400 * BLOCK ? null : Math.max(-60, Math.min(80, 10 * Math.log10(a / (r + 1e-9)))));
   }
   const echoW = Array.from(path.echo.subarray(ECHO_SPEC.window)), resW = echoW.map((v, k) => v - y[ECHO_SPEC.window + k]);
-  const erle = Number.isFinite(erleDb(echoW, resW)) ? Math.min(80, erleDb(echoW, resW)) : 80;
+  const e = erleDb(echoW, resW), erle = Number.isFinite(e) ? Math.min(80, e) : 80;
   const mean = answered > 1 ? m.total / Math.max(1, answered - 1) : 0;
-  const res: PathResult = { path, erle, blocks, pass: false, fault: m.fault, answered, meanCycles: mean, worstCycles: m.worst, why: '' };
+  const nonzero = m.y.reduce((s, v) => s + (v !== 0 ? 1 : 0), 0);
+  const res: PathResult = { path, erle, blocks, pass: false, fault: m.fault, answered, meanCycles: mean, worstCycles: m.worst, nonzero, why: '' };
   res.why = whyNot(res);
   res.pass = res.why === '';
   return res;
 }
 
-/** The reason a path failed, from what the bench saw, or ''. */
+/** The reason a path failed, from what the bench saw (the values written, the ERLE curve), or ''. It says what the curve shows and lists the causes that fit it: the bench cannot see inside the program. */
 export function whyNot(r: PathResult): string {
   const p = r.path, tag = `path ${p.index + 1} (${tailWord(p.cls)}, ${p.source})`;
   if (r.fault) return `${tag}: ${r.fault.message}`;
   const need = ECHO_SPEC.erleDb, f = (v: number) => `${v.toFixed(1)} dB`;
   if (r.erle >= need) return '';
-  const w0 = ECHO_SPEC.window / BLOCK, tail = r.blocks.slice(w0).filter((b): b is number => b !== null), mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / Math.max(1, v.length), first = mean(tail.slice(0, 4)), last = mean(tail.slice(-4));
-  const reached = `ERLE ${f(r.erle)} over the last ${ECHO_SPEC.samples - ECHO_SPEC.window} samples, ${f(need)} needed`;
-  if (r.answered > 0 && r.blocks.every((b) => b === null || Math.abs(b) < 0.05)) return `${tag}: ${reached}. ŷ stayed at 0 the whole time: nothing is being subtracted, so no weight is learning.`;
-  if (r.erle < -3 || r.blocks.some((b) => b !== null && b < -10)) return `${tag}: diverging. ${reached}: the residual is ${f(-r.erle)} louder than the echo it should remove. The update's sign is wrong or the step is too large for the signal.`;
-  if (last - first > 3) return `${tag}: not converged. ${reached}, and still rising (${f(first)} over the first blocks of the window, ${f(last)} over the last): it learns too slowly, so the step is too small or not normalized by the signal's energy.`;
-  return `${tag}: ${reached}. It settled and stopped improving, short of the target: too few taps for a tail this long, or an update that rounds away once the error is small.`;
+  const graded = ECHO_SPEC.samples - ECHO_SPEC.window;
+  const reached = `ERLE ${f(r.erle)} over the last ${groupDigits(graded)} samples, ${f(need)} needed`;
+  const w0 = ECHO_SPEC.window / BLOCK, tail = r.blocks.slice(w0).filter((b): b is number => b !== null);
+  const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / Math.max(1, v.length);
+  const first = mean(tail.slice(0, 4)), last = mean(tail.slice(-4));
+  const sd = Math.sqrt(mean(tail.map((b) => (b - mean(tail)) ** 2)));
+  if (r.answered > 0 && r.nonzero === 0) return `${tag}: ${reached}. ŷ was 0 on every one of the ${groupDigits(r.answered)} samples: nothing is subtracted, so the weights never move or the filter's output is never what is written.`;
+  if (r.erle < -3) {
+    // a constant, an old sample or a wrong scale is wrong by about the echo's own size; an error far past that has run away
+    return `${tag}: ${reached}. The residual is ${f(-r.erle)} louder than the echo itself. ${r.erle < -15
+      ? "It ran away, the error growing far past the echo: the update's sign is wrong or the step is too large for the signal."
+      : "It was wrong from the start and stayed so: ŷ is not an estimate of the echo (a constant, an old sample, a wrong scale), or the update's sign is wrong."}`;
+  }
+  if (last - first > 1.2) return `${tag}: ${reached}. Not converged: it was still creeping up (${f(first)} over the first blocks of the graded stretch, ${f(last)} over the last), so it learns too slowly: the step is too small, or the update is not normalized by the signal's energy.`;
+  return `${tag}: ${reached}. The curve has plateaued below the target${sd > 2 ? `, wandering ${sd.toFixed(1)} dB from block to block` : ''}. Causes that fit: too few taps for this tail, a step too large for the signal${sd > 2 ? ' (the jitter points here)' : ''}, a step so small that it has not finished, or a biased update (one that truncates instead of rounding lets the weights drift).`;
 }
 
 // ---- the grade ----------------------------------------------------------------------------------------
@@ -302,15 +323,26 @@ export interface RefOpts {
   busy?: number;
   /** Write ŷ twice per sample. */
   twice?: boolean;
+  /** The update's rounding term left out: it truncates (floors), which biases every weight downwards. */
+  truncate?: boolean;
   /** Write ŷ only on every second sample. */
   skipY?: boolean;
   /** Read d before writing ŷ. */
   peek?: boolean;
 }
 
+/** The reference's shape, for the page (the tests pin them to the program: tests/capstone-echo.test.ts). */
+export const REF_TAPS = 96, REF_Q = 14;
+
+/** Cycles a sample of the reference takes, measured: the worst over a short run (the program has no data-dependent path). */
+let refCycles: number | undefined;
+export function referenceCycles(): number {
+  return (refCycles ??= runPath(assembleEcho(echoReference()).words, echoPaths(1, 600)[0]).worstCycles);
+}
+
 /** The reference canceller: NLMS on 96 taps in Q14 weights, the history in a double-written ring so the window is contiguous. */
 export function echoReference(o: RefOpts = {}): string {
-  const N = o.taps ?? 96, mu = o.muShift ?? 18, up = o.update ?? true, sub = o.sign === -1, ring = N * 4;
+  const N = o.taps ?? REF_TAPS, mu = o.muShift ?? 18, up = o.update ?? true, sub = o.sign === -1, ring = N * 4;
   return `# NLMS echo canceller: ${N} taps, weights in Q14 at address 0, x history (a ring written twice) at 0x400.
 # ŷ = Σ w[k]·x[n-k];  e = d - ŷ;  w[k] += e·x[n-k] / (ε + Σ x²)   (step μ = ½)
         lui   s0, 0x10000          # the sample port
@@ -360,8 +392,7 @@ ${o.busy ? `        li    a6, ${o.busy}\nidle:   addi  a6, a6, -1\n        bnez 
         li    a3, ${N}
 upd:    lw    a5, 0(t4)
         mul   a5, a5, t0
-        add   a5, a5, s6
-        srai  a5, a5, 17           # g·x[k] in Q14
+${o.truncate ? '' : '        add   a5, a5, s6\n'}        srai  a5, a5, 17           # g·x[k] in Q14
         lw    a4, 0(t5)
         ${sub ? 'sub' : 'add'}   a4, a4, a5
 ${up ? '        sw    a4, 0(t5)' : '        # (weights not stored)'}

@@ -1,22 +1,27 @@
-.ec-page { max-width: 900px; }
+.ec-page { max-width: 900px; --ec-good: #0a6e4c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ec-page { --ec-good: var(--good); } }
+:root[data-theme="dark"] .ec-page { --ec-good: var(--good); }
 .ec-machines { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
 .ec-machine { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 10px 12px; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; height: auto; }
 .ec-machine.on { border-color: var(--accent); background: var(--accent-soft, var(--surface-2)); }
 .ec-machine:disabled { opacity: 1; color: var(--muted); background: var(--surface-2); cursor: not-allowed; }
 .ec-machine:disabled b { color: var(--muted); }
 .ec-soon { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.ec-machine.on .ec-soon { color: var(--good); }
+.ec-machine.on .ec-soon { color: var(--ec-good); }
 .ec-note { font-size: 12.5px; color: var(--muted); }
 .ec-out { margin-top: 18px; min-height: 2em; }
-.ec-good { color: var(--good); } .ec-bad { color: var(--bad); }
+.ec-good { color: var(--ec-good); } .ec-bad { color: var(--bad); }
 .ec-table td.num, .ec-table th { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ec-table tr.ok td:last-child { color: var(--good); } .ec-table tr.no td:last-child { color: var(--bad); }
+.ec-table tr.ok td:first-child { color: var(--ec-good); font-weight: 600; } .ec-table tr.no td:first-child { color: var(--bad); font-weight: 600; }
+.ec-table tr.no td { background: color-mix(in srgb, var(--bad) 9%, transparent); }
 .ec-why { padding-left: 18px; } .ec-why li { margin: 6px 0; }
-.ec-chart { width: 100%; height: auto; max-width: 640px; display: block; margin-top: 12px; }
+.ec-chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+.ec-legend { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.ec-sw { display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
 .ec-win { fill: var(--surface-2); }
 .ec-grid { stroke: var(--border); stroke-width: 1; } .ec-zero { stroke: var(--muted); stroke-width: 1; }
-.ec-tick { font-size: 10.5px; fill: var(--muted); }
-.ec-need { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 5 4; } .ec-needt { font-size: 11px; fill: var(--good); }
+.ec-tick { font-size: 11px; fill: var(--muted); }
+.ec-need { stroke: var(--ec-good); stroke-width: 1.5; stroke-dasharray: 5 4; } .ec-needt { font-size: 11.5px; fill: var(--ec-good); }
 .ec-line { fill: none; stroke-width: 2; }
 @media (pointer: coarse) { .ec-machine, .ec-page .btn { min-height: 40px; } }
 .ec-tw { overflow-x: auto; margin: 8px 0; }
