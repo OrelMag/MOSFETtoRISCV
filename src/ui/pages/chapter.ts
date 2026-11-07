@@ -10,6 +10,8 @@ import { Stage } from '../../view/stage';
 import { maybeCoach } from '../coachmarks';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
+import type { Widget } from '../../view/stage';
+import { stageStepOf } from '../stageborrow';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { bindKeys } from '../keys';
 import { toggleChapterMenu } from '../quicknav';
@@ -35,6 +37,14 @@ export interface Page {
   destroy(): void;
 }
 
+/** The stage before a chapter's first figure: no circuit yet, and where it comes. */
+function stageIntro(steps: Step[], has: (k: number) => boolean): Widget {
+  const first = steps.findIndex((_, k) => has(k));
+  const text = first < 0 ? 'This chapter has no figure.'
+    : `The first figure comes at step ${first + 1}, “${steps[first].title}”. The text up to there says what it will show.`;
+  return { el: h('div', { class: 'stage-intro', role: 'note' }, h('p', null, 'No figure yet'), h('p', { class: 'sub' }, text)) };
+}
+
 /** The page that last set the top bar's data-widget-step (a later page keeps it when an earlier one is destroyed). */
 let widgetStepOwner: object | null = null;
 
@@ -53,8 +63,8 @@ export class ChapterPage implements Page {
   private tour: TourPlayer | null = null;
   private foot: HTMLElement;
   private step = -1;
-  /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
-  private shown = false;
+  /** The step whose scene or widget is on the stage (-1: none, or the intro card): a step without one shows the nearest earlier step's. */
+  private shownStep = -1;
   /** Is the stage showing a scene (not a widget)? Only a scene has a drill path in the hash. */
   private sceneShown = false;
   /** Following the address bar (a route): the stage's moves are not new history entries. */
@@ -179,26 +189,35 @@ export class ChapterPage implements Page {
     if (location.hash !== want) history.replaceState(null, '', want);
   }
 
-  /** Put step i's scene or widget on the stage; a step without either keeps what is shown, or borrows the nearest earlier one's. */
+  /**
+   * Put step i's stage on the stage. A step without a scene or widget shows its PREVIOUS stage (the nearest earlier step's, kept
+   * as it is when that is what is showing: a later step's figure would name terms before the text introduces them), and where
+   * nothing earlier exists, an honest card saying where the first figure comes (stageIntro).
+   */
   private show(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
     const has = (k: number) => !!(steps[k].scene || steps[k].widget);
-    let k = i;
-    if (!has(k)) {
-      if (this.shown) {
-        if (path && this.sceneShown) {
-          this.routing = true;
-          try {
-            this.stage.openPath(path);
-          } finally {
-            this.routing = false;
-          }
+    const k = stageStepOf(has, i);
+    if (k >= 0 && k !== i && k === this.shownStep) {
+      if (path && this.sceneShown) {
+        this.routing = true;
+        try {
+          this.stage.openPath(path);
+        } finally {
+          this.routing = false;
         }
-        return;
       }
-      while (k > 0 && !has(k)) k--;
-      if (!has(k)) k = steps.findIndex((s) => s.scene || s.widget);
-      if (k < 0) return;
+      return;
+    }
+    if (k < 0) {
+      // nothing earlier to show: a card, not a later step's figure
+      this.stage.showWidget(stageIntro(steps, has));
+      this.shownStep = -1;
+      this.sceneShown = false;
+      this.el.classList.add('no-inspector');
+      widgetStepOwner = this;
+      document.documentElement.setAttribute('data-widget-step', '');
+      return;
     }
     const st = steps[k];
     if (st.scene) {
@@ -207,7 +226,7 @@ export class ChapterPage implements Page {
       this.stage.load(sc, path, performance.now() - t0);
     }
     else this.stage.showWidget(st.widget!());
-    this.shown = true;
+    this.shownStep = k;
     this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);
     // a widget has no gate delays to slow down: the top bar's Slow motion button hides (app.css)

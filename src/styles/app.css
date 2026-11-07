@@ -2976,3 +2976,8 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .wire.quiet.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 0.45); }
 .wire.quiet.v1, .wire.quiet.bus1, .wire.quiet.vx, .wire.quiet.short { opacity: 1; }
 .wire.quiet.v1 { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); }
+
+/* A chapter's stage before its first figure (ui/pages/chapter.ts stageIntro): a card, not a later step's widget. */
+.stage-intro { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--text); }
+.stage-intro p { margin: 0; font-weight: 600; font-size: 15px; }
+.stage-intro p.sub { font-weight: 400; font-size: 13.5px; color: var(--muted); max-width: 38ch; line-height: 1.5; }
