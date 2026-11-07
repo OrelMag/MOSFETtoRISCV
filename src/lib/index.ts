@@ -91,3 +91,4 @@ export * from './ethswitch';
 export * from './enigmagates';
 export * from './aes';
 export * from './sha256';
+export * from './macunit';

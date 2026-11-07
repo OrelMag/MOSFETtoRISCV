@@ -17,6 +17,7 @@ import { cacheLines, cpuState, pipeSnap, retireCount, retiring } from '../riscv/
 import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
 import type { CustomRow } from '../riscv/custom';
+import { accHex } from '../dsp/mac';
 import { ISS, type ModelState } from '../riscv/iss';
 import { disasmC, expand16, parcelAt } from '../riscv/rvc';
 import { PROGRAMS } from '../riscv/programs';
@@ -90,6 +91,8 @@ export interface CpuSceneOptions {
   c?: boolean;
   /** The CPU's custom instructions (riscv/custom.ts): single-cycle or pipelined; assembled, run on the golden model and decoded by the control unit. */
   custom?: readonly CustomRow[];
+  /** The MAC core (chapter "A MAC on the RV32"): mac, mac2, clracc and racc assemble, the golden model keeps the accumulator, and the panel shows it. */
+  mac?: boolean;
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -99,7 +102,7 @@ const oooImemK = (words: number[]) => Math.max(6, Math.ceil(Math.log2(Math.max(1
 export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts.ooo ? { ...sceneOpts, m: true } : sceneOpts;
   // the C core runs any program compressed, unless the program says otherwise (.option norvc / rvc)
-  const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom);
+  const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom, { mac: opts.mac });
   // the CPU panel and the Out of order panel share the selected instruction
   const link: OooLink = {};
   return {
@@ -110,7 +113,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom }),
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
@@ -122,9 +125,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
   return (stage: Stage): Widget => {
     const asm = opts.asm;
     const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
-      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}) };
+      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
     let iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
     let lastX: number[] = new Array(32).fill(0);
+    let accPrev: bigint | undefined = 0n;
     let changed = new Set<number>();
     let mismatch: string | null = null;
     let running: number | null = null;
@@ -218,7 +222,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const errBox = h('div', { class: 'asm-errors' });
     // Instructions the assembler takes but this CPU's gates lack (mul on RV32I, lb on a word-only memory): noted, not refused.
     const gaps = (r: AsmResult) => hardwareGaps(r, hwFeaturesOf(opts));
-    const check = debounce(() => { const r = assemble(editor.value, opts.custom); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
+    const check = debounce(() => { const r = assemble(editor.value, opts.custom, { mac: opts.mac }); editor.setDiagnostics(r.errors.length ? r.errors : gaps(r)); }, 300);
     const editor = codeEditor({ value: opts.source, lang: 'rvasm', rows: 14, onChange: () => { errBox.textContent = ''; check(); } });
     editor.el.classList.add('asm-editor');
     // Still shown after Assemble & load rebuilds the panel: the program uses what the gates lack, so a mismatch is expected.
@@ -228,7 +232,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px' },
         h('button', {
           class: 'btn sm primary', onclick: () => {
-            const r = assemble(editor.value, opts.custom);
+            const r = assemble(editor.value, opts.custom, { mac: opts.mac });
             editor.setDiagnostics(r.errors);
             if (r.errors.length) {
               errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
@@ -249,12 +253,12 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = 'none'; } }, 'Close')));
     // Decks of punched cards (cards/program.ts, shared with the sandbox's ROMs): one object card a word.
     function saveAsDeck(): void {
-      const r = assemble(editor.value, opts.custom);
+      const r = assemble(editor.value, opts.custom, { mac: opts.mac });
       editor.setDiagnostics(r.errors);
       if (r.errors.length) return void (errBox.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n'));
       if (!r.words.length) return void (errBox.textContent = 'The program is empty: nothing to punch.');
       const name = progs.find((p) => p.id === sel.value)?.name ?? 'my program';
-      const deck = programCards(name, editor.value, r.lines.map((l) => ({ word: l.word, srcLine: l.srcLine, dis: disasm(l.word, l.addr) })));
+      const deck = programCards(name, editor.value, r.lines.map((l) => ({ word: l.word, srcLine: l.srcLine, dis: disasm(l.word, l.addr, opts.custom, 32, opts.mac) })));
       const file = `${name.trim().replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'program'}${DECK_EXT}`;
       void import('../view/image').then((m) => m.saveFile(file, deckToJson(deck)));
     }
@@ -289,7 +293,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : opts.c ? 'RV32IC CPU' : 'RV32I CPU', h('span', { class: 'fold-hint' }));
+    const title = h('h4', null, opts.mac ? 'RV32I + MAC CPU' : opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : opts.c ? 'RV32IC CPU' : 'RV32I CPU', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow', ...(opts.foldCpu ? { 'data-keep': 'folded' } : {}) }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
@@ -335,6 +339,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
           if (fd >= 0 && diff < 0) mismatch = `${FABI[fd]} differs: hardware ${hex(f![fd])}, model ${hex(iss.f[fd])}`;
           const fc = cpuState(stage.sim).fcsr;
           if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
+          const sa = cpuState(stage.sim).acc;
+          if (opts.mac && sa !== undefined && sa !== iss.acc && diff < 0 && fd < 0) mismatch = `acc differs after "${stepped || log.at(-1)?.text || 'reset'}": hardware ${accHex(sa)}, model ${accHex(iss.acc)}`;
           if (diff >= 0) mismatch = `${ABI[diff]} differs after "${stepped || log.at(-1)?.text || 'reset'}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
@@ -366,6 +372,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       slowCtl.update();
       if (stage.cycles === 0 && iss.steps > 0) {
         iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
+        accPrev = 0n;
         mismatch = null;
         slowCtl.tracing = false;
         log.length = 0;
@@ -386,6 +393,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       // Mid-edge the PC register has already moved but the golden model steps only when the edge is done.
       if (!mismatch && !opts.pipeline && !opts.ooo && !stage.inEdge && atBoundary && st.pc !== iss.pc) mismatch = `PC differs: hardware ${hex(st.pc)}, model ${hex(iss.pc)}`;
       const halted = iss.halted;
+      const accSeen = accPrev;
+      if (!stage.inEdge) accPrev = st.acc;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
@@ -417,7 +426,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       }
       const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
       const w = wordAt(shownPc);
-      const d = decode(w, opts.custom);
+      const d = decode(w, opts.custom, 32, opts.mac);
       const short = opts.c ? parcelAt(asm.words, shownPc) : null;
       now.replaceChildren(
         h('span', { class: 'fmt' }, short?.size === 2 ? `16-bit → ${d.fmt}-type` : `${d.fmt}-type`),
@@ -470,7 +479,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       else if (cur) listing.scrollTop = Math.max(0, cur.offsetTop - listing.offsetTop - 40);
       showUse(inFlight, shownPc);
       showTrace();
-      regs.replaceChildren(...st.x.map((v, i) => h('div', { class: `r${changed.has(i) && stage.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v | 0}` },
+      if (opts.mac && st.acc !== undefined && !mismatch && !stage.inEdge && st.acc !== iss.acc) mismatch = `acc differs: hardware ${accHex(st.acc)}, model ${accHex(iss.acc)}`;
+      regs.replaceChildren(...(opts.mac && st.acc !== undefined ? [h('div', { class: `r acc${st.acc !== accSeen ? ' chg' : ''}${st.acc ? '' : ' z'}`, title: `acc = ${st.acc} (40 bits, signed)` }, h('span', { class: 'n' }, 'acc'), h('span', { class: 'v' }, '0x' + accHex(st.acc)))] : []), ...st.x.map((v, i) => h('div', { class: `r${changed.has(i) && stage.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v | 0}` },
         h('span', { class: 'n' }, `${ABI[i]}`), h('span', { class: 'v' }, hex(v)))));
       if (st.f) {
         const nz = st.f.map((v, i) => [i, v] as const).filter(([, v]) => v !== 0);
@@ -499,7 +509,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     };
     const dis = (pc: number) => {
       const p = opts.c ? parcelAt(asm.words, pc) : null;
-      return p?.size === 2 ? disasmC(p.bits, pc) : disasm(wordAt(pc), pc, opts.custom);
+      return p?.size === 2 ? disasmC(p.bits, pc) : disasm(wordAt(pc), pc, opts.custom, 32, opts.mac);
     };
     const fieldFocus = () => fieldHover ?? fieldPin;
     /** Colour the fields of `word` and light `units` (slowctl.ts markInstr). Returns a note for the use line. */
@@ -537,8 +547,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         const order = Object.keys(STAGE_UNITS);
         const rows = [...inFlight].flatMap(([pc, stgs]) => stgs.map((s) => [s as keyof typeof STAGE_UNITS, pc] as const))
           .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
-        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc), opts.custom))));
-        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc)))),
+        const note = markFields(dPc === undefined ? null : wordAt(dPc), rows.flatMap(([s, pc]) => stageUse(s, instrUse(wordAt(pc), opts.custom, opts.mac))));
+        usePath.replaceChildren(...rows.map(([s, pc]) => h('div', { class: 'flight' }, h('span', { class: 'stg' }, s), h('code', null, disasm(wordAt(pc), pc, opts.custom, 32, opts.mac)))),
           note ? h('div', { class: 'ibd-note' }, note) : '');
         return;
       }
@@ -549,7 +559,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         return;
       }
       const w = wordAt(pc);
-      const use = opts.ooo ? oooUse(w, pc === selPc ? selPort : -1) : instrUse(w, opts.custom);
+      const use = opts.ooo ? oooUse(w, pc === selPc ? selPort : -1) : instrUse(w, opts.custom, opts.mac);
       const stages = inFlight.get(pc) ?? [];
       // the out-of-order core decodes in two slots: no single set of field wires to colour
       const carried = !opts.ooo && (!opts.pipeline || !stages.length || stages.includes('D'));

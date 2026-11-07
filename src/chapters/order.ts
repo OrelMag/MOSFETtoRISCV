@@ -82,6 +82,7 @@ const BOOK = [
   'iir',
   'multirate',
   'cordic',
+  'mac',
   'converters',
   'adaptive',
   'speech',

@@ -45,7 +45,7 @@ function constRef(d: ComponentDef): PartRef | undefined {
  * A CPU's instruction memory (lib/cpu.ts rom: 32-bit byte address, 32-bit words, a lookup
  * leaf) as a sandbox ROM part with the same ports, its program as hex with the disassembly.
  */
-function romRef(d: ComponentDef): PartRef | undefined {
+function romRef(d: ComponentDef, mac = false): PartRef | undefined {
   const [a, q] = d.ports;
   if (!d.id.startsWith('rom_') || !d.behavior || d.ports.length !== 2 || a.name !== 'addr' || a.width !== 32 || q.name !== 'data' || q.width !== 32) return undefined;
   const n = netlistOf(d)?.instances.filter((i) => /^c\d+$/.test(i.name)).length ?? 0;
@@ -53,8 +53,8 @@ function romRef(d: ComponentDef): PartRef | undefined {
   if (!Number.isInteger(k) || k < 1 || k > MAX_ROM_K) return undefined;
   const words = Array.from({ length: n }, (_, i) => d.behavior!.eval([4 * i], undefined)[0] >>> 0);
   while (words.length > 1 && words[words.length - 1] === 0x13) words.pop();
-  const src = words.map((w, i) => `${w.toString(16).padStart(8, '0')}  # ${(4 * i).toString(16).padStart(3, '0')}: ${disasm(w, 4 * i)}`).join('\n');
-  return { rom: { k, w: 32, addr: 'rv32', lang: 'hex', src: `${src}\n` } };
+  const src = words.map((w, i) => `${w.toString(16).padStart(8, '0')}  # ${(4 * i).toString(16).padStart(3, '0')}: ${disasm(w, 4 * i, undefined, 32, mac)}`).join('\n');
+  return { rom: { k, w: 32, addr: 'rv32', lang: 'hex', src: `${src}\n`, ...(mac ? { mac: true as const } : {}) } };
 }
 
 /**
@@ -71,6 +71,8 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
   let name = `${def.name} copy`;
   for (let i = 2; names.has(name); i++) name = `${def.name} copy ${i}`;
 
+  // a MAC core (lib/macunit.ts as its `macu`): its ROM keeps the four instructions' names
+  const withMac = !!netlistOf(def)?.instances.some((i) => i.name === 'macu' && i.def.id === 'macunit');
   const chips: Record<string, ChipDoc> = {};
   const chipFor = new Map<ComponentDef, string | null>();
   const refOf = (d: ComponentDef): PartRef | undefined => {
@@ -79,7 +81,7 @@ export function remixDef(ws: Workspace, def: ComponentDef): { ws: Workspace; id:
     if (prog) return { ucode: prog };
     if (stableRef(d)) return undefined;
     const reader = readerRefOf(d);
-    const special = romRef(d) ?? constRef(d) ?? (reader ? { reader } : undefined);
+    const special = romRef(d, withMac) ?? constRef(d) ?? (reader ? { reader } : undefined);
     if (special) return special;
     // Brought along as a chip (reusing an identical one from an earlier remix). If it cannot be
     // one (a port wider than a pin), the library reference stays: it works until a reload.

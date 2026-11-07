@@ -83,6 +83,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "iir": () => import('./ch-dsp-iir').then((m) => m.chIir),
   "multirate": () => import('./ch-dsp-multirate').then((m) => m.chMultirate),
   "cordic": () => import('./ch-dsp-cordic').then((m) => m.chCordic),
+  "mac": () => import('./ch-dsp-mac').then((m) => m.chMac),
   "converters": () => import('./ch-dsp-converters').then((m) => m.chConverters),
   "adaptive": () => import('./ch-dsp-adaptive').then((m) => m.chAdaptive),
   "speech": () => import('./ch-dsp-speech').then((m) => m.chSpeech),
