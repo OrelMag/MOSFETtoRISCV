@@ -8,7 +8,7 @@ import { dctStage } from '../lib/dct';
 import { register } from '../lib/sequential';
 import { stats } from '../sim/stats';
 import { dctApi, dctScene, dctWidget, fileWidget, filterWidget, huffWidget, pictureWidget, qualityWidget, resizeWidget } from '../widgets/dsppictures';
-import { PICTURE_BLOCKS } from '../widgets/dsppictures';
+import { FILE_QUALITY, PICTURE_BLOCKS } from '../widgets/dsppictures';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -198,7 +198,7 @@ C(0) = 1/√2, otherwise 1</pre>
       get body() {
         const r = at()[1];
         return `
-        <p>Put it together, and it is a file. A baseline JPEG is a list of segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data, and end of image. For this scene at quality 50 it is ${n0(r.bytes.length)} bytes.</p>
+        <p>Put it together, and it is a file. A baseline JPEG is a list of segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data, and end of image. For this scene at quality 50 it is ${n0(r.bytes.length)} bytes; the file below opens at quality ${FILE_QUALITY}, which makes ${n0(encodeJpeg(scene(), FILE_QUALITY).bytes.length)}.</p>
         <p>This page wrote every one of those bytes, and two programs that had no part in it read them. The tests decode files made this way, the scene at 96 × 96 and qualities 10 and 75, with libjpeg through Pillow, and find every pixel within one level of our own reconstruction. Here your browser decodes the same bytes. A level or so either way is expected: T.81 sets how exact an inverse DCT must be, not one way of computing it, and fast decoders use integer ones.</p>
         <p>Try a picture of your own. It is read and turned grey by your browser, and goes nowhere.</p>
         <div class="try">Lower the quality until you can see the blocks in the browser's own decode. Then save the file and open it in another program.</div>`;
