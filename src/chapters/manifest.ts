@@ -454,7 +454,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Booting from cards", challenge: "reach" },
     { title: "Everything on one bus", challenge: "reach" },
   ] },
-  { id: "message", num: 0, title: "Sending a message", blurb: "What it takes to send anything: bits on a wire, the two parts of a delay, what fits on a line, why messages are cut into packets and wrapped in layers, and decibels.", level: "Communication", label: "C0", builds: ["basics"], recap: {"checks":3}, steps: [
+  { id: "message", num: 0, title: "Sending a message", blurb: "What it takes to send anything: bits on a wire, the two parts of a delay, what fits on a line, why messages are cut into packets and wrapped in layers, and decibels.", level: "Communication", label: "C0", builds: ["basics","bus"], recap: {"checks":3}, steps: [
     { title: "Bits on a wire", challenge: "quiz" },
     { title: "How long does it take?", challenge: "quiz" },
     { title: "What fits on the line", challenge: "quiz" },
@@ -463,7 +463,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Decibels", challenge: "quiz" },
     { title: "An estimate on one page", challenge: "quiz" },
   ] },
-  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["relays","bus"], recap: {"checks":3}, steps: [
+  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["message","relays","bus"], recap: {"checks":3}, steps: [
     { title: "Moving a bit", challenge: "quiz" },
     { title: "A line that fades", challenge: "quiz" },
     { title: "The relay as a repeater", challenge: "quiz" },
@@ -482,7 +482,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The busy tone", challenge: "quiz" },
     { title: "Start-stop", challenge: "quiz" },
   ] },
-  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph"], recap: {"checks":3}, steps: [
+  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph","exchange"], recap: {"checks":3}, steps: [
     { title: "The driver and its load", challenge: "quiz" },
     { title: "A long wire on a chip", challenge: "quiz" },
     { title: "Repeaters", challenge: "quiz" },
@@ -493,7 +493,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An I/O pad, and where the transistors stop", challenge: "reach" },
     { title: "From the pad to the pin" },
   ] },
-  { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["latches","wire"], recap: {"checks":3}, steps: [
+  { id: "clocks", num: 42, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["inverter","latches","wire"], recap: {"checks":3}, steps: [
     { title: "What a receiver decides", challenge: "quiz" },
     { title: "A Schmitt trigger", challenge: "quiz" },
     { title: "Noise on a slow edge", challenge: "quiz" },
