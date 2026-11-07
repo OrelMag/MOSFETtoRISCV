@@ -1648,7 +1648,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-slow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .cpu-slow .seg button { padding: 2px 7px; font-size: 11px; }
 .cpu-rate { display: flex; align-items: center; gap: 6px; flex: 1 1 140px; min-width: 0; }
-.cpu-rate input { flex: 1; min-width: 60px; accent-color: var(--accent); }
+/* slider + its 7.5em readout fit the ~147 px the rate gets beside Slow / Back / Step in a 330 px panel (60 px left it 1.7 px over) */
+.cpu-rate input { flex: 1; min-width: 52px; accent-color: var(--accent); }
 .cpu-rate-v { font: 11px var(--font-mono); color: var(--text-2); white-space: nowrap; min-width: 7.5em; }
 .cpu-narr { display: grid; gap: 2px; font-size: 12px; line-height: 1.45; }
 .cpu-narr .narr-row { display: grid; grid-template-columns: 4.6em 1fr; column-gap: 8px; padding: 1px 0; }
