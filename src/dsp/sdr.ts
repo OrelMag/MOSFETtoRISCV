@@ -220,7 +220,7 @@ export function sample(b: Band, noiseDb: number, from = 0, count = b.n - from): 
   for (let i = 0; i < count; i++) {
     const j = from + i, r = Math.round(ADC_SCALE * (b.re[j] + g * b.noiseRe[j])), q = Math.round(ADC_SCALE * (b.im[j] + g * b.noiseIm[j]));
     if (r > ADC_MAX || r < ADC_MIN || q > ADC_MAX || q < ADC_MIN) clipped++;
-    xr[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, r)); xi[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, q));
+    xr[i] = r > ADC_MAX ? ADC_MAX : r < ADC_MIN ? ADC_MIN : r; xi[i] = q > ADC_MAX ? ADC_MAX : q < ADC_MIN ? ADC_MIN : q;
   }
   return { xr, xi, clipped };
 }
@@ -433,9 +433,27 @@ export function stationOccupied(k: number, share = 0.98): number {
   return FS;
 }
 
+const peakOf = new WeakMap<Band, number[]>();
+/** Does sample(b, noiseDb) clip anything? The same answer as `sample(b, noiseDb).clipped > 0` without rounding a whole second: a bound from the largest band and noise values rules clipping out, and a scan that stops at the first clipped sample decides the rest. */
+function clipsAt(b: Band, noiseDb: number): boolean {
+  let pk = peakOf.get(b);
+  if (!pk) {
+    pk = [0, 0, 0, 0];
+    for (let j = 0; j < b.n; j++) { pk[0] = Math.max(pk[0], Math.abs(b.re[j])); pk[1] = Math.max(pk[1], Math.abs(b.im[j])); pk[2] = Math.max(pk[2], Math.abs(b.noiseRe[j])); pk[3] = Math.max(pk[3], Math.abs(b.noiseIm[j])); }
+    peakOf.set(b, pk);
+  }
+  const g = noiseAmp(noiseDb), lim = Math.min(ADC_MAX, -ADC_MIN) - 2;
+  if (ADC_SCALE * (Math.max(pk[0], pk[1]) + g * Math.max(pk[2], pk[3])) < lim) return false;
+  for (let j = 0; j < b.n; j++) {
+    const r = Math.round(ADC_SCALE * (b.re[j] + g * b.noiseRe[j])), q = Math.round(ADC_SCALE * (b.im[j] + g * b.noiseIm[j]));
+    if (r > ADC_MAX || r < ADC_MIN || q > ADC_MAX || q < ADC_MIN) return true;
+  }
+  return false;
+}
+
 /** The first noise level, in whole dB from −40 up, at which the ADC clips a sample of the second of band; null if none to 0 dB. */
 export function firstClipNoiseDb(): number | null {
   const b = synthBand(FS);
-  for (let nd = -40; nd <= 0; nd++) if (sample(b, nd).clipped > 0) return nd;
+  for (let nd = -40; nd <= 0; nd++) if (clipsAt(b, nd)) return nd;
   return null;
 }

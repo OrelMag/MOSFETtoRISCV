@@ -124,6 +124,24 @@ export function dft(x: Cx): Cx {
 export const fftMults = (N: number): number => (N / 2) * Math.log2(N);
 
 /** A radix-2 decimation-in-time FFT of a power-of-two length; `mults` counts its butterflies. `inverse` divides by N. */
+/** cos / sin of step·k for every stage of an N-point transform (one table per size and direction; the same expressions as computed in the loop, so the values are identical). */
+const twiddles = new Map<string, { c: Float64Array; s: Float64Array }>();
+function twiddlesOf(N: number, inverse: boolean): { c: Float64Array; s: Float64Array } {
+  const key = `${N}${inverse ? 'i' : 'f'}`;
+  let t = twiddles.get(key);
+  if (!t) {
+    const c = new Float64Array(N), s = new Float64Array(N);
+    for (let size = 2; size <= N; size *= 2) {
+      const half = size / 2, step = ((inverse ? 2 : -2) * Math.PI) / size;
+      for (let k = 0; k < half; k++) { c[half + k] = Math.cos(step * k); s[half + k] = Math.sin(step * k); }
+    }
+    t = { c, s };
+    if (twiddles.size >= 8) twiddles.delete(twiddles.keys().next().value!);
+    twiddles.set(key, t);
+  }
+  return t;
+}
+
 export function fft(x: Cx, inverse = false): Cx & { mults: number } {
   const N = x.re.length;
   if (N & (N - 1)) throw new Error(`fft: ${N} is not a power of two`);
@@ -134,10 +152,11 @@ export function fft(x: Cx, inverse = false): Cx & { mults: number } {
     if (j > i) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
   }
   let mults = 0;
+  const tw = twiddlesOf(N, inverse);
   for (let size = 2; size <= N; size *= 2) {
-    const half = size / 2, step = ((inverse ? 2 : -2) * Math.PI) / size;
+    const half = size / 2;
     for (let st = 0; st < N; st += size) for (let k = 0; k < half; k++) {
-      const c = Math.cos(step * k), s = Math.sin(step * k), a = st + k, b = a + half;
+      const c = tw.c[half + k], s = tw.s[half + k], a = st + k, b = a + half;
       const tr = re[b] * c - im[b] * s, ti = re[b] * s + im[b] * c;
       re[b] = re[a] - tr; im[b] = im[a] - ti;
       re[a] += tr; im[a] += ti;

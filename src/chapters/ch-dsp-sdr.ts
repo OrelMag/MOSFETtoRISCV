@@ -5,7 +5,7 @@
 import { cicAliasDb, cicResponse } from '../dsp/multirate';
 import {
   ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, stationBand, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
-  workPerSecond, synthBand, NCO_AMP, NCO_SHIFT, interferenceDb, ringSpread, trailingZeros, tuningWord, firstClipNoiseDb, chanWorstDb, audioHalfPointHz, audioGainDb, preLiftDb, analogueLiftDb, sample, ALPHA, stationOccupied,
+  workPerSecond, synthBand, NCO_AMP, NCO_SHIFT, interferenceDb, ringSpread, trailingZeros, tuningWord, firstClipNoiseDb, chanWorstDb, audioHalfPointHz, audioGainDb, preLiftDb, analogueLiftDb, ALPHA, stationOccupied,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS } from '../dsp/sdrclip';
 import { cicDecimator } from '../lib/multirate';
@@ -19,7 +19,7 @@ const d1 = (x: number) => (Math.abs(x) < 0.05 ? 0 : x).toFixed(1);
 const khzf = (hz: number) => `${n0(hz / 1000)} kHz`;
 const memo = <T>(f: () => T): (() => T) => { let v: T | undefined; return () => (v ??= f()); };
 const nands = memo(nandsOf);
-const tone = memo(() => [-40, -25, -10, 0].map((nd) => ({ nd, clip: sample(band(), nd).clipped, snr: toneSnr(receive(band(), STATIONS[0].f, nd).chain.audio), cn: carrierToNoise(STATIONS[0].a, nd, stationBand(STATIONS[0])) })));
+const tone = memo(() => [-40, -25, -10, 0].map((nd) => { const rx = receive(band(), STATIONS[0].f, nd); return { nd, clip: rx.clipped, snr: toneSnr(rx.chain.audio), cn: carrierToNoise(STATIONS[0].a, nd, stationBand(STATIONS[0])) }; }));
 const weak = memo(() => [-40, -25, -15].map((nd) => ({ nd, key: keyingRatio(receive(band(), STATIONS[3].f, nd).chain.audio), cn: carrierToNoise(STATIONS[3].a, nd, stationBand(STATIONS[3])) })));
 const measuredBw = memo(() => ({ tone: occupied(toneFm(DEV, TEST_TONE_HZ), 0.98), wide: occupied(toneFm(DEV, 15_000), 0.98) }));
 /** The closest two stations are this far apart. */
