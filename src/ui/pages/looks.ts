@@ -44,8 +44,12 @@ function litChip(stage: Stage): void {
   chip?.off();
   let timer = 0;
   // gone once the circuit is on screen: the chip would sit on its input bar
-  const seen = () => { if (stage.el.getBoundingClientRect().top < innerHeight * 0.5) off(); };
-  const off = () => { clearTimeout(timer); removeEventListener('scroll', seen); el.remove(); if (chip?.el === el) chip = null; };
+  // (a meaningful part of the stage, not all of it: a screen's height of it is more than the chip needs to give way)
+  const io = typeof IntersectionObserver !== 'undefined'
+    ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting && (e.intersectionRatio >= 0.15 || e.intersectionRect.height >= 160)) off(); }, { threshold: [0, 0.05, 0.1, 0.15, 0.25, 0.5] })
+    : null;
+  io?.observe(stage.el);
+  const off = () => { clearTimeout(timer); io?.disconnect(); el.remove(); if (chip?.el === el) chip = null; };
   const go = h('button', { class: 'btn sm primary', type: 'button', onclick: () => {
     stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     off();
@@ -55,7 +59,6 @@ function litChip(stage: Stage): void {
   document.body.append(el);
   chip = { el, off };
   timer = window.setTimeout(off, 8000);
-  addEventListener('scroll', seen, { passive: true });
 }
 
 /** Wire every [data-show] element under `root` to `stage`. Returns a function that drops a pinned highlight. */
