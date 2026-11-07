@@ -15,10 +15,25 @@ import { NAND, TIE0, TIE1 } from './transistors';
 
 export type Sig = number;
 
+/** Every design built with Rtl, top level first: tests walk them (equivalence across drawing changes, the drawing checks). */
+export const RTL_TOPS: ComponentDef[] = [];
+
 interface Driver { scope: number; inst: string; port: string }
 interface Gate { scope: number; name: string; def: ComponentDef; ins: Sig[]; out: Sig[]; label?: string }
 interface Pin { name: string; width: number; sigs: Sig[] }
-interface Scope { id: number; name: string; label: string; parent: number; kids: number[] }
+interface Scope {
+  id: number; name: string; label: string; parent: number; kids: number[];
+  /** A block made by split(): its id carries the parent's name, and its ports are ordered register by register. */
+  idName?: string; role?: 'next' | 'state' | 'out';
+  /** A scope whose gates went into next / state / out blocks: drawn as those three in a row. */
+  split?: boolean;
+}
+
+/** Every block drawn as next state / state / outputs (drawSplit), for the drawing checks. */
+export const RTL_SPLITS: ComponentDef[] = [];
+
+/** A block with at least this many gates of its own, flip-flops among them, is drawn as next state, state register and outputs. */
+export const SPLIT_MIN = 40;
 
 const OUT_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'out').map((p) => p.name);
 const IN_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
@@ -30,6 +45,8 @@ export interface RtlOptions {
   summary: string;
   label?: string;
   notes?: string;
+  /** Draw a block of many gates as is, not as next state / state register / outputs (split()). */
+  noSplit?: boolean;
   /** Wrap a column of the drawing after this many grid units. */
   columnHeight?: number;
   /** Width of the top box in grid units (default: from its label). */
@@ -234,16 +251,126 @@ export class Rtl {
     return { imp, exp };
   }
 
+  /** d and q of each register of a split block, by register: ports of the three blocks line up in this order. */
+  private regRank = new Map<Sig, number>();
+
+  /**
+   * A large block of a state machine as three: the flip-flops (state), the gates whose outputs reach a flip-flop's d
+   * (next state), and the rest (outputs). Only the gates' boxes change; every gate keeps its inputs, so the netlist
+   * flattens to the same leaves on the same nets (tests/redrawclear-fsm.test.ts holds every design's outputs to it).
+   */
+  private split(sc: Scope): void {
+    if (sc.role) return; // blocks it already has (a ROM, a counter) stay, drawn first
+    const mine = this.gates.filter((g) => g.scope === sc.id);
+    const isReg = (g: Gate) => g.def === DFF || g.def === DFF_R;
+    const regs = mine.filter(isReg);
+    if (mine.length < SPLIT_MIN || !regs.length || regs.length === mine.length) return;
+    const byOut = new Map<Sig, Gate>();
+    for (const g of mine) for (const o of g.out) byOut.set(this.root(o), g);
+    const next = new Set<Gate>();
+    const walk = (sig: Sig) => {
+      const g = byOut.get(this.root(sig));
+      if (!g || isReg(g) || next.has(g)) return;
+      next.add(g);
+      g.ins.forEach(walk);
+    };
+    for (const r of regs) walk(r.ins[0]);
+    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[]) => {
+      if (!gates.length) return;
+      // a name its parent does not use yet (a block may already have a 'state' of its own)
+      const taken = new Set(sc.kids.map((k) => this.scopes[k].name));
+      let nm = name;
+      for (let i = 2; taken.has(nm); i++) nm = `${name}${i}`;
+      const k: Scope = { id: this.scopes.length, name: nm, label, parent: sc.id, kids: [], idName: sc.id === 0 ? nm : `${sc.idName ?? sc.name}_${nm}`, role };
+      this.scopes.push(k);
+      sc.kids.push(k.id);
+      for (const g of gates) { g.scope = k.id; for (const o of g.out) this.drivers[this.root(o)].scope = k.id; }
+    };
+    // one or two output gates are not worth a box of their own (its label would not fit it): they join the logic
+    const outs = mine.filter((g) => !isReg(g) && !next.has(g)), few = outs.length > 0 && outs.length <= 2;
+    make('next', 'next', few ? 'next state, outputs' : 'next state', mine.filter((g) => next.has(g) || (few && !isReg(g))));
+    make('state', 'state', 'state', regs);
+    if (!few) make('out', 'out', 'outputs', outs);
+    sc.split = true;
+    regs.forEach((r, i) => { this.regRank.set(this.root(r.ins[0]), i); this.regRank.set(this.root(r.out[0]), i); });
+  }
+
+  /**
+   * A split block's own drawing: its inputs at the left, next state, state and outputs in a row, its outputs at the right.
+   * Each block is lined up on the first signal it takes from the one before, so a register's d runs straight from next
+   * state into the state block and its q on into the outputs; a signal that runs backwards (q into next state), skips a
+   * block, or comes from a pin is a pointer.
+   */
+  private drawSplit(sc: Scope, id: string, importList: Sig[], exportList: Sig[], built: Map<number, ComponentDef>, exp: Set<Sig>[], imp: Set<Sig>[]): ComponentDef {
+    const rootOf = (s: Sig) => this.root(s);
+    const netName = (s: Sig) => this.names[rootOf(s)];
+    const L = Math.max(4, ...this.names.filter((_, i) => this.alias[i] === i).map((nm) => nm.length));
+    const gapW = Math.ceil(L + 7);
+    const kids = sc.kids.map((k) => ({ sc: this.scopes[k], def: built.get(k)! }));
+    const instances: InstanceDef[] = [];
+    let x = gapW;
+    kids.forEach(({ sc: k, def }, i) => {
+      const g = symbolGeom(def);
+      let y = 2;
+      if (i > 0) {
+        const before = kids[i - 1], bg = symbolGeom(before.def), bAt = instances[i - 1].at!;
+        const from = new Set([...exp[before.sc.id]].map(rootOf));
+        const shared = [...imp[k.id]].map(rootOf).find((s) => from.has(s));
+        y = shared !== undefined ? bAt[1] + bg.ports[netName(shared)].pos[1] - g.ports[netName(shared)].pos[1] : bAt[1];
+      }
+      instances.push({ name: k.name, def, at: [x, y], label: k.label });
+      x += g.w + 10;
+    });
+    const top = Math.min(...instances.map((i) => i.at![1]));
+    if (top < 2) for (const i of instances) i.at = [i.at![0], i.at![1] + 2 - top];
+    const R = x + gapW - 10;
+    const col = new Map<string, number>(kids.map(({ sc: k }, i) => [k.name, i]));
+    const ports: PortDef[] = [];
+    const pins: Record<string, [number, number]> = {};
+    importList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }); pins[netName(s)] = [0, 2 + 2 * i]; });
+    exportList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'out' }); pins[netName(s)] = [R, 2 + 2 * i]; });
+    const drv = new Map<Sig, { end: string; col: number }>();
+    for (const s of importList) drv.set(s, { end: netName(s), col: -1 });
+    for (const { sc: k } of kids) for (const s of exp[k.id]) drv.set(rootOf(s), { end: `${k.name}.${netName(s)}`, col: col.get(k.name)! });
+    const sinks = new Map<Sig, { end: string; col: number }[]>();
+    const add = (s: Sig, end: string, c: number) => { const r = rootOf(s); if (!sinks.has(r)) sinks.set(r, []); sinks.get(r)!.push({ end, col: c }); };
+    for (const { sc: k } of kids) for (const s of imp[k.id]) add(s, `${k.name}.${netName(s)}`, col.get(k.name)!);
+    for (const s of exportList) add(s, netName(s), kids.length);
+    const nets: NetDef[] = [];
+    for (const [s, ends] of sinks) {
+      const d = drv.get(s);
+      if (!d) throw new Error(`${id}: no driver for ${netName(s)}`);
+      // a wire only into the block right after the driver's, or from the last block out to a pin; the rest are pointers
+      const tags = ends.filter((e) => d.col < 0 || e.col !== d.col + 1).map((e) => e.end);
+      const net: NetDef = { name: netName(s), ends: [d.end, ...ends.map((e) => e.end)] };
+      if (tags.length === ends.length) net.tags = true;
+      else if (tags.length) net.tags = tags;
+      nets.push(net);
+    }
+    const def = define({
+      id,
+      name: `${this.opt.name}: ${sc.label}`,
+      category: this.opt.category,
+      summary: `${sc.label} (a block of ${this.opt.name}): its next-state logic, its state register and its outputs.`,
+      ports,
+      symbol: { kind: 'box', label: sc.label },
+      netlist: () => ({ pins, instances, nets }),
+    });
+    if (!RTL_SPLITS.includes(def)) RTL_SPLITS.push(def);
+    return def;
+  }
+
   private defs: ComponentDef[] = [];
   build(): ComponentDef {
     if (this.pending.size) throw new Error(`${this.opt.id}: a register has no d`);
+    if (!this.opt.noSplit) for (const sc of [...this.scopes]) this.split(sc);
     const { imp, exp } = this.plumbing();
     const built = new Map<number, ComponentDef>();
     const rootOf = (s: Sig) => this.root(s);
 
     const buildScope = (sc: Scope): ComponentDef => {
       const isRoot = sc.id === 0;
-      const id = isRoot ? this.opt.id : `${this.opt.id}_${sc.name}`;
+      const id = isRoot ? this.opt.id : `${this.opt.id}_${sc.idName ?? sc.name}`;
       // children first
       for (const k of sc.kids) built.set(k, buildScope(this.scopes[k]));
       // a label is ~0.5 units a character beside its pin and stub: two of them must fit in a column gap
@@ -251,8 +378,10 @@ export class Rtl {
       const gapW = Math.ceil(L + 7);
       const b = new Builder(gapW, gapW);
       const myGates = this.gates.filter((g) => g.scope === sc.id);
-      const importList = isRoot ? [] : [...imp[sc.id]].map(rootOf);
-      const exportList = isRoot ? [] : [...exp[sc.id]].map(rootOf);
+      const byReg = (xs: Sig[]) => (sc.role ? [...xs].sort((a, b) => (this.regRank.get(a) ?? 1e9) - (this.regRank.get(b) ?? 1e9)) : xs);
+      const importList = isRoot ? [] : byReg([...imp[sc.id]].map(rootOf));
+      const exportList = isRoot ? [] : byReg([...exp[sc.id]].map(rootOf));
+      if (sc.split && !isRoot) return this.drawSplit(sc, id, importList, exportList, built, exp, imp);
       const netName = (s: Sig) => this.names[rootOf(s)];
       // drivers of each signal as seen in this scope
       const drv = new Map<Sig, string>();
@@ -350,6 +479,7 @@ export class Rtl {
     };
     const top = buildScope(this.scopes[0]);
     this.defs.push(top);
+    if (!RTL_TOPS.includes(top)) RTL_TOPS.push(top);
     return top;
   }
 }
