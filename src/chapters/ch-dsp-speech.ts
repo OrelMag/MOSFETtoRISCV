@@ -9,8 +9,9 @@ import { logicDepth, stats } from '../sim/stats';
 import { adpcmRvWidget, adpcmWidget, companderWidget, lpcWidget, ulawApi, ulawScene, ulawWidget, vocoderWidget, voiceWidget } from '../widgets/dspspeech';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const kb = (b: number) => `${(b / 1000).toFixed(b % 1000 ? 1 : 0)} kb/s`;
 

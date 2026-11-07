@@ -8,8 +8,9 @@ import { TCP_K } from '../net/tcp';
 import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const K = TCP_K, MSS = K.MSS;
 const FRAME = MSS + 54, ON_WIRE = FRAME + 4 + 8 + 12;
 /** The most data the link can carry in segments this small: preamble, headers, FCS and gap are all wire time. */

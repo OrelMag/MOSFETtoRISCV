@@ -18,13 +18,14 @@ import { clipButton } from '../../widgets/clip';
 import { h, s } from '../dom';
 import '../../styles/signals.css';
 import '../../styles/tune.css';
+import { groupNum } from '../../sim/numfmt';
 
 const KEY = 'mosfet2riscv:captune:';
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(KEY + k); return v ? (JSON.parse(v) as T) : d; } catch { return d; } };
 const save = (k: string, v: unknown) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch { /* storage blocked: nothing kept */ } };
 
 const PRICES: GatePrices = { mixer: (k) => stats(complexMixer(k)).nands, cic: (N, R, w) => stats(cicDecimator(N, R, w)).nands };
-const n0 = (v: number) => Math.round(v).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (v: number) => groupNum(Math.round(v));
 const mps = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} M` : `${n0(v / 1e3)} k`);
 const khz = (hz: number) => `${(hz / 1000).toLocaleString('en', { maximumFractionDigits: 1 })} kHz`;
 

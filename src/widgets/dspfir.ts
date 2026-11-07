@@ -23,6 +23,7 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/dsp.css';
+import { groupNum } from '../sim/numfmt';
 
 /** The sliders' ranges, one place: the tests read these, so a Try box can be checked against what its slider can reach. */
 export const RANGES = {
@@ -30,7 +31,7 @@ export const RANGES = {
 } as const;
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const sp = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const sp = (v: number) => groupNum(Math.round(v));
 const stems = (p: Plot, ys: readonly number[], cls = '') => {
   ys.forEach((y, i) => p.layer.append(s('line', { x1: p.X(i), x2: p.X(i), y1: p.Y(0), y2: p.Y(y), class: `fir-stem ${cls}` })));
 };

@@ -11,6 +11,7 @@ import { assemble } from '../riscv/asm';
 import { ISS } from '../riscv/iss';
 import { bursts, bytesOf, MAC_BIT, MAC_GAP } from './ethcheck';
 import { clocksOf, DRIVER_INIT, DRV, type NicRun } from './nicbench';
+import { groupNum } from '../sim/numfmt';
 
 export const HOST = { ip: ip4(10, 0, 1, 2), gw: ip4(10, 0, 1, 1), far: ip4(10, 0, 2, 2), mac: [...DRV.mac] } as const;
 const RAM_K = 13, IMEM_K = 9, CONSOLE = 0x80000000;
@@ -313,7 +314,7 @@ function runScenario(words: number[], s: HostScenario): Outcome {
   if (replyEnd < 0) return { ok: false, why: `the gateway answered ARP, and no echo request followed within ${n0(400_000)} clocks: read the answer's sender MAC, then send`, clocks: 0 };
   return { ok: false, why: `the far host replied at clock ${replyEnd}, and no 'K' came to the console at ${hex(CONSOLE, 8)}: receive it, and check it is the reply to your request`, clocks: 0 };
 }
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 /** Every scenario on a source: the size in words and the mean clocks from reset to the answer. Never throws. */
 export function runHostPuzzle(src: string): NicRun {

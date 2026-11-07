@@ -10,6 +10,7 @@ import { stats } from '../sim/stats';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
 const hex = (x: number, n = 2) => x.toString(16).toUpperCase().padStart(n, '0');
 
@@ -262,7 +263,7 @@ export interface CompareCosts { uartNands: string; uartClocks: number; spiMaster
 export function throughputWidget(c: CompareCosts): Widget {
   let n = 4;
   const body = h('div');
-  const thin = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+  const thin = (x: number) => groupNum(x);
   const cmp = h('div', { class: 'spi-scroll' }, h('table', { class: 'spi-table spi-cmp' },
     h('thead', null, h('tr', null, h('th'), h('th', null, 'UART'), h('th', null, 'SPI'), h('th', null, 'I²C'))),
     h('tbody', null, ...([

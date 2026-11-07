@@ -22,11 +22,12 @@ import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
 import '../styles/dsp.css';
+import { groupNum } from '../sim/numfmt';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const TAU = 2 * Math.PI;
 const dB = (g: number) => 20 * Math.log10(Math.max(g, 1e-6));
-const grouped = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const grouped = (v: number) => groupNum(v);
 const stems = (p: Plot, ys: readonly number[], cls = '', x0 = 0) => ys.forEach((y, i) => { if (y !== 0) p.layer.append(s('line', { x1: p.X(x0 + i), x2: p.X(x0 + i), y1: p.Y(0), y2: p.Y(y), class: `sg-stem ${cls}` })); });
 const freqGrid = range(501).map((i) => (i / 500) * 0.5);
 

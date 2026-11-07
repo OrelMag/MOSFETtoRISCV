@@ -6,8 +6,9 @@ import { INSTRS24 } from '../dsp/isa24';
 import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget, instrTable, loopWidget, rvFigure, rvPerProduct, rvWithoutDm } from '../widgets/dspcore';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(x);
 const f2 = (x: number) => x.toFixed(2);
 
 export const chDspCore: Chapter = {

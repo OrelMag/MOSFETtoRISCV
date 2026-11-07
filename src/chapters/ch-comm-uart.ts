@@ -6,9 +6,10 @@ import { stats } from '../sim/stats';
 import { baudWidget, busUartApi, coreApi, coreScene, coreState, fifoWidget, frameWidget, rxScene, rxState, twoApi, twoComputersNands, twoScene, txScene, TWO_DIV, uartBusScene } from '../widgets/uart';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(x);
 const pct = (x: number, d = 2) => `${(100 * x).toFixed(d)} %`;
 
 const TOL = tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4);

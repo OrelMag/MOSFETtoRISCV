@@ -24,6 +24,7 @@ import { dmaRx, dmaTx, MIN_FRAME_TIME, PING_FRAME, PING_FRAME_TIME, wireBytes, w
 import { slider } from './mosparts';
 import { btn, outAt, outp, pulse, select, waveSvg } from './uart';
 import { numOf } from '../chapters/order';
+import { groupNum } from '../sim/numfmt';
 
 /**
  * Like uart.ts's Loop, but each tick simulates for a time budget instead of a fixed number of steps: a computer pair on the cycle engine runs at a few
@@ -51,7 +52,7 @@ class SliceLoop {
 
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
 const hex4 = (v: number) => v.toString(16).padStart(4, '0');
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const words = (src: string): number[] => { const a = assemble(src); if (a.errors.length) throw new Error(a.errors[0].message); return a.words; };
 
 export { dmaRx, dmaTx, wireBytes, wireClocks };

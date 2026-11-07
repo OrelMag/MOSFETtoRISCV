@@ -6,8 +6,9 @@ import { NIC_COSTS, nicPollSource } from '../riscv/nicprograms';
 import { checksumWidget, costWidget, frameWidget, lanApi, lanScene, nicApi, nicScene, pathWidget, ringWidget } from '../widgets/net';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const us = (clocks: number) => (clocks * CLOCK_NS / 1000).toFixed(1);
 const N = NET.nands;
 const ARP_FRAME = wireClocks(42);

@@ -9,8 +9,9 @@ import { stats } from '../sim/stats';
 import { bowlWidget, CHANNELS, echoWidget, eqWidget, ECHO_TAPS, LMS_SPEC, LMS_TARGET, lmsApi, lmsScene } from '../widgets/dspadaptive';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const minus = (t: string) => t.replace(/-/g, '−');
 

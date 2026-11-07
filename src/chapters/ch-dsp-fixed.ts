@@ -11,8 +11,9 @@ import { chainWidget, costRows, costWidget, mulScene, overflowWidget, qWidget, r
 import { dspRows, DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const n0 = (v: number) => groupNum(v);
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const db = (v: number) => `${v.toFixed(1)} dB`;
 const WRAP6 = overflowRun(6, 16, 'wrap').snrDb, SAT6 = overflowRun(6, 16, 'sat').snrDb, SCALE6 = overflowRun(6, 16, 'scale').snrDb;

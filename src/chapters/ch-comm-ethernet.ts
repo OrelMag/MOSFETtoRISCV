@@ -9,9 +9,10 @@ import { collisionWidget, minFrameWidget, segState, segmentScene, throughputWidg
 import { csmaScene, frameWidget, rxScene, txScene } from '../widgets/ethernet';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 const BITS_MIN = frameBitTimes(MIN_FRAME);
 const US_BIT = 1 / LINK_MBPS;

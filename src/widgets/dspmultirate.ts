@@ -12,10 +12,11 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
+import { groupNum } from '../sim/numfmt';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-6));
-const spaced = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const spaced = (x: number) => groupNum(Math.round(x));
 const stems = (p: Plot, xs: readonly number[], ys: readonly number[], cls = '') => {
   xs.forEach((x, i) => { if (Math.abs(ys[i]) > 1e-3) p.layer.append(s('line', { x1: p.X(x), x2: p.X(x), y1: p.Y(0), y2: p.Y(ys[i]), class: `sg-stem ${cls}` })); });
 };
