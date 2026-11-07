@@ -19,6 +19,7 @@ import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
 import { frameRun } from './slowctl';
 import '../styles/line.css';
+import '../styles/dsp.css';
 import '../styles/dspcore.css';
 
 export const FIG = figures;
