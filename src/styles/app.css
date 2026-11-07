@@ -2979,3 +2979,5 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 
 /* the LEVEL tag under a panel that would cover it (Stage.yieldBadge) */
 .level-badge.yield { visibility: hidden; }
+
+.zoom-read[hidden] { display: none; }

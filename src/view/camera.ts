@@ -175,6 +175,16 @@ export function touchZoom(vb: ViewBox, width: number, c: Vec, minPx = TOUCH_PX, 
   return { x: c[0] - (c[0] - vb.x) * k, y: c[1] - (c[1] - vb.y) * k, w: vb.w * k, h: vb.h * k };
 }
 
+/** "Zoom to readable" (the stage bar): offered while the fitted overview is drawn under READABLE_BELOW px per grid unit (a pipeline
+ *  or a bus top fitted to its width: gates a few px wide), and it shows the drawing at READABLE_PX instead. */
+export const READABLE_BELOW = 2.5, READABLE_PX = 3;
+export const offerReadable = (pxPerUnit: number): boolean => pxPerUnit > 0 && pxPerUnit < READABLE_BELOW;
+/** The view at `px` per unit: the drawing's left edge (its inputs) at the host's left, centred vertically on it, for panning right. */
+export function readableBox(bbox: ViewBox, width: number, height: number, px = READABLE_PX): ViewBox {
+  const w = width / px, h = height / px;
+  return { x: bbox.x - 2, y: bbox.y + bbox.h / 2 - h / 2, w, h };
+}
+
 export class Camera {
   vb: ViewBox = { x: 0, y: 0, w: 10, h: 10 };
   /** Showing what the last fit() chose: the learner has not zoomed or panned since. */
@@ -233,6 +243,13 @@ export class Camera {
     this.hostPx = r.width;
     this.apply();
     return true;
+  }
+
+  /** Show `vb` as a view of the learner's own: not fitted, so a resize keeps its scale (resized()); Fit undoes it. */
+  setView(vb: ViewBox): void {
+    this.vb = vb;
+    this.fitted = false;
+    this.apply();
   }
 
   /** Scale the view by `factor` (< 1 zooms in) around a world point (default: the centre). */

@@ -226,6 +226,7 @@ export class Stage {
   private timingBtn: HTMLButtonElement;
   private panesBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
+  private readBtn!: HTMLButtonElement;
   /** Aborted by destroy(): the document listeners this stage added. */
   private life = new AbortController();
   private moreMenu: HTMLElement;
@@ -340,6 +341,8 @@ export class Stage {
     this.syncPanesBtn();
     const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
     menuKeys(imgWrap, imgMenu, imgBtn, () => showImg(false));
+    // offered only while the overview is under ~2.5 px per unit (camera.ts offerReadable), hidden at or above it
+    const readBtn = this.readBtn = h('button', { class: 'btn ghost sm keep zoom-read', hidden: true, title: 'Zoom to readable: about 3 px per grid unit from the inputs; drag to pan, Fit returns to the overview', 'aria-label': 'Zoom to readable', onclick: () => this.view.zoomReadable() }, icon('zoomin', 15), h('span', { class: 'lbl' }, 'Zoom to readable')) as HTMLButtonElement;
     const zoomOut = btn('minus', 'Zoom out', () => this.zoomBy(1.25), ' zoom-btn');
     const zoomIn = btn('plus', 'Zoom in', () => this.zoomBy(0.8), ' zoom-btn');
     // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
@@ -370,6 +373,7 @@ export class Stage {
     const pressed = (b: HTMLElement) => b.classList.contains('on');
     // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
     this.shedGroups = [
+      { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.view.zoomReadable() }] },
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
       { els: [imgWrap], items: [
         { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
@@ -415,7 +419,7 @@ export class Stage {
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
-      upBtn, zoomOut, zoomIn, fitBtn,
+      upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
@@ -450,6 +454,7 @@ export class Stage {
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
     });
+    this.view.onCamera(() => this.syncReadable());
     this.view.arrange = true;
     this.view.pickable = true;
     this.view.trace = true;
@@ -2379,6 +2384,14 @@ export class Stage {
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
    *  right dock's width changed or a panel now covers part of the circuit. */
+  /** Show Zoom to readable only while the schematic's overview is drawn too small to read; the bar refits when it comes or goes. */
+  private syncReadable(): void {
+    const on = this.view.readableOffered && !this.boardOn && !this.leaf && !this.el.classList.contains('widget-mode');
+    if (this.readBtn.hidden !== on) return;
+    this.readBtn.hidden = !on;
+    this.fitBar();
+  }
+
   /** The LEVEL tag gives way to a panel (a folded right-docked strip too) that would sit over it: half a tag is worse than none.
    *  Where a panel and the tag meet depends on the stage's width, so it is measured, not a media query. */
   private yieldBadge(): void {
