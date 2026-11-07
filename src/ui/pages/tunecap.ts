@@ -128,7 +128,7 @@ export class TuneCapstonePage {
         h('aside', { class: 'tc-side' },
           h('section', { class: 'tc-card' }, h('h2', null, 'The brief'),
             h('p', null, `A band sampled at ${n0(FS / 1000)} kHz holds four FM stations, each swinging ±${DEV / 1000} kHz. One of them is weak, and keys a tone between ${TONE_MIN} and ${TONE_MAX} Hz on and off in Morse at 30 words a minute (a unit of ${UNIT_S * 1000} ms). Build a chain from the radio chapter's blocks that finds it and decodes the message.`),
-            h('p', null, `You see one practice band. A check runs your chain on five more, each with the station somewhere else, a different message and a different neighbourhood. Every one of the five must decode, exactly. Each check takes the next of ${ATTEMPTS.length} sets of five, in an order of your own, so a chain that only fits the last five will not do.`),
+            h('p', null, `You see one practice band. A check runs your chain on five more, each with the station somewhere else, a different message and a different neighbourhood. Every one of the five must decode, exactly. Each check takes the next of ${ATTEMPTS.length} sets of five, from a starting point of your own, so a chain that only fits the last five will not do.`),
             h('p', { class: 'cc-hint' }, 'The mixer and the CICs are gates and are priced in NANDs, counted from their circuits at your sizes. Everything after them runs on a DSP core and is priced in multiplies a second. The Morse decoder is given and free: it listens for the tone against everything else in the sound.')),
           h('section', { class: 'tc-card' }, h('h2', null, 'Practice band'), this.practice, play.el)),
         h('div', { class: 'tc-main' },

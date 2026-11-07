@@ -151,7 +151,9 @@ describe('the parts the grade reasons with', () => {
     for (const st of [6, 12]) {
       const b = discCordic(re, im, rate, st), bound = ((Math.atan(2 ** -(st - 1)) + 2 ** -11) / (2 * Math.PI)) * (rate / 50_000);
       let worst = 0;
-      for (let i = 1; i < n; i++) worst = Math.max(worst, Math.abs(a[i] - b[i]));
+      // angles compared round the circle: a full turn is rate / DEV in these units
+      const turn = rate / 50_000;
+      for (let i = 1; i < n; i++) { const d = Math.abs(a[i] - b[i]) % turn; worst = Math.max(worst, Math.min(d, turn - d)); }
       expect(worst).toBeLessThanOrEqual(bound);
     }
   });

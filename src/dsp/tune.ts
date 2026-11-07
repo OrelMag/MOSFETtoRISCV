@@ -705,7 +705,7 @@ export function hintsFor(cause: Cause, c: Chain): string[] {
   const mx = c[0] as Extract<Block, { kind: 'mixer' }>;
   switch (cause.kind) {
     case 'tune-fixed': return ['the mixer: a fixed tune only fits a band whose station you know', 'the mixer can look for the station itself'];
-    case 'tune-none': return ['the mixer: how far a line must stand above its surroundings to count as a station', "the practice band says how far its station's line stands"];
+    case 'tune-none': return ['the mixer: how far a line must stand above its surroundings to count as a station', 'on the practice band, lower it until the mixer finds its station, and see how far that line stands'];
     case 'tune-wrong': return ['the mixer: what it accepts as a station, so a ripple of the noise does not count', "the practice band says how far a real station's line stands"];
     case 'tone-cut': return ['the audio filter: its cutoff must keep the tone the station keys', 'the brief says how high the tone can be'];
     case 'too-narrow': return ['the channel filter: FM needs room for its swing and its tone, Carson\'s band', 'a wider channel filter'];
@@ -716,11 +716,12 @@ export function hintsFor(cause: Cause, c: Chain): string[] {
     case 'interference': {
       const w = cause.worst, out: string[] = [];
       if (w.spurDb > 6 && mx.bits < LIMITS.bits[1]) out.push('the mixer: a finer oscillator table, whose spurs fall lower');
+      // a station only partly past the new Nyquist rate comes in mostly through the channel filter's edge: that hint first
+      if (!w.whole || !w.block) out.push(has('channel') ? 'a narrower channel filter, or more taps in it for a steeper edge' : 'a channel filter before the discriminator');
       if (w.block === 'cic') {
         if (cics.some((k) => k.N < LIMITS.N[1])) out.push('a higher CIC order, which folds less into the channel');
         if (cics.some((k) => k.R > LIMITS.cicR[0])) out.push('a smaller CIC ratio, with a half-band or polyphase filter after it doing the rest of the decimation');
       } else if (w.block) out.push(`the ${BLOCK_NOUN[w.block]}: more taps, so less folds in`);
-      if (!w.whole || !w.block) out.push(has('channel') ? 'a narrower channel filter, or more taps in it for a steeper edge' : 'a channel filter before the discriminator');
       return out;
     }
     case 'noise': return ['a narrower channel filter lets in less noise (but not narrower than the station)', has('deemph') ? 'the audio filter: keep less of the noise above the tone' : 'de-emphasis, and an audio filter that keeps less above the tone'];
@@ -762,17 +763,17 @@ export function explain(r: BandResult, c: Chain): string[] {
     case 'tone-cut': return [`Your audio filters are ${cause.lossDb.toFixed(1)} dB down at the ${r.band.toneHz} Hz tone this station keys. The same chain with their cutoff raised to keep the tone decodes this band.`];
     case 'too-narrow': return [`Your CIC and channel filters are ${cause.lossDb.toFixed(1)} dB down ${DEV / 1000} kHz from the carrier, where the station's swing reaches: they cut its own signal. The same chain with the channel filter widened to hold the station decodes this band.`];
     case 'disc-rate': return [`Your discriminator runs at ${(cause.rate / 1000).toFixed(0)} kHz. The station swings ±${DEV / 1000} kHz with a ${r.band.toneHz} Hz tone, which takes more than ${((2 * (DEV + r.band.toneHz)) / 1000).toFixed(1)} kHz, and the station alone, with nothing else in the band, does not decode.`];
-    case 'cordic': return [`With ${cause.stages} CORDIC stages each angle is off by up to ${((Math.atan(2 ** -(cause.stages - 1)) * 180) / Math.PI).toFixed(1)}°. The same chain with a phase step in its place decodes this band.`];
+    case 'cordic': return [`With ${cause.stages} CORDIC stages each angle is off by up to ${((Math.atan(2 ** -(cause.stages - 1)) * 180) / Math.PI).toPrecision(2)}°. The same chain with a phase step in its place decodes this band.`];
     case 'decoder': return ['Your decoder\'s threshold misreads this band: the same sound, read with the threshold on auto, decodes.'];
     case 'unknown': return ['The station alone, with nothing else in the band, does not decode through your chain, and no one block put right on its own makes it decode.'];
     case 'noise': return [`Carrier to noise in your channel: ${fmtDb(r.measures!.cnDb)}. Your station with the noise alone, and no other station, already loses the message${cause.stationsToo ? ', and the noise is the larger of what spoils it' : '; no other station beside it does'}.`];
     case 'interference': {
       const w = cause.worst, m = r.measures!, where = w.offKhz > 0 ? 'above' : 'below';
       const how = w.block === null ? 'reached your channel directly, through the edge of your filters'
-        : w.whole ? `folded down to ${fmtKhz(w.foldedTo!)} from yours when your ${BLOCK_NOUN[w.block]} dropped the rate`
-        : `straddled half the rate your ${BLOCK_NOUN[w.block]} leaves: part of it folded (its carrier to ${fmtKhz(w.foldedTo!)} from yours), and part came in directly`;
+        : w.whole ? `folded in when your ${BLOCK_NOUN[w.block]} dropped the rate, landing at ${fmtKhz(w.foldedTo!)} from yours`
+        : `straddled half the rate your ${BLOCK_NOUN[w.block]} leaves: the part of it past that folded in, and the rest came in directly, through the edge of your filters`;
       const out = [`A station ${Math.abs(w.offKhz).toFixed(0)} kHz ${where} yours ${how}. In your channel it measured ${Math.abs(w.db).toFixed(1)} dB ${w.db >= 0 ? 'stronger' : 'weaker'} than your station.`];
-      if (w.spurDb > 6) out.push(`Your oscillator table lets in ${w.spurDb.toFixed(1)} dB more of that station than a ten-bit table would: the rest is its spurs.`);
+      if (w.spurDb > 6) out.push(`Your oscillator table lets in ${w.spurDb.toFixed(1)} dB more of that station than a ten-bit table would: that extra is the table's spurs.`);
       out.push(`Measured in your chain: carrier to interference ${fmtDb(m.ciDb)} in the channel, carrier to noise ${fmtDb(m.cnDb)}.`);
       out.push(w.breaks ? 'Added to your station on its own, that station alone spoils the message.' : 'No one part spoils the message on its own: the other stations and the noise together do.');
       return out;
