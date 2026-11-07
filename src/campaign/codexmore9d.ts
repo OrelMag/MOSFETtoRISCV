@@ -1,6 +1,7 @@
 // The fuller codex for the Signal processing level: converters, filters that learn, pictures (codexdspd.ts holds the summaries). No DOM.
 
 import type { CodexMore } from './codexmore';
+import { ECHO_FIGS as EF } from '../dsp/echofigs';
 
 export const MORE9D: Record<string, CodexMore> = {
   enob: {
@@ -152,7 +153,7 @@ with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
       'Thinking it needs a model of how d is produced. Only R and p enter; the echo path itself is never needed to find the best filter.',
       'Treating it as a real-time method. By the time the statistics are estimated the path has moved, which is the reason for walking down the bowl instead.',
       'Solving a Toeplitz system as a general matrix. Levinson is n² where Gaussian elimination is n³, which at 128 taps is a factor of 128.',
-      'Expecting zero error. The solution is the best a filter of that length can do: a 32-tap canceller on a 128-tap path leaves the tail it has no taps for, and the chapter\'s NLMS run reaches 10.3 dB.',
+      `Expecting zero error. The solution is the best a filter of that length can do: a 32-tap canceller on a 128-tap path leaves the tail it has no taps for, and the chapter's NLMS run reaches ${EF.erle32.toFixed(1)} dB.`,
     ],
     chapters: [
       { chapter: 'adaptive', step: 1, label: 'The best a filter can do' },
@@ -160,20 +161,21 @@ with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
     ],
   },
   lms: {
-    idea: `Rather than solve for the bottom of the bowl, walk to it. The slope needs expected values, but one sample gives a noisy estimate, −2 e x. In 1960 Widrow and Hoff took that seriously, and <b>LMS</b> is the result: e = d − Σ w<sub>k</sub> x<sub>k</sub>, then w<sub>k</sub> ← w<sub>k</sub> + μ e x<sub>k</sub>. One more multiply per tap, no correlations, no matrix, no idea what the signal is. Any step may go the wrong way; on average they go downhill. A coloured input makes the bowl a long narrow valley: the walk crosses it quickly and creeps along it, at a rate set by the spread of the correlation matrix's eigenvalues.<br><br>The step has a limit. It shrinks the error only while μ is below 2 over the energy in the filter's samples, 2 / (N σ²) for a steady input, and for speech the loudest stretch decides, so a loud input can break a filter that was stable. <b>NLMS</b> divides the step by that energy and behaves the same at any loudness, with μ anywhere between 0 and 2. In gates, learning costs a second multiplier and an adder per tap, so a learning filter is about twice the price of a fixed one; the update e × x is shifted down and rounded half up, which leaves a dead zone where small updates are zero.`,
+    idea: `Rather than solve for the bottom of the bowl, walk to it. The slope needs expected values, but one sample gives a noisy estimate, −2 e x. In 1960 Widrow and Hoff took that seriously, and <b>LMS</b> is the result: e = d − Σ w<sub>k</sub> x<sub>k</sub>, then w<sub>k</sub> ← w<sub>k</sub> + μ e x<sub>k</sub>. One more multiply per tap, no correlations, no matrix, no idea what the signal is. Any step may go the wrong way; on average they go downhill. A coloured input makes the bowl a long narrow valley: the walk crosses it quickly and creeps along it, at a rate set by the spread of the correlation matrix's eigenvalues.<br><br>The step has a limit. It shrinks the error only while μ is below 2 over the energy in the filter's samples, 2 / (N σ²) for a steady input, and for speech the loudest stretch decides, so a loud input can break a filter that was stable. <b>NLMS</b> divides the step by that energy, so its stability and its rate of convergence do not depend on loudness, with μ anywhere between 0 and 2. What it reaches still does, against room noise that stays put. In gates, learning costs a second multiplier and an adder per tap, so a learning filter is about twice the price of a fixed one; the update e × x is shifted down and rounded half up, which leaves a dead zone where small updates are zero.`,
     example: {
       title: 'Step limits on the chapter\'s far end, and what a tap costs',
-      body: `<pre>128 taps, generated far-end sound
-  2 / (N σ²)  from the average power:        1.27
-  2 / (energy of the loudest 128 samples):   0.135   ← where plain LMS diverges
+      body: `<pre>128 taps, a recorded voice as the far end
+  2 / (N σ²)  from the average power:        ${EF.avgAllows.toFixed(2)}
+  2 / (energy of the loudest 128 samples):   ${EF.loudestAllows.toFixed(3)}   ← safe below this
+  plain LMS: converges at ${EF.stillConverges} times it, diverged at ${EF.diverges} times
   NLMS: μ in (0, 2), whatever the loudness
 LMS tap, 12-bit words:   4,580 NANDs, 4,172 of them the two multipliers
 four taps with their sums: 19,188 NANDs
-update e × x shifted down 7, rounded half up: inside ±64 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: 1.27 would have let the run diverge.`,
+update e × x shifted down 7, rounded half up: inside ±64 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: ${EF.avgAllows.toFixed(2)} would have let the run diverge.`,
     },
     mistakes: [
-      'Taking the step limit from the average power. For speech it is set by the loudest stretch of N samples, here 0.135 against 1.27.',
-      'Calling NLMS faster. It only makes the step independent of loudness; a coloured input still crawls along the valley.',
+      `Taking the step limit from the average power. For speech it is set by the loudest stretch of N samples, here ${EF.loudestAllows.toFixed(3)} against ${EF.avgAllows.toFixed(2)}.`,
+      'Calling NLMS faster. It only makes the step\'s limit and rate independent of loudness; a coloured input still crawls along the valley.',
       'Truncating the update instead of rounding. A truncated product takes one off any small negative value, so the coefficients slide away with nothing to stop them.',
       'Leaving it learning during near-end talk. That voice lands in the error and pushes the coefficients away from the answer.',
     ],
@@ -184,21 +186,21 @@ update e × x shifted down 7, rounded half up: inside ±64 it is zero (dead zone
     ],
   },
   echocancel: {
-    idea: `A speaker at your end plays what the far end said; it comes back through the room into your microphone, and the far end hears itself. The room is a filter, and nobody can stop the call to measure it, but the signal sent to the speaker is known to the bit. So a copy of the path, learnt by NLMS, is run on that signal and its output subtracted from the microphone: what is left is the near-end voice and whatever the copy got wrong. The measure is <b>echo return loss enhancement</b>, ERLE, how far the echo has come down, in dB.<br><br>It works because the far-end signal is known and the path linear. Its limits are the length, the learning rule and the near end. Echo beyond the last tap cannot be subtracted, however long it runs. Plain LMS is stable only below a step set by the loudest stretch; NLMS does not mind loudness. And near-end speech is, to the filter, a huge error to be fixed: it wrecks what has been learnt, so a real canceller stops learning while someone talks, which is where most of its difficulty lies. This model is told when that is; a real one has to detect it.`,
+    idea: `A speaker at your end plays what the far end said; it comes back through the room into your microphone, and the far end hears itself. The room is a filter, and nobody can stop the call to measure it, but the signal sent to the speaker is known to the bit. So a copy of the path, learnt by NLMS, is run on that signal and its output subtracted from the microphone: what is left is the near-end voice and whatever the copy got wrong. The measure is <b>echo return loss enhancement</b>, ERLE, how far the echo has come down, in dB.<br><br>It works because the far-end signal is known and the path linear. Its limits are the length, the learning rule and the near end. Echo beyond the last tap cannot be subtracted, however long it runs. Plain LMS is safe only below a step set by the loudest stretch; NLMS's limit does not depend on loudness. And near-end speech is, to the filter, a huge error to be fixed: it wrecks what has been learnt, so a real canceller stops learning while someone talks, which is where most of its difficulty lies. This model is told when that is; a real one has to detect it.`,
     example: {
       title: 'The chapter\'s run: 32,000 samples at 8 kHz, a 128-tap hidden path',
-      body: `<pre>128 taps, NLMS μ = 0.5:                      ERLE 30.7 dB (last quarter)
-32 taps, the tail has none:                   ERLE 10.3 dB
-near-end talk, learning left on:               7.6 dB once the voice has ended
-near-end talk, learning frozen while it lasts: 29.7 dB
+      body: `<pre>128 taps, NLMS μ = 0.5:                      ERLE ${EF.erle.toFixed(1)} dB (last quarter)
+32 taps, the tail has none:                   ERLE ${EF.erle32.toFixed(1)} dB
+near-end talk, learning left on:              ${EF.talkOn.toFixed(1)} dB over the last second
+near-end talk, learning frozen while it lasts: ${EF.talkHeld.toFixed(1)} dB
 cost: 128 taps × 2 multiplications = 256 a sample
-      × 8,000 = 2,048,000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is 22 dB.`,
+      × 8,000 = 2,048,000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is about ${Math.round(EF.talkHeld - EF.talkOn)} dB. The far end is a LibriVox reading; the path and the room noise are seeded models.`,
     },
     mistakes: [
-      'Leaving learning on in double talk. The voice lands in the error and the filter walks away from the path: 7.6 dB against 29.7 with it frozen.',
-      'Giving the filter fewer taps than the echo lasts. What is beyond them stays as a floor: 10.3 dB at 32 taps against 30.7 at 128.',
+      `Leaving learning on in double talk. The voice lands in the error and the filter walks away from the path: ${EF.talkOn.toFixed(1)} dB against ${EF.talkHeld.toFixed(1)} with it frozen.`,
+      `Giving the filter fewer taps than the echo lasts. What is beyond them stays as a floor: ${EF.erle32.toFixed(1)} dB at 32 taps against ${EF.erle.toFixed(1)} at 128.`,
       'Using plain LMS on speech. Its limit is set by the loudest stretch, so a loud far end can make a stable canceller diverge; NLMS divides that out.',
-      'Reading the model\'s figures as a compliance claim. The far end here is generated sound and the path a seeded model; ITU-T G.168 sets its own tests and none is claimed.',
+      'Reading the model\'s figures as a compliance claim. The far end here is one recorded voice and the path a seeded model; ITU-T G.168 sets its own tests and none is claimed.',
     ],
     chapters: [
       { chapter: 'adaptive', step: 0, label: 'An echo nobody can measure' },

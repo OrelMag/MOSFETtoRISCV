@@ -1,6 +1,7 @@
 // Check yourself for the Signal processing level: converters, filters that learn, pictures. Two questions an entry, the right option first (the page shuffles), each wrong one saying why. No DOM.
 
 import type { Quiz } from '../chapters/types';
+import { ECHO_FIGS as EF } from '../dsp/echofigs';
 
 export const CHECK11D: Record<string, Quiz[]> = {
   enob: [
@@ -136,15 +137,15 @@ export const CHECK11D: Record<string, Quiz[]> = {
       question: 'What does ERLE measure in an echo canceller?',
       options: ['How far the echo has been brought down, in dB', 'How loud the far end is at the speaker', 'How many taps the filter has learnt so far', 'How long the room\'s echo lasts'],
       answer: 0,
-      explain: 'Echo return loss enhancement is the echo\'s power over the power left after subtraction, in decibels: 30.7 dB over the last quarter of the chapter\'s run.',
+      explain: `Echo return loss enhancement is the echo's power over the power left after subtraction, in decibels: ${EF.erle.toFixed(1)} dB over the last quarter of the chapter's run.`,
       why: ['', 'The far end\'s level is the input; ERLE compares the echo with what remains.', 'The taps are a design choice, and ERLE would not count them.', 'The room\'s tail is a property of the path, not a measure of the canceller.'],
     },
     {
-      question: 'Near-end talk starts and ends. With learning left on, ERLE is 7.6 dB afterwards; with learning frozen it is 29.7. How much does leaving it on lose?',
-      options: ['About 22 dB', 'About 3 dB', 'About 10 dB', 'Nothing: the voice ended'],
+      question: `Near-end talk starts and ends. Over the last second, with learning left on, ERLE is ${EF.talkOn.toFixed(1)} dB; with learning frozen it is ${EF.talkHeld.toFixed(1)}. How much does leaving it on lose?`,
+      options: [`About ${Math.round(EF.talkHeld - EF.talkOn)} dB`, 'About 2 dB', `About ${Math.round(EF.talkOn)} dB`, 'Nothing: the voice ended'],
       answer: 0,
-      explain: 'The voice lands in the error while it lasts and drives the coefficients away from the path; ending it does not undo that. The difference is 22 dB.',
-      why: ['', 'That is far too small; the figures given are 7.6 and 29.7.', 'The two figures differ by more than that.', 'The damage was done while the voice lasted and stays.'],
+      explain: `The voice lands in the error while it lasts and drives the coefficients away from the path; ending it does not undo that. The difference is about ${Math.round(EF.talkHeld - EF.talkOn)} dB.`,
+      why: ['', `That is too small; the figures given are ${EF.talkOn.toFixed(1)} and ${EF.talkHeld.toFixed(1)}.`, 'That is what is left with learning on, not what is lost.', 'The damage was done while the voice lasted and stays.'],
     },
   ],
   separable: [
