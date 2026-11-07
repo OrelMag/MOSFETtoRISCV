@@ -73,7 +73,10 @@ export const FIR5: ComponentDef = define({
     const s3 = b.op(add, [`${s2}.s`, `${sSix}.s`, `${gnd}.y`], undefined, 'sumB');
     b.next();
     b.wire(`${s3}.s`, 'y');
+    // the last adder sits level with the 6·x2 sum it takes, so that wire no longer climbs through the one before
+    const last = b.instances.find((i) => i.name === 'sumB')!;
+    last.at = [last.at![0], 14];
     const R = b.right;
-    return { pins: { x: [0, 6], clk: [0, 22], y: [R, 6] }, instances: b.instances, nets: b.nets() };
+    return { pins: { x: [0, 6], clk: [0, 22], y: [R, 17] }, instances: b.instances, nets: b.nets() };
   },
 });

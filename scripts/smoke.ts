@@ -485,6 +485,7 @@ const PRINT_DRIVE = `(async () => {
     else if (f.querySelector('svg').getBoundingClientRect().width < 20) bad.push('a figure is collapsed');
   }
   if (page.querySelector('.pd-wait')) bad.push('a figure is still waiting');
+  if (page.querySelector('.lz, [aria-busy="true"]')) bad.push('a figure number is still a placeholder (' + page.querySelectorAll('.lz').length + ')');
   if (window.__printed !== 1) bad.push('window.print was called ' + window.__printed + ' times');
   if (!page.querySelector('.pd-q') || !page.querySelector('.pd-answers li')) bad.push('no questions and answers');
   if (document.querySelector('.topbar') && document.documentElement.getAttribute('data-palette') === 'print') bad.push('the figures left <html> in the paper palette');
@@ -575,6 +576,8 @@ function routes(): Route[] {
   const printCh = chapters.find((c) => c.id === 'gates') ?? chapters[1];
   add(`#/c/${printCh.id}/print`, themed('dark'), ' (dark)', undefined, PRINT_DRIVE);
   add(`#/c/${printCh.id}/print`, light, ` (${VIEWPORTS[VIEWPORTS.length - 1].name})`, VIEWPORTS[VIEWPORTS.length - 1], PRINT_DRIVE);
+  // a chapter whose numbers are computed by the page (ui/lazy.ts): none may print as a placeholder
+  add('#/c/sdr/print', light, '', undefined, PRINT_DRIVE.replace('if (figs.length < 3)', 'if (false)'));
   // The first-run coach marks over a chapter step, the workbench and the sandbox, in both themes and on a phone.
   for (const theme of ['light', 'dark'] as const) {
     for (const hash of [`#/c/${chapters[1].id}/0`, '#/workbench/rca4', '#/sandbox']) add(hash, firstRun(theme), ` (first run, ${theme})`);
@@ -1081,6 +1084,12 @@ class Tab {
     await Promise.race([
       this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
       sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
+    ]);
+    // heavy figures and widgets fill in after the step has drawn (ui/lazy.ts: aria-busy until their numbers are in): wait for them, so what they build is judged too
+    const filled = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.lz[aria-busy], .widget[aria-busy="true"]')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: filled, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: a figure never finished computing'); }),
     ]);
     const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
     await Promise.race([
