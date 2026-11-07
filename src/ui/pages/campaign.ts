@@ -26,6 +26,7 @@ import { ancestors, dependents, isDone, nextAvailable, statusOf } from '../../ca
 import { LESSONS } from '../../campaign/lessons';
 import { levelChallenge, levelChipId, startCandidates, startFrom } from '../../campaign/levels';
 import { ACTS, actName, actTitle, NODES, nodeById } from '../../campaign/nodes';
+import { CAPSTONES, COMM_CAPSTONES, DSP_CAPSTONES } from '../../learn/capstones';
 import { hasTwin, twinKey } from '../../campaign/twinids';
 import { exportCampaign, importCampaign, progress } from '../../campaign/progress';
 import type { CampaignNode } from '../../campaign/types';
@@ -152,6 +153,9 @@ export class CampaignPage implements Page {
     const refocus = keepFocus(this.main, a === 'n' ? b : undefined);
     this.renderHead();
     if (changed) this.cxListOpen = false;
+    // a capstone is not a level on the map: an old or hand-made #/campaign/n/<capstone> goes where the capstone is played, in place
+    const cap = a === 'n' && b && !nodeById(b) ? [...CAPSTONES, ...COMM_CAPSTONES, ...DSP_CAPSTONES].find((c) => c.id === b && c.route) : undefined;
+    if (cap) { location.replace(cap.route!); return; }
     // an address that names no level or entry: the shared notice, with the way back, not the map under a wrong address
     if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
     else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
