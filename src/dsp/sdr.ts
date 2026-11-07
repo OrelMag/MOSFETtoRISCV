@@ -220,7 +220,7 @@ export function sample(b: Band, noiseDb: number, from = 0, count = b.n - from): 
   for (let i = 0; i < count; i++) {
     const j = from + i, r = Math.round(ADC_SCALE * (b.re[j] + g * b.noiseRe[j])), q = Math.round(ADC_SCALE * (b.im[j] + g * b.noiseIm[j]));
     if (r > ADC_MAX || r < ADC_MIN || q > ADC_MAX || q < ADC_MIN) clipped++;
-    xr[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, r)); xi[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, q));
+    xr[i] = r > ADC_MAX ? ADC_MAX : r < ADC_MIN ? ADC_MIN : r; xi[i] = q > ADC_MAX ? ADC_MAX : q < ADC_MIN ? ADC_MIN : q;
   }
   return { xr, xi, clipped };
 }
@@ -264,9 +264,19 @@ export function demodulate(yr: ArrayLike<number>, yi: ArrayLike<number>): Chain 
 export interface Reception { chain: Chain; yr: Int32Array; yi: Int32Array; clipped: number }
 /** The receiver on a stretch of the band: sample, mix, CIC, then the rest. */
 export function receive(b: Band, f: number, noiseDb: number, count = b.n, k: number = NCO_K): Reception {
+  const key = `${f}|${noiseDb}|${count}|${k}`, hit = recent.find((e) => e.b === b && e.key === key);
+  if (hit) { recent.splice(recent.indexOf(hit), 1); recent.unshift(hit); return hit.r; }
   const { xr, xi, clipped } = sample(b, noiseDb, 0, count), { yr, yi } = frontBlock(xr, xi, tuningWord(f), k);
-  return { chain: demodulate(yr, yi), yr, yi, clipped };
+  const r = { chain: demodulate(yr, yi), yr, yi, clipped };
+  // only the page's own second of band is worth keeping: an entry holds its band (16 MB) as well as its result
+  if (b === bands.get(`${FS}:all`)) { recent.unshift({ b, key, r }); recent.length = Math.min(recent.length, RECEIVE_KEPT); }
+  return r;
 }
+/** The last few receptions of the full band, by parameters: the page asks for the same one from several places (a table row, a sentence, a readout), and a Reception is never changed. */
+const RECEIVE_KEPT = 3;
+const recent: Array<{ b: Band; key: string; r: Reception }> = [];
+/** Let the kept receptions go (about 10 MB each): the chapter calls it when the learner leaves it. Moving between its steps keeps them. */
+export function releaseReceptions(): void { recent.length = 0; }
 
 // ---- measurements ---------------------------------------------------------------------------------------------------------------------------
 
@@ -418,7 +428,15 @@ export function ringSpread(f: number, clocks: number): number {
 }
 
 /** The band one station occupies on its own, measured: the narrowest span around its carrier holding `share` of its power, from the power spectrum averaged over 14 blocks of 2^16 samples, 0.96 s of its programme (the first second less the last 0.04 s). */
+const occupiedMemo = new Map<string, number>();
 export function stationOccupied(k: number, share = 0.98): number {
+  const key = `${k}|${share}`, hit = occupiedMemo.get(key);
+  if (hit !== undefined) return hit;
+  const v = stationOccupiedRaw(k, share);
+  occupiedMemo.set(key, v);
+  return v;
+}
+function stationOccupiedRaw(k: number, share: number): number {
   const B = 1 << 16, blocks = 14, n = B * blocks, re = new Float32Array(n), im = new Float32Array(n), e = preEmphasis(program(k, AUD + 2)), top = programPeak(k);
   for (let i = 0; i < e.length; i++) e[i] /= top;
   addFm(re, im, 0, 1, e, DEV);
@@ -433,9 +451,27 @@ export function stationOccupied(k: number, share = 0.98): number {
   return FS;
 }
 
+const peakOf = new WeakMap<Band, number[]>();
+/** Does sample(b, noiseDb) clip anything? The same answer as `sample(b, noiseDb).clipped > 0` without rounding a whole second: a bound from the largest band and noise values rules clipping out, and a scan that stops at the first clipped sample decides the rest. */
+function clipsAt(b: Band, noiseDb: number): boolean {
+  let pk = peakOf.get(b);
+  if (!pk) {
+    pk = [0, 0, 0, 0];
+    for (let j = 0; j < b.n; j++) { pk[0] = Math.max(pk[0], Math.abs(b.re[j])); pk[1] = Math.max(pk[1], Math.abs(b.im[j])); pk[2] = Math.max(pk[2], Math.abs(b.noiseRe[j])); pk[3] = Math.max(pk[3], Math.abs(b.noiseIm[j])); }
+    peakOf.set(b, pk);
+  }
+  const g = noiseAmp(noiseDb), lim = Math.min(ADC_MAX, -ADC_MIN) - 2;
+  if (ADC_SCALE * (Math.max(pk[0], pk[1]) + g * Math.max(pk[2], pk[3])) < lim) return false;
+  for (let j = 0; j < b.n; j++) {
+    const r = Math.round(ADC_SCALE * (b.re[j] + g * b.noiseRe[j])), q = Math.round(ADC_SCALE * (b.im[j] + g * b.noiseIm[j]));
+    if (r > ADC_MAX || r < ADC_MIN || q > ADC_MAX || q < ADC_MIN) return true;
+  }
+  return false;
+}
+
 /** The first noise level, in whole dB from −40 up, at which the ADC clips a sample of the second of band; null if none to 0 dB. */
 export function firstClipNoiseDb(): number | null {
   const b = synthBand(FS);
-  for (let nd = -40; nd <= 0; nd++) if (sample(b, nd).clipped > 0) return nd;
+  for (let nd = -40; nd <= 0; nd++) if (clipsAt(b, nd)) return nd;
   return null;
 }
