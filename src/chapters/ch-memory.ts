@@ -1065,9 +1065,9 @@ export const chMemory: Chapter = {
       title: 'FIFO',
       body: `
         <p>A <strong>first-in first-out</strong> queue decouples a producer from a consumer: a UART receiving bytes faster than software reads
-        them, a processing stage that sometimes has to wait. Here, four words in registers, written through <span data-show="u6">a decoder</span> at
+        them, a processing stage that sometimes has to wait. Here, four words in registers, written through <span data-show="dec">a decoder</span> at
         the <span data-show="wp">write pointer</span> and read
-        through <span data-show="u14">a multiplexer</span> at the <span data-show="rp">read pointer</span>. Both pointers only ever count up,
+        through <span data-show="rdp">a multiplexer</span> at the <span data-show="rp">read pointer</span>. Both pointers only ever count up,
         wrapping around: a <em>circular buffer</em>.</p>
         <p>The trick is one extra pointer bit. Equal pointers mean <span data-show="emp">empty</span>; same slot but different extra bit means the
         writer is a full lap ahead: <span data-show="fl">full</span>. Without it, full and empty would look the same.</p>
@@ -1114,7 +1114,7 @@ export const chMemory: Chapter = {
       title: 'Stack',
       body: `
         <p>Swap the queue's discipline for <strong>last-in first-out</strong> and one pointer is enough: <span data-show="sp">the stack pointer</span> counts the words held.
-        Push writes at slot sp and increments it; pop decrements it; <span data-show="u18">the top is slot sp − 1</span>. Return-address predictors in CPUs are small stacks
+        Push writes at slot sp and increments it; pop decrements it; <span data-show="rdp">the top is slot sp − 1</span>. Return-address predictors in CPUs are small stacks
         like this one; the program's call stack is the same idea kept in memory, with sp in a register (x2 in RISC-V).</p>
         <p>One pointer instead of two, but the read side is not free: the top is slot sp − 1, so every read passes through a decrement before the multiplexer, which makes the top slower to reach than a FIFO's head, whose read
         pointer is already the address. The stack costs ${nands(stack(2, 8))} NANDs for 4 words of 8 bits, the FIFO ${nands(fifo(2, 8))}.</p>`,

@@ -8,6 +8,7 @@ import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
 import { RELAY_BUZZER, RELAY_FA, RELAY_LATCH, RELAY_NAND } from '../src/lib/relays';
 import { CATHODE_FOLLOWER, ECCLES_JORDAN, TUBE_BUF, TUBE_INV, TUBE_NAND, TUBE_NOR } from '../src/lib/tubes';
+import { fifo, stack } from '../src/lib/storage';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { routeNetlist } from '../src/view/route';
@@ -44,6 +45,13 @@ const levels: [string, () => ComponentDef][] = [
   ['Eccles–Jordan flip-flop', () => ECCLES_JORDAN],
   ['Ethernet segment', () => ethSegment(4)],
   ['Ethernet switch', () => ethSwitch({ cellK: 7 })],
+  // the memory chapter's FIFO, drawn by hand (circuit eyeballing, phase 2a)
+  ['FIFO 4 × 8', () => fifo(2, 8)],
+  ['FIFO 8 × 8', () => fifo(3, 8)],
+  ['FIFO 16 × 8', () => fifo(4, 8)],
+  ['stack 4 × 8', () => stack(2, 8)],
+  ['stack 8 × 8', () => stack(3, 8)],
+  ['stack 16 × 8', () => stack(4, 8)],
 ];
 
 describe('hand-drawn levels', () => {
