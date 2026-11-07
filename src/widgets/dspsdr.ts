@@ -13,6 +13,7 @@ import { fft } from '../comm/fourier';
 import { complexMixer, sdrFront, sdrNco } from '../lib/sdr';
 import { stats } from '../sim/stats';
 import { h, s } from '../ui/dom';
+import { lazyProps } from '../ui/lazy';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { clipButton } from './clip';
 import { line, mkChips, num, plotOf, type Plot } from './line';
@@ -200,11 +201,22 @@ export const nandsOf = () => ({ mixer: stats(complexMixer()).nands, nco: stats(s
 export const TONE_OFF_HZ = 100;
 export const TABLE_KS = [3, 4, 5, 6, 7, 8, 9] as const;
 export interface TableRow { k: number; nands: number; sfdr: number; keying: number; toneOff: number; toneOn: number }
-let tableRows: TableRow[] | undefined;
+const rowOf = new Map<number, TableRow>();
+/** One table size's row, each figure measured the first time it is read (a sentence needs one of them, not all five). */
+export function tableRow(k: number): TableRow {
+  let r = rowOf.get(k);
+  if (!r) {
+    r = lazyProps<TableRow>({ k: () => k, nands: () => stats(sdrNco(k)).nands, sfdr: () => mixerSfdr(k), keying: () => keyingRatio(receive(band(), STATIONS[3].f, -40, FS, k).chain.audio), toneOff: () => toneSnrOff(k, TONE_OFF_HZ), toneOn: () => toneSnrOff(k, 0) });
+    rowOf.set(k, r);
+  }
+  return r;
+}
 /** Each table size's cost in gates (the NCO alone) and the two things it buys. The weak station is received from the same second of band as everywhere else. */
 export function tableSweep(): TableRow[] {
-  return (tableRows ??= TABLE_KS.map((k) => ({ k, nands: stats(sdrNco(k)).nands, sfdr: mixerSfdr(k), keying: keyingRatio(receive(band(), STATIONS[3].f, -40, FS, k).chain.audio), toneOff: toneSnrOff(k, TONE_OFF_HZ), toneOn: toneSnrOff(k, 0) })));
+  return TABLE_KS.map((k) => tableRow(k));
 }
+/** The pieces tableSweep() is made of, as separate units of work (for a page that fills them in one task at a time). */
+export const tableUnits = (): Array<() => unknown> => TABLE_KS.flatMap((k) => (['nands', 'sfdr', 'keying', 'toneOff', 'toneOn'] as const).map((f) => () => tableRow(k)[f]));
 export function tableWidget(): Widget {
   let k = NCO_K;
   const rows = tableSweep(), chips = mkChips(4);
