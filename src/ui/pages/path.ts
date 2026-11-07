@@ -7,7 +7,7 @@ import { pathCtx } from '../../learn/evidence';
 import type { SkillState } from '../../learn/mastery';
 import { chapterById, currentTier, fmtMinutes, nextUp, stepMinutes, tierViews, type NextItem, type PathCtx, type TierView } from '../../learn/path';
 import { testOutItems } from '../../learn/placement';
-import { capstoneStatus, COMM_CAPSTONES } from '../../learn/capstones';
+import { capstoneStatus, COMM_CAPSTONES, DSP_CAPSTONES, type AnyCapstone } from '../../learn/capstones';
 import { tierChapters } from '../../learn/skills';
 import { learn, PERSONAS } from '../../learn/store';
 import { h, icon } from '../dom';
@@ -53,7 +53,7 @@ export class PathPage implements Page {
     this.main.replaceChildren(...views.map((v) => this.tier(v, ctx, cur, start)),
       h('div', { class: 'lp-legend' }, ...(['mastered', 'practised', 'rusty', 'learning', 'new'] as SkillState[]).map((s) => h('span', null, h('span', { class: `lp-chip ${s}` }, 'a'), STATE_LABEL[s]))),
       h('p', { class: 'lp-note' }, 'Mastered: understood (a question right), built (its level or challenge), and remembered (right twice, days apart). Times are estimates.'));
-    this.side.replaceChildren(this.next(nextUp(ctx, start)), ...views.filter((v) => v.tier === cur && v.capstone).map((v) => this.capCard(v)), this.commCaps(ctx));
+    this.side.replaceChildren(this.next(nextUp(ctx, start)), ...views.filter((v) => v.tier === cur && v.capstone).map((v) => this.capCard(v)), this.capGroup('Communication capstones', COMM_CAPSTONES, ctx), this.capGroup('Signal processing capstones', DSP_CAPSTONES, ctx));
   }
 
   private tier(v: TierView, ctx: PathCtx, cur: number, start: number): HTMLElement {
@@ -110,12 +110,13 @@ export class PathPage implements Page {
       h('p', { class: 'lp-note' }, 'Questions due come first, then the next step of your tier, then a level that practises what you have read.'));
   }
 
-  /** The communication track's capstones: outside the tiers, so a tier's progress never depends on them. */
-  private commCaps(ctx: PathCtx): HTMLElement {
-    return h('section', { class: 'lp-cap' }, h('div', { class: 'lp-nh' }, h('b', null, 'Communication capstones')),
-      ...COMM_CAPSTONES.map((c) => {
+  /** A track's capstones: outside the tiers, so a tier's progress never depends on them. One without a route is not built yet. */
+  private capGroup(title: string, caps: readonly AnyCapstone[], ctx: PathCtx): HTMLElement {
+    return h('section', { class: 'lp-cap' }, h('div', { class: 'lp-nh' }, h('b', null, title)),
+      ...caps.map((c) => {
         const status = capstoneStatus(c.id, { [c.id]: ctx.campaign(c.id) });
-        return h('div', { class: 'cc-capline' }, h('div', { class: 'lp-nh' }, h('b', null, c.title), h('span', { class: `lp-pill ${status}` }, status === 'passed' ? 'passed' : status === 'started' ? 'started' : 'open')),
+        return h('div', { class: 'cc-capline' }, h('div', { class: 'lp-nh' }, h('b', null, c.title),
+          h('span', { class: `lp-pill ${c.route ? status : 'none'}` }, !c.route ? 'not built yet' : status === 'passed' ? 'passed' : status === 'started' ? 'started' : 'open')),
           h('p', { class: 'lp-sub' }, c.brief), c.route ? h('a', { class: 'btn sm', href: c.route }, status === 'passed' ? 'Try again' : 'Open') : null);
       }));
   }

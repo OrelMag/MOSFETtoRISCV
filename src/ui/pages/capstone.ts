@@ -20,7 +20,8 @@ import { type BuildChallenge, type CheckResult, importAnswer, startChallenge } f
 import { Editor } from '../../editor/editor';
 import { loadWorkspace, saveWorkspace } from '../../editor/store';
 import '../../editor/features';
-import type { AnyCapstone } from '../../learn/capstones';
+import { type AnyCapstone, DSP_CAPSTONES } from '../../learn/capstones';
+import { MASK_SPEC } from '../../campaign/capmask';
 import { resolveComponent } from '../../lib/resolve';
 import { h, icon } from '../dom';
 import { markJump } from '../returnto';
@@ -41,6 +42,7 @@ export const PIN_NOTES: Record<string, string> = {
   instr: 'the bench answers imem[pc] in the same cycle', drdata: 'the bench answers dmem[daddr] in the same cycle',
   pc: 'address of the instruction', daddr: 'data address', dwdata: 'the word to store', dwe: 'a store at the clock edge',
   rwe: 'a register write (the bench watches it)', rwa: 'its register number', rwd: 'the value written to x[rwa]',
+  x: 'the sample: 12-bit signed, −2048 … 2047, a new one every clock', y: 'the filtered sample: 14-bit signed, same scale, read just before each rising edge',
 };
 
 const rich = (tag: 'p' | 'div' | 'li' | 'span', html: string, cls?: string) => {
@@ -146,7 +148,7 @@ export class CapstonePage implements Page {
     const others = builtCapstones().filter((c) => c.id !== cap.id);
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: '#/campaign', title: 'The campaign' }, icon('chevL', 14), 'Campaign'),
-      h('span', { class: 'lv-badge cap-tier' }, cap.tier ? `TIER ${cap.tier} CAPSTONE` : 'COMMUNICATION CAPSTONE'),
+      h('span', { class: 'lv-badge cap-tier' }, cap.tier ? `TIER ${cap.tier} CAPSTONE` : DSP_CAPSTONES.some((c) => c.id === cap.id) ? 'SIGNAL PROCESSING CAPSTONE' : 'COMMUNICATION CAPSTONE'),
       h('span', { class: 'lv-crumb' }, h('b', null, cap.title)),
       this.isBrief() ? this.briefBadge() : this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
       h('span', { class: 'lv-spacer' }),
@@ -241,11 +243,12 @@ export class CapstonePage implements Page {
     const rule = capstoneRule(this.nodeId);
     const names = partNames((rule?.lib ?? []).filter((x) => x !== 'nand'), (u) => resolveComponent(u)?.name);
     const core = coreSpecOf(ch.check);
-    const graded = core
+    const graded = ch.check.kind === 'custom' ? `${ch.check.describe} Scored on NANDs.` : core
       ? `${core.tests().length} programs against the golden model, write by write (registers and stores, in order), within the cycle budget; Pong among them. Scored on NANDs, clock period and cycles.`
       : `A test sequence of ${ch.check.kind === 'sequence' ? ch.check.steps.length : 0} clocked steps, every output compared after every step. Scored on NANDs and clock period.`;
     el.append(
       ...(rulesOnly ? [] : [h('section', null, h('h4', null, 'The brief'), rich('p', ch.brief))]),
+      ...(this.nodeId === 'cap_mask' && !rulesOnly ? [this.maskSheet()] : []),
       h('section', null, h('h4', null, 'Pins'), h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins' },
         h('thead', null, h('tr', null, ['pin', 'dir', 'w', 'meaning'].map((t) => h('th', null, t)))), h('tbody', null, ch.ports.map(pinRow))))),
       ...(rulesOnly ? [h('section', null, h('h4', null, 'Check'), h('p', null, graded))] : [h('section', null, h('h4', null, 'Graded'), h('p', null, graded),
@@ -258,9 +261,35 @@ export class CapstonePage implements Page {
     if (this.ref) this.showRefNands(el);
   }
 
+  /** The mask as a table: the numbers the bench holds the filter to. */
+  private maskSheet(): HTMLElement {
+    const s = MASK_SPEC, k = (f: number) => `${+(f * s.rate / 1000).toFixed(2)} kHz`;
+    const row = (a: string, b: string, c: string) => h('tr', null, h('th', { scope: 'row' }, a), h('td', null, b), h('td', null, c));
+    return h('section', null, h('h4', null, 'The mask'), h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins cap-mask' },
+      h('thead', null, h('tr', null, ['band', 'frequency', 'gain'].map((t) => h('th', null, t)))),
+      h('tbody', null,
+        row('Pass', `0 – ${k(s.passEdge)}`, `1 ± ${s.rippleDb} dB`),
+        row('Transition', `${k(s.passEdge)} – ${k(s.stopEdge)}`, 'free'),
+        row('Stop', `${k(s.stopEdge)} – ${s.rate / 2000} kHz`, `≤ −${s.stopDb} dB`),
+        row('Sample rate', `${s.rate / 1000} kHz`, 'one sample a clock'),
+        row('Input / output', `x ${s.xBits} bits, y ${s.yBits} bits`, 'same scale'),
+        row('Budget', `${s.budget.toLocaleString('en')} NANDs`, 'through your chips')))));
+  }
+
   private testsTab(el: HTMLElement): void {
     const ch = this.ch!;
     const core = coreSpecOf(ch.check);
+    if (this.nodeId === 'cap_mask') {
+      el.append(h('section', null, h('h4', null, 'What Check runs'),
+        h('p', { class: 'sub' }, 'On your gates, 32 lanes at a time. Frequencies, amplitudes, bursts and noise come from a seed that depends on your circuit; the sheet is the only fixed part.'),
+        h('ul', { class: 'cap-tests' },
+          rich('li', '<b>Impulse response</b>: a full-scale impulse, then silence: the filter read from its gates.'),
+          rich('li', '<b>Swept sines</b>: DC, nine frequencies in the pass band (its edge always one) and 22 in the stop band (its edge always one), each measured by correlation over whole periods.'),
+          rich('li', '<b>Worst case</b>: your impulse response with its signs reversed so that every tap adds, and its negative, then full-scale noise: y must match the response, and a wrap or a clip is named by sample.'),
+          rich('li', '<b>Silence</b>: 31 bursts (size, sign and length drawn) and then zeros: the output must be 0 for the last 128 samples; a limit cycle is named by its period.'),
+          rich('li', '<b>Budget</b>: NANDs, counted through your chips.'))));
+      return;
+    }
     if (core) {
       const tests = core.tests();
       el.append(h('section', null, h('h4', null, `${tests.length} programs`),
