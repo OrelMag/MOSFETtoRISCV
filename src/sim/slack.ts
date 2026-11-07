@@ -17,6 +17,12 @@ export interface SlackMap {
   clocked: boolean;
   /** Every timed leaf and flip-flop (hierarchical path) with the longest path through it. */
   items: { path: string[]; through: number }[];
+  /** The longest timed path through a net (arrival + the longest on from it; -Infinity: none crosses it). */
+  through(net: number): number;
+  /** That path, as the hierarchical paths of the parts on it (leaves and flip-flops), from its launch to its capture. */
+  pathThrough(net: number): string[][];
+  /** The nets a path through an instance leaves it by (its leaves' outputs, a flip-flop's q and captured inputs). */
+  netsOf(prefix: readonly string[]): number[];
 }
 
 const cache = { unit: new WeakMap<FlatDesign, SlackMap | null>(), load: new WeakMap<FlatDesign, SlackMap | null>(), drawn: new WeakMap<FlatDesign, SlackMap | null>() };
@@ -32,7 +38,7 @@ function compute(design: FlatDesign, model: DelayModel): SlackMap | null {
   let g = timingGraph(design, { delay: model });
   const clocked = g.captures.length > 0;
   if (!clocked) g = timingGraph(design, { delay: model, outputs: true });
-  const { leaves, excluded, captures, tin, delays, arr, qSource } = g;
+  const { leaves, excluded, captures, tin, delays, arr, qSource, driver, via } = g;
   if (!captures.length) return null;
   const nets = design.netCount;
 
@@ -103,7 +109,62 @@ function compute(design: FlatDesign, model: DelayModel): SlackMap | null {
     if (r > -Infinity) put(path, arr(q) + r);
   }
   items.push(...ff.values());
-  return { model, period, clocked, items };
+
+  const capAt = new Map<number, string[]>();
+  for (const c of captures) if (!capAt.has(c.net)) capAt.set(c.net, c.dff);
+  const through = (net: number): number => {
+    const r = remOf(net);
+    return r > -Infinity ? arr(net) + r : -Infinity;
+  };
+  const EPS = 1e-9;
+  const pathThrough = (net: number): string[][] => {
+    if (through(net) === -Infinity) return [];
+    const back: string[][] = [];
+    // back to the launch: each driver's latest input (timing.ts's own walk for the critical path)
+    for (let n = net, steps = 0; steps < leaves.length + 2; steps++) {
+      arr(n);
+      const d = driver[n];
+      if (d < 0) {
+        const q = qSource.get(n);
+        if (q) back.push(q);
+        break;
+      }
+      back.push(leaves[d].node.path);
+      if (via[n] < 0 || via[n] === n) break;
+      n = via[n];
+    }
+    const fwd: string[][] = [];
+    // on to the capture: at each net the reader whose output keeps the remaining length
+    for (let n = net, steps = 0; steps < leaves.length + 2; steps++) {
+      const r = remOf(n);
+      let next = -1;
+      for (let k = count[n]; k < count[n + 1] && next < 0; k++) {
+        const d = readers[k];
+        for (const p of leaves[d].outputs) for (const o of p) {
+          if (next < 0 && Math.abs(remOf(o) + delays[d] - r) < EPS) {
+            fwd.push(leaves[d].node.path);
+            next = o;
+          }
+        }
+      }
+      if (next < 0) {
+        const c = capAt.get(n);
+        if (c) fwd.push(c);
+        break;
+      }
+      n = next;
+    }
+    return [...back.reverse(), ...fwd];
+  };
+  const netsOf = (prefix: readonly string[]): number[] => {
+    const under = (p: readonly string[]) => p.length >= prefix.length && prefix.every((x, i) => p[i] === x);
+    const out: number[] = [];
+    leaves.forEach((l, d) => { if (!excluded[d] && under(l.node.path)) for (const p of l.outputs) out.push(...p); });
+    for (const [n, p] of qSource) if (under(p)) out.push(n);
+    for (const c of captures) if (under(c.dff)) out.push(c.net);
+    return out;
+  };
+  return { model, period, clocked, items, through, pathThrough, netsOf };
 }
 
 /**

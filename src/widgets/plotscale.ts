@@ -9,9 +9,9 @@ export function tickStep(span: number, n = 4): number {
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
 }
 
-/** The ticks of [lo, hi], at multiples of the step. */
-export function axisTicks(lo: number, hi: number): { step: number; ticks: number[] } {
-  const step = tickStep(hi - lo), ticks: number[] = [];
+/** The ticks of [lo, hi], at multiples of the step: about n of them (fewer on a phone's narrower plot). */
+export function axisTicks(lo: number, hi: number, n = 4): { step: number; ticks: number[] } {
+  const step = tickStep(hi - lo, n), ticks: number[] = [];
   for (let v = Math.ceil(lo / step) * step + 0; v <= lo + (hi - lo) * 1.0001; v += step) ticks.push(Math.abs(v) < step * 1e-9 ? 0 : v);
   return { step, ticks };
 }
