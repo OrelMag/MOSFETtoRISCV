@@ -553,7 +553,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Noise decides how many points", challenge: "quiz" },
     { title: "300 b/s to 56 kb/s", challenge: "quiz" },
   ] },
-  { id: "carriers", num: 48, title: "Many carriers", blurb: "Why split a channel into thousands of tones: FFT butterflies and a streaming pipeline in gates, the cyclic prefix, water-filling, and what ADSL, Wi-Fi and 5G each chose.", level: "Communication", builds: ["modem","adders","registers","fastadd"], recap: {"checks":3}, steps: [
+  { id: "carriers", num: 48, title: "Many carriers", blurb: "Why split a channel into thousands of tones: FFT butterflies and a streaming pipeline in gates, the cyclic prefix, water-filling, and what ADSL, Wi-Fi and 5G each chose.", level: "Communication", builds: ["modem","signals","noise","adders","registers","fastadd"], recap: {"checks":3}, steps: [
     { title: "Many tones, one FFT", challenge: "quiz" },
     { title: "The butterfly", challenge: "reach" },
     { title: "Eight points, in gates", challenge: "reach" },
@@ -564,7 +564,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What breaks a block of tones", challenge: "quiz" },
     { title: "The same idea, everywhere", challenge: "quiz" },
   ] },
-  { id: "serial", num: 49, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","wire","signals"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 49, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","uart","wire","signals","noise"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz" },
     { title: "8b/10b and running disparity", challenge: "quiz" },
     { title: "Scrambling instead", challenge: "quiz" },
@@ -575,7 +575,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "PAM4", challenge: "quiz" },
     { title: "Fibre", challenge: "quiz" },
   ] },
-  { id: "glass", num: 50, title: "Light in glass", blurb: "How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.", level: "Communication", builds: ["serial","modem"], recap: {"checks":3}, steps: [
+  { id: "glass", num: 50, title: "Light in glass", blurb: "How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.", level: "Communication", builds: ["serial","modem","carriers"], recap: {"checks":3}, steps: [
     { title: "Why glass", challenge: "quiz" },
     { title: "What keeps the light in", challenge: "quiz" },
     { title: "Modes", challenge: "quiz" },
@@ -585,7 +585,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A receiver that sees the field", challenge: "quiz" },
     { title: "Budgeting an ocean", challenge: "quiz" },
   ] },
-  { id: "errors", num: 51, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","wire","clocks"], recap: {"checks":3}, steps: [
+  { id: "errors", num: 51, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","noise","serial"], recap: {"checks":3}, steps: [
     { title: "One extra bit", challenge: "quiz" },
     { title: "Locating the error", challenge: "reach" },
     { title: "A remainder as a check", challenge: "quiz" },
