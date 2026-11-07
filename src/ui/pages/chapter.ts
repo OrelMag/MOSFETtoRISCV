@@ -564,5 +564,6 @@ export class ChapterPage implements Page {
     this.unlisten.forEach((f) => f());
     this.pillOff?.();
     this.stage.destroy();
+    this.chapter.leave?.();
   }
 }

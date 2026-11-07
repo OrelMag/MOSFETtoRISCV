@@ -275,6 +275,8 @@ export function receive(b: Band, f: number, noiseDb: number, count = b.n, k: num
 /** The last few receptions of the full band, by parameters: the page asks for the same one from several places (a table row, a sentence, a readout), and a Reception is never changed. */
 const RECEIVE_KEPT = 3;
 const recent: Array<{ b: Band; key: string; r: Reception }> = [];
+/** Let the kept receptions go (about 10 MB each): the chapter calls it when the learner leaves it. Moving between its steps keeps them. */
+export function releaseReceptions(): void { recent.length = 0; }
 
 // ---- measurements ---------------------------------------------------------------------------------------------------------------------------
 

@@ -6,6 +6,7 @@ import { cicAliasDb, cicResponse } from '../dsp/multirate';
 import {
   ADC_SCALE, AUD, AUDIO_R, AUDIO_TAPS, carrierToNoise, carson, stationBand, CHAN_EDGE, CHAN_TAPS, CIC_GAIN, CIC_N, CIC_R, DEV, FS, FS_CIC, keyingRatio, KEYING_LOST_DB, NCO_BITS, NCO_K, occupied, receive, STATIONS, TAU, TEST_TONE_HZ, toneFm, toneSnr, W_CIC, W_IN, W_MIX,
   workPerSecond, synthBand, NCO_AMP, NCO_SHIFT, interferenceDb, ringSpread, trailingZeros, tuningWord, firstClipNoiseDb, chanWorstDb, audioHalfPointHz, audioGainDb, preLiftDb, analogueLiftDb, ALPHA, stationOccupied,
+  releaseReceptions,
 } from '../dsp/sdr';
 import { CLIP_CLOCKS } from '../dsp/sdrclip';
 import { cicDecimator } from '../lib/multirate';
@@ -43,6 +44,7 @@ const d2 = (x: number) => (x < 0 ? '−' : '+') + Math.abs(x).toFixed(2);
 const ratioDb = (a: number, b: number) => 20 * Math.log10(a / b);
 
 export const chSdr: Chapter = {
+  leave: releaseReceptions,
   id: 'sdr', num: numOf('sdr'), title: 'A software radio', level: 'Signal processing',
   blurb: 'Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.',
   goals: [
