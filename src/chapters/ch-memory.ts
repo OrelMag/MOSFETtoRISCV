@@ -1076,13 +1076,13 @@ export const chMemory: Chapter = {
         <div class="try">push = 1: pulse with din = 0x11, 0x22, 0x33. Then push = 0, pop = 1: dout shows 0x11 first.</div>`,
       tour: {
         beats: [
-          { title: 'Push', reset: true, set: { push: 1, pop: 0, din: 0x11 }, cycles: 1, show: ['u6', 'wp'], expect: { empty: 0, full: 0, dout: 0x11 },
+          { title: 'Push', reset: true, set: { push: 1, pop: 0, din: 0x11 }, cycles: 1, show: ['dec', 'wp'], expect: { empty: 0, full: 0, dout: 0x11 },
             say: '<p>push = 1, din = 0x11, one edge: the write pointer moves on and the FIFO is no longer empty (empty = {v:empty}). dout shows the oldest word, {v:dout}.</p>' },
           { title: 'Second word', set: { din: 0x22 }, cycles: 1, show: ['wp'], expect: { dout: 0x11 },
             say: '<p>0x22 goes in the next slot. dout is still the oldest word: {v:dout}.</p>' },
           { title: 'Third word', set: { din: 0x33 }, cycles: 1, show: ['wp', 'rp'], expect: { dout: 0x11, empty: 0 },
             say: '<p>0x33 behind it. Three words held; the read pointer has not moved, so dout = {v:dout}.</p>' },
-          { title: 'Pop', set: { push: 0, pop: 1 }, cycles: 1, show: ['rp', 'u14'], expect: { dout: 0x22 },
+          { title: 'Pop', set: { push: 0, pop: 1 }, cycles: 1, show: ['rp', 'rdp'], expect: { dout: 0x22 },
             say: '<p>pop = 1, one edge: the read pointer moves to the next slot. dout = {v:dout}. First in, first out.</p>' },
           { title: 'Drain it', cycles: 2, show: ['emp', 'rp', 'wp'], expect: { empty: 1 },
             say: '<p>Two more pops: the read pointer catches the write pointer, and empty = {v:empty}.</p>' },
@@ -1122,9 +1122,9 @@ export const chMemory: Chapter = {
         beats: [
           { title: 'Push 0x0A', reset: true, set: { push: 1, pop: 0, din: 0x0a }, cycles: 1, show: ['sp'], expect: { top: 0x0a, empty: 0 },
             say: '<p>push = 1: 0x0A is written at slot sp = 0 and sp moves to 1. The top is slot sp − 1: top = {v:top}.</p>' },
-          { title: 'Push 0x0B', set: { din: 0x0b }, cycles: 1, show: ['sp', 'u18'], expect: { top: 0x0b },
+          { title: 'Push 0x0B', set: { din: 0x0b }, cycles: 1, show: ['sp', 'rdp'], expect: { top: 0x0b },
             say: '<p>0x0B goes in slot 1, sp = 2. The top is now {v:top}; 0x0A is underneath.</p>' },
-          { title: 'Pop', set: { push: 0, pop: 1 }, cycles: 1, show: ['sp', 'u18'], expect: { top: 0x0a },
+          { title: 'Pop', set: { push: 0, pop: 1 }, cycles: 1, show: ['sp', 'rdp'], expect: { top: 0x0a },
             say: '<p>pop = 1: sp falls back to 1, so the top is slot 0 again: {v:top}. The last word in came out first.</p>' },
           { title: 'Pop again', cycles: 1, show: ['sp'], expect: { empty: 1 },
             say: '<p>One more pop: sp = 0, and empty = {v:empty}.</p>' },
