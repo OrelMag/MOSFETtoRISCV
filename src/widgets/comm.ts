@@ -147,7 +147,7 @@ export function codesWidget(): Widget {
 // ---------------------------------------------------------------- Nyquist and Shannon
 
 export function limitsWidget(withNoise: boolean): Widget {
-  let bExp = 3.49, snrDb = 30, levelExp = 1;
+  let bExp = Math.log10(3100), snrDb = 30, levelExp = 1; // the voice band the text works with (3.49 would read 3.09 kHz)
   const B = () => 10 ** bExp, M = () => 2 ** levelExp;
   const W = 640, H = 300, Mg = { l: 52, r: 18, t: 14, b: 34 }, YMAX = 14;
   const { svg, X, Y } = frame(W, H, Mg, [-10, 60, [-10, 0, 10, 20, 30, 40, 50, 60], (v) => `${v}`], [0, YMAX, [0, 2, 4, 6, 8, 10, 12, 14], (v) => `${v}`], ['SNR, dB', 'bit/s per Hz'], false);
