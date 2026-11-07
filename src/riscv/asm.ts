@@ -3,7 +3,7 @@
 
 import { specOf, type CustomRow } from './custom';
 import { compress32, decodeC, scatter } from './rvc';
-import { BY_NAME, BY_NAME64, CSRS, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS, type Xlen } from './isa';
+import { BY_NAME, BY_NAME64, CSRS, MAC_BY_NAME, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS, type Xlen } from './isa';
 
 export interface AsmLine {
   addr: number;
@@ -35,11 +35,14 @@ interface Stmt {
   /** Under .option rvc: compressed wherever a 16-bit form exists. */
   rvc: boolean;
   xlen: Xlen;
+  mac: boolean;
 }
 
 export interface AsmOptions {
   /** 64: RV64I / M (ld, sd, lwu, the W instructions, 6-bit shift amounts, li of any 64-bit constant). */
   xlen?: Xlen;
+  /** The MAC core's mac, mac2, clracc and racc (riscv/isa.ts MAC_INSTRS; the core is lib/cpu.ts singleCycleCpu({ mac: true })). */
+  mac?: boolean;
 }
 
 export class AsmError extends Error {}
@@ -177,7 +180,7 @@ export function assemble(src: string, custom: readonly CustomRow[] = [], opts: A
       else if (o !== 'push' && o !== 'pop') errors.push({ line: i + 1, message: '.option takes rvc or norvc' });
       return;
     }
-    const st: Stmt = { line: i + 1, op, args, text: ln, addr: 0, size: 0, parts: [], rvc, xlen };
+    const st: Stmt = { line: i + 1, op, args, text: ln, addr: 0, size: 0, parts: [], rvc, xlen, mac: !!opts.mac };
     st.parts = st.op.startsWith('c.') ? [2] : op === '.half' ? args.map(() => 2) : op === '.align' ? [] : Array(sizeOf(op, args, xlen)).fill(rvc && op !== '.word' ? 2 : 4);
     stmts.push(st);
   });
@@ -476,7 +479,8 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
 
   const own = custom.find((r) => r.name === op);
   if (BY_NAME64.has(op) && xlen !== 64) throw new AsmError(`${op} is RV64 only`);
-  const spec = BY_NAME.get(op) ?? (xlen === 64 ? BY_NAME64.get(op) : undefined) ?? (own ? specOf(own) : undefined);
+  if (!st.mac && MAC_BY_NAME.has(op) && !own) throw new AsmError(`${op} is a MAC instruction: this core has no MAC`);
+  const spec = BY_NAME.get(op) ?? (st.mac ? MAC_BY_NAME.get(op) : undefined) ?? (xlen === 64 ? BY_NAME64.get(op) : undefined) ?? (own ? specOf(own) : undefined);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
   if (spec.opcode === OPCODES.AMO) {
     const lr = op === 'lr.w';
@@ -490,6 +494,12 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
     const r = { rs1: 0, rs2: 0 };
     spec.simt.forEach((f, i) => (r[f] = reg(args[i])));
     return [encR(spec.opcode, 0, spec.funct3!, r.rs1, r.rs2, 0)];
+  }
+  if (spec.mac) {
+    if (op === 'clracc') { need(0); return [encR(spec.opcode, 0, spec.funct3!, 0, 0, 0)]; }
+    need(2);
+    // racc rd, rs1: the shift is rs1; mac / mac2 rs1, rs2 write no register
+    return op === 'racc' ? [encR(spec.opcode, reg(args[0]), spec.funct3!, reg(args[1]), 0, 0)] : [encR(spec.opcode, 0, spec.funct3!, reg(args[0]), reg(args[1]), 0)];
   }
   const f3 = spec.funct3 ?? 0;
   switch (spec.fmt) {

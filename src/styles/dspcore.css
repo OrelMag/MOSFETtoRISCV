@@ -1,0 +1,25 @@
+/* "A DSP core": the CPU panel's listing and state, the address-cell strip, the cost bars and the benchmark table. */
+.dsp-list { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; font: 11.5px/1.5 var(--font-mono); }
+.dsp-line { display: grid; grid-template-columns: 2.4em 1fr; gap: 6px; padding: 0 6px; white-space: nowrap; }
+.dsp-line .a { color: var(--muted); }
+.dsp-line.in-loop { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dsp-line.cur { background: color-mix(in srgb, var(--warn, #c80) 28%, transparent); font-weight: 600; }
+.dsp-verdict { font: 12px var(--font-mono); margin: 6px 0; }
+.dsp-verdict.ok { color: var(--good); }
+.dsp-verdict.bad { color: var(--bad); }
+.dsp-cells { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; margin: 8px 0; }
+.dsp-cell { text-align: center; font: 10px/1.8 var(--font-mono); border-radius: 3px; background: var(--surface-2); color: var(--muted); min-height: 18px; }
+.dsp-cell.win { outline: 1px solid var(--accent); outline-offset: -1px; }
+.dsp-cell.hit { background: var(--accent); color: #fff; }
+.dsp-cell.first { outline: 2px solid var(--text); outline-offset: -2px; }
+.dsp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin: 8px 0; }
+.dsp-bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
+.dsp-row { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr) 9em; gap: 8px; align-items: center; margin: 4px 0; font-size: 12.5px; }
+.dsp-row .bar { height: 10px; background: var(--accent); border-radius: 3px; display: block; }
+.dsp-row .n, .dsp-row .v { color: var(--text-2, var(--text)); }
+.dsp-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.dsp-table th, .dsp-table td { border-bottom: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+@media (max-width: 600px) { .dsp-row { grid-template-columns: 1fr; } .dsp-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+.dsp-modes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.dsp-modes button { font-family: var(--font-mono); }
+.dsp-modes button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }

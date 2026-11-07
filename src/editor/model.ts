@@ -303,11 +303,13 @@ export type PartRef =
    */
   | { reader: ReaderRef }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
-  | { rom: { k: number; w: 8 | 16 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'isa' | '6502'; src: string;
+  | { rom: { k: number; w: 8 | 16 | 24 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'dsp24' | 'isa' | '6502'; src: string;
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */
       isa?: IsaDoc;
       /** lang 'asm': the CPU's custom instructions (riscv/custom.ts), a copy of its core's rows, so the program assembles. */
       custom?: CustomRow[];
+      /** lang 'asm' / 'hex': the MAC core's mac, mac2, clracc and racc assemble and disassemble (riscv/isa.ts MAC_INSTRS). */
+      mac?: true;
       /** lang 'asm' (or hex), byte addressed: the C extension. The ROM answers at any even address with the 32 bits starting there (lib/rvc.ts cWindowRom); `.option rvc` needs it. */
       c?: boolean;
       /** lang 'asm': assembled for RV64 (ld, sd, the W instructions, li of any 64-bit constant); the words stay 32-bit instructions. */

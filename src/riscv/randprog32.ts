@@ -33,6 +33,9 @@ export interface Rand32Options {
   /** Custom instructions (riscv/custom.ts): about a fifth of the units are one of the rows, set up so that every
    *  address they compute stays in the data window and every jump lands on an instruction (draws nothing without rows). */
   custom?: readonly CustomRow[];
+  /** The MAC core's mac, mac2, clracc and racc (about a quarter of the units), and now and then a word on custom-2 that is none of them (funct7 or funct3[2] set:
+   *  it does nothing). Draws nothing without it. */
+  mac?: boolean;
 }
 
 /** mulberry32: small, fast, good enough. */
@@ -228,6 +231,17 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
   for (let i = 0; i < n; i++) {
     for (const p of pending.filter((q) => q.at === i)) out.push(`${p.label}:`);
     if (o.c && r() < 0.35) { cUnit(i); continue; }
+    if (o.mac && r() < 0.28) {
+      const v = r();
+      if (v < 0.3) emit(`mac ${src()}, ${src()}`);
+      else if (v < 0.6) emit(`mac2 ${src()}, ${src()}`);
+      else if (v < 0.68) emit('clracc');
+      else if (v < 0.93) {
+        // a small shift often, so that the result is a number and the clamp acts now and then
+        if (r() < 0.6) { emit(`li ${ADDR}, ${int(0, 20)}`); emit(`racc ${dst()}, ${ADDR}`); } else emit(`racc ${dst()}, ${src()}`);
+      } else emit(`.word 0x${(((int(0, 7) << 12) | (int(0, 31) << 15) | (int(0, 31) << 20) | ((r() < 0.5 ? int(1, 127) : 0) << 25) | 0x5b) >>> 0).toString(16).padStart(8, '0')}`);
+      continue;
+    }
     const u = r();
     if (u < 0.1) {
       // forward branch or jal over 1–4 units

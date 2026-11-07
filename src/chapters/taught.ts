@@ -4,6 +4,7 @@
 // one). OPTIONAL: the prologue and appendix chapters that also explain an entry, for readers who took that path.
 
 import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
+import { TAUGHT_DSP } from '../campaign/codexdsp';
 
 /** Codex id → the journey chapter that teaches it. */
 export const TAUGHT: Record<string, string> = {
@@ -211,6 +212,8 @@ export const TAUGHT: Record<string, string> = {
   internetpath: 'path',
   // the extension's (campaign/codexcomm2.ts)
   ...TAUGHT_COMM2,
+  // the Signal processing level's (campaign/codexdsp.ts)
+  ...TAUGHT_DSP,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

@@ -25,6 +25,7 @@ import { cacheLines } from '../riscv/cosim';
 import { ABI, FABI } from '../riscv/isa';
 import { ISS, type IssOptions } from '../riscv/iss';
 import { stepEffect } from '../riscv/trace';
+import { accHex } from '../dsp/mac';
 import { narrateInstr, type NarrLine } from '../riscv/narrate';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
@@ -50,6 +51,8 @@ export interface CpuIss {
   custom?: CustomRow[];
   /** The C extension (rv32ic_core, or a ROM with its C box ticked): the model fetches 16-bit parcels. */
   c?: boolean;
+  /** The MAC core (a `macu` part of lib/macunit.ts): mac, mac2, clracc and racc are legal, and the accumulator is compared. Found, never a setting. */
+  mac?: boolean;
 }
 
 /** ChipDoc.cpu: the user's settings; every field left out is detected. */
@@ -79,6 +82,8 @@ export interface CpuDesc extends CpuDoc {
   fcsr?: string;
   /** The memory-port core (rv32i_core, rv32i_pipe_core, or a { core } part with custom instructions) at the top level; detected only. */
   core?: string;
+  /** The part with an `acc` output (the MAC core's unit); detected only. */
+  acc?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
 }
@@ -120,7 +125,7 @@ export function nestedRoms(doc: ChipDoc, chips: Chips | undefined, depth = 2): s
 }
 
 /** Library cores with a memory port and no data memory (singleCycleCpu shared): their register file is '<part>.rf'. */
-const isPortCore = (lib: string) => lib === 'rv32i_core' || (/_core$/.test(lib) && lib !== 'm6502_core');
+const isPortCore = (lib: string) => lib === 'rv32i_core' || (/_core$/.test(lib) && lib !== 'm6502_core' && lib !== 'dsp24_core');
 
 /** Does the chip (or a user chip placed in it) hold a console or a switch bank? */
 function hasIoParts(doc: ChipDoc, chips: Chips | undefined, depth = 2): boolean {
@@ -186,9 +191,11 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const system = !!partNamed(doc, 'csr') && !!partNamed(doc, 'trap');
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
+  const macu = doc.parts.find((p) => p.id === 'macu' && 'lib' in p.ref && p.ref.lib === 'macunit');
   const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
   return {
-    rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}) },
+    rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}), ...(macu ? { mac: true } : {}) },
+    ...(macu ? { acc: macu.id } : {}),
     ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
     ...(retire ? { retire: { pin: retire.id } } : pipeCore ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
     ...(core && portCoreOf(core.ref) ? { core: core.id } : {}),
@@ -214,7 +221,8 @@ export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
   // The core's custom rows follow the hardware, whatever the settings say about the rest.
-  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}) };
+  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}), ...(det?.iss.mac ? { mac: true } : {}) };
+  if (det?.acc) out.acc = det.acc;
   return out;
 }
 
@@ -338,6 +346,16 @@ export function partNode(sim: Sim, path: string | undefined): HierNode | undefin
   return n;
 }
 
+/** The MAC unit's accumulator as a signed 40-bit BigInt (null: no such part; an X bit reads as 0). */
+export function readAcc(sim: Sim, part: string | undefined): bigint | null {
+  const port = partNode(sim, part)?.ports.acc;
+  if (!port) return null;
+  const bits = sim.getBits(port);
+  let v = 0n;
+  for (let i = bits.length - 1; i >= 0; i--) v = (v << 1n) | (bits[i] === 1 ? 1n : 0n);
+  return BigInt.asIntN(40, v);
+}
+
 /** x0..x31 (or f0..f31) of a register file part; x0 reads 0 when the part has no w0. -1: unknown. */
 export function readRegs(sim: Sim, part: string | undefined): number[] | null {
   const st = storageOf(partNode(sim, part));
@@ -397,6 +415,8 @@ export interface CpuRead {
   x: number[] | null;
   f: number[] | null;
   fcsr: number | null;
+  /** The MAC core's accumulator (40 bits, signed); null: none. */
+  acc: bigint | null;
   dmem: number[] | null;
   /** An instruction retires at the next rising edge. */
   retiring: boolean;
@@ -411,6 +431,7 @@ export function readCpu(v: CpuSimView, doc: ChipDoc, d: CpuDesc): CpuRead | null
     x: readRegs(sim, d.regs),
     f: readRegs(sim, d.fregs),
     fcsr: readFcsr(sim, d.fcsr),
+    acc: readAcc(sim, d.acc),
     dmem: readMem(sim, d.dmem),
     retiring: r === 1 || r === null,
   };
@@ -743,6 +764,8 @@ export class CpuMonitor {
     }
     const fc = readFcsr(sim, d.fcsr);
     if (fc !== null && fc !== ((iss.frm << 5) | iss.fflags)) return void at('fcsr', 'fcsr', (iss.frm << 5) | iss.fflags, fc);
+    const acc = readAcc(sim, d.acc);
+    if (acc !== null && iss.mac && acc !== iss.acc) return void at('acc', 'acc', Number(BigInt.asUintN(32, iss.acc)), Number(BigInt.asUintN(32, acc)), `acc: expected 0x${accHex(iss.acc)}, got 0x${accHex(acc)} (40 bits)`);
     if (!d.pipeline && d.pc) {
       const pc = refValue(this.es, doc, d.pc);
       if (pc !== null && pc !== iss.pc >>> 0) return void at('pc', 'PC', iss.pc, pc);

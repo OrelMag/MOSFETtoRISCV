@@ -28,6 +28,9 @@ a general complex multiplier  6,884
       { chapter: 'carriers', step: 2, label: 'Eight points, in gates' },
       { chapter: 'carriers', step: 3, label: 'A sample every clock' },
       { chapter: 'carriers', step: 4, label: 'How many bits a sample' },
+      { chapter: 'spectrum', step: 3, label: 'More points are not more resolution' },
+      { chapter: 'spectrum', step: 5, label: 'Filtering by blocks' },
+      { chapter: 'spectrum', step: 6, label: 'One bin, cheaply: Goertzel' },
     ],
   },
   waterfill: {

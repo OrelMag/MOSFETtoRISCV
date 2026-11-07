@@ -8,6 +8,7 @@
 // which an interrupt is taken executes no instruction).
 
 import type { BusMemory } from '../bus/model';
+import { accAfter, MAC_F3, raccOf } from '../dsp/mac';
 import { aluCtlOf, aluOp, branchTaken, FMT_FIELDS, type CustomRow } from './custom';
 import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
@@ -39,6 +40,10 @@ export interface IssOptions {
   bus?: BusMemory;
   /** The CPU's custom instructions (riscv/custom.ts): each executes its control row. */
   custom?: readonly CustomRow[];
+  /** The MAC core (dsp/mac.ts, chapter "A MAC on the RV32"): mac, mac2, clracc and racc on custom-2, one 40-bit accumulator. */
+  mac?: boolean;
+  /** Tests only (tests/dsp-mac-mutants.test.ts): the MAC's arithmetic replaced by a deliberately wrong one, to show that the lock-step comparison notices. */
+  macMutant?: { accAfter?: typeof accAfter; raccOf?: typeof raccOf };
   /** The C extension (riscv/rvc.ts): instructions are fetched as 16-bit parcels at any even address. */
   c?: boolean;
 }
@@ -113,6 +118,11 @@ export class ISS {
   readonly io: boolean;
   readonly m: boolean;
   readonly custom: readonly CustomRow[];
+  /** The MAC core's instructions are legal (IssOptions.mac), and the accumulator they share (40 bits, signed). */
+  readonly mac: boolean;
+  acc = 0n;
+  /** (not enumerable: save() and structuredClone see fields only) */
+  private readonly macFns!: { accAfter: typeof accAfter; raccOf: typeof raccOf };
   readonly fext: boolean;
   /** The C extension: 16-bit instructions, PC + 2 after one, jumps to any even address. */
   readonly c: boolean;
@@ -160,6 +170,8 @@ export class ISS {
     this.io = this.system || !!opts.mmio;
     this.m = !!opts.m;
     this.custom = opts.custom ?? [];
+    this.mac = !!opts.mac;
+    Object.defineProperty(this, 'macFns', { value: { accAfter, raccOf, ...opts.macMutant }, enumerable: false });
     this.fext = !!opts.f;
     this.c = !!opts.c;
     this.hartid = opts.hartid ?? 0;
@@ -331,7 +343,7 @@ export class ISS {
       }
     }
     const { word, size, half } = this.instrAt(pc);
-    const d = decode(word, this.custom);
+    const d = decode(word, this.custom, 32, this.mac);
     const x = this.x;
     const a = x[d.rs1] | 0, b = x[d.rs2] | 0, ua = x[d.rs1], ub = x[d.rs2];
     let next = (pc + size) >>> 0;
@@ -351,7 +363,11 @@ export class ISS {
     let extraCycles = 0;
     let fWrite: number | undefined;
     if (this.system && (!d.spec || (isM && !this.m) || (isF && !this.fext))) trap = new Trap(CAUSE.ILLEGAL);
-    else if (d.spec?.custom) {
+    else if (d.spec?.mac) {
+      // The MAC core (dsp/mac.ts): racc reads the accumulator, the others change it; rs1 is racc's shift, rs2 mac's second operand
+      if (d.funct3 === MAC_F3.racc) write(this.macFns.raccOf(this.acc, ua).y);
+      else this.acc = this.macFns.accAfter(this.acc, d.funct3, ua, ub);
+    } else if (d.spec?.custom) {
       // A custom instruction: its control row, as the single-cycle CPU's data path runs it (riscv/custom.ts).
       const r = d.spec.custom;
       const A = r.srcA === 'pc' ? pc | 0 : a, B = r.srcB === 'imm' ? d.imm | 0 : b;
@@ -518,7 +534,7 @@ export class ISS {
     this.steps++;
     const t = trap as Trap | null;
     const fwrite = !t && fWrite !== undefined ? { rd: d.rd, value: fWrite >>> 0 } : undefined;
-    const text = half !== undefined ? disasmC(half, pc) : disasm(word, pc, this.custom);
+    const text = half !== undefined ? disasmC(half, pc) : disasm(word, pc, this.custom, 32, this.mac);
     return { pc, word, ...(half !== undefined ? { half } : {}), text, rd, value, store, fwrite, trap: t ? { cause: t.cause, interrupt: false } : undefined, halted: this.halted };
   }
 

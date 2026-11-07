@@ -2,7 +2,7 @@
 // and the 8-point DCT in gates run over a block. Every number is dsp/pictures.ts's; pictures are generated, or the learner's own file, decoded here and never uploaded.
 
 import { signedOf, wordOf } from '../comm/signals';
-import { AC_LUMA, basis, blockAt, category, DC_LUMA, DCT_F, DCT_WI, DCT_WO, dct8Fixed, encodeJpeg, extraBits, fdct, filter2d, filterCost, grow, huffCodes, KERNELS, type Picture, pictureOf, psnr, scene, shrink, SIZE, ZIGZAG, zonePlate } from '../dsp/pictures';
+import { AC_LUMA, basis, blockAt, category, DC_LUMA, DCT_F, DCT_WI, DCT_WO, dct8Fixed, encodeJpeg, extraBits, fdct, filter2d, filterCost, grow, huffCodes, KERNELS, parsePgm, PHOTO, type Picture, pictureOf, psnr, scene, shrink, SIZE, ZIGZAG, zonePlate } from '../dsp/pictures';
 import { dctStage } from '../lib/dct';
 import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -40,7 +40,9 @@ const sel = (label: string, opts: string[], pick: number, on: (i: number) => voi
   return h('label', { class: 'mos-sl ln-sel' }, h('span', null, label), s);
 };
 
-let sceneMemo: Picture | undefined, zoneMemo: Picture | undefined;
+let sceneMemo: Picture | undefined, zoneMemo: Picture | undefined, photoMemo: Promise<Picture> | undefined;
+/** The photograph, fetched once, the first time a step asks for it. */
+const thePhoto = () => (photoMemo ??= fetch(PHOTO.file).then((r) => { if (!r.ok) throw new Error(`${PHOTO.file}: ${r.status}`); return r.arrayBuffer(); }).then((a) => parsePgm(new Uint8Array(a))).catch((e) => { photoMemo = undefined; throw e; }));
 const theScene = () => (sceneMemo ??= scene());
 const theZone = () => (zoneMemo ??= zonePlate());
 
@@ -140,11 +142,13 @@ export function dctWidget(): Widget {
 // ---- quantization ---------------------------------------------------------------------------------------------------------------------------------------
 
 export function qualityWidget(): Widget {
-  let q = 30;
-  const p = theScene(), a = canvasOf(p, 1, 'The generated original'), b = canvasOf(p, 1, 'After quantizing its coefficients'), c = canvasOf(p, 1, 'The error, eight times'), chips = mkChips(4), tab = h('div');
+  let q = 30, p = theScene(), src = 0;
+  const credit = h('p', { class: 'sub' }), a = canvasOf(p, 1, 'The original'), b = canvasOf(p, 1, 'After quantizing its coefficients'), c = canvasOf(p, 1, 'The error, eight times'), chips = mkChips(4), tab = h('div');
   const paint = () => {
     const r = encodeJpeg(p, q);
+    paintPicture(a, p);
     paintPicture(b, r.out);
+    credit.textContent = src ? `Photograph: ${PHOTO.credit}.` : 'A generated scene.';
     paintPicture(c, pictureOf(p.w, p.h, (x, y) => 128 + 8 * (r.out.px[y * p.w + x] - p.px[y * p.w + x])));
     tab.replaceChildren(grid(r.table, (v) => String(v), (v) => v / 255));
     chips.set(0, `${num(psnr(p, r.out), 1)} dB`, 'PSNR against the original');
@@ -155,8 +159,13 @@ export function qualityWidget(): Widget {
   paint();
   return {
     el: h('div', { class: 'widget mos sr-w' },
-      h('div', { class: 'panel' }, h('h3', null, 'The one step that loses'), h('div', { class: 'pic-row' }, fig(a, 'Original'), fig(b, 'After quantization'), fig(c, 'Error × 8'), fig(tab, 'The table at this quality')), chips.el),
-      h('div', { class: 'panel mos-ctl' }, slider('Quality', 1, 100, 1, q, (x) => String(x), (x) => { q = x; paint(); }).el)),
+      h('div', { class: 'panel' }, h('h3', null, 'The one step that loses'), h('div', { class: 'pic-row' }, fig(a, 'Original'), fig(b, 'After quantization'), fig(c, 'Error × 8'), fig(tab, 'The table at this quality')), chips.el, credit),
+      h('div', { class: 'panel mos-ctl' }, slider('Quality', 1, 100, 1, q, (x) => String(x), (x) => { q = x; paint(); }).el, sel('Picture', ['The scene', 'A photograph'], src, (i) => {
+        src = i;
+        if (!i) { p = theScene(); paint(); return; }
+        credit.textContent = 'Loading the photograph…';
+        thePhoto().then((ph) => { if (src) { p = ph; paint(); } }).catch((e: Error) => { credit.textContent = `The photograph would not load: ${e.message}`; });
+      }))),
   };
 }
 
@@ -229,7 +238,7 @@ async function browserDecode(bytes: Uint8Array, w: number, hh: number): Promise<
   } catch { return null; }
 }
 export function fileWidget(): Widget {
-  let q = 75, own: Picture | null = null, token = 0;
+  let q = 75, own: Picture | null = null, token = 0, photo: Picture | null = null;
   const shown = h('img', { class: 'pic', alt: 'Our JPEG file, decoded by the browser', width: SIZE }) as HTMLImageElement, ours = canvasOf(theScene(), 1, 'Our own reconstruction');
   const chips = mkChips(4), note = h('p', { class: 'sub' }), link = h('a', { class: 'btn sm', download: 'ours.jpg' }, 'Save the file') as HTMLAnchorElement;
   let url = '';
@@ -248,7 +257,7 @@ export function fileWidget(): Widget {
     chips.set(1, String(worst), 'largest difference, in levels, between the browser\'s decode and ours');
     chips.set(2, `${num((100 * off) / d.px.length, 1)} %`, 'of pixels differ at all');
     chips.set(3, `${num(psnr(p, r.out), 1)} dB`, 'PSNR against the picture that went in');
-    note.textContent = own ? 'Your picture was decoded and turned grey here. Nothing was sent anywhere.' : 'The browser decoded these bytes with its own decoder. A decoder may do its inverse transform its own way, so a level or so either way is allowed.';
+    note.textContent = own === photo ? `Photograph: ${PHOTO.credit}.` : own ? 'Your picture was decoded and turned grey here. Nothing was sent anywhere.' : 'The browser decoded these bytes with its own decoder. A decoder may do its inverse transform its own way, so a level or so either way is allowed.';
   };
   const file = h('input', { type: 'file', accept: 'image/*', 'aria-label': 'Use a picture of your own' }) as HTMLInputElement;
   file.addEventListener('change', async () => { const f = file.files?.[0]; if (!f) return; try { own = await pictureFromFile(f); void paint(); } catch { note.textContent = 'That file could not be read as a picture.'; } });
@@ -256,7 +265,7 @@ export function fileWidget(): Widget {
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'A file another program can open'), h('div', { class: 'pic-row' }, fig(shown, 'The browser\'s decode of our file'), fig(ours, 'Our reconstruction')), chips.el, note),
-      h('div', { class: 'panel mos-ctl' }, slider('Quality', 5, 95, 5, q, (x) => String(x), (x) => { q = x; void paint(); }).el, h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Your picture'), file), h('div', { class: 'dram-ops' }, link, h('button', { type: 'button', class: 'btn sm', onclick: () => { own = null; file.value = ''; void paint(); } }, 'Back to the scene')))),
+      h('div', { class: 'panel mos-ctl' }, slider('Quality', 5, 95, 5, q, (x) => String(x), (x) => { q = x; void paint(); }).el, h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Your picture'), file), h('div', { class: 'dram-ops' }, link, h('button', { type: 'button', class: 'btn sm', onclick: () => { thePhoto().then((ph) => { photo = ph; own = ph; file.value = ''; void paint(); }).catch((e: Error) => { note.textContent = `The photograph would not load: ${e.message}`; }); } }, 'Use the photograph'), h('button', { type: 'button', class: 'btn sm', onclick: () => { own = null; file.value = ''; void paint(); } }, 'Back to the scene')))),
   };
 }
 

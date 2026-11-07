@@ -81,7 +81,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
   if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
-    if (!int(k) || (w !== 8 && w !== 16 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
+    if (!int(k) || (w !== 8 && w !== 16 && w !== 24 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'dsp24' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
     if (lang === 'isa') {
       const isa = sanitizeIsa(r.rom.isa);
       return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
@@ -89,7 +89,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
     const c = r.rom.c === true && addr === 'rv32' && w === 32 && (lang === 'asm' || lang === 'hex');
     const xlen = r.rom.xlen === 64 && lang === 'asm' && !c;
-    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
   }
   if (isObj(r.ucode)) {
     const p = sanitizeProgram(r.ucode);

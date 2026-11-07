@@ -314,6 +314,174 @@ def multirate():
 
 
 
+# ---- chapter "A MAC on the RV32": the benchmark set's data and its exact outputs --------------------------------------------------------------------
+# src/dsp/macbench.ts regenerates the same integers (an LCG, a taps recipe that needs no trigonometry); tests/dsp-mac-bench.test.ts holds the two equal.
+# The outputs are exact integers (round half up, then a clamp to 32 bits); scipy's float filters are the outside cross-check.
+
+
+def lcg_stream(seed):
+    s = seed & 0xFFFFFFFF
+    while True:
+        s = (s * 1664525 + 1013904223) & 0xFFFFFFFF
+        yield (s >> 16) & 0xFFFF
+
+
+def box_taps(T):
+    """ones(k) convolved with itself three times (length 3k - 2 = T), scaled to a sum of 32768 (Q15), rounded half up."""
+    k = (T + 2) // 3
+    h = np.convolve(np.convolve(np.ones(k, dtype=np.int64), np.ones(k, dtype=np.int64)), np.ones(k, dtype=np.int64))
+    S = int(h.sum())
+    assert len(h) == T
+    return [(2 * int(v) * 32768 + S) // (2 * S) for v in h]
+
+
+def racc_exact(acc, sh):
+    """acc / 2^sh rounded half up (the first dropped bit added back), then clamped to 32 bits: dsp/mac.ts raccOf."""
+    v = (acc + ((1 << (sh - 1)) if sh > 0 else 0)) >> sh
+    return max(-(2**31), min(2**31 - 1, v))
+
+
+def mac_fir(T, M, seed):
+    L = M + T - 1
+    g = lcg_stream(seed)
+    xs = [next(g) - 32768 for _ in range(L)]
+    xs[3], xs[5] = -32768, 32767
+    h = box_taps(T)
+    y = [racc_exact(sum(h[k] * xs[n + T - 1 - k] for k in range(T)), 15) for n in range(M)]
+    ref = signal.lfilter(np.array(h, dtype=float), [1.0], np.array(xs, dtype=float))[T - 1:]
+    assert [int(v) for v in np.floor((ref + 16384) / 32768)] == y  # scipy's float filter is exact on these integers
+    return {'T': T, 'M': M, 'seed': seed, 'h': h, 'x': xs, 'y': y, 'sum_abs_h': sum(abs(v) for v in h)}
+
+
+def mac_biquad(N, amp, seed):
+    sos = signal.butter(8, 0.2, output='sos')
+    # scipy puts the whole gain in the first section (its b are ~1e-6, 0 in Q13): give every section unit gain at DC, b = (1 + a1 + a2) / 4 * [1, 2, 1]
+    q = []
+    for s in sos:
+        g = int(round(float(1 + s[4] + s[5]) / 4 * 8192))
+        q.append([g, 2 * g, g, int(round(float(-s[4]) * 8192)), int(round(float(-s[5]) * 8192))])
+    g = lcg_stream(seed)
+    x = [next(g) % (2 * amp + 1) - amp for _ in range(N)]
+    cur, peak = list(x), 0
+    for b0, b1, b2, na1, na2 in q:
+        x1 = x2 = y1 = y2 = 0
+        out = []
+        for v in cur:
+            y = racc_exact(b0 * v + b1 * x1 + b2 * x2 + na1 * y1 + na2 * y2, 13)
+            assert -32768 <= y <= 32767
+            peak = max(peak, abs(y))
+            out.append(y)
+            x2, x1, y2, y1 = x1, v, y1, y
+        cur = out
+    sosq = np.array([[b0 / 8192, b1 / 8192, b2 / 8192, 1.0, -na1 / 8192, -na2 / 8192] for b0, b1, b2, na1, na2 in q])
+    ref = signal.sosfilt(sosq, np.array(x, dtype=float))
+    return {'N': N, 'amp': amp, 'seed': seed, 'sos_q13': q, 'x': x, 'y': cur, 'peak': peak, 'vs_sosfilt_max': float(f'{float(np.max(np.abs(ref - np.array(cur)))):.12g}')}
+
+
+def mac_dot(N, seed):
+    g = lcg_stream(seed)
+    a = [next(g) % 8191 - 4095 for _ in range(N)]
+    b = [next(g) % 8191 - 4095 for _ in range(N)]
+    s = sum(p * q for p, q in zip(a, b))
+    assert abs(s) < 2**31
+    return {'N': N, 'seed': seed, 'a': a, 'b': b, 'sum': s, 'y': racc_exact(s, 15), 'numpy': int(np.dot(np.array(a, dtype=np.int64), np.array(b, dtype=np.int64)))}
+
+
+def mac():
+    return {'fir16': mac_fir(16, 16, 16), 'fir64': mac_fir(64, 8, 64), 'biquad': mac_biquad(16, 12000, 8), 'dot': mac_dot(64, 99)}
+
+
+
+def lcg_ints(n, seed, amp):
+    """Integers in [-amp, amp] from the tests' LCG."""
+    s, out = seed, []
+    for _ in range(n):
+        s = (s * 1664525 + 1013904223) % 2**32
+        out.append(int(s / 2**32 * (2 * amp + 1)) - amp)
+    return out
+
+
+def q15(v, scale=32768):
+    return [int(max(-scale, min(scale - 1, round(c * scale)))) for c in v]
+
+
+def rshift_round(acc, s):
+    """The core's rounding: add half, arithmetic shift (floor)."""
+    return (int(acc) + (1 << (s - 1) if s else 0)) >> s
+
+
+def sat16(v):
+    return max(-32768, min(32767, int(v)))
+
+
+def fir_fixed(h, x):
+    """What the core computes: the exact sum of products, rounded once, saturated once. Zeros before the first sample."""
+    out = []
+    for n in range(len(x)):
+        acc = sum(h[k] * x[n - k] for k in range(len(h)) if n - k >= 0)
+        out.append(sat16(rshift_round(acc, 15)))
+    return out
+
+
+def dspcore():
+    """The DSP core's benchmark set: inputs, quantized coefficients, the exact integer answers (what the gates must give,
+    bit for bit) and scipy's floating-point answers (the outside check, within a few LSB)."""
+    def tone(n, a, f, ph=0.0):
+        return [a * np.sin(2 * np.pi * f * i + ph) for i in range(n)]
+
+    res = {}
+    for name, taps, cut, n in [('fir16', 16, 0.25, 32), ('fir64', 64, 0.2, 64)]:
+        h = q15(signal.firwin(taps, cut, window='hamming'))
+        x = [int(round(a + b)) + e for a, b, e in zip(tone(n, 6000, 0.04), tone(n, 3000, 0.35), lcg_ints(n, 99 + taps, 400))]
+        res[name] = {'taps': taps, 'h': h, 'x': x, 'y': fir_fixed(h, x),
+                     'scipy': r(signal.lfilter(np.array(h) / 32768, 1, np.array(x, float)))}
+    # biquad cascade: 4th-order Butterworth low-pass as two sections, coefficients in Q3.13, direct form I
+    sos = signal.butter(4, 0.2, output='sos')
+    secs = []
+    for s in sos:
+        b0, b1, b2, a0, a1, a2 = s
+        secs.append([int(round(c * 8192)) for c in (b0, b1, b2)] + [int(round(c * 8192)) for c in (a1, a2)])
+    xs = [int(round(a + b)) + e for a, b, e in zip(tone(64, 7000, 0.03), tone(64, 2500, 0.3), lcg_ints(64, 4242, 300))]
+    cur = list(xs)
+    for b0, b1, b2, a1, a2 in secs:
+        y = []
+        for n in range(len(cur)):
+            g = lambda arr, k: arr[n - k] if n - k >= 0 else 0
+            acc = b0 * cur[n] + b1 * g(cur, 1) + b2 * g(cur, 2) - a1 * g(y, 1) - a2 * g(y, 2)
+            y.append(sat16(rshift_round(acc, 13)))
+        cur = y
+    sosq = np.array([[s[0], s[1], s[2], 8192, s[3], s[4]] for s in secs], float) / 8192
+    res['biquad'] = {'sections': secs, 'x': xs, 'y': cur, 'scipy': r(signal.sosfilt(sosq, np.array(xs, float)))}
+    # dot product
+    dx = lcg_ints(128, 7, 2500)
+    dy = [a // 2 + e for a, e in zip(dx, lcg_ints(128, 8, 300))]
+    acc = int(np.dot(np.array(dx, np.int64), np.array(dy, np.int64)))
+    res['dot'] = {'x': dx, 'y': dy, 'acc': acc, 'out15': sat16(rshift_round(acc, 15)), 'out13': sat16(rshift_round(acc, 13)),
+                  'scipy': float(np.dot(np.array(dx, float), np.array(dy, float)))}
+    # 64-point FFT, decimation in time, Q15 twiddles, a rounding at each product pair, no per-stage scaling
+    N = 64
+    wr = q15([np.cos(2 * np.pi * k / N) for k in range(N // 2)], 32767)
+    wi = q15([-np.sin(2 * np.pi * k / N) for k in range(N // 2)], 32767)
+    re = [int(round(a + b)) + e for a, b, e in zip(tone(N, 380, 5 / N), tone(N, 120, 17 / N), lcg_ints(N, 31, 25))]
+    im = [int(round(a)) + e for a, e in zip(tone(N, 200, 9 / N), lcg_ints(N, 32, 25))]
+    rev = [int(format(k, '06b')[::-1], 2) for k in range(N)]
+    ar, ai = [re[rev[k]] for k in range(N)], [im[rev[k]] for k in range(N)]
+    half = 1
+    while half < N:
+        for base in range(0, N, 2 * half):
+            for j in range(half):
+                a, b = base + j, base + j + half
+                k = j * (N // 2 // half)
+                tr = sat16(rshift_round(ar[b] * wr[k] - ai[b] * wi[k], 15))
+                ti = sat16(rshift_round(ar[b] * wi[k] + ai[b] * wr[k], 15))
+                ar[a], ar[b], ai[a], ai[b] = ar[a] + tr, ar[a] - tr, ai[a] + ti, ai[a] - ti
+        half *= 2
+    z = np.fft.fft(np.array(re, float) + 1j * np.array(im, float))
+    res['fft'] = {'n': N, 're': re, 'im': im, 'wr': wr, 'wi': wi, 'yre': ar, 'yim': ai, 'scipyRe': r(z.real), 'scipyIm': r(z.imag)}
+    return res
+
+
+
 
 def adaptive():
     from scipy.linalg import solve_toeplitz
@@ -406,8 +574,69 @@ def pictures():
     }
 
 
+def wav16(path):
+    """A mono 16-bit WAV's samples, as ints: the plain 44-byte header the site's clips have."""
+    import struct
+    b = path.read_bytes()
+    assert b[:4] == b'RIFF' and b[8:12] == b'WAVE' and b[36:40] == b'data'
+    rate = struct.unpack('<I', b[24:28])[0]
+    return rate, list(struct.unpack(f'<{(len(b) - 44) // 2}h', b[44:]))
 
-GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate, 'adaptive': adaptive, 'pictures': pictures}
+
+def speech():
+    """G.711 mu-law and IMA ADPCM through audioop (Python 3.12: it is gone from 3.13), and LPC on the voice through solve_toeplitz."""
+    import struct
+    import warnings
+    from scipy.linalg import solve_toeplitz
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DeprecationWarning)
+        import audioop
+    # every 14-bit sample, as audioop's 16-bit input (times 4), and every code back
+    lin = struct.pack(f'<{16384}h', *[4 * x for x in range(-8192, 8192)])
+    ulaw = list(audioop.lin2ulaw(lin, 2))
+    back = [v // 4 for v in struct.unpack('<256h', audioop.ulaw2lin(bytes(range(256)), 2))]
+    # ADPCM on the voice in two halves, the state carried across, then decoded in two halves
+    rate, voice = wav16(Path(__file__).resolve().parents[2] / 'public' / 'dsp' / 'voice-8k.wav')
+    x = voice[:4000]
+    pcm = struct.pack(f'<{len(x)}h', *x)
+    a, st = audioop.lin2adpcm(pcm[:4000], 2, None)
+    b, st2 = audioop.lin2adpcm(pcm[4000:], 2, st)
+    d1, dst = audioop.adpcm2lin(a + b, 2, None)
+    # a loud square wave: clipping of the prediction and the index's ceiling
+    sq = [32767 if (i // 37) % 2 else -32768 for i in range(600)]
+    c, cst = audioop.lin2adpcm(struct.pack(f'<{len(sq)}h', *sq), 2, None)
+    dq, _ = audioop.adpcm2lin(c, 2, None)
+    # LPC of order 10 on Hamming-windowed frames of the voice
+    frames = []
+    w = np.hamming(240)
+    for start in (2000, 9000, 17000, 30000):
+        f = np.array(voice[start:start + 240], float) * w
+        rr = np.array([np.dot(f[k:], f[:len(f) - k]) for k in range(11)])
+        frames.append({'start': start, 'r': r(rr), 'a': r(solve_toeplitz(rr[:10], rr[1:11]))})
+    return {
+        'rate': rate, 'ulaw': ulaw, 'ulaw2lin': back,
+        'adpcm': {'x': x, 'bytes': list(a + b), 'state_mid': list(st), 'state_end': list(st2), 'decoded': list(struct.unpack(f'<{len(x)}h', d1)), 'decoder_state': list(dst)},
+        'square': {'x': sq, 'bytes': list(c), 'state': list(cst), 'decoded': list(struct.unpack(f'<{len(sq)}h', dq))},
+        'lpc': frames,
+    }
+
+
+def music():
+    """The MDCT of windowed frames of the nocturne, through scipy's DCT-IV and the folding identity: (a, b, c, d) -> (-c_r - d, a - b_r), then DCT-IV, halved (scipy's has a 2)."""
+    from scipy import fft
+    rate, x = wav16(Path(__file__).resolve().parents[2] / 'public' / 'dsp' / 'nocturne-16k.wav')
+    M = 256
+    w = np.sin(np.pi * (np.arange(2 * M) + 0.5) / (2 * M))
+    rows = []
+    for start in (4000, 30000, 90000):
+        f = np.array(x[start:start + 2 * M], float) / 32768 * w
+        a, b, c, d = f[:M // 2], f[M // 2:M], f[M:3 * M // 2], f[3 * M // 2:]
+        u = np.concatenate([-c[::-1] - d, a - b[::-1]])
+        rows.append({'start': start, 'X': r(fft.dct(u, type=4) / 2)})
+    return {'rate': rate, 'M': M, 'frames': rows}
+
+
+GENERATORS = {'zplane': zplane, 'spectrum': spectrum, 'firdesign': firdesign, 'iir': iir, 'multirate': multirate, 'mac': mac, 'dspcore': dspcore, 'adaptive': adaptive, 'speech': speech, 'music': music, 'pictures': pictures}
 
 
 def stamp(data):

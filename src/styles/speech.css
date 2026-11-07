@@ -1,0 +1,5 @@
+/* "Speech" and "Music": the program listing, and the codec tables. */
+.dsp-asm { font-size: 11.5px; line-height: 1.45; max-height: 280px; overflow: auto; margin: 8px 0 0; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+.dsp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin: 6px 0; }
+.dsp-bars span { flex: 1; min-width: 4px; background: var(--accent); border-radius: 2px 2px 0 0; }
+.dsp-bars span.alt { background: var(--warn); }

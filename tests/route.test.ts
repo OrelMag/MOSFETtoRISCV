@@ -9,7 +9,8 @@ import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
-import { bigMemTops, cpuTops, doomTops } from './tops';
+import { bigMemTops, cpuTops, doomTops, macTops } from './tops';
+import '../src/lib/macunit';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
 const words = assemble(PROGRAMS[0].source).words;
@@ -46,7 +47,7 @@ function allDefs(): ComponentDef[] {
     seen.add(d);
     for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
   };
-  for (const d of [...cpuTops(), ...bigMemTops(), ...doomTops()]) visit(d);
+  for (const d of [...cpuTops(), ...macTops(), ...bigMemTops(), ...doomTops()]) visit(d);
   return [...seen];
 }
 

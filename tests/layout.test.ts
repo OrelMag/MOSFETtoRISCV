@@ -13,7 +13,8 @@ import { boxText, boxTextOverlaps, ICON, iconSpot, labelRect, portTextRect } fro
 import { counter } from '../src/lib/sequential';
 import { symbolGeom } from '../src/sim/geometry';
 import { families, initialParams } from '../src/lib/resolve';
-import { bigMemTops, cpuTops, doomTops } from './tops';
+import { bigMemTops, cpuTops, doomTops, macTops } from './tops';
+import '../src/lib/macunit';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import { rv16Pipe } from '../src/lib/rv16/pipe';
 import { rv16SysCore } from '../src/lib/rv16/system';
@@ -57,7 +58,7 @@ for (const o of [{ fwd: false, stall: false, flush: false }, { fwd: true, stall:
 
 describe('schematic labels', () => {
   // the top-level CPUs are not registered (only their parts are): add them explicitly
-  const tops = [...cpuTops(), ...bigMemTops(), ...doomTops()];
+  const tops = [...cpuTops(), ...macTops(), ...bigMemTops(), ...doomTops()];
   const defs = [...new Set([...registry.values(), ...tops])].filter((d) => d.netlist);
   it.each(defs.map((d) => [d.id, d] as const))('%s: no label hides another', (_, d) => {
     expect(labelOverlaps(d, netlistOf(d)!)).toEqual([]);

@@ -9,6 +9,8 @@ import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
+import { dspChip } from './exampledsp';
+import { BENCH24 } from '../dsp/programs24';
 import { computer6502Chip, memory6502Chip } from './example6502';
 import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
@@ -446,6 +448,14 @@ export const EXAMPLES: Example[] = [
     subchips: CPU4_SUBCHIPS,
     hz: 1000,
   },
+  ...BENCH24.map((b, i): Example => ({
+    id: i === 0 ? 'dsp-core' : `dsp-core-${b.id}`, group: 'computers', drawer: true,
+    short: i === 0 ? 'A small DSP core: two memories, a MAC, a hardware loop.' : `The DSP core running ${b.name}.`,
+    name: i === 0 ? 'DSP core (FIR filter)' : `DSP core: ${b.name}`,
+    blurb: `The DSP core of the "A DSP core" chapter (16-bit data, 24-bit instructions, X and Y memories read in the same clock, a MAC, a hardware loop) with a ROM in DSP24 assembly and the memories loaded with ${b.name}'s samples and coefficients. Run: ${b.outs} output words; Run to halt in the CPU drawer checks every register against the golden model.`,
+    build: (id, n) => dspChip(id, n, b),
+    hz: 2000,
+  })),
   {
     id: 'm6502', group: 'computers', drawer: true, short: 'The part, a ROM in 6502 assembly, RAM and devices.', name: '6502 computer (1975)',
     blurb: 'The MOS 6502 (cycle-exact; open it for its transistors), a 4K ROM in 6502 assembly, 2K of RAM, a console, LEDs and switches behind a memory map. Run: the Fibonacci numbers in decimal.',

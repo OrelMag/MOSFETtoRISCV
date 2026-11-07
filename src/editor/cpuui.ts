@@ -13,6 +13,7 @@ import { groupDigits } from '../sim/numfmt';
 import { lrScNote } from '../riscv/hwgaps';
 import '../styles/sbcpu.css';
 import { wordsHash } from '../lib/bigmem';
+import { accHex } from '../dsp/mac';
 import { ABI, decode, disasm, FABI } from '../riscv/isa';
 import { CAUSE } from '../riscv/iss';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
@@ -45,6 +46,7 @@ import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { OPCODES } from '../m6502/isa';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
+import { acc40, type Dsp24Desc, Dsp24Monitor, dsp24Use, detectDsp24 } from './dsp24mon';
 import { detectLanes16, type LaneDesc, LaneMonitor } from './lanemon';
 import { detect6502, flags6502, type M6502Desc, M6502Monitor } from './m6502mon';
 import { detectRv64, hex64, mismatch64Text, Rv64Monitor, type Rv64Desc } from './rv64mon';
@@ -76,10 +78,10 @@ const CAUSE_NAMES: Record<number, string> = {
   [CAUSE.TIMER_IRQ]: 'timer interrupt', [CAUSE.EXTERNAL_IRQ]: 'external interrupt',
 };
 
-type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor | M6502Monitor | SapMonitor | Rv64Monitor;
-const monKind = (m: Mon) => (m instanceof Rv64Monitor ? 'rv64' : m instanceof SapMonitor ? 'sap' : m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : m instanceof M6502Monitor ? 'm6502' : 'cpu');
+type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor | SapMonitor | Rv64Monitor;
+const monKind = (m: Mon) => (m instanceof Rv64Monitor ? 'rv64' : m instanceof SapMonitor ? 'sap' : m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : m instanceof Dsp24Monitor ? 'dsp24' : m instanceof M6502Monitor ? 'm6502' : 'cpu');
 /** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings; the 6502's: a byte a word). */
-const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor | M6502Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor || m instanceof M6502Monitor;
+const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor || m instanceof Dsp24Monitor || m instanceof M6502Monitor;
 interface Entry { chip: string; mon: Mon; pipe: PipeHistory; hook: EdgeHook }
 
 /** Children replaced only when `key` changed (the panel redraws on every simulation change). */
@@ -127,6 +129,8 @@ class CpuPanel {
   private lanes: LaneDesc | null = null;
   /** A 4-bit CPU (a ROM in 4-bit assembly): the example's registers checked every clock. */
   private cpu4: Cpu4Desc | null = null;
+  /** The DSP core (a ROM in DSP24 assembly and a placed dsp24_core): every register checked every clock. */
+  private dsp24: Dsp24Desc | null = null;
   private rv64: Rv64Desc | null = null;
   /** A 6502 part (and a ROM in 6502 assembly): followed instruction by instruction (the part is the cycle-exact model). */
   private m6502: M6502Desc | null = null;
@@ -167,6 +171,8 @@ class CpuPanel {
   private fregs = h('div', { class: 'cpu-mem' });
   private memSec = h('div', { class: 'cpu-sec' });
   private mem = h('div', { class: 'cpu-mem' });
+  /** The DSP core's own sections: loop and accumulator, the X and Y windows with their pointers, the output words. */
+  private dsp = h('div', { class: 'sb-dsp' });
   private trace = h('div', { class: 'cpu-trace sb-cpu-trace' });
   /** The last instruction told unit by unit, as the chapters' CPU panel does (riscv/narrate.ts). */
   private narrSec = h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, 'the last instruction, unit by unit'));
@@ -211,6 +217,7 @@ class CpuPanel {
         h('span', { class: 'sb-cpu-secbtns' }, this.customBtn, this.ucodeBtn,
           h('button', { class: 'btn ghost sm', title: 'Edit the program in the ROM (Apply resets the CPU to run it)', onclick: () => this.editProgram() }, icon('code', 13), 'Edit…'))),
       this.listing, this.use,
+      this.dsp, // the DSP core's loop, accumulator, windows and outputs (hidden for the other CPUs)
       this.fieldsSec, this.fields,
       this.pipeSec, this.pipe,
       this.oooSec, this.oooV.el,
@@ -316,24 +323,25 @@ class CpuPanel {
         this.rv16 = this.multi || this.desc || this.rv64 ? null : detectRv16(ed.doc, chips);
         this.lanes = this.multi || this.desc || this.rv16 || this.rv64 ? null : detectLanes16(ed.doc, chips);
         this.m6502 = this.multi || this.desc || this.rv16 || this.lanes || this.rv64 ? null : detect6502(ed.doc, chips);
-        this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 ? null : detectCpu4(ed.doc, chips);
-        if (this.sap) this.rv16 = this.lanes = this.m6502 = this.cpu4 = null;
-        const found = !!(this.sap || this.multi || this.rv64 || this.desc || this.rv16 || this.lanes || this.m6502 || this.cpu4);
+        this.dsp24 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 ? null : detectDsp24(ed.doc, chips);
+        this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 || this.dsp24 ? null : detectCpu4(ed.doc, chips);
+        if (this.sap) this.rv16 = this.lanes = this.m6502 = this.cpu4 = this.dsp24 = null;
+        const found = !!(this.sap || this.multi || this.rv64 || this.desc || this.rv16 || this.lanes || this.m6502 || this.cpu4 || this.dsp24);
         if (found !== this.found) {
           this.found = found;
           ed.renderActions(); // the toolbar's CPU button comes or goes
         }
       }
-      const want = this.rv64 ? 'rv64' : this.sap ? 'sap' : this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.cpu4 ? 'cpu4' : 'cpu';
+      const want = this.rv64 ? 'rv64' : this.sap ? 'sap' : this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.dsp24 ? 'dsp24' : this.cpu4 ? 'cpu4' : 'cpu';
       // Monitors of chips that are gone, replaced by another simulation, or of another kind now.
       for (const [k, v] of this.monitors) {
         const kind = v.chip === chip && monKind(v.mon) !== want;
         if (!ed.ws.open.includes(v.chip) || (v.chip === chip && k !== es) || kind) { this.drop(k, v); this.monitors.delete(k); }
       }
       let entry = this.monitors.get(es);
-      if ((this.sap || this.rv64 || this.desc || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502) && !entry) {
+      if ((this.sap || this.rv64 || this.desc || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502) && !entry) {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
-        const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
+        const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.dsp24 ? new Dsp24Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
         const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, pipeRoot(es.sim, mon instanceof CpuMonitor ? mon.desc : null), es.cycles); } };
         es.edgeHooks.add(hook);
@@ -356,10 +364,10 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        const complete = !!(this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.m6502);
+        const complete = !!(this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502);
         if (complete && !this.closed.has(chip) && !tightForDrawer()) this.setOpen(true);
         else if (complete && !this.closed.has(chip)) this.hintPanel(chip);
-        else if (!this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.m6502) this.setOpen(false);
+        else if (!this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.dsp24 && !this.m6502) this.setOpen(false);
       }
       this.redock();
       if (this.open) this.renderThrottled();
@@ -535,12 +543,14 @@ class CpuPanel {
     this.regs.classList.remove('sb-cpu-w64');
     // Only an RV32 monitor on an out-of-order core shows it (renderOoo): never the 4-bit CPU, the 6502, RV16, lanes.
     this.oooSec.hidden = this.oooV.el.hidden = true;
+    this.dsp.hidden = !(mon instanceof Dsp24Monitor);
     if (mon instanceof Rv64Monitor) return this.renderRv64(mon);
     if (mon instanceof SapMonitor) return this.renderSap(mon);
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
     if (mon instanceof Rv16Monitor) return this.renderRv16(mon);
     if (mon instanceof LaneMonitor) return this.renderLanes(mon);
     if (mon instanceof Cpu4Monitor) return this.renderCpu4(mon);
+    if (mon instanceof Dsp24Monitor) return this.renderDsp24(mon);
     if (mon instanceof M6502Monitor) return this.render6502(mon);
     const d = mon.desc!;
     const r = mon.read();
@@ -563,7 +573,7 @@ class CpuPanel {
     this.runBtn.title = mon instanceof M6502Monitor ? `Clock until the program jumps to itself, or ${groupDigits(RUN_CAP)} cycles` : mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${groupDigits(RUN_CAP)} cycles`
       : 'Needs the golden model (a register file to check, a program that builds, a Reset) to know when the program halts';
     this.stepBtn.title = multi ? 'One clock cycle: every core that is not stalled retires an instruction'
-      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor ? 'One clock: one instruction' : mon instanceof SapMonitor ? 'Clock to the next T0: one instruction (five steps)' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';
+      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor || mon instanceof Dsp24Monitor ? 'One clock: one instruction' : mon instanceof SapMonitor ? 'Clock to the next T0: one instruction (five steps)' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';
     keyed(this.slowBtn, `${!!this.slow}`, () => [icon(this.slow ? 'pause' : 'play', 14), this.slow ? 'Pause' : 'Slow']);
     this.slowBtn.classList.toggle('on', !!this.slow);
     this.slowBtn.title = `Run ${multi ? 'one cycle' : 'one instruction'} at a time at the rate beside it: the current instruction and the parts it uses stay marked`;
@@ -646,7 +656,7 @@ class CpuPanel {
         });
       } else this.rows = (img?.lines ?? []).map((l) => {
         const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Mark the parts this instruction uses' },
-          h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' || rr!.lang === 'isa' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' || rr!.lang === 'isa' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w <= 16 || l.size === 2 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
+          h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' || rr!.lang === 'dsp24' || rr!.lang === 'isa' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' || rr!.lang === 'dsp24' || rr!.lang === 'isa' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w === 24 ? (l.word >>> 0).toString(16).padStart(6, '0') : rr!.w <= 16 || l.size === 2 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
         row.addEventListener('click', () => this.select(l.addr));
         this.rowOf.set(l.addr, row);
         return row;
@@ -673,7 +683,7 @@ class CpuPanel {
     const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
     this.now.replaceChildren(...(w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, noPc)]
-      : [h('span', { class: 'fmt' }, `${decode(w, this.desc?.iss.custom).fmt}-type${mon instanceof CpuMonitor && mon.compressedAt(pc!) ? ' · 16-bit' : ''}`), h('code', null, disasm(w, pc!, this.desc?.iss.custom)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
+      : [h('span', { class: 'fmt' }, `${decode(w, this.desc?.iss.custom, 32, this.desc?.iss.mac).fmt}-type${mon instanceof CpuMonitor && mon.compressedAt(pc!) ? ' · 16-bit' : ''}`), h('code', null, disasm(w, pc!, this.desc?.iss.custom, 32, this.desc?.iss.mac)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
   }
 
   /** A listing line clicked: mark the parts its instruction uses (the site's CPUs' names), or clear. */
@@ -707,7 +717,7 @@ class CpuPanel {
     this.fieldsSec.hidden = this.fields.hidden = !this.running && w === null;
     if (this.running) return; // frozen while running fast: a breakdown per frame is noise
     keyed(this.fields, f && w !== null ? `${f.pc}:${w}:${f.role}` : 'none', () => (f && w !== null ? [
-      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, f.pc, this.desc?.iss.custom)), h('span', null, f.role)),
+      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, f.pc, this.desc?.iss.custom, 32, this.desc?.iss.mac)), h('span', null, f.role)),
       instrBreakdown(w, {
         compact: true, custom: this.desc?.iss.custom, selected: this.fieldPin, onField: (k, sticky) => {
           if (sticky) this.fieldPin = this.fieldPin === k ? null : k;
@@ -822,8 +832,9 @@ class CpuPanel {
     this.regsSec.textContent = 'Registers';
     if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, 'No register file found.')]);
     else {
-      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && this.ed.sim.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v < 0 ? 'unknown' : v | 0}` },
-        h('span', { class: 'n' }, ABI[i]), h('span', { class: 'v' }, hexR(v)))));
+      const acc = r?.acc;
+      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}|${acc ?? ''}`, () => [...(acc != null ? [h('div', { class: `r acc${acc ? '' : ' z'}`, title: `acc = ${acc} (40 bits, signed)` }, h('span', { class: 'n' }, 'acc'), h('span', { class: 'v' }, `0x${accHex(acc)}`))] : []), ...x.map((v, i) => h('div', { class: `r${chg.has(i) && this.ed.sim.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `x${i} = ${v < 0 ? 'unknown' : v | 0}` },
+        h('span', { class: 'n' }, ABI[i]), h('span', { class: 'v' }, hexR(v))))]);
     }
     this.regs.classList.remove('sb-cpu-mregs');
     const f = r?.f;
@@ -897,7 +908,7 @@ class CpuPanel {
     keyed(this.now, cores.map((c, i) => `${c.pc}|${mon.lastStall[i]}`).join(','), () => [h('div', { class: 'sb-cpu-cores' }, cores.map((c, i) => {
       const w = c.pc !== null && c.pc >= 0 ? mon.wordAt(c.pc) : null;
       return h('div', { class: 'sb-cpu-core' }, h('b', { class: 'sb-cpu-hart' }, `C${i}`),
-        h('code', null, w === null ? 'PC unknown' : `${hex4(c.pc!)}  ${disasm(w, c.pc!, this.desc?.iss.custom)}`),
+        h('code', null, w === null ? 'PC unknown' : `${hex4(c.pc!)}  ${disasm(w, c.pc!, this.desc?.iss.custom, 32, this.desc?.iss.mac)}`),
         mon.lastStall[i] ? h('span', { class: 'warn', title: 'Lost the memory port to the other core at the last edge' }, 'stalled') : null);
     }))]);
     this.renderListing(mon, null, cores.flatMap((c, i) => (c.pc !== null && c.pc >= 0 ? [{ tag: `C${i}`, pc: c.pc, title: `core ${i} (${d.cores[i].part}) fetches this` }] : [])), '');
@@ -905,7 +916,7 @@ class CpuPanel {
     const w = this.sel !== null ? mon.wordAt(this.sel) : null;
     this.fieldsSec.hidden = this.fields.hidden = w === null;
     keyed(this.fields, w === null ? 'none' : `${this.sel}:${w}`, () => (w === null ? [] : [
-      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, this.sel!, this.desc?.iss.custom)), h('span', null, 'selected')),
+      h('div', { class: 'cpu-fields-head' }, h('code', null, disasm(w, this.sel!, this.desc?.iss.custom, 32, this.desc?.iss.mac)), h('span', null, 'selected')),
       instrBreakdown(w, { compact: true })]));
     this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = this.fregsSec.hidden = this.fregs.hidden = true;
     // registers side by side: the ones any core has set
@@ -1133,6 +1144,164 @@ class CpuPanel {
     this.computeMarks();
   }
 
+  // ---- the DSP core ---------------------------------------------------------------------------
+
+  private loopKey = '';
+  private dspAllOpen = new Set<number>();
+
+  private renderDsp24(mon: Dsp24Monitor): void {
+    const es = this.ed.sim, pc = mon.pc, r = mon.read(), iss = mon.iss;
+    const bits: HTMLElement[] = [h('span', null, `cycle ${es.cycles}`), ...(iss ? [h('span', null, `retired ${mon.retired}`)] : [])];
+    const memBad = iss?.halted && !mon.mismatch ? mon.memoryMismatch() : null;
+    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the DSP golden model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    else if (memBad) bits.push(h('span', { class: 'bad', title: 'At the halt every word of X and Y is compared with the model' }, `✗ memory: ${memBad}`));
+    else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
+    else if (mon.unchecked) bits.push(h('span', { class: 'warn', title: mon.unchecked }, 'not checked'));
+    else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at cycle 0' }, 'golden model joins at the next Reset'));
+    else bits.push(h('span', { class: 'good', title: 'After every clock the PC, r0–r7, p0–p7, the address generators’ base / length / modifier, the loop unit, the 40-bit accumulator, halt and out match the DSP golden model, and every store lands in X or Y' }, '✓ matches golden model'));
+    if (iss?.halted) bits.push(h('span', { class: 'warn' }, 'halted'));
+    keyed(this.status, bits.map((b) => b.outerHTML).join(''), () => bits);
+    keyed(this.gaps, mon.unchecked ?? '', () => (mon.unchecked ? [h('div', null, h('b', null, 'Followed, not checked: '), mon.unchecked, '.')] : []));
+    this.renderListing(mon, pc !== null && pc >= 0 ? 4 * pc : pc, null, '');
+    // the hardware loop's range, while it is active
+    const lo = r && r.la === 1 ? r.ls : -1, hi = r && r.la === 1 ? r.le : -1;
+    const lk = `${this.listKey}|${lo}|${hi}`;
+    if (lk !== this.loopKey) {
+      this.loopKey = lk;
+      for (const row of this.rows) {
+        const a = Number(row.dataset.pc) / 4, inl = lo >= 0 && a >= lo && a <= hi;
+        row.classList.toggle('inloop', inl);
+        row.classList.toggle('lstart', inl && a === lo);
+        row.classList.toggle('lend', inl && a === hi);
+      }
+    }
+    const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
+    const hx2 = (v: number) => v.toString(16).toUpperCase().padStart(2, '0');
+    keyed(this.now, `${pc}|${w}`, () => (w === null
+      ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, pc === null ? 'not found' : 'unknown (X)')]
+      : [h('span', { class: 'fmt' }, 'DSP24'), h('code', null, mon.isa.disasm(w, pc!)), h('span', { class: 'hexw' }, `0x${hx2(pc!)}`)]));
+    const isa = mon.isa;
+    const fpc = this.sel !== null ? this.sel / 4 : pc !== null && pc >= 0 ? pc : null;
+    const fw = fpc !== null && !this.running ? mon.wordAt(fpc) : null;
+    this.fieldsSec.hidden = this.fields.hidden = fw === null;
+    const ROLE = { op: 'f-op', reg: 'f-rd', imm: 'f-imm', cond: 'f-fn', none: 'f-imm unused' } as const;
+    keyed(this.fields, fw === null ? 'none' : `${fpc}:${fw}:${this.sel !== null}`, () => {
+      if (fw === null) return [];
+      let hi2 = isa.wordBits - 1;
+      const boxes = isa.fields(fw).map((f) => {
+        const top = hi2;
+        hi2 -= f.bits;
+        return h('div', { class: ROLE[f.kind], style: `--w:${f.bits}`, title: `${f.name}, bits ${top}:${top - f.bits + 1} = ${f.value}` },
+          h('div', { class: 'fname' }, f.name),
+          h('div', { class: 'fbits' }, Array.from({ length: f.bits }, (_, i) => h('span', { class: 'bit' }, String((fw >>> (top - i)) & 1)))));
+      });
+      return [
+        h('div', { class: 'cpu-fields-head' }, h('code', null, isa.disasm(fw, fpc!)), h('span', null, this.sel !== null ? 'selected' : 'current')),
+        h('div', { class: 'ibd' }, h('div', { class: 'fields' }, boxes)),
+        ...(isa.disasm(fw).startsWith('.word') ? [h('div', { class: 'sb-sum' }, 'No instruction has this code: it runs as NOP.')]
+          : this.sel === null ? [h('div', { class: 'sb-sum' }, dsp24Use(fw).path)] : []),
+      ];
+    });
+    this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
+    this.fregsSec.hidden = this.fregs.hidden = this.memSec.hidden = this.mem.hidden = true;
+    // Registers r0–r7 (the PC is the current line above).
+    const names = Array.from({ length: 8 }, (_, i) => `r${i}`);
+    const digits = Array<number>(8).fill(4);
+    const x = r ? [...r.r] : null;
+    this.trackChanges(mon, [x]);
+    const chg = this.changed[0] ?? new Set<number>();
+    this.regsSec.textContent = 'Registers';
+    this.regs.classList.remove('sb-cpu-mregs');
+    if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, 'Not found: the dsp24_core part keeps them at seq.pc and regs.r0–r7, aguX.p0–p3, aguY.p0–p3, mac.unit.acc.')]);
+    else {
+      keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${names[i]} = ${v < 0 ? 'unknown' : v}${v >= 0 ? ` (${(v ^ 0x8000) - 0x8000} signed)` : ''}` },
+        h('span', { class: 'n' }, names[i]), h('span', { class: 'v' }, v < 0 ? '?'.repeat(digits[i]) : `0x${v.toString(16).toUpperCase().padStart(digits[i], '0')}`))));
+    }
+    this.renderDspBlock(mon, r);
+    this.renderTrace(mon);
+    this.computeMarks();
+  }
+
+  /** Loop and accumulator, the X and Y windows with their pointers, the memories, the output words. */
+  private renderDspBlock(mon: Dsp24Monitor, r: ReturnType<Dsp24Monitor['read']>): void {
+    const xw = mon.mem(0), yw = mon.mem(1);
+    const key = [r ? JSON.stringify(r) : 'none', xw ? wordsHash(xw) : 'x', yw ? wordsHash(yw) : 'x', mon.outs.length, mon.outs[mon.outs.length - 1], mon.xram, mon.yram].join('|');
+    keyed(this.dsp, key, () => {
+      if (!r) return [];
+      const U = (v: number, d: number) => (v < 0 ? '?'.repeat(d) : v.toString(16).toUpperCase().padStart(d, '0'));
+      const s16 = (v: number) => (v < 0 ? '?' : String((v ^ 0x8000) - 0x8000));
+      const out: Node[] = [];
+      // loop unit and accumulator
+      const accBits = r.acc;
+      out.push(h('div', { class: 'cpu-sec' }, 'Loop and accumulator'));
+      out.push(h('div', { class: 'sb-dsp-kv' },
+        h('span', null, 'loop'), h('span', { class: r.la === 1 ? 'on' : '' }, r.la === 1 ? `active · ${r.lc} to go · 0x${U(r.ls, 2)} … 0x${U(r.le, 2)}` : `idle · start 0x${U(r.ls, 2)} · end 0x${U(r.le, 2)} · count ${r.lc < 0 ? '?' : r.lc}`),
+        h('span', null, 'acc'), h('span', { title: '40 bits, signed' }, accBits < 0 ? '?' : `0x${U(accBits, 10)}`),
+        h('span', null, ''), h('span', { class: 'dim' }, accBits < 0 ? 'unknown' : `${acc40(accBits)}${accBits >= 0 ? `  ≈ ${(Number(acc40(accBits)) / 2 ** 30).toFixed(5)} in Q2.30` : ''}`)));
+      // the two memories: the window an address generator steps through, its pointers marked
+      for (const bus of [0, 1] as const) {
+        const words = bus ? yw : xw, name = bus ? 'Y' : 'X';
+        const base = bus ? r.yb : r.xb, len = bus ? r.yl : r.xl, mod = bus ? r.ym : r.xm;
+        const ptrs = r.p.slice(bus * 4, bus * 4 + 4);
+        const ok = ptrs.filter((p) => p >= 0);
+        const windowed = base >= 0 && len >= 1 && len <= 32;
+        const start = windowed ? base : (ok.length ? Math.min(...ok) & ~7 : 0), n = windowed ? len : 16;
+        out.push(h('div', { class: 'cpu-sec' }, `${name} memory`, h('span', { class: 'cpu-sec-hint' },
+          `p${bus * 4}–p${bus * 4 + 3} · ${len === 0 ? 'no window' : `window [0x${U(base, 2)}, 0x${U((base + len) & 255, 2)})`} · m = ${mod < 0 ? '?' : mod}`)));
+        out.push(h('div', { class: `sb-dsp-ring${bus ? ' y' : ''}`, title: windowed ? `${name}[base … base + len − 1]: where the circular modes (+c, −c) of this generator wrap` : `No circular window (len ${len}): the 16 words from 0x${U(start, 2)}` },
+          Array.from({ length: n }, (_, i) => {
+            const a = (start + i) & 255, v = words ? words[a] : -1;
+            const here = ptrs.map((p, k) => (p === a ? `p${bus * 4 + k}` : '')).filter(Boolean);
+            return h('span', { class: `c${here.length ? ' p' : ''}`, title: `${name}[0x${U(a, 2)}] = ${v < 0 ? '?' : `0x${U(v, 4)} (${s16(v)})`}${here.length ? ` ← ${here.join(', ')}` : ''}` },
+              h('i', null, here.length > 1 ? `${here[0]}+${here.length - 1}` : here.join('')), h('b', null, v < 0 ? '????' : U(v, 4)));
+          })));
+        out.push(h('div', { class: 'sb-dsp-ptrs' }, ptrs.map((p, k) => {
+          const inside = windowed && p >= 0 && ((p - base) & 255) < len;
+          return h('span', { class: `pp${!windowed || inside ? '' : ' off'}`, title: `p${bus * 4 + k} = ${p < 0 ? 'unknown' : p}${windowed && p >= 0 ? (inside ? ' (inside the window)' : ' (outside the window)') : ''}` },
+            `p${bus * 4 + k}`, h('b', null, p < 0 ? '??' : U(p, 2)));
+        })));
+        const det = h('details', { class: 'sb-dsp-all' }, h('summary', null, `All 256 words of ${name}`),
+          h('div', { class: 'g' }, Array.from({ length: 32 }, (_, row) => h('div', null, h('span', { class: 'a' }, U(row * 8, 2)),
+            ...Array.from({ length: 8 }, (_, c) => { const v = words ? words[row * 8 + c] : -1; return h('span', { class: v ? '' : 'z' }, v < 0 ? '????' : U(v, 4)); })))));
+        if (this.dspAllOpen.has(bus)) (det as HTMLDetailsElement).open = true;
+        det.addEventListener('toggle', () => { if ((det as HTMLDetailsElement).open) this.dspAllOpen.add(bus); else this.dspAllOpen.delete(bus); });
+        out.push(det);
+      }
+      // the words sent by out
+      out.push(h('div', { class: 'cpu-sec' }, 'Output', h('span', { class: 'cpu-sec-hint' }, `${mon.outs.length} word${mon.outs.length === 1 ? '' : 's'} sent by out (last 32)`)));
+      out.push(mon.outs.length ? h('div', { class: 'sb-dsp-out' }, mon.outs.slice(-32).map((v) => h('span', { title: `0x${U(v, 4)} = ${s16(v)}` }, s16(v))))
+        : h('div', { class: 'sb-sum' }, 'Nothing yet: out ra sends one word.'));
+      return out;
+    });
+  }
+
+  /** The units of the core and the memories the selected instruction (or, in slow mode, the running one) goes through. */
+  private computeMarksDsp(mon: Dsp24Monitor): void {
+    const ed = this.ed;
+    const pc = this.sel !== null ? this.sel / 4 : this.slow ? mon.pc : null;
+    const built = ed.sim.built ?? ed.compiled;
+    const key = [ed.chipId, pc, this.sel, !!this.slow, this.open].join('|');
+    if (key === this.markKey && built === this.markBuilt) return this.applyMarks();
+    this.markKey = key;
+    this.markBuilt = built;
+    const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
+    const u = w !== null ? dsp24Use(w) : null;
+    const core = mon.desc?.core;
+    const inner = core && ed.sim.sim ? [...(partNode(ed.sim.sim, core)?.children?.keys() ?? [])] : [];
+    const names = u ? u.units.filter((n) => inner.includes(n)) : [];
+    this.coreUnits = core && names.length ? { core, names } : null;
+    const have = new Set(ed.doc.parts.map((p) => p.id));
+    this.marked = [...(this.coreUnits ? [core!] : []), ...(u ? u.mems.map((m) => (m === 'x' ? mon.xram : mon.yram)).filter((id): id is string => !!id && have.has(id)) : [])];
+    this.wireMarks = new Map();
+    this.useKey = '';
+    this.applyMarks();
+    if (this.sel !== null && w !== null && u && this.open) {
+      const cu = this.coreUnits;
+      keyed(this.use, `${this.sel}|${w}|${this.marked.length}`, () => [h('code', null, mon.isa.disasm(w, pc!)), h('div', null, u.path),
+        ...(cu ? [h('button', { class: 'btn sm ghost', title: `Open ${cu.core} to see ${cu.names.length} of its units lit`, onclick: () => lookInside(this.ed, [cu.core]) }, icon('layers', 13), `Show the ${cu.names.length} units inside ${cu.core}`)] : [])]);
+    } else keyed(this.use, '', () => []);
+  }
+
   // ---- an RV64 core -------------------------------------------------------------------------
 
   private renderRv64(mon: Rv64Monitor): void {
@@ -1307,6 +1476,7 @@ class CpuPanel {
   private computeMarks(): void {
     const mon = this.mon, ed = this.ed;
     if (mon instanceof Cpu4Monitor) return this.computeMarks4(mon);
+    if (mon instanceof Dsp24Monitor) return this.computeMarksDsp(mon);
     if (mon instanceof SapMonitor) return this.computeMarksSap(mon);
     if (mon instanceof Rv64Monitor || mon instanceof Rv16Monitor || mon instanceof LaneMonitor || mon instanceof M6502Monitor) {
       // The parts an instruction uses are named after the chapters' RV32 CPUs: nothing to mark here.

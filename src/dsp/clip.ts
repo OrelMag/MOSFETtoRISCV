@@ -2,7 +2,7 @@
 // from a model, and a clip from the gates is short and checked equal to the model first (nothing large plays live through a simulator).
 
 export type ClipSource = 'model' | 'gates';
-export interface Clip { samples: ArrayLike<number>; rate: number; source: ClipSource; note?: string }
+export interface Clip { samples: ArrayLike<number>; rate: number; source: ClipSource; note?: string; /** Samples faded in and out (default 200): a very short clip needs fewer. */ fade?: number }
 
 /** Loudest the player goes. A filter's peak or a wrapped word never reaches the ears any harder than this. */
 export const CLIP_PEAK = 0.3;

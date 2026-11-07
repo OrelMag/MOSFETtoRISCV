@@ -92,7 +92,7 @@ describe('ROM part', () => {
     expect(err({ src: '1\n1ff' })).toBe('ROM program: line 2: word 1 (0x1ff) does not fit in 8 bits');
     expect(err({ k: 0 })).toMatch(/k = 1–/);
     expect(err({ k: MAX_ROM_K + 1 })).toMatch(/k = 1–/);
-    expect(err({ w: 12 as 8 })).toMatch(/8, 16 or 32/);
+    expect(err({ w: 12 as 8 })).toMatch(/8, 16, 24 or 32/);
     expect(err({ addr: 'rv32', w: 16 })).toMatch(/32-bit/);
     expect(err({ src: '' })).toBe('ok');
   });
