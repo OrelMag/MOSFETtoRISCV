@@ -20,6 +20,15 @@ export const wrapAcc = (v: bigint): bigint => BigInt.asIntN(ACC_BITS, v);
 export const macProduct = (f3: number, a: number, b: number): bigint =>
   BigInt(half(a, false) * half(b, false)) + (f3 === MAC_F3.mac2 ? BigInt(half(a, true) * half(b, true)) : 0n);
 
+/** The largest sum the accumulator holds; one more wraps to −2^(ACC_BITS − 1). */
+export const ACC_MAX = (1n << BigInt(ACC_BITS - 1)) - 1n;
+/** Both halves −32768: every product the largest a 16 × 16 signed multiply gives, 2^30. */
+export const FULL_SCALE = 0x80008000 | 0;
+/** Instructions adding `product` each that fit before the accumulator wraps (the next one wraps). */
+export const fitsBeforeWrap = (product: bigint): bigint => ACC_MAX / product;
+/** Bits a two's-complement number needs to hold v. */
+export const signedBits = (v: bigint): number => (v < 0n ? -v - 1n : v).toString(2).length + 1;
+
 /** The accumulator after one instruction (funct3 0..3; racc leaves it as it is). */
 export function accAfter(acc: bigint, f3: number, a: number, b: number): bigint {
   if (f3 === MAC_F3.clracc) return 0n;

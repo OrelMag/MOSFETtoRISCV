@@ -429,6 +429,22 @@ export function startApp(root: HTMLElement): void {
         });
         return;
       }
+      if (parts[2] === 'cap_echo') {
+        import('./pages/dspcap').then((m) => {
+          if (seq === routeSeq) mount(new m.DspCapstonePage(parts[2]));
+        }, (e) => {
+          if (seq === routeSeq) view.replaceChildren(loadFailed('capstone', e));
+        });
+        return;
+      }
+      if (parts[2] === 'cap_tune') {
+        import('./pages/tunecap').then((m) => {
+          if (seq === routeSeq) mount(new m.TuneCapstonePage(parts[2]));
+        }, (e) => {
+          if (seq === routeSeq) view.replaceChildren(loadFailed('capstone', e));
+        });
+        return;
+      }
       if (parts[2]?.startsWith('cap_')) {
         import('./pages/capstone').then((m) => {
           if (seq === routeSeq) mount(new m.CapstonePage(parts[2]));

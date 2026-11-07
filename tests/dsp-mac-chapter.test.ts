@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { chMac } from '../src/chapters/ch-dsp-mac';
 import { DSP_LEVEL } from '../src/chapters/dspladder';
-import { ACC_BITS, raccOf } from '../src/dsp/mac';
+import { ACC_BITS, accAfter, fitsBeforeWrap, FULL_SCALE, MAC_F3, macProduct, raccOf, signedBits } from '../src/dsp/mac';
 import { assemble } from '../src/riscv/asm';
 import { alignRows, benchFig, FILTER_Y, filterSource, macDelta, machineCost, perProduct, timePerProduct, unitNands } from '../src/widgets/dspmac';
 import { firstMismatch } from './verify/maclock';
@@ -38,8 +38,19 @@ describe('A MAC on the RV32', () => {
     // step 4's Try: at shift 39 only the sign and the rounding bit are left, at 40 and more the result is 0
     expect(raccOf(-(2n ** 39n), 39).y).toBe(-1); expect(raccOf(2n ** 39n - 1n, 39).y).toBe(1);
     for (const a of [-(2n ** 39n), -1n, 2n ** 39n - 1n]) for (let sh = 40; sh < 64; sh++) expect(raccOf(a, sh).y).toBe(0);
-    // headroom: 512 mac products or 256 mac2 steps, and 64 Q1.15 taps leave three bits
-    expect(512n * 2n ** 30n).toBe(2n ** 39n); expect(2n ** 36n * 8n).toBe(2n ** 39n);
+    // headroom, on the model: 511 full-scale mac (255 mac2) stay positive and the next one wraps; a 64-tap full-scale sum needs 38 of the 40 bits
+    for (const [op, fit] of [[MAC_F3.mac, 511], [MAC_F3.mac2, 255]] as const) {
+      expect(Number(fitsBeforeWrap(macProduct(op, FULL_SCALE, FULL_SCALE)))).toBe(fit);
+      let acc = 0n;
+      for (let i = 0; i < fit; i++) acc = accAfter(acc, op, FULL_SCALE, FULL_SCALE);
+      expect(acc > 0n).toBe(true);
+      expect(accAfter(acc, op, FULL_SCALE, FULL_SCALE) < 0n).toBe(true);
+    }
+    expect(signedBits(64n * macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE))).toBe(38);
+    const text = chMac.steps.map((s) => s.body).join(' ') + chMac.recap!.keep.join(' ');
+    expect(text).toContain('511 mac products'); expect(text).toContain('255 mac2 steps');
+    expect(text).toContain('needs 38 of the 40 bits: 2 to spare');
+    expect(text).not.toMatch(/512 mac|256 mac2 steps|three bits to spare/);
   });
   it('step 5: the filter on the panel gives its answer on the gates, in lock step', async () => {
     const w = assemble(filterSource(), [], { mac: true }).words;

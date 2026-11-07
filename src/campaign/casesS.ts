@@ -51,4 +51,20 @@ export const CASESS: Record<string, LevelCase> = {
     alts: [{ name: 'First-order loop (one sum)', nand: 502, note: 'sdModulator(1, 8), counted by the simulator' }, { name: 'Second-order loop (two sums)', nand: 987, note: 'sdModulator(2, 8), counted by the simulator' }],
   },
 
+  // ---- sp_mac
+  sp_mac: {
+    problem: 'A filter output is a sum of products, and the partial sums wander. A run of large positive taps takes the sum far past what a 32-bit result holds, and later negative ones bring it back: the final sum fits, the middle did not. An accumulator the width of a result has to clamp or wrap in the middle, and either one makes the answer wrong; an accumulator with guard bits keeps the sum exact and lets the result be rounded and clamped once, when it is read.',
+    without: 'Clamp every sum on the way in and an excursion past 32 bits is cut off: the sum that comes back is off by the whole overshoot, not by a rounding step. Wrap at the result width and it is off by 2^32. With 8 guard bits 255 mac2 (511 mac) of full-scale operands still fit, and a 64-tap Q1.15 filter uses 6 of the 8 bits. Past 40 bits the register wraps as two\'s complement, with no flag: 256 full-scale mac2 turn +2^39 into −2^39.',
+    cost: 'The unit is 10 081 NANDs and 127 NAND delays a clock. Two signed 16 × 16 tree multipliers are 3 572 NANDs each, 7 144 together; the read path (shifter, rounder, clamp) is 1 384, of which the clamp is 195; the 40-bit register is 600, its adder 360, the pair adder 297. A clamp on every add would put a second clamp of 188 NANDs in the loop and still be wrong.',
+    alts: [{ name: 'MAC unit, 40-bit accumulator (library)', lib: 'macunit' }, { name: 'Read path: shift, round, clamp (library)', lib: 'macread' }],
+  },
+
+  // ---- sp_circ
+  sp_circ: {
+    problem: 'A filter keeps its last N samples, and every new sample pushes the others one place along. Done in memory that is N loads and N stores a sample. Leave the samples where they are, write the new one over the oldest, and let the pointer walk the buffer and go back to its start at the end: the address step has to do the wrap, because an instruction spent on it is a clock lost on every tap.',
+    without: 'A plain pointer runs off the end of the buffer into whatever follows it, and the program repairs it with a compare and a branch each tap. In the core that costs a clock a tap, doubling a one-clock loop body. The same adder also has to serve a step of m for a strided walk and a bit-reversed order for an FFT, or each of those takes a program of its own.',
+    cost: 'The whole step is 639 NANDs and 53 delays: four 8-bit adders of 72 NANDs each (the pointer step, the window end, the end minus 1 and the reverse-carry add), two equality comparators of 54, five 8-bit muxes of 32, the mode decoder of 35, the step inverter of 32 and 16 gates of glue. The reversals are wiring and cost nothing. The circular modes cost 323 of that: two comparators, two adders for the end, two muxes and the gates that join them.',
+    alts: [{ name: '8-bit adder (library)', lib: 'rca8' }, { name: 'Address step, all eight modes (library)', lib: 'dsp24_agu_step' }],
+  },
+
 };

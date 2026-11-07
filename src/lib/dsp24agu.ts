@@ -78,37 +78,47 @@ const AGU_PORTS: PortDef[] = [
  * value at the clock edge. we writes wd into the register wsel names (0 to 3 the pointers, 4 base, 5 length, 6 modifier); q reads rsel's.
  */
 export const DSP24_AGU: ComponentDef = (() => {
-  // Drawn by hand (the mockup's AGU): the control on the left, the four pointers and the window registers in a column, the read
-  // multiplexers and the STEP block at the right, the new pointer back to the left along the bottom. Data are wires; what reaches
-  // many places (sel, we, mode, wd, steps, the clock) is a label.
+  // Drawn by hand (the mockup's AGU), on a 14-unit row pitch: the seven registers (p0..p3, base, length, modifier) in one column, each
+  // with its own row; the read multiplexer (8:1, pitch 14) has an input on every register row, so those seven wires run straight. The
+  // address multiplexer and the STEP block sit in the gaps between two of those rows and take their inputs from short taps, so each
+  // crosses only the rows between. The write enables come from the left (pointer select, then the steps AND, then the OR), the
+  // decoder of the register index from below. What reaches many places (sel, we, mode, wd, steps, the clock) and the new pointer coming
+  // back from STEP are labels.
   const S = new Sheet();
-  const T = 4;
-  const row = (i: number) => T + 9 * i;          // p0..p3
-  const wrow = (i: number) => T + 38 + 10 * i;    // base, length, modifier
-  const RX = 62; // the registers' column
-  S.place('u0', decoder(2), 10, T + 8, 'which pointer');
-  S.place('u1', decoder(3, true), 10, T + 24, 'write enable of one');
-  S.place('u2', splitter(ones(3), 2), 14, T);
-  S.place('u3', orN(3), 20, T, 'mode ≠ 0');
-  S.place('u4', AND, 32, T + 1, 'steps');
-  // AND (steps, pointer) and OR (written, stepped) of each pointer, in creation order of the generator
+  const P = 14; // row pitch
+  const R = (i: number) => 16 + P * i;              // the q row of p0..p3, base, length, modifier (i = 0..6)
+  const RX = 70;                                    // the registers' column
+  const XG = 30, XO = 48;                           // the AND and the OR of each pointer's enable
+  const XD = 62;                                    // the trunk that carries the next pointer to the four d pins
+  const XU = 112;                                   // the read multiplexer
+  // above: which mode steps
+  S.place('u2', splitter(ones(3), 2), 24, 2);
+  S.place('u3', orN(3), 30, 2, 'mode ≠ 0');
+  S.place('u4', AND, 40, 3, 'steps');
+  // pointer select (pitch 14: y_i on the AND's b row) and the steps / enable gates
+  S.alignY('u0', decoder(2, false, P), 14, 'y0', R(0) + 1, 'which pointer');
   const gates = [0, 1, 2, 3].map((i) => {
     const a = `u${5 + 2 * i}`, o = `u${6 + 2 * i}`;
-    S.place(a, AND, 38, row(i) - 3);
-    S.place(o, OR, 46, row(i) + 2, `enable p${i}`);
+    S.alignY(a, AND, XG, 'y', R(i));
+    S.alignY(o, OR, XO, 'y', R(i) + 1, `enable p${i}`);
     return [a, o];
   });
-  S.place('u13', busMux2(8), 52, T + 13, 'step or written value');
+  // register-index decoder (below, compact): its outputs climb to the ORs and to the enables of base, length, modifier
+  S.place('u1', decoder(3, true), 14, R(6) + P + 2, 'write enable of one');
+  S.alignY('u13', busMux2(8), 54, 'y', 4, 'step or written value');
   const R8 = register(8);
-  for (let i = 0; i < 4; i++) S.place(`p${i}`, R8, RX, row(i), `p${i}`);
-  S.place('base', R8, RX, wrow(0), 'base');
-  S.place('len', R8, RX, wrow(1), 'length');
-  S.place('mod', R8, RX, wrow(2), 'modifier');
-  S.place('u14', muxTree(2, 8), 82, T + 10, 'address');
-  S.place('u15', constWord(8, 0), 70, wrow(2) + 8, '0');
-  S.place('u16', muxTree(3, 8), 82, T + 32, 'read a register');
-  S.place('u17', DSP24_AGU_STEP, 98, T + 22, 'next pointer');
-  const bottom = wrow(2) + 14;
+  for (let i = 0; i < 4; i++) S.place(`p${i}`, R8, RX, R(i) - 3, `p${i}`);
+  S.place('base', R8, RX, R(4) - 3, 'base');
+  S.place('len', R8, RX, R(5) - 3, 'length');
+  S.place('mod', R8, RX, R(6) - 3, 'modifier');
+  // address multiplexer: in the gap between the p1 and p2 rows; STEP in the gap between base and length
+  S.place('u14', muxTree(2, 8), 88, R(1) + 2, 'address');
+  S.place('u17', DSP24_AGU_STEP, 96, R(4) + 1, 'next pointer');
+  S.alignY('u16', muxTree(3, 8, P), XU, 'd0', R(0), 'read a register');
+  S.alignY('u15', constWord(8, 0), 104, 'y', R(6) + P, '0');
+  const tx = [85, 83, 81, 84];                      // the taps of p0..p3 to the address multiplexer
+  const tap = (i: number): [number, number][] => [[tx[i], R(i)], [tx[i], S.P('u14', `d${i}`)[1]]];
+  const V = (...p: [number, number][]) => p;
   const nets: NetDef[] = [
     { name: 'sel', ends: ['sel', 'u0.a', 'u14.s'], tags: true },
     { name: 'wsel', ends: ['wsel', 'u1.a'], tags: true },
@@ -118,24 +128,30 @@ export const DSP24_AGU: ComponentDef = (() => {
     { ends: ['u3.y', 'u4.a'] },
     { name: 'act', ends: ['act', 'u4.b'], tags: true },
     { name: 'steps', ends: ['u4.y', ...gates.map(([a]) => `${a}.a`)], tags: true },
-    ...gates.flatMap(([a, o], i) => [
-      { ends: [`u0.y${i}`, `${a}.b`] },
-      { ends: [`u1.y${i}`, `${o}.a`] },
-      { ends: [`${a}.y`, `${o}.b`] },
-    ]),
+    ...gates.flatMap(([a, o], i) => {
+      const xt = 36 + 1.5 * i, s = S.P('u1', `y${i}`)[1];
+      return [
+        { ends: [`u0.y${i}`, `${a}.b`] },
+        { ends: [`u1.y${i}`, `${o}.b`], via: { [`${o}.b`]: V([xt, s], [xt, R(i) + 2]) } },
+        { ends: [`${a}.y`, `${o}.a`] },
+      ];
+    }),
     { name: 'wd', ends: ['wd', 'u13.b', 'base.d', 'len.d', 'mod.d'], tags: true },
-    { ends: ['u13.y', 'p0.d', 'p1.d', 'p2.d', 'p3.d'] },
+    { ends: ['u13.y', 'p0.d', 'p1.d', 'p2.d', 'p3.d'], trunk: XD },
     ...[0, 1, 2, 3].map((i) => ({ name: `en${i}`, ends: [`${gates[i][1]}.y`, `p${i}.en`] })),
     { name: 'clk', ends: ['clk', 'p0.clk', 'p1.clk', 'p2.clk', 'p3.clk', 'base.clk', 'len.clk', 'mod.clk'], tags: true },
-    { ends: ['u1.y4', 'base.en'] }, { ends: ['u1.y5', 'len.en'] }, { ends: ['u1.y6', 'mod.en'] },
-    ...[0, 1, 2, 3].map((i) => ({ name: `P${i}`, ends: [`p${i}.q`, `u14.d${i}`, `u16.d${i}`] })),
-    { name: 'base', ends: ['base.q', 'u16.d4', 'u17.base'] },
-    { name: 'len', ends: ['len.q', 'u16.d5', 'u17.len'] },
-    { name: 'mod', ends: ['mod.q', 'u16.d6', 'u17.m'] },
+    ...[4, 5, 6].map((i) => {
+      const xt = 36 + 1.5 * i, s = S.P('u1', `y${i}`)[1], e = ['base', 'len', 'mod'][i - 4];
+      return { ends: [`u1.y${i}`, `${e}.en`], via: { [`${e}.en`]: V([xt, s], [xt, R(i) + 1]) } };
+    }),
+    ...[0, 1, 2, 3].map((i) => ({ name: `P${i}`, ends: [`p${i}.q`, `u16.d${i}`, `u14.d${i}`], via: { [`u14.d${i}`]: tap(i) } })),
+    { name: 'base', ends: ['base.q', 'u16.d4', 'u17.base'], via: { 'u17.base': V([82, R(4)], [82, S.P('u17', 'base')[1]]) } },
+    { name: 'len', ends: ['len.q', 'u16.d5', 'u17.len'], via: { 'u17.len': V([84, R(5)], [84, S.P('u17', 'len')[1]]) } },
+    { name: 'mod', ends: ['mod.q', 'u16.d6', 'u17.m'], via: { 'u17.m': V([86, R(6)], [86, S.P('u17', 'm')[1]]) } },
     { ends: ['u15.y', 'u16.d7'] },
     { name: 'rsel', ends: ['rsel', 'u16.s'], tags: true },
-    { name: 'a0', ends: ['u14.y', 'u17.p', 'a'] },
-    { ends: ['u17.y', 'u13.a'], via: { 'u13.a': [[S.R('u17') + 4, bottom], [50, bottom], [50, S.P('u13', 'a')[1]]] } },
+    { name: 'a0', ends: ['u14.y', 'u17.p', 'a'], via: { 'u17.p': [[94, S.P('u14', 'y')[1]], [94, S.P('u17', 'p')[1]]], a: [[94, S.P('u14', 'y')[1]], [94, 8], [XU + 16, 8]] } },
+    { name: 'next', ends: ['u17.y', 'u13.a'], tags: true },
     { ends: ['u16.y', 'q'] },
   ];
   return define({
@@ -144,7 +160,7 @@ export const DSP24_AGU: ComponentDef = (() => {
     ports: AGU_PORTS,
     symbol: { kind: 'box', label: 'AGU' },
     netlist: () => ({
-      pins: { sel: [0, T + 15], mode: [0, T + 3], act: [0, T + 6], we: [0, T + 36], wsel: [0, T + 34], wd: [0, T + 46], rsel: [0, T + 58], clk: [0, T + 62], a: [S.R('u17') + 8, S.P('u14', 'y')[1]], q: [S.R('u17') + 8, S.P('u16', 'y')[1]] },
+      pins: { sel: [0, 12], mode: [0, 4], act: [0, 8], we: [0, 24], wsel: [0, 20], wd: [0, 28], rsel: [0, 32], clk: [0, 36], a: [XU + 16, 8], q: [XU + 16, S.P('u16', 'y')[1]] },
       instances: S.instances(), nets,
     }),
   });

@@ -2,7 +2,7 @@
 .es-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
 .es-bar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .es-bar .seg button { border: 0; background: var(--surface); color: var(--text-2); padding: 5px 10px; font: 13px var(--font-ui); cursor: pointer; }
-.es-bar .seg button[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg, #fff); }
+.es-bar .seg button[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); }
 .es-strip { display: grid; grid-template-columns: repeat(17, minmax(0, 1fr)); gap: 2px; margin: 10px 0 4px; }
 .es-cell { border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); padding: 4px 0; font: 600 12px var(--font-mono); cursor: pointer; text-align: center; }
 .es-cell small { display: block; font: 10px var(--font-mono); color: var(--muted); }
