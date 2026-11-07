@@ -60,6 +60,7 @@ export class ChapterPage implements Page {
   private routing = false;
   private unlisten: (() => void)[] = [];
   private pillOff: (() => void) | null = null;
+  private circuitBtn: HTMLElement | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
   private unbindKeys: () => void;
@@ -79,7 +80,7 @@ export class ChapterPage implements Page {
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
-    this.el.append(this.showCircuitButton());
+    this.circuitBtn = this.showCircuitButton();
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.sceneShown) syncDrill(this.hash(), this.routing);
@@ -253,12 +254,13 @@ export class ChapterPage implements Page {
   /** Save (bookmark) and Add note, for the step shown; nothing on the recap. */
   private renderTools(): void {
     const place = this.place();
-    if (!place) return void this.tools.replaceChildren();
+    if (!place) return void this.tools.replaceChildren(...(this.circuitBtn ? [this.circuitBtn] : []));
     const n = notes().notesAt(place).length;
     this.tools.replaceChildren(
       bookmarkButton(place, () => this.placeTitle()),
       h('button', { class: 'btn sm note-add', type: 'button', title: 'A note on this step, pinned to the part selected on the stage', onclick: () => this.stepNotes?.add() },
-        icon('note', 15), h('span', { class: 'lbl' }, 'Add note'), n ? h('small', null, ` · ${n}`) : null));
+        icon('note', 15), h('span', { class: 'lbl' }, 'Add note'), n ? h('small', null, ` · ${n}`) : null),
+      ...(this.circuitBtn ? [this.circuitBtn] : []));
   }
 
   /** Hover definitions: a chunk of its own, marked once it arrives (if still shown), skipping terms met in earlier steps seen. */
@@ -366,11 +368,11 @@ export class ChapterPage implements Page {
   }
 
   /**
-   * On a phone the circuit sits under the text, below the fold, and nothing says so: a pill at the bottom of the screen
-   * takes the learner to it, and goes away once the stage is in view (app.css .show-circuit shows it on a phone only).
+   * On a phone the circuit sits under the text, below the fold, and nothing says so: a button beside Save takes the learner
+   * to it (app.css .show-circuit shows it on a phone only). In the flow, not floating: a floating pill covered the text read.
    */
   private showCircuitButton(): HTMLElement {
-    const b = h('button', { class: 'btn primary show-circuit', type: 'button', 'aria-label': 'Show the circuit', onclick: () => {
+    const b = h('button', { class: 'btn sm primary show-circuit', type: 'button', 'aria-label': 'Show the circuit', onclick: () => {
       this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     } }, icon('chevD', 16), 'Show circuit');
     if (typeof IntersectionObserver !== 'undefined') {

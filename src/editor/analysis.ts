@@ -22,6 +22,7 @@ import type { Hit } from './geom';
 import { lintChip, type LintResult } from './lint';
 import type { ChipDoc } from './model';
 import { type ProbeTarget, resolveProbe, sameTarget } from './probes';
+import { setProbeRow } from './probehook';
 import { registerPropsSection } from './props';
 import type { EditorSim } from './runtime';
 import { type SlackMap, slackHeat, slackOf } from '../sim/slack';
@@ -318,6 +319,25 @@ class Analysis {
     return () => this.probe(target);
   }
 
+  /** The menu's row for a target: add or remove its probe; or why there is none. */
+  probeRow(target: ProbeTarget): { label: string; run(): void } | string {
+    const built = this.ed.sim.built;
+    if (!this.gate) return 'Switch level has no gate time: the solver returns settled values.';
+    if (!this.sim || !built) return 'Not simulated yet: finish the wiring (see the diagnostics).';
+    const r = resolveProbe(target, this.ed.doc, built, this.sim.design);
+    if (!r) return 'Not on a working net of the chip\'s simulation.';
+    const on = [...this.targets.values()].some((t) => sameTarget(t, target, this.ed.doc, built));
+    // a pin's own lane is already this net
+    const key = r.nets.join(',');
+    const port = !on && this.la.lanes.find((l) => !l.probe && l.nets.join(',') === key);
+    if (port) return `Its lane is already in the Timing panel: ${port.label}.`;
+    return { label: on ? 'Remove its probe' : 'Add a probe and timing lane', run: () => {
+      // the panel first, as probe mode opens it: opening it lays out its lanes again
+      if (!on && !this.open) this.setOpen(true);
+      this.probe(target);
+    } };
+  }
+
   private probe(target: ProbeTarget): void {
     const doc = this.ed.doc;
     const sim = this.sim, built = this.ed.sim.built;
@@ -361,7 +381,8 @@ class Analysis {
     const polys = this.ed.view.polys;
     for (const l of this.la.lanes) {
       const t = this.targets.get(l.id);
-      if (!l.probe || !t || 'pin' in t) continue;
+      // a net inside a part has no wire on this canvas: its lane alone shows it
+      if (!l.probe || !t || 'pin' in t || 'path' in t) continue;
       let at: Vec | null = null;
       if ('wires' in t) {
         let len = -1;
@@ -514,6 +535,9 @@ class Analysis {
 }
 
 const of = new WeakMap<Editor, Analysis>();
+
+// the right-click menu's probe row (the Timing panel opens with the first), through probehook.ts
+setProbeRow((ed, target) => of.get(ed)?.probeRow(target) ?? 'The Timing panel is not available here.');
 
 registerEditorPlugin((ed) => {
   const a = new Analysis(ed);

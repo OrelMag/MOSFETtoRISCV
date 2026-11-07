@@ -28,6 +28,50 @@ const CHAIN: ComponentDef = {
   }),
 };
 
+describe('slack through a net, for the right-click menu', () => {
+  const d = flatten(CHAIN, { mode: 'gate' });
+  const s = slackOf(d)!;
+  const net = (inst: string, port: string) => d.root.children!.get(inst)!.ports[port][0];
+
+  it('the longest path through a net: the period on the critical one, less on the branch', () => {
+    expect(s.through(net('n2', 'y'))).toBe(s.period);
+    expect(s.through(net('r0', 'q'))).toBe(s.period);
+    expect(s.period - s.through(net('s1', 'y'))).toBe(2);
+    // the d input: only its path into r0, setup included
+    expect(s.through(d.root.ports.d[0])).toBe(SETUP);
+    expect([...new Set(s.pathThrough(d.root.ports.d[0]).map((p) => p[0]))]).toEqual(['r0']);
+  });
+
+  it('the path through it runs from the launching flip-flop to the capturing one, in order', () => {
+    const top = (p: string[]) => p[0];
+    const crit = s.pathThrough(net('n2', 'y')).map(top);
+    expect(crit[0]).toBe('r0');
+    expect(crit[crit.length - 1]).toBe('r1');
+    expect([...new Set(crit)]).toEqual(['r0', 'n1', 'n2', 'n3', 'r1']);
+    expect([...new Set(s.pathThrough(net('s1', 'y')).map(top))]).toEqual(['r0', 's1', 'r2']);
+    // it agrees with the timing report's critical path
+    expect(analyzeTiming(d)!.path.length).toBeGreaterThan(0);
+  });
+
+  it('an instance leaves by its outputs, a flip-flop also by what it captures', () => {
+    expect(s.netsOf(['n2'])).toContain(net('n2', 'y'));
+    const r1 = s.netsOf(['r1']);
+    expect(r1).toContain(net('n3', 'y'));
+    expect(Math.max(...s.netsOf(['s1']).map((n) => s.through(n)))).toBe(s.period - 2);
+    expect(s.netsOf(['nothing'])).toEqual([]);
+  });
+
+  it('a large design\'s path stays finite and ordered by arrival', () => {
+    const cpu = flatten(singleCycleCpu(assemble(PROGRAMS[0].source).words));
+    const c = slackOf(cpu)!;
+    let best = -1, at = -1;
+    for (let n = 0; n < cpu.netCount; n += 7) { const t = c.through(n); if (t > best) { best = t; at = n; } }
+    const p = c.pathThrough(at);
+    expect(p.length).toBeGreaterThan(3);
+    expect(p.length).toBeLessThan(cpu.leaves.length);
+  });
+});
+
 describe('slack heatmap', () => {
   it('a chain and a side branch: the critical parts at 0, the branch at its spare time', () => {
     const d = flatten(CHAIN, { mode: 'gate' });

@@ -103,12 +103,14 @@ export class Inspector {
   }
 
   /** Open at this section, for the right-click menu: unfolded (the learner's own fold stands next time), scrolled to. "Where it is used" stays open across parts, as when opened by hand. */
-  openAt(section: 'info' | 'truth' | 'used'): void {
+  openAt(section: 'info' | 'truth' | 'used' | 'power'): void {
     if (this.folded) this.setFolded(false, false);
     if (section === 'used') this.usedOpen = true;
+    if (section === 'power') this.powerOpen = true;
     this.setTab(section === 'truth' ? 'truth' : 'info');
-    if (section === 'used') {
-      const det = [...this.body.querySelectorAll<HTMLElement>('details.insp-used')].find((d) => d.querySelector('summary')?.textContent === 'Where it is used');
+    if (section === 'used' || section === 'power') {
+      const title = section === 'used' ? 'Where it is used' : 'Power (estimate)';
+      const det = [...this.body.querySelectorAll<HTMLElement>('details.insp-used')].find((d) => d.querySelector('summary')?.textContent === title);
       if (det) peek(det);
     }
   }

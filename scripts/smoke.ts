@@ -319,9 +319,14 @@ const MENU_DRIVE = `(async () => {
     if (!group) bad.push('no Measure group');
     else {
       group.focus();
-      key(group, 'ArrowRight'); await wait(80);
+      key(group, 'ArrowRight');
+      // the group loads its timing first
+      for (let i = 0; i < 40 && ![...document.querySelectorAll('.ctx-menu.fly button')].some((x) => x.textContent.startsWith('Fan-out')); i++) await wait(50);
       if (menu().length !== 2) bad.push('the arrow did not open a group beside the menu');
-      if (!/^Fan-out: [0-9]/.test(document.activeElement?.textContent ?? '')) bad.push('no fan-out in Measure: ' + document.activeElement?.textContent);
+      const fly = [...document.querySelectorAll('.ctx-menu.fly button')].map((x) => x.textContent);
+      if (!fly.some((t) => /^Fan-out: [0-9]/.test(t))) bad.push('no fan-out in Measure: ' + fly.join(' | '));
+      if (!fly.some((t) => /^Slack: /.test(t))) bad.push('no slack in Measure: ' + fly.join(' | '));
+      if (!document.querySelector('.ctx-menu.fly')?.contains(document.activeElement)) bad.push('the group did not take the focus');
       key(document.activeElement, 'ArrowLeft'); await wait(60);
       if (menu().length !== 1) bad.push('the arrow did not close the group');
     }

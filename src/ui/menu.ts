@@ -52,10 +52,11 @@ export function menuSpot(x: number, y: number, w: number, hh: number, vw: number
 
 /** Where a group opens beside its row: right of the menu, else left of it; level with the row, kept on screen. */
 export function flySpot(menu: { left: number; right: number }, rowTop: number, w: number, hh: number, vw: number, vh: number): { left: number; top: number } {
-  return {
-    left: Math.max(EDGE, menu.right - 3 + w > vw - EDGE ? menu.left - w + 3 : menu.right - 3),
-    top: Math.max(EDGE, Math.min(rowTop - 6, vh - hh - EDGE)),
-  };
+  const right = menu.right - 3, left = menu.left - w + 3;
+  const fitsRight = right + w <= vw - EDGE, fitsLeft = left >= EDGE;
+  // neither fits: the side with more room, kept on screen
+  const x = fitsRight ? right : fitsLeft ? left : vw - EDGE - menu.right > menu.left - EDGE ? vw - EDGE - w : EDGE;
+  return { left: Math.max(EDGE, x), top: Math.max(EDGE, Math.min(rowTop - 6, vh - hh - EDGE)) };
 }
 
 /** A point for a menu opened by key: on the target (`box`), within what is on screen of its view. */
@@ -78,16 +79,6 @@ export function typeAhead(labels: readonly string[], at: number, ch: string): nu
     if (labels[i].replace(/^[✓\s]+/, '').toLowerCase().startsWith(c)) return i;
   }
   return -1;
-}
-
-export interface PickEntry { label: string; note?: string; run(): void }
-
-/** The rows a filter leaves, the ones starting with it first; past `max` the count of the rest. */
-export function pickRows(all: readonly PickEntry[], q: string, max = 200): { rows: PickEntry[]; more: number } {
-  const t = q.trim().toLowerCase();
-  const hit = !t ? [...all] : all.filter((x) => x.label.toLowerCase().includes(t) || x.note?.toLowerCase().includes(t));
-  if (t) hit.sort((a, b) => Number(b.label.toLowerCase().startsWith(t)) - Number(a.label.toLowerCase().startsWith(t)));
-  return { rows: hit.slice(0, max), more: Math.max(0, hit.length - max) };
 }
 
 // ---- the open menu -----------------------------------------------------------------------------------------------
@@ -151,7 +142,7 @@ export function closeMenu(owner?: object): void {
   document.removeEventListener('pointerdown', onOutside, true);
   document.removeEventListener('keydown', onKey, true);
   document.removeEventListener('contextmenu', onContext, true);
-  if (!picker) removeEventListener('hashchange', onRoute);
+  removeEventListener('hashchange', onRoute);
 }
 
 export const menuOpenFor = (owner: object): boolean => cur?.owner === owner;
@@ -267,13 +258,18 @@ function openFly(row: HTMLElement, it: MenuItem, focus: boolean): void {
   document.body.append(f);
   cur.fly = { el: f, row };
   row.setAttribute('aria-expanded', 'true');
-  fillSub(f, it, () => {
-    const m = cur?.el.getBoundingClientRect();
+  const place = () => {
+    const m = cur?.fly?.el === f ? cur.el.getBoundingClientRect() : null;
     if (!m) return;
     const r = row.getBoundingClientRect();
     const s = flySpot(m, r.top, f.offsetWidth, f.offsetHeight, innerWidth, innerHeight);
     f.style.left = `${s.left}px`;
     f.style.top = `${s.top}px`;
+  };
+  // placed again whenever it changes size: a group that loads its rows grows after "Loading…" was placed
+  if (typeof ResizeObserver === 'function') new ResizeObserver(place).observe(f);
+  fillSub(f, it, () => {
+    place();
     if (focus && cur?.fly?.el === f && !f.contains(document.activeElement)) itemsOf(f)[0]?.focus({ preventScroll: true });
   });
 }
@@ -336,67 +332,16 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   (rows.find((b) => !b.classList.contains('ctx-val')) ?? rows[0] ?? m).focus({ preventScroll: true });
 }
 
-// ---- the picker: a keyboard's way to a part or a wire, which have no focus of their own --------------------------
+// ---- the picker (ui/menupick.ts, loaded on demand) closes with the menu and on a route change ----------------------
 
-let picker: { el: HTMLElement; off(): void; owner?: object } | null = null;
+let pickerClose: ((owner?: object) => void) | null = null;
 
-/** Close the picker (`owner`: only if it opened it). */
-export function closePicker(owner?: object): void {
-  if (owner && picker?.owner !== owner) return;
-  picker?.off();
-  picker?.el.remove();
-  picker = null;
+/** The picker registers how it closes; the menu calls it. */
+export function setPickerClose(f: (owner?: object) => void): void {
+  pickerClose = f;
 }
 
-/** A filter box over a list; a pick closes it and runs the row. Esc gives the focus back to `back`. */
-export function showPicker(title: string, all: readonly PickEntry[], back?: HTMLElement | SVGElement | null, owner?: object): void {
-  closeMenu();
-  closePicker();
-  const input = h('input', { type: 'text', 'aria-label': `${title}: filter`, placeholder: 'Type to filter' }) as HTMLInputElement;
-  const list = h('ul', { role: 'listbox', 'aria-label': title });
-  const pick = (x: PickEntry) => {
-    closePicker();
-    x.run();
-  };
-  const draw = () => {
-    const { rows, more } = pickRows(all, input.value);
-    list.replaceChildren(...rows.map((x) => h('li', { role: 'presentation' }, h('button', { role: 'option', onclick: () => pick(x) }, h('span', null, x.label), x.note ? h('small', null, x.note) : null))),
-      ...(more ? [h('li', { class: 'ctx-note' }, `${more} more: type to narrow it down`)] : []),
-      ...(!rows.length ? [h('li', { class: 'ctx-note' }, 'Nothing by that name')] : []));
-  };
-  const leave = () => {
-    closePicker();
-    if (back?.isConnected) back.focus({ preventScroll: true });
-  };
-  const el = h('div', { class: 'ctx-pick', role: 'dialog', 'aria-label': title }, h('h3', null, title), input, list);
-  input.addEventListener('input', draw);
-  el.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    const rows = [...list.querySelectorAll<HTMLElement>('button')];
-    const at = rows.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'Escape' || e.key === 'Tab') {
-      e.preventDefault();
-      leave();
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      rows[at + 1 < rows.length ? at + 1 : 0]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (at <= 0) input.focus();
-      else rows[at - 1].focus();
-    } else if (e.key === 'Enter' && document.activeElement === input) {
-      e.preventDefault();
-      rows[0]?.click();
-    }
-  });
-  const outside = (e: PointerEvent) => { if (!el.contains(e.target as Node)) closePicker(); };
-  document.addEventListener('pointerdown', outside, true);
-  addEventListener('hashchange', onRoute);
-  picker = { el, ...(owner ? { owner } : {}), off: () => {
-    document.removeEventListener('pointerdown', outside, true);
-    if (!cur) removeEventListener('hashchange', onRoute);
-  } };
-  draw();
-  document.body.append(el);
-  input.focus();
+/** Close the picker if one is open (`owner`: only if it opened it). */
+export function closePicker(owner?: object): void {
+  pickerClose?.(owner);
 }
