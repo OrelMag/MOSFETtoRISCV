@@ -528,7 +528,7 @@ export const chExchange: Chapter = {
     {
       title: 'Start-stop',
       body: `
-        <p>The telephone network's first big data customer was the teleprinter (telex), and it needed the one thing a call does not: a receiver that finds the start of each character by itself, with a clock of its own. The teleprinter carried the same questions to a machine. A motor turns all the time at about the right speed, and a character is five bits in a <em>frame</em> (start unit 0, five data units, stop 1.5 units of 1). The idle line is 1; the falling start
+        <p>The telephone network's first big data customer was the teleprinter (telex), and it needed the one thing a call does not: a receiver that finds the start of each character by itself, with a clock of its own. In the teleprinter a motor turns all the time at about the right speed, and a character is five bits in a <em>frame</em> (start unit 0, five data units, stop 1.5 units of 1). The idle line is 1; the falling start
         edge releases a clutch and the receiver's shaft turns one revolution, with cams that look at the line at fixed offsets from the start: the middle of each unit. At the end of the revolution the stop unit's 1 re-latches the clutch. The two motors have to agree only
         for the length of one character, ${frameUnits(ITA2_START_STOP)} units, since every start edge re-synchronizes the receiver.</p>
         <p>How far can they differ? A receiver that is e too fast reaches its stop sample, ${K_ITA2} + ½ units after the start edge, early by about ${K_ITA2} e units, and the sample must stay at or after the stop unit's beginning. The closed form is ±½ / K for the K = ${K_ITA2} units before the stop:
