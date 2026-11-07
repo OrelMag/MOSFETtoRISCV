@@ -8,7 +8,8 @@ import { CHECKS } from '../src/campaign/codexcheck';
 import { moreOf } from '../src/campaign/codexmore';
 import { chapterById } from '../src/chapters';
 import { sqnrDb } from '../src/comm/signals';
-import { levinson, peakEnergy, runEcho, farEnd } from '../src/dsp/adaptive';
+import { levinson, peakEnergy, runEcho } from '../src/dsp/adaptive';
+import { ECHO_RUN, ROOM_NOISE, TALK, voiceEcho } from '../src/dsp/echofigs';
 import {
   enob, flashComparators, idealSqnrDb, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, sarConvert, SD_GUARD, sdBand, sdErrorPower, sdLinearModelDb, sdMeasuredDb, sdPeak,
 } from '../src/dsp/converters';
@@ -22,6 +23,7 @@ import { lmsFilter, lmsTap, sdConverter, sdModulator } from '../src/lib/sigmadel
 import { stats } from '../src/sim/stats';
 import { CHAIN, chainEnob } from '../src/widgets/dspconverters';
 import { CHANNELS, ECHO_N, ECHO_TAPS, LMS_SPEC } from '../src/widgets/dspadaptive';
+import { wavSamples } from './dsp/wav';
 
 const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 /** Everything an entry says: summary, fuller text, questions. */
@@ -42,6 +44,11 @@ const says = (ch: string, step: number, s: string) => {
 const f1 = (x: number) => x.toFixed(1);
 const minus = (x: number, d: number) => `${x < 0 ? '−' : ''}${Math.abs(x).toFixed(d)}`;
 const db = (x: number) => 10 * Math.log10(x);
+/** "Filters that learn"'s echo canceller exactly as step 3 and its widget run it (dsp/echofigs.ts, widgets/dspadaptive.ts). */
+const voice = voiceEcho(wavSamples('public/dsp/voice-8k.wav').x);
+const echoRun = (o: { taps?: number; talk?: boolean; freeze?: boolean; mu?: number; normalized?: boolean } = {}) =>
+  runEcho({ n: ECHO_RUN, seed: 3, taps: o.taps ?? ECHO_TAPS, mu: o.mu ?? 0.5, normalized: o.normalized ?? true, x: voice.x, near: voice.near, noise: ROOM_NOISE,
+    ...(o.talk ? { talkFrom: TALK.from, talkTo: TALK.to, freeze: o.freeze } : {}) }).erle;
 
 describe('group D: converters', () => {
   it('SNR and ENOB: the ideal figure, the inverse, the chain', () => {
@@ -204,25 +211,31 @@ describe('group D: filters that learn', () => {
     expect(128 ** 2).toBe(16384);
     expect(128 ** 3).toBe(2097152);
     expect(128 ** 3 / 128 ** 2).toBe(128);
-    const lo = runEcho({ n: ECHO_N, seed: 3, taps: 32, mu: 0.5, normalized: true }).erle;
+    const lo = echoRun({ taps: 32 });
     quotes('wiener', c(16384), c(2097152), '8 places', '0.24', '[1.0, −0.4]', '128 times', f1(lo));
     says('adaptive', 1, 'agrees to 8 places');
     says('adaptive', 1, 'R w = p');
   });
 
   it('LMS and NLMS: the step limits and what a tap costs', () => {
-    const fe = farEnd(ECHO_N, 3), sig = fe.reduce((m, v) => m + v * v, 0) / ECHO_N, top = peakEnergy(fe, ECHO_TAPS);
+    const fe = voice.x, sig = fe.reduce((m, v) => m + v * v, 0) / fe.length, top = peakEnergy(fe, ECHO_TAPS);
     const avg = 2 / (ECHO_TAPS * sig), loud = 2 / top;
-    expect(avg.toFixed(2)).toBe('1.27');
-    expect(loud.toFixed(3)).toBe('0.135');
+    expect(avg.toFixed(2)).toBe('1.87');
+    expect(loud.toFixed(3)).toBe('0.176');
+    // the loudest-stretch limit is a guarantee, not the edge: plain LMS still converges at 1.3 times it, has diverged at 1.4, and at the average's limit
+    const plain = (mu: number) => { const e = echoRun({ mu, normalized: false }); return Number.isFinite(e) ? e : -Infinity; };
+    expect(plain(1.3 * loud)).toBeGreaterThan(20);
+    expect(plain(1.4 * loud)).toBeLessThan(-3);
+    expect(plain(avg)).toBeLessThan(-3);
     const mul = nands(treeMul(LMS_SPEC.w, true)), tap = nands(lmsTap(LMS_SPEC)), four = nands(lmsFilter(LMS_SPEC));
     expect([tap, 2 * mul, four]).toEqual([4580, 4172, 19188]);
     expect(LMS_SPEC.w).toBe(12);
     expect(LMS_SPEC.n).toBe(4);
     expect(2 ** (LMS_SPEC.s - 1)).toBe(64);
     expect(LMS_SPEC.s).toBe(7);
-    expect(Math.round(avg / loud)).toBe(9);
-    quotes('lms', '1.27', '0.135', c(tap), c(2 * mul), c(four), '±64', '1960');
+    expect(Math.round(avg / loud)).toBe(11);
+    quotes('lms', avg.toFixed(2), loud.toFixed(3), c(tap), c(2 * mul), c(four), '±64', '1960', 'recorded voice', 'converges at 1.3 times', 'diverged at 1.4 times');
+    says('adaptive', 3, 'still converges at 1.3 times it and has fallen apart at 1.4 times it');
     says('adaptive', 3, `${avg.toFixed(2)}`);
     says('adaptive', 3, `${loud.toFixed(3)}`);
     says('adaptive', 5, `${c(tap).replace(/,/g, ' ')} NANDs`);
@@ -233,20 +246,25 @@ describe('group D: filters that learn', () => {
   });
 
   it('echo canceller: ERLE, the cost, the talk', () => {
-    const echo = (o: { taps?: number; talk?: boolean; freeze?: boolean } = {}) =>
-      runEcho({ n: ECHO_N, seed: 3, taps: o.taps ?? ECHO_TAPS, mu: 0.5, normalized: true, ...(o.talk ? { talkFrom: 18000, talkTo: 25000, freeze: o.freeze } : {}) }).erle;
-    const full = echo(), short = echo({ taps: 32 }), on = echo({ talk: true }), frozen = echo({ talk: true, freeze: true });
-    expect([full, short, on, frozen].map(f1)).toEqual(['30.7', '10.3', '7.6', '29.7']);
-    expect(Math.round(frozen - on)).toBe(22);
+    const full = echoRun(), short = echoRun({ taps: 32 }), on = echoRun({ talk: true }), frozen = echoRun({ talk: true, freeze: true });
+    expect([full, short, on, frozen].map(f1)).toEqual(['35.4', '14.6', '25.1', '33.9']);
+    const gap = Math.round(frozen - on);
+    expect(gap).toBe(9);
+    expect(ECHO_N).toBe(ECHO_RUN);
+    expect(TALK.to - TALK.from).toBe(7000);
     expect(ECHO_TAPS * 2).toBe(256);
     expect(256 * 8000).toBe(2048000);
     expect(ECHO_TAPS / 8000 * 1000).toBe(16);
     expect((2048000 / 1e6).toFixed(2)).toBe('2.05');
     expect(ECHO_N).toBe(32000);
-    quotes('echocancel', '30.7', '10.3', '7.6', '29.7', '256', '2.05', c(2048000), '16 ms', '22 dB', 'G.168', c(32000));
+    quotes('echocancel', ...[full, short, on, frozen].map(f1), '256', '2.05', c(2048000), '16 ms', `about ${gap} dB`, 'G.168', c(32000), 'over the last second', 'LibriVox');
+    // the quiz's right option is the computed gap, and a distractor is what is left with learning on
+    expect(CHECKS.echocancel[1].options[CHECKS.echocancel[1].answer]).toBe(`About ${gap} dB`);
+    expect(CHECKS.echocancel[1].options).toContain(`About ${Math.round(on)} dB`);
     says('adaptive', 3, `${full.toFixed(0)} dB`);
     says('adaptive', 3, `${short.toFixed(0)} dB with 32 taps`);
-    says('adaptive', 3, `${on.toFixed(0)} dB`);
+    says('adaptive', 3, `${on.toFixed(0)} dB with learning left on, against ${frozen.toFixed(0)} when it stopped`);
+    says('adaptive', 3, 'Over the last second of the run');
     says('adaptive', 3, 'G.168');
     says('adaptive', 3, `${ECHO_TAPS * 2} multiplications a sample`);
     says('adaptive', 0, 'The room is a filter');
