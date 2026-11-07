@@ -1,0 +1,65 @@
+/* "Tune it" (ui/pages/tunecap.ts): the chain builder. Theme tokens only, so both themes follow. */
+.cc-page.tc-page { max-width: 1240px; }
+.tc-cols { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.tc-side { display: flex; flex-direction: column; gap: 14px; }
+.tc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.tc-card h2, .tc-main > h2 { margin: 0 0 8px; font-size: 15px; }
+.tc-card p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.5; }
+.tc-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.tc-mono { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tc-good { color: var(--good); } .tc-bad { color: var(--bad); }
+.tc-practice { transition: opacity .15s; } .tc-practice.tc-busy { opacity: .55; }
+.tc-practice p { margin: 4px 0; }
+
+.tc-chain { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.tc-block { width: 168px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.tc-mixer, .tc-cic { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.tc-block-head { display: flex; align-items: center; gap: 4px; min-height: 26px; }
+.tc-block-head b { font-size: 13.5px; flex: 1; }
+.tc-block-ops { display: flex; gap: 2px; }
+.tc-op { width: 26px; height: 26px; padding: 0; font: inherit; font-size: 14px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.tc-op:disabled { color: var(--muted); cursor: default; opacity: .6; }
+.tc-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.tc-field input, .tc-field select { font: 13px var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; min-width: 0; }
+.tc-rate { font-size: 12px; color: var(--muted); min-height: 1.2em; }
+.tc-cost { margin-top: auto; font: 12px var(--font-mono); color: var(--accent); }
+.tc-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tc-chip { height: 32px; padding: 0 12px; border-radius: 99px; border: 1px dashed var(--border); background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.tc-chip:hover { border-color: var(--accent); }
+.tc-problem { margin: 0; color: var(--bad); font-size: 13.5px; min-height: 1.2em; }
+.tc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.tc-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.tc-tile b { font: 600 17px var(--font-mono); }
+.tc-tile span { font-size: 12px; color: var(--muted); }
+.tc-out h2 { font-size: 15px; margin: 6px 0; }
+.tc-table tr.ok td:last-child { color: var(--good); } .tc-table tr.no td:last-child { color: var(--bad); }
+.tc-pass { border: 1px solid var(--good); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+.tc-pass h3 { margin: 0 0 4px; color: var(--good); font-size: 15px; }
+.tc-pass p { margin: 0; font-size: 13.5px; }
+
+.tc-board { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 680px; }
+.tc-board h3 { margin: 0; font-size: 16px; }
+.tc-board h4 { margin: 0 0 6px; font-size: 14px; }
+.tc-fig { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.tc-fig figcaption { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.tc-wrong { border: 1px solid color-mix(in srgb, var(--bad) 55%, var(--border)); background: color-mix(in srgb, var(--bad) 8%, var(--surface)); border-radius: 10px; padding: 12px 14px; }
+.tc-wrong p { margin: 0 0 6px; font-size: 13.5px; line-height: 1.55; }
+.tc-help, .tc-slips { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tc-help ul, .tc-slips ul { margin: 0 0 6px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+
+.tc-spec { width: 100%; height: auto; display: block; }
+.tc-spec-bg { fill: var(--surface-2); }
+.tc-spec-shade { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tc-spec-line { fill: none; stroke: var(--accent); stroke-width: 1.3; }
+.tc-mark { stroke-width: 1.5; } .tc-mark.tuned { stroke: var(--warn); } .tc-mark.culprit { stroke: var(--bad); stroke-dasharray: 4 3; }
+.tc-mark-t { font-size: 13px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; } .tc-mark-t.tuned { fill: var(--text); } .tc-mark-t.culprit { fill: var(--bad); }
+.tc-grid { stroke: var(--border); stroke-width: 1; }
+.tc-tick { font-size: 12px; fill: var(--muted); font-family: var(--font-mono); }
+
+@media (max-width: 900px) { .tc-cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .tc-block { width: 100%; } }
+@media (pointer: coarse) { .tc-op { width: 40px; height: 40px; } .tc-chip { min-height: 40px; } .tc-field input, .tc-field select { min-height: 40px; } }
+.tc-table { border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.tc-table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 5px 14px 5px 0; border-bottom: 1px solid var(--border); }
+.tc-table td { padding: 5px 14px 5px 0; border-bottom: 1px solid var(--border); font-family: var(--font-mono); white-space: nowrap; }
+.tc-table .btn { margin-left: 4px; }
