@@ -19,8 +19,10 @@ export interface LayeredOptions {
   wires?: Record<string, boolean>;
   /** Column per instance name, overriding the depth (relative, 0 = first). */
   column?: Record<string, number>;
+  /** Pins in this order, top to bottom, whatever their sinks ask for (the others sorted by height). */
+  pinOrder?: string[];
   /** Minimum row-to-row spacing of pins. */
-  pinPitch?: number;
+  pinPitch?: number | [number, number];
 }
 
 const inst = (end: string): string | null => (end.includes('.') ? end.slice(0, end.indexOf('.')) : null);
@@ -138,6 +140,10 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     }
     initPins();
   }
+  // nothing anchors the rows, so the whole drawing may have drifted: back to the top
+  const lift = 2 - Math.min(...names.map((n) => top.get(n)!), ...[...pinY.values()].map((y) => y));
+  for (const n of names) top.set(n, top.get(n)! + lift);
+  for (const [p, y] of pinY) pinY.set(p, y + lift);
   // x: columns, a channel between them as wide as the wires that run there
   const x = new Map<string, number>();
   let cx = opts.x0 ?? 10;
@@ -152,15 +158,16 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
   const instances: InstanceDef[] = insts.map((i) => ({ ...i, at: [x.get(i.name)!, top.get(i.name)!] }));
   void byName;
   // pins: inputs left, outputs right; ordered by the height they want, kept `pitch` apart
-  const pitch = opts.pinPitch ?? 2;
+  const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
   const pins: Record<string, [number, number]> = {};
-  const place = (side: PortDef[], px: number) => {
-    const want = side.map((p) => ({ p: p.name, y: pinY.get(p.name) ?? 2 })).sort((a, b) => a.y - b.y);
+  const place = (side: PortDef[], px: number, pitch: number) => {
+    const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
+    const want = side.map((p) => ({ p: p.name, y: pinY.get(p.name) ?? 2 })).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
     let y = 2;
     for (const q of want) { const t = Math.max(y, Math.round(q.y)); pins[q.p] = [px, t]; y = t + pitch; }
   };
-  place(ports.filter((p) => p.dir === 'in'), 0);
-  place(ports.filter((p) => p.dir === 'out'), cx);
+  place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
+  place(ports.filter((p) => p.dir === 'out'), cx, pitches[1]);
   const outNets = nets.map((n) => {
     const o = opts.wires?.[n.ends[0]];
     if (o === undefined) return n;
