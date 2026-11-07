@@ -1065,9 +1065,9 @@ export const chMemory: Chapter = {
       title: 'FIFO',
       body: `
         <p>A <strong>first-in first-out</strong> queue decouples a producer from a consumer: a UART receiving bytes faster than software reads
-        them, a processing stage that sometimes has to wait. Here, four words in registers, written through <span data-show="u6">a decoder</span> at
+        them, a processing stage that sometimes has to wait. Here, four words in registers, written through <span data-show="dec">a decoder</span> at
         the <span data-show="wp">write pointer</span> and read
-        through <span data-show="u14">a multiplexer</span> at the <span data-show="rp">read pointer</span>. Both pointers only ever count up,
+        through <span data-show="rdp">a multiplexer</span> at the <span data-show="rp">read pointer</span>. Both pointers only ever count up,
         wrapping around: a <em>circular buffer</em>.</p>
         <p>The trick is one extra pointer bit. Equal pointers mean <span data-show="emp">empty</span>; same slot but different extra bit means the
         writer is a full lap ahead: <span data-show="fl">full</span>. Without it, full and empty would look the same.</p>

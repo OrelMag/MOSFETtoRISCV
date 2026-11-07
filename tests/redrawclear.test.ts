@@ -6,6 +6,7 @@ import { laneCore } from '../src/lib/lanes';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
+import { fifo } from '../src/lib/storage';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { routeNetlist } from '../src/view/route';
@@ -31,6 +32,10 @@ const levels: [string, () => ComponentDef][] = [
   ['lane core', () => laneCore(w, 4)],
   ['Ethernet segment', () => ethSegment(4)],
   ['Ethernet switch', () => ethSwitch({ cellK: 7 })],
+  // the memory chapter's FIFO, drawn by hand (circuit eyeballing, phase 2a)
+  ['FIFO 4 × 8', () => fifo(2, 8)],
+  ['FIFO 8 × 8', () => fifo(3, 8)],
+  ['FIFO 16 × 8', () => fifo(4, 8)],
 ];
 
 describe('hand-drawn levels', () => {

@@ -2,7 +2,7 @@
 // product terms found by Quine–McCluskey), a FIFO, a stack, a content-addressable memory and a
 // register file with more ports.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { addSub, andN, busMux2, decoder, equal, incrementer } from './combinational';
@@ -174,47 +174,72 @@ export function pla(preset: keyof typeof PLA_PRESETS): ComponentDef {
 export function fifo(k: number, w: number): ComponentDef {
   const N = 2 ** k;
   return memo(`fifo${N}x${w}`, () => {
-    const b = new Builder(12, 12);
-    b.pins('push', 'pop', 'din', 'clk');
-    // full / empty are computed further right (instances 'fl' and 'emp'); the builder wires by name
-    const wr = b.name(b.op1(AND, ['push', b.op1(NOT, ['fl.y'])], 'push if not full'), 'write', true);
-    const rd = b.name(b.op1(AND, ['pop', b.op1(NOT, ['emp.eq'])], 'pop if not empty'), 'read', true);
-    b.next();
-    const wp = b.op(register(k + 1), ['wi.y', wr, 'clk'], 'write pointer', 'wp');
-    const rp = b.op(register(k + 1), ['ri.y', rd, 'clk'], 'read pointer', 'rp');
-    b.op(incrementer(k + 1), [`${wp}.q`], undefined, 'wi');
-    b.op(incrementer(k + 1), [`${rp}.q`], undefined, 'ri');
-    b.name(`${wp}.q`, 'wp', true);
-    b.name(`${rp}.q`, 'rp', true);
-    b.name('wi.y', 'wp+1', true);
-    b.name('ri.y', 'rp+1', true);
-    b.next();
-    const sw = b.op(splitter([k, 1]), [`${wp}.q`]), sr = b.op(splitter([k, 1]), [`${rp}.q`]);
-    b.name(`${sw}.o0`, 'waddr', true);
-    b.name(`${sr}.o0`, 'raddr', true);
-    b.next();
-    const dec = b.op(decoder(k, true), [`${sw}.o0`, wr], 'which word');
-    const same = b.op1(equal(k), [`${sw}.o0`, `${sr}.o0`], 'same slot');
-    const lap = b.op1(XOR, [`${sw}.o1`, `${sr}.o1`], 'a lap apart');
-    b.op(equal(k + 1), [`${wp}.q`, `${rp}.q`], 'empty', 'emp');
-    b.op(AND, [same, lap], 'full', 'fl');
-    b.name('emp.eq', 'empty', true);
-    b.name('fl.y', 'full', true);
-    b.next();
-    const words = Array.from({ length: N }, (_, i) => b.op1(register(w), ['din', `${dec}.y${i}`, 'clk'], `word ${i}`));
-    b.next();
-    const all = b.op1(merger(Array(N).fill(w)), words);
-    b.next();
-    b.wire(b.op1(readPort(k, w), [all, `${sr}.o0`], 'oldest word'), 'dout');
-    b.wire('emp.eq', 'empty');
-    b.wire('fl.y', 'full');
-    const R = b.right;
+    // Drawn by hand: the write pointer (its gate, register and +1 loop) at the decoder's height, the comparators under
+    // it, the read pointer under them; the words in a column whose rows the decoder's outputs and the merger's inputs
+    // meet straight (pitch P), the read port to their right with the read address coming up into its select. full
+    // and empty go back to the gates on the left as pointers: feedback across the whole level.
+    const P = 10, H = 5 * N; // decoder.a sits at 8 + H - 8, its rows at 10 + P·i
+    // write pointer at the decoder's address, read pointer under it, the comparators under the words beside full / empty
+    const Wy = H, Ry = H + 30, Bot = 10 * N + 8, X = 12;
+    const R = 104;
+    const instances: InstanceDef[] = [
+      // write pointer
+      { name: 'nf', def: NOT, at: [6, Wy + 1] },
+      { name: 'wr', def: AND, at: [10, Wy - 1], label: 'push if not full' },
+      { name: 'wp', def: register(k + 1), at: [18, Wy - 3], label: 'write pointer' },
+      { name: 'wi', def: incrementer(k + 1), at: [28, Wy - 3], label: '+1' },
+      { name: 'sw', def: splitter([k, 1], 4), at: [40, Wy - 4] },
+      { name: 'dec', def: decoder(k, true, P), at: [46 + X, 8], label: 'which word' },
+      // read pointer
+      { name: 'ne', def: NOT, at: [6, Ry + 1] },
+      { name: 'rd', def: AND, at: [10, Ry - 1], label: 'pop if not empty' },
+      { name: 'rp', def: register(k + 1), at: [18, Ry - 3], label: 'read pointer' },
+      { name: 'ri', def: incrementer(k + 1), at: [28, Ry - 3], label: '+1' },
+      { name: 'sr', def: splitter([k, 1], 4), at: [40, Ry - 4] },
+      // the words, the merger and the read port
+      ...Array.from({ length: N }, (_, i): InstanceDef => ({ name: `word${i}`, def: register(w), at: [60 + X, 6 + P * i], label: `word ${i}` })),
+      { name: 'all', def: merger(Array(N).fill(w), P), at: [72 + X, 4] },
+      { name: 'rdp', def: readPort(k, w), at: [76 + X, 2 + H], label: 'oldest word' },
+      // comparators, their outputs straight to full and empty
+      { name: 'same', def: equal(k), at: [43, Wy + 6], label: 'same slot' },
+      { name: 'lap', def: XOR, at: [43, Wy + 14], label: 'a lap apart' },
+      { name: 'fl', def: AND, at: [51, Wy + 10], label: 'full' },
+      { name: 'emp', def: equal(k + 1), at: [29, Wy + 12], label: 'empty' },
+    ];
+    const loop = (y: number): [number, number][] => [[37, y - 1], [37, y - 5], [16, y - 5], [16, y - 1]];
+    const nets: NetDef[] = [
+      { name: 'push', ends: ['push', 'wr.a'] }, { name: 'pop', ends: ['pop', 'rd.a'] },
+      { name: 'not full', ends: ['nf.y', 'wr.b'] }, { name: 'not empty', ends: ['ne.y', 'rd.b'] },
+      { name: 'write', ends: ['wr.y', 'wp.en', 'dec.en'], via: { 'dec.en': [[15, Wy + 1], [15, Wy - 7], [57, Wy - 7], [57, Wy + 10]] } },
+      { name: 'read', ends: ['rd.y', 'rp.en'] },
+      // the comparators read the pointers by name (pointers): their taps would cross both pointer loops
+      { name: 'wp', ends: ['wp.q', 'wi.a', 'sw.in', 'emp.a'], via: { 'sw.in': [[27, Wy + 6], [39, Wy + 6], [39, Wy]] } },
+      { name: 'rp', ends: ['rp.q', 'ri.a', 'sr.in', 'emp.b'], via: { 'sr.in': [[27, Ry + 6], [39, Ry + 6], [39, Ry]] } },
+      { name: 'wp+1', ends: ['wi.y', 'wp.d'], via: { 'wp.d': loop(Wy) } },
+      { name: 'rp+1', ends: ['ri.y', 'rp.d'], via: { 'rp.d': loop(Ry) } },
+      { name: 'waddr', ends: ['sw.o0', 'dec.a', 'same.a'] },
+      { name: 'raddr', ends: ['sr.o0', 'rdp.sel', 'same.b'], via: { 'rdp.sel': [[43, Ry - 2], [43, Bot], [81 + X, Bot]] } },
+      { name: 'wlap', ends: ['sw.o1', 'lap.a'] },
+      { name: 'rlap', ends: ['sr.o1', 'lap.b'] },
+      { name: 'same', ends: ['same.eq', 'fl.a'] }, { name: 'lapped', ends: ['lap.y', 'fl.b'] },
+      { name: 'full', ends: ['fl.y', 'full', 'nf.a'], tags: ['nf.a'], via: { full: [[56, Wy + 12], [56, Bot + 4]] } },
+      { name: 'empty', ends: ['emp.eq', 'empty', 'ne.a'], tags: ['ne.a'] },
+      { name: 'din', ends: ['din', ...Array.from({ length: N }, (_, i) => `word${i}.d`)], trunk: 58 + X },
+      { name: 'clk', ends: ['clk', 'wp.clk', 'rp.clk', ...Array.from({ length: N }, (_, i) => `word${i}.clk`)], tags: true },
+      ...Array.from({ length: N }, (_, i): NetDef => ({ name: `we${i}`, ends: [`dec.y${i}`, `word${i}.en`] })),
+      ...Array.from({ length: N }, (_, i): NetDef => ({ name: `word ${i}`, ends: [`word${i}.q`, `all.i${i}`] })),
+      { name: 'words', ends: ['all.out', 'rdp.words'] },
+      { name: 'dout', ends: ['rdp.y', 'dout'] },
+    ];
     return define({
       id: `fifo${N}x${w}`, name: `${N}-word FIFO (${w}-bit)`, category: 'memory',
       summary: `A circular buffer of ${N} words. push writes din at the write pointer and advances it; pop advances the read pointer, and dout always shows the oldest word. ${k + 1}-bit pointers: equal means empty; same slot but one lap apart means full. Push when full and pop when empty are ignored.`,
       ports: [bit('push', 'in'), bit('pop', 'in'), bus('din', w, 'in'), clock(), bus('dout', w, 'out'), bit('empty', 'out'), bit('full', 'out')],
       symbol: { kind: 'box', label: 'FIFO' },
-      netlist: () => ({ pins: { push: [0, 2], pop: [0, 6], din: [0, 10], clk: [0, 14], dout: [R, 4], empty: [R, 8], full: [R, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({
+        pins: { din: [0, 2], push: [0, Wy], pop: [0, Ry], clk: [0, Ry + 10], dout: [R, 4 + H], full: [R, Bot + 4], empty: [R, Bot + 8] },
+        instances, nets,
+      }),
       hdl: {
         verilog: `wire write = push & ~full, read = pop & ~empty;
 assign empty = wp == rp;
