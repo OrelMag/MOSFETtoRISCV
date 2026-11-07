@@ -1106,6 +1106,25 @@ svg.schematic .inst.dragging .hit { fill: color-mix(in srgb, var(--sel) 10%, tra
 svg.schematic .inst.grouped .hit { fill: color-mix(in srgb, var(--sel) 20%, transparent); stroke: var(--sel); stroke-width: 0.16; }
 svg.schematic.reshaping, svg.schematic.reshaping .wire-hit { cursor: grabbing !important; }
 svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent); stroke: var(--sel); stroke-width: 0.08; stroke-dasharray: 0.4 0.3; pointer-events: none; }
+/* Net colour swatches (editor/hueswatch.ts): the right-click menu on every schematic (stages, look inside, the sandbox) and the
+   sandbox's wire / pointer properties, so here and not in editor.css. The colour is
+   drawn by ::before, so the menu's hover background on its buttons cannot paint over it. */
+.sb-hues { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sb-hues .sb-hue-sw, .ctx-menu .sb-hues .sb-hue-sw {
+  position: relative; width: 18px; height: 18px; padding: 0; flex: none; border-radius: 50%; cursor: pointer;
+  border: 0; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong);
+}
+.sb-hue-sw::before {
+  content: ''; position: absolute; inset: 2px; border-radius: 50%;
+  background: light-dark(oklch(0.62 0.17 var(--sw-h)), oklch(0.74 0.15 var(--sw-h)));
+}
+.sb-hue-sw.auto::before { background: conic-gradient(oklch(0.7 0.15 45), oklch(0.7 0.15 120), oklch(0.7 0.15 185), oklch(0.7 0.15 255), oklch(0.7 0.15 320), oklch(0.7 0.15 45)); }
+.sb-hue-sw.none::before { background: linear-gradient(135deg, transparent 43%, var(--muted) 44% 56%, transparent 57%); }
+.sb-hues .sb-hue-sw:hover { box-shadow: 0 0 0 1px var(--text-2); }
+.sb-hues .sb-hue-sw[aria-checked='true'] { box-shadow: 0 0 0 2px var(--accent); }
+.sb-hues .sb-hue-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-ctx-hues { display: grid; gap: 6px; padding: 5px 9px 4px; }
+.sb-ctx-hues > span { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 /* the right-click menu (ui/menu.ts) */
 .ctx-menu {
   position: fixed; z-index: 70; min-width: 210px; max-width: min(360px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
@@ -1648,7 +1667,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-slow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .cpu-slow .seg button { padding: 2px 7px; font-size: 11px; }
 .cpu-rate { display: flex; align-items: center; gap: 6px; flex: 1 1 140px; min-width: 0; }
-.cpu-rate input { flex: 1; min-width: 60px; accent-color: var(--accent); }
+/* slider + its 7.5em readout fit the ~147 px the rate gets beside Slow / Back / Step in a 330 px panel (60 px left it 1.7 px over) */
+.cpu-rate input { flex: 1; min-width: 52px; accent-color: var(--accent); }
 .cpu-rate-v { font: 11px var(--font-mono); color: var(--text-2); white-space: nowrap; min-width: 7.5em; }
 .cpu-narr { display: grid; gap: 2px; font-size: 12px; line-height: 1.45; }
 .cpu-narr .narr-row { display: grid; grid-template-columns: 4.6em 1fr; column-gap: 8px; padding: 1px 0; }
@@ -2917,6 +2937,8 @@ html[data-busy]::before {
 /* a touch screen: the menu is a bottom sheet (ui/menu.ts adds .sheet), groups open in place */
 @media (pointer: coarse) {
   .ctx-menu button, .ctx-pick li button, .ctx-pick input { min-height: 40px; }
+  .sb-hues .sb-hue-sw, .ctx-menu .sb-hues .sb-hue-sw { width: 40px; height: 40px; min-height: 40px; }
+  .sb-hue-sw::before { inset: 6px; }
   .ctx-menu kbd { display: none; } /* shortcuts mean nothing to a finger */
   .ctx-copy { opacity: 1; }
   .ctx-menu.sheet {

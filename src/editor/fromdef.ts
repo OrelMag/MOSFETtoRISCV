@@ -140,6 +140,7 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
           const d = DIR[t.dir], s = t.stub;
           l.at = [t.pos[0] + d[0] * s, t.pos[1] + d[1] * s];
         }
+        if (net.hue !== undefined) l.hue = net.hue;
         labels.push(l);
         const w = t.end === drv
           ? addWire({ a: ref(t.end), b: { label: l.id }, pts })
@@ -147,6 +148,8 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
         mine.push({ w, line: [], full: [] });
       }
     }
+    // a colour the learner picked on the stage (view/layout.ts, put on the net by applyLayout) goes to every piece of the net
+    if (net.hue !== undefined) for (const m of mine) m.w.hue = net.hue;
     firstWire[ni] = mine[0]?.w;
   });
 

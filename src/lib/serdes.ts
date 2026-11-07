@@ -46,7 +46,10 @@ interface TPort { name: string; width: number }
  * smaller, and the block has no `spec`: only the cared-about rows are defined).
  */
 export function tableBlock(id: string, name: string, summary: string, ins: TPort[], outs: TPort[], fn: (v: number[]) => number[], label = 'TABLE', care?: (v: number[], out: number) => boolean): ComponentDef {
-  return memo(id, () => {
+  // The minimization runs on the first netlist() call, not when the module is evaluated: every chapter loads this module,
+  // and the tables of all its blocks took about 300 ms of the first load.
+  const inP = ins.map((p) => port(p.name, p.width, 'in')), outP = outs.map((p) => port(p.name, p.width, 'out'));
+  const draw = () => {
     const n = ins.reduce((a, p) => a + p.width, 0), rows = 1 << n, nOut = outs.reduce((a, p) => a + p.width, 0);
     const onSets: number[][] = Array.from({ length: nOut }, () => []), dcSets: number[][] = Array.from({ length: nOut }, () => []);
     for (let m = 0; m < rows; m++) {
@@ -101,12 +104,15 @@ export function tableBlock(id: string, name: string, summary: string, ins: TPort
       ob += p.width;
     }
     const R = Math.max(b.right, 30);
-    const inP = ins.map((p) => port(p.name, p.width, 'in')), outP = outs.map((p) => port(p.name, p.width, 'out'));
+    return { pins: pinsOf(inP, outP, R), instances: b.instances, nets: b.nets() };
+  };
+  return memo(id, () => {
+    let built: ReturnType<typeof draw> | undefined;
     return define({
       id, name, category: 'gate', summary,
       ports: [...inP, ...outP], symbol: { kind: 'box', label },
       ...(care ? {} : { spec: (v: number[]) => fn(v) }),
-      netlist: () => ({ pins: pinsOf(inP, outP, R), instances: b.instances, nets: b.nets() }),
+      netlist: () => (built ??= draw()),
     });
   });
 }

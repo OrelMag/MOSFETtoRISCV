@@ -4,7 +4,7 @@
 // tables themselves, so the colours cannot disagree with what assembles.
 
 import { commentStart, DIRECTIVES, PSEUDO_OPS } from '../riscv/asm';
-import { BY_NAME, CSRS, fregNumber, regNumber, RM_OPERANDS } from '../riscv/isa';
+import { BY_NAME, CSRS, fregNumber, MAC_BY_NAME, regNumber, RM_OPERANDS } from '../riscv/isa';
 import { scanHexLine } from '../editor/program';
 import { DIRECTIVES16, PSEUDO16 } from '../riscv/rv16/asm16';
 import { BY_NAME16, CSRS16, reg16 } from '../riscv/rv16/isa16';
@@ -19,7 +19,7 @@ import { SAP_BY_NAME } from '../sap/isa';
 
 /** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); sapasm: the
  *  SAP-1's (Appendix C); hex: words; py: the Python subset of chapter 15. */
-export type CodeLang = 'rvasm' | 'rv16asm' | 'cpu4asm' | 'dsp24asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
+export type CodeLang = 'rvasm' | 'rvmacasm' | 'rv16asm' | 'cpu4asm' | 'dsp24asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -55,6 +55,9 @@ const RV32: AsmWords = {
     return 'sym';
   },
 };
+
+/** The RV32 + MAC's assembly: RV32 with the four custom-2 instructions as mnemonics (the echo capstone). */
+const RV32MAC: AsmWords = { ...RV32, mnemonic: (w) => (MAC_BY_NAME.has(w.toLowerCase()) ? 'op' : RV32.mnemonic(w)) };
 
 const PSEUDO_16 = new Set(PSEUDO16), DIRS_16 = new Set(DIRECTIVES16), CSRS_16 = new Set(CSRS16);
 const RV16: AsmWords = {
@@ -246,5 +249,5 @@ export function tokenize(line: string, lang: CodeLang): Tok[] {
   if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
   if (lang === 'm6502asm') return m6502asm(line);
   if (lang === 'py') return py(line);
-  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'dsp24asm' ? DSP24 : lang === 'sapasm' ? SAP : RV32);
+  return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'dsp24asm' ? DSP24 : lang === 'sapasm' ? SAP : lang === 'rvmacasm' ? RV32MAC : RV32);
 }
