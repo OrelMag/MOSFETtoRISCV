@@ -6,6 +6,8 @@ import { laneCore } from '../src/lib/lanes';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
+import { RELAY_BUZZER, RELAY_LATCH, RELAY_NAND } from '../src/lib/relays';
+import { CATHODE_FOLLOWER, ECCLES_JORDAN, TUBE_BUF, TUBE_INV, TUBE_NAND, TUBE_NOR } from '../src/lib/tubes';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { routeNetlist } from '../src/view/route';
@@ -29,6 +31,16 @@ const levels: [string, () => ComponentDef][] = [
   ['state machine control', () => MC_FSM],
   ['microcode control', () => MC_MICRO],
   ['lane core', () => laneCore(w, 4)],
+  // the prologue's relay and tube circuits (circuit eyeballing, phase 2a)
+  ['relay NAND', () => RELAY_NAND],
+  ['self-holding relay', () => RELAY_LATCH],
+  ['relay buzzer', () => RELAY_BUZZER],
+  ['tube inverter', () => TUBE_INV],
+  ['two tube inverters', () => TUBE_BUF],
+  ['tube NOR', () => TUBE_NOR],
+  ['tube NAND', () => TUBE_NAND],
+  ['cathode follower', () => CATHODE_FOLLOWER],
+  ['Eccles–Jordan flip-flop', () => ECCLES_JORDAN],
   ['Ethernet segment', () => ethSegment(4)],
   ['Ethernet switch', () => ethSwitch({ cellK: 7 })],
 ];

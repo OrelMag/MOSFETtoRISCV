@@ -266,6 +266,10 @@ export function dsp24Core(): ComponentDef {
   return d;
 }
 
+const contents = new Map<string, { program: number[]; x: number[]; y: number[] }>();
+/** What a dsp24Computer holds (its 256 program words, X and Y at power-on), or undefined: the sandbox remakes the computer from these. By id: the stage remixes a copy of the def (the learner's layout applied). */
+export const dsp24ComputerOf = (d: ComponentDef) => contents.get(d.id);
+
 /** The computer: the 256-word program ROM, the core, and the X and Y memories (256 words of 16 bits, with their starting contents). */
 export function dsp24Computer(program: ArrayLike<number>, x: ArrayLike<number> = [], y: ArrayLike<number> = []): ComponentDef {
   const R0 = rom24(program);
@@ -281,6 +285,8 @@ export function dsp24Computer(program: ArrayLike<number>, x: ArrayLike<number> =
     symbol: { kind: 'box', label: 'DSP CORE' },
     netlist: () => dsp24Drawing(mems),
   });
+  const words = (w: ArrayLike<number>, m: number) => Array.from({ length: 256 }, (_, i) => (w[i] ?? 0) & m);
+  contents.set(d.id, { program: words(program, 0xffffff), x: words(x, 0xffff), y: words(y, 0xffff) });
   cores.set(key, d);
   return d;
 }
