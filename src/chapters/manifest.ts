@@ -769,7 +769,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Reading a specification", challenge: "quiz" },
     { title: "On your own", challenge: "quiz" },
   ] },
-  { id: "fixed", num: 67, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals","noise","carriers"], recap: {"checks":3}, steps: [
+  { id: "fixed", num: 67, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals","noise","carriers","float"], recap: {"checks":3}, steps: [
     { title: "A word and its point", challenge: "quiz" },
     { title: "Wrap or saturate", challenge: "quiz" },
     { title: "A saturating adder", challenge: "reach" },
