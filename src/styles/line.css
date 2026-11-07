@@ -26,8 +26,9 @@
 .ln-table { min-width: 520px; }
 .ln-table th:first-child { text-align: left; white-space: nowrap; }
 .ln-table td, .ln-table th { padding: 4px 8px; font-size: 12.5px; vertical-align: top; }
-.ln-noise { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-@container (max-width: 760px) { .ln-noise { grid-template-columns: minmax(0, 1fr); } }
+/* the grid inside .ln-noise (the container), so the query can see the widget's width: one column under 760 px */
+.ln-noise-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@container (max-width: 760px) { .ln-noise-grid { grid-template-columns: minmax(0, 1fr); } }
 .ln-sec h4 { margin: 0 0 2px; font-size: 14px; }
 .ln-sec .sub { margin: 0 0 8px; }
 .ln-sec .mos-row { margin: 8px 0; }
