@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { signedOf, wordOf } from '../src/comm/signals';
-import { AC_LUMA, ANNEX_K1, blockAt, category, DC_LUMA, DCT_F, DCT_K, DCT_WI, DCT_WO, dct2Fixed, dct8Fixed, decimationTaps, encodeJpeg, extraBits, fdct, filter1d, filter2d, huffCodes, idct, KERNELS, pictureOf, qualityTable, scene, ZIGZAG } from '../src/dsp/pictures';
+import { AC_LUMA, ANNEX_K1, blockAt, category, DC_LUMA, DCT_F, DCT_K, DCT_WI, DCT_WO, dct2Fixed, dct8Fixed, decimationTaps, encodeJpeg, extraBits, fdct, filter1d, filter2d, huffCodes, idct, KERNELS, parsePgm, pictureOf, qualityTable, scene, ZIGZAG } from '../src/dsp/pictures';
 import { constMul, dctStage } from '../src/lib/dct';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
@@ -152,4 +152,16 @@ describe('the gates', () => {
     };
     visit(dctStage());
   }, 120_000);
+});
+
+describe('the photograph', () => {
+  it('is a 192 × 192 grey picture the page and the tests read the same way, and the writer codes it', () => {
+    const p = parsePgm(new Uint8Array(readFileSync('public/dsp/aldrin-192.pgm')));
+    expect([p.w, p.h]).toEqual([192, 192]);
+    const lo = Math.min(...p.px), hi = Math.max(...p.px);
+    expect(lo).toBeLessThan(20); expect(hi).toBeGreaterThan(230);
+    const r = encodeJpeg(p, 50);
+    expect(r.out.w).toBe(192);
+    expect(r.bytes.length).toBeLessThan(192 * 192);
+  });
 });

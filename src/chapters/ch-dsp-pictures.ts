@@ -68,7 +68,7 @@ export const chPictures: Chapter = {
         return `
         <p>Sound was one row of samples in time. A grey picture is samples on a grid: ${p.w} across, ${p.h} down, each a level from 0 to 255. At 8 bits a sample that is ${n0(p.w * p.h)} bytes, before anything is done to it. Colour would be three such grids.</p>
         <p>Everything learned about samples still holds, one axis at a time. A row is a signal along x, a column along y, and a picture has a spectrum in two dimensions: smooth sky is low frequency, a sharp edge or fine stripes are high. <a href="#/c/signals/5">Sampling folds</a> anything above half the rate, along either axis.</p>
-        <p>The pictures in this chapter are generated, so every number is the same everywhere: a sky, a sun, a mountain, stripes, rings and a little noise. The last step takes a picture of your own, read in your browser and never sent anywhere.</p>
+        <p>The pictures in this chapter are generated, so every number is the same everywhere: a sky, a sun, a mountain, stripes, rings and a little noise. Two steps also offer one photograph, NASA's of Buzz Aldrin on the Moon in 1969, which is in the public domain. The last step takes a picture of your own, read in your browser and never sent anywhere.</p>
         <div class="try">Move the row down from the sky into the stripes, and watch the plot go from a flat line with the sun's step in it to a square wave.</div>`;
       },
       widget: pictureWidget,
@@ -163,7 +163,7 @@ C(0) = 1/√2, otherwise 1</pre>
         <p>Here the loss happens, at one step. Each coefficient is divided by an entry of a table and rounded to the nearest whole number. Large divisors at high frequencies send most of those coefficients to zero, and the eye forgives that more readily than errors in the smooth parts. The table is T.81's Table K.1, which the standard gives as an example "used with good results", not a requirement.</p>
         <p>The quality setting is not in T.81 at all. It is libjpeg's: below 50 the table is scaled by 5000 / q percent, above it by 200 − 2q, each entry rounded and kept between 1 and 255. At quality 50 that is K.1 itself. The tests hold this against the tables Pillow's libjpeg writes, at nine qualities from 1 to 100.</p>
         <p>On this scene, quality 10 makes ${n0(lo.bytes.length)} bytes at ${psnr(p, lo.out).toFixed(1)} dB, quality 50 ${n0(mid.bytes.length)} bytes at ${psnr(p, mid.out).toFixed(1)} dB, and quality 90 ${n0(hi.bytes.length)} bytes at ${psnr(p, hi.out).toFixed(1)} dB, against ${n0(p.w * p.h)} raw. Those are real file sizes, headers included. At low quality the eight-sample grid shows, first in smooth areas such as the sky, because each block keeps little more than its own mean and the next one's mean is not the same.</p>
-        <div class="try">Take quality down to 10 and look at the sky and the stripes, then at the error. Then find the quality where you stop seeing the blocks.</div>`;
+        <div class="try">Take quality down to 10 and look at the sky and the stripes, then at the error. Then find the quality where you stop seeing the blocks, and do the same on the photograph: its flat black sky costs almost nothing and barely changes, while the textured ground is where the blocks and the smearing show.</div>`;
       },
       widget: qualityWidget,
       challenge: {
