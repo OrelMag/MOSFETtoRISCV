@@ -265,7 +265,19 @@ describe('the echo capstone', () => {
       await tick();
       expect(v.ok).toBe(false);
       expect(v.diagnosis, `${taps} taps seed ${seed}`).toMatch(/So the update works there\. What the failing paths? adds? is a tail up to \d+ taps/);
+      expect(v.diagnosis).toMatch(/fewer taps than that tail.*a step too small/);
       expect(v.diagnosis).not.toMatch(/falls short/);
+    }
+  }, 120_000);
+
+  it('diagnosis: 96 taps with a step of 5/128 also passes the probe, so the step is named beside the taps (the audit found it told "the tail")', async () => {
+    const src = ref.replace('        slli  t0, t0, 18', '        slli  t0, t0, 12\n        li    t6, 5\n        mul   t0, t0, t6');
+    expect(src).not.toBe(ref);
+    for (const seed of [1, 2]) {
+      await tick();
+      const v = gradeEcho(src, seed);
+      expect(v.ok, `seed ${seed}`).toBe(false);
+      expect(v.diagnosis, `seed ${seed}`).toMatch(/a step too small still finishes a short tail but not a long one within the run\. If your filter covers 96 taps, the step is the one to raise/);
     }
   }, 120_000);
 

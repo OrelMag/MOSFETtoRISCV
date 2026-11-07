@@ -283,7 +283,8 @@ export function diagnose(words: number[], results: readonly PathResult[]): strin
   const head = `Run on a 16-tap tail with steady white noise, your program reaches ${f(loud)} at the usual far-end level and ${f(quiet)} with the far end 20 dB quieter (${f(need)} needed).`;
   if (loud >= need) {
     const reach = Math.max(...failing.map((r) => CLASS_OF[r.path.cls][1])), speech = failing.some((r) => r.path.source === 'speech');
-    return `${head} So the update works there. What the failing path${failing.length > 1 ? 's add' : ' adds'} is a tail up to ${reach} taps (a filter shorter than the tail cannot cancel it)${speech ? ', and speech\'s bursts and colour (a step that suits steady noise may not suit them)' : ''}.`;
+    // a slow step still finishes a 16-tap tail, so passing the probe cannot tell too few taps from too small a step: name both
+    return `${head} So the update works there. What the failing path${failing.length > 1 ? 's add' : ' adds'} is a tail up to ${reach} taps${speech ? ' and speech\'s bursts and colour' : ''}. Two causes fit, and the probe cannot tell them apart: a filter with fewer taps than that tail cannot cancel all of it, and a step too small still finishes a short tail but not a long one within the run. If your filter covers ${reach} taps, the step is the one to raise.`;
   }
   const where = 'not the tail length';
   if (quiet > loud + 10) return `${head} It falls short even there, so the fault is in the update, ${where}, and it does better when the signal is quieter: the step is too large at the usual level.`;
