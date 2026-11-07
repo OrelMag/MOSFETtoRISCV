@@ -97,10 +97,13 @@ const IMPULSE = MASK_SPEC.xMax;
 const T1 = 420;         // impulse and bursts: samples
 const TAIL = 128;       // the last samples that must be zero
 const BURSTS = 31;
-/** How far y may be from what the impulse response predicts before the worst-case check calls it wrong, in output units (6 % of the 14-bit range). */
+/** How far y may be from what the impulse response predicts before the worst-case check calls it wrong, in output units: 1.6 % of the 14-bit range,
+ *  about 9 % of the reference's 2 936 peak. A correct IIR's rounding stays under 100 (the toward-zero one, 40 seeds), the reference FIR's under 2. */
 const TOLERANCE = 256;
+/** How close to a power of two a difference must be to be called a wrap (the output's own rounding). */
+const WRAP_SLACK = 1;
 
-/** Lanes: DC, nine in the pass band (the edge always among them), 22 in the stop band (its edge, and the one before Nyquist, always). */
+/** Lanes: DC; nine in the pass band, its edge and eight drawn; 22 in the stop band, its edge and the bin before Nyquist and 20 drawn. */
 export interface SineLane { m: number; phase: number; band: 'dc' | 'pass' | 'stop' }
 export function sineLanes(seed: number): SineLane[] {
   const r = rng(seed ^ 0x51ed), pick = (lo: number, hi: number, n: number, fixed: number[]): number[] => {
@@ -205,13 +208,21 @@ export function runMask(def: ComponentDef, mode: 'gate' | 'switch', o: MaskOpts 
   const passMiss = lanes.map((ln, l) => ({ ln, db: dbOf(gains[l]) })).filter(({ ln, db }) => ln.band !== 'stop' && Math.abs(db) > MASK_SPEC.rippleDb + eps);
   const stopMiss = lanes.map((ln, l) => ({ ln, db: dbOf(gains[l]) })).filter(({ ln, db }) => ln.band === 'stop' && db > -MASK_SPEC.stopDb + eps);
   const at = (m: number) => khz(m / WINDOW);
+  // held until the worst-case check has run: when a word wraps, that is the cause and a bad gain only its symptom
+  const bandFails: string[] = [];
+  const dcGain = gains[lanes.findIndex((ln) => ln.band === 'dc')];
   if (passMiss.length) {
     const w = passMiss.reduce((a, c) => (Math.abs(c.db) > Math.abs(a.db) ? c : a));
-    fails.push(`pass band: at ${w.ln.band === 'dc' ? '0 Hz (DC)' : at(w.ln.m)} the gain is ${fmtDb(w.db)}; the pass band must stay within ±${MASK_SPEC.rippleDb} dB of unity up to ${khz(MASK_SPEC.passEdge)} (${(Math.abs(w.db) - MASK_SPEC.rippleDb).toFixed(1)} dB outside${passMiss.length > 1 ? `; ${passMiss.length} of ${lanes.filter((x) => x.band !== 'stop').length} frequencies miss` : ''})`);
+    const miss = passMiss.length > 1 ? `; ${passMiss.length} of ${lanes.filter((x) => x.band !== 'stop').length} frequencies miss` : '';
+    const rule = `the pass band must stay within ±${MASK_SPEC.rippleDb} dB of unity up to ${khz(MASK_SPEC.passEdge)}`;
+    // dB cannot say a gain is negative or zero: say what came out instead
+    bandFails.push(w.ln.band === 'dc' && dcGain < 1e-6
+      ? `pass band: at 0 Hz (DC) an input of +${SINE_AMP} held steady comes out near ${Math.round(dcGain * SINE_AMP)}: ${dcGain > -1e-6 ? 'nothing gets through' : `the gain is negative (× ${dcGain.toFixed(2).replace('-', '−')}), so the output is inverted`}; ${rule}${miss ? ` (${miss.slice(2)})` : ''}`
+      : `pass band: at ${w.ln.band === 'dc' ? '0 Hz (DC)' : at(w.ln.m)} the gain is ${fmtDb(w.db)}; ${rule} (${(Math.abs(w.db) - MASK_SPEC.rippleDb).toFixed(1)} dB outside${miss})`);
   }
   if (stopMiss.length) {
     const w = stopMiss.reduce((a, c) => (c.db > a.db ? c : a));
-    fails.push(`stop band: at ${at(w.ln.m)} the gain is ${fmtDb(w.db)}; from ${khz(MASK_SPEC.stopEdge)} up it must be ${fmtDb(-MASK_SPEC.stopDb)} or lower (${(w.db + MASK_SPEC.stopDb).toFixed(1)} dB short${stopMiss.length > 1 ? `; ${stopMiss.length} of ${lanes.filter((x) => x.band === 'stop').length} frequencies miss` : ''})`);
+    bandFails.push(`stop band: at ${at(w.ln.m)} the gain is ${fmtDb(w.db)}; from ${khz(MASK_SPEC.stopEdge)} up it must be ${fmtDb(-MASK_SPEC.stopDb)} or lower (${(w.db + MASK_SPEC.stopDb).toFixed(1)} dB short${stopMiss.length > 1 ? `; ${stopMiss.length} of ${lanes.filter((x) => x.band === 'stop').length} frequencies miss` : ''})`);
   }
   const passDb = lanes.map((ln, l) => ({ f: ln.m / WINDOW, db: dbOf(gains[l]), band: ln.band }));
   const passWorst = passDb.filter((x) => x.band !== 'stop').reduce((a, c) => (Math.abs(c.db) > Math.abs(a.db) ? c : a));
@@ -233,22 +244,34 @@ export function runMask(def: ComponentDef, mode: 'gate' | 'switch', o: MaskOpts 
     // rounding inside a feedback loop makes the response a little non-linear (a long impulse response is read to ±½ at every clock); a wrap or a clip is thousands
     const tol = TOLERANCE;
     tested += stim.length;
-    const bad: { lane: number; n: number; y: number; e: number }[] = [];
+    const bad: { lane: number; n: number; y: number; e: number; errs: number[] }[] = [];
     stim.forEach((x, l) => {
+      let first: { n: number; y: number; e: number } | undefined;
+      const errs: number[] = [];
       for (let n = 0; n < T3; n++) {
         let e = 0;
         for (let k = 0; k < Lh && k <= n; k++) e += hk[k] * x[n - k];
-        worstErr = Math.max(worstErr, Math.abs(ys3[l][n] - e));
-        if (Math.abs(ys3[l][n] - e) > tol) { bad.push({ lane: l, n, y: ys3[l][n], e: Math.round(e) }); break; }
+        const err = ys3[l][n] - e;
+        worstErr = Math.max(worstErr, Math.abs(err));
+        if (Math.abs(err) > tol) { first ??= { n, y: ys3[l][n], e: Math.round(e) }; errs.push(Math.round(err)); }
       }
+      if (first) bad.push({ lane: l, ...first, errs });
     });
     if (bad.length) {
       const b = bad[0], d = b.y - b.e, k = Math.round(Math.log2(Math.abs(d))), what = b.lane < 2 ? 'the worst-case input (your own impulse response, signs reversed, so that every tap adds)' : 'full-scale noise';
-      const wrapped = k >= 8 && Math.abs(Math.abs(d) - 2 ** k) <= tol;
+      // a wrap is off by a power of two to within the output's rounding, at every sample it is off (a clip or a loop's rounding is not; a wrap fed back through a loop no longer is, and reads as a difference)
+      const onGrid = (v: number) => { const m = Math.round(v / 2 ** k); return m !== 0 && Math.abs(v - m * 2 ** k) <= WRAP_SLACK; };
+      const wrapped = Math.abs(d) >= 64 && b.errs.every(onGrid);
+      const clipped = !wrapped && Math.sign(b.y) === Math.sign(b.e) && Math.abs(b.y) < Math.abs(b.e);
       const peak = Math.round(hk.reduce((s, v) => s + Math.abs(v), 0) * MASK_SPEC.xMax);
-      fails.push(`${what}, sample ${b.n + 1}: y reads ${b.y} where the impulse response says ${b.e}, so the output ${wrapped ? `wrapped (off by exactly ${groupDigits(2 ** k)} = 2^${k})` : Math.abs(b.y) < Math.abs(b.e) && Math.sign(b.y) === Math.sign(b.e) && Math.abs(d) > 4 * tol ? 'clipped' : 'differs'}. The taps add up to ${gainSum.toFixed(2)} × full scale, so y can reach ±${groupDigits(peak)} and needs ${Math.ceil(Math.log2(peak + 1)) + 1} bits${bad.length > 1 ? ` (${bad.length} of ${stim.length} inputs fail)` : ''}`);
+      const how = wrapped ? `so a word wrapped: y is off by exactly ${groupDigits(2 ** k)} = 2^${k}`
+        : clipped ? `so the output clipped: it falls ${groupDigits(Math.abs(d))} short, so something saturates on the way`
+        : `a difference of ${groupDigits(Math.abs(d))}, more than the ±${tol} rounding may explain`;
+      fails.push(`${what}, sample ${b.n + 1}: y reads ${b.y} where the impulse response says ${b.e}, ${how}. Your impulse response adds up to ${gainSum.toFixed(2)} × full scale, so the running sum reaches ±${groupDigits(peak)}: every word that carries it, the accumulator included, must hold that without wrapping or saturating (y alone needs ${Math.ceil(Math.log2(peak + 1)) + 1} bits)${bad.length > 1 ? ` (${bad.length} of ${stim.length} inputs fail)` : ''}`);
     }
   }
+
+  fails.push(...bandFails);
 
   // ---- the budget --------------------------------------------------------------------------------------------------------------------------------
   const nands = stats(def).nands;

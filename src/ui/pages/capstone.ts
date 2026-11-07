@@ -254,7 +254,7 @@ export class CapstonePage implements Page {
       ...(rulesOnly ? [h('section', null, h('h4', null, 'Check'), h('p', null, graded))] : [h('section', null, h('h4', null, 'Graded'), h('p', null, graded),
         h('p', { class: 'cap-ref' }, h('b', null, 'Reference: '), h('span', { 'data-ref': 'nand' }, '… NANDs'), ' (period and cycles are shown after a pass)'))]),
       h('section', null, h('h4', null, 'Allowed'),
-        h('p', null, `NAND and ${names.length} unlocked parts (the palette's Unlocked parts lists them). Your own chips count by their NANDs.`),
+        h('p', null, `NAND and the unlocked parts below (the palette's Unlocked parts lists them). Your own chips count by their NANDs.`),
         h('details', { class: 'cap-parts' }, h('summary', null, 'The parts'), h('p', null, names.join(', ')))),
       ...(rulesOnly ? [] : [h('p', { class: 'cap-note' }, h('b', null, 'Capstones only: '), 'no exam and no certificate. There is no walkthrough, no tip and no “Do it for me”; the reference answer opens after a pass, and a pass marks the tier done on My path.')]),
     );
@@ -263,17 +263,17 @@ export class CapstonePage implements Page {
 
   /** The mask as a table: the numbers the bench holds the filter to. */
   private maskSheet(): HTMLElement {
-    const s = MASK_SPEC, k = (f: number) => `${+(f * s.rate / 1000).toFixed(2)} kHz`;
+    const s = MASK_SPEC, k = (f: number) => `${+(f * s.rate / 1000).toFixed(2)} kHz`;
     const row = (a: string, b: string, c: string) => h('tr', null, h('th', { scope: 'row' }, a), h('td', null, b), h('td', null, c));
     return h('section', null, h('h4', null, 'The mask'), h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins cap-mask' },
       h('thead', null, h('tr', null, ['band', 'frequency', 'gain'].map((t) => h('th', null, t)))),
       h('tbody', null,
         row('Pass', `0 – ${k(s.passEdge)}`, `1 ± ${s.rippleDb} dB`),
         row('Transition', `${k(s.passEdge)} – ${k(s.stopEdge)}`, 'free'),
-        row('Stop', `${k(s.stopEdge)} – ${s.rate / 2000} kHz`, `≤ −${s.stopDb} dB`),
+        row('Stop', `${k(s.stopEdge)} – ${s.rate / 2000} kHz`, `≤ −${s.stopDb} dB`),
         row('Sample rate', `${s.rate / 1000} kHz`, 'one sample a clock'),
         row('Input / output', `x ${s.xBits} bits, y ${s.yBits} bits`, 'same scale'),
-        row('Budget', `${s.budget.toLocaleString('en')} NANDs`, 'through your chips')))));
+        row('Budget', `${groupDigits(s.budget)} NANDs`, 'through your chips')))));
   }
 
   private testsTab(el: HTMLElement): void {
