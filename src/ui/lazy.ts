@@ -22,12 +22,19 @@ export function enqueue(run: () => void, alive: () => boolean = () => true): voi
 }
 
 const inBrowser = typeof document !== 'undefined';
-let seq = 0;
+let seq = 0, placing = false;
 const fills = new Map<string, () => string>();
 
-/** Text for a number that costs real time: a placeholder in the page, filled in later (see `settleLazy`); the value itself outside a browser. */
+/** A step's body as the chapter page shows it: numbers that cost time are placeholders here. Everywhere else (print, search, first-use checks, hover cards) `lz` computes the text on the spot. */
+export function lazyBody(body: () => string): string {
+  const was = placing;
+  placing = inBrowser;
+  try { return body(); } finally { placing = was; }
+}
+
+/** Text for a number that costs real time: inside `lazyBody` a placeholder in the page, filled in later (see `settleLazy`); the value itself anywhere else. */
 export function lz(f: () => string): string {
-  if (!inBrowser) return f();
+  if (!placing) return f();
   const id = String(++seq);
   if (fills.size > 400) fills.clear();
   fills.set(id, f);
@@ -46,25 +53,40 @@ export function settleLazy(root: ParentNode): void {
 
 /** A widget that draws a placeholder now and builds itself later. `warm` are the heavy pieces the build will ask for (each memoized by whoever computes it), run one per task first. */
 export function deferred<W extends { el: HTMLElement; update?(): void; destroy?(): void }>(make: () => W, ...warm: Array<() => unknown>): () => W {
+  return deferredAt([560, 700], make, ...warm);
+}
+/** `deferred` with the height the finished widget takes on a wide and on a narrow screen, so the placeholder holds its room and nothing below it moves when it is replaced. */
+export function deferredAt<W extends { el: HTMLElement; update?(): void; destroy?(): void }>(heights: [number, number], make: () => W, ...warm: Array<() => unknown>): () => W {
   return () => {
     if (!inBrowser) return make();
     let real: W | null = null, gone = false;
     const host = document.createElement('div');
-    host.className = 'widget mos sr-w sdr-w';
+    host.className = 'widget mos sr-w sdr-w lz-host';
     host.setAttribute('aria-busy', 'true');
+    host.style.setProperty('--lz-h', `${heights[0]}px`);
+    host.style.setProperty('--lz-h-narrow', `${heights[1]}px`);
     const p = document.createElement('div');
     p.className = 'panel';
     const note = document.createElement('p');
     note.className = 'sub lz-note';
+    note.setAttribute('role', 'status');
     note.textContent = 'Computing…';
     p.append(note);
     host.append(p);
     const alive = () => !gone && host.isConnected;
     for (const w of warm) enqueue(() => { w(); }, alive);
     enqueue(() => {
-      real = make();
-      host.className = real.el.className;
-      host.replaceChildren(...Array.from(real.el.childNodes));
+      try {
+        real = make();
+        host.removeAttribute('style');
+        for (const a of Array.from(real.el.attributes)) host.setAttribute(a.name, a.value);
+        host.replaceChildren(...Array.from(real.el.childNodes));
+      } catch (e) {
+        console.error(e);
+        host.classList.remove('lz-host');
+        note.textContent = 'Could not compute this figure.';
+        note.setAttribute('role', 'alert');
+      }
       host.removeAttribute('aria-busy');
     }, alive);
     return { el: host, update: () => real?.update?.(), destroy: () => { gone = true; real?.destroy?.(); } } as unknown as W;

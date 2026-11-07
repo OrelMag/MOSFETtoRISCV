@@ -11,7 +11,7 @@ import { CLIP_CLOCKS } from '../dsp/sdrclip';
 import { cicDecimator } from '../lib/multirate';
 import { stats } from '../sim/stats';
 import { audioWidget, band, bandWidget, carsonWidget, channelWidget, dialWidget, DIAL_DEFAULT, frontScene, FRONT_CLOCKS, mixerScene, MIXER_CLOCKS, nandsOf, sdrApi, tableRow, tableUnits, TABLE_KS, tableWidget, tuneWidget } from '../widgets/dspsdr';
-import { deferred, lazyProps, lz } from '../ui/lazy';
+import { deferredAt, lazyProps, lz } from '../ui/lazy';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -95,7 +95,7 @@ export const chSdr: Chapter = {
         <p>The receiver has five stages and the first two are in gates: <strong>mix</strong> the chosen station to zero (${n0(b.mixer)} NANDs), <strong>decimate</strong> by ${CIC_R} with a CIC (two of them, ${n0(2 * stats(cicDecimator(CIC_N, CIC_R, W_MIX)).nands)} NANDs), <strong>filter</strong> the channel, <strong>discriminate</strong>, and <strong>filter</strong> the audio down to ${n0(AUD / 1000)} kHz.</p>
         <div class="try">Raise the noise to the right. The floor lifts under the weak station first, and at the far end the ADC clips: the readout counts the samples at full scale.</div>`;
       },
-      widget: deferred(bandWidget, band, ...STATIONS.map((_, k) => () => stationOccupied(k))),
+      widget: deferredAt([673, 792], bandWidget, band, ...STATIONS.map((_, k) => () => stationOccupied(k))),
       challenge: {
         kind: 'quiz', question: 'Which of these does the ADC\'s word size decide?',
         options: ['How far a weak station sits above rounding noise next to a loud one', 'How many stations fit in the band', 'The width of each station', 'The rate the audio comes out at'],
@@ -113,7 +113,7 @@ export const chSdr: Chapter = {
         <p>This sets the channel the receiver must keep. The closest two stations here are ${khzf(closest())} apart. The widest station in the band is the sweep, with Carson's ${khzf(widest())} (the 130 kHz above is the 15 kHz-audio case, not a station here), so a ±${khzf(CHAN_EDGE)} filter, ${khzf(2 * CHAN_EDGE)} wide, has room. On the first step the shaded bands are Carson's, an upper bound; the table beside them lists what each station measures at 98 % of its own power, averaged over about a second of its programme: ${[0, 1, 2, 3].map((k) => lz(() => khzf(occAt(k)))).join(', ')}.</p>
         <div class="try">Slide the audio tone up to 15 kHz and watch the sidebands run out to the shaded edges. Then shrink the deviation to 5 kHz: the band collapses to a few audio tones' width.</div>`;
       },
-      widget: deferred(carsonWidget),
+      widget: deferredAt([551, 620], carsonWidget),
       challenge: {
         kind: 'quiz', question: `A station deviates ±${n0(DEV / 1000)} kHz and carries audio up to 15 kHz. Stations are ${khzf(closest())} apart at the closest. Do they overlap?`,
         options: [`No: Carson's band is ${khzf(carson(DEV, 15000))}`, 'Yes: the deviation alone is wider', 'Yes: 15 kHz audio needs 15 kHz either side', 'It depends on the noise'],
@@ -130,7 +130,7 @@ export const chSdr: Chapter = {
         <p>Because the samples are complex, this is one rotation and nothing is lost: (x<sub>r</sub> + j x<sub>i</sub>)(cos θ − j sin θ) = (x<sub>r</sub> cos θ + x<sub>i</sub> sin θ) + j (x<sub>i</sub> cos θ − x<sub>r</sub> sin θ). A real mixer, one multiplication, would make the sum and the difference of every pair of frequencies at once and fold the mirror image onto the station. The step is a ${NCO_BITS}-bit <em>tuning word</em>, so the oscillator tunes in ${d1(FS / 2 ** NCO_BITS)} Hz steps. The band wraps at ±${n0(FS / 2000)} kHz, so the station at +${n0(STATIONS[3].f / 1000)} kHz, tuned to ${n0(STATIONS[0].f / 1000)}, would sit at +${n0((STATIONS[3].f - STATIONS[0].f) / 1000)} kHz and shows at ${n0((STATIONS[3].f - STATIONS[0].f - FS) / 1000)} kHz.</p>
         <div class="try">Drag the tuning across a station. The channel it lands in is the shaded one, the only part the later stages keep.</div>`;
       },
-      widget: deferred(tuneWidget, band),
+      widget: deferredAt([810, 737], tuneWidget, band),
       challenge: {
         kind: 'quiz', question: `The oscillator is tuned to ${n0(STATIONS[0].f / 1000)} kHz. Where does the station at +${n0(STATIONS[2].f / 1000)} kHz end up?`,
         options: [`+${n0((STATIONS[2].f - STATIONS[0].f) / 1000)} kHz`, `${n0((STATIONS[0].f + STATIONS[2].f) / 1000)} kHz`, '0 Hz', `+${n0(STATIONS[2].f / 1000)} kHz`],
@@ -170,7 +170,7 @@ export const chSdr: Chapter = {
         <p>The chapter's mixer uses ${NCO_K} bits: ${lz(() => d1(r(NCO_K).sfdr))} dB of spur-free range for ${n0(r(NCO_K).nands)} NANDs in the oscillator, against ${n0(r(9).nands)} at ${r(9).k}. The test tone's audio SNR on its own frequency is ${lz(() => d1(toneAt(0).snr))} dB, which only says its tuning word is a friendly one.</p>
         <div class="try">Play the weak station at 4 bits, then at 6 and 8, and read the key-down / key-up figure beside it. Then read the tone column: the left figure is on its frequency, the right one 100 Hz off.</div>`;
       },
-      widget: deferred(tableWidget, band, ...tableUnits()),
+      widget: deferredAt([496, 586], tableWidget, band, ...tableUnits()),
       challenge: {
         kind: 'quiz', question: 'What sets the table size a receiver needs?',
         options: ['How much louder its strongest neighbour is than the weakest wanted station', 'The audio\'s highest frequency', 'The deviation of the stations', 'The number of stations'],
@@ -210,7 +210,7 @@ export const chSdr: Chapter = {
         <p>Putting the channel filter and the discriminator on the DSP core waits for that core. Until it exists the model stands in for it, and the steps after this one depend on nothing but its numbers.</p>
         <div class="try">Pick the weak station. The largest discriminator output is ${lz(() => d2(peaks.weak))} deviations for it against ${lz(() => d2(peaks.tone))} for the test tone, which is the one that keeps to its limit: the angle ignores amplitude, not noise or the neighbours' alias, and whatever exceeds one deviation is theirs.</div>`;
       },
-      widget: deferred(channelWidget, band, () => receive(band(), STATIONS[0].f, -40, 1 << 17)),
+      widget: deferredAt([797, 832], channelWidget, band, () => receive(band(), STATIONS[0].f, -40, 1 << 17)),
       challenge: {
         kind: 'quiz', question: 'Why does the discriminator work on the product z[n] · conj(z[n−1]) instead of subtracting the two angles?',
         options: ['The angle of the product is the difference, with no wrap to undo', 'It is cheaper than subtracting angles', 'It removes the noise', 'Angles cannot be computed for complex samples'],
@@ -227,7 +227,7 @@ export const chSdr: Chapter = {
         <p>Last is a trick of the broadcaster's. FM's noise is worst at high audio frequencies, so the transmitter boosts the treble before modulating and the receiver cuts it back, and the same cut takes the noise down with it. Here the pair is a first-order discrete filter and its exact inverse (α = ${ALPHA.toFixed(3)}), so the two cancel on the sound and not on the hiss. It is not the analogue 75 µs network, whose corner is ${d1(1 / (2 * Math.PI * TAU) / 1000)} kHz: this filter lifts 10 kHz by ${d1(preLiftDb(10_000))} dB over the bass, where an analogue network with ${n0(TAU * 1e6)} µs lifts ${d1(analogueLiftDb(10_000))} dB.</p>
         <div class="try">Play the arpeggio without the de-emphasis, then with it. The first is the transmitter's boost with nothing to undo it.</div>`;
       },
-      widget: deferred(audioWidget, band, () => receive(band(), STATIONS[1].f, -40)),
+      widget: deferredAt([822, 931], audioWidget, band, () => receive(band(), STATIONS[1].f, -40)),
       challenge: {
         kind: 'quiz', question: 'If the receiver skipped de-emphasis, what would the listener get?',
         options: ['Too much treble, and the hiss with it', 'Nothing: de-emphasis is only for noise', 'The audio at half speed', 'Only the bass'],
@@ -247,7 +247,7 @@ export const chSdr: Chapter = {
         <details class="deeper"><summary>What this chapter does not do</summary><p>Only the CIC is in gates: the plan for this chapter said a CIC and a polyphase decimator, but the polyphase decimator is the rate chapter's, and the channel filter that follows the CIC waits for the DSP core. The noise slider goes to 0 dB, not −5, so that the weak station can be taken past its threshold; the ADC clips well before. Carrier to noise is defined over Carson's band, as above.</p></details>
         <div class="try">Tune to ${n0(STATIONS[0].f / 1000)} kHz and play both. Then tune to +${n0(STATIONS[3].f / 1000)} kHz, raise the noise, and watch the carrier-to-noise readout against how the Morse looks in the waveform.</div>`;
       },
-      widget: deferred(dialWidget, band, () => receive(band(), DIAL_DEFAULT.f, DIAL_DEFAULT.noise)),
+      widget: deferredAt([767, 659], dialWidget, band, () => receive(band(), DIAL_DEFAULT.f, DIAL_DEFAULT.noise)),
       challenge: {
         kind: 'quiz', question: 'The receiver is tuned to the weak station and the noise is raised. Which station breaks up first?',
         options: ['The weak one: its carrier-to-noise ratio is lowest', 'The test tone: it is loudest', 'All at once: the noise is the same for all', 'None: FM rejects noise completely'],

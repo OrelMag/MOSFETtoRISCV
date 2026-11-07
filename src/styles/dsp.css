@@ -121,5 +121,9 @@
 .sdr-w .mos-sl output { min-width: 92px; white-space: nowrap; text-align: right; }
 
 /* heavy figures that fill in after the step has drawn (ui/lazy.ts) */
-.lz[aria-busy="true"] { color: var(--muted); }
+.lz { font-variant-numeric: tabular-nums; }
+.lz[aria-busy="true"] { color: var(--muted); display: inline-block; min-width: 4ch; }
 .lz-note { margin: 12px; }
+/* the placeholder holds about the room the widget takes, so filling it in moves nothing below */
+.lz-host { min-height: var(--lz-h, 560px); }
+@media (max-width: 720px) { .lz-host { min-height: var(--lz-h-narrow, 700px); } }

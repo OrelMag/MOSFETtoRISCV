@@ -268,12 +268,12 @@ export function receive(b: Band, f: number, noiseDb: number, count = b.n, k: num
   if (hit) { recent.splice(recent.indexOf(hit), 1); recent.unshift(hit); return hit.r; }
   const { xr, xi, clipped } = sample(b, noiseDb, 0, count), { yr, yi } = frontBlock(xr, xi, tuningWord(f), k);
   const r = { chain: demodulate(yr, yi), yr, yi, clipped };
-  recent.unshift({ b, key, r });
-  recent.length = Math.min(recent.length, RECEIVE_KEPT);
+  // only the page's own second of band is worth keeping: an entry holds its band (16 MB) as well as its result
+  if (b === bands.get(`${FS}:all`)) { recent.unshift({ b, key, r }); recent.length = Math.min(recent.length, RECEIVE_KEPT); }
   return r;
 }
-/** The last few receptions, by band and parameters: the page asks for the same one from several places (a table row, a sentence, a readout), and a Reception is never changed. */
-const RECEIVE_KEPT = 4;
+/** The last few receptions of the full band, by parameters: the page asks for the same one from several places (a table row, a sentence, a readout), and a Reception is never changed. */
+const RECEIVE_KEPT = 3;
 const recent: Array<{ b: Band; key: string; r: Reception }> = [];
 
 // ---- measurements ---------------------------------------------------------------------------------------------------------------------------
