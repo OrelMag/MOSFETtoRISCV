@@ -366,6 +366,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   width: 22px; flex: 0 1 22px; min-width: 6px; height: 6px; border-radius: 4px; border: 0; padding: 0; cursor: pointer;
   background: var(--surface-3);
 }
+/* a 24 px-tall hit area around the 6 px dot, for the mouse too (WCAG 2.5.8); the touch block below widens it */
+.steps-dots button { position: relative; }
+.steps-dots button::after { content: ''; position: absolute; inset: -9px -2px; }
+.steps-dots button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .steps-dots button.done { background: color-mix(in srgb, var(--accent) 45%, var(--surface-3)); }
 .steps-dots button.cur { background: var(--accent); }
 .narrative-body {
@@ -410,7 +414,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .narrative-foot .btn:has(.lbl) { height: auto; min-height: 32px; padding-block: 4px; }
 .narrative-foot .btn .lbl { overflow: hidden; text-align: left; line-height: 1.2; display: flex; flex-direction: column; min-width: 0; }
 .narrative-foot .btn .lbl small { font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.narrative-foot .btn .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.narrative-foot .btn .lbl .t { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: break-word; white-space: normal; }
 /* a neighbour's title needs the room more than the key hint does (the shortcut stays: aria-keyshortcuts, the help sheet) */
 .narrative-foot .btn:has(.lbl) .kbd-hint { display: none; }
 .narrative-foot .btn:not(:has(.lbl)) { flex: none; } /* a plain Back / Next keeps its key hint whole */
@@ -470,6 +474,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .prose .look:not(.long) { white-space: nowrap; }
 .look:hover, .look:focus-visible, .look.on { background: var(--accent-soft); outline: none; }
+.look:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step-title:focus { outline: none; }
 .look.on { box-shadow: 0 0 0 1px var(--accent); }
 .lit-line {
   font-size: 13px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border);
@@ -863,7 +869,7 @@ html[data-widget-step] .slow-btn { display: none; }
 .ports { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ports td { padding: 4px 6px; border-top: 1px solid var(--border); }
 .ports td:first-child { font-family: var(--font-mono); font-weight: 600; }
-.ports td.val { font-family: var(--font-mono); text-align: right; overflow-wrap: anywhere; }
+.ports td.val { font-family: var(--font-mono); text-align: right; overflow-wrap: anywhere; white-space: normal; }
 .ports td.dir { color: var(--muted); font-size: 12px; }
 .insp-used { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; font-size: 13px; }
 .insp-used summary { cursor: pointer; font-weight: 600; color: var(--text); }
@@ -905,7 +911,7 @@ details.tech-note summary { cursor: pointer; }
 .insp-power-src, .insp-power-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
 .insp-power .stats { margin: 8px 0 4px; }
 .insp-power .stat b { font-size: 15px; }
-.insp-power-t td:first-child { overflow-wrap: anywhere; }
+.insp-power-t td:first-child { overflow-wrap: anywhere; white-space: normal; }
 .insp-power-t td.val { white-space: nowrap; }
 .insp-power-bar { position: relative; width: 34%; }
 .insp-power-bar i { position: absolute; left: 6px; top: 50%; height: 6px; margin-top: -3px; max-width: calc(100% - 12px); border-radius: 3px; background: var(--accent-soft); }
@@ -930,7 +936,7 @@ pre.code {
     var(--surface-2);
 }
 /* the inspector is a narrow column: a long line wraps rather than run off the right edge with only a faint shadow to say so */
-.inspector pre.code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.inspector pre.code { white-space: pre-wrap; overflow-wrap: anywhere; white-space: normal; }
 pre.code .kw { color: var(--accent); font-weight: 600; }
 pre.code .cm { color: var(--muted); font-style: italic; }
 .dl-hdl { margin-bottom: 14px; }
@@ -1145,8 +1151,8 @@ svg.schematic .pick-band { fill: color-mix(in srgb, var(--sel) 8%, transparent);
 .ctx-ar { color: var(--muted); }
 .ctx-note { margin: 4px 8px; max-width: 260px; font-size: 13px; color: var(--muted); }
 .ctx-head { display: grid; gap: 1px; padding: 5px 9px 6px; min-width: 0; }
-.ctx-head b { font: 600 13px var(--font-mono); overflow-wrap: anywhere; }
-.ctx-head span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ctx-head b { font: 600 13px var(--font-mono); overflow-wrap: anywhere; white-space: normal; }
+.ctx-head span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
 .ctx-menu button.ctx-val { justify-content: flex-start; gap: 10px; padding-block: 2px; font: 12px var(--font-mono); }
 .ctx-menu button.ctx-val[hidden] { display: none; }
 .ctx-val i { flex: none; width: 24px; font: 600 10px var(--font-ui); font-style: normal; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -1715,7 +1721,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* instruction breakdown: meaning per field, the immediate assembled bit by bit */
 .ibd-meaning { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font: 11.5px var(--font-mono); margin: 4px 0; }
 .ibd-meaning .k { color: var(--fc); font-weight: 700; white-space: nowrap; }
-.ibd-meaning .v { color: var(--text-2); min-width: 0; overflow-wrap: anywhere; }
+.ibd-meaning .v { color: var(--text-2); min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .ibd-meaning .row { display: contents; cursor: pointer; }
 .ibd-meaning .row.off .k, .ibd-meaning .row.off .v { opacity: 0.55; }
 .ibd-meaning .row:hover .v, .ibd-meaning .row.on .v { color: var(--text); }
@@ -1725,7 +1731,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .ibd-imm .c { flex: var(--n) 1 0; min-width: 20px; border-radius: 4px; padding: 2px 1px; background: color-mix(in srgb, var(--fc) 18%, var(--surface)); cursor: default; }
 .ibd-imm .c.sign { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fc) 16%, var(--surface)) 0 4px, color-mix(in srgb, var(--fc) 6%, var(--surface)) 4px 8px); }
 .ibd-imm .c.zero { background: var(--surface-2); color: var(--muted); }
-.ibd-imm .c b { display: block; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.ibd-imm .c b { display: block; font-weight: 700; color: var(--text); overflow-wrap: anywhere; white-space: normal; }
 .ibd-imm .c i { display: block; font-style: normal; font-size: 9.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ibd-imm .c.hi { outline: 1.5px solid var(--fc); }
 .ibd-imm .axis { font: 9.5px var(--font-mono); color: var(--muted); margin-top: 2px; }
@@ -1747,7 +1753,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .fl-list tr.cur td.a { color: var(--text); }
 .fl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .fl-phases { font-size: 13px; min-height: 6.5em; }
-.fl-phases p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.fl-phases p { margin: 0 0 4px; overflow-wrap: anywhere; white-space: normal; }
 
 .tstages { font: 11.5px var(--font-mono); display: grid; gap: 2px; }
 .tstages .ts { display: grid; grid-template-columns: 52px 1fr 40px; gap: 6px; align-items: center; }
@@ -2124,7 +2130,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 }
 .err-text { min-width: 0; padding-right: 28px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
 .err-count { color: var(--muted); font-size: 12.5px; }
-.err-msg { flex-basis: 100%; min-width: 0; font: 12.5px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
+.err-msg { flex-basis: 100%; min-width: 0; font: 12.5px var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; white-space: normal; }
 .err-note { flex-basis: 100%; color: var(--muted); font-size: 12.5px; }
 .err-btns { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 4px; }
 .err-btns .btn.primary { background: var(--bad); border-color: var(--bad); color: var(--surface); }
@@ -2202,7 +2208,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 @media (max-width: 860px) { .gfx-edge-grid { grid-template-columns: 1fr; } }
 .gfx-edge-canvas { display: block; width: 100%; height: auto; margin-top: 8px; border-radius: var(--radius-sm); touch-action: none; cursor: crosshair; }
 .gfx-edge-info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font-size: 13px; margin-bottom: 14px; }
-.gfx-edge-info .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gfx-edge-info .v { font: 600 12.5px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; white-space: normal; }
 .gfx-edge-info .v.good { color: var(--good); }
 .gfx-edge-info .v.bad { color: var(--bad); }
 /* chapter 33's drawing pad (widgets/drawpad.ts): the drawing's own colours are data, the chrome follows the theme */
@@ -2234,7 +2240,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .gfx-mem-who { font: 9.5px var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gfx-mem-writer { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 6px 8px; border-radius: 7px; background: var(--surface-2); font: 11px var(--font-mono); }
 .gfx-mem-writer .k { color: var(--muted); white-space: nowrap; }
-.gfx-mem-writer .v { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.gfx-mem-writer .v { color: var(--text); min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .gfx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--muted); }
 .gfx-dot.draw { background: var(--series-2); }
 .gfx-dot.wait { background: var(--series-3); }
