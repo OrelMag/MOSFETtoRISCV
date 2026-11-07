@@ -97,7 +97,7 @@ function clampFrom(n: number, w: number): ComponentDef {
       ports: [bus('x', n, 'in'), bus('y', w, 'out'), bit('sat', 'out')],
       symbol: { kind: 'box', label: 'CLAMP', w: 8 },
       spec: ([x]) => { const v = wrapTo(x, n), y = satTo(v, w); return [uns(y, w), y === v ? 0 : 1]; },
-      netlist: () => ({ pins: { x: [0, 8], y: [R, 6], sat: [R, 18] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { x: [0, 12], y: [R, 6], sat: [R, 18] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }

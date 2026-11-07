@@ -11,6 +11,8 @@ import { PONG16 } from '../riscv/rv16/pong16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import { disasm4 } from '../isa4/isa4';
 import { PROGRAMS4 } from '../isa4/programs4';
+import { disasm24 } from '../dsp/isa24';
+import { BENCH24 } from '../dsp/programs24';
 import { SB_PROGRAMS_6502 } from '../m6502/sbprograms';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
@@ -82,7 +84,7 @@ export interface ListingRow {
 
 /** One row per word of the program (the fill past its end is not listed). */
 export function romListing(r: Pick<RomRef, 'w' | 'addr'> & { lang?: ProgramLang }, img: BuiltProgram): ListingRow[] {
-  const dis = r.w === 32 || r.lang === 'cpu4' || r.lang === 'isa' || r.lang === '6502';
+  const dis = r.w === 32 || r.lang === 'cpu4' || r.lang === 'dsp24' || r.lang === 'isa' || r.lang === '6502';
   const digits = r.w / 4;
   return img.lines.map((l, i) => ({
     index: i,
@@ -111,10 +113,10 @@ export function convertProgram(src: string, to: ProgramLang, from: ProgramLang =
   // hex → 6502: one .byte a word (a word wider than a byte cannot be one)
   if (to === '6502') return p.words.some((w) => w >>> 0 > 0xff) ? null : p.lines.map((l) => `        .byte $${l.word.toString(16).toUpperCase().padStart(2, '0')}`).join('\n');
   const narrow = (l: ProgramLang) => l === 'rv16' || l === 'cpu4';
-  const d = (to === 'isa' || from === 'isa') && isa ? isa.wordBits / 4 : from === '6502' ? 2 : narrow(to) || narrow(from) ? 4 : 8;
+  const d = to === 'dsp24' || from === 'dsp24' ? 6 : (to === 'isa' || from === 'isa') && isa ? isa.wordBits / 4 : from === '6502' ? 2 : narrow(to) || narrow(from) ? 4 : 8;
   return p.lines.map((l, i) => {
     const w = `0x${(l.word >>> 0).toString(16).padStart(d, '0')}`;
-    const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : to === 'isa' && isa ? tableOf(isa).disasm(l.word, i) : l.text;
+    const text = to === 'rv16' ? disasm16(l.word, i) : to === 'cpu4' ? disasm4(l.word) : to === 'dsp24' ? disasm24(l.word) : to === 'isa' && isa ? tableOf(isa).disasm(l.word, i) : l.text;
     // a 6502 operand byte or fill has no text of its own
     return to === 'hex' ? (l.text ? `${w}  # ${l.text}` : w) : `        .word ${w}   # ${text}`;
   }).join('\n');
@@ -157,6 +159,7 @@ export const ROM_SAMPLES: RomSample[] = [
   { id: 'rv16leds', name: 'RV16: Fibonacci on the LEDs', lang: 'rv16', src: RV16_LEDS },
   { id: 'rv16pong', name: 'RV16: Pong (a 32 × 32 screen at 0xF000, switches)', lang: 'rv16', src: PONG16 },
   ...PROGRAMS4.map((p): RomSample => ({ id: p.id, name: p.name, lang: 'cpu4', src: p.src })),
+  ...BENCH24.map((b): RomSample => ({ id: `dsp24_${b.id}`, name: `DSP24: ${b.name}`, lang: 'dsp24', src: b.src })),
   ...SB_PROGRAMS_6502.map((p): RomSample => ({ id: p.id, name: p.name, lang: '6502', src: p.src })),
 ];
 

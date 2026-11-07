@@ -55,6 +55,10 @@ export * from './warpmem';
 export * from './fppipe';
 export * from './rv16';
 export * from './cpu4';
+export * from './dsp24';
+export * from './dsp24agu';
+export * from './dsp24seq';
+export * from './dsp24core';
 export * from './fsm';
 export * from './fsms';
 export * from './raster';
@@ -92,3 +96,7 @@ export * from './enigmagates';
 export * from './aes';
 export * from './sha256';
 export * from './macunit';
+
+// The DSP core without its memories is built on demand; register it so the sandbox's palette and saved chips resolve it by id.
+import { dsp24Core } from './dsp24core';
+dsp24Core();
