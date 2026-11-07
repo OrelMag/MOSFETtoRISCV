@@ -111,6 +111,18 @@ before relying on them. Add to this as chapters land.
 - 0.607253, the angles' sum and every error figure: computed, and held by `tests/dsp-cordic.test.ts` against Math at every angle a word holds.
 - ROM and CORDIC costs: measured from the gates. That a quarter-wave table saves about a factor of four, and that interpolation does better: **unread**, from memory, and not measured here.
 
+## A MAC on the RV32 (`mac`)
+
+- Our own design; there is no outside definition to read. RISC-V's draft P extension (packed SIMD, including 16-bit multiply-accumulates) was **not read** and is not claimed to match: the four instructions are ours, on custom-2, and say so.
+- RISC-V's custom opcode space (custom-0 to custom-3, opcode[6:2] 0b00010, 0b01010, 0b10110, 0b11110) is the repo's own `riscv/custom.ts` table; the unprivileged ISA manual's chapter on opcode-space allocation was **unread** here.
+- Spike cannot execute custom-2, so the MAC has no outside model. It is checked against our golden model in lock step, instruction by instruction, on the gates: the benchmarks, 60 seeded random programs that mix the MAC with RV32I (including words on custom-2 that are none of the four), and the directed program of `tests/dsp-mac-mutants.test.ts`. That test runs 14 deliberately faulty golden models (a dropped high product, truncating instead of rounding, a tie rounded down or away from zero, clamps at 16 / 31 bits or none, a 5-bit shift, accumulator widths 32 and 48, an unsigned low half, a clracc that does nothing, a logical shift) and fails unless the comparison reports each one; it first requires each mutant to differ from the real model on the program. It shows these 14 are caught. It is not a proof that no fault is.
+- Rounding and clamping are chapter `fixed`'s rules (round half up, one clamp), and `comm/fftfix.ts`'s "keep every bit, round once". The exact reference is Python integers in `scripts/dsp/oracle.py` (`mac`), written to `tests/dsp/vectors/mac.json` with the versions used.
+- scipy 1.16.3 `signal.lfilter` (FIR, float64: exact on these integers, asserted), `signal.sosfilt` with the quantized coefficients (the biquad cascade is within 1.5 LSB of it) and `signal.butter(8, 0.2, output='sos')` (the coefficients): **ran**. numpy `dot` on int64 equals the dot product's exact sum: **ran**. The Butterworth sections are redistributed to unit gain at DC each (scipy puts the gain in section 1, where Q13 rounds it to 0); the exact integers are ours.
+- The benchmark figures are measured on gates (BitSim, 32 lanes), the data setup subtracted by running each program's setup alone; the cycles equal the golden model's instruction counts on every lane. The software-multiply machine's three long kernels are re-counted on the golden model, not on gates, in the test that pins them (the script that wrote the figures ran them on gates, four minutes).
+- RV32IM is chapter `widths`'s `xlenCpu` at 32 bits: the single-cycle core has no M option. Its adders are Kogge–Stone and its memory banked by byte, so its NANDs and period are on another basis from the rest and the chapter says so.
+- The estimates the plan carried were low for software (about 70 clocks a product against about 106 measured) and about right for the MAC loops (6 / 3 / 1.9 against 6.15 / 3.17 / 2.04 on the 64-tap filter). The unit's 10 063 NANDs (10 081 with the clamp of `firmac`) replace the 10 047 sum of parts.
+- Not covered: the pipelined RV32 (decision 4), the sandbox's ROM program editor beyond the assembler and listing (MAC names are known in a ROM marked `mac`, set by Open in Sandbox on the chapter's core), and FPGA export of the MAC core (its register is an ordinary register; not tried).
+
 ## Converters (`converters`)
 
 - 6.02 b + 1.76 dB, the R-2R ladder, DNL and INL, flash and SAR: standard results, **unread**, from memory; each is held numerically by `tests/dsp-converters.test.ts` where the chapter gives a number.
@@ -123,7 +135,52 @@ before relying on them. Add to this as chapters land.
 - Widrow and Hoff, 1960: the names and the year are **secondary**, from comments in the Linux kernel's `drivers/misc/echo/echo.h`, seen through search results. The title "Adaptive switching circuits" and its venue, IRE WESCON Convention Record, are **unread**, from memory: the search found neither, and the paper was not opened. The chapter says only that they took the one-sample gradient seriously in 1960.
 - ITU-T G.168: **secondary**, an IEEE topic page seen through search results says it specifies test methods and requirements for digital network echo cancellers. The Recommendation was not opened, and the chapter claims no compliance.
 - Levinson's recursion: **ran**, against scipy's `solve_toeplitz` (`scripts/dsp/oracle.py`, `tests/dsp/vectors/adaptive.json`).
-- LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and the divergence just above it is measured here on this far end. The far-end sound and the echo paths are generated models, not recordings or measured paths.
+- LMS, NLMS and the step bound 2 / ‖x‖²: standard, **unread**, from memory; the bound follows from one step's error, and where it really breaks is measured here on this far end: still converging at 1.3 times it, diverged at 1.4 times (`tests/dsp-echofigs.test.ts`). The far end is a public-domain recording, **read**: LibriVox's "The Gettysburg Address" read by Shurtagal (https://librivox.org/the-gettysburg-address-by-abraham-lincoln/; the footer: "LibriVox recordings are Public Domain in the USA. If you are not in the USA, please verify the copyright status of these works in your own country before downloading"; archive.org item gettysburg_shurtagal_librivox, licenseurl creativecommons.org/licenses/publicdomain), as public/dsp/voice-8k.wav: its first 4 s are the far end, and 0.875 s from 4 s in are the near-end talker. The file: https://archive.org/download/gettysburg_shurtagal_librivox/Gettysburg_Address_Lincoln_64kb.mp3 (its sha1 matches archive.org's), decoded in headless Chrome at 44.1 kHz, 6 s cut from 0:25, resampled 80/441 by the site's windowed sinc, its DC offset of −0.125 of full scale removed, peak at −1 dBFS, 16-bit. The echo paths and the room noise (0.003 of full scale, about −50 dB) are models, not measured paths.
+
+## Speech (`speech`)
+
+- ITU-T G.711 (1988), the ITU's free PDF: **read**, Tables 2a and 2b (μ-law, both signs), §§ 1–5 and their notes.
+  - § 3.2's all-zero suppression is mentioned in its text, and not implemented here.
+  - § 3.6 leaves the encoding of a sample exactly on a decision value to the equipment. Ours takes the interval above it, as Python's audioop does.
+  - The tests check the table's printed decision and output values at every segment end, and every interior sample.
+- Python 3.12's `audioop` (the C module, removed in 3.13; CI pins 3.12): **ran** (`scripts/dsp/oracle.py`).
+  - `lin2ulaw` and `ulaw2lin` on all 16 384 samples and 256 codes.
+  - `lin2adpcm` and `adpcm2lin` on the first 4 000 samples of the voice, in two halves with the state carried, and on a full-scale square wave. LPC against `solve_toeplitz` on 4 frames of it.
+  - Our nibble order is audioop's (first sample in the high half). Microsoft's IMA ADPCM WAV format differs, **unread**, from memory.
+- IMA's ADPCM recommendation (1992): **unread**, not freely available. The step and index tables are written from memory and checked against audioop above.
+- LPC: the autocorrelation method and Levinson–Durbin, standard. Checked against scipy's `solve_toeplitz` on the voice's frames.
+  - Pre-emphasis 0.9375, log-area ratios, centre clipping for pitch (Sondhi): **unread**, from memory.
+  - FS-1015 / LPC-10 (54 bits every 22.5 ms, 2.4 kb/s, 1984): **unread**, from memory. The vocoder is ours and only laid out like it.
+- The voice: LibriVox, "The Gettysburg Address" (Abraham Lincoln), read by Shurtagal. **read**:
+  - catalog page https://librivox.org/the-gettysburg-address-by-abraham-lincoln/, whose footer says "LibriVox recordings are Public Domain in the USA. If you are not in the USA, please verify the copyright status of these works in your own country";
+  - LibriVox's page https://librivox.org/pages/public-domain/: "all our recordings are public domain";
+  - archive.org item `gettysburg_shurtagal_librivox`, `licenseurl` http://creativecommons.org/licenses/publicdomain/.
+  - File: https://archive.org/download/gettysburg_shurtagal_librivox/Gettysburg_Address_Lincoln_64kb.mp3, 803 444 bytes. Its sha1 ed8e8827… matches archive.org's metadata; sha256 d9f40f96….
+  - Processing:
+    1. Decoded in headless Chrome 156 (`decodeAudioData`, 44.1 kHz mono).
+    2. Cut at 0:25–0:31.
+    3. Resampled 80/441 by this site's windowed sinc (`comm/signals.ts windowedSinc`, the polyphase sum checked equal to `dsp/multirate.ts upfirdn`).
+    4. The recording's DC offset of −0.125 of full scale removed (mean, then a 6 Hz DC blocker).
+    5. Peak at −1 dBFS, 10 ms fades, 16-bit.
+  - `public/dsp/voice-8k.wav`, 96 044 bytes. Nobody has listened to it to check the excerpt's words.
+
+## Music (`music`)
+
+- The MDCT and TDAC (Princen–Bradley, 1986): standard, **unread**, from memory. Checked numerically: the MDCT equals scipy's DCT-IV of the folded frame (`oracle.py`), and the overlap-add reconstruction is within 10⁻¹².
+- The masking model is **simplified and ours**: one-Bark bands, a 25 / 10 dB a Bark spreading triangle and a 14 dB offset.
+  - Zwicker's Bark formula and Terhardt's threshold in quiet: **unread**, from memory.
+  - The chapter and the widget both say this. No psychoacoustic standard (MPEG-1 Layer III's models, for instance) was read or followed.
+- The codec is ours. It claims no format and no compatibility. Its figures are on this recording and by this model, pinned in `src/dsp/soundfigs.ts`.
+- The music: Musopen, "The Complete Chopin Collection", Chopin's Nocturne in E minor, Op. 72 No. 1. **read**:
+  - archive.org item https://archive.org/details/musopen-chopin, `licenseurl` http://creativecommons.org/publicdomain/zero/1.0/ (CC0 1.0), creator Aaron Dunn, uploader aaron@musopen.org.
+  - The pianist is not named there, and musopen.org's own page could not be read (403).
+  - File: https://archive.org/download/musopen-chopin/NocturneOp.72No.1InEMinor.m4a, Apple Lossless, 13 733 639 bytes. Its sha1 5f595333… matches archive.org's; sha256 c7cffd88….
+  - Processing:
+    1. Decoded losslessly with PyAV 19.0.2 (FFmpeg libavcodec 63; Chrome cannot decode ALAC).
+    2. Mixed to mono and cut at 0:05–0:15.
+    3. Resampled 160/441 by the same windowed sinc.
+    4. Peak at −1 dBFS, 16-bit.
+  - `public/dsp/nocturne-16k.wav`, 320 044 bytes.
 
 ## Pictures (`pictures`)
 
@@ -144,10 +201,36 @@ before relying on them. Add to this as chapters land.
 - BT.601's luminance weights (0.299, 0.587, 0.114) for a learner's own picture: **unread**, from memory.
 - IEEE 1180: not used. There is no inverse DCT in gates, so its test does not apply.
 - The DCT stage's cost and accuracy: measured from the gates and held by `tests/dsp-pictures.test.ts`. The cost of a 64-word transpose store is quoted as plain registers. That store is not built.
-- Pictures: generated scenes. The public-domain photograph the plan mentions is **owed**, not added.
+- Pictures: generated scenes, and one photograph, **read**: NASA's AS11-40-5903, Buzz Aldrin on the Moon, Apollo 11, 21 July 1969, photographed by Neil Armstrong.
+  - Source: Wikimedia Commons, https://commons.wikimedia.org/wiki/File:Aldrin_Apollo_11_original.jpg, licence template {{PD-USGov-NASA}}: "This file is in the public domain in the United States because it was solely created by NASA."
+  - Commons' metadata: LicenseShortName "Public domain", Copyrighted False; credited to the NASA Image and Video Library.
+  - File: Commons' 960 px rendition (https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Aldrin_Apollo_11_original.jpg/960px-Aldrin_Apollo_11_original.jpg), 280 403 bytes, sha256 7ea66a1e….
+  - Processing: Pillow 13.0.0 converted it to grey ('L', ITU-R 601-2 luma), cropped a centred square, and resampled it to 192 × 192 with Lanczos. It is stored as public/dsp/aldrin-192.pgm, 36 879 bytes.
+  - Commons warns that NASA's logos and insignia are restricted. None appears in this crop.
+
+## A software radio (`sdr`)
+
+- The band is synthesized (`src/dsp/sdr.ts`: four FM stations, complex baseband, 960 kHz, seeded Gaussian noise). No recording is used, so there is nothing to license and nothing outside to compare it with.
+- Mixer and CIC: **the gates equal our integer model on every clock** (`tests/dsp-sdr.test.ts`: the mixer at three table sizes and tunings, the front end's I, Q and strobe, the typed-array model equal to the clock-by-clock one). The CIC's growth and wrap are Hogenauer's, already checked under `multirate`.
+- The clip: the first 15 360 clocks of the band through the gates in a BitSim, then the same floating-point filters as the model. The test compares every word leaving the CIC and every audio sample. The browser renders it on a click (about 10 s measured in headless Chrome).
+- Carson's rule, 2 (Δf + f<sub>m</sub>): **unread**, from memory. The chapter does not rest on it: the occupied band is measured from an FFT of one station (98 % of the power, `occupied()`), and `tests/dsp-sdr.test.ts` holds the rule to that within 10 % for modulation indices above 1 (102.0 against 102.0 kHz at 50 kHz and 1 kHz; 120.0 against 130 at 15 kHz). The measured 98 % bands against Carson's at a 15 kHz tone are 30 vs 40 kHz at β = 0.33, 60 vs 60 at β = 1, 90 vs 90 at β = 2 and 120 vs 130 at β = 3.3; the 99.9 % band at β = 3.3 is 150 kHz. So the rule is a convenient figure, not a bound either way. Each station's own highest audio frequency comes from its programme's parameters.
+- 75 µs pre-emphasis time constant (North American broadcast) and FM's threshold "near 10 dB carrier to noise": **unread**, from memory. ITU-R BS.450 is not cited. The pre-emphasis here is a first-order digital filter and its exact inverse; it is not the analogue network's response. The threshold sentence is attributed to textbooks, and the weak station's measured keying ratio is shown beside the carrier-to-noise figure it comes with.
+- The table-size findings are measured here (`mixerSfdr`, `keyingRatio`, `toneSnrOff`, `interferenceDb`; `tests/dsp-sdr.test.ts`), not quoted. Spur-free range rises 6 dB a bit. The weak station's keying shows a capture cliff (lost at 3 and 4 bits, then 15.7 dB at 5 and 36.7 at 6) and then saturates near 49 to 50 dB. That floor is the noise, not the table or the neighbours: at 12 bits and −40 dB of noise it is 49.7 dB with all four stations and 50.5 dB with the weak one alone; with the noise off it is 56.2 dB with all four and 66.3 dB alone, and that gap is the CIC's alias of the neighbours (a 12-bit table leaves them at −14.3 dB in the weak station's channel, the sweep's alias alone −14.5). The test tone does **not** show the table at all on its own frequency, and that is a property of its tuning word (45056 ends in 12 zero bits, so its phase lands on table points); tuned 100 Hz off it is 45.1 / 45.7 / 50.4 / 56.5 / 79.0 dB at 3 / 4 / 5 / 6 / 8 bits. An earlier version of the chapter said FM audio was immune; that was wrong, and is withdrawn.
+- Test-tone SNR: a sine and cosine at 1 kHz fitted by least squares and subtracted from the audio; the rest is everything else. Measured at 80.6 dB with the noise at −40 dB, and 82.8 dB at −60 dB (the floor of this model's own arithmetic). The chapter prints the figures it computes; none is quoted.
+- The channel filter, the discriminator, the audio filter and the de-emphasis are floating point in the model. Their DSP-core version is **not built**: it is listed in `Chapter.soon`.
+- Nobody has listened to these clips either.
 
 ## Sound
 
 - Nobody has listened to the clips, including the decimated sweeps in `multirate`. Headless Chrome confirms the buttons start and stop a buffer; it cannot tell what the sound is like. The claims in the text
   are the numbers beside each clip, and the sentence in "Wrap or saturate" about what you will hear has not been confirmed by ear.
 
+
+## A DSP core
+
+- The ISA (DSP24), its assembler, golden model, gates and benchmarks are our own, not a real DSP's. No vendor manual was read to design them. The ideas named (X and Y memories read in one clock, post-modify addressing, circular and bit-reversed modes, zero-overhead loops, a pipelined clock with delay slots in a real DSP) are textbook DSP-architecture general knowledge, **unread** here as sources: from memory, and the chapter attributes no figure to any product.
+- The benchmark answers: scipy `signal.firwin`, `butter(output='sos')`, `lfilter`, `sosfilt` and `numpy.fft.fft`, **ran** (`scripts/dsp/oracle.py`, `tests/dsp/vectors/dspcore.json`). The exact integer answers are computed in the generator with the core's own rounding rule and held bit for bit by the gates; scipy's floating-point answers agree within 1 LSB (FIRs), 16 LSB (the biquad cascade, rounding noise of a recursive filter, tolerance 24) and 3 LSB (the FFT, tolerance 8).
+- The gates equal the golden model at every clock on the five benchmarks, on random programs (valid and raw words) and a hand-made ALU corner program; eleven deliberately wrong models are each reported as a mismatch. This is verification against our own model, not against an independent implementation of DSP24.
+- The cost figures are measured from the gates (`scripts/dsp/dspcore-bench.ts`); the cycle figures come from the model the gates equal. The RV32 columns are `src/dsp/macbench.json`, the MAC chapter's.
+- Comparison caveats: the DSP core's clocks per product include its loop set-up, rounding and output instructions; the RV32 kernels exclude set-up. Block lengths differ, hence per product. The FFT has no RV32 counterpart.
+- Not listened to, not read: nothing of sound. Secondary: none.

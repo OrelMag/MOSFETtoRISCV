@@ -47,6 +47,19 @@ export function zonePlate(n = SIZE): Picture {
   return rounded(pictureOf(n, n, (x, y) => { const dx = x - n / 2, dy = y - n / 2; return 128 + 110 * Math.cos(k * (dx * dx + dy * dy)); }));
 }
 
+/** One photograph, public domain: NASA's AS11-40-5903, Buzz Aldrin on the Moon (Apollo 11, 1969, photographed by Neil Armstrong), grey and 192 × 192 (docs/DSP-SOURCES.md). */
+export const PHOTO = { file: 'dsp/aldrin-192.pgm', credit: 'Buzz Aldrin on the Moon, Apollo 11, 1969, photographed by Neil Armstrong. NASA, public domain (AS11-40-5903)' };
+/** A binary PGM (P5, 8-bit): the photograph's format, read the same way in the page and in the tests. */
+export function parsePgm(b: Uint8Array): Picture {
+  let at = 0;
+  const word = (): string => { while (b[at] === 0x20 || b[at] === 0x0a || b[at] === 0x0d || b[at] === 0x09) at++; let s = ''; while (at < b.length && b[at] > 0x20) s += String.fromCharCode(b[at++]); return s; };
+  if (word() !== 'P5') throw new Error('not a binary PGM');
+  const w = Number(word()), h = Number(word()), max = Number(word());
+  at++;
+  if (max !== 255 || b.length - at < w * h) throw new Error('unexpected PGM');
+  return pictureOf(w, h, (x, y) => b[at + y * w + x]);
+}
+
 /** Grown to whole 8 × 8 blocks by repeating the last row and column, as a JPEG encoder must. */
 export function padTo8(p: Picture): Picture {
   const w = Math.ceil(p.w / 8) * 8, h = Math.ceil(p.h / 8) * 8;

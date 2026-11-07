@@ -36,6 +36,8 @@ export interface InstrSpec {
   simt?: ('rs1' | 'rs2')[];
   /** A custom instruction (riscv/custom.ts): its control row. */
   custom?: CustomRow;
+  /** One of the MAC core's four instructions (MAC_INSTRS, on custom-2). */
+  mac?: true;
 }
 
 const FR = (name: string, f7: number, fp: FpRoles, f3?: number): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OPFP, funct7: f7, funct3: fp.rm ? undefined : f3, hw: false, fp });
@@ -129,6 +131,16 @@ export const INSTRS64: InstrSpec[] = [
     ([name, f3, f7]): InstrSpec => ({ name, fmt: 'R', opcode: OPCODES.OP32, funct3: f3, funct7: f7, hw: false })),
 ];
 export const BY_NAME64 = new Map(INSTRS64.map((i) => [i.name, i]));
+
+/**
+ * The MAC core's instructions (chapter "A MAC on the RV32"): one opcode, custom-2, R-type with funct7 = 0, told apart by funct3. Kept out of INSTRS
+ * so that every table the other cores read stays as it is; decode / disasm / the assembler read it when asked (mac = true). A word on custom-2 with
+ * funct7 != 0 or funct3 >= 4 is none of them: it does nothing, on the model and in the gates.
+ */
+export const MAC_OPCODE = slotOpcode(2);
+export const MAC_INSTRS: InstrSpec[] = (['mac', 'mac2', 'clracc', 'racc'] as const).map(
+  (name, f3): InstrSpec => ({ name, fmt: 'R', opcode: MAC_OPCODE, funct3: f3, funct7: 0, hw: true, mac: true }));
+export const MAC_BY_NAME = new Map(MAC_INSTRS.map((i) => [i.name, i]));
 
 export const FABI = [
   'ft0', 'ft1', 'ft2', 'ft3', 'ft4', 'ft5', 'ft6', 'ft7', 'fs0', 'fs1', 'fa0', 'fa1', 'fa2', 'fa3', 'fa4', 'fa5',
@@ -252,7 +264,7 @@ export const IMM_TOP: Record<ImmFmt, number> = { I: 11, S: 11, B: 12, U: 31, J: 
 /** custom: the CPU's custom instructions (riscv/custom.ts): a word on a custom slot is the slot's row, whatever its
  *  funct3 / funct7 (the control unit matches opcode[6:2] only). xlen 64: RV64I / M (INSTRS64), and slli / srli / srai
  *  take a 6-bit shift amount (instr[25] is shamt[5]). */
-export function decode(word: number, custom?: readonly CustomRow[], xlen: Xlen = 32): Decoded {
+export function decode(word: number, custom?: readonly CustomRow[], xlen: Xlen = 32, mac = false): Decoded {
   const w = word >>> 0;
   const opcode = w & 0x7f, rd = (w >>> 7) & 31, funct3 = (w >>> 12) & 7, rs1 = (w >>> 15) & 31, rs2 = (w >>> 20) & 31, funct7 = w >>> 25;
   const wide = xlen === 64;
@@ -276,7 +288,8 @@ export function decode(word: number, custom?: readonly CustomRow[], xlen: Xlen =
     spec = s;
     break;
   }
-  if (!spec && custom?.length) {
+  if (!spec && mac && opcode === MAC_OPCODE && funct7 === 0 && funct3 < 4) spec = MAC_INSTRS[funct3];
+  if (!spec && custom?.length && !(mac && opcode === MAC_OPCODE)) {
     const row = custom.find((r) => slotOpcode(r.slot) === opcode);
     if (row) spec = specOf(row);
   }
@@ -297,8 +310,8 @@ const rn = (r: number) => ABI[r];
 const frn = (r: number) => FABI[r];
 
 /** Disassemble one word; pc (if given) resolves branch / jump targets to absolute addresses. */
-export function disasm(word: number, pc?: number, custom?: readonly CustomRow[], xlen: Xlen = 32): string {
-  const d = decode(word, custom, xlen);
+export function disasm(word: number, pc?: number, custom?: readonly CustomRow[], xlen: Xlen = 32, mac = false): string {
+  const d = decode(word, custom, xlen, mac);
   const tgt = (off: number) => (pc === undefined ? `${off}` : `0x${u32(pc + off).toString(16)}`);
   if (!d.spec) return `.word 0x${d.word.toString(16).padStart(8, '0')}`;
   const n = d.name;
@@ -314,6 +327,7 @@ export function disasm(word: number, pc?: number, custom?: readonly CustomRow[],
     return `${n} ${R(fp.rd, d.rd)}, ${R(fp.rs1, d.rs1)}, ${R(fp.rs2, d.rs2)}${rm}`;
   }
   if (d.opcode === OPCODES.AMO) return n === 'lr.w' ? `${n} ${rn(d.rd)}, (${rn(d.rs1)})` : `${n} ${rn(d.rd)}, ${rn(d.rs2)}, (${rn(d.rs1)})`;
+  if (d.spec.mac) return n === 'clracc' ? n : n === 'racc' ? `${n} ${rn(d.rd)}, ${rn(d.rs1)}` : `${n} ${rn(d.rs1)}, ${rn(d.rs2)}`;
   if (d.spec.simt) return [n, d.spec.simt.map((f) => rn(d[f])).join(', ')].filter(Boolean).join(' ');
   switch (d.fmt) {
     case 'R': case 'R4': return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${rn(d.rs2)}`;

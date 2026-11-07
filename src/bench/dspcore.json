@@ -1,0 +1,51 @@
+{
+ "nands": {
+  "core": 21974,
+  "decode": 407,
+  "regs": 2867,
+  "alu": 2663,
+  "agu": 1920,
+  "aguStep": 639,
+  "seq": 1232,
+  "loop": 886,
+  "mac": 10229,
+  "macUnit": 10081,
+  "secondMultiplier": 3572,
+  "rom": 24480,
+  "ram": 80874,
+  "computer": 208202
+ },
+ "period": 195,
+ "cycles": {
+  "fir16": {
+   "cycles": 742,
+   "outs": 32,
+   "macs": 512,
+   "words": 14
+  },
+  "fir64": {
+   "cycles": 4550,
+   "outs": 64,
+   "macs": 4096,
+   "words": 14
+  },
+  "biquad": {
+   "cycles": 975,
+   "outs": 64,
+   "macs": 640,
+   "words": 30
+  },
+  "dot": {
+   "cycles": 135,
+   "outs": 2,
+   "macs": 128,
+   "words": 8
+  },
+  "fft": {
+   "cycles": 4512,
+   "outs": 128,
+   "macs": 768,
+   "words": 232
+  }
+ }
+}

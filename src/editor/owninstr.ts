@@ -32,6 +32,8 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
   const kind = portCoreOf(core.ref) ?? { pipe: false, m: false, dcache: false, custom: [] };
   let rows: CustomRow[] = structuredClone(kind.custom);
   let sel = 0;
+  // a MAC unit in the chip owns custom-2: a row on it is refused, with the reason
+  const mac = ed.doc.parts.some((p) => p.id === 'macu' && 'lib' in p.ref && p.ref.lib === 'macunit');
   const left = h('div', { class: 'oi-left' });
   const right = h('div', { class: 'oi-right' });
   const status = h('div', { class: 'sb-rom-dlg-status', role: 'status' });
@@ -45,7 +47,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
     // the slots and presets
     left.replaceChildren(
       h('div', { class: 'oi-sec' }, 'Your instructions'),
-      ...rows.map((r, i) => h('button', { type: 'button', class: `oi-item${i === sel ? ' on' : ''}${buildable(r, taken(r)) ? '' : ' bad'}`, onclick: () => { sel = i; render(); } },
+      ...rows.map((r, i) => h('button', { type: 'button', class: `oi-item${i === sel ? ' on' : ''}${buildable(r, taken(r), mac) ? '' : ' bad'}`, onclick: () => { sel = i; render(); } },
         h('b', null, r.name || '(unnamed)'), h('small', null, `${SLOT_NAME[r.slot]} · ${r.fmt}-type`))),
       rows.length < 3 ? h('div', { class: 'oi-sec' }, 'Add one, starting from') : '',
       ...(rows.length < 3 ? CUSTOM_PRESETS.map((p) => h('button', {
@@ -81,7 +83,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
         h('span', { class: 'oi-seg', role: 'group', 'aria-label': l.label }, l.opts.map(([v, t]) => h('button', {
           type: 'button', class: r[l.key] === v ? 'on' : '', 'aria-pressed': String(r[l.key] === v), onclick: () => set({ [l.key]: v } as Partial<CustomRow>),
         }, t)))));
-      const probs = problemsOf(r, taken(r));
+      const probs = problemsOf(r, taken(r), mac);
       const ok = !probs.some((p) => p.level === 'bad');
       right.replaceChildren(
         h('div', { class: 'oi-enc' },
@@ -98,7 +100,7 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
     }
 
     // what Apply would build: the control unit measured, problems summed
-    const allOk = rows.every((r) => buildable(r, taken(r)));
+    const allOk = rows.every((r) => buildable(r, taken(r), mac));
     applyBtn.disabled = !allOk;
     if (!allOk) {
       status.className = 'sb-rom-dlg-status err';

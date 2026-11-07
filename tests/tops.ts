@@ -14,6 +14,12 @@ import { m6502 } from '../src/lib/m6502/chip';
 import { DOOM_MAP, doomComputer, doomDevices } from '../src/lib/doompc';
 import { xlenTops } from '../src/lib/cpu64';
 
+/** Chapter "A MAC on the RV32": the single-cycle core with the MAC unit (not in cpuTops: the sandbox round trip of the others is slow enough). */
+export function macTops(): ComponentDef[] {
+  const w = assemble(PROGRAMS[0].source).words;
+  return [singleCycleCpu(w, { mac: true }), singleCycleCpu(w, { mac: true, adder: 'ks' })];
+}
+
 export function cpuTops(): ComponentDef[] {
   const w = assemble(PROGRAMS[0].source).words, cw = assemble(CACHE_CPU_PROGRAMS[0].source).words;
   return [

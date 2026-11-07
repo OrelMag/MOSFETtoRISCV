@@ -129,6 +129,7 @@ DFE                         34 %    2 × 10⁻¹⁷   (noise unchanged, 40 mV)</
       { chapter: 'serial', step: 6, label: 'Equalization' },
       { chapter: 'serial', step: 5, label: 'The eye diagram' },
       { chapter: 'serial', step: 7, label: 'PAM4' },
+      { chapter: 'adaptive', step: 4, label: 'An equalizer' },
     ],
   },
   crc: {
