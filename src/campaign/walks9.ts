@@ -194,6 +194,36 @@ export const WALKS9: Record<string, WalkScript> = {
   ],
 
   // ---- sp_mac
+  sp_mac: [
+    {
+      title: 'Two products, one sum',
+      text: 'mul0 multiplies the low halves, mul1 the high halves, both signed; g1 lets the high product through only for mac2 (otherwise 0). e0 and e1 sign-extend them to 33 bits and pair adds them: two products of 2^30 at most each cannot overflow 33 bits.',
+      parts: ['alo', 'blo', 'ahi', 'bhi', 'mul0', 'mul1', 'g1', 'e0', 'e1', 'pair'], codex: ['multacc'],
+      why: 'Adding the pair before the accumulator keeps the loop to one adder: the accumulator sees one 33-bit number a clock, whichever of mac and mac2 it was.',
+      whyNot: { text: 'Two adders in the loop, one per product, would double the carry chain that sets the period.' },
+    },
+    {
+      title: 'A register wide enough to wander',
+      text: 'pe sign-extends the pair to 40 bits and add sums it with the register. nxt picks the sum or 0 (clracc), and the register acc loads it only when we is 1: en and not racc. Nothing clamps here.',
+      parts: ['pe', 'add', 'nxt', 'zero40', 'nop0', 'clr', 'isr', 'nr', 'we', 'acc'], codex: ['guardbits'],
+      ask: {
+        question: 'The register holds 2^38 and a mac2 of full-scale operands (+2^31) arrives. What does it hold after the clock?',
+        options: ['2^38 + 2^31: it fits, and nothing clamps it', '2^31 − 1: the sum is clamped to 32 bits', '2^38: a sum past 32 bits is dropped', '−2^39: it wrapped'],
+        answer: 0,
+        explain: 'The register is 40 bits: it holds anything below 2^39. The clamp to 32 bits belongs to the read, so a sum that is past 32 bits now may be pulled back by the products that follow.',
+        why: ['', 'That is what a clamp on every add would do, and it loses the excursion for good.', 'Nothing is dropped: the register has room.', 'Wrapping starts only at 2^39.'],
+      },
+      why: 'Eight bits above a 32-bit product cover 256 products of full scale; the budget is about the length of the dot product, not about its value.',
+      whyNot: { text: 'A saturating accumulator would need a comparator on every add, in the loop, and would turn an excursion that comes back into a wrong answer.' },
+    },
+    {
+      title: 'Read once',
+      text: 'read takes the 40 bits and the shift: one zero below, a shift right by sh with the sign filling in, the bit that falls out first added back with half adders (round half up), and a clamp from 41 to 32 bits. y follows the register at all times; sat says the clamp acted.',
+      parts: ['read'], codex: ['saturate', 'guardbits'],
+      why: 'Rounding and clamping happen once, on the finished sum, so their error is one half step and one clamp, however many products were added.',
+      whyNot: { text: 'Rounding each product before it is added puts a half step of error in per tap; it saves nothing, since the register is already wide.' },
+    },
+  ],
 
   // ---- sp_circ
 

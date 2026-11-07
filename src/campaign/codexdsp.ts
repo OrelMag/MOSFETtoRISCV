@@ -34,6 +34,7 @@ const LISTED = new Set([
   'sigmadelta', 'noiseshaping',
 
   // sp_mac
+  'multacc',
 
   // sp_circ
 

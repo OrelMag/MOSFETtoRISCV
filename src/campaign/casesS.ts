@@ -52,6 +52,12 @@ export const CASESS: Record<string, LevelCase> = {
   },
 
   // ---- sp_mac
+  sp_mac: {
+    problem: 'A filter output is a sum of products, and the partial sums wander. A run of large positive taps takes the sum far past what a 32-bit result holds, and later negative ones bring it back: the final sum fits, the middle did not. An accumulator the width of a result has to clamp or wrap in the middle, and either one makes the answer wrong; an accumulator with guard bits keeps the sum exact and lets the result be rounded and clamped once, when it is read.',
+    without: 'Clamp every sum on the way in and an excursion past 32 bits is cut off: the sum that comes back is off by the whole overshoot, not by a rounding step. Wrap at the result width and it is off by 2^32. With 8 guard bits 255 mac2 (511 mac) of full-scale operands still fit, and a 64-tap Q1.15 filter uses 6 of the 8 bits. Past 40 bits the register wraps as two\'s complement, with no flag: 256 full-scale mac2 turn +2^39 into −2^39.',
+    cost: 'The unit is 10 081 NANDs and 127 NAND delays a clock. Two signed 16 × 16 tree multipliers are 3 572 NANDs each, 7 144 together; the read path (shifter, rounder, clamp) is 1 384, of which the clamp is 195; the 40-bit register is 600, its adder 360, the pair adder 297. A clamp on every add would put a second clamp of 188 NANDs in the loop and still be wrong.',
+    alts: [{ name: 'MAC unit, 40-bit accumulator (library)', lib: 'macunit' }, { name: 'Read path: shift, round, clamp (library)', lib: 'macread' }],
+  },
 
   // ---- sp_circ
 

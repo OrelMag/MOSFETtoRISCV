@@ -19,6 +19,11 @@ import { runSd, SD_REF, SD_W, SD_WORD } from './sdcheck';
 import { biquad } from '../lib/biquad';
 import { BQ_CYCLES, BQ_LANES, runBiquadBench } from './dspcheck';
 import { GZ_BLOCK, GZ_NOISE, runGoertzel } from './goertzelcheck';
+import { ACC_BITS } from '../dsp/mac';
+import { macRead, macUnit } from '../lib/macunit';
+import { roundUp } from '../lib/fft';
+import { clampWide } from '../lib/firmac';
+import { MAC_CLOCKS, MAC_LANES, runMacBench } from './maccheck';
 
 /** The word of the saturating adder level: 8 bits, so Check runs every pair (65 536). */
 export const SAT_W = 8;
@@ -51,6 +56,13 @@ export const biquadGives = leafGives(BIQUAD_REF, () => []);
 export const GZ_REF = (): ComponentDef => goertzelCell(GZ_STATE, RV16_MUX2);
 /** The multiplier is given with every other leaf: the recurrence around it is what the level builds. */
 export const gzGives = leafGives(GZ_REF, () => []);
+
+/** The MAC level's reference: the chapter's unit (two signed 16 × 16 tree multipliers, the pair adder, the 40-bit accumulator, the read path). */
+export const MAC_REF = (): ComponentDef => macUnit();
+/** The read path's word: the accumulator and one more bit, the one the shift drops first. */
+export const MAC_RW = ACC_BITS + 1;
+/** The read path, its rounder and its clamp are what the level builds; the multipliers, the shifter and the adders are given. */
+export const macGives = leafGives(MAC_REF, () => [macRead(), roundUp(MAC_RW), clampWide(MAC_RW, 32)]);
 
 export const BUILDDSP: Record<string, () => BuildChallenge> = {
   sp_sat: () => ({
@@ -119,6 +131,17 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
   }),
 
   // ---- sp_mac
+  sp_mac: () => ({
+    id: 'sp_mac', title: 'MAC with guard bits', level: 'sequential', allowed: 'nand',
+    brief: '<b>a</b> and <b>b</b> are 32-bit operands, each two signed 16-bit halves; <b>op</b> is <b>mac</b> (0: acc += lo(a) × lo(b)), <b>mac2</b> (1: acc += lo × lo + hi × hi), <b>clracc</b> (2: acc = 0) or <b>racc</b> (3: the accumulator is only read), and <b>en</b> = 0 holds the accumulator whatever op says. '
+      + `The accumulator <b>acc</b> is a ${ACC_BITS}-bit register, two's complement: 8 guard bits above a 32-bit product, so 255 mac2 (or 511 mac) of full-scale operands fit; past that it wraps, with no flag and no clamp. `
+      + 'At all times <b>y</b> is the accumulator read with the shift <b>sh</b> (0 … 63): shifted right (arithmetic), the first bit dropped added back (round half up; none when sh = 0) and clamped <i>once</i> to 32 bits; <b>sat</b> is 1 when that clamp acted. '
+      + 'The sum itself is never clamped on the way in: a partial sum may run far past 32 bits and come back. The multipliers, the adders and the shifter are given. '
+      + `Check runs ${MAC_LANES} instruction streams of ${MAC_CLOCKS} clocks (the worst case that fits, an excursion that comes back, the wrap, reads at the shifts that matter, the control inputs, seeded random streams) and compares y and sat before each clock and acc after it with the chapter's model. Graded on NANDs and the clock period.`,
+    ports: pinsOf(MAC_REF()),
+    check: { kind: 'custom', describe: `${MAC_LANES} streams of ${MAC_CLOCKS} clocks (255 full-scale mac2, excursions past 32 bits that come back, the wrap past 40 bits, reads at shifts 0, 15, 39 and 40 or more, ties, clracc, en = 0, seeded random streams): y, sat and acc against the model at every clock.`, run: runMacBench, unit: 'stream' },
+    answer: refOf('sp_mac', MAC_REF, 'MAC unit', () => [[macRead(), 'Read path'], [roundUp(MAC_RW), 'Rounder'], [clampWide(MAC_RW, 32), 'Clamp to 32 bits']]),
+  }),
 
   // ---- sp_circ
 
