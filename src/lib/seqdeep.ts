@@ -1,7 +1,7 @@
 // Chapter 8's deeper steps: the 74-series edge-triggered flip-flop (six gates, one of them a 3-input NAND) and a
 // pair of flip-flops whose second clock arrives late (clock skew), the circuit that breaks a shift register.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
 import { define } from './define';
 import { NOT } from './gates';
@@ -83,24 +83,29 @@ const skewCache = new Map<number, ComponentDef>();
 export function skewPair(k: number): ComponentDef {
   let d = skewCache.get(k);
   if (d) return d;
-  const b = new Builder(8, 10, 4);
-  b.pins('d', 'clk');
-  const f1 = b.add(DFF, 'ff1', 'ff1');
-  let clk2 = 'clk';
-  for (let i = 0; i < k; i++) clk2 = b.op1(CLK_BUF, [clk2], `buffer ${i + 1}`, `cb${i}`);
-  b.next();
-  const f2 = b.add(DFF, 'ff2', 'ff2');
-  b.wire('d', `${f1}.d`); b.wire('clk', `${f1}.clk`);
-  b.wire(`${f1}.q`, `${f2}.d`); b.wire(clk2, `${f2}.clk`);
-  b.wire(`${f1}.q`, 'q1'); b.wire(`${f2}.q`, 'q2');
-  b.name(`${f1}.q`, 'q1', true); b.name(`${f2}.q`, 'q2', true);
-  if (k) b.name(clk2, 'clk2', true);
+  // Drawn by hand: q1 leaves over the top to its pin (it also feeds the second flip-flop straight on), the clock runs
+  // under the first flip-flop into the buffers and on to the second. Builder would make both pointers (several sinks /
+  // driven by a pin), two units from their partners.
+  const X2 = Math.max(22, 12 + 8 * k + 2), R = X2 + 14;
+  const instances: InstanceDef[] = [{ name: 'ff1', def: DFF, at: [6, 1], label: 'ff1' }];
+  for (let i = 0; i < k; i++) instances.push({ name: `cb${i}`, def: CLK_BUF, at: [8 + 8 * i, 8], label: `buffer ${i + 1}` });
+  instances.push({ name: 'ff2', def: DFF, at: [X2, 2], label: 'ff2' }); // its d level with ff1's q
+  const clk2 = k ? `cb${k - 1}.y` : 'clk';
+  const nets: NetDef[] = [
+    { name: 'd', ends: ['d', 'ff1.d'] },
+    { name: 'q1', ends: ['ff1.q', 'ff2.d', 'q1'], via: { q1: [[16, 4], [16, -2]] } },
+    { name: 'q2', ends: ['ff2.q', 'q2'] },
+    k ? { name: 'clk', ends: ['clk', 'ff1.clk', 'cb0.a'], via: { 'ff1.clk': [[4, 10], [4, 5]] } }
+      : { name: 'clk', ends: ['clk', 'ff1.clk', 'ff2.clk'], via: { 'ff1.clk': [[4, 10], [4, 5]], 'ff2.clk': [[X2 - 2, 10], [X2 - 2, 6]] } },
+    ...Array.from({ length: Math.max(0, k - 1) }, (_, i): NetDef => ({ ends: [`cb${i}.y`, `cb${i + 1}.a`] })),
+    ...(k ? [{ name: 'clk2', ends: [clk2, 'ff2.clk'], via: { 'ff2.clk': [[X2 - 2, 10], [X2 - 2, 6]] } } as NetDef] : []),
+  ];
   d = define({
     id: `skewpair${k}`, name: `Two flip-flops, clock ${2 * k} delays late`, category: 'sequential',
     summary: `Flip-flop 1 feeds flip-flop 2 directly; flip-flop 2 is clocked through ${k} buffer${k === 1 ? '' : 's'} (${2 * k} NAND delays later).`,
     ports: [bit('d', 'in'), bit('clk', 'in', 'left', true), bit('q1', 'out'), bit('q2', 'out')],
     symbol: { kind: 'box', label: 'SKEW' },
-    netlist: () => ({ pins: { d: [1, 3], clk: [1, 10], q1: [b.right + 2, 3], q2: [b.right + 2, 9] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { d: [0, 3], clk: [0, 10], q1: [R, -2], q2: [R, 5] }, instances, nets }),
   });
   skewCache.set(k, d);
   return d;
