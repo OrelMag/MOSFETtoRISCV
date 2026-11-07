@@ -5,7 +5,7 @@
 // ui/pages/capstone.ts (#/campaign/play/<id>). No DOM.
 
 import { groupDigits } from '../sim/numfmt';
-import { type AnyCapstone, CAPSTONES, COMM_CAPSTONES, type Capstone, type CapstoneStatus, capstoneStatus } from '../learn/capstones';
+import { type AnyCapstone, CAPSTONES, COMM_CAPSTONES, DSP_CAPSTONES, type Capstone, type CapstoneStatus, capstoneStatus } from '../learn/capstones';
 import { type BuildChallenge, type ChallengeCheck, type CheckResult, checkChallenge, type LibRule, type PinSpec, type SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import { UserLibrary } from '../editor/library';
@@ -24,6 +24,7 @@ import { UART_CORE } from '../lib/uart';
 import { pinsOf, refOf as refOfSubs } from './buildcomm';
 import { ethSwitch } from '../lib/ethswitch';
 import { CONSOLE_ERR, runConsole, AGE_MARGIN, runSwitchSpec, SW_MAX_FRAME, SW_QUIET, SW_THROUGHPUT, SW_THROUGHPUT_BYTES, SW_THROUGHPUT_GAP } from './capcomm';
+import { MASK_BRIEF, MASK_PARTS, MASK_SPEC, maskReferenceDef, runMask } from './capmask';
 import { CORE_BRIEF, CORE_PINS } from './build5';
 import { BRIEF_BUDGET, briefSpec, briefTests } from './brief';
 import { type CoreCheck, coreCheck, type CoreTest, corePeriod } from './corecheck';
@@ -31,7 +32,7 @@ import { coreTests, pipeTests } from './coretests';
 import { rng } from './drills';
 import { ruleFor, unlockedPartCount } from './graph';
 
-export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.find((c) => c.id === id) ?? COMM_CAPSTONES.find((c) => c.id === id);
+export const capstoneById = (id: string): AnyCapstone | undefined => CAPSTONES.find((c) => c.id === id) ?? COMM_CAPSTONES.find((c) => c.id === id) ?? DSP_CAPSTONES.find((c) => c.id === id);
 
 /** What the console may place: the blocks one level inside the reference, so a learner works from them and cannot place the finished UART. */
 const consoleGiven = (): string[] => (UART_CORE.netlist?.().instances ?? []).map((i) => i.def.id);
@@ -54,7 +55,7 @@ const GENERAL_PARTS = ['dffe', 'reg*', 'creg*', 'counter*', 'fifo*', 'pmem*', 'e
 
 export const capstoneChipId = (id: string): string => `u_ch_${id}`;
 
-export const capstoneOfChip = (chipId: string): AnyCapstone | undefined => [...CAPSTONES, ...COMM_CAPSTONES].find((c) => capstoneChipId(c.id) === chipId);
+export const capstoneOfChip = (chipId: string): AnyCapstone | undefined => [...CAPSTONES, ...COMM_CAPSTONES, ...DSP_CAPSTONES].find((c) => capstoneChipId(c.id) === chipId);
 
 /** True once the capstone is passed: only then do its reference answer and "Do it for me" open. */
 export const solutionsOpen = (id: string, nodes: Record<string, { status?: string } | undefined>): boolean => capstoneStatus(id, nodes) === ('passed' satisfies CapstoneStatus);
@@ -88,6 +89,7 @@ export function capstoneRule(id: string): LibRule | undefined {
     // the serial console: the transmitter and receiver levels' parts, and the FIFO and the baud generator as given blocks
     else if (id === 'cap_switch') { const t = tierRule(['l_switch', 'l_mac'], []); r = { ...t, lib: [...new Set([...withoutCpu(t.lib).filter((x) => !/^(eth_|mac_table)/.test(x)), ...GENERAL_PARTS, ...switchLeaves()])].sort() }; }
     else if (id === 'cap_console') { const t = tierRule(['l_uarttx', 'l_uartrx'], ['uart_full']); r = { ...t, lib: [...new Set([...withoutCpu(t.lib), ...GENERAL_PARTS, ...consoleGiven()])].sort() }; }
+    else if (id === 'cap_mask') r = { lib: ['nand', ...MASK_PARTS].sort(), label: 'NAND + adders, registers, multipliers', gates: true };
     if (r) rules.set(id, r);
   }
   return r;
@@ -293,6 +295,15 @@ export function capstoneChallenge(id: string): BuildChallenge | undefined {
       ports: pinsOf(SWITCH_REF()).filter((p) => !/^(drops|bad|frames|learned|evicted|flooded|filtered)/.test(p.name)),
       check: { kind: 'custom', describe: 'Learning, broadcasts and a group address, every pair of hosts, flooding to a stranger, two hosts behind one port, a host that moves, a damaged frame, the longest frame, a held output and one pausing inside a frame, three inputs at once to one output, and throughput at full load.', run: runSwitchSpec, unit: 'check', slow: true },
       answer: refOfSubs('cap_switch', SWITCH_REF, 'Four-port switch', () => switchBlocks().map((d) => [d, d.name] as [ComponentDef, string])),
+    };
+  }
+  else if (id === 'cap_mask') {
+    c = {
+      ...base, level: 'sequential',
+      brief: MASK_BRIEF,
+      ports: pins([['x', MASK_SPEC.xBits], ['clk']], [['y', MASK_SPEC.yBits]], 'clk'),
+      check: { kind: 'custom', describe: 'Swept sines against the mask, an impulse response read from the gates, a worst-case input and full-scale noise against that response, bursts then silence, and the NAND budget.', run: (def, mode) => runMask(def, mode), unit: 'check', slow: true },
+      answer: refOf('cap_mask', maskReferenceDef, 'Folded FIR'),
     };
   }
   if (c) cache.set(id, c);

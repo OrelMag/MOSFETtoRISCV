@@ -411,7 +411,9 @@ export function noiseWidget(): Widget {
   };
   const sl = (label: string, a: number, b: number, st: number, v: number, fmt: (x: number) => string, f: (x: number) => void) => slider(label, a, b, st, v, fmt, (x) => f(x)).el;
   const sec = (title: string, lead: string, ...kids: (Node | string)[]) => h('div', { class: 'panel ln-sec' }, h('h4', null, title), h('p', { class: 'sub' }, lead), ...kids);
-  const el = h('div', { class: 'widget mos ln-noise' },
+  // the sections sit in a grid of their own: .ln-noise is the container its one-column rule asks about (an element
+  // cannot query itself, and nothing above it is a container: the rule never applied, two columns of 151 px on a tablet)
+  const el = h('div', { class: 'widget mos ln-noise' }, h('div', { class: 'ln-noise-grid' },
     sec('Crosstalk', 'An aggressor edge on one trace, a quiet neighbour.',
       xt.el, h('div', { class: 'mos-row' }, sl('Spacing', 0.5, 5, 0.1, sh, (v) => `${v.toFixed(1)}·h`, (v) => { sh = v; paintXt(); }), sl('Run', 10, 300, 10, len, (v) => `${v} mm`, (v) => { len = v; paintXt(); }),
         sl('Edge', 0.05, 2, 0.05, rise, ns, (v) => { rise = v; paintXt(); })), xtChips.el),
@@ -420,7 +422,7 @@ export function noiseWidget(): Widget {
     sec('A differential pair', 'The same noise on both legs; the receiver subtracts them.',
       dfBars, h('div', { class: 'mos-row' }, sl('Common', 0, 1, 0.05, cm, (v) => `${v.toFixed(2)} V`, (v) => { cm = v; paintDf(); }), sl('CMRR', 20, 80, 5, cmrr, (v) => `${v} dB`, (v) => { cmrr = v; paintDf(); }), sl('Mismatch', 0, 20, 1, mis, (v) => `${v} %`, (v) => { mis = v; paintDf(); })), dfChips.el),
     sec('What noise does to a bit', `A pseudo-random pattern through a single-pole channel; chapter ${numOf('serial')} reads this picture in depth.`,
-      eyePlot.el, h('div', { class: 'mos-row' }, sl('Rate', 0.2, 4, 0.1, rate, (v) => `${v.toFixed(1)} Gb/s`, (v) => { rate = v; paintEye(); }), sl('Bandwidth', 0.1, 4, 0.05, bw, (v) => `${v.toFixed(2)} GHz`, (v) => { bw = v; paintEye(); }), sl('Noise', 0, 200, 5, sig, (v) => `${v} mV`, (v) => { sig = v; paintEye(); })), eyeChips.el));
+      eyePlot.el, h('div', { class: 'mos-row' }, sl('Rate', 0.2, 4, 0.1, rate, (v) => `${v.toFixed(1)} Gb/s`, (v) => { rate = v; paintEye(); }), sl('Bandwidth', 0.1, 4, 0.05, bw, (v) => `${v.toFixed(2)} GHz`, (v) => { bw = v; paintEye(); }), sl('Noise', 0, 200, 5, sig, (v) => `${v} mV`, (v) => { sig = v; paintEye(); })), eyeChips.el)));
   paintXt(); paintGb(); paintDf(); paintEye();
   return { el };
 }

@@ -519,7 +519,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Using the unsigned loop on signed operands: the low half is right, the high half needs the sign corrections of mulh.',
     ],
     lib: 'smul8', compare: ['amul8'],
-    chapters: [{ chapter: 'muldiv', step: 1, label: 'Or reuse one adder' }],
+    chapters: [{ chapter: 'muldiv', step: 1, label: 'Or reuse one adder' }, { chapter: 'firdesign', step: 5, label: 'A constant is a few shifts' }],
   },
   bpred: {
     idea: 'A pipeline fetches the next instruction before the current branch is decided, so it must guess the next PC. A wrong guess costs a flush: the campaign\'s RV16 pipeline resolves branches in E, two instructions behind fetch, so every redirect costs 2 cycles. Static prediction uses the instruction alone: predict not taken (free: keep fetching pc + 1), or backward taken, forward not taken (loops close with a backward branch). Dynamic prediction learns per branch: a table indexed by low PC bits holds a 2-bit saturating counter (00 and 01 predict not taken, 10 and 11 taken, each outcome moves it one step), so one surprise does not flip an established guess. A branch target buffer stores the target as well, so the redirect happens in F, before the instruction is decoded.<br>The price is a table read in F, which is on the critical path, and area: the 16-entry, 62-bit BTB of the RV32 pipeline is 22 849 NANDs.',

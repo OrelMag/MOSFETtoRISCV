@@ -212,7 +212,7 @@ check:     0xFFFB + 0x0005 = 0x1_0000 → 0x0000 (carry out dropped)</pre>`,
       'Forgetting the asymmetry: <code>neg</code> of 0x8000 is 0x8000, and RV16\'s <code>div</code> of −32 768 by −1 returns −32 768 by definition.',
     ],
     anatomy: ['alu'],
-    chapters: [{ chapter: 'binary', step: 1, label: 'Negative numbers: two\'s complement' }, { chapter: 'adders', step: 5, label: 'Subtraction for free' }],
+    chapters: [{ chapter: 'binary', step: 1, label: 'Negative numbers: two\'s complement' }, { chapter: 'adders', step: 5, label: 'Subtraction for free' }, { chapter: 'fixed', step: 0, label: 'A word and its point' }],
   },
 
   overflow: {
@@ -235,7 +235,7 @@ bne  t1, a2, ovf</pre>`,
       'Expecting a trap: RV16 wraps silently, as RISC-V does.',
     ],
     anatomy: ['alu'],
-    chapters: [{ chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'adders', step: 7, label: 'Signed comparison' }],
+    chapters: [{ chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'adders', step: 7, label: 'Signed comparison' }, { chapter: 'fixed', step: 1, label: 'Wrap or saturate' }, { chapter: 'fixed', step: 5, label: 'Wrapping can be right' }],
   },
 
   signext: {
@@ -907,6 +907,7 @@ both inexact: NX is set</pre>`,
       { chapter: 'float', step: 4, label: 'Round to nearest, ties to even' },
       { chapter: 'float', step: 5, label: 'Five rounding modes' },
       { chapter: 'float', step: 25, label: 'Rounding surprises' },
+      { chapter: 'fixed', step: 4, label: 'Rounding' },
     ],
   },
 
@@ -1410,7 +1411,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Logical shifts: a negative coordinate turns into a large positive one.',
       'Rounding to whole pixels every step: the errors accumulate; keep the fraction and round only when drawing.',
     ],
-    chapters: [{ chapter: 'graphics', step: 0, label: 'Vertices are a kernel' }],
+    chapters: [{ chapter: 'graphics', step: 0, label: 'Vertices are a kernel' }, { chapter: 'cordic', step: 0, label: 'A rotation is four multiplications' }, { chapter: 'cordic', step: 2, label: 'The gain nobody can avoid' }],
   },
   // ---- act 10: memory
   memwall: {
