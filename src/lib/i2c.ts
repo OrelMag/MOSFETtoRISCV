@@ -248,11 +248,12 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
   ];
   const sdaEnds: string[] = [], sclEnds: string[] = [];
   const clkEnds = ['clk'], rstEnds = ['rst'];
-  const pins: Record<string, [number, number]> = { clk: [0, 0], rst: [0, 2] };
-  let x = 12, inY = 6, outY = 4, right = 0;
-  const gap = 14;
+  const pins: Record<string, [number, number]> = { clk: [0, 0], rst: [4, 0] }; // clk is placed below the rails at the end
+  const x0 = 12;
+  let x = x0, inY = 8, outY = 0, right = 0;
+  const gap = 18, Y0 = 8; // devices on row Y0: the controller's pins and the target's address ties line up with it
   const devH = Math.max(cg.h, tg.h) + 2;
-  const padY = devH + 8, railS = padY + pg.h + 8, railC = railS + 4;
+  const padY = Y0 + devH + 8, railS = padY + pg.h + 8, railC = railS + 4;
   const pad = (name: string, dev: string, lowPort: string, rxPort: string, dx: number, rail: string[], tag: string) => {
     instances.push({ name, def: I2C_PAD, at: [dx, padY] });
     nets.push({ name: `${tag}_o_${dev}`, ends: [`${dev}.${lowPort}`, `${name}.low`], tags: true });
@@ -261,7 +262,7 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
   };
   for (let k = 0; k < ctls; k++) {
     const d = `c${k}`;
-    instances.push({ name: d, def: C, at: [x, 2], label: `controller ${k}` });
+    instances.push({ name: d, def: C, at: [x, Y0], label: `controller ${k}` });
     clkEnds.push(`${d}.clk`); rstEnds.push(`${d}.rst`);
     for (const [p, w] of [['go', 1], ['cmd', 2], ['din', 8]] as [string, number][]) {
       const n = `${p}${k}`;
@@ -270,29 +271,29 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
     }
     for (const [p, w] of [['ready', 1], ['dout', 8], ['ack', 1], ['lost', 1]] as [string, number][]) {
       const n = `${p}${k}`;
-      ports.push({ name: n, width: w, dir: 'out' }); pins[n] = [-1, outY]; outY += 2; // x fixed up below
+      ports.push({ name: n, width: w, dir: 'out' }); pins[n] = [x + cg.w + 3 + outY, 2]; outY += 2; // a staircase along the top: the topmost output takes the leftmost pin, so no wire crosses another
       nets.push({ name: n, ends: [`${d}.${p}`, n], tags: true });
     }
-    pad(`ps${k}`, d, 'sda_o', 'sda_i', x + 2, sdaEnds, 'sda'); pad(`pc${k}`, d, 'scl_o', 'scl_i', x + 2 + pg.w + 4, sclEnds, 'scl');
+    pad(`ps${k}`, d, 'sda_o', 'sda_i', x - 1, sdaEnds, 'sda'); pad(`pc${k}`, d, 'scl_o', 'scl_i', x + 12, sclEnds, 'scl');
     x += Math.max(cg.w, 2 * pg.w + 10) + gap;
   }
   targets.forEach((tspec, k) => {
     const d = `t${k}`;
-    instances.push({ name: d, def: T, at: [x, 2], label: `target ${k}: 0x${tspec.adr.toString(16)}` });
+    instances.push({ name: d, def: T, at: [x, Y0 + 2], label: `target ${k}: 0x${tspec.adr.toString(16)}` });
     clkEnds.push(`${d}.clk`); rstEnds.push(`${d}.rst`);
     // address and stretch are wired to the rails with tie cells, one per bit
     const bits = (name: string, w: number, v: number, ty: number) => {
       const ts = Array.from({ length: w }, (_, i) => `${d}_${name}${i}`);
-      ts.forEach((tn, i) => { instances.push({ name: tn, def: (v >> i) & 1 ? TIE1 : TIE0, at: [x - 12, ty + 3 * i] }); });
-      instances.push({ name: `${d}_${name}_m`, def: merger(ones(w)), at: [x - 7, ty] });
+      ts.forEach((tn, i) => { instances.push({ name: tn, def: (v >> i) & 1 ? TIE1 : TIE0, at: [x - 12, ty + 1 + 4 * i] }); });
+      instances.push({ name: `${d}_${name}_m`, def: merger(ones(w), 4), at: [x - 7, ty] });
       ts.forEach((tn, i) => nets.push({ name: `${tn}`, ends: [`${tn}.y`, `${d}_${name}_m.i${i}`], tags: true }));
       nets.push({ name: `${d}_${name}`, ends: [`${d}_${name}_m.out`, `${d}.${name}`], tags: true });
     };
-    bits('adr', 7, tspec.adr, 2);
+    bits('adr', 7, tspec.adr, Y0 - 4); // the merger (pitch 4, as the ties) ends on the target's adr pin
     const sn = `stretch${k}`;
-    ports.push({ name: sn, width: 6, dir: 'in' }); pins[sn] = [0, inY]; inY += 2;
+    ports.push({ name: sn, width: 6, dir: 'in' }); pins[sn] = [x - 2, padY + 8]; inY += 2;
     nets.push({ name: sn, ends: [sn, `${d}.stretch`], tags: true });
-    pad(`ps_t${k}`, d, 'sda_o', 'sda_i', x + 2, sdaEnds, 'sda'); pad(`pc_t${k}`, d, 'scl_o', 'scl_i', x + 2 + pg.w + 4, sclEnds, 'scl');
+    pad(`ps_t${k}`, d, 'sda_o', 'sda_i', x - 1, sdaEnds, 'sda'); pad(`pc_t${k}`, d, 'scl_o', 'scl_i', x + 12, sclEnds, 'scl');
     x += Math.max(tg.w, 2 * pg.w + 10) + gap;
   });
   right = x;
@@ -303,7 +304,7 @@ export function i2cBus(ctls: number, targets: I2cTargetSpec[]): ComponentDef {
   nets.push({ name: 'clk', ends: clkEnds, tags: true }, { name: 'rst', ends: rstEnds, tags: true });
   ports.push({ name: 'sda', width: 1, dir: 'inout' }, { name: 'scl', width: 1, dir: 'inout' });
   pins.sda = [right + 14, railS]; pins.scl = [right + 14, railC];
-  for (const p of ports) if (p.dir === 'out' && p.name !== 'sda' && p.name !== 'scl') pins[p.name] = [right + 14, pins[p.name][1]];
+  pins.clk = [x0 + 10, railC + 8];
   const def = define({
     id: `i2c_bus_${key}`, name: `I²C bus (${ctls} controller${ctls === 1 ? '' : 's'}, ${targets.length} target${targets.length === 1 ? '' : 's'})`, category: 'cell',
     summary: 'Controllers and targets in gates, each behind an open-drain pad on two wires that two resistors pull up: the whole bus is solved at switch level, down to the transistors in every NAND.',
