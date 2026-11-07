@@ -5,7 +5,7 @@ import { h } from '../ui/dom';
 import { closeMenu, type MenuEntry } from '../ui/menu';
 import { copyText } from '../ui/viewlink';
 import { groupDigits } from '../sim/numfmt';
-import { readersOf } from '../sim/netcap';
+import { netCaps, readersOf } from '../sim/netcap';
 import type { FlatDesign } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import type { Bit, ComponentDef } from '../sim/types';
@@ -147,6 +147,53 @@ export function explainGroup(def: ComponentDef, host: ExplainHost): MenuEntry[] 
   } }];
 }
 
+export interface MeasureHost {
+  /** Its probe: the row, or why there is none here (absent: not offered). */
+  probe?: NonNullable<MenuEntry> | string;
+  /** Static timing over this design, at this level; or why there is none. */
+  timing: { design: FlatDesign; at: readonly string[] } | string;
+  /** Light these parts (hierarchical paths) on the level shown. */
+  light(paths: string[][]): void;
+  /** A part's power: the Inspector's section, or why not. */
+  power?: (() => void) | string;
+  /** A wire's toggles counted so far (null: nothing counts them here); or why there is no power to read. */
+  toggles?: (() => number | null) | string;
+}
+
+/** The menu's timing rows for some nets of a design (a wire's, or an instance's when `inst` is given). */
+async function timingRows(host: MeasureHost, nets: () => readonly number[], inst?: string): Promise<NonNullable<MenuEntry>[]> {
+  const t = host.timing;
+  if (typeof t === 'string') return [{ label: 'Slack through here', why: t }, { label: 'Light the critical path through it', why: t }];
+  const [{ slackOf, slackBand, SLACK_BAND_LABELS }, { fmtDelay }, { defaultDelay }] = await Promise.all([import('../sim/slack'), import('../sim/delay'), import('./delayui')]);
+  const model = defaultDelay();
+  const s = slackOf(t.design, model);
+  if (!s) return [{ label: 'Slack through here', why: 'Nothing here is timed: no path from an input or a flip-flop.' }];
+  const ns = inst ? s.netsOf([...t.at, inst]) : nets();
+  let best = -Infinity, at = -1;
+  for (const n of ns) {
+    const v = s.through(n);
+    if (v > best) { best = v; at = n; }
+  }
+  if (at < 0) return [{ label: 'Slack through here', why: s.clocked ? 'No register-to-register path crosses it.' : 'No input-to-output path crosses it.' }];
+  const slack = s.period - best;
+  const band = SLACK_BAND_LABELS[slackBand(slack, s.period)];
+  const what = s.clocked ? 'its slowest path could grow this much before it set the clock' : 'its slowest path is this much shorter than the longest input to output';
+  return [
+    { label: `Slack: ${fmtDelay(slack, model)} of ${fmtDelay(s.period, model)}`, hint: `${band === 'critical' ? 'On the critical path' : `${band} of the period`}: ${what}` },
+    { label: 'Light the critical path through it', hint: `The slowest path through it, ${fmtDelay(best, model)} long`, run: () => host.light(s.pathThrough(at)) },
+  ];
+}
+
+export { powerOff } from './truthrule';
+
+/** Measure for a part. */
+export function partMeasure(inst: string, host: MeasureHost): MenuEntry[] {
+  return [{ label: 'Measure', sub: async () => [
+    ...await timingRows(host, () => [], inst),
+    ...(host.power === undefined ? [] : [typeof host.power === 'string' ? { label: 'Power', why: host.power } : { label: 'Power', hint: 'Live from the running scene, else on random inputs', run: host.power }]),
+  ] }];
+}
+
 export interface TraceHost {
   /** Light the net: every wire, label and tag of it. */
   highlight(): void;
@@ -162,6 +209,8 @@ export interface TraceHost {
   transistors: boolean;
   /** Further groups, after Explain. */
   more?: MenuEntry[];
+  /** Probes, timing and power, where the surface has them (absent: the fan-out alone). */
+  measure?: MeasureHost;
 }
 
 /** Trace's rows, then the groups: the same order on every surface. */
@@ -181,13 +230,29 @@ export function wireRows(f: NetFacts, host: TraceHost): MenuEntry[] {
   if (f.both.length) out.push(list('Jump to the connection', 'Jump to a connection', [...f.both, ...f.sinks], ''));
   else out.push(list('Jump to the sink', 'Jump to a sink', f.sinks, 'Nothing at this level reads this net.'));
   out.push(null,
-    { label: 'Measure', sub: () => {
+    { label: 'Measure', sub: async () => {
       const d = host.design();
       if (!d) return [{ label: 'Fan-out', why: 'Not in the simulation yet: wire it in first.' }];
-      const readers = readersOf(d);
+      const readers = readersOf(d), flat = host.flat();
       let n = 0;
-      for (const net of host.flat()) n += readers[net] ?? 0;
-      return [{ label: `Fan-out: ${fanText(f, n, host.transistors)}`, hint: 'What this wire has to drive' }];
+      for (const net of flat) n += readers[net] ?? 0;
+      const m = host.measure;
+      const rows: MenuEntry[] = [];
+      if (m?.probe !== undefined) rows.push(typeof m.probe === 'string' ? { label: 'Add a probe and timing lane', why: m.probe } : m.probe);
+      if (m) rows.push(...await timingRows(m, () => flat));
+      rows.push({ label: `Fan-out: ${fanText(f, n, host.transistors)}`, hint: 'What this wire has to drive' });
+      if (m?.toggles !== undefined) {
+        if (typeof m.toggles === 'string') rows.push({ label: 'Power', why: m.toggles });
+        else {
+          const [{ energyFj, fmtEnergy }] = await Promise.all([import('../sim/power')]);
+          const caps = netCaps(d);
+          let c = 0;
+          for (const net of flat) c += caps[net] ?? 0;
+          const k = m.toggles();
+          rows.push({ label: `Switched capacitance: ${c.toFixed(2)} fF`, hint: k === null ? `${fmtEnergy(energyFj(c))} each time it toggles` : `${groupDigits(k)} toggles so far: ${fmtEnergy(energyFj(c * k))}` });
+        }
+      }
+      return rows;
     } },
     { label: 'Explain', sub: [host.why ? { label: 'Why this value?', key: 'W', run: () => host.why!() } : { label: 'Why this value?', why: host.whyOff ?? 'Not available here.' }] }, ...(host.more ?? []));
   return out;

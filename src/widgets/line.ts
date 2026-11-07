@@ -32,8 +32,14 @@ export interface Plot { el: SVGSVGElement; X(v: number): number; Y(v: number): n
 
 export const num = (v: number, d = 1) => (Math.abs(v) < 1e-9 ? '0' : v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''));
 
+/** Widest a plot is drawn on a phone (units): a 640-wide plot scaled to 320 px was 85 px tall, its text half size. */
+export const NARROW_PLOT_W = 380;
+const narrowScreen = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
+
 export function plotOf(o: PlotOpts): Plot {
-  const W = o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
+  // On a phone the same plot is drawn narrower, not scaled down: it keeps its height and its text stays readable.
+  const narrow = narrowScreen();
+  const W = narrow ? Math.min(o.W ?? 460, NARROW_PLOT_W) : o.W ?? 460, H = o.H ?? 230, m = { l: 48, r: 12, t: 12, b: 36 };
   const xLo = o.x[0];
   let xMax = o.x[1], yLo = o.y[0], yHi = o.y[1];
   const X = (v: number) => axisX(v, xLo, xMax, m.l, W - m.r);
@@ -56,7 +62,7 @@ export function plotOf(o: PlotOpts): Plot {
     el: svg, X, Y, layer, clear: () => layer.replaceChildren(), xMax, x0: m.l, x1: W - m.r,
     setX(max) {
       xMax = max; p.xMax = max;
-      const { step: st, ticks } = axisTicks(xLo, max), d = st < 1 ? 1 : 0, kids: SVGElement[] = [];
+      const { step: st, ticks } = axisTicks(xLo, max, narrow ? 3 : 4), d = st < 1 ? 1 : 0, kids: SVGElement[] = [];
       // a tick at the far end would be cut by the plot's edge if it were centred on itself
       for (const v of ticks) { const atEnd = X(v) > W - m.r - 14; kids.push(s('line', { x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, class: 'grid' }), s('text', { x: atEnd ? W - 2 : X(v), y: H - m.b + 14, 'text-anchor': atEnd ? 'end' : 'middle', class: 'tick' }, xf ? xf(v) : num(v, d + (st < 0.1 ? 2 : st < 1 ? 1 : 0)))); }
       gx.replaceChildren(...kids);
