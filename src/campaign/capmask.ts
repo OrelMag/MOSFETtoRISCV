@@ -262,7 +262,7 @@ export function runMask(def: ComponentDef, mode: 'gate' | 'switch', o: MaskOpts 
       // a wrap is off by a power of two to within the output's rounding, at every sample it is off (a clip or a loop's rounding is not; a wrap fed back through a loop no longer is, and reads as a difference)
       const onGrid = (v: number) => { const m = Math.round(v / 2 ** k); return m !== 0 && Math.abs(v - m * 2 ** k) <= WRAP_SLACK; };
       const wrapped = Math.abs(d) >= 64 && b.errs.every(onGrid);
-      const clipped = !wrapped && Math.sign(b.y) === Math.sign(b.e) && Math.abs(b.y) < Math.abs(b.e);
+      const clipped = !wrapped && !stuck.length && Math.sign(b.y) === Math.sign(b.e) && Math.abs(b.y) < Math.abs(b.e);
       const peak = Math.round(hk.reduce((s, v) => s + Math.abs(v), 0) * MASK_SPEC.xMax);
       const how = wrapped ? `so a word wrapped: y is off by exactly ${groupDigits(2 ** k)} = 2^${k}`
         : clipped ? `so the output clipped: it falls ${groupDigits(Math.abs(d))} short, so something saturates on the way`
