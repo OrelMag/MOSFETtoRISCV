@@ -64,10 +64,10 @@ export function bandWidget(): Widget {
     chips.set(3, String(smp.clipped), smp.clipped > 0 ? 'samples of the second at full scale: the ADC clips' : 'samples of the second at full scale');
   };
   const sn = slider('Noise', -60, 0, 1, noise, (v) => `${v} dB`, (v) => { noise = v; paint(); });
-  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'), h('th', { class: 'num' }, 'Measured, 98 %'))),
+  const table = h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Station'), h('th', { class: 'num' }, 'Centre'), h('th', { class: 'num' }, 'Amplitude'), h('th', { class: 'num' }, 'Carson band'), h('th', { class: 'num' }, '98 % measured'))),
     ...STATIONS.map((st, k) => h('tr', null, h('td', null, st.name), h('td', { class: 'num' }, khz(st.f)), h('td', { class: 'num' }, String(st.a)), h('td', { class: 'num' }, `${num(stationBand(st) / 1000, 0)} kHz`), h('td', { class: 'num' }, `${num(stationOccupied(k) / 1000, 0)} kHz`))));
   paint();
-  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: Carson\'s rule, an upper bound; the table also lists the band each station measures')), chips.el), h('div', { class: 'panel' }, table), h('div', { class: 'panel mos-ctl' }, sn.el)) };
+  return { el: h('div', { class: 'widget mos sr-w sdr-w' }, h('div', { class: 'panel' }, h('h3', null, 'One second of the band, as the ADC saw it'), plot.el, h('div', { class: 'ln-key' }, h('span', { class: 'k-far' }, 'power spectrum'), h('span', { class: 'k-near' }, 'shaded: Carson\'s rule, an upper bound; the table also lists the band each station measures')), chips.el), h('div', { class: 'panel' }, h('div', { class: 'dsp-scroll' }, table)), h('div', { class: 'panel mos-ctl' }, sn.el)) };
 }
 
 // ---- how wide a station is -----------------------------------------------------------------------------------------------------------------------
