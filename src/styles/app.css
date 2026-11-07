@@ -640,7 +640,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage-toast.out { opacity: 0; }
 @keyframes stage-toast-in { from { opacity: 0; transform: translateY(-4px); } }
-.challenge.solved:not(.how-open) :is(.hints, .challenge-actions, .explain) { display: none; }
+.challenge.solved:not(.how-open) :is(.hints, .challenge-actions) { display: none; }
+/* a quiz has no Show how: its explanation is the point of answering, so it stays after a right pick */
+.challenge.solved:not(.how-open, .quiz-q) .explain { display: none; }
+/* a narrow box (a phone, the 295 px text column): the Question / n of 4 tag above the question, not squeezing it */
+.challenge.quiz-q { container-type: inline-size; }
+@container (max-width: 400px) { .challenge-head { flex-direction: column; align-items: flex-start; gap: 4px; } }
 .challenge-how { margin-top: 6px; }
 /* phone: a button beside Save that takes the learner down to the circuit under the text (ui/pages/chapter.ts showCircuitButton) */
 .show-circuit { display: none; }

@@ -33,6 +33,20 @@ export interface QuizOpts {
   onAnswer?(right: boolean): void;
 }
 
+/**
+ * A data-ahead gloss (`<span data-ahead="and">AND (a gate whose output is 1 only when every input is 1)</span>`, chapters/firstuse.ts)
+ * is fine in running prose but swamps a question or an option: keep the term, and its codex entry shows as the glossary's hover card.
+ */
+function tidy(html: string): string {
+  if (!settings.glossary) return html;
+  return html.replace(/<span\b[^>]*\bdata-ahead="([^"]*)"[^>]*>([^<(]+?)\s*\([^<]+\)\s*<\/span>/g, '<span class="gl" tabindex="0" data-cx="$1" data-wire="1">$2</span>');
+}
+
+/** Attach the hover cards to the terms `tidy` left (the glossary chunk loads on demand). */
+function wire(root: HTMLElement): void {
+  if (root.querySelector('[data-wire]')) void import('../campaign/ui/glossaryui').then((m) => m.wireTerms(root), () => {});
+}
+
 export function quizBox(q: Quiz, key: string, label: string, onSolved: () => void, qopts: QuizOpts = {}): HTMLElement {
   const wasSolved = !qopts.fresh && settings.isSolved(key);
   let logged = wasSolved;
@@ -42,7 +56,7 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
     if (qopts.onAnswer) qopts.onAnswer(right);
     else reviewLog().record(key, right);
   };
-  const box = h('div', { class: 'challenge' });
+  const box = h('div', { class: 'challenge quiz-q' });
   const tag = h('span', { class: 'tag' }, label);
   // polite: a screen reader reads the verdict out after a pick
   const explain = h('div', { class: 'explain', 'aria-live': 'polite' });
@@ -52,7 +66,8 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
   const right = () => {
     buttons[q.answer].classList.add('right');
     const why = q.why?.[q.answer];
-    explain.innerHTML = why ? `${why} ${q.explain}` : q.explain;
+    explain.innerHTML = tidy(why ? `${why} ${q.explain}` : q.explain);
+    wire(explain);
     reveal.remove();
   };
   const markSolved = () => {
@@ -63,12 +78,13 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
   q.options.forEach((o, i) => {
     // authored HTML, as the question and the explanations are (<code>RO II CE</code>), in one span: the button is a
     // flex box, which would set a code and the text after it apart
-    const btn = h('button', { class: 'btn' }, h('span', { html: o }));
+    const btn = h('button', { class: 'btn' }, h('span', { html: tidy(o) }));
     btn.addEventListener('click', () => {
       if (i !== q.answer) {
         log(false);
         btn.classList.add('wrong');
-        explain.innerHTML = q.why?.[i] ?? 'Not quite. Try another answer.';
+        explain.innerHTML = tidy(q.why?.[i] ?? 'Not quite. Try another answer.');
+        wire(explain);
         // below the fold of a long step, or of the page on a phone: bring the explanation up
         intoView(explain);
         return;
@@ -84,7 +100,8 @@ export function quizBox(q: Quiz, key: string, label: string, onSolved: () => voi
     buttons.push(btn);
   });
   opts.append(...shuffleOrder(buttons.length, `${key}|${q.question}`).map((i) => buttons[i]));
-  box.append(h('div', { class: 'challenge-head' }, tag, h('span', { html: q.question })), opts, reveal, explain);
+  box.append(h('div', { class: 'challenge-head' }, tag, h('span', { html: tidy(q.question) })), opts, reveal, explain);
+  wire(box);
   if (wasSolved) {
     markSolved();
     right();
