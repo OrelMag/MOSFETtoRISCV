@@ -1,10 +1,11 @@
 // Quick navigation: every chapter and step reachable, search ranking.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { chapterById, chapters } from '../src/chapters';
 import { ladderFocus } from '../src/widgets/journey';
 import { SECTIONS, sectionsOf } from '../src/chapters/sections';
 import { chapterMark, navEntries, plainText, resumeTarget, searchNav, snippet, type NavChapter } from '../src/ui/chapternav';
+import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
 
 const book: NavChapter[] = [
   { id: 'gates', num: 4, title: 'Logic gates', blurb: 'Everything from NAND.', level: 'Gates', steps: [
@@ -18,6 +19,8 @@ const book: NavChapter[] = [
 ];
 
 describe('chapter navigation', () => {
+  beforeAll(warmBook, WARM_TIMEOUT);
+
   it('has one entry per chapter and per step of the real book, each resolving', () => {
     const es = navEntries(chapters);
     expect(es.length).toBe(chapters.reduce((n, c) => n + 1 + c.steps.length, 0));
@@ -30,7 +33,7 @@ describe('chapter navigation', () => {
       expect(e.text).not.toMatch(/<[a-z/]/i);
     }
     expect(navEntries(chapters)).toBe(es);
-  });
+  }, BOOK_TIMEOUT);
 
   it('numbers an appendix by its letter, and finds it by that letter', () => {
     const withA: NavChapter[] = [...book, { id: 'app', num: 3, appendix: 'A', title: '1975: the 6502', blurb: 'NMOS.', level: 'NMOS', steps: [{ title: 'NMOS', body: '<p>Loads.</p>' }] }];
