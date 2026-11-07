@@ -20,7 +20,8 @@ async function freshLayout(raw?: string) {
     removeItem: (k: string) => void mem.delete(k),
   });
   vi.resetModules();
-  const L = await import('../src/view/layout');
+  // the store and its readers, and the writes (in the menu's chunk on the site): one module instance of each per load
+  const L = { ...await import('../src/view/layout'), ...await import('../src/view/netcolours') };
   return { L, saved: () => JSON.parse(mem.get(KEY) ?? '{}') as Record<string, { hues?: Record<string, unknown> }> };
 }
 
@@ -119,13 +120,14 @@ describe('stage net colours: drawing', () => {
     expect(nl.nets[i].hue).toBeUndefined();
   });
 
-  it('spreadHues keeps a picked hue and moves its neighbours away from it', () => {
-    // two parallel nets whose own hues are far apart; pick one onto the other's hue
+  it('spreading never overrides a picked hue: whatever spreadHues gives a net, the pick is drawn', () => {
+    // two nets side by side: spreadHues moves one of them; a pick on either is drawn as picked
     const a = { key: 'a', polys: [[[0, 0], [20, 0]] as [number, number][]] }, b = { key: 'b', polys: [[[0, 1], [20, 1]] as [number, number][]] };
-    const free = spreadHues([a, b]);
-    const pinned = spreadHues([{ ...a, fixed: free[1] }, b]);
-    expect(pinned[0]).toBe(free[1]);
-    expect(Math.min(Math.abs(pinned[1] - pinned[0]), 360 - Math.abs(pinned[1] - pinned[0]))).toBeGreaterThanOrEqual(30);
+    const spread = spreadHues([a, b]);
+    for (const s of spread) {
+      expect(drawnHue(s, 185)).toBe(USER_HUE + 185);
+      expect(drawnHue(s, 'auto')).toBe(USER_HUE + s);
+    }
     // a net no one picked and no neighbour crowds keeps its own hue
     expect(spreadHues([a])[0]).toBe(netHue('a'));
   });

@@ -23,12 +23,7 @@ export function netHue(key: string): number {
 }
 
 /** A net as drawn: its identity and its wires (polylines in grid units). */
-export interface HueNet {
-  key: string;
-  polys: readonly (readonly (readonly [number, number])[])[];
-  /** A hue the learner picked: kept as it is, and its neighbours move away from it, not it from them. */
-  fixed?: number;
-}
+export interface HueNet { key: string; polys: readonly (readonly (readonly [number, number])[])[] }
 
 const SPREAD = 60; // degrees under which two neighbouring hues start to compete
 const STEP = 2; // candidate hues, 40°–320° in 2° steps
@@ -43,7 +38,7 @@ const hueDist = (a: number, b: number) => { const d = Math.abs(a - b) % 360; ret
  * own on a tie), so a net far from others keeps its colour and an edit only recolours nets near it.
  */
 export function spreadHues(nets: readonly HueNet[]): number[] {
-  const own = nets.map((n) => n.fixed ?? netHue(n.key));
+  const own = nets.map((n) => netHue(n.key));
   // Cells each net passes through (one sample per unit), and the nets in each cell.
   const W = 1 << 16;
   const cellOf = (x: number, y: number) => (Math.floor(x / 2) + W / 2) * W + (Math.floor(y / 2) + W / 2);
@@ -76,7 +71,6 @@ export function spreadHues(nets: readonly HueNet[]): number[] {
   const cost = new Float64Array(N);
   // The hue for net i against its neighbours in `placed` (all of them on the refining passes).
   const choose = (i: number, placed: (j: number) => boolean) => {
-    if (nets[i].fixed !== undefined) return own[i];
     cost.fill(0);
     let clash = false;
     for (const [j, w] of nbrs[i]) {
