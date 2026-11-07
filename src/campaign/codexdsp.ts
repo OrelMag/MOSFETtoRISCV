@@ -33,5 +33,10 @@ const LISTED = new Set([
   // sp_sd
   'sigmadelta', 'noiseshaping',
 
+  // sp_mac
+  'multacc',
+
+  // sp_circ
+
 ]);
 export const DSP_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_DSP.map((e) => e.id).filter((id) => !LISTED.has(id)));

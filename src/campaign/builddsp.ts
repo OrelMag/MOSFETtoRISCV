@@ -1,7 +1,6 @@
 // Act 13's build levels (Signals, the Signal processing level's optional act): a saturating adder, a biquad, Goertzel for one
-// tone, a CIC decimator, a CORDIC stage and a sigma-delta loop, each checked against the chapter's model (dsp/). The reference
-// answers are the chapters' library circuits drawn as chips. The MAC with guard bits and the circular address wait for the
-// MAC unit and the DSP core. No DOM.
+// tone, a CIC decimator, a CORDIC stage, a sigma-delta loop, a MAC with guard bits and the DSP core's address step, each checked
+// against the chapter's model (dsp/). The reference answers are the chapters' library circuits drawn as chips. No DOM.
 
 import type { BuildChallenge } from '../editor/challenges';
 import { cordicStage as cordicModel, type CordicSpec } from '../dsp/cordic';
@@ -19,6 +18,13 @@ import { runSd, SD_REF, SD_W, SD_WORD } from './sdcheck';
 import { biquad } from '../lib/biquad';
 import { BQ_CYCLES, BQ_LANES, runBiquadBench } from './dspcheck';
 import { GZ_BLOCK, GZ_NOISE, runGoertzel } from './goertzelcheck';
+import { ACC_BITS } from '../dsp/mac';
+import { macRead, macUnit } from '../lib/macunit';
+import { roundUp } from '../lib/fft';
+import { clampWide } from '../lib/firmac';
+import { MAC_CLOCKS, MAC_LANES, runMacBench } from './maccheck';
+import { DSP24_AGU_STEP } from '../lib/dsp24agu';
+import { CIRC_TRIPLES, CIRC_VECTORS, runCirc } from './circcheck';
 
 /** The word of the saturating adder level: 8 bits, so Check runs every pair (65 536). */
 export const SAT_W = 8;
@@ -51,6 +57,16 @@ export const biquadGives = leafGives(BIQUAD_REF, () => []);
 export const GZ_REF = (): ComponentDef => goertzelCell(GZ_STATE, RV16_MUX2);
 /** The multiplier is given with every other leaf: the recurrence around it is what the level builds. */
 export const gzGives = leafGives(GZ_REF, () => []);
+
+/** The MAC level's reference: the chapter's unit (two signed 16 × 16 tree multipliers, the pair adder, the 40-bit accumulator, the read path). */
+export const MAC_REF = (): ComponentDef => macUnit();
+/** The read path's word: the accumulator and one more bit, the one the shift drops first. */
+export const MAC_RW = ACC_BITS + 1;
+/** The read path, its rounder and its clamp are what the level builds; the multipliers, the shifter and the adders are given. */
+export const macGives = leafGives(MAC_REF, () => [macRead(), roundUp(MAC_RW), clampWide(MAC_RW, 32)]);
+/** The circular address level's reference: the DSP core's address step, all eight modes. Its parts are all given. */
+export const CIRC_REF = (): ComponentDef => DSP24_AGU_STEP;
+export const circGives = leafGives(CIRC_REF, () => []);
 
 export const BUILDDSP: Record<string, () => BuildChallenge> = {
   sp_sat: () => ({
@@ -116,6 +132,31 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
     ports: pinsOf(SD_REF()),
     check: { kind: 'custom', describe: '16 inputs of 3000 clocks (steady levels from −0.9 to +0.9 full scale, 1 LSB, ±full scale, three sines, steps, seeded sines): bit, y1 and y2 equal the model after every clock, and the bits of each steady input average to the input within 0.01 over the last 2000 clocks.', run: runSd },
     answer: refOf('sp_sd', SD_REF, 'Sigma-delta loop'),
+  }),
+
+  // ---- sp_mac
+  sp_mac: () => ({
+    id: 'sp_mac', title: 'MAC with guard bits', level: 'sequential', allowed: 'nand',
+    brief: '<b>a</b> and <b>b</b> are 32-bit operands, each two signed 16-bit halves; <b>op</b> is <b>mac</b> (0: acc += lo(a) × lo(b)), <b>mac2</b> (1: acc += lo × lo + hi × hi), <b>clracc</b> (2: acc = 0) or <b>racc</b> (3: the accumulator is only read), and <b>en</b> = 0 holds the accumulator whatever op says. '
+      + `The accumulator <b>acc</b> is a ${ACC_BITS}-bit register, two's complement: 8 guard bits above a 32-bit product, so 255 mac2 (or 511 mac) of full-scale operands fit; past that it wraps, with no flag and no clamp. `
+      + 'At all times <b>y</b> is the accumulator read with the shift <b>sh</b> (0 … 63): shifted right (arithmetic), the first bit dropped added back (round half up; none when sh = 0) and clamped <i>once</i> to 32 bits; <b>sat</b> is 1 when that clamp acted. '
+      + 'The sum itself is never clamped on the way in: a partial sum may run far past 32 bits and come back. The multipliers, the adders and the shifter are given. '
+      + `Check runs ${MAC_LANES} instruction streams of ${MAC_CLOCKS} clocks (the worst case that fits, an excursion that comes back, the wrap, reads at the shifts that matter, the control inputs, seeded random streams) and compares y and sat before each clock and acc after it with the chapter's model. Graded on NANDs and the clock period.`,
+    ports: pinsOf(MAC_REF()),
+    check: { kind: 'custom', describe: `${MAC_LANES} streams of ${MAC_CLOCKS} clocks (255 full-scale mac2, excursions past 32 bits that come back, the wrap past 40 bits, reads at shifts 0, 15, 39 and 40 or more, ties, clracc, en = 0, seeded random streams): y, sat and acc against the model at every clock.`, run: runMacBench, unit: 'stream' },
+    answer: refOf('sp_mac', MAC_REF, 'MAC unit', () => [[macRead(), 'Read path'], [roundUp(MAC_RW), 'Rounder'], [clampWide(MAC_RW, 32), 'Clamp to 32 bits']]),
+  }),
+
+  // ---- sp_circ
+  sp_circ: () => ({
+    id: 'sp_circ', title: 'Circular address', level: 'gates', allowed: 'nand',
+    brief: 'The next value of a pointer after an access, the DSP core\'s address step, all eight modes: <b>p</b> is the 8-bit pointer, <b>mode</b> says how it moves, <b>base</b> and <b>len</b> are a window (its end is base + len, modulo 256) and <b>m</b> a modifier; <b>y</b> is the pointer\'s next value. '
+      + 'Mode 0 stays; 1 is p + 1; 2 is p − 1; 3 is p + m; 7 is p − m (all modulo 256). Mode 4, <i>circular up</i>, is p + 1, except that when p + 1 equals the window end the pointer goes to the base. Mode 5, <i>circular down</i>, is p − 1, except that when p equals the base it goes to end − 1, the last address of the window. '
+      + 'Mode 6, <i>bit-reversed</i>: reverse the bits of p, add m with its bits reversed, and reverse the sum back. The circular modes are the point of the level, but all eight are checked. '
+      + `Check runs every pointer (256) in every mode on ${CIRC_TRIPLES.length} windows (${CIRC_VECTORS.toLocaleString('en')} vectors): windows that cross 255, a length of 0, 1 and 255, a base of 0 and 255, modifiers of 0, 1, 32, 128 and 255, pointers outside the window. It names the first wrong vector of each mode.`,
+    ports: pinsOf(CIRC_REF()),
+    check: { kind: 'custom', describe: `${CIRC_VECTORS.toLocaleString('en')} vectors: every p in every mode on ${CIRC_TRIPLES.length} (base, len, m) windows, the corners of 8-bit wrap included, against the DSP core's model.`, run: runCirc, unit: 'vector' },
+    answer: refOf('sp_circ', CIRC_REF, 'Address step'),
   }),
 
 };
