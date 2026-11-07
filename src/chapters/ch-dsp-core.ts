@@ -203,7 +203,7 @@ export const chDspCore: Chapter = {
       },
       widget: benchWidget,
       challenge: {
-        kind: 'quiz', question: 'The DSP core needs about 1.1 clocks a product and the RV32IM with the packed MAC 2.0 on the 64-tap filter. Is it twice as fast?',
+        kind: 'quiz', question: 'The DSP core needs about 1.1 clocks a product and the RV32I with the packed MAC 2.0 on the 64-tap filter. Is it twice as fast?',
         options: ['No: its clock is longer, so compare time, not clocks', 'Yes, by exactly the ratio of clocks', 'No: it is slower', 'It depends only on the NANDs'],
         answer: 0,
         explain: 'Time is clocks times the period. A longer period eats part of the gain. The table shows the time in NAND delays.',

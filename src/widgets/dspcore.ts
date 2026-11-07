@@ -171,9 +171,9 @@ export function loopWidget(): Widget {
   const out = h('div', { class: 'dsp-cost' });
   const paint = () => {
     const rows: [string, number, string][] = [
-      ['RV32IM, multiply and loop in software', rvPerProduct('rv32im', 'fir64'), 'rv32im'],
-      ['RV32IM + MAC, one tap per iteration', rvPerProduct('mac', 'fir64'), 'mac'],
-      ['RV32IM + packed MAC, two taps per word', rvPerProduct('mac2u', 'fir64'), 'mac2u'],
+      ['RV32IM, mul instruction in a plain loop', rvPerProduct('rv32im', 'fir64'), 'rv32im'],
+      ['RV32I + MAC, one tap per iteration', rvPerProduct('mac', 'fir64'), 'mac'],
+      ['RV32I + packed MAC, two taps per word', rvPerProduct('mac2u', 'fir64'), 'mac2u'],
       [`DSP core, ${taps} + 7 clocks a sample`, (taps + 7) / taps, 'dsp'],
     ];
     const max = Math.max(...rows.map((r) => r[1]));
@@ -188,7 +188,7 @@ export function loopWidget(): Widget {
 
 export function benchWidget(): Widget {
   const ids = ['fir16', 'fir64', 'biquad', 'dot'] as const;
-  const machines: [string, string][] = [['rv32im', 'RV32IM'], ['mac', 'RV32IM + MAC'], ['mac2u', 'RV32IM + MAC, packed'], ['dsp', 'DSP core']];
+  const machines: [string, string][] = [['rv32im', 'RV32IM'], ['mac', 'RV32I + MAC'], ['mac2u', 'RV32I + MAC, packed'], ['dsp', 'DSP core']];
   const row = (id: string) => h('tr', null, h('th', null, bench(id).name), ...machines.map(([m]) => {
     const v = m === 'dsp' ? dspPerProduct(id as 'fir16') : rvPerProduct(m, id);
     const t = v * (m === 'dsp' ? FIG.period : rvFigure(m).period);
