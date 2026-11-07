@@ -27,9 +27,9 @@ const reasons = (f: string[]) => ({
 });
 
 describe('the mask capstone', () => {
-  it('is the DSP group on My path: cap_mask routed, cap_echo and cap_tune not built yet; the other groups are untouched', () => {
+  it('is the DSP group on My path: cap_mask routed, cap_echo routed too, cap_tune not built yet; the other groups are untouched', () => {
     expect(DSP_CAPSTONES.map((c) => c.id)).toEqual(['cap_mask', 'cap_echo', 'cap_tune']);
-    expect(DSP_CAPSTONES.map((c) => c.route)).toEqual(['#/campaign/play/cap_mask', null, null]);
+    expect(DSP_CAPSTONES.map((c) => c.route)).toEqual(['#/campaign/play/cap_mask', '#/campaign/play/cap_echo', null]);
     expect(capstoneById('cap_mask')?.title).toBe('A filter to a mask');
     expect(capstoneById('cap_fault')).toBeTruthy();
     expect(capstoneById('cap_t1')?.tier).toBe(1);
