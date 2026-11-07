@@ -29,7 +29,7 @@ export const chFixed: Chapter = {
     'tell which rounding biases a long sum, and how many guard bits an accumulator needs',
     'place a chain\'s gains so that a word\'s bits are not thrown away',
   ],
-  builds: ['binary', 'muldiv', 'signals'],
+  builds: ['binary', 'muldiv', 'signals', 'noise', 'carriers', 'float'],
   recap: {
     keep: [
       'Qm.f is the same two\'s complement word with a point in a chosen place: range and step are fixed when the design is. A DSP word is usually a fraction, Q1.(w−1), from −1 to just below +1, because a product of two fractions stays one.',
@@ -68,11 +68,11 @@ export const chFixed: Chapter = {
       title: 'A word and its point',
       get body() {
         return `
-        <p>This level takes the signals of the Communication chapters and asks how to compute with them for real: in words of a fixed size, at a price, with sound and pictures you can check. <a href="#/c/signals/0">Chapter ${numOf('signals')}</a> gave you a sample, a spectrum and a filter. <a href="#/c/noise/0">Chapter ${numOf('noise')}</a> gave you noise, and <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> the FFT in gates. Nothing is repeated here. What each chapter asks:</p>
-        ${ladder()}
+        <p>The bench taught a method for reading what a system does wrong. This level takes the signals of the Communication chapters and asks how to compute with them for real: in words of a fixed size, at a price, with sound and pictures you can check. <a href="#/c/signals/0">Chapter ${numOf('signals')}</a> gave you a sample, a spectrum and a filter. <a href="#/c/noise/0">Chapter ${numOf('noise')}</a> gave you noise, and <a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> the FFT in gates. Nothing is repeated here. The table at the end of this step lists the whole level.</p>
         <p><a href="#/c/binary/0">Chapter ${numOf('binary')}</a> introduced fixed point: an integer that means x / 2ᶠ. Signal processing uses one form of it above all, the <strong>fraction</strong>. Q1.15 has 16 bits, one before the point and that one is the sign, so its range is −1 to just under +1 in steps of 2⁻¹⁵. The notation counts the sign among the integer bits.</p>
         <p>Why fractions? Because two of them multiply to something that is still less than 1, so a product can always be brought back to the same format. Integers do the reverse: products grow out of the word. The hardware does not know about any of this. The same adder serves every format, and the format is a promise the designer keeps.</p>
-        <div class="try">Set 8 bits with 7 after the point, and find the word for −1, and the largest word. Then give the format 4 bits after the point, and read what the same word now means.</div>`;
+        <div class="try">Set 8 bits with 7 after the point, and find the word for −1, and the largest word. Then give the format 4 bits after the point, and read what the same word now means.</div>
+        <details class="deeper"><summary>The level, chapter by chapter</summary>${ladder()}</details>`;
       },
       widget: qWidget,
       challenge: {
