@@ -55,20 +55,33 @@ export function markTerms(root: HTMLElement, max = 10, skip: ReadonlySet<string>
       frag.append(s.slice(at, m.start));
       const ahead = later?.(m.id);
       const el = h('span', { class: ahead ? 'gl later' : 'gl', tabindex: '0', 'data-cx': m.id, 'data-later': ahead ?? null }, s.slice(m.start, m.end));
-      el.addEventListener('mouseenter', () => show(el));
-      el.addEventListener('focus', () => show(el));
-      el.addEventListener('mouseleave', hideSoon);
-      el.addEventListener('blur', hideSoon);
-      // keyboard: Enter takes the term to its codex entry (the card's link is out of the tab order, below the page), Esc closes the card
-      el.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape' && card && !card.hidden) { hideGlossary(); ev.stopPropagation(); }
-        else if (ev.key === 'Enter') { ev.preventDefault(); openEntry(m.id); }
-      });
+      wire(el, m.id);
       frag.append(el);
       at = m.end;
     }
     frag.append(s.slice(at));
     t.replaceWith(frag);
+  }
+}
+
+/** Hover, focus and keyboard behaviour of one marked term. */
+function wire(el: HTMLElement, id: string): void {
+  el.addEventListener('mouseenter', () => show(el));
+  el.addEventListener('focus', () => show(el));
+  el.addEventListener('mouseleave', hideSoon);
+  el.addEventListener('blur', hideSoon);
+  // keyboard: Enter takes the term to its codex entry (the card's link is out of the tab order, below the page), Esc closes the card
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && card && !card.hidden) { hideGlossary(); ev.stopPropagation(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); openEntry(id); }
+  });
+}
+
+/** Terms a caller marked itself (`.gl[data-wire]`, ui/quiz.ts: an explanation in place folded into a hover card). */
+export function wireTerms(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLElement>('.gl[data-wire]')) {
+    el.removeAttribute('data-wire');
+    wire(el, el.dataset.cx ?? '');
   }
 }
 
