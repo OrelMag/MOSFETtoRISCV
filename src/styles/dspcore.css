@@ -20,3 +20,6 @@
 .dsp-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .dsp-table th, .dsp-table td { border-bottom: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
 @media (max-width: 600px) { .dsp-row { grid-template-columns: 1fr; } .dsp-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+.dsp-modes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.dsp-modes button { font-family: var(--font-mono); }
+.dsp-modes button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }

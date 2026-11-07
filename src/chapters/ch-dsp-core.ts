@@ -3,7 +3,7 @@
 // Every figure is measured: src/bench/dspcore.json (scripts/dsp/dspcore-bench.ts) and src/dsp/macbench.json.
 
 import { INSTRS24 } from '../dsp/isa24';
-import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget, instrTable, loopWidget, rvFigure, rvPerProduct } from '../widgets/dspcore';
+import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget, instrTable, loopWidget, rvFigure, rvPerProduct, rvWithoutDm } from '../widgets/dspcore';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -26,7 +26,7 @@ export const chDspCore: Chapter = {
       'Two memories with two address buses let one instruction read a sample and a coefficient in the same clock. One memory would need two clocks, and a cache cannot give back what two ports give.',
       'An address generator is a few registers and an adder beside the memory. Circular mode compares the next address with the end of the window, so a delay line needs no shifting. Bit-reversed mode adds in reverse, so an FFT\'s shuffle needs no loop of its own.',
       'The hardware loop holds a start, an end and a count. At the end address the PC goes back to the start without a fetch or a branch. It nests no deeper than one level, because each deeper level needs three more registers and a stack.',
-      'The measured clock a product is 1.05 to 1.52 on this core, not 1: the loop\'s set-up, the rounding and the output each cost a clock per output. And the core is slower to clock than the RV32, because a clock covers the ROM, the decode, the address, the memory, the multiplier and the adder in one go. A real DSP pipelines that path, and pays in branch and load delay slots.',
+      'The measured clocks a product are 1.05 to 1.52 on this core, not 1: the loop\'s set-up, the rounding and the output each cost a clock per output. And the core is slower to clock than the RV32, because a clock covers the ROM, the decode, the address, the memory, the multiplier and the adder in one go. A real DSP pipelines that path, and pays in branch and load delay slots.',
     ],
     check: [
       {
@@ -40,7 +40,7 @@ export const chDspCore: Chapter = {
         question: 'Why does a circular window make a delay line cheaper?',
         options: ['The newest sample overwrites the oldest and nothing moves', 'It needs no memory', 'It lets the multiplier run faster', 'It makes the address a constant'],
         answer: 0,
-        explain: 'Shifting a delay line would cost a load and a store per sample. With a circular window the pointer wraps at the end, and only one word is written per sample.',
+        explain: 'Shifting a delay line would cost N moves a sample. With a circular window the pointer wraps at the end, and only one word is written per sample.',
         why: ['', 'The samples still have to be kept somewhere.', 'The multiplier does not see the window.', 'The address changes at every access: it steps and wraps.'],
       },
       {
@@ -61,7 +61,7 @@ export const chDspCore: Chapter = {
         return `
         <p><a href="#/c/mac/1">Chapter ${numOf('mac')}</a> measured the RV32 filtering. With a multiplier the loop is ${f2(a)} clocks a product. With a MAC instruction it is ${f2(b)}, because two loads, two pointer steps and a branch still surround every product. Even packing two samples in a word, the best case there, leaves ${f2(c)} clocks.</p>
         <p>That overhead is what a DSP core removes. The product is already one instruction. What is left is <strong>fetching two operands</strong>, <strong>moving two pointers</strong> and <strong>counting</strong>. Do them as part of the multiply-accumulate and there is nothing else in the loop: one clock a tap is possible. The rest of this chapter builds the three pieces and measures what they cost.</p>
-        <p>The bar chart below shows the inner loop for a filter of any length. The DSP core's bar is the loop's clock and its one set-up clock, spread over the taps.</p>
+        <p>The bar chart below shows the inner loop for a filter of any length. The DSP core's bar is a sample's N + 7 clocks spread over its N taps: the loop's N, and seven more for the load, the store, the loop set-up, the round, the output, the count and the branch. The RV32 bars are the MAC chapter's 64-tap measurements, with the packed layout for the last of them.</p>
         <div class="try">Slide the taps from 2 up to 128. How many taps does it take for the loop's set-up to stop mattering?</div>`;
       },
       widget: loopWidget,
@@ -136,6 +136,14 @@ export const chDspCore: Chapter = {
         return `
         <p>The instruction word is 24 bits: 5 for the operation, then fields placed where the decoder wants them. A multiply-accumulate names an X operand and a Y operand, each a pointer and a mode: <code>mac x(p0)+c, y(p4)+c</code>. The core's instruction set is ours, not any real DSP's. It has ${INSTRS24.length} instructions, and the decoder behind them is only ${n0(FIG.nands.decode)} NANDs.</p>
         <p>It would not fit the Custom ISA tables of the sandbox, which name an operand and a bit pattern: here an operand is a pointer and a mode in one token, and <code>mov</code> splits its register numbers across two fields. So the core has an assembler of its own, which the sandbox's ROM editor knows.</p>
+        <p>The fields, most significant bit first:</p>
+        <table class="dsp-table"><thead><tr><th>form</th><th>23–19</th><th>18–16</th><th>15–13</th><th>12–10</th><th>9–8</th><th>7–5</th><th>4–3</th><th>2</th><th>1–0</th></tr></thead><tbody>
+        <tr><td><code>add</code> and the ALU</td><td>op</td><td>rd</td><td>ra</td><td>rb</td><td colspan="5">0</td></tr>
+        <tr><td><code>mac</code></td><td>op</td><td colspan="2">0</td><td>X mode</td><td>X ptr</td><td>Y mode</td><td>Y ptr</td><td colspan="2">0</td></tr>
+        <tr><td><code>ld</code>, <code>st</code></td><td>op</td><td>rd</td><td>ra (st)</td><td>mode</td><td>ptr</td><td colspan="2">0</td><td>X / Y</td><td>0</td></tr>
+        <tr><td><code>ldi</code></td><td>op</td><td>dst low</td><td colspan="7">dst high in 15–14, the 14-bit constant in 13–0</td></tr>
+        <tr><td><code>loop</code></td><td>op</td><td colspan="8">bit 18: a register (in 15–13) or a constant count in 17–8; the end address in 7–0</td></tr>
+        </tbody></table>
         ${instrTable()}
         <p>The accumulator is read by <code>rnd</code>, which shifts, rounds half up once and clamps to 16 bits, and by <code>rndc</code>, which also clears it in the same clock: the next output's first <code>mac</code> then needs no <code>clr</code>.</p>`;
       },
@@ -171,7 +179,7 @@ export const chDspCore: Chapter = {
       title: 'The FFT',
       get body() {
         return `
-        <p>A 64-point FFT touches both ideas. The input is copied into bit-reversed order by the address generator, one loop of ${FIG.cycles.fft.words > 0 ? '64' : '64'} iterations. Then six stages of butterflies, each a loop of <code>mac</code> pairs that use the twiddle table in Y, with the modifier set to the stage's stride.</p>
+        <p>A 64-point FFT touches both ideas. The input is copied into bit-reversed order by the address generator, one loop of 64 iterations. Then six stages of butterflies, each a loop of <code>mac</code> pairs that use the twiddle table in Y, with the modifier set to the stage's stride.</p>
         <p>The whole transform takes <strong>${n0(FIG.cycles.fft.cycles)} clocks</strong>: ${FIG.cycles.fft.macs} multiply-accumulates, and the rest is loads, stores and adds. A butterfly is 16 clocks here, because the core has one memory write port and one ALU. Real DSPs do a butterfly in a handful of clocks. The result below is the model's, which the gates equal, and the tones sit where they were put.</p>
         ${''}`;
       },
@@ -189,8 +197,8 @@ export const chDspCore: Chapter = {
       get body() {
         const dsp = rvFigure('rv32im');
         return `
-        <p>Per product, so the machines' different block lengths do not matter. The DSP core is the winner in clocks everywhere, but its clock is longer: ${FIG.period} NAND delays against the RV32's ${dsp.period}, since one clock reaches from the ROM through decode, the pointer, the memory, the multiplier and the accumulator. Time per product is the product of the two, and that is what the table gives.</p>
-        <p>The FFT has no RV32 figure to compare with, since the MAC chapter did not run one. The core is ${n0(FIG.nands.core)} NANDs without memories, against ${n0(dsp.nands)} for the RV32IM. Nearly half of that is the MAC (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
+        <p>Per product, so the machines' different block lengths do not matter. The DSP core is the winner in clocks everywhere, but its clock is longer: ${FIG.period} NAND delays against ${rvFigure('mac').period} for the MAC cores (${f2(FIG.period / rvFigure('mac').period)} times) and ${dsp.period} for the RV32IM, which has faster adders, since one clock reaches from the ROM through decode, the pointer, the memory, the multiplier and the accumulator. Time per product is the product of the two, and that is what the table gives.</p>
+        <p>The FFT has no RV32 figure to compare with, since the MAC chapter did not run one. The core is ${n0(FIG.nands.core)} NANDs without memories. The RV32IM is ${n0(dsp.nands)} with its 32-word data memory and 32 × 32 registers, and ${n0(rvWithoutDm('rv32im'))} without the data memory, so the core is about ${f2(rvWithoutDm('rv32im') / FIG.nands.core)} times smaller than it, and ${f2(rvWithoutDm('mac') / FIG.nands.core)} times smaller than the MAC core (${n0(rvWithoutDm('mac'))}). Nearly half of that is the MAC (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
         <p><strong>What a real DSP does.</strong> It pipelines this path: fetch, decode, address, memory, multiply, accumulate in stages, each short, so the clock is several times faster. The costs are visible in the programmer's model: the instruction after a branch still runs (a delay slot), a loaded value is not there for the next instruction, and the loop must be set up some instructions before it starts. This core pays none of those, and pays for it in the length of its clock.</p>`;
       },
       widget: benchWidget,

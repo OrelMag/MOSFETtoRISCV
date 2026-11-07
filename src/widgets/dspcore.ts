@@ -9,6 +9,9 @@ import { BENCH24, type Bench24 } from '../dsp/programs24';
 import { INSTRS24, MODES24, MODE_NOTES24, disasm24 } from '../dsp/isa24';
 import figures from '../bench/dspcore.json';
 import { DSP24_STATE, dsp24Computer } from '../lib/dsp24core';
+import { singleCycleCpu } from '../lib/cpu';
+import { xlenCpu } from '../lib/cpu64';
+import { stats } from '../sim/stats';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
@@ -29,6 +32,12 @@ export const dspPerProduct = (id: 'fir16' | 'fir64' | 'biquad' | 'dot'): number 
 type MacFig = { period: number; nands: number; benches: Record<string, { kernel: number; products: number }> };
 const MACHINES = macFigures.machines as unknown as Record<string, MacFig>;
 export const rvPerProduct = (m: string, id: string): number => MACHINES[m].benches[id].kernel / MACHINES[m].benches[id].products;
+/** An RV32 machine's NANDs without its data memory (instance dm), to compare with a core that has none. */
+export function rvWithoutDm(m: string): number {
+  const def = m === 'rv32im' ? xlenCpu([0x13, 0x13], { xlen: 32, m: true }) : singleCycleCpu([0x13, 0x13], m === 'rv32i' ? {} : { mac: true });
+  const dm = def.netlist?.().instances.find((i) => i.name === 'dm');
+  return MACHINES[m].nands - (dm ? stats(dm.def).nands : 0);
+}
 export const rvFigure = (m: string): { nands: number; period: number } => ({ nands: MACHINES[m].nands, period: MACHINES[m].period });
 
 const program = (b: Bench24) => assemble24(b.src);
@@ -124,9 +133,9 @@ export function addressRun(start: number, mode: number, base: number, len: numbe
 export function aguWidget(): Widget {
   let mode = 4, base = 4, len = 6, m = 32, start = 4;
   const grid = h('div', { class: 'dsp-cells' }), seq = h('p', { class: 'sub' }), note = h('p', { class: 'sub' });
-  const modes = h('div', { class: 'chips' }, ...MODES24.map((s, i) => h('button', { class: 'chip', 'data-mode': String(i), onclick: () => { mode = i; if (i === 6) { base = 0; len = 0; start = 0; } paint(); } }, `x(p)${s || ' '}`)));
+  const modes = h('div', { class: 'dsp-modes' }, ...MODES24.map((s, i) => h('button', { class: 'btn sm', 'data-mode': String(i), onclick: () => { mode = i; paint(); } }, `x(p)${s || ' '}`)));
   const paint = () => {
-    const cells = 64, run = addressRun(start, mode, base, len, m, mode === 6 ? 64 : 14), seen = new Set(run);
+    const cells = 64, run = addressRun(mode === 6 ? 0 : start, mode, base, len, m, mode === 6 ? 64 : 14), seen = new Set(run);
     grid.replaceChildren(...Array.from({ length: cells }, (_, i) => h('span', { class: `dsp-cell${seen.has(i) ? ' hit' : ''}${i === run[0] ? ' first' : ''}${(mode === 4 || mode === 5) && i >= base && i < base + len ? ' win' : ''}`, title: String(i) }, run.indexOf(i) >= 0 && run.indexOf(i) < 99 ? String(run.indexOf(i)) : '')));
     seq.textContent = `addresses: ${run.slice(0, 16).join(', ')}${run.length > 16 ? ' …' : ''}`;
     note.textContent = `${MODES24[mode] || '(none)'}: ${MODE_NOTES24[mode]}.${mode === 6 ? ` rev(rev(p) + rev(m)), m = ${m}: reversed ${rev8(m)}.` : ''}`;
@@ -152,7 +161,7 @@ export function fftWidget(): Widget {
   const orderEl = h('p', { class: 'sub' }, `bit-reversed addresses, 64 points (m = 32): ${order.slice(0, 16).join(', ')} …`);
   const cyc = FIG.cycles.fft.cycles;
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'The 64-point FFT, run on the model the gates equal'), bars,
-    h('p', { class: 'sub' }, `magnitude of bins 0–31: the two tones sit in bins 5 and 17. ${cyc} clocks in all.`), orderEl)) };
+    h('p', { class: 'sub' }, `magnitude of bins 0–31: three tones: bins 5 and 17 from the real part, bin 9 from the imaginary part. ${cyc} clocks in all.`), orderEl)) };
 }
 
 // ---- cost of a loop -------------------------------------------------------------------------------------------------------------------------
@@ -164,8 +173,8 @@ export function loopWidget(): Widget {
     const rows: [string, number, string][] = [
       ['RV32IM, multiply and loop in software', rvPerProduct('rv32im', 'fir64'), 'rv32im'],
       ['RV32IM + MAC, one tap per iteration', rvPerProduct('mac', 'fir64'), 'mac'],
-      ['RV32IM + MAC, two taps per word', rvPerProduct('mac2', 'fir64'), 'mac2'],
-      ['DSP core, hardware loop', (taps + 1) / taps, 'dsp'],
+      ['RV32IM + packed MAC, two taps per word', rvPerProduct('mac2u', 'fir64'), 'mac2u'],
+      [`DSP core, ${taps} + 7 clocks a sample`, (taps + 7) / taps, 'dsp'],
     ];
     const max = Math.max(...rows.map((r) => r[1]));
     out.replaceChildren(...rows.map(([name, v]) => h('div', { class: 'dsp-row' }, h('span', { class: 'n' }, name), h('span', { class: 'bar', style: `width:${Math.round((v / max) * 100)}%` }), h('span', { class: 'v' }, `${f2(v)} clocks a tap`))));
@@ -188,7 +197,7 @@ export function benchWidget(): Widget {
   const costRow = h('tr', null, h('th', null, 'NANDs, period'), ...machines.map(([m]) => h('td', null, m === 'dsp' ? `${FIG.nands.core.toLocaleString('en').replace(/,/g, ' ')}, ${FIG.period}` : `${rvFigure(m).nands.toLocaleString('en').replace(/,/g, ' ')}, ${rvFigure(m).period}`)));
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Clocks and time per product, measured'),
     h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, ''), ...machines.map(([, n]) => h('th', null, n)))), h('tbody', null, ...ids.map(row), costRow)),
-    h('p', { class: 'sub' }, 'Per product, so the machines\' different block lengths do not matter. The RV32 columns are the MAC chapter\'s kernels without setup; the DSP core\'s include its loop set-up, rounding and output instructions. The DSP core\'s NANDs are without memories.'))) };
+    h('p', { class: 'sub' }, 'Per product, so the machines\' different block lengths do not matter. The RV32 columns are the MAC chapter\'s kernels without setup; the DSP core\'s include its loop set-up, rounding and output instructions. Basis of the last row: the RV32 columns are the whole core without its program ROM, with a 32-word data memory (about a third of the NANDs) and a 32 × 32 register file; the DSP core is without its program ROM and both memories, with 8 × 16 registers. Periods are in NAND delays: the RV32IM has Kogge-Stone adders, the MAC cores do not.'))) };
 }
 
 // ---- the instruction set -----------------------------------------------------------------------------------------------------------------
