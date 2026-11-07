@@ -31,7 +31,7 @@ function erleChart(results: readonly PathResult[]): SVGElement {
     r.blocks.forEach((v, b) => { if (v !== null) d += `${r.blocks[b - 1] === null || b === 0 ? 'M' : 'L'}${X(b).toFixed(1)},${Y(v).toFixed(1)}`; });
     svg.append(s('path', { d, class: 'ec-line', style: `stroke:${PATH_HUES[i % PATH_HUES.length]}` }));
     const last = [...r.blocks].reverse().find((v) => v !== null);
-    if (last !== undefined && last !== null) svg.append(s('text', { x: W - R - 3, y: Y(last) + (r.pass ? 12 : -4), class: 'ec-tick', 'text-anchor': 'end' }, `${i + 1}`));
+    if (last !== undefined && last !== null) svg.append(s('text', { x: W - R - 3, y: Y(last) + (r.pass ? 12 : -4) + (i - 1.5) * 4, class: 'ec-tick', 'text-anchor': 'end' }, `${i + 1}`));
   });
   return svg;
 }
@@ -75,7 +75,7 @@ export class DspCapstonePage {
       h('section', { class: 'cc-brief' }, h('h2', null, 'The machine'), machines),
       h('section', { class: 'cc-brief' }, h('h2', null, 'The sample port'),
         h('p', null, `RV32IM assembly on the golden model: the program from address 0, ${S.ramWords.toLocaleString('en')} words of RAM from address 0, registers and RAM start at 0. Every instruction is one cycle, mul and div included. One sample port, used in this order once per sample:`),
-        h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins' },
+        h('div', { class: 'ec-tw' }, h('table', { class: 'ec-t' },
           h('thead', null, h('tr', null, ['address', 'access', 'meaning'].map((t) => h('th', null, t)))),
           h('tbody', null,
             h('tr', null, h('td', null, hex(ECHO_IO.x)), h('td', null, 'lw'), h('td', null, 'x: the next far-end sample, 16-bit signed (Q15). Starts the sample period; cycles are counted from one x read to the next.')),
@@ -133,8 +133,8 @@ export class DspCapstonePage {
       h('td', null, r.pass ? 'pass' : 'fail')));
     this.out.replaceChildren(...[
       h('h2', { class: v.ok ? 'ec-good' : 'ec-bad' }, v.ok ? 'Passed: the echo is gone on all four paths' : `Not yet: ${v.results.filter((r) => !r.pass).length} of ${v.results.length} paths fail`),
-      h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins ec-table' },
-        h('thead', null, h('tr', null, ['path', 'tail', 'far end', `ERLE (need ${S.erleDb})`, `worst cycles (max ${S.budget.toLocaleString('en')})`, ''].map((t) => h('th', null, t)))), h('tbody', null, rows))),
+      h('div', { class: 'ec-tw' }, h('table', { class: 'ec-t ec-table' },
+        h('thead', null, h('tr', null, ['path', 'tail', 'far end', `ERLE (need ${S.erleDb})`, `cycles (max ${S.budget.toLocaleString('en')})`, ''].map((t) => h('th', null, t)))), h('tbody', null, rows))),
       v.ok ? h('p', null, `Worst sample ${v.worstCycles.toLocaleString('en')} cycles, mean ${Math.round(v.meanCycles).toLocaleString('en')}; lowest ERLE ${v.minErle.toFixed(1)} dB. The next check draws other paths.`) : null,
       v.reasons.length ? h('ul', { class: 'ec-why' }, v.reasons.map((r) => h('li', null, r))) : null,
       v.results.some((r) => r.blocks.some((b) => b !== null)) ? erleChart(v.results) : null,

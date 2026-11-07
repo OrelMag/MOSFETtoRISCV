@@ -19,3 +19,8 @@
 .ec-need { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 5 4; } .ec-needt { font-size: 11px; fill: var(--good); }
 .ec-line { fill: none; stroke-width: 2; }
 @media (pointer: coarse) { .ec-machine, .ec-page .btn { min-height: 40px; } }
+.ec-tw { overflow-x: auto; margin: 8px 0; }
+.ec-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ec-t th { text-align: left; font: 600 11px var(--font-ui); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 5px 10px 5px 0; border-bottom: 1px solid var(--border); }
+.ec-t td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ec-t td:first-child { font-family: var(--font-mono); white-space: nowrap; }
