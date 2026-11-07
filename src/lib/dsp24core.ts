@@ -174,20 +174,23 @@ function dsp24Drawing(mem: Mems | null): { instances: InstanceDef[]; nets: NetDe
   S.place('aguX', DSP24_AGU, 68, 4, 'AGU X');
   S.place('aguY', DSP24_AGU, 68, 76, 'AGU Y');
   S.place('mac', DSP24_MAC, 130, 60, 'MAC');
-  S.place('u0', cut(14, 0, 8), 112, 40, 'imm8');
-  S.place('u1', placed(8, 0, 16), 122, 40, 'imm8, signed');
-  S.place('u2', placed(14, 0, 16), 142, 36, 'imm14, signed');
-  S.place('u3', M16, 130, 31, 'b operand');
-  S.place('alu', DSP24_ALU, 140, 25, 'ALU');
+  // The register write multiplexer's inputs come in its encoding's order (alu, X, Y, mov, imm14, ldh, mac), so each source sits
+  // where its wire reaches the pin without crossing a neighbour: the ones below it climb to their pin on trunks that step right in
+  // pin order, and the qa taps that feed the low-byte and mov paths stay clear of everything that comes from the left.
+  S.place('u9', cut(16, 0, 8), 126, 36);
+  S.place('u0', cut(14, 0, 8), 126, 40, 'imm8');
+  S.place('u10', merger([8, 8], 2), 134, 34, 'ldh: {imm8, rd low}');
+  S.place('u1', placed(8, 0, 16), 134, 40, 'imm8, signed');
+  S.place('u3', M16, 142, 31, 'b operand');
+  S.place('alu', DSP24_ALU, 154, 25, 'ALU');
+  S.place('u2', placed(14, 0, 16), 156, 36, 'imm14, signed');
   S.place('u4', busMux2(8), 112, 46, 'AGU register read');
-  S.place('u5', constWord(8, 0), 118, 52);
-  S.place('u6', constWord(16, 0), 126, 54);
-  S.place('u7', merger([8, 8], 2), 126, 49, 'zero-extended');
-  S.place('u8', muxTree(2, 16), 136, 44, 'mov source');
-  S.place('u9', cut(16, 0, 8), 126, 43);
-  S.place('u10', merger([8, 8], 2), 146, 41, 'ldh: {imm8, rd low}');
-  S.place('u11', muxTree(3, 16), 160, 27, 'register write data');
-  S.place('u12', cut(16, 0, 8), 170, 35, 'low byte');
+  S.place('u5', constWord(8, 0), 120, 51);
+  S.place('u7', merger([8, 8], 2), 128, 49, 'zero-extended');
+  S.place('u6', constWord(16, 0), 128, 54);
+  S.place('u8', muxTree(2, 16), 136, 46, 'mov source');
+  S.place('u11', muxTree(3, 16), 168, 27, 'register write data');
+  S.place('u12', cut(16, 0, 8), 176, 35, 'low byte');
 
   const ctl = (n: string, ...sinks: string[]): NetDef => ({ name: n, ends: [`dec.${n}`, ...sinks], tags: true });
   const mx = (inst: string, pin: string) => (mem ? inst : pin);
@@ -207,15 +210,15 @@ function dsp24Drawing(mem: Mems | null): { instances: InstanceDef[]; nets: NetDe
     ctl('yp', 'aguY.sel'), ctl('ymode', 'aguY.mode'), ctl('yact', 'aguY.act'), ctl('wey', 'aguY.we'),
     { ends: ['aguX.a', mx('xram.addr', 'xaddr')] },
     { ends: ['aguY.a', mx('yram.addr', 'yaddr')] },
-    { ends: [mx('xram.dout', 'xdata'), 'mac.x', 'u11.d1'], via: { 'u11.d1': [[158, 13], [158, 31]] } },
-    { ends: [mx('yram.dout', 'ydata'), 'mac.y', 'u11.d2'], via: { 'u11.d2': [[156, 85], [156, 33]] } },
+    { ends: [mx('xram.dout', 'xdata'), 'mac.x', 'u11.d1'], via: { 'u11.d1': [[165, 13], [165, 31]] } },
+    { ends: [mx('yram.dout', 'ydata'), 'mac.y', 'u11.d2'], via: { 'u11.d2': [[166, 85], [166, 33]] } },
     ctl('macop', 'mac.op'), ctl('macen', 'mac.en'), ctl('sh', 'mac.sh'),
     ctl('imm', 'u0.a', 'u2.a'),
-    { ends: ['u0.y', 'u1.a', 'u10.i1'] },
-    { name: 'qb', ends: ['regs.qb', 'u3.a'] },
-    { ends: ['u1.y', 'u3.b'] },
+    { ends: ['u0.y', 'u1.a', 'u10.i1'], via: { 'u10.i1': [[133, 41], [133, 37]] } },
+    { name: 'qb', ends: ['regs.qb', 'u3.a'], via: { 'u3.a': [[140, 29], [140, 33]] } },
+    { ends: ['u1.y', 'u3.b'], via: { 'u3.b': [[140, 41], [140, 35]] } },
     ctl('bimm', 'u3.s'),
-    { ends: ['u3.y', 'alu.b'] },
+    { ends: ['u3.y', 'alu.b'], via: { 'alu.b': [[150, 34], [150, 29]] } },
     ctl('aluf', 'alu.f'),
     { ends: ['aguX.q', 'u4.a'] },
     { ends: ['aguY.q', 'u4.b'] },
@@ -227,10 +230,10 @@ function dsp24Drawing(mem: Mems | null): { instances: InstanceDef[]; nets: NetDe
     ctl('msrc', 'u8.s'),
     { ends: ['u9.y', 'u10.i0'] },
     { ends: ['alu.y', 'u11.d0'] },
-    { ends: ['u8.y', 'u11.d3'] },
+    { ends: ['u8.y', 'u11.d3'], via: { 'u11.d3': [[149, 51], [149, 35]] } },
     { ends: ['u2.y', 'u11.d4'] },
-    { ends: ['u10.out', 'u11.d5'] },
-    { ends: ['mac.r', 'u11.d6'], via: { 'u11.d6': [[152, 65], [152, 41]] } },
+    { ends: ['u10.out', 'u11.d5'], via: { 'u11.d5': [[139, 36], [139, 39]] } },
+    { ends: ['mac.r', 'u11.d6'], via: { 'u11.d6': [[163, 65], [163, 41]] } },
     ctl('wsrc', 'u11.s'),
     { name: 'd', ends: ['u11.y', 'regs.d', 'u12.a'], tags: ['regs.d'] },
     { ends: ['u12.y', 'aguX.wd', 'aguY.wd'], tags: true },
