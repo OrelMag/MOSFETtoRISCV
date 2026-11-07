@@ -848,7 +848,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Pairs, unrolling, and the alignment trap", challenge: "quiz" },
     { title: "The measured table", challenge: "quiz" },
   ] },
-  { id: "dspcore", num: 75, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","fixed","firdesign"], recap: {"checks":3}, steps: [
+  { id: "dspcore", num: 75, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign"], recap: {"checks":3}, steps: [
     { title: "What a loop costs", challenge: "quiz" },
     { title: "Two memories, two buses", challenge: "reach" },
     { title: "Address generators", challenge: "quiz" },
@@ -858,7 +858,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The FFT", challenge: "quiz" },
     { title: "Against the RV32 machines", challenge: "quiz" },
   ] },
-  { id: "converters", num: 76, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "converters", num: 76, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","zplane","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz" },
     { title: "The way back: a ladder", challenge: "quiz" },
@@ -875,7 +875,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz" },
     { title: "A tap in gates", challenge: "reach" },
   ] },
-  { id: "speech", num: 78, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","adaptive","fixed"], recap: {"checks":3}, steps: [
+  { id: "speech", num: 78, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","multirate","adaptive","fixed"], recap: {"checks":3}, steps: [
     { title: "A voice on a wire", challenge: "quiz" },
     { title: "Why logarithms", challenge: "quiz" },
     { title: "μ-law, from G.711's table", challenge: "quiz" },
