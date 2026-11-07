@@ -39,7 +39,7 @@ export const COMM_CAPSTONES: CommCapstone[] = [
 export const DSP_CAPSTONES: DspCapstone[] = [
   { id: 'cap_mask', title: 'A filter to a mask', brief: 'A low-pass to a stated mask (pass edge, ripple, stop edge, attenuation at 48 kHz) for the worst-case input, in a NAND budget. Judged on the gates: swept sines, an impulse response read from the circuit, a worst-case sequence that must not wrap, and silence after a burst.', route: '#/campaign/play/cap_mask' },
   { id: 'cap_echo', title: 'An echo canceller', brief: 'An adaptive filter that learns an echo path from the far-end signal and removes it, graded on the dB of echo it takes out and how fast.', route: '#/campaign/play/cap_echo' },
-  { id: 'cap_tune', title: 'Tune it', brief: 'A band you have not seen, a weak station, a message in it: build your own chain from the radio chapter’s blocks. Graded by the decoded message across several held-back bands, with its cost reported.', route: null },
+  { id: 'cap_tune', title: 'Tune it', brief: 'A band you have not seen, a weak station, a message in it: build your own chain from the radio chapter’s blocks. Graded by the decoded message across several held-back bands, with its cost reported.', route: '#/campaign/play/cap_tune' },
 ];
 
 export type CapstoneStatus = 'none' | 'started' | 'passed';
