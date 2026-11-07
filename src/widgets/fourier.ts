@@ -42,7 +42,7 @@ export function harmonicsWidget(): Widget {
     const fs = Array.from({ length: 121 }, (_, i) => (i / 120) * fMax);
     line(spec, fs, fs.map((f) => poleGain(f, bw)), 'ln-s fr-gain');
     vmark(spec, bw, `pole ${num(bw, 2)} GHz`, 'start', 'pole');
-    if (rate / 2 > bw * 1.6 || rate / 2 < bw / 1.6) vmark(spec, rate / 2, `Nyquist ${num(rate / 2, 1)}`, 'start', 'nyq');
+    if (rate / 2 > bw * 1.6 || rate / 2 < bw / 1.6) vmark(spec, rate / 2, `Nyquist ${num(rate / 2, 1)} GHz`, 'start', 'nyq');
     const dx = Math.min(4, Math.max(1.5, (spec.X(f0) - spec.X(0)) / 4));
     const stem = (f: number, amp: number, off: number, cls: string) => spec.layer.append(s('line', { x1: spec.X(f) + off, x2: spec.X(f) + off, y1: spec.Y(0), y2: spec.Y(amp), class: `fr-stem ${cls}` }));
     series.harmonics.forEach((hm, i) => { if (hm.k * f0 > fMax) return; stem(hm.k * f0, hm.amp, -dx / 2, i < kept ? 'in on' : 'in'); stem(hm.k * f0, out.harmonics[i].amp, dx / 2, 'out'); });

@@ -50,3 +50,10 @@
 
 @media (pointer: coarse) { .spi-table th, .spi-table td { padding: 8px; } }
 .spi-cmp th.num, .spi-cmp td.num { white-space: nowrap; }
+/* A phone: the row headings wrap and stay put while the columns scroll under them, so the comparison never looks empty. */
+@media (max-width: 560px) {
+  .spi-table { font-size: 11.5px; }
+  .spi-table th, .spi-table td { padding: 3px 5px; }
+  .spi-table tbody th { white-space: normal; min-width: 6.5em; }
+  .spi-cmp tbody th, .spi-cmp thead th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+}

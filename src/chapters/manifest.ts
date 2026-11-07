@@ -525,7 +525,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Arbitration: two controllers at once", challenge: "quiz" },
     { title: "Three ways to move a byte", challenge: "quiz" },
   ] },
-  { id: "signals", num: 45, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
+  { id: "signals", num: 45, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["message","wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
     { title: "A wave is a sum of sines", challenge: "quiz" },
     { title: "The same numbers in frequency", challenge: "quiz" },
     { title: "Narrow in time, wide in frequency", challenge: "quiz" },
@@ -535,14 +535,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Rounding to a number", challenge: "quiz" },
     { title: "A mixer moves a band", challenge: "quiz" },
   ] },
-  { id: "noise", num: 46, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["signals","telegraph"], recap: {"checks":3}, steps: [
+  { id: "noise", num: 46, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["message","signals","telegraph"], recap: {"checks":3}, steps: [
     { title: "The floor", challenge: "quiz" },
+    { title: "A chain: who pays", challenge: "quiz" },
     { title: "A decision", challenge: "quiz" },
     { title: "The matched filter", challenge: "quiz" },
     { title: "One axis for every link", challenge: "quiz" },
     { title: "Power or band", challenge: "quiz" },
     { title: "Shannon's argument, and his code", challenge: "quiz" },
-    { title: "A chain: who pays", challenge: "quiz" },
   ] },
   { id: "modem", num: 47, title: "Modems", blurb: "How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon's limit.", level: "Communication", builds: ["telegraph","adders","registers","wire","signals","noise"], recap: {"checks":3}, steps: [
     { title: "A channel built for voices", challenge: "quiz" },
